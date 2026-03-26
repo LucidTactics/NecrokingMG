@@ -39,3 +39,4 @@ Necroking/Content/obj/
 ## Large assets (copy from C++ project manually)
 Necroking/assets/maps/*.json
 Necroking/assets/Sprites/*.png
+log/
