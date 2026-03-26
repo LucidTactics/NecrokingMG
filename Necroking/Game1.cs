@@ -405,6 +405,8 @@ public class Game1 : Microsoft.Xna.Framework.Game
         _groundSystem.Init(gridSize, gridSize);
         _envSystem.Init(gridSize);
         _wallSystem.Init(gridSize, gridSize, gridSize);
+        // Add a default wall def so scenarios can render walls
+        _wallSystem.Defs.Add(new World.WallVisualDef { Name = "Stone", Color = new Color(130, 130, 130, 255), MaxHP = 100 });
         _sim.Init(gridSize, gridSize, _gameData);
         _sim.SetEnvironmentSystem(_envSystem);
         _sim.SetWallSystem(_wallSystem);
@@ -1445,7 +1447,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 StartGame();
             }
         }
-        else if (FindNecromancer() < 0 && !_paused && _gameWorldLoaded)
+        else if (FindNecromancer() < 0 && !_paused && _gameWorldLoaded && _activeScenario == null)
         {
             _gameOver = true;
         }
@@ -1774,12 +1776,14 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // --- Weather effects (rain) ---
         DrawWeather(screenW, screenH);
 
-        DrawHUD(screenW, screenH);
+        bool showUI = _activeScenario == null || _activeScenario.WantsUI;
+        if (showUI)
+            DrawHUD(screenW, screenH);
 
         if (_buildingPlacementActive)
             DrawBuildingPlacement(screenW, screenH);
 
-        if (_gameOver)
+        if (_gameOver && showUI)
             DrawGameOver(screenW, screenH);
         else if (_menuState == MenuState.PauseMenu)
             DrawPauseMenu(screenW, screenH);
@@ -1798,7 +1802,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
             _uiEditor.Draw(screenW, screenH);
         }
 
-        if (_font != null)
+        if (_font != null && showUI)
         {
             string dbg = $"Zoom:{_camera.Zoom:F0} Pos:({_camera.Position.X:F0},{_camera.Position.Y:F0}) Speed:{_timeScale:F1}x FPS:{(_rawDt > 0 ? 1f / _rawDt : 0):F0}";
             DrawText(_smallFont, dbg, new Vector2(10, screenH - 18), new Color(120, 120, 120));

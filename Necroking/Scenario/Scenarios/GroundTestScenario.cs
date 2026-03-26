@@ -30,23 +30,26 @@ public class GroundTestScenario : ScenarioBase
     {
         _tickCount++;
 
-        if (_tickCount == 5 && _screenshotsTaken == 0)
+        // Don't request a new screenshot until the previous one has been captured
+        if (DeferredScreenshot != null) return;
+
+        if (_screenshotsTaken == 0 && _tickCount >= 5)
         {
             // Take overview screenshot
             ZoomOnLocation(32f, 32f, 48f);
             DeferredScreenshot = "ground_overview";
             _screenshotsTaken++;
-            DebugLog.Log(ScenarioLog, "Taking ground_overview screenshot at tick 5");
+            DebugLog.Log(ScenarioLog, "Taking ground_overview screenshot at tick " + _tickCount);
         }
-        else if (_tickCount == 10 && _screenshotsTaken == 1)
+        else if (_screenshotsTaken == 1 && _tickCount >= 10)
         {
             // Close-up
             ZoomOnLocation(32f, 32f, 128f);
             DeferredScreenshot = "ground_closeup";
             _screenshotsTaken++;
-            DebugLog.Log(ScenarioLog, "Taking ground_closeup screenshot at tick 10");
+            DebugLog.Log(ScenarioLog, "Taking ground_closeup screenshot at tick " + _tickCount);
         }
-        else if (_tickCount >= 15)
+        else if (_screenshotsTaken >= 2 && _tickCount >= 15)
         {
             _complete = true;
         }

@@ -26,12 +26,17 @@ public class WallTrapScenario : ScenarioBase
         int radius = 5;
 
         // Simple rectangular wall ring
+        var ws = sim.WallSystem;
         for (int i = -radius; i <= radius; i++)
         {
             grid.SetTerrain(cx + i, cy - radius, TerrainType.Wall);
             grid.SetTerrain(cx + i, cy + radius, TerrainType.Wall);
             grid.SetTerrain(cx - radius, cy + i, TerrainType.Wall);
             grid.SetTerrain(cx + radius, cy + i, TerrainType.Wall);
+            ws?.SetWall(cx + i, cy - radius, 1);
+            ws?.SetWall(cx + i, cy + radius, 1);
+            ws?.SetWall(cx - radius, cy + i, 1);
+            ws?.SetWall(cx + radius, cy + i, 1);
         }
 
         grid.RebuildCostField();

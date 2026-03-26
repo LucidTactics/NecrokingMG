@@ -27,16 +27,23 @@ public class WallGateScenario : ScenarioBase
         int radius = 5;
 
         // Build wall ring with a north gate (gap)
+        var ws = sim.WallSystem;
         for (int i = -radius; i <= radius; i++)
         {
             // North wall with 2-tile gap in center
             if (Math.Abs(i) > 1)
+            {
                 grid.SetTerrain(cx + i, cy - radius, TerrainType.Wall);
+                ws?.SetWall(cx + i, cy - radius, 1);
+            }
             // South wall (solid)
             grid.SetTerrain(cx + i, cy + radius, TerrainType.Wall);
+            ws?.SetWall(cx + i, cy + radius, 1);
             // East and west walls
             grid.SetTerrain(cx - radius, cy + i, TerrainType.Wall);
             grid.SetTerrain(cx + radius, cy + i, TerrainType.Wall);
+            ws?.SetWall(cx - radius, cy + i, 1);
+            ws?.SetWall(cx + radius, cy + i, 1);
         }
 
         grid.RebuildCostField();

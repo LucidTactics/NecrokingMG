@@ -23,6 +23,8 @@ public class WallTestScenario : ScenarioBase
         var grid = sim.Grid;
         int wallsPlaced = 0;
 
+        var ws = sim.WallSystem;
+
         // Horizontal line
         for (int i = 0; i < 5; i++)
         {
@@ -30,6 +32,8 @@ public class WallTestScenario : ScenarioBase
             int gy = 4;
             grid.SetTerrain(gx, gy, TerrainType.Wall);
             grid.SetTerrain(gx + 1, gy, TerrainType.Wall);
+            ws?.SetWall(gx, gy, 1);
+            ws?.SetWall(gx + 1, gy, 1);
             wallsPlaced++;
         }
 
@@ -40,6 +44,8 @@ public class WallTestScenario : ScenarioBase
             int gy = 4 + i * 2;
             grid.SetTerrain(gx, gy, TerrainType.Wall);
             grid.SetTerrain(gx, gy + 1, TerrainType.Wall);
+            ws?.SetWall(gx, gy, 1);
+            ws?.SetWall(gx, gy + 1, 1);
             wallsPlaced++;
         }
 
@@ -48,6 +54,8 @@ public class WallTestScenario : ScenarioBase
         {
             grid.SetTerrain(30 + i * 2, 4, TerrainType.Wall);
             grid.SetTerrain(30, 4 + i * 2, TerrainType.Wall);
+            ws?.SetWall(30 + i * 2, 4, 1);
+            ws?.SetWall(30, 4 + i * 2, 1);
         }
 
         // Box
@@ -57,6 +65,10 @@ public class WallTestScenario : ScenarioBase
             grid.SetTerrain(40 + i * 2, 10, TerrainType.Wall);
             grid.SetTerrain(40, 4 + i * 2, TerrainType.Wall);
             grid.SetTerrain(46, 4 + i * 2, TerrainType.Wall);
+            ws?.SetWall(40 + i * 2, 4, 1);
+            ws?.SetWall(40 + i * 2, 10, 1);
+            ws?.SetWall(40, 4 + i * 2, 1);
+            ws?.SetWall(46, 4 + i * 2, 1);
         }
 
         grid.RebuildCostField();
