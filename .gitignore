@@ -35,3 +35,7 @@ Necroking/Content/obj/
 
 ## Claude
 .claude/
+
+## Large assets (copy from C++ project manually)
+Necroking/assets/maps/*.json
+Necroking/assets/Sprites/*.png
