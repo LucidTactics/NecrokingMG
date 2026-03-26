@@ -25,6 +25,13 @@ public static class ScenarioRegistry
         Register("wall_trap", () => new Scenarios.WallTrapScenario());
         Register("wall_gate", () => new Scenarios.WallGateScenario());
         Register("UIEmpty", () => new Scenarios.UIEmptyScenario());
+        Register("grass_test", () => new Scenarios.GrassTestScenario());
+        Register("corpse_worker", () => new Scenarios.CorpseWorkerScenario());
+        Register("raid_workers", () => new Scenarios.RaidWorkersScenario());
+        Register("undead_raid", () => new Scenarios.UndeadRaidScenario());
+        Register("shadow_test", () => new Scenarios.ShadowTestScenario());
+        Register("grass_wall_depth", () => new Scenarios.GrassWallDepthScenario());
+        Register("road_rim", () => new Scenarios.RoadRimScenario());
     }
 
     public static void Register(string name, Func<ScenarioBase> creator)

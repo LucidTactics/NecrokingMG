@@ -101,6 +101,13 @@ Necroking/bin/Debug/net9.0/Necroking.exe --scenario <name> --timeout <seconds>
 - `wall_trap` — 10 soldiers trapped inside wall ring, validates all survive
 - `wall_gate` — Wall ring with north gate, soldiers navigate through via A*
 - `UIEmpty` — [UI test] Verifies UI/HUD is visible on empty map
+- `grass_test` — Isolated grass rendering: single cells, patches, mixed types (6 screenshots)
+- `corpse_worker` — Skeleton worker + corpses + grinder building setup
+- `raid_workers` — 5 skeleton outposts with workers raided by 5 soldiers
+- `undead_raid` — Undead base produces skeletons, raids peasant village with huts
+- `shadow_test` — Shadow consistency across L-shaped wall and units (4 screenshots)
+- `grass_wall_depth` — Depth ordering between grass and walls (4 screenshots)
+- `road_rim` — Road rendering test with different edge softness/rim settings (4 screenshots)
 
 ### Creating a new scenario
 1. Create `Necroking/Scenario/Scenarios/MyScenario.cs`

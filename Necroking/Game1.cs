@@ -429,6 +429,33 @@ public class Game1 : Microsoft.Xna.Framework.Game
             DebugLog.Log("scenario", $"Ground setup: types={_groundSystem.TypeCount}, vertexMap={(_groundVertexMapTex != null ? "OK" : "NONE")}, effect={(_groundEffect != null ? "OK" : "NONE")}");
         }
 
+        // Setup grass data for scenarios that want it
+        if (scenario.WantsGrass)
+        {
+            int grassCellsPerUnit = 2; // ~0.8 cell size → ~1.25 cells per unit, round to 2
+            int gw = gridSize * grassCellsPerUnit;
+            int gh = gridSize * grassCellsPerUnit;
+            _grassMap = new byte[gw * gh];
+            _grassW = gw;
+            _grassH = gh;
+            // Default 3 grass types: green, dead, tall
+            _grassBaseColors = new Color[] {
+                new(46, 102, 20), new(100, 80, 40), new(30, 90, 30)
+            };
+            _grassTipColors = new Color[] {
+                new(100, 166, 50), new(160, 140, 80), new(60, 180, 60)
+            };
+            // Fill with no grass (0)
+            Array.Fill(_grassMap, (byte)0);
+            scenario.GrassMap = _grassMap;
+            scenario.GrassW = gw;
+            scenario.GrassH = gh;
+            DebugLog.Log("scenario", $"Grass setup: {gw}x{gh}, 3 types");
+        }
+
+        // Give scenario access to road system
+        scenario.RoadSystem = _roadSystem;
+
         // Initialize the scenario
         scenario.OnInit(_sim);
 
