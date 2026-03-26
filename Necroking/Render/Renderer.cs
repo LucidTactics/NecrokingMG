@@ -1,0 +1,121 @@
+using System;
+using Microsoft.Xna.Framework;
+using Microsoft.Xna.Framework.Graphics;
+using Necroking.Core;
+
+namespace Necroking.Render;
+
+public class Renderer
+{
+    private int _screenW, _screenH;
+    private int _prevScrollValue;
+
+    public int ScreenW => _screenW;
+    public int ScreenH => _screenH;
+
+    public void Init(int screenWidth, int screenHeight)
+    {
+        _screenW = screenWidth;
+        _screenH = screenHeight;
+    }
+
+    public void SetScreenSize(int w, int h)
+    {
+        _screenW = w;
+        _screenH = h;
+    }
+
+    public void HandleCameraInput(Camera25D cam, float dt)
+    {
+        var kb = Microsoft.Xna.Framework.Input.Keyboard.GetState();
+        float speed = cam.PanSpeed / cam.Zoom * 32f;
+
+        if (kb.IsKeyDown(Microsoft.Xna.Framework.Input.Keys.W) || kb.IsKeyDown(Microsoft.Xna.Framework.Input.Keys.Up))
+            cam.Position.Y -= speed * dt;
+        if (kb.IsKeyDown(Microsoft.Xna.Framework.Input.Keys.S) || kb.IsKeyDown(Microsoft.Xna.Framework.Input.Keys.Down))
+            cam.Position.Y += speed * dt;
+        if (kb.IsKeyDown(Microsoft.Xna.Framework.Input.Keys.A) || kb.IsKeyDown(Microsoft.Xna.Framework.Input.Keys.Left))
+            cam.Position.X -= speed * dt;
+        if (kb.IsKeyDown(Microsoft.Xna.Framework.Input.Keys.D) || kb.IsKeyDown(Microsoft.Xna.Framework.Input.Keys.Right))
+            cam.Position.X += speed * dt;
+
+        var mouse = Microsoft.Xna.Framework.Input.Mouse.GetState();
+        int scrollDelta = mouse.ScrollWheelValue - _prevScrollValue;
+        _prevScrollValue = mouse.ScrollWheelValue;
+        if (scrollDelta != 0)
+            cam.ZoomBy(scrollDelta / 120f);
+    }
+
+    public Vector2 WorldToScreen(Vec2 worldPos, float height, Camera25D cam)
+    {
+        float sx = (worldPos.X - cam.Position.X) * cam.Zoom + _screenW * 0.5f;
+        float sy = (worldPos.Y - cam.Position.Y) * cam.Zoom * cam.YRatio + _screenH * 0.5f - height * cam.HeightScale;
+        return new Vector2(sx, sy);
+    }
+
+    public Vec2 ScreenToWorld(Vector2 screenPos, Camera25D cam)
+    {
+        float wx = (screenPos.X - _screenW * 0.5f) / cam.Zoom + cam.Position.X;
+        float wy = (screenPos.Y - _screenH * 0.5f) / (cam.Zoom * cam.YRatio) + cam.Position.Y;
+        return new Vec2(wx, wy);
+    }
+
+    /// <summary>
+    /// Draw a sprite frame from an atlas at a world position.
+    /// </summary>
+    public void DrawSprite(SpriteBatch batch, SpriteAtlas atlas, SpriteFrame frame,
+                           Vec2 worldPos, float height, Camera25D cam,
+                           float scale = 1f, bool flipX = false, Color? tint = null)
+    {
+        if (atlas.Texture == null) return;
+
+        var screenPos = WorldToScreen(worldPos, height, cam);
+        float pixelScale = scale * cam.Zoom / 32f; // normalized so zoom=32 → 1:1
+
+        float drawW = frame.Rect.Width * pixelScale;
+        float drawH = frame.Rect.Height * pixelScale;
+
+        // Pivot: (0.5, 1.0) = bottom-center. The world position maps to this point on the sprite.
+        // When flipped, mirror the X pivot around 0.5
+        float pivotX = flipX ? (1f - frame.PivotX) : frame.PivotX;
+        float pivotOffsetX = pivotX * drawW;
+        float pivotOffsetY = frame.PivotY * drawH;
+
+        var destRect = new Rectangle(
+            (int)(screenPos.X - pivotOffsetX),
+            (int)(screenPos.Y - pivotOffsetY),
+            (int)drawW, (int)drawH);
+
+        var sourceRect = frame.Rect;
+
+        // Handle horizontal flip
+        SpriteEffects effects = flipX ? SpriteEffects.FlipHorizontally : SpriteEffects.None;
+
+        batch.Draw(atlas.Texture, destRect, sourceRect, tint ?? Color.White,
+                   0f, Vector2.Zero, effects, 0f);
+    }
+
+    /// <summary>
+    /// Draw a flipbook frame at a world position.
+    /// </summary>
+    public void DrawFlipbookFrame(SpriteBatch batch, Flipbook flipbook, int frameIndex,
+                                   Vec2 worldPos, float height, Camera25D cam,
+                                   float scale = 1f, Color? tint = null)
+    {
+        if (flipbook.Texture == null) return;
+
+        var sourceRect = flipbook.GetFrameRect(frameIndex);
+        var screenPos = WorldToScreen(worldPos, height, cam);
+        float pixelScale = scale * cam.Zoom / 32f;
+
+        float drawW = sourceRect.Width * pixelScale;
+        float drawH = sourceRect.Height * pixelScale;
+
+        var destRect = new Rectangle(
+            (int)(screenPos.X - drawW * 0.5f),
+            (int)(screenPos.Y - drawH * 0.5f),
+            (int)drawW, (int)drawH);
+
+        batch.Draw(flipbook.Texture, destRect, sourceRect, tint ?? Color.White);
+    }
+}

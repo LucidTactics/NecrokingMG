@@ -1,0 +1,88 @@
+{
+  "bloom": {
+    "bicubicUpsampling": true,
+    "enabled": true,
+    "intensity": 5.480769157409668,
+    "iterations": 6,
+    "scatter": 0.5038461685180664,
+    "softKnee": 0.2538461685180664,
+    "threshold": 1.207692265510559
+  },
+  "general": {
+    "buildingDepositRange": 5.0,
+    "buildingPlacementRange": 20.0,
+    "buildingsDestructible": true,
+    "combatLogEnabled": true,
+    "combatLogFadeTime": 3.0,
+    "combatLogFontSize": 18,
+    "combatLogLines": 10,
+    "damageNumberColor": [
+      200,
+      80,
+      54,
+      255
+    ],
+    "damageNumberFadeTime": 4.2083330154418945,
+    "damageNumberSize": 20,
+    "damageNumberSpeed": 1.5,
+    "damageNumbersEnabled": true,
+    "editorScrollAccel": 3.9555556774139404,
+    "editorScrollSpeed": 30.0,
+    "groundTypeWarp": 1.7999999523162842,
+    "groundUVWarpAmp": 0.2964426875114441,
+    "groundUVWarpFreq": 0.035573121160268784,
+    "showObjectRadius": false,
+    "showTimeControls": true,
+    "showUnitRadius": false,
+    "wpRapidEdit": true
+  },
+  "grass": {
+    "baseColor": [
+      77,
+      88,
+      18,
+      255
+    ],
+    "bladesPerCell": 10,
+    "cellSize": 0.800000011920929,
+    "density": 160.0,
+    "fwidthSmoothing": false,
+    "height": 100.03845977783203,
+    "minBladeWidth": true,
+    "tipColor": [
+      82,
+      139,
+      40,
+      255
+    ],
+    "windSpeed": 1.0,
+    "windStrength": 2.6192307472229004
+  },
+  "horde": {
+    "circleOffset": 6.0,
+    "circleRadius": 15.0,
+    "driftAmplitude": 2.78125,
+    "driftHz": 0.10000000149011612,
+    "engagementRange": 12.0,
+    "idleRadius": 3.0729165077209473,
+    "leashChance": 0.25,
+    "leashRadius": 35.0,
+    "positionLerp": 2.0,
+    "returnSpeedMult": 0.6499999761581421,
+    "rotationLerp": 0.10000000149011612,
+    "velocityDirLerp": 8.520833969116211
+  },
+  "shadow": {
+    "enabled": true,
+    "lengthScale": 0.0,
+    "opacity": 0.1770833283662796,
+    "squash": 0.30000001192092896,
+    "sunAngle": 225.0,
+    "unitShadowMode": 1
+  },
+  "weather": {
+    "activePreset": "dreary_rain",
+    "enabled": true,
+    "transitionSpeed": 1.0
+  }
+}

@@ -1,0 +1,44 @@
+{
+  "unit_groups": [
+    {
+      "entries": [
+        {
+          "unit": "militia_copy2",
+          "weight": 1.0
+        },
+        {
+          "unit": "militia_copy2_copy",
+          "weight": 1.0
+        },
+        {
+          "unit": "militia_copy2_copy_copy",
+          "weight": 1.0
+        }
+      ],
+      "id": "group_0",
+      "name": "LightInfantryZombie"
+    },
+    {
+      "entries": [
+        {
+          "unit": "militia_copy2_copy_copy_copy",
+          "weight": 1.0
+        },
+        {
+          "unit": "militia_copy2_copy_copy_copy_copy",
+          "weight": 1.0
+        },
+        {
+          "unit": "militia_copy2_copy_copy_copy_copy_copy",
+          "weight": 1.0
+        },
+        {
+          "unit": "militia_copy2_copy_copy_copy_copy_copy_copy",
+          "weight": 1.0
+        }
+      ],
+      "id": "group_1",
+      "name": "TemplarZombie"
+    }
+  ]
+}

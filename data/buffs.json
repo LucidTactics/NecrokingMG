@@ -1,0 +1,231 @@
+{
+  "buffs": [
+    {
+      "duration": 6.0,
+      "effects": [
+        {
+          "stat": "NaturalProt",
+          "type": "Set",
+          "value": 15.0
+        }
+      ],
+      "hasPulsingOutline": true,
+      "id": "iron_skin",
+      "name": "Iron Skin",
+      "pulsingOutline": {
+        "blendMode": 0,
+        "color": {
+          "a": 74,
+          "b": 232,
+          "g": 252,
+          "intensity": 1.0384615659713745,
+          "r": 255
+        },
+        "outlineWidth": 1.0,
+        "pulseColor": {
+          "a": 92,
+          "b": 168,
+          "g": 225,
+          "intensity": 1.1538461446762085,
+          "r": 255
+        },
+        "pulseSpeed": 1.0,
+        "pulseWidth": 1.5
+      },
+      "unitTint": {
+        "a": 180,
+        "b": 73,
+        "g": 167,
+        "r": 191
+      }
+    },
+    {
+      "duration": 30.0,
+      "effects": [
+        {
+          "stat": "Strength",
+          "type": "Add",
+          "value": 5.0
+        }
+      ],
+      "id": "strength_buff",
+      "name": "Strength"
+    },
+    {
+      "duration": 60.0,
+      "effects": [
+        {
+          "stat": "CombatSpeed",
+          "type": "Multiply",
+          "value": 2.0
+        }
+      ],
+      "hasOrbital": true,
+      "id": "iron_skin_copy",
+      "maxStacks": 3,
+      "name": "Quickness",
+      "orbital": {
+        "flipbookID": "fire_loop",
+        "moonOrbitRadius": 0.15000000596046448,
+        "moonOrbitSpeed": 3.0,
+        "orbColor": {
+          "a": 255,
+          "b": 234,
+          "g": 103,
+          "intensity": 1.0,
+          "r": 92
+        },
+        "orbCount": 1,
+        "orbCountMatchesStacks": true,
+        "orbScale": 1.0,
+        "sunOrbitRadius": 1.2000000476837158,
+        "sunOrbitSpeed": 0.6000000238418579
+      },
+      "unitTint": {
+        "a": 180,
+        "b": 73,
+        "g": 167,
+        "r": 191
+      }
+    },
+    {
+      "duration": 100.0,
+      "effects": [
+        {
+          "stat": "Defense",
+          "type": "Add",
+          "value": 4.0
+        }
+      ],
+      "hasOrbital": true,
+      "hasPulsingOutline": true,
+      "id": "buff_3",
+      "maxStacks": 3,
+      "name": "Lucky",
+      "orbital": {
+        "flipbookID": "fire_loop",
+        "moonOrbitRadius": 0.15000000596046448,
+        "moonOrbitSpeed": 3.0,
+        "orbColor": {
+          "a": 255,
+          "b": 68,
+          "g": 176,
+          "intensity": 1.0,
+          "r": 97
+        },
+        "orbCount": 1,
+        "orbCountMatchesStacks": true,
+        "orbScale": 1.0,
+        "sunOrbitRadius": 1.2000000476837158,
+        "sunOrbitSpeed": 0.6000000238418579
+      },
+      "pulsingOutline": {
+        "blendMode": 0,
+        "color": {
+          "a": 255,
+          "b": 128,
+          "g": 255,
+          "intensity": 1.442307710647583,
+          "r": 99
+        },
+        "outlineWidth": 1.0,
+        "pulseColor": {
+          "a": 255,
+          "b": 106,
+          "g": 173,
+          "intensity": 0.8653846383094788,
+          "r": 147
+        },
+        "pulseSpeed": 2.0,
+        "pulseWidth": 2.0
+      }
+    },
+    {
+      "duration": 4.0,
+      "effects": [],
+      "hasWeaponParticle": true,
+      "id": "buff_4",
+      "name": "CastingEffect",
+      "weaponParticle": {
+        "blendMode": 1,
+        "color": {
+          "a": 58,
+          "b": 255,
+          "g": 98,
+          "intensity": 7.442307472229004,
+          "r": 198
+        },
+        "flipbookID": "fire_loop",
+        "fps": 15.0,
+        "moveDirX": 0.0,
+        "moveDirY": 0.0,
+        "moveDirZ": 1.0,
+        "moveSpeed": 1.0,
+        "particleLifetime": 0.800000011920929,
+        "particleScale": 0.5,
+        "rangeMax": 1.0,
+        "rangeMin": 0.5,
+        "renderBehind": false,
+        "spawnRate": 20.0
+      }
+    },
+    {
+      "duration": 4.0,
+      "effects": [],
+      "hasWeaponParticle": true,
+      "id": "buff_4_copy",
+      "name": "CastingEffect Green",
+      "weaponParticle": {
+        "blendMode": 1,
+        "color": {
+          "a": 58,
+          "b": 97,
+          "g": 255,
+          "intensity": 7.442307472229004,
+          "r": 101
+        },
+        "flipbookID": "fire_loop",
+        "fps": 15.0,
+        "moveDirX": 0.0,
+        "moveDirY": 0.0,
+        "moveDirZ": 1.0,
+        "moveSpeed": 1.0,
+        "particleLifetime": 0.800000011920929,
+        "particleScale": 0.5,
+        "rangeMax": 1.0,
+        "rangeMin": 0.5,
+        "renderBehind": false,
+        "spawnRate": 20.0
+      }
+    },
+    {
+      "duration": 4.0,
+      "effects": [],
+      "hasWeaponParticle": true,
+      "id": "buff_4_copy_copy",
+      "name": "CastingEffect Lightning",
+      "weaponParticle": {
+        "blendMode": 1,
+        "color": {
+          "a": 58,
+          "b": 97,
+          "g": 247,
+          "intensity": 5.25,
+          "r": 255
+        },
+        "flipbookID": "fire_loop",
+        "fps": 15.0,
+        "moveDirX": 0.0,
+        "moveDirY": 0.0,
+        "moveDirZ": 1.0,
+        "moveSpeed": 1.0,
+        "particleLifetime": 0.800000011920929,
+        "particleScale": 0.5,
+        "rangeMax": 1.0,
+        "rangeMin": 0.5,
+        "renderBehind": false,
+        "spawnRate": 20.0
+      }
+    }
+  ]
+}

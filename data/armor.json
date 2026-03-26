@@ -1,0 +1,76 @@
+{
+  "armors": [
+    {
+      "bodyProtection": 0,
+      "headProtection": 0,
+      "id": "none",
+      "name": "None"
+    },
+    {
+      "bodyProtection": 0,
+      "headProtection": 2,
+      "id": "hood",
+      "name": "Hood"
+    },
+    {
+      "bodyProtection": 8,
+      "headProtection": 0,
+      "id": "breastplate",
+      "name": "Breastplate"
+    },
+    {
+      "bodyProtection": 2,
+      "headProtection": 0,
+      "id": "cloth",
+      "name": "Cloth"
+    },
+    {
+      "bodyProtection": 10,
+      "headProtection": 0,
+      "id": "chainmail_helm",
+      "name": "Chainmail"
+    },
+    {
+      "bodyProtection": 15,
+      "headProtection": 0,
+      "id": "full_plate",
+      "name": "Full Plate"
+    },
+    {
+      "bodyProtection": 2,
+      "headProtection": 0,
+      "id": "light_leather",
+      "name": "Light Leather"
+    },
+    {
+      "bodyProtection": 15,
+      "headProtection": 15,
+      "id": "armor_7",
+      "name": "Wooden Shield"
+    },
+    {
+      "bodyProtection": 0,
+      "headProtection": 10,
+      "id": "armor_8",
+      "name": "Iron Cap"
+    },
+    {
+      "bodyProtection": 15,
+      "headProtection": 0,
+      "id": "armor_9",
+      "name": "Iron Hauberk"
+    },
+    {
+      "bodyProtection": 14,
+      "headProtection": 0,
+      "id": "armor_10",
+      "name": "Iron Helm"
+    },
+    {
+      "bodyProtection": 6,
+      "headProtection": 0,
+      "id": "armor_11",
+      "name": "Hardened Leather Cuirass"
+    }
+  ]
+}

@@ -1,0 +1,39 @@
+{
+  "shields": [
+    {
+      "defense": 0,
+      "id": "none",
+      "name": "None",
+      "parry": 0,
+      "protection": 0
+    },
+    {
+      "defense": -1,
+      "id": "buckler",
+      "name": "Buckler",
+      "parry": 3,
+      "protection": 2
+    },
+    {
+      "defense": -2,
+      "id": "kite_shield",
+      "name": "Kite Shield",
+      "parry": 5,
+      "protection": 4
+    },
+    {
+      "defense": -3,
+      "id": "tower_shield",
+      "name": "Tower Shield",
+      "parry": 7,
+      "protection": 6
+    },
+    {
+      "defense": -2,
+      "id": "shield_4",
+      "name": "Wooden Shield",
+      "parry": 4,
+      "protection": 8
+    }
+  ]
+}

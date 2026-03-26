@@ -1,0 +1,426 @@
+{
+  "wallDefs": [
+    {
+      "color": [
+        140,
+        105,
+        50,
+        255
+      ],
+      "maxHP": 100,
+      "name": "Wood",
+      "protection": 0,
+      "segments": {
+        "E": {
+          "enabled": true,
+          "offset": [
+            0.28977271914482117,
+            -0.20671433210372925
+          ],
+          "pivot": [
+            0.5,
+            1.0
+          ],
+          "size": [
+            0.46000000834465027,
+            0.38999998569488525
+          ],
+          "spritePath": "assets/Environment/walls/90Wood.png",
+          "srcRect": [
+            0.0,
+            0.0,
+            75.0,
+            41.0
+          ]
+        },
+        "N": {
+          "enabled": true,
+          "offset": [
+            9.165331721305847e-05,
+            -0.7191011905670166
+          ],
+          "pivot": [
+            0.5,
+            1.0
+          ],
+          "size": [
+            0.11772970855236053,
+            0.6290017366409302
+          ],
+          "spritePath": "assets/Environment/walls/0Wood.png",
+          "srcRect": [
+            0.0,
+            0.0,
+            11.0,
+            133.0
+          ]
+        },
+        "NE": {
+          "enabled": true,
+          "offset": [
+            0.27197888493537903,
+            -0.2668622136116028
+          ],
+          "pivot": [
+            0.5,
+            1.0
+          ],
+          "size": [
+            0.5373594760894775,
+            0.5958577394485474
+          ],
+          "spritePath": "assets/Environment/walls/60Wood.png",
+          "srcRect": [
+            0.0,
+            0.0,
+            63.0,
+            0.0
+          ]
+        },
+        "NW": {
+          "enabled": true,
+          "offset": [
+            -0.24917517602443695,
+            -0.2991202473640442
+          ],
+          "pivot": [
+            0.5,
+            1.0
+          ],
+          "size": [
+            0.5,
+            0.6000000238418579
+          ],
+          "spritePath": "assets/Environment/walls/120Wood.png",
+          "srcRect": [
+            0.0,
+            0.0,
+            0.0,
+            78.0
+          ]
+        },
+        "S": {
+          "enabled": true,
+          "offset": [
+            -0.00016799569129943848,
+            0.24966393411159515
+          ],
+          "pivot": [
+            0.5,
+            1.0
+          ],
+          "size": [
+            0.12105938792228699,
+            0.5587120652198792
+          ],
+          "spritePath": "assets/Environment/walls/0Wood.png",
+          "srcRect": [
+            0.0,
+            0.0,
+            11.0,
+            133.0
+          ]
+        },
+        "SE": {
+          "enabled": true,
+          "offset": [
+            0.28923147916793823,
+            0.2849768102169037
+          ],
+          "pivot": [
+            0.5,
+            1.0
+          ],
+          "size": [
+            0.5304838418960571,
+            0.6207649111747742
+          ],
+          "spritePath": "assets/Environment/walls/120Wood.png",
+          "srcRect": [
+            0.0,
+            0.0,
+            0.0,
+            78.0
+          ]
+        },
+        "SW": {
+          "enabled": true,
+          "offset": [
+            -0.2795087993144989,
+            0.2970735728740692
+          ],
+          "pivot": [
+            0.5,
+            1.0
+          ],
+          "size": [
+            0.5205278396606445,
+            0.613575279712677
+          ],
+          "spritePath": "assets/Environment/walls/60Wood.png",
+          "srcRect": [
+            0.0,
+            0.0,
+            63.0,
+            0.0
+          ]
+        },
+        "W": {
+          "enabled": true,
+          "offset": [
+            -0.2811846137046814,
+            -0.2011290192604065
+          ],
+          "pivot": [
+            0.5,
+            1.0
+          ],
+          "size": [
+            0.46000000834465027,
+            0.38999995589256287
+          ],
+          "spritePath": "assets/Environment/walls/90Wood.png",
+          "srcRect": [
+            0.0,
+            0.0,
+            75.0,
+            41.0
+          ]
+        },
+        "center": {
+          "enabled": true,
+          "offset": [
+            0.008064523339271545,
+            -0.06048388034105301
+          ],
+          "pivot": [
+            0.5,
+            1.0
+          ],
+          "size": [
+            0.16129031777381897,
+            0.5161290168762207
+          ],
+          "spritePath": "assets/Environment/walls/CenterWood.png",
+          "srcRect": [
+            0.0,
+            0.0,
+            30.0,
+            64.0
+          ]
+        }
+      }
+    },
+    {
+      "color": [
+        130,
+        130,
+        135,
+        255
+      ],
+      "maxHP": 300,
+      "name": "Stone",
+      "protection": 5,
+      "segments": {
+        "E": {
+          "enabled": false,
+          "offset": [
+            0.0,
+            0.0
+          ],
+          "pivot": [
+            0.5,
+            1.0
+          ],
+          "size": [
+            1.0,
+            1.0
+          ],
+          "spritePath": "",
+          "srcRect": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        "N": {
+          "enabled": false,
+          "offset": [
+            0.0,
+            0.0
+          ],
+          "pivot": [
+            0.5,
+            1.0
+          ],
+          "size": [
+            1.0,
+            1.0
+          ],
+          "spritePath": "",
+          "srcRect": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        "NE": {
+          "enabled": false,
+          "offset": [
+            0.0,
+            0.0
+          ],
+          "pivot": [
+            0.5,
+            1.0
+          ],
+          "size": [
+            1.0,
+            1.0
+          ],
+          "spritePath": "",
+          "srcRect": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        "NW": {
+          "enabled": false,
+          "offset": [
+            0.0,
+            0.0
+          ],
+          "pivot": [
+            0.5,
+            1.0
+          ],
+          "size": [
+            1.0,
+            1.0
+          ],
+          "spritePath": "",
+          "srcRect": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        "S": {
+          "enabled": false,
+          "offset": [
+            0.0,
+            0.0
+          ],
+          "pivot": [
+            0.5,
+            1.0
+          ],
+          "size": [
+            1.0,
+            1.0
+          ],
+          "spritePath": "",
+          "srcRect": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        "SE": {
+          "enabled": false,
+          "offset": [
+            0.0,
+            0.0
+          ],
+          "pivot": [
+            0.5,
+            1.0
+          ],
+          "size": [
+            1.0,
+            1.0
+          ],
+          "spritePath": "",
+          "srcRect": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        "SW": {
+          "enabled": false,
+          "offset": [
+            0.0,
+            0.0
+          ],
+          "pivot": [
+            0.5,
+            1.0
+          ],
+          "size": [
+            1.0,
+            1.0
+          ],
+          "spritePath": "",
+          "srcRect": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        "W": {
+          "enabled": false,
+          "offset": [
+            0.0,
+            0.0
+          ],
+          "pivot": [
+            0.5,
+            1.0
+          ],
+          "size": [
+            1.0,
+            1.0
+          ],
+          "spritePath": "",
+          "srcRect": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        "center": {
+          "enabled": false,
+          "offset": [
+            0.0,
+            0.0
+          ],
+          "pivot": [
+            0.5,
+            1.0
+          ],
+          "size": [
+            1.0,
+            1.0
+          ],
+          "spritePath": "",
+          "srcRect": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      }
+    }
+  ]
+}

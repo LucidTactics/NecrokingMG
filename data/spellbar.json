@@ -1,0 +1,16 @@
+{
+  "slots": [
+    {
+      "spellID": "skeleton_warrior_upgrade"
+    },
+    {
+      "spellID": "summon_skeleton"
+    },
+    {
+      "spellID": ""
+    },
+    {
+      "spellID": "fireball"
+    }
+  ]
+}

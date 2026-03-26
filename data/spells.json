@@ -1,0 +1,764 @@
+{
+  "spells": [
+    {
+      "aoeRadius": 4.0,
+      "aoeType": "AOE",
+      "castTime": 0.0,
+      "castingBuffID": "buff_4",
+      "category": "Projectile",
+      "cooldown": 0.0,
+      "damage": 18,
+      "hitEffectFlipbook": {
+        "color": {
+          "a": 255,
+          "b": 255,
+          "g": 79,
+          "intensity": 5.019230842590332,
+          "r": 179
+        },
+        "flipbookID": "cloud03",
+        "fps": 0.0,
+        "rotation": 0.0,
+        "scale": 1.2000000476837158
+      },
+      "id": "fireball",
+      "manaCost": 2.0,
+      "name": "Nether Blast",
+      "precisionBonus": 0,
+      "projectileDelay": 0.0,
+      "projectileFlipbook": {
+        "color": {
+          "a": 255,
+          "b": 255,
+          "g": 79,
+          "intensity": 1.399999976158142,
+          "r": 179
+        },
+        "flipbookID": "fire_loop",
+        "fps": 0.0,
+        "rotation": 0.0,
+        "scale": 1.5
+      },
+      "projectileSpeed": 28.299999237060547,
+      "quantity": 1,
+      "range": 40.0,
+      "trajectory": "Lob"
+    },
+    {
+      "aoeRadius": 0.0,
+      "aoeType": "Single",
+      "castTime": 0.0,
+      "category": "Projectile",
+      "cooldown": 1.0,
+      "damage": 9,
+      "hitEffectFlipbook": {
+        "color": {
+          "a": 255,
+          "b": 255,
+          "g": 79,
+          "intensity": 4.038461685180664,
+          "r": 179
+        },
+        "flipbookID": "cloud03",
+        "fps": 3.0,
+        "rotation": 0.0,
+        "scale": 0.6000000238418579
+      },
+      "id": "nether_darts",
+      "manaCost": 4.0,
+      "name": "Nether Darts",
+      "precisionBonus": -5,
+      "projectileDelay": 0.07999999821186066,
+      "projectileFlipbook": {
+        "color": {
+          "a": 255,
+          "b": 255,
+          "g": 79,
+          "intensity": 3.403846263885498,
+          "r": 179
+        },
+        "flipbookID": "fire_loop",
+        "fps": 3.0,
+        "rotation": 0.0,
+        "scale": 0.30000001192092896
+      },
+      "projectileSpeed": 28.299999237060547,
+      "quantity": 10,
+      "range": 30.0,
+      "trajectory": "Swirly"
+    },
+    {
+      "castTime": 0.0,
+      "category": "Summon",
+      "cooldown": 0.5,
+      "id": "summon_skeleton",
+      "manaCost": 2.0,
+      "name": "Summon Skeleton",
+      "range": 20.0,
+      "spawnLocation": "NearestTargetToMouse",
+      "summonFlipbook": {
+        "color": {
+          "a": 128,
+          "b": 50,
+          "g": 80,
+          "intensity": 1.0,
+          "r": 60
+        },
+        "duration": 1.0,
+        "flipbookID": "fire_loop",
+        "fps": 0.0,
+        "rotation": 0.0,
+        "scale": 0.5
+      },
+      "summonMode": "Spawn",
+      "summonQuantity": 1,
+      "summonTargetReq": "Corpse",
+      "summonUnitID": "skeleton"
+    },
+    {
+      "acceptableTargets": [
+        "skeleton"
+      ],
+      "castTime": 0.0,
+      "category": "Summon",
+      "cooldown": 1.0,
+      "id": "skeleton_warrior_upgrade",
+      "manaCost": 5.0,
+      "name": "Skeleton Warrior Upgrade",
+      "range": 20.0,
+      "spawnLocation": "NearestTargetToMouse",
+      "summonFlipbook": {
+        "color": {
+          "a": 128,
+          "b": 127,
+          "g": 255,
+          "intensity": 1.903846263885498,
+          "r": 196
+        },
+        "duration": 1.5,
+        "flipbookID": "cloud03",
+        "fps": 3.0,
+        "rotation": 0.0,
+        "scale": 1.2999999523162842
+      },
+      "summonMode": "Transform",
+      "summonQuantity": 1,
+      "summonTargetReq": "UnitType",
+      "summonUnitID": "skeleton_copy"
+    },
+    {
+      "castTime": 0.0,
+      "category": "Summon",
+      "cooldown": 2.0,
+      "id": "summon_abomination",
+      "manaCost": 10.0,
+      "name": "Summon Abomination",
+      "range": 0.0,
+      "spawnLocation": "AdjacentToCaster",
+      "summonFlipbook": {
+        "color": {
+          "a": 255,
+          "b": 255,
+          "g": 255,
+          "intensity": 1.0,
+          "r": 255
+        },
+        "fps": 0.0,
+        "rotation": 0.0,
+        "scale": 1.0
+      },
+      "summonMode": "Spawn",
+      "summonQuantity": 1,
+      "summonTargetReq": "None",
+      "summonUnitID": "abomination"
+    },
+    {
+      "aoeRadius": 3.0,
+      "castTime": 0.0,
+      "castingBuffID": "buff_4_copy_copy",
+      "category": "Strike",
+      "cooldown": 1.5,
+      "damage": 25,
+      "hitEffectFlipbook": {
+        "blendMode": "Additive",
+        "color": {
+          "a": 47,
+          "b": 215,
+          "g": 247,
+          "intensity": 4.5,
+          "r": 248
+        },
+        "duration": 0.2199999988079071,
+        "flipbookID": "radial_glow",
+        "fps": 0.0,
+        "rotation": 0.0,
+        "scale": 1.75
+      },
+      "id": "sky_lightning",
+      "manaCost": 2.0,
+      "name": "Sky Lightning",
+      "range": 35.0,
+      "strikeBranches": 2,
+      "strikeChainBranches": 0,
+      "strikeChainDepth": 0,
+      "strikeChainRange": 8.0,
+      "strikeChainWidthDecay": 0.800000011920929,
+      "strikeCoreColor": {
+        "a": 255,
+        "b": 255,
+        "g": 255,
+        "intensity": 2.019230842590332,
+        "r": 255
+      },
+      "strikeCoreWidth": 1.2000000476837158,
+      "strikeDisplacement": 0.20000000298023224,
+      "strikeDuration": 0.20000000298023224,
+      "strikeFlickerHz": 0.0,
+      "strikeFlickerMax": 1.0,
+      "strikeFlickerMin": 0.800000011920929,
+      "strikeGlowColor": {
+        "a": 200,
+        "b": 255,
+        "g": 180,
+        "intensity": 2.25,
+        "r": 140
+      },
+      "strikeGlowWidth": 3.0,
+      "strikeJitterHz": 0.0,
+      "strikeTargetUnit": false,
+      "telegraphDuration": 0.25,
+      "zapDuration": 0.11999999731779099
+    },
+    {
+      "aoeRadius": 0.0,
+      "castTime": 0.0,
+      "castingBuffID": "buff_4_copy_copy",
+      "category": "Strike",
+      "cooldown": 0.5,
+      "damage": 12,
+      "hitEffectFlipbook": {
+        "color": {
+          "a": 255,
+          "b": 255,
+          "g": 255,
+          "intensity": 1.0,
+          "r": 255
+        },
+        "fps": 0.0,
+        "rotation": 0.0,
+        "scale": 1.0
+      },
+      "id": "lightning_zap",
+      "manaCost": 1.0,
+      "name": "Lightning Zap",
+      "range": 25.0,
+      "strikeBranches": 2,
+      "strikeChainBranches": 1,
+      "strikeChainDepth": 2,
+      "strikeChainRange": 8.0,
+      "strikeChainWidthDecay": 0.800000011920929,
+      "strikeCoreColor": {
+        "a": 255,
+        "b": 55,
+        "g": 253,
+        "intensity": 2.42307710647583,
+        "r": 253
+      },
+      "strikeCoreWidth": 1.5,
+      "strikeDisplacement": 0.10000000149011612,
+      "strikeDuration": 0.20000000298023224,
+      "strikeFlickerHz": 2.0,
+      "strikeFlickerMax": 1.0,
+      "strikeFlickerMin": 0.800000011920929,
+      "strikeGlowColor": {
+        "a": 140,
+        "b": 253,
+        "g": 177,
+        "intensity": 3.173076868057251,
+        "r": 150
+      },
+      "strikeGlowWidth": 3.0,
+      "strikeJitterHz": 10.0,
+      "strikeTargetUnit": true,
+      "telegraphDuration": 0.20000000298023224,
+      "zapDuration": 0.25
+    },
+    {
+      "beamBranches": 1,
+      "beamChainBranches": 2,
+      "beamChainDepth": 2,
+      "beamChainRange": 16.0,
+      "beamChainWidthDecay": 0.8999999761581421,
+      "beamCoreColor": {
+        "a": 255,
+        "b": 196,
+        "g": 253,
+        "intensity": 3.173076868057251,
+        "r": 255
+      },
+      "beamCoreWidth": 0.5,
+      "beamDisplacement": 0.15000000596046448,
+      "beamFlickerHz": 1.0,
+      "beamFlickerMax": 1.0,
+      "beamFlickerMin": 0.800000011920929,
+      "beamGlowColor": {
+        "a": 180,
+        "b": 255,
+        "g": 231,
+        "intensity": 3.461538553237915,
+        "r": 149
+      },
+      "beamGlowWidth": 1.0,
+      "beamJitterHz": 10.0,
+      "beamMaxDuration": 0.0,
+      "beamRetargetRadius": 15.0,
+      "beamTickRate": 0.25,
+      "castTime": 0.0,
+      "castingBuffID": "buff_4_copy_copy",
+      "category": "Beam",
+      "cooldown": 3.0,
+      "damage": 15,
+      "id": "lightning_beam",
+      "manaCost": 2.0,
+      "name": "Lightning Beam",
+      "range": 30.0
+    },
+    {
+      "acceptableTargets": [
+        "skeleton_copy"
+      ],
+      "castTime": 0.0,
+      "category": "Summon",
+      "cooldown": 1.0,
+      "id": "skeleton_warrior_upgrade_copy",
+      "manaCost": 5.0,
+      "name": "Elite Skeleton Upgrade",
+      "range": 20.0,
+      "spawnLocation": "NearestTargetToMouse",
+      "summonFlipbook": {
+        "color": {
+          "a": 128,
+          "b": 127,
+          "g": 255,
+          "intensity": 1.903846263885498,
+          "r": 196
+        },
+        "duration": 1.5,
+        "flipbookID": "cloud03",
+        "fps": 3.0,
+        "rotation": 0.0,
+        "scale": 1.2999999523162842
+      },
+      "summonMode": "Transform",
+      "summonQuantity": 1,
+      "summonTargetReq": "UnitType",
+      "summonUnitID": "skeleton_copy_copy"
+    },
+    {
+      "aoeRadius": 0.0,
+      "aoeType": "Single",
+      "buffID": "iron_skin",
+      "castFlipbook": {
+        "color": {
+          "a": 255,
+          "b": 86,
+          "g": 189,
+          "intensity": 1.0,
+          "r": 231
+        },
+        "duration": 0.4000000059604645,
+        "flipbookID": "cloud03",
+        "fps": 0.0,
+        "rotation": 0.0,
+        "scale": 1.0
+      },
+      "castTime": 0.0,
+      "category": "Buff",
+      "chainDelay": 0.10000000149011612,
+      "chainQuantity": 1,
+      "chainRange": 5.0,
+      "cooldown": 0.0,
+      "friendlyOnly": true,
+      "id": "spell_9",
+      "manaCost": 1.0,
+      "name": "Iron Skin",
+      "range": 20.0
+    },
+    {
+      "aoeRadius": 0.0,
+      "aoeType": "Single",
+      "buffID": "iron_skin_copy",
+      "castFlipbook": {
+        "color": {
+          "a": 255,
+          "b": 231,
+          "g": 105,
+          "intensity": 1.0,
+          "r": 85
+        },
+        "duration": 0.4000000059604645,
+        "flipbookID": "cloud03",
+        "fps": 0.0,
+        "rotation": 0.0,
+        "scale": 1.0
+      },
+      "castTime": 0.0,
+      "category": "Buff",
+      "chainDelay": 0.10000000149011612,
+      "chainQuantity": 1,
+      "chainRange": 5.0,
+      "cooldown": 0.0,
+      "friendlyOnly": true,
+      "id": "spell_9_copy",
+      "manaCost": 1.0,
+      "name": "Quickness",
+      "range": 20.0
+    },
+    {
+      "aoeRadius": 0.0,
+      "aoeType": "Single",
+      "buffID": "buff_3",
+      "castFlipbook": {
+        "color": {
+          "a": 255,
+          "b": 255,
+          "g": 255,
+          "intensity": 1.0,
+          "r": 255
+        },
+        "fps": 0.0,
+        "rotation": 0.0,
+        "scale": 1.0
+      },
+      "castTime": 0.0,
+      "category": "Buff",
+      "chainDelay": 0.10000000149011612,
+      "chainQuantity": 1,
+      "chainRange": 5.0,
+      "cooldown": 0.0,
+      "friendlyOnly": true,
+      "id": "spell_11",
+      "manaCost": 2.0,
+      "name": "Lucky",
+      "range": 20.0
+    },
+    {
+      "castTime": 0.0,
+      "castingBuffID": "buff_4_copy",
+      "category": "Drain",
+      "cooldown": 1.0,
+      "damage": 2,
+      "drainArcHeight": 40.0,
+      "drainBreakRange": 0.0,
+      "drainCoreColor": {
+        "a": 155,
+        "b": 79,
+        "g": 255,
+        "intensity": 2.5,
+        "r": 156
+      },
+      "drainCoreWidth": 3.0,
+      "drainCorpseHP": 10,
+      "drainFlickerMax": 1.2000000476837158,
+      "drainFlickerMin": 1.0,
+      "drainGlowColor": {
+        "a": 27,
+        "b": 128,
+        "g": 255,
+        "intensity": 5.942307472229004,
+        "r": 97
+      },
+      "drainGlowWidth": 5.5,
+      "drainHealPercent": 1.0,
+      "drainMaxDuration": 2.0,
+      "drainPulseHz": 1.2000000476837158,
+      "drainPulseStrength": 0.30000001192092896,
+      "drainReversed": false,
+      "drainSwayAmplitude": 8.0,
+      "drainSwayHz": 1.0,
+      "drainTargetEffect": {
+        "color": {
+          "a": 255,
+          "b": 255,
+          "g": 255,
+          "intensity": 1.0,
+          "r": 255
+        },
+        "fps": 0.0,
+        "rotation": 0.0,
+        "scale": 1.0
+      },
+      "drainTendrilCount": 3,
+      "drainTickRate": 0.25,
+      "drainVisualReversed": true,
+      "id": "spell_12",
+      "manaCost": 2.0,
+      "name": "Lifedrain",
+      "range": 30.0
+    },
+    {
+      "castTime": 0.0,
+      "category": "Summon",
+      "cooldown": 0.0,
+      "id": "debug_militia_summon",
+      "manaCost": 0.0,
+      "name": "Debug Militia Summon",
+      "range": 200.0,
+      "spawnLocation": "AtTargetLocation",
+      "summonFlipbook": {
+        "color": {
+          "a": 255,
+          "b": 255,
+          "g": 255,
+          "intensity": 1.0,
+          "r": 255
+        },
+        "fps": 0.0,
+        "rotation": 0.0,
+        "scale": 1.0
+      },
+      "summonMode": "Spawn",
+      "summonQuantity": 10,
+      "summonTargetReq": "None",
+      "summonUnitID": "militia"
+    },
+    {
+      "castTime": 0.0,
+      "category": "Summon",
+      "cooldown": 0.0,
+      "id": "debug_militia_summon_copy",
+      "manaCost": 0.0,
+      "name": "Debug Priest",
+      "range": 200.0,
+      "spawnLocation": "AtTargetLocation",
+      "summonFlipbook": {
+        "color": {
+          "a": 255,
+          "b": 255,
+          "g": 255,
+          "intensity": 1.0,
+          "r": 255
+        },
+        "fps": 0.0,
+        "rotation": 0.0,
+        "scale": 1.0
+      },
+      "summonMode": "Spawn",
+      "summonQuantity": 1,
+      "summonTargetReq": "None",
+      "summonUnitID": "militia_copy_copy"
+    },
+    {
+      "castTime": 0.0,
+      "category": "Summon",
+      "cooldown": 0.0,
+      "id": "debug_skeleton_summon",
+      "manaCost": 0.0,
+      "name": "Debug Skeleton Summon",
+      "range": 9999.0,
+      "spawnLocation": "AtTargetLocation",
+      "summonFlipbook": {
+        "color": {
+          "a": 255,
+          "b": 255,
+          "g": 255,
+          "intensity": 1.0,
+          "r": 255
+        },
+        "rotation": 0.0,
+        "scale": 1.0
+      },
+      "summonMode": "Spawn",
+      "summonQuantity": 20,
+      "summonTargetReq": "None",
+      "summonUnitID": "skeleton"
+    },
+    {
+      "castTime": 0.0,
+      "castingBuffID": "buff_4_copy",
+      "category": "Summon",
+      "cooldown": 0.5,
+      "id": "raise_zombie",
+      "manaCost": 3.0,
+      "name": "Raise Zombie",
+      "range": 20.0,
+      "spawnLocation": "NearestTargetToMouse",
+      "summonFlipbook": {
+        "color": {
+          "a": 128,
+          "b": 40,
+          "g": 120,
+          "intensity": 1.0,
+          "r": 50
+        },
+        "flipbookID": "fire_loop",
+        "fps": 0.0,
+        "rotation": 0.0,
+        "scale": 0.5
+      },
+      "summonMode": "Spawn",
+      "summonQuantity": 1,
+      "summonTargetReq": "Corpse",
+      "summonUnitID": ""
+    },
+    {
+      "aoeRadius": 6.0,
+      "castTime": 0.0,
+      "castingBuffID": "buff_4_copy",
+      "category": "Summon",
+      "cooldown": 3.0,
+      "id": "raise_zombie_throng",
+      "manaCost": 8.0,
+      "name": "Raise Zombie Throng",
+      "range": 20.0,
+      "spawnLocation": "AtTargetLocation",
+      "summonFlipbook": {
+        "color": {
+          "a": 128,
+          "b": 40,
+          "g": 120,
+          "intensity": 1.0,
+          "r": 50
+        },
+        "flipbookID": "fire_loop",
+        "fps": 0.0,
+        "rotation": 0.0,
+        "scale": 0.5
+      },
+      "summonMode": "Spawn",
+      "summonQuantity": 5,
+      "summonTargetReq": "CorpseAOE",
+      "summonUnitID": ""
+    },
+    {
+      "castTime": 0.0,
+      "castingBuffID": "buff_4",
+      "category": "Drain",
+      "cooldown": 2.0,
+      "damage": 5,
+      "drainArcHeight": 40.0,
+      "drainBreakRange": 0.0,
+      "drainCoreColor": {
+        "a": 255,
+        "b": 80,
+        "g": 255,
+        "intensity": 2.5,
+        "r": 120
+      },
+      "drainCoreWidth": 1.5,
+      "drainCorpseHP": 10,
+      "drainFlickerMax": 1.2000000476837158,
+      "drainFlickerMin": 0.800000011920929,
+      "drainGlowColor": {
+        "a": 160,
+        "b": 20,
+        "g": 120,
+        "intensity": 1.5,
+        "r": 40
+      },
+      "drainGlowWidth": 5.0,
+      "drainHealPercent": 1.0,
+      "drainMaxDuration": 0.0,
+      "drainPulseHz": 2.0,
+      "drainPulseStrength": 0.4000000059604645,
+      "drainReversed": false,
+      "drainSwayAmplitude": 8.0,
+      "drainSwayHz": 1.5,
+      "drainTargetEffect": {
+        "color": {
+          "a": 255,
+          "b": 255,
+          "g": 255,
+          "intensity": 1.0,
+          "r": 255
+        },
+        "rotation": 0.0,
+        "scale": 1.0
+      },
+      "drainTendrilCount": 3,
+      "drainTickRate": 0.25,
+      "drainVisualReversed": false,
+      "id": "life_drain",
+      "manaCost": 5.0,
+      "name": "Life Drain",
+      "range": 25.0
+    },
+    {
+      "aoeRadius": 4.0,
+      "castTime": 0.0,
+      "castingBuffID": "buff_4_copy_copy",
+      "category": "Strike",
+      "cooldown": 3.0,
+      "damage": 20,
+      "godRayEdgeSoftness": 0.800000011920929,
+      "godRayNoiseScale": 3.0,
+      "godRayNoiseSpeed": 5.0,
+      "godRayNoiseStrength": 0.30000001192092896,
+      "hitEffectFlipbook": {
+        "color": {
+          "a": 255,
+          "b": 255,
+          "g": 255,
+          "intensity": 1.0,
+          "r": 255
+        },
+        "fps": 0.0,
+        "rotation": 0.0,
+        "scale": 1.0
+      },
+      "id": "god_ray",
+      "manaCost": 8.0,
+      "name": "God Ray",
+      "range": 25.0,
+      "strikeBranches": 0,
+      "strikeChainBranches": 0,
+      "strikeChainDepth": 0,
+      "strikeChainRange": 8.0,
+      "strikeChainWidthDecay": 0.800000011920929,
+      "strikeCoreColor": {
+        "a": 255,
+        "b": 200,
+        "g": 247,
+        "intensity": 7.673076629638672,
+        "r": 255
+      },
+      "strikeCoreWidth": 1.2000000476837158,
+      "strikeDisplacement": 0.10000000149011612,
+      "strikeDuration": 1.5,
+      "strikeFlickerHz": 1.0,
+      "strikeFlickerMax": 1.2000000476837158,
+      "strikeFlickerMin": 1.0,
+      "strikeGlowColor": {
+        "a": 180,
+        "b": 82,
+        "g": 192,
+        "intensity": 11.25,
+        "r": 254
+      },
+      "strikeGlowWidth": 4.5,
+      "strikeJitterHz": 0.0,
+      "strikeTargetUnit": false,
+      "strikeVisual": "GodRay",
+      "targetFilter": "UndeadOnly",
+      "telegraphDuration": 0.4000000059604645,
+      "zapDuration": 0.11999999731779099
+    },
+    {
+      "id": "order_attack",
+      "displayName": "Order Attack",
+      "category": "Command",
+      "manaCost": 0,
+      "cooldown": 5,
+      "range": 999
+    },
+    {
+      "id": "ghost_mode",
+      "displayName": "Ghost Mode",
+      "category": "Toggle",
+      "manaCost": 0,
+      "cooldown": 0.5,
+      "range": 0,
+      "toggleEffect": "ghost_mode"
+    }
+  ]
+}

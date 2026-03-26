@@ -1,0 +1,107 @@
+{
+  "weapons": [
+    {
+      "attackBonus": 3,
+      "damage": 6,
+      "defenseBonus": 5,
+      "id": "staff",
+      "length": 2,
+      "name": "Staff"
+    },
+    {
+      "attackBonus": 2,
+      "damage": 6,
+      "defenseBonus": 0,
+      "id": "spear",
+      "length": 3,
+      "name": "Spear"
+    },
+    {
+      "attackBonus": 1,
+      "damage": 4,
+      "defenseBonus": -2,
+      "id": "spear_copy",
+      "length": 5,
+      "name": "Pike"
+    },
+    {
+      "attackBonus": 3,
+      "damage": 10,
+      "defenseBonus": 0,
+      "id": "hook",
+      "length": 1,
+      "name": "Hook"
+    },
+    {
+      "attackBonus": 0,
+      "damage": 6,
+      "defenseBonus": 0,
+      "id": "club",
+      "length": 1,
+      "name": "Club"
+    },
+    {
+      "attackBonus": 3,
+      "damage": 8,
+      "defenseBonus": 2,
+      "id": "shortsword",
+      "length": 1,
+      "name": "Shortsword"
+    },
+    {
+      "attackBonus": 2,
+      "damage": 10,
+      "defenseBonus": 3,
+      "id": "lance",
+      "length": 3,
+      "name": "Lance"
+    },
+    {
+      "attackBonus": 1,
+      "damage": 3,
+      "defenseBonus": 0,
+      "id": "dagger",
+      "length": 1,
+      "name": "Dagger"
+    },
+    {
+      "attackBonus": 0,
+      "cooldown": 2.0,
+      "damage": 0,
+      "defenseBonus": 0,
+      "directRange": 16.0,
+      "id": "longbow",
+      "isRanged": true,
+      "length": 0,
+      "name": "Longbow",
+      "precision": 10,
+      "projectileType": "Arrow",
+      "range": 40.0,
+      "rangedDamage": 8
+    },
+    {
+      "attackBonus": 4,
+      "damage": 12,
+      "defenseBonus": 0,
+      "id": "weapon_8",
+      "length": 2,
+      "name": "Battle Axe"
+    },
+    {
+      "attackBonus": -4,
+      "damage": 2,
+      "defenseBonus": 0,
+      "id": "weapon_10",
+      "length": 1,
+      "name": "Zombie Bite"
+    },
+    {
+      "attackBonus": -2,
+      "damage": 0,
+      "defenseBonus": 0,
+      "id": "weapon_11",
+      "length": 1,
+      "name": "Zombie Claw"
+    }
+  ]
+}

@@ -1,0 +1,774 @@
+{
+  "units": [
+    {
+      "ai": "PlayerControlled",
+      "armors": [
+        "hood"
+      ],
+      "color": {
+        "a": 255,
+        "b": 0,
+        "g": 200,
+        "r": 0
+      },
+      "faction": "Undead",
+      "id": "necromancer",
+      "name": "Necromancer",
+      "orcaPriority": 3,
+      "shields": [],
+      "size": 2,
+      "sprite": {
+        "atlas": "VampireFaction",
+        "name": "GhoulLord"
+      },
+      "spriteScale": 1.0,
+      "spriteWorldHeight": 2.0,
+      "stats": {
+        "attack": 15,
+        "combatSpeed": 6.0,
+        "defense": 15,
+        "encumbrance": 2,
+        "magicResist": 16,
+        "maxHP": 20,
+        "naturalProt": 20,
+        "strength": 10
+      },
+      "type": "Necromancer",
+      "weapons": [
+        "staff"
+      ]
+    },
+    {
+      "ai": "AttackClosest",
+      "armors": [],
+      "color": {
+        "a": 255,
+        "b": 160,
+        "g": 160,
+        "r": 160
+      },
+      "faction": "Undead",
+      "id": "skeleton",
+      "name": "Skeleton",
+      "orcaPriority": 0,
+      "shields": [],
+      "size": 2,
+      "sprite": {
+        "atlas": "VampireFaction",
+        "name": "Skeleton"
+      },
+      "spriteScale": 0.8999999761581421,
+      "spriteWorldHeight": 1.7999999523162842,
+      "stats": {
+        "attack": 8,
+        "combatSpeed": 3.5999999046325684,
+        "defense": 10,
+        "encumbrance": 0,
+        "magicResist": 6,
+        "maxHP": 6,
+        "naturalProt": 0,
+        "strength": 8
+      },
+      "type": "Skeleton",
+      "weapons": [
+        "spear"
+      ]
+    },
+    {
+      "ai": "AttackClosestRetarget",
+      "armors": [
+        "none"
+      ],
+      "color": {
+        "a": 255,
+        "b": 30,
+        "g": 30,
+        "r": 30
+      },
+      "faction": "Undead",
+      "id": "abomination",
+      "name": "Abomination",
+      "orcaPriority": 2,
+      "shields": [],
+      "size": 2,
+      "sprite": {
+        "atlas": "VampireFaction",
+        "name": "EliteGhoul2"
+      },
+      "spriteScale": 1.0,
+      "spriteWorldHeight": 2.5,
+      "stats": {
+        "attack": 10,
+        "combatSpeed": 3.0,
+        "defense": 8,
+        "encumbrance": 0,
+        "magicResist": 14,
+        "maxHP": 40,
+        "naturalProt": 8,
+        "strength": 16
+      },
+      "type": "Abomination",
+      "weapons": [
+        "hook"
+      ]
+    },
+    {
+      "ai": "AttackClosest",
+      "armors": [
+        "armor_11",
+        "armor_8"
+      ],
+      "color": {
+        "a": 255,
+        "b": 80,
+        "g": 140,
+        "r": 180
+      },
+      "faction": "Human",
+      "id": "militia",
+      "name": "Light Infantry Pikeman",
+      "orcaPriority": 0,
+      "shields": [],
+      "size": 2,
+      "sprite": {
+        "atlas": "Navarre_Units",
+        "name": "NavarreLightInfantry_Pikemen"
+      },
+      "spriteScale": 1.0,
+      "spriteWorldHeight": 1.899999976158142,
+      "stats": {
+        "attack": 8,
+        "combatSpeed": 3.0,
+        "defense": 12,
+        "encumbrance": 4,
+        "magicResist": 10,
+        "maxHP": 10,
+        "naturalProt": 0,
+        "strength": 10
+      },
+      "type": "Militia",
+      "weapons": [
+        "spear_copy"
+      ],
+      "zombieTypeID": "group_0"
+    },
+    {
+      "ai": "AttackClosest",
+      "armors": [
+        "armor_8",
+        "armor_11"
+      ],
+      "color": {
+        "a": 255,
+        "b": 80,
+        "g": 140,
+        "r": 180
+      },
+      "faction": "Undead",
+      "id": "militia_copy2",
+      "name": "LightInfantryZombie1",
+      "orcaPriority": 0,
+      "shields": [
+        "none"
+      ],
+      "size": 2,
+      "sprite": {
+        "atlas": "Navarre_Zombies",
+        "name": "NavarreLightInfantryZombieHG"
+      },
+      "spriteScale": 1.0,
+      "spriteWorldHeight": 1.899999976158142,
+      "stats": {
+        "attack": 6,
+        "combatSpeed": 1.5,
+        "defense": 6,
+        "encumbrance": 0,
+        "magicResist": 6,
+        "maxHP": 12,
+        "naturalProt": 0,
+        "strength": 9
+      },
+      "type": "Dynamic",
+      "weapons": [
+        "weapon_10",
+        "weapon_11"
+      ]
+    },
+    {
+      "ai": "AttackClosest",
+      "armors": [
+        "armor_8",
+        "armor_11"
+      ],
+      "color": {
+        "a": 255,
+        "b": 80,
+        "g": 140,
+        "r": 180
+      },
+      "faction": "Undead",
+      "id": "militia_copy2_copy",
+      "name": "LightInfantryZombie2",
+      "orcaPriority": 0,
+      "shields": [
+        "none"
+      ],
+      "size": 2,
+      "sprite": {
+        "atlas": "Navarre_Zombies",
+        "name": "NavarreLightInfantryZombieHNG"
+      },
+      "spriteScale": 1.0,
+      "spriteWorldHeight": 1.899999976158142,
+      "stats": {
+        "attack": 6,
+        "combatSpeed": 1.5,
+        "defense": 6,
+        "encumbrance": 0,
+        "magicResist": 6,
+        "maxHP": 12,
+        "naturalProt": 0,
+        "strength": 9
+      },
+      "type": "Dynamic",
+      "weapons": [
+        "weapon_10",
+        "weapon_11"
+      ]
+    },
+    {
+      "ai": "AttackClosest",
+      "armors": [
+        "armor_11"
+      ],
+      "color": {
+        "a": 255,
+        "b": 80,
+        "g": 140,
+        "r": 180
+      },
+      "faction": "Undead",
+      "id": "militia_copy2_copy_copy",
+      "name": "LightInfantryZombie3",
+      "orcaPriority": 0,
+      "shields": [
+        "none"
+      ],
+      "size": 2,
+      "sprite": {
+        "atlas": "Navarre_Zombies",
+        "name": "NavarreLightInfantryZombieNHNG"
+      },
+      "spriteScale": 1.0,
+      "spriteWorldHeight": 1.899999976158142,
+      "stats": {
+        "attack": 6,
+        "combatSpeed": 1.5,
+        "defense": 6,
+        "encumbrance": 0,
+        "magicResist": 6,
+        "maxHP": 12,
+        "naturalProt": 0,
+        "strength": 9
+      },
+      "type": "Dynamic",
+      "weapons": [
+        "weapon_10",
+        "weapon_11"
+      ]
+    },
+    {
+      "ai": "AttackClosest",
+      "armors": [
+        "armor_10",
+        "chainmail_helm"
+      ],
+      "color": {
+        "a": 255,
+        "b": 80,
+        "g": 140,
+        "r": 180
+      },
+      "faction": "Undead",
+      "id": "militia_copy2_copy_copy_copy",
+      "name": "TemplarZombie1",
+      "orcaPriority": 0,
+      "shields": [
+        "none"
+      ],
+      "size": 2,
+      "sprite": {
+        "atlas": "Navarre_Zombies",
+        "name": "NavarreTemplar_ZombieHCNG"
+      },
+      "spriteScale": 1.0,
+      "spriteWorldHeight": 1.899999976158142,
+      "stats": {
+        "attack": 6,
+        "combatSpeed": 1.5,
+        "defense": 6,
+        "encumbrance": 0,
+        "magicResist": 6,
+        "maxHP": 12,
+        "naturalProt": 0,
+        "strength": 9
+      },
+      "type": "Dynamic",
+      "weapons": [
+        "weapon_11"
+      ]
+    },
+    {
+      "ai": "AttackClosest",
+      "armors": [
+        "armor_10",
+        "chainmail_helm"
+      ],
+      "color": {
+        "a": 255,
+        "b": 80,
+        "g": 140,
+        "r": 180
+      },
+      "faction": "Undead",
+      "id": "militia_copy2_copy_copy_copy_copy",
+      "name": "TemplarZombie2",
+      "orcaPriority": 0,
+      "shields": [
+        "none"
+      ],
+      "size": 2,
+      "sprite": {
+        "atlas": "Navarre_Zombies",
+        "name": "NavarreTemplar_ZombieNCG"
+      },
+      "spriteScale": 1.0,
+      "spriteWorldHeight": 1.899999976158142,
+      "stats": {
+        "attack": 6,
+        "combatSpeed": 1.5,
+        "defense": 6,
+        "encumbrance": 0,
+        "magicResist": 6,
+        "maxHP": 12,
+        "naturalProt": 0,
+        "strength": 9
+      },
+      "type": "Dynamic",
+      "weapons": [
+        "weapon_11"
+      ]
+    },
+    {
+      "ai": "AttackClosest",
+      "armors": [
+        "chainmail_helm"
+      ],
+      "color": {
+        "a": 255,
+        "b": 80,
+        "g": 140,
+        "r": 180
+      },
+      "faction": "Undead",
+      "id": "militia_copy2_copy_copy_copy_copy_copy",
+      "name": "TemplarZombie3",
+      "orcaPriority": 0,
+      "shields": [
+        "none"
+      ],
+      "size": 2,
+      "sprite": {
+        "atlas": "Navarre_Zombies",
+        "name": "NavarreTemplar_ZombieNHCNG"
+      },
+      "spriteScale": 1.0,
+      "spriteWorldHeight": 1.899999976158142,
+      "stats": {
+        "attack": 6,
+        "combatSpeed": 1.5,
+        "defense": 6,
+        "encumbrance": 0,
+        "magicResist": 6,
+        "maxHP": 12,
+        "naturalProt": 0,
+        "strength": 9
+      },
+      "type": "Dynamic",
+      "weapons": [
+        "weapon_11",
+        "weapon_10"
+      ]
+    },
+    {
+      "ai": "AttackClosest",
+      "armors": [
+        "chainmail_helm"
+      ],
+      "color": {
+        "a": 255,
+        "b": 80,
+        "g": 140,
+        "r": 180
+      },
+      "faction": "Undead",
+      "id": "militia_copy2_copy_copy_copy_copy_copy_copy",
+      "name": "TemplarZombie4",
+      "orcaPriority": 0,
+      "shields": [
+        "none"
+      ],
+      "size": 2,
+      "sprite": {
+        "atlas": "Navarre_Zombies",
+        "name": "NavarreTemplar_ZombieNHNCNG"
+      },
+      "spriteScale": 1.0,
+      "spriteWorldHeight": 1.899999976158142,
+      "stats": {
+        "attack": 6,
+        "combatSpeed": 1.5,
+        "defense": 6,
+        "encumbrance": 0,
+        "magicResist": 6,
+        "maxHP": 12,
+        "naturalProt": 0,
+        "strength": 9
+      },
+      "type": "Dynamic",
+      "weapons": [
+        "weapon_11",
+        "weapon_10"
+      ]
+    },
+    {
+      "ai": "AttackClosest",
+      "armors": [
+        "armor_11",
+        "armor_8"
+      ],
+      "color": {
+        "a": 255,
+        "b": 80,
+        "g": 140,
+        "r": 180
+      },
+      "faction": "Human",
+      "id": "militia_copy",
+      "name": "Light Infantry Sword & Shield",
+      "orcaPriority": 0,
+      "shields": [],
+      "size": 2,
+      "sprite": {
+        "atlas": "Navarre_Units",
+        "name": "NavarreLightInfantry_Sword&Shield"
+      },
+      "spriteScale": 1.0,
+      "spriteWorldHeight": 1.7999999523162842,
+      "stats": {
+        "attack": 8,
+        "combatSpeed": 3.0,
+        "defense": 12,
+        "encumbrance": 4,
+        "magicResist": 10,
+        "maxHP": 10,
+        "naturalProt": 0,
+        "strength": 10
+      },
+      "type": "Dynamic",
+      "weapons": [
+        "club"
+      ],
+      "zombieTypeID": "group_0"
+    },
+    {
+      "ai": "Caster",
+      "armors": [
+        "cloth",
+        "hood"
+      ],
+      "color": {
+        "a": 255,
+        "b": 80,
+        "g": 140,
+        "r": 180
+      },
+      "faction": "Human",
+      "id": "militia_copy_copy",
+      "manaRegen": 1.0,
+      "maxMana": 50.0,
+      "name": "Priest",
+      "orcaPriority": 0,
+      "shields": [],
+      "size": 2,
+      "spellID": "god_ray",
+      "sprite": {
+        "atlas": "Navarre_Units",
+        "name": "NavarreBishop"
+      },
+      "spriteScale": 1.0,
+      "spriteWorldHeight": 1.7999999523162842,
+      "stats": {
+        "attack": 8,
+        "combatSpeed": 3.0,
+        "defense": 8,
+        "encumbrance": 2,
+        "magicResist": 14,
+        "maxHP": 10,
+        "naturalProt": 0,
+        "strength": 9
+      },
+      "type": "Dynamic",
+      "weapons": [
+        "staff"
+      ],
+      "zombieTypeID": "group_0"
+    },
+    {
+      "ai": "AttackClosest",
+      "armors": [
+        "chainmail_helm",
+        "armor_10"
+      ],
+      "color": {
+        "a": 255,
+        "b": 180,
+        "g": 100,
+        "r": 100
+      },
+      "faction": "Human",
+      "id": "soldier",
+      "name": "Soldier",
+      "orcaPriority": 0,
+      "shields": [
+        "tower_shield"
+      ],
+      "size": 2,
+      "sprite": {
+        "atlas": "Navarre_Units",
+        "name": "NavarreTemplar_Sword&Shield"
+      },
+      "spriteScale": 1.0,
+      "spriteWorldHeight": 1.7999999523162842,
+      "stats": {
+        "attack": 10,
+        "combatSpeed": 2.5,
+        "defense": 12,
+        "encumbrance": 6,
+        "magicResist": 10,
+        "maxHP": 10,
+        "naturalProt": 0,
+        "strength": 11
+      },
+      "type": "Soldier",
+      "weapons": [
+        "shortsword"
+      ],
+      "zombieTypeID": "group_1"
+    },
+    {
+      "ai": "AttackClosest",
+      "armors": [
+        "armor_10",
+        "chainmail_helm"
+      ],
+      "color": {
+        "a": 255,
+        "b": 50,
+        "g": 200,
+        "r": 220
+      },
+      "faction": "Human",
+      "id": "knight",
+      "name": "Knight",
+      "orcaPriority": 1,
+      "shields": [
+        "tower_shield"
+      ],
+      "size": 2,
+      "sprite": {
+        "atlas": "Navarre_Units",
+        "name": "NavarreUnderMarshal"
+      },
+      "spriteScale": 1.0,
+      "spriteWorldHeight": 1.7999999523162842,
+      "stats": {
+        "attack": 12,
+        "combatSpeed": 3.0,
+        "defense": 15,
+        "encumbrance": 5,
+        "magicResist": 12,
+        "maxHP": 15,
+        "naturalProt": 0,
+        "strength": 12
+      },
+      "type": "Knight",
+      "weapons": [
+        "shortsword"
+      ],
+      "zombieTypeID": "group_1"
+    },
+    {
+      "ai": "ArcherAttack",
+      "armors": [
+        "armor_11",
+        "armor_8"
+      ],
+      "color": {
+        "a": 255,
+        "b": 60,
+        "g": 100,
+        "r": 180
+      },
+      "faction": "Human",
+      "id": "archer",
+      "name": "Light Infantry Archer",
+      "orcaPriority": 0,
+      "shields": [],
+      "size": 2,
+      "sprite": {
+        "atlas": "Navarre_Units",
+        "name": "NavarreLightInfantry_Archer"
+      },
+      "spriteScale": 1.0,
+      "spriteWorldHeight": 1.7999999523162842,
+      "stats": {
+        "attack": 8,
+        "combatSpeed": 2.5,
+        "defense": 8,
+        "encumbrance": 2,
+        "magicResist": 10,
+        "maxHP": 8,
+        "naturalProt": 0,
+        "strength": 8
+      },
+      "type": "Archer",
+      "weapons": [
+        "dagger",
+        "longbow"
+      ],
+      "zombieTypeID": "group_0"
+    },
+    {
+      "ai": "AttackClosest",
+      "armors": [
+        "breastplate",
+        "armor_8"
+      ],
+      "color": {
+        "a": 255,
+        "b": 160,
+        "g": 160,
+        "r": 160
+      },
+      "faction": "Undead",
+      "id": "skeleton_copy",
+      "name": "Skeleton Warrior",
+      "orcaPriority": 0,
+      "shields": [
+        "shield_4"
+      ],
+      "size": 2,
+      "sprite": {
+        "atlas": "VampireFaction",
+        "name": "SkeletonWarrior2"
+      },
+      "spriteScale": 1.0,
+      "spriteWorldHeight": 1.899999976158142,
+      "stats": {
+        "attack": 10,
+        "combatSpeed": 4.800000190734863,
+        "defense": 11,
+        "encumbrance": 0,
+        "magicResist": 6,
+        "maxHP": 8,
+        "naturalProt": 0,
+        "strength": 8
+      },
+      "type": "Dynamic",
+      "weapons": [
+        "shortsword"
+      ]
+    },
+    {
+      "ai": "AttackClosest",
+      "armors": [
+        "armor_9",
+        "armor_10"
+      ],
+      "color": {
+        "a": 255,
+        "b": 160,
+        "g": 160,
+        "r": 160
+      },
+      "faction": "Undead",
+      "id": "skeleton_copy_copy",
+      "name": "Elite Skeleton",
+      "orcaPriority": 1,
+      "shields": [
+        "none"
+      ],
+      "size": 2,
+      "sprite": {
+        "atlas": "VampireFaction",
+        "name": "SkeletonWarrior3"
+      },
+      "spriteScale": 1.0,
+      "spriteWorldHeight": 1.7999999523162842,
+      "stats": {
+        "attack": 11,
+        "combatSpeed": 4.800000190734863,
+        "defense": 10,
+        "encumbrance": 0,
+        "magicResist": 8,
+        "maxHP": 12,
+        "naturalProt": 4,
+        "strength": 12
+      },
+      "type": "Dynamic",
+      "weapons": [
+        "weapon_8"
+      ]
+    },
+    {
+      "ai": "AttackClosest",
+      "armors": [],
+      "color": {
+        "a": 255,
+        "b": 160,
+        "g": 160,
+        "r": 160
+      },
+      "faction": "Undead",
+      "id": "skeleton_copy_copy_copy",
+      "name": "Risen",
+      "orcaPriority": 1,
+      "shields": [
+        "none"
+      ],
+      "size": 3,
+      "sprite": {
+        "atlas": "VampireFaction",
+        "name": "VampireRisen"
+      },
+      "spriteScale": 1.2999999523162842,
+      "spriteWorldHeight": 1.7999999523162842,
+      "stats": {
+        "attack": 13,
+        "combatSpeed": 6.0,
+        "defense": 12,
+        "encumbrance": 0,
+        "magicResist": 10,
+        "maxHP": 20,
+        "naturalProt": 8,
+        "strength": 14
+      },
+      "type": "Dynamic",
+      "weapons": [
+        "weapon_11",
+        "weapon_11"
+      ]
+    }
+  ]
+}

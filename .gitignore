@@ -1,0 +1,37 @@
+## .NET / MonoGame
+bin/
+obj/
+*.user
+*.suo
+*.cache
+*.log
+
+## Build outputs
+Necroking/bin/
+Necroking.Editor/bin/
+Necroking.Tests/bin/
+Necroking/obj/
+Necroking.Editor/obj/
+Necroking.Tests/obj/
+
+## Publish output
+Necroking/bin/Publish/
+
+## IDE
+.vs/
+.vscode/
+*.DotSettings
+
+## OS
+Thumbs.db
+.DS_Store
+
+## MGCB intermediates
+Necroking/Content/bin/
+Necroking/Content/obj/
+
+## NuGet
+*.nupkg
+
+## Claude
+.claude/
