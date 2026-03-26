@@ -17,6 +17,14 @@ public static class ScenarioRegistry
         Register("ai_behavior", () => new Scenarios.AIBehaviorScenario());
         Register("building_placement", () => new Scenarios.BuildingPlacementScenario());
         Register("ground_test", () => new Scenarios.GroundTestScenario());
+        Register("order_attack", () => new Scenarios.OrderAttackScenario());
+        Register("god_ray", () => new Scenarios.GodRayScenario());
+        Register("priest_battle", () => new Scenarios.PriestBattleScenario());
+        Register("patrol_encounter", () => new Scenarios.PatrolEncounterScenario());
+        Register("wall_test", () => new Scenarios.WallTestScenario());
+        Register("wall_trap", () => new Scenarios.WallTrapScenario());
+        Register("wall_gate", () => new Scenarios.WallGateScenario());
+        Register("UIEmpty", () => new Scenarios.UIEmptyScenario());
     }
 
     public static void Register(string name, Func<ScenarioBase> creator)

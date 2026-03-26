@@ -39,7 +39,7 @@ public class SpellTestScenario : ScenarioBase
         {
             float angle = -60f + i * 30f; // -60 to +60 degrees
             float rad = angle * MathF.PI / 180f;
-            float dist = 6f;
+            float dist = 14f;
             var pos = new Vec2(10f + MathF.Cos(rad) * dist, 10f + MathF.Sin(rad) * dist);
             _enemyPositions[i] = pos;
             int enemyIdx = units.AddUnit(pos, UnitType.Soldier);
@@ -94,11 +94,14 @@ public class SpellTestScenario : ScenarioBase
             if (sim.Units.Faction[i] == Faction.Human)
             {
                 if (sim.Units.Alive[i]) aliveEnemies++;
-                // Check if they took damage (HP < max)
-                if (sim.Units.Stats[i].HP < sim.Units.Stats[i].MaxHP || !sim.Units.Alive[i])
+                // Check if they took damage (HP < max) — dead units are removed by swap-and-pop
+                if (sim.Units.Stats[i].HP < sim.Units.Stats[i].MaxHP)
                     totalDamaged++;
             }
         }
+        // Dead enemies count as damaged (they were removed from the array)
+        int killed = _initialEnemyCount - aliveEnemies;
+        totalDamaged += killed;
 
         // Check projectile count
         int activeProjectiles = 0;
