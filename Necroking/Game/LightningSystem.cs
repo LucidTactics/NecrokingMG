@@ -1,6 +1,9 @@
+using System;
 using System.Collections.Generic;
 using Necroking.Core;
 using Necroking.Data;
+using Necroking.Movement;
+using Necroking.Spatial;
 
 namespace Necroking.GameSystems;
 
@@ -37,6 +40,9 @@ public class ActiveStrike
     public bool Alive = true;
     public string SpellID = "";
     public LightningStyle Style = new();
+    public StrikeVisual Visual = StrikeVisual.Lightning;
+    public GodRayParams GodRay = new();
+    public SpellTargetFilter TargetFilter = SpellTargetFilter.AnyEnemy;
 }
 
 public class ActiveZap
@@ -107,7 +113,9 @@ public class LightningSystem
     public IReadOnlyList<ActiveDrain> Drains => _drains;
 
     public void SpawnStrike(Vec2 targetPos, float telegraphDuration, float effectDuration,
-                            float aoeRadius, int damage, LightningStyle style, string spellID)
+                            float aoeRadius, int damage, LightningStyle style, string spellID,
+                            StrikeVisual visual = StrikeVisual.Lightning, GodRayParams? godRay = null,
+                            SpellTargetFilter targetFilter = SpellTargetFilter.AnyEnemy)
     {
         _strikes.Add(new ActiveStrike
         {
@@ -117,7 +125,10 @@ public class LightningSystem
             AoeRadius = aoeRadius,
             Damage = damage,
             Style = style,
-            SpellID = spellID
+            SpellID = spellID,
+            Visual = visual,
+            GodRay = godRay ?? new GodRayParams(),
+            TargetFilter = targetFilter
         });
     }
 
@@ -157,7 +168,8 @@ public class LightningSystem
         });
     }
 
-    public void Update(float dt, List<LightningDamage> outDamage)
+    public void Update(float dt, List<LightningDamage> outDamage,
+                        Quadtree? quadtree = null, UnitArrays? units = null)
     {
         // Update strikes
         for (int i = _strikes.Count - 1; i >= 0; i--)
@@ -171,7 +183,28 @@ public class LightningSystem
                 if (!s.DamageApplied)
                 {
                     s.DamageApplied = true;
-                    outDamage.Add(new LightningDamage { UnitIdx = -1, Damage = s.Damage });
+
+                    // AOE damage: query quadtree for units in radius
+                    if (quadtree != null && units != null && s.AoeRadius > 0f)
+                    {
+                        var nearby = new List<uint>();
+                        quadtree.QueryRadius(s.TargetPos, s.AoeRadius, nearby);
+                        foreach (uint nid in nearby)
+                        {
+                            int j = UnitUtil.ResolveUnitIndex(units, nid);
+                            if (j < 0 || !units.Alive[j]) continue;
+
+                            bool shouldHit = s.TargetFilter switch
+                            {
+                                SpellTargetFilter.AnyEnemy => units.Faction[j] != Faction.Undead,
+                                SpellTargetFilter.UndeadOnly => units.Faction[j] == Faction.Undead,
+                                SpellTargetFilter.LivingOnly => units.Faction[j] != Faction.Undead,
+                                _ => true
+                            };
+                            if (shouldHit)
+                                outDamage.Add(new LightningDamage { UnitIdx = j, Damage = s.Damage });
+                        }
+                    }
                 }
                 if (s.EffectTimer >= s.EffectDuration) s.Alive = false;
             }

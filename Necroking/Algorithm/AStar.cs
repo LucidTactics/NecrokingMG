@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using Necroking.Core;
+using Necroking.World;
 
 namespace Necroking.Algorithm;
 
@@ -95,7 +96,15 @@ public static class AStar
                 byte tileCost = getCost(nx, ny);
                 if (tileCost == 255) continue;
 
-                float tentativeG = currentG + moveCost * (1.0f + tileCost * 0.1f);
+                // For diagonal movement, check both adjacent cardinal tiles are passable
+                // (no corner-cutting through walls)
+                if (dx != 0 && dy != 0)
+                {
+                    if (getCost(cx + dx, cy) >= 255) continue;
+                    if (getCost(cx, cy + dy) >= 255) continue;
+                }
+
+                float tentativeG = currentG + moveCost * tileCost;
                 long nKey = Key(nx, ny);
 
                 if (!gScore.TryGetValue(nKey, out float existingG) || tentativeG < existingG)
@@ -106,6 +115,36 @@ public static class AStar
                     openSet.Add((f, nKey));
                 }
             }
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// World-space convenience wrapper: converts world positions to grid coords,
+    /// runs A*, then converts resulting path back to world-space waypoints.
+    /// </summary>
+    public static AStarResultWorld FindWorld(TileGrid grid, Vec2 startWorld, Vec2 goalWorld,
+                                              int sizeTier = 0, int maxSearchTiles = 0)
+    {
+        var start = grid.WorldToGrid(startWorld);
+        var goal = grid.WorldToGrid(goalWorld);
+
+        var tileResult = Find(
+            (x, y) => grid.GetCost(x, y, sizeTier),
+            grid.Width, grid.Height, start, goal, maxSearchTiles);
+
+        var result = new AStarResultWorld
+        {
+            Found = tileResult.Found,
+            TotalCost = tileResult.TotalCost,
+            Waypoints = new List<Vec2>()
+        };
+
+        if (tileResult.Found)
+        {
+            foreach (var gc in tileResult.Path)
+                result.Waypoints.Add(grid.GridToWorld(gc.X, gc.Y));
         }
 
         return result;

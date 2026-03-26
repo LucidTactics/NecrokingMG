@@ -103,7 +103,11 @@ public class TriggerSystem
         }
 
         // Evaluate each trigger instance
-        var evalCtx = new TriggerEvalContext { GameTime = sim.GameTime };
+        var evalCtx = new TriggerEvalContext
+        {
+            GameTime = sim.GameTime,
+            RuntimeStates = _runtimeState.ToArray()
+        };
 
         for (int i = 0; i < _instances.Count; i++)
         {

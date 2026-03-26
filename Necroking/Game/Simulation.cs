@@ -180,6 +180,7 @@ public class Simulation
         // Core subsystems
         UpdateAI(dt);
         UpdateMovement(dt);
+        _horde.UpdateStates(_units, _quadtree, _necromancerIdx, dt);
         UpdateFacingAngles(dt);
         UpdateCombat(dt);
 
@@ -193,7 +194,7 @@ public class Simulation
 
         // Lightning
         var lightningDmg = new List<LightningDamage>();
-        _lightning.Update(dt, lightningDmg);
+        _lightning.Update(dt, lightningDmg, _quadtree, _units);
         foreach (var ld in lightningDmg)
             if (ld.UnitIdx >= 0 && ld.UnitIdx < _units.Count)
                 ApplyDamage(ld.UnitIdx, ld.Damage);
@@ -253,7 +254,10 @@ public class Simulation
                 case AIBehavior.PlayerControlled:
                 {
                     float speed = _units.MaxSpeed[i];
-                    if (_necroRunning) speed *= 1.8f;
+                    if (_units.GhostMode[i])
+                        speed = 20.0f; // Ghost mode: fixed high speed, ignores collision
+                    else if (_necroRunning)
+                        speed *= 1.8f;
                     _units.PreferredVel[i] = _necroMoveInput * speed;
                     break;
                 }
@@ -413,9 +417,70 @@ public class Simulation
 
                 case AIBehavior.Caster:
                 {
-                    // Stay idle, cast spell when mana available
                     _units.PreferredVel[i] = Vec2.Zero;
-                    // Auto-casting handled by caster spell system (not yet wired)
+
+                    // Tick mana regen
+                    _units.Mana[i] = MathF.Min(_units.MaxMana[i], _units.Mana[i] + _units.ManaRegen[i] * dt);
+
+                    // Tick spell cooldown
+                    _units.SpellCooldownTimer[i] = MathF.Max(0f, _units.SpellCooldownTimer[i] - dt);
+
+                    // No spell or no mana pool — idle
+                    string spellId = _units.SpellID[i];
+                    if (string.IsNullOrEmpty(spellId) || _units.MaxMana[i] <= 0f) break;
+
+                    // Look up spell definition
+                    var spell = _gameData?.Spells.Get(spellId);
+                    if (spell == null) break;
+
+                    // Find closest enemy within spell range
+                    int enemy = FindClosestEnemy(i);
+                    if (enemy >= 0)
+                    {
+                        float dist = (_units.Position[enemy] - _units.Position[i]).Length();
+                        if (dist <= spell.Range &&
+                            _units.Mana[i] >= spell.ManaCost &&
+                            _units.SpellCooldownTimer[i] <= 0f)
+                        {
+                            // Cast the spell — spawn strike at target
+                            var style = new LightningStyle
+                            {
+                                CoreColor = spell.StrikeCoreColor,
+                                GlowColor = spell.StrikeGlowColor,
+                                CoreWidth = spell.StrikeCoreWidth,
+                                GlowWidth = spell.StrikeGlowWidth
+                            };
+                            var visual = spell.StrikeVisualType == "GodRay"
+                                ? StrikeVisual.GodRay : StrikeVisual.Lightning;
+                            var grp = new GodRayParams
+                            {
+                                EdgeSoftness = spell.GodRayEdgeSoftness,
+                                NoiseSpeed = spell.GodRayNoiseSpeed,
+                                NoiseStrength = spell.GodRayNoiseStrength,
+                                NoiseScale = spell.GodRayNoiseScale
+                            };
+                            var tFilter = Enum.TryParse<SpellTargetFilter>(spell.TargetFilter, out var tf)
+                                ? tf : SpellTargetFilter.AnyEnemy;
+                            _lightning.SpawnStrike(_units.Position[enemy],
+                                spell.TelegraphDuration, spell.StrikeDuration,
+                                spell.AoeRadius, spell.Damage, style, spell.Id, visual, grp, tFilter);
+
+                            _units.Mana[i] -= spell.ManaCost;
+                            _units.SpellCooldownTimer[i] = spell.Cooldown;
+
+                            // Apply casting buff
+                            if (!string.IsNullOrEmpty(spell.CastingBuffID) && _gameData != null)
+                            {
+                                var castBuff = _gameData.Buffs.Get(spell.CastingBuffID);
+                                if (castBuff != null) BuffSystem.ApplyBuff(_units, i, castBuff);
+                            }
+
+                            // Face target
+                            var toEnemy = _units.Position[enemy] - _units.Position[i];
+                            if (toEnemy.LengthSq() > 0.01f)
+                                _units.FacingAngle[i] = MathF.Atan2(toEnemy.Y, toEnemy.X) * 180f / MathF.PI;
+                        }
+                    }
                     break;
                 }
 
@@ -429,25 +494,46 @@ public class Simulation
                 case AIBehavior.OrderAttack:
                 {
                     // Attack-move to moveTarget, fight enemies, rejoin horde
+                    const float OrderEngageRange = 15f;
+                    const float OrderArrivalDist = 5f;
+
+                    Vec2 dest = _units.MoveTarget[i];
+                    float distToDest = (_units.Position[i] - dest).Length();
+                    bool atDest = distToDest < OrderArrivalDist;
+
+                    // Acquire/validate target
                     if (!IsTargetAlive(_units.Target[i]))
                     {
                         int enemy = FindClosestEnemy(i);
-                        if (enemy >= 0 && (_units.Position[enemy] - _units.Position[i]).Length() < 15f)
-                            _units.Target[i] = CombatTarget.Unit(_units.Id[enemy]);
+                        if (enemy >= 0)
+                        {
+                            float eDist = (_units.Position[enemy] - _units.Position[i]).Length();
+                            if (eDist < OrderEngageRange)
+                                _units.Target[i] = CombatTarget.Unit(_units.Id[enemy]);
+                            else
+                                _units.Target[i] = CombatTarget.None;
+                        }
                     }
-                    if (_units.Target[i].IsUnit)
+
+                    if (IsTargetAlive(_units.Target[i]) && _units.Target[i].IsUnit)
                     {
                         int ti = ResolveUnitTarget(_units.Target[i]);
                         if (ti >= 0) MoveTowardUnit(i, ti, _units.MaxSpeed[i]);
                         else _units.PreferredVel[i] = Vec2.Zero;
                     }
+                    else if (!atDest)
+                    {
+                        // March toward destination
+                        var dir = (dest - _units.Position[i]).Normalized();
+                        _units.PreferredVel[i] = dir * _units.MaxSpeed[i];
+                    }
                     else
                     {
-                        var toTarget = _units.MoveTarget[i] - _units.Position[i];
-                        if (toTarget.LengthSq() > 1f)
-                            _units.PreferredVel[i] = toTarget.Normalized() * _units.MaxSpeed[i];
-                        else
-                            _units.PreferredVel[i] = Vec2.Zero;
+                        // At destination with no enemies — return to horde
+                        _units.AI[i] = AIBehavior.AttackClosest;
+                        _units.Target[i] = CombatTarget.None;
+                        _horde.AddUnit(_units.Id[i]);
+                        _units.PreferredVel[i] = Vec2.Zero;
                     }
                     break;
                 }

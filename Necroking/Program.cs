@@ -1,4 +1,6 @@
 using System;
+using System.IO;
+using System.Reflection;
 using Microsoft.Xna.Framework;
 
 namespace Necroking;
@@ -65,6 +67,11 @@ public static class Program
     [STAThread]
     static void Main(string[] args)
     {
+        // Set CWD to executable directory so data/ and assets/ are found
+        var exeDir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
+        if (!string.IsNullOrEmpty(exeDir))
+            Directory.SetCurrentDirectory(exeDir);
+
         LaunchArgs.Parse(args);
         using var game = new Game1();
         game.Run();

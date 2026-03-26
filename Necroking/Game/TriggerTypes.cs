@@ -51,7 +51,11 @@ public class CondUnitsKilled : ConditionNode
 {
     public int Count { get; set; } = 1;
     public bool Cumulative { get; set; } = true;
-    public override bool Evaluate(TriggerEvalContext ctx, int instanceIdx) => false;
+    public override bool Evaluate(TriggerEvalContext ctx, int instanceIdx)
+    {
+        if (instanceIdx < 0 || instanceIdx >= ctx.RuntimeStates.Length) return false;
+        return ctx.RuntimeStates[instanceIdx].KillCounter >= Count;
+    }
 }
 
 public class CondGameTime : ConditionNode
@@ -167,6 +171,7 @@ public class TriggerInstance
 public class TriggerEvalContext
 {
     public float GameTime;
+    public TriggerRuntimeState[] RuntimeStates = System.Array.Empty<TriggerRuntimeState>();
 }
 
 public class TriggerExecContext

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Necroking.Core;
 using Necroking.Data;
 using Necroking.Data.Registries;
 using Necroking.Movement;
@@ -97,5 +98,32 @@ public static class BuffSystem
         }
 
         return setValue ?? (baseValue + additive) * multiplicative;
+    }
+
+    /// <summary>
+    /// Apply buff with combat log output showing stat changes.
+    /// </summary>
+    public static void ApplyBuffLogged(UnitArrays units, int unitIdx, BuffDef def, string unitName)
+    {
+        if (unitIdx < 0 || unitIdx >= units.Count) return;
+
+        // Log the application
+        var buffs = units.ActiveBuffs[unitIdx];
+        bool stacking = false;
+        for (int i = 0; i < buffs.Count; i++)
+        {
+            if (buffs[i].BuffDefID == def.Id) { stacking = true; break; }
+        }
+
+        if (stacking)
+            DebugLog.Log("combat", $"         Buff '{def.Id}' stacked on {unitName}");
+        else
+            DebugLog.Log("combat", $"         Buff '{def.Id}' applied to {unitName}");
+
+        // Log stat changes
+        foreach (var eff in def.Effects)
+            DebugLog.Log("combat", $"           {eff.Type} {eff.Stat} {eff.Value:+0.##;-0.##;0}");
+
+        ApplyBuff(units, unitIdx, def);
     }
 }
