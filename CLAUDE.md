@@ -1,28 +1,26 @@
-# Necroking - Claude Code Instructions
+# Necroking (MonoGame C#) - Claude Code Instructions
 
 ## Build
 ```bash
-cmake --build build --config Release
+dotnet build Necroking/Necroking.csproj
 ```
-Always build in Release mode unless the user explicitly requests a Debug build.
-
-**Important**: If the CMake cache has `CMAKE_BUILD_TYPE=Debug`, the `--config Release` flag alone does NOT switch to Release (single-config generator). You must reconfigure first:
+Default build is Debug. For Release:
 ```bash
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+dotnet build Necroking/Necroking.csproj -c Release
 ```
-Then rebuild. Debug builds are ~112MB vs ~5MB for Release and are far too slow for scenario iteration.
 
 ## File Conventions
-- C++ source in `src/`, organized by subsystem (core, data, editor, game, movement, render, spatial, ui, world)
-- Assets in `assets/` (Environment/, Effects/, Icons/, Sprites/, shaders/, UI/)
-- Game data in `data/` (JSON/XML registries, maps, settings)
+- C# source in `Necroking/`, organized by subsystem (Algorithm, Core, Data, Editor, Game, Movement, Render, Scenario, Spatial, UI, World)
+- Main game loop in `Necroking/Game1.cs`, entry point in `Necroking/Program.cs`
+- Assets in `Necroking/assets/` (Environment/, Effects/, Icons/, Sprites/, shaders/, UI/)
+- Game data in `Necroking/Content/data/` (JSON registries, maps, settings)
 - Tools/scripts in `tools/` (Python utilities)
 
 ## Code Style
-- Use `Vec2` (custom type) for world positions, `Vector2` (raylib) for screen positions
-- Debug logging via `src/core/debug_log.h` — file-based, never console
-- Editors use raygui immediate mode + custom widgets
-- Shaders in `assets/shaders/`, GLSL 330
+- Use `Vec2` (custom type in `Core/`) for world positions, `Vector2` (MonoGame/XNA) for screen positions
+- Debug logging via `Core/DebugLog.cs` — file-based to `log/` directory, never console
+- Editors use immediate mode UI in `Editor/`
+- Shaders in `Necroking/assets/shaders/`, GLSL/HLSL
 
 ## Large File Safety
 - **NEVER** attempt to read or upload files larger than 15 MB directly — this causes context overflow loops
@@ -70,7 +68,11 @@ Automated test scenarios let you verify game behavior by running the game, execu
 
 ### Running a scenario
 ```bash
-./build/Necroking.exe --scenario <name> --timeout <seconds>
+dotnet run --project Necroking/Necroking.csproj -- --scenario <name> --timeout <seconds>
+```
+Or run the built executable directly:
+```bash
+Necroking/bin/Debug/net9.0/Necroking.exe --scenario <name> --timeout <seconds>
 ```
 - `--scenario <name>` — required, selects which scenario to run
 - `--timeout <seconds>` — optional (default 30), wall-clock time before force-quit
@@ -85,41 +87,44 @@ Automated test scenarios let you verify game behavior by running the game, execu
 ### Available scenarios
 - `combat_test` — Spawns a skeleton and soldier, lets them fight, validates combat.log
 - `skirmish` — 20 skeletons vs 8 soldiers line battle
-- `empty_map` — Verifies empty map has nothing spawned, saves screenshot
-- `UIEmpty` — [UI test] Verifies UI/HUD is visible on empty map, saves screenshot
-- `grass_test` — Isolated grass rendering: single cells, patches, mixed types (6 screenshots)
+- `empty_map` — Verifies empty map has nothing spawned
+- `spell_test` — Fires 5 fireballs at enemies, validates projectile spawning and damage
+- `combat_log` — Validates combat log entries are written
+- `ai_behavior` — Tests archer, guard, and attack-necro AI behaviors
+- `building_placement` — Places and validates a building
+- `ground_test` — Ground rendering screenshot test
+- `order_attack` — 12 skeletons march to target, fight 2 soldiers, return to horde
+- `god_ray` — Caster AI fires god ray spells at skeleton cluster
+- `priest_battle` — Priest caster + 5 soldiers vs 20 skeletons
+- `patrol_encounter` — 6 skeleton camp attacked by 4 patrolling soldiers
+- `wall_test` — Wall patterns placed on grid, pathfinding rebuilt
+- `wall_trap` — 10 soldiers trapped inside wall ring, validates all survive
+- `wall_gate` — Wall ring with north gate, soldiers navigate through via A*
+- `UIEmpty` — [UI test] Verifies UI/HUD is visible on empty map
 
 ### Creating a new scenario
-1. Create `src/scenario/my_scenario.h` and `src/scenario/my_scenario.cpp`
-2. Extend `ScenarioBase` (defined in `src/scenario/scenario_base.h`):
-   - `name()` — return a short identifier string
-   - `onInit(Simulation& sim)` — spawn units, set up state
-   - `onTick(Simulation& sim, float dt)` — per-frame checks
-   - `isComplete()` — return true when done
-   - `onComplete(Simulation& sim)` — final validation, return 0=pass / non-zero=fail
-3. Add the .cpp to `GAME_SOURCES` in `CMakeLists.txt`
-4. Register it in `src/scenario/scenario_registry.h` — add `#include` and an `if` branch in `createScenario()`
-5. Build and test: `cmake --build build --config Release && ./build/Necroking.exe --scenario my_scenario --timeout 30`
+1. Create `Necroking/Scenario/Scenarios/MyScenario.cs`
+2. Extend `ScenarioBase` (defined in `Necroking/Scenario/ScenarioBase.cs`):
+   - `Name` — property returning a short identifier string
+   - `OnInit(Simulation sim)` — spawn units, set up state
+   - `OnTick(Simulation sim, float dt)` — per-frame checks
+   - `IsComplete` — property returning true when done
+   - `OnComplete(Simulation sim)` — final validation, return 0=pass / non-zero=fail
+3. Register it in `Necroking/Scenario/ScenarioRegistry.cs` — add a `Register(...)` call in the static constructor
+4. Build and test: `dotnet build Necroking/Necroking.csproj && Necroking/bin/Debug/net9.0/Necroking.exe --scenario my_scenario --timeout 30 --headless --speed 10`
 
 ### UI test scenarios
 - For scenarios that need HUD/UI rendered, extend `UIScenarioBase` instead of `ScenarioBase`
 - UI test names should start with "UI" (e.g. `UIEmpty`, `UISpellBar`)
 - Default scenarios suppress all UI/HUD rendering for clean visual output
 
-### Grass test scenarios
-- Override `wantsGrass()` → `true` to enable grass rendering
-- Access grass system via `grassSystem_` pointer (set by main.cpp before onInit)
-- Start with `grassSystem_->fillGrassType(255)` to clear all grass, then place only what you need
-- Use `setGrassType(cx, cy, typeIndex)` for individual cells — grid coords = `worldPos / cellSize()`
-
 ### Screenshots
-- Use `scenarioScreenshot("name")` (from `scenario/scenario_screenshot.h`) to save PNGs
-- Screenshots are saved to `build/log/screenshots/<name>.png`
+- Set `DeferredScreenshot = "name"` to request a screenshot (taken by main loop after rendering)
+- Screenshots are saved to `log/screenshots/<name>.png` (relative to executable directory)
 - The screenshot directory is cleared on each scenario run
 - Use `Read` tool on the PNG path to visually verify screenshots
-- Use `zoomOnLocation(worldX, worldY, zoom)` to move the camera before each screenshot
-- **Zoom guidance for render tests**: always include at least one tightly-zoomed shot of the smallest testable element (a single grass cell, a single unit, a single wall tile, etc.) so rendering issues are easy to spot. Use zoom 100-128 for close-ups, 40-80 for medium shots, 20-40 for overviews
-- For multi-screenshot scenarios: start with the most isolated/zoomed views first, then build up to combinations and overview shots
+- Use `ZoomOnLocation(worldX, worldY, zoom)` to move the camera before each screenshot
+- **Zoom guidance for render tests**: always include at least one tightly-zoomed shot of the smallest testable element (a single unit, a single wall tile, etc.) so rendering issues are easy to spot. Use zoom 100-128 for close-ups, 40-80 for medium shots, 20-40 for overviews
 
 ### Testing preference
 When asked to write an automated test, **always prefer creating a scenario first** (in-engine test with real rendering/systems/screenshots). Only fall back to external scripting (Python tools, etc.) if the scenario system can't handle what's needed — e.g., pure data validation, offline analysis, or things that don't require the game running.
@@ -127,7 +132,7 @@ When asked to write an automated test, **always prefer creating a scenario first
 ### Scenario logging
 When creating a new scenario, **spend real effort designing what to log**. The scenario log is your primary debugging tool — if a scenario fails or behaves unexpectedly, the log is how you figure out why without re-running.
 
-- Use `debugLog("scenario", ...)` for all scenario logging (writes to `log/scenario.log`)
+- Use `DebugLog.Log(ScenarioLog, ...)` for all scenario logging (writes to `log/scenario.log`)
 - **Log liberally** — the scenario log doesn't clutter gameplay logs, so there's no cost to over-logging
 - When in doubt, **log more rather than less**. It's much easier to skip past extra log lines than to re-run a scenario because you didn't log enough
 - Log at every decision point: what the scenario is about to do and why
@@ -135,12 +140,12 @@ When creating a new scenario, **spend real effort designing what to log**. The s
 - Log measured values with context: not just `damage=5` but `damage=5 (expected 3-8, attacker=Skeleton str=10, defender=Soldier prot=12)`
 - Log counts and summaries: unit counts per faction each tick, total damage dealt, rounds elapsed
 - On completion, log a detailed summary of what happened — this makes pass/fail output much more useful
-- Combat log output goes to `log/combat.log` — check it with `cat build/log/combat.log`
+- Combat log output goes to `log/combat.log` — check it with `cat Necroking/bin/Debug/net9.0/log/combat.log`
 
 ### Scenario tips
-- No necromancer is spawned in scenarios; use `sim.getUnitsMut().addUnit(pos, type)` to spawn units
+- No necromancer is spawned in scenarios; use `sim.UnitsMut.AddUnit(pos, type)` to spawn units
 - Unit indices can shift after dead units are removed (swap-and-pop) — check by faction count, not stored indices
-- Available unit types: Skeleton, Soldier, Knight, Archer, Militia, Abomination (via UnitType enum)
+- Available unit types: Skeleton, Soldier, Knight, Archer, Militia, Abomination, Necromancer, Dynamic (via UnitType enum)
 - Scenarios render with no grass, no ground, no weather — just the background color and sprites
 - Default background is dark muddy brown (45,35,25) — good contrast for sprites with black outlines
 - Use `--bgcolor R,G,B` to change background when testing sprites that blend into the default (e.g. `--bgcolor 80,80,100` for lighter, `--bgcolor 0,0,0` for pure black)
@@ -148,13 +153,13 @@ When creating a new scenario, **spend real effort designing what to log**. The s
 
 ## Auto-accept Patterns
 - Reading any file in the project
-- Editing files in `src/`, `assets/shaders/`, `tools/`
-- Creating new files in `src/`, `assets/`, `tools/`, `data/`
-- Running `cmake --build build`
+- Editing files in `Necroking/`, `tools/`
+- Creating new files in `Necroking/`, `tools/`
+- Running `dotnet build`
 - Running Python scripts in `tools/`
 - Running `ls`, `mkdir` for directory inspection
 - Glob and Grep searches within the project
-- Running scenario tests via `./Necroking.exe --scenario`
+- Running scenario tests via `Necroking.exe --scenario`
 
 ## Bash
 
