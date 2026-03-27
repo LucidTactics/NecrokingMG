@@ -636,6 +636,11 @@ public class Simulation
                 int j = UnitUtil.ResolveUnitIndex(_units, nid);
                 if (j < 0 || !_units.Alive[j]) continue;
 
+                // Necromancer ignores friendly units for ORCA — they dodge around it instead
+                if (_units.AI[i] == AIBehavior.PlayerControlled &&
+                    _units.Faction[j] == _units.Faction[i])
+                    continue;
+
                 neighbors.Add(new ORCANeighbor
                 {
                     Position = _units.Position[j],
@@ -666,6 +671,33 @@ public class Simulation
                 _units.Position[i], _units.Velocity[i], _units.PreferredVel[i],
                 neighbors, param, dt);
 
+            // Stuck detection + perpendicular nudge
+            float speed = newVel.Length();
+            float prefSpeed = _units.PreferredVel[i].Length();
+            if (prefSpeed > 0.1f && speed < 0.1f * _units.MaxSpeed[i])
+            {
+                _units.StuckFrames[i]++;
+                if (_units.StuckFrames[i] > 20)
+                {
+                    // Compute perpendicular to preferred velocity
+                    Vec2 prefDir = _units.PreferredVel[i] * (1f / prefSpeed);
+                    Vec2 perp = (i % 2 == 0)
+                        ? new Vec2(-prefDir.Y, prefDir.X)
+                        : new Vec2(prefDir.Y, -prefDir.X);
+
+                    // Blend ramps from 30% at 1s (frame 60) to 80% at 2s (frame 120)
+                    float t = MathUtil.Clamp((_units.StuckFrames[i] - 20) / 100f, 0f, 1f);
+                    float blend = 0.3f + t * 0.5f;
+
+                    newVel = _units.PreferredVel[i] * (1f - blend) + perp * (prefSpeed * blend);
+                    speed = newVel.Length();
+                }
+            }
+            else
+            {
+                _units.StuckFrames[i] = 0;
+            }
+
             // Apply acceleration limit
             float targetSpeed = newVel.Length();
             float currentSpeed = _units.Velocity[i].Length();
@@ -673,7 +705,8 @@ public class Simulation
 
             if (speedDiff > 0f)
             {
-                float maxAccel = _units.MaxSpeed[i] / AccelTime;
+                float accelMult = _units.AI[i] == AIBehavior.PlayerControlled ? 3f : 1f;
+                float maxAccel = _units.MaxSpeed[i] / AccelTime * accelMult;
                 float maxDelta = maxAccel * dt;
                 if (speedDiff > maxDelta) speedDiff = maxDelta;
             }

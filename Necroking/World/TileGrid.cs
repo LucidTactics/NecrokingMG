@@ -14,8 +14,8 @@ public static class TerrainCosts
     public static float GetCost(TerrainType t) => t switch
     {
         TerrainType.Open => 1f,
-        TerrainType.Rough => 3f,
-        TerrainType.Water => 10f,
+        TerrainType.Rough => 2f,
+        TerrainType.Water => 5f,
         TerrainType.Wall => 255f,
         _ => 1f
     };
@@ -122,6 +122,27 @@ public class TileGrid
                 float dy = ty + 0.5f - worldY;
                 if (dx * dx + dy * dy <= r2)
                     _costField[Index(tx, ty)] = 255;
+            }
+    }
+
+    public void StampImpassableCircleTier(int tier, float worldX, float worldY, float radius)
+    {
+        if (tier < 0 || tier >= TerrainCosts.NumSizeTiers) return;
+        if (_costFieldTier[tier] == null) _costFieldTier[tier] = new byte[Width * Height];
+
+        int minTX = Math.Max(0, (int)MathF.Floor(worldX - radius));
+        int maxTX = Math.Min(Width - 1, (int)MathF.Ceiling(worldX + radius));
+        int minTY = Math.Max(0, (int)MathF.Floor(worldY - radius));
+        int maxTY = Math.Min(Height - 1, (int)MathF.Ceiling(worldY + radius));
+
+        float r2 = radius * radius;
+        for (int ty = minTY; ty <= maxTY; ty++)
+            for (int tx = minTX; tx <= maxTX; tx++)
+            {
+                float dx = tx + 0.5f - worldX;
+                float dy = ty + 0.5f - worldY;
+                if (dx * dx + dy * dy <= r2)
+                    _costFieldTier[tier][Index(tx, ty)] = 255;
             }
     }
 

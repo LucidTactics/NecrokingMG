@@ -107,6 +107,9 @@ public class Game1 : Microsoft.Xna.Framework.Game
     private SpellEditorWindow _spellEditor = null!;
     private SettingsWindow _settingsWindow = null!;
 
+    // Collision debug
+    private CollisionDebugMode _collisionDebugMode = CollisionDebugMode.Off;
+
     // Scenario state
     private ScenarioBase? _activeScenario;
     private int _scenarioScrollOffset;
@@ -509,6 +512,8 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
         _sim.UnitsMut.SpriteScale[idx] = unitDef.SpriteScale;
         _sim.UnitsMut.OrcaPriority[idx] = unitDef.OrcaPriority;
+        _sim.UnitsMut.Radius[idx] = unitDef.Radius;
+        _sim.UnitsMut.Size[idx] = unitDef.Size;
 
         // Build full stats from equipment
         var builtStats = _gameData.Units.BuildStats(unitDefID, _gameData.Weapons, _gameData.Armors, _gameData.Shields);
@@ -746,6 +751,12 @@ public class Game1 : Microsoft.Xna.Framework.Game
             _prevMouse = mouse;
             base.Update(gameTime);
             return;
+        }
+
+        // --- F8 collision debug toggle ---
+        if (WasKeyPressed(kb, Keys.F8))
+        {
+            _collisionDebugMode = (CollisionDebugMode)(((int)_collisionDebugMode + 1) % (int)CollisionDebugMode.Count);
         }
 
         // --- F9-F12 editor toggles ---
@@ -1475,6 +1486,13 @@ public class Game1 : Microsoft.Xna.Framework.Game
                     _camera.Zoom = _activeScenario.CameraZoom;
                 }
 
+                // Apply collision debug override from scenario
+                if (_activeScenario.CollisionDebugOverride.HasValue)
+                {
+                    _collisionDebugMode = _activeScenario.CollisionDebugOverride.Value;
+                    _activeScenario.CollisionDebugOverride = null;
+                }
+
                 if (_activeScenario.IsComplete)
                 {
                     int result = _activeScenario.OnComplete(_sim);
@@ -1955,6 +1973,15 @@ public class Game1 : Microsoft.Xna.Framework.Game
         if (useBloom)
             _bloom.EndScene(GraphicsDevice, _spriteBatch, bloomSettings);
 
+        // --- Collision debug overlay (after world, before HUD) ---
+        if (_collisionDebugMode != CollisionDebugMode.Off)
+        {
+            _spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.PointClamp);
+            _debugDraw.DrawCollisionDebug(_spriteBatch, GraphicsDevice, _sim, _camera, _renderer,
+                _collisionDebugMode, _envSystem);
+            _spriteBatch.End();
+        }
+
         // --- HUD (drawn after bloom so it's not affected) ---
         _spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.PointClamp);
 
@@ -2010,6 +2037,13 @@ public class Game1 : Microsoft.Xna.Framework.Game
         {
             string dbg = $"Zoom:{_camera.Zoom:F0} Pos:({_camera.Position.X:F0},{_camera.Position.Y:F0}) Speed:{_timeScale:F1}x FPS:{(_rawDt > 0 ? 1f / _rawDt : 0):F0}";
             DrawText(_smallFont, dbg, new Vector2(10, screenH - 18), new Color(120, 120, 120));
+        }
+
+        // Show collision debug mode label when active
+        if (_collisionDebugMode != CollisionDebugMode.Off && _smallFont != null)
+        {
+            string label = $"[F8] Collision Debug: {DebugDraw.GetModeLabel(_collisionDebugMode)}";
+            DrawText(_smallFont, label, new Vector2(10, screenH - 36), new Color(255, 200, 80));
         }
 
         _spriteBatch.End();

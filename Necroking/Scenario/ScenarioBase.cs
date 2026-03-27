@@ -2,6 +2,7 @@ using System;
 using Necroking.Core;
 using Necroking.Data.Registries;
 using Necroking.GameSystems;
+using Necroking.Render;
 using Necroking.World;
 
 namespace Necroking.Scenario;
@@ -53,6 +54,9 @@ public abstract class ScenarioBase
 
     // Request opening the buff manager popup on SpellEditor
     public bool RequestOpenBuffManager;
+
+    // Collision debug mode override (set by scenario, consumed by Game1)
+    public CollisionDebugMode? CollisionDebugOverride;
 
     // Deferred screenshot name (taken by main loop after rendering)
     public string? DeferredScreenshot;

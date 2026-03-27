@@ -38,6 +38,7 @@ public static class ScenarioRegistry
         Register("bloom_test", () => new Scenarios.BloomTestScenario());
         Register("bloom_debug", () => new Scenarios.BloomDebugScenario());
         Register("spell_visual_test", () => new Scenarios.SpellVisualTestScenario());
+        Register("collision_debug_test", () => new Scenarios.CollisionDebugTestScenario());
     }
 
     public static void Register(string name, Func<ScenarioBase> creator)

@@ -99,6 +99,9 @@ public class UnitArrays
     // Dodge (set when attack misses, cleared each tick)
     public List<bool> Dodging = new();
 
+    // Stuck detection for ORCA nudge
+    public List<int> StuckFrames = new();
+
     public int Count;
     private uint _nextID;
 
@@ -143,6 +146,7 @@ public class UnitArrays
         EffectSpawnPos2D.Add(Vec2.Zero);
         EffectSpawnHeight.Add(0f);
         Dodging.Add(false);
+        StuckFrames.Add(0);
         ActiveBuffs.Add(new List<ActiveBuff>());
         DraggingCorpseIdx.Add(-1);
         SpawnBuildingIdx.Add(-1);
@@ -212,6 +216,7 @@ public class UnitArrays
         (EffectSpawnPos2D[a], EffectSpawnPos2D[b]) = (EffectSpawnPos2D[b], EffectSpawnPos2D[a]);
         (EffectSpawnHeight[a], EffectSpawnHeight[b]) = (EffectSpawnHeight[b], EffectSpawnHeight[a]);
         (Dodging[a], Dodging[b]) = (Dodging[b], Dodging[a]);
+        (StuckFrames[a], StuckFrames[b]) = (StuckFrames[b], StuckFrames[a]);
         (ActiveBuffs[a], ActiveBuffs[b]) = (ActiveBuffs[b], ActiveBuffs[a]);
         (DraggingCorpseIdx[a], DraggingCorpseIdx[b]) = (DraggingCorpseIdx[b], DraggingCorpseIdx[a]);
         (SpawnBuildingIdx[a], SpawnBuildingIdx[b]) = (SpawnBuildingIdx[b], SpawnBuildingIdx[a]);
@@ -243,7 +248,7 @@ public class UnitArrays
         KnockdownTimer.RemoveAt(last); StandupTimer.RemoveAt(last);
         Harassment.RemoveAt(last); SpriteScale.RemoveAt(last);
         EffectSpawnPos2D.RemoveAt(last); EffectSpawnHeight.RemoveAt(last);
-        Dodging.RemoveAt(last);
+        Dodging.RemoveAt(last); StuckFrames.RemoveAt(last);
         ActiveBuffs.RemoveAt(last); DraggingCorpseIdx.RemoveAt(last);
         SpawnBuildingIdx.RemoveAt(last); RaidTargetIdx.RemoveAt(last);
         PatrolRouteIdx.RemoveAt(last); PatrolWaypointIdx.RemoveAt(last);
@@ -269,7 +274,7 @@ public class UnitArrays
         KnockdownTimer.Clear(); StandupTimer.Clear();
         Harassment.Clear(); SpriteScale.Clear();
         EffectSpawnPos2D.Clear(); EffectSpawnHeight.Clear();
-        Dodging.Clear();
+        Dodging.Clear(); StuckFrames.Clear();
         ActiveBuffs.Clear(); DraggingCorpseIdx.Clear();
         SpawnBuildingIdx.Clear(); RaidTargetIdx.Clear();
         PatrolRouteIdx.Clear(); PatrolWaypointIdx.Clear();

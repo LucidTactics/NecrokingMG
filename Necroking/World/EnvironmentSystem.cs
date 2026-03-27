@@ -184,7 +184,17 @@ public class EnvironmentSystem
         {
             var def = _defs[obj.DefIndex];
             if (def.CollisionRadius > 0)
-                grid.StampImpassableCircle(obj.X + def.CollisionOffsetX, obj.Y + def.CollisionOffsetY, def.CollisionRadius * obj.Scale);
+            {
+                float cx = obj.X + def.CollisionOffsetX;
+                float cy = obj.Y + def.CollisionOffsetY;
+                float scaledRadius = def.CollisionRadius * obj.Scale;
+                grid.StampImpassableCircle(cx, cy, scaledRadius);
+                for (int tier = 0; tier < TerrainCosts.NumSizeTiers; tier++)
+                {
+                    float expanded = scaledRadius + TerrainCosts.SizeTierRadius[tier];
+                    grid.StampImpassableCircleTier(tier, cx, cy, expanded);
+                }
+            }
         }
     }
 
