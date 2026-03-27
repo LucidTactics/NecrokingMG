@@ -16,6 +16,11 @@ public abstract class ScenarioBase
     public virtual bool WantsGrass => false;
     public virtual bool WantsGround => false;
 
+    /// <summary>
+    /// Override to request a larger grid for the scenario. Default is 64.
+    /// </summary>
+    public virtual int GridSize => 64;
+
     public abstract void OnInit(Simulation sim);
     public abstract void OnTick(Simulation sim, float dt);
     public abstract bool IsComplete { get; }

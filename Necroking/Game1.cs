@@ -296,6 +296,11 @@ public class Game1 : Microsoft.Xna.Framework.Game
         _sim.SetEnvironmentSystem(_envSystem);
         _sim.SetWallSystem(_wallSystem);
 
+        // Bake wall and environment object collisions into the tile grid cost field
+        _wallSystem.BakeWalls(_sim.Grid);
+        _envSystem.BakeCollisions(_sim.Grid);
+        DebugLog.Log("startup", $"Baked collisions: {_envSystem.ObjectCount} objects, grid {worldW}x{worldH}");
+
         // Spawn necromancer near map center
         float center = worldW * 0.5f;
         SpawnUnit("necromancer", new Vec2(center, center));
@@ -448,8 +453,8 @@ public class Game1 : Microsoft.Xna.Framework.Game
         _corpseAnims.Clear();
         _effectManager.Clear();
 
-        // Init simulation with a small grid for scenarios
-        int gridSize = 64;
+        // Init simulation with a grid sized to the scenario's needs
+        int gridSize = scenario.GridSize;
         _groundSystem.ClearTypes();
         _groundSystem.Init(gridSize, gridSize);
         _envSystem.Init(gridSize);

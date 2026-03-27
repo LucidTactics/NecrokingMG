@@ -334,7 +334,8 @@ public class Simulation
                     var toTarget = _units.MoveTarget[i] - _units.Position[i];
                     if (toTarget.LengthSq() > 1f)
                     {
-                        var dir = _pathfinder.GetDirection(_units.Position[i], _units.MoveTarget[i], _frameNumber);
+                        int sizeTier = TerrainCosts.SizeToTier(_units.Size[i]);
+                        var dir = _pathfinder.GetDirection(_units.Position[i], _units.MoveTarget[i], _frameNumber, sizeTier, i);
                         _units.PreferredVel[i] = dir * _units.MaxSpeed[i];
                     }
                     else
@@ -716,20 +717,164 @@ public class Simulation
                 ? (newVel * (1f / targetSpeed)) * finalSpeed
                 : Vec2.Zero;
 
-            // Move with basic wall collision
+            // Move with wall collision (axis-independent, gap probes, wall sliding)
             Vec2 oldPos = _units.Position[i];
             Vec2 delta = _units.Velocity[i] * dt;
+            // Wall collision uses smaller radius than ORCA for 1-tile gap clearance
             float r = _units.Radius[i] * 0.7f;
 
-            // Try X movement
-            Vec2 testPos = new(oldPos.X + delta.X, oldPos.Y);
-            if (!IsBlocked(testPos.X, testPos.Y, r))
-                _units.Position[i] = new Vec2(testPos.X, _units.Position[i].Y);
+            // --- Stuck-inside-blocked-tile escape ---
+            // If unit's current position overlaps an impassable tile, push toward nearest free tile
+            if (IsBlocked(oldPos.X, oldPos.Y, r))
+            {
+                int unitGX = (int)MathF.Floor(oldPos.X / GameConstants.TileSize);
+                int unitGY = (int)MathF.Floor(oldPos.Y / GameConstants.TileSize);
+                float bestDist2 = 1e18f;
+                Vec2 bestPos = oldPos;
+                bool found = false;
 
-            // Try Y movement
-            testPos = new Vec2(_units.Position[i].X, oldPos.Y + delta.Y);
-            if (!IsBlocked(testPos.X, testPos.Y, r))
-                _units.Position[i] = new Vec2(_units.Position[i].X, testPos.Y);
+                int searchRadius = 20;
+                for (int dy = -searchRadius; dy <= searchRadius && !found; dy++)
+                {
+                    for (int dx = -searchRadius; dx <= searchRadius; dx++)
+                    {
+                        int gx = unitGX + dx, gy = unitGY + dy;
+                        if (!_grid.InBounds(gx, gy)) continue;
+                        if (_grid.GetCost(gx, gy) == 255) continue;
+
+                        float tx = (gx + 0.5f) * GameConstants.TileSize;
+                        float ty = (gy + 0.5f) * GameConstants.TileSize;
+                        if (IsBlocked(tx, ty, r)) continue;
+
+                        float d2 = (tx - oldPos.X) * (tx - oldPos.X) + (ty - oldPos.Y) * (ty - oldPos.Y);
+                        if (d2 < bestDist2)
+                        {
+                            bestDist2 = d2;
+                            bestPos = new Vec2(tx, ty);
+                            found = true;
+                        }
+                    }
+                }
+
+                if (found)
+                {
+                    float dist = MathF.Sqrt(bestDist2);
+                    float pushSpeed = _units.MaxSpeed[i] * 3f;
+                    float step = pushSpeed * dt;
+                    if (dist <= step || dist < 0.1f)
+                    {
+                        oldPos = bestPos;
+                    }
+                    else
+                    {
+                        Vec2 dir = new((bestPos.X - oldPos.X) / dist, (bestPos.Y - oldPos.Y) / dist);
+                        oldPos = new Vec2(oldPos.X + dir.X * step, oldPos.Y + dir.Y * step);
+                    }
+                    _units.Position[i] = oldPos;
+                }
+            }
+
+            // --- Axis-independent movement with gap probing ---
+            Vec2 newPos = oldPos;
+
+            // Try X movement, with perpendicular Y probe if blocked
+            if (delta.X != 0f)
+            {
+                if (!IsBlocked(oldPos.X + delta.X, oldPos.Y, r))
+                {
+                    newPos = new Vec2(oldPos.X + delta.X, newPos.Y);
+                }
+                else
+                {
+                    // Probe small Y offsets to find a gap center
+                    float[] probes = { 0.1f, -0.1f, 0.2f, -0.2f, 0.3f, -0.3f };
+                    foreach (float off in probes)
+                    {
+                        float probeY = oldPos.Y + off;
+                        if (!IsBlocked(oldPos.X, probeY, r) &&
+                            !IsBlocked(oldPos.X + delta.X, probeY, r))
+                        {
+                            newPos = new Vec2(oldPos.X + delta.X, probeY);
+                            break;
+                        }
+                    }
+                }
+            }
+
+            // Try Y movement, with perpendicular X probe if blocked
+            if (delta.Y != 0f)
+            {
+                if (!IsBlocked(newPos.X, oldPos.Y + delta.Y, r))
+                {
+                    newPos = new Vec2(newPos.X, oldPos.Y + delta.Y);
+                }
+                else if (newPos.Y == oldPos.Y) // only probe if Y wasn't already adjusted
+                {
+                    float[] probes = { 0.1f, -0.1f, 0.2f, -0.2f, 0.3f, -0.3f };
+                    foreach (float off in probes)
+                    {
+                        float probeX = newPos.X + off;
+                        if (!IsBlocked(probeX, oldPos.Y, r) &&
+                            !IsBlocked(probeX, oldPos.Y + delta.Y, r))
+                        {
+                            newPos = new Vec2(probeX, oldPos.Y + delta.Y);
+                            break;
+                        }
+                    }
+                }
+            }
+
+            // --- Wall sliding ---
+            // If both axes blocked but velocity is nonzero, compute wall normal
+            // from nearby impassable tiles and slide along the tangent
+            if (newPos.X == oldPos.X && newPos.Y == oldPos.Y &&
+                (delta.X != 0f || delta.Y != 0f))
+            {
+                Vec2 wallNormal = Vec2.Zero;
+                int gx0 = (int)MathF.Floor((oldPos.X - r * 2f) / GameConstants.TileSize);
+                int gy0 = (int)MathF.Floor((oldPos.Y - r * 2f) / GameConstants.TileSize);
+                int gx1 = (int)MathF.Floor((oldPos.X + r * 2f) / GameConstants.TileSize);
+                int gy1 = (int)MathF.Floor((oldPos.Y + r * 2f) / GameConstants.TileSize);
+
+                for (int gy = gy0; gy <= gy1; gy++)
+                {
+                    for (int gx = gx0; gx <= gx1; gx++)
+                    {
+                        if (!_grid.InBounds(gx, gy)) continue;
+                        if (_grid.GetCost(gx, gy) != 255) continue;
+                        float tileX = (gx + 0.5f) * GameConstants.TileSize;
+                        float tileY = (gy + 0.5f) * GameConstants.TileSize;
+                        float awayX = oldPos.X - tileX;
+                        float awayY = oldPos.Y - tileY;
+                        float d2 = awayX * awayX + awayY * awayY;
+                        if (d2 > 0.0001f)
+                        {
+                            wallNormal = new Vec2(wallNormal.X + awayX / d2, wallNormal.Y + awayY / d2);
+                        }
+                    }
+                }
+
+                float nLen = wallNormal.Length();
+                if (nLen > 0.001f)
+                {
+                    wallNormal = wallNormal * (1f / nLen);
+                    // Project velocity onto wall tangent: slide = v - (v.n)*n
+                    float dot = delta.X * wallNormal.X + delta.Y * wallNormal.Y;
+                    Vec2 slide = new(delta.X - dot * wallNormal.X, delta.Y - dot * wallNormal.Y);
+
+                    if (slide.LengthSq() > 0.0001f)
+                    {
+                        Vec2 slidePos = oldPos;
+                        if (slide.X != 0f && !IsBlocked(oldPos.X + slide.X, oldPos.Y, r))
+                            slidePos = new Vec2(oldPos.X + slide.X, slidePos.Y);
+                        if (slide.Y != 0f && !IsBlocked(slidePos.X, oldPos.Y + slide.Y, r))
+                            slidePos = new Vec2(slidePos.X, oldPos.Y + slide.Y);
+                        newPos = slidePos;
+                    }
+                }
+            }
+
+            _units.Position[i] = newPos;
         }
     }
 

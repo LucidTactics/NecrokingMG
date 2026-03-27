@@ -180,19 +180,24 @@ public class EnvironmentSystem
 
     public void BakeCollisions(TileGrid grid)
     {
+        // Reset tiered cost fields to base terrain before stamping obstacles
+        grid.RebuildTieredCostFields();
+
         foreach (var obj in _objects)
         {
             var def = _defs[obj.DefIndex];
             if (def.CollisionRadius > 0)
             {
-                float cx = obj.X + def.CollisionOffsetX;
-                float cy = obj.Y + def.CollisionOffsetY;
-                float scaledRadius = def.CollisionRadius * obj.Scale;
-                grid.StampImpassableCircle(cx, cy, scaledRadius);
+                // Scale offset and radius by def.Scale * obj.Scale (matching C++)
+                float es = def.Scale * obj.Scale;
+                float cx = obj.X + def.CollisionOffsetX * es;
+                float cy = obj.Y + def.CollisionOffsetY * es;
+                float cr = def.CollisionRadius * es;
+
+                grid.StampImpassableCircle(cx, cy, cr);
                 for (int tier = 0; tier < TerrainCosts.NumSizeTiers; tier++)
                 {
-                    float expanded = scaledRadius + TerrainCosts.SizeTierRadius[tier];
-                    grid.StampImpassableCircleTier(tier, cx, cy, expanded);
+                    grid.StampImpassableCircleTier(tier, cx, cy, cr);
                 }
             }
         }
