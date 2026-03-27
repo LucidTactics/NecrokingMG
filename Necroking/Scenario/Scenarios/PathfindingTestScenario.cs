@@ -29,7 +29,7 @@ public class PathfindingTestScenario : ScenarioBase
     private readonly List<bool> _testPassed = new();
     private readonly List<string> _testNames = new();
     private float _testStartTime;
-    private const float TestTimeout = 15f; // seconds per test
+    private const float TestTimeout = 30f; // seconds per test
     private const float TargetReachDist = 2f;
     private const float UnitSpeed = 20f;
 
@@ -58,42 +58,23 @@ public class PathfindingTestScenario : ScenarioBase
         // Clear previous units
         ClearAllUnits(units);
 
-        // Place dense tree grid with deliberate cup-shaped gaps
-        // Fill a 30x30 area with trees, leaving a winding path
-        int ox = 10, oy = 10; // offset
-        for (int y = 0; y < 30; y++)
+        // Dense forest: randomly scattered wall tiles at ~40% density
+        // No clear path — unit must weave through gaps between trees
+        int ox = 10, oy = 10;
+        int forestW = 40, forestH = 40;
+        var rng = new Random(42); // deterministic seed for reproducibility
+
+        for (int y = 0; y < forestH; y++)
         {
-            for (int x = 0; x < 30; x++)
+            for (int x = 0; x < forestW; x++)
             {
-                // Default: wall
-                bool wall = true;
+                // Clear start area (top-left 4x4) and end area (bottom-right 4x4)
+                bool isStart = x < 4 && y < 4;
+                bool isEnd = x >= forestW - 4 && y >= forestH - 4;
 
-                // Create a winding path: horizontal corridors connected by vertical segments
-                // Corridor 1: y=2..4, x=0..25
-                if (y >= 2 && y <= 4 && x >= 0 && x <= 25) wall = false;
-                // Vertical connector 1: y=4..10, x=24..26
-                if (y >= 4 && y <= 10 && x >= 24 && x <= 26) wall = false;
-                // Corridor 2: y=8..10, x=4..26
-                if (y >= 8 && y <= 10 && x >= 4 && x <= 26) wall = false;
-                // Vertical connector 2: y=10..16, x=4..6
-                if (y >= 10 && y <= 16 && x >= 4 && x <= 6) wall = false;
-                // Corridor 3: y=14..16, x=4..25
-                if (y >= 14 && y <= 16 && x >= 4 && x <= 25) wall = false;
-                // Vertical connector 3: y=16..22, x=24..26
-                if (y >= 16 && y <= 22 && x >= 24 && x <= 26) wall = false;
-                // Corridor 4: y=20..22, x=4..26
-                if (y >= 20 && y <= 22 && x >= 4 && x <= 26) wall = false;
-                // Vertical connector 4: y=22..28, x=4..6
-                if (y >= 22 && y <= 28 && x >= 4 && x <= 6) wall = false;
-                // Corridor 5: y=26..28, x=4..28
-                if (y >= 26 && y <= 28 && x >= 4 && x <= 28) wall = false;
-
-                // Start area: y=0..4, x=0..4
-                if (y >= 0 && y <= 4 && x >= 0 && x <= 4) wall = false;
-                // End area: y=26..29, x=26..29
-                if (y >= 26 && y <= 29 && x >= 26 && x <= 29) wall = false;
-
-                if (wall)
+                if (isStart || isEnd)
+                    grid.SetTerrain(ox + x, oy + y, TerrainType.Open);
+                else if (rng.NextDouble() < 0.40) // 40% tree density
                     grid.SetTerrain(ox + x, oy + y, TerrainType.Wall);
                 else
                     grid.SetTerrain(ox + x, oy + y, TerrainType.Open);
@@ -103,9 +84,9 @@ public class PathfindingTestScenario : ScenarioBase
         grid.RebuildCostField();
         sim.RebuildPathfinder();
 
-        // Spawn unit at start
-        Vec2 startPos = new(ox + 2f, oy + 3f);
-        Vec2 target = new(ox + 28f, oy + 28f);
+        // Spawn unit top-left, target bottom-right
+        Vec2 startPos = new(ox + 2f, oy + 2f);
+        Vec2 target = new(ox + forestW - 2f, oy + forestH - 2f);
 
         int idx = units.AddUnit(startPos, UnitType.Skeleton);
         units.AI[idx] = AIBehavior.MoveToPoint;
@@ -118,49 +99,66 @@ public class PathfindingTestScenario : ScenarioBase
         _testTargets.Add(target);
         _testStartTime = _elapsed;
 
-        ZoomOnLocation(ox + 15f, oy + 15f, 16f);
+        ZoomOnLocation(ox + forestW / 2f, oy + forestH / 2f, 10f);
         DebugLog.Log(ScenarioLog, $"Spawned skeleton at ({startPos.X:F1},{startPos.Y:F1}), target ({target.X:F1},{target.Y:F1})");
     }
 
     // -------------------------------------------------------------------
-    // Test 2: U-shaped wall trap requiring chunk exit
+    // Test 2: Cup at chunk boundary — unit must use imaginary chunk to escape
+    // The cup straddles the chunk edge at x=64. The cup opening faces away
+    // from the target, so the unit MUST exit through the chunk boundary.
+    //
+    //   Chunk 0 (x<64)  |  Chunk 1 (x>=64)
+    //                    |
+    //        +-----------+
+    //        |  C        |   (C = unit inside cup)
+    //        +-----------+
+    //                    |
+    //                    |        T  (target far right in chunk 1)
+    //
+    // The cup bottom+left+right walls are in chunk 0, but the right wall
+    // extends into chunk 1. The opening is at the top (low Y).
+    // Target is in chunk 1 below the cup — unit must go up, exit cup,
+    // then navigate right and down to reach target.
     // -------------------------------------------------------------------
     private void SetupTest2(Simulation sim)
     {
         _testUnitIndices.Clear();
         _testTargets.Clear();
-        _testNames.Add("Cup trap requiring chunk exit");
-        DebugLog.Log(ScenarioLog, "--- Test 2: Cup trap requiring chunk exit ---");
+        _testNames.Add("Cup trap at chunk boundary");
+        DebugLog.Log(ScenarioLog, "--- Test 2: Cup at chunk boundary ---");
 
         var grid = sim.Grid;
         var units = sim.UnitsMut;
         ClearAllUnits(units);
 
-        // Clear test 1 terrain
-        for (int y = 0; y < 50; y++)
-            for (int x = 0; x < 50; x++)
-                grid.SetTerrain(x, y, TerrainType.Open);
+        // Clear area
+        for (int y = 0; y < 100; y++)
+            for (int x = 0; x < 130; x++)
+                if (grid.InBounds(x, y))
+                    grid.SetTerrain(x, y, TerrainType.Open);
 
-        // Build U-shaped wall within a single chunk
-        int cx = 20, cy = 20;
+        // Cup straddling chunk boundary at x=64
+        // Cup is 12 wide (x=58..70), 8 tall (y=30..38), open at top (y=30)
+        int cupLeft = 58, cupRight = 70, cupTop = 30, cupBottom = 38;
 
-        // Bottom wall: horizontal
-        for (int x = cx - 5; x <= cx + 5; x++)
-            grid.SetTerrain(x, cy + 5, TerrainType.Wall);
-        // Left wall: vertical
-        for (int y = cy - 2; y <= cy + 5; y++)
-            grid.SetTerrain(cx - 5, y, TerrainType.Wall);
-        // Right wall: vertical
-        for (int y = cy - 2; y <= cy + 5; y++)
-            grid.SetTerrain(cx + 5, y, TerrainType.Wall);
-        // The top is open (the cup opening)
+        // Bottom wall
+        for (int x = cupLeft; x <= cupRight; x++)
+            grid.SetTerrain(x, cupBottom, TerrainType.Wall);
+        // Left wall
+        for (int y = cupTop + 1; y <= cupBottom; y++)
+            grid.SetTerrain(cupLeft, y, TerrainType.Wall);
+        // Right wall
+        for (int y = cupTop + 1; y <= cupBottom; y++)
+            grid.SetTerrain(cupRight, y, TerrainType.Wall);
+        // Top is OPEN — the cup opening
 
         grid.RebuildCostField();
         sim.RebuildPathfinder();
 
-        // Spawn unit inside the U, target outside at the bottom
-        Vec2 startPos = new(cx, cy + 2);
-        Vec2 target = new(cx, cy + 12);
+        // Unit inside cup (centered), target far below and to the right
+        Vec2 startPos = new(64f, 35f); // inside cup, right at chunk boundary
+        Vec2 target = new(90f, 50f);   // in chunk 1, below and right
 
         int idx = units.AddUnit(startPos, UnitType.Skeleton);
         units.AI[idx] = AIBehavior.MoveToPoint;
@@ -173,58 +171,65 @@ public class PathfindingTestScenario : ScenarioBase
         _testTargets.Add(target);
         _testStartTime = _elapsed;
 
-        ZoomOnLocation(cx, cy + 5, 16f);
-        DebugLog.Log(ScenarioLog, $"U-wall at ({cx},{cy}), unit inside at ({startPos.X:F1},{startPos.Y:F1}), target at ({target.X:F1},{target.Y:F1})");
+        ZoomOnLocation(64f, 40f, 10f);
+        DebugLog.Log(ScenarioLog, $"Cup at chunk boundary x=64, cup=({cupLeft},{cupTop})-({cupRight},{cupBottom})");
+        DebugLog.Log(ScenarioLog, $"Unit at ({startPos.X:F1},{startPos.Y:F1}), target at ({target.X:F1},{target.Y:F1})");
     }
 
     // -------------------------------------------------------------------
-    // Test 3: Multi-chunk winding corridor
+    // Test 3: Multi-chunk pathfinding with mountain ranges blocking direct routes
+    //
+    // Layout (4 chunks wide = 256 tiles):
+    //
+    //   Chunk(0,0) | Chunk(1,0) | Chunk(2,0) | Chunk(3,0)
+    //   -----------+------------+------------+-----------
+    //   Chunk(0,1) | Chunk(1,1) | Chunk(2,1) | Chunk(3,1)
+    //
+    //   S = start (chunk 0,0)
+    //   T = target (chunk 3,1)
+    //
+    //   Mountain range 1: vertical wall from chunk(1,0) down into chunk(1,1)
+    //     with a gap only at the very bottom of chunk(1,1)
+    //   Mountain range 2: vertical wall from chunk(2,1) up into chunk(2,0)
+    //     with a gap only at the very top of chunk(2,0)
+    //
+    //   Required path: S → right through chunk(0,0) → down through gap at
+    //   bottom of mountain 1 → right → up through gap at top of mountain 2 → T
+    //
+    // This tests that the pathfinder chooses the correct chunks to route through.
     // -------------------------------------------------------------------
     private void SetupTest3(Simulation sim)
     {
         _testUnitIndices.Clear();
         _testTargets.Clear();
-        _testNames.Add("Multi-chunk corridor");
-        DebugLog.Log(ScenarioLog, "--- Test 3: Multi-chunk corridor ---");
+        _testNames.Add("Multi-chunk mountain ranges");
+        DebugLog.Log(ScenarioLog, "--- Test 3: Multi-chunk mountain ranges ---");
 
         var grid = sim.Grid;
         var units = sim.UnitsMut;
         ClearAllUnits(units);
 
-        // Clear terrain
-        for (int y = 0; y < 200; y++)
-            for (int x = 0; x < 200; x++)
+        // Clear area (4x2 chunks = 256x128 tiles)
+        for (int y = 0; y < 128; y++)
+            for (int x = 0; x < 256; x++)
                 if (grid.InBounds(x, y))
                     grid.SetTerrain(x, y, TerrainType.Open);
 
-        // Build walls creating a winding corridor spanning 3+ chunks (64 tiles each)
-        // Wall top and bottom with turns
+        // Mountain range 1: vertical wall at x=64 (chunk boundary 0|1)
+        // Runs from y=0 down to y=120, gap at y=121..127 (bottom of chunk 1,1)
+        for (int y = 0; y <= 120; y++)
+            grid.SetTerrain(64, y, TerrainType.Wall);
 
-        // Outer walls
-        for (int x = 5; x < 195; x++)
-        {
-            grid.SetTerrain(x, 5, TerrainType.Wall);
-            grid.SetTerrain(x, 15, TerrainType.Wall);
-        }
-
-        // Create horizontal corridor at y=6..14 with vertical walls creating turns
-        // Block 1: wall at x=60, y=6..12 (force turn through gap at y=13..14)
-        for (int y = 6; y <= 12; y++)
-            grid.SetTerrain(60, y, TerrainType.Wall);
-
-        // Block 2: wall at x=120, y=8..14 (force turn through gap at y=6..7)
-        for (int y = 8; y <= 14; y++)
-            grid.SetTerrain(120, y, TerrainType.Wall);
-
-        // Block 3: wall at x=180, y=6..12
-        for (int y = 6; y <= 12; y++)
-            grid.SetTerrain(180, y, TerrainType.Wall);
+        // Mountain range 2: vertical wall at x=192 (chunk boundary 2|3)
+        // Runs from y=8 down to y=127, gap at y=0..7 (top of chunk 2,0)
+        for (int y = 8; y <= 127; y++)
+            grid.SetTerrain(192, y, TerrainType.Wall);
 
         grid.RebuildCostField();
         sim.RebuildPathfinder();
 
-        Vec2 startPos = new(8f, 10f);
-        Vec2 target = new(190f, 10f);
+        Vec2 startPos = new(10f, 32f);   // chunk (0,0)
+        Vec2 target = new(220f, 96f);    // chunk (3,1)
 
         int idx = units.AddUnit(startPos, UnitType.Skeleton);
         units.AI[idx] = AIBehavior.MoveToPoint;
@@ -237,8 +242,9 @@ public class PathfindingTestScenario : ScenarioBase
         _testTargets.Add(target);
         _testStartTime = _elapsed;
 
-        ZoomOnLocation(100f, 10f, 4f);
-        DebugLog.Log(ScenarioLog, $"Corridor from ({startPos.X:F1},{startPos.Y:F1}) to ({target.X:F1},{target.Y:F1}), 3 turns across 3+ chunks");
+        ZoomOnLocation(128f, 64f, 4f);
+        DebugLog.Log(ScenarioLog, $"Mountain range at x=64 (gap at bottom), x=192 (gap at top)");
+        DebugLog.Log(ScenarioLog, $"Unit at ({startPos.X:F1},{startPos.Y:F1}), target at ({target.X:F1},{target.Y:F1})");
     }
 
     // -------------------------------------------------------------------

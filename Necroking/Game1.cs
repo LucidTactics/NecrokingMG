@@ -655,6 +655,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         _font = Content.Load<SpriteFont>("DefaultFont");
         _smallFont = Content.Load<SpriteFont>("SmallFont");
         _largeFont = Content.Load<SpriteFont>("LargeFont");
+        _debugDraw.SetFont(_smallFont);
 
         _bloom.Init(GraphicsDevice, Content,
             _graphics.PreferredBackBufferWidth, _graphics.PreferredBackBufferHeight);
@@ -2135,7 +2136,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         {
             _spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.PointClamp);
             _debugDraw.DrawCollisionDebug(_spriteBatch, GraphicsDevice, _sim, _camera, _renderer,
-                _collisionDebugMode, _envSystem);
+                _collisionDebugMode, _envSystem, _sim.Pathfinder);
             _spriteBatch.End();
         }
 

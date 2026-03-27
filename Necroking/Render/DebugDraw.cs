@@ -23,11 +23,12 @@ public struct DebugFlags
 public enum CollisionDebugMode
 {
     Off = 0,
+    All,
+    Chunks,
     CostField,
     UnitORCA,
     Velocity,
     OccupiedTiles,
-    All,
     Count
 }
 
@@ -36,6 +37,9 @@ public class DebugDraw
     public uint SelectedUnitID = GameConstants.InvalidUnit;
 
     private Texture2D? _pixel;
+    private SpriteFont? _font;
+
+    public void SetFont(SpriteFont? font) => _font = font;
 
     public void Draw(SpriteBatch batch, GraphicsDevice device, Simulation sim, Camera25D cam,
                      Renderer renderer, DebugFlags flags, bool showUnitRadius = false)
@@ -76,7 +80,8 @@ public class DebugDraw
     /// </summary>
     public void DrawCollisionDebug(SpriteBatch batch, GraphicsDevice device, Simulation sim,
                                     Camera25D cam, Renderer renderer,
-                                    CollisionDebugMode mode, EnvironmentSystem? envSystem = null)
+                                    CollisionDebugMode mode, EnvironmentSystem? envSystem = null,
+                                    Pathfinder? pathfinder = null)
     {
         if (mode == CollisionDebugMode.Off) return;
         EnsurePixel(device);
@@ -92,6 +97,9 @@ public class DebugDraw
 
         if (mode == CollisionDebugMode.OccupiedTiles || mode == CollisionDebugMode.All)
             DrawOccupiedTiles(batch, sim, cam, renderer, envSystem);
+
+        if (mode == CollisionDebugMode.Chunks || mode == CollisionDebugMode.All)
+            DrawChunkOverlay(batch, sim, cam, renderer, pathfinder);
     }
 
     /// <summary>
@@ -100,11 +108,12 @@ public class DebugDraw
     public static string GetModeLabel(CollisionDebugMode mode) => mode switch
     {
         CollisionDebugMode.Off => "Off",
+        CollisionDebugMode.All => "All",
+        CollisionDebugMode.Chunks => "Chunks",
         CollisionDebugMode.CostField => "Cost Field",
         CollisionDebugMode.UnitORCA => "Unit ORCA Radii",
         CollisionDebugMode.Velocity => "Velocity Vectors",
         CollisionDebugMode.OccupiedTiles => "Occupied Tiles",
-        CollisionDebugMode.All => "All",
         _ => "Unknown"
     };
 
@@ -350,4 +359,105 @@ public class DebugDraw
         batch.Draw(_pixel, start, null, color, angle, Vector2.Zero,
             new Vector2(length, 1f), SpriteEffects.None, 0f);
     }
+
+    // ========== Chunk Overlay ==========
+
+    private void DrawChunkOverlay(SpriteBatch batch, Simulation sim, Camera25D cam, Renderer renderer,
+        Pathfinder? pathfinder)
+    {
+        if (pathfinder == null) return;
+        int scx = pathfinder.SectorCountX;
+        int scy = pathfinder.SectorCountY;
+        int ss = Pathfinder.SectorSize;
+
+        // Draw sector grid lines
+        for (int sy = 0; sy <= scy; sy++)
+        {
+            var left = renderer.WorldToScreen(new Vec2(0, sy * ss), 0f, cam);
+            var right = renderer.WorldToScreen(new Vec2(scx * ss, sy * ss), 0f, cam);
+            DrawLine(batch, left, right, new Color(100, 100, 255, 60));
+        }
+        for (int sx = 0; sx <= scx; sx++)
+        {
+            var top = renderer.WorldToScreen(new Vec2(sx * ss, 0), 0f, cam);
+            var bot = renderer.WorldToScreen(new Vec2(sx * ss, scy * ss), 0f, cam);
+            DrawLine(batch, top, bot, new Color(100, 100, 255, 60));
+        }
+
+        // Draw sector labels
+        if (_font != null && cam.Zoom >= 8f)
+        {
+            for (int sy = 0; sy < scy; sy++)
+            {
+                for (int sx = 0; sx < scx; sx++)
+                {
+                    var center = renderer.WorldToScreen(new Vec2((sx + 0.5f) * ss, (sy + 0.5f) * ss), 0f, cam);
+                    if (center.X > -50 && center.X < renderer.ScreenW + 50 &&
+                        center.Y > -50 && center.Y < renderer.ScreenH + 50)
+                    {
+                        string label = $"S({sx},{sy})";
+                        batch.DrawString(_font, label, center - new Vector2(20, 6), new Color(120, 120, 255, 80));
+                    }
+                }
+            }
+        }
+
+        // Draw imaginary chunks for each unit that has one (different color: orange/yellow)
+        foreach (int unitIdx in pathfinder.GetActiveImaginaryChunkUnits())
+        {
+            if (unitIdx < 0 || unitIdx >= sim.Units.Count || !sim.Units.Alive[unitIdx]) continue;
+
+            var info = pathfinder.GetImaginaryChunkInfo(unitIdx);
+            if (info == null) continue;
+            var (baseX, baseY, w, h, active) = info.Value;
+
+            // Draw imaginary chunk boundary as a thick orange rectangle
+            var tl = renderer.WorldToScreen(new Vec2(baseX, baseY), 0f, cam);
+            var tr = renderer.WorldToScreen(new Vec2(baseX + w, baseY), 0f, cam);
+            var bl = renderer.WorldToScreen(new Vec2(baseX, baseY + h), 0f, cam);
+            var br = renderer.WorldToScreen(new Vec2(baseX + w, baseY + h), 0f, cam);
+
+            var chunkColor = new Color(255, 180, 40, 140); // orange for imaginary chunk
+
+            // Top
+            DrawLine(batch, tl, tr, chunkColor);
+            DrawLine(batch, tl + new Vector2(0, 1), tr + new Vector2(0, 1), chunkColor);
+            // Bottom
+            DrawLine(batch, bl, br, chunkColor);
+            DrawLine(batch, bl + new Vector2(0, -1), br + new Vector2(0, -1), chunkColor);
+            // Left
+            DrawLine(batch, tl, bl, chunkColor);
+            DrawLine(batch, tl + new Vector2(1, 0), bl + new Vector2(1, 0), chunkColor);
+            // Right
+            DrawLine(batch, tr, br, chunkColor);
+            DrawLine(batch, tr + new Vector2(-1, 0), br + new Vector2(-1, 0), chunkColor);
+
+            // Label
+            if (_font != null)
+            {
+                var labelPos = renderer.WorldToScreen(new Vec2(baseX + 1, baseY + 1), 0f, cam);
+                batch.DrawString(_font, $"Imag #{unitIdx}", labelPos, new Color(255, 200, 50, 220));
+            }
+        }
+
+        // Highlight which sector each unit is in
+        var units = sim.Units;
+        for (int i = 0; i < units.Count; i++)
+        {
+            if (!units.Alive[i]) continue;
+            var pos = units.Position[i];
+            int sx = (int)(pos.X / ss);
+            int sy = (int)(pos.Y / ss);
+            if (sx < 0 || sx >= scx || sy < 0 || sy >= scy) continue;
+
+            // Tint the unit's sector with a subtle faction-colored overlay
+            bool isUndead = units.Faction[i] == 0;
+            var sectorTint = isUndead ? new Color(40, 120, 40, 25) : new Color(120, 40, 40, 25);
+            var sp = renderer.WorldToScreen(new Vec2(sx * ss, sy * ss), 0f, cam);
+            float tileW = ss * cam.Zoom;
+            float tileH = ss * cam.Zoom * cam.YRatio;
+            batch.Draw(_pixel, new Rectangle((int)sp.X, (int)sp.Y, (int)tileW, (int)tileH), sectorTint);
+        }
+    }
+
 }

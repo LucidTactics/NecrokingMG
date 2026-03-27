@@ -108,6 +108,21 @@ public class Pathfinder
     public int SectorCountY => _sectorCountY;
     public TileGrid? Grid => _grid;
 
+    /// <summary>Get imaginary chunk bounds for debug visualization. Returns (baseX, baseY, w, h, active) or null.</summary>
+    public (int baseX, int baseY, int w, int h, bool active)? GetImaginaryChunkInfo(int unitIdx)
+    {
+        if (_unitImagChunks.TryGetValue(unitIdx, out var ic) && ic.Active)
+            return (ic.BaseX, ic.BaseY, ic.ChunkW, ic.ChunkH, ic.Active);
+        return null;
+    }
+
+    /// <summary>Get all active imaginary chunk unit indices for debug overlay.</summary>
+    public IEnumerable<int> GetActiveImaginaryChunkUnits()
+    {
+        foreach (var kv in _unitImagChunks)
+            if (kv.Value.Active) yield return kv.Key;
+    }
+
     public void Init(TileGrid grid)
     {
         _grid = grid;
