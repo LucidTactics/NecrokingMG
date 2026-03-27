@@ -68,7 +68,7 @@ public class SpriteAtlas
 
         // Load texture
         using var stream = File.OpenRead(pngPath);
-        _texture = Texture2D.FromStream(device, stream);
+        _texture = TextureUtil.LoadPremultiplied(device, stream);
         if (_texture == null) return false;
 
         _originalWidth = _texture.Width;

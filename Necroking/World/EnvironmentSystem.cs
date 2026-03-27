@@ -217,7 +217,7 @@ public class EnvironmentSystem
             try
             {
                 using var stream = System.IO.File.OpenRead(path);
-                _textures[i] = Texture2D.FromStream(device, stream);
+                _textures[i] = Necroking.Render.TextureUtil.LoadPremultiplied(device, stream);
             }
             catch { /* skip failed loads */ }
         }
@@ -243,7 +243,7 @@ public class EnvironmentSystem
         try
         {
             using var stream = System.IO.File.OpenRead(path);
-            _textures[defIdx] = Texture2D.FromStream(_device, stream);
+            _textures[defIdx] = Necroking.Render.TextureUtil.LoadPremultiplied(_device, stream);
         }
         catch { /* skip failed loads */ }
     }

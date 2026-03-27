@@ -21,7 +21,7 @@ public class Flipbook
         if (!File.Exists(path)) return false;
 
         using var stream = File.OpenRead(path);
-        Texture = Texture2D.FromStream(device, stream);
+        Texture = TextureUtil.LoadPremultiplied(device, stream);
         if (Texture == null) return false;
 
         Cols = cols;

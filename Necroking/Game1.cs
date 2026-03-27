@@ -1990,6 +1990,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         else
             GraphicsDevice.Clear(new Color(30, 30, 40));
 
+        // AlphaBlend with premultiplied-alpha textures (loaded via TextureUtil.LoadPremultiplied)
         _spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.LinearClamp);
 
         if (!useBloom)
@@ -2060,6 +2061,33 @@ public class Game1 : Microsoft.Xna.Framework.Game
             _spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.PointClamp);
             _debugDraw.DrawCollisionDebug(_spriteBatch, GraphicsDevice, _sim, _camera, _renderer,
                 _collisionDebugMode, _envSystem);
+            _spriteBatch.End();
+        }
+
+        // --- Map editor: Alt shows object names ---
+        if (_menuState == MenuState.MapEditor && Keyboard.GetState().IsKeyDown(Keys.LeftAlt))
+        {
+            _spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.PointClamp);
+            for (int oi = 0; oi < _envSystem.ObjectCount; oi++)
+            {
+                var obj = _envSystem.GetObject(oi);
+                var def = _envSystem.GetDef(obj.DefIndex);
+                var sp = _renderer.WorldToScreen(new Vec2(obj.X, obj.Y), 0f, _camera);
+                // Only draw if on screen
+                if (sp.X > -100 && sp.X < screenW + 100 && sp.Y > -100 && sp.Y < screenH + 100)
+                {
+                    string label = !string.IsNullOrEmpty(def.Name) ? def.Name : def.Id;
+                    if (!string.IsNullOrEmpty(label))
+                    {
+                        var textSize = _smallFont != null ? _smallFont.MeasureString(label) : new Vector2(label.Length * 6, 12);
+                        var textPos = new Vector2(sp.X - textSize.X * 0.5f, sp.Y + 4);
+                        // Dark background for readability
+                        _spriteBatch.Draw(_pixel, new Rectangle((int)textPos.X - 2, (int)textPos.Y - 1, (int)textSize.X + 4, (int)textSize.Y + 2), new Color(0, 0, 0, 160));
+                        if (_smallFont != null)
+                            _spriteBatch.DrawString(_smallFont, label, textPos, new Color(220, 220, 255));
+                    }
+                }
+            }
             _spriteBatch.End();
         }
 
@@ -2238,7 +2266,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         _spriteBatch.Draw(_groundVertexMapTex!, new Rectangle(0, 0, _renderer.ScreenW, _renderer.ScreenH), Color.White);
         _spriteBatch.End();
 
-        // Resume normal SpriteBatch
+        // Resume normal SpriteBatch (premultiplied alpha)
         _spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.LinearClamp);
     }
 
