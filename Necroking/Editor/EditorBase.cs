@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
+using Necroking.Core;
 
 namespace Necroking.Editor;
 
@@ -33,16 +34,27 @@ public class EditorBase
     public static readonly Color SuccessColor = new(80, 200, 100);
 
     // State
-    protected SpriteBatch _sb = null!;
-    protected Texture2D _pixel = null!;
+    internal SpriteBatch _sb = null!;
+    internal Texture2D _pixel = null!;
     protected SpriteFont? _font;
     protected SpriteFont? _smallFont;
     protected SpriteFont? _largeFont;
+    internal GraphicsDevice _gd = null!;
     internal MouseState _mouse;
     internal MouseState _prevMouse;
     internal KeyboardState _kb;
     internal KeyboardState _prevKb;
     protected int _screenW, _screenH;
+
+    // INF02: Global scroll consumed flag
+    private bool _scrollConsumed;
+    public bool IsScrollConsumed => _scrollConsumed;
+    public void ConsumeScroll() => _scrollConsumed = true;
+
+    // INF03: Global mouse-over-UI flag
+    private bool _mouseOverEditorUI;
+    public bool IsMouseOverUI => _mouseOverEditorUI;
+    public void SetMouseOverUI() => _mouseOverEditorUI = true;
 
     // Text input state
     private string? _activeFieldId;
@@ -51,8 +63,50 @@ public class EditorBase
     private double _keyRepeatTimer;
     private Keys _lastRepeatingKey;
 
+    // INF09: Multi-line text area state
+    private int _textAreaScrollOffset;
+    private int _textAreaCursorPos;
+
     // Scroll state (per-panel, keyed by panel ID)
     private readonly Dictionary<string, float> _scrollOffsets = new();
+
+    /// <summary>
+    /// Get the current scroll offset for a given panel, or 0 if not found.
+    /// </summary>
+    public float GetScrollOffset(string panelId) =>
+        _scrollOffsets.TryGetValue(panelId, out float v) ? v : 0f;
+
+    // Scissor clipping stack
+    private readonly Stack<Rectangle> _scissorStack = new();
+    private static readonly RasterizerState _scissorRasterState = new() { ScissorTestEnable = true };
+
+    // Input layer system (0=main, 1=popup, 2=dropdown, 3=confirm dialog)
+    private int _inputLayer;
+    public int InputLayer { get => _inputLayer; set => _inputLayer = value; }
+    public bool IsInputBlocked(int layer) => _inputLayer > layer;
+
+    // Combo dropdown scroll state (keyed by fieldId)
+    private readonly Dictionary<string, int> _comboScrollOffsets = new();
+
+    // Deferred dropdown overlay data
+    private struct PendingDropdown
+    {
+        public string FieldId;
+        public string[] Options;
+        public string CurrentValue;
+        public Rectangle InputRect;
+        public int ScrollOffset;
+        public int MaxScroll;
+        public bool NeedsScroll;
+        public int VisibleCount;
+        public int DropY;
+        public bool FlippedUp; // INF11: dropdown flipped upward
+    }
+    private PendingDropdown? _pendingDropdown;
+    private bool _dropdownOverlayConsumedClick;
+
+    // Color picker popup (shared instance)
+    private readonly ColorPickerPopup _colorPicker = new();
 
     public void SetContext(SpriteBatch sb, Texture2D pixel, SpriteFont? font, SpriteFont? smallFont, SpriteFont? largeFont)
     {
@@ -61,6 +115,8 @@ public class EditorBase
         _font = font;
         _smallFont = smallFont;
         _largeFont = largeFont;
+        _gd = sb.GraphicsDevice;
+        _colorPicker.SetContext(sb, pixel, font, smallFont);
     }
 
     public void UpdateInput(MouseState mouse, MouseState prevMouse, KeyboardState kb, KeyboardState prevKb,
@@ -74,6 +130,17 @@ public class EditorBase
         _screenH = screenH;
         _cursorBlink += (float)gameTime.ElapsedGameTime.TotalSeconds;
 
+        // Reset per-frame flags
+        _inputLayer = 0;
+        _scrollConsumed = false;
+        _mouseOverEditorUI = false;
+        _pendingDropdown = null;
+        _dropdownOverlayConsumedClick = false;
+
+        // Update color picker popup input (with keyboard for value box editing)
+        float dt = (float)gameTime.ElapsedGameTime.TotalSeconds;
+        _colorPicker.UpdateInput(mouse, prevMouse, kb, prevKb, screenW, screenH, dt);
+
         // Handle key repeat for text input
         if (_activeFieldId != null)
             HandleTextInput(gameTime);
@@ -84,6 +151,18 @@ public class EditorBase
     public void DrawRect(Rectangle rect, Color color)
     {
         _sb.Draw(_pixel, rect, color);
+    }
+
+    /// <summary>
+    /// Draw a line between two screen-space points using a rotated 1-pixel texture.
+    /// </summary>
+    public void DrawLine(Vector2 a, Vector2 b, Color color, int thickness = 1)
+    {
+        var diff = b - a;
+        float length = diff.Length();
+        if (length < 0.5f) return;
+        float angle = MathF.Atan2(diff.Y, diff.X);
+        _sb.Draw(_pixel, a, null, color, angle, Vector2.Zero, new Vector2(length, thickness), SpriteEffects.None, 0f);
     }
 
     public void DrawBorder(Rectangle rect, Color color, int thickness = 1)
@@ -113,6 +192,54 @@ public class EditorBase
         _sb.Draw(texture, position, sourceRect, color, rotation, origin, scale, effects, 0f);
     }
 
+    // === Scissor Clipping ===
+
+    /// <summary>
+    /// Begin a scissor-clipped region. Ends the current SpriteBatch, sets the scissor rectangle,
+    /// and begins a new SpriteBatch with ScissorTestEnable. Supports nesting via a stack.
+    /// </summary>
+    public void BeginClip(Rectangle clipRect)
+    {
+        // End the current SpriteBatch pass
+        _sb.End();
+
+        // Push the current scissor rect onto the stack (for nesting)
+        _scissorStack.Push(_gd.ScissorRectangle);
+
+        // Set the new scissor rectangle
+        _gd.ScissorRectangle = clipRect;
+
+        // Begin a new SpriteBatch with scissor test enabled
+        _sb.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.PointClamp,
+            null, _scissorRasterState);
+    }
+
+    /// <summary>
+    /// End a scissor-clipped region. Restores the previous scissor rectangle from the stack.
+    /// </summary>
+    public void EndClip()
+    {
+        // End the scissor-enabled SpriteBatch pass
+        _sb.End();
+
+        // Restore the previous scissor rectangle
+        if (_scissorStack.Count > 0)
+            _gd.ScissorRectangle = _scissorStack.Pop();
+
+        // Resume the normal SpriteBatch (matching the HUD pass in Game1.Draw)
+        if (_scissorStack.Count > 0)
+        {
+            // Still nested - re-enable scissor with the parent clip rect
+            _sb.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.PointClamp,
+                null, _scissorRasterState);
+        }
+        else
+        {
+            // Back to normal - no scissor test
+            _sb.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.PointClamp);
+        }
+    }
+
     // === Panel ===
 
     public Rectangle DrawPanel(int x, int y, int w, int h, string title)
@@ -130,7 +257,7 @@ public class EditorBase
     public bool DrawButton(string text, int x, int y, int w, int h, Color? bgOverride = null)
     {
         var rect = new Rectangle(x, y, w, h);
-        bool hovered = rect.Contains(_mouse.X, _mouse.Y);
+        bool hovered = !IsInputBlocked(0) && rect.Contains(_mouse.X, _mouse.Y);
         bool pressed = hovered && _mouse.LeftButton == ButtonState.Pressed;
         bool clicked = hovered && _mouse.LeftButton == ButtonState.Released && _prevMouse.LeftButton == ButtonState.Pressed;
 
@@ -152,6 +279,8 @@ public class EditorBase
     public int DrawScrollableList(string panelId, IReadOnlyList<string> items, int selectedIdx,
         int x, int y, int w, int h, string? searchFilter = null)
     {
+        bool inputBlocked = IsInputBlocked(0);
+
         // Clip region
         var clipRect = new Rectangle(x, y, w, h);
         DrawRect(clipRect, new Color(20, 20, 35, 200));
@@ -164,7 +293,7 @@ public class EditorBase
         int clicked = -1;
 
         // Handle scroll wheel when hovering
-        if (clipRect.Contains(_mouse.X, _mouse.Y))
+        if (!inputBlocked && !_scrollConsumed && clipRect.Contains(_mouse.X, _mouse.Y))
         {
             int scrollDelta = _mouse.ScrollWheelValue - _prevMouse.ScrollWheelValue;
             if (scrollDelta != 0)
@@ -180,6 +309,7 @@ public class EditorBase
                 float maxScroll = Math.Max(0, totalH - h);
                 scroll = Math.Clamp(scroll, 0, maxScroll);
                 _scrollOffsets[panelId] = scroll;
+                ConsumeScroll();
             }
         }
 
@@ -194,7 +324,7 @@ public class EditorBase
             if (drawY >= y + h) break;
 
             var itemRect = new Rectangle(x, (int)drawY, w, itemH);
-            bool hovered = itemRect.Contains(_mouse.X, _mouse.Y) && clipRect.Contains(_mouse.X, _mouse.Y);
+            bool hovered = !inputBlocked && itemRect.Contains(_mouse.X, _mouse.Y) && clipRect.Contains(_mouse.X, _mouse.Y);
 
             Color bg;
             if (i == selectedIdx) bg = ItemSelected;
@@ -248,7 +378,7 @@ public class EditorBase
         var inputRect = new Rectangle(inputX, y, inputW, inputH);
 
         bool isActive = _activeFieldId == fieldId;
-        bool hovered = inputRect.Contains(_mouse.X, _mouse.Y);
+        bool hovered = !IsInputBlocked(0) && inputRect.Contains(_mouse.X, _mouse.Y);
 
         // Click to activate
         if (hovered && _mouse.LeftButton == ButtonState.Pressed && _prevMouse.LeftButton == ButtonState.Released)
@@ -296,7 +426,7 @@ public class EditorBase
         // Text display
         var inputRect = new Rectangle(inputX, y, inputW, inputH);
         bool isActive = _activeFieldId == fieldId;
-        bool hovered = inputRect.Contains(_mouse.X, _mouse.Y);
+        bool hovered = !IsInputBlocked(0) && inputRect.Contains(_mouse.X, _mouse.Y);
 
         if (hovered && _mouse.LeftButton == ButtonState.Pressed && _prevMouse.LeftButton == ButtonState.Released)
         {
@@ -356,7 +486,7 @@ public class EditorBase
 
         var inputRect = new Rectangle(inputX, y, inputW, inputH);
         bool isActive = _activeFieldId == fieldId;
-        bool hovered = inputRect.Contains(_mouse.X, _mouse.Y);
+        bool hovered = !IsInputBlocked(0) && inputRect.Contains(_mouse.X, _mouse.Y);
 
         if (hovered && _mouse.LeftButton == ButtonState.Pressed && _prevMouse.LeftButton == ButtonState.Released)
         {
@@ -411,7 +541,7 @@ public class EditorBase
     {
         int boxSize = 16;
         var boxRect = new Rectangle(x, y + 2, boxSize, boxSize);
-        bool hovered = boxRect.Contains(_mouse.X, _mouse.Y);
+        bool hovered = !IsInputBlocked(0) && boxRect.Contains(_mouse.X, _mouse.Y);
         bool clicked = hovered && _mouse.LeftButton == ButtonState.Pressed && _prevMouse.LeftButton == ButtonState.Released;
 
         DrawRect(boxRect, InputBg);
@@ -428,8 +558,12 @@ public class EditorBase
     }
 
     /// <summary>
-    /// Draw a dropdown/combo for string enum values
+    /// Draw a dropdown/combo for string enum values.
+    /// Supports scrolling when there are more than 8 items.
     /// </summary>
+    private const int ComboMaxVisibleItems = 8;
+    private const int ComboItemH = 20;
+
     public string DrawCombo(string fieldId, string label, string value, string[] options, int x, int y, int w)
     {
         int labelW = 120;
@@ -439,8 +573,11 @@ public class EditorBase
         int inputW = w - labelW;
         int inputH = 20;
         var inputRect = new Rectangle(inputX, y, inputW, inputH);
-        bool hovered = inputRect.Contains(_mouse.X, _mouse.Y);
-        bool isOpen = _activeFieldId == fieldId + "_combo";
+
+        // If a dropdown overlay consumed the click this frame, block combo button interaction
+        bool hovered = !_dropdownOverlayConsumedClick && !IsInputBlocked(0) && inputRect.Contains(_mouse.X, _mouse.Y);
+        string comboId = fieldId + "_combo";
+        bool isOpen = _activeFieldId == comboId;
 
         // Draw the current value
         DrawRect(inputRect, hovered || isOpen ? ItemHover : InputBg);
@@ -450,39 +587,170 @@ public class EditorBase
 
         if (hovered && _mouse.LeftButton == ButtonState.Pressed && _prevMouse.LeftButton == ButtonState.Released)
         {
-            _activeFieldId = isOpen ? null : fieldId + "_combo";
+            if (isOpen)
+            {
+                _activeFieldId = null;
+            }
+            else
+            {
+                _activeFieldId = comboId;
+                // Reset scroll to show the selected item
+                int selectedIdx = Array.IndexOf(options, value);
+                if (selectedIdx >= 0 && options.Length > ComboMaxVisibleItems)
+                    _comboScrollOffsets[comboId] = Math.Max(0, Math.Min(selectedIdx - 2, options.Length - ComboMaxVisibleItems));
+                else
+                    _comboScrollOffsets[comboId] = 0;
+            }
             return value;
         }
 
-        // Draw dropdown if open
+        // When open: handle input inline (so DrawCombo can return the selection),
+        // but defer visual rendering to DrawDropdownOverlays()
         if (isOpen)
         {
-            int dropH = Math.Min(options.Length * 20, 200);
+            // Set input layer to prevent click-through to widgets behind the dropdown
+            if (_inputLayer < 2) _inputLayer = 2;
+
+            int visibleCount = Math.Min(options.Length, ComboMaxVisibleItems);
+            bool needsScroll = options.Length > ComboMaxVisibleItems;
+
+            // Get or init scroll offset
+            if (!_comboScrollOffsets.ContainsKey(comboId))
+                _comboScrollOffsets[comboId] = 0;
+            int scrollOffset = _comboScrollOffsets[comboId];
+            int maxScroll = Math.Max(0, options.Length - ComboMaxVisibleItems);
+            scrollOffset = Math.Clamp(scrollOffset, 0, maxScroll);
+
+            int dropH = visibleCount * ComboItemH;
+
+            // INF11: Flip dropdown upward if it would extend below the screen
             int dropY = y + inputH;
-
-            DrawRect(new Rectangle(inputX, dropY, inputW, dropH), PanelBg);
-            DrawBorder(new Rectangle(inputX, dropY, inputW, dropH), PanelBorder);
-
-            for (int i = 0; i < options.Length && i * 20 < dropH; i++)
+            bool flippedUp = false;
+            if (dropY + dropH > _screenH)
             {
-                var optRect = new Rectangle(inputX, dropY + i * 20, inputW, 20);
+                dropY = y - dropH;
+                flippedUp = true;
+                // If flipping up still goes off-screen, clamp to top
+                if (dropY < 0) dropY = 0;
+            }
+            var dropRect = new Rectangle(inputX, dropY, inputW, dropH);
+
+            // Handle mouse wheel scrolling within the dropdown + consume scroll
+            if (dropRect.Contains(_mouse.X, _mouse.Y))
+            {
+                // Always consume scroll when hovering dropdown to prevent panel scroll-through
+                ConsumeScroll();
+
+                if (needsScroll)
+                {
+                    int scrollDelta = _mouse.ScrollWheelValue - _prevMouse.ScrollWheelValue;
+                    if (scrollDelta != 0)
+                    {
+                        scrollOffset -= scrollDelta > 0 ? 1 : -1;
+                        scrollOffset = Math.Clamp(scrollOffset, 0, maxScroll);
+                        _comboScrollOffsets[comboId] = scrollOffset;
+                    }
+                }
+            }
+
+            // Check for option clicks (input handling — no drawing)
+            for (int vi = 0; vi < visibleCount; vi++)
+            {
+                int i = vi + scrollOffset;
+                if (i >= options.Length) break;
+
+                var optRect = new Rectangle(inputX, dropY + vi * ComboItemH, inputW, ComboItemH);
                 bool optHovered = optRect.Contains(_mouse.X, _mouse.Y);
-                bool selected = options[i] == value;
-
-                if (optHovered || selected)
-                    DrawRect(optRect, optHovered ? ItemHover : ItemSelected);
-
-                DrawText(options[i], new Vector2(inputX + 3, dropY + i * 20 + 2), selected ? TextBright : TextColor);
 
                 if (optHovered && _mouse.LeftButton == ButtonState.Pressed && _prevMouse.LeftButton == ButtonState.Released)
                 {
                     _activeFieldId = null;
+                    _dropdownOverlayConsumedClick = true;
                     return options[i];
                 }
             }
+
+            // Close dropdown if clicking outside
+            if (_mouse.LeftButton == ButtonState.Pressed && _prevMouse.LeftButton == ButtonState.Released
+                && !dropRect.Contains(_mouse.X, _mouse.Y) && !inputRect.Contains(_mouse.X, _mouse.Y))
+            {
+                _activeFieldId = null;
+                _dropdownOverlayConsumedClick = true;
+            }
+
+            // Save for deferred rendering (visual only)
+            _pendingDropdown = new PendingDropdown
+            {
+                FieldId = comboId,
+                Options = options,
+                CurrentValue = value,
+                InputRect = inputRect,
+                ScrollOffset = scrollOffset,
+                MaxScroll = maxScroll,
+                NeedsScroll = needsScroll,
+                VisibleCount = visibleCount,
+                DropY = dropY,
+                FlippedUp = flippedUp,
+            };
         }
 
         return value;
+    }
+
+    /// <summary>
+    /// Draw all pending dropdown overlays on top of everything.
+    /// Must be called at the very end of an editor's Draw method,
+    /// after all panels, popups, etc., so the dropdown renders at the highest z-level.
+    /// </summary>
+    public void DrawDropdownOverlays()
+    {
+        if (_pendingDropdown == null) return;
+
+        var dd = _pendingDropdown.Value;
+        int inputX = dd.InputRect.X;
+        int inputW = dd.InputRect.Width;
+        int dropH = dd.VisibleCount * ComboItemH;
+        var dropRect = new Rectangle(inputX, dd.DropY, inputW, dropH);
+        int scrollOffset = dd.ScrollOffset;
+
+        // INF11: Shadow behind the dropdown for visual separation
+        var shadowRect = new Rectangle(dropRect.X + 3, dropRect.Y + 3, dropRect.Width, dropRect.Height);
+        DrawRect(shadowRect, new Color(0, 0, 0, 100));
+
+        // Background
+        DrawRect(dropRect, PanelBg);
+        // INF11: Stronger border (2px) to distinguish from content behind
+        DrawBorder(dropRect, AccentColor, 2);
+
+        // Use scissor clipping for clean edges
+        BeginClip(dropRect);
+
+        for (int vi = 0; vi < dd.VisibleCount; vi++)
+        {
+            int i = vi + scrollOffset;
+            if (i >= dd.Options.Length) break;
+
+            var optRect = new Rectangle(inputX, dd.DropY + vi * ComboItemH, inputW, ComboItemH);
+            bool optHovered = optRect.Contains(_mouse.X, _mouse.Y);
+            bool isSelected = dd.Options[i] == dd.CurrentValue;
+
+            if (optHovered || isSelected)
+                DrawRect(optRect, optHovered ? ItemHover : ItemSelected);
+
+            DrawText(dd.Options[i], new Vector2(inputX + 3, dd.DropY + vi * ComboItemH + 2),
+                isSelected ? TextBright : TextColor);
+        }
+
+        EndClip();
+
+        // Draw scrollbar indicator if scrollable
+        if (dd.NeedsScroll)
+        {
+            float scrollRatio = dd.MaxScroll > 0 ? (float)scrollOffset / dd.MaxScroll : 0;
+            int barH = Math.Max(12, dropH * dd.VisibleCount / dd.Options.Length);
+            int barY = dd.DropY + (int)(scrollRatio * (dropH - barH));
+            DrawRect(new Rectangle(inputX + inputW - 6, barY, 5, barH), new Color(100, 100, 140, 180));
+        }
     }
 
     /// <summary>
@@ -524,6 +792,55 @@ public class EditorBase
     }
 
     /// <summary>
+    /// Draw a clickable color swatch that opens the HSV color picker popup.
+    /// Returns true when OK is pressed (color was changed).
+    /// </summary>
+    public bool DrawColorSwatch(string id, int x, int y, int w, int h, ref HdrColor color, bool hideIntensity = false)
+    {
+        // If the color picker is open for this id, pass hideIntensity on open (already handled)
+        // The ColorSwatch method handles drawing, click detection, and popup open/sync
+        return _colorPicker.ColorSwatch(id, x, y, w, h, ref color);
+    }
+
+    /// <summary>
+    /// Open the color picker popup for a specific color (alternative to swatch-based opening).
+    /// </summary>
+    public void OpenColorPicker(string id, HdrColor color, bool hideIntensity = false)
+    {
+        _colorPicker.Open(id, color, hideIntensity);
+    }
+
+    /// <summary>
+    /// Draw the color picker popup overlay. Call this AFTER all other editor drawing
+    /// so it renders on top of everything.
+    /// </summary>
+    public void DrawColorPickerPopup()
+    {
+        // Capture back buffer for eyedropper if dropper is active
+        if (_colorPicker.IsDropperActive)
+            _colorPicker.CaptureBackBuffer(_gd);
+        _colorPicker.Draw();
+    }
+
+    /// <summary>
+    /// Returns true if the color picker popup is currently open (to suppress other interactions).
+    /// </summary>
+    public bool IsColorPickerOpen => _colorPicker.IsOpen;
+
+    /// <summary>
+    /// Returns true if the eyedropper mode is active.
+    /// </summary>
+    public bool IsDropperActive => _colorPicker.IsDropperActive;
+
+    /// <summary>
+    /// Activate the eyedropper tool on the color picker.
+    /// </summary>
+    public void OpenDropper()
+    {
+        _colorPicker.OpenDropper();
+    }
+
+    /// <summary>
     /// Draw a search/filter text field (no label, full width)
     /// </summary>
     public string DrawSearchField(string fieldId, string value, int x, int y, int w)
@@ -531,7 +848,7 @@ public class EditorBase
         int inputH = 22;
         var inputRect = new Rectangle(x, y, w, inputH);
         bool isActive = _activeFieldId == fieldId;
-        bool hovered = inputRect.Contains(_mouse.X, _mouse.Y);
+        bool hovered = !IsInputBlocked(0) && inputRect.Contains(_mouse.X, _mouse.Y);
 
         if (hovered && _mouse.LeftButton == ButtonState.Pressed && _prevMouse.LeftButton == ButtonState.Released)
         {
@@ -564,6 +881,246 @@ public class EditorBase
         return isActive ? _inputBuffer : value;
     }
 
+    // === INF08: Slider + value box combo widget ===
+
+    /// <summary>
+    /// Draw a horizontal slider with a numeric value box to the right.
+    /// Click the value box to type exact values.
+    /// Returns the new float value.
+    /// </summary>
+    public float DrawSliderFloat(string id, string label, float value, float min, float max, int x, int y, int w)
+    {
+        int labelW = 120;
+        DrawText(label, new Vector2(x, y + 2), TextDim);
+
+        int sliderX = x + labelW;
+        int valueBoxW = 50;
+        int sliderW = w - labelW - valueBoxW - 4;
+        int sliderH = 16;
+        int trackY = y + 2;
+
+        // -- Slider track --
+        var trackRect = new Rectangle(sliderX, trackY, sliderW, sliderH);
+        DrawRect(trackRect, InputBg);
+        DrawBorder(trackRect, InputBorder);
+
+        // Filled portion
+        float t = (max > min) ? Math.Clamp((value - min) / (max - min), 0f, 1f) : 0f;
+        int fillW = (int)(t * (sliderW - 4));
+        if (fillW > 0)
+            DrawRect(new Rectangle(sliderX + 2, trackY + 2, fillW, sliderH - 4), AccentColor);
+
+        // Thumb
+        int thumbX = sliderX + 2 + (int)(t * (sliderW - 4)) - 4;
+        DrawRect(new Rectangle(thumbX, trackY, 8, sliderH), TextBright);
+
+        // Slider interaction (drag)
+        bool hovered = !IsInputBlocked(0) && trackRect.Contains(_mouse.X, _mouse.Y);
+        if (hovered || (_mouse.LeftButton == ButtonState.Pressed && _prevMouse.LeftButton == ButtonState.Pressed))
+        {
+            if (_mouse.LeftButton == ButtonState.Pressed && _mouse.Y >= trackY - 4 && _mouse.Y <= trackY + sliderH + 4
+                && _mouse.X >= sliderX - 4 && _mouse.X <= sliderX + sliderW + 4)
+            {
+                float newT = Math.Clamp((float)(_mouse.X - sliderX - 2) / (sliderW - 4), 0f, 1f);
+                value = min + newT * (max - min);
+                // Update input buffer if value box is active for this slider
+                string valueFieldId = id + "_val";
+                if (_activeFieldId == valueFieldId)
+                    _inputBuffer = value.ToString("F2");
+            }
+        }
+
+        // -- Value box (clickable text field) --
+        string valueFieldId2 = id + "_val";
+        int vbX = sliderX + sliderW + 4;
+        var vbRect = new Rectangle(vbX, y, valueBoxW, 20);
+        bool vbActive = _activeFieldId == valueFieldId2;
+        bool vbHovered = !IsInputBlocked(0) && vbRect.Contains(_mouse.X, _mouse.Y);
+
+        if (vbHovered && _mouse.LeftButton == ButtonState.Pressed && _prevMouse.LeftButton == ButtonState.Released)
+        {
+            _activeFieldId = valueFieldId2;
+            _inputBuffer = value.ToString("F2");
+            _cursorBlink = 0;
+            vbActive = true;
+        }
+        else if (vbActive && _mouse.LeftButton == ButtonState.Pressed && _prevMouse.LeftButton == ButtonState.Released && !vbHovered)
+        {
+            _activeFieldId = null;
+            if (float.TryParse(_inputBuffer, out float parsed))
+                return Math.Clamp(parsed, min, max);
+            return value;
+        }
+
+        DrawRect(vbRect, InputBg);
+        DrawBorder(vbRect, vbActive ? InputActive : InputBorder);
+        string vbText = vbActive ? _inputBuffer : value.ToString("F2");
+        DrawText(vbText, new Vector2(vbX + 3, y + 2), vbActive ? TextBright : TextColor);
+
+        if (vbActive && ((int)(_cursorBlink * 2) % 2 == 0))
+        {
+            float cursorX = vbX + 3 + MeasureText(vbText).X;
+            DrawRect(new Rectangle((int)cursorX, y + 2, 1, 16), TextBright);
+        }
+
+        if (vbActive && float.TryParse(_inputBuffer, out float cur))
+            return Math.Clamp(cur, min, max);
+
+        return Math.Clamp(value, min, max);
+    }
+
+    // === INF09: Multi-line text area widget ===
+
+    /// <summary>
+    /// Draw a multi-line text area with word wrapping and scrolling.
+    /// Click to edit, supports Enter for new lines.
+    /// Returns the updated string.
+    /// </summary>
+    public string DrawTextArea(string id, string value, int x, int y, int w, int h)
+    {
+        var areaRect = new Rectangle(x, y, w, h);
+        string areaFieldId = id + "_textarea";
+        bool isActive = _activeFieldId == areaFieldId;
+        bool hovered = !IsInputBlocked(0) && areaRect.Contains(_mouse.X, _mouse.Y);
+
+        // Click to activate
+        if (hovered && _mouse.LeftButton == ButtonState.Pressed && _prevMouse.LeftButton == ButtonState.Released)
+        {
+            _activeFieldId = areaFieldId;
+            _inputBuffer = value ?? "";
+            _textAreaCursorPos = _inputBuffer.Length;
+            _textAreaScrollOffset = 0;
+            _cursorBlink = 0;
+            isActive = true;
+        }
+        // Click outside to deactivate
+        else if (isActive && _mouse.LeftButton == ButtonState.Pressed && _prevMouse.LeftButton == ButtonState.Released && !hovered)
+        {
+            _activeFieldId = null;
+            return _inputBuffer;
+        }
+
+        // Background
+        DrawRect(areaRect, InputBg);
+        DrawBorder(areaRect, isActive ? InputActive : InputBorder);
+
+        string text = isActive ? _inputBuffer : (value ?? "");
+
+        // Word-wrap the text into lines
+        var lines = WrapText(text, w - 8);
+
+        // Scroll handling
+        int lineH = 16;
+        int visibleLines = Math.Max(1, (h - 4) / lineH);
+        int totalLines = lines.Count;
+
+        if (isActive && !_scrollConsumed && hovered)
+        {
+            int scrollDelta = _mouse.ScrollWheelValue - _prevMouse.ScrollWheelValue;
+            if (scrollDelta != 0)
+            {
+                _textAreaScrollOffset -= scrollDelta > 0 ? 1 : -1;
+                _textAreaScrollOffset = Math.Clamp(_textAreaScrollOffset, 0, Math.Max(0, totalLines - visibleLines));
+                ConsumeScroll();
+            }
+        }
+        _textAreaScrollOffset = Math.Clamp(_textAreaScrollOffset, 0, Math.Max(0, totalLines - visibleLines));
+
+        // Draw text lines
+        int drawY = y + 2;
+        for (int i = _textAreaScrollOffset; i < lines.Count && drawY < y + h - 2; i++)
+        {
+            DrawText(lines[i], new Vector2(x + 4, drawY), isActive ? TextBright : TextColor);
+            drawY += lineH;
+        }
+
+        // Draw cursor
+        if (isActive && ((int)(_cursorBlink * 2) % 2 == 0))
+        {
+            // Find cursor line and column
+            int charCount = 0;
+            int curLine = 0;
+            int curCol = 0;
+            for (int i = 0; i < lines.Count; i++)
+            {
+                if (charCount + lines[i].Length >= _textAreaCursorPos)
+                {
+                    curLine = i;
+                    curCol = _textAreaCursorPos - charCount;
+                    break;
+                }
+                charCount += lines[i].Length;
+                if (i < lines.Count - 1) charCount++; // newline char
+            }
+
+            if (curLine >= _textAreaScrollOffset && curLine < _textAreaScrollOffset + visibleLines)
+            {
+                string beforeCursor = curCol <= lines[curLine].Length ? lines[curLine][..curCol] : lines[curLine];
+                float cxPos = x + 4 + MeasureText(beforeCursor).X;
+                int cyPos = y + 2 + (curLine - _textAreaScrollOffset) * lineH;
+                DrawRect(new Rectangle((int)cxPos, cyPos, 1, lineH), TextBright);
+            }
+        }
+
+        // Scrollbar
+        if (totalLines > visibleLines)
+        {
+            float scrollRatio = totalLines > visibleLines ? (float)_textAreaScrollOffset / (totalLines - visibleLines) : 0;
+            int barH = Math.Max(12, (h - 4) * visibleLines / totalLines);
+            int barY = y + 2 + (int)(scrollRatio * (h - 4 - barH));
+            DrawRect(new Rectangle(x + w - 6, barY, 5, barH), new Color(100, 100, 140, 180));
+        }
+
+        return isActive ? _inputBuffer : (value ?? "");
+    }
+
+    /// <summary>
+    /// Word-wrap text to fit within the given pixel width.
+    /// </summary>
+    private List<string> WrapText(string text, int maxWidth)
+    {
+        var result = new List<string>();
+        if (string.IsNullOrEmpty(text)) { result.Add(""); return result; }
+
+        // Split on explicit newlines first
+        var paragraphs = text.Split('\n');
+        foreach (var para in paragraphs)
+        {
+            if (string.IsNullOrEmpty(para)) { result.Add(""); continue; }
+
+            var words = para.Split(' ');
+            string currentLine = "";
+            foreach (var word in words)
+            {
+                string candidate = string.IsNullOrEmpty(currentLine) ? word : currentLine + " " + word;
+                if (MeasureText(candidate).X > maxWidth && !string.IsNullOrEmpty(currentLine))
+                {
+                    result.Add(currentLine);
+                    currentLine = word;
+                }
+                else
+                {
+                    currentLine = candidate;
+                }
+            }
+            result.Add(currentLine);
+        }
+        return result;
+    }
+
+    // === INF14: Status message alpha fade helper ===
+
+    /// <summary>
+    /// Get an alpha-faded color for status messages.
+    /// Timer counts down from a positive value; the last 1.0 second fades out.
+    /// </summary>
+    public static Color FadeStatusColor(Color baseColor, float timer)
+    {
+        if (timer <= 0) return Color.Transparent;
+        float alpha = timer < 1f ? timer : 1f;
+        return baseColor * alpha;
+    }
+
     // === Text Input Handling ===
 
     private void HandleTextInput(GameTime gameTime)
@@ -571,6 +1128,8 @@ public class EditorBase
         if (_activeFieldId == null) return;
         // Skip combo dropdowns
         if (_activeFieldId.EndsWith("_combo")) return;
+
+        bool isTextArea = _activeFieldId.EndsWith("_textarea");
 
         var pressed = _kb.GetPressedKeys();
         double dt = gameTime.ElapsedGameTime.TotalSeconds;
@@ -599,28 +1158,96 @@ public class EditorBase
                 _keyRepeatTimer = 0;
             }
 
-            if (key == Keys.Back && _inputBuffer.Length > 0)
+            if (isTextArea)
             {
-                _inputBuffer = _inputBuffer[..^1];
-                _cursorBlink = 0;
-            }
-            else if (key == Keys.Enter || key == Keys.Tab)
-            {
-                _activeFieldId = null;
-                return;
-            }
-            else if (key == Keys.Escape)
-            {
-                _activeFieldId = null;
-                return;
+                // Multi-line text area input handling
+                _textAreaCursorPos = Math.Clamp(_textAreaCursorPos, 0, _inputBuffer.Length);
+
+                if (key == Keys.Back && _textAreaCursorPos > 0)
+                {
+                    _inputBuffer = _inputBuffer[..(_textAreaCursorPos - 1)] + _inputBuffer[_textAreaCursorPos..];
+                    _textAreaCursorPos--;
+                    _cursorBlink = 0;
+                }
+                else if (key == Keys.Delete && _textAreaCursorPos < _inputBuffer.Length)
+                {
+                    _inputBuffer = _inputBuffer[.._textAreaCursorPos] + _inputBuffer[(_textAreaCursorPos + 1)..];
+                    _cursorBlink = 0;
+                }
+                else if (key == Keys.Enter)
+                {
+                    _inputBuffer = _inputBuffer[.._textAreaCursorPos] + "\n" + _inputBuffer[_textAreaCursorPos..];
+                    _textAreaCursorPos++;
+                    _cursorBlink = 0;
+                }
+                else if (key == Keys.Left && _textAreaCursorPos > 0)
+                {
+                    _textAreaCursorPos--;
+                    _cursorBlink = 0;
+                }
+                else if (key == Keys.Right && _textAreaCursorPos < _inputBuffer.Length)
+                {
+                    _textAreaCursorPos++;
+                    _cursorBlink = 0;
+                }
+                else if (key == Keys.Home)
+                {
+                    _textAreaCursorPos = 0;
+                    _cursorBlink = 0;
+                }
+                else if (key == Keys.End)
+                {
+                    _textAreaCursorPos = _inputBuffer.Length;
+                    _cursorBlink = 0;
+                }
+                else if (key == Keys.Tab)
+                {
+                    // Tab closes text area
+                    _activeFieldId = null;
+                    return;
+                }
+                else if (key == Keys.Escape)
+                {
+                    _activeFieldId = null;
+                    return;
+                }
+                else
+                {
+                    char? c = KeyToChar(key, shift);
+                    if (c.HasValue)
+                    {
+                        _inputBuffer = _inputBuffer[.._textAreaCursorPos] + c.Value + _inputBuffer[_textAreaCursorPos..];
+                        _textAreaCursorPos++;
+                        _cursorBlink = 0;
+                    }
+                }
             }
             else
             {
-                char? c = KeyToChar(key, shift);
-                if (c.HasValue)
+                // Single-line text input handling
+                if (key == Keys.Back && _inputBuffer.Length > 0)
                 {
-                    _inputBuffer += c.Value;
+                    _inputBuffer = _inputBuffer[..^1];
                     _cursorBlink = 0;
+                }
+                else if (key == Keys.Enter || key == Keys.Tab)
+                {
+                    _activeFieldId = null;
+                    return;
+                }
+                else if (key == Keys.Escape)
+                {
+                    _activeFieldId = null;
+                    return;
+                }
+                else
+                {
+                    char? c = KeyToChar(key, shift);
+                    if (c.HasValue)
+                    {
+                        _inputBuffer += c.Value;
+                        _cursorBlink = 0;
+                    }
                 }
             }
         }
@@ -678,7 +1305,98 @@ public class EditorBase
     public bool IsTextInputActive => _activeFieldId != null && !_activeFieldId.EndsWith("_combo");
 
     /// <summary>
+    /// Returns true if a specific field (by fieldId) is currently the active text input.
+    /// </summary>
+    public bool IsFieldActive(string fieldId) => _activeFieldId == fieldId;
+
+    /// <summary>
     /// Deactivate any active text field
     /// </summary>
     public void ClearActiveField() { _activeFieldId = null; }
+
+    /// <summary>
+    /// If an active combo dropdown is open, close it and return true.
+    /// Editors should call this at the top of their Escape cascade so that
+    /// Escape closes the dropdown first before closing sub-editors/popups.
+    /// </summary>
+    public bool CloseActiveDropdown()
+    {
+        if (_activeFieldId != null && _activeFieldId.EndsWith("_combo"))
+        {
+            _activeFieldId = null;
+            return true;
+        }
+        return false;
+    }
+
+    // === Confirmation Dialog ===
+
+    /// <summary>
+    /// Draw a centered confirmation dialog with dark overlay.
+    /// Returns true if Confirm is clicked. Sets isOpen to false on either button.
+    /// Call this AFTER all other editor drawing so it renders on top.
+    /// </summary>
+    public bool DrawConfirmDialog(string title, string message, ref bool isOpen)
+    {
+        if (!isOpen) return false;
+
+        // Set input layer to block all lower-layer interactions
+        _inputLayer = 3;
+
+        // Dark overlay
+        DrawRect(new Rectangle(0, 0, _screenW, _screenH), new Color(0, 0, 0, 150));
+
+        // Dialog dimensions
+        int dialogW = 360;
+        int dialogH = 160;
+        int dx = (_screenW - dialogW) / 2;
+        int dy = (_screenH - dialogH) / 2;
+
+        // Dialog background
+        DrawRect(new Rectangle(dx, dy, dialogW, dialogH), PanelBg);
+        DrawBorder(new Rectangle(dx, dy, dialogW, dialogH), PanelBorder, 2);
+
+        // Title bar
+        DrawRect(new Rectangle(dx, dy, dialogW, 28), PanelHeader);
+        DrawRect(new Rectangle(dx, dy + 28, dialogW, 1), PanelBorder);
+        DrawText(title, new Vector2(dx + 10, dy + 5), TextBright, _font);
+
+        // Message text
+        DrawText(message, new Vector2(dx + 16, dy + 44), TextColor);
+
+        // Buttons
+        int btnW = 90;
+        int btnH = 28;
+        int btnY = dy + dialogH - btnH - 16;
+        int confirmX = dx + dialogW / 2 - btnW - 10;
+        int cancelX = dx + dialogW / 2 + 10;
+
+        // Temporarily allow button interaction at this layer
+        int savedLayer = _inputLayer;
+        _inputLayer = 0;
+
+        bool confirmed = false;
+
+        if (DrawButton("Confirm", confirmX, btnY, btnW, btnH, DangerColor))
+        {
+            confirmed = true;
+            isOpen = false;
+        }
+
+        if (DrawButton("Cancel", cancelX, btnY, btnW, btnH))
+        {
+            isOpen = false;
+        }
+
+        // Restore input layer
+        _inputLayer = savedLayer;
+
+        // Also close on Escape
+        if (_kb.IsKeyDown(Keys.Escape) && _prevKb.IsKeyUp(Keys.Escape))
+        {
+            isOpen = false;
+        }
+
+        return confirmed;
+    }
 }

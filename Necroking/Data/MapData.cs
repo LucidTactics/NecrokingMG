@@ -358,6 +358,9 @@ public static class MapData
         if (ed.TryGetProperty("buildingMaxHP", out var bmhp)) def.BuildingMaxHP = bmhp.GetInt32();
         if (ed.TryGetProperty("buildingProtection", out var bp)) def.BuildingProtection = bp.GetInt32();
         if (ed.TryGetProperty("buildingDefaultOwner", out var bdo)) def.BuildingDefaultOwner = bdo.GetInt32();
+        if (ed.TryGetProperty("costWood", out var cw)) def.CostWood = cw.GetInt32();
+        if (ed.TryGetProperty("costStone", out var cs)) def.CostStone = cs.GetInt32();
+        if (ed.TryGetProperty("costGold", out var cg)) def.CostGold = cg.GetInt32();
         if (ed.TryGetProperty("boundTriggerID", out var btid)) def.BoundTriggerID = btid.GetString() ?? "";
         if (ed.TryGetProperty("processTime", out var pt)) def.ProcessTime = pt.GetSingle();
         if (ed.TryGetProperty("autoSpawn", out var ats)) def.AutoSpawn = ats.GetBoolean();

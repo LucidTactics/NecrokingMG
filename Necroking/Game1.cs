@@ -25,6 +25,8 @@ public class Game1 : Microsoft.Xna.Framework.Game
     private GraphicsDeviceManager _graphics;
     private SpriteBatch _spriteBatch = null!;
     private Texture2D _pixel = null!;
+    private Texture2D _glowTex = null!;
+    private Texture2D? _mainMenuBg;
     private SpriteFont? _font;
     private SpriteFont? _smallFont;
     private SpriteFont? _largeFont;
@@ -103,6 +105,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
     private EditorBase _editorUi = new();
     private UnitEditorWindow _unitEditor = null!;
     private SpellEditorWindow _spellEditor = null!;
+    private SettingsWindow _settingsWindow = null!;
 
     // Scenario state
     private ScenarioBase? _activeScenario;
@@ -128,6 +131,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
     public Game1()
     {
         _graphics = new GraphicsDeviceManager(this);
+        _graphics.GraphicsProfile = GraphicsProfile.HiDef;
 
         if (LaunchArgs.ResolutionW > 0 && LaunchArgs.ResolutionH > 0)
         {
@@ -359,7 +363,8 @@ public class Game1 : Microsoft.Xna.Framework.Game
             },
             wallSystem: _wallSystem,
             roadSystem: _roadSystem,
-            tileGrid: _sim.Grid);
+            tileGrid: _sim.Grid,
+            editorBase: _editorUi);
 
         // Feed grass data to map editor
         if (_grassMap.Length > 0)
@@ -456,8 +461,30 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // Give scenario access to road system
         scenario.RoadSystem = _roadSystem;
 
+        // Init map editor with scenario systems (needed for editor screenshot scenarios)
+        _mapEditor.Init(
+            _groundSystem, _envSystem, _triggerSystem, _camera,
+            _spriteBatch, _pixel, _font, _smallFont, GraphicsDevice,
+            onVertexMapChanged: () =>
+            {
+                _groundVertexMapTex?.Dispose();
+                _groundVertexMapTex = _groundSystem.CreateVertexMapTexture(GraphicsDevice);
+            },
+            wallSystem: _wallSystem,
+            roadSystem: _roadSystem,
+            tileGrid: _sim.Grid,
+            editorBase: _editorUi);
+
         // Initialize the scenario
         scenario.OnInit(_sim);
+
+        // Wire up UnitEditorAccessor for AnimButtonTestScenario
+        if (scenario is Scenario.Scenarios.AnimButtonTestScenario animTest)
+            animTest.UnitEditor = new Scenario.Scenarios.UnitEditorAccessor(_unitEditor);
+
+        // Wire up BloomRenderer reference for bloom debug
+        if (scenario is Scenario.Scenarios.BloomDebugScenario bloomDbg)
+            bloomDbg.BloomRef = _bloom;
 
         // Apply camera override
         if (scenario.HasCameraOverride)
@@ -550,6 +577,29 @@ public class Game1 : Microsoft.Xna.Framework.Game
         _pixel = new Texture2D(GraphicsDevice, 1, 1);
         _pixel.SetData(new[] { Color.White });
 
+        // Create radial glow texture (64x64 with smooth quadratic falloff)
+        _glowTex = new Texture2D(GraphicsDevice, 64, 64);
+        var glowData = new Color[64 * 64];
+        for (int gy = 0; gy < 64; gy++)
+            for (int gx = 0; gx < 64; gx++)
+            {
+                float dx = (gx - 31.5f) / 31.5f;
+                float dy = (gy - 31.5f) / 31.5f;
+                float dist = MathF.Sqrt(dx * dx + dy * dy);
+                float alpha = MathF.Max(0, 1f - dist);
+                alpha *= alpha; // quadratic falloff for soft glow
+                glowData[gy * 64 + gx] = new Color((byte)255, (byte)255, (byte)255, (byte)(alpha * 255));
+            }
+        _glowTex.SetData(glowData);
+
+        // Load main menu background
+        string menuBgPath = Path.Combine("assets", "UI", "Background", "VampireBackground.png");
+        if (File.Exists(menuBgPath))
+        {
+            using var stream = File.OpenRead(menuBgPath);
+            _mainMenuBg = Texture2D.FromStream(GraphicsDevice, stream);
+        }
+
         _font = Content.Load<SpriteFont>("DefaultFont");
         _smallFont = Content.Load<SpriteFont>("SmallFont");
         _largeFont = Content.Load<SpriteFont>("LargeFont");
@@ -571,8 +621,11 @@ public class Game1 : Microsoft.Xna.Framework.Game
         _unitEditor = new UnitEditorWindow(_editorUi);
         _unitEditor.SetGameData(_gameData);
         _unitEditor.SetAtlases(_atlases);
+        _unitEditor.SetAnimMeta(_animMeta);
         _spellEditor = new SpellEditorWindow(_editorUi);
         _spellEditor.SetGameData(_gameData);
+        _settingsWindow = new SettingsWindow(_editorUi);
+        _settingsWindow.SetGameData(_gameData, Path.Combine("data", "settings.json"));
     }
 
     protected override void Update(GameTime gameTime)
@@ -751,47 +804,11 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 Exit();
         }
 
-        // --- Settings screen clicks ---
-        if (_menuState == MenuState.Settings && mouse.LeftButton == ButtonState.Pressed && _prevMouse.LeftButton == ButtonState.Released)
+        // --- Settings window close handling ---
+        if (_menuState == MenuState.Settings && _settingsWindow.WantsClose)
         {
-            int sw = GraphicsDevice.Viewport.Width;
-            int sh = GraphicsDevice.Viewport.Height;
-            int panelW = 500, panelH = 500;
-            int panelX = (sw - panelW) / 2;
-            int panelY = (sh - panelH) / 2;
-            int lineH = 28;
-            int sy = panelY + 50; // "BLOOM" header
-            sy += lineH; // now at Bloom Enabled line
-
-            // Bloom Enabled toggle
-            if (mouse.X >= panelX && mouse.X < panelX + panelW && mouse.Y >= sy && mouse.Y < sy + lineH)
-                _gameData.Settings.Bloom.Enabled = !_gameData.Settings.Bloom.Enabled;
-            sy += lineH; // threshold/intensity
-            sy += lineH; // "SHADOW" header
-            sy += lineH; // now at Shadow Enabled line
-
-            // Shadow Enabled toggle
-            if (mouse.X >= panelX && mouse.X < panelX + panelW && mouse.Y >= sy && mouse.Y < sy + lineH)
-                _gameData.Settings.Shadow.Enabled = !_gameData.Settings.Shadow.Enabled;
-            sy += lineH; // sun angle
-            sy += lineH; // "WEATHER" header
-            sy += lineH; // now at Weather Enabled line
-
-            // Weather Enabled toggle
-            if (mouse.X >= panelX && mouse.X < panelX + panelW && mouse.Y >= sy && mouse.Y < sy + lineH)
-                _gameData.Settings.Weather.Enabled = !_gameData.Settings.Weather.Enabled;
-            sy += lineH; // active preset
-            sy += lineH; // "GENERAL" header
-            sy += lineH; // now at Combat Log line
-
-            // CombatLog Enabled toggle
-            if (mouse.X >= panelX && mouse.X < panelX + panelW && mouse.Y >= sy && mouse.Y < sy + lineH)
-                _gameData.Settings.General.CombatLogEnabled = !_gameData.Settings.General.CombatLogEnabled;
-            sy += lineH; // now at Damage Numbers line
-
-            // DamageNumbers Enabled toggle
-            if (mouse.X >= panelX && mouse.X < panelX + panelW && mouse.Y >= sy && mouse.Y < sy + lineH)
-                _gameData.Settings.General.DamageNumbersEnabled = !_gameData.Settings.General.DamageNumbersEnabled;
+            _settingsWindow.WantsClose = false;
+            _menuState = MenuState.PauseMenu;
         }
 
         // --- ESC toggles pause menu / closes editor ---
@@ -821,12 +838,15 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // --- Editor updates ---
         int screenW = GraphicsDevice.Viewport.Width;
         int screenH = GraphicsDevice.Viewport.Height;
+        // Update EditorBase input first so _eb has current mouse/keyboard state for all editors
+        if (_menuState == MenuState.UnitEditor || _menuState == MenuState.SpellEditor || _menuState == MenuState.MapEditor || _menuState == MenuState.Settings)
+            _editorUi.UpdateInput(mouse, _prevMouse, kb, _prevKb, screenW, screenH, gameTime);
         if (_menuState == MenuState.MapEditor && _gameWorldLoaded)
             _mapEditor.Update(screenW, screenH);
+        if (_menuState == MenuState.Settings)
+            _settingsWindow.Update(screenW, screenH, gameTime);
         if (_menuState == MenuState.UIEditor)
             _uiEditor.Update(screenW, screenH);
-        if (_menuState == MenuState.UnitEditor || _menuState == MenuState.SpellEditor)
-            _editorUi.UpdateInput(mouse, _prevMouse, kb, _prevKb, screenW, screenH, gameTime);
 
         // --- Camera ---
         _renderer.SetScreenSize(screenW, screenH);
@@ -1102,20 +1122,54 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
                         case "Strike":
                         {
+                            var style = new LightningStyle
+                            {
+                                CoreColor = spell.StrikeCoreColor,
+                                GlowColor = spell.StrikeGlowColor,
+                                CoreWidth = spell.StrikeCoreWidth,
+                                GlowWidth = spell.StrikeGlowWidth
+                            };
                             var sVis = spell.StrikeVisualType == "GodRay" ? StrikeVisual.GodRay : StrikeVisual.Lightning;
                             var sGrp = new GodRayParams { EdgeSoftness = spell.GodRayEdgeSoftness,
                                 NoiseSpeed = spell.GodRayNoiseSpeed, NoiseStrength = spell.GodRayNoiseStrength,
                                 NoiseScale = spell.GodRayNoiseScale };
                             Enum.TryParse<SpellTargetFilter>(spell.TargetFilter, out var sTF);
-                            _sim.Lightning.SpawnStrike(mouseWorld, spell.TelegraphDuration,
-                                spell.StrikeDuration, spell.AoeRadius, spell.Damage,
-                                new LightningStyle
+
+                            if (spell.StrikeTargetUnit)
+                            {
+                                // Zap: caster to nearest enemy near mouse
+                                var casterEffPos = necroPos;
+                                float casterH = 1.5f; // approx hand height
+                                // Find nearest enemy to mouse
+                                int enemy = -1;
+                                float bestDist = spell.Range * spell.Range;
+                                for (int ui = 0; ui < _sim.Units.Count; ui++)
                                 {
-                                    CoreColor = spell.StrikeCoreColor,
-                                    GlowColor = spell.StrikeGlowColor,
-                                    CoreWidth = spell.StrikeCoreWidth,
-                                    GlowWidth = spell.StrikeGlowWidth
-                                }, spell.Id, sVis, sGrp, sTF);
+                                    if (!_sim.Units.Alive[ui] || _sim.Units.Faction[ui] == _sim.Units.Faction[necroIdx]) continue;
+                                    float d = (mouseWorld - _sim.Units.Position[ui]).LengthSq();
+                                    if (d < bestDist) { bestDist = d; enemy = ui; }
+                                }
+                                if (enemy >= 0)
+                                {
+                                    var targetPos = _sim.Units.Position[enemy];
+                                    float targetH = 1.0f;
+                                    var tDef = _gameData.Units.Get(_sim.Units.UnitDefID[enemy]);
+                                    if (tDef != null) targetH = tDef.SpriteWorldHeight * 0.5f;
+
+                                    _sim.Lightning.SpawnZap(casterEffPos, targetPos,
+                                        spell.ZapDuration > 0 ? spell.ZapDuration : spell.StrikeDuration,
+                                        style, casterH, targetH);
+                                    // Direct damage via damage event
+                                    _damageNumbers.Add(new DamageNumber { WorldPos = targetPos, Damage = spell.Damage, Timer = 0f, Height = targetH });
+                                }
+                            }
+                            else
+                            {
+                                // Sky strike at mouse position
+                                _sim.Lightning.SpawnStrike(mouseWorld, spell.TelegraphDuration,
+                                    spell.StrikeDuration, spell.AoeRadius, spell.Damage,
+                                    style, spell.Id, sVis, sGrp, sTF);
+                            }
                             break;
                         }
 
@@ -1405,6 +1459,15 @@ public class Game1 : Microsoft.Xna.Framework.Game
             {
                 _activeScenario.OnTick(_sim, dt);
 
+                // Apply menu state requests from scenario (for editor screenshots)
+                if (_activeScenario.RequestedMenuState != null)
+                {
+                    var requested = _activeScenario.RequestedMenuState;
+                    _activeScenario.RequestedMenuState = null;
+                    if (Enum.TryParse<MenuState>(requested, true, out var state))
+                        _menuState = state;
+                }
+
                 // Apply camera overrides from scenario each tick
                 if (_activeScenario.HasCameraOverride)
                 {
@@ -1447,6 +1510,83 @@ public class Game1 : Microsoft.Xna.Framework.Game
                     Timer = 0f,
                     Height = dmg.Height
                 });
+            }
+        }
+
+        // --- Scenario tick when editor is active (editors pause normal sim but scenarios must still tick) ---
+        if (editorActive && _activeScenario != null)
+        {
+            _activeScenario.OnTick(_sim, 1f / 60f);
+
+            if (_activeScenario.RequestedMenuState != null)
+            {
+                var requested = _activeScenario.RequestedMenuState;
+                _activeScenario.RequestedMenuState = null;
+                if (Enum.TryParse<MenuState>(requested, true, out var state))
+                    _menuState = state;
+            }
+
+            if (_activeScenario.RequestSelectFirst)
+            {
+                _activeScenario.RequestSelectFirst = false;
+                if (_menuState == MenuState.UnitEditor) _unitEditor.SelectFirst();
+                else if (_menuState == MenuState.SpellEditor) _spellEditor.SelectFirst();
+                else if (_menuState == MenuState.UIEditor) _uiEditor.SelectedIndex = 0;
+            }
+
+            // Apply map editor tab switch from scenario
+            if (_activeScenario.RequestedMapTab != null)
+            {
+                var tabName = _activeScenario.RequestedMapTab;
+                _activeScenario.RequestedMapTab = null;
+                if (_menuState == MenuState.MapEditor && Enum.TryParse<MapEditorTab>(tabName, true, out var mapTab))
+                    _mapEditor.ActiveTab = mapTab;
+            }
+
+            // Apply UI editor tab switch from scenario
+            if (_activeScenario.RequestedUITab != null)
+            {
+                var tabName = _activeScenario.RequestedUITab;
+                _activeScenario.RequestedUITab = null;
+                if (_menuState == MenuState.UIEditor && Enum.TryParse<UIEditorTab>(tabName, true, out var uiTab))
+                    _uiEditor.ActiveTab = uiTab;
+            }
+
+            // Open weapon sub-editor popup
+            if (_activeScenario.RequestOpenWeaponSub)
+            {
+                _activeScenario.RequestOpenWeaponSub = false;
+                if (_menuState == MenuState.UnitEditor)
+                    _unitEditor.OpenWeaponSubEditor();
+            }
+
+            // Open buff manager popup
+            if (_activeScenario.RequestOpenBuffManager)
+            {
+                _activeScenario.RequestOpenBuffManager = false;
+                if (_menuState == MenuState.SpellEditor)
+                    _spellEditor.OpenBuffManager();
+            }
+
+            if (_activeScenario.IsComplete)
+            {
+                int result = _activeScenario.OnComplete(_sim);
+                string scenarioName = _activeScenario.Name;
+                DebugLog.Log("scenario", $"Scenario '{scenarioName}' completed with result: {(result == 0 ? "PASS" : "FAIL")} (code={result})");
+                Console.Error.WriteLine(result == 0 ? $"SCENARIO PASS: {scenarioName}" : $"SCENARIO FAIL: {scenarioName} (code={result})");
+                _activeScenario = null;
+                if (LaunchArgs.Headless)
+                {
+                    Environment.ExitCode = result;
+                    Exit();
+                    return;
+                }
+                _menuState = MenuState.MainMenu;
+                _gameWorldLoaded = false;
+                _prevKb = kb;
+                _prevMouse = mouse;
+                base.Update(gameTime);
+                return;
             }
         }
 
@@ -1744,7 +1884,8 @@ public class Game1 : Microsoft.Xna.Framework.Game
         }
 
         // Begin bloom scene capture
-        bool useBloom = _bloom.IsInitialized && _gameData.Settings.Bloom.Enabled;
+        var bloomSettings = _activeScenario?.BloomOverride ?? _gameData.Settings.Bloom;
+        bool useBloom = _bloom.IsInitialized && bloomSettings.Enabled;
         if (useBloom)
             _bloom.BeginScene(GraphicsDevice);
         else
@@ -1786,6 +1927,23 @@ public class Game1 : Microsoft.Xna.Framework.Game
         _spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.Additive, SamplerState.LinearClamp);
         DrawEffects();
         DrawLightning();
+
+        // Bloom debug: draw test HDR shapes (multiple additive layers to exceed 1.0)
+        if (_activeScenario is Scenario.Scenarios.BloomDebugScenario bloomDebug && bloomDebug.DrawTestShapes)
+        {
+            foreach (var (wx, wy, sz, col, label) in Scenario.Scenarios.BloomDebugScenario.TestShapes)
+            {
+                var screenPos = _renderer.WorldToScreen(new Vec2(wx, wy), 0f, _camera);
+                int pixSz = (int)(sz * _camera.Zoom);
+                var rect = new Rectangle((int)screenPos.X - pixSz / 2, (int)screenPos.Y - pixSz / 2, pixSz, pixSz);
+
+                // Draw the shape multiple times additively to push values above 1.0
+                int layers = label.Contains("3x") ? 5 : 1;
+                for (int l = 0; l < layers; l++)
+                    _spriteBatch.Draw(_pixel, rect, col);
+            }
+        }
+
         _spriteBatch.End();
 
         // --- Alpha blend pass (damage numbers on top) ---
@@ -1795,7 +1953,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
         // End bloom and composite
         if (useBloom)
-            _bloom.EndScene(GraphicsDevice, _spriteBatch, _gameData.Settings.Bloom);
+            _bloom.EndScene(GraphicsDevice, _spriteBatch, bloomSettings);
 
         // --- HUD (drawn after bloom so it's not affected) ---
         _spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.PointClamp);
@@ -1815,11 +1973,26 @@ public class Game1 : Microsoft.Xna.Framework.Game
         else if (_menuState == MenuState.PauseMenu)
             DrawPauseMenu(screenW, screenH);
         else if (_menuState == MenuState.Settings)
-            DrawSettings(screenW, screenH);
+            _settingsWindow.Draw(screenW, screenH);
         if (_menuState == MenuState.UnitEditor)
+        {
             _unitEditor.Draw(screenW, screenH, gameTime);
+            // U23: Handle close request from the editor's [X] button
+            if (_unitEditor.WantsClose)
+            {
+                _unitEditor.WantsClose = false;
+                _menuState = MenuState.None;
+            }
+        }
         else if (_menuState == MenuState.SpellEditor)
+        {
             _spellEditor.Draw(screenW, screenH, gameTime);
+            if (_spellEditor.WantsClose)
+            {
+                _spellEditor.WantsClose = false;
+                _menuState = MenuState.None;
+            }
+        }
         else if (_menuState == MenuState.MapEditor)
         {
             _mapEditor.Draw(screenW, screenH);
@@ -1828,6 +2001,10 @@ public class Game1 : Microsoft.Xna.Framework.Game
         {
             _uiEditor.Draw(screenW, screenH);
         }
+
+        // Draw color picker popup overlay (must be after all editor drawing, on top)
+        if (_menuState == MenuState.UnitEditor || _menuState == MenuState.SpellEditor)
+            _editorUi.DrawColorPickerPopup();
 
         if (_font != null && showUI)
         {
@@ -1952,7 +2129,9 @@ public class Game1 : Microsoft.Xna.Framework.Game
         if (_grassMap.Length == 0 || _grassW == 0 || _grassBaseColors.Length == 0) return;
         if (_camera.Zoom < 8f) return; // don't draw grass when zoomed way out
 
-        float cellSize = 0.8f; // matches GrassSystem.DEFAULT_CELL_SIZE
+        var grassSettings = _gameData.Settings.Grass;
+        float cellSize = grassSettings.CellSize;
+        if (cellSize <= 0f) cellSize = 0.8f;
 
         float viewLeft = _camera.Position.X - _renderer.ScreenW / (2f * _camera.Zoom) - 2;
         float viewRight = _camera.Position.X + _renderer.ScreenW / (2f * _camera.Zoom) + 2;
@@ -1970,6 +2149,9 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // Skip if cells are too small to see
         if (pixelSize < 2f) return;
 
+        // Wind sway offset based on settings
+        float windOffset = _gameTime * grassSettings.WindSpeed * grassSettings.WindStrength;
+
         for (int cy = minCY; cy <= maxCY; cy++)
         {
             for (int cx = minCX; cx <= maxCX; cx++)
@@ -1985,7 +2167,11 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
                 float wx = cx * cellSize;
                 float wy = cy * cellSize;
-                var sp = _renderer.WorldToScreen(new Vec2(wx, wy), 0f, _camera);
+
+                // Apply wind sway per-cell
+                float cellPhase = (cx * 73856093 ^ cy * 19349663) * 0.0001f;
+                float sway = MathF.Sin(windOffset + cellPhase) * grassSettings.WindStrength * 0.15f;
+                var sp = _renderer.WorldToScreen(new Vec2(wx + sway, wy), 0f, _camera);
 
                 // Draw small green marks to represent grass blades
                 var baseColor = _grassBaseColors[typeIdx];
@@ -1998,9 +2184,10 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 Color grassColor = Color.Lerp(baseColor, tipColor, 0.3f + variation * 0.4f);
                 grassColor = new Color(grassColor.R, grassColor.G, grassColor.B, (byte)180);
 
-                // Draw as a small overlay patch
+                // Draw as a small overlay patch, height scaled by settings
+                float heightScale = grassSettings.Height / 150f; // normalize against default 150
                 int drawW = Math.Max(2, (int)pixelSize);
-                int drawH = Math.Max(1, (int)(pixelSizeY * 0.8f));
+                int drawH = Math.Max(1, (int)(pixelSizeY * 0.8f * heightScale));
                 _spriteBatch.Draw(_pixel, new Rectangle((int)sp.X, (int)(sp.Y - drawH * 0.3f), drawW, drawH), grassColor);
             }
         }
@@ -2216,16 +2403,29 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
     private void DrawShadows()
     {
+        var shadow = _gameData.Settings.Shadow;
+        if (!shadow.Enabled) return;
+
+        float angleRad = shadow.SunAngle * MathF.PI / 180f;
+        float offsetX = MathF.Cos(angleRad) * shadow.LengthScale;
+        float offsetY = MathF.Sin(angleRad) * shadow.LengthScale;
+        byte alphaB = (byte)(Math.Clamp(shadow.Opacity, 0f, 1f) * 255);
+        var shadowColor = new Color((byte)0, (byte)0, (byte)0, alphaB);
+
         for (int i = 0; i < _sim.Units.Count; i++)
         {
             if (!_sim.Units.Alive[i]) continue;
-            var sp = _renderer.WorldToScreen(_sim.Units.Position[i], 0f, _camera);
-            float r = _sim.Units.Radius[i] * _camera.Zoom * 0.8f;
-            float ry = r * _camera.YRatio;
+            float unitRadius = _sim.Units.Radius[i];
+            var worldPos = _sim.Units.Position[i];
+            // Offset shadow position by sun direction (in world space, scaled by unit radius)
+            var shadowWorld = new Vec2(worldPos.X + offsetX * unitRadius, worldPos.Y + offsetY * unitRadius);
+            var sp = _renderer.WorldToScreen(shadowWorld, 0f, _camera);
+            float r = unitRadius * _camera.Zoom * (1f - shadow.Squash * 0.5f);
+            float ry = r * _camera.YRatio * (1f - shadow.Squash);
 
             // Ellipse shadow approximation using stretched pixel
             _spriteBatch.Draw(_pixel, new Rectangle((int)(sp.X - r), (int)(sp.Y - ry * 0.5f), (int)(r * 2), (int)ry),
-                new Color(0, 0, 0, 50));
+                shadowColor);
         }
     }
 
@@ -2609,11 +2809,11 @@ public class Game1 : Microsoft.Xna.Framework.Game
             }
             else
             {
-                // Fallback glow
+                // Fallback glow (radial gradient circle)
                 byte a = (byte)(alpha * 200);
-                float glowSize = scale * _camera.Zoom * 0.5f;
-                _spriteBatch.Draw(_pixel, sp, null, new Color(eff.Tint.R, eff.Tint.G, eff.Tint.B, a),
-                    0f, new Vector2(0.5f, 0.5f), glowSize, SpriteEffects.None, 0f);
+                float glowSize = scale * _camera.Zoom * 0.5f / 32f; // divide by half-texture-size to match world scale
+                _spriteBatch.Draw(_glowTex, sp, null, new Color(eff.Tint.R, eff.Tint.G, eff.Tint.B, a),
+                    0f, new Vector2(32f, 32f), glowSize, SpriteEffects.None, 0f);
             }
         }
 
@@ -2647,8 +2847,8 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 float pulse = 0.5f + 0.5f * MathF.Sin(strike.TelegraphTimer * 20f);
                 float radius = strike.AoeRadius * _camera.Zoom * pulse;
                 byte alpha = (byte)(100 * pulse);
-                _spriteBatch.Draw(_pixel, sp, null, new Color((byte)255, (byte)200, (byte)100, alpha),
-                    0f, new Vector2(0.5f, 0.5f), new Vector2(radius * 2, radius * _camera.YRatio), SpriteEffects.None, 0f);
+                _spriteBatch.Draw(_glowTex, sp, null, new Color((byte)255, (byte)200, (byte)100, alpha),
+                    0f, new Vector2(32f, 32f), new Vector2(radius * 2 / 32f, radius * _camera.YRatio / 32f), SpriteEffects.None, 0f);
             }
             else
             {
@@ -2664,13 +2864,13 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 }
                 else
                 {
-                    // Lightning effect: bright flash
+                    // Lightning effect: bright flash (radial glow, not rectangle)
                     float radius = strike.AoeRadius * _camera.Zoom;
                     byte coreAlpha = (byte)(255 * fade);
                     var coreColor = strike.Style.CoreColor.ToScaledColor();
-                    _spriteBatch.Draw(_pixel, sp, null,
+                    _spriteBatch.Draw(_glowTex, sp, null,
                         new Color(coreColor.R, coreColor.G, coreColor.B, coreAlpha),
-                        0f, new Vector2(0.5f, 0.5f), new Vector2(radius, radius * _camera.YRatio * 0.5f),
+                        0f, new Vector2(32f, 32f), new Vector2(radius / 32f, radius * _camera.YRatio * 0.5f / 32f),
                         SpriteEffects.None, 0f);
 
                     // Procedural lightning bolt from sky
@@ -2927,23 +3127,30 @@ public class Game1 : Microsoft.Xna.Framework.Game
     private void DrawDamageNumbers()
     {
         if (_font == null) return;
+        var dnSettings = _gameData.Settings.General;
+        if (!dnSettings.DamageNumbersEnabled) return;
+        var dnColor = dnSettings.DamageNumberColor;
+        float dnScale = dnSettings.DamageNumberSize / 16f; // normalize against default 16
+
         foreach (var dn in _damageNumbers)
         {
-            float fade = 1f - dn.Timer / _gameData.Settings.General.DamageNumberFadeTime;
+            float fade = 1f - dn.Timer / dnSettings.DamageNumberFadeTime;
             if (fade <= 0f) continue;
             var sp = _renderer.WorldToScreen(dn.WorldPos, dn.Height, _camera);
             byte alpha = (byte)(255 * fade);
             string text = dn.Damage.ToString();
-            var size = _font.MeasureString(text);
+            var size = _font.MeasureString(text) * dnScale;
             var pos = new Vector2(sp.X - size.X / 2f, sp.Y - size.Y / 2f);
 
             // Shadow pass
             var shadowColor = new Color((byte)0, (byte)0, (byte)0, alpha);
-            _spriteBatch.DrawString(_font, text, new Vector2(pos.X + 1f, pos.Y + 1f), shadowColor);
+            _spriteBatch.DrawString(_font, text, new Vector2(pos.X + 1f, pos.Y + 1f), shadowColor,
+                0f, Vector2.Zero, dnScale, SpriteEffects.None, 0f);
 
-            // Text pass
-            var color = new Color((byte)220, (byte)60, (byte)60, alpha);
-            _spriteBatch.DrawString(_font, text, pos, color);
+            // Text pass — use DamageNumberColor from settings
+            var color = new Color((byte)dnColor.R, (byte)dnColor.G, (byte)dnColor.B, alpha);
+            _spriteBatch.DrawString(_font, text, pos, color,
+                0f, Vector2.Zero, dnScale, SpriteEffects.None, 0f);
         }
     }
 
@@ -3240,91 +3447,6 @@ public class Game1 : Microsoft.Xna.Framework.Game
         }
     }
 
-    private void DrawSettings(int screenW, int screenH)
-    {
-        // Dim background
-        _spriteBatch.Draw(_pixel, new Rectangle(0, 0, screenW, screenH), new Color(0, 0, 0, 180));
-
-        int panelW = 500, panelH = 500;
-        int panelX = (screenW - panelW) / 2;
-        int panelY = (screenH - panelH) / 2;
-
-        // Panel background
-        _spriteBatch.Draw(_pixel, new Rectangle(panelX, panelY, panelW, panelH), new Color(25, 25, 45, 240));
-        _spriteBatch.Draw(_pixel, new Rectangle(panelX, panelY, panelW, 3), new Color(100, 100, 180));
-
-        // Title
-        if (_largeFont != null)
-        {
-            string title = "SETTINGS";
-            var titleSize = _largeFont.MeasureString(title);
-            DrawText(_largeFont, title, new Vector2(panelX + panelW / 2f - titleSize.X / 2f, panelY + 12), Color.White);
-        }
-
-        if (_font == null) return;
-
-        int lineH = 28;
-        int x = panelX + 20;
-        int y = panelY + 50;
-        var labelColor = new Color(180, 180, 200);
-        var valueColor = new Color(120, 200, 120);
-        var offColor = new Color(200, 100, 100);
-        var headerColor = new Color(100, 100, 180);
-        var hintColor = new Color(100, 100, 120);
-
-        var bloom = _gameData.Settings.Bloom;
-        var shadow = _gameData.Settings.Shadow;
-        var weather = _gameData.Settings.Weather;
-        var general = _gameData.Settings.General;
-
-        // --- Bloom ---
-        DrawText(_font, "BLOOM", new Vector2(x, y), headerColor);
-        y += lineH;
-        DrawText(_font, $"  Enabled: {(bloom.Enabled ? "ON" : "OFF")}", new Vector2(x, y),
-            bloom.Enabled ? valueColor : offColor);
-        DrawText(_font, "(click to toggle)", new Vector2(x + 250, y), hintColor);
-        y += lineH;
-        DrawText(_font, $"  Threshold: {bloom.Threshold:F2}   Intensity: {bloom.Intensity:F2}", new Vector2(x, y), labelColor);
-        y += lineH;
-
-        // --- Shadow ---
-        DrawText(_font, "SHADOW", new Vector2(x, y), headerColor);
-        y += lineH;
-        DrawText(_font, $"  Enabled: {(shadow.Enabled ? "ON" : "OFF")}", new Vector2(x, y),
-            shadow.Enabled ? valueColor : offColor);
-        DrawText(_font, "(click to toggle)", new Vector2(x + 250, y), hintColor);
-        y += lineH;
-        DrawText(_font, $"  Sun Angle: {shadow.SunAngle:F1}", new Vector2(x, y), labelColor);
-        y += lineH;
-
-        // --- Weather ---
-        DrawText(_font, "WEATHER", new Vector2(x, y), headerColor);
-        y += lineH;
-        DrawText(_font, $"  Enabled: {(weather.Enabled ? "ON" : "OFF")}", new Vector2(x, y),
-            weather.Enabled ? valueColor : offColor);
-        DrawText(_font, "(click to toggle)", new Vector2(x + 250, y), hintColor);
-        y += lineH;
-        string presetName = string.IsNullOrEmpty(weather.ActivePreset) ? "(none)" : weather.ActivePreset;
-        DrawText(_font, $"  Active Preset: {presetName}", new Vector2(x, y), labelColor);
-        y += lineH;
-
-        // --- General ---
-        DrawText(_font, "GENERAL", new Vector2(x, y), headerColor);
-        y += lineH;
-        DrawText(_font, $"  Combat Log: {(general.CombatLogEnabled ? "ON" : "OFF")}", new Vector2(x, y),
-            general.CombatLogEnabled ? valueColor : offColor);
-        DrawText(_font, "(click to toggle)", new Vector2(x + 250, y), hintColor);
-        y += lineH;
-        DrawText(_font, $"  Damage Numbers: {(general.DamageNumbersEnabled ? "ON" : "OFF")}", new Vector2(x, y),
-            general.DamageNumbersEnabled ? valueColor : offColor);
-        DrawText(_font, "(click to toggle)", new Vector2(x + 250, y), hintColor);
-        y += lineH;
-
-        // Footer
-        y += 10;
-        DrawText(_font, "Press ESC to return to pause menu", new Vector2(x, y), hintColor);
-    }
-
     private void DrawWeather(int screenW, int screenH)
     {
         // Check if weather is enabled and has a preset
@@ -3382,8 +3504,23 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
     private void DrawMainMenu(int screenW, int screenH)
     {
-        // Dark background
-        _spriteBatch.Draw(_pixel, new Rectangle(0, 0, screenW, screenH), new Color(20, 15, 30));
+        // Background image (scaled to fill, centered)
+        if (_mainMenuBg != null)
+        {
+            float bgScale = MathF.Max((float)screenW / _mainMenuBg.Width,
+                                      (float)screenH / _mainMenuBg.Height);
+            float bgW = _mainMenuBg.Width * bgScale;
+            float bgH = _mainMenuBg.Height * bgScale;
+            _spriteBatch.Draw(_mainMenuBg,
+                new Rectangle((int)((screenW - bgW) * 0.5f), (int)((screenH - bgH) * 0.5f),
+                              (int)bgW, (int)bgH),
+                Color.White);
+        }
+        else
+        {
+            _spriteBatch.Draw(_pixel, new Rectangle(0, 0, screenW, screenH), new Color(20, 15, 30));
+        }
+        // Dark overlay for contrast
         _spriteBatch.Draw(_pixel, new Rectangle(0, 0, screenW, screenH), new Color(0, 0, 0, 120));
 
         // Title
@@ -3417,8 +3554,24 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
     private void DrawScenarioList(int screenW, int screenH)
     {
-        // Dark background
-        _spriteBatch.Draw(_pixel, new Rectangle(0, 0, screenW, screenH), new Color(20, 15, 30));
+        // Same background as main menu
+        if (_mainMenuBg != null)
+        {
+            float bgScale = MathF.Max((float)screenW / _mainMenuBg.Width,
+                                      (float)screenH / _mainMenuBg.Height);
+            float bgW = _mainMenuBg.Width * bgScale;
+            float bgH = _mainMenuBg.Height * bgScale;
+            _spriteBatch.Draw(_mainMenuBg,
+                new Rectangle((int)((screenW - bgW) * 0.5f), (int)((screenH - bgH) * 0.5f),
+                              (int)bgW, (int)bgH),
+                Color.White);
+        }
+        else
+        {
+            _spriteBatch.Draw(_pixel, new Rectangle(0, 0, screenW, screenH), new Color(20, 15, 30));
+        }
+        // Dark overlay for contrast
+        _spriteBatch.Draw(_pixel, new Rectangle(0, 0, screenW, screenH), new Color(0, 0, 0, 120));
 
         // Title
         if (_largeFont != null)

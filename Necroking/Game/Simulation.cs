@@ -461,9 +461,35 @@ public class Simulation
                             };
                             var tFilter = Enum.TryParse<SpellTargetFilter>(spell.TargetFilter, out var tf)
                                 ? tf : SpellTargetFilter.AnyEnemy;
-                            _lightning.SpawnStrike(_units.Position[enemy],
-                                spell.TelegraphDuration, spell.StrikeDuration,
-                                spell.AoeRadius, spell.Damage, style, spell.Id, visual, grp, tFilter);
+                            if (spell.StrikeTargetUnit)
+                            {
+                                // Instant zap: caster hand to target unit
+                                Vec2 casterPos = _units.EffectSpawnPos2D[i];
+                                float casterHeight = _units.EffectSpawnHeight[i];
+                                Vec2 targetPos = _units.Position[enemy];
+
+                                // Target center of sprite body instead of feet
+                                float targetH = 1.8f;
+                                if (_gameData != null)
+                                {
+                                    var tDef = _gameData.Units.Get(_units.UnitDefID[enemy]);
+                                    if (tDef != null) targetH = tDef.SpriteWorldHeight;
+                                }
+                                targetH *= _units.SpriteScale[enemy];
+
+                                _lightning.SpawnZap(casterPos, targetPos, spell.ZapDuration, style,
+                                    casterHeight, targetH * 0.5f);
+
+                                // Apply direct damage to target
+                                ApplyDamage(enemy, spell.Damage);
+                            }
+                            else
+                            {
+                                // Sky lightning strike: telegraph then AOE
+                                _lightning.SpawnStrike(_units.Position[enemy],
+                                    spell.TelegraphDuration, spell.StrikeDuration,
+                                    spell.AoeRadius, spell.Damage, style, spell.Id, visual, grp, tFilter);
+                            }
 
                             _units.Mana[i] -= spell.ManaCost;
                             _units.SpellCooldownTimer[i] = spell.Cooldown;

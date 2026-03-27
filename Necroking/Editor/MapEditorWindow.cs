@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text;
 using System.Text.Json;
 using Microsoft.Xna.Framework;
@@ -52,6 +53,7 @@ public class MapEditorWindow
     private SpriteFont? _font;
     private SpriteFont? _smallFont;
     private GraphicsDevice _device = null!;
+    private EditorBase? _eb;
 
     // Callbacks
     private Action? _onVertexMapChanged;
@@ -84,6 +86,15 @@ public class MapEditorWindow
 
     // Walls tab
     public int SelectedWallType; // 0 = erase, 1+ = wall def index+1
+    private bool _showWallDebug;
+    private WallEditorWindow? _wallEditor;
+
+    // Objects tab extras
+    private bool _showCollisions;
+    private EnvObjectEditorWindow? _envObjectEditor;
+
+    // Texture file browser (UI01)
+    private readonly TextureFileBrowser _textureBrowser = new();
 
     // Roads tab
     public int SelectedRoadTexDef = -1;
@@ -91,6 +102,7 @@ public class MapEditorWindow
     public int SelectedRoadPoint = -1;
     public int SelectedJunctionIndex = -1;
     private bool _roadPlaceMode;
+    private bool _junctionPlaceMode; // RM15: click-to-place junction in viewport
     private int _draggingPoint = -1;
     private int _draggingJunction = -1;
 
@@ -101,6 +113,16 @@ public class MapEditorWindow
     private bool _regionPlaceWaypoint;
     private int _draggingRegion = -1;
     private bool _draggingRegionResize;
+
+    // M26: Region drag handle types
+    private enum RegionHandle
+    {
+        None, Body,
+        N, E, S, W,       // Edge midpoints
+        NW, NE, SE, SW,   // Corners
+        CircleRadius       // Circle radius handle
+    }
+    private RegionHandle _activeHandle = RegionHandle.None;
 
     // Triggers tab
     public int SelectedTriggerDefIndex = -1;
@@ -114,6 +136,20 @@ public class MapEditorWindow
     private MouseState _prevMouse;
     private KeyboardState _prevKb;
     private int _prevScrollValue;
+
+    // M16: Smooth camera velocity
+    private float _camVelX;
+    private float _camVelY;
+    private const float CamAcceleration = 40f;
+    private const float CamFriction = 8f;
+    private const float CamBaseSpeed = 30f;
+
+    // RM17: Waypoint dragging
+    private int _draggingWaypoint = -1;
+
+    // M28: Object batch undo accumulators
+    private List<(ushort defIdx, float x, float y, float scale, float seed, int objIdx)>? _batchPlacedObjects;
+    private List<(ushort defIdx, float x, float y, float scale, float seed)>? _batchRemovedObjects;
 
     // Save/Load
     private string _mapFilename = "default";
@@ -155,6 +191,138 @@ public class MapEditorWindow
     private static readonly Color RoadPointColor = new(200, 120, 60, 200);
     private static readonly Color JunctionColor = new(60, 200, 200, 200);
 
+    // ---- Undo system ----
+    private const int MaxUndoStack = 50;
+    private readonly List<UndoAction> _undoStack = new();
+
+    // Stroke accumulators (active during a drag)
+    private Dictionary<long, byte>? _groundStrokeOld;   // key = vy*VertexW+vx -> old type
+    private Dictionary<int, byte>? _grassStrokeOld;     // key = gy*grassW+gx -> old value
+    private Dictionary<int, (byte type, short hp)>? _wallStrokeOld; // key = ty*wallW+tx -> old (type,hp)
+
+    // ---- Undo action types ----
+
+    private abstract class UndoAction { public abstract void Undo(); }
+
+    private class UndoGroundStroke : UndoAction
+    {
+        public GroundSystem Ground = null!;
+        public Dictionary<long, byte> OldValues = new();
+        public Action? OnChanged;
+        public override void Undo()
+        {
+            foreach (var kv in OldValues)
+            {
+                int vx = (int)(kv.Key % 100000);
+                int vy = (int)(kv.Key / 100000);
+                Ground.SetVertex(vx, vy, kv.Value);
+            }
+            OnChanged?.Invoke();
+        }
+    }
+
+    private class UndoGrassStroke : UndoAction
+    {
+        public byte[] GrassMap = null!;
+        public Dictionary<int, byte> OldValues = new();
+        public Action? OnChanged;
+        public override void Undo()
+        {
+            foreach (var kv in OldValues)
+            {
+                if (kv.Key >= 0 && kv.Key < GrassMap.Length)
+                    GrassMap[kv.Key] = kv.Value;
+            }
+            OnChanged?.Invoke();
+        }
+    }
+
+    private class UndoWallStroke : UndoAction
+    {
+        public WallSystem Walls = null!;
+        public Dictionary<int, (byte type, short hp)> OldValues = new();
+        public int WallWidth;
+        public override void Undo()
+        {
+            var types = Walls.GetTypes();
+            var hps = Walls.GetHPArray();
+            foreach (var kv in OldValues)
+            {
+                if (kv.Key >= 0 && kv.Key < types.Length)
+                {
+                    types[kv.Key] = kv.Value.type;
+                    hps[kv.Key] = kv.Value.hp;
+                }
+            }
+        }
+    }
+
+    private class UndoObjectPlace : UndoAction
+    {
+        public EnvironmentSystem Env = null!;
+        public int ObjectIndex;
+        public override void Undo()
+        {
+            if (ObjectIndex >= 0 && ObjectIndex < Env.ObjectCount)
+                Env.RemoveObject(ObjectIndex);
+        }
+    }
+
+    private class UndoObjectRemove : UndoAction
+    {
+        public EnvironmentSystem Env = null!;
+        public ushort DefIndex;
+        public float X, Y, Scale, Seed;
+        public override void Undo()
+        {
+            Env.AddObject(DefIndex, X, Y, Scale, Seed);
+        }
+    }
+
+    // M28: Batch undo for paint-mode object placement
+    private class UndoObjectBatchPlace : UndoAction
+    {
+        public EnvironmentSystem Env = null!;
+        public List<int> ObjectIndices = new();
+        public override void Undo()
+        {
+            // Remove in reverse order so indices remain valid
+            for (int i = ObjectIndices.Count - 1; i >= 0; i--)
+            {
+                int idx = ObjectIndices[i];
+                if (idx >= 0 && idx < Env.ObjectCount)
+                    Env.RemoveObject(idx);
+            }
+        }
+    }
+
+    // M28: Batch undo for paint-mode object removal
+    private class UndoObjectBatchRemove : UndoAction
+    {
+        public EnvironmentSystem Env = null!;
+        public List<(ushort defIdx, float x, float y, float scale, float seed)> Removed = new();
+        public override void Undo()
+        {
+            foreach (var r in Removed)
+                Env.AddObject(r.defIdx, r.x, r.y, r.scale, r.seed);
+        }
+    }
+
+    private void PushUndo(UndoAction action)
+    {
+        _undoStack.Add(action);
+        if (_undoStack.Count > MaxUndoStack)
+            _undoStack.RemoveAt(0);
+    }
+
+    private void PerformUndo()
+    {
+        if (_undoStack.Count == 0) return;
+        var action = _undoStack[^1];
+        _undoStack.RemoveAt(_undoStack.Count - 1);
+        action.Undo();
+    }
+
     // Tab names and layout
     private static readonly string[] TabRow1 = { "Ground", "Grass", "Objects", "Walls" };
     private static readonly string[] TabRow2 = { "Roads", "Regions", "Triggers" };
@@ -177,7 +345,8 @@ public class MapEditorWindow
         WallSystem? wallSystem = null,
         RoadSystem? roadSystem = null,
         TileGrid? tileGrid = null,
-        Action? onGrassMapChanged = null)
+        Action? onGrassMapChanged = null,
+        EditorBase? editorBase = null)
     {
         _groundSystem = groundSystem;
         _envSystem = envSystem;
@@ -193,6 +362,18 @@ public class MapEditorWindow
         _roadSystem = roadSystem ?? new RoadSystem();
         _tileGrid = tileGrid ?? new TileGrid();
         _onGrassMapChanged = onGrassMapChanged;
+        _eb = editorBase;
+
+        // Initialize the environment object def editor sub-window
+        if (_eb != null)
+        {
+            _envObjectEditor = new EnvObjectEditorWindow();
+            _envObjectEditor.Init(_eb, _envSystem, device, spriteBatch, pixel, font, smallFont, _triggerSystem);
+
+            _wallEditor = new WallEditorWindow(_eb);
+            _wallEditor.SetWallSystem(_wallSystem);
+            _wallEditor.SetMapFilename(_mapFilename);
+        }
     }
 
     /// <summary>
@@ -241,28 +422,64 @@ public class MapEditorWindow
     //  Update
     // ========================================================================
 
+    /// <summary>Whether the env object def editor overlay is open (blocks map interaction).</summary>
+    public bool IsEnvObjectEditorOpen => _envObjectEditor != null && _envObjectEditor.IsOpen;
+
     public void Update(int screenW, int screenH)
     {
+        // Update env object editor if open (blocks all normal input)
+        if (_envObjectEditor != null && _envObjectEditor.IsOpen)
+        {
+            _envObjectEditor.Update();
+            _prevMouse = Mouse.GetState();
+            _prevKb = Keyboard.GetState();
+            _prevScrollValue = _prevMouse.ScrollWheelValue;
+            return;
+        }
+
         var mouse = Mouse.GetState();
         var kb = Keyboard.GetState();
+        float dt = 1f / 60f; // fixed timestep assumption
+
+        // If wall editor overlay is open, skip normal input processing
+        if (_wallEditor != null && _wallEditor.IsOpen)
+        {
+            _prevMouse = mouse;
+            _prevKb = kb;
+            _prevScrollValue = mouse.ScrollWheelValue;
+            return;
+        }
+
         bool leftClick = mouse.LeftButton == ButtonState.Pressed && _prevMouse.LeftButton == ButtonState.Released;
         bool leftDown = mouse.LeftButton == ButtonState.Pressed;
         bool leftUp = mouse.LeftButton == ButtonState.Released && _prevMouse.LeftButton == ButtonState.Pressed;
         bool rightClick = mouse.RightButton == ButtonState.Pressed && _prevMouse.RightButton == ButtonState.Released;
+        bool rightDown = mouse.RightButton == ButtonState.Pressed;
+        bool rightUp = mouse.RightButton == ButtonState.Released && _prevMouse.RightButton == ButtonState.Pressed;
 
         int panelX = screenW - PanelWidth - 10;
         int panelY = 10;
         bool overPanel = IsMouseOverPanel(screenW, screenH);
 
-        // Status timer
-        if (_statusTimer > 0) _statusTimer -= 1f / 60f;
+        // INF03: Set mouse-over-UI flag when over the editor panel
+        if (overPanel && _eb != null)
+            _eb.SetMouseOverUI();
 
-        // --- Tab switching via keyboard (1-7) ---
-        for (int i = 0; i < 7; i++)
+        // Status timer
+        if (_statusTimer > 0) _statusTimer -= dt;
+
+        // M31: Check if text field is being edited to suppress hotkeys
+        bool textEditing = _eb != null && _eb.IsTextInputActive;
+
+        if (!textEditing)
         {
-            Keys key = Keys.D1 + i;
-            if (kb.IsKeyDown(key) && _prevKb.IsKeyUp(key))
-                ActiveTab = (MapEditorTab)i;
+            // --- Tab switching via keyboard (1-7) ---
+            for (int i = 0; i < 7; i++)
+            {
+                Keys key = Keys.D1 + i;
+                if (kb.IsKeyDown(key) && _prevKb.IsKeyUp(key))
+                    ActiveTab = (MapEditorTab)i;
+            }
         }
 
         // --- Tab switching via click ---
@@ -287,17 +504,52 @@ public class MapEditorWindow
             }
         }
 
-        // --- Brush size via Q/E or [/] ---
-        bool canAdjustBrush = ActiveTab == MapEditorTab.Ground || ActiveTab == MapEditorTab.Grass ||
-                              ActiveTab == MapEditorTab.Walls || ActiveTab == MapEditorTab.Objects;
-        if (canAdjustBrush)
+        if (!textEditing)
         {
-            if ((kb.IsKeyDown(Keys.Q) && _prevKb.IsKeyUp(Keys.Q)) ||
-                (kb.IsKeyDown(Keys.OemOpenBrackets) && _prevKb.IsKeyUp(Keys.OemOpenBrackets)))
-                BrushRadius = Math.Max(0, BrushRadius - 1);
-            if ((kb.IsKeyDown(Keys.E) && _prevKb.IsKeyUp(Keys.E)) ||
-                (kb.IsKeyDown(Keys.OemCloseBrackets) && _prevKb.IsKeyUp(Keys.OemCloseBrackets)))
-                BrushRadius = Math.Min(20, BrushRadius + 1);
+            // --- Brush size via Q/E or [/] ---
+            bool canAdjustBrush = ActiveTab == MapEditorTab.Ground || ActiveTab == MapEditorTab.Grass ||
+                                  ActiveTab == MapEditorTab.Walls || ActiveTab == MapEditorTab.Objects;
+            if (canAdjustBrush)
+            {
+                if ((kb.IsKeyDown(Keys.Q) && _prevKb.IsKeyUp(Keys.Q)) ||
+                    (kb.IsKeyDown(Keys.OemOpenBrackets) && _prevKb.IsKeyUp(Keys.OemOpenBrackets)))
+                    BrushRadius = Math.Max(0, BrushRadius - 1);
+                if ((kb.IsKeyDown(Keys.E) && _prevKb.IsKeyUp(Keys.E)) ||
+                    (kb.IsKeyDown(Keys.OemCloseBrackets) && _prevKb.IsKeyUp(Keys.OemCloseBrackets)))
+                    BrushRadius = Math.Min(20, BrushRadius + 1);
+            }
+
+            // M16: Smooth WASD camera with acceleration/friction
+            // RM37: Arrow keys in addition to WASD
+            if (kb.IsKeyDown(Keys.W) || kb.IsKeyDown(Keys.Up)) _camVelY -= CamAcceleration * dt;
+            if ((kb.IsKeyDown(Keys.S) && !kb.IsKeyDown(Keys.LeftControl)) || kb.IsKeyDown(Keys.Down)) _camVelY += CamAcceleration * dt;
+            if (kb.IsKeyDown(Keys.A) || kb.IsKeyDown(Keys.Left)) _camVelX -= CamAcceleration * dt;
+            if (kb.IsKeyDown(Keys.D) || kb.IsKeyDown(Keys.Right)) _camVelX += CamAcceleration * dt;
+
+            // RM10: 'B' hotkey to toggle Single/Paint mode in Objects tab
+            if (ActiveTab == MapEditorTab.Objects && kb.IsKeyDown(Keys.B) && _prevKb.IsKeyUp(Keys.B))
+                _objectPaintMode = !_objectPaintMode;
+        }
+
+        // RM35: Apply exponential friction to camera velocity
+        float frictionFactor = MathF.Exp(-CamFriction * dt);
+        _camVelX *= frictionFactor;
+        _camVelY *= frictionFactor;
+
+        // RM36: Clamp camera speed inversely with zoom
+        float camMaxSpeed = CamBaseSpeed / _camera.Zoom * 100f;
+        float speed = MathF.Sqrt(_camVelX * _camVelX + _camVelY * _camVelY);
+        if (speed > camMaxSpeed)
+        {
+            _camVelX = _camVelX / speed * camMaxSpeed;
+            _camVelY = _camVelY / speed * camMaxSpeed;
+        }
+
+        // Apply camera velocity
+        if (MathF.Abs(_camVelX) > 0.01f || MathF.Abs(_camVelY) > 0.01f)
+        {
+            var pos = _camera.Position;
+            _camera.Position = new Vec2(pos.X + _camVelX * dt, pos.Y + _camVelY * dt);
         }
 
         // --- Scroll per-tab ---
@@ -312,6 +564,18 @@ public class MapEditorWindow
         if (kb.IsKeyDown(Keys.LeftControl) && kb.IsKeyDown(Keys.S) && _prevKb.IsKeyUp(Keys.S))
             SaveMap();
 
+        // --- Load (Ctrl+L) ---
+        if (kb.IsKeyDown(Keys.LeftControl) && kb.IsKeyDown(Keys.L) && _prevKb.IsKeyUp(Keys.L))
+            LoadMap();
+
+        // --- Undo (Ctrl+Z) ---
+        if (kb.IsKeyDown(Keys.LeftControl) && kb.IsKeyDown(Keys.Z) && _prevKb.IsKeyUp(Keys.Z))
+        {
+            PerformUndo();
+            _statusMessage = $"Undo ({_undoStack.Count} remaining)";
+            _statusTimer = 1.5f;
+        }
+
         // --- Tab-specific update ---
         switch (ActiveTab)
         {
@@ -325,7 +589,7 @@ public class MapEditorWindow
                 UpdateObjectsTab(mouse, kb, leftClick, leftDown, leftUp, rightClick, overPanel, panelX, panelY, screenW, screenH);
                 break;
             case MapEditorTab.Walls:
-                UpdateWallsTab(mouse, kb, leftClick, leftDown, leftUp, overPanel, panelX, panelY, screenW, screenH);
+                UpdateWallsTab(mouse, kb, leftClick, leftDown, leftUp, rightClick, rightDown, rightUp, overPanel, panelX, panelY, screenW, screenH);
                 break;
             case MapEditorTab.Roads:
                 UpdateRoadsTab(mouse, kb, leftClick, leftDown, leftUp, rightClick, overPanel, panelX, panelY, screenW, screenH);
@@ -337,6 +601,9 @@ public class MapEditorWindow
                 UpdateTriggersTab(mouse, kb, leftClick, overPanel, panelX, panelY, screenW, screenH);
                 break;
         }
+
+        // Update texture file browser input
+        _textureBrowser.Update(mouse, _prevMouse, kb, _prevKb);
 
         _prevMouse = mouse;
         _prevKb = kb;
@@ -363,9 +630,9 @@ public class MapEditorWindow
         int tabsBottom = panelY + TabRowHeight * 2;
         _spriteBatch.Draw(_pixel, new Rectangle(panelX, tabsBottom, PanelWidth, 1), SeparatorColor);
 
-        // Content area
+        // Content area (reserve 92px for bottom bar: filename + buttons + shortcuts + status)
         int contentY = tabsBottom + 2;
-        int contentH = panelH - (tabsBottom - panelY) - 2;
+        int contentH = panelH - (tabsBottom - panelY) - 2 - 92;
 
         switch (ActiveTab)
         {
@@ -392,13 +659,90 @@ public class MapEditorWindow
                 break;
         }
 
-        // Status bar at bottom
+        // Bottom bar: map filename, Save/Load buttons, undo info, status message
+        int bottomH = 90; // height of the bottom section
+        int bottomY = panelY + panelH - bottomH;
+        _spriteBatch.Draw(_pixel, new Rectangle(panelX, bottomY, PanelWidth, 1), SeparatorColor);
+        bottomY += 2;
+
+        // Map filename text field
+        if (_eb != null)
+        {
+            string newFilename = _eb.DrawTextField("map_filename", "Map File", _mapFilename, panelX + Margin, bottomY, PanelWidth - Margin * 2);
+            if (newFilename != _mapFilename) _mapFilename = newFilename;
+        }
+        else
+        {
+            DrawSmallText($"Map: {_mapFilename}", panelX + Margin, bottomY + 3, TextColor);
+        }
+        bottomY += FieldHeight + 2;
+
+        // Save / Load / Undo buttons
+        int btnW3 = (PanelWidth - Margin * 2 - 8) / 3;
+        DrawButtonRect("Save", panelX + Margin, bottomY, btnW3, ButtonHeight, ButtonBg);
+        DrawButtonRect("Load", panelX + Margin + btnW3 + 4, bottomY, btnW3, ButtonHeight, ButtonBg);
+        DrawButtonRect($"Undo ({_undoStack.Count})", panelX + Margin + (btnW3 + 4) * 2, bottomY, btnW3, ButtonHeight,
+            _undoStack.Count > 0 ? AccentColor : ButtonBg);
+
+        // Handle Save/Load/Undo button clicks
+        {
+            var mouse2 = Mouse.GetState();
+            if (mouse2.LeftButton == ButtonState.Pressed && _prevMouse.LeftButton == ButtonState.Released)
+            {
+                if (mouse2.Y >= bottomY && mouse2.Y < bottomY + ButtonHeight)
+                {
+                    int relX = mouse2.X - (panelX + Margin);
+                    if (relX >= 0 && relX < btnW3)
+                        SaveMap();
+                    else if (relX >= btnW3 + 4 && relX < btnW3 * 2 + 4)
+                        LoadMap();
+                    else if (relX >= (btnW3 + 4) * 2 && relX < (btnW3 + 4) * 2 + btnW3)
+                    {
+                        PerformUndo();
+                        _statusMessage = $"Undo ({_undoStack.Count} remaining)";
+                        _statusTimer = 1.5f;
+                    }
+                }
+            }
+        }
+        bottomY += ButtonHeight + 2;
+
+        // Keyboard shortcuts hint
+        DrawSmallText("Ctrl+S Save | Ctrl+L Load | Ctrl+Z Undo", panelX + Margin, bottomY + 2, TextDim);
+        bottomY += LineHeight;
+
+        // INF14: Status message with alpha fade
         if (_statusTimer > 0 && !string.IsNullOrEmpty(_statusMessage))
         {
-            int statusY = panelY + panelH - 22;
-            _spriteBatch.Draw(_pixel, new Rectangle(panelX, statusY, PanelWidth, 22), new Color(20, 20, 20, 220));
-            DrawSmallText(_statusMessage, panelX + Margin, statusY + 3,
-                _statusMessage.StartsWith("Saved") ? SuccessColor : DangerColor);
+            bool isSuccess = _statusMessage.StartsWith("Saved") || _statusMessage.StartsWith("Loaded") || _statusMessage.StartsWith("Undo");
+            Color baseColor = isSuccess ? SuccessColor : DangerColor;
+            Color fadedColor = EditorBase.FadeStatusColor(baseColor, _statusTimer);
+            DrawSmallText(_statusMessage, panelX + Margin, bottomY + 2, fadedColor);
+        }
+
+        // Wall editor overlay (drawn last, on top of everything)
+        if (_wallEditor != null && _wallEditor.IsOpen)
+        {
+            var gameTime = new GameTime(TimeSpan.Zero, TimeSpan.FromSeconds(1.0 / 60.0));
+            _wallEditor.Draw(screenW, screenH, gameTime);
+        }
+
+        // Env object def editor overlay
+        if (_envObjectEditor != null && _envObjectEditor.IsOpen)
+        {
+            _envObjectEditor.Draw(screenW, screenH);
+        }
+
+        // Texture file browser popup
+        if (_eb != null)
+        {
+            _textureBrowser.Draw(_eb, screenW, screenH);
+        }
+
+        // Dropdown overlays (drawn last, on top of everything)
+        if (_eb != null)
+        {
+            _eb.DrawDropdownOverlays();
         }
     }
 
@@ -474,7 +818,7 @@ public class MapEditorWindow
             // Add Type button
             int addY = contentY + _groundSystem.TypeCount * (ButtonHeight + 2) + 4 - (int)_tabScroll[0];
             if (mouse.Y >= addY && mouse.Y < addY + ButtonHeight &&
-                mouse.X >= panelX + Margin && mouse.X < panelX + 60 + Margin)
+                mouse.X >= panelX + Margin && mouse.X < panelX + 80 + Margin)
             {
                 _groundSystem.AddGroundType(new GroundTypeDef
                 {
@@ -482,15 +826,40 @@ public class MapEditorWindow
                     Name = $"Type {_groundSystem.TypeCount}"
                 });
             }
+
+            // Delete Type button
+            if (_groundSystem.TypeCount > 1 && SelectedGroundType >= 0 &&
+                mouse.Y >= addY && mouse.Y < addY + ButtonHeight &&
+                mouse.X >= panelX + Margin + 90 && mouse.X < panelX + Margin + 160)
+            {
+                _groundSystem.RemoveType(SelectedGroundType);
+                SelectedGroundType = Math.Min(SelectedGroundType, _groundSystem.TypeCount - 1);
+                _onVertexMapChanged?.Invoke();
+            }
         }
 
         // Paint on world
         if (leftDown && !overPanel)
         {
+            if (!_painting)
+                _groundStrokeOld = new Dictionary<long, byte>();
             _painting = true;
             PaintGround(mouse, screenW, screenH);
         }
-        if (leftUp) _painting = false;
+        if (leftUp)
+        {
+            if (_painting && _groundStrokeOld != null && _groundStrokeOld.Count > 0)
+            {
+                PushUndo(new UndoGroundStroke
+                {
+                    Ground = _groundSystem,
+                    OldValues = _groundStrokeOld,
+                    OnChanged = _onVertexMapChanged
+                });
+            }
+            _groundStrokeOld = null;
+            _painting = false;
+        }
     }
 
     private void PaintGround(MouseState mouse, int screenW, int screenH)
@@ -510,8 +879,12 @@ public class MapEditorWindow
                 int cy = vy + dy;
                 if (cx >= 0 && cx < _groundSystem.VertexW && cy >= 0 && cy < _groundSystem.VertexH)
                 {
-                    if (_groundSystem.GetVertex(cx, cy) != typeIdx)
+                    byte oldVal = _groundSystem.GetVertex(cx, cy);
+                    if (oldVal != typeIdx)
                     {
+                        // Record old value if not already recorded this stroke
+                        long key = (long)cy * 100000 + cx;
+                        _groundStrokeOld?.TryAdd(key, oldVal);
                         _groundSystem.SetVertex(cx, cy, typeIdx);
                         changed = true;
                     }
@@ -550,8 +923,44 @@ public class MapEditorWindow
         int addY = contentY + _groundSystem.TypeCount * (ButtonHeight + 2) + 4 - (int)scroll;
         DrawButtonRect("+ Add Type", panelX + Margin, addY, 80, ButtonHeight, ButtonBg);
 
+        // Delete Type button (only if >1 type)
+        if (_groundSystem.TypeCount > 1 && SelectedGroundType >= 0)
+            DrawButtonRect("Delete", panelX + Margin + 90, addY, 70, ButtonHeight, DangerColor);
+
+        addY += ButtonHeight + 8;
+
+        // Selected ground type editable properties
+        if (SelectedGroundType >= 0 && SelectedGroundType < _groundSystem.TypeCount && _eb != null)
+        {
+            _spriteBatch.Draw(_pixel, new Rectangle(panelX, addY, PanelWidth, 1), SeparatorColor);
+            addY += 4;
+            var def = _groundSystem.GetTypeDef(SelectedGroundType);
+            int fw = PanelWidth - Margin * 2;
+
+            string newName = _eb.DrawTextField("ground_name", "Name", def.Name, panelX + Margin, addY, fw);
+            if (newName != def.Name) def.Name = newName;
+            addY += FieldHeight + 2;
+
+            int gndBrowseBtnW = 55;
+            string newTexPath = _eb.DrawTextField("ground_tex", "Texture", def.TexturePath, panelX + Margin, addY, fw - gndBrowseBtnW - 4);
+            if (newTexPath != def.TexturePath)
+            {
+                def.TexturePath = newTexPath;
+                _groundSystem.LoadTextures(_device);
+            }
+            if (_eb.DrawButton("Browse", panelX + Margin + fw - gndBrowseBtnW, addY, gndBrowseBtnW, 20))
+            {
+                _textureBrowser.Open("assets/Environment/Ground", def.TexturePath, path =>
+                {
+                    def.TexturePath = path;
+                    _groundSystem.LoadTextures(_device);
+                });
+            }
+            addY += FieldHeight + 2;
+        }
+
         // Brush size
-        addY += ButtonHeight + 10;
+        addY += 4;
         DrawBrushSizeControl(panelX, addY);
 
         // Info
@@ -606,7 +1015,7 @@ public class MapEditorWindow
             // Add Type button
             int addY = listY + _grassTypes.Count * (ButtonHeight + 2) + 4;
             if (mouse.Y >= addY && mouse.Y < addY + ButtonHeight &&
-                mouse.X >= panelX + Margin && mouse.X < panelX + 60 + Margin)
+                mouse.X >= panelX + Margin && mouse.X < panelX + 80 + Margin)
             {
                 _grassTypes.Add(new GrassTypeDef
                 {
@@ -614,15 +1023,49 @@ public class MapEditorWindow
                     Name = $"Grass {_grassTypes.Count}"
                 });
             }
+
+            // Delete Type button (next to Add button)
+            if (!_grassEraserSelected && SelectedGrassType >= 0 && SelectedGrassType < _grassTypes.Count &&
+                mouse.Y >= addY && mouse.Y < addY + ButtonHeight &&
+                mouse.X >= panelX + Margin + 90 && mouse.X < panelX + Margin + 180)
+            {
+                _grassTypes.RemoveAt(SelectedGrassType);
+                // Remap grass map
+                for (int gi = 0; gi < _grassMap.Length; gi++)
+                {
+                    byte v = _grassMap[gi];
+                    if (v == 255 || v == 0) continue; // eraser or empty
+                    int typeIdx = v - 1; // 1-based to 0-based
+                    if (typeIdx == SelectedGrassType) _grassMap[gi] = 0;
+                    else if (typeIdx > SelectedGrassType) _grassMap[gi] = (byte)(v - 1);
+                }
+                SelectedGrassType = Math.Min(SelectedGrassType, _grassTypes.Count - 1);
+                _onGrassMapChanged?.Invoke();
+            }
         }
 
         // Paint grass
         if (leftDown && !overPanel && _grassMap.Length > 0)
         {
+            if (!_painting)
+                _grassStrokeOld = new Dictionary<int, byte>();
             _painting = true;
             PaintGrass(mouse, screenW, screenH);
         }
-        if (leftUp) _painting = false;
+        if (leftUp)
+        {
+            if (_painting && _grassStrokeOld != null && _grassStrokeOld.Count > 0)
+            {
+                PushUndo(new UndoGrassStroke
+                {
+                    GrassMap = _grassMap,
+                    OldValues = _grassStrokeOld,
+                    OnChanged = _onGrassMapChanged
+                });
+            }
+            _grassStrokeOld = null;
+            _painting = false;
+        }
     }
 
     private void PaintGrass(MouseState mouse, int screenW, int screenH)
@@ -653,8 +1096,10 @@ public class MapEditorWindow
                 if (gx >= 0 && gx < _grassW && gy >= 0 && gy < _grassH)
                 {
                     int idx = gy * _grassW + gx;
-                    if (_grassMap[idx] != paintValue)
+                    byte oldVal = _grassMap[idx];
+                    if (oldVal != paintValue)
                     {
+                        _grassStrokeOld?.TryAdd(idx, oldVal);
                         _grassMap[idx] = paintValue;
                         changed = true;
                     }
@@ -713,13 +1158,90 @@ public class MapEditorWindow
         DrawButtonRect("+ Add Type", panelX + Margin, y, 80, ButtonHeight, ButtonBg);
         y += ButtonHeight + 8;
 
-        // Selected type properties
+        // Delete Type button
         if (!_grassEraserSelected && SelectedGrassType >= 0 && SelectedGrassType < _grassTypes.Count)
+        {
+            DrawButtonRect("Delete Type", panelX + Margin + 90, y - ButtonHeight - 8, 90, ButtonHeight, DangerColor);
+        }
+
+        // Selected type properties (editable)
+        if (!_grassEraserSelected && SelectedGrassType >= 0 && SelectedGrassType < _grassTypes.Count && _eb != null)
         {
             _spriteBatch.Draw(_pixel, new Rectangle(panelX, y, PanelWidth, 1), SeparatorColor);
             y += 4;
             var gt = _grassTypes[SelectedGrassType];
+            int fw = PanelWidth - Margin * 2;
+            bool changed = false;
 
+            string newName = _eb.DrawTextField("grass_name", "Name", gt.Name, panelX + Margin, y, fw);
+            if (newName != gt.Name) { gt.Name = newName; changed = true; }
+            y += FieldHeight + 2;
+
+            // Base Color
+            DrawSmallText("Base Color:", panelX + Margin, y, AccentColor);
+            // Color swatch preview
+            _spriteBatch.Draw(_pixel, new Rectangle(panelX + Margin + 80, y + 2, 14, 14), new Color(gt.BaseR, gt.BaseG, gt.BaseB));
+            y += LineHeight;
+
+            int newBaseR = _eb.DrawIntField("grass_baseR", "  R", gt.BaseR, panelX + Margin, y, fw);
+            newBaseR = Math.Clamp(newBaseR, 0, 255);
+            if (newBaseR != gt.BaseR) { gt.BaseR = (byte)newBaseR; changed = true; }
+            y += FieldHeight + 2;
+
+            int newBaseG = _eb.DrawIntField("grass_baseG", "  G", gt.BaseG, panelX + Margin, y, fw);
+            newBaseG = Math.Clamp(newBaseG, 0, 255);
+            if (newBaseG != gt.BaseG) { gt.BaseG = (byte)newBaseG; changed = true; }
+            y += FieldHeight + 2;
+
+            int newBaseB = _eb.DrawIntField("grass_baseB", "  B", gt.BaseB, panelX + Margin, y, fw);
+            newBaseB = Math.Clamp(newBaseB, 0, 255);
+            if (newBaseB != gt.BaseB) { gt.BaseB = (byte)newBaseB; changed = true; }
+            y += FieldHeight + 2;
+
+            // Tip Color
+            DrawSmallText("Tip Color:", panelX + Margin, y, AccentColor);
+            _spriteBatch.Draw(_pixel, new Rectangle(panelX + Margin + 80, y + 2, 14, 14), new Color(gt.TipR, gt.TipG, gt.TipB));
+            y += LineHeight;
+
+            int newTipR = _eb.DrawIntField("grass_tipR", "  R", gt.TipR, panelX + Margin, y, fw);
+            newTipR = Math.Clamp(newTipR, 0, 255);
+            if (newTipR != gt.TipR) { gt.TipR = (byte)newTipR; changed = true; }
+            y += FieldHeight + 2;
+
+            int newTipG = _eb.DrawIntField("grass_tipG", "  G", gt.TipG, panelX + Margin, y, fw);
+            newTipG = Math.Clamp(newTipG, 0, 255);
+            if (newTipG != gt.TipG) { gt.TipG = (byte)newTipG; changed = true; }
+            y += FieldHeight + 2;
+
+            int newTipB = _eb.DrawIntField("grass_tipB", "  B", gt.TipB, panelX + Margin, y, fw);
+            newTipB = Math.Clamp(newTipB, 0, 255);
+            if (newTipB != gt.TipB) { gt.TipB = (byte)newTipB; changed = true; }
+            y += FieldHeight + 2;
+
+            // Density
+            float newDensity = _eb.DrawFloatField("grass_density", "Density", gt.Density, panelX + Margin, y, fw, 0.1f);
+            if (MathF.Abs(newDensity - gt.Density) > 0.001f) { gt.Density = newDensity; changed = true; }
+            y += FieldHeight + 2;
+
+            // Height
+            float newHeight = _eb.DrawFloatField("grass_height", "Height", gt.Height, panelX + Margin, y, fw, 0.1f);
+            if (MathF.Abs(newHeight - gt.Height) > 0.001f) { gt.Height = newHeight; changed = true; }
+            y += FieldHeight + 2;
+
+            // Blades per cell
+            int newBlades = _eb.DrawIntField("grass_blades", "Blades/cell", gt.Blades, panelX + Margin, y, fw);
+            newBlades = Math.Max(1, newBlades);
+            if (newBlades != gt.Blades) { gt.Blades = newBlades; changed = true; }
+            y += FieldHeight + 2;
+
+            if (changed) _onGrassMapChanged?.Invoke();
+        }
+        else if (!_grassEraserSelected && SelectedGrassType >= 0 && SelectedGrassType < _grassTypes.Count)
+        {
+            // Fallback if no EditorBase
+            _spriteBatch.Draw(_pixel, new Rectangle(panelX, y, PanelWidth, 1), SeparatorColor);
+            y += 4;
+            var gt = _grassTypes[SelectedGrassType];
             DrawSmallText($"Name: {gt.Name}", panelX + Margin, y, TextBright); y += LineHeight;
             DrawSmallText($"Base: R={gt.BaseR} G={gt.BaseG} B={gt.BaseB}", panelX + Margin, y, TextColor); y += LineHeight;
             DrawSmallText($"Tip:  R={gt.TipR} G={gt.TipG} B={gt.TipB}", panelX + Margin, y, TextColor); y += LineHeight;
@@ -745,23 +1267,37 @@ public class MapEditorWindow
     private void UpdateObjectsTab(MouseState mouse, KeyboardState kb, bool leftClick, bool leftDown, bool leftUp,
         bool rightClick, bool overPanel, int panelX, int panelY, int screenW, int screenH)
     {
+        // Access rightDown/rightUp from mouse state
+        bool rightDown = mouse.RightButton == ButtonState.Pressed;
+        bool rightUp = mouse.RightButton == ButtonState.Released && _prevMouse.RightButton == ButtonState.Pressed;
+
         if (leftClick && overPanel)
         {
             int contentY = panelY + TabRowHeight * 2 + HeaderHeight + 6;
 
-            // Category buttons
+            // Skip past "Edit Defs" button area (handled by EditorBase.DrawButton)
+            if (_eb != null && _envObjectEditor != null)
+                contentY += ButtonHeight + 4;
+
+            // Category buttons — wrapping layout (must match DrawObjectsTab)
             var categories = GetEnvCategories();
-            int catBtnW = Math.Max(40, (PanelWidth - Margin * 2) / Math.Max(1, categories.Count));
-            if (mouse.Y >= contentY && mouse.Y < contentY + ButtonHeight)
+            int availW = PanelWidth - Margin * 2;
+            int catBtnW = Math.Max(56, availW / Math.Clamp(categories.Count, 1, 5));
+            int catsPerRow = Math.Max(1, availW / catBtnW);
+            int catRows = (categories.Count + catsPerRow - 1) / catsPerRow;
+            int catTotalH = catRows * (ButtonHeight + 2) + 2;
+            if (mouse.Y >= contentY && mouse.Y < contentY + catTotalH)
             {
                 int relX = mouse.X - (panelX + Margin);
-                int catIdx = relX / catBtnW;
+                int row = (mouse.Y - contentY) / (ButtonHeight + 2);
+                int col = relX / catBtnW;
+                int catIdx = row * catsPerRow + col;
                 if (catIdx >= 0 && catIdx < categories.Count)
                     SelectedEnvCategory = catIdx;
             }
 
             // Mode toggle
-            int modeY = contentY + ButtonHeight + 4;
+            int modeY = contentY + catTotalH;
             int halfW = (PanelWidth - Margin * 2) / 2;
             if (mouse.Y >= modeY && mouse.Y < modeY + ButtonHeight)
             {
@@ -770,71 +1306,223 @@ public class MapEditorWindow
                 else if (relX >= halfW && relX < halfW * 2) _objectPaintMode = true;
             }
 
-            // Def list
+            // Def list (or group list for M17)
             int listY = modeY + ButtonHeight + 4;
             var filteredDefs = GetFilteredEnvDefs(categories);
-            for (int i = 0; i < filteredDefs.Count; i++)
+            // M17: If category is "Groups", show group list instead
+            bool isGroupMode = SelectedEnvCategory < categories.Count && categories[SelectedEnvCategory] == "Groups";
+            if (isGroupMode)
             {
-                int itemY = listY + i * (ButtonHeight + 2) - (int)_envListScroll;
-                if (mouse.Y >= itemY && mouse.Y < itemY + ButtonHeight)
+                var groups = GetEnvGroups();
+                for (int i = 0; i < groups.Count; i++)
                 {
-                    SelectedEnvDefIndex = filteredDefs[i];
-                    break;
+                    int itemY = listY + i * (ButtonHeight + 2) - (int)_envListScroll;
+                    if (mouse.Y >= itemY && mouse.Y < itemY + ButtonHeight)
+                    {
+                        // Store group index as negative to differentiate from def index
+                        SelectedEnvDefIndex = -(i + 1); // -1 = group 0, -2 = group 1, etc.
+                        break;
+                    }
+                }
+            }
+            else
+            {
+                for (int i = 0; i < filteredDefs.Count; i++)
+                {
+                    int itemY = listY + i * (ButtonHeight + 2) - (int)_envListScroll;
+                    if (mouse.Y >= itemY && mouse.Y < itemY + ButtonHeight)
+                    {
+                        SelectedEnvDefIndex = filteredDefs[i];
+                        break;
+                    }
                 }
             }
         }
 
         // Scroll env list
-        int scrollDelta = mouse.ScrollWheelValue - _prevScrollValue;
-        if (scrollDelta != 0 && overPanel)
-            _envListScroll = MathF.Max(0, _envListScroll - scrollDelta * 0.2f);
+        int scrollDelta2 = mouse.ScrollWheelValue - _prevScrollValue;
+        if (scrollDelta2 != 0 && overPanel)
+            _envListScroll = MathF.Max(0, _envListScroll - scrollDelta2 * 0.2f);
+
+        // M17: Resolve def index (may be a group selection using weighted random)
+        int resolvedDefIndex = ResolveObjectDefIndex();
 
         // Place/paint on world
-        if (SelectedEnvDefIndex >= 0)
+        if (resolvedDefIndex >= 0 || SelectedEnvDefIndex < -0) // allow group mode too
         {
             if (!_objectPaintMode)
             {
                 // Single mode: click to place
                 if (leftClick && !overPanel)
                 {
-                    Vec2 worldPos = _camera.ScreenToWorld(new Vector2(mouse.X, mouse.Y), screenW, screenH);
-                    _envSystem.AddObject((ushort)SelectedEnvDefIndex, worldPos.X, worldPos.Y);
+                    int defToPlace = ResolveObjectDefIndex();
+                    if (defToPlace >= 0)
+                    {
+                        Vec2 worldPos = _camera.ScreenToWorld(new Vector2(mouse.X, mouse.Y), screenW, screenH);
+                        // RM03: Check collision radius overlap before placing
+                        if (_envSystem.CanPlaceObject(defToPlace, worldPos.X, worldPos.Y))
+                        {
+                            int newIdx = _envSystem.AddObject((ushort)defToPlace, worldPos.X, worldPos.Y);
+                            PushUndo(new UndoObjectPlace { Env = _envSystem, ObjectIndex = newIdx });
+                            AutoCreateTriggerInstance(newIdx); // RM06
+                            RebakeObjectCollisions(); // RM04
+                        }
+                    }
                 }
             }
             else
             {
-                // Paint mode: drag to paint hex-grid pattern
+                // M28: Paint mode with batch undo
                 if (leftDown && !overPanel)
                 {
-                    PaintObjects(mouse, screenW, screenH);
+                    if (_batchPlacedObjects == null)
+                        _batchPlacedObjects = new();
+                    PaintObjectsBatch(mouse, screenW, screenH);
+                }
+                if (leftUp && _batchPlacedObjects != null)
+                {
+                    if (_batchPlacedObjects.Count > 0)
+                    {
+                        PushUndo(new UndoObjectBatchPlace
+                        {
+                            Env = _envSystem,
+                            ObjectIndices = new List<int>(_batchPlacedObjects.Select(b => b.objIdx))
+                        });
+                        RebakeObjectCollisions(); // RM04
+                    }
+                    _batchPlacedObjects = null;
                 }
             }
         }
 
-        // Right-click to remove nearest
-        if (rightClick && !overPanel)
+        // Right-click to remove nearest (single or batch)
+        if (!_objectPaintMode)
         {
-            Vec2 worldPos = _camera.ScreenToWorld(new Vector2(mouse.X, mouse.Y), screenW, screenH);
-            int closest = FindClosestObject(worldPos, 3f);
-            if (closest >= 0) _envSystem.RemoveObject(closest);
+            // Single remove
+            if (rightClick && !overPanel)
+            {
+                Vec2 worldPos = _camera.ScreenToWorld(new Vector2(mouse.X, mouse.Y), screenW, screenH);
+                int closest = FindClosestObject(worldPos, 3f);
+                if (closest >= 0)
+                {
+                    var obj = _envSystem.GetObject(closest);
+                    PushUndo(new UndoObjectRemove
+                    {
+                        Env = _envSystem,
+                        DefIndex = obj.DefIndex,
+                        X = obj.X, Y = obj.Y,
+                        Scale = obj.Scale, Seed = obj.Seed
+                    });
+                    AutoRemoveTriggerInstance(closest); // RM07
+                    _envSystem.RemoveObject(closest);
+                    RebakeObjectCollisions(); // RM04
+                }
+            }
+        }
+        else
+        {
+            // M28: Batch remove in paint mode (right-click drag)
+            if (rightDown && !overPanel)
+            {
+                if (_batchRemovedObjects == null)
+                    _batchRemovedObjects = new();
+                Vec2 worldPos = _camera.ScreenToWorld(new Vector2(mouse.X, mouse.Y), screenW, screenH);
+                int closest = FindClosestObject(worldPos, 3f);
+                if (closest >= 0)
+                {
+                    var obj = _envSystem.GetObject(closest);
+                    _batchRemovedObjects.Add((obj.DefIndex, obj.X, obj.Y, obj.Scale, obj.Seed));
+                    AutoRemoveTriggerInstance(closest); // RM07
+                    _envSystem.RemoveObject(closest);
+                }
+            }
+            if (rightUp && _batchRemovedObjects != null)
+            {
+                if (_batchRemovedObjects.Count > 0)
+                {
+                    PushUndo(new UndoObjectBatchRemove
+                    {
+                        Env = _envSystem,
+                        Removed = new(_batchRemovedObjects)
+                    });
+                    RebakeObjectCollisions(); // RM04
+                }
+                _batchRemovedObjects = null;
+            }
         }
     }
 
-    private void PaintObjects(MouseState mouse, int screenW, int screenH)
+    /// <summary>
+    /// M17: Resolve the currently selected def index, handling group mode with weighted random.
+    /// Returns -1 if nothing valid is selected.
+    /// </summary>
+    private int ResolveObjectDefIndex()
     {
-        if (SelectedEnvDefIndex < 0) return;
+        if (SelectedEnvDefIndex >= 0)
+            return SelectedEnvDefIndex;
+
+        // Group mode: SelectedEnvDefIndex is -(groupIndex+1)
+        if (SelectedEnvDefIndex < 0)
+        {
+            int groupIdx = -(SelectedEnvDefIndex + 1);
+            var groups = GetEnvGroups();
+            if (groupIdx < 0 || groupIdx >= groups.Count) return -1;
+            string groupName = groups[groupIdx];
+
+            // Collect defs in this group with weights
+            float totalWeight = 0;
+            var candidates = new List<(int defIdx, float weight)>();
+            for (int i = 0; i < _envSystem.DefCount; i++)
+            {
+                var def = _envSystem.GetDef(i);
+                if (def.Group == groupName)
+                {
+                    float w = Math.Max(0.001f, def.GroupWeight);
+                    candidates.Add((i, w));
+                    totalWeight += w;
+                }
+            }
+            if (candidates.Count == 0) return -1;
+
+            // Weighted random selection
+            float roll = Random.Shared.NextSingle() * totalWeight;
+            float accum = 0;
+            foreach (var (defIdx, weight) in candidates)
+            {
+                accum += weight;
+                if (roll <= accum) return defIdx;
+            }
+            return candidates[^1].defIdx;
+        }
+
+        return -1;
+    }
+
+    /// <summary>
+    /// M28: Paint objects with batch accumulation for undo.
+    /// </summary>
+    private void PaintObjectsBatch(MouseState mouse, int screenW, int screenH)
+    {
+        int defToPlace = ResolveObjectDefIndex();
+        if (defToPlace < 0) return;
         Vec2 worldPos = _camera.ScreenToWorld(new Vector2(mouse.X, mouse.Y), screenW, screenH);
-        var def = _envSystem.GetDef(SelectedEnvDefIndex);
-        float spacing = Math.Max(1f, def.PlacementScale * 2f);
+        var def = _envSystem.GetDef(defToPlace);
+        // RM05: Use collision radius in spacing calculation (fallback to PlacementScale)
+        float colRadius = def.CollisionRadius > 0 ? def.CollisionRadius : def.PlacementScale;
+        float spacing = Math.Max(1f, colRadius * 2.2f);
 
         for (int dy = -BrushRadius; dy <= BrushRadius; dy++)
         {
             for (int dx = -BrushRadius; dx <= BrushRadius; dx++)
             {
                 if (dx * dx + dy * dy > BrushRadius * BrushRadius) continue;
-                // Hex-grid offset
                 float ox = dx * spacing + (dy % 2 == 0 ? 0 : spacing * 0.5f);
-                float oy = dy * spacing * 0.866f; // sqrt(3)/2
+                float oy = dy * spacing * 0.866f;
+
+                // RM05: Add random jitter to prevent grid-like appearance
+                float jitter = spacing * 0.25f;
+                ox += (Random.Shared.NextSingle() - 0.5f) * 2f * jitter;
+                oy += (Random.Shared.NextSingle() - 0.5f) * 2f * jitter;
 
                 float px = worldPos.X + ox;
                 float py = worldPos.Y + oy;
@@ -848,30 +1536,106 @@ public class MapEditorWindow
                     float ddx = obj.X - px, ddy = obj.Y - py;
                     if (ddx * ddx + ddy * ddy < minDist2) { tooClose = true; break; }
                 }
+                // RM03: Also check collision radius overlap
+                if (!tooClose && !_envSystem.CanPlaceObject(defToPlace, px, py))
+                    tooClose = true;
+
                 if (!tooClose)
-                    _envSystem.AddObject((ushort)SelectedEnvDefIndex, px, py);
+                {
+                    int newIdx = _envSystem.AddObject((ushort)defToPlace, px, py);
+                    _batchPlacedObjects?.Add(((ushort)defToPlace, px, py, 1f, 0f, newIdx));
+                    AutoCreateTriggerInstance(newIdx); // RM06
+                }
             }
         }
     }
 
+    private void PaintObjects(MouseState mouse, int screenW, int screenH)
+    {
+        if (SelectedEnvDefIndex < 0) return;
+        Vec2 worldPos = _camera.ScreenToWorld(new Vector2(mouse.X, mouse.Y), screenW, screenH);
+        var def = _envSystem.GetDef(SelectedEnvDefIndex);
+        // RM05: Use collision radius in spacing calculation
+        float colRadius = def.CollisionRadius > 0 ? def.CollisionRadius : def.PlacementScale;
+        float spacing = Math.Max(1f, colRadius * 2.2f);
+
+        for (int dy = -BrushRadius; dy <= BrushRadius; dy++)
+        {
+            for (int dx = -BrushRadius; dx <= BrushRadius; dx++)
+            {
+                if (dx * dx + dy * dy > BrushRadius * BrushRadius) continue;
+                // Hex-grid offset
+                float ox = dx * spacing + (dy % 2 == 0 ? 0 : spacing * 0.5f);
+                float oy = dy * spacing * 0.866f; // sqrt(3)/2
+
+                // RM05: Random jitter
+                float jitter = spacing * 0.25f;
+                ox += (Random.Shared.NextSingle() - 0.5f) * 2f * jitter;
+                oy += (Random.Shared.NextSingle() - 0.5f) * 2f * jitter;
+
+                float px = worldPos.X + ox;
+                float py = worldPos.Y + oy;
+
+                // Check no existing object too close
+                bool tooClose = false;
+                float minDist2 = spacing * spacing * 0.5f;
+                for (int i = 0; i < _envSystem.ObjectCount; i++)
+                {
+                    var obj = _envSystem.GetObject(i);
+                    float ddx = obj.X - px, ddy = obj.Y - py;
+                    if (ddx * ddx + ddy * ddy < minDist2) { tooClose = true; break; }
+                }
+                // RM03: Check collision overlap
+                if (!tooClose && !_envSystem.CanPlaceObject(SelectedEnvDefIndex, px, py))
+                    tooClose = true;
+
+                if (!tooClose)
+                {
+                    int newIdx = _envSystem.AddObject((ushort)SelectedEnvDefIndex, px, py);
+                    AutoCreateTriggerInstance(newIdx); // RM06
+                }
+            }
+        }
+        RebakeObjectCollisions(); // RM04
+    }
+
     private void DrawObjectsTab(int panelX, int contentY, int contentH, int screenW, int screenH)
     {
+        // Save original top of content area for bottom-anchored sections
+        int contentTop = contentY;
+
         var categories = GetEnvCategories();
         DrawSectionHeader(panelX, ref contentY, $"Objects ({_envSystem.DefCount} defs, {_envSystem.ObjectCount} placed)");
 
+        // "Edit Defs" button to open the EnvObjectEditor overlay
+        if (_eb != null && _envObjectEditor != null)
+        {
+            if (_eb.DrawButton("Edit Defs", panelX + Margin, contentY, PanelWidth - Margin * 2, ButtonHeight, EditorBase.AccentColor))
+            {
+                Core.DebugLog.Log("editor", $"Edit Defs clicked, opening EnvObjectEditor (defCount={_envSystem.DefCount})");
+                _envObjectEditor.Open();
+            }
+            contentY += ButtonHeight + 4;
+        }
+
         var mouse = Mouse.GetState();
 
-        // Category buttons
-        int catBtnW = Math.Max(40, (PanelWidth - Margin * 2) / Math.Max(1, categories.Count));
+        // Category buttons — wrap to multiple rows if they exceed panel width
+        int availW = PanelWidth - Margin * 2;
+        int catBtnW = Math.Max(56, availW / Math.Clamp(categories.Count, 1, 5));
+        int catsPerRow = Math.Max(1, availW / catBtnW);
+        int catRows = (categories.Count + catsPerRow - 1) / catsPerRow;
         for (int i = 0; i < categories.Count; i++)
         {
+            int col = i % catsPerRow;
+            int row = i / catsPerRow;
             bool active = i == SelectedEnvCategory;
-            var btnRect = new Rectangle(panelX + Margin + i * catBtnW, contentY, catBtnW - 2, ButtonHeight);
+            var btnRect = new Rectangle(panelX + Margin + col * catBtnW, contentY + row * (ButtonHeight + 2), catBtnW - 2, ButtonHeight);
             var bg = active ? TabActiveColor : (IsInRect(mouse, btnRect) ? ButtonHoverColor : TabInactiveColor);
             _spriteBatch.Draw(_pixel, btnRect, bg);
             DrawTextCentered(categories[i], btnRect, TextColor);
         }
-        contentY += ButtonHeight + 4;
+        contentY += catRows * (ButtonHeight + 2) + 2;
 
         // Mode toggle: Single | Paint
         int halfW = (PanelWidth - Margin * 2) / 2;
@@ -888,57 +1652,168 @@ public class MapEditorWindow
         // Separator
         _spriteBatch.Draw(_pixel, new Rectangle(panelX, contentY - 2, PanelWidth, 1), SeparatorColor);
 
-        // Def list
-        var filteredDefs = GetFilteredEnvDefs(categories);
-        int listAreaH = contentH - (contentY - (panelX + 10)) - 160; // reserve space for properties
+        // M17: Check if category is "Groups"
+        bool isGroupMode = SelectedEnvCategory < categories.Count && categories[SelectedEnvCategory] == "Groups";
+        int listAreaH = contentH - (contentY - contentTop) - 160;
 
-        for (int i = 0; i < filteredDefs.Count; i++)
+        if (isGroupMode)
         {
-            int itemY = contentY + i * (ButtonHeight + 2) - (int)_envListScroll;
-            if (itemY < contentY - ButtonHeight || itemY > contentY + listAreaH) continue;
+            // M17: Draw group list instead of individual defs
+            var groups = GetEnvGroups();
+            for (int i = 0; i < groups.Count; i++)
+            {
+                int itemY = contentY + i * (ButtonHeight + 2) - (int)_envListScroll;
+                if (itemY < contentY - ButtonHeight || itemY > contentY + listAreaH) continue;
 
-            int defIdx = filteredDefs[i];
-            var def = _envSystem.GetDef(defIdx);
-            bool selected = defIdx == SelectedEnvDefIndex;
-            var btnRect = new Rectangle(panelX + Margin, itemY, PanelWidth - Margin * 2, ButtonHeight);
+                bool selected = SelectedEnvDefIndex == -(i + 1);
+                var btnRect = new Rectangle(panelX + Margin, itemY, PanelWidth - Margin * 2, ButtonHeight);
 
-            var bgColor = selected ? HighlightColor : (IsInRect(mouse, btnRect) ? ButtonHoverColor : Color.Transparent);
-            if (bgColor != Color.Transparent)
-                _spriteBatch.Draw(_pixel, btnRect, bgColor);
+                var bgColor = selected ? HighlightColor : (IsInRect(mouse, btnRect) ? ButtonHoverColor : Color.Transparent);
+                if (bgColor != Color.Transparent)
+                    _spriteBatch.Draw(_pixel, btnRect, bgColor);
 
-            string label = def.Name;
-            if (def.IsBuilding) label += " [B]";
-            DrawSmallText(label, panelX + Margin + 4, itemY + 3, selected ? TextBright : TextColor);
+                // Count defs in group
+                int defCount = 0;
+                for (int d = 0; d < _envSystem.DefCount; d++)
+                    if (_envSystem.GetDef(d).Group == groups[i]) defCount++;
+
+                DrawSmallText($"{groups[i]} ({defCount} defs)", panelX + Margin + 4, itemY + 3, selected ? TextBright : TextColor);
+            }
+
+            // Selected group info
+            if (SelectedEnvDefIndex < 0)
+            {
+                int groupIdx = -(SelectedEnvDefIndex + 1);
+                if (groupIdx >= 0 && groupIdx < groups.Count)
+                {
+                    int propY = contentTop + contentH - 140;
+                    _spriteBatch.Draw(_pixel, new Rectangle(panelX, propY - 4, PanelWidth, 1), SeparatorColor);
+                    propY += 2;
+                    DrawSmallText($"Group: {groups[groupIdx]}", panelX + Margin, propY, TextBright); propY += LineHeight;
+                    DrawSmallText("Uses weighted random selection", panelX + Margin, propY, TextColor); propY += LineHeight;
+                    DrawSmallText(_objectPaintMode ? "Left-drag to paint (random)" : "Click to place (random)", panelX + Margin, propY, TextDim);
+                }
+            }
+        }
+        else
+        {
+            // Normal def list
+            var filteredDefs = GetFilteredEnvDefs(categories);
+
+            for (int i = 0; i < filteredDefs.Count; i++)
+            {
+                int itemY = contentY + i * (ButtonHeight + 2) - (int)_envListScroll;
+                if (itemY < contentY - ButtonHeight || itemY > contentY + listAreaH) continue;
+
+                int defIdx = filteredDefs[i];
+                var def = _envSystem.GetDef(defIdx);
+                bool selected = defIdx == SelectedEnvDefIndex;
+                var btnRect = new Rectangle(panelX + Margin, itemY, PanelWidth - Margin * 2, ButtonHeight);
+
+                var bgColor = selected ? HighlightColor : (IsInRect(mouse, btnRect) ? ButtonHoverColor : Color.Transparent);
+                if (bgColor != Color.Transparent)
+                    _spriteBatch.Draw(_pixel, btnRect, bgColor);
+
+                // RM09: Display as "[category] name" instead of "name [B]"
+                string label = $"[{def.Category}] {def.Name}";
+                DrawSmallText(label, panelX + Margin + 4, itemY + 3, selected ? TextBright : TextColor);
+            }
+
+            // Selected def properties
+            if (SelectedEnvDefIndex >= 0 && SelectedEnvDefIndex < _envSystem.DefCount)
+            {
+                int propY = contentTop + contentH - 140;
+                _spriteBatch.Draw(_pixel, new Rectangle(panelX, propY - 4, PanelWidth, 1), SeparatorColor);
+                propY += 2;
+
+                var selDef = _envSystem.GetDef(SelectedEnvDefIndex);
+                DrawSmallText($"Selected: {selDef.Name}", panelX + Margin, propY, TextBright); propY += LineHeight;
+                DrawSmallText($"Category: {selDef.Category}", panelX + Margin, propY, TextColor); propY += LineHeight;
+                DrawSmallText($"Collision: r={selDef.CollisionRadius:F1}", panelX + Margin, propY, TextColor); propY += LineHeight;
+                DrawSmallText($"Scale: {selDef.Scale:F2} Height: {selDef.SpriteWorldHeight:F1}", panelX + Margin, propY, TextColor); propY += LineHeight;
+                if (selDef.IsBuilding)
+                    DrawSmallText($"Building: HP={selDef.BuildingMaxHP} Prot={selDef.BuildingProtection}", panelX + Margin, propY, SuccessColor);
+                else
+                    DrawSmallText(_objectPaintMode ? "Left-drag to paint objects" : "Click to place, right-click remove", panelX + Margin, propY, TextDim);
+            }
         }
 
-        // Selected def properties
-        if (SelectedEnvDefIndex >= 0 && SelectedEnvDefIndex < _envSystem.DefCount)
+        // Show Collisions checkbox
+        if (_eb != null)
         {
-            int propY = contentY + contentH - 140;
-            _spriteBatch.Draw(_pixel, new Rectangle(panelX, propY - 4, PanelWidth, 1), SeparatorColor);
-            propY += 2;
-
-            var selDef = _envSystem.GetDef(SelectedEnvDefIndex);
-            DrawSmallText($"Selected: {selDef.Name}", panelX + Margin, propY, TextBright); propY += LineHeight;
-            DrawSmallText($"Category: {selDef.Category}", panelX + Margin, propY, TextColor); propY += LineHeight;
-            DrawSmallText($"Collision: r={selDef.CollisionRadius:F1}", panelX + Margin, propY, TextColor); propY += LineHeight;
-            DrawSmallText($"Scale: {selDef.Scale:F2} Height: {selDef.SpriteWorldHeight:F1}", panelX + Margin, propY, TextColor); propY += LineHeight;
-            if (selDef.IsBuilding)
-                DrawSmallText($"Building: HP={selDef.BuildingMaxHP} Prot={selDef.BuildingProtection}", panelX + Margin, propY, SuccessColor);
-            else
-                DrawSmallText(_objectPaintMode ? "Left-drag to paint objects" : "Click to place, right-click remove", panelX + Margin, propY, TextDim);
+            int checkY = contentTop + contentH - 48;
+            _showCollisions = _eb.DrawCheckbox("Show Collisions", _showCollisions, panelX + Margin, checkY);
         }
 
         // Brush size (for paint mode)
         if (_objectPaintMode)
         {
-            int brushY = contentY + contentH - 22;
+            int brushY = contentTop + contentH - 22;
             DrawBrushSizeControl(panelX, brushY);
         }
 
         // Brush cursor for paint mode
         if (_objectPaintMode && !IsMouseOverPanel(screenW, screenH))
             DrawBrushCursor(screenW, screenH);
+
+        // RM08: Draw collision overlay with isometric ellipses
+        if (_showCollisions)
+            DrawCollisionOverlay(screenW, screenH);
+    }
+
+    /// <summary>Whether the "Show Collisions" checkbox is active on the Objects tab.</summary>
+    public bool ShowObjectCollisions => _showCollisions;
+
+    /// <summary>
+    /// RM08: Draw isometric ellipses for each placed object's collision radius.
+    /// Y is compressed by camera YRatio. When Alt is held, show object names.
+    /// </summary>
+    private void DrawCollisionOverlay(int screenW, int screenH)
+    {
+        var kb = Keyboard.GetState();
+        bool showNames = kb.IsKeyDown(Keys.LeftAlt) || kb.IsKeyDown(Keys.RightAlt);
+        var collisionColor = new Color(255, 100, 100, 120);
+        var nameColor = new Color(255, 220, 100, 220);
+
+        for (int i = 0; i < _envSystem.ObjectCount; i++)
+        {
+            var obj = _envSystem.GetObject(i);
+            if (obj.DefIndex < 0 || obj.DefIndex >= _envSystem.DefCount) continue;
+            var def = _envSystem.GetDef(obj.DefIndex);
+            if (def.CollisionRadius <= 0) continue;
+
+            float worldCx = obj.X + def.CollisionOffsetX;
+            float worldCy = obj.Y + def.CollisionOffsetY;
+            float radius = def.CollisionRadius * obj.Scale;
+
+            var center = _camera.WorldToScreen(new Vec2(worldCx, worldCy), 0, screenW, screenH);
+            float radiusX = radius * _camera.Zoom;
+            float radiusY = radius * _camera.Zoom * _camera.YRatio; // Compress Y for isometric
+
+            int segments = Math.Max(16, (int)(radiusX * 0.5f));
+            DrawEllipseOutline(center, radiusX, radiusY, collisionColor, segments);
+
+            if (showNames)
+            {
+                DrawSmallText(def.Name, (int)(center.X - 20), (int)(center.Y - radiusY - 14), nameColor);
+            }
+        }
+    }
+
+    /// <summary>
+    /// RM08: Draw an ellipse outline (used for isometric collision circles).
+    /// </summary>
+    private void DrawEllipseOutline(Vector2 center, float radiusX, float radiusY, Color color, int segments)
+    {
+        float step = MathF.PI * 2f / segments;
+        for (int i = 0; i < segments; i++)
+        {
+            float a1 = i * step;
+            float a2 = (i + 1) * step;
+            var p1 = center + new Vector2(MathF.Cos(a1) * radiusX, MathF.Sin(a1) * radiusY);
+            var p2 = center + new Vector2(MathF.Cos(a2) * radiusX, MathF.Sin(a2) * radiusY);
+            DrawLine(p1, p2, color);
+        }
     }
 
     // ====================================================================
@@ -946,6 +1821,7 @@ public class MapEditorWindow
     // ====================================================================
 
     private void UpdateWallsTab(MouseState mouse, KeyboardState kb, bool leftClick, bool leftDown, bool leftUp,
+        bool rightClick, bool rightDown, bool rightUp,
         bool overPanel, int panelX, int panelY, int screenW, int screenH)
     {
         if (leftClick && overPanel)
@@ -974,9 +1850,11 @@ public class MapEditorWindow
             }
         }
 
-        // Paint walls
+        // Paint walls (left-click uses selected type)
         if (leftDown && !overPanel)
         {
+            if (!_painting)
+                _wallStrokeOld = new Dictionary<int, (byte type, short hp)>();
             _painting = true;
             PaintWalls(mouse, screenW, screenH);
         }
@@ -984,7 +1862,45 @@ public class MapEditorWindow
         {
             if (_painting)
             {
+                if (_wallStrokeOld != null && _wallStrokeOld.Count > 0)
+                {
+                    PushUndo(new UndoWallStroke
+                    {
+                        Walls = _wallSystem,
+                        OldValues = _wallStrokeOld,
+                        WallWidth = _wallSystem.Width
+                    });
+                }
+                _wallStrokeOld = null;
                 // Rebuild cost field and bake walls after painting
+                _tileGrid.RebuildCostField();
+                _wallSystem.BakeWalls(_tileGrid);
+            }
+            _painting = false;
+        }
+
+        // RM11: Right-click to erase walls regardless of selected type
+        if (rightDown && !overPanel)
+        {
+            if (!_painting)
+                _wallStrokeOld = new Dictionary<int, (byte type, short hp)>();
+            _painting = true;
+            EraseWalls(mouse, screenW, screenH);
+        }
+        if (rightUp)
+        {
+            if (_painting)
+            {
+                if (_wallStrokeOld != null && _wallStrokeOld.Count > 0)
+                {
+                    PushUndo(new UndoWallStroke
+                    {
+                        Walls = _wallSystem,
+                        OldValues = _wallStrokeOld,
+                        WallWidth = _wallSystem.Width
+                    });
+                }
+                _wallStrokeOld = null;
                 _tileGrid.RebuildCostField();
                 _wallSystem.BakeWalls(_tileGrid);
             }
@@ -998,6 +1914,9 @@ public class MapEditorWindow
         int wx = WallSystem.SnapToWallGrid((int)MathF.Round(worldPos.X));
         int wy = WallSystem.SnapToWallGrid((int)MathF.Round(worldPos.Y));
 
+        var types = _wallSystem.GetTypes();
+        var hps = _wallSystem.GetHPArray();
+
         for (int dy = -BrushRadius; dy <= BrushRadius; dy++)
         {
             for (int dx = -BrushRadius; dx <= BrushRadius; dx++)
@@ -1007,10 +1926,41 @@ public class MapEditorWindow
                 int ty = wy + dy * WallSystem.WallStep;
                 if (!_wallSystem.InBounds(tx, ty)) continue;
 
+                int idx = ty * _wallSystem.Width + tx;
+                _wallStrokeOld?.TryAdd(idx, (types[idx], hps[idx]));
+
                 if (SelectedWallType == 0)
                     _wallSystem.ClearWall(tx, ty);
                 else
                     _wallSystem.SetWall(tx, ty, (byte)SelectedWallType);
+            }
+        }
+    }
+
+    /// <summary>
+    /// RM11: Erase walls under the brush, regardless of selected wall type.
+    /// </summary>
+    private void EraseWalls(MouseState mouse, int screenW, int screenH)
+    {
+        Vec2 worldPos = _camera.ScreenToWorld(new Vector2(mouse.X, mouse.Y), screenW, screenH);
+        int wx = WallSystem.SnapToWallGrid((int)MathF.Round(worldPos.X));
+        int wy = WallSystem.SnapToWallGrid((int)MathF.Round(worldPos.Y));
+
+        var types = _wallSystem.GetTypes();
+        var hps = _wallSystem.GetHPArray();
+
+        for (int dy = -BrushRadius; dy <= BrushRadius; dy++)
+        {
+            for (int dx = -BrushRadius; dx <= BrushRadius; dx++)
+            {
+                if (dx * dx + dy * dy > BrushRadius * BrushRadius) continue;
+                int tx = wx + dx * WallSystem.WallStep;
+                int ty = wy + dy * WallSystem.WallStep;
+                if (!_wallSystem.InBounds(tx, ty)) continue;
+
+                int idx = ty * _wallSystem.Width + tx;
+                _wallStrokeOld?.TryAdd(idx, (types[idx], hps[idx]));
+                _wallSystem.ClearWall(tx, ty);
             }
         }
     }
@@ -1057,15 +2007,36 @@ public class MapEditorWindow
         DrawBrushSizeControl(panelX, y);
         y += ButtonHeight + 4;
 
+        // Show Debug checkbox
+        if (_eb != null)
+        {
+            _showWallDebug = _eb.DrawCheckbox("Show Debug", _showWallDebug, panelX + Margin, y);
+            y += FieldHeight + 4;
+        }
+
+        // Edit Wall Defs button
+        if (_eb != null && _wallEditor != null)
+        {
+            if (_eb.DrawButton("Edit Wall Defs", panelX + Margin, y, PanelWidth - Margin * 2, ButtonHeight))
+            {
+                _wallEditor.SetMapFilename(_mapFilename);
+                _wallEditor.Open(Math.Max(0, SelectedWallType - 1));
+            }
+            y += ButtonHeight + 4;
+        }
+
         // Info
         DrawSmallText($"Grid: {_wallSystem.Width}x{_wallSystem.Height} step={WallSystem.WallStep}", panelX + Margin, y, TextDim);
         y += LineHeight;
-        DrawSmallText("Left-drag to paint walls", panelX + Margin, y, TextDim);
+        DrawSmallText("Left-drag to paint, Right-drag to erase", panelX + Margin, y, TextDim);
 
         // Brush cursor
         if (!IsMouseOverPanel(screenW, screenH))
             DrawBrushCursor(screenW, screenH);
     }
+
+    /// <summary>Whether the "Show Debug" checkbox is active on the Walls tab.</summary>
+    public bool ShowWallDebug => _showWallDebug;
 
     // ====================================================================
     //  ROADS TAB
@@ -1119,12 +2090,26 @@ public class MapEditorWindow
 
             // Junction section
             int juncY = modeY + ButtonHeight + 4;
-            // Add Junction
+            // Add Junction (at camera center)
             if (mouse.Y >= juncY && mouse.Y < juncY + ButtonHeight &&
                 mouse.X >= panelX + Margin && mouse.X < panelX + 100 + Margin)
             {
                 Vec2 camPos = _camera.Position;
-                SelectedJunctionIndex = _roadSystem.AddJunction(camPos);
+                int newJuncIdx = _roadSystem.AddJunction(camPos);
+                SelectedJunctionIndex = newJuncIdx;
+                // RM16: Set textureDefIndex to the selected road's texture
+                if (newJuncIdx >= 0 && SelectedRoadIndex >= 0 && SelectedRoadIndex < _roadSystem.RoadCount)
+                {
+                    var junc = _roadSystem.GetJunction(newJuncIdx);
+                    junc.TextureDefIndex = _roadSystem.GetRoad(SelectedRoadIndex).TextureDefIndex;
+                }
+            }
+
+            // RM15: Toggle click-to-place junction mode (same row as Add Junction)
+            if (mouse.Y >= juncY && mouse.Y < juncY + ButtonHeight &&
+                mouse.X >= panelX + Margin + 110 && mouse.X < panelX + Margin + 230)
+            {
+                _junctionPlaceMode = !_junctionPlaceMode;
             }
         }
 
@@ -1133,11 +2118,26 @@ public class MapEditorWindow
         {
             Vec2 worldPos = _camera.ScreenToWorld(new Vector2(mouse.X, mouse.Y), screenW, screenH);
 
+            // RM15: Click-to-place junction in viewport
+            if (_junctionPlaceMode && leftClick)
+            {
+                int newJuncIdx = _roadSystem.AddJunction(worldPos);
+                SelectedJunctionIndex = newJuncIdx;
+                // RM16: Set textureDefIndex to the selected road's texture
+                if (newJuncIdx >= 0 && SelectedRoadIndex >= 0 && SelectedRoadIndex < _roadSystem.RoadCount)
+                {
+                    var junc = _roadSystem.GetJunction(newJuncIdx);
+                    junc.TextureDefIndex = _roadSystem.GetRoad(SelectedRoadIndex).TextureDefIndex;
+                }
+                _junctionPlaceMode = false;
+            }
+
             // Place mode: click to add control points
             if (_roadPlaceMode && leftClick && SelectedRoadIndex >= 0)
             {
                 var road = _roadSystem.GetRoad(SelectedRoadIndex);
                 road.Points.Add(new RoadControlPoint { Position = worldPos, Width = 2f });
+                // TODO RM13: Call road system mesh rebuild once a cached mesh pipeline exists
             }
 
             // Drag control points
@@ -1193,7 +2193,11 @@ public class MapEditorWindow
                     float d = (road.Points[i].Position - worldPos).Length();
                     if (d < bestDist) { bestDist = d; toRemove = i; }
                 }
-                if (toRemove >= 0) road.Points.RemoveAt(toRemove);
+                if (toRemove >= 0)
+                {
+                    road.Points.RemoveAt(toRemove);
+                    // TODO RM13: Call road system mesh rebuild once a cached mesh pipeline exists
+                }
             }
         }
     }
@@ -1235,20 +2239,112 @@ public class MapEditorWindow
             _roadPlaceMode ? AccentColor : ButtonBg);
         y += ButtonHeight + 8;
 
-        // Selected road properties
+        // Selected road properties (editable)
         if (SelectedRoadIndex >= 0 && SelectedRoadIndex < _roadSystem.RoadCount)
         {
             _spriteBatch.Draw(_pixel, new Rectangle(panelX, y, PanelWidth, 1), SeparatorColor);
             y += 4;
             var road = _roadSystem.GetRoad(SelectedRoadIndex);
+            int fw = PanelWidth - Margin * 2;
 
-            DrawSmallText($"Name: {road.Name}", panelX + Margin, y, TextBright); y += LineHeight;
-            DrawSmallText($"Texture: {road.TextureDefIndex}", panelX + Margin, y, TextColor); y += LineHeight;
-            DrawSmallText($"Order: {road.RenderOrder}", panelX + Margin, y, TextColor); y += LineHeight;
-            DrawSmallText($"EdgeSoftness: {road.EdgeSoftness:F2}", panelX + Margin, y, TextColor); y += LineHeight;
-            DrawSmallText($"TexScale: {road.TextureScale:F2}", panelX + Margin, y, TextColor); y += LineHeight;
-            DrawSmallText($"Rim: w={road.RimWidth:F1} tex={road.RimTextureDefIndex}", panelX + Margin, y, TextColor); y += LineHeight;
-            DrawSmallText($"Points: {road.Points.Count}", panelX + Margin, y, TextColor); y += LineHeight;
+            if (_eb != null)
+            {
+                string newName = _eb.DrawTextField("road_name", "Name", road.Name, panelX + Margin, y, fw);
+                if (newName != road.Name) road.Name = newName;
+                y += FieldHeight + 2;
+
+                // Road texture selection via browse button
+                int texDefIdx = road.TextureDefIndex;
+                string roadTexPath = (texDefIdx >= 0 && texDefIdx < _roadSystem.TextureDefCount)
+                    ? _roadSystem.GetTextureDef(texDefIdx).TexturePath : "";
+                int rdBrowseBtnW = 55;
+                string newRoadTexPath = _eb.DrawTextField("road_texpath", "Texture", roadTexPath, panelX + Margin, y, fw - rdBrowseBtnW - 4);
+                if (newRoadTexPath != roadTexPath && texDefIdx >= 0 && texDefIdx < _roadSystem.TextureDefCount)
+                    _roadSystem.GetTextureDef(texDefIdx).TexturePath = newRoadTexPath;
+                if (_eb.DrawButton("Browse", panelX + Margin + fw - rdBrowseBtnW, y, rdBrowseBtnW, 20))
+                {
+                    int capturedIdx = texDefIdx;
+                    _textureBrowser.Open("assets/Environment/Roads", roadTexPath, path =>
+                    {
+                        if (capturedIdx >= 0 && capturedIdx < _roadSystem.TextureDefCount)
+                            _roadSystem.GetTextureDef(capturedIdx).TexturePath = path;
+                    });
+                }
+                y += FieldHeight + 2;
+
+                int newOrder = _eb.DrawIntField("road_order", "Render Order", road.RenderOrder, panelX + Margin, y, fw);
+                if (newOrder != road.RenderOrder) road.RenderOrder = newOrder;
+                y += FieldHeight + 2;
+
+                float newTexScale = _eb.DrawFloatField("road_texScale", "Tex Scale", road.TextureScale, panelX + Margin, y, fw, 0.05f);
+                if (MathF.Abs(newTexScale - road.TextureScale) > 0.001f) road.TextureScale = newTexScale;
+                y += FieldHeight + 2;
+
+                float newEdgeSoft = _eb.DrawFloatField("road_edgeSoft", "Edge Softness", road.EdgeSoftness, panelX + Margin, y, fw, 0.01f);
+                if (MathF.Abs(newEdgeSoft - road.EdgeSoftness) > 0.001f) road.EdgeSoftness = newEdgeSoft;
+                y += FieldHeight + 2;
+
+                // Rim section
+                DrawSmallText("Rim:", panelX + Margin, y, AccentColor); y += LineHeight;
+
+                float newRimW = _eb.DrawFloatField("road_rimW", "  Rim Width", road.RimWidth, panelX + Margin, y, fw, 0.1f);
+                if (MathF.Abs(newRimW - road.RimWidth) > 0.001f) road.RimWidth = newRimW;
+                y += FieldHeight + 2;
+
+                float newRimTile = _eb.DrawFloatField("road_rimTile", "  Rim Tile Rate", road.RimTextureScale, panelX + Margin, y, fw, 0.1f);
+                if (MathF.Abs(newRimTile - road.RimTextureScale) > 0.001f) road.RimTextureScale = newRimTile;
+                y += FieldHeight + 2;
+
+                float newRimEdge = _eb.DrawFloatField("road_rimEdge", "  Rim Softness", road.RimEdgeSoftness, panelX + Margin, y, fw, 0.01f);
+                if (MathF.Abs(newRimEdge - road.RimEdgeSoftness) > 0.001f) road.RimEdgeSoftness = newRimEdge;
+                y += FieldHeight + 2;
+
+                // New Point Width
+                float newPtW = _eb.DrawFloatField("road_newPtW", "New Pt Width", 2f, panelX + Margin, y, fw, 0.1f);
+                y += FieldHeight + 2;
+
+                DrawSmallText($"Points: {road.Points.Count}", panelX + Margin, y, TextDim); y += LineHeight;
+            }
+            else
+            {
+                DrawSmallText($"Name: {road.Name}", panelX + Margin, y, TextBright); y += LineHeight;
+                DrawSmallText($"Texture: {road.TextureDefIndex}", panelX + Margin, y, TextColor); y += LineHeight;
+                DrawSmallText($"Order: {road.RenderOrder}", panelX + Margin, y, TextColor); y += LineHeight;
+                DrawSmallText($"EdgeSoftness: {road.EdgeSoftness:F2}", panelX + Margin, y, TextColor); y += LineHeight;
+                DrawSmallText($"TexScale: {road.TextureScale:F2}", panelX + Margin, y, TextColor); y += LineHeight;
+                DrawSmallText($"Rim: w={road.RimWidth:F1} tex={road.RimTextureDefIndex}", panelX + Margin, y, TextColor); y += LineHeight;
+                DrawSmallText($"Points: {road.Points.Count}", panelX + Margin, y, TextColor); y += LineHeight;
+            }
+        }
+
+        // M15: Road Texture Defs section - editable names
+        y += 4;
+        _spriteBatch.Draw(_pixel, new Rectangle(panelX, y, PanelWidth, 1), SeparatorColor);
+        y += 4;
+        DrawSmallText($"Road Texture Defs ({_roadSystem.TextureDefCount})", panelX + Margin, y, AccentColor);
+        y += LineHeight;
+
+        if (_eb != null)
+        {
+            for (int tdi = 0; tdi < _roadSystem.TextureDefCount; tdi++)
+            {
+                if (y > contentY + contentH - 200) break;
+                var td = _roadSystem.GetTextureDef(tdi);
+                int fw = PanelWidth - Margin * 2;
+
+                string newTdName = _eb.DrawTextField($"road_texdef_name_{tdi}", $"Tex[{tdi}] Name", td.Name, panelX + Margin, y, fw);
+                if (newTdName != td.Name) td.Name = newTdName;
+                y += FieldHeight + 2;
+            }
+        }
+        else
+        {
+            for (int tdi = 0; tdi < _roadSystem.TextureDefCount; tdi++)
+            {
+                var td = _roadSystem.GetTextureDef(tdi);
+                DrawSmallText($"  [{tdi}] {td.Name} - {td.TexturePath}", panelX + Margin, y, TextColor);
+                y += LineHeight;
+            }
         }
 
         // Junctions header
@@ -1257,16 +2353,45 @@ public class MapEditorWindow
         y += 4;
         DrawSmallText("Junctions", panelX + Margin, y, AccentColor); y += LineHeight;
         DrawButtonRect("+ Add Junction", panelX + Margin, y, 120, ButtonHeight, ButtonBg);
+        // RM15: Click-to-place junction button
+        DrawButtonRect(_junctionPlaceMode ? "[Placing...]" : "Place on Map", panelX + Margin + 110, y, 120, ButtonHeight,
+            _junctionPlaceMode ? AccentColor : ButtonBg);
         y += ButtonHeight + 4;
 
         for (int i = 0; i < _roadSystem.JunctionCount; i++)
         {
-            if (y > contentY + contentH) break;
+            if (y > contentY + contentH - 120) break;
             var junc = _roadSystem.GetJunction(i);
             bool selected = i == SelectedJunctionIndex;
             DrawSmallText($"{(selected ? "> " : "  ")}{junc.Name} ({junc.Position.X:F0},{junc.Position.Y:F0}) r={junc.Radius:F1}",
                 panelX + Margin, y, selected ? TextBright : TextColor);
             y += LineHeight;
+        }
+
+        // Selected junction editable properties
+        if (SelectedJunctionIndex >= 0 && SelectedJunctionIndex < _roadSystem.JunctionCount && _eb != null)
+        {
+            y += 4;
+            _spriteBatch.Draw(_pixel, new Rectangle(panelX, y, PanelWidth, 1), SeparatorColor);
+            y += 4;
+            var junc = _roadSystem.GetJunction(SelectedJunctionIndex);
+            int fw = PanelWidth - Margin * 2;
+
+            string jName = _eb.DrawTextField("junc_name", "Junc Name", junc.Name, panelX + Margin, y, fw);
+            if (jName != junc.Name) junc.Name = jName;
+            y += FieldHeight + 2;
+
+            float jRadius = _eb.DrawFloatField("junc_radius", "Radius", junc.Radius, panelX + Margin, y, fw, 0.5f);
+            if (MathF.Abs(jRadius - junc.Radius) > 0.001f) junc.Radius = jRadius;
+            y += FieldHeight + 2;
+
+            float jTexScale = _eb.DrawFloatField("junc_texScale", "Tex Scale", junc.TextureScale, panelX + Margin, y, fw, 0.05f);
+            if (MathF.Abs(jTexScale - junc.TextureScale) > 0.001f) junc.TextureScale = jTexScale;
+            y += FieldHeight + 2;
+
+            float jEdgeSoft = _eb.DrawFloatField("junc_edgeSoft", "Edge Softness", junc.EdgeSoftness, panelX + Margin, y, fw, 0.01f);
+            if (MathF.Abs(jEdgeSoft - junc.EdgeSoftness) > 0.001f) junc.EdgeSoftness = jEdgeSoft;
+            y += FieldHeight + 2;
         }
 
         // Draw road control points and junctions on world
@@ -1352,9 +2477,99 @@ public class MapEditorWindow
                 _triggerSystem.RemoveRegion(SelectedRegionIndex);
                 SelectedRegionIndex = Math.Min(SelectedRegionIndex, _triggerSystem.Regions.Count - 1);
             }
+
+            // Shape toggle button -- compute Y offset from region properties section
+            // We use a rough layout calculation: region list + Add/Delete row + separator + 2 fields (Name, ID) + shape button
+            if (SelectedRegionIndex >= 0 && SelectedRegionIndex < regions.Count)
+            {
+                int shapeY = addY + ButtonHeight + 8 + 4 + (FieldHeight + 2) * 2; // after Name + ID fields
+                if (mouse.Y >= shapeY && mouse.Y < shapeY + ButtonHeight &&
+                    mouse.X >= panelX + Margin && mouse.X < panelX + PanelWidth - Margin)
+                {
+                    var region = _triggerSystem.RegionsMut[SelectedRegionIndex];
+                    region.Shape = region.Shape == RegionShape.Rectangle ? RegionShape.Circle : RegionShape.Rectangle;
+                }
+            }
+
+            // Patrol route list clicks and buttons - these are drawn below the region properties
+            // We need approximate Y positions. Use a simplified approach:
+            // scan the patrol route list buttons in the rendered area
+            var pr = _triggerSystem.PatrolRoutes;
+
+            // Look for patrol route Add/Delete Route clicks
+            // Since the exact Y depends on region properties, we check the patrol route list from the bottom area.
+            // A simpler approach: iterate patrol route items and check position.
+            // We rely on the fact that patrol routes section is after region properties. Approximate:
+            int regionPropsHeight = 0;
+            if (SelectedRegionIndex >= 0 && SelectedRegionIndex < regions.Count)
+            {
+                var reg = regions[SelectedRegionIndex];
+                regionPropsHeight = 4 + (FieldHeight + 2) * 2 + ButtonHeight + 2 + (FieldHeight + 2) * 2; // Name + ID + Shape + PosX + PosY
+                if (reg.Shape == RegionShape.Rectangle)
+                    regionPropsHeight += (FieldHeight + 2) * 2; // HalfW + HalfH
+                else
+                    regionPropsHeight += (FieldHeight + 2); // Radius
+                regionPropsHeight += 4; // spacing
+            }
+
+            int prSectionY = addY + ButtonHeight + 8 + regionPropsHeight + 1 + 4 + LineHeight; // separator + header
+
+            // Click on patrol route items
+            for (int i = 0; i < pr.Count; i++)
+            {
+                int prBtnY = prSectionY + i * (ButtonHeight + 2);
+                if (mouse.Y >= prBtnY && mouse.Y < prBtnY + ButtonHeight &&
+                    mouse.X >= panelX + Margin && mouse.X < panelX + PanelWidth - Margin)
+                {
+                    SelectedPatrolRoute = i;
+                    break;
+                }
+            }
+
+            // Add Route button
+            int addRouteY = prSectionY + pr.Count * (ButtonHeight + 2);
+            if (mouse.Y >= addRouteY && mouse.Y < addRouteY + ButtonHeight &&
+                mouse.X >= panelX + Margin && mouse.X < panelX + Margin + 100)
+            {
+                var newRoute = new PatrolRoute
+                {
+                    Id = $"patrol_{pr.Count}",
+                    Name = $"Patrol {pr.Count}"
+                };
+                _triggerSystem.PatrolRoutesMut.Add(newRoute);
+                SelectedPatrolRoute = pr.Count - 1;
+            }
+
+            // Delete Route button
+            if (mouse.Y >= addRouteY && mouse.Y < addRouteY + ButtonHeight &&
+                mouse.X >= panelX + Margin + 110 && mouse.X < panelX + Margin + 210 &&
+                SelectedPatrolRoute >= 0 && SelectedPatrolRoute < pr.Count)
+            {
+                _triggerSystem.PatrolRoutesMut.RemoveAt(SelectedPatrolRoute);
+                SelectedPatrolRoute = Math.Min(SelectedPatrolRoute, _triggerSystem.PatrolRoutes.Count - 1);
+            }
+
+            // Place WP button - appears below patrol route properties
+            if (SelectedPatrolRoute >= 0 && SelectedPatrolRoute < pr.Count)
+            {
+                // The Place WP button is at the bottom of the patrol section
+                // We scan for it roughly
+                int wpBtnY = addRouteY + ButtonHeight + 4;
+                if (_eb != null)
+                    wpBtnY += (FieldHeight + 2) * 3; // Name + ID + Loop
+                wpBtnY += LineHeight; // Waypoints header
+                wpBtnY += pr[SelectedPatrolRoute].Waypoints.Count * LineHeight; // waypoints
+                wpBtnY += 4 + LineHeight; // help text
+
+                if (mouse.Y >= wpBtnY && mouse.Y < wpBtnY + ButtonHeight &&
+                    mouse.X >= panelX + Margin && mouse.X < panelX + Margin + 80)
+                {
+                    _regionPlaceWaypoint = !_regionPlaceWaypoint;
+                }
+            }
         }
 
-        // World interaction: drag regions
+        // World interaction: drag regions (M26: 10 handle types)
         if (!overPanel)
         {
             Vec2 worldPos = _camera.ScreenToWorld(new Vector2(mouse.X, mouse.Y), screenW, screenH);
@@ -1362,34 +2577,54 @@ public class MapEditorWindow
             if (leftClick && SelectedRegionIndex >= 0 && SelectedRegionIndex < _triggerSystem.Regions.Count)
             {
                 var region = _triggerSystem.Regions[SelectedRegionIndex];
-                // Check if we're on the edge (resize) or center (drag)
-                float dx = MathF.Abs(worldPos.X - region.X);
-                float dy = MathF.Abs(worldPos.Y - region.Y);
+                _activeHandle = RegionHandle.None;
+                _draggingRegion = -1;
+
+                float handleTol = 1.5f; // world-space tolerance for handle hit
 
                 if (region.Shape == RegionShape.Rectangle)
                 {
-                    bool onEdge = (MathF.Abs(dx - region.HalfW) < 1.5f) || (MathF.Abs(dy - region.HalfH) < 1.5f);
-                    if (onEdge && dx <= region.HalfW + 1.5f && dy <= region.HalfH + 1.5f)
+                    float l = region.X - region.HalfW;
+                    float r = region.X + region.HalfW;
+                    float t = region.Y - region.HalfH;
+                    float b = region.Y + region.HalfH;
+                    float mx = region.X;
+                    float my = region.Y;
+
+                    // Test corners first (smallest targets)
+                    if (Vec2Near(worldPos, new Vec2(l, t), handleTol)) { _activeHandle = RegionHandle.NW; }
+                    else if (Vec2Near(worldPos, new Vec2(r, t), handleTol)) { _activeHandle = RegionHandle.NE; }
+                    else if (Vec2Near(worldPos, new Vec2(r, b), handleTol)) { _activeHandle = RegionHandle.SE; }
+                    else if (Vec2Near(worldPos, new Vec2(l, b), handleTol)) { _activeHandle = RegionHandle.SW; }
+                    // Edge midpoints
+                    else if (Vec2Near(worldPos, new Vec2(mx, t), handleTol)) { _activeHandle = RegionHandle.N; }
+                    else if (Vec2Near(worldPos, new Vec2(r, my), handleTol)) { _activeHandle = RegionHandle.E; }
+                    else if (Vec2Near(worldPos, new Vec2(mx, b), handleTol)) { _activeHandle = RegionHandle.S; }
+                    else if (Vec2Near(worldPos, new Vec2(l, my), handleTol)) { _activeHandle = RegionHandle.W; }
+                    // Body (inside rect)
+                    else if (worldPos.X >= l && worldPos.X <= r && worldPos.Y >= t && worldPos.Y <= b)
                     {
-                        _draggingRegion = SelectedRegionIndex;
-                        _draggingRegionResize = true;
+                        _activeHandle = RegionHandle.Body;
                     }
-                    else if (dx <= region.HalfW && dy <= region.HalfH)
+
+                    if (_activeHandle != RegionHandle.None)
                     {
                         _draggingRegion = SelectedRegionIndex;
-                        _draggingRegionResize = false;
+                        _draggingRegionResize = _activeHandle != RegionHandle.Body;
                     }
                 }
                 else // Circle
                 {
                     float dist = (worldPos - new Vec2(region.X, region.Y)).Length();
-                    if (MathF.Abs(dist - region.Radius) < 1.5f)
+                    if (MathF.Abs(dist - region.Radius) < handleTol)
                     {
+                        _activeHandle = RegionHandle.CircleRadius;
                         _draggingRegion = SelectedRegionIndex;
                         _draggingRegionResize = true;
                     }
                     else if (dist <= region.Radius)
                     {
+                        _activeHandle = RegionHandle.Body;
                         _draggingRegion = SelectedRegionIndex;
                         _draggingRegionResize = false;
                     }
@@ -1399,25 +2634,128 @@ public class MapEditorWindow
             if (leftDown && _draggingRegion >= 0 && _draggingRegion < _triggerSystem.Regions.Count)
             {
                 var region = _triggerSystem.RegionsMut[_draggingRegion];
-                if (_draggingRegionResize)
+
+                switch (_activeHandle)
                 {
-                    if (region.Shape == RegionShape.Rectangle)
+                    case RegionHandle.Body:
+                        region.X = worldPos.X;
+                        region.Y = worldPos.Y;
+                        break;
+
+                    // Edge midpoints - resize from one side only
+                    case RegionHandle.N:
                     {
-                        region.HalfW = MathF.Max(1f, MathF.Abs(worldPos.X - region.X));
-                        region.HalfH = MathF.Max(1f, MathF.Abs(worldPos.Y - region.Y));
+                        float oldBottom = region.Y + region.HalfH;
+                        float newTop = worldPos.Y;
+                        if (newTop < oldBottom - 1f)
+                        {
+                            region.Y = (newTop + oldBottom) / 2f;
+                            region.HalfH = (oldBottom - newTop) / 2f;
+                        }
+                        break;
                     }
-                    else
+                    case RegionHandle.S:
                     {
+                        float oldTop = region.Y - region.HalfH;
+                        float newBottom = worldPos.Y;
+                        if (newBottom > oldTop + 1f)
+                        {
+                            region.Y = (oldTop + newBottom) / 2f;
+                            region.HalfH = (newBottom - oldTop) / 2f;
+                        }
+                        break;
+                    }
+                    case RegionHandle.W:
+                    {
+                        float oldRight = region.X + region.HalfW;
+                        float newLeft = worldPos.X;
+                        if (newLeft < oldRight - 1f)
+                        {
+                            region.X = (newLeft + oldRight) / 2f;
+                            region.HalfW = (oldRight - newLeft) / 2f;
+                        }
+                        break;
+                    }
+                    case RegionHandle.E:
+                    {
+                        float oldLeft = region.X - region.HalfW;
+                        float newRight = worldPos.X;
+                        if (newRight > oldLeft + 1f)
+                        {
+                            region.X = (oldLeft + newRight) / 2f;
+                            region.HalfW = (newRight - oldLeft) / 2f;
+                        }
+                        break;
+                    }
+
+                    // Corners - resize from corner
+                    case RegionHandle.NW:
+                    {
+                        float oldRight = region.X + region.HalfW;
+                        float oldBottom = region.Y + region.HalfH;
+                        float newLeft = worldPos.X;
+                        float newTop = worldPos.Y;
+                        if (newLeft < oldRight - 1f && newTop < oldBottom - 1f)
+                        {
+                            region.X = (newLeft + oldRight) / 2f;
+                            region.HalfW = (oldRight - newLeft) / 2f;
+                            region.Y = (newTop + oldBottom) / 2f;
+                            region.HalfH = (oldBottom - newTop) / 2f;
+                        }
+                        break;
+                    }
+                    case RegionHandle.NE:
+                    {
+                        float oldLeft = region.X - region.HalfW;
+                        float oldBottom = region.Y + region.HalfH;
+                        float newRight = worldPos.X;
+                        float newTop = worldPos.Y;
+                        if (newRight > oldLeft + 1f && newTop < oldBottom - 1f)
+                        {
+                            region.X = (oldLeft + newRight) / 2f;
+                            region.HalfW = (newRight - oldLeft) / 2f;
+                            region.Y = (newTop + oldBottom) / 2f;
+                            region.HalfH = (oldBottom - newTop) / 2f;
+                        }
+                        break;
+                    }
+                    case RegionHandle.SE:
+                    {
+                        float oldLeft = region.X - region.HalfW;
+                        float oldTop = region.Y - region.HalfH;
+                        float newRight = worldPos.X;
+                        float newBottom = worldPos.Y;
+                        if (newRight > oldLeft + 1f && newBottom > oldTop + 1f)
+                        {
+                            region.X = (oldLeft + newRight) / 2f;
+                            region.HalfW = (newRight - oldLeft) / 2f;
+                            region.Y = (oldTop + newBottom) / 2f;
+                            region.HalfH = (newBottom - oldTop) / 2f;
+                        }
+                        break;
+                    }
+                    case RegionHandle.SW:
+                    {
+                        float oldRight = region.X + region.HalfW;
+                        float oldTop = region.Y - region.HalfH;
+                        float newLeft = worldPos.X;
+                        float newBottom = worldPos.Y;
+                        if (newLeft < oldRight - 1f && newBottom > oldTop + 1f)
+                        {
+                            region.X = (newLeft + oldRight) / 2f;
+                            region.HalfW = (oldRight - newLeft) / 2f;
+                            region.Y = (oldTop + newBottom) / 2f;
+                            region.HalfH = (newBottom - oldTop) / 2f;
+                        }
+                        break;
+                    }
+
+                    case RegionHandle.CircleRadius:
                         region.Radius = MathF.Max(1f, (worldPos - new Vec2(region.X, region.Y)).Length());
-                    }
-                }
-                else
-                {
-                    region.X = worldPos.X;
-                    region.Y = worldPos.Y;
+                        break;
                 }
             }
-            if (leftUp) _draggingRegion = -1;
+            if (leftUp) { _draggingRegion = -1; _activeHandle = RegionHandle.None; }
 
             // Waypoint placement
             if (_regionPlaceWaypoint && leftClick && SelectedPatrolRoute >= 0)
@@ -1429,6 +2767,28 @@ public class MapEditorWindow
                     _regionPlaceWaypoint = false;
                 }
             }
+
+            // RM17: Waypoint dragging - click to start dragging nearest waypoint
+            if (leftClick && !_regionPlaceWaypoint && _draggingRegion < 0 &&
+                SelectedPatrolRoute >= 0 && SelectedPatrolRoute < _triggerSystem.PatrolRoutes.Count)
+            {
+                var route = _triggerSystem.PatrolRoutes[SelectedPatrolRoute];
+                float bestDist = 2f; // world-space tolerance
+                _draggingWaypoint = -1;
+                for (int wi = 0; wi < route.Waypoints.Count; wi++)
+                {
+                    float d = (route.Waypoints[wi] - worldPos).Length();
+                    if (d < bestDist) { bestDist = d; _draggingWaypoint = wi; SelectedWaypointIndex = wi; }
+                }
+            }
+            if (leftDown && _draggingWaypoint >= 0 &&
+                SelectedPatrolRoute >= 0 && SelectedPatrolRoute < _triggerSystem.PatrolRoutes.Count)
+            {
+                var routes = _triggerSystem.PatrolRoutesMut;
+                if (_draggingWaypoint < routes[SelectedPatrolRoute].Waypoints.Count)
+                    routes[SelectedPatrolRoute].Waypoints[_draggingWaypoint] = worldPos;
+            }
+            if (leftUp) _draggingWaypoint = -1;
         }
     }
 
@@ -1462,27 +2822,67 @@ public class MapEditorWindow
         DrawButtonRect("Delete", panelX + Margin + 85, y, 75, ButtonHeight, SelectedRegionIndex >= 0 ? DangerColor : ButtonBg);
         y += ButtonHeight + 8;
 
-        // Selected region properties
+        // Selected region properties (editable)
         if (SelectedRegionIndex >= 0 && SelectedRegionIndex < regions.Count)
         {
             _spriteBatch.Draw(_pixel, new Rectangle(panelX, y, PanelWidth, 1), SeparatorColor);
             y += 4;
-            var region = regions[SelectedRegionIndex];
+            var region = _triggerSystem.RegionsMut[SelectedRegionIndex];
+            int fw = PanelWidth - Margin * 2;
 
-            DrawSmallText($"ID: {region.Id}", panelX + Margin, y, TextBright); y += LineHeight;
-            DrawSmallText($"Name: {region.Name}", panelX + Margin, y, TextColor); y += LineHeight;
-            DrawSmallText($"Shape: {region.Shape}", panelX + Margin, y, TextColor); y += LineHeight;
-            DrawSmallText($"Pos: ({region.X:F1}, {region.Y:F1})", panelX + Margin, y, TextColor); y += LineHeight;
-
-            if (region.Shape == RegionShape.Rectangle)
+            if (_eb != null)
             {
-                DrawSmallText($"Half: ({region.HalfW:F1}, {region.HalfH:F1})", panelX + Margin, y, TextColor);
+                string newName = _eb.DrawTextField("region_name", "Name", region.Name, panelX + Margin, y, fw);
+                if (newName != region.Name) region.Name = newName;
+                y += FieldHeight + 2;
+
+                string newId = _eb.DrawTextField("region_id", "ID", region.Id, panelX + Margin, y, fw);
+                if (newId != region.Id) region.Id = newId;
+                y += FieldHeight + 2;
+
+                // Shape toggle button
+                string shapeLabel = $"Shape: {region.Shape}";
+                DrawButtonRect(shapeLabel, panelX + Margin, y, fw, ButtonHeight, ButtonBg);
+                y += ButtonHeight + 2;
+
+                float newX = _eb.DrawFloatField("region_x", "Position X", region.X, panelX + Margin, y, fw, 1f);
+                if (MathF.Abs(newX - region.X) > 0.001f) region.X = newX;
+                y += FieldHeight + 2;
+
+                float newY = _eb.DrawFloatField("region_y", "Position Y", region.Y, panelX + Margin, y, fw, 1f);
+                if (MathF.Abs(newY - region.Y) > 0.001f) region.Y = newY;
+                y += FieldHeight + 2;
+
+                if (region.Shape == RegionShape.Rectangle)
+                {
+                    float newHW = _eb.DrawFloatField("region_hw", "Half W", region.HalfW, panelX + Margin, y, fw, 0.5f);
+                    if (MathF.Abs(newHW - region.HalfW) > 0.001f) region.HalfW = MathF.Max(0.5f, newHW);
+                    y += FieldHeight + 2;
+
+                    float newHH = _eb.DrawFloatField("region_hh", "Half H", region.HalfH, panelX + Margin, y, fw, 0.5f);
+                    if (MathF.Abs(newHH - region.HalfH) > 0.001f) region.HalfH = MathF.Max(0.5f, newHH);
+                    y += FieldHeight + 2;
+                }
+                else
+                {
+                    float newR = _eb.DrawFloatField("region_radius", "Radius", region.Radius, panelX + Margin, y, fw, 0.5f);
+                    if (MathF.Abs(newR - region.Radius) > 0.001f) region.Radius = MathF.Max(0.5f, newR);
+                    y += FieldHeight + 2;
+                }
             }
             else
             {
-                DrawSmallText($"Radius: {region.Radius:F1}", panelX + Margin, y, TextColor);
+                DrawSmallText($"ID: {region.Id}", panelX + Margin, y, TextBright); y += LineHeight;
+                DrawSmallText($"Name: {region.Name}", panelX + Margin, y, TextColor); y += LineHeight;
+                DrawSmallText($"Shape: {region.Shape}", panelX + Margin, y, TextColor); y += LineHeight;
+                DrawSmallText($"Pos: ({region.X:F1}, {region.Y:F1})", panelX + Margin, y, TextColor); y += LineHeight;
+                if (region.Shape == RegionShape.Rectangle)
+                    DrawSmallText($"Half: ({region.HalfW:F1}, {region.HalfH:F1})", panelX + Margin, y, TextColor);
+                else
+                    DrawSmallText($"Radius: {region.Radius:F1}", panelX + Margin, y, TextColor);
+                y += LineHeight;
             }
-            y += LineHeight + 4;
+            y += 4;
         }
 
         // Patrol Routes section
@@ -1494,23 +2894,73 @@ public class MapEditorWindow
         var patrolRoutes = _triggerSystem.PatrolRoutes;
         for (int i = 0; i < patrolRoutes.Count; i++)
         {
-            if (y > contentY + contentH) break;
+            if (y > contentY + contentH - 200) break;
             bool selected = i == SelectedPatrolRoute;
-            DrawSmallText($"{(selected ? "> " : "  ")}{patrolRoutes[i].Name} ({patrolRoutes[i].Waypoints.Count} wps)",
-                panelX + Margin, y, selected ? TextBright : TextColor);
-            y += LineHeight;
+            var prBtnRect = new Rectangle(panelX + Margin, y, PanelWidth - Margin * 2, ButtonHeight);
+            var prBg = selected ? HighlightColor : (IsInRect(mouse, prBtnRect) ? ButtonHoverColor : Color.Transparent);
+            if (prBg != Color.Transparent)
+                _spriteBatch.Draw(_pixel, prBtnRect, prBg);
+            DrawSmallText($"{patrolRoutes[i].Name} ({patrolRoutes[i].Waypoints.Count} wps)",
+                panelX + Margin + 4, y + 3, selected ? TextBright : TextColor);
+            y += ButtonHeight + 2;
         }
 
         // Add patrol route button region
-        if (y < contentY + contentH - ButtonHeight)
+        if (y < contentY + contentH - ButtonHeight * 3)
         {
             DrawButtonRect("+ Add Route", panelX + Margin, y, 100, ButtonHeight, ButtonBg);
+            DrawButtonRect("Delete Route", panelX + Margin + 110, y, 100, ButtonHeight,
+                SelectedPatrolRoute >= 0 ? DangerColor : ButtonBg);
             y += ButtonHeight + 4;
         }
 
-        // Waypoint controls
+        // Selected patrol route editable properties
         if (SelectedPatrolRoute >= 0 && SelectedPatrolRoute < patrolRoutes.Count)
         {
+            var route = _triggerSystem.PatrolRoutesMut[SelectedPatrolRoute];
+            int fw = PanelWidth - Margin * 2;
+
+            if (_eb != null)
+            {
+                string prName = _eb.DrawTextField("patrol_name", "Route Name", route.Name, panelX + Margin, y, fw);
+                if (prName != route.Name) route.Name = prName;
+                y += FieldHeight + 2;
+
+                string prId = _eb.DrawTextField("patrol_id", "Route ID", route.Id, panelX + Margin, y, fw);
+                if (prId != route.Id) route.Id = prId;
+                y += FieldHeight + 2;
+
+                route.Loop = _eb.DrawCheckbox("Loop", route.Loop, panelX + Margin, y);
+                y += FieldHeight + 2;
+            }
+
+            // Waypoints list with delete buttons
+            DrawSmallText($"Waypoints ({route.Waypoints.Count}):", panelX + Margin, y, AccentColor);
+            y += LineHeight;
+
+            for (int wi = 0; wi < route.Waypoints.Count; wi++)
+            {
+                if (y > contentY + contentH - ButtonHeight) break;
+                var wp = route.Waypoints[wi];
+                bool wpSel = wi == SelectedWaypointIndex;
+                DrawSmallText($"  {(wpSel ? ">" : " ")} ({wp.X:F1}, {wp.Y:F1})", panelX + Margin, y + 3,
+                    wpSel ? TextBright : TextColor);
+
+                // Delete waypoint button
+                if (_eb != null)
+                {
+                    if (_eb.DrawButton("X", panelX + PanelWidth - Margin - 24, y, 22, 20, DangerColor))
+                    {
+                        route.Waypoints.RemoveAt(wi);
+                        if (SelectedWaypointIndex >= route.Waypoints.Count)
+                            SelectedWaypointIndex = route.Waypoints.Count - 1;
+                        break; // list modified, stop drawing
+                    }
+                }
+                y += LineHeight;
+            }
+
+            y += 4;
             DrawSmallText("Click 'Place WP' then click on world", panelX + Margin, y, TextDim);
             y += LineHeight;
             DrawButtonRect(_regionPlaceWaypoint ? "[Placing...]" : "Place WP", panelX + Margin, y, 80, ButtonHeight,
@@ -1524,6 +2974,10 @@ public class MapEditorWindow
     private void DrawRegionOverlays(int screenW, int screenH)
     {
         var regions = _triggerSystem.Regions;
+        var handleColor = new Color(255, 255, 100, 220);
+        var handleActiveColor = new Color(255, 120, 60, 255);
+        const int handleSz = 6; // half-size of handle square
+
         for (int i = 0; i < regions.Count; i++)
         {
             var region = regions[i];
@@ -1542,6 +2996,28 @@ public class MapEditorWindow
                     _spriteBatch.Draw(_pixel, new Rectangle(rx, ry, rw, rh), fill);
                     DrawRectBorder(rx, ry, rw, rh, border);
                 }
+
+                // M26: Draw drag handles when selected
+                if (selected && rw > 0 && rh > 0)
+                {
+                    int cx = rx + rw / 2;
+                    int cy = ry + rh / 2;
+
+                    // 4 corners
+                    DrawRegionHandleSquare(rx, ry, handleSz, _activeHandle == RegionHandle.NW ? handleActiveColor : handleColor);
+                    DrawRegionHandleSquare(rx + rw, ry, handleSz, _activeHandle == RegionHandle.NE ? handleActiveColor : handleColor);
+                    DrawRegionHandleSquare(rx + rw, ry + rh, handleSz, _activeHandle == RegionHandle.SE ? handleActiveColor : handleColor);
+                    DrawRegionHandleSquare(rx, ry + rh, handleSz, _activeHandle == RegionHandle.SW ? handleActiveColor : handleColor);
+
+                    // 4 edge midpoints
+                    DrawRegionHandleSquare(cx, ry, handleSz, _activeHandle == RegionHandle.N ? handleActiveColor : handleColor);
+                    DrawRegionHandleSquare(rx + rw, cy, handleSz, _activeHandle == RegionHandle.E ? handleActiveColor : handleColor);
+                    DrawRegionHandleSquare(cx, ry + rh, handleSz, _activeHandle == RegionHandle.S ? handleActiveColor : handleColor);
+                    DrawRegionHandleSquare(rx, cy, handleSz, _activeHandle == RegionHandle.W ? handleActiveColor : handleColor);
+
+                    // Body center indicator
+                    DrawRegionHandleSquare(cx, cy, handleSz - 1, _activeHandle == RegionHandle.Body ? handleActiveColor : new Color(100, 255, 100, 180));
+                }
             }
             else // Circle
             {
@@ -1550,6 +3026,20 @@ public class MapEditorWindow
                 int segments = Math.Max(16, (int)(screenRadius * 0.5f));
                 var color = selected ? new Color(120, 120, 255, 220) : RegionCircleBorder;
                 DrawCircleOutline(center, screenRadius, color, segments);
+
+                // M26: Draw handles when selected
+                if (selected)
+                {
+                    // Center handle (body)
+                    DrawRegionHandleSquare((int)center.X, (int)center.Y, handleSz - 1,
+                        _activeHandle == RegionHandle.Body ? handleActiveColor : new Color(100, 100, 255, 180));
+
+                    // Radius handle (right side of circle)
+                    int rHandleX = (int)(center.X + screenRadius);
+                    int rHandleY = (int)center.Y;
+                    DrawRegionHandleSquare(rHandleX, rHandleY, handleSz,
+                        _activeHandle == RegionHandle.CircleRadius ? handleActiveColor : handleColor);
+                }
             }
 
             // Label
@@ -1575,6 +3065,14 @@ public class MapEditorWindow
                 }
             }
         }
+    }
+
+    /// <summary>M26: Draw a small square handle indicator at the given screen position.</summary>
+    private void DrawRegionHandleSquare(int cx, int cy, int halfSz, Color color)
+    {
+        _spriteBatch.Draw(_pixel, new Rectangle(cx - halfSz, cy - halfSz, halfSz * 2, halfSz * 2), color);
+        // Border
+        DrawRectBorder(cx - halfSz, cy - halfSz, halfSz * 2, halfSz * 2, new Color(0, 0, 0, 180));
     }
 
     // ====================================================================
@@ -1727,20 +3225,45 @@ public class MapEditorWindow
                 SelectedTriggerDefIndex >= 0 ? DangerColor : ButtonBg);
             y += ButtonHeight + 8;
 
-            // Properties for selected def
+            // Properties for selected def (editable)
             if (SelectedTriggerDefIndex >= 0 && SelectedTriggerDefIndex < _triggerSystem.Triggers.Count)
             {
                 _spriteBatch.Draw(_pixel, new Rectangle(panelX, y, PanelWidth, 1), SeparatorColor);
                 y += 4;
-                var def = _triggerSystem.Triggers[SelectedTriggerDefIndex];
+                var def = _triggerSystem.TriggersMut[SelectedTriggerDefIndex];
+                int fw = PanelWidth - Margin * 2;
 
-                DrawSmallText($"ID: {def.Id}", panelX + Margin, y, TextBright); y += LineHeight;
-                DrawSmallText($"Name: {def.Name}", panelX + Margin, y, TextColor); y += LineHeight;
-                DrawSmallText($"Active: {def.ActiveByDefault}", panelX + Margin, y, TextColor); y += LineHeight;
-                DrawSmallText($"OneShot: {def.OneShot}  MaxFire: {def.MaxFireCount}", panelX + Margin, y, TextColor); y += LineHeight;
+                if (_eb != null)
+                {
+                    string newName = _eb.DrawTextField("trig_name", "Name", def.Name, panelX + Margin, y, fw);
+                    if (newName != def.Name) def.Name = newName;
+                    y += FieldHeight + 2;
+
+                    string newId = _eb.DrawTextField("trig_id", "ID", def.Id, panelX + Margin, y, fw);
+                    if (newId != def.Id) def.Id = newId;
+                    y += FieldHeight + 2;
+
+                    def.ActiveByDefault = _eb.DrawCheckbox("Active", def.ActiveByDefault, panelX + Margin, y);
+                    y += FieldHeight + 2;
+
+                    def.OneShot = _eb.DrawCheckbox("OneShot", def.OneShot, panelX + Margin, y);
+                    y += FieldHeight + 2;
+
+                    int newMaxFire = _eb.DrawIntField("trig_maxFire", "MaxFireCount", def.MaxFireCount, panelX + Margin, y, fw);
+                    if (newMaxFire != def.MaxFireCount) def.MaxFireCount = Math.Max(0, newMaxFire);
+                    y += FieldHeight + 2;
+                }
+                else
+                {
+                    DrawSmallText($"ID: {def.Id}", panelX + Margin, y, TextBright); y += LineHeight;
+                    DrawSmallText($"Name: {def.Name}", panelX + Margin, y, TextColor); y += LineHeight;
+                    DrawSmallText($"Active: {def.ActiveByDefault}", panelX + Margin, y, TextColor); y += LineHeight;
+                    DrawSmallText($"OneShot: {def.OneShot}  MaxFire: {def.MaxFireCount}", panelX + Margin, y, TextColor); y += LineHeight;
+                }
 
                 // Condition
                 y += 4;
+                _condEditIdCounter = 0; // Reset per-frame counter for unique field IDs
                 DrawSmallText("Condition:", panelX + Margin, y, AccentColor); y += LineHeight;
                 if (def.Condition != null)
                     DrawConditionTree(def.Condition, panelX + Margin + 8, ref y);
@@ -1756,16 +3279,93 @@ public class MapEditorWindow
                     if (y > contentY + contentH) break;
                     bool selEffect = ei == SelectedEffectIndex;
                     string effectLabel = GetEffectLabel(def.Effects[ei]);
+
+                    // Click to select effect
+                    var effRect = new Rectangle(panelX + Margin, y, PanelWidth - Margin * 2 - 26, LineHeight);
+                    var effMouse = Mouse.GetState();
+                    if (IsInRect(effMouse, effRect) && effMouse.LeftButton == ButtonState.Pressed && _prevMouse.LeftButton == ButtonState.Released)
+                        SelectedEffectIndex = ei;
+
                     DrawSmallText($"  {(selEffect ? "> " : "")}{effectLabel}", panelX + Margin, y,
                         selEffect ? TextBright : TextColor);
+
+                    // Delete effect button
+                    if (_eb != null && _eb.DrawButton("X", panelX + PanelWidth - Margin - 24, y, 22, 20, DangerColor))
+                    {
+                        def.Effects.RemoveAt(ei);
+                        if (SelectedEffectIndex >= def.Effects.Count)
+                            SelectedEffectIndex = def.Effects.Count - 1;
+                        break;
+                    }
                     y += LineHeight;
+
+                    // RM18: Editable effect parameters when selected
+                    if (selEffect && _eb != null)
+                    {
+                        int ex = panelX + Margin + 16;
+                        int ew = fw - 16;
+                        DrawEffectEditor(def.Effects[ei], ei, ex, ref y, ew);
+                    }
                 }
 
                 // Add effect / add condition buttons
                 if (y < contentY + contentH - ButtonHeight * 2)
                 {
-                    DrawButtonRect("+ Condition", panelX + Margin, y, 100, ButtonHeight, ButtonBg);
-                    DrawButtonRect("+ Effect", panelX + Margin + 110, y, 80, ButtonHeight, ButtonBg);
+                    // Add condition dropdown
+                    if (_eb != null)
+                    {
+                        string[] condTypes = { "AND", "OR", "NOT", "EntersRegion", "UnitsKilled", "GameTime", "Cooldown" };
+                        string condType = _eb.DrawCombo("trig_addCond", "+ Condition", "(add)", condTypes, panelX + Margin, y, fw / 2);
+                        if (condType != "(add)")
+                        {
+                            ConditionNode? newCond = condType switch
+                            {
+                                "AND" => new CondAnd(),
+                                "OR" => new CondOr(),
+                                "NOT" => new CondNot(),
+                                "EntersRegion" => new CondEntersRegion(),
+                                "UnitsKilled" => new CondUnitsKilled(),
+                                "GameTime" => new CondGameTime(),
+                                "Cooldown" => new CondCooldown(),
+                                _ => null
+                            };
+                            if (newCond != null)
+                            {
+                                if (def.Condition == null)
+                                    def.Condition = newCond;
+                                else if (def.Condition is CondAnd andC)
+                                    andC.Children.Add(newCond);
+                                else
+                                {
+                                    var wrap = new CondAnd();
+                                    wrap.Children.Add(def.Condition);
+                                    wrap.Children.Add(newCond);
+                                    def.Condition = wrap;
+                                }
+                            }
+                        }
+
+                        // Add effect dropdown
+                        string[] effectTypes = { "ActivateTrigger", "DeactivateTrigger", "SpawnUnits", "KillUnits" };
+                        string effectType = _eb.DrawCombo("trig_addEff", "+ Effect", "(add)", effectTypes, panelX + Margin + fw / 2 + 4, y, fw / 2 - 4);
+                        if (effectType != "(add)")
+                        {
+                            TriggerEffect? newEff = effectType switch
+                            {
+                                "ActivateTrigger" => new EffActivateTrigger(),
+                                "DeactivateTrigger" => new EffDeactivateTrigger(),
+                                "SpawnUnits" => new EffSpawnUnits(),
+                                "KillUnits" => new EffKillUnits(),
+                                _ => null
+                            };
+                            if (newEff != null) def.Effects.Add(newEff);
+                        }
+                    }
+                    else
+                    {
+                        DrawButtonRect("+ Condition", panelX + Margin, y, 100, ButtonHeight, ButtonBg);
+                        DrawButtonRect("+ Effect", panelX + Margin + 110, y, 80, ButtonHeight, ButtonBg);
+                    }
                     y += ButtonHeight + 4;
                 }
 
@@ -1802,28 +3402,60 @@ public class MapEditorWindow
                 SelectedTriggerInstanceIndex >= 0 ? DangerColor : ButtonBg);
             y += ButtonHeight + 8;
 
-            // Properties for selected instance
+            // Properties for selected instance (editable)
             if (SelectedTriggerInstanceIndex >= 0 && SelectedTriggerInstanceIndex < _triggerSystem.Instances.Count)
             {
                 _spriteBatch.Draw(_pixel, new Rectangle(panelX, y, PanelWidth, 1), SeparatorColor);
                 y += 4;
-                var inst = _triggerSystem.Instances[SelectedTriggerInstanceIndex];
+                var inst = _triggerSystem.InstancesMut[SelectedTriggerInstanceIndex];
+                int fw = PanelWidth - Margin * 2;
 
-                DrawSmallText($"ID: {inst.InstanceID}", panelX + Margin, y, TextBright); y += LineHeight;
-                DrawSmallText($"Parent: {inst.ParentTriggerID}", panelX + Margin, y, TextColor); y += LineHeight;
-                DrawSmallText($"Active: {inst.ActiveByDefault}", panelX + Margin, y, TextColor); y += LineHeight;
-                DrawSmallText($"AutoCreated: {inst.AutoCreated}", panelX + Margin, y, TextColor); y += LineHeight;
-                if (!string.IsNullOrEmpty(inst.BoundObjectID))
+                if (_eb != null)
                 {
-                    DrawSmallText($"Bound: {inst.BoundObjectID}", panelX + Margin, y, SuccessColor);
-                    y += LineHeight;
+                    string newInstId = _eb.DrawTextField("inst_id", "ID", inst.InstanceID, panelX + Margin, y, fw);
+                    if (newInstId != inst.InstanceID) inst.InstanceID = newInstId;
+                    y += FieldHeight + 2;
+
+                    // RM28: Parent trigger dropdown populated from trigger system
+                    {
+                        var triggerIds = new string[_triggerSystem.Triggers.Count + 1];
+                        triggerIds[0] = "(none)";
+                        for (int ti = 0; ti < _triggerSystem.Triggers.Count; ti++)
+                            triggerIds[ti + 1] = _triggerSystem.Triggers[ti].Id;
+                        string curParent = string.IsNullOrEmpty(inst.ParentTriggerID) ? "(none)" : inst.ParentTriggerID;
+                        string newParent = _eb.DrawCombo("inst_parent", "Parent", curParent, triggerIds, panelX + Margin, y, fw);
+                        if (newParent != curParent)
+                            inst.ParentTriggerID = newParent == "(none)" ? "" : newParent;
+                    }
+                    y += FieldHeight + 2;
+
+                    inst.ActiveByDefault = _eb.DrawCheckbox("Active", inst.ActiveByDefault, panelX + Margin, y);
+                    y += FieldHeight + 2;
+
+                    // RM20: BoundObjectID editable (was read-only)
+                    string newBoundObj = _eb.DrawTextField("inst_boundobj", "BoundObjID", inst.BoundObjectID, panelX + Margin, y, fw);
+                    if (newBoundObj != inst.BoundObjectID) inst.BoundObjectID = newBoundObj;
+                    y += FieldHeight + 2;
+
+                    DrawSmallText($"AutoCreated: {inst.AutoCreated}", panelX + Margin, y, TextDim); y += LineHeight;
+                }
+                else
+                {
+                    DrawSmallText($"ID: {inst.InstanceID}", panelX + Margin, y, TextBright); y += LineHeight;
+                    DrawSmallText($"Parent: {inst.ParentTriggerID}", panelX + Margin, y, TextColor); y += LineHeight;
+                    DrawSmallText($"Active: {inst.ActiveByDefault}", panelX + Margin, y, TextColor); y += LineHeight;
+                    DrawSmallText($"Bound: {inst.BoundObjectID}", panelX + Margin, y, TextColor); y += LineHeight;
+                    DrawSmallText($"AutoCreated: {inst.AutoCreated}", panelX + Margin, y, TextColor); y += LineHeight;
                 }
             }
         }
     }
 
+    private int _condEditIdCounter; // Incremented each frame to create unique field IDs
+
     private void DrawConditionTree(ConditionNode cond, int x, ref int y)
     {
+        int fw = PanelWidth - Margin * 2 - (x - Margin);
         switch (cond)
         {
             case CondAnd andCond:
@@ -1839,21 +3471,59 @@ public class MapEditorWindow
                 if (notCond.Child != null) DrawConditionTree(notCond.Child, x + 12, ref y);
                 break;
             case CondEntersRegion enters:
-                DrawSmallText($"EntersRegion: {enters.RegionID} (min:{enters.MinCount})", x, y, TextColor);
-                y += LineHeight;
+            {
+                DrawSmallText("EntersRegion:", x, y, TextColor); y += LineHeight;
+                // RM18: Editable condition parameters
+                if (_eb != null)
+                {
+                    int cid = _condEditIdCounter++;
+                    string newRegion = _eb.DrawTextField($"cond_er_region_{cid}", "  RegionID", enters.RegionID, x, y, Math.Max(80, fw));
+                    if (newRegion != enters.RegionID) enters.RegionID = newRegion;
+                    y += FieldHeight + 2;
+                    int newMin = _eb.DrawIntField($"cond_er_min_{cid}", "  MinCount", enters.MinCount, x, y, Math.Max(80, fw));
+                    if (newMin != enters.MinCount) enters.MinCount = Math.Max(1, newMin);
+                    y += FieldHeight + 2;
+                }
                 break;
+            }
             case CondUnitsKilled killed:
-                DrawSmallText($"UnitsKilled: {killed.Count} cumul={killed.Cumulative}", x, y, TextColor);
-                y += LineHeight;
+            {
+                DrawSmallText("UnitsKilled:", x, y, TextColor); y += LineHeight;
+                if (_eb != null)
+                {
+                    int cid = _condEditIdCounter++;
+                    int newCount = _eb.DrawIntField($"cond_uk_count_{cid}", "  Count", killed.Count, x, y, Math.Max(80, fw));
+                    if (newCount != killed.Count) killed.Count = Math.Max(1, newCount);
+                    y += FieldHeight + 2;
+                    killed.Cumulative = _eb.DrawCheckbox("  Cumulative", killed.Cumulative, x, y);
+                    y += FieldHeight + 2;
+                }
                 break;
+            }
             case CondGameTime gameTime:
-                DrawSmallText($"GameTime >= {gameTime.Time:F1}", x, y, TextColor);
-                y += LineHeight;
+            {
+                DrawSmallText("GameTime:", x, y, TextColor); y += LineHeight;
+                if (_eb != null)
+                {
+                    int cid = _condEditIdCounter++;
+                    float newTime = _eb.DrawFloatField($"cond_gt_time_{cid}", "  Time >=", gameTime.Time, x, y, Math.Max(80, fw), 1f);
+                    if (MathF.Abs(newTime - gameTime.Time) > 0.001f) gameTime.Time = newTime;
+                    y += FieldHeight + 2;
+                }
                 break;
+            }
             case CondCooldown cooldown:
-                DrawSmallText($"Cooldown: {cooldown.Interval:F1}s", x, y, TextColor);
-                y += LineHeight;
+            {
+                DrawSmallText("Cooldown:", x, y, TextColor); y += LineHeight;
+                if (_eb != null)
+                {
+                    int cid = _condEditIdCounter++;
+                    float newInterval = _eb.DrawFloatField($"cond_cd_int_{cid}", "  Interval", cooldown.Interval, x, y, Math.Max(80, fw), 0.5f);
+                    if (MathF.Abs(newInterval - cooldown.Interval) > 0.001f) cooldown.Interval = newInterval;
+                    y += FieldHeight + 2;
+                }
                 break;
+            }
             default:
                 DrawSmallText($"Unknown: {cond.GetType().Name}", x, y, TextDim);
                 y += LineHeight;
@@ -1871,6 +3541,85 @@ public class MapEditorWindow
             EffKillUnits kill => $"Kill in: {kill.RegionID} (max:{kill.MaxKills})",
             _ => $"Unknown: {effect.GetType().Name}"
         };
+    }
+
+    /// <summary>
+    /// RM18: Draw editable parameter fields for a trigger effect.
+    /// </summary>
+    private void DrawEffectEditor(TriggerEffect effect, int effectIndex, int x, ref int y, int w)
+    {
+        if (_eb == null) return;
+        string prefix = $"eff_{effectIndex}_";
+
+        switch (effect)
+        {
+            case EffActivateTrigger act:
+            {
+                string newId = _eb.DrawTextField(prefix + "trigId", "TriggerID", act.TriggerID, x, y, w);
+                if (newId != act.TriggerID) act.TriggerID = newId;
+                y += FieldHeight + 2;
+                break;
+            }
+            case EffDeactivateTrigger deact:
+            {
+                string newId = _eb.DrawTextField(prefix + "trigId", "TriggerID", deact.TriggerID, x, y, w);
+                if (newId != deact.TriggerID) deact.TriggerID = newId;
+                y += FieldHeight + 2;
+                break;
+            }
+            case EffSpawnUnits spawn:
+            {
+                string newUnitDef = _eb.DrawTextField(prefix + "unitDef", "UnitDefID", spawn.UnitDefID, x, y, w);
+                if (newUnitDef != spawn.UnitDefID) spawn.UnitDefID = newUnitDef;
+                y += FieldHeight + 2;
+
+                int newCount = _eb.DrawIntField(prefix + "count", "Count", spawn.Count, x, y, w);
+                if (newCount != spawn.Count) spawn.Count = Math.Max(1, newCount);
+                y += FieldHeight + 2;
+
+                string[] factionNames = Enum.GetNames<Faction>();
+                string curFaction = spawn.Faction.ToString();
+                string newFaction = _eb.DrawCombo(prefix + "faction", "Faction", curFaction, factionNames, x, y, w);
+                if (newFaction != curFaction && Enum.TryParse<Faction>(newFaction, out var parsedFaction))
+                    spawn.Faction = parsedFaction;
+                y += FieldHeight + 2;
+
+                string newRegion = _eb.DrawTextField(prefix + "region", "RegionID", spawn.RegionID, x, y, w);
+                if (newRegion != spawn.RegionID) spawn.RegionID = newRegion;
+                y += FieldHeight + 2;
+
+                float newDist = _eb.DrawFloatField(prefix + "dist", "SpawnDist", spawn.SpawnDistance, x, y, w, 0.5f);
+                if (MathF.Abs(newDist - spawn.SpawnDistance) > 0.001f) spawn.SpawnDistance = newDist;
+                y += FieldHeight + 2;
+
+                float newInterval = _eb.DrawFloatField(prefix + "interval", "SpawnInterval", spawn.SpawnInterval, x, y, w, 0.5f);
+                if (MathF.Abs(newInterval - spawn.SpawnInterval) > 0.001f) spawn.SpawnInterval = newInterval;
+                y += FieldHeight + 2;
+
+                string[] behaviorNames = Enum.GetNames<PostSpawnBehavior>();
+                string curBehavior = spawn.PostBehavior.ToString();
+                string newBehavior = _eb.DrawCombo(prefix + "behavior", "PostBehavior", curBehavior, behaviorNames, x, y, w);
+                if (newBehavior != curBehavior && Enum.TryParse<PostSpawnBehavior>(newBehavior, out var parsedBehavior))
+                    spawn.PostBehavior = parsedBehavior;
+                y += FieldHeight + 2;
+
+                string newPatrol = _eb.DrawTextField(prefix + "patrol", "PatrolRouteID", spawn.PatrolRouteID, x, y, w);
+                if (newPatrol != spawn.PatrolRouteID) spawn.PatrolRouteID = newPatrol;
+                y += FieldHeight + 2;
+                break;
+            }
+            case EffKillUnits kill:
+            {
+                string newRegion = _eb.DrawTextField(prefix + "region", "RegionID", kill.RegionID, x, y, w);
+                if (newRegion != kill.RegionID) kill.RegionID = newRegion;
+                y += FieldHeight + 2;
+
+                int newMax = _eb.DrawIntField(prefix + "maxKills", "MaxKills", kill.MaxKills, x, y, w);
+                if (newMax != kill.MaxKills) kill.MaxKills = Math.Max(0, newMax);
+                y += FieldHeight + 2;
+                break;
+            }
+        }
     }
 
     // ====================================================================
@@ -1967,6 +3716,9 @@ public class MapEditorWindow
                 writer.WriteNumber("buildingMaxHP", def.BuildingMaxHP);
                 writer.WriteNumber("buildingProtection", def.BuildingProtection);
                 writer.WriteNumber("buildingDefaultOwner", def.BuildingDefaultOwner);
+                writer.WriteNumber("costWood", def.CostWood);
+                writer.WriteNumber("costStone", def.CostStone);
+                writer.WriteNumber("costGold", def.CostGold);
                 writer.WriteString("boundTriggerID", def.BoundTriggerID);
                 writer.WriteNumber("processTime", def.ProcessTime);
                 writer.WriteBoolean("autoSpawn", def.AutoSpawn);
@@ -2033,6 +3785,82 @@ public class MapEditorWindow
             _statusMessage = $"Save error: {ex.Message}";
             _statusTimer = 5f;
             DebugLog.Log("editor", $"Map save error: {ex.Message}");
+        }
+    }
+
+    private void LoadMap()
+    {
+        try
+        {
+            string mapsDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "assets", "maps");
+            string mapPath = Path.Combine(mapsDir, _mapFilename + ".json");
+            string triggerPath = Path.Combine(mapsDir, _mapFilename + "_triggers.json");
+            string roadsPath = Path.Combine(mapsDir, _mapFilename + "_roads.json");
+
+            if (!File.Exists(mapPath))
+            {
+                _statusMessage = $"File not found: {mapPath}";
+                _statusTimer = 3f;
+                return;
+            }
+
+            // Clear existing data
+            _groundSystem.ClearTypes();
+            _envSystem.ClearObjects();
+            _envSystem.ClearDefs();
+            _wallSystem.Defs.Clear();
+            _undoStack.Clear();
+
+            // Load main map data (ground, env defs, placed objects, wall defs)
+            MapData.Load(mapPath, _groundSystem, _envSystem, _wallSystem);
+
+            // Reload ground textures
+            _groundSystem.LoadTextures(_device);
+
+            // Load grass data from the map JSON
+            string json = File.ReadAllText(mapPath);
+            using var doc = JsonDocument.Parse(json);
+            var grassInfo = MapData.LoadGrass(doc.RootElement);
+            if (grassInfo.HasValue)
+            {
+                var gi = grassInfo.Value;
+                _grassMap = gi.Cells;
+                _grassW = gi.Width;
+                _grassH = gi.Height;
+                _grassTypes.Clear();
+                foreach (var t in gi.Types)
+                {
+                    _grassTypes.Add(new GrassTypeDef
+                    {
+                        Id = t.Id, Name = t.Name,
+                        BaseR = t.BaseR, BaseG = t.BaseG, BaseB = t.BaseB,
+                        TipR = t.TipR, TipG = t.TipG, TipB = t.TipB
+                    });
+                }
+            }
+
+            // Load triggers
+            MapData.LoadTriggers(triggerPath, _triggerSystem);
+
+            // Load roads
+            MapData.LoadRoads(roadsPath, _roadSystem);
+
+            // Reload env textures
+            _envSystem.LoadTextures(_device);
+
+            // Notify listeners
+            _onVertexMapChanged?.Invoke();
+            _onGrassMapChanged?.Invoke();
+
+            _statusMessage = $"Loaded: {mapPath}";
+            _statusTimer = 3f;
+            DebugLog.Log("editor", $"Map loaded from {mapPath}");
+        }
+        catch (Exception ex)
+        {
+            _statusMessage = $"Load error: {ex.Message}";
+            _statusTimer = 5f;
+            DebugLog.Log("editor", $"Map load error: {ex.Message}");
         }
     }
 
@@ -2413,17 +4241,29 @@ public class MapEditorWindow
         mouse.X >= rect.X && mouse.X < rect.X + rect.Width &&
         mouse.Y >= rect.Y && mouse.Y < rect.Y + rect.Height;
 
+    /// <summary>M26: Check if a world position is near a target point within tolerance.</summary>
+    private static bool Vec2Near(Vec2 a, Vec2 b, float tol) =>
+        MathF.Abs(a.X - b.X) < tol && MathF.Abs(a.Y - b.Y) < tol;
+
     // ---- Environment helpers ----
 
     private List<string> GetEnvCategories()
     {
         var cats = new HashSet<string>();
+        bool hasGroups = false;
         for (int i = 0; i < _envSystem.DefCount; i++)
+        {
             cats.Add(_envSystem.GetDef(i).Category);
+            if (!string.IsNullOrEmpty(_envSystem.GetDef(i).Group))
+                hasGroups = true;
+        }
 
         var list = new List<string> { "All" };
         foreach (var c in cats)
             if (c != "All") list.Add(c);
+        // M17: Add "Groups" option if any defs have a group
+        if (hasGroups)
+            list.Add("Groups");
         return list;
     }
 
@@ -2437,6 +4277,72 @@ public class MapEditorWindow
                 result.Add(i);
         }
         return result;
+    }
+
+    /// <summary>
+    /// M17: Get distinct group names from environment object defs.
+    /// </summary>
+    private List<string> GetEnvGroups()
+    {
+        var groups = new List<string>();
+        var seen = new HashSet<string>();
+        for (int i = 0; i < _envSystem.DefCount; i++)
+        {
+            var def = _envSystem.GetDef(i);
+            if (!string.IsNullOrEmpty(def.Group) && seen.Add(def.Group))
+                groups.Add(def.Group);
+        }
+        return groups;
+    }
+
+    /// <summary>
+    /// RM04: Rebuild cost field and bake environment collisions.
+    /// Called after placing or removing objects so pathfinding data stays in sync.
+    /// </summary>
+    private void RebakeObjectCollisions()
+    {
+        _tileGrid.RebuildCostField();
+        _envSystem.BakeCollisions(_tileGrid);
+    }
+
+    /// <summary>
+    /// RM06: If the placed object's def has a BoundTriggerID, auto-create a TriggerInstance for it.
+    /// </summary>
+    private void AutoCreateTriggerInstance(int objectIndex)
+    {
+        if (objectIndex < 0 || objectIndex >= _envSystem.ObjectCount) return;
+        var obj = _envSystem.GetObject(objectIndex);
+        if (obj.DefIndex < 0 || obj.DefIndex >= _envSystem.DefCount) return;
+        var def = _envSystem.GetDef(obj.DefIndex);
+        if (string.IsNullOrEmpty(def.BoundTriggerID)) return;
+
+        var inst = new TriggerInstance
+        {
+            InstanceID = $"auto_{obj.ObjectID}",
+            ParentTriggerID = def.BoundTriggerID,
+            BoundObjectID = obj.ObjectID,
+            ActiveByDefault = true,
+            AutoCreated = true
+        };
+        _triggerSystem.AddInstance(inst);
+    }
+
+    /// <summary>
+    /// RM07: Before removing an object, check if it has a bound trigger instance and remove it.
+    /// </summary>
+    private void AutoRemoveTriggerInstance(int objectIndex)
+    {
+        if (objectIndex < 0 || objectIndex >= _envSystem.ObjectCount) return;
+        var obj = _envSystem.GetObject(objectIndex);
+
+        // Find and remove any trigger instance bound to this object
+        for (int i = _triggerSystem.Instances.Count - 1; i >= 0; i--)
+        {
+            if (_triggerSystem.Instances[i].BoundObjectID == obj.ObjectID)
+            {
+                _triggerSystem.RemoveInstance(i);
+            }
+        }
     }
 
     private int FindClosestObject(Vec2 worldPos, float maxDist)

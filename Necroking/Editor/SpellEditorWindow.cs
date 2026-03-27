@@ -19,8 +19,16 @@ public class SpellEditorWindow
     private readonly EditorBase _ui;
     private GameData _gameData = null!;
 
+    /// <summary>Set to true when the user clicks the [X] close button on the top bar.</summary>
+    public bool WantsClose { get; set; }
+
     // Spell list state
     private int _selectedIdx = -1;
+    /// <summary>Select the first item in the list (for screenshot scenarios).</summary>
+    public void SelectFirst() { _selectedIdx = 0; }
+
+    /// <summary>Open the buff manager popup (for UI test scenarios).</summary>
+    public void OpenBuffManager() { _buffManagerOpen = true; _buffSelectedIdx = 0; }
     private string _searchFilter = "";
     private float _detailScroll;
     private List<string> _filteredIds = new();
@@ -34,12 +42,31 @@ public class SpellEditorWindow
     private bool _flipbookManagerOpen;
     private int _fbSelectedIdx;
     private float _fbManagerScroll;
+    private readonly TextureFileBrowser _fbTextureBrowser = new();
 
     // Buff manager popup
     private bool _buffManagerOpen;
     private int _buffSelectedIdx;
     private float _buffManagerScroll;
     private float _buffDetailScroll;
+
+    // Buff preview
+    private BuffPreview? _buffPreview;
+    private int _lastBuffPreviewIdx = -1;
+
+    // Delete confirmation dialog
+    private bool _deleteConfirmOpen;
+    private string _deleteConfirmTarget = ""; // "spell", "flipbook", or "buff"
+    private string _deleteConfirmId = "";
+
+    // Spell preview
+    private SpellPreview? _spellPreview;
+    private bool _previewBloom = true;
+    private bool _buffPreviewBloom = true;
+    private int _lastPreviewSelectedIdx = -1;
+
+    // Clipboard for Ctrl+C / Ctrl+V
+    private SpellDef? _clipboardSpell;
 
     // Category options (no Command/Toggle for editing)
     private static readonly string[] CategoryOptions =
@@ -59,6 +86,7 @@ public class SpellEditorWindow
     private static readonly string[] StatOptions =
         { "Strength", "Attack", "Defense", "MagicResist", "NaturalProt", "CombatSpeed", "MaxHP", "Encumbrance" };
     private static readonly string[] IntBlendOptions = { "Alpha", "Additive" };
+    private static readonly string[] TargetFilterOptions = { "AnyEnemy", "UndeadOnly", "LivingOnly" };
 
     // Layout constants
     private const int ListWidth = 300;
@@ -86,12 +114,16 @@ public class SpellEditorWindow
         // Handle Ctrl+S
         HandleKeyboardShortcuts();
 
+        // --- Spell preview update and render-to-target ---
+        UpdateSpellPreview(dt);
+        RenderSpellPreviewToTarget();
+
         // Full-screen dark overlay
         _ui.DrawRect(new Rectangle(0, 0, screenW, screenH), new Color(0, 0, 0, 180));
 
-        // Main panel covering most of screen
-        int marginX = (int)(screenW * 0.03f);
-        int marginY = (int)(screenH * 0.02f);
+        // U22: Main panel with margins (5% horizontal, 3% vertical)
+        int marginX = (int)(screenW * 0.05f);
+        int marginY = (int)(screenH * 0.03f);
         int panelW = screenW - marginX * 2;
         int panelH = screenH - marginY * 2;
         int panelX = marginX;
@@ -120,10 +152,33 @@ public class SpellEditorWindow
 
         // --- Popup overlays (drawn on top) ---
         if (_flipbookManagerOpen)
+        {
+            _ui.InputLayer = 1;
             DrawFlipbookManagerPopup(screenW, screenH);
+        }
 
         if (_buffManagerOpen)
+        {
+            // Update and render buff preview to its RenderTarget2D
+            UpdateBuffPreview(dt);
+            RenderBuffPreviewToTarget();
+
+            _ui.InputLayer = 1;
             DrawBuffManagerPopup(screenW, screenH);
+        }
+
+        // Delete confirmation dialog (drawn on top of everything)
+        if (_deleteConfirmOpen)
+        {
+            string msg = $"Delete {_deleteConfirmTarget}: {_deleteConfirmId}?";
+            if (_ui.DrawConfirmDialog("Confirm Delete", msg, ref _deleteConfirmOpen))
+            {
+                ExecuteDelete();
+            }
+        }
+
+        // Dropdown overlays (drawn last, on top of everything)
+        _ui.DrawDropdownOverlays();
     }
 
     // ===========================
@@ -136,6 +191,7 @@ public class SpellEditorWindow
         bool ctrl = _ui._kb.IsKeyDown(Keys.LeftControl) || _ui._kb.IsKeyDown(Keys.RightControl);
         bool sPressed = _ui._kb.IsKeyDown(Keys.S) && !_ui._prevKb.IsKeyDown(Keys.S);
 
+        // Ctrl+S save (works from any context including buff manager)
         if (ctrl && sPressed)
         {
             _gameData.Save("data");
@@ -143,12 +199,49 @@ public class SpellEditorWindow
             SetStatus("Saved!");
         }
 
-        // Escape to close popups
+        // Ctrl+C: Copy selected spell
+        bool cPressed = _ui._kb.IsKeyDown(Keys.C) && !_ui._prevKb.IsKeyDown(Keys.C);
+        if (ctrl && cPressed && !_buffManagerOpen && !_flipbookManagerOpen)
+        {
+            var allIds = _gameData.Spells.GetIDs();
+            if (_selectedIdx >= 0 && _selectedIdx < allIds.Count)
+            {
+                var srcDef = _gameData.Spells.Get(allIds[_selectedIdx]);
+                if (srcDef != null)
+                {
+                    _clipboardSpell = CloneSpell(srcDef, srcDef.Id);
+                    SetStatus("Copied: " + srcDef.DisplayName);
+                }
+            }
+        }
+
+        // Ctrl+V: Paste copied spell
+        bool vPressed = _ui._kb.IsKeyDown(Keys.V) && !_ui._prevKb.IsKeyDown(Keys.V);
+        if (ctrl && vPressed && !_buffManagerOpen && !_flipbookManagerOpen && _clipboardSpell != null)
+        {
+            string newId = _clipboardSpell.Id + "_paste";
+            int suffix = 1;
+            while (_gameData.Spells.Get(newId) != null)
+                newId = _clipboardSpell.Id + "_paste" + (++suffix);
+            var newDef = CloneSpell(_clipboardSpell, newId);
+            var allIds = _gameData.Spells.GetIDs();
+            if (_selectedIdx >= 0 && _selectedIdx < allIds.Count)
+                _gameData.Spells.AddAfter(newDef, allIds[_selectedIdx]);
+            else
+                _gameData.Spells.Add(newDef);
+            _selectedIdx = IndexOf(_gameData.Spells.GetIDs(), newId);
+            MarkDirty();
+            SetStatus("Pasted: " + newId);
+        }
+
+        // Escape hierarchy: dropdown -> delete confirm -> buff manager -> flipbook manager -> (let parent handle close)
         bool escPressed = _ui._kb.IsKeyDown(Keys.Escape) && !_ui._prevKb.IsKeyDown(Keys.Escape);
         if (escPressed)
         {
-            if (_flipbookManagerOpen) { _flipbookManagerOpen = false; return; }
+            if (_ui.CloseActiveDropdown()) return; // dropdown was open, consumed escape
+            if (_deleteConfirmOpen) { _deleteConfirmOpen = false; return; }
             if (_buffManagerOpen) { _buffManagerOpen = false; return; }
+            if (_flipbookManagerOpen) { _flipbookManagerOpen = false; return; }
         }
     }
 
@@ -174,20 +267,24 @@ public class SpellEditorWindow
         }
 
         // Flipbooks button
-        if (_ui.DrawButton("Flipbooks", x + w - 370, y + 10, 100, 30))
+        if (_ui.DrawButton("Flipbooks", x + w - 410, y + 10, 100, 30))
             _flipbookManagerOpen = true;
 
         // Buffs button
-        if (_ui.DrawButton("Buffs", x + w - 260, y + 10, 80, 30))
+        if (_ui.DrawButton("Buffs", x + w - 300, y + 10, 80, 30))
             _buffManagerOpen = true;
 
         // Save button
-        if (_ui.DrawButton("Save (Ctrl+S)", x + w - 170, y + 10, 160, 30, EditorBase.SuccessColor))
+        if (_ui.DrawButton("Save (Ctrl+S)", x + w - 210, y + 10, 160, 30, EditorBase.SuccessColor))
         {
             _gameData.Save("data");
             _unsavedChanges = false;
             SetStatus("Saved!");
         }
+
+        // Close button [X] (RS01)
+        if (_ui.DrawButton("X", x + w - 40, y + 10, 30, 30))
+            WantsClose = true;
 
         // Status message
         if (_statusTimer > 0 && !string.IsNullOrEmpty(_statusMessage))
@@ -279,14 +376,14 @@ public class SpellEditorWindow
             {
                 _ui.DrawRect(itemRect, bg);
 
-                // Category color dot
+                // Category color circle
                 var def = _gameData.Spells.Get(_filteredIds[i]);
                 if (def != null)
                 {
                     Color catColor = GetCategoryColor(def.Category);
-                    int dotX = x + 10;
-                    int dotY = (int)(drawItemY + itemH / 2 - 3);
-                    _ui.DrawRect(new Rectangle(dotX, dotY, 6, 6), catColor);
+                    int dotCX = x + 13;
+                    int dotCY = (int)(drawItemY + itemH / 2);
+                    DrawSmallFilledCircle(dotCX, dotCY, 4, catColor);
                 }
 
                 string displayName = displayItems[i];
@@ -358,11 +455,9 @@ public class SpellEditorWindow
             var allIds = _gameData.Spells.GetIDs();
             if (_selectedIdx >= 0 && _selectedIdx < allIds.Count)
             {
-                string removeId = allIds[_selectedIdx];
-                _gameData.Spells.Remove(removeId);
-                _selectedIdx = Math.Min(_selectedIdx, _gameData.Spells.Count - 1);
-                MarkDirty();
-                SetStatus("Deleted: " + removeId);
+                _deleteConfirmTarget = "spell";
+                _deleteConfirmId = allIds[_selectedIdx];
+                _deleteConfirmOpen = true;
             }
         }
     }
@@ -398,8 +493,14 @@ public class SpellEditorWindow
         // Clipping background
         _ui.DrawRect(panelRect, new Color(28, 28, 42, 200));
 
+        // RS22: Begin scissor clipping to prevent overflow
+        _ui.BeginClip(panelRect);
+
         int fieldW = w - 24;
         int curY = y + 8 - (int)_detailScroll;
+
+        // =================== PREVIEW ===================
+        curY = DrawSpellPreviewSection(def, x + 8, curY, fieldW);
 
         // =================== NAME ===================
         string oldName = def.DisplayName;
@@ -445,6 +546,9 @@ public class SpellEditorWindow
             case "Beam": DrawBeamFields(def, x + 8, ref curY, fieldW); break;
             case "Drain": DrawDrainFields(def, x + 8, ref curY, fieldW); break;
         }
+
+        // RS22: End scissor clipping
+        _ui.EndClip();
 
         // Clamp scroll to content
         float totalContentH = (curY + _detailScroll) - y;
@@ -549,6 +653,46 @@ public class SpellEditorWindow
             def.AoeRadius = DrawFloatField10x("sp_bd_aoer", "AOE Radius", def.AoeRadius, x, ref curY, w);
         }
 
+        // Acceptable Targets checklist (unit IDs)
+        curY += 4;
+        _ui.DrawRect(new Rectangle(x, curY, w, 1), new Color(60, 60, 80));
+        curY += 4;
+        _ui.DrawText("ACCEPTABLE TARGETS", new Vector2(x, curY), new Color(200, 180, 255));
+        curY += 18;
+
+        var unitIDs = _gameData.Units.GetIDs();
+        if (def.AcceptableTargets == null)
+            def.AcceptableTargets = new List<string>();
+
+        // "(all)" hint when empty
+        if (def.AcceptableTargets.Count == 0)
+        {
+            _ui.DrawText("(all units - check to restrict)", new Vector2(x + 4, curY + 2), new Color(120, 120, 140));
+            curY += RowH;
+        }
+
+        // RS25: 2-column layout for acceptable targets
+        int colW = (w - 8) / 2;
+        for (int i = 0; i < unitIDs.Count; i++)
+        {
+            int col = i % 2;
+            int colX = x + 4 + col * colW;
+            var ud = _gameData.Units.Get(unitIDs[i]);
+            string displayLabel = ud?.DisplayName ?? unitIDs[i];
+            bool isChecked = def.AcceptableTargets.Contains(unitIDs[i]);
+            bool newChecked = _ui.DrawCheckbox(displayLabel, isChecked, colX, curY);
+            if (newChecked != isChecked)
+            {
+                if (newChecked)
+                    def.AcceptableTargets.Add(unitIDs[i]);
+                else
+                    def.AcceptableTargets.Remove(unitIDs[i]);
+                MarkDirty();
+            }
+            if (col == 1 || i == unitIDs.Count - 1)
+                curY += RowH;
+        }
+
         // Cast flipbook ref
         def.CastFlipbook = DrawFlipbookRefSection("sp_cast_fb", "Cast Effect", def.CastFlipbook, x, ref curY, w);
     }
@@ -591,6 +735,49 @@ public class SpellEditorWindow
         if (def.SpawnLocation != oldLoc) MarkDirty();
         curY += RowH;
 
+        // RS10: Acceptable Targets checklist when SummonTargetReq == "UnitType"
+        if (def.SummonTargetReq == "UnitType")
+        {
+            curY += 4;
+            _ui.DrawRect(new Rectangle(x, curY, w, 1), new Color(60, 60, 80));
+            curY += 4;
+            _ui.DrawText("ACCEPTABLE TARGETS", new Vector2(x, curY), new Color(200, 180, 255));
+            curY += 18;
+
+            var unitIDs = _gameData.Units.GetIDs();
+            if (def.AcceptableTargets == null)
+                def.AcceptableTargets = new List<string>();
+
+            // "(all)" hint when empty
+            if (def.AcceptableTargets.Count == 0)
+            {
+                _ui.DrawText("(all units - check to restrict)", new Vector2(x + 4, curY + 2), new Color(120, 120, 140));
+                curY += RowH;
+            }
+
+            // RS25: 2-column layout for acceptable targets
+            int smColW = (w - 8) / 2;
+            for (int i = 0; i < unitIDs.Count; i++)
+            {
+                int col = i % 2;
+                int colX = x + 4 + col * smColW;
+                var ud = _gameData.Units.Get(unitIDs[i]);
+                string displayLabel = ud?.DisplayName ?? unitIDs[i];
+                bool isChecked = def.AcceptableTargets.Contains(unitIDs[i]);
+                bool newChecked = _ui.DrawCheckbox(displayLabel, isChecked, colX, curY);
+                if (newChecked != isChecked)
+                {
+                    if (newChecked)
+                        def.AcceptableTargets.Add(unitIDs[i]);
+                    else
+                        def.AcceptableTargets.Remove(unitIDs[i]);
+                    MarkDirty();
+                }
+                if (col == 1 || i == unitIDs.Count - 1)
+                    curY += RowH;
+            }
+        }
+
         // Summon flipbook ref
         def.SummonFlipbook = DrawFlipbookRefSection("sp_sm_fb", "Summon Effect", def.SummonFlipbook, x, ref curY, w);
     }
@@ -602,6 +789,22 @@ public class SpellEditorWindow
     {
         curY += 4;
         DrawSectionHeader(x, ref curY, w, "STRIKE", new Color(255, 255, 100));
+
+        // Target Filter row (3 toggle buttons)
+        _ui.DrawText("Target Filter", new Vector2(x, curY + 2), EditorBase.TextDim);
+        int tfBtnW = (w - LabelW - 8) / 3;
+        int tfX = x + LabelW;
+        for (int i = 0; i < TargetFilterOptions.Length; i++)
+        {
+            bool isActive = def.TargetFilter == TargetFilterOptions[i];
+            Color btnColor = isActive ? EditorBase.AccentColor : EditorBase.ButtonBg;
+            if (_ui.DrawButton(TargetFilterOptions[i], tfX + i * (tfBtnW + 4), curY, tfBtnW, 20, btnColor))
+            {
+                def.TargetFilter = TargetFilterOptions[i];
+                MarkDirty();
+            }
+        }
+        curY += RowH;
 
         // Target toggle (Ground vs Unit)
         bool oldTarget = def.StrikeTargetUnit;
@@ -622,8 +825,11 @@ public class SpellEditorWindow
         if (def.Damage != oldDmg) MarkDirty();
         curY += RowH;
 
-        // AOE Radius
-        def.AoeRadius = DrawFloatField10x("sp_st_aoer", "AOE Radius", def.AoeRadius, x, ref curY, w);
+        // RS23: AOE Radius only for ground strikes (not unit-targeted zaps)
+        if (!def.StrikeTargetUnit)
+        {
+            def.AoeRadius = DrawFloatField10x("sp_st_aoer", "AOE Radius", def.AoeRadius, x, ref curY, w);
+        }
 
         if (!def.StrikeTargetUnit)
         {
@@ -896,6 +1102,9 @@ public class SpellEditorWindow
     // ======================================
     private void DrawFlipbookManagerPopup(int screenW, int screenH)
     {
+        // Update texture file browser input
+        _fbTextureBrowser.Update(_ui._mouse, _ui._prevMouse, _ui._kb, _ui._prevKb);
+
         // Modal overlay
         _ui.DrawRect(new Rectangle(0, 0, screenW, screenH), new Color(0, 0, 0, 100));
 
@@ -912,9 +1121,14 @@ public class SpellEditorWindow
         var headerSize = _ui.MeasureText(headerText);
         _ui.DrawText(headerText, new Vector2(px + (pw - headerSize.X) / 2, py + 10), EditorBase.TextBright);
 
+        // Temporarily unblock input so popup buttons/fields work
+        int savedLayer = _ui.InputLayer;
+        _ui.InputLayer = 0;
+
         // Close button
         if (_ui.DrawButton("X", px + pw - 40, py + 5, 30, 30))
         {
+            _ui.InputLayer = savedLayer;
             _flipbookManagerOpen = false;
             return;
         }
@@ -1013,16 +1227,19 @@ public class SpellEditorWindow
             var currentFbIDs = _gameData.Flipbooks.GetIDs();
             if (_fbSelectedIdx >= 0 && _fbSelectedIdx < currentFbIDs.Count)
             {
-                _gameData.Flipbooks.Remove(currentFbIDs[_fbSelectedIdx]);
-                MarkDirty();
-                if (_fbSelectedIdx >= _gameData.Flipbooks.Count)
-                    _fbSelectedIdx = Math.Max(0, _gameData.Flipbooks.Count - 1);
+                _deleteConfirmTarget = "flipbook";
+                _deleteConfirmId = currentFbIDs[_fbSelectedIdx];
+                _deleteConfirmOpen = true;
             }
         }
 
         // Apply & Close
         if (_ui.DrawButton("Apply & Close", px + pw - 160, btnRowY, 150, 32))
+        {
+            _ui.InputLayer = savedLayer;
             _flipbookManagerOpen = false;
+            return;
+        }
 
         // --- Flipbook detail (right side) ---
         var curFbIDs = _gameData.Flipbooks.GetIDs();
@@ -1040,10 +1257,19 @@ public class SpellEditorWindow
                 if (fd.DisplayName != oldName) MarkDirty();
                 cy += rowH + 4;
 
-                // Path
+                // Path with Browse button
+                int browseBtnW = 55;
                 string oldPath = fd.Path;
-                fd.Path = _ui.DrawTextField("fb_path", "Path", fd.Path, contentX, cy, fieldW);
+                fd.Path = _ui.DrawTextField("fb_path", "Path", fd.Path, contentX, cy, fieldW - browseBtnW - 4);
                 if (fd.Path != oldPath) MarkDirty();
+                if (_ui.DrawButton("Browse", contentX + fieldW - browseBtnW, cy, browseBtnW, 20))
+                {
+                    _fbTextureBrowser.Open("assets/Effects", fd.Path, path =>
+                    {
+                        fd.Path = path;
+                        MarkDirty();
+                    });
+                }
                 cy += rowH + 4;
 
                 // Cols
@@ -1071,17 +1297,73 @@ public class SpellEditorWindow
                 _ui.DrawText($"Total frames: {fd.Cols * fd.Rows}", new Vector2(contentX, cy + 6), new Color(120, 120, 140));
             }
         }
+
+        // Texture file browser popup (drawn on top of flipbook manager)
+        _fbTextureBrowser.Draw(_ui, screenW, screenH);
+
+        // Restore input layer
+        _ui.InputLayer = savedLayer;
     }
 
     // ======================================
     //  Buff Manager Popup
     // ======================================
+    private void EnsureBuffPreviewInitialized()
+    {
+        if (_buffPreview != null && _buffPreview.IsInitialized) return;
+        if (_ui._gd == null || _ui._pixel == null) return;
+        _buffPreview = new BuffPreview();
+        _buffPreview.Init(_ui._gd, _ui._pixel);
+        _buffPreview.BloomEnabled = _buffPreviewBloom;
+    }
+
+    private void UpdateBuffPreview(float dt)
+    {
+        EnsureBuffPreviewInitialized();
+        if (_buffPreview == null) return;
+
+        var buffIDs = _gameData.Buffs.GetIDs();
+        if (_buffSelectedIdx >= 0 && _buffSelectedIdx < buffIDs.Count)
+        {
+            var bd = _gameData.Buffs.Get(buffIDs[_buffSelectedIdx]);
+            if (bd != null)
+            {
+                if (_buffSelectedIdx != _lastBuffPreviewIdx)
+                {
+                    _lastBuffPreviewIdx = _buffSelectedIdx;
+                    _buffPreview.SetBuff(bd);
+                }
+                else
+                {
+                    // Live update: always pass the current buff data
+                    _buffPreview.SetBuff(bd);
+                }
+            }
+        }
+
+        _buffPreview.Update(dt);
+    }
+
+    private void RenderBuffPreviewToTarget()
+    {
+        if (_buffPreview == null || !_buffPreview.IsInitialized) return;
+        if (_buffSelectedIdx < 0) return;
+
+        // End the current SpriteBatch so we can render to the RT
+        _ui._sb.End();
+
+        _buffPreview.RenderToTarget();
+
+        // Re-begin the SpriteBatch to continue UI drawing
+        _ui._sb.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.PointClamp);
+    }
+
     private void DrawBuffManagerPopup(int screenW, int screenH)
     {
         // Modal overlay
         _ui.DrawRect(new Rectangle(0, 0, screenW, screenH), new Color(0, 0, 0, 100));
 
-        int pw = 850, ph = 650;
+        int pw = 900, ph = 700;
         int px = (screenW - pw) / 2;
         int py = (screenH - ph) / 2;
 
@@ -1188,10 +1470,9 @@ public class SpellEditorWindow
             var curBuffIDs = _gameData.Buffs.GetIDs();
             if (_buffSelectedIdx >= 0 && _buffSelectedIdx < curBuffIDs.Count)
             {
-                _gameData.Buffs.Remove(curBuffIDs[_buffSelectedIdx]);
-                MarkDirty();
-                if (_buffSelectedIdx >= _gameData.Buffs.Count)
-                    _buffSelectedIdx = Math.Max(0, _gameData.Buffs.Count - 1);
+                _deleteConfirmTarget = "buff";
+                _deleteConfirmId = curBuffIDs[_buffSelectedIdx];
+                _deleteConfirmOpen = true;
             }
         }
 
@@ -1231,7 +1512,61 @@ public class SpellEditorWindow
 
         _ui.DrawRect(detailRect, new Color(28, 28, 42, 200));
 
+        // Begin scissor clipping for scroll area
+        _ui.BeginClip(detailRect);
+
         int cy = detailY - (int)_buffDetailScroll;
+
+        // --- Buff Preview ---
+        if (_buffPreview != null && _buffPreview.IsInitialized)
+        {
+            var tex = _buffPreview.GetTexture();
+            if (tex != null)
+            {
+                int previewW = Math.Min(_buffPreview.Width, fieldW);
+                float previewScale = previewW / (float)_buffPreview.Width;
+                int previewH = (int)(_buffPreview.Height * previewScale);
+
+                // Border
+                _ui.DrawRect(new Rectangle(contentX - 1, cy - 1, previewW + 2, previewH + 2), new Color(60, 60, 80));
+
+                // Draw the preview texture
+                _ui._sb.Draw(tex, new Rectangle(contentX, cy, previewW, previewH), Color.White);
+
+                // Label
+                _ui.DrawText("BUFF PREVIEW", new Vector2(contentX + 4, cy + 2), new Color(255, 255, 255, 120));
+
+                cy += previewH + 4;
+
+                // Animation dropdown
+                string currentAnim = BuffPreview.AnimOptions[_buffPreview.PreviewAnimIndex];
+                string newAnim = _ui.DrawCombo("bf_prev_anim", "Animation", currentAnim, BuffPreview.AnimOptions, contentX, cy, Math.Min(250, fieldW));
+                for (int ai = 0; ai < BuffPreview.AnimOptions.Length; ai++)
+                {
+                    if (BuffPreview.AnimOptions[ai] == newAnim)
+                    {
+                        _buffPreview.PreviewAnimIndex = ai;
+                        break;
+                    }
+                }
+                cy += rowH;
+
+                // RS15: Stack Count spinner for buff preview
+                int oldStacks = _buffPreview.PreviewStackCount;
+                _buffPreview.PreviewStackCount = _ui.DrawIntField("bf_prev_stacks", "Stacks", _buffPreview.PreviewStackCount, contentX, cy, Math.Min(250, fieldW));
+                _buffPreview.PreviewStackCount = Math.Clamp(_buffPreview.PreviewStackCount, 1, 10);
+                if (_buffPreview.PreviewStackCount != oldStacks)
+                    _buffPreview.MarkDirty();
+                cy += rowH;
+
+                // RS14: Bloom toggle for buff preview
+                bool oldBuffBloom = _buffPreviewBloom;
+                _buffPreviewBloom = _ui.DrawCheckbox("Bloom", _buffPreviewBloom, contentX, cy);
+                if (_buffPreviewBloom != oldBuffBloom && _buffPreview != null)
+                    _buffPreview.BloomEnabled = _buffPreviewBloom;
+                cy += rowH + 8;
+            }
+        }
 
         // Name
         string oldName = bd.DisplayName;
@@ -1466,6 +1801,9 @@ public class SpellEditorWindow
         if (tint.A != oldTA) MarkDirty();
         cy += RowH;
 
+        // End scissor clipping for scroll area
+        _ui.EndClip();
+
         // Clamp buff detail scroll
         float totalBuffContentH = (cy + _buffDetailScroll) - detailY;
         float maxBDS = Math.Max(0, totalBuffContentH - detailH + 20);
@@ -1559,21 +1897,17 @@ public class SpellEditorWindow
     {
         _ui.DrawText(label, new Vector2(x, curY + 2), EditorBase.TextDim);
 
-        // Preview swatch
-        var previewColor = color.ToScaledColor();
+        // Clickable color swatch that opens the HSV picker popup (swatch only, no inline fields)
         int swatchX = x + LabelW;
-        _ui.DrawRect(new Rectangle(swatchX, curY, 40, 18), previewColor);
-        _ui.DrawBorder(new Rectangle(swatchX, curY, 40, 18), EditorBase.InputBorder);
+        if (_ui.DrawColorSwatch(prefix, swatchX, curY, 40, 18, ref color))
+            MarkDirty();
 
-        // Compact RGBA + I display
+        // Compact RGBA + I display next to swatch (read-only info)
         string info = $"({color.R},{color.G},{color.B},{color.A}) x{color.Intensity:F1}";
         _ui.DrawText(info, new Vector2(swatchX + 46, curY + 2), new Color(120, 120, 140));
         curY += RowH;
 
-        // Inline RGBA + Intensity fields
-        var (newColor, height) = _ui.DrawHdrColorField(prefix, "", color, x + 12, curY, w - 12);
-        curY += height;
-        return newColor;
+        return color;
     }
 
     // ======================================
@@ -1693,6 +2027,151 @@ public class SpellEditorWindow
     }
 
     // ======================================
+    //  Delete confirmation execution
+    // ======================================
+    private void ExecuteDelete()
+    {
+        switch (_deleteConfirmTarget)
+        {
+            case "spell":
+            {
+                var allIds = _gameData.Spells.GetIDs();
+                if (IndexOf(allIds, _deleteConfirmId) >= 0)
+                {
+                    _gameData.Spells.Remove(_deleteConfirmId);
+                    _selectedIdx = Math.Min(_selectedIdx, _gameData.Spells.Count - 1);
+                    MarkDirty();
+                    SetStatus("Deleted: " + _deleteConfirmId);
+                }
+                break;
+            }
+            case "flipbook":
+            {
+                var fbIds = _gameData.Flipbooks.GetIDs();
+                if (IndexOf(fbIds, _deleteConfirmId) >= 0)
+                {
+                    _gameData.Flipbooks.Remove(_deleteConfirmId);
+                    if (_fbSelectedIdx >= _gameData.Flipbooks.Count)
+                        _fbSelectedIdx = Math.Max(0, _gameData.Flipbooks.Count - 1);
+                    MarkDirty();
+                    SetStatus("Deleted flipbook: " + _deleteConfirmId);
+                }
+                break;
+            }
+            case "buff":
+            {
+                var buffIds = _gameData.Buffs.GetIDs();
+                if (IndexOf(buffIds, _deleteConfirmId) >= 0)
+                {
+                    _gameData.Buffs.Remove(_deleteConfirmId);
+                    if (_buffSelectedIdx >= _gameData.Buffs.Count)
+                        _buffSelectedIdx = Math.Max(0, _gameData.Buffs.Count - 1);
+                    MarkDirty();
+                    SetStatus("Deleted buff: " + _deleteConfirmId);
+                }
+                break;
+            }
+        }
+    }
+
+    // ======================================
+    //  Spell Preview integration
+    // ======================================
+    private void EnsurePreviewInitialized()
+    {
+        if (_spellPreview != null && _spellPreview.IsInitialized) return;
+        if (_ui._gd == null || _ui._pixel == null) return;
+        _spellPreview = new SpellPreview();
+        _spellPreview.Init(_ui._gd, _ui._pixel);
+        _spellPreview.BloomEnabled = _previewBloom;
+    }
+
+    private void UpdateSpellPreview(float dt)
+    {
+        EnsurePreviewInitialized();
+        if (_spellPreview == null) return;
+
+        // Track selection changes
+        var allIds = _gameData.Spells.GetIDs();
+        if (_selectedIdx >= 0 && _selectedIdx < allIds.Count && _selectedIdx != _lastPreviewSelectedIdx)
+        {
+            _lastPreviewSelectedIdx = _selectedIdx;
+            var def = _gameData.Spells.Get(allIds[_selectedIdx]);
+            if (def != null)
+                _spellPreview.TriggerSpell(def);
+        }
+        else if (_selectedIdx < 0 || _selectedIdx >= allIds.Count)
+        {
+            _lastPreviewSelectedIdx = -1;
+        }
+
+        // Keep the cached spell updated for live editing
+        if (_selectedIdx >= 0 && _selectedIdx < allIds.Count)
+        {
+            var def = _gameData.Spells.Get(allIds[_selectedIdx]);
+            if (def != null)
+                _spellPreview.UpdateSpell(def);
+        }
+
+        _spellPreview.Update(dt);
+    }
+
+    private void RenderSpellPreviewToTarget()
+    {
+        if (_spellPreview == null || !_spellPreview.IsInitialized) return;
+        if (_selectedIdx < 0) return;
+
+        // End the current SpriteBatch so we can render to the RT
+        _ui._sb.End();
+
+        _spellPreview.RenderToTarget();
+
+        // Re-begin the SpriteBatch to continue UI drawing
+        _ui._sb.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.PointClamp);
+    }
+
+    private int DrawSpellPreviewSection(SpellDef def, int x, int curY, int fieldW)
+    {
+        if (_spellPreview == null || !_spellPreview.IsInitialized) return curY;
+
+        var tex = _spellPreview.GetTexture();
+        if (tex == null) return curY;
+
+        // Constrain preview width to available field width
+        int previewW = Math.Min(_spellPreview.Width, fieldW);
+        float scale = previewW / (float)_spellPreview.Width;
+        int previewH = (int)(_spellPreview.Height * scale);
+
+        // RS03: Center the preview horizontally within the detail panel
+        int previewX = x + (fieldW - previewW) / 2;
+
+        // Border
+        _ui.DrawRect(new Rectangle(previewX - 1, curY - 1, previewW + 2, previewH + 2), new Color(60, 60, 80));
+
+        // Draw the preview texture
+        _ui._sb.Draw(tex, new Rectangle(previewX, curY, previewW, previewH), Color.White);
+
+        // Category label overlay
+        string catLabel = def.Category.ToUpperInvariant() + " PREVIEW";
+        _ui.DrawText(catLabel, new Vector2(previewX + 4, curY + 2), new Color(255, 255, 255, 120));
+
+        curY += previewH + 4;
+
+        // Bloom checkbox
+        bool oldBloom = _previewBloom;
+        _previewBloom = _ui.DrawCheckbox("Bloom", _previewBloom, x, curY);
+        if (_previewBloom != oldBloom && _spellPreview != null)
+            _spellPreview.BloomEnabled = _previewBloom;
+
+        // RS04: Loop indicator next to Bloom checkbox
+        _ui.DrawText("Loop", new Vector2(x + 80, curY + 2), new Color(120, 200, 120));
+
+        curY += RowH + 4;
+
+        return curY;
+    }
+
+    // ======================================
     //  Utility
     // ======================================
     private void RebuildFilteredList()
@@ -1720,6 +2199,7 @@ public class SpellEditorWindow
     private void MarkDirty()
     {
         _unsavedChanges = true;
+        _spellPreview?.MarkDirty();
     }
 
     private void SetStatus(string msg)
@@ -1819,7 +2299,73 @@ public class SpellEditorWindow
         if (src.UnitTint != null)
             def.UnitTint = new ColorJson { R = src.UnitTint.R, G = src.UnitTint.G, B = src.UnitTint.B, A = src.UnitTint.A };
 
+        // RS19: Deep copy remaining visual sub-objects
+        if (src.BehindEffect != null)
+            def.BehindEffect = new UprightEffectVisual
+            {
+                FlipbookID = src.BehindEffect.FlipbookID, Scale = src.BehindEffect.Scale,
+                Color = src.BehindEffect.Color, BlendMode = src.BehindEffect.BlendMode,
+                YOffset = src.BehindEffect.YOffset, PinToEffectSpawn = src.BehindEffect.PinToEffectSpawn,
+            };
+        if (src.FrontEffect != null)
+            def.FrontEffect = new UprightEffectVisual
+            {
+                FlipbookID = src.FrontEffect.FlipbookID, Scale = src.FrontEffect.Scale,
+                Color = src.FrontEffect.Color, BlendMode = src.FrontEffect.BlendMode,
+                YOffset = src.FrontEffect.YOffset, PinToEffectSpawn = src.FrontEffect.PinToEffectSpawn,
+            };
+        if (src.LightningAura != null)
+            def.LightningAura = new LightningAuraVisual
+            {
+                ArcCount = src.LightningAura.ArcCount, ArcRadius = src.LightningAura.ArcRadius,
+                CoreColor = src.LightningAura.CoreColor, GlowColor = src.LightningAura.GlowColor,
+                CoreWidth = src.LightningAura.CoreWidth, GlowWidth = src.LightningAura.GlowWidth,
+                FlickerHz = src.LightningAura.FlickerHz, JitterHz = src.LightningAura.JitterHz,
+            };
+        if (src.ImageBehind != null)
+            def.ImageBehind = new ImageBehindVisual
+            {
+                Color = src.ImageBehind.Color, Scale = src.ImageBehind.Scale,
+                PulseSpeed = src.ImageBehind.PulseSpeed, PulseAmount = src.ImageBehind.PulseAmount,
+                BlendMode = src.ImageBehind.BlendMode,
+            };
+        if (src.PulsingOutline != null)
+            def.PulsingOutline = new PulsingOutlineVisual
+            {
+                Color = src.PulsingOutline.Color, PulseColor = src.PulsingOutline.PulseColor,
+                OutlineWidth = src.PulsingOutline.OutlineWidth, PulseWidth = src.PulsingOutline.PulseWidth,
+                PulseSpeed = src.PulsingOutline.PulseSpeed, BlendMode = src.PulsingOutline.BlendMode,
+            };
+        if (src.WeaponParticle != null)
+            def.WeaponParticle = new WeaponParticleVisual
+            {
+                FlipbookID = src.WeaponParticle.FlipbookID, FPS = src.WeaponParticle.FPS,
+                Color = src.WeaponParticle.Color, SpawnRate = src.WeaponParticle.SpawnRate,
+                RangeMin = src.WeaponParticle.RangeMin, RangeMax = src.WeaponParticle.RangeMax,
+                ParticleLifetime = src.WeaponParticle.ParticleLifetime,
+                ParticleScale = src.WeaponParticle.ParticleScale,
+                MoveSpeed = src.WeaponParticle.MoveSpeed,
+                MoveDirX = src.WeaponParticle.MoveDirX, MoveDirY = src.WeaponParticle.MoveDirY,
+                MoveDirZ = src.WeaponParticle.MoveDirZ,
+                BlendMode = src.WeaponParticle.BlendMode, RenderBehind = src.WeaponParticle.RenderBehind,
+            };
+
         return def;
+    }
+
+    /// <summary>
+    /// Draw a small filled circle using the pixel texture (scanline approach).
+    /// </summary>
+    private void DrawSmallFilledCircle(int cx, int cy, int radius, Color color)
+    {
+        for (int dy = -radius; dy <= radius; dy++)
+        {
+            float hw = MathF.Sqrt(radius * radius - dy * dy);
+            int x = (int)(cx - hw);
+            int w = (int)(hw * 2);
+            if (w > 0)
+                _ui.DrawRect(new Rectangle(x, cy + dy, w, 1), color);
+        }
     }
 
     private static int IndexOf(IReadOnlyList<string> list, string value)

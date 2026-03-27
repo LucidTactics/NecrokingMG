@@ -24,6 +24,28 @@ public class UnitEditorWindow
 
     // --- Unit list state ---
     private int _selectedIdx = -1;
+    /// <summary>Select the first item in the list (for screenshot scenarios).</summary>
+    public void SelectFirst() { _selectedIdx = 0; }
+
+    // --- Public accessors for scenario testing ---
+    /// <summary>Open the weapon sub-editor popup (for UI test scenarios).</summary>
+    public void OpenWeaponSubEditor() { _activeSubEditor = SubEditor.Weapon; _subSelectedIdx = 0; }
+    /// <summary>Current preview animation playing state.</summary>
+    public bool PreviewPlaying => _previewPlaying;
+    /// <summary>Current preview animation looping state.</summary>
+    public bool PreviewLooping => _previewLooping;
+    /// <summary>Current preview animation time.</summary>
+    public float PreviewAnimTime => _previewAnim.AnimTime;
+    /// <summary>Toggle play/pause on the animation preview.</summary>
+    public void TogglePlayPause() { _previewPlaying = !_previewPlaying; }
+    /// <summary>Toggle loop/once on the animation preview.</summary>
+    public void ToggleLoop() { _previewLooping = !_previewLooping; }
+    /// <summary>Step the animation forward one frame.</summary>
+    public void StepForward() { _previewPlaying = false; StepAnimForward(); }
+    /// <summary>Step the animation backward one frame.</summary>
+    public void StepBack() { _previewPlaying = false; StepAnimBackward(); }
+    /// <summary>Whether a unit is currently selected.</summary>
+    public bool HasSelection => _selectedIdx >= 0;
     private string _searchFilter = "";
     private int _factionTab; // 0=All, 1=Undead, 2=Human
     private List<string> _filteredIds = new();
@@ -35,15 +57,40 @@ public class UnitEditorWindow
     // --- Sprite preview ---
     private AnimController _previewAnim = new();
     private bool _previewPlaying = true;
+    private bool _previewLooping = true;
     private float _previewAngle = 60f; // default facing angle
     private string _previewAtlas = "";
     private string _previewSprite = "";
     private string _previewAnimName = "Idle";
+    private UnitSpriteData? _lastPreviewSpriteData; // track to avoid re-init every frame
+    private string _lastPreviewAnimName = "";        // track to detect anim changes
+
+    // --- Weapon point editing ---
+    private enum PickTarget { None, Hilt, Tip }
+    private PickTarget _pickMode = PickTarget.None;
+    private bool _rapidEditEnabled;
+    private HdrColor _weaponLineColor = new HdrColor(255, 200, 50, 180);
+
+    // --- Preview sprite geometry (saved from last DrawPreviewSprite for pick-mode) ---
+    private float _lastPreviewScale;
+    private float _lastPreviewDrawX;
+    private float _lastPreviewDrawY;
+    private float _lastPreviewDrawW;
+    private float _lastPreviewDrawH;
+    private bool _lastPreviewFlipX;
+    private float _lastPreviewPivotScreenX;
+    private float _lastPreviewPivotScreenY;
+    private int _lastPreviewBoxX, _lastPreviewBoxY, _lastPreviewBoxSize;
+    private bool _lastPreviewValid;
 
     // --- Status ---
     private string _statusMessage = "";
     private float _statusTimer;
     private bool _unsavedChanges;
+
+    // --- RU39: Deferred frame duration editing ---
+    private int _editingFrameMs = -1;       // buffered value while text field is active (-1 = not editing)
+    private bool _frameMsFieldWasActive;     // track previous frame's active state for commit-on-blur
 
     // --- Equipment sub-editor popup state ---
     private enum SubEditor { None, Weapon, Armor, Shield }
@@ -51,6 +98,28 @@ public class UnitEditorWindow
     private int _subSelectedIdx = -1;
     private string _subSearchFilter = "";
     private float _subPropScroll;
+
+    // --- Group editor popup state ---
+    private bool _groupEditorOpen;
+    private int _groupSelectedIdx = -1;
+    private float _groupPropScroll;
+
+    // --- Clipboard for Ctrl+C / Ctrl+V ---
+    private UnitDef? _clipboardUnit;
+    private WeaponDef? _clipboardWeapon;
+    private ArmorDef? _clipboardArmor;
+    private ShieldDef? _clipboardShield;
+
+    /// <summary>
+    /// When true, Game1 should close this editor (toggle menu state).
+    /// Reset by Game1 after reading.
+    /// </summary>
+    public bool WantsClose { get; set; }
+
+    // --- Delete confirmation dialog state ---
+    private bool _confirmDeleteOpen;
+    private string _confirmDeleteId = "";
+    private SubEditor _confirmDeleteType = SubEditor.None;
 
     // --- Constants ---
     private const int LeftPanelW = 300;
@@ -82,6 +151,16 @@ public class UnitEditorWindow
         _atlases = atlases;
     }
 
+    /// <summary>
+    /// Pass the global animation metadata so the preview AnimController can use
+    /// ms-based frame durations instead of tick-based fallback.
+    /// </summary>
+    public void SetAnimMeta(Dictionary<string, AnimationMeta> animMeta)
+    {
+        _animMeta = animMeta;
+    }
+    private Dictionary<string, AnimationMeta>? _animMeta;
+
     // =========================================================================
     //  MAIN DRAW
     // =========================================================================
@@ -93,36 +172,232 @@ public class UnitEditorWindow
         float dt = (float)gameTime.ElapsedGameTime.TotalSeconds;
         if (_statusTimer > 0) _statusTimer -= dt;
 
-        // --- Dark overlay ---
+        // --- Dark overlay behind panel ---
         _ui.DrawRect(new Rectangle(0, 0, screenW, screenH), new Color(0, 0, 0, 160));
 
-        int panelX = 0;
-        int panelY = 0;
-        int panelW = screenW;
-        int panelH = screenH;
+        // U22: Centered panel with margins
+        int marginX = (int)(screenW * 0.05f);
+        int marginY = (int)(screenH * 0.03f);
+        int panelX = marginX;
+        int panelY = marginY;
+        int panelW = screenW - marginX * 2;
+        int panelH = screenH - marginY * 2;
+
+        // Panel background + border
+        _ui.DrawRect(new Rectangle(panelX, panelY, panelW, panelH), new Color(35, 35, 45, 250));
+        _ui.DrawBorder(new Rectangle(panelX, panelY, panelW, panelH), new Color(80, 80, 100), 2);
 
         // --- Top bar ---
         int topBarH = 30;
         _ui.DrawRect(new Rectangle(panelX, panelY, panelW, topBarH), EditorBase.PanelHeader);
-        _ui.DrawText("Unit Editor (F9)", new Vector2(panelX + 10, panelY + 6), EditorBase.TextBright, null);
 
-        // Unsaved indicator
+        // RU05: Centered title with asterisk when unsaved + small circle dot to the right
+        string titleText = _unsavedChanges ? "UNIT EDITOR *" : "UNIT EDITOR";
+        var titleSize = _ui.MeasureText(titleText);
+        float titleX = panelX + (panelW - titleSize.X) / 2f;
+        _ui.DrawText(titleText, new Vector2(titleX, panelY + 6), EditorBase.TextBright, null);
         if (_unsavedChanges)
-            _ui.DrawText("*UNSAVED*", new Vector2(panelX + 200, panelY + 6), EditorBase.DangerColor);
+        {
+            // Small circle dot to the right of the title text
+            int dotSize = 6;
+            int dotX = (int)(titleX + titleSize.X) + 4;
+            int dotY = panelY + 6 + (int)(titleSize.Y - dotSize) / 2;
+            _ui.DrawRect(new Rectangle(dotX, dotY, dotSize, dotSize), new Color(255, 165, 0));
+        }
+
+        // RU04: Close button [X] on the left side of the top bar
+        if (_ui.DrawButton("X", panelX + 6, panelY + 3, 24, 24, EditorBase.DangerColor))
+            WantsClose = true;
+
+        // Groups button in top bar
+        if (_ui.DrawButton("Groups", panelX + panelW - 370, panelY + 3, 70, 24))
+            _groupEditorOpen = true;
 
         // Save button in top bar
-        if (_ui.DrawButton("Save All (Ctrl+S)", panelX + panelW - 160, panelY + 3, 150, 24, EditorBase.SuccessColor))
+        if (_ui.DrawButton("Save All (Ctrl+S)", panelX + panelW - 200, panelY + 3, 160, 24, EditorBase.SuccessColor))
             SaveAll();
 
-        // Ctrl+S
-        if (_ui._kb.IsKeyDown(Keys.LeftControl) && _ui._kb.IsKeyDown(Keys.S) &&
+        // U21: Guard keyboard shortcuts against active text fields
+        bool textActive = _ui.IsTextInputActive;
+
+        // Ctrl+S (skip if text field active)
+        if (!textActive &&
+            _ui._kb.IsKeyDown(Keys.LeftControl) && _ui._kb.IsKeyDown(Keys.S) &&
             !(_ui._prevKb.IsKeyDown(Keys.LeftControl) && _ui._prevKb.IsKeyDown(Keys.S)))
             SaveAll();
 
-        // Status message in top bar
+        // U19: Ctrl+C in sub-editors copies weapon/armor/shield; otherwise copies unit
+        if (!textActive &&
+            _ui._kb.IsKeyDown(Keys.LeftControl) && _ui._kb.IsKeyDown(Keys.C) &&
+            !(_ui._prevKb.IsKeyDown(Keys.LeftControl) && _ui._prevKb.IsKeyDown(Keys.C)))
+        {
+            if (_activeSubEditor == SubEditor.Weapon)
+            {
+                var wIds = _gameData.Weapons.GetIDs();
+                if (_subSelectedIdx >= 0 && _subSelectedIdx < wIds.Count)
+                {
+                    var srcW = _gameData.Weapons.Get(wIds[_subSelectedIdx]);
+                    if (srcW != null) { _clipboardWeapon = CloneWeapon(srcW, srcW.Id); SetStatus("Copied weapon: " + srcW.Id); }
+                }
+            }
+            else if (_activeSubEditor == SubEditor.Armor)
+            {
+                var aIds = _gameData.Armors.GetIDs();
+                if (_subSelectedIdx >= 0 && _subSelectedIdx < aIds.Count)
+                {
+                    var srcA = _gameData.Armors.Get(aIds[_subSelectedIdx]);
+                    if (srcA != null) { _clipboardArmor = CloneArmor(srcA, srcA.Id); SetStatus("Copied armor: " + srcA.Id); }
+                }
+            }
+            else if (_activeSubEditor == SubEditor.Shield)
+            {
+                var sIds = _gameData.Shields.GetIDs();
+                if (_subSelectedIdx >= 0 && _subSelectedIdx < sIds.Count)
+                {
+                    var srcS = _gameData.Shields.Get(sIds[_subSelectedIdx]);
+                    if (srcS != null) { _clipboardShield = CloneShield(srcS, srcS.Id); SetStatus("Copied shield: " + srcS.Id); }
+                }
+            }
+            else if (!_groupEditorOpen)
+            {
+                var allIdsCopy = _gameData.Units.GetIDs();
+                if (_selectedIdx >= 0 && _selectedIdx < allIdsCopy.Count)
+                {
+                    var srcDef = _gameData.Units.Get(allIdsCopy[_selectedIdx]);
+                    if (srcDef != null)
+                    {
+                        _clipboardUnit = CloneUnit(srcDef, srcDef.Id);
+                        SetStatus("Copied: " + srcDef.Id);
+                    }
+                }
+            }
+        }
+
+        // U19: Ctrl+V in sub-editors pastes weapon/armor/shield; otherwise pastes unit
+        if (!textActive &&
+            _ui._kb.IsKeyDown(Keys.LeftControl) && _ui._kb.IsKeyDown(Keys.V) &&
+            !(_ui._prevKb.IsKeyDown(Keys.LeftControl) && _ui._prevKb.IsKeyDown(Keys.V)))
+        {
+            if (_activeSubEditor == SubEditor.Weapon && _clipboardWeapon != null)
+            {
+                string newId = _clipboardWeapon.Id + "_paste";
+                int suffix = 1;
+                while (_gameData.Weapons.Get(newId) != null) newId = _clipboardWeapon.Id + "_paste" + (++suffix);
+                var newDef = CloneWeapon(_clipboardWeapon, newId);
+                newDef.DisplayName = _clipboardWeapon.DisplayName + " (Paste)";
+                _gameData.Weapons.Add(newDef);
+                _subSelectedIdx = IndexOf(_gameData.Weapons.GetIDs(), newId);
+                _unsavedChanges = true;
+                SetStatus("Pasted weapon: " + newId);
+            }
+            else if (_activeSubEditor == SubEditor.Armor && _clipboardArmor != null)
+            {
+                string newId = _clipboardArmor.Id + "_paste";
+                int suffix = 1;
+                while (_gameData.Armors.Get(newId) != null) newId = _clipboardArmor.Id + "_paste" + (++suffix);
+                var newDef = CloneArmor(_clipboardArmor, newId);
+                newDef.DisplayName = _clipboardArmor.DisplayName + " (Paste)";
+                _gameData.Armors.Add(newDef);
+                _subSelectedIdx = IndexOf(_gameData.Armors.GetIDs(), newId);
+                _unsavedChanges = true;
+                SetStatus("Pasted armor: " + newId);
+            }
+            else if (_activeSubEditor == SubEditor.Shield && _clipboardShield != null)
+            {
+                string newId = _clipboardShield.Id + "_paste";
+                int suffix = 1;
+                while (_gameData.Shields.Get(newId) != null) newId = _clipboardShield.Id + "_paste" + (++suffix);
+                var newDef = CloneShield(_clipboardShield, newId);
+                newDef.DisplayName = _clipboardShield.DisplayName + " (Paste)";
+                _gameData.Shields.Add(newDef);
+                _subSelectedIdx = IndexOf(_gameData.Shields.GetIDs(), newId);
+                _unsavedChanges = true;
+                SetStatus("Pasted shield: " + newId);
+            }
+            else if (_activeSubEditor == SubEditor.None && !_groupEditorOpen && _clipboardUnit != null)
+            {
+                string newId = _clipboardUnit.Id + "_paste";
+                int suffix = 1;
+                while (_gameData.Units.Get(newId) != null)
+                    newId = _clipboardUnit.Id + "_paste" + (++suffix);
+
+                var newDef = CloneUnit(_clipboardUnit, newId);
+                newDef.DisplayName = _clipboardUnit.DisplayName + " (Paste)";
+                newDef.UnitType = "Dynamic"; // RU26: pasted units are always Dynamic
+                var allIdsPaste = _gameData.Units.GetIDs();
+                if (_selectedIdx >= 0 && _selectedIdx < allIdsPaste.Count)
+                    _gameData.Units.AddAfter(newDef, allIdsPaste[_selectedIdx]);
+                else
+                    _gameData.Units.Add(newDef);
+                _selectedIdx = IndexOf(_gameData.Units.GetIDs(), newId);
+                _unsavedChanges = true;
+                SyncPreviewToSelected();
+                SetStatus("Pasted: " + newId);
+            }
+        }
+
+        // Escape key hierarchy: confirm dialog -> dropdown -> pick mode -> sub-editors -> group editor -> (caller handles closing unit editor)
+        if (!textActive && _ui._kb.IsKeyDown(Keys.Escape) && _ui._prevKb.IsKeyUp(Keys.Escape))
+        {
+            if (_confirmDeleteOpen)
+            {
+                _confirmDeleteOpen = false;
+            }
+            else if (_ui.CloseActiveDropdown())
+            {
+                // Dropdown was open, consumed escape
+            }
+            else if (_pickMode != PickTarget.None)
+            {
+                _pickMode = PickTarget.None;
+            }
+            else if (_activeSubEditor != SubEditor.None)
+            {
+                _activeSubEditor = SubEditor.None;
+                _subSelectedIdx = -1;
+            }
+            else if (_groupEditorOpen)
+            {
+                _groupEditorOpen = false;
+            }
+        }
+
+        // RU15: Right-click cancels pick mode
+        if (_pickMode != PickTarget.None &&
+            _ui._mouse.RightButton == ButtonState.Pressed && _ui._prevMouse.RightButton == ButtonState.Released)
+        {
+            _pickMode = PickTarget.None;
+        }
+
+        // RU12: Rapid-edit arrow key navigation when pick mode is active
+        if (!textActive && _rapidEditEnabled && _pickMode != PickTarget.None)
+        {
+            if (_ui._kb.IsKeyDown(Keys.Left) && _ui._prevKb.IsKeyUp(Keys.Left))
+                StepBack();
+            if (_ui._kb.IsKeyDown(Keys.Right) && _ui._prevKb.IsKeyUp(Keys.Right))
+                StepForward();
+            if (_ui._kb.IsKeyDown(Keys.Up) && _ui._prevKb.IsKeyUp(Keys.Up))
+            {
+                int idx = Array.IndexOf(AngleOptions, ((int)_previewAngle).ToString());
+                if (idx < 0) idx = 1;
+                idx = (idx - 1 + AngleOptions.Length) % AngleOptions.Length;
+                if (int.TryParse(AngleOptions[idx], out int a)) _previewAngle = a;
+            }
+            if (_ui._kb.IsKeyDown(Keys.Down) && _ui._prevKb.IsKeyUp(Keys.Down))
+            {
+                int idx = Array.IndexOf(AngleOptions, ((int)_previewAngle).ToString());
+                if (idx < 0) idx = 1;
+                idx = (idx + 1) % AngleOptions.Length;
+                if (int.TryParse(AngleOptions[idx], out int a)) _previewAngle = a;
+            }
+        }
+
+        // Status message in top bar (RU06: alpha fade during last second)
         if (_statusTimer > 0 && !string.IsNullOrEmpty(_statusMessage))
         {
             Color sc = _statusMessage.Contains("FAIL") ? EditorBase.DangerColor : EditorBase.SuccessColor;
+            float alpha = Math.Min(1f, _statusTimer);
+            sc = sc * alpha;
             _ui.DrawText(_statusMessage, new Vector2(panelX + panelW - 450, panelY + 6), sc);
         }
 
@@ -147,6 +422,57 @@ public class UnitEditorWindow
         // =================================================================
         if (_activeSubEditor != SubEditor.None)
             DrawSubEditor(screenW, screenH);
+
+        // =================================================================
+        //  GROUP EDITOR POPUP (if open)
+        // =================================================================
+        if (_groupEditorOpen)
+            DrawGroupEditor(screenW, screenH);
+
+        // =================================================================
+        //  CONFIRM DELETE DIALOG (drawn last, on top of everything)
+        // =================================================================
+        if (_confirmDeleteOpen)
+        {
+            // RU18: Show affected unit count in delete confirmation
+            int affectedCount = _confirmDeleteType switch
+            {
+                SubEditor.Weapon => _gameData.Units.CountUnitsWithWeapon(_confirmDeleteId),
+                SubEditor.Armor => _gameData.Units.CountUnitsWithArmor(_confirmDeleteId),
+                SubEditor.Shield => _gameData.Units.CountUnitsWithShield(_confirmDeleteId),
+                _ => 0
+            };
+            string confirmMsg = $"Delete '{_confirmDeleteId}'? Used by {affectedCount} unit(s). Remove from all?";
+            if (_ui.DrawConfirmDialog("Confirm Delete", confirmMsg, ref _confirmDeleteOpen))
+            {
+                // Confirmed deletion
+                switch (_confirmDeleteType)
+                {
+                    case SubEditor.Weapon:
+                        _gameData.Units.RemoveWeaponFromAll(_confirmDeleteId);
+                        _gameData.Weapons.Remove(_confirmDeleteId);
+                        _subSelectedIdx = Math.Min(_subSelectedIdx, _gameData.Weapons.Count - 1);
+                        SetStatus("Removed weapon: " + _confirmDeleteId);
+                        break;
+                    case SubEditor.Armor:
+                        _gameData.Units.RemoveArmorFromAll(_confirmDeleteId);
+                        _gameData.Armors.Remove(_confirmDeleteId);
+                        _subSelectedIdx = Math.Min(_subSelectedIdx, _gameData.Armors.Count - 1);
+                        SetStatus("Removed armor: " + _confirmDeleteId);
+                        break;
+                    case SubEditor.Shield:
+                        _gameData.Units.RemoveShieldFromAll(_confirmDeleteId);
+                        _gameData.Shields.Remove(_confirmDeleteId);
+                        _subSelectedIdx = Math.Min(_subSelectedIdx, _gameData.Shields.Count - 1);
+                        SetStatus("Removed shield: " + _confirmDeleteId);
+                        break;
+                }
+                _unsavedChanges = true;
+            }
+        }
+
+        // Dropdown overlays (drawn last, on top of everything)
+        _ui.DrawDropdownOverlays();
     }
 
     // =========================================================================
@@ -204,20 +530,26 @@ public class UnitEditorWindow
             filteredSelectedIdx = _filteredIds.IndexOf(selectedId);
         }
 
-        // --- Build display strings with faction color dots ---
+        // U25: Build display strings with space for faction color dot
         var displayItems = new List<string>();
+        var factionColors = new List<Color>();
         foreach (var id in _filteredIds)
         {
             var def = _gameData.Units.Get(id);
             string name = def?.DisplayName ?? id;
-            string fChar = def?.Faction?.Length > 0 ? def.Faction[..1] : "?";
-            displayItems.Add($"[{fChar}] {name}");
+            displayItems.Add("     " + name); // leading space for dot
+            string faction = def?.Faction ?? "";
+            factionColors.Add(faction == "Undead" ? new Color(80, 200, 80) :
+                              faction == "Human" ? new Color(80, 140, 220) :
+                              EditorBase.TextDim);
         }
 
         // --- Draw scrollable list ---
         int listH = h - (curY - y) - 36; // room for bottom buttons
+        int listX = x + 4;
+        int listW2 = LeftPanelW - 8;
         int clicked = _ui.DrawScrollableList("unit_list", displayItems, filteredSelectedIdx,
-            x + 4, curY, LeftPanelW - 8, listH, null);
+            listX, curY, listW2, listH, null);
 
         if (clicked >= 0 && clicked < _filteredIds.Count)
         {
@@ -225,6 +557,24 @@ public class UnitEditorWindow
             _selectedIdx = IndexOf(allIds, clickedId);
             _propScrollOffset = 0;
             SyncPreviewToSelected();
+        }
+
+        // U25: Overlay faction color dots on the list items
+        {
+            float scroll = _ui.GetScrollOffset("unit_list");
+            int itemH = 22;
+            float dotDrawY = curY - scroll;
+            int dotSize = 8;
+            for (int i = 0; i < displayItems.Count; i++)
+            {
+                if (dotDrawY + itemH > curY && dotDrawY < curY + listH)
+                {
+                    int dotX2 = listX + 6;
+                    int dotY2 = (int)dotDrawY + (itemH - dotSize) / 2;
+                    _ui.DrawRect(new Rectangle(dotX2, dotY2, dotSize, dotSize), factionColors[i]);
+                }
+                dotDrawY += itemH;
+            }
         }
 
         curY += listH + 4;
@@ -243,7 +593,10 @@ public class UnitEditorWindow
                 DisplayName = "New Unit",
                 Faction = "Undead",
                 AI = "AttackClosest",
-                Stats = new UnitStatsJson()
+                Stats = new UnitStatsJson(),
+                // RU27: Default sprite and weapon
+                Sprite = new SpriteRef { AtlasName = "VampireFaction", SpriteName = "Skeleton" },
+                Weapons = new List<string> { "club" },
             };
             if (_selectedIdx >= 0 && _selectedIdx < allIds.Count)
                 _gameData.Units.AddAfter(newDef, allIds[_selectedIdx]);
@@ -269,6 +622,7 @@ public class UnitEditorWindow
                         newId = srcDef.Id + "_copy" + (++suffix);
 
                     var newDef = CloneUnit(srcDef, newId);
+                    newDef.UnitType = "Dynamic"; // RU28: copied units are always Dynamic
                     _gameData.Units.AddAfter(newDef, srcDef.Id);
                     _selectedIdx = IndexOf(_gameData.Units.GetIDs(), newId);
                     _unsavedChanges = true;
@@ -326,16 +680,24 @@ public class UnitEditorWindow
         int drawY = y + pad - (int)_propScrollOffset;
         int startDrawY = drawY;
 
+        // RU40: Scissor clip the right panel content area
+        _ui.BeginClip(new Rectangle(x, y, w, h));
+
+        // RU02: Name and ID above the sprite preview
+        drawY = DrawNameIdFields(def, drawX, drawY, contentW);
+        drawY += 4;
+
         // ==== SPRITE PREVIEW ====
         drawY = DrawSpritePreview(def, drawX, drawY, contentW, dt);
         drawY += 8;
 
-        // ==== IDENTITY SECTION ====
-        drawY = DrawIdentitySection(def, drawX, drawY, contentW);
-        drawY += 8;
-
+        // RU01: Combat Stats BEFORE Identity
         // ==== STATS SECTION ====
         drawY = DrawStatsSection(def, drawX, drawY, contentW);
+        drawY += 8;
+
+        // ==== IDENTITY SECTION ====
+        drawY = DrawIdentitySection(def, drawX, drawY, contentW);
         drawY += 8;
 
         // ==== CASTER SECTION ====
@@ -344,11 +706,17 @@ public class UnitEditorWindow
 
         // ==== EQUIPMENT SECTION ====
         drawY = DrawEquipmentSection(def, drawX, drawY, contentW);
+        drawY += 8;
+
+        // ==== COLOR SECTION ====
+        drawY = DrawColorSection(def, drawX, drawY, contentW);
         drawY += 16;
 
         _maxPropHeight = (drawY - startDrawY) + (int)_propScrollOffset;
 
-        // --- Scrollbar ---
+        _ui.EndClip(); // RU40: end scissor clip
+
+        // --- Scrollbar (outside clip so it's always visible) ---
         if (_maxPropHeight > h)
         {
             float scrollRatio = _propScrollOffset / (_maxPropHeight - h);
@@ -377,6 +745,23 @@ public class UnitEditorWindow
 
         // Draw the sprite frame in the preview
         DrawPreviewSprite(def, previewX, previewY, previewSize, dt);
+
+        // Draw weapon point line overlay (U02)
+        DrawWeaponLineOverlay(def);
+
+        // Handle pick mode clicks (U03)
+        HandlePickModeClick(def, previewX, previewY, previewSize);
+
+        // Pick mode indicator on the preview box
+        if (_pickMode != PickTarget.None)
+        {
+            Color pickBorderColor = _pickMode == PickTarget.Hilt ? new Color(80, 200, 255) : new Color(255, 200, 80);
+            _ui.DrawBorder(new Rectangle(previewX, previewY, previewSize, previewSize), pickBorderColor, 2);
+            string pickLabel = _pickMode == PickTarget.Hilt ? "PICK HILT" : "PICK TIP";
+            _ui.DrawText(pickLabel, new Vector2(previewX + 4, previewY + previewSize - 16), pickBorderColor);
+            // RU14: Hint text near preview during pick mode
+            _ui.DrawText("Click sprite to set point", new Vector2(previewX, previewY + previewSize + 2), EditorBase.TextDim);
+        }
 
         // Controls to the right of the preview box
         int ctrlX = previewX + previewSize + 10;
@@ -414,40 +799,97 @@ public class UnitEditorWindow
         _previewAnimName = _ui.DrawCombo("prev_anim", "Animation", _previewAnimName, animNames, ctrlX, ctrlY, ctrlW);
         ctrlY += RowH;
 
-        // Play/Pause/Step, Frame counter
-        int btnW2 = 50;
-        if (_ui.DrawButton(_previewPlaying ? "Pause" : "Play", ctrlX, ctrlY, btnW2, 20))
-            _previewPlaying = !_previewPlaying;
+        // --- U10-U13: Improved preview controls ---
+        int btnX = ctrlX;
 
-        if (_ui.DrawButton("Step", ctrlX + btnW2 + 4, ctrlY, 40, 20))
+        // U12: Play/Pause with visually distinct colors
+        Color playBtnColor = _previewPlaying ? new Color(200, 80, 80) : new Color(80, 200, 100);
+        string playLabel = _previewPlaying ? "||" : ">";
+        if (_ui.DrawButton(playLabel, btnX, ctrlY, 30, 20, playBtnColor))
+        {
+            _previewPlaying = !_previewPlaying;
+            Core.DebugLog.Log("editor", $"Play/Pause toggled: playing={_previewPlaying} animTime={_previewAnim.AnimTime:F1}");
+        }
+        btnX += 34;
+
+        // U11: Step back button
+        if (_ui.DrawButton("|<", btnX, ctrlY, 30, 20))
         {
             _previewPlaying = false;
-            _previewAnim.Update(1f / 30f);
+            StepAnimBackward();
+            Core.DebugLog.Log("editor", $"Step back: animTime={_previewAnim.AnimTime:F1}");
         }
+        btnX += 34;
+
+        // Step forward button
+        if (_ui.DrawButton(">|", btnX, ctrlY, 30, 20))
+        {
+            _previewPlaying = false;
+            StepAnimForward();
+            Core.DebugLog.Log("editor", $"Step forward: animTime={_previewAnim.AnimTime:F1}");
+        }
+        btnX += 34;
+
+        // U10: Loop toggle
+        Color loopColor = _previewLooping ? EditorBase.AccentColor : EditorBase.ButtonBg;
+        if (_ui.DrawButton(_previewLooping ? "Loop" : "Once", btnX, ctrlY, 42, 20, loopColor))
+        {
+            _previewLooping = !_previewLooping;
+            Core.DebugLog.Log("editor", $"Loop toggled: looping={_previewLooping}");
+        }
+        btnX += 46;
 
         // Frame info
         string frameInfo = $"T:{_previewAnim.AnimTime:F0}";
-        _ui.DrawText(frameInfo, new Vector2(ctrlX + btnW2 + 48, ctrlY + 2), EditorBase.TextDim);
+        _ui.DrawText(frameInfo, new Vector2(btnX + 4, ctrlY + 2), EditorBase.TextDim);
         ctrlY += RowH;
 
-        // Angle selector
-        string currentAngleStr = ((int)_previewAngle).ToString();
-        if (!AngleOptions.Contains(currentAngleStr)) currentAngleStr = "60";
-        string newAngleStr = _ui.DrawCombo("prev_angle", "Angle", currentAngleStr, AngleOptions, ctrlX, ctrlY, ctrlW);
-        if (int.TryParse(newAngleStr, out int newAngle))
-            _previewAngle = newAngle;
+        // U13: Angle stepper (< angle >) instead of dropdown
+        _ui.DrawText("Angle", new Vector2(ctrlX, ctrlY + 2), EditorBase.TextDim);
+        int angleStepX = ctrlX + 50;
+        if (_ui.DrawButton("<", angleStepX, ctrlY, 24, 20))
+        {
+            int idx = Array.IndexOf(AngleOptions, ((int)_previewAngle).ToString());
+            if (idx < 0) idx = 1;
+            idx = (idx - 1 + AngleOptions.Length) % AngleOptions.Length;
+            if (int.TryParse(AngleOptions[idx], out int a)) _previewAngle = a;
+        }
+        _ui.DrawText(((int)_previewAngle).ToString(), new Vector2(angleStepX + 28, ctrlY + 2), EditorBase.TextBright);
+        var angleTextW = _ui.MeasureText(((int)_previewAngle).ToString());
+        if (_ui.DrawButton(">", angleStepX + 30 + (int)angleTextW.X, ctrlY, 24, 20))
+        {
+            int idx = Array.IndexOf(AngleOptions, ((int)_previewAngle).ToString());
+            if (idx < 0) idx = 1;
+            idx = (idx + 1) % AngleOptions.Length;
+            if (int.TryParse(AngleOptions[idx], out int a)) _previewAngle = a;
+        }
         ctrlY += RowH;
 
         // Update preview animation
         if (_previewPlaying)
+        {
             _previewAnim.Update(dt);
 
+            // Handle non-looping playback (U10)
+            if (!_previewLooping && _previewAnim.IsAnimFinished)
+                _previewPlaying = false;
+        }
+
         curY = Math.Max(previewY + previewSize, ctrlY) + 4;
+
+        // ==== WEAPON POINT SECTION (U01-U06) ====
+        curY = DrawWeaponPointSection(def, x, curY, w);
+
+        // ==== ANIMATION TIMING SECTION (U07-U09) ====
+        curY = DrawAnimTimingSection(def, x, curY, w);
+
         return curY;
     }
 
     private void DrawPreviewSprite(UnitDef def, int boxX, int boxY, int boxSize, float dt)
     {
+        _lastPreviewValid = false;
+
         if (def.Sprite == null || string.IsNullOrEmpty(def.Sprite.AtlasName) || string.IsNullOrEmpty(def.Sprite.SpriteName))
             return;
 
@@ -459,45 +901,572 @@ public class UnitEditorWindow
         var spriteData = atlas.GetUnit(def.Sprite.SpriteName);
         if (spriteData == null) return;
 
-        // Make sure anim controller is initialized
-        if (_previewAnim.CurrentState == AnimState.Idle || true) // always keep in sync
+        // Only re-init anim controller when sprite data or animation name changes
+        bool spriteChanged = spriteData != _lastPreviewSpriteData;
+        bool animChanged = _previewAnimName != _lastPreviewAnimName;
+
+        if (spriteChanged)
         {
             _previewAnim.Init(spriteData);
-            // Request the preview animation by mapping name to state
+            if (_animMeta != null && def.Sprite != null)
+                _previewAnim.SetAnimMeta(_animMeta, def.Sprite.SpriteName);
+            _lastPreviewSpriteData = spriteData;
+        }
+
+        // Always keep timing overrides in sync (U09)
+        var runtimeTimings = BuildRuntimeTimingOverrides(def);
+        if (runtimeTimings.Count > 0)
+            _previewAnim.SetAnimTimings(runtimeTimings);
+        else
+            _previewAnim.SetAnimTimings(null);
+
+        if (spriteChanged || animChanged)
+        {
             var targetState = NameToAnimState(_previewAnimName);
             _previewAnim.ForceState(targetState);
-            // Preserve time if playing
+            _lastPreviewAnimName = _previewAnimName;
         }
 
         var fr = _previewAnim.GetCurrentFrame(_previewAngle);
         if (!fr.Frame.HasValue) return;
 
         var frame = fr.Frame.Value;
-        // Scale sprite to fit in the preview box while maintaining aspect ratio
+
+        // U14: Use pivot data for positioning — pivot marks the unit's feet
         float scaleX = (float)boxSize / frame.Rect.Width;
         float scaleY = (float)boxSize / frame.Rect.Height;
-        float scale = Math.Min(scaleX, scaleY) * 0.8f; // 80% to leave some padding
+        float scale = Math.Min(scaleX, scaleY) * 0.8f;
 
         float drawW = frame.Rect.Width * scale;
         float drawH = frame.Rect.Height * scale;
-        float drawX = boxX + (boxSize - drawW) / 2f;
-        float drawY = boxY + (boxSize - drawH) / 2f;
+
+        // Pivot is normalized (0-1). Spritemeta uses bottom-left origin for Y,
+        // so flip Y to convert to top-left coords (matching Game1.cs:2566).
+        // When FlipX is true, also flip PivotX (matching Game1.cs:2564).
+        float pivotNormX = fr.FlipX ? (1f - frame.PivotX) : frame.PivotX;
+        float pivotNormY = 1f - frame.PivotY;
+        float feetScreenY = boxY + boxSize - 8f; // 8px margin from box bottom
+        float drawX = boxX + boxSize / 2f - pivotNormX * drawW;
+        float drawY = feetScreenY - pivotNormY * drawH;
+
+        // Clamp so sprite stays reasonably visible in the box
+        drawX = Math.Clamp(drawX, boxX - drawW * 0.2f, boxX + boxSize - drawW * 0.8f);
+        drawY = Math.Clamp(drawY, boxY, boxY + boxSize - drawH * 0.3f);
 
         var effects = fr.FlipX ? SpriteEffects.FlipHorizontally : SpriteEffects.None;
         var origin = new Vector2(frame.Rect.Width * 0.5f, frame.Rect.Height * 0.5f);
         var pos = new Vector2(drawX + drawW / 2f, drawY + drawH / 2f);
 
         _ui.DrawTexture(atlas.Texture, pos, frame.Rect, Color.White, 0f, origin, scale, effects);
+
+        // Save geometry for pick mode and weapon line overlay
+        _lastPreviewScale = scale;
+        _lastPreviewDrawX = drawX;
+        _lastPreviewDrawY = drawY;
+        _lastPreviewDrawW = drawW;
+        _lastPreviewDrawH = drawH;
+        _lastPreviewFlipX = fr.FlipX;
+        // Pivot screen position: the sprite's pivot (anchor) in screen coordinates.
+        // PivotX is normalized (0-1) across the frame width; PivotY is bottom-left origin so we flip Y.
+        // When FlipX, pivotNormX is already flipped above.
+        _lastPreviewPivotScreenX = drawX + pivotNormX * drawW;
+        _lastPreviewPivotScreenY = drawY + pivotNormY * drawH;
+        _lastPreviewBoxX = boxX;
+        _lastPreviewBoxY = boxY;
+        _lastPreviewBoxSize = boxSize;
+        _lastPreviewValid = true;
     }
 
     // =========================================================================
-    //  IDENTITY SECTION
+    //  WEAPON POINT SECTION (U01-U06)
     // =========================================================================
 
-    private int DrawIdentitySection(UnitDef def, int x, int y, int w)
+    private WeaponFrameData GetOrCreateWeaponFrame(UnitDef def, out int frameIndex)
+    {
+        frameIndex = GetCurrentFrameIndex(def);
+        string animName = _previewAnimName;
+        string yawKey = ((int)_previewAngle).ToString();
+
+        if (!def.WeaponPoints.TryGetValue(animName, out var yawDict))
+        {
+            yawDict = new Dictionary<string, List<WeaponFrameData>>();
+            def.WeaponPoints[animName] = yawDict;
+        }
+
+        if (!yawDict.TryGetValue(yawKey, out var frames))
+        {
+            frames = new List<WeaponFrameData>();
+            yawDict[yawKey] = frames;
+        }
+
+        while (frames.Count <= frameIndex)
+            frames.Add(new WeaponFrameData());
+
+        return frames[frameIndex];
+    }
+
+    private WeaponFrameData? TryGetWeaponFrame(UnitDef def, out int frameIndex)
+    {
+        frameIndex = GetCurrentFrameIndex(def);
+        string animName = _previewAnimName;
+        string yawKey = ((int)_previewAngle).ToString();
+
+        if (!def.WeaponPoints.TryGetValue(animName, out var yawDict)) return null;
+        if (!yawDict.TryGetValue(yawKey, out var frames)) return null;
+        if (frameIndex >= frames.Count) return null;
+        return frames[frameIndex];
+    }
+
+    private int DrawWeaponPointSection(UnitDef def, int x, int y, int w)
     {
         int curY = y;
-        DrawSectionHeader("Identity", x, ref curY, w);
+        DrawSectionHeader("Weapon Points", x, ref curY, w);
+
+        int frameIdx = GetCurrentFrameIndex(def);
+        var wpFrame = TryGetWeaponFrame(def, out _);
+
+        _ui.DrawText($"Frame: {frameIdx}  Anim: {_previewAnimName}  Yaw: {(int)_previewAngle}",
+            new Vector2(x, curY + 2), EditorBase.TextDim);
+        curY += RowH;
+
+        // U01: Hilt coordinates (RU37: slightly wider fields)
+        int halfW = (w + 20) / 2;
+        float hiltX = wpFrame?.Hilt.X ?? 0f;
+        float hiltY = wpFrame?.Hilt.Y ?? 0f;
+        float newHiltX = _ui.DrawFloatField("wp_hilt_x", "Hilt X", hiltX, x, curY, halfW, 1f);
+        float newHiltY = _ui.DrawFloatField("wp_hilt_y", "Hilt Y", hiltY, x + halfW, curY, halfW, 1f);
+        if (Math.Abs(newHiltX - hiltX) > 0.001f || Math.Abs(newHiltY - hiltY) > 0.001f)
+        {
+            var frame = GetOrCreateWeaponFrame(def, out _);
+            frame.Hilt.X = newHiltX;
+            frame.Hilt.Y = newHiltY;
+            _unsavedChanges = true;
+        }
+        curY += RowH;
+
+        // U01: Tip coordinates (RU37: slightly wider fields)
+        float tipX = wpFrame?.Tip.X ?? 0f;
+        float tipY = wpFrame?.Tip.Y ?? 0f;
+        float newTipX = _ui.DrawFloatField("wp_tip_x", "Tip X", tipX, x, curY, halfW, 1f);
+        float newTipY = _ui.DrawFloatField("wp_tip_y", "Tip Y", tipY, x + halfW, curY, halfW, 1f);
+        if (Math.Abs(newTipX - tipX) > 0.001f || Math.Abs(newTipY - tipY) > 0.001f)
+        {
+            var frame = GetOrCreateWeaponFrame(def, out _);
+            frame.Tip.X = newTipX;
+            frame.Tip.Y = newTipY;
+            _unsavedChanges = true;
+        }
+        curY += RowH;
+
+        // U04: Behind checkboxes
+        bool hiltBehind = wpFrame?.Hilt.Behind ?? false;
+        bool tipBehind = wpFrame?.Tip.Behind ?? false;
+        bool newHiltBehind = _ui.DrawCheckbox("Hilt Behind", hiltBehind, x, curY);
+        bool newTipBehind = _ui.DrawCheckbox("Tip Behind", tipBehind, x + w / 2, curY);
+        if (newHiltBehind != hiltBehind)
+        {
+            var frame = GetOrCreateWeaponFrame(def, out _);
+            frame.Hilt.Behind = newHiltBehind;
+            _unsavedChanges = true;
+        }
+        if (newTipBehind != tipBehind)
+        {
+            var frame = GetOrCreateWeaponFrame(def, out _);
+            frame.Tip.Behind = newTipBehind;
+            _unsavedChanges = true;
+        }
+        curY += RowH;
+
+        // U03: Pick buttons + U06: Rapid edit
+        int pickBtnX = x;
+        Color pickHiltColor = _pickMode == PickTarget.Hilt ? new Color(80, 200, 255) : EditorBase.ButtonBg;
+        if (_ui.DrawButton("Pick Hilt", pickBtnX, curY, 70, 20, pickHiltColor))
+            _pickMode = _pickMode == PickTarget.Hilt ? PickTarget.None : PickTarget.Hilt;
+        pickBtnX += 74;
+
+        Color pickTipColor = _pickMode == PickTarget.Tip ? new Color(255, 200, 80) : EditorBase.ButtonBg;
+        if (_ui.DrawButton("Pick Tip", pickBtnX, curY, 70, 20, pickTipColor))
+            _pickMode = _pickMode == PickTarget.Tip ? PickTarget.None : PickTarget.Tip;
+        pickBtnX += 74;
+
+        if (_pickMode != PickTarget.None)
+        {
+            if (_ui.DrawButton("Cancel", pickBtnX, curY, 55, 20, EditorBase.DangerColor))
+                _pickMode = PickTarget.None;
+            pickBtnX += 59;
+        }
+
+        // U06: Rapid edit toggle
+        _rapidEditEnabled = _ui.DrawCheckbox("Rapid Edit", _rapidEditEnabled, pickBtnX + 8, curY);
+        curY += RowH;
+
+        // U05: Weapon line color swatch
+        bool colorChanged = _ui.DrawColorSwatch("wp_line_color", x, curY, 30, 18, ref _weaponLineColor, true);
+        _ui.DrawText("Weapon Line Color", new Vector2(x + 36, curY + 2), EditorBase.TextDim);
+        curY += RowH;
+
+        return curY;
+    }
+
+    private void DrawWeaponLineOverlay(UnitDef def)
+    {
+        if (!_lastPreviewValid) return;
+        var wpFrame = TryGetWeaponFrame(def, out _);
+        if (wpFrame == null) return;
+
+        var hiltScreen = WeaponPointToScreen(wpFrame.Hilt.X, wpFrame.Hilt.Y);
+        var tipScreen = WeaponPointToScreen(wpFrame.Tip.X, wpFrame.Tip.Y);
+
+        var lineColor = new Color(_weaponLineColor.R, _weaponLineColor.G, _weaponLineColor.B, _weaponLineColor.A);
+        _ui.DrawLine(hiltScreen, tipScreen, lineColor, 2);
+
+        int markerSize = 5;
+        _ui.DrawRect(new Rectangle((int)hiltScreen.X - markerSize / 2, (int)hiltScreen.Y - markerSize / 2,
+            markerSize, markerSize), new Color(80, 200, 255));
+        _ui.DrawRect(new Rectangle((int)tipScreen.X - markerSize / 2, (int)tipScreen.Y - markerSize / 2,
+            markerSize, markerSize), new Color(255, 200, 80));
+    }
+
+    private Vector2 WeaponPointToScreen(float wpX, float wpY)
+    {
+        // Pivot-based: weapon points are relative to the sprite's pivot (anchor point).
+        // C++ reference: pivotScreenX + wpX * scale * flipMul
+        float flipMul = _lastPreviewFlipX ? -1f : 1f;
+        float sx = _lastPreviewPivotScreenX + wpX * _lastPreviewScale * flipMul;
+        float sy = _lastPreviewPivotScreenY + wpY * _lastPreviewScale;
+        return new Vector2(sx, sy);
+    }
+
+    private Vector2 ScreenToWeaponPoint(float screenX, float screenY)
+    {
+        // Inverse of WeaponPointToScreen: convert screen coords back to weapon-point space.
+        float flipMul = _lastPreviewFlipX ? -1f : 1f;
+        float wpX = (screenX - _lastPreviewPivotScreenX) / (_lastPreviewScale * flipMul);
+        float wpY = (screenY - _lastPreviewPivotScreenY) / _lastPreviewScale;
+        return new Vector2(wpX, wpY);
+    }
+
+    private void HandlePickModeClick(UnitDef def, int boxX, int boxY, int boxSize)
+    {
+        if (_pickMode == PickTarget.None) return;
+        if (!_lastPreviewValid) return;
+
+        var boxRect = new Rectangle(boxX, boxY, boxSize, boxSize);
+        if (!boxRect.Contains(_ui._mouse.X, _ui._mouse.Y)) return;
+
+        if (_ui._mouse.LeftButton == ButtonState.Pressed && _ui._prevMouse.LeftButton == ButtonState.Released)
+        {
+            var wp = ScreenToWeaponPoint(_ui._mouse.X, _ui._mouse.Y);
+            var frame = GetOrCreateWeaponFrame(def, out _);
+
+            if (_pickMode == PickTarget.Hilt)
+            {
+                frame.Hilt.X = MathF.Round(wp.X);
+                frame.Hilt.Y = MathF.Round(wp.Y);
+            }
+            else if (_pickMode == PickTarget.Tip)
+            {
+                frame.Tip.X = MathF.Round(wp.X);
+                frame.Tip.Y = MathF.Round(wp.Y);
+            }
+
+            _unsavedChanges = true;
+
+            if (_rapidEditEnabled)
+                _pickMode = _pickMode == PickTarget.Hilt ? PickTarget.Tip : PickTarget.Hilt;
+            else
+                _pickMode = PickTarget.None;
+        }
+    }
+
+    // =========================================================================
+    //  ANIMATION TIMING SECTION (U07-U09)
+    // =========================================================================
+
+    private int DrawAnimTimingSection(UnitDef def, int x, int y, int w)
+    {
+        int curY = y;
+        DrawSectionHeader("Animation Timing", x, ref curY, w);
+
+        string animName = _previewAnimName;
+        def.AnimTimings.TryGetValue(animName, out var timing);
+
+        int frameIdx = GetCurrentFrameIndex(def);
+        int frameCount = GetFrameCountForCurrentAnim(def);
+
+        // U07: Frame duration field (ms)
+        int currentFrameDur = 100;
+        bool hasTimingOverride = false;
+        if (timing != null && frameIdx < timing.FrameDurationsMs.Count)
+        {
+            currentFrameDur = timing.FrameDurationsMs[frameIdx];
+            hasTimingOverride = true;
+        }
+
+        // RU39: Deferred frame duration editing - buffer value while text field is active
+        string durLabel = hasTimingOverride ? $"Frame {frameIdx} ms *" : $"Frame {frameIdx} ms";
+        bool frameMsFieldActive = _ui.IsFieldActive("at_framedur");
+        int displayValue = frameMsFieldActive && _editingFrameMs >= 0 ? _editingFrameMs : currentFrameDur;
+        int newFrameDur = _ui.DrawIntField("at_framedur", durLabel, displayValue, x, curY, w);
+
+        if (frameMsFieldActive)
+        {
+            // While field is active, just buffer the value (don't apply to data)
+            _editingFrameMs = newFrameDur;
+        }
+
+        // Commit on blur: field was active last frame, not active now
+        bool justDeactivated = _frameMsFieldWasActive && !frameMsFieldActive;
+        // Also commit on +/- button clicks (value changed while not typing)
+        bool buttonChanged = !frameMsFieldActive && newFrameDur != currentFrameDur;
+
+        if (justDeactivated || buttonChanged)
+        {
+            int commitValue = justDeactivated ? (_editingFrameMs >= 0 ? _editingFrameMs : currentFrameDur) : newFrameDur;
+            if (commitValue != currentFrameDur)
+            {
+                if (timing == null)
+                {
+                    timing = new UnitAnimTimingOverride();
+                    def.AnimTimings[animName] = timing;
+                }
+                while (timing.FrameDurationsMs.Count <= frameIdx)
+                    timing.FrameDurationsMs.Add(100);
+                timing.FrameDurationsMs[frameIdx] = Math.Max(1, commitValue);
+                _unsavedChanges = true;
+            }
+            _editingFrameMs = -1;
+        }
+        _frameMsFieldWasActive = frameMsFieldActive;
+        curY += RowH;
+
+        if (_ui.DrawButton("Set All Frames", x, curY, 100, 20))
+        {
+            if (timing == null)
+            {
+                timing = new UnitAnimTimingOverride();
+                def.AnimTimings[animName] = timing;
+            }
+            timing.FrameDurationsMs.Clear();
+            for (int i = 0; i < Math.Max(1, frameCount); i++)
+                timing.FrameDurationsMs.Add(Math.Max(1, currentFrameDur));
+            _unsavedChanges = true;
+        }
+
+        if (timing != null && _ui.DrawButton("Clear Timing", x + 108, curY, 100, 20, EditorBase.DangerColor))
+        {
+            def.AnimTimings.Remove(animName);
+            _unsavedChanges = true;
+        }
+
+        _ui.DrawText($"Frames: {frameCount}", new Vector2(x + 220, curY + 2), EditorBase.TextDim);
+        curY += RowH;
+
+        // U08: Effect time field with override indicator
+        int effectTime = timing?.EffectTimeMs ?? -1;
+        bool hasEffectOverride = effectTime >= 0;
+        string effectLabel = hasEffectOverride ? "Effect ms *" : "Effect ms";
+        int newEffectTime = _ui.DrawIntField("at_effecttime", effectLabel, hasEffectOverride ? effectTime : 0, x, curY, w);
+        if (newEffectTime != (hasEffectOverride ? effectTime : 0))
+        {
+            if (timing == null)
+            {
+                timing = new UnitAnimTimingOverride();
+                def.AnimTimings[animName] = timing;
+            }
+            timing.EffectTimeMs = Math.Max(0, newEffectTime);
+            _unsavedChanges = true;
+        }
+
+        if (hasEffectOverride)
+        {
+            if (_ui.DrawButton("X", x + w - 24, curY, 22, 20, EditorBase.DangerColor))
+            {
+                if (timing != null) timing.EffectTimeMs = -1;
+                _unsavedChanges = true;
+            }
+        }
+        curY += RowH;
+
+        return curY;
+    }
+
+    private Dictionary<string, Render.AnimTimingOverride> BuildRuntimeTimingOverrides(UnitDef def)
+    {
+        var result = new Dictionary<string, Render.AnimTimingOverride>();
+        foreach (var (animName, unitTiming) in def.AnimTimings)
+        {
+            var rt = new Render.AnimTimingOverride
+            {
+                FrameDurationsMs = new List<int>(unitTiming.FrameDurationsMs),
+                EffectTimeMs = unitTiming.EffectTimeMs,
+            };
+            result[animName] = rt;
+        }
+        return result;
+    }
+
+    private int GetCurrentFrameIndex(UnitDef def)
+    {
+        if (def.Sprite == null || string.IsNullOrEmpty(def.Sprite.AtlasName) || string.IsNullOrEmpty(def.Sprite.SpriteName))
+            return 0;
+
+        var atlasId = AtlasDefs.ResolveAtlasName(def.Sprite.AtlasName);
+        if ((int)atlasId >= _atlases.Length) return 0;
+        var atlas = _atlases[(int)atlasId];
+        if (!atlas.IsLoaded) return 0;
+
+        var spriteData = atlas.GetUnit(def.Sprite.SpriteName);
+        if (spriteData == null) return 0;
+
+        var anim = spriteData.GetAnim(_previewAnimName);
+        if (anim == null) return 0;
+
+        int spriteAngle = _previewAnim.ResolveAngle(_previewAngle, out _);
+        var kfs = anim.GetAngle(spriteAngle);
+        if (kfs == null || kfs.Count == 0)
+            kfs = anim.GetAngle(30);
+        if (kfs == null || kfs.Count == 0) return 0;
+
+        if (def.AnimTimings.TryGetValue(_previewAnimName, out var timing) && timing.FrameDurationsMs.Count > 0)
+        {
+            float cumMs = 0;
+            for (int i = 0; i < timing.FrameDurationsMs.Count; i++)
+            {
+                cumMs += timing.FrameDurationsMs[i];
+                if (_previewAnim.AnimTime < cumMs) return i;
+            }
+            return Math.Max(0, timing.FrameDurationsMs.Count - 1);
+        }
+
+        int frameIdx = 0;
+        for (int i = kfs.Count - 1; i >= 0; i--)
+        {
+            if (_previewAnim.AnimTime >= kfs[i].Time) { frameIdx = i; break; }
+        }
+        return frameIdx;
+    }
+
+    private int GetFrameCountForCurrentAnim(UnitDef def)
+    {
+        if (def.Sprite == null || string.IsNullOrEmpty(def.Sprite.AtlasName) || string.IsNullOrEmpty(def.Sprite.SpriteName))
+            return 0;
+
+        var atlasId = AtlasDefs.ResolveAtlasName(def.Sprite.AtlasName);
+        if ((int)atlasId >= _atlases.Length) return 0;
+        var atlas = _atlases[(int)atlasId];
+        if (!atlas.IsLoaded) return 0;
+
+        var spriteData = atlas.GetUnit(def.Sprite.SpriteName);
+        if (spriteData == null) return 0;
+
+        var anim = spriteData.GetAnim(_previewAnimName);
+        if (anim == null) return 0;
+
+        int spriteAngle = _previewAnim.ResolveAngle(_previewAngle, out _);
+        var kfs = anim.GetAngle(spriteAngle);
+        if (kfs == null || kfs.Count == 0)
+            kfs = anim.GetAngle(30);
+        return kfs?.Count ?? 0;
+    }
+
+    private void StepAnimForward()
+    {
+        var allIds = _gameData.Units.GetIDs();
+        if (_selectedIdx < 0 || _selectedIdx >= allIds.Count) return;
+        var def = _gameData.Units.Get(allIds[_selectedIdx]);
+        if (def?.Sprite == null) return;
+
+        var atlasId = AtlasDefs.ResolveAtlasName(def.Sprite.AtlasName);
+        if ((int)atlasId >= _atlases.Length) return;
+        var atlas = _atlases[(int)atlasId];
+        if (!atlas.IsLoaded) return;
+
+        var spriteData = atlas.GetUnit(def.Sprite.SpriteName);
+        if (spriteData == null) return;
+
+        var anim = spriteData.GetAnim(_previewAnimName);
+        if (anim == null) return;
+
+        int spriteAngle = _previewAnim.ResolveAngle(_previewAngle, out _);
+
+        if (def.AnimTimings.TryGetValue(_previewAnimName, out var timing) && timing.FrameDurationsMs.Count > 0)
+        {
+            int currentFrame = GetCurrentFrameIndex(def);
+            int nextFrame = (currentFrame + 1) % timing.FrameDurationsMs.Count;
+            float targetMs = 0;
+            for (int i = 0; i < nextFrame; i++)
+                targetMs += timing.FrameDurationsMs[i];
+            _previewAnim.AnimTime = targetMs;
+            return;
+        }
+
+        var kfs = anim.GetAngle(spriteAngle);
+        if (kfs == null || kfs.Count == 0)
+            kfs = anim.GetAngle(30);
+        if (kfs == null || kfs.Count == 0) return;
+
+        int curIdx = 0;
+        for (int i = kfs.Count - 1; i >= 0; i--)
+        {
+            if (_previewAnim.AnimTime >= kfs[i].Time) { curIdx = i; break; }
+        }
+        int nextIdx = (curIdx + 1) % kfs.Count;
+        _previewAnim.AnimTime = kfs[nextIdx].Time;
+    }
+
+    private void StepAnimBackward()
+    {
+        var allIds = _gameData.Units.GetIDs();
+        if (_selectedIdx < 0 || _selectedIdx >= allIds.Count) return;
+        var def = _gameData.Units.Get(allIds[_selectedIdx]);
+        if (def?.Sprite == null) return;
+
+        var atlasId = AtlasDefs.ResolveAtlasName(def.Sprite.AtlasName);
+        if ((int)atlasId >= _atlases.Length) return;
+        var atlas = _atlases[(int)atlasId];
+        if (!atlas.IsLoaded) return;
+
+        var spriteData = atlas.GetUnit(def.Sprite.SpriteName);
+        if (spriteData == null) return;
+
+        var anim = spriteData.GetAnim(_previewAnimName);
+        if (anim == null) return;
+
+        int spriteAngle = _previewAnim.ResolveAngle(_previewAngle, out _);
+
+        if (def.AnimTimings.TryGetValue(_previewAnimName, out var timing) && timing.FrameDurationsMs.Count > 0)
+        {
+            int currentFrame = GetCurrentFrameIndex(def);
+            int prevFrame = (currentFrame - 1 + timing.FrameDurationsMs.Count) % timing.FrameDurationsMs.Count;
+            float targetMs = 0;
+            for (int i = 0; i < prevFrame; i++)
+                targetMs += timing.FrameDurationsMs[i];
+            _previewAnim.AnimTime = targetMs;
+            return;
+        }
+
+        var kfs = anim.GetAngle(spriteAngle);
+        if (kfs == null || kfs.Count == 0)
+            kfs = anim.GetAngle(30);
+        if (kfs == null || kfs.Count == 0) return;
+
+        int curIdx = 0;
+        for (int i = kfs.Count - 1; i >= 0; i--)
+        {
+            if (_previewAnim.AnimTime >= kfs[i].Time) { curIdx = i; break; }
+        }
+        int prevIdx = (curIdx - 1 + kfs.Count) % kfs.Count;
+        _previewAnim.AnimTime = kfs[prevIdx].Time;
+    }
+
+    // =========================================================================
+    //  RU02: NAME / ID FIELDS (above sprite preview)
+    // =========================================================================
+
+    private int DrawNameIdFields(UnitDef def, int x, int y, int w)
+    {
+        int curY = y;
 
         // Name
         string newName = _ui.DrawTextField("unit_name", "Name", def.DisplayName, x, curY, w);
@@ -508,6 +1477,18 @@ public class UnitEditorWindow
         _ui.DrawText("ID", new Vector2(x, curY + 2), EditorBase.TextDim);
         _ui.DrawText(def.Id, new Vector2(x + 120, curY + 2), EditorBase.TextColor);
         curY += RowH;
+
+        return curY;
+    }
+
+    // =========================================================================
+    //  IDENTITY SECTION
+    // =========================================================================
+
+    private int DrawIdentitySection(UnitDef def, int x, int y, int w)
+    {
+        int curY = y;
+        DrawSectionHeader("Identity", x, ref curY, w);
 
         // Faction
         string[] factions = Enum.GetNames<Faction>();
@@ -525,14 +1506,22 @@ public class UnitEditorWindow
         if (newOrcaPri != def.OrcaPriority) { def.OrcaPriority = newOrcaPri; _unsavedChanges = true; }
         curY += RowH;
 
-        // Size
+        // U15: Size (auto-derives radius when changed)
         int newSize = _ui.DrawIntField("unit_size", "Size", def.Size, x, curY, w);
-        if (newSize != def.Size) { def.Size = newSize; _unsavedChanges = true; }
+        if (newSize != def.Size)
+        {
+            def.Size = newSize;
+            def.Radius = newSize * 0.25f; // auto-derive radius
+            _unsavedChanges = true;
+        }
         curY += RowH;
 
-        // Radius
+        // Radius (show derived hint)
         float newRadius = _ui.DrawFloatField("unit_radius", "Radius", def.Radius, x, curY, w, 0.05f);
         if (Math.Abs(newRadius - def.Radius) > 0.001f) { def.Radius = newRadius; _unsavedChanges = true; }
+        // U15: Show derived radius hint
+        float derivedRadius = def.Size * 0.25f;
+        _ui.DrawText($"(auto: {derivedRadius:F2})", new Vector2(x + w - 90, curY + 2), EditorBase.TextDim);
         curY += RowH;
 
         // Sprite Scale
@@ -545,10 +1534,27 @@ public class UnitEditorWindow
         if (Math.Abs(newHeight - def.SpriteWorldHeight) > 0.001f) { def.SpriteWorldHeight = newHeight; _unsavedChanges = true; }
         curY += RowH;
 
-        // Zombie Type dropdown (populated from unit IDs that are faction Undead)
+        // U16: Zombie Type dropdown with grouped items (units + groups)
+        // RU30: Map current value to display format for groups
         string[] zombieTypes = BuildZombieTypeList();
-        string newZombieType = _ui.DrawCombo("unit_zombie", "Zombie Type", def.ZombieTypeID, zombieTypes, x, curY, w);
-        if (newZombieType != def.ZombieTypeID) { def.ZombieTypeID = newZombieType; _unsavedChanges = true; }
+        string zombieDisplay = def.ZombieTypeID;
+        // If the current value is a group ID, find its display form
+        var gDef2 = _gameData.UnitGroups.Get(def.ZombieTypeID);
+        if (gDef2 != null)
+            zombieDisplay = $"Group: {gDef2.DisplayName} [{def.ZombieTypeID}]";
+        string newZombieType = _ui.DrawCombo("unit_zombie", "Zombie Type", zombieDisplay, zombieTypes, x, curY, w);
+        if (newZombieType != zombieDisplay && !newZombieType.StartsWith("-- "))
+        {
+            // RU30: Extract raw group ID from "Group: DisplayName [id]" format
+            string resolvedId = newZombieType;
+            if (newZombieType.StartsWith("Group: ") && newZombieType.Contains('[') && newZombieType.EndsWith("]"))
+            {
+                int bracketStart = newZombieType.LastIndexOf('[');
+                resolvedId = newZombieType.Substring(bracketStart + 1, newZombieType.Length - bracketStart - 2);
+            }
+            def.ZombieTypeID = resolvedId;
+            _unsavedChanges = true;
+        }
         curY += RowH;
 
         return curY;
@@ -620,10 +1626,24 @@ public class UnitEditorWindow
         int curY = y;
         DrawSectionHeader("Caster", x, ref curY, w);
 
-        // Spell dropdown
+        // U17: Spell dropdown shows "DisplayName (spellId)" format
+        string[] spellDisplayNames = BuildSpellDropdownDisplayList();
         string[] spellIds = BuildSpellDropdownList();
-        string newSpellID = _ui.DrawCombo("unit_spell", "Spell", def.SpellID, spellIds, x, curY, w);
-        if (newSpellID != def.SpellID) { def.SpellID = newSpellID; _unsavedChanges = true; }
+        // Find current display name for the selected spell
+        string currentSpellDisplay = def.SpellID;
+        for (int si = 0; si < spellIds.Length; si++)
+        {
+            if (spellIds[si] == def.SpellID) { currentSpellDisplay = spellDisplayNames[si]; break; }
+        }
+        string newSpellDisplay = _ui.DrawCombo("unit_spell", "Spell", currentSpellDisplay, spellDisplayNames, x, curY, w);
+        // Map display name back to ID
+        if (newSpellDisplay != currentSpellDisplay)
+        {
+            for (int si = 0; si < spellDisplayNames.Length; si++)
+            {
+                if (spellDisplayNames[si] == newSpellDisplay) { def.SpellID = spellIds[si]; _unsavedChanges = true; break; }
+            }
+        }
         curY += RowH;
 
         // Max Mana
@@ -631,9 +1651,16 @@ public class UnitEditorWindow
         if (Math.Abs(newMana - def.MaxMana) > 0.001f) { def.MaxMana = newMana; _unsavedChanges = true; }
         curY += RowH;
 
-        // Mana Regen
-        float newRegen = _ui.DrawFloatField("unit_mregen", "Mana Regen", def.ManaRegen, x, curY, w, 0.1f);
-        if (Math.Abs(newRegen - def.ManaRegen) > 0.001f) { def.ManaRegen = newRegen; _unsavedChanges = true; }
+        // RU10: Mana Regen x10 integer spinner — edit as int, store as value * 0.1f
+        int manaRegenX10 = (int)(def.ManaRegen * 10);
+        int newRegenX10 = _ui.DrawIntField("unit_mregen", "Mana Regen x10", manaRegenX10, x, curY, w);
+        if (newRegenX10 != manaRegenX10) { def.ManaRegen = newRegenX10 * 0.1f; _unsavedChanges = true; }
+        // Show full mana time estimate
+        if (def.MaxMana > 0 && def.ManaRegen > 0.001f)
+        {
+            float fullTime = def.MaxMana / def.ManaRegen;
+            _ui.DrawText($"(full in {fullTime:F1}s)", new Vector2(x + w - 110, curY + 2), EditorBase.TextDim);
+        }
         curY += RowH;
 
         return curY;
@@ -648,22 +1675,35 @@ public class UnitEditorWindow
         int curY = y;
         DrawSectionHeader("Equipment", x, ref curY, w);
 
-        // --- Weapons ---
+        // --- Weapons --- (RU33: show "DisplayName (id)" format in dropdowns)
         _ui.DrawText("Weapons", new Vector2(x, curY + 2), EditorBase.AccentColor);
         if (_ui.DrawButton("Edit Weapons", x + w - 110, curY, 100, 20))
             _activeSubEditor = SubEditor.Weapon;
         curY += RowH;
 
-        string[] weaponIds = BuildWeaponDropdownList();
+        BuildWeaponDropdownLists(out string[] weaponDisplayNames, out string[] weaponIdList);
         for (int i = 0; i < def.Weapons.Count; i++)
         {
             string wId = def.Weapons[i];
             var wDef = _gameData.Weapons.Get(wId);
-            string displayLabel = wDef != null ? $"  [{i}] {wDef.DisplayName}" : $"  [{i}]";
 
-            // Weapon dropdown
-            string newWId = _ui.DrawCombo($"weap_{i}", displayLabel, wId, weaponIds, x, curY, w - 28);
-            if (newWId != wId) { def.Weapons[i] = newWId; _unsavedChanges = true; }
+            // U26: Weapon type tag with color [M] orange for melee, [R] blue for ranged
+            if (wDef != null)
+            {
+                string tag = wDef.IsRanged ? "[R]" : "[M]";
+                Color tagColor = wDef.IsRanged ? new Color(80, 140, 220) : new Color(220, 150, 50);
+                _ui.DrawText(tag, new Vector2(x, curY + 2), tagColor);
+            }
+            string displayLabel = wDef != null ? $"     [{i}] {wDef.DisplayName}" : $"  [{i}]";
+
+            // Weapon dropdown with display names
+            string currentDisplay = MapIdToDisplay(wId, weaponDisplayNames, weaponIdList);
+            string newDisplay = _ui.DrawCombo($"weap_{i}", displayLabel, currentDisplay, weaponDisplayNames, x, curY, w - 28);
+            if (newDisplay != currentDisplay)
+            {
+                def.Weapons[i] = MapDisplayToId(newDisplay, weaponDisplayNames, weaponIdList);
+                _unsavedChanges = true;
+            }
 
             // Remove button
             if (_ui.DrawButton("X", x + w - 24, curY, 22, 20, EditorBase.DangerColor))
@@ -674,46 +1714,50 @@ public class UnitEditorWindow
                 curY += RowH;
                 continue;
             }
-            curY += RowH;
 
-            // Stat summary for this weapon
+            // RU34: Stat summary on the SAME row (to the right, after dropdown area)
             if (wDef != null)
             {
                 string summary;
                 if (wDef.IsRanged)
-                    summary = $"    Ranged: dmg={wDef.RangedDamage} rng={wDef.Range:F1} prec={wDef.Precision} cd={wDef.Cooldown:F1}";
+                    summary = $"R:d{wDef.RangedDamage} r{wDef.Range:F0} p{wDef.Precision}";
                 else
-                    summary = $"    Melee: dmg={wDef.Damage} atk={wDef.AttackBonus} def={wDef.DefenseBonus} len={wDef.Length}";
-                _ui.DrawText(summary, new Vector2(x + 10, curY + 2), EditorBase.TextDim);
-                curY += 18;
+                    summary = $"M:d{wDef.Damage} a{wDef.AttackBonus} d{wDef.DefenseBonus}";
+                _ui.DrawText(summary, new Vector2(x + w - 180, curY + 2), EditorBase.TextDim);
             }
+            curY += RowH;
         }
         if (def.Weapons.Count < 4)
         {
             if (_ui.DrawButton("+ Add Weapon", x + 10, curY, 100, 20))
             {
-                def.Weapons.Add(weaponIds.Length > 0 ? weaponIds[0] : "");
+                def.Weapons.Add(weaponIdList.Length > 0 ? weaponIdList[0] : "");
                 _unsavedChanges = true;
             }
             curY += RowH;
         }
         curY += 4;
 
-        // --- Armors ---
+        // --- Armors --- (RU33: show "DisplayName (id)" format in dropdowns)
         _ui.DrawText("Armors", new Vector2(x, curY + 2), EditorBase.AccentColor);
         if (_ui.DrawButton("Edit Armor", x + w - 110, curY, 100, 20))
             _activeSubEditor = SubEditor.Armor;
         curY += RowH;
 
-        string[] armorIds = BuildArmorDropdownList();
+        BuildArmorDropdownLists(out string[] armorDisplayNames, out string[] armorIdList);
         for (int i = 0; i < def.Armors.Count; i++)
         {
             string aId = def.Armors[i];
             var aDef = _gameData.Armors.Get(aId);
             string displayLabel = aDef != null ? $"  [{i}] {aDef.DisplayName}" : $"  [{i}]";
 
-            string newAId = _ui.DrawCombo($"arm_{i}", displayLabel, aId, armorIds, x, curY, w - 28);
-            if (newAId != aId) { def.Armors[i] = newAId; _unsavedChanges = true; }
+            string currentDisplay = MapIdToDisplay(aId, armorDisplayNames, armorIdList);
+            string newDisplay = _ui.DrawCombo($"arm_{i}", displayLabel, currentDisplay, armorDisplayNames, x, curY, w - 28);
+            if (newDisplay != currentDisplay)
+            {
+                def.Armors[i] = MapDisplayToId(newDisplay, armorDisplayNames, armorIdList);
+                _unsavedChanges = true;
+            }
 
             if (_ui.DrawButton("X", x + w - 24, curY, 22, 20, EditorBase.DangerColor))
             {
@@ -723,42 +1767,46 @@ public class UnitEditorWindow
                 curY += RowH;
                 continue;
             }
-            curY += RowH;
 
+            // RU34: Stat summary on the SAME row
             if (aDef != null)
             {
-                string summary = $"    Body={aDef.BodyProtection} Head={aDef.HeadProtection} Enc={aDef.Encumbrance}";
-                if (aDef.Bonuses.Count > 0) summary += $" [{string.Join(",", aDef.Bonuses)}]";
-                _ui.DrawText(summary, new Vector2(x + 10, curY + 2), EditorBase.TextDim);
-                curY += 18;
+                string summary = $"B{aDef.BodyProtection} H{aDef.HeadProtection} E{aDef.Encumbrance}";
+                _ui.DrawText(summary, new Vector2(x + w - 180, curY + 2), EditorBase.TextDim);
             }
+            curY += RowH;
         }
         if (def.Armors.Count < 4)
         {
             if (_ui.DrawButton("+ Add Armor", x + 10, curY, 100, 20))
             {
-                def.Armors.Add(armorIds.Length > 0 ? armorIds[0] : "");
+                def.Armors.Add(armorIdList.Length > 0 ? armorIdList[0] : "");
                 _unsavedChanges = true;
             }
             curY += RowH;
         }
         curY += 4;
 
-        // --- Shields ---
+        // --- Shields --- (RU33: show "DisplayName (id)" format in dropdowns)
         _ui.DrawText("Shields", new Vector2(x, curY + 2), EditorBase.AccentColor);
         if (_ui.DrawButton("Edit Shields", x + w - 110, curY, 100, 20))
             _activeSubEditor = SubEditor.Shield;
         curY += RowH;
 
-        string[] shieldIds = BuildShieldDropdownList();
+        BuildShieldDropdownLists(out string[] shieldDisplayNames, out string[] shieldIdList);
         for (int i = 0; i < def.Shields.Count; i++)
         {
             string sId = def.Shields[i];
             var sDef = _gameData.Shields.Get(sId);
             string displayLabel = sDef != null ? $"  [{i}] {sDef.DisplayName}" : $"  [{i}]";
 
-            string newSId = _ui.DrawCombo($"shld_{i}", displayLabel, sId, shieldIds, x, curY, w - 28);
-            if (newSId != sId) { def.Shields[i] = newSId; _unsavedChanges = true; }
+            string currentDisplay = MapIdToDisplay(sId, shieldDisplayNames, shieldIdList);
+            string newDisplay = _ui.DrawCombo($"shld_{i}", displayLabel, currentDisplay, shieldDisplayNames, x, curY, w - 28);
+            if (newDisplay != currentDisplay)
+            {
+                def.Shields[i] = MapDisplayToId(newDisplay, shieldDisplayNames, shieldIdList);
+                _unsavedChanges = true;
+            }
 
             if (_ui.DrawButton("X", x + w - 24, curY, 22, 20, EditorBase.DangerColor))
             {
@@ -768,26 +1816,273 @@ public class UnitEditorWindow
                 curY += RowH;
                 continue;
             }
-            curY += RowH;
 
+            // RU34: Stat summary on the SAME row
             if (sDef != null)
             {
-                string summary = $"    Prot={sDef.Protection} Parry={sDef.Parry} Def={sDef.Defense}";
-                _ui.DrawText(summary, new Vector2(x + 10, curY + 2), EditorBase.TextDim);
-                curY += 18;
+                string summary = $"P{sDef.Protection} Pa{sDef.Parry} D{sDef.Defense}";
+                _ui.DrawText(summary, new Vector2(x + w - 180, curY + 2), EditorBase.TextDim);
             }
+            curY += RowH;
         }
         if (def.Shields.Count < 1)
         {
             if (_ui.DrawButton("+ Add Shield", x + 10, curY, 100, 20))
             {
-                def.Shields.Add(shieldIds.Length > 0 ? shieldIds[0] : "");
+                def.Shields.Add(shieldIdList.Length > 0 ? shieldIdList[0] : "");
                 _unsavedChanges = true;
             }
             curY += RowH;
         }
 
         return curY;
+    }
+
+    // =========================================================================
+    //  COLOR SECTION
+    // =========================================================================
+
+    private int DrawColorSection(UnitDef def, int x, int y, int w)
+    {
+        int curY = y;
+        DrawSectionHeader("Color", x, ref curY, w);
+
+        // Convert ColorJson? to HdrColor for the swatch
+        HdrColor hdrColor;
+        if (def.Color != null)
+            hdrColor = new HdrColor((byte)def.Color.R, (byte)def.Color.G, (byte)def.Color.B, (byte)def.Color.A);
+        else
+            hdrColor = new HdrColor(255, 255, 255, 255);
+
+        // Draw a clickable color swatch (swatch only, no inline fields - editing happens in the picker popup)
+        bool changed = _ui.DrawColorSwatch("unit_color", x, curY, 40, 20, ref hdrColor);
+
+        // Show read-only RGBA info next to swatch
+        string info = $"({hdrColor.R},{hdrColor.G},{hdrColor.B},{hdrColor.A})";
+        _ui.DrawText(info, new Vector2(x + 48, curY + 2), EditorBase.TextDim);
+
+        if (changed)
+        {
+            def.Color = new ColorJson { R = hdrColor.R, G = hdrColor.G, B = hdrColor.B, A = hdrColor.A };
+            _unsavedChanges = true;
+        }
+        curY += RowH + 4;
+
+        return curY;
+    }
+
+    // =========================================================================
+    //  GROUP EDITOR POPUP
+    // =========================================================================
+
+    private void DrawGroupEditor(int screenW, int screenH)
+    {
+        // Modal overlay
+        _ui.DrawRect(new Rectangle(0, 0, screenW, screenH), new Color(0, 0, 0, 120));
+
+        int popW = 700;
+        int popH = 450;
+        int popX = (screenW - popW) / 2;
+        int popY = (screenH - popH) / 2;
+
+        _ui.DrawPanel(popX, popY, popW, popH, "Unit Group Editor");
+
+        // Close button
+        if (_ui.DrawButton("X", popX + popW - 30, popY + 3, 24, 22, EditorBase.DangerColor))
+        {
+            _groupEditorOpen = false;
+            return;
+        }
+
+        int contentY = popY + 32;
+        int contentH = popH - 72;
+        int listW = 200;
+
+        // --- Left: group list ---
+        int leftX = popX + 4;
+        var groupIds = _gameData.UnitGroups.GetIDs();
+        var groupDisplayItems = new List<string>();
+        foreach (var id in groupIds)
+        {
+            var gDef = _gameData.UnitGroups.Get(id);
+            groupDisplayItems.Add(gDef?.DisplayName ?? id);
+        }
+
+        int filteredGroupSelIdx = _groupSelectedIdx >= 0 && _groupSelectedIdx < groupIds.Count
+            ? _groupSelectedIdx : -1;
+
+        int clicked = _ui.DrawScrollableList("group_list", groupDisplayItems, filteredGroupSelIdx,
+            leftX, contentY, listW, contentH, null);
+        if (clicked >= 0 && clicked < groupIds.Count)
+        {
+            _groupSelectedIdx = clicked;
+            _groupPropScroll = 0;
+        }
+
+        // --- Bottom CRUD buttons for groups ---
+        int bottomY = popY + popH - 34;
+        int bx = popX + 8;
+        int btnW = 70;
+        int btnH = 24;
+
+        if (_ui.DrawButton("+ New", bx, bottomY, btnW, btnH))
+        {
+            string newId = "group_" + DateTime.Now.ToString("HHmmss");
+            var newDef = new UnitGroupDef { Id = newId, DisplayName = "New Group" };
+            _gameData.UnitGroups.Add(newDef);
+            _groupSelectedIdx = IndexOf(_gameData.UnitGroups.GetIDs(), newId);
+            _unsavedChanges = true;
+            SetStatus("Added group: " + newId);
+        }
+        bx += btnW + 4;
+
+        // RU31: Copy button between New and Delete
+        if (_groupSelectedIdx >= 0 && _groupSelectedIdx < groupIds.Count)
+        {
+            if (_ui.DrawButton("Copy", bx, bottomY, btnW, btnH))
+            {
+                var srcGroup = _gameData.UnitGroups.Get(groupIds[_groupSelectedIdx]);
+                if (srcGroup != null)
+                {
+                    string newId = srcGroup.Id + "_copy";
+                    int suffix = 1;
+                    while (_gameData.UnitGroups.Get(newId) != null)
+                        newId = srcGroup.Id + "_copy" + (++suffix);
+                    var newDef = new UnitGroupDef
+                    {
+                        Id = newId,
+                        DisplayName = srcGroup.DisplayName + " (Copy)",
+                        Entries = new List<UnitGroupEntry>()
+                    };
+                    foreach (var entry in srcGroup.Entries)
+                        newDef.Entries.Add(new UnitGroupEntry { UnitDefID = entry.UnitDefID, Weight = entry.Weight });
+                    _gameData.UnitGroups.AddAfter(newDef, srcGroup.Id);
+                    _groupSelectedIdx = IndexOf(_gameData.UnitGroups.GetIDs(), newId);
+                    _unsavedChanges = true;
+                    SetStatus("Copied group: " + newId);
+                }
+            }
+            bx += btnW + 4;
+
+            if (_ui.DrawButton("Delete", bx, bottomY, btnW, btnH, EditorBase.DangerColor))
+            {
+                string removeId = groupIds[_groupSelectedIdx];
+                _gameData.UnitGroups.Remove(removeId);
+                _groupSelectedIdx = Math.Min(_groupSelectedIdx, _gameData.UnitGroups.Count - 1);
+                _unsavedChanges = true;
+                SetStatus("Removed group: " + removeId);
+            }
+        }
+
+        // Save button
+        if (_ui.DrawButton("Save", popX + popW - 80, bottomY, 70, btnH, EditorBase.SuccessColor))
+        {
+            bool ok = _gameData.UnitGroups.Save("data/unit_groups.json");
+            SetStatus(ok ? "Saved unit_groups.json" : "SAVE FAILED!");
+        }
+
+        // --- Right: group detail ---
+        int rightX = popX + listW + 12;
+        int rightW = popW - listW - 20;
+        _ui.DrawRect(new Rectangle(rightX - 2, contentY, 1, contentH), EditorBase.PanelBorder);
+
+        if (_groupSelectedIdx >= 0 && _groupSelectedIdx < groupIds.Count)
+        {
+            var gDef = _gameData.UnitGroups.Get(groupIds[_groupSelectedIdx]);
+            if (gDef != null)
+                DrawGroupDetail(gDef, rightX, contentY, rightW, contentH);
+        }
+    }
+
+    private void DrawGroupDetail(UnitGroupDef g, int x, int y, int ww, int h)
+    {
+        // Handle scroll
+        var area = new Rectangle(x, y, ww, h);
+        if (area.Contains(_ui._mouse.X, _ui._mouse.Y))
+        {
+            int sd = _ui._mouse.ScrollWheelValue - _ui._prevMouse.ScrollWheelValue;
+            if (sd != 0) { _groupPropScroll -= sd * 0.3f; _groupPropScroll = Math.Max(0, _groupPropScroll); }
+        }
+
+        int curY = y + 4 - (int)_groupPropScroll;
+
+        // Name field
+        string newName = _ui.DrawTextField("g_name", "Name", g.DisplayName, x, curY, ww);
+        if (newName != g.DisplayName) { g.DisplayName = newName; _unsavedChanges = true; }
+        curY += RowH;
+
+        // ID (read-only)
+        _ui.DrawText("ID", new Vector2(x, curY + 2), EditorBase.TextDim);
+        _ui.DrawText(g.Id, new Vector2(x + 120, curY + 2), EditorBase.TextColor);
+        curY += RowH;
+
+        // Entries header
+        _ui.DrawText("Entries:", new Vector2(x, curY + 2), EditorBase.AccentColor);
+        curY += RowH;
+
+        // RU32: Build unit dropdown with "DisplayName [id]" format
+        BuildUnitDisplayDropdownLists(out string[] unitDisplayOptions, out string[] unitIdOptions);
+
+        for (int i = 0; i < g.Entries.Count; i++)
+        {
+            var entry = g.Entries[i];
+
+            // RU32: Unit ID dropdown with display names
+            string currentDisplay = MapIdToDisplay(entry.UnitDefID, unitDisplayOptions, unitIdOptions);
+            string newDisplay = _ui.DrawCombo($"ge_uid_{i}", $"  [{i}] Unit", currentDisplay, unitDisplayOptions, x, curY, ww - 28);
+            if (newDisplay != currentDisplay)
+            {
+                entry.UnitDefID = MapDisplayToId(newDisplay, unitDisplayOptions, unitIdOptions);
+                _unsavedChanges = true;
+            }
+
+            // Delete button
+            if (_ui.DrawButton("X", x + ww - 24, curY, 22, 20, EditorBase.DangerColor))
+            {
+                g.Entries.RemoveAt(i);
+                _unsavedChanges = true;
+                i--;
+                curY += RowH;
+                continue;
+            }
+            curY += RowH;
+
+            // Weight field
+            float newWeight = _ui.DrawFloatField($"ge_wt_{i}", "    Weight", entry.Weight, x, curY, ww, 0.1f);
+            if (Math.Abs(newWeight - entry.Weight) > 0.001f) { entry.Weight = newWeight; _unsavedChanges = true; }
+            curY += RowH;
+        }
+
+        // Add entry button
+        if (_ui.DrawButton("+ Add Unit", x + 10, curY, 100, 20))
+        {
+            g.Entries.Add(new UnitGroupEntry());
+            _unsavedChanges = true;
+        }
+    }
+
+    private string[] BuildUnitDropdownList()
+    {
+        var list = new List<string> { "" };
+        foreach (var id in _gameData.Units.GetIDs())
+            list.Add(id);
+        return list.ToArray();
+    }
+
+    // RU32: Build unit dropdown with "DisplayName [id]" format and parallel ID list
+    private void BuildUnitDisplayDropdownLists(out string[] displayNames, out string[] ids)
+    {
+        var dispList = new List<string> { "" };
+        var idList = new List<string> { "" };
+        foreach (var id in _gameData.Units.GetIDs())
+        {
+            var u = _gameData.Units.Get(id);
+            string name = u?.DisplayName ?? "";
+            dispList.Add(string.IsNullOrEmpty(name) ? id : $"{name} [{id}]");
+            idList.Add(id);
+        }
+        displayNames = dispList.ToArray();
+        ids = idList.ToArray();
     }
 
     // =========================================================================
@@ -904,19 +2199,23 @@ public class UnitEditorWindow
         if (newName != w.DisplayName) { w.DisplayName = newName; _unsavedChanges = true; }
         curY += RowH;
 
-        string newId = _ui.DrawTextField("w_id", "ID", w.Id, x, curY, ww);
-        if (newId != w.Id)
-        {
-            // Rename: update references
-            string oldId = w.Id;
-            w.Id = newId;
-            // Re-key in registry if needed - for simplicity just mark unsaved
-            _unsavedChanges = true;
-        }
+        // RU25: ID is read-only (registry key must not change)
+        _ui.DrawText("ID", new Vector2(x, curY + 2), EditorBase.TextDim);
+        _ui.DrawText(w.Id, new Vector2(x + 120, curY + 2), EditorBase.TextColor);
         curY += RowH;
 
-        bool newRanged = _ui.DrawCheckbox("Is Ranged", w.IsRanged, x, curY);
-        if (newRanged != w.IsRanged) { w.IsRanged = newRanged; _unsavedChanges = true; }
+        // U27: Melee/Ranged toggle buttons instead of checkbox
+        {
+            int toggleW = 80;
+            int toggleH = 22;
+            Color meleeColor = !w.IsRanged ? EditorBase.AccentColor : EditorBase.ButtonBg;
+            Color rangedColor = w.IsRanged ? EditorBase.AccentColor : EditorBase.ButtonBg;
+            _ui.DrawText("Type", new Vector2(x, curY + 2), EditorBase.TextDim);
+            if (_ui.DrawButton("Melee", x + 120, curY, toggleW, toggleH, meleeColor))
+            { w.IsRanged = false; _unsavedChanges = true; }
+            if (_ui.DrawButton("Ranged", x + 120 + toggleW + 4, curY, toggleW, toggleH, rangedColor))
+            { w.IsRanged = true; _unsavedChanges = true; }
+        }
         curY += RowH;
 
         if (!w.IsRanged)
@@ -959,6 +2258,12 @@ public class UnitEditorWindow
 
             int newPrec = _ui.DrawIntField("w_prec", "Precision", w.Precision, x, curY, ww);
             if (newPrec != w.Precision) { w.Precision = newPrec; _unsavedChanges = true; }
+            curY += RowH;
+
+            // Projectile Type dropdown
+            string[] projTypes = Enum.GetNames<ProjectileType>();
+            string newProjType = _ui.DrawCombo("w_projtype", "Projectile", w.ProjectileType, projTypes, x, curY, ww);
+            if (newProjType != w.ProjectileType) { w.ProjectileType = newProjType; _unsavedChanges = true; }
             curY += RowH;
 
             // Also show melee stats (weapons can have both)
@@ -1055,8 +2360,9 @@ public class UnitEditorWindow
         if (newName != a.DisplayName) { a.DisplayName = newName; _unsavedChanges = true; }
         curY += RowH;
 
-        string newId = _ui.DrawTextField("a_id", "ID", a.Id, x, curY, ww);
-        if (newId != a.Id) { a.Id = newId; _unsavedChanges = true; }
+        // RU25: ID is read-only (registry key must not change)
+        _ui.DrawText("ID", new Vector2(x, curY + 2), EditorBase.TextDim);
+        _ui.DrawText(a.Id, new Vector2(x + 120, curY + 2), EditorBase.TextColor);
         curY += RowH;
 
         int newBody = _ui.DrawIntField("a_body", "Body Prot", a.BodyProtection, x, curY, ww);
@@ -1151,8 +2457,9 @@ public class UnitEditorWindow
         if (newName != s.DisplayName) { s.DisplayName = newName; _unsavedChanges = true; }
         curY += RowH;
 
-        string newId = _ui.DrawTextField("s_id", "ID", s.Id, x, curY, ww);
-        if (newId != s.Id) { s.Id = newId; _unsavedChanges = true; }
+        // RU25: ID is read-only (registry key must not change)
+        _ui.DrawText("ID", new Vector2(x, curY + 2), EditorBase.TextDim);
+        _ui.DrawText(s.Id, new Vector2(x + 120, curY + 2), EditorBase.TextColor);
         curY += RowH;
 
         int newProt = _ui.DrawIntField("s_prot", "Protection", s.Protection, x, curY, ww);
@@ -1176,6 +2483,14 @@ public class UnitEditorWindow
         int btnW = 70;
         int btnH = 24;
 
+        // Apply & Close button (bottom-right area)
+        if (_ui.DrawButton("Apply & Close", popX + popW - 190, bottomY, 100, btnH, EditorBase.AccentColor))
+        {
+            _activeSubEditor = SubEditor.None;
+            _subSelectedIdx = -1;
+            return;
+        }
+
         switch (_activeSubEditor)
         {
             case SubEditor.Weapon:
@@ -1194,14 +2509,43 @@ public class UnitEditorWindow
                 var wIds = _gameData.Weapons.GetIDs();
                 if (_subSelectedIdx >= 0 && _subSelectedIdx < wIds.Count)
                 {
+                    // Copy button
+                    if (_ui.DrawButton("Copy", bx, bottomY, btnW, btnH))
+                    {
+                        var srcW = _gameData.Weapons.Get(wIds[_subSelectedIdx]);
+                        if (srcW != null)
+                        {
+                            string newId = srcW.Id + "_copy";
+                            int suffix = 1;
+                            while (_gameData.Weapons.Get(newId) != null)
+                                newId = srcW.Id + "_copy" + (++suffix);
+                            var newDef = CloneWeapon(srcW, newId);
+                            _gameData.Weapons.AddAfter(newDef, srcW.Id);
+                            _subSelectedIdx = IndexOf(_gameData.Weapons.GetIDs(), newId);
+                            _unsavedChanges = true;
+                            SetStatus("Copied weapon: " + newId);
+                        }
+                    }
+                    bx += btnW + 4;
+
+                    // Delete button with confirmation if referenced
                     if (_ui.DrawButton("Delete", bx, bottomY, btnW, btnH, EditorBase.DangerColor))
                     {
                         string removeId = wIds[_subSelectedIdx];
-                        _gameData.Units.RemoveWeaponFromAll(removeId);
-                        _gameData.Weapons.Remove(removeId);
-                        _subSelectedIdx = Math.Min(_subSelectedIdx, _gameData.Weapons.Count - 1);
-                        _unsavedChanges = true;
-                        SetStatus("Removed weapon: " + removeId);
+                        int refCount = _gameData.Units.CountUnitsWithWeapon(removeId);
+                        if (refCount > 0)
+                        {
+                            _confirmDeleteOpen = true;
+                            _confirmDeleteId = removeId;
+                            _confirmDeleteType = SubEditor.Weapon;
+                        }
+                        else
+                        {
+                            _gameData.Weapons.Remove(removeId);
+                            _subSelectedIdx = Math.Min(_subSelectedIdx, _gameData.Weapons.Count - 1);
+                            _unsavedChanges = true;
+                            SetStatus("Removed weapon: " + removeId);
+                        }
                     }
                 }
 
@@ -1229,14 +2573,43 @@ public class UnitEditorWindow
                 var aIds = _gameData.Armors.GetIDs();
                 if (_subSelectedIdx >= 0 && _subSelectedIdx < aIds.Count)
                 {
+                    // Copy button
+                    if (_ui.DrawButton("Copy", bx, bottomY, btnW, btnH))
+                    {
+                        var srcA = _gameData.Armors.Get(aIds[_subSelectedIdx]);
+                        if (srcA != null)
+                        {
+                            string newId = srcA.Id + "_copy";
+                            int suffix = 1;
+                            while (_gameData.Armors.Get(newId) != null)
+                                newId = srcA.Id + "_copy" + (++suffix);
+                            var newDef = CloneArmor(srcA, newId);
+                            _gameData.Armors.AddAfter(newDef, srcA.Id);
+                            _subSelectedIdx = IndexOf(_gameData.Armors.GetIDs(), newId);
+                            _unsavedChanges = true;
+                            SetStatus("Copied armor: " + newId);
+                        }
+                    }
+                    bx += btnW + 4;
+
+                    // Delete button with confirmation if referenced
                     if (_ui.DrawButton("Delete", bx, bottomY, btnW, btnH, EditorBase.DangerColor))
                     {
                         string removeId = aIds[_subSelectedIdx];
-                        _gameData.Units.RemoveArmorFromAll(removeId);
-                        _gameData.Armors.Remove(removeId);
-                        _subSelectedIdx = Math.Min(_subSelectedIdx, _gameData.Armors.Count - 1);
-                        _unsavedChanges = true;
-                        SetStatus("Removed armor: " + removeId);
+                        int refCount = _gameData.Units.CountUnitsWithArmor(removeId);
+                        if (refCount > 0)
+                        {
+                            _confirmDeleteOpen = true;
+                            _confirmDeleteId = removeId;
+                            _confirmDeleteType = SubEditor.Armor;
+                        }
+                        else
+                        {
+                            _gameData.Armors.Remove(removeId);
+                            _subSelectedIdx = Math.Min(_subSelectedIdx, _gameData.Armors.Count - 1);
+                            _unsavedChanges = true;
+                            SetStatus("Removed armor: " + removeId);
+                        }
                     }
                 }
 
@@ -1263,14 +2636,43 @@ public class UnitEditorWindow
                 var sIds = _gameData.Shields.GetIDs();
                 if (_subSelectedIdx >= 0 && _subSelectedIdx < sIds.Count)
                 {
+                    // Copy button
+                    if (_ui.DrawButton("Copy", bx, bottomY, btnW, btnH))
+                    {
+                        var srcS = _gameData.Shields.Get(sIds[_subSelectedIdx]);
+                        if (srcS != null)
+                        {
+                            string newId = srcS.Id + "_copy";
+                            int suffix = 1;
+                            while (_gameData.Shields.Get(newId) != null)
+                                newId = srcS.Id + "_copy" + (++suffix);
+                            var newDef = CloneShield(srcS, newId);
+                            _gameData.Shields.AddAfter(newDef, srcS.Id);
+                            _subSelectedIdx = IndexOf(_gameData.Shields.GetIDs(), newId);
+                            _unsavedChanges = true;
+                            SetStatus("Copied shield: " + newId);
+                        }
+                    }
+                    bx += btnW + 4;
+
+                    // Delete button with confirmation if referenced
                     if (_ui.DrawButton("Delete", bx, bottomY, btnW, btnH, EditorBase.DangerColor))
                     {
                         string removeId = sIds[_subSelectedIdx];
-                        _gameData.Units.RemoveShieldFromAll(removeId);
-                        _gameData.Shields.Remove(removeId);
-                        _subSelectedIdx = Math.Min(_subSelectedIdx, _gameData.Shields.Count - 1);
-                        _unsavedChanges = true;
-                        SetStatus("Removed shield: " + removeId);
+                        int refCount = _gameData.Units.CountUnitsWithShield(removeId);
+                        if (refCount > 0)
+                        {
+                            _confirmDeleteOpen = true;
+                            _confirmDeleteId = removeId;
+                            _confirmDeleteType = SubEditor.Shield;
+                        }
+                        else
+                        {
+                            _gameData.Shields.Remove(removeId);
+                            _subSelectedIdx = Math.Min(_subSelectedIdx, _gameData.Shields.Count - 1);
+                            _unsavedChanges = true;
+                            SetStatus("Removed shield: " + removeId);
+                        }
                     }
                 }
 
@@ -1324,12 +2726,17 @@ public class UnitEditorWindow
         _previewAnimName = "Idle";
         _previewPlaying = true;
 
+        // Force re-init on next DrawPreviewSprite by clearing tracking state
+        _lastPreviewSpriteData = null;
+        _lastPreviewAnimName = "";
+
         // Re-init animation controller
         var atlasId = AtlasDefs.ResolveAtlasName(_previewAtlas);
         if ((int)atlasId < _atlases.Length && _atlases[(int)atlasId].IsLoaded)
         {
             var spriteData = _atlases[(int)atlasId].GetUnit(_previewSprite);
             _previewAnim.Init(spriteData);
+            _lastPreviewSpriteData = spriteData;
         }
     }
 
@@ -1361,11 +2768,23 @@ public class UnitEditorWindow
     private string[] BuildZombieTypeList()
     {
         var list = new List<string> { "" };
+        // U16: Section header for units
+        list.Add("-- Units --");
         foreach (var id in _gameData.Units.GetIDs())
         {
-            var d = _gameData.Units.Get(id);
-            if (d != null && d.Faction == "Undead")
-                list.Add(id);
+            list.Add(id); // RU29: include all units, not just Undead
+        }
+        // U16: Section header for groups — RU30: prefix with "Group: " and show display name
+        var groupIds = _gameData.UnitGroups.GetIDs();
+        if (groupIds.Count > 0)
+        {
+            list.Add("-- Groups --");
+            foreach (var gId in groupIds)
+            {
+                var gDef = _gameData.UnitGroups.Get(gId);
+                string displayName = gDef?.DisplayName ?? gId;
+                list.Add($"Group: {displayName} [{gId}]");
+            }
         }
         return list.ToArray();
     }
@@ -1378,28 +2797,85 @@ public class UnitEditorWindow
         return list.ToArray();
     }
 
-    private string[] BuildWeaponDropdownList()
+    // U17: Build spell dropdown with "DisplayName (id)" format
+    private string[] BuildSpellDropdownDisplayList()
     {
         var list = new List<string> { "" };
+        foreach (var id in _gameData.Spells.GetIDs())
+        {
+            var spell = _gameData.Spells.Get(id);
+            string displayName = spell?.DisplayName ?? "";
+            list.Add(string.IsNullOrEmpty(displayName) ? id : $"{displayName} ({id})");
+        }
+        return list.ToArray();
+    }
+
+    // RU33: Build weapon dropdown with display names and parallel ID list
+    private void BuildWeaponDropdownLists(out string[] displayNames, out string[] ids)
+    {
+        var dispList = new List<string> { "" };
+        var idList = new List<string> { "" };
         foreach (var id in _gameData.Weapons.GetIDs())
-            list.Add(id);
-        return list.ToArray();
+        {
+            var w = _gameData.Weapons.Get(id);
+            string name = w?.DisplayName ?? "";
+            dispList.Add(string.IsNullOrEmpty(name) ? id : $"{name} ({id})");
+            idList.Add(id);
+        }
+        displayNames = dispList.ToArray();
+        ids = idList.ToArray();
     }
 
-    private string[] BuildArmorDropdownList()
+    private void BuildArmorDropdownLists(out string[] displayNames, out string[] ids)
     {
-        var list = new List<string> { "" };
+        var dispList = new List<string> { "" };
+        var idList = new List<string> { "" };
         foreach (var id in _gameData.Armors.GetIDs())
-            list.Add(id);
-        return list.ToArray();
+        {
+            var a = _gameData.Armors.Get(id);
+            string name = a?.DisplayName ?? "";
+            dispList.Add(string.IsNullOrEmpty(name) ? id : $"{name} ({id})");
+            idList.Add(id);
+        }
+        displayNames = dispList.ToArray();
+        ids = idList.ToArray();
     }
 
-    private string[] BuildShieldDropdownList()
+    private void BuildShieldDropdownLists(out string[] displayNames, out string[] ids)
     {
-        var list = new List<string> { "" };
+        var dispList = new List<string> { "" };
+        var idList = new List<string> { "" };
         foreach (var id in _gameData.Shields.GetIDs())
-            list.Add(id);
-        return list.ToArray();
+        {
+            var s = _gameData.Shields.Get(id);
+            string name = s?.DisplayName ?? "";
+            dispList.Add(string.IsNullOrEmpty(name) ? id : $"{name} ({id})");
+            idList.Add(id);
+        }
+        displayNames = dispList.ToArray();
+        ids = idList.ToArray();
+    }
+
+    /// <summary>Find an ID in a parallel array by matching the display string, return the corresponding ID.</summary>
+    private static string MapDisplayToId(string displayValue, string[] displayNames, string[] ids)
+    {
+        for (int i = 0; i < displayNames.Length; i++)
+        {
+            if (displayNames[i] == displayValue)
+                return i < ids.Length ? ids[i] : displayValue;
+        }
+        return displayValue; // fallback
+    }
+
+    /// <summary>Find the display name for a raw ID.</summary>
+    private static string MapIdToDisplay(string id, string[] displayNames, string[] ids)
+    {
+        for (int i = 0; i < ids.Length; i++)
+        {
+            if (ids[i] == id)
+                return i < displayNames.Length ? displayNames[i] : id;
+        }
+        return id; // fallback
     }
 
     private static AnimState NameToAnimState(string name)
@@ -1460,7 +2936,83 @@ public class UnitEditorWindow
             def.Sprite = new SpriteRef { AtlasName = src.Sprite.AtlasName, SpriteName = src.Sprite.SpriteName };
         }
 
+        // Clone weapon points
+        foreach (var (animKey, yawDict) in src.WeaponPoints)
+        {
+            var newYawDict = new Dictionary<string, List<WeaponFrameData>>();
+            foreach (var (yawKey, frames) in yawDict)
+            {
+                var newFrames = new List<WeaponFrameData>();
+                foreach (var f in frames)
+                {
+                    newFrames.Add(new WeaponFrameData
+                    {
+                        Hilt = new WeaponPointData { X = f.Hilt.X, Y = f.Hilt.Y, Behind = f.Hilt.Behind },
+                        Tip = new WeaponPointData { X = f.Tip.X, Y = f.Tip.Y, Behind = f.Tip.Behind },
+                    });
+                }
+                newYawDict[yawKey] = newFrames;
+            }
+            def.WeaponPoints[animKey] = newYawDict;
+        }
+
+        // Clone anim timings
+        foreach (var (animKey, timing) in src.AnimTimings)
+        {
+            def.AnimTimings[animKey] = new UnitAnimTimingOverride
+            {
+                FrameDurationsMs = new List<int>(timing.FrameDurationsMs),
+                EffectTimeMs = timing.EffectTimeMs,
+            };
+        }
+
         return def;
+    }
+
+    private static WeaponDef CloneWeapon(WeaponDef src, string newId)
+    {
+        return new WeaponDef
+        {
+            Id = newId,
+            DisplayName = src.DisplayName + " (Copy)",
+            Damage = src.Damage,
+            AttackBonus = src.AttackBonus,
+            DefenseBonus = src.DefenseBonus,
+            Length = src.Length,
+            IsRanged = src.IsRanged,
+            Range = src.Range,
+            DirectRange = src.DirectRange,
+            Cooldown = src.Cooldown,
+            RangedDamage = src.RangedDamage,
+            Precision = src.Precision,
+            ProjectileType = src.ProjectileType,
+            Bonuses = new List<string>(src.Bonuses),
+        };
+    }
+
+    private static ArmorDef CloneArmor(ArmorDef src, string newId)
+    {
+        return new ArmorDef
+        {
+            Id = newId,
+            DisplayName = src.DisplayName + " (Copy)",
+            BodyProtection = src.BodyProtection,
+            HeadProtection = src.HeadProtection,
+            Encumbrance = src.Encumbrance,
+            Bonuses = new List<string>(src.Bonuses),
+        };
+    }
+
+    private static ShieldDef CloneShield(ShieldDef src, string newId)
+    {
+        return new ShieldDef
+        {
+            Id = newId,
+            DisplayName = src.DisplayName + " (Copy)",
+            Protection = src.Protection,
+            Parry = src.Parry,
+            Defense = src.Defense,
+        };
     }
 
     private static int IndexOf(IReadOnlyList<string> list, string value)

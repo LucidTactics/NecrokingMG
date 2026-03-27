@@ -1,5 +1,6 @@
 using System;
 using Necroking.Core;
+using Necroking.Data.Registries;
 using Necroking.GameSystems;
 using Necroking.World;
 
@@ -19,6 +20,16 @@ public abstract class ScenarioBase
     public abstract bool IsComplete { get; }
     public abstract int OnComplete(Simulation sim);
 
+    // Bloom settings override (set by scenario, consumed by Game1)
+    public BloomSettings? BloomOverride;
+
+    // Request a specific menu state (editor) to be opened by Game1
+    // Set to non-null to have Game1 switch to that MenuState
+    public string? RequestedMenuState;
+
+    // Request that Game1 select the first item in the active editor
+    public bool RequestSelectFirst;
+
     // Camera override
     public bool HasCameraOverride;
     public float CameraX, CameraY, CameraZoom = 64f;
@@ -30,6 +41,18 @@ public abstract class ScenarioBase
         CameraY = worldY;
         CameraZoom = zoom;
     }
+
+    // Request tab switch on MapEditor (set to non-null; consumed by Game1)
+    public string? RequestedMapTab;
+
+    // Request tab switch on UIEditor (set to non-null; consumed by Game1)
+    public string? RequestedUITab;
+
+    // Request opening a sub-editor popup on UnitEditor
+    public bool RequestOpenWeaponSub;
+
+    // Request opening the buff manager popup on SpellEditor
+    public bool RequestOpenBuffManager;
 
     // Deferred screenshot name (taken by main loop after rendering)
     public string? DeferredScreenshot;

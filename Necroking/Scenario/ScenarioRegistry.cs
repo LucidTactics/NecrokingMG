@@ -32,6 +32,12 @@ public static class ScenarioRegistry
         Register("shadow_test", () => new Scenarios.ShadowTestScenario());
         Register("grass_wall_depth", () => new Scenarios.GrassWallDepthScenario());
         Register("road_rim", () => new Scenarios.RoadRimScenario());
+        Register("editor_screenshots", () => new Scenarios.EditorScreenshotScenario());
+        Register("ui_test", () => new Scenarios.EditorUITestScenario());
+        Register("anim_button_test", () => new Scenarios.AnimButtonTestScenario());
+        Register("bloom_test", () => new Scenarios.BloomTestScenario());
+        Register("bloom_debug", () => new Scenarios.BloomDebugScenario());
+        Register("spell_visual_test", () => new Scenarios.SpellVisualTestScenario());
     }
 
     public static void Register(string name, Func<ScenarioBase> creator)

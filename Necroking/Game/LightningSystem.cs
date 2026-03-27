@@ -160,11 +160,13 @@ public class LightningSystem
         });
     }
 
-    public void SpawnZap(Vec2 start, Vec2 end, float duration, LightningStyle style)
+    public void SpawnZap(Vec2 start, Vec2 end, float duration, LightningStyle style,
+                         float startHeight = 0f, float endHeight = 0f)
     {
         _zaps.Add(new ActiveZap
         {
-            StartPos = start, EndPos = end, Duration = duration, Style = style
+            StartPos = start, EndPos = end, Duration = duration, Style = style,
+            StartHeight = startHeight, EndHeight = endHeight
         });
     }
 

@@ -74,6 +74,7 @@ public class RoadSystem
     public int JunctionCount => _junctions.Count;
     public RoadJunction GetJunction(int i) => _junctions[i];
     public IReadOnlyList<RoadJunction> Junctions => _junctions;
+    public void SetJunctions(List<RoadJunction> junctions) { _junctions.Clear(); _junctions.AddRange(junctions); }
 
     public static Vec2 CatmullRom(Vec2 p0, Vec2 p1, Vec2 p2, Vec2 p3, float t)
     {

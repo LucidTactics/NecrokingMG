@@ -9,6 +9,34 @@ public class SpriteRef
     [JsonPropertyName("name")] public string SpriteName { get; set; } = "";
 }
 
+/// <summary>
+/// A single weapon attachment point (hilt or tip) with position and behind-flag.
+/// </summary>
+public class WeaponPointData
+{
+    [JsonPropertyName("x")] public float X { get; set; }
+    [JsonPropertyName("y")] public float Y { get; set; }
+    [JsonPropertyName("behind")] public bool Behind { get; set; }
+}
+
+/// <summary>
+/// Weapon point data for a single frame at a given yaw: hilt + tip positions.
+/// </summary>
+public class WeaponFrameData
+{
+    [JsonPropertyName("hilt")] public WeaponPointData Hilt { get; set; } = new();
+    [JsonPropertyName("tip")] public WeaponPointData Tip { get; set; } = new();
+}
+
+/// <summary>
+/// Per-animation timing override for a unit: frame durations and effect time.
+/// </summary>
+public class UnitAnimTimingOverride
+{
+    [JsonPropertyName("frameDurationsMs")] public List<int> FrameDurationsMs { get; set; } = new();
+    [JsonPropertyName("effectTimeMs")] public int EffectTimeMs { get; set; } = -1;
+}
+
 public class UnitStatsJson
 {
     [JsonPropertyName("maxHP")] public int MaxHP { get; set; } = 10;
@@ -43,6 +71,18 @@ public class UnitDef : IHasId
     [JsonPropertyName("weapons")] public List<string> Weapons { get; set; } = new();
     [JsonPropertyName("armors")] public List<string> Armors { get; set; } = new();
     [JsonPropertyName("shields")] public List<string> Shields { get; set; } = new();
+
+    /// <summary>
+    /// Weapon attachment points: anim name -> yaw angle -> list of WeaponFrameData (one per frame).
+    /// </summary>
+    [JsonPropertyName("weaponPoints")]
+    public Dictionary<string, Dictionary<string, List<WeaponFrameData>>> WeaponPoints { get; set; } = new();
+
+    /// <summary>
+    /// Per-animation timing overrides: anim name -> UnitAnimTimingOverride.
+    /// </summary>
+    [JsonPropertyName("animTimings")]
+    public Dictionary<string, UnitAnimTimingOverride> AnimTimings { get; set; } = new();
 }
 
 public class UnitRegistry : RegistryBase<UnitDef>

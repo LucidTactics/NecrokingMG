@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
+using Necroking.Core;
 
 namespace Necroking.World;
 
@@ -64,6 +65,14 @@ public class EnvironmentObjectDef
     public bool AutoSpawn { get; set; }
     public float SpawnOffsetX { get; set; }
     public float SpawnOffsetY { get; set; } = 1.5f;
+
+    // Building costs
+    public int CostWood { get; set; }
+    public int CostStone { get; set; }
+    public int CostGold { get; set; }
+
+    // Tint color (used by color harmonizer M04)
+    public HdrColor TintColor { get; set; } = new(255, 255, 255, 255, 1f);
 }
 
 public struct PlacedObject
@@ -128,10 +137,46 @@ public class EnvironmentSystem
     }
 
     public void ClearObjects() { _objects.Clear(); _objectRuntime.Clear(); _processState.Clear(); }
+    public void ClearDefs() { _defs.Clear(); _textures.Clear(); }
     public int ObjectCount => _objects.Count;
     public PlacedObject GetObject(int idx) => _objects[idx];
     public PlacedObjectRuntime GetObjectRuntime(int idx) => _objectRuntime[idx];
     public BuildingProcessState GetProcessState(int idx) => _processState[idx];
+
+    /// <summary>
+    /// Check whether a new object of the given def can be placed at (x,y) without
+    /// overlapping the collision radius of any existing object.
+    /// Returns true if placement is valid (no overlap or def has no collision).
+    /// </summary>
+    public bool CanPlaceObject(int defIndex, float x, float y, float scale = 1f)
+    {
+        if (defIndex < 0 || defIndex >= _defs.Count) return false;
+        var newDef = _defs[defIndex];
+        float newRadius = newDef.CollisionRadius * scale;
+        float newCX = x + newDef.CollisionOffsetX;
+        float newCY = y + newDef.CollisionOffsetY;
+
+        // If the new object has no collision radius, always allow placement
+        if (newRadius <= 0f) return true;
+
+        for (int i = 0; i < _objects.Count; i++)
+        {
+            var obj = _objects[i];
+            var existDef = _defs[obj.DefIndex];
+            float existRadius = existDef.CollisionRadius * obj.Scale;
+            if (existRadius <= 0f) continue;
+
+            float existCX = obj.X + existDef.CollisionOffsetX;
+            float existCY = obj.Y + existDef.CollisionOffsetY;
+
+            float dx = newCX - existCX;
+            float dy = newCY - existCY;
+            float minDist = newRadius + existRadius;
+            if (dx * dx + dy * dy < minDist * minDist)
+                return false;
+        }
+        return true;
+    }
 
     public void BakeCollisions(TileGrid grid)
     {
@@ -172,6 +217,25 @@ public class EnvironmentSystem
     {
         if (defIdx < 0 || defIdx >= _textures.Count) return null;
         return _textures[defIdx];
+    }
+
+    /// <summary>
+    /// Reload texture for a single def (e.g. after changing TexturePath in the editor).
+    /// </summary>
+    public void ReloadDefTexture(int defIdx)
+    {
+        if (_device == null || defIdx < 0 || defIdx >= _defs.Count) return;
+        while (_textures.Count <= defIdx) _textures.Add(null);
+        _textures[defIdx]?.Dispose();
+        _textures[defIdx] = null;
+        string path = _defs[defIdx].TexturePath;
+        if (string.IsNullOrEmpty(path) || !System.IO.File.Exists(path)) return;
+        try
+        {
+            using var stream = System.IO.File.OpenRead(path);
+            _textures[defIdx] = Texture2D.FromStream(_device, stream);
+        }
+        catch { /* skip failed loads */ }
     }
 
     /// <summary>
