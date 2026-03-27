@@ -1045,8 +1045,8 @@ public class Simulation
             Timestamp = _gameTime,
             AttackerName = GetUnitDisplayName(attackerIdx),
             DefenderName = GetUnitDisplayName(defenderIdx),
-            AttackerFaction = _units.Faction[attackerIdx] == Faction.Undead ? 'A' : 'B',
-            DefenderFaction = _units.Faction[defenderIdx] == Faction.Undead ? 'A' : 'B',
+            AttackerFaction = _units.Faction[attackerIdx] == Faction.Undead ? 'A' : _units.Faction[attackerIdx] == Faction.Animal ? 'C' : 'B',
+            DefenderFaction = _units.Faction[defenderIdx] == Faction.Undead ? 'A' : _units.Faction[defenderIdx] == Faction.Animal ? 'C' : 'B',
             WeaponName = atkStats.MeleeWeapons.Count > 0 ? atkStats.MeleeWeapons[0].Name : "Unarmed",
             AttackBase = atkStats.Attack,
             AttackDRN = atkDRN,
@@ -1115,8 +1115,23 @@ public class Simulation
     // --- Helpers ---
     private void MoveTowardUnit(int i, int targetIdx, float speed)
     {
-        Vec2 dir = (_units.Position[targetIdx] - _units.Position[i]).Normalized();
-        _units.PreferredVel[i] = dir * speed;
+        Vec2 targetPos = _units.Position[targetIdx];
+        Vec2 myPos = _units.Position[i];
+        float dist = (targetPos - myPos).Length();
+
+        // Use pathfinder for longer distances to navigate around obstacles
+        if (dist > 3f && _pathfinder != null && _pathfinder.Grid != null)
+        {
+            int sizeTier = TerrainCosts.SizeToTier(_units.Size[i]);
+            Vec2 dir = _pathfinder.GetDirection(myPos, targetPos, _frameNumber, sizeTier, i);
+            _units.PreferredVel[i] = dir * speed;
+        }
+        else
+        {
+            // Close range: beeline directly
+            Vec2 dir = dist > 0.01f ? (targetPos - myPos) * (1f / dist) : Vec2.Zero;
+            _units.PreferredVel[i] = dir * speed;
+        }
     }
 
     private CombatTarget FindBestEnemyTarget(int unitIdx)
@@ -1217,6 +1232,63 @@ public class Simulation
         int idx = _units.AddUnit(pos, UnitType.Dynamic);
         _units.UnitDefID[idx] = unitID;
         return idx;
+    }
+
+    /// <summary>
+    /// Mark a corpse as dissolving/consumed so it fades out and is removed.
+    /// </summary>
+    public void ConsumeCorpse(int corpseIdx)
+    {
+        if (corpseIdx >= 0 && corpseIdx < _corpses.Count)
+        {
+            _corpses[corpseIdx].Dissolving = true;
+            _corpses[corpseIdx].ConsumedBySummon = true;
+        }
+    }
+
+    /// <summary>
+    /// Transform an existing unit into a new unit type, preserving position and facing.
+    /// Matches C++ Simulation::transformUnit.
+    /// </summary>
+    public void TransformUnit(int unitIdx, string newUnitID)
+    {
+        if (_gameData == null || unitIdx < 0 || unitIdx >= _units.Count) return;
+        var def = _gameData.Units.Get(newUnitID);
+        if (def == null) return;
+
+        // Rebuild stats from the new unit definition
+        var newStats = _gameData.Units.BuildStats(newUnitID, _gameData.Weapons, _gameData.Armors, _gameData.Shields);
+        _units.Stats[unitIdx] = newStats;
+        _units.UnitDefID[unitIdx] = newUnitID;
+        _units.Size[unitIdx] = def.Size;
+        _units.Radius[unitIdx] = def.Radius;
+        _units.MaxSpeed[unitIdx] = newStats.CombatSpeed;
+        _units.OrcaPriority[unitIdx] = def.OrcaPriority;
+        _units.Faction[unitIdx] = def.Faction == "Human" ? Faction.Human : Faction.Undead;
+        _units.SpriteScale[unitIdx] = def.SpriteScale;
+        // Reset HP to new max
+        _units.Stats[unitIdx].HP = newStats.MaxHP;
+
+        // Reset AI behavior from the new definition
+        _units.AI[unitIdx] = def.AI switch
+        {
+            "PlayerControlled" => AIBehavior.PlayerControlled,
+            "AttackClosest" => AIBehavior.AttackClosest,
+            "AttackNecromancer" => AIBehavior.AttackNecromancer,
+            "GuardKnight" => AIBehavior.GuardKnight,
+            "ArcherAttack" => AIBehavior.ArcherAttack,
+            "CorpseWorker" => AIBehavior.CorpseWorker,
+            _ => AIBehavior.AttackClosest
+        };
+    }
+
+    /// <summary>
+    /// Resolve a stable UnitID back to an index in the current UnitArrays.
+    /// Returns -1 if not found.
+    /// </summary>
+    public int ResolveUnitID(uint unitID)
+    {
+        return UnitUtil.ResolveUnitIndex(_units, unitID);
     }
 
     public string GetUnitDisplayName(int unitIdx)

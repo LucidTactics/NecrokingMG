@@ -562,16 +562,16 @@ public class MapEditorWindow
             _tabScroll[tabIdx] = MathF.Max(0, _tabScroll[tabIdx] - scrollDelta * 0.2f);
         }
 
-        // --- Save (Ctrl+S) ---
-        if (kb.IsKeyDown(Keys.LeftControl) && kb.IsKeyDown(Keys.S) && _prevKb.IsKeyUp(Keys.S))
+        // --- Save (Ctrl+S) — suppress when text field is active ---
+        if (!textEditing && kb.IsKeyDown(Keys.LeftControl) && kb.IsKeyDown(Keys.S) && _prevKb.IsKeyUp(Keys.S))
             SaveMap();
 
-        // --- Load (Ctrl+L) ---
-        if (kb.IsKeyDown(Keys.LeftControl) && kb.IsKeyDown(Keys.L) && _prevKb.IsKeyUp(Keys.L))
+        // --- Load (Ctrl+L) — suppress when text field is active ---
+        if (!textEditing && kb.IsKeyDown(Keys.LeftControl) && kb.IsKeyDown(Keys.L) && _prevKb.IsKeyUp(Keys.L))
             LoadMap();
 
-        // --- Undo (Ctrl+Z) ---
-        if (kb.IsKeyDown(Keys.LeftControl) && kb.IsKeyDown(Keys.Z) && _prevKb.IsKeyUp(Keys.Z))
+        // --- Undo (Ctrl+Z) — suppress when text field is active ---
+        if (!textEditing && kb.IsKeyDown(Keys.LeftControl) && kb.IsKeyDown(Keys.Z) && _prevKb.IsKeyUp(Keys.Z))
         {
             PerformUndo();
             _statusMessage = $"Undo ({_undoStack.Count} remaining)";

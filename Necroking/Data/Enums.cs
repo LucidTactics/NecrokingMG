@@ -9,7 +9,7 @@ public enum UnitType : byte
     Count
 }
 
-public enum Faction : byte { Undead = 0, Human = 1 }
+public enum Faction : byte { Undead = 0, Human = 1, Animal = 2 }
 
 public enum AIBehavior : byte
 {

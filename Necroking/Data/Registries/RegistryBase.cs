@@ -45,6 +45,27 @@ public abstract class RegistryBase<TDef> where TDef : class, IHasId, new()
         _orderedIDs.Remove(id);
     }
 
+    /// <summary>
+    /// Rename an item's ID. Returns false if newId already exists (and isn't the same item)
+    /// or if oldId doesn't exist. Updates the internal dictionary and ordered list.
+    /// </summary>
+    public bool RenameId(string oldId, string newId)
+    {
+        if (string.IsNullOrEmpty(newId)) return false;
+        if (oldId == newId) return true; // no-op
+        if (_defs.ContainsKey(newId)) return false; // duplicate
+        if (!_defs.TryGetValue(oldId, out var def)) return false; // not found
+
+        _defs.Remove(oldId);
+        def.Id = newId;
+        _defs[newId] = def;
+
+        int idx = _orderedIDs.IndexOf(oldId);
+        if (idx >= 0) _orderedIDs[idx] = newId;
+
+        return true;
+    }
+
     protected virtual JsonSerializerOptions CreateJsonOptions()
     {
         var options = new JsonSerializerOptions

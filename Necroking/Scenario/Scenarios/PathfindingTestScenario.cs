@@ -191,10 +191,13 @@ public class PathfindingTestScenario : ScenarioBase
         grid.RebuildCostField();
         sim.RebuildPathfinder();
 
-        // Unit in chunk 0, just left of the boundary, aligned with the cup opening
-        Vec2 startPos = new(62f, 32f);
-        // Target is in chunk 0, far south — unit must go right through cup, then south
-        Vec2 target = new(55f, 60f);
+        // Unit INSIDE the cup (in chunk 1)
+        Vec2 startPos = new(67f, 32f);
+        // Target is ALSO in chunk 1 but outside the cup, below the bottom wall
+        // The cup bottom wall is at y=35, so target at y=45 is in the same chunk but unreachable
+        // from inside the cup via same-sector flow. Unit must leave chunk 1 (go left into chunk 0),
+        // navigate around the wall at x=64, and re-enter chunk 1 below the cup.
+        Vec2 target = new(67f, 45f);
 
         int idx = units.AddUnit(startPos, UnitType.Skeleton);
         units.AI[idx] = AIBehavior.MoveToPoint;

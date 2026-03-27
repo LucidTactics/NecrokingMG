@@ -126,9 +126,10 @@ public class WallEditorWindow
         // Handle keyboard shortcuts
         var kb = Keyboard.GetState();
         var prevKb = _ui._prevKb;
+        bool textActive = _ui.IsTextInputActive;
 
-        // Escape: close dropdown first, then close window
-        if (kb.IsKeyDown(Keys.Escape) && prevKb.IsKeyUp(Keys.Escape))
+        // Escape: close dropdown first, then close window (suppress when text field is active — EditorBase handles Escape)
+        if (!textActive && kb.IsKeyDown(Keys.Escape) && prevKb.IsKeyUp(Keys.Escape))
         {
             if (!_ui.CloseActiveDropdown())
             {
@@ -137,8 +138,8 @@ public class WallEditorWindow
             }
         }
 
-        // Ctrl+S to save
-        if (kb.IsKeyDown(Keys.LeftControl) && kb.IsKeyDown(Keys.S) && prevKb.IsKeyUp(Keys.S))
+        // Ctrl+S to save (suppress when text field is active)
+        if (!textActive && kb.IsKeyDown(Keys.LeftControl) && kb.IsKeyDown(Keys.S) && prevKb.IsKeyUp(Keys.S))
             Save();
 
         // Block input to layer 0 (parent editor) while this popup is open

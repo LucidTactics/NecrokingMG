@@ -47,7 +47,7 @@ public class UnitEditorWindow
     /// <summary>Whether a unit is currently selected.</summary>
     public bool HasSelection => _selectedIdx >= 0;
     private string _searchFilter = "";
-    private int _factionTab; // 0=All, 1=Undead, 2=Human
+    private int _factionTab; // 0=All, 1=Undead, 2=Human, 3=Animal
     private List<string> _filteredIds = new();
 
     // --- Right panel scroll ---
@@ -128,7 +128,7 @@ public class UnitEditorWindow
     private const int SearchH = 24;
 
     // --- Faction filter labels ---
-    private static readonly string[] FactionTabs = { "All", "Undead", "Human" };
+    private static readonly string[] FactionTabs = { "All", "Undead", "Human", "Animal" };
 
     // --- AI behavior names ---
     private static readonly string[] AINames = Enum.GetNames<AIBehavior>();
@@ -146,9 +146,33 @@ public class UnitEditorWindow
         _gameData = gameData;
     }
 
-    public void SetAtlases(SpriteAtlas[] atlases)
+    private GraphicsDevice? _graphicsDevice;
+
+    public void SetAtlases(SpriteAtlas[] atlases, GraphicsDevice? device = null)
     {
         _atlases = atlases;
+        if (device != null) _graphicsDevice = device;
+    }
+
+    /// <summary>
+    /// Rescan the sprites directory for new .spritemeta files and load any new atlases.
+    /// </summary>
+    private void RefreshAtlases()
+    {
+        if (_graphicsDevice == null) return;
+        AtlasDefs.ScanSpritesDirectory("assets/Sprites");
+        int oldCount = _atlases.Length;
+        if (AtlasDefs.TotalCount > oldCount)
+        {
+            Array.Resize(ref _atlases, AtlasDefs.TotalCount);
+            for (int i = oldCount; i < AtlasDefs.TotalCount; i++)
+            {
+                _atlases[i] = new SpriteAtlas();
+                string name = AtlasDefs.Names[i];
+                _atlases[i].Load(_graphicsDevice, $"assets/Sprites/{name}.png", $"assets/Sprites/{name}.spritemeta");
+            }
+            DebugLog.Log("editor", $"Refreshed atlases: {AtlasDefs.TotalCount} total ({AtlasDefs.TotalCount - oldCount} new)");
+        }
     }
 
     /// <summary>
@@ -518,6 +542,7 @@ public class UnitEditorWindow
             // Faction filter
             if (_factionTab == 1 && def.Faction != "Undead") continue;
             if (_factionTab == 2 && def.Faction != "Human") continue;
+            if (_factionTab == 3 && def.Faction != "Animal") continue;
 
             // Search filter
             if (!string.IsNullOrEmpty(_searchFilter))
@@ -549,6 +574,7 @@ public class UnitEditorWindow
             string faction = def?.Faction ?? "";
             factionColors.Add(faction == "Undead" ? new Color(80, 200, 80) :
                               faction == "Human" ? new Color(80, 140, 220) :
+                              faction == "Animal" ? new Color(200, 160, 60) :
                               EditorBase.TextDim);
         }
 
@@ -776,16 +802,21 @@ public class UnitEditorWindow
         int ctrlW = w - previewSize - 20;
         int ctrlY = previewY;
 
-        // Atlas dropdown
+        // Atlas dropdown + Refresh button
         string[] atlasNames = AtlasDefs.Names;
         string currentAtlas = def.Sprite?.AtlasName ?? "";
-        string newAtlas = _ui.DrawCombo("prev_atlas", "Atlas", currentAtlas, atlasNames, ctrlX, ctrlY, ctrlW);
+        int refreshBtnW = 50;
+        string newAtlas = _ui.DrawCombo("prev_atlas", "Atlas", currentAtlas, atlasNames, ctrlX, ctrlY, ctrlW - refreshBtnW - 4);
         if (newAtlas != currentAtlas)
         {
             if (def.Sprite == null) def.Sprite = new SpriteRef();
             def.Sprite.AtlasName = newAtlas;
             _unsavedChanges = true;
             SyncPreviewToSelected();
+        }
+        if (_ui.DrawButton("Refresh", ctrlX + ctrlW - refreshBtnW, ctrlY, refreshBtnW, 20))
+        {
+            RefreshAtlases();
         }
         ctrlY += RowH;
 
@@ -1484,6 +1515,10 @@ public class UnitEditorWindow
     //  RU02: NAME / ID FIELDS (above sprite preview)
     // =========================================================================
 
+    private string _pendingIdEdit = ""; // buffer for ID editing
+    private bool _idEditFailed;
+    private float _idEditFailTimer;
+
     private int DrawNameIdFields(UnitDef def, int x, int y, int w)
     {
         int curY = y;
@@ -1493,12 +1528,68 @@ public class UnitEditorWindow
         if (newName != def.DisplayName) { def.DisplayName = newName; _unsavedChanges = true; }
         curY += RowH;
 
-        // ID (read-only display)
-        _ui.DrawText("ID", new Vector2(x, curY + 2), EditorBase.TextDim);
-        _ui.DrawText(def.Id, new Vector2(x + 120, curY + 2), EditorBase.TextColor);
+        // ID (editable with validation)
+        string newId = _ui.DrawTextField("unit_id", "ID", def.Id, x, curY, w);
+        if (newId != def.Id && !_ui.IsFieldActive("unit_id"))
+        {
+            // Field lost focus with a changed value — try to rename
+            string oldId = def.Id;
+            if (_gameData.Units.RenameId(oldId, newId))
+            {
+                // Update all references across the game data
+                UpdateUnitIdReferences(oldId, newId);
+                _unsavedChanges = true;
+                _idEditFailed = false;
+            }
+            else
+            {
+                // Duplicate or invalid — flash red warning
+                _idEditFailed = true;
+                _idEditFailTimer = 2f;
+            }
+        }
+        if (_idEditFailed && _idEditFailTimer > 0)
+        {
+            _idEditFailTimer -= 1f / 60f;
+            _ui.DrawText("ID already exists!", new Vector2(x + 120, curY + 14),
+                new Color((byte)255, (byte)80, (byte)80, (byte)(255 * Math.Min(1f, _idEditFailTimer))));
+        }
         curY += RowH;
 
         return curY;
+    }
+
+    /// <summary>
+    /// Update all references to a unit ID across the game data when it's renamed.
+    /// </summary>
+    private void UpdateUnitIdReferences(string oldId, string newId)
+    {
+        // Update other units' zombie type references
+        foreach (var uid in _gameData.Units.GetIDs())
+        {
+            var u = _gameData.Units.Get(uid);
+            if (u == null) continue;
+            if (u.ZombieTypeID == oldId) u.ZombieTypeID = newId;
+        }
+
+        // Update unit group entries
+        foreach (var gid in _gameData.UnitGroups.GetIDs())
+        {
+            var g = _gameData.UnitGroups.Get(gid);
+            if (g?.Entries == null) continue;
+            foreach (var entry in g.Entries)
+            {
+                if (entry.UnitDefID == oldId) entry.UnitDefID = newId;
+            }
+        }
+
+        // Update spell summon unit IDs
+        foreach (var sid in _gameData.Spells.GetIDs())
+        {
+            var s = _gameData.Spells.Get(sid);
+            if (s == null) continue;
+            if (s.SummonUnitID == oldId) s.SummonUnitID = newId;
+        }
     }
 
     // =========================================================================

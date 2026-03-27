@@ -54,7 +54,8 @@ public class DebugDraw
             {
                 if (!units.Alive[i]) continue;
                 DrawCircle(batch, renderer, cam, units.Position[i], units.Radius[i],
-                    units.Faction[i] == Faction.Undead ? Color.Green : Color.Red);
+                    units.Faction[i] == Faction.Undead ? Color.Green :
+                    units.Faction[i] == Faction.Animal ? Color.Yellow : Color.Red);
             }
         }
 
@@ -440,7 +441,8 @@ public class DebugDraw
             }
         }
 
-        // Highlight which sector each unit is in
+        // Highlight which sector each unit is in (draw each sector at most once)
+        var drawnSectors = new HashSet<int>();
         var units = sim.Units;
         for (int i = 0; i < units.Count; i++)
         {
@@ -450,7 +452,9 @@ public class DebugDraw
             int sy = (int)(pos.Y / ss);
             if (sx < 0 || sx >= scx || sy < 0 || sy >= scy) continue;
 
-            // Tint the unit's sector with a subtle faction-colored overlay
+            int sectorKey = sy * scx + sx;
+            if (!drawnSectors.Add(sectorKey)) continue; // already drawn
+
             bool isUndead = units.Faction[i] == 0;
             var sectorTint = isUndead ? new Color(40, 120, 40, 25) : new Color(120, 40, 40, 25);
             var sp = renderer.WorldToScreen(new Vec2(sx * ss, sy * ss), 0f, cam);

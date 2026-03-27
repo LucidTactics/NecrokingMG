@@ -111,6 +111,9 @@ public class Game1 : Microsoft.Xna.Framework.Game
     private SpellEditorWindow _spellEditor = null!;
     private SettingsWindow _settingsWindow = null!;
 
+    // Random
+    private readonly Random _rng = new();
+
     // Collision debug
     private CollisionDebugMode _collisionDebugMode = CollisionDebugMode.Off;
 
@@ -185,14 +188,16 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // Init renderer
         _renderer.Init(_graphics.PreferredBackBufferWidth, _graphics.PreferredBackBufferHeight);
 
-        // Load atlases
-        for (int i = 0; i < (int)AtlasID.Count; i++)
+        // Scan for sprite sheets and load atlases
+        AtlasDefs.ScanSpritesDirectory("assets/Sprites");
+        _atlases = new SpriteAtlas[AtlasDefs.TotalCount];
+        for (int i = 0; i < AtlasDefs.TotalCount; i++)
         {
             _atlases[i] = new SpriteAtlas();
             string name = AtlasDefs.Names[i];
             _atlases[i].Load(GraphicsDevice, $"assets/Sprites/{name}.png", $"assets/Sprites/{name}.spritemeta");
         }
-        DebugLog.Log("startup", "Atlases loaded");
+        DebugLog.Log("startup", $"Atlases loaded: {AtlasDefs.TotalCount} ({string.Join(", ", AtlasDefs.Names)})");
 
         base.Initialize();
     }
@@ -623,6 +628,217 @@ public class Game1 : Microsoft.Xna.Framework.Game
         }
     }
 
+    /// <summary>
+    /// Execute the full summon spell logic matching C++ Simulation::executeSpellCast for Summon category.
+    /// Handles all SummonTargetReq types: None, Corpse, UnitType, CorpseAOE.
+    /// Handles SummonMode: Spawn, Transform.
+    /// </summary>
+    private void ExecuteSummonSpell(SpellDef spell, PendingSpellCast pending, Vec2 necroPos, int necroIdx)
+    {
+        if (spell.SummonTargetReq == "CorpseAOE")
+        {
+            // AOE corpse raise: iterate corpses in range, resolve zombie type per corpse
+            int raised = 0;
+            for (int i = 0; i < _sim.Corpses.Count && raised < spell.SummonQuantity; i++)
+            {
+                var corpse = _sim.Corpses[i];
+                if (corpse.Dissolving || corpse.ConsumedBySummon) continue;
+                if (corpse.DraggedByUnitID != GameConstants.InvalidUnit) continue;
+                float dist = (corpse.Position - pending.TargetPos).Length();
+                if (dist > spell.AoeRadius) continue;
+
+                // Resolve zombie type from corpse's UnitDef
+                var corpseDef = _gameData.Units.Get(corpse.UnitDefID);
+                if (corpseDef == null || string.IsNullOrEmpty(corpseDef.ZombieTypeID)) continue;
+
+                // Resolve actual unit ID: check unit registry first, then groups
+                string resolvedID;
+                if (_gameData.Units.Get(corpseDef.ZombieTypeID) != null)
+                    resolvedID = corpseDef.ZombieTypeID;
+                else
+                    resolvedID = _gameData.UnitGroups.PickRandom(corpseDef.ZombieTypeID) ?? "";
+                if (string.IsNullOrEmpty(resolvedID)) continue;
+
+                var spawnPos = corpse.Position;
+                float corpseFacing = corpse.FacingAngle;
+                _sim.ConsumeCorpse(i);
+
+                SpawnUnit(resolvedID, spawnPos);
+                int idx = _sim.Units.Count - 1;
+                if (idx >= 0)
+                {
+                    _sim.UnitsMut.FacingAngle[idx] = corpseFacing;
+                    _sim.UnitsMut.StandupTimer[idx] = 1.5f;
+                    // Add to horde if undead
+                    if (_sim.Units.Faction[idx] == Faction.Undead &&
+                        _sim.Units.AI[idx] != AIBehavior.PlayerControlled)
+                        _sim.Horde.AddUnit(_sim.Units.Id[idx]);
+                    raised++;
+                }
+
+                // Spawn summon effect at each corpse location
+                SpawnSummonEffect(spell, spawnPos);
+            }
+        }
+        else
+        {
+            // Single corpse consume (Corpse targeting)
+            float corpseFacing = -1f; // -1 = no corpse consumed
+            string summonUnitID = pending.SummonUnitID;
+
+            if (spell.SummonTargetReq == "Corpse" && pending.TargetCorpseIdx >= 0)
+            {
+                // Resolve zombie type from corpse if summonUnitID is empty
+                if (string.IsNullOrEmpty(summonUnitID) && pending.TargetCorpseIdx < _sim.Corpses.Count)
+                {
+                    var corpse = _sim.Corpses[pending.TargetCorpseIdx];
+                    var corpseDef = _gameData.Units.Get(corpse.UnitDefID);
+                    if (corpseDef != null && !string.IsNullOrEmpty(corpseDef.ZombieTypeID))
+                    {
+                        if (_gameData.Units.Get(corpseDef.ZombieTypeID) != null)
+                            summonUnitID = corpseDef.ZombieTypeID;
+                        else
+                            summonUnitID = _gameData.UnitGroups.PickRandom(corpseDef.ZombieTypeID) ?? "";
+                    }
+                }
+                if (pending.TargetCorpseIdx < _sim.Corpses.Count)
+                {
+                    corpseFacing = _sim.Corpses[pending.TargetCorpseIdx].FacingAngle;
+                    _sim.ConsumeCorpse(pending.TargetCorpseIdx);
+                }
+            }
+
+            if (spell.SummonMode == "Transform" && pending.TargetUnitID != GameConstants.InvalidUnit)
+            {
+                // Transform mode: replace existing unit with the summon unit
+                int targetIdx = _sim.ResolveUnitID(pending.TargetUnitID);
+                if (targetIdx >= 0 && !string.IsNullOrEmpty(summonUnitID))
+                {
+                    var targetPos = _sim.Units.Position[targetIdx];
+                    _sim.TransformUnit(targetIdx, summonUnitID);
+
+                    // Rebuild animation for the transformed unit
+                    RebuildUnitAnim(targetIdx, summonUnitID);
+
+                    // Spawn summon effect at target position
+                    SpawnSummonEffect(spell, targetPos);
+                }
+            }
+            else
+            {
+                // Spawn mode
+                if (string.IsNullOrEmpty(summonUnitID)) return;
+
+                Vec2 spawnPos;
+                switch (spell.SpawnLocation)
+                {
+                    case "NearestTargetToMouse":
+                        spawnPos = pending.TargetPos;
+                        break;
+                    case "NearestTargetToCaster":
+                        spawnPos = pending.TargetPos;
+                        break;
+                    case "AdjacentToCaster":
+                    {
+                        float angle = _rng.Next(360) * MathF.PI / 180f;
+                        spawnPos = necroPos + new Vec2(MathF.Cos(angle) * 2f, MathF.Sin(angle) * 2f);
+                        break;
+                    }
+                    case "AtTargetLocation":
+                        spawnPos = pending.TargetPos;
+                        break;
+                    default:
+                        spawnPos = pending.TargetPos;
+                        break;
+                }
+
+                for (int q = 0; q < spell.SummonQuantity; q++)
+                {
+                    var unitSpawnPos = spawnPos;
+                    if (q > 0)
+                    {
+                        // Offset additional spawns slightly
+                        float angle = _rng.Next(360) * MathF.PI / 180f;
+                        unitSpawnPos = spawnPos + new Vec2(MathF.Cos(angle) * 1f, MathF.Sin(angle) * 1f);
+                    }
+
+                    SpawnUnit(summonUnitID, unitSpawnPos);
+                    int idx = _sim.Units.Count - 1;
+                    if (idx >= 0)
+                    {
+                        // Inherit corpse rotation for reanimated units
+                        if (corpseFacing >= 0f)
+                        {
+                            _sim.UnitsMut.FacingAngle[idx] = corpseFacing;
+                            _sim.UnitsMut.StandupTimer[idx] = 1.5f;
+                        }
+                        // Add to horde if undead
+                        if (_sim.Units.Faction[idx] == Faction.Undead &&
+                            _sim.Units.AI[idx] != AIBehavior.PlayerControlled)
+                            _sim.Horde.AddUnit(_sim.Units.Id[idx]);
+                    }
+                }
+
+                // Spawn summon effect at the primary spawn location
+                SpawnSummonEffect(spell, spawnPos);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Spawn the visual summon flipbook effect at a given position.
+    /// </summary>
+    private void SpawnSummonEffect(SpellDef spell, Vec2 pos)
+    {
+        if (spell.SummonFlipbook == null || string.IsNullOrEmpty(spell.SummonFlipbook.FlipbookID)) return;
+
+        var fb = spell.SummonFlipbook;
+        var tint = fb.Color.ToScaledColor();
+        int blendMode = fb.BlendMode == "Additive" ? 1 : 0;
+        int alignment = fb.Alignment == "Upright" ? 1 : 0;
+        float duration = fb.Duration >= 0f ? fb.Duration : 0.4f;
+
+        _effectManager.SpawnSpellImpact(pos, fb.Scale, tint, fb.FlipbookID,
+            fb.Color.Intensity, blendMode, alignment, duration);
+    }
+
+    /// <summary>
+    /// Rebuild animation data for a unit (e.g. after transform).
+    /// </summary>
+    private void RebuildUnitAnim(int unitIdx, string unitDefID)
+    {
+        var unitDef = _gameData.Units.Get(unitDefID);
+        if (unitDef?.Sprite == null) return;
+
+        var atlasId = AtlasDefs.ResolveAtlasName(unitDef.Sprite.AtlasName);
+        var spriteData = _atlases[(int)atlasId].GetUnit(unitDef.Sprite.SpriteName);
+        if (spriteData == null) return;
+
+        var ctrl = new AnimController();
+        ctrl.Init(spriteData);
+        ctrl.ForceState(AnimState.Idle);
+
+        if (_animMeta.Count > 0)
+            ctrl.SetAnimMeta(_animMeta, unitDef.Sprite.SpriteName);
+
+        float refH = 128f;
+        var idleAnim = spriteData.GetAnim("Idle");
+        if (idleAnim != null)
+        {
+            var kfs = idleAnim.GetAngle(30);
+            if (kfs != null && kfs.Count > 0)
+                refH = kfs[0].Frame.Rect.Height;
+        }
+
+        _unitAnims[_sim.Units.Id[unitIdx]] = new UnitAnimData
+        {
+            Ctrl = ctrl,
+            AtlasID = atlasId,
+            RefFrameHeight = refH,
+            CachedDefID = unitDefID
+        };
+    }
+
     protected override void LoadContent()
     {
         _spriteBatch = new SpriteBatch(GraphicsDevice);
@@ -675,7 +891,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         _editorUi.SetContext(_spriteBatch, _pixel, _font, _smallFont, _largeFont);
         _unitEditor = new UnitEditorWindow(_editorUi);
         _unitEditor.SetGameData(_gameData);
-        _unitEditor.SetAtlases(_atlases);
+        _unitEditor.SetAtlases(_atlases, GraphicsDevice);
         _unitEditor.SetAnimMeta(_animMeta);
         _spellEditor = new SpellEditorWindow(_editorUi);
         _spellEditor.SetGameData(_gameData);
@@ -803,26 +1019,30 @@ public class Game1 : Microsoft.Xna.Framework.Game
             return;
         }
 
+        // Check if any editor text field is active (persists from previous frame, safe to read before UpdateInput)
+        bool anyTextInputActive = (_editorUi != null && _editorUi.IsTextInputActive)
+            || (_menuState == MenuState.UIEditor && _uiEditor.IsTextInputActive);
+
         // --- F8 collision debug toggle ---
-        if (WasKeyPressed(kb, Keys.F8))
+        if (!anyTextInputActive && WasKeyPressed(kb, Keys.F8))
         {
             _collisionDebugMode = (CollisionDebugMode)(((int)_collisionDebugMode + 1) % (int)CollisionDebugMode.Count);
         }
 
         // --- F9-F12 editor toggles ---
-        if (WasKeyPressed(kb, Keys.F9))
+        if (!anyTextInputActive && WasKeyPressed(kb, Keys.F9))
         {
             _menuState = _menuState == MenuState.UnitEditor ? MenuState.None : MenuState.UnitEditor;
             _editorUi.ClearActiveField();
         }
-        if (WasKeyPressed(kb, Keys.F10))
+        if (!anyTextInputActive && WasKeyPressed(kb, Keys.F10))
         {
             _menuState = _menuState == MenuState.SpellEditor ? MenuState.None : MenuState.SpellEditor;
             _editorUi.ClearActiveField();
         }
-        if (WasKeyPressed(kb, Keys.F11))
+        if (!anyTextInputActive && WasKeyPressed(kb, Keys.F11))
             _menuState = _menuState == MenuState.MapEditor ? MenuState.None : MenuState.MapEditor;
-        if (WasKeyPressed(kb, Keys.F12))
+        if (!anyTextInputActive && WasKeyPressed(kb, Keys.F12))
             _menuState = _menuState == MenuState.UIEditor ? MenuState.None : MenuState.UIEditor;
 
         // --- Pause menu button clicks ---
@@ -873,7 +1093,8 @@ public class Game1 : Microsoft.Xna.Framework.Game
         }
 
         // --- ESC toggles pause menu / closes editor ---
-        if (WasKeyPressed(kb, Keys.Escape))
+        // When a text field is active, Escape is consumed by EditorBase.HandleTextInput to deactivate the field.
+        if (!anyTextInputActive && WasKeyPressed(kb, Keys.Escape))
         {
             if (_menuState == MenuState.Settings)
             {
@@ -919,8 +1140,8 @@ public class Game1 : Microsoft.Xna.Framework.Game
         if (editorOpen)
         {
             // Editors: free camera — map editor handles its own WASD via smooth camera in MapEditorWindow.Update
-            // Other editors: allow arrow key panning
-            if (_menuState != MenuState.MapEditor)
+            // Other editors: allow arrow key panning (suppressed when a text field is active)
+            if (_menuState != MenuState.MapEditor && !anyTextInputActive)
             {
                 Vec2 camMove = Vec2.Zero;
                 if (kb.IsKeyDown(Keys.Up) || kb.IsKeyDown(Keys.W)) camMove.Y -= 1f;
@@ -968,7 +1189,6 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // Editors pause the game
         bool editorActive = _menuState == MenuState.UnitEditor || _menuState == MenuState.SpellEditor
             || _menuState == MenuState.MapEditor || _menuState == MenuState.UIEditor;
-        bool editorInputActive = editorActive && _editorUi != null && _editorUi.IsTextInputActive;
 
         // --- IsMouseOverUI: reset each frame, then test UI elements ---
         _mouseOverUI = false;
@@ -995,6 +1215,17 @@ public class Game1 : Microsoft.Xna.Framework.Game
             // Building placement panel (left side)
             if (_buildingPlacementActive && mouse.X < 180)
                 _mouseOverUI = true;
+
+            // Time control buttons (bottom-right)
+            if (_gameData.Settings.General.ShowTimeControls)
+            {
+                const int tcBtnW = 32, tcBtnH = 22, tcGap = 2, tcNum = 6;
+                int tcTotalW = tcNum * tcBtnW + (tcNum - 1) * tcGap;
+                int tcX = screenW - tcTotalW - 10;
+                int tcY = screenH - 52;
+                if (mouse.X >= tcX && mouse.X < tcX + tcTotalW && mouse.Y >= tcY && mouse.Y < tcY + tcBtnH)
+                    _mouseOverUI = true;
+            }
         }
 
         if (!_paused && !editorActive)
@@ -1167,7 +1398,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 if (string.IsNullOrEmpty(spellId) || necroIdx < 0) continue;
 
                 var result = SpellCaster.TryStartSpellCast(spellId, _gameData.Spells, _sim.NecroState,
-                    _sim.Units, necroIdx, mouseWorld, _sim.Corpses, _pendingSpell);
+                    _sim.Units, necroIdx, mouseWorld, _sim.Corpses, _pendingSpell, _gameData);
 
                 if (result == CastResult.Success)
                 {
@@ -1262,16 +1493,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
                         }
 
                         case "Summon":
-                            string summonId = spell.SummonUnitID;
-                            if (!string.IsNullOrEmpty(summonId))
-                            {
-                                for (int s2 = 0; s2 < spell.SummonQuantity; s2++)
-                                {
-                                    float angle = s2 * MathF.PI * 2f / spell.SummonQuantity;
-                                    var offset = new Vec2(MathF.Cos(angle), MathF.Sin(angle)) * 2f;
-                                    SpawnUnit(summonId, necroPos + offset);
-                                }
-                            }
+                            ExecuteSummonSpell(spell, _pendingSpell, necroPos, necroIdx);
                             break;
 
                         case "Beam":
@@ -1372,7 +1594,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
                     string secSpellId = _secondaryBarState.Slots[sk].SpellID;
                     if (string.IsNullOrEmpty(secSpellId)) continue;
                     var secResult = SpellCaster.TryStartSpellCast(secSpellId, _gameData.Spells, _sim.NecroState,
-                        _sim.Units, necroIdx, mouseWorld, _sim.Corpses, _pendingSpell);
+                        _sim.Units, necroIdx, mouseWorld, _sim.Corpses, _pendingSpell, _gameData);
                     if (secResult == CastResult.Success)
                     {
                         var spell2 = _gameData.Spells.Get(secSpellId);
@@ -1411,9 +1633,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
                                 break;
                             }
                             case "Summon":
-                                if (!string.IsNullOrEmpty(spell2.SummonUnitID))
-                                    for (int ss = 0; ss < spell2.SummonQuantity; ss++)
-                                    { float a2 = ss * MathF.PI * 2f / spell2.SummonQuantity; SpawnUnit(spell2.SummonUnitID, necroPos2 + new Vec2(MathF.Cos(a2), MathF.Sin(a2)) * 2f); }
+                                ExecuteSummonSpell(spell2, _pendingSpell, necroPos2, necroIdx);
                                 break;
                             case "Command":
                                 for (int ci = 0; ci < _sim.Units.Count; ci++)
@@ -1529,13 +1749,33 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 }
             }
 
-            // --- Time controls ---
+            // --- Time controls (keyboard) ---
             if (WasKeyPressed(kb, Keys.OemPlus) || WasKeyPressed(kb, Keys.Add))
                 _timeScale = MathF.Min(_timeScale * 2f, 8f);
             if (WasKeyPressed(kb, Keys.OemMinus) || WasKeyPressed(kb, Keys.Subtract))
                 _timeScale = MathF.Max(_timeScale * 0.5f, 0.25f);
             if (WasKeyPressed(kb, Keys.D0))
                 _timeScale = 1f;
+
+            // --- Time controls (mouse click on buttons) ---
+            if (_gameData.Settings.General.ShowTimeControls
+                && mouse.LeftButton == ButtonState.Pressed && _prevMouse.LeftButton == ButtonState.Released)
+            {
+                ReadOnlySpan<float> tcSpeeds = stackalloc float[] { 0.1f, 0.25f, 0.5f, 1.0f, 1.5f, 2.0f };
+                const int tcBtnW = 32, tcBtnH = 22, tcGap = 2, tcNum = 6;
+                int tcTotalW = tcNum * tcBtnW + (tcNum - 1) * tcGap;
+                int tcBaseX = screenW - tcTotalW - 10;
+                int tcBaseY = screenH - 52;
+                for (int s = 0; s < tcNum; s++)
+                {
+                    int bx = tcBaseX + s * (tcBtnW + tcGap);
+                    if (mouse.X >= bx && mouse.X < bx + tcBtnW && mouse.Y >= tcBaseY && mouse.Y < tcBaseY + tcBtnH)
+                    {
+                        _timeScale = tcSpeeds[s];
+                        break;
+                    }
+                }
+            }
 
             // --- Tick pending projectiles ---
             TickPendingProjectiles(dt);
@@ -1686,15 +1926,15 @@ public class Game1 : Microsoft.Xna.Framework.Game
             }
         }
 
-        // --- Update animations (even when paused for visual polish) ---
-        UpdateAnimations(rawDt);
+        // --- Update animations (scaled by timeScale so they match game speed) ---
+        UpdateAnimations(dt);
 
         // --- Update damage numbers ---
         for (int i = _damageNumbers.Count - 1; i >= 0; i--)
         {
             var dn = _damageNumbers[i];
-            dn.Timer += rawDt;
-            dn.Height += _gameData.Settings.General.DamageNumberSpeed * rawDt;
+            dn.Timer += dt;
+            dn.Height += _gameData.Settings.General.DamageNumberSpeed * dt;
             if (dn.Timer > _gameData.Settings.General.DamageNumberFadeTime)
                 _damageNumbers.RemoveAt(i);
             else
@@ -3533,6 +3773,39 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // --- Bottom: Controls hint ---
         DrawText(_smallFont, "WASD: Move | Scroll: Zoom | ESC: Menu | Space: Jump | G: Ghost | Shift: Run",
             new Vector2(10, screenH - 22), new Color(120, 120, 140, 200));
+
+        // --- Time control buttons (bottom-right) ---
+        if (_gameData.Settings.General.ShowTimeControls && _smallFont != null)
+        {
+            var tcMouse = Mouse.GetState();
+            ReadOnlySpan<float> tcSpeeds = stackalloc float[] { 0.1f, 0.25f, 0.5f, 1.0f, 1.5f, 2.0f };
+            string[] tcLabels = { "<<<", "<<", "<", "=", ">", ">>" };
+            const int tcBtnW = 32, tcBtnH = 22, tcGap = 2, tcNum = 6;
+            int tcTotalW = tcNum * tcBtnW + (tcNum - 1) * tcGap;
+            int tcBaseX = screenW - tcTotalW - 10;
+            int tcBaseY = screenH - 52;
+
+            for (int s = 0; s < tcNum; s++)
+            {
+                int bx = tcBaseX + s * (tcBtnW + tcGap);
+                bool hover = tcMouse.X >= bx && tcMouse.X < bx + tcBtnW
+                          && tcMouse.Y >= tcBaseY && tcMouse.Y < tcBaseY + tcBtnH;
+                bool active = MathF.Abs(_timeScale - tcSpeeds[s]) < 0.001f;
+                Color bg = active ? new Color(70, 100, 160, 220)
+                         : hover  ? new Color(50, 60, 80, 180)
+                                  : new Color(20, 20, 30, 140);
+                _spriteBatch.Draw(_pixel, new Rectangle(bx, tcBaseY, tcBtnW, tcBtnH), bg);
+                var labelSize = _smallFont.MeasureString(tcLabels[s]);
+                DrawText(_smallFont, tcLabels[s],
+                    new Vector2(bx + tcBtnW / 2f - labelSize.X / 2f, tcBaseY + tcBtnH / 2f - labelSize.Y / 2f),
+                    Color.White);
+            }
+
+            // Speed label to the right of buttons
+            string speedText = $"{_timeScale:G2}x";
+            DrawText(_smallFont, speedText, new Vector2(tcBaseX + tcTotalW + 6, tcBaseY + 5),
+                new Color(180, 180, 200, 200));
+        }
 
         // --- Combat log (bottom-left, above controls hint) ---
         if (_gameData.Settings.General.CombatLogEnabled)
