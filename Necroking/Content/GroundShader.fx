@@ -111,8 +111,10 @@ float4 PixelShaderFunction(float2 texCoord : TEXCOORD0) : COLOR0
     float2 screenPos = screenUV * ScreenSize;
 
     // Screen to world coordinate conversion
-    float worldX = (screenPos.x - ScreenSize.x * 0.5) / Zoom + CameraPos.x;
-    float worldY = (screenPos.y - ScreenSize.y * 0.5) / (Zoom * YRatio) + CameraPos.y;
+    // Snap screen position to integer pixel to eliminate subpixel shimmer
+    float2 snappedScreen = floor(screenPos) + 0.5;
+    float worldX = (snappedScreen.x - ScreenSize.x * 0.5) / Zoom + CameraPos.x;
+    float worldY = (snappedScreen.y - ScreenSize.y * 0.5) / (Zoom * YRatio) + CameraPos.y;
     float2 worldPos = float2(worldX, worldY);
 
     // Type boundary warping with noise

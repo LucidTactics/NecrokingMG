@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text.Json;
 using Necroking.Core;
 using Necroking.World;
@@ -314,17 +315,37 @@ public static class MapData
                 };
                 if (gt.TryGetProperty("baseColor", out var bc))
                 {
-                    info.BaseR = (byte)(bc.TryGetProperty("r", out var r) ? r.GetInt32() : 46);
-                    info.BaseG = (byte)(bc.TryGetProperty("g", out var g) ? g.GetInt32() : 102);
-                    info.BaseB = (byte)(bc.TryGetProperty("b", out var b) ? b.GetInt32() : 20);
+                    if (bc.ValueKind == JsonValueKind.Array)
+                    {
+                        var arr = bc.EnumerateArray().ToArray();
+                        info.BaseR = arr.Length > 0 ? (byte)arr[0].GetInt32() : (byte)46;
+                        info.BaseG = arr.Length > 1 ? (byte)arr[1].GetInt32() : (byte)102;
+                        info.BaseB = arr.Length > 2 ? (byte)arr[2].GetInt32() : (byte)20;
+                    }
+                    else
+                    {
+                        info.BaseR = (byte)(bc.TryGetProperty("r", out var r) ? r.GetInt32() : 46);
+                        info.BaseG = (byte)(bc.TryGetProperty("g", out var g) ? g.GetInt32() : 102);
+                        info.BaseB = (byte)(bc.TryGetProperty("b", out var b) ? b.GetInt32() : 20);
+                    }
                 }
                 else { info.BaseR = 46; info.BaseG = 102; info.BaseB = 20; }
 
                 if (gt.TryGetProperty("tipColor", out var tc))
                 {
-                    info.TipR = (byte)(tc.TryGetProperty("r", out var r) ? r.GetInt32() : 100);
-                    info.TipG = (byte)(tc.TryGetProperty("g", out var g) ? g.GetInt32() : 166);
-                    info.TipB = (byte)(tc.TryGetProperty("b", out var b) ? b.GetInt32() : 50);
+                    if (tc.ValueKind == JsonValueKind.Array)
+                    {
+                        var arr = tc.EnumerateArray().ToArray();
+                        info.TipR = arr.Length > 0 ? (byte)arr[0].GetInt32() : (byte)100;
+                        info.TipG = arr.Length > 1 ? (byte)arr[1].GetInt32() : (byte)166;
+                        info.TipB = arr.Length > 2 ? (byte)arr[2].GetInt32() : (byte)50;
+                    }
+                    else
+                    {
+                        info.TipR = (byte)(tc.TryGetProperty("r", out var r) ? r.GetInt32() : 100);
+                        info.TipG = (byte)(tc.TryGetProperty("g", out var g) ? g.GetInt32() : 166);
+                        info.TipB = (byte)(tc.TryGetProperty("b", out var b) ? b.GetInt32() : 50);
+                    }
                 }
                 else { info.TipR = 100; info.TipG = 166; info.TipB = 50; }
 

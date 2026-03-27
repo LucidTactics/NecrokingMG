@@ -63,6 +63,7 @@ public class MapEditorWindow
     private readonly List<GrassTypeDef> _grassTypes = new();
     private byte[] _grassMap = Array.Empty<byte>();
     private int _grassW, _grassH;
+    private float _grassCellSize = 0.8f;
 
     // ---- Editor state ----
     public MapEditorTab ActiveTab = MapEditorTab.Ground;
@@ -379,11 +380,12 @@ public class MapEditorWindow
     /// <summary>
     /// Set the grass data arrays for the editor to manipulate.
     /// </summary>
-    public void SetGrassData(byte[] grassMap, int grassW, int grassH, MapData.GrassTypeInfo[] types)
+    public void SetGrassData(byte[] grassMap, int grassW, int grassH, MapData.GrassTypeInfo[] types, float cellSize = 0.8f)
     {
         _grassMap = grassMap;
         _grassW = grassW;
         _grassH = grassH;
+        _grassCellSize = cellSize > 0f ? cellSize : 0.8f;
         _grassTypes.Clear();
         foreach (var t in types)
         {
@@ -1022,6 +1024,15 @@ public class MapEditorWindow
                     Id = $"grass_{_grassTypes.Count}",
                     Name = $"Grass {_grassTypes.Count}"
                 });
+                // Allocate grass map if none exists yet
+                if (_grassMap.Length == 0 && _groundSystem.WorldW > 0)
+                {
+                    float cs = _grassCellSize > 0f ? _grassCellSize : 0.8f;
+                    _grassW = (int)MathF.Ceiling(_groundSystem.WorldW / cs);
+                    _grassH = (int)MathF.Ceiling(_groundSystem.WorldH / cs);
+                    _grassMap = new byte[_grassW * _grassH];
+                }
+                _onGrassMapChanged?.Invoke();
             }
 
             // Delete Type button (next to Add button)
@@ -1073,9 +1084,10 @@ public class MapEditorWindow
         if (_grassW == 0 || _grassH == 0) return;
 
         Vec2 worldPos = _camera.ScreenToWorld(new Vector2(mouse.X, mouse.Y), screenW, screenH);
-        // Grass cells are 1:1 with world coords (cellSize = 1.0)
-        int cx = (int)MathF.Floor(worldPos.X);
-        int cy = (int)MathF.Floor(worldPos.Y);
+        // Grass cells use cellSize (e.g. 0.8) — must match GrassRenderer mapping
+        float cs = _grassCellSize > 0f ? _grassCellSize : 0.8f;
+        int cx = (int)MathF.Floor(worldPos.X / cs);
+        int cy = (int)MathF.Floor(worldPos.Y / cs);
 
         byte paintValue;
         if (_grassEraserSelected)
@@ -1177,45 +1189,24 @@ public class MapEditorWindow
             if (newName != gt.Name) { gt.Name = newName; changed = true; }
             y += FieldHeight + 2;
 
-            // Base Color
+            // Base Color — LDR color swatch
             DrawSmallText("Base Color:", panelX + Margin, y, AccentColor);
-            // Color swatch preview
-            _spriteBatch.Draw(_pixel, new Rectangle(panelX + Margin + 80, y + 2, 14, 14), new Color(gt.BaseR, gt.BaseG, gt.BaseB));
-            y += LineHeight;
-
-            int newBaseR = _eb.DrawIntField("grass_baseR", "  R", gt.BaseR, panelX + Margin, y, fw);
-            newBaseR = Math.Clamp(newBaseR, 0, 255);
-            if (newBaseR != gt.BaseR) { gt.BaseR = (byte)newBaseR; changed = true; }
+            var baseHdr = new HdrColor(gt.BaseR, gt.BaseG, gt.BaseB, 255, 1.0f);
+            if (_eb.DrawColorSwatch("grass_baseColor", panelX + Margin + 80, y, 40, 18, ref baseHdr, hideIntensity: true))
+            {
+                gt.BaseR = baseHdr.R; gt.BaseG = baseHdr.G; gt.BaseB = baseHdr.B;
+                changed = true;
+            }
             y += FieldHeight + 2;
 
-            int newBaseG = _eb.DrawIntField("grass_baseG", "  G", gt.BaseG, panelX + Margin, y, fw);
-            newBaseG = Math.Clamp(newBaseG, 0, 255);
-            if (newBaseG != gt.BaseG) { gt.BaseG = (byte)newBaseG; changed = true; }
-            y += FieldHeight + 2;
-
-            int newBaseB = _eb.DrawIntField("grass_baseB", "  B", gt.BaseB, panelX + Margin, y, fw);
-            newBaseB = Math.Clamp(newBaseB, 0, 255);
-            if (newBaseB != gt.BaseB) { gt.BaseB = (byte)newBaseB; changed = true; }
-            y += FieldHeight + 2;
-
-            // Tip Color
+            // Tip Color — LDR color swatch
             DrawSmallText("Tip Color:", panelX + Margin, y, AccentColor);
-            _spriteBatch.Draw(_pixel, new Rectangle(panelX + Margin + 80, y + 2, 14, 14), new Color(gt.TipR, gt.TipG, gt.TipB));
-            y += LineHeight;
-
-            int newTipR = _eb.DrawIntField("grass_tipR", "  R", gt.TipR, panelX + Margin, y, fw);
-            newTipR = Math.Clamp(newTipR, 0, 255);
-            if (newTipR != gt.TipR) { gt.TipR = (byte)newTipR; changed = true; }
-            y += FieldHeight + 2;
-
-            int newTipG = _eb.DrawIntField("grass_tipG", "  G", gt.TipG, panelX + Margin, y, fw);
-            newTipG = Math.Clamp(newTipG, 0, 255);
-            if (newTipG != gt.TipG) { gt.TipG = (byte)newTipG; changed = true; }
-            y += FieldHeight + 2;
-
-            int newTipB = _eb.DrawIntField("grass_tipB", "  B", gt.TipB, panelX + Margin, y, fw);
-            newTipB = Math.Clamp(newTipB, 0, 255);
-            if (newTipB != gt.TipB) { gt.TipB = (byte)newTipB; changed = true; }
+            var tipHdr = new HdrColor(gt.TipR, gt.TipG, gt.TipB, 255, 1.0f);
+            if (_eb.DrawColorSwatch("grass_tipColor", panelX + Margin + 80, y, 40, 18, ref tipHdr, hideIntensity: true))
+            {
+                gt.TipR = tipHdr.R; gt.TipG = tipHdr.G; gt.TipB = tipHdr.B;
+                changed = true;
+            }
             y += FieldHeight + 2;
 
             // Density

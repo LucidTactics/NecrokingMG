@@ -47,6 +47,9 @@ public class Game1 : Microsoft.Xna.Framework.Game
     private int _grassW, _grassH;
     private Color[] _grassBaseColors = Array.Empty<Color>();
     private Color[] _grassTipColors = Array.Empty<Color>();
+    private string[] _grassTypeIds = Array.Empty<string>();
+    private string[] _grassTypeNames = Array.Empty<string>();
+    private GrassRenderer _grassRenderer = new();
 
     // Rendering
     private Renderer _renderer = new();
@@ -86,6 +89,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
     private MouseState _prevMouse;
     private float _rawDt;
     private bool _mouseOverUI;
+    private float _editorPanTime; // ramp-up timer for editor camera panning
 
     // Pending projectiles (multi-projectile delay)
     private struct PendingProjectileGroup
@@ -259,10 +263,14 @@ public class Game1 : Microsoft.Xna.Framework.Game
                     _grassMap = gi.Cells;
                     _grassBaseColors = new Color[gi.Types.Length];
                     _grassTipColors = new Color[gi.Types.Length];
+                    _grassTypeIds = new string[gi.Types.Length];
+                    _grassTypeNames = new string[gi.Types.Length];
                     for (int i = 0; i < gi.Types.Length; i++)
                     {
                         _grassBaseColors[i] = new Color(gi.Types[i].BaseR, gi.Types[i].BaseG, gi.Types[i].BaseB);
                         _grassTipColors[i] = new Color(gi.Types[i].TipR, gi.Types[i].TipG, gi.Types[i].TipB);
+                        _grassTypeIds[i] = gi.Types[i].Id ?? $"grass_{i}";
+                        _grassTypeNames[i] = gi.Types[i].Name ?? $"Grass {i}";
                     }
                     DebugLog.Log("startup", $"Grass map: {_grassW}x{_grassH}, {gi.Types.Length} types");
                 }
@@ -367,6 +375,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
             wallSystem: _wallSystem,
             roadSystem: _roadSystem,
             tileGrid: _sim.Grid,
+            onGrassMapChanged: SyncGrassFromEditor,
             editorBase: _editorUi);
 
         // Feed grass data to map editor
@@ -377,17 +386,51 @@ public class Game1 : Microsoft.Xna.Framework.Game
             {
                 grassTypeInfos[gi] = new MapData.GrassTypeInfo
                 {
+                    Id = _grassTypeIds != null && gi < _grassTypeIds.Length ? _grassTypeIds[gi] : $"grass_{gi}",
+                    Name = _grassTypeNames != null && gi < _grassTypeNames.Length ? _grassTypeNames[gi] : $"Grass {gi}",
                     BaseR = _grassBaseColors[gi].R, BaseG = _grassBaseColors[gi].G, BaseB = _grassBaseColors[gi].B,
                     TipR = _grassTipColors[gi].R, TipG = _grassTipColors[gi].G, TipB = _grassTipColors[gi].B
                 };
             }
-            _mapEditor.SetGrassData(_grassMap, _grassW, _grassH, grassTypeInfos);
+            _mapEditor.SetGrassData(_grassMap, _grassW, _grassH, grassTypeInfos, _gameData.Settings.Grass.CellSize);
         }
 
         Window.Title = "Necroking";
         DebugLog.Log("startup", "Game world loaded");
         _gameWorldLoaded = true;
         _menuState = MenuState.None;
+    }
+
+    /// <summary>
+    /// Sync grass data from the map editor back to Game1's rendering arrays.
+    /// Called by the editor whenever the grass map or grass type properties change.
+    /// </summary>
+    private void SyncGrassFromEditor()
+    {
+        // The editor may have a new/different grass map reference (e.g. after editor Load)
+        var editorMap = _mapEditor.GetGrassMap();
+        if (editorMap != _grassMap && editorMap.Length > 0)
+        {
+            _grassMap = editorMap;
+            _grassW = _mapEditor.GrassW;
+            _grassH = _mapEditor.GrassH;
+        }
+
+        // Sync grass type colors from editor definitions
+        var types = _mapEditor.GrassTypes;
+        if (types.Count > 0)
+        {
+            if (_grassBaseColors.Length != types.Count)
+                _grassBaseColors = new Color[types.Count];
+            if (_grassTipColors.Length != types.Count)
+                _grassTipColors = new Color[types.Count];
+
+            for (int i = 0; i < types.Count; i++)
+            {
+                _grassBaseColors[i] = new Color(types[i].BaseR, types[i].BaseG, types[i].BaseB);
+                _grassTipColors[i] = new Color(types[i].TipR, types[i].TipG, types[i].TipB);
+            }
+        }
     }
 
     private void StartScenario(string scenarioName)
@@ -476,6 +519,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
             wallSystem: _wallSystem,
             roadSystem: _roadSystem,
             tileGrid: _sim.Grid,
+            onGrassMapChanged: SyncGrassFromEditor,
             editorBase: _editorUi);
 
         // Initialize the scenario
@@ -614,6 +658,8 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
         try { _groundEffect = Content.Load<Microsoft.Xna.Framework.Graphics.Effect>("GroundShader"); }
         catch { _groundEffect = null; }
+
+        _grassRenderer.Init(GraphicsDevice);
 
         // Init UI editor (read-only viewer, doesn't depend on game systems)
         _uiEditor.Init(_spriteBatch, _pixel, _font, _smallFont);
@@ -862,9 +908,35 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // --- Camera ---
         _renderer.SetScreenSize(screenW, screenH);
 
-        // Camera follows necromancer, or free pan with arrow keys in scenarios
+        // Camera follows necromancer, or free pan in editors/scenarios
         int necroIdx = FindNecromancer();
-        if (necroIdx >= 0)
+        bool editorOpen = _menuState == MenuState.UnitEditor || _menuState == MenuState.SpellEditor
+            || _menuState == MenuState.MapEditor || _menuState == MenuState.UIEditor;
+        if (editorOpen)
+        {
+            // Editors: free camera — map editor handles its own WASD via smooth camera in MapEditorWindow.Update
+            // Other editors: allow arrow key panning
+            if (_menuState != MenuState.MapEditor)
+            {
+                Vec2 camMove = Vec2.Zero;
+                if (kb.IsKeyDown(Keys.Up) || kb.IsKeyDown(Keys.W)) camMove.Y -= 1f;
+                if (kb.IsKeyDown(Keys.Down) || kb.IsKeyDown(Keys.S)) camMove.Y += 1f;
+                if (kb.IsKeyDown(Keys.Left) || kb.IsKeyDown(Keys.A)) camMove.X -= 1f;
+                if (kb.IsKeyDown(Keys.Right) || kb.IsKeyDown(Keys.D)) camMove.X += 1f;
+                if (camMove.LengthSq() > 0.01f)
+                {
+                    _editorPanTime += rawDt;
+                    float ramp = 1f + 2f * MathF.Min(_editorPanTime / 2f, 1f); // 1x → 3x over 2 seconds
+                    float camSpeed = 400f / MathF.Max(1f, _camera.Zoom) * ramp;
+                    _camera.Position += camMove.Normalized() * camSpeed * rawDt;
+                }
+                else
+                {
+                    _editorPanTime = 0f; // reset when not panning
+                }
+            }
+        }
+        else if (necroIdx >= 0)
         {
             var necroPos = _sim.Units.Position[necroIdx];
             var diff = necroPos - _camera.Position;
@@ -1901,6 +1973,15 @@ public class Game1 : Microsoft.Xna.Framework.Game
             return;
         }
 
+        // Snap camera to pixel grid to prevent subpixel shimmer on ground/sprites
+        // X pixel size = 1/Zoom, Y pixel size = 1/(Zoom*YRatio) due to isometric compression
+        var realCameraPos = _camera.Position;
+        float pixelSizeX = 1f / _camera.Zoom;
+        float pixelSizeY = 1f / (_camera.Zoom * _camera.YRatio);
+        _camera.Position = new Vec2(
+            MathF.Round(realCameraPos.X / pixelSizeX) * pixelSizeX,
+            MathF.Round(realCameraPos.Y / pixelSizeY) * pixelSizeY);
+
         // Begin bloom scene capture
         var bloomSettings = _activeScenario?.BloomOverride ?? _gameData.Settings.Bloom;
         bool useBloom = _bloom.IsInitialized && bloomSettings.Enabled;
@@ -1981,6 +2062,9 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 _collisionDebugMode, _envSystem);
             _spriteBatch.End();
         }
+
+        // Restore real camera position (smooth, for input/HUD)
+        _camera.Position = realCameraPos;
 
         // --- HUD (drawn after bloom so it's not affected) ---
         _spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.PointClamp);
@@ -2160,71 +2244,15 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
     private void DrawGrass()
     {
-        if (_grassMap.Length == 0 || _grassW == 0 || _grassBaseColors.Length == 0) return;
-        if (_camera.Zoom < 8f) return; // don't draw grass when zoomed way out
-
-        var grassSettings = _gameData.Settings.Grass;
-        float cellSize = grassSettings.CellSize;
-        if (cellSize <= 0f) cellSize = 0.8f;
-
-        float viewLeft = _camera.Position.X - _renderer.ScreenW / (2f * _camera.Zoom) - 2;
-        float viewRight = _camera.Position.X + _renderer.ScreenW / (2f * _camera.Zoom) + 2;
-        float viewTop = _camera.Position.Y - _renderer.ScreenH / (_camera.Zoom * _camera.YRatio) - 2;
-        float viewBottom = _camera.Position.Y + _renderer.ScreenH / (_camera.Zoom * _camera.YRatio) + 2;
-
-        int minCX = Math.Max(0, (int)(viewLeft / cellSize));
-        int maxCX = Math.Min(_grassW - 1, (int)(viewRight / cellSize));
-        int minCY = Math.Max(0, (int)(viewTop / cellSize));
-        int maxCY = Math.Min(_grassH - 1, (int)(viewBottom / cellSize));
-
-        float pixelSize = cellSize * _camera.Zoom;
-        float pixelSizeY = pixelSize * _camera.YRatio;
-
-        // Skip if cells are too small to see
-        if (pixelSize < 2f) return;
-
-        // Wind sway offset based on settings
-        float windOffset = _gameTime * grassSettings.WindSpeed * grassSettings.WindStrength;
-
-        for (int cy = minCY; cy <= maxCY; cy++)
-        {
-            for (int cx = minCX; cx <= maxCX; cx++)
-            {
-                int idx = cy * _grassW + cx;
-                if (idx >= _grassMap.Length) continue;
-                byte grassType = _grassMap[idx];
-                if (grassType == 255 || grassType == 0) continue; // 255 = no grass, 0 = could be valid type index
-
-                // Type index is 1-based (0 = no grass in the C++ system, 255 = cleared)
-                int typeIdx = grassType - 1;
-                if (typeIdx < 0 || typeIdx >= _grassBaseColors.Length) continue;
-
-                float wx = cx * cellSize;
-                float wy = cy * cellSize;
-
-                // Apply wind sway per-cell
-                float cellPhase = (cx * 73856093 ^ cy * 19349663) * 0.0001f;
-                float sway = MathF.Sin(windOffset + cellPhase) * grassSettings.WindStrength * 0.15f;
-                var sp = _renderer.WorldToScreen(new Vec2(wx + sway, wy), 0f, _camera);
-
-                // Draw small green marks to represent grass blades
-                var baseColor = _grassBaseColors[typeIdx];
-                var tipColor = _grassTipColors[typeIdx];
-
-                // Hash for per-cell variation
-                uint hash = (uint)(cx * 73856093 ^ cy * 19349663);
-                float variation = (hash % 100) / 100f;
-
-                Color grassColor = Color.Lerp(baseColor, tipColor, 0.3f + variation * 0.4f);
-                grassColor = new Color(grassColor.R, grassColor.G, grassColor.B, (byte)180);
-
-                // Draw as a small overlay patch, height scaled by settings
-                float heightScale = grassSettings.Height / 150f; // normalize against default 150
-                int drawW = Math.Max(2, (int)pixelSize);
-                int drawH = Math.Max(1, (int)(pixelSizeY * 0.8f * heightScale));
-                _spriteBatch.Draw(_pixel, new Rectangle((int)sp.X, (int)(sp.Y - drawH * 0.3f), drawW, drawH), grassColor);
-            }
-        }
+        _grassRenderer.Draw(
+            GraphicsDevice,
+            _spriteBatch,
+            _camera,
+            _renderer.ScreenW, _renderer.ScreenH,
+            _grassMap, _grassW, _grassH,
+            _grassBaseColors, _grassTipColors,
+            _gameData.Settings.Grass,
+            _gameTime);
     }
 
     private void DrawRoads()
