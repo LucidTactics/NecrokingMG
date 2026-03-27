@@ -285,6 +285,66 @@ public class AnimController
         return result;
     }
 
+    /// <summary>
+    /// Returns the current frame index (0-based) for the given facing angle.
+    /// This mirrors the logic in GetCurrentFrame but returns the index instead of the frame data.
+    /// </summary>
+    public int GetCurrentFrameIndex(float facingAngleDeg)
+    {
+        if (_spriteData == null) return 0;
+
+        string animName = StateToAnimName(_currentState);
+        var anim = _spriteData.GetAnim(animName);
+        if (anim == null)
+        {
+            if (_currentState == AnimState.Run || _currentState == AnimState.Jog)
+                anim = _spriteData.GetAnim("Walk");
+            anim ??= _spriteData.GetAnim("Idle");
+            if (anim == null) return 0;
+        }
+
+        int spriteAngle = ResolveAngle(facingAngleDeg, out _);
+
+        float effectiveTime = _animTime;
+        if (_reversePlayback && (_currentState == AnimState.Walk || _currentState == AnimState.Jog || _currentState == AnimState.Run))
+        {
+            int totalMs = GetEffectiveTotalDurationMs();
+            if (totalMs > 0)
+                effectiveTime = MathF.Max(0f, totalMs - _animTime);
+            else
+            {
+                int totalT = anim.TotalTicks();
+                if (totalT > 0) effectiveTime = MathF.Max(0f, totalT - _animTime);
+            }
+        }
+
+        // ms-based
+        var durations = GetEffectiveFrameDurations(spriteAngle);
+        if (durations != null && durations.Count > 0)
+        {
+            float cumMs = 0;
+            for (int f = 0; f < durations.Count; f++)
+            {
+                cumMs += durations[f];
+                if (effectiveTime < cumMs) return f;
+            }
+            return durations.Count - 1;
+        }
+
+        // tick-based fallback
+        var tickKfs = anim.GetAngle(spriteAngle);
+        if (tickKfs == null || tickKfs.Count == 0)
+            tickKfs = anim.GetAngle(30);
+        if (tickKfs != null && tickKfs.Count > 0)
+        {
+            for (int i = tickKfs.Count - 1; i >= 0; i--)
+            {
+                if (effectiveTime >= tickKfs[i].Time) return i;
+            }
+        }
+        return 0;
+    }
+
     // --- Angle resolution ---
 
     public int ResolveAngle(float angleDeg, out bool flipX)

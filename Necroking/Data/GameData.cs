@@ -29,6 +29,8 @@ public class GameData
         ok &= Weather.Load(Path.Combine(dataDir, "weather.json"));
         ok &= UnitGroups.Load(Path.Combine(dataDir, "unit_groups.json"));
         ok &= Settings.Load(Path.Combine(dataDir, "settings.json"));
+        // Load weapon_points.json (must be after units.json so UnitDefs exist)
+        ok &= Units.LoadWeaponPoints(Path.Combine(dataDir, "weapon_points.json"));
         return ok;
     }
 
@@ -45,6 +47,7 @@ public class GameData
         ok &= Weather.Save(Path.Combine(dataDir, "weather.json"));
         ok &= UnitGroups.Save(Path.Combine(dataDir, "unit_groups.json"));
         ok &= Settings.Save(Path.Combine(dataDir, "settings.json"));
+        ok &= Units.SaveWeaponPoints(Path.Combine(dataDir, "weapon_points.json"));
         return ok;
     }
 }

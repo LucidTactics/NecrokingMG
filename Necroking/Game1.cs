@@ -232,9 +232,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         if (File.Exists("data/animations.json"))
             DebugLog.Log("startup", "animations.json found");
 
-        // Load weapon_points.json (stub)
-        if (File.Exists("data/weapon_points.json"))
-            DebugLog.Log("startup", "weapon_points.json found");
+        // weapon_points.json is now loaded by GameData.Load() into each UnitDef.WeaponPoints
 
         // Init world systems
         _roadSystem.Init();
@@ -1171,19 +1169,20 @@ public class Game1 : Microsoft.Xna.Framework.Game
                     if (spell == null) continue;
                     var necroPos = _sim.Units.Position[necroIdx];
                     var necroUid = _sim.Units.Id[necroIdx];
+                    var effectOrigin = _sim.Units.EffectSpawnPos2D[necroIdx];
 
                     switch (spell.Category)
                     {
                         case "Projectile":
-                            // Fire first projectile immediately
-                            SpawnSpellProjectile(spell, necroPos, mouseWorld, necroUid);
+                            // Fire first projectile immediately (from weapon tip)
+                            SpawnSpellProjectile(spell, effectOrigin, mouseWorld, necroUid);
                             // Queue remaining with delay
                             if (spell.Quantity > 1)
                             {
                                 _pendingProjectiles.Add(new PendingProjectileGroup
                                 {
                                     SpellID = spellId,
-                                    Origin = necroPos,
+                                    Origin = effectOrigin,
                                     Target = mouseWorld,
                                     Remaining = spell.Quantity - 1,
                                     Timer = 0f,
@@ -1220,9 +1219,9 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
                             if (spell.StrikeTargetUnit)
                             {
-                                // Zap: caster to nearest enemy near mouse
-                                var casterEffPos = necroPos;
-                                float casterH = 1.5f; // approx hand height
+                                // Zap: caster weapon tip to nearest enemy near mouse
+                                var casterEffPos = effectOrigin;
+                                float casterH = _sim.Units.EffectSpawnHeight[necroIdx];
                                 // Find nearest enemy to mouse
                                 int enemy = -1;
                                 float bestDist = spell.Range * spell.Range;
@@ -1374,16 +1373,17 @@ public class Game1 : Microsoft.Xna.Framework.Game
                         if (spell2 == null) continue;
                         var necroPos2 = _sim.Units.Position[necroIdx];
                         var necroUid2 = _sim.Units.Id[necroIdx];
+                        var effectOrigin2 = _sim.Units.EffectSpawnPos2D[necroIdx];
                         switch (spell2.Category)
                         {
                             case "Projectile":
-                                SpawnSpellProjectile(spell2, necroPos2, mouseWorld, necroUid2);
+                                SpawnSpellProjectile(spell2, effectOrigin2, mouseWorld, necroUid2);
                                 if (spell2.Quantity > 1)
                                 {
                                     _pendingProjectiles.Add(new PendingProjectileGroup
                                     {
                                         SpellID = secSpellId,
-                                        Origin = necroPos2,
+                                        Origin = effectOrigin2,
                                         Target = mouseWorld,
                                         Remaining = spell2.Quantity - 1,
                                         Timer = 0f,
@@ -1779,7 +1779,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 {
                     int necroIdx = FindNecromancer();
                     uint ownerUid = necroIdx >= 0 ? _sim.Units.Id[necroIdx] : 0;
-                    Vec2 origin = necroIdx >= 0 ? _sim.Units.Position[necroIdx] : pg.Origin;
+                    Vec2 origin = necroIdx >= 0 ? _sim.Units.EffectSpawnPos2D[necroIdx] : pg.Origin;
                     SpawnSpellProjectile(spell, origin, pg.Target, ownerUid);
                 }
 
@@ -1944,7 +1944,77 @@ public class Game1 : Microsoft.Xna.Framework.Game
             _unitAnims[uid] = animData;
         }
 
+        // Update EffectSpawnPos2D / EffectSpawnHeight from weapon tip data
+        UpdateEffectSpawnPositions();
+
         _effectManager.Update(dt);
+    }
+
+    /// <summary>
+    /// Compute each unit's weapon-tip world position for use as spell/effect origin.
+    /// Priority: 1) weapon point tip from UnitDef  2) facing-based fallback
+    /// </summary>
+    private void UpdateEffectSpawnPositions()
+    {
+        var mu = _sim.UnitsMut;
+        for (int i = 0; i < _sim.Units.Count; i++)
+        {
+            if (!_sim.Units.Alive[i]) continue;
+
+            uint uid = _sim.Units.Id[i];
+            if (!_unitAnims.TryGetValue(uid, out var animData)) continue;
+
+            string defID = _sim.Units.UnitDefID[i];
+            var unitDef = _gameData.Units.Get(defID);
+            bool foundWeaponTip = false;
+
+            if (unitDef != null && unitDef.WeaponPoints.Count > 0 && animData.RefFrameHeight > 0f)
+            {
+                string animName = AnimController.StateToAnimName(animData.Ctrl.CurrentState);
+                if (unitDef.WeaponPoints.TryGetValue(animName, out var yawDict))
+                {
+                    int spriteAngle = animData.Ctrl.ResolveAngle(_sim.Units.FacingAngle[i], out bool flipX);
+                    string yawKey = spriteAngle.ToString();
+                    if (yawDict.TryGetValue(yawKey, out var frames))
+                    {
+                        int frameIdx = animData.Ctrl.GetCurrentFrameIndex(_sim.Units.FacingAngle[i]);
+                        if (frameIdx >= 0 && frameIdx < frames.Count)
+                        {
+                            var wpf = frames[frameIdx];
+                            bool tipSet = wpf.Tip.X != 0f || wpf.Tip.Y != 0f;
+                            if (tipSet)
+                            {
+                                float flipMul = flipX ? -1f : 1f;
+                                float worldH = (unitDef.SpriteWorldHeight > 0 ? unitDef.SpriteWorldHeight : 1.8f)
+                                               * _sim.Units.SpriteScale[i];
+                                float worldScale = worldH / animData.RefFrameHeight;
+
+                                float tipDx = wpf.Tip.X * worldScale * flipMul;
+                                mu.EffectSpawnPos2D[i] = new Vec2(
+                                    _sim.Units.Position[i].X + tipDx,
+                                    _sim.Units.Position[i].Y);
+
+                                float unitHeight = _sim.Units.JumpHeight[i];
+                                mu.EffectSpawnHeight[i] = unitHeight - wpf.Tip.Y * worldScale
+                                    * _camera.Zoom / _camera.HeightScale;
+
+                                foundWeaponTip = true;
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (!foundWeaponTip)
+            {
+                // Fallback: offset in facing direction
+                float facingRad = _sim.Units.FacingAngle[i] * MathF.PI / 180f;
+                float radius = _sim.Units.Radius[i];
+                mu.EffectSpawnPos2D[i] = _sim.Units.Position[i]
+                    + new Vec2(MathF.Cos(facingRad), MathF.Sin(facingRad)) * radius * 1.5f;
+                mu.EffectSpawnHeight[i] = 0.6f;
+            }
+        }
     }
 
     protected override void Draw(GameTime gameTime)
@@ -2987,7 +3057,8 @@ public class Game1 : Microsoft.Xna.Framework.Game
             int targetIdx = UnitUtil.ResolveUnitIndex(_sim.Units, beam.TargetID);
             if (casterIdx < 0 || targetIdx < 0) continue;
 
-            var startSp = _renderer.WorldToScreen(_sim.Units.Position[casterIdx], 1.5f, _camera);
+            var startSp = _renderer.WorldToScreen(_sim.Units.EffectSpawnPos2D[casterIdx],
+                _sim.Units.EffectSpawnHeight[casterIdx], _camera);
             var endSp = _renderer.WorldToScreen(_sim.Units.Position[targetIdx], 1f, _camera);
             DrawLightningBolt(startSp, endSp, beam.Style, 1f);
         }
@@ -3003,7 +3074,8 @@ public class Game1 : Microsoft.Xna.Framework.Game
             int targetIdx = UnitUtil.ResolveUnitIndex(_sim.Units, drain.TargetID);
             if (targetIdx >= 0) targetPos = _sim.Units.Position[targetIdx];
 
-            var startSp = _renderer.WorldToScreen(_sim.Units.Position[casterIdx], 1.5f, _camera);
+            var startSp = _renderer.WorldToScreen(_sim.Units.EffectSpawnPos2D[casterIdx],
+                _sim.Units.EffectSpawnHeight[casterIdx], _camera);
             var endSp = _renderer.WorldToScreen(targetPos, 1f, _camera);
 
             // Draw multiple tendrils with sway

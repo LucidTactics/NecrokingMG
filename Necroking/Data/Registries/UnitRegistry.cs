@@ -1,4 +1,6 @@
 using System.Collections.Generic;
+using System.IO;
+using System.Text.Json;
 using System.Text.Json.Serialization;
 
 namespace Necroking.Data.Registries;
@@ -225,5 +227,123 @@ public class UnitRegistry : RegistryBase<UnitDef>
         }
 
         return s;
+    }
+
+    /// <summary>
+    /// Load weapon_points.json and populate WeaponPoints on each UnitDef.
+    /// The file uses flat keys: hx, hy, hb, tx, ty, tb per frame.
+    /// </summary>
+    public bool LoadWeaponPoints(string path)
+    {
+        if (!File.Exists(path)) return true; // not an error if file doesn't exist
+
+        try
+        {
+            string json = File.ReadAllText(path);
+            using var doc = JsonDocument.Parse(json);
+            var root = doc.RootElement;
+
+            if (!root.TryGetProperty("units", out var arr) || arr.ValueKind != JsonValueKind.Array)
+                return true;
+
+            foreach (var uobj in arr.EnumerateArray())
+            {
+                string uid = uobj.TryGetProperty("unit", out var uidProp) ? uidProp.GetString() ?? "" : "";
+                if (string.IsNullOrEmpty(uid)) continue;
+                var def = Get(uid);
+                if (def == null) continue;
+
+                if (!uobj.TryGetProperty("anims", out var anims) || anims.ValueKind != JsonValueKind.Object)
+                    continue;
+
+                foreach (var animProp in anims.EnumerateObject())
+                {
+                    string animName = animProp.Name;
+                    if (animProp.Value.ValueKind != JsonValueKind.Object) continue;
+
+                    var yawDict = new Dictionary<string, List<WeaponFrameData>>();
+                    foreach (var yawProp in animProp.Value.EnumerateObject())
+                    {
+                        string yawKey = yawProp.Name;
+                        if (yawProp.Value.ValueKind != JsonValueKind.Array) continue;
+
+                        var frameList = new List<WeaponFrameData>();
+                        foreach (var f in yawProp.Value.EnumerateArray())
+                        {
+                            var fd = new WeaponFrameData
+                            {
+                                Hilt = new WeaponPointData
+                                {
+                                    X = f.TryGetProperty("hx", out var hx) ? hx.GetSingle() : 0f,
+                                    Y = f.TryGetProperty("hy", out var hy) ? hy.GetSingle() : 0f,
+                                    Behind = f.TryGetProperty("hb", out var hb) && hb.GetBoolean()
+                                },
+                                Tip = new WeaponPointData
+                                {
+                                    X = f.TryGetProperty("tx", out var tx) ? tx.GetSingle() : 0f,
+                                    Y = f.TryGetProperty("ty", out var ty) ? ty.GetSingle() : 0f,
+                                    Behind = f.TryGetProperty("tb", out var tb) && tb.GetBoolean()
+                                }
+                            };
+                            frameList.Add(fd);
+                        }
+                        yawDict[yawKey] = frameList;
+                    }
+                    def.WeaponPoints[animName] = yawDict;
+                }
+            }
+            return true;
+        }
+        catch { return false; }
+    }
+
+    /// <summary>
+    /// Save weapon_points.json from each UnitDef's WeaponPoints data.
+    /// Uses the flat-key format: hx, hy, hb, tx, ty, tb.
+    /// </summary>
+    public bool SaveWeaponPoints(string path)
+    {
+        try
+        {
+            var unitArr = new List<object>();
+            foreach (var id in _orderedIDs)
+            {
+                if (!_defs.TryGetValue(id, out var def)) continue;
+                if (def.WeaponPoints.Count == 0) continue;
+
+                var animMap = new Dictionary<string, object>();
+                foreach (var (animName, yawDict) in def.WeaponPoints)
+                {
+                    var yawObj = new Dictionary<string, object>();
+                    foreach (var (yawKey, frames) in yawDict)
+                    {
+                        var frameArr = new List<object>();
+                        foreach (var fd in frames)
+                        {
+                            frameArr.Add(new Dictionary<string, object>
+                            {
+                                ["hx"] = fd.Hilt.X, ["hy"] = fd.Hilt.Y, ["hb"] = fd.Hilt.Behind,
+                                ["tx"] = fd.Tip.X,   ["ty"] = fd.Tip.Y,   ["tb"] = fd.Tip.Behind
+                            });
+                        }
+                        yawObj[yawKey] = frameArr;
+                    }
+                    animMap[animName] = yawObj;
+                }
+
+                unitArr.Add(new Dictionary<string, object>
+                {
+                    ["unit"] = def.Id,
+                    ["anims"] = animMap
+                });
+            }
+
+            var doc = new Dictionary<string, object> { ["units"] = unitArr };
+            var options = new JsonSerializerOptions { WriteIndented = true };
+            string json = JsonSerializer.Serialize(doc, options);
+            File.WriteAllText(path, json);
+            return true;
+        }
+        catch { return false; }
     }
 }

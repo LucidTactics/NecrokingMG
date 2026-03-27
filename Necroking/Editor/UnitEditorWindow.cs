@@ -372,10 +372,18 @@ public class UnitEditorWindow
         // RU12: Rapid-edit arrow key navigation when pick mode is active
         if (!textActive && _rapidEditEnabled && _pickMode != PickTarget.None)
         {
-            if (_ui._kb.IsKeyDown(Keys.Left) && _ui._prevKb.IsKeyUp(Keys.Left))
+            if ((_ui._kb.IsKeyDown(Keys.Left) && _ui._prevKb.IsKeyUp(Keys.Left)) ||
+                (_ui._kb.IsKeyDown(Keys.A) && _ui._prevKb.IsKeyUp(Keys.A)))
+            {
                 StepBack();
-            if (_ui._kb.IsKeyDown(Keys.Right) && _ui._prevKb.IsKeyUp(Keys.Right))
+                _pickMode = PickTarget.Hilt;
+            }
+            if ((_ui._kb.IsKeyDown(Keys.Right) && _ui._prevKb.IsKeyUp(Keys.Right)) ||
+                (_ui._kb.IsKeyDown(Keys.D) && _ui._prevKb.IsKeyUp(Keys.D)))
+            {
                 StepForward();
+                _pickMode = PickTarget.Hilt;
+            }
             if (_ui._kb.IsKeyDown(Keys.Up) && _ui._prevKb.IsKeyUp(Keys.Up))
             {
                 int idx = Array.IndexOf(AngleOptions, ((int)_previewAngle).ToString());
@@ -1173,7 +1181,19 @@ public class UnitEditorWindow
             _unsavedChanges = true;
 
             if (_rapidEditEnabled)
-                _pickMode = _pickMode == PickTarget.Hilt ? PickTarget.Tip : PickTarget.Hilt;
+            {
+                if (_pickMode == PickTarget.Hilt)
+                {
+                    // After setting hilt, auto-switch to tip
+                    _pickMode = PickTarget.Tip;
+                }
+                else
+                {
+                    // After setting tip, advance to next frame and switch back to hilt
+                    StepAnimForward();
+                    _pickMode = PickTarget.Hilt;
+                }
+            }
             else
                 _pickMode = PickTarget.None;
         }
