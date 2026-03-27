@@ -58,23 +58,36 @@ public class PathfindingTestScenario : ScenarioBase
         // Clear previous units
         ClearAllUnits(units);
 
-        // Dense forest: randomly scattered wall tiles at ~40% density
-        // No clear path — unit must weave through gaps between trees
+        // Dense forest with unit INSIDE it. ~25% density so navigable but challenging.
+        // Surrounded by solid wall border so unit can't just walk around.
         int ox = 10, oy = 10;
         int forestW = 40, forestH = 40;
-        var rng = new Random(42); // deterministic seed for reproducibility
+        var rng = new Random(42); // deterministic seed
 
+        // First: solid wall border enclosing the entire forest
+        for (int x = ox - 1; x <= ox + forestW; x++)
+        {
+            grid.SetTerrain(x, oy - 1, TerrainType.Wall);
+            grid.SetTerrain(x, oy + forestH, TerrainType.Wall);
+        }
+        for (int y = oy - 1; y <= oy + forestH; y++)
+        {
+            grid.SetTerrain(ox - 1, y, TerrainType.Wall);
+            grid.SetTerrain(ox + forestW, y, TerrainType.Wall);
+        }
+
+        // Interior: scattered trees at 25% density
         for (int y = 0; y < forestH; y++)
         {
             for (int x = 0; x < forestW; x++)
             {
-                // Clear start area (top-left 4x4) and end area (bottom-right 4x4)
-                bool isStart = x < 4 && y < 4;
-                bool isEnd = x >= forestW - 4 && y >= forestH - 4;
+                // Clear start area (top-left 3x3) and end area (bottom-right 3x3)
+                bool isStart = x < 3 && y < 3;
+                bool isEnd = x >= forestW - 3 && y >= forestH - 3;
 
                 if (isStart || isEnd)
                     grid.SetTerrain(ox + x, oy + y, TerrainType.Open);
-                else if (rng.NextDouble() < 0.40) // 40% tree density
+                else if (rng.NextDouble() < 0.25) // 25% — navigable but tricky
                     grid.SetTerrain(ox + x, oy + y, TerrainType.Wall);
                 else
                     grid.SetTerrain(ox + x, oy + y, TerrainType.Open);
@@ -84,81 +97,9 @@ public class PathfindingTestScenario : ScenarioBase
         grid.RebuildCostField();
         sim.RebuildPathfinder();
 
-        // Spawn unit top-left, target bottom-right
-        Vec2 startPos = new(ox + 2f, oy + 2f);
-        Vec2 target = new(ox + forestW - 2f, oy + forestH - 2f);
-
-        int idx = units.AddUnit(startPos, UnitType.Skeleton);
-        units.AI[idx] = AIBehavior.MoveToPoint;
-        units.MoveTarget[idx] = target;
-        units.MaxSpeed[idx] = UnitSpeed;
-        units.Stats[idx].CombatSpeed = UnitSpeed; // Simulation overwrites MaxSpeed from Stats each tick
-        units.Faction[idx] = Faction.Undead;
-
-        _testUnitIndices.Add(idx);
-        _testTargets.Add(target);
-        _testStartTime = _elapsed;
-
-        ZoomOnLocation(ox + forestW / 2f, oy + forestH / 2f, 10f);
-        DebugLog.Log(ScenarioLog, $"Spawned skeleton at ({startPos.X:F1},{startPos.Y:F1}), target ({target.X:F1},{target.Y:F1})");
-    }
-
-    // -------------------------------------------------------------------
-    // Test 2: Cup at chunk boundary — unit must use imaginary chunk to escape
-    // The cup straddles the chunk edge at x=64. The cup opening faces away
-    // from the target, so the unit MUST exit through the chunk boundary.
-    //
-    //   Chunk 0 (x<64)  |  Chunk 1 (x>=64)
-    //                    |
-    //        +-----------+
-    //        |  C        |   (C = unit inside cup)
-    //        +-----------+
-    //                    |
-    //                    |        T  (target far right in chunk 1)
-    //
-    // The cup bottom+left+right walls are in chunk 0, but the right wall
-    // extends into chunk 1. The opening is at the top (low Y).
-    // Target is in chunk 1 below the cup — unit must go up, exit cup,
-    // then navigate right and down to reach target.
-    // -------------------------------------------------------------------
-    private void SetupTest2(Simulation sim)
-    {
-        _testUnitIndices.Clear();
-        _testTargets.Clear();
-        _testNames.Add("Cup trap at chunk boundary");
-        DebugLog.Log(ScenarioLog, "--- Test 2: Cup at chunk boundary ---");
-
-        var grid = sim.Grid;
-        var units = sim.UnitsMut;
-        ClearAllUnits(units);
-
-        // Clear area
-        for (int y = 0; y < 100; y++)
-            for (int x = 0; x < 130; x++)
-                if (grid.InBounds(x, y))
-                    grid.SetTerrain(x, y, TerrainType.Open);
-
-        // Cup straddling chunk boundary at x=64
-        // Cup is 12 wide (x=58..70), 8 tall (y=30..38), open at top (y=30)
-        int cupLeft = 58, cupRight = 70, cupTop = 30, cupBottom = 38;
-
-        // Bottom wall
-        for (int x = cupLeft; x <= cupRight; x++)
-            grid.SetTerrain(x, cupBottom, TerrainType.Wall);
-        // Left wall
-        for (int y = cupTop + 1; y <= cupBottom; y++)
-            grid.SetTerrain(cupLeft, y, TerrainType.Wall);
-        // Right wall
-        for (int y = cupTop + 1; y <= cupBottom; y++)
-            grid.SetTerrain(cupRight, y, TerrainType.Wall);
-        // Top is OPEN — the cup opening
-
-        grid.RebuildCostField();
-        sim.RebuildPathfinder();
-
-        // Unit inside cup (centered), target far below and to the right
-        Vec2 startPos = new(64f, 35f); // inside cup, right at chunk boundary
-        Vec2 target = new(90f, 50f);   // in chunk 1, below and right
+        // Unit starts inside top-left corner, target inside bottom-right corner
+        Vec2 startPos = new(ox + 1.5f, oy + 1.5f);
+        Vec2 target = new(ox + forestW - 1.5f, oy + forestH - 1.5f);
 
         int idx = units.AddUnit(startPos, UnitType.Skeleton);
         units.AI[idx] = AIBehavior.MoveToPoint;
@@ -171,9 +112,105 @@ public class PathfindingTestScenario : ScenarioBase
         _testTargets.Add(target);
         _testStartTime = _elapsed;
 
-        ZoomOnLocation(64f, 40f, 10f);
-        DebugLog.Log(ScenarioLog, $"Cup at chunk boundary x=64, cup=({cupLeft},{cupTop})-({cupRight},{cupBottom})");
-        DebugLog.Log(ScenarioLog, $"Unit at ({startPos.X:F1},{startPos.Y:F1}), target at ({target.X:F1},{target.Y:F1})");
+        ZoomOnLocation(ox + forestW / 2f, oy + forestH / 2f, 10f);
+        DebugLog.Log(ScenarioLog, $"Dense forest {forestW}x{forestH} enclosed by walls, 25% interior density");
+        DebugLog.Log(ScenarioLog, $"Unit at ({startPos.X:F1},{startPos.Y:F1}), target ({target.X:F1},{target.Y:F1})");
+    }
+
+    // -------------------------------------------------------------------
+    // Test 2: Cup in adjacent chunk — unit needs imaginary chunk to escape
+    //
+    // Chunk boundary is at x=64.
+    // The unit is in chunk 0 (x<64), placed at x=63 (just inside chunk 0).
+    // The cup walls are ALL in chunk 1 (x>=64):
+    //
+    //   Chunk 0        |  Chunk 1
+    //     (unit's      |
+    //      sector)     |
+    //                  |  +------+
+    //              C . |  |      |    (cup walls in chunk 1)
+    //                  |  +------+
+    //                  |
+    //         T        |              (target is in chunk 0, south)
+    //
+    // The unit is at x=63, y=32 (chunk 0).
+    // Cup walls: right wall at x=65, top at y=30, bottom at y=34 (all in chunk 1).
+    // Left side of cup is the chunk boundary itself (x=64) which isn't a wall.
+    // The cup opens to the RIGHT (east, deeper into chunk 1).
+    //
+    // From chunk 0's flow field, there are no obstacles — it doesn't see chunk 1's
+    // walls. So the flow field says "go south toward target." But physically the
+    // unit can't go south because the cup's bottom wall at y=34 (in chunk 1) blocks
+    // it when it steps across the boundary.
+    //
+    // The unit needs an imaginary chunk to see both sectors and find the exit
+    // (go right through the cup opening, then south).
+    // -------------------------------------------------------------------
+    private void SetupTest2(Simulation sim)
+    {
+        _testUnitIndices.Clear();
+        _testTargets.Clear();
+        _testNames.Add("Cup in adjacent chunk");
+        DebugLog.Log(ScenarioLog, "--- Test 2: Cup in adjacent chunk ---");
+
+        var grid = sim.Grid;
+        var units = sim.UnitsMut;
+        ClearAllUnits(units);
+
+        // Clear area
+        for (int y = 0; y < 100; y++)
+            for (int x = 50; x < 100; x++)
+                if (grid.InBounds(x, y))
+                    grid.SetTerrain(x, y, TerrainType.Open);
+
+        // Cup walls entirely in chunk 1 (x >= 64)
+        // Creates a pocket that traps the unit when it's near x=63
+        // Cup: top wall y=29, bottom wall y=35, right wall x=70
+        // Left side is open (the chunk boundary at x=64)
+        // Cup opening is to the right (x=71+)
+
+        // Top wall (y=29, x=64..70)
+        for (int x = 64; x <= 70; x++)
+            grid.SetTerrain(x, 29, TerrainType.Wall);
+        // Bottom wall (y=35, x=64..70)
+        for (int x = 64; x <= 70; x++)
+            grid.SetTerrain(x, 35, TerrainType.Wall);
+        // Right wall (x=70, y=30..34) — closes the cup on the right
+        for (int y = 30; y <= 34; y++)
+            grid.SetTerrain(70, y, TerrainType.Wall);
+        // Left side (x=64) is NOT walled — it's the chunk boundary
+        // But we add walls at x=64 for y outside the opening to create the pocket
+        // Wall above cup opening
+        for (int y = 20; y <= 29; y++)
+            grid.SetTerrain(64, y, TerrainType.Wall);
+        // Wall below cup opening
+        for (int y = 35; y <= 45; y++)
+            grid.SetTerrain(64, y, TerrainType.Wall);
+        // This means the only way through x=64 is the cup opening at y=30..34
+
+        grid.RebuildCostField();
+        sim.RebuildPathfinder();
+
+        // Unit in chunk 0, just left of the boundary, aligned with the cup opening
+        Vec2 startPos = new(62f, 32f);
+        // Target is in chunk 0, far south — unit must go right through cup, then south
+        Vec2 target = new(55f, 60f);
+
+        int idx = units.AddUnit(startPos, UnitType.Skeleton);
+        units.AI[idx] = AIBehavior.MoveToPoint;
+        units.MoveTarget[idx] = target;
+        units.MaxSpeed[idx] = UnitSpeed;
+        units.Stats[idx].CombatSpeed = UnitSpeed;
+        units.Faction[idx] = Faction.Undead;
+
+        _testUnitIndices.Add(idx);
+        _testTargets.Add(target);
+        _testStartTime = _elapsed;
+
+        ZoomOnLocation(64f, 35f, 8f);
+        DebugLog.Log(ScenarioLog, $"Cup walls in chunk 1 (x>=64), opening at y=30..34");
+        DebugLog.Log(ScenarioLog, $"Wall at x=64 blocks passage except through cup at y=30..34");
+        DebugLog.Log(ScenarioLog, $"Unit at ({startPos.X:F1},{startPos.Y:F1}) in chunk 0, target at ({target.X:F1},{target.Y:F1}) in chunk 0 south");
     }
 
     // -------------------------------------------------------------------
