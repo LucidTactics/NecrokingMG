@@ -246,8 +246,17 @@ public class Simulation
         {
             if (!_units.Alive[i]) continue;
             if (_units.Jumping[i] || _units.KnockdownTimer[i] > 0f) { _units.PreferredVel[i] = Vec2.Zero; continue; }
-            if (!_units.PendingAttack[i].IsNone) { _units.PreferredVel[i] = Vec2.Zero; continue; }
-            if (_units.InCombat[i] && _units.AI[i] != AIBehavior.PlayerControlled) { _units.PreferredVel[i] = Vec2.Zero; continue; }
+            // FleeWhenHit and wolf AIs handle their own combat/disengage logic
+            bool selfManagesCombat = _units.AI[i] == AIBehavior.FleeWhenHit
+                || _units.AI[i] == AIBehavior.WolfHitAndRun || _units.AI[i] == AIBehavior.WolfHitAndRunIsolated
+                || _units.AI[i] == AIBehavior.WolfOpportunist || _units.AI[i] == AIBehavior.WolfOpportunistIsolated;
+            // Units with pending attacks stop moving (except self-managed AIs)
+            // FleeWhenHit always bypasses; wolf AIs bypass during disengage/wait phases
+            if (!_units.PendingAttack[i].IsNone && !(_units.AI[i] == AIBehavior.FleeWhenHit
+                || (selfManagesCombat && _units.WolfPhase[i] >= WolfDisengage)))
+            { _units.PreferredVel[i] = Vec2.Zero; continue; }
+            if (_units.InCombat[i] && _units.AI[i] != AIBehavior.PlayerControlled && !selfManagesCombat)
+            { _units.PreferredVel[i] = Vec2.Zero; continue; }
 
             switch (_units.AI[i])
             {
@@ -576,10 +585,139 @@ public class Simulation
                     goto default;
                 }
 
+                case AIBehavior.FleeWhenHit:
+                {
+                    // Deer-like behavior: idle normally, flee 15 units away when hit
+                    // Debug: log state periodically
+                    if (_frameNumber % 120 == 0)
+                        DebugLog.Log("ai", $"FleeWhenHit unit {i}: LastAttacker={_units.LastAttackerID[i]}, FleeTimer={_units.FleeTimer[i]:F1}, InCombat={_units.InCombat[i]}, HP={_units.Stats[i].HP}");
+
+                    if (_units.FleeTimer[i] > 0)
+                    {
+                        // Currently fleeing — force disengage from combat
+                        Disengage(i);
+
+                        _units.FleeTimer[i] -= dt;
+                        int attackerIdx = UnitUtil.ResolveUnitIndex(_units, _units.LastAttackerID[i]);
+                        if (attackerIdx >= 0)
+                        {
+                            Vec2 awayDir = (_units.Position[i] - _units.Position[attackerIdx]);
+                            float dist = awayDir.Length();
+                            if (dist > 15f)
+                            {
+                                // Far enough, stop fleeing and reset attacker
+                                _units.FleeTimer[i] = 0;
+                                _units.LastAttackerID[i] = GameConstants.InvalidUnit;
+                                _units.PreferredVel[i] = Vec2.Zero;
+                            }
+                            else
+                            {
+                                awayDir = dist > 0.01f ? awayDir * (1f / dist) : new Vec2(1, 0);
+                                _units.PreferredVel[i] = awayDir * _units.MaxSpeed[i] * 1.5f;
+                            }
+                        }
+                        else
+                        {
+                            // Attacker gone, stop fleeing
+                            _units.FleeTimer[i] = 0;
+                            _units.LastAttackerID[i] = GameConstants.InvalidUnit;
+                            _units.PreferredVel[i] = Vec2.Zero;
+                        }
+                    }
+                    else if (_units.LastAttackerID[i] != GameConstants.InvalidUnit)
+                    {
+                        // Got hit — start fleeing immediately, disengage from combat
+                        _units.FleeTimer[i] = 5f;
+                        Disengage(i);
+                    }
+                    else
+                    {
+                        _units.PreferredVel[i] = Vec2.Zero; // idle
+                    }
+                    break;
+                }
+
+                case AIBehavior.NeutralFightBack:
+                {
+                    // Neutral: ignore enemies unless hit, then fight attacker
+                    if (_units.LastAttackerID[i] != GameConstants.InvalidUnit)
+                    {
+                        // We've been hit before — fight the attacker (or any enemy if attacker dead)
+                        if (!IsTargetAlive(_units.Target[i]))
+                        {
+                            int attackerIdx = UnitUtil.ResolveUnitIndex(_units, _units.LastAttackerID[i]);
+                            if (attackerIdx >= 0 && _units.Alive[attackerIdx])
+                                _units.Target[i] = CombatTarget.Unit(_units.LastAttackerID[i]);
+                            else
+                                _units.Target[i] = FindBestEnemyTarget(i);
+                        }
+
+                        if (_units.Target[i].IsUnit)
+                        {
+                            int targetIdx = ResolveUnitTarget(_units.Target[i]);
+                            if (targetIdx >= 0)
+                                MoveTowardUnit(i, targetIdx, _units.MaxSpeed[i]);
+                            else
+                                _units.PreferredVel[i] = Vec2.Zero;
+                        }
+                        else
+                            _units.PreferredVel[i] = Vec2.Zero;
+                    }
+                    else
+                    {
+                        _units.PreferredVel[i] = Vec2.Zero; // peaceful until provoked
+                    }
+                    break;
+                }
+
+                case AIBehavior.WolfHitAndRun:
+                case AIBehavior.WolfHitAndRunIsolated:
+                case AIBehavior.WolfOpportunist:
+                case AIBehavior.WolfOpportunistIsolated:
+                {
+                    UpdateWolfAI(i, dt);
+                    break;
+                }
+
                 default:
                 {
+                    bool inHorde = _units.Faction[i] == Faction.Undead && _horde.IsInHorde(_units.Id[i]);
+                    var hordeState = inHorde ? _horde.GetUnitState(_units.Id[i]) : HordeUnitState.Following;
+
+                    // Returning horde units: drop target, move back to slot
+                    if (inHorde && hordeState == HordeUnitState.Returning)
+                    {
+                        _units.Target[i] = CombatTarget.None;
+                        _units.InCombat[i] = false;
+                        _units.PendingAttack[i] = CombatTarget.None;
+                        if (_horde.GetTargetPosition(_units.Id[i], out var returnSlot))
+                        {
+                            float distToSlot = (_units.Position[i] - returnSlot).Length();
+                            if (distToSlot > 0.5f)
+                            {
+                                var dir = (returnSlot - _units.Position[i]).Normalized();
+                                _units.PreferredVel[i] = dir * _units.MaxSpeed[i] * _horde.Settings.ReturnSpeedMult;
+                            }
+                            else
+                                _units.PreferredVel[i] = Vec2.Zero;
+                        }
+                        else
+                            _units.PreferredVel[i] = Vec2.Zero;
+                        break;
+                    }
+
+                    // Acquire new target (range-limited for horde units)
                     if (!IsTargetAlive(_units.Target[i]))
-                        _units.Target[i] = FindBestEnemyTarget(i);
+                    {
+                        if (inHorde)
+                        {
+                            // Horde units only target enemies within engagement range
+                            int nearby = FindClosestEnemy(i, _horde.Settings.EngagementRange);
+                            _units.Target[i] = nearby >= 0 ? CombatTarget.Unit(_units.Id[nearby]) : CombatTarget.None;
+                        }
+                        else
+                            _units.Target[i] = FindBestEnemyTarget(i);
+                    }
 
                     if (_units.Target[i].IsUnit)
                     {
@@ -590,7 +728,22 @@ public class Simulation
                             _units.PreferredVel[i] = Vec2.Zero;
                     }
                     else
-                        _units.PreferredVel[i] = Vec2.Zero;
+                    {
+                        // No combat target — follow horde slot position if in horde
+                        if (inHorde && _horde.GetTargetPosition(_units.Id[i], out var slotPos))
+                        {
+                            float distToSlot = (_units.Position[i] - slotPos).Length();
+                            if (distToSlot > 0.5f)
+                            {
+                                var dir = (slotPos - _units.Position[i]).Normalized();
+                                _units.PreferredVel[i] = dir * _units.MaxSpeed[i];
+                            }
+                            else
+                                _units.PreferredVel[i] = Vec2.Zero;
+                        }
+                        else
+                            _units.PreferredVel[i] = Vec2.Zero;
+                    }
                     break;
                 }
             }
@@ -958,6 +1111,14 @@ public class Simulation
             {
                 _units.InCombat[i] = true;
                 _units.InCombat[targetIdx] = true;
+
+                // FleeWhenHit: treat entering combat range as being "attacked"
+                // so the unit flees immediately instead of waiting for actual damage
+                if (_units.AI[targetIdx] == AIBehavior.FleeWhenHit &&
+                    _units.LastAttackerID[targetIdx] == GameConstants.InvalidUnit)
+                {
+                    _units.LastAttackerID[targetIdx] = _units.Id[i];
+                }
             }
         }
 
@@ -1098,6 +1259,8 @@ public class Simulation
 
         _units.Stats[unitIdx].HP -= damage;
         _units.HitShakeTimer[unitIdx] = 0.15f;
+        if (attackerIdx >= 0 && attackerIdx < _units.Count)
+            _units.LastAttackerID[unitIdx] = _units.Id[attackerIdx];
         _damageEvents.Add(new DamageEvent
         {
             Position = _units.Position[unitIdx],
@@ -1134,22 +1297,274 @@ public class Simulation
         }
     }
 
+    // Wolf AI phases
+    private const byte WolfEngage = 0;
+    private const byte WolfAttacking = 1;
+    private const byte WolfDisengage = 2;
+    private const byte WolfWaitCooldown = 3;
+
+    private void UpdateWolfAI(int i, float dt)
+    {
+        var ai = _units.AI[i];
+        bool isolated = ai == AIBehavior.WolfHitAndRunIsolated || ai == AIBehavior.WolfOpportunistIsolated;
+        bool opportunist = ai == AIBehavior.WolfOpportunist || ai == AIBehavior.WolfOpportunistIsolated;
+
+        // Debug logging every 2 seconds
+        if (_frameNumber % 120 == 0)
+        {
+            int tIdx = ResolveUnitTarget(_units.Target[i]);
+            float dbgDist = tIdx >= 0 ? (_units.Position[tIdx] - _units.Position[i]).Length() : -1;
+            DebugLog.Log("ai", $"Wolf unit {i}: phase={_units.WolfPhase[i]} timer={_units.WolfPhaseTimer[i]:F1} " +
+                $"target={_units.Target[i]} dist={dbgDist:F1} cooldown={_units.AttackCooldown[i]:F2} " +
+                $"inCombat={_units.InCombat[i]} vel={_units.PreferredVel[i].Length():F1}");
+        }
+
+        // Find/validate target
+        if (!IsTargetAlive(_units.Target[i]))
+        {
+            _units.Target[i] = isolated ? FindMostIsolatedEnemy(i) : FindBestEnemyTarget(i);
+            _units.WolfPhase[i] = WolfEngage;
+            _units.WolfPhaseTimer[i] = 0;
+        }
+
+        int targetIdx = ResolveUnitTarget(_units.Target[i]);
+        if (targetIdx < 0)
+        {
+            _units.PreferredVel[i] = Vec2.Zero;
+            return;
+        }
+
+        Vec2 myPos = _units.Position[i];
+        Vec2 targetPos = _units.Position[targetIdx];
+        float dist = (targetPos - myPos).Length();
+        // Use same engage range as the combat system
+        float attackRange = MeleeRangeBase + _units.Stats[i].Length * 0.15f + _units.Radius[i] + _units.Radius[targetIdx];
+        float disengageDist = attackRange + 2f; // back off 2 units beyond attack range
+        float attackCooldown = _units.AttackCooldown[i];
+
+        switch (_units.WolfPhase[i])
+        {
+            case WolfEngage:
+            {
+                // Move toward target
+                if (dist <= attackRange)
+                {
+                    if (opportunist)
+                    {
+                        // Check if target is facing away (>100° from us)
+                        if (IsTargetFacingAway(i, targetIdx, 100f) || _units.WolfPhaseTimer[i] > attackCooldown)
+                        {
+                            // Opportunity! Or timeout — attack
+                            _units.WolfPhase[i] = WolfAttacking;
+                            _units.WolfPhaseTimer[i] = 0;
+                            _units.InCombat[i] = true;
+                        }
+                        else
+                        {
+                            // Wait for opportunity, circle at edge of range
+                            _units.WolfPhaseTimer[i] += dt;
+                            Vec2 perp = new Vec2(-(targetPos.Y - myPos.Y), targetPos.X - myPos.X);
+                            if (perp.LengthSq() > 0.01f) perp = perp.Normalized();
+                            _units.PreferredVel[i] = perp * _units.MaxSpeed[i] * 0.5f;
+                        }
+                    }
+                    else
+                    {
+                        // Non-opportunist: attack immediately
+                        _units.WolfPhase[i] = WolfAttacking;
+                        _units.WolfPhaseTimer[i] = 0;
+                        _units.InCombat[i] = true;
+                    }
+                }
+                else
+                {
+                    MoveTowardUnit(i, targetIdx, _units.MaxSpeed[i]);
+                    if (opportunist) _units.WolfPhaseTimer[i] += dt;
+                }
+                break;
+            }
+
+            case WolfAttacking:
+            {
+                // In melee range attacking — let combat system handle the attack
+                // Once attack cooldown starts (we just attacked), transition to disengage
+                if (attackCooldown > 0 && _units.WolfPhaseTimer[i] > 0.2f)
+                {
+                    // We've been in attack phase long enough and cooldown started → disengage
+                    _units.WolfPhase[i] = WolfDisengage;
+                    _units.WolfPhaseTimer[i] = 0;
+                    _units.InCombat[i] = false;
+                }
+                else
+                {
+                    _units.WolfPhaseTimer[i] += dt;
+                    // Stay near target
+                    if (dist > attackRange * 1.5f)
+                        MoveTowardUnit(i, targetIdx, _units.MaxSpeed[i]);
+                    else
+                        _units.PreferredVel[i] = Vec2.Zero;
+                }
+                break;
+            }
+
+            case WolfDisengage:
+            {
+                // Force-clear combat state but KEEP our target (wolf still tracks it)
+                _units.InCombat[i] = false;
+                _units.PendingAttack[i] = CombatTarget.None;
+
+                // Back away from target to maintain disengageDist
+                if (dist < disengageDist)
+                {
+                    Vec2 awayDir = dist > 0.01f ? (myPos - targetPos) * (1f / dist) : new Vec2(1, 0);
+                    _units.PreferredVel[i] = awayDir * _units.MaxSpeed[i];
+                }
+                else
+                {
+                    // Reached safe distance, wait for cooldown
+                    _units.WolfPhase[i] = WolfWaitCooldown;
+                    _units.WolfPhaseTimer[i] = 0;
+                    _units.PreferredVel[i] = Vec2.Zero;
+                }
+                break;
+            }
+
+            case WolfWaitCooldown:
+            {
+                // Force-clear combat state but KEEP our target
+                _units.InCombat[i] = false;
+                _units.PendingAttack[i] = CombatTarget.None;
+
+                // Maintain distance, wait for attack cooldown to expire
+                if (dist < disengageDist - 0.5f)
+                {
+                    Vec2 awayDir = dist > 0.01f ? (myPos - targetPos) * (1f / dist) : new Vec2(1, 0);
+                    _units.PreferredVel[i] = awayDir * _units.MaxSpeed[i] * 0.5f;
+                }
+                else if (attackCooldown <= 0)
+                {
+                    // Cooldown done — re-engage
+                    _units.WolfPhase[i] = WolfEngage;
+                    _units.WolfPhaseTimer[i] = 0;
+                }
+                else
+                {
+                    // Circle while waiting (emergent flanking when multiple wolves)
+                    Vec2 toTarget = targetPos - myPos;
+                    Vec2 perp = new Vec2(-toTarget.Y, toTarget.X);
+                    if (perp.LengthSq() > 0.01f) perp = perp.Normalized();
+                    _units.PreferredVel[i] = perp * _units.MaxSpeed[i] * 0.3f;
+                }
+                break;
+            }
+        }
+    }
+
+    /// <summary>Check if the target is facing away from us by more than angleDeg degrees.</summary>
+    private bool IsTargetFacingAway(int unitIdx, int targetIdx, float angleDeg)
+    {
+        float targetFacing = _units.FacingAngle[targetIdx] * MathF.PI / 180f;
+        Vec2 targetFacingDir = new Vec2(MathF.Cos(targetFacing), MathF.Sin(targetFacing));
+        Vec2 toUs = _units.Position[unitIdx] - _units.Position[targetIdx];
+        if (toUs.LengthSq() < 0.01f) return false;
+        toUs = toUs.Normalized();
+        // dot product: 1 = facing toward us, -1 = facing away
+        float dot = targetFacingDir.X * toUs.X + targetFacingDir.Y * toUs.Y;
+        float angleRad = angleDeg * MathF.PI / 180f;
+        return dot < MathF.Cos(angleRad); // facing more than angleDeg away from us
+    }
+
+    /// <summary>Find the most isolated enemy (fewest allies nearby).</summary>
+    private CombatTarget FindMostIsolatedEnemy(int unitIdx)
+    {
+        int bestIdx = -1;
+        int bestAllyCount = int.MaxValue;
+        float bestDist = float.MaxValue;
+
+        for (int j = 0; j < _units.Count; j++)
+        {
+            if (!_units.Alive[j] || _units.Faction[j] == _units.Faction[unitIdx]) continue;
+            float dist = (_units.Position[j] - _units.Position[unitIdx]).LengthSq();
+            if (dist > 40f * 40f) continue; // max acquisition range
+
+            // Count allies near this enemy
+            int allyCount = 0;
+            for (int k = 0; k < _units.Count; k++)
+            {
+                if (k == j || !_units.Alive[k] || _units.Faction[k] != _units.Faction[j]) continue;
+                float allyDist = (_units.Position[k] - _units.Position[j]).LengthSq();
+                if (allyDist < 8f * 8f) allyCount++; // allies within 8 units
+            }
+
+            // Prefer fewest allies, break ties by distance
+            if (allyCount < bestAllyCount || (allyCount == bestAllyCount && dist < bestDist))
+            {
+                bestAllyCount = allyCount;
+                bestDist = dist;
+                bestIdx = j;
+            }
+        }
+
+        return bestIdx >= 0 ? CombatTarget.Unit(_units.Id[bestIdx]) : CombatTarget.None;
+    }
+
+    /// <summary>
+    /// Cleanly disengage a unit from combat. Clears combat state and makes
+    /// the unit's former target retarget to another enemy in range.
+    /// </summary>
+    private void Disengage(int unitIdx)
+    {
+        _units.InCombat[unitIdx] = false;
+        _units.PendingAttack[unitIdx] = CombatTarget.None;
+
+        // Make the former target retarget if possible
+        var oldTarget = _units.Target[unitIdx];
+        _units.Target[unitIdx] = CombatTarget.None;
+
+        if (oldTarget.IsUnit)
+        {
+            int targetIdx = ResolveUnitTarget(oldTarget);
+            if (targetIdx >= 0 && _units.Alive[targetIdx])
+            {
+                // If the target was fighting us, make it pick a new target
+                var theirTarget = _units.Target[targetIdx];
+                if (theirTarget.IsUnit)
+                {
+                    int theirTargetIdx = ResolveUnitTarget(theirTarget);
+                    if (theirTargetIdx == unitIdx)
+                    {
+                        // They were targeting us — find them a new target
+                        int newTarget = FindClosestEnemy(targetIdx);
+                        if (newTarget >= 0)
+                            _units.Target[targetIdx] = CombatTarget.Unit(_units.Id[newTarget]);
+                        else
+                        {
+                            _units.Target[targetIdx] = CombatTarget.None;
+                            _units.InCombat[targetIdx] = false;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     private CombatTarget FindBestEnemyTarget(int unitIdx)
     {
         int closest = FindClosestEnemy(unitIdx);
         return closest >= 0 ? CombatTarget.Unit(_units.Id[closest]) : CombatTarget.None;
     }
 
-    private int FindClosestEnemy(int unitIdx)
+    private int FindClosestEnemy(int unitIdx, float maxRange = 0f)
     {
         float bestDist = float.MaxValue;
+        float maxDist2 = maxRange > 0f ? maxRange * maxRange : float.MaxValue;
         int bestIdx = -1;
         for (int j = 0; j < _units.Count; j++)
         {
             if (j == unitIdx || !_units.Alive[j]) continue;
             if (_units.Faction[j] == _units.Faction[unitIdx]) continue;
             float dist = (_units.Position[j] - _units.Position[unitIdx]).LengthSq();
-            if (dist < bestDist) { bestDist = dist; bestIdx = j; }
+            if (dist < bestDist && dist <= maxDist2) { bestDist = dist; bestIdx = j; }
         }
         return bestIdx;
     }

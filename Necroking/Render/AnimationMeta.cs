@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
@@ -69,7 +70,8 @@ public static class AnimMetaLoader
 
                 string unit = root.GetProperty("unit").GetString() ?? "";
                 string category = root.GetProperty("category").GetString() ?? "";
-                int yaw = root.TryGetProperty("yaw", out var y) ? y.GetInt32() : 0;
+                // Use GetDouble→int cast for all numeric fields to handle both int and float JSON values
+                int yaw = root.TryGetProperty("yaw", out var y) ? (int)Math.Round(y.GetDouble()) : 0;
                 string key = MetaKey(unit, category);
 
                 if (!output.TryGetValue(key, out var meta))
@@ -79,11 +81,11 @@ public static class AnimMetaLoader
                 }
 
                 if (root.TryGetProperty("effect_time_ms", out var et))
-                    meta.EffectTimeMs = et.GetInt32();
+                    meta.EffectTimeMs = (int)Math.Round(et.GetDouble());
                 if (root.TryGetProperty("loop_start", out var ls))
-                    meta.LoopStartIndex = ls.GetInt32();
+                    meta.LoopStartIndex = (int)Math.Round(ls.GetDouble());
                 if (root.TryGetProperty("loop_end", out var le))
-                    meta.LoopEndIndex = le.GetInt32();
+                    meta.LoopEndIndex = (int)Math.Round(le.GetDouble());
 
                 var ym = new AnimYawMeta();
                 if (root.TryGetProperty("effect_spawn_x", out var esx)) ym.EffectSpawnX = esx.GetSingle();
@@ -91,10 +93,10 @@ public static class AnimMetaLoader
                 if (root.TryGetProperty("effect_spawn_z", out var esz)) ym.EffectSpawnZ = esz.GetSingle();
 
                 if (root.TryGetProperty("time_ms", out var tms) && tms.ValueKind == JsonValueKind.Array)
-                    foreach (var v in tms.EnumerateArray()) ym.FrameDurationsMs.Add(v.GetInt32());
+                    foreach (var v in tms.EnumerateArray()) ym.FrameDurationsMs.Add((int)Math.Round(v.GetDouble()));
 
                 if (root.TryGetProperty("frame_ticks", out var ft) && ft.ValueKind == JsonValueKind.Array)
-                    foreach (var v in ft.EnumerateArray()) ym.FrameTicks.Add(v.GetInt32());
+                    foreach (var v in ft.EnumerateArray()) ym.FrameTicks.Add((int)Math.Round(v.GetDouble()));
 
                 meta.YawData[yaw] = ym;
             }

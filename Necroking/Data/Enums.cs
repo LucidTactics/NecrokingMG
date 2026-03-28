@@ -15,7 +15,12 @@ public enum AIBehavior : byte
 {
     PlayerControlled = 0, AttackClosest, AttackClosestRetarget, GuardKnight,
     AttackNecromancer, MoveToPoint, ArcherAttack, IdleAtPoint, DefendPoint,
-    Raid, Patrol, CorpseWorker, Caster, OrderAttack
+    Raid, Patrol, CorpseWorker, Caster, OrderAttack,
+    FleeWhenHit, NeutralFightBack,
+    WolfHitAndRun,          // Attack → disengage 3 units → wait for cooldown → re-engage (nearest target)
+    WolfHitAndRunIsolated,  // Same but prefers isolated targets
+    WolfOpportunist,        // Like HitAndRun but waits up to 1 cycle for target to turn away (>100° from facing)
+    WolfOpportunistIsolated // Same but prefers isolated targets
 }
 
 public enum ProjectileType : byte { Arrow, Fireball }

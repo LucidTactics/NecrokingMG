@@ -1928,24 +1928,23 @@ public class SpellEditorWindow
         int x, ref int curY, int w)
     {
         var buffIDs = _gameData.Buffs.GetIDs();
-        var names = new string[buffIDs.Count + 1];
-        names[0] = "(none)";
-        int currentIdx = 0;
+        var names = new string[buffIDs.Count];
+        int currentIdx = -1;
         for (int i = 0; i < buffIDs.Count; i++)
         {
             var bd = _gameData.Buffs.Get(buffIDs[i]);
-            names[i + 1] = bd?.DisplayName ?? buffIDs[i];
-            if (currentId == buffIDs[i]) currentIdx = i + 1;
+            names[i] = bd?.DisplayName ?? buffIDs[i];
+            if (currentId == buffIDs[i]) currentIdx = i;
         }
 
-        string currentName = currentIdx < names.Length ? names[currentIdx] : "(none)";
-        string newName = _ui.DrawCombo(fieldId, label, currentName, names, x, curY, w);
+        string currentName = currentIdx >= 0 ? names[currentIdx] : "";
+        string newName = _ui.DrawCombo(fieldId, label, currentName, names, x, curY, w, allowNone: true);
         curY += RowH;
 
         if (newName != currentName)
         {
             MarkDirty();
-            if (newName == "(none)") return "";
+            if (string.IsNullOrEmpty(newName)) return "";
             for (int i = 0; i < buffIDs.Count; i++)
             {
                 var bd = _gameData.Buffs.Get(buffIDs[i]);
@@ -1963,24 +1962,23 @@ public class SpellEditorWindow
         int x, ref int curY, int w)
     {
         var fbIDs = _gameData.Flipbooks.GetIDs();
-        var names = new string[fbIDs.Count + 1];
-        names[0] = "(none)";
-        int currentIdx = 0;
+        var names = new string[fbIDs.Count];
+        int currentIdx = -1;
         for (int i = 0; i < fbIDs.Count; i++)
         {
             var fd = _gameData.Flipbooks.Get(fbIDs[i]);
-            names[i + 1] = fd?.DisplayName ?? fbIDs[i];
-            if (currentId == fbIDs[i]) currentIdx = i + 1;
+            names[i] = fd?.DisplayName ?? fbIDs[i];
+            if (currentId == fbIDs[i]) currentIdx = i;
         }
 
-        string currentName = currentIdx < names.Length ? names[currentIdx] : "(none)";
-        string newName = _ui.DrawCombo(fieldId, label, currentName, names, x, curY, w);
+        string currentName = currentIdx >= 0 ? names[currentIdx] : "";
+        string newName = _ui.DrawCombo(fieldId, label, currentName, names, x, curY, w, allowNone: true);
         curY += RowH;
 
         if (newName != currentName)
         {
             MarkDirty();
-            if (newName == "(none)") return "";
+            if (string.IsNullOrEmpty(newName)) return "";
             for (int i = 0; i < fbIDs.Count; i++)
             {
                 var fd = _gameData.Flipbooks.Get(fbIDs[i]);
@@ -1998,24 +1996,23 @@ public class SpellEditorWindow
         int x, ref int curY, int w)
     {
         var unitIDs = _gameData.Units.GetIDs();
-        var names = new string[unitIDs.Count + 1];
-        names[0] = "(none)";
-        int currentIdx = 0;
+        var names = new string[unitIDs.Count];
+        int currentIdx = -1;
         for (int i = 0; i < unitIDs.Count; i++)
         {
             var ud = _gameData.Units.Get(unitIDs[i]);
-            names[i + 1] = ud?.DisplayName ?? unitIDs[i];
-            if (currentId == unitIDs[i]) currentIdx = i + 1;
+            names[i] = ud?.DisplayName ?? unitIDs[i];
+            if (currentId == unitIDs[i]) currentIdx = i;
         }
 
-        string currentName = currentIdx < names.Length ? names[currentIdx] : "(none)";
-        string newName = _ui.DrawCombo(fieldId, label, currentName, names, x, curY, w);
+        string currentName = currentIdx >= 0 ? names[currentIdx] : "";
+        string newName = _ui.DrawCombo(fieldId, label, currentName, names, x, curY, w, allowNone: true);
         curY += RowH;
 
         if (newName != currentName)
         {
             MarkDirty();
-            if (newName == "(none)") return "";
+            if (string.IsNullOrEmpty(newName)) return "";
             for (int i = 0; i < unitIDs.Count; i++)
             {
                 var ud = _gameData.Units.Get(unitIDs[i]);

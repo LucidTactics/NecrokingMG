@@ -41,6 +41,12 @@ public static class ScenarioRegistry
         Register("collision_debug_test", () => new Scenarios.CollisionDebugTestScenario());
         Register("grass_blade_test", () => new Scenarios.GrassBladeTestScenario());
         Register("pathfinding_test", () => new Scenarios.PathfindingTestScenario());
+        Register("wolf_hit_and_run", () => new Scenarios.WolfHitAndRunScenario());
+        Register("flee_when_hit", () => new Scenarios.FleeWhenHitScenario());
+        Register("neutral_fight_back", () => new Scenarios.NeutralFightBackScenario());
+        Register("move_to_point", () => new Scenarios.MoveToPointScenario());
+        Register("retarget", () => new Scenarios.RetargetScenario());
+        Register("horde_follow", () => new Scenarios.HordeFollowScenario());
     }
 
     public static void Register(string name, Func<ScenarioBase> creator)

@@ -45,8 +45,9 @@ public class EnvObjectEditorWindow
 
     // Reference image slots (up to 3 env object indices for scale comparison)
     private readonly int[] _referenceDefIndices = { -1, -1, -1 };
-    private bool _refDropdownOpen;
-    private int _refDropdownSlot = -1;
+    // Cached env object name list for reference picker DrawCombo (invalidated when def count changes)
+    private string[]? _cachedEnvObjectNames;
+    private int _cachedEnvObjectCount = -1;
 
     // Preview texture cache
     private Texture2D? _previewTex;
@@ -138,8 +139,8 @@ public class EnvObjectEditorWindow
         _draggingCollisionCenter = false;
         _draggingCollisionRadius = false;
         _draggingPivot = false;
-        _refDropdownOpen = false;
-        _refDropdownSlot = -1;
+        _cachedEnvObjectNames = null;
+        _cachedEnvObjectCount = -1;
         _harmonizerOpen = false;
         _harmonizer.Cancel();
         _edgeTweakerOpen = false;
@@ -540,11 +541,7 @@ public class EnvObjectEditorWindow
         // Bottom-right: ref 3
         DrawReferenceSlot(2, x + Padding + cellW + 2, gridY + cellH + 2, cellW, cellH, pixPerWorld);
 
-        // Draw the ref dropdown if open (on top of slots)
-        if (_refDropdownOpen && _refDropdownSlot >= 0 && _refDropdownSlot < 3)
-        {
-            DrawRefDropdown(_refDropdownSlot, x, y, w, h);
-        }
+        // Reference slot DrawCombo pickers are handled inline within DrawReferenceSlot
     }
 
     /// <summary>M06: Draw the currently edited object in a grid slot at the same scale as references.</summary>
@@ -630,74 +627,48 @@ public class EnvObjectEditorWindow
         }
         else
         {
-            // Empty slot - click to pick a reference
-            _ui.DrawText("Empty", new Vector2(x + w / 2 - 16, y + h / 2 - 6), EditorBase.TextDim, _smallFont);
-
-            // Clicking on empty slot opens picker
-            var mouse = Mouse.GetState();
-            var prevMouse = _ui._prevMouse;
-            var slotRect = new Rectangle(x, y, w, h);
-            if (slotRect.Contains(mouse.X, mouse.Y) &&
-                mouse.LeftButton == ButtonState.Pressed && prevMouse.LeftButton == ButtonState.Released &&
-                !_refDropdownOpen)
+            // Empty slot - show a DrawCombo picker for selecting a reference object
+            string[] names = GetEnvObjectNames();
+            if (names.Length > 0)
             {
-                _refDropdownOpen = true;
-                _refDropdownSlot = slotIdx;
+                string picked = _ui.DrawCombo($"refpick_{slotIdx}", "Ref", "(Pick...)", names, x + 2, y + h / 2 - 10, w - 4);
+                if (picked != "(Pick...)")
+                {
+                    // Find the def index matching the picked name
+                    for (int di = 0; di < _env.DefCount; di++)
+                    {
+                        var d = _env.GetDef(di);
+                        string lbl = string.IsNullOrEmpty(d.Name) ? d.Id : d.Name;
+                        if (lbl == picked)
+                        {
+                            _referenceDefIndices[slotIdx] = di;
+                            _env.ReloadDefTexture(di);
+                            break;
+                        }
+                    }
+                }
+            }
+            else
+            {
+                _ui.DrawText("(no defs)", new Vector2(x + 4, y + h / 2 - 6), EditorBase.TextDim, _smallFont);
             }
         }
     }
 
-    private void DrawRefDropdown(int slotIdx, int panelX, int panelY, int panelW, int panelH)
+    /// <summary>Get cached array of env object display names for reference picker DrawCombo.</summary>
+    private string[] GetEnvObjectNames()
     {
-        // Draw a scrollable list of all defs as a dropdown overlay
-        int ddW = Math.Min(panelW - 20, 220);
-        if (ddW < 60) ddW = panelW - 20;
-        int ddH = 200;
-        int ddX = panelX + (panelW - ddW) / 2;
-        int ddY = panelY - ddH - 4; // position above reference panel
-        if (ddY < 0) ddY = panelY + 4;
-
-        _ui.DrawRect(new Rectangle(ddX, ddY, ddW, ddH), PanelBg);
-        _ui.DrawBorder(new Rectangle(ddX, ddY, ddW, ddH), BorderColor, 2);
-        _ui.DrawText("Pick reference object:", new Vector2(ddX + 4, ddY + 2), EditorBase.TextBright, _smallFont);
-
-        // Close button
-        if (_ui.DrawButton("X", ddX + ddW - 22, ddY + 2, 18, 14, EditorBase.DangerColor))
+        if (_cachedEnvObjectNames == null || _cachedEnvObjectCount != _env.DefCount)
         {
-            _refDropdownOpen = false;
-            return;
+            _cachedEnvObjectCount = _env.DefCount;
+            _cachedEnvObjectNames = new string[_env.DefCount];
+            for (int i = 0; i < _env.DefCount; i++)
+            {
+                var d = _env.GetDef(i);
+                _cachedEnvObjectNames[i] = string.IsNullOrEmpty(d.Name) ? d.Id : d.Name;
+            }
         }
-
-        // Scrollable list of defs
-        int listY = ddY + 18;
-        int listH = ddH - 18;
-
-        // Build labels
-        var labels = new List<string>();
-        for (int i = 0; i < _env.DefCount; i++)
-        {
-            var d = _env.GetDef(i);
-            string lbl = string.IsNullOrEmpty(d.Name) ? d.Id : d.Name;
-            labels.Add(lbl);
-        }
-
-        int clicked = _ui.DrawScrollableList($"refpick_{slotIdx}", labels, -1, ddX + 2, listY, ddW - 4, listH);
-        if (clicked >= 0 && clicked < _env.DefCount)
-        {
-            _referenceDefIndices[slotIdx] = clicked;
-            _env.ReloadDefTexture(clicked); // ensure texture loaded
-            _refDropdownOpen = false;
-        }
-
-        // Close dropdown if clicking outside
-        var mouse = Mouse.GetState();
-        var prevMouse = _ui._prevMouse;
-        var ddRect = new Rectangle(ddX, ddY, ddW, ddH);
-        if (!ddRect.Contains(mouse.X, mouse.Y) &&
-            mouse.LeftButton == ButtonState.Pressed && prevMouse.LeftButton == ButtonState.Released)
-        {
-            _refDropdownOpen = false;
-        }
+        return _cachedEnvObjectNames;
     }
 
     private void HandleCollisionDrag(EnvironmentObjectDef def, float cx, float cy, float radiusPx, float pixPerWorld)

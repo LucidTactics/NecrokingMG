@@ -94,6 +94,8 @@ public class HordeSystem
         return true;
     }
 
+    public bool IsInHorde(uint id) => FindUnit(id) >= 0;
+
     public HordeUnitState GetUnitState(uint id)
     {
         int hi = FindUnit(id);
@@ -197,10 +199,18 @@ public class HordeSystem
 
                 case HordeUnitState.Engaged:
                 {
-                    // Leash check
+                    // Leash check: distance from horde slot
                     Vec2 slotPos = ComputeSlotPosition(hu.SlotIndex, _hordeUnits.Count, _globalTime);
                     float distToSlot = (units.Position[idx] - slotPos).Length();
 
+                    // Hard leash: if way beyond leash radius, force return immediately
+                    if (distToSlot > _settings.LeashRadius * 1.5f)
+                    {
+                        hu.State = HordeUnitState.Returning;
+                        break;
+                    }
+
+                    // Soft leash: probabilistic return check
                     if (distToSlot > _settings.LeashRadius)
                     {
                         hu.LeashCheckTimer -= dt;
@@ -208,7 +218,10 @@ public class HordeSystem
                         {
                             hu.LeashCheckTimer = CombatTickInterval;
                             if ((float)_rng.NextDouble() < _settings.LeashChance)
+                            {
                                 hu.State = HordeUnitState.Returning;
+                                break;
+                            }
                         }
                     }
 

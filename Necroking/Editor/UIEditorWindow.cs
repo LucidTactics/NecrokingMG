@@ -221,10 +221,9 @@ public class UIEditorWindow : EditorBase
     private float _elemDetailScroll;
     private float _widgetDetailScroll;
 
-    // Add-child dropdown state
-    private bool _addChildDropdownOpen;
-    private bool _addChildIsWidget; // false=element, true=widget
-    private string[] _addChildOptions = Array.Empty<string>();
+    // Add-child DrawCombo IDs (for programmatic close on tab switch)
+    private const string AddElemComboId = "addchild_elem_combo";
+    private const string AddWgtComboId = "addchild_wgt_combo";
 
     // ═══════════════════════════════════════
     //  Initialization (two signatures for compat)
@@ -837,7 +836,9 @@ public class UIEditorWindow : EditorBase
                 _nsDetailScroll = 0;
                 _elemDetailScroll = 0;
                 _widgetDetailScroll = 0;
-                _addChildDropdownOpen = false;
+                // Close any open add-child DrawCombo
+                if (_activeFieldId == AddElemComboId || _activeFieldId == AddWgtComboId)
+                    _activeFieldId = null;
             }
         }
 
@@ -1924,61 +1925,23 @@ public class UIEditorWindow : EditorBase
             _childDragInsertIdx = -1;
         }
 
-        // Child buttons -- with element/widget name dropdowns
-        int childBtnW = (propW - 24) / 5;
+        // Child buttons (Copy / Paste / Del) + DrawCombo pickers for add-child
+        int childBtnW = (propW - 24) / 3;
         int childBtnH = 22;
 
-        // +Elem button with dropdown
-        if (DrawButton("+Elem", x + pad, curY, childBtnW, childBtnH))
-        {
-            if (_elements.Count > 0)
-            {
-                _addChildDropdownOpen = true;
-                _addChildIsWidget = false;
-                _addChildOptions = _elements.Select(e => e.Id).ToArray();
-            }
-            else
-            {
-                var newChild = new UIEditorChildDef { Name = $"child_{def.Children.Count}", Width = 100, Height = 40 };
-                def.Children.Add(newChild);
-                _selectedChildIdx = def.Children.Count - 1;
-                _selectedChildPath = new List<int> { _selectedChildIdx };
-                _unsavedChanges = true;
-            }
-        }
-
-        // +Wgt button with dropdown
-        if (DrawButton("+Wgt", x + pad + (childBtnW + 4), curY, childBtnW, childBtnH))
-        {
-            if (_widgets.Count > 0)
-            {
-                _addChildDropdownOpen = true;
-                _addChildIsWidget = true;
-                _addChildOptions = _widgets.Select(wd2 => wd2.Id).ToArray();
-            }
-            else
-            {
-                var newChild = new UIEditorChildDef { Name = $"child_{def.Children.Count}", Width = 200, Height = 100 };
-                def.Children.Add(newChild);
-                _selectedChildIdx = def.Children.Count - 1;
-                _selectedChildPath = new List<int> { _selectedChildIdx };
-                _unsavedChanges = true;
-            }
-        }
-
         // Copy button (UI13)
-        if (DrawButton("Copy", x + pad + (childBtnW + 4) * 2, curY, childBtnW, childBtnH))
+        if (DrawButton("Copy", x + pad, curY, childBtnW, childBtnH))
         {
             CopySelectedChild(def);
         }
 
         // Paste button (UI13)
-        if (DrawButton("Paste", x + pad + (childBtnW + 4) * 3, curY, childBtnW, childBtnH))
+        if (DrawButton("Paste", x + pad + (childBtnW + 4), curY, childBtnW, childBtnH))
         {
             PasteChild(def);
         }
 
-        if (DrawButton("Del", x + pad + (childBtnW + 4) * 4, curY, childBtnW, childBtnH, DangerColor))
+        if (DrawButton("Del", x + pad + (childBtnW + 4) * 2, curY, childBtnW, childBtnH, DangerColor))
         {
             if (_selectedChildIdx >= 0 && _selectedChildIdx < def.Children.Count)
             {
@@ -1991,77 +1954,56 @@ public class UIEditorWindow : EditorBase
         }
         curY += childBtnH + 4;
 
-        // Add child dropdown (select element or widget by name)
-        if (_addChildDropdownOpen && _addChildOptions.Length > 0)
+        // +Element DrawCombo picker (replaces old +Elem button + manual dropdown)
+        if (_elements.Count > 0)
         {
-            int dropH = Math.Min(_addChildOptions.Length, 8) * 20;
-            int dropX = x + pad;
-            int dropW = propW;
-            var dropRect = new Rectangle(dropX, curY, dropW, dropH);
-            DrawRect(dropRect, PanelBg);
-            DrawBorder(dropRect, PanelBorder);
-
-            for (int di = 0; di < Math.Min(_addChildOptions.Length, 8); di++)
+            string[] elemNames = _elements.Select(e => e.Id).ToArray();
+            string picked = DrawCombo("addchild_elem", "+Element", "(pick)", elemNames, x + pad, curY, propW);
+            if (picked != "(pick)")
             {
-                var optRect = new Rectangle(dropX, curY + di * 20, dropW, 20);
-                bool optHov = optRect.Contains(_mouse.X, _mouse.Y);
-                if (optHov) DrawRect(optRect, ItemHover);
-                DrawText(_addChildOptions[di], new Vector2(dropX + 4, curY + di * 20 + 2), TextColor);
+                var newChild = new UIEditorChildDef { Name = $"child_{def.Children.Count}" };
+                newChild.Element = picked;
+                var refEl = _elements.FirstOrDefault(e => e.Id == picked);
+                newChild.Width = refEl?.Width ?? 100;
+                newChild.Height = refEl?.Height ?? 40;
+                def.Children.Add(newChild);
+                _selectedChildIdx = def.Children.Count - 1;
+                _selectedChildPath = new List<int> { _selectedChildIdx };
+                _unsavedChanges = true;
+            }
+            curY += 24;
+        }
 
-                if (optHov && LeftJustPressed)
+        // +Widget DrawCombo picker (replaces old +Wgt button + manual dropdown)
+        if (_widgets.Count > 0)
+        {
+            string[] wgtNames = _widgets.Select(wd2 => wd2.Id).ToArray();
+            string picked = DrawCombo("addchild_wgt", "+Widget", "(pick)", wgtNames, x + pad, curY, propW);
+            if (picked != "(pick)")
+            {
+                // UI15: Circular reference guard
+                if (WouldCreateCircularRef(def.Id, picked))
                 {
-                    string chosenId = _addChildOptions[di];
-                    var newChild = new UIEditorChildDef
-                    {
-                        Name = $"child_{def.Children.Count}",
-                    };
-                    if (_addChildIsWidget)
-                    {
-                        // UI15: Circular reference guard
-                        if (WouldCreateCircularRef(def.Id, chosenId))
-                        {
-                            _circularRefWarning = $"Circular ref: {def.Id} -> {chosenId}";
-                            _circularRefWarningTimer = 3f;
-                            _addChildDropdownOpen = false;
-                        }
-                        else
-                        {
-                            newChild.Widget = chosenId;
-                            var refWd = _widgets.FirstOrDefault(wd2 => wd2.Id == chosenId);
-                            newChild.Width = refWd?.Width ?? 200;
-                            newChild.Height = refWd?.Height ?? 100;
-                            def.Children.Add(newChild);
-                            _selectedChildIdx = def.Children.Count - 1;
-                            _selectedChildPath = new List<int> { _selectedChildIdx };
-                            _unsavedChanges = true;
-                            _addChildDropdownOpen = false;
-                        }
-                    }
-                    else
-                    {
-                        newChild.Element = chosenId;
-                        var refEl = _elements.FirstOrDefault(e => e.Id == chosenId);
-                        newChild.Width = refEl?.Width ?? 100;
-                        newChild.Height = refEl?.Height ?? 40;
-                        def.Children.Add(newChild);
-                        _selectedChildIdx = def.Children.Count - 1;
-                        _selectedChildPath = new List<int> { _selectedChildIdx };
-                        _unsavedChanges = true;
-                        _addChildDropdownOpen = false;
-                    }
+                    _circularRefWarning = $"Circular ref: {def.Id} -> {picked}";
+                    _circularRefWarningTimer = 3f;
+                }
+                else
+                {
+                    var newChild = new UIEditorChildDef { Name = $"child_{def.Children.Count}" };
+                    newChild.Widget = picked;
+                    var refWd = _widgets.FirstOrDefault(wd2 => wd2.Id == picked);
+                    newChild.Width = refWd?.Width ?? 200;
+                    newChild.Height = refWd?.Height ?? 100;
+                    def.Children.Add(newChild);
+                    _selectedChildIdx = def.Children.Count - 1;
+                    _selectedChildPath = new List<int> { _selectedChildIdx };
+                    _unsavedChanges = true;
                 }
             }
-
-            // Close on click outside
-            if (LeftJustPressed && !dropRect.Contains(_mouse.X, _mouse.Y))
-                _addChildDropdownOpen = false;
-
-            curY += dropH + 4;
+            curY += 24;
         }
-        else
-        {
-            curY += 2;
-        }
+
+        curY += 2;
 
         // Selected child properties
         if (_selectedChildIdx >= 0 && _selectedChildIdx < def.Children.Count)

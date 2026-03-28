@@ -130,8 +130,9 @@ public class UnitEditorWindow
     // --- Faction filter labels ---
     private static readonly string[] FactionTabs = { "All", "Undead", "Human", "Animal" };
 
-    // --- AI behavior names ---
+    // --- Cached enum name arrays ---
     private static readonly string[] AINames = Enum.GetNames<AIBehavior>();
+    private static readonly string[] FactionNames = Enum.GetNames<Faction>();
 
     // --- Zombie type labels (from the unit registry itself) ---
     private static readonly string[] AngleOptions = { "30", "60", "300" };
@@ -1602,8 +1603,7 @@ public class UnitEditorWindow
         DrawSectionHeader("Identity", x, ref curY, w);
 
         // Faction
-        string[] factions = Enum.GetNames<Faction>();
-        string newFaction = _ui.DrawCombo("unit_faction", "Faction", def.Faction, factions, x, curY, w);
+        string newFaction = _ui.DrawCombo("unit_faction", "Faction", def.Faction, FactionNames, x, curY, w);
         if (newFaction != def.Faction) { def.Faction = newFaction; _unsavedChanges = true; }
         curY += RowH;
 
@@ -1648,23 +1648,32 @@ public class UnitEditorWindow
         // U16: Zombie Type dropdown with grouped items (units + groups)
         // RU30: Map current value to display format for groups
         string[] zombieTypes = BuildZombieTypeList();
-        string zombieDisplay = def.ZombieTypeID;
+        string zombieDisplay = def.ZombieTypeID ?? "";
         // If the current value is a group ID, find its display form
         var gDef2 = _gameData.UnitGroups.Get(def.ZombieTypeID);
         if (gDef2 != null)
             zombieDisplay = $"Group: {gDef2.DisplayName} [{def.ZombieTypeID}]";
-        string newZombieType = _ui.DrawCombo("unit_zombie", "Zombie Type", zombieDisplay, zombieTypes, x, curY, w);
+        string newZombieType = _ui.DrawCombo("unit_zombie", "Zombie Type", zombieDisplay, zombieTypes, x, curY, w, allowNone: true);
         if (newZombieType != zombieDisplay && !newZombieType.StartsWith("-- "))
         {
-            // RU30: Extract raw group ID from "Group: DisplayName [id]" format
-            string resolvedId = newZombieType;
-            if (newZombieType.StartsWith("Group: ") && newZombieType.Contains('[') && newZombieType.EndsWith("]"))
+            // allowNone returns "" when "(none)" is selected
+            if (string.IsNullOrEmpty(newZombieType))
             {
-                int bracketStart = newZombieType.LastIndexOf('[');
-                resolvedId = newZombieType.Substring(bracketStart + 1, newZombieType.Length - bracketStart - 2);
+                def.ZombieTypeID = "";
+                _unsavedChanges = true;
             }
-            def.ZombieTypeID = resolvedId;
-            _unsavedChanges = true;
+            else
+            {
+                // RU30: Extract raw group ID from "Group: DisplayName [id]" format
+                string resolvedId = newZombieType;
+                if (newZombieType.StartsWith("Group: ") && newZombieType.Contains('[') && newZombieType.EndsWith("]"))
+                {
+                    int bracketStart = newZombieType.LastIndexOf('[');
+                    resolvedId = newZombieType.Substring(bracketStart + 1, newZombieType.Length - bracketStart - 2);
+                }
+                def.ZombieTypeID = resolvedId;
+                _unsavedChanges = true;
+            }
         }
         curY += RowH;
 
@@ -1741,18 +1750,26 @@ public class UnitEditorWindow
         string[] spellDisplayNames = BuildSpellDropdownDisplayList();
         string[] spellIds = BuildSpellDropdownList();
         // Find current display name for the selected spell
-        string currentSpellDisplay = def.SpellID;
+        string currentSpellDisplay = string.IsNullOrEmpty(def.SpellID) ? "" : def.SpellID;
         for (int si = 0; si < spellIds.Length; si++)
         {
             if (spellIds[si] == def.SpellID) { currentSpellDisplay = spellDisplayNames[si]; break; }
         }
-        string newSpellDisplay = _ui.DrawCombo("unit_spell", "Spell", currentSpellDisplay, spellDisplayNames, x, curY, w);
+        string newSpellDisplay = _ui.DrawCombo("unit_spell", "Spell", currentSpellDisplay, spellDisplayNames, x, curY, w, allowNone: true);
         // Map display name back to ID
         if (newSpellDisplay != currentSpellDisplay)
         {
-            for (int si = 0; si < spellDisplayNames.Length; si++)
+            if (string.IsNullOrEmpty(newSpellDisplay))
             {
-                if (spellDisplayNames[si] == newSpellDisplay) { def.SpellID = spellIds[si]; _unsavedChanges = true; break; }
+                def.SpellID = "";
+                _unsavedChanges = true;
+            }
+            else
+            {
+                for (int si = 0; si < spellDisplayNames.Length; si++)
+                {
+                    if (spellDisplayNames[si] == newSpellDisplay) { def.SpellID = spellIds[si]; _unsavedChanges = true; break; }
+                }
             }
         }
         curY += RowH;
@@ -1809,10 +1826,10 @@ public class UnitEditorWindow
 
             // Weapon dropdown with display names
             string currentDisplay = MapIdToDisplay(wId, weaponDisplayNames, weaponIdList);
-            string newDisplay = _ui.DrawCombo($"weap_{i}", displayLabel, currentDisplay, weaponDisplayNames, x, curY, w - 28);
+            string newDisplay = _ui.DrawCombo($"weap_{i}", displayLabel, currentDisplay, weaponDisplayNames, x, curY, w - 28, allowNone: true);
             if (newDisplay != currentDisplay)
             {
-                def.Weapons[i] = MapDisplayToId(newDisplay, weaponDisplayNames, weaponIdList);
+                def.Weapons[i] = string.IsNullOrEmpty(newDisplay) ? "" : MapDisplayToId(newDisplay, weaponDisplayNames, weaponIdList);
                 _unsavedChanges = true;
             }
 
@@ -1863,10 +1880,10 @@ public class UnitEditorWindow
             string displayLabel = aDef != null ? $"  [{i}] {aDef.DisplayName}" : $"  [{i}]";
 
             string currentDisplay = MapIdToDisplay(aId, armorDisplayNames, armorIdList);
-            string newDisplay = _ui.DrawCombo($"arm_{i}", displayLabel, currentDisplay, armorDisplayNames, x, curY, w - 28);
+            string newDisplay = _ui.DrawCombo($"arm_{i}", displayLabel, currentDisplay, armorDisplayNames, x, curY, w - 28, allowNone: true);
             if (newDisplay != currentDisplay)
             {
-                def.Armors[i] = MapDisplayToId(newDisplay, armorDisplayNames, armorIdList);
+                def.Armors[i] = string.IsNullOrEmpty(newDisplay) ? "" : MapDisplayToId(newDisplay, armorDisplayNames, armorIdList);
                 _unsavedChanges = true;
             }
 
@@ -1912,10 +1929,10 @@ public class UnitEditorWindow
             string displayLabel = sDef != null ? $"  [{i}] {sDef.DisplayName}" : $"  [{i}]";
 
             string currentDisplay = MapIdToDisplay(sId, shieldDisplayNames, shieldIdList);
-            string newDisplay = _ui.DrawCombo($"shld_{i}", displayLabel, currentDisplay, shieldDisplayNames, x, curY, w - 28);
+            string newDisplay = _ui.DrawCombo($"shld_{i}", displayLabel, currentDisplay, shieldDisplayNames, x, curY, w - 28, allowNone: true);
             if (newDisplay != currentDisplay)
             {
-                def.Shields[i] = MapDisplayToId(newDisplay, shieldDisplayNames, shieldIdList);
+                def.Shields[i] = string.IsNullOrEmpty(newDisplay) ? "" : MapDisplayToId(newDisplay, shieldDisplayNames, shieldIdList);
                 _unsavedChanges = true;
             }
 
@@ -2878,7 +2895,7 @@ public class UnitEditorWindow
 
     private string[] BuildZombieTypeList()
     {
-        var list = new List<string> { "" };
+        var list = new List<string>();
         // U16: Section header for units
         list.Add("-- Units --");
         foreach (var id in _gameData.Units.GetIDs())
@@ -2902,7 +2919,7 @@ public class UnitEditorWindow
 
     private string[] BuildSpellDropdownList()
     {
-        var list = new List<string> { "" };
+        var list = new List<string>();
         foreach (var id in _gameData.Spells.GetIDs())
             list.Add(id);
         return list.ToArray();
@@ -2911,7 +2928,7 @@ public class UnitEditorWindow
     // U17: Build spell dropdown with "DisplayName (id)" format
     private string[] BuildSpellDropdownDisplayList()
     {
-        var list = new List<string> { "" };
+        var list = new List<string>();
         foreach (var id in _gameData.Spells.GetIDs())
         {
             var spell = _gameData.Spells.Get(id);
@@ -2924,8 +2941,8 @@ public class UnitEditorWindow
     // RU33: Build weapon dropdown with display names and parallel ID list
     private void BuildWeaponDropdownLists(out string[] displayNames, out string[] ids)
     {
-        var dispList = new List<string> { "" };
-        var idList = new List<string> { "" };
+        var dispList = new List<string>();
+        var idList = new List<string>();
         foreach (var id in _gameData.Weapons.GetIDs())
         {
             var w = _gameData.Weapons.Get(id);
@@ -2939,8 +2956,8 @@ public class UnitEditorWindow
 
     private void BuildArmorDropdownLists(out string[] displayNames, out string[] ids)
     {
-        var dispList = new List<string> { "" };
-        var idList = new List<string> { "" };
+        var dispList = new List<string>();
+        var idList = new List<string>();
         foreach (var id in _gameData.Armors.GetIDs())
         {
             var a = _gameData.Armors.Get(id);
@@ -2954,8 +2971,8 @@ public class UnitEditorWindow
 
     private void BuildShieldDropdownLists(out string[] displayNames, out string[] ids)
     {
-        var dispList = new List<string> { "" };
-        var idList = new List<string> { "" };
+        var dispList = new List<string>();
+        var idList = new List<string>();
         foreach (var id in _gameData.Shields.GetIDs())
         {
             var s = _gameData.Shields.Get(id);

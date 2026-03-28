@@ -108,6 +108,12 @@ Necroking/bin/Debug/net9.0/Necroking.exe --scenario <name> --timeout <seconds>
 - `shadow_test` — Shadow consistency across L-shaped wall and units (4 screenshots)
 - `grass_wall_depth` — Depth ordering between grass and walls (4 screenshots)
 - `road_rim` — Road rendering test with different edge softness/rim settings (4 screenshots)
+- `flee_when_hit` — FleeWhenHit AI: deer flees 15 units from attacker when engaged
+- `neutral_fight_back` — NeutralFightBack AI: peaceful until hit, then fights attacker
+- `wolf_hit_and_run` — WolfHitAndRun AI: 4-phase engage→attack→disengage→cooldown cycle
+- `move_to_point` — MoveToPoint AI: unit pathfinds to destination
+- `retarget` — AttackClosestRetarget AI: periodic 2s retargeting to closest enemy
+- `horde_follow` — Horde formation following necromancer + engagement with enemies
 
 ### Creating a new scenario
 1. Create `Necroking/Scenario/Scenarios/MyScenario.cs`

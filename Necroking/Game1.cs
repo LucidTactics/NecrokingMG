@@ -310,15 +310,8 @@ public class Game1 : Microsoft.Xna.Framework.Game
         float center = worldW * 0.5f;
         SpawnUnit("necromancer", new Vec2(center, center));
 
-        // Spawn some test units nearby
-        for (int i = 0; i < 8; i++)
-            SpawnUnit("skeleton", new Vec2(center - 4 + i * 1.2f, center + 3));
-        for (int i = 0; i < 5; i++)
-            SpawnUnit("soldier", new Vec2(center + 10 + i * 1.5f, center - 5));
-        for (int i = 0; i < 2; i++)
-            SpawnUnit("knight", new Vec2(center + 12 + i * 2f, center - 8));
-        for (int i = 0; i < 3; i++)
-            SpawnUnit("archer", new Vec2(center + 14 + i * 1.5f, center - 3));
+        // Spawn 1 militia nearby
+        SpawnUnit("militia", new Vec2(center + 5, center + 3));
 
         _camera.Position = new Vec2(center, center);
         _camera.Zoom = 24f;
@@ -343,9 +336,9 @@ public class Game1 : Microsoft.Xna.Framework.Game
         catch
         {
             _spellBarState.Slots = new[] {
-                new SpellBarSlot { SpellID = "fireball" },
-                new SpellBarSlot { SpellID = "" },
-                new SpellBarSlot { SpellID = "" },
+                new SpellBarSlot { SpellID = "summon_skeleton_copy_copy" }, // Summon Wolf
+                new SpellBarSlot { SpellID = "summon_skeleton_copy" },      // Summon Deer
+                new SpellBarSlot { SpellID = "raise_zombie" },              // Summon Zombie
                 new SpellBarSlot { SpellID = "" }
             };
         }
@@ -573,25 +566,26 @@ public class Game1 : Microsoft.Xna.Framework.Game
         _sim.UnitsMut.MaxSpeed[idx] = builtStats.CombatSpeed;
 
         // Faction
-        _sim.UnitsMut.Faction[idx] = unitDef.Faction == "Human" ? Faction.Human : Faction.Undead;
-
-        // AI
-        _sim.UnitsMut.AI[idx] = unitDef.AI switch
+        _sim.UnitsMut.Faction[idx] = unitDef.Faction switch
         {
-            "PlayerControlled" => AIBehavior.PlayerControlled,
-            "AttackClosest" => AIBehavior.AttackClosest,
-            "AttackNecromancer" => AIBehavior.AttackNecromancer,
-            "GuardKnight" => AIBehavior.GuardKnight,
-            "ArcherAttack" => AIBehavior.ArcherAttack,
-            _ => AIBehavior.AttackClosest
+            "Human" => Faction.Human,
+            "Animal" => Faction.Animal,
+            _ => Faction.Undead
         };
+
+        // AI — parse from string to enum, supporting all AIBehavior values
+        _sim.UnitsMut.AI[idx] = Enum.TryParse<AIBehavior>(unitDef.AI, out var parsedAI)
+            ? parsedAI : AIBehavior.AttackClosest;
 
         // If necromancer, record index in simulation
         if (unitDef.AI == "PlayerControlled")
         {
-            // Use reflection-free approach: set via a public method
             _sim.SetNecromancerIndex(idx);
         }
+
+        // Auto-enroll undead non-necromancer units in the horde
+        if (_sim.Units.Faction[idx] == Faction.Undead && _sim.Units.AI[idx] != AIBehavior.PlayerControlled)
+            _sim.Horde.AddUnit(_sim.Units.Id[idx]);
 
         // Set up animation
         if (unitDef.Sprite != null)
@@ -2081,6 +2075,8 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
                 var ctrl = new AnimController();
                 ctrl.Init(spriteData);
+                if (_animMeta.Count > 0)
+                    ctrl.SetAnimMeta(_animMeta, unitDef.Sprite.SpriteName);
                 animData = new UnitAnimData { Ctrl = ctrl, AtlasID = atlasId, RefFrameHeight = 128f, CachedDefID = defID };
 
                 var idleAnim = spriteData.GetAnim("Idle");
@@ -2812,26 +2808,144 @@ public class Game1 : Microsoft.Xna.Framework.Game
         var shadow = _gameData.Settings.Shadow;
         if (!shadow.Enabled) return;
 
-        float angleRad = shadow.SunAngle * MathF.PI / 180f;
-        float offsetX = MathF.Cos(angleRad) * shadow.LengthScale;
-        float offsetY = MathF.Sin(angleRad) * shadow.LengthScale;
-        byte alphaB = (byte)(Math.Clamp(shadow.Opacity, 0f, 1f) * 255);
-        var shadowColor = new Color((byte)0, (byte)0, (byte)0, alphaB);
+        bool useShader = (UnitShadowMode)shadow.UnitShadowMode == UnitShadowMode.Shader;
+
+        if (useShader)
+            DrawShaderShadows(shadow);
+        else
+            DrawEllipseShadows(shadow);
+    }
+
+    private void DrawEllipseShadows(ShadowSettings shadow)
+    {
+        // C++ style: two concentric soft ellipses per unit at ground position
+        byte outerAlpha = (byte)Math.Clamp(shadow.Opacity * 255f * 0.6f, 0, 255);
+        byte innerAlpha = (byte)Math.Clamp(shadow.Opacity * 255f * 0.35f, 0, 255);
+        var outerColor = new Color((byte)0, (byte)0, (byte)0, outerAlpha);
+        var innerColor = new Color((byte)0, (byte)0, (byte)0, innerAlpha);
 
         for (int i = 0; i < _sim.Units.Count; i++)
         {
             if (!_sim.Units.Alive[i]) continue;
             float unitRadius = _sim.Units.Radius[i];
             var worldPos = _sim.Units.Position[i];
-            // Offset shadow position by sun direction (in world space, scaled by unit radius)
-            var shadowWorld = new Vec2(worldPos.X + offsetX * unitRadius, worldPos.Y + offsetY * unitRadius);
-            var sp = _renderer.WorldToScreen(shadowWorld, 0f, _camera);
-            float r = unitRadius * _camera.Zoom * (1f - shadow.Squash * 0.5f);
-            float ry = r * _camera.YRatio * (1f - shadow.Squash);
+            var sp = _renderer.WorldToScreen(worldPos, 0f, _camera);
 
-            // Ellipse shadow approximation using stretched pixel
-            _spriteBatch.Draw(_pixel, new Rectangle((int)(sp.X - r), (int)(sp.Y - ry * 0.5f), (int)(r * 2), (int)ry),
-                shadowColor);
+            float r = unitRadius * _camera.Zoom * 0.8f;
+            float ry = r * _camera.YRatio;
+
+            // Outer soft ellipse
+            _spriteBatch.Draw(_glowTex,
+                new Rectangle((int)(sp.X - r), (int)(sp.Y - ry * 0.5f), (int)(r * 2), (int)ry),
+                outerColor);
+            // Inner darker ellipse (60% size)
+            float ir = r * 0.6f;
+            float iry = ry * 0.6f;
+            _spriteBatch.Draw(_glowTex,
+                new Rectangle((int)(sp.X - ir), (int)(sp.Y - iry * 0.5f), (int)(ir * 2), (int)iry),
+                innerColor);
+        }
+
+        // Corpse shadows (fade with dissolve)
+        foreach (var corpse in _sim.Corpses)
+        {
+            var unitDef = _gameData.Units.Get(corpse.UnitDefID);
+            if (unitDef == null) continue;
+            float radius = unitDef.Radius > 0 ? unitDef.Radius : 0.495f;
+            var sp = _renderer.WorldToScreen(corpse.Position, 0f, _camera);
+            float r = radius * _camera.Zoom * 0.8f;
+            float ry = r * _camera.YRatio;
+
+            float dissolveAlpha = corpse.Dissolving ? MathF.Max(0f, 1f - corpse.DissolveTimer / 2f) : 1f;
+            byte coa = (byte)(outerAlpha * dissolveAlpha);
+            byte cia = (byte)(innerAlpha * dissolveAlpha);
+
+            _spriteBatch.Draw(_glowTex,
+                new Rectangle((int)(sp.X - r), (int)(sp.Y - ry * 0.5f), (int)(r * 2), (int)ry),
+                new Color((byte)0, (byte)0, (byte)0, coa));
+            float ir2 = r * 0.6f;
+            float iry2 = ry * 0.6f;
+            _spriteBatch.Draw(_glowTex,
+                new Rectangle((int)(sp.X - ir2), (int)(sp.Y - iry2 * 0.5f), (int)(ir2 * 2), (int)iry2),
+                new Color((byte)0, (byte)0, (byte)0, cia));
+        }
+    }
+
+    private void DrawShaderShadows(ShadowSettings shadow)
+    {
+        // Shader-projected shadows: sprite silhouette projected as a parallelogram
+        float sunRad = shadow.SunAngle * MathF.PI / 180f;
+        byte shAlpha = (byte)Math.Clamp(shadow.Opacity * 255f, 0, 255);
+        var shadowColor = new Color((byte)0, (byte)0, (byte)0, shAlpha);
+
+        for (int i = 0; i < _sim.Units.Count; i++)
+        {
+            if (!_sim.Units.Alive[i]) continue;
+            uint uid = _sim.Units.Id[i];
+            if (!_unitAnims.TryGetValue(uid, out var animData)) continue;
+
+            var unitDef = _gameData.Units.Get(_sim.Units.UnitDefID[i]);
+            if (unitDef == null) continue;
+
+            var atlas = _atlases[(int)animData.AtlasID];
+            if (!atlas.IsLoaded) continue;
+
+            var fr = animData.Ctrl.GetCurrentFrame(_sim.Units.FacingAngle[i]);
+            if (fr.Frame == null) continue;
+
+            float worldH = (unitDef.SpriteWorldHeight > 0 ? unitDef.SpriteWorldHeight : 1.8f) * _sim.Units.SpriteScale[i];
+            float pixelH = worldH * _camera.Zoom;
+            float scale = pixelH / animData.RefFrameHeight;
+
+            // Shadow projection calculation
+            float swLen = worldH * shadow.LengthScale * _camera.Zoom;
+            float usdx = MathF.Cos(sunRad) * swLen;
+            float usdy = MathF.Sin(sunRad) * swLen * _camera.YRatio;
+            float destW = fr.Frame.Value.Rect.Width * scale;
+            float destH = fr.Frame.Value.Rect.Height * scale;
+            float shadowH = destH * shadow.Squash;
+            float anchorX = fr.Frame.Value.PivotX;
+
+            // Feet position (ground contact, ignoring jump height)
+            var feetSp = _renderer.WorldToScreen(_sim.Units.Position[i], 0f, _camera);
+
+            float leftOff = destW * anchorX;
+            float rightOff = destW * (1f - anchorX);
+
+            // Draw shadow as a skewed sprite quad (parallelogram)
+            // Bottom edge at feet, top edge shifted by sun direction
+            var srcRect = fr.Frame.Value.Rect;
+            if (fr.FlipX)
+            {
+                // Swap anchor for flipped sprite
+                float tmp = leftOff;
+                leftOff = rightOff;
+                rightOff = tmp;
+            }
+
+            // Use the glow texture as a soft shadow for the projected shape
+            // Top-left and top-right are shifted by sun offset
+            float tlX = feetSp.X - leftOff + usdx;
+            float tlY = feetSp.Y - shadowH + usdy;
+            float trX = feetSp.X + rightOff + usdx;
+            float blX = feetSp.X - leftOff;
+            float blY = feetSp.Y;
+            float brX = feetSp.X + rightOff;
+
+            // Approximate the parallelogram as a squashed sprite draw
+            // Center of the parallelogram
+            float cx = (tlX + trX + blX + brX) * 0.25f;
+            float cy = (tlY + tlY + blY + blY) * 0.25f;
+
+            // Draw the sprite's texture as a flat shadow (squashed + offset)
+            var shadowDest = new Rectangle(
+                (int)(feetSp.X - leftOff + usdx * 0.5f),
+                (int)(feetSp.Y - shadowH),
+                (int)(leftOff + rightOff),
+                (int)shadowH);
+
+            _spriteBatch.Draw(atlas.Texture, shadowDest, srcRect,
+                shadowColor, 0f, new Vector2(0, 0), fr.FlipX ? SpriteEffects.FlipHorizontally : SpriteEffects.None, 0f);
         }
     }
 

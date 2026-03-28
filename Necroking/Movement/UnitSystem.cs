@@ -53,6 +53,10 @@ public class UnitArrays
     public List<float> AttackCooldown = new();
     public List<CombatTarget> PendingAttack = new();
     public List<float> HitShakeTimer = new();
+    public List<uint> LastAttackerID = new();   // stable ID of last unit that hit us
+    public List<float> FleeTimer = new();       // countdown for FleeWhenHit flee duration
+    public List<byte> WolfPhase = new();        // 0=engage, 1=attacking, 2=disengage, 3=wait/cooldown
+    public List<float> WolfPhaseTimer = new();  // timer for current wolf phase
 
     // Jumping
     public List<bool> Jumping = new();
@@ -131,6 +135,10 @@ public class UnitArrays
         AttackCooldown.Add(0f);
         PendingAttack.Add(CombatTarget.None);
         HitShakeTimer.Add(0f);
+        LastAttackerID.Add(GameConstants.InvalidUnit);
+        FleeTimer.Add(0f);
+        WolfPhase.Add(0);
+        WolfPhaseTimer.Add(0f);
         Jumping.Add(false);
         JumpTimer.Add(0f);
         JumpDuration.Add(1f);
@@ -201,6 +209,10 @@ public class UnitArrays
         (AttackCooldown[a], AttackCooldown[b]) = (AttackCooldown[b], AttackCooldown[a]);
         (PendingAttack[a], PendingAttack[b]) = (PendingAttack[b], PendingAttack[a]);
         (HitShakeTimer[a], HitShakeTimer[b]) = (HitShakeTimer[b], HitShakeTimer[a]);
+        (LastAttackerID[a], LastAttackerID[b]) = (LastAttackerID[b], LastAttackerID[a]);
+        (FleeTimer[a], FleeTimer[b]) = (FleeTimer[b], FleeTimer[a]);
+        (WolfPhase[a], WolfPhase[b]) = (WolfPhase[b], WolfPhase[a]);
+        (WolfPhaseTimer[a], WolfPhaseTimer[b]) = (WolfPhaseTimer[b], WolfPhaseTimer[a]);
         (Jumping[a], Jumping[b]) = (Jumping[b], Jumping[a]);
         (JumpTimer[a], JumpTimer[b]) = (JumpTimer[b], JumpTimer[a]);
         (JumpDuration[a], JumpDuration[b]) = (JumpDuration[b], JumpDuration[a]);
@@ -242,6 +254,8 @@ public class UnitArrays
         Target.RemoveAt(last); RetargetTimer.RemoveAt(last); Alive.RemoveAt(last);
         InCombat.RemoveAt(last); FacingAngle.RemoveAt(last); AttackCooldown.RemoveAt(last);
         PendingAttack.RemoveAt(last); HitShakeTimer.RemoveAt(last);
+        LastAttackerID.RemoveAt(last); FleeTimer.RemoveAt(last);
+        WolfPhase.RemoveAt(last); WolfPhaseTimer.RemoveAt(last);
         Jumping.RemoveAt(last); JumpTimer.RemoveAt(last); JumpDuration.RemoveAt(last);
         JumpStartPos.RemoveAt(last); JumpEndPos.RemoveAt(last);
         JumpIsAttack.RemoveAt(last); JumpAttackFired.RemoveAt(last); JumpHeight.RemoveAt(last);
@@ -268,6 +282,8 @@ public class UnitArrays
         Target.Clear(); RetargetTimer.Clear(); Alive.Clear();
         InCombat.Clear(); FacingAngle.Clear(); AttackCooldown.Clear();
         PendingAttack.Clear(); HitShakeTimer.Clear();
+        LastAttackerID.Clear(); FleeTimer.Clear();
+        WolfPhase.Clear(); WolfPhaseTimer.Clear();
         Jumping.Clear(); JumpTimer.Clear(); JumpDuration.Clear();
         JumpStartPos.Clear(); JumpEndPos.Clear();
         JumpIsAttack.Clear(); JumpAttackFired.Clear(); JumpHeight.Clear();

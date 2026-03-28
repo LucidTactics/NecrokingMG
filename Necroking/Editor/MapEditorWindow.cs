@@ -125,6 +125,10 @@ public class MapEditorWindow
     }
     private RegionHandle _activeHandle = RegionHandle.None;
 
+    // Cached enum name arrays (avoid per-frame allocation)
+    private static readonly string[] CachedFactionNames = Enum.GetNames<Faction>();
+    private static readonly string[] CachedPostSpawnBehaviorNames = Enum.GetNames<PostSpawnBehavior>();
+
     // Triggers tab
     public int SelectedTriggerDefIndex = -1;
     public int SelectedTriggerInstanceIndex = -1;
@@ -3409,14 +3413,12 @@ public class MapEditorWindow
 
                     // RM28: Parent trigger dropdown populated from trigger system
                     {
-                        var triggerIds = new string[_triggerSystem.Triggers.Count + 1];
-                        triggerIds[0] = "(none)";
+                        var triggerIds = new string[_triggerSystem.Triggers.Count];
                         for (int ti = 0; ti < _triggerSystem.Triggers.Count; ti++)
-                            triggerIds[ti + 1] = _triggerSystem.Triggers[ti].Id;
-                        string curParent = string.IsNullOrEmpty(inst.ParentTriggerID) ? "(none)" : inst.ParentTriggerID;
-                        string newParent = _eb.DrawCombo("inst_parent", "Parent", curParent, triggerIds, panelX + Margin, y, fw);
-                        if (newParent != curParent)
-                            inst.ParentTriggerID = newParent == "(none)" ? "" : newParent;
+                            triggerIds[ti] = _triggerSystem.Triggers[ti].Id;
+                        string newParent = _eb.DrawCombo("inst_parent", "Parent", inst.ParentTriggerID, triggerIds, panelX + Margin, y, fw, allowNone: true);
+                        if (newParent != inst.ParentTriggerID)
+                            inst.ParentTriggerID = newParent;
                     }
                     y += FieldHeight + 2;
 
@@ -3568,9 +3570,8 @@ public class MapEditorWindow
                 if (newCount != spawn.Count) spawn.Count = Math.Max(1, newCount);
                 y += FieldHeight + 2;
 
-                string[] factionNames = Enum.GetNames<Faction>();
                 string curFaction = spawn.Faction.ToString();
-                string newFaction = _eb.DrawCombo(prefix + "faction", "Faction", curFaction, factionNames, x, y, w);
+                string newFaction = _eb.DrawCombo(prefix + "faction", "Faction", curFaction, CachedFactionNames, x, y, w);
                 if (newFaction != curFaction && Enum.TryParse<Faction>(newFaction, out var parsedFaction))
                     spawn.Faction = parsedFaction;
                 y += FieldHeight + 2;
@@ -3587,9 +3588,8 @@ public class MapEditorWindow
                 if (MathF.Abs(newInterval - spawn.SpawnInterval) > 0.001f) spawn.SpawnInterval = newInterval;
                 y += FieldHeight + 2;
 
-                string[] behaviorNames = Enum.GetNames<PostSpawnBehavior>();
                 string curBehavior = spawn.PostBehavior.ToString();
-                string newBehavior = _eb.DrawCombo(prefix + "behavior", "PostBehavior", curBehavior, behaviorNames, x, y, w);
+                string newBehavior = _eb.DrawCombo(prefix + "behavior", "PostBehavior", curBehavior, CachedPostSpawnBehaviorNames, x, y, w);
                 if (newBehavior != curBehavior && Enum.TryParse<PostSpawnBehavior>(newBehavior, out var parsedBehavior))
                     spawn.PostBehavior = parsedBehavior;
                 y += FieldHeight + 2;

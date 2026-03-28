@@ -57,7 +57,7 @@ public class EditorBase
     public void SetMouseOverUI() => _mouseOverEditorUI = true;
 
     // Text input state
-    private string? _activeFieldId;
+    protected string? _activeFieldId;
     private string _inputBuffer = "";
     private float _cursorBlink;
     private double _keyRepeatTimer;
@@ -88,11 +88,19 @@ public class EditorBase
     // Combo dropdown scroll state (keyed by fieldId)
     private readonly Dictionary<string, int> _comboScrollOffsets = new();
 
+    // Combo filter text per-dropdown (keyed by fieldId)
+    private readonly Dictionary<string, string> _comboFilterText = new();
+
+    // Combo keyboard highlight index (-1 = no highlight)
+    private int _comboHighlightIdx = -1;
+
     // Deferred dropdown overlay data
     private struct PendingDropdown
     {
         public string FieldId;
-        public string[] Options;
+        public string[] Options;        // full option list (may include "(none)")
+        public string[] FilteredOptions; // after applying search filter
+        public int[] FilteredIndices;    // indices into Options for each filtered item
         public string CurrentValue;
         public Rectangle InputRect;
         public int ScrollOffset;
@@ -101,6 +109,9 @@ public class EditorBase
         public int VisibleCount;
         public int DropY;
         public bool FlippedUp; // INF11: dropdown flipped upward
+        public bool ShowFilter; // whether the filter text box is shown
+        public string FilterText; // current filter string
+        public int HighlightIdx; // keyboard highlight index into FilteredOptions
     }
     private PendingDropdown? _pendingDropdown;
     private bool _dropdownOverlayConsumedClick;
@@ -131,7 +142,10 @@ public class EditorBase
         _cursorBlink += (float)gameTime.ElapsedGameTime.TotalSeconds;
 
         // Reset per-frame flags
-        _inputLayer = 0;
+        // If a dropdown is open from last frame, pre-set input layer to block all widgets
+        // This prevents widgets drawn BEFORE the combo from stealing clicks
+        bool dropdownWasOpen = _activeFieldId != null && _activeFieldId.EndsWith("_combo");
+        _inputLayer = dropdownWasOpen ? 2 : 0;
         _scrollConsumed = false;
         _mouseOverEditorUI = false;
         _pendingDropdown = null;
@@ -559,12 +573,17 @@ public class EditorBase
 
     /// <summary>
     /// Draw a dropdown/combo for string enum values.
-    /// Supports scrolling when there are more than 8 items.
+    /// Supports scrolling, search filtering (auto for 15+ items), keyboard navigation,
+    /// max-height capping (40% screen), and an optional "(none)" entry.
     /// </summary>
-    private const int ComboMaxVisibleItems = 8;
     private const int ComboItemH = 20;
+    private const int ComboFilterH = 22; // height of the filter text box row
 
-    public string DrawCombo(string fieldId, string label, string value, string[] options, int x, int y, int w)
+    // Highlight color for keyboard navigation (distinct from hover and selected)
+    private static readonly Color ComboHighlight = new(70, 90, 140, 240);
+
+    public string DrawCombo(string fieldId, string label, string value, string[] options,
+        int x, int y, int w, bool allowNone = false)
     {
         int labelW = 120;
         DrawText(label, new Vector2(x, y + 2), TextDim);
@@ -574,15 +593,34 @@ public class EditorBase
         int inputH = 20;
         var inputRect = new Rectangle(inputX, y, inputW, inputH);
 
+        // Build effective option list (prepend "(none)" when allowed)
+        string[] effectiveOptions;
+        if (allowNone)
+        {
+            effectiveOptions = new string[options.Length + 1];
+            effectiveOptions[0] = "(none)";
+            Array.Copy(options, 0, effectiveOptions, 1, options.Length);
+        }
+        else
+        {
+            effectiveOptions = options;
+        }
+
+        // Map display value: if allowNone and value is empty, show "(none)"
+        string displayValue = value;
+        if (allowNone && string.IsNullOrEmpty(value))
+            displayValue = "(none)";
+
         // If a dropdown overlay consumed the click this frame, block combo button interaction
-        bool hovered = !_dropdownOverlayConsumedClick && !IsInputBlocked(0) && inputRect.Contains(_mouse.X, _mouse.Y);
         string comboId = fieldId + "_combo";
         bool isOpen = _activeFieldId == comboId;
+        // The combo button itself is always clickable when it's the open dropdown (to allow closing)
+        bool hovered = !_dropdownOverlayConsumedClick && (isOpen || !IsInputBlocked(0)) && inputRect.Contains(_mouse.X, _mouse.Y);
 
         // Draw the current value
         DrawRect(inputRect, hovered || isOpen ? ItemHover : InputBg);
         DrawBorder(inputRect, isOpen ? InputActive : InputBorder);
-        DrawText(value, new Vector2(inputX + 3, y + 2), TextColor);
+        DrawText(displayValue, new Vector2(inputX + 3, y + 2), TextColor);
         DrawText("v", new Vector2(inputX + inputW - 14, y + 2), TextDim);
 
         if (hovered && _mouse.LeftButton == ButtonState.Pressed && _prevMouse.LeftButton == ButtonState.Released)
@@ -590,14 +628,24 @@ public class EditorBase
             if (isOpen)
             {
                 _activeFieldId = null;
+                _comboFilterText.Remove(comboId);
+                _comboHighlightIdx = -1;
             }
             else
             {
                 _activeFieldId = comboId;
-                // Reset scroll to show the selected item
-                int selectedIdx = Array.IndexOf(options, value);
-                if (selectedIdx >= 0 && options.Length > ComboMaxVisibleItems)
-                    _comboScrollOffsets[comboId] = Math.Max(0, Math.Min(selectedIdx - 2, options.Length - ComboMaxVisibleItems));
+                _comboFilterText[comboId] = "";
+                _comboHighlightIdx = -1;
+
+                // Compute max visible based on 40% screen height
+                int maxDropH = (int)(_screenH * 0.4f);
+                int maxVisible = Math.Max(1, maxDropH / ComboItemH);
+                int visCount = Math.Min(effectiveOptions.Length, maxVisible);
+
+                // Reset scroll to center the selected item
+                int selectedIdx = Array.IndexOf(effectiveOptions, displayValue);
+                if (selectedIdx >= 0 && effectiveOptions.Length > visCount)
+                    _comboScrollOffsets[comboId] = Math.Max(0, Math.Min(selectedIdx - visCount / 2, effectiveOptions.Length - visCount));
                 else
                     _comboScrollOffsets[comboId] = 0;
             }
@@ -611,17 +659,52 @@ public class EditorBase
             // Set input layer to prevent click-through to widgets behind the dropdown
             if (_inputLayer < 2) _inputLayer = 2;
 
-            int visibleCount = Math.Min(options.Length, ComboMaxVisibleItems);
-            bool needsScroll = options.Length > ComboMaxVisibleItems;
+            // Filter support: auto-enable when 15+ items
+            bool showFilter = effectiveOptions.Length >= 15;
+            if (!_comboFilterText.ContainsKey(comboId))
+                _comboFilterText[comboId] = "";
+            string filterText = _comboFilterText[comboId];
+
+            // Build filtered list
+            string[] filteredOptions;
+            int[] filteredIndices;
+            if (showFilter && !string.IsNullOrEmpty(filterText))
+            {
+                var fOpts = new List<string>();
+                var fIdxs = new List<int>();
+                for (int oi = 0; oi < effectiveOptions.Length; oi++)
+                {
+                    if (effectiveOptions[oi].Contains(filterText, StringComparison.OrdinalIgnoreCase))
+                    {
+                        fOpts.Add(effectiveOptions[oi]);
+                        fIdxs.Add(oi);
+                    }
+                }
+                filteredOptions = fOpts.ToArray();
+                filteredIndices = fIdxs.ToArray();
+            }
+            else
+            {
+                filteredOptions = effectiveOptions;
+                filteredIndices = new int[effectiveOptions.Length];
+                for (int oi = 0; oi < effectiveOptions.Length; oi++) filteredIndices[oi] = oi;
+            }
+
+            // Compute max visible based on 40% screen height
+            int maxDropH = (int)(_screenH * 0.4f);
+            int filterRowH = showFilter ? ComboFilterH : 0;
+            int maxVisibleItems = Math.Max(1, (maxDropH - filterRowH) / ComboItemH);
+            int visibleCount = Math.Min(filteredOptions.Length, maxVisibleItems);
+            bool needsScroll = filteredOptions.Length > maxVisibleItems;
 
             // Get or init scroll offset
             if (!_comboScrollOffsets.ContainsKey(comboId))
                 _comboScrollOffsets[comboId] = 0;
             int scrollOffset = _comboScrollOffsets[comboId];
-            int maxScroll = Math.Max(0, options.Length - ComboMaxVisibleItems);
+            int maxScroll = Math.Max(0, filteredOptions.Length - visibleCount);
             scrollOffset = Math.Clamp(scrollOffset, 0, maxScroll);
 
-            int dropH = visibleCount * ComboItemH;
+            int dropH = visibleCount * ComboItemH + filterRowH;
 
             // INF11: Flip dropdown upward if it would extend below the screen
             int dropY = y + inputH;
@@ -630,15 +713,98 @@ public class EditorBase
             {
                 dropY = y - dropH;
                 flippedUp = true;
-                // If flipping up still goes off-screen, clamp to top
                 if (dropY < 0) dropY = 0;
             }
             var dropRect = new Rectangle(inputX, dropY, inputW, dropH);
 
+            // Keyboard navigation (when the dropdown is open)
+            {
+                bool arrowDown = _kb.IsKeyDown(Keys.Down) && _prevKb.IsKeyUp(Keys.Down);
+                bool arrowUp = _kb.IsKeyDown(Keys.Up) && _prevKb.IsKeyUp(Keys.Up);
+                bool enterKey = _kb.IsKeyDown(Keys.Enter) && _prevKb.IsKeyUp(Keys.Enter);
+                bool escapeKey = _kb.IsKeyDown(Keys.Escape) && _prevKb.IsKeyUp(Keys.Escape);
+
+                if (escapeKey)
+                {
+                    _activeFieldId = null;
+                    _comboFilterText.Remove(comboId);
+                    _comboHighlightIdx = -1;
+                    _dropdownOverlayConsumedClick = true;
+                    return value;
+                }
+
+                if (arrowDown)
+                {
+                    _comboHighlightIdx++;
+                    if (_comboHighlightIdx >= filteredOptions.Length) _comboHighlightIdx = 0;
+                    // Scroll to keep highlight visible
+                    if (_comboHighlightIdx >= scrollOffset + visibleCount)
+                        scrollOffset = _comboHighlightIdx - visibleCount + 1;
+                    else if (_comboHighlightIdx < scrollOffset)
+                        scrollOffset = _comboHighlightIdx;
+                    scrollOffset = Math.Clamp(scrollOffset, 0, maxScroll);
+                    _comboScrollOffsets[comboId] = scrollOffset;
+                }
+                if (arrowUp)
+                {
+                    _comboHighlightIdx--;
+                    if (_comboHighlightIdx < 0) _comboHighlightIdx = filteredOptions.Length - 1;
+                    if (_comboHighlightIdx < scrollOffset)
+                        scrollOffset = _comboHighlightIdx;
+                    else if (_comboHighlightIdx >= scrollOffset + visibleCount)
+                        scrollOffset = _comboHighlightIdx - visibleCount + 1;
+                    scrollOffset = Math.Clamp(scrollOffset, 0, maxScroll);
+                    _comboScrollOffsets[comboId] = scrollOffset;
+                }
+                if (enterKey && _comboHighlightIdx >= 0 && _comboHighlightIdx < filteredOptions.Length)
+                {
+                    string picked = filteredOptions[_comboHighlightIdx];
+                    _activeFieldId = null;
+                    _comboFilterText.Remove(comboId);
+                    _comboHighlightIdx = -1;
+                    _dropdownOverlayConsumedClick = true;
+                    if (allowNone && picked == "(none)") return "";
+                    return picked;
+                }
+
+                // Filter text input via keyboard (only when filter is shown)
+                if (showFilter)
+                {
+                    bool shift = _kb.IsKeyDown(Keys.LeftShift) || _kb.IsKeyDown(Keys.RightShift);
+                    foreach (var key in _kb.GetPressedKeys())
+                    {
+                        if (_prevKb.IsKeyUp(key))
+                        {
+                            if (key == Keys.Back && filterText.Length > 0)
+                            {
+                                filterText = filterText[..^1];
+                                _comboFilterText[comboId] = filterText;
+                                _comboHighlightIdx = -1;
+                                // Re-filter will happen next frame; reset scroll
+                                _comboScrollOffsets[comboId] = 0;
+                            }
+                            else
+                            {
+                                char? c = KeyToChar(key, shift);
+                                if (c.HasValue)
+                                {
+                                    filterText += c.Value;
+                                    _comboFilterText[comboId] = filterText;
+                                    _comboHighlightIdx = -1;
+                                    _comboScrollOffsets[comboId] = 0;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // The items area starts below the filter row (if present)
+            int itemsY = dropY + filterRowH;
+
             // Handle mouse wheel scrolling within the dropdown + consume scroll
             if (dropRect.Contains(_mouse.X, _mouse.Y))
             {
-                // Always consume scroll when hovering dropdown to prevent panel scroll-through
                 ConsumeScroll();
 
                 if (needsScroll)
@@ -653,28 +819,34 @@ public class EditorBase
                 }
             }
 
-            // Check for option clicks (input handling — no drawing)
+            // Check for option clicks (input handling -- no drawing)
             for (int vi = 0; vi < visibleCount; vi++)
             {
-                int i = vi + scrollOffset;
-                if (i >= options.Length) break;
+                int fi = vi + scrollOffset;
+                if (fi >= filteredOptions.Length) break;
 
-                var optRect = new Rectangle(inputX, dropY + vi * ComboItemH, inputW, ComboItemH);
+                var optRect = new Rectangle(inputX, itemsY + vi * ComboItemH, inputW, ComboItemH);
                 bool optHovered = optRect.Contains(_mouse.X, _mouse.Y);
 
                 if (optHovered && _mouse.LeftButton == ButtonState.Pressed && _prevMouse.LeftButton == ButtonState.Released)
                 {
+                    string picked = filteredOptions[fi];
                     _activeFieldId = null;
+                    _comboFilterText.Remove(comboId);
+                    _comboHighlightIdx = -1;
                     _dropdownOverlayConsumedClick = true;
-                    return options[i];
+                    if (allowNone && picked == "(none)") return "";
+                    return picked;
                 }
             }
 
-            // Close dropdown if clicking outside
+            // Close dropdown if clicking outside both the combo button and dropdown
             if (_mouse.LeftButton == ButtonState.Pressed && _prevMouse.LeftButton == ButtonState.Released
                 && !dropRect.Contains(_mouse.X, _mouse.Y) && !inputRect.Contains(_mouse.X, _mouse.Y))
             {
                 _activeFieldId = null;
+                _comboFilterText.Remove(comboId);
+                _comboHighlightIdx = -1;
                 _dropdownOverlayConsumedClick = true;
             }
 
@@ -682,8 +854,10 @@ public class EditorBase
             _pendingDropdown = new PendingDropdown
             {
                 FieldId = comboId,
-                Options = options,
-                CurrentValue = value,
+                Options = effectiveOptions,
+                FilteredOptions = filteredOptions,
+                FilteredIndices = filteredIndices,
+                CurrentValue = displayValue,
                 InputRect = inputRect,
                 ScrollOffset = scrollOffset,
                 MaxScroll = maxScroll,
@@ -691,6 +865,9 @@ public class EditorBase
                 VisibleCount = visibleCount,
                 DropY = dropY,
                 FlippedUp = flippedUp,
+                ShowFilter = showFilter,
+                FilterText = filterText,
+                HighlightIdx = _comboHighlightIdx,
             };
         }
 
@@ -709,7 +886,9 @@ public class EditorBase
         var dd = _pendingDropdown.Value;
         int inputX = dd.InputRect.X;
         int inputW = dd.InputRect.Width;
-        int dropH = dd.VisibleCount * ComboItemH;
+        int filterRowH = dd.ShowFilter ? ComboFilterH : 0;
+        int itemsDropH = dd.VisibleCount * ComboItemH;
+        int dropH = itemsDropH + filterRowH;
         var dropRect = new Rectangle(inputX, dd.DropY, inputW, dropH);
         int scrollOffset = dd.ScrollOffset;
 
@@ -722,23 +901,46 @@ public class EditorBase
         // INF11: Stronger border (2px) to distinguish from content behind
         DrawBorder(dropRect, AccentColor, 2);
 
-        // Use scissor clipping for clean edges
-        BeginClip(dropRect);
+        // Draw filter text box at the top if applicable
+        int itemsY = dd.DropY + filterRowH;
+        if (dd.ShowFilter)
+        {
+            var filterRect = new Rectangle(inputX + 2, dd.DropY + 1, inputW - 4, ComboFilterH - 2);
+            DrawRect(filterRect, InputBg);
+            DrawBorder(filterRect, InputActive);
+            string filterDisplay = string.IsNullOrEmpty(dd.FilterText) ? "Type to filter..." : dd.FilterText;
+            Color filterColor = string.IsNullOrEmpty(dd.FilterText) ? TextDim : TextColor;
+            DrawText(filterDisplay, new Vector2(inputX + 5, dd.DropY + 3), filterColor);
+            // Blinking cursor
+            if (!string.IsNullOrEmpty(dd.FilterText) || _cursorBlink % 1.0f < 0.5f)
+            {
+                float cursorX = inputX + 5 + MeasureText(dd.FilterText ?? "").X;
+                if (_cursorBlink % 1.0f < 0.5f)
+                    DrawRect(new Rectangle((int)cursorX, dd.DropY + 3, 1, 14), TextBright);
+            }
+        }
+
+        // Use scissor clipping for clean edges on the items area
+        var itemsClip = new Rectangle(inputX, itemsY, inputW, itemsDropH);
+        BeginClip(itemsClip);
 
         for (int vi = 0; vi < dd.VisibleCount; vi++)
         {
-            int i = vi + scrollOffset;
-            if (i >= dd.Options.Length) break;
+            int fi = vi + scrollOffset;
+            if (fi >= dd.FilteredOptions.Length) break;
 
-            var optRect = new Rectangle(inputX, dd.DropY + vi * ComboItemH, inputW, ComboItemH);
+            var optRect = new Rectangle(inputX, itemsY + vi * ComboItemH, inputW, ComboItemH);
             bool optHovered = optRect.Contains(_mouse.X, _mouse.Y);
-            bool isSelected = dd.Options[i] == dd.CurrentValue;
+            bool isSelected = dd.FilteredOptions[fi] == dd.CurrentValue;
+            bool isHighlighted = fi == dd.HighlightIdx;
 
-            if (optHovered || isSelected)
+            if (isHighlighted)
+                DrawRect(optRect, ComboHighlight);
+            else if (optHovered || isSelected)
                 DrawRect(optRect, optHovered ? ItemHover : ItemSelected);
 
-            DrawText(dd.Options[i], new Vector2(inputX + 3, dd.DropY + vi * ComboItemH + 2),
-                isSelected ? TextBright : TextColor);
+            Color textCol = isSelected ? TextBright : (isHighlighted ? TextBright : TextColor);
+            DrawText(dd.FilteredOptions[fi], new Vector2(inputX + 3, itemsY + vi * ComboItemH + 2), textCol);
         }
 
         EndClip();
@@ -747,8 +949,8 @@ public class EditorBase
         if (dd.NeedsScroll)
         {
             float scrollRatio = dd.MaxScroll > 0 ? (float)scrollOffset / dd.MaxScroll : 0;
-            int barH = Math.Max(12, dropH * dd.VisibleCount / dd.Options.Length);
-            int barY = dd.DropY + (int)(scrollRatio * (dropH - barH));
+            int barH = Math.Max(12, itemsDropH * dd.VisibleCount / Math.Max(1, dd.FilteredOptions.Length));
+            int barY = itemsY + (int)(scrollRatio * (itemsDropH - barH));
             DrawRect(new Rectangle(inputX + inputW - 6, barY, 5, barH), new Color(100, 100, 140, 180));
         }
     }
@@ -1323,6 +1525,8 @@ public class EditorBase
     {
         if (_activeFieldId != null && _activeFieldId.EndsWith("_combo"))
         {
+            _comboFilterText.Remove(_activeFieldId);
+            _comboHighlightIdx = -1;
             _activeFieldId = null;
             return true;
         }
