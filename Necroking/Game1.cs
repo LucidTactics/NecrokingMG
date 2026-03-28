@@ -526,6 +526,9 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // Initialize the scenario
         scenario.OnInit(_sim);
 
+        // Reload env textures in case the scenario added new defs
+        _envSystem.LoadTextures(GraphicsDevice);
+
         // Wire up UnitEditorAccessor for AnimButtonTestScenario
         if (scenario is Scenario.Scenarios.AnimButtonTestScenario animTest)
             animTest.UnitEditor = new Scenario.Scenarios.UnitEditorAccessor(_unitEditor);
@@ -2145,19 +2148,35 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 targetState = AnimState.Dodge;
             else if (!_sim.Units.PendingAttack[i].IsNone)
                 targetState = AnimState.Attack1;
-            else if (_sim.Units.InCombat[i] && _sim.Units.AttackCooldown[i] > 0f)
+            else if (_sim.Units.HitReacting[i])
+                targetState = AnimState.BlockReact;
+            else if (_sim.Units.BlockReacting[i])
+                targetState = AnimState.BlockReact;
+            else if (_sim.Units.PostAttackTimer[i] > 0f)
                 targetState = AnimState.Block;
-            else if (_sim.Units.InCombat[i])
-                targetState = AnimState.Attack1;
+            else if (_sim.Units.InCombat[i] && _sim.Units.AttackCooldown[i] > 0f)
+            {
+                // Pre-roll: start attack animation early so effect time aligns with cooldown expiry
+                float cooldownRemaining = _sim.Units.AttackCooldown[i];
+                float effectTime = animData.Ctrl.GetEffectTimeSeconds(AnimState.Attack1);
+                float animDur = animData.Ctrl.GetTotalDurationSeconds(AnimState.Attack1);
+                float lockout = _gameData.Settings.Combat.PostAttackLockout;
+                float speed = (animDur > 0f && lockout > 0f) ? MathF.Max(1f, animDur / lockout) : 1f;
+                float preRollTime = effectTime > 0f ? effectTime / speed : 0f;
+
+                if (preRollTime > 0f && cooldownRemaining <= preRollTime)
+                    targetState = AnimState.Attack1; // start wind-up early
+                else
+                    targetState = AnimState.Block;
+            }
             else if (_sim.Units.Velocity[i].LengthSq() > 0.5f)
             {
+                // Animation driven by actual velocity — shift-to-run works by
+                // boosting MaxSpeed so the unit crosses the Run threshold naturally
                 float speed = _sim.Units.Velocity[i].Length();
                 float baseSpeed = _sim.Units.Stats[i].CombatSpeed;
-                // Running = speed > 1.4x base (shift held), Jog = speed > 1.1x base
                 if (speed > baseSpeed * 1.4f)
                     targetState = AnimState.Run;
-                else if (speed > baseSpeed * 1.1f)
-                    targetState = AnimState.Jog;
                 else
                     targetState = AnimState.Walk;
             }
@@ -2175,6 +2194,15 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 movingBackward = dot < -0.3f;
             }
             animData.Ctrl.SetReversePlayback(movingBackward);
+
+            // When transitioning into attack, calculate playback speed to fit within lockout
+            if (targetState == AnimState.Attack1 && animData.Ctrl.CurrentState != AnimState.Attack1)
+            {
+                float lockout = _gameData.Settings.Combat.PostAttackLockout;
+                float animDur = animData.Ctrl.GetTotalDurationSeconds(AnimState.Attack1);
+                if (animDur > 0f && lockout > 0f)
+                    animData.Ctrl.PlaybackSpeed = MathF.Max(1f, animDur / lockout);
+            }
 
             animData.Ctrl.RequestState(targetState);
             animData.Ctrl.Update(dt);
@@ -2869,12 +2897,39 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 new Rectangle((int)(sp.X - ir2), (int)(sp.Y - iry2 * 0.5f), (int)(ir2 * 2), (int)iry2),
                 new Color((byte)0, (byte)0, (byte)0, cia));
         }
+
+        // Environment object shadows (ellipse at ground pivot)
+        for (int i = 0; i < _envSystem.ObjectCount; i++)
+        {
+            var obj = _envSystem.Objects[i];
+            var def = _envSystem.Defs[obj.DefIndex];
+            var tex = _envSystem.GetDefTexture(obj.DefIndex);
+            if (tex == null) continue;
+
+            float worldH = def.SpriteWorldHeight * obj.Scale * def.Scale;
+            float scale = worldH * _camera.Zoom / tex.Height;
+            float objW = tex.Width * scale;
+            float r = objW * 0.4f;
+            float ry = r * _camera.YRatio;
+
+            var sp = _renderer.WorldToScreen(new Vec2(obj.X, obj.Y), 0f, _camera);
+
+            _spriteBatch.Draw(_glowTex,
+                new Rectangle((int)(sp.X - r), (int)(sp.Y - ry * 0.5f), (int)(r * 2), (int)ry),
+                outerColor);
+            float ir3 = r * 0.6f;
+            float iry3 = ry * 0.6f;
+            _spriteBatch.Draw(_glowTex,
+                new Rectangle((int)(sp.X - ir3), (int)(sp.Y - iry3 * 0.5f), (int)(ir3 * 2), (int)iry3),
+                innerColor);
+        }
     }
 
     private void DrawShaderShadows(ShadowSettings shadow)
     {
-        // Shader-projected shadows: sprite silhouette projected as a parallelogram
-        float sunRad = shadow.SunAngle * MathF.PI / 180f;
+        // Projected shadows using the same pivot/origin as sprite drawing.
+        // Uses the position+origin Draw overload so the shadow's pivot point
+        // is placed at feetSp — exactly matching the sprite's ground contact.
         byte shAlpha = (byte)Math.Clamp(shadow.Opacity * 255f, 0, 255);
         var shadowColor = new Color((byte)0, (byte)0, (byte)0, shAlpha);
 
@@ -2897,55 +2952,43 @@ public class Game1 : Microsoft.Xna.Framework.Game
             float pixelH = worldH * _camera.Zoom;
             float scale = pixelH / animData.RefFrameHeight;
 
-            // Shadow projection calculation
-            float swLen = worldH * shadow.LengthScale * _camera.Zoom;
-            float usdx = MathF.Cos(sunRad) * swLen;
-            float usdy = MathF.Sin(sunRad) * swLen * _camera.YRatio;
-            float destW = fr.Frame.Value.Rect.Width * scale;
-            float destH = fr.Frame.Value.Rect.Height * scale;
-            float shadowH = destH * shadow.Squash;
-            float anchorX = fr.Frame.Value.PivotX;
+            var srcRect = fr.Frame.Value.Rect;
+
+            // Same pivot calculation as DrawSpriteFrame — this IS the sprite's anchor
+            float pivotX = fr.FlipX ? (1f - fr.Frame.Value.PivotX) : fr.Frame.Value.PivotX;
+            float pivotY = 1f - fr.Frame.Value.PivotY; // spritemeta bottom-left → top-left
+
+            var shadowOrigin = new Vector2(pivotX * srcRect.Width, pivotY * srcRect.Height);
+            var effects = fr.FlipX ? SpriteEffects.FlipHorizontally : SpriteEffects.None;
 
             // Feet position (ground contact, ignoring jump height)
             var feetSp = _renderer.WorldToScreen(_sim.Units.Position[i], 0f, _camera);
 
-            float leftOff = destW * anchorX;
-            float rightOff = destW * (1f - anchorX);
+            // Shadow: same X scale as sprite, Y scale squashed
+            _spriteBatch.Draw(atlas.Texture, feetSp, srcRect,
+                shadowColor, 0f, shadowOrigin, new Vector2(scale, scale * shadow.Squash), effects, 0f);
+        }
 
-            // Draw shadow as a skewed sprite quad (parallelogram)
-            // Bottom edge at feet, top edge shifted by sun direction
-            var srcRect = fr.Frame.Value.Rect;
-            if (fr.FlipX)
-            {
-                // Swap anchor for flipped sprite
-                float tmp = leftOff;
-                leftOff = rightOff;
-                rightOff = tmp;
-            }
+        // Environment object shadows — same pivot as DrawSingleEnvObject
+        for (int i = 0; i < _envSystem.ObjectCount; i++)
+        {
+            var obj = _envSystem.Objects[i];
+            var def = _envSystem.Defs[obj.DefIndex];
+            var tex = _envSystem.GetDefTexture(obj.DefIndex);
+            if (tex == null) continue;
 
-            // Use the glow texture as a soft shadow for the projected shape
-            // Top-left and top-right are shifted by sun offset
-            float tlX = feetSp.X - leftOff + usdx;
-            float tlY = feetSp.Y - shadowH + usdy;
-            float trX = feetSp.X + rightOff + usdx;
-            float blX = feetSp.X - leftOff;
-            float blY = feetSp.Y;
-            float brX = feetSp.X + rightOff;
+            float worldH = def.SpriteWorldHeight * obj.Scale * def.Scale;
+            float pixelH = worldH * _camera.Zoom;
+            float scale = pixelH / tex.Height;
 
-            // Approximate the parallelogram as a squashed sprite draw
-            // Center of the parallelogram
-            float cx = (tlX + trX + blX + brX) * 0.25f;
-            float cy = (tlY + tlY + blY + blY) * 0.25f;
+            // Same origin as DrawSingleEnvObject
+            var shadowOrigin = new Vector2(def.PivotX * tex.Width, def.PivotY * tex.Height);
 
-            // Draw the sprite's texture as a flat shadow (squashed + offset)
-            var shadowDest = new Rectangle(
-                (int)(feetSp.X - leftOff + usdx * 0.5f),
-                (int)(feetSp.Y - shadowH),
-                (int)(leftOff + rightOff),
-                (int)shadowH);
+            var feetSp = _renderer.WorldToScreen(new Vec2(obj.X, obj.Y), 0f, _camera);
 
-            _spriteBatch.Draw(atlas.Texture, shadowDest, srcRect,
-                shadowColor, 0f, new Vector2(0, 0), fr.FlipX ? SpriteEffects.FlipHorizontally : SpriteEffects.None, 0f);
+            // Shadow: same X scale as sprite, Y scale squashed
+            _spriteBatch.Draw(tex, feetSp, null,
+                shadowColor, 0f, shadowOrigin, new Vector2(scale, scale * shadow.Squash), SpriteEffects.None, 0f);
         }
     }
 
@@ -3097,14 +3140,6 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
         float heightOffset = _sim.Units.JumpHeight[i];
         var sp = _renderer.WorldToScreen(_sim.Units.Position[i], heightOffset, _camera);
-
-        // Hit shake effect
-        if (_sim.Units.HitShakeTimer[i] > 0f)
-        {
-            var rng = new Random((int)(_gameTime * 1000) + i);
-            sp.X += (rng.NextSingle() - 0.5f) * 4f;
-            sp.Y += (rng.NextSingle() - 0.5f) * 3f;
-        }
 
         DrawSpriteFrame(atlas, fr.Frame.Value, sp, scale, fr.FlipX, tint);
         DrawHPBar(i, sp);

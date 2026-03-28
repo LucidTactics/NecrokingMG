@@ -23,6 +23,8 @@ public enum AIBehavior : byte
     WolfOpportunistIsolated // Same but prefers isolated targets
 }
 
+public enum QueuedUnitAction : byte { None, Flee, Disengage }
+
 public enum ProjectileType : byte { Arrow, Fireball }
 public enum HitLocation : byte { Head, Arms, Chest, Legs, Feet }
 

@@ -71,6 +71,18 @@ public class ShadowSettings
     [JsonPropertyName("unitShadowMode")] public int UnitShadowMode { get; set; } = 1;
 }
 
+public class CombatSettings
+{
+    [JsonPropertyName("attackCooldown")] public float AttackCooldown { get; set; } = 3.0f;
+    [JsonPropertyName("postAttackLockout")] public float PostAttackLockout { get; set; } = 1.0f;
+    [JsonPropertyName("facingThreshold")] public float FacingThreshold { get; set; } = 60f;
+    [JsonPropertyName("turnSpeed")] public float TurnSpeed { get; set; } = 360f;
+    [JsonPropertyName("meleeRange")] public float MeleeRange { get; set; } = 0.8f;
+    [JsonPropertyName("accelHalfTime")] public float AccelHalfTime { get; set; } = 1.2f;
+    [JsonPropertyName("accel80Time")] public float Accel80Time { get; set; } = 3.0f;
+    [JsonPropertyName("accelFullTime")] public float AccelFullTime { get; set; } = 6.0f;
+}
+
 public class HordeSettings
 {
     [JsonPropertyName("circleOffset")] public float CircleOffset { get; set; } = 6.0f;
@@ -95,6 +107,7 @@ public class GameSettingsData
     [JsonPropertyName("general")] public GeneralSettings General { get; set; } = new();
     [JsonPropertyName("shadow")] public ShadowSettings Shadow { get; set; } = new();
     [JsonPropertyName("horde")] public HordeSettings Horde { get; set; } = new();
+    [JsonPropertyName("combat")] public CombatSettings Combat { get; set; } = new();
 
     public bool Load(string path)
     {
@@ -110,6 +123,7 @@ public class GameSettingsData
             General = loaded.General;
             Shadow = loaded.Shadow;
             Horde = loaded.Horde;
+            Combat = loaded.Combat;
             return true;
         }
         catch { return false; }

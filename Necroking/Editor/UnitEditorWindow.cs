@@ -735,6 +735,10 @@ public class UnitEditorWindow
         drawY = DrawIdentitySection(def, drawX, drawY, contentW);
         drawY += 8;
 
+        // ==== COMBAT OVERRIDES SECTION ====
+        drawY = DrawCombatOverridesSection(def, drawX, drawY, contentW);
+        drawY += 8;
+
         // ==== CASTER SECTION ====
         drawY = DrawCasterSection(def, drawX, drawY, contentW);
         drawY += 8;
@@ -1735,6 +1739,55 @@ public class UnitEditorWindow
         curY += RowH;
 
         return curY;
+    }
+
+    // =========================================================================
+    //  COMBAT OVERRIDES SECTION
+    // =========================================================================
+
+    private int DrawCombatOverridesSection(UnitDef def, int x, int y, int w)
+    {
+        int curY = y;
+        DrawSectionHeader("Combat Overrides", x, ref curY, w);
+
+        curY = DrawNullableFloat("co_atkcd", "Attack Cooldown", def.AttackCooldown, x, curY, w, 0.5f,
+            v => { def.AttackCooldown = v; _unsavedChanges = true; });
+        curY = DrawNullableFloat("co_lockout", "Post-Attack Lockout", def.PostAttackLockout, x, curY, w, 0.1f,
+            v => { def.PostAttackLockout = v; _unsavedChanges = true; });
+        curY = DrawNullableFloat("co_turn", "Turn Speed", def.TurnSpeed, x, curY, w, 10f,
+            v => { def.TurnSpeed = v; _unsavedChanges = true; });
+        curY = DrawNullableFloat("co_accelh", "Accel Half Time", def.AccelHalfTime, x, curY, w, 0.1f,
+            v => { def.AccelHalfTime = v; _unsavedChanges = true; });
+        curY = DrawNullableFloat("co_accel80", "Accel 80% Time", def.Accel80Time, x, curY, w, 0.1f,
+            v => { def.Accel80Time = v; _unsavedChanges = true; });
+        curY = DrawNullableFloat("co_accelf", "Accel Full Time", def.AccelFullTime, x, curY, w, 0.5f,
+            v => { def.AccelFullTime = v; _unsavedChanges = true; });
+
+        return curY;
+    }
+
+    private int DrawNullableFloat(string id, string label, float? value, int x, int y, int w, float step,
+        Action<float?> setter)
+    {
+        bool hasValue = value.HasValue;
+        float displayVal = value ?? 0f;
+
+        // Checkbox to enable/disable override
+        bool newHas = _ui.DrawCheckbox(label, hasValue, x, y);
+        if (newHas != hasValue)
+        {
+            setter(newHas ? displayVal : null);
+            hasValue = newHas;
+        }
+
+        if (hasValue)
+        {
+            float newVal = _ui.DrawFloatField(id, label, displayVal, x + 20, y + RowH, w - 20, step);
+            if (Math.Abs(newVal - displayVal) > 0.001f)
+                setter(newVal);
+            return y + RowH * 2;
+        }
+        return y + RowH;
     }
 
     // =========================================================================

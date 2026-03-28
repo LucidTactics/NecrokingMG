@@ -74,6 +74,14 @@ public class UnitDef : IHasId
     [JsonPropertyName("armors")] public List<string> Armors { get; set; } = new();
     [JsonPropertyName("shields")] public List<string> Shields { get; set; } = new();
 
+    // Combat overrides (nullable = use global CombatSettings default)
+    [JsonPropertyName("attackCooldown")] public float? AttackCooldown { get; set; }
+    [JsonPropertyName("postAttackLockout")] public float? PostAttackLockout { get; set; }
+    [JsonPropertyName("turnSpeed")] public float? TurnSpeed { get; set; }
+    [JsonPropertyName("accelHalfTime")] public float? AccelHalfTime { get; set; }
+    [JsonPropertyName("accel80Time")] public float? Accel80Time { get; set; }
+    [JsonPropertyName("accelFullTime")] public float? AccelFullTime { get; set; }
+
     /// <summary>
     /// Weapon attachment points: anim name -> yaw angle -> list of WeaponFrameData (one per frame).
     /// </summary>

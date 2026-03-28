@@ -97,11 +97,20 @@ public class UnitArrays
     public List<float> SpellCooldownTimer = new();
     public List<string> SpellID = new();
 
+    // Engagement & combat state
+    public List<CombatTarget> EngagedTarget = new();       // who this unit is fighting
+    public List<float> PostAttackTimer = new();             // movement lockout countdown from attack initiation
+    public List<float> MoveTime = new();                    // continuous movement time for acceleration curve
+    public List<QueuedUnitAction> QueuedAction = new();     // action to execute when unit becomes free
+    public List<float> AnimPlaybackSpeed = new();           // per-unit animation speed multiplier
+
     // Ghost mode
     public List<bool> GhostMode = new();
 
-    // Dodge (set when attack misses, cleared each tick)
+    // Dodge / React (set on combat events, cleared each tick)
     public List<bool> Dodging = new();
+    public List<bool> HitReacting = new();     // set when unit takes damage — triggers HitReact anim
+    public List<bool> BlockReacting = new();   // set when attack is blocked — triggers BlockReact anim
 
     // Stuck detection for ORCA nudge
     public List<int> StuckFrames = new();
@@ -154,6 +163,8 @@ public class UnitArrays
         EffectSpawnPos2D.Add(Vec2.Zero);
         EffectSpawnHeight.Add(0f);
         Dodging.Add(false);
+        HitReacting.Add(false);
+        BlockReacting.Add(false);
         StuckFrames.Add(0);
         ActiveBuffs.Add(new List<ActiveBuff>());
         DraggingCorpseIdx.Add(-1);
@@ -166,6 +177,11 @@ public class UnitArrays
         ManaRegen.Add(0f);
         SpellCooldownTimer.Add(0f);
         SpellID.Add("");
+        EngagedTarget.Add(CombatTarget.None);
+        PostAttackTimer.Add(0f);
+        MoveTime.Add(0f);
+        QueuedAction.Add(QueuedUnitAction.None);
+        AnimPlaybackSpeed.Add(1f);
         GhostMode.Add(false);
         return idx;
     }
@@ -228,6 +244,8 @@ public class UnitArrays
         (EffectSpawnPos2D[a], EffectSpawnPos2D[b]) = (EffectSpawnPos2D[b], EffectSpawnPos2D[a]);
         (EffectSpawnHeight[a], EffectSpawnHeight[b]) = (EffectSpawnHeight[b], EffectSpawnHeight[a]);
         (Dodging[a], Dodging[b]) = (Dodging[b], Dodging[a]);
+        (HitReacting[a], HitReacting[b]) = (HitReacting[b], HitReacting[a]);
+        (BlockReacting[a], BlockReacting[b]) = (BlockReacting[b], BlockReacting[a]);
         (StuckFrames[a], StuckFrames[b]) = (StuckFrames[b], StuckFrames[a]);
         (ActiveBuffs[a], ActiveBuffs[b]) = (ActiveBuffs[b], ActiveBuffs[a]);
         (DraggingCorpseIdx[a], DraggingCorpseIdx[b]) = (DraggingCorpseIdx[b], DraggingCorpseIdx[a]);
@@ -240,6 +258,11 @@ public class UnitArrays
         (ManaRegen[a], ManaRegen[b]) = (ManaRegen[b], ManaRegen[a]);
         (SpellCooldownTimer[a], SpellCooldownTimer[b]) = (SpellCooldownTimer[b], SpellCooldownTimer[a]);
         (SpellID[a], SpellID[b]) = (SpellID[b], SpellID[a]);
+        (EngagedTarget[a], EngagedTarget[b]) = (EngagedTarget[b], EngagedTarget[a]);
+        (PostAttackTimer[a], PostAttackTimer[b]) = (PostAttackTimer[b], PostAttackTimer[a]);
+        (MoveTime[a], MoveTime[b]) = (MoveTime[b], MoveTime[a]);
+        (QueuedAction[a], QueuedAction[b]) = (QueuedAction[b], QueuedAction[a]);
+        (AnimPlaybackSpeed[a], AnimPlaybackSpeed[b]) = (AnimPlaybackSpeed[b], AnimPlaybackSpeed[a]);
         (GhostMode[a], GhostMode[b]) = (GhostMode[b], GhostMode[a]);
     }
 
@@ -262,12 +285,16 @@ public class UnitArrays
         KnockdownTimer.RemoveAt(last); StandupTimer.RemoveAt(last);
         Harassment.RemoveAt(last); SpriteScale.RemoveAt(last);
         EffectSpawnPos2D.RemoveAt(last); EffectSpawnHeight.RemoveAt(last);
-        Dodging.RemoveAt(last); StuckFrames.RemoveAt(last);
+        Dodging.RemoveAt(last); HitReacting.RemoveAt(last);
+        BlockReacting.RemoveAt(last); StuckFrames.RemoveAt(last);
         ActiveBuffs.RemoveAt(last); DraggingCorpseIdx.RemoveAt(last);
         SpawnBuildingIdx.RemoveAt(last); RaidTargetIdx.RemoveAt(last);
         PatrolRouteIdx.RemoveAt(last); PatrolWaypointIdx.RemoveAt(last);
         Mana.RemoveAt(last); MaxMana.RemoveAt(last); ManaRegen.RemoveAt(last);
         SpellCooldownTimer.RemoveAt(last); SpellID.RemoveAt(last);
+        EngagedTarget.RemoveAt(last); PostAttackTimer.RemoveAt(last);
+        MoveTime.RemoveAt(last); QueuedAction.RemoveAt(last);
+        AnimPlaybackSpeed.RemoveAt(last);
         GhostMode.RemoveAt(last);
     }
 

@@ -72,6 +72,36 @@ public class ShadowTestScenario : ScenarioBase
         sim.UnitsMut.AddUnit(new Vec2(_centerX + 2f * step + halfStep + 3f, _centerY + 3f * step), UnitType.Knight);
 
         DebugLog.Log(ScenarioLog, "Spawned units for shadow comparison");
+
+        // Environment objects — tree and building for shadow pivot testing
+        var env = sim.EnvironmentSystem;
+        if (env != null)
+        {
+            var treeDef = new EnvironmentObjectDef
+            {
+                Id = "shadow_tree", Name = "Shadow Tree",
+                TexturePath = "assets/Environment/Trees/BranchlessTree1.png",
+                SpriteWorldHeight = 6f,
+                PivotX = 0.5f, PivotY = 1f,
+                Scale = 1f
+            };
+            int treeDefIdx = env.AddDef(treeDef);
+            env.AddObject((ushort)treeDefIdx, _centerX - 4f, _centerY + 6f);
+            DebugLog.Log(ScenarioLog, "Placed tree for shadow test");
+
+            var buildingDef = new EnvironmentObjectDef
+            {
+                Id = "shadow_house", Name = "Shadow House",
+                TexturePath = "assets/Environment/Buildings/House1.png",
+                SpriteWorldHeight = 8f,
+                PivotX = 0.5f, PivotY = 1f,
+                IsBuilding = true, Scale = 1f
+            };
+            int houseDefIdx = env.AddDef(buildingDef);
+            env.AddObject((ushort)houseDefIdx, _centerX + 6f, _centerY + 6f);
+            DebugLog.Log(ScenarioLog, "Placed building for shadow test");
+        }
+
         ZoomOnLocation(_centerX + 2f, _centerY + 4f, 40f);
     }
 
@@ -98,6 +128,12 @@ public class ShadowTestScenario : ScenarioBase
                     CamX = _centerX - 6f, CamY = _centerY + 3f, Zoom = 60f },
             new() { Name = "shadow_corner", Desc = "Wall corner with knight",
                     CamX = _centerX + 2f * step + 2f, CamY = _centerY + 3f * step, Zoom = 50f },
+            new() { Name = "shadow_envobj", Desc = "Env objects: tree and building shadows",
+                    CamX = _centerX + 1f, CamY = _centerY + 6f, Zoom = 40f },
+            new() { Name = "shadow_tree_close", Desc = "Close-up: tree shadow pivot",
+                    CamX = _centerX - 4f, CamY = _centerY + 6f, Zoom = 80f },
+            new() { Name = "shadow_house_close", Desc = "Close-up: building shadow pivot",
+                    CamX = _centerX + 6f, CamY = _centerY + 6f, Zoom = 60f },
         };
 
         int frameInStep = _frame % 3;

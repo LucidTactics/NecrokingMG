@@ -36,6 +36,7 @@ public class AnimController
     private bool _reversePlayback;
     private bool _actionMomentFired;
     private Dictionary<string, AnimTimingOverride>? _timingOverrides;
+    private float _playbackSpeed = 1f;
 
     // Angle sectors: maps world angle to sprite angle + flip
     // World: 0=right, 90=down(toward camera), 180=left, 270=up(away)
@@ -57,6 +58,7 @@ public class AnimController
     public AnimState CurrentState => _currentState;
     public bool IsAnimFinished => _finished;
     public float AnimTime { get => _animTime; set => _animTime = value; }
+    public float PlaybackSpeed { get => _playbackSpeed; set => _playbackSpeed = MathF.Max(0.1f, value); }
     public void SetReversePlayback(bool reverse) => _reversePlayback = reverse;
 
     public void Init(UnitSpriteData? spriteData, float tickRate = 30f)
@@ -119,6 +121,7 @@ public class AnimController
         _animTime = 0f;
         _finished = false;
         _actionMomentFired = false;
+        _playbackSpeed = 1f;
     }
 
     // --- Update ---
@@ -133,8 +136,8 @@ public class AnimController
 
         if (totalMs > 0)
         {
-            // MS-BASED PLAYBACK
-            _animTime += dt * 1000f;
+            // MS-BASED PLAYBACK (scaled by playback speed)
+            _animTime += dt * 1000f * _playbackSpeed;
             var mode = GetPlayMode(_currentState);
 
             if (mode == AnimPlayMode.Loop)
@@ -161,8 +164,8 @@ public class AnimController
         }
         else if (anim != null)
         {
-            // TICK-BASED FALLBACK
-            _animTime += _stateTickRate[(int)_currentState] * dt;
+            // TICK-BASED FALLBACK (scaled by playback speed)
+            _animTime += _stateTickRate[(int)_currentState] * dt * _playbackSpeed;
             int totalT = anim.TotalTicks();
             if (totalT <= 0) return;
 
@@ -394,9 +397,36 @@ public class AnimController
         string animName = StateToAnimName(state);
         if (_timingOverrides != null && _timingOverrides.TryGetValue(animName, out var ov) && ov.EffectTimeMs >= 0)
             return ov.EffectTimeMs / 1000f;
-        var meta = GetCurrentMeta();
+        var meta = GetMetaForState(state);
         if (meta != null && meta.EffectTimeMs > 0) return meta.EffectTimeMs / 1000f;
         return 0f;
+    }
+
+    public float GetTotalDurationSeconds(AnimState state)
+    {
+        string animName = StateToAnimName(state);
+        if (_timingOverrides != null && _timingOverrides.TryGetValue(animName, out var ov) && ov.FrameDurationsMs.Count > 0)
+        {
+            int total = 0;
+            foreach (int d in ov.FrameDurationsMs) total += d;
+            return total / 1000f;
+        }
+        var meta = GetMetaForState(state);
+        if (meta != null)
+        {
+            int ms = meta.TotalDurationMs();
+            if (ms > 0) return ms / 1000f;
+        }
+        return 0f;
+    }
+
+    private AnimationMeta? GetMetaForState(AnimState state)
+    {
+        if (_animMeta == null || string.IsNullOrEmpty(_unitName)) return null;
+        string animName = StateToAnimName(state);
+        string key = AnimMetaLoader.MetaKey(_unitName, animName);
+        _animMeta.TryGetValue(key, out var meta);
+        return meta;
     }
 
     // --- Effective timing helpers ---
