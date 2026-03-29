@@ -1,4 +1,5 @@
 using Microsoft.Xna.Framework;
+using Necroking.Core;
 using Necroking.Data.Registries;
 
 namespace Necroking.Editor;
@@ -91,13 +92,18 @@ public static class SettingsGeneralTab
         s.DamageNumbersEnabled = ui.DrawCheckbox("Enabled", s.DamageNumbersEnabled, x, curY);
         curY += RowH;
 
-        // Color swatch (ColorJson -> draw as RGBA int fields)
+        // Color swatch (ColorJson -> interactive color picker + RGBA int fields)
         var dc = s.DamageNumberColor;
+        var dmgHdr = new HdrColor((byte)System.Math.Clamp(dc.R, 0, 255),
+                                   (byte)System.Math.Clamp(dc.G, 0, 255),
+                                   (byte)System.Math.Clamp(dc.B, 0, 255),
+                                   (byte)System.Math.Clamp(dc.A, 0, 255));
         ui.DrawText("Color", new Vector2(x, curY + 2), EditorBase.TextDim);
-        // Preview swatch
-        var preview = new Color(dc.R, dc.G, dc.B, dc.A);
-        ui.DrawRect(new Rectangle(x + 120, curY, 40, 18), preview);
-        ui.DrawBorder(new Rectangle(x + 120, curY, 40, 18), EditorBase.InputBorder);
+        if (ui.DrawColorSwatch("gen_dmgColor", x + 120, curY, 40, 18, ref dmgHdr, true))
+        {
+            dc.R = dmgHdr.R; dc.G = dmgHdr.G; dc.B = dmgHdr.B; dc.A = dmgHdr.A;
+            s.DamageNumberColor = dc;
+        }
         curY += RowH;
 
         dc.R = System.Math.Clamp(ui.DrawIntField("gen_dmgColorR", "  R", dc.R, x, curY, w), 0, 255);

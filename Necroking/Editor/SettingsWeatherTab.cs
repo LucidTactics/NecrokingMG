@@ -1,6 +1,7 @@
 using System;
 using System.Linq;
 using Microsoft.Xna.Framework;
+using Necroking.Core;
 using Necroking.Data;
 using Necroking.Data.Registries;
 
@@ -92,15 +93,25 @@ public static class SettingsWeatherTab
         fx.Saturation = Math.Clamp(fx.Saturation, 0f, 3f);
         curY += RowH;
 
-        fx.TintR = ui.DrawFloatField("wthr_tintR", "Tint R", fx.TintR, x, curY, w, 0.01f);
+        // Tint color swatch
+        var tintColor = FloatRgbToHdr(fx.TintR, fx.TintG, fx.TintB, 2f);
+        ui.DrawText("Tint Color", new Vector2(x, curY + 2), EditorBase.TextDim);
+        if (ui.DrawColorSwatch("wthr_tintColor", x + 120, curY, 40, 18, ref tintColor, true))
+        {
+            HdrToFloatRgb(tintColor, 2f, out float tr, out float tg, out float tb);
+            fx.TintR = tr; fx.TintG = tg; fx.TintB = tb;
+        }
+        curY += RowH;
+
+        fx.TintR = ui.DrawFloatField("wthr_tintR", "  Tint R", fx.TintR, x, curY, w, 0.01f);
         fx.TintR = Math.Clamp(fx.TintR, 0f, 2f);
         curY += RowH;
 
-        fx.TintG = ui.DrawFloatField("wthr_tintG", "Tint G", fx.TintG, x, curY, w, 0.01f);
+        fx.TintG = ui.DrawFloatField("wthr_tintG", "  Tint G", fx.TintG, x, curY, w, 0.01f);
         fx.TintG = Math.Clamp(fx.TintG, 0f, 2f);
         curY += RowH;
 
-        fx.TintB = ui.DrawFloatField("wthr_tintB", "Tint B", fx.TintB, x, curY, w, 0.01f);
+        fx.TintB = ui.DrawFloatField("wthr_tintB", "  Tint B", fx.TintB, x, curY, w, 0.01f);
         fx.TintB = Math.Clamp(fx.TintB, 0f, 2f);
         curY += RowH;
 
@@ -113,15 +124,25 @@ public static class SettingsWeatherTab
         ui.DrawText("-- Ambient --", new Vector2(x, curY), EditorBase.AccentColor);
         curY += RowH;
 
-        fx.AmbientR = ui.DrawFloatField("wthr_ambientR", "Ambient R", fx.AmbientR, x, curY, w, 0.01f);
+        // Ambient color swatch
+        var ambientColor = FloatRgbToHdr(fx.AmbientR, fx.AmbientG, fx.AmbientB, 2f);
+        ui.DrawText("Ambient Color", new Vector2(x, curY + 2), EditorBase.TextDim);
+        if (ui.DrawColorSwatch("wthr_ambientColor", x + 120, curY, 40, 18, ref ambientColor, true))
+        {
+            HdrToFloatRgb(ambientColor, 2f, out float ar, out float ag, out float ab);
+            fx.AmbientR = ar; fx.AmbientG = ag; fx.AmbientB = ab;
+        }
+        curY += RowH;
+
+        fx.AmbientR = ui.DrawFloatField("wthr_ambientR", "  Ambient R", fx.AmbientR, x, curY, w, 0.01f);
         fx.AmbientR = Math.Clamp(fx.AmbientR, 0f, 2f);
         curY += RowH;
 
-        fx.AmbientG = ui.DrawFloatField("wthr_ambientG", "Ambient G", fx.AmbientG, x, curY, w, 0.01f);
+        fx.AmbientG = ui.DrawFloatField("wthr_ambientG", "  Ambient G", fx.AmbientG, x, curY, w, 0.01f);
         fx.AmbientG = Math.Clamp(fx.AmbientG, 0f, 2f);
         curY += RowH;
 
-        fx.AmbientB = ui.DrawFloatField("wthr_ambientB", "Ambient B", fx.AmbientB, x, curY, w, 0.01f);
+        fx.AmbientB = ui.DrawFloatField("wthr_ambientB", "  Ambient B", fx.AmbientB, x, curY, w, 0.01f);
         fx.AmbientB = Math.Clamp(fx.AmbientB, 0f, 2f);
         curY += RowH;
 
@@ -151,15 +172,25 @@ public static class SettingsWeatherTab
         fx.FogDensity = Math.Clamp(fx.FogDensity, 0f, 1f);
         curY += RowH;
 
-        fx.FogR = ui.DrawFloatField("wthr_fogR", "Fog R", fx.FogR, x, curY, w, 0.01f);
+        // Fog color swatch
+        var fogColor = FloatRgbToHdr(fx.FogR, fx.FogG, fx.FogB, 1f);
+        ui.DrawText("Fog Color", new Vector2(x, curY + 2), EditorBase.TextDim);
+        if (ui.DrawColorSwatch("wthr_fogColor", x + 120, curY, 40, 18, ref fogColor, true))
+        {
+            HdrToFloatRgb(fogColor, 1f, out float fr, out float fg, out float fb);
+            fx.FogR = fr; fx.FogG = fg; fx.FogB = fb;
+        }
+        curY += RowH;
+
+        fx.FogR = ui.DrawFloatField("wthr_fogR", "  Fog R", fx.FogR, x, curY, w, 0.01f);
         fx.FogR = Math.Clamp(fx.FogR, 0f, 1f);
         curY += RowH;
 
-        fx.FogG = ui.DrawFloatField("wthr_fogG", "Fog G", fx.FogG, x, curY, w, 0.01f);
+        fx.FogG = ui.DrawFloatField("wthr_fogG", "  Fog G", fx.FogG, x, curY, w, 0.01f);
         fx.FogG = Math.Clamp(fx.FogG, 0f, 1f);
         curY += RowH;
 
-        fx.FogB = ui.DrawFloatField("wthr_fogB", "Fog B", fx.FogB, x, curY, w, 0.01f);
+        fx.FogB = ui.DrawFloatField("wthr_fogB", "  Fog B", fx.FogB, x, curY, w, 0.01f);
         fx.FogB = Math.Clamp(fx.FogB, 0f, 1f);
         curY += RowH;
 
@@ -180,15 +211,25 @@ public static class SettingsWeatherTab
         fx.HazeStrength = Math.Clamp(fx.HazeStrength, 0f, 1f);
         curY += RowH;
 
-        fx.HazeR = ui.DrawFloatField("wthr_hazeR", "Haze R", fx.HazeR, x, curY, w, 0.01f);
+        // Haze color swatch
+        var hazeColor = FloatRgbToHdr(fx.HazeR, fx.HazeG, fx.HazeB, 1f);
+        ui.DrawText("Haze Color", new Vector2(x, curY + 2), EditorBase.TextDim);
+        if (ui.DrawColorSwatch("wthr_hazeColor", x + 120, curY, 40, 18, ref hazeColor, true))
+        {
+            HdrToFloatRgb(hazeColor, 1f, out float hr, out float hg, out float hb);
+            fx.HazeR = hr; fx.HazeG = hg; fx.HazeB = hb;
+        }
+        curY += RowH;
+
+        fx.HazeR = ui.DrawFloatField("wthr_hazeR", "  Haze R", fx.HazeR, x, curY, w, 0.01f);
         fx.HazeR = Math.Clamp(fx.HazeR, 0f, 1f);
         curY += RowH;
 
-        fx.HazeG = ui.DrawFloatField("wthr_hazeG", "Haze G", fx.HazeG, x, curY, w, 0.01f);
+        fx.HazeG = ui.DrawFloatField("wthr_hazeG", "  Haze G", fx.HazeG, x, curY, w, 0.01f);
         fx.HazeG = Math.Clamp(fx.HazeG, 0f, 1f);
         curY += RowH;
 
-        fx.HazeB = ui.DrawFloatField("wthr_hazeB", "Haze B", fx.HazeB, x, curY, w, 0.01f);
+        fx.HazeB = ui.DrawFloatField("wthr_hazeB", "  Haze B", fx.HazeB, x, curY, w, 0.01f);
         fx.HazeB = Math.Clamp(fx.HazeB, 0f, 1f);
         curY += RowH;
 
@@ -257,5 +298,26 @@ public static class SettingsWeatherTab
         curY += RowH;
 
         return curY - y;
+    }
+
+    /// <summary>
+    /// Convert 3 float RGB values (in 0..maxVal range) to an HdrColor for the color swatch.
+    /// </summary>
+    private static HdrColor FloatRgbToHdr(float r, float g, float b, float maxVal)
+    {
+        byte br = (byte)Math.Clamp(r / maxVal * 255f, 0, 255);
+        byte bg = (byte)Math.Clamp(g / maxVal * 255f, 0, 255);
+        byte bb = (byte)Math.Clamp(b / maxVal * 255f, 0, 255);
+        return new HdrColor(br, bg, bb);
+    }
+
+    /// <summary>
+    /// Write HdrColor bytes back to float RGB fields (in 0..maxVal range).
+    /// </summary>
+    private static void HdrToFloatRgb(HdrColor c, float maxVal, out float r, out float g, out float b)
+    {
+        r = Math.Clamp(c.R / 255f * maxVal, 0f, maxVal);
+        g = Math.Clamp(c.G / 255f * maxVal, 0f, maxVal);
+        b = Math.Clamp(c.B / 255f * maxVal, 0f, maxVal);
     }
 }

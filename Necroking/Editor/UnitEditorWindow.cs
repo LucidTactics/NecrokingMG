@@ -120,6 +120,8 @@ public class UnitEditorWindow
     private bool _confirmDeleteOpen;
     private string _confirmDeleteId = "";
     private SubEditor _confirmDeleteType = SubEditor.None;
+    private bool _confirmDeleteUnit;      // U12: unit-level delete confirmation
+    private bool _confirmDeleteGroup;     // U12: group-level delete confirmation
 
     // --- Constants ---
     private const int LeftPanelW = 300;
@@ -368,6 +370,14 @@ public class UnitEditorWindow
             {
                 _confirmDeleteOpen = false;
             }
+            else if (_confirmDeleteUnit)
+            {
+                _confirmDeleteUnit = false;
+            }
+            else if (_confirmDeleteGroup)
+            {
+                _confirmDeleteGroup = false;
+            }
             else if (_ui.CloseActiveDropdown())
             {
                 // Dropdown was open, consumed escape
@@ -502,6 +512,46 @@ public class UnitEditorWindow
                 }
                 _unsavedChanges = true;
             }
+        }
+
+        // U12: Unit delete confirmation dialog
+        if (_confirmDeleteUnit)
+        {
+            string unitMsg = $"Delete unit '{_confirmDeleteId}'?";
+            if (_ui.DrawConfirmDialog("Confirm Delete", unitMsg, ref _confirmDeleteUnit))
+            {
+                _gameData.Units.Remove(_confirmDeleteId);
+                _selectedIdx = Math.Min(_selectedIdx, _gameData.Units.Count - 1);
+                _unsavedChanges = true;
+                SyncPreviewToSelected();
+                SetStatus("Removed: " + _confirmDeleteId);
+            }
+        }
+
+        // U12: Group delete confirmation dialog
+        if (_confirmDeleteGroup)
+        {
+            string groupMsg = $"Delete group '{_confirmDeleteId}'?";
+            if (_ui.DrawConfirmDialog("Confirm Delete", groupMsg, ref _confirmDeleteGroup))
+            {
+                _gameData.UnitGroups.Remove(_confirmDeleteId);
+                _groupSelectedIdx = Math.Min(_groupSelectedIdx, _gameData.UnitGroups.Count - 1);
+                _unsavedChanges = true;
+                SetStatus("Removed group: " + _confirmDeleteId);
+            }
+        }
+
+        // U03: Crosshair cursor overlay when pick mode is active
+        if (_pickMode != PickTarget.None)
+        {
+            int mx = _ui._mouse.X;
+            int my = _ui._mouse.Y;
+            Color crossColor = _pickMode == PickTarget.Hilt ? new Color(80, 200, 255) : new Color(255, 200, 80);
+            int crossSize = 10;
+            // Horizontal line
+            _ui.DrawLine(new Vector2(mx - crossSize, my), new Vector2(mx + crossSize, my), crossColor, 1);
+            // Vertical line
+            _ui.DrawLine(new Vector2(mx, my - crossSize), new Vector2(mx, my + crossSize), crossColor, 1);
         }
 
         // Dropdown overlays (drawn last, on top of everything)
@@ -669,12 +719,8 @@ public class UnitEditorWindow
 
             if (_ui.DrawButton("Delete", bx, curY, btnW, btnH, EditorBase.DangerColor))
             {
-                string removeId = allIds[_selectedIdx];
-                _gameData.Units.Remove(removeId);
-                _selectedIdx = Math.Min(_selectedIdx, _gameData.Units.Count - 1);
-                _unsavedChanges = true;
-                SyncPreviewToSelected();
-                SetStatus("Removed: " + removeId);
+                _confirmDeleteUnit = true;
+                _confirmDeleteId = allIds[_selectedIdx];
             }
         }
     }
@@ -782,11 +828,14 @@ public class UnitEditorWindow
         _ui.DrawRect(new Rectangle(previewX, previewY, previewSize, previewSize), new Color(15, 15, 25, 240));
         _ui.DrawBorder(new Rectangle(previewX, previewY, previewSize, previewSize), EditorBase.PanelBorder);
 
+        // U02: Draw weapon line behind sprite if Behind flag is set
+        DrawWeaponLineOverlay(def, behindOnly: true);
+
         // Draw the sprite frame in the preview
         DrawPreviewSprite(def, previewX, previewY, previewSize, dt);
 
-        // Draw weapon point line overlay (U02)
-        DrawWeaponLineOverlay(def);
+        // U02: Draw weapon line in front of sprite if Behind flag is not set
+        DrawWeaponLineOverlay(def, behindOnly: false);
 
         // Handle pick mode clicks (U03)
         HandlePickModeClick(def, previewX, previewY, previewSize);
@@ -1152,11 +1201,20 @@ public class UnitEditorWindow
         return curY;
     }
 
-    private void DrawWeaponLineOverlay(UnitDef def)
+    /// <summary>
+    /// U02: Draw weapon line overlay on the sprite preview.
+    /// When behindOnly=true, only draws if the weapon's Behind flag is set (renders before sprite).
+    /// When behindOnly=false, only draws if the Behind flag is not set (renders after sprite).
+    /// </summary>
+    private void DrawWeaponLineOverlay(UnitDef def, bool behindOnly)
     {
         if (!_lastPreviewValid) return;
         var wpFrame = TryGetWeaponFrame(def, out _);
         if (wpFrame == null) return;
+
+        // Use hilt's Behind flag to determine render order for the whole weapon line
+        bool isBehind = wpFrame.Hilt.Behind;
+        if (behindOnly != isBehind) return;
 
         var hiltScreen = WeaponPointToScreen(wpFrame.Hilt.X, wpFrame.Hilt.Y);
         var tipScreen = WeaponPointToScreen(wpFrame.Tip.X, wpFrame.Tip.Y);
@@ -1164,11 +1222,23 @@ public class UnitEditorWindow
         var lineColor = new Color(_weaponLineColor.R, _weaponLineColor.G, _weaponLineColor.B, _weaponLineColor.A);
         _ui.DrawLine(hiltScreen, tipScreen, lineColor, 2);
 
-        int markerSize = 5;
-        _ui.DrawRect(new Rectangle((int)hiltScreen.X - markerSize / 2, (int)hiltScreen.Y - markerSize / 2,
-            markerSize, markerSize), new Color(80, 200, 255));
-        _ui.DrawRect(new Rectangle((int)tipScreen.X - markerSize / 2, (int)tipScreen.Y - markerSize / 2,
-            markerSize, markerSize), new Color(255, 200, 80));
+        // U02: Draw circles at hilt and tip positions (4px radius approximated with line segments)
+        DrawCircleOverlay(hiltScreen, 4, new Color(80, 200, 255));
+        DrawCircleOverlay(tipScreen, 4, new Color(255, 200, 80));
+    }
+
+    /// <summary>Draw a circle at the given screen position using line segments.</summary>
+    private void DrawCircleOverlay(Vector2 center, int radius, Color color)
+    {
+        const int segments = 12;
+        for (int i = 0; i < segments; i++)
+        {
+            float a0 = MathF.PI * 2f * i / segments;
+            float a1 = MathF.PI * 2f * (i + 1) / segments;
+            var p0 = center + new Vector2(MathF.Cos(a0) * radius, MathF.Sin(a0) * radius);
+            var p1 = center + new Vector2(MathF.Cos(a1) * radius, MathF.Sin(a1) * radius);
+            _ui.DrawLine(p0, p1, color, 1);
+        }
     }
 
     private Vector2 WeaponPointToScreen(float wpX, float wpY)
@@ -2147,11 +2217,8 @@ public class UnitEditorWindow
 
             if (_ui.DrawButton("Delete", bx, bottomY, btnW, btnH, EditorBase.DangerColor))
             {
-                string removeId = groupIds[_groupSelectedIdx];
-                _gameData.UnitGroups.Remove(removeId);
-                _groupSelectedIdx = Math.Min(_groupSelectedIdx, _gameData.UnitGroups.Count - 1);
-                _unsavedChanges = true;
-                SetStatus("Removed group: " + removeId);
+                _confirmDeleteGroup = true;
+                _confirmDeleteId = groupIds[_groupSelectedIdx];
             }
         }
 

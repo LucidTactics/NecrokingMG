@@ -74,6 +74,10 @@ public class EnvObjectEditorWindow
     private bool _newCategoryDialogOpen;
     private string _newCategoryName = "";
 
+    // Delete category dialog
+    private bool _deleteCategoryDialogOpen;
+    private int _deleteCategoryReassignIdx; // index into category list for reassignment target
+
     // Texture file browser (UI01)
     private readonly TextureFileBrowser _textureBrowser = new();
     private MouseState _prevMouseEnv;
@@ -136,6 +140,8 @@ public class EnvObjectEditorWindow
         _defListScrollY = 0;
         _confirmDeleteOpen = false;
         _newCategoryDialogOpen = false;
+        _deleteCategoryDialogOpen = false;
+        _deleteCategoryReassignIdx = 0;
         _draggingCollisionCenter = false;
         _draggingCollisionRadius = false;
         _draggingPivot = false;
@@ -242,6 +248,9 @@ public class EnvObjectEditorWindow
         if (_newCategoryDialogOpen)
             DrawNewCategoryDialog(screenW, screenH);
 
+        if (_deleteCategoryDialogOpen)
+            DrawDeleteCategoryDialog(screenW, screenH);
+
         // M05: Edge tweaker popup
         if (_edgeTweakerOpen)
             DrawEdgeTweakerPopup(screenW, screenH);
@@ -272,6 +281,24 @@ public class EnvObjectEditorWindow
         int newCatIdx = Array.IndexOf(catOptions, newCat);
         if (newCatIdx >= 0) _categoryFilter = newCatIdx;
         curY += RowH + 4;
+
+        // New Category / Delete Category buttons
+        int catBtnW = (w - Padding * 2 - 4) / 2;
+        if (_ui.DrawButton("+Cat", x + Padding, curY, catBtnW, BtnH, EditorBase.AccentColor))
+        {
+            _newCategoryDialogOpen = true;
+            _newCategoryName = "";
+        }
+        if (_ui.DrawButton("-Cat", x + Padding + catBtnW + 4, curY, catBtnW, BtnH, EditorBase.DangerColor))
+        {
+            // Only allow deleting a specific category (not "All")
+            if (_categoryFilter > 0 && _categoryFilter < catOptions.Length)
+            {
+                _deleteCategoryDialogOpen = true;
+                _deleteCategoryReassignIdx = 0;
+            }
+        }
+        curY += BtnH + 4;
 
         // Search field
         _searchFilter = _ui.DrawSearchField("envdef_search", _searchFilter, x + Padding, curY, w - Padding * 2);
@@ -1171,6 +1198,8 @@ public class EnvObjectEditorWindow
                 _edgeTweakerOpen = false;
             else if (_confirmDeleteOpen)
                 _confirmDeleteOpen = false;
+            else if (_deleteCategoryDialogOpen)
+                _deleteCategoryDialogOpen = false;
             else if (_newCategoryDialogOpen)
                 _newCategoryDialogOpen = false;
             else
@@ -1511,6 +1540,95 @@ public class EnvObjectEditorWindow
         if (_ui.DrawButton("Cancel", dx + dw / 2 + 20, dy + dh - 40, 80, 28))
         {
             _newCategoryDialogOpen = false;
+        }
+
+        _ui.InputLayer = savedLayer;
+    }
+
+    private void DrawDeleteCategoryDialog(int screenW, int screenH)
+    {
+        // Block input to lower layers
+        _ui.InputLayer = 3;
+
+        // Dark overlay
+        _ui.DrawRect(new Rectangle(0, 0, screenW, screenH), new Color(0, 0, 0, 150));
+
+        // Determine which category is being deleted (currently filtered category)
+        var allCats = GetCategories();
+        string catToDelete = _categoryFilter > 0 && _categoryFilter < allCats.Count
+            ? allCats[_categoryFilter] : "";
+
+        if (string.IsNullOrEmpty(catToDelete))
+        {
+            _deleteCategoryDialogOpen = false;
+            return;
+        }
+
+        // Build reassignment options (all categories except the one being deleted)
+        var reassignOptions = new List<string>();
+        for (int i = 0; i < allCats.Count; i++)
+        {
+            if (i == 0) continue; // skip "All"
+            if (allCats[i] == catToDelete) continue;
+            reassignOptions.Add(allCats[i]);
+        }
+        if (reassignOptions.Count == 0)
+            reassignOptions.Add("Misc");
+
+        // Count objects in this category
+        int objCount = 0;
+        for (int i = 0; i < _env.DefCount; i++)
+        {
+            if (_env.GetDef(i).Category == catToDelete)
+                objCount++;
+        }
+
+        int dw = 380, dh = 170;
+        int dx = (screenW - dw) / 2;
+        int dy = (screenH - dh) / 2;
+
+        _ui.DrawRect(new Rectangle(dx, dy, dw, dh), EditorBase.PanelBg);
+        _ui.DrawBorder(new Rectangle(dx, dy, dw, dh), EditorBase.PanelBorder, 2);
+        _ui.DrawRect(new Rectangle(dx, dy, dw, 28), EditorBase.PanelHeader);
+        _ui.DrawText("Delete Category", new Vector2(dx + 10, dy + 5), EditorBase.TextBright, _font);
+
+        int savedLayer = _ui.InputLayer;
+        _ui.InputLayer = 0;
+
+        int cy = dy + 36;
+
+        _ui.DrawText($"Delete category \"{catToDelete}\" ({objCount} objects)?", new Vector2(dx + 16, cy), EditorBase.TextBright);
+        cy += 22;
+
+        // Reassignment dropdown
+        string[] reassignArray = reassignOptions.ToArray();
+        if (_deleteCategoryReassignIdx >= reassignArray.Length)
+            _deleteCategoryReassignIdx = 0;
+        string currentReassign = reassignArray[_deleteCategoryReassignIdx];
+        string newReassign = _ui.DrawCombo("del_cat_reassign", "Reassign to", currentReassign, reassignArray, dx + 16, cy, dw - 32);
+        int newReassignIdx = Array.IndexOf(reassignArray, newReassign);
+        if (newReassignIdx >= 0)
+            _deleteCategoryReassignIdx = newReassignIdx;
+        cy += RowH + 8;
+
+        // Delete button
+        if (_ui.DrawButton("Delete", dx + dw / 2 - 100, dy + dh - 40, 80, 28, EditorBase.DangerColor))
+        {
+            string reassignTo = reassignArray[_deleteCategoryReassignIdx];
+            // Reassign all objects from deleted category
+            for (int i = 0; i < _env.DefCount; i++)
+            {
+                if (_env.GetDef(i).Category == catToDelete)
+                    _env.GetDef(i).Category = reassignTo;
+            }
+            // Reset filter to "All"
+            _categoryFilter = 0;
+            _deleteCategoryDialogOpen = false;
+        }
+
+        if (_ui.DrawButton("Cancel", dx + dw / 2 + 20, dy + dh - 40, 80, 28))
+        {
+            _deleteCategoryDialogOpen = false;
         }
 
         _ui.InputLayer = savedLayer;

@@ -205,6 +205,9 @@ public class SettingsWindow
             WantsClose = true;
         }
 
+        // Draw color picker popup (must be after all content drawing, before dropdowns)
+        _ui.DrawColorPickerPopup();
+
         // Draw dropdown overlays (must be after all content drawing)
         _ui.DrawDropdownOverlays();
 

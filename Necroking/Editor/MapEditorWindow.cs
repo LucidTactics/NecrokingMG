@@ -124,6 +124,7 @@ public class MapEditorWindow
         CircleRadius       // Circle radius handle
     }
     private RegionHandle _activeHandle = RegionHandle.None;
+    private Vec2 _regionDragOffset; // offset from region center to click point for body drag
 
     // Cached enum name arrays (avoid per-frame allocation)
     private static readonly string[] CachedFactionNames = Enum.GetNames<Faction>();
@@ -2567,64 +2568,51 @@ public class MapEditorWindow
             }
         }
 
-        // World interaction: drag regions (M26: 10 handle types)
+        // World interaction: drag regions (M26: 10 handle types + viewport click-to-select)
         if (!overPanel)
         {
             Vec2 worldPos = _camera.ScreenToWorld(new Vector2(mouse.X, mouse.Y), screenW, screenH);
 
-            if (leftClick && SelectedRegionIndex >= 0 && SelectedRegionIndex < _triggerSystem.Regions.Count)
+            // Scale handle tolerance with zoom so handles stay clickable at any zoom level
+            // 8 screen pixels converted to world-space
+            float handleTol = 8f / _camera.Zoom;
+
+            if (leftClick)
             {
-                var region = _triggerSystem.Regions[SelectedRegionIndex];
                 _activeHandle = RegionHandle.None;
                 _draggingRegion = -1;
 
-                float handleTol = 1.5f; // world-space tolerance for handle hit
-
-                if (region.Shape == RegionShape.Rectangle)
+                // First: try handles on the currently-selected region (highest priority)
+                if (SelectedRegionIndex >= 0 && SelectedRegionIndex < _triggerSystem.Regions.Count)
                 {
-                    float l = region.X - region.HalfW;
-                    float r = region.X + region.HalfW;
-                    float t = region.Y - region.HalfH;
-                    float b = region.Y + region.HalfH;
-                    float mx = region.X;
-                    float my = region.Y;
-
-                    // Test corners first (smallest targets)
-                    if (Vec2Near(worldPos, new Vec2(l, t), handleTol)) { _activeHandle = RegionHandle.NW; }
-                    else if (Vec2Near(worldPos, new Vec2(r, t), handleTol)) { _activeHandle = RegionHandle.NE; }
-                    else if (Vec2Near(worldPos, new Vec2(r, b), handleTol)) { _activeHandle = RegionHandle.SE; }
-                    else if (Vec2Near(worldPos, new Vec2(l, b), handleTol)) { _activeHandle = RegionHandle.SW; }
-                    // Edge midpoints
-                    else if (Vec2Near(worldPos, new Vec2(mx, t), handleTol)) { _activeHandle = RegionHandle.N; }
-                    else if (Vec2Near(worldPos, new Vec2(r, my), handleTol)) { _activeHandle = RegionHandle.E; }
-                    else if (Vec2Near(worldPos, new Vec2(mx, b), handleTol)) { _activeHandle = RegionHandle.S; }
-                    else if (Vec2Near(worldPos, new Vec2(l, my), handleTol)) { _activeHandle = RegionHandle.W; }
-                    // Body (inside rect)
-                    else if (worldPos.X >= l && worldPos.X <= r && worldPos.Y >= t && worldPos.Y <= b)
-                    {
-                        _activeHandle = RegionHandle.Body;
-                    }
-
+                    var region = _triggerSystem.Regions[SelectedRegionIndex];
+                    _activeHandle = HitTestRegionHandles(region, worldPos, handleTol);
                     if (_activeHandle != RegionHandle.None)
                     {
                         _draggingRegion = SelectedRegionIndex;
                         _draggingRegionResize = _activeHandle != RegionHandle.Body;
+                        if (_activeHandle == RegionHandle.Body)
+                            _regionDragOffset = new Vec2(region.X - worldPos.X, region.Y - worldPos.Y);
                     }
                 }
-                else // Circle
+
+                // Second: if no handle hit on selected, try clicking any region body to select it
+                if (_activeHandle == RegionHandle.None)
                 {
-                    float dist = (worldPos - new Vec2(region.X, region.Y)).Length();
-                    if (MathF.Abs(dist - region.Radius) < handleTol)
+                    var regions = _triggerSystem.Regions;
+                    for (int i = 0; i < regions.Count; i++)
                     {
-                        _activeHandle = RegionHandle.CircleRadius;
-                        _draggingRegion = SelectedRegionIndex;
-                        _draggingRegionResize = true;
-                    }
-                    else if (dist <= region.Radius)
-                    {
-                        _activeHandle = RegionHandle.Body;
-                        _draggingRegion = SelectedRegionIndex;
-                        _draggingRegionResize = false;
+                        if (i == SelectedRegionIndex) continue; // already checked above
+                        var r = regions[i];
+                        if (r.ContainsPoint(worldPos))
+                        {
+                            SelectedRegionIndex = i;
+                            _activeHandle = RegionHandle.Body;
+                            _draggingRegion = i;
+                            _draggingRegionResize = false;
+                            _regionDragOffset = new Vec2(r.X - worldPos.X, r.Y - worldPos.Y);
+                            break;
+                        }
                     }
                 }
             }
@@ -2636,8 +2624,8 @@ public class MapEditorWindow
                 switch (_activeHandle)
                 {
                     case RegionHandle.Body:
-                        region.X = worldPos.X;
-                        region.Y = worldPos.Y;
+                        region.X = worldPos.X + _regionDragOffset.X;
+                        region.Y = worldPos.Y + _regionDragOffset.Y;
                         break;
 
                     // Edge midpoints - resize from one side only
@@ -4213,6 +4201,41 @@ public class MapEditorWindow
     /// <summary>M26: Check if a world position is near a target point within tolerance.</summary>
     private static bool Vec2Near(Vec2 a, Vec2 b, float tol) =>
         MathF.Abs(a.X - b.X) < tol && MathF.Abs(a.Y - b.Y) < tol;
+
+    /// <summary>Hit-test all drag handles on a region. Returns the matched handle, or None.</summary>
+    private static RegionHandle HitTestRegionHandles(TriggerRegion region, Vec2 worldPos, float handleTol)
+    {
+        if (region.Shape == RegionShape.Rectangle)
+        {
+            float l = region.X - region.HalfW;
+            float r = region.X + region.HalfW;
+            float t = region.Y - region.HalfH;
+            float b = region.Y + region.HalfH;
+            float mx = region.X;
+            float my = region.Y;
+
+            // Test corners first (smallest targets)
+            if (Vec2Near(worldPos, new Vec2(l, t), handleTol)) return RegionHandle.NW;
+            if (Vec2Near(worldPos, new Vec2(r, t), handleTol)) return RegionHandle.NE;
+            if (Vec2Near(worldPos, new Vec2(r, b), handleTol)) return RegionHandle.SE;
+            if (Vec2Near(worldPos, new Vec2(l, b), handleTol)) return RegionHandle.SW;
+            // Edge midpoints
+            if (Vec2Near(worldPos, new Vec2(mx, t), handleTol)) return RegionHandle.N;
+            if (Vec2Near(worldPos, new Vec2(r, my), handleTol)) return RegionHandle.E;
+            if (Vec2Near(worldPos, new Vec2(mx, b), handleTol)) return RegionHandle.S;
+            if (Vec2Near(worldPos, new Vec2(l, my), handleTol)) return RegionHandle.W;
+            // Body (inside rect)
+            if (worldPos.X >= l && worldPos.X <= r && worldPos.Y >= t && worldPos.Y <= b)
+                return RegionHandle.Body;
+        }
+        else // Circle
+        {
+            float dist = (worldPos - new Vec2(region.X, region.Y)).Length();
+            if (MathF.Abs(dist - region.Radius) < handleTol) return RegionHandle.CircleRadius;
+            if (dist <= region.Radius) return RegionHandle.Body;
+        }
+        return RegionHandle.None;
+    }
 
     // ---- Environment helpers ----
 
