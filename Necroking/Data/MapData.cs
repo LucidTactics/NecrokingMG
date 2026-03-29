@@ -385,6 +385,11 @@ public static class MapData
         if (ed.TryGetProperty("boundTriggerID", out var btid)) def.BoundTriggerID = btid.GetString() ?? "";
         if (ed.TryGetProperty("processTime", out var pt)) def.ProcessTime = pt.GetSingle();
         if (ed.TryGetProperty("autoSpawn", out var ats)) def.AutoSpawn = ats.GetBoolean();
+        if (ed.TryGetProperty("isForagable", out var ifor)) def.IsForagable = ifor.GetBoolean();
+        if (ed.TryGetProperty("foragableType", out var ftyp)) def.ForagableType = ftyp.GetString() ?? "";
+        if (ed.TryGetProperty("respawnTime", out var rst)) def.RespawnTime = rst.GetSingle();
+        if (ed.TryGetProperty("scaleMin", out var smin)) def.ScaleMin = smin.GetSingle();
+        if (ed.TryGetProperty("scaleMax", out var smax)) def.ScaleMax = smax.GetSingle();
         return def;
     }
 }

@@ -73,6 +73,13 @@ public class EnvironmentObjectDef
 
     // Tint color (used by color harmonizer M04)
     public HdrColor TintColor { get; set; } = new(255, 255, 255, 255, 1f);
+
+    // Foragable properties
+    public bool IsForagable { get; set; }
+    public string ForagableType { get; set; } = "";     // resource type name (e.g., "Mushroom", "Branch")
+    public float RespawnTime { get; set; } = 180f;      // seconds (default 3 minutes)
+    public float ScaleMin { get; set; } = 0.8f;         // random scale variation min
+    public float ScaleMax { get; set; } = 1.2f;         // random scale variation max
 }
 
 public struct PlacedObject
@@ -89,8 +96,10 @@ public struct PlacedObjectRuntime
     public int HP;
     public int Owner;
     public bool Alive;
+    public bool Collected;         // foragable has been picked up
+    public float RespawnTimer;     // countdown to respawn after collection
 
-    public PlacedObjectRuntime() { HP = 0; Owner = 1; Alive = true; }
+    public PlacedObjectRuntime() { HP = 0; Owner = 1; Alive = true; Collected = false; RespawnTimer = 0f; }
 }
 
 public class EnvironmentSystem
@@ -142,6 +151,54 @@ public class EnvironmentSystem
     public PlacedObject GetObject(int idx) => _objects[idx];
     public PlacedObjectRuntime GetObjectRuntime(int idx) => _objectRuntime[idx];
     public BuildingProcessState GetProcessState(int idx) => _processState[idx];
+
+    /// <summary>
+    /// Collect a foragable object. Returns the ForagableType string, or null if not foragable/already collected.
+    /// </summary>
+    public string? CollectForagable(int objIdx)
+    {
+        if (objIdx < 0 || objIdx >= _objects.Count) return null;
+        var def = _defs[_objects[objIdx].DefIndex];
+        if (!def.IsForagable) return null;
+        if (objIdx >= _objectRuntime.Count) return null;
+        var rt = _objectRuntime[objIdx];
+        if (rt.Collected) return null;
+
+        rt.Collected = true;
+        rt.RespawnTimer = def.RespawnTime;
+        _objectRuntime[objIdx] = rt;
+        return def.ForagableType;
+    }
+
+    /// <summary>
+    /// Update foragable respawn timers. Call each frame with dt.
+    /// </summary>
+    public void UpdateForagables(float dt)
+    {
+        for (int i = 0; i < _objectRuntime.Count; i++)
+        {
+            if (!_objectRuntime[i].Collected) continue;
+            var rt = _objectRuntime[i];
+            rt.RespawnTimer -= dt;
+            if (rt.RespawnTimer <= 0f)
+            {
+                rt.Collected = false;
+                rt.RespawnTimer = 0f;
+            }
+            _objectRuntime[i] = rt;
+        }
+    }
+
+    /// <summary>
+    /// Check if an object is currently visible (not collected).
+    /// </summary>
+    public bool IsObjectVisible(int objIdx)
+    {
+        if (objIdx < 0 || objIdx >= _objects.Count) return false;
+        if (objIdx < _objectRuntime.Count && _objectRuntime[objIdx].Collected) return false;
+        if (objIdx < _objectRuntime.Count && !_objectRuntime[objIdx].Alive) return false;
+        return true;
+    }
 
     /// <summary>
     /// Check whether a new object of the given def can be placed at (x,y) without

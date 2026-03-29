@@ -54,3 +54,8 @@
 /processor:EffectProcessor
 /build:GroundShader.fx
 
+#begin WeatherFog.fx
+/importer:EffectImporter
+/processor:EffectProcessor
+/build:WeatherFog.fx
+

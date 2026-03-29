@@ -307,6 +307,7 @@ public class EnvObjectEditorWindow
             string label = def.Name;
             if (string.IsNullOrEmpty(label)) label = def.Id;
             if (def.IsBuilding) label += " [B]";
+            if (def.IsForagable) label += " [F]";
             labels.Add(label);
         }
 
@@ -1022,6 +1023,34 @@ public class EnvObjectEditorWindow
 
         curY += 4;
 
+        // --- Section: Foragable ---
+        curY = DrawSectionLabel(fx, curY, fieldW, "FORAGABLE");
+
+        bool newIsForagable = _ui.DrawCheckbox("Is Foragable", def.IsForagable, fx, curY);
+        if (newIsForagable != def.IsForagable) def.IsForagable = newIsForagable;
+        curY += RowH;
+
+        if (def.IsForagable)
+        {
+            string newFType = _ui.DrawTextField("envdef_ftype", "Resource Type", def.ForagableType, fx, curY, fieldW);
+            if (newFType != def.ForagableType) def.ForagableType = newFType;
+            curY += RowH;
+
+            float newRespawn = _ui.DrawFloatField("envdef_respawn", "Respawn Time (s)", def.RespawnTime, fx, curY, fieldW, 10f);
+            if (MathF.Abs(newRespawn - def.RespawnTime) > 0.01f) def.RespawnTime = MathF.Max(0f, newRespawn);
+            curY += RowH;
+
+            float newScMin = _ui.DrawFloatField("envdef_scmin", "Scale Min", def.ScaleMin, fx, curY, fieldW, 0.05f);
+            if (MathF.Abs(newScMin - def.ScaleMin) > 0.001f) def.ScaleMin = MathF.Max(0.1f, newScMin);
+            curY += RowH;
+
+            float newScMax = _ui.DrawFloatField("envdef_scmax", "Scale Max", def.ScaleMax, fx, curY, fieldW, 0.05f);
+            if (MathF.Abs(newScMax - def.ScaleMax) > 0.001f) def.ScaleMax = MathF.Max(def.ScaleMin, newScMax);
+            curY += RowH;
+        }
+
+        curY += 4;
+
         // --- Section: Trigger ---
         curY = DrawSectionLabel(fx, curY, fieldW, "TRIGGER / PROCESSING");
 
@@ -1231,6 +1260,11 @@ public class EnvObjectEditorWindow
             SpawnOffsetX = src.SpawnOffsetX,
             SpawnOffsetY = src.SpawnOffsetY,
             TintColor = src.TintColor,
+            IsForagable = src.IsForagable,
+            ForagableType = src.ForagableType,
+            RespawnTime = src.RespawnTime,
+            ScaleMin = src.ScaleMin,
+            ScaleMax = src.ScaleMax,
         };
 
         int newIdx = _env.AddDef(copy);
@@ -1319,6 +1353,12 @@ public class EnvObjectEditorWindow
                 writer.WriteBoolean("autoSpawn", def.AutoSpawn);
                 writer.WriteNumber("spawnOffsetX", def.SpawnOffsetX);
                 writer.WriteNumber("spawnOffsetY", def.SpawnOffsetY);
+                // Foragable
+                writer.WriteBoolean("isForagable", def.IsForagable);
+                writer.WriteString("foragableType", def.ForagableType);
+                writer.WriteNumber("respawnTime", def.RespawnTime);
+                writer.WriteNumber("scaleMin", def.ScaleMin);
+                writer.WriteNumber("scaleMax", def.ScaleMax);
                 // M04: Tint color
                 writer.WriteStartObject("tintColor");
                 writer.WriteNumber("r", def.TintColor.R);
