@@ -14,6 +14,7 @@ public class SettingsWindow
     private readonly EditorBase _ui;
     private GameData _gameData = null!;
     private string _settingsJsonPath = "";
+    private string _weatherJsonPath = "";
 
     // Tab state
     private enum Tab { Bloom, Shadow, Environment, Weather, General, Horde }
@@ -25,6 +26,7 @@ public class SettingsWindow
 
     // Track whether we need to save after a frame (dirty flag)
     private bool _dirty;
+    private bool _weatherDirty;
 
     /// <summary>Set to true when the user clicks Back or presses ESC.</summary>
     public bool WantsClose { get; set; }
@@ -41,10 +43,11 @@ public class SettingsWindow
         _ui = ui;
     }
 
-    public void SetGameData(GameData gameData, string settingsJsonPath)
+    public void SetGameData(GameData gameData, string settingsJsonPath, string weatherJsonPath = "")
     {
         _gameData = gameData;
         _settingsJsonPath = settingsJsonPath;
+        _weatherJsonPath = weatherJsonPath;
     }
 
     /// <summary>
@@ -58,6 +61,12 @@ public class SettingsWindow
         {
             _dirty = false;
             _gameData.Settings.Save(_settingsJsonPath);
+        }
+        if (_weatherDirty)
+        {
+            _weatherDirty = false;
+            if (!string.IsNullOrEmpty(_weatherJsonPath))
+                _gameData.Weather.Save(_weatherJsonPath);
         }
     }
 
@@ -147,9 +156,12 @@ public class SettingsWindow
                 break;
             case Tab.Environment:
                 totalContentHeight = SettingsEnvironmentTab.Draw(_ui, _gameData.Settings.Grass, contentX, y, contentW);
+                MarkDirty();
                 break;
             case Tab.Weather:
                 totalContentHeight = SettingsWeatherTab.Draw(_ui, _gameData.Settings.Weather, _gameData, contentX, y, contentW);
+                MarkDirty();
+                _weatherDirty = true;
                 break;
             case Tab.General:
                 totalContentHeight = DrawGeneralTab(contentX, y, contentW);

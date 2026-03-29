@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Text.Json;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Necroking.Core;
@@ -80,6 +81,72 @@ public class EnvironmentObjectDef
     public float RespawnTime { get; set; } = 180f;      // seconds (default 3 minutes)
     public float ScaleMin { get; set; } = 0.8f;         // random scale variation min
     public float ScaleMax { get; set; } = 1.2f;         // random scale variation max
+
+    /// <summary>
+    /// Write all properties of this def to a Utf8JsonWriter.
+    /// Caller must call WriteStartObject/WriteEndObject around this.
+    /// </summary>
+    public void WriteJson(Utf8JsonWriter writer)
+    {
+        writer.WriteString("id", Id);
+        writer.WriteString("name", Name);
+        writer.WriteString("category", Category);
+        writer.WriteString("texturePath", TexturePath);
+        writer.WriteString("heightMapPath", HeightMapPath);
+        writer.WriteNumber("spriteWorldHeight", SpriteWorldHeight);
+        writer.WriteNumber("worldHeight", WorldHeight);
+        writer.WriteNumber("pivotX", PivotX);
+        writer.WriteNumber("pivotY", PivotY);
+        writer.WriteNumber("collisionRadius", CollisionRadius);
+        writer.WriteNumber("collisionOffsetX", CollisionOffsetX);
+        writer.WriteNumber("collisionOffsetY", CollisionOffsetY);
+        writer.WriteNumber("scale", Scale);
+        writer.WriteNumber("placementScale", PlacementScale);
+        writer.WriteString("group", Group);
+        writer.WriteNumber("groupWeight", GroupWeight);
+        writer.WriteBoolean("isBuilding", IsBuilding);
+        writer.WriteBoolean("playerBuildable", PlayerBuildable);
+        writer.WriteNumber("buildingMaxHP", BuildingMaxHP);
+        writer.WriteNumber("buildingProtection", BuildingProtection);
+        writer.WriteNumber("buildingDefaultOwner", BuildingDefaultOwner);
+        writer.WriteNumber("costWood", CostWood);
+        writer.WriteNumber("costStone", CostStone);
+        writer.WriteNumber("costGold", CostGold);
+        writer.WriteString("boundTriggerID", BoundTriggerID);
+        // Processing slots
+        writer.WriteStartObject("input1");
+        writer.WriteString("kind", Input1.Kind);
+        writer.WriteString("resourceID", Input1.ResourceID);
+        writer.WriteEndObject();
+        writer.WriteStartObject("input2");
+        writer.WriteString("kind", Input2.Kind);
+        writer.WriteString("resourceID", Input2.ResourceID);
+        writer.WriteEndObject();
+        writer.WriteStartObject("output");
+        writer.WriteString("kind", Output.Kind);
+        writer.WriteString("resourceID", Output.ResourceID);
+        writer.WriteEndObject();
+        writer.WriteNumber("processTime", ProcessTime);
+        writer.WriteNumber("maxInputQueue", MaxInputQueue);
+        writer.WriteNumber("maxOutputQueue", MaxOutputQueue);
+        writer.WriteBoolean("autoSpawn", AutoSpawn);
+        writer.WriteNumber("spawnOffsetX", SpawnOffsetX);
+        writer.WriteNumber("spawnOffsetY", SpawnOffsetY);
+        // Foragable
+        writer.WriteBoolean("isForagable", IsForagable);
+        writer.WriteString("foragableType", ForagableType);
+        writer.WriteNumber("respawnTime", RespawnTime);
+        writer.WriteNumber("scaleMin", ScaleMin);
+        writer.WriteNumber("scaleMax", ScaleMax);
+        // Tint color
+        writer.WriteStartObject("tintColor");
+        writer.WriteNumber("r", TintColor.R);
+        writer.WriteNumber("g", TintColor.G);
+        writer.WriteNumber("b", TintColor.B);
+        writer.WriteNumber("a", TintColor.A);
+        writer.WriteNumber("intensity", TintColor.Intensity);
+        writer.WriteEndObject();
+    }
 }
 
 public struct PlacedObject

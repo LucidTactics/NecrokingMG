@@ -168,6 +168,13 @@ public class Game1 : Microsoft.Xna.Framework.Game
         Content.RootDirectory = "Content";
         IsMouseVisible = true;
 
+        // Save settings and weather presets when the game exits
+        Exiting += (_, _) =>
+        {
+            _gameData.Settings.Save(Path.Combine("data", "settings.json"));
+            _gameData.Weather.Save(Path.Combine("data", "weather.json"));
+        };
+
         if (LaunchArgs.Headless)
         {
             // Hide window for headless mode
@@ -909,7 +916,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         _spellEditor = new SpellEditorWindow(_editorUi);
         _spellEditor.SetGameData(_gameData);
         _settingsWindow = new SettingsWindow(_editorUi);
-        _settingsWindow.SetGameData(_gameData, Path.Combine("data", "settings.json"));
+        _settingsWindow.SetGameData(_gameData, Path.Combine("data", "settings.json"), Path.Combine("data", "weather.json"));
     }
 
     protected override void Update(GameTime gameTime)
@@ -2096,13 +2103,13 @@ public class Game1 : Microsoft.Xna.Framework.Game
             // Outer purple glow
             float outerR = 6f;
             _spriteBatch.Draw(_pixel, new Vector2(sp.X - outerR, sp.Y - outerR), null,
-                new Color(120, 40, 180, 80), 0f, Vector2.Zero,
+                Color.FromNonPremultiplied(120, 40, 180, 80), 0f, Vector2.Zero,
                 new Vector2(outerR * 2, outerR * 2), SpriteEffects.None, 0f);
 
             // Inner white bright
             float innerR = 2f;
             _spriteBatch.Draw(_pixel, new Vector2(sp.X - innerR, sp.Y - innerR), null,
-                new Color(255, 255, 255, 200), 0f, Vector2.Zero,
+                Color.FromNonPremultiplied(255, 255, 255, 200), 0f, Vector2.Zero,
                 new Vector2(innerR * 2, innerR * 2), SpriteEffects.None, 0f);
         }
     }
@@ -3171,7 +3178,10 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 // Highlight dragged corpse with brighter tint
                 Color corpseTint;
                 if (corpse.DraggedByUnitID != GameConstants.InvalidUnit)
-                    corpseTint = new Color((byte)Math.Min(255, alpha + 80), (byte)(alpha / 2), (byte)alpha, alpha);
+                {
+                    float af = alpha / 255f;
+                    corpseTint = new Color((byte)(Math.Min(255, alpha + 80) * af), (byte)(alpha / 2 * af), (byte)(alpha * af), alpha);
+                }
                 else
                     corpseTint = new Color(alpha, alpha, alpha, alpha);
                 DrawSpriteFrame(atlas, fr.Frame.Value, sp, scale, fr.FlipX, corpseTint);
@@ -3269,7 +3279,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
         // Ghost mode: semi-transparent blue tint
         if (_sim.Units.GhostMode[i])
-            tint = new Color((byte)(tint.R * 0.5f), (byte)(tint.G * 0.5f), (byte)(tint.B + 80), (byte)140);
+            tint = Color.FromNonPremultiplied((int)(tint.R * 0.5f), (int)(tint.G * 0.5f), (int)(tint.B + 80), 140);
 
         float heightOffset = _sim.Units.JumpHeight[i];
         var sp = _renderer.WorldToScreen(_sim.Units.Position[i], heightOffset, _camera);
@@ -3285,7 +3295,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
             if (!string.IsNullOrEmpty(weaponName) && _smallFont != null)
             {
                 var weaponPos = new Vector2(sp.X + 10, sp.Y - 55);
-                DrawText(_smallFont, weaponName, weaponPos, new Color(255, 220, 140, 220));
+                DrawText(_smallFont, weaponName, weaponPos, Color.FromNonPremultiplied(255, 220, 140, 220));
             }
         }
 
@@ -3300,9 +3310,9 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 var buffDef = _gameData.Buffs.Get(buff.BuffDefID);
                 Color dotColor;
                 if (buffDef?.UnitTint != null && buffDef.UnitTint.A > 0)
-                    dotColor = new Color(buffDef.UnitTint.R, buffDef.UnitTint.G, buffDef.UnitTint.B, 220);
+                    dotColor = Color.FromNonPremultiplied(buffDef.UnitTint.R, buffDef.UnitTint.G, buffDef.UnitTint.B, 220);
                 else
-                    dotColor = new Color(100, 200, 100, 220);
+                    dotColor = Color.FromNonPremultiplied(100, 200, 100, 220);
                 _spriteBatch.Draw(_pixel, new Rectangle((int)(dotStartX + dotIdx * 5), (int)dotY, 4, 4), dotColor);
                 dotIdx++;
             }
@@ -3445,14 +3455,14 @@ public class Game1 : Microsoft.Xna.Framework.Game
                     float scale = pixelSize / srcRect.Width;
                     var origin = new Vector2(srcRect.Width / 2f, srcRect.Height / 2f);
                     var color = proj.ParticleColor.ToScaledColor();
-                    _spriteBatch.Draw(fb.Texture, sp, srcRect, new Color(color.R, color.G, color.B, color.A),
+                    _spriteBatch.Draw(fb.Texture, sp, srcRect, Color.FromNonPremultiplied(color.R, color.G, color.B, color.A),
                         proj.Age * 2f, origin, scale, SpriteEffects.None, 0f);
                 }
                 else
                 {
                     // Fallback glow dot
                     float glowSize = 6f * _camera.Zoom / 32f;
-                    _spriteBatch.Draw(_pixel, sp, null, new Color(255, 120, 40, 200),
+                    _spriteBatch.Draw(_pixel, sp, null, Color.FromNonPremultiplied(255, 120, 40, 200),
                         0f, new Vector2(0.5f, 0.5f), glowSize, SpriteEffects.None, 0f);
                 }
 
@@ -3464,7 +3474,8 @@ public class Game1 : Microsoft.Xna.Framework.Game
                         proj.Position - proj.Velocity.Normalized() * (t * 0.3f),
                         proj.Height - proj.VelocityZ * t * 0.02f, _camera);
                     byte alpha = (byte)(120 / t);
-                    _spriteBatch.Draw(_pixel, trailPos, null, new Color((byte)255, (byte)100, (byte)30, alpha),
+                    float taf = alpha / 255f;
+                    _spriteBatch.Draw(_pixel, trailPos, null, new Color((byte)(255 * taf), (byte)(100 * taf), (byte)(30 * taf), alpha),
                         0f, new Vector2(0.5f, 0.5f), trailLen / t, SpriteEffects.None, 0f);
                 }
             }
@@ -3937,7 +3948,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 0f, Vector2.Zero, dnScale, SpriteEffects.None, 0f);
 
             // Text pass — use DamageNumberColor from settings
-            var color = new Color((byte)dnColor.R, (byte)dnColor.G, (byte)dnColor.B, alpha);
+            var color = Color.FromNonPremultiplied(dnColor.R, dnColor.G, dnColor.B, alpha);
             _spriteBatch.DrawString(_font, text, pos, color,
                 0f, Vector2.Zero, dnScale, SpriteEffects.None, 0f);
         }

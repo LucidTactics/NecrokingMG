@@ -1309,64 +1309,7 @@ public class EnvObjectEditorWindow
             {
                 var def = _env.GetDef(i);
                 writer.WriteStartObject();
-                writer.WriteString("id", def.Id);
-                writer.WriteString("name", def.Name);
-                writer.WriteString("category", def.Category);
-                writer.WriteString("texturePath", def.TexturePath);
-                writer.WriteString("heightMapPath", def.HeightMapPath);
-                writer.WriteNumber("spriteWorldHeight", def.SpriteWorldHeight);
-                writer.WriteNumber("worldHeight", def.WorldHeight);
-                writer.WriteNumber("pivotX", def.PivotX);
-                writer.WriteNumber("pivotY", def.PivotY);
-                writer.WriteNumber("collisionRadius", def.CollisionRadius);
-                writer.WriteNumber("collisionOffsetX", def.CollisionOffsetX);
-                writer.WriteNumber("collisionOffsetY", def.CollisionOffsetY);
-                writer.WriteNumber("scale", def.Scale);
-                writer.WriteNumber("placementScale", def.PlacementScale);
-                writer.WriteString("group", def.Group);
-                writer.WriteNumber("groupWeight", def.GroupWeight);
-                writer.WriteBoolean("isBuilding", def.IsBuilding);
-                writer.WriteBoolean("playerBuildable", def.PlayerBuildable);
-                writer.WriteNumber("buildingMaxHP", def.BuildingMaxHP);
-                writer.WriteNumber("buildingProtection", def.BuildingProtection);
-                writer.WriteNumber("buildingDefaultOwner", def.BuildingDefaultOwner);
-                writer.WriteNumber("costWood", def.CostWood);
-                writer.WriteNumber("costStone", def.CostStone);
-                writer.WriteNumber("costGold", def.CostGold);
-                writer.WriteString("boundTriggerID", def.BoundTriggerID);
-                // Processing slots
-                writer.WriteStartObject("input1");
-                writer.WriteString("kind", def.Input1.Kind);
-                writer.WriteString("resourceID", def.Input1.ResourceID);
-                writer.WriteEndObject();
-                writer.WriteStartObject("input2");
-                writer.WriteString("kind", def.Input2.Kind);
-                writer.WriteString("resourceID", def.Input2.ResourceID);
-                writer.WriteEndObject();
-                writer.WriteStartObject("output");
-                writer.WriteString("kind", def.Output.Kind);
-                writer.WriteString("resourceID", def.Output.ResourceID);
-                writer.WriteEndObject();
-                writer.WriteNumber("processTime", def.ProcessTime);
-                writer.WriteNumber("maxInputQueue", def.MaxInputQueue);
-                writer.WriteNumber("maxOutputQueue", def.MaxOutputQueue);
-                writer.WriteBoolean("autoSpawn", def.AutoSpawn);
-                writer.WriteNumber("spawnOffsetX", def.SpawnOffsetX);
-                writer.WriteNumber("spawnOffsetY", def.SpawnOffsetY);
-                // Foragable
-                writer.WriteBoolean("isForagable", def.IsForagable);
-                writer.WriteString("foragableType", def.ForagableType);
-                writer.WriteNumber("respawnTime", def.RespawnTime);
-                writer.WriteNumber("scaleMin", def.ScaleMin);
-                writer.WriteNumber("scaleMax", def.ScaleMax);
-                // M04: Tint color
-                writer.WriteStartObject("tintColor");
-                writer.WriteNumber("r", def.TintColor.R);
-                writer.WriteNumber("g", def.TintColor.G);
-                writer.WriteNumber("b", def.TintColor.B);
-                writer.WriteNumber("a", def.TintColor.A);
-                writer.WriteNumber("intensity", def.TintColor.Intensity);
-                writer.WriteEndObject();
+                def.WriteJson(writer);
                 writer.WriteEndObject();
             }
             writer.WriteEndArray();

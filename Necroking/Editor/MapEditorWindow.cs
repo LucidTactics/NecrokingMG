@@ -3690,40 +3690,7 @@ public class MapEditorWindow
             {
                 var def = _envSystem.GetDef(i);
                 writer.WriteStartObject();
-                writer.WriteString("id", def.Id);
-                writer.WriteString("name", def.Name);
-                writer.WriteString("category", def.Category);
-                writer.WriteString("texturePath", def.TexturePath);
-                writer.WriteString("heightMapPath", def.HeightMapPath);
-                writer.WriteNumber("spriteWorldHeight", def.SpriteWorldHeight);
-                writer.WriteNumber("worldHeight", def.WorldHeight);
-                writer.WriteNumber("pivotX", def.PivotX);
-                writer.WriteNumber("pivotY", def.PivotY);
-                writer.WriteNumber("collisionRadius", def.CollisionRadius);
-                writer.WriteNumber("collisionOffsetX", def.CollisionOffsetX);
-                writer.WriteNumber("collisionOffsetY", def.CollisionOffsetY);
-                writer.WriteNumber("scale", def.Scale);
-                writer.WriteNumber("placementScale", def.PlacementScale);
-                writer.WriteString("group", def.Group);
-                writer.WriteBoolean("isBuilding", def.IsBuilding);
-                writer.WriteBoolean("playerBuildable", def.PlayerBuildable);
-                writer.WriteNumber("buildingMaxHP", def.BuildingMaxHP);
-                writer.WriteNumber("buildingProtection", def.BuildingProtection);
-                writer.WriteNumber("buildingDefaultOwner", def.BuildingDefaultOwner);
-                writer.WriteNumber("costWood", def.CostWood);
-                writer.WriteNumber("costStone", def.CostStone);
-                writer.WriteNumber("costGold", def.CostGold);
-                writer.WriteString("boundTriggerID", def.BoundTriggerID);
-                writer.WriteNumber("processTime", def.ProcessTime);
-                writer.WriteBoolean("autoSpawn", def.AutoSpawn);
-                writer.WriteNumber("spawnOffsetX", def.SpawnOffsetX);
-                writer.WriteNumber("spawnOffsetY", def.SpawnOffsetY);
-                // Foragable
-                writer.WriteBoolean("isForagable", def.IsForagable);
-                writer.WriteString("foragableType", def.ForagableType);
-                writer.WriteNumber("respawnTime", def.RespawnTime);
-                writer.WriteNumber("scaleMin", def.ScaleMin);
-                writer.WriteNumber("scaleMax", def.ScaleMax);
+                def.WriteJson(writer);
                 writer.WriteEndObject();
             }
             writer.WriteEndArray();
