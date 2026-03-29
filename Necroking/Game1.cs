@@ -30,9 +30,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
     private SpriteFont? _font;
     private SpriteFont? _smallFont;
     private SpriteFont? _largeFont;
-    private BasicEffect? _shadowEffect;
-    private readonly VertexPositionColorTexture[] _shadowVerts = new VertexPositionColorTexture[4];
-    private static readonly short[] ShadowIndices = { 0, 1, 2, 0, 2, 3 };
+    private ShadowRenderer _shadowRenderer = new();
 
     // Data
     private GameData _gameData = new();
@@ -64,10 +62,11 @@ public class Game1 : Microsoft.Xna.Framework.Game
     private Dictionary<string, Flipbook> _flipbooks = new(); // keyed by flipbook ID
     private Dictionary<string, AnimationMeta> _animMeta = new(); // animation metadata
     private Microsoft.Xna.Framework.Graphics.Effect? _groundEffect;
-    private Microsoft.Xna.Framework.Graphics.Effect? _weatherFogEffect;
     private Texture2D? _groundVertexMapTex;
     private EffectManager _effectManager = new();
     private BloomRenderer _bloom = new();
+    private WeatherRenderer _weatherRenderer = new();
+    private LightningRenderer _lightningRenderer = new();
     private DebugDraw _debugDraw = new();
     private List<DamageNumber> _damageNumbers = new();
 
@@ -127,7 +126,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
     private int _scenarioScrollOffset;
 
     // Per-unit animation data
-    private struct UnitAnimData
+    internal struct UnitAnimData
     {
         public AnimController Ctrl;
         public AtlasID AtlasID;
@@ -869,13 +868,8 @@ public class Game1 : Microsoft.Xna.Framework.Game
             }
         _glowTex.SetData(glowData);
 
-        // BasicEffect for shadow quads (textured parallelograms)
-        _shadowEffect = new BasicEffect(GraphicsDevice)
-        {
-            TextureEnabled = true,
-            VertexColorEnabled = true,
-            LightingEnabled = false,
-        };
+        // Shadow renderer (BasicEffect for parallelogram quads)
+        _shadowRenderer.Init(GraphicsDevice);
 
         // Load main menu background
         string menuBgPath = Path.Combine("assets", "UI", "Background", "VampireBackground.png");
@@ -896,10 +890,15 @@ public class Game1 : Microsoft.Xna.Framework.Game
         try { _groundEffect = Content.Load<Microsoft.Xna.Framework.Graphics.Effect>("GroundShader"); }
         catch { _groundEffect = null; }
 
-        try { _weatherFogEffect = Content.Load<Microsoft.Xna.Framework.Graphics.Effect>("WeatherFog"); }
-        catch { _weatherFogEffect = null; }
+        {
+            Microsoft.Xna.Framework.Graphics.Effect? fogEffect = null;
+            try { fogEffect = Content.Load<Microsoft.Xna.Framework.Graphics.Effect>("WeatherFog"); } catch { }
+            _weatherRenderer.LoadEffect(fogEffect);
+        }
+        _weatherRenderer.Init(_graphics.PreferredBackBufferWidth, _graphics.PreferredBackBufferHeight);
 
         _grassRenderer.Init(GraphicsDevice);
+        _lightningRenderer.Init(_spriteBatch, _pixel, _glowTex, _sim, _camera, _renderer, GraphicsDevice);
 
         // Init UI editor (read-only viewer, doesn't depend on game systems)
         _uiEditor.Init(_spriteBatch, _pixel, _font, _smallFont);
@@ -2380,6 +2379,9 @@ public class Game1 : Microsoft.Xna.Framework.Game
             MathF.Round(realCameraPos.X / pixelSizeX) * pixelSizeX,
             MathF.Round(realCameraPos.Y / pixelSizeY) * pixelSizeY);
 
+        // Set weather renderer context for this frame
+        _weatherRenderer.SetContext(_spriteBatch, _pixel, _glowTex, _camera, _gameTime, _gameData, GraphicsDevice);
+
         // Begin bloom scene capture
         var bloomSettings = _activeScenario?.BloomOverride ?? _gameData.Settings.Bloom;
         bool useBloom = _bloom.IsInitialized && bloomSettings.Enabled;
@@ -2407,7 +2409,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         DrawGrass();
 
         // --- Shadows ---
-        DrawShadows();
+        _shadowRenderer.Draw(GraphicsDevice, _spriteBatch, _glowTex, _camera, _renderer, _sim, _gameData, _unitAnims, _atlases, _envSystem);
 
         // --- Corpses ---
         DrawCorpses();
@@ -2420,14 +2422,15 @@ public class Game1 : Microsoft.Xna.Framework.Game
         DrawSoulOrbs();
 
         // --- Rain (world-space, depth-sorted with scene objects) ---
-        DrawWorldRain(screenW, screenH);
+        _weatherRenderer.DrawRain(screenW, screenH);
 
         _spriteBatch.End();
 
         // --- Additive blend pass (effects, lightning) ---
         _spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.Additive, SamplerState.LinearClamp);
         DrawEffects();
-        DrawLightning();
+        _lightningRenderer.SetGameTime(_gameTime);
+        _lightningRenderer.Draw();
 
         // Bloom debug: draw test HDR shapes (multiple additive layers to exceed 1.0)
         if (_activeScenario is Scenario.Scenarios.BloomDebugScenario bloomDebug && bloomDebug.DrawTestShapes)
@@ -2499,7 +2502,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         _spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.PointClamp);
 
         // --- Weather effects (fog/haze/brightness — rain draws in scene pass) ---
-        DrawWeather(screenW, screenH);
+        _weatherRenderer.DrawFog(screenW, screenH);
 
         bool showUI = _activeScenario == null || _activeScenario.WantsUI;
         if (showUI)
@@ -2889,242 +2892,6 @@ public class Game1 : Microsoft.Xna.Framework.Game
             // Label
             string name = string.IsNullOrEmpty(def.Name) ? def.Id : def.Name;
             DrawText(_smallFont, name, new Vector2(sp.X + 10, sp.Y - 20), new Color(200, 255, 200, 200));
-        }
-    }
-
-    private void DrawShadows()
-    {
-        var shadow = _gameData.Settings.Shadow;
-        if (!shadow.Enabled) return;
-
-        bool useShader = (UnitShadowMode)shadow.UnitShadowMode == UnitShadowMode.Shader;
-
-        if (useShader)
-            DrawShaderShadows(shadow);
-        else
-            DrawEllipseShadows(shadow);
-    }
-
-    private void DrawEllipseShadows(ShadowSettings shadow)
-    {
-        // C++ style: two concentric soft ellipses per unit at ground position
-        byte outerAlpha = (byte)Math.Clamp(shadow.Opacity * 255f * 0.6f, 0, 255);
-        byte innerAlpha = (byte)Math.Clamp(shadow.Opacity * 255f * 0.35f, 0, 255);
-        var outerColor = new Color((byte)0, (byte)0, (byte)0, outerAlpha);
-        var innerColor = new Color((byte)0, (byte)0, (byte)0, innerAlpha);
-
-        for (int i = 0; i < _sim.Units.Count; i++)
-        {
-            if (!_sim.Units.Alive[i]) continue;
-            float unitRadius = _sim.Units.Radius[i];
-            var worldPos = _sim.Units.Position[i];
-            var sp = _renderer.WorldToScreen(worldPos, 0f, _camera);
-
-            float r = unitRadius * _camera.Zoom * 0.8f;
-            float ry = r * _camera.YRatio;
-
-            // Outer soft ellipse
-            _spriteBatch.Draw(_glowTex,
-                new Rectangle((int)(sp.X - r), (int)(sp.Y - ry * 0.5f), (int)(r * 2), (int)ry),
-                outerColor);
-            // Inner darker ellipse (60% size)
-            float ir = r * 0.6f;
-            float iry = ry * 0.6f;
-            _spriteBatch.Draw(_glowTex,
-                new Rectangle((int)(sp.X - ir), (int)(sp.Y - iry * 0.5f), (int)(ir * 2), (int)iry),
-                innerColor);
-        }
-
-        // Corpse shadows (fade with dissolve)
-        foreach (var corpse in _sim.Corpses)
-        {
-            var unitDef = _gameData.Units.Get(corpse.UnitDefID);
-            if (unitDef == null) continue;
-            float radius = unitDef.Radius > 0 ? unitDef.Radius : 0.495f;
-            var sp = _renderer.WorldToScreen(corpse.Position, 0f, _camera);
-            float r = radius * _camera.Zoom * 0.8f;
-            float ry = r * _camera.YRatio;
-
-            float dissolveAlpha = corpse.Dissolving ? MathF.Max(0f, 1f - corpse.DissolveTimer / 2f) : 1f;
-            byte coa = (byte)(outerAlpha * dissolveAlpha);
-            byte cia = (byte)(innerAlpha * dissolveAlpha);
-
-            _spriteBatch.Draw(_glowTex,
-                new Rectangle((int)(sp.X - r), (int)(sp.Y - ry * 0.5f), (int)(r * 2), (int)ry),
-                new Color((byte)0, (byte)0, (byte)0, coa));
-            float ir2 = r * 0.6f;
-            float iry2 = ry * 0.6f;
-            _spriteBatch.Draw(_glowTex,
-                new Rectangle((int)(sp.X - ir2), (int)(sp.Y - iry2 * 0.5f), (int)(ir2 * 2), (int)iry2),
-                new Color((byte)0, (byte)0, (byte)0, cia));
-        }
-
-        // Environment object shadows (ellipse at ground pivot, skip collected)
-        for (int i = 0; i < _envSystem.ObjectCount; i++)
-        {
-            if (!_envSystem.IsObjectVisible(i)) continue;
-            var obj = _envSystem.Objects[i];
-            var def = _envSystem.Defs[obj.DefIndex];
-            var tex = _envSystem.GetDefTexture(obj.DefIndex);
-            if (tex == null) continue;
-
-            float worldH = def.SpriteWorldHeight * obj.Scale * def.Scale;
-            float scale = worldH * _camera.Zoom / tex.Height;
-            float objW = tex.Width * scale;
-            float r = objW * 0.4f;
-            float ry = r * _camera.YRatio;
-
-            var sp = _renderer.WorldToScreen(new Vec2(obj.X, obj.Y), 0f, _camera);
-
-            _spriteBatch.Draw(_glowTex,
-                new Rectangle((int)(sp.X - r), (int)(sp.Y - ry * 0.5f), (int)(r * 2), (int)ry),
-                outerColor);
-            float ir3 = r * 0.6f;
-            float iry3 = ry * 0.6f;
-            _spriteBatch.Draw(_glowTex,
-                new Rectangle((int)(sp.X - ir3), (int)(sp.Y - iry3 * 0.5f), (int)(ir3 * 2), (int)iry3),
-                innerColor);
-        }
-    }
-
-    private void DrawShaderShadows(ShadowSettings shadow)
-    {
-        // Projected shadows as skewed parallelogram quads (matching C++ implementation).
-        // Bottom edge sits at feet, top edge shifted by sun direction vector.
-        float sunRad = shadow.SunAngle * MathF.PI / 180f;
-        float sdxDir = MathF.Cos(sunRad);
-        float sdyDir = MathF.Sin(sunRad);
-        byte shAlpha = (byte)Math.Clamp(shadow.Opacity * 255f, 0, 255);
-        var shadowColor = new Color((byte)0, (byte)0, (byte)0, shAlpha);
-
-        // End SpriteBatch, draw quads with BasicEffect, then resume SpriteBatch
-        _spriteBatch.End();
-
-        // Set up BasicEffect for shadow quads
-        _shadowEffect!.Projection = Matrix.CreateOrthographicOffCenter(
-            0, GraphicsDevice.Viewport.Width, GraphicsDevice.Viewport.Height, 0, 0, 1);
-        _shadowEffect.View = Matrix.Identity;
-        _shadowEffect.World = Matrix.Identity;
-        _shadowEffect.Alpha = 1f;
-
-        GraphicsDevice.BlendState = BlendState.AlphaBlend;
-        GraphicsDevice.SamplerStates[0] = SamplerState.LinearClamp;
-        GraphicsDevice.RasterizerState = RasterizerState.CullNone;
-
-        // Unit shadows
-        for (int i = 0; i < _sim.Units.Count; i++)
-        {
-            if (!_sim.Units.Alive[i]) continue;
-            uint uid = _sim.Units.Id[i];
-            if (!_unitAnims.TryGetValue(uid, out var animData)) continue;
-
-            var unitDef = _gameData.Units.Get(_sim.Units.UnitDefID[i]);
-            if (unitDef == null) continue;
-
-            var atlas = _atlases[(int)animData.AtlasID];
-            if (!atlas.IsLoaded || atlas.Texture == null) continue;
-
-            var fr = animData.Ctrl.GetCurrentFrame(_sim.Units.FacingAngle[i]);
-            if (fr.Frame == null) continue;
-
-            float worldH = (unitDef.SpriteWorldHeight > 0 ? unitDef.SpriteWorldHeight : 1.8f) * _sim.Units.SpriteScale[i];
-            float pixelH = worldH * _camera.Zoom;
-            float scale = pixelH / animData.RefFrameHeight;
-
-            var srcRect = fr.Frame.Value.Rect;
-            float destW = srcRect.Width * scale;
-            float destH = srcRect.Height * scale;
-            float shadowH = destH * shadow.Squash;
-
-            float anchorX = fr.FlipX ? (1f - fr.Frame.Value.PivotX) : fr.Frame.Value.PivotX;
-            float leftOff = destW * anchorX;
-            float rightOff = destW * (1f - anchorX);
-
-            float swLen = worldH * shadow.LengthScale * _camera.Zoom;
-            float sdx = sdxDir * swLen;
-            float sdy = sdyDir * swLen * _camera.YRatio;
-
-            var feetSp = _renderer.WorldToScreen(_sim.Units.Position[i], 0f, _camera);
-
-            // UV coordinates from atlas
-            float texW = atlas.Texture.Width;
-            float texH = atlas.Texture.Height;
-            float u0 = srcRect.X / texW;
-            float v0 = srcRect.Y / texH;
-            float u1 = (srcRect.X + srcRect.Width) / texW;
-            float v1 = (srcRect.Y + srcRect.Height) / texH;
-            if (fr.FlipX) { (u0, u1) = (u1, u0); }
-
-            DrawShadowQuad(atlas.Texture, feetSp.X, feetSp.Y,
-                leftOff, rightOff, shadowH, sdx, sdy,
-                u0, v0, u1, v1, shadowColor);
-        }
-
-        // Environment object shadows (skip collected foragables)
-        for (int i = 0; i < _envSystem.ObjectCount; i++)
-        {
-            if (!_envSystem.IsObjectVisible(i)) continue;
-            var obj = _envSystem.Objects[i];
-            var def = _envSystem.Defs[obj.DefIndex];
-            var tex = _envSystem.GetDefTexture(obj.DefIndex);
-            if (tex == null) continue;
-
-            float worldH = def.SpriteWorldHeight * obj.Scale * def.Scale;
-            float pixelH = worldH * _camera.Zoom;
-            float scale = pixelH / tex.Height;
-            float destW = tex.Width * scale;
-            float destH = pixelH;
-            float shadowH = destH * shadow.Squash;
-
-            float leftOff = destW * def.PivotX;
-            float rightOff = destW * (1f - def.PivotX);
-
-            float swLen = worldH * shadow.LengthScale * _camera.Zoom;
-            float sdx = sdxDir * swLen;
-            float sdy = sdyDir * swLen * _camera.YRatio;
-
-            var feetSp = _renderer.WorldToScreen(new Vec2(obj.X, obj.Y), 0f, _camera);
-
-            DrawShadowQuad(tex, feetSp.X, feetSp.Y,
-                leftOff, rightOff, shadowH, sdx, sdy,
-                0f, 0f, 1f, 1f, shadowColor);
-        }
-
-        // Resume SpriteBatch
-        _spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.LinearClamp);
-    }
-
-    /// <summary>
-    /// Draw a shadow as a textured parallelogram: bottom edge at feet, top edge skewed by sun offset.
-    /// Matches the C++ rlBegin(RL_QUADS) shadow rendering.
-    /// </summary>
-    private void DrawShadowQuad(Texture2D texture, float feetX, float feetY,
-        float leftOff, float rightOff, float shadowH, float sdx, float sdy,
-        float u0, float v0, float u1, float v1, Color color)
-    {
-        // Bottom-left/right at feet level
-        float blX = feetX - leftOff;
-        float blY = feetY;
-        float brX = feetX + rightOff;
-        float brY = feetY;
-
-        // Top-left/right shifted by sun direction
-        float tlX = feetX - leftOff + sdx;
-        float tlY = feetY - shadowH + sdy;
-        float trX = feetX + rightOff + sdx;
-        float trY = feetY - shadowH + sdy;
-
-        _shadowVerts[0] = new VertexPositionColorTexture(new Vector3(tlX, tlY, 0), color, new Vector2(u0, v0));
-        _shadowVerts[1] = new VertexPositionColorTexture(new Vector3(blX, blY, 0), color, new Vector2(u0, v1));
-        _shadowVerts[2] = new VertexPositionColorTexture(new Vector3(brX, brY, 0), color, new Vector2(u1, v1));
-        _shadowVerts[3] = new VertexPositionColorTexture(new Vector3(trX, trY, 0), color, new Vector2(u1, v0));
-
-        _shadowEffect!.Texture = texture;
-        foreach (var pass in _shadowEffect.CurrentTechnique.Passes)
-        {
-            pass.Apply();
-            GraphicsDevice.DrawUserIndexedPrimitives(
-                PrimitiveType.TriangleList, _shadowVerts, 0, 4, ShadowIndices, 0, 2);
         }
     }
 
@@ -3529,398 +3296,6 @@ public class Game1 : Microsoft.Xna.Framework.Game
             {
                 _effectManager.SpawnExplosion(impact.Position, impact.AoeRadius);
             }
-        }
-    }
-
-    private void DrawLightning()
-    {
-        // Draw active strikes
-        foreach (var strike in _sim.Lightning.Strikes)
-        {
-            if (!strike.Alive) continue;
-
-            if (strike.TelegraphTimer < strike.TelegraphDuration)
-            {
-                // Telegraph: pulsing circle on ground
-                var sp = _renderer.WorldToScreen(strike.TargetPos, 0f, _camera);
-                float pulse = 0.5f + 0.5f * MathF.Sin(strike.TelegraphTimer * 20f);
-                float radius = strike.AoeRadius * _camera.Zoom * pulse;
-                byte alpha = (byte)(100 * pulse);
-                _spriteBatch.Draw(_glowTex, sp, null, new Color((byte)255, (byte)200, (byte)100, alpha),
-                    0f, new Vector2(32f, 32f), new Vector2(radius * 2 / 32f, radius * _camera.YRatio / 32f), SpriteEffects.None, 0f);
-            }
-            else
-            {
-                var sp = _renderer.WorldToScreen(strike.TargetPos, 0f, _camera);
-                float fade = 1f - strike.EffectTimer / strike.EffectDuration;
-
-                if (strike.Visual == StrikeVisual.GodRay)
-                {
-                    // God ray: beam from sky to ground
-                    float sH = GraphicsDevice.Viewport.Height;
-                    DrawGodRay(new Vector2(sp.X - 200f, sp.Y - sH * 0.6f), sp,
-                        strike.Style, strike.GodRay, _gameTime, strike.EffectTimer, strike.EffectDuration);
-                }
-                else
-                {
-                    // Lightning effect: bright flash (radial glow, not rectangle)
-                    float radius = strike.AoeRadius * _camera.Zoom;
-                    byte coreAlpha = (byte)(255 * fade);
-                    var coreColor = strike.Style.CoreColor.ToScaledColor();
-                    _spriteBatch.Draw(_glowTex, sp, null,
-                        new Color(coreColor.R, coreColor.G, coreColor.B, coreAlpha),
-                        0f, new Vector2(32f, 32f), new Vector2(radius / 32f, radius * _camera.YRatio * 0.5f / 32f),
-                        SpriteEffects.None, 0f);
-
-                    // Procedural lightning bolt from sky (start above top of screen)
-                    float skyY = -50f; // well above screen edge
-                    float skyX = sp.X - 50f + (sp.Y - skyY) * 0.05f; // slight angle
-                    DrawLightningBolt(new Vector2(skyX, skyY), sp, strike.Style, fade);
-                }
-            }
-        }
-
-        // Draw active zaps
-        foreach (var zap in _sim.Lightning.Zaps)
-        {
-            if (!zap.Alive) continue;
-            var startSp = _renderer.WorldToScreen(zap.StartPos, zap.StartHeight, _camera);
-            var endSp = _renderer.WorldToScreen(zap.EndPos, zap.EndHeight, _camera);
-            float fade = 1f - zap.Timer / zap.Duration;
-            DrawLightningBolt(startSp, endSp, zap.Style, fade);
-        }
-
-        // Draw active beams
-        foreach (var beam in _sim.Lightning.Beams)
-        {
-            if (!beam.Alive) continue;
-            int casterIdx = UnitUtil.ResolveUnitIndex(_sim.Units, beam.CasterID);
-            int targetIdx = UnitUtil.ResolveUnitIndex(_sim.Units, beam.TargetID);
-            if (casterIdx < 0 || targetIdx < 0) continue;
-
-            var startSp = _renderer.WorldToScreen(_sim.Units.EffectSpawnPos2D[casterIdx],
-                _sim.Units.EffectSpawnHeight[casterIdx], _camera);
-            var endSp = _renderer.WorldToScreen(_sim.Units.Position[targetIdx], 1f, _camera);
-            DrawLightningBolt(startSp, endSp, beam.Style, 1f);
-        }
-
-        // Draw active drains
-        foreach (var drain in _sim.Lightning.Drains)
-        {
-            if (!drain.Alive) continue;
-            int casterIdx = UnitUtil.ResolveUnitIndex(_sim.Units, drain.CasterID);
-            if (casterIdx < 0) continue;
-
-            Vec2 targetPos = drain.TargetCorpseIdx >= 0 ? drain.CorpsePos : Vec2.Zero;
-            int targetIdx = UnitUtil.ResolveUnitIndex(_sim.Units, drain.TargetID);
-            if (targetIdx >= 0) targetPos = _sim.Units.Position[targetIdx];
-
-            var startSp = _renderer.WorldToScreen(_sim.Units.EffectSpawnPos2D[casterIdx],
-                _sim.Units.EffectSpawnHeight[casterIdx], _camera);
-            var endSp = _renderer.WorldToScreen(targetPos, 1f, _camera);
-
-            // Draw multiple tendrils with sway
-            for (int t = 0; t < drain.TendrilCount; t++)
-            {
-                float offset = (t - drain.TendrilCount / 2f) * 8f;
-                float sway = MathF.Sin(drain.Elapsed * 3f + t * 2f) * 6f;
-                var swayStart = new Vector2(startSp.X + offset, startSp.Y);
-                var swayEnd = new Vector2(endSp.X + sway, endSp.Y);
-                DrawTendril(swayStart, swayEnd, drain.CoreColor, drain.GlowColor, drain.Elapsed);
-            }
-        }
-    }
-
-    private void DrawLightningBolt(Vector2 start, Vector2 end, LightningStyle style, float fade)
-    {
-        // Generate main bolt via recursive midpoint displacement
-        uint seed = (uint)(start.X * 1000 + end.Y * 7 + _gameTime * 60);
-        var mainPoints = GenerateBoltPoints(start, end, style.Subdivisions, style.Displacement, ref seed);
-        if (mainPoints.Count < 2) return;
-
-        // Generate branches from the main bolt
-        var branches = GenerateBranches(mainPoints, style, ref seed);
-
-        byte coreAlpha = (byte)(fade * 255);
-        var coreColor = style.CoreColor.ToScaledColor();
-        var glowColor = style.GlowColor.ToScaledColor();
-
-        // Draw branches first (behind main bolt), with reduced width/alpha
-        float branchCoreW = style.CoreWidth * style.BranchDecay;
-        float branchGlowW = style.GlowWidth * style.BranchDecay;
-        byte branchCoreA = (byte)(coreAlpha * 0.7f);
-        byte branchGlowA = (byte)(coreAlpha * 0.2f);
-
-        foreach (var branch in branches)
-        {
-            DrawBoltPolyline(branch, coreColor, glowColor,
-                branchCoreW * fade, branchGlowW * fade, branchCoreA, branchGlowA);
-        }
-
-        // Draw main bolt on top
-        DrawBoltPolyline(mainPoints, coreColor, glowColor,
-            style.CoreWidth * fade, style.GlowWidth * fade, coreAlpha, (byte)(coreAlpha * 0.4f));
-    }
-
-    /// <summary>
-    /// Recursive midpoint displacement: each iteration doubles the point count,
-    /// inserting displaced midpoints between every pair.
-    /// Uses pre-allocated capacity to reduce GC pressure.
-    /// </summary>
-    private static List<Vector2> GenerateBoltPoints(Vector2 start, Vector2 end,
-        int subdivisions, float displacement, ref uint seed)
-    {
-        // Final point count = 2^subdivisions + 1. Pre-allocate to avoid resizing.
-        int finalCount = (1 << subdivisions) + 1;
-        var points = new List<Vector2>(finalCount) { start, end };
-
-        for (int iter = 0; iter < subdivisions; iter++)
-        {
-            var newPoints = new List<Vector2>(points.Count * 2);
-            for (int i = 0; i < points.Count - 1; i++)
-            {
-                newPoints.Add(points[i]);
-
-                // Midpoint with perpendicular displacement
-                var mid = (points[i] + points[i + 1]) * 0.5f;
-                var seg = points[i + 1] - points[i];
-                float segLen = seg.Length();
-                if (segLen < 0.5f) { continue; }
-                var perp = new Vector2(-seg.Y / segLen, seg.X / segLen);
-
-                seed = seed * 1103515245 + 12345;
-                float offset = ((seed % 1000) / 500f - 1f) * segLen * displacement;
-                newPoints.Add(mid + perp * offset);
-            }
-            newPoints.Add(points[^1]);
-            points = newPoints;
-        }
-        return points;
-    }
-
-    /// <summary>
-    /// Generate forking branches from the main bolt. Branches spawn from the middle
-    /// 50% of the bolt (25%-75%), each forking at a natural angle off the main path.
-    /// </summary>
-    private static List<List<Vector2>> GenerateBranches(List<Vector2> mainPoints,
-        LightningStyle style, ref uint seed)
-    {
-        var branches = new List<List<Vector2>>();
-        if (style.MaxBranches <= 0 || style.BranchChance <= 0f) return branches;
-
-        int count = mainPoints.Count;
-        int startIdx = count / 4;       // 25%
-        int endIdx = count * 3 / 4;     // 75%
-
-        for (int i = startIdx; i < endIdx && branches.Count < style.MaxBranches; i++)
-        {
-            seed = seed * 1103515245 + 12345;
-            float roll = (seed % 1000) / 1000f;
-            if (roll > style.BranchChance) continue;
-
-            // Branch direction: tangent + perpendicular * 0.8 (random side)
-            Vector2 tangent;
-            if (i + 1 < count)
-                tangent = mainPoints[i + 1] - mainPoints[i];
-            else
-                tangent = mainPoints[i] - mainPoints[i - 1];
-            float tanLen = tangent.Length();
-            if (tanLen < 0.1f) continue;
-            tangent /= tanLen;
-
-            var perp = new Vector2(-tangent.Y, tangent.X);
-            seed = seed * 1103515245 + 12345;
-            float side = (seed % 2 == 0) ? 1f : -1f;
-
-            var branchDir = tangent + perp * side * 0.8f;
-            float bdLen = branchDir.Length();
-            if (bdLen > 0.01f) branchDir /= bdLen;
-
-            // Branch length: fraction of remaining main bolt distance
-            float remainDist = (mainPoints[^1] - mainPoints[i]).Length();
-            float branchLen = remainDist * style.BranchLength;
-            if (branchLen < 5f) continue;
-
-            Vector2 branchEnd = mainPoints[i] + branchDir * branchLen;
-
-            // Generate branch bolt with fewer subdivisions, no further branching
-            int branchSubdiv = Math.Max(1, style.Subdivisions - 2);
-            var branchPoints = GenerateBoltPoints(mainPoints[i], branchEnd,
-                branchSubdiv, style.Displacement, ref seed);
-            branches.Add(branchPoints);
-        }
-        return branches;
-    }
-
-    /// <summary>
-    /// Draw a polyline as glow + core segments.
-    /// </summary>
-    private void DrawBoltPolyline(List<Vector2> points, Color coreColor, Color glowColor,
-        float coreWidth, float glowWidth, byte coreAlpha, byte glowAlpha)
-    {
-        for (int i = 0; i < points.Count - 1; i++)
-        {
-            var segDir = points[i + 1] - points[i];
-            float segLen = segDir.Length();
-            if (segLen < 0.5f) continue;
-            float angle = MathF.Atan2(segDir.Y, segDir.X);
-
-            // Glow (wider, dimmer)
-            _spriteBatch.Draw(_pixel, points[i], null,
-                new Color(glowColor.R, glowColor.G, glowColor.B, glowAlpha),
-                angle, new Vector2(0, 0.5f), new Vector2(segLen, glowWidth),
-                SpriteEffects.None, 0f);
-
-            // Core (narrow, bright)
-            _spriteBatch.Draw(_pixel, points[i], null,
-                new Color(coreColor.R, coreColor.G, coreColor.B, coreAlpha),
-                angle, new Vector2(0, 0.5f), new Vector2(segLen, coreWidth),
-                SpriteEffects.None, 0f);
-        }
-    }
-
-    private static float GodRayNoise(float y, float x, float t, float scale, float speed)
-    {
-        float s1 = MathF.Sin(y * scale + t * speed * 2.1f + x * 0.3f);
-        float s2 = MathF.Sin(y * scale * 1.7f - t * speed * 1.4f + x * 0.5f);
-        float s3 = MathF.Sin(y * scale * 0.6f + t * speed * 0.8f - x * 0.2f);
-        return (s1 * s2 + s3) * 0.5f + 0.5f;
-    }
-
-    private void DrawGodRay(Vector2 sky, Vector2 ground, LightningStyle style, GodRayParams p,
-                             float elapsed, float effectTimer, float effectDuration)
-    {
-        float shimmer = MathF.Sin(elapsed * 8f) * 0.15f + 0.85f;
-        float baseAlpha = shimmer;
-
-        if (effectDuration > 0f)
-        {
-            float remaining = effectDuration - effectTimer;
-            if (remaining < 0.15f) baseAlpha *= MathF.Max(0f, remaining / 0.15f);
-        }
-        if (baseAlpha <= 0.001f) return;
-
-        var core = style.CoreColor.ToScaledColor();
-        var glow = style.GlowColor.ToScaledColor();
-        var mid = new Color((byte)((core.R + glow.R) / 2), (byte)((core.G + glow.G) / 2),
-                            (byte)((core.B + glow.B) / 2), (byte)((core.A + glow.A) / 2));
-
-        float cw = style.CoreWidth;
-        float gw = style.GlowWidth;
-
-        // 4 layers from outer glow to inner core
-        float[] layerT = { 1f, 0.66f, 0.33f, 0f };
-        Color[] layerColors = { glow, mid, core, core };
-        float[] layerAlphas = { 0.12f, 0.25f, 0.45f, 0.75f };
-
-        float edgeSoft = MathF.Max(0f, MathF.Min(1f, p.EdgeSoftness));
-        const int EdgeSublayers = 3;
-        const int Slices = 20;
-
-        for (int li = 0; li < 4; li++)
-        {
-            float w = cw + (gw - cw) * layerT[li];
-            float widthTop = 5f * w;
-            float widthBottom = 30f * w;
-            Color lc = layerColors[li];
-            float lAlpha = layerAlphas[li];
-
-            // Draw edge sub-layers (wider, more transparent) then core layer
-            for (int sub = EdgeSublayers; sub >= 0; sub--)
-            {
-                float expand = sub > 0 ? edgeSoft * sub / EdgeSublayers : 0f;
-                float subAlphaMul = sub > 0 ? (1f / (sub + 1)) * 0.5f : 1f;
-                float wMul = 1f + expand;
-                float layerA = baseAlpha * lAlpha * subAlphaMul;
-                if (layerA <= 0.001f) continue;
-
-                byte ca = (byte)(lc.A * MathF.Min(1f, layerA));
-
-                for (int s = 0; s < Slices; s++)
-                {
-                    float t0 = s / (float)Slices;
-                    float t1 = (s + 1) / (float)Slices;
-
-                    float y0 = sky.Y + (ground.Y - sky.Y) * t0;
-                    float y1 = sky.Y + (ground.Y - sky.Y) * t1;
-                    float cx0 = sky.X + (ground.X - sky.X) * t0;
-                    float cx1 = sky.X + (ground.X - sky.X) * t1;
-                    float hw0 = (widthTop + (widthBottom - widthTop) * t0) * wMul;
-                    float hw1 = (widthTop + (widthBottom - widthTop) * t1) * wMul;
-
-                    // Noise modulation on innermost sub-layer
-                    float n = 1f;
-                    if (p.NoiseStrength > 0.001f && sub == 0)
-                    {
-                        float raw = GodRayNoise(t0 * 10f, cx0 * 0.01f, elapsed, p.NoiseScale, p.NoiseSpeed);
-                        n = 1f - p.NoiseStrength * 0.6f + p.NoiseStrength * 0.6f * raw;
-                    }
-
-                    byte sliceA = (byte)(ca * n);
-                    Color sliceColor = new(lc.R, lc.G, lc.B, sliceA);
-
-                    // Draw quad as two segments (left half, right half)
-                    float midX0 = cx0;
-                    float midX1 = cx1;
-                    float sliceH = y1 - y0;
-                    if (sliceH < 0.5f) continue;
-
-                    // Left side of trapezoid
-                    _spriteBatch.Draw(_pixel, new Vector2(midX0 - hw0, y0), null, sliceColor,
-                        0f, Vector2.Zero, new Vector2(hw0 * 2, sliceH), SpriteEffects.None, 0f);
-                }
-            }
-
-            // Ground aura ellipse
-            float auraW = widthBottom * 1.1f;
-            float auraH = widthBottom * 0.35f;
-            float auraAlpha = baseAlpha * lAlpha * 0.4f;
-            byte ga = (byte)(lc.A * MathF.Min(1f, auraAlpha));
-            Color auraColor = new(lc.R, lc.G, lc.B, ga);
-
-            _spriteBatch.Draw(_pixel, new Vector2(ground.X - auraW, ground.Y - auraH * 0.5f), null,
-                auraColor, 0f, Vector2.Zero, new Vector2(auraW * 2, auraH), SpriteEffects.None, 0f);
-        }
-    }
-
-    private void DrawTendril(Vector2 start, Vector2 end, HdrColor coreColor, HdrColor glowColor, float time)
-    {
-        var dir = end - start;
-        float length = dir.Length();
-        if (length < 1f) return;
-        var norm = dir / length;
-        var perp = new Vector2(-norm.Y, norm.X);
-
-        int segments = Math.Max(3, (int)(length / 20f));
-        var points = new Vector2[segments + 1];
-        points[0] = start;
-        points[segments] = end;
-
-        for (int i = 1; i < segments; i++)
-        {
-            float t = i / (float)segments;
-            var basePos = Vector2.Lerp(start, end, t);
-            float arc = MathF.Sin(t * MathF.PI) * 20f; // arc height
-            float wave = MathF.Sin(time * 4f + t * 8f) * 5f;
-            points[i] = basePos + perp * (arc + wave);
-        }
-
-        var core = coreColor.ToScaledColor();
-        var glow = glowColor.ToScaledColor();
-
-        for (int i = 0; i < segments; i++)
-        {
-            var segDir = points[i + 1] - points[i];
-            float segLen = segDir.Length();
-            if (segLen < 0.5f) continue;
-            float angle = MathF.Atan2(segDir.Y, segDir.X);
-
-            _spriteBatch.Draw(_pixel, points[i], null,
-                new Color(glow.R, glow.G, glow.B, (byte)120),
-                angle, new Vector2(0, 0.5f), new Vector2(segLen, 4f), SpriteEffects.None, 0f);
-            _spriteBatch.Draw(_pixel, points[i], null,
-                new Color(core.R, core.G, core.B, (byte)200),
-                angle, new Vector2(0, 0.5f), new Vector2(segLen, 1.5f), SpriteEffects.None, 0f);
         }
     }
 
@@ -4451,73 +3826,6 @@ public class Game1 : Microsoft.Xna.Framework.Game
                     (int)MathF.Max(1, eW), (int)MathF.Max(1, eH)),
                     null, Color.FromNonPremultiplied(200, 215, 235, sAlpha),
                     0f, Vector2.Zero, SpriteEffects.None, 0f);
-            }
-        }
-    }
-
-    private void DrawWeather(int screenW, int screenH)
-    {
-        // Check if weather is enabled and has a preset
-        if (!_gameData.Settings.Weather.Enabled) return;
-        string presetId = _gameData.Settings.Weather.ActivePreset;
-        if (string.IsNullOrEmpty(presetId)) return;
-        var preset = _gameData.Weather.Get(presetId);
-        if (preset == null) return;
-        var fx = preset.Effects;
-
-        // Rain draws in scene pass via DrawWorldRain() for depth sorting with world objects.
-
-        // Fog/haze/brightness overlay (shader-based simplex noise fog)
-        if (fx.FogDensity > 0.01f || fx.HazeStrength > 0.01f || fx.Brightness < 0.95f)
-        {
-            if (_weatherFogEffect != null)
-            {
-                // End current SpriteBatch to switch to shader mode
-                _spriteBatch.End();
-
-                // Compute world-space mapping for fog anchoring
-                float halfWorldW = screenW * 0.5f / _camera.Zoom;
-                float halfWorldH = screenH * 0.5f / (_camera.Zoom * _camera.YRatio);
-                var fogOrigin = new Vector2(_camera.Position.X - halfWorldW, _camera.Position.Y + halfWorldH);
-                var fogWorldScale = new Vector2(halfWorldW * 2.0f, -halfWorldH * 2.0f);
-
-                // Set shader uniforms
-                _weatherFogEffect.Parameters["FogDensity"]?.SetValue(fx.FogDensity);
-                _weatherFogEffect.Parameters["FogColor"]?.SetValue(new Microsoft.Xna.Framework.Vector3(fx.FogR, fx.FogG, fx.FogB));
-                _weatherFogEffect.Parameters["FogSpeed"]?.SetValue(fx.FogSpeed);
-                _weatherFogEffect.Parameters["FogScaleU"]?.SetValue(fx.FogScale);
-                _weatherFogEffect.Parameters["Time"]?.SetValue(_gameTime);
-                _weatherFogEffect.Parameters["FogWorldOrigin"]?.SetValue(fogOrigin);
-                _weatherFogEffect.Parameters["FogWorldScale"]?.SetValue(fogWorldScale);
-                _weatherFogEffect.Parameters["HazeStrength"]?.SetValue(fx.HazeStrength);
-                _weatherFogEffect.Parameters["HazeColor"]?.SetValue(new Microsoft.Xna.Framework.Vector3(fx.HazeR, fx.HazeG, fx.HazeB));
-                _weatherFogEffect.Parameters["Brightness"]?.SetValue(fx.Brightness);
-
-                // Draw fullscreen quad with fog shader (premultiplied alpha output)
-                _spriteBatch.Begin(SpriteSortMode.Immediate, BlendState.AlphaBlend, SamplerState.PointClamp,
-                    null, null, _weatherFogEffect);
-                _spriteBatch.Draw(_pixel, new Rectangle(0, 0, screenW, screenH), Color.White);
-                _spriteBatch.End();
-
-                // Resume normal SpriteBatch for remaining HUD drawing
-                _spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.PointClamp);
-            }
-            else
-            {
-                // Fallback: flat-color fog overlay (no shader available)
-                if (fx.FogDensity > 0.01f || fx.HazeStrength > 0.01f)
-                {
-                    float fogAlpha = MathF.Min(fx.FogDensity * 0.5f + fx.HazeStrength * 0.3f, 0.4f);
-                    byte fR = (byte)(fx.FogR * 255), fG = (byte)(fx.FogG * 255), fB = (byte)(fx.FogB * 255);
-                    _spriteBatch.Draw(_pixel, new Rectangle(0, 0, screenW, screenH),
-                        new Color(fR, fG, fB, (byte)(fogAlpha * 255)));
-                }
-                if (fx.Brightness < 0.95f)
-                {
-                    float darkAmount = 1f - fx.Brightness;
-                    _spriteBatch.Draw(_pixel, new Rectangle(0, 0, screenW, screenH),
-                        new Color((byte)0, (byte)0, (byte)0, (byte)(darkAmount * 180)));
-                }
             }
         }
     }
