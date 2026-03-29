@@ -163,9 +163,15 @@ public class WeatherRenderer
         float yRatio = _camera.YRatio;
         float heightScale = _camera.HeightScale;
         float minZoom = _camera.MinZoom;
+        float maxZoom = _camera.MaxZoom;
         float baseFallRate = fx.RainSpeed / 60.0f;
         float windAngleRad = fx.RainWindAngle * MathF.PI / 180.0f;
+        float windSin = MathF.Sin(windAngleRad);
         float globalTime = _gameTime;
+
+        // Zoom-based drop size: 2x at max zoom in, 1x at max zoom out
+        float zoomT = MathUtil.Clamp((zoom - minZoom) / (maxZoom - minZoom), 0f, 1f);
+        float zoomDropScale = 1.0f + zoomT; // 1.0 at min zoom, 2.0 at max zoom
 
         float halfScreenW = screenW * 0.5f;
         float halfScreenH = screenH * 0.5f;
@@ -229,15 +235,28 @@ public class WeatherRenderer
 
                 float fallProgress = cyclePhase / fallFraction;
                 float currentHeight = RAIN_FALL_HEIGHT * (1.0f - fallProgress);
-                float streakH = fx.RainLength * (1.0f + (fx.RainNearScale - 1.0f) * depth);
 
-                float driftTop = currentHeight * RAIN_WIND_DRIFT_SCALE * MathF.Sin(windAngleRad);
-                float streakWorldH = streakH / (zoom * yRatio) * 2.0f;
-                float driftBot = (currentHeight - streakWorldH) * RAIN_WIND_DRIFT_SCALE * MathF.Sin(windAngleRad);
+                // Streak length in height units, scaled by zoom (2x at max zoom, 1x at min)
+                float baseStreakH = fx.RainLength * zoomDropScale / heightScale;
+                float streakH = baseStreakH * (1.0f + (fx.RainNearScale - 1.0f) * depth);
+                float topHeight = currentHeight + streakH;
+                float botHeight = currentHeight;
 
-                var topSp = _camera.WorldToScreen(new Vec2(wx + driftTop, wy), currentHeight, screenW, screenH);
-                var botSp = _camera.WorldToScreen(new Vec2(wx + driftBot, wy),
-                    MathF.Max(0f, currentHeight - streakWorldH), screenW, screenH);
+                // Wind drift at top and bottom of streak
+                float driftTop = windSin * (RAIN_FALL_HEIGHT - topHeight) * RAIN_WIND_DRIFT_SCALE;
+                float driftBot = windSin * (RAIN_FALL_HEIGHT - botHeight) * RAIN_WIND_DRIFT_SCALE;
+
+                // Project to screen using direct math (matches C++ projection)
+                float halfSW = screenW * 0.5f;
+                float halfSH = screenH * 0.5f;
+                float projX = zoom;
+                float projY = zoom * yRatio;
+                float topSX = (wx + driftTop - _camera.Position.X) * projX + halfSW;
+                float topSY = (wy - _camera.Position.Y) * projY + halfSH - topHeight * heightScale;
+                float botSX = (wx + driftBot - _camera.Position.X) * projX + halfSW;
+                float botSY = (wy - _camera.Position.Y) * projY + halfSH - botHeight * heightScale;
+                var topSp = new Vector2(topSX, topSY);
+                var botSp = new Vector2(botSX, botSY);
 
                 if (topSp.X < -50 || topSp.X > screenW + 50 || botSp.Y < -50 || topSp.Y > screenH + 50)
                     continue;
@@ -245,7 +264,7 @@ public class WeatherRenderer
                 byte colR = (byte)(170 + (int)(30 * depth));
                 byte colG = (byte)(185 + (int)(25 * depth));
                 byte colB = (byte)(215 + (int)(15 * depth));
-                float thickness = 1.0f + 0.5f * depth;
+                float thickness = (1.0f + 0.5f * depth) * zoomDropScale;
 
                 float alphaVal = fx.RainAlpha * (fx.RainFarOpacity + (1f - fx.RainFarOpacity) * depth)
                     * distFade * (0.7f + HashFloat(h0) * 0.3f);
@@ -268,7 +287,7 @@ public class WeatherRenderer
                 splashCount++;
 
                 float splashProgress = (cyclePhase - fallFraction) / (1f - fallFraction);
-                float radius = (1.5f + 2.5f * depth) * (zoom / 32f) * splashProgress;
+                float radius = (1.5f + 2.5f * depth) * (zoom / 32f) * splashProgress * fx.RainSplashScale;
                 float splashAlpha = fx.RainAlpha * (1f - splashProgress) * distFade * 0.6f;
                 byte sAlpha = (byte)(MathUtil.Clamp(splashAlpha, 0f, 1f) * 255);
                 if (sAlpha == 0) continue;

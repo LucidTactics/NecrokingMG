@@ -37,6 +37,7 @@ public class WeatherEffects
     [JsonPropertyName("rainLength")] public float RainLength { get; set; } = 15.0f;
     [JsonPropertyName("rainFarOpacity")] public float RainFarOpacity { get; set; } = 0.5f;
     [JsonPropertyName("rainNearScale")] public float RainNearScale { get; set; } = 1.5f;
+    [JsonPropertyName("rainSplashScale")] public float RainSplashScale { get; set; } = 1.0f;
     [JsonPropertyName("windStrength")] public float WindStrength { get; set; }
     [JsonPropertyName("windAngle")] public float WindAngle { get; set; }
 }

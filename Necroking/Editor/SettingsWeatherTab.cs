@@ -240,6 +240,10 @@ public static class SettingsWeatherTab
         fx.RainNearScale = Math.Max(0.1f, fx.RainNearScale);
         curY += RowH;
 
+        fx.RainSplashScale = ui.DrawFloatField("wthr_rainSplSc", "Splash Scale", fx.RainSplashScale, x, curY, w, 0.1f);
+        fx.RainSplashScale = Math.Max(0.1f, fx.RainSplashScale);
+        curY += RowH;
+
         // --- Section: Wind ---
         curY += 4;
         ui.DrawText("-- Wind --", new Vector2(x, curY), EditorBase.AccentColor);
