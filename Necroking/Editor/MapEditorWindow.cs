@@ -1357,7 +1357,8 @@ public class MapEditorWindow
                         // RM03: Check collision radius overlap before placing
                         if (_envSystem.CanPlaceObject(defToPlace, worldPos.X, worldPos.Y))
                         {
-                            int newIdx = _envSystem.AddObject((ushort)defToPlace, worldPos.X, worldPos.Y);
+                            float placeScale = GetRandomPlacementScale(defToPlace);
+                            int newIdx = _envSystem.AddObject((ushort)defToPlace, worldPos.X, worldPos.Y, placeScale);
                             PushUndo(new UndoObjectPlace { Env = _envSystem, ObjectIndex = newIdx });
                             AutoCreateTriggerInstance(newIdx); // RM06
                             RebakeObjectCollisions(); // RM04
@@ -1537,8 +1538,9 @@ public class MapEditorWindow
 
                 if (!tooClose)
                 {
-                    int newIdx = _envSystem.AddObject((ushort)defToPlace, px, py);
-                    _batchPlacedObjects?.Add(((ushort)defToPlace, px, py, 1f, 0f, newIdx));
+                    float paintScale = GetRandomPlacementScale(defToPlace);
+                    int newIdx = _envSystem.AddObject((ushort)defToPlace, px, py, paintScale);
+                    _batchPlacedObjects?.Add(((ushort)defToPlace, px, py, paintScale, 0f, newIdx));
                     AutoCreateTriggerInstance(newIdx); // RM06
                 }
             }
@@ -1586,7 +1588,8 @@ public class MapEditorWindow
 
                 if (!tooClose)
                 {
-                    int newIdx = _envSystem.AddObject((ushort)SelectedEnvDefIndex, px, py);
+                    float groupScale = GetRandomPlacementScale(SelectedEnvDefIndex);
+                    int newIdx = _envSystem.AddObject((ushort)SelectedEnvDefIndex, px, py, groupScale);
                     AutoCreateTriggerInstance(newIdx); // RM06
                 }
             }
@@ -3713,6 +3716,14 @@ public class MapEditorWindow
                 writer.WriteString("boundTriggerID", def.BoundTriggerID);
                 writer.WriteNumber("processTime", def.ProcessTime);
                 writer.WriteBoolean("autoSpawn", def.AutoSpawn);
+                writer.WriteNumber("spawnOffsetX", def.SpawnOffsetX);
+                writer.WriteNumber("spawnOffsetY", def.SpawnOffsetY);
+                // Foragable
+                writer.WriteBoolean("isForagable", def.IsForagable);
+                writer.WriteString("foragableType", def.ForagableType);
+                writer.WriteNumber("respawnTime", def.RespawnTime);
+                writer.WriteNumber("scaleMin", def.ScaleMin);
+                writer.WriteNumber("scaleMax", def.ScaleMax);
                 writer.WriteEndObject();
             }
             writer.WriteEndArray();
@@ -4237,6 +4248,15 @@ public class MapEditorWindow
         MathF.Abs(a.X - b.X) < tol && MathF.Abs(a.Y - b.Y) < tol;
 
     // ---- Environment helpers ----
+
+    private static readonly Random _placementRng = new();
+    private float GetRandomPlacementScale(int defIndex)
+    {
+        if (defIndex < 0 || defIndex >= _envSystem.DefCount) return 1f;
+        var def = _envSystem.GetDef(defIndex);
+        if (def.ScaleMin >= def.ScaleMax) return def.ScaleMin;
+        return def.ScaleMin + (float)_placementRng.NextDouble() * (def.ScaleMax - def.ScaleMin);
+    }
 
     private List<string> GetEnvCategories()
     {

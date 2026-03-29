@@ -4412,8 +4412,9 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 float sLen = MathF.Sqrt(dx * dx + dy * dy);
                 if (sLen < 0.5f) continue;
 
+                float af = alpha / 255f;
                 _spriteBatch.Draw(_pixel, topSp, null,
-                    new Color(colR, colG, colB, alpha),
+                    new Color((byte)(colR * af), (byte)(colG * af), (byte)(colB * af), alpha),
                     MathF.Atan2(dy, dx), Vector2.Zero,
                     new Vector2(sLen, thickness), SpriteEffects.None, 0f);
             }
@@ -4432,7 +4433,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 _spriteBatch.Draw(_glowTex, new Rectangle(
                     (int)(groundScreen.X - eW * 0.5f), (int)(groundScreen.Y - eH * 0.5f),
                     (int)MathF.Max(1, eW), (int)MathF.Max(1, eH)),
-                    null, new Color((byte)200, (byte)215, (byte)235, sAlpha),
+                    null, Color.FromNonPremultiplied(200, 215, 235, sAlpha),
                     0f, Vector2.Zero, SpriteEffects.None, 0f);
             }
         }
