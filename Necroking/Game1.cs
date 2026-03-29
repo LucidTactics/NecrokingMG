@@ -30,6 +30,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
     private SpriteFont? _font;
     private SpriteFont? _smallFont;
     private SpriteFont? _largeFont;
+    private BasicEffect? _shadowEffect;
 
     // Data
     private GameData _gameData = new();
@@ -857,6 +858,14 @@ public class Game1 : Microsoft.Xna.Framework.Game
             }
         _glowTex.SetData(glowData);
 
+        // BasicEffect for shadow quads (textured parallelograms)
+        _shadowEffect = new BasicEffect(GraphicsDevice)
+        {
+            TextureEnabled = true,
+            VertexColorEnabled = true,
+            LightingEnabled = false,
+        };
+
         // Load main menu background
         string menuBgPath = Path.Combine("assets", "UI", "Background", "VampireBackground.png");
         if (File.Exists(menuBgPath))
@@ -1443,7 +1452,9 @@ public class Game1 : Microsoft.Xna.Framework.Game
                                 CoreColor = spell.StrikeCoreColor,
                                 GlowColor = spell.StrikeGlowColor,
                                 CoreWidth = spell.StrikeCoreWidth,
-                                GlowWidth = spell.StrikeGlowWidth
+                                GlowWidth = spell.StrikeGlowWidth,
+                                Displacement = spell.StrikeDisplacement,
+                                MaxBranches = spell.StrikeBranches
                             };
                             var sVis = spell.StrikeVisualType == "GodRay" ? StrikeVisual.GodRay : StrikeVisual.Lightning;
                             var sGrp = new GodRayParams { EdgeSoftness = spell.GodRayEdgeSoftness,
@@ -1502,7 +1513,8 @@ public class Game1 : Microsoft.Xna.Framework.Game
                                 _sim.Lightning.SpawnBeam(necroUid, _sim.Units.Id[targetIdx],
                                     spell.Id, spell.Damage, spell.BeamTickRate, spell.BeamRetargetRadius,
                                     new LightningStyle { CoreColor = spell.BeamCoreColor, GlowColor = spell.BeamGlowColor,
-                                        CoreWidth = spell.BeamCoreWidth, GlowWidth = spell.BeamGlowWidth });
+                                        CoreWidth = spell.BeamCoreWidth, GlowWidth = spell.BeamGlowWidth,
+                                        Displacement = spell.BeamDisplacement, MaxBranches = spell.BeamBranches });
                                 _channelingSlot = slot;
                             }
                             break;
@@ -1625,7 +1637,8 @@ public class Game1 : Microsoft.Xna.Framework.Game
                                 var gr2 = new GodRayParams { EdgeSoftness = spell2.GodRayEdgeSoftness, NoiseSpeed = spell2.GodRayNoiseSpeed, NoiseStrength = spell2.GodRayNoiseStrength, NoiseScale = spell2.GodRayNoiseScale };
                                 Enum.TryParse<SpellTargetFilter>(spell2.TargetFilter, out var tf2);
                                 _sim.Lightning.SpawnStrike(mouseWorld, spell2.TelegraphDuration, spell2.StrikeDuration, spell2.AoeRadius, spell2.Damage,
-                                    new LightningStyle { CoreColor = spell2.StrikeCoreColor, GlowColor = spell2.StrikeGlowColor, CoreWidth = spell2.StrikeCoreWidth, GlowWidth = spell2.StrikeGlowWidth },
+                                    new LightningStyle { CoreColor = spell2.StrikeCoreColor, GlowColor = spell2.StrikeGlowColor, CoreWidth = spell2.StrikeCoreWidth, GlowWidth = spell2.StrikeGlowWidth,
+                                        Displacement = spell2.StrikeDisplacement, MaxBranches = spell2.StrikeBranches },
                                     spell2.Id, sv2, gr2, tf2);
                                 break;
                             }
@@ -2144,7 +2157,9 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
             // Determine animation state
             AnimState targetState;
-            if (_sim.Units.Dodging[i])
+            if (_sim.Units.StandupTimer[i] > 0f)
+                targetState = AnimState.Standup;
+            else if (_sim.Units.Dodging[i])
                 targetState = AnimState.Dodge;
             else if (!_sim.Units.PendingAttack[i].IsNone)
                 targetState = AnimState.Attack1;
@@ -2927,12 +2942,29 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
     private void DrawShaderShadows(ShadowSettings shadow)
     {
-        // Projected shadows using the same pivot/origin as sprite drawing.
-        // Uses the position+origin Draw overload so the shadow's pivot point
-        // is placed at feetSp — exactly matching the sprite's ground contact.
+        // Projected shadows as skewed parallelogram quads (matching C++ implementation).
+        // Bottom edge sits at feet, top edge shifted by sun direction vector.
+        float sunRad = shadow.SunAngle * MathF.PI / 180f;
+        float sdxDir = MathF.Cos(sunRad);
+        float sdyDir = MathF.Sin(sunRad);
         byte shAlpha = (byte)Math.Clamp(shadow.Opacity * 255f, 0, 255);
         var shadowColor = new Color((byte)0, (byte)0, (byte)0, shAlpha);
 
+        // End SpriteBatch, draw quads with BasicEffect, then resume SpriteBatch
+        _spriteBatch.End();
+
+        // Set up BasicEffect for shadow quads
+        _shadowEffect!.Projection = Matrix.CreateOrthographicOffCenter(
+            0, GraphicsDevice.Viewport.Width, GraphicsDevice.Viewport.Height, 0, 0, 1);
+        _shadowEffect.View = Matrix.Identity;
+        _shadowEffect.World = Matrix.Identity;
+        _shadowEffect.Alpha = 1f;
+
+        GraphicsDevice.BlendState = BlendState.AlphaBlend;
+        GraphicsDevice.SamplerStates[0] = SamplerState.LinearClamp;
+        GraphicsDevice.RasterizerState = RasterizerState.CullNone;
+
+        // Unit shadows
         for (int i = 0; i < _sim.Units.Count; i++)
         {
             if (!_sim.Units.Alive[i]) continue;
@@ -2943,7 +2975,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
             if (unitDef == null) continue;
 
             var atlas = _atlases[(int)animData.AtlasID];
-            if (!atlas.IsLoaded) continue;
+            if (!atlas.IsLoaded || atlas.Texture == null) continue;
 
             var fr = animData.Ctrl.GetCurrentFrame(_sim.Units.FacingAngle[i]);
             if (fr.Frame == null) continue;
@@ -2953,23 +2985,35 @@ public class Game1 : Microsoft.Xna.Framework.Game
             float scale = pixelH / animData.RefFrameHeight;
 
             var srcRect = fr.Frame.Value.Rect;
+            float destW = srcRect.Width * scale;
+            float destH = srcRect.Height * scale;
+            float shadowH = destH * shadow.Squash;
 
-            // Same pivot calculation as DrawSpriteFrame — this IS the sprite's anchor
-            float pivotX = fr.FlipX ? (1f - fr.Frame.Value.PivotX) : fr.Frame.Value.PivotX;
-            float pivotY = 1f - fr.Frame.Value.PivotY; // spritemeta bottom-left → top-left
+            float anchorX = fr.FlipX ? (1f - fr.Frame.Value.PivotX) : fr.Frame.Value.PivotX;
+            float leftOff = destW * anchorX;
+            float rightOff = destW * (1f - anchorX);
 
-            var shadowOrigin = new Vector2(pivotX * srcRect.Width, pivotY * srcRect.Height);
-            var effects = fr.FlipX ? SpriteEffects.FlipHorizontally : SpriteEffects.None;
+            float swLen = worldH * shadow.LengthScale * _camera.Zoom;
+            float sdx = sdxDir * swLen;
+            float sdy = sdyDir * swLen * _camera.YRatio;
 
-            // Feet position (ground contact, ignoring jump height)
             var feetSp = _renderer.WorldToScreen(_sim.Units.Position[i], 0f, _camera);
 
-            // Shadow: same X scale as sprite, Y scale squashed
-            _spriteBatch.Draw(atlas.Texture, feetSp, srcRect,
-                shadowColor, 0f, shadowOrigin, new Vector2(scale, scale * shadow.Squash), effects, 0f);
+            // UV coordinates from atlas
+            float texW = atlas.Texture.Width;
+            float texH = atlas.Texture.Height;
+            float u0 = srcRect.X / texW;
+            float v0 = srcRect.Y / texH;
+            float u1 = (srcRect.X + srcRect.Width) / texW;
+            float v1 = (srcRect.Y + srcRect.Height) / texH;
+            if (fr.FlipX) { (u0, u1) = (u1, u0); }
+
+            DrawShadowQuad(atlas.Texture, feetSp.X, feetSp.Y,
+                leftOff, rightOff, shadowH, sdx, sdy,
+                u0, v0, u1, v1, shadowColor);
         }
 
-        // Environment object shadows — same pivot as DrawSingleEnvObject
+        // Environment object shadows
         for (int i = 0; i < _envSystem.ObjectCount; i++)
         {
             var obj = _envSystem.Objects[i];
@@ -2980,15 +3024,62 @@ public class Game1 : Microsoft.Xna.Framework.Game
             float worldH = def.SpriteWorldHeight * obj.Scale * def.Scale;
             float pixelH = worldH * _camera.Zoom;
             float scale = pixelH / tex.Height;
+            float destW = tex.Width * scale;
+            float destH = pixelH;
+            float shadowH = destH * shadow.Squash;
 
-            // Same origin as DrawSingleEnvObject
-            var shadowOrigin = new Vector2(def.PivotX * tex.Width, def.PivotY * tex.Height);
+            float leftOff = destW * def.PivotX;
+            float rightOff = destW * (1f - def.PivotX);
+
+            float swLen = worldH * shadow.LengthScale * _camera.Zoom;
+            float sdx = sdxDir * swLen;
+            float sdy = sdyDir * swLen * _camera.YRatio;
 
             var feetSp = _renderer.WorldToScreen(new Vec2(obj.X, obj.Y), 0f, _camera);
 
-            // Shadow: same X scale as sprite, Y scale squashed
-            _spriteBatch.Draw(tex, feetSp, null,
-                shadowColor, 0f, shadowOrigin, new Vector2(scale, scale * shadow.Squash), SpriteEffects.None, 0f);
+            DrawShadowQuad(tex, feetSp.X, feetSp.Y,
+                leftOff, rightOff, shadowH, sdx, sdy,
+                0f, 0f, 1f, 1f, shadowColor);
+        }
+
+        // Resume SpriteBatch
+        _spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.LinearClamp);
+    }
+
+    /// <summary>
+    /// Draw a shadow as a textured parallelogram: bottom edge at feet, top edge skewed by sun offset.
+    /// Matches the C++ rlBegin(RL_QUADS) shadow rendering.
+    /// </summary>
+    private void DrawShadowQuad(Texture2D texture, float feetX, float feetY,
+        float leftOff, float rightOff, float shadowH, float sdx, float sdy,
+        float u0, float v0, float u1, float v1, Color color)
+    {
+        // Bottom-left/right at feet level
+        float blX = feetX - leftOff;
+        float blY = feetY;
+        float brX = feetX + rightOff;
+        float brY = feetY;
+
+        // Top-left/right shifted by sun direction
+        float tlX = feetX - leftOff + sdx;
+        float tlY = feetY - shadowH + sdy;
+        float trX = feetX + rightOff + sdx;
+        float trY = feetY - shadowH + sdy;
+
+        var verts = new VertexPositionColorTexture[4];
+        verts[0] = new VertexPositionColorTexture(new Vector3(tlX, tlY, 0), color, new Vector2(u0, v0));
+        verts[1] = new VertexPositionColorTexture(new Vector3(blX, blY, 0), color, new Vector2(u0, v1));
+        verts[2] = new VertexPositionColorTexture(new Vector3(brX, brY, 0), color, new Vector2(u1, v1));
+        verts[3] = new VertexPositionColorTexture(new Vector3(trX, trY, 0), color, new Vector2(u1, v0));
+
+        var indices = new short[] { 0, 1, 2, 0, 2, 3 };
+
+        _shadowEffect!.Texture = texture;
+        foreach (var pass in _shadowEffect.CurrentTechnique.Passes)
+        {
+            pass.Apply();
+            GraphicsDevice.DrawUserIndexedPrimitives(
+                PrimitiveType.TriangleList, verts, 0, 4, indices, 0, 2);
         }
     }
 
@@ -3428,8 +3519,10 @@ public class Game1 : Microsoft.Xna.Framework.Game
                         0f, new Vector2(32f, 32f), new Vector2(radius / 32f, radius * _camera.YRatio * 0.5f / 32f),
                         SpriteEffects.None, 0f);
 
-                    // Procedural lightning bolt from sky
-                    DrawLightningBolt(new Vector2(sp.X - 50f, sp.Y - 400f), sp, strike.Style, fade);
+                    // Procedural lightning bolt from sky (start above top of screen)
+                    float skyY = -50f; // well above screen edge
+                    float skyX = sp.X - 50f + (sp.Y - skyY) * 0.05f; // slight angle
+                    DrawLightningBolt(new Vector2(skyX, skyY), sp, strike.Style, fade);
                 }
             }
         }
@@ -3487,35 +3580,129 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
     private void DrawLightningBolt(Vector2 start, Vector2 end, LightningStyle style, float fade)
     {
-        // Procedural jagged lightning bolt
-        var dir = end - start;
-        float length = dir.Length();
-        if (length < 1f) return;
-        var norm = dir / length;
-        var perp = new Vector2(-norm.Y, norm.X);
-
-        int segments = Math.Max(4, (int)(length / 15f));
-        var points = new Vector2[segments + 1];
-        points[0] = start;
-        points[segments] = end;
-
-        // Generate jagged midpoints
+        // Generate main bolt via recursive midpoint displacement
         uint seed = (uint)(start.X * 1000 + end.Y * 7 + _gameTime * 60);
-        for (int i = 1; i < segments; i++)
-        {
-            float t = i / (float)segments;
-            var basePos = Vector2.Lerp(start, end, t);
-            seed = seed * 1103515245 + 12345;
-            float displacement = ((seed % 1000) / 500f - 1f) * style.CoreWidth * 8f * (1f - MathF.Abs(t - 0.5f) * 2f);
-            points[i] = basePos + perp * displacement;
-        }
+        var mainPoints = GenerateBoltPoints(start, end, style.Subdivisions, style.Displacement, ref seed);
+        if (mainPoints.Count < 2) return;
 
-        // Draw segments
+        // Generate branches from the main bolt
+        var branches = GenerateBranches(mainPoints, style, ref seed);
+
         byte coreAlpha = (byte)(fade * 255);
         var coreColor = style.CoreColor.ToScaledColor();
         var glowColor = style.GlowColor.ToScaledColor();
 
-        for (int i = 0; i < segments; i++)
+        // Draw branches first (behind main bolt), with reduced width/alpha
+        float branchCoreW = style.CoreWidth * style.BranchDecay;
+        float branchGlowW = style.GlowWidth * style.BranchDecay;
+        byte branchCoreA = (byte)(coreAlpha * 0.7f);
+        byte branchGlowA = (byte)(coreAlpha * 0.2f);
+
+        foreach (var branch in branches)
+        {
+            DrawBoltPolyline(branch, coreColor, glowColor,
+                branchCoreW * fade, branchGlowW * fade, branchCoreA, branchGlowA);
+        }
+
+        // Draw main bolt on top
+        DrawBoltPolyline(mainPoints, coreColor, glowColor,
+            style.CoreWidth * fade, style.GlowWidth * fade, coreAlpha, (byte)(coreAlpha * 0.4f));
+    }
+
+    /// <summary>
+    /// Recursive midpoint displacement: each iteration doubles the point count,
+    /// inserting displaced midpoints between every pair.
+    /// </summary>
+    private static List<Vector2> GenerateBoltPoints(Vector2 start, Vector2 end,
+        int subdivisions, float displacement, ref uint seed)
+    {
+        var points = new List<Vector2> { start, end };
+
+        for (int iter = 0; iter < subdivisions; iter++)
+        {
+            var newPoints = new List<Vector2>(points.Count * 2);
+            for (int i = 0; i < points.Count - 1; i++)
+            {
+                newPoints.Add(points[i]);
+
+                // Midpoint with perpendicular displacement
+                var mid = (points[i] + points[i + 1]) * 0.5f;
+                var seg = points[i + 1] - points[i];
+                float segLen = seg.Length();
+                if (segLen < 0.5f) { continue; }
+                var perp = new Vector2(-seg.Y / segLen, seg.X / segLen);
+
+                seed = seed * 1103515245 + 12345;
+                float offset = ((seed % 1000) / 500f - 1f) * segLen * displacement;
+                newPoints.Add(mid + perp * offset);
+            }
+            newPoints.Add(points[^1]);
+            points = newPoints;
+        }
+        return points;
+    }
+
+    /// <summary>
+    /// Generate forking branches from the main bolt. Branches spawn from the middle
+    /// 50% of the bolt (25%-75%), each forking at a natural angle off the main path.
+    /// </summary>
+    private static List<List<Vector2>> GenerateBranches(List<Vector2> mainPoints,
+        LightningStyle style, ref uint seed)
+    {
+        var branches = new List<List<Vector2>>();
+        if (style.MaxBranches <= 0 || style.BranchChance <= 0f) return branches;
+
+        int count = mainPoints.Count;
+        int startIdx = count / 4;       // 25%
+        int endIdx = count * 3 / 4;     // 75%
+
+        for (int i = startIdx; i < endIdx && branches.Count < style.MaxBranches; i++)
+        {
+            seed = seed * 1103515245 + 12345;
+            float roll = (seed % 1000) / 1000f;
+            if (roll > style.BranchChance) continue;
+
+            // Branch direction: tangent + perpendicular * 0.8 (random side)
+            Vector2 tangent;
+            if (i + 1 < count)
+                tangent = mainPoints[i + 1] - mainPoints[i];
+            else
+                tangent = mainPoints[i] - mainPoints[i - 1];
+            float tanLen = tangent.Length();
+            if (tanLen < 0.1f) continue;
+            tangent /= tanLen;
+
+            var perp = new Vector2(-tangent.Y, tangent.X);
+            seed = seed * 1103515245 + 12345;
+            float side = (seed % 2 == 0) ? 1f : -1f;
+
+            var branchDir = tangent + perp * side * 0.8f;
+            float bdLen = branchDir.Length();
+            if (bdLen > 0.01f) branchDir /= bdLen;
+
+            // Branch length: fraction of remaining main bolt distance
+            float remainDist = (mainPoints[^1] - mainPoints[i]).Length();
+            float branchLen = remainDist * style.BranchLength;
+            if (branchLen < 5f) continue;
+
+            Vector2 branchEnd = mainPoints[i] + branchDir * branchLen;
+
+            // Generate branch bolt with fewer subdivisions, no further branching
+            int branchSubdiv = Math.Max(1, style.Subdivisions - 2);
+            var branchPoints = GenerateBoltPoints(mainPoints[i], branchEnd,
+                branchSubdiv, style.Displacement, ref seed);
+            branches.Add(branchPoints);
+        }
+        return branches;
+    }
+
+    /// <summary>
+    /// Draw a polyline as glow + core segments.
+    /// </summary>
+    private void DrawBoltPolyline(List<Vector2> points, Color coreColor, Color glowColor,
+        float coreWidth, float glowWidth, byte coreAlpha, byte glowAlpha)
+    {
+        for (int i = 0; i < points.Count - 1; i++)
         {
             var segDir = points[i + 1] - points[i];
             float segLen = segDir.Length();
@@ -3524,14 +3711,14 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
             // Glow (wider, dimmer)
             _spriteBatch.Draw(_pixel, points[i], null,
-                new Color(glowColor.R, glowColor.G, glowColor.B, (byte)(coreAlpha * 0.4f)),
-                angle, new Vector2(0, 0.5f), new Vector2(segLen, style.GlowWidth * fade),
+                new Color(glowColor.R, glowColor.G, glowColor.B, glowAlpha),
+                angle, new Vector2(0, 0.5f), new Vector2(segLen, glowWidth),
                 SpriteEffects.None, 0f);
 
             // Core (narrow, bright)
             _spriteBatch.Draw(_pixel, points[i], null,
                 new Color(coreColor.R, coreColor.G, coreColor.B, coreAlpha),
-                angle, new Vector2(0, 0.5f), new Vector2(segLen, style.CoreWidth * fade),
+                angle, new Vector2(0, 0.5f), new Vector2(segLen, coreWidth),
                 SpriteEffects.None, 0f);
         }
     }

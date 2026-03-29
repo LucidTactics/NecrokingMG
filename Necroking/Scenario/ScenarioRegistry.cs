@@ -48,6 +48,7 @@ public static class ScenarioRegistry
         Register("retarget", () => new Scenarios.RetargetScenario());
         Register("horde_follow", () => new Scenarios.HordeFollowScenario());
         Register("sprite_scale", () => new Scenarios.SpriteScaleScenario());
+        Register("shadow_pivot", () => new Scenarios.ShadowPivotScenario());
     }
 
     public static void Register(string name, Func<ScenarioBase> creator)

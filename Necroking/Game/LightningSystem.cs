@@ -17,6 +17,14 @@ public class LightningStyle
     public float FlickerMax = 1f;
     public float FlickerHz;
     public float JitterHz;
+    // Bolt shape
+    public int Subdivisions = 5;        // recursive midpoint displacement iterations
+    public float Displacement = 0.35f;  // midpoint offset as fraction of segment length
+    // Branching
+    public float BranchChance = 0.3f;   // probability per point of spawning a branch
+    public float BranchLength = 0.4f;   // branch extends this fraction of remaining main bolt
+    public float BranchDecay = 0.6f;    // width multiplier per branch level
+    public int MaxBranches = 3;         // max branches per bolt
 }
 
 public class GodRayParams

@@ -797,8 +797,8 @@ public class Simulation
         for (int i = 0; i < _units.Count; i++)
         {
             if (!_units.Alive[i]) continue;
-            // Movement blocked by: jumping, knockdown, pending attack, or post-attack lockout
-            if (_units.Jumping[i] || _units.KnockdownTimer[i] > 0f
+            // Movement blocked by: jumping, knockdown, standup, pending attack, or post-attack lockout
+            if (_units.Jumping[i] || _units.KnockdownTimer[i] > 0f || _units.StandupTimer[i] > 0f
                 || !_units.PendingAttack[i].IsNone || _units.PostAttackTimer[i] > 0f)
             {
                 _units.Velocity[i] = Vec2.Zero;
