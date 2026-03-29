@@ -1091,6 +1091,10 @@ public class Game1 : Microsoft.Xna.Framework.Game
             if (mouse.X >= menuX2 && mouse.X < menuX2 + btnW2 && mouse.Y >= y2 && mouse.Y < y2 + btnH2)
             { _menuState = MenuState.MapEditor; _paused = false; }
             y2 += btnH2 + btnGap2;
+            // UI Editor
+            if (mouse.X >= menuX2 && mouse.X < menuX2 + btnW2 && mouse.Y >= y2 && mouse.Y < y2 + btnH2)
+            { _menuState = MenuState.UIEditor; _paused = false; }
+            y2 += btnH2 + btnGap2;
             // Settings
             if (mouse.X >= menuX2 && mouse.X < menuX2 + btnW2 && mouse.Y >= y2 && mouse.Y < y2 + btnH2)
             { _menuState = MenuState.Settings; }
@@ -3646,6 +3650,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         DrawMenuButton("Unit Editor (F9)", menuX, ref menuY, btnW, btnH, btnGap, mouse);
         DrawMenuButton("Spell Editor (F10)", menuX, ref menuY, btnW, btnH, btnGap, mouse);
         DrawMenuButton("Map Editor (F11)", menuX, ref menuY, btnW, btnH, btnGap, mouse);
+        DrawMenuButton("UI Editor (F12)", menuX, ref menuY, btnW, btnH, btnGap, mouse);
         DrawMenuButton("Settings", menuX, ref menuY, btnW, btnH, btnGap, mouse);
 
         menuY += 10;
