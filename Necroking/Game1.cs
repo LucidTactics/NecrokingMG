@@ -31,6 +31,8 @@ public class Game1 : Microsoft.Xna.Framework.Game
     private SpriteFont? _smallFont;
     private SpriteFont? _largeFont;
     private BasicEffect? _shadowEffect;
+    private readonly VertexPositionColorTexture[] _shadowVerts = new VertexPositionColorTexture[4];
+    private static readonly short[] ShadowIndices = { 0, 1, 2, 0, 2, 3 };
 
     // Data
     private GameData _gameData = new();
@@ -246,7 +248,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         _roadSystem.Init();
 
         // Load map
-        string mapPath = "assets/maps/default.json";
+        string mapPath = GamePaths.DefaultMapJson;
         if (File.Exists(mapPath))
         {
             DebugLog.Log("startup", "Loading map from file...");
@@ -3105,20 +3107,17 @@ public class Game1 : Microsoft.Xna.Framework.Game
         float trX = feetX + rightOff + sdx;
         float trY = feetY - shadowH + sdy;
 
-        var verts = new VertexPositionColorTexture[4];
-        verts[0] = new VertexPositionColorTexture(new Vector3(tlX, tlY, 0), color, new Vector2(u0, v0));
-        verts[1] = new VertexPositionColorTexture(new Vector3(blX, blY, 0), color, new Vector2(u0, v1));
-        verts[2] = new VertexPositionColorTexture(new Vector3(brX, brY, 0), color, new Vector2(u1, v1));
-        verts[3] = new VertexPositionColorTexture(new Vector3(trX, trY, 0), color, new Vector2(u1, v0));
-
-        var indices = new short[] { 0, 1, 2, 0, 2, 3 };
+        _shadowVerts[0] = new VertexPositionColorTexture(new Vector3(tlX, tlY, 0), color, new Vector2(u0, v0));
+        _shadowVerts[1] = new VertexPositionColorTexture(new Vector3(blX, blY, 0), color, new Vector2(u0, v1));
+        _shadowVerts[2] = new VertexPositionColorTexture(new Vector3(brX, brY, 0), color, new Vector2(u1, v1));
+        _shadowVerts[3] = new VertexPositionColorTexture(new Vector3(trX, trY, 0), color, new Vector2(u1, v0));
 
         _shadowEffect!.Texture = texture;
         foreach (var pass in _shadowEffect.CurrentTechnique.Passes)
         {
             pass.Apply();
             GraphicsDevice.DrawUserIndexedPrimitives(
-                PrimitiveType.TriangleList, verts, 0, 4, indices, 0, 2);
+                PrimitiveType.TriangleList, _shadowVerts, 0, 4, ShadowIndices, 0, 2);
         }
     }
 
@@ -3181,6 +3180,8 @@ public class Game1 : Microsoft.Xna.Framework.Game
     }
 
     // Sortable item for merged unit+object depth sorting
+    private readonly List<DepthItem> _depthItems = new(256); // reused each frame
+
     private struct DepthItem : IComparable<DepthItem>
     {
         public float Y;
@@ -3198,8 +3199,9 @@ public class Game1 : Microsoft.Xna.Framework.Game
         float viewTop = _camera.Position.Y - _renderer.ScreenH / (_camera.Zoom * _camera.YRatio) - viewMargin;
         float viewBottom = _camera.Position.Y + _renderer.ScreenH / (_camera.Zoom * _camera.YRatio) + viewMargin;
 
-        // Build merged sort list
-        var items = new List<DepthItem>();
+        // Build merged sort list (reuse cached list to avoid per-frame allocation)
+        _depthItems.Clear();
+        var items = _depthItems;
 
         // Add units
         for (int i = 0; i < _sim.Units.Count; i++)
@@ -3652,11 +3654,14 @@ public class Game1 : Microsoft.Xna.Framework.Game
     /// <summary>
     /// Recursive midpoint displacement: each iteration doubles the point count,
     /// inserting displaced midpoints between every pair.
+    /// Uses pre-allocated capacity to reduce GC pressure.
     /// </summary>
     private static List<Vector2> GenerateBoltPoints(Vector2 start, Vector2 end,
         int subdivisions, float displacement, ref uint seed)
     {
-        var points = new List<Vector2> { start, end };
+        // Final point count = 2^subdivisions + 1. Pre-allocate to avoid resizing.
+        int finalCount = (1 << subdivisions) + 1;
+        var points = new List<Vector2>(finalCount) { start, end };
 
         for (int iter = 0; iter < subdivisions; iter++)
         {
