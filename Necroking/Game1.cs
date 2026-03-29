@@ -2410,6 +2410,9 @@ public class Game1 : Microsoft.Xna.Framework.Game
         DrawProjectiles();
         DrawSoulOrbs();
 
+        // --- Rain (world-space, depth-sorted with scene objects) ---
+        DrawWorldRain(screenW, screenH);
+
         _spriteBatch.End();
 
         // --- Additive blend pass (effects, lightning) ---
@@ -2486,7 +2489,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // --- HUD (drawn after bloom so it's not affected) ---
         _spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.PointClamp);
 
-        // --- Weather effects (rain) ---
+        // --- Weather effects (fog/haze/brightness — rain draws in scene pass) ---
         DrawWeather(screenW, screenH);
 
         bool showUI = _activeScenario == null || _activeScenario.WantsUI;
@@ -4283,6 +4286,158 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
     private static float HashFloat(uint h) => (float)(h & 0x00FFFFFFu) / (float)0x01000000u;
 
+    /// <summary>
+    /// Draw rain in the scene pass so it depth-sorts with world objects.
+    /// Call during the main AlphaBlend SpriteBatch pass, after DrawUnitsAndObjects.
+    /// </summary>
+    private void DrawWorldRain(int screenW, int screenH)
+    {
+        if (!_gameData.Settings.Weather.Enabled) return;
+        string presetId = _gameData.Settings.Weather.ActivePreset;
+        if (string.IsNullOrEmpty(presetId)) return;
+        var preset = _gameData.Weather.Get(presetId);
+        if (preset == null) return;
+        var fx = preset.Effects;
+        if (fx.RainDensity <= 0f) return;
+
+        DrawRainParticles(fx, screenW, screenH);
+    }
+
+    private void DrawRainParticles(Data.Registries.WeatherEffects fx, int screenW, int screenH)
+    {
+        const float RAIN_CELL_SIZE = 2.0f;
+        const int RAIN_DROPS_PER_CELL = 8;
+        const float RAIN_FALL_HEIGHT = 20.0f;
+        const float RAIN_SPLASH_TIME = 0.20f;
+        const float RAIN_WIND_DRIFT_SCALE = 0.06f;
+        const float RAIN_FADE_BAND = 15.0f;
+        const float RAIN_REF_ZOOM = 48.0f;
+        const int MAX_RAIN = 6000;
+        const int MAX_SPLASHES = 800;
+
+        float zoom = _camera.Zoom;
+        float yRatio = _camera.YRatio;
+        float heightScale = _camera.HeightScale;
+        float minZoom = _camera.MinZoom;
+        float baseFallRate = fx.RainSpeed / 60.0f;
+        float windAngleRad = fx.RainWindAngle * MathF.PI / 180.0f;
+        float globalTime = _gameTime;
+
+        float halfScreenW = screenW * 0.5f;
+        float halfScreenH = screenH * 0.5f;
+        float worldHalfW = halfScreenW / zoom;
+        float worldHalfH = halfScreenH / (zoom * yRatio);
+        float marginW = RAIN_FALL_HEIGHT * RAIN_WIND_DRIFT_SCALE + 2.0f;
+        float marginH = RAIN_FALL_HEIGHT / (zoom * yRatio) * heightScale + 2.0f;
+
+        float worldMinX = _camera.Position.X - worldHalfW - marginW;
+        float worldMaxX = _camera.Position.X + worldHalfW + marginW;
+        float worldMinY = _camera.Position.Y - worldHalfH - marginH;
+        float worldMaxY = _camera.Position.Y + worldHalfH + marginH;
+
+        int cellMinX = (int)MathF.Floor(worldMinX / RAIN_CELL_SIZE);
+        int cellMaxX = (int)MathF.Ceiling(worldMaxX / RAIN_CELL_SIZE);
+        int cellMinY = (int)MathF.Floor(worldMinY / RAIN_CELL_SIZE);
+        int cellMaxY = (int)MathF.Ceiling(worldMaxY / RAIN_CELL_SIZE);
+
+        float zoomNorm = MathUtil.Clamp((zoom - minZoom) / (RAIN_REF_ZOOM - minZoom), 0f, 1f);
+        float priorityThreshold = fx.RainDensity * (0.02f + 0.98f * zoomNorm * zoomNorm);
+
+        int totalCells = (cellMaxX - cellMinX) * (cellMaxY - cellMinY);
+        int estimatedDrops = totalCells * RAIN_DROPS_PER_CELL;
+        if (estimatedDrops > 0)
+            priorityThreshold = MathF.Min(priorityThreshold, (float)MAX_RAIN / estimatedDrops);
+
+        int rainCount = 0, splashCount = 0;
+
+        for (int cy = cellMinY; cy < cellMaxY; cy++)
+        for (int cx = cellMinX; cx < cellMaxX; cx++)
+        for (int idx = 0; idx < RAIN_DROPS_PER_CELL; idx++)
+        {
+            uint h0 = RainHash(cx, cy, idx);
+            if (HashFloat(h0) >= priorityThreshold) continue;
+
+            float localX = HashFloat(RainHash(cx, cy, idx + 1000));
+            float localY = HashFloat(RainHash(cx, cy, idx + 2000));
+            float phaseOffset = HashFloat(RainHash(cx, cy, idx + 3000));
+            float speedVar = 0.8f + HashFloat(RainHash(cx, cy, idx + 4000)) * 0.4f;
+
+            float wx = (cx + localX) * RAIN_CELL_SIZE;
+            float wy = (cy + localY) * RAIN_CELL_SIZE;
+
+            float fallTime = RAIN_FALL_HEIGHT / (baseFallRate * speedVar);
+            float cycleDuration = fallTime + RAIN_SPLASH_TIME;
+            float cyclePhase = (globalTime / cycleDuration + phaseOffset) % 1.0f;
+            float fallFraction = fallTime / cycleDuration;
+
+            var groundScreen = _camera.WorldToScreen(new Vec2(wx, wy), 0f, screenW, screenH);
+            float depth = MathUtil.Clamp(groundScreen.Y / screenH, 0f, 1f);
+
+            float distMin = MathF.Min(
+                MathF.Min(wx - worldMinX, worldMaxX - wx),
+                MathF.Min(wy - worldMinY, worldMaxY - wy));
+            float distFade = MathUtil.Clamp(distMin / RAIN_FADE_BAND, 0f, 1f);
+
+            if (cyclePhase < fallFraction)
+            {
+                if (rainCount >= MAX_RAIN) continue;
+                rainCount++;
+
+                float fallProgress = cyclePhase / fallFraction;
+                float currentHeight = RAIN_FALL_HEIGHT * (1.0f - fallProgress);
+                float streakH = fx.RainLength * (1.0f + (fx.RainNearScale - 1.0f) * depth);
+
+                float driftTop = currentHeight * RAIN_WIND_DRIFT_SCALE * MathF.Sin(windAngleRad);
+                float streakWorldH = streakH / (zoom * yRatio) * 2.0f;
+                float driftBot = (currentHeight - streakWorldH) * RAIN_WIND_DRIFT_SCALE * MathF.Sin(windAngleRad);
+
+                var topSp = _camera.WorldToScreen(new Vec2(wx + driftTop, wy), currentHeight, screenW, screenH);
+                var botSp = _camera.WorldToScreen(new Vec2(wx + driftBot, wy),
+                    MathF.Max(0f, currentHeight - streakWorldH), screenW, screenH);
+
+                if (topSp.X < -50 || topSp.X > screenW + 50 || botSp.Y < -50 || topSp.Y > screenH + 50)
+                    continue;
+
+                byte colR = (byte)(170 + (int)(30 * depth));
+                byte colG = (byte)(185 + (int)(25 * depth));
+                byte colB = (byte)(215 + (int)(15 * depth));
+                float thickness = 1.0f + 0.5f * depth;
+
+                float alphaVal = fx.RainAlpha * (fx.RainFarOpacity + (1f - fx.RainFarOpacity) * depth)
+                    * distFade * (0.7f + HashFloat(h0) * 0.3f);
+                byte alpha = (byte)(MathUtil.Clamp(alphaVal, 0f, 1f) * 255);
+                if (alpha == 0) continue;
+
+                float dx = botSp.X - topSp.X, dy = botSp.Y - topSp.Y;
+                float sLen = MathF.Sqrt(dx * dx + dy * dy);
+                if (sLen < 0.5f) continue;
+
+                _spriteBatch.Draw(_pixel, topSp, null,
+                    new Color(colR, colG, colB, alpha),
+                    MathF.Atan2(dy, dx), Vector2.Zero,
+                    new Vector2(sLen, thickness), SpriteEffects.None, 0f);
+            }
+            else
+            {
+                if (splashCount >= MAX_SPLASHES) continue;
+                splashCount++;
+
+                float splashProgress = (cyclePhase - fallFraction) / (1f - fallFraction);
+                float radius = (1.5f + 2.5f * depth) * (zoom / 32f) * splashProgress;
+                float splashAlpha = fx.RainAlpha * (1f - splashProgress) * distFade * 0.6f;
+                byte sAlpha = (byte)(MathUtil.Clamp(splashAlpha, 0f, 1f) * 255);
+                if (sAlpha == 0) continue;
+
+                float eW = radius * 2f, eH = radius * yRatio * 2f;
+                _spriteBatch.Draw(_glowTex, new Rectangle(
+                    (int)(groundScreen.X - eW * 0.5f), (int)(groundScreen.Y - eH * 0.5f),
+                    (int)MathF.Max(1, eW), (int)MathF.Max(1, eH)),
+                    null, new Color((byte)200, (byte)215, (byte)235, sAlpha),
+                    0f, Vector2.Zero, SpriteEffects.None, 0f);
+            }
+        }
+    }
+
     private void DrawWeather(int screenW, int screenH)
     {
         // Check if weather is enabled and has a preset
@@ -4293,194 +4448,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         if (preset == null) return;
         var fx = preset.Effects;
 
-        // Rain particles (world-space cell grid, CPU-driven)
-        if (fx.RainDensity > 0f)
-        {
-            const float RAIN_CELL_SIZE = 2.0f;
-            const int RAIN_DROPS_PER_CELL = 8;
-            const float RAIN_FALL_HEIGHT = 20.0f;
-            const float RAIN_SPLASH_TIME = 0.20f;
-            const float RAIN_WIND_DRIFT_SCALE = 0.06f;
-            const float RAIN_FADE_BAND = 15.0f;
-            const float RAIN_REF_ZOOM = 48.0f;
-            const int MAX_RAIN = 6000;
-            const int MAX_SPLASHES = 800;
-
-            float zoom = _camera.Zoom;
-            float yRatio = _camera.YRatio;
-            float heightScale = _camera.HeightScale;
-            float minZoom = _camera.MinZoom;
-            float baseFallRate = fx.RainSpeed / 60.0f; // convert from old screen-space speed to world units/sec
-            float windAngleRad = fx.RainWindAngle * MathF.PI / 180.0f;
-            float globalTime = _gameTime;
-
-            // Calculate visible world extents from camera
-            float halfScreenW = screenW * 0.5f;
-            float halfScreenH = screenH * 0.5f;
-            float worldHalfW = halfScreenW / zoom;
-            float worldHalfH = halfScreenH / (zoom * yRatio);
-            // Add margin for rain falling from above + wind drift
-            float marginW = RAIN_FALL_HEIGHT * RAIN_WIND_DRIFT_SCALE + 2.0f;
-            float marginH = RAIN_FALL_HEIGHT / (zoom * yRatio) * heightScale + 2.0f;
-
-            float worldMinX = _camera.Position.X - worldHalfW - marginW;
-            float worldMaxX = _camera.Position.X + worldHalfW + marginW;
-            float worldMinY = _camera.Position.Y - worldHalfH - marginH;
-            float worldMaxY = _camera.Position.Y + worldHalfH + marginH;
-
-            int cellMinX = (int)MathF.Floor(worldMinX / RAIN_CELL_SIZE);
-            int cellMaxX = (int)MathF.Ceiling(worldMaxX / RAIN_CELL_SIZE);
-            int cellMinY = (int)MathF.Floor(worldMinY / RAIN_CELL_SIZE);
-            int cellMaxY = (int)MathF.Ceiling(worldMaxY / RAIN_CELL_SIZE);
-
-            // Zoom-based priority threshold for density scaling
-            float zoomNorm = MathUtil.Clamp((zoom - minZoom) / (RAIN_REF_ZOOM - minZoom), 0f, 1f);
-            float zoomNormSq = zoomNorm * zoomNorm;
-            float priorityThreshold = fx.RainDensity * (0.02f + 0.98f * zoomNormSq);
-
-            // Budget clamp
-            int totalCells = (cellMaxX - cellMinX) * (cellMaxY - cellMinY);
-            int estimatedDrops = totalCells * RAIN_DROPS_PER_CELL;
-            if (estimatedDrops > 0)
-                priorityThreshold = MathF.Min(priorityThreshold, (float)MAX_RAIN / estimatedDrops);
-
-            int rainCount = 0;
-            int splashCount = 0;
-
-            for (int cy = cellMinY; cy < cellMaxY; cy++)
-            {
-                for (int cx = cellMinX; cx < cellMaxX; cx++)
-                {
-                    for (int idx = 0; idx < RAIN_DROPS_PER_CELL; idx++)
-                    {
-                        // Hash for priority culling
-                        uint h0 = RainHash(cx, cy, idx);
-                        float priority = HashFloat(h0);
-                        if (priority >= priorityThreshold) continue;
-
-                        // Per-drop random values
-                        uint h1 = RainHash(cx, cy, idx + 1000);
-                        uint h2 = RainHash(cx, cy, idx + 2000);
-                        uint h3 = RainHash(cx, cy, idx + 3000);
-                        uint h4 = RainHash(cx, cy, idx + 4000);
-
-                        float localX = HashFloat(h1);
-                        float localY = HashFloat(h2);
-                        float phaseOffset = HashFloat(h3);
-                        float speedVar = 0.8f + HashFloat(h4) * 0.4f; // 0.8 - 1.2
-
-                        // World position of ground point
-                        float wx = (cx + localX) * RAIN_CELL_SIZE;
-                        float wy = (cy + localY) * RAIN_CELL_SIZE;
-
-                        // Fall timing
-                        float fallTime = RAIN_FALL_HEIGHT / (baseFallRate * speedVar);
-                        float cycleDuration = fallTime + RAIN_SPLASH_TIME;
-                        float cyclePhase = (globalTime / cycleDuration + phaseOffset) % 1.0f;
-                        float fallFraction = fallTime / cycleDuration;
-
-                        // Ground point screen position (for depth calculation)
-                        var groundScreen = _camera.WorldToScreen(new Vec2(wx, wy), 0f, screenW, screenH);
-                        float depth = MathUtil.Clamp(groundScreen.Y / screenH, 0f, 1f);
-
-                        // Distance fade (fade out at edges of visible area)
-                        float distX = MathF.Min(wx - worldMinX, worldMaxX - wx);
-                        float distY = MathF.Min(wy - worldMinY, worldMaxY - wy);
-                        float distMin = MathF.Min(distX, distY);
-                        float distFade = MathUtil.Clamp(distMin / RAIN_FADE_BAND, 0f, 1f);
-
-                        if (cyclePhase < fallFraction)
-                        {
-                            // --- Falling phase ---
-                            if (rainCount >= MAX_RAIN) continue;
-                            rainCount++;
-
-                            float fallProgress = cyclePhase / fallFraction;
-                            float currentHeight = RAIN_FALL_HEIGHT * (1.0f - fallProgress);
-
-                            // Streak length varies by depth (near drops appear longer)
-                            float baseStreakH = fx.RainLength;
-                            float streakH = baseStreakH * (1.0f + (fx.RainNearScale - 1.0f) * depth);
-
-                            // Wind drift creates angled streaks
-                            float driftTop = currentHeight * RAIN_WIND_DRIFT_SCALE * MathF.Sin(windAngleRad);
-                            float streakWorldH = streakH / (zoom * yRatio) * 2.0f; // approximate streak world height
-                            float driftBottom = (currentHeight - streakWorldH) * RAIN_WIND_DRIFT_SCALE * MathF.Sin(windAngleRad);
-
-                            // Project top and bottom of streak to screen
-                            var topScreen = _camera.WorldToScreen(
-                                new Vec2(wx + driftTop, wy), currentHeight, screenW, screenH);
-                            float bottomHeight = MathF.Max(0f, currentHeight - streakWorldH);
-                            var bottomScreen = _camera.WorldToScreen(
-                                new Vec2(wx + driftBottom, wy), bottomHeight, screenW, screenH);
-
-                            // Skip if entirely off-screen
-                            if (topScreen.X < -50 || topScreen.X > screenW + 50 ||
-                                bottomScreen.Y < -50 || topScreen.Y > screenH + 50)
-                                continue;
-
-                            // Color varies by depth: near=(200,210,230), far=(170,185,215)
-                            byte colR = (byte)(170 + (int)(30 * depth));
-                            byte colG = (byte)(185 + (int)(25 * depth));
-                            byte colB = (byte)(215 + (int)(15 * depth));
-
-                            // Thickness varies by depth: 1.0 - 1.5px
-                            float thickness = 1.0f + 0.5f * depth;
-
-                            // Alpha
-                            float alphaVal = fx.RainAlpha * (fx.RainFarOpacity + (1.0f - fx.RainFarOpacity) * depth)
-                                             * distFade * (0.7f + HashFloat(h0) * 0.3f);
-                            byte alpha = (byte)(MathUtil.Clamp(alphaVal, 0f, 1f) * 255);
-                            if (alpha == 0) continue;
-
-                            // Draw streak as a rotated 1px rect
-                            float dx = bottomScreen.X - topScreen.X;
-                            float dy = bottomScreen.Y - topScreen.Y;
-                            float streakLen = MathF.Sqrt(dx * dx + dy * dy);
-                            if (streakLen < 0.5f) continue;
-                            float rotation = MathF.Atan2(dy, dx);
-
-                            _spriteBatch.Draw(_pixel,
-                                topScreen, null,
-                                new Color(colR, colG, colB, alpha),
-                                rotation, Vector2.Zero,
-                                new Vector2(streakLen, thickness),
-                                SpriteEffects.None, 0f);
-                        }
-                        else
-                        {
-                            // --- Splash phase ---
-                            if (splashCount >= MAX_SPLASHES) continue;
-                            splashCount++;
-
-                            float splashProgress = (cyclePhase - fallFraction) / (1.0f - fallFraction);
-
-                            // Expanding ellipse at ground position
-                            float baseRadius = 1.5f + 2.5f * depth;
-                            float radius = baseRadius * (zoom / 32.0f) * splashProgress;
-
-                            // Alpha fades out as splash expands
-                            float splashAlpha = fx.RainAlpha * (1.0f - splashProgress) * distFade * 0.6f;
-                            byte sAlpha = (byte)(MathUtil.Clamp(splashAlpha, 0f, 1f) * 255);
-                            if (sAlpha == 0) continue;
-
-                            // Draw as ellipse using glow texture
-                            float ellipseW = radius * 2.0f;
-                            float ellipseH = radius * yRatio * 2.0f; // foreshortened vertically
-                            var splashRect = new Rectangle(
-                                (int)(groundScreen.X - ellipseW * 0.5f),
-                                (int)(groundScreen.Y - ellipseH * 0.5f),
-                                (int)MathF.Max(1, ellipseW),
-                                (int)MathF.Max(1, ellipseH));
-
-                            _spriteBatch.Draw(_glowTex, splashRect, null,
-                                new Color((byte)200, (byte)215, (byte)235, sAlpha),
-                                0f, Vector2.Zero, SpriteEffects.None, 0f);
-                        }
-                    }
-                }
-            }
-        }
+        // Rain draws in scene pass via DrawWorldRain() for depth sorting with world objects.
 
         // Fog/haze/brightness overlay (shader-based simplex noise fog)
         if (fx.FogDensity > 0.01f || fx.HazeStrength > 0.01f || fx.Brightness < 0.95f)
