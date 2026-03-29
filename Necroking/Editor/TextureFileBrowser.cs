@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using Microsoft.Xna.Framework;
+using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
 
 namespace Necroking.Editor;
@@ -25,12 +26,19 @@ public class TextureFileBrowser
     private List<string> _files = new();
     private string _filterText = "";
 
+    // Preview state
+    private string _selectedFile = "";          // highlighted file (not yet committed)
+    private Texture2D? _previewTexture;
+    private GraphicsDevice? _graphicsDevice;
+    private readonly Dictionary<string, Texture2D> _textureCache = new();
+
     // Scroll state
     private float _scrollOffset;
 
     // Layout constants
-    private const int PopupW = 500;
+    private const int PopupW = 660;
     private const int PopupH = 520;
+    private const int PreviewW = 160;
     private const int TitleBarH = 28;
     private const int PathBarH = 24;
     private const int FilterBarH = 26;
@@ -50,19 +58,19 @@ public class TextureFileBrowser
 
     public bool IsOpen => _isOpen;
 
+    public void SetGraphicsDevice(GraphicsDevice device) => _graphicsDevice = device;
+
     /// <summary>
     /// Open the file browser popup.
     /// </summary>
-    /// <param name="rootDir">Root directory to browse from (e.g., "assets/Environment/").
-    /// If empty, defaults to "assets/".</param>
-    /// <param name="currentPath">Current texture path value, used to set initial directory.</param>
-    /// <param name="onSelect">Callback invoked with the selected relative path (e.g., "assets/Environment/Ground/Grass.png").</param>
     public void Open(string rootDir, string currentPath, Action<string> onSelect)
     {
         _isOpen = true;
         _onSelect = onSelect;
         _filterText = "";
         _scrollOffset = 0;
+        _selectedFile = "";
+        _previewTexture = null;
 
         // Normalize root dir
         _rootDir = string.IsNullOrEmpty(rootDir) ? "assets" : rootDir.TrimEnd('/', '\\');
@@ -131,26 +139,32 @@ public class TextureFileBrowser
         ui.DrawRect(new Rectangle(0, 0, screenW, screenH), OverlayBg);
 
         // Center the popup
-        int px = (screenW - PopupW) / 2;
+        int totalW = PopupW;
+        int px = (screenW - totalW) / 2;
         int py = (screenH - PopupH) / 2;
+        int listW = PopupW - PreviewW;
 
         // Background + border
-        ui.DrawRect(new Rectangle(px, py, PopupW, PopupH), PopupBg);
-        ui.DrawBorder(new Rectangle(px, py, PopupW, PopupH), BorderColor, 2);
+        ui.DrawRect(new Rectangle(px, py, totalW, PopupH), PopupBg);
+        ui.DrawBorder(new Rectangle(px, py, totalW, PopupH), BorderColor, 2);
 
         // Title bar
         ui.DrawRect(new Rectangle(px, py, PopupW, TitleBarH), HeaderBg);
         ui.DrawRect(new Rectangle(px, py + TitleBarH, PopupW, 1), BorderColor);
         ui.DrawText("Texture File Browser", new Vector2(px + Padding, py + 5), EditorBase.TextBright);
 
-        // Close button (X) in title bar
-        int closeBtnX = px + PopupW - 30;
+        // Close button (X) in title bar — temporarily allow input
+        int closeBtnX = px + totalW - 30;
         int closeBtnY = py + 2;
+        int layerForClose = ui.InputLayer;
+        ui.InputLayer = 0;
         if (ui.DrawButton("X", closeBtnX, closeBtnY, 24, 24, EditorBase.DangerColor))
         {
+            ui.InputLayer = layerForClose;
             Close();
             return;
         }
+        ui.InputLayer = layerForClose;
 
         int curY = py + TitleBarH + 2;
 
@@ -201,9 +215,12 @@ public class TextureFileBrowser
             var itemRect = new Rectangle(px + 2, (int)drawY, PopupW - 4, ItemH);
             bool hovered = itemRect.Contains(mouse.X, mouse.Y) && contentRect.Contains(mouse.X, mouse.Y);
 
+            bool isSelected = !entry.IsDirectory && entry.FullPath.Replace('\\', '/') == _selectedFile;
+            if (isSelected)
+                ui.DrawRect(itemRect, SelectedBg);
             if (hovered)
             {
-                ui.DrawRect(itemRect, HoverBg);
+                if (!isSelected) ui.DrawRect(itemRect, HoverBg);
 
                 // Click handling
                 if (mouse.LeftButton == ButtonState.Pressed && _prevMouseState.LeftButton == ButtonState.Released)
@@ -214,12 +231,9 @@ public class TextureFileBrowser
                     }
                     else
                     {
-                        // File selected - return relative path
-                        string relativePath = entry.FullPath.Replace('\\', '/');
-                        _onSelect?.Invoke(relativePath);
-                        Close();
-                        ui.EndClip();
-                        return;
+                        // File clicked — select for preview (don't commit yet)
+                        _selectedFile = entry.FullPath.Replace('\\', '/');
+                        _previewTexture = LoadPreviewTexture(_selectedFile);
                     }
                 }
             }
@@ -252,13 +266,68 @@ public class TextureFileBrowser
             ui.DrawRect(new Rectangle(px + PopupW - 10, barY, 7, barH), new Color(100, 100, 140, 180));
         }
 
-        // Footer: cancel button
-        int footerY = py + PopupH - FooterH + 4;
-        if (ui.DrawButton("Cancel", px + PopupW - 80, footerY, 70, 24, EditorBase.DangerColor))
+        // Preview panel (right side)
+        int previewX = px + listW;
+        int previewY = py + TitleBarH + 2;
+        int previewH = PopupH - TitleBarH - FooterH - 4;
+        ui.DrawRect(new Rectangle(previewX, previewY, PreviewW, previewH), new Color(15, 15, 25, 240));
+        ui.DrawRect(new Rectangle(previewX, previewY, 1, previewH), BorderColor);
+
+        if (_previewTexture != null)
         {
+            // Scale to fit preview area with padding
+            int padded = PreviewW - 16;
+            float scale = Math.Min((float)padded / _previewTexture.Width, (float)(previewH - 60) / _previewTexture.Height);
+            scale = Math.Min(scale, 1f);
+            int drawW = (int)(_previewTexture.Width * scale);
+            int drawH = (int)(_previewTexture.Height * scale);
+            int drawX = previewX + (PreviewW - drawW) / 2;
+            int pvDrawY = previewY + 8;
+
+            // Checkerboard background for transparency
+            for (int cy2 = pvDrawY; cy2 < pvDrawY + drawH; cy2 += 8)
+                for (int cx2 = drawX; cx2 < drawX + drawW; cx2 += 8)
+                {
+                    bool dark = ((cx2 - drawX) / 8 + (cy2 - pvDrawY) / 8) % 2 == 0;
+                    ui.DrawRect(new Rectangle(cx2, cy2,
+                        Math.Min(8, drawX + drawW - cx2), Math.Min(8, pvDrawY + drawH - cy2)),
+                        dark ? new Color(35, 35, 35) : new Color(55, 55, 55));
+                }
+
+            ui.SpriteBatch.Draw(_previewTexture, new Rectangle(drawX, pvDrawY, drawW, drawH), Color.White);
+            ui.DrawText($"{_previewTexture.Width}x{_previewTexture.Height}", new Vector2(previewX + 8, pvDrawY + drawH + 4), EditorBase.TextDim);
+
+            // Show filename
+            string fname = Path.GetFileName(_selectedFile);
+            ui.DrawText(fname, new Vector2(previewX + 8, pvDrawY + drawH + 20), EditorBase.TextBright);
+        }
+        else
+        {
+            ui.DrawText("No preview", new Vector2(previewX + 8, previewY + 8), EditorBase.TextDim);
+        }
+
+        // Footer: Use + Cancel buttons (temporarily lower InputLayer so buttons work)
+        int footerY = py + PopupH - FooterH + 4;
+        bool hasSelection = !string.IsNullOrEmpty(_selectedFile);
+        int savedLayer = ui.InputLayer;
+        ui.InputLayer = 0;
+
+        if (hasSelection && ui.DrawButton("Use", px + totalW - 170, footerY, 70, 24, EditorBase.AccentColor))
+        {
+            ui.InputLayer = savedLayer;
+            _onSelect?.Invoke(_selectedFile);
             Close();
+            _prevMouseState = mouse;
             return;
         }
+        if (ui.DrawButton("Cancel", px + totalW - 80, footerY, 70, 24, EditorBase.DangerColor))
+        {
+            ui.InputLayer = savedLayer;
+            Close();
+            _prevMouseState = mouse;
+            return;
+        }
+        ui.InputLayer = savedLayer;
 
         // Store mouse for next frame click detection
         _prevMouseState = mouse;
@@ -277,6 +346,21 @@ public class TextureFileBrowser
         _currentDir = dir.Replace('\\', '/');
         _scrollOffset = 0;
         RefreshListing();
+    }
+
+    private Texture2D? LoadPreviewTexture(string path)
+    {
+        if (string.IsNullOrEmpty(path) || _graphicsDevice == null) return null;
+        if (_textureCache.TryGetValue(path, out var cached)) return cached;
+        if (!File.Exists(path)) return null;
+        try
+        {
+            using var stream = File.OpenRead(path);
+            var tex = Texture2D.FromStream(_graphicsDevice, stream);
+            _textureCache[path] = tex;
+            return tex;
+        }
+        catch { return null; }
     }
 
     private void RefreshListing()

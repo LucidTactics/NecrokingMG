@@ -168,10 +168,18 @@ public class Game1 : Microsoft.Xna.Framework.Game
         IsMouseVisible = true;
 
         // Save settings and weather presets when the game exits
+        // Save to both runtime dir AND source dir so publish doesn't overwrite changes
         Exiting += (_, _) =>
         {
             _gameData.Settings.Save(Path.Combine("data", "settings.json"));
             _gameData.Weather.Save(Path.Combine("data", "weather.json"));
+            // Also save to source tree so dotnet publish picks up the latest
+            string srcData = Path.Combine("..", "data");
+            if (Directory.Exists(srcData))
+            {
+                _gameData.Settings.Save(Path.Combine(srcData, "settings.json"));
+                _gameData.Weather.Save(Path.Combine(srcData, "weather.json"));
+            }
         };
 
         if (LaunchArgs.Headless)

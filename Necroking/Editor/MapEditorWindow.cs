@@ -3736,6 +3736,17 @@ public class MapEditorWindow
             _statusMessage = $"Saved: {path}";
             _statusTimer = 3f;
             DebugLog.Log("editor", $"Map saved to {path}");
+
+            // Also copy to source tree so dotnet publish picks up the latest
+            string srcMapsDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "assets", "maps");
+            if (Directory.Exists(srcMapsDir))
+            {
+                try
+                {
+                    File.Copy(path, Path.Combine(srcMapsDir, _mapFilename + ".json"), true);
+                }
+                catch { /* source tree copy is best-effort */ }
+            }
         }
         catch (Exception ex)
         {

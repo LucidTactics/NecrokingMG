@@ -35,6 +35,7 @@ public class EditorBase
 
     // State
     internal SpriteBatch _sb = null!;
+    public SpriteBatch SpriteBatch => _sb;
     internal Texture2D _pixel = null!;
     protected SpriteFont? _font;
     protected SpriteFont? _smallFont;
@@ -62,6 +63,14 @@ public class EditorBase
     private float _cursorBlink;
     private double _keyRepeatTimer;
     private Keys _lastRepeatingKey;
+
+    // Cursor and selection state (shared by single-line and text area fields)
+    private int _cursorPos;           // cursor position within _inputBuffer
+    private int _selectionStart = -1; // start of selection (-1 = no selection)
+    private bool _selectAll;          // select-all flag set on focus
+    private bool _draggingSelection;  // mouse drag in progress for selection
+    private int _activeFieldInputX;   // left edge of the active input rect (for click-to-position)
+    private int _activeFieldInputW;   // width of the active input rect
 
     // INF09: Multi-line text area state
     private int _textAreaScrollOffset;
@@ -198,6 +207,41 @@ public class EditorBase
     {
         var f = font ?? _smallFont ?? _font;
         return f?.MeasureString(text) ?? Vector2.Zero;
+    }
+
+    /// <summary>Find character index from pixel X position within a text string.</summary>
+    private int CharIndexFromPixelX(string text, int pixelX)
+    {
+        if (string.IsNullOrEmpty(text)) return 0;
+        for (int i = 1; i <= text.Length; i++)
+        {
+            float w = MeasureText(text[..i]).X;
+            if (pixelX < w - MeasureText(text[(i-1)..i]).X * 0.5f)
+                return i - 1;
+        }
+        return text.Length;
+    }
+
+    /// <summary>Check if there's an active text selection.</summary>
+    private bool HasSelection => _selectionStart >= 0 && _selectionStart != _cursorPos;
+
+    /// <summary>Get ordered selection range (min, max).</summary>
+    private (int start, int end) GetSelectionRange()
+    {
+        int a = Math.Min(_selectionStart, _cursorPos);
+        int b = Math.Max(_selectionStart, _cursorPos);
+        return (a, b);
+    }
+
+    /// <summary>Delete selected text and collapse cursor.</summary>
+    private void DeleteSelection()
+    {
+        if (!HasSelection) return;
+        var (start, end) = GetSelectionRange();
+        _inputBuffer = _inputBuffer[..start] + _inputBuffer[end..];
+        _cursorPos = start;
+        _selectionStart = -1;
+        _selectAll = false;
     }
 
     public void DrawTexture(Texture2D texture, Vector2 position, Rectangle sourceRect,
@@ -394,18 +438,55 @@ public class EditorBase
         bool isActive = _activeFieldId == fieldId;
         bool hovered = !IsInputBlocked(0) && inputRect.Contains(_mouse.X, _mouse.Y);
 
-        // Click to activate
+        // Click to activate (or reposition cursor if already active)
         if (hovered && _mouse.LeftButton == ButtonState.Pressed && _prevMouse.LeftButton == ButtonState.Released)
         {
-            _activeFieldId = fieldId;
-            _inputBuffer = value;
+            if (!isActive)
+            {
+                // First click: activate with select-all
+                _activeFieldId = fieldId;
+                _inputBuffer = value;
+                _cursorPos = value.Length;
+                _selectionStart = 0;
+                _selectAll = true;
+                _cursorBlink = 0;
+                _activeFieldInputX = inputX + 3;
+                _activeFieldInputW = inputW - 6;
+                isActive = true;
+            }
+            else
+            {
+                // Click in already-active field: position cursor, start drag selection
+                int clickPos = CharIndexFromPixelX(_inputBuffer, _mouse.X - inputX - 3);
+                _cursorPos = clickPos;
+                _selectionStart = clickPos;
+                _selectAll = false;
+                _draggingSelection = true;
+                _cursorBlink = 0;
+            }
+        }
+        // Drag to extend selection
+        else if (isActive && _draggingSelection && _mouse.LeftButton == ButtonState.Pressed)
+        {
+            int dragPos = CharIndexFromPixelX(_inputBuffer, _mouse.X - inputX - 3);
+            _cursorPos = dragPos;
             _cursorBlink = 0;
-            isActive = true;
+        }
+        // Release drag
+        else if (_draggingSelection && _mouse.LeftButton == ButtonState.Released)
+        {
+            _draggingSelection = false;
+            // If start == cursor, clear selection
+            if (_selectionStart == _cursorPos)
+                _selectionStart = -1;
         }
         // Click elsewhere to deactivate
         else if (isActive && _mouse.LeftButton == ButtonState.Pressed && _prevMouse.LeftButton == ButtonState.Released && !hovered)
         {
             _activeFieldId = null;
+            _selectAll = false;
+            _selectionStart = -1;
+            _draggingSelection = false;
             return _inputBuffer;
         }
 
@@ -413,13 +494,24 @@ public class EditorBase
         DrawBorder(inputRect, isActive ? InputActive : InputBorder);
 
         string displayText = isActive ? _inputBuffer : value;
+
+        // Draw selection highlight
+        if (isActive && HasSelection)
+        {
+            var (selStart, selEnd) = GetSelectionRange();
+            float selX1 = MeasureText(displayText[..selStart]).X;
+            float selX2 = MeasureText(displayText[..selEnd]).X;
+            DrawRect(new Rectangle(inputX + 3 + (int)selX1, y + 2, (int)(selX2 - selX1), inputH - 4),
+                new Color(80, 120, 200, 140));
+        }
+
         DrawText(displayText, new Vector2(inputX + 3, y + 2), isActive ? TextBright : TextColor);
 
         // Draw cursor
-        if (isActive && ((int)(_cursorBlink * 2) % 2 == 0))
+        if (isActive && !HasSelection && ((int)(_cursorBlink * 2) % 2 == 0))
         {
-            float cursorX = inputX + 3 + MeasureText(displayText).X;
-            DrawRect(new Rectangle((int)cursorX, y + 2, 1, inputH - 4), TextBright);
+            float cursorPixelX = inputX + 3 + MeasureText(displayText[.._cursorPos]).X;
+            DrawRect(new Rectangle((int)cursorPixelX, y + 2, 1, inputH - 4), TextBright);
         }
 
         return isActive ? _inputBuffer : value;
@@ -446,12 +538,17 @@ public class EditorBase
         {
             _activeFieldId = fieldId;
             _inputBuffer = value.ToString();
+            _cursorPos = _inputBuffer.Length;
+            _selectionStart = 0;
+            _selectAll = true;
             _cursorBlink = 0;
             isActive = true;
         }
         else if (isActive && _mouse.LeftButton == ButtonState.Pressed && _prevMouse.LeftButton == ButtonState.Released && !hovered)
         {
             _activeFieldId = null;
+            _selectAll = false;
+            _selectionStart = -1;
             if (int.TryParse(_inputBuffer, out int parsed))
                 return parsed;
             return value;
@@ -506,12 +603,17 @@ public class EditorBase
         {
             _activeFieldId = fieldId;
             _inputBuffer = value.ToString("F2");
+            _cursorPos = _inputBuffer.Length;
+            _selectionStart = 0;
+            _selectAll = true;
             _cursorBlink = 0;
             isActive = true;
         }
         else if (isActive && _mouse.LeftButton == ButtonState.Pressed && _prevMouse.LeftButton == ButtonState.Released && !hovered)
         {
             _activeFieldId = null;
+            _selectAll = false;
+            _selectionStart = -1;
             if (float.TryParse(_inputBuffer, out float parsed))
                 return parsed;
             return value;
@@ -1056,12 +1158,17 @@ public class EditorBase
         {
             _activeFieldId = fieldId;
             _inputBuffer = value;
+            _cursorPos = value.Length;
+            _selectionStart = 0;
+            _selectAll = true;
             _cursorBlink = 0;
             isActive = true;
         }
         else if (isActive && _mouse.LeftButton == ButtonState.Pressed && _prevMouse.LeftButton == ButtonState.Released && !hovered)
         {
             _activeFieldId = null;
+            _selectAll = false;
+            _selectionStart = -1;
             return _inputBuffer;
         }
 
@@ -1426,28 +1533,130 @@ public class EditorBase
             }
             else
             {
-                // Single-line text input handling
-                if (key == Keys.Back && _inputBuffer.Length > 0)
-                {
-                    _inputBuffer = _inputBuffer[..^1];
-                    _cursorBlink = 0;
-                }
-                else if (key == Keys.Enter || key == Keys.Tab)
+                // Single-line text input with cursor positioning and selection
+                _cursorPos = Math.Clamp(_cursorPos, 0, _inputBuffer.Length);
+
+                if (key == Keys.Enter || key == Keys.Tab)
                 {
                     _activeFieldId = null;
+                    _selectAll = false;
+                    _selectionStart = -1;
                     return;
                 }
                 else if (key == Keys.Escape)
                 {
                     _activeFieldId = null;
+                    _selectAll = false;
+                    _selectionStart = -1;
                     return;
+                }
+                else if (key == Keys.Back)
+                {
+                    if (_selectAll || HasSelection)
+                    {
+                        DeleteSelection();
+                        _selectAll = false;
+                    }
+                    else if (_cursorPos > 0)
+                    {
+                        _inputBuffer = _inputBuffer[..(_cursorPos - 1)] + _inputBuffer[_cursorPos..];
+                        _cursorPos--;
+                    }
+                    _cursorBlink = 0;
+                }
+                else if (key == Keys.Delete)
+                {
+                    if (_selectAll || HasSelection)
+                    {
+                        DeleteSelection();
+                        _selectAll = false;
+                    }
+                    else if (_cursorPos < _inputBuffer.Length)
+                    {
+                        _inputBuffer = _inputBuffer[.._cursorPos] + _inputBuffer[(_cursorPos + 1)..];
+                    }
+                    _cursorBlink = 0;
+                }
+                else if (key == Keys.Left)
+                {
+                    if (HasSelection && !shift)
+                    {
+                        _cursorPos = Math.Min(_selectionStart, _cursorPos);
+                        _selectionStart = -1;
+                    }
+                    else
+                    {
+                        if (shift && _selectionStart < 0) _selectionStart = _cursorPos;
+                        if (_cursorPos > 0) _cursorPos--;
+                        if (!shift) _selectionStart = -1;
+                    }
+                    _selectAll = false;
+                    _cursorBlink = 0;
+                }
+                else if (key == Keys.Right)
+                {
+                    if (HasSelection && !shift)
+                    {
+                        _cursorPos = Math.Max(_selectionStart, _cursorPos);
+                        _selectionStart = -1;
+                    }
+                    else
+                    {
+                        if (shift && _selectionStart < 0) _selectionStart = _cursorPos;
+                        if (_cursorPos < _inputBuffer.Length) _cursorPos++;
+                        if (!shift) _selectionStart = -1;
+                    }
+                    _selectAll = false;
+                    _cursorBlink = 0;
+                }
+                else if (key == Keys.Home)
+                {
+                    if (shift && _selectionStart < 0) _selectionStart = _cursorPos;
+                    _cursorPos = 0;
+                    if (!shift) _selectionStart = -1;
+                    _selectAll = false;
+                    _cursorBlink = 0;
+                }
+                else if (key == Keys.End)
+                {
+                    if (shift && _selectionStart < 0) _selectionStart = _cursorPos;
+                    _cursorPos = _inputBuffer.Length;
+                    if (!shift) _selectionStart = -1;
+                    _selectAll = false;
+                    _cursorBlink = 0;
+                }
+                else if (key == Keys.A && (_kb.IsKeyDown(Keys.LeftControl) || _kb.IsKeyDown(Keys.RightControl)))
+                {
+                    // Ctrl+A: select all
+                    _selectionStart = 0;
+                    _cursorPos = _inputBuffer.Length;
+                    _selectAll = false;
+                    _cursorBlink = 0;
                 }
                 else
                 {
                     char? c = KeyToChar(key, shift);
                     if (c.HasValue)
                     {
-                        _inputBuffer += c.Value;
+                        // If select-all or has selection, replace selected text
+                        if (_selectAll)
+                        {
+                            _inputBuffer = c.Value.ToString();
+                            _cursorPos = 1;
+                            _selectionStart = -1;
+                            _selectAll = false;
+                        }
+                        else if (HasSelection)
+                        {
+                            DeleteSelection();
+                            _inputBuffer = _inputBuffer[.._cursorPos] + c.Value + _inputBuffer[_cursorPos..];
+                            _cursorPos++;
+                        }
+                        else
+                        {
+                            _inputBuffer = _inputBuffer[.._cursorPos] + c.Value + _inputBuffer[_cursorPos..];
+                            _cursorPos++;
+                        }
                         _cursorBlink = 0;
                     }
                 }

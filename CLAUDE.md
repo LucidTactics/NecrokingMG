@@ -1,5 +1,9 @@
 # Necroking (MonoGame C#) - Claude Code Instructions
 
+## Git Policy
+- **Commits**: OK to commit freely when a feature is known to be working. Good initiative.
+- **Push**: Always ask the user for permission before pushing. Never push without explicit approval.
+
 ## Build
 ```bash
 dotnet build Necroking/Necroking.csproj

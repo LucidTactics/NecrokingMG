@@ -51,6 +51,7 @@ public class UIEditorElementDef
     public string Id { get; set; } = "";
     public string Type { get; set; } = "nineSlice";
     public string NineSlice { get; set; } = "";
+    public string ImagePath { get; set; } = "";  // texture path for image type
     public int Width { get; set; } = 100;
     public int Height { get; set; } = 40;
     public byte[]? TintColor { get; set; }
@@ -234,6 +235,7 @@ public class UIEditorWindow : EditorBase
     {
         SetContext(spriteBatch, pixel, font, smallFont, null);
         _device = spriteBatch.GraphicsDevice;
+        _textureBrowser.SetGraphicsDevice(_device);
     }
 
     /// <summary>Init with a GraphicsDevice and definitions directory.</summary>
@@ -301,6 +303,7 @@ public class UIEditorWindow : EditorBase
                     Id = item.GetStringProp("id"),
                     Type = item.GetStringProp("type", "nineSlice"),
                     NineSlice = item.GetStringProp("nineSlice"),
+                    ImagePath = item.GetStringProp("imagePath"),
                     Width = item.GetIntProp("width", 100),
                     Height = item.GetIntProp("height", 40),
                 };
@@ -500,6 +503,8 @@ public class UIEditorWindow : EditorBase
             writer.WriteString("type", el.Type);
             if (!string.IsNullOrEmpty(el.NineSlice))
                 writer.WriteString("nineSlice", el.NineSlice);
+            if (!string.IsNullOrEmpty(el.ImagePath))
+                writer.WriteString("imagePath", el.ImagePath);
             writer.WriteNumber("width", el.Width);
             writer.WriteNumber("height", el.Height);
             if (el.TintColor != null)
@@ -753,6 +758,7 @@ public class UIEditorWindow : EditorBase
         UpdateInput(mouse, _prevMouseLocal, kb, _prevKb, screenW, screenH, gt);
         _textureBrowser.Update(mouse, _prevMouseLocal, kb, _prevKb);
         _prevMouseLocal = mouse;
+        _prevKb = kb;
     }
 
     // ═══════════════════════════════════════
@@ -910,6 +916,22 @@ public class UIEditorWindow : EditorBase
             _unsavedChanges = false;
             _statusMsg = "Saved all tabs";
             _statusTimer = 3f;
+
+            // Also copy to source tree so dotnet publish picks up the latest
+            string srcDefsDir = Path.Combine("..", _defsDir);
+            if (Directory.Exists(srcDefsDir))
+            {
+                try
+                {
+                    foreach (var file in new[] { "nine_slices.json", "elements.json", "widgets.json" })
+                    {
+                        string src = Path.Combine(_defsDir, file);
+                        if (File.Exists(src))
+                            File.Copy(src, Path.Combine(srcDefsDir, file), true);
+                    }
+                }
+                catch { /* source tree copy is best-effort */ }
+            }
         }
         catch (Exception ex)
         {
@@ -1071,16 +1093,16 @@ public class UIEditorWindow : EditorBase
         DrawText("Borders:", new Vector2(x + pad, curY), TextColor);
         curY += 20;
 
-        int bfW = propW / 2 - 4;
-        int newBL = DrawIntField("ns_bl", "L", def.BorderLeft, x + pad, curY, bfW);
-        int newBR = DrawIntField("ns_br", "R", def.BorderRight, x + pad + bfW + 8, curY, bfW);
+        int newBL = DrawIntField("ns_bl", "Border Left", def.BorderLeft, x + pad, curY, propW);
         if (newBL != def.BorderLeft) { def.BorderLeft = Math.Max(0, newBL); _unsavedChanges = true; InvalidateNineSlice(def.Id); }
+        curY += 24;
+        int newBR = DrawIntField("ns_br", "Border Right", def.BorderRight, x + pad, curY, propW);
         if (newBR != def.BorderRight) { def.BorderRight = Math.Max(0, newBR); _unsavedChanges = true; InvalidateNineSlice(def.Id); }
         curY += 24;
-
-        int newBT = DrawIntField("ns_bt", "T", def.BorderTop, x + pad, curY, bfW);
-        int newBB = DrawIntField("ns_bb", "B", def.BorderBottom, x + pad + bfW + 8, curY, bfW);
+        int newBT = DrawIntField("ns_bt", "Border Top", def.BorderTop, x + pad, curY, propW);
         if (newBT != def.BorderTop) { def.BorderTop = Math.Max(0, newBT); _unsavedChanges = true; InvalidateNineSlice(def.Id); }
+        curY += 24;
+        int newBB = DrawIntField("ns_bb", "Border Bottom", def.BorderBottom, x + pad, curY, propW);
         if (newBB != def.BorderBottom) { def.BorderBottom = Math.Max(0, newBB); _unsavedChanges = true; InvalidateNineSlice(def.Id); }
         curY += 24;
 
@@ -1344,8 +1366,8 @@ public class UIEditorWindow : EditorBase
         }
         curY += 24;
 
-        // Nine-Slice picker
-        if (def.Type == "nineSlice" || def.Type == "image")
+        // Nine-Slice picker (for nineSlice type)
+        if (def.Type == "nineSlice")
         {
             var nsIds = new[] { "(none)" }.Concat(_nineSlices.Select(ns => ns.Id)).ToArray();
             string curNs = string.IsNullOrEmpty(def.NineSlice) ? "(none)" : def.NineSlice;
@@ -1355,15 +1377,27 @@ public class UIEditorWindow : EditorBase
             curY += 24;
         }
 
-        // Size (RI19: Width and Height on the same row)
+        // Image path picker (for image type) — uses texture file browser
+        if (def.Type == "image")
         {
-            int halfFieldW = propW / 2 - 4;
-            int newW = DrawIntField("el_w", "Width", def.Width, x + pad, curY, halfFieldW);
-            if (newW != def.Width) { def.Width = Math.Max(16, newW); _unsavedChanges = true; }
-            int newH = DrawIntField("el_h", "Height", def.Height, x + pad + halfFieldW + 8, curY, halfFieldW);
-            if (newH != def.Height) { def.Height = Math.Max(16, newH); _unsavedChanges = true; }
+            int browseBtnW = 60;
+            string displayPath = string.IsNullOrEmpty(def.ImagePath) ? "(none)" : def.ImagePath;
+            DrawTextField("el_img", "Image", displayPath, x + pad, curY, propW - browseBtnW - 4);
+            if (DrawButton("Browse", x + pad + propW - browseBtnW, curY, browseBtnW, 20))
+            {
+                _textureBrowser.Open("assets/UI", def.ImagePath,
+                    path => { def.ImagePath = path; _unsavedChanges = true; });
+            }
             curY += 24;
         }
+
+        // Size
+        int newW = DrawIntField("el_w", "Width", def.Width, x + pad, curY, propW);
+        if (newW != def.Width) { def.Width = Math.Max(16, newW); _unsavedChanges = true; }
+        curY += 24;
+        int newH = DrawIntField("el_h", "Height", def.Height, x + pad, curY, propW);
+        if (newH != def.Height) { def.Height = Math.Max(16, newH); _unsavedChanges = true; }
+        curY += 24;
 
         // Tint color -- color swatch
         {
