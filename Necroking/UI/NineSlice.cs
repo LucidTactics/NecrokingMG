@@ -38,6 +38,17 @@ public class NineSlice
         return true;
     }
 
+    /// <summary>Initialize from an already-loaded texture (for harmonized copies).</summary>
+    public void LoadFromTexture(Texture2D texture, int borderL, int borderR, int borderT, int borderB, bool tileEdges)
+    {
+        Texture = texture;
+        BorderLeft = borderL;
+        BorderRight = borderR;
+        BorderTop = borderT;
+        BorderBottom = borderB;
+        TileEdges = tileEdges;
+    }
+
     public void Draw(SpriteBatch batch, Rectangle dest, Color? tint = null, float scale = 1f)
     {
         if (Texture == null) return;

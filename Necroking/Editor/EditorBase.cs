@@ -1130,6 +1130,7 @@ public class EditorBase
     /// Returns true if the color picker popup is currently open (to suppress other interactions).
     /// </summary>
     public bool IsColorPickerOpen => _colorPicker.IsOpen;
+    public bool IsDropdownOpen => _activeFieldId != null && _activeFieldId.EndsWith("_combo");
 
     /// <summary>
     /// Returns true if the eyedropper mode is active.

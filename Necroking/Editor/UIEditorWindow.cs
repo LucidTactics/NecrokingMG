@@ -211,6 +211,10 @@ public class UIEditorWindow : EditorBase
     // Loaded textures (for nine-slice display)
     private readonly Dictionary<string, Texture2D> _textures = new();
 
+    // Harmonized texture cache (per-pixel color-shifted copies, keyed by source path)
+    private readonly Dictionary<string, Texture2D> _harmonizedTextures = new();
+    private readonly Dictionary<string, NineSlice> _harmonizedNineSlices = new();
+
     // Loaded NineSlice instances (for preview rendering)
     private readonly Dictionary<string, NineSlice> _nsInstances = new();
 
@@ -1427,10 +1431,11 @@ public class UIEditorWindow : EditorBase
                 _unsavedChanges = true;
             }
 
-            // Harmonize button for element tint (UI19)
+            // Harmonize button — per-pixel texture color shift
             int harmBtnX = x + pad + 170;
             if (DrawButton("Harmonize", harmBtnX, curY, 80, 18))
             {
+                // Begin with a dummy color — the real work is per-pixel on Apply
                 var colors = new[] { BytesToHdr(def.TintColor ?? new byte[] { 255, 255, 255, 255 }) };
                 _harmonizer.Begin(colors);
                 _harmonizerOpen = true;
@@ -1439,16 +1444,57 @@ public class UIEditorWindow : EditorBase
             curY += 24;
         }
 
-        // Harmonizer panel for element tint (UI19)
+        // Harmonizer panel for per-pixel element texture harmonization
         if (_harmonizerOpen && _harmonizer.Active && ActiveTab == UIEditorTab.Elements && _harmonizerTarget == HarmonizerTarget.ElementTint)
         {
             if (_harmonizer.DrawPanel(this, x, ref curY, propW + pad * 2))
             {
-                // Write harmonized result back to element tint
-                if (_harmonizer.NumColors > 0)
+                // Per-pixel harmonize: create a color-shifted copy of the source texture
+                if (_device != null)
                 {
-                    def.TintColor = HdrToBytes(_harmonizer.Result[0]);
-                    _unsavedChanges = true;
+                    // Find the source texture for this element
+                    Texture2D? sourceTex = null;
+                    string texKey = "";
+                    if (def.Type == "image" && !string.IsNullOrEmpty(def.ImagePath))
+                    {
+                        sourceTex = GetOrLoadTexture(def.ImagePath);
+                        texKey = def.ImagePath;
+                    }
+                    else if (def.Type == "nineSlice" && !string.IsNullOrEmpty(def.NineSlice))
+                    {
+                        var nsDef = _nineSlices.FirstOrDefault(n => n.Id == def.NineSlice);
+                        if (nsDef != null && !string.IsNullOrEmpty(nsDef.Texture))
+                        {
+                            sourceTex = GetOrLoadTexture(nsDef.Texture);
+                            texKey = nsDef.Texture;
+                        }
+                    }
+
+                    if (sourceTex != null && !string.IsNullOrEmpty(texKey))
+                    {
+                        var harmonized = _harmonizer.HarmonizeTexture(sourceTex, _device);
+                        if (harmonized != null)
+                        {
+                            // Cache the harmonized texture for preview
+                            if (_harmonizedTextures.TryGetValue(texKey, out var old) && old != sourceTex)
+                                old.Dispose();
+                            _harmonizedTextures[texKey] = harmonized;
+
+                            // If it's a nine-slice, rebuild the instance with the harmonized texture
+                            if (def.Type == "nineSlice" && !string.IsNullOrEmpty(def.NineSlice))
+                            {
+                                var nsDef = _nineSlices.FirstOrDefault(n => n.Id == def.NineSlice);
+                                if (nsDef != null)
+                                {
+                                    var nsInst = new NineSlice();
+                                    nsInst.LoadFromTexture(harmonized, nsDef.BorderLeft, nsDef.BorderRight,
+                                        nsDef.BorderTop, nsDef.BorderBottom, nsDef.TileEdges);
+                                    _harmonizedNineSlices[def.NineSlice] = nsInst;
+                                }
+                            }
+                            _unsavedChanges = true;
+                        }
+                    }
                 }
             }
         }
@@ -1571,9 +1617,12 @@ public class UIEditorWindow : EditorBase
         }
 
         // Draw element background (nine-slice, image, or plain)
+        // Use harmonized texture if available, otherwise original with tint
         if (def.Type == "image" && !string.IsNullOrEmpty(def.ImagePath))
         {
-            var imgTex = GetOrLoadTexture(def.ImagePath);
+            // Check for harmonized copy first
+            var imgTex = _harmonizedTextures.TryGetValue(def.ImagePath, out var harmImg) ? harmImg
+                : GetOrLoadTexture(def.ImagePath);
             if (imgTex != null)
             {
                 var tint = ByteColor(def.TintColor ?? new byte[] { 255, 255, 255, 255 });
@@ -1586,7 +1635,11 @@ public class UIEditorWindow : EditorBase
         }
         else
         {
-            var ns = !string.IsNullOrEmpty(def.NineSlice) ? GetOrLoadNineSlice(def.NineSlice) : null;
+            // Check for harmonized nine-slice first
+            NineSlice? ns = null;
+            if (!string.IsNullOrEmpty(def.NineSlice))
+                ns = _harmonizedNineSlices.TryGetValue(def.NineSlice, out var harmNs) ? harmNs
+                    : GetOrLoadNineSlice(def.NineSlice);
             if (ns != null)
             {
                 ns.Draw(_sb, elRect, ByteColor(def.TintColor ?? new byte[] { 255, 255, 255, 255 }));
@@ -1961,15 +2014,35 @@ public class UIEditorWindow : EditorBase
             }
             curY += 24;
 
-            // Harmonizer panel for widget BG tint (RI23)
+            // Harmonizer panel for widget BG — per-pixel on background nine-slice
             if (_harmonizerOpen && _harmonizer.Active && ActiveTab == UIEditorTab.Widgets && _harmonizerTarget == HarmonizerTarget.WidgetBgTint)
             {
                 if (_harmonizer.DrawPanel(this, x + pad, ref curY, propW))
                 {
-                    if (_harmonizer.NumColors > 0)
+                    // Per-pixel harmonize the background nine-slice texture
+                    if (_device != null && !string.IsNullOrEmpty(def.Background))
                     {
-                        def.BackgroundTint = HdrToBytes(_harmonizer.Result[0]);
-                        _unsavedChanges = true;
+                        var nsDef = _nineSlices.FirstOrDefault(n => n.Id == def.Background);
+                        if (nsDef != null && !string.IsNullOrEmpty(nsDef.Texture))
+                        {
+                            var sourceTex = GetOrLoadTexture(nsDef.Texture);
+                            if (sourceTex != null)
+                            {
+                                var harmonized = _harmonizer.HarmonizeTexture(sourceTex, _device);
+                                if (harmonized != null)
+                                {
+                                    if (_harmonizedTextures.TryGetValue(nsDef.Texture, out var old2) && old2 != sourceTex)
+                                        old2.Dispose();
+                                    _harmonizedTextures[nsDef.Texture] = harmonized;
+
+                                    var nsInst = new NineSlice();
+                                    nsInst.LoadFromTexture(harmonized, nsDef.BorderLeft, nsDef.BorderRight,
+                                        nsDef.BorderTop, nsDef.BorderBottom, nsDef.TileEdges);
+                                    _harmonizedNineSlices[def.Background] = nsInst;
+                                    _unsavedChanges = true;
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -2745,19 +2818,59 @@ public class UIEditorWindow : EditorBase
     private void DrawWidgetChild(UIEditorChildDef child, Rectangle rect, bool selected)
     {
         var elemDef = _elements.FirstOrDefault(e => e.Id == child.Element);
-        NineSlice? childNs = null;
-        if (elemDef != null && !string.IsNullOrEmpty(elemDef.NineSlice))
-            childNs = GetOrLoadNineSlice(elemDef.NineSlice);
+        bool drawn = false;
 
-        if (childNs != null)
+        if (elemDef != null)
         {
-            byte[] tc = elemDef?.TintColor ?? new byte[] { 255, 255, 255, 255 };
-            childNs.Draw(_sb, rect, ByteColor(tc));
+            byte[] tc = elemDef.TintColor ?? new byte[] { 255, 255, 255, 255 };
+            var tint = ByteColor(tc);
+
+            if (elemDef.Type == "image" && !string.IsNullOrEmpty(elemDef.ImagePath))
+            {
+                // Image element — check for harmonized copy first
+                var imgTex = _harmonizedTextures.TryGetValue(elemDef.ImagePath, out var harmImg) ? harmImg
+                    : GetOrLoadTexture(elemDef.ImagePath);
+                if (imgTex != null)
+                {
+                    _sb.Draw(imgTex, rect, tint);
+                    drawn = true;
+                }
+            }
+            else if (!string.IsNullOrEmpty(elemDef.NineSlice))
+            {
+                // Nine-slice element — check for harmonized copy first
+                NineSlice? childNs = _harmonizedNineSlices.TryGetValue(elemDef.NineSlice, out var harmNs) ? harmNs
+                    : GetOrLoadNineSlice(elemDef.NineSlice);
+                if (childNs != null)
+                {
+                    childNs.Draw(_sb, rect, tint);
+                    drawn = true;
+                }
+            }
+
+            // Stroke/outline
+            if (elemDef.StrokeThickness > 0)
+            {
+                var strokeCol = ByteColor(elemDef.StrokeColor);
+                int t = elemDef.StrokeThickness;
+                Rectangle strokeRect;
+                if (elemDef.StrokeMode == "outside")
+                    strokeRect = new Rectangle(rect.X - t, rect.Y - t, rect.Width + t * 2, rect.Height + t * 2);
+                else if (elemDef.StrokeMode == "center")
+                    strokeRect = new Rectangle(rect.X - t / 2, rect.Y - t / 2, rect.Width + t, rect.Height + t);
+                else // "inside"
+                    strokeRect = rect;
+
+                int sx = strokeRect.X, sy = strokeRect.Y, sw = strokeRect.Width, sh = strokeRect.Height;
+                DrawRect(new Rectangle(sx, sy, sw, t), strokeCol);
+                DrawRect(new Rectangle(sx, sy + sh - t, sw, t), strokeCol);
+                DrawRect(new Rectangle(sx, sy + t, t, sh - t * 2), strokeCol);
+                DrawRect(new Rectangle(sx + sw - t, sy + t, t, sh - t * 2), strokeCol);
+            }
         }
-        else
-        {
+
+        if (!drawn)
             DrawRect(rect, new Color(50, 50, 70, 180));
-        }
 
         // Label
         string label = !string.IsNullOrEmpty(child.Name) ? child.Name :
@@ -2778,7 +2891,6 @@ public class UIEditorWindow : EditorBase
         {
             DrawBorder(rect, new Color(255, 200, 80, 255), 2);
 
-            // Resize handles for selected child
             int chs = 6;
             DrawResizeHandle(rect.X + rect.Width - chs, rect.Y + rect.Height - chs, chs);
             DrawResizeHandle(rect.X + rect.Width - chs, rect.Y + rect.Height / 2 - chs / 2, chs);

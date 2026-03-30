@@ -1182,7 +1182,10 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
         // --- ESC toggles pause menu / closes editor ---
         // When a text field is active, Escape is consumed by EditorBase.HandleTextInput to deactivate the field.
-        if (!anyTextInputActive && WasKeyPressed(kb, Keys.Escape))
+        // When a popup (color picker, texture browser, confirm dialog) is open, don't close the editor.
+        bool popupOpen = _editorUi.IsColorPickerOpen || _editorUi.IsDropdownOpen
+            || (_menuState == MenuState.UIEditor && (_uiEditor.IsColorPickerOpen || _uiEditor.IsDropdownOpen));
+        if (!anyTextInputActive && !popupOpen && WasKeyPressed(kb, Keys.Escape))
         {
             if (_menuState == MenuState.Settings)
             {

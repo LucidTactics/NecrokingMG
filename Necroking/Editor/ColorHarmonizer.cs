@@ -240,6 +240,33 @@ public class ColorHarmonizer
     }
 
     /// <summary>
+    /// Create a harmonized copy of a texture — per-pixel color shift toward target.
+    /// Each pixel's HSV/HCL is individually lerped toward the target color.
+    /// Call on the main thread (creates a new Texture2D).
+    /// </summary>
+    public Texture2D? HarmonizeTexture(Texture2D source, GraphicsDevice device)
+    {
+        if (source == null || device == null) return null;
+        if (HueStrength <= 0f && SatStrength <= 0f && ValStrength <= 0f) return null;
+
+        var targetCol = TargetColor.ToColor();
+        var pixels = new Color[source.Width * source.Height];
+        source.GetData(pixels);
+
+        for (int i = 0; i < pixels.Length; i++)
+        {
+            if (pixels[i].A == 0) continue; // skip fully transparent
+            pixels[i] = UseHclMode
+                ? HarmonizeHcl(pixels[i], targetCol, HueStrength, SatStrength, ValStrength)
+                : Harmonize(pixels[i], targetCol, HueStrength, SatStrength, ValStrength);
+        }
+
+        var result = new Texture2D(device, source.Width, source.Height);
+        result.SetData(pixels);
+        return result;
+    }
+
+    /// <summary>
     /// Get the original colors (before harmonization).
     /// </summary>
     public HdrColor GetOriginal(int index) =>

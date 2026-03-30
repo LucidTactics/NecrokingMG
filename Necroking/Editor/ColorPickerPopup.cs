@@ -605,6 +605,14 @@ public class ColorPickerPopup
 
         if (!_isOpen) return;
 
+        // Escape cancels the popup (restores original color)
+        if (_kb.IsKeyDown(Keys.Escape) && _prevKb.IsKeyUp(Keys.Escape) && _editingField < 0)
+        {
+            _currentColor = _originalColor;
+            _cancelled = true;
+            return;
+        }
+
         int popupH = _hideIntensity ? PopupBaseH - 24 : PopupBaseH;
 
         // Clamp popup position to screen bounds
