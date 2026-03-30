@@ -56,6 +56,10 @@ public class UIEditorElementDef
     public int Height { get; set; } = 40;
     public byte[]? TintColor { get; set; }
     public UIEditorTextRegion? TextRegion { get; set; }
+    // Stroke/outline
+    public int StrokeThickness { get; set; }           // 0 = no stroke
+    public byte[] StrokeColor { get; set; } = { 255, 255, 255, 255 };
+    public string StrokeMode { get; set; } = "inside"; // "inside", "outside", "center"
 }
 
 // ─────────────────────────────────────────────
@@ -309,6 +313,10 @@ public class UIEditorWindow : EditorBase
                 };
                 if (item.TryGetProperty("tintColor", out var tc) && tc.ValueKind == JsonValueKind.Array)
                     def.TintColor = ReadColorArray(tc);
+                def.StrokeThickness = item.GetIntProp("strokeThickness", 0);
+                if (item.TryGetProperty("strokeColor", out var sc) && sc.ValueKind == JsonValueKind.Array)
+                    def.StrokeColor = ReadColorArray(sc);
+                def.StrokeMode = item.GetStringProp("strokeMode", "inside");
                 if (item.TryGetProperty("textRegion", out var tr))
                 {
                     def.TextRegion = new UIEditorTextRegion
@@ -509,6 +517,12 @@ public class UIEditorWindow : EditorBase
             writer.WriteNumber("height", el.Height);
             if (el.TintColor != null)
                 WriteColorArray(writer, "tintColor", el.TintColor);
+            if (el.StrokeThickness > 0)
+            {
+                writer.WriteNumber("strokeThickness", el.StrokeThickness);
+                WriteColorArray(writer, "strokeColor", el.StrokeColor);
+                writer.WriteString("strokeMode", el.StrokeMode);
+            }
             if (el.TextRegion != null)
             {
                 writer.WritePropertyName("textRegion");
@@ -1439,6 +1453,38 @@ public class UIEditorWindow : EditorBase
             }
         }
 
+        // Stroke/outline
+        {
+            DrawText("-- Stroke --", new Vector2(x + pad, curY + 2), AccentColor);
+            curY += 20;
+
+            int newThick = DrawIntField("el_stroke_t", "Thickness", def.StrokeThickness, x + pad, curY, propW);
+            if (newThick != def.StrokeThickness) { def.StrokeThickness = Math.Max(0, newThick); _unsavedChanges = true; }
+            curY += 24;
+
+            if (def.StrokeThickness > 0)
+            {
+                // Stroke color
+                DrawText("Color:", new Vector2(x + pad, curY + 2), TextDim);
+                var strokeHdr = BytesToHdr(def.StrokeColor);
+                if (DrawColorSwatch("el_stroke_c", x + pad + 120, curY, 40, 18, ref strokeHdr, hideIntensity: true))
+                    _unsavedChanges = true;
+                var newStroke = HdrToBytes(strokeHdr);
+                if (!newStroke.SequenceEqual(def.StrokeColor))
+                {
+                    def.StrokeColor = newStroke;
+                    _unsavedChanges = true;
+                }
+                curY += 24;
+
+                // Stroke mode
+                string[] modes = { "inside", "outside", "center" };
+                string newMode = DrawCombo("el_stroke_m", "Mode", def.StrokeMode, modes, x + pad, curY, propW);
+                if (newMode != def.StrokeMode) { def.StrokeMode = newMode; _unsavedChanges = true; }
+                curY += 24;
+            }
+        }
+
         // Text Region (RI18: only show for "text" type, not any element with TextRegion != null)
         if (def.Type == "text")
         {
@@ -1524,18 +1570,55 @@ public class UIEditorWindow : EditorBase
             }
         }
 
-        // Draw element background (nine-slice or plain)
-        var ns = !string.IsNullOrEmpty(def.NineSlice) ? GetOrLoadNineSlice(def.NineSlice) : null;
-        if (ns != null)
+        // Draw element background (nine-slice, image, or plain)
+        if (def.Type == "image" && !string.IsNullOrEmpty(def.ImagePath))
         {
-            ns.Draw(_sb, elRect, ByteColor(def.TintColor ?? new byte[] { 255, 255, 255, 255 }));
+            var imgTex = GetOrLoadTexture(def.ImagePath);
+            if (imgTex != null)
+            {
+                var tint = ByteColor(def.TintColor ?? new byte[] { 255, 255, 255, 255 });
+                _sb.Draw(imgTex, elRect, tint);
+            }
+            else
+            {
+                DrawRect(elRect, ByteColor(def.TintColor ?? new byte[] { 60, 60, 80, 200 }));
+            }
         }
         else
         {
-            DrawRect(elRect, ByteColor(def.TintColor ?? new byte[] { 60, 60, 80, 200 }));
+            var ns = !string.IsNullOrEmpty(def.NineSlice) ? GetOrLoadNineSlice(def.NineSlice) : null;
+            if (ns != null)
+            {
+                ns.Draw(_sb, elRect, ByteColor(def.TintColor ?? new byte[] { 255, 255, 255, 255 }));
+            }
+            else
+            {
+                DrawRect(elRect, ByteColor(def.TintColor ?? new byte[] { 60, 60, 80, 200 }));
+            }
         }
 
-        // Element outline
+        // Stroke/outline (user-defined, rendered before editor outline)
+        if (def.StrokeThickness > 0)
+        {
+            var strokeCol = ByteColor(def.StrokeColor);
+            int t = def.StrokeThickness;
+            Rectangle strokeRect;
+            if (def.StrokeMode == "outside")
+                strokeRect = new Rectangle(elX - t, elY - t, def.Width + t * 2, def.Height + t * 2);
+            else if (def.StrokeMode == "center")
+                strokeRect = new Rectangle(elX - t / 2, elY - t / 2, def.Width + t, def.Height + t);
+            else // "inside"
+                strokeRect = elRect;
+
+            // Draw stroke as 4 rectangles (top, bottom, left, right)
+            int sx = strokeRect.X, sy = strokeRect.Y, sw = strokeRect.Width, sh = strokeRect.Height;
+            DrawRect(new Rectangle(sx, sy, sw, t), strokeCol);                  // top
+            DrawRect(new Rectangle(sx, sy + sh - t, sw, t), strokeCol);         // bottom
+            DrawRect(new Rectangle(sx, sy + t, t, sh - t * 2), strokeCol);      // left
+            DrawRect(new Rectangle(sx + sw - t, sy + t, t, sh - t * 2), strokeCol); // right
+        }
+
+        // Editor element outline (selection indicator)
         DrawBorder(elRect, AccentColor, 2);
 
         // Resize handles (8 zones)

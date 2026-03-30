@@ -30,6 +30,8 @@ public class ColorHarmonizer
 
     // Snapshot of original colors at the time Begin() was called
     private readonly HdrColor[] _originals = new HdrColor[MaxColors];
+    // True originals from first Begin() — never overwritten by Apply
+    private readonly HdrColor[] _trueOriginals = new HdrColor[MaxColors];
 
     // Live harmonized results (updated each frame via Recompute)
     public readonly HdrColor[] Result = new HdrColor[MaxColors];
@@ -174,6 +176,7 @@ public class ColorHarmonizer
         for (int i = 0; i < NumColors; i++)
         {
             _originals[i] = colors[i];
+            _trueOriginals[i] = colors[i];
             Result[i] = colors[i];
         }
         Active = true;
@@ -222,12 +225,15 @@ public class ColorHarmonizer
     }
 
     /// <summary>
-    /// Reset results back to originals and zero out strengths.
+    /// Reset results back to true originals (before any Apply) and zero out strengths.
     /// </summary>
     public void Reset()
     {
         for (int i = 0; i < NumColors; i++)
-            Result[i] = _originals[i];
+        {
+            _originals[i] = _trueOriginals[i];
+            Result[i] = _trueOriginals[i];
+        }
         HueStrength = 0f;
         SatStrength = 0f;
         ValStrength = 0f;

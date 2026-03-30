@@ -62,6 +62,7 @@ public class SpriteAtlas
     public UnitSpriteData? GetUnit(string name) =>
         _units.TryGetValue(name, out var u) ? u : null;
 
+    /// <summary>Full load: reads PNG + meta from disk, creates GPU texture. Single-threaded.</summary>
     public bool Load(GraphicsDevice device, string pngPath, string metaPath)
     {
         if (!File.Exists(pngPath) || !File.Exists(metaPath)) return false;
@@ -84,7 +85,52 @@ public class SpriteAtlas
             return false;
         }
 
-        // Spritemeta uses bottom-left Y origin; MonoGame uses top-left
+        FixupYOrigin();
+        RescaleAllFrames();
+        IsLoaded = true;
+        return true;
+    }
+
+    /// <summary>Parse metadata only (thread-safe, no GPU). Call from background thread.</summary>
+    public bool ParseMetaOnly(string metaPath)
+    {
+        return ParseMeta(metaPath);
+    }
+
+    /// <summary>Create GPU texture from pre-read PNG bytes. Call on main thread after ParseMetaOnly.</summary>
+    public bool LoadFromStream(GraphicsDevice device, Stream pngStream)
+    {
+        _texture = TextureUtil.LoadPremultiplied(device, pngStream);
+        if (_texture == null) return false;
+
+        _originalWidth = _texture.Width;
+        _originalHeight = _texture.Height;
+        _scaleX = 1f;
+        _scaleY = 1f;
+
+        FixupYOrigin();
+        RescaleAllFrames();
+        IsLoaded = true;
+        return true;
+    }
+
+    /// <summary>Set a pre-created texture and finalize the atlas. Call on main thread after ParseMetaOnly + GPU texture creation.</summary>
+    public void SetTextureAndFinalize(Texture2D texture, int width, int height)
+    {
+        _texture = texture;
+        _originalWidth = width;
+        _originalHeight = height;
+        _scaleX = 1f;
+        _scaleY = 1f;
+        FixupYOrigin();
+        RescaleAllFrames();
+        IsLoaded = true;
+    }
+
+    /// <summary>Flip Y coordinates from spritemeta bottom-left to MonoGame top-left.</summary>
+    private void FixupYOrigin()
+    {
+        if (_originalHeight <= 0) return;
         foreach (var udata in _units.Values)
             foreach (var adata in udata.Animations.Values)
                 foreach (var (_, kfs) in adata.AngleFrames)
@@ -98,10 +144,6 @@ public class SpriteAtlas
                             kf.Frame.Rect.Height);
                         kfs[i] = kf;
                     }
-
-        RescaleAllFrames();
-        IsLoaded = true;
-        return true;
     }
 
     public void Unload()

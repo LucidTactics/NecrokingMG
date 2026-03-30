@@ -38,6 +38,15 @@ public class Game1 : Microsoft.Xna.Framework.Game
     // Simulation
     private Simulation _sim = new();
     private Inventory _inventory = new();
+    private System.Diagnostics.Stopwatch? _startupTimer;
+    private long _startupLastMs;
+    private void LogTiming(string step)
+    {
+        if (_startupTimer == null) return;
+        long now = _startupTimer.ElapsedMilliseconds;
+        DebugLog.Log("startup", $"  [{now}ms +{now - _startupLastMs}ms] {step}");
+        _startupLastMs = now;
+    }
     private GroundSystem _groundSystem = new();
     private EnvironmentSystem _envSystem = new();
     private WallSystem _wallSystem = new();
@@ -196,27 +205,64 @@ public class Game1 : Microsoft.Xna.Framework.Game
     {
         DebugLog.Clear("startup");
         DebugLog.Log("startup", "=== Necroking MG Startup ===");
+        _startupTimer = System.Diagnostics.Stopwatch.StartNew();
+        _startupLastMs = 0;
 
         if (LaunchArgs.Headless)
             Window.Position = new Point(-10000, -10000);
 
         // Load game data
         _gameData.Load("data");
-        DebugLog.Log("startup", $"GameData: {_gameData.Units.Count} units, {_gameData.Spells.Count} spells, {_gameData.Weapons.Count} weapons");
+        LogTiming($"GameData loaded: {_gameData.Units.Count} units, {_gameData.Spells.Count} spells, {_gameData.Weapons.Count} weapons");
 
         // Init renderer
         _renderer.Init(_graphics.PreferredBackBufferWidth, _graphics.PreferredBackBufferHeight);
 
-        // Scan for sprite sheets and load atlases
+        // Scan for sprite sheets and load atlases (parallel file read + sequential GPU upload)
         AtlasDefs.ScanSpritesDirectory("assets/Sprites");
-        _atlases = new SpriteAtlas[AtlasDefs.TotalCount];
-        for (int i = 0; i < AtlasDefs.TotalCount; i++)
-        {
+        int atlasCount = AtlasDefs.TotalCount;
+        _atlases = new SpriteAtlas[atlasCount];
+
+        // Phase 1: Read PNG files, decode to pixels, and parse metadata in parallel (no GPU)
+        var pngBytes = new byte[atlasCount][];
+        var decodedPixels = new Color[atlasCount][];
+        var decodedW = new int[atlasCount];
+        var decodedH = new int[atlasCount];
+        var metaParsed = new bool[atlasCount];
+        for (int i = 0; i < atlasCount; i++)
             _atlases[i] = new SpriteAtlas();
+
+        System.Threading.Tasks.Parallel.For(0, atlasCount, i =>
+        {
             string name = AtlasDefs.Names[i];
-            _atlases[i].Load(GraphicsDevice, $"assets/Sprites/{name}.png", $"assets/Sprites/{name}.spritemeta");
+            string pngPath = $"assets/Sprites/{name}.png";
+            string metaPath = $"assets/Sprites/{name}.spritemeta";
+            if (File.Exists(pngPath))
+            {
+                pngBytes[i] = File.ReadAllBytes(pngPath);
+                // Decode PNG to raw pixels on background thread (CPU-heavy part)
+                var (pixels, w, h) = TextureUtil.DecodePngPremultiplied(pngBytes[i]);
+                decodedPixels[i] = pixels;
+                decodedW[i] = w;
+                decodedH[i] = h;
+            }
+            if (File.Exists(metaPath))
+                metaParsed[i] = _atlases[i].ParseMetaOnly(metaPath);
+        });
+        LogTiming("Atlas PNG decode + metadata parsed (parallel)");
+
+        // Phase 2: Upload decoded pixels to GPU (fast — just SetData, no PNG decode)
+        for (int i = 0; i < atlasCount; i++)
+        {
+            if (decodedPixels[i] != null && metaParsed[i])
+            {
+                var tex = TextureUtil.CreateTextureFromPixels(GraphicsDevice,
+                    decodedPixels[i], decodedW[i], decodedH[i]);
+                _atlases[i].SetTextureAndFinalize(tex, decodedW[i], decodedH[i]);
+                decodedPixels[i] = null!; // free memory
+            }
         }
-        DebugLog.Log("startup", $"Atlases loaded: {AtlasDefs.TotalCount} ({string.Join(", ", AtlasDefs.Names)})");
+        LogTiming($"Atlases GPU upload: {atlasCount} ({string.Join(", ", AtlasDefs.Names)})");
 
         base.Initialize();
     }
@@ -241,7 +287,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
             if (fb.Load(GraphicsDevice, fbDef.Path, fbDef.Cols, fbDef.Rows, fbDef.DefaultFPS))
                 _flipbooks[fbId] = fb;
         }
-        DebugLog.Log("startup", $"Flipbooks loaded: {_flipbooks.Count}");
+        LogTiming($"Flipbooks loaded: {_flipbooks.Count}");
 
         // Load animation metadata from all atlas spritemeta files
         foreach (string name in AtlasDefs.Names)
@@ -250,7 +296,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
             if (File.Exists(metaPath))
                 AnimMetaLoader.Load(metaPath, _animMeta);
         }
-        DebugLog.Log("startup", $"Animation metadata: {_animMeta.Count} entries");
+        LogTiming($"Animation metadata: {_animMeta.Count} entries");
 
         // Load animations.json timing overrides (stub)
         if (File.Exists("data/animations.json"))
@@ -269,7 +315,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
             MapData.Load(mapPath, _groundSystem, _envSystem, _wallSystem);
             MapData.LoadTriggers("assets/maps/default_triggers.json", _triggerSystem);
             MapData.LoadRoads("assets/maps/default_roads.json", _roadSystem);
-            DebugLog.Log("startup", $"Map loaded: ground={_groundSystem.WorldW}x{_groundSystem.WorldH}, objects={_envSystem.ObjectCount}");
+            LogTiming($"Map loaded: ground={_groundSystem.WorldW}x{_groundSystem.WorldH}, objects={_envSystem.ObjectCount}");
 
             // Load grass map
             try
@@ -313,7 +359,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         _groundSystem.LoadTextures(GraphicsDevice);
         _groundVertexMapTex = _groundSystem.CreateVertexMapTexture(GraphicsDevice);
         _envSystem.LoadTextures(GraphicsDevice);
-        DebugLog.Log("startup", $"Ground textures: {_groundSystem.TypeCount}, Env textures: {_envSystem.DefCount}, VertexMap: {(_groundVertexMapTex != null ? "OK" : "NONE")}");
+        LogTiming($"Ground textures: {_groundSystem.TypeCount}, Env textures: {_envSystem.DefCount}, VertexMap: {(_groundVertexMapTex != null ? "OK" : "NONE")}");
 
         // Init simulation with map size
         _sim.Init(worldW, worldH, _gameData);
@@ -323,7 +369,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // Bake wall and environment object collisions into the tile grid cost field
         _wallSystem.BakeWalls(_sim.Grid);
         _envSystem.BakeCollisions(_sim.Grid);
-        DebugLog.Log("startup", $"Baked collisions: {_envSystem.ObjectCount} objects, grid {worldW}x{worldH}");
+        LogTiming($"Baked collisions: {_envSystem.ObjectCount} objects, grid {worldW}x{worldH}");
 
         // Spawn necromancer near map center
         float center = worldW * 0.5f;
@@ -416,7 +462,8 @@ public class Game1 : Microsoft.Xna.Framework.Game
         }
 
         Window.Title = "Necroking";
-        DebugLog.Log("startup", "Game world loaded");
+        LogTiming("Game world loaded");
+        DebugLog.Log("startup", $"=== Total startup: {_startupTimer?.ElapsedMilliseconds ?? 0}ms ===");
         _gameWorldLoaded = true;
         _menuState = MenuState.None;
     }
@@ -876,6 +923,8 @@ public class Game1 : Microsoft.Xna.Framework.Game
             }
         _glowTex.SetData(glowData);
 
+        LogTiming("Glow texture created");
+
         // Shadow renderer (BasicEffect for parallelogram quads)
         _shadowRenderer.Init(GraphicsDevice);
 
@@ -887,13 +936,17 @@ public class Game1 : Microsoft.Xna.Framework.Game
             _mainMenuBg = Texture2D.FromStream(GraphicsDevice, stream);
         }
 
+        LogTiming("Menu background loaded");
+
         _font = Content.Load<SpriteFont>("DefaultFont");
         _smallFont = Content.Load<SpriteFont>("SmallFont");
         _largeFont = Content.Load<SpriteFont>("LargeFont");
         _debugDraw.SetFont(_smallFont);
+        LogTiming("Fonts loaded");
 
         _bloom.Init(GraphicsDevice, Content,
             _graphics.PreferredBackBufferWidth, _graphics.PreferredBackBufferHeight);
+        LogTiming("Bloom initialized");
 
         try { _groundEffect = Content.Load<Microsoft.Xna.Framework.Graphics.Effect>("GroundShader"); }
         catch { _groundEffect = null; }
@@ -907,12 +960,14 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
         _grassRenderer.Init(GraphicsDevice);
         _lightningRenderer.Init(_spriteBatch, _pixel, _glowTex, _sim, _camera, _renderer, GraphicsDevice);
+        LogTiming("Renderers initialized (weather, grass, lightning)");
 
         // Init UI editor (read-only viewer, doesn't depend on game systems)
         _uiEditor.Init(_spriteBatch, _pixel, _font, _smallFont);
         string uiDefPath = Path.Combine("assets", "UI", "definitions");
         if (Directory.Exists(uiDefPath))
             _uiEditor.LoadDefinitions(uiDefPath);
+        LogTiming("UI editor initialized");
 
         // Init property editor infrastructure
         _editorUi.SetContext(_spriteBatch, _pixel, _font, _smallFont, _largeFont);
@@ -924,6 +979,8 @@ public class Game1 : Microsoft.Xna.Framework.Game
         _spellEditor.SetGameData(_gameData);
         _settingsWindow = new SettingsWindow(_editorUi);
         _settingsWindow.SetGameData(_gameData, Path.Combine("data", "settings.json"), Path.Combine("data", "weather.json"));
+        LogTiming("Editors initialized");
+        DebugLog.Log("startup", $"=== LoadContent complete ===");
     }
 
     protected override void Update(GameTime gameTime)
