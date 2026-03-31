@@ -2937,6 +2937,7 @@ public partial class UIEditorWindow : EditorBase
                 if (elemDef.Type == "text")
                 {
                     // Text element — no background, render text with alignment
+                    // Use child's actual rect as bounds (not element def's text region size)
                     drawn = true;
                     string text = !string.IsNullOrEmpty(child.DefaultText) ? child.DefaultText
                         : !string.IsNullOrEmpty(elemDef.DefaultText) ? elemDef.DefaultText : "";
@@ -2946,26 +2947,22 @@ public partial class UIEditorWindow : EditorBase
                         var fontColor = tr != null ? ByteColor(tr.FontColor) : Color.White;
                         var textSize = MeasureText(text);
 
-                        // Text region bounds (or element bounds as fallback)
-                        int trX = rect.X + (tr?.X ?? 0);
-                        int trY = rect.Y + (tr?.Y ?? 0);
-                        int trW = tr != null && tr.W > 0 ? tr.W : rect.Width;
-                        int trH = tr != null && tr.H > 0 ? tr.H : rect.Height;
+                        // Use the child's placed rect as the text area
+                        int trW = rect.Width;
+                        int trH = rect.Height;
 
-                        // Horizontal alignment
                         float tx = (tr?.Align ?? "left") switch
                         {
-                            "center" => trX + (trW - textSize.X) / 2,
-                            "right" => trX + trW - textSize.X - 2,
-                            _ => trX + 2
+                            "center" => rect.X + (trW - textSize.X) / 2,
+                            "right" => rect.X + trW - textSize.X - 2,
+                            _ => rect.X + 2
                         };
 
-                        // Vertical alignment
                         float ty = (tr?.VAlign ?? "top") switch
                         {
-                            "center" => trY + (trH - textSize.Y) / 2,
-                            "bottom" => trY + trH - textSize.Y - 2,
-                            _ => trY + 2
+                            "center" => rect.Y + (trH - textSize.Y) / 2,
+                            "bottom" => rect.Y + trH - textSize.Y - 2,
+                            _ => rect.Y + 2
                         };
 
                         DrawText(text, new Vector2(tx, ty), fontColor);
