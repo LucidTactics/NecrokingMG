@@ -16,6 +16,7 @@ public class ColorHarmonizer
     public const int MaxColors = 16;
 
     public bool Active { get; private set; }
+    public bool LastActionWasReset { get; private set; } // true after Reset, false after Apply/slider change
 
     // Target color to harmonize toward
     public HdrColor TargetColor = new(200, 160, 80, 255, 1f);
@@ -222,6 +223,7 @@ public class ColorHarmonizer
         HueStrength = 0f;
         SatStrength = 0f;
         ValStrength = 0f;
+        LastActionWasReset = false;
     }
 
     /// <summary>
@@ -237,17 +239,22 @@ public class ColorHarmonizer
         HueStrength = 0f;
         SatStrength = 0f;
         ValStrength = 0f;
+        LastActionWasReset = true;
     }
 
     /// <summary>
     /// Create a harmonized copy of a texture — per-pixel color shift toward target.
     /// Each pixel's HSV/HCL is individually lerped toward the target color.
+    /// Target alpha acts as a multiplier on per-pixel alpha (transparent stays transparent).
     /// Call on the main thread (creates a new Texture2D).
     /// </summary>
     public Texture2D? HarmonizeTexture(Texture2D source, GraphicsDevice device)
     {
+        float alphaMul = TargetColor.A / 255f;
+        bool hasColorShift = HueStrength > 0f || SatStrength > 0f || ValStrength > 0f;
+        bool hasAlphaShift = alphaMul < 0.999f;
         if (source == null || device == null) return null;
-        if (HueStrength <= 0f && SatStrength <= 0f && ValStrength <= 0f) return null;
+        if (!hasColorShift && !hasAlphaShift) return null;
 
         var targetCol = TargetColor.ToColor();
         var pixels = new Color[source.Width * source.Height];
@@ -256,9 +263,19 @@ public class ColorHarmonizer
         for (int i = 0; i < pixels.Length; i++)
         {
             if (pixels[i].A == 0) continue; // skip fully transparent
-            pixels[i] = UseHclMode
-                ? HarmonizeHcl(pixels[i], targetCol, HueStrength, SatStrength, ValStrength)
-                : Harmonize(pixels[i], targetCol, HueStrength, SatStrength, ValStrength);
+
+            Color c = pixels[i];
+            if (hasColorShift)
+            {
+                c = UseHclMode
+                    ? HarmonizeHcl(c, targetCol, HueStrength, SatStrength, ValStrength)
+                    : Harmonize(c, targetCol, HueStrength, SatStrength, ValStrength);
+            }
+            if (hasAlphaShift)
+            {
+                c.A = (byte)(c.A * alphaMul);
+            }
+            pixels[i] = c;
         }
 
         var result = new Texture2D(device, source.Width, source.Height);

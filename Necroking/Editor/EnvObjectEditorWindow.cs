@@ -1648,8 +1648,7 @@ public class EnvObjectEditorWindow
 
         try
         {
-            using var stream = File.OpenRead(def.TexturePath);
-            var tex = Texture2D.FromStream(_device, stream);
+            var tex = Render.TextureUtil.LoadPremultiplied(_device, def.TexturePath);
             _edgeTweakerTexW = tex.Width;
             _edgeTweakerTexH = tex.Height;
             _edgeTweakerPixels = new Color[tex.Width * tex.Height];

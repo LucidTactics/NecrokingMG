@@ -355,8 +355,7 @@ public class TextureFileBrowser
         if (!File.Exists(path)) return null;
         try
         {
-            using var stream = File.OpenRead(path);
-            var tex = Texture2D.FromStream(_graphicsDevice, stream);
+            var tex = Necroking.Render.TextureUtil.LoadPremultiplied(_graphicsDevice, path);
             _textureCache[path] = tex;
             return tex;
         }

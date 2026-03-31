@@ -198,15 +198,36 @@ public class EditorBase
 
     public void DrawText(string text, Vector2 pos, Color color, SpriteFont? font = null)
     {
+        if (string.IsNullOrEmpty(text)) return;
         var f = font ?? _smallFont ?? _font;
         if (f != null)
-            _sb.DrawString(f, text, pos, color);
+        {
+            try { _sb.DrawString(f, text, pos, color); }
+            catch { _sb.DrawString(f, SanitizeForFont(text, f), pos, color); }
+        }
     }
 
     public Vector2 MeasureText(string text, SpriteFont? font = null)
     {
+        if (string.IsNullOrEmpty(text)) return Vector2.Zero;
         var f = font ?? _smallFont ?? _font;
-        return f?.MeasureString(text) ?? Vector2.Zero;
+        if (f == null) return Vector2.Zero;
+        try { return f.MeasureString(text); }
+        catch { return f.MeasureString(SanitizeForFont(text, f)); }
+    }
+
+    /// <summary>Remove characters not supported by the font.</summary>
+    private static string SanitizeForFont(string text, SpriteFont font)
+    {
+        var sb = new System.Text.StringBuilder(text.Length);
+        foreach (char c in text)
+        {
+            if (font.Characters.Contains(c) || c == '\n' || c == '\r')
+                sb.Append(c);
+            else
+                sb.Append('?');
+        }
+        return sb.ToString();
     }
 
     /// <summary>Find character index from pixel X position within a text string.</summary>

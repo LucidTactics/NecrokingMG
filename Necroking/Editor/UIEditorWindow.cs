@@ -56,6 +56,8 @@ public class UIEditorElementDef
     public int Height { get; set; } = 40;
     public byte[]? TintColor { get; set; }
     public UIEditorTextRegion? TextRegion { get; set; }
+    public string DefaultText { get; set; } = "";  // default text content for text elements
+    public HarmonizeSettings? Harmonize { get; set; } // per-pixel harmonizer settings (persisted)
     // Stroke/outline
     public int StrokeThickness { get; set; }           // 0 = no stroke
     public byte[] StrokeColor { get; set; } = { 255, 255, 255, 255 };
@@ -118,11 +120,22 @@ public class UIEditorTints
 public class UIEditorWidgetDef
 {
     public string Id { get; set; } = "";
-    public string Background { get; set; } = "";
+    // Three-layer system: Background (bottom) → Stencil (middle) → Children → Frame (top)
+    public string Background { get; set; } = "";       // nine-slice ID for background layer
+    public string Stencil { get; set; } = "";           // nine-slice ID for stencil overlay
+    public string StencilImagePath { get; set; } = "";  // direct image path for stencil (stretched sprite)
+    public string Frame { get; set; } = "";             // nine-slice ID for frame (topmost)
     public int Width { get; set; } = 200;
     public int Height { get; set; } = 100;
     public float BackgroundScale { get; set; } = 1f;
-    public byte[]? BackgroundTint { get; set; }  // RI23: background tint color
+    public byte[]? BackgroundTint { get; set; }
+    public byte[]? StencilTint { get; set; }
+    public byte[]? FrameTint { get; set; }
+    public int BackgroundInset { get; set; }            // pixels inset from frame on all sides
+    public int StencilInset { get; set; }               // pixels inset from frame on all sides
+    public HarmonizeSettings? BgHarmonize { get; set; }
+    public HarmonizeSettings? StencilHarmonize { get; set; }
+    public HarmonizeSettings? FrameHarmonize { get; set; }
     public bool Modal { get; set; }
     public string Layout { get; set; } = "none";
     public int LayoutPadding { get; set; }
@@ -180,7 +193,9 @@ public class UIEditorWindow : EditorBase
     // Color Harmonizer (CP04 / UI19)
     private readonly ColorHarmonizer _harmonizer = new();
     private bool _harmonizerOpen;
-    private enum HarmonizerTarget { ElementTint, WidgetChildTints, WidgetBgTint }
+    private float _harmonizeLiveTimer;          // throttle timer for live preview regeneration
+    private const float HarmonizeLiveInterval = 0.2f; // regenerate every 200ms
+    private enum HarmonizerTarget { ElementTint, WidgetChildTints, WidgetBgTint, WidgetStencilTint, WidgetFrameTint }
     private HarmonizerTarget _harmonizerTarget;
 
     // Texture file browser (UI01)
@@ -271,6 +286,52 @@ public class UIEditorWindow : EditorBase
 
         _loaded = true;
         _unsavedChanges = false;
+
+        // Regenerate harmonized textures from saved settings
+        if (_device != null)
+            RegenerateAllHarmonizedOnLoad();
+    }
+
+    private void RegenerateAllHarmonizedOnLoad()
+    {
+        // Elements
+        foreach (var el in _elements)
+        {
+            if (el.Harmonize == null || !el.Harmonize.HasEffect) continue;
+            SetHarmonizerFromSettings(el.Harmonize);
+            string imgPath = el.Type == "image" ? el.ImagePath : "";
+            string nsRef = el.Type == "nineSlice" ? el.NineSlice : "";
+            ApplyHarmonizeToLayer(nsRef, imgPath, "el");
+        }
+        // Widgets
+        foreach (var wd in _widgets)
+        {
+            if (wd.BgHarmonize != null && wd.BgHarmonize.HasEffect)
+            {
+                SetHarmonizerFromSettings(wd.BgHarmonize);
+                ApplyHarmonizeToLayer(wd.Background, "");
+            }
+            if (wd.StencilHarmonize != null && wd.StencilHarmonize.HasEffect)
+            {
+                SetHarmonizerFromSettings(wd.StencilHarmonize);
+                ApplyHarmonizeToLayer(wd.Stencil, wd.StencilImagePath);
+            }
+            if (wd.FrameHarmonize != null && wd.FrameHarmonize.HasEffect)
+            {
+                SetHarmonizerFromSettings(wd.FrameHarmonize);
+                ApplyHarmonizeToLayer(wd.Frame, "");
+            }
+        }
+    }
+
+    private void SetHarmonizerFromSettings(HarmonizeSettings s)
+    {
+        _harmonizer.TargetColor = new Core.HdrColor(s.TargetColor[0], s.TargetColor[1],
+            s.TargetColor[2], s.TargetColor.Length > 3 ? s.TargetColor[3] : (byte)255);
+        _harmonizer.HueStrength = s.HueStrength;
+        _harmonizer.SatStrength = s.SatStrength;
+        _harmonizer.ValStrength = s.ValStrength;
+        _harmonizer.UseHclMode = s.UseHcl;
     }
 
     private void LoadNineSlices(string path)
@@ -317,6 +378,9 @@ public class UIEditorWindow : EditorBase
                 };
                 if (item.TryGetProperty("tintColor", out var tc) && tc.ValueKind == JsonValueKind.Array)
                     def.TintColor = ReadColorArray(tc);
+                def.DefaultText = item.GetStringProp("defaultText");
+                if (item.TryGetProperty("harmonize", out var elHarm))
+                    def.Harmonize = ReadHarmonize(elHarm);
                 def.StrokeThickness = item.GetIntProp("strokeThickness", 0);
                 if (item.TryGetProperty("strokeColor", out var sc) && sc.ValueKind == JsonValueKind.Array)
                     def.StrokeColor = ReadColorArray(sc);
@@ -375,9 +439,20 @@ public class UIEditorWindow : EditorBase
                     IsScrollbar = item.GetBoolProp("isScrollbar"),                   // RI20
                     ScrollbarProportional = item.GetBoolProp("scrollbarProportional"), // RI20
                 };
-                // RI23: background tint
+                def.Stencil = item.GetStringProp("stencil");
+                def.StencilImagePath = item.GetStringProp("stencilImagePath");
+                def.Frame = item.GetStringProp("frame");
+                def.BackgroundInset = item.GetIntProp("backgroundInset");
+                def.StencilInset = item.GetIntProp("stencilInset");
+                if (item.TryGetProperty("bgHarmonize", out var bgH)) def.BgHarmonize = ReadHarmonize(bgH);
+                if (item.TryGetProperty("stencilHarmonize", out var stH)) def.StencilHarmonize = ReadHarmonize(stH);
+                if (item.TryGetProperty("frameHarmonize", out var frH)) def.FrameHarmonize = ReadHarmonize(frH);
                 if (item.TryGetProperty("backgroundTint", out var bgTint) && bgTint.ValueKind == JsonValueKind.Array)
                     def.BackgroundTint = ReadColorArray(bgTint);
+                if (item.TryGetProperty("stencilTint", out var stTint) && stTint.ValueKind == JsonValueKind.Array)
+                    def.StencilTint = ReadColorArray(stTint);
+                if (item.TryGetProperty("frameTint", out var frTint) && frTint.ValueKind == JsonValueKind.Array)
+                    def.FrameTint = ReadColorArray(frTint);
                 if (item.TryGetProperty("children", out var children))
                 {
                     foreach (var ch in children.EnumerateArray())
@@ -521,6 +596,10 @@ public class UIEditorWindow : EditorBase
             writer.WriteNumber("height", el.Height);
             if (el.TintColor != null)
                 WriteColorArray(writer, "tintColor", el.TintColor);
+            if (!string.IsNullOrEmpty(el.DefaultText))
+                writer.WriteString("defaultText", el.DefaultText);
+            if (el.Harmonize != null && el.Harmonize.HasEffect)
+                WriteHarmonize(writer, "harmonize", el.Harmonize);
             if (el.StrokeThickness > 0)
             {
                 writer.WriteNumber("strokeThickness", el.StrokeThickness);
@@ -563,11 +642,31 @@ public class UIEditorWindow : EditorBase
             writer.WriteString("id", wd.Id);
             if (!string.IsNullOrEmpty(wd.Background))
                 writer.WriteString("background", wd.Background);
+            if (!string.IsNullOrEmpty(wd.Stencil))
+                writer.WriteString("stencil", wd.Stencil);
+            if (!string.IsNullOrEmpty(wd.StencilImagePath))
+                writer.WriteString("stencilImagePath", wd.StencilImagePath);
+            if (!string.IsNullOrEmpty(wd.Frame))
+                writer.WriteString("frame", wd.Frame);
             writer.WriteNumber("width", wd.Width);
             writer.WriteNumber("height", wd.Height);
             writer.WriteNumber("backgroundScale", wd.BackgroundScale);
+            if (wd.BackgroundInset != 0)
+                writer.WriteNumber("backgroundInset", wd.BackgroundInset);
+            if (wd.StencilInset != 0)
+                writer.WriteNumber("stencilInset", wd.StencilInset);
             if (wd.BackgroundTint != null)
                 WriteColorArray(writer, "backgroundTint", wd.BackgroundTint);
+            if (wd.StencilTint != null)
+                WriteColorArray(writer, "stencilTint", wd.StencilTint);
+            if (wd.FrameTint != null)
+                WriteColorArray(writer, "frameTint", wd.FrameTint);
+            if (wd.BgHarmonize != null && wd.BgHarmonize.HasEffect)
+                WriteHarmonize(writer, "bgHarmonize", wd.BgHarmonize);
+            if (wd.StencilHarmonize != null && wd.StencilHarmonize.HasEffect)
+                WriteHarmonize(writer, "stencilHarmonize", wd.StencilHarmonize);
+            if (wd.FrameHarmonize != null && wd.FrameHarmonize.HasEffect)
+                WriteHarmonize(writer, "frameHarmonize", wd.FrameHarmonize);
             writer.WriteBoolean("modal", wd.Modal);
             if (wd.Layout != "none" && !string.IsNullOrEmpty(wd.Layout))
             {
@@ -691,6 +790,31 @@ public class UIEditorWindow : EditorBase
         writer.WriteEndArray();
     }
 
+    private static HarmonizeSettings? ReadHarmonize(JsonElement el)
+    {
+        if (el.ValueKind != JsonValueKind.Object) return null;
+        var h = new HarmonizeSettings();
+        if (el.TryGetProperty("targetColor", out var tc) && tc.ValueKind == JsonValueKind.Array)
+            h.TargetColor = ReadColorArray(tc);
+        h.HueStrength = el.GetFloatProp("hueStrength");
+        h.SatStrength = el.GetFloatProp("satStrength");
+        h.ValStrength = el.GetFloatProp("valStrength");
+        h.UseHcl = el.GetBoolProp("useHcl");
+        return h;
+    }
+
+    private static void WriteHarmonize(Utf8JsonWriter writer, string name, HarmonizeSettings h)
+    {
+        writer.WritePropertyName(name);
+        writer.WriteStartObject();
+        WriteColorArray(writer, "targetColor", h.TargetColor);
+        writer.WriteNumber("hueStrength", h.HueStrength);
+        writer.WriteNumber("satStrength", h.SatStrength);
+        writer.WriteNumber("valStrength", h.ValStrength);
+        writer.WriteBoolean("useHcl", h.UseHcl);
+        writer.WriteEndObject();
+    }
+
     private static void EnsureDir(string filePath)
     {
         var dir = Path.GetDirectoryName(filePath);
@@ -710,8 +834,7 @@ public class UIEditorWindow : EditorBase
         if (!File.Exists(texPath)) return null;
         try
         {
-            using var stream = File.OpenRead(texPath);
-            tex = Texture2D.FromStream(_device, stream);
+            tex = Render.TextureUtil.LoadPremultiplied(_device, texPath);
             _textures[texPath] = tex;
             return tex;
         }
@@ -802,6 +925,14 @@ public class UIEditorWindow : EditorBase
                 _statusTimer = 0;
                 _statusMsg = "";
             }
+        }
+
+        // Reset live harmonize timer when color picker is closed
+        if (!IsColorPickerOpen)
+            _harmonizeLiveTimer = 0;
+        else
+        {
+            _harmonizeLiveTimer = 0;
         }
 
         // Ctrl+S save (RI31: check IsTextInputActive to avoid triggering while typing)
@@ -915,6 +1046,17 @@ public class UIEditorWindow : EditorBase
 
         // Draw color picker popup on top of everything
         DrawColorPickerPopup();
+
+        // Live harmonize regen (after color picker has updated swatch values)
+        if (IsColorPickerOpen && _device != null)
+        {
+            _harmonizeLiveTimer += (float)gameTime.ElapsedGameTime.TotalSeconds;
+            if (_harmonizeLiveTimer >= HarmonizeLiveInterval)
+            {
+                _harmonizeLiveTimer = 0;
+                RegenerateHarmonizedTextures();
+            }
+        }
 
         // Draw texture file browser popup on top of everything
         _textureBrowser.Draw(this, screenW, screenH);
@@ -1431,76 +1573,46 @@ public class UIEditorWindow : EditorBase
                 _unsavedChanges = true;
             }
 
-            // Harmonize button — per-pixel texture color shift
+            // Harmonize toggle
             int harmBtnX = x + pad + 170;
-            if (DrawButton("Harmonize", harmBtnX, curY, 80, 18))
+            bool showElHarm = def.Harmonize != null;
+            if (DrawButton(showElHarm ? "Hide Harm." : "Harmonize", harmBtnX, curY, 80, 18))
             {
-                // Begin with a dummy color — the real work is per-pixel on Apply
-                var colors = new[] { BytesToHdr(def.TintColor ?? new byte[] { 255, 255, 255, 255 }) };
-                _harmonizer.Begin(colors);
-                _harmonizerOpen = true;
-                _harmonizerTarget = HarmonizerTarget.ElementTint;
+                def.Harmonize = showElHarm ? null : new HarmonizeSettings();
+                _unsavedChanges = true;
             }
             curY += 24;
         }
 
-        // Harmonizer panel for per-pixel element texture harmonization
-        if (_harmonizerOpen && _harmonizer.Active && ActiveTab == UIEditorTab.Elements && _harmonizerTarget == HarmonizerTarget.ElementTint)
+        // Inline element harmonizer
+        if (def.Harmonize != null)
         {
-            if (_harmonizer.DrawPanel(this, x, ref curY, propW + pad * 2))
+            bool changed = DrawInlineHarmonizer(def.Harmonize, x + pad, ref curY, propW);
+            if (changed && _device != null)
             {
-                // Per-pixel harmonize: create a color-shifted copy of the source texture
-                if (_device != null)
-                {
-                    // Find the source texture for this element
-                    Texture2D? sourceTex = null;
-                    string texKey = "";
-                    if (def.Type == "image" && !string.IsNullOrEmpty(def.ImagePath))
-                    {
-                        sourceTex = GetOrLoadTexture(def.ImagePath);
-                        texKey = def.ImagePath;
-                    }
-                    else if (def.Type == "nineSlice" && !string.IsNullOrEmpty(def.NineSlice))
-                    {
-                        var nsDef = _nineSlices.FirstOrDefault(n => n.Id == def.NineSlice);
-                        if (nsDef != null && !string.IsNullOrEmpty(nsDef.Texture))
-                        {
-                            sourceTex = GetOrLoadTexture(nsDef.Texture);
-                            texKey = nsDef.Texture;
-                        }
-                    }
-
-                    if (sourceTex != null && !string.IsNullOrEmpty(texKey))
-                    {
-                        var harmonized = _harmonizer.HarmonizeTexture(sourceTex, _device);
-                        if (harmonized != null)
-                        {
-                            // Cache the harmonized texture for preview
-                            if (_harmonizedTextures.TryGetValue(texKey, out var old) && old != sourceTex)
-                                old.Dispose();
-                            _harmonizedTextures[texKey] = harmonized;
-
-                            // If it's a nine-slice, rebuild the instance with the harmonized texture
-                            if (def.Type == "nineSlice" && !string.IsNullOrEmpty(def.NineSlice))
-                            {
-                                var nsDef = _nineSlices.FirstOrDefault(n => n.Id == def.NineSlice);
-                                if (nsDef != null)
-                                {
-                                    var nsInst = new NineSlice();
-                                    nsInst.LoadFromTexture(harmonized, nsDef.BorderLeft, nsDef.BorderRight,
-                                        nsDef.BorderTop, nsDef.BorderBottom, nsDef.TileEdges);
-                                    _harmonizedNineSlices[def.NineSlice] = nsInst;
-                                }
-                            }
-                            _unsavedChanges = true;
-                        }
-                    }
-                }
+                _harmonizer.TargetColor = new Core.HdrColor(def.Harmonize.TargetColor[0], def.Harmonize.TargetColor[1],
+                    def.Harmonize.TargetColor[2], def.Harmonize.TargetColor.Length > 3 ? def.Harmonize.TargetColor[3] : (byte)255);
+                _harmonizer.HueStrength = def.Harmonize.HueStrength;
+                _harmonizer.SatStrength = def.Harmonize.SatStrength;
+                _harmonizer.ValStrength = def.Harmonize.ValStrength;
+                _harmonizer.UseHclMode = def.Harmonize.UseHcl;
+                string imgPath = def.Type == "image" ? def.ImagePath : "";
+                string nsRef = def.Type == "nineSlice" ? def.NineSlice : "";
+                ApplyHarmonizeToLayer(nsRef, imgPath, "el");
+                _unsavedChanges = true;
             }
         }
 
         // Stroke/outline
         {
+        // Default text (for text-type elements, editable in element editor)
+        if (def.Type == "text")
+        {
+            string newDefText = DrawTextField("el_deftext", "Default Text", def.DefaultText, x + pad, curY, propW);
+            if (newDefText != def.DefaultText) { def.DefaultText = newDefText; _unsavedChanges = true; }
+            curY += 24;
+        }
+
             DrawText("-- Stroke --", new Vector2(x + pad, curY + 2), AccentColor);
             curY += 20;
 
@@ -1621,7 +1733,7 @@ public class UIEditorWindow : EditorBase
         if (def.Type == "image" && !string.IsNullOrEmpty(def.ImagePath))
         {
             // Check for harmonized copy first
-            var imgTex = _harmonizedTextures.TryGetValue(def.ImagePath, out var harmImg) ? harmImg
+            var imgTex = _harmonizedTextures.TryGetValue("el|" + def.ImagePath, out var harmImg) ? harmImg
                 : GetOrLoadTexture(def.ImagePath);
             if (imgTex != null)
             {
@@ -1638,7 +1750,7 @@ public class UIEditorWindow : EditorBase
             // Check for harmonized nine-slice first
             NineSlice? ns = null;
             if (!string.IsNullOrEmpty(def.NineSlice))
-                ns = _harmonizedNineSlices.TryGetValue(def.NineSlice, out var harmNs) ? harmNs
+                ns = _harmonizedNineSlices.TryGetValue("el|" + def.NineSlice, out var harmNs) ? harmNs
                     : GetOrLoadNineSlice(def.NineSlice);
             if (ns != null)
             {
@@ -1685,8 +1797,8 @@ public class UIEditorWindow : EditorBase
         DrawResizeHandle(elX + def.Width / 2 - hs / 2, elY + def.Height - hs / 2, hs);
         DrawResizeHandle(elX + def.Width - hs / 2, elY + def.Height - hs / 2, hs);
 
-        // Text region overlay
-        if (def.TextRegion != null)
+        // Text region overlay (only for text-type elements)
+        if (def.Type == "text" && def.TextRegion != null)
         {
             var tr = def.TextRegion;
             int trDrawW = tr.W > 0 ? tr.W : def.Width;
@@ -1694,7 +1806,8 @@ public class UIEditorWindow : EditorBase
             var textRect = new Rectangle(elX + tr.X, elY + tr.Y, trDrawW, trDrawH);
             DrawRect(textRect, new Color(100, 200, 100, 30));
             DrawBorder(textRect, new Color(100, 200, 100, 150));
-            DrawText("Sample Text", new Vector2(textRect.X + 4, textRect.Y + 4),
+            string displayText = !string.IsNullOrEmpty(def.DefaultText) ? def.DefaultText : "Sample Text";
+            DrawText(displayText, new Vector2(textRect.X + 4, textRect.Y + 4),
                 ByteColor(tr.FontColor, 200));
         }
 
@@ -1794,6 +1907,16 @@ public class UIEditorWindow : EditorBase
 
     private void DrawWidgetTab(int x, int y, int w, int h)
     {
+        try { DrawWidgetTabInner(x, y, w, h); }
+        catch (Exception ex)
+        {
+            DrawText($"Widget tab error: {ex.Message}", new Vector2(x + 10, y + 10), DangerColor);
+            Core.DebugLog.Log("ui_editor", $"Widget tab crash: {ex}");
+        }
+    }
+
+    private void DrawWidgetTabInner(int x, int y, int w, int h)
+    {
         int listW = 220;
         int propsW = 320;
         int canvasX = x + listW + propsW + 2;
@@ -1886,13 +2009,60 @@ public class UIEditorWindow : EditorBase
         if (newId != def.Id) { def.Id = newId; _unsavedChanges = true; }
         curY += 24;
 
-        // Background 9-slice dropdown
+        // Three-layer system: Background → Stencil → Children → Frame
         var nsIds = new[] { "(none)" }.Concat(_nineSlices.Select(ns => ns.Id)).ToArray();
+
+        DrawText("-- Layers --", new Vector2(x + pad, curY + 2), AccentColor);
+        curY += 20;
+
+        // Frame (topmost layer)
+        string curFrame = string.IsNullOrEmpty(def.Frame) ? "(none)" : def.Frame;
+        string newFrame = DrawCombo("wd_frame", "Frame", curFrame, nsIds, x + pad, curY, propW);
+        if (newFrame == "(none)") newFrame = "";
+        if (newFrame != def.Frame) { def.Frame = newFrame; _unsavedChanges = true; }
+        curY += 24;
+
+        // Background
         string curBg = string.IsNullOrEmpty(def.Background) ? "(none)" : def.Background;
         string newBg = DrawCombo("wd_bg", "Background", curBg, nsIds, x + pad, curY, propW);
         if (newBg == "(none)") newBg = "";
         if (newBg != def.Background) { def.Background = newBg; _unsavedChanges = true; }
         curY += 24;
+
+        if (!string.IsNullOrEmpty(def.Background))
+        {
+            int newBgInset = DrawIntField("wd_bgins", "BG Inset", def.BackgroundInset, x + pad, curY, propW);
+            if (newBgInset != def.BackgroundInset) { def.BackgroundInset = Math.Max(0, newBgInset); _unsavedChanges = true; }
+            curY += 22;
+        }
+
+        // Stencil (nine-slice OR image)
+        string curSt = string.IsNullOrEmpty(def.Stencil) ? "(none)" : def.Stencil;
+        string newSt = DrawCombo("wd_stencil", "Stencil NS", curSt, nsIds, x + pad, curY, propW);
+        if (newSt == "(none)") newSt = "";
+        if (newSt != def.Stencil) { def.Stencil = newSt; _unsavedChanges = true; }
+        curY += 24;
+
+        // Stencil image browse (alternative to nine-slice)
+        {
+            int browseBtnW = 60;
+            string stDisplay = string.IsNullOrEmpty(def.StencilImagePath) ? "(none)" : def.StencilImagePath;
+            DrawTextField("wd_stimg", "Stencil Img", stDisplay, x + pad, curY, propW - browseBtnW - 4);
+            if (DrawButton("Browse", x + pad + propW - browseBtnW, curY, browseBtnW, 20))
+            {
+                _textureBrowser.Open("assets/UI", def.StencilImagePath,
+                    path => { def.StencilImagePath = path; _unsavedChanges = true; });
+            }
+            curY += 24;
+        }
+
+        bool hasStencil = !string.IsNullOrEmpty(def.Stencil) || !string.IsNullOrEmpty(def.StencilImagePath);
+        if (hasStencil)
+        {
+            int newStInset = DrawIntField("wd_stins", "Stencil Inset", def.StencilInset, x + pad, curY, propW);
+            if (newStInset != def.StencilInset) { def.StencilInset = Math.Max(0, newStInset); _unsavedChanges = true; }
+            curY += 22;
+        }
 
         // Size
         int newW = DrawIntField("wd_w", "Width", def.Width, x + pad, curY, propW);
@@ -1988,65 +2158,10 @@ public class UIEditorWindow : EditorBase
             curY += 22;
         }
 
-        // RI23: Background tint color (shown when widget has a background nine-slice)
-        if (!string.IsNullOrEmpty(def.Background))
-        {
-            DrawText("BG Tint:", new Vector2(x + pad, curY + 2), TextDim);
-            byte[] bgTint = def.BackgroundTint ?? new byte[] { 255, 255, 255, 255 };
-            var bgHdr = BytesToHdr(bgTint);
-            if (DrawColorSwatch("wd_bgtint", x + pad + 120, curY, 40, 18, ref bgHdr, hideIntensity: true))
-                _unsavedChanges = true;
-            var newBgTint = HdrToBytes(bgHdr);
-            if (def.BackgroundTint == null || !newBgTint.SequenceEqual(def.BackgroundTint))
-            {
-                def.BackgroundTint = newBgTint;
-                _unsavedChanges = true;
-            }
-
-            // Harmonize button for widget background tint (RI23)
-            int harmBgBtnX = x + pad + 170;
-            if (DrawButton("Harmonize", harmBgBtnX, curY, 80, 18))
-            {
-                var colors = new[] { BytesToHdr(def.BackgroundTint ?? new byte[] { 255, 255, 255, 255 }) };
-                _harmonizer.Begin(colors);
-                _harmonizerOpen = true;
-                _harmonizerTarget = HarmonizerTarget.WidgetBgTint;
-            }
-            curY += 24;
-
-            // Harmonizer panel for widget BG — per-pixel on background nine-slice
-            if (_harmonizerOpen && _harmonizer.Active && ActiveTab == UIEditorTab.Widgets && _harmonizerTarget == HarmonizerTarget.WidgetBgTint)
-            {
-                if (_harmonizer.DrawPanel(this, x + pad, ref curY, propW))
-                {
-                    // Per-pixel harmonize the background nine-slice texture
-                    if (_device != null && !string.IsNullOrEmpty(def.Background))
-                    {
-                        var nsDef = _nineSlices.FirstOrDefault(n => n.Id == def.Background);
-                        if (nsDef != null && !string.IsNullOrEmpty(nsDef.Texture))
-                        {
-                            var sourceTex = GetOrLoadTexture(nsDef.Texture);
-                            if (sourceTex != null)
-                            {
-                                var harmonized = _harmonizer.HarmonizeTexture(sourceTex, _device);
-                                if (harmonized != null)
-                                {
-                                    if (_harmonizedTextures.TryGetValue(nsDef.Texture, out var old2) && old2 != sourceTex)
-                                        old2.Dispose();
-                                    _harmonizedTextures[nsDef.Texture] = harmonized;
-
-                                    var nsInst = new NineSlice();
-                                    nsInst.LoadFromTexture(harmonized, nsDef.BorderLeft, nsDef.BorderRight,
-                                        nsDef.BorderTop, nsDef.BorderBottom, nsDef.TileEdges);
-                                    _harmonizedNineSlices[def.Background] = nsInst;
-                                    _unsavedChanges = true;
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
+        // Per-layer harmonize controls
+        { var bt = def.BackgroundTint; var bh = def.BgHarmonize; DrawLayerHarmonize("BG", "wd_bgtint", def.Background, "", "bg", ref bt, ref bh, x, pad, propW, ref curY); def.BackgroundTint = bt; def.BgHarmonize = bh; }
+        { var st2 = def.StencilTint; var sh2 = def.StencilHarmonize; DrawLayerHarmonize("Stencil", "wd_sttint", def.Stencil, def.StencilImagePath, "st", ref st2, ref sh2, x, pad, propW, ref curY); def.StencilTint = st2; def.StencilHarmonize = sh2; }
+        { var ft = def.FrameTint; var fh = def.FrameHarmonize; DrawLayerHarmonize("Frame", "wd_frtint", def.Frame, "", "fr", ref ft, ref fh, x, pad, propW, ref curY); def.FrameTint = ft; def.FrameHarmonize = fh; }
 
         // Children section
         DrawRect(new Rectangle(x + pad, curY, propW, 1), PanelBorder);
@@ -2198,7 +2313,15 @@ public class UIEditorWindow : EditorBase
         // Selected child properties
         if (_selectedChildIdx >= 0 && _selectedChildIdx < def.Children.Count)
         {
-            DrawChildProperties(def.Children[_selectedChildIdx], x + pad, curY, propW);
+            try
+            {
+                DrawChildProperties(def.Children[_selectedChildIdx], x + pad, curY, propW);
+            }
+            catch (Exception ex)
+            {
+                DrawText($"Error: {ex.Message}", new Vector2(x + pad, curY), DangerColor);
+                Core.DebugLog.Log("ui_editor", $"DrawChildProperties crash: {ex}");
+            }
         }
 
         // Track content height for scroll clamping
@@ -2631,17 +2754,47 @@ public class UIEditorWindow : EditorBase
         int wdY = y + (h - def.Height) / 2;
         var wdRect = new Rectangle(wdX, wdY, def.Width, def.Height);
 
-        // Draw widget background (nine-slice)
-        var bgNs = !string.IsNullOrEmpty(def.Background) ? GetOrLoadNineSlice(def.Background) : null;
-        if (bgNs != null)
+        // Layer 1: Background (bottom, with inset)
+        if (!string.IsNullOrEmpty(def.Background))
         {
-            var bgColor = def.BackgroundTint != null ? ByteColor(def.BackgroundTint) : Color.White;
-            bgNs.Draw(_sb, wdRect, bgColor, def.BackgroundScale);
+            var bgNs = _harmonizedNineSlices.TryGetValue("bg|" + def.Background, out var hBg) ? hBg
+                : GetOrLoadNineSlice(def.Background);
+            if (bgNs != null)
+            {
+                int bi = def.BackgroundInset;
+                var bgRect = new Rectangle(wdX + bi, wdY + bi, def.Width - bi * 2, def.Height - bi * 2);
+                var bgColor = def.BackgroundTint != null ? ByteColor(def.BackgroundTint) : Color.White;
+                bgNs.Draw(_sb, bgRect, bgColor, def.BackgroundScale);
+            }
         }
         else
         {
             DrawRect(wdRect, new Color(40, 40, 60, 200));
         }
+
+        // Layer 2: Stencil (middle, with inset) — nine-slice or stretched image
+        {
+            int si = def.StencilInset;
+            var stRect = new Rectangle(wdX + si, wdY + si, def.Width - si * 2, def.Height - si * 2);
+            var stColor = def.StencilTint != null ? ByteColor(def.StencilTint) : Color.White;
+
+            if (!string.IsNullOrEmpty(def.StencilImagePath))
+            {
+                var stTex = _harmonizedTextures.TryGetValue("st|" + def.StencilImagePath, out var hStImg) ? hStImg
+                    : GetOrLoadTexture(def.StencilImagePath);
+                if (stTex != null)
+                    _sb.Draw(stTex, stRect, stColor);
+            }
+            else if (!string.IsNullOrEmpty(def.Stencil))
+            {
+                var stNs = _harmonizedNineSlices.TryGetValue("st|" + def.Stencil, out var hSt) ? hSt
+                    : GetOrLoadNineSlice(def.Stencil);
+                if (stNs != null)
+                    stNs.Draw(_sb, stRect, stColor);
+            }
+        }
+
+        // Children render here (between stencil and frame)
         DrawBorder(wdRect, PanelBorder, 1);
 
         // Draw children
@@ -2650,6 +2803,18 @@ public class UIEditorWindow : EditorBase
             var child = def.Children[i];
             var childRect = GetChildScreenRect(child, wdX, wdY, def.Width, def.Height);
             DrawWidgetChild(child, childRect, i == _selectedChildIdx);
+        }
+
+        // Layer 3: Frame (topmost, over children)
+        if (!string.IsNullOrEmpty(def.Frame))
+        {
+            var frNs = _harmonizedNineSlices.TryGetValue("fr|" + def.Frame, out var hFr) ? hFr
+                : GetOrLoadNineSlice(def.Frame);
+            if (frNs != null)
+            {
+                var frColor = def.FrameTint != null ? ByteColor(def.FrameTint) : Color.White;
+                frNs.Draw(_sb, wdRect, frColor);
+            }
         }
 
         // Widget outline
@@ -2817,68 +2982,110 @@ public class UIEditorWindow : EditorBase
 
     private void DrawWidgetChild(UIEditorChildDef child, Rectangle rect, bool selected)
     {
-        var elemDef = _elements.FirstOrDefault(e => e.Id == child.Element);
         bool drawn = false;
 
-        if (elemDef != null)
+        // If child references a widget, render its layers (background → stencil → frame)
+        if (!string.IsNullOrEmpty(child.Widget))
         {
-            byte[] tc = elemDef.TintColor ?? new byte[] { 255, 255, 255, 255 };
-            var tint = ByteColor(tc);
-
-            if (elemDef.Type == "image" && !string.IsNullOrEmpty(elemDef.ImagePath))
+            var widgetDef = _widgets.FirstOrDefault(w => w.Id == child.Widget);
+            if (widgetDef != null)
             {
-                // Image element — check for harmonized copy first
-                var imgTex = _harmonizedTextures.TryGetValue(elemDef.ImagePath, out var harmImg) ? harmImg
-                    : GetOrLoadTexture(elemDef.ImagePath);
-                if (imgTex != null)
+                drawn = true;
+                // Background layer
+                if (!string.IsNullOrEmpty(widgetDef.Background))
                 {
-                    _sb.Draw(imgTex, rect, tint);
-                    drawn = true;
+                    var bgNs = _harmonizedNineSlices.TryGetValue("bg|" + widgetDef.Background, out var hBg) ? hBg
+                        : GetOrLoadNineSlice(widgetDef.Background);
+                    if (bgNs != null)
+                    {
+                        int bi = widgetDef.BackgroundInset;
+                        var bgRect = new Rectangle(rect.X + bi, rect.Y + bi, rect.Width - bi * 2, rect.Height - bi * 2);
+                        var bgColor = widgetDef.BackgroundTint != null ? ByteColor(widgetDef.BackgroundTint) : Color.White;
+                        bgNs.Draw(_sb, bgRect, bgColor, widgetDef.BackgroundScale);
+                    }
+                }
+                // Stencil layer
+                bool hasStencilImg = !string.IsNullOrEmpty(widgetDef.StencilImagePath);
+                bool hasStencilNs = !string.IsNullOrEmpty(widgetDef.Stencil);
+                if (hasStencilImg || hasStencilNs)
+                {
+                    int si = widgetDef.StencilInset;
+                    var stRect = new Rectangle(rect.X + si, rect.Y + si, rect.Width - si * 2, rect.Height - si * 2);
+                    var stColor = widgetDef.StencilTint != null ? ByteColor(widgetDef.StencilTint) : Color.White;
+
+                    if (hasStencilImg)
+                    {
+                        var stTex = _harmonizedTextures.TryGetValue("st|" + widgetDef.StencilImagePath, out var hSt) ? hSt
+                            : GetOrLoadTexture(widgetDef.StencilImagePath);
+                        if (stTex != null) _sb.Draw(stTex, stRect, stColor);
+                    }
+                    else
+                    {
+                        var stNs = _harmonizedNineSlices.TryGetValue("st|" + widgetDef.Stencil, out var hSt2) ? hSt2
+                            : GetOrLoadNineSlice(widgetDef.Stencil);
+                        if (stNs != null) stNs.Draw(_sb, stRect, stColor);
+                    }
+                }
+                // Frame layer (on top)
+                if (!string.IsNullOrEmpty(widgetDef.Frame))
+                {
+                    var frNs = _harmonizedNineSlices.TryGetValue("fr|" + widgetDef.Frame, out var hFr) ? hFr
+                        : GetOrLoadNineSlice(widgetDef.Frame);
+                    if (frNs != null)
+                    {
+                        var frColor = widgetDef.FrameTint != null ? ByteColor(widgetDef.FrameTint) : Color.White;
+                        frNs.Draw(_sb, rect, frColor);
+                    }
                 }
             }
-            else if (!string.IsNullOrEmpty(elemDef.NineSlice))
+        }
+
+        // If child references an element, render it
+        if (!drawn && !string.IsNullOrEmpty(child.Element))
+        {
+            var elemDef = _elements.FirstOrDefault(e => e.Id == child.Element);
+            if (elemDef != null)
             {
-                // Nine-slice element — check for harmonized copy first
-                NineSlice? childNs = _harmonizedNineSlices.TryGetValue(elemDef.NineSlice, out var harmNs) ? harmNs
-                    : GetOrLoadNineSlice(elemDef.NineSlice);
-                if (childNs != null)
+                byte[] tc = elemDef.TintColor ?? new byte[] { 255, 255, 255, 255 };
+                var tint = ByteColor(tc);
+
+                if (elemDef.Type == "image" && !string.IsNullOrEmpty(elemDef.ImagePath))
                 {
-                    childNs.Draw(_sb, rect, tint);
-                    drawn = true;
+                    var imgTex = _harmonizedTextures.TryGetValue("el|" + elemDef.ImagePath, out var harmImg) ? harmImg
+                        : GetOrLoadTexture(elemDef.ImagePath);
+                    if (imgTex != null) { _sb.Draw(imgTex, rect, tint); drawn = true; }
                 }
-            }
+                else if (!string.IsNullOrEmpty(elemDef.NineSlice))
+                {
+                    NineSlice? childNs = _harmonizedNineSlices.TryGetValue("el|" + elemDef.NineSlice, out var harmNs) ? harmNs
+                        : GetOrLoadNineSlice(elemDef.NineSlice);
+                    if (childNs != null) { childNs.Draw(_sb, rect, tint); drawn = true; }
+                }
 
-            // Stroke/outline
-            if (elemDef.StrokeThickness > 0)
-            {
-                var strokeCol = ByteColor(elemDef.StrokeColor);
-                int t = elemDef.StrokeThickness;
-                Rectangle strokeRect;
-                if (elemDef.StrokeMode == "outside")
-                    strokeRect = new Rectangle(rect.X - t, rect.Y - t, rect.Width + t * 2, rect.Height + t * 2);
-                else if (elemDef.StrokeMode == "center")
-                    strokeRect = new Rectangle(rect.X - t / 2, rect.Y - t / 2, rect.Width + t, rect.Height + t);
-                else // "inside"
-                    strokeRect = rect;
-
-                int sx = strokeRect.X, sy = strokeRect.Y, sw = strokeRect.Width, sh = strokeRect.Height;
-                DrawRect(new Rectangle(sx, sy, sw, t), strokeCol);
-                DrawRect(new Rectangle(sx, sy + sh - t, sw, t), strokeCol);
-                DrawRect(new Rectangle(sx, sy + t, t, sh - t * 2), strokeCol);
-                DrawRect(new Rectangle(sx + sw - t, sy + t, t, sh - t * 2), strokeCol);
+                // Stroke/outline
+                if (elemDef.StrokeThickness > 0)
+                {
+                    var strokeCol = ByteColor(elemDef.StrokeColor);
+                    int t = elemDef.StrokeThickness;
+                    Rectangle strokeRect = elemDef.StrokeMode switch
+                    {
+                        "outside" => new Rectangle(rect.X - t, rect.Y - t, rect.Width + t * 2, rect.Height + t * 2),
+                        "center" => new Rectangle(rect.X - t / 2, rect.Y - t / 2, rect.Width + t, rect.Height + t),
+                        _ => rect
+                    };
+                    int sx = strokeRect.X, sy = strokeRect.Y, sw = strokeRect.Width, sh = strokeRect.Height;
+                    DrawRect(new Rectangle(sx, sy, sw, t), strokeCol);
+                    DrawRect(new Rectangle(sx, sy + sh - t, sw, t), strokeCol);
+                    DrawRect(new Rectangle(sx, sy + t, t, sh - t * 2), strokeCol);
+                    DrawRect(new Rectangle(sx + sw - t, sy + t, t, sh - t * 2), strokeCol);
+                }
             }
         }
 
         if (!drawn)
             DrawRect(rect, new Color(50, 50, 70, 180));
 
-        // Label
-        string label = !string.IsNullOrEmpty(child.Name) ? child.Name :
-                        !string.IsNullOrEmpty(child.Element) ? child.Element : "child";
-        DrawText(label, new Vector2(rect.X + 4, rect.Y + 4),
-            selected ? TextBright : TextColor);
-
-        // Default text
+        // Only show DefaultText, not element/child names
         if (!string.IsNullOrEmpty(child.DefaultText))
         {
             DrawText(child.DefaultText,
@@ -2906,6 +3113,207 @@ public class UIEditorWindow : EditorBase
     //  Utility
     // ═══════════════════════════════════════
 
+    /// <summary>Regenerate harmonized textures for the current harmonizer target (throttled live preview).</summary>
+    /// <summary>Live preview: regenerate harmonized texture for current harmonizer target.</summary>
+    /// <summary>Live preview: regenerate harmonized textures for currently selected element/widget.</summary>
+    private void RegenerateHarmonizedTextures()
+    {
+        if (_device == null) return;
+
+        if (ActiveTab == UIEditorTab.Elements && SelectedIndex >= 0 && SelectedIndex < _elements.Count)
+        {
+            var el = _elements[SelectedIndex];
+            if (el.Harmonize != null && el.Harmonize.HasEffect)
+            {
+                SetHarmonizerFromSettings(el.Harmonize);
+                string imgPath = el.Type == "image" ? el.ImagePath : "";
+                string nsRef = el.Type == "nineSlice" ? el.NineSlice : "";
+                ApplyHarmonizeToLayer(nsRef, imgPath, "el");
+            }
+        }
+        else if (ActiveTab == UIEditorTab.Widgets && SelectedIndex >= 0 && SelectedIndex < _widgets.Count)
+        {
+            var wd = _widgets[SelectedIndex];
+            if (wd.BgHarmonize != null && wd.BgHarmonize.HasEffect)
+            { SetHarmonizerFromSettings(wd.BgHarmonize); ApplyHarmonizeToLayer(wd.Background, "", "bg"); }
+            if (wd.StencilHarmonize != null && wd.StencilHarmonize.HasEffect)
+            { SetHarmonizerFromSettings(wd.StencilHarmonize); ApplyHarmonizeToLayer(wd.Stencil, wd.StencilImagePath, "st"); }
+            if (wd.FrameHarmonize != null && wd.FrameHarmonize.HasEffect)
+            { SetHarmonizerFromSettings(wd.FrameHarmonize); ApplyHarmonizeToLayer(wd.Frame, "", "fr"); }
+        }
+    }
+
+    /// <summary>Draw tint swatch + inline harmonizer sliders for a widget layer.
+    /// Settings are persisted directly on the HarmonizeSettings object.</summary>
+    private void DrawLayerHarmonize(string label, string swatchId,
+        string nsId, string imagePath, string cachePrefix,
+        ref byte[]? tintColor, ref HarmonizeSettings? settings,
+        int x, int pad, int propW, ref int curY)
+    {
+        bool hasNs = !string.IsNullOrEmpty(nsId);
+        bool hasImg = !string.IsNullOrEmpty(imagePath);
+        if (!hasNs && !hasImg) return;
+
+        DrawText($"{label} Tint:", new Vector2(x + pad, curY + 2), TextDim);
+        byte[] tint = tintColor ?? new byte[] { 255, 255, 255, 255 };
+        var hdr = BytesToHdr(tint);
+        if (DrawColorSwatch(swatchId, x + pad + 120, curY, 40, 18, ref hdr, hideIntensity: false))
+            _unsavedChanges = true;
+        var newTint = HdrToBytes(hdr);
+        if (tintColor == null || !newTint.SequenceEqual(tintColor))
+        {
+            tintColor = newTint;
+            _unsavedChanges = true;
+        }
+
+        // Toggle harmonize panel
+        bool showHarm = settings != null;
+        int harmBtnX = x + pad + 170;
+        if (DrawButton(showHarm ? "Hide Harm." : "Harmonize", harmBtnX, curY, 80, 18))
+        {
+            if (settings == null)
+                settings = new HarmonizeSettings();
+            else
+                settings = null; // toggle off (but keeps saved state until save)
+            _unsavedChanges = true;
+        }
+        curY += 24;
+
+        // Inline harmonizer sliders (directly modify settings)
+        if (settings != null)
+        {
+            bool changed = DrawInlineHarmonizer(settings, x + pad, ref curY, propW);
+            if (changed)
+            {
+                // Regenerate harmonized texture
+                _harmonizer.TargetColor = new Core.HdrColor(settings.TargetColor[0], settings.TargetColor[1],
+                    settings.TargetColor[2], settings.TargetColor.Length > 3 ? settings.TargetColor[3] : (byte)255);
+                _harmonizer.HueStrength = settings.HueStrength;
+                _harmonizer.SatStrength = settings.SatStrength;
+                _harmonizer.ValStrength = settings.ValStrength;
+                _harmonizer.UseHclMode = settings.UseHcl;
+                if (_device != null)
+                    ApplyHarmonizeToLayer(nsId, imagePath, cachePrefix);
+                _unsavedChanges = true;
+            }
+        }
+    }
+
+    /// <summary>Draw inline harmonizer controls (target color, mode, 3 sliders). Returns true if changed.</summary>
+    private bool DrawInlineHarmonizer(HarmonizeSettings settings, int x, ref int curY, int w)
+    {
+        bool changed = false;
+        int labelW = 80;
+        int fieldX = x + labelW;
+        int fieldW = w - labelW;
+
+        // Target color
+        DrawText("Target:", new Vector2(x, curY + 2), TextDim);
+        var targHdr = BytesToHdr(settings.TargetColor);
+        if (DrawColorSwatch("harm_target", fieldX, curY, 40, 18, ref targHdr, hideIntensity: false))
+        {
+            settings.TargetColor = HdrToBytes(targHdr);
+            changed = true;
+        }
+        curY += 22;
+
+        // Mode toggle
+        DrawText("Mode:", new Vector2(x, curY + 2), TextDim);
+        string modeLabel = settings.UseHcl ? "HCL" : "HSV";
+        if (DrawButton(modeLabel, fieldX, curY, 48, 18))
+        {
+            settings.UseHcl = !settings.UseHcl;
+            changed = true;
+        }
+        curY += 22;
+
+        // 3 sliders
+        string[] labels = settings.UseHcl ? new[] { "Hue:", "Chroma:", "Lum:" } : new[] { "Hue:", "Sat:", "Value:" };
+        float[] vals = { settings.HueStrength, settings.SatStrength, settings.ValStrength };
+
+        for (int i = 0; i < 3; i++)
+        {
+            float newVal = DrawSliderFloat($"harm_s{i}", labels[i], vals[i], 0f, 1f, x, curY, w);
+            if (MathF.Abs(newVal - vals[i]) > 0.001f)
+            {
+                vals[i] = newVal;
+                changed = true;
+            }
+            curY += 22;
+        }
+        settings.HueStrength = vals[0];
+        settings.SatStrength = vals[1];
+        settings.ValStrength = vals[2];
+
+        return changed;
+    }
+
+    /// <summary>Apply or reset harmonization for a layer's texture. Shared by all layer harmonizers.
+    /// cachePrefix ensures different layers using the same texture get separate cached copies.</summary>
+    private void ApplyHarmonizeToLayer(string nsId, string imagePath, string cachePrefix = "")
+    {
+        // Find source texture — try direct image path first, then nine-slice lookup
+        Texture2D? sourceTex = null;
+        string texKey = "";
+        string? nsLookupId = null;
+
+        if (!string.IsNullOrEmpty(imagePath))
+        {
+            sourceTex = GetOrLoadTexture(imagePath);
+            texKey = imagePath;
+        }
+        else if (!string.IsNullOrEmpty(nsId))
+        {
+            var nsDef = _nineSlices.FirstOrDefault(n => n.Id == nsId);
+            if (nsDef != null && !string.IsNullOrEmpty(nsDef.Texture))
+            {
+                sourceTex = GetOrLoadTexture(nsDef.Texture);
+                texKey = nsDef.Texture;
+                nsLookupId = nsId;
+            }
+        }
+
+        if (sourceTex == null || string.IsNullOrEmpty(texKey)) return;
+
+        // Prefix cache key so different layers using the same texture don't collide
+        string cacheKey = string.IsNullOrEmpty(cachePrefix) ? texKey : cachePrefix + "|" + texKey;
+
+        if (_harmonizer.LastActionWasReset)
+        {
+            // Reset — clear cache to show original
+            if (_harmonizedTextures.TryGetValue(cacheKey, out var old) && old != sourceTex)
+                old.Dispose();
+            _harmonizedTextures.Remove(cacheKey);
+            if (!string.IsNullOrEmpty(nsLookupId))
+                _harmonizedNineSlices.Remove(cachePrefix + "|" + nsLookupId);
+            _unsavedChanges = true;
+        }
+        else
+        {
+            // Slider change — regenerate
+            var harmonized = _harmonizer.HarmonizeTexture(sourceTex, _device!);
+            if (harmonized != null)
+            {
+                if (_harmonizedTextures.TryGetValue(cacheKey, out var old) && old != sourceTex)
+                    old.Dispose();
+                _harmonizedTextures[cacheKey] = harmonized;
+
+                if (!string.IsNullOrEmpty(nsLookupId))
+                {
+                    var nsDef = _nineSlices.FirstOrDefault(n => n.Id == nsLookupId);
+                    if (nsDef != null)
+                    {
+                        var nsInst = new NineSlice();
+                        nsInst.LoadFromTexture(harmonized, nsDef.BorderLeft, nsDef.BorderRight,
+                            nsDef.BorderTop, nsDef.BorderBottom, nsDef.TileEdges);
+                        _harmonizedNineSlices[cachePrefix + "|" + nsLookupId] = nsInst;
+                    }
+                }
+                _unsavedChanges = true;
+            }
+        }
+    }
+
     private void DrawResizeHandle(int x, int y, int size)
     {
         var r = new Rectangle(x, y, size, size);
@@ -2920,11 +3328,14 @@ public class UIEditorWindow : EditorBase
                mouse.Y >= hy && mouse.Y < hy + size;
     }
 
-    /// <summary>Convert byte[] RGBA to Color, avoiding constructor ambiguity.</summary>
+    /// <summary>Convert byte[] RGBA to premultiplied Color for correct alpha blending.</summary>
     private static Color ByteColor(byte[] c, byte alphaOverride = 0)
     {
         byte a = alphaOverride > 0 ? alphaOverride : (c.Length > 3 ? c[3] : (byte)255);
-        return new Color((int)c[0], (int)c[1], (int)c[2], (int)a);
+        if (a == 255)
+            return new Color((int)c[0], (int)c[1], (int)c[2], 255);
+        float af = a / 255f;
+        return new Color((byte)(c[0] * af), (byte)(c[1] * af), (byte)(c[2] * af), a);
     }
 
     /// <summary>Convert byte[] RGBA to HdrColor (LDR, intensity=1).</summary>

@@ -30,6 +30,7 @@
     <PackageReference Include="MonoGame.Content.Builder.Task" Version="3.8.*" />
     <PackageReference Include="MonoGame.ImGuiNet" Version="1.0.5" />
     <PackageReference Include="StbImageSharp" Version="2.30.15" />
+    <PackageReference Include="TextCopy" Version="6.2.1" />
   </ItemGroup>
   <ItemGroup>
     <None Include="assets\**\*" CopyToOutputDirectory="PreserveNewest" />

@@ -87,8 +87,7 @@ public class GroundSystem
             if (string.IsNullOrEmpty(path) || !System.IO.File.Exists(path)) continue;
             try
             {
-                using var stream = System.IO.File.OpenRead(path);
-                _textures[i] = Texture2D.FromStream(device, stream);
+                _textures[i] = Necroking.Render.TextureUtil.LoadPremultiplied(device, path);
             }
             catch { }
         }

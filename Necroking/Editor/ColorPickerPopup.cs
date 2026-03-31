@@ -55,6 +55,8 @@ public class ColorPickerPopup
     // Result state
     private bool _confirmed;  // true when OK is pressed (user accepted the change)
     private bool _cancelled;  // true when Cancel is pressed (user rejected the change)
+    private static string? _hexClipboard; // internal hex clipboard fallback
+    private bool _hexSelectAll;           // select-all on first click into hex field
 
     // === Eyedropper state (CP01) ===
     private bool _dropperActive;
@@ -387,6 +389,15 @@ public class ColorPickerPopup
         }
 
         return confirmed;
+    }
+
+    private static char? KeyToHexChar(Keys key)
+    {
+        if (key >= Keys.D0 && key <= Keys.D9) return (char)('0' + (key - Keys.D0));
+        if (key >= Keys.NumPad0 && key <= Keys.NumPad9) return (char)('0' + (key - Keys.NumPad0));
+        if (key >= Keys.A && key <= Keys.F) return (char)('A' + (key - Keys.A));
+        if (key == Keys.OemPeriod) return null; // block period in hex
+        return null;
     }
 
     private static char? KeyToNumericChar(Keys key)
@@ -798,6 +809,111 @@ public class ColorPickerPopup
         DrawText(rawInfo, new Vector2(cx, cy), new Color(100, 100, 120));
         cy += 16;
 
+        // Hex code field (all color pickers)
+        {
+            string hexVal = $"#{_currentColor.R:X2}{_currentColor.G:X2}{_currentColor.B:X2}";
+            DrawText("Hex:", new Vector2(cx, cy + 2), new Color(100, 100, 120));
+            int hexFieldX = cx + 32;
+            int hexFieldW = 80;
+            var hexRect = new Rectangle(hexFieldX, cy, hexFieldW, 18);
+            bool hexActive = _editingField == 100; // field ID 100 = hex
+            bool hexHovered = hexRect.Contains(_mouse.X, _mouse.Y);
+
+            DrawRect(hexRect, hexActive ? new Color(55, 55, 75) : new Color(35, 35, 50));
+            DrawBorder(hexRect, hexActive ? new Color(140, 170, 255) : new Color(65, 65, 85));
+
+            if (hexActive)
+            {
+                // Selection highlight when select-all is active
+                if (_hexSelectAll)
+                {
+                    float selW = MeasureText(_editBuffer).X;
+                    DrawRect(new Rectangle(hexFieldX + 3, cy + 2, (int)selW, 14), new Color(80, 120, 200, 140));
+                }
+                DrawText(_editBuffer, new Vector2(hexFieldX + 3, cy + 2), Color.White);
+                if (!_hexSelectAll && (int)(_editCursorBlink * 3) % 2 == 0)
+                {
+                    float curXPos = hexFieldX + 3 + MeasureText(_editBuffer).X;
+                    DrawRect(new Rectangle((int)curXPos, cy + 2, 1, 14), Color.White);
+                }
+
+                // Handle hex input
+                bool ctrl = _kb.IsKeyDown(Keys.LeftControl) || _kb.IsKeyDown(Keys.RightControl);
+                foreach (var key in _kb.GetPressedKeys())
+                {
+                    if (_prevKb.IsKeyUp(key))
+                    {
+                        if (key == Keys.Enter || key == Keys.Tab)
+                        {
+                            // Parse hex and apply
+                            string hex = _editBuffer.TrimStart('#');
+                            if (hex.Length == 6 && int.TryParse(hex, System.Globalization.NumberStyles.HexNumber, null, out int rgb))
+                            {
+                                _currentColor.R = (byte)((rgb >> 16) & 0xFF);
+                                _currentColor.G = (byte)((rgb >> 8) & 0xFF);
+                                _currentColor.B = (byte)(rgb & 0xFF);
+                                (_hue, _sat, _val) = RgbToHsv(_currentColor.R, _currentColor.G, _currentColor.B);
+                            }
+                            _editingField = -1;
+                        }
+                        else if (key == Keys.Escape)
+                        {
+                            _editingField = -1;
+                        }
+                        else if (key == Keys.Back)
+                        {
+                            if (_hexSelectAll) { _editBuffer = "#"; _hexSelectAll = false; }
+                            else if (_editBuffer.Length > 0) _editBuffer = _editBuffer[..^1];
+                        }
+                        else if (ctrl && key == Keys.V)
+                        {
+                            // Paste from clipboard
+                            try
+                            {
+                                string clip = _hexClipboard ?? "";
+                                // Try system clipboard via MonoGame's SDL
+                                try { clip = TextCopy.ClipboardService.GetText() ?? clip; } catch { }
+                                clip = clip.Trim().TrimStart('#');
+                                if (clip.Length <= 8) _editBuffer = "#" + clip;
+                                _hexSelectAll = false;
+                            }
+                            catch { }
+                        }
+                        else
+                        {
+                            char? c = KeyToHexChar(key);
+                            if (c.HasValue)
+                            {
+                                if (_hexSelectAll) { _editBuffer = "#"; _hexSelectAll = false; }
+                                if (_editBuffer.Length < 7)
+                                    _editBuffer += c.Value;
+                            }
+                        }
+                    }
+                }
+            }
+            else
+            {
+                DrawText(hexVal, new Vector2(hexFieldX + 3, cy + 2), Color.White);
+
+                if (hexHovered && _mouse.LeftButton == ButtonState.Pressed && _prevMouse.LeftButton == ButtonState.Released)
+                {
+                    _editingField = 100;
+                    _editBuffer = hexVal;
+                    _editCursorBlink = 0;
+                    _hexSelectAll = true;
+                }
+
+                // Ctrl+C copies hex when hovering
+                if (hexHovered && (_kb.IsKeyDown(Keys.LeftControl) || _kb.IsKeyDown(Keys.RightControl))
+                    && _kb.IsKeyDown(Keys.C) && _prevKb.IsKeyUp(Keys.C))
+                {
+                    _hexClipboard = hexVal;
+                    try { TextCopy.ClipboardService.SetText(hexVal); } catch { }
+                }
+            }
+            cy += 22;
+        }
         // === OK / Cancel buttons ===
         int btnW = 80;
         int btnH = 26;

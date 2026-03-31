@@ -99,10 +99,13 @@ public class WeatherRenderer
                 _spriteBatch.End();
 
                 // Compute world-space mapping for fog anchoring
+                // HLSL texCoord: (0,0)=top-left, (1,1)=bottom-right (Y-down)
+                // So origin = world at top-left = (camX - halfW, camY - halfH)
+                // Scale = world span across full UV = (2*halfW, 2*halfH) — both positive
                 float halfWorldW = screenW * 0.5f / _camera.Zoom;
-                float halfWorldH = screenW * 0.5f / (_camera.Zoom * _camera.YRatio);
-                var fogOrigin = new Vector2(_camera.Position.X - halfWorldW, _camera.Position.Y + halfWorldH);
-                var fogWorldScale = new Vector2(halfWorldW * 2.0f, -halfWorldH * 2.0f);
+                float halfWorldH = screenH * 0.5f / (_camera.Zoom * _camera.YRatio);
+                var fogOrigin = new Vector2(_camera.Position.X - halfWorldW, _camera.Position.Y - halfWorldH);
+                var fogWorldScale = new Vector2(halfWorldW * 2.0f, halfWorldH * 2.0f);
 
                 // Set shader uniforms
                 _fogEffect.Parameters["FogDensity"]?.SetValue(fx.FogDensity);

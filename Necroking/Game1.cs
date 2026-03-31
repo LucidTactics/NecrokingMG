@@ -932,8 +932,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         string menuBgPath = Path.Combine("assets", "UI", "Background", "VampireBackground.png");
         if (File.Exists(menuBgPath))
         {
-            using var stream = File.OpenRead(menuBgPath);
-            _mainMenuBg = Texture2D.FromStream(GraphicsDevice, stream);
+            _mainMenuBg = TextureUtil.LoadPremultiplied(GraphicsDevice, menuBgPath);
         }
 
         LogTiming("Menu background loaded");
@@ -1274,7 +1273,9 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // Scroll zoom (always active)
         int scrollDelta = mouse.ScrollWheelValue - _prevScrollValue;
         _prevScrollValue = mouse.ScrollWheelValue;
-        if (scrollDelta != 0 && _menuState == MenuState.None && !_mouseOverUI)
+        bool scrollOverUI = _mouseOverUI
+            || (_menuState == MenuState.MapEditor && _mapEditor.IsMouseOverPanel(screenW, screenH));
+        if (scrollDelta != 0 && (_menuState == MenuState.None || _menuState == MenuState.MapEditor) && !scrollOverUI)
             _camera.ZoomBy(scrollDelta / 120f);
 
         // Editors pause the game

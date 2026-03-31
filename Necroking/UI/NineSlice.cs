@@ -27,8 +27,7 @@ public class NineSlice
     public bool Load(GraphicsDevice device, NineSliceDef def)
     {
         if (!File.Exists(def.TexturePath)) return false;
-        using var stream = File.OpenRead(def.TexturePath);
-        Texture = Texture2D.FromStream(device, stream);
+        Texture = Necroking.Render.TextureUtil.LoadPremultiplied(device, def.TexturePath);
         if (Texture == null) return false;
         BorderLeft = def.BorderLeft;
         BorderRight = def.BorderRight;
