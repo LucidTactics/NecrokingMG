@@ -30,13 +30,11 @@ public class PatrolEncounterScenario : ScenarioBase
             units.MoveTarget[idx] = new Vec2(x, y);
         }
 
-        // Soldier outpost with patrol route (4 soldiers, Patrol AI simulated as MoveToPoint)
-        // They march toward the skeleton camp
+        // Soldier patrol — spawn close enough to reach all skeletons and resolve battle within timeout
         for (int i = 0; i < 4; i++)
         {
-            int idx = units.AddUnit(new Vec2(30f, 10f + i * 1.5f), UnitType.Soldier);
+            int idx = units.AddUnit(new Vec2(20f, 10f + i * 1.5f), UnitType.Soldier);
             units.AI[idx] = AIBehavior.AttackClosest;
-            // The soldiers will naturally seek out enemies
         }
 
         DebugLog.Log(ScenarioLog, "Spawned 6 skeletons (camp) + 4 soldiers (patrol)");

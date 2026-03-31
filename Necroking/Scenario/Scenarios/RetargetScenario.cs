@@ -35,12 +35,14 @@ public class RetargetScenario : ScenarioBase
 
         var units = sim.UnitsMut;
 
-        // Spawn skeleton with AttackClosestRetarget AI
+        // Spawn skeleton with AttackClosestRetarget AI — high HP so it survives long enough to test retargeting
         int skelIdx = units.AddUnit(new Vec2(15f, 15f), UnitType.Skeleton);
         units.AI[skelIdx] = AIBehavior.AttackClosestRetarget;
         units.RetargetTimer[skelIdx] = 0f; // start ready to pick a target immediately
+        units.Stats[skelIdx].MaxHP = 9999;
+        units.Stats[skelIdx].HP = 9999;
         _skeletonId = units.Id[skelIdx];
-        DebugLog.Log(ScenarioLog, $"Skeleton id={_skeletonId} at (15,15) with AttackClosestRetarget AI");
+        DebugLog.Log(ScenarioLog, $"Skeleton id={_skeletonId} at (15,15) with AttackClosestRetarget AI, HP=9999");
 
         // Spawn soldier A (closer to skeleton) with AttackClosest AI
         int solAIdx = units.AddUnit(new Vec2(20f, 15f), UnitType.Soldier);
