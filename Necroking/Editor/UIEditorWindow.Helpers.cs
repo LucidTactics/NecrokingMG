@@ -37,9 +37,9 @@ public partial class UIEditorWindow
     //  Widget Layer Rendering
     // ═══════════════════════════════════════
 
-    /// <summary>Draw the three widget layers (background → stencil → frame) into a rectangle.
-    /// Shared by both the main canvas and nested widget child rendering.</summary>
-    private void DrawWidgetLayers(UIEditorWidgetDef def, int drawX, int drawY, int drawW, int drawH)
+    /// <summary>Draw widget layers into a rectangle.
+    /// When drawFrame=false, only draws background + stencil (for inserting children between stencil and frame).</summary>
+    private void DrawWidgetLayers(UIEditorWidgetDef def, int drawX, int drawY, int drawW, int drawH, bool drawFrame = true)
     {
         // Layer 1: Background (with inset)
         if (!string.IsNullOrEmpty(def.Background))
@@ -73,6 +73,20 @@ public partial class UIEditorWindow
         }
 
         // Layer 3: Frame (topmost, full bounds)
+        if (drawFrame && !string.IsNullOrEmpty(def.Frame))
+        {
+            var frNs = GetNineSlice(def.Frame, "fr");
+            if (frNs != null)
+            {
+                var frColor = def.FrameTint != null ? ByteColor(def.FrameTint) : Color.White;
+                frNs.Draw(_sb, new Rectangle(drawX, drawY, drawW, drawH), frColor);
+            }
+        }
+    }
+
+    /// <summary>Draw just the frame layer of a widget.</summary>
+    private void DrawWidgetFrame(UIEditorWidgetDef def, int drawX, int drawY, int drawW, int drawH)
+    {
         if (!string.IsNullOrEmpty(def.Frame))
         {
             var frNs = GetNineSlice(def.Frame, "fr");
@@ -305,18 +319,24 @@ public partial class UIEditorWindow
     //  Layout Helpers
     // ═══════════════════════════════════════
 
-    /// <summary>Calculate child rects with layout applied (horizontal/vertical auto-positioning).</summary>
+    /// <summary>Calculate child rects with layout applied (horizontal/vertical auto-positioning).
+    /// Matches C++ computeLayoutPositions: supports wrapping, per-side padding, spacing.</summary>
     private static System.Collections.Generic.List<Rectangle> ComputeLayoutRects(UIEditorWidgetDef def, int wdX, int wdY)
     {
         var rects = new System.Collections.Generic.List<Rectangle>();
-        bool useLayout = def.Layout == "horizontal" || def.Layout == "vertical";
+        bool isHoriz = def.Layout == "horizontal";
+        bool isVert = def.Layout == "vertical";
+        bool useLayout = isHoriz || isVert;
 
         int padL = def.LayoutPadLeft > 0 ? def.LayoutPadLeft : def.LayoutPadding;
+        int padR = def.LayoutPadRight > 0 ? def.LayoutPadRight : def.LayoutPadding;
         int padT = def.LayoutPadTop > 0 ? def.LayoutPadTop : def.LayoutPadding;
+        int padB = def.LayoutPadBottom > 0 ? def.LayoutPadBottom : def.LayoutPadding;
         int spacX = def.LayoutSpacingX > 0 ? def.LayoutSpacingX : def.LayoutSpacing;
         int spacY = def.LayoutSpacingY > 0 ? def.LayoutSpacingY : def.LayoutSpacing;
 
         int curX = padL, curY = padT;
+        int rowMaxH = 0, colMaxW = 0;
 
         for (int i = 0; i < def.Children.Count; i++)
         {
@@ -326,13 +346,38 @@ public partial class UIEditorWindow
 
             if (useLayout && !child.IgnoreLayout)
             {
-                rects.Add(new Rectangle(wdX + curX + child.X, wdY + curY + child.Y, cw, ch));
-                if (def.Layout == "horizontal") curX += cw + spacX;
-                else curY += ch + spacY;
+                if (isHoriz)
+                {
+                    // Wrap to next row if doesn't fit
+                    if (curX > padL && curX + cw > def.Width - padR)
+                    {
+                        curY += rowMaxH + spacY;
+                        curX = padL;
+                        rowMaxH = 0;
+                    }
+                    // Layout positions children — child.X/Y are ignored (C++ overwrites them)
+                    rects.Add(new Rectangle(wdX + curX, wdY + curY, cw, ch));
+                    curX += cw + spacX;
+                    if (ch > rowMaxH) rowMaxH = ch;
+                }
+                else // vertical
+                {
+                    // Wrap to next column if doesn't fit
+                    if (curY > padT && curY + ch > def.Height - padB)
+                    {
+                        curX += colMaxW + spacX;
+                        curY = padT;
+                        colMaxW = 0;
+                    }
+                    // Layout positions children — child.X/Y are ignored (C++ overwrites them)
+                    rects.Add(new Rectangle(wdX + curX, wdY + curY, cw, ch));
+                    curY += ch + spacY;
+                    if (cw > colMaxW) colMaxW = cw;
+                }
             }
             else
             {
-                // Anchor-based positioning
+                // Anchor-based positioning (no layout or ignoreLayout)
                 int col = child.Anchor % 3, row = child.Anchor / 3;
                 int anchorX = col switch { 0 => 0, 1 => def.Width / 2, 2 => def.Width, _ => 0 };
                 int anchorY = row switch { 0 => 0, 1 => def.Height / 2, 2 => def.Height, _ => 0 };

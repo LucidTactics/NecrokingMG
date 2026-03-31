@@ -2271,8 +2271,8 @@ public partial class UIEditorWindow : EditorBase
             }
         }
 
-        // Track content height for scroll clamping
-        int contentBottom = curY + (int)_widgetDetailScroll - y + 200; // 200 is estimate for child props
+        // Track content height for scroll clamping (generous for child props + harmonizers + overrides)
+        int contentBottom = curY + (int)_widgetDetailScroll - y + 800;
         _widgetDetailScroll = Math.Min(_widgetDetailScroll, Math.Max(0, contentBottom - h));
 
         EndClip();
@@ -2748,15 +2748,7 @@ public partial class UIEditorWindow : EditorBase
         }
 
         // Frame layer (topmost, over children)
-        if (!string.IsNullOrEmpty(def.Frame))
-        {
-            var frNs = GetNineSlice(def.Frame, "fr");
-            if (frNs != null)
-            {
-                var frColor = def.FrameTint != null ? ByteColor(def.FrameTint) : Color.White;
-                frNs.Draw(_sb, wdRect, frColor);
-            }
-        }
+        DrawWidgetFrame(def, wdX, wdY, def.Width, def.Height);
 
         // Widget outline
         DrawBorder(wdRect, AccentColor, 1);
@@ -2920,7 +2912,16 @@ public partial class UIEditorWindow : EditorBase
             if (widgetDef != null)
             {
                 drawn = true;
-                DrawWidgetLayers(widgetDef, rect.X, rect.Y, rect.Width, rect.Height);
+                // Background + stencil (children render between stencil and frame)
+                DrawWidgetLayers(widgetDef, rect.X, rect.Y, rect.Width, rect.Height, drawFrame: false);
+
+                // Nested widget's own children
+                var nestedRects = ComputeLayoutRects(widgetDef, rect.X, rect.Y);
+                for (int ci = 0; ci < widgetDef.Children.Count && ci < nestedRects.Count; ci++)
+                    DrawWidgetChild(widgetDef.Children[ci], nestedRects[ci], false);
+
+                // Frame on top of children
+                DrawWidgetFrame(widgetDef, rect.X, rect.Y, rect.Width, rect.Height);
             }
         }
 
@@ -2933,7 +2934,44 @@ public partial class UIEditorWindow : EditorBase
                 byte[] tc = elemDef.TintColor ?? new byte[] { 255, 255, 255, 255 };
                 var tint = ByteColor(tc);
 
-                if (elemDef.Type == "image" && !string.IsNullOrEmpty(elemDef.ImagePath))
+                if (elemDef.Type == "text")
+                {
+                    // Text element — no background, render text with alignment
+                    drawn = true;
+                    string text = !string.IsNullOrEmpty(child.DefaultText) ? child.DefaultText
+                        : !string.IsNullOrEmpty(elemDef.DefaultText) ? elemDef.DefaultText : "";
+                    if (!string.IsNullOrEmpty(text))
+                    {
+                        var tr = elemDef.TextRegion;
+                        var fontColor = tr != null ? ByteColor(tr.FontColor) : Color.White;
+                        var textSize = MeasureText(text);
+
+                        // Text region bounds (or element bounds as fallback)
+                        int trX = rect.X + (tr?.X ?? 0);
+                        int trY = rect.Y + (tr?.Y ?? 0);
+                        int trW = tr != null && tr.W > 0 ? tr.W : rect.Width;
+                        int trH = tr != null && tr.H > 0 ? tr.H : rect.Height;
+
+                        // Horizontal alignment
+                        float tx = (tr?.Align ?? "left") switch
+                        {
+                            "center" => trX + (trW - textSize.X) / 2,
+                            "right" => trX + trW - textSize.X - 2,
+                            _ => trX + 2
+                        };
+
+                        // Vertical alignment
+                        float ty = (tr?.VAlign ?? "top") switch
+                        {
+                            "center" => trY + (trH - textSize.Y) / 2,
+                            "bottom" => trY + trH - textSize.Y - 2,
+                            _ => trY + 2
+                        };
+
+                        DrawText(text, new Vector2(tx, ty), fontColor);
+                    }
+                }
+                else if (elemDef.Type == "image" && !string.IsNullOrEmpty(elemDef.ImagePath))
                 {
                     var imgTex = GetTexture(elemDef.ImagePath, "el");
                     if (imgTex != null) { _sb.Draw(imgTex, rect, tint); drawn = true; }
@@ -2967,15 +3005,26 @@ public partial class UIEditorWindow : EditorBase
         if (!drawn)
             DrawRect(rect, new Color(50, 50, 70, 180));
 
-        // Only show DefaultText, not element/child names
+        // Show DefaultText for non-text elements (text elements render their own text above)
         if (!string.IsNullOrEmpty(child.DefaultText))
         {
-            DrawText(child.DefaultText,
-                new Vector2(rect.X + 4, rect.Y + rect.Height / 2 - 6),
-                new Color(200, 200, 200, 180));
+            var elemDef2 = !string.IsNullOrEmpty(child.Element) ? _elements.FirstOrDefault(e => e.Id == child.Element) : null;
+            if (elemDef2 == null || elemDef2.Type != "text")
+            {
+                DrawText(child.DefaultText,
+                    new Vector2(rect.X + 4, rect.Y + rect.Height / 2 - 6),
+                    new Color(200, 200, 200, 180));
+            }
         }
 
-        // Selection highlight
+        // Selection highlight (skip border for text-only elements to avoid visible box)
+        bool isTextElement = false;
+        if (!string.IsNullOrEmpty(child.Element))
+        {
+            var elemCheck = _elements.FirstOrDefault(e => e.Id == child.Element);
+            isTextElement = elemCheck?.Type == "text";
+        }
+
         if (selected)
         {
             DrawBorder(rect, new Color(255, 200, 80, 255), 2);
@@ -2985,7 +3034,7 @@ public partial class UIEditorWindow : EditorBase
             DrawResizeHandle(rect.X + rect.Width - chs, rect.Y + rect.Height / 2 - chs / 2, chs);
             DrawResizeHandle(rect.X + rect.Width / 2 - chs / 2, rect.Y + rect.Height - chs, chs);
         }
-        else
+        else if (!isTextElement)
         {
             DrawBorder(rect, new Color(100, 100, 140, 100));
         }
