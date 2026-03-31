@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
@@ -38,6 +39,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
     // Simulation
     private Simulation _sim = new();
     private Inventory _inventory = new();
+    private Render.FontManager _fontManager = new();
     private System.Diagnostics.Stopwatch? _startupTimer;
     private long _startupLastMs;
     private void LogTiming(string step)
@@ -941,6 +943,15 @@ public class Game1 : Microsoft.Xna.Framework.Game
         _smallFont = Content.Load<SpriteFont>("SmallFont");
         _largeFont = Content.Load<SpriteFont>("LargeFont");
         _debugDraw.SetFont(_smallFont);
+
+        // Load TrueType fonts via FontStashSharp (dynamic sizing)
+        _fontManager.LoadFontsFromDirectory(Path.Combine("assets", "fonts"));
+        if (_fontManager.HasFonts)
+        {
+            // Prefer "Standard" as default, fall back to first loaded
+            if (_fontManager.FontFamilies.Any(f => f == "Standard"))
+                _fontManager.SetDefault("Standard");
+        }
         LogTiming("Fonts loaded");
 
         _bloom.Init(GraphicsDevice, Content,
@@ -963,6 +974,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
         // Init UI editor (read-only viewer, doesn't depend on game systems)
         _uiEditor.Init(_spriteBatch, _pixel, _font, _smallFont);
+        _uiEditor.SetFontManager(_fontManager);
         string uiDefPath = Path.Combine("assets", "UI", "definitions");
         if (Directory.Exists(uiDefPath))
             _uiEditor.LoadDefinitions(uiDefPath);

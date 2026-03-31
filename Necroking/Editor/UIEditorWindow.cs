@@ -8,6 +8,7 @@ using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
 using Necroking.Core;
 using Necroking.UI;
+using FontStashSharp;
 
 namespace Necroking.Editor;
 
@@ -38,6 +39,7 @@ public class UIEditorTextRegion
     public int H { get; set; }
     public string Align { get; set; } = "left";
     public string VAlign { get; set; } = "top";
+    public string FontFamily { get; set; } = "";  // empty = default font
     public int FontSize { get; set; } = 14;
     public byte[] FontColor { get; set; } = { 255, 255, 255, 255 };
     public bool WordWrap { get; set; }  // RI21
@@ -161,6 +163,7 @@ public class UIEditorWidgetDef
 public partial class UIEditorWindow : EditorBase
 {
     private GraphicsDevice? _device;
+    private Render.FontManager? _fontMgr;
 
     // Loaded data
     private readonly List<UIEditorNineSliceDef> _nineSlices = new();
@@ -261,6 +264,8 @@ public partial class UIEditorWindow : EditorBase
         _textureBrowser.SetGraphicsDevice(_device);
     }
 
+    public void SetFontManager(Render.FontManager fontManager) => _fontMgr = fontManager;
+
     /// <summary>Init with a GraphicsDevice and definitions directory.</summary>
     public void Init(GraphicsDevice device, string definitionsDir)
     {
@@ -353,6 +358,7 @@ public partial class UIEditorWindow : EditorBase
                         H = tr.GetIntProp("h"),
                         Align = tr.GetStringProp("align", "left"),
                         VAlign = tr.GetStringProp("valign", "top"),
+                        FontFamily = tr.GetStringProp("fontFamily"),
                         FontSize = tr.GetIntProp("fontSize", 14),
                     };
                     if (tr.TryGetProperty("fontColor", out var fc) && fc.ValueKind == JsonValueKind.Array)
@@ -574,6 +580,8 @@ public partial class UIEditorWindow : EditorBase
                 writer.WriteNumber("h", el.TextRegion.H);
                 writer.WriteString("align", el.TextRegion.Align);
                 writer.WriteString("valign", el.TextRegion.VAlign);
+                if (!string.IsNullOrEmpty(el.TextRegion.FontFamily))
+                    writer.WriteString("fontFamily", el.TextRegion.FontFamily);
                 writer.WriteNumber("fontSize", el.TextRegion.FontSize);
                 WriteColorArray(writer, "fontColor", el.TextRegion.FontColor);
                 writer.WriteEndObject();
@@ -1629,6 +1637,17 @@ public partial class UIEditorWindow : EditorBase
             if (newVAlign != tr.VAlign) { tr.VAlign = newVAlign; _unsavedChanges = true; }
             curY += 22;
 
+            // Font family dropdown
+            if (_fontMgr != null && _fontMgr.HasFonts)
+            {
+                var families = new[] { "(default)" }.Concat(_fontMgr.GetFamilyNames()).ToArray();
+                string curFamily = string.IsNullOrEmpty(tr.FontFamily) ? "(default)" : tr.FontFamily;
+                string newFamily = DrawCombo("el_fontfam", "Font", curFamily, families, x + pad, curY, propW);
+                if (newFamily == "(default)") newFamily = "";
+                if (newFamily != tr.FontFamily) { tr.FontFamily = newFamily; _unsavedChanges = true; }
+                curY += 24;
+            }
+
             int newFS = DrawIntField("el_fs", "Font Size", tr.FontSize, x + pad, curY, propW);
             if (newFS != tr.FontSize) { tr.FontSize = Math.Max(1, newFS); _unsavedChanges = true; }
             curY += 22;
@@ -1753,8 +1772,13 @@ public partial class UIEditorWindow : EditorBase
             DrawRect(textRect, new Color(100, 200, 100, 30));
             DrawBorder(textRect, new Color(100, 200, 100, 150));
             string displayText = !string.IsNullOrEmpty(def.DefaultText) ? def.DefaultText : "Sample Text";
-            DrawText(displayText, new Vector2(textRect.X + 4, textRect.Y + 4),
-                ByteColor(tr.FontColor, 200));
+            var dynFont = _fontMgr?.GetFont(tr.FontSize, string.IsNullOrEmpty(tr.FontFamily) ? null : tr.FontFamily);
+            if (dynFont != null)
+                _sb.DrawString(dynFont, displayText, new Vector2(textRect.X + 4, textRect.Y + 4),
+                    ByteColor(tr.FontColor, 200));
+            else
+                DrawText(displayText, new Vector2(textRect.X + 4, textRect.Y + 4),
+                    ByteColor(tr.FontColor, 200));
         }
 
         // Drag logic for element resize
@@ -2936,8 +2960,7 @@ public partial class UIEditorWindow : EditorBase
 
                 if (elemDef.Type == "text")
                 {
-                    // Text element — no background, render text with alignment
-                    // Use child's actual rect as bounds (not element def's text region size)
+                    // Text element — render with FontStashSharp for proper sizing
                     drawn = true;
                     string text = !string.IsNullOrEmpty(child.DefaultText) ? child.DefaultText
                         : !string.IsNullOrEmpty(elemDef.DefaultText) ? elemDef.DefaultText : "";
@@ -2945,9 +2968,17 @@ public partial class UIEditorWindow : EditorBase
                     {
                         var tr = elemDef.TextRegion;
                         var fontColor = tr != null ? ByteColor(tr.FontColor) : Color.White;
-                        var textSize = MeasureText(text);
+                        int fontSize = tr?.FontSize ?? 14;
+                        string fontFamily = tr?.FontFamily ?? "";
 
-                        // Use the child's placed rect as the text area
+                        // Use FontStashSharp for proper font sizing
+                        var dynFont = _fontMgr?.GetFont(fontSize, string.IsNullOrEmpty(fontFamily) ? null : fontFamily);
+                        Vector2 textSize;
+                        if (dynFont != null)
+                            textSize = dynFont.MeasureString(text);
+                        else
+                            textSize = MeasureText(text);
+
                         int trW = rect.Width;
                         int trH = rect.Height;
 
@@ -2957,7 +2988,6 @@ public partial class UIEditorWindow : EditorBase
                             "right" => rect.X + trW - textSize.X - 2,
                             _ => rect.X + 2
                         };
-
                         float ty = (tr?.VAlign ?? "top") switch
                         {
                             "center" => rect.Y + (trH - textSize.Y) / 2,
@@ -2965,7 +2995,10 @@ public partial class UIEditorWindow : EditorBase
                             _ => rect.Y + 2
                         };
 
-                        DrawText(text, new Vector2(tx, ty), fontColor);
+                        if (dynFont != null)
+                            _sb.DrawString(dynFont, text, new Vector2(tx, ty), fontColor);
+                        else
+                            DrawText(text, new Vector2(tx, ty), fontColor);
                     }
                 }
                 else if (elemDef.Type == "image" && !string.IsNullOrEmpty(elemDef.ImagePath))
