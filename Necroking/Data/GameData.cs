@@ -15,6 +15,7 @@ public class GameData
     public WeatherRegistry Weather { get; } = new();
     public UnitGroupRegistry UnitGroups { get; } = new();
     public GameSettingsData Settings { get; } = new();
+    public ItemRegistry Items { get; } = new();
 
     public bool Load(string dataDir = "data")
     {
@@ -29,6 +30,7 @@ public class GameData
         ok &= Weather.Load(Path.Combine(dataDir, "weather.json"));
         ok &= UnitGroups.Load(Path.Combine(dataDir, "unit_groups.json"));
         ok &= Settings.Load(Path.Combine(dataDir, "settings.json"));
+        Items.Load(Path.Combine(dataDir, "items.json")); // optional, don't fail if missing
         // Load weapon_points.json (must be after units.json so UnitDefs exist)
         ok &= Units.LoadWeaponPoints(Path.Combine(dataDir, "weapon_points.json"));
         return ok;
@@ -47,6 +49,7 @@ public class GameData
         ok &= Weather.Save(Path.Combine(dataDir, "weather.json"));
         ok &= UnitGroups.Save(Path.Combine(dataDir, "unit_groups.json"));
         ok &= Settings.Save(Path.Combine(dataDir, "settings.json"));
+        ok &= Items.Save(Path.Combine(dataDir, "items.json"));
         ok &= Units.SaveWeaponPoints(Path.Combine(dataDir, "weapon_points.json"));
 
         // Also save to source tree so dotnet publish picks up the latest
@@ -63,6 +66,7 @@ public class GameData
             Weather.Save(Path.Combine(srcDir, "weather.json"));
             UnitGroups.Save(Path.Combine(srcDir, "unit_groups.json"));
             Settings.Save(Path.Combine(srcDir, "settings.json"));
+            Items.Save(Path.Combine(srcDir, "items.json"));
             Units.SaveWeaponPoints(Path.Combine(srcDir, "weapon_points.json"));
         }
         return ok;

@@ -83,6 +83,15 @@ public abstract class ScenarioBase
 
     // Road system access (set by Game1 before OnInit)
     public RoadSystem? RoadSystem;
+
+    // Inventory system access (set by Game1 before OnInit)
+    public GameSystems.Inventory? Inventory;
+    public Data.Registries.ItemRegistry? ItemRegistry;
+
+    // Inventory UI control
+    public bool RequestOpenInventory;
+    public bool RequestCloseInventory;
+    public Game.InventoryUI? InventoryUI;
 }
 
 public abstract class UIScenarioBase : ScenarioBase

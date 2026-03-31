@@ -14,6 +14,7 @@ using Necroking.GameSystems;
 using Necroking.World;
 using Necroking.Scenario;
 using Necroking.Editor;
+using Necroking.UI;
 
 namespace Necroking;
 
@@ -38,8 +39,10 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
     // Simulation
     private Simulation _sim = new();
-    private Inventory _inventory = new();
+    private Inventory _inventory = null!;
     private Render.FontManager _fontManager = new();
+    private RuntimeWidgetRenderer _widgetRenderer = new();
+    private Game.InventoryUI _inventoryUI = new();
     private System.Diagnostics.Stopwatch? _startupTimer;
     private long _startupLastMs;
     private void LogTiming(string step)
@@ -195,10 +198,10 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
         if (LaunchArgs.Headless)
         {
-            // Hide window for headless mode
+            // Hide window for headless mode — use larger resolution if user specifies one
             Window.IsBorderless = true;
-            _graphics.PreferredBackBufferWidth = 320;
-            _graphics.PreferredBackBufferHeight = 240;
+            _graphics.PreferredBackBufferWidth = LaunchArgs.ResolutionW > 0 ? LaunchArgs.ResolutionW : 320;
+            _graphics.PreferredBackBufferHeight = LaunchArgs.ResolutionH > 0 ? LaunchArgs.ResolutionH : 240;
             _graphics.IsFullScreen = false;
         }
     }
@@ -215,7 +218,8 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
         // Load game data
         _gameData.Load("data");
-        LogTiming($"GameData loaded: {_gameData.Units.Count} units, {_gameData.Spells.Count} spells, {_gameData.Weapons.Count} weapons");
+        _inventory = new Inventory(20, _gameData.Items);
+        LogTiming($"GameData loaded: {_gameData.Units.Count} units, {_gameData.Spells.Count} spells, {_gameData.Weapons.Count} weapons, {_gameData.Items.Count} items");
 
         // Init renderer
         _renderer.Init(_graphics.PreferredBackBufferWidth, _graphics.PreferredBackBufferHeight);
@@ -512,6 +516,15 @@ public class Game1 : Microsoft.Xna.Framework.Game
         }
 
         _activeScenario = scenario;
+
+        // UI scenarios need a larger resolution in headless mode
+        if (LaunchArgs.Headless && scenario.WantsUI && _graphics.PreferredBackBufferWidth < 800)
+        {
+            _graphics.PreferredBackBufferWidth = 800;
+            _graphics.PreferredBackBufferHeight = 600;
+            _graphics.ApplyChanges();
+        }
+
         _gameWorldLoaded = false;
         _gameOver = false;
         _damageNumbers.Clear();
@@ -573,8 +586,11 @@ public class Game1 : Microsoft.Xna.Framework.Game
             DebugLog.Log("scenario", $"Grass setup: {gw}x{gh}, 3 types");
         }
 
-        // Give scenario access to road system
+        // Give scenario access to road system and inventory
         scenario.RoadSystem = _roadSystem;
+        scenario.Inventory = _inventory;
+        scenario.ItemRegistry = _gameData.Items;
+        scenario.InventoryUI = _inventoryUI;
 
         // Init map editor with scenario systems (needed for editor screenshot scenarios)
         _mapEditor.Init(
@@ -980,6 +996,13 @@ public class Game1 : Microsoft.Xna.Framework.Game
             _uiEditor.LoadDefinitions(uiDefPath);
         LogTiming("UI editor initialized");
 
+        // Runtime widget renderer + inventory UI
+        _widgetRenderer.Init(GraphicsDevice, _spriteBatch, _fontManager);
+        if (Directory.Exists(uiDefPath))
+            _widgetRenderer.LoadDefinitions(uiDefPath);
+        _inventoryUI.Init(_widgetRenderer, _inventory, _gameData.Items);
+        LogTiming("Inventory UI initialized");
+
         // Init property editor infrastructure
         _editorUi.SetContext(_spriteBatch, _pixel, _font, _smallFont, _largeFont);
         _unitEditor = new UnitEditorWindow(_editorUi);
@@ -1140,6 +1163,10 @@ public class Game1 : Microsoft.Xna.Framework.Game
         if (!anyTextInputActive && WasKeyPressed(kb, Keys.F12))
             _menuState = _menuState == MenuState.UIEditor ? MenuState.None : MenuState.UIEditor;
 
+        // 'I' key toggles inventory
+        if (!anyTextInputActive && WasKeyPressed(kb, Keys.I) && _menuState == MenuState.None)
+            _inventoryUI.Toggle(GraphicsDevice.Viewport.Width, GraphicsDevice.Viewport.Height);
+
         // --- Pause menu button clicks ---
         if (_menuState == MenuState.PauseMenu && mouse.LeftButton == ButtonState.Pressed && _prevMouse.LeftButton == ButtonState.Released)
         {
@@ -1211,6 +1238,10 @@ public class Game1 : Microsoft.Xna.Framework.Game
             {
                 _menuState = MenuState.None;
                 _paused = false;
+            }
+            else if (_menuState == MenuState.None && _inventoryUI.IsVisible)
+            {
+                _inventoryUI.Close();
             }
             else if (_menuState == MenuState.None)
             {
@@ -1314,6 +1345,10 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
             // Spell dropdown open
             if (_spellDropdownSlot >= 0 || _secondaryDropdownSlot >= 0)
+                _mouseOverUI = true;
+
+            // Inventory window
+            if (_inventoryUI.ContainsMouse(mouse.X, mouse.Y))
                 _mouseOverUI = true;
 
             // Building placement panel (left side)
@@ -1881,7 +1916,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 {
                     string? resourceType = _envSystem.CollectForagable(bestIdx);
                     if (resourceType != null)
-                        _inventory.Add(resourceType);
+                        _inventory.AddItem(resourceType);
                 }
             }
 
@@ -1939,6 +1974,18 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 {
                     _camera.Position = new Vec2(_activeScenario.CameraX, _activeScenario.CameraY);
                     _camera.Zoom = _activeScenario.CameraZoom;
+                }
+
+                // Apply inventory UI requests from scenario
+                if (_activeScenario.RequestOpenInventory)
+                {
+                    _activeScenario.RequestOpenInventory = false;
+                    _inventoryUI.Open(screenW, screenH);
+                }
+                if (_activeScenario.RequestCloseInventory)
+                {
+                    _activeScenario.RequestCloseInventory = false;
+                    _inventoryUI.Close();
                 }
 
                 // Apply collision debug override from scenario
@@ -2025,6 +2072,18 @@ public class Game1 : Microsoft.Xna.Framework.Game
                     _uiEditor.ActiveTab = uiTab;
             }
 
+            // Inventory UI requests from scenario
+            if (_activeScenario.RequestOpenInventory)
+            {
+                _activeScenario.RequestOpenInventory = false;
+                _inventoryUI.Open(screenW, screenH);
+            }
+            if (_activeScenario.RequestCloseInventory)
+            {
+                _activeScenario.RequestCloseInventory = false;
+                _inventoryUI.Close();
+            }
+
             // Open weapon sub-editor popup
             if (_activeScenario.RequestOpenWeaponSub)
             {
@@ -2091,6 +2150,9 @@ public class Game1 : Microsoft.Xna.Framework.Game
         {
             _gameOver = true;
         }
+
+        // Update inventory UI after all sim/scenario ticks (so slot sync sees latest inventory state)
+        _inventoryUI.Update(mouse, kb);
 
         _prevKb = kb;
         _prevMouse = mouse;
@@ -2592,6 +2654,10 @@ public class Game1 : Microsoft.Xna.Framework.Game
         bool showUI = _activeScenario == null || _activeScenario.WantsUI;
         if (showUI)
             DrawHUD(screenW, screenH);
+
+        // Inventory UI (widget-based, drawn over HUD)
+        if (showUI)
+            _inventoryUI.Draw();
 
         if (_buildingPlacementActive)
             DrawBuildingPlacement(screenW, screenH);
@@ -3434,16 +3500,9 @@ public class Game1 : Microsoft.Xna.Framework.Game
         _spriteBatch.Draw(_pixel, new Rectangle(10, 50, (int)(200 * manaFrac), 16), new Color(80, 80, 220));
         DrawText(_font, $"Mana: {(int)_sim.NecroState.Mana}/{(int)_sim.NecroState.MaxMana}", new Vector2(15, 51), Color.White);
 
-        // Foragable inventory
-        if (_inventory.All.Count > 0)
-        {
-            int resY = 72;
-            foreach (var (type, count) in _inventory.All)
-            {
-                DrawText(_font, $"{type}: {count}", new Vector2(15, resY), new Color(200, 220, 180));
-                resY += 18;
-            }
-        }
+        // Inventory hint (press I)
+        if (_inventory.UsedSlots > 0 && !_inventoryUI.IsVisible)
+            DrawText(_font, $"[I] Inventory ({_inventory.UsedSlots} items)", new Vector2(15, 72), new Color(200, 220, 180));
 
         // Spell bar
         int slotW = 50;

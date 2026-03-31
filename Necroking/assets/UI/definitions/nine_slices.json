@@ -1,212 +1,103 @@
 {
   "nineSlices": [
     {
-      "borderBottom": 100,
-      "borderLeft": 100,
-      "borderRight": 100,
-      "borderTop": 100,
       "id": "frame_fancy",
       "texture": "assets/UI/Frames/FancyFrame2.png",
+      "borderLeft": 111,
+      "borderRight": 113,
+      "borderTop": 109,
+      "borderBottom": 106,
       "tileEdges": false
     },
     {
-      "borderBottom": 22,
+      "id": "button_rounded",
+      "texture": "assets/UI/Button/InnerCornersButtonRounded.png",
       "borderLeft": 22,
       "borderRight": 22,
       "borderTop": 22,
-      "id": "button_rounded",
-      "texture": "assets/UI/Button/InnerCornersButtonRounded.png",
+      "borderBottom": 22,
       "tileEdges": false
     },
     {
-      "borderBottom": 15,
-      "borderLeft": 14,
-      "borderRight": 13,
-      "borderTop": 14,
       "id": "FancyButton",
       "texture": "assets/UI/Button/FrameButton3png.png",
+      "borderLeft": 18,
+      "borderRight": 17,
+      "borderTop": 14,
+      "borderBottom": 15,
       "tileEdges": false
     },
     {
-      "borderBottom": 86,
+      "id": "Background",
+      "texture": "assets/UI/Frames/FancyFrame2_Inner.png",
       "borderLeft": 86,
       "borderRight": 84,
       "borderTop": 88,
-      "id": "Background",
-      "texture": "assets/UI/Frames/FancyFrame2_Inner.png",
+      "borderBottom": 86,
       "tileEdges": false
     },
     {
       "id": "panel_outer",
       "texture": "assets/UI/Frames/VeryFancyFrameOuter.png",
-      "borderLeft": 90, "borderRight": 90, "borderTop": 100, "borderBottom": 80,
+      "borderLeft": 321,
+      "borderRight": 314,
+      "borderTop": 310,
+      "borderBottom": 336,
       "tileEdges": false
     },
     {
       "id": "panel_inner",
       "texture": "assets/UI/Frames/SimpleSquareFilled1.png",
-      "borderLeft": 16, "borderRight": 16, "borderTop": 16, "borderBottom": 16,
+      "borderLeft": 21,
+      "borderRight": 21,
+      "borderTop": 21,
+      "borderBottom": 21,
       "tileEdges": false
     },
     {
       "id": "ribbon_banner",
       "texture": "assets/UI/Ribbons/Ribbon1.png",
-      "borderLeft": 130, "borderRight": 130, "borderTop": 5, "borderBottom": 5,
+      "borderLeft": 218,
+      "borderRight": 169,
+      "borderTop": 5,
+      "borderBottom": 5,
       "tileEdges": false
     },
     {
       "id": "portrait_frame",
       "texture": "assets/UI/Frames/SquarePortraitFrame.png",
-      "borderLeft": 25, "borderRight": 25, "borderTop": 25, "borderBottom": 30,
+      "borderLeft": 63,
+      "borderRight": 60,
+      "borderTop": 39,
+      "borderBottom": 47,
       "tileEdges": false
     },
     {
-      "id": "dragon_portrait",
-      "texture": "assets/UI/Portraits/Dragon3-Transp-Bust2.png",
-      "borderLeft": 0, "borderRight": 0, "borderTop": 0, "borderBottom": 0,
+      "id": "Thinclothborder",
+      "texture": "assets/UI/Frames/ClothUpgradeThinFrame.png",
+      "borderLeft": 40,
+      "borderRight": 40,
+      "borderTop": 40,
+      "borderBottom": 40,
       "tileEdges": false
     },
     {
-      "id": "icon_hp",
-      "texture": "assets/UI/Icons/NewIcons/Health24.png",
-      "borderLeft": 0, "borderRight": 0, "borderTop": 0, "borderBottom": 0,
+      "id": "RenaiThinBorder",
+      "texture": "assets/UI/Frames/RenaiThinFrame.png",
+      "borderLeft": 10,
+      "borderRight": 10,
+      "borderTop": 10,
+      "borderBottom": 10,
       "tileEdges": false
     },
     {
-      "id": "icon_spirit",
-      "texture": "assets/UI/Icons/NewIcons/Spirit24.png",
-      "borderLeft": 0, "borderRight": 0, "borderTop": 0, "borderBottom": 0,
+      "id": "LeatherBackground",
+      "texture": "assets/UI/Frames/EmbossedLeatherBorderInner.png",
+      "borderLeft": 146,
+      "borderRight": 146,
+      "borderTop": 150,
+      "borderBottom": 150,
       "tileEdges": false
-    },
-    {
-      "id": "icon_morale",
-      "texture": "assets/UI/Icons/NewIcons/Morale24.png",
-      "borderLeft": 0, "borderRight": 0, "borderTop": 0, "borderBottom": 0,
-      "tileEdges": false
-    },
-    {
-      "id": "icon_size",
-      "texture": "assets/UI/Icons/NewIcons/Size24.png",
-      "borderLeft": 0, "borderRight": 0, "borderTop": 0, "borderBottom": 0,
-      "tileEdges": false
-    },
-    {
-      "id": "icon_toughness",
-      "texture": "assets/UI/Icons/NewIcons/Tough24.png",
-      "borderLeft": 0, "borderRight": 0, "borderTop": 0, "borderBottom": 0,
-      "tileEdges": false
-    },
-    {
-      "id": "icon_magic",
-      "texture": "assets/UI/Icons/NewIcons/Magic24.png",
-      "borderLeft": 0, "borderRight": 0, "borderTop": 0, "borderBottom": 0,
-      "tileEdges": false
-    },
-    {
-      "id": "icon_strength",
-      "texture": "assets/UI/Icons/NewIcons/Strength24.png",
-      "borderLeft": 0, "borderRight": 0, "borderTop": 0, "borderBottom": 0,
-      "tileEdges": false
-    },
-    {
-      "id": "icon_protection",
-      "texture": "assets/UI/Icons/NewIcons/Prot24.png",
-      "borderLeft": 0, "borderRight": 0, "borderTop": 0, "borderBottom": 0,
-      "tileEdges": false
-    },
-    {
-      "id": "icon_coverage",
-      "texture": "assets/UI/Icons/NewIcons/Coverage24.png",
-      "borderLeft": 0, "borderRight": 0, "borderTop": 0, "borderBottom": 0,
-      "tileEdges": false
-    },
-    {
-      "id": "icon_attack",
-      "texture": "assets/UI/Icons/NewIcons/Attack24.png",
-      "borderLeft": 0, "borderRight": 0, "borderTop": 0, "borderBottom": 0,
-      "tileEdges": false
-    },
-    {
-      "id": "icon_defense",
-      "texture": "assets/UI/Icons/NewIcons/Defense24.png",
-      "borderLeft": 0, "borderRight": 0, "borderTop": 0, "borderBottom": 0,
-      "tileEdges": false
-    },
-    {
-      "id": "icon_precision",
-      "texture": "assets/UI/Icons/NewIcons/Prec24.png",
-      "borderLeft": 0, "borderRight": 0, "borderTop": 0, "borderBottom": 0,
-      "tileEdges": false
-    },
-    {
-      "id": "icon_speed",
-      "texture": "assets/UI/Icons/NewIcons/Speed24.png",
-      "borderLeft": 0, "borderRight": 0, "borderTop": 0, "borderBottom": 0,
-      "tileEdges": false
-    },
-    {
-      "id": "icon_encumbrance",
-      "texture": "assets/UI/Icons/NewIcons/Enc24.png",
-      "borderLeft": 0, "borderRight": 0, "borderTop": 0, "borderBottom": 0,
-      "tileEdges": false
-    },
-    {
-      "id": "icon_upkeep",
-      "texture": "assets/UI/Icons/NewIcons/Gold24.png",
-      "borderLeft": 0, "borderRight": 0, "borderTop": 0, "borderBottom": 0,
-      "tileEdges": false
-    },
-    {
-      "id": "equip_helmet", "texture": "assets/UI/Icons/Equipment/Helmet.png",
-      "borderLeft": 0, "borderRight": 0, "borderTop": 0, "borderBottom": 0, "tileEdges": false
-    },
-    {
-      "id": "equip_chest", "texture": "assets/UI/Icons/Equipment/ChestArmor.png",
-      "borderLeft": 0, "borderRight": 0, "borderTop": 0, "borderBottom": 0, "tileEdges": false
-    },
-    {
-      "id": "equip_shield", "texture": "assets/UI/Icons/Equipment/Shield.png",
-      "borderLeft": 0, "borderRight": 0, "borderTop": 0, "borderBottom": 0, "tileEdges": false
-    },
-    {
-      "id": "equip_weapon", "texture": "assets/UI/Icons/Equipment/Sword.png",
-      "borderLeft": 0, "borderRight": 0, "borderTop": 0, "borderBottom": 0, "tileEdges": false
-    },
-    {
-      "id": "equip_boots", "texture": "assets/UI/Icons/Equipment/Boot.png",
-      "borderLeft": 0, "borderRight": 0, "borderTop": 0, "borderBottom": 0, "tileEdges": false
-    },
-    {
-      "id": "equip_amulet", "texture": "assets/UI/Icons/Equipment/Amulet.png",
-      "borderLeft": 0, "borderRight": 0, "borderTop": 0, "borderBottom": 0, "tileEdges": false
-    },
-    {
-      "id": "equip_ring", "texture": "assets/UI/Icons/Equipment/Ring2.png",
-      "borderLeft": 0, "borderRight": 0, "borderTop": 0, "borderBottom": 0, "tileEdges": false
-    },
-    {
-      "id": "dmg_slash", "texture": "assets/UI/Icons/DamageTypes/Slash.png",
-      "borderLeft": 0, "borderRight": 0, "borderTop": 0, "borderBottom": 0, "tileEdges": false
-    },
-    {
-      "id": "dmg_blunt", "texture": "assets/UI/Icons/DamageTypes/Blunt.png",
-      "borderLeft": 0, "borderRight": 0, "borderTop": 0, "borderBottom": 0, "tileEdges": false
-    },
-    {
-      "id": "dmg_pierce", "texture": "assets/UI/Icons/DamageTypes/PierceDamageType.png",
-      "borderLeft": 0, "borderRight": 0, "borderTop": 0, "borderBottom": 0, "tileEdges": false
-    },
-    {
-      "id": "icon_length", "texture": "assets/UI/Icons/DamageTypes/Length.png",
-      "borderLeft": 0, "borderRight": 0, "borderTop": 0, "borderBottom": 0, "tileEdges": false
-    },
-    {
-      "id": "icon_parry", "texture": "assets/UI/Icons/NewIcons/Parry24.png",
-      "borderLeft": 0, "borderRight": 0, "borderTop": 0, "borderBottom": 0, "tileEdges": false
-    },
-    {
-      "id": "swatch_1_3", "texture": "assets/UI/Ribbons/Swatch1.3.png",
-      "borderLeft": 20, "borderRight": 20, "borderTop": 10, "borderBottom": 10, "tileEdges": false
     }
   ]
 }

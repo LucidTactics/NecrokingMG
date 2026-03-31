@@ -1,363 +1,140 @@
 {
   "elements": [
     {
-      "height": 30,
-      "id": "label_title",
-      "textRegion": {
-        "align": "center",
-        "fontColor": [
-          60,
-          45,
-          30,
-          255
-        ],
-        "fontSize": 24,
-        "h": 30,
-        "valign": "center",
-        "w": 260,
-        "x": 0,
-        "y": 0
-      },
-      "type": "text",
-      "width": 260
-    },
-    {
-      "height": 40,
-      "id": "label_body",
-      "textRegion": {
-        "align": "center",
-        "fontColor": [
-          80,
-          65,
-          50,
-          255
-        ],
-        "fontSize": 18,
-        "h": 40,
-        "valign": "center",
-        "w": 260,
-        "x": 0,
-        "y": 0
-      },
-      "type": "text",
-      "width": 260
-    },
-    {
-      "height": 300,
-      "id": "Button Inner",
-      "nineSlice": "Background",
+      "id": "Window",
       "type": "nineSlice",
-      "width": 300
+      "nineSlice": "frame_fancy",
+      "width": 523,
+      "height": 463,
+      "tintColor": [
+        255,
+        255,
+        255,
+        255
+      ]
     },
     {
-      "height": 300,
-      "id": "FrameOnly",
-      "nineSlice": "FancyButton",
+      "id": "ClothBorder",
       "type": "nineSlice",
-      "width": 300
-    },
-    {
-      "height": 40,
-      "id": "new_element_4",
-      "textRegion": {
-        "align": "center",
-        "fontColor": [255, 255, 255, 255],
-        "fontSize": 16,
-        "h": 0,
-        "valign": "center",
-        "w": 0,
-        "x": 0,
-        "y": 0
-      },
-      "type": "text",
-      "width": 120
-    },
-    {
-      "id": "sp_inner_bg",
-      "type": "nineSlice",
-      "nineSlice": "panel_inner",
-      "width": 400,
-      "height": 800,
-      "tintColor": [112, 113, 139, 252]
-    },
-    {
-      "id": "sp_ribbon",
-      "type": "nineSlice",
-      "nineSlice": "ribbon_banner",
+      "nineSlice": "Thinclothborder",
       "width": 350,
-      "height": 50
+      "height": 350,
+      "tintColor": [
+        255,
+        255,
+        255,
+        255
+      ]
     },
     {
-      "id": "sp_portrait_frame",
+      "id": "LeatherBackground",
       "type": "nineSlice",
-      "nineSlice": "portrait_frame",
-      "width": 140,
-      "height": 150
-    },
-    {
-      "id": "sp_portrait_img",
-      "type": "image",
-      "nineSlice": "dragon_portrait",
       "width": 100,
-      "height": 100
+      "height": 40,
+      "tintColor": [
+        255,
+        255,
+        255,
+        255
+      ]
     },
     {
-      "id": "sp_section_header",
-      "type": "text",
-      "width": 380,
-      "height": 28,
+      "id": "GhoulfatherBackground",
+      "type": "image",
+      "imagePath": "assets/UI/Portraits/GhoulFather236.png",
+      "width": 165,
+      "height": 203,
+      "tintColor": [
+        255,
+        255,
+        255,
+        255
+      ],
       "textRegion": {
-        "align": "center",
-        "valign": "center",
-        "fontSize": 20,
-        "fontColor": [55, 40, 28, 255],
-        "x": 0, "y": 0, "w": 380, "h": 28
-      }
-    },
-    {
-      "id": "sp_unit_name",
-      "type": "text",
-      "width": 300,
-      "height": 36,
-      "textRegion": {
-        "align": "center",
-        "valign": "center",
-        "fontSize": 24,
-        "fontColor": [240, 220, 170, 255],
-        "x": 0, "y": 0, "w": 300, "h": 36
-      }
-    },
-    {
-      "id": "sp_description",
-      "type": "text",
-      "width": 240,
-      "height": 120,
-      "textRegion": {
+        "x": 0,
+        "y": 0,
+        "w": 100,
+        "h": 40,
         "align": "left",
         "valign": "top",
-        "fontSize": 12,
-        "fontColor": [185, 170, 145, 255],
-        "x": 0, "y": 0, "w": 240, "h": 120,
-        "wordWrap": true
-      }
-    },
-    {
-      "id": "sp_icon_hp", "type": "image", "nineSlice": "icon_hp", "width": 24, "height": 24
-    },
-    {
-      "id": "sp_icon_spirit", "type": "image", "nineSlice": "icon_spirit", "width": 24, "height": 24
-    },
-    {
-      "id": "sp_icon_morale", "type": "image", "nineSlice": "icon_morale", "width": 24, "height": 24
-    },
-    {
-      "id": "sp_icon_size", "type": "image", "nineSlice": "icon_size", "width": 24, "height": 24
-    },
-    {
-      "id": "sp_icon_toughness", "type": "image", "nineSlice": "icon_toughness", "width": 24, "height": 24
-    },
-    {
-      "id": "sp_icon_magic", "type": "image", "nineSlice": "icon_magic", "width": 24, "height": 24
-    },
-    {
-      "id": "sp_icon_strength", "type": "image", "nineSlice": "icon_strength", "width": 24, "height": 24
-    },
-    {
-      "id": "sp_icon_protection", "type": "image", "nineSlice": "icon_protection", "width": 24, "height": 24
-    },
-    {
-      "id": "sp_icon_coverage", "type": "image", "nineSlice": "icon_coverage", "width": 24, "height": 24
-    },
-    {
-      "id": "sp_icon_attack", "type": "image", "nineSlice": "icon_attack", "width": 24, "height": 24
-    },
-    {
-      "id": "sp_icon_defense", "type": "image", "nineSlice": "icon_defense", "width": 24, "height": 24
-    },
-    {
-      "id": "sp_icon_precision", "type": "image", "nineSlice": "icon_precision", "width": 24, "height": 24
-    },
-    {
-      "id": "sp_icon_speed", "type": "image", "nineSlice": "icon_speed", "width": 24, "height": 24
-    },
-    {
-      "id": "sp_icon_encumbrance", "type": "image", "nineSlice": "icon_encumbrance", "width": 24, "height": 24
-    },
-    {
-      "id": "sp_icon_upkeep", "type": "image", "nineSlice": "icon_upkeep", "width": 24, "height": 24
-    },
-    {
-      "id": "sp_stat_label",
-      "type": "text",
-      "width": 90,
-      "height": 24,
-      "textRegion": {
-        "align": "left",
-        "valign": "center",
         "fontSize": 14,
-        "fontColor": [195, 178, 152, 255],
-        "x": 0, "y": 0, "w": 90, "h": 24
+        "fontColor": [
+          255,
+          255,
+          255,
+          255
+        ]
       }
     },
     {
-      "id": "sp_stat_value",
+      "id": "Quantity",
       "type": "text",
-      "width": 50,
-      "height": 24,
+      "width": 81,
+      "height": 44,
+      "tintColor": [
+        255,
+        255,
+        255,
+        0
+      ],
+      "defaultText": "1",
       "textRegion": {
+        "x": 0,
+        "y": 0,
+        "w": 80,
+        "h": 40,
         "align": "right",
         "valign": "center",
-        "fontSize": 14,
-        "fontColor": [210, 195, 168, 255],
-        "x": 0, "y": 0, "w": 50, "h": 24
+        "fontFamily": "Gothic",
+        "fontSize": 50,
+        "fontColor": [
+          202,
+          192,
+          152,
+          255
+        ]
       }
     },
     {
-      "id": "sp_equip_helmet", "type": "image", "nineSlice": "equip_helmet", "width": 32, "height": 32
+      "id": "Icon",
+      "type": "image",
+      "imagePath": "assets/Environment/Mushrooms/Deathcap.png",
+      "width": 73,
+      "height": 74,
+      "tintColor": [
+        255,
+        255,
+        255,
+        255
+      ]
     },
     {
-      "id": "sp_equip_chest", "type": "image", "nineSlice": "equip_chest", "width": 32, "height": 32
-    },
-    {
-      "id": "sp_equip_shield", "type": "image", "nineSlice": "equip_shield", "width": 32, "height": 32
-    },
-    {
-      "id": "sp_equip_weapon", "type": "image", "nineSlice": "equip_weapon", "width": 32, "height": 32
-    },
-    {
-      "id": "sp_equip_boots", "type": "image", "nineSlice": "equip_boots", "width": 32, "height": 32
-    },
-    {
-      "id": "sp_equip_amulet", "type": "image", "nineSlice": "equip_amulet", "width": 32, "height": 32
-    },
-    {
-      "id": "sp_equip_ring", "type": "image", "nineSlice": "equip_ring", "width": 32, "height": 32
-    },
-    {
-      "id": "sp_dmg_slash", "type": "image", "nineSlice": "dmg_slash", "width": 20, "height": 20
-    },
-    {
-      "id": "sp_dmg_blunt", "type": "image", "nineSlice": "dmg_blunt", "width": 20, "height": 20
-    },
-    {
-      "id": "sp_dmg_pierce", "type": "image", "nineSlice": "dmg_pierce", "width": 20, "height": 20
-    },
-    {
-      "id": "sp_icon_length", "type": "image", "nineSlice": "icon_length", "width": 20, "height": 20
-    },
-    {
-      "id": "sp_icon_parry", "type": "image", "nineSlice": "icon_parry", "width": 20, "height": 20
-    },
-    {
-      "id": "sp_equip_slot_label",
-      "type": "text", "width": 80, "height": 32,
-      "textRegion": {
-        "align": "left", "valign": "center", "fontSize": 13,
-        "fontColor": [195, 175, 148, 255],
-        "x": 0, "y": 0, "w": 80, "h": 32
-      }
-    },
-    {
-      "id": "sp_equip_item_label",
-      "type": "text", "width": 180, "height": 32,
-      "textRegion": {
-        "align": "left", "valign": "center", "fontSize": 13,
-        "fontColor": [210, 192, 162, 255],
-        "x": 0, "y": 0, "w": 180, "h": 32
-      }
-    },
-    {
-      "id": "sp_equip_stat_label",
-      "type": "text", "width": 40, "height": 32,
-      "textRegion": {
-        "align": "center", "valign": "center", "fontSize": 13,
-        "fontColor": [190, 172, 148, 255],
-        "x": 0, "y": 0, "w": 40, "h": 32
-      }
-    },
-    {
-      "id": "sp_attack_name",
-      "type": "text", "width": 120, "height": 24,
-      "textRegion": {
-        "align": "left", "valign": "center", "fontSize": 13,
-        "fontColor": [210, 192, 162, 255],
-        "x": 0, "y": 0, "w": 120, "h": 24
-      }
-    },
-    {
-      "id": "sp_attack_value",
-      "type": "text", "width": 40, "height": 24,
-      "textRegion": {
-        "align": "center", "valign": "center", "fontSize": 13,
-        "fontColor": [190, 172, 148, 255],
-        "x": 0, "y": 0, "w": 40, "h": 24
-      }
-    },
-    {
-      "id": "sp_ability_label",
-      "type": "text", "width": 380, "height": 22,
-      "textRegion": {
-        "align": "left", "valign": "center", "fontSize": 13,
-        "fontColor": [185, 170, 145, 255],
-        "x": 8, "y": 0, "w": 372, "h": 22
-      }
-    },
-    {
-      "id": "sp_table_header",
-      "type": "text", "width": 60, "height": 20,
-      "textRegion": {
-        "align": "center", "valign": "center", "fontSize": 11,
-        "fontColor": [170, 155, 130, 200],
-        "x": 0, "y": 0, "w": 60, "h": 20
-      }
-    },
-    {
-      "id": "sp_section_header_light",
+      "id": "Title",
       "type": "text",
-      "width": 380,
-      "height": 28,
+      "width": 300,
+      "height": 81,
+      "tintColor": [
+        255,
+        255,
+        255,
+        0
+      ],
+      "defaultText": "Inventory",
       "textRegion": {
+        "x": 0,
+        "y": 0,
+        "w": 300,
+        "h": 80,
         "align": "center",
         "valign": "center",
-        "fontSize": 20,
-        "fontColor": [235, 220, 185, 255],
-        "x": 0, "y": 0, "w": 380, "h": 28
-      }
-    },
-    {
-      "id": "sp_inline_slash", "type": "image", "nineSlice": "dmg_slash", "width": 18, "height": 18
-    },
-    {
-      "id": "sp_inline_blunt", "type": "image", "nineSlice": "dmg_blunt", "width": 18, "height": 18
-    },
-    {
-      "id": "sp_inline_pierce", "type": "image", "nineSlice": "dmg_pierce", "width": 18, "height": 18
-    },
-    {
-      "id": "sp_inline_armor", "type": "image", "nineSlice": "equip_chest", "width": 18, "height": 18
-    },
-    {
-      "id": "sp_inline_shield", "type": "image", "nineSlice": "equip_shield", "width": 18, "height": 18
-    },
-    {
-      "id": "sp_inline_length", "type": "image", "nineSlice": "icon_length", "width": 18, "height": 18
-    },
-    {
-      "id": "sp_equip_stat_right",
-      "type": "text", "width": 28, "height": 26,
-      "textRegion": {
-        "align": "right", "valign": "center", "fontSize": 13,
-        "fontColor": [190, 172, 148, 255],
-        "x": 0, "y": 0, "w": 28, "h": 26
-      }
-    },
-    {
-      "id": "sp_equip_len_label",
-      "type": "text", "width": 35, "height": 26,
-      "textRegion": {
-        "align": "left", "valign": "center", "fontSize": 12,
-        "fontColor": [170, 155, 130, 255],
-        "x": 0, "y": 0, "w": 35, "h": 26
+        "fontFamily": "GrandStrategy",
+        "fontSize": 70,
+        "fontColor": [
+          223,
+          200,
+          151,
+          255
+        ]
       }
     }
   ]
