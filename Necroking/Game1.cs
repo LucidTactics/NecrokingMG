@@ -33,6 +33,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
     private SpriteFont? _smallFont;
     private SpriteFont? _largeFont;
     private ShadowRenderer _shadowRenderer = new();
+    private HUDRenderer _hudRenderer = new();
 
     // Data
     private GameData _gameData = new();
@@ -99,10 +100,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
     private int _secondaryDropdownSlot = -1;
     private int _channelingSlot = -1;
     private float _spellDropdownScroll;
-    private bool _buildingPlacementActive;
     private int _hoveredObjectIdx = -1;
-    private int _buildingPlacementSelectedDef = -1;
-    private List<int> _buildableDefIndices = new();
     private int _prevScrollValue;
     private KeyboardState _prevKb;
     private MouseState _prevMouse;
@@ -392,52 +390,31 @@ public class Game1 : Microsoft.Xna.Framework.Game
         _camera.Zoom = 24f;
 
         // Load spell bar from data file
+        // Load both spell bars from single JSON read
         _spellBarState.Slots = new SpellBarSlot[4];
+        _secondaryBarState.Slots = new SpellBarSlot[4];
+        for (int si = 0; si < 4; si++)
+        {
+            _spellBarState.Slots[si] = new SpellBarSlot { SpellID = "" };
+            _secondaryBarState.Slots[si] = new SpellBarSlot { SpellID = "" };
+        }
         try
         {
             string sbJson = File.ReadAllText("data/spellbar.json");
             using var sbDoc = System.Text.Json.JsonDocument.Parse(sbJson);
-            var slotsArr = sbDoc.RootElement.GetProperty("slots");
-            int si = 0;
-            foreach (var slot in slotsArr.EnumerateArray())
-            {
-                if (si >= 4) break;
-                _spellBarState.Slots[si] = new SpellBarSlot { SpellID = slot.GetProperty("spellID").GetString() ?? "" };
-                si++;
-            }
-            for (; si < 4; si++) _spellBarState.Slots[si] = new SpellBarSlot { SpellID = "" };
-            DebugLog.Log("startup", $"SpellBar loaded: {_spellBarState.Slots[0].SpellID}, {_spellBarState.Slots[1].SpellID}, {_spellBarState.Slots[2].SpellID}, {_spellBarState.Slots[3].SpellID}");
+            LoadSpellBarSlots(sbDoc.RootElement, "slots", _spellBarState);
+            LoadSpellBarSlots(sbDoc.RootElement, "secondary", _secondaryBarState);
         }
-        catch
+        catch (Exception ex)
         {
+            DebugLog.Log("startup", $"Failed to load spellbar.json: {ex.Message}");
             _spellBarState.Slots = new[] {
-                new SpellBarSlot { SpellID = "summon_skeleton_copy_copy" }, // Summon Wolf
-                new SpellBarSlot { SpellID = "summon_skeleton_copy" },      // Summon Deer
-                new SpellBarSlot { SpellID = "raise_zombie" },              // Summon Zombie
+                new SpellBarSlot { SpellID = "summon_skeleton_copy_copy" },
+                new SpellBarSlot { SpellID = "summon_skeleton_copy" },
+                new SpellBarSlot { SpellID = "raise_zombie" },
                 new SpellBarSlot { SpellID = "" }
             };
         }
-
-        // Load secondary spell bar (keys 1-4)
-        _secondaryBarState.Slots = new SpellBarSlot[4];
-        for (int si = 0; si < 4; si++) _secondaryBarState.Slots[si] = new SpellBarSlot { SpellID = "" };
-        try
-        {
-            string sbJson2 = File.ReadAllText("data/spellbar.json");
-            using var sbDoc2 = System.Text.Json.JsonDocument.Parse(sbJson2);
-            if (sbDoc2.RootElement.TryGetProperty("secondary", out var secArr))
-            {
-                int si2 = 0;
-                foreach (var slot in secArr.EnumerateArray())
-                {
-                    if (si2 >= 4) break;
-                    _secondaryBarState.Slots[si2] = new SpellBarSlot { SpellID = slot.GetProperty("spellID").GetString() ?? "" };
-                    si2++;
-                }
-                DebugLog.Log("startup", $"SecondaryBar loaded: {_secondaryBarState.Slots[0].SpellID}, {_secondaryBarState.Slots[1].SpellID}, {_secondaryBarState.Slots[2].SpellID}, {_secondaryBarState.Slots[3].SpellID}");
-            }
-        }
-        catch { /* secondary bar stays empty */ }
 
         // Init map editor with live systems
         _mapEditor.Init(
@@ -966,6 +943,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         _smallFont = Content.Load<SpriteFont>("SmallFont");
         _largeFont = Content.Load<SpriteFont>("LargeFont");
         _debugDraw.SetFont(_smallFont);
+        _hudRenderer.Init(_spriteBatch, _pixel, _font, _smallFont);
 
         // Load TrueType fonts via FontStashSharp (dynamic sizing)
         _fontManager.LoadFontsFromDirectory(Path.Combine("assets", "fonts"));
@@ -982,11 +960,12 @@ public class Game1 : Microsoft.Xna.Framework.Game
         LogTiming("Bloom initialized");
 
         try { _groundEffect = Content.Load<Microsoft.Xna.Framework.Graphics.Effect>("GroundShader"); }
-        catch { _groundEffect = null; }
+        catch (Exception ex) { _groundEffect = null; DebugLog.Log("startup", $"GroundShader not loaded: {ex.Message}"); }
 
         {
             Microsoft.Xna.Framework.Graphics.Effect? fogEffect = null;
-            try { fogEffect = Content.Load<Microsoft.Xna.Framework.Graphics.Effect>("WeatherFog"); } catch { }
+            try { fogEffect = Content.Load<Microsoft.Xna.Framework.Graphics.Effect>("WeatherFog"); }
+            catch (Exception ex) { DebugLog.Log("startup", $"WeatherFog not loaded: {ex.Message}"); }
             _weatherRenderer.LoadEffect(fogEffect);
         }
         _weatherRenderer.Init(_graphics.PreferredBackBufferWidth, _graphics.PreferredBackBufferHeight);
@@ -1368,9 +1347,8 @@ public class Game1 : Microsoft.Xna.Framework.Game
             if (_buildingMenuUI.ContainsMouse(mouse.X, mouse.Y))
                 _mouseOverUI = true;
 
-            // Building placement panel (left side)
-            if (_buildingPlacementActive && mouse.X < 180)
-                _mouseOverUI = true;
+            // Building placement panel (left side, editor mode)
+            // (handled by BuildingMenuUI.ContainsMouse above)
 
             // Time control buttons (bottom-right)
             if (_gameData.Settings.General.ShowTimeControls)
@@ -2148,6 +2126,19 @@ public class Game1 : Microsoft.Xna.Framework.Game
         base.Update(gameTime);
     }
 
+    private static void LoadSpellBarSlots(System.Text.Json.JsonElement root, string key, SpellBarState bar)
+    {
+        if (!root.TryGetProperty(key, out var arr)) return;
+        int si = 0;
+        foreach (var slot in arr.EnumerateArray())
+        {
+            if (si >= bar.Slots.Length) break;
+            bar.Slots[si] = new SpellBarSlot { SpellID = slot.GetProperty("spellID").GetString() ?? "" };
+            si++;
+        }
+        DebugLog.Log("startup", $"SpellBar '{key}' loaded: {string.Join(", ", bar.Slots.Select(s => s.SpellID))}");
+    }
+
     private bool WasKeyPressed(KeyboardState current, Keys key) =>
         current.IsKeyDown(key) && _prevKb.IsKeyUp(key);
 
@@ -2663,9 +2654,6 @@ public class Game1 : Microsoft.Xna.Framework.Game
             }
         }
 
-        if (_buildingPlacementActive)
-            DrawBuildingPlacement(screenW, screenH);
-
         if (_gameOver && showUI)
             DrawGameOver(screenW, screenH);
         else if (_menuState == MenuState.PauseMenu)
@@ -2964,89 +2952,6 @@ public class Game1 : Microsoft.Xna.Framework.Game
                     darkColor, 0f, Vector2.Zero,
                     new Vector2(tileW + 0.5f, 2f), SpriteEffects.None, 0f);
             }
-        }
-    }
-
-    private void DrawBuildingPlacement(int screenW, int screenH)
-    {
-        if (_buildableDefIndices.Count == 0)
-        {
-            // Show message that no buildable defs exist
-            DrawText(_font, "No buildable structures available.", new Vector2(screenW - 260, 10), new Color(200, 100, 100));
-            return;
-        }
-
-        // --- Right-side panel ---
-        int panelW = 220;
-        int panelX = screenW - panelW - 10;
-        int panelY = 10;
-        int itemH = 24;
-        int headerH = 32;
-        int panelH = headerH + _buildableDefIndices.Count * itemH + 10;
-
-        // Background
-        _spriteBatch.Draw(_pixel, new Rectangle(panelX, panelY, panelW, panelH), new Color(25, 25, 40, 230));
-        _spriteBatch.Draw(_pixel, new Rectangle(panelX, panelY, panelW, headerH), new Color(50, 40, 70, 240));
-        _spriteBatch.Draw(_pixel, new Rectangle(panelX, panelY + headerH, panelW, 1), new Color(100, 80, 140));
-
-        // Title
-        DrawText(_font, "Build (B)", new Vector2(panelX + 8, panelY + 6), new Color(255, 220, 140));
-
-        // List items
-        var mouse = Mouse.GetState();
-        for (int i = 0; i < _buildableDefIndices.Count; i++)
-        {
-            int defIdx = _buildableDefIndices[i];
-            var def = _envSystem.Defs[defIdx];
-            int itemY = panelY + headerH + 4 + i * itemH;
-
-            bool isSelected = (i == _buildingPlacementSelectedDef);
-            bool isHovered = mouse.X >= panelX && mouse.X < panelX + panelW
-                && mouse.Y >= itemY && mouse.Y < itemY + itemH;
-
-            // Highlight
-            if (isSelected)
-                _spriteBatch.Draw(_pixel, new Rectangle(panelX + 2, itemY, panelW - 4, itemH), new Color(80, 60, 120, 200));
-            else if (isHovered)
-                _spriteBatch.Draw(_pixel, new Rectangle(panelX + 2, itemY, panelW - 4, itemH), new Color(60, 50, 80, 150));
-
-            string label = string.IsNullOrEmpty(def.Name) ? def.Id : def.Name;
-            Color textColor = isSelected ? new Color(255, 230, 160) : new Color(190, 190, 210);
-            DrawText(_smallFont, label, new Vector2(panelX + 10, itemY + 4), textColor);
-        }
-
-        // --- Ghost preview at mouse position ---
-        if (_buildingPlacementSelectedDef >= 0 && mouse.X < panelX)
-        {
-            int defIdx = _buildableDefIndices[_buildingPlacementSelectedDef];
-            var def = _envSystem.Defs[defIdx];
-            Vec2 mouseWorld = _camera.ScreenToWorld(new Vector2(mouse.X, mouse.Y), screenW, screenH);
-            var sp = _renderer.WorldToScreen(mouseWorld, 0f, _camera);
-
-            // Draw ghost rectangle for the building
-            var tex = _envSystem.GetDefTexture(defIdx);
-            if (tex != null)
-            {
-                float worldH = def.SpriteWorldHeight * def.Scale;
-                float pixelH = worldH * _camera.Zoom;
-                float scale = pixelH / tex.Height;
-                var origin = new Vector2(def.PivotX * tex.Width, def.PivotY * tex.Height);
-                _spriteBatch.Draw(tex, sp, null, new Color(255, 255, 255, 120), 0f, origin, scale, SpriteEffects.None, 0f);
-            }
-            else
-            {
-                // No texture — draw a placeholder ghost rectangle
-                float ghostSize = 2f * _camera.Zoom;
-                float ghostSizeY = ghostSize * _camera.YRatio;
-                _spriteBatch.Draw(_pixel, new Rectangle(
-                    (int)(sp.X - ghostSize / 2), (int)(sp.Y - ghostSizeY),
-                    (int)ghostSize, (int)ghostSizeY),
-                    new Color(100, 200, 100, 100));
-            }
-
-            // Label
-            string name = string.IsNullOrEmpty(def.Name) ? def.Id : def.Name;
-            DrawText(_smallFont, name, new Vector2(sp.X + 10, sp.Y - 20), new Color(200, 255, 200, 200));
         }
     }
 
@@ -3486,284 +3391,12 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
     private void DrawHUD(int screenW, int screenH)
     {
-        int necroIdx = FindNecromancer();
-
-        // --- Top-left: HP bar ---
-        if (necroIdx >= 0)
-        {
-            var stats = _sim.Units.Stats[necroIdx];
-            float hpFrac = stats.MaxHP > 0 ? (float)stats.HP / stats.MaxHP : 0f;
-            _spriteBatch.Draw(_pixel, new Rectangle(10, 32, 200, 16), new Color(60, 20, 20));
-            _spriteBatch.Draw(_pixel, new Rectangle(10, 32, (int)(200 * hpFrac), 16), new Color(200, 40, 40));
-            DrawText(_font, $"HP: {stats.HP}/{stats.MaxHP}", new Vector2(15, 33), Color.White);
-        }
-
-        // --- Top-left: Mana bar ---
-        float manaFrac = _sim.NecroState.MaxMana > 0 ? _sim.NecroState.Mana / _sim.NecroState.MaxMana : 0f;
-        _spriteBatch.Draw(_pixel, new Rectangle(10, 50, 200, 16), new Color(40, 40, 80));
-        _spriteBatch.Draw(_pixel, new Rectangle(10, 50, (int)(200 * manaFrac), 16), new Color(80, 80, 220));
-        DrawText(_font, $"Mana: {(int)_sim.NecroState.Mana}/{(int)_sim.NecroState.MaxMana}", new Vector2(15, 51), Color.White);
-
-        // Inventory hint (press I)
-        if (_inventory.UsedSlots > 0 && !_inventoryUI.IsVisible)
-            DrawText(_font, $"[I] Inventory ({_inventory.UsedSlots} items)", new Vector2(15, 72), new Color(200, 220, 180));
-
-        // Spell bar
-        int slotW = 50;
-        int slotH = 50;
-        int slotY = screenH - 95;
-        string[] slotKeys = { "Q", "E", "LC", "RC" };
-        for (int s = 0; s < 4; s++)
-        {
-            int slotX = screenW / 2 - 110 + s * (slotW + 4);
-            bool hasSpell = s < _spellBarState.Slots.Length && !string.IsNullOrEmpty(_spellBarState.Slots[s].SpellID);
-            Color slotColor = hasSpell ? new Color(50, 50, 70, 200) : new Color(30, 30, 40, 150);
-            _spriteBatch.Draw(_pixel, new Rectangle(slotX, slotY, slotW, slotH), slotColor);
-            _spriteBatch.Draw(_pixel, new Rectangle(slotX, slotY, slotW, 2), new Color(100, 100, 130, 200));
-
-            if (_smallFont != null)
-            {
-                DrawText(_smallFont, slotKeys[s], new Vector2(slotX + 2, slotY + 2), new Color(180, 180, 200));
-
-                if (hasSpell)
-                {
-                    var spell = _gameData.Spells.Get(_spellBarState.Slots[s].SpellID);
-                    if (spell != null)
-                    {
-                        string name = spell.DisplayName.Length > 7 ? spell.DisplayName[..7] : spell.DisplayName;
-                        DrawText(_smallFont, name, new Vector2(slotX + 3, slotY + slotH - 14), new Color(200, 200, 220));
-
-                        // Spell category icon (geometric shape)
-                        DrawSpellCategoryIcon(spell.Category, slotX + slotW / 2, slotY + slotH / 2 - 2);
-
-                        // Cooldown overlay
-                        float cd = _sim.NecroState.GetCooldown(spell.Id);
-                        if (cd > 0f)
-                        {
-                            float cdFrac = MathF.Min(cd / MathF.Max(spell.Cooldown, 0.1f), 1f);
-                            int cdH = (int)(slotH * cdFrac);
-                            _spriteBatch.Draw(_pixel, new Rectangle(slotX, slotY + slotH - cdH, slotW, cdH),
-                                new Color(0, 0, 0, 150));
-                            DrawText(_smallFont, $"{cd:F1}", new Vector2(slotX + 12, slotY + 18), new Color(255, 200, 100));
-                        }
-
-                        // Not enough mana indicator
-                        if (_sim.NecroState.Mana < spell.ManaCost)
-                        {
-                            _spriteBatch.Draw(_pixel, new Rectangle(slotX, slotY, slotW, slotH),
-                                new Color(80, 0, 0, 80));
-                        }
-                    }
-                }
-            }
-        }
-
-        // Spell dropdown (if open)
-        if (_spellDropdownSlot >= 0 && _smallFont != null)
-        {
-            int ddSlotX = screenW / 2 - 110 + _spellDropdownSlot * (slotW + 4);
-            int ddItemH = 20;
-            var allSpells = _gameData.Spells.GetIDs();
-            int ddH = (allSpells.Count + 1) * ddItemH;
-            int ddY = slotY - 10;
-
-            // Background
-            _spriteBatch.Draw(_pixel, new Rectangle(ddSlotX - 2, ddY - ddH - 2, 164, ddH + 4), new Color(20, 20, 35, 240));
-
-            // "None" option
-            DrawText(_smallFont, "(None)", new Vector2(ddSlotX + 4, ddY - ddItemH), new Color(150, 150, 170));
-
-            // Spell options
-            for (int si = 0; si < allSpells.Count; si++)
-            {
-                var spDef = _gameData.Spells.Get(allSpells[si]);
-                int itemY = ddY - (si + 2) * ddItemH;
-                string label = spDef != null ? $"{spDef.DisplayName} [{spDef.Category}]" : allSpells[si];
-                Color labelColor = _spellBarState.Slots[_spellDropdownSlot].SpellID == allSpells[si]
-                    ? new Color(255, 220, 100) : new Color(200, 200, 220);
-                DrawText(_smallFont, label, new Vector2(ddSlotX + 4, itemY), labelColor);
-            }
-        }
-
-        // --- Secondary spell bar (keys 1-4) ---
-        {
-            int secSlotW = 35, secSlotH = 35;
-            int secSlotY = slotY - secSlotH - 6;
-            string[] secSlotKeys = { "1", "2", "3", "4" };
-            for (int s = 0; s < 4; s++)
-            {
-                int secSlotX = screenW / 2 - 80 + s * (secSlotW + 4);
-                bool hasSecSpell = s < _secondaryBarState.Slots.Length && !string.IsNullOrEmpty(_secondaryBarState.Slots[s].SpellID);
-                Color secColor = hasSecSpell ? new Color(45, 50, 65, 180) : new Color(25, 25, 35, 120);
-                _spriteBatch.Draw(_pixel, new Rectangle(secSlotX, secSlotY, secSlotW, secSlotH), secColor);
-                _spriteBatch.Draw(_pixel, new Rectangle(secSlotX, secSlotY, secSlotW, 2), new Color(90, 90, 120, 180));
-                if (_smallFont != null)
-                {
-                    DrawText(_smallFont, secSlotKeys[s], new Vector2(secSlotX + 2, secSlotY + 1), new Color(160, 160, 180));
-                    if (hasSecSpell)
-                    {
-                        var secSpell = _gameData.Spells.Get(_secondaryBarState.Slots[s].SpellID);
-                        if (secSpell != null)
-                        {
-                            string sn = secSpell.DisplayName.Length > 5 ? secSpell.DisplayName[..5] : secSpell.DisplayName;
-                            DrawText(_smallFont, sn, new Vector2(secSlotX + 2, secSlotY + secSlotH - 13), new Color(180, 180, 200));
-                            float scd = _sim.NecroState.GetCooldown(secSpell.Id);
-                            if (scd > 0f)
-                            {
-                                float scdFrac = MathF.Min(scd / MathF.Max(secSpell.Cooldown, 0.1f), 1f);
-                                int scdH = (int)(secSlotH * scdFrac);
-                                _spriteBatch.Draw(_pixel, new Rectangle(secSlotX, secSlotY + secSlotH - scdH, secSlotW, scdH), new Color(0, 0, 0, 150));
-                            }
-                            if (_sim.NecroState.Mana < secSpell.ManaCost)
-                                _spriteBatch.Draw(_pixel, new Rectangle(secSlotX, secSlotY, secSlotW, secSlotH), new Color(80, 0, 0, 80));
-                        }
-                    }
-                }
-            }
-        }
-
-        // --- Secondary spell bar dropdown ---
-        if (_secondaryDropdownSlot >= 0 && _secondaryDropdownSlot < 4 && _smallFont != null)
-        {
-            int secSlotW3 = 35;
-            int secSlotY3 = slotY - 35 - 6;
-            int sddSlotX = screenW / 2 - 80 + _secondaryDropdownSlot * (secSlotW3 + 4);
-            int sddItemH = 20;
-            var secSpellList = _gameData.Spells.GetIDs();
-            int sddH = (secSpellList.Count + 1) * sddItemH;
-            int sddY = secSlotY3 - 10;
-
-            // Background
-            _spriteBatch.Draw(_pixel, new Rectangle(sddSlotX - 2, sddY - sddH - 2, 164, sddH + 4), new Color(20, 20, 35, 240));
-
-            // "None" option
-            DrawText(_smallFont, "(None)", new Vector2(sddSlotX + 4, sddY - sddItemH), new Color(150, 150, 170));
-
-            // Spell options
-            for (int si = 0; si < secSpellList.Count; si++)
-            {
-                var spDef = _gameData.Spells.Get(secSpellList[si]);
-                int itemY = sddY - (si + 2) * sddItemH;
-                string label = spDef != null ? $"{spDef.DisplayName} [{spDef.Category}]" : secSpellList[si];
-                Color labelColor = _secondaryBarState.Slots[_secondaryDropdownSlot].SpellID == secSpellList[si]
-                    ? new Color(255, 220, 100) : new Color(200, 200, 220);
-                DrawText(_smallFont, label, new Vector2(sddSlotX + 4, itemY), labelColor);
-            }
-        }
-
-        // --- Building hover tooltip ---
-        if (_hoveredObjectIdx >= 0 && _hoveredObjectIdx < _envSystem.ObjectCount && _smallFont != null)
-        {
-            var hovObj = _envSystem.GetObject(_hoveredObjectIdx);
-            var hovDef = _envSystem.Defs[hovObj.DefIndex];
-            var hovRt = _envSystem.GetObjectRuntime(_hoveredObjectIdx);
-            var hovProc = _envSystem.GetProcessState(_hoveredObjectIdx);
-            string ownerStr = hovRt.Owner == 0 ? "Undead" : hovRt.Owner == 1 ? "Neutral" : "Human";
-            string procStr = hovProc.Processing ? $"Processing ({hovProc.ProcessTimer:F1}s)" : "Idle";
-            string[] ttLines = {
-                hovDef.Name.Length > 0 ? hovDef.Name : hovDef.Id,
-                $"HP: {hovRt.HP}/{hovDef.BuildingMaxHP}",
-                $"Owner: {ownerStr}",
-                procStr
-            };
-            var mouse = Mouse.GetState();
-            int ttX = mouse.X + 16, ttY = mouse.Y - 70;
-            int ttW = 160, ttH = ttLines.Length * 16 + 8;
-            _spriteBatch.Draw(_pixel, new Rectangle(ttX - 4, ttY - 4, ttW + 8, ttH + 8), new Color(15, 15, 25, 220));
-            _spriteBatch.Draw(_pixel, new Rectangle(ttX - 4, ttY - 4, ttW + 8, 2), new Color(100, 100, 160));
-            for (int tl = 0; tl < ttLines.Length; tl++)
-                DrawText(_smallFont, ttLines[tl], new Vector2(ttX, ttY + tl * 16), new Color(220, 220, 240));
-        }
-
-        // --- Top-left: Unit counts + inventory ---
-        int undead = 0, human = 0;
-        for (int i = 0; i < _sim.Units.Count; i++)
-        {
-            if (!_sim.Units.Alive[i]) continue;
-            if (_sim.Units.Faction[i] == Faction.Undead) undead++;
-            else human++;
-        }
-        DrawText(_font, $"Enemies: {human} | Undead: {undead}", new Vector2(10, 70), Color.White);
-
-        // Inventory
-        int invY = 94;
-        foreach (var (matID, count) in _sim.NecroState.Inventory)
-        {
-            if (count > 0)
-            {
-                DrawText(_font, $"{matID}: {count}", new Vector2(15, invY), new Color(200, 160, 255));
-                invY += 16;
-            }
-        }
-
-        // --- Bottom: Controls hint ---
-        DrawText(_smallFont, "WASD: Move | Scroll: Zoom | ESC: Menu | Space: Jump | G: Ghost | Shift: Run",
-            new Vector2(10, screenH - 22), new Color(120, 120, 140, 200));
-
-        // --- Time control buttons (bottom-right) ---
-        if (_gameData.Settings.General.ShowTimeControls && _smallFont != null)
-        {
-            var tcMouse = Mouse.GetState();
-            ReadOnlySpan<float> tcSpeeds = stackalloc float[] { 0.1f, 0.25f, 0.5f, 1.0f, 1.5f, 2.0f };
-            string[] tcLabels = { "<<<", "<<", "<", "=", ">", ">>" };
-            const int tcBtnW = 32, tcBtnH = 22, tcGap = 2, tcNum = 6;
-            int tcTotalW = tcNum * tcBtnW + (tcNum - 1) * tcGap;
-            int tcBaseX = screenW - tcTotalW - 10;
-            int tcBaseY = screenH - 52;
-
-            for (int s = 0; s < tcNum; s++)
-            {
-                int bx = tcBaseX + s * (tcBtnW + tcGap);
-                bool hover = tcMouse.X >= bx && tcMouse.X < bx + tcBtnW
-                          && tcMouse.Y >= tcBaseY && tcMouse.Y < tcBaseY + tcBtnH;
-                bool active = MathF.Abs(_timeScale - tcSpeeds[s]) < 0.001f;
-                Color bg = active ? new Color(70, 100, 160, 220)
-                         : hover  ? new Color(50, 60, 80, 180)
-                                  : new Color(20, 20, 30, 140);
-                _spriteBatch.Draw(_pixel, new Rectangle(bx, tcBaseY, tcBtnW, tcBtnH), bg);
-                var labelSize = _smallFont.MeasureString(tcLabels[s]);
-                DrawText(_smallFont, tcLabels[s],
-                    new Vector2(bx + tcBtnW / 2f - labelSize.X / 2f, tcBaseY + tcBtnH / 2f - labelSize.Y / 2f),
-                    Color.White);
-            }
-
-            // Speed label to the right of buttons
-            string speedText = $"{_timeScale:G2}x";
-            DrawText(_smallFont, speedText, new Vector2(tcBaseX + tcTotalW + 6, tcBaseY + 5),
-                new Color(180, 180, 200, 200));
-        }
-
-        // --- Combat log (bottom-left, above controls hint) ---
-        if (_gameData.Settings.General.CombatLogEnabled)
-        {
-            var entries = _sim.CombatLog.Entries;
-            int maxLines = _gameData.Settings.General.CombatLogLines;
-            float fadeTime = _gameData.Settings.General.CombatLogFadeTime;
-            int logFontSize = _gameData.Settings.General.CombatLogFontSize;
-            int logBaseY = screenH - 40;
-            int linesDrawn = 0;
-
-            for (int li = entries.Count - 1; li >= 0 && linesDrawn < maxLines; li--)
-            {
-                var e = entries[li];
-                float age = _sim.GameTime - e.Timestamp;
-                if (age > fadeTime * 3f) continue;
-                float fade = age < fadeTime ? 1f : MathF.Max(0f, 1f - (age - fadeTime) / fadeTime);
-                byte alpha = (byte)(fade * 200);
-
-                string logLine = e.Outcome switch
-                {
-                    CombatLogOutcome.Hit => $"{e.AttackerName} hit {e.DefenderName} for {e.NetDamage} ({e.WeaponName})",
-                    CombatLogOutcome.Miss => $"{e.AttackerName} missed {e.DefenderName}",
-                    CombatLogOutcome.Blocked => $"{e.DefenderName} blocked {e.AttackerName}'s attack",
-                    _ => ""
-                };
-
-                DrawText(_smallFont, logLine, new Vector2(10, logBaseY - linesDrawn * 16),
-                    new Color((byte)200, (byte)200, (byte)200, alpha));
-                linesDrawn++;
-            }
-        }
+        _hudRenderer.Draw(screenW, screenH, _sim, _gameData,
+            _inventory, _inventoryUI.IsVisible,
+            _spellBarState, _secondaryBarState,
+            _spellDropdownSlot, _secondaryDropdownSlot,
+            _timeScale, _hoveredObjectIdx, _envSystem,
+            DrawSpellCategoryIcon);
     }
 
     private void DrawPauseMenu(int screenW, int screenH)
@@ -4129,6 +3762,19 @@ public class Game1 : Microsoft.Xna.Framework.Game
     {
         if (font != null)
             _spriteBatch.DrawString(font, text, pos, color);
+    }
+
+    protected override void UnloadContent()
+    {
+        _widgetRenderer.Shutdown();
+        _pixel?.Dispose();
+        _glowTex?.Dispose();
+        _mainMenuBg?.Dispose();
+        _groundVertexMapTex?.Dispose();
+        foreach (var atlas in _atlases)
+            atlas?.Texture?.Dispose();
+        _envSystem.OnCollisionsDirty = null;
+        base.UnloadContent();
     }
 }
 

@@ -388,7 +388,7 @@ public class BuildingMenuUI
         if (envDef.PlacementRadius > 0)
         {
             float radiusPixels = envDef.PlacementRadius * camera.Zoom;
-            DrawCircleOutline(batch, pixel, screenPos, radiusPixels,
+            Render.DrawUtils.DrawCircleOutline(batch, pixel, screenPos, radiusPixels,
                 canPlace ? new Color(50, 200, 50, 40) : new Color(200, 50, 50, 40), 16);
         }
     }
@@ -443,22 +443,4 @@ public class BuildingMenuUI
         _batch.Draw(_pixel, new Rectangle(r.X + r.Width - t, r.Y + t, t, r.Height - t * 2), c);
     }
 
-    private static void DrawCircleOutline(SpriteBatch batch, Texture2D pixel,
-        Vector2 center, float radius, Color color, int segments)
-    {
-        for (int i = 0; i < segments; i++)
-        {
-            float a1 = MathF.PI * 2 * i / segments;
-            float a2 = MathF.PI * 2 * (i + 1) / segments;
-            var p1 = center + new Vector2(MathF.Cos(a1), MathF.Sin(a1)) * radius;
-            var p2 = center + new Vector2(MathF.Cos(a2), MathF.Sin(a2)) * radius;
-
-            float dx = p2.X - p1.X, dy = p2.Y - p1.Y;
-            float len = MathF.Sqrt(dx * dx + dy * dy);
-            float angle = MathF.Atan2(dy, dx);
-
-            batch.Draw(pixel, p1, null, color, angle, Vector2.Zero,
-                new Vector2(len, 1f), SpriteEffects.None, 0f);
-        }
-    }
 }
