@@ -1046,21 +1046,9 @@ public partial class UIEditorWindow : EditorBase
             _statusMsg = "Saved all tabs";
             _statusTimer = 3f;
 
-            // Also copy to source tree so dotnet publish picks up the latest
-            string srcDefsDir = Path.Combine("..", _defsDir);
-            if (Directory.Exists(srcDefsDir))
-            {
-                try
-                {
-                    foreach (var file in new[] { "nine_slices.json", "elements.json", "widgets.json" })
-                    {
-                        string src = Path.Combine(_defsDir, file);
-                        if (File.Exists(src))
-                            File.Copy(src, Path.Combine(srcDefsDir, file), true);
-                    }
-                }
-                catch { /* source tree copy is best-effort */ }
-            }
+            // Dual-save to source tree so all builds stay in sync
+            foreach (var file in new[] { "nine_slices.json", "elements.json", "widgets.json" })
+                Core.GamePaths.DualSave(Path.Combine(_defsDir, file));
         }
         catch (Exception ex)
         {

@@ -52,23 +52,12 @@ public class GameData
         ok &= Items.Save(Path.Combine(dataDir, "items.json"));
         ok &= Units.SaveWeaponPoints(Path.Combine(dataDir, "weapon_points.json"));
 
-        // Also save to source tree so dotnet publish picks up the latest
-        string srcDir = Path.Combine("..", dataDir);
-        if (Directory.Exists(srcDir))
-        {
-            Weapons.Save(Path.Combine(srcDir, "weapons.json"));
-            Armors.Save(Path.Combine(srcDir, "armor.json"));
-            Shields.Save(Path.Combine(srcDir, "shields.json"));
-            Units.Save(Path.Combine(srcDir, "units.json"));
-            Flipbooks.Save(Path.Combine(srcDir, "flipbooks.json"));
-            Buffs.Save(Path.Combine(srcDir, "buffs.json"));
-            Spells.Save(Path.Combine(srcDir, "spells.json"));
-            Weather.Save(Path.Combine(srcDir, "weather.json"));
-            UnitGroups.Save(Path.Combine(srcDir, "unit_groups.json"));
-            Settings.Save(Path.Combine(srcDir, "settings.json"));
-            Items.Save(Path.Combine(srcDir, "items.json"));
-            Units.SaveWeaponPoints(Path.Combine(srcDir, "weapon_points.json"));
-        }
+        // Dual-save each data file to source tree via GamePaths
+        string[] dataFiles = { "weapons.json", "armor.json", "shields.json", "units.json",
+            "flipbooks.json", "buffs.json", "spells.json", "weather.json",
+            "unit_groups.json", "settings.json", "items.json", "weapon_points.json" };
+        foreach (var file in dataFiles)
+            Core.GamePaths.DualSave(Path.Combine(dataDir, file));
         return ok;
     }
 }

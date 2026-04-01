@@ -73,6 +73,7 @@ public static class Program
             Directory.SetCurrentDirectory(exeDir);
 
         LaunchArgs.Parse(args);
+        Necroking.Core.GamePaths.DetectSourceRoot();
         using var game = new Game1();
         game.Run();
     }

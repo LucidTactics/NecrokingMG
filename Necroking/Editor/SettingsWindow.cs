@@ -56,14 +56,12 @@ public class SettingsWindow
     /// </summary>
     public void Update(int screenW, int screenH, GameTime gameTime)
     {
-        // Auto-save when dirty — save to both runtime and source tree
+        // Auto-save when dirty — save to runtime + dual-save to source tree
         if (_dirty)
         {
             _dirty = false;
             _gameData.Settings.Save(_settingsJsonPath);
-            string srcSettings = System.IO.Path.Combine("..", _settingsJsonPath);
-            if (System.IO.File.Exists(srcSettings) || System.IO.Directory.Exists(System.IO.Path.GetDirectoryName(srcSettings) ?? ""))
-                _gameData.Settings.Save(srcSettings);
+            Necroking.Core.GamePaths.DualSave(_settingsJsonPath);
         }
         if (_weatherDirty)
         {
@@ -71,9 +69,7 @@ public class SettingsWindow
             if (!string.IsNullOrEmpty(_weatherJsonPath))
             {
                 _gameData.Weather.Save(_weatherJsonPath);
-                string srcWeather = System.IO.Path.Combine("..", _weatherJsonPath);
-                if (System.IO.File.Exists(srcWeather) || System.IO.Directory.Exists(System.IO.Path.GetDirectoryName(srcWeather) ?? ""))
-                    _gameData.Weather.Save(srcWeather);
+                Necroking.Core.GamePaths.DualSave(_weatherJsonPath);
             }
         }
     }

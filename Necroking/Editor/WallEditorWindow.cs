@@ -901,6 +901,9 @@ public class WallEditorWindow
 
             _statusMessage = "Saved!";
             _statusTimer = 2f;
+
+            // Dual-save to source tree
+            Necroking.Core.GamePaths.DualSave(Path.Combine("assets", "maps", _mapFilename + "_walldefs.json"));
         }
         catch (Exception ex)
         {

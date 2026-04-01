@@ -27,6 +27,8 @@ Necroking/bin/Publish/
 ## OS
 Thumbs.db
 .DS_Store
+desktop.ini
+.tmp.driveupload/
 
 ## MGCB intermediates
 Necroking/Content/bin/
@@ -39,6 +41,14 @@ Necroking/Content/obj/
 .claude/
 
 ## Large assets (copy from C++ project manually)
-Necroking/assets/maps/*.json
 Necroking/assets/Sprites/*.png
 log/
+
+## Map data (large, changes frequently — sync via dual-save, not git)
+Necroking/assets/maps/default.json
+Necroking/assets/maps/default_roads.json
+Necroking/assets/maps/default_triggers.json
+
+## Temp files
+move_stderr.txt
+retarget_stderr.txt

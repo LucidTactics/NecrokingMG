@@ -1511,6 +1511,9 @@ public class EnvObjectEditorWindow
 
             _statusMessage = $"Saved {_env.DefCount} defs to {path}";
             _statusTimer = 3f;
+
+            // Dual-save to source tree
+            Core.GamePaths.DualSave(path);
         }
         catch (Exception ex)
         {
