@@ -169,12 +169,13 @@ public class Game1 : Microsoft.Xna.Framework.Game
         }
         else
         {
-            // Borderless fullscreen: use adapter output bounds
+            // Windowed borderless "fullscreen" with +1 height trick:
+            // Prevents OS from treating it as exclusive fullscreen, which breaks screenshots
             var adapter = GraphicsAdapter.DefaultAdapter;
             _graphics.PreferredBackBufferWidth = adapter.CurrentDisplayMode.Width;
-            _graphics.PreferredBackBufferHeight = adapter.CurrentDisplayMode.Height;
-            _graphics.HardwareModeSwitch = false;
-            _graphics.IsFullScreen = true;
+            _graphics.PreferredBackBufferHeight = adapter.CurrentDisplayMode.Height + 1;
+            _graphics.IsFullScreen = false;
+            Window.IsBorderless = true;
         }
 
         Content.RootDirectory = "Content";
@@ -214,6 +215,8 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
         if (LaunchArgs.Headless)
             Window.Position = new Point(-10000, -10000);
+        else if (LaunchArgs.ResolutionW <= 0 && LaunchArgs.ResolutionH <= 0)
+            Window.Position = new Point(0, 0);
 
         // Load game data
         _gameData.Load("data");
