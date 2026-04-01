@@ -23,6 +23,7 @@ public class EnvObjectEditorWindow
     private EnvironmentSystem _env = null!;
     private TriggerSystem? _triggerSystem;
     private Data.Registries.ItemRegistry? _itemRegistry;
+    private Data.Registries.SpellRegistry? _spellRegistry;
     private GraphicsDevice _device = null!;
     private Texture2D _pixel = null!;
     private SpriteBatch _sb = null!;
@@ -139,7 +140,12 @@ public class EnvObjectEditorWindow
     public void SetItemRegistry(Data.Registries.ItemRegistry? items)
     {
         _itemRegistry = items;
-        _costItemOptions = null; // invalidate cache
+        _costItemOptions = null;
+    }
+
+    public void SetSpellRegistry(Data.Registries.SpellRegistry? spells)
+    {
+        _spellRegistry = spells;
     }
 
     private string[] GetCostItemOptions()
@@ -1193,6 +1199,43 @@ public class EnvObjectEditorWindow
 
         curY += 4;
 
+        // --- Section: Trap Spell ---
+        curY = DrawSectionLabel(fx, curY, fieldW, "TRAP SPELL");
+
+        bool hasTrap = !string.IsNullOrEmpty(def.TrapSpellId);
+        if (_spellRegistry != null && _spellRegistry.Count > 0)
+        {
+            var spellIds = _spellRegistry.GetIDs();
+            var spellOptions = new string[spellIds.Count];
+            for (int si = 0; si < spellIds.Count; si++) spellOptions[si] = spellIds[si];
+
+            string newTrapSpell = _ui.DrawCombo("envdef_trapspell", "Trap Spell", def.TrapSpellId, spellOptions, fx, curY, fieldW, allowNone: true);
+            if (newTrapSpell != def.TrapSpellId) def.TrapSpellId = newTrapSpell;
+            curY += RowH;
+
+            if (!string.IsNullOrEmpty(def.TrapSpellId))
+            {
+                int newUses = _ui.DrawIntField("envdef_trapuses", "Uses (0=∞)", def.TrapUses, fx, curY, fieldW);
+                if (newUses != def.TrapUses) def.TrapUses = Math.Max(0, newUses);
+                curY += RowH;
+            }
+        }
+        else
+        {
+            string newTrapSpell = _ui.DrawTextField("envdef_trapspell_t", "Trap Spell ID", def.TrapSpellId, fx, curY, fieldW);
+            if (newTrapSpell != def.TrapSpellId) def.TrapSpellId = newTrapSpell;
+            curY += RowH;
+
+            if (!string.IsNullOrEmpty(def.TrapSpellId))
+            {
+                int newUses = _ui.DrawIntField("envdef_trapuses", "Uses (0=∞)", def.TrapUses, fx, curY, fieldW);
+                if (newUses != def.TrapUses) def.TrapUses = Math.Max(0, newUses);
+                curY += RowH;
+            }
+        }
+
+        curY += 4;
+
         // --- Section: Trigger ---
         curY = DrawSectionLabel(fx, curY, fieldW, "TRIGGER / PROCESSING");
 
@@ -1398,6 +1441,8 @@ public class EnvObjectEditorWindow
             Cost2ItemId = src.Cost2ItemId,
             Cost2Amount = src.Cost2Amount,
             PlacementRadius = src.PlacementRadius,
+            TrapSpellId = src.TrapSpellId,
+            TrapUses = src.TrapUses,
             BoundTriggerID = src.BoundTriggerID,
             Input1 = new ProcessSlot { Kind = src.Input1.Kind, ResourceID = src.Input1.ResourceID },
             Input2 = new ProcessSlot { Kind = src.Input2.Kind, ResourceID = src.Input2.ResourceID },

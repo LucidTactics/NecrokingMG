@@ -1334,6 +1334,9 @@ public class Simulation
         ApplyDamage(defenderIdx, netDmg, attackerIdx);
     }
 
+    /// <summary>Apply damage to a unit from an external source (spells, traps, etc.).</summary>
+    public void DealDamage(int unitIdx, int damage) => ApplyDamage(unitIdx, damage);
+
     private void ApplyDamage(int unitIdx, int damage, int attackerIdx = -1)
     {
         if (unitIdx < 0 || unitIdx >= _units.Count || !_units.Alive[unitIdx]) return;

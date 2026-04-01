@@ -4,6 +4,8 @@ using System.Text.Json;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Necroking.Core;
+using Necroking.Data;
+using Necroking.Movement;
 
 namespace Necroking.World;
 
@@ -81,6 +83,10 @@ public class EnvironmentObjectDef
     // Placement radius: additive to collisionRadius for placement spacing checks
     public float PlacementRadius { get; set; }
 
+    // Trap spell system
+    public string TrapSpellId { get; set; } = "";   // spell to cast when enemy enters range
+    public int TrapUses { get; set; }                // 0 = infinite uses
+
     // Tint color (used by color harmonizer M04)
     public HdrColor TintColor { get; set; } = new(255, 255, 255, 255, 1f);
 
@@ -126,6 +132,8 @@ public class EnvironmentObjectDef
         writer.WriteString("cost2ItemId", Cost2ItemId);
         writer.WriteNumber("cost2Amount", Cost2Amount);
         writer.WriteNumber("placementRadius", PlacementRadius);
+        writer.WriteString("trapSpellId", TrapSpellId);
+        writer.WriteNumber("trapUses", TrapUses);
         writer.WriteString("boundTriggerID", BoundTriggerID);
         // Processing slots
         writer.WriteStartObject("input1");
@@ -179,6 +187,8 @@ public struct PlacedObjectRuntime
     public bool Alive;
     public bool Collected;         // foragable has been picked up
     public float RespawnTimer;     // countdown to respawn after collection
+    public int TrapUsesRemaining;  // trap uses left (-1 = not a trap, 0 = infinite)
+    public float TrapCooldownTimer; // time until trap can fire again
 
     public PlacedObjectRuntime() { HP = 0; Owner = 1; Alive = true; Collected = false; RespawnTimer = 0f; }
 }
@@ -217,7 +227,12 @@ public class EnvironmentSystem
             ObjectID = $"obj_{_nextObjectID++}"
         };
         _objects.Add(obj);
-        _objectRuntime.Add(new PlacedObjectRuntime { HP = _defs[defIndex].BuildingMaxHP, Owner = _defs[defIndex].BuildingDefaultOwner, Alive = true });
+        var def = _defs[defIndex];
+        _objectRuntime.Add(new PlacedObjectRuntime
+        {
+            HP = def.BuildingMaxHP, Owner = def.BuildingDefaultOwner, Alive = true,
+            TrapUsesRemaining = !string.IsNullOrEmpty(def.TrapSpellId) ? (def.TrapUses == 0 ? 0 : def.TrapUses) : -1,
+        });
         _processState.Add(new BuildingProcessState());
 
         if (_defs[defIndex].CollisionRadius > 0)
@@ -303,6 +318,103 @@ public class EnvironmentSystem
         }
         if (anyRespawned)
             OnCollisionsDirty?.Invoke();
+    }
+
+    /// <summary>Event emitted when a trap fires a spell.</summary>
+    public struct TrapFireEvent
+    {
+        public int ObjectIndex;
+        public string SpellId;
+        public Vec2 TrapPos;
+        public int TargetUnitIdx;
+        public int TrapOwner;
+    }
+
+    /// <summary>Pending trap fire events from the last UpdateTraps call. Consumed by Game1.</summary>
+    public readonly List<TrapFireEvent> TrapFireEvents = new();
+
+    /// <summary>Update trap cooldowns and find targets. Populates TrapFireEvents.</summary>
+    public void UpdateTraps(float dt, UnitArrays units)
+    {
+        TrapFireEvents.Clear();
+
+        for (int i = 0; i < _objectRuntime.Count; i++)
+        {
+            var rt = _objectRuntime[i];
+            if (!rt.Alive || rt.Collected) continue;
+            if (rt.TrapUsesRemaining < 0) continue; // -1 = not a trap
+
+            var def = _defs[_objects[i].DefIndex];
+            if (string.IsNullOrEmpty(def.TrapSpellId)) continue;
+
+            // Tick cooldown
+            if (rt.TrapCooldownTimer > 0f)
+            {
+                rt.TrapCooldownTimer -= dt;
+                _objectRuntime[i] = rt;
+                continue;
+            }
+
+            // Find first enemy in range
+            var trapPos = new Vec2(_objects[i].X, _objects[i].Y);
+            int target = FindTrapTarget(trapPos, def, rt.Owner, units);
+            if (target < 0) continue;
+
+            // Fire!
+            TrapFireEvents.Add(new TrapFireEvent
+            {
+                ObjectIndex = i, SpellId = def.TrapSpellId,
+                TrapPos = trapPos, TargetUnitIdx = target, TrapOwner = rt.Owner
+            });
+
+            // Apply cooldown
+            // (spell cooldown will be looked up by Game1 since we don't have SpellRegistry here)
+            rt.TrapCooldownTimer = 0.5f; // default, overridden by Game1 after looking up spell
+
+            // Decrement uses
+            if (rt.TrapUsesRemaining > 0)
+            {
+                rt.TrapUsesRemaining--;
+                if (rt.TrapUsesRemaining <= 0)
+                {
+                    rt.Alive = false;
+                    OnCollisionsDirty?.Invoke();
+                }
+            }
+
+            _objectRuntime[i] = rt;
+        }
+    }
+
+    /// <summary>Set the trap cooldown for an object (called by Game1 after looking up spell cooldown).</summary>
+    public void SetTrapCooldown(int objIdx, float cooldown)
+    {
+        if (objIdx < 0 || objIdx >= _objectRuntime.Count) return;
+        var rt = _objectRuntime[objIdx];
+        rt.TrapCooldownTimer = cooldown;
+        _objectRuntime[objIdx] = rt;
+    }
+
+    private static int FindTrapTarget(Vec2 trapPos, EnvironmentObjectDef def, int trapOwner,
+        UnitArrays units)
+    {
+        // Use the spell range from the def name — but we don't have SpellRegistry here.
+        // Use a fixed detection range based on typical trap spell range.
+        // Game1 can override with actual spell range if needed.
+        float rangeSq = 2.5f * 2.5f; // slightly larger than trap_zap range of 1.5
+
+        float bestDist = rangeSq;
+        int bestIdx = -1;
+        Faction trapFaction = trapOwner == 0 ? Faction.Undead : Faction.Human;
+
+        for (int u = 0; u < units.Count; u++)
+        {
+            if (!units.Alive[u]) continue;
+            if (units.Faction[u] == trapFaction) continue; // skip friendlies
+            float d = (units.Position[u] - trapPos).LengthSq();
+            if (d < bestDist) { bestDist = d; bestIdx = u; }
+        }
+        return bestIdx;
     }
 
     /// <summary>

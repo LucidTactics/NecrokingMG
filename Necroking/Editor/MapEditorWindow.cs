@@ -438,6 +438,11 @@ public class MapEditorWindow
         _envObjectEditor?.SetItemRegistry(items);
     }
 
+    public void SetSpellRegistry(Data.Registries.SpellRegistry? spells)
+    {
+        _envObjectEditor?.SetSpellRegistry(spells);
+    }
+
     public bool IsEnvObjectEditorOpen => _envObjectEditor != null && _envObjectEditor.IsOpen;
 
     public void Update(int screenW, int screenH)

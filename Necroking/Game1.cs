@@ -431,6 +431,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
             onGrassMapChanged: SyncGrassFromEditor,
             editorBase: _editorUi);
         _mapEditor.SetItemRegistry(_gameData.Items);
+        _mapEditor.SetSpellRegistry(_gameData.Spells);
 
         // Feed grass data to map editor
         if (_grassMap.Length > 0)
@@ -1614,7 +1615,8 @@ public class Game1 : Microsoft.Xna.Framework.Game
                                     _sim.Lightning.SpawnZap(casterEffPos, targetPos,
                                         spell.ZapDuration > 0 ? spell.ZapDuration : spell.StrikeDuration,
                                         style, casterH, targetH);
-                                    // Direct damage via damage event
+                                    // Apply damage + show damage number
+                                    _sim.DealDamage(enemy, spell.Damage);
                                     _damageNumbers.Add(new DamageNumber { WorldPos = targetPos, Damage = spell.Damage, Timer = 0f, Height = targetH });
                                 }
                             }
@@ -1920,6 +1922,8 @@ public class Game1 : Microsoft.Xna.Framework.Game
             // --- Simulate ---
             _sim.Tick(dt);
             _envSystem.UpdateForagables(dt);
+            _envSystem.UpdateTraps(dt, _sim.Units);
+            ProcessTrapFireEvents();
 
             // --- Scenario tick ---
             if (_activeScenario != null)
@@ -2124,6 +2128,63 @@ public class Game1 : Microsoft.Xna.Framework.Game
         _prevKb = kb;
         _prevMouse = mouse;
         base.Update(gameTime);
+    }
+
+    /// <summary>Process trap fire events from EnvironmentSystem.UpdateTraps — cast spells and apply damage.</summary>
+    private void ProcessTrapFireEvents()
+    {
+        foreach (var evt in _envSystem.TrapFireEvents)
+        {
+            var spell = _gameData.Spells.Get(evt.SpellId);
+            if (spell == null) continue;
+
+            // Set proper cooldown from spell def
+            _envSystem.SetTrapCooldown(evt.ObjectIndex, spell.Cooldown);
+
+            var targetPos = _sim.Units.Position[evt.TargetUnitIdx];
+            float targetH = 1.0f;
+            var tDef = _gameData.Units.Get(_sim.Units.UnitDefID[evt.TargetUnitIdx]);
+            if (tDef != null) targetH = tDef.SpriteWorldHeight * 0.5f;
+
+            if (spell.Category == "Strike" && spell.StrikeTargetUnit)
+            {
+                // Zap from trap to target
+                var style = new LightningStyle
+                {
+                    CoreColor = spell.StrikeCoreColor,
+                    GlowColor = spell.StrikeGlowColor,
+                    CoreWidth = spell.StrikeCoreWidth,
+                    GlowWidth = spell.StrikeGlowWidth,
+                    Displacement = spell.StrikeDisplacement,
+                    MaxBranches = spell.StrikeBranches
+                };
+                _sim.Lightning.SpawnZap(evt.TrapPos, targetPos,
+                    spell.ZapDuration > 0 ? spell.ZapDuration : 0.2f,
+                    style, 0.3f, targetH);
+                _sim.DealDamage(evt.TargetUnitIdx, spell.Damage);
+                _damageNumbers.Add(new DamageNumber
+                {
+                    WorldPos = targetPos, Damage = spell.Damage, Timer = 0f, Height = targetH
+                });
+            }
+            else if (spell.Category == "Strike")
+            {
+                // Ground strike at target position
+                var style = new LightningStyle
+                {
+                    CoreColor = spell.StrikeCoreColor,
+                    GlowColor = spell.StrikeGlowColor,
+                    CoreWidth = spell.StrikeCoreWidth,
+                    GlowWidth = spell.StrikeGlowWidth,
+                    Displacement = spell.StrikeDisplacement,
+                    MaxBranches = spell.StrikeBranches
+                };
+                var sVis = spell.StrikeVisualType == "GodRay" ? StrikeVisual.GodRay : StrikeVisual.Lightning;
+                _sim.Lightning.SpawnStrike(targetPos, spell.TelegraphDuration,
+                    spell.StrikeDuration, spell.AoeRadius, spell.Damage,
+                    style, spell.Id, sVis);
+            }
+        }
     }
 
     private static void LoadSpellBarSlots(System.Text.Json.JsonElement root, string key, SpellBarState bar)
