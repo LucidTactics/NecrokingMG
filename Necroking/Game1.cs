@@ -43,6 +43,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
     private Render.FontManager _fontManager = new();
     private RuntimeWidgetRenderer _widgetRenderer = new();
     private Game.InventoryUI _inventoryUI = new();
+    private Game.BuildingMenuUI _buildingMenuUI = new();
     private System.Diagnostics.Stopwatch? _startupTimer;
     private long _startupLastMs;
     private void LogTiming(string step)
@@ -372,6 +373,9 @@ public class Game1 : Microsoft.Xna.Framework.Game
         _sim.SetEnvironmentSystem(_envSystem);
         _sim.SetWallSystem(_wallSystem);
 
+        // Wire collision change callback so pathfinding rebuilds when objects change state
+        _envSystem.OnCollisionsDirty = () => _sim.RebuildPathfinder();
+
         // Bake wall and environment object collisions into the tile grid cost field
         _wallSystem.BakeWalls(_sim.Grid);
         _envSystem.BakeCollisions(_sim.Grid);
@@ -449,6 +453,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
             tileGrid: _sim.Grid,
             onGrassMapChanged: SyncGrassFromEditor,
             editorBase: _editorUi);
+        _mapEditor.SetItemRegistry(_gameData.Items);
 
         // Feed grass data to map editor
         if (_grassMap.Length > 0)
@@ -537,6 +542,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         _groundSystem.ClearTypes();
         _groundSystem.Init(gridSize, gridSize);
         _envSystem.Init(gridSize);
+        _envSystem.OnCollisionsDirty = () => _sim.RebuildPathfinder();
         _wallSystem.Init(gridSize, gridSize, gridSize);
         // Add a default wall def so scenarios can render walls
         _wallSystem.Defs.Add(new World.WallVisualDef { Name = "Stone", Color = new Color(130, 130, 130, 255), MaxHP = 100 });
@@ -606,6 +612,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
             tileGrid: _sim.Grid,
             onGrassMapChanged: SyncGrassFromEditor,
             editorBase: _editorUi);
+        _mapEditor.SetItemRegistry(_gameData.Items);
 
         // Initialize the scenario
         scenario.OnInit(_sim);
@@ -1001,7 +1008,9 @@ public class Game1 : Microsoft.Xna.Framework.Game
         if (Directory.Exists(uiDefPath))
             _widgetRenderer.LoadDefinitions(uiDefPath);
         _inventoryUI.Init(_widgetRenderer, _inventory, _gameData.Items);
-        LogTiming("Inventory UI initialized");
+        _buildingMenuUI.Init(_widgetRenderer, _envSystem, _inventory, _gameData.Items,
+            _graphics.PreferredBackBufferHeight, _spriteBatch, _pixel);
+        LogTiming("Inventory & Building UI initialized");
 
         // Init property editor infrastructure
         _editorUi.SetContext(_spriteBatch, _pixel, _font, _smallFont, _largeFont);
@@ -1239,6 +1248,10 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 _menuState = MenuState.None;
                 _paused = false;
             }
+            else if (_menuState == MenuState.None && _buildingMenuUI.IsVisible)
+            {
+                _buildingMenuUI.Close();
+            }
             else if (_menuState == MenuState.None && _inventoryUI.IsVisible)
             {
                 _inventoryUI.Close();
@@ -1349,6 +1362,10 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
             // Inventory window
             if (_inventoryUI.ContainsMouse(mouse.X, mouse.Y))
+                _mouseOverUI = true;
+
+            // Building menu
+            if (_buildingMenuUI.ContainsMouse(mouse.X, mouse.Y))
                 _mouseOverUI = true;
 
             // Building placement panel (left side)
@@ -1853,43 +1870,14 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
             // --- Building placement toggle (B) ---
             if (WasKeyPressed(kb, Keys.B))
-            {
-                _buildingPlacementActive = !_buildingPlacementActive;
-                if (_buildingPlacementActive)
-                {
-                    // Cache buildable def indices
-                    _buildableDefIndices.Clear();
-                    for (int di = 0; di < _envSystem.DefCount; di++)
-                    {
-                        if (_envSystem.Defs[di].PlayerBuildable)
-                            _buildableDefIndices.Add(di);
-                    }
-                    _buildingPlacementSelectedDef = _buildableDefIndices.Count > 0 ? 0 : -1;
-                }
-            }
+                _buildingMenuUI.Toggle(screenW, screenH);
 
-            // --- Building placement click ---
-            if (_buildingPlacementActive && _buildingPlacementSelectedDef >= 0
+            // --- Building placement click (world click to place) ---
+            if (_buildingMenuUI.IsPlacementActive
+                && !_buildingMenuUI.ContainsMouse(mouse.X, mouse.Y)
                 && mouse.LeftButton == ButtonState.Pressed && _prevMouse.LeftButton == ButtonState.Released)
             {
-                // Check if click is on the panel (right side) — if so, handle selection instead
-                int panelW2 = 220;
-                int panelX2 = screenW - panelW2 - 10;
-                if (mouse.X >= panelX2)
-                {
-                    // Panel click — select a building
-                    int itemH2 = 24;
-                    int listY2 = 46;
-                    int clickIdx = (mouse.Y - listY2) / itemH2;
-                    if (clickIdx >= 0 && clickIdx < _buildableDefIndices.Count)
-                        _buildingPlacementSelectedDef = clickIdx;
-                }
-                else
-                {
-                    // World click — place building
-                    int defIdx = _buildableDefIndices[_buildingPlacementSelectedDef];
-                    _envSystem.AddObject((ushort)defIdx, mouseWorld.X, mouseWorld.Y);
-                }
+                _buildingMenuUI.TryPlace(mouseWorld.X, mouseWorld.Y);
             }
 
             // --- Foragable collection (right-click within 2 units of necromancer) ---
@@ -2153,6 +2141,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
         // Update inventory UI after all sim/scenario ticks (so slot sync sees latest inventory state)
         _inventoryUI.Update(mouse, kb);
+        _buildingMenuUI.Update(mouse, _prevMouse, screenW, screenH);
 
         _prevKb = kb;
         _prevMouse = mouse;
@@ -2658,6 +2647,21 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // Inventory UI (widget-based, drawn over HUD)
         if (showUI)
             _inventoryUI.Draw();
+
+        // Building menu UI (widget-based)
+        if (showUI)
+        {
+            _buildingMenuUI.DrawMenu();
+
+            // Ghost preview for building placement
+            if (_buildingMenuUI.IsPlacementActive)
+            {
+                var ms = Mouse.GetState();
+                Vec2 mw = _camera.ScreenToWorld(new Vector2(ms.X, ms.Y), screenW, screenH);
+                var sp = _renderer.WorldToScreen(mw, 0f, _camera);
+                _buildingMenuUI.DrawGhostPreview(_spriteBatch, _pixel, mw, sp, _camera, _renderer);
+            }
+        }
 
         if (_buildingPlacementActive)
             DrawBuildingPlacement(screenW, screenH);

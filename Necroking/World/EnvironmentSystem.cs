@@ -67,10 +67,19 @@ public class EnvironmentObjectDef
     public float SpawnOffsetX { get; set; }
     public float SpawnOffsetY { get; set; } = 1.5f;
 
-    // Building costs
+    // Building costs (legacy)
     public int CostWood { get; set; }
     public int CostStone { get; set; }
     public int CostGold { get; set; }
+
+    // Item-based building costs (references ItemRegistry IDs)
+    public string Cost1ItemId { get; set; } = "";
+    public int Cost1Amount { get; set; }
+    public string Cost2ItemId { get; set; } = "";
+    public int Cost2Amount { get; set; }
+
+    // Placement radius: additive to collisionRadius for placement spacing checks
+    public float PlacementRadius { get; set; }
 
     // Tint color (used by color harmonizer M04)
     public HdrColor TintColor { get; set; } = new(255, 255, 255, 255, 1f);
@@ -112,6 +121,11 @@ public class EnvironmentObjectDef
         writer.WriteNumber("costWood", CostWood);
         writer.WriteNumber("costStone", CostStone);
         writer.WriteNumber("costGold", CostGold);
+        writer.WriteString("cost1ItemId", Cost1ItemId);
+        writer.WriteNumber("cost1Amount", Cost1Amount);
+        writer.WriteString("cost2ItemId", Cost2ItemId);
+        writer.WriteNumber("cost2Amount", Cost2Amount);
+        writer.WriteNumber("placementRadius", PlacementRadius);
         writer.WriteString("boundTriggerID", BoundTriggerID);
         // Processing slots
         writer.WriteStartObject("input1");
@@ -182,6 +196,10 @@ public class EnvironmentSystem
     private readonly List<BuildingProcessState> _processState = new();
     private int _nextObjectID;
 
+    /// <summary>Called when collision state changes (object placed/removed/collected/destroyed/respawned).
+    /// Wire this to RebuildPathfinder so the pathfinding grid stays in sync.</summary>
+    public Action? OnCollisionsDirty;
+
     public void Init(float worldMaxY, GraphicsDevice? device = null) { _worldMaxY = worldMaxY; _device = device; }
 
     public int AddDef(EnvironmentObjectDef def) { _defs.Add(def); _textures.Add(null); return _defs.Count - 1; }
@@ -201,15 +219,37 @@ public class EnvironmentSystem
         _objects.Add(obj);
         _objectRuntime.Add(new PlacedObjectRuntime { HP = _defs[defIndex].BuildingMaxHP, Owner = _defs[defIndex].BuildingDefaultOwner, Alive = true });
         _processState.Add(new BuildingProcessState());
+
+        if (_defs[defIndex].CollisionRadius > 0)
+            OnCollisionsDirty?.Invoke();
+
         return _objects.Count - 1;
     }
 
     public void RemoveObject(int index)
     {
         if (index < 0 || index >= _objects.Count) return;
+        bool hadCollision = _defs[_objects[index].DefIndex].CollisionRadius > 0;
         _objects.RemoveAt(index);
         if (index < _objectRuntime.Count) _objectRuntime.RemoveAt(index);
         if (index < _processState.Count) _processState.RemoveAt(index);
+
+        if (hadCollision)
+            OnCollisionsDirty?.Invoke();
+    }
+
+    /// <summary>Mark an object as destroyed (Alive=false). Clears collision and hides it.
+    /// Unlike RemoveObject, this preserves array indices.</summary>
+    public void DestroyObject(int objIdx)
+    {
+        if (objIdx < 0 || objIdx >= _objectRuntime.Count) return;
+        var rt = _objectRuntime[objIdx];
+        if (!rt.Alive) return;
+        rt.Alive = false;
+        _objectRuntime[objIdx] = rt;
+
+        if (_defs[_objects[objIdx].DefIndex].CollisionRadius > 0)
+            OnCollisionsDirty?.Invoke();
     }
 
     public void ClearObjects() { _objects.Clear(); _objectRuntime.Clear(); _processState.Clear(); }
@@ -234,6 +274,10 @@ public class EnvironmentSystem
         rt.Collected = true;
         rt.RespawnTimer = def.RespawnTime;
         _objectRuntime[objIdx] = rt;
+
+        if (def.CollisionRadius > 0)
+            OnCollisionsDirty?.Invoke();
+
         return def.ForagableType;
     }
 
@@ -242,6 +286,7 @@ public class EnvironmentSystem
     /// </summary>
     public void UpdateForagables(float dt)
     {
+        bool anyRespawned = false;
         for (int i = 0; i < _objectRuntime.Count; i++)
         {
             if (!_objectRuntime[i].Collected) continue;
@@ -251,9 +296,13 @@ public class EnvironmentSystem
             {
                 rt.Collected = false;
                 rt.RespawnTimer = 0f;
+                if (_defs[_objects[i].DefIndex].CollisionRadius > 0)
+                    anyRespawned = true;
             }
             _objectRuntime[i] = rt;
         }
+        if (anyRespawned)
+            OnCollisionsDirty?.Invoke();
     }
 
     /// <summary>
@@ -276,18 +325,23 @@ public class EnvironmentSystem
     {
         if (defIndex < 0 || defIndex >= _defs.Count) return false;
         var newDef = _defs[defIndex];
-        float newRadius = newDef.CollisionRadius * scale;
+        // Placement check radius = collisionRadius + placementRadius (additive spacing)
+        float newRadius = newDef.CollisionRadius * scale + newDef.PlacementRadius;
         float newCX = x + newDef.CollisionOffsetX;
         float newCY = y + newDef.CollisionOffsetY;
 
-        // If the new object has no collision radius, always allow placement
+        // If both collision and placement radius are zero, always allow
         if (newRadius <= 0f) return true;
 
         for (int i = 0; i < _objects.Count; i++)
         {
+            // Skip collected/destroyed objects
+            if (i < _objectRuntime.Count && (_objectRuntime[i].Collected || !_objectRuntime[i].Alive))
+                continue;
+
             var obj = _objects[i];
             var existDef = _defs[obj.DefIndex];
-            float existRadius = existDef.CollisionRadius * obj.Scale;
+            float existRadius = existDef.CollisionRadius * obj.Scale + existDef.PlacementRadius;
             if (existRadius <= 0f) continue;
 
             float existCX = obj.X + existDef.CollisionOffsetX;
@@ -307,12 +361,19 @@ public class EnvironmentSystem
         // Reset tiered cost fields to base terrain before stamping obstacles
         grid.RebuildTieredCostFields();
 
-        foreach (var obj in _objects)
+        for (int i = 0; i < _objects.Count; i++)
         {
+            // Skip collected foragables and destroyed objects
+            if (i < _objectRuntime.Count)
+            {
+                var rt = _objectRuntime[i];
+                if (rt.Collected || !rt.Alive) continue;
+            }
+
+            var obj = _objects[i];
             var def = _defs[obj.DefIndex];
             if (def.CollisionRadius > 0)
             {
-                // Scale offset and radius by def.Scale * obj.Scale (matching C++)
                 float es = def.Scale * obj.Scale;
                 float cx = obj.X + def.CollisionOffsetX * es;
                 float cy = obj.Y + def.CollisionOffsetY * es;

@@ -136,6 +136,35 @@
           255
         ]
       }
+    },
+    {
+      "id": "BuildingName",
+      "type": "text",
+      "width": 142,
+      "height": 40,
+      "tintColor": [
+        255,
+        255,
+        255,
+        0
+      ],
+      "defaultText": "Building A",
+      "textRegion": {
+        "x": 0,
+        "y": 0,
+        "w": 140,
+        "h": 40,
+        "align": "left",
+        "valign": "top",
+        "fontFamily": "GrandStrategy",
+        "fontSize": 30,
+        "fontColor": [
+          255,
+          255,
+          255,
+          255
+        ]
+      }
     }
   ]
 }

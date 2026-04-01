@@ -47,6 +47,14 @@
       "maxStack": 99,
       "category": "material",
       "description": "Infused with arcane energy. Restores mana."
+    },
+    {
+      "id": "Log",
+      "displayName": "Log",
+      "icon": "assets/Environment/Misc/Log2.png",
+      "maxStack": 99,
+      "category": "material",
+      "description": "A small wooden log. Useful for building and fuel."
     }
   ]
 }

@@ -87,8 +87,7 @@
           "y": 0,
           "width": 109,
           "height": 106,
-          "anchor": 0,
-          "childOverrides": []
+          "anchor": 0
         },
         {
           "name": "child_3",
@@ -97,8 +96,7 @@
           "y": 0,
           "width": 109,
           "height": 106,
-          "anchor": 0,
-          "childOverrides": []
+          "anchor": 0
         }
       ]
     },
@@ -164,6 +162,133 @@
         255
       ],
       "modal": false
+    },
+    {
+      "id": "BuildingMenu",
+      "background": "panel_inner",
+      "frame": "RenaiThinBorder",
+      "width": 258,
+      "height": 929,
+      "backgroundScale": 1,
+      "backgroundTint": [
+        255,
+        255,
+        255,
+        255
+      ],
+      "frameTint": [
+        255,
+        255,
+        255,
+        255
+      ],
+      "modal": false,
+      "layout": "vertical",
+      "layoutPadding": 1,
+      "layoutSpacing": 1,
+      "layoutPadTop": 15,
+      "layoutPadBottom": 0,
+      "layoutPadLeft": 25,
+      "layoutPadRight": 0,
+      "layoutSpacingX": 0,
+      "layoutSpacingY": 0,
+      "children": [
+        {
+          "name": "child_0",
+          "widget": "BuildingItem",
+          "x": 15,
+          "y": 13,
+          "width": 218,
+          "height": 68,
+          "anchor": 0
+        },
+        {
+          "name": "child_0_copy",
+          "widget": "BuildingItem",
+          "x": 15,
+          "y": 13,
+          "width": 218,
+          "height": 68,
+          "anchor": 0
+        },
+        {
+          "name": "child_0_copy",
+          "widget": "BuildingItem",
+          "x": 15,
+          "y": 13,
+          "width": 218,
+          "height": 68,
+          "anchor": 0
+        }
+      ]
+    },
+    {
+      "id": "BuildingItem",
+      "background": "panel_inner",
+      "frame": "RenaiThinBorder",
+      "width": 218,
+      "height": 68,
+      "backgroundScale": 0.75,
+      "backgroundTint": [
+        255,
+        255,
+        255,
+        255
+      ],
+      "frameTint": [
+        255,
+        255,
+        255,
+        255
+      ],
+      "modal": false,
+      "children": [
+        {
+          "name": "child_0",
+          "element": "BuildingName",
+          "x": 11,
+          "y": 16,
+          "width": 142,
+          "height": 40,
+          "anchor": 0
+        },
+        {
+          "name": "Icon1",
+          "element": "Icon",
+          "x": 180,
+          "y": 35,
+          "width": 25,
+          "height": 25,
+          "anchor": 0
+        },
+        {
+          "name": "Quant1",
+          "element": "Quantity",
+          "x": 139,
+          "y": 18,
+          "width": 40,
+          "height": 44,
+          "anchor": 0
+        },
+        {
+          "name": "Icon2",
+          "element": "Icon",
+          "x": 180,
+          "y": 9,
+          "width": 25,
+          "height": 25,
+          "anchor": 0
+        },
+        {
+          "name": "Quant2",
+          "element": "Quantity",
+          "x": 139,
+          "y": 2,
+          "width": 40,
+          "height": 28,
+          "anchor": 0
+        }
+      ]
     }
   ]
 }

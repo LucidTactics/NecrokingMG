@@ -44,6 +44,7 @@ public class MapEditorWindow
     private GroundSystem _groundSystem = null!;
     private EnvironmentSystem _envSystem = null!;
     private TriggerSystem _triggerSystem = null!;
+    private Data.Registries.ItemRegistry? _itemRegistry;
     private WallSystem _wallSystem = null!;
     private RoadSystem _roadSystem = null!;
     private TileGrid _tileGrid = null!;
@@ -375,6 +376,7 @@ public class MapEditorWindow
         {
             _envObjectEditor = new EnvObjectEditorWindow();
             _envObjectEditor.Init(_eb, _envSystem, device, spriteBatch, pixel, font, smallFont, _triggerSystem);
+            _envObjectEditor.SetItemRegistry(_itemRegistry);
 
             _wallEditor = new WallEditorWindow(_eb);
             _wallEditor.SetWallSystem(_wallSystem);
@@ -430,6 +432,12 @@ public class MapEditorWindow
     // ========================================================================
 
     /// <summary>Whether the env object def editor overlay is open (blocks map interaction).</summary>
+    public void SetItemRegistry(Data.Registries.ItemRegistry? items)
+    {
+        _itemRegistry = items;
+        _envObjectEditor?.SetItemRegistry(items);
+    }
+
     public bool IsEnvObjectEditorOpen => _envObjectEditor != null && _envObjectEditor.IsOpen;
 
     public void Update(int screenW, int screenH)

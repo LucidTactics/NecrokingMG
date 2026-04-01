@@ -457,6 +457,7 @@ public partial class UIEditorWindow : EditorBase
                                 H = txo.GetIntProp("h"),
                                 Align = txo.GetStringProp("align", "left"),
                                 VAlign = txo.GetStringProp("valign", "top"),
+                                FontFamily = txo.GetStringProp("fontFamily", ""),
                                 FontSize = txo.GetIntProp("fontSize", 14),
                             };
                             if (txo.TryGetProperty("fontColor", out var txfc) && txfc.ValueKind == JsonValueKind.Array)
@@ -708,6 +709,8 @@ public partial class UIEditorWindow : EditorBase
                         writer.WriteNumber("h", ch.TextOverride.H);
                         writer.WriteString("align", ch.TextOverride.Align);
                         writer.WriteString("valign", ch.TextOverride.VAlign);
+                        if (!string.IsNullOrEmpty(ch.TextOverride.FontFamily))
+                            writer.WriteString("fontFamily", ch.TextOverride.FontFamily);
                         writer.WriteNumber("fontSize", ch.TextOverride.FontSize);
                         WriteColorArray(writer, "fontColor", ch.TextOverride.FontColor);
                         if (ch.TextOverride.WordWrap)
@@ -1511,7 +1514,7 @@ public partial class UIEditorWindow : EditorBase
             DrawTextField("el_img", "Image", displayPath, x + pad, curY, propW - browseBtnW - 4);
             if (DrawButton("Browse", x + pad + propW - browseBtnW, curY, browseBtnW, 20))
             {
-                _textureBrowser.Open("assets/UI", def.ImagePath,
+                _textureBrowser.Open("assets", def.ImagePath,
                     path => { def.ImagePath = path; _unsavedChanges = true; });
             }
             curY += 24;
@@ -1769,8 +1772,8 @@ public partial class UIEditorWindow : EditorBase
             int trDrawW = tr.W > 0 ? tr.W : def.Width;
             int trDrawH = tr.H > 0 ? tr.H : def.Height;
             var textRect = new Rectangle(elX + tr.X, elY + tr.Y, trDrawW, trDrawH);
-            DrawRect(textRect, new Color(100, 200, 100, 30));
-            DrawBorder(textRect, new Color(100, 200, 100, 150));
+            // Subtle text region indicator (dashed border only, no fill)
+            DrawBorder(textRect, new Color(100, 200, 100, 60));
             string displayText = !string.IsNullOrEmpty(def.DefaultText) ? def.DefaultText : "Sample Text";
             var dynFont = _fontMgr?.GetFont(tr.FontSize, string.IsNullOrEmpty(tr.FontFamily) ? null : tr.FontFamily);
             if (dynFont != null)
@@ -2020,7 +2023,7 @@ public partial class UIEditorWindow : EditorBase
             DrawTextField("wd_stimg", "Stencil Img", stDisplay, x + pad, curY, propW - browseBtnW - 4);
             if (DrawButton("Browse", x + pad + propW - browseBtnW, curY, browseBtnW, 20))
             {
-                _textureBrowser.Open("assets/UI", def.StencilImagePath,
+                _textureBrowser.Open("assets", def.StencilImagePath,
                     path => { def.StencilImagePath = path; _unsavedChanges = true; });
             }
             curY += 24;
@@ -2468,6 +2471,17 @@ public partial class UIEditorWindow : EditorBase
         if (child.HasTextOverride && child.TextOverride != null)
         {
             var txo = child.TextOverride;
+
+            // Font family dropdown
+            if (_fontMgr != null && _fontMgr.HasFonts)
+            {
+                var families = new[] { "(default)" }.Concat(_fontMgr.GetFamilyNames()).ToArray();
+                string curFam = string.IsNullOrEmpty(txo.FontFamily) ? "(default)" : txo.FontFamily;
+                string newFam = DrawCombo("ch_txo_ff", "Font", curFam, families, x + 8, curY, propW - 8);
+                if (newFam == "(default)") newFam = "";
+                if (newFam != txo.FontFamily) { txo.FontFamily = newFam; _unsavedChanges = true; }
+                curY += 22;
+            }
 
             int txoFs = DrawIntField("ch_txo_fs", "FontSize", txo.FontSize, x + 8, curY, propW - 8);
             if (txoFs != txo.FontSize) { txo.FontSize = Math.Max(1, txoFs); _unsavedChanges = true; }
@@ -2925,7 +2939,8 @@ public partial class UIEditorWindow : EditorBase
         DrawText($"{def.Width} x {def.Height}", new Vector2(wdX, wdY + def.Height + 4), TextDim);
     }
 
-    private void DrawWidgetChild(UIEditorChildDef child, Rectangle rect, bool selected)
+    /// <param name="editorChrome">Show selection boxes, outlines, handles. False for nested/runtime rendering.</param>
+    private void DrawWidgetChild(UIEditorChildDef child, Rectangle rect, bool selected, bool editorChrome = true)
     {
         bool drawn = false;
 
@@ -2939,10 +2954,10 @@ public partial class UIEditorWindow : EditorBase
                 // Background + stencil (children render between stencil and frame)
                 DrawWidgetLayers(widgetDef, rect.X, rect.Y, rect.Width, rect.Height, drawFrame: false);
 
-                // Nested widget's own children
+                // Nested widget's own children (no editor chrome — pure visual)
                 var nestedRects = ComputeLayoutRects(widgetDef, rect.X, rect.Y);
                 for (int ci = 0; ci < widgetDef.Children.Count && ci < nestedRects.Count; ci++)
-                    DrawWidgetChild(widgetDef.Children[ci], nestedRects[ci], false);
+                    DrawWidgetChild(widgetDef.Children[ci], nestedRects[ci], false, editorChrome: false);
 
                 // Frame on top of children
                 DrawWidgetFrame(widgetDef, rect.X, rect.Y, rect.Width, rect.Height);
@@ -2966,12 +2981,16 @@ public partial class UIEditorWindow : EditorBase
                         : !string.IsNullOrEmpty(elemDef.DefaultText) ? elemDef.DefaultText : "";
                     if (!string.IsNullOrEmpty(text))
                     {
+                        // Apply child text override if present, falling back to element def
                         var tr = elemDef.TextRegion;
-                        var fontColor = tr != null ? ByteColor(tr.FontColor) : Color.White;
-                        int fontSize = tr?.FontSize ?? 14;
-                        string fontFamily = tr?.FontFamily ?? "";
+                        var txo = (child.HasTextOverride && child.TextOverride != null) ? child.TextOverride : null;
 
-                        // Use FontStashSharp for proper font sizing
+                        var fontColor = ByteColor(txo?.FontColor ?? tr?.FontColor ?? new byte[] { 255, 255, 255, 255 });
+                        int fontSize = (txo != null && txo.FontSize > 0) ? txo.FontSize : tr?.FontSize ?? 14;
+                        string fontFamily = !string.IsNullOrEmpty(txo?.FontFamily) ? txo.FontFamily : tr?.FontFamily ?? "";
+                        string align = !string.IsNullOrEmpty(txo?.Align) ? txo.Align : tr?.Align ?? "left";
+                        string valign = !string.IsNullOrEmpty(txo?.VAlign) ? txo.VAlign : tr?.VAlign ?? "top";
+
                         var dynFont = _fontMgr?.GetFont(fontSize, string.IsNullOrEmpty(fontFamily) ? null : fontFamily);
                         Vector2 textSize;
                         if (dynFont != null)
@@ -2982,13 +3001,13 @@ public partial class UIEditorWindow : EditorBase
                         int trW = rect.Width;
                         int trH = rect.Height;
 
-                        float tx = (tr?.Align ?? "left") switch
+                        float tx = align switch
                         {
                             "center" => rect.X + (trW - textSize.X) / 2,
                             "right" => rect.X + trW - textSize.X - 2,
                             _ => rect.X + 2
                         };
-                        float ty = (tr?.VAlign ?? "top") switch
+                        float ty = valign switch
                         {
                             "center" => rect.Y + (trH - textSize.Y) / 2,
                             "bottom" => rect.Y + trH - textSize.Y - 2,
@@ -3032,10 +3051,11 @@ public partial class UIEditorWindow : EditorBase
             }
         }
 
-        if (!drawn)
+        // Fallback placeholder (only in editor chrome mode)
+        if (!drawn && editorChrome)
             DrawRect(rect, new Color(50, 50, 70, 180));
 
-        // Show DefaultText for non-text elements (text elements render their own text above)
+        // Show DefaultText for non-text elements
         if (!string.IsNullOrEmpty(child.DefaultText))
         {
             var elemDef2 = !string.IsNullOrEmpty(child.Element) ? _elements.FirstOrDefault(e => e.Id == child.Element) : null;
@@ -3047,26 +3067,28 @@ public partial class UIEditorWindow : EditorBase
             }
         }
 
-        // Selection highlight (skip border for text-only elements to avoid visible box)
-        bool isTextElement = false;
-        if (!string.IsNullOrEmpty(child.Element))
+        // Editor chrome: selection highlight, outlines, resize handles
+        if (editorChrome)
         {
-            var elemCheck = _elements.FirstOrDefault(e => e.Id == child.Element);
-            isTextElement = elemCheck?.Type == "text";
-        }
+            bool isTextElement = false;
+            if (!string.IsNullOrEmpty(child.Element))
+            {
+                var elemCheck = _elements.FirstOrDefault(e => e.Id == child.Element);
+                isTextElement = elemCheck?.Type == "text";
+            }
 
-        if (selected)
-        {
-            DrawBorder(rect, new Color(255, 200, 80, 255), 2);
-
-            int chs = 6;
-            DrawResizeHandle(rect.X + rect.Width - chs, rect.Y + rect.Height - chs, chs);
-            DrawResizeHandle(rect.X + rect.Width - chs, rect.Y + rect.Height / 2 - chs / 2, chs);
-            DrawResizeHandle(rect.X + rect.Width / 2 - chs / 2, rect.Y + rect.Height - chs, chs);
-        }
-        else if (!isTextElement)
-        {
-            DrawBorder(rect, new Color(100, 100, 140, 100));
+            if (selected)
+            {
+                DrawBorder(rect, new Color(255, 200, 80, 255), 2);
+                int chs = 6;
+                DrawResizeHandle(rect.X + rect.Width - chs, rect.Y + rect.Height - chs, chs);
+                DrawResizeHandle(rect.X + rect.Width - chs, rect.Y + rect.Height / 2 - chs / 2, chs);
+                DrawResizeHandle(rect.X + rect.Width / 2 - chs / 2, rect.Y + rect.Height - chs, chs);
+            }
+            else if (!isTextElement)
+            {
+                DrawBorder(rect, new Color(100, 100, 140, 100));
+            }
         }
     }
 

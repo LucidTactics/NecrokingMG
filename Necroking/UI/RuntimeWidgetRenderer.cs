@@ -228,7 +228,7 @@ public class RuntimeWidgetRenderer
                 if (elemDef.Type == "text")
                 {
                     drawn = true;
-                    // Check for text override
+                    // Check for text content override
                     string text = "";
                     if (_textOverrides.TryGetValue(instanceId, out var tMap) && tMap.TryGetValue(child.Name, out var ov))
                         text = ov;
@@ -238,7 +238,11 @@ public class RuntimeWidgetRenderer
                         text = elemDef.DefaultText;
 
                     if (!string.IsNullOrEmpty(text))
-                        DrawTextElement(text, elemDef, rect);
+                    {
+                        // Apply child text override if present
+                        var txo = (child.HasTextOverride && child.TextOverride != null) ? child.TextOverride : null;
+                        DrawTextElement(text, elemDef, rect, txo);
+                    }
                 }
                 else if (elemDef.Type == "image")
                 {
@@ -280,23 +284,29 @@ public class RuntimeWidgetRenderer
         }
     }
 
-    private void DrawTextElement(string text, UIEditorElementDef elemDef, Rectangle rect)
+    private void DrawTextElement(string text, UIEditorElementDef elemDef, Rectangle rect,
+        UIEditorTextRegion? textOverride = null)
     {
+        // Apply child text override if present, falling back to element def
         var tr = elemDef.TextRegion;
-        var fontColor = tr != null ? ByteColor(tr.FontColor) : Color.White;
-        int fontSize = tr?.FontSize ?? 14;
-        string fontFamily = tr?.FontFamily ?? "";
+        var txo = textOverride;
+
+        var fontColor = ByteColor(txo?.FontColor ?? tr?.FontColor ?? new byte[] { 255, 255, 255, 255 });
+        int fontSize = (txo != null && txo.FontSize > 0) ? txo.FontSize : tr?.FontSize ?? 14;
+        string fontFamily = !string.IsNullOrEmpty(txo?.FontFamily) ? txo.FontFamily : tr?.FontFamily ?? "";
+        string align = !string.IsNullOrEmpty(txo?.Align) ? txo.Align : tr?.Align ?? "left";
+        string valign = !string.IsNullOrEmpty(txo?.VAlign) ? txo.VAlign : tr?.VAlign ?? "top";
 
         var dynFont = _fontMgr?.GetFont(fontSize, string.IsNullOrEmpty(fontFamily) ? null : fontFamily);
         Vector2 textSize = dynFont?.MeasureString(text) ?? new Vector2(text.Length * 8, 14);
 
-        float tx = (tr?.Align ?? "left") switch
+        float tx = align switch
         {
             "center" => rect.X + (rect.Width - textSize.X) / 2,
             "right" => rect.X + rect.Width - textSize.X - 2,
             _ => rect.X + 2
         };
-        float ty = (tr?.VAlign ?? "top") switch
+        float ty = valign switch
         {
             "center" => rect.Y + (rect.Height - textSize.Y) / 2,
             "bottom" => rect.Y + rect.Height - textSize.Y - 2,
@@ -645,6 +655,31 @@ public class RuntimeWidgetRenderer
                             DefaultText = ch.TryGetProperty("defaultText", out var cdt) ? cdt.GetString() ?? "" : "",
                             IgnoreLayout = ch.TryGetProperty("ignoreLayout", out var il) && il.GetBoolean(),
                         };
+                        // Text override
+                        if (ch.TryGetProperty("textOverride", out var txo))
+                        {
+                            child.HasTextOverride = true;
+                            child.TextOverride = new UIEditorTextRegion
+                            {
+                                X = txo.TryGetProperty("x", out var txx) ? txx.GetInt32() : 0,
+                                Y = txo.TryGetProperty("y", out var txy) ? txy.GetInt32() : 0,
+                                W = txo.TryGetProperty("w", out var txw) ? txw.GetInt32() : 0,
+                                H = txo.TryGetProperty("h", out var txh) ? txh.GetInt32() : 0,
+                                Align = txo.TryGetProperty("align", out var txa) ? txa.GetString() ?? "left" : "left",
+                                VAlign = txo.TryGetProperty("valign", out var txva) ? txva.GetString() ?? "top" : "top",
+                                FontFamily = txo.TryGetProperty("fontFamily", out var txff) ? txff.GetString() ?? "" : "",
+                                FontSize = txo.TryGetProperty("fontSize", out var txfs) ? txfs.GetInt32() : 14,
+                            };
+                            if (txo.TryGetProperty("fontColor", out var txfc) && txfc.ValueKind == JsonValueKind.Array)
+                            {
+                                var fca = txfc.EnumerateArray().ToArray();
+                                if (fca.Length >= 4)
+                                    child.TextOverride.FontColor = new byte[] { (byte)fca[0].GetInt32(), (byte)fca[1].GetInt32(),
+                                        (byte)fca[2].GetInt32(), (byte)fca[3].GetInt32() };
+                            }
+                            if (txo.TryGetProperty("wordWrap", out var txww))
+                                child.TextOverride.WordWrap = txww.GetBoolean();
+                        }
                         wd.Children.Add(child);
                     }
                 }

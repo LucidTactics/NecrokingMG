@@ -22,11 +22,13 @@ public class EnvObjectEditorWindow
     private EditorBase _ui = null!;
     private EnvironmentSystem _env = null!;
     private TriggerSystem? _triggerSystem;
+    private Data.Registries.ItemRegistry? _itemRegistry;
     private GraphicsDevice _device = null!;
     private Texture2D _pixel = null!;
     private SpriteBatch _sb = null!;
     private SpriteFont? _font;
     private SpriteFont? _smallFont;
+    private string[]? _costItemOptions; // cached dropdown options for cost type
 
     // --- State ---
     public bool IsOpen;
@@ -44,7 +46,11 @@ public class EnvObjectEditorWindow
     private bool _draggingPivot;
 
     // Reference image slots (up to 3 env object indices for scale comparison)
-    private readonly int[] _referenceDefIndices = { -1, -1, -1 };
+    // Slot 2 is reserved for necromancer silhouette (special rendering, -2 = necro placeholder)
+    private const int NecroRefMarker = -2;
+    private const float NecroWorldHeight = 2.2f; // approximate necromancer world height
+    private readonly int[] _referenceDefIndices = { -1, -1, NecroRefMarker };
+    private bool _defaultRefsSet;
     // Cached env object name list for reference picker DrawCombo (invalidated when def count changes)
     private string[]? _cachedEnvObjectNames;
     private int _cachedEnvObjectCount = -1;
@@ -130,6 +136,25 @@ public class EnvObjectEditorWindow
         _smallFont = smallFont;
     }
 
+    public void SetItemRegistry(Data.Registries.ItemRegistry? items)
+    {
+        _itemRegistry = items;
+        _costItemOptions = null; // invalidate cache
+    }
+
+    private string[] GetCostItemOptions()
+    {
+        if (_costItemOptions != null) return _costItemOptions;
+        var opts = new System.Collections.Generic.List<string>();
+        if (_itemRegistry != null)
+        {
+            foreach (var id in _itemRegistry.GetIDs())
+                opts.Add(id);
+        }
+        _costItemOptions = opts.ToArray();
+        return _costItemOptions;
+    }
+
     public void Open()
     {
         IsOpen = true;
@@ -152,8 +177,17 @@ public class EnvObjectEditorWindow
         _edgeTweakerOpen = false;
         _edgeTweakerPreview = null;
         _edgeTweakerPixels = null;
-        for (int i = 0; i < _referenceDefIndices.Length; i++)
-            _referenceDefIndices[i] = -1;
+        // Set default references on first open: Cottage1, Tall Pine, Necromancer
+        if (!_defaultRefsSet)
+        {
+            _defaultRefsSet = true;
+            _referenceDefIndices[0] = FindRefByName("Cottage1");
+            _referenceDefIndices[1] = FindRefByName("Tall Pine");
+            _referenceDefIndices[2] = NecroRefMarker; // hardcoded necromancer silhouette
+            // Preload reference textures
+            for (int ri = 0; ri < _referenceDefIndices.Length; ri++)
+                if (_referenceDefIndices[ri] >= 0) _env.ReloadDefTexture(_referenceDefIndices[ri]);
+        }
         ReloadPreview();
     }
 
@@ -417,8 +451,8 @@ public class EnvObjectEditorWindow
 
             _sb.Draw(tex, new Rectangle(drawX, drawY, drawW, drawH), Color.White);
 
-            // Scale factor: pixels per world-unit
-            float pixPerWorld = drawH / MathF.Max(def.SpriteWorldHeight, 0.01f);
+            // Scale factor: pixels per world-unit (incorporates def.Scale for correct relative sizing)
+            float pixPerWorld = drawH / MathF.Max(def.SpriteWorldHeight * def.Scale, 0.01f);
 
             // Pivot position in screen pixels
             float pivotPxX = drawX + def.PivotX * drawW;
@@ -463,6 +497,33 @@ public class EnvObjectEditorWindow
             {
                 _hoveringCollisionCenter = false;
                 _hoveringCollisionEdge = false;
+            }
+
+            // --- Draw placement radius circle (dashed style, different color) ---
+            float effectivePlacementR = def.CollisionRadius + def.PlacementRadius;
+            if (effectivePlacementR > 0.01f)
+            {
+                float prPx = effectivePlacementR * pixPerWorld;
+                float prCx = pivotPxX + def.CollisionOffsetX * pixPerWorld;
+                float prCy = pivotPxY + def.CollisionOffsetY * pixPerWorld;
+                DrawCircleOutline(new Vector2(prCx, prCy), prPx, new Color(100, 180, 255, 80), 48);
+            }
+
+            // --- Scroll wheel adjusts collision radius when hovering preview ---
+            {
+                var ms = Mouse.GetState();
+                if (ms.X >= x && ms.X < x + w && ms.Y >= y && ms.Y < y + mainH)
+                {
+                    int scrollDelta = ms.ScrollWheelValue - _ui._prevMouse.ScrollWheelValue;
+                    if (scrollDelta != 0 && pixPerWorld > 0.001f)
+                    {
+                        float step = 0.1f;
+                        if (scrollDelta > 0)
+                            def.CollisionRadius = MathF.Max(0f, def.CollisionRadius + step);
+                        else
+                            def.CollisionRadius = MathF.Max(0f, def.CollisionRadius - step);
+                    }
+                }
             }
 
             // Handle pivot click-to-set
@@ -550,26 +611,45 @@ public class EnvObjectEditorWindow
         _ui.DrawRect(new Rectangle(x, y, w, h), new Color(15, 15, 28, 250));
         _ui.DrawText("2x2 Grid: Edited + 3 References (click to set, X to clear)", new Vector2(x + 4, y + 2), EditorBase.TextDim, _smallFont);
 
-        // M06: 2x2 grid layout
-        // Top-left = edited object, Top-right = ref 1, Bottom-left = ref 2, Bottom-right = ref 3
         int gridY = y + 16;
         int gridH = h - 18;
         int cellW = (w - Padding * 2 - 2) / 2;
         int cellH = (gridH - 2) / 2;
 
+        // Compute unified pixPerWorld so ALL objects use the same scale.
+        // Find the tallest world-height across all 4 objects (edited + 3 refs),
+        // then set scale so the tallest fits within a cell.
+        float maxWorldH = 0.01f;
+        if (_selectedDef >= 0 && _selectedDef < _env.DefCount)
+        {
+            var ed = _env.GetDef(_selectedDef);
+            maxWorldH = MathF.Max(maxWorldH, ed.SpriteWorldHeight * ed.Scale);
+        }
+        for (int ri = 0; ri < _referenceDefIndices.Length; ri++)
+        {
+            int idx = _referenceDefIndices[ri];
+            if (idx == NecroRefMarker)
+                maxWorldH = MathF.Max(maxWorldH, NecroWorldHeight);
+            else if (idx >= 0 && idx < _env.DefCount)
+            {
+                var rd = _env.GetDef(idx);
+                maxWorldH = MathF.Max(maxWorldH, rd.SpriteWorldHeight * rd.Scale);
+            }
+        }
+        // Scale so tallest object fills ~80% of cell height
+        float refPixPerWorld = (cellH * 0.8f) / maxWorldH;
+
         // Top-left: edited object preview
-        DrawEditedObjectSlot(x + Padding, gridY, cellW, cellH, pixPerWorld);
+        DrawEditedObjectSlot(x + Padding, gridY, cellW, cellH, refPixPerWorld);
 
         // Top-right: ref 1
-        DrawReferenceSlot(0, x + Padding + cellW + 2, gridY, cellW, cellH, pixPerWorld);
+        DrawReferenceSlot(0, x + Padding + cellW + 2, gridY, cellW, cellH, refPixPerWorld);
 
         // Bottom-left: ref 2
-        DrawReferenceSlot(1, x + Padding, gridY + cellH + 2, cellW, cellH, pixPerWorld);
+        DrawReferenceSlot(1, x + Padding, gridY + cellH + 2, cellW, cellH, refPixPerWorld);
 
         // Bottom-right: ref 3
-        DrawReferenceSlot(2, x + Padding + cellW + 2, gridY + cellH + 2, cellW, cellH, pixPerWorld);
-
-        // Reference slot DrawCombo pickers are handled inline within DrawReferenceSlot
+        DrawReferenceSlot(2, x + Padding + cellW + 2, gridY + cellH + 2, cellW, cellH, refPixPerWorld);
     }
 
     /// <summary>M06: Draw the currently edited object in a grid slot at the same scale as references.</summary>
@@ -588,26 +668,17 @@ public class EnvObjectEditorWindow
             return;
         }
 
-        // Draw at same world-scale as main preview
-        float drawH = def.SpriteWorldHeight * pixPerWorld;
+        // Draw at unified world-scale (incorporating def.Scale)
+        float drawH = def.SpriteWorldHeight * def.Scale * pixPerWorld;
         float refScale = drawH / tex.Height;
         float drawW = tex.Width * refScale;
 
-        // Clamp to fit in slot
-        if (drawW > w - 4 || drawH > h - 4)
-        {
-            float fitScale = MathF.Min((w - 4) / drawW, (h - 4) / drawH);
-            drawW *= fitScale;
-            drawH *= fitScale;
-        }
-
+        // Align to bottom of cell (objects share a ground plane)
         int rx = x + (w - (int)drawW) / 2;
-        int ry = y + (h - (int)drawH) / 2;
+        int ry = y + h - (int)drawH - 4;
         _sb.Draw(tex, new Rectangle(rx, ry, (int)drawW, (int)drawH), Color.White);
 
-        string label = string.IsNullOrEmpty(def.Name) ? def.Id : def.Name;
-        if (label.Length > 12) label = label[..12] + "..";
-        _ui.DrawText("[Edit] " + label, new Vector2(x + 2, y + h - 14), new Color(140, 180, 255), _smallFont);
+        // No label on the edited object slot — it's always the current selection
     }
 
     private void DrawReferenceSlot(int slotIdx, int x, int y, int w, int h, float pixPerWorld)
@@ -617,6 +688,26 @@ public class EnvObjectEditorWindow
 
         int refDefIdx = _referenceDefIndices[slotIdx];
 
+        // Special: necromancer silhouette placeholder
+        if (refDefIdx == NecroRefMarker)
+        {
+            float necDrawH = NecroWorldHeight * pixPerWorld;
+            float necDrawW = MathF.Max(4f, necDrawH * 0.4f);
+            int nw = Math.Max(4, (int)necDrawW);
+            int nh = Math.Max(4, (int)necDrawH);
+            int nx = x + (w - nw) / 2;
+            int ny = y + h - nh - 4; // align to bottom
+            // Body
+            _ui.DrawRect(new Rectangle(nx, ny + nh / 6, nw, nh - nh / 6), new Color(80, 50, 120, 180));
+            // Head
+            int headS = Math.Max(3, nw * 2 / 3);
+            _ui.DrawRect(new Rectangle(nx + (nw - headS) / 2, ny, headS, headS), new Color(100, 60, 140, 200));
+            _ui.DrawText("Necromancer", new Vector2(x + 2, y + h - 14), new Color(180, 140, 220), _smallFont);
+            if (_ui.DrawButton("X", x + w - 18, y + 2, 16, 14, EditorBase.DangerColor))
+                _referenceDefIndices[slotIdx] = -1;
+            return;
+        }
+
         if (refDefIdx >= 0 && refDefIdx < _env.DefCount)
         {
             var refDef = _env.GetDef(refDefIdx);
@@ -624,21 +715,14 @@ public class EnvObjectEditorWindow
 
             if (refTex != null && pixPerWorld > 0.001f)
             {
-                // Draw at the same world-scale as the main preview
-                float refDrawH = refDef.SpriteWorldHeight * pixPerWorld;
+                // Draw at unified world-scale (incorporating refDef.Scale)
+                float refDrawH = refDef.SpriteWorldHeight * refDef.Scale * pixPerWorld;
                 float refScale = refDrawH / refTex.Height;
                 float refDrawW = refTex.Width * refScale;
 
-                // Clamp to fit in slot
-                if (refDrawW > w - 4 || refDrawH > h - 4)
-                {
-                    float fitScale = MathF.Min((w - 4) / refDrawW, (h - 4) / refDrawH);
-                    refDrawW *= fitScale;
-                    refDrawH *= fitScale;
-                }
-
+                // Align to bottom of cell (shared ground plane)
                 int rx = x + (w - (int)refDrawW) / 2;
-                int ry = y + (h - (int)refDrawH) / 2;
+                int ry = y + h - (int)refDrawH - 4;
                 _sb.Draw(refTex, new Rectangle(rx, ry, (int)refDrawW, (int)refDrawH), Color.White);
             }
 
@@ -656,13 +740,21 @@ public class EnvObjectEditorWindow
         else
         {
             // Empty slot - show a DrawCombo picker for selecting a reference object
-            string[] names = GetEnvObjectNames();
+            string[] baseNames = GetEnvObjectNames();
+            // Prepend "Necromancer" as a special option
+            string[] names = new string[baseNames.Length + 1];
+            names[0] = "~ Necromancer";
+            Array.Copy(baseNames, 0, names, 1, baseNames.Length);
+
             if (names.Length > 0)
             {
                 string picked = _ui.DrawCombo($"refpick_{slotIdx}", "Ref", "(Pick...)", names, x + 2, y + h / 2 - 10, w - 4);
-                if (picked != "(Pick...)")
+                if (picked == "~ Necromancer")
                 {
-                    // Find the def index matching the picked name
+                    _referenceDefIndices[slotIdx] = NecroRefMarker;
+                }
+                else if (picked != "(Pick...)")
+                {
                     for (int di = 0; di < _env.DefCount; di++)
                     {
                         var d = _env.GetDef(di);
@@ -681,6 +773,18 @@ public class EnvObjectEditorWindow
                 _ui.DrawText("(no defs)", new Vector2(x + 4, y + h / 2 - 6), EditorBase.TextDim, _smallFont);
             }
         }
+    }
+
+    private int FindRefByName(string name)
+    {
+        for (int i = 0; i < _env.DefCount; i++)
+        {
+            var d = _env.GetDef(i);
+            if (string.Equals(d.Name, name, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(d.Id, name, StringComparison.OrdinalIgnoreCase))
+                return i;
+        }
+        return -1;
     }
 
     /// <summary>Get cached array of env object display names for reference picker DrawCombo.</summary>
@@ -865,8 +969,8 @@ public class EnvObjectEditorWindow
         if (MathF.Abs(newScale - def.Scale) > 0.001f) def.Scale = newScale;
         curY += RowH;
 
-        float newPlaceScale = _ui.DrawFloatField("envdef_placescale", "Placement Scale", def.PlacementScale, fx, curY, fieldW, 0.1f);
-        if (MathF.Abs(newPlaceScale - def.PlacementScale) > 0.001f) def.PlacementScale = newPlaceScale;
+        float newPlaceRadius = _ui.DrawFloatField("envdef_placeradius", "Placement Radius", def.PlacementRadius, fx, curY, fieldW, 0.5f);
+        if (MathF.Abs(newPlaceRadius - def.PlacementRadius) > 0.001f) def.PlacementRadius = newPlaceRadius;
         curY += RowH;
 
         // M04: Tint color + Harmonize button
@@ -1019,18 +1123,29 @@ public class EnvObjectEditorWindow
             if (newOwner != def.BuildingDefaultOwner) def.BuildingDefaultOwner = newOwner;
             curY += RowH;
 
-            // RM22: Building cost fields
-            int newCostWood = _ui.DrawIntField("envdef_costwood", "Cost Wood", def.CostWood, fx, curY, fieldW);
-            if (newCostWood != def.CostWood) def.CostWood = Math.Max(0, newCostWood);
+            // Item-based building costs (dropdowns + quantity)
+            var costOptions = GetCostItemOptions();
+            string newCost1Type = _ui.DrawCombo("envdef_cost1type", "Cost 1 Type", def.Cost1ItemId, costOptions, fx, curY, fieldW, allowNone: true);
+            if (newCost1Type != def.Cost1ItemId) def.Cost1ItemId = newCost1Type;
             curY += RowH;
 
-            int newCostStone = _ui.DrawIntField("envdef_coststone", "Cost Stone", def.CostStone, fx, curY, fieldW);
-            if (newCostStone != def.CostStone) def.CostStone = Math.Max(0, newCostStone);
+            if (!string.IsNullOrEmpty(def.Cost1ItemId))
+            {
+                int newCost1Amt = _ui.DrawIntField("envdef_cost1amt", "Cost 1 Qty", def.Cost1Amount, fx, curY, fieldW);
+                if (newCost1Amt != def.Cost1Amount) def.Cost1Amount = Math.Max(0, newCost1Amt);
+                curY += RowH;
+            }
+
+            string newCost2Type = _ui.DrawCombo("envdef_cost2type", "Cost 2 Type", def.Cost2ItemId, costOptions, fx, curY, fieldW, allowNone: true);
+            if (newCost2Type != def.Cost2ItemId) def.Cost2ItemId = newCost2Type;
             curY += RowH;
 
-            int newCostGold = _ui.DrawIntField("envdef_costgold", "Cost Gold", def.CostGold, fx, curY, fieldW);
-            if (newCostGold != def.CostGold) def.CostGold = Math.Max(0, newCostGold);
-            curY += RowH;
+            if (!string.IsNullOrEmpty(def.Cost2ItemId))
+            {
+                int newCost2Amt = _ui.DrawIntField("envdef_cost2amt", "Cost 2 Qty", def.Cost2Amount, fx, curY, fieldW);
+                if (newCost2Amt != def.Cost2Amount) def.Cost2Amount = Math.Max(0, newCost2Amt);
+                curY += RowH;
+            }
 
             bool newAutoSpawn = _ui.DrawCheckbox("Auto Spawn", def.AutoSpawn, fx, curY);
             if (newAutoSpawn != def.AutoSpawn) def.AutoSpawn = newAutoSpawn;
@@ -1278,6 +1393,11 @@ public class EnvObjectEditorWindow
             CostWood = src.CostWood,
             CostStone = src.CostStone,
             CostGold = src.CostGold,
+            Cost1ItemId = src.Cost1ItemId,
+            Cost1Amount = src.Cost1Amount,
+            Cost2ItemId = src.Cost2ItemId,
+            Cost2Amount = src.Cost2Amount,
+            PlacementRadius = src.PlacementRadius,
             BoundTriggerID = src.BoundTriggerID,
             Input1 = new ProcessSlot { Kind = src.Input1.Kind, ResourceID = src.Input1.ResourceID },
             Input2 = new ProcessSlot { Kind = src.Input2.Kind, ResourceID = src.Input2.ResourceID },
