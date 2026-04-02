@@ -44,7 +44,7 @@ public class ShadowRenderer
         bool useShader = (UnitShadowMode)shadow.UnitShadowMode == UnitShadowMode.Shader;
 
         if (useShader)
-            DrawShaderShadows(device, spriteBatch, camera, renderer, sim, gameData, unitAnims, atlases, envSystem, shadow);
+            DrawShaderShadows(device, spriteBatch, glowTex, camera, renderer, sim, gameData, unitAnims, atlases, envSystem, shadow);
         else
             DrawEllipseShadows(spriteBatch, glowTex, camera, renderer, sim, gameData, envSystem, shadow);
     }
@@ -142,6 +142,7 @@ public class ShadowRenderer
     private void DrawShaderShadows(
         GraphicsDevice device,
         SpriteBatch spriteBatch,
+        Texture2D glowTex,
         Camera25D camera,
         Renderer renderer,
         Simulation sim,
@@ -228,6 +229,8 @@ public class ShadowRenderer
             if (!envSystem.IsObjectVisible(i)) continue;
             var obj = envSystem.Objects[i];
             var def = envSystem.Defs[obj.DefIndex];
+            if (def.ShadowType == 2) continue; // None — skip entirely
+
             var tex = envSystem.GetDefTexture(obj.DefIndex);
             if (tex == null) continue;
 
@@ -236,20 +239,33 @@ public class ShadowRenderer
             float scale = pixelH / tex.Height;
             float destW = tex.Width * scale;
             float destH = pixelH;
-            float shadowH = destH * shadow.Squash;
-
-            float leftOff = destW * def.PivotX;
-            float rightOff = destW * (1f - def.PivotX);
-
-            float swLen = worldH * shadow.LengthScale * camera.Zoom;
-            float sdx = sdxDir * swLen;
-            float sdy = sdyDir * swLen * camera.YRatio;
 
             var feetSp = renderer.WorldToScreen(new Vec2(obj.X, obj.Y), 0f, camera);
 
-            DrawShadowQuad(device, tex, feetSp.X, feetSp.Y,
-                leftOff, rightOff, shadowH, sdx, sdy,
-                0f, 0f, 1f, 1f, shadowColor);
+            if (def.ShadowType == 1)
+            {
+                // Diffuse ellipse — simple oval at feet using the glow texture
+                float ellipseW = destW * 0.7f;
+                float ellipseH = ellipseW * 0.4f * camera.YRatio;
+                DrawShadowQuad(device, glowTex ?? tex, feetSp.X, feetSp.Y,
+                    ellipseW * 0.5f, ellipseW * 0.5f, ellipseH, 0f, 0f,
+                    0f, 0f, 1f, 1f, shadowColor);
+            }
+            else
+            {
+                // Sprite projection (default)
+                float shadowH = destH * shadow.Squash;
+                float leftOff = destW * def.PivotX;
+                float rightOff = destW * (1f - def.PivotX);
+
+                float swLen = worldH * shadow.LengthScale * camera.Zoom;
+                float sdx = sdxDir * swLen;
+                float sdy = sdyDir * swLen * camera.YRatio;
+
+                DrawShadowQuad(device, tex, feetSp.X, feetSp.Y,
+                    leftOff, rightOff, shadowH, sdx, sdy,
+                    0f, 0f, 1f, 1f, shadowColor);
+            }
         }
 
         // Resume SpriteBatch

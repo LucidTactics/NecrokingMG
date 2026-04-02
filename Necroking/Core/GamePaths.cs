@@ -72,7 +72,7 @@ public static class GamePaths
 
     // Map files
     public const string DefaultMapJson = "assets/maps/default.json";
-    public const string EnvDefsJson = "maps/env_defs.json";
+    public const string EnvDefsJson = "data/env_defs.json";
 
     // Asset directories
     public const string SpritesDir = "assets/Sprites";

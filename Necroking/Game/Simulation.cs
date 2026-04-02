@@ -1397,6 +1397,8 @@ public class Simulation
     private const byte WolfAttacking = 1;
     private const byte WolfDisengage = 2;
     private const byte WolfWaitCooldown = 3;
+    private const float WolfAggroRange = 10f;
+    private const float WolfAggroBreakRange = 15f;
 
     private void UpdateWolfAI(int i, float dt)
     {
@@ -1414,10 +1416,18 @@ public class Simulation
                 $"inCombat={_units.InCombat[i]} vel={_units.PreferredVel[i].Length():F1}");
         }
 
-        // Find/validate target
+        // Find/validate target with aggro range
         if (!IsTargetAlive(_units.Target[i]))
         {
-            _units.Target[i] = isolated ? FindMostIsolatedEnemy(i) : FindBestEnemyTarget(i);
+            if (isolated)
+            {
+                _units.Target[i] = FindMostIsolatedEnemy(i); // returns CombatTarget directly
+            }
+            else
+            {
+                int found = FindClosestEnemy(i, WolfAggroRange);
+                _units.Target[i] = found >= 0 ? CombatTarget.Unit(_units.Id[found]) : CombatTarget.None;
+            }
             _units.WolfPhase[i] = WolfEngage;
             _units.WolfPhaseTimer[i] = 0;
         }
@@ -1425,6 +1435,18 @@ public class Simulation
         int targetIdx = ResolveUnitTarget(_units.Target[i]);
         if (targetIdx < 0)
         {
+            _units.PreferredVel[i] = Vec2.Zero;
+            return;
+        }
+
+        // Drop target if beyond break range
+        float breakDist = (_units.Position[targetIdx] - _units.Position[i]).Length();
+        if (breakDist > WolfAggroBreakRange)
+        {
+            _units.Target[i] = CombatTarget.None;
+            _units.EngagedTarget[i] = CombatTarget.None;
+            _units.WolfPhase[i] = WolfEngage;
+            _units.WolfPhaseTimer[i] = 0;
             _units.PreferredVel[i] = Vec2.Zero;
             return;
         }

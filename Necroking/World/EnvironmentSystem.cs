@@ -83,9 +83,17 @@ public class EnvironmentObjectDef
     // Placement radius: additive to collisionRadius for placement spacing checks
     public float PlacementRadius { get; set; }
 
+    // Shadow type: 0=SpriteProjection (default), 1=DiffuseEllipse, 2=None
+    public int ShadowType { get; set; }
+
     // Trap spell system
     public string TrapSpellId { get; set; } = "";   // spell to cast when enemy enters range
     public int TrapUses { get; set; }                // 0 = infinite uses
+    public string TrapTriggeredSprite { get; set; } = ""; // sprite when firing
+    public string TrapDeployedSprite { get; set; } = "";  // sprite after firing
+    public float TrapTriggeredDuration { get; set; } = 0.3f; // seconds in triggered state
+    public float TrapDeployedDuration { get; set; } = 2.0f;  // seconds in deployed state before fade/reset
+    public float TrapFadeDuration { get; set; } = 1.0f;      // alpha fade-out duration for expended traps
 
     // Tint color (used by color harmonizer M04)
     public HdrColor TintColor { get; set; } = new(255, 255, 255, 255, 1f);
@@ -132,8 +140,14 @@ public class EnvironmentObjectDef
         writer.WriteString("cost2ItemId", Cost2ItemId);
         writer.WriteNumber("cost2Amount", Cost2Amount);
         writer.WriteNumber("placementRadius", PlacementRadius);
+        writer.WriteNumber("shadowType", ShadowType);
         writer.WriteString("trapSpellId", TrapSpellId);
         writer.WriteNumber("trapUses", TrapUses);
+        writer.WriteString("trapTriggeredSprite", TrapTriggeredSprite);
+        writer.WriteString("trapDeployedSprite", TrapDeployedSprite);
+        writer.WriteNumber("trapTriggeredDuration", TrapTriggeredDuration);
+        writer.WriteNumber("trapDeployedDuration", TrapDeployedDuration);
+        writer.WriteNumber("trapFadeDuration", TrapFadeDuration);
         writer.WriteString("boundTriggerID", BoundTriggerID);
         // Processing slots
         writer.WriteStartObject("input1");
@@ -180,6 +194,8 @@ public struct PlacedObject
     public string ObjectID;
 }
 
+public enum TrapVisualState : byte { Hidden, Triggered, Deployed, FadingOut }
+
 public struct PlacedObjectRuntime
 {
     public int HP;
@@ -187,8 +203,11 @@ public struct PlacedObjectRuntime
     public bool Alive;
     public bool Collected;         // foragable has been picked up
     public float RespawnTimer;     // countdown to respawn after collection
-    public int TrapUsesRemaining;  // trap uses left (-1 = not a trap, 0 = infinite)
+    public int TrapUsesRemaining;   // trap uses left (-1 = not a trap, 0 = infinite)
     public float TrapCooldownTimer; // time until trap can fire again
+    public TrapVisualState TrapState; // current visual state
+    public float TrapStateTimer;    // time remaining in current state
+    public bool TrapExpended;       // true when uses depleted (fading out)
 
     public PlacedObjectRuntime() { HP = 0; Owner = 1; Alive = true; Collected = false; RespawnTimer = 0f; }
 }
@@ -200,6 +219,7 @@ public class EnvironmentSystem
     private readonly List<string> _groups = new();
     private readonly List<EnvironmentObjectDef> _defs = new();
     private readonly List<Texture2D?> _textures = new();
+    private readonly Dictionary<string, Texture2D?> _trapTextures = new(); // cached trap sprite textures
     private GraphicsDevice? _device;
     private readonly List<PlacedObject> _objects = new();
     private readonly List<PlacedObjectRuntime> _objectRuntime = new();
@@ -214,6 +234,7 @@ public class EnvironmentSystem
 
     public int AddDef(EnvironmentObjectDef def) { _defs.Add(def); _textures.Add(null); return _defs.Count - 1; }
     public void RemoveDef(int index) { if (index >= 0 && index < _defs.Count) { _defs.RemoveAt(index); _textures.RemoveAt(index); } }
+    public void ReplaceDef(int index, EnvironmentObjectDef def) { if (index >= 0 && index < _defs.Count) _defs[index] = def; }
     public int DefCount => _defs.Count;
     public EnvironmentObjectDef GetDef(int idx) => _defs[idx];
     public int FindDef(string id) { for (int i = 0; i < _defs.Count; i++) if (_defs[i].Id == id) return i; return -1; }
@@ -347,38 +368,85 @@ public class EnvironmentSystem
             var def = _defs[_objects[i].DefIndex];
             if (string.IsNullOrEmpty(def.TrapSpellId)) continue;
 
-            // Tick cooldown
-            if (rt.TrapCooldownTimer > 0f)
+            // State machine for trap visuals
+            switch (rt.TrapState)
             {
-                rt.TrapCooldownTimer -= dt;
-                _objectRuntime[i] = rt;
-                continue;
-            }
-
-            // Find first enemy in range
-            var trapPos = new Vec2(_objects[i].X, _objects[i].Y);
-            int target = FindTrapTarget(trapPos, def, rt.Owner, units);
-            if (target < 0) continue;
-
-            // Fire!
-            TrapFireEvents.Add(new TrapFireEvent
-            {
-                ObjectIndex = i, SpellId = def.TrapSpellId,
-                TrapPos = trapPos, TargetUnitIdx = target, TrapOwner = rt.Owner
-            });
-
-            // Apply cooldown
-            // (spell cooldown will be looked up by Game1 since we don't have SpellRegistry here)
-            rt.TrapCooldownTimer = 0.5f; // default, overridden by Game1 after looking up spell
-
-            // Decrement uses
-            if (rt.TrapUsesRemaining > 0)
-            {
-                rt.TrapUsesRemaining--;
-                if (rt.TrapUsesRemaining <= 0)
+                case TrapVisualState.Hidden:
                 {
-                    rt.Alive = false;
-                    OnCollisionsDirty?.Invoke();
+                    // Tick cooldown
+                    if (rt.TrapCooldownTimer > 0f)
+                    {
+                        rt.TrapCooldownTimer -= dt;
+                        _objectRuntime[i] = rt;
+                        continue;
+                    }
+
+                    // Find first enemy in range
+                    var trapPos = new Vec2(_objects[i].X, _objects[i].Y);
+                    int target = FindTrapTarget(trapPos, def, rt.Owner, units);
+                    if (target < 0) continue;
+
+                    // Fire! Transition to Triggered
+                    TrapFireEvents.Add(new TrapFireEvent
+                    {
+                        ObjectIndex = i, SpellId = def.TrapSpellId,
+                        TrapPos = trapPos, TargetUnitIdx = target, TrapOwner = rt.Owner
+                    });
+
+                    // Decrement uses
+                    if (rt.TrapUsesRemaining > 0)
+                    {
+                        rt.TrapUsesRemaining--;
+                        if (rt.TrapUsesRemaining <= 0)
+                            rt.TrapExpended = true;
+                    }
+
+                    rt.TrapState = TrapVisualState.Triggered;
+                    rt.TrapStateTimer = def.TrapTriggeredDuration;
+                    break;
+                }
+
+                case TrapVisualState.Triggered:
+                {
+                    rt.TrapStateTimer -= dt;
+                    if (rt.TrapStateTimer <= 0f)
+                    {
+                        rt.TrapState = TrapVisualState.Deployed;
+                        rt.TrapStateTimer = def.TrapDeployedDuration;
+                    }
+                    break;
+                }
+
+                case TrapVisualState.Deployed:
+                {
+                    rt.TrapStateTimer -= dt;
+                    if (rt.TrapStateTimer <= 0f)
+                    {
+                        if (rt.TrapExpended)
+                        {
+                            // Start fade-out
+                            rt.TrapState = TrapVisualState.FadingOut;
+                            rt.TrapStateTimer = def.TrapFadeDuration;
+                        }
+                        else
+                        {
+                            // Return to hidden, start cooldown
+                            rt.TrapState = TrapVisualState.Hidden;
+                            rt.TrapCooldownTimer = 0.5f; // overridden by Game1 with spell cooldown
+                        }
+                    }
+                    break;
+                }
+
+                case TrapVisualState.FadingOut:
+                {
+                    rt.TrapStateTimer -= dt;
+                    if (rt.TrapStateTimer <= 0f)
+                    {
+                        rt.Alive = false;
+                        OnCollisionsDirty?.Invoke();
+                    }
+                    break;
                 }
             }
 
@@ -529,6 +597,55 @@ public class EnvironmentSystem
     {
         if (defIdx < 0 || defIdx >= _textures.Count) return null;
         return _textures[defIdx];
+    }
+
+    /// <summary>Get the correct texture for an object based on trap visual state. Returns alpha multiplier.</summary>
+    public Texture2D? GetObjectTexture(int objIdx, out float alpha)
+    {
+        alpha = 1f;
+        if (objIdx < 0 || objIdx >= _objects.Count) return null;
+        var obj = _objects[objIdx];
+        var def = _defs[obj.DefIndex];
+
+        if (objIdx >= _objectRuntime.Count || _objectRuntime[objIdx].TrapUsesRemaining < 0)
+            return GetDefTexture(obj.DefIndex); // not a trap
+
+        var rt = _objectRuntime[objIdx];
+        switch (rt.TrapState)
+        {
+            case TrapVisualState.Triggered:
+                if (!string.IsNullOrEmpty(def.TrapTriggeredSprite))
+                    return GetOrLoadTrapTexture(def.TrapTriggeredSprite);
+                return GetDefTexture(obj.DefIndex);
+
+            case TrapVisualState.Deployed:
+                if (!string.IsNullOrEmpty(def.TrapDeployedSprite))
+                    return GetOrLoadTrapTexture(def.TrapDeployedSprite);
+                return GetDefTexture(obj.DefIndex);
+
+            case TrapVisualState.FadingOut:
+                alpha = MathF.Max(0f, rt.TrapStateTimer / MathF.Max(def.TrapFadeDuration, 0.01f));
+                if (!string.IsNullOrEmpty(def.TrapDeployedSprite))
+                    return GetOrLoadTrapTexture(def.TrapDeployedSprite);
+                return GetDefTexture(obj.DefIndex);
+
+            default: // Hidden
+                return GetDefTexture(obj.DefIndex);
+        }
+    }
+
+    private Texture2D? GetOrLoadTrapTexture(string path)
+    {
+        if (string.IsNullOrEmpty(path)) return null;
+        if (_trapTextures.TryGetValue(path, out var cached)) return cached;
+        if (_device == null || !System.IO.File.Exists(path)) { _trapTextures[path] = null; return null; }
+        try
+        {
+            var tex = Render.TextureUtil.LoadPremultiplied(_device, path);
+            _trapTextures[path] = tex;
+            return tex;
+        }
+        catch { _trapTextures[path] = null; return null; }
     }
 
     /// <summary>
