@@ -1026,7 +1026,7 @@ public class MapEditorWindow
             }
             if (_eb.DrawButton("Browse", panelX + Margin + fw - gndBrowseBtnW, addY, gndBrowseBtnW, 20))
             {
-                _textureBrowser.Open("assets/Environment/Ground", def.TexturePath, path =>
+                _textureBrowser.Open(GamePaths.Resolve("assets/Environment/Ground"), def.TexturePath, path =>
                 {
                     def.TexturePath = path;
                     _groundSystem.LoadTextures(_device);
@@ -2332,7 +2332,7 @@ public class MapEditorWindow
                 if (_eb.DrawButton("Browse", panelX + Margin + fw - rdBrowseBtnW, y, rdBrowseBtnW, 20))
                 {
                     int capturedIdx = texDefIdx;
-                    _textureBrowser.Open("assets/Environment/Roads", roadTexPath, path =>
+                    _textureBrowser.Open(GamePaths.Resolve("assets/Environment/Roads"), roadTexPath, path =>
                     {
                         if (capturedIdx >= 0 && capturedIdx < _roadSystem.TextureDefCount)
                             _roadSystem.GetTextureDef(capturedIdx).TexturePath = path;
@@ -3873,7 +3873,7 @@ public class MapEditorWindow
     {
         try
         {
-            string mapsDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "assets", "maps");
+            string mapsDir = GamePaths.Resolve("data/maps");
             Directory.CreateDirectory(mapsDir);
             string path = Path.Combine(mapsDir, _mapFilename + ".json");
 
@@ -3935,8 +3935,7 @@ public class MapEditorWindow
 
             // Env defs are now saved separately to data/env_defs.json
             // Save them alongside the map save for convenience
-            MapData.SaveEnvDefs("data/env_defs.json", _envSystem);
-            GamePaths.DualSave("data/env_defs.json");
+            MapData.SaveEnvDefs(GamePaths.Resolve("data/env_defs.json"), _envSystem);
 
             // Placed objects
             writer.WriteStartArray("placedObjects");
@@ -4008,10 +4007,7 @@ public class MapEditorWindow
             _statusTimer = 3f;
             DebugLog.Log("editor", $"Map saved to {path}");
 
-            // Dual-save to source tree so all builds stay in sync
-            GamePaths.DualSave(Path.Combine("assets", "maps", _mapFilename + ".json"));
-            GamePaths.DualSave(Path.Combine("assets", "maps", _mapFilename + "_triggers.json"));
-            GamePaths.DualSave(Path.Combine("assets", "maps", _mapFilename + "_roads.json"));
+            // Files saved directly to canonical location
         }
         catch (Exception ex)
         {
@@ -4025,7 +4021,7 @@ public class MapEditorWindow
     {
         try
         {
-            string mapsDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "assets", "maps");
+            string mapsDir = GamePaths.Resolve("data/maps");
             string mapPath = Path.Combine(mapsDir, _mapFilename + ".json");
             string triggerPath = Path.Combine(mapsDir, _mapFilename + "_triggers.json");
             string roadsPath = Path.Combine(mapsDir, _mapFilename + "_roads.json");
@@ -4046,7 +4042,7 @@ public class MapEditorWindow
 
             // Load env defs from canonical location, then map data (placed objects, walls, units)
             _placedUnits.Clear();
-            MapData.LoadEnvDefs("data/env_defs.json", _envSystem);
+            MapData.LoadEnvDefs(GamePaths.Resolve("data/env_defs.json"), _envSystem);
             MapData.Load(mapPath, _groundSystem, _envSystem, _wallSystem, _placedUnits);
 
             // Reload ground textures

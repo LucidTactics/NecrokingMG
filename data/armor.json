@@ -1,76 +1,100 @@
 {
   "armors": [
     {
+      "id": "none",
+      "name": "None",
       "bodyProtection": 0,
       "headProtection": 0,
-      "id": "none",
-      "name": "None"
+      "encumbrance": 0,
+      "bonuses": []
     },
     {
+      "id": "hood",
+      "name": "Hood",
       "bodyProtection": 0,
       "headProtection": 2,
-      "id": "hood",
-      "name": "Hood"
+      "encumbrance": 0,
+      "bonuses": []
     },
     {
+      "id": "breastplate",
+      "name": "Breastplate",
       "bodyProtection": 8,
       "headProtection": 0,
-      "id": "breastplate",
-      "name": "Breastplate"
+      "encumbrance": 0,
+      "bonuses": []
     },
     {
+      "id": "cloth",
+      "name": "Cloth",
       "bodyProtection": 2,
       "headProtection": 0,
-      "id": "cloth",
-      "name": "Cloth"
+      "encumbrance": 0,
+      "bonuses": []
     },
     {
+      "id": "chainmail_helm",
+      "name": "Chainmail",
       "bodyProtection": 10,
       "headProtection": 0,
-      "id": "chainmail_helm",
-      "name": "Chainmail"
+      "encumbrance": 0,
+      "bonuses": []
     },
     {
+      "id": "full_plate",
+      "name": "Full Plate",
       "bodyProtection": 15,
       "headProtection": 0,
-      "id": "full_plate",
-      "name": "Full Plate"
+      "encumbrance": 0,
+      "bonuses": []
     },
     {
+      "id": "light_leather",
+      "name": "Light Leather",
       "bodyProtection": 2,
       "headProtection": 0,
-      "id": "light_leather",
-      "name": "Light Leather"
+      "encumbrance": 0,
+      "bonuses": []
     },
     {
+      "id": "armor_7",
+      "name": "Wooden Shield",
       "bodyProtection": 15,
       "headProtection": 15,
-      "id": "armor_7",
-      "name": "Wooden Shield"
+      "encumbrance": 0,
+      "bonuses": []
     },
     {
+      "id": "armor_8",
+      "name": "Iron Cap",
       "bodyProtection": 0,
       "headProtection": 10,
-      "id": "armor_8",
-      "name": "Iron Cap"
+      "encumbrance": 0,
+      "bonuses": []
     },
     {
+      "id": "armor_9",
+      "name": "Iron Hauberk",
       "bodyProtection": 15,
       "headProtection": 0,
-      "id": "armor_9",
-      "name": "Iron Hauberk"
+      "encumbrance": 0,
+      "bonuses": []
     },
     {
+      "id": "armor_10",
+      "name": "Iron Helm",
       "bodyProtection": 14,
       "headProtection": 0,
-      "id": "armor_10",
-      "name": "Iron Helm"
+      "encumbrance": 0,
+      "bonuses": []
     },
     {
+      "id": "armor_11",
+      "name": "Hardened Leather Cuirass",
       "bodyProtection": 6,
       "headProtection": 0,
-      "id": "armor_11",
-      "name": "Hardened Leather Cuirass"
+      "encumbrance": 0,
+      "bonuses": []
     }
   ]
 }

@@ -8,24 +8,38 @@
 ```bash
 dotnet build Necroking/Necroking.csproj
 ```
-Default build is Debug. For Release:
-```bash
-dotnet build Necroking/Necroking.csproj -c Release
-```
+Output goes to `bin/Debug/`. For Release: `dotnet build Necroking/Necroking.csproj -c Release`
 
 ### Publish (self-contained)
-Publish is configured as self-contained (win-x64) in the csproj, so it bundles the .NET runtime. Always publish after making changes the user needs to test:
+Publish is configured as self-contained (win-x64) in the csproj. Always publish after making changes the user needs to test:
 ```bash
-dotnet publish Necroking/Necroking.csproj -c Debug -r win-x64 --self-contained -o Necroking/bin/Publish
+dotnet publish Necroking/Necroking.csproj -c Debug -r win-x64 --self-contained -o bin/Publish
 ```
-The user tests from `bin/Publish`. After publishing, copy any new/modified data files from `Necroking/Data/` to `Necroking/bin/Publish/data/` if they aren't auto-copied by the build.
+The user tests from `bin/Publish/`. The exe references `assets/` and `data/` at the project root (two levels up from `bin/Publish/`) — no file copying needed.
+
+## Directory Layout
+```
+NecrokingMG/
+  assets/          (sprites, textures, UI, effects, fonts, items)
+  data/            (ALL JSON: game data, maps/, env_defs, spellbar)
+  resources/       (shaders .fx, fonts .spritefont, Content.mgcb)
+  bin/             (build output — exe + runtime DLLs only)
+    Publish/
+    Debug/
+  Necroking/       (C# source code, .csproj)
+  Necroking.Editor/
+  tools/
+```
 
 ## File Conventions
 - C# source in `Necroking/`, organized by subsystem (Algorithm, Core, Data, Editor, Game, Movement, Render, Scenario, Spatial, UI, World)
 - Main game loop in `Necroking/Game1.cs`, entry point in `Necroking/Program.cs`
-- Assets in `Necroking/assets/` (Environment/, Effects/, Icons/, Sprites/, shaders/, UI/)
-- Game data in `Necroking/Content/data/` (JSON registries, maps, settings)
-- Tools/scripts in `tools/` (Python utilities)
+- Assets at root `assets/` (Environment/, Effects/, Items/, Sprites/, UI/, fonts/)
+- Game data at root `data/` (JSON registries, maps/, settings)
+- Maps in `data/maps/` (default.json, triggers, roads, wall_defs)
+- Shaders and fonts in `resources/`
+- Tools/scripts in `tools/`
+- All paths resolved via `GamePaths.Resolve()` — no DualSave, no file copying to build output
 
 ## Code Style
 - Use `Vec2` (custom type in `Core/`) for world positions, `Vector2` (MonoGame/XNA) for screen positions
@@ -83,7 +97,7 @@ dotnet run --project Necroking/Necroking.csproj -- --scenario <name> --timeout <
 ```
 Or run the built executable directly:
 ```bash
-Necroking/bin/Debug/net9.0/Necroking.exe --scenario <name> --timeout <seconds>
+bin/Debug/Necroking.exe --scenario <name> --timeout <seconds>
 ```
 - `--scenario <name>` — required, selects which scenario to run
 - `--timeout <seconds>` — optional (default 30), wall-clock time before force-quit
@@ -135,7 +149,7 @@ Necroking/bin/Debug/net9.0/Necroking.exe --scenario <name> --timeout <seconds>
    - `IsComplete` — property returning true when done
    - `OnComplete(Simulation sim)` — final validation, return 0=pass / non-zero=fail
 3. Register it in `Necroking/Scenario/ScenarioRegistry.cs` — add a `Register(...)` call in the static constructor
-4. Build and test: `dotnet build Necroking/Necroking.csproj && Necroking/bin/Debug/net9.0/Necroking.exe --scenario my_scenario --timeout 30 --headless --speed 10`
+4. Build and test: `dotnet build Necroking/Necroking.csproj && bin/Debug/Necroking.exe --scenario my_scenario --timeout 30 --headless --speed 10`
 
 ### UI test scenarios
 - For scenarios that need HUD/UI rendered, extend `UIScenarioBase` instead of `ScenarioBase`
@@ -164,7 +178,7 @@ When creating a new scenario, **spend real effort designing what to log**. The s
 - Log measured values with context: not just `damage=5` but `damage=5 (expected 3-8, attacker=Skeleton str=10, defender=Soldier prot=12)`
 - Log counts and summaries: unit counts per faction each tick, total damage dealt, rounds elapsed
 - On completion, log a detailed summary of what happened — this makes pass/fail output much more useful
-- Combat log output goes to `log/combat.log` — check it with `cat Necroking/bin/Debug/net9.0/log/combat.log`
+- Combat log output goes to `log/combat.log` — check it with `cat bin/Debug/log/combat.log`
 
 ### Scenario tips
 - No necromancer is spawned in scenarios; use `sim.UnitsMut.AddUnit(pos, type)` to spawn units

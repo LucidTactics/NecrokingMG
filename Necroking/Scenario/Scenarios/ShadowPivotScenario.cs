@@ -40,7 +40,7 @@ public class ShadowPivotScenario : ScenarioBase
             var treeDef = new EnvironmentObjectDef
             {
                 Id = "shadow_pivot_tree", Name = "Test Tree",
-                TexturePath = "assets/Environment/Trees/BranchlessTree1.png",
+                TexturePath = GamePaths.Resolve("assets/Environment/Trees/BranchlessTree1.png"),
                 SpriteWorldHeight = 6f, PivotX = 0.5f, PivotY = 1f, Scale = 1f
             };
             int treeIdx = env.AddDef(treeDef);
@@ -50,7 +50,7 @@ public class ShadowPivotScenario : ScenarioBase
             var cottageDef = new EnvironmentObjectDef
             {
                 Id = "shadow_pivot_cottage", Name = "Cottage1",
-                TexturePath = "assets/Environment/Buildings/ThatchedCottage.png",
+                TexturePath = GamePaths.Resolve("assets/Environment/Buildings/ThatchedCottage.png"),
                 SpriteWorldHeight = 8f, PivotX = 0.5f, PivotY = 1f,
                 IsBuilding = true, Scale = 1.0492146f
             };

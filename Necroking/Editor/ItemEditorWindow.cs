@@ -137,7 +137,7 @@ public class ItemEditorWindow
         // Ctrl+S save
         if (ctrl && sPressed)
         {
-            _gameData.Save("data");
+            _gameData.Save();
             _unsavedChanges = false;
             SetStatus("Saved!");
         }
@@ -210,7 +210,7 @@ public class ItemEditorWindow
         // Save button
         if (_ui.DrawButton("Save (Ctrl+S)", x + w - 210, y + 10, 160, 30, EditorBase.SuccessColor))
         {
-            _gameData.Save("data");
+            _gameData.Save();
             _unsavedChanges = false;
             SetStatus("Saved!");
         }

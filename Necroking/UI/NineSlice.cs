@@ -26,8 +26,9 @@ public class NineSlice
 
     public bool Load(GraphicsDevice device, NineSliceDef def)
     {
-        if (!File.Exists(def.TexturePath)) return false;
-        Texture = Necroking.Render.TextureUtil.LoadPremultiplied(device, def.TexturePath);
+        string resolved = Necroking.Core.GamePaths.Resolve(def.TexturePath);
+        if (!File.Exists(resolved)) return false;
+        Texture = Necroking.Render.TextureUtil.LoadPremultiplied(device, resolved);
         if (Texture == null) return false;
         BorderLeft = def.BorderLeft;
         BorderRight = def.BorderRight;

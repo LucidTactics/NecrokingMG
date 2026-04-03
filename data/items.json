@@ -38,7 +38,7 @@
       "icon": "assets/Environment/Mushrooms/PoisonMushroom.png",
       "maxStack": 99,
       "category": "material",
-      "description": "Extremely toxic — handle with care."
+      "description": "Extremely toxic \u2014 handle with care."
     },
     {
       "id": "MagicMushroom",
@@ -55,6 +55,38 @@
       "maxStack": 99,
       "category": "material",
       "description": "A small wooden log. Useful for building and fuel."
+    },
+    {
+      "id": "potion_frenzy",
+      "displayName": "Frenzy Potion",
+      "icon": "assets/Items/Potions/FrenzyPotion.png",
+      "maxStack": 10,
+      "category": "potion",
+      "description": "Drives the target into a berserk frenzy."
+    },
+    {
+      "id": "potion_paralysis",
+      "displayName": "Paralysis Potion",
+      "icon": "assets/Items/Potions/Paralysis Potion.png",
+      "maxStack": 10,
+      "category": "potion",
+      "description": "Gradually paralyzes the target."
+    },
+    {
+      "id": "potion_zombie",
+      "displayName": "Zombie Potion",
+      "icon": "assets/Items/Potions/ZombiePotion.png",
+      "maxStack": 10,
+      "category": "potion",
+      "description": "Curses the target to rise as a zombie."
+    },
+    {
+      "id": "potion_poison",
+      "displayName": "Poison Potion",
+      "icon": "assets/Items/Potions/PoisonPotion.png",
+      "maxStack": 10,
+      "category": "potion",
+      "description": "Coats in deadly poison."
     }
   ]
 }

@@ -740,7 +740,7 @@ public class WallEditorWindow
             if (_ui.DrawButton("Browse", x + pad + fieldW - browseBtnW, curY, browseBtnW, 20))
             {
                 int capturedSeg = _selectedSegment;
-                _textureBrowser.Open("assets/Environment/Walls", seg.SpritePath, path =>
+                _textureBrowser.Open(GamePaths.Resolve("assets/Environment/Walls"), seg.SpritePath, path =>
                 {
                     if (_selectedDef >= 0 && _selectedDef < _walls.DefCount &&
                         capturedSeg >= 0 && capturedSeg < (int)WallSegDir.Count)
@@ -850,7 +850,7 @@ public class WallEditorWindow
     {
         try
         {
-            string mapsDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "assets", "maps");
+            string mapsDir = GamePaths.Resolve("data/maps");
             Directory.CreateDirectory(mapsDir);
             string path = Path.Combine(mapsDir, _mapFilename + "_walldefs.json");
 
@@ -902,8 +902,7 @@ public class WallEditorWindow
             _statusMessage = "Saved!";
             _statusTimer = 2f;
 
-            // Dual-save to source tree
-            Necroking.Core.GamePaths.DualSave(Path.Combine("assets", "maps", _mapFilename + "_walldefs.json"));
+            // Saved directly to canonical location
         }
         catch (Exception ex)
         {

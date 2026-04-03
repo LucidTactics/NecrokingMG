@@ -84,7 +84,9 @@ public class GroundSystem
         {
             if (_textures[i] != null) continue;
             string path = _types[i].TexturePath;
-            if (string.IsNullOrEmpty(path) || !System.IO.File.Exists(path)) continue;
+            if (string.IsNullOrEmpty(path)) continue;
+            string resolved = Core.GamePaths.Resolve(path);
+            if (!System.IO.File.Exists(resolved)) continue;
             try
             {
                 _textures[i] = Necroking.Render.TextureUtil.LoadPremultiplied(device, path);

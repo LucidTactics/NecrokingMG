@@ -189,22 +189,14 @@ public class Game1 : Microsoft.Xna.Framework.Game
             Window.IsBorderless = true;
         }
 
-        Content.RootDirectory = "Content";
+        Content.RootDirectory = "resources";
         IsMouseVisible = true;
 
         // Save settings and weather presets when the game exits
-        // Save to both runtime dir AND source dir so publish doesn't overwrite changes
         Exiting += (_, _) =>
         {
-            _gameData.Settings.Save(Path.Combine("data", "settings.json"));
-            _gameData.Weather.Save(Path.Combine("data", "weather.json"));
-            // Also save to source tree so dotnet publish picks up the latest
-            string srcData = Path.Combine("..", "data");
-            if (Directory.Exists(srcData))
-            {
-                _gameData.Settings.Save(Path.Combine(srcData, "settings.json"));
-                _gameData.Weather.Save(Path.Combine(srcData, "weather.json"));
-            }
+            _gameData.Settings.Save(GamePaths.Resolve(GamePaths.SettingsJson));
+            _gameData.Weather.Save(GamePaths.Resolve(GamePaths.WeatherJson));
         };
 
         if (LaunchArgs.Headless)
@@ -245,7 +237,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
             Window.Position = new Point(0, 0);
 
         // Load game data
-        _gameData.Load("data");
+        _gameData.Load();
         _inventory = new Inventory(20, _gameData.Items);
         LogTiming($"GameData loaded: {_gameData.Units.Count} units, {_gameData.Spells.Count} spells, {_gameData.Weapons.Count} weapons, {_gameData.Items.Count} items");
 
@@ -253,7 +245,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         _renderer.Init(_graphics.PreferredBackBufferWidth, _graphics.PreferredBackBufferHeight);
 
         // Scan for sprite sheets and load atlases (parallel file read + sequential GPU upload)
-        AtlasDefs.ScanSpritesDirectory("assets/Sprites");
+        AtlasDefs.ScanSpritesDirectory();
         int atlasCount = AtlasDefs.TotalCount;
         _atlases = new SpriteAtlas[atlasCount];
 
@@ -269,8 +261,8 @@ public class Game1 : Microsoft.Xna.Framework.Game
         System.Threading.Tasks.Parallel.For(0, atlasCount, i =>
         {
             string name = AtlasDefs.Names[i];
-            string pngPath = $"assets/Sprites/{name}.png";
-            string metaPath = $"assets/Sprites/{name}.spritemeta";
+            string pngPath = GamePaths.Resolve($"assets/Sprites/{name}.png");
+            string metaPath = GamePaths.Resolve($"assets/Sprites/{name}.spritemeta");
             if (File.Exists(pngPath))
             {
                 pngBytes[i] = File.ReadAllBytes(pngPath);
@@ -333,29 +325,29 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // Load animation metadata from all atlas spritemeta files
         foreach (string name in AtlasDefs.Names)
         {
-            string metaPath = $"assets/Sprites/{name}.animationmeta";
+            string metaPath = GamePaths.Resolve($"assets/Sprites/{name}.animationmeta");
             if (File.Exists(metaPath))
                 AnimMetaLoader.Load(metaPath, _animMeta);
         }
         LogTiming($"Animation metadata: {_animMeta.Count} entries");
 
         // Load animations.json timing overrides (stub)
-        if (File.Exists("data/animations.json"))
+        if (File.Exists(GamePaths.Resolve(GamePaths.AnimationsJson)))
             DebugLog.Log("startup", "animations.json found");
 
         // weapon_points.json is now loaded by GameData.Load() into each UnitDef.WeaponPoints
 
         // Load map
         var placedUnits = new List<Data.PlacedUnit>();
-        string mapPath = GamePaths.DefaultMapJson;
+        string mapPath = GamePaths.Resolve(GamePaths.DefaultMapJson);
         if (File.Exists(mapPath))
         {
             DebugLog.Log("startup", "Loading map from file...");
             // Load env defs from canonical location (before map, so placed objects can resolve IDs)
-            MapData.LoadEnvDefs("data/env_defs.json", _envSystem);
+            MapData.LoadEnvDefs(GamePaths.Resolve(GamePaths.EnvDefsJson), _envSystem);
             MapData.Load(mapPath, _groundSystem, _envSystem, _wallSystem, placedUnits);
-            MapData.LoadTriggers("assets/maps/default_triggers.json", _triggerSystem);
-            MapData.LoadRoads("assets/maps/default_roads.json", _roadSystem);
+            MapData.LoadTriggers(GamePaths.Resolve("data/maps/default_triggers.json"), _triggerSystem);
+            MapData.LoadRoads(GamePaths.Resolve("data/maps/default_roads.json"), _roadSystem);
             LogTiming($"Map loaded: ground={_groundSystem.WorldW}x{_groundSystem.WorldH}, objects={_envSystem.ObjectCount}, defs={_envSystem.DefCount}");
 
             // Load grass map
@@ -469,7 +461,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         }
         try
         {
-            string sbJson = File.ReadAllText("data/spellbar.json");
+            string sbJson = File.ReadAllText(GamePaths.Resolve(GamePaths.SpellBarJson));
             using var sbDoc = System.Text.Json.JsonDocument.Parse(sbJson);
             LoadSpellBarSlots(sbDoc.RootElement, "slots", _spellBarState);
             LoadSpellBarSlots(sbDoc.RootElement, "secondary", _secondaryBarState);
@@ -1065,7 +1057,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         _shadowRenderer.Init(GraphicsDevice);
 
         // Load main menu background
-        string menuBgPath = Path.Combine("assets", "UI", "Background", "VampireBackground.png");
+        string menuBgPath = GamePaths.Resolve(Path.Combine("assets", "UI", "Background", "VampireBackground.png"));
         if (File.Exists(menuBgPath))
         {
             _mainMenuBg = TextureUtil.LoadPremultiplied(GraphicsDevice, menuBgPath);
@@ -1080,7 +1072,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         _hudRenderer.Init(_spriteBatch, _pixel, _font, _smallFont);
 
         // Load TrueType fonts via FontStashSharp (dynamic sizing)
-        _fontManager.LoadFontsFromDirectory(Path.Combine("assets", "fonts"));
+        _fontManager.LoadFontsFromDirectory(GamePaths.Resolve(GamePaths.FontsDir));
         if (_fontManager.HasFonts)
         {
             // Prefer "Standard" as default, fall back to first loaded
@@ -1111,7 +1103,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // Init UI editor (read-only viewer, doesn't depend on game systems)
         _uiEditor.Init(_spriteBatch, _pixel, _font, _smallFont);
         _uiEditor.SetFontManager(_fontManager);
-        string uiDefPath = Path.Combine("assets", "UI", "definitions");
+        string uiDefPath = GamePaths.Resolve(GamePaths.UIDefsDir);
         if (Directory.Exists(uiDefPath))
             _uiEditor.LoadDefinitions(uiDefPath);
         LogTiming("UI editor initialized");
@@ -1138,7 +1130,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         _itemEditor = new ItemEditorWindow(_editorUi);
         _itemEditor.SetGameData(_gameData);
         _settingsWindow = new SettingsWindow(_editorUi);
-        _settingsWindow.SetGameData(_gameData, Path.Combine("data", "settings.json"), Path.Combine("data", "weather.json"));
+        _settingsWindow.SetGameData(_gameData, GamePaths.Resolve(GamePaths.SettingsJson), GamePaths.Resolve(GamePaths.WeatherJson));
         LogTiming("Editors initialized");
         DebugLog.Log("startup", $"=== LoadContent complete ===");
     }
@@ -2576,7 +2568,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         if (_itemTextureCache.TryGetValue(path, out var cached)) return cached;
         try
         {
-            var tex = TextureUtil.LoadPremultiplied(GraphicsDevice, path);
+            var tex = TextureUtil.LoadPremultiplied(GraphicsDevice, GamePaths.Resolve(path));
             _itemTextureCache[path] = tex;
             return tex;
         }
@@ -2591,7 +2583,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         if (item == null || string.IsNullOrEmpty(item.Icon)) { _itemTextureCache[itemId] = null; return null; }
         try
         {
-            var tex = TextureUtil.LoadPremultiplied(GraphicsDevice, item.Icon);
+            var tex = TextureUtil.LoadPremultiplied(GraphicsDevice, GamePaths.Resolve(item.Icon));
             _itemTextureCache[itemId] = tex;
             return tex;
         }

@@ -4,10 +4,12 @@
     <TargetFramework>net9.0</TargetFramework>
     <RollForward>Major</RollForward>
     <PublishReadyToRun>false</PublishReadyToRun>
-    <SelfContained>true</SelfContained>
-    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <!-- SelfContained applied only during publish via command line -->
     <TieredCompilation>false</TieredCompilation>
     <Nullable>enable</Nullable>
+    <OutputPath>..\bin\$(Configuration)\</OutputPath>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <AppendRuntimeIdentifierToOutputPath>false</AppendRuntimeIdentifierToOutputPath>
   </PropertyGroup>
   <PropertyGroup>
     <ApplicationManifest>app.manifest</ApplicationManifest>
@@ -35,8 +37,8 @@
     <PackageReference Include="StbImageSharp" Version="2.30.15" />
     <PackageReference Include="TextCopy" Version="6.2.1" />
   </ItemGroup>
+  <!-- MonoGame Content (shaders, fonts) from resources/ -->
   <ItemGroup>
-    <None Include="assets\**\*" CopyToOutputDirectory="PreserveNewest" />
-    <None Include="..\data\**\*" LinkBase="data" CopyToOutputDirectory="PreserveNewest" />
+    <MonoGameContentReference Include="..\resources\Content.mgcb" />
   </ItemGroup>
 </Project>

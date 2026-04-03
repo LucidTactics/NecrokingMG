@@ -1,44 +1,72 @@
 {
   "unit_groups": [
     {
+      "id": "group_0",
+      "name": "LightInfantryZombie",
       "entries": [
         {
-          "unit": "militia_copy2",
-          "weight": 1.0
+          "unitDefID": "militia_copy2",
+          "weight": 1
         },
         {
-          "unit": "militia_copy2_copy",
-          "weight": 1.0
+          "unitDefID": "militia_copy2_copy",
+          "weight": 1
         },
         {
-          "unit": "militia_copy2_copy_copy",
-          "weight": 1.0
+          "unitDefID": "militia_copy2_copy_copy",
+          "weight": 1
         }
-      ],
-      "id": "group_0",
-      "name": "LightInfantryZombie"
+      ]
     },
     {
+      "id": "group_1",
+      "name": "TemplarZombie",
       "entries": [
         {
-          "unit": "militia_copy2_copy_copy_copy",
-          "weight": 1.0
+          "unitDefID": "militia_copy2_copy_copy_copy",
+          "weight": 1
         },
         {
-          "unit": "militia_copy2_copy_copy_copy_copy",
-          "weight": 1.0
+          "unitDefID": "militia_copy2_copy_copy_copy_copy",
+          "weight": 1
         },
         {
-          "unit": "militia_copy2_copy_copy_copy_copy_copy",
-          "weight": 1.0
+          "unitDefID": "militia_copy2_copy_copy_copy_copy_copy",
+          "weight": 1
         },
         {
-          "unit": "militia_copy2_copy_copy_copy_copy_copy_copy",
-          "weight": 1.0
+          "unitDefID": "militia_copy2_copy_copy_copy_copy_copy_copy",
+          "weight": 1
         }
-      ],
-      "id": "group_1",
-      "name": "TemplarZombie"
+      ]
+    },
+    {
+      "id": "group_182459",
+      "name": "FemaleDeerZombie",
+      "entries": [
+        {
+          "unitDefID": "ZombieFemaleDeer",
+          "weight": 1
+        },
+        {
+          "unitDefID": "ZombieFemaleDeer2",
+          "weight": 1
+        }
+      ]
+    },
+    {
+      "id": "group_182459_copy",
+      "name": "MaleDeerZombie",
+      "entries": [
+        {
+          "unitDefID": "ZombieMaleDeer",
+          "weight": 1
+        },
+        {
+          "unitDefID": "ZombieMaleDeer2",
+          "weight": 1
+        }
+      ]
     }
   ]
 }

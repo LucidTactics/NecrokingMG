@@ -583,10 +583,12 @@ public class EnvironmentSystem
         {
             if (_textures[i] != null) continue;
             string path = _defs[i].TexturePath;
-            if (string.IsNullOrEmpty(path) || !System.IO.File.Exists(path)) continue;
+            if (string.IsNullOrEmpty(path)) continue;
+            string resolved = Core.GamePaths.Resolve(path);
+            if (!System.IO.File.Exists(resolved)) continue;
             try
             {
-                using var stream = System.IO.File.OpenRead(path);
+                using var stream = System.IO.File.OpenRead(resolved);
                 _textures[i] = Necroking.Render.TextureUtil.LoadPremultiplied(device, stream);
             }
             catch { /* skip failed loads */ }
@@ -638,7 +640,8 @@ public class EnvironmentSystem
     {
         if (string.IsNullOrEmpty(path)) return null;
         if (_trapTextures.TryGetValue(path, out var cached)) return cached;
-        if (_device == null || !System.IO.File.Exists(path)) { _trapTextures[path] = null; return null; }
+        string resolved = Core.GamePaths.Resolve(path);
+        if (_device == null || !System.IO.File.Exists(resolved)) { _trapTextures[path] = null; return null; }
         try
         {
             var tex = Render.TextureUtil.LoadPremultiplied(_device, path);
@@ -658,10 +661,12 @@ public class EnvironmentSystem
         _textures[defIdx]?.Dispose();
         _textures[defIdx] = null;
         string path = _defs[defIdx].TexturePath;
-        if (string.IsNullOrEmpty(path) || !System.IO.File.Exists(path)) return;
+        if (string.IsNullOrEmpty(path)) return;
+        string resolved = Core.GamePaths.Resolve(path);
+        if (!System.IO.File.Exists(resolved)) return;
         try
         {
-            using var stream = System.IO.File.OpenRead(path);
+            using var stream = System.IO.File.OpenRead(resolved);
             _textures[defIdx] = Necroking.Render.TextureUtil.LoadPremultiplied(_device, stream);
         }
         catch { /* skip failed loads */ }

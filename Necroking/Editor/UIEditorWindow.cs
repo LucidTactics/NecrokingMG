@@ -1046,9 +1046,7 @@ public partial class UIEditorWindow : EditorBase
             _statusMsg = "Saved all tabs";
             _statusTimer = 3f;
 
-            // Dual-save to source tree so all builds stay in sync
-            foreach (var file in new[] { "nine_slices.json", "elements.json", "widgets.json" })
-                Core.GamePaths.DualSave(Path.Combine(_defsDir, file));
+            // Files saved directly to canonical location
         }
         catch (Exception ex)
         {

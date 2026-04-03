@@ -18,8 +18,9 @@ public class GameData
     public ItemRegistry Items { get; } = new();
     public PotionRegistry Potions { get; } = new();
 
-    public bool Load(string dataDir = "data")
+    public bool Load()
     {
+        string dataDir = Core.GamePaths.Resolve("data");
         bool ok = true;
         ok &= Weapons.Load(Path.Combine(dataDir, "weapons.json"));
         ok &= Armors.Load(Path.Combine(dataDir, "armor.json"));
@@ -38,8 +39,9 @@ public class GameData
         return ok;
     }
 
-    public bool Save(string dataDir = "data")
+    public bool Save()
     {
+        string dataDir = Core.GamePaths.Resolve("data");
         bool ok = true;
         ok &= Weapons.Save(Path.Combine(dataDir, "weapons.json"));
         ok &= Armors.Save(Path.Combine(dataDir, "armor.json"));
@@ -54,13 +56,6 @@ public class GameData
         ok &= Items.Save(Path.Combine(dataDir, "items.json"));
         ok &= Potions.Save(Path.Combine(dataDir, "potions.json"));
         ok &= Units.SaveWeaponPoints(Path.Combine(dataDir, "weapon_points.json"));
-
-        // Dual-save each data file to source tree via GamePaths
-        string[] dataFiles = { "weapons.json", "armor.json", "shields.json", "units.json",
-            "flipbooks.json", "buffs.json", "spells.json", "weather.json",
-            "unit_groups.json", "settings.json", "items.json", "potions.json", "weapon_points.json" };
-        foreach (var file in dataFiles)
-            Core.GamePaths.DualSave(Path.Combine(dataDir, file));
         return ok;
     }
 }

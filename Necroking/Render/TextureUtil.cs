@@ -18,7 +18,9 @@ public static class TextureUtil
     /// </summary>
     public static Texture2D LoadPremultiplied(GraphicsDevice device, string path)
     {
-        using var stream = File.OpenRead(path);
+        // Resolve relative asset paths through GamePaths
+        string resolved = Path.IsPathRooted(path) ? path : Core.GamePaths.Resolve(path);
+        using var stream = File.OpenRead(resolved);
         return LoadPremultiplied(device, stream);
     }
 

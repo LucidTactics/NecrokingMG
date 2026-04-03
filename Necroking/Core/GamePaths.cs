@@ -1,62 +1,45 @@
+using System;
 using System.IO;
 
 namespace Necroking.Core;
 
 /// <summary>
-/// Centralized path constants for data files and assets.
-/// All paths are relative to the executable directory.
+/// Centralized path resolution for data files and assets.
+/// The exe runs from bin/Publish/ or bin/Debug/. The project root
+/// (where assets/, data/, resources/ live) is two levels up.
+/// All game paths are resolved relative to Root.
 /// </summary>
 public static class GamePaths
 {
     /// <summary>
-    /// Path to the Necroking/ source project directory. Detected at startup.
-    /// Used for dual-saving: runtime edits are written here so they survive rebuilds.
-    /// Null if source tree cannot be found (e.g., deployed without source).
+    /// Absolute path to the project root directory (where assets/, data/, bin/ live).
     /// </summary>
-    public static string? SourceRoot { get; private set; }
+    public static string Root { get; private set; } = "";
 
-    /// <summary>Call once at startup to detect the source tree root.</summary>
-    public static void DetectSourceRoot()
+    /// <summary>Call once at startup to detect the project root.</summary>
+    public static void DetectRoot()
     {
-        // From bin/Publish/ → ../../Necroking/
-        // From bin/Debug/net9.0/ → ../../../Necroking/
-        string[] candidates = { "../../Necroking", "../../../Necroking" };
-        foreach (var rel in candidates)
+        // From bin/Publish/ or bin/Debug/ → ../../
+        string baseDir = AppDomain.CurrentDomain.BaseDirectory;
+        string candidate = Path.GetFullPath(Path.Combine(baseDir, "..", ".."));
+        if (Directory.Exists(Path.Combine(candidate, "data")) &&
+            Directory.Exists(Path.Combine(candidate, "assets")))
         {
-            string abs = Path.GetFullPath(rel);
-            if (File.Exists(Path.Combine(abs, "Necroking.csproj")))
-            {
-                SourceRoot = abs;
-                DebugLog.Log("startup", $"Source root detected: {SourceRoot}");
-                return;
-            }
+            Root = candidate;
         }
-        DebugLog.Log("startup", "Source root not found (deployed build)");
-    }
-
-    /// <summary>Get the source tree equivalent of a runtime-relative path, or null if no source root.</summary>
-    public static string? ToSourcePath(string runtimeRelativePath)
-    {
-        if (SourceRoot == null) return null;
-        return Path.Combine(SourceRoot, runtimeRelativePath);
-    }
-
-    /// <summary>Copy a runtime file to its source tree equivalent. Safe no-op if source root not found.</summary>
-    public static void DualSave(string runtimePath)
-    {
-        var srcPath = ToSourcePath(runtimePath);
-        if (srcPath == null || !File.Exists(runtimePath)) return;
-        try
+        else
         {
-            var dir = Path.GetDirectoryName(srcPath);
-            if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
-            File.Copy(runtimePath, srcPath, overwrite: true);
+            // Fallback: data/assets next to exe (deployed build)
+            Root = baseDir;
         }
-        catch { /* source tree sync is best-effort */ }
+        DebugLog.Log("startup", $"Project root: {Root}");
     }
 
+    /// <summary>Resolve a project-relative path to an absolute path.</summary>
+    public static string Resolve(string relativePath) => Path.Combine(Root, relativePath);
 
-    // Data files
+    // --- Data files ---
+    public const string DataDir = "data";
     public const string SettingsJson = "data/settings.json";
     public const string WeatherJson = "data/weather.json";
     public const string UnitsJson = "data/units.json";
@@ -69,19 +52,26 @@ public static class GamePaths
     public const string FlipbooksJson = "data/flipbooks.json";
     public const string SpellBarJson = "data/spellbar.json";
     public const string WeaponPointsJson = "data/weapon_points.json";
-
-    // Map files
-    public const string DefaultMapJson = "assets/maps/default.json";
     public const string EnvDefsJson = "data/env_defs.json";
 
-    // Asset directories
+    // --- Map files (now in data/maps/) ---
+    public const string DefaultMapJson = "data/maps/default.json";
+    public const string MapsDir = "data/maps";
+
+    // --- Asset directories ---
+    public const string AssetsDir = "assets";
     public const string SpritesDir = "assets/Sprites";
     public const string EnvironmentDir = "assets/Environment";
     public const string GroundDir = "assets/Environment/Ground";
     public const string RoadsDir = "assets/Environment/Roads";
-    public const string ShadersDir = "assets/shaders";
+    public const string EffectsDir = "assets/Effects";
+    public const string FontsDir = "assets/fonts";
+    public const string UIDefsDir = "assets/UI/definitions";
 
-    // Log files
+    // --- Resources ---
+    public const string ResourcesDir = "resources";
+
+    // --- Log files (relative to exe, not project root) ---
     public const string LogDir = "log";
     public const string CombatLog = "log/combat.log";
     public const string ScenarioLog = "log/scenario.log";

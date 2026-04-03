@@ -411,7 +411,8 @@ public class RuntimeWidgetRenderer
     {
         if (string.IsNullOrEmpty(texPath)) return null;
         if (_textures.TryGetValue(texPath, out var tex)) return tex;
-        if (!File.Exists(texPath)) return null;
+        string resolved = Core.GamePaths.Resolve(texPath);
+        if (!File.Exists(resolved)) return null;
         try
         {
             tex = TextureUtil.LoadPremultiplied(_device, texPath);

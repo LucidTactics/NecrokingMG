@@ -80,7 +80,7 @@ public class ShadowTestScenario : ScenarioBase
             var treeDef = new EnvironmentObjectDef
             {
                 Id = "shadow_tree", Name = "Shadow Tree",
-                TexturePath = "assets/Environment/Trees/BranchlessTree1.png",
+                TexturePath = GamePaths.Resolve("assets/Environment/Trees/BranchlessTree1.png"),
                 SpriteWorldHeight = 6f,
                 PivotX = 0.5f, PivotY = 1f,
                 Scale = 1f
@@ -92,7 +92,7 @@ public class ShadowTestScenario : ScenarioBase
             var buildingDef = new EnvironmentObjectDef
             {
                 Id = "shadow_house", Name = "Shadow House",
-                TexturePath = "assets/Environment/Buildings/House1.png",
+                TexturePath = GamePaths.Resolve("assets/Environment/Buildings/House1.png"),
                 SpriteWorldHeight = 8f,
                 PivotX = 0.5f, PivotY = 1f,
                 IsBuilding = true, Scale = 1f

@@ -194,7 +194,7 @@ public class SpellEditorWindow
         // Ctrl+S save (works from any context including buff manager)
         if (ctrl && sPressed)
         {
-            _gameData.Save("data");
+            _gameData.Save();
             _unsavedChanges = false;
             SetStatus("Saved!");
         }
@@ -277,7 +277,7 @@ public class SpellEditorWindow
         // Save button
         if (_ui.DrawButton("Save (Ctrl+S)", x + w - 210, y + 10, 160, 30, EditorBase.SuccessColor))
         {
-            _gameData.Save("data");
+            _gameData.Save();
             _unsavedChanges = false;
             SetStatus("Saved!");
         }
@@ -1264,7 +1264,7 @@ public class SpellEditorWindow
                 if (fd.Path != oldPath) MarkDirty();
                 if (_ui.DrawButton("Browse", contentX + fieldW - browseBtnW, cy, browseBtnW, 20))
                 {
-                    _fbTextureBrowser.Open("assets/Effects", fd.Path, path =>
+                    _fbTextureBrowser.Open(GamePaths.Resolve("assets/Effects"), fd.Path, path =>
                     {
                         fd.Path = path;
                         MarkDirty();

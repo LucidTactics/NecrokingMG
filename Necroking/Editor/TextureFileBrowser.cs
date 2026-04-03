@@ -352,7 +352,8 @@ public class TextureFileBrowser
     {
         if (string.IsNullOrEmpty(path) || _graphicsDevice == null) return null;
         if (_textureCache.TryGetValue(path, out var cached)) return cached;
-        if (!File.Exists(path)) return null;
+        string resolved = System.IO.Path.IsPathRooted(path) ? path : Necroking.Core.GamePaths.Resolve(path);
+        if (!File.Exists(resolved)) return null;
         try
         {
             var tex = Necroking.Render.TextureUtil.LoadPremultiplied(_graphicsDevice, path);

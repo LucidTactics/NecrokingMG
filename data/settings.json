@@ -1,91 +1,99 @@
 {
   "bloom": {
-    "bicubicUpsampling": true,
     "enabled": true,
-    "intensity": 5.480769157409668,
+    "threshold": 0.8,
+    "softKnee": 0.5,
+    "intensity": 1,
+    "scatter": 0.7,
     "iterations": 6,
-    "scatter": 0.5038461685180664,
-    "softKnee": 0.2538461685180664,
-    "threshold": 1.207692265510559
-  },
-  "general": {
-    "buildingDepositRange": 5.0,
-    "buildingPlacementRange": 20.0,
-    "buildingsDestructible": true,
-    "combatLogEnabled": true,
-    "combatLogFadeTime": 3.0,
-    "combatLogFontSize": 18,
-    "combatLogLines": 10,
-    "damageNumberColor": [
-      200,
-      80,
-      54,
-      255
-    ],
-    "damageNumberFadeTime": 4.2083330154418945,
-    "damageNumberSize": 20,
-    "damageNumberSpeed": 1.5,
-    "damageNumbersEnabled": true,
-    "editorScrollAccel": 3.9555556774139404,
-    "editorScrollSpeed": 30.0,
-    "groundTypeWarp": 1.7999999523162842,
-    "groundUVWarpAmp": 0.2964426875114441,
-    "groundUVWarpFreq": 0.035573121160268784,
-    "showObjectRadius": false,
-    "showTimeControls": true,
-    "showUnitRadius": false,
-    "wpRapidEdit": true
+    "bicubicUpsampling": true
   },
   "grass": {
-    "baseColor": [
-      77,
-      88,
-      18,
-      255
-    ],
+    "baseColor": {
+      "r": 46,
+      "g": 102,
+      "b": 20,
+      "a": 255
+    },
+    "tipColor": {
+      "r": 100,
+      "g": 166,
+      "b": 50,
+      "a": 255
+    },
+    "density": 160,
+    "height": 150,
     "bladesPerCell": 10,
-    "cellSize": 0.800000011920929,
-    "density": 160.0,
-    "fwidthSmoothing": false,
-    "height": 100.03845977783203,
-    "minBladeWidth": true,
-    "tipColor": [
-      82,
-      139,
-      40,
-      255
-    ],
-    "windSpeed": 1.0,
-    "windStrength": 2.6192307472229004
+    "cellSize": 0.8,
+    "windSpeed": 1,
+    "windStrength": 1,
+    "fwidthSmoothing": true,
+    "minBladeWidth": true
   },
-  "horde": {
-    "circleOffset": 6.0,
-    "circleRadius": 15.0,
-    "driftAmplitude": 2.78125,
-    "driftHz": 0.10000000149011612,
-    "engagementRange": 12.0,
-    "idleRadius": 3.0729165077209473,
-    "leashChance": 0.25,
-    "leashRadius": 35.0,
-    "positionLerp": 2.0,
-    "returnSpeedMult": 0.6499999761581421,
-    "rotationLerp": 0.10000000149011612,
-    "velocityDirLerp": 8.520833969116211
+  "weather": {
+    "enabled": false,
+    "activePreset": "",
+    "transitionSpeed": 1
+  },
+  "general": {
+    "showTimeControls": true,
+    "showUnitRadius": false,
+    "showObjectRadius": false,
+    "groundTypeWarp": 1.8,
+    "groundUVWarpAmp": 0.4,
+    "groundUVWarpFreq": 0.15,
+    "editorScrollSpeed": 30,
+    "editorScrollAccel": 6,
+    "combatLogEnabled": true,
+    "combatLogLines": 10,
+    "combatLogFadeTime": 3,
+    "combatLogFontSize": 12,
+    "wpRapidEdit": false,
+    "buildingsDestructible": true,
+    "buildingDepositRange": 5,
+    "buildingPlacementRange": 20,
+    "damageNumbersEnabled": true,
+    "damageNumberColor": {
+      "r": 200,
+      "g": 80,
+      "b": 80,
+      "a": 255
+    },
+    "damageNumberSize": 16,
+    "damageNumberFadeTime": 0.75,
+    "damageNumberSpeed": 1.5
   },
   "shadow": {
     "enabled": true,
-    "lengthScale": 0.0,
-    "opacity": 0.1770833283662796,
-    "squash": 0.30000001192092896,
-    "sunAngle": 225.0,
+    "sunAngle": 225,
+    "lengthScale": 0.6,
+    "opacity": 0.35,
+    "squash": 0.3,
     "unitShadowMode": 1
   },
-  "startingInventory": [
-    { "itemId": "potion_paralysis", "quantity": 3 }
-  ],
-  "weather": {
-    "activePreset": "dreary_rain",
-    "enabled": true,
-    "transitionSpeed": 1.0
-  }
+  "horde": {
+    "circleOffset": 6,
+    "circleRadius": 12,
+    "positionLerp": 3,
+    "rotationLerp": 1.5,
+    "driftHz": 0.2,
+    "driftAmplitude": 0.7,
+    "idleRadius": 2,
+    "engagementRange": 10,
+    "leashRadius": 25,
+    "leashChance": 0.25,
+    "returnSpeedMult": 0.65,
+    "velocityDirLerp": 6
+  },
+  "combat": {
+    "attackCooldown": 3,
+    "postAttackLockout": 1,
+    "facingThreshold": 60,
+    "turnSpeed": 360,
+    "meleeRange": 0.8,
+    "accelHalfTime": 1.2,
+    "accel80Time": 3,
+    "accelFullTime": 6
+  },
+  "startingInventory": []
 }

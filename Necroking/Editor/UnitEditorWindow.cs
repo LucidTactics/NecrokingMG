@@ -163,7 +163,7 @@ public class UnitEditorWindow
     private void RefreshAtlases()
     {
         if (_graphicsDevice == null) return;
-        AtlasDefs.ScanSpritesDirectory("assets/Sprites");
+        AtlasDefs.ScanSpritesDirectory();
         int oldCount = _atlases.Length;
         if (AtlasDefs.TotalCount > oldCount)
         {
@@ -172,7 +172,7 @@ public class UnitEditorWindow
             {
                 _atlases[i] = new SpriteAtlas();
                 string name = AtlasDefs.Names[i];
-                _atlases[i].Load(_graphicsDevice, $"assets/Sprites/{name}.png", $"assets/Sprites/{name}.spritemeta");
+                _atlases[i].Load(_graphicsDevice, GamePaths.Resolve($"assets/Sprites/{name}.png"), GamePaths.Resolve($"assets/Sprites/{name}.spritemeta"));
             }
             DebugLog.Log("editor", $"Refreshed atlases: {AtlasDefs.TotalCount} total ({AtlasDefs.TotalCount - oldCount} new)");
         }
@@ -2225,8 +2225,7 @@ public class UnitEditorWindow
         // Save button
         if (_ui.DrawButton("Save", popX + popW - 80, bottomY, 70, btnH, EditorBase.SuccessColor))
         {
-            bool ok = _gameData.UnitGroups.Save("data/unit_groups.json");
-            Core.GamePaths.DualSave("data/unit_groups.json");
+            bool ok = _gameData.UnitGroups.Save(Core.GamePaths.Resolve("data/unit_groups.json"));
             SetStatus(ok ? "Saved unit_groups.json" : "SAVE FAILED!");
         }
 
@@ -2801,8 +2800,7 @@ public class UnitEditorWindow
                 // Save
                 if (_ui.DrawButton("Save", popX + popW - 80, bottomY, 70, btnH, EditorBase.SuccessColor))
                 {
-                    bool ok = _gameData.Weapons.Save("data/weapons.json");
-                    Core.GamePaths.DualSave("data/weapons.json");
+                    bool ok = _gameData.Weapons.Save(Core.GamePaths.Resolve("data/weapons.json"));
                     SetStatus(ok ? "Saved weapons.json" : "SAVE FAILED!");
                 }
                 break;
@@ -2865,8 +2863,7 @@ public class UnitEditorWindow
 
                 if (_ui.DrawButton("Save", popX + popW - 80, bottomY, 70, btnH, EditorBase.SuccessColor))
                 {
-                    bool ok = _gameData.Armors.Save("data/armor.json");
-                    Core.GamePaths.DualSave("data/armor.json");
+                    bool ok = _gameData.Armors.Save(Core.GamePaths.Resolve("data/armor.json"));
                     SetStatus(ok ? "Saved armor.json" : "SAVE FAILED!");
                 }
                 break;
@@ -2929,8 +2926,7 @@ public class UnitEditorWindow
 
                 if (_ui.DrawButton("Save", popX + popW - 80, bottomY, 70, btnH, EditorBase.SuccessColor))
                 {
-                    bool ok = _gameData.Shields.Save("data/shields.json");
-                    Core.GamePaths.DualSave("data/shields.json");
+                    bool ok = _gameData.Shields.Save(Core.GamePaths.Resolve("data/shields.json"));
                     SetStatus(ok ? "Saved shields.json" : "SAVE FAILED!");
                 }
                 break;
@@ -2955,7 +2951,7 @@ public class UnitEditorWindow
 
     private void SaveAll()
     {
-        bool ok = _gameData.Save("data");
+        bool ok = _gameData.Save();
         _unsavedChanges = !ok;
         SetStatus(ok ? "Saved all game data" : "SAVE FAILED!");
     }

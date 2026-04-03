@@ -65,10 +65,12 @@ public class SpriteAtlas
     /// <summary>Full load: reads PNG + meta from disk, creates GPU texture. Single-threaded.</summary>
     public bool Load(GraphicsDevice device, string pngPath, string metaPath)
     {
-        if (!File.Exists(pngPath) || !File.Exists(metaPath)) return false;
+        string resolvedPng = Path.IsPathRooted(pngPath) ? pngPath : Core.GamePaths.Resolve(pngPath);
+        string resolvedMeta = Path.IsPathRooted(metaPath) ? metaPath : Core.GamePaths.Resolve(metaPath);
+        if (!File.Exists(resolvedPng) || !File.Exists(resolvedMeta)) return false;
 
         // Load texture
-        using var stream = File.OpenRead(pngPath);
+        using var stream = File.OpenRead(resolvedPng);
         _texture = TextureUtil.LoadPremultiplied(device, stream);
         if (_texture == null) return false;
 
@@ -94,7 +96,8 @@ public class SpriteAtlas
     /// <summary>Parse metadata only (thread-safe, no GPU). Call from background thread.</summary>
     public bool ParseMetaOnly(string metaPath)
     {
-        return ParseMeta(metaPath);
+        string resolved = Path.IsPathRooted(metaPath) ? metaPath : Core.GamePaths.Resolve(metaPath);
+        return ParseMeta(resolved);
     }
 
     /// <summary>Create GPU texture from pre-read PNG bytes. Call on main thread after ParseMetaOnly.</summary>

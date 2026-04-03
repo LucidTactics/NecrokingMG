@@ -18,9 +18,10 @@ public class Flipbook
 
     public bool Load(GraphicsDevice device, string path, int cols, int rows, float fps = 30f)
     {
-        if (!File.Exists(path)) return false;
+        string resolved = Path.IsPathRooted(path) ? path : Core.GamePaths.Resolve(path);
+        if (!File.Exists(resolved)) return false;
 
-        using var stream = File.OpenRead(path);
+        using var stream = File.OpenRead(resolved);
         Texture = TextureUtil.LoadPremultiplied(device, stream);
         if (Texture == null) return false;
 

@@ -961,7 +961,7 @@ public class EnvObjectEditorWindow
         }
         if (_ui.DrawButton("Browse", fx + fieldW - envBrowseBtnW, curY, envBrowseBtnW, 20))
         {
-            _textureBrowser.Open("assets/Environment", def.TexturePath, path =>
+            _textureBrowser.Open(GamePaths.Resolve("assets/Environment"), def.TexturePath, path =>
             {
                 def.TexturePath = path;
                 _env.ReloadDefTexture(_selectedDef);
@@ -1535,14 +1535,13 @@ public class EnvObjectEditorWindow
         // Save env defs to canonical location: data/env_defs.json
         try
         {
-            string path = "data/env_defs.json";
+            string path = GamePaths.Resolve("data/env_defs.json");
             Data.MapData.SaveEnvDefs(path, _env);
 
             _statusMessage = $"Saved {_env.DefCount} defs to {path}";
             _statusTimer = 3f;
 
-            // Dual-save to source tree
-            Core.GamePaths.DualSave(path);
+            // Saved directly to canonical location
         }
         catch (Exception ex)
         {

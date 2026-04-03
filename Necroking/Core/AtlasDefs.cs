@@ -27,8 +27,9 @@ public static class AtlasDefs
     /// Scan the sprites directory for .spritemeta files and rebuild the atlas list.
     /// New atlases are appended after the default ones.
     /// </summary>
-    public static void ScanSpritesDirectory(string spritesDir = "assets/Sprites")
+    public static void ScanSpritesDirectory(string? spritesDir = null)
     {
+        spritesDir ??= GamePaths.Resolve(GamePaths.SpritesDir);
         var names = new List<string>(DefaultNames);
 
         if (Directory.Exists(spritesDir))

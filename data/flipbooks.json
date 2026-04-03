@@ -1,28 +1,28 @@
 {
   "flipbooks": [
     {
-      "cols": 4,
-      "defaultFPS": 30.0,
       "id": "fire_loop",
       "name": "Fire Loop",
       "path": "assets/Effects/FX_TX_Fire_Fireloop_01_4x4.png",
-      "rows": 4
+      "cols": 4,
+      "rows": 4,
+      "defaultFPS": 30
     },
     {
-      "cols": 8,
-      "defaultFPS": 60.0,
       "id": "cloud03",
       "name": "Cloud 03",
       "path": "assets/Effects/Cloud03_8x8.png",
-      "rows": 8
+      "cols": 8,
+      "rows": 8,
+      "defaultFPS": 60
     },
     {
-      "cols": 1,
-      "defaultFPS": 1.0,
       "id": "radial_glow",
       "name": "Radial Glow",
       "path": "assets/Effects/radial_gradient_circle_256.png",
-      "rows": 1
+      "cols": 1,
+      "rows": 1,
+      "defaultFPS": 1
     }
   ]
 }

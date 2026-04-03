@@ -1170,7 +1170,13 @@
           ]
         }
       },
-      "animTimings": {}
+      "animTimings": {},
+      "archetype": "",
+      "detectionRange": 0,
+      "detectionBreakRange": 0,
+      "alertDuration": 2,
+      "alertEscalateRange": 0,
+      "groupAlertRadius": 0
     },
     {
       "id": "skeleton",
@@ -1490,7 +1496,7 @@
       "archetype": "DeerHerd",
       "detectionRange": 12,
       "detectionBreakRange": 18,
-      "alertDuration": 2.0,
+      "alertDuration": 2,
       "alertEscalateRange": 5,
       "groupAlertRadius": 15
     },
@@ -1707,11 +1713,11 @@
         }
       },
       "archetype": "WolfPack",
-      "detectionRange": 10.0,
-      "detectionBreakRange": 15.0,
-      "alertDuration": 1.0,
-      "alertEscalateRange": 6.0,
-      "groupAlertRadius": 12.0
+      "detectionRange": 10,
+      "detectionBreakRange": 15,
+      "alertDuration": 1,
+      "alertEscalateRange": 6,
+      "groupAlertRadius": 12
     },
     {
       "id": "ZombieWolf",
@@ -2405,7 +2411,7 @@
     },
     {
       "id": "militia_copy",
-      "name": "Light Infantry Sword & Shield",
+      "name": "Light Infantry Sword \u0026 Shield",
       "type": "Dynamic",
       "faction": "Human",
       "ai": "AttackClosest",
@@ -2422,7 +2428,7 @@
       },
       "sprite": {
         "atlas": "Navarre_Units",
-        "name": "NavarreLightInfantry_Sword&Shield"
+        "name": "NavarreLightInfantry_Sword\u0026Shield"
       },
       "stats": {
         "maxHP": 10,
@@ -2812,7 +2818,7 @@
       "archetype": "CasterUnit",
       "detectionRange": 15,
       "detectionBreakRange": 22,
-      "alertDuration": 1.0,
+      "alertDuration": 1,
       "alertEscalateRange": 8,
       "groupAlertRadius": 0
     },
@@ -2835,7 +2841,7 @@
       },
       "sprite": {
         "atlas": "Navarre_Units",
-        "name": "NavarreTemplar_Sword&Shield"
+        "name": "NavarreTemplar_Sword\u0026Shield"
       },
       "stats": {
         "maxHP": 10,
@@ -2991,7 +2997,7 @@
       "archetype": "ArcherUnit",
       "detectionRange": 18,
       "detectionBreakRange": 25,
-      "alertDuration": 1.0,
+      "alertDuration": 1,
       "alertEscalateRange": 10,
       "groupAlertRadius": 0
     },

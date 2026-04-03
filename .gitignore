@@ -1,5 +1,4 @@
 ## .NET / MonoGame
-bin/
 obj/
 *.user
 *.suo
@@ -8,16 +7,17 @@ obj/
 
 ExampleNecroking/
 
-## Build outputs
-Necroking/bin/
-Necroking.Editor/bin/
-Necroking.Tests/bin/
+## Build outputs (bin/ at root level)
+bin/
 Necroking/obj/
+Necroking.Editor/bin/
 Necroking.Editor/obj/
+Necroking.Tests/bin/
 Necroking.Tests/obj/
 
-## Publish output
-Necroking/bin/Publish/
+## MGCB intermediates
+resources/bin/
+resources/obj/
 
 ## IDE
 .vs/
@@ -29,10 +29,7 @@ Thumbs.db
 .DS_Store
 desktop.ini
 .tmp.driveupload/
-
-## MGCB intermediates
-Necroking/Content/bin/
-Necroking/Content/obj/
+.tmp.drivedownload/
 
 ## NuGet
 *.nupkg
@@ -41,13 +38,12 @@ Necroking/Content/obj/
 .claude/
 
 ## Large assets (copy from C++ project manually)
-Necroking/assets/Sprites/*.png
-log/
+assets/Sprites/*.png
 
-## Map data (large, changes frequently — sync via dual-save, not git)
-Necroking/assets/maps/default.json
-Necroking/assets/maps/default_roads.json
-Necroking/assets/maps/default_triggers.json
+## Map data (large, changes frequently)
+data/maps/default.json
+data/maps/default_roads.json
+data/maps/default_triggers.json
 
 ## Temp files
 move_stderr.txt
