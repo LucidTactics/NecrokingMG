@@ -303,6 +303,13 @@ public class Game1 : Microsoft.Xna.Framework.Game
         _effectManager.Clear();
         _pendingProjectiles.Clear();
 
+        // Clear world systems for clean reload (prevents doubling on second play)
+        _envSystem.OnCollisionsDirty = null;
+        _envSystem.ClearObjects();
+        _envSystem.ClearDefs();
+        _groundSystem.ClearTypes();
+        _roadSystem.Init();
+
         // Load flipbooks
         foreach (var fbId in _gameData.Flipbooks.GetIDs())
         {
@@ -329,9 +336,6 @@ public class Game1 : Microsoft.Xna.Framework.Game
             DebugLog.Log("startup", "animations.json found");
 
         // weapon_points.json is now loaded by GameData.Load() into each UnitDef.WeaponPoints
-
-        // Init world systems
-        _roadSystem.Init();
 
         // Load map
         var placedUnits = new List<Data.PlacedUnit>();

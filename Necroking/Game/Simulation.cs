@@ -105,6 +105,7 @@ public class Simulation
         _gameTime = 0f;
         _frameNumber = 0;
         _nextCorpseID = 0;
+        _necromancerIdx = -1;
         _necroState = new NecromancerState();
         _harassmentDecayTimer = CombatTickInterval;
 
