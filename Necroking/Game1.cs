@@ -2782,6 +2782,10 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 targetState = AnimState.Attack1;
             else if (_sim.Units.HitReacting[i])
                 targetState = AnimState.BlockReact;
+            else if (_sim.Units.Archetype[i] == AI.ArchetypeRegistry.DeerHerd
+                && _sim.Units.Routine[i] == 6 /* RoutineFeeding */
+                && _sim.Units.Subroutine[i] == 1 /* FeedEating */)
+                targetState = AnimState.Feeding;
             else if (_sim.Units.BlockReacting[i])
                 targetState = AnimState.BlockReact;
             else if (_sim.Units.PostAttackTimer[i] > 0f)

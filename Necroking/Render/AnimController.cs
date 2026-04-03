@@ -11,6 +11,7 @@ public enum AnimState : byte
     Death, Fall, Knockdown, Standup, Stunned, Panic,
     JumpTakeoff, JumpLoop, JumpLand, JumpAttackSetup, JumpAttackHit,
     Ranged1,
+    Feeding,
     Count
 }
 
@@ -491,6 +492,7 @@ public class AnimController
         AnimState.JumpTakeoff => "JumpTakeoff", AnimState.JumpLoop => "JumpLoop",
         AnimState.JumpLand => "JumpLand", AnimState.JumpAttackSetup => "JumpAttackSetup",
         AnimState.JumpAttackHit => "JumpAttackHit",
+        AnimState.Feeding => "Feed",
         _ => "Idle"
     };
 
@@ -498,7 +500,7 @@ public class AnimController
     {
         AnimState.Idle or AnimState.Walk or AnimState.Jog or AnimState.Run
             or AnimState.Block or AnimState.Stunned or AnimState.JumpLoop
-            or AnimState.Panic => AnimPlayMode.Loop,
+            or AnimState.Panic or AnimState.Feeding => AnimPlayMode.Loop,
         AnimState.Death or AnimState.Knockdown or AnimState.Fall => AnimPlayMode.PlayOnceHold,
         _ => AnimPlayMode.PlayOnceTransition
     };

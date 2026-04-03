@@ -22,6 +22,7 @@ public ref struct AIContext
     public Spatial.Quadtree? Quadtree;
     public GameSystems.HordeSystem? Horde;
     public GameSystems.TriggerSystem? TriggerSystem;
+    public World.EnvironmentSystem? EnvSystem;
 
     // Game clock
     public float GameTime;          // total elapsed seconds

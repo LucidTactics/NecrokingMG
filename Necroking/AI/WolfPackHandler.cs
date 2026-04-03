@@ -45,7 +45,7 @@ public class WolfPackHandler : IArchetypeHandler
 
     public void OnSpawn(ref AIContext ctx)
     {
-        // Store spawn position as MoveTarget (used as roam center)
+        ctx.Units.SpawnPosition[ctx.UnitIndex] = ctx.MyPos;
         ctx.Units.MoveTarget[ctx.UnitIndex] = ctx.MyPos;
         ctx.Routine = ctx.IsNight ? RoutineSleeping : RoutineIdleRoaming;
         ctx.Subroutine = 0;

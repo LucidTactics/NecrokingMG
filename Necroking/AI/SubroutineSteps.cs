@@ -96,9 +96,25 @@ public static class SubroutineSteps
             if (ctx.SubroutineTimer <= 0f)
             {
                 ctx.Subroutine = 0;
-                float angle = ((ctx.FrameNumber * 7 + i * 13) % 628) / 100f;
-                float dist = roamRadius * (0.2f + ((ctx.FrameNumber * 3 + i * 17) % 80) / 100f);
-                ctx.Units.MoveTarget[i] = center + new Vec2(MathF.Cos(angle) * dist, MathF.Sin(angle) * dist);
+                // Pick a random walkable point within roam radius (try up to 5 times)
+                var grid = ctx.Pathfinder?.Grid;
+                for (int attempt = 0; attempt < 5; attempt++)
+                {
+                    int seed = ctx.FrameNumber * 7 + i * 13 + attempt * 31;
+                    float angle = (seed % 628) / 100f;
+                    float dist = roamRadius * (0.2f + (((seed * 3) & 0x7F) % 80) / 100f);
+                    var candidate = center + new Vec2(MathF.Cos(angle) * dist, MathF.Sin(angle) * dist);
+
+                    if (grid != null)
+                    {
+                        int tx = (int)MathF.Floor(candidate.X);
+                        int ty = (int)MathF.Floor(candidate.Y);
+                        if (grid.GetCost(tx, ty) == 255) continue; // impassable, try again
+                    }
+
+                    ctx.Units.MoveTarget[i] = candidate;
+                    break;
+                }
             }
         }
     }

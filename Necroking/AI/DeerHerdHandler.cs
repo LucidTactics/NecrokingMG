@@ -4,27 +4,26 @@ using Necroking.Core;
 namespace Necroking.AI;
 
 /// <summary>
-/// Deer herd AI archetype: prey animal with alert/flee behavior.
+/// Deer herd AI archetype: prey animal with alert/flee/feeding behavior.
 ///
 /// Behavior varies by sex (determined by UnitDef — FemaleDeer vs MaleDeer):
 ///   Female: always flees from threats, never fights
-///   Male: fights back if cornered or if threat is alone, otherwise flees
+///   Male: fights back when hit. Stands facing attacker between attacks, charges when ready.
 ///
 /// Routines:
 ///   0 = IdleRoaming  — walk to a point at 30% speed, idle for a while, repeat within 10u of spawn
 ///   1 = Sleeping     — nighttime: stand still
-///   2 = Alert        — freeze, face threat. If threat approaches, escalate
-///   3 = Fleeing      — run away from threat. Propagates to nearby herd members
+///   2 = Alert        — freeze and watch threat; recheck every second
+///   3 = Fleeing      — run away from threat
 ///   4 = Calming      — threat gone, gradually return to idle behavior
-///   5 = FightBack    — male only: charge and attack the threat
+///   5 = FightBack    — male only: charge when ready, stand and face between attacks
+///   6 = Feeding      — walk to bush, play feed animation, idle, repeat
 ///
-/// Alert behavior:
-///   - On detection: freeze in place, face threat (Alert routine)
-///   - After alert duration or if threat gets within escalate range:
-///     - Female: always flee
-///     - Male: fight if threat is alone, flee if outnumbered
-///   - Flee propagation: when one deer flees, nearby herd members also flee
-///   - After fleeing far enough (break range), enter Calming then return to Idle
+/// Alert behavior (reworked):
+///   - On detection: freeze, face threat (Alert routine, Watch subroutine)
+///   - Every 1 second: if ANY hostile within 90% of alert radius → flee (or fight if male)
+///   - If no hostile within 90%: stay frozen, keep watching
+///   - If alert drops to Unaware: enter Calming then back to Idle
 /// </summary>
 public class DeerHerdHandler : IArchetypeHandler
 {
@@ -34,14 +33,30 @@ public class DeerHerdHandler : IArchetypeHandler
     private const byte RoutineFleeing = 3;
     private const byte RoutineCalming = 4;
     private const byte RoutineFightBack = 5;
+    private const byte RoutineFeeding = 6;
 
-    // Fighting subroutines (for males)
-    private const byte FightChase = 0;
-    private const byte FightAttack = 1;
+    // Alert subroutines
+    private const byte AlertWatch = 0;
+    private const byte AlertRun = 1;
+
+    // Fighting subroutines (male only)
+    private const byte FightStance = 0;  // stand facing attacker, wait for cooldown
+    private const byte FightCharge = 1;  // charge in and strike
+
+    // Feeding subroutines
+    private const byte FeedWalkToBush = 0;
+    private const byte FeedEating = 1;
+    private const byte FeedIdleAfter = 2;
 
     private const float RoamRadius = 10f;
     private const float FleeDistance = 20f;
     private const float CalmDuration = 3f;
+    private const float AlertRecheckInterval = 1f;
+    private const float AlertThresholdFraction = 0.9f;
+    private const float FeedDuration = 4f;
+    private const float FeedIdleDuration = 2f;
+    private const float BushSearchRadius = 20f;
+    private const float FeedingChance = 0.3f; // 30% chance to feed instead of roam
 
     public void OnSpawn(ref AIContext ctx)
     {
@@ -63,6 +78,7 @@ public class DeerHerdHandler : IArchetypeHandler
             case RoutineFleeing:     UpdateFleeing(ref ctx); break;
             case RoutineCalming:     UpdateCalming(ref ctx); break;
             case RoutineFightBack:   UpdateFightBack(ref ctx); break;
+            case RoutineFeeding:     UpdateFeeding(ref ctx); break;
         }
     }
 
@@ -71,35 +87,17 @@ public class DeerHerdHandler : IArchetypeHandler
         byte alert = ctx.AlertState;
         bool isMale = IsMale(ref ctx);
 
-        // Alert detected → enter Alert routine (from any non-combat routine)
-        if (alert >= (byte)UnitAlertState.Alert && ctx.Routine <= RoutineSleeping)
+        // Alert detected → enter Alert routine (from idle/sleeping/feeding)
+        if (alert >= (byte)UnitAlertState.Alert &&
+            (ctx.Routine <= RoutineSleeping || ctx.Routine == RoutineFeeding))
         {
             ctx.Routine = RoutineAlert;
-            ctx.Subroutine = 0;
-            ctx.SubroutineTimer = 0f;
+            ctx.Subroutine = AlertWatch;
+            ctx.SubroutineTimer = 0f; // will freeze for 1s before first check
             return;
         }
 
-        // Aggressive alert → escalate from Alert
-        if (alert == (byte)UnitAlertState.Aggressive && ctx.Routine == RoutineAlert)
-        {
-            if (isMale && ShouldFightBack(ref ctx))
-            {
-                ctx.Routine = RoutineFightBack;
-                ctx.Subroutine = FightChase;
-                ctx.SubroutineTimer = 0f;
-                ctx.Units.Target[ctx.UnitIndex] = CombatTarget.Unit(ctx.AlertTarget);
-            }
-            else
-            {
-                ctx.Routine = RoutineFleeing;
-                ctx.Subroutine = 0;
-                ctx.SubroutineTimer = 0f;
-            }
-            return;
-        }
-
-        // Threat gone while alert/fighting → calm down
+        // Threat gone while alert/fleeing → calm down
         if (alert == (byte)UnitAlertState.Unaware)
         {
             if (ctx.Routine == RoutineAlert || ctx.Routine == RoutineFleeing)
@@ -120,7 +118,7 @@ public class DeerHerdHandler : IArchetypeHandler
             }
         }
 
-        // Time of day for non-alert routines
+        // Time of day for idle routines
         if (ctx.Routine <= RoutineSleeping)
         {
             byte target = ctx.IsNight ? RoutineSleeping : RoutineIdleRoaming;
@@ -132,11 +130,11 @@ public class DeerHerdHandler : IArchetypeHandler
             }
         }
 
+        // Fight target died or left
         if (ctx.Routine == RoutineFightBack)
-        {   
+        {
             if (!SubroutineSteps.IsTargetAlive(ref ctx))
             {
-                // Target dead — return to time-of-day routine
                 ctx.Units.Target[ctx.UnitIndex] = CombatTarget.None;
                 ctx.Units.EngagedTarget[ctx.UnitIndex] = CombatTarget.None;
                 ctx.AlertState = (byte)UnitAlertState.Unaware;
@@ -144,8 +142,6 @@ public class DeerHerdHandler : IArchetypeHandler
                 SwitchToTimeOfDayRoutine(ref ctx);
                 return;
             }
-
-            // Alert dropped (enemy left break range) — disengage
             if (ctx.AlertState == (byte)UnitAlertState.Unaware)
             {
                 ctx.Units.Target[ctx.UnitIndex] = CombatTarget.None;
@@ -155,6 +151,7 @@ public class DeerHerdHandler : IArchetypeHandler
             }
         }
     }
+
     private static void SwitchToTimeOfDayRoutine(ref AIContext ctx)
     {
         byte target = ctx.IsNight ? RoutineSleeping : RoutineIdleRoaming;
@@ -164,6 +161,29 @@ public class DeerHerdHandler : IArchetypeHandler
             ctx.Subroutine = 0;
             ctx.SubroutineTimer = 0f;
         }
+    }
+
+    private static bool IsMale(ref AIContext ctx)
+    {
+        string defId = ctx.Units.UnitDefID[ctx.UnitIndex] ?? "";
+        return defId.Contains("Male", StringComparison.OrdinalIgnoreCase)
+            && !defId.Contains("Female", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>Check if any hostile is within a fraction of the detection range.</summary>
+    private static bool AnyHostileWithinThreshold(ref AIContext ctx)
+    {
+        float detRange = ctx.Units.DetectionRange[ctx.UnitIndex];
+        float threshold = detRange * AlertThresholdFraction;
+        float threshSq = threshold * threshold;
+        var myFaction = ctx.MyFaction;
+        for (int j = 0; j < ctx.Units.Count; j++)
+        {
+            if (!ctx.Units.Alive[j] || ctx.Units.Faction[j] == myFaction) continue;
+            if ((ctx.Units.Position[j] - ctx.MyPos).LengthSq() < threshSq)
+                return true;
+        }
+        return false;
     }
 
     /// <summary>Male fights if threat is alone (no other enemies nearby).</summary>
@@ -180,24 +200,96 @@ public class DeerHerdHandler : IArchetypeHandler
         return threatCount <= 1;
     }
 
-    private static bool IsMale(ref AIContext ctx)
-    {
-        string defId = ctx.Units.UnitDefID[ctx.UnitIndex] ?? "";
-        return defId.Contains("Male", StringComparison.OrdinalIgnoreCase)
-            && !defId.Contains("Female", StringComparison.OrdinalIgnoreCase);
-    }
-
+    // ═══════════════════════════════════════
+    //  Routine: Idle & Roaming (with 30% feeding chance)
     // ═══════════════════════════════════════
 
     private static void UpdateIdleRoaming(ref AIContext ctx)
     {
+        byte prevSub = ctx.Subroutine;
         SubroutineSteps.IdleRoam(ref ctx, RoamRadius);
+
+        // When IdleRoam just transitioned from idle (1) to walking (0),
+        // 30% chance to feed at a bush instead
+        if (prevSub == 1 && ctx.Subroutine == 0)
+        {
+            int roll = (ctx.FrameNumber + ctx.UnitIndex * 7) % 100;
+            if (roll < (int)(FeedingChance * 100))
+                TryStartFeeding(ref ctx);
+        }
     }
 
-    private static void UpdateAlert(ref AIContext ctx)
+    // ═══════════════════════════════════════
+    //  Routine: Alert (Watch + escalation)
+    // ═══════════════════════════════════════
+
+    private void UpdateAlert(ref AIContext ctx)
     {
+        bool isMale = IsMale(ref ctx);
+
+        // Face the threat
         SubroutineSteps.AlertStance(ref ctx);
+
+        ctx.SubroutineTimer += ctx.Dt;
+
+        // Recheck every 1 second
+        if (ctx.SubroutineTimer >= AlertRecheckInterval)
+        {
+            ctx.SubroutineTimer = 0f;
+
+            if (AnyHostileWithinThreshold(ref ctx))
+            {
+                // Threat is close — escalate
+                if (isMale && ShouldFightBack(ref ctx))
+                {
+                    ctx.Routine = RoutineFightBack;
+                    ctx.Subroutine = FightStance;
+                    ctx.SubroutineTimer = 0f;
+                    ctx.Units.Target[ctx.UnitIndex] = CombatTarget.Unit(ctx.AlertTarget);
+                    return;
+                }
+                else
+                {
+                    ctx.Routine = RoutineFleeing;
+                    ctx.Subroutine = 0;
+                    ctx.SubroutineTimer = 0f;
+                    // Propagate flee to nearby herd
+                    PropagateFleeToHerd(ref ctx);
+                    return;
+                }
+            }
+            // else: no hostile close enough, keep watching
+        }
     }
+
+    private static void PropagateFleeToHerd(ref AIContext ctx)
+    {
+        float herdRadius = ctx.Units.GroupAlertRadius[ctx.UnitIndex];
+        if (herdRadius <= 0f) herdRadius = 15f;
+        float herdRadiusSq = herdRadius * herdRadius;
+
+        for (int j = 0; j < ctx.Units.Count; j++)
+        {
+            if (j == ctx.UnitIndex || !ctx.Units.Alive[j]) continue;
+            if (ctx.Units.Faction[j] != ctx.MyFaction) continue;
+            if (ctx.Units.Archetype[j] != ArchetypeRegistry.DeerHerd) continue;
+            if ((ctx.Units.Position[j] - ctx.MyPos).LengthSq() > herdRadiusSq) continue;
+
+            // Only escalate deer that aren't already fleeing/fighting
+            byte r = ctx.Units.Routine[j];
+            if (r == RoutineFleeing || r == RoutineFightBack) continue;
+
+            ctx.Units.Routine[j] = RoutineFleeing;
+            ctx.Units.Subroutine[j] = 0;
+            ctx.Units.SubroutineTimer[j] = 0f;
+            ctx.Units.AlertTarget[j] = ctx.AlertTarget;
+            ctx.Units.AlertState[j] = (byte)UnitAlertState.Aggressive;
+        }
+    }
+
+    // ═══════════════════════════════════════
+    //  Routine: Fleeing
+    // ═══════════════════════════════════════
 
     private static void UpdateFleeing(ref AIContext ctx)
     {
@@ -210,20 +302,21 @@ public class DeerHerdHandler : IArchetypeHandler
             if (dist > 0.01f) awayDir *= 1f / dist;
             else awayDir = new Vec2(1, 0);
 
-            // Pathfind to a point far away from threat
             Vec2 fleeDest = ctx.MyPos + awayDir * FleeDistance;
             SubroutineSteps.MoveToward(ref ctx, fleeDest, ctx.MySpeed);
         }
         else
         {
-            // Threat gone — will be caught by EvaluateRoutine next frame
             ctx.Units.PreferredVel[ctx.UnitIndex] = Vec2.Zero;
         }
     }
 
+    // ═══════════════════════════════════════
+    //  Routine: Calming
+    // ═══════════════════════════════════════
+
     private static void UpdateCalming(ref AIContext ctx)
     {
-        // Slow down gradually, then return to idle
         ctx.Units.PreferredVel[ctx.UnitIndex] = Vec2.Zero;
         ctx.SubroutineTimer -= ctx.Dt;
         if (ctx.SubroutineTimer <= 0f)
@@ -234,6 +327,10 @@ public class DeerHerdHandler : IArchetypeHandler
         }
     }
 
+    // ═══════════════════════════════════════
+    //  Routine: FightBack (male only — stance + charge)
+    // ═══════════════════════════════════════
+
     private static void UpdateFightBack(ref AIContext ctx)
     {
         if (!SubroutineSteps.IsTargetAlive(ref ctx))
@@ -243,28 +340,209 @@ public class DeerHerdHandler : IArchetypeHandler
             return;
         }
 
-        ctx.SubroutineTimer += ctx.Dt;
+        int targetIdx = SubroutineSteps.ResolveTarget(ref ctx);
 
-        if (ctx.Subroutine == FightChase)
+        switch (ctx.Subroutine)
         {
-            SubroutineSteps.MoveToTarget(ref ctx);
-            int targetIdx = SubroutineSteps.ResolveTarget(ref ctx);
-            if (targetIdx >= 0)
+            case FightStance:
             {
-                float range = SubroutineSteps.GetMeleeRange(ref ctx, targetIdx);
-                if ((ctx.Units.Position[targetIdx] - ctx.MyPos).Length() <= range)
+                // Stand still facing attacker, wait for attack cooldown
+                if (targetIdx >= 0)
                 {
-                    ctx.Subroutine = FightAttack;
+                    // Face the target but don't move
+                    var dir = ctx.Units.Position[targetIdx] - ctx.MyPos;
+                    if (dir.LengthSq() > 0.01f)
+                    {
+                        float angle = MathF.Atan2(dir.Y, dir.X) * (180f / MathF.PI);
+                        ctx.Units.FacingAngle[ctx.UnitIndex] = angle;
+                    }
+                }
+                ctx.Units.PreferredVel[ctx.UnitIndex] = Vec2.Zero;
+
+                // When attack is ready, charge
+                if (ctx.Units.AttackCooldown[ctx.UnitIndex] <= 0f &&
+                    ctx.Units.PostAttackTimer[ctx.UnitIndex] <= 0f)
+                {
+                    ctx.Subroutine = FightCharge;
                     ctx.SubroutineTimer = 0f;
                 }
+                break;
+            }
+
+            case FightCharge:
+            {
+                // Charge toward target
+                if (targetIdx >= 0)
+                {
+                    float range = SubroutineSteps.GetMeleeRange(ref ctx, targetIdx);
+                    float dist = (ctx.Units.Position[targetIdx] - ctx.MyPos).Length();
+
+                    if (dist <= range)
+                    {
+                        // In range — attack and go back to stance
+                        SubroutineSteps.AttackTarget(ref ctx);
+
+                        // Once attack fires (cooldown starts), return to stance
+                        if (ctx.Units.AttackCooldown[ctx.UnitIndex] > 0f)
+                        {
+                            ctx.Subroutine = FightStance;
+                            ctx.SubroutineTimer = 0f;
+                            ctx.Units.EngagedTarget[ctx.UnitIndex] = CombatTarget.None;
+                        }
+                    }
+                    else
+                    {
+                        // Still closing distance
+                        SubroutineSteps.MoveToward(ref ctx, ctx.Units.Position[targetIdx], ctx.MySpeed);
+                    }
+                }
+                break;
             }
         }
-        else // FightAttack
+    }
+
+    // ═══════════════════════════════════════
+    //  Routine: Feeding (walk to bush, eat, idle, repeat)
+    // ═══════════════════════════════════════
+
+    /// <summary>Try to find a nearby bush and start feeding. Returns true if started.</summary>
+    private static bool TryStartFeeding(ref AIContext ctx)
+    {
+        Vec2 bushPos;
+        if (!FindNearbyBush(ref ctx, out bushPos))
+            return false;
+
+        ctx.Routine = RoutineFeeding;
+        ctx.Subroutine = FeedWalkToBush;
+        ctx.SubroutineTimer = 0f;
+        ctx.Units.MoveTarget[ctx.UnitIndex] = bushPos;
+        return true;
+    }
+
+    private static void UpdateFeeding(ref AIContext ctx)
+    {
+        switch (ctx.Subroutine)
         {
-            SubroutineSteps.AttackTarget(ref ctx);
-            // Male deer doesn't disengage — keeps fighting until threat dies or leaves
+            case FeedWalkToBush:
+            {
+                Vec2 target = ctx.Units.MoveTarget[ctx.UnitIndex];
+                float dist = (ctx.MyPos - target).Length();
+                if (dist > 1.5f)
+                {
+                    SubroutineSteps.MoveToward(ref ctx, target, ctx.MySpeed * 0.3f);
+                }
+                else
+                {
+                    // Arrived at bush — start eating
+                    ctx.Subroutine = FeedEating;
+                    ctx.SubroutineTimer = FeedDuration;
+                    ctx.Units.PreferredVel[ctx.UnitIndex] = Vec2.Zero;
+                }
+                break;
+            }
+
+            case FeedEating:
+            {
+                // Stand still facing the bush, playing feed animation
+                ctx.Units.PreferredVel[ctx.UnitIndex] = Vec2.Zero;
+                // Face toward the bush target
+                Vec2 toBush = ctx.Units.MoveTarget[ctx.UnitIndex] - ctx.MyPos;
+                if (toBush.LengthSq() > 0.01f)
+                    ctx.Units.FacingAngle[ctx.UnitIndex] = MathF.Atan2(toBush.Y, toBush.X) * (180f / MathF.PI);
+                ctx.SubroutineTimer -= ctx.Dt;
+                if (ctx.SubroutineTimer <= 0f)
+                {
+                    ctx.Subroutine = FeedIdleAfter;
+                    ctx.SubroutineTimer = FeedIdleDuration;
+                }
+                break;
+            }
+
+            case FeedIdleAfter:
+            {
+                ctx.Units.PreferredVel[ctx.UnitIndex] = Vec2.Zero;
+                ctx.SubroutineTimer -= ctx.Dt;
+                if (ctx.SubroutineTimer <= 0f)
+                {
+                    // Try to find another bush nearby, otherwise return to roaming
+                    Vec2 nextBush;
+                    if (FindNearbyBush(ref ctx, out nextBush, minDist: 3f))
+                    {
+                        ctx.Subroutine = FeedWalkToBush;
+                        ctx.SubroutineTimer = 0f;
+                        ctx.Units.MoveTarget[ctx.UnitIndex] = nextBush;
+                    }
+                    else
+                    {
+                        ctx.Routine = RoutineIdleRoaming;
+                        ctx.Subroutine = 0;
+                        ctx.SubroutineTimer = 0f;
+                    }
+                }
+                break;
+            }
         }
     }
+
+    /// <summary>Find a nearby bush within BushSearchRadius of spawn position.
+    /// Returns a pathable spot adjacent to the bush, not the bush center.</summary>
+    private static bool FindNearbyBush(ref AIContext ctx, out Vec2 feedSpot, float minDist = 0f)
+    {
+        feedSpot = Vec2.Zero;
+        var envSystem = ctx.EnvSystem;
+        if (envSystem == null) return false;
+
+        Vec2 spawnPos = ctx.Units.SpawnPosition[ctx.UnitIndex];
+        float searchRadiusSq = BushSearchRadius * BushSearchRadius;
+        float minDistSq = minDist * minDist;
+
+        float bestDist = float.MaxValue;
+        Vec2 bestBushPos = Vec2.Zero;
+        float bestBushRadius = 0f;
+        bool found = false;
+
+        // Use a semi-random offset to avoid all deer targeting the same bush
+        int offset = (ctx.UnitIndex * 37 + ctx.FrameNumber / 60) % Math.Max(envSystem.ObjectCount, 1);
+
+        for (int iter = 0; iter < envSystem.ObjectCount; iter++)
+        {
+            int i = (iter + offset) % envSystem.ObjectCount;
+            var obj = envSystem.GetObject(i);
+            var def = envSystem.Defs[obj.DefIndex];
+
+            if (def.Category != "Bush") continue;
+
+            Vec2 objPos = new Vec2(obj.X, obj.Y);
+
+            // Must be near the deer's spawn area
+            if ((objPos - spawnPos).LengthSq() > searchRadiusSq) continue;
+
+            // Must be at least minDist from current position (to find a different bush)
+            float distSq = (objPos - ctx.MyPos).LengthSq();
+            if (distSq < minDistSq) continue;
+
+            if (distSq < bestDist)
+            {
+                bestDist = distSq;
+                bestBushPos = objPos;
+                bestBushRadius = def.CollisionRadius * obj.Scale;
+                found = true;
+            }
+        }
+
+        if (!found) return false;
+
+        // Pick a spot just outside the bush collision radius, from a semi-random angle
+        // Use unit index + frame for variety so different deer approach from different sides
+        float angle = ((ctx.UnitIndex * 53 + ctx.FrameNumber / 30) % 628) / 100f;
+        float standoff = bestBushRadius + 0.5f; // just outside collision + small buffer
+        feedSpot = bestBushPos + new Vec2(MathF.Cos(angle) * standoff, MathF.Sin(angle) * standoff);
+        return true;
+    }
+
+    // ═══════════════════════════════════════
+    //  Debug names
+    // ═══════════════════════════════════════
 
     public string GetRoutineName(byte routine) => routine switch
     {
@@ -274,15 +552,29 @@ public class DeerHerdHandler : IArchetypeHandler
         RoutineFleeing => "Fleeing",
         RoutineCalming => "Calming",
         RoutineFightBack => "FightBack",
+        RoutineFeeding => "Feeding",
         _ => $"Unknown({routine})"
     };
 
     public string GetSubroutineName(byte routine, byte subroutine) => routine switch
     {
+        RoutineAlert => subroutine switch
+        {
+            AlertWatch => "Watch",
+            AlertRun => "Run",
+            _ => $"Unknown({subroutine})"
+        },
         RoutineFightBack => subroutine switch
         {
-            FightChase => "FightChase",
-            FightAttack => "FightAttack",
+            FightStance => "Stance",
+            FightCharge => "Charge",
+            _ => $"Unknown({subroutine})"
+        },
+        RoutineFeeding => subroutine switch
+        {
+            FeedWalkToBush => "WalkToBush",
+            FeedEating => "Eating",
+            FeedIdleAfter => "IdleAfter",
             _ => $"Unknown({subroutine})"
         },
         _ => subroutine == 0 ? "Default" : $"Unknown({subroutine})"
