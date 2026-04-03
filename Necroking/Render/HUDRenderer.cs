@@ -101,8 +101,6 @@ public class HUDRenderer
         int necroIdx = FindNecromancer(sim);
 
         DrawStatusBars(necroIdx, sim);
-        DrawInventoryHint(inventory, inventoryVisible);
-        DrawUnitCounts(sim);
 
         int primaryY = screenH - PrimaryBarBottomOffset;
         DrawSpellBar(screenW, primaryY, PrimarySlotW, PrimarySlotH, PrimaryBarOffsetX,
@@ -122,7 +120,6 @@ public class HUDRenderer
             DrawPotionDropdown(screenW, secondaryY, potionSlots, potionDropdownSlot, gameData);
 
         DrawBuildingTooltip(hoveredObjectIdx, envSystem, sim);
-        DrawNecroMaterials(sim);
         DrawControlsHint(screenH);
         DrawTimeControls(screenW, screenH, timeScale, gameData);
         DrawCombatLog(screenW, screenH, sim, gameData);
@@ -149,23 +146,6 @@ public class HUDRenderer
         Text(_font, $"Mana: {(int)sim.NecroState.Mana}/{(int)sim.NecroState.MaxMana}", new Vector2(BarX + 5, ManaBarY + 1), Color.White);
     }
 
-    private void DrawInventoryHint(Inventory inventory, bool inventoryVisible)
-    {
-        if (inventory.UsedSlots > 0 && !inventoryVisible)
-            Text(_font, $"[I] Inventory ({inventory.UsedSlots} items)", new Vector2(15, 72), InventoryHintColor);
-    }
-
-    private void DrawUnitCounts(Simulation sim)
-    {
-        int undead = 0, human = 0;
-        for (int i = 0; i < sim.Units.Count; i++)
-        {
-            if (!sim.Units.Alive[i]) continue;
-            if (sim.Units.Faction[i] == Faction.Undead) undead++;
-            else human++;
-        }
-        Text(_font, $"Enemies: {human} | Undead: {undead}", new Vector2(10, 70), Color.White);
-    }
 
     // ═══════════════════════════════════════
     //  Spell Bars (unified for primary + secondary)
@@ -283,19 +263,6 @@ public class HUDRenderer
         _batch.Draw(_pixel, new Rectangle(ttX - 4, ttY - 4, ttW + 8, 2), TooltipBorder);
         for (int i = 0; i < lines.Length; i++)
             Text(_smallFont, lines[i], new Vector2(ttX, ttY + i * 16), TooltipText);
-    }
-
-    private void DrawNecroMaterials(Simulation sim)
-    {
-        int y = 94;
-        foreach (var (matID, count) in sim.NecroState.Inventory)
-        {
-            if (count > 0)
-            {
-                Text(_font, $"{matID}: {count}", new Vector2(15, y), MaterialColor);
-                y += 16;
-            }
-        }
     }
 
     private void DrawControlsHint(int screenH)

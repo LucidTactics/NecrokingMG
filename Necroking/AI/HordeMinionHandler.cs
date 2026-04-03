@@ -25,6 +25,13 @@ public class HordeMinionHandler : IArchetypeHandler
     private const byte RoutineReturning = 3;
     private const byte RoutineCommanded = 4;
 
+    // Following subroutines
+    private const byte FollowMoving = 0;  // actively moving toward slot
+    private const byte FollowIdle = 1;    // arrived at slot, waiting for slot to drift >1.5 before moving again
+
+    private const float FollowDeadzone = 1.5f;  // don't issue new move until slot is this far away
+    private const float FollowArriveThreshold = 0.5f; // close enough to count as "arrived"
+
     private const float CommandTimeout = 45f;
     private const float CommandClearRadius = 10f;
 
@@ -99,18 +106,37 @@ public class HordeMinionHandler : IArchetypeHandler
             {
                 ctx.Units.Target[ctx.UnitIndex] = CombatTarget.Unit(ctx.Units.Id[enemy]);
                 ctx.Routine = RoutineChasing;
+                ctx.Subroutine = 0;
                 return;
             }
         }
 
-        // Follow horde slot position
+        // Follow horde slot position with deadzone to prevent stuttering
         if (ctx.Horde != null && ctx.Horde.GetTargetPosition(ctx.MyId, out var slotPos))
         {
             float dist = (ctx.MyPos - slotPos).Length();
-            if (dist > 0.5f)
-                SubroutineSteps.MoveToward(ref ctx, slotPos, ctx.MySpeed);
-            else
+
+            if (ctx.Subroutine == FollowIdle)
+            {
+                // Idle at slot — only start moving again if slot drifted far enough
                 ctx.Units.PreferredVel[ctx.UnitIndex] = Vec2.Zero;
+                if (dist > FollowDeadzone)
+                    ctx.Subroutine = FollowMoving;
+            }
+            else
+            {
+                // Actively moving toward slot
+                if (dist > FollowArriveThreshold)
+                {
+                    SubroutineSteps.MoveToward(ref ctx, slotPos, ctx.MySpeed);
+                }
+                else
+                {
+                    // Arrived
+                    ctx.Units.PreferredVel[ctx.UnitIndex] = Vec2.Zero;
+                    ctx.Subroutine = FollowIdle;
+                }
+            }
         }
         else
             ctx.Units.PreferredVel[ctx.UnitIndex] = Vec2.Zero;
@@ -203,12 +229,14 @@ public class HordeMinionHandler : IArchetypeHandler
             else
             {
                 ctx.Routine = RoutineFollowing;
+                ctx.Subroutine = FollowIdle;
                 ctx.Units.PreferredVel[ctx.UnitIndex] = Vec2.Zero;
             }
         }
         else
         {
             ctx.Routine = RoutineFollowing;
+            ctx.Subroutine = FollowMoving;
             ctx.Units.PreferredVel[ctx.UnitIndex] = Vec2.Zero;
         }
     }

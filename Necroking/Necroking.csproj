@@ -4,6 +4,8 @@
     <TargetFramework>net9.0</TargetFramework>
     <RollForward>Major</RollForward>
     <PublishReadyToRun>false</PublishReadyToRun>
+    <SelfContained>true</SelfContained>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <TieredCompilation>false</TieredCompilation>
     <Nullable>enable</Nullable>
   </PropertyGroup>
