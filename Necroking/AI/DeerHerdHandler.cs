@@ -131,6 +131,39 @@ public class DeerHerdHandler : IArchetypeHandler
                 ctx.SubroutineTimer = 0f;
             }
         }
+
+        if (ctx.Routine == RoutineFightBack)
+        {   
+            if (!SubroutineSteps.IsTargetAlive(ref ctx))
+            {
+                // Target dead — return to time-of-day routine
+                ctx.Units.Target[ctx.UnitIndex] = CombatTarget.None;
+                ctx.Units.EngagedTarget[ctx.UnitIndex] = CombatTarget.None;
+                ctx.AlertState = (byte)UnitAlertState.Unaware;
+                ctx.AlertTarget = GameConstants.InvalidUnit;
+                SwitchToTimeOfDayRoutine(ref ctx);
+                return;
+            }
+
+            // Alert dropped (enemy left break range) — disengage
+            if (ctx.AlertState == (byte)UnitAlertState.Unaware)
+            {
+                ctx.Units.Target[ctx.UnitIndex] = CombatTarget.None;
+                ctx.Units.EngagedTarget[ctx.UnitIndex] = CombatTarget.None;
+                SwitchToTimeOfDayRoutine(ref ctx);
+                return;
+            }
+        }
+    }
+    private static void SwitchToTimeOfDayRoutine(ref AIContext ctx)
+    {
+        byte target = ctx.IsNight ? RoutineSleeping : RoutineIdleRoaming;
+        if (ctx.Routine != target)
+        {
+            ctx.Routine = target;
+            ctx.Subroutine = 0;
+            ctx.SubroutineTimer = 0f;
+        }
     }
 
     /// <summary>Male fights if threat is alone (no other enemies nearby).</summary>
