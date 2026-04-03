@@ -2226,6 +2226,7 @@ public class UnitEditorWindow
         if (_ui.DrawButton("Save", popX + popW - 80, bottomY, 70, btnH, EditorBase.SuccessColor))
         {
             bool ok = _gameData.UnitGroups.Save("data/unit_groups.json");
+            Core.GamePaths.DualSave("data/unit_groups.json");
             SetStatus(ok ? "Saved unit_groups.json" : "SAVE FAILED!");
         }
 
@@ -2801,6 +2802,7 @@ public class UnitEditorWindow
                 if (_ui.DrawButton("Save", popX + popW - 80, bottomY, 70, btnH, EditorBase.SuccessColor))
                 {
                     bool ok = _gameData.Weapons.Save("data/weapons.json");
+                    Core.GamePaths.DualSave("data/weapons.json");
                     SetStatus(ok ? "Saved weapons.json" : "SAVE FAILED!");
                 }
                 break;
@@ -2864,6 +2866,7 @@ public class UnitEditorWindow
                 if (_ui.DrawButton("Save", popX + popW - 80, bottomY, 70, btnH, EditorBase.SuccessColor))
                 {
                     bool ok = _gameData.Armors.Save("data/armor.json");
+                    Core.GamePaths.DualSave("data/armor.json");
                     SetStatus(ok ? "Saved armor.json" : "SAVE FAILED!");
                 }
                 break;
@@ -2927,6 +2930,7 @@ public class UnitEditorWindow
                 if (_ui.DrawButton("Save", popX + popW - 80, bottomY, 70, btnH, EditorBase.SuccessColor))
                 {
                     bool ok = _gameData.Shields.Save("data/shields.json");
+                    Core.GamePaths.DualSave("data/shields.json");
                     SetStatus(ok ? "Saved shields.json" : "SAVE FAILED!");
                 }
                 break;

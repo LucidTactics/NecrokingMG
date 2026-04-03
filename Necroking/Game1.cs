@@ -316,14 +316,17 @@ public class Game1 : Microsoft.Xna.Framework.Game
         _roadSystem.Init();
 
         // Load map
+        var placedUnits = new List<Data.PlacedUnit>();
         string mapPath = GamePaths.DefaultMapJson;
         if (File.Exists(mapPath))
         {
             DebugLog.Log("startup", "Loading map from file...");
-            MapData.Load(mapPath, _groundSystem, _envSystem, _wallSystem);
+            // Load env defs from canonical location (before map, so placed objects can resolve IDs)
+            MapData.LoadEnvDefs("data/env_defs.json", _envSystem);
+            MapData.Load(mapPath, _groundSystem, _envSystem, _wallSystem, placedUnits);
             MapData.LoadTriggers("assets/maps/default_triggers.json", _triggerSystem);
             MapData.LoadRoads("assets/maps/default_roads.json", _roadSystem);
-            LogTiming($"Map loaded: ground={_groundSystem.WorldW}x{_groundSystem.WorldH}, objects={_envSystem.ObjectCount}");
+            LogTiming($"Map loaded: ground={_groundSystem.WorldW}x{_groundSystem.WorldH}, objects={_envSystem.ObjectCount}, defs={_envSystem.DefCount}");
 
             // Load grass map
             try
@@ -382,15 +385,47 @@ public class Game1 : Microsoft.Xna.Framework.Game
         _envSystem.BakeCollisions(_sim.Grid);
         LogTiming($"Baked collisions: {_envSystem.ObjectCount} objects, grid {worldW}x{worldH}");
 
-        // Spawn necromancer near map center
+        // Spawn placed units from map data
         float center = worldW * 0.5f;
-        SpawnUnit("necromancer", new Vec2(center, center));
+        foreach (var pu in placedUnits)
+        {
+            SpawnUnit(pu.UnitDefId, new Vec2(pu.X, pu.Y));
+            int lastIdx = _sim.Units.Count - 1;
+            if (!string.IsNullOrEmpty(pu.Faction))
+            {
+                _sim.UnitsMut.Faction[lastIdx] = pu.Faction switch
+                {
+                    "Human" => Faction.Human,
+                    "Animal" => Faction.Animal,
+                    _ => Faction.Undead
+                };
+            }
+            if (!string.IsNullOrEmpty(pu.PatrolRouteId))
+            {
+                _sim.UnitsMut.AI[lastIdx] = AIBehavior.Patrol;
+                for (int pri = 0; pri < _triggerSystem.PatrolRoutes.Count; pri++)
+                {
+                    if (_triggerSystem.PatrolRoutes[pri].Id == pu.PatrolRouteId)
+                    { _sim.UnitsMut.PatrolRouteIdx[lastIdx] = pri; break; }
+                }
+            }
+        }
+        if (placedUnits.Count > 0)
+            LogTiming($"Spawned {placedUnits.Count} placed units");
 
-        // Spawn 1 militia nearby
-        SpawnUnit("militia", new Vec2(center + 5, center + 3));
+        // Always ensure necromancer exists
+        if (_sim.NecromancerIndex < 0)
+        {
+            SpawnUnit("necromancer", new Vec2(center, center));
+            DebugLog.Log("startup", "No necromancer in placed units, spawned default at map center");
+        }
 
-        _camera.Position = new Vec2(center, center);
+        _camera.Position = _sim.NecromancerIndex >= 0
+            ? _sim.Units.Position[_sim.NecromancerIndex] : new Vec2(center, center);
         _camera.Zoom = 24f;
+
+        // Pass placed units to map editor so markers are visible
+        _mapEditor.SetPlacedUnits(placedUnits);
 
         // Load spell bar from data file
         // Load both spell bars from single JSON read
@@ -435,6 +470,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
             editorBase: _editorUi);
         _mapEditor.SetItemRegistry(_gameData.Items);
         _mapEditor.SetSpellRegistry(_gameData.Spells);
+        _mapEditor.SetGameData(_gameData);
 
         // Feed grass data to map editor
         if (_grassMap.Length > 0)
@@ -2593,6 +2629,9 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // --- Roads ---
         DrawRoads();
 
+        // --- Ground-layer objects (traps — render above dirt, below grass) ---
+        DrawGroundLayerObjects();
+
         // --- Walls ---
         DrawWalls();
 
@@ -3080,6 +3119,19 @@ public class Game1 : Microsoft.Xna.Framework.Game
         }
     }
 
+    /// <summary>Draw ground-layer objects (traps) — above dirt, below grass/units.</summary>
+    private void DrawGroundLayerObjects()
+    {
+        for (int i = 0; i < _envSystem.ObjectCount; i++)
+        {
+            if (!_envSystem.IsObjectVisible(i)) continue;
+            var obj = _envSystem.Objects[i];
+            var def = _envSystem.Defs[obj.DefIndex];
+            if (def.Category != "Traps") continue;
+            DrawSingleEnvObject(i);
+        }
+    }
+
     // Sortable item for merged unit+object depth sorting
     private readonly List<DepthItem> _depthItems = new(256); // reused each frame
 
@@ -3109,11 +3161,13 @@ public class Game1 : Microsoft.Xna.Framework.Game
             if (_sim.Units.Alive[i])
                 items.Add(new DepthItem { Y = _sim.Units.Position[i].Y, IsUnit = true, Index = i });
 
-        // Add environment objects (with view culling, skip collected foragables)
+        // Add environment objects (with view culling, skip collected foragables, skip ground-layer objects)
         for (int i = 0; i < _envSystem.ObjectCount; i++)
         {
             if (!_envSystem.IsObjectVisible(i)) continue;
             var obj = _envSystem.Objects[i];
+            var def = _envSystem.Defs[obj.DefIndex];
+            if (def.Category == "Traps") continue; // drawn in ground layer pass
             if (obj.X < viewLeft || obj.X > viewRight || obj.Y < viewTop || obj.Y > viewBottom)
                 continue;
             if (_envSystem.GetDefTexture(obj.DefIndex) == null) continue;
@@ -3214,17 +3268,23 @@ public class Game1 : Microsoft.Xna.Framework.Game
     {
         var obj = _envSystem.Objects[i];
         var def = _envSystem.Defs[obj.DefIndex];
-        var tex = _envSystem.GetDefTexture(obj.DefIndex);
+        var tex = _envSystem.GetObjectTexture(i, out float alpha);
         if (tex == null) return;
+
+        // Always compute scale from the main def texture so trap sprites render at same size
+        var mainTex = _envSystem.GetDefTexture(obj.DefIndex);
+        float refHeight = mainTex != null ? mainTex.Height : tex.Height;
 
         float worldH = def.SpriteWorldHeight * obj.Scale * def.Scale;
         float pixelH = worldH * _camera.Zoom;
-        float scale = pixelH / tex.Height;
+        float scale = pixelH / refHeight;
 
         var screenPos = _renderer.WorldToScreen(new Vec2(obj.X, obj.Y), 0f, _camera);
         var origin = new Vector2(def.PivotX * tex.Width, def.PivotY * tex.Height);
 
-        _spriteBatch.Draw(tex, screenPos, null, Color.White, 0f, origin, scale, SpriteEffects.None, 0f);
+        // Apply alpha for trap fade-out (premultiplied)
+        Color tint = alpha >= 1f ? Color.White : new Color(alpha, alpha, alpha, alpha);
+        _spriteBatch.Draw(tex, screenPos, null, tint, 0f, origin, scale, SpriteEffects.None, 0f);
     }
 
     private void DrawSpriteFrame(SpriteAtlas atlas, SpriteFrame frame, Vector2 screenPos,

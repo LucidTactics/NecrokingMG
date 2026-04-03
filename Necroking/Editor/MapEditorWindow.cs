@@ -15,7 +15,7 @@ using Necroking.GameSystems;
 
 namespace Necroking.Editor;
 
-public enum MapEditorTab { Ground, Grass, Objects, Walls, Roads, Regions, Triggers }
+public enum MapEditorTab { Ground, Grass, Objects, Walls, Roads, Regions, Triggers, Units }
 
 // ============================================================================
 //  Grass type definition (editor-side, no dedicated GrassSystem yet)
@@ -45,6 +45,7 @@ public class MapEditorWindow
     private EnvironmentSystem _envSystem = null!;
     private TriggerSystem _triggerSystem = null!;
     private Data.Registries.ItemRegistry? _itemRegistry;
+    private Data.GameData? _gameData;
     private WallSystem _wallSystem = null!;
     private RoadSystem _roadSystem = null!;
     private TileGrid _tileGrid = null!;
@@ -71,7 +72,7 @@ public class MapEditorWindow
     public int BrushRadius = 2;
 
     // Per-tab scroll offsets
-    private readonly float[] _tabScroll = new float[7];
+    private readonly float[] _tabScroll = new float[8];
 
     // Ground tab
     public int SelectedGroundType;
@@ -157,6 +158,17 @@ public class MapEditorWindow
     // M28: Object batch undo accumulators
     private List<(ushort defIdx, float x, float y, float scale, float seed, int objIdx)>? _batchPlacedObjects;
     private List<(ushort defIdx, float x, float y, float scale, float seed)>? _batchRemovedObjects;
+
+    // Units tab
+    private readonly List<PlacedUnit> _placedUnits = new();
+    private int _selectedUnitDefIdx = -1;
+    private int _unitFactionFilter; // 0=All, 1=Undead, 2=Human, 3=Animal
+    private float _unitListScroll;
+    private string _unitPatrolRoute = "";
+    // Cached from Draw for hit-testing in Update
+    private int _unitListDrawY;
+    private int _unitListItemH = 22;
+    private int _unitListVisibleCount;
 
     // Save/Load
     private string _mapFilename = "default";
@@ -315,6 +327,26 @@ public class MapEditorWindow
         }
     }
 
+    private class UndoUnitPlace : UndoAction
+    {
+        public List<PlacedUnit> Units = null!;
+        public override void Undo()
+        {
+            if (Units.Count > 0) Units.RemoveAt(Units.Count - 1);
+        }
+    }
+
+    private class UndoUnitRemove : UndoAction
+    {
+        public List<PlacedUnit> Units = null!;
+        public PlacedUnit Removed;
+        public int RemovedIndex;
+        public override void Undo()
+        {
+            Units.Insert(RemovedIndex, Removed);
+        }
+    }
+
     private void PushUndo(UndoAction action)
     {
         _undoStack.Add(action);
@@ -332,7 +364,7 @@ public class MapEditorWindow
 
     // Tab names and layout
     private static readonly string[] TabRow1 = { "Ground", "Grass", "Objects", "Walls" };
-    private static readonly string[] TabRow2 = { "Roads", "Regions", "Triggers" };
+    private static readonly string[] TabRow2 = { "Roads", "Regions", "Triggers", "Units" };
 
     // ========================================================================
     //  Init
@@ -443,6 +475,17 @@ public class MapEditorWindow
         _envObjectEditor?.SetSpellRegistry(spells);
     }
 
+    public void SetGameData(Data.GameData? data) => _gameData = data;
+
+    public void SetPlacedUnits(List<PlacedUnit> units)
+    {
+        _placedUnits.Clear();
+        _placedUnits.AddRange(units);
+    }
+
+    /// <summary>Get the placed units list for loading into Game1.</summary>
+    public List<PlacedUnit> PlacedUnits => _placedUnits;
+
     public bool IsEnvObjectEditorOpen => _envObjectEditor != null && _envObjectEditor.IsOpen;
 
     public void Update(int screenW, int screenH)
@@ -470,11 +513,15 @@ public class MapEditorWindow
             return;
         }
 
-        bool leftClick = mouse.LeftButton == ButtonState.Pressed && _prevMouse.LeftButton == ButtonState.Released;
-        bool leftDown = mouse.LeftButton == ButtonState.Pressed;
+        // Block all clicks when any popup/overlay is open (texture browser, color picker, dropdown)
+        bool popupBlocking = _textureBrowser.IsOpen
+            || (_eb != null && (_eb.IsColorPickerOpen || _eb.IsDropdownOpen));
+
+        bool leftClick = !popupBlocking && mouse.LeftButton == ButtonState.Pressed && _prevMouse.LeftButton == ButtonState.Released;
+        bool leftDown = !popupBlocking && mouse.LeftButton == ButtonState.Pressed;
         bool leftUp = mouse.LeftButton == ButtonState.Released && _prevMouse.LeftButton == ButtonState.Pressed;
-        bool rightClick = mouse.RightButton == ButtonState.Pressed && _prevMouse.RightButton == ButtonState.Released;
-        bool rightDown = mouse.RightButton == ButtonState.Pressed;
+        bool rightClick = !popupBlocking && mouse.RightButton == ButtonState.Pressed && _prevMouse.RightButton == ButtonState.Released;
+        bool rightDown = !popupBlocking && mouse.RightButton == ButtonState.Pressed;
         bool rightUp = mouse.RightButton == ButtonState.Released && _prevMouse.RightButton == ButtonState.Pressed;
 
         int panelX = screenW - PanelWidth - 10;
@@ -493,8 +540,8 @@ public class MapEditorWindow
 
         if (!textEditing)
         {
-            // --- Tab switching via keyboard (1-7) ---
-            for (int i = 0; i < 7; i++)
+            // --- Tab switching via keyboard (1-8) ---
+            for (int i = 0; i < 8; i++)
             {
                 Keys key = Keys.D1 + i;
                 if (kb.IsKeyDown(key) && _prevKb.IsKeyUp(key))
@@ -508,7 +555,7 @@ public class MapEditorWindow
             int tabY1 = panelY;
             int tabY2 = panelY + TabRowHeight;
             int tabW1 = PanelWidth / 4;
-            int tabW2 = PanelWidth / 3;
+            int tabW2 = PanelWidth / 4; // Row 2 now has 4 tabs too
 
             if (mouse.Y >= tabY1 && mouse.Y < tabY1 + TabRowHeight)
             {
@@ -520,7 +567,7 @@ public class MapEditorWindow
             {
                 int relX = mouse.X - panelX;
                 int idx = relX / tabW2;
-                if (idx >= 0 && idx < 3) ActiveTab = (MapEditorTab)(idx + 4);
+                if (idx >= 0 && idx < 4) ActiveTab = (MapEditorTab)(idx + 4);
             }
         }
 
@@ -620,6 +667,9 @@ public class MapEditorWindow
             case MapEditorTab.Triggers:
                 UpdateTriggersTab(mouse, kb, leftClick, overPanel, panelX, panelY, screenW, screenH);
                 break;
+            case MapEditorTab.Units:
+                UpdateUnitsTab(mouse, kb, leftClick, overPanel, panelX, panelY, screenW, screenH);
+                break;
         }
 
         // Update texture file browser input
@@ -677,7 +727,13 @@ public class MapEditorWindow
             case MapEditorTab.Triggers:
                 DrawTriggersTab(panelX, contentY, contentH);
                 break;
+            case MapEditorTab.Units:
+                DrawUnitsTab(panelX, contentY, contentH, screenW, screenH);
+                break;
         }
+
+        // Always draw placed unit markers (visible on all tabs)
+        DrawPlacedUnitMarkers(screenW, screenH);
 
         // Bottom bar: map filename, Save/Load buttons, undo info, status message
         int bottomH = 90; // height of the bottom section
@@ -793,10 +849,10 @@ public class MapEditorWindow
             DrawTextCentered(TabRow1[i], rect, TextColor);
         }
 
-        // Row 2: Roads, Regions, Triggers
-        int tabW2 = PanelWidth / 3;
+        // Row 2: Roads, Regions, Triggers, Units
+        int tabW2 = PanelWidth / 4;
         int row2Y = panelY + TabRowHeight;
-        for (int i = 0; i < 3; i++)
+        for (int i = 0; i < 4; i++)
         {
             var tab = (MapEditorTab)(i + 4);
             bool active = ActiveTab == tab;
@@ -3618,6 +3674,198 @@ public class MapEditorWindow
     }
 
     // ====================================================================
+    //  UNITS TAB
+    // ====================================================================
+
+    private void UpdateUnitsTab(MouseState mouse, KeyboardState kb, bool leftClick,
+        bool overPanel, int panelX, int panelY, int screenW, int screenH)
+    {
+        if (_gameData == null) return;
+
+        // Click on panel to select unit def (uses cached layout from Draw)
+        if (leftClick && overPanel && _unitListDrawY > 0)
+        {
+            var unitIds = GetFilteredUnitIds();
+            int relY = mouse.Y - _unitListDrawY;
+            if (relY >= 0 && relY < _unitListVisibleCount * _unitListItemH)
+            {
+                int clickedVisIdx = relY / _unitListItemH;
+                int scrolledIdx = clickedVisIdx + (int)(_unitListScroll / _unitListItemH);
+                if (scrolledIdx >= 0 && scrolledIdx < unitIds.Count)
+                    _selectedUnitDefIdx = scrolledIdx;
+            }
+        }
+
+        // Click on world to place selected unit
+        if (leftClick && !overPanel && _selectedUnitDefIdx >= 0)
+        {
+            var unitIds = GetFilteredUnitIds();
+            if (_selectedUnitDefIdx < unitIds.Count)
+            {
+                Vec2 worldPos = _camera.ScreenToWorld(new Vector2(mouse.X, mouse.Y), screenW, screenH);
+                var unitDef = _gameData.Units.Get(unitIds[_selectedUnitDefIdx]);
+                _placedUnits.Add(new PlacedUnit
+                {
+                    UnitDefId = unitIds[_selectedUnitDefIdx],
+                    X = worldPos.X,
+                    Y = worldPos.Y,
+                    Faction = unitDef?.Faction ?? "Undead",
+                    PatrolRouteId = _unitPatrolRoute,
+                });
+                PushUndo(new UndoUnitPlace { Units = _placedUnits });
+            }
+        }
+
+        // Right-click to delete nearest placed unit
+        bool rightClick = mouse.RightButton == ButtonState.Pressed && _prevMouse.RightButton == ButtonState.Released;
+        if (rightClick && !overPanel && _placedUnits.Count > 0)
+        {
+            Vec2 worldPos = _camera.ScreenToWorld(new Vector2(mouse.X, mouse.Y), screenW, screenH);
+            float bestDist = 4f * 4f; // generous click radius
+            int bestIdx = -1;
+            for (int i = 0; i < _placedUnits.Count; i++)
+            {
+                float dx = _placedUnits[i].X - worldPos.X, dy = _placedUnits[i].Y - worldPos.Y;
+                float d = dx * dx + dy * dy;
+                if (d < bestDist) { bestDist = d; bestIdx = i; }
+            }
+            if (bestIdx >= 0)
+            {
+                PushUndo(new UndoUnitRemove { Units = _placedUnits, Removed = _placedUnits[bestIdx], RemovedIndex = bestIdx });
+                _placedUnits.RemoveAt(bestIdx);
+            }
+        }
+    }
+
+    private void DrawUnitsTab(int panelX, int contentY, int contentH, int screenW, int screenH)
+    {
+        if (_gameData == null || _eb == null) return;
+
+        int x = panelX + Margin;
+        int w = PanelWidth - Margin * 2;
+        int curY = contentY + 4;
+
+        // Faction filter
+        string[] factionLabels = { "All", "Undead", "Human", "Animal" };
+        string curFaction = factionLabels[_unitFactionFilter];
+        string newFaction = _eb.DrawCombo("unit_faction", "Faction", curFaction, factionLabels, x, curY, w);
+        for (int fi = 0; fi < factionLabels.Length; fi++)
+            if (factionLabels[fi] == newFaction) _unitFactionFilter = fi;
+        curY += 24;
+
+        // Patrol route selector
+        var routes = _triggerSystem.PatrolRoutes;
+        if (routes.Count > 0)
+        {
+            var routeNames = new string[routes.Count + 1];
+            routeNames[0] = "(none)";
+            for (int ri = 0; ri < routes.Count; ri++)
+                routeNames[ri + 1] = string.IsNullOrEmpty(routes[ri].Name) ? routes[ri].Id : routes[ri].Name;
+            string curRoute = string.IsNullOrEmpty(_unitPatrolRoute) ? "(none)" : _unitPatrolRoute;
+            string newRoute = _eb.DrawCombo("unit_patrol", "Patrol", curRoute, routeNames, x, curY, w);
+            _unitPatrolRoute = newRoute == "(none)" ? "" : newRoute;
+            // Resolve name back to ID if needed
+            if (!string.IsNullOrEmpty(_unitPatrolRoute))
+            {
+                for (int ri = 0; ri < routes.Count; ri++)
+                {
+                    string rLabel = string.IsNullOrEmpty(routes[ri].Name) ? routes[ri].Id : routes[ri].Name;
+                    if (rLabel == _unitPatrolRoute) { _unitPatrolRoute = routes[ri].Id; break; }
+                }
+            }
+            curY += 24;
+        }
+
+        // Unit def list
+        var unitIds = GetFilteredUnitIds();
+        _eb.DrawText("Unit Defs:", new Vector2(x, curY), EditorBase.TextBright);
+        curY += 18;
+
+        int listH = contentH - (curY - contentY) - 100;
+        int itemH = 22;
+        int visibleItems = listH / itemH;
+
+        // Cache for Update hit-testing
+        _unitListDrawY = curY;
+        _unitListItemH = itemH;
+        _unitListVisibleCount = Math.Min(unitIds.Count, visibleItems);
+
+        var mouse = Mouse.GetState();
+        for (int i = 0; i < unitIds.Count && i < visibleItems; i++)
+        {
+            int scrolledIdx = i + (int)(_unitListScroll / itemH);
+            if (scrolledIdx >= unitIds.Count) break;
+
+            var def = _gameData.Units.Get(unitIds[scrolledIdx]);
+            string label = def != null ? $"{def.DisplayName} [{def.Faction}]" : unitIds[scrolledIdx];
+            bool selected = scrolledIdx == _selectedUnitDefIdx;
+            int itemY = curY + i * itemH;
+
+            if (selected)
+                _spriteBatch.Draw(_pixel, new Rectangle(x, itemY, w, itemH), new Color(60, 60, 100, 200));
+
+            bool hovered = mouse.X >= x && mouse.X < x + w && mouse.Y >= itemY && mouse.Y < itemY + itemH;
+            if (hovered && !selected)
+                _spriteBatch.Draw(_pixel, new Rectangle(x, itemY, w, itemH), new Color(40, 40, 70, 150));
+
+            Color textCol = selected ? new Color(255, 230, 160) : EditorBase.TextDim;
+            _eb.DrawText(label, new Vector2(x + 4, itemY + 3), textCol, _smallFont);
+        }
+        curY += listH;
+
+        // Placed units count
+        _eb.DrawText($"Placed: {_placedUnits.Count} units", new Vector2(x, curY + 4), EditorBase.TextBright);
+        curY += 20;
+
+        // Clear all button
+        if (_eb.DrawButton("Clear All Units", x, curY, 120, 20, EditorBase.DangerColor))
+            _placedUnits.Clear();
+    }
+
+    private List<string> GetFilteredUnitIds()
+    {
+        if (_gameData == null) return new();
+        var allIds = _gameData.Units.GetIDs();
+        if (_unitFactionFilter == 0) return new List<string>(allIds);
+
+        string filterFaction = _unitFactionFilter switch { 1 => "Undead", 2 => "Human", 3 => "Animal", _ => "" };
+        var filtered = new List<string>();
+        foreach (var id in allIds)
+        {
+            var def = _gameData.Units.Get(id);
+            if (def != null && def.Faction == filterFaction)
+                filtered.Add(id);
+        }
+        return filtered;
+    }
+
+    private void DrawPlacedUnitMarkers(int screenW, int screenH)
+    {
+        foreach (var pu in _placedUnits)
+        {
+            var sp = _camera.WorldToScreen(new Vec2(pu.X, pu.Y), 0f, screenW, screenH);
+            float r = 6f;
+            Color markerColor = pu.Faction switch
+            {
+                "Human" => new Color(100, 150, 255, 200),
+                "Animal" => new Color(100, 200, 100, 200),
+                _ => new Color(200, 100, 255, 200) // Undead = purple
+            };
+
+            // Diamond marker
+            _spriteBatch.Draw(_pixel, new Rectangle((int)(sp.X - r), (int)(sp.Y - r / 2), (int)(r * 2), (int)r), markerColor);
+            // Label
+            if (_smallFont != null)
+            {
+                var def = _gameData?.Units.Get(pu.UnitDefId);
+                string label = def?.DisplayName ?? pu.UnitDefId;
+                if (label.Length > 10) label = label[..10];
+                _spriteBatch.DrawString(_smallFont, label, new Vector2(sp.X + 8, sp.Y - 6), markerColor);
+            }
+        }
+    }
+
+    // ====================================================================
     //  SAVE / LOAD
     // ====================================================================
 
@@ -3685,16 +3933,10 @@ public class MapEditorWindow
                 writer.WriteEndObject();
             }
 
-            // Environment defs
-            writer.WriteStartArray("envDefs");
-            for (int i = 0; i < _envSystem.DefCount; i++)
-            {
-                var def = _envSystem.GetDef(i);
-                writer.WriteStartObject();
-                def.WriteJson(writer);
-                writer.WriteEndObject();
-            }
-            writer.WriteEndArray();
+            // Env defs are now saved separately to data/env_defs.json
+            // Save them alongside the map save for convenience
+            MapData.SaveEnvDefs("data/env_defs.json", _envSystem);
+            GamePaths.DualSave("data/env_defs.json");
 
             // Placed objects
             writer.WriteStartArray("placedObjects");
@@ -3737,6 +3979,22 @@ public class MapEditorWindow
             }
             writer.WriteEndArray();
 
+            // --- Placed units ---
+            writer.WriteStartArray("placedUnits");
+            foreach (var pu in _placedUnits)
+            {
+                writer.WriteStartObject();
+                writer.WriteString("unitDefId", pu.UnitDefId);
+                writer.WriteNumber("x", pu.X);
+                writer.WriteNumber("y", pu.Y);
+                if (!string.IsNullOrEmpty(pu.Faction))
+                    writer.WriteString("faction", pu.Faction);
+                if (!string.IsNullOrEmpty(pu.PatrolRouteId))
+                    writer.WriteString("patrolRouteId", pu.PatrolRouteId);
+                writer.WriteEndObject();
+            }
+            writer.WriteEndArray();
+
             writer.WriteEndObject();
             writer.Flush();
 
@@ -3750,16 +4008,10 @@ public class MapEditorWindow
             _statusTimer = 3f;
             DebugLog.Log("editor", $"Map saved to {path}");
 
-            // Also copy to source tree so dotnet publish picks up the latest
-            string srcMapsDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "assets", "maps");
-            if (Directory.Exists(srcMapsDir))
-            {
-                try
-                {
-                    File.Copy(path, Path.Combine(srcMapsDir, _mapFilename + ".json"), true);
-                }
-                catch { /* source tree copy is best-effort */ }
-            }
+            // Dual-save to source tree so all builds stay in sync
+            GamePaths.DualSave(Path.Combine("assets", "maps", _mapFilename + ".json"));
+            GamePaths.DualSave(Path.Combine("assets", "maps", _mapFilename + "_triggers.json"));
+            GamePaths.DualSave(Path.Combine("assets", "maps", _mapFilename + "_roads.json"));
         }
         catch (Exception ex)
         {
@@ -3792,8 +4044,10 @@ public class MapEditorWindow
             _wallSystem.Defs.Clear();
             _undoStack.Clear();
 
-            // Load main map data (ground, env defs, placed objects, wall defs)
-            MapData.Load(mapPath, _groundSystem, _envSystem, _wallSystem);
+            // Load env defs from canonical location, then map data (placed objects, walls, units)
+            _placedUnits.Clear();
+            MapData.LoadEnvDefs("data/env_defs.json", _envSystem);
+            MapData.Load(mapPath, _groundSystem, _envSystem, _wallSystem, _placedUnits);
 
             // Reload ground textures
             _groundSystem.LoadTextures(_device);

@@ -496,8 +496,9 @@ public class EnvObjectEditorWindow
                 int dotSize = (_hoveringCollisionCenter || _draggingCollisionCenter) ? 4 : 2;
                 _ui.DrawRect(new Rectangle((int)cx - dotSize, (int)cy - dotSize, dotSize * 2 + 1, dotSize * 2 + 1), centerCol);
 
-                // Interactive dragging
-                HandleCollisionDrag(def, cx, cy, radiusPx, pixPerWorld);
+                // Interactive dragging (blocked when popup open)
+                if (!_textureBrowser.IsOpen && !_ui.IsColorPickerOpen && !_ui.IsDropdownOpen)
+                    HandleCollisionDrag(def, cx, cy, radiusPx, pixPerWorld);
             }
             else
             {
@@ -516,6 +517,7 @@ public class EnvObjectEditorWindow
             }
 
             // --- Scroll wheel adjusts collision radius when hovering preview ---
+            if (!_textureBrowser.IsOpen && !_ui.IsColorPickerOpen && !_ui.IsDropdownOpen)
             {
                 var ms = Mouse.GetState();
                 if (ms.X >= x && ms.X < x + w && ms.Y >= y && ms.Y < y + mainH)
@@ -532,8 +534,9 @@ public class EnvObjectEditorWindow
                 }
             }
 
-            // Handle pivot click-to-set
-            HandlePivotDrag(def, drawX, drawY, drawW, drawH);
+            // Handle pivot click-to-set (blocked when popup open)
+            if (!_textureBrowser.IsOpen && !_ui.IsColorPickerOpen && !_ui.IsDropdownOpen)
+                HandlePivotDrag(def, drawX, drawY, drawW, drawH);
 
             // Draw reference images at same scale
             DrawReferencePanel(x, y + mainH, w, RefPanelH, pixPerWorld);
@@ -1102,6 +1105,14 @@ public class EnvObjectEditorWindow
         if (MathF.Abs(newCOY - def.CollisionOffsetY) > 0.001f) def.CollisionOffsetY = newCOY;
         curY += RowH;
 
+        // Shadow type
+        string[] shadowTypes = { "Sprite Projection", "Diffuse Ellipse", "None" };
+        string curShadow = def.ShadowType >= 0 && def.ShadowType < shadowTypes.Length ? shadowTypes[def.ShadowType] : shadowTypes[0];
+        string newShadow = _ui.DrawCombo("envdef_shadowtype", "Shadow", curShadow, shadowTypes, fx, curY, fieldW);
+        for (int si = 0; si < shadowTypes.Length; si++)
+            if (shadowTypes[si] == newShadow && si != def.ShadowType) def.ShadowType = si;
+        curY += RowH;
+
         curY += 4;
 
         // --- Section: Building ---
@@ -1202,36 +1213,64 @@ public class EnvObjectEditorWindow
         // --- Section: Trap Spell ---
         curY = DrawSectionLabel(fx, curY, fieldW, "TRAP SPELL");
 
-        bool hasTrap = !string.IsNullOrEmpty(def.TrapSpellId);
+        // Trap spell selector
         if (_spellRegistry != null && _spellRegistry.Count > 0)
         {
             var spellIds = _spellRegistry.GetIDs();
             var spellOptions = new string[spellIds.Count];
             for (int si = 0; si < spellIds.Count; si++) spellOptions[si] = spellIds[si];
-
             string newTrapSpell = _ui.DrawCombo("envdef_trapspell", "Trap Spell", def.TrapSpellId, spellOptions, fx, curY, fieldW, allowNone: true);
             if (newTrapSpell != def.TrapSpellId) def.TrapSpellId = newTrapSpell;
-            curY += RowH;
-
-            if (!string.IsNullOrEmpty(def.TrapSpellId))
-            {
-                int newUses = _ui.DrawIntField("envdef_trapuses", "Uses (0=∞)", def.TrapUses, fx, curY, fieldW);
-                if (newUses != def.TrapUses) def.TrapUses = Math.Max(0, newUses);
-                curY += RowH;
-            }
         }
         else
         {
             string newTrapSpell = _ui.DrawTextField("envdef_trapspell_t", "Trap Spell ID", def.TrapSpellId, fx, curY, fieldW);
             if (newTrapSpell != def.TrapSpellId) def.TrapSpellId = newTrapSpell;
+        }
+        curY += RowH;
+
+        if (!string.IsNullOrEmpty(def.TrapSpellId))
+        {
+            int newUses = _ui.DrawIntField("envdef_trapuses", "Uses (0=∞)", def.TrapUses, fx, curY, fieldW);
+            if (newUses != def.TrapUses) def.TrapUses = Math.Max(0, newUses);
             curY += RowH;
 
-            if (!string.IsNullOrEmpty(def.TrapSpellId))
+            // Trap sprites (with browse buttons)
+            int trapBrowseW = 55;
+            string newTriggered = _ui.DrawTextField("envdef_traptrigspr", "Triggered Sprite", def.TrapTriggeredSprite, fx, curY, fieldW - trapBrowseW - 4);
+            if (newTriggered != def.TrapTriggeredSprite) def.TrapTriggeredSprite = newTriggered;
+            if (_ui.DrawButton("Browse", fx + fieldW - trapBrowseW, curY, trapBrowseW, 20))
             {
-                int newUses = _ui.DrawIntField("envdef_trapuses", "Uses (0=∞)", def.TrapUses, fx, curY, fieldW);
-                if (newUses != def.TrapUses) def.TrapUses = Math.Max(0, newUses);
-                curY += RowH;
+                _textureBrowser.Open("assets", def.TrapTriggeredSprite, path =>
+                {
+                    def.TrapTriggeredSprite = path;
+                });
             }
+            curY += RowH;
+
+            string newDeployed = _ui.DrawTextField("envdef_trapdeplspr", "Deployed Sprite", def.TrapDeployedSprite, fx, curY, fieldW - trapBrowseW - 4);
+            if (newDeployed != def.TrapDeployedSprite) def.TrapDeployedSprite = newDeployed;
+            if (_ui.DrawButton("Browse##2", fx + fieldW - trapBrowseW, curY, trapBrowseW, 20))
+            {
+                _textureBrowser.Open("assets", def.TrapDeployedSprite, path =>
+                {
+                    def.TrapDeployedSprite = path;
+                });
+            }
+            curY += RowH;
+
+            // Trap timings
+            float newTrigDur = _ui.DrawFloatField("envdef_traptrigdur", "Triggered (s)", def.TrapTriggeredDuration, fx, curY, fieldW, 0.05f);
+            if (MathF.Abs(newTrigDur - def.TrapTriggeredDuration) > 0.001f) def.TrapTriggeredDuration = MathF.Max(0f, newTrigDur);
+            curY += RowH;
+
+            float newDeplDur = _ui.DrawFloatField("envdef_trapdepldur", "Deployed (s)", def.TrapDeployedDuration, fx, curY, fieldW, 0.1f);
+            if (MathF.Abs(newDeplDur - def.TrapDeployedDuration) > 0.001f) def.TrapDeployedDuration = MathF.Max(0f, newDeplDur);
+            curY += RowH;
+
+            float newFadeDur = _ui.DrawFloatField("envdef_trapfadedur", "Fade Out (s)", def.TrapFadeDuration, fx, curY, fieldW, 0.1f);
+            if (MathF.Abs(newFadeDur - def.TrapFadeDuration) > 0.001f) def.TrapFadeDuration = MathF.Max(0f, newFadeDur);
+            curY += RowH;
         }
 
         curY += 4;
@@ -1441,8 +1480,14 @@ public class EnvObjectEditorWindow
             Cost2ItemId = src.Cost2ItemId,
             Cost2Amount = src.Cost2Amount,
             PlacementRadius = src.PlacementRadius,
+            ShadowType = src.ShadowType,
             TrapSpellId = src.TrapSpellId,
             TrapUses = src.TrapUses,
+            TrapTriggeredSprite = src.TrapTriggeredSprite,
+            TrapDeployedSprite = src.TrapDeployedSprite,
+            TrapTriggeredDuration = src.TrapTriggeredDuration,
+            TrapDeployedDuration = src.TrapDeployedDuration,
+            TrapFadeDuration = src.TrapFadeDuration,
             BoundTriggerID = src.BoundTriggerID,
             Input1 = new ProcessSlot { Kind = src.Input1.Kind, ResourceID = src.Input1.ResourceID },
             Input2 = new ProcessSlot { Kind = src.Input2.Kind, ResourceID = src.Input2.ResourceID },
@@ -1487,30 +1532,17 @@ public class EnvObjectEditorWindow
 
     private void SaveDefs()
     {
-        // Save env defs to a JSON file alongside the map
+        // Save env defs to canonical location: data/env_defs.json
         try
         {
-            string dir = "maps";
-            if (!Directory.Exists(dir)) Directory.CreateDirectory(dir);
-            string path = Path.Combine(dir, "env_defs.json");
-
-            var options = new JsonSerializerOptions { WriteIndented = true };
-            using var stream = File.Create(path);
-            using var writer = new Utf8JsonWriter(stream, new JsonWriterOptions { Indented = true });
-
-            writer.WriteStartArray();
-            for (int i = 0; i < _env.DefCount; i++)
-            {
-                var def = _env.GetDef(i);
-                writer.WriteStartObject();
-                def.WriteJson(writer);
-                writer.WriteEndObject();
-            }
-            writer.WriteEndArray();
-            writer.Flush();
+            string path = "data/env_defs.json";
+            Data.MapData.SaveEnvDefs(path, _env);
 
             _statusMessage = $"Saved {_env.DefCount} defs to {path}";
             _statusTimer = 3f;
+
+            // Dual-save to source tree
+            Core.GamePaths.DualSave(path);
         }
         catch (Exception ex)
         {

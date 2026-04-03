@@ -11,7 +11,8 @@ namespace Necroking.Data;
 
 public static class MapData
 {
-    public static bool Load(string path, GroundSystem ground, EnvironmentSystem env, WallSystem walls)
+    public static bool Load(string path, GroundSystem ground, EnvironmentSystem env, WallSystem walls,
+        List<PlacedUnit>? placedUnits = null)
     {
         if (!File.Exists(path)) return false;
 
@@ -55,24 +56,27 @@ public static class MapData
             }
 
             // --- Environment defs ---
-            if (root.TryGetProperty("envDefs", out var edArr))
+            // Skip embedded envDefs — they're now loaded from data/env_defs.json before the map.
+            // Fall back to embedded defs only if env system has no defs yet (legacy maps).
+            if (env.DefCount == 0 && root.TryGetProperty("envDefs", out var edArr))
             {
                 foreach (var ed in edArr.EnumerateArray())
                 {
                     var def = ParseEnvDef(ed);
                     env.AddDef(def);
                 }
-                DebugLog.Log("startup", $"  Env defs: {env.DefCount}");
+                DebugLog.Log("startup", $"  Env defs (embedded fallback): {env.DefCount}");
             }
 
             // --- Placed objects ---
             if (root.TryGetProperty("placedObjects", out var poArr))
             {
+                int orphans = 0;
                 foreach (var po in poArr.EnumerateArray())
                 {
                     string defId = po.GetProperty("defId").GetString() ?? "";
                     int defIdx = env.FindDef(defId);
-                    if (defIdx < 0) continue;
+                    if (defIdx < 0) { orphans++; continue; }
 
                     float x = po.GetProperty("x").GetSingle();
                     float y = po.GetProperty("y").GetSingle();
@@ -81,7 +85,7 @@ public static class MapData
 
                     env.AddObject((ushort)defIdx, x, y, scale, seed);
                 }
-                DebugLog.Log("startup", $"  Placed objects: {env.ObjectCount}");
+                DebugLog.Log("startup", $"  Placed objects: {env.ObjectCount}" + (orphans > 0 ? $" ({orphans} orphans skipped)" : ""));
             }
 
             // --- Walls ---
@@ -100,6 +104,23 @@ public static class MapData
                 DebugLog.Log("startup", $"  Wall defs: {walls.DefCount}");
             }
 
+            // --- Placed units ---
+            if (placedUnits != null && root.TryGetProperty("placedUnits", out var puArr))
+            {
+                foreach (var pu in puArr.EnumerateArray())
+                {
+                    placedUnits.Add(new PlacedUnit
+                    {
+                        UnitDefId = pu.TryGetProperty("unitDefId", out var uid) ? uid.GetString() ?? "" : "",
+                        X = pu.TryGetProperty("x", out var px) ? px.GetSingle() : 0,
+                        Y = pu.TryGetProperty("y", out var py) ? py.GetSingle() : 0,
+                        Faction = pu.TryGetProperty("faction", out var pf) ? pf.GetString() ?? "" : "",
+                        PatrolRouteId = pu.TryGetProperty("patrolRouteId", out var pr) ? pr.GetString() ?? "" : "",
+                    });
+                }
+                DebugLog.Log("startup", $"  Placed units: {placedUnits.Count}");
+            }
+
             return true;
         }
         catch (Exception ex)
@@ -107,6 +128,67 @@ public static class MapData
             DebugLog.Log("startup", $"Map load error: {ex.Message}");
             return false;
         }
+    }
+
+    /// <summary>Load env defs from a standalone JSON file (flat array format).
+    /// This is the canonical source — loaded before the map.</summary>
+    public static bool LoadEnvDefs(string path, EnvironmentSystem env)
+    {
+        if (!File.Exists(path)) return false;
+        try
+        {
+            string json = File.ReadAllText(path);
+            using var doc = JsonDocument.Parse(json);
+            var root = doc.RootElement;
+
+            // Handle both formats: flat array [...] or wrapped {"envDefs": [...]}
+            JsonElement defsArray;
+            if (root.ValueKind == JsonValueKind.Array)
+                defsArray = root;
+            else if (root.TryGetProperty("envDefs", out var wrapped) && wrapped.ValueKind == JsonValueKind.Array)
+                defsArray = wrapped;
+            else
+                return false;
+
+            foreach (var ed in defsArray.EnumerateArray())
+            {
+                var def = ParseEnvDef(ed);
+                if (!string.IsNullOrEmpty(def.Id))
+                    env.AddDef(def);
+            }
+            DebugLog.Log("startup", $"  Env defs loaded: {env.DefCount} (from {path})");
+            return true;
+        }
+        catch (Exception ex)
+        {
+            DebugLog.Log("startup", $"  env_defs load error: {ex.Message}");
+            return false;
+        }
+    }
+
+    /// <summary>Save env defs to a standalone JSON file (flat array format).</summary>
+    public static bool SaveEnvDefs(string path, EnvironmentSystem env)
+    {
+        try
+        {
+            var dir = Path.GetDirectoryName(path);
+            if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
+
+            using var stream = File.Create(path);
+            using var writer = new System.Text.Json.Utf8JsonWriter(stream, new System.Text.Json.JsonWriterOptions { Indented = true });
+
+            writer.WriteStartArray();
+            for (int i = 0; i < env.DefCount; i++)
+            {
+                writer.WriteStartObject();
+                env.GetDef(i).WriteJson(writer);
+                writer.WriteEndObject();
+            }
+            writer.WriteEndArray();
+            writer.Flush();
+            return true;
+        }
+        catch { return false; }
     }
 
     public static bool LoadTriggers(string path, TriggerSystem triggers)
@@ -387,8 +469,14 @@ public static class MapData
         if (ed.TryGetProperty("cost2ItemId", out var c2id)) def.Cost2ItemId = c2id.GetString() ?? "";
         if (ed.TryGetProperty("cost2Amount", out var c2a)) def.Cost2Amount = c2a.GetInt32();
         if (ed.TryGetProperty("placementRadius", out var pr)) def.PlacementRadius = pr.GetSingle();
+        if (ed.TryGetProperty("shadowType", out var sht)) def.ShadowType = sht.GetInt32();
         if (ed.TryGetProperty("trapSpellId", out var tsi)) def.TrapSpellId = tsi.GetString() ?? "";
         if (ed.TryGetProperty("trapUses", out var tu)) def.TrapUses = tu.GetInt32();
+        if (ed.TryGetProperty("trapTriggeredSprite", out var tts)) def.TrapTriggeredSprite = tts.GetString() ?? "";
+        if (ed.TryGetProperty("trapDeployedSprite", out var tds)) def.TrapDeployedSprite = tds.GetString() ?? "";
+        if (ed.TryGetProperty("trapTriggeredDuration", out var ttd)) def.TrapTriggeredDuration = ttd.GetSingle();
+        if (ed.TryGetProperty("trapDeployedDuration", out var tdd)) def.TrapDeployedDuration = tdd.GetSingle();
+        if (ed.TryGetProperty("trapFadeDuration", out var tfd)) def.TrapFadeDuration = tfd.GetSingle();
         if (ed.TryGetProperty("boundTriggerID", out var btid)) def.BoundTriggerID = btid.GetString() ?? "";
         if (ed.TryGetProperty("processTime", out var pt)) def.ProcessTime = pt.GetSingle();
         if (ed.TryGetProperty("autoSpawn", out var ats)) def.AutoSpawn = ats.GetBoolean();

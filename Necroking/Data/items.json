@@ -38,7 +38,7 @@
       "icon": "assets/Environment/Mushrooms/PoisonMushroom.png",
       "maxStack": 99,
       "category": "material",
-      "description": "Extremely toxic — handle with care."
+      "description": "Extremely toxic \u2014 handle with care."
     },
     {
       "id": "MagicMushroom",
