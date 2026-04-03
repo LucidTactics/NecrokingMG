@@ -25,7 +25,7 @@ public enum AIBehavior : byte
 
 public enum QueuedUnitAction : byte { None, Flee, Disengage }
 
-public enum ProjectileType : byte { Arrow, Fireball }
+public enum ProjectileType : byte { Arrow, Fireball, Potion }
 public enum HitLocation : byte { Head, Arms, Chest, Legs, Feet }
 
 // --- Spell ---

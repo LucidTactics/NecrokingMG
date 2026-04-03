@@ -167,7 +167,7 @@
       "id": "BuildingMenu",
       "background": "panel_inner",
       "frame": "RenaiThinBorder",
-      "width": 258,
+      "width": 252,
       "height": 929,
       "backgroundScale": 1,
       "backgroundTint": [
@@ -188,7 +188,7 @@
       "layoutSpacing": 1,
       "layoutPadTop": 15,
       "layoutPadBottom": 0,
-      "layoutPadLeft": 25,
+      "layoutPadLeft": 18,
       "layoutPadRight": 0,
       "layoutSpacingX": 0,
       "layoutSpacingY": 0,
@@ -286,6 +286,128 @@
           "y": 2,
           "width": 40,
           "height": 28,
+          "anchor": 0
+        }
+      ]
+    },
+    {
+      "id": "CraftingMenu",
+      "background": "panel_inner",
+      "width": 252,
+      "height": 929,
+      "backgroundScale": 1,
+      "backgroundTint": [
+        255,
+        255,
+        255,
+        255
+      ],
+      "modal": false,
+      "layout": "vertical",
+      "layoutPadding": 1,
+      "layoutSpacing": 1,
+      "layoutPadTop": 15,
+      "layoutPadBottom": 0,
+      "layoutPadLeft": 18,
+      "layoutPadRight": 0,
+      "layoutSpacingX": 0,
+      "layoutSpacingY": 0,
+      "children": [
+        {
+          "name": "child_0",
+          "widget": "CraftingItem",
+          "x": 0,
+          "y": 0,
+          "width": 218,
+          "height": 68,
+          "anchor": 0,
+          "childOverrides": []
+        }
+      ]
+    },
+    {
+      "id": "CraftingItem",
+      "background": "panel_inner",
+      "width": 218,
+      "height": 68,
+      "backgroundScale": 0.75,
+      "backgroundTint": [
+        255,
+        255,
+        255,
+        255
+      ],
+      "modal": false,
+      "children": [
+        {
+          "name": "child_0",
+          "element": "BuildingName",
+          "x": 57,
+          "y": 11,
+          "width": 105,
+          "height": 45,
+          "anchor": 0,
+          "defaultText": "Potion A",
+          "textOverride": {
+            "x": 0,
+            "y": 0,
+            "w": 142,
+            "h": 40,
+            "align": "left",
+            "valign": "top",
+            "fontSize": 20,
+            "fontColor": [
+              255,
+              255,
+              255,
+              255
+            ],
+            "wordWrap": true
+          }
+        },
+        {
+          "name": "Icon1",
+          "element": "Icon",
+          "x": 180,
+          "y": 35,
+          "width": 25,
+          "height": 25,
+          "anchor": 0
+        },
+        {
+          "name": "Quant1",
+          "element": "Quantity",
+          "x": 139,
+          "y": 18,
+          "width": 40,
+          "height": 44,
+          "anchor": 0
+        },
+        {
+          "name": "Icon2",
+          "element": "Icon",
+          "x": 180,
+          "y": 9,
+          "width": 25,
+          "height": 25,
+          "anchor": 0
+        },
+        {
+          "name": "Quant2",
+          "element": "Quantity",
+          "x": 139,
+          "y": 2,
+          "width": 40,
+          "height": 28,
+          "anchor": 0
+        },
+        {
+          "name": "Icon2_copy",
+          "element": "Icon",
+          "x": 9,
+          "y": 11,
+          "width": 47,
+          "height": 45,
           "anchor": 0
         }
       ]

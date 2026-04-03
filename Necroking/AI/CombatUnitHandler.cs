@@ -96,18 +96,20 @@ public class CombatUnitHandler : IArchetypeHandler
             }
         }
 
-        // Target dead in combat → return
+        // Target dead in combat → return (unless frenzied)
         if (ctx.Routine == RoutineCombat && !SubroutineSteps.IsTargetAlive(ref ctx))
         {
-            // Try to find another nearby enemy
+            // Frenzied units search wider and never return to leash
+            bool frenzied = ctx.Units.Frenzied[ctx.UnitIndex];
             float range = ctx.Units.DetectionRange[ctx.UnitIndex];
-            int next = SubroutineSteps.FindClosestEnemy(ref ctx, range > 0 ? range : 12f);
+            float searchRange = frenzied ? MathF.Max(range, 30f) : (range > 0 ? range : 12f);
+            int next = SubroutineSteps.FindClosestEnemy(ref ctx, searchRange);
             if (next >= 0)
             {
                 ctx.Units.Target[ctx.UnitIndex] = CombatTarget.Unit(ctx.Units.Id[next]);
                 ctx.Subroutine = CombatChase;
             }
-            else
+            else if (!frenzied)
             {
                 ctx.Routine = RoutineReturn;
                 ctx.SubroutineTimer = 0f;
@@ -116,6 +118,7 @@ public class CombatUnitHandler : IArchetypeHandler
                 ctx.AlertState = (byte)UnitAlertState.Unaware;
                 ctx.AlertTarget = GameConstants.InvalidUnit;
             }
+            // else frenzied with no targets: stay in combat routine, will recheck next tick
         }
 
         // Threat gone → return
@@ -224,6 +227,15 @@ public class CombatUnitHandler : IArchetypeHandler
 
     private static void UpdateReturn(ref AIContext ctx)
     {
+        // Frenzied units don't return — go back to idle/combat search
+        if (ctx.Units.Frenzied[ctx.UnitIndex])
+        {
+            ctx.Routine = RoutineIdle;
+            ctx.Subroutine = 0;
+            ctx.SubroutineTimer = 0f;
+            return;
+        }
+
         ctx.Units.EngagedTarget[ctx.UnitIndex] = CombatTarget.None;
         ctx.Units.InCombat[ctx.UnitIndex] = false;
 

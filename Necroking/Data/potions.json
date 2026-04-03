@@ -1,0 +1,128 @@
+{
+  "potions": [
+    {
+      "id": "potion_frenzy",
+      "displayName": "Frenzy Potion",
+      "icon": "assets/Items/Potions/FrenzyPotion.png",
+      "description": "Drives the target into a berserk frenzy. \u002B50% attack speed, \u002B20% move speed. Permanent. Prevents leash and flee.",
+      "targetType": "Friendly",
+      "throwRange": 10,
+      "projectileScale": 0.5,
+      "buffID": "buff_frenzy",
+      "buffDuration": 0,
+      "onHitEffect": "Frenzy",
+      "hitsCorpses": false,
+      "projectileFlipbook": null,
+      "hitEffectFlipbook": null,
+      "recipe": [
+        {
+          "itemId": "Toadstool",
+          "amount": 1
+        },
+        {
+          "itemId": "Mushroom",
+          "amount": 1
+        },
+        {
+          "itemId": "",
+          "amount": 1
+        }
+      ],
+      "craftTime": 1,
+      "itemID": "potion_frenzy"
+    },
+    {
+      "id": "potion_paralysis",
+      "displayName": "Paralysis Potion",
+      "icon": "assets/Items/Potions/Paralysis Potion.png",
+      "description": "Gradually slows the target over 8 seconds, then stuns for 3 seconds.",
+      "targetType": "Enemy",
+      "throwRange": 10,
+      "projectileScale": 0.5,
+      "buffID": "buff_paralysis_slow",
+      "buffDuration": 0,
+      "onHitEffect": "Paralysis",
+      "hitsCorpses": false,
+      "projectileFlipbook": null,
+      "hitEffectFlipbook": null,
+      "recipe": [
+        {
+          "itemId": "Ghostcap",
+          "amount": 1
+        },
+        {
+          "itemId": "Rotgill",
+          "amount": 1
+        },
+        {
+          "itemId": "",
+          "amount": 1
+        }
+      ],
+      "craftTime": 1,
+      "itemID": "potion_paralysis"
+    },
+    {
+      "id": "potion_zombie",
+      "displayName": "Zombie Potion",
+      "icon": "assets/Items/Potions/ZombiePotion.png",
+      "description": "On enemy: raises as zombie on death. On friendly: coats weapons with zombie curse. On corpse: raises after 1 second.",
+      "targetType": "Any",
+      "throwRange": 10,
+      "projectileScale": 0.5,
+      "buffID": "buff_zombie_mark",
+      "buffDuration": 0,
+      "onHitEffect": "Zombie",
+      "hitsCorpses": true,
+      "projectileFlipbook": null,
+      "hitEffectFlipbook": null,
+      "recipe": [
+        {
+          "itemId": "Rotgill",
+          "amount": 1
+        },
+        {
+          "itemId": "Mushroom",
+          "amount": 1
+        },
+        {
+          "itemId": "",
+          "amount": 1
+        }
+      ],
+      "craftTime": 1,
+      "itemID": "potion_zombie"
+    },
+    {
+      "id": "potion_poison",
+      "displayName": "Poison Potion",
+      "icon": "assets/Items/Potions/PoisonPotion.png",
+      "description": "On enemy: applies 10 poison. On friendly: coats weapons with 5 poison on hit for 5 minutes.",
+      "targetType": "Any",
+      "throwRange": 10,
+      "projectileScale": 0.5,
+      "buffID": "buff_poison_dot",
+      "buffDuration": 0,
+      "onHitEffect": "Poison",
+      "hitsCorpses": false,
+      "projectileFlipbook": null,
+      "hitEffectFlipbook": null,
+      "recipe": [
+        {
+          "itemId": "PoisonMushroom",
+          "amount": 2
+        },
+        {
+          "itemId": "",
+          "amount": 1
+        },
+        {
+          "itemId": "",
+          "amount": 1
+        }
+      ],
+      "craftTime": 1,
+      "itemID": "potion_poison"
+    }
+  ]
+}

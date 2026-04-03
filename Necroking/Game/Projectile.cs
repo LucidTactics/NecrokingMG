@@ -37,6 +37,10 @@ public class Projectile
     public float SwirlFreq;
     public float SwirlAmplitude;
     public float SwirlPhase;
+    public string PotionID = "";
+    public string IconTexturePath = "";
+    public bool HitsCorpses;
+    public string PotionTargetType = "Any"; // "Friendly", "Enemy", "Any"
 }
 
 public class ImpactEvent
@@ -59,6 +63,9 @@ public class ProjectileHit
     public int Precision;
     public string WeaponName = "";
     public ProjectileType ProjectileType = ProjectileType.Arrow;
+    public string PotionID = "";
+    public Vec2 ImpactPos;
+    public int CorpseHitIdx = -1;
 }
 
 public class ProjectileManager
@@ -71,6 +78,9 @@ public class ProjectileManager
     private const float FireballHitHeight = 5.0f;
     private const float FireballArmTime = 0.15f;
     private const float HitRadius = 0.6f;
+    private const float PotionHitRadius = 1.0f;
+    private const float PotionHitHeight = 3.0f;
+    private const float PotionArmTime = 0.2f;
     private const float MaxAge = 10.0f;
     private const float Pi = 3.14159265f;
     private const float Deg2Rad = Pi / 180f;
@@ -147,7 +157,32 @@ public class ProjectileManager
         });
     }
 
-    public void Update(float dt, UnitArrays units, Quadtree qt)
+    public void SpawnPotionLob(Vec2 from, Vec2 target, Faction faction, uint owner,
+                               string potionId, float scale = 0.5f, float spawnHeight = 1.5f)
+    {
+        var dir = (target - from).Normalized();
+        float dist = (target - from).Length();
+        if (dist < 0.1f) dist = 0.1f;
+        float speed = MagicSpeed * 0.7f; // potions are slower than fireballs
+
+        float sinTwoTheta = MathF.Min(dist * Gravity / (speed * speed), 1f);
+        float theta = 0.5f * MathF.Asin(sinTwoTheta);
+
+        _projectiles.Add(new Projectile
+        {
+            Position = from, Height = spawnHeight, Type = ProjectileType.Potion,
+            OwnerFaction = faction, OwnerID = owner, Damage = 0,
+            AoeRadius = 1.0f, PotionID = potionId,
+            NoFriendlyFire = false, IsLob = true,
+            ParticleScale = scale,
+            Velocity = dir * speed * MathF.Cos(theta),
+            VelocityZ = speed * MathF.Sin(theta)
+        });
+    }
+
+    public void Update(float dt, UnitArrays units, Quadtree qt) => Update(dt, units, qt, null);
+
+    public void Update(float dt, UnitArrays units, Quadtree qt, IReadOnlyList<Corpse>? corpses)
     {
         _impacts.Clear();
         _hits.Clear();
@@ -240,6 +275,78 @@ public class ProjectileManager
                     proj.Alive = false;
                     break;
                 }
+            }
+
+            // Potion collision — unified: hits valid unit or corpse within radius
+            // Checks after arm time, while below potion hit height (not just on descent)
+            if (proj.Alive && proj.Type == ProjectileType.Potion &&
+                proj.Age > PotionArmTime && proj.Height < PotionHitHeight)
+            {
+                float searchR = PotionHitRadius;
+                float searchRSq = searchR * searchR;
+
+                // Find closest valid unit
+                int bestUnitIdx = -1;
+                float bestUnitDist = searchRSq;
+                nearbyIDs.Clear();
+                qt.QueryRadius(proj.Position, searchR, nearbyIDs);
+                foreach (uint nid in nearbyIDs)
+                {
+                    if (nid == proj.OwnerID) continue;
+                    int hitIdx = UnitUtil.ResolveUnitIndex(units, nid);
+                    if (hitIdx < 0) continue;
+                    // Filter by potion target type
+                    bool isFriendly = units.Faction[hitIdx] == proj.OwnerFaction;
+                    if (proj.PotionTargetType == "Friendly" && !isFriendly) continue;
+                    if (proj.PotionTargetType == "Enemy" && isFriendly) continue;
+                    // "Any" hits both
+                    float d = (units.Position[hitIdx] - proj.Position).LengthSq();
+                    if (d < bestUnitDist) { bestUnitDist = d; bestUnitIdx = hitIdx; }
+                }
+
+                // Find closest corpse if enabled
+                int bestCorpseIdx = -1;
+                float bestCorpseDist = searchRSq;
+                if (proj.HitsCorpses && corpses != null)
+                {
+                    for (int ci = 0; ci < corpses.Count; ci++)
+                    {
+                        if (corpses[ci].Dissolving) continue;
+                        float d = (corpses[ci].Position - proj.Position).LengthSq();
+                        if (d < bestCorpseDist) { bestCorpseDist = d; bestCorpseIdx = ci; }
+                    }
+                }
+
+                // Hit whichever is closer
+                bool hitUnit = bestUnitIdx >= 0 && (bestCorpseIdx < 0 || bestUnitDist <= bestCorpseDist);
+                bool hitCorpse = bestCorpseIdx >= 0 && !hitUnit;
+
+                if (hitUnit || hitCorpse)
+                {
+                    _hits.Add(new ProjectileHit {
+                        UnitIdx = hitUnit ? bestUnitIdx : -1,
+                        CorpseHitIdx = hitCorpse ? bestCorpseIdx : -1,
+                        Damage = 0, OwnerID = proj.OwnerID, OwnerFaction = proj.OwnerFaction,
+                        PotionID = proj.PotionID, ProjectileType = proj.Type, ImpactPos = proj.Position
+                    });
+                    _impacts.Add(new ImpactEvent { Position = proj.Position, Type = proj.Type, AoeRadius = 0,
+                        HitEffectFlipbookID = proj.HitEffectFlipbookID, HitEffectColor = proj.HitEffectColor, HitEffectScale = proj.HitEffectScale });
+                    proj.Alive = false;
+                }
+            }
+
+            // Potion ground impact — missed everything, record for ground-targeted effects
+            if (proj.Alive && proj.Type == ProjectileType.Potion && proj.Height <= 0f && proj.VelocityZ < 0f)
+            {
+                proj.Height = 0f;
+                _hits.Add(new ProjectileHit {
+                    UnitIdx = -1, CorpseHitIdx = -1,
+                    Damage = 0, OwnerID = proj.OwnerID, OwnerFaction = proj.OwnerFaction,
+                    PotionID = proj.PotionID, ProjectileType = proj.Type, ImpactPos = proj.Position
+                });
+                _impacts.Add(new ImpactEvent { Position = proj.Position, Type = proj.Type, AoeRadius = 0,
+                    HitEffectFlipbookID = proj.HitEffectFlipbookID, HitEffectColor = proj.HitEffectColor, HitEffectScale = proj.HitEffectScale });
+                proj.Alive = false;
             }
 
             // Ground impact

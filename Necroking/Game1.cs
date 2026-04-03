@@ -10,6 +10,7 @@ using Necroking.Data.Registries;
 using Necroking.Core;
 using Necroking.Render;
 using Necroking.Movement;
+using Necroking.Game;
 using Necroking.GameSystems;
 using Necroking.World;
 using Necroking.Scenario;
@@ -18,7 +19,7 @@ using Necroking.UI;
 
 namespace Necroking;
 
-public enum MenuState { MainMenu, None, PauseMenu, Settings, UnitEditor, SpellEditor, MapEditor, UIEditor, ScenarioList }
+public enum MenuState { MainMenu, None, PauseMenu, Settings, UnitEditor, SpellEditor, MapEditor, UIEditor, ItemEditor, ScenarioList }
 
 public class Game1 : Microsoft.Xna.Framework.Game
 {
@@ -45,6 +46,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
     private RuntimeWidgetRenderer _widgetRenderer = new();
     private Game.InventoryUI _inventoryUI = new();
     private Game.BuildingMenuUI _buildingMenuUI = new();
+    private CraftingMenuUI _craftingMenu = new();
     private System.Diagnostics.Stopwatch? _startupTimer;
     private long _startupLastMs;
     private void LogTiming(string step)
@@ -99,6 +101,10 @@ public class Game1 : Microsoft.Xna.Framework.Game
     private int _spellDropdownSlot = -1;
     private int _secondaryDropdownSlot = -1;
     private int _channelingSlot = -1;
+    private string[] _potionSlots = new string[2] { "", "" };
+    private int _activePotionSlot = -1;
+    private int _potionDropdownSlot = -1;
+    private readonly Dictionary<string, Texture2D?> _itemTextureCache = new();
     private float _spellDropdownScroll;
     private int _hoveredObjectIdx = -1;
     private int _prevScrollValue;
@@ -126,6 +132,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
     private EditorBase _editorUi = new();
     private UnitEditorWindow _unitEditor = null!;
     private SpellEditorWindow _spellEditor = null!;
+    private ItemEditorWindow _itemEditor = null!;
     private SettingsWindow _settingsWindow = null!;
 
     // Random
@@ -156,6 +163,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         public int Damage;
         public float Timer;
         public float Height;
+        public bool IsPoison;
     }
 
     public Game1()
@@ -1111,6 +1119,8 @@ public class Game1 : Microsoft.Xna.Framework.Game
         _inventoryUI.Init(_widgetRenderer, _inventory, _gameData.Items);
         _buildingMenuUI.Init(_widgetRenderer, _envSystem, _inventory, _gameData.Items,
             _graphics.PreferredBackBufferHeight, _spriteBatch, _pixel);
+        _craftingMenu.Init(_widgetRenderer, _inventory, _gameData.Items, _gameData,
+            _graphics.PreferredBackBufferHeight, _spriteBatch, _pixel);
         LogTiming("Inventory & Building UI initialized");
 
         // Init property editor infrastructure
@@ -1121,6 +1131,8 @@ public class Game1 : Microsoft.Xna.Framework.Game
         _unitEditor.SetAnimMeta(_animMeta);
         _spellEditor = new SpellEditorWindow(_editorUi);
         _spellEditor.SetGameData(_gameData);
+        _itemEditor = new ItemEditorWindow(_editorUi);
+        _itemEditor.SetGameData(_gameData);
         _settingsWindow = new SettingsWindow(_editorUi);
         _settingsWindow.SetGameData(_gameData, Path.Combine("data", "settings.json"), Path.Combine("data", "weather.json"));
         LogTiming("Editors initialized");
@@ -1312,6 +1324,10 @@ public class Game1 : Microsoft.Xna.Framework.Game
             if (mouse.X >= menuX2 && mouse.X < menuX2 + btnW2 && mouse.Y >= y2 && mouse.Y < y2 + btnH2)
             { _menuState = MenuState.UIEditor; _paused = false; }
             y2 += btnH2 + btnGap2;
+            // Item Editor
+            if (mouse.X >= menuX2 && mouse.X < menuX2 + btnW2 && mouse.Y >= y2 && mouse.Y < y2 + btnH2)
+            { _menuState = MenuState.ItemEditor; _paused = false; }
+            y2 += btnH2 + btnGap2;
             // Settings
             if (mouse.X >= menuX2 && mouse.X < menuX2 + btnW2 && mouse.Y >= y2 && mouse.Y < y2 + btnH2)
             { _menuState = MenuState.Settings; }
@@ -1344,7 +1360,8 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 _menuState = MenuState.PauseMenu;
             }
             else if (_menuState == MenuState.UnitEditor || _menuState == MenuState.SpellEditor ||
-                _menuState == MenuState.MapEditor || _menuState == MenuState.UIEditor)
+                _menuState == MenuState.MapEditor || _menuState == MenuState.UIEditor ||
+                _menuState == MenuState.ItemEditor)
             {
                 _menuState = MenuState.None;
             }
@@ -1356,6 +1373,10 @@ public class Game1 : Microsoft.Xna.Framework.Game
             else if (_menuState == MenuState.None && _buildingMenuUI.IsVisible)
             {
                 _buildingMenuUI.Close();
+            }
+            else if (_menuState == MenuState.None && _craftingMenu.IsVisible)
+            {
+                _craftingMenu.Close();
             }
             else if (_menuState == MenuState.None && _inventoryUI.IsVisible)
             {
@@ -1372,7 +1393,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         int screenW = GraphicsDevice.Viewport.Width;
         int screenH = GraphicsDevice.Viewport.Height;
         // Update EditorBase input first so _eb has current mouse/keyboard state for all editors
-        if (_menuState == MenuState.UnitEditor || _menuState == MenuState.SpellEditor || _menuState == MenuState.MapEditor || _menuState == MenuState.Settings)
+        if (_menuState == MenuState.UnitEditor || _menuState == MenuState.SpellEditor || _menuState == MenuState.MapEditor || _menuState == MenuState.Settings || _menuState == MenuState.ItemEditor)
             _editorUi.UpdateInput(mouse, _prevMouse, kb, _prevKb, screenW, screenH, gameTime);
         if (_menuState == MenuState.MapEditor && _gameWorldLoaded)
             _mapEditor.Update(screenW, screenH);
@@ -1462,7 +1483,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 _mouseOverUI = true;
 
             // Spell dropdown open
-            if (_spellDropdownSlot >= 0 || _secondaryDropdownSlot >= 0)
+            if (_spellDropdownSlot >= 0 || _secondaryDropdownSlot >= 0 || _potionDropdownSlot >= 0)
                 _mouseOverUI = true;
 
             // Inventory window
@@ -1471,6 +1492,8 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
             // Building menu
             if (_buildingMenuUI.ContainsMouse(mouse.X, mouse.Y))
+                _mouseOverUI = true;
+            if (_craftingMenu.ContainsMouse(mouse.X, mouse.Y))
                 _mouseOverUI = true;
 
             // Building placement panel (left side, editor mode)
@@ -1639,6 +1662,46 @@ public class Game1 : Microsoft.Xna.Framework.Game
                         }
                     }
                 }
+
+                // --- Potion slot dropdown interaction ---
+                int potionBaseX = screenW / 2 - 80 + 4 * (secSlotW2 + 4) + 8;
+                int potionSlotY = secSlotY2;
+                if (_potionDropdownSlot >= 0)
+                {
+                    // Check if click is in potion dropdown
+                    int pddX = potionBaseX + _potionDropdownSlot * (secSlotW2 + 4);
+                    int pddY = potionSlotY - 20;
+                    var allPotionIds = _gameData.Potions.GetIDs();
+                    int pddItemH = 20;
+                    int pddH = (allPotionIds.Count + 1) * pddItemH;
+
+                    if (mouse.X >= pddX && mouse.X < pddX + 160 && mouse.Y >= pddY - pddH && mouse.Y < pddY)
+                    {
+                        int pddIdx = (pddY - mouse.Y) / pddItemH;
+                        if (pddIdx == 0)
+                            _potionSlots[_potionDropdownSlot] = "";
+                        else if (pddIdx - 1 < allPotionIds.Count)
+                        {
+                            var pdef = _gameData.Potions.Get(allPotionIds[pddIdx - 1]);
+                            _potionSlots[_potionDropdownSlot] = pdef?.ItemID ?? "";
+                        }
+                    }
+                    _potionDropdownSlot = -1;
+                }
+                else
+                {
+                    // Check if click is on a potion slot
+                    for (int ps = 0; ps < 2; ps++)
+                    {
+                        int psX = potionBaseX + ps * (secSlotW2 + 4);
+                        if (mouse.X >= psX && mouse.X < psX + secSlotW2 &&
+                            mouse.Y >= potionSlotY && mouse.Y < potionSlotY + secSlotH2)
+                        {
+                            _potionDropdownSlot = ps;
+                            goto SkipSpellCast;
+                        }
+                    }
+                }
             }
 
             // --- Spell casting (Q = slot 0, E = slot 1, LClick = slot 2, RClick = slot 3) ---
@@ -1656,6 +1719,13 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 if (!pressed || slot >= _spellBarState.Slots.Length) continue;
                 string spellId = _spellBarState.Slots[slot].SpellID;
                 if (string.IsNullOrEmpty(spellId) || necroIdx < 0) continue;
+
+                // --- Melee & Gather: special built-in ability ---
+                if (spellId == "melee_gather")
+                {
+                    TryMeleeOrGather(necroIdx, mouseWorld);
+                    continue;
+                }
 
                 var result = SpellCaster.TryStartSpellCast(spellId, _gameData.Spells, _sim.NecroState,
                     _sim.Units, necroIdx, mouseWorld, _sim.Corpses, _pendingSpell, _gameData);
@@ -1791,19 +1861,20 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
                         case "Command":
                         {
-                            // Order Attack: send all horde units to attack-move toward target
+                            // Order Attack: send horde minions to attack-move toward target
+                            // They stay in the horde and auto-return when area is clear or timeout
                             for (int ci = 0; ci < _sim.Units.Count; ci++)
                             {
                                 if (!_sim.Units.Alive[ci]) continue;
                                 if (_sim.Units.Faction[ci] != Faction.Undead) continue;
-                                if (_sim.Units.AI[ci] == AIBehavior.PlayerControlled) continue;
-                                if (_sim.Units.AI[ci] == AIBehavior.DefendPoint) continue;
-                                if (_sim.Units.AI[ci] == AIBehavior.CorpseWorker) continue;
+                                if (_sim.Units.Archetype[ci] != AI.ArchetypeRegistry.HordeMinion) continue;
 
-                                _sim.Horde.RemoveUnit(_sim.Units.Id[ci]);
-                                _sim.UnitsMut.AI[ci] = AIBehavior.OrderAttack;
+                                _sim.UnitsMut.Routine[ci] = 4; // RoutineCommanded
+                                _sim.UnitsMut.Subroutine[ci] = 0;
+                                _sim.UnitsMut.SubroutineTimer[ci] = 0f;
                                 _sim.UnitsMut.MoveTarget[ci] = mouseWorld;
                                 _sim.UnitsMut.Target[ci] = CombatTarget.None;
+                                _sim.UnitsMut.EngagedTarget[ci] = CombatTarget.None;
                             }
                             break;
                         }
@@ -1905,13 +1976,13 @@ public class Game1 : Microsoft.Xna.Framework.Game
                                 {
                                     if (!_sim.Units.Alive[ci]) continue;
                                     if (_sim.Units.Faction[ci] != Faction.Undead) continue;
-                                    if (_sim.Units.AI[ci] == AIBehavior.PlayerControlled) continue;
-                                    if (_sim.Units.AI[ci] == AIBehavior.DefendPoint) continue;
-                                    if (_sim.Units.AI[ci] == AIBehavior.CorpseWorker) continue;
-                                    _sim.Horde.RemoveUnit(_sim.Units.Id[ci]);
-                                    _sim.UnitsMut.AI[ci] = AIBehavior.OrderAttack;
+                                    if (_sim.Units.Archetype[ci] != AI.ArchetypeRegistry.HordeMinion) continue;
+                                    _sim.UnitsMut.Routine[ci] = 4; // RoutineCommanded
+                                    _sim.UnitsMut.Subroutine[ci] = 0;
+                                    _sim.UnitsMut.SubroutineTimer[ci] = 0f;
                                     _sim.UnitsMut.MoveTarget[ci] = mouseWorld;
                                     _sim.UnitsMut.Target[ci] = CombatTarget.None;
+                                    _sim.UnitsMut.EngagedTarget[ci] = CombatTarget.None;
                                 }
                                 break;
                             case "Toggle":
@@ -1929,6 +2000,82 @@ public class Game1 : Microsoft.Xna.Framework.Game
                     }
                 }
             }
+
+            // --- Auto-populate potion slots from inventory ---
+            {
+                var potionItemIds = new List<string>();
+                foreach (var pid in _gameData.Potions.GetIDs())
+                {
+                    var pdef = _gameData.Potions.Get(pid);
+                    if (pdef != null && !string.IsNullOrEmpty(pdef.ItemID) && _inventory.GetItemCount(pdef.ItemID) > 0)
+                        potionItemIds.Add(pdef.ItemID);
+                }
+                for (int pk = 0; pk < 2; pk++)
+                {
+                    // Clear slot if item is gone from inventory
+                    if (!string.IsNullOrEmpty(_potionSlots[pk]) && _inventory.GetItemCount(_potionSlots[pk]) <= 0)
+                        _potionSlots[pk] = "";
+                    // Fill empty slot with next available potion not already assigned
+                    if (string.IsNullOrEmpty(_potionSlots[pk]))
+                    {
+                        foreach (var itemId in potionItemIds)
+                        {
+                            bool alreadyAssigned = false;
+                            for (int other = 0; other < 2; other++)
+                                if (other != pk && _potionSlots[other] == itemId) alreadyAssigned = true;
+                            if (!alreadyAssigned) { _potionSlots[pk] = itemId; break; }
+                        }
+                    }
+                }
+            }
+
+            // --- Potion slots (keys 5, 6) — select for throwing ---
+            if (necroIdx >= 0)
+            {
+                Keys[] potionKeys = { Keys.D5, Keys.D6 };
+                for (int pk = 0; pk < 2; pk++)
+                {
+                    if (!WasKeyPressed(kb, potionKeys[pk])) continue;
+                    if (string.IsNullOrEmpty(_potionSlots[pk])) continue;
+                    if (_inventory.GetItemCount(_potionSlots[pk]) <= 0) continue;
+                    _activePotionSlot = (_activePotionSlot == pk) ? -1 : pk;
+                }
+            }
+
+            // Potion throw on left-click when a potion slot is active
+            if (_activePotionSlot >= 0 && necroIdx >= 0 && !_mouseOverUI
+                && mouse.LeftButton == ButtonState.Pressed && _prevMouse.LeftButton == ButtonState.Released)
+            {
+                string potionItemId = _potionSlots[_activePotionSlot];
+                var potionDef = FindPotionByItemId(potionItemId);
+                if (potionDef != null)
+                {
+                    var necroPos = _sim.Units.Position[necroIdx];
+                    float dist = (mouseWorld - necroPos).Length();
+
+                    if (dist < 1.0f)
+                    {
+                        // Self-target: apply directly
+                        if (_inventory.GetItemCount(potionItemId) > 0)
+                        {
+                            _inventory.RemoveItem(potionItemId, 1);
+                            PotionSystem.ApplyPotionEffect(potionDef.Id, _gameData.Potions, _gameData.Buffs,
+                                necroIdx, _sim.UnitsMut, _sim.Units.Faction[necroIdx],
+                                _sim.PendingZombieRaises, _sim.CorpsesMut, necroPos);
+                        }
+                    }
+                    else
+                    {
+                        PotionSystem.TryThrowPotion(potionDef.Id, _gameData.Potions, _inventory,
+                            _sim.UnitsMut, necroIdx, mouseWorld, _sim.Corpses, _sim.Projectiles);
+                    }
+                }
+                _activePotionSlot = -1;
+            }
+
+            // Cancel potion selection on right-click
+            if (_activePotionSlot >= 0 && mouse.RightButton == ButtonState.Pressed && _prevMouse.RightButton == ButtonState.Released)
+                _activePotionSlot = -1;
 
             // --- Corpse drag (F key) ---
             if (WasKeyPressed(kb, Keys.F) && necroIdx >= 0)
@@ -1975,7 +2122,17 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
             // --- Building placement toggle (B) ---
             if (WasKeyPressed(kb, Keys.B))
+            {
+                if (_craftingMenu.IsVisible) _craftingMenu.Close();
                 _buildingMenuUI.Toggle(screenW, screenH);
+            }
+
+            // --- Crafting menu toggle (C) ---
+            if (WasKeyPressed(kb, Keys.C))
+            {
+                if (_buildingMenuUI.IsVisible) _buildingMenuUI.Close();
+                _craftingMenu.Toggle(screenW, screenH);
+            }
 
             // --- Building placement click (world click to place) ---
             if (_buildingMenuUI.IsPlacementActive
@@ -2123,7 +2280,8 @@ public class Game1 : Microsoft.Xna.Framework.Game
                     WorldPos = dmg.Position,
                     Damage = dmg.Damage,
                     Timer = 0f,
-                    Height = dmg.Height
+                    Height = dmg.Height,
+                    IsPoison = dmg.IsPoison
                 });
             }
         }
@@ -2249,6 +2407,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // Update inventory UI after all sim/scenario ticks (so slot sync sees latest inventory state)
         _inventoryUI.Update(mouse, kb);
         _buildingMenuUI.Update(mouse, _prevMouse, screenW, screenH);
+        _craftingMenu.Update(mouse, _prevMouse, screenW, screenH, dt);
 
         _prevKb = kb;
         _prevMouse = mouse;
@@ -2327,6 +2486,113 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
     private bool WasKeyPressed(KeyboardState current, Keys key) =>
         current.IsKeyDown(key) && _prevKb.IsKeyUp(key);
+
+    private PotionDef? FindPotionByItemId(string itemId)
+    {
+        foreach (var id in _gameData.Potions.GetIDs())
+        {
+            var p = _gameData.Potions.Get(id);
+            if (p != null && p.ItemID == itemId) return p;
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// Melee & Gather: try to melee attack an enemy near mouse, otherwise try to collect a foragable.
+    /// </summary>
+    private void TryMeleeOrGather(int necroIdx, Vec2 mouseWorld)
+    {
+        var necroPos = _sim.Units.Position[necroIdx];
+
+        // Check melee cooldown
+        if (_sim.Units.AttackCooldown[necroIdx] <= 0f && _sim.Units.PostAttackTimer[necroIdx] <= 0f)
+        {
+            // Find closest enemy near the mouse that is within melee range of the necromancer
+            var stats = _sim.Units.Stats[necroIdx];
+            int weaponLen = stats.MeleeWeapons.Count > 0 ? stats.MeleeWeapons[0].Length : stats.Length;
+            float meleeRange = 1.0f + weaponLen * 0.15f; // base melee range + weapon reach
+
+            int bestEnemy = -1;
+            float bestDist = float.MaxValue;
+            for (int i = 0; i < _sim.Units.Count; i++)
+            {
+                if (i == necroIdx || !_sim.Units.Alive[i]) continue;
+                if (_sim.Units.Faction[i] == _sim.Units.Faction[necroIdx]) continue; // skip friendlies
+
+                float distToMouse = (mouseWorld - _sim.Units.Position[i]).Length();
+                float distToNecro = (necroPos - _sim.Units.Position[i]).Length();
+
+                // Must be near the mouse click AND within melee range of necro
+                if (distToMouse < 3f && distToNecro <= meleeRange && distToMouse < bestDist)
+                {
+                    bestDist = distToMouse;
+                    bestEnemy = i;
+                }
+            }
+
+            if (bestEnemy >= 0)
+            {
+                // Initiate melee attack
+                _sim.UnitsMut.PendingAttack[necroIdx] = CombatTarget.Unit(_sim.Units.Id[bestEnemy]);
+                float cooldown = _gameData.Units.Get(_sim.Units.UnitDefID[necroIdx])?.AttackCooldown
+                    ?? _gameData.Settings.Combat.AttackCooldown;
+                _sim.UnitsMut.AttackCooldown[necroIdx] = cooldown;
+                return;
+            }
+        }
+
+        // No melee target — try foragable collection
+        float forageDist = 2f;
+        int bestForage = -1;
+        float bestForageDist = forageDist;
+        for (int fi = 0; fi < _envSystem.ObjectCount; fi++)
+        {
+            if (!_envSystem.IsObjectVisible(fi)) continue;
+            var def = _envSystem.Defs[_envSystem.Objects[fi].DefIndex];
+            if (!def.IsForagable) continue;
+            var obj = _envSystem.Objects[fi];
+            float dist = (new Vec2(obj.X, obj.Y) - necroPos).Length();
+            if (dist < bestForageDist)
+            {
+                bestForageDist = dist;
+                bestForage = fi;
+            }
+        }
+        if (bestForage >= 0)
+        {
+            string? resourceType = _envSystem.CollectForagable(bestForage);
+            if (resourceType != null)
+                _inventory.AddItem(resourceType);
+        }
+    }
+
+    private Texture2D? GetItemTextureByPath(string path)
+    {
+        if (string.IsNullOrEmpty(path)) return null;
+        if (_itemTextureCache.TryGetValue(path, out var cached)) return cached;
+        try
+        {
+            var tex = TextureUtil.LoadPremultiplied(GraphicsDevice, path);
+            _itemTextureCache[path] = tex;
+            return tex;
+        }
+        catch { _itemTextureCache[path] = null; return null; }
+    }
+
+    private Texture2D? GetItemTexture(string itemId)
+    {
+        if (string.IsNullOrEmpty(itemId)) return null;
+        if (_itemTextureCache.TryGetValue(itemId, out var cached)) return cached;
+        var item = _gameData.Items.Get(itemId);
+        if (item == null || string.IsNullOrEmpty(item.Icon)) { _itemTextureCache[itemId] = null; return null; }
+        try
+        {
+            var tex = TextureUtil.LoadPremultiplied(GraphicsDevice, item.Icon);
+            _itemTextureCache[itemId] = tex;
+            return tex;
+        }
+        catch { _itemTextureCache[itemId] = null; return null; }
+    }
 
     private int FindClosestEnemyToPoint(Vec2 worldPos, float maxRange)
     {
@@ -2854,6 +3120,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         if (showUI)
         {
             _buildingMenuUI.DrawMenu();
+            _craftingMenu.Draw();
 
             // Ghost preview for building placement
             if (_buildingMenuUI.IsPlacementActive)
@@ -2897,6 +3164,15 @@ public class Game1 : Microsoft.Xna.Framework.Game
         else if (_menuState == MenuState.UIEditor)
         {
             _uiEditor.Draw(screenW, screenH);
+        }
+        else if (_menuState == MenuState.ItemEditor)
+        {
+            _itemEditor.Draw(screenW, screenH, gameTime);
+            if (_itemEditor.WantsClose)
+            {
+                _itemEditor.WantsClose = false;
+                _menuState = MenuState.None;
+            }
         }
 
         // Draw color picker popup overlay (must be after all editor drawing, on top)
@@ -3357,7 +3633,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
             }
                 
 
-            // Text above head: velocity | anim state | max speed
+            // Text above head: AI label + velocity | anim state | max speed
             string info = $"{aiLabel}\nv:{speed:F1} {animLabel} ms:{maxSpeed:F1}";
             var textPos = new Vector2(sp.X - info.Length * 3, sp.Y - 28);
             _spriteBatch.DrawString(_smallFont, info, textPos, new Color(255, 255, 200, 220));
@@ -3368,6 +3644,30 @@ public class Game1 : Microsoft.Xna.Framework.Game
             _spriteBatch.DrawString(_smallFont, "[F7] Debug: Unit Info",
                 new Vector2(10, 26), new Color(80, 200, 255, 200));
     }
+
+    private static string GetRoutineName(byte archetype, byte routine) => archetype switch
+    {
+        AI.ArchetypeRegistry.WolfPack => routine switch { 0 => "IdleRoam", 1 => "Sleep", 2 => "Fight", _ => $"R{routine}" },
+        AI.ArchetypeRegistry.DeerHerd => routine switch { 0 => "IdleRoam", 1 => "Sleep", 2 => "Alert", 3 => "Flee", 4 => "Calm", 5 => "FightBack", _ => $"R{routine}" },
+        AI.ArchetypeRegistry.HordeMinion => routine switch { 0 => "Follow", 1 => "Chase", 2 => "Engage", 3 => "Return", _ => $"R{routine}" },
+        AI.ArchetypeRegistry.PatrolSoldier or AI.ArchetypeRegistry.GuardStationary or AI.ArchetypeRegistry.ArmyUnit =>
+            routine switch { 0 => "Idle", 1 => "Alert", 2 => "Combat", 3 => "Return", _ => $"R{routine}" },
+        AI.ArchetypeRegistry.ArcherUnit or AI.ArchetypeRegistry.CasterUnit =>
+            routine switch { 0 => "Idle", 1 => "Alert", 2 => "Combat", 3 => "Return", _ => $"R{routine}" },
+        _ => $"R{routine}"
+    };
+
+    private static string GetSubroutineName(byte archetype, byte routine, byte sub) => archetype switch
+    {
+        AI.ArchetypeRegistry.WolfPack when routine == 2 => sub switch { 0 => "Approach", 1 => "Strike", 2 => "Disengage", 3 => "Cooldown", _ => $"S{sub}" },
+        AI.ArchetypeRegistry.WolfPack => sub switch { 0 => "Walk", 1 => "Idle", _ => $"S{sub}" },
+        AI.ArchetypeRegistry.DeerHerd when routine == 5 => sub switch { 0 => "Chase", 1 => "Attack", _ => $"S{sub}" },
+        AI.ArchetypeRegistry.DeerHerd => sub switch { 0 => "Walk", 1 => "Idle", _ => $"S{sub}" },
+        AI.ArchetypeRegistry.HordeMinion => $"S{sub}",
+        AI.ArchetypeRegistry.PatrolSoldier when routine == 0 => sub switch { 0 => "Walking", 1 => "Waiting", _ => $"S{sub}" },
+        _ when routine == 2 => sub switch { 0 => "Chase", 1 => "Attack", _ => $"S{sub}" },
+        _ => sub switch { 0 => "Walk", 1 => "Idle", _ => $"S{sub}" },
+    };
 
     /// <summary>Draw ground-layer objects (traps) — above dirt, below grass/units.</summary>
     private void DrawGroundLayerObjects()
@@ -3642,6 +3942,28 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 _spriteBatch.Draw(_pixel, sp, null, new Color(160, 140, 100),
                     angle, new Vector2(-2f, 1.5f), new Vector2(4f, 3f), SpriteEffects.None, 0f);
             }
+            else if (proj.Type == ProjectileType.Potion && !string.IsNullOrEmpty(proj.IconTexturePath))
+            {
+                // Potion bottle tumbling through the air
+                var tex = GetItemTextureByPath(proj.IconTexturePath);
+                if (tex != null)
+                {
+                    float worldSize = proj.ParticleScale * 1.2f;
+                    float pixelSize = worldSize * _camera.Zoom;
+                    float scale = pixelSize / MathF.Max(tex.Width, tex.Height);
+                    var origin = new Vector2(tex.Width / 2f, tex.Height / 2f);
+                    float tumble = proj.Age * 6f; // fast spin
+                    _spriteBatch.Draw(tex, sp, null, Color.White,
+                        tumble, origin, scale, SpriteEffects.None, 0f);
+                }
+                else
+                {
+                    // Fallback colored dot
+                    float glowSize = 5f * _camera.Zoom / 32f;
+                    _spriteBatch.Draw(_pixel, sp, null, new Color(100, 200, 100, 200),
+                        0f, new Vector2(0.5f, 0.5f), glowSize, SpriteEffects.None, 0f);
+                }
+            }
             else
             {
                 // Spell projectile — try flipbook rendering
@@ -3756,8 +4078,10 @@ public class Game1 : Microsoft.Xna.Framework.Game
             _spriteBatch.DrawString(_font, text, new Vector2(pos.X + 1f, pos.Y + 1f), shadowColor,
                 0f, Vector2.Zero, dnScale, SpriteEffects.None, 0f);
 
-            // Text pass — use DamageNumberColor from settings
-            var color = Color.FromNonPremultiplied(dnColor.R, dnColor.G, dnColor.B, alpha);
+            // Text pass — green for poison, otherwise use DamageNumberColor from settings
+            var color = dn.IsPoison
+                ? Color.FromNonPremultiplied(40, 200, 40, alpha)
+                : Color.FromNonPremultiplied(dnColor.R, dnColor.G, dnColor.B, alpha);
             _spriteBatch.DrawString(_font, text, pos, color,
                 0f, Vector2.Zero, dnScale, SpriteEffects.None, 0f);
         }
@@ -3770,7 +4094,9 @@ public class Game1 : Microsoft.Xna.Framework.Game
             _spellBarState, _secondaryBarState,
             _spellDropdownSlot, _secondaryDropdownSlot,
             _timeScale, _hoveredObjectIdx, _envSystem,
-            DrawSpellCategoryIcon);
+            DrawSpellCategoryIcon,
+            _potionSlots, _activePotionSlot, GetItemTexture,
+            _potionDropdownSlot);
     }
 
     private void DrawPauseMenu(int screenW, int screenH)
@@ -3802,6 +4128,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         DrawMenuButton("Spell Editor (F10)", menuX, ref menuY, btnW, btnH, btnGap, mouse);
         DrawMenuButton("Map Editor (F11)", menuX, ref menuY, btnW, btnH, btnGap, mouse);
         DrawMenuButton("UI Editor (F12)", menuX, ref menuY, btnW, btnH, btnGap, mouse);
+        DrawMenuButton("Item Editor", menuX, ref menuY, btnW, btnH, btnGap, mouse);
         DrawMenuButton("Settings", menuX, ref menuY, btnW, btnH, btnGap, mouse);
 
         menuY += 10;

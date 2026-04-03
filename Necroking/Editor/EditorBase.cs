@@ -333,10 +333,10 @@ public class EditorBase
 
     // === Button ===
 
-    public bool DrawButton(string text, int x, int y, int w, int h, Color? bgOverride = null)
+    public bool DrawButton(string text, int x, int y, int w, int h, Color? bgOverride = null, int layer = 0)
     {
         var rect = new Rectangle(x, y, w, h);
-        bool hovered = !IsInputBlocked(0) && rect.Contains(_mouse.X, _mouse.Y);
+        bool hovered = !IsInputBlocked(layer) && rect.Contains(_mouse.X, _mouse.Y);
         bool pressed = hovered && _mouse.LeftButton == ButtonState.Pressed;
         bool clicked = hovered && _mouse.LeftButton == ButtonState.Released && _prevMouse.LeftButton == ButtonState.Pressed;
 

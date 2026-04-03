@@ -11,6 +11,7 @@ namespace Necroking.AI;
 ///   1 = Chasing      — pursuing an enemy assigned by horde system
 ///   2 = Engaged      — in melee combat with target
 ///   3 = Returning    — pathfinding back to formation after combat
+///   4 = Commanded    — attack-move to a target point, fight enemies there, auto-return when clear or timeout
 ///
 /// The HordeSystem still manages formation geometry (slot positions, circle center).
 /// This handler reads horde state and drives unit movement/combat accordingly.
@@ -22,6 +23,10 @@ public class HordeMinionHandler : IArchetypeHandler
     private const byte RoutineChasing = 1;
     private const byte RoutineEngaged = 2;
     private const byte RoutineReturning = 3;
+    private const byte RoutineCommanded = 4;
+
+    private const float CommandTimeout = 45f;
+    private const float CommandClearRadius = 10f;
 
     public void OnSpawn(ref AIContext ctx)
     {
@@ -48,12 +53,16 @@ public class HordeMinionHandler : IArchetypeHandler
             case RoutineChasing:   UpdateChasing(ref ctx); break;
             case RoutineEngaged:   UpdateEngaged(ref ctx); break;
             case RoutineReturning: UpdateReturning(ref ctx); break;
+            case RoutineCommanded: UpdateCommanded(ref ctx); break;
         }
     }
 
     /// <summary>Sync our routine with the HordeSystem's state assignments.</summary>
     private static void SyncHordeState(ref AIContext ctx, HordeUnitState hordeState)
     {
+        // Don't override commanded units with horde assignments
+        if (ctx.Routine == RoutineCommanded) return;
+
         // Horde assigns Chasing with a target — pick it up
         if (hordeState == HordeUnitState.Chasing && ctx.Routine != RoutineChasing && ctx.Routine != RoutineEngaged)
         {
@@ -136,20 +145,36 @@ public class HordeMinionHandler : IArchetypeHandler
 
     private static void UpdateEngaged(ref AIContext ctx)
     {
+        bool frenzied = ctx.Units.Frenzied[ctx.UnitIndex];
+
         if (!SubroutineSteps.IsTargetAlive(ref ctx))
         {
-            ctx.Routine = RoutineReturning;
-            ctx.Units.Target[ctx.UnitIndex] = CombatTarget.None;
-            ctx.Units.EngagedTarget[ctx.UnitIndex] = CombatTarget.None;
-            ctx.Units.InCombat[ctx.UnitIndex] = false;
+            // Frenzied: search for new target instead of returning
+            if (frenzied)
+            {
+                int next = SubroutineSteps.FindClosestEnemy(ref ctx, 30f);
+                if (next >= 0)
+                {
+                    ctx.Units.Target[ctx.UnitIndex] = CombatTarget.Unit(ctx.Units.Id[next]);
+                    ctx.Routine = RoutineChasing;
+                }
+                // else no enemies: stay idle, will recheck
+            }
+            else
+            {
+                ctx.Routine = RoutineReturning;
+                ctx.Units.Target[ctx.UnitIndex] = CombatTarget.None;
+                ctx.Units.EngagedTarget[ctx.UnitIndex] = CombatTarget.None;
+                ctx.Units.InCombat[ctx.UnitIndex] = false;
+            }
             return;
         }
 
         // Stay near target, let combat system handle attacks
         SubroutineSteps.AttackTarget(ref ctx);
 
-        // Leash check
-        if (ctx.Horde != null)
+        // Leash check — frenzied units ignore leash
+        if (!frenzied && ctx.Horde != null)
         {
             float leashRadius = ctx.Horde.Settings.LeashRadius;
             float distToCenter = (ctx.MyPos - ctx.Horde.CircleCenter).Length();
@@ -188,12 +213,80 @@ public class HordeMinionHandler : IArchetypeHandler
         }
     }
 
+    private static void UpdateCommanded(ref AIContext ctx)
+    {
+        ctx.SubroutineTimer += ctx.Dt;
+        Vec2 commandTarget = ctx.Units.MoveTarget[ctx.UnitIndex];
+
+        // Timeout — return to horde
+        if (ctx.SubroutineTimer > CommandTimeout)
+        {
+            ReturnFromCommand(ref ctx);
+            return;
+        }
+
+        // If we have a combat target, fight it
+        if (SubroutineSteps.IsTargetAlive(ref ctx))
+        {
+            int targetIdx = SubroutineSteps.ResolveTarget(ref ctx);
+            if (targetIdx >= 0)
+            {
+                float dist = (ctx.Units.Position[targetIdx] - ctx.MyPos).Length();
+                float meleeRange = SubroutineSteps.GetMeleeRange(ref ctx, targetIdx);
+                if (dist <= meleeRange)
+                {
+                    ctx.Units.EngagedTarget[ctx.UnitIndex] = ctx.Units.Target[ctx.UnitIndex];
+                    SubroutineSteps.AttackTarget(ref ctx);
+                }
+                else
+                {
+                    SubroutineSteps.MoveToward(ref ctx, ctx.Units.Position[targetIdx], ctx.MySpeed);
+                }
+            }
+            return;
+        }
+
+        // No current target — are we at the command point?
+        float distToTarget = (ctx.MyPos - commandTarget).Length();
+        if (distToTarget > 2f)
+        {
+            // Still moving to command point
+            ctx.Units.Target[ctx.UnitIndex] = CombatTarget.None;
+            ctx.Units.EngagedTarget[ctx.UnitIndex] = CombatTarget.None;
+            SubroutineSteps.MoveToward(ref ctx, commandTarget, ctx.MySpeed);
+        }
+        else
+        {
+            // At command point — look for enemies nearby
+            int enemy = SubroutineSteps.FindClosestEnemy(ref ctx, CommandClearRadius);
+            if (enemy >= 0)
+            {
+                ctx.Units.Target[ctx.UnitIndex] = CombatTarget.Unit(ctx.Units.Id[enemy]);
+            }
+            else
+            {
+                // Area is clear — return to horde
+                ReturnFromCommand(ref ctx);
+            }
+        }
+    }
+
+    private static void ReturnFromCommand(ref AIContext ctx)
+    {
+        ctx.Routine = RoutineReturning;
+        ctx.SubroutineTimer = 0f;
+        ctx.Units.Target[ctx.UnitIndex] = CombatTarget.None;
+        ctx.Units.EngagedTarget[ctx.UnitIndex] = CombatTarget.None;
+        ctx.Units.InCombat[ctx.UnitIndex] = false;
+    }
+
     public string GetRoutineName(byte routine) => routine switch
     {
         RoutineFollowing => "Following",
         RoutineChasing => "Chasing",
         RoutineEngaged => "Engaged",
         RoutineReturning => "Returning",
+        RoutineCommanded => "Commanded",
         _ => $"Unknown({routine})"
     };
 

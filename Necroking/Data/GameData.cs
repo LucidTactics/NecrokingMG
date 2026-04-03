@@ -16,6 +16,7 @@ public class GameData
     public UnitGroupRegistry UnitGroups { get; } = new();
     public GameSettingsData Settings { get; } = new();
     public ItemRegistry Items { get; } = new();
+    public PotionRegistry Potions { get; } = new();
 
     public bool Load(string dataDir = "data")
     {
@@ -31,6 +32,7 @@ public class GameData
         ok &= UnitGroups.Load(Path.Combine(dataDir, "unit_groups.json"));
         ok &= Settings.Load(Path.Combine(dataDir, "settings.json"));
         Items.Load(Path.Combine(dataDir, "items.json")); // optional, don't fail if missing
+        Potions.Load(Path.Combine(dataDir, "potions.json")); // optional, don't fail if missing
         // Load weapon_points.json (must be after units.json so UnitDefs exist)
         ok &= Units.LoadWeaponPoints(Path.Combine(dataDir, "weapon_points.json"));
         return ok;
@@ -50,12 +52,13 @@ public class GameData
         ok &= UnitGroups.Save(Path.Combine(dataDir, "unit_groups.json"));
         ok &= Settings.Save(Path.Combine(dataDir, "settings.json"));
         ok &= Items.Save(Path.Combine(dataDir, "items.json"));
+        ok &= Potions.Save(Path.Combine(dataDir, "potions.json"));
         ok &= Units.SaveWeaponPoints(Path.Combine(dataDir, "weapon_points.json"));
 
         // Dual-save each data file to source tree via GamePaths
         string[] dataFiles = { "weapons.json", "armor.json", "shields.json", "units.json",
             "flipbooks.json", "buffs.json", "spells.json", "weather.json",
-            "unit_groups.json", "settings.json", "items.json", "weapon_points.json" };
+            "unit_groups.json", "settings.json", "items.json", "potions.json", "weapon_points.json" };
         foreach (var file in dataFiles)
             Core.GamePaths.DualSave(Path.Combine(dataDir, file));
         return ok;

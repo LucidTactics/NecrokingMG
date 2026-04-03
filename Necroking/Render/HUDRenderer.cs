@@ -69,6 +69,9 @@ public class HUDRenderer
     private static readonly Color ControlHintColor = new(120, 120, 140, 200);
     private static readonly Color InventoryHintColor = new(200, 220, 180);
     private static readonly Color MaterialColor = new(200, 160, 255);
+    private static readonly Color PotionActiveBorder = new(180, 200, 100, 240);
+    private static readonly Color PotionQtyColor = new(255, 255, 200);
+    private static readonly Color PotionEmptyColor = new(100, 100, 100, 120);
 
     // Dependencies (set via Init)
     private SpriteBatch _batch = null!;
@@ -90,7 +93,10 @@ public class HUDRenderer
         SpellBarState primaryBar, SpellBarState secondaryBar,
         int spellDropdownSlot, int secondaryDropdownSlot,
         float timeScale, int hoveredObjectIdx, EnvironmentSystem envSystem,
-        Action<string, int, int> drawSpellCategoryIcon)
+        Action<string, int, int> drawSpellCategoryIcon,
+        string[]? potionSlots = null, int activePotionSlot = -1,
+        Func<string, Texture2D?>? getItemTexture = null,
+        int potionDropdownSlot = -1)
     {
         int necroIdx = FindNecromancer(sim);
 
@@ -109,6 +115,11 @@ public class HUDRenderer
             new[] { "1", "2", "3", "4" }, secondaryBar, sim, gameData, drawSpellCategoryIcon, 5);
         DrawSpellDropdown(screenW, secondaryY, SecondarySlotW, SecondaryBarOffsetX,
             secondaryDropdownSlot, secondaryBar, gameData);
+
+        if (potionSlots != null)
+            DrawPotionSlots(screenW, secondaryY, potionSlots, activePotionSlot, inventory, gameData, getItemTexture);
+        if (potionSlots != null)
+            DrawPotionDropdown(screenW, secondaryY, potionSlots, potionDropdownSlot, gameData);
 
         DrawBuildingTooltip(hoveredObjectIdx, envSystem, sim);
         DrawNecroMaterials(sim);
@@ -182,7 +193,16 @@ public class HUDRenderer
             Text(_smallFont, keys[s], new Vector2(slotX + 2, barY + 2), KeyLabelColor);
 
             if (!hasSpell) continue;
-            var spell = gameData.Spells.Get(bar.Slots[s].SpellID);
+
+            // Special built-in abilities
+            string slotSpellId = bar.Slots[s].SpellID;
+            if (slotSpellId == "melee_gather")
+            {
+                Text(_smallFont, "Melee", new Vector2(slotX + 3, barY + slotH - 14), SpellNameColor);
+                continue;
+            }
+
+            var spell = gameData.Spells.Get(slotSpellId);
             if (spell == null) continue;
 
             // Name (truncated)
@@ -352,6 +372,102 @@ public class HUDRenderer
             Text(_smallFont, logLine, new Vector2(10, logBaseY - linesDrawn * 16),
                 new Color((byte)200, (byte)200, (byte)200, alpha));
             linesDrawn++;
+        }
+    }
+
+    // ═══════════════════════════════════════
+    //  Potion Slots
+    // ═══════════════════════════════════════
+
+    private void DrawPotionSlots(int screenW, int secondaryY, string[] potionSlots,
+        int activePotionSlot, Inventory inventory, GameData gameData,
+        Func<string, Texture2D?>? getItemTexture)
+    {
+        if (_smallFont == null) return;
+
+        // Position: to the right of the secondary bar (4 slots * (35+4) = 156, so offset = 80 + 156 + 8)
+        int baseX = screenW / 2 - SecondaryBarOffsetX + 4 * (SecondarySlotW + SlotSpacing) + 8;
+        int barY = secondaryY;
+
+        for (int s = 0; s < potionSlots.Length && s < 2; s++)
+        {
+            int slotX = baseX + s * (SecondarySlotW + SlotSpacing);
+            string potionItemId = potionSlots[s];
+            bool hasPotion = !string.IsNullOrEmpty(potionItemId);
+            int qty = hasPotion ? inventory.GetItemCount(potionItemId) : 0;
+            bool isActive = s == activePotionSlot;
+
+            // Background
+            Color bg = hasPotion && qty > 0 ? SecFilledBg : SecEmptyBg;
+            _batch.Draw(_pixel, new Rectangle(slotX, barY, SecondarySlotW, SecondarySlotH), bg);
+
+            // Border — highlight if active
+            Color border = isActive ? PotionActiveBorder : SecBorder;
+            _batch.Draw(_pixel, new Rectangle(slotX, barY, SecondarySlotW, SlotBorderHeight), border);
+            if (isActive)
+            {
+                _batch.Draw(_pixel, new Rectangle(slotX, barY + SecondarySlotH - SlotBorderHeight, SecondarySlotW, SlotBorderHeight), border);
+                _batch.Draw(_pixel, new Rectangle(slotX, barY, SlotBorderHeight, SecondarySlotH), border);
+                _batch.Draw(_pixel, new Rectangle(slotX + SecondarySlotW - SlotBorderHeight, barY, SlotBorderHeight, SecondarySlotH), border);
+            }
+
+            // Key label
+            Text(_smallFont, (s + 5).ToString(), new Vector2(slotX + 2, barY + 2), KeyLabelColor);
+
+            if (hasPotion && getItemTexture != null)
+            {
+                // Draw potion icon
+                var texture = getItemTexture(potionItemId);
+                if (texture != null)
+                {
+                    int iconSize = SecondarySlotW - 6;
+                    var iconRect = new Rectangle(slotX + 3, barY + 3, iconSize, iconSize);
+                    _batch.Draw(texture, iconRect, Color.White);
+                }
+
+                // Quantity in bottom-right
+                if (qty > 0)
+                {
+                    string qtyStr = qty.ToString();
+                    var qtySize = _smallFont.MeasureString(qtyStr);
+                    Text(_smallFont, qtyStr,
+                        new Vector2(slotX + SecondarySlotW - qtySize.X - 2, barY + SecondarySlotH - qtySize.Y - 1),
+                        PotionQtyColor);
+                }
+                else
+                {
+                    // Dim overlay when out of stock
+                    _batch.Draw(_pixel, new Rectangle(slotX, barY, SecondarySlotW, SecondarySlotH), PotionEmptyColor);
+                }
+            }
+        }
+    }
+
+    private void DrawPotionDropdown(int screenW, int secondaryY, string[] potionSlots,
+        int openSlot, GameData gameData)
+    {
+        if (openSlot < 0 || openSlot >= 2 || _smallFont == null) return;
+
+        int baseX = screenW / 2 - SecondaryBarOffsetX + 4 * (SecondarySlotW + SlotSpacing) + 8;
+        int slotX = baseX + openSlot * (SecondarySlotW + SlotSpacing);
+
+        var allPotions = gameData.Potions.GetIDs();
+        int ddItemH = DropdownItemH;
+        int ddH = (allPotions.Count + 1) * ddItemH;
+        int ddY = secondaryY - 10;
+
+        _batch.Draw(_pixel, new Rectangle(slotX - 2, ddY - ddH - 2, DropdownWidth, ddH + 4), DropdownBg);
+        Text(_smallFont, "(None)", new Vector2(slotX + 4, ddY - ddItemH), DropdownNoneColor);
+
+        string currentItemId = potionSlots[openSlot];
+        for (int pi = 0; pi < allPotions.Count; pi++)
+        {
+            var pDef = gameData.Potions.Get(allPotions[pi]);
+            int itemY = ddY - (pi + 2) * ddItemH;
+            string label = pDef?.DisplayName ?? allPotions[pi];
+            bool isSelected = pDef != null && pDef.ItemID == currentItemId;
+            Text(_smallFont, label, new Vector2(slotX + 4, itemY),
+                isSelected ? DropdownSelectedColor : DropdownNormalColor);
         }
     }
 

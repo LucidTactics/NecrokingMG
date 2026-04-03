@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using Necroking.Core;
 using Necroking.Data;
+using Necroking.Game;
 using Necroking.Movement;
 using Necroking.Spatial;
 using Necroking.World;
@@ -30,6 +31,7 @@ public class DamageEvent
     public Vec2 Position;
     public int Damage;
     public float Height;
+    public bool IsPoison;
 }
 
 public struct SoulOrb
@@ -66,6 +68,7 @@ public class Simulation
     private int _necromancerIdx = -1;
     private float _harassmentDecayTimer = CombatTickInterval;
     private int _nextCorpseID;
+    private readonly List<PendingZombieRaise> _pendingZombieRaises = new();
 
     // Public accessors
     public TileGrid Grid => _grid;
@@ -88,6 +91,7 @@ public class Simulation
     public Pathfinder Pathfinder => _pathfinder;
     public EnvironmentSystem? EnvironmentSystem => _envSystem;
     public WallSystem? WallSystem => _wallSystem;
+    public List<PendingZombieRaise> PendingZombieRaises => _pendingZombieRaises;
 
     public void Init(int gridWidth, int gridHeight, GameData? gameData = null)
     {
@@ -187,10 +191,77 @@ public class Simulation
         UpdateFacingAngles(dt);
         UpdateCombat(dt);
 
-        // Projectiles (with quadtree collision)
-        _projectiles.Update(dt, _units, _quadtree);
+        // Tick potion effects (paralysis, poison DoT, weapon coat timers)
+        PotionSystem.TickPotionEffects(_units, _damageEvents, dt);
+
+        // Tick pending zombie raises
+        PotionSystem.TickZombieRaises(_pendingZombieRaises, dt, (defId, pos, facing, scale) =>
+        {
+            // Resolve zombie type from the dead unit's def
+            string spawnId = "skeleton"; // fallback
+            if (_gameData != null)
+            {
+                var unitDef = _gameData.Units.Get(defId);
+                if (unitDef != null && !string.IsNullOrEmpty(unitDef.ZombieTypeID))
+                {
+                    // ZombieTypeID can be a direct unit def or a unit group — resolve it
+                    if (_gameData.Units.Get(unitDef.ZombieTypeID) != null)
+                        spawnId = unitDef.ZombieTypeID;
+                    else
+                        spawnId = _gameData.UnitGroups.PickRandom(unitDef.ZombieTypeID) ?? "skeleton";
+                }
+            }
+            int idx = SpawnUnitByID(spawnId, pos);
+            if (idx >= 0)
+            {
+                _units.Faction[idx] = Faction.Undead;
+                _units.FacingAngle[idx] = facing;
+                _units.StandupTimer[idx] = 1.5f;
+                _units.SpawnPosition[idx] = pos;
+                // Set as horde minion and add to horde
+                _units.Archetype[idx] = AI.ArchetypeRegistry.HordeMinion;
+                _units.Routine[idx] = 0; // Following
+                _horde.AddUnit(_units.Id[idx]);
+            }
+        });
+
+        // Projectiles (with quadtree collision, pass corpses for potion corpse-targeting)
+        _projectiles.Update(dt, _units, _quadtree, _corpses);
         foreach (var hit in _projectiles.Hits)
         {
+            // Potion projectiles apply effects instead of damage
+            if (!string.IsNullOrEmpty(hit.PotionID))
+            {
+                if (_gameData != null)
+                {
+                    // Direct corpse hit — raise it
+                    if (hit.CorpseHitIdx >= 0 && hit.CorpseHitIdx < _corpses.Count)
+                    {
+                        var potion = _gameData.Potions.Get(hit.PotionID);
+                        if (potion != null)
+                        {
+                            var corpse = _corpses[hit.CorpseHitIdx];
+                            _pendingZombieRaises.Add(new PendingZombieRaise
+                            {
+                                Position = corpse.Position,
+                                UnitDefID = corpse.UnitDefID,
+                                FacingAngle = corpse.FacingAngle,
+                                SpriteScale = corpse.SpriteScale,
+                                Timer = 1.0f
+                            });
+                            corpse.Dissolving = true;
+                            corpse.ConsumedBySummon = true;
+                        }
+                    }
+                    else
+                    {
+                        Vec2 impactPos = hit.UnitIdx >= 0 ? _units.Position[hit.UnitIdx] : hit.ImpactPos;
+                        PotionSystem.ApplyPotionEffect(hit.PotionID, _gameData.Potions, _gameData.Buffs,
+                            hit.UnitIdx, _units, hit.OwnerFaction, _pendingZombieRaises, _corpses, impactPos);
+                    }
+                }
+                continue;
+            }
             if (hit.UnitIdx >= 0 && hit.UnitIdx < _units.Count && _units.Alive[hit.UnitIdx])
                 ApplyDamage(hit.UnitIdx, hit.Damage);
         }
@@ -1305,9 +1376,16 @@ public class Simulation
 
         int atkDRN = UnitUtil.RollDRN();
         int defDRN = UnitUtil.RollDRN();
-        int modAtk = atkStats.Attack + atkDRN;
+
+        // Apply paralysis reduction to attack and defense
+        float atkParalysis = PotionSystem.GetParalysisFraction(_units, attackerIdx);
+        float defParalysis = PotionSystem.GetParalysisFraction(_units, defenderIdx);
+        int effectiveAtk = (int)(atkStats.Attack * atkParalysis);
+        int effectiveDef = (int)(defStats.Defense * defParalysis);
+
+        int modAtk = effectiveAtk + atkDRN;
         int harassment = _units.Harassment[defenderIdx];
-        int modDef = defStats.Defense - harassment + defDRN;
+        int modDef = effectiveDef - harassment + defDRN;
 
         var logEntry = new CombatLogEntry
         {
@@ -1339,8 +1417,8 @@ public class Simulation
         int weaponLen = atkStats.MeleeWeapons.Count > 0 ? atkStats.MeleeWeapons[0].Length : atkStats.Length;
         var hitLoc = UnitUtil.RollHitLocation(_units.Size[attackerIdx], _units.Size[defenderIdx], weaponLen);
 
-        // Damage roll — protection varies by hit location
-        int baseDmg = atkStats.Strength + atkStats.Damage;
+        // Damage roll — protection varies by hit location (paralysis reduces strength)
+        int baseDmg = (int)((atkStats.Strength + atkStats.Damage) * atkParalysis);
         int dmgDRN = UnitUtil.RollDRN();
         int protDRN = UnitUtil.RollDRN();
         int dmgRoll = baseDmg + dmgDRN;
@@ -1364,6 +1442,21 @@ public class Simulation
             _units.BlockReacting[defenderIdx] = true;
 
         ApplyDamage(defenderIdx, netDmg, attackerIdx);
+
+        // Weapon coats: apply poison and/or zombie-on-death to defender
+        if (hit && defenderIdx >= 0 && defenderIdx < _units.Count && _units.Alive[defenderIdx])
+        {
+            if (_units.WeaponPoisonCoatTimer[attackerIdx] > 0f && _units.WeaponPoisonAmount[attackerIdx] > 0)
+            {
+                _units.PoisonStacks[defenderIdx] += _units.WeaponPoisonAmount[attackerIdx];
+                if (_units.PoisonTickTimer[defenderIdx] <= 0f)
+                    _units.PoisonTickTimer[defenderIdx] = 3f;
+            }
+            if (_units.WeaponZombieCoatTimer[attackerIdx] > 0f)
+            {
+                _units.ZombieOnDeath[defenderIdx] = true;
+            }
+        }
     }
 
     /// <summary>Apply damage to a unit from an external source (spells, traps, etc.).</summary>
@@ -1739,6 +1832,20 @@ public class Simulation
         {
             if (!_units.Alive[i])
             {
+                // Queue zombie raise if unit had ZombieOnDeath
+                bool zombieRaise = _units.ZombieOnDeath[i];
+                if (zombieRaise)
+                {
+                    _pendingZombieRaises.Add(new PendingZombieRaise
+                    {
+                        Position = _units.Position[i],
+                        UnitDefID = _units.UnitDefID[i],
+                        FacingAngle = _units.FacingAngle[i],
+                        SpriteScale = _units.SpriteScale[i],
+                        Timer = 1.0f
+                    });
+                }
+
                 _corpses.Add(new Corpse
                 {
                     Position = _units.Position[i],
@@ -1746,7 +1853,10 @@ public class Simulation
                     UnitDefID = _units.UnitDefID[i],
                     FacingAngle = _units.FacingAngle[i],
                     SpriteScale = _units.SpriteScale[i],
-                    CorpseID = _nextCorpseID++
+                    CorpseID = _nextCorpseID++,
+                    // Mark corpse as consumed so it dissolves while the zombie rises
+                    Dissolving = zombieRaise,
+                    ConsumedBySummon = zombieRaise
                 });
                 _units.RemoveUnit(i);
                 if (_necromancerIdx == i) _necromancerIdx = -1;

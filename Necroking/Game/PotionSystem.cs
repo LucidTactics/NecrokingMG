@@ -1,0 +1,349 @@
+using System;
+using System.Collections.Generic;
+using Necroking.Core;
+using Necroking.Data;
+using Necroking.Data.Registries;
+using Necroking.GameSystems;
+using Necroking.Movement;
+
+namespace Necroking.Game;
+
+public struct PendingZombieRaise
+{
+    public Vec2 Position;
+    public string UnitDefID;
+    public float FacingAngle;
+    public float SpriteScale;
+    public float Timer;
+}
+
+public static class PotionSystem
+{
+    /// <summary>
+    /// Try to throw a potion. Returns true if successfully thrown (projectile spawned or direct-applied).
+    /// </summary>
+    public static bool TryThrowPotion(
+        string potionId, PotionRegistry potions, Inventory inventory,
+        UnitArrays units, int necroIdx, Vec2 mouseWorld,
+        IReadOnlyList<Corpse> corpses, ProjectileManager projectiles)
+    {
+        var potion = potions.Get(potionId);
+        if (potion == null || necroIdx < 0) return false;
+
+        // Must have the item in inventory
+        if (inventory.GetItemCount(potion.ItemID) <= 0) return false;
+
+        var necroPos = units.Position[necroIdx];
+        float dist = (mouseWorld - necroPos).Length();
+
+        // Range check
+        if (dist > potion.ThrowRange + 1f) return false;
+
+        // Self-target: apply directly if clicking near necromancer
+        if (dist < 1.0f)
+        {
+            // Direct apply will be handled by caller after consuming item
+            inventory.RemoveItem(potion.ItemID, 1);
+            return true; // caller checks dist < 1.0 and applies directly
+        }
+
+        // Throw projectile
+        uint necroUid = units.Id[necroIdx];
+        projectiles.SpawnPotionLob(necroPos, mouseWorld, units.Faction[necroIdx], necroUid,
+            potionId, potion.ProjectileScale);
+
+        // Set visuals on the spawned projectile
+        var projs = projectiles.Projectiles;
+        if (projs.Count > 0)
+        {
+            var lastProj = projs[projs.Count - 1];
+            // Set icon texture path for potion sprite rendering
+            lastProj.IconTexturePath = potion.Icon;
+            lastProj.HitsCorpses = potion.HitsCorpses;
+            lastProj.PotionTargetType = potion.TargetType;
+            if (potion.ProjectileFlipbook != null)
+            {
+                lastProj.FlipbookID = potion.ProjectileFlipbook.FlipbookID;
+                lastProj.ParticleScale = potion.ProjectileFlipbook.Scale;
+                lastProj.ParticleColor = potion.ProjectileFlipbook.Color;
+            }
+            if (potion.HitEffectFlipbook != null)
+            {
+                lastProj.HitEffectFlipbookID = potion.HitEffectFlipbook.FlipbookID;
+                lastProj.HitEffectScale = potion.HitEffectFlipbook.Scale;
+                lastProj.HitEffectColor = potion.HitEffectFlipbook.Color;
+            }
+        }
+
+        inventory.RemoveItem(potion.ItemID, 1);
+        return true;
+    }
+
+    /// <summary>
+    /// Apply a potion effect on hit. Called when a potion projectile lands.
+    /// </summary>
+    public static void ApplyPotionEffect(
+        string potionId, PotionRegistry potions, BuffRegistry buffs,
+        int hitUnitIdx, UnitArrays units, Faction ownerFaction,
+        List<PendingZombieRaise> pendingRaises, List<Corpse> corpses, Vec2 impactPos)
+    {
+        var potion = potions.Get(potionId);
+        if (potion == null) return;
+
+        switch (potion.OnHitEffect)
+        {
+            case "Frenzy":
+                ApplyFrenzy(potion, buffs, hitUnitIdx, units);
+                break;
+            case "Paralysis":
+                ApplyParalysis(potion, buffs, hitUnitIdx, units);
+                break;
+            case "Zombie":
+                ApplyZombie(potion, buffs, hitUnitIdx, units, ownerFaction, pendingRaises, corpses, impactPos);
+                break;
+            case "Poison":
+                ApplyPoison(potion, buffs, hitUnitIdx, units, ownerFaction);
+                break;
+            default:
+                // Generic buff application
+                if (!string.IsNullOrEmpty(potion.BuffID) && hitUnitIdx >= 0)
+                {
+                    var buffDef = buffs.Get(potion.BuffID);
+                    if (buffDef != null)
+                        BuffSystem.ApplyBuff(units, hitUnitIdx, buffDef);
+                }
+                break;
+        }
+    }
+
+    private static void ApplyFrenzy(PotionDef potion, BuffRegistry buffs, int unitIdx, UnitArrays units)
+    {
+        if (unitIdx < 0 || unitIdx >= units.Count) return;
+
+        // Apply frenzy buff (permanent)
+        if (!string.IsNullOrEmpty(potion.BuffID))
+        {
+            var buffDef = buffs.Get(potion.BuffID);
+            if (buffDef != null)
+            {
+                BuffSystem.ApplyBuff(units, unitIdx, buffDef);
+                // Mark the buff as permanent
+                var activeBuffs = units.ActiveBuffs[unitIdx];
+                for (int i = 0; i < activeBuffs.Count; i++)
+                {
+                    if (activeBuffs[i].BuffDefID == buffDef.Id)
+                    {
+                        var b = activeBuffs[i];
+                        b.Permanent = true;
+                        activeBuffs[i] = b;
+                        break;
+                    }
+                }
+            }
+        }
+
+        // Set frenzy behavior flag
+        units.Frenzied[unitIdx] = true;
+    }
+
+    private static void ApplyParalysis(PotionDef potion, BuffRegistry buffs, int unitIdx, UnitArrays units)
+    {
+        if (unitIdx < 0 || unitIdx >= units.Count) return;
+
+        // Start the slow phase (8 seconds of gradually slowing to 0)
+        units.ParalysisSlowTimer[unitIdx] = 8f;
+        units.ParalysisStunTimer[unitIdx] = 0f;
+
+        // Apply visual buff
+        if (!string.IsNullOrEmpty(potion.BuffID))
+        {
+            var buffDef = buffs.Get(potion.BuffID);
+            if (buffDef != null)
+                BuffSystem.ApplyBuff(units, unitIdx, buffDef);
+        }
+    }
+
+    private static void ApplyZombie(PotionDef potion, BuffRegistry buffs, int unitIdx, UnitArrays units,
+        Faction ownerFaction, List<PendingZombieRaise> pendingRaises, List<Corpse> corpses, Vec2 impactPos)
+    {
+        // No unit hit and no corpse hit (corpse hits are handled directly in Simulation via CorpseHitIdx)
+        if (unitIdx < 0) return;
+
+        // Hit a unit
+        if (units.Faction[unitIdx] == ownerFaction)
+        {
+            // Friendly: coat weapons with zombie curse
+            units.WeaponZombieCoatTimer[unitIdx] = 300f; // 5 minutes
+
+            if (!string.IsNullOrEmpty(potion.BuffID))
+            {
+                var buffDef = buffs.Get(potion.BuffID);
+                if (buffDef != null)
+                    BuffSystem.ApplyBuff(units, unitIdx, buffDef);
+            }
+        }
+        else
+        {
+            // Enemy: mark to raise as zombie on death
+            units.ZombieOnDeath[unitIdx] = true;
+
+            if (!string.IsNullOrEmpty(potion.BuffID))
+            {
+                var buffDef = buffs.Get(potion.BuffID);
+                if (buffDef != null)
+                    BuffSystem.ApplyBuff(units, unitIdx, buffDef);
+            }
+        }
+    }
+
+    private static void ApplyPoison(PotionDef potion, BuffRegistry buffs, int unitIdx, UnitArrays units, Faction ownerFaction)
+    {
+        if (unitIdx < 0 || unitIdx >= units.Count) return;
+
+        if (units.Faction[unitIdx] == ownerFaction)
+        {
+            // Friendly: coat weapons with poison
+            units.WeaponPoisonCoatTimer[unitIdx] = 300f; // 5 minutes
+            units.WeaponPoisonAmount[unitIdx] = 5;
+
+            if (!string.IsNullOrEmpty(potion.BuffID))
+            {
+                var buffDef = buffs.Get(potion.BuffID);
+                if (buffDef != null)
+                    BuffSystem.ApplyBuff(units, unitIdx, buffDef);
+            }
+        }
+        else
+        {
+            // Enemy: apply 10 poison stacks
+            units.PoisonStacks[unitIdx] += 10;
+            if (units.PoisonTickTimer[unitIdx] <= 0f)
+                units.PoisonTickTimer[unitIdx] = 3f;
+
+            if (!string.IsNullOrEmpty(potion.BuffID))
+            {
+                var buffDef = buffs.Get(potion.BuffID);
+                if (buffDef != null)
+                    BuffSystem.ApplyBuff(units, unitIdx, buffDef);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Get the paralysis stat multiplier for a unit (0..1). 1 = no paralysis, 0 = fully stunned.
+    /// Used by combat resolution to scale attack/defense.
+    /// </summary>
+    public static float GetParalysisFraction(UnitArrays units, int unitIdx)
+    {
+        if (units.ParalysisStunTimer[unitIdx] > 0f) return 0f;
+        if (units.ParalysisSlowTimer[unitIdx] > 0f)
+            return MathF.Max(units.ParalysisSlowTimer[unitIdx] / 8f, 0f);
+        return 1f;
+    }
+
+    /// <summary>
+    /// Tick all potion effects each frame. Called from Simulation.Tick().
+    /// </summary>
+    public static void TickPotionEffects(UnitArrays units, List<DamageEvent> damageEvents, float dt)
+    {
+        for (int i = 0; i < units.Count; i++)
+        {
+            // --- Paralysis ---
+            if (units.ParalysisSlowTimer[i] > 0f)
+            {
+                units.ParalysisSlowTimer[i] -= dt;
+                // Lerp speed toward 0 over 8 seconds; attack/defense handled in combat resolution
+                float slowFraction = MathF.Max(units.ParalysisSlowTimer[i] / 8f, 0f);
+                units.MaxSpeed[i] *= slowFraction;
+
+                if (units.ParalysisSlowTimer[i] <= 0f)
+                {
+                    units.ParalysisSlowTimer[i] = 0f;
+                    units.ParalysisStunTimer[i] = 6f;
+                }
+            }
+
+            if (units.ParalysisStunTimer[i] > 0f)
+            {
+                units.ParalysisStunTimer[i] -= dt;
+                // Completely stunned: zero speed; attack/defense handled in combat resolution
+                units.MaxSpeed[i] = 0f;
+
+                if (units.ParalysisStunTimer[i] <= 0f)
+                    units.ParalysisStunTimer[i] = 0f;
+            }
+
+            // --- Poison DoT ---
+            if (units.PoisonStacks[i] > 0)
+            {
+                units.PoisonTickTimer[i] -= dt;
+                if (units.PoisonTickTimer[i] <= 0f)
+                {
+                    // Deal poison damage: ceil(stacks / 10)
+                    int dmg = (int)MathF.Ceiling(units.PoisonStacks[i] / 10f);
+                    units.Stats[i].HP -= dmg;
+                    units.PoisonStacks[i] -= dmg;
+                    if (units.PoisonStacks[i] <= 0) units.PoisonStacks[i] = 0;
+
+                    // Green damage number
+                    damageEvents.Add(new DamageEvent
+                    {
+                        Position = units.Position[i],
+                        Damage = dmg,
+                        Height = 1.5f,
+                        IsPoison = true
+                    });
+
+                    if (units.Stats[i].HP <= 0)
+                    {
+                        units.Alive[i] = false;
+                        units.Stats[i].HP = 0;
+                    }
+
+                    // Reset tick timer if still poisoned
+                    if (units.PoisonStacks[i] > 0)
+                        units.PoisonTickTimer[i] = 3f;
+                }
+            }
+
+            // --- Weapon coat timers ---
+            if (units.WeaponPoisonCoatTimer[i] > 0f)
+            {
+                units.WeaponPoisonCoatTimer[i] -= dt;
+                if (units.WeaponPoisonCoatTimer[i] <= 0f)
+                {
+                    units.WeaponPoisonCoatTimer[i] = 0f;
+                    units.WeaponPoisonAmount[i] = 0;
+                }
+            }
+
+            if (units.WeaponZombieCoatTimer[i] > 0f)
+            {
+                units.WeaponZombieCoatTimer[i] -= dt;
+                if (units.WeaponZombieCoatTimer[i] <= 0f)
+                    units.WeaponZombieCoatTimer[i] = 0f;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Tick pending zombie raises. Called from Simulation.Tick().
+    /// Uses Simulation.SpawnUnitByID for proper unit setup.
+    /// </summary>
+    public static void TickZombieRaises(List<PendingZombieRaise> raises, float dt,
+        Action<string, Vec2, float, float> spawnZombie)
+    {
+        for (int i = raises.Count - 1; i >= 0; i--)
+        {
+            var r = raises[i];
+            r.Timer -= dt;
+            raises[i] = r;
+
+            if (r.Timer <= 0f)
+            {
+                spawnZombie(r.UnitDefID, r.Position, r.FacingAngle, r.SpriteScale);
+                raises.RemoveAt(i);
+            }
+        }
+    }
+}

@@ -1,21 +1,21 @@
 {
   "slots": [
     {
-      "spellID": "skeleton_warrior_upgrade"
-    },
-    {
-      "spellID": "summon_skeleton"
-    },
-    {
-      "spellID": ""
+      "spellID": "raise_zombie"
     },
     {
       "spellID": "fireball"
+    },
+    {
+      "spellID": "melee_gather"
+    },
+    {
+      "spellID": ""
     }
   ],
   "secondary": [
     {
-      "spellID": ""
+      "spellID": "summon_skeleton_copy_copy_copy"
     },
     {
       "spellID": ""

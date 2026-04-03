@@ -1376,9 +1376,14 @@ public class SpellEditorWindow
         var headerSize = _ui.MeasureText(headerText);
         _ui.DrawText(headerText, new Vector2(px + (pw - headerSize.X) / 2, py + 10), EditorBase.TextBright);
 
+        // Temporarily unblock input so popup buttons/fields work
+        int savedLayer = _ui.InputLayer;
+        _ui.InputLayer = 0;
+
         // Close button
         if (_ui.DrawButton("X", px + pw - 40, py + 5, 30, 30))
         {
+            _ui.InputLayer = savedLayer;
             _buffManagerOpen = false;
             return;
         }
@@ -1478,7 +1483,11 @@ public class SpellEditorWindow
 
         // Apply & Close
         if (_ui.DrawButton("Apply & Close", px + pw - 160, btnRowY, 150, 32))
+        {
+            _ui.InputLayer = savedLayer;
             _buffManagerOpen = false;
+            return;
+        }
 
         // --- Buff detail (right side, scrollable) ---
         var currentBuffIDs = _gameData.Buffs.GetIDs();
@@ -1488,6 +1497,8 @@ public class SpellEditorWindow
             if (bd != null)
                 DrawBuffDetail(bd, contentX, contentY, contentW, btnRowY - contentY - 10);
         }
+
+        _ui.InputLayer = savedLayer;
     }
 
     // ======================================

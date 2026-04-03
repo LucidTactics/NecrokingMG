@@ -133,6 +133,17 @@ public class UnitArrays
     public List<float> AlertEscalateRange = new();
     public List<float> GroupAlertRadius = new();
 
+    // Potion effects
+    public List<int> PoisonStacks = new();
+    public List<float> PoisonTickTimer = new();
+    public List<float> WeaponPoisonCoatTimer = new();
+    public List<int> WeaponPoisonAmount = new();
+    public List<bool> ZombieOnDeath = new();
+    public List<float> WeaponZombieCoatTimer = new();
+    public List<float> ParalysisSlowTimer = new();
+    public List<float> ParalysisStunTimer = new();
+    public List<bool> Frenzied = new();
+
     public int Count;
     private uint _nextID;
 
@@ -215,6 +226,15 @@ public class UnitArrays
         AlertDuration.Add(2f);
         AlertEscalateRange.Add(0f);
         GroupAlertRadius.Add(0f);
+        PoisonStacks.Add(0);
+        PoisonTickTimer.Add(0f);
+        WeaponPoisonCoatTimer.Add(0f);
+        WeaponPoisonAmount.Add(0);
+        ZombieOnDeath.Add(false);
+        WeaponZombieCoatTimer.Add(0f);
+        ParalysisSlowTimer.Add(0f);
+        ParalysisStunTimer.Add(0f);
+        Frenzied.Add(false);
         return idx;
     }
 
@@ -310,6 +330,15 @@ public class UnitArrays
         (AlertDuration[a], AlertDuration[b]) = (AlertDuration[b], AlertDuration[a]);
         (AlertEscalateRange[a], AlertEscalateRange[b]) = (AlertEscalateRange[b], AlertEscalateRange[a]);
         (GroupAlertRadius[a], GroupAlertRadius[b]) = (GroupAlertRadius[b], GroupAlertRadius[a]);
+        (PoisonStacks[a], PoisonStacks[b]) = (PoisonStacks[b], PoisonStacks[a]);
+        (PoisonTickTimer[a], PoisonTickTimer[b]) = (PoisonTickTimer[b], PoisonTickTimer[a]);
+        (WeaponPoisonCoatTimer[a], WeaponPoisonCoatTimer[b]) = (WeaponPoisonCoatTimer[b], WeaponPoisonCoatTimer[a]);
+        (WeaponPoisonAmount[a], WeaponPoisonAmount[b]) = (WeaponPoisonAmount[b], WeaponPoisonAmount[a]);
+        (ZombieOnDeath[a], ZombieOnDeath[b]) = (ZombieOnDeath[b], ZombieOnDeath[a]);
+        (WeaponZombieCoatTimer[a], WeaponZombieCoatTimer[b]) = (WeaponZombieCoatTimer[b], WeaponZombieCoatTimer[a]);
+        (ParalysisSlowTimer[a], ParalysisSlowTimer[b]) = (ParalysisSlowTimer[b], ParalysisSlowTimer[a]);
+        (ParalysisStunTimer[a], ParalysisStunTimer[b]) = (ParalysisStunTimer[b], ParalysisStunTimer[a]);
+        (Frenzied[a], Frenzied[b]) = (Frenzied[b], Frenzied[a]);
     }
 
     private void TrimLast()
@@ -348,6 +377,11 @@ public class UnitArrays
         DetectionRange.RemoveAt(last); DetectionBreakRange.RemoveAt(last);
         AlertDuration.RemoveAt(last); AlertEscalateRange.RemoveAt(last);
         GroupAlertRadius.RemoveAt(last);
+        PoisonStacks.RemoveAt(last); PoisonTickTimer.RemoveAt(last);
+        WeaponPoisonCoatTimer.RemoveAt(last); WeaponPoisonAmount.RemoveAt(last);
+        ZombieOnDeath.RemoveAt(last); WeaponZombieCoatTimer.RemoveAt(last);
+        ParalysisSlowTimer.RemoveAt(last); ParalysisStunTimer.RemoveAt(last);
+        Frenzied.RemoveAt(last);
     }
 
     public void Clear()
@@ -381,6 +415,11 @@ public class UnitArrays
         AlertTarget.Clear(); SpawnPosition.Clear(); IsSneaking.Clear();
         DetectionRange.Clear(); DetectionBreakRange.Clear();
         AlertDuration.Clear(); AlertEscalateRange.Clear(); GroupAlertRadius.Clear();
+        PoisonStacks.Clear(); PoisonTickTimer.Clear();
+        WeaponPoisonCoatTimer.Clear(); WeaponPoisonAmount.Clear();
+        ZombieOnDeath.Clear(); WeaponZombieCoatTimer.Clear();
+        ParalysisSlowTimer.Clear(); ParalysisStunTimer.Clear();
+        Frenzied.Clear();
     }
 }
 

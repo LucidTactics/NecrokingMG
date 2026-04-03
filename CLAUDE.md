@@ -13,6 +13,13 @@ Default build is Debug. For Release:
 dotnet build Necroking/Necroking.csproj -c Release
 ```
 
+### Publish (self-contained)
+Publish is configured as self-contained (win-x64) in the csproj, so it bundles the .NET runtime. Always publish after making changes the user needs to test:
+```bash
+dotnet publish Necroking/Necroking.csproj -c Debug -o Necroking/bin/Publish
+```
+The user tests from `bin/Publish`. After publishing, copy any new/modified data files from `Necroking/Data/` to `Necroking/bin/Publish/data/` if they aren't auto-copied by the build.
+
 ## File Conventions
 - C# source in `Necroking/`, organized by subsystem (Algorithm, Core, Data, Editor, Game, Movement, Render, Scenario, Spatial, UI, World)
 - Main game loop in `Necroking/Game1.cs`, entry point in `Necroking/Program.cs`

@@ -174,8 +174,11 @@ public class WolfPackHandler : IArchetypeHandler
             case FightExecuteAttack:
             {
                 SubroutineSteps.AttackTarget(ref ctx);
-                // Transition: once attack cooldown starts, disengage
-                if (ctx.Units.AttackCooldown[ctx.UnitIndex] > 0 && ctx.SubroutineTimer > 0.2f)
+                // Transition: wait for attack animation to finish (PostAttackTimer == 0)
+                // before disengaging. AttackCooldown > 0 means the attack was initiated.
+                if (ctx.Units.AttackCooldown[ctx.UnitIndex] > 0
+                    && ctx.Units.PostAttackTimer[ctx.UnitIndex] <= 0f
+                    && ctx.SubroutineTimer > 0.1f)
                 {
                     ctx.Subroutine = FightDisengage;
                     ctx.SubroutineTimer = 0f;
