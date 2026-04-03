@@ -147,4 +147,16 @@ public class RangedUnitHandler : IArchetypeHandler
             ctx.Units.PreferredVel[ctx.UnitIndex] = Vec2.Zero;
         }
     }
+
+    public string GetRoutineName(byte routine) => routine switch
+    {
+        RoutineIdle => "IdleRoaming",
+        RoutineAlert => "Alert",
+        RoutineCombat => "Combat",
+        RoutineReturn => "Return",
+        _ => $"Unknown({routine})"
+    };
+
+    public string GetSubroutineName(byte routine, byte subroutine) =>
+        subroutine == 0 ? "Default" : $"Unknown({subroutine})";
 }

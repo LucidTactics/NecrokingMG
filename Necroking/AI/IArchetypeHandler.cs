@@ -21,6 +21,12 @@ public interface IArchetypeHandler
 
     /// <summary>Called when a unit of this archetype is first spawned. Initialize routine state.</summary>
     void OnSpawn(ref AIContext ctx);
+
+    /// <summary>Human-readable name for the given routine index.</summary>
+    string GetRoutineName(byte routine);
+
+    /// <summary>Human-readable name for the given subroutine index within a routine.</summary>
+    string GetSubroutineName(byte routine, byte subroutine);
 }
 
 /// <summary>

@@ -239,4 +239,32 @@ public class CombatUnitHandler : IArchetypeHandler
             ctx.Units.PreferredVel[ctx.UnitIndex] = Vec2.Zero;
         }
     }
+
+    public string GetRoutineName(byte routine) => routine switch
+    {
+        RoutineIdle => _archetypeId == ArchetypeRegistry.PatrolSoldier ? "Patrol"
+                     : _archetypeId == ArchetypeRegistry.GuardStationary ? "Guard"
+                     : "IdleRoaming",
+        RoutineAlert => "Alert",
+        RoutineCombat => "Combat",
+        RoutineReturn => "Return",
+        _ => $"Unknown({routine})"
+    };
+
+    public string GetSubroutineName(byte routine, byte subroutine) => routine switch
+    {
+        RoutineIdle when _archetypeId == ArchetypeRegistry.PatrolSoldier => subroutine switch
+        {
+            PatrolWalking => "PatrolWalking",
+            PatrolWaiting => "PatrolWaiting",
+            _ => $"Unknown({subroutine})"
+        },
+        RoutineCombat => subroutine switch
+        {
+            CombatChase => "CombatChase",
+            CombatAttack => "CombatAttack",
+            _ => $"Unknown({subroutine})"
+        },
+        _ => subroutine == 0 ? "Default" : $"Unknown({subroutine})"
+    };
 }

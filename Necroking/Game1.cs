@@ -3343,9 +3343,22 @@ public class Game1 : Microsoft.Xna.Framework.Game
             uint uid = _sim.Units.Id[i];
             if (_unitAnims.TryGetValue(uid, out var animData))
                 animLabel = animData.Ctrl.CurrentState.ToString();
+                
+            string aiLabel = "?";
+            var aiArchetypeId = _sim.Units.Archetype[i];
+            aiLabel = AI.ArchetypeRegistry.GetName(aiArchetypeId);
+            var aiArchetype = AI.ArchetypeRegistry.Get(aiArchetypeId);
+
+            if (aiArchetype != null) {
+                
+                string routineLabel = aiArchetype.GetRoutineName(_sim.Units.Routine[i]);
+
+                aiLabel = $"{aiLabel} - {routineLabel}";
+            }
+                
 
             // Text above head: velocity | anim state | max speed
-            string info = $"v:{speed:F1} {animLabel} ms:{maxSpeed:F1}";
+            string info = $"{aiLabel}\nv:{speed:F1} {animLabel} ms:{maxSpeed:F1}";
             var textPos = new Vector2(sp.X - info.Length * 3, sp.Y - 28);
             _spriteBatch.DrawString(_smallFont, info, textPos, new Color(255, 255, 200, 220));
         }

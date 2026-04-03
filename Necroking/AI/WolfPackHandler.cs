@@ -216,4 +216,25 @@ public class WolfPackHandler : IArchetypeHandler
             }
         }
     }
+
+    public string GetRoutineName(byte routine) => routine switch
+    {
+        RoutineIdleRoaming => "IdleRoaming",
+        RoutineSleeping => "Sleeping",
+        RoutineFighting => "Fighting",
+        _ => $"Unknown({routine})"
+    };
+
+    public string GetSubroutineName(byte routine, byte subroutine) => routine switch
+    {
+        RoutineFighting => subroutine switch
+        {
+            FightMoveToEngage => "MoveToEngage",
+            FightExecuteAttack => "ExecuteAttack",
+            FightDisengage => "Disengage",
+            FightWaitCooldown => "WaitCooldown",
+            _ => $"Unknown({subroutine})"
+        },
+        _ => subroutine == 0 ? "Default" : $"Unknown({subroutine})"
+    };
 }

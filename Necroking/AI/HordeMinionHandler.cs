@@ -187,4 +187,16 @@ public class HordeMinionHandler : IArchetypeHandler
             ctx.Units.PreferredVel[ctx.UnitIndex] = Vec2.Zero;
         }
     }
+
+    public string GetRoutineName(byte routine) => routine switch
+    {
+        RoutineFollowing => "Following",
+        RoutineChasing => "Chasing",
+        RoutineEngaged => "Engaged",
+        RoutineReturning => "Returning",
+        _ => $"Unknown({routine})"
+    };
+
+    public string GetSubroutineName(byte routine, byte subroutine) =>
+        subroutine == 0 ? "Default" : $"Unknown({subroutine})";
 }

@@ -233,4 +233,25 @@ public class DeerHerdHandler : IArchetypeHandler
         }
     }
 
+    public string GetRoutineName(byte routine) => routine switch
+    {
+        RoutineIdleRoaming => "IdleRoaming",
+        RoutineSleeping => "Sleeping",
+        RoutineAlert => "Alert",
+        RoutineFleeing => "Fleeing",
+        RoutineCalming => "Calming",
+        RoutineFightBack => "FightBack",
+        _ => $"Unknown({routine})"
+    };
+
+    public string GetSubroutineName(byte routine, byte subroutine) => routine switch
+    {
+        RoutineFightBack => subroutine switch
+        {
+            FightChase => "FightChase",
+            FightAttack => "FightAttack",
+            _ => $"Unknown({subroutine})"
+        },
+        _ => subroutine == 0 ? "Default" : $"Unknown({subroutine})"
+    };
 }
