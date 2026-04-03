@@ -12,5 +12,19 @@
     {
       "spellID": "fireball"
     }
+  ],
+  "secondary": [
+    {
+      "spellID": ""
+    },
+    {
+      "spellID": ""
+    },
+    {
+      "spellID": ""
+    },
+    {
+      "spellID": "ghost_mode"
+    }
   ]
 }

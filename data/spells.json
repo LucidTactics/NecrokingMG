@@ -3364,7 +3364,7 @@
     },
     {
       "id": "ghost_mode",
-      "name": "",
+      "name": "Ghost Mode",
       "category": "Toggle",
       "range": 0,
       "manaCost": 0,
