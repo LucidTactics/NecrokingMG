@@ -16,7 +16,7 @@ dotnet build Necroking/Necroking.csproj -c Release
 ### Publish (self-contained)
 Publish is configured as self-contained (win-x64) in the csproj, so it bundles the .NET runtime. Always publish after making changes the user needs to test:
 ```bash
-dotnet publish Necroking/Necroking.csproj -c Debug -o Necroking/bin/Publish
+dotnet publish Necroking/Necroking.csproj -c Debug -r win-x64 --self-contained -o Necroking/bin/Publish
 ```
 The user tests from `bin/Publish`. After publishing, copy any new/modified data files from `Necroking/Data/` to `Necroking/bin/Publish/data/` if they aren't auto-copied by the build.
 
