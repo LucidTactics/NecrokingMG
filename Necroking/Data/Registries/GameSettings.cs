@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -99,6 +100,12 @@ public class HordeSettings
     [JsonPropertyName("velocityDirLerp")] public float VelocityDirLerp { get; set; } = 6.0f;
 }
 
+public class StartingItem
+{
+    [JsonPropertyName("itemId")] public string ItemId { get; set; } = "";
+    [JsonPropertyName("quantity")] public int Quantity { get; set; } = 1;
+}
+
 public class GameSettingsData
 {
     [JsonPropertyName("bloom")] public BloomSettings Bloom { get; set; } = new();
@@ -108,6 +115,7 @@ public class GameSettingsData
     [JsonPropertyName("shadow")] public ShadowSettings Shadow { get; set; } = new();
     [JsonPropertyName("horde")] public HordeSettings Horde { get; set; } = new();
     [JsonPropertyName("combat")] public CombatSettings Combat { get; set; } = new();
+    [JsonPropertyName("startingInventory")] public List<StartingItem> StartingInventory { get; set; } = new();
 
     public bool Load(string path)
     {
@@ -124,6 +132,7 @@ public class GameSettingsData
             Shadow = loaded.Shadow;
             Horde = loaded.Horde;
             Combat = loaded.Combat;
+            StartingInventory = loaded.StartingInventory;
             return true;
         }
         catch { return false; }

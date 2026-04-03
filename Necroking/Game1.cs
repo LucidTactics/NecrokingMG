@@ -525,6 +525,10 @@ public class Game1 : Microsoft.Xna.Framework.Game
         DebugLog.Log("startup", $"=== Total startup: {_startupTimer?.ElapsedMilliseconds ?? 0}ms ===");
         _gameWorldLoaded = true;
         _menuState = MenuState.None;
+
+        // Starting inventory
+        foreach (var item in _gameData.Settings.StartingInventory)
+            _inventory.AddItem(item.ItemId, item.Quantity);
     }
 
     /// <summary>
@@ -3013,6 +3017,21 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // --- Projectiles ---
         DrawProjectiles();
         DrawSoulOrbs();
+
+        // --- Potion throw range indicator ---
+        if (_activePotionSlot >= 0 && _sim.NecromancerIndex >= 0)
+        {
+            string potionItemId = _potionSlots[_activePotionSlot];
+            var potionDef = FindPotionByItemId(potionItemId);
+            if (potionDef != null)
+            {
+                _debugDraw.EnsurePixel(GraphicsDevice);
+                var necroPos = _sim.Units.Position[_sim.NecromancerIndex];
+                float range = potionDef.ThrowRange + 1f;
+                _debugDraw.DrawCircle(_spriteBatch, _renderer, _camera,
+                    necroPos, range, new Color(180, 200, 100, 100), 48);
+            }
+        }
 
         // --- Rain (world-space, depth-sorted with scene objects) ---
         _weatherRenderer.DrawRain(screenW, screenH);

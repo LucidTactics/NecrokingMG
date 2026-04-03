@@ -80,6 +80,9 @@
     "sunAngle": 225.0,
     "unitShadowMode": 1
   },
+  "startingInventory": [
+    { "itemId": "potion_paralysis", "quantity": 3 }
+  ],
   "weather": {
     "activePreset": "dreary_rain",
     "enabled": true,
