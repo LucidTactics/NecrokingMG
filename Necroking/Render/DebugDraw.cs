@@ -304,7 +304,7 @@ public class DebugDraw
 
     // ========== Drawing Primitives ==========
 
-    private void EnsurePixel(GraphicsDevice device)
+    public void EnsurePixel(GraphicsDevice device)
     {
         if (_pixel == null)
         {
@@ -313,8 +313,8 @@ public class DebugDraw
         }
     }
 
-    private void DrawCircle(SpriteBatch batch, Renderer renderer, Camera25D cam,
-                            Vec2 worldCenter, float worldRadius, Color color, int segments = 24)
+    public void DrawCircle(SpriteBatch batch, Renderer renderer, Camera25D cam,
+                           Vec2 worldCenter, float worldRadius, Color color, int segments = 24)
     {
         if (_pixel == null) return;
         for (int i = 0; i < segments; i++)
@@ -329,7 +329,7 @@ public class DebugDraw
         }
     }
 
-    private void DrawArrow(SpriteBatch batch, Vector2 start, Vector2 end, Color color)
+    public void DrawArrow(SpriteBatch batch, Vector2 start, Vector2 end, Color color)
     {
         if (_pixel == null) return;
         DrawLine(batch, start, end, color);
@@ -350,7 +350,7 @@ public class DebugDraw
         DrawLine(batch, end, right, color);
     }
 
-    private void DrawLine(SpriteBatch batch, Vector2 start, Vector2 end, Color color)
+    public void DrawLine(SpriteBatch batch, Vector2 start, Vector2 end, Color color)
     {
         if (_pixel == null) return;
         var diff = end - start;

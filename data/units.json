@@ -1,774 +1,3177 @@
 {
   "units": [
     {
-      "ai": "PlayerControlled",
-      "armors": [
-        "hood"
-      ],
-      "color": {
-        "a": 255,
-        "b": 0,
-        "g": 200,
-        "r": 0
-      },
-      "faction": "Undead",
       "id": "necromancer",
       "name": "Necromancer",
+      "type": "Necromancer",
+      "faction": "Undead",
+      "ai": "PlayerControlled",
       "orcaPriority": 3,
-      "shields": [],
       "size": 2,
+      "radius": 0.495,
+      "spriteScale": 1,
+      "spriteWorldHeight": 2,
+      "color": {
+        "r": 0,
+        "g": 200,
+        "b": 0,
+        "a": 255
+      },
       "sprite": {
         "atlas": "VampireFaction",
         "name": "GhoulLord"
       },
-      "spriteScale": 1.0,
-      "spriteWorldHeight": 2.0,
       "stats": {
-        "attack": 15,
-        "combatSpeed": 6.0,
-        "defense": 15,
-        "encumbrance": 2,
-        "magicResist": 16,
         "maxHP": 20,
+        "strength": 10,
+        "attack": 15,
+        "defense": 15,
+        "magicResist": 16,
+        "encumbrance": 2,
         "naturalProt": 20,
-        "strength": 10
+        "combatSpeed": 5
       },
-      "type": "Necromancer",
+      "zombieTypeID": "",
+      "spellID": "",
+      "maxMana": 0,
+      "manaRegen": 0,
       "weapons": [
         "staff"
-      ]
+      ],
+      "armors": [
+        "hood"
+      ],
+      "shields": [],
+      "attackCooldown": null,
+      "postAttackLockout": null,
+      "turnSpeed": null,
+      "accelHalfTime": null,
+      "accel80Time": null,
+      "accelFullTime": null,
+      "weaponPoints": {
+        "Idle": {
+          "30": [
+            {
+              "hilt": {
+                "x": -15,
+                "y": -35,
+                "behind": false
+              },
+              "tip": {
+                "x": -17,
+                "y": -63,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": -16,
+                "y": -36,
+                "behind": false
+              },
+              "tip": {
+                "x": -16,
+                "y": -60,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": -14,
+                "y": -35,
+                "behind": false
+              },
+              "tip": {
+                "x": -15,
+                "y": -61,
+                "behind": false
+              }
+            }
+          ],
+          "300": [
+            {
+              "hilt": {
+                "x": 17.11063,
+                "y": -37.729034,
+                "behind": false
+              },
+              "tip": {
+                "x": 18.879515,
+                "y": -61.903793,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": 18.289886,
+                "y": -35.37052,
+                "behind": false
+              },
+              "tip": {
+                "x": 21.238028,
+                "y": -59.54528,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": 18.879515,
+                "y": -37.139404,
+                "behind": false
+              },
+              "tip": {
+                "x": 21.238028,
+                "y": -61.903793,
+                "behind": false
+              }
+            }
+          ],
+          "60": [
+            {
+              "hilt": {
+                "x": -15,
+                "y": -39,
+                "behind": false
+              },
+              "tip": {
+                "x": -17,
+                "y": -64,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": -16.270323,
+                "y": -35.960148,
+                "behind": false
+              },
+              "tip": {
+                "x": -15.108157,
+                "y": -57.46022,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": -13.9459915,
+                "y": -37.703396,
+                "behind": false
+              },
+              "tip": {
+                "x": -15.108157,
+                "y": -61.527798,
+                "behind": false
+              }
+            }
+          ]
+        },
+        "Attack1": {
+          "30": [
+            {
+              "hilt": {
+                "x": -17.620504,
+                "y": -49.67349,
+                "behind": false
+              },
+              "tip": {
+                "x": -24.629053,
+                "y": -69.998276,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": -23.928198,
+                "y": -55.280327,
+                "behind": false
+              },
+              "tip": {
+                "x": -22.526487,
+                "y": -67.19486,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": -9.911102,
+                "y": -55.981182,
+                "behind": false
+              },
+              "tip": {
+                "x": -24.629053,
+                "y": -61.58802,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": 27.234201,
+                "y": -40.562378,
+                "behind": false
+              },
+              "tip": {
+                "x": 30.738476,
+                "y": -65.79315,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": 29.336765,
+                "y": -29.3487,
+                "behind": false
+              },
+              "tip": {
+                "x": 47.55899,
+                "y": -37.0581,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": 27.234201,
+                "y": -41.263233,
+                "behind": false
+              },
+              "tip": {
+                "x": 30.738476,
+                "y": -63.690586,
+                "behind": false
+              }
+            }
+          ],
+          "300": [
+            {
+              "hilt": {
+                "x": 9.120248,
+                "y": -48.784977,
+                "behind": false
+              },
+              "tip": {
+                "x": -7.902067,
+                "y": -62.260975,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": -12.157646,
+                "y": -43.820137,
+                "behind": false
+              },
+              "tip": {
+                "x": -31.30775,
+                "y": -30.344137,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": 10.538774,
+                "y": -56.586872,
+                "behind": false
+              },
+              "tip": {
+                "x": -10.73912,
+                "y": -55.87761,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": 22.596247,
+                "y": -50.203503,
+                "behind": false
+              },
+              "tip": {
+                "x": 21.177721,
+                "y": -72.899925,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": 23.30551,
+                "y": -37.436768,
+                "behind": false
+              },
+              "tip": {
+                "x": 28.979614,
+                "y": -49.49424,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": 23.30551,
+                "y": -50.912766,
+                "behind": false
+              },
+              "tip": {
+                "x": 22.596247,
+                "y": -74.31845,
+                "behind": false
+              }
+            }
+          ],
+          "60": [
+            {
+              "hilt": {
+                "x": -21.785397,
+                "y": -48.212433,
+                "behind": false
+              },
+              "tip": {
+                "x": -15.709661,
+                "y": -70.490135,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": -17.059824,
+                "y": -54.963253,
+                "behind": false
+              },
+              "tip": {
+                "x": -27.861132,
+                "y": -65.76456,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": -13.009334,
+                "y": -53.613087,
+                "behind": false
+              },
+              "tip": {
+                "x": -17.734905,
+                "y": -64.4144,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": 12.643774,
+                "y": -38.761288,
+                "behind": false
+              },
+              "tip": {
+                "x": 14.66902,
+                "y": -59.688824,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": 15.344101,
+                "y": -27.284899,
+                "behind": false
+              },
+              "tip": {
+                "x": 27.495573,
+                "y": -33.360634,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": 11.293611,
+                "y": -38.761288,
+                "behind": false
+              },
+              "tip": {
+                "x": 16.019182,
+                "y": -61.71407,
+                "behind": false
+              }
+            }
+          ]
+        },
+        "Attack2": {
+          "30": [
+            {
+              "hilt": {
+                "x": 14.488893,
+                "y": -46.313778,
+                "behind": false
+              },
+              "tip": {
+                "x": -12.707691,
+                "y": -55.16848,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": 16.38633,
+                "y": -42.518906,
+                "behind": false
+              },
+              "tip": {
+                "x": 1.2068399,
+                "y": -54.536,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": 27.138466,
+                "y": -34.92916,
+                "behind": false
+              },
+              "tip": {
+                "x": 46.745308,
+                "y": -43.151382,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": -8.28034,
+                "y": -19.117193,
+                "behind": false
+              },
+              "tip": {
+                "x": -2.5880322,
+                "y": -5.835141,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": -3.8529897,
+                "y": -36.19412,
+                "behind": false
+              },
+              "tip": {
+                "x": -5.750426,
+                "y": -59.59583,
+                "behind": false
+              }
+            }
+          ],
+          "300": [
+            {
+              "hilt": {
+                "x": -10.900861,
+                "y": -44.517,
+                "behind": false
+              },
+              "tip": {
+                "x": -19.413683,
+                "y": -50.90161,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": -13.738468,
+                "y": -41.67939,
+                "behind": false
+              },
+              "tip": {
+                "x": -37.148727,
+                "y": -50.19221,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": 16.056408,
+                "y": -43.807594,
+                "behind": false
+              },
+              "tip": {
+                "x": 8.962389,
+                "y": -53.02982,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": 17.47521,
+                "y": -21.106739,
+                "behind": false
+              },
+              "tip": {
+                "x": 46.560684,
+                "y": -14.722122,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": 16.765808,
+                "y": -40.260586,
+                "behind": false
+              },
+              "tip": {
+                "x": 20.312819,
+                "y": -65.089645,
+                "behind": false
+              }
+            }
+          ],
+          "60": [
+            {
+              "hilt": {
+                "x": 16.731617,
+                "y": -45.541016,
+                "behind": false
+              },
+              "tip": {
+                "x": -2.2427437,
+                "y": -56.29315,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": 21.791447,
+                "y": -41.113663,
+                "behind": false
+              },
+              "tip": {
+                "x": 15.46666,
+                "y": -53.13076,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": 16.099138,
+                "y": -32.25896,
+                "behind": false
+              },
+              "tip": {
+                "x": 35.073498,
+                "y": -37.31879,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": -16.789755,
+                "y": -20.241867,
+                "behind": false
+              },
+              "tip": {
+                "x": -28.17437,
+                "y": -8.224771,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": -12.362403,
+                "y": -35.421356,
+                "behind": false
+              },
+              "tip": {
+                "x": -14.892318,
+                "y": -61.35298,
+                "behind": false
+              }
+            }
+          ]
+        },
+        "Spell1": {
+          "30": [
+            {
+              "hilt": {
+                "x": 16,
+                "y": -24,
+                "behind": true
+              },
+              "tip": {
+                "x": 25,
+                "y": -21,
+                "behind": true
+              }
+            },
+            {
+              "hilt": {
+                "x": 15,
+                "y": -31,
+                "behind": false
+              },
+              "tip": {
+                "x": 26,
+                "y": -29,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": 13,
+                "y": -41,
+                "behind": false
+              },
+              "tip": {
+                "x": 29,
+                "y": -46,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": 19,
+                "y": -38,
+                "behind": false
+              },
+              "tip": {
+                "x": 37,
+                "y": -35,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": -10,
+                "y": -34,
+                "behind": false
+              },
+              "tip": {
+                "x": 1,
+                "y": -44,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": 18.071798,
+                "y": -37.664776,
+                "behind": false
+              },
+              "tip": {
+                "x": 35.405132,
+                "y": -41.66478,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": 26.738466,
+                "y": -36.99811,
+                "behind": false
+              },
+              "tip": {
+                "x": 48.0718,
+                "y": -37.664776,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": 5.4051313,
+                "y": -32.331444,
+                "behind": false
+              },
+              "tip": {
+                "x": 22.0718,
+                "y": -41.66478,
+                "behind": false
+              }
+            }
+          ],
+          "300": [
+            {
+              "hilt": {
+                "x": 6.9948726,
+                "y": -27.895441,
+                "behind": true
+              },
+              "tip": {
+                "x": -17.774359,
+                "y": -21.408262,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": 24.687181,
+                "y": -40.280056,
+                "behind": false
+              },
+              "tip": {
+                "x": 31.17436,
+                "y": -43.81852,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": 25.866669,
+                "y": -43.81852,
+                "behind": false
+              },
+              "tip": {
+                "x": 42.96923,
+                "y": -52.664673,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": 12.302565,
+                "y": -46.767235,
+                "behind": false
+              },
+              "tip": {
+                "x": 2.2769237,
+                "y": -50.895443,
+                "behind": true
+              }
+            },
+            {
+              "hilt": {
+                "x": 25,
+                "y": -37,
+                "behind": false
+              },
+              "tip": {
+                "x": 37,
+                "y": -50,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": 27.046156,
+                "y": -46.177494,
+                "behind": false
+              },
+              "tip": {
+                "x": 40.020515,
+                "y": -55.023647,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": 11.712821,
+                "y": -46.177494,
+                "behind": false
+              },
+              "tip": {
+                "x": 2.2769237,
+                "y": -49.715954,
+                "behind": true
+              }
+            },
+            {
+              "hilt": {
+                "x": 25.866669,
+                "y": -37.92108,
+                "behind": false
+              },
+              "tip": {
+                "x": 37.071796,
+                "y": -50.895443,
+                "behind": false
+              }
+            }
+          ],
+          "60": [
+            {
+              "hilt": {
+                "x": 13.822234,
+                "y": -21.555481,
+                "behind": false
+              },
+              "tip": {
+                "x": 25.189756,
+                "y": -19.162317,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": 10.830781,
+                "y": -32.32471,
+                "behind": false
+              },
+              "tip": {
+                "x": 25.788046,
+                "y": -28.136677,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": 1.856421,
+                "y": -37.709328,
+                "behind": false
+              },
+              "tip": {
+                "x": 12.027362,
+                "y": -38.307617,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": 17.411978,
+                "y": -35.316166,
+                "behind": false
+              },
+              "tip": {
+                "x": 41.343605,
+                "y": -34.119583,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": -11,
+                "y": -35,
+                "behind": false
+              },
+              "tip": {
+                "x": -1,
+                "y": -45,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": 4.847874,
+                "y": -37.11104,
+                "behind": false
+              },
+              "tip": {
+                "x": 15.018815,
+                "y": -38.90591,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": 19.20685,
+                "y": -36.512745,
+                "behind": false
+              },
+              "tip": {
+                "x": 42.540184,
+                "y": -33.521294,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": -8.91281,
+                "y": -34.717873,
+                "behind": false
+              },
+              "tip": {
+                "x": -1.1350323,
+                "y": -42.49565,
+                "behind": false
+              }
+            }
+          ]
+        },
+        "Walk": {
+          "30": [
+            {
+              "hilt": {
+                "x": 2.7829118,
+                "y": -24.24055,
+                "behind": false
+              },
+              "tip": {
+                "x": 25.688898,
+                "y": -32.257645,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": -1.2256359,
+                "y": -23.095251,
+                "behind": false
+              },
+              "tip": {
+                "x": 22.82565,
+                "y": -23.6679,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": -4.0888844,
+                "y": -20.232002,
+                "behind": false
+              },
+              "tip": {
+                "x": 14.235905,
+                "y": -14.505506,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": -5.8068333,
+                "y": -21.3773,
+                "behind": false
+              },
+              "tip": {
+                "x": 8.509408,
+                "y": -10.496958,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": -5.234184,
+                "y": -20.804651,
+                "behind": false
+              },
+              "tip": {
+                "x": 14.235905,
+                "y": -9.351658,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": 2.7829118,
+                "y": -22.5226,
+                "behind": false
+              },
+              "tip": {
+                "x": 24.543598,
+                "y": -21.3773,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": 7.364109,
+                "y": -25.385849,
+                "behind": false
+              },
+              "tip": {
+                "x": 30.270096,
+                "y": -33.975594,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": 6.791459,
+                "y": -26.531149,
+                "behind": false
+              },
+              "tip": {
+                "x": 25.11625,
+                "y": -36.83884,
+                "behind": false
+              }
+            }
+          ],
+          "300": [
+            {
+              "hilt": {
+                "x": 8.401969,
+                "y": -27.578884,
+                "behind": false
+              },
+              "tip": {
+                "x": 13.170268,
+                "y": -39.764538,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": 8.401969,
+                "y": -25.989452,
+                "behind": false
+              },
+              "tip": {
+                "x": 15.819323,
+                "y": -31.817371,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": 16.349134,
+                "y": -20.161531,
+                "behind": false
+              },
+              "tip": {
+                "x": 6.8125362,
+                "y": -20.691341,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": 16.878944,
+                "y": -13.8038,
+                "behind": false
+              },
+              "tip": {
+                "x": 4.6932926,
+                "y": -19.63172,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": 17.408756,
+                "y": -16.452854,
+                "behind": false
+              },
+              "tip": {
+                "x": 7.8721585,
+                "y": -20.691341,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": 14.759701,
+                "y": -29.168318,
+                "behind": false
+              },
+              "tip": {
+                "x": 10.521214,
+                "y": -25.989452,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": 2.5740488,
+                "y": -41.88378,
+                "behind": true
+              },
+              "tip": {
+                "x": 9.461591,
+                "y": -26.519262,
+                "behind": true
+              }
+            },
+            {
+              "hilt": {
+                "x": 4.6932926,
+                "y": -44.003025,
+                "behind": true
+              },
+              "tip": {
+                "x": 8.93178,
+                "y": -29.168318,
+                "behind": true
+              }
+            }
+          ],
+          "60": [
+            {
+              "hilt": {
+                "x": 0.092102826,
+                "y": -24.398312,
+                "behind": false
+              },
+              "tip": {
+                "x": 15.166079,
+                "y": -30.858587,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": -3.6763911,
+                "y": -22.783243,
+                "behind": false
+              },
+              "tip": {
+                "x": 11.397585,
+                "y": -21.70653,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": -6.906529,
+                "y": -22.783243,
+                "behind": false
+              },
+              "tip": {
+                "x": 2.7838843,
+                "y": -13.631186,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": -9.59831,
+                "y": -23.321598,
+                "behind": false
+              },
+              "tip": {
+                "x": 0.092102826,
+                "y": -7.17091,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": -10.136666,
+                "y": -23.321598,
+                "behind": false
+              },
+              "tip": {
+                "x": 3.860597,
+                "y": -11.47776,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": -3.1380348,
+                "y": -20.629818,
+                "behind": false
+              },
+              "tip": {
+                "x": 15.704435,
+                "y": -19.553104,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": 3.3222406,
+                "y": -24.398312,
+                "behind": false
+              },
+              "tip": {
+                "x": 23.77978,
+                "y": -31.396942,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": 1.1688154,
+                "y": -25.475023,
+                "behind": false
+              },
+              "tip": {
+                "x": 22.164711,
+                "y": -35.703793,
+                "behind": false
+              }
+            }
+          ]
+        }
+      },
+      "animTimings": {}
     },
     {
-      "ai": "AttackClosest",
-      "armors": [],
-      "color": {
-        "a": 255,
-        "b": 160,
-        "g": 160,
-        "r": 160
-      },
-      "faction": "Undead",
       "id": "skeleton",
       "name": "Skeleton",
+      "type": "Skeleton",
+      "faction": "Undead",
+      "ai": "AttackClosest",
       "orcaPriority": 0,
-      "shields": [],
       "size": 2,
+      "radius": 0.495,
+      "spriteScale": 0.9,
+      "spriteWorldHeight": 1.8,
+      "color": {
+        "r": 160,
+        "g": 160,
+        "b": 160,
+        "a": 255
+      },
       "sprite": {
         "atlas": "VampireFaction",
         "name": "Skeleton"
       },
-      "spriteScale": 0.8999999761581421,
-      "spriteWorldHeight": 1.7999999523162842,
       "stats": {
-        "attack": 8,
-        "combatSpeed": 3.5999999046325684,
-        "defense": 10,
-        "encumbrance": 0,
-        "magicResist": 6,
         "maxHP": 6,
+        "strength": 8,
+        "attack": 8,
+        "defense": 10,
+        "magicResist": 6,
+        "encumbrance": 0,
         "naturalProt": 0,
-        "strength": 8
+        "combatSpeed": 3.6
       },
-      "type": "Skeleton",
+      "zombieTypeID": "",
+      "spellID": "",
+      "maxMana": 0,
+      "manaRegen": 0,
       "weapons": [
         "spear"
-      ]
+      ],
+      "armors": [],
+      "shields": [],
+      "attackCooldown": null,
+      "postAttackLockout": null,
+      "turnSpeed": null,
+      "accelHalfTime": null,
+      "accel80Time": null,
+      "accelFullTime": null,
+      "weaponPoints": {
+        "Attack1": {
+          "60": [
+            {
+              "hilt": {
+                "x": -10.994864,
+                "y": -30.992033,
+                "behind": false
+              },
+              "tip": {
+                "x": 5.278641,
+                "y": -31.57323,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": -2.8581119,
+                "y": -12.393742,
+                "behind": false
+              },
+              "tip": {
+                "x": 32.013687,
+                "y": -9.487759,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": 12.834197,
+                "y": -15.880921,
+                "behind": false
+              },
+              "tip": {
+                "x": 38.40685,
+                "y": -25.761265,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": -2.276915,
+                "y": -12.393742,
+                "behind": false
+              },
+              "tip": {
+                "x": 31.43249,
+                "y": -11.812545,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": -6.3452916,
+                "y": -21.11169,
+                "behind": false
+              },
+              "tip": {
+                "x": 20.97095,
+                "y": -44.359554,
+                "behind": false
+              }
+            }
+          ]
+        },
+        "Idle": {
+          "30": [
+            {
+              "hilt": {
+                "x": -6.290296,
+                "y": -21.69114,
+                "behind": false
+              },
+              "tip": {
+                "x": 25.857265,
+                "y": -46.045353,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": -6.290296,
+                "y": -22.178225,
+                "behind": false
+              },
+              "tip": {
+                "x": 24.883097,
+                "y": -43.609932,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": -7.2644644,
+                "y": -24.126562,
+                "behind": false
+              },
+              "tip": {
+                "x": 28.292686,
+                "y": -45.071186,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": -7.2644644,
+                "y": -22.178225,
+                "behind": false
+              },
+              "tip": {
+                "x": 29.266855,
+                "y": -45.55827,
+                "behind": false
+              }
+            }
+          ],
+          "300": [
+            {
+              "hilt": {
+                "x": 6.0624614,
+                "y": -25.534824,
+                "behind": false
+              },
+              "tip": {
+                "x": 21.42698,
+                "y": -53.614803,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": 6.5922723,
+                "y": -23.41558,
+                "behind": false
+              },
+              "tip": {
+                "x": 25.665466,
+                "y": -49.906128,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": 6.0624614,
+                "y": -25.534824,
+                "behind": false
+              },
+              "tip": {
+                "x": 25.665466,
+                "y": -53.614803,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": 6.0624614,
+                "y": -24.475203,
+                "behind": false
+              },
+              "tip": {
+                "x": 19.837545,
+                "y": -54.674427,
+                "behind": false
+              }
+            }
+          ],
+          "60": [
+            {
+              "hilt": {
+                "x": -8.301332,
+                "y": -23.639477,
+                "behind": false
+              },
+              "tip": {
+                "x": 12.156207,
+                "y": -46.045353,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": -8.788416,
+                "y": -22.665308,
+                "behind": false
+              },
+              "tip": {
+                "x": 14.591628,
+                "y": -43.12285,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": -8.301332,
+                "y": -24.126562,
+                "behind": false
+              },
+              "tip": {
+                "x": 15.565797,
+                "y": -44.5841,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": -12.198007,
+                "y": -21.69114,
+                "behind": false
+              },
+              "tip": {
+                "x": 14.104544,
+                "y": -45.071186,
+                "behind": false
+              }
+            }
+          ]
+        }
+      },
+      "animTimings": {},
+      "archetype": "HordeMinion",
+      "detectionRange": 10,
+      "detectionBreakRange": 20,
+      "alertDuration": 0.5,
+      "alertEscalateRange": 8,
+      "groupAlertRadius": 0
     },
     {
-      "ai": "AttackClosestRetarget",
-      "armors": [
-        "none"
-      ],
-      "color": {
-        "a": 255,
-        "b": 30,
-        "g": 30,
-        "r": 30
+      "id": "FemaleDeer",
+      "name": "Female Deer",
+      "type": "Dynamic",
+      "faction": "Animal",
+      "ai": "FleeWhenHit",
+      "orcaPriority": 0,
+      "size": 2,
+      "radius": 0.5,
+      "spriteScale": 1.5,
+      "spriteWorldHeight": 1.8,
+      "color": null,
+      "sprite": {
+        "atlas": "Animals",
+        "name": "FemaleDeer"
       },
+      "stats": {
+        "maxHP": 6,
+        "strength": 4,
+        "attack": 3,
+        "defense": 11,
+        "magicResist": 2,
+        "encumbrance": 2,
+        "naturalProt": 5,
+        "combatSpeed": 15
+      },
+      "zombieTypeID": "group_182459",
+      "spellID": "",
+      "maxMana": 0,
+      "manaRegen": 0,
+      "weapons": [
+        "weapon_174944"
+      ],
+      "armors": [],
+      "shields": [],
+      "attackCooldown": null,
+      "postAttackLockout": null,
+      "turnSpeed": null,
+      "accelHalfTime": null,
+      "accel80Time": null,
+      "accelFullTime": null,
+      "weaponPoints": {},
+      "animTimings": {},
+      "archetype": "DeerHerd",
+      "detectionRange": 12,
+      "detectionBreakRange": 18,
+      "alertDuration": 2.0,
+      "alertEscalateRange": 5,
+      "groupAlertRadius": 15
+    },
+    {
+      "id": "ZombieFemaleDeer",
+      "name": "Zombie Female Deer",
+      "type": "Dynamic",
       "faction": "Undead",
+      "ai": "AttackClosest",
+      "orcaPriority": 0,
+      "size": 2,
+      "radius": 0.495,
+      "spriteScale": 1.5,
+      "spriteWorldHeight": 1.8,
+      "color": null,
+      "sprite": {
+        "atlas": "ZombieAnimals",
+        "name": "ZombieFemaleDeer"
+      },
+      "stats": {
+        "maxHP": 10,
+        "strength": 4,
+        "attack": 3,
+        "defense": 9,
+        "magicResist": 2,
+        "encumbrance": 2,
+        "naturalProt": 4,
+        "combatSpeed": 15
+      },
+      "zombieTypeID": "",
+      "spellID": "",
+      "maxMana": 0,
+      "manaRegen": 0,
+      "weapons": [
+        "weapon_174944"
+      ],
+      "armors": [],
+      "shields": [],
+      "attackCooldown": null,
+      "postAttackLockout": null,
+      "turnSpeed": null,
+      "accelHalfTime": null,
+      "accel80Time": null,
+      "accelFullTime": null,
+      "weaponPoints": {},
+      "animTimings": {},
+      "archetype": "HordeMinion",
+      "detectionRange": 10,
+      "detectionBreakRange": 20,
+      "alertDuration": 0.5,
+      "alertEscalateRange": 8,
+      "groupAlertRadius": 0
+    },
+    {
+      "id": "ZombieFemaleDeer2",
+      "name": "Zombie Female Deer2",
+      "type": "Dynamic",
+      "faction": "Undead",
+      "ai": "AttackClosest",
+      "orcaPriority": 0,
+      "size": 2,
+      "radius": 0.495,
+      "spriteScale": 1.5,
+      "spriteWorldHeight": 1.8,
+      "color": null,
+      "sprite": {
+        "atlas": "ZombieAnimals",
+        "name": "ZombieFemaleDeer2"
+      },
+      "stats": {
+        "maxHP": 10,
+        "strength": 4,
+        "attack": 3,
+        "defense": 9,
+        "magicResist": 2,
+        "encumbrance": 2,
+        "naturalProt": 4,
+        "combatSpeed": 15
+      },
+      "zombieTypeID": "",
+      "spellID": "",
+      "maxMana": 0,
+      "manaRegen": 0,
+      "weapons": [
+        "weapon_174944"
+      ],
+      "armors": [],
+      "shields": [],
+      "attackCooldown": null,
+      "postAttackLockout": null,
+      "turnSpeed": null,
+      "accelHalfTime": null,
+      "accel80Time": null,
+      "accelFullTime": null,
+      "weaponPoints": {},
+      "animTimings": {
+        "Idle": {
+          "frameDurationsMs": [],
+          "effectTimeMs": 1
+        }
+      },
+      "archetype": "HordeMinion",
+      "detectionRange": 10,
+      "detectionBreakRange": 20,
+      "alertDuration": 0.5,
+      "alertEscalateRange": 8,
+      "groupAlertRadius": 0
+    },
+    {
+      "id": "MaleDeer",
+      "name": "Male Deer",
+      "type": "Dynamic",
+      "faction": "Animal",
+      "ai": "NeutralFightBack",
+      "orcaPriority": 0,
+      "size": 2,
+      "radius": 0.5,
+      "spriteScale": 1.2,
+      "spriteWorldHeight": 1.8,
+      "color": null,
+      "sprite": {
+        "atlas": "Animals",
+        "name": "MaleDeer"
+      },
+      "stats": {
+        "maxHP": 10,
+        "strength": 6,
+        "attack": 5,
+        "defense": 11,
+        "magicResist": 3,
+        "encumbrance": 2,
+        "naturalProt": 5,
+        "combatSpeed": 15
+      },
+      "zombieTypeID": "group_182459_copy",
+      "spellID": "",
+      "maxMana": 0,
+      "manaRegen": 0,
+      "weapons": [
+        "weapon_174944",
+        "weapon_181921"
+      ],
+      "armors": [],
+      "shields": [],
+      "attackCooldown": null,
+      "postAttackLockout": null,
+      "turnSpeed": null,
+      "accelHalfTime": null,
+      "accel80Time": null,
+      "accelFullTime": null,
+      "weaponPoints": {},
+      "animTimings": {},
+      "archetype": "DeerHerd",
+      "detectionRange": 12,
+      "detectionBreakRange": 18,
+      "alertDuration": 2.5,
+      "alertEscalateRange": 4,
+      "groupAlertRadius": 15
+    },
+    {
+      "id": "Wolf",
+      "name": "Wolf",
+      "type": "Dynamic",
+      "faction": "Animal",
+      "ai": "WolfHitAndRun",
+      "orcaPriority": 0,
+      "size": 2,
+      "radius": 0.5,
+      "spriteScale": 2.2,
+      "spriteWorldHeight": 1.8,
+      "color": null,
+      "sprite": {
+        "atlas": "Animals",
+        "name": "Wolf"
+      },
+      "stats": {
+        "maxHP": 8,
+        "strength": 8,
+        "attack": 11,
+        "defense": 13,
+        "magicResist": 3,
+        "encumbrance": 2,
+        "naturalProt": 3,
+        "combatSpeed": 15
+      },
+      "zombieTypeID": "ZombieWolf",
+      "spellID": "",
+      "maxMana": 0,
+      "manaRegen": 0,
+      "weapons": [
+        "weapon_174944",
+        "weapon_181921"
+      ],
+      "armors": [],
+      "shields": [],
+      "attackCooldown": null,
+      "postAttackLockout": null,
+      "turnSpeed": null,
+      "accelHalfTime": null,
+      "accel80Time": null,
+      "accelFullTime": null,
+      "weaponPoints": {},
+      "animTimings": {
+        "Jog": {
+          "frameDurationsMs": [
+            75,
+            75,
+            75,
+            75,
+            75,
+            75
+          ],
+          "effectTimeMs": -1
+        }
+      },
+      "archetype": "WolfPack",
+      "detectionRange": 10.0,
+      "detectionBreakRange": 15.0,
+      "alertDuration": 1.0,
+      "alertEscalateRange": 6.0,
+      "groupAlertRadius": 12.0
+    },
+    {
+      "id": "ZombieWolf",
+      "name": "Zombie Wolf",
+      "type": "Dynamic",
+      "faction": "Undead",
+      "ai": "AttackClosest",
+      "orcaPriority": 0,
+      "size": 2,
+      "radius": 0.5,
+      "spriteScale": 2.2,
+      "spriteWorldHeight": 1.8,
+      "color": null,
+      "sprite": {
+        "atlas": "ZombieAnimals",
+        "name": "ZombieWolf"
+      },
+      "stats": {
+        "maxHP": 10,
+        "strength": 9,
+        "attack": 8,
+        "defense": 11,
+        "magicResist": 3,
+        "encumbrance": 2,
+        "naturalProt": 3,
+        "combatSpeed": 12
+      },
+      "zombieTypeID": "group_182459_copy",
+      "spellID": "",
+      "maxMana": 0,
+      "manaRegen": 0,
+      "weapons": [
+        "weapon_174944",
+        "weapon_181921"
+      ],
+      "armors": [],
+      "shields": [],
+      "attackCooldown": null,
+      "postAttackLockout": null,
+      "turnSpeed": null,
+      "accelHalfTime": null,
+      "accel80Time": null,
+      "accelFullTime": null,
+      "weaponPoints": {},
+      "animTimings": {},
+      "archetype": "HordeMinion",
+      "detectionRange": 10,
+      "detectionBreakRange": 20,
+      "alertDuration": 0.5,
+      "alertEscalateRange": 8,
+      "groupAlertRadius": 0
+    },
+    {
+      "id": "ZombieMaleDeer",
+      "name": "Zombie Male Deer",
+      "type": "Dynamic",
+      "faction": "Undead",
+      "ai": "AttackClosest",
+      "orcaPriority": 0,
+      "size": 2,
+      "radius": 0.5,
+      "spriteScale": 1.2,
+      "spriteWorldHeight": 1.8,
+      "color": null,
+      "sprite": {
+        "atlas": "ZombieAnimals",
+        "name": "ZombieMaleDeer"
+      },
+      "stats": {
+        "maxHP": 15,
+        "strength": 7,
+        "attack": 4,
+        "defense": 8,
+        "magicResist": 3,
+        "encumbrance": 2,
+        "naturalProt": 4,
+        "combatSpeed": 15
+      },
+      "zombieTypeID": "",
+      "spellID": "",
+      "maxMana": 0,
+      "manaRegen": 0,
+      "weapons": [
+        "weapon_174944",
+        "weapon_181921"
+      ],
+      "armors": [],
+      "shields": [],
+      "attackCooldown": null,
+      "postAttackLockout": null,
+      "turnSpeed": null,
+      "accelHalfTime": null,
+      "accel80Time": null,
+      "accelFullTime": null,
+      "weaponPoints": {},
+      "animTimings": {},
+      "archetype": "HordeMinion",
+      "detectionRange": 10,
+      "detectionBreakRange": 20,
+      "alertDuration": 0.5,
+      "alertEscalateRange": 8,
+      "groupAlertRadius": 0
+    },
+    {
+      "id": "ZombieMaleDeer2",
+      "name": "Zombie Male Deer2",
+      "type": "Dynamic",
+      "faction": "Undead",
+      "ai": "AttackClosest",
+      "orcaPriority": 0,
+      "size": 2,
+      "radius": 0.5,
+      "spriteScale": 1.2,
+      "spriteWorldHeight": 1.8,
+      "color": null,
+      "sprite": {
+        "atlas": "ZombieAnimals",
+        "name": "ZombieMaleDeer2"
+      },
+      "stats": {
+        "maxHP": 15,
+        "strength": 7,
+        "attack": 4,
+        "defense": 8,
+        "magicResist": 3,
+        "encumbrance": 2,
+        "naturalProt": 4,
+        "combatSpeed": 15
+      },
+      "zombieTypeID": "",
+      "spellID": "",
+      "maxMana": 0,
+      "manaRegen": 0,
+      "weapons": [
+        "weapon_174944",
+        "weapon_181921"
+      ],
+      "armors": [],
+      "shields": [],
+      "attackCooldown": null,
+      "postAttackLockout": null,
+      "turnSpeed": null,
+      "accelHalfTime": null,
+      "accel80Time": null,
+      "accelFullTime": null,
+      "weaponPoints": {},
+      "animTimings": {},
+      "archetype": "HordeMinion",
+      "detectionRange": 10,
+      "detectionBreakRange": 20,
+      "alertDuration": 0.5,
+      "alertEscalateRange": 8,
+      "groupAlertRadius": 0
+    },
+    {
       "id": "abomination",
       "name": "Abomination",
+      "type": "Abomination",
+      "faction": "Undead",
+      "ai": "AttackClosestRetarget",
       "orcaPriority": 2,
-      "shields": [],
       "size": 2,
+      "radius": 0.495,
+      "spriteScale": 1,
+      "spriteWorldHeight": 2.5,
+      "color": {
+        "r": 30,
+        "g": 30,
+        "b": 30,
+        "a": 255
+      },
       "sprite": {
         "atlas": "VampireFaction",
         "name": "EliteGhoul2"
       },
-      "spriteScale": 1.0,
-      "spriteWorldHeight": 2.5,
       "stats": {
-        "attack": 10,
-        "combatSpeed": 3.0,
-        "defense": 8,
-        "encumbrance": 0,
-        "magicResist": 14,
         "maxHP": 40,
+        "strength": 16,
+        "attack": 10,
+        "defense": 8,
+        "magicResist": 14,
+        "encumbrance": 0,
         "naturalProt": 8,
-        "strength": 16
+        "combatSpeed": 3
       },
-      "type": "Abomination",
+      "zombieTypeID": "",
+      "spellID": "",
+      "maxMana": 0,
+      "manaRegen": 0,
       "weapons": [
         "hook"
-      ]
+      ],
+      "armors": [
+        "none"
+      ],
+      "shields": [],
+      "attackCooldown": null,
+      "postAttackLockout": null,
+      "turnSpeed": null,
+      "accelHalfTime": null,
+      "accel80Time": null,
+      "accelFullTime": null,
+      "weaponPoints": {},
+      "animTimings": {},
+      "archetype": "HordeMinion",
+      "detectionRange": 10,
+      "detectionBreakRange": 20,
+      "alertDuration": 0.5,
+      "alertEscalateRange": 8,
+      "groupAlertRadius": 0
     },
     {
-      "ai": "AttackClosest",
-      "armors": [
-        "armor_11",
-        "armor_8"
-      ],
-      "color": {
-        "a": 255,
-        "b": 80,
-        "g": 140,
-        "r": 180
-      },
-      "faction": "Human",
       "id": "militia",
       "name": "Light Infantry Pikeman",
+      "type": "Militia",
+      "faction": "Human",
+      "ai": "AttackClosest",
       "orcaPriority": 0,
-      "shields": [],
       "size": 2,
+      "radius": 0.495,
+      "spriteScale": 1,
+      "spriteWorldHeight": 1.9,
+      "color": {
+        "r": 180,
+        "g": 140,
+        "b": 80,
+        "a": 255
+      },
       "sprite": {
         "atlas": "Navarre_Units",
         "name": "NavarreLightInfantry_Pikemen"
       },
-      "spriteScale": 1.0,
-      "spriteWorldHeight": 1.899999976158142,
       "stats": {
-        "attack": 8,
-        "combatSpeed": 3.0,
-        "defense": 12,
-        "encumbrance": 4,
-        "magicResist": 10,
         "maxHP": 10,
-        "naturalProt": 0,
-        "strength": 10
+        "strength": 10,
+        "attack": 10,
+        "defense": 12,
+        "magicResist": 11,
+        "encumbrance": 4,
+        "naturalProt": 1,
+        "combatSpeed": 3
       },
-      "type": "Militia",
+      "zombieTypeID": "group_0",
+      "spellID": "",
+      "maxMana": 0,
+      "manaRegen": 0,
       "weapons": [
         "spear_copy"
       ],
-      "zombieTypeID": "group_0"
+      "armors": [
+        "armor_11",
+        "armor_8"
+      ],
+      "shields": [],
+      "attackCooldown": null,
+      "postAttackLockout": null,
+      "turnSpeed": null,
+      "accelHalfTime": null,
+      "accel80Time": null,
+      "accelFullTime": null,
+      "weaponPoints": {},
+      "animTimings": {},
+      "archetype": "ArmyUnit",
+      "detectionRange": 15,
+      "detectionBreakRange": 25,
+      "alertDuration": 1.5,
+      "alertEscalateRange": 8,
+      "groupAlertRadius": 12
     },
     {
-      "ai": "AttackClosest",
-      "armors": [
-        "armor_8",
-        "armor_11"
-      ],
-      "color": {
-        "a": 255,
-        "b": 80,
-        "g": 140,
-        "r": 180
-      },
-      "faction": "Undead",
       "id": "militia_copy2",
       "name": "LightInfantryZombie1",
+      "type": "Dynamic",
+      "faction": "Undead",
+      "ai": "AttackClosest",
       "orcaPriority": 0,
-      "shields": [
-        "none"
-      ],
       "size": 2,
+      "radius": 0.495,
+      "spriteScale": 1,
+      "spriteWorldHeight": 1.9,
+      "color": {
+        "r": 180,
+        "g": 140,
+        "b": 80,
+        "a": 255
+      },
       "sprite": {
         "atlas": "Navarre_Zombies",
         "name": "NavarreLightInfantryZombieHG"
       },
-      "spriteScale": 1.0,
-      "spriteWorldHeight": 1.899999976158142,
       "stats": {
-        "attack": 6,
-        "combatSpeed": 1.5,
-        "defense": 6,
-        "encumbrance": 0,
-        "magicResist": 6,
         "maxHP": 12,
+        "strength": 9,
+        "attack": 6,
+        "defense": 6,
+        "magicResist": 6,
+        "encumbrance": 0,
         "naturalProt": 0,
-        "strength": 9
+        "combatSpeed": 1.5
       },
-      "type": "Dynamic",
+      "zombieTypeID": "",
+      "spellID": "",
+      "maxMana": 0,
+      "manaRegen": 0,
       "weapons": [
         "weapon_10",
         "weapon_11"
-      ]
-    },
-    {
-      "ai": "AttackClosest",
+      ],
       "armors": [
         "armor_8",
         "armor_11"
       ],
-      "color": {
-        "a": 255,
-        "b": 80,
-        "g": 140,
-        "r": 180
-      },
-      "faction": "Undead",
-      "id": "militia_copy2_copy",
-      "name": "LightInfantryZombie2",
-      "orcaPriority": 0,
       "shields": [
         "none"
       ],
+      "attackCooldown": null,
+      "postAttackLockout": null,
+      "turnSpeed": null,
+      "accelHalfTime": null,
+      "accel80Time": null,
+      "accelFullTime": null,
+      "weaponPoints": {},
+      "animTimings": {},
+      "archetype": "HordeMinion",
+      "detectionRange": 10,
+      "detectionBreakRange": 20,
+      "alertDuration": 0.5,
+      "alertEscalateRange": 8,
+      "groupAlertRadius": 0
+    },
+    {
+      "id": "militia_copy2_copy",
+      "name": "LightInfantryZombie2",
+      "type": "Dynamic",
+      "faction": "Undead",
+      "ai": "AttackClosest",
+      "orcaPriority": 0,
       "size": 2,
+      "radius": 0.495,
+      "spriteScale": 1,
+      "spriteWorldHeight": 1.9,
+      "color": {
+        "r": 180,
+        "g": 140,
+        "b": 80,
+        "a": 255
+      },
       "sprite": {
         "atlas": "Navarre_Zombies",
         "name": "NavarreLightInfantryZombieHNG"
       },
-      "spriteScale": 1.0,
-      "spriteWorldHeight": 1.899999976158142,
       "stats": {
-        "attack": 6,
-        "combatSpeed": 1.5,
-        "defense": 6,
-        "encumbrance": 0,
-        "magicResist": 6,
         "maxHP": 12,
+        "strength": 9,
+        "attack": 6,
+        "defense": 6,
+        "magicResist": 6,
+        "encumbrance": 0,
         "naturalProt": 0,
-        "strength": 9
+        "combatSpeed": 1.5
       },
-      "type": "Dynamic",
+      "zombieTypeID": "",
+      "spellID": "",
+      "maxMana": 0,
+      "manaRegen": 0,
       "weapons": [
         "weapon_10",
         "weapon_11"
-      ]
-    },
-    {
-      "ai": "AttackClosest",
+      ],
       "armors": [
+        "armor_8",
         "armor_11"
       ],
-      "color": {
-        "a": 255,
-        "b": 80,
-        "g": 140,
-        "r": 180
-      },
-      "faction": "Undead",
-      "id": "militia_copy2_copy_copy",
-      "name": "LightInfantryZombie3",
-      "orcaPriority": 0,
       "shields": [
         "none"
       ],
+      "attackCooldown": null,
+      "postAttackLockout": null,
+      "turnSpeed": null,
+      "accelHalfTime": null,
+      "accel80Time": null,
+      "accelFullTime": null,
+      "weaponPoints": {},
+      "animTimings": {},
+      "archetype": "HordeMinion",
+      "detectionRange": 10,
+      "detectionBreakRange": 20,
+      "alertDuration": 0.5,
+      "alertEscalateRange": 8,
+      "groupAlertRadius": 0
+    },
+    {
+      "id": "militia_copy2_copy_copy",
+      "name": "LightInfantryZombie3",
+      "type": "Dynamic",
+      "faction": "Undead",
+      "ai": "AttackClosest",
+      "orcaPriority": 0,
       "size": 2,
+      "radius": 0.495,
+      "spriteScale": 1,
+      "spriteWorldHeight": 1.9,
+      "color": {
+        "r": 180,
+        "g": 140,
+        "b": 80,
+        "a": 255
+      },
       "sprite": {
         "atlas": "Navarre_Zombies",
         "name": "NavarreLightInfantryZombieNHNG"
       },
-      "spriteScale": 1.0,
-      "spriteWorldHeight": 1.899999976158142,
       "stats": {
-        "attack": 6,
-        "combatSpeed": 1.5,
-        "defense": 6,
-        "encumbrance": 0,
-        "magicResist": 6,
         "maxHP": 12,
+        "strength": 9,
+        "attack": 6,
+        "defense": 6,
+        "magicResist": 6,
+        "encumbrance": 0,
         "naturalProt": 0,
-        "strength": 9
+        "combatSpeed": 1.5
       },
-      "type": "Dynamic",
+      "zombieTypeID": "",
+      "spellID": "",
+      "maxMana": 0,
+      "manaRegen": 0,
       "weapons": [
         "weapon_10",
         "weapon_11"
-      ]
-    },
-    {
-      "ai": "AttackClosest",
-      "armors": [
-        "armor_10",
-        "chainmail_helm"
       ],
-      "color": {
-        "a": 255,
-        "b": 80,
-        "g": 140,
-        "r": 180
-      },
-      "faction": "Undead",
-      "id": "militia_copy2_copy_copy_copy",
-      "name": "TemplarZombie1",
-      "orcaPriority": 0,
+      "armors": [
+        "armor_11"
+      ],
       "shields": [
         "none"
       ],
+      "attackCooldown": null,
+      "postAttackLockout": null,
+      "turnSpeed": null,
+      "accelHalfTime": null,
+      "accel80Time": null,
+      "accelFullTime": null,
+      "weaponPoints": {},
+      "animTimings": {},
+      "archetype": "HordeMinion",
+      "detectionRange": 10,
+      "detectionBreakRange": 20,
+      "alertDuration": 0.5,
+      "alertEscalateRange": 8,
+      "groupAlertRadius": 0
+    },
+    {
+      "id": "militia_copy2_copy_copy_copy",
+      "name": "TemplarZombie1",
+      "type": "Dynamic",
+      "faction": "Undead",
+      "ai": "AttackClosest",
+      "orcaPriority": 0,
       "size": 2,
+      "radius": 0.495,
+      "spriteScale": 1,
+      "spriteWorldHeight": 1.9,
+      "color": {
+        "r": 180,
+        "g": 140,
+        "b": 80,
+        "a": 255
+      },
       "sprite": {
         "atlas": "Navarre_Zombies",
         "name": "NavarreTemplar_ZombieHCNG"
       },
-      "spriteScale": 1.0,
-      "spriteWorldHeight": 1.899999976158142,
       "stats": {
-        "attack": 6,
-        "combatSpeed": 1.5,
-        "defense": 6,
-        "encumbrance": 0,
-        "magicResist": 6,
         "maxHP": 12,
+        "strength": 9,
+        "attack": 6,
+        "defense": 6,
+        "magicResist": 6,
+        "encumbrance": 0,
         "naturalProt": 0,
-        "strength": 9
+        "combatSpeed": 1.5
       },
-      "type": "Dynamic",
+      "zombieTypeID": "",
+      "spellID": "",
+      "maxMana": 0,
+      "manaRegen": 0,
       "weapons": [
         "weapon_11"
-      ]
-    },
-    {
-      "ai": "AttackClosest",
+      ],
       "armors": [
         "armor_10",
         "chainmail_helm"
       ],
-      "color": {
-        "a": 255,
-        "b": 80,
-        "g": 140,
-        "r": 180
-      },
-      "faction": "Undead",
-      "id": "militia_copy2_copy_copy_copy_copy",
-      "name": "TemplarZombie2",
-      "orcaPriority": 0,
       "shields": [
         "none"
       ],
+      "attackCooldown": null,
+      "postAttackLockout": null,
+      "turnSpeed": null,
+      "accelHalfTime": null,
+      "accel80Time": null,
+      "accelFullTime": null,
+      "weaponPoints": {},
+      "animTimings": {},
+      "archetype": "HordeMinion",
+      "detectionRange": 10,
+      "detectionBreakRange": 20,
+      "alertDuration": 0.5,
+      "alertEscalateRange": 8,
+      "groupAlertRadius": 0
+    },
+    {
+      "id": "militia_copy2_copy_copy_copy_copy",
+      "name": "TemplarZombie2",
+      "type": "Dynamic",
+      "faction": "Undead",
+      "ai": "AttackClosest",
+      "orcaPriority": 0,
       "size": 2,
+      "radius": 0.495,
+      "spriteScale": 1,
+      "spriteWorldHeight": 1.9,
+      "color": {
+        "r": 180,
+        "g": 140,
+        "b": 80,
+        "a": 255
+      },
       "sprite": {
         "atlas": "Navarre_Zombies",
         "name": "NavarreTemplar_ZombieNCG"
       },
-      "spriteScale": 1.0,
-      "spriteWorldHeight": 1.899999976158142,
       "stats": {
-        "attack": 6,
-        "combatSpeed": 1.5,
-        "defense": 6,
-        "encumbrance": 0,
-        "magicResist": 6,
         "maxHP": 12,
+        "strength": 9,
+        "attack": 6,
+        "defense": 6,
+        "magicResist": 6,
+        "encumbrance": 0,
         "naturalProt": 0,
-        "strength": 9
+        "combatSpeed": 1.5
       },
-      "type": "Dynamic",
+      "zombieTypeID": "",
+      "spellID": "",
+      "maxMana": 0,
+      "manaRegen": 0,
       "weapons": [
         "weapon_11"
-      ]
-    },
-    {
-      "ai": "AttackClosest",
-      "armors": [
-        "chainmail_helm"
       ],
-      "color": {
-        "a": 255,
-        "b": 80,
-        "g": 140,
-        "r": 180
-      },
-      "faction": "Undead",
-      "id": "militia_copy2_copy_copy_copy_copy_copy",
-      "name": "TemplarZombie3",
-      "orcaPriority": 0,
-      "shields": [
-        "none"
-      ],
-      "size": 2,
-      "sprite": {
-        "atlas": "Navarre_Zombies",
-        "name": "NavarreTemplar_ZombieNHCNG"
-      },
-      "spriteScale": 1.0,
-      "spriteWorldHeight": 1.899999976158142,
-      "stats": {
-        "attack": 6,
-        "combatSpeed": 1.5,
-        "defense": 6,
-        "encumbrance": 0,
-        "magicResist": 6,
-        "maxHP": 12,
-        "naturalProt": 0,
-        "strength": 9
-      },
-      "type": "Dynamic",
-      "weapons": [
-        "weapon_11",
-        "weapon_10"
-      ]
-    },
-    {
-      "ai": "AttackClosest",
-      "armors": [
-        "chainmail_helm"
-      ],
-      "color": {
-        "a": 255,
-        "b": 80,
-        "g": 140,
-        "r": 180
-      },
-      "faction": "Undead",
-      "id": "militia_copy2_copy_copy_copy_copy_copy_copy",
-      "name": "TemplarZombie4",
-      "orcaPriority": 0,
-      "shields": [
-        "none"
-      ],
-      "size": 2,
-      "sprite": {
-        "atlas": "Navarre_Zombies",
-        "name": "NavarreTemplar_ZombieNHNCNG"
-      },
-      "spriteScale": 1.0,
-      "spriteWorldHeight": 1.899999976158142,
-      "stats": {
-        "attack": 6,
-        "combatSpeed": 1.5,
-        "defense": 6,
-        "encumbrance": 0,
-        "magicResist": 6,
-        "maxHP": 12,
-        "naturalProt": 0,
-        "strength": 9
-      },
-      "type": "Dynamic",
-      "weapons": [
-        "weapon_11",
-        "weapon_10"
-      ]
-    },
-    {
-      "ai": "AttackClosest",
-      "armors": [
-        "armor_11",
-        "armor_8"
-      ],
-      "color": {
-        "a": 255,
-        "b": 80,
-        "g": 140,
-        "r": 180
-      },
-      "faction": "Human",
-      "id": "militia_copy",
-      "name": "Light Infantry Sword & Shield",
-      "orcaPriority": 0,
-      "shields": [],
-      "size": 2,
-      "sprite": {
-        "atlas": "Navarre_Units",
-        "name": "NavarreLightInfantry_Sword&Shield"
-      },
-      "spriteScale": 1.0,
-      "spriteWorldHeight": 1.7999999523162842,
-      "stats": {
-        "attack": 8,
-        "combatSpeed": 3.0,
-        "defense": 12,
-        "encumbrance": 4,
-        "magicResist": 10,
-        "maxHP": 10,
-        "naturalProt": 0,
-        "strength": 10
-      },
-      "type": "Dynamic",
-      "weapons": [
-        "club"
-      ],
-      "zombieTypeID": "group_0"
-    },
-    {
-      "ai": "Caster",
-      "armors": [
-        "cloth",
-        "hood"
-      ],
-      "color": {
-        "a": 255,
-        "b": 80,
-        "g": 140,
-        "r": 180
-      },
-      "faction": "Human",
-      "id": "militia_copy_copy",
-      "manaRegen": 1.0,
-      "maxMana": 50.0,
-      "name": "Priest",
-      "orcaPriority": 0,
-      "shields": [],
-      "size": 2,
-      "spellID": "god_ray",
-      "sprite": {
-        "atlas": "Navarre_Units",
-        "name": "NavarreBishop"
-      },
-      "spriteScale": 1.0,
-      "spriteWorldHeight": 1.7999999523162842,
-      "stats": {
-        "attack": 8,
-        "combatSpeed": 3.0,
-        "defense": 8,
-        "encumbrance": 2,
-        "magicResist": 14,
-        "maxHP": 10,
-        "naturalProt": 0,
-        "strength": 9
-      },
-      "type": "Dynamic",
-      "weapons": [
-        "staff"
-      ],
-      "zombieTypeID": "group_0"
-    },
-    {
-      "ai": "AttackClosest",
-      "armors": [
-        "chainmail_helm",
-        "armor_10"
-      ],
-      "color": {
-        "a": 255,
-        "b": 180,
-        "g": 100,
-        "r": 100
-      },
-      "faction": "Human",
-      "id": "soldier",
-      "name": "Soldier",
-      "orcaPriority": 0,
-      "shields": [
-        "tower_shield"
-      ],
-      "size": 2,
-      "sprite": {
-        "atlas": "Navarre_Units",
-        "name": "NavarreTemplar_Sword&Shield"
-      },
-      "spriteScale": 1.0,
-      "spriteWorldHeight": 1.7999999523162842,
-      "stats": {
-        "attack": 10,
-        "combatSpeed": 2.5,
-        "defense": 12,
-        "encumbrance": 6,
-        "magicResist": 10,
-        "maxHP": 10,
-        "naturalProt": 0,
-        "strength": 11
-      },
-      "type": "Soldier",
-      "weapons": [
-        "shortsword"
-      ],
-      "zombieTypeID": "group_1"
-    },
-    {
-      "ai": "AttackClosest",
       "armors": [
         "armor_10",
         "chainmail_helm"
       ],
-      "color": {
-        "a": 255,
-        "b": 50,
-        "g": 200,
-        "r": 220
-      },
-      "faction": "Human",
-      "id": "knight",
-      "name": "Knight",
-      "orcaPriority": 1,
       "shields": [
-        "tower_shield"
+        "none"
       ],
-      "size": 2,
-      "sprite": {
-        "atlas": "Navarre_Units",
-        "name": "NavarreUnderMarshal"
-      },
-      "spriteScale": 1.0,
-      "spriteWorldHeight": 1.7999999523162842,
-      "stats": {
-        "attack": 12,
-        "combatSpeed": 3.0,
-        "defense": 15,
-        "encumbrance": 5,
-        "magicResist": 12,
-        "maxHP": 15,
-        "naturalProt": 0,
-        "strength": 12
-      },
-      "type": "Knight",
-      "weapons": [
-        "shortsword"
-      ],
-      "zombieTypeID": "group_1"
+      "attackCooldown": null,
+      "postAttackLockout": null,
+      "turnSpeed": null,
+      "accelHalfTime": null,
+      "accel80Time": null,
+      "accelFullTime": null,
+      "weaponPoints": {},
+      "animTimings": {},
+      "archetype": "HordeMinion",
+      "detectionRange": 10,
+      "detectionBreakRange": 20,
+      "alertDuration": 0.5,
+      "alertEscalateRange": 8,
+      "groupAlertRadius": 0
     },
     {
-      "ai": "ArcherAttack",
+      "id": "militia_copy2_copy_copy_copy_copy_copy",
+      "name": "TemplarZombie3",
+      "type": "Dynamic",
+      "faction": "Undead",
+      "ai": "AttackClosest",
+      "orcaPriority": 0,
+      "size": 2,
+      "radius": 0.495,
+      "spriteScale": 1,
+      "spriteWorldHeight": 1.9,
+      "color": {
+        "r": 180,
+        "g": 140,
+        "b": 80,
+        "a": 255
+      },
+      "sprite": {
+        "atlas": "Navarre_Zombies",
+        "name": "NavarreTemplar_ZombieNHCNG"
+      },
+      "stats": {
+        "maxHP": 12,
+        "strength": 9,
+        "attack": 6,
+        "defense": 6,
+        "magicResist": 6,
+        "encumbrance": 0,
+        "naturalProt": 0,
+        "combatSpeed": 1.5
+      },
+      "zombieTypeID": "",
+      "spellID": "",
+      "maxMana": 0,
+      "manaRegen": 0,
+      "weapons": [
+        "weapon_11",
+        "weapon_10"
+      ],
+      "armors": [
+        "chainmail_helm"
+      ],
+      "shields": [
+        "none"
+      ],
+      "attackCooldown": null,
+      "postAttackLockout": null,
+      "turnSpeed": null,
+      "accelHalfTime": null,
+      "accel80Time": null,
+      "accelFullTime": null,
+      "weaponPoints": {},
+      "animTimings": {},
+      "archetype": "HordeMinion",
+      "detectionRange": 10,
+      "detectionBreakRange": 20,
+      "alertDuration": 0.5,
+      "alertEscalateRange": 8,
+      "groupAlertRadius": 0
+    },
+    {
+      "id": "militia_copy2_copy_copy_copy_copy_copy_copy",
+      "name": "TemplarZombie4",
+      "type": "Dynamic",
+      "faction": "Undead",
+      "ai": "AttackClosest",
+      "orcaPriority": 0,
+      "size": 2,
+      "radius": 0.495,
+      "spriteScale": 1,
+      "spriteWorldHeight": 1.9,
+      "color": {
+        "r": 180,
+        "g": 140,
+        "b": 80,
+        "a": 255
+      },
+      "sprite": {
+        "atlas": "Navarre_Zombies",
+        "name": "NavarreTemplar_ZombieNHNCNG"
+      },
+      "stats": {
+        "maxHP": 12,
+        "strength": 9,
+        "attack": 6,
+        "defense": 6,
+        "magicResist": 6,
+        "encumbrance": 0,
+        "naturalProt": 0,
+        "combatSpeed": 1.5
+      },
+      "zombieTypeID": "",
+      "spellID": "",
+      "maxMana": 0,
+      "manaRegen": 0,
+      "weapons": [
+        "weapon_11",
+        "weapon_10"
+      ],
+      "armors": [
+        "chainmail_helm"
+      ],
+      "shields": [
+        "none"
+      ],
+      "attackCooldown": null,
+      "postAttackLockout": null,
+      "turnSpeed": null,
+      "accelHalfTime": null,
+      "accel80Time": null,
+      "accelFullTime": null,
+      "weaponPoints": {},
+      "animTimings": {},
+      "archetype": "HordeMinion",
+      "detectionRange": 10,
+      "detectionBreakRange": 20,
+      "alertDuration": 0.5,
+      "alertEscalateRange": 8,
+      "groupAlertRadius": 0
+    },
+    {
+      "id": "militia_copy",
+      "name": "Light Infantry Sword & Shield",
+      "type": "Dynamic",
+      "faction": "Human",
+      "ai": "AttackClosest",
+      "orcaPriority": 0,
+      "size": 2,
+      "radius": 0.495,
+      "spriteScale": 1,
+      "spriteWorldHeight": 1.8,
+      "color": {
+        "r": 180,
+        "g": 140,
+        "b": 80,
+        "a": 255
+      },
+      "sprite": {
+        "atlas": "Navarre_Units",
+        "name": "NavarreLightInfantry_Sword&Shield"
+      },
+      "stats": {
+        "maxHP": 10,
+        "strength": 10,
+        "attack": 8,
+        "defense": 12,
+        "magicResist": 10,
+        "encumbrance": 4,
+        "naturalProt": 0,
+        "combatSpeed": 3
+      },
+      "zombieTypeID": "group_0",
+      "spellID": "",
+      "maxMana": 0,
+      "manaRegen": 0,
+      "weapons": [
+        "club"
+      ],
       "armors": [
         "armor_11",
         "armor_8"
       ],
-      "color": {
-        "a": 255,
-        "b": 60,
-        "g": 100,
-        "r": 180
-      },
+      "shields": [],
+      "attackCooldown": null,
+      "postAttackLockout": null,
+      "turnSpeed": null,
+      "accelHalfTime": null,
+      "accel80Time": null,
+      "accelFullTime": null,
+      "weaponPoints": {},
+      "animTimings": {},
+      "archetype": "ArmyUnit",
+      "detectionRange": 15,
+      "detectionBreakRange": 25,
+      "alertDuration": 1.5,
+      "alertEscalateRange": 8,
+      "groupAlertRadius": 12
+    },
+    {
+      "id": "militia_copy_copy",
+      "name": "Priest",
+      "type": "Dynamic",
       "faction": "Human",
+      "ai": "Caster",
+      "orcaPriority": 0,
+      "size": 2,
+      "radius": 0.495,
+      "spriteScale": 1,
+      "spriteWorldHeight": 1.8,
+      "color": {
+        "r": 180,
+        "g": 140,
+        "b": 80,
+        "a": 255
+      },
+      "sprite": {
+        "atlas": "Navarre_Units",
+        "name": "NavarreBishop"
+      },
+      "stats": {
+        "maxHP": 10,
+        "strength": 9,
+        "attack": 8,
+        "defense": 8,
+        "magicResist": 14,
+        "encumbrance": 2,
+        "naturalProt": 0,
+        "combatSpeed": 3
+      },
+      "zombieTypeID": "group_0",
+      "spellID": "god_ray",
+      "maxMana": 50,
+      "manaRegen": 1,
+      "weapons": [
+        "staff"
+      ],
+      "armors": [
+        "cloth",
+        "hood"
+      ],
+      "shields": [],
+      "attackCooldown": null,
+      "postAttackLockout": null,
+      "turnSpeed": null,
+      "accelHalfTime": null,
+      "accel80Time": null,
+      "accelFullTime": null,
+      "weaponPoints": {
+        "Spell1": {
+          "30": [
+            {
+              "hilt": {
+                "x": 12.944438,
+                "y": -22.927773,
+                "behind": false
+              },
+              "tip": {
+                "x": 9.055549,
+                "y": -25.149994,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": 13.499993,
+                "y": -35.149994,
+                "behind": false
+              },
+              "tip": {
+                "x": 19.05555,
+                "y": -39.038883,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": 7.388882,
+                "y": -40.70555,
+                "behind": false
+              },
+              "tip": {
+                "x": 1.277771,
+                "y": -32.927773,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": 16.833326,
+                "y": -34.038883,
+                "behind": false
+              },
+              "tip": {
+                "x": 17.944439,
+                "y": -41.81666,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": 12.944438,
+                "y": -34.59444,
+                "behind": false
+              },
+              "tip": {
+                "x": 18.499994,
+                "y": -38.48333,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": 5.16666,
+                "y": -42.37222,
+                "behind": false
+              },
+              "tip": {
+                "x": -2.0555625,
+                "y": -36.261105,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": 11.833327,
+                "y": -35.149994,
+                "behind": false
+              },
+              "tip": {
+                "x": 18.499994,
+                "y": -39.038883,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": -8.722229,
+                "y": -34.038883,
+                "behind": false
+              },
+              "tip": {
+                "x": -5.9444513,
+                "y": -46.261105,
+                "behind": false
+              }
+            }
+          ],
+          "300": [
+            {
+              "hilt": {
+                "x": 3.8472247,
+                "y": -31.294859,
+                "behind": true
+              },
+              "tip": {
+                "x": -10.692706,
+                "y": -28.96847,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": 21.295141,
+                "y": -44.09,
+                "behind": false
+              },
+              "tip": {
+                "x": 25.366323,
+                "y": -52.23236,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": 24.203129,
+                "y": -46.997986,
+                "behind": false
+              },
+              "tip": {
+                "x": 34.090282,
+                "y": -59.793125,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": 13.152781,
+                "y": -45.253193,
+                "behind": false
+              },
+              "tip": {
+                "x": 3.2656274,
+                "y": -55.721943,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": 21.295141,
+                "y": -43.5084,
+                "behind": false
+              },
+              "tip": {
+                "x": 25.94792,
+                "y": -51.650764,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": 27.69271,
+                "y": -47.579582,
+                "behind": false
+              },
+              "tip": {
+                "x": 32.927086,
+                "y": -58.62993,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": 12.571183,
+                "y": -47.579582,
+                "behind": false
+              },
+              "tip": {
+                "x": 4.428822,
+                "y": -54.55875,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": 25.94792,
+                "y": -38.855625,
+                "behind": false
+              },
+              "tip": {
+                "x": 38.74306,
+                "y": -53.97715,
+                "behind": false
+              }
+            }
+          ],
+          "60": [
+            {
+              "hilt": {
+                "x": 20.888893,
+                "y": -26.372206,
+                "behind": false
+              },
+              "tip": {
+                "x": 29.222227,
+                "y": -25.81665,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": 23.66667,
+                "y": -36.372208,
+                "behind": false
+              },
+              "tip": {
+                "x": 42.55556,
+                "y": -40.81665,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": 19.222225,
+                "y": -41.92776,
+                "behind": false
+              },
+              "tip": {
+                "x": 34.222225,
+                "y": -50.261097,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": 29.777782,
+                "y": -39.70554,
+                "behind": false
+              },
+              "tip": {
+                "x": 45.33334,
+                "y": -44.70554,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": 22.55556,
+                "y": -33.59443,
+                "behind": false
+              },
+              "tip": {
+                "x": 39.222225,
+                "y": -40.261097,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": 18.66667,
+                "y": -39.70554,
+                "behind": false
+              },
+              "tip": {
+                "x": 32.000004,
+                "y": -48.038876,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": 30.333338,
+                "y": -38.59443,
+                "behind": false
+              },
+              "tip": {
+                "x": 43.111115,
+                "y": -46.92776,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": 5.8888927,
+                "y": -37.48332,
+                "behind": false
+              },
+              "tip": {
+                "x": 10.888892,
+                "y": -43.59443,
+                "behind": false
+              }
+            }
+          ]
+        }
+      },
+      "animTimings": {},
+      "archetype": "CasterUnit",
+      "detectionRange": 15,
+      "detectionBreakRange": 22,
+      "alertDuration": 1.0,
+      "alertEscalateRange": 8,
+      "groupAlertRadius": 0
+    },
+    {
+      "id": "soldier",
+      "name": "Soldier",
+      "type": "Soldier",
+      "faction": "Human",
+      "ai": "AttackClosest",
+      "orcaPriority": 0,
+      "size": 2,
+      "radius": 0.495,
+      "spriteScale": 1,
+      "spriteWorldHeight": 1.8,
+      "color": {
+        "r": 100,
+        "g": 100,
+        "b": 180,
+        "a": 255
+      },
+      "sprite": {
+        "atlas": "Navarre_Units",
+        "name": "NavarreTemplar_Sword&Shield"
+      },
+      "stats": {
+        "maxHP": 10,
+        "strength": 11,
+        "attack": 10,
+        "defense": 12,
+        "magicResist": 10,
+        "encumbrance": 6,
+        "naturalProt": 0,
+        "combatSpeed": 2.5
+      },
+      "zombieTypeID": "group_1",
+      "spellID": "",
+      "maxMana": 0,
+      "manaRegen": 0,
+      "weapons": [
+        "shortsword"
+      ],
+      "armors": [
+        "chainmail_helm",
+        "armor_10"
+      ],
+      "shields": [
+        "tower_shield"
+      ],
+      "attackCooldown": null,
+      "postAttackLockout": null,
+      "turnSpeed": null,
+      "accelHalfTime": null,
+      "accel80Time": null,
+      "accelFullTime": null,
+      "weaponPoints": {},
+      "animTimings": {},
+      "archetype": "ArmyUnit",
+      "detectionRange": 15,
+      "detectionBreakRange": 25,
+      "alertDuration": 1.5,
+      "alertEscalateRange": 8,
+      "groupAlertRadius": 12
+    },
+    {
+      "id": "knight",
+      "name": "Knight",
+      "type": "Knight",
+      "faction": "Human",
+      "ai": "AttackClosest",
+      "orcaPriority": 1,
+      "size": 2,
+      "radius": 0.495,
+      "spriteScale": 1,
+      "spriteWorldHeight": 1.8,
+      "color": {
+        "r": 220,
+        "g": 200,
+        "b": 50,
+        "a": 255
+      },
+      "sprite": {
+        "atlas": "Navarre_Units",
+        "name": "NavarreUnderMarshal"
+      },
+      "stats": {
+        "maxHP": 15,
+        "strength": 12,
+        "attack": 12,
+        "defense": 15,
+        "magicResist": 12,
+        "encumbrance": 5,
+        "naturalProt": 0,
+        "combatSpeed": 3
+      },
+      "zombieTypeID": "group_1",
+      "spellID": "",
+      "maxMana": 0,
+      "manaRegen": 0,
+      "weapons": [
+        "shortsword"
+      ],
+      "armors": [
+        "armor_10",
+        "chainmail_helm"
+      ],
+      "shields": [
+        "tower_shield"
+      ],
+      "attackCooldown": null,
+      "postAttackLockout": null,
+      "turnSpeed": null,
+      "accelHalfTime": null,
+      "accel80Time": null,
+      "accelFullTime": null,
+      "weaponPoints": {},
+      "animTimings": {},
+      "archetype": "ArmyUnit",
+      "detectionRange": 15,
+      "detectionBreakRange": 25,
+      "alertDuration": 1.5,
+      "alertEscalateRange": 8,
+      "groupAlertRadius": 12
+    },
+    {
       "id": "archer",
       "name": "Light Infantry Archer",
+      "type": "Archer",
+      "faction": "Human",
+      "ai": "ArcherAttack",
       "orcaPriority": 0,
-      "shields": [],
       "size": 2,
+      "radius": 0.495,
+      "spriteScale": 1,
+      "spriteWorldHeight": 1.8,
+      "color": {
+        "r": 180,
+        "g": 100,
+        "b": 60,
+        "a": 255
+      },
       "sprite": {
         "atlas": "Navarre_Units",
         "name": "NavarreLightInfantry_Archer"
       },
-      "spriteScale": 1.0,
-      "spriteWorldHeight": 1.7999999523162842,
       "stats": {
-        "attack": 8,
-        "combatSpeed": 2.5,
-        "defense": 8,
-        "encumbrance": 2,
-        "magicResist": 10,
         "maxHP": 8,
+        "strength": 8,
+        "attack": 8,
+        "defense": 8,
+        "magicResist": 10,
+        "encumbrance": 2,
         "naturalProt": 0,
-        "strength": 8
+        "combatSpeed": 2.5
       },
-      "type": "Archer",
+      "zombieTypeID": "group_0",
+      "spellID": "",
+      "maxMana": 0,
+      "manaRegen": 0,
       "weapons": [
         "dagger",
         "longbow"
       ],
-      "zombieTypeID": "group_0"
-    },
-    {
-      "ai": "AttackClosest",
       "armors": [
-        "breastplate",
+        "armor_11",
         "armor_8"
       ],
-      "color": {
-        "a": 255,
-        "b": 160,
-        "g": 160,
-        "r": 160
-      },
-      "faction": "Undead",
+      "shields": [],
+      "attackCooldown": null,
+      "postAttackLockout": null,
+      "turnSpeed": null,
+      "accelHalfTime": null,
+      "accel80Time": null,
+      "accelFullTime": null,
+      "weaponPoints": {},
+      "animTimings": {},
+      "archetype": "ArcherUnit",
+      "detectionRange": 18,
+      "detectionBreakRange": 25,
+      "alertDuration": 1.0,
+      "alertEscalateRange": 10,
+      "groupAlertRadius": 0
+    },
+    {
       "id": "skeleton_copy",
       "name": "Skeleton Warrior",
+      "type": "Dynamic",
+      "faction": "Undead",
+      "ai": "AttackClosest",
       "orcaPriority": 0,
-      "shields": [
-        "shield_4"
-      ],
       "size": 2,
+      "radius": 0.495,
+      "spriteScale": 1,
+      "spriteWorldHeight": 1.9,
+      "color": {
+        "r": 160,
+        "g": 160,
+        "b": 160,
+        "a": 255
+      },
       "sprite": {
         "atlas": "VampireFaction",
         "name": "SkeletonWarrior2"
       },
-      "spriteScale": 1.0,
-      "spriteWorldHeight": 1.899999976158142,
       "stats": {
-        "attack": 10,
-        "combatSpeed": 4.800000190734863,
-        "defense": 11,
-        "encumbrance": 0,
-        "magicResist": 6,
         "maxHP": 8,
+        "strength": 8,
+        "attack": 10,
+        "defense": 11,
+        "magicResist": 6,
+        "encumbrance": 0,
         "naturalProt": 0,
-        "strength": 8
+        "combatSpeed": 4.8
       },
-      "type": "Dynamic",
+      "zombieTypeID": "",
+      "spellID": "",
+      "maxMana": 0,
+      "manaRegen": 0,
       "weapons": [
         "shortsword"
-      ]
+      ],
+      "armors": [
+        "breastplate",
+        "armor_8"
+      ],
+      "shields": [
+        "shield_4"
+      ],
+      "attackCooldown": null,
+      "postAttackLockout": null,
+      "turnSpeed": null,
+      "accelHalfTime": null,
+      "accel80Time": null,
+      "accelFullTime": null,
+      "weaponPoints": {},
+      "animTimings": {},
+      "archetype": "HordeMinion",
+      "detectionRange": 10,
+      "detectionBreakRange": 20,
+      "alertDuration": 0.5,
+      "alertEscalateRange": 8,
+      "groupAlertRadius": 0
     },
     {
-      "ai": "AttackClosest",
-      "armors": [
-        "armor_9",
-        "armor_10"
-      ],
-      "color": {
-        "a": 255,
-        "b": 160,
-        "g": 160,
-        "r": 160
-      },
-      "faction": "Undead",
       "id": "skeleton_copy_copy",
       "name": "Elite Skeleton",
+      "type": "Dynamic",
+      "faction": "Undead",
+      "ai": "AttackClosest",
       "orcaPriority": 1,
-      "shields": [
-        "none"
-      ],
       "size": 2,
+      "radius": 0.495,
+      "spriteScale": 1,
+      "spriteWorldHeight": 1.8,
+      "color": {
+        "r": 160,
+        "g": 160,
+        "b": 160,
+        "a": 255
+      },
       "sprite": {
         "atlas": "VampireFaction",
         "name": "SkeletonWarrior3"
       },
-      "spriteScale": 1.0,
-      "spriteWorldHeight": 1.7999999523162842,
       "stats": {
-        "attack": 11,
-        "combatSpeed": 4.800000190734863,
-        "defense": 10,
-        "encumbrance": 0,
-        "magicResist": 8,
         "maxHP": 12,
+        "strength": 12,
+        "attack": 11,
+        "defense": 10,
+        "magicResist": 8,
+        "encumbrance": 0,
         "naturalProt": 4,
-        "strength": 12
+        "combatSpeed": 4.8
       },
-      "type": "Dynamic",
+      "zombieTypeID": "",
+      "spellID": "",
+      "maxMana": 0,
+      "manaRegen": 0,
       "weapons": [
         "weapon_8"
-      ]
-    },
-    {
-      "ai": "AttackClosest",
-      "armors": [],
-      "color": {
-        "a": 255,
-        "b": 160,
-        "g": 160,
-        "r": 160
-      },
-      "faction": "Undead",
-      "id": "skeleton_copy_copy_copy",
-      "name": "Risen",
-      "orcaPriority": 1,
+      ],
+      "armors": [
+        "armor_9",
+        "armor_10"
+      ],
       "shields": [
         "none"
       ],
+      "attackCooldown": null,
+      "postAttackLockout": null,
+      "turnSpeed": null,
+      "accelHalfTime": null,
+      "accel80Time": null,
+      "accelFullTime": null,
+      "weaponPoints": {},
+      "animTimings": {},
+      "archetype": "HordeMinion",
+      "detectionRange": 10,
+      "detectionBreakRange": 20,
+      "alertDuration": 0.5,
+      "alertEscalateRange": 8,
+      "groupAlertRadius": 0
+    },
+    {
+      "id": "skeleton_copy_copy_copy",
+      "name": "Risen",
+      "type": "Dynamic",
+      "faction": "Undead",
+      "ai": "AttackClosest",
+      "orcaPriority": 1,
       "size": 3,
+      "radius": 0.495,
+      "spriteScale": 1.3,
+      "spriteWorldHeight": 1.8,
+      "color": {
+        "r": 160,
+        "g": 160,
+        "b": 160,
+        "a": 255
+      },
       "sprite": {
         "atlas": "VampireFaction",
         "name": "VampireRisen"
       },
-      "spriteScale": 1.2999999523162842,
-      "spriteWorldHeight": 1.7999999523162842,
       "stats": {
-        "attack": 13,
-        "combatSpeed": 6.0,
-        "defense": 12,
-        "encumbrance": 0,
-        "magicResist": 10,
         "maxHP": 20,
+        "strength": 14,
+        "attack": 13,
+        "defense": 12,
+        "magicResist": 10,
+        "encumbrance": 0,
         "naturalProt": 8,
-        "strength": 14
+        "combatSpeed": 6
       },
-      "type": "Dynamic",
+      "zombieTypeID": "",
+      "spellID": "",
+      "maxMana": 0,
+      "manaRegen": 0,
       "weapons": [
         "weapon_11",
         "weapon_11"
-      ]
+      ],
+      "armors": [],
+      "shields": [
+        "none"
+      ],
+      "attackCooldown": null,
+      "postAttackLockout": null,
+      "turnSpeed": null,
+      "accelHalfTime": null,
+      "accel80Time": null,
+      "accelFullTime": null,
+      "weaponPoints": {},
+      "animTimings": {},
+      "archetype": "HordeMinion",
+      "detectionRange": 10,
+      "detectionBreakRange": 20,
+      "alertDuration": 0.5,
+      "alertEscalateRange": 8,
+      "groupAlertRadius": 0
     }
   ]
 }

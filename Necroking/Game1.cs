@@ -134,6 +134,9 @@ public class Game1 : Microsoft.Xna.Framework.Game
     // Collision debug
     private CollisionDebugMode _collisionDebugMode = CollisionDebugMode.Off;
 
+    // Gameplay debug (F7): 0=Off, 1=Horde, 2=Unit Info
+    private int _gameplayDebugMode;
+
     // Scenario state
     private ScenarioBase? _activeScenario;
     private int _scenarioScrollOffset;
@@ -210,6 +213,21 @@ public class Game1 : Microsoft.Xna.Framework.Game
     {
         DebugLog.Clear("startup");
         DebugLog.Log("startup", "=== Necroking MG Startup ===");
+
+        // Register AI archetypes
+        AI.ArchetypeRegistry.Register(AI.ArchetypeRegistry.WolfPack, "WolfPack", new AI.WolfPackHandler());
+        AI.ArchetypeRegistry.Register(AI.ArchetypeRegistry.DeerHerd, "DeerHerd", new AI.DeerHerdHandler());
+        AI.ArchetypeRegistry.Register(AI.ArchetypeRegistry.HordeMinion, "HordeMinion", new AI.HordeMinionHandler());
+        AI.ArchetypeRegistry.Register(AI.ArchetypeRegistry.PatrolSoldier, "PatrolSoldier",
+            new AI.CombatUnitHandler(AI.ArchetypeRegistry.PatrolSoldier));
+        AI.ArchetypeRegistry.Register(AI.ArchetypeRegistry.GuardStationary, "GuardStationary",
+            new AI.CombatUnitHandler(AI.ArchetypeRegistry.GuardStationary));
+        AI.ArchetypeRegistry.Register(AI.ArchetypeRegistry.ArmyUnit, "ArmyUnit",
+            new AI.CombatUnitHandler(AI.ArchetypeRegistry.ArmyUnit));
+        AI.ArchetypeRegistry.Register(AI.ArchetypeRegistry.ArcherUnit, "ArcherUnit",
+            new AI.RangedUnitHandler(AI.ArchetypeRegistry.ArcherUnit));
+        AI.ArchetypeRegistry.Register(AI.ArchetypeRegistry.CasterUnit, "CasterUnit",
+            new AI.RangedUnitHandler(AI.ArchetypeRegistry.CasterUnit));
         _startupTimer = System.Diagnostics.Stopwatch.StartNew();
         _startupLastMs = 0;
 
@@ -376,6 +394,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         _sim.Init(worldW, worldH, _gameData);
         _sim.SetEnvironmentSystem(_envSystem);
         _sim.SetWallSystem(_wallSystem);
+        _sim.SetTriggerSystem(_triggerSystem);
 
         // Wire collision change callback so pathfinding rebuilds when objects change state
         _envSystem.OnCollisionsDirty = () => _sim.RebuildPathfinder();
@@ -566,6 +585,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         _sim.Init(gridSize, gridSize, _gameData);
         _sim.SetEnvironmentSystem(_envSystem);
         _sim.SetWallSystem(_wallSystem);
+        _sim.SetTriggerSystem(_triggerSystem);
 
         // Ensure spell bar state is initialized for HUD safety
         if (_spellBarState.Slots == null)
@@ -684,9 +704,53 @@ public class Game1 : Microsoft.Xna.Framework.Game
             _ => Faction.Undead
         };
 
-        // AI — parse from string to enum, supporting all AIBehavior values
-        _sim.UnitsMut.AI[idx] = Enum.TryParse<AIBehavior>(unitDef.AI, out var parsedAI)
-            ? parsedAI : AIBehavior.AttackClosest;
+        // AI — use new archetype system if specified, otherwise legacy AI enum
+        if (!string.IsNullOrEmpty(unitDef.Archetype))
+        {
+            // Resolve archetype name to ID
+            byte archetypeId = unitDef.Archetype switch
+            {
+                "WolfPack" => AI.ArchetypeRegistry.WolfPack,
+                "DeerHerd" => AI.ArchetypeRegistry.DeerHerd,
+                "PatrolSoldier" => AI.ArchetypeRegistry.PatrolSoldier,
+                "GuardStationary" => AI.ArchetypeRegistry.GuardStationary,
+                "ArmyUnit" => AI.ArchetypeRegistry.ArmyUnit,
+                "CasterUnit" => AI.ArchetypeRegistry.CasterUnit,
+                "ArcherUnit" => AI.ArchetypeRegistry.ArcherUnit,
+                "Civilian" => AI.ArchetypeRegistry.Civilian,
+                "HordeMinion" => AI.ArchetypeRegistry.HordeMinion,
+                _ => AI.ArchetypeRegistry.None
+            };
+            _sim.UnitsMut.Archetype[idx] = archetypeId;
+
+            // Initialize awareness config from UnitDef
+            _sim.UnitsMut.DetectionRange[idx] = unitDef.DetectionRange;
+            _sim.UnitsMut.DetectionBreakRange[idx] = unitDef.DetectionBreakRange;
+            _sim.UnitsMut.AlertDuration[idx] = unitDef.AlertDuration;
+            _sim.UnitsMut.AlertEscalateRange[idx] = unitDef.AlertEscalateRange;
+            _sim.UnitsMut.GroupAlertRadius[idx] = unitDef.GroupAlertRadius;
+
+            // Call OnSpawn for the archetype handler
+            var handler = AI.ArchetypeRegistry.Get(archetypeId);
+            if (handler != null)
+            {
+                float dayCycleLength = 360f;
+                float dayFraction = (_sim.GameTime % dayCycleLength) / dayCycleLength;
+                var ctx = new AI.AIContext
+                {
+                    UnitIndex = idx, Units = _sim.UnitsMut, Dt = 0, FrameNumber = 0,
+                    GameData = _gameData, Pathfinder = _sim.Pathfinder,
+                    Horde = _sim.Horde, TriggerSystem = _triggerSystem,
+                    GameTime = _sim.GameTime, DayTime = dayFraction, IsNight = dayFraction >= 0.5f,
+                };
+                handler.OnSpawn(ref ctx);
+            }
+        }
+        else
+        {
+            _sim.UnitsMut.AI[idx] = Enum.TryParse<AIBehavior>(unitDef.AI, out var parsedAI)
+                ? parsedAI : AIBehavior.AttackClosest;
+        }
 
         // If necromancer, record index in simulation
         if (unitDef.AI == "PlayerControlled")
@@ -694,8 +758,9 @@ public class Game1 : Microsoft.Xna.Framework.Game
             _sim.SetNecromancerIndex(idx);
         }
 
-        // Auto-enroll undead non-necromancer units in the horde
-        if (_sim.Units.Faction[idx] == Faction.Undead && _sim.Units.AI[idx] != AIBehavior.PlayerControlled)
+        // Auto-enroll undead non-necromancer units in the horde (skip if archetype handles it)
+        if (_sim.Units.Archetype[idx] == 0 && _sim.Units.Faction[idx] == Faction.Undead
+            && _sim.Units.AI[idx] != AIBehavior.PlayerControlled)
             _sim.Horde.AddUnit(_sim.Units.Id[idx]);
 
         // Set up animation
@@ -712,6 +777,19 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 // Wire animation metadata
                 if (_animMeta.Count > 0)
                     ctrl.SetAnimMeta(_animMeta, unitDef.Sprite.SpriteName);
+
+                // Wire per-unit animation timing overrides (from unit editor)
+                if (unitDef.AnimTimings.Count > 0)
+                {
+                    var overrides = new Dictionary<string, AnimTimingOverride>();
+                    foreach (var (anim, ov) in unitDef.AnimTimings)
+                        overrides[anim] = new AnimTimingOverride
+                        {
+                            FrameDurationsMs = new List<int>(ov.FrameDurationsMs),
+                            EffectTimeMs = ov.EffectTimeMs
+                        };
+                    ctrl.SetAnimTimings(overrides);
+                }
 
                 float refH = 128f;
                 var idleAnim = spriteData.GetAnim("Idle");
@@ -1168,6 +1246,10 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // Check if any editor text field is active (persists from previous frame, safe to read before UpdateInput)
         bool anyTextInputActive = (_editorUi != null && _editorUi.IsTextInputActive)
             || (_menuState == MenuState.UIEditor && _uiEditor.IsTextInputActive);
+
+        // --- F7 gameplay debug toggle (Off → Horde → Unit Info → Off) ---
+        if (!anyTextInputActive && WasKeyPressed(kb, Keys.F7))
+            _gameplayDebugMode = (_gameplayDebugMode + 1) % 3;
 
         // --- F8 collision debug toggle ---
         if (!anyTextInputActive && WasKeyPressed(kb, Keys.F8))
@@ -2453,19 +2535,30 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 else
                     targetState = AnimState.Block;
             }
-            else if (_sim.Units.Velocity[i].LengthSq() > 0.5f)
+            else
             {
-                // Animation driven by actual velocity — shift-to-run works by
-                // boosting MaxSpeed so the unit crosses the Run threshold naturally
                 float speed = _sim.Units.Velocity[i].Length();
                 float baseSpeed = _sim.Units.Stats[i].CombatSpeed;
-                if (speed > baseSpeed * 1.4f)
-                    targetState = AnimState.Run;
-                else
+                float walkThreshold = 0.25f;
+                float jogThreshold = 4f + baseSpeed / 3f;
+                float runThreshold = 6f + 2f * baseSpeed / 3f;
+
+                if (speed <= walkThreshold)
+                    targetState = AnimState.Idle;
+                else if (speed < jogThreshold)
                     targetState = AnimState.Walk;
+                else if (speed < runThreshold)
+                    targetState = AnimState.Jog;
+                else
+                    targetState = AnimState.Run;
+
+                // Debug: log state transitions
+                if (animData.Ctrl.CurrentState != targetState && speed > walkThreshold)
+                {
+                    string defId = _sim.Units.UnitDefID[i] ?? "?";
+                    DebugLog.Log("anim", $"Unit {i} ({defId}): {animData.Ctrl.CurrentState}->{targetState} speed={speed:F1} base={baseSpeed:F1} walk<{jogThreshold:F1} jog<{runThreshold:F1}");
+                }
             }
-            else
-                targetState = AnimState.Idle;
 
             // Reverse walk playback when moving backward relative to facing
             float facingRad = _sim.Units.FacingAngle[i] * MathF.PI / 180f;
@@ -2695,6 +2788,17 @@ public class Game1 : Microsoft.Xna.Framework.Game
             _spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.PointClamp);
             _debugDraw.DrawCollisionDebug(_spriteBatch, GraphicsDevice, _sim, _camera, _renderer,
                 _collisionDebugMode, _envSystem, _sim.Pathfinder);
+            _spriteBatch.End();
+        }
+
+        // --- Gameplay debug overlay (F7) ---
+        if (_gameplayDebugMode > 0)
+        {
+            _spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.PointClamp);
+            if (_gameplayDebugMode == 1)
+                DrawHordeDebug();
+            else if (_gameplayDebugMode == 2)
+                DrawUnitInfoDebug();
             _spriteBatch.End();
         }
 
@@ -3117,6 +3221,135 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 DrawSpriteFrame(atlas, fr.Frame.Value, sp, scale, fr.FlipX, corpseTint);
             }
         }
+    }
+
+    // ═══════════════════════════════════════
+    //  Gameplay Debug Visualizations (F7)
+    // ═══════════════════════════════════════
+
+    private void DrawHordeDebug()
+    {
+        _debugDraw.EnsurePixel(GraphicsDevice);
+        int screenW = GraphicsDevice.Viewport.Width, screenH = GraphicsDevice.Viewport.Height;
+        var horde = _sim.Horde;
+        var settings = horde.Settings;
+
+        // Formation circle
+        _debugDraw.DrawCircle(_spriteBatch, _renderer, _camera,
+            horde.CircleCenter, settings.CircleRadius, new Color(100, 200, 100, 120));
+
+        // Engagement range
+        _debugDraw.DrawCircle(_spriteBatch, _renderer, _camera,
+            horde.CircleCenter, settings.EngagementRange, new Color(255, 200, 80, 80));
+
+        // Leash radius
+        _debugDraw.DrawCircle(_spriteBatch, _renderer, _camera,
+            horde.CircleCenter, settings.LeashRadius, new Color(255, 80, 80, 60));
+
+        // Formation facing arrow
+        var facingDir = new Vec2(MathF.Cos(horde.CircleFacing), MathF.Sin(horde.CircleFacing));
+        var centerSp = _camera.WorldToScreen(horde.CircleCenter, 0f, screenW, screenH);
+        var facingEnd = _camera.WorldToScreen(horde.CircleCenter + facingDir * 3f, 0f, screenW, screenH);
+        _debugDraw.DrawArrow(_spriteBatch, centerSp, facingEnd, new Color(100, 255, 100, 200));
+
+        // Unit slots and connections
+        foreach (var unit in horde.HordeUnits)
+        {
+            int unitIdx = -1;
+            for (int j = 0; j < _sim.Units.Count; j++)
+                if (_sim.Units.Id[j] == unit.UnitID) { unitIdx = j; break; }
+            if (unitIdx < 0 || !_sim.Units.Alive[unitIdx]) continue;
+
+            var unitPos = _sim.Units.Position[unitIdx];
+            var unitSp = _camera.WorldToScreen(unitPos, 0f, screenW, screenH);
+
+            // Line to slot target
+            if (horde.GetTargetPosition(unit.UnitID, out Vec2 slotPos))
+            {
+                var slotSp = _camera.WorldToScreen(slotPos, 0f, screenW, screenH);
+                // Slot marker (small cross)
+                _spriteBatch.Draw(_pixel, new Rectangle((int)slotSp.X - 3, (int)slotSp.Y, 7, 1), new Color(100, 200, 100, 150));
+                _spriteBatch.Draw(_pixel, new Rectangle((int)slotSp.X, (int)slotSp.Y - 3, 1, 7), new Color(100, 200, 100, 150));
+                // Line from unit to slot
+                Color lineCol = unit.State switch
+                {
+                    HordeUnitState.Following => new Color(100, 200, 100, 100),
+                    HordeUnitState.Engaged => new Color(255, 80, 80, 150),
+                    HordeUnitState.Chasing => new Color(255, 200, 80, 150),
+                    HordeUnitState.Returning => new Color(80, 150, 255, 150),
+                    _ => new Color(150, 150, 150, 100)
+                };
+                _debugDraw.DrawLine(_spriteBatch, unitSp, slotSp, lineCol);
+            }
+
+            // State label
+            if (_smallFont != null)
+            {
+                string stateLabel = unit.State.ToString();
+                _spriteBatch.DrawString(_smallFont, stateLabel,
+                    new Vector2(unitSp.X + 8, unitSp.Y - 16), new Color(200, 200, 200, 200));
+            }
+        }
+
+        // Mode label
+        if (_smallFont != null)
+            _spriteBatch.DrawString(_smallFont, "[F7] Debug: Horde",
+                new Vector2(10, 26), new Color(100, 255, 100, 200));
+    }
+
+    private void DrawUnitInfoDebug()
+    {
+        _debugDraw.EnsurePixel(GraphicsDevice);
+        int screenW = GraphicsDevice.Viewport.Width, screenH = GraphicsDevice.Viewport.Height;
+
+        for (int i = 0; i < _sim.Units.Count; i++)
+        {
+            if (!_sim.Units.Alive[i]) continue;
+
+            var pos = _sim.Units.Position[i];
+            var sp = _camera.WorldToScreen(pos, 0f, screenW, screenH);
+            float speed = _sim.Units.Velocity[i].Length();
+            float maxSpeed = _sim.Units.MaxSpeed[i];
+
+            // Line to target
+            var target = _sim.Units.Target[i];
+            if (target.IsUnit)
+            {
+                int tIdx = -1;
+                for (int j = 0; j < _sim.Units.Count; j++)
+                    if (_sim.Units.Id[j] == target.UnitID) { tIdx = j; break; }
+                if (tIdx >= 0 && _sim.Units.Alive[tIdx])
+                {
+                    var tSp = _camera.WorldToScreen(_sim.Units.Position[tIdx], 0f, screenW, screenH);
+                    _debugDraw.DrawLine(_spriteBatch, sp, tSp, new Color(255, 100, 100, 100));
+                }
+            }
+
+            // Velocity vector
+            if (speed > 0.1f)
+            {
+                var velEnd = _camera.WorldToScreen(pos + _sim.Units.Velocity[i].Normalized() * 1.5f, 0f, screenW, screenH);
+                _debugDraw.DrawArrow(_spriteBatch, sp, velEnd, new Color(80, 200, 255, 150));
+            }
+
+            if (_smallFont == null) continue;
+
+            // Get animation state
+            string animLabel = "?";
+            uint uid = _sim.Units.Id[i];
+            if (_unitAnims.TryGetValue(uid, out var animData))
+                animLabel = animData.Ctrl.CurrentState.ToString();
+
+            // Text above head: velocity | anim state | max speed
+            string info = $"v:{speed:F1} {animLabel} ms:{maxSpeed:F1}";
+            var textPos = new Vector2(sp.X - info.Length * 3, sp.Y - 28);
+            _spriteBatch.DrawString(_smallFont, info, textPos, new Color(255, 255, 200, 220));
+        }
+
+        // Mode label
+        if (_smallFont != null)
+            _spriteBatch.DrawString(_smallFont, "[F7] Debug: Unit Info",
+                new Vector2(10, 26), new Color(80, 200, 255, 200));
     }
 
     /// <summary>Draw ground-layer objects (traps) — above dirt, below grass/units.</summary>

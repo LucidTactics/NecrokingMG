@@ -115,6 +115,24 @@ public class UnitArrays
     // Stuck detection for ORCA nudge
     public List<int> StuckFrames = new();
 
+    // AI behavior framework (replaces WolfPhase/FleeTimer for new archetypes)
+    public List<byte> Archetype = new();        // ArchetypeRegistry ID (0=None=use legacy AI)
+    public List<byte> Routine = new();           // current routine index (meaning varies by archetype)
+    public List<byte> Subroutine = new();        // current step within routine
+    public List<float> SubroutineTimer = new();  // generic timer for current step
+    public List<byte> AlertState = new();        // 0=Unaware, 1=Alert, 2=Aggressive
+    public List<float> AlertTimer = new();       // time in alert state
+    public List<uint> AlertTarget = new();       // who triggered awareness
+    public List<Vec2> SpawnPosition = new();     // where unit was spawned (used as roam center)
+    public List<bool> IsSneaking = new();        // sneaking movement mode
+
+    // Per-unit awareness config (set from UnitDef at spawn)
+    public List<float> DetectionRange = new();
+    public List<float> DetectionBreakRange = new();
+    public List<float> AlertDuration = new();
+    public List<float> AlertEscalateRange = new();
+    public List<float> GroupAlertRadius = new();
+
     public int Count;
     private uint _nextID;
 
@@ -183,6 +201,20 @@ public class UnitArrays
         QueuedAction.Add(QueuedUnitAction.None);
         AnimPlaybackSpeed.Add(1f);
         GhostMode.Add(false);
+        Archetype.Add(0);
+        Routine.Add(0);
+        Subroutine.Add(0);
+        SubroutineTimer.Add(0f);
+        AlertState.Add(0);
+        AlertTimer.Add(0f);
+        AlertTarget.Add(GameConstants.InvalidUnit);
+        SpawnPosition.Add(pos);
+        IsSneaking.Add(false);
+        DetectionRange.Add(0f);
+        DetectionBreakRange.Add(0f);
+        AlertDuration.Add(2f);
+        AlertEscalateRange.Add(0f);
+        GroupAlertRadius.Add(0f);
         return idx;
     }
 
@@ -264,6 +296,20 @@ public class UnitArrays
         (QueuedAction[a], QueuedAction[b]) = (QueuedAction[b], QueuedAction[a]);
         (AnimPlaybackSpeed[a], AnimPlaybackSpeed[b]) = (AnimPlaybackSpeed[b], AnimPlaybackSpeed[a]);
         (GhostMode[a], GhostMode[b]) = (GhostMode[b], GhostMode[a]);
+        (Archetype[a], Archetype[b]) = (Archetype[b], Archetype[a]);
+        (Routine[a], Routine[b]) = (Routine[b], Routine[a]);
+        (Subroutine[a], Subroutine[b]) = (Subroutine[b], Subroutine[a]);
+        (SubroutineTimer[a], SubroutineTimer[b]) = (SubroutineTimer[b], SubroutineTimer[a]);
+        (AlertState[a], AlertState[b]) = (AlertState[b], AlertState[a]);
+        (AlertTimer[a], AlertTimer[b]) = (AlertTimer[b], AlertTimer[a]);
+        (AlertTarget[a], AlertTarget[b]) = (AlertTarget[b], AlertTarget[a]);
+        (SpawnPosition[a], SpawnPosition[b]) = (SpawnPosition[b], SpawnPosition[a]);
+        (IsSneaking[a], IsSneaking[b]) = (IsSneaking[b], IsSneaking[a]);
+        (DetectionRange[a], DetectionRange[b]) = (DetectionRange[b], DetectionRange[a]);
+        (DetectionBreakRange[a], DetectionBreakRange[b]) = (DetectionBreakRange[b], DetectionBreakRange[a]);
+        (AlertDuration[a], AlertDuration[b]) = (AlertDuration[b], AlertDuration[a]);
+        (AlertEscalateRange[a], AlertEscalateRange[b]) = (AlertEscalateRange[b], AlertEscalateRange[a]);
+        (GroupAlertRadius[a], GroupAlertRadius[b]) = (GroupAlertRadius[b], GroupAlertRadius[a]);
     }
 
     private void TrimLast()
@@ -296,6 +342,12 @@ public class UnitArrays
         MoveTime.RemoveAt(last); QueuedAction.RemoveAt(last);
         AnimPlaybackSpeed.RemoveAt(last);
         GhostMode.RemoveAt(last);
+        Archetype.RemoveAt(last); Routine.RemoveAt(last); Subroutine.RemoveAt(last);
+        SubroutineTimer.RemoveAt(last); AlertState.RemoveAt(last); AlertTimer.RemoveAt(last);
+        AlertTarget.RemoveAt(last); SpawnPosition.RemoveAt(last); IsSneaking.RemoveAt(last);
+        DetectionRange.RemoveAt(last); DetectionBreakRange.RemoveAt(last);
+        AlertDuration.RemoveAt(last); AlertEscalateRange.RemoveAt(last);
+        GroupAlertRadius.RemoveAt(last);
     }
 
     public void Clear()
@@ -324,6 +376,11 @@ public class UnitArrays
         Mana.Clear(); MaxMana.Clear(); ManaRegen.Clear();
         SpellCooldownTimer.Clear(); SpellID.Clear();
         GhostMode.Clear();
+        Archetype.Clear(); Routine.Clear(); Subroutine.Clear();
+        SubroutineTimer.Clear(); AlertState.Clear(); AlertTimer.Clear();
+        AlertTarget.Clear(); SpawnPosition.Clear(); IsSneaking.Clear();
+        DetectionRange.Clear(); DetectionBreakRange.Clear();
+        AlertDuration.Clear(); AlertEscalateRange.Clear(); GroupAlertRadius.Clear();
     }
 }
 

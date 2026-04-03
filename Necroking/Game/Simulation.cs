@@ -114,6 +114,8 @@ public class Simulation
 
     public void SetEnvironmentSystem(EnvironmentSystem? es) { _envSystem = es; }
     public void SetWallSystem(WallSystem? ws) { _wallSystem = ws; }
+    public void SetTriggerSystem(TriggerSystem? ts) { _triggerSystem = ts; }
+    private TriggerSystem? _triggerSystem;
     public void SetNecromancerIndex(int idx) { _necromancerIdx = idx; }
 
     public void Tick(float dt)
@@ -242,11 +244,36 @@ public class Simulation
     // --- AI ---
     private void UpdateAI(float dt)
     {
+        // Awareness pass (runs before AI updates)
+        float dayCycleLength = 360f; // 6 minutes = 360 seconds
+        float dayFraction = (_gameTime % dayCycleLength) / dayCycleLength;
+        bool isNight = dayFraction >= 0.5f; // minutes 3-6 are night
+        AI.AwarenessSystem.Update(_units, dt, (int)_frameNumber);
+
         for (int i = 0; i < _units.Count; i++)
         {
             if (!_units.Alive[i]) continue;
             if (_units.Jumping[i] || _units.KnockdownTimer[i] > 0f) { _units.PreferredVel[i] = Vec2.Zero; continue; }
-            // FleeWhenHit and wolf AIs handle their own combat/disengage logic
+
+            // New archetype system: if Archetype > 0, dispatch to handler
+            if (_units.Archetype[i] > 0)
+            {
+                var handler = AI.ArchetypeRegistry.Get(_units.Archetype[i]);
+                if (handler != null)
+                {
+                    var ctx = new AI.AIContext
+                    {
+                        UnitIndex = i, Units = _units, Dt = dt, FrameNumber = (int)_frameNumber,
+                        GameData = _gameData, Pathfinder = _pathfinder, Quadtree = _quadtree,
+                        Horde = _horde, TriggerSystem = _triggerSystem,
+                        GameTime = _gameTime, DayTime = dayFraction, IsNight = isNight,
+                    };
+                    handler.Update(ref ctx);
+                }
+                continue;
+            }
+
+            // Legacy AI: FleeWhenHit and wolf AIs handle their own combat/disengage logic
             bool selfManagesCombat = _units.AI[i] == AIBehavior.FleeWhenHit
                 || _units.AI[i] == AIBehavior.WolfHitAndRun || _units.AI[i] == AIBehavior.WolfHitAndRunIsolated
                 || _units.AI[i] == AIBehavior.WolfOpportunist || _units.AI[i] == AIBehavior.WolfOpportunistIsolated;
@@ -371,10 +398,7 @@ public class Simulation
                     // Return to idle point
                     var toIdle = _units.MoveTarget[i] - _units.Position[i];
                     if (toIdle.LengthSq() > 4f)
-                    {
-                        var dir = toIdle.Normalized();
-                        _units.PreferredVel[i] = dir * _units.MaxSpeed[i] * 0.5f;
-                    }
+                        MoveTowardPosition(i, _units.MoveTarget[i], _units.MaxSpeed[i] * 0.5f);
                     else
                         _units.PreferredVel[i] = Vec2.Zero;
                     break;
@@ -386,10 +410,7 @@ public class Simulation
                     // For now, just move to moveTarget (first waypoint)
                     var toTarget = _units.MoveTarget[i] - _units.Position[i];
                     if (toTarget.LengthSq() > 1f)
-                    {
-                        var dir = toTarget.Normalized();
-                        _units.PreferredVel[i] = dir * _units.MaxSpeed[i];
-                    }
+                        MoveTowardPosition(i, _units.MoveTarget[i], _units.MaxSpeed[i]);
                     else
                         _units.PreferredVel[i] = Vec2.Zero;
 
@@ -419,7 +440,7 @@ public class Simulation
                         // Move toward moveTarget (raid destination)
                         var toTarget = _units.MoveTarget[i] - _units.Position[i];
                         if (toTarget.LengthSq() > 1f)
-                            _units.PreferredVel[i] = toTarget.Normalized() * _units.MaxSpeed[i];
+                            MoveTowardPosition(i, _units.MoveTarget[i], _units.MaxSpeed[i]);
                         else
                             _units.PreferredVel[i] = Vec2.Zero;
                     }
@@ -561,8 +582,7 @@ public class Simulation
                     else if (!atDest)
                     {
                         // March toward destination
-                        var dir = (dest - _units.Position[i]).Normalized();
-                        _units.PreferredVel[i] = dir * _units.MaxSpeed[i];
+                        MoveTowardPosition(i, dest, _units.MaxSpeed[i]);
                     }
                     else
                     {
@@ -613,7 +633,9 @@ public class Simulation
                             else
                             {
                                 awayDir = dist > 0.01f ? awayDir * (1f / dist) : new Vec2(1, 0);
-                                _units.PreferredVel[i] = awayDir * _units.MaxSpeed[i];
+                                // Pathfind to a point far away from the attacker
+                                Vec2 fleeDest = _units.Position[i] + awayDir * 15f;
+                                MoveTowardPosition(i, fleeDest, _units.MaxSpeed[i]);
                             }
                         }
                         else
@@ -722,10 +744,7 @@ public class Simulation
                         {
                             float distToSlot = (_units.Position[i] - returnSlot).Length();
                             if (distToSlot > 0.5f)
-                            {
-                                var dir = (returnSlot - _units.Position[i]).Normalized();
-                                _units.PreferredVel[i] = dir * _units.MaxSpeed[i] * _horde.Settings.ReturnSpeedMult;
-                            }
+                                MoveTowardPosition(i, returnSlot, _units.MaxSpeed[i] * _horde.Settings.ReturnSpeedMult);
                             else
                                 _units.PreferredVel[i] = Vec2.Zero;
                         }
@@ -734,12 +753,27 @@ public class Simulation
                         break;
                     }
 
+                    // Sync horde chasing target to unit target
+                    if (inHorde && hordeState == HordeUnitState.Chasing)
+                    {
+                        uint chasingId = _horde.GetChasingTarget(_units.Id[i]);
+                        if (chasingId != GameConstants.InvalidUnit)
+                        {
+                            _units.Target[i] = CombatTarget.Unit(chasingId);
+                            if (_frameNumber % 60 == 0)
+                            {
+                                int tIdx = UnitUtil.ResolveUnitIndex(_units, chasingId);
+                                float cDist = tIdx >= 0 ? (_units.Position[tIdx] - _units.Position[i]).Length() : -1;
+                                Core.DebugLog.Log("horde", $"Unit {i} Chasing target={chasingId} tIdx={tIdx} dist={cDist:F1} vel={_units.PreferredVel[i].Length():F1}");
+                            }
+                        }
+                    }
+
                     // Acquire new target (range-limited for horde units)
                     if (!IsTargetAlive(_units.Target[i]))
                     {
                         if (inHorde)
                         {
-                            // Horde units only target enemies within engagement range
                             int nearby = FindClosestEnemy(i, _horde.Settings.EngagementRange);
                             _units.Target[i] = nearby >= 0 ? CombatTarget.Unit(_units.Id[nearby]) : CombatTarget.None;
                         }
@@ -772,10 +806,7 @@ public class Simulation
                         {
                             float distToSlot = (_units.Position[i] - slotPos).Length();
                             if (distToSlot > 0.5f)
-                            {
-                                var dir = (slotPos - _units.Position[i]).Normalized();
-                                _units.PreferredVel[i] = dir * _units.MaxSpeed[i];
-                            }
+                                MoveTowardPosition(i, slotPos, _units.MaxSpeed[i]);
                             else
                                 _units.PreferredVel[i] = Vec2.Zero;
                         }
@@ -1373,11 +1404,15 @@ public class Simulation
     // --- Helpers ---
     private void MoveTowardUnit(int i, int targetIdx, float speed)
     {
-        Vec2 targetPos = _units.Position[targetIdx];
+        MoveTowardPosition(i, _units.Position[targetIdx], speed);
+    }
+
+    /// <summary>Move unit toward a world position using pathfinding for longer distances.</summary>
+    private void MoveTowardPosition(int i, Vec2 targetPos, float speed)
+    {
         Vec2 myPos = _units.Position[i];
         float dist = (targetPos - myPos).Length();
 
-        // Use pathfinder for longer distances to navigate around obstacles
         if (dist > 3f && _pathfinder != null && _pathfinder.Grid != null)
         {
             int sizeTier = TerrainCosts.SizeToTier(_units.Size[i]);
@@ -1386,7 +1421,6 @@ public class Simulation
         }
         else
         {
-            // Close range: beeline directly
             Vec2 dir = dist > 0.01f ? (targetPos - myPos) * (1f / dist) : Vec2.Zero;
             _units.PreferredVel[i] = dir * speed;
         }

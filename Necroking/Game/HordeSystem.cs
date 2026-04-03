@@ -232,11 +232,11 @@ public class HordeSystem
                     foreach (uint nid in nearbyIDs)
                     {
                         int ni = UnitUtil.ResolveUnitIndex(units, nid);
-                        if (ni < 0 || units.Faction[ni] == Faction.Undead) continue;
+                        if (ni < 0 || !units.Alive[ni] || units.Faction[ni] == Faction.Undead) continue;
                         anyEnemy = true;
                         break;
                     }
-                    if (!anyEnemy) hu.State = HordeUnitState.Following;
+                    if (!anyEnemy) hu.State = HordeUnitState.Returning;
                     break;
                 }
 

@@ -93,6 +93,16 @@ public class UnitDef : IHasId
     /// </summary>
     [JsonPropertyName("animTimings")]
     public Dictionary<string, UnitAnimTimingOverride> AnimTimings { get; set; } = new();
+
+    // AI behavior framework
+    [JsonPropertyName("archetype")] public string Archetype { get; set; } = ""; // ArchetypeRegistry name (empty = legacy AI)
+
+    // Awareness config (used by AwarenessSystem)
+    [JsonPropertyName("detectionRange")] public float DetectionRange { get; set; }
+    [JsonPropertyName("detectionBreakRange")] public float DetectionBreakRange { get; set; }
+    [JsonPropertyName("alertDuration")] public float AlertDuration { get; set; } = 2f;
+    [JsonPropertyName("alertEscalateRange")] public float AlertEscalateRange { get; set; }
+    [JsonPropertyName("groupAlertRadius")] public float GroupAlertRadius { get; set; }
 }
 
 public class UnitRegistry : RegistryBase<UnitDef>
