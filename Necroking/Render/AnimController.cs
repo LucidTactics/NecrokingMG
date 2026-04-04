@@ -40,6 +40,10 @@ public class AnimController
     private Dictionary<string, AnimTimingOverride>? _timingOverrides;
     private float _playbackSpeed = 1f;
 
+    // Cached resolved data for _currentState (set once per state transition)
+    private AnimationData? _resolvedAnim;
+    private AnimationMeta? _resolvedMeta;
+
     // Angle sectors: maps world angle to sprite angle + flip
     // World: 0=right, 90=down(toward camera), 180=left, 270=up(away)
     // Sprite angles: 30 (right-ish), 60 (down), 300 (up/away)
@@ -74,18 +78,70 @@ public class AnimController
         _timingOverrides = null;
         for (int i = 0; i < _stateTickRate.Length; i++)
             _stateTickRate[i] = 30f; // flat fallback
+        ResolveForState();
     }
 
     public void SetAnimMeta(Dictionary<string, AnimationMeta>? metaMap, string unitName)
     {
         _animMeta = metaMap;
         _unitName = unitName;
+        ResolveForState();
     }
 
     public void SetAnimTimings(Dictionary<string, AnimTimingOverride>? timings)
     {
         _timingOverrides = timings;
     }
+
+    // --- Resolved data caching ---
+
+    /// <summary>
+    /// Resolves and caches AnimationData + AnimationMeta for _currentState.
+    /// Called once per state transition (from SwitchState) and when underlying data changes.
+    /// </summary>
+    private void ResolveForState()
+    {
+        _resolvedAnim = ResolveAnimForState(_currentState);
+        _resolvedMeta = ResolveMetaForState(_currentState);
+    }
+
+    private AnimationData? ResolveAnimForState(AnimState state)
+    {
+        if (_spriteData == null) return null;
+        var anim = _spriteData.GetAnim(StateToAnimName(state));
+        if (anim != null) return anim;
+
+        string? fallback = GetFallbackAnimName(state);
+        if (fallback != null)
+            anim = _spriteData.GetAnim(fallback);
+
+        return anim ?? _spriteData.GetAnim("Idle");
+    }
+
+    private AnimationMeta? ResolveMetaForState(AnimState state)
+    {
+        if (_animMeta == null || string.IsNullOrEmpty(_unitName)) return null;
+        string key = AnimMetaLoader.MetaKey(_unitName, StateToAnimName(state));
+        if (_animMeta.TryGetValue(key, out var meta)) return meta;
+
+        string? fallback = GetFallbackAnimName(state);
+        if (fallback != null)
+        {
+            key = AnimMetaLoader.MetaKey(_unitName, fallback);
+            if (_animMeta.TryGetValue(key, out meta)) return meta;
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// Single source of truth for animation fallback chains.
+    /// </summary>
+    private static string? GetFallbackAnimName(AnimState state) => state switch
+    {
+        AnimState.Run or AnimState.Jog => "Walk",
+        AnimState.Hover => "Fall",
+        _ => null
+    };
 
     // --- State transitions ---
 
@@ -124,33 +180,15 @@ public class AnimController
         _finished = false;
         _actionMomentFired = false;
         _playbackSpeed = 1f;
+        ResolveForState();
     }
 
     // --- Update ---
-
-    /// <summary>
-    /// Resolves the sprite animation for the current state, applying fallback chains
-    /// (e.g. Hover->Fall->Idle, Run->Walk->Idle).
-    /// </summary>
-    private AnimationData? ResolveAnim()
-    {
-        if (_spriteData == null) return null;
-        var anim = _spriteData.GetAnim(StateToAnimName(_currentState));
-        if (anim != null) return anim;
-
-        if (_currentState == AnimState.Run || _currentState == AnimState.Jog)
-            anim = _spriteData.GetAnim("Walk");
-        else if (_currentState == AnimState.Hover)
-            anim = _spriteData.GetAnim("Fall");
-
-        return anim ?? _spriteData.GetAnim("Idle");
-    }
 
     public void Update(float dt)
     {
         if (_spriteData == null) return;
 
-        var anim = ResolveAnim();
         int totalMs = GetEffectiveTotalDurationMs();
 
         if (totalMs > 0)
@@ -181,11 +219,11 @@ public class AnimController
                 }
             }
         }
-        else if (anim != null)
+        else if (_resolvedAnim != null)
         {
             // TICK-BASED FALLBACK (scaled by playback speed)
             _animTime += _stateTickRate[(int)_currentState] * dt * _playbackSpeed;
-            int totalT = anim.TotalTicks();
+            int totalT = _resolvedAnim.TotalTicks();
             if (totalT <= 0) return;
 
             var mode = GetPlayMode(_currentState);
@@ -224,10 +262,7 @@ public class AnimController
     public FrameResult GetCurrentFrame(float facingAngleDeg)
     {
         var result = new FrameResult();
-        if (_spriteData == null) return result;
-
-        var anim = ResolveAnim();
-        if (anim == null) return result;
+        if (_resolvedAnim == null) return result;
 
         int spriteAngle = ResolveAngle(facingAngleDeg, out bool flipX);
         result.FlipX = flipX;
@@ -242,7 +277,7 @@ public class AnimController
                 effectiveTime = MathF.Max(0f, totalMs - _animTime);
             else
             {
-                int totalT = anim.TotalTicks();
+                int totalT = _resolvedAnim.TotalTicks();
                 if (totalT > 0) effectiveTime = MathF.Max(0f, totalT - _animTime);
             }
         }
@@ -251,9 +286,9 @@ public class AnimController
         var durations = GetEffectiveFrameDurations(spriteAngle);
         if (durations != null && durations.Count > 0)
         {
-            var kfs = anim.GetAngle(spriteAngle);
+            var kfs = _resolvedAnim.GetAngle(spriteAngle);
             if ((kfs == null || kfs.Count == 0) && spriteAngle != 30)
-                kfs = anim.GetAngle(30);
+                kfs = _resolvedAnim.GetAngle(30);
 
             // Find frame index from cumulative ms
             int numDurFrames = durations.Count;
@@ -280,9 +315,9 @@ public class AnimController
         }
 
         // Tick-based fallback
-        var tickKfs = anim.GetAngle(spriteAngle);
+        var tickKfs = _resolvedAnim.GetAngle(spriteAngle);
         if (tickKfs == null || tickKfs.Count == 0)
-            tickKfs = anim.GetAngle(30); // fallback angle
+            tickKfs = _resolvedAnim.GetAngle(30); // fallback angle
 
         if (tickKfs != null && tickKfs.Count > 0)
         {
@@ -304,17 +339,7 @@ public class AnimController
     /// </summary>
     public int GetCurrentFrameIndex(float facingAngleDeg)
     {
-        if (_spriteData == null) return 0;
-
-        string animName = StateToAnimName(_currentState);
-        var anim = _spriteData.GetAnim(animName);
-        if (anim == null)
-        {
-            if (_currentState == AnimState.Run || _currentState == AnimState.Jog)
-                anim = _spriteData.GetAnim("Walk");
-            anim ??= _spriteData.GetAnim("Idle");
-            if (anim == null) return 0;
-        }
+        if (_resolvedAnim == null) return 0;
 
         int spriteAngle = ResolveAngle(facingAngleDeg, out _);
 
@@ -326,7 +351,7 @@ public class AnimController
                 effectiveTime = MathF.Max(0f, totalMs - _animTime);
             else
             {
-                int totalT = anim.TotalTicks();
+                int totalT = _resolvedAnim.TotalTicks();
                 if (totalT > 0) effectiveTime = MathF.Max(0f, totalT - _animTime);
             }
         }
@@ -345,9 +370,9 @@ public class AnimController
         }
 
         // tick-based fallback
-        var tickKfs = anim.GetAngle(spriteAngle);
+        var tickKfs = _resolvedAnim.GetAngle(spriteAngle);
         if (tickKfs == null || tickKfs.Count == 0)
-            tickKfs = anim.GetAngle(30);
+            tickKfs = _resolvedAnim.GetAngle(30);
         if (tickKfs != null && tickKfs.Count > 0)
         {
             for (int i = tickKfs.Count - 1; i >= 0; i--)
@@ -393,10 +418,9 @@ public class AnimController
         if (effectMs > 0) return _animTime >= effectMs;
 
         // Fallback: 50% of total ticks
-        var anim = _spriteData?.GetAnim(StateToAnimName(_currentState));
-        if (anim != null)
+        if (_resolvedAnim != null)
         {
-            int total = anim.TotalTicks();
+            int total = _resolvedAnim.TotalTicks();
             return total > 0 && _animTime >= total * 0.5f;
         }
         return false;
@@ -407,7 +431,7 @@ public class AnimController
         string animName = StateToAnimName(state);
         if (_timingOverrides != null && _timingOverrides.TryGetValue(animName, out var ov) && ov.EffectTimeMs >= 0)
             return ov.EffectTimeMs / 1000f;
-        var meta = GetMetaForState(state);
+        var meta = ResolveMetaForState(state);
         if (meta != null && meta.EffectTimeMs > 0) return meta.EffectTimeMs / 1000f;
         return 0f;
     }
@@ -421,7 +445,7 @@ public class AnimController
             foreach (int d in ov.FrameDurationsMs) total += d;
             return total / 1000f;
         }
-        var meta = GetMetaForState(state);
+        var meta = ResolveMetaForState(state);
         if (meta != null)
         {
             int ms = meta.TotalDurationMs();
@@ -430,16 +454,7 @@ public class AnimController
         return 0f;
     }
 
-    private AnimationMeta? GetMetaForState(AnimState state)
-    {
-        if (_animMeta == null || string.IsNullOrEmpty(_unitName)) return null;
-        string animName = StateToAnimName(state);
-        string key = AnimMetaLoader.MetaKey(_unitName, animName);
-        _animMeta.TryGetValue(key, out var meta);
-        return meta;
-    }
-
-    // --- Effective timing helpers ---
+    // --- Effective timing helpers (use cached _resolvedMeta) ---
 
     private int GetEffectiveTotalDurationMs()
     {
@@ -450,8 +465,7 @@ public class AnimController
             foreach (int d in ov.FrameDurationsMs) total += d;
             return total;
         }
-        var meta = GetCurrentMeta();
-        return meta?.TotalDurationMs() ?? 0;
+        return _resolvedMeta?.TotalDurationMs() ?? 0;
     }
 
     private int GetEffectiveEffectTimeMs()
@@ -459,8 +473,7 @@ public class AnimController
         string animName = StateToAnimName(_currentState);
         if (_timingOverrides != null && _timingOverrides.TryGetValue(animName, out var ov) && ov.EffectTimeMs >= 0)
             return ov.EffectTimeMs;
-        var meta = GetCurrentMeta();
-        return meta?.EffectTimeMs ?? 0;
+        return _resolvedMeta?.EffectTimeMs ?? 0;
     }
 
     private List<int>? GetEffectiveFrameDurations(int spriteAngle)
@@ -469,33 +482,12 @@ public class AnimController
         if (_timingOverrides != null && _timingOverrides.TryGetValue(animName, out var ov) && ov.FrameDurationsMs.Count > 0)
             return ov.FrameDurationsMs;
 
-        var meta = GetCurrentMeta();
-        if (meta != null)
+        if (_resolvedMeta != null)
         {
-            if (meta.YawData.TryGetValue(spriteAngle, out var ym) && ym.FrameDurationsMs.Count > 0)
+            if (_resolvedMeta.YawData.TryGetValue(spriteAngle, out var ym) && ym.FrameDurationsMs.Count > 0)
                 return ym.FrameDurationsMs;
-            foreach (var (_, y) in meta.YawData)
+            foreach (var (_, y) in _resolvedMeta.YawData)
                 if (y.FrameDurationsMs.Count > 0) return y.FrameDurationsMs;
-        }
-        return null;
-    }
-
-    private AnimationMeta? GetCurrentMeta()
-    {
-        if (_animMeta == null || string.IsNullOrEmpty(_unitName)) return null;
-        string animName = StateToAnimName(_currentState);
-        string key = AnimMetaLoader.MetaKey(_unitName, animName);
-        if (_animMeta.TryGetValue(key, out var meta)) return meta;
-
-        // Fallback chain for meta (mirrors ResolveAnim)
-        string? fallback = null;
-        if (_currentState == AnimState.Hover) fallback = "Fall";
-        else if (_currentState == AnimState.Run || _currentState == AnimState.Jog) fallback = "Walk";
-
-        if (fallback != null)
-        {
-            key = AnimMetaLoader.MetaKey(_unitName, fallback);
-            if (_animMeta.TryGetValue(key, out meta)) return meta;
         }
         return null;
     }
