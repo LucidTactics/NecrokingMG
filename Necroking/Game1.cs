@@ -2787,6 +2787,8 @@ public class Game1 : Microsoft.Xna.Framework.Game
         return -1;
     }
 
+    private static readonly Random _projRng = new();
+
     private void SpawnSpellProjectile(SpellDef spell, Vec2 origin, Vec2 target, uint ownerUid)
     {
         _sim.Projectiles.SpawnFireball(origin, target,
@@ -2795,6 +2797,63 @@ public class Game1 : Microsoft.Xna.Framework.Game
         if (projs.Count > 0)
         {
             var lastProj = projs[projs.Count - 1];
+
+            // Apply trajectory type
+            var traj = Enum.TryParse<Trajectory>(spell.Trajectory, true, out var t) ? t : Trajectory.Lob;
+            var dir = (target - origin).Normalized();
+            float speed = spell.ProjectileSpeed > 0 ? spell.ProjectileSpeed : ProjectileManager.MagicSpeed;
+
+            switch (traj)
+            {
+                case Trajectory.DirectFire:
+                {
+                    float theta = 5f * MathF.PI / 180f;
+                    lastProj.Velocity = dir * speed * MathF.Cos(theta);
+                    lastProj.VelocityZ = speed * MathF.Sin(theta);
+                    lastProj.BaseDirection = dir;
+                    lastProj.IsLob = false;
+                    break;
+                }
+                case Trajectory.Swirly:
+                {
+                    float theta = 5f * MathF.PI / 180f;
+                    lastProj.Velocity = dir * speed * MathF.Cos(theta);
+                    lastProj.VelocityZ = speed * MathF.Sin(theta);
+                    lastProj.BaseDirection = dir;
+                    lastProj.IsLob = false;
+                    lastProj.SwirlFreq = 3f + (float)_projRng.NextDouble() * 5f;
+                    lastProj.SwirlAmplitude = 0.5f + (float)_projRng.NextDouble() * 1.5f;
+                    lastProj.SwirlPhase = (float)_projRng.NextDouble() * 2f * MathF.PI;
+                    break;
+                }
+                case Trajectory.Homing:
+                {
+                    float theta = 5f * MathF.PI / 180f;
+                    lastProj.Velocity = dir * speed * MathF.Cos(theta);
+                    lastProj.VelocityZ = speed * MathF.Sin(theta);
+                    lastProj.BaseDirection = dir;
+                    lastProj.IsLob = false;
+                    lastProj.TargetPos = target;
+                    lastProj.HomingStrength = 5f;
+                    break;
+                }
+                case Trajectory.HomingSwirly:
+                {
+                    float theta = 5f * MathF.PI / 180f;
+                    lastProj.Velocity = dir * speed * MathF.Cos(theta);
+                    lastProj.VelocityZ = speed * MathF.Sin(theta);
+                    lastProj.BaseDirection = dir;
+                    lastProj.IsLob = false;
+                    lastProj.TargetPos = target;
+                    lastProj.HomingStrength = 5f;
+                    lastProj.SwirlFreq = 3f + (float)_projRng.NextDouble() * 5f;
+                    lastProj.SwirlAmplitude = 0.5f + (float)_projRng.NextDouble() * 1.5f;
+                    lastProj.SwirlPhase = (float)_projRng.NextDouble() * 2f * MathF.PI;
+                    break;
+                }
+                // Lob is the default from SpawnFireball — no changes needed
+            }
+
             if (spell.ProjectileFlipbook != null)
             {
                 lastProj.FlipbookID = spell.ProjectileFlipbook.FlipbookID;
