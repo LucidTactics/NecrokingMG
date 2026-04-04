@@ -58,9 +58,12 @@ public class ItemEditorWindow
     private float GetListScroll(string key) => _listScrolls.GetValueOrDefault(key, 0);
     private void SetListScroll(string key, float val) => _listScrolls[key] = val;
 
+    private readonly ReflectionPropertyRenderer _renderer;
+
     public ItemEditorWindow(EditorBase ui)
     {
         _ui = ui;
+        _renderer = new ReflectionPropertyRenderer(ui);
     }
 
     public void SetGameData(GameData gameData)
@@ -431,41 +434,10 @@ public class ItemEditorWindow
         int fieldW = w - 24;
         int curY = y + 8 - (int)_detailScroll;
 
-        // =================== ID ===================
-        string oldId = def.Id;
-        def.Id = _ui.DrawTextField("item_id", "ID", def.Id, x + 8, curY, fieldW);
-        if (def.Id != oldId) MarkDirty();
-        curY += RowH;
-
-        // =================== DISPLAY NAME ===================
-        string oldName = def.DisplayName;
-        def.DisplayName = _ui.DrawTextField("item_name", "Display Name", def.DisplayName, x + 8, curY, fieldW);
-        if (def.DisplayName != oldName) MarkDirty();
-        curY += RowH;
-
-        // =================== ICON ===================
-        string oldIcon = def.Icon;
-        def.Icon = _ui.DrawTextField("item_icon", "Icon", def.Icon, x + 8, curY, fieldW);
-        if (def.Icon != oldIcon) MarkDirty();
-        curY += RowH;
-
-        // =================== MAX STACK ===================
-        int oldStack = def.MaxStack;
-        def.MaxStack = _ui.DrawIntField("item_stack", "Max Stack", def.MaxStack, x + 8, curY, fieldW);
-        if (def.MaxStack != oldStack) MarkDirty();
-        curY += RowH;
-
-        // =================== CATEGORY ===================
-        string oldCat = def.Category;
-        def.Category = _ui.DrawCombo("item_cat", "Category", def.Category, CategoryOptions, x + 8, curY, fieldW);
-        if (def.Category != oldCat) MarkDirty();
-        curY += RowH;
-
-        // =================== DESCRIPTION ===================
-        string oldDesc = def.Description;
-        def.Description = _ui.DrawTextField("item_desc", "Description", def.Description, x + 8, curY, fieldW);
-        if (def.Description != oldDesc) MarkDirty();
-        curY += RowH;
+        // Draw all annotated ItemDef fields via reflection
+        var (nextY, changed) = _renderer.DrawAnnotatedProperties("item", def, x + 8, curY, fieldW);
+        curY = nextY;
+        if (changed) MarkDirty();
 
         // =================== POTION FIELDS ===================
         if (def.Category == "potion")
