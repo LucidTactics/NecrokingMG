@@ -22,13 +22,13 @@
         "name": "GhoulLord"
       },
       "stats": {
-        "maxHP": 20,
-        "strength": 10,
-        "attack": 15,
-        "defense": 15,
+        "maxHP": 12,
+        "strength": 8,
+        "attack": 8,
+        "defense": 10,
         "magicResist": 16,
         "encumbrance": 2,
-        "naturalProt": 20,
+        "naturalProt": 0,
         "combatSpeed": 5
       },
       "zombieTypeID": "",
@@ -36,7 +36,7 @@
       "maxMana": 0,
       "manaRegen": 0,
       "weapons": [
-        "staff"
+        "dagger"
       ],
       "armors": [
         "hood"

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using Microsoft.Xna.Framework;
+using Microsoft.Xna.Framework.Audio;
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
 using Necroking.Data;
@@ -157,11 +158,33 @@ public class Game1 : Microsoft.Xna.Framework.Game
         public string CachedDefID;
     }
 
+    private struct CollectingForagable
+    {
+        public int ObjIdx;           // environment object index
+        public Vec2 StartPos;        // world position where object was
+        public float StartHeight;    // initial upward pop height
+        public Vec2 TargetPos;       // necromancer position at time of collection
+        public float Timer;          // 0..ArcDuration
+        public float ArcDuration;    // total flight time
+        public string ResourceType;  // what to add to inventory on complete
+        public Texture2D? Texture;   // cached texture for rendering
+        public float BaseScale;      // original render scale
+        public float PivotX, PivotY; // texture pivot
+    }
+
+    private readonly List<CollectingForagable> _collectingForagables = new();
+    private const float ForagableArcDuration = 0.35f;
+    private const float ForagableWiggleRange = 3f;     // start wiggling at this distance
+    private const float ForagableAutoPickupRange = 1.5f;
+    private float _autoPickupCooldown;
+    private SoundEffect? _pickupSound;
+
     private struct DamageNumber
     {
         public Vec2 WorldPos;
         public int Damage;
         public float Timer;
+        public string? PickupText; // non-null = this is a pickup notification, not damage
         public float Height;
         public bool IsPoison;
     }
@@ -1118,6 +1141,18 @@ public class Game1 : Microsoft.Xna.Framework.Game
         _craftingMenu.Init(_widgetRenderer, _inventory, _gameData.Items, _gameData,
             _graphics.PreferredBackBufferHeight, _spriteBatch, _pixel);
         LogTiming("Inventory & Building UI initialized");
+
+        // Load audio
+        try
+        {
+            string pickupPath = GamePaths.Resolve("assets/Audio/Interaction/PickupPop.wav");
+            if (System.IO.File.Exists(pickupPath))
+            {
+                using var stream = System.IO.File.OpenRead(pickupPath);
+                _pickupSound = SoundEffect.FromStream(stream);
+            }
+        }
+        catch { /* audio is optional */ }
 
         // Init property editor infrastructure
         _editorUi.SetContext(_spriteBatch, _pixel, _font, _smallFont, _largeFont);
@@ -2142,27 +2177,23 @@ public class Game1 : Microsoft.Xna.Framework.Game
             if (!_mouseOverUI && mouse.RightButton == ButtonState.Pressed && _prevMouse.RightButton == ButtonState.Released
                 && _sim.NecromancerIndex >= 0)
             {
-                Vec2 necroPos = _sim.Units.Position[_sim.NecromancerIndex];
-                float bestDist = 2f; // max collect range
-                int bestIdx = -1;
-                for (int fi = 0; fi < _envSystem.ObjectCount; fi++)
-                {
-                    if (!_envSystem.IsObjectVisible(fi)) continue;
-                    var def = _envSystem.Defs[_envSystem.Objects[fi].DefIndex];
-                    if (!def.IsForagable) continue;
-                    var obj = _envSystem.Objects[fi];
-                    float dist = (new Vec2(obj.X, obj.Y) - necroPos).Length();
-                    if (dist < bestDist)
-                    {
-                        bestDist = dist;
-                        bestIdx = fi;
-                    }
-                }
+                int bestIdx = FindNearestForagable(_sim.Units.Position[_sim.NecromancerIndex], 2f);
                 if (bestIdx >= 0)
+                    StartForagableCollection(bestIdx);
+            }
+
+            // --- Auto-pickup foragables ---
+            if (_gameData.Settings.General.AutoPickupForagables && _sim.NecromancerIndex >= 0)
+            {
+                _autoPickupCooldown -= dt;
+                if (_autoPickupCooldown <= 0f)
                 {
-                    string? resourceType = _envSystem.CollectForagable(bestIdx);
-                    if (resourceType != null)
-                        _inventory.AddItem(resourceType);
+                    int autoIdx = FindNearestForagable(_sim.Units.Position[_sim.NecromancerIndex], ForagableAutoPickupRange);
+                    if (autoIdx >= 0)
+                    {
+                        StartForagableCollection(autoIdx);
+                        _autoPickupCooldown = 0.3f; // stagger auto-pickups
+                    }
                 }
             }
 
@@ -2538,27 +2569,123 @@ public class Game1 : Microsoft.Xna.Framework.Game
         }
 
         // No melee target — try foragable collection
-        float forageDist = 2f;
-        int bestForage = -1;
-        float bestForageDist = forageDist;
+        int bestForage = FindNearestForagable(necroPos, 2f);
+        if (bestForage >= 0)
+            StartForagableCollection(bestForage);
+    }
+
+    private int FindNearestForagable(Vec2 fromPos, float maxDist)
+    {
+        float bestDist = maxDist;
+        int bestIdx = -1;
         for (int fi = 0; fi < _envSystem.ObjectCount; fi++)
         {
             if (!_envSystem.IsObjectVisible(fi)) continue;
             var def = _envSystem.Defs[_envSystem.Objects[fi].DefIndex];
             if (!def.IsForagable) continue;
             var obj = _envSystem.Objects[fi];
-            float dist = (new Vec2(obj.X, obj.Y) - necroPos).Length();
-            if (dist < bestForageDist)
+            float dist = (new Vec2(obj.X, obj.Y) - fromPos).Length();
+            if (dist < bestDist) { bestDist = dist; bestIdx = fi; }
+        }
+        return bestIdx;
+    }
+
+    /// <summary>Start a foragable collection with arc animation instead of instant pickup.</summary>
+    private void StartForagableCollection(int objIdx)
+    {
+        if (_sim.NecromancerIndex < 0) return;
+        string? resourceType = _envSystem.CollectForagable(objIdx);
+        if (resourceType == null) return;
+
+        var obj = _envSystem.Objects[objIdx];
+        var def = _envSystem.Defs[obj.DefIndex];
+        var tex = _envSystem.GetDefTexture(obj.DefIndex);
+
+        float worldH = def.SpriteWorldHeight * obj.Scale * def.Scale;
+        float pixelH = worldH * _camera.Zoom;
+        float baseScale = tex != null ? pixelH / tex.Height : 1f;
+
+        _collectingForagables.Add(new CollectingForagable
+        {
+            ObjIdx = objIdx,
+            StartPos = new Vec2(obj.X, obj.Y),
+            StartHeight = 0f,
+            TargetPos = _sim.Units.Position[_sim.NecromancerIndex],
+            Timer = 0f,
+            ArcDuration = ForagableArcDuration,
+            ResourceType = resourceType,
+            Texture = tex,
+            BaseScale = baseScale,
+            PivotX = def.PivotX,
+            PivotY = def.PivotY,
+        });
+    }
+
+    /// <summary>Update collecting foragable arcs. Called each frame.</summary>
+    private void UpdateCollectingForagables(float dt)
+    {
+        for (int i = _collectingForagables.Count - 1; i >= 0; i--)
+        {
+            var cf = _collectingForagables[i];
+            cf.Timer += dt;
+
+            // Update target to follow necromancer
+            if (_sim.NecromancerIndex >= 0)
+                cf.TargetPos = _sim.Units.Position[_sim.NecromancerIndex];
+
+            _collectingForagables[i] = cf;
+
+            if (cf.Timer >= cf.ArcDuration)
             {
-                bestForageDist = dist;
-                bestForage = fi;
+                // Complete collection — add to inventory
+                _inventory.AddItem(cf.ResourceType);
+
+                // Pop effect at character
+                _effectManager.SpawnDustPuff(cf.TargetPos);
+
+                // Pickup sound
+                _pickupSound?.Play(0.3f, 0f, 0f);
+
+                // Floating pickup text (green, rising)
+                _damageNumbers.Add(new DamageNumber
+                {
+                    WorldPos = cf.TargetPos,
+                    Damage = 0, // we'll use a special marker
+                    Timer = 0f,
+                    Height = 2f,
+                    IsPoison = false,
+                    PickupText = cf.ResourceType
+                });
+
+                _collectingForagables.RemoveAt(i);
             }
         }
-        if (bestForage >= 0)
+    }
+
+    /// <summary>Draw collecting foragable arcs (objects flying toward character).</summary>
+    private void DrawCollectingForagables()
+    {
+        foreach (var cf in _collectingForagables)
         {
-            string? resourceType = _envSystem.CollectForagable(bestForage);
-            if (resourceType != null)
-                _inventory.AddItem(resourceType);
+            if (cf.Texture == null) continue;
+            float t = cf.Timer / cf.ArcDuration; // 0..1
+
+            // Position: lerp from start to target
+            Vec2 pos = cf.StartPos + (cf.TargetPos - cf.StartPos) * t;
+
+            // Height: arc upward then down (parabola peaking at t=0.3)
+            float arcHeight = 2f * (1f - (t - 0.3f) * (t - 0.3f) / 0.49f);
+            if (arcHeight < 0f) arcHeight = 0f;
+
+            // Scale: shrink from 100% to 40%
+            float scale = cf.BaseScale * (1f - t * 0.6f);
+
+            // Rotation: spin faster over time
+            float rotation = t * t * 6f;
+
+            var sp = _renderer.WorldToScreen(pos, arcHeight, _camera);
+            var origin = new Vector2(cf.PivotX * cf.Texture.Width, cf.PivotY * cf.Texture.Height);
+            _spriteBatch.Draw(cf.Texture, sp, null, Color.White, rotation, origin, scale, SpriteEffects.None, 0f);
         }
     }
 
@@ -2865,6 +2992,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         UpdateEffectSpawnPositions();
 
         _effectManager.Update(dt);
+        UpdateCollectingForagables(dt);
     }
 
     /// <summary>
@@ -3058,8 +3186,9 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
         _spriteBatch.End();
 
-        // --- Alpha blend pass (damage numbers on top) ---
+        // --- Alpha blend pass (collecting foragables + damage numbers on top) ---
         _spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.LinearClamp);
+        DrawCollectingForagables();
         DrawDamageNumbers();
         _spriteBatch.End();
 
@@ -3847,9 +3976,39 @@ public class Game1 : Microsoft.Xna.Framework.Game
         var screenPos = _renderer.WorldToScreen(new Vec2(obj.X, obj.Y), 0f, _camera);
         var origin = new Vector2(def.PivotX * tex.Width, def.PivotY * tex.Height);
 
-        // Apply alpha for trap fade-out (premultiplied)
+        float rotation = 0f;
         Color tint = alpha >= 1f ? Color.White : new Color(alpha, alpha, alpha, alpha);
-        _spriteBatch.Draw(tex, screenPos, null, tint, 0f, origin, scale, SpriteEffects.None, 0f);
+
+        // Foragable proximity effects
+        if (def.IsForagable && _sim.NecromancerIndex >= 0)
+        {
+            Vec2 objPos = new Vec2(obj.X, obj.Y);
+            Vec2 necroPos = _sim.Units.Position[_sim.NecromancerIndex];
+            float dist = (objPos - necroPos).Length();
+
+            if (dist < ForagableWiggleRange)
+            {
+                // Wiggle: sinusoidal rotation, intensifies with proximity
+                float proximity = 1f - (dist / ForagableWiggleRange); // 0 at edge, 1 at necro
+                float wiggleAngle = MathF.Sin(_gameTime * 8f + obj.Seed * 10f) * 0.08f * proximity;
+                rotation = wiggleAngle;
+
+                // Scale pulse: subtle breathe effect
+                float pulse = 1f + MathF.Sin(_gameTime * 4f + obj.Seed * 5f) * 0.03f * proximity;
+                scale *= pulse;
+            }
+
+            // Mouse hover highlight: brighten + enlarge when cursor is over the object
+            var mouseWorld = _renderer.ScreenToWorld(new Vector2(Mouse.GetState().X, Mouse.GetState().Y), _camera);
+            float mouseDist = (objPos - new Vec2(mouseWorld.X, mouseWorld.Y)).Length();
+            if (mouseDist < 1.2f && dist < ForagableWiggleRange)
+            {
+                scale *= 1.1f;
+                tint = new Color(1.3f, 1.3f, 1.3f, 1f); // brighten
+            }
+        }
+
+        _spriteBatch.Draw(tex, screenPos, null, tint, rotation, origin, scale, SpriteEffects.None, 0f);
     }
 
     private void DrawSpriteFrame(SpriteAtlas atlas, SpriteFrame frame, Vector2 screenPos,
@@ -4084,7 +4243,9 @@ public class Game1 : Microsoft.Xna.Framework.Game
             if (fade <= 0f) continue;
             var sp = _renderer.WorldToScreen(dn.WorldPos, dn.Height, _camera);
             byte alpha = (byte)(255 * fade);
-            string text = dn.Damage.ToString();
+
+            // Pickup text or damage number
+            string text = dn.PickupText != null ? $"+{dn.PickupText}" : dn.Damage.ToString();
             var size = _font.MeasureString(text) * dnScale;
             var pos = new Vector2(sp.X - size.X / 2f, sp.Y - size.Y / 2f);
 
@@ -4093,10 +4254,14 @@ public class Game1 : Microsoft.Xna.Framework.Game
             _spriteBatch.DrawString(_font, text, new Vector2(pos.X + 1f, pos.Y + 1f), shadowColor,
                 0f, Vector2.Zero, dnScale, SpriteEffects.None, 0f);
 
-            // Text pass — green for poison, otherwise use DamageNumberColor from settings
-            var color = dn.IsPoison
-                ? Color.FromNonPremultiplied(40, 200, 40, alpha)
-                : Color.FromNonPremultiplied(dnColor.R, dnColor.G, dnColor.B, alpha);
+            // Text pass — pickup=gold, poison=green, otherwise use DamageNumberColor
+            Color color;
+            if (dn.PickupText != null)
+                color = Color.FromNonPremultiplied(255, 220, 100, alpha);
+            else if (dn.IsPoison)
+                color = Color.FromNonPremultiplied(40, 200, 40, alpha);
+            else
+                color = Color.FromNonPremultiplied(dnColor.R, dnColor.G, dnColor.B, alpha);
             _spriteBatch.DrawString(_font, text, pos, color,
                 0f, Vector2.Zero, dnScale, SpriteEffects.None, 0f);
         }

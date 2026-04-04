@@ -123,6 +123,10 @@ public static class SettingsGeneralTab
         curY += RowH;
 
         s.DamageNumberSpeed = ui.DrawFloatField("gen_dmgNumSpeed", "Speed", s.DamageNumberSpeed, x, curY, w, 0.1f);
+        curY += RowH + 8;
+
+        DrawSectionHeader(ui, "Pickup", x, ref curY, w);
+        s.AutoPickupForagables = ui.DrawCheckbox("Auto-Pickup Foragables", s.AutoPickupForagables, x + 10, curY);
         curY += RowH;
 
         return curY - y;

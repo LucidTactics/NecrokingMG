@@ -61,7 +61,8 @@
     },
     "damageNumberSize": 16,
     "damageNumberFadeTime": 0.75,
-    "damageNumberSpeed": 1.5
+    "damageNumberSpeed": 1.5,
+    "autoPickupForagables": false
   },
   "shadow": {
     "enabled": true,
