@@ -30,6 +30,7 @@ NecrokingMG/
   Necroking/       (C# source code, .csproj)
   Necroking.Editor/
   tools/
+  todos/           (temporary research/task notes for future sessions)
 ```
 
 ## File Conventions
@@ -209,6 +210,9 @@ When creating a new scenario, **spend real effort designing what to log**. The s
 ## Bash
 
 Try to avoid using multi bash commands like cs XXX && git info, they force unnecesary user confirmations!
+
+## Todos Directory (`todos/`)
+Temporary research notes and task summaries for future sessions. Each file covers one topic with context, what's done, what's left, and how to debug. Check this directory at the start of relevant work — complete items get deleted. Not for permanent knowledge (use memory for that) or code TODOs (use comments).
 
 ## C++ Migration
 
