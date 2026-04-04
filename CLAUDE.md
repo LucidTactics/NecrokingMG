@@ -10,12 +10,13 @@ dotnet build Necroking/Necroking.csproj
 ```
 Output goes to `bin/Debug/`. For Release: `dotnet build Necroking/Necroking.csproj -c Release`
 
-### Publish (self-contained)
-Publish is configured as self-contained (win-x64) in the csproj. Always publish after making changes the user needs to test:
+### Publish (self-contained, for distribution)
+Creates a self-contained build for people without .NET installed.
+**NEVER use `-c Debug` or `-c Release` with `dotnet publish --self-contained`** — it pollutes those output folders with runtime DLLs (`hostfxr.dll`, `coreclr.dll`) and breaks the normal exe. Always use `-c Publish`:
 ```bash
-dotnet publish Necroking/Necroking.csproj -c Debug -r win-x64 --self-contained -o bin/Publish
+dotnet publish Necroking/Necroking.csproj -c Publish -r win-x64 --self-contained -o bin/Publish
 ```
-The user tests from `bin/Publish/`. The exe references `assets/` and `data/` at the project root (two levels up from `bin/Publish/`) — no file copying needed.
+The exe references `assets/` and `data/` at the project root (two levels up from `bin/Publish/`) — no file copying needed.
 
 ## Directory Layout
 ```
