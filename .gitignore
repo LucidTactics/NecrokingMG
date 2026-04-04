@@ -36,6 +36,7 @@ desktop.ini
 
 ## Claude
 .claude/
+CLAUDE.local.md
 
 ## Large assets (copy from C++ project manually)
 assets/Sprites/*.png
