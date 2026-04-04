@@ -32,3 +32,10 @@ The bloom pipeline was overhauled to match C++ structurally (soft knee extract, 
 2. Compare bloom extract output at a known pixel to verify soft knee produces same values
 3. Test with the extra Gaussian blur re-enabled to see if it helps
 4. Try increasing bloom iterations or scatter to get more spread
+
+
+## NEW FINDINGS
+Try to fix things like below and see if it helps.
+
+- HdrColor.ToScaledColor shouldn't be used except to preview the color in color picker, it being used Everywere is a big reason blending cannot be done well.
+- FlipbookRef settings like BlendMode isn't passed along. Need to check that all such values are actually used properly. This is a very big change.

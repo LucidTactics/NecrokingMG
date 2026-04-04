@@ -21,6 +21,8 @@ public struct HdrColor
 
     public Color ToColor() => new(R, G, B, A);
 
+    // DO NOT USE EXCEPT IN COLORPICKER!!!
+    // NOTE: This ruins HDR scaling and bleaches out the color, need to use another way to pass intensity to get real HDR like C++!
     public Color ToScaledColor() => new(
         (byte)Math.Min(255f, R * Intensity),
         (byte)Math.Min(255f, G * Intensity),
