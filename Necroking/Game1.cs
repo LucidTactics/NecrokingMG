@@ -81,6 +81,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
     private Dictionary<string, Flipbook> _flipbooks = new(); // keyed by flipbook ID
     private Dictionary<string, AnimationMeta> _animMeta = new(); // animation metadata
     private Microsoft.Xna.Framework.Graphics.Effect? _groundEffect;
+    private Microsoft.Xna.Framework.Graphics.Effect? _outlineFlatEffect;
     private Texture2D? _groundVertexMapTex;
     private EffectManager _effectManager = new();
     private BloomRenderer _bloom = new();
@@ -1110,6 +1111,9 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
         try { _groundEffect = Content.Load<Microsoft.Xna.Framework.Graphics.Effect>("GroundShader"); }
         catch (Exception ex) { _groundEffect = null; DebugLog.Log("startup", $"GroundShader not loaded: {ex.Message}"); }
+
+        try { _outlineFlatEffect = Content.Load<Microsoft.Xna.Framework.Graphics.Effect>("OutlineFlat"); }
+        catch (Exception ex) { _outlineFlatEffect = null; DebugLog.Log("startup", $"OutlineFlat not loaded: {ex.Message}"); }
 
         {
             Microsoft.Xna.Framework.Graphics.Effect? fogEffect = null;
@@ -3923,6 +3927,9 @@ public class Game1 : Microsoft.Xna.Framework.Game
         float heightOffset = _sim.Units[i].JumpHeight;
         var sp = _renderer.WorldToScreen(_sim.Units[i].Position, heightOffset, _camera);
 
+        // Pulsing outline: draw sprite 8 times at directional offsets behind the unit
+        DrawUnitPulsingOutline(i, atlas, fr.Frame.Value, sp, scale, fr.FlipX);
+
         DrawSpriteFrame(atlas, fr.Frame.Value, sp, scale, fr.FlipX, tint);
         DrawHPBar(i, sp);
 
@@ -4023,6 +4030,74 @@ public class Game1 : Microsoft.Xna.Framework.Game
         var origin = new Vector2(pivotX * frame.Rect.Width, pivotY * frame.Rect.Height);
         var effects = flipX ? SpriteEffects.FlipHorizontally : SpriteEffects.None;
         _spriteBatch.Draw(atlas.Texture, screenPos, frame.Rect, tint, 0f, origin, scale, effects, 0f);
+    }
+
+    // 8-direction offsets: N, NE, E, SE, S, SW, W, NW
+    private static readonly float[][] _outlineDirs =
+    {
+        new[] { 0f, -1f }, new[] { 1f, -1f }, new[] { 1f, 0f }, new[] { 1f, 1f },
+        new[] { 0f,  1f }, new[] {-1f,  1f }, new[] {-1f, 0f }, new[] {-1f,-1f }
+    };
+
+    private void DrawUnitPulsingOutline(int unitIdx, SpriteAtlas atlas, SpriteFrame frame,
+                                         Vector2 screenPos, float scale, bool flipX)
+    {
+        if (atlas.Texture == null || _outlineFlatEffect == null) return;
+
+        // Find first active pulsing outline buff
+        PulsingOutlineVisual? po = null;
+        foreach (var buff in _sim.Units[unitIdx].ActiveBuffs)
+        {
+            var buffDef = _gameData.Buffs.Get(buff.BuffDefID);
+            if (buffDef != null && buffDef.HasPulsingOutline && buffDef.PulsingOutline != null)
+            {
+                po = buffDef.PulsingOutline;
+                break;
+            }
+        }
+        if (po == null) return;
+
+        // Pulse t: 0..1 oscillation
+        float t = 0.5f + 0.5f * MathF.Sin(_gameTime * po.PulseSpeed * 2f * MathF.PI);
+
+        // Interpolate width between base and pulse
+        float offset = po.OutlineWidth + (po.PulseWidth - po.OutlineWidth) * t;
+        if (offset < 0.5f) return;
+
+        // Lerp color with HDR intensity
+        float colR = MathHelper.Lerp(po.Color.R / 255f, po.PulseColor.R / 255f, t);
+        float colG = MathHelper.Lerp(po.Color.G / 255f, po.PulseColor.G / 255f, t);
+        float colB = MathHelper.Lerp(po.Color.B / 255f, po.PulseColor.B / 255f, t);
+        float colA = MathHelper.Lerp(po.Color.A / 255f, po.PulseColor.A / 255f, t);
+        float intensity = MathHelper.Lerp(po.Color.Intensity, po.PulseColor.Intensity, t);
+
+        // Pass outline color to shader as normalized floats (shader does the premultiply)
+        var outlineColorVec = new Vector4(colR * intensity, colG * intensity, colB * intensity, colA);
+        _outlineFlatEffect.Parameters["OutlineColor"]?.SetValue(outlineColorVec);
+
+        // Flush current batch, switch to outline shader
+        _spriteBatch.End();
+
+        var blendState = po.BlendMode == 1 ? BlendState.Additive : BlendState.AlphaBlend;
+        _spriteBatch.Begin(SpriteSortMode.Deferred, blendState, SamplerState.LinearClamp, effect: _outlineFlatEffect);
+
+        float pivotX = flipX ? (1f - frame.PivotX) : frame.PivotX;
+        float pivotY = 1f - frame.PivotY;
+        var origin = new Vector2(pivotX * frame.Rect.Width, pivotY * frame.Rect.Height);
+        var effects = flipX ? SpriteEffects.FlipHorizontally : SpriteEffects.None;
+
+        // Draw sprite 8 times at directional offsets
+        for (int d = 0; d < 8; d++)
+        {
+            float dx = _outlineDirs[d][0] * offset;
+            float dy = _outlineDirs[d][1] * offset;
+            var offsetPos = new Vector2(screenPos.X + dx, screenPos.Y + dy);
+            _spriteBatch.Draw(atlas.Texture, offsetPos, frame.Rect, Color.White, 0f, origin, scale, effects, 0f);
+        }
+
+        // Restore normal batch state
+        _spriteBatch.End();
+        _spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.LinearClamp);
     }
 
     private void DrawHPBar(int unitIdx, Vector2 screenPos)

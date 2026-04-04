@@ -239,10 +239,70 @@ public class BuffPreview
     // ========================================
     // Unit silhouette
     // ========================================
+    private void GetAnimOffsets(out float animBob, out float animLean)
+    {
+        animBob = 0;
+        animLean = 0;
+        if (_previewAnimIdx == 1) // Walk
+        {
+            animBob = MathF.Sin(_elapsed * 6f) * 2f;
+            animLean = MathF.Sin(_elapsed * 3f) * 1f;
+        }
+        else if (_previewAnimIdx == 2) // Attack
+        {
+            float t = (_elapsed % 1.5f) / 1.5f;
+            if (t < 0.3f)
+                animLean = t / 0.3f * 8f;
+            else if (t < 0.5f)
+                animLean = 8f - (t - 0.3f) / 0.2f * 8f;
+        }
+    }
+
+    /// <summary>
+    /// Draws the unit silhouette shape at a given offset with a uniform color.
+    /// Used by both DrawUnit (normal render) and DrawPulsingOutline (8-direction outline).
+    /// </summary>
+    private void DrawUnitSilhouette(float dx, float dy, Color color)
+    {
+        var center = UnitScreenPos();
+        GetAnimOffsets(out float animBob, out float animLean);
+
+        float bx = center.X - UnitWidth * 0.5f + animLean + dx;
+        float by = center.Y - UnitHeight * 0.4f + animBob + dy;
+
+        // Body (torso)
+        int bodyW = (int)(UnitWidth * 0.65f);
+        int bodyH = (int)(UnitHeight * 0.5f);
+        int bodyX = (int)(bx + (UnitWidth - bodyW) * 0.5f);
+        int bodyY = (int)(by + UnitHeight * 0.2f);
+        _sb.Draw(_pixel, new Rectangle(bodyX, bodyY, bodyW, bodyH), color);
+
+        // Head
+        int headSize = (int)(UnitWidth * 0.45f);
+        int headX = (int)(bx + (UnitWidth - headSize) * 0.5f);
+        int headY = (int)(by);
+        DrawFilledCircle(new Vector2(headX + headSize * 0.5f, headY + headSize * 0.5f), headSize * 0.5f, color);
+
+        // Legs
+        int legW = (int)(UnitWidth * 0.22f);
+        int legH = (int)(UnitHeight * 0.3f);
+        int legY = bodyY + bodyH;
+        float legSpread = _previewAnimIdx == 1 ? MathF.Sin(_elapsed * 6f) * 3f : 0;
+        _sb.Draw(_pixel, new Rectangle((int)(bodyX + 1 - legSpread), legY, legW, legH), color);
+        _sb.Draw(_pixel, new Rectangle((int)(bodyX + bodyW - legW - 1 + legSpread), legY, legW, legH), color);
+
+        // Arms
+        int armW = (int)(UnitWidth * 0.15f);
+        int armH = (int)(UnitHeight * 0.35f);
+        float armSwing = _previewAnimIdx == 2 ?
+            ((_elapsed % 1.5f) < 0.5f ? MathF.Sin((_elapsed % 1.5f) / 0.5f * PI) * 6f : 0) : 0;
+        _sb.Draw(_pixel, new Rectangle((int)(bodyX - armW - 1), bodyY + 2 - (int)armSwing, armW, armH), color);
+        _sb.Draw(_pixel, new Rectangle(bodyX + bodyW + 1, bodyY + 2 + (int)(armSwing * 0.5f), armW, armH), color);
+    }
+
     private void DrawUnit()
     {
         if (_cachedBuff == null) return;
-        var center = UnitScreenPos();
 
         // Apply unit tint
         Color bodyColor = new Color(60, 70, 90);
@@ -257,22 +317,9 @@ public class BuffPreview
             headColor = Color.Lerp(headColor, tintColor, tintStrength);
         }
 
-        // Simple animation offset
-        float animBob = 0;
-        float animLean = 0;
-        if (_previewAnimIdx == 1) // Walk
-        {
-            animBob = MathF.Sin(_elapsed * 6f) * 2f;
-            animLean = MathF.Sin(_elapsed * 3f) * 1f;
-        }
-        else if (_previewAnimIdx == 2) // Attack
-        {
-            float t = (_elapsed % 1.5f) / 1.5f;
-            if (t < 0.3f)
-                animLean = t / 0.3f * 8f;
-            else if (t < 0.5f)
-                animLean = 8f - (t - 0.3f) / 0.2f * 8f;
-        }
+        // Draw with per-part colors (head slightly lighter than body)
+        var center = UnitScreenPos();
+        GetAnimOffsets(out float animBob, out float animLean);
 
         float bx = center.X - UnitWidth * 0.5f + animLean;
         float by = center.Y - UnitHeight * 0.4f + animBob;
@@ -284,7 +331,7 @@ public class BuffPreview
         int bodyY = (int)(by + UnitHeight * 0.2f);
         _sb.Draw(_pixel, new Rectangle(bodyX, bodyY, bodyW, bodyH), bodyColor);
 
-        // Head (circle approximation)
+        // Head
         int headSize = (int)(UnitWidth * 0.45f);
         int headX = (int)(bx + (UnitWidth - headSize) * 0.5f);
         int headY = (int)(by);
@@ -383,37 +430,44 @@ public class BuffPreview
     // ========================================
     // Pulsing Outline
     // ========================================
+    private static readonly float[][] OutlineDirs =
+    {
+        new[] { 0f, -1f }, new[] { 1f, -1f }, new[] { 1f, 0f }, new[] { 1f, 1f },
+        new[] { 0f,  1f }, new[] {-1f,  1f }, new[] {-1f, 0f }, new[] {-1f,-1f }
+    };
+
     private void DrawPulsingOutline()
     {
         if (_cachedBuff == null || !_cachedBuff.HasPulsingOutline || _cachedBuff.PulsingOutline == null) return;
         var po = _cachedBuff.PulsingOutline;
 
-        var center = UnitScreenPos();
-        var color = po.Color.ToScaledColor();
-        var pulseColor = po.PulseColor.ToScaledColor();
+        // Pulse t: 0..1 oscillation (matches C++ implementation)
+        float t = 0.5f + 0.5f * MathF.Sin(_elapsed * po.PulseSpeed * 2f * PI);
 
-        float pulse = MathF.Sin(_elapsed * po.PulseSpeed * 2 * PI) * 0.5f + 0.5f;
-        var blendedColor = Color.Lerp(color, pulseColor, pulse);
+        // Interpolate width between base and pulse
+        float offset = po.OutlineWidth + (po.PulseWidth - po.OutlineWidth) * t;
+        if (offset < 0.5f) return;
 
-        float width = po.OutlineWidth + pulse * po.PulseWidth;
+        // Lerp color components with HDR intensity
+        float colR = MathHelper.Lerp(po.Color.R / 255f, po.PulseColor.R / 255f, t);
+        float colG = MathHelper.Lerp(po.Color.G / 255f, po.PulseColor.G / 255f, t);
+        float colB = MathHelper.Lerp(po.Color.B / 255f, po.PulseColor.B / 255f, t);
+        float colA = MathHelper.Lerp(po.Color.A / 255f, po.PulseColor.A / 255f, t);
+        float intensity = MathHelper.Lerp(po.Color.Intensity, po.PulseColor.Intensity, t);
 
-        // Draw outline around unit shape
-        float hw = UnitWidth * 0.5f + width;
-        float hh = UnitHeight * 0.5f + width;
-        float bx = center.X - hw;
-        float by = center.Y - hh * 0.65f;
-        float w = hw * 2;
-        float h = hh * 1.65f;
+        var outlineColor = new Color(
+            (byte)Math.Min(255f, colR * intensity * 255f),
+            (byte)Math.Min(255f, colG * intensity * 255f),
+            (byte)Math.Min(255f, colB * intensity * 255f),
+            (byte)Math.Min(255f, colA * 255f));
 
-        int thick = Math.Max(1, (int)width);
-        // Top
-        _sb.Draw(_pixel, new Rectangle((int)bx, (int)by, (int)w, thick), blendedColor * 0.7f);
-        // Bottom
-        _sb.Draw(_pixel, new Rectangle((int)bx, (int)(by + h - thick), (int)w, thick), blendedColor * 0.7f);
-        // Left
-        _sb.Draw(_pixel, new Rectangle((int)bx, (int)by, thick, (int)h), blendedColor * 0.7f);
-        // Right
-        _sb.Draw(_pixel, new Rectangle((int)(bx + w - thick), (int)by, thick, (int)h), blendedColor * 0.7f);
+        // Draw unit silhouette 8 times at directional offsets
+        for (int d = 0; d < 8; d++)
+        {
+            float dx = OutlineDirs[d][0] * offset;
+            float dy = OutlineDirs[d][1] * offset;
+            DrawUnitSilhouette(dx, dy, outlineColor);
+        }
     }
 
     // ========================================

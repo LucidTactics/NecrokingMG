@@ -59,3 +59,8 @@
 /processor:EffectProcessor
 /build:WeatherFog.fx
 
+#begin OutlineFlat.fx
+/importer:EffectImporter
+/processor:EffectProcessor
+/build:OutlineFlat.fx
+
