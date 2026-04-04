@@ -41,9 +41,9 @@ public class WolfHitAndRunScenario : ScenarioBase
         for (int w = 0; w < 3; w++)
         {
             int idx = units.AddUnit(wolfPositions[w], UnitType.Skeleton);
-            units.AI[idx] = AIBehavior.WolfHitAndRun;
-            units.Faction[idx] = Faction.Animal;
-            _wolfIds[w] = units.Id[idx];
+            units[idx].AI = AIBehavior.WolfHitAndRun;
+            units[idx].Faction = Faction.Animal;
+            _wolfIds[w] = units[idx].Id;
             _maxPhaseReached[w] = 0;
             _phaseTransitions[w] = 0;
             _lastPhase[w] = 0;
@@ -55,8 +55,8 @@ public class WolfHitAndRunScenario : ScenarioBase
         for (int s = 0; s < 2; s++)
         {
             int idx = units.AddUnit(soldierPositions[s], UnitType.Soldier);
-            units.AI[idx] = AIBehavior.AttackClosest;
-            _soldierIds[s] = units.Id[idx];
+            units[idx].AI = AIBehavior.AttackClosest;
+            _soldierIds[s] = units[idx].Id;
             DebugLog.Log(ScenarioLog, $"Soldier {s}: spawned at ({soldierPositions[s].X:F1}, {soldierPositions[s].Y:F1}), id={_soldierIds[s]}, AI=AttackClosest");
         }
 
@@ -76,7 +76,7 @@ public class WolfHitAndRunScenario : ScenarioBase
             int idx = FindByID(units, _wolfIds[w]);
             if (idx < 0) continue;
 
-            byte currentPhase = units.WolfPhase[idx];
+            byte currentPhase = units[idx].WolfPhase;
             if (currentPhase != _lastPhase[w])
             {
                 _phaseTransitions[w]++;
@@ -117,12 +117,12 @@ public class WolfHitAndRunScenario : ScenarioBase
         for (int w = 0; w < 3; w++)
         {
             int idx = FindByID(units, _wolfIds[w]);
-            if (idx >= 0 && units.Alive[idx]) aliveWolves++;
+            if (idx >= 0 && units[idx].Alive) aliveWolves++;
         }
         for (int s = 0; s < 2; s++)
         {
             int idx = FindByID(units, _soldierIds[s]);
-            if (idx >= 0 && units.Alive[idx]) aliveSoldiers++;
+            if (idx >= 0 && units[idx].Alive) aliveSoldiers++;
         }
         if ((aliveWolves == 0 || aliveSoldiers == 0) && _elapsed > 3f)
         {
@@ -148,20 +148,20 @@ public class WolfHitAndRunScenario : ScenarioBase
                 continue;
             }
 
-            var pos = units.Position[idx];
-            byte phase = units.WolfPhase[idx];
-            float phaseTimer = units.WolfPhaseTimer[idx];
-            bool inCombat = units.InCombat[idx];
-            float cooldown = units.AttackCooldown[idx];
+            var pos = units[idx].Position;
+            byte phase = units[idx].WolfPhase;
+            float phaseTimer = units[idx].WolfPhaseTimer;
+            bool inCombat = units[idx].InCombat;
+            float cooldown = units[idx].AttackCooldown;
 
             // Find distance to nearest soldier
             float nearestDist = float.MaxValue;
             for (int s = 0; s < 2; s++)
             {
                 int sIdx = FindByID(units, _soldierIds[s]);
-                if (sIdx >= 0 && units.Alive[sIdx])
+                if (sIdx >= 0 && units[sIdx].Alive)
                 {
-                    float d = (units.Position[sIdx] - pos).Length();
+                    float d = (units[sIdx].Position - pos).Length();
                     if (d < nearestDist) nearestDist = d;
                 }
             }
@@ -180,10 +180,10 @@ public class WolfHitAndRunScenario : ScenarioBase
                 DebugLog.Log(ScenarioLog, $"  Soldier {s} (id={_soldierIds[s]}): DEAD/REMOVED");
                 continue;
             }
-            var pos = units.Position[idx];
-            bool alive = units.Alive[idx];
-            var hp = units.Stats[idx].HP;
-            var maxHp = units.Stats[idx].MaxHP;
+            var pos = units[idx].Position;
+            bool alive = units[idx].Alive;
+            var hp = units[idx].Stats.HP;
+            var maxHp = units[idx].Stats.MaxHP;
             DebugLog.Log(ScenarioLog, $"  Soldier {s} (id={_soldierIds[s]}): pos=({pos.X:F1},{pos.Y:F1}) alive={alive} HP={hp}/{maxHp}");
         }
 
@@ -202,7 +202,7 @@ public class WolfHitAndRunScenario : ScenarioBase
     private int FindByID(UnitArrays units, uint id)
     {
         for (int i = 0; i < units.Count; i++)
-            if (units.Id[i] == id) return i;
+            if (units[i].Id == id) return i;
         return -1;
     }
 
@@ -223,7 +223,7 @@ public class WolfHitAndRunScenario : ScenarioBase
         for (int w = 0; w < 3; w++)
         {
             int idx = FindByID(units, _wolfIds[w]);
-            string status = idx >= 0 && units.Alive[idx] ? "ALIVE" : "DEAD";
+            string status = idx >= 0 && units[idx].Alive ? "ALIVE" : "DEAD";
             DebugLog.Log(ScenarioLog,
                 $"Wolf {w} (id={_wolfIds[w]}): {status}, maxPhase={PhaseName(_maxPhaseReached[w])}({_maxPhaseReached[w]}), " +
                 $"transitions={_phaseTransitions[w]}");
@@ -252,12 +252,12 @@ public class WolfHitAndRunScenario : ScenarioBase
         for (int w = 0; w < 3; w++)
         {
             int idx = FindByID(units, _wolfIds[w]);
-            if (idx >= 0 && units.Alive[idx]) aliveWolves++;
+            if (idx >= 0 && units[idx].Alive) aliveWolves++;
         }
         for (int s = 0; s < 2; s++)
         {
             int idx = FindByID(units, _soldierIds[s]);
-            if (idx >= 0 && units.Alive[idx]) aliveSoldiers++;
+            if (idx >= 0 && units[idx].Alive) aliveSoldiers++;
         }
 
         DebugLog.Log(ScenarioLog, $"Final: {aliveWolves}/3 wolves alive, {aliveSoldiers}/2 soldiers alive");

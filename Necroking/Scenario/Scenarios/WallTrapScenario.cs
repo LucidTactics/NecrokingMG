@@ -50,8 +50,8 @@ public class WallTrapScenario : ScenarioBase
             float dist = 2f;
             var pos = _center + new Vec2(MathF.Cos(angle) * dist, MathF.Sin(angle) * dist);
             int idx = units.AddUnit(pos, UnitType.Soldier);
-            units.AI[idx] = AIBehavior.IdleAtPoint;
-            units.MoveTarget[idx] = pos;
+            units[idx].AI = AIBehavior.IdleAtPoint;
+            units[idx].MoveTarget = pos;
         }
 
         DebugLog.Log(ScenarioLog, $"Built wall ring at ({cx},{cy}) r={radius}, spawned 10 soldiers inside");
@@ -87,9 +87,9 @@ public class WallTrapScenario : ScenarioBase
         int nearCenter = 0;
         for (int i = 0; i < sim.Units.Count; i++)
         {
-            if (!sim.Units.Alive[i]) continue;
+            if (!sim.Units[i].Alive) continue;
             alive++;
-            float dist = (sim.Units.Position[i] - _center).Length();
+            float dist = (sim.Units[i].Position - _center).Length();
             if (dist < 8f) nearCenter++;
         }
 

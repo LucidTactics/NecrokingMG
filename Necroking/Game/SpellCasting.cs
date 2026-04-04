@@ -50,7 +50,7 @@ public static class SpellCaster
         if (necro.GetCooldown(spellID) > 0f) return CastResult.OnCooldown;
         if (necro.Mana < spell.ManaCost) return CastResult.NotEnoughMana;
 
-        var necroPos = units.Position[necroIdx];
+        var necroPos = units[necroIdx].Position;
 
         // Reset pending state
         outPending.SpellID = spellID;
@@ -88,13 +88,13 @@ public static class SpellCaster
                     int bestUnit = -1;
                     for (int i = 0; i < units.Count; i++)
                     {
-                        if (!units.Alive[i]) continue;
-                        float distToNecro = (units.Position[i] - necroPos).Length();
+                        if (!units[i].Alive) continue;
+                        float distToNecro = (units[i].Position - necroPos).Length();
                         if (distToNecro > spell.Range) continue;
-                        if (spell.Category == "Buff" && units.Faction[i] != Faction.Undead) continue;
-                        if (spell.Category == "Debuff" && units.Faction[i] == Faction.Undead) continue;
+                        if (spell.Category == "Buff" && units[i].Faction != Faction.Undead) continue;
+                        if (spell.Category == "Debuff" && units[i].Faction == Faction.Undead) continue;
 
-                        float distToCursor = (units.Position[i] - mouseWorld).Length();
+                        float distToCursor = (units[i].Position - mouseWorld).Length();
                         if (distToCursor < bestDist)
                         {
                             bestDist = distToCursor;
@@ -103,8 +103,8 @@ public static class SpellCaster
                     }
                     if (bestUnit < 0) return CastResult.NoValidTarget;
                     outPending.TargetUnitIdx = bestUnit;
-                    outPending.TargetUnitID = units.Id[bestUnit];
-                    outPending.TargetPos = units.Position[bestUnit];
+                    outPending.TargetUnitID = units[bestUnit].Id;
+                    outPending.TargetPos = units[bestUnit].Position;
                 }
                 break;
             }
@@ -144,16 +144,16 @@ public static class SpellCaster
                     int bestUnit = -1;
                     for (int i = 0; i < units.Count; i++)
                     {
-                        if (!units.Alive[i]) continue;
-                        if (units.Faction[i] != Faction.Undead) continue;
-                        float distToNecro = (units.Position[i] - necroPos).Length();
+                        if (!units[i].Alive) continue;
+                        if (units[i].Faction != Faction.Undead) continue;
+                        float distToNecro = (units[i].Position - necroPos).Length();
                         if (distToNecro > spell.Range) continue;
 
                         // Check if unit type matches acceptable targets using unitDefID
                         bool acceptable = spell.AcceptableTargets == null || spell.AcceptableTargets.Count == 0;
                         if (!acceptable)
                         {
-                            string uid = units.UnitDefID[i];
+                            string uid = units[i].UnitDefID;
                             foreach (var t in spell.AcceptableTargets!)
                             {
                                 if (t == uid) { acceptable = true; break; }
@@ -161,7 +161,7 @@ public static class SpellCaster
                         }
                         if (!acceptable) continue;
 
-                        float distToCursor = (units.Position[i] - mouseWorld).Length();
+                        float distToCursor = (units[i].Position - mouseWorld).Length();
                         if (distToCursor < bestDist)
                         {
                             bestDist = distToCursor;
@@ -170,8 +170,8 @@ public static class SpellCaster
                     }
                     if (bestUnit < 0) return CastResult.NoValidTarget;
                     outPending.TargetUnitIdx = bestUnit;
-                    outPending.TargetUnitID = units.Id[bestUnit];
-                    outPending.TargetPos = units.Position[bestUnit];
+                    outPending.TargetUnitID = units[bestUnit].Id;
+                    outPending.TargetPos = units[bestUnit].Position;
                     outPending.SummonUnitID = spell.SummonUnitID;
                 }
                 else if (spell.SummonTargetReq == "CorpseAOE")
@@ -222,11 +222,11 @@ public static class SpellCaster
                     int bestUnit = -1;
                     for (int i = 0; i < units.Count; i++)
                     {
-                        if (!units.Alive[i]) continue;
-                        if (units.Faction[i] == Faction.Undead) continue;
-                        float distToNecro = (units.Position[i] - necroPos).Length();
+                        if (!units[i].Alive) continue;
+                        if (units[i].Faction == Faction.Undead) continue;
+                        float distToNecro = (units[i].Position - necroPos).Length();
                         if (distToNecro > spell.Range) continue;
-                        float distToCursor = (units.Position[i] - mouseWorld).Length();
+                        float distToCursor = (units[i].Position - mouseWorld).Length();
                         if (distToCursor < bestDist)
                         {
                             bestDist = distToCursor;
@@ -235,8 +235,8 @@ public static class SpellCaster
                     }
                     if (bestUnit < 0) return CastResult.NoValidTarget;
                     outPending.TargetUnitIdx = bestUnit;
-                    outPending.TargetUnitID = units.Id[bestUnit];
-                    outPending.TargetPos = units.Position[bestUnit];
+                    outPending.TargetUnitID = units[bestUnit].Id;
+                    outPending.TargetPos = units[bestUnit].Position;
                 }
                 else
                 {
@@ -253,11 +253,11 @@ public static class SpellCaster
                 int bestUnit = -1;
                 for (int i = 0; i < units.Count; i++)
                 {
-                    if (!units.Alive[i]) continue;
-                    if (units.Faction[i] == Faction.Undead) continue;
-                    float distToNecro = (units.Position[i] - necroPos).Length();
+                    if (!units[i].Alive) continue;
+                    if (units[i].Faction == Faction.Undead) continue;
+                    float distToNecro = (units[i].Position - necroPos).Length();
                     if (distToNecro > spell.Range) continue;
-                    float distToCursor = (units.Position[i] - mouseWorld).Length();
+                    float distToCursor = (units[i].Position - mouseWorld).Length();
                     if (distToCursor < bestDist)
                     {
                         bestDist = distToCursor;
@@ -266,8 +266,8 @@ public static class SpellCaster
                 }
                 if (bestUnit < 0) return CastResult.NoValidTarget;
                 outPending.TargetUnitIdx = bestUnit;
-                outPending.TargetUnitID = units.Id[bestUnit];
-                outPending.TargetPos = units.Position[bestUnit];
+                outPending.TargetUnitID = units[bestUnit].Id;
+                outPending.TargetPos = units[bestUnit].Position;
                 break;
             }
 
@@ -278,19 +278,19 @@ public static class SpellCaster
                 int bestUnit = -1;
                 for (int i = 0; i < units.Count; i++)
                 {
-                    if (!units.Alive[i]) continue;
+                    if (!units[i].Alive) continue;
                     if (spell.DrainReversed)
                     {
-                        if (units.Faction[i] != Faction.Undead) continue;
+                        if (units[i].Faction != Faction.Undead) continue;
                         if (i == necroIdx) continue;
                     }
                     else
                     {
-                        if (units.Faction[i] == Faction.Undead) continue;
+                        if (units[i].Faction == Faction.Undead) continue;
                     }
-                    float distToNecro = (units.Position[i] - necroPos).Length();
+                    float distToNecro = (units[i].Position - necroPos).Length();
                     if (distToNecro > spell.Range) continue;
-                    float distToCursor = (units.Position[i] - mouseWorld).Length();
+                    float distToCursor = (units[i].Position - mouseWorld).Length();
                     if (distToCursor < bestDist)
                     {
                         bestDist = distToCursor;
@@ -301,8 +301,8 @@ public static class SpellCaster
                 if (bestUnit >= 0)
                 {
                     outPending.TargetUnitIdx = bestUnit;
-                    outPending.TargetUnitID = units.Id[bestUnit];
-                    outPending.TargetPos = units.Position[bestUnit];
+                    outPending.TargetUnitID = units[bestUnit].Id;
+                    outPending.TargetPos = units[bestUnit].Position;
                     outPending.TargetCorpseIdx = -1;
                 }
                 else if (!spell.DrainReversed)

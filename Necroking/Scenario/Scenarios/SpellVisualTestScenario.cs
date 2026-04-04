@@ -121,10 +121,10 @@ public class SpellVisualTestScenario : ScenarioBase
         // Spawn necromancer
         var units = sim.UnitsMut;
         _necroIdx = units.AddUnit(new Vec2(CenterX, CenterY), UnitType.Necromancer);
-        units.AI[_necroIdx] = AIBehavior.PlayerControlled;
+        units[_necroIdx].AI = AIBehavior.PlayerControlled;
         sim.SetNecromancerIndex(_necroIdx);
-        _necroUid = units.Id[_necroIdx];
-        _necroPos = units.Position[_necroIdx];
+        _necroUid = units[_necroIdx].Id;
+        _necroPos = units[_necroIdx].Position;
 
         // Give enormous mana pool so all casts succeed
         sim.NecroState.Mana = 500f;
@@ -153,8 +153,8 @@ public class SpellVisualTestScenario : ScenarioBase
         _necroIdx = sim.NecromancerIndex;
         if (_necroIdx >= 0 && _necroIdx < sim.Units.Count)
         {
-            _necroPos = sim.Units.Position[_necroIdx];
-            _necroUid = sim.Units.Id[_necroIdx];
+            _necroPos = sim.Units[_necroIdx].Position;
+            _necroUid = sim.Units[_necroIdx].Id;
         }
 
         switch (_phase)
@@ -398,7 +398,7 @@ public class SpellVisualTestScenario : ScenarioBase
         // Spawn the zap visual with caster height (hand) and target height (body center)
         float casterHeight = 0f;
         if (_necroIdx >= 0 && _necroIdx < sim.Units.Count)
-            casterHeight = sim.Units.EffectSpawnHeight[_necroIdx];
+            casterHeight = sim.Units[_necroIdx].EffectSpawnHeight;
         float targetHeight = 0.9f; // approximate body center
         sim.Lightning.SpawnZap(_necroPos, target, 0.25f, style,
             casterHeight, targetHeight);
@@ -424,7 +424,7 @@ public class SpellVisualTestScenario : ScenarioBase
                 FlickerMax = 1f,
                 JitterHz = 10f
             };
-            sim.Lightning.SpawnBeam(_necroUid, sim.Units.Id[targetIdx],
+            sim.Lightning.SpawnBeam(_necroUid, sim.Units[targetIdx].Id,
                 spellID, 15, 0.25f, 15f, style);
             DebugLog.Log(ScenarioLog, $"Cast beam '{spellID}' on enemy idx={targetIdx}");
         }
@@ -439,7 +439,7 @@ public class SpellVisualTestScenario : ScenarioBase
         int targetIdx = FindClosestEnemy(sim, target, 10f);
         if (targetIdx >= 0)
         {
-            sim.Lightning.SpawnDrain(_necroUid, sim.Units.Id[targetIdx],
+            sim.Lightning.SpawnDrain(_necroUid, sim.Units[targetIdx].Id,
                 spellID, 5, 0.25f, 1f, 10, false, 2f,
                 3, 40f,
                 new HdrColor(120, 255, 80, 255, 2.5f),
@@ -508,8 +508,8 @@ public class SpellVisualTestScenario : ScenarioBase
             int idx = sim.SpawnUnitByID(summonUnitID, pos + offset);
             if (idx >= 0 && idx < sim.Units.Count)
             {
-                sim.UnitsMut.AI[idx] = AIBehavior.IdleAtPoint;
-                sim.UnitsMut.MoveTarget[idx] = pos + offset;
+                sim.UnitsMut[idx].AI = AIBehavior.IdleAtPoint;
+                sim.UnitsMut[idx].MoveTarget = pos + offset;
             }
         }
         DebugLog.Log(ScenarioLog, $"Summoned '{summonUnitID}' near ({pos.X:F1}, {pos.Y:F1})");
@@ -531,11 +531,11 @@ public class SpellVisualTestScenario : ScenarioBase
             float spread = (i - (count - 1) / 2f) * 2f;
             var pos = new Vec2(center.X, center.Y + spread);
             int idx = units.AddUnit(pos, UnitType.Soldier);
-            units.AI[idx] = AIBehavior.IdleAtPoint;
-            units.MoveTarget[idx] = pos;
+            units[idx].AI = AIBehavior.IdleAtPoint;
+            units[idx].MoveTarget = pos;
             // Give them plenty of HP so they survive for the screenshot
-            units.Stats[idx].MaxHP = 200;
-            units.Stats[idx].HP = 200;
+            units[idx].Stats.MaxHP = 200;
+            units[idx].Stats.HP = 200;
             _enemyIndices[i] = idx;
             _enemyStartHP[i] = 200;
             DebugLog.Log(ScenarioLog, $"  Spawned enemy {i} at ({pos.X:F1}, {pos.Y:F1}), idx={idx}");
@@ -550,8 +550,8 @@ public class SpellVisualTestScenario : ScenarioBase
             float spread = (i - (count - 1) / 2f) * 2f;
             var pos = new Vec2(center.X, center.Y + spread);
             int idx = units.AddUnit(pos, UnitType.Skeleton);
-            units.AI[idx] = AIBehavior.IdleAtPoint;
-            units.MoveTarget[idx] = pos;
+            units[idx].AI = AIBehavior.IdleAtPoint;
+            units[idx].MoveTarget = pos;
             DebugLog.Log(ScenarioLog, $"  Spawned friendly skeleton {i} at ({pos.X:F1}, {pos.Y:F1}), idx={idx}");
         }
     }
@@ -563,9 +563,9 @@ public class SpellVisualTestScenario : ScenarioBase
         for (int i = 0; i < units.Count; i++)
         {
             if (i == _necroIdx) continue;
-            if (!units.Alive[i]) continue;
-            if (units.Id[i] == _necroUid) continue;
-            units.Alive[i] = false;
+            if (!units[i].Alive) continue;
+            if (units[i].Id == _necroUid) continue;
+            units[i].Alive = false;
         }
         // Clear active lightning effects from previous phase
         sim.Lightning.Clear();
@@ -584,13 +584,13 @@ public class SpellVisualTestScenario : ScenarioBase
         {
             int idx = _enemyIndices[i];
             if (idx < 0 || idx >= sim.Units.Count) continue;
-            if (!sim.Units.Alive[idx])
+            if (!sim.Units[idx].Alive)
             {
                 // Dead means took at least all its HP
                 totalDamage += _enemyStartHP[i];
                 continue;
             }
-            int lost = _enemyStartHP[i] - sim.Units.Stats[idx].HP;
+            int lost = _enemyStartHP[i] - sim.Units[idx].Stats.HP;
             if (lost > 0) totalDamage += lost;
         }
         // Also account for enemies that may have been removed via swap-and-pop
@@ -638,7 +638,7 @@ public class SpellVisualTestScenario : ScenarioBase
         // Check necromancer
         if (_necroIdx >= 0 && _necroIdx < sim.Units.Count)
         {
-            var buffs = sim.Units.ActiveBuffs[_necroIdx];
+            var buffs = sim.Units[_necroIdx].ActiveBuffs;
             for (int i = 0; i < buffs.Count; i++)
                 if (buffs[i].BuffDefID == buffID)
                     return true;
@@ -646,9 +646,9 @@ public class SpellVisualTestScenario : ScenarioBase
         // Check all friendlies
         for (int i = 0; i < sim.Units.Count; i++)
         {
-            if (!sim.Units.Alive[i]) continue;
-            if (sim.Units.Faction[i] != Faction.Undead) continue;
-            var buffs = sim.Units.ActiveBuffs[i];
+            if (!sim.Units[i].Alive) continue;
+            if (sim.Units[i].Faction != Faction.Undead) continue;
+            var buffs = sim.Units[i].ActiveBuffs;
             for (int j = 0; j < buffs.Count; j++)
                 if (buffs[j].BuffDefID == buffID)
                     return true;
@@ -660,7 +660,7 @@ public class SpellVisualTestScenario : ScenarioBase
     {
         int count = 0;
         for (int i = 0; i < sim.Units.Count; i++)
-            if (sim.Units.Alive[i] && sim.Units.Faction[i] == Faction.Undead)
+            if (sim.Units[i].Alive && sim.Units[i].Faction == Faction.Undead)
                 count++;
         return count;
     }
@@ -669,7 +669,7 @@ public class SpellVisualTestScenario : ScenarioBase
     {
         int count = 0;
         for (int i = 0; i < sim.Units.Count; i++)
-            if (sim.Units.Alive[i] && sim.Units.Faction[i] == Faction.Human)
+            if (sim.Units[i].Alive && sim.Units[i].Faction == Faction.Human)
                 count++;
         return count;
     }
@@ -680,9 +680,9 @@ public class SpellVisualTestScenario : ScenarioBase
         int bestIdx = -1;
         for (int i = 0; i < sim.Units.Count; i++)
         {
-            if (!sim.Units.Alive[i]) continue;
-            if (sim.Units.Faction[i] == Faction.Undead) continue;
-            float dSq = (sim.Units.Position[i] - pos).LengthSq();
+            if (!sim.Units[i].Alive) continue;
+            if (sim.Units[i].Faction == Faction.Undead) continue;
+            float dSq = (sim.Units[i].Position - pos).LengthSq();
             if (dSq < bestDistSq) { bestDistSq = dSq; bestIdx = i; }
         }
         return bestIdx;

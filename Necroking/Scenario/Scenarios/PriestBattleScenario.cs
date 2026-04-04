@@ -21,19 +21,19 @@ public class PriestBattleScenario : ScenarioBase
 
         // Spawn priest (caster) with soldiers
         int priestIdx = units.AddUnit(new Vec2(8f, 10f), UnitType.Soldier);
-        units.AI[priestIdx] = AIBehavior.Caster;
-        units.Mana[priestIdx] = 30f;
-        units.MaxMana[priestIdx] = 50f;
-        units.ManaRegen[priestIdx] = 1.5f;
-        units.SpellID[priestIdx] = "lightning_bolt"; // Use existing spell
-        units.Stats[priestIdx].MaxHP = 60;
-        units.Stats[priestIdx].HP = 60;
+        units[priestIdx].AI = AIBehavior.Caster;
+        units[priestIdx].Mana = 30f;
+        units[priestIdx].MaxMana = 50f;
+        units[priestIdx].ManaRegen = 1.5f;
+        units[priestIdx].SpellID = "lightning_bolt"; // Use existing spell
+        units[priestIdx].Stats.MaxHP = 60;
+        units[priestIdx].Stats.HP = 60;
 
         // 5 soldiers backing up priest
         for (int i = 0; i < 5; i++)
         {
             int idx = units.AddUnit(new Vec2(6f + i * 1.5f, 8f), UnitType.Soldier);
-            units.AI[idx] = AIBehavior.AttackClosest;
+            units[idx].AI = AIBehavior.AttackClosest;
         }
 
         // 20 skeletons spread in grid
@@ -42,7 +42,7 @@ public class PriestBattleScenario : ScenarioBase
             float x = 20f + (i % 5) * 2f;
             float y = 8f + (i / 5) * 2f;
             int idx = units.AddUnit(new Vec2(x, y), UnitType.Skeleton);
-            units.AI[idx] = AIBehavior.AttackClosest;
+            units[idx].AI = AIBehavior.AttackClosest;
         }
 
         DebugLog.Log(ScenarioLog, "Spawned priest + 5 soldiers vs 20 skeletons");
@@ -56,8 +56,8 @@ public class PriestBattleScenario : ScenarioBase
         int undead = 0, human = 0;
         for (int i = 0; i < sim.Units.Count; i++)
         {
-            if (!sim.Units.Alive[i]) continue;
-            if (sim.Units.Faction[i] == Faction.Undead) undead++;
+            if (!sim.Units[i].Alive) continue;
+            if (sim.Units[i].Faction == Faction.Undead) undead++;
             else human++;
         }
 
@@ -75,8 +75,8 @@ public class PriestBattleScenario : ScenarioBase
         int undead = 0, human = 0;
         for (int i = 0; i < sim.Units.Count; i++)
         {
-            if (!sim.Units.Alive[i]) continue;
-            if (sim.Units.Faction[i] == Faction.Undead) undead++;
+            if (!sim.Units[i].Alive) continue;
+            if (sim.Units[i].Faction == Faction.Undead) undead++;
             else human++;
         }
         DebugLog.Log(ScenarioLog, $"Survivors: undead={undead} human={human}");

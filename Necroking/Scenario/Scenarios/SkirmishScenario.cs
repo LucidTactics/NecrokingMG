@@ -36,8 +36,8 @@ public class SkirmishScenario : ScenarioBase
         int undead = 0, human = 0;
         for (int i = 0; i < sim.Units.Count; i++)
         {
-            if (!sim.Units.Alive[i]) continue;
-            if (sim.Units.Faction[i] == Faction.Undead) undead++;
+            if (!sim.Units[i].Alive) continue;
+            if (sim.Units[i].Faction == Faction.Undead) undead++;
             else human++;
         }
 

@@ -202,13 +202,13 @@ public class LightningSystem
                         foreach (uint nid in nearby)
                         {
                             int j = UnitUtil.ResolveUnitIndex(units, nid);
-                            if (j < 0 || !units.Alive[j]) continue;
+                            if (j < 0 || !units[j].Alive) continue;
 
                             bool shouldHit = s.TargetFilter switch
                             {
-                                SpellTargetFilter.AnyEnemy => units.Faction[j] != Faction.Undead,
-                                SpellTargetFilter.UndeadOnly => units.Faction[j] == Faction.Undead,
-                                SpellTargetFilter.LivingOnly => units.Faction[j] != Faction.Undead,
+                                SpellTargetFilter.AnyEnemy => units[j].Faction != Faction.Undead,
+                                SpellTargetFilter.UndeadOnly => units[j].Faction == Faction.Undead,
+                                SpellTargetFilter.LivingOnly => units[j].Faction != Faction.Undead,
                                 _ => true
                             };
                             if (shouldHit)

@@ -37,8 +37,8 @@ public class CombatTestScenario : ScenarioBase
         int undead = 0, human = 0;
         for (int i = 0; i < sim.Units.Count; i++)
         {
-            if (!sim.Units.Alive[i]) continue;
-            if (sim.Units.Faction[i] == Faction.Undead) undead++;
+            if (!sim.Units[i].Alive) continue;
+            if (sim.Units[i].Faction == Faction.Undead) undead++;
             else human++;
         }
 
@@ -57,7 +57,7 @@ public class CombatTestScenario : ScenarioBase
         // Pass if at least one side won
         int alive = 0;
         for (int i = 0; i < sim.Units.Count; i++)
-            if (sim.Units.Alive[i]) alive++;
+            if (sim.Units[i].Alive) alive++;
         bool pass = alive > 0;
         DebugLog.Log(ScenarioLog, pass ? "PASS" : "FAIL (no survivors)");
         return pass ? 0 : 1;

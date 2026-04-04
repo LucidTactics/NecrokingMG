@@ -45,8 +45,8 @@ public class WolfPackHandler : IArchetypeHandler
 
     public void OnSpawn(ref AIContext ctx)
     {
-        ctx.Units.SpawnPosition[ctx.UnitIndex] = ctx.MyPos;
-        ctx.Units.MoveTarget[ctx.UnitIndex] = ctx.MyPos;
+        ctx.Units[ctx.UnitIndex].SpawnPosition = ctx.MyPos;
+        ctx.Units[ctx.UnitIndex].MoveTarget = ctx.MyPos;
         ctx.Routine = ctx.IsNight ? RoutineSleeping : RoutineIdleRoaming;
         ctx.Subroutine = 0;
         ctx.SubroutineTimer = 0f;
@@ -77,7 +77,7 @@ public class WolfPackHandler : IArchetypeHandler
             uint threatId = ctx.AlertTarget;
             if (threatId != GameConstants.InvalidUnit)
             {
-                ctx.Units.Target[ctx.UnitIndex] = CombatTarget.Unit(threatId);
+                ctx.Units[ctx.UnitIndex].Target = CombatTarget.Unit(threatId);
                 ctx.Routine = RoutineFighting;
                 ctx.Subroutine = FightMoveToEngage;
                 ctx.SubroutineTimer = 0f;
@@ -91,8 +91,8 @@ public class WolfPackHandler : IArchetypeHandler
             if (!SubroutineSteps.IsTargetAlive(ref ctx))
             {
                 // Target dead — return to time-of-day routine
-                ctx.Units.Target[ctx.UnitIndex] = CombatTarget.None;
-                ctx.Units.EngagedTarget[ctx.UnitIndex] = CombatTarget.None;
+                ctx.Units[ctx.UnitIndex].Target = CombatTarget.None;
+                ctx.Units[ctx.UnitIndex].EngagedTarget = CombatTarget.None;
                 ctx.AlertState = (byte)UnitAlertState.Unaware;
                 ctx.AlertTarget = GameConstants.InvalidUnit;
                 SwitchToTimeOfDayRoutine(ref ctx);
@@ -102,8 +102,8 @@ public class WolfPackHandler : IArchetypeHandler
             // Alert dropped (enemy left break range) — disengage
             if (alertState == (byte)UnitAlertState.Unaware)
             {
-                ctx.Units.Target[ctx.UnitIndex] = CombatTarget.None;
-                ctx.Units.EngagedTarget[ctx.UnitIndex] = CombatTarget.None;
+                ctx.Units[ctx.UnitIndex].Target = CombatTarget.None;
+                ctx.Units[ctx.UnitIndex].EngagedTarget = CombatTarget.None;
                 SwitchToTimeOfDayRoutine(ref ctx);
                 return;
             }
@@ -161,7 +161,7 @@ public class WolfPackHandler : IArchetypeHandler
                 if (targetIdx >= 0)
                 {
                     float attackRange = SubroutineSteps.GetMeleeRange(ref ctx, targetIdx);
-                    float dist = (ctx.Units.Position[targetIdx] - ctx.MyPos).Length();
+                    float dist = (ctx.Units[targetIdx].Position - ctx.MyPos).Length();
                     if (dist <= attackRange)
                     {
                         ctx.Subroutine = FightExecuteAttack;
@@ -176,13 +176,13 @@ public class WolfPackHandler : IArchetypeHandler
                 SubroutineSteps.AttackTarget(ref ctx);
                 // Transition: wait for attack animation to finish (PostAttackTimer == 0)
                 // before disengaging. AttackCooldown > 0 means the attack was initiated.
-                if (ctx.Units.AttackCooldown[ctx.UnitIndex] > 0
-                    && ctx.Units.PostAttackTimer[ctx.UnitIndex] <= 0f
+                if (ctx.Units[ctx.UnitIndex].AttackCooldown > 0
+                    && ctx.Units[ctx.UnitIndex].PostAttackTimer <= 0f
                     && ctx.SubroutineTimer > 0.1f)
                 {
                     ctx.Subroutine = FightDisengage;
                     ctx.SubroutineTimer = 0f;
-                    ctx.Units.EngagedTarget[ctx.UnitIndex] = CombatTarget.None;
+                    ctx.Units[ctx.UnitIndex].EngagedTarget = CombatTarget.None;
                 }
                 break;
             }

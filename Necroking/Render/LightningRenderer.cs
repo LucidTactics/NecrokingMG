@@ -100,9 +100,9 @@ public class LightningRenderer
             int targetIdx = UnitUtil.ResolveUnitIndex(_sim.Units, beam.TargetID);
             if (casterIdx < 0 || targetIdx < 0) continue;
 
-            var startSp = _renderer.WorldToScreen(_sim.Units.EffectSpawnPos2D[casterIdx],
-                _sim.Units.EffectSpawnHeight[casterIdx], _camera);
-            var endSp = _renderer.WorldToScreen(_sim.Units.Position[targetIdx], 1f, _camera);
+            var startSp = _renderer.WorldToScreen(_sim.Units[casterIdx].EffectSpawnPos2D,
+                _sim.Units[casterIdx].EffectSpawnHeight, _camera);
+            var endSp = _renderer.WorldToScreen(_sim.Units[targetIdx].Position, 1f, _camera);
             DrawLightningBolt(startSp, endSp, beam.Style, 1f);
         }
 
@@ -115,10 +115,10 @@ public class LightningRenderer
 
             Vec2 targetPos = drain.TargetCorpseIdx >= 0 ? drain.CorpsePos : Vec2.Zero;
             int targetIdx = UnitUtil.ResolveUnitIndex(_sim.Units, drain.TargetID);
-            if (targetIdx >= 0) targetPos = _sim.Units.Position[targetIdx];
+            if (targetIdx >= 0) targetPos = _sim.Units[targetIdx].Position;
 
-            var startSp = _renderer.WorldToScreen(_sim.Units.EffectSpawnPos2D[casterIdx],
-                _sim.Units.EffectSpawnHeight[casterIdx], _camera);
+            var startSp = _renderer.WorldToScreen(_sim.Units[casterIdx].EffectSpawnPos2D,
+                _sim.Units[casterIdx].EffectSpawnHeight, _camera);
             var endSp = _renderer.WorldToScreen(targetPos, 1f, _camera);
 
             // Draw multiple tendrils with sway

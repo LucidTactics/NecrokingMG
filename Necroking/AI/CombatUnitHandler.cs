@@ -50,7 +50,7 @@ public class CombatUnitHandler : IArchetypeHandler
 
     public void OnSpawn(ref AIContext ctx)
     {
-        ctx.Units.SpawnPosition[ctx.UnitIndex] = ctx.MyPos;
+        ctx.Units[ctx.UnitIndex].SpawnPosition = ctx.MyPos;
         ctx.Routine = RoutineIdle;
         ctx.Subroutine = 0;
         ctx.SubroutineTimer = 0f;
@@ -88,7 +88,7 @@ public class CombatUnitHandler : IArchetypeHandler
             uint threatId = ctx.AlertTarget;
             if (threatId != GameConstants.InvalidUnit)
             {
-                ctx.Units.Target[ctx.UnitIndex] = CombatTarget.Unit(threatId);
+                ctx.Units[ctx.UnitIndex].Target = CombatTarget.Unit(threatId);
                 ctx.Routine = RoutineCombat;
                 ctx.Subroutine = CombatChase;
                 ctx.SubroutineTimer = 0f;
@@ -100,21 +100,21 @@ public class CombatUnitHandler : IArchetypeHandler
         if (ctx.Routine == RoutineCombat && !SubroutineSteps.IsTargetAlive(ref ctx))
         {
             // Frenzied units search wider and never return to leash
-            bool frenzied = ctx.Units.Frenzied[ctx.UnitIndex];
-            float range = ctx.Units.DetectionRange[ctx.UnitIndex];
+            bool frenzied = ctx.Units[ctx.UnitIndex].Frenzied;
+            float range = ctx.Units[ctx.UnitIndex].DetectionRange;
             float searchRange = frenzied ? MathF.Max(range, 30f) : (range > 0 ? range : 12f);
             int next = SubroutineSteps.FindClosestEnemy(ref ctx, searchRange);
             if (next >= 0)
             {
-                ctx.Units.Target[ctx.UnitIndex] = CombatTarget.Unit(ctx.Units.Id[next]);
+                ctx.Units[ctx.UnitIndex].Target = CombatTarget.Unit(ctx.Units[next].Id);
                 ctx.Subroutine = CombatChase;
             }
             else if (!frenzied)
             {
                 ctx.Routine = RoutineReturn;
                 ctx.SubroutineTimer = 0f;
-                ctx.Units.Target[ctx.UnitIndex] = CombatTarget.None;
-                ctx.Units.EngagedTarget[ctx.UnitIndex] = CombatTarget.None;
+                ctx.Units[ctx.UnitIndex].Target = CombatTarget.None;
+                ctx.Units[ctx.UnitIndex].EngagedTarget = CombatTarget.None;
                 ctx.AlertState = (byte)UnitAlertState.Unaware;
                 ctx.AlertTarget = GameConstants.InvalidUnit;
             }
@@ -147,12 +147,12 @@ public class CombatUnitHandler : IArchetypeHandler
         // Walk to current waypoint, pause, advance
         if (ctx.Subroutine == PatrolWalking)
         {
-            SubroutineSteps.MoveToward(ref ctx, ctx.Units.MoveTarget[ctx.UnitIndex], ctx.MySpeed * 0.5f);
-            if ((ctx.Units.MoveTarget[ctx.UnitIndex] - ctx.MyPos).LengthSq() < 2f)
+            SubroutineSteps.MoveToward(ref ctx, ctx.Units[ctx.UnitIndex].MoveTarget, ctx.MySpeed * 0.5f);
+            if ((ctx.Units[ctx.UnitIndex].MoveTarget - ctx.MyPos).LengthSq() < 2f)
             {
                 ctx.Subroutine = PatrolWaiting;
                 ctx.SubroutineTimer = 1.5f + (ctx.UnitIndex % 3); // 1.5-3.5s pause at waypoint
-                ctx.Units.PreferredVel[ctx.UnitIndex] = Vec2.Zero;
+                ctx.Units[ctx.UnitIndex].PreferredVel = Vec2.Zero;
             }
         }
         else // PatrolWaiting
@@ -162,16 +162,16 @@ public class CombatUnitHandler : IArchetypeHandler
             if (ctx.SubroutineTimer <= 0f)
             {
                 // Advance to next waypoint
-                int routeIdx = ctx.Units.PatrolRouteIdx[ctx.UnitIndex];
-                int waypointIdx = ctx.Units.PatrolWaypointIdx[ctx.UnitIndex];
+                int routeIdx = ctx.Units[ctx.UnitIndex].PatrolRouteIdx;
+                int waypointIdx = ctx.Units[ctx.UnitIndex].PatrolWaypointIdx;
                 if (ctx.TriggerSystem != null && routeIdx >= 0 && routeIdx < ctx.TriggerSystem.PatrolRoutes.Count)
                 {
                     var route = ctx.TriggerSystem.PatrolRoutes[routeIdx];
                     if (route.Waypoints.Count > 0)
                     {
                         waypointIdx = (waypointIdx + 1) % route.Waypoints.Count;
-                        ctx.Units.PatrolWaypointIdx[ctx.UnitIndex] = waypointIdx;
-                        ctx.Units.MoveTarget[ctx.UnitIndex] = route.Waypoints[waypointIdx];
+                        ctx.Units[ctx.UnitIndex].PatrolWaypointIdx = waypointIdx;
+                        ctx.Units[ctx.UnitIndex].MoveTarget = route.Waypoints[waypointIdx];
                     }
                 }
                 ctx.Subroutine = PatrolWalking;
@@ -182,11 +182,11 @@ public class CombatUnitHandler : IArchetypeHandler
     private static void UpdateGuard(ref AIContext ctx)
     {
         // Stand at spawn position, face outward
-        float dist = (ctx.MyPos - ctx.Units.SpawnPosition[ctx.UnitIndex]).Length();
+        float dist = (ctx.MyPos - ctx.Units[ctx.UnitIndex].SpawnPosition).Length();
         if (dist > 1f)
-            SubroutineSteps.MoveToward(ref ctx, ctx.Units.SpawnPosition[ctx.UnitIndex], ctx.MySpeed * 0.5f);
+            SubroutineSteps.MoveToward(ref ctx, ctx.Units[ctx.UnitIndex].SpawnPosition, ctx.MySpeed * 0.5f);
         else
-            ctx.Units.PreferredVel[ctx.UnitIndex] = Vec2.Zero;
+            ctx.Units[ctx.UnitIndex].PreferredVel = Vec2.Zero;
     }
 
     private static void UpdateIdleRoam(ref AIContext ctx)
@@ -212,7 +212,7 @@ public class CombatUnitHandler : IArchetypeHandler
             if (targetIdx >= 0)
             {
                 float range = SubroutineSteps.GetMeleeRange(ref ctx, targetIdx);
-                if ((ctx.Units.Position[targetIdx] - ctx.MyPos).Length() <= range)
+                if ((ctx.Units[targetIdx].Position - ctx.MyPos).Length() <= range)
                 {
                     ctx.Subroutine = CombatAttack;
                     ctx.SubroutineTimer = 0f;
@@ -228,7 +228,7 @@ public class CombatUnitHandler : IArchetypeHandler
     private static void UpdateReturn(ref AIContext ctx)
     {
         // Frenzied units don't return — go back to idle/combat search
-        if (ctx.Units.Frenzied[ctx.UnitIndex])
+        if (ctx.Units[ctx.UnitIndex].Frenzied)
         {
             ctx.Routine = RoutineIdle;
             ctx.Subroutine = 0;
@@ -236,10 +236,10 @@ public class CombatUnitHandler : IArchetypeHandler
             return;
         }
 
-        ctx.Units.EngagedTarget[ctx.UnitIndex] = CombatTarget.None;
-        ctx.Units.InCombat[ctx.UnitIndex] = false;
+        ctx.Units[ctx.UnitIndex].EngagedTarget = CombatTarget.None;
+        ctx.Units[ctx.UnitIndex].InCombat = false;
 
-        Vec2 returnPos = ctx.Units.SpawnPosition[ctx.UnitIndex];
+        Vec2 returnPos = ctx.Units[ctx.UnitIndex].SpawnPosition;
         float dist = (ctx.MyPos - returnPos).Length();
         if (dist > 2f)
             SubroutineSteps.MoveToward(ref ctx, returnPos, ctx.MySpeed * 0.6f);
@@ -248,7 +248,7 @@ public class CombatUnitHandler : IArchetypeHandler
             ctx.Routine = RoutineIdle;
             ctx.Subroutine = 0;
             ctx.SubroutineTimer = 0f;
-            ctx.Units.PreferredVel[ctx.UnitIndex] = Vec2.Zero;
+            ctx.Units[ctx.UnitIndex].PreferredVel = Vec2.Zero;
         }
     }
 

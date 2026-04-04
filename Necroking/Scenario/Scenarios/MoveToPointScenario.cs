@@ -38,9 +38,9 @@ public class MoveToPointScenario : ScenarioBase
         _closestDist = _initialDist;
 
         int idx = units.AddUnit(_startPos, UnitType.Skeleton);
-        units.AI[idx] = AIBehavior.MoveToPoint;
-        units.MoveTarget[idx] = _targetPos;
-        _unitId = units.Id[idx];
+        units[idx].AI = AIBehavior.MoveToPoint;
+        units[idx].MoveTarget = _targetPos;
+        _unitId = units[idx].Id;
 
         DebugLog.Log(ScenarioLog, $"Spawned skeleton id={_unitId} at ({_startPos.X:F1},{_startPos.Y:F1})");
         DebugLog.Log(ScenarioLog, $"MoveTarget set to ({_targetPos.X:F1},{_targetPos.Y:F1})");
@@ -53,7 +53,7 @@ public class MoveToPointScenario : ScenarioBase
     private int FindByID(UnitArrays units, uint id)
     {
         for (int i = 0; i < units.Count; i++)
-            if (units.Id[i] == id) return i;
+            if (units[i].Id == id) return i;
         return -1;
     }
 
@@ -64,14 +64,14 @@ public class MoveToPointScenario : ScenarioBase
         var units = sim.Units;
         int idx = FindByID(sim.UnitsMut, _unitId);
 
-        if (idx < 0 || !units.Alive[idx])
+        if (idx < 0 || !units[idx].Alive)
         {
             DebugLog.Log(ScenarioLog, $"t={_elapsed:F1}s: Unit lost or dead, ending scenario");
             _complete = true;
             return;
         }
 
-        var pos = units.Position[idx];
+        var pos = units[idx].Position;
         float dist = (pos - _targetPos).Length();
 
         // Track closest distance achieved
@@ -95,8 +95,8 @@ public class MoveToPointScenario : ScenarioBase
         if (_logTimer <= 0f)
         {
             _logTimer = 1f;
-            var vel = units.Velocity[idx];
-            var prefVel = units.PreferredVel[idx];
+            var vel = units[idx].Velocity;
+            var prefVel = units[idx].PreferredVel;
             float progress = (_initialDist - dist) / _initialDist * 100f;
             DebugLog.Log(ScenarioLog,
                 $"t={_elapsed:F1}s: pos=({pos.X:F1},{pos.Y:F1}) dist={dist:F1} " +
@@ -119,9 +119,9 @@ public class MoveToPointScenario : ScenarioBase
         int idx = FindByID(sim.UnitsMut, _unitId);
 
         float finalDist = float.MaxValue;
-        if (idx >= 0 && units.Alive[idx])
+        if (idx >= 0 && units[idx].Alive)
         {
-            var pos = units.Position[idx];
+            var pos = units[idx].Position;
             finalDist = (pos - _targetPos).Length();
             DebugLog.Log(ScenarioLog, $"Final position: ({pos.X:F1},{pos.Y:F1})");
             DebugLog.Log(ScenarioLog, $"Final distance to target: {finalDist:F2}");

@@ -27,19 +27,19 @@ public class GodRayScenario : ScenarioBase
             float x = 10f + (i % 3) * 2f;
             float y = 10f + (i / 3) * 2f;
             int idx = units.AddUnit(new Vec2(x, y), UnitType.Skeleton);
-            units.AI[idx] = AIBehavior.IdleAtPoint;
-            units.MoveTarget[idx] = new Vec2(x, y);
+            units[idx].AI = AIBehavior.IdleAtPoint;
+            units[idx].MoveTarget = new Vec2(x, y);
         }
 
         // Spawn 2 caster soldiers
         for (int i = 0; i < 2; i++)
         {
             int idx = units.AddUnit(new Vec2(20f + i * 3f, 10f), UnitType.Soldier);
-            units.AI[idx] = AIBehavior.Caster;
-            units.Mana[idx] = 50f;
-            units.MaxMana[idx] = 50f;
-            units.ManaRegen[idx] = 2f;
-            units.SpellID[idx] = "god_ray";
+            units[idx].AI = AIBehavior.Caster;
+            units[idx].Mana = 50f;
+            units[idx].MaxMana = 50f;
+            units[idx].ManaRegen = 2f;
+            units[idx].SpellID = "god_ray";
         }
 
         DebugLog.Log(ScenarioLog, "Spawned 6 skeletons + 2 casters");
@@ -75,7 +75,7 @@ public class GodRayScenario : ScenarioBase
         // Count surviving skeletons
         int alive = 0;
         for (int i = 0; i < sim.Units.Count; i++)
-            if (sim.Units.Alive[i] && sim.Units.Faction[i] == Faction.Undead) alive++;
+            if (sim.Units[i].Alive && sim.Units[i].Faction == Faction.Undead) alive++;
         DebugLog.Log(ScenarioLog, $"Skeletons remaining: {alive}/6");
 
         return 0; // Always pass - visual test

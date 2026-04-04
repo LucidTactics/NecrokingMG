@@ -30,9 +30,9 @@ public class SpellTestScenario : ScenarioBase
 
         // Spawn a necromancer at center
         int necroIdx = units.AddUnit(new Vec2(10f, 10f), UnitType.Necromancer);
-        units.AI[necroIdx] = AIBehavior.PlayerControlled;
+        units[necroIdx].AI = AIBehavior.PlayerControlled;
         sim.SetNecromancerIndex(necroIdx);
-        DebugLog.Log(ScenarioLog, $"Spawned necromancer at (10, 10), idx={necroIdx}, id={units.Id[necroIdx]}");
+        DebugLog.Log(ScenarioLog, $"Spawned necromancer at (10, 10), idx={necroIdx}, id={units[necroIdx].Id}");
 
         // Spawn 5 enemies spread out in a semicircle
         for (int i = 0; i < 5; i++)
@@ -43,7 +43,7 @@ public class SpellTestScenario : ScenarioBase
             var pos = new Vec2(10f + MathF.Cos(rad) * dist, 10f + MathF.Sin(rad) * dist);
             _enemyPositions[i] = pos;
             int enemyIdx = units.AddUnit(pos, UnitType.Soldier);
-            units.AI[enemyIdx] = AIBehavior.IdleAtPoint; // Don't fight back, stay still
+            units[enemyIdx].AI = AIBehavior.IdleAtPoint; // Don't fight back, stay still
             DebugLog.Log(ScenarioLog, $"Spawned enemy {i} at ({pos.X:F1}, {pos.Y:F1}), idx={enemyIdx}");
         }
 
@@ -65,11 +65,11 @@ public class SpellTestScenario : ScenarioBase
             {
                 // Find necromancer
                 int necroIdx = sim.NecromancerIndex;
-                if (necroIdx >= 0 && necroIdx < sim.Units.Count && sim.Units.Alive[necroIdx])
+                if (necroIdx >= 0 && necroIdx < sim.Units.Count && sim.Units[necroIdx].Alive)
                 {
-                    var necroPos = sim.Units.Position[necroIdx];
+                    var necroPos = sim.Units[necroIdx].Position;
                     var targetPos = _enemyPositions[_castIndex];
-                    uint necroUid = sim.Units.Id[necroIdx];
+                    uint necroUid = sim.Units[necroIdx].Id;
 
                     sim.Projectiles.SpawnFireball(necroPos, targetPos, Faction.Undead, necroUid,
                         25, 1.5f, "Fireball");
@@ -91,11 +91,11 @@ public class SpellTestScenario : ScenarioBase
         int totalDamaged = 0;
         for (int i = 0; i < sim.Units.Count; i++)
         {
-            if (sim.Units.Faction[i] == Faction.Human)
+            if (sim.Units[i].Faction == Faction.Human)
             {
-                if (sim.Units.Alive[i]) aliveEnemies++;
+                if (sim.Units[i].Alive) aliveEnemies++;
                 // Check if they took damage (HP < max) — dead units are removed by swap-and-pop
-                if (sim.Units.Stats[i].HP < sim.Units.Stats[i].MaxHP)
+                if (sim.Units[i].Stats.HP < sim.Units[i].Stats.MaxHP)
                     totalDamaged++;
             }
         }

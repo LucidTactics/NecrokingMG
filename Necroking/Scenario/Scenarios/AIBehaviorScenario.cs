@@ -34,40 +34,40 @@ public class AIBehaviorScenario : ScenarioBase
         // Spawn necromancer (target for AttackNecromancer AI)
         _necroPos = new Vec2(10f, 10f);
         int necroIdx = units.AddUnit(_necroPos, UnitType.Necromancer);
-        units.AI[necroIdx] = AIBehavior.PlayerControlled;
-        _necroId = units.Id[necroIdx];
+        units[necroIdx].AI = AIBehavior.PlayerControlled;
+        _necroId = units[necroIdx].Id;
         sim.SetNecromancerIndex(necroIdx);
         DebugLog.Log(ScenarioLog, $"Necromancer at (10, 10), id={_necroId}");
 
         // Spawn 2 undead archers with ArcherAttack AI
         int arch1 = units.AddUnit(new Vec2(8f, 8f), UnitType.Skeleton);
-        units.AI[arch1] = AIBehavior.ArcherAttack;
-        _archerId1 = units.Id[arch1];
+        units[arch1].AI = AIBehavior.ArcherAttack;
+        _archerId1 = units[arch1].Id;
         int arch2 = units.AddUnit(new Vec2(12f, 8f), UnitType.Skeleton);
-        units.AI[arch2] = AIBehavior.ArcherAttack;
-        _archerId2 = units.Id[arch2];
+        units[arch2].AI = AIBehavior.ArcherAttack;
+        _archerId2 = units[arch2].Id;
         DebugLog.Log(ScenarioLog, $"Archers (ArcherAttack AI) at (8,8) and (12,8), ids={_archerId1},{_archerId2}");
 
         // Spawn a knight with GuardKnight AI
         int knightIdx = units.AddUnit(new Vec2(15f, 15f), UnitType.Knight);
-        units.AI[knightIdx] = AIBehavior.GuardKnight;
-        _knightId = units.Id[knightIdx];
+        units[knightIdx].AI = AIBehavior.GuardKnight;
+        _knightId = units[knightIdx].Id;
         DebugLog.Log(ScenarioLog, $"Knight (GuardKnight AI) at (15, 15), id={_knightId}");
 
         // Spawn 2 soldiers with AttackNecromancer AI — they should move toward necro
         int s1 = units.AddUnit(new Vec2(20f, 20f), UnitType.Soldier);
-        units.AI[s1] = AIBehavior.AttackNecromancer;
-        _soldier1Id = units.Id[s1];
+        units[s1].AI = AIBehavior.AttackNecromancer;
+        _soldier1Id = units[s1].Id;
         int s2 = units.AddUnit(new Vec2(22f, 20f), UnitType.Soldier);
-        units.AI[s2] = AIBehavior.AttackNecromancer;
-        _soldier2Id = units.Id[s2];
+        units[s2].AI = AIBehavior.AttackNecromancer;
+        _soldier2Id = units[s2].Id;
         DebugLog.Log(ScenarioLog, $"Soldiers (AttackNecromancer AI) at (20,20) and (22,20), ids={_soldier1Id},{_soldier2Id}");
 
         // Spawn some enemies near archers so they have targets to shoot
         for (int i = 0; i < 3; i++)
         {
             int eIdx = units.AddUnit(new Vec2(10f + i * 1.5f, 14f), UnitType.Soldier);
-            units.AI[eIdx] = AIBehavior.AttackClosest;
+            units[eIdx].AI = AIBehavior.AttackClosest;
             DebugLog.Log(ScenarioLog, $"Target soldier {i} (AttackClosest) at ({10f + i * 1.5f:F1}, 14)");
         }
 
@@ -105,15 +105,15 @@ public class AIBehaviorScenario : ScenarioBase
         var units = sim.Units;
         for (int i = 0; i < units.Count; i++)
         {
-            if (!units.Alive[i]) continue;
-            uint id = units.Id[i];
-            var pos = units.Position[i];
-            var ai = units.AI[i];
+            if (!units[i].Alive) continue;
+            uint id = units[i].Id;
+            var pos = units[i].Position;
+            var ai = units[i].AI;
 
             if (id == _necroId || id == _archerId1 || id == _archerId2 ||
                 id == _knightId || id == _soldier1Id || id == _soldier2Id)
             {
-                DebugLog.Log(ScenarioLog, $"  id={id} ai={ai} pos=({pos.X:F1},{pos.Y:F1}) inCombat={units.InCombat[i]}");
+                DebugLog.Log(ScenarioLog, $"  id={id} ai={ai} pos=({pos.X:F1},{pos.Y:F1}) inCombat={units[i].InCombat}");
             }
         }
     }
@@ -121,7 +121,7 @@ public class AIBehaviorScenario : ScenarioBase
     private int FindByID(UnitArrays units, uint id)
     {
         for (int i = 0; i < units.Count; i++)
-            if (units.Id[i] == id) return i;
+            if (units[i].Id == id) return i;
         return -1;
     }
 
@@ -143,8 +143,8 @@ public class AIBehaviorScenario : ScenarioBase
         int s2Idx = FindByID(sim.UnitsMut, _soldier2Id);
         if (s1Idx >= 0 || s2Idx >= 0)
         {
-            float dist1 = s1Idx >= 0 ? (units.Position[s1Idx] - _necroPos).Length() : 999f;
-            float dist2 = s2Idx >= 0 ? (units.Position[s2Idx] - _necroPos).Length() : 999f;
+            float dist1 = s1Idx >= 0 ? (units[s1Idx].Position - _necroPos).Length() : 999f;
+            float dist2 = s2Idx >= 0 ? (units[s2Idx].Position - _necroPos).Length() : 999f;
             float minDist = MathF.Min(dist1, dist2);
             // They started at ~14 units away, should be closer after 10s
             soldiersMoved = minDist < 12f;
@@ -158,15 +158,15 @@ public class AIBehaviorScenario : ScenarioBase
 
         // Check 3: Knight should still exist (GuardKnight is defensive)
         int knightIdx = FindByID(sim.UnitsMut, _knightId);
-        bool knightExists = knightIdx >= 0 && units.Alive[knightIdx];
+        bool knightExists = knightIdx >= 0 && units[knightIdx].Alive;
         DebugLog.Log(ScenarioLog, $"GuardKnight still alive: {(knightExists ? "PASS" : "FAIL (died or missing)")}");
 
         // Summary
         int undead = 0, human = 0;
         for (int i = 0; i < units.Count; i++)
         {
-            if (!units.Alive[i]) continue;
-            if (units.Faction[i] == Faction.Undead) undead++;
+            if (!units[i].Alive) continue;
+            if (units[i].Faction == Faction.Undead) undead++;
             else human++;
         }
         DebugLog.Log(ScenarioLog, $"Final state: {undead} undead, {human} human alive");

@@ -34,26 +34,26 @@ public static class SubroutineSteps
     public static void MoveToTarget(ref AIContext ctx)
     {
         int targetIdx = ResolveTarget(ref ctx);
-        if (targetIdx < 0) { ctx.Units.PreferredVel[ctx.UnitIndex] = Vec2.Zero; return; }
-        MoveToward(ref ctx, ctx.Units.Position[targetIdx], ctx.MySpeed);
+        if (targetIdx < 0) { ctx.Units[ctx.UnitIndex].PreferredVel = Vec2.Zero; return; }
+        MoveToward(ref ctx, ctx.Units[targetIdx].Position, ctx.MySpeed);
     }
 
     public static bool MoveToTarget_InRange(ref AIContext ctx, float range)
     {
         int targetIdx = ResolveTarget(ref ctx);
         if (targetIdx < 0) return false;
-        return (ctx.Units.Position[targetIdx] - ctx.MyPos).LengthSq() <= range * range;
+        return (ctx.Units[targetIdx].Position - ctx.MyPos).LengthSq() <= range * range;
     }
 
     /// <summary>Pathfind toward MoveTarget position.</summary>
     public static void MoveToPosition(ref AIContext ctx, float speed)
     {
-        MoveToward(ref ctx, ctx.Units.MoveTarget[ctx.UnitIndex], speed);
+        MoveToward(ref ctx, ctx.Units[ctx.UnitIndex].MoveTarget, speed);
     }
 
     public static bool MoveToPosition_Arrived(ref AIContext ctx, float threshold = 1f)
     {
-        return (ctx.Units.MoveTarget[ctx.UnitIndex] - ctx.MyPos).LengthSq() <= threshold * threshold;
+        return (ctx.Units[ctx.UnitIndex].MoveTarget - ctx.MyPos).LengthSq() <= threshold * threshold;
     }
 
     /// <summary>Back away from alert target to maintain distance.</summary>
@@ -67,7 +67,7 @@ public static class SubroutineSteps
             MoveToward(ref ctx, fleeDest, ctx.MySpeed);
         }
         else
-            ctx.Units.PreferredVel[ctx.UnitIndex] = Vec2.Zero;
+            ctx.Units[ctx.UnitIndex].PreferredVel = Vec2.Zero;
     }
 
     /// <summary>Walk-then-idle roaming pattern. Walk to random point at walkSpeed,
@@ -76,22 +76,22 @@ public static class SubroutineSteps
     public static void IdleRoam(ref AIContext ctx, float roamRadius, float walkSpeedFraction = 0.3f)
     {
         int i = ctx.UnitIndex;
-        Vec2 center = ctx.Units.SpawnPosition[i];
+        Vec2 center = ctx.Units[i].SpawnPosition;
 
         if (ctx.Subroutine == 0) // walking to point
         {
-            Vec2 target = ctx.Units.MoveTarget[i];
+            Vec2 target = ctx.Units[i].MoveTarget;
             MoveToward(ref ctx, target, ctx.MySpeed * walkSpeedFraction);
             if ((target - ctx.MyPos).LengthSq() < 1.5f)
             {
                 ctx.Subroutine = 1;
                 ctx.SubroutineTimer = 3f + (i % 6) + ((ctx.FrameNumber + i * 3) % 5); // 3-13s idle
-                ctx.Units.PreferredVel[i] = Vec2.Zero;
+                ctx.Units[i].PreferredVel = Vec2.Zero;
             }
         }
         else // idle at point
         {
-            ctx.Units.PreferredVel[i] = Vec2.Zero;
+            ctx.Units[i].PreferredVel = Vec2.Zero;
             ctx.SubroutineTimer -= ctx.Dt;
             if (ctx.SubroutineTimer <= 0f)
             {
@@ -112,7 +112,7 @@ public static class SubroutineSteps
                         if (grid.GetCost(tx, ty) == 255) continue; // impassable, try again
                     }
 
-                    ctx.Units.MoveTarget[i] = candidate;
+                    ctx.Units[i].MoveTarget = candidate;
                     break;
                 }
             }
@@ -125,16 +125,16 @@ public static class SubroutineSteps
         int i = ctx.UnitIndex;
         // Pick new wander target when timer expires or arrived
         ctx.SubroutineTimer -= ctx.Dt;
-        var toTarget = ctx.Units.MoveTarget[i] - ctx.MyPos;
+        var toTarget = ctx.Units[i].MoveTarget - ctx.MyPos;
         if (ctx.SubroutineTimer <= 0f || toTarget.LengthSq() < 1f)
         {
             // Pick random point within radius of center
             float angle = ((ctx.FrameNumber * 7 + i * 13) % 628) / 100f; // deterministic pseudo-random
             float dist = radius * (0.3f + ((ctx.FrameNumber * 3 + i * 17) % 70) / 100f);
-            ctx.Units.MoveTarget[i] = center + new Vec2(MathF.Cos(angle) * dist, MathF.Sin(angle) * dist);
+            ctx.Units[i].MoveTarget = center + new Vec2(MathF.Cos(angle) * dist, MathF.Sin(angle) * dist);
             ctx.SubroutineTimer = 3f + (i % 5); // 3-7 seconds between wander points
         }
-        MoveToward(ref ctx, ctx.Units.MoveTarget[i], speed * 0.3f);
+        MoveToward(ref ctx, ctx.Units[i].MoveTarget, speed * 0.3f);
     }
 
     // ═══════════════════════════════════════
@@ -145,57 +145,57 @@ public static class SubroutineSteps
     public static void AttackTarget(ref AIContext ctx)
     {
         int targetIdx = ResolveTarget(ref ctx);
-        if (targetIdx < 0) { ctx.Units.PreferredVel[ctx.UnitIndex] = Vec2.Zero; return; }
+        if (targetIdx < 0) { ctx.Units[ctx.UnitIndex].PreferredVel = Vec2.Zero; return; }
 
-        float dist = (ctx.Units.Position[targetIdx] - ctx.MyPos).Length();
+        float dist = (ctx.Units[targetIdx].Position - ctx.MyPos).Length();
         float attackRange = GetMeleeRange(ref ctx, targetIdx);
 
         if (dist > attackRange * 1.5f)
-            MoveToward(ref ctx, ctx.Units.Position[targetIdx], ctx.MySpeed);
+            MoveToward(ref ctx, ctx.Units[targetIdx].Position, ctx.MySpeed);
         else
-            ctx.Units.PreferredVel[ctx.UnitIndex] = Vec2.Zero;
+            ctx.Units[ctx.UnitIndex].PreferredVel = Vec2.Zero;
 
         // Set engaged target so combat system fires
-        if (ctx.Units.EngagedTarget[ctx.UnitIndex].IsNone)
-            ctx.Units.EngagedTarget[ctx.UnitIndex] = ctx.Units.Target[ctx.UnitIndex];
+        if (ctx.Units[ctx.UnitIndex].EngagedTarget.IsNone)
+            ctx.Units[ctx.UnitIndex].EngagedTarget = ctx.Units[ctx.UnitIndex].Target;
     }
 
     public static bool AttackTarget_CooldownStarted(ref AIContext ctx, float minTime = 0.2f)
     {
-        return ctx.Units.AttackCooldown[ctx.UnitIndex] > 0 && ctx.SubroutineTimer > minTime;
+        return ctx.Units[ctx.UnitIndex].AttackCooldown > 0 && ctx.SubroutineTimer > minTime;
     }
 
     /// <summary>Clear engagement, back away from target.</summary>
     public static void Disengage(ref AIContext ctx, float backoffDist)
     {
         int i = ctx.UnitIndex;
-        ctx.Units.EngagedTarget[i] = CombatTarget.None;
-        ctx.Units.PendingAttack[i] = CombatTarget.None;
-        ctx.Units.PostAttackTimer[i] = 0f;
+        ctx.Units[i].EngagedTarget = CombatTarget.None;
+        ctx.Units[i].PendingAttack = CombatTarget.None;
+        ctx.Units[i].PostAttackTimer = 0f;
 
         int targetIdx = ResolveTarget(ref ctx);
         if (targetIdx >= 0)
         {
-            float dist = (ctx.MyPos - ctx.Units.Position[targetIdx]).Length();
+            float dist = (ctx.MyPos - ctx.Units[targetIdx].Position).Length();
             if (dist < backoffDist)
             {
                 var awayDir = dist > 0.01f
-                    ? (ctx.MyPos - ctx.Units.Position[targetIdx]) * (1f / dist)
+                    ? (ctx.MyPos - ctx.Units[targetIdx].Position) * (1f / dist)
                     : new Vec2(1, 0);
-                ctx.Units.PreferredVel[i] = awayDir * ctx.MySpeed;
+                ctx.Units[i].PreferredVel = awayDir * ctx.MySpeed;
             }
             else
-                ctx.Units.PreferredVel[i] = Vec2.Zero;
+                ctx.Units[i].PreferredVel = Vec2.Zero;
         }
         else
-            ctx.Units.PreferredVel[i] = Vec2.Zero;
+            ctx.Units[i].PreferredVel = Vec2.Zero;
     }
 
     public static bool Disengage_Complete(ref AIContext ctx, float backoffDist)
     {
         int targetIdx = ResolveTarget(ref ctx);
         if (targetIdx < 0) return true;
-        return (ctx.MyPos - ctx.Units.Position[targetIdx]).Length() >= backoffDist;
+        return (ctx.MyPos - ctx.Units[targetIdx].Position).Length() >= backoffDist;
     }
 
     // ═══════════════════════════════════════
@@ -205,7 +205,7 @@ public static class SubroutineSteps
     /// <summary>Stand still, decrement SubroutineTimer.</summary>
     public static void Wait(ref AIContext ctx)
     {
-        ctx.Units.PreferredVel[ctx.UnitIndex] = Vec2.Zero;
+        ctx.Units[ctx.UnitIndex].PreferredVel = Vec2.Zero;
         ctx.SubroutineTimer -= ctx.Dt;
     }
 
@@ -218,41 +218,41 @@ public static class SubroutineSteps
         int targetIdx = ResolveTarget(ref ctx);
         if (targetIdx >= 0)
         {
-            float dist = (ctx.MyPos - ctx.Units.Position[targetIdx]).Length();
+            float dist = (ctx.MyPos - ctx.Units[targetIdx].Position).Length();
             float desiredDist = GetMeleeRange(ref ctx, targetIdx) + 2f;
             if (dist < desiredDist - 0.5f)
             {
                 var awayDir = dist > 0.01f
-                    ? (ctx.MyPos - ctx.Units.Position[targetIdx]) * (1f / dist)
+                    ? (ctx.MyPos - ctx.Units[targetIdx].Position) * (1f / dist)
                     : new Vec2(1, 0);
-                ctx.Units.PreferredVel[ctx.UnitIndex] = awayDir * ctx.MySpeed * 0.5f;
+                ctx.Units[ctx.UnitIndex].PreferredVel = awayDir * ctx.MySpeed * 0.5f;
             }
             else
-                ctx.Units.PreferredVel[ctx.UnitIndex] = Vec2.Zero;
+                ctx.Units[ctx.UnitIndex].PreferredVel = Vec2.Zero;
         }
         else
-            ctx.Units.PreferredVel[ctx.UnitIndex] = Vec2.Zero;
+            ctx.Units[ctx.UnitIndex].PreferredVel = Vec2.Zero;
     }
 
     public static bool WaitForCooldown_Ready(ref AIContext ctx)
     {
-        return ctx.Units.AttackCooldown[ctx.UnitIndex] <= 0f;
+        return ctx.Units[ctx.UnitIndex].AttackCooldown <= 0f;
     }
 
     /// <summary>Stand still and face the alert target (used for alert states).</summary>
     public static void AlertStance(ref AIContext ctx)
     {
         int i = ctx.UnitIndex;
-        ctx.Units.PreferredVel[i] = Vec2.Zero;
+        ctx.Units[i].PreferredVel = Vec2.Zero;
         uint targetId = ctx.AlertTarget;
         if (targetId == GameConstants.InvalidUnit) return;
         for (int j = 0; j < ctx.Units.Count; j++)
         {
-            if (ctx.Units.Id[j] == targetId && ctx.Units.Alive[j])
+            if (ctx.Units[j].Id == targetId && ctx.Units[j].Alive)
             {
-                var dir = ctx.Units.Position[j] - ctx.MyPos;
+                var dir = ctx.Units[j].Position - ctx.MyPos;
                 if (dir.LengthSq() > 0.01f)
-                    ctx.Units.FacingAngle[i] = MathF.Atan2(dir.Y, dir.X) * 180f / MathF.PI;
+                    ctx.Units[i].FacingAngle = MathF.Atan2(dir.Y, dir.X) * 180f / MathF.PI;
                 break;
             }
         }
@@ -261,7 +261,7 @@ public static class SubroutineSteps
     /// <summary>Stand still, do nothing (used for sleeping, etc.).</summary>
     public static void Idle(ref AIContext ctx)
     {
-        ctx.Units.PreferredVel[ctx.UnitIndex] = Vec2.Zero;
+        ctx.Units[ctx.UnitIndex].PreferredVel = Vec2.Zero;
     }
 
     // ═══════════════════════════════════════
@@ -277,16 +277,16 @@ public static class SubroutineSteps
 
         if (dist > 3f && ctx.Pathfinder?.Grid != null)
         {
-            int sizeTier = TerrainCosts.SizeToTier(ctx.Units.Size[i]);
+            int sizeTier = TerrainCosts.SizeToTier(ctx.Units[i].Size);
             Vec2 dir = ctx.Pathfinder.GetDirection(myPos, target, (uint)ctx.FrameNumber, sizeTier, i);
-            ctx.Units.PreferredVel[i] = dir * speed;
+            ctx.Units[i].PreferredVel = dir * speed;
         }
         else if (dist > 0.01f)
         {
-            ctx.Units.PreferredVel[i] = (target - myPos) * (1f / dist) * speed;
+            ctx.Units[i].PreferredVel = (target - myPos) * (1f / dist) * speed;
         }
         else
-            ctx.Units.PreferredVel[i] = Vec2.Zero;
+            ctx.Units[i].PreferredVel = Vec2.Zero;
     }
 
     /// <summary>Find closest enemy unit (different faction, alive).</summary>
@@ -299,9 +299,9 @@ public static class SubroutineSteps
 
         for (int j = 0; j < ctx.Units.Count; j++)
         {
-            if (j == ctx.UnitIndex || !ctx.Units.Alive[j]) continue;
-            if (ctx.Units.Faction[j] == myFaction) continue;
-            float d = (ctx.Units.Position[j] - myPos).LengthSq();
+            if (j == ctx.UnitIndex || !ctx.Units[j].Alive) continue;
+            if (ctx.Units[j].Faction == myFaction) continue;
+            float d = (ctx.Units[j].Position - myPos).LengthSq();
             if (d < bestDist) { bestDist = d; bestIdx = j; }
         }
         return bestIdx;
@@ -310,10 +310,10 @@ public static class SubroutineSteps
     /// <summary>Resolve current combat target to unit index.</summary>
     public static int ResolveTarget(ref AIContext ctx)
     {
-        var target = ctx.Units.Target[ctx.UnitIndex];
+        var target = ctx.Units[ctx.UnitIndex].Target;
         if (!target.IsUnit) return -1;
         for (int j = 0; j < ctx.Units.Count; j++)
-            if (ctx.Units.Id[j] == target.UnitID && ctx.Units.Alive[j]) return j;
+            if (ctx.Units[j].Id == target.UnitID && ctx.Units[j].Alive) return j;
         return -1;
     }
 
@@ -323,7 +323,7 @@ public static class SubroutineSteps
         uint targetId = ctx.AlertTarget;
         if (targetId == GameConstants.InvalidUnit) return -1;
         for (int j = 0; j < ctx.Units.Count; j++)
-            if (ctx.Units.Id[j] == targetId && ctx.Units.Alive[j]) return j;
+            if (ctx.Units[j].Id == targetId && ctx.Units[j].Alive) return j;
         return -1;
     }
 
@@ -336,7 +336,7 @@ public static class SubroutineSteps
     public static float GetMeleeRange(ref AIContext ctx, int targetIdx)
     {
         float baseRange = ctx.GameData?.Settings.Combat.MeleeRange ?? 1.5f;
-        return baseRange + ctx.Units.Stats[ctx.UnitIndex].Length * 0.15f
-            + ctx.Units.Radius[ctx.UnitIndex] + ctx.Units.Radius[targetIdx];
+        return baseRange + ctx.Units[ctx.UnitIndex].Stats.Length * 0.15f
+            + ctx.Units[ctx.UnitIndex].Radius + ctx.Units[targetIdx].Radius;
     }
 }

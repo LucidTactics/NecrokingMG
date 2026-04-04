@@ -27,11 +27,11 @@ public class ShadowPivotScenario : ScenarioBase
 
         // Single skeleton — isolated so shadow is clearly visible
         int skel = sim.UnitsMut.AddUnit(new Vec2(CX, CY), UnitType.Skeleton);
-        sim.UnitsMut.AI[skel] = AIBehavior.IdleAtPoint;
+        sim.UnitsMut[skel].AI = AIBehavior.IdleAtPoint;
 
         // Single soldier on second row
         int sold = sim.UnitsMut.AddUnit(new Vec2(CX + 8f, CY), UnitType.Soldier);
-        sim.UnitsMut.AI[sold] = AIBehavior.IdleAtPoint;
+        sim.UnitsMut[sold].AI = AIBehavior.IdleAtPoint;
 
         // Tree
         var env = sim.EnvironmentSystem;

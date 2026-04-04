@@ -44,8 +44,8 @@ public class HordeFollowScenario : ScenarioBase
 
         // Spawn necromancer at (15, 15)
         int necroIdx = units.AddUnit(new Vec2(15f, 15f), UnitType.Necromancer);
-        units.AI[necroIdx] = AIBehavior.PlayerControlled;
-        _necroId = units.Id[necroIdx];
+        units[necroIdx].AI = AIBehavior.PlayerControlled;
+        _necroId = units[necroIdx].Id;
         sim.SetNecromancerIndex(necroIdx);
         DebugLog.Log(ScenarioLog, $"Spawned necromancer at (15, 15), idx={necroIdx}, id={_necroId}");
 
@@ -55,13 +55,13 @@ public class HordeFollowScenario : ScenarioBase
             float x = 14f + (i % 4) * 1.0f;
             float y = 14f + (i / 4) * 1.0f;
             int idx = units.AddUnit(new Vec2(x, y), UnitType.Skeleton);
-            units.AI[idx] = AIBehavior.AttackClosest;
-            _skeletonIds[i] = units.Id[idx];
+            units[idx].AI = AIBehavior.AttackClosest;
+            _skeletonIds[i] = units[idx].Id;
 
             // Manually enroll in horde (Game1 does this normally, but scenarios bypass Game1 spawning)
-            sim.Horde.AddUnit(units.Id[idx]);
+            sim.Horde.AddUnit(units[idx].Id);
 
-            DebugLog.Log(ScenarioLog, $"Spawned skeleton {i} at ({x:F1}, {y:F1}), idx={idx}, id={units.Id[idx]}");
+            DebugLog.Log(ScenarioLog, $"Spawned skeleton {i} at ({x:F1}, {y:F1}), idx={idx}, id={units[idx].Id}");
         }
         _skeletonCount = 8;
 
@@ -118,7 +118,7 @@ public class HordeFollowScenario : ScenarioBase
             int necroIdx = sim.NecromancerIndex;
             if (necroIdx >= 0 && necroIdx < sim.Units.Count)
             {
-                var necroPos = sim.Units.Position[necroIdx];
+                var necroPos = sim.Units[necroIdx].Position;
                 DebugLog.Log(ScenarioLog, $"  Necromancer stopped at ({necroPos.X:F1}, {necroPos.Y:F1})");
                 DebugLog.Log(ScenarioLog, $"  Horde circle center: ({sim.Horde.CircleCenter.X:F1}, {sim.Horde.CircleCenter.Y:F1})");
             }
@@ -141,7 +141,7 @@ public class HordeFollowScenario : ScenarioBase
                 return;
             }
 
-            var necroPos = sim.Units.Position[necroIdx];
+            var necroPos = sim.Units[necroIdx].Position;
             var circleCenter = sim.Horde.CircleCenter;
             _skeletonsNearNecroAfterMove = 0;
             _skeletonsNearNecroTotal = 0;
@@ -154,7 +154,7 @@ public class HordeFollowScenario : ScenarioBase
                 if (idx < 0) continue;
                 _skeletonsNearNecroTotal++;
 
-                var skelPos = sim.Units.Position[idx];
+                var skelPos = sim.Units[idx].Position;
                 float distToNecro = (skelPos - necroPos).Length();
                 float distToCircle = (skelPos - circleCenter).Length();
                 var hordeState = sim.Horde.GetUnitState(_skeletonIds[i]);
@@ -174,8 +174,8 @@ public class HordeFollowScenario : ScenarioBase
             for (int i = 0; i < 2; i++)
             {
                 int idx = units.AddUnit(new Vec2(30f + i * 1.5f, 15f), UnitType.Soldier);
-                units.AI[idx] = AIBehavior.AttackClosest;
-                DebugLog.Log(ScenarioLog, $"  Spawned soldier {i} at ({30f + i * 1.5f:F1}, 15), idx={idx}, id={units.Id[idx]}");
+                units[idx].AI = AIBehavior.AttackClosest;
+                DebugLog.Log(ScenarioLog, $"  Spawned soldier {i} at ({30f + i * 1.5f:F1}, 15), idx={idx}, id={units[idx].Id}");
             }
 
             _phase = 2;
@@ -221,7 +221,7 @@ public class HordeFollowScenario : ScenarioBase
         int humanAlive = 0;
         for (int i = 0; i < sim.Units.Count; i++)
         {
-            if (sim.Units.Alive[i] && sim.Units.Faction[i] == Faction.Human)
+            if (sim.Units[i].Alive && sim.Units[i].Faction == Faction.Human)
                 humanAlive++;
         }
 
@@ -241,7 +241,7 @@ public class HordeFollowScenario : ScenarioBase
         int necroIdx = sim.NecromancerIndex;
         if (necroIdx < 0 || necroIdx >= sim.Units.Count) return;
 
-        var necroPos = sim.Units.Position[necroIdx];
+        var necroPos = sim.Units[necroIdx].Position;
         var circleCenter = sim.Horde.CircleCenter;
 
         int following = 0, chasing = 0, engaged = 0, returning = 0;
@@ -260,8 +260,8 @@ public class HordeFollowScenario : ScenarioBase
         int undeadAlive = 0, humanAlive = 0;
         for (int i = 0; i < sim.Units.Count; i++)
         {
-            if (!sim.Units.Alive[i]) continue;
-            if (sim.Units.Faction[i] == Faction.Undead) undeadAlive++;
+            if (!sim.Units[i].Alive) continue;
+            if (sim.Units[i].Faction == Faction.Undead) undeadAlive++;
             else humanAlive++;
         }
 
@@ -271,7 +271,7 @@ public class HordeFollowScenario : ScenarioBase
     private static int FindByID(UnitArrays units, uint id)
     {
         for (int i = 0; i < units.Count; i++)
-            if (units.Id[i] == id) return i;
+            if (units[i].Id == id) return i;
         return -1;
     }
 
@@ -297,8 +297,8 @@ public class HordeFollowScenario : ScenarioBase
         int undeadAlive = 0, humanAlive = 0;
         for (int i = 0; i < sim.Units.Count; i++)
         {
-            if (!sim.Units.Alive[i]) continue;
-            if (sim.Units.Faction[i] == Faction.Undead) undeadAlive++;
+            if (!sim.Units[i].Alive) continue;
+            if (sim.Units[i].Faction == Faction.Undead) undeadAlive++;
             else humanAlive++;
         }
         DebugLog.Log(ScenarioLog, $"Final state: {undeadAlive} undead, {humanAlive} human alive");

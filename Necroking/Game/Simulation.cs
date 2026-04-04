@@ -132,9 +132,9 @@ public class Simulation
         // Clear per-frame flags and tick timers
         for (int i = 0; i < _units.Count; i++)
         {
-            _units.Dodging[i] = false;
-            _units.HitReacting[i] = false;
-            _units.BlockReacting[i] = false;
+            _units[i].Dodging = false;
+            _units[i].HitReacting = false;
+            _units[i].BlockReacting = false;
         }
 
         // Update mana and cooldowns
@@ -145,27 +145,27 @@ public class Simulation
         BuffSystem.TickBuffs(_units, dt);
         for (int i = 0; i < _units.Count; i++)
         {
-            if (_units.ActiveBuffs[i].Count > 0)
-                _units.MaxSpeed[i] = BuffSystem.GetModifiedStat(_units, i, BuffStat.CombatSpeed, _units.Stats[i].CombatSpeed);
+            if (_units[i].ActiveBuffs.Count > 0)
+                _units[i].MaxSpeed = BuffSystem.GetModifiedStat(_units, i, BuffStat.CombatSpeed, _units[i].Stats.CombatSpeed);
             else
-                _units.MaxSpeed[i] = _units.Stats[i].CombatSpeed;
+                _units[i].MaxSpeed = _units[i].Stats.CombatSpeed;
         }
 
         // Tick knockdown timers
         for (int i = 0; i < _units.Count; i++)
         {
-            if (_units.KnockdownTimer[i] > 0f)
-                _units.KnockdownTimer[i] = MathF.Max(0f, _units.KnockdownTimer[i] - dt);
-            if (_units.StandupTimer[i] > 0f)
-                _units.StandupTimer[i] = MathF.Max(0f, _units.StandupTimer[i] - dt);
+            if (_units[i].KnockdownTimer > 0f)
+                _units[i].KnockdownTimer = MathF.Max(0f, _units[i].KnockdownTimer - dt);
+            if (_units[i].StandupTimer > 0f)
+                _units[i].StandupTimer = MathF.Max(0f, _units[i].StandupTimer - dt);
         }
 
         // Tick hit shake timers and clear dodge flags
         for (int i = 0; i < _units.Count; i++)
         {
-            if (_units.HitShakeTimer[i] > 0f)
-                _units.HitShakeTimer[i] = MathF.Max(0f, _units.HitShakeTimer[i] - dt);
-            _units.Dodging[i] = false;
+            if (_units[i].HitShakeTimer > 0f)
+                _units[i].HitShakeTimer = MathF.Max(0f, _units[i].HitShakeTimer - dt);
+            _units[i].Dodging = false;
         }
 
         // Harassment decay
@@ -174,8 +174,8 @@ public class Simulation
         {
             _harassmentDecayTimer += CombatTickInterval;
             for (int i = 0; i < _units.Count; i++)
-                if (_units.Harassment[i] > 0)
-                    _units.Harassment[i] = (_units.Harassment[i] + 1) / 2;
+                if (_units[i].Harassment > 0)
+                    _units[i].Harassment = (_units[i].Harassment + 1) / 2;
         }
 
         // Rebuild quadtree
@@ -214,14 +214,14 @@ public class Simulation
             int idx = SpawnUnitByID(spawnId, pos);
             if (idx >= 0)
             {
-                _units.Faction[idx] = Faction.Undead;
-                _units.FacingAngle[idx] = facing;
-                _units.StandupTimer[idx] = 1.5f;
-                _units.SpawnPosition[idx] = pos;
+                _units[idx].Faction = Faction.Undead;
+                _units[idx].FacingAngle = facing;
+                _units[idx].StandupTimer = 1.5f;
+                _units[idx].SpawnPosition = pos;
                 // Set as horde minion and add to horde
-                _units.Archetype[idx] = AI.ArchetypeRegistry.HordeMinion;
-                _units.Routine[idx] = 0; // Following
-                _horde.AddUnit(_units.Id[idx]);
+                _units[idx].Archetype = AI.ArchetypeRegistry.HordeMinion;
+                _units[idx].Routine = 0; // Following
+                _horde.AddUnit(_units[idx].Id);
             }
         });
 
@@ -255,14 +255,14 @@ public class Simulation
                     }
                     else
                     {
-                        Vec2 impactPos = hit.UnitIdx >= 0 ? _units.Position[hit.UnitIdx] : hit.ImpactPos;
+                        Vec2 impactPos = hit.UnitIdx >= 0 ? _units[hit.UnitIdx].Position : hit.ImpactPos;
                         PotionSystem.ApplyPotionEffect(hit.PotionID, _gameData.Potions, _gameData.Buffs,
                             hit.UnitIdx, _units, hit.OwnerFaction, _pendingZombieRaises, _corpses, impactPos);
                     }
                 }
                 continue;
             }
-            if (hit.UnitIdx >= 0 && hit.UnitIdx < _units.Count && _units.Alive[hit.UnitIdx])
+            if (hit.UnitIdx >= 0 && hit.UnitIdx < _units.Count && _units[hit.UnitIdx].Alive)
                 ApplyDamage(hit.UnitIdx, hit.Damage);
         }
 
@@ -289,8 +289,8 @@ public class Simulation
         var ids = new uint[_units.Count];
         for (int i = 0; i < _units.Count; i++)
         {
-            positions[i] = _units.Position[i];
-            ids[i] = _units.Id[i];
+            positions[i] = _units[i].Position;
+            ids[i] = _units[i].Id;
         }
         _quadtree.Build(positions, ids, new AABB(0, 0, _grid.Width, _grid.Height));
     }
@@ -310,7 +310,7 @@ public class Simulation
     {
         _necroFacingOverride = angleDeg;
         if (_necromancerIdx >= 0 && _necromancerIdx < _units.Count)
-            _units.FacingAngle[_necromancerIdx] = angleDeg;
+            _units[_necromancerIdx].FacingAngle = angleDeg;
     }
 
     // --- AI ---
@@ -324,13 +324,13 @@ public class Simulation
 
         for (int i = 0; i < _units.Count; i++)
         {
-            if (!_units.Alive[i]) continue;
-            if (_units.Jumping[i] || _units.KnockdownTimer[i] > 0f) { _units.PreferredVel[i] = Vec2.Zero; continue; }
+            if (!_units[i].Alive) continue;
+            if (_units[i].Jumping || _units[i].KnockdownTimer > 0f) { _units[i].PreferredVel = Vec2.Zero; continue; }
 
             // New archetype system: if Archetype > 0, dispatch to handler
-            if (_units.Archetype[i] > 0)
+            if (_units[i].Archetype > 0)
             {
-                var handler = AI.ArchetypeRegistry.Get(_units.Archetype[i]);
+                var handler = AI.ArchetypeRegistry.Get(_units[i].Archetype);
                 if (handler != null)
                 {
                     var ctx = new AI.AIContext
@@ -346,74 +346,74 @@ public class Simulation
             }
 
             // Legacy AI: FleeWhenHit and wolf AIs handle their own combat/disengage logic
-            bool selfManagesCombat = _units.AI[i] == AIBehavior.FleeWhenHit
-                || _units.AI[i] == AIBehavior.WolfHitAndRun || _units.AI[i] == AIBehavior.WolfHitAndRunIsolated
-                || _units.AI[i] == AIBehavior.WolfOpportunist || _units.AI[i] == AIBehavior.WolfOpportunistIsolated;
+            bool selfManagesCombat = _units[i].AI == AIBehavior.FleeWhenHit
+                || _units[i].AI == AIBehavior.WolfHitAndRun || _units[i].AI == AIBehavior.WolfHitAndRunIsolated
+                || _units[i].AI == AIBehavior.WolfOpportunist || _units[i].AI == AIBehavior.WolfOpportunistIsolated;
             // Units with pending attacks stop moving (except self-managed AIs)
             // FleeWhenHit always bypasses; wolf AIs bypass during disengage/wait phases
-            if (!_units.PendingAttack[i].IsNone && !(_units.AI[i] == AIBehavior.FleeWhenHit
-                || (selfManagesCombat && _units.WolfPhase[i] >= WolfDisengage)))
-            { _units.PreferredVel[i] = Vec2.Zero; continue; }
-            if (_units.InCombat[i] && _units.AI[i] != AIBehavior.PlayerControlled && !selfManagesCombat)
-            { _units.PreferredVel[i] = Vec2.Zero; continue; }
+            if (!_units[i].PendingAttack.IsNone && !(_units[i].AI == AIBehavior.FleeWhenHit
+                || (selfManagesCombat && _units[i].WolfPhase >= WolfDisengage)))
+            { _units[i].PreferredVel = Vec2.Zero; continue; }
+            if (_units[i].InCombat && _units[i].AI != AIBehavior.PlayerControlled && !selfManagesCombat)
+            { _units[i].PreferredVel = Vec2.Zero; continue; }
 
-            switch (_units.AI[i])
+            switch (_units[i].AI)
             {
                 case AIBehavior.PlayerControlled:
                 {
-                    float speed = _units.Stats[i].CombatSpeed;
-                    if (_units.GhostMode[i])
+                    float speed = _units[i].Stats.CombatSpeed;
+                    if (_units[i].GhostMode)
                         speed = 20.0f;
                     else if (_necroRunning)
                         speed *= 1.8f;
-                    _units.MaxSpeed[i] = speed; // update so ORCA + accel cap respect current speed
-                    _units.PreferredVel[i] = _necroMoveInput * speed;
+                    _units[i].MaxSpeed = speed; // update so ORCA + accel cap respect current speed
+                    _units[i].PreferredVel = _necroMoveInput * speed;
                     break;
                 }
 
                 case AIBehavior.ArcherAttack:
                 {
-                    if (!IsTargetAlive(_units.Target[i]) || !_units.Target[i].IsUnit)
+                    if (!IsTargetAlive(_units[i].Target) || !_units[i].Target.IsUnit)
                     {
                         int enemy = FindClosestEnemy(i);
-                        _units.Target[i] = enemy >= 0 ? CombatTarget.Unit(_units.Id[enemy]) : CombatTarget.None;
+                        _units[i].Target = enemy >= 0 ? CombatTarget.Unit(_units[enemy].Id) : CombatTarget.None;
                     }
-                    if (_units.Target[i].IsUnit)
+                    if (_units[i].Target.IsUnit)
                     {
-                        int targetIdx = ResolveUnitTarget(_units.Target[i]);
+                        int targetIdx = ResolveUnitTarget(_units[i].Target);
                         if (targetIdx >= 0)
                         {
-                            float dist = (_units.Position[targetIdx] - _units.Position[i]).Length();
-                            float bestRange = _units.Stats[i].RangedRange.Count > 0 ? _units.Stats[i].RangedRange[0] : 40f;
+                            float dist = (_units[targetIdx].Position - _units[i].Position).Length();
+                            float bestRange = _units[i].Stats.RangedRange.Count > 0 ? _units[i].Stats.RangedRange[0] : 40f;
 
                             if (dist <= bestRange)
                             {
-                                _units.PreferredVel[i] = Vec2.Zero;
-                                if (_units.AttackCooldown[i] <= 0f && _units.PendingAttack[i].IsNone)
+                                _units[i].PreferredVel = Vec2.Zero;
+                                if (_units[i].AttackCooldown <= 0f && _units[i].PendingAttack.IsNone)
                                 {
-                                    int damage = _units.Stats[i].RangedDmg.Count > 0 ? _units.Stats[i].RangedDmg[0] : 8;
+                                    int damage = _units[i].Stats.RangedDmg.Count > 0 ? _units[i].Stats.RangedDmg[0] : 8;
                                     bool volley = dist > bestRange * 0.4f;
-                                    _projectiles.SpawnArrow(_units.Position[i], _units.Position[targetIdx],
-                                        _units.Faction[i], _units.Id[i], damage, volley, 10);
-                                    _units.AttackCooldown[i] = _units.Stats[i].RangedCooldownTime.Count > 0
-                                        ? _units.Stats[i].RangedCooldownTime[0] : 2f;
+                                    _projectiles.SpawnArrow(_units[i].Position, _units[targetIdx].Position,
+                                        _units[i].Faction, _units[i].Id, damage, volley, 10);
+                                    _units[i].AttackCooldown = _units[i].Stats.RangedCooldownTime.Count > 0
+                                        ? _units[i].Stats.RangedCooldownTime[0] : 2f;
                                 }
                             }
                             else
-                                MoveTowardUnit(i, targetIdx, _units.MaxSpeed[i]);
+                                MoveTowardUnit(i, targetIdx, _units[i].MaxSpeed);
                         }
-                        else _units.PreferredVel[i] = Vec2.Zero;
+                        else _units[i].PreferredVel = Vec2.Zero;
                     }
-                    else _units.PreferredVel[i] = Vec2.Zero;
+                    else _units[i].PreferredVel = Vec2.Zero;
                     break;
                 }
 
                 case AIBehavior.AttackNecromancer:
                 {
-                    if (_necromancerIdx >= 0 && _necromancerIdx < _units.Count && _units.Alive[_necromancerIdx])
-                        _units.Target[i] = CombatTarget.Unit(_units.Id[_necromancerIdx]);
-                    else if (!IsTargetAlive(_units.Target[i]))
-                        _units.Target[i] = FindBestEnemyTarget(i);
+                    if (_necromancerIdx >= 0 && _necromancerIdx < _units.Count && _units[_necromancerIdx].Alive)
+                        _units[i].Target = CombatTarget.Unit(_units[_necromancerIdx].Id);
+                    else if (!IsTargetAlive(_units[i].Target))
+                        _units[i].Target = FindBestEnemyTarget(i);
                     goto default;
                 }
 
@@ -423,32 +423,32 @@ public class Simulation
                     float bestGuardDist = float.MaxValue;
                     for (int j = 0; j < _units.Count; j++)
                     {
-                        if (j == i || !_units.Alive[j] || _units.Faction[j] != _units.Faction[i]) continue;
-                        if (_units.AI[j] != AIBehavior.AttackNecromancer) continue;
-                        float d = (_units.Position[j] - _units.Position[i]).LengthSq();
+                        if (j == i || !_units[j].Alive || _units[j].Faction != _units[i].Faction) continue;
+                        if (_units[j].AI != AIBehavior.AttackNecromancer) continue;
+                        float d = (_units[j].Position - _units[i].Position).LengthSq();
                         if (d < bestGuardDist) { bestGuardDist = d; guardTarget = j; }
                     }
                     if (guardTarget >= 0 && MathF.Sqrt(bestGuardDist) > 3f)
                     {
-                        MoveTowardUnit(i, guardTarget, _units.MaxSpeed[i]);
+                        MoveTowardUnit(i, guardTarget, _units[i].MaxSpeed);
                         break;
                     }
-                    if (!IsTargetAlive(_units.Target[i]))
-                        _units.Target[i] = FindBestEnemyTarget(i);
+                    if (!IsTargetAlive(_units[i].Target))
+                        _units[i].Target = FindBestEnemyTarget(i);
                     goto default;
                 }
 
                 case AIBehavior.MoveToPoint:
                 {
-                    var toTarget = _units.MoveTarget[i] - _units.Position[i];
+                    var toTarget = _units[i].MoveTarget - _units[i].Position;
                     if (toTarget.LengthSq() > 1f)
                     {
-                        int sizeTier = TerrainCosts.SizeToTier(_units.Size[i]);
-                        var dir = _pathfinder.GetDirection(_units.Position[i], _units.MoveTarget[i], _frameNumber, sizeTier, i);
-                        _units.PreferredVel[i] = dir * _units.MaxSpeed[i];
+                        int sizeTier = TerrainCosts.SizeToTier(_units[i].Size);
+                        var dir = _pathfinder.GetDirection(_units[i].Position, _units[i].MoveTarget, _frameNumber, sizeTier, i);
+                        _units[i].PreferredVel = dir * _units[i].MaxSpeed;
                     }
                     else
-                        _units.PreferredVel[i] = Vec2.Zero;
+                        _units[i].PreferredVel = Vec2.Zero;
                     break;
                 }
 
@@ -459,20 +459,20 @@ public class Simulation
                     int enemy = FindClosestEnemy(i);
                     if (enemy >= 0)
                     {
-                        float eDist = (_units.Position[enemy] - _units.Position[i]).Length();
+                        float eDist = (_units[enemy].Position - _units[i].Position).Length();
                         if (eDist < 10f)
                         {
-                            _units.Target[i] = CombatTarget.Unit(_units.Id[enemy]);
-                            MoveTowardUnit(i, enemy, _units.MaxSpeed[i]);
+                            _units[i].Target = CombatTarget.Unit(_units[enemy].Id);
+                            MoveTowardUnit(i, enemy, _units[i].MaxSpeed);
                             break;
                         }
                     }
                     // Return to idle point
-                    var toIdle = _units.MoveTarget[i] - _units.Position[i];
+                    var toIdle = _units[i].MoveTarget - _units[i].Position;
                     if (toIdle.LengthSq() > 4f)
-                        MoveTowardPosition(i, _units.MoveTarget[i], _units.MaxSpeed[i] * 0.5f);
+                        MoveTowardPosition(i, _units[i].MoveTarget, _units[i].MaxSpeed * 0.5f);
                     else
-                        _units.PreferredVel[i] = Vec2.Zero;
+                        _units[i].PreferredVel = Vec2.Zero;
                     break;
                 }
 
@@ -480,18 +480,18 @@ public class Simulation
                 {
                     // Move along patrol route waypoints
                     // For now, just move to moveTarget (first waypoint)
-                    var toTarget = _units.MoveTarget[i] - _units.Position[i];
+                    var toTarget = _units[i].MoveTarget - _units[i].Position;
                     if (toTarget.LengthSq() > 1f)
-                        MoveTowardPosition(i, _units.MoveTarget[i], _units.MaxSpeed[i]);
+                        MoveTowardPosition(i, _units[i].MoveTarget, _units[i].MaxSpeed);
                     else
-                        _units.PreferredVel[i] = Vec2.Zero;
+                        _units[i].PreferredVel = Vec2.Zero;
 
                     // Fight nearby enemies
                     int nearEnemy = FindClosestEnemy(i);
-                    if (nearEnemy >= 0 && (_units.Position[nearEnemy] - _units.Position[i]).Length() < 8f)
+                    if (nearEnemy >= 0 && (_units[nearEnemy].Position - _units[i].Position).Length() < 8f)
                     {
-                        _units.Target[i] = CombatTarget.Unit(_units.Id[nearEnemy]);
-                        MoveTowardUnit(i, nearEnemy, _units.MaxSpeed[i]);
+                        _units[i].Target = CombatTarget.Unit(_units[nearEnemy].Id);
+                        MoveTowardUnit(i, nearEnemy, _units[i].MaxSpeed);
                     }
                     break;
                 }
@@ -499,39 +499,39 @@ public class Simulation
                 case AIBehavior.Raid:
                 {
                     // Attack-move toward target, call friends
-                    if (!IsTargetAlive(_units.Target[i]))
-                        _units.Target[i] = FindBestEnemyTarget(i);
-                    if (_units.Target[i].IsUnit)
+                    if (!IsTargetAlive(_units[i].Target))
+                        _units[i].Target = FindBestEnemyTarget(i);
+                    if (_units[i].Target.IsUnit)
                     {
-                        int ti = ResolveUnitTarget(_units.Target[i]);
-                        if (ti >= 0) MoveTowardUnit(i, ti, _units.MaxSpeed[i]);
-                        else _units.PreferredVel[i] = Vec2.Zero;
+                        int ti = ResolveUnitTarget(_units[i].Target);
+                        if (ti >= 0) MoveTowardUnit(i, ti, _units[i].MaxSpeed);
+                        else _units[i].PreferredVel = Vec2.Zero;
                     }
                     else
                     {
                         // Move toward moveTarget (raid destination)
-                        var toTarget = _units.MoveTarget[i] - _units.Position[i];
+                        var toTarget = _units[i].MoveTarget - _units[i].Position;
                         if (toTarget.LengthSq() > 1f)
-                            MoveTowardPosition(i, _units.MoveTarget[i], _units.MaxSpeed[i]);
+                            MoveTowardPosition(i, _units[i].MoveTarget, _units[i].MaxSpeed);
                         else
-                            _units.PreferredVel[i] = Vec2.Zero;
+                            _units[i].PreferredVel = Vec2.Zero;
                     }
                     break;
                 }
 
                 case AIBehavior.Caster:
                 {
-                    _units.PreferredVel[i] = Vec2.Zero;
+                    _units[i].PreferredVel = Vec2.Zero;
 
                     // Tick mana regen
-                    _units.Mana[i] = MathF.Min(_units.MaxMana[i], _units.Mana[i] + _units.ManaRegen[i] * dt);
+                    _units[i].Mana = MathF.Min(_units[i].MaxMana, _units[i].Mana + _units[i].ManaRegen * dt);
 
                     // Tick spell cooldown
-                    _units.SpellCooldownTimer[i] = MathF.Max(0f, _units.SpellCooldownTimer[i] - dt);
+                    _units[i].SpellCooldownTimer = MathF.Max(0f, _units[i].SpellCooldownTimer - dt);
 
                     // No spell or no mana pool — idle
-                    string spellId = _units.SpellID[i];
-                    if (string.IsNullOrEmpty(spellId) || _units.MaxMana[i] <= 0f) break;
+                    string spellId = _units[i].SpellID;
+                    if (string.IsNullOrEmpty(spellId) || _units[i].MaxMana <= 0f) break;
 
                     // Look up spell definition
                     var spell = _gameData?.Spells.Get(spellId);
@@ -541,10 +541,10 @@ public class Simulation
                     int enemy = FindClosestEnemy(i);
                     if (enemy >= 0)
                     {
-                        float dist = (_units.Position[enemy] - _units.Position[i]).Length();
+                        float dist = (_units[enemy].Position - _units[i].Position).Length();
                         if (dist <= spell.Range &&
-                            _units.Mana[i] >= spell.ManaCost &&
-                            _units.SpellCooldownTimer[i] <= 0f)
+                            _units[i].Mana >= spell.ManaCost &&
+                            _units[i].SpellCooldownTimer <= 0f)
                         {
                             // Cast the spell — spawn strike at target
                             var style = new LightningStyle
@@ -568,18 +568,18 @@ public class Simulation
                             if (spell.StrikeTargetUnit)
                             {
                                 // Instant zap: caster hand to target unit
-                                Vec2 casterPos = _units.EffectSpawnPos2D[i];
-                                float casterHeight = _units.EffectSpawnHeight[i];
-                                Vec2 targetPos = _units.Position[enemy];
+                                Vec2 casterPos = _units[i].EffectSpawnPos2D;
+                                float casterHeight = _units[i].EffectSpawnHeight;
+                                Vec2 targetPos = _units[enemy].Position;
 
                                 // Target center of sprite body instead of feet
                                 float targetH = 1.8f;
                                 if (_gameData != null)
                                 {
-                                    var tDef = _gameData.Units.Get(_units.UnitDefID[enemy]);
+                                    var tDef = _gameData.Units.Get(_units[enemy].UnitDefID);
                                     if (tDef != null) targetH = tDef.SpriteWorldHeight;
                                 }
-                                targetH *= _units.SpriteScale[enemy];
+                                targetH *= _units[enemy].SpriteScale;
 
                                 _lightning.SpawnZap(casterPos, targetPos, spell.ZapDuration, style,
                                     casterHeight, targetH * 0.5f);
@@ -590,13 +590,13 @@ public class Simulation
                             else
                             {
                                 // Sky lightning strike: telegraph then AOE
-                                _lightning.SpawnStrike(_units.Position[enemy],
+                                _lightning.SpawnStrike(_units[enemy].Position,
                                     spell.TelegraphDuration, spell.StrikeDuration,
                                     spell.AoeRadius, spell.Damage, style, spell.Id, visual, grp, tFilter);
                             }
 
-                            _units.Mana[i] -= spell.ManaCost;
-                            _units.SpellCooldownTimer[i] = spell.Cooldown;
+                            _units[i].Mana -= spell.ManaCost;
+                            _units[i].SpellCooldownTimer = spell.Cooldown;
 
                             // Apply casting buff
                             if (!string.IsNullOrEmpty(spell.CastingBuffID) && _gameData != null)
@@ -606,9 +606,9 @@ public class Simulation
                             }
 
                             // Face target
-                            var toEnemy = _units.Position[enemy] - _units.Position[i];
+                            var toEnemy = _units[enemy].Position - _units[i].Position;
                             if (toEnemy.LengthSq() > 0.01f)
-                                _units.FacingAngle[i] = MathF.Atan2(toEnemy.Y, toEnemy.X) * 180f / MathF.PI;
+                                _units[i].FacingAngle = MathF.Atan2(toEnemy.Y, toEnemy.X) * 180f / MathF.PI;
                         }
                     }
                     break;
@@ -617,7 +617,7 @@ public class Simulation
                 case AIBehavior.CorpseWorker:
                 {
                     // Find corpses, drag to buildings — simplified for now
-                    _units.PreferredVel[i] = Vec2.Zero;
+                    _units[i].PreferredVel = Vec2.Zero;
                     break;
                 }
 
@@ -627,53 +627,53 @@ public class Simulation
                     const float OrderEngageRange = 15f;
                     const float OrderArrivalDist = 5f;
 
-                    Vec2 dest = _units.MoveTarget[i];
-                    float distToDest = (_units.Position[i] - dest).Length();
+                    Vec2 dest = _units[i].MoveTarget;
+                    float distToDest = (_units[i].Position - dest).Length();
                     bool atDest = distToDest < OrderArrivalDist;
 
                     // Acquire/validate target
-                    if (!IsTargetAlive(_units.Target[i]))
+                    if (!IsTargetAlive(_units[i].Target))
                     {
                         int enemy = FindClosestEnemy(i);
                         if (enemy >= 0)
                         {
-                            float eDist = (_units.Position[enemy] - _units.Position[i]).Length();
+                            float eDist = (_units[enemy].Position - _units[i].Position).Length();
                             if (eDist < OrderEngageRange)
-                                _units.Target[i] = CombatTarget.Unit(_units.Id[enemy]);
+                                _units[i].Target = CombatTarget.Unit(_units[enemy].Id);
                             else
-                                _units.Target[i] = CombatTarget.None;
+                                _units[i].Target = CombatTarget.None;
                         }
                     }
 
-                    if (IsTargetAlive(_units.Target[i]) && _units.Target[i].IsUnit)
+                    if (IsTargetAlive(_units[i].Target) && _units[i].Target.IsUnit)
                     {
-                        int ti = ResolveUnitTarget(_units.Target[i]);
-                        if (ti >= 0) MoveTowardUnit(i, ti, _units.MaxSpeed[i]);
-                        else _units.PreferredVel[i] = Vec2.Zero;
+                        int ti = ResolveUnitTarget(_units[i].Target);
+                        if (ti >= 0) MoveTowardUnit(i, ti, _units[i].MaxSpeed);
+                        else _units[i].PreferredVel = Vec2.Zero;
                     }
                     else if (!atDest)
                     {
                         // March toward destination
-                        MoveTowardPosition(i, dest, _units.MaxSpeed[i]);
+                        MoveTowardPosition(i, dest, _units[i].MaxSpeed);
                     }
                     else
                     {
                         // At destination with no enemies — return to horde
-                        _units.AI[i] = AIBehavior.AttackClosest;
-                        _units.Target[i] = CombatTarget.None;
-                        _horde.AddUnit(_units.Id[i]);
-                        _units.PreferredVel[i] = Vec2.Zero;
+                        _units[i].AI = AIBehavior.AttackClosest;
+                        _units[i].Target = CombatTarget.None;
+                        _horde.AddUnit(_units[i].Id);
+                        _units[i].PreferredVel = Vec2.Zero;
                     }
                     break;
                 }
 
                 case AIBehavior.AttackClosestRetarget:
                 {
-                    _units.RetargetTimer[i] -= dt;
-                    if (_units.RetargetTimer[i] <= 0f || !IsTargetAlive(_units.Target[i]))
+                    _units[i].RetargetTimer -= dt;
+                    if (_units[i].RetargetTimer <= 0f || !IsTargetAlive(_units[i].Target))
                     {
-                        _units.Target[i] = FindBestEnemyTarget(i);
-                        _units.RetargetTimer[i] = 2f;
+                        _units[i].Target = FindBestEnemyTarget(i);
+                        _units[i].RetargetTimer = 2f;
                     }
                     goto default;
                 }
@@ -682,70 +682,70 @@ public class Simulation
                 {
                     // Deer-like behavior: idle normally, flee when hit at effect time
                     if (_frameNumber % 120 == 0)
-                        DebugLog.Log("ai", $"FleeWhenHit unit {i}: LastAttacker={_units.LastAttackerID[i]}, FleeTimer={_units.FleeTimer[i]:F1}, InCombat={_units.InCombat[i]}, HP={_units.Stats[i].HP}");
+                        DebugLog.Log("ai", $"FleeWhenHit unit {i}: LastAttacker={_units[i].LastAttackerID}, FleeTimer={_units[i].FleeTimer:F1}, InCombat={_units[i].InCombat}, HP={_units[i].Stats.HP}");
 
-                    if (_units.FleeTimer[i] > 0)
+                    if (_units[i].FleeTimer > 0)
                     {
                         // Currently fleeing — force disengage
                         Disengage(i);
-                        _units.EngagedTarget[i] = CombatTarget.None;
+                        _units[i].EngagedTarget = CombatTarget.None;
 
-                        _units.FleeTimer[i] -= dt;
-                        int attackerIdx = UnitUtil.ResolveUnitIndex(_units, _units.LastAttackerID[i]);
+                        _units[i].FleeTimer -= dt;
+                        int attackerIdx = UnitUtil.ResolveUnitIndex(_units, _units[i].LastAttackerID);
                         if (attackerIdx >= 0)
                         {
-                            Vec2 awayDir = (_units.Position[i] - _units.Position[attackerIdx]);
+                            Vec2 awayDir = (_units[i].Position - _units[attackerIdx].Position);
                             float dist = awayDir.Length();
                             if (dist > 15f)
                             {
-                                _units.FleeTimer[i] = 0;
-                                _units.LastAttackerID[i] = GameConstants.InvalidUnit;
-                                _units.PreferredVel[i] = Vec2.Zero;
+                                _units[i].FleeTimer = 0;
+                                _units[i].LastAttackerID = GameConstants.InvalidUnit;
+                                _units[i].PreferredVel = Vec2.Zero;
                             }
                             else
                             {
                                 awayDir = dist > 0.01f ? awayDir * (1f / dist) : new Vec2(1, 0);
                                 // Pathfind to a point far away from the attacker
-                                Vec2 fleeDest = _units.Position[i] + awayDir * 15f;
-                                MoveTowardPosition(i, fleeDest, _units.MaxSpeed[i]);
+                                Vec2 fleeDest = _units[i].Position + awayDir * 15f;
+                                MoveTowardPosition(i, fleeDest, _units[i].MaxSpeed);
                             }
                         }
                         else
                         {
-                            _units.FleeTimer[i] = 0;
-                            _units.LastAttackerID[i] = GameConstants.InvalidUnit;
-                            _units.PreferredVel[i] = Vec2.Zero;
+                            _units[i].FleeTimer = 0;
+                            _units[i].LastAttackerID = GameConstants.InvalidUnit;
+                            _units[i].PreferredVel = Vec2.Zero;
                         }
                     }
-                    else if (_units.LastAttackerID[i] != GameConstants.InvalidUnit)
+                    else if (_units[i].LastAttackerID != GameConstants.InvalidUnit)
                     {
                         // Got hit — check if we can flee now or need to queue
-                        if (_units.PostAttackTimer[i] > 0f || !_units.PendingAttack[i].IsNone)
+                        if (_units[i].PostAttackTimer > 0f || !_units[i].PendingAttack.IsNone)
                         {
                             // Mid-attack: queue flee for when we're free
-                            _units.QueuedAction[i] = QueuedUnitAction.Flee;
+                            _units[i].QueuedAction = QueuedUnitAction.Flee;
                         }
                         else
                         {
                             // Free to flee now
-                            _units.FleeTimer[i] = 5f;
+                            _units[i].FleeTimer = 5f;
                             Disengage(i);
-                            _units.EngagedTarget[i] = CombatTarget.None;
+                            _units[i].EngagedTarget = CombatTarget.None;
                         }
                     }
-                    else if (_units.QueuedAction[i] == QueuedUnitAction.Flee
-                             && _units.PostAttackTimer[i] <= 0f
-                             && _units.PendingAttack[i].IsNone)
+                    else if (_units[i].QueuedAction == QueuedUnitAction.Flee
+                             && _units[i].PostAttackTimer <= 0f
+                             && _units[i].PendingAttack.IsNone)
                     {
                         // Queued flee — now free to execute
-                        _units.QueuedAction[i] = QueuedUnitAction.None;
-                        _units.FleeTimer[i] = 5f;
+                        _units[i].QueuedAction = QueuedUnitAction.None;
+                        _units[i].FleeTimer = 5f;
                         Disengage(i);
-                        _units.EngagedTarget[i] = CombatTarget.None;
+                        _units[i].EngagedTarget = CombatTarget.None;
                     }
                     else
                     {
-                        _units.PreferredVel[i] = Vec2.Zero; // idle
+                        _units[i].PreferredVel = Vec2.Zero; // idle
                     }
                     break;
                 }
@@ -753,40 +753,40 @@ public class Simulation
                 case AIBehavior.NeutralFightBack:
                 {
                     // Neutral: ignore enemies unless hit, then fight attacker
-                    if (_units.LastAttackerID[i] != GameConstants.InvalidUnit)
+                    if (_units[i].LastAttackerID != GameConstants.InvalidUnit)
                     {
                         // We've been hit before — fight the attacker (or any enemy if attacker dead)
-                        if (!IsTargetAlive(_units.Target[i]))
+                        if (!IsTargetAlive(_units[i].Target))
                         {
-                            int attackerIdx = UnitUtil.ResolveUnitIndex(_units, _units.LastAttackerID[i]);
-                            if (attackerIdx >= 0 && _units.Alive[attackerIdx])
-                                _units.Target[i] = CombatTarget.Unit(_units.LastAttackerID[i]);
+                            int attackerIdx = UnitUtil.ResolveUnitIndex(_units, _units[i].LastAttackerID);
+                            if (attackerIdx >= 0 && _units[attackerIdx].Alive)
+                                _units[i].Target = CombatTarget.Unit(_units[i].LastAttackerID);
                             else
-                                _units.Target[i] = FindBestEnemyTarget(i);
+                                _units[i].Target = FindBestEnemyTarget(i);
                         }
 
-                        if (_units.Target[i].IsUnit)
+                        if (_units[i].Target.IsUnit)
                         {
-                            int targetIdx = ResolveUnitTarget(_units.Target[i]);
+                            int targetIdx = ResolveUnitTarget(_units[i].Target);
                             if (targetIdx >= 0)
                             {
-                                MoveTowardUnit(i, targetIdx, _units.MaxSpeed[i]);
+                                MoveTowardUnit(i, targetIdx, _units[i].MaxSpeed);
                                 // Engage when in range
-                                float dist = (_units.Position[targetIdx] - _units.Position[i]).Length();
+                                float dist = (_units[targetIdx].Position - _units[i].Position).Length();
                                 float engageRange = (_gameData?.Settings.Combat.MeleeRange ?? MeleeRangeBase)
-                                    + _units.Stats[i].Length * 0.15f + _units.Radius[i] + _units.Radius[targetIdx];
-                                if (dist <= engageRange && _units.EngagedTarget[i].IsNone)
-                                    _units.EngagedTarget[i] = _units.Target[i];
+                                    + _units[i].Stats.Length * 0.15f + _units[i].Radius + _units[targetIdx].Radius;
+                                if (dist <= engageRange && _units[i].EngagedTarget.IsNone)
+                                    _units[i].EngagedTarget = _units[i].Target;
                             }
                             else
-                                _units.PreferredVel[i] = Vec2.Zero;
+                                _units[i].PreferredVel = Vec2.Zero;
                         }
                         else
-                            _units.PreferredVel[i] = Vec2.Zero;
+                            _units[i].PreferredVel = Vec2.Zero;
                     }
                     else
                     {
-                        _units.PreferredVel[i] = Vec2.Zero; // peaceful until provoked
+                        _units[i].PreferredVel = Vec2.Zero; // peaceful until provoked
                     }
                     break;
                 }
@@ -802,88 +802,88 @@ public class Simulation
 
                 default:
                 {
-                    bool inHorde = _units.Faction[i] == Faction.Undead && _horde.IsInHorde(_units.Id[i]);
-                    var hordeState = inHorde ? _horde.GetUnitState(_units.Id[i]) : HordeUnitState.Following;
+                    bool inHorde = _units[i].Faction == Faction.Undead && _horde.IsInHorde(_units[i].Id);
+                    var hordeState = inHorde ? _horde.GetUnitState(_units[i].Id) : HordeUnitState.Following;
 
                     // Returning horde units: drop target, move back to slot
                     if (inHorde && hordeState == HordeUnitState.Returning)
                     {
-                        _units.Target[i] = CombatTarget.None;
-                        _units.EngagedTarget[i] = CombatTarget.None;
-                        _units.InCombat[i] = false;
-                        _units.PendingAttack[i] = CombatTarget.None;
-                        if (_horde.GetTargetPosition(_units.Id[i], out var returnSlot))
+                        _units[i].Target = CombatTarget.None;
+                        _units[i].EngagedTarget = CombatTarget.None;
+                        _units[i].InCombat = false;
+                        _units[i].PendingAttack = CombatTarget.None;
+                        if (_horde.GetTargetPosition(_units[i].Id, out var returnSlot))
                         {
-                            float distToSlot = (_units.Position[i] - returnSlot).Length();
+                            float distToSlot = (_units[i].Position - returnSlot).Length();
                             if (distToSlot > 0.5f)
-                                MoveTowardPosition(i, returnSlot, _units.MaxSpeed[i] * _horde.Settings.ReturnSpeedMult);
+                                MoveTowardPosition(i, returnSlot, _units[i].MaxSpeed * _horde.Settings.ReturnSpeedMult);
                             else
-                                _units.PreferredVel[i] = Vec2.Zero;
+                                _units[i].PreferredVel = Vec2.Zero;
                         }
                         else
-                            _units.PreferredVel[i] = Vec2.Zero;
+                            _units[i].PreferredVel = Vec2.Zero;
                         break;
                     }
 
                     // Sync horde chasing target to unit target
                     if (inHorde && hordeState == HordeUnitState.Chasing)
                     {
-                        uint chasingId = _horde.GetChasingTarget(_units.Id[i]);
+                        uint chasingId = _horde.GetChasingTarget(_units[i].Id);
                         if (chasingId != GameConstants.InvalidUnit)
                         {
-                            _units.Target[i] = CombatTarget.Unit(chasingId);
+                            _units[i].Target = CombatTarget.Unit(chasingId);
                             if (_frameNumber % 60 == 0)
                             {
                                 int tIdx = UnitUtil.ResolveUnitIndex(_units, chasingId);
-                                float cDist = tIdx >= 0 ? (_units.Position[tIdx] - _units.Position[i]).Length() : -1;
-                                Core.DebugLog.Log("horde", $"Unit {i} Chasing target={chasingId} tIdx={tIdx} dist={cDist:F1} vel={_units.PreferredVel[i].Length():F1}");
+                                float cDist = tIdx >= 0 ? (_units[tIdx].Position - _units[i].Position).Length() : -1;
+                                Core.DebugLog.Log("horde", $"Unit {i} Chasing target={chasingId} tIdx={tIdx} dist={cDist:F1} vel={_units[i].PreferredVel.Length():F1}");
                             }
                         }
                     }
 
                     // Acquire new target (range-limited for horde units)
-                    if (!IsTargetAlive(_units.Target[i]))
+                    if (!IsTargetAlive(_units[i].Target))
                     {
                         if (inHorde)
                         {
                             int nearby = FindClosestEnemy(i, _horde.Settings.EngagementRange);
-                            _units.Target[i] = nearby >= 0 ? CombatTarget.Unit(_units.Id[nearby]) : CombatTarget.None;
+                            _units[i].Target = nearby >= 0 ? CombatTarget.Unit(_units[nearby].Id) : CombatTarget.None;
                         }
                         else
-                            _units.Target[i] = FindBestEnemyTarget(i);
+                            _units[i].Target = FindBestEnemyTarget(i);
                     }
 
-                    if (_units.Target[i].IsUnit)
+                    if (_units[i].Target.IsUnit)
                     {
-                        int targetIdx = ResolveUnitTarget(_units.Target[i]);
+                        int targetIdx = ResolveUnitTarget(_units[i].Target);
                         if (targetIdx >= 0)
                         {
-                            MoveTowardUnit(i, targetIdx, _units.MaxSpeed[i]);
+                            MoveTowardUnit(i, targetIdx, _units[i].MaxSpeed);
                             // Auto-engage when in melee range
-                            float dist = (_units.Position[targetIdx] - _units.Position[i]).Length();
+                            float dist = (_units[targetIdx].Position - _units[i].Position).Length();
                             float engageRange = (_gameData?.Settings.Combat.MeleeRange ?? MeleeRangeBase)
-                                + _units.Stats[i].Length * 0.15f + _units.Radius[i] + _units.Radius[targetIdx];
-                            if (dist <= engageRange && _units.EngagedTarget[i].IsNone)
-                                _units.EngagedTarget[i] = _units.Target[i];
+                                + _units[i].Stats.Length * 0.15f + _units[i].Radius + _units[targetIdx].Radius;
+                            if (dist <= engageRange && _units[i].EngagedTarget.IsNone)
+                                _units[i].EngagedTarget = _units[i].Target;
                         }
                         else
-                            _units.PreferredVel[i] = Vec2.Zero;
+                            _units[i].PreferredVel = Vec2.Zero;
                     }
                     else
                     {
                         // No combat target — clear engagement
-                        _units.EngagedTarget[i] = CombatTarget.None;
+                        _units[i].EngagedTarget = CombatTarget.None;
                         // Follow horde slot position if in horde
-                        if (inHorde && _horde.GetTargetPosition(_units.Id[i], out var slotPos))
+                        if (inHorde && _horde.GetTargetPosition(_units[i].Id, out var slotPos))
                         {
-                            float distToSlot = (_units.Position[i] - slotPos).Length();
+                            float distToSlot = (_units[i].Position - slotPos).Length();
                             if (distToSlot > 0.5f)
-                                MoveTowardPosition(i, slotPos, _units.MaxSpeed[i]);
+                                MoveTowardPosition(i, slotPos, _units[i].MaxSpeed);
                             else
-                                _units.PreferredVel[i] = Vec2.Zero;
+                                _units[i].PreferredVel = Vec2.Zero;
                         }
                         else
-                            _units.PreferredVel[i] = Vec2.Zero;
+                            _units[i].PreferredVel = Vec2.Zero;
                     }
                     break;
                 }
@@ -899,96 +899,96 @@ public class Simulation
 
         for (int i = 0; i < _units.Count; i++)
         {
-            if (!_units.Alive[i]) continue;
+            if (!_units[i].Alive) continue;
             // Movement blocked by: jumping, knockdown, standup, pending attack, or post-attack lockout
-            if (_units.Jumping[i] || _units.KnockdownTimer[i] > 0f || _units.StandupTimer[i] > 0f
-                || !_units.PendingAttack[i].IsNone || _units.PostAttackTimer[i] > 0f)
+            if (_units[i].Jumping || _units[i].KnockdownTimer > 0f || _units[i].StandupTimer > 0f
+                || !_units[i].PendingAttack.IsNone || _units[i].PostAttackTimer > 0f)
             {
-                _units.Velocity[i] = Vec2.Zero;
-                _units.MoveTime[i] = 0f;
+                _units[i].Velocity = Vec2.Zero;
+                _units[i].MoveTime = 0f;
                 continue;
             }
 
             // Ghost mode: skip ORCA
-            if (_units.GhostMode[i])
+            if (_units[i].GhostMode)
             {
-                _units.Velocity[i] = _units.PreferredVel[i];
-                _units.Position[i] += _units.Velocity[i] * dt;
+                _units[i].Velocity = _units[i].PreferredVel;
+                _units[i].Position += _units[i].Velocity * dt;
                 continue;
             }
 
             // Build ORCA neighbor list
             neighbors.Clear();
             nearbyIDs.Clear();
-            float queryRadius = MathF.Max(_units.Radius[i] * 5f, 3f);
-            _quadtree.QueryRadius(_units.Position[i], queryRadius, nearbyIDs);
+            float queryRadius = MathF.Max(_units[i].Radius * 5f, 3f);
+            _quadtree.QueryRadius(_units[i].Position, queryRadius, nearbyIDs);
 
             foreach (uint nid in nearbyIDs)
             {
-                if (nid == _units.Id[i]) continue;
+                if (nid == _units[i].Id) continue;
                 int j = UnitUtil.ResolveUnitIndex(_units, nid);
-                if (j < 0 || !_units.Alive[j]) continue;
+                if (j < 0 || !_units[j].Alive) continue;
 
                 // Necromancer ignores friendly units for ORCA — they dodge around it instead
-                if (_units.AI[i] == AIBehavior.PlayerControlled &&
-                    _units.Faction[j] == _units.Faction[i])
+                if (_units[i].AI == AIBehavior.PlayerControlled &&
+                    _units[j].Faction == _units[i].Faction)
                     continue;
 
                 neighbors.Add(new ORCANeighbor
                 {
-                    Position = _units.Position[j],
-                    Velocity = _units.Velocity[j],
-                    Radius = _units.Radius[j],
+                    Position = _units[j].Position,
+                    Velocity = _units[j].Velocity,
+                    Radius = _units[j].Radius,
                     Id = nid,
-                    Priority = _units.Faction[j] != _units.Faction[i]
-                        ? _units.OrcaPriority[i]  // cross-faction: equal
-                        : _units.OrcaPriority[j]  // same-faction: respect hierarchy
+                    Priority = _units[j].Faction != _units[i].Faction
+                        ? _units[i].OrcaPriority  // cross-faction: equal
+                        : _units[j].OrcaPriority  // same-faction: respect hierarchy
                 });
             }
 
             // Sort by distance, keep closest 10
-            var myPos = _units.Position[i];
+            var myPos = _units[i].Position;
             neighbors.Sort((a, b) => (a.Position - myPos).LengthSq().CompareTo((b.Position - myPos).LengthSq()));
             if (neighbors.Count > 10) neighbors.RemoveRange(10, neighbors.Count - 10);
 
             var param = new ORCAParams
             {
                 TimeHorizon = 3f,
-                MaxSpeed = _units.MaxSpeed[i],
-                Radius = _units.Radius[i],
+                MaxSpeed = _units[i].MaxSpeed,
+                Radius = _units[i].Radius,
                 MaxNeighbors = 10,
-                Priority = _units.OrcaPriority[i]
+                Priority = _units[i].OrcaPriority
             };
 
             Vec2 newVel = Orca.ComputeORCAVelocity(
-                _units.Position[i], _units.Velocity[i], _units.PreferredVel[i],
+                _units[i].Position, _units[i].Velocity, _units[i].PreferredVel,
                 neighbors, param, dt);
 
             // Stuck detection + perpendicular nudge
             float speed = newVel.Length();
-            float prefSpeed = _units.PreferredVel[i].Length();
-            if (prefSpeed > 0.1f && speed < 0.1f * _units.MaxSpeed[i])
+            float prefSpeed = _units[i].PreferredVel.Length();
+            if (prefSpeed > 0.1f && speed < 0.1f * _units[i].MaxSpeed)
             {
-                _units.StuckFrames[i]++;
-                if (_units.StuckFrames[i] > 20)
+                _units[i].StuckFrames++;
+                if (_units[i].StuckFrames > 20)
                 {
                     // Compute perpendicular to preferred velocity
-                    Vec2 prefDir = _units.PreferredVel[i] * (1f / prefSpeed);
+                    Vec2 prefDir = _units[i].PreferredVel * (1f / prefSpeed);
                     Vec2 perp = (i % 2 == 0)
                         ? new Vec2(-prefDir.Y, prefDir.X)
                         : new Vec2(prefDir.Y, -prefDir.X);
 
                     // Blend ramps from 30% at 1s (frame 60) to 80% at 2s (frame 120)
-                    float t = MathUtil.Clamp((_units.StuckFrames[i] - 20) / 100f, 0f, 1f);
+                    float t = MathUtil.Clamp((_units[i].StuckFrames - 20) / 100f, 0f, 1f);
                     float blend = 0.3f + t * 0.5f;
 
-                    newVel = _units.PreferredVel[i] * (1f - blend) + perp * (prefSpeed * blend);
+                    newVel = _units[i].PreferredVel * (1f - blend) + perp * (prefSpeed * blend);
                     speed = newVel.Length();
                 }
             }
             else
             {
-                _units.StuckFrames[i] = 0;
+                _units[i].StuckFrames = 0;
             }
 
             // --- Turn penalty: reduce MoveTime when changing direction ---
@@ -997,10 +997,10 @@ public class Simulation
             // proportionally, so the unit must re-accelerate after sharp turns.
             // NOTE: To disable turn penalty for player, change this condition:
             float targetSpeed = newVel.Length();
-            bool applyTurnPenalty = _units.AI[i] != AIBehavior.PlayerControlled;
-            if (applyTurnPenalty && targetSpeed > 0.001f && _units.Velocity[i].LengthSq() > 0.01f)
+            bool applyTurnPenalty = _units[i].AI != AIBehavior.PlayerControlled;
+            if (applyTurnPenalty && targetSpeed > 0.001f && _units[i].Velocity.LengthSq() > 0.01f)
             {
-                Vec2 oldDir = _units.Velocity[i].Normalized();
+                Vec2 oldDir = _units[i].Velocity.Normalized();
                 Vec2 newDir = newVel * (1f / targetSpeed);
                 // dot = cos(angle), clamp for safety
                 float dot = MathUtil.Clamp(oldDir.X * newDir.X + oldDir.Y * newDir.Y, -1f, 1f);
@@ -1017,7 +1017,7 @@ public class Simulation
                     t = MathUtil.Clamp(t, 0f, 1f);
                     // Smoothstep-ish: gentle at small angles, aggressive at large
                     float penalty = t * t * (3f - 2f * t); // smoothstep [0,1]
-                    _units.MoveTime[i] *= (1f - penalty);
+                    _units[i].MoveTime *= (1f - penalty);
                 }
             }
 
@@ -1026,30 +1026,30 @@ public class Simulation
             // k derived from accelHalfTime: k = -ln(0.5) / accelHalfTime
             if (targetSpeed > 0.001f)
             {
-                _units.MoveTime[i] += dt;
+                _units[i].MoveTime += dt;
 
-                var accelDef = _gameData?.Units.Get(_units.UnitDefID[i]);
+                var accelDef = _gameData?.Units.Get(_units[i].UnitDefID);
                 float accelHalfTime = accelDef?.AccelHalfTime ?? _gameData?.Settings.Combat.AccelHalfTime ?? 1.2f;
                 float accelK = 0.6931f / accelHalfTime; // ln(2) / halfTime
                 // Player-controlled gets instant acceleration
-                float speedFraction = _units.AI[i] == AIBehavior.PlayerControlled
+                float speedFraction = _units[i].AI == AIBehavior.PlayerControlled
                     ? 1f
-                    : 1f - MathF.Exp(-accelK * _units.MoveTime[i]);
-                float finalSpeed = MathF.Min(targetSpeed, _units.MaxSpeed[i] * speedFraction);
-                _units.Velocity[i] = (newVel * (1f / targetSpeed)) * finalSpeed;
+                    : 1f - MathF.Exp(-accelK * _units[i].MoveTime);
+                float finalSpeed = MathF.Min(targetSpeed, _units[i].MaxSpeed * speedFraction);
+                _units[i].Velocity = (newVel * (1f / targetSpeed)) * finalSpeed;
             }
             else
             {
                 // Stopped — reset acceleration (no deceleration)
-                _units.MoveTime[i] = 0f;
-                _units.Velocity[i] = Vec2.Zero;
+                _units[i].MoveTime = 0f;
+                _units[i].Velocity = Vec2.Zero;
             }
 
             // Move with wall collision (axis-independent, gap probes, wall sliding)
-            Vec2 oldPos = _units.Position[i];
-            Vec2 delta = _units.Velocity[i] * dt;
+            Vec2 oldPos = _units[i].Position;
+            Vec2 delta = _units[i].Velocity * dt;
             // Wall collision uses smaller radius than ORCA for 1-tile gap clearance
-            float r = _units.Radius[i] * 0.7f;
+            float r = _units[i].Radius * 0.7f;
 
             // --- Stuck-inside-blocked-tile escape ---
             // If unit's current position overlaps an impassable tile, push toward nearest free tile
@@ -1087,7 +1087,7 @@ public class Simulation
                 if (found)
                 {
                     float dist = MathF.Sqrt(bestDist2);
-                    float pushSpeed = _units.MaxSpeed[i] * 3f;
+                    float pushSpeed = _units[i].MaxSpeed * 3f;
                     float step = pushSpeed * dt;
                     if (dist <= step || dist < 0.1f)
                     {
@@ -1098,7 +1098,7 @@ public class Simulation
                         Vec2 dir = new((bestPos.X - oldPos.X) / dist, (bestPos.Y - oldPos.Y) / dist);
                         oldPos = new Vec2(oldPos.X + dir.X * step, oldPos.Y + dir.Y * step);
                     }
-                    _units.Position[i] = oldPos;
+                    _units[i].Position = oldPos;
                 }
             }
 
@@ -1202,7 +1202,7 @@ public class Simulation
                 }
             }
 
-            _units.Position[i] = newPos;
+            _units[i].Position = newPos;
         }
     }
 
@@ -1225,31 +1225,31 @@ public class Simulation
 
         for (int i = 0; i < _units.Count; i++)
         {
-            if (!_units.Alive[i]) continue;
-            if (_units.StandupTimer[i] > 0f) continue;
+            if (!_units[i].Alive) continue;
+            if (_units[i].StandupTimer > 0f) continue;
 
             // PlayerControlled: facing is set by mouse in Game1, don't override
-            if (_units.AI[i] == AIBehavior.PlayerControlled) continue;
+            if (_units[i].AI == AIBehavior.PlayerControlled) continue;
 
             // Per-unit turn speed override
             float turnSpeed = globalTurnSpeed;
-            var unitDef = _gameData?.Units.Get(_units.UnitDefID[i]);
+            var unitDef = _gameData?.Units.Get(_units[i].UnitDefID);
             if (unitDef?.TurnSpeed.HasValue == true)
                 turnSpeed = unitDef.TurnSpeed.Value;
 
             // Priority 1: Always turn toward engaged target when one is set
-            if (!_units.EngagedTarget[i].IsNone && _units.EngagedTarget[i].IsUnit)
+            if (!_units[i].EngagedTarget.IsNone && _units[i].EngagedTarget.IsUnit)
             {
-                int ti = ResolveUnitTarget(_units.EngagedTarget[i]);
+                int ti = ResolveUnitTarget(_units[i].EngagedTarget);
                 if (ti >= 0)
                 {
-                    Vec2 dir = _units.Position[ti] - _units.Position[i];
+                    Vec2 dir = _units[ti].Position - _units[i].Position;
                     if (dir.LengthSq() > 0.001f)
                     {
                         float targetAngle = MathF.Atan2(dir.Y, dir.X) * Rad2Deg;
-                        float diff = AngleDiff(targetAngle, _units.FacingAngle[i]);
+                        float diff = AngleDiff(targetAngle, _units[i].FacingAngle);
                         float maxTurn = turnSpeed * dt;
-                        _units.FacingAngle[i] += MathUtil.Clamp(diff, -maxTurn, maxTurn);
+                        _units[i].FacingAngle += MathUtil.Clamp(diff, -maxTurn, maxTurn);
                     }
                     continue;
                 }
@@ -1257,15 +1257,15 @@ public class Simulation
 
             // Priority 2: Face movement direction (actual velocity, or intended direction
             // if still accelerating from zero)
-            Vec2 faceDir = _units.Velocity[i];
+            Vec2 faceDir = _units[i].Velocity;
             if (faceDir.LengthSq() < 0.1f)
-                faceDir = _units.PreferredVel[i]; // use intended direction during acceleration ramp-up
+                faceDir = _units[i].PreferredVel; // use intended direction during acceleration ramp-up
             if (faceDir.LengthSq() > 0.1f)
             {
                 float targetAngle = MathF.Atan2(faceDir.Y, faceDir.X) * Rad2Deg;
-                float diff = AngleDiff(targetAngle, _units.FacingAngle[i]);
+                float diff = AngleDiff(targetAngle, _units[i].FacingAngle);
                 float maxTurn = turnSpeed * dt;
-                _units.FacingAngle[i] += MathUtil.Clamp(diff, -maxTurn, maxTurn);
+                _units[i].FacingAngle += MathUtil.Clamp(diff, -maxTurn, maxTurn);
             }
         }
     }
@@ -1286,10 +1286,10 @@ public class Simulation
     private bool IsFacingTarget(int i, int ti)
     {
         float threshold = _gameData?.Settings.Combat.FacingThreshold ?? 60f;
-        Vec2 dir = _units.Position[ti] - _units.Position[i];
+        Vec2 dir = _units[ti].Position - _units[i].Position;
         if (dir.LengthSq() < 0.001f) return true;
         float targetAngle = MathF.Atan2(dir.Y, dir.X) * Rad2Deg;
-        float diff = MathF.Abs(AngleDiff(targetAngle, _units.FacingAngle[i]));
+        float diff = MathF.Abs(AngleDiff(targetAngle, _units[i].FacingAngle));
         return diff <= threshold * 0.5f;
     }
 
@@ -1303,64 +1303,64 @@ public class Simulation
         // Tick down post-attack timers
         for (int i = 0; i < _units.Count; i++)
         {
-            if (_units.PostAttackTimer[i] > 0f)
-                _units.PostAttackTimer[i] = MathF.Max(0f, _units.PostAttackTimer[i] - dt);
+            if (_units[i].PostAttackTimer > 0f)
+                _units[i].PostAttackTimer = MathF.Max(0f, _units[i].PostAttackTimer - dt);
         }
 
         // Derive InCombat from EngagedTarget + range (read-only flag for AI/animation)
         for (int i = 0; i < _units.Count; i++)
         {
-            _units.InCombat[i] = false;
-            if (!_units.Alive[i] || _units.EngagedTarget[i].IsNone) continue;
-            if (!_units.EngagedTarget[i].IsUnit) continue;
-            int ti = ResolveUnitTarget(_units.EngagedTarget[i]);
+            _units[i].InCombat = false;
+            if (!_units[i].Alive || _units[i].EngagedTarget.IsNone) continue;
+            if (!_units[i].EngagedTarget.IsUnit) continue;
+            int ti = ResolveUnitTarget(_units[i].EngagedTarget);
             if (ti < 0)
             {
                 // Target dead or gone — clear engagement
-                _units.EngagedTarget[i] = CombatTarget.None;
+                _units[i].EngagedTarget = CombatTarget.None;
                 continue;
             }
-            float dist = (_units.Position[ti] - _units.Position[i]).Length();
-            float range = meleeRange + _units.Stats[i].Length * 0.15f + _units.Radius[i] + _units.Radius[ti];
+            float dist = (_units[ti].Position - _units[i].Position).Length();
+            float range = meleeRange + _units[i].Stats.Length * 0.15f + _units[i].Radius + _units[ti].Radius;
             if (dist <= range)
-                _units.InCombat[i] = true;
+                _units[i].InCombat = true;
         }
 
         // Attack cooldowns and queuing
         for (int i = 0; i < _units.Count; i++)
         {
-            if (!_units.Alive[i]) continue;
-            _units.AttackCooldown[i] = MathF.Max(0f, _units.AttackCooldown[i] - dt);
+            if (!_units[i].Alive) continue;
+            _units[i].AttackCooldown = MathF.Max(0f, _units[i].AttackCooldown - dt);
 
-            if (_units.KnockdownTimer[i] > 0f) continue;
-            if (!_units.PendingAttack[i].IsNone) continue;
-            if (_units.AttackCooldown[i] > 0f) continue;
-            if (_units.PostAttackTimer[i] > 0f) continue;
+            if (_units[i].KnockdownTimer > 0f) continue;
+            if (!_units[i].PendingAttack.IsNone) continue;
+            if (_units[i].AttackCooldown > 0f) continue;
+            if (_units[i].PostAttackTimer > 0f) continue;
 
             // Must have an engaged target in melee range
-            if (!_units.InCombat[i]) continue;
-            if (_units.EngagedTarget[i].IsNone || !_units.EngagedTarget[i].IsUnit) continue;
+            if (!_units[i].InCombat) continue;
+            if (_units[i].EngagedTarget.IsNone || !_units[i].EngagedTarget.IsUnit) continue;
 
-            int targetIdx = ResolveUnitTarget(_units.EngagedTarget[i]);
+            int targetIdx = ResolveUnitTarget(_units[i].EngagedTarget);
             if (targetIdx < 0) continue;
 
             // Must be facing the target
             if (!IsFacingTarget(i, targetIdx)) continue;
 
             // Queue attack — set lockout and cooldown (per-unit overrides)
-            var unitDef = _gameData?.Units.Get(_units.UnitDefID[i]);
-            _units.PendingAttack[i] = _units.EngagedTarget[i];
-            _units.AttackCooldown[i] = unitDef?.AttackCooldown ?? attackCooldownTime;
-            _units.PostAttackTimer[i] = unitDef?.PostAttackLockout ?? postAttackLockout;
+            var unitDef = _gameData?.Units.Get(_units[i].UnitDefID);
+            _units[i].PendingAttack = _units[i].EngagedTarget;
+            _units[i].AttackCooldown = unitDef?.AttackCooldown ?? attackCooldownTime;
+            _units[i].PostAttackTimer = unitDef?.PostAttackLockout ?? postAttackLockout;
         }
     }
 
     public void ResolvePendingAttack(int unitIdx)
     {
-        if (unitIdx < 0 || unitIdx >= _units.Count || !_units.Alive[unitIdx]) return;
-        var t = _units.PendingAttack[unitIdx];
+        if (unitIdx < 0 || unitIdx >= _units.Count || !_units[unitIdx].Alive) return;
+        var t = _units[unitIdx].PendingAttack;
         if (t.IsNone) return;
-        _units.PendingAttack[unitIdx] = CombatTarget.None;
+        _units[unitIdx].PendingAttack = CombatTarget.None;
 
         if (!t.IsUnit) return;
         int defenderIdx = ResolveUnitTarget(t);
@@ -1371,8 +1371,8 @@ public class Simulation
 
     private void ResolveMeleeAttack(int attackerIdx, int defenderIdx)
     {
-        var atkStats = _units.Stats[attackerIdx];
-        var defStats = _units.Stats[defenderIdx];
+        var atkStats = _units[attackerIdx].Stats;
+        var defStats = _units[defenderIdx].Stats;
 
         int atkDRN = UnitUtil.RollDRN();
         int defDRN = UnitUtil.RollDRN();
@@ -1384,7 +1384,7 @@ public class Simulation
         int effectiveDef = (int)(defStats.Defense * defParalysis);
 
         int modAtk = effectiveAtk + atkDRN;
-        int harassment = _units.Harassment[defenderIdx];
+        int harassment = _units[defenderIdx].Harassment;
         int modDef = effectiveDef - harassment + defDRN;
 
         var logEntry = new CombatLogEntry
@@ -1392,8 +1392,8 @@ public class Simulation
             Timestamp = _gameTime,
             AttackerName = GetUnitDisplayName(attackerIdx),
             DefenderName = GetUnitDisplayName(defenderIdx),
-            AttackerFaction = _units.Faction[attackerIdx] == Faction.Undead ? 'A' : _units.Faction[attackerIdx] == Faction.Animal ? 'C' : 'B',
-            DefenderFaction = _units.Faction[defenderIdx] == Faction.Undead ? 'A' : _units.Faction[defenderIdx] == Faction.Animal ? 'C' : 'B',
+            AttackerFaction = _units[attackerIdx].Faction == Faction.Undead ? 'A' : _units[attackerIdx].Faction == Faction.Animal ? 'C' : 'B',
+            DefenderFaction = _units[defenderIdx].Faction == Faction.Undead ? 'A' : _units[defenderIdx].Faction == Faction.Animal ? 'C' : 'B',
             WeaponName = atkStats.MeleeWeapons.Count > 0 ? atkStats.MeleeWeapons[0].Name : "Unarmed",
             AttackBase = atkStats.Attack,
             AttackDRN = atkDRN,
@@ -1406,8 +1406,8 @@ public class Simulation
 
         if (!hit)
         {
-            _units.Harassment[defenderIdx]++;
-            _units.Dodging[defenderIdx] = true;
+            _units[defenderIdx].Harassment++;
+            _units[defenderIdx].Dodging = true;
             logEntry.Outcome = CombatLogOutcome.Miss;
             _combatLog.AddEntry(logEntry);
             return;
@@ -1415,7 +1415,7 @@ public class Simulation
 
         // Hit location
         int weaponLen = atkStats.MeleeWeapons.Count > 0 ? atkStats.MeleeWeapons[0].Length : atkStats.Length;
-        var hitLoc = UnitUtil.RollHitLocation(_units.Size[attackerIdx], _units.Size[defenderIdx], weaponLen);
+        var hitLoc = UnitUtil.RollHitLocation(_units[attackerIdx].Size, _units[defenderIdx].Size, weaponLen);
 
         // Damage roll — protection varies by hit location (paralysis reduces strength)
         int baseDmg = (int)((atkStats.Strength + atkStats.Damage) * atkParalysis);
@@ -1437,24 +1437,24 @@ public class Simulation
         _combatLog.AddEntry(logEntry);
 
         if (netDmg > 0)
-            _units.HitReacting[defenderIdx] = true;
+            _units[defenderIdx].HitReacting = true;
         else
-            _units.BlockReacting[defenderIdx] = true;
+            _units[defenderIdx].BlockReacting = true;
 
         ApplyDamage(defenderIdx, netDmg, attackerIdx);
 
         // Weapon coats: apply poison and/or zombie-on-death to defender
-        if (hit && defenderIdx >= 0 && defenderIdx < _units.Count && _units.Alive[defenderIdx])
+        if (hit && defenderIdx >= 0 && defenderIdx < _units.Count && _units[defenderIdx].Alive)
         {
-            if (_units.WeaponPoisonCoatTimer[attackerIdx] > 0f && _units.WeaponPoisonAmount[attackerIdx] > 0)
+            if (_units[attackerIdx].WeaponPoisonCoatTimer > 0f && _units[attackerIdx].WeaponPoisonAmount > 0)
             {
-                _units.PoisonStacks[defenderIdx] += _units.WeaponPoisonAmount[attackerIdx];
-                if (_units.PoisonTickTimer[defenderIdx] <= 0f)
-                    _units.PoisonTickTimer[defenderIdx] = 3f;
+                _units[defenderIdx].PoisonStacks += _units[attackerIdx].WeaponPoisonAmount;
+                if (_units[defenderIdx].PoisonTickTimer <= 0f)
+                    _units[defenderIdx].PoisonTickTimer = 3f;
             }
-            if (_units.WeaponZombieCoatTimer[attackerIdx] > 0f)
+            if (_units[attackerIdx].WeaponZombieCoatTimer > 0f)
             {
-                _units.ZombieOnDeath[defenderIdx] = true;
+                _units[defenderIdx].ZombieOnDeath = true;
             }
         }
     }
@@ -1464,59 +1464,59 @@ public class Simulation
 
     private void ApplyDamage(int unitIdx, int damage, int attackerIdx = -1)
     {
-        if (unitIdx < 0 || unitIdx >= _units.Count || !_units.Alive[unitIdx]) return;
+        if (unitIdx < 0 || unitIdx >= _units.Count || !_units[unitIdx].Alive) return;
 
-        _units.Stats[unitIdx].HP -= damage;
+        _units[unitIdx].Stats.HP -= damage;
         if (attackerIdx >= 0 && attackerIdx < _units.Count)
         {
-            _units.LastAttackerID[unitIdx] = _units.Id[attackerIdx];
+            _units[unitIdx].LastAttackerID = _units[attackerIdx].Id;
 
             // Auto-engage with attacker if not already engaged (AI decides in its update)
             // Most AIs will engage; FleeWhenHit will queue flee instead
-            if (_units.EngagedTarget[unitIdx].IsNone
-                && _units.AI[unitIdx] != AIBehavior.FleeWhenHit
-                && _units.AI[unitIdx] != AIBehavior.PlayerControlled)
+            if (_units[unitIdx].EngagedTarget.IsNone
+                && _units[unitIdx].AI != AIBehavior.FleeWhenHit
+                && _units[unitIdx].AI != AIBehavior.PlayerControlled)
             {
-                _units.EngagedTarget[unitIdx] = CombatTarget.Unit(_units.Id[attackerIdx]);
-                _units.Target[unitIdx] = _units.EngagedTarget[unitIdx];
+                _units[unitIdx].EngagedTarget = CombatTarget.Unit(_units[attackerIdx].Id);
+                _units[unitIdx].Target = _units[unitIdx].EngagedTarget;
             }
         }
         _damageEvents.Add(new DamageEvent
         {
-            Position = _units.Position[unitIdx],
+            Position = _units[unitIdx].Position,
             Damage = damage,
             Height = 1.5f
         });
 
-        if (_units.Stats[unitIdx].HP <= 0)
+        if (_units[unitIdx].Stats.HP <= 0)
         {
-            _units.Alive[unitIdx] = false;
-            _units.Stats[unitIdx].HP = 0;
+            _units[unitIdx].Alive = false;
+            _units[unitIdx].Stats.HP = 0;
         }
     }
 
     // --- Helpers ---
     private void MoveTowardUnit(int i, int targetIdx, float speed)
     {
-        MoveTowardPosition(i, _units.Position[targetIdx], speed);
+        MoveTowardPosition(i, _units[targetIdx].Position, speed);
     }
 
     /// <summary>Move unit toward a world position using pathfinding for longer distances.</summary>
     private void MoveTowardPosition(int i, Vec2 targetPos, float speed)
     {
-        Vec2 myPos = _units.Position[i];
+        Vec2 myPos = _units[i].Position;
         float dist = (targetPos - myPos).Length();
 
         if (dist > 3f && _pathfinder != null && _pathfinder.Grid != null)
         {
-            int sizeTier = TerrainCosts.SizeToTier(_units.Size[i]);
+            int sizeTier = TerrainCosts.SizeToTier(_units[i].Size);
             Vec2 dir = _pathfinder.GetDirection(myPos, targetPos, _frameNumber, sizeTier, i);
-            _units.PreferredVel[i] = dir * speed;
+            _units[i].PreferredVel = dir * speed;
         }
         else
         {
             Vec2 dir = dist > 0.01f ? (targetPos - myPos) * (1f / dist) : Vec2.Zero;
-            _units.PreferredVel[i] = dir * speed;
+            _units[i].PreferredVel = dir * speed;
         }
     }
 
@@ -1530,64 +1530,64 @@ public class Simulation
 
     private void UpdateWolfAI(int i, float dt)
     {
-        var ai = _units.AI[i];
+        var ai = _units[i].AI;
         bool isolated = ai == AIBehavior.WolfHitAndRunIsolated || ai == AIBehavior.WolfOpportunistIsolated;
         bool opportunist = ai == AIBehavior.WolfOpportunist || ai == AIBehavior.WolfOpportunistIsolated;
 
         // Debug logging every 2 seconds
         if (_frameNumber % 120 == 0)
         {
-            int tIdx = ResolveUnitTarget(_units.Target[i]);
-            float dbgDist = tIdx >= 0 ? (_units.Position[tIdx] - _units.Position[i]).Length() : -1;
-            DebugLog.Log("ai", $"Wolf unit {i}: phase={_units.WolfPhase[i]} timer={_units.WolfPhaseTimer[i]:F1} " +
-                $"target={_units.Target[i]} dist={dbgDist:F1} cooldown={_units.AttackCooldown[i]:F2} " +
-                $"inCombat={_units.InCombat[i]} vel={_units.PreferredVel[i].Length():F1}");
+            int tIdx = ResolveUnitTarget(_units[i].Target);
+            float dbgDist = tIdx >= 0 ? (_units[tIdx].Position - _units[i].Position).Length() : -1;
+            DebugLog.Log("ai", $"Wolf unit {i}: phase={_units[i].WolfPhase} timer={_units[i].WolfPhaseTimer:F1} " +
+                $"target={_units[i].Target} dist={dbgDist:F1} cooldown={_units[i].AttackCooldown:F2} " +
+                $"inCombat={_units[i].InCombat} vel={_units[i].PreferredVel.Length():F1}");
         }
 
         // Find/validate target with aggro range
-        if (!IsTargetAlive(_units.Target[i]))
+        if (!IsTargetAlive(_units[i].Target))
         {
             if (isolated)
             {
-                _units.Target[i] = FindMostIsolatedEnemy(i); // returns CombatTarget directly
+                _units[i].Target = FindMostIsolatedEnemy(i); // returns CombatTarget directly
             }
             else
             {
                 int found = FindClosestEnemy(i, WolfAggroRange);
-                _units.Target[i] = found >= 0 ? CombatTarget.Unit(_units.Id[found]) : CombatTarget.None;
+                _units[i].Target = found >= 0 ? CombatTarget.Unit(_units[found].Id) : CombatTarget.None;
             }
-            _units.WolfPhase[i] = WolfEngage;
-            _units.WolfPhaseTimer[i] = 0;
+            _units[i].WolfPhase = WolfEngage;
+            _units[i].WolfPhaseTimer = 0;
         }
 
-        int targetIdx = ResolveUnitTarget(_units.Target[i]);
+        int targetIdx = ResolveUnitTarget(_units[i].Target);
         if (targetIdx < 0)
         {
-            _units.PreferredVel[i] = Vec2.Zero;
+            _units[i].PreferredVel = Vec2.Zero;
             return;
         }
 
         // Drop target if beyond break range
-        float breakDist = (_units.Position[targetIdx] - _units.Position[i]).Length();
+        float breakDist = (_units[targetIdx].Position - _units[i].Position).Length();
         if (breakDist > WolfAggroBreakRange)
         {
-            _units.Target[i] = CombatTarget.None;
-            _units.EngagedTarget[i] = CombatTarget.None;
-            _units.WolfPhase[i] = WolfEngage;
-            _units.WolfPhaseTimer[i] = 0;
-            _units.PreferredVel[i] = Vec2.Zero;
+            _units[i].Target = CombatTarget.None;
+            _units[i].EngagedTarget = CombatTarget.None;
+            _units[i].WolfPhase = WolfEngage;
+            _units[i].WolfPhaseTimer = 0;
+            _units[i].PreferredVel = Vec2.Zero;
             return;
         }
 
-        Vec2 myPos = _units.Position[i];
-        Vec2 targetPos = _units.Position[targetIdx];
+        Vec2 myPos = _units[i].Position;
+        Vec2 targetPos = _units[targetIdx].Position;
         float dist = (targetPos - myPos).Length();
         // Use same engage range as the combat system
-        float attackRange = MeleeRangeBase + _units.Stats[i].Length * 0.15f + _units.Radius[i] + _units.Radius[targetIdx];
+        float attackRange = MeleeRangeBase + _units[i].Stats.Length * 0.15f + _units[i].Radius + _units[targetIdx].Radius;
         float disengageDist = attackRange + 2f; // back off 2 units beyond attack range
-        float attackCooldown = _units.AttackCooldown[i];
+        float attackCooldown = _units[i].AttackCooldown;
 
-        switch (_units.WolfPhase[i])
+        switch (_units[i].WolfPhase)
         {
             case WolfEngage:
             {
@@ -1597,34 +1597,34 @@ public class Simulation
                     if (opportunist)
                     {
                         // Check if target is facing away (>100° from us)
-                        if (IsTargetFacingAway(i, targetIdx, 100f) || _units.WolfPhaseTimer[i] > attackCooldown)
+                        if (IsTargetFacingAway(i, targetIdx, 100f) || _units[i].WolfPhaseTimer > attackCooldown)
                         {
                             // Opportunity! Or timeout — attack
-                            _units.WolfPhase[i] = WolfAttacking;
-                            _units.WolfPhaseTimer[i] = 0;
-                            _units.EngagedTarget[i] = _units.Target[i];
+                            _units[i].WolfPhase = WolfAttacking;
+                            _units[i].WolfPhaseTimer = 0;
+                            _units[i].EngagedTarget = _units[i].Target;
                         }
                         else
                         {
                             // Wait for opportunity, circle at edge of range
-                            _units.WolfPhaseTimer[i] += dt;
+                            _units[i].WolfPhaseTimer += dt;
                             Vec2 perp = new Vec2(-(targetPos.Y - myPos.Y), targetPos.X - myPos.X);
                             if (perp.LengthSq() > 0.01f) perp = perp.Normalized();
-                            _units.PreferredVel[i] = perp * _units.MaxSpeed[i] * 0.5f;
+                            _units[i].PreferredVel = perp * _units[i].MaxSpeed * 0.5f;
                         }
                     }
                     else
                     {
                         // Non-opportunist: attack immediately
-                        _units.WolfPhase[i] = WolfAttacking;
-                        _units.WolfPhaseTimer[i] = 0;
-                        _units.EngagedTarget[i] = _units.Target[i];
+                        _units[i].WolfPhase = WolfAttacking;
+                        _units[i].WolfPhaseTimer = 0;
+                        _units[i].EngagedTarget = _units[i].Target;
                     }
                 }
                 else
                 {
-                    MoveTowardUnit(i, targetIdx, _units.MaxSpeed[i]);
-                    if (opportunist) _units.WolfPhaseTimer[i] += dt;
+                    MoveTowardUnit(i, targetIdx, _units[i].MaxSpeed);
+                    if (opportunist) _units[i].WolfPhaseTimer += dt;
                 }
                 break;
             }
@@ -1633,21 +1633,21 @@ public class Simulation
             {
                 // In melee range attacking — let combat system handle the attack
                 // Once attack cooldown starts (we just attacked), transition to disengage
-                if (attackCooldown > 0 && _units.WolfPhaseTimer[i] > 0.2f)
+                if (attackCooldown > 0 && _units[i].WolfPhaseTimer > 0.2f)
                 {
                     // We've been in attack phase long enough and cooldown started → disengage
-                    _units.WolfPhase[i] = WolfDisengage;
-                    _units.WolfPhaseTimer[i] = 0;
-                    _units.EngagedTarget[i] = CombatTarget.None;
+                    _units[i].WolfPhase = WolfDisengage;
+                    _units[i].WolfPhaseTimer = 0;
+                    _units[i].EngagedTarget = CombatTarget.None;
                 }
                 else
                 {
-                    _units.WolfPhaseTimer[i] += dt;
+                    _units[i].WolfPhaseTimer += dt;
                     // Stay near target
                     if (dist > attackRange * 1.5f)
-                        MoveTowardUnit(i, targetIdx, _units.MaxSpeed[i]);
+                        MoveTowardUnit(i, targetIdx, _units[i].MaxSpeed);
                     else
-                        _units.PreferredVel[i] = Vec2.Zero;
+                        _units[i].PreferredVel = Vec2.Zero;
                 }
                 break;
             }
@@ -1655,22 +1655,22 @@ public class Simulation
             case WolfDisengage:
             {
                 // Force-clear engagement and lockout — wolf needs to move immediately
-                _units.EngagedTarget[i] = CombatTarget.None;
-                _units.PendingAttack[i] = CombatTarget.None;
-                _units.PostAttackTimer[i] = 0f;
+                _units[i].EngagedTarget = CombatTarget.None;
+                _units[i].PendingAttack = CombatTarget.None;
+                _units[i].PostAttackTimer = 0f;
 
                 // Back away from target to maintain disengageDist
                 if (dist < disengageDist)
                 {
                     Vec2 awayDir = dist > 0.01f ? (myPos - targetPos) * (1f / dist) : new Vec2(1, 0);
-                    _units.PreferredVel[i] = awayDir * _units.MaxSpeed[i];
+                    _units[i].PreferredVel = awayDir * _units[i].MaxSpeed;
                 }
                 else
                 {
                     // Reached safe distance, wait for cooldown
-                    _units.WolfPhase[i] = WolfWaitCooldown;
-                    _units.WolfPhaseTimer[i] = 0;
-                    _units.PreferredVel[i] = Vec2.Zero;
+                    _units[i].WolfPhase = WolfWaitCooldown;
+                    _units[i].WolfPhaseTimer = 0;
+                    _units[i].PreferredVel = Vec2.Zero;
                 }
                 break;
             }
@@ -1678,20 +1678,20 @@ public class Simulation
             case WolfWaitCooldown:
             {
                 // Force-clear engagement but KEEP our target
-                _units.EngagedTarget[i] = CombatTarget.None;
-                _units.PendingAttack[i] = CombatTarget.None;
+                _units[i].EngagedTarget = CombatTarget.None;
+                _units[i].PendingAttack = CombatTarget.None;
 
                 // Maintain distance, wait for attack cooldown to expire
                 if (dist < disengageDist - 0.5f)
                 {
                     Vec2 awayDir = dist > 0.01f ? (myPos - targetPos) * (1f / dist) : new Vec2(1, 0);
-                    _units.PreferredVel[i] = awayDir * _units.MaxSpeed[i] * 0.5f;
+                    _units[i].PreferredVel = awayDir * _units[i].MaxSpeed * 0.5f;
                 }
                 else if (attackCooldown <= 0)
                 {
                     // Cooldown done — re-engage
-                    _units.WolfPhase[i] = WolfEngage;
-                    _units.WolfPhaseTimer[i] = 0;
+                    _units[i].WolfPhase = WolfEngage;
+                    _units[i].WolfPhaseTimer = 0;
                 }
                 else
                 {
@@ -1699,7 +1699,7 @@ public class Simulation
                     Vec2 toTarget = targetPos - myPos;
                     Vec2 perp = new Vec2(-toTarget.Y, toTarget.X);
                     if (perp.LengthSq() > 0.01f) perp = perp.Normalized();
-                    _units.PreferredVel[i] = perp * _units.MaxSpeed[i] * 0.3f;
+                    _units[i].PreferredVel = perp * _units[i].MaxSpeed * 0.3f;
                 }
                 break;
             }
@@ -1709,9 +1709,9 @@ public class Simulation
     /// <summary>Check if the target is facing away from us by more than angleDeg degrees.</summary>
     private bool IsTargetFacingAway(int unitIdx, int targetIdx, float angleDeg)
     {
-        float targetFacing = _units.FacingAngle[targetIdx] * MathF.PI / 180f;
+        float targetFacing = _units[targetIdx].FacingAngle * MathF.PI / 180f;
         Vec2 targetFacingDir = new Vec2(MathF.Cos(targetFacing), MathF.Sin(targetFacing));
-        Vec2 toUs = _units.Position[unitIdx] - _units.Position[targetIdx];
+        Vec2 toUs = _units[unitIdx].Position - _units[targetIdx].Position;
         if (toUs.LengthSq() < 0.01f) return false;
         toUs = toUs.Normalized();
         // dot product: 1 = facing toward us, -1 = facing away
@@ -1729,16 +1729,16 @@ public class Simulation
 
         for (int j = 0; j < _units.Count; j++)
         {
-            if (!_units.Alive[j] || _units.Faction[j] == _units.Faction[unitIdx]) continue;
-            float dist = (_units.Position[j] - _units.Position[unitIdx]).LengthSq();
+            if (!_units[j].Alive || _units[j].Faction == _units[unitIdx].Faction) continue;
+            float dist = (_units[j].Position - _units[unitIdx].Position).LengthSq();
             if (dist > 40f * 40f) continue; // max acquisition range
 
             // Count allies near this enemy
             int allyCount = 0;
             for (int k = 0; k < _units.Count; k++)
             {
-                if (k == j || !_units.Alive[k] || _units.Faction[k] != _units.Faction[j]) continue;
-                float allyDist = (_units.Position[k] - _units.Position[j]).LengthSq();
+                if (k == j || !_units[k].Alive || _units[k].Faction != _units[j].Faction) continue;
+                float allyDist = (_units[k].Position - _units[j].Position).LengthSq();
                 if (allyDist < 8f * 8f) allyCount++; // allies within 8 units
             }
 
@@ -1751,7 +1751,7 @@ public class Simulation
             }
         }
 
-        return bestIdx >= 0 ? CombatTarget.Unit(_units.Id[bestIdx]) : CombatTarget.None;
+        return bestIdx >= 0 ? CombatTarget.Unit(_units[bestIdx].Id) : CombatTarget.None;
     }
 
     /// <summary>
@@ -1760,22 +1760,22 @@ public class Simulation
     /// </summary>
     private void Disengage(int unitIdx)
     {
-        _units.EngagedTarget[unitIdx] = CombatTarget.None;
-        _units.InCombat[unitIdx] = false;
-        _units.PendingAttack[unitIdx] = CombatTarget.None;
-        _units.PostAttackTimer[unitIdx] = 0f;
+        _units[unitIdx].EngagedTarget = CombatTarget.None;
+        _units[unitIdx].InCombat = false;
+        _units[unitIdx].PendingAttack = CombatTarget.None;
+        _units[unitIdx].PostAttackTimer = 0f;
 
         // Make the former target retarget if possible
-        var oldTarget = _units.Target[unitIdx];
-        _units.Target[unitIdx] = CombatTarget.None;
+        var oldTarget = _units[unitIdx].Target;
+        _units[unitIdx].Target = CombatTarget.None;
 
         if (oldTarget.IsUnit)
         {
             int targetIdx = ResolveUnitTarget(oldTarget);
-            if (targetIdx >= 0 && _units.Alive[targetIdx])
+            if (targetIdx >= 0 && _units[targetIdx].Alive)
             {
                 // If the target was fighting us, make it pick a new target
-                var theirTarget = _units.Target[targetIdx];
+                var theirTarget = _units[targetIdx].Target;
                 if (theirTarget.IsUnit)
                 {
                     int theirTargetIdx = ResolveUnitTarget(theirTarget);
@@ -1784,11 +1784,11 @@ public class Simulation
                         // They were targeting us — find them a new target
                         int newTarget = FindClosestEnemy(targetIdx);
                         if (newTarget >= 0)
-                            _units.Target[targetIdx] = CombatTarget.Unit(_units.Id[newTarget]);
+                            _units[targetIdx].Target = CombatTarget.Unit(_units[newTarget].Id);
                         else
                         {
-                            _units.Target[targetIdx] = CombatTarget.None;
-                            _units.InCombat[targetIdx] = false;
+                            _units[targetIdx].Target = CombatTarget.None;
+                            _units[targetIdx].InCombat = false;
                         }
                     }
                 }
@@ -1799,7 +1799,7 @@ public class Simulation
     private CombatTarget FindBestEnemyTarget(int unitIdx)
     {
         int closest = FindClosestEnemy(unitIdx);
-        return closest >= 0 ? CombatTarget.Unit(_units.Id[closest]) : CombatTarget.None;
+        return closest >= 0 ? CombatTarget.Unit(_units[closest].Id) : CombatTarget.None;
     }
 
     private int FindClosestEnemy(int unitIdx, float maxRange = 0f)
@@ -1809,9 +1809,9 @@ public class Simulation
         int bestIdx = -1;
         for (int j = 0; j < _units.Count; j++)
         {
-            if (j == unitIdx || !_units.Alive[j]) continue;
-            if (_units.Faction[j] == _units.Faction[unitIdx]) continue;
-            float dist = (_units.Position[j] - _units.Position[unitIdx]).LengthSq();
+            if (j == unitIdx || !_units[j].Alive) continue;
+            if (_units[j].Faction == _units[unitIdx].Faction) continue;
+            float dist = (_units[j].Position - _units[unitIdx].Position).LengthSq();
             if (dist < bestDist && dist <= maxDist2) { bestDist = dist; bestIdx = j; }
         }
         return bestIdx;
@@ -1830,29 +1830,29 @@ public class Simulation
     {
         for (int i = _units.Count - 1; i >= 0; i--)
         {
-            if (!_units.Alive[i])
+            if (!_units[i].Alive)
             {
                 // Queue zombie raise if unit had ZombieOnDeath
-                bool zombieRaise = _units.ZombieOnDeath[i];
+                bool zombieRaise = _units[i].ZombieOnDeath;
                 if (zombieRaise)
                 {
                     _pendingZombieRaises.Add(new PendingZombieRaise
                     {
-                        Position = _units.Position[i],
-                        UnitDefID = _units.UnitDefID[i],
-                        FacingAngle = _units.FacingAngle[i],
-                        SpriteScale = _units.SpriteScale[i],
+                        Position = _units[i].Position,
+                        UnitDefID = _units[i].UnitDefID,
+                        FacingAngle = _units[i].FacingAngle,
+                        SpriteScale = _units[i].SpriteScale,
                         Timer = 1.0f
                     });
                 }
 
                 _corpses.Add(new Corpse
                 {
-                    Position = _units.Position[i],
-                    UnitType = _units.Type[i],
-                    UnitDefID = _units.UnitDefID[i],
-                    FacingAngle = _units.FacingAngle[i],
-                    SpriteScale = _units.SpriteScale[i],
+                    Position = _units[i].Position,
+                    UnitType = _units[i].Type,
+                    UnitDefID = _units[i].UnitDefID,
+                    FacingAngle = _units[i].FacingAngle,
+                    SpriteScale = _units[i].SpriteScale,
                     CorpseID = _nextCorpseID++,
                     // Mark corpse as consumed so it dissolves while the zombie rises
                     Dissolving = zombieRaise,
@@ -1870,19 +1870,19 @@ public class Simulation
         // Update dragged corpse positions to follow their dragger
         for (int u = 0; u < _units.Count; u++)
         {
-            int dragIdx = _units.DraggingCorpseIdx[u];
+            int dragIdx = _units[u].DraggingCorpseIdx;
             if (dragIdx < 0 || dragIdx >= _corpses.Count) continue;
-            if (!_units.Alive[u])
+            if (!_units[u].Alive)
             {
                 // Unit died while dragging — release the corpse
                 _corpses[dragIdx].DraggedByUnitID = GameConstants.InvalidUnit;
-                _units.DraggingCorpseIdx[u] = -1;
+                _units[u].DraggingCorpseIdx = -1;
                 continue;
             }
             // Corpse follows slightly behind the unit
-            float facingRad = _units.FacingAngle[u] * MathF.PI / 180f;
+            float facingRad = _units[u].FacingAngle * MathF.PI / 180f;
             var behind = new Vec2(-MathF.Cos(facingRad), -MathF.Sin(facingRad)) * 1.2f;
-            _corpses[dragIdx].Position = _units.Position[u] + behind;
+            _corpses[dragIdx].Position = _units[u].Position + behind;
         }
 
         for (int i = _corpses.Count - 1; i >= 0; i--)
@@ -1895,13 +1895,13 @@ public class Simulation
                 {
                     // If someone was dragging this corpse, release them
                     for (int u = 0; u < _units.Count; u++)
-                        if (_units.DraggingCorpseIdx[u] == i)
-                            _units.DraggingCorpseIdx[u] = -1;
+                        if (_units[u].DraggingCorpseIdx == i)
+                            _units[u].DraggingCorpseIdx = -1;
                     _corpses.RemoveAt(i);
                     // Fix up drag indices that pointed past the removed element
                     for (int u = 0; u < _units.Count; u++)
-                        if (_units.DraggingCorpseIdx[u] > i)
-                            _units.DraggingCorpseIdx[u]--;
+                        if (_units[u].DraggingCorpseIdx > i)
+                            _units[u].DraggingCorpseIdx--;
                 }
             }
         }
@@ -1910,7 +1910,7 @@ public class Simulation
     public int SpawnUnitByID(string unitID, Vec2 pos)
     {
         int idx = _units.AddUnit(pos, UnitType.Dynamic);
-        _units.UnitDefID[idx] = unitID;
+        _units[idx].UnitDefID = unitID;
 
         // Apply UnitDef properties
         if (_gameData != null)
@@ -1918,21 +1918,21 @@ public class Simulation
             var def = _gameData.Units.Get(unitID);
             if (def != null)
             {
-                _units.SpriteScale[idx] = def.SpriteScale;
-                _units.Radius[idx] = def.Radius;
-                _units.Size[idx] = def.Size;
-                _units.OrcaPriority[idx] = def.OrcaPriority;
+                _units[idx].SpriteScale = def.SpriteScale;
+                _units[idx].Radius = def.Radius;
+                _units[idx].Size = def.Size;
+                _units[idx].OrcaPriority = def.OrcaPriority;
 
                 if (!string.IsNullOrEmpty(def.Faction))
-                    _units.Faction[idx] = def.Faction == "Human" ? Faction.Human
+                    _units[idx].Faction = def.Faction == "Human" ? Faction.Human
                         : def.Faction == "Animal" ? Faction.Animal : Faction.Undead;
 
                 if (Enum.TryParse<AIBehavior>(def.AI, out var ai))
-                    _units.AI[idx] = ai;
+                    _units[idx].AI = ai;
 
                 var stats = _gameData.Units.BuildStats(unitID, _gameData.Weapons, _gameData.Armors, _gameData.Shields);
-                _units.Stats[idx] = stats;
-                _units.MaxSpeed[idx] = stats.CombatSpeed;
+                _units[idx].Stats = stats;
+                _units[idx].MaxSpeed = stats.CombatSpeed;
             }
         }
         return idx;
@@ -1962,19 +1962,19 @@ public class Simulation
 
         // Rebuild stats from the new unit definition
         var newStats = _gameData.Units.BuildStats(newUnitID, _gameData.Weapons, _gameData.Armors, _gameData.Shields);
-        _units.Stats[unitIdx] = newStats;
-        _units.UnitDefID[unitIdx] = newUnitID;
-        _units.Size[unitIdx] = def.Size;
-        _units.Radius[unitIdx] = def.Radius;
-        _units.MaxSpeed[unitIdx] = newStats.CombatSpeed;
-        _units.OrcaPriority[unitIdx] = def.OrcaPriority;
-        _units.Faction[unitIdx] = def.Faction == "Human" ? Faction.Human : Faction.Undead;
-        _units.SpriteScale[unitIdx] = def.SpriteScale;
+        _units[unitIdx].Stats = newStats;
+        _units[unitIdx].UnitDefID = newUnitID;
+        _units[unitIdx].Size = def.Size;
+        _units[unitIdx].Radius = def.Radius;
+        _units[unitIdx].MaxSpeed = newStats.CombatSpeed;
+        _units[unitIdx].OrcaPriority = def.OrcaPriority;
+        _units[unitIdx].Faction = def.Faction == "Human" ? Faction.Human : Faction.Undead;
+        _units[unitIdx].SpriteScale = def.SpriteScale;
         // Reset HP to new max
-        _units.Stats[unitIdx].HP = newStats.MaxHP;
+        _units[unitIdx].Stats.HP = newStats.MaxHP;
 
         // Reset AI behavior from the new definition
-        _units.AI[unitIdx] = def.AI switch
+        _units[unitIdx].AI = def.AI switch
         {
             "PlayerControlled" => AIBehavior.PlayerControlled,
             "AttackClosest" => AIBehavior.AttackClosest,
@@ -1998,7 +1998,7 @@ public class Simulation
     public string GetUnitDisplayName(int unitIdx)
     {
         if (unitIdx < 0 || unitIdx >= _units.Count) return "Unknown";
-        return _units.UnitDefID[unitIdx];
+        return _units[unitIdx].UnitDefID;
     }
 
     public void RebuildPathfinder()

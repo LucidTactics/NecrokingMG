@@ -477,9 +477,9 @@ public class EnvironmentSystem
 
         for (int u = 0; u < units.Count; u++)
         {
-            if (!units.Alive[u]) continue;
-            if (units.Faction[u] == trapFaction) continue; // skip friendlies
-            float d = (units.Position[u] - trapPos).LengthSq();
+            if (!units[u].Alive) continue;
+            if (units[u].Faction == trapFaction) continue; // skip friendlies
+            float d = (units[u].Position - trapPos).LengthSq();
             if (d < bestDist) { bestDist = d; bestIdx = u; }
         }
         return bestIdx;

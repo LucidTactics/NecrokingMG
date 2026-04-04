@@ -76,7 +76,7 @@ public class HordeMinionHandler : IArchetypeHandler
             uint chasingId = ctx.Horde!.GetChasingTarget(ctx.MyId);
             if (chasingId != GameConstants.InvalidUnit)
             {
-                ctx.Units.Target[ctx.UnitIndex] = CombatTarget.Unit(chasingId);
+                ctx.Units[ctx.UnitIndex].Target = CombatTarget.Unit(chasingId);
                 ctx.Routine = RoutineChasing;
                 ctx.Subroutine = 0;
             }
@@ -88,9 +88,9 @@ public class HordeMinionHandler : IArchetypeHandler
             if (!SubroutineSteps.IsTargetAlive(ref ctx))
             {
                 ctx.Routine = RoutineReturning;
-                ctx.Units.Target[ctx.UnitIndex] = CombatTarget.None;
-                ctx.Units.EngagedTarget[ctx.UnitIndex] = CombatTarget.None;
-                ctx.Units.InCombat[ctx.UnitIndex] = false;
+                ctx.Units[ctx.UnitIndex].Target = CombatTarget.None;
+                ctx.Units[ctx.UnitIndex].EngagedTarget = CombatTarget.None;
+                ctx.Units[ctx.UnitIndex].InCombat = false;
             }
         }
     }
@@ -104,7 +104,7 @@ public class HordeMinionHandler : IArchetypeHandler
             int enemy = SubroutineSteps.FindClosestEnemy(ref ctx, engageRange);
             if (enemy >= 0)
             {
-                ctx.Units.Target[ctx.UnitIndex] = CombatTarget.Unit(ctx.Units.Id[enemy]);
+                ctx.Units[ctx.UnitIndex].Target = CombatTarget.Unit(ctx.Units[enemy].Id);
                 ctx.Routine = RoutineChasing;
                 ctx.Subroutine = 0;
                 return;
@@ -119,7 +119,7 @@ public class HordeMinionHandler : IArchetypeHandler
             if (ctx.Subroutine == FollowIdle)
             {
                 // Idle at slot — only start moving again if slot drifted far enough
-                ctx.Units.PreferredVel[ctx.UnitIndex] = Vec2.Zero;
+                ctx.Units[ctx.UnitIndex].PreferredVel = Vec2.Zero;
                 if (dist > FollowDeadzone)
                     ctx.Subroutine = FollowMoving;
             }
@@ -133,13 +133,13 @@ public class HordeMinionHandler : IArchetypeHandler
                 else
                 {
                     // Arrived
-                    ctx.Units.PreferredVel[ctx.UnitIndex] = Vec2.Zero;
+                    ctx.Units[ctx.UnitIndex].PreferredVel = Vec2.Zero;
                     ctx.Subroutine = FollowIdle;
                 }
             }
         }
         else
-            ctx.Units.PreferredVel[ctx.UnitIndex] = Vec2.Zero;
+            ctx.Units[ctx.UnitIndex].PreferredVel = Vec2.Zero;
     }
 
     private static void UpdateChasing(ref AIContext ctx)
@@ -148,30 +148,30 @@ public class HordeMinionHandler : IArchetypeHandler
         {
             // Target dead — return to formation
             ctx.Routine = RoutineReturning;
-            ctx.Units.Target[ctx.UnitIndex] = CombatTarget.None;
-            ctx.Units.EngagedTarget[ctx.UnitIndex] = CombatTarget.None;
+            ctx.Units[ctx.UnitIndex].Target = CombatTarget.None;
+            ctx.Units[ctx.UnitIndex].EngagedTarget = CombatTarget.None;
             return;
         }
 
         int targetIdx = SubroutineSteps.ResolveTarget(ref ctx);
         if (targetIdx >= 0)
         {
-            SubroutineSteps.MoveToward(ref ctx, ctx.Units.Position[targetIdx], ctx.MySpeed);
+            SubroutineSteps.MoveToward(ref ctx, ctx.Units[targetIdx].Position, ctx.MySpeed);
 
             // Auto-engage when in melee range
-            float dist = (ctx.Units.Position[targetIdx] - ctx.MyPos).Length();
+            float dist = (ctx.Units[targetIdx].Position - ctx.MyPos).Length();
             float engageRange = SubroutineSteps.GetMeleeRange(ref ctx, targetIdx);
             if (dist <= engageRange)
             {
                 ctx.Routine = RoutineEngaged;
-                ctx.Units.EngagedTarget[ctx.UnitIndex] = ctx.Units.Target[ctx.UnitIndex];
+                ctx.Units[ctx.UnitIndex].EngagedTarget = ctx.Units[ctx.UnitIndex].Target;
             }
         }
     }
 
     private static void UpdateEngaged(ref AIContext ctx)
     {
-        bool frenzied = ctx.Units.Frenzied[ctx.UnitIndex];
+        bool frenzied = ctx.Units[ctx.UnitIndex].Frenzied;
 
         if (!SubroutineSteps.IsTargetAlive(ref ctx))
         {
@@ -181,7 +181,7 @@ public class HordeMinionHandler : IArchetypeHandler
                 int next = SubroutineSteps.FindClosestEnemy(ref ctx, 30f);
                 if (next >= 0)
                 {
-                    ctx.Units.Target[ctx.UnitIndex] = CombatTarget.Unit(ctx.Units.Id[next]);
+                    ctx.Units[ctx.UnitIndex].Target = CombatTarget.Unit(ctx.Units[next].Id);
                     ctx.Routine = RoutineChasing;
                 }
                 // else no enemies: stay idle, will recheck
@@ -189,9 +189,9 @@ public class HordeMinionHandler : IArchetypeHandler
             else
             {
                 ctx.Routine = RoutineReturning;
-                ctx.Units.Target[ctx.UnitIndex] = CombatTarget.None;
-                ctx.Units.EngagedTarget[ctx.UnitIndex] = CombatTarget.None;
-                ctx.Units.InCombat[ctx.UnitIndex] = false;
+                ctx.Units[ctx.UnitIndex].Target = CombatTarget.None;
+                ctx.Units[ctx.UnitIndex].EngagedTarget = CombatTarget.None;
+                ctx.Units[ctx.UnitIndex].InCombat = false;
             }
             return;
         }
@@ -207,19 +207,19 @@ public class HordeMinionHandler : IArchetypeHandler
             if (distToCenter > leashRadius * 1.5f)
             {
                 ctx.Routine = RoutineReturning;
-                ctx.Units.Target[ctx.UnitIndex] = CombatTarget.None;
-                ctx.Units.EngagedTarget[ctx.UnitIndex] = CombatTarget.None;
-                ctx.Units.InCombat[ctx.UnitIndex] = false;
+                ctx.Units[ctx.UnitIndex].Target = CombatTarget.None;
+                ctx.Units[ctx.UnitIndex].EngagedTarget = CombatTarget.None;
+                ctx.Units[ctx.UnitIndex].InCombat = false;
             }
         }
     }
 
     private static void UpdateReturning(ref AIContext ctx)
     {
-        ctx.Units.Target[ctx.UnitIndex] = CombatTarget.None;
-        ctx.Units.EngagedTarget[ctx.UnitIndex] = CombatTarget.None;
-        ctx.Units.InCombat[ctx.UnitIndex] = false;
-        ctx.Units.PendingAttack[ctx.UnitIndex] = CombatTarget.None;
+        ctx.Units[ctx.UnitIndex].Target = CombatTarget.None;
+        ctx.Units[ctx.UnitIndex].EngagedTarget = CombatTarget.None;
+        ctx.Units[ctx.UnitIndex].InCombat = false;
+        ctx.Units[ctx.UnitIndex].PendingAttack = CombatTarget.None;
 
         if (ctx.Horde != null && ctx.Horde.GetTargetPosition(ctx.MyId, out var slotPos))
         {
@@ -230,21 +230,21 @@ public class HordeMinionHandler : IArchetypeHandler
             {
                 ctx.Routine = RoutineFollowing;
                 ctx.Subroutine = FollowIdle;
-                ctx.Units.PreferredVel[ctx.UnitIndex] = Vec2.Zero;
+                ctx.Units[ctx.UnitIndex].PreferredVel = Vec2.Zero;
             }
         }
         else
         {
             ctx.Routine = RoutineFollowing;
             ctx.Subroutine = FollowMoving;
-            ctx.Units.PreferredVel[ctx.UnitIndex] = Vec2.Zero;
+            ctx.Units[ctx.UnitIndex].PreferredVel = Vec2.Zero;
         }
     }
 
     private static void UpdateCommanded(ref AIContext ctx)
     {
         ctx.SubroutineTimer += ctx.Dt;
-        Vec2 commandTarget = ctx.Units.MoveTarget[ctx.UnitIndex];
+        Vec2 commandTarget = ctx.Units[ctx.UnitIndex].MoveTarget;
 
         // Timeout — return to horde
         if (ctx.SubroutineTimer > CommandTimeout)
@@ -259,16 +259,16 @@ public class HordeMinionHandler : IArchetypeHandler
             int targetIdx = SubroutineSteps.ResolveTarget(ref ctx);
             if (targetIdx >= 0)
             {
-                float dist = (ctx.Units.Position[targetIdx] - ctx.MyPos).Length();
+                float dist = (ctx.Units[targetIdx].Position - ctx.MyPos).Length();
                 float meleeRange = SubroutineSteps.GetMeleeRange(ref ctx, targetIdx);
                 if (dist <= meleeRange)
                 {
-                    ctx.Units.EngagedTarget[ctx.UnitIndex] = ctx.Units.Target[ctx.UnitIndex];
+                    ctx.Units[ctx.UnitIndex].EngagedTarget = ctx.Units[ctx.UnitIndex].Target;
                     SubroutineSteps.AttackTarget(ref ctx);
                 }
                 else
                 {
-                    SubroutineSteps.MoveToward(ref ctx, ctx.Units.Position[targetIdx], ctx.MySpeed);
+                    SubroutineSteps.MoveToward(ref ctx, ctx.Units[targetIdx].Position, ctx.MySpeed);
                 }
             }
             return;
@@ -279,8 +279,8 @@ public class HordeMinionHandler : IArchetypeHandler
         if (distToTarget > 2f)
         {
             // Still moving to command point
-            ctx.Units.Target[ctx.UnitIndex] = CombatTarget.None;
-            ctx.Units.EngagedTarget[ctx.UnitIndex] = CombatTarget.None;
+            ctx.Units[ctx.UnitIndex].Target = CombatTarget.None;
+            ctx.Units[ctx.UnitIndex].EngagedTarget = CombatTarget.None;
             SubroutineSteps.MoveToward(ref ctx, commandTarget, ctx.MySpeed);
         }
         else
@@ -289,7 +289,7 @@ public class HordeMinionHandler : IArchetypeHandler
             int enemy = SubroutineSteps.FindClosestEnemy(ref ctx, CommandClearRadius);
             if (enemy >= 0)
             {
-                ctx.Units.Target[ctx.UnitIndex] = CombatTarget.Unit(ctx.Units.Id[enemy]);
+                ctx.Units[ctx.UnitIndex].Target = CombatTarget.Unit(ctx.Units[enemy].Id);
             }
             else
             {
@@ -303,9 +303,9 @@ public class HordeMinionHandler : IArchetypeHandler
     {
         ctx.Routine = RoutineReturning;
         ctx.SubroutineTimer = 0f;
-        ctx.Units.Target[ctx.UnitIndex] = CombatTarget.None;
-        ctx.Units.EngagedTarget[ctx.UnitIndex] = CombatTarget.None;
-        ctx.Units.InCombat[ctx.UnitIndex] = false;
+        ctx.Units[ctx.UnitIndex].Target = CombatTarget.None;
+        ctx.Units[ctx.UnitIndex].EngagedTarget = CombatTarget.None;
+        ctx.Units[ctx.UnitIndex].InCombat = false;
     }
 
     public string GetRoutineName(byte routine) => routine switch

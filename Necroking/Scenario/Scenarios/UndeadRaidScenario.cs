@@ -80,7 +80,7 @@ public class UndeadRaidScenario : ScenarioBase
             float wy = BaseY + 2f - w * 2f;
             int workerIdx = units.AddUnit(new Vec2(wx, wy), UnitType.Skeleton);
             if (workerIdx >= 0)
-                units.AI[workerIdx] = AIBehavior.CorpseWorker;
+                units[workerIdx].AI = AIBehavior.CorpseWorker;
         }
 
         // Corpses around base
@@ -110,8 +110,8 @@ public class UndeadRaidScenario : ScenarioBase
                 int idx = units.AddUnit(new Vec2(px, py), UnitType.Militia);
                 if (idx >= 0)
                 {
-                    units.AI[idx] = AIBehavior.IdleAtPoint;
-                    units.MoveTarget[idx] = new Vec2(hx, hy);
+                    units[idx].AI = AIBehavior.IdleAtPoint;
+                    units[idx].MoveTarget = new Vec2(hx, hy);
                 }
             }
         }
@@ -131,11 +131,11 @@ public class UndeadRaidScenario : ScenarioBase
         int undeadCount = 0, humanCount = 0, skeletonCombat = 0;
         for (int i = 0; i < units.Count; i++)
         {
-            if (!units.Alive[i] || units.Type[i] == UnitType.Necromancer) continue;
-            if (units.Faction[i] == Faction.Undead)
+            if (!units[i].Alive || units[i].Type == UnitType.Necromancer) continue;
+            if (units[i].Faction == Faction.Undead)
             {
                 undeadCount++;
-                if (units.AI[i] != AIBehavior.CorpseWorker) skeletonCombat++;
+                if (units[i].AI != AIBehavior.CorpseWorker) skeletonCombat++;
             }
             else humanCount++;
         }
@@ -164,7 +164,7 @@ public class UndeadRaidScenario : ScenarioBase
                 float hx = HutPositions[h][0], hy = HutPositions[h][1];
                 DebugLog.Log(ScenarioLog, $"[{_elapsed:F1}s] Hut {h} destroyed! Spawning reinforcement peasant");
                 int idx = sim.UnitsMut.AddUnit(new Vec2(hx, hy), UnitType.Militia);
-                if (idx >= 0) sim.UnitsMut.AI[idx] = AIBehavior.AttackClosest;
+                if (idx >= 0) sim.UnitsMut[idx].AI = AIBehavior.AttackClosest;
             }
         }
 
@@ -172,9 +172,9 @@ public class UndeadRaidScenario : ScenarioBase
         int idleNearBase = 0;
         for (int i = 0; i < units.Count; i++)
         {
-            if (!units.Alive[i] || units.Faction[i] != Faction.Undead) continue;
-            if (units.AI[i] == AIBehavior.CorpseWorker || units.AI[i] == AIBehavior.Raid) continue;
-            float dist2 = (units.Position[i] - new Vec2(BaseX, BaseY)).LengthSq();
+            if (!units[i].Alive || units[i].Faction != Faction.Undead) continue;
+            if (units[i].AI == AIBehavior.CorpseWorker || units[i].AI == AIBehavior.Raid) continue;
+            float dist2 = (units[i].Position - new Vec2(BaseX, BaseY)).LengthSq();
             if (dist2 < 15f * 15f) idleNearBase++;
         }
 
@@ -185,10 +185,10 @@ public class UndeadRaidScenario : ScenarioBase
             var mu = sim.UnitsMut;
             for (int i = 0; i < mu.Count; i++)
             {
-                if (!mu.Alive[i] || mu.Faction[i] != Faction.Undead) continue;
-                if (mu.AI[i] == AIBehavior.CorpseWorker || mu.AI[i] == AIBehavior.Raid) continue;
-                float dist2 = (mu.Position[i] - new Vec2(BaseX, BaseY)).LengthSq();
-                if (dist2 < 15f * 15f) mu.AI[i] = AIBehavior.Raid;
+                if (!mu[i].Alive || mu[i].Faction != Faction.Undead) continue;
+                if (mu[i].AI == AIBehavior.CorpseWorker || mu[i].AI == AIBehavior.Raid) continue;
+                float dist2 = (mu[i].Position - new Vec2(BaseX, BaseY)).LengthSq();
+                if (dist2 < 15f * 15f) mu[i].AI = AIBehavior.Raid;
             }
         }
 
@@ -231,11 +231,11 @@ public class UndeadRaidScenario : ScenarioBase
             int forced = 0;
             for (int i = 0; i < mu.Count; i++)
             {
-                if (!mu.Alive[i] || mu.Type[i] == UnitType.Necromancer) continue;
-                var ai = mu.AI[i];
+                if (!mu[i].Alive || mu[i].Type == UnitType.Necromancer) continue;
+                var ai = mu[i].AI;
                 if (ai == AIBehavior.IdleAtPoint || ai == AIBehavior.CorpseWorker || ai == AIBehavior.DefendPoint)
                 {
-                    mu.AI[i] = AIBehavior.AttackClosest;
+                    mu[i].AI = AIBehavior.AttackClosest;
                     forced++;
                 }
             }

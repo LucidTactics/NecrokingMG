@@ -52,10 +52,10 @@ public class DebugDraw
         {
             for (int i = 0; i < units.Count; i++)
             {
-                if (!units.Alive[i]) continue;
-                DrawCircle(batch, renderer, cam, units.Position[i], units.Radius[i],
-                    units.Faction[i] == Faction.Undead ? Color.Green :
-                    units.Faction[i] == Faction.Animal ? Color.Yellow : Color.Red);
+                if (!units[i].Alive) continue;
+                DrawCircle(batch, renderer, cam, units[i].Position, units[i].Radius,
+                    units[i].Faction == Faction.Undead ? Color.Green :
+                    units[i].Faction == Faction.Animal ? Color.Yellow : Color.Red);
             }
         }
 
@@ -63,12 +63,12 @@ public class DebugDraw
         {
             for (int i = 0; i < units.Count; i++)
             {
-                if (!units.Alive[i]) continue;
-                var start = renderer.WorldToScreen(units.Position[i], 0f, cam);
-                var vel = units.Velocity[i];
+                if (!units[i].Alive) continue;
+                var start = renderer.WorldToScreen(units[i].Position, 0f, cam);
+                var vel = units[i].Velocity;
                 if (vel.LengthSq() > 0.01f)
                 {
-                    var end = renderer.WorldToScreen(units.Position[i] + vel * 0.5f, 0f, cam);
+                    var end = renderer.WorldToScreen(units[i].Position + vel * 0.5f, 0f, cam);
                     DrawLine(batch, start, end, Color.Yellow);
                 }
             }
@@ -188,10 +188,10 @@ public class DebugDraw
 
         for (int i = 0; i < units.Count; i++)
         {
-            if (!units.Alive[i]) continue;
+            if (!units[i].Alive) continue;
 
             bool isNecromancer = (i == necroIdx);
-            bool isUndead = units.Faction[i] == Faction.Undead;
+            bool isUndead = units[i].Faction == Faction.Undead;
 
             Color circleColor;
             if (isNecromancer)
@@ -202,15 +202,15 @@ public class DebugDraw
                 circleColor = new Color(220, 50, 50, 200); // red for human
 
             int segments = isNecromancer ? 32 : 24;
-            float radius = units.Radius[i];
+            float radius = units[i].Radius;
 
             // Draw the circle
-            DrawCircle(batch, renderer, cam, units.Position[i], radius, circleColor, segments);
+            DrawCircle(batch, renderer, cam, units[i].Position, radius, circleColor, segments);
 
             // Necromancer gets a second, slightly larger circle for emphasis
             if (isNecromancer)
             {
-                DrawCircle(batch, renderer, cam, units.Position[i], radius * 1.15f,
+                DrawCircle(batch, renderer, cam, units[i].Position, radius * 1.15f,
                     new Color(180, 255, 180, 120), segments);
             }
         }
@@ -224,12 +224,12 @@ public class DebugDraw
 
         for (int i = 0; i < units.Count; i++)
         {
-            if (!units.Alive[i]) continue;
+            if (!units[i].Alive) continue;
 
-            var pos = units.Position[i];
+            var pos = units[i].Position;
 
             // Current velocity (green arrow)
-            var vel = units.Velocity[i];
+            var vel = units[i].Velocity;
             if (vel.LengthSq() > 0.001f)
             {
                 var start = renderer.WorldToScreen(pos, 0f, cam);
@@ -238,7 +238,7 @@ public class DebugDraw
             }
 
             // Preferred velocity (blue arrow)
-            var prefVel = units.PreferredVel[i];
+            var prefVel = units[i].PreferredVel;
             if (prefVel.LengthSq() > 0.001f)
             {
                 var start = renderer.WorldToScreen(pos, 0f, cam);
@@ -406,7 +406,7 @@ public class DebugDraw
         // Draw imaginary chunks for each unit that has one (different color: orange/yellow)
         foreach (int unitIdx in pathfinder.GetActiveImaginaryChunkUnits())
         {
-            if (unitIdx < 0 || unitIdx >= sim.Units.Count || !sim.Units.Alive[unitIdx]) continue;
+            if (unitIdx < 0 || unitIdx >= sim.Units.Count || !sim.Units[unitIdx].Alive) continue;
 
             var info = pathfinder.GetImaginaryChunkInfo(unitIdx);
             if (info == null) continue;
@@ -446,8 +446,8 @@ public class DebugDraw
         var units = sim.Units;
         for (int i = 0; i < units.Count; i++)
         {
-            if (!units.Alive[i]) continue;
-            var pos = units.Position[i];
+            if (!units[i].Alive) continue;
+            var pos = units[i].Position;
             int sx = (int)(pos.X / ss);
             int sy = (int)(pos.Y / ss);
             if (sx < 0 || sx >= scx || sy < 0 || sy >= scy) continue;
@@ -455,7 +455,7 @@ public class DebugDraw
             int sectorKey = sy * scx + sx;
             if (!drawnSectors.Add(sectorKey)) continue; // already drawn
 
-            bool isUndead = units.Faction[i] == 0;
+            bool isUndead = units[i].Faction == 0;
             var sectorTint = isUndead ? new Color(40, 120, 40, 25) : new Color(120, 40, 40, 25);
             var sp = renderer.WorldToScreen(new Vec2(sx * ss, sy * ss), 0f, cam);
             float tileW = ss * cam.Zoom;

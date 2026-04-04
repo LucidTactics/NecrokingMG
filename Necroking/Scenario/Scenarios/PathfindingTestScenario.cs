@@ -102,11 +102,11 @@ public class PathfindingTestScenario : ScenarioBase
         Vec2 target = new(ox + forestW - 1.5f, oy + forestH - 1.5f);
 
         int idx = units.AddUnit(startPos, UnitType.Skeleton);
-        units.AI[idx] = AIBehavior.MoveToPoint;
-        units.MoveTarget[idx] = target;
-        units.MaxSpeed[idx] = UnitSpeed;
-        units.Stats[idx].CombatSpeed = UnitSpeed;
-        units.Faction[idx] = Faction.Undead;
+        units[idx].AI = AIBehavior.MoveToPoint;
+        units[idx].MoveTarget = target;
+        units[idx].MaxSpeed = UnitSpeed;
+        units[idx].Stats.CombatSpeed = UnitSpeed;
+        units[idx].Faction = Faction.Undead;
 
         _testUnitIndices.Add(idx);
         _testTargets.Add(target);
@@ -200,11 +200,11 @@ public class PathfindingTestScenario : ScenarioBase
         Vec2 target = new(67f, 45f);
 
         int idx = units.AddUnit(startPos, UnitType.Skeleton);
-        units.AI[idx] = AIBehavior.MoveToPoint;
-        units.MoveTarget[idx] = target;
-        units.MaxSpeed[idx] = UnitSpeed;
-        units.Stats[idx].CombatSpeed = UnitSpeed;
-        units.Faction[idx] = Faction.Undead;
+        units[idx].AI = AIBehavior.MoveToPoint;
+        units[idx].MoveTarget = target;
+        units[idx].MaxSpeed = UnitSpeed;
+        units[idx].Stats.CombatSpeed = UnitSpeed;
+        units[idx].Faction = Faction.Undead;
 
         _testUnitIndices.Add(idx);
         _testTargets.Add(target);
@@ -272,11 +272,11 @@ public class PathfindingTestScenario : ScenarioBase
         Vec2 target = new(220f, 96f);    // chunk (3,1)
 
         int idx = units.AddUnit(startPos, UnitType.Skeleton);
-        units.AI[idx] = AIBehavior.MoveToPoint;
-        units.MoveTarget[idx] = target;
-        units.MaxSpeed[idx] = UnitSpeed;
-        units.Stats[idx].CombatSpeed = UnitSpeed;
-        units.Faction[idx] = Faction.Undead;
+        units[idx].AI = AIBehavior.MoveToPoint;
+        units[idx].MoveTarget = target;
+        units[idx].MaxSpeed = UnitSpeed;
+        units[idx].Stats.CombatSpeed = UnitSpeed;
+        units[idx].Faction = Faction.Undead;
 
         _testUnitIndices.Add(idx);
         _testTargets.Add(target);
@@ -309,12 +309,12 @@ public class PathfindingTestScenario : ScenarioBase
         for (int t = 0; t < _testUnitIndices.Count; t++)
         {
             int ui = _testUnitIndices[t];
-            if (ui >= sim.Units.Count || !sim.Units.Alive[ui])
+            if (ui >= sim.Units.Count || !sim.Units[ui].Alive)
             {
                 allReached = false;
                 continue;
             }
-            float dist = (sim.Units.Position[ui] - _testTargets[t]).Length();
+            float dist = (sim.Units[ui].Position - _testTargets[t]).Length();
             if (dist > TargetReachDist)
                 allReached = false;
         }
@@ -323,11 +323,11 @@ public class PathfindingTestScenario : ScenarioBase
         if (_phase % 30 == 0 && _testUnitIndices.Count > 0)
         {
             int ui = _testUnitIndices[0];
-            if (ui < sim.Units.Count && sim.Units.Alive[ui])
+            if (ui < sim.Units.Count && sim.Units[ui].Alive)
             {
-                var pos = sim.Units.Position[ui];
-                var vel = sim.Units.Velocity[ui];
-                var prefVel = sim.Units.PreferredVel[ui];
+                var pos = sim.Units[ui].Position;
+                var vel = sim.Units[ui].Velocity;
+                var prefVel = sim.Units[ui].PreferredVel;
                 DebugLog.Log(ScenarioLog, $"  t={testElapsed:F1}s pos=({pos.X:F1},{pos.Y:F1}) vel=({vel.X:F1},{vel.Y:F1}) pref=({prefVel.X:F1},{prefVel.Y:F1}) dist={(_testTargets[0] - pos).Length():F1}");
             }
             else
@@ -356,9 +356,9 @@ public class PathfindingTestScenario : ScenarioBase
             for (int t = 0; t < _testUnitIndices.Count; t++)
             {
                 int ui = _testUnitIndices[t];
-                if (ui < sim.Units.Count && sim.Units.Alive[ui])
+                if (ui < sim.Units.Count && sim.Units[ui].Alive)
                 {
-                    var pos = sim.Units.Position[ui];
+                    var pos = sim.Units[ui].Position;
                     float dist = (pos - _testTargets[t]).Length();
                     DebugLog.Log(ScenarioLog, $"  Unit {t}: pos=({pos.X:F1},{pos.Y:F1}) dist={dist:F1}");
                 }

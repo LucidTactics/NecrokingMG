@@ -26,8 +26,8 @@ public class CombatLogScenario : ScenarioBase
         int skelIdx = units.AddUnit(new Vec2(10f, 10f), UnitType.Skeleton);
         int soldierIdx = units.AddUnit(new Vec2(11f, 10f), UnitType.Soldier);
 
-        DebugLog.Log(ScenarioLog, $"Spawned skeleton at (10, 10), idx={skelIdx}, HP={units.Stats[skelIdx].MaxHP}");
-        DebugLog.Log(ScenarioLog, $"Spawned soldier at (11, 10), idx={soldierIdx}, HP={units.Stats[soldierIdx].MaxHP}");
+        DebugLog.Log(ScenarioLog, $"Spawned skeleton at (10, 10), idx={skelIdx}, HP={units[skelIdx].Stats.MaxHP}");
+        DebugLog.Log(ScenarioLog, $"Spawned soldier at (11, 10), idx={soldierIdx}, HP={units[soldierIdx].Stats.MaxHP}");
         DebugLog.Log(ScenarioLog, $"Initial combat log entries: {sim.CombatLog.Entries.Count}");
 
         ZoomOnLocation(10.5f, 10f, 64f);
@@ -43,8 +43,8 @@ public class CombatLogScenario : ScenarioBase
             int undead = 0, human = 0;
             for (int i = 0; i < sim.Units.Count; i++)
             {
-                if (!sim.Units.Alive[i]) continue;
-                if (sim.Units.Faction[i] == Faction.Undead) undead++;
+                if (!sim.Units[i].Alive) continue;
+                if (sim.Units[i].Faction == Faction.Undead) undead++;
                 else human++;
             }
             DebugLog.Log(ScenarioLog, $"t={_elapsed:F1}s: combat log entries={sim.CombatLog.Entries.Count}, alive: {undead} undead / {human} human");
@@ -55,8 +55,8 @@ public class CombatLogScenario : ScenarioBase
         bool hasUndead = false, hasHuman = false;
         for (int i = 0; i < sim.Units.Count; i++)
         {
-            if (!sim.Units.Alive[i]) continue;
-            if (sim.Units.Faction[i] == Faction.Undead) hasUndead = true;
+            if (!sim.Units[i].Alive) continue;
+            if (sim.Units[i].Faction == Faction.Undead) hasUndead = true;
             else hasHuman = true;
         }
         oneSideDead = !hasUndead || !hasHuman;

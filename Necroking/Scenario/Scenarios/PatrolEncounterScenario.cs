@@ -26,15 +26,15 @@ public class PatrolEncounterScenario : ScenarioBase
             float x = 10f + (i % 3) * 2f;
             float y = 10f + (i / 3) * 2f;
             int idx = units.AddUnit(new Vec2(x, y), UnitType.Skeleton);
-            units.AI[idx] = AIBehavior.IdleAtPoint;
-            units.MoveTarget[idx] = new Vec2(x, y);
+            units[idx].AI = AIBehavior.IdleAtPoint;
+            units[idx].MoveTarget = new Vec2(x, y);
         }
 
         // Soldier patrol — spawn close enough to reach all skeletons and resolve battle within timeout
         for (int i = 0; i < 4; i++)
         {
             int idx = units.AddUnit(new Vec2(20f, 10f + i * 1.5f), UnitType.Soldier);
-            units.AI[idx] = AIBehavior.AttackClosest;
+            units[idx].AI = AIBehavior.AttackClosest;
         }
 
         DebugLog.Log(ScenarioLog, "Spawned 6 skeletons (camp) + 4 soldiers (patrol)");
@@ -48,8 +48,8 @@ public class PatrolEncounterScenario : ScenarioBase
         int undead = 0, human = 0;
         for (int i = 0; i < sim.Units.Count; i++)
         {
-            if (!sim.Units.Alive[i]) continue;
-            if (sim.Units.Faction[i] == Faction.Undead) undead++;
+            if (!sim.Units[i].Alive) continue;
+            if (sim.Units[i].Faction == Faction.Undead) undead++;
             else human++;
         }
 
@@ -78,8 +78,8 @@ public class PatrolEncounterScenario : ScenarioBase
         int undead = 0, human = 0;
         for (int i = 0; i < sim.Units.Count; i++)
         {
-            if (!sim.Units.Alive[i]) continue;
-            if (sim.Units.Faction[i] == Faction.Undead) undead++;
+            if (!sim.Units[i].Alive) continue;
+            if (sim.Units[i].Faction == Faction.Undead) undead++;
             else human++;
         }
         bool oneFactionDead = undead == 0 || human == 0;

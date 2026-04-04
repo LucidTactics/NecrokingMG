@@ -85,34 +85,34 @@ public class CollisionDebugTestScenario : ScenarioBase
         // --- Spawn undead units (near obstacles) ---
         // Necromancer
         int necroIdx = units.AddUnit(new Vec2(12f, 10f), UnitType.Necromancer);
-        units.Faction[necroIdx] = Faction.Undead;
+        units[necroIdx].Faction = Faction.Undead;
         sim.SetNecromancerIndex(necroIdx);
 
         // Skeletons near rough terrain
         for (int i = 0; i < 4; i++)
         {
             int idx = units.AddUnit(new Vec2(10f + i * 1.2f, 7f), UnitType.Skeleton);
-            units.Faction[idx] = Faction.Undead;
+            units[idx].Faction = Faction.Undead;
             // Give them a move target so they have preferred velocity
-            units.MoveTarget[idx] = new Vec2(18f, 7f);
+            units[idx].MoveTarget = new Vec2(18f, 7f);
         }
 
         // Abomination near water
         int aboIdx = units.AddUnit(new Vec2(10f, 14f), UnitType.Abomination);
-        units.Faction[aboIdx] = Faction.Undead;
-        units.MoveTarget[aboIdx] = new Vec2(18f, 14f);
+        units[aboIdx].Faction = Faction.Undead;
+        units[aboIdx].MoveTarget = new Vec2(18f, 14f);
 
         // --- Spawn human units (near wall) ---
         for (int i = 0; i < 3; i++)
         {
             int idx = units.AddUnit(new Vec2(22f + i * 1.5f, 14f), UnitType.Soldier);
-            units.Faction[idx] = Faction.Human;
-            units.MoveTarget[idx] = new Vec2(12f, 14f);
+            units[idx].Faction = Faction.Human;
+            units[idx].MoveTarget = new Vec2(12f, 14f);
         }
 
         int archerIdx = units.AddUnit(new Vec2(28f, 8f), UnitType.Archer);
-        units.Faction[archerIdx] = Faction.Human;
-        units.MoveTarget[archerIdx] = new Vec2(12f, 8f);
+        units[archerIdx].Faction = Faction.Human;
+        units[archerIdx].MoveTarget = new Vec2(12f, 8f);
 
         DebugLog.Log(ScenarioLog, $"Spawned {units.Count} units (necro + skeletons + abomination + soldiers + archer)");
 
@@ -257,7 +257,7 @@ public class CollisionDebugTestScenario : ScenarioBase
         // Validate: all units still present
         int alive = 0;
         for (int i = 0; i < sim.Units.Count; i++)
-            if (sim.Units.Alive[i]) alive++;
+            if (sim.Units[i].Alive) alive++;
 
         bool pass = alive > 0;
         DebugLog.Log(ScenarioLog, $"Units alive: {alive}/{sim.Units.Count} -> {(pass ? "PASS" : "FAIL")}");

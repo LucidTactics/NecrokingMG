@@ -78,7 +78,7 @@ public class RaidWorkersScenario : ScenarioBase
             int workerIdx = units.AddUnit(new Vec2(ox + 2f, oy + 1f), UnitType.Skeleton);
             if (workerIdx >= 0)
             {
-                units.AI[workerIdx] = AIBehavior.CorpseWorker;
+                units[workerIdx].AI = AIBehavior.CorpseWorker;
                 DebugLog.Log(ScenarioLog, $"  Worker skeleton at ({ox + 2f:F0}, {oy + 1f:F0})");
             }
 
@@ -114,7 +114,7 @@ public class RaidWorkersScenario : ScenarioBase
             int idx = units.AddUnit(new Vec2(sx, raidStartY), UnitType.Soldier);
             if (idx >= 0)
             {
-                units.AI[idx] = AIBehavior.Raid;
+                units[idx].AI = AIBehavior.Raid;
                 DebugLog.Log(ScenarioLog, $"  Soldier {s} at ({sx:F1}, {raidStartY:F0}) - Raid AI");
             }
         }
@@ -134,9 +134,9 @@ public class RaidWorkersScenario : ScenarioBase
         int undeadCount = 0, humanCount = 0;
         for (int i = 0; i < units.Count; i++)
         {
-            if (!units.Alive[i]) continue;
-            if (units.Type[i] == UnitType.Necromancer) continue;
-            if (units.Faction[i] == Faction.Undead) undeadCount++;
+            if (!units[i].Alive) continue;
+            if (units[i].Type == UnitType.Necromancer) continue;
+            if (units[i].Faction == Faction.Undead) undeadCount++;
             else humanCount++;
         }
 
@@ -174,12 +174,12 @@ public class RaidWorkersScenario : ScenarioBase
             int forced = 0;
             for (int i = 0; i < mu.Count; i++)
             {
-                if (!mu.Alive[i]) continue;
-                if (mu.Type[i] == UnitType.Necromancer) continue;
-                var ai = mu.AI[i];
+                if (!mu[i].Alive) continue;
+                if (mu[i].Type == UnitType.Necromancer) continue;
+                var ai = mu[i].AI;
                 if (ai == AIBehavior.IdleAtPoint || ai == AIBehavior.CorpseWorker || ai == AIBehavior.DefendPoint)
                 {
-                    mu.AI[i] = AIBehavior.AttackClosest;
+                    mu[i].AI = AIBehavior.AttackClosest;
                     forced++;
                 }
             }
@@ -205,8 +205,8 @@ public class RaidWorkersScenario : ScenarioBase
         int undeadAlive = 0, humanAlive = 0;
         for (int i = 0; i < sim.Units.Count; i++)
         {
-            if (!sim.Units.Alive[i] || sim.Units.Type[i] == UnitType.Necromancer) continue;
-            if (sim.Units.Faction[i] == Faction.Undead) undeadAlive++;
+            if (!sim.Units[i].Alive || sim.Units[i].Type == UnitType.Necromancer) continue;
+            if (sim.Units[i].Faction == Faction.Undead) undeadAlive++;
             else humanAlive++;
         }
 

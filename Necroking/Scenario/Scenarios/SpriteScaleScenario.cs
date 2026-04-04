@@ -32,8 +32,8 @@ public class SpriteScaleScenario : ScenarioBase
         {
             float x = _cx - 6f + s * 4f;
             int idx = sim.UnitsMut.AddUnit(new Vec2(x, _cy), UnitType.Skeleton);
-            sim.UnitsMut.SpriteScale[idx] = scales[s];
-            DebugLog.Log(ScenarioLog, $"Skeleton at ({x:F1}, {_cy:F1}) scale={scales[s]:F1} -> actual SpriteScale={sim.Units.SpriteScale[idx]:F1}");
+            sim.UnitsMut[idx].SpriteScale = scales[s];
+            DebugLog.Log(ScenarioLog, $"Skeleton at ({x:F1}, {_cy:F1}) scale={scales[s]:F1} -> actual SpriteScale={sim.Units[idx].SpriteScale:F1}");
         }
 
         // Also spawn soldiers at different scales on second row
@@ -41,13 +41,13 @@ public class SpriteScaleScenario : ScenarioBase
         {
             float x = _cx - 6f + s * 4f;
             int idx = sim.UnitsMut.AddUnit(new Vec2(x, _cy + 5f), UnitType.Soldier);
-            sim.UnitsMut.SpriteScale[idx] = scales[s];
-            DebugLog.Log(ScenarioLog, $"Soldier at ({x:F1}, {_cy + 5f:F1}) scale={scales[s]:F1} -> actual SpriteScale={sim.Units.SpriteScale[idx]:F1}");
+            sim.UnitsMut[idx].SpriteScale = scales[s];
+            DebugLog.Log(ScenarioLog, $"Soldier at ({x:F1}, {_cy + 5f:F1}) scale={scales[s]:F1} -> actual SpriteScale={sim.Units[idx].SpriteScale:F1}");
         }
 
         // Disable AI so units stand still
         for (int i = 0; i < sim.Units.Count; i++)
-            sim.UnitsMut.AI[i] = AIBehavior.IdleAtPoint;
+            sim.UnitsMut[i].AI = AIBehavior.IdleAtPoint;
 
         ZoomOnLocation(_cx, _cy + 2.5f, 40f);
     }
@@ -90,7 +90,7 @@ public class SpriteScaleScenario : ScenarioBase
             // Verify scale values are correct
             for (int i = 0; i < sim.Units.Count; i++)
             {
-                DebugLog.Log(ScenarioLog, $"Unit {i}: type={sim.Units.Type[i]} scale={sim.Units.SpriteScale[i]:F2}");
+                DebugLog.Log(ScenarioLog, $"Unit {i}: type={sim.Units[i].Type} scale={sim.Units[i].SpriteScale:F2}");
             }
             _complete = true;
         }
@@ -105,7 +105,7 @@ public class SpriteScaleScenario : ScenarioBase
         bool has05 = false, has10 = false, has15 = false, has20 = false;
         for (int i = 0; i < sim.Units.Count; i++)
         {
-            float s = sim.Units.SpriteScale[i];
+            float s = sim.Units[i].SpriteScale;
             if (System.MathF.Abs(s - 0.5f) < 0.01f) has05 = true;
             if (System.MathF.Abs(s - 1.0f) < 0.01f) has10 = true;
             if (System.MathF.Abs(s - 1.5f) < 0.01f) has15 = true;

@@ -33,7 +33,7 @@ public static class PotionSystem
         // Must have the item in inventory
         if (inventory.GetItemCount(potion.ItemID) <= 0) return false;
 
-        var necroPos = units.Position[necroIdx];
+        var necroPos = units[necroIdx].Position;
         float dist = (mouseWorld - necroPos).Length();
 
         // Range check
@@ -48,8 +48,8 @@ public static class PotionSystem
         }
 
         // Throw projectile
-        uint necroUid = units.Id[necroIdx];
-        projectiles.SpawnPotionLob(necroPos, mouseWorld, units.Faction[necroIdx], necroUid,
+        uint necroUid = units[necroIdx].Id;
+        projectiles.SpawnPotionLob(necroPos, mouseWorld, units[necroIdx].Faction, necroUid,
             potionId, potion.ProjectileScale);
 
         // Set visuals on the spawned projectile
@@ -128,7 +128,7 @@ public static class PotionSystem
             {
                 BuffSystem.ApplyBuff(units, unitIdx, buffDef);
                 // Mark the buff as permanent
-                var activeBuffs = units.ActiveBuffs[unitIdx];
+                var activeBuffs = units[unitIdx].ActiveBuffs;
                 for (int i = 0; i < activeBuffs.Count; i++)
                 {
                     if (activeBuffs[i].BuffDefID == buffDef.Id)
@@ -143,7 +143,7 @@ public static class PotionSystem
         }
 
         // Set frenzy behavior flag
-        units.Frenzied[unitIdx] = true;
+        units[unitIdx].Frenzied = true;
     }
 
     private static void ApplyParalysis(PotionDef potion, BuffRegistry buffs, int unitIdx, UnitArrays units)
@@ -151,8 +151,8 @@ public static class PotionSystem
         if (unitIdx < 0 || unitIdx >= units.Count) return;
 
         // Start the slow phase (8 seconds of gradually slowing to 0)
-        units.ParalysisSlowTimer[unitIdx] = 8f;
-        units.ParalysisStunTimer[unitIdx] = 0f;
+        units[unitIdx].ParalysisSlowTimer = 8f;
+        units[unitIdx].ParalysisStunTimer = 0f;
 
         // Apply visual buff
         if (!string.IsNullOrEmpty(potion.BuffID))
@@ -170,10 +170,10 @@ public static class PotionSystem
         if (unitIdx < 0) return;
 
         // Hit a unit
-        if (units.Faction[unitIdx] == ownerFaction)
+        if (units[unitIdx].Faction == ownerFaction)
         {
             // Friendly: coat weapons with zombie curse
-            units.WeaponZombieCoatTimer[unitIdx] = 300f; // 5 minutes
+            units[unitIdx].WeaponZombieCoatTimer = 300f; // 5 minutes
 
             if (!string.IsNullOrEmpty(potion.BuffID))
             {
@@ -185,7 +185,7 @@ public static class PotionSystem
         else
         {
             // Enemy: mark to raise as zombie on death
-            units.ZombieOnDeath[unitIdx] = true;
+            units[unitIdx].ZombieOnDeath = true;
 
             if (!string.IsNullOrEmpty(potion.BuffID))
             {
@@ -200,11 +200,11 @@ public static class PotionSystem
     {
         if (unitIdx < 0 || unitIdx >= units.Count) return;
 
-        if (units.Faction[unitIdx] == ownerFaction)
+        if (units[unitIdx].Faction == ownerFaction)
         {
             // Friendly: coat weapons with poison
-            units.WeaponPoisonCoatTimer[unitIdx] = 300f; // 5 minutes
-            units.WeaponPoisonAmount[unitIdx] = 5;
+            units[unitIdx].WeaponPoisonCoatTimer = 300f; // 5 minutes
+            units[unitIdx].WeaponPoisonAmount = 5;
 
             if (!string.IsNullOrEmpty(potion.BuffID))
             {
@@ -216,9 +216,9 @@ public static class PotionSystem
         else
         {
             // Enemy: apply 10 poison stacks
-            units.PoisonStacks[unitIdx] += 10;
-            if (units.PoisonTickTimer[unitIdx] <= 0f)
-                units.PoisonTickTimer[unitIdx] = 3f;
+            units[unitIdx].PoisonStacks += 10;
+            if (units[unitIdx].PoisonTickTimer <= 0f)
+                units[unitIdx].PoisonTickTimer = 3f;
 
             if (!string.IsNullOrEmpty(potion.BuffID))
             {
@@ -235,9 +235,9 @@ public static class PotionSystem
     /// </summary>
     public static float GetParalysisFraction(UnitArrays units, int unitIdx)
     {
-        if (units.ParalysisStunTimer[unitIdx] > 0f) return 0f;
-        if (units.ParalysisSlowTimer[unitIdx] > 0f)
-            return MathF.Max(units.ParalysisSlowTimer[unitIdx] / 8f, 0f);
+        if (units[unitIdx].ParalysisStunTimer > 0f) return 0f;
+        if (units[unitIdx].ParalysisSlowTimer > 0f)
+            return MathF.Max(units[unitIdx].ParalysisSlowTimer / 8f, 0f);
         return 1f;
     }
 
@@ -249,79 +249,79 @@ public static class PotionSystem
         for (int i = 0; i < units.Count; i++)
         {
             // --- Paralysis ---
-            if (units.ParalysisSlowTimer[i] > 0f)
+            if (units[i].ParalysisSlowTimer > 0f)
             {
-                units.ParalysisSlowTimer[i] -= dt;
+                units[i].ParalysisSlowTimer -= dt;
                 // Lerp speed toward 0 over 8 seconds; attack/defense handled in combat resolution
-                float slowFraction = MathF.Max(units.ParalysisSlowTimer[i] / 8f, 0f);
-                units.MaxSpeed[i] *= slowFraction;
+                float slowFraction = MathF.Max(units[i].ParalysisSlowTimer / 8f, 0f);
+                units[i].MaxSpeed *= slowFraction;
 
-                if (units.ParalysisSlowTimer[i] <= 0f)
+                if (units[i].ParalysisSlowTimer <= 0f)
                 {
-                    units.ParalysisSlowTimer[i] = 0f;
-                    units.ParalysisStunTimer[i] = 6f;
+                    units[i].ParalysisSlowTimer = 0f;
+                    units[i].ParalysisStunTimer = 6f;
                 }
             }
 
-            if (units.ParalysisStunTimer[i] > 0f)
+            if (units[i].ParalysisStunTimer > 0f)
             {
-                units.ParalysisStunTimer[i] -= dt;
+                units[i].ParalysisStunTimer -= dt;
                 // Completely stunned: zero speed; attack/defense handled in combat resolution
-                units.MaxSpeed[i] = 0f;
+                units[i].MaxSpeed = 0f;
 
-                if (units.ParalysisStunTimer[i] <= 0f)
-                    units.ParalysisStunTimer[i] = 0f;
+                if (units[i].ParalysisStunTimer <= 0f)
+                    units[i].ParalysisStunTimer = 0f;
             }
 
             // --- Poison DoT ---
-            if (units.PoisonStacks[i] > 0)
+            if (units[i].PoisonStacks > 0)
             {
-                units.PoisonTickTimer[i] -= dt;
-                if (units.PoisonTickTimer[i] <= 0f)
+                units[i].PoisonTickTimer -= dt;
+                if (units[i].PoisonTickTimer <= 0f)
                 {
                     // Deal poison damage: ceil(stacks / 10)
-                    int dmg = (int)MathF.Ceiling(units.PoisonStacks[i] / 10f);
-                    units.Stats[i].HP -= dmg;
-                    units.PoisonStacks[i] -= dmg;
-                    if (units.PoisonStacks[i] <= 0) units.PoisonStacks[i] = 0;
+                    int dmg = (int)MathF.Ceiling(units[i].PoisonStacks / 10f);
+                    units[i].Stats.HP -= dmg;
+                    units[i].PoisonStacks -= dmg;
+                    if (units[i].PoisonStacks <= 0) units[i].PoisonStacks = 0;
 
                     // Green damage number
                     damageEvents.Add(new DamageEvent
                     {
-                        Position = units.Position[i],
+                        Position = units[i].Position,
                         Damage = dmg,
                         Height = 1.5f,
                         IsPoison = true
                     });
 
-                    if (units.Stats[i].HP <= 0)
+                    if (units[i].Stats.HP <= 0)
                     {
-                        units.Alive[i] = false;
-                        units.Stats[i].HP = 0;
+                        units[i].Alive = false;
+                        units[i].Stats.HP = 0;
                     }
 
                     // Reset tick timer if still poisoned
-                    if (units.PoisonStacks[i] > 0)
-                        units.PoisonTickTimer[i] = 3f;
+                    if (units[i].PoisonStacks > 0)
+                        units[i].PoisonTickTimer = 3f;
                 }
             }
 
             // --- Weapon coat timers ---
-            if (units.WeaponPoisonCoatTimer[i] > 0f)
+            if (units[i].WeaponPoisonCoatTimer > 0f)
             {
-                units.WeaponPoisonCoatTimer[i] -= dt;
-                if (units.WeaponPoisonCoatTimer[i] <= 0f)
+                units[i].WeaponPoisonCoatTimer -= dt;
+                if (units[i].WeaponPoisonCoatTimer <= 0f)
                 {
-                    units.WeaponPoisonCoatTimer[i] = 0f;
-                    units.WeaponPoisonAmount[i] = 0;
+                    units[i].WeaponPoisonCoatTimer = 0f;
+                    units[i].WeaponPoisonAmount = 0;
                 }
             }
 
-            if (units.WeaponZombieCoatTimer[i] > 0f)
+            if (units[i].WeaponZombieCoatTimer > 0f)
             {
-                units.WeaponZombieCoatTimer[i] -= dt;
-                if (units.WeaponZombieCoatTimer[i] <= 0f)
-                    units.WeaponZombieCoatTimer[i] = 0f;
+                units[i].WeaponZombieCoatTimer -= dt;
+                if (units[i].WeaponZombieCoatTimer <= 0f)
+                    units[i].WeaponZombieCoatTimer = 0f;
             }
         }
     }

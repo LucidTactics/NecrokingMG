@@ -87,7 +87,7 @@ public class CorpseWorkerScenario : ScenarioBase
         int idx = units.AddUnit(new Vec2(CX + 3f, CY + 3f), UnitType.Skeleton);
         if (idx >= 0)
         {
-            units.AI[idx] = AIBehavior.CorpseWorker;
+            units[idx].AI = AIBehavior.CorpseWorker;
             DebugLog.Log(ScenarioLog, $"Skeleton worker spawned at ({CX + 3f}, {CY + 3f}), idx={idx}, AI=CorpseWorker");
         }
 
@@ -113,8 +113,8 @@ public class CorpseWorkerScenario : ScenarioBase
         int skeletonCount = 0;
         for (int i = 0; i < units.Count; i++)
         {
-            if (!units.Alive[i]) continue;
-            if (units.Faction[i] == Faction.Undead) skeletonCount++;
+            if (!units[i].Alive) continue;
+            if (units[i].Faction == Faction.Undead) skeletonCount++;
         }
 
         if (_phase == 0)

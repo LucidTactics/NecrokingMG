@@ -239,11 +239,11 @@ public class TriggerSystem
                         int killed = 0;
                         for (int j = 0; j < sim.Units.Count; j++)
                         {
-                            if (!sim.Units.Alive[j]) continue;
+                            if (!sim.Units[j].Alive) continue;
                             if (kill.MaxKills > 0 && killed >= kill.MaxKills) break;
-                            if (region.ContainsPoint(sim.Units.Position[j]))
+                            if (region.ContainsPoint(sim.Units[j].Position))
                             {
-                                sim.UnitsMut.Alive[j] = false;
+                                sim.UnitsMut[j].Alive = false;
                                 killed++;
                             }
                         }

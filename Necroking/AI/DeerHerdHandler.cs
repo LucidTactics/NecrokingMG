@@ -60,7 +60,7 @@ public class DeerHerdHandler : IArchetypeHandler
 
     public void OnSpawn(ref AIContext ctx)
     {
-        ctx.Units.SpawnPosition[ctx.UnitIndex] = ctx.MyPos;
+        ctx.Units[ctx.UnitIndex].SpawnPosition = ctx.MyPos;
         ctx.Routine = ctx.IsNight ? RoutineSleeping : RoutineIdleRoaming;
         ctx.Subroutine = 0;
         ctx.SubroutineTimer = 0f;
@@ -104,16 +104,16 @@ public class DeerHerdHandler : IArchetypeHandler
             {
                 ctx.Routine = RoutineCalming;
                 ctx.SubroutineTimer = CalmDuration;
-                ctx.Units.Target[ctx.UnitIndex] = CombatTarget.None;
-                ctx.Units.EngagedTarget[ctx.UnitIndex] = CombatTarget.None;
+                ctx.Units[ctx.UnitIndex].Target = CombatTarget.None;
+                ctx.Units[ctx.UnitIndex].EngagedTarget = CombatTarget.None;
                 return;
             }
             if (ctx.Routine == RoutineFightBack && !SubroutineSteps.IsTargetAlive(ref ctx))
             {
                 ctx.Routine = RoutineCalming;
                 ctx.SubroutineTimer = CalmDuration;
-                ctx.Units.Target[ctx.UnitIndex] = CombatTarget.None;
-                ctx.Units.EngagedTarget[ctx.UnitIndex] = CombatTarget.None;
+                ctx.Units[ctx.UnitIndex].Target = CombatTarget.None;
+                ctx.Units[ctx.UnitIndex].EngagedTarget = CombatTarget.None;
                 return;
             }
         }
@@ -135,8 +135,8 @@ public class DeerHerdHandler : IArchetypeHandler
         {
             if (!SubroutineSteps.IsTargetAlive(ref ctx))
             {
-                ctx.Units.Target[ctx.UnitIndex] = CombatTarget.None;
-                ctx.Units.EngagedTarget[ctx.UnitIndex] = CombatTarget.None;
+                ctx.Units[ctx.UnitIndex].Target = CombatTarget.None;
+                ctx.Units[ctx.UnitIndex].EngagedTarget = CombatTarget.None;
                 ctx.AlertState = (byte)UnitAlertState.Unaware;
                 ctx.AlertTarget = GameConstants.InvalidUnit;
                 SwitchToTimeOfDayRoutine(ref ctx);
@@ -144,8 +144,8 @@ public class DeerHerdHandler : IArchetypeHandler
             }
             if (ctx.AlertState == (byte)UnitAlertState.Unaware)
             {
-                ctx.Units.Target[ctx.UnitIndex] = CombatTarget.None;
-                ctx.Units.EngagedTarget[ctx.UnitIndex] = CombatTarget.None;
+                ctx.Units[ctx.UnitIndex].Target = CombatTarget.None;
+                ctx.Units[ctx.UnitIndex].EngagedTarget = CombatTarget.None;
                 SwitchToTimeOfDayRoutine(ref ctx);
                 return;
             }
@@ -165,7 +165,7 @@ public class DeerHerdHandler : IArchetypeHandler
 
     private static bool IsMale(ref AIContext ctx)
     {
-        string defId = ctx.Units.UnitDefID[ctx.UnitIndex] ?? "";
+        string defId = ctx.Units[ctx.UnitIndex].UnitDefID ?? "";
         return defId.Contains("Male", StringComparison.OrdinalIgnoreCase)
             && !defId.Contains("Female", StringComparison.OrdinalIgnoreCase);
     }
@@ -173,14 +173,14 @@ public class DeerHerdHandler : IArchetypeHandler
     /// <summary>Check if any hostile is within a fraction of the detection range.</summary>
     private static bool AnyHostileWithinThreshold(ref AIContext ctx)
     {
-        float detRange = ctx.Units.DetectionRange[ctx.UnitIndex];
+        float detRange = ctx.Units[ctx.UnitIndex].DetectionRange;
         float threshold = detRange * AlertThresholdFraction;
         float threshSq = threshold * threshold;
         var myFaction = ctx.MyFaction;
         for (int j = 0; j < ctx.Units.Count; j++)
         {
-            if (!ctx.Units.Alive[j] || ctx.Units.Faction[j] == myFaction) continue;
-            if ((ctx.Units.Position[j] - ctx.MyPos).LengthSq() < threshSq)
+            if (!ctx.Units[j].Alive || ctx.Units[j].Faction == myFaction) continue;
+            if ((ctx.Units[j].Position - ctx.MyPos).LengthSq() < threshSq)
                 return true;
         }
         return false;
@@ -193,8 +193,8 @@ public class DeerHerdHandler : IArchetypeHandler
         var myFaction = ctx.MyFaction;
         for (int j = 0; j < ctx.Units.Count; j++)
         {
-            if (!ctx.Units.Alive[j] || ctx.Units.Faction[j] == myFaction) continue;
-            if ((ctx.Units.Position[j] - ctx.MyPos).LengthSq() < 15f * 15f)
+            if (!ctx.Units[j].Alive || ctx.Units[j].Faction == myFaction) continue;
+            if ((ctx.Units[j].Position - ctx.MyPos).LengthSq() < 15f * 15f)
                 threatCount++;
         }
         return threatCount <= 1;
@@ -245,7 +245,7 @@ public class DeerHerdHandler : IArchetypeHandler
                     ctx.Routine = RoutineFightBack;
                     ctx.Subroutine = FightStance;
                     ctx.SubroutineTimer = 0f;
-                    ctx.Units.Target[ctx.UnitIndex] = CombatTarget.Unit(ctx.AlertTarget);
+                    ctx.Units[ctx.UnitIndex].Target = CombatTarget.Unit(ctx.AlertTarget);
                     return;
                 }
                 else
@@ -264,26 +264,26 @@ public class DeerHerdHandler : IArchetypeHandler
 
     private static void PropagateFleeToHerd(ref AIContext ctx)
     {
-        float herdRadius = ctx.Units.GroupAlertRadius[ctx.UnitIndex];
+        float herdRadius = ctx.Units[ctx.UnitIndex].GroupAlertRadius;
         if (herdRadius <= 0f) herdRadius = 15f;
         float herdRadiusSq = herdRadius * herdRadius;
 
         for (int j = 0; j < ctx.Units.Count; j++)
         {
-            if (j == ctx.UnitIndex || !ctx.Units.Alive[j]) continue;
-            if (ctx.Units.Faction[j] != ctx.MyFaction) continue;
-            if (ctx.Units.Archetype[j] != ArchetypeRegistry.DeerHerd) continue;
-            if ((ctx.Units.Position[j] - ctx.MyPos).LengthSq() > herdRadiusSq) continue;
+            if (j == ctx.UnitIndex || !ctx.Units[j].Alive) continue;
+            if (ctx.Units[j].Faction != ctx.MyFaction) continue;
+            if (ctx.Units[j].Archetype != ArchetypeRegistry.DeerHerd) continue;
+            if ((ctx.Units[j].Position - ctx.MyPos).LengthSq() > herdRadiusSq) continue;
 
             // Only escalate deer that aren't already fleeing/fighting
-            byte r = ctx.Units.Routine[j];
+            byte r = ctx.Units[j].Routine;
             if (r == RoutineFleeing || r == RoutineFightBack) continue;
 
-            ctx.Units.Routine[j] = RoutineFleeing;
-            ctx.Units.Subroutine[j] = 0;
-            ctx.Units.SubroutineTimer[j] = 0f;
-            ctx.Units.AlertTarget[j] = ctx.AlertTarget;
-            ctx.Units.AlertState[j] = (byte)UnitAlertState.Aggressive;
+            ctx.Units[j].Routine = RoutineFleeing;
+            ctx.Units[j].Subroutine = 0;
+            ctx.Units[j].SubroutineTimer = 0f;
+            ctx.Units[j].AlertTarget = ctx.AlertTarget;
+            ctx.Units[j].AlertState = (byte)UnitAlertState.Aggressive;
         }
     }
 
@@ -296,7 +296,7 @@ public class DeerHerdHandler : IArchetypeHandler
         int threatIdx = SubroutineSteps.ResolveAlertTarget(ref ctx);
         if (threatIdx >= 0)
         {
-            Vec2 threatPos = ctx.Units.Position[threatIdx];
+            Vec2 threatPos = ctx.Units[threatIdx].Position;
             Vec2 awayDir = ctx.MyPos - threatPos;
             float dist = awayDir.Length();
             if (dist > 0.01f) awayDir *= 1f / dist;
@@ -307,7 +307,7 @@ public class DeerHerdHandler : IArchetypeHandler
         }
         else
         {
-            ctx.Units.PreferredVel[ctx.UnitIndex] = Vec2.Zero;
+            ctx.Units[ctx.UnitIndex].PreferredVel = Vec2.Zero;
         }
     }
 
@@ -317,7 +317,7 @@ public class DeerHerdHandler : IArchetypeHandler
 
     private static void UpdateCalming(ref AIContext ctx)
     {
-        ctx.Units.PreferredVel[ctx.UnitIndex] = Vec2.Zero;
+        ctx.Units[ctx.UnitIndex].PreferredVel = Vec2.Zero;
         ctx.SubroutineTimer -= ctx.Dt;
         if (ctx.SubroutineTimer <= 0f)
         {
@@ -350,18 +350,18 @@ public class DeerHerdHandler : IArchetypeHandler
                 if (targetIdx >= 0)
                 {
                     // Face the target but don't move
-                    var dir = ctx.Units.Position[targetIdx] - ctx.MyPos;
+                    var dir = ctx.Units[targetIdx].Position - ctx.MyPos;
                     if (dir.LengthSq() > 0.01f)
                     {
                         float angle = MathF.Atan2(dir.Y, dir.X) * (180f / MathF.PI);
-                        ctx.Units.FacingAngle[ctx.UnitIndex] = angle;
+                        ctx.Units[ctx.UnitIndex].FacingAngle = angle;
                     }
                 }
-                ctx.Units.PreferredVel[ctx.UnitIndex] = Vec2.Zero;
+                ctx.Units[ctx.UnitIndex].PreferredVel = Vec2.Zero;
 
                 // When attack is ready, charge
-                if (ctx.Units.AttackCooldown[ctx.UnitIndex] <= 0f &&
-                    ctx.Units.PostAttackTimer[ctx.UnitIndex] <= 0f)
+                if (ctx.Units[ctx.UnitIndex].AttackCooldown <= 0f &&
+                    ctx.Units[ctx.UnitIndex].PostAttackTimer <= 0f)
                 {
                     ctx.Subroutine = FightCharge;
                     ctx.SubroutineTimer = 0f;
@@ -375,7 +375,7 @@ public class DeerHerdHandler : IArchetypeHandler
                 if (targetIdx >= 0)
                 {
                     float range = SubroutineSteps.GetMeleeRange(ref ctx, targetIdx);
-                    float dist = (ctx.Units.Position[targetIdx] - ctx.MyPos).Length();
+                    float dist = (ctx.Units[targetIdx].Position - ctx.MyPos).Length();
 
                     if (dist <= range)
                     {
@@ -383,17 +383,17 @@ public class DeerHerdHandler : IArchetypeHandler
                         SubroutineSteps.AttackTarget(ref ctx);
 
                         // Once attack fires (cooldown starts), return to stance
-                        if (ctx.Units.AttackCooldown[ctx.UnitIndex] > 0f)
+                        if (ctx.Units[ctx.UnitIndex].AttackCooldown > 0f)
                         {
                             ctx.Subroutine = FightStance;
                             ctx.SubroutineTimer = 0f;
-                            ctx.Units.EngagedTarget[ctx.UnitIndex] = CombatTarget.None;
+                            ctx.Units[ctx.UnitIndex].EngagedTarget = CombatTarget.None;
                         }
                     }
                     else
                     {
                         // Still closing distance
-                        SubroutineSteps.MoveToward(ref ctx, ctx.Units.Position[targetIdx], ctx.MySpeed);
+                        SubroutineSteps.MoveToward(ref ctx, ctx.Units[targetIdx].Position, ctx.MySpeed);
                     }
                 }
                 break;
@@ -415,7 +415,7 @@ public class DeerHerdHandler : IArchetypeHandler
         ctx.Routine = RoutineFeeding;
         ctx.Subroutine = FeedWalkToBush;
         ctx.SubroutineTimer = 0f;
-        ctx.Units.MoveTarget[ctx.UnitIndex] = bushPos;
+        ctx.Units[ctx.UnitIndex].MoveTarget = bushPos;
         return true;
     }
 
@@ -425,7 +425,7 @@ public class DeerHerdHandler : IArchetypeHandler
         {
             case FeedWalkToBush:
             {
-                Vec2 target = ctx.Units.MoveTarget[ctx.UnitIndex];
+                Vec2 target = ctx.Units[ctx.UnitIndex].MoveTarget;
                 float dist = (ctx.MyPos - target).Length();
                 if (dist > 1.5f)
                 {
@@ -436,7 +436,7 @@ public class DeerHerdHandler : IArchetypeHandler
                     // Arrived at bush — start eating
                     ctx.Subroutine = FeedEating;
                     ctx.SubroutineTimer = FeedDuration;
-                    ctx.Units.PreferredVel[ctx.UnitIndex] = Vec2.Zero;
+                    ctx.Units[ctx.UnitIndex].PreferredVel = Vec2.Zero;
                 }
                 break;
             }
@@ -444,11 +444,11 @@ public class DeerHerdHandler : IArchetypeHandler
             case FeedEating:
             {
                 // Stand still facing the bush, playing feed animation
-                ctx.Units.PreferredVel[ctx.UnitIndex] = Vec2.Zero;
+                ctx.Units[ctx.UnitIndex].PreferredVel = Vec2.Zero;
                 // Face toward the bush target
-                Vec2 toBush = ctx.Units.MoveTarget[ctx.UnitIndex] - ctx.MyPos;
+                Vec2 toBush = ctx.Units[ctx.UnitIndex].MoveTarget - ctx.MyPos;
                 if (toBush.LengthSq() > 0.01f)
-                    ctx.Units.FacingAngle[ctx.UnitIndex] = MathF.Atan2(toBush.Y, toBush.X) * (180f / MathF.PI);
+                    ctx.Units[ctx.UnitIndex].FacingAngle = MathF.Atan2(toBush.Y, toBush.X) * (180f / MathF.PI);
                 ctx.SubroutineTimer -= ctx.Dt;
                 if (ctx.SubroutineTimer <= 0f)
                 {
@@ -460,7 +460,7 @@ public class DeerHerdHandler : IArchetypeHandler
 
             case FeedIdleAfter:
             {
-                ctx.Units.PreferredVel[ctx.UnitIndex] = Vec2.Zero;
+                ctx.Units[ctx.UnitIndex].PreferredVel = Vec2.Zero;
                 ctx.SubroutineTimer -= ctx.Dt;
                 if (ctx.SubroutineTimer <= 0f)
                 {
@@ -470,7 +470,7 @@ public class DeerHerdHandler : IArchetypeHandler
                     {
                         ctx.Subroutine = FeedWalkToBush;
                         ctx.SubroutineTimer = 0f;
-                        ctx.Units.MoveTarget[ctx.UnitIndex] = nextBush;
+                        ctx.Units[ctx.UnitIndex].MoveTarget = nextBush;
                     }
                     else
                     {
@@ -492,7 +492,7 @@ public class DeerHerdHandler : IArchetypeHandler
         var envSystem = ctx.EnvSystem;
         if (envSystem == null) return false;
 
-        Vec2 spawnPos = ctx.Units.SpawnPosition[ctx.UnitIndex];
+        Vec2 spawnPos = ctx.Units[ctx.UnitIndex].SpawnPosition;
         float searchRadiusSq = BushSearchRadius * BushSearchRadius;
         float minDistSq = minDist * minDist;
 

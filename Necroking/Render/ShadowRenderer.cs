@@ -67,9 +67,9 @@ public class ShadowRenderer
 
         for (int i = 0; i < sim.Units.Count; i++)
         {
-            if (!sim.Units.Alive[i]) continue;
-            float unitRadius = sim.Units.Radius[i];
-            var worldPos = sim.Units.Position[i];
+            if (!sim.Units[i].Alive) continue;
+            float unitRadius = sim.Units[i].Radius;
+            var worldPos = sim.Units[i].Position;
             var sp = renderer.WorldToScreen(worldPos, 0f, camera);
 
             float r = unitRadius * camera.Zoom * 0.8f;
@@ -177,20 +177,20 @@ public class ShadowRenderer
         // Unit shadows
         for (int i = 0; i < sim.Units.Count; i++)
         {
-            if (!sim.Units.Alive[i]) continue;
-            uint uid = sim.Units.Id[i];
+            if (!sim.Units[i].Alive) continue;
+            uint uid = sim.Units[i].Id;
             if (!unitAnims.TryGetValue(uid, out var animData)) continue;
 
-            var unitDef = gameData.Units.Get(sim.Units.UnitDefID[i]);
+            var unitDef = gameData.Units.Get(sim.Units[i].UnitDefID);
             if (unitDef == null) continue;
 
             var atlas = atlases[(int)animData.AtlasID];
             if (!atlas.IsLoaded || atlas.Texture == null) continue;
 
-            var fr = animData.Ctrl.GetCurrentFrame(sim.Units.FacingAngle[i]);
+            var fr = animData.Ctrl.GetCurrentFrame(sim.Units[i].FacingAngle);
             if (fr.Frame == null) continue;
 
-            float worldH = (unitDef.SpriteWorldHeight > 0 ? unitDef.SpriteWorldHeight : 1.8f) * sim.Units.SpriteScale[i];
+            float worldH = (unitDef.SpriteWorldHeight > 0 ? unitDef.SpriteWorldHeight : 1.8f) * sim.Units[i].SpriteScale;
             float pixelH = worldH * camera.Zoom;
             float scale = pixelH / animData.RefFrameHeight;
 
@@ -207,7 +207,7 @@ public class ShadowRenderer
             float sdx = sdxDir * swLen;
             float sdy = sdyDir * swLen * camera.YRatio;
 
-            var feetSp = renderer.WorldToScreen(sim.Units.Position[i], 0f, camera);
+            var feetSp = renderer.WorldToScreen(sim.Units[i].Position, 0f, camera);
 
             // UV coordinates from atlas
             float texW = atlas.Texture.Width;

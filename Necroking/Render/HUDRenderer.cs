@@ -133,7 +133,7 @@ public class HUDRenderer
     {
         if (necroIdx >= 0)
         {
-            var stats = sim.Units.Stats[necroIdx];
+            var stats = sim.Units[necroIdx].Stats;
             float hpFrac = stats.MaxHP > 0 ? (float)stats.HP / stats.MaxHP : 0f;
             _batch.Draw(_pixel, new Rectangle(BarX, HpBarY, BarWidth, BarHeight), HpBarBg);
             _batch.Draw(_pixel, new Rectangle(BarX, HpBarY, (int)(BarWidth * hpFrac), BarHeight), HpBarFg);

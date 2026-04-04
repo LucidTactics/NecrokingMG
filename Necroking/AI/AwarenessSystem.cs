@@ -29,16 +29,16 @@ public static class AwarenessSystem
     {
         for (int i = 0; i < units.Count; i++)
         {
-            if (!units.Alive[i]) continue;
-            if (units.Archetype[i] == ArchetypeRegistry.PlayerControlled) continue;
-            if (units.Archetype[i] == ArchetypeRegistry.None) continue;
+            if (!units[i].Alive) continue;
+            if (units[i].Archetype == ArchetypeRegistry.PlayerControlled) continue;
+            if (units[i].Archetype == ArchetypeRegistry.None) continue;
 
-            float detectionRange = units.DetectionRange[i];
-            float breakRange = units.DetectionBreakRange[i];
+            float detectionRange = units[i].DetectionRange;
+            float breakRange = units[i].DetectionBreakRange;
             if (detectionRange <= 0f) continue; // no awareness
 
-            byte alertState = units.AlertState[i];
-            Vec2 myPos = units.Position[i];
+            byte alertState = units[i].AlertState;
+            Vec2 myPos = units[i].Position;
 
             switch (alertState)
             {
@@ -48,12 +48,12 @@ public static class AwarenessSystem
                     int threatIdx = FindClosestThreat(units, i, detectionRange);
                     if (threatIdx >= 0)
                     {
-                        units.AlertState[i] = (byte)UnitAlertState.Alert;
-                        units.AlertTimer[i] = 0f;
-                        units.AlertTarget[i] = units.Id[threatIdx];
+                        units[i].AlertState = (byte)UnitAlertState.Alert;
+                        units[i].AlertTimer = 0f;
+                        units[i].AlertTarget = units[threatIdx].Id;
 
                         // Group propagation
-                        float groupRadius = units.GroupAlertRadius[i];
+                        float groupRadius = units[i].GroupAlertRadius;
                         if (groupRadius > 0f)
                             PropagateAlert(units, i, threatIdx, groupRadius);
                     }
@@ -62,33 +62,33 @@ public static class AwarenessSystem
 
                 case (byte)UnitAlertState.Alert:
                 {
-                    units.AlertTimer[i] += dt;
+                    units[i].AlertTimer += dt;
                     int threatIdx = ResolveThreat(units, i);
 
                     if (threatIdx < 0)
                     {
                         // Threat gone — calm down
-                        units.AlertState[i] = (byte)UnitAlertState.Unaware;
-                        units.AlertTarget[i] = GameConstants.InvalidUnit;
+                        units[i].AlertState = (byte)UnitAlertState.Unaware;
+                        units[i].AlertTarget = GameConstants.InvalidUnit;
                         break;
                     }
 
-                    float dist = (units.Position[threatIdx] - myPos).Length();
+                    float dist = (units[threatIdx].Position - myPos).Length();
 
                     // Break range check
                     if (dist > breakRange)
                     {
-                        units.AlertState[i] = (byte)UnitAlertState.Unaware;
-                        units.AlertTarget[i] = GameConstants.InvalidUnit;
+                        units[i].AlertState = (byte)UnitAlertState.Unaware;
+                        units[i].AlertTarget = GameConstants.InvalidUnit;
                         break;
                     }
 
                     // Escalation: alert duration expired or threat very close
-                    float alertDuration = units.AlertDuration[i];
-                    float escalateRange = units.AlertEscalateRange[i];
-                    if (units.AlertTimer[i] >= alertDuration || (escalateRange > 0 && dist <= escalateRange))
+                    float alertDuration = units[i].AlertDuration;
+                    float escalateRange = units[i].AlertEscalateRange;
+                    if (units[i].AlertTimer >= alertDuration || (escalateRange > 0 && dist <= escalateRange))
                     {
-                        units.AlertState[i] = (byte)UnitAlertState.Aggressive;
+                        units[i].AlertState = (byte)UnitAlertState.Aggressive;
                     }
                     break;
                 }
@@ -99,16 +99,16 @@ public static class AwarenessSystem
                     int threatIdx = ResolveThreat(units, i);
                     if (threatIdx < 0)
                     {
-                        units.AlertState[i] = (byte)UnitAlertState.Unaware;
-                        units.AlertTarget[i] = GameConstants.InvalidUnit;
+                        units[i].AlertState = (byte)UnitAlertState.Unaware;
+                        units[i].AlertTarget = GameConstants.InvalidUnit;
                         break;
                     }
 
-                    float dist = (units.Position[threatIdx] - myPos).Length();
+                    float dist = (units[threatIdx].Position - myPos).Length();
                     if (dist > breakRange)
                     {
-                        units.AlertState[i] = (byte)UnitAlertState.Unaware;
-                        units.AlertTarget[i] = GameConstants.InvalidUnit;
+                        units[i].AlertState = (byte)UnitAlertState.Unaware;
+                        units[i].AlertTarget = GameConstants.InvalidUnit;
                     }
                     break;
                 }
@@ -120,21 +120,21 @@ public static class AwarenessSystem
     {
         float bestDist = maxRange * maxRange;
         int bestIdx = -1;
-        var myFaction = units.Faction[unitIdx];
-        var myPos = units.Position[unitIdx];
+        var myFaction = units[unitIdx].Faction;
+        var myPos = units[unitIdx].Position;
 
         for (int j = 0; j < units.Count; j++)
         {
-            if (j == unitIdx || !units.Alive[j]) continue;
-            if (units.Faction[j] == myFaction) continue;
+            if (j == unitIdx || !units[j].Alive) continue;
+            if (units[j].Faction == myFaction) continue;
 
             // Adjust range based on target movement state
             float effectiveRange = maxRange;
-            if (units.IsSneaking[j]) effectiveRange *= 0.5f;
-            else if (units.Velocity[j].LengthSq() > units.MaxSpeed[j] * units.MaxSpeed[j] * 0.8f)
+            if (units[j].IsSneaking) effectiveRange *= 0.5f;
+            else if (units[j].Velocity.LengthSq() > units[j].MaxSpeed * units[j].MaxSpeed * 0.8f)
                 effectiveRange *= 1.5f; // running = easier to detect
 
-            float d = (units.Position[j] - myPos).LengthSq();
+            float d = (units[j].Position - myPos).LengthSq();
             if (d < bestDist && d <= effectiveRange * effectiveRange)
             {
                 bestDist = d;
@@ -146,32 +146,32 @@ public static class AwarenessSystem
 
     private static int ResolveThreat(UnitArrays units, int unitIdx)
     {
-        uint targetId = units.AlertTarget[unitIdx];
+        uint targetId = units[unitIdx].AlertTarget;
         if (targetId == GameConstants.InvalidUnit) return -1;
         for (int j = 0; j < units.Count; j++)
-            if (units.Id[j] == targetId && units.Alive[j]) return j;
+            if (units[j].Id == targetId && units[j].Alive) return j;
         return -1;
     }
 
     private static void PropagateAlert(UnitArrays units, int alerterIdx, int threatIdx, float radius)
     {
         float r2 = radius * radius;
-        var alerterPos = units.Position[alerterIdx];
-        var alerterFaction = units.Faction[alerterIdx];
+        var alerterPos = units[alerterIdx].Position;
+        var alerterFaction = units[alerterIdx].Faction;
 
         for (int j = 0; j < units.Count; j++)
         {
-            if (j == alerterIdx || !units.Alive[j]) continue;
-            if (units.Faction[j] != alerterFaction) continue;
-            if (units.AlertState[j] != (byte)UnitAlertState.Unaware) continue;
-            if (units.DetectionRange[j] <= 0f) continue;
+            if (j == alerterIdx || !units[j].Alive) continue;
+            if (units[j].Faction != alerterFaction) continue;
+            if (units[j].AlertState != (byte)UnitAlertState.Unaware) continue;
+            if (units[j].DetectionRange <= 0f) continue;
 
-            float d = (units.Position[j] - alerterPos).LengthSq();
+            float d = (units[j].Position - alerterPos).LengthSq();
             if (d <= r2)
             {
-                units.AlertState[j] = (byte)UnitAlertState.Alert;
-                units.AlertTimer[j] = 0f;
-                units.AlertTarget[j] = units.Id[threatIdx];
+                units[j].AlertState = (byte)UnitAlertState.Alert;
+                units[j].AlertTimer = 0f;
+                units[j].AlertTarget = units[threatIdx].Id;
             }
         }
     }

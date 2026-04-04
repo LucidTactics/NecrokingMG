@@ -30,16 +30,16 @@ public ref struct AIContext
     public bool IsNight;            // true during night period
 
     // Convenience accessors
-    public readonly Vec2 MyPos => Units.Position[UnitIndex];
-    public readonly float MySpeed => Units.MaxSpeed[UnitIndex];
-    public readonly Faction MyFaction => Units.Faction[UnitIndex];
-    public readonly uint MyId => Units.Id[UnitIndex];
-    public readonly byte Routine { get => Units.Routine[UnitIndex]; set => Units.Routine[UnitIndex] = value; }
-    public readonly byte Subroutine { get => Units.Subroutine[UnitIndex]; set => Units.Subroutine[UnitIndex] = value; }
-    public readonly float SubroutineTimer { get => Units.SubroutineTimer[UnitIndex]; set => Units.SubroutineTimer[UnitIndex] = value; }
-    public readonly byte AlertState { get => Units.AlertState[UnitIndex]; set => Units.AlertState[UnitIndex] = value; }
-    public readonly float AlertTimer { get => Units.AlertTimer[UnitIndex]; set => Units.AlertTimer[UnitIndex] = value; }
-    public readonly uint AlertTarget { get => Units.AlertTarget[UnitIndex]; set => Units.AlertTarget[UnitIndex] = value; }
+    public readonly Vec2 MyPos => Units[UnitIndex].Position;
+    public readonly float MySpeed => Units[UnitIndex].MaxSpeed;
+    public readonly Faction MyFaction => Units[UnitIndex].Faction;
+    public readonly uint MyId => Units[UnitIndex].Id;
+    public readonly byte Routine { get => Units[UnitIndex].Routine; set => Units[UnitIndex].Routine = value; }
+    public readonly byte Subroutine { get => Units[UnitIndex].Subroutine; set => Units[UnitIndex].Subroutine = value; }
+    public readonly float SubroutineTimer { get => Units[UnitIndex].SubroutineTimer; set => Units[UnitIndex].SubroutineTimer = value; }
+    public readonly byte AlertState { get => Units[UnitIndex].AlertState; set => Units[UnitIndex].AlertState = value; }
+    public readonly float AlertTimer { get => Units[UnitIndex].AlertTimer; set => Units[UnitIndex].AlertTimer = value; }
+    public readonly uint AlertTarget { get => Units[UnitIndex].AlertTarget; set => Units[UnitIndex].AlertTarget = value; }
 }
 
 /// <summary>Alert states shared by all archetypes.</summary>

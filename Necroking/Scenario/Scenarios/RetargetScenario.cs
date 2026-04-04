@@ -37,23 +37,23 @@ public class RetargetScenario : ScenarioBase
 
         // Spawn skeleton with AttackClosestRetarget AI — high HP so it survives long enough to test retargeting
         int skelIdx = units.AddUnit(new Vec2(15f, 15f), UnitType.Skeleton);
-        units.AI[skelIdx] = AIBehavior.AttackClosestRetarget;
-        units.RetargetTimer[skelIdx] = 0f; // start ready to pick a target immediately
-        units.Stats[skelIdx].MaxHP = 9999;
-        units.Stats[skelIdx].HP = 9999;
-        _skeletonId = units.Id[skelIdx];
+        units[skelIdx].AI = AIBehavior.AttackClosestRetarget;
+        units[skelIdx].RetargetTimer = 0f; // start ready to pick a target immediately
+        units[skelIdx].Stats.MaxHP = 9999;
+        units[skelIdx].Stats.HP = 9999;
+        _skeletonId = units[skelIdx].Id;
         DebugLog.Log(ScenarioLog, $"Skeleton id={_skeletonId} at (15,15) with AttackClosestRetarget AI, HP=9999");
 
         // Spawn soldier A (closer to skeleton) with AttackClosest AI
         int solAIdx = units.AddUnit(new Vec2(20f, 15f), UnitType.Soldier);
-        units.AI[solAIdx] = AIBehavior.AttackClosest;
-        _soldierAId = units.Id[solAIdx];
+        units[solAIdx].AI = AIBehavior.AttackClosest;
+        _soldierAId = units[solAIdx].Id;
         DebugLog.Log(ScenarioLog, $"Soldier A id={_soldierAId} at (20,15) with AttackClosest AI");
 
         // Spawn soldier B (farther from skeleton) with AttackClosest AI
         int solBIdx = units.AddUnit(new Vec2(25f, 15f), UnitType.Soldier);
-        units.AI[solBIdx] = AIBehavior.AttackClosest;
-        _soldierBId = units.Id[solBIdx];
+        units[solBIdx].AI = AIBehavior.AttackClosest;
+        _soldierBId = units[solBIdx].Id;
         DebugLog.Log(ScenarioLog, $"Soldier B id={_soldierBId} at (25,15) with AttackClosest AI");
 
         _lastObservedTarget = CombatTarget.None;
@@ -65,7 +65,7 @@ public class RetargetScenario : ScenarioBase
     private int FindByID(UnitArrays units, uint id)
     {
         for (int i = 0; i < units.Count; i++)
-            if (units.Id[i] == id) return i;
+            if (units[i].Id == id) return i;
         return -1;
     }
 
@@ -89,7 +89,7 @@ public class RetargetScenario : ScenarioBase
         var units = sim.UnitsMut;
         int skelIdx = FindByID(units, _skeletonId);
 
-        if (skelIdx < 0 || !units.Alive[skelIdx])
+        if (skelIdx < 0 || !units[skelIdx].Alive)
         {
             DebugLog.Log(ScenarioLog, $"t={_elapsed:F1}s: Skeleton lost or dead, ending scenario");
             _complete = true;
@@ -100,12 +100,12 @@ public class RetargetScenario : ScenarioBase
         if (_elapsed >= 5f && !_soldierARemoved)
         {
             int solAIdx = FindByID(units, _soldierAId);
-            if (solAIdx >= 0 && units.Alive[solAIdx])
+            if (solAIdx >= 0 && units[solAIdx].Alive)
             {
-                units.Alive[solAIdx] = false;
+                units[solAIdx].Alive = false;
                 DebugLog.Log(ScenarioLog, $"t={_elapsed:F1}s: KILLED Soldier A (id={_soldierAId}) to force retarget");
-                DebugLog.Log(ScenarioLog, $"  Skeleton's current target: {DescribeTarget(units.Target[skelIdx])}");
-                DebugLog.Log(ScenarioLog, $"  RetargetTimer: {units.RetargetTimer[skelIdx]:F2}s");
+                DebugLog.Log(ScenarioLog, $"  Skeleton's current target: {DescribeTarget(units[skelIdx].Target)}");
+                DebugLog.Log(ScenarioLog, $"  RetargetTimer: {units[skelIdx].RetargetTimer:F2}s");
             }
             else
             {
@@ -115,7 +115,7 @@ public class RetargetScenario : ScenarioBase
         }
 
         // Track target changes
-        var currentTarget = units.Target[skelIdx];
+        var currentTarget = units[skelIdx].Target;
         if (currentTarget != _lastObservedTarget)
         {
             string from = DescribeTarget(_lastObservedTarget);
@@ -140,17 +140,17 @@ public class RetargetScenario : ScenarioBase
         if (_logTimer <= 0f)
         {
             _logTimer = 1f;
-            var pos = units.Position[skelIdx];
-            float retargetTimer = units.RetargetTimer[skelIdx];
-            bool inCombat = units.InCombat[skelIdx];
+            var pos = units[skelIdx].Position;
+            float retargetTimer = units[skelIdx].RetargetTimer;
+            bool inCombat = units[skelIdx].InCombat;
 
             // Check distances to soldiers
             int solAIdx = FindByID(units, _soldierAId);
             int solBIdx = FindByID(units, _soldierBId);
-            float distA = (solAIdx >= 0 && units.Alive[solAIdx])
-                ? (units.Position[solAIdx] - pos).Length() : -1f;
-            float distB = (solBIdx >= 0 && units.Alive[solBIdx])
-                ? (units.Position[solBIdx] - pos).Length() : -1f;
+            float distA = (solAIdx >= 0 && units[solAIdx].Alive)
+                ? (units[solAIdx].Position - pos).Length() : -1f;
+            float distB = (solBIdx >= 0 && units[solBIdx].Alive)
+                ? (units[solBIdx].Position - pos).Length() : -1f;
 
             DebugLog.Log(ScenarioLog,
                 $"t={_elapsed:F1}s: skelPos=({pos.X:F1},{pos.Y:F1}) target={DescribeTarget(currentTarget)} " +
@@ -176,10 +176,10 @@ public class RetargetScenario : ScenarioBase
         // Check skeleton final state
         var units = sim.Units;
         int skelIdx = FindByID(sim.UnitsMut, _skeletonId);
-        if (skelIdx >= 0 && units.Alive[skelIdx])
+        if (skelIdx >= 0 && units[skelIdx].Alive)
         {
-            var pos = units.Position[skelIdx];
-            var target = units.Target[skelIdx];
+            var pos = units[skelIdx].Position;
+            var target = units[skelIdx].Target;
             DebugLog.Log(ScenarioLog, $"Skeleton final pos=({pos.X:F1},{pos.Y:F1}), target={DescribeTarget(target)}");
         }
         else
@@ -189,9 +189,9 @@ public class RetargetScenario : ScenarioBase
 
         // Check soldier states
         int solAIdx = FindByID(sim.UnitsMut, _soldierAId);
-        bool solAAlive = solAIdx >= 0 && units.Alive[solAIdx];
+        bool solAAlive = solAIdx >= 0 && units[solAIdx].Alive;
         int solBIdx = FindByID(sim.UnitsMut, _soldierBId);
-        bool solBAlive = solBIdx >= 0 && units.Alive[solBIdx];
+        bool solBAlive = solBIdx >= 0 && units[solBIdx].Alive;
         DebugLog.Log(ScenarioLog, $"Soldier A alive: {solAAlive}, Soldier B alive: {solBAlive}");
 
         DebugLog.Log(ScenarioLog, $"Soldier A was removed: {_soldierARemoved}");

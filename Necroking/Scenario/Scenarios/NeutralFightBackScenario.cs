@@ -43,11 +43,11 @@ public class NeutralFightBackScenario : ScenarioBase
         // Give it high HP so it survives long enough to demonstrate fighting back
         _neutralInitialPos = new Vec2(15f, 15f);
         int neutralIdx = units.AddUnit(_neutralInitialPos, UnitType.Skeleton);
-        units.AI[neutralIdx] = AIBehavior.NeutralFightBack;
-        units.Faction[neutralIdx] = Faction.Animal;
-        units.Stats[neutralIdx].MaxHP = 100;
-        units.Stats[neutralIdx].HP = 100;
-        _neutralId = units.Id[neutralIdx];
+        units[neutralIdx].AI = AIBehavior.NeutralFightBack;
+        units[neutralIdx].Faction = Faction.Animal;
+        units[neutralIdx].Stats.MaxHP = 100;
+        units[neutralIdx].Stats.HP = 100;
+        _neutralId = units[neutralIdx].Id;
         DebugLog.Log(ScenarioLog, $"Spawned neutral skeleton id={_neutralId} at ({_neutralInitialPos.X:F1}, {_neutralInitialPos.Y:F1}), AI=NeutralFightBack, Faction=Animal, HP=100");
 
         ZoomOnLocation(16f, 15f, 40f);
@@ -67,7 +67,7 @@ public class NeutralFightBackScenario : ScenarioBase
         {
             if (neutralIdx >= 0)
             {
-                var pos = units.Position[neutralIdx];
+                var pos = units[neutralIdx].Position;
                 float drift = (pos - _neutralInitialPos).Length();
                 if (drift > 0.1f && !_neutralMovedDuringIdlePhase)
                 {
@@ -85,7 +85,7 @@ public class NeutralFightBackScenario : ScenarioBase
             // Log idle phase result before spawning soldier
             if (neutralIdx >= 0)
             {
-                var pos = units.Position[neutralIdx];
+                var pos = units[neutralIdx].Position;
                 float drift = (pos - _neutralInitialPos).Length();
                 DebugLog.Log(ScenarioLog, $"t={_elapsed:F2}s: Idle phase complete. Neutral pos=({pos.X:F1},{pos.Y:F1}), drift={drift:F2}, moved={_neutralMovedDuringIdlePhase}");
             }
@@ -93,8 +93,8 @@ public class NeutralFightBackScenario : ScenarioBase
             // Spawn aggressive soldier nearby
             var soldierPos = new Vec2(18f, 15f);
             int soldierIdx = units.AddUnit(soldierPos, UnitType.Soldier);
-            units.AI[soldierIdx] = AIBehavior.AttackClosest;
-            _soldierId = units.Id[soldierIdx];
+            units[soldierIdx].AI = AIBehavior.AttackClosest;
+            _soldierId = units[soldierIdx].Id;
             DebugLog.Log(ScenarioLog, $"t={_elapsed:F2}s: Spawned soldier id={_soldierId} at ({soldierPos.X:F1},{soldierPos.Y:F1}), AI=AttackClosest");
 
             // Re-resolve neutral index since AddUnit may have reallocated
@@ -102,14 +102,14 @@ public class NeutralFightBackScenario : ScenarioBase
         }
 
         // Phase 2 ongoing: Check if neutral has been hit and is fighting back
-        if (_soldierSpawned && neutralIdx >= 0 && units.Alive[neutralIdx])
+        if (_soldierSpawned && neutralIdx >= 0 && units[neutralIdx].Alive)
         {
-            var lastAttacker = units.LastAttackerID[neutralIdx];
-            bool hasTarget = units.Target[neutralIdx].IsUnit;
-            bool inCombat = units.InCombat[neutralIdx];
-            var pos = units.Position[neutralIdx];
+            var lastAttacker = units[neutralIdx].LastAttackerID;
+            bool hasTarget = units[neutralIdx].Target.IsUnit;
+            bool inCombat = units[neutralIdx].InCombat;
+            var pos = units[neutralIdx].Position;
             float driftFromStart = (pos - _neutralInitialPos).Length();
-            int hp = units.Stats[neutralIdx].HP;
+            int hp = units[neutralIdx].Stats.HP;
 
             // Detect hit: LastAttackerID set OR HP dropped below max
             if (!_neutralWasHit && (lastAttacker != GameConstants.InvalidUnit || hp < 100))
@@ -161,13 +161,13 @@ public class NeutralFightBackScenario : ScenarioBase
 
         if (neutralIdx >= 0)
         {
-            var pos = units.Position[neutralIdx];
-            var ai = units.AI[neutralIdx];
-            bool alive = units.Alive[neutralIdx];
-            bool inCombat = units.InCombat[neutralIdx];
-            var target = units.Target[neutralIdx];
-            var lastAttacker = units.LastAttackerID[neutralIdx];
-            int hp = units.Stats[neutralIdx].HP;
+            var pos = units[neutralIdx].Position;
+            var ai = units[neutralIdx].AI;
+            bool alive = units[neutralIdx].Alive;
+            bool inCombat = units[neutralIdx].InCombat;
+            var target = units[neutralIdx].Target;
+            var lastAttacker = units[neutralIdx].LastAttackerID;
+            int hp = units[neutralIdx].Stats.HP;
             float drift = (pos - _neutralInitialPos).Length();
             DebugLog.Log(ScenarioLog, $"  Neutral id={_neutralId}: alive={alive}, HP={hp}/100, pos=({pos.X:F1},{pos.Y:F1}), drift={drift:F2}, ai={ai}, inCombat={inCombat}, target={target.Kind}:{target.Value}, lastAttacker={lastAttacker}");
         }
@@ -178,11 +178,11 @@ public class NeutralFightBackScenario : ScenarioBase
 
         if (soldierIdx >= 0)
         {
-            var pos = units.Position[soldierIdx];
-            bool alive = units.Alive[soldierIdx];
-            bool inCombat = units.InCombat[soldierIdx];
-            var target = units.Target[soldierIdx];
-            int hp = units.Stats[soldierIdx].HP;
+            var pos = units[soldierIdx].Position;
+            bool alive = units[soldierIdx].Alive;
+            bool inCombat = units[soldierIdx].InCombat;
+            var target = units[soldierIdx].Target;
+            int hp = units[soldierIdx].Stats.HP;
             DebugLog.Log(ScenarioLog, $"  Soldier id={_soldierId}: alive={alive}, HP={hp}, pos=({pos.X:F1},{pos.Y:F1}), inCombat={inCombat}, target={target.Kind}:{target.Value}");
         }
         else if (_soldierId != 0)
@@ -194,8 +194,8 @@ public class NeutralFightBackScenario : ScenarioBase
         int undead = 0, human = 0, animal = 0;
         for (int i = 0; i < units.Count; i++)
         {
-            if (!units.Alive[i]) continue;
-            switch (units.Faction[i])
+            if (!units[i].Alive) continue;
+            switch (units[i].Faction)
             {
                 case Faction.Undead: undead++; break;
                 case Faction.Human: human++; break;
@@ -208,7 +208,7 @@ public class NeutralFightBackScenario : ScenarioBase
     private int FindByID(UnitArrays units, uint id)
     {
         for (int i = 0; i < units.Count; i++)
-            if (units.Id[i] == id) return i;
+            if (units[i].Id == id) return i;
         return -1;
     }
 
@@ -230,12 +230,12 @@ public class NeutralFightBackScenario : ScenarioBase
 
         // Check 3: Neutral fought back after being hit
         bool fightBackPass;
-        if (neutralIdx >= 0 && units.Alive[neutralIdx])
+        if (neutralIdx >= 0 && units[neutralIdx].Alive)
         {
             fightBackPass = _neutralFoughtBack;
-            var pos = units.Position[neutralIdx];
+            var pos = units[neutralIdx].Position;
             float drift = (pos - _neutralInitialPos).Length();
-            int hp = units.Stats[neutralIdx].HP;
+            int hp = units[neutralIdx].Stats.HP;
             DebugLog.Log(ScenarioLog, $"Phase 2b - Neutral fought back: {(fightBackPass ? "PASS" : "FAIL")} (foughtBack={_neutralFoughtBack}, finalPos=({pos.X:F1},{pos.Y:F1}), totalDrift={drift:F2}, HP={hp}/100)");
         }
         else
@@ -247,8 +247,8 @@ public class NeutralFightBackScenario : ScenarioBase
 
         // Summary
         int soldierIdx = _soldierId != 0 ? FindByID(units, _soldierId) : -1;
-        bool soldierAlive = soldierIdx >= 0 && units.Alive[soldierIdx];
-        bool neutralAlive = neutralIdx >= 0 && units.Alive[neutralIdx];
+        bool soldierAlive = soldierIdx >= 0 && units[soldierIdx].Alive;
+        bool neutralAlive = neutralIdx >= 0 && units[neutralIdx].Alive;
         DebugLog.Log(ScenarioLog, $"Final state: neutral alive={neutralAlive}, soldier alive={soldierAlive}");
         DebugLog.Log(ScenarioLog, $"Combat log entries: {sim.CombatLog.Entries.Count}");
         DebugLog.Log(ScenarioLog, $"Elapsed time: {_elapsed:F1}s");

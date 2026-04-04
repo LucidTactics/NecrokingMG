@@ -439,7 +439,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
             int lastIdx = _sim.Units.Count - 1;
             if (!string.IsNullOrEmpty(pu.Faction))
             {
-                _sim.UnitsMut.Faction[lastIdx] = pu.Faction switch
+                _sim.UnitsMut[lastIdx].Faction = pu.Faction switch
                 {
                     "Human" => Faction.Human,
                     "Animal" => Faction.Animal,
@@ -448,11 +448,11 @@ public class Game1 : Microsoft.Xna.Framework.Game
             }
             if (!string.IsNullOrEmpty(pu.PatrolRouteId))
             {
-                _sim.UnitsMut.AI[lastIdx] = AIBehavior.Patrol;
+                _sim.UnitsMut[lastIdx].AI = AIBehavior.Patrol;
                 for (int pri = 0; pri < _triggerSystem.PatrolRoutes.Count; pri++)
                 {
                     if (_triggerSystem.PatrolRoutes[pri].Id == pu.PatrolRouteId)
-                    { _sim.UnitsMut.PatrolRouteIdx[lastIdx] = pri; break; }
+                    { _sim.UnitsMut[lastIdx].PatrolRouteIdx = pri; break; }
                 }
             }
         }
@@ -467,7 +467,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         }
 
         _camera.Position = _sim.NecromancerIndex >= 0
-            ? _sim.Units.Position[_sim.NecromancerIndex] : new Vec2(center, center);
+            ? _sim.Units[_sim.NecromancerIndex].Position : new Vec2(center, center);
         _camera.Zoom = 24f;
 
         // Pass placed units to map editor so markers are visible
@@ -712,23 +712,23 @@ public class Game1 : Microsoft.Xna.Framework.Game
     private void SpawnUnit(string unitDefID, Vec2 pos)
     {
         int idx = _sim.UnitsMut.AddUnit(pos, UnitType.Dynamic);
-        _sim.UnitsMut.UnitDefID[idx] = unitDefID;
+        _sim.UnitsMut[idx].UnitDefID = unitDefID;
 
         var unitDef = _gameData.Units.Get(unitDefID);
         if (unitDef == null) return;
 
-        _sim.UnitsMut.SpriteScale[idx] = unitDef.SpriteScale;
-        _sim.UnitsMut.OrcaPriority[idx] = unitDef.OrcaPriority;
-        _sim.UnitsMut.Radius[idx] = unitDef.Radius;
-        _sim.UnitsMut.Size[idx] = unitDef.Size;
+        _sim.UnitsMut[idx].SpriteScale = unitDef.SpriteScale;
+        _sim.UnitsMut[idx].OrcaPriority = unitDef.OrcaPriority;
+        _sim.UnitsMut[idx].Radius = unitDef.Radius;
+        _sim.UnitsMut[idx].Size = unitDef.Size;
 
         // Build full stats from equipment
         var builtStats = _gameData.Units.BuildStats(unitDefID, _gameData.Weapons, _gameData.Armors, _gameData.Shields);
-        _sim.UnitsMut.Stats[idx] = builtStats;
-        _sim.UnitsMut.MaxSpeed[idx] = builtStats.CombatSpeed;
+        _sim.UnitsMut[idx].Stats = builtStats;
+        _sim.UnitsMut[idx].MaxSpeed = builtStats.CombatSpeed;
 
         // Faction
-        _sim.UnitsMut.Faction[idx] = unitDef.Faction switch
+        _sim.UnitsMut[idx].Faction = unitDef.Faction switch
         {
             "Human" => Faction.Human,
             "Animal" => Faction.Animal,
@@ -752,14 +752,14 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 "HordeMinion" => AI.ArchetypeRegistry.HordeMinion,
                 _ => AI.ArchetypeRegistry.None
             };
-            _sim.UnitsMut.Archetype[idx] = archetypeId;
+            _sim.UnitsMut[idx].Archetype = archetypeId;
 
             // Initialize awareness config from UnitDef
-            _sim.UnitsMut.DetectionRange[idx] = unitDef.DetectionRange;
-            _sim.UnitsMut.DetectionBreakRange[idx] = unitDef.DetectionBreakRange;
-            _sim.UnitsMut.AlertDuration[idx] = unitDef.AlertDuration;
-            _sim.UnitsMut.AlertEscalateRange[idx] = unitDef.AlertEscalateRange;
-            _sim.UnitsMut.GroupAlertRadius[idx] = unitDef.GroupAlertRadius;
+            _sim.UnitsMut[idx].DetectionRange = unitDef.DetectionRange;
+            _sim.UnitsMut[idx].DetectionBreakRange = unitDef.DetectionBreakRange;
+            _sim.UnitsMut[idx].AlertDuration = unitDef.AlertDuration;
+            _sim.UnitsMut[idx].AlertEscalateRange = unitDef.AlertEscalateRange;
+            _sim.UnitsMut[idx].GroupAlertRadius = unitDef.GroupAlertRadius;
 
             // Call OnSpawn for the archetype handler
             var handler = AI.ArchetypeRegistry.Get(archetypeId);
@@ -779,7 +779,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         }
         else
         {
-            _sim.UnitsMut.AI[idx] = Enum.TryParse<AIBehavior>(unitDef.AI, out var parsedAI)
+            _sim.UnitsMut[idx].AI = Enum.TryParse<AIBehavior>(unitDef.AI, out var parsedAI)
                 ? parsedAI : AIBehavior.AttackClosest;
         }
 
@@ -790,9 +790,9 @@ public class Game1 : Microsoft.Xna.Framework.Game
         }
 
         // Auto-enroll undead non-necromancer units in the horde (skip if archetype handles it)
-        if (_sim.Units.Archetype[idx] == 0 && _sim.Units.Faction[idx] == Faction.Undead
-            && _sim.Units.AI[idx] != AIBehavior.PlayerControlled)
-            _sim.Horde.AddUnit(_sim.Units.Id[idx]);
+        if (_sim.Units[idx].Archetype == 0 && _sim.Units[idx].Faction == Faction.Undead
+            && _sim.Units[idx].AI != AIBehavior.PlayerControlled)
+            _sim.Horde.AddUnit(_sim.Units[idx].Id);
 
         // Set up animation
         if (unitDef.Sprite != null)
@@ -831,7 +831,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
                         refH = kfs[0].Frame.Rect.Height;
                 }
 
-                _unitAnims[_sim.Units.Id[idx]] = new UnitAnimData
+                _unitAnims[_sim.Units[idx].Id] = new UnitAnimData
                 {
                     Ctrl = ctrl,
                     AtlasID = atlasId,
@@ -881,12 +881,12 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 int idx = _sim.Units.Count - 1;
                 if (idx >= 0)
                 {
-                    _sim.UnitsMut.FacingAngle[idx] = corpseFacing;
-                    _sim.UnitsMut.StandupTimer[idx] = 1.5f;
+                    _sim.UnitsMut[idx].FacingAngle = corpseFacing;
+                    _sim.UnitsMut[idx].StandupTimer = 1.5f;
                     // Add to horde if undead
-                    if (_sim.Units.Faction[idx] == Faction.Undead &&
-                        _sim.Units.AI[idx] != AIBehavior.PlayerControlled)
-                        _sim.Horde.AddUnit(_sim.Units.Id[idx]);
+                    if (_sim.Units[idx].Faction == Faction.Undead &&
+                        _sim.Units[idx].AI != AIBehavior.PlayerControlled)
+                        _sim.Horde.AddUnit(_sim.Units[idx].Id);
                     raised++;
                 }
 
@@ -928,7 +928,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 int targetIdx = _sim.ResolveUnitID(pending.TargetUnitID);
                 if (targetIdx >= 0 && !string.IsNullOrEmpty(summonUnitID))
                 {
-                    var targetPos = _sim.Units.Position[targetIdx];
+                    var targetPos = _sim.Units[targetIdx].Position;
                     _sim.TransformUnit(targetIdx, summonUnitID);
 
                     // Rebuild animation for the transformed unit
@@ -983,13 +983,13 @@ public class Game1 : Microsoft.Xna.Framework.Game
                         // Inherit corpse rotation for reanimated units
                         if (corpseFacing >= 0f)
                         {
-                            _sim.UnitsMut.FacingAngle[idx] = corpseFacing;
-                            _sim.UnitsMut.StandupTimer[idx] = 1.5f;
+                            _sim.UnitsMut[idx].FacingAngle = corpseFacing;
+                            _sim.UnitsMut[idx].StandupTimer = 1.5f;
                         }
                         // Add to horde if undead
-                        if (_sim.Units.Faction[idx] == Faction.Undead &&
-                            _sim.Units.AI[idx] != AIBehavior.PlayerControlled)
-                            _sim.Horde.AddUnit(_sim.Units.Id[idx]);
+                        if (_sim.Units[idx].Faction == Faction.Undead &&
+                            _sim.Units[idx].AI != AIBehavior.PlayerControlled)
+                            _sim.Horde.AddUnit(_sim.Units[idx].Id);
                     }
                 }
 
@@ -1044,7 +1044,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 refH = kfs[0].Frame.Rect.Height;
         }
 
-        _unitAnims[_sim.Units.Id[unitIdx]] = new UnitAnimData
+        _unitAnims[_sim.Units[unitIdx].Id] = new UnitAnimData
         {
             Ctrl = ctrl,
             AtlasID = atlasId,
@@ -1466,7 +1466,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         }
         else if (necroIdx >= 0)
         {
-            var necroPos = _sim.Units.Position[necroIdx];
+            var necroPos = _sim.Units[necroIdx].Position;
             var diff = necroPos - _camera.Position;
             _camera.Position += diff * MathF.Min(1f, 5f * rawDt);
         }
@@ -1561,7 +1561,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 _sim.SetNecromancerInput(moveDir, running);
 
                 // Mouse facing
-                var necroPos = _sim.Units.Position[necroIdx];
+                var necroPos = _sim.Units[necroIdx].Position;
                 var toMouse = mouseWorld - necroPos;
                 if (toMouse.LengthSq() > 0.01f)
                 {
@@ -1574,20 +1574,20 @@ public class Game1 : Microsoft.Xna.Framework.Game
             if (WasKeyPressed(kb, Keys.Space) && necroIdx >= 0)
             {
                 var mu = _sim.UnitsMut;
-                bool canJump = mu.Alive[necroIdx] && !mu.Jumping[necroIdx]
-                    && mu.KnockdownTimer[necroIdx] <= 0f && !_pendingSpell.Active;
+                bool canJump = mu[necroIdx].Alive && !mu[necroIdx].Jumping
+                    && mu[necroIdx].KnockdownTimer <= 0f && !_pendingSpell.Active;
                 if (canJump)
                 {
-                    float facingRad = mu.FacingAngle[necroIdx] * MathF.PI / 180f;
+                    float facingRad = mu[necroIdx].FacingAngle * MathF.PI / 180f;
                     var facingDir = new Vec2(MathF.Cos(facingRad), MathF.Sin(facingRad));
-                    mu.Jumping[necroIdx] = true;
-                    mu.JumpTimer[necroIdx] = 0f;
-                    mu.JumpHeight[necroIdx] = 0f;
-                    mu.JumpStartPos[necroIdx] = mu.Position[necroIdx];
-                    mu.JumpEndPos[necroIdx] = mu.Position[necroIdx] + facingDir * 4f;
-                    mu.JumpIsAttack[necroIdx] = true;
-                    mu.JumpAttackFired[necroIdx] = false;
-                    mu.JumpDuration[necroIdx] = 1f;
+                    mu[necroIdx].Jumping = true;
+                    mu[necroIdx].JumpTimer = 0f;
+                    mu[necroIdx].JumpHeight = 0f;
+                    mu[necroIdx].JumpStartPos = mu[necroIdx].Position;
+                    mu[necroIdx].JumpEndPos = mu[necroIdx].Position + facingDir * 4f;
+                    mu[necroIdx].JumpIsAttack = true;
+                    mu[necroIdx].JumpAttackFired = false;
+                    mu[necroIdx].JumpDuration = 1f;
                 }
             }
 
@@ -1606,8 +1606,8 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 {
                     if (necroIdx >= 0)
                     {
-                        _sim.Lightning.CancelBeamsForCaster(_sim.Units.Id[necroIdx]);
-                        _sim.Lightning.CancelDrainsForCaster(_sim.Units.Id[necroIdx]);
+                        _sim.Lightning.CancelBeamsForCaster(_sim.Units[necroIdx].Id);
+                        _sim.Lightning.CancelDrainsForCaster(_sim.Units[necroIdx].Id);
                     }
                     _channelingSlot = -1;
                 }
@@ -1765,9 +1765,9 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 {
                     var spell = _gameData.Spells.Get(spellId);
                     if (spell == null) continue;
-                    var necroPos = _sim.Units.Position[necroIdx];
-                    var necroUid = _sim.Units.Id[necroIdx];
-                    var effectOrigin = _sim.Units.EffectSpawnPos2D[necroIdx];
+                    var necroPos = _sim.Units[necroIdx].Position;
+                    var necroUid = _sim.Units[necroIdx].Id;
+                    var effectOrigin = _sim.Units[necroIdx].EffectSpawnPos2D;
 
                     switch (spell.Category)
                     {
@@ -1821,21 +1821,21 @@ public class Game1 : Microsoft.Xna.Framework.Game
                             {
                                 // Zap: caster weapon tip to nearest enemy near mouse
                                 var casterEffPos = effectOrigin;
-                                float casterH = _sim.Units.EffectSpawnHeight[necroIdx];
+                                float casterH = _sim.Units[necroIdx].EffectSpawnHeight;
                                 // Find nearest enemy to mouse
                                 int enemy = -1;
                                 float bestDist = spell.Range * spell.Range;
                                 for (int ui = 0; ui < _sim.Units.Count; ui++)
                                 {
-                                    if (!_sim.Units.Alive[ui] || _sim.Units.Faction[ui] == _sim.Units.Faction[necroIdx]) continue;
-                                    float d = (mouseWorld - _sim.Units.Position[ui]).LengthSq();
+                                    if (!_sim.Units[ui].Alive || _sim.Units[ui].Faction == _sim.Units[necroIdx].Faction) continue;
+                                    float d = (mouseWorld - _sim.Units[ui].Position).LengthSq();
                                     if (d < bestDist) { bestDist = d; enemy = ui; }
                                 }
                                 if (enemy >= 0)
                                 {
-                                    var targetPos = _sim.Units.Position[enemy];
+                                    var targetPos = _sim.Units[enemy].Position;
                                     float targetH = 1.0f;
-                                    var tDef = _gameData.Units.Get(_sim.Units.UnitDefID[enemy]);
+                                    var tDef = _gameData.Units.Get(_sim.Units[enemy].UnitDefID);
                                     if (tDef != null) targetH = tDef.SpriteWorldHeight * 0.5f;
 
                                     _sim.Lightning.SpawnZap(casterEffPos, targetPos,
@@ -1866,7 +1866,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
                             int targetIdx = FindClosestEnemyToPoint(mouseWorld, 3f);
                             if (targetIdx >= 0)
                             {
-                                _sim.Lightning.SpawnBeam(necroUid, _sim.Units.Id[targetIdx],
+                                _sim.Lightning.SpawnBeam(necroUid, _sim.Units[targetIdx].Id,
                                     spell.Id, spell.Damage, spell.BeamTickRate, spell.BeamRetargetRadius,
                                     new LightningStyle { CoreColor = spell.BeamCoreColor, GlowColor = spell.BeamGlowColor,
                                         CoreWidth = spell.BeamCoreWidth, GlowWidth = spell.BeamGlowWidth,
@@ -1881,7 +1881,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
                             int targetIdx2 = FindClosestEnemyToPoint(mouseWorld, 5f);
                             if (targetIdx2 >= 0)
                             {
-                                _sim.Lightning.SpawnDrain(necroUid, _sim.Units.Id[targetIdx2],
+                                _sim.Lightning.SpawnDrain(necroUid, _sim.Units[targetIdx2].Id,
                                     spell.Id, spell.Damage, spell.DrainTickRate, spell.DrainHealPercent,
                                     spell.DrainCorpseHP, spell.DrainReversed, spell.DrainMaxDuration,
                                     spell.DrainTendrilCount, spell.DrainArcHeight, spell.DrainCoreColor, spell.DrainGlowColor);
@@ -1896,16 +1896,16 @@ public class Game1 : Microsoft.Xna.Framework.Game
                             // They stay in the horde and auto-return when area is clear or timeout
                             for (int ci = 0; ci < _sim.Units.Count; ci++)
                             {
-                                if (!_sim.Units.Alive[ci]) continue;
-                                if (_sim.Units.Faction[ci] != Faction.Undead) continue;
-                                if (_sim.Units.Archetype[ci] != AI.ArchetypeRegistry.HordeMinion) continue;
+                                if (!_sim.Units[ci].Alive) continue;
+                                if (_sim.Units[ci].Faction != Faction.Undead) continue;
+                                if (_sim.Units[ci].Archetype != AI.ArchetypeRegistry.HordeMinion) continue;
 
-                                _sim.UnitsMut.Routine[ci] = 4; // RoutineCommanded
-                                _sim.UnitsMut.Subroutine[ci] = 0;
-                                _sim.UnitsMut.SubroutineTimer[ci] = 0f;
-                                _sim.UnitsMut.MoveTarget[ci] = mouseWorld;
-                                _sim.UnitsMut.Target[ci] = CombatTarget.None;
-                                _sim.UnitsMut.EngagedTarget[ci] = CombatTarget.None;
+                                _sim.UnitsMut[ci].Routine = 4; // RoutineCommanded
+                                _sim.UnitsMut[ci].Subroutine = 0;
+                                _sim.UnitsMut[ci].SubroutineTimer = 0f;
+                                _sim.UnitsMut[ci].MoveTarget = mouseWorld;
+                                _sim.UnitsMut[ci].Target = CombatTarget.None;
+                                _sim.UnitsMut[ci].EngagedTarget = CombatTarget.None;
                             }
                             break;
                         }
@@ -1914,7 +1914,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
                         {
                             // Toggle effect on necromancer
                             if (spell.ToggleEffect == "ghost_mode")
-                                _sim.UnitsMut.GhostMode[necroIdx] = !_sim.Units.GhostMode[necroIdx];
+                                _sim.UnitsMut[necroIdx].GhostMode = !_sim.Units[necroIdx].GhostMode;
                             break;
                         }
                     }
@@ -1929,15 +1929,15 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 else if (slot == 2 && result == CastResult.NoValidTarget)
                 {
                     // LClick on empty slot or failed cast = melee attack
-                    if (necroIdx >= 0 && !_sim.Units.PendingAttack[necroIdx].IsNone == false)
+                    if (necroIdx >= 0 && !_sim.Units[necroIdx].PendingAttack.IsNone == false)
                     {
                         int meleeTarget = FindClosestEnemyToPoint(
-                            _sim.Units.Position[necroIdx], 2f);
+                            _sim.Units[necroIdx].Position, 2f);
                         if (meleeTarget >= 0)
                         {
-                            _sim.UnitsMut.Target[necroIdx] = CombatTarget.Unit(_sim.Units.Id[meleeTarget]);
-                            _sim.UnitsMut.PendingAttack[necroIdx] = CombatTarget.Unit(_sim.Units.Id[meleeTarget]);
-                            _sim.UnitsMut.AttackCooldown[necroIdx] = 2f;
+                            _sim.UnitsMut[necroIdx].Target = CombatTarget.Unit(_sim.Units[meleeTarget].Id);
+                            _sim.UnitsMut[necroIdx].PendingAttack = CombatTarget.Unit(_sim.Units[meleeTarget].Id);
+                            _sim.UnitsMut[necroIdx].AttackCooldown = 2f;
                         }
                     }
                 }
@@ -1947,7 +1947,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
             // --- Ghost mode toggle (G) ---
             if (WasKeyPressed(kb, Keys.G) && necroIdx >= 0)
-                _sim.UnitsMut.GhostMode[necroIdx] = !_sim.Units.GhostMode[necroIdx];
+                _sim.UnitsMut[necroIdx].GhostMode = !_sim.Units[necroIdx].GhostMode;
 
             // --- Secondary spell bar (keys 1-4) ---
             if (necroIdx >= 0)
@@ -1965,9 +1965,9 @@ public class Game1 : Microsoft.Xna.Framework.Game
                     {
                         var spell2 = _gameData.Spells.Get(secSpellId);
                         if (spell2 == null) continue;
-                        var necroPos2 = _sim.Units.Position[necroIdx];
-                        var necroUid2 = _sim.Units.Id[necroIdx];
-                        var effectOrigin2 = _sim.Units.EffectSpawnPos2D[necroIdx];
+                        var necroPos2 = _sim.Units[necroIdx].Position;
+                        var necroUid2 = _sim.Units[necroIdx].Id;
+                        var effectOrigin2 = _sim.Units[necroIdx].EffectSpawnPos2D;
                         switch (spell2.Category)
                         {
                             case "Projectile":
@@ -2005,20 +2005,20 @@ public class Game1 : Microsoft.Xna.Framework.Game
                             case "Command":
                                 for (int ci = 0; ci < _sim.Units.Count; ci++)
                                 {
-                                    if (!_sim.Units.Alive[ci]) continue;
-                                    if (_sim.Units.Faction[ci] != Faction.Undead) continue;
-                                    if (_sim.Units.Archetype[ci] != AI.ArchetypeRegistry.HordeMinion) continue;
-                                    _sim.UnitsMut.Routine[ci] = 4; // RoutineCommanded
-                                    _sim.UnitsMut.Subroutine[ci] = 0;
-                                    _sim.UnitsMut.SubroutineTimer[ci] = 0f;
-                                    _sim.UnitsMut.MoveTarget[ci] = mouseWorld;
-                                    _sim.UnitsMut.Target[ci] = CombatTarget.None;
-                                    _sim.UnitsMut.EngagedTarget[ci] = CombatTarget.None;
+                                    if (!_sim.Units[ci].Alive) continue;
+                                    if (_sim.Units[ci].Faction != Faction.Undead) continue;
+                                    if (_sim.Units[ci].Archetype != AI.ArchetypeRegistry.HordeMinion) continue;
+                                    _sim.UnitsMut[ci].Routine = 4; // RoutineCommanded
+                                    _sim.UnitsMut[ci].Subroutine = 0;
+                                    _sim.UnitsMut[ci].SubroutineTimer = 0f;
+                                    _sim.UnitsMut[ci].MoveTarget = mouseWorld;
+                                    _sim.UnitsMut[ci].Target = CombatTarget.None;
+                                    _sim.UnitsMut[ci].EngagedTarget = CombatTarget.None;
                                 }
                                 break;
                             case "Toggle":
                                 if (spell2.ToggleEffect == "ghost_mode")
-                                    _sim.UnitsMut.GhostMode[necroIdx] = !_sim.Units.GhostMode[necroIdx];
+                                    _sim.UnitsMut[necroIdx].GhostMode = !_sim.Units[necroIdx].GhostMode;
                                 break;
                         }
 
@@ -2081,7 +2081,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 var potionDef = FindPotionByItemId(potionItemId);
                 if (potionDef != null)
                 {
-                    var necroPos = _sim.Units.Position[necroIdx];
+                    var necroPos = _sim.Units[necroIdx].Position;
                     float dist = (mouseWorld - necroPos).Length();
 
                     if (dist < 1.0f)
@@ -2091,7 +2091,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
                         {
                             _inventory.RemoveItem(potionItemId, 1);
                             PotionSystem.ApplyPotionEffect(potionDef.Id, _gameData.Potions, _gameData.Buffs,
-                                necroIdx, _sim.UnitsMut, _sim.Units.Faction[necroIdx],
+                                necroIdx, _sim.UnitsMut, _sim.Units[necroIdx].Faction,
                                 _sim.PendingZombieRaises, _sim.CorpsesMut, necroPos);
                         }
                     }
@@ -2111,16 +2111,16 @@ public class Game1 : Microsoft.Xna.Framework.Game
             // --- Corpse drag (F key) ---
             if (WasKeyPressed(kb, Keys.F) && necroIdx >= 0)
             {
-                int currentDrag = _sim.Units.DraggingCorpseIdx[necroIdx];
+                int currentDrag = _sim.Units[necroIdx].DraggingCorpseIdx;
                 if (currentDrag >= 0)
                 {
                     if (currentDrag < _sim.Corpses.Count)
                         _sim.CorpsesMut[currentDrag].DraggedByUnitID = GameConstants.InvalidUnit;
-                    _sim.UnitsMut.DraggingCorpseIdx[necroIdx] = -1;
+                    _sim.UnitsMut[necroIdx].DraggingCorpseIdx = -1;
                 }
                 else
                 {
-                    var np3 = _sim.Units.Position[necroIdx];
+                    var np3 = _sim.Units[necroIdx].Position;
                     float bcd = 3f * 3f; int bci = -1;
                     for (int ci = 0; ci < _sim.Corpses.Count; ci++)
                     {
@@ -2131,8 +2131,8 @@ public class Game1 : Microsoft.Xna.Framework.Game
                     }
                     if (bci >= 0)
                     {
-                        _sim.UnitsMut.DraggingCorpseIdx[necroIdx] = bci;
-                        _sim.CorpsesMut[bci].DraggedByUnitID = _sim.Units.Id[necroIdx];
+                        _sim.UnitsMut[necroIdx].DraggingCorpseIdx = bci;
+                        _sim.CorpsesMut[bci].DraggedByUnitID = _sim.Units[necroIdx].Id;
                     }
                 }
             }
@@ -2177,7 +2177,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
             if (!_mouseOverUI && mouse.RightButton == ButtonState.Pressed && _prevMouse.RightButton == ButtonState.Released
                 && _sim.NecromancerIndex >= 0)
             {
-                int bestIdx = FindNearestForagable(_sim.Units.Position[_sim.NecromancerIndex], 2f);
+                int bestIdx = FindNearestForagable(_sim.Units[_sim.NecromancerIndex].Position, 2f);
                 if (bestIdx >= 0)
                     StartForagableCollection(bestIdx);
             }
@@ -2188,7 +2188,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 _autoPickupCooldown -= dt;
                 if (_autoPickupCooldown <= 0f)
                 {
-                    int autoIdx = FindNearestForagable(_sim.Units.Position[_sim.NecromancerIndex], ForagableAutoPickupRange);
+                    int autoIdx = FindNearestForagable(_sim.Units[_sim.NecromancerIndex].Position, ForagableAutoPickupRange);
                     if (autoIdx >= 0)
                     {
                         StartForagableCollection(autoIdx);
@@ -2452,9 +2452,9 @@ public class Game1 : Microsoft.Xna.Framework.Game
             // Set proper cooldown from spell def
             _envSystem.SetTrapCooldown(evt.ObjectIndex, spell.Cooldown);
 
-            var targetPos = _sim.Units.Position[evt.TargetUnitIdx];
+            var targetPos = _sim.Units[evt.TargetUnitIdx].Position;
             float targetH = 1.0f;
-            var tDef = _gameData.Units.Get(_sim.Units.UnitDefID[evt.TargetUnitIdx]);
+            var tDef = _gameData.Units.Get(_sim.Units[evt.TargetUnitIdx].UnitDefID);
             if (tDef != null) targetH = tDef.SpriteWorldHeight * 0.5f;
 
             if (spell.Category == "Strike" && spell.StrikeTargetUnit)
@@ -2529,13 +2529,13 @@ public class Game1 : Microsoft.Xna.Framework.Game
     /// </summary>
     private void TryMeleeOrGather(int necroIdx, Vec2 mouseWorld)
     {
-        var necroPos = _sim.Units.Position[necroIdx];
+        var necroPos = _sim.Units[necroIdx].Position;
 
         // Check melee cooldown
-        if (_sim.Units.AttackCooldown[necroIdx] <= 0f && _sim.Units.PostAttackTimer[necroIdx] <= 0f)
+        if (_sim.Units[necroIdx].AttackCooldown <= 0f && _sim.Units[necroIdx].PostAttackTimer <= 0f)
         {
             // Find closest enemy near the mouse that is within melee range of the necromancer
-            var stats = _sim.Units.Stats[necroIdx];
+            var stats = _sim.Units[necroIdx].Stats;
             int weaponLen = stats.MeleeWeapons.Count > 0 ? stats.MeleeWeapons[0].Length : stats.Length;
             float meleeRange = 1.0f + weaponLen * 0.15f; // base melee range + weapon reach
 
@@ -2543,11 +2543,11 @@ public class Game1 : Microsoft.Xna.Framework.Game
             float bestDist = float.MaxValue;
             for (int i = 0; i < _sim.Units.Count; i++)
             {
-                if (i == necroIdx || !_sim.Units.Alive[i]) continue;
-                if (_sim.Units.Faction[i] == _sim.Units.Faction[necroIdx]) continue; // skip friendlies
+                if (i == necroIdx || !_sim.Units[i].Alive) continue;
+                if (_sim.Units[i].Faction == _sim.Units[necroIdx].Faction) continue; // skip friendlies
 
-                float distToMouse = (mouseWorld - _sim.Units.Position[i]).Length();
-                float distToNecro = (necroPos - _sim.Units.Position[i]).Length();
+                float distToMouse = (mouseWorld - _sim.Units[i].Position).Length();
+                float distToNecro = (necroPos - _sim.Units[i].Position).Length();
 
                 // Must be near the mouse click AND within melee range of necro
                 if (distToMouse < 3f && distToNecro <= meleeRange && distToMouse < bestDist)
@@ -2560,10 +2560,10 @@ public class Game1 : Microsoft.Xna.Framework.Game
             if (bestEnemy >= 0)
             {
                 // Initiate melee attack
-                _sim.UnitsMut.PendingAttack[necroIdx] = CombatTarget.Unit(_sim.Units.Id[bestEnemy]);
-                float cooldown = _gameData.Units.Get(_sim.Units.UnitDefID[necroIdx])?.AttackCooldown
+                _sim.UnitsMut[necroIdx].PendingAttack = CombatTarget.Unit(_sim.Units[bestEnemy].Id);
+                float cooldown = _gameData.Units.Get(_sim.Units[necroIdx].UnitDefID)?.AttackCooldown
                     ?? _gameData.Settings.Combat.AttackCooldown;
-                _sim.UnitsMut.AttackCooldown[necroIdx] = cooldown;
+                _sim.UnitsMut[necroIdx].AttackCooldown = cooldown;
                 return;
             }
         }
@@ -2610,7 +2610,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
             ObjIdx = objIdx,
             StartPos = new Vec2(obj.X, obj.Y),
             StartHeight = 0f,
-            TargetPos = _sim.Units.Position[_sim.NecromancerIndex],
+            TargetPos = _sim.Units[_sim.NecromancerIndex].Position,
             Timer = 0f,
             ArcDuration = ForagableArcDuration,
             ResourceType = resourceType,
@@ -2631,7 +2631,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
             // Update target to follow necromancer
             if (_sim.NecromancerIndex >= 0)
-                cf.TargetPos = _sim.Units.Position[_sim.NecromancerIndex];
+                cf.TargetPos = _sim.Units[_sim.NecromancerIndex].Position;
 
             _collectingForagables[i] = cf;
 
@@ -2723,10 +2723,10 @@ public class Game1 : Microsoft.Xna.Framework.Game
         int bestIdx = -1;
         for (int i = 0; i < _sim.Units.Count; i++)
         {
-            if (!_sim.Units.Alive[i]) continue;
+            if (!_sim.Units[i].Alive) continue;
             // Enemy = different faction from necromancer (undead)
-            if (_sim.Units.Faction[i] == Faction.Undead) continue;
-            float d = (_sim.Units.Position[i] - worldPos).LengthSq();
+            if (_sim.Units[i].Faction == Faction.Undead) continue;
+            float d = (_sim.Units[i].Position - worldPos).LengthSq();
             if (d < bestDist) { bestDist = d; bestIdx = i; }
         }
         return bestIdx;
@@ -2735,7 +2735,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
     private int FindNecromancer()
     {
         for (int i = 0; i < _sim.Units.Count; i++)
-            if (_sim.Units.Alive[i] && _sim.Units.AI[i] == AIBehavior.PlayerControlled)
+            if (_sim.Units[i].Alive && _sim.Units[i].AI == AIBehavior.PlayerControlled)
                 return i;
         return -1;
     }
@@ -2778,8 +2778,8 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 if (spell != null)
                 {
                     int necroIdx = FindNecromancer();
-                    uint ownerUid = necroIdx >= 0 ? _sim.Units.Id[necroIdx] : 0;
-                    Vec2 origin = necroIdx >= 0 ? _sim.Units.EffectSpawnPos2D[necroIdx] : pg.Origin;
+                    uint ownerUid = necroIdx >= 0 ? _sim.Units[necroIdx].Id : 0;
+                    Vec2 origin = necroIdx >= 0 ? _sim.Units[necroIdx].EffectSpawnPos2D : pg.Origin;
                     SpawnSpellProjectile(spell, origin, pg.Target, ownerUid);
                 }
 
@@ -2819,14 +2819,14 @@ public class Game1 : Microsoft.Xna.Framework.Game
     {
         for (int i = 0; i < _sim.Units.Count; i++)
         {
-            if (!_sim.Units.Alive[i]) continue;
+            if (!_sim.Units[i].Alive) continue;
 
-            uint uid = _sim.Units.Id[i];
+            uint uid = _sim.Units[i].Id;
 
             if (!_unitAnims.TryGetValue(uid, out var animData))
             {
                 // Try to init from defID
-                string defID = _sim.Units.UnitDefID[i];
+                string defID = _sim.Units[i].UnitDefID;
                 var unitDef = _gameData.Units.Get(defID);
                 if (unitDef?.Sprite == null) continue;
                 var atlasId = AtlasDefs.ResolveAtlasName(unitDef.Sprite.AtlasName);
@@ -2850,48 +2850,48 @@ public class Game1 : Microsoft.Xna.Framework.Game
             }
 
             // --- Jump state machine ---
-            if (_sim.Units.Jumping[i])
+            if (_sim.Units[i].Jumping)
             {
                 var mu = _sim.UnitsMut;
-                mu.JumpTimer[i] += dt;
-                float t = MathF.Min(mu.JumpTimer[i] / mu.JumpDuration[i], 1f);
-                mu.Position[i] = mu.JumpStartPos[i] + (mu.JumpEndPos[i] - mu.JumpStartPos[i]) * t;
-                mu.Velocity[i] = Vec2.Zero;
-                mu.JumpHeight[i] = t >= 1f ? 0f : 4f * 0.8f * t * (1f - t);
+                mu[i].JumpTimer += dt;
+                float t = MathF.Min(mu[i].JumpTimer / mu[i].JumpDuration, 1f);
+                mu[i].Position = mu[i].JumpStartPos + (mu[i].JumpEndPos - mu[i].JumpStartPos) * t;
+                mu[i].Velocity = Vec2.Zero;
+                mu[i].JumpHeight = t >= 1f ? 0f : 4f * 0.8f * t * (1f - t);
 
-                float takeoffEnd = mu.JumpDuration[i] * 0.35f;
-                float landStart = mu.JumpDuration[i] - 0.25f;
+                float takeoffEnd = mu[i].JumpDuration * 0.35f;
+                float landStart = mu[i].JumpDuration - 0.25f;
                 var current = animData.Ctrl.CurrentState;
-                bool isAttack = mu.JumpIsAttack[i];
+                bool isAttack = mu[i].JumpIsAttack;
                 var midAnim = isAttack ? AnimState.JumpAttackSetup : AnimState.JumpLoop;
                 var landAnim = isAttack ? AnimState.JumpAttackHit : AnimState.JumpLand;
 
-                if (mu.JumpTimer[i] < takeoffEnd)
+                if (mu[i].JumpTimer < takeoffEnd)
                 {
                     if (current != AnimState.JumpTakeoff) animData.Ctrl.ForceState(AnimState.JumpTakeoff);
                 }
-                else if (mu.JumpTimer[i] < landStart)
+                else if (mu[i].JumpTimer < landStart)
                 {
                     if (current != midAnim) animData.Ctrl.ForceState(midAnim);
                 }
                 else
                 {
                     if (current != landAnim && t < 1f) animData.Ctrl.ForceState(landAnim);
-                    if (isAttack && t >= 1f && !mu.JumpAttackFired[i])
+                    if (isAttack && t >= 1f && !mu[i].JumpAttackFired)
                     {
-                        mu.JumpAttackFired[i] = true;
+                        mu[i].JumpAttackFired = true;
                         _sim.ResolvePendingAttack(i); // reuse melee resolution
                     }
                     if (t >= 1f && current != landAnim)
                     {
-                        mu.Jumping[i] = false;
-                        mu.JumpHeight[i] = 0f;
+                        mu[i].Jumping = false;
+                        mu[i].JumpHeight = 0f;
                     }
                 }
-                if (mu.JumpTimer[i] > mu.JumpDuration[i] + 1.5f)
+                if (mu[i].JumpTimer > mu[i].JumpDuration + 1.5f)
                 {
-                    mu.Jumping[i] = false;
-                    mu.JumpHeight[i] = 0f;
+                    mu[i].Jumping = false;
+                    mu[i].JumpHeight = 0f;
                     animData.Ctrl.ForceState(AnimState.Idle);
                 }
                 animData.Ctrl.Update(dt);
@@ -2901,26 +2901,26 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
             // Determine animation state
             AnimState targetState;
-            if (_sim.Units.StandupTimer[i] > 0f)
+            if (_sim.Units[i].StandupTimer > 0f)
                 targetState = AnimState.Standup;
-            else if (_sim.Units.Dodging[i])
+            else if (_sim.Units[i].Dodging)
                 targetState = AnimState.Dodge;
-            else if (!_sim.Units.PendingAttack[i].IsNone)
+            else if (!_sim.Units[i].PendingAttack.IsNone)
                 targetState = AnimState.Attack1;
-            else if (_sim.Units.HitReacting[i])
+            else if (_sim.Units[i].HitReacting)
                 targetState = AnimState.BlockReact;
-            else if (_sim.Units.Archetype[i] == AI.ArchetypeRegistry.DeerHerd
-                && _sim.Units.Routine[i] == 6 /* RoutineFeeding */
-                && _sim.Units.Subroutine[i] == 1 /* FeedEating */)
+            else if (_sim.Units[i].Archetype == AI.ArchetypeRegistry.DeerHerd
+                && _sim.Units[i].Routine == 6 /* RoutineFeeding */
+                && _sim.Units[i].Subroutine == 1 /* FeedEating */)
                 targetState = AnimState.Feeding;
-            else if (_sim.Units.BlockReacting[i])
+            else if (_sim.Units[i].BlockReacting)
                 targetState = AnimState.BlockReact;
-            else if (_sim.Units.PostAttackTimer[i] > 0f)
+            else if (_sim.Units[i].PostAttackTimer > 0f)
                 targetState = AnimState.Block;
-            else if (_sim.Units.InCombat[i] && _sim.Units.AttackCooldown[i] > 0f)
+            else if (_sim.Units[i].InCombat && _sim.Units[i].AttackCooldown > 0f)
             {
                 // Pre-roll: start attack animation early so effect time aligns with cooldown expiry
-                float cooldownRemaining = _sim.Units.AttackCooldown[i];
+                float cooldownRemaining = _sim.Units[i].AttackCooldown;
                 float effectTime = animData.Ctrl.GetEffectTimeSeconds(AnimState.Attack1);
                 float animDur = animData.Ctrl.GetTotalDurationSeconds(AnimState.Attack1);
                 float lockout = _gameData.Settings.Combat.PostAttackLockout;
@@ -2934,8 +2934,8 @@ public class Game1 : Microsoft.Xna.Framework.Game
             }
             else
             {
-                float speed = _sim.Units.Velocity[i].Length();
-                float baseSpeed = _sim.Units.Stats[i].CombatSpeed;
+                float speed = _sim.Units[i].Velocity.Length();
+                float baseSpeed = _sim.Units[i].Stats.CombatSpeed;
                 float walkThreshold = 0.25f;
                 float jogThreshold = 4f + baseSpeed / 3f;
                 float runThreshold = 6f + 2f * baseSpeed / 3f;
@@ -2952,15 +2952,15 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 // Debug: log state transitions
                 if (animData.Ctrl.CurrentState != targetState && speed > walkThreshold)
                 {
-                    string defId = _sim.Units.UnitDefID[i] ?? "?";
+                    string defId = _sim.Units[i].UnitDefID ?? "?";
                     DebugLog.Log("anim", $"Unit {i} ({defId}): {animData.Ctrl.CurrentState}->{targetState} speed={speed:F1} base={baseSpeed:F1} walk<{jogThreshold:F1} jog<{runThreshold:F1}");
                 }
             }
 
             // Reverse walk playback when moving backward relative to facing
-            float facingRad = _sim.Units.FacingAngle[i] * MathF.PI / 180f;
+            float facingRad = _sim.Units[i].FacingAngle * MathF.PI / 180f;
             var facingDir = new Vec2(MathF.Cos(facingRad), MathF.Sin(facingRad));
-            var vel = _sim.Units.Velocity[i];
+            var vel = _sim.Units[i].Velocity;
             bool movingBackward = false;
             if (vel.LengthSq() > 0.1f)
             {
@@ -2982,7 +2982,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
             animData.Ctrl.Update(dt);
 
             // Resolve pending attacks at action moment
-            if (animData.Ctrl.ConsumeActionMoment() && !_sim.Units.PendingAttack[i].IsNone)
+            if (animData.Ctrl.ConsumeActionMoment() && !_sim.Units[i].PendingAttack.IsNone)
                 _sim.ResolvePendingAttack(i);
 
             _unitAnims[uid] = animData;
@@ -3004,12 +3004,12 @@ public class Game1 : Microsoft.Xna.Framework.Game
         var mu = _sim.UnitsMut;
         for (int i = 0; i < _sim.Units.Count; i++)
         {
-            if (!_sim.Units.Alive[i]) continue;
+            if (!_sim.Units[i].Alive) continue;
 
-            uint uid = _sim.Units.Id[i];
+            uint uid = _sim.Units[i].Id;
             if (!_unitAnims.TryGetValue(uid, out var animData)) continue;
 
-            string defID = _sim.Units.UnitDefID[i];
+            string defID = _sim.Units[i].UnitDefID;
             var unitDef = _gameData.Units.Get(defID);
             bool foundWeaponTip = false;
 
@@ -3018,11 +3018,11 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 string animName = AnimController.StateToAnimName(animData.Ctrl.CurrentState);
                 if (unitDef.WeaponPoints.TryGetValue(animName, out var yawDict))
                 {
-                    int spriteAngle = animData.Ctrl.ResolveAngle(_sim.Units.FacingAngle[i], out bool flipX);
+                    int spriteAngle = animData.Ctrl.ResolveAngle(_sim.Units[i].FacingAngle, out bool flipX);
                     string yawKey = spriteAngle.ToString();
                     if (yawDict.TryGetValue(yawKey, out var frames))
                     {
-                        int frameIdx = animData.Ctrl.GetCurrentFrameIndex(_sim.Units.FacingAngle[i]);
+                        int frameIdx = animData.Ctrl.GetCurrentFrameIndex(_sim.Units[i].FacingAngle);
                         if (frameIdx >= 0 && frameIdx < frames.Count)
                         {
                             var wpf = frames[frameIdx];
@@ -3031,16 +3031,16 @@ public class Game1 : Microsoft.Xna.Framework.Game
                             {
                                 float flipMul = flipX ? -1f : 1f;
                                 float worldH = (unitDef.SpriteWorldHeight > 0 ? unitDef.SpriteWorldHeight : 1.8f)
-                                               * _sim.Units.SpriteScale[i];
+                                               * _sim.Units[i].SpriteScale;
                                 float worldScale = worldH / animData.RefFrameHeight;
 
                                 float tipDx = wpf.Tip.X * worldScale * flipMul;
-                                mu.EffectSpawnPos2D[i] = new Vec2(
-                                    _sim.Units.Position[i].X + tipDx,
-                                    _sim.Units.Position[i].Y);
+                                mu[i].EffectSpawnPos2D = new Vec2(
+                                    _sim.Units[i].Position.X + tipDx,
+                                    _sim.Units[i].Position.Y);
 
-                                float unitHeight = _sim.Units.JumpHeight[i];
-                                mu.EffectSpawnHeight[i] = unitHeight - wpf.Tip.Y * worldScale
+                                float unitHeight = _sim.Units[i].JumpHeight;
+                                mu[i].EffectSpawnHeight = unitHeight - wpf.Tip.Y * worldScale
                                     * _camera.Zoom / _camera.HeightScale;
 
                                 foundWeaponTip = true;
@@ -3053,11 +3053,11 @@ public class Game1 : Microsoft.Xna.Framework.Game
             if (!foundWeaponTip)
             {
                 // Fallback: offset in facing direction
-                float facingRad = _sim.Units.FacingAngle[i] * MathF.PI / 180f;
-                float radius = _sim.Units.Radius[i];
-                mu.EffectSpawnPos2D[i] = _sim.Units.Position[i]
+                float facingRad = _sim.Units[i].FacingAngle * MathF.PI / 180f;
+                float radius = _sim.Units[i].Radius;
+                mu[i].EffectSpawnPos2D = _sim.Units[i].Position
                     + new Vec2(MathF.Cos(facingRad), MathF.Sin(facingRad)) * radius * 1.5f;
-                mu.EffectSpawnHeight[i] = 0.6f;
+                mu[i].EffectSpawnHeight = 0.6f;
             }
         }
     }
@@ -3150,7 +3150,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
             if (potionDef != null)
             {
                 _debugDraw.EnsurePixel(GraphicsDevice);
-                var necroPos = _sim.Units.Position[_sim.NecromancerIndex];
+                var necroPos = _sim.Units[_sim.NecromancerIndex].Position;
                 float range = potionDef.ThrowRange + 1f;
                 _debugDraw.DrawCircle(_spriteBatch, _renderer, _camera,
                     necroPos, range, new Color(180, 200, 100, 100), 48);
@@ -3681,10 +3681,10 @@ public class Game1 : Microsoft.Xna.Framework.Game
         {
             int unitIdx = -1;
             for (int j = 0; j < _sim.Units.Count; j++)
-                if (_sim.Units.Id[j] == unit.UnitID) { unitIdx = j; break; }
-            if (unitIdx < 0 || !_sim.Units.Alive[unitIdx]) continue;
+                if (_sim.Units[j].Id == unit.UnitID) { unitIdx = j; break; }
+            if (unitIdx < 0 || !_sim.Units[unitIdx].Alive) continue;
 
-            var unitPos = _sim.Units.Position[unitIdx];
+            var unitPos = _sim.Units[unitIdx].Position;
             var unitSp = _camera.WorldToScreen(unitPos, 0f, screenW, screenH);
 
             // Line to slot target
@@ -3728,23 +3728,23 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
         for (int i = 0; i < _sim.Units.Count; i++)
         {
-            if (!_sim.Units.Alive[i]) continue;
+            if (!_sim.Units[i].Alive) continue;
 
-            var pos = _sim.Units.Position[i];
+            var pos = _sim.Units[i].Position;
             var sp = _camera.WorldToScreen(pos, 0f, screenW, screenH);
-            float speed = _sim.Units.Velocity[i].Length();
-            float maxSpeed = _sim.Units.MaxSpeed[i];
+            float speed = _sim.Units[i].Velocity.Length();
+            float maxSpeed = _sim.Units[i].MaxSpeed;
 
             // Line to target
-            var target = _sim.Units.Target[i];
+            var target = _sim.Units[i].Target;
             if (target.IsUnit)
             {
                 int tIdx = -1;
                 for (int j = 0; j < _sim.Units.Count; j++)
-                    if (_sim.Units.Id[j] == target.UnitID) { tIdx = j; break; }
-                if (tIdx >= 0 && _sim.Units.Alive[tIdx])
+                    if (_sim.Units[j].Id == target.UnitID) { tIdx = j; break; }
+                if (tIdx >= 0 && _sim.Units[tIdx].Alive)
                 {
-                    var tSp = _camera.WorldToScreen(_sim.Units.Position[tIdx], 0f, screenW, screenH);
+                    var tSp = _camera.WorldToScreen(_sim.Units[tIdx].Position, 0f, screenW, screenH);
                     _debugDraw.DrawLine(_spriteBatch, sp, tSp, new Color(255, 100, 100, 100));
                 }
             }
@@ -3752,7 +3752,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
             // Velocity vector
             if (speed > 0.1f)
             {
-                var velEnd = _camera.WorldToScreen(pos + _sim.Units.Velocity[i].Normalized() * 1.5f, 0f, screenW, screenH);
+                var velEnd = _camera.WorldToScreen(pos + _sim.Units[i].Velocity.Normalized() * 1.5f, 0f, screenW, screenH);
                 _debugDraw.DrawArrow(_spriteBatch, sp, velEnd, new Color(80, 200, 255, 150));
             }
 
@@ -3760,18 +3760,18 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
             // Get animation state
             string animLabel = "?";
-            uint uid = _sim.Units.Id[i];
+            uint uid = _sim.Units[i].Id;
             if (_unitAnims.TryGetValue(uid, out var animData))
                 animLabel = animData.Ctrl.CurrentState.ToString();
-                
+
             string aiLabel = "?";
-            var aiArchetypeId = _sim.Units.Archetype[i];
+            var aiArchetypeId = _sim.Units[i].Archetype;
             aiLabel = AI.ArchetypeRegistry.GetName(aiArchetypeId);
             var aiArchetype = AI.ArchetypeRegistry.Get(aiArchetypeId);
 
             if (aiArchetype != null) {
                 
-                string routineLabel = aiArchetype.GetRoutineName(_sim.Units.Routine[i]);
+                string routineLabel = aiArchetype.GetRoutineName(_sim.Units[i].Routine);
 
                 aiLabel = $"{aiLabel} - {routineLabel}";
             }
@@ -3852,8 +3852,8 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
         // Add units
         for (int i = 0; i < _sim.Units.Count; i++)
-            if (_sim.Units.Alive[i])
-                items.Add(new DepthItem { Y = _sim.Units.Position[i].Y, IsUnit = true, Index = i });
+            if (_sim.Units[i].Alive)
+                items.Add(new DepthItem { Y = _sim.Units[i].Position.Y, IsUnit = true, Index = i });
 
         // Add environment objects (with view culling, skip collected foragables, skip ground-layer objects)
         for (int i = 0; i < _envSystem.ObjectCount; i++)
@@ -3881,28 +3881,28 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
     private void DrawSingleUnit(int i)
     {
-        uint uid = _sim.Units.Id[i];
+        uint uid = _sim.Units[i].Id;
         if (!_unitAnims.TryGetValue(uid, out var animData)) return;
 
-        var unitDef = _gameData.Units.Get(_sim.Units.UnitDefID[i]);
+        var unitDef = _gameData.Units.Get(_sim.Units[i].UnitDefID);
         if (unitDef == null) return;
 
         var atlas = _atlases[(int)animData.AtlasID];
         if (!atlas.IsLoaded) return;
 
-        var fr = animData.Ctrl.GetCurrentFrame(_sim.Units.FacingAngle[i]);
+        var fr = animData.Ctrl.GetCurrentFrame(_sim.Units[i].FacingAngle);
         if (fr.Frame == null) return;
 
-        float worldH = (unitDef.SpriteWorldHeight > 0 ? unitDef.SpriteWorldHeight : 1.8f) * _sim.Units.SpriteScale[i];
+        float worldH = (unitDef.SpriteWorldHeight > 0 ? unitDef.SpriteWorldHeight : 1.8f) * _sim.Units[i].SpriteScale;
         float pixelH = worldH * _camera.Zoom;
         float scale = pixelH / animData.RefFrameHeight;
 
-        Color tint = _sim.Units.Faction[i] == Faction.Undead
+        Color tint = _sim.Units[i].Faction == Faction.Undead
             ? new Color(190, 210, 190)
             : new Color(210, 195, 185);
 
         // Apply buff tinting
-        foreach (var buff in _sim.Units.ActiveBuffs[i])
+        foreach (var buff in _sim.Units[i].ActiveBuffs)
         {
             var buffDef = _gameData.Buffs.Get(buff.BuffDefID);
             if (buffDef?.UnitTint != null && buffDef.UnitTint.A > 0)
@@ -3917,19 +3917,19 @@ public class Game1 : Microsoft.Xna.Framework.Game
         }
 
         // Ghost mode: semi-transparent blue tint
-        if (_sim.Units.GhostMode[i])
+        if (_sim.Units[i].GhostMode)
             tint = Color.FromNonPremultiplied((int)(tint.R * 0.5f), (int)(tint.G * 0.5f), (int)(tint.B + 80), 140);
 
-        float heightOffset = _sim.Units.JumpHeight[i];
-        var sp = _renderer.WorldToScreen(_sim.Units.Position[i], heightOffset, _camera);
+        float heightOffset = _sim.Units[i].JumpHeight;
+        var sp = _renderer.WorldToScreen(_sim.Units[i].Position, heightOffset, _camera);
 
         DrawSpriteFrame(atlas, fr.Frame.Value, sp, scale, fr.FlipX, tint);
         DrawHPBar(i, sp);
 
         // --- Feature 1: Weapon point text during attack ---
-        if (!_sim.Units.PendingAttack[i].IsNone)
+        if (!_sim.Units[i].PendingAttack.IsNone)
         {
-            var stats = _sim.Units.Stats[i];
+            var stats = _sim.Units[i].Stats;
             string weaponName = stats.MeleeWeapons.Count > 0 ? stats.MeleeWeapons[0].Name : "Unarmed";
             if (!string.IsNullOrEmpty(weaponName) && _smallFont != null)
             {
@@ -3939,12 +3939,12 @@ public class Game1 : Microsoft.Xna.Framework.Game
         }
 
         // --- Feature 2: Buff indicator dots above HP bar ---
-        if (_sim.Units.ActiveBuffs[i].Count > 0)
+        if (_sim.Units[i].ActiveBuffs.Count > 0)
         {
-            float dotStartX = sp.X - (_sim.Units.ActiveBuffs[i].Count * 5f) / 2f;
+            float dotStartX = sp.X - (_sim.Units[i].ActiveBuffs.Count * 5f) / 2f;
             float dotY = sp.Y - 52f;
             int dotIdx = 0;
-            foreach (var buff in _sim.Units.ActiveBuffs[i])
+            foreach (var buff in _sim.Units[i].ActiveBuffs)
             {
                 var buffDef = _gameData.Buffs.Get(buff.BuffDefID);
                 Color dotColor;
@@ -3983,7 +3983,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         if (def.IsForagable && _sim.NecromancerIndex >= 0)
         {
             Vec2 objPos = new Vec2(obj.X, obj.Y);
-            Vec2 necroPos = _sim.Units.Position[_sim.NecromancerIndex];
+            Vec2 necroPos = _sim.Units[_sim.NecromancerIndex].Position;
             float dist = (objPos - necroPos).Length();
 
             if (dist < ForagableWiggleRange)
@@ -4027,17 +4027,17 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
     private void DrawHPBar(int unitIdx, Vector2 screenPos)
     {
-        var stats = _sim.Units.Stats[unitIdx];
+        var stats = _sim.Units[unitIdx].Stats;
         if (stats.MaxHP <= 0) return;
 
         float hpRatio = (float)stats.HP / stats.MaxHP;
         if (hpRatio >= 1f) return; // don't show full HP bars
 
         // Position HP bar above the unit based on its sprite height
-        var unitDef = _gameData.Units.Get(_sim.Units.UnitDefID[unitIdx]);
+        var unitDef = _gameData.Units.Get(_sim.Units[unitIdx].UnitDefID);
         float spriteWorldH = (unitDef != null && unitDef.SpriteWorldHeight > 0)
             ? unitDef.SpriteWorldHeight : 1.8f;
-        float spriteScale = _sim.Units.SpriteScale[unitIdx];
+        float spriteScale = _sim.Units[unitIdx].SpriteScale;
         float barOffset = spriteWorldH * spriteScale * _camera.Zoom * 0.9f + 5f;
 
         float barW = 30f;

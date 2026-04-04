@@ -12,7 +12,7 @@ public static class BuffSystem
     public static void ApplyBuff(UnitArrays units, int unitIdx, BuffDef def)
     {
         if (unitIdx < 0 || unitIdx >= units.Count) return;
-        var buffs = units.ActiveBuffs[unitIdx];
+        var buffs = units[unitIdx].ActiveBuffs;
 
         // Check for existing stack
         for (int i = 0; i < buffs.Count; i++)
@@ -42,8 +42,8 @@ public static class BuffSystem
     {
         for (int i = 0; i < units.Count; i++)
         {
-            if (!units.Alive[i]) continue;
-            var buffs = units.ActiveBuffs[i];
+            if (!units[i].Alive) continue;
+            var buffs = units[i].ActiveBuffs;
             for (int j = buffs.Count - 1; j >= 0; j--)
             {
                 var b = buffs[j];
@@ -60,7 +60,7 @@ public static class BuffSystem
     public static void RemoveBuffStack(UnitArrays units, int unitIdx, string buffDefID)
     {
         if (unitIdx < 0 || unitIdx >= units.Count) return;
-        var buffs = units.ActiveBuffs[unitIdx];
+        var buffs = units[unitIdx].ActiveBuffs;
         for (int i = 0; i < buffs.Count; i++)
         {
             if (buffs[i].BuffDefID == buffDefID)
@@ -83,7 +83,7 @@ public static class BuffSystem
         float multiplicative = 1f;
         float? setValue = null;
 
-        foreach (var buff in units.ActiveBuffs[unitIdx])
+        foreach (var buff in units[unitIdx].ActiveBuffs)
         {
             foreach (var eff in buff.Effects)
             {
@@ -108,7 +108,7 @@ public static class BuffSystem
         if (unitIdx < 0 || unitIdx >= units.Count) return;
 
         // Log the application
-        var buffs = units.ActiveBuffs[unitIdx];
+        var buffs = units[unitIdx].ActiveBuffs;
         bool stacking = false;
         for (int i = 0; i < buffs.Count; i++)
         {

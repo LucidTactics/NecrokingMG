@@ -32,7 +32,7 @@ public class RangedUnitHandler : IArchetypeHandler
 
     public void OnSpawn(ref AIContext ctx)
     {
-        ctx.Units.SpawnPosition[ctx.UnitIndex] = ctx.MyPos;
+        ctx.Units[ctx.UnitIndex].SpawnPosition = ctx.MyPos;
         ctx.Routine = RoutineIdle;
         ctx.Subroutine = 0;
         ctx.SubroutineTimer = 0f;
@@ -66,7 +66,7 @@ public class RangedUnitHandler : IArchetypeHandler
         {
             if (ctx.AlertTarget != GameConstants.InvalidUnit)
             {
-                ctx.Units.Target[ctx.UnitIndex] = CombatTarget.Unit(ctx.AlertTarget);
+                ctx.Units[ctx.UnitIndex].Target = CombatTarget.Unit(ctx.AlertTarget);
                 ctx.Routine = RoutineCombat;
                 ctx.SubroutineTimer = 0f;
                 return;
@@ -75,14 +75,14 @@ public class RangedUnitHandler : IArchetypeHandler
 
         if (ctx.Routine == RoutineCombat && !SubroutineSteps.IsTargetAlive(ref ctx))
         {
-            float range = ctx.Units.DetectionRange[ctx.UnitIndex];
+            float range = ctx.Units[ctx.UnitIndex].DetectionRange;
             int next = SubroutineSteps.FindClosestEnemy(ref ctx, range > 0 ? range : 15f);
             if (next >= 0)
-                ctx.Units.Target[ctx.UnitIndex] = CombatTarget.Unit(ctx.Units.Id[next]);
+                ctx.Units[ctx.UnitIndex].Target = CombatTarget.Unit(ctx.Units[next].Id);
             else
             {
                 ctx.Routine = RoutineReturn;
-                ctx.Units.Target[ctx.UnitIndex] = CombatTarget.None;
+                ctx.Units[ctx.UnitIndex].Target = CombatTarget.None;
                 ctx.AlertState = (byte)UnitAlertState.Unaware;
                 ctx.AlertTarget = GameConstants.InvalidUnit;
             }
@@ -110,33 +110,33 @@ public class RangedUnitHandler : IArchetypeHandler
         int targetIdx = SubroutineSteps.ResolveTarget(ref ctx);
         if (targetIdx < 0) return;
 
-        float dist = (ctx.Units.Position[targetIdx] - ctx.MyPos).Length();
+        float dist = (ctx.Units[targetIdx].Position - ctx.MyPos).Length();
 
         if (dist < TooCloseRange)
         {
             // Too close — back away
-            SubroutineSteps.MoveAwayFrom(ref ctx, ctx.Units.Position[targetIdx], PreferredRange);
+            SubroutineSteps.MoveAwayFrom(ref ctx, ctx.Units[targetIdx].Position, PreferredRange);
         }
         else if (dist > PreferredRange + 2f)
         {
             // Too far — approach
-            SubroutineSteps.MoveToward(ref ctx, ctx.Units.Position[targetIdx], ctx.MySpeed * 0.6f);
+            SubroutineSteps.MoveToward(ref ctx, ctx.Units[targetIdx].Position, ctx.MySpeed * 0.6f);
         }
         else
         {
             // Good range — stand and fight
-            ctx.Units.PreferredVel[ctx.UnitIndex] = Vec2.Zero;
-            if (ctx.Units.EngagedTarget[ctx.UnitIndex].IsNone)
-                ctx.Units.EngagedTarget[ctx.UnitIndex] = ctx.Units.Target[ctx.UnitIndex];
+            ctx.Units[ctx.UnitIndex].PreferredVel = Vec2.Zero;
+            if (ctx.Units[ctx.UnitIndex].EngagedTarget.IsNone)
+                ctx.Units[ctx.UnitIndex].EngagedTarget = ctx.Units[ctx.UnitIndex].Target;
         }
     }
 
     private static void UpdateReturn(ref AIContext ctx)
     {
-        ctx.Units.EngagedTarget[ctx.UnitIndex] = CombatTarget.None;
-        ctx.Units.InCombat[ctx.UnitIndex] = false;
+        ctx.Units[ctx.UnitIndex].EngagedTarget = CombatTarget.None;
+        ctx.Units[ctx.UnitIndex].InCombat = false;
 
-        Vec2 returnPos = ctx.Units.SpawnPosition[ctx.UnitIndex];
+        Vec2 returnPos = ctx.Units[ctx.UnitIndex].SpawnPosition;
         if ((ctx.MyPos - returnPos).Length() > 2f)
             SubroutineSteps.MoveToward(ref ctx, returnPos, ctx.MySpeed * 0.5f);
         else
@@ -144,7 +144,7 @@ public class RangedUnitHandler : IArchetypeHandler
             ctx.Routine = RoutineIdle;
             ctx.Subroutine = 0;
             ctx.SubroutineTimer = 0f;
-            ctx.Units.PreferredVel[ctx.UnitIndex] = Vec2.Zero;
+            ctx.Units[ctx.UnitIndex].PreferredVel = Vec2.Zero;
         }
     }
 

@@ -31,16 +31,16 @@ public class OrderAttackScenario : ScenarioBase
             float x = 8f + (i % 4) * 1.5f;
             float y = 8f + (i / 4) * 1.5f;
             int idx = units.AddUnit(new Vec2(x, y), UnitType.Skeleton);
-            units.AI[idx] = AIBehavior.OrderAttack;
-            units.MoveTarget[idx] = _targetPos;
-            units.Target[idx] = CombatTarget.None;
+            units[idx].AI = AIBehavior.OrderAttack;
+            units[idx].MoveTarget = _targetPos;
+            units[idx].Target = CombatTarget.None;
         }
 
         // Spawn 2 soldiers at the target location
         for (int i = 0; i < 2; i++)
         {
             int idx = units.AddUnit(new Vec2(30f + i * 2f, 10f), UnitType.Soldier);
-            units.AI[idx] = AIBehavior.AttackClosest;
+            units[idx].AI = AIBehavior.AttackClosest;
         }
 
         DebugLog.Log(ScenarioLog, $"Spawned 12 skeletons + 2 soldiers, target=({_targetPos.X},{_targetPos.Y})");
@@ -59,14 +59,14 @@ public class OrderAttackScenario : ScenarioBase
 
         for (int i = 0; i < sim.Units.Count; i++)
         {
-            if (!sim.Units.Alive[i]) continue;
-            if (sim.Units.Faction[i] == Faction.Undead)
+            if (!sim.Units[i].Alive) continue;
+            if (sim.Units[i].Faction == Faction.Undead)
             {
                 undead++;
-                float dist = (sim.Units.Position[i] - _targetPos).Length();
+                float dist = (sim.Units[i].Position - _targetPos).Length();
                 if (dist < 8f) undeadAtTarget++;
-                if (sim.Units.InCombat[i]) anyInCombat = true;
-                if (sim.Units.AI[i] == AIBehavior.AttackClosest) undeadAttackClosest++;
+                if (sim.Units[i].InCombat) anyInCombat = true;
+                if (sim.Units[i].AI == AIBehavior.AttackClosest) undeadAttackClosest++;
             }
             else human++;
         }

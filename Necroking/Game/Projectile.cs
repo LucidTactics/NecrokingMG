@@ -251,7 +251,7 @@ public class ProjectileManager
                         if (nid == proj.OwnerID) continue;
                         int hitIdx = UnitUtil.ResolveUnitIndex(units, nid);
                         if (hitIdx < 0) continue;
-                        if (proj.NoFriendlyFire && units.Faction[hitIdx] == proj.OwnerFaction) continue;
+                        if (proj.NoFriendlyFire && units[hitIdx].Faction == proj.OwnerFaction) continue;
                         _hits.Add(new ProjectileHit { UnitIdx = hitIdx, Damage = proj.Damage, OwnerID = proj.OwnerID, OwnerFaction = proj.OwnerFaction, WeaponName = proj.WeaponName, ProjectileType = proj.Type });
                     }
                     _impacts.Add(new ImpactEvent { Position = proj.Position, Type = proj.Type, AoeRadius = proj.AoeRadius, HitEffectFlipbookID = proj.HitEffectFlipbookID, HitEffectColor = proj.HitEffectColor, HitEffectScale = proj.HitEffectScale });
@@ -269,7 +269,7 @@ public class ProjectileManager
                     if (nid == proj.OwnerID) continue;
                     int hitIdx = UnitUtil.ResolveUnitIndex(units, nid);
                     if (hitIdx < 0) continue;
-                    if (proj.NoFriendlyFire && units.Faction[hitIdx] == proj.OwnerFaction) continue;
+                    if (proj.NoFriendlyFire && units[hitIdx].Faction == proj.OwnerFaction) continue;
                     _hits.Add(new ProjectileHit { UnitIdx = hitIdx, Damage = proj.Damage, OwnerID = proj.OwnerID, OwnerFaction = proj.OwnerFaction, Precision = proj.Precision, WeaponName = proj.WeaponName, ProjectileType = proj.Type });
                     _impacts.Add(new ImpactEvent { Position = proj.Position, Type = proj.Type });
                     proj.Alive = false;
@@ -296,11 +296,11 @@ public class ProjectileManager
                     int hitIdx = UnitUtil.ResolveUnitIndex(units, nid);
                     if (hitIdx < 0) continue;
                     // Filter by potion target type
-                    bool isFriendly = units.Faction[hitIdx] == proj.OwnerFaction;
+                    bool isFriendly = units[hitIdx].Faction == proj.OwnerFaction;
                     if (proj.PotionTargetType == "Friendly" && !isFriendly) continue;
                     if (proj.PotionTargetType == "Enemy" && isFriendly) continue;
                     // "Any" hits both
-                    float d = (units.Position[hitIdx] - proj.Position).LengthSq();
+                    float d = (units[hitIdx].Position - proj.Position).LengthSq();
                     if (d < bestUnitDist) { bestUnitDist = d; bestUnitIdx = hitIdx; }
                 }
 
@@ -362,7 +362,7 @@ public class ProjectileManager
                         if (nid == proj.OwnerID) continue;
                         int hitIdx = UnitUtil.ResolveUnitIndex(units, nid);
                         if (hitIdx < 0) continue;
-                        if (proj.NoFriendlyFire && units.Faction[hitIdx] == proj.OwnerFaction) continue;
+                        if (proj.NoFriendlyFire && units[hitIdx].Faction == proj.OwnerFaction) continue;
                         _hits.Add(new ProjectileHit { UnitIdx = hitIdx, Damage = proj.Damage, OwnerID = proj.OwnerID, OwnerFaction = proj.OwnerFaction, Precision = proj.Precision, WeaponName = proj.WeaponName, ProjectileType = proj.Type });
                     }
                 }
@@ -377,8 +377,8 @@ public class ProjectileManager
                         if (nid == proj.OwnerID) continue;
                         int idx = UnitUtil.ResolveUnitIndex(units, nid);
                         if (idx < 0) continue;
-                        if (proj.NoFriendlyFire && units.Faction[idx] == proj.OwnerFaction) continue;
-                        float d = (units.Position[idx] - proj.Position).LengthSq();
+                        if (proj.NoFriendlyFire && units[idx].Faction == proj.OwnerFaction) continue;
+                        float d = (units[idx].Position - proj.Position).LengthSq();
                         if (d < bestDist) { bestDist = d; bestIdx = idx; }
                     }
                     if (bestIdx >= 0)

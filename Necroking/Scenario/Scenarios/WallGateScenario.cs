@@ -58,8 +58,8 @@ public class WallGateScenario : ScenarioBase
             var pos = _center + new Vec2(MathF.Cos(angle) * 2f, MathF.Sin(angle) * 2f);
             int idx = units.AddUnit(pos, UnitType.Soldier);
             // MoveToPoint toward north exit
-            units.AI[idx] = AIBehavior.MoveToPoint;
-            units.MoveTarget[idx] = new Vec2(20f, 5f); // Well north of the ring
+            units[idx].AI = AIBehavior.MoveToPoint;
+            units[idx].MoveTarget = new Vec2(20f, 5f); // Well north of the ring
         }
 
         // Run A* to verify the gate is passable
@@ -98,9 +98,9 @@ public class WallGateScenario : ScenarioBase
         int escaped = 0;
         for (int i = 0; i < sim.Units.Count; i++)
         {
-            if (!sim.Units.Alive[i]) continue;
+            if (!sim.Units[i].Alive) continue;
             alive++;
-            float dist = (sim.Units.Position[i] - _center).Length();
+            float dist = (sim.Units[i].Position - _center).Length();
             if (dist > 8f) escaped++;
         }
 

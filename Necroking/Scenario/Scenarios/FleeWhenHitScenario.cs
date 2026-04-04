@@ -38,18 +38,18 @@ public class FleeWhenHitScenario : ScenarioBase
         // Give it extra HP so it survives long enough for the flee AI to trigger
         _deerStartPos = new Vec2(32f, 32f);
         int deerIdx = units.AddUnit(_deerStartPos, UnitType.Skeleton);
-        units.AI[deerIdx] = AIBehavior.FleeWhenHit;
-        units.Faction[deerIdx] = Faction.Animal;
-        units.Stats[deerIdx].HP = 100;
-        units.Stats[deerIdx].MaxHP = 100;
-        _deerID = units.Id[deerIdx];
-        DebugLog.Log(ScenarioLog, $"Deer (Skeleton/FleeWhenHit/Animal) spawned at ({_deerStartPos.X:F1}, {_deerStartPos.Y:F1}), id={_deerID}, HP={units.Stats[deerIdx].HP}");
+        units[deerIdx].AI = AIBehavior.FleeWhenHit;
+        units[deerIdx].Faction = Faction.Animal;
+        units[deerIdx].Stats.HP = 100;
+        units[deerIdx].Stats.MaxHP = 100;
+        _deerID = units[deerIdx].Id;
+        DebugLog.Log(ScenarioLog, $"Deer (Skeleton/FleeWhenHit/Animal) spawned at ({_deerStartPos.X:F1}, {_deerStartPos.Y:F1}), id={_deerID}, HP={units[deerIdx].Stats.HP}");
 
         // Spawn soldier with AttackClosest AI — it will path toward and attack the deer
         _soldierStartPos = new Vec2(37f, 32f);
         int soldierIdx = units.AddUnit(_soldierStartPos, UnitType.Soldier);
-        units.AI[soldierIdx] = AIBehavior.AttackClosest;
-        _soldierID = units.Id[soldierIdx];
+        units[soldierIdx].AI = AIBehavior.AttackClosest;
+        _soldierID = units[soldierIdx].Id;
         DebugLog.Log(ScenarioLog, $"Soldier (AttackClosest/Human) spawned at ({_soldierStartPos.X:F1}, {_soldierStartPos.Y:F1}), id={_soldierID}");
 
         float initialDistance = (_deerStartPos - _soldierStartPos).Length();
@@ -76,19 +76,19 @@ public class FleeWhenHitScenario : ScenarioBase
         }
 
         // Track when LastAttackerID gets set on the deer
-        if (deerIdx >= 0 && !_lastAttackerSetLogged && units.LastAttackerID[deerIdx] != GameConstants.InvalidUnit)
+        if (deerIdx >= 0 && !_lastAttackerSetLogged && units[deerIdx].LastAttackerID != GameConstants.InvalidUnit)
         {
             _lastAttackerSetLogged = true;
-            DebugLog.Log(ScenarioLog, $"t={_elapsed:F2}s: *** Deer LastAttackerID set to {units.LastAttackerID[deerIdx]} (soldier id={_soldierID}) ***");
+            DebugLog.Log(ScenarioLog, $"t={_elapsed:F2}s: *** Deer LastAttackerID set to {units[deerIdx].LastAttackerID} (soldier id={_soldierID}) ***");
         }
 
         // Track when FleeTimer starts counting (flee begins)
-        if (deerIdx >= 0 && !_fleeStartLogged && units.FleeTimer[deerIdx] > 0f)
+        if (deerIdx >= 0 && !_fleeStartLogged && units[deerIdx].FleeTimer > 0f)
         {
             _fleeStartLogged = true;
-            var deerPos = units.Position[deerIdx];
+            var deerPos = units[deerIdx].Position;
             float distFromStart = (deerPos - _deerStartPos).Length();
-            DebugLog.Log(ScenarioLog, $"t={_elapsed:F2}s: *** Deer started fleeing! FleeTimer={units.FleeTimer[deerIdx]:F1}, pos=({deerPos.X:F1},{deerPos.Y:F1}), distFromStart={distFromStart:F1} ***");
+            DebugLog.Log(ScenarioLog, $"t={_elapsed:F2}s: *** Deer started fleeing! FleeTimer={units[deerIdx].FleeTimer:F1}, pos=({deerPos.X:F1},{deerPos.Y:F1}), distFromStart={distFromStart:F1} ***");
         }
 
         if (_elapsed >= TestDuration)
@@ -99,13 +99,13 @@ public class FleeWhenHitScenario : ScenarioBase
     {
         if (deerIdx >= 0)
         {
-            var deerPos = units.Position[deerIdx];
+            var deerPos = units[deerIdx].Position;
             float distFromStart = (deerPos - _deerStartPos).Length();
-            bool alive = units.Alive[deerIdx];
-            float fleeTimer = units.FleeTimer[deerIdx];
-            uint lastAttacker = units.LastAttackerID[deerIdx];
-            bool inCombat = units.InCombat[deerIdx];
-            int hp = units.Stats[deerIdx].HP;
+            bool alive = units[deerIdx].Alive;
+            float fleeTimer = units[deerIdx].FleeTimer;
+            uint lastAttacker = units[deerIdx].LastAttackerID;
+            bool inCombat = units[deerIdx].InCombat;
+            int hp = units[deerIdx].Stats.HP;
 
             DebugLog.Log(ScenarioLog,
                 $"t={_elapsed:F1}s: Deer pos=({deerPos.X:F1},{deerPos.Y:F1}) distFromStart={distFromStart:F1} " +
@@ -118,12 +118,12 @@ public class FleeWhenHitScenario : ScenarioBase
 
         if (soldierIdx >= 0)
         {
-            var soldierPos = units.Position[soldierIdx];
-            bool alive = units.Alive[soldierIdx];
-            bool inCombat = units.InCombat[soldierIdx];
-            int hp = units.Stats[soldierIdx].HP;
+            var soldierPos = units[soldierIdx].Position;
+            bool alive = units[soldierIdx].Alive;
+            bool inCombat = units[soldierIdx].InCombat;
+            int hp = units[soldierIdx].Stats.HP;
 
-            float distToDeer = deerIdx >= 0 ? (units.Position[deerIdx] - soldierPos).Length() : -1f;
+            float distToDeer = deerIdx >= 0 ? (units[deerIdx].Position - soldierPos).Length() : -1f;
 
             DebugLog.Log(ScenarioLog,
                 $"t={_elapsed:F1}s: Soldier pos=({soldierPos.X:F1},{soldierPos.Y:F1}) " +
@@ -138,7 +138,7 @@ public class FleeWhenHitScenario : ScenarioBase
     private int FindByID(UnitArrays units, uint id)
     {
         for (int i = 0; i < units.Count; i++)
-            if (units.Id[i] == id) return i;
+            if (units[i].Id == id) return i;
         return -1;
     }
 
@@ -162,11 +162,11 @@ public class FleeWhenHitScenario : ScenarioBase
 
         // Check 3: Deer fled sufficiently far from start OR far from soldier
         bool deerFled = false;
-        if (deerIdx >= 0 && units.Alive[deerIdx])
+        if (deerIdx >= 0 && units[deerIdx].Alive)
         {
-            var deerPos = units.Position[deerIdx];
+            var deerPos = units[deerIdx].Position;
             float distFromStart = (deerPos - _deerStartPos).Length();
-            float distFromSoldier = soldierIdx >= 0 ? (deerPos - units.Position[soldierIdx]).Length() : 999f;
+            float distFromSoldier = soldierIdx >= 0 ? (deerPos - units[soldierIdx].Position).Length() : 999f;
 
             DebugLog.Log(ScenarioLog, $"Deer final pos: ({deerPos.X:F1},{deerPos.Y:F1})");
             DebugLog.Log(ScenarioLog, $"Deer distance from start: {distFromStart:F1} (need > 5.0)");
@@ -186,7 +186,7 @@ public class FleeWhenHitScenario : ScenarioBase
         // Summary
         int aliveCount = 0;
         for (int i = 0; i < units.Count; i++)
-            if (units.Alive[i]) aliveCount++;
+            if (units[i].Alive) aliveCount++;
 
         DebugLog.Log(ScenarioLog, $"Final state: {aliveCount} units alive, elapsed={_elapsed:F1}s");
         DebugLog.Log(ScenarioLog, $"Combat log entries: {sim.CombatLog.Entries.Count}");

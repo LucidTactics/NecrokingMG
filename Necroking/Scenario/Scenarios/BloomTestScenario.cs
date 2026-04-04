@@ -49,7 +49,7 @@ public class BloomTestScenario : ScenarioBase
 
         // Spawn a necromancer at center
         int necroIdx = units.AddUnit(new Vec2(10f, 10f), UnitType.Necromancer);
-        units.AI[necroIdx] = AIBehavior.PlayerControlled;
+        units[necroIdx].AI = AIBehavior.PlayerControlled;
         sim.SetNecromancerIndex(necroIdx);
 
         // Spawn some idle skeletons as targets / scene furniture
@@ -59,8 +59,8 @@ public class BloomTestScenario : ScenarioBase
             float dist = 6f;
             var pos = new Vec2(10f + MathF.Cos(angle) * dist, 10f + MathF.Sin(angle) * dist);
             int idx = units.AddUnit(pos, UnitType.Skeleton);
-            units.AI[idx] = AIBehavior.IdleAtPoint;
-            units.MoveTarget[idx] = pos;
+            units[idx].AI = AIBehavior.IdleAtPoint;
+            units[idx].MoveTarget = pos;
         }
 
         // Spawn some soldiers on the other side
@@ -68,8 +68,8 @@ public class BloomTestScenario : ScenarioBase
         {
             var pos = new Vec2(20f + i * 2f, 10f);
             int idx = units.AddUnit(pos, UnitType.Soldier);
-            units.AI[idx] = AIBehavior.IdleAtPoint;
-            units.MoveTarget[idx] = pos;
+            units[idx].AI = AIBehavior.IdleAtPoint;
+            units[idx].MoveTarget = pos;
         }
 
         DebugLog.Log(ScenarioLog, $"Spawned {units.Count} units");
@@ -240,13 +240,13 @@ public class BloomTestScenario : ScenarioBase
 
         // Fire a fireball for explosion effect
         int necroIdx = sim.NecromancerIndex;
-        if (necroIdx >= 0 && necroIdx < sim.Units.Count && sim.Units.Alive[necroIdx])
+        if (necroIdx >= 0 && necroIdx < sim.Units.Count && sim.Units[necroIdx].Alive)
         {
-            var necroPos = sim.Units.Position[necroIdx];
+            var necroPos = sim.Units[necroIdx].Position;
             float angle = _elapsed * 1.5f;
             var target = new Vec2(14f + MathF.Cos(angle) * 8f, 10f + MathF.Sin(angle) * 6f);
             sim.Projectiles.SpawnFireball(necroPos, target, Faction.Undead,
-                sim.Units.Id[necroIdx], 0, 1.5f, "Fireball");
+                sim.Units[necroIdx].Id, 0, 1.5f, "Fireball");
         }
     }
 

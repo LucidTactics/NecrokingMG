@@ -113,8 +113,8 @@ public class HordeSystem
         _globalTime += dt;
         if (necroIdx < 0 || necroIdx >= units.Count) return;
 
-        var necroPos = units.Position[necroIdx];
-        var necroVel = units.Velocity[necroIdx];
+        var necroPos = units[necroIdx].Position;
+        var necroVel = units[necroIdx].Velocity;
         float necroSpeed = necroVel.Length();
         _necroMoving = necroSpeed > 0.5f;
 
@@ -162,11 +162,11 @@ public class HordeSystem
                 {
                     // Check if any enemy is within engagement range
                     nearbyIDs.Clear();
-                    qt.QueryRadius(units.Position[idx], _settings.EngagementRange, nearbyIDs);
+                    qt.QueryRadius(units[idx].Position, _settings.EngagementRange, nearbyIDs);
                     foreach (uint nid in nearbyIDs)
                     {
                         int ni = UnitUtil.ResolveUnitIndex(units, nid);
-                        if (ni < 0 || units.Faction[ni] == Faction.Undead) continue;
+                        if (ni < 0 || units[ni].Faction == Faction.Undead) continue;
                         hu.State = HordeUnitState.Engaged;
                         break;
                     }
@@ -182,13 +182,13 @@ public class HordeSystem
                         hu.ChasingTarget = GameConstants.InvalidUnit;
                         break;
                     }
-                    if (units.InCombat[idx])
+                    if (units[idx].InCombat)
                     {
                         hu.State = HordeUnitState.Engaged;
                         hu.ChasingTarget = GameConstants.InvalidUnit;
                         break;
                     }
-                    float targetDistToCircle = (units.Position[targetIdx] - _circleCenter).Length();
+                    float targetDistToCircle = (units[targetIdx].Position - _circleCenter).Length();
                     if (targetDistToCircle > _settings.CircleRadius)
                     {
                         hu.State = HordeUnitState.Following;
@@ -201,7 +201,7 @@ public class HordeSystem
                 {
                     // Leash check: distance from horde slot
                     Vec2 slotPos = ComputeSlotPosition(hu.SlotIndex, _hordeUnits.Count, _globalTime);
-                    float distToSlot = (units.Position[idx] - slotPos).Length();
+                    float distToSlot = (units[idx].Position - slotPos).Length();
 
                     // Hard leash: if way beyond leash radius, force return immediately
                     if (distToSlot > _settings.LeashRadius * 1.5f)
@@ -227,12 +227,12 @@ public class HordeSystem
 
                     // Check if any enemy still nearby
                     nearbyIDs.Clear();
-                    qt.QueryRadius(units.Position[idx], _settings.EngagementRange * 1.5f, nearbyIDs);
+                    qt.QueryRadius(units[idx].Position, _settings.EngagementRange * 1.5f, nearbyIDs);
                     bool anyEnemy = false;
                     foreach (uint nid in nearbyIDs)
                     {
                         int ni = UnitUtil.ResolveUnitIndex(units, nid);
-                        if (ni < 0 || !units.Alive[ni] || units.Faction[ni] == Faction.Undead) continue;
+                        if (ni < 0 || !units[ni].Alive || units[ni].Faction == Faction.Undead) continue;
                         anyEnemy = true;
                         break;
                     }
@@ -243,7 +243,7 @@ public class HordeSystem
                 case HordeUnitState.Returning:
                 {
                     Vec2 slotPos = ComputeSlotPosition(hu.SlotIndex, _hordeUnits.Count, _globalTime);
-                    float distToSlot = (units.Position[idx] - slotPos).Length();
+                    float distToSlot = (units[idx].Position - slotPos).Length();
                     if (distToSlot < 2f) hu.State = HordeUnitState.Following;
                     break;
                 }
@@ -263,7 +263,7 @@ public class HordeSystem
             foreach (uint nid in nearbyIDs)
             {
                 int ni = UnitUtil.ResolveUnitIndex(units, nid);
-                if (ni < 0 || units.Faction[ni] == Faction.Undead) continue;
+                if (ni < 0 || units[ni].Faction == Faction.Undead) continue;
                 enemiesInCircle.Add(ni);
             }
 
@@ -282,14 +282,14 @@ public class HordeSystem
                     float bestDist2 = float.MaxValue;
                     foreach (int e in enemiesInCircle)
                     {
-                        float d2 = (units.Position[e] - units.Position[unitIdx]).LengthSq();
+                        float d2 = (units[e].Position - units[unitIdx].Position).LengthSq();
                         if (d2 < bestDist2) { bestDist2 = d2; bestEnemy = e; }
                     }
 
                     if (bestEnemy >= 0)
                     {
                         hu.State = HordeUnitState.Chasing;
-                        hu.ChasingTarget = units.Id[bestEnemy];
+                        hu.ChasingTarget = units[bestEnemy].Id;
                     }
                 }
             }
