@@ -3920,15 +3920,22 @@ public class Game1 : Microsoft.Xna.Framework.Game
             }
         }
 
-        // Ghost mode: semi-transparent blue tint
+        // Ghost mode: semi-transparent blue-shifted sprite
         if (_sim.Units[i].GhostMode)
-            tint = Color.FromNonPremultiplied((int)(tint.R * 0.5f), (int)(tint.G * 0.5f), (int)(tint.B + 80), 140);
+            tint = Color.FromNonPremultiplied(
+                Math.Min(255, (int)(tint.R * 0.7f + 80)),
+                Math.Min(255, (int)(tint.G * 0.7f + 100)),
+                Math.Min(255, (int)(tint.B * 0.7f + 120)), 100);
 
         float heightOffset = _sim.Units[i].JumpHeight;
         var sp = _renderer.WorldToScreen(_sim.Units[i].Position, heightOffset, _camera);
 
         // Pulsing outline: draw sprite 8 times at directional offsets behind the unit
         DrawUnitPulsingOutline(i, atlas, fr.Frame.Value, sp, scale, fr.FlipX);
+
+        // Ghost mode: subtle blue pulsing outline
+        if (_sim.Units[i].GhostMode)
+            DrawGhostOutline(atlas, fr.Frame.Value, sp, scale, fr.FlipX);
 
         DrawSpriteFrame(atlas, fr.Frame.Value, sp, scale, fr.FlipX, tint);
         DrawHPBar(i, sp);
@@ -4032,6 +4039,46 @@ public class Game1 : Microsoft.Xna.Framework.Game
         _spriteBatch.Draw(atlas.Texture, screenPos, frame.Rect, tint, 0f, origin, scale, effects, 0f);
     }
 
+    private void DrawGhostOutline(SpriteAtlas atlas, SpriteFrame frame,
+                                    Vector2 screenPos, float scale, bool flipX)
+    {
+        if (atlas.Texture == null || _outlineFlatEffect == null) return;
+
+        // Match C++ ghost outline: subtle ghostly blue, gentle pulse
+        float t = 0.5f + 0.5f * MathF.Sin(_gameTime * 0.8f * 2f * MathF.PI);
+        float offset = 1.0f + (1.5f - 1.0f) * t;
+        if (offset < 0.5f) return;
+
+        // Lerp between ghostly blue and slightly brighter
+        float colR = MathHelper.Lerp(140f / 255f, 170f / 255f, t);
+        float colG = MathHelper.Lerp(200f / 255f, 215f / 255f, t);
+        float colB = MathHelper.Lerp(255f / 255f, 255f / 255f, t);
+        float colA = MathHelper.Lerp(45f / 255f, 60f / 255f, t);
+        float intensity = MathHelper.Lerp(1.0f, 1.1f, t);
+
+        var outlineColorVec = new Vector4(colR * intensity, colG * intensity, colB * intensity, colA);
+        _outlineFlatEffect.Parameters["OutlineColor"]?.SetValue(outlineColorVec);
+
+        _spriteBatch.End();
+        _spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.NonPremultiplied, SamplerState.LinearClamp, effect: _outlineFlatEffect);
+
+        float pivotX = flipX ? (1f - frame.PivotX) : frame.PivotX;
+        float pivotY = 1f - frame.PivotY;
+        var origin = new Vector2(pivotX * frame.Rect.Width, pivotY * frame.Rect.Height);
+        var effects = flipX ? SpriteEffects.FlipHorizontally : SpriteEffects.None;
+
+        for (int d = 0; d < 8; d++)
+        {
+            float dx = _outlineDirs[d][0] * offset;
+            float dy = _outlineDirs[d][1] * offset;
+            var offsetPos = new Vector2(screenPos.X + dx, screenPos.Y + dy);
+            _spriteBatch.Draw(atlas.Texture, offsetPos, frame.Rect, Color.White, 0f, origin, scale, effects, 0f);
+        }
+
+        _spriteBatch.End();
+        _spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.LinearClamp);
+    }
+
     // 8-direction offsets: N, NE, E, SE, S, SW, W, NW
     private static readonly float[][] _outlineDirs =
     {
@@ -4078,7 +4125,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // Flush current batch, switch to outline shader
         _spriteBatch.End();
 
-        var blendState = po.BlendMode == 1 ? BlendState.Additive : BlendState.AlphaBlend;
+        var blendState = po.BlendMode == 1 ? BlendState.Additive : BlendState.NonPremultiplied;
         _spriteBatch.Begin(SpriteSortMode.Deferred, blendState, SamplerState.LinearClamp, effect: _outlineFlatEffect);
 
         float pivotX = flipX ? (1f - frame.PivotX) : frame.PivotX;

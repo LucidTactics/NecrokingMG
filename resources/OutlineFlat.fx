@@ -16,7 +16,7 @@ sampler2D TextureSampler : register(s0);
 float4 PixelShaderFunction(float2 texCoord : TEXCOORD0) : COLOR0
 {
     float a = tex2D(TextureSampler, texCoord).a;
-    return float4(OutlineColor.rgb * a, OutlineColor.a * a);
+    return float4(OutlineColor.rgb, OutlineColor.a * a);
 }
 
 technique OutlineFlat
