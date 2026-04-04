@@ -202,6 +202,8 @@ public class EditorBase
         var f = font ?? _smallFont ?? _font;
         if (f != null)
         {
+            // Round to integer pixels to avoid sub-pixel artifacts with PointClamp sampling
+            pos = new Vector2((int)pos.X, (int)pos.Y);
             try { _sb.DrawString(f, text, pos, color); }
             catch { _sb.DrawString(f, SanitizeForFont(text, f), pos, color); }
         }

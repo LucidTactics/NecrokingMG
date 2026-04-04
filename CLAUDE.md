@@ -48,6 +48,12 @@ NecrokingMG/
 - Editors use immediate mode UI in `Editor/`
 - Shaders in `Necroking/assets/shaders/`, GLSL/HLSL
 
+## UI Text Rendering
+- SpriteBatch uses `SamplerState.PointClamp` — text drawn at sub-pixel positions gets aliasing artifacts
+- **Always round text positions to integer pixels**: `new Vector2((int)x, (int)y)`
+- `EditorBase.DrawText` already rounds internally, but any direct `DrawString` calls (e.g. in `Game1.cs`) must round manually
+- When centering text with `MeasureString`, the division produces floats — cast to `int` before passing to draw
+
 ## Large File Safety
 - **NEVER** attempt to read or upload files larger than 15 MB directly — this causes context overflow loops
 - Before reading any data/log/binary file, check its size first (`ls -lh` or `wc -c`)

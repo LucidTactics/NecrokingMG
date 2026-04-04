@@ -4568,7 +4568,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         if (_font != null)
         {
             var textSize = _font.MeasureString(text);
-            DrawText(_font, text, new Vector2(x + w / 2f - textSize.X / 2f, y + (h - textSize.Y) / 2f),
+            DrawText(_font, text, new Vector2((int)(x + w / 2f - textSize.X / 2f), (int)(y + (h - textSize.Y) / 2f)),
                 new Color(255, 245, 220));
         }
         y += h + gap;
