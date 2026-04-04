@@ -31,7 +31,15 @@ public class GameData
         ok &= Spells.Load(Path.Combine(dataDir, "spells.json"));
         ok &= Weather.Load(Path.Combine(dataDir, "weather.json"));
         ok &= UnitGroups.Load(Path.Combine(dataDir, "unit_groups.json"));
-        ok &= Settings.Load(Path.Combine(dataDir, "settings.json"));
+
+        // Settings: load from local bin/settings/ if it exists, otherwise fall back to data/
+        string localSettings = Core.GamePaths.Resolve(Core.GamePaths.LocalSettingsJson);
+        string defaultSettings = Path.Combine(dataDir, "settings.json");
+        if (File.Exists(localSettings))
+            ok &= Settings.Load(localSettings);
+        else
+            ok &= Settings.Load(defaultSettings);
+
         Items.Load(Path.Combine(dataDir, "items.json")); // optional, don't fail if missing
         Potions.Load(Path.Combine(dataDir, "potions.json")); // optional, don't fail if missing
         // Load weapon_points.json (must be after units.json so UnitDefs exist)
@@ -52,7 +60,12 @@ public class GameData
         ok &= Spells.Save(Path.Combine(dataDir, "spells.json"));
         ok &= Weather.Save(Path.Combine(dataDir, "weather.json"));
         ok &= UnitGroups.Save(Path.Combine(dataDir, "unit_groups.json"));
-        ok &= Settings.Save(Path.Combine(dataDir, "settings.json"));
+
+        // Settings: always save to local bin/settings/
+        string localDir = Core.GamePaths.Resolve(Core.GamePaths.LocalSettingsDir);
+        Directory.CreateDirectory(localDir);
+        ok &= Settings.Save(Path.Combine(localDir, "settings.json"));
+
         ok &= Items.Save(Path.Combine(dataDir, "items.json"));
         ok &= Potions.Save(Path.Combine(dataDir, "potions.json"));
         ok &= Units.SaveWeaponPoints(Path.Combine(dataDir, "weapon_points.json"));

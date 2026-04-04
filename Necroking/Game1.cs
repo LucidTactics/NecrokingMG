@@ -216,10 +216,12 @@ public class Game1 : Microsoft.Xna.Framework.Game
         Content.RootDirectory = "resources";
         IsMouseVisible = true;
 
-        // Save settings and weather presets when the game exits
+        // Save settings (to local bin/settings/) and weather presets when the game exits
         Exiting += (_, _) =>
         {
-            _gameData.Settings.Save(GamePaths.Resolve(GamePaths.SettingsJson));
+            string localDir = GamePaths.Resolve(GamePaths.LocalSettingsDir);
+            System.IO.Directory.CreateDirectory(localDir);
+            _gameData.Settings.Save(GamePaths.Resolve(GamePaths.LocalSettingsJson));
             _gameData.Weather.Save(GamePaths.Resolve(GamePaths.WeatherJson));
         };
 
@@ -1176,7 +1178,8 @@ public class Game1 : Microsoft.Xna.Framework.Game
         _itemEditor = new ItemEditorWindow(_editorUi);
         _itemEditor.SetGameData(_gameData);
         _settingsWindow = new SettingsWindow(_editorUi);
-        _settingsWindow.SetGameData(_gameData, GamePaths.Resolve(GamePaths.SettingsJson), GamePaths.Resolve(GamePaths.WeatherJson));
+        System.IO.Directory.CreateDirectory(GamePaths.Resolve(GamePaths.LocalSettingsDir));
+        _settingsWindow.SetGameData(_gameData, GamePaths.Resolve(GamePaths.LocalSettingsJson), GamePaths.Resolve(GamePaths.WeatherJson));
         LogTiming("Editors initialized");
         DebugLog.Log("startup", $"=== LoadContent complete ===");
     }

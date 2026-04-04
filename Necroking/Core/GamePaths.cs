@@ -38,6 +38,10 @@ public static class GamePaths
     /// <summary>Resolve a project-relative path to an absolute path.</summary>
     public static string Resolve(string relativePath) => Path.Combine(Root, relativePath);
 
+    // --- Local user settings (saved per-build, not in source data) ---
+    public const string LocalSettingsDir = "bin/settings";
+    public const string LocalSettingsJson = "bin/settings/settings.json";
+
     // --- Data files ---
     public const string DataDir = "data";
     public const string SettingsJson = "data/settings.json";
