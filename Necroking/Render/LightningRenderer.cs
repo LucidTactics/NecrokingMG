@@ -19,9 +19,11 @@ public class LightningRenderer
     private Renderer _renderer = null!;
     private GraphicsDevice _graphicsDevice = null!;
     private float _gameTime;
+    private GodRayRenderer _godRayRenderer = null!;
 
     public void Init(SpriteBatch spriteBatch, Texture2D pixel, Texture2D glowTex,
-                     Simulation sim, Camera25D camera, Renderer renderer, GraphicsDevice graphicsDevice)
+                     Simulation sim, Camera25D camera, Renderer renderer, GraphicsDevice graphicsDevice,
+                     Microsoft.Xna.Framework.Graphics.Effect? hdrIntensityEffect = null)
     {
         _spriteBatch = spriteBatch;
         _pixel = pixel;
@@ -30,12 +32,16 @@ public class LightningRenderer
         _camera = camera;
         _renderer = renderer;
         _graphicsDevice = graphicsDevice;
+        _godRayRenderer = new GodRayRenderer();
+        _godRayRenderer.Init(graphicsDevice, hdrIntensityEffect);
     }
 
     public void SetGameTime(float gameTime) => _gameTime = gameTime;
 
     public void Draw()
     {
+        _godRayRenderer.PendingGodRays.Clear();
+
         // Draw active strikes
         foreach (var strike in _sim.Lightning.Strikes)
         {
@@ -58,10 +64,10 @@ public class LightningRenderer
 
                 if (strike.Visual == StrikeVisual.GodRay)
                 {
-                    // God ray: beam from sky to ground
+                    // Collect for separate god ray pass
                     float sH = _graphicsDevice.Viewport.Height;
-                    DrawGodRay(new Vector2(sp.X - 200f, sp.Y - sH * 0.6f), sp,
-                        strike.Style, strike.GodRay, _gameTime, strike.EffectTimer, strike.EffectDuration);
+                    _godRayRenderer.PendingGodRays.Add((new Vector2(sp.X - 200f, sp.Y - sH * 0.6f), sp,
+                        strike.Style, strike.GodRay, _gameTime, strike.EffectTimer, strike.EffectDuration));
                 }
                 else
                 {
@@ -132,6 +138,11 @@ public class LightningRenderer
             }
         }
     }
+
+    /// <summary>
+    /// Draw god rays in a separate pass. Must be called AFTER the additive SpriteBatch.End().
+    /// </summary>
+    public void DrawGodRays() => _godRayRenderer.DrawAll();
 
     private void DrawLightningBolt(Vector2 start, Vector2 end, LightningStyle style, float fade)
     {
@@ -281,109 +292,6 @@ public class LightningRenderer
         }
     }
 
-    private static float GodRayNoise(float y, float x, float t, float scale, float speed)
-    {
-        float s1 = MathF.Sin(y * scale + t * speed * 2.1f + x * 0.3f);
-        float s2 = MathF.Sin(y * scale * 1.7f - t * speed * 1.4f + x * 0.5f);
-        float s3 = MathF.Sin(y * scale * 0.6f + t * speed * 0.8f - x * 0.2f);
-        return (s1 * s2 + s3) * 0.5f + 0.5f;
-    }
-
-    private void DrawGodRay(Vector2 sky, Vector2 ground, LightningStyle style, GodRayParams p,
-                             float elapsed, float effectTimer, float effectDuration)
-    {
-        float shimmer = MathF.Sin(elapsed * 8f) * 0.15f + 0.85f;
-        float baseAlpha = shimmer;
-
-        if (effectDuration > 0f)
-        {
-            float remaining = effectDuration - effectTimer;
-            if (remaining < 0.15f) baseAlpha *= MathF.Max(0f, remaining / 0.15f);
-        }
-        if (baseAlpha <= 0.001f) return;
-
-        var core = style.CoreColor.ToScaledColor();
-        var glow = style.GlowColor.ToScaledColor();
-        var mid = new Color((byte)((core.R + glow.R) / 2), (byte)((core.G + glow.G) / 2),
-                            (byte)((core.B + glow.B) / 2), (byte)((core.A + glow.A) / 2));
-
-        float cw = style.CoreWidth;
-        float gw = style.GlowWidth;
-
-        // 4 layers from outer glow to inner core
-        float[] layerT = { 1f, 0.66f, 0.33f, 0f };
-        Color[] layerColors = { glow, mid, core, core };
-        float[] layerAlphas = { 0.12f, 0.25f, 0.45f, 0.75f };
-
-        float edgeSoft = MathF.Max(0f, MathF.Min(1f, p.EdgeSoftness));
-        const int EdgeSublayers = 3;
-        const int Slices = 20;
-
-        for (int li = 0; li < 4; li++)
-        {
-            float w = cw + (gw - cw) * layerT[li];
-            float widthTop = 5f * w;
-            float widthBottom = 30f * w;
-            Color lc = layerColors[li];
-            float lAlpha = layerAlphas[li];
-
-            // Draw edge sub-layers (wider, more transparent) then core layer
-            for (int sub = EdgeSublayers; sub >= 0; sub--)
-            {
-                float expand = sub > 0 ? edgeSoft * sub / EdgeSublayers : 0f;
-                float subAlphaMul = sub > 0 ? (1f / (sub + 1)) * 0.5f : 1f;
-                float wMul = 1f + expand;
-                float layerA = baseAlpha * lAlpha * subAlphaMul;
-                if (layerA <= 0.001f) continue;
-
-                byte ca = (byte)(lc.A * MathF.Min(1f, layerA));
-
-                for (int s = 0; s < Slices; s++)
-                {
-                    float t0 = s / (float)Slices;
-                    float t1 = (s + 1) / (float)Slices;
-
-                    float y0 = sky.Y + (ground.Y - sky.Y) * t0;
-                    float y1 = sky.Y + (ground.Y - sky.Y) * t1;
-                    float cx0 = sky.X + (ground.X - sky.X) * t0;
-                    float cx1 = sky.X + (ground.X - sky.X) * t1;
-                    float hw0 = (widthTop + (widthBottom - widthTop) * t0) * wMul;
-                    float hw1 = (widthTop + (widthBottom - widthTop) * t1) * wMul;
-
-                    // Noise modulation on innermost sub-layer
-                    float n = 1f;
-                    if (p.NoiseStrength > 0.001f && sub == 0)
-                    {
-                        float raw = GodRayNoise(t0 * 10f, cx0 * 0.01f, elapsed, p.NoiseScale, p.NoiseSpeed);
-                        n = 1f - p.NoiseStrength * 0.6f + p.NoiseStrength * 0.6f * raw;
-                    }
-
-                    byte sliceA = (byte)(ca * n);
-                    Color sliceColor = new(lc.R, lc.G, lc.B, sliceA);
-
-                    // Draw quad as two segments (left half, right half)
-                    float midX0 = cx0;
-                    float midX1 = cx1;
-                    float sliceH = y1 - y0;
-                    if (sliceH < 0.5f) continue;
-
-                    // Left side of trapezoid
-                    _spriteBatch.Draw(_pixel, new Vector2(midX0 - hw0, y0), null, sliceColor,
-                        0f, Vector2.Zero, new Vector2(hw0 * 2, sliceH), SpriteEffects.None, 0f);
-                }
-            }
-
-            // Ground aura ellipse
-            float auraW = widthBottom * 1.1f;
-            float auraH = widthBottom * 0.35f;
-            float auraAlpha = baseAlpha * lAlpha * 0.4f;
-            byte ga = (byte)(lc.A * MathF.Min(1f, auraAlpha));
-            Color auraColor = new(lc.R, lc.G, lc.B, ga);
-
-            _spriteBatch.Draw(_pixel, new Vector2(ground.X - auraW, ground.Y - auraH * 0.5f), null,
-                auraColor, 0f, Vector2.Zero, new Vector2(auraW * 2, auraH), SpriteEffects.None, 0f);
-        }
-    }
 
     private void DrawTendril(Vector2 start, Vector2 end, HdrColor coreColor, HdrColor glowColor, float time)
     {

@@ -82,6 +82,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
     private Dictionary<string, AnimationMeta> _animMeta = new(); // animation metadata
     private Microsoft.Xna.Framework.Graphics.Effect? _groundEffect;
     private Microsoft.Xna.Framework.Graphics.Effect? _outlineFlatEffect;
+    private Microsoft.Xna.Framework.Graphics.Effect? _hdrIntensityEffect;
     private Texture2D? _groundVertexMapTex;
     private EffectManager _effectManager = new();
     private BloomRenderer _bloom = new();
@@ -1129,6 +1130,8 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
         try { _outlineFlatEffect = Content.Load<Microsoft.Xna.Framework.Graphics.Effect>("OutlineFlat"); }
         catch (Exception ex) { _outlineFlatEffect = null; DebugLog.Log("startup", $"OutlineFlat not loaded: {ex.Message}"); }
+        try { _hdrIntensityEffect = Content.Load<Microsoft.Xna.Framework.Graphics.Effect>("HdrIntensity"); }
+        catch (Exception ex) { _hdrIntensityEffect = null; DebugLog.Log("startup", $"HdrIntensity not loaded: {ex.Message}"); }
 
         {
             Microsoft.Xna.Framework.Graphics.Effect? fogEffect = null;
@@ -1139,7 +1142,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         _weatherRenderer.Init(_graphics.PreferredBackBufferWidth, _graphics.PreferredBackBufferHeight);
 
         _grassRenderer.Init(GraphicsDevice);
-        _lightningRenderer.Init(_spriteBatch, _pixel, _glowTex, _sim, _camera, _renderer, GraphicsDevice);
+        _lightningRenderer.Init(_spriteBatch, _pixel, _glowTex, _sim, _camera, _renderer, GraphicsDevice, _hdrIntensityEffect);
         LogTiming("Renderers initialized (weather, grass, lightning)");
 
         // Init UI editor (read-only viewer, doesn't depend on game systems)
@@ -3234,6 +3237,9 @@ public class Game1 : Microsoft.Xna.Framework.Game
         }
 
         _spriteBatch.End();
+
+        // --- God ray pass (alpha blend + HDR intensity shader) ---
+        _lightningRenderer.DrawGodRays();
 
         // --- Alpha blend pass (collecting foragables + damage numbers on top) ---
         _spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.LinearClamp);

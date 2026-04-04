@@ -29,6 +29,7 @@ public class BloomRenderer
     private XnaEffect? _extractEffect;
     private XnaEffect? _combineEffect;
     private XnaEffect? _blurEffect;
+    private XnaEffect? _bicubicUpsampleEffect;
 
     public bool IsInitialized => _initialized;
     public RenderTarget2D? SceneRT => _sceneRT;
@@ -98,6 +99,16 @@ public class BloomRenderer
             _extractEffect = content.Load<XnaEffect>("BloomExtract");
             _combineEffect = content.Load<XnaEffect>("BloomCombine");
             _blurEffect = content.Load<XnaEffect>("GaussianBlur");
+            try
+            {
+                _bicubicUpsampleEffect = content.Load<XnaEffect>("BloomUpsampleBicubic");
+                Console.Error.WriteLine("[Bloom] Bicubic upsample shader loaded");
+            }
+            catch (Exception bex)
+            {
+                _bicubicUpsampleEffect = null;
+                Console.Error.WriteLine($"[Bloom] Bicubic upsample not loaded: {bex.Message}");
+            }
             _initialized = true;
             Console.Error.WriteLine("[Bloom] Shaders loaded successfully");
         }
@@ -144,6 +155,7 @@ public class BloomRenderer
 
         // --- Step 1: Prefilter — extract bright pixels from scene → mips[0] ---
         _extractEffect.Parameters["BloomThreshold"]?.SetValue(settings.Threshold);
+        _extractEffect.Parameters["SoftKnee"]?.SetValue(settings.SoftKnee);
         device.SetRenderTarget(_mips[0]);
         device.Clear(Color.Black);
         batch.Begin(SpriteSortMode.Immediate, BlendState.Opaque, SamplerState.LinearClamp, null, null, _extractEffect);
@@ -161,32 +173,43 @@ public class BloomRenderer
         }
 
         // --- Step 3: Upsample chain — blend each mip back up with scatter ---
+        // Matches C++: optionally uses bicubic upsampling shader
         float scatter = Math.Clamp(settings.Scatter, 0f, 1f);
         byte scatterAlpha = (byte)(scatter * 255f);
         var scatterTint = new Color((byte)255, (byte)255, (byte)255, scatterAlpha);
+        bool useBicubic = settings.BicubicUpsampling && _bicubicUpsampleEffect != null;
 
         for (int i = iters - 2; i >= 0; i--)
         {
-            // Additively blend the smaller mip onto the larger one
             device.SetRenderTarget(_mips[i]);
-            batch.Begin(SpriteSortMode.Immediate, BlendState.Additive, SamplerState.LinearClamp);
+            if (useBicubic)
+            {
+                // Set texel size of the SOURCE texture (the smaller mip being upsampled)
+                _bicubicUpsampleEffect!.Parameters["TexelSize"]?.SetValue(
+                    new Vector2(1f / _mips[i + 1]!.Width, 1f / _mips[i + 1]!.Height));
+                batch.Begin(SpriteSortMode.Immediate, BlendState.Additive, SamplerState.LinearClamp,
+                    null, null, _bicubicUpsampleEffect);
+            }
+            else
+            {
+                batch.Begin(SpriteSortMode.Immediate, BlendState.Additive, SamplerState.LinearClamp);
+            }
             batch.Draw(_mips[i + 1], new Rectangle(0, 0, _mips[i]!.Width, _mips[i]!.Height), scatterTint);
             batch.End();
         }
 
-        // --- Step 3.5: Optional blur pass on mips[0] for extra softness ---
-        if (_tempBlurRT != null && _blurEffect != null)
+        // Note: C++ does NOT have an extra blur pass — removed to match C++ pipeline
+        // (The mip chain downsample/upsample already provides sufficient blur)
+        if (false && _tempBlurRT != null && _blurEffect != null)
         {
             float blurScale = 1.5f;
 
-            // Horizontal blur: mips[0] -> tempBlur
             SetBlurParameters(_blurEffect, blurScale / _mips[0]!.Width, 0);
             device.SetRenderTarget(_tempBlurRT);
             batch.Begin(SpriteSortMode.Immediate, BlendState.Opaque, SamplerState.LinearClamp, null, null, _blurEffect);
             batch.Draw(_mips[0], new Rectangle(0, 0, _tempBlurRT.Width, _tempBlurRT.Height), Color.White);
             batch.End();
 
-            // Vertical blur: tempBlur -> mips[0]
             SetBlurParameters(_blurEffect, 0, blurScale / _tempBlurRT.Height);
             device.SetRenderTarget(_mips[0]);
             batch.Begin(SpriteSortMode.Immediate, BlendState.Opaque, SamplerState.LinearClamp, null, null, _blurEffect);
