@@ -11,6 +11,9 @@ public class WeatherRenderer
 {
     private int _screenW, _screenH;
     private float _flashIntensity;
+    private float _flashTimer = 5.0f;
+    private float _doubleFlashTimer = -1.0f;
+    private readonly Random _rng = new();
 
     // Dependencies set via SetContext each frame
     private SpriteBatch _spriteBatch = null!;
@@ -90,8 +93,9 @@ public class WeatherRenderer
 
         // Rain draws in scene pass via DrawRain() for depth sorting with world objects.
 
-        // Fog/haze/brightness overlay (shader-based simplex noise fog)
-        if (fx.FogDensity > 0.01f || fx.HazeStrength > 0.01f || fx.Brightness < 0.95f)
+        // Weather overlay (fog, haze, brightness, tint, vignette, lightning flash)
+        if (fx.FogDensity > 0.01f || fx.HazeStrength > 0.01f || fx.Brightness < 0.95f
+            || fx.TintStrength > 0.01f || fx.VignetteStrength > 0.01f || _flashIntensity > 0.01f)
         {
             if (_fogEffect != null)
             {
@@ -99,15 +103,12 @@ public class WeatherRenderer
                 _spriteBatch.End();
 
                 // Compute world-space mapping for fog anchoring
-                // HLSL texCoord: (0,0)=top-left, (1,1)=bottom-right (Y-down)
-                // So origin = world at top-left = (camX - halfW, camY - halfH)
-                // Scale = world span across full UV = (2*halfW, 2*halfH) — both positive
                 float halfWorldW = screenW * 0.5f / _camera.Zoom;
                 float halfWorldH = screenH * 0.5f / (_camera.Zoom * _camera.YRatio);
                 var fogOrigin = new Vector2(_camera.Position.X - halfWorldW, _camera.Position.Y - halfWorldH);
                 var fogWorldScale = new Vector2(halfWorldW * 2.0f, halfWorldH * 2.0f);
 
-                // Set shader uniforms
+                // Set shader uniforms - fog
                 _fogEffect.Parameters["FogDensity"]?.SetValue(fx.FogDensity);
                 _fogEffect.Parameters["FogColor"]?.SetValue(new Vector3(fx.FogR, fx.FogG, fx.FogB));
                 _fogEffect.Parameters["FogSpeed"]?.SetValue(fx.FogSpeed);
@@ -118,6 +119,19 @@ public class WeatherRenderer
                 _fogEffect.Parameters["HazeStrength"]?.SetValue(fx.HazeStrength);
                 _fogEffect.Parameters["HazeColor"]?.SetValue(new Vector3(fx.HazeR, fx.HazeG, fx.HazeB));
                 _fogEffect.Parameters["Brightness"]?.SetValue(fx.Brightness);
+
+                // Tint
+                _fogEffect.Parameters["TintColor"]?.SetValue(new Vector3(fx.TintR, fx.TintG, fx.TintB));
+                _fogEffect.Parameters["TintStrength"]?.SetValue(fx.TintStrength);
+
+                // Vignette
+                _fogEffect.Parameters["VignetteStrength"]?.SetValue(fx.VignetteStrength);
+                _fogEffect.Parameters["VignetteRadius"]?.SetValue(fx.VignetteRadius);
+                _fogEffect.Parameters["VignetteSoftness"]?.SetValue(fx.VignetteSoftness);
+                _fogEffect.Parameters["Resolution"]?.SetValue(new Vector2(screenW, screenH));
+
+                // Lightning flash
+                _fogEffect.Parameters["FlashIntensity"]?.SetValue(_flashIntensity);
 
                 // Draw fullscreen quad with fog shader (premultiplied alpha output)
                 _spriteBatch.Begin(SpriteSortMode.Immediate, BlendState.AlphaBlend, SamplerState.PointClamp,
@@ -130,7 +144,7 @@ public class WeatherRenderer
             }
             else
             {
-                // Fallback: flat-color fog overlay (no shader available)
+                // Fallback: flat-color overlays (no shader available)
                 if (fx.FogDensity > 0.01f || fx.HazeStrength > 0.01f)
                 {
                     float fogAlpha = MathF.Min(fx.FogDensity * 0.5f + fx.HazeStrength * 0.3f, 0.4f);
@@ -144,11 +158,80 @@ public class WeatherRenderer
                     _spriteBatch.Draw(_pixel, new Rectangle(0, 0, screenW, screenH),
                         new Color((byte)0, (byte)0, (byte)0, (byte)(darkAmount * 180)));
                 }
+                if (fx.TintStrength > 0.01f)
+                {
+                    byte tR = (byte)((1f - fx.TintR) * fx.TintStrength * 255);
+                    byte tG = (byte)((1f - fx.TintG) * fx.TintStrength * 255);
+                    byte tB = (byte)((1f - fx.TintB) * fx.TintStrength * 255);
+                    byte tA = (byte)(MathF.Max(MathF.Max(tR, tG), tB));
+                    if (tA > 0)
+                        _spriteBatch.Draw(_pixel, new Rectangle(0, 0, screenW, screenH),
+                            new Color(tR, tG, tB, tA));
+                }
+                if (_flashIntensity > 0.01f)
+                {
+                    byte flashA = (byte)(MathUtil.Clamp(_flashIntensity * 0.8f, 0f, 1f) * 255);
+                    _spriteBatch.Draw(_pixel, new Rectangle(0, 0, screenW, screenH),
+                        new Color(flashA, flashA, flashA, flashA));
+                }
             }
         }
     }
 
     public void TriggerFlash() => _flashIntensity = 1f;
+
+    /// <summary>
+    /// Update lightning flash timer. Call once per frame from Game1.Update().
+    /// </summary>
+    public void Update(float dt, GameData gameData)
+    {
+        _gameData = gameData;
+        if (!_gameData.Settings.Weather.Enabled) return;
+        string presetId = _gameData.Settings.Weather.ActivePreset;
+        if (string.IsNullOrEmpty(presetId)) return;
+        var preset = _gameData.Weather.Get(presetId);
+        if (preset == null) return;
+        var fx = preset.Effects;
+
+        UpdateLightning(fx, dt);
+    }
+
+    private void UpdateLightning(WeatherEffects fx, float dt)
+    {
+        if (!fx.LightningEnabled)
+        {
+            _flashIntensity = 0f;
+            return;
+        }
+
+        // Exponential decay
+        _flashIntensity *= MathF.Exp(-5.0f * dt);
+        if (_flashIntensity < 0.01f) _flashIntensity = 0f;
+
+        // Double-flash follow-up
+        if (_doubleFlashTimer > 0f)
+        {
+            _doubleFlashTimer -= dt;
+            if (_doubleFlashTimer <= 0f)
+            {
+                _flashIntensity = 0.6f + (float)_rng.NextDouble() * 0.2f;
+                _doubleFlashTimer = -1f;
+            }
+        }
+
+        // Main flash timer
+        _flashTimer -= dt;
+        if (_flashTimer <= 0f)
+        {
+            _flashIntensity = 0.8f + (float)_rng.NextDouble() * 0.2f;
+            float range = fx.LightningMaxInterval - fx.LightningMinInterval;
+            _flashTimer = fx.LightningMinInterval + (float)_rng.NextDouble() * range;
+
+            // 30% chance of double-flash
+            if (_rng.NextDouble() < 0.3)
+                _doubleFlashTimer = 0.12f + (float)_rng.NextDouble() * 0.08f;
+        }
+    }
 
     private void DrawRainParticles(WeatherEffects fx, int screenW, int screenH)
     {

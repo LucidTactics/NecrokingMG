@@ -29,6 +29,9 @@ public abstract class ScenarioBase
     // Bloom settings override (set by scenario, consumed by Game1)
     public BloomSettings? BloomOverride;
 
+    // Weather override: set preset ID to enable weather for this scenario
+    public string? WeatherPreset;
+
     // Request a specific menu state (editor) to be opened by Game1
     // Set to non-null to have Game1 switch to that MenuState
     public string? RequestedMenuState;

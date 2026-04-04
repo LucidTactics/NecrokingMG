@@ -50,6 +50,7 @@ public static class ScenarioRegistry
         Register("sprite_scale", () => new Scenarios.SpriteScaleScenario());
         Register("shadow_pivot", () => new Scenarios.ShadowPivotScenario());
         Register("inventory_ui", () => new Scenarios.InventoryUIScenario());
+        Register("weather_test", () => new Scenarios.WeatherTestScenario());
     }
 
     public static void Register(string name, Func<ScenarioBase> creator)

@@ -14,7 +14,7 @@ float FogSpeed;
 float FogScaleU;   // user-facing fogScale multiplier
 float Time;
 float2 FogWorldOrigin;  // world position at screen top-left
-float2 FogWorldScale;   // world units covered by screen (width, height — height is negative for Y-down)
+float2 FogWorldScale;   // world units covered by screen (width, height)
 
 // Haze uniforms
 float HazeStrength;
@@ -22,6 +22,19 @@ float3 HazeColor;
 
 // Brightness
 float Brightness;
+
+// Tint
+float3 TintColor;
+float TintStrength;
+
+// Vignette
+float VignetteStrength;
+float VignetteRadius;
+float VignetteSoftness;
+float2 Resolution;
+
+// Lightning flash
+float FlashIntensity;
 
 // SpriteBatch provides the texture in s0
 sampler2D TextureSampler : register(s0);
@@ -127,6 +140,49 @@ float4 PixelShaderFunction(float2 texCoord : TEXCOORD0) : COLOR0
         // Blend darkness on top (black with alpha)
         result.rgb = result.rgb * (1.0 - darkAlpha);
         result.a = result.a * (1.0 - darkAlpha) + darkAlpha;
+    }
+
+    // --- Tint (colored overlay) ---
+    if (TintStrength > 0.001)
+    {
+        // Approximate multiplicative tint via darkening overlay
+        // Tint removes light in channels where tintColor < 1.0
+        float3 tintDark = (1.0 - TintColor) * TintStrength;
+        float tintAlpha = max(max(tintDark.r, tintDark.g), tintDark.b);
+        if (tintAlpha > 0.001)
+        {
+            float3 tintRgb = float3(0.0, 0.0, 0.0);
+            // Selective darkening: channels where tintColor is high should not darken
+            tintRgb = (1.0 - TintColor) * TintStrength;
+            result.rgb = result.rgb * (1.0 - tintAlpha) + tintRgb * tintAlpha;
+            result.a = result.a * (1.0 - tintAlpha) + tintAlpha;
+        }
+    }
+
+    // --- Vignette (radial darkening) ---
+    if (VignetteStrength > 0.001)
+    {
+        float2 center = texCoord - 0.5;
+        // Aspect ratio correction
+        if (Resolution.y > 0.0)
+            center.x *= Resolution.x / Resolution.y;
+        float dist = length(center);
+        float vig = 1.0 - smoothstep_custom(VignetteRadius, VignetteRadius + VignetteSoftness, dist);
+        float vigDark = (1.0 - vig) * VignetteStrength;
+
+        // Blend vignette darkness on top
+        result.rgb = result.rgb * (1.0 - vigDark);
+        result.a = result.a * (1.0 - vigDark) + vigDark;
+    }
+
+    // --- Lightning flash (white additive) ---
+    if (FlashIntensity > 0.001)
+    {
+        // Flash reduces overlay opacity and adds white
+        // This brightens what's underneath
+        float flashAlpha = FlashIntensity * 0.8;
+        result.rgb = result.rgb * (1.0 - flashAlpha) + float3(1.0, 1.0, 1.0) * flashAlpha;
+        result.a = max(result.a, flashAlpha);
     }
 
     // Output as premultiplied alpha (MonoGame SpriteBatch expects this)
