@@ -342,9 +342,10 @@ public class Game1 : Microsoft.Xna.Framework.Game
         {
             var fbDef = _gameData.Flipbooks.Get(fbId);
             if (fbDef == null || string.IsNullOrEmpty(fbDef.Path)) continue;
-            if (!File.Exists(fbDef.Path)) continue;
+            var resolvedPath = GamePaths.Resolve(fbDef.Path);
+            if (!File.Exists(resolvedPath)) continue;
             var fb = new Flipbook();
-            if (fb.Load(GraphicsDevice, fbDef.Path, fbDef.Cols, fbDef.Rows, fbDef.DefaultFPS))
+            if (fb.Load(GraphicsDevice, resolvedPath, fbDef.Cols, fbDef.Rows, fbDef.DefaultFPS))
                 _flipbooks[fbId] = fb;
         }
         LogTiming($"Flipbooks loaded: {_flipbooks.Count}");
