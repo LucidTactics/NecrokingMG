@@ -40,6 +40,9 @@ public class AnimController
     private Dictionary<string, AnimTimingOverride>? _timingOverrides;
     private float _playbackSpeed = 1f;
 
+    // Per-unit attack animation override (e.g. "AttackBite" for wolves)
+    private string? _attackAnimOverride;
+
     // Cached resolved data for _currentState (set once per state transition)
     private AnimationData? _resolvedAnim;
     private AnimationMeta? _resolvedMeta;
@@ -93,6 +96,12 @@ public class AnimController
         _timingOverrides = timings;
     }
 
+    public void SetAttackAnimOverride(string? animName)
+    {
+        _attackAnimOverride = animName;
+        ResolveForState();
+    }
+
     // --- Resolved data caching ---
 
     /// <summary>
@@ -108,6 +117,14 @@ public class AnimController
     private AnimationData? ResolveAnimForState(AnimState state)
     {
         if (_spriteData == null) return null;
+
+        // Try attack anim override first (e.g. "AttackBite" for wolves)
+        if (_attackAnimOverride != null && IsAttackState(state))
+        {
+            var ov = _spriteData.GetAnim(_attackAnimOverride);
+            if (ov != null) return ov;
+        }
+
         var anim = _spriteData.GetAnim(StateToAnimName(state));
         if (anim != null) return anim;
 
@@ -121,6 +138,14 @@ public class AnimController
     private AnimationMeta? ResolveMetaForState(AnimState state)
     {
         if (_animMeta == null || string.IsNullOrEmpty(_unitName)) return null;
+
+        // Try attack anim override first
+        if (_attackAnimOverride != null && IsAttackState(state))
+        {
+            string ovKey = AnimMetaLoader.MetaKey(_unitName, _attackAnimOverride);
+            if (_animMeta.TryGetValue(ovKey, out var ovMeta)) return ovMeta;
+        }
+
         string key = AnimMetaLoader.MetaKey(_unitName, StateToAnimName(state));
         if (_animMeta.TryGetValue(key, out var meta)) return meta;
 
@@ -132,6 +157,9 @@ public class AnimController
         }
         return null;
     }
+
+    private static bool IsAttackState(AnimState state) =>
+        state == AnimState.Attack1 || state == AnimState.Attack2 || state == AnimState.Attack3;
 
     /// <summary>
     /// Single source of truth for animation fallback chains.

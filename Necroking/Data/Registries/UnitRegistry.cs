@@ -74,6 +74,8 @@ public class UnitDef : IHasId
     [JsonPropertyName("armors")] public List<string> Armors { get; set; } = new();
     [JsonPropertyName("shields")] public List<string> Shields { get; set; } = new();
 
+    [JsonPropertyName("attackAnim")] public string? AttackAnim { get; set; }
+
     // Combat overrides (nullable = use global CombatSettings default)
     [JsonPropertyName("attackCooldown")] public float? AttackCooldown { get; set; }
     [JsonPropertyName("postAttackLockout")] public float? PostAttackLockout { get; set; }

@@ -819,6 +819,9 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 if (_animMeta.Count > 0)
                     ctrl.SetAnimMeta(_animMeta, unitDef.Sprite.SpriteName);
 
+                if (unitDef.AttackAnim != null)
+                    ctrl.SetAttackAnimOverride(unitDef.AttackAnim);
+
                 // Wire per-unit animation timing overrides (from unit editor)
                 if (unitDef.AnimTimings.Count > 0)
                 {
@@ -1044,6 +1047,9 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
         if (_animMeta.Count > 0)
             ctrl.SetAnimMeta(_animMeta, unitDef.Sprite.SpriteName);
+
+        if (unitDef.AttackAnim != null)
+            ctrl.SetAttackAnimOverride(unitDef.AttackAnim);
 
         float refH = 128f;
         var idleAnim = spriteData.GetAnim("Idle");
@@ -2862,6 +2868,8 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 ctrl.Init(spriteData);
                 if (_animMeta.Count > 0)
                     ctrl.SetAnimMeta(_animMeta, unitDef.Sprite.SpriteName);
+                if (unitDef.AttackAnim != null)
+                    ctrl.SetAttackAnimOverride(unitDef.AttackAnim);
                 animData = new UnitAnimData { Ctrl = ctrl, AtlasID = atlasId, RefFrameHeight = 128f, CachedDefID = defID };
 
                 var idleAnim = spriteData.GetAnim("Idle");
