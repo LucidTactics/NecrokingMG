@@ -10,6 +10,55 @@ namespace Necroking.Editor;
 /// <summary>
 /// Draws editable fields for any object based on [EditorField] attributes.
 /// Caches type layouts so reflection only runs once per CLR type.
+///
+/// <para><b>Usage in an editor window:</b></para>
+/// <code>
+/// // 1. Add a field and create in constructor:
+/// private readonly ReflectionPropertyRenderer _renderer;
+/// _renderer = new ReflectionPropertyRenderer(ui);
+///
+/// // 2. Call in your Draw method where you'd normally have manual field blocks:
+/// var (nextY, changed) = _renderer.DrawAnnotatedProperties("myprefix", def, x, curY, w);
+/// curY = nextY;          // continue drawing custom controls below
+/// if (changed) MarkDirty();
+///
+/// // 3. Annotate properties on the data Def class:
+/// [EditorField(Label = "Display Name", Order = 0)]
+/// public string DisplayName { get; set; } = "";
+///
+/// [EditorField(Label = "Category", Order = 1)]
+/// [EditorCombo("material", "potion", "consumable")]    // renders as dropdown
+/// public string Category { get; set; } = "";
+///
+/// [EditorField(Label = "Speed", Order = 2, Step = 0.5f)] // custom drag step
+/// public float Speed { get; set; } = 1.0f;
+///
+/// [EditorField(Label = "Core Color", Order = 3, Group = "VISUALS",
+///     GroupColorR = 120, GroupColorG = 200, GroupColorB = 255)]
+/// public HdrColor CoreColor { get; set; } = new(...);
+///
+/// [EditorHide]   // exclude from reflection rendering
+/// public string InternalField { get; set; } = "";
+/// </code>
+///
+/// <para><b>Supported field types:</b></para>
+/// <list type="bullet">
+///   <item><c>string</c> — text field (or combo dropdown with [EditorCombo])</item>
+///   <item><c>int</c> — integer drag field</item>
+///   <item><c>float</c> — float drag field (step size via EditorField.Step)</item>
+///   <item><c>bool</c> — checkbox toggle</item>
+///   <item><c>HdrColor</c> — R/G/B/A + intensity editor (variable height)</item>
+/// </list>
+///
+/// <para><b>Adding support for a new field type:</b></para>
+/// <para>
+/// Add an <c>else if (propType == typeof(MyType))</c> branch in <see cref="DrawField"/>.
+/// Read the current value, call the appropriate <c>EditorBase.Draw*</c> method,
+/// advance <c>curY</c>, compare old vs new, and return true if changed.
+/// If the new type needs attribute configuration (e.g. min/max range), add a property
+/// to <see cref="EditorFieldAttribute"/> — existing cached layouts will pick it up
+/// automatically since the cache is per-type and built once.
+/// </para>
 /// </summary>
 public class ReflectionPropertyRenderer
 {
