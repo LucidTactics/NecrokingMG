@@ -1396,6 +1396,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         if (_menuState == MenuState.Settings && _settingsWindow.WantsClose)
         {
             _settingsWindow.WantsClose = false;
+            _editorUi.ResetAllState();
             _menuState = MenuState.PauseMenu;
         }
 
@@ -1408,12 +1409,14 @@ public class Game1 : Microsoft.Xna.Framework.Game
         {
             if (_menuState == MenuState.Settings)
             {
+                _editorUi.ResetAllState();
                 _menuState = MenuState.PauseMenu;
             }
             else if (_menuState == MenuState.UnitEditor || _menuState == MenuState.SpellEditor ||
                 _menuState == MenuState.MapEditor || _menuState == MenuState.UIEditor ||
                 _menuState == MenuState.ItemEditor)
             {
+                _editorUi.ResetAllState();
                 _menuState = MenuState.None;
             }
             else if (_menuState == MenuState.PauseMenu)
@@ -3335,6 +3338,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
             if (_unitEditor.WantsClose)
             {
                 _unitEditor.WantsClose = false;
+                _editorUi.ResetAllState();
                 _menuState = MenuState.None;
             }
         }
@@ -3344,6 +3348,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
             if (_spellEditor.WantsClose)
             {
                 _spellEditor.WantsClose = false;
+                _editorUi.ResetAllState();
                 _menuState = MenuState.None;
             }
         }
@@ -3361,6 +3366,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
             if (_itemEditor.WantsClose)
             {
                 _itemEditor.WantsClose = false;
+                _editorUi.ResetAllState();
                 _menuState = MenuState.None;
             }
         }

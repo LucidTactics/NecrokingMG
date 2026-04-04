@@ -1750,6 +1750,17 @@ public class EditorBase
     public void ClearActiveField() { _activeFieldId = null; }
 
     /// <summary>
+    /// Reset all interactive state (active field, dropdown, color picker).
+    /// Call when closing an editor to prevent stale state from blocking input.
+    /// </summary>
+    public void ResetAllState()
+    {
+        _activeFieldId = null;
+        _comboHighlightIdx = -1;
+        _colorPicker.Close();
+    }
+
+    /// <summary>
     /// If an active combo dropdown is open, close it and return true.
     /// Editors should call this at the top of their Escape cascade so that
     /// Escape closes the dropdown first before closing sub-editors/popups.

@@ -31,7 +31,7 @@
     "minBladeWidth": true
   },
   "weather": {
-    "enabled": false,
+    "enabled": true,
     "activePreset": "thunderstorm",
     "transitionSpeed": 1
   },
