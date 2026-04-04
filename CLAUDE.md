@@ -201,4 +201,8 @@ When creating a new scenario, **spend real effort designing what to log**. The s
 
 ## Bash
 
-TRY TO AVOID USING COMPOSED BASIC OPERATORS LIKE cs XXX && git info, THEY FORCE UNNECESSARY USER CONFIRMATIONS!
+Try to avoid using multi bash commands like cs XXX && git info, they force unnecesary user confirmations!
+
+## C++ Migration
+
+This project migrated from ../Necroking, refer to its files when trying to reimplement features that worked there.
