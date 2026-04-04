@@ -25,7 +25,7 @@ public class PriestBattleScenario : ScenarioBase
         units[priestIdx].Mana = 30f;
         units[priestIdx].MaxMana = 50f;
         units[priestIdx].ManaRegen = 1.5f;
-        units[priestIdx].SpellID = "lightning_bolt"; // Use existing spell
+        units[priestIdx].SpellID = "god_ray";
         units[priestIdx].Stats.MaxHP = 60;
         units[priestIdx].Stats.HP = 60;
 
