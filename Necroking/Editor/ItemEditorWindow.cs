@@ -49,17 +49,17 @@ public class ItemEditorWindow
     private float GetListScroll(string key) => _listScrolls.GetValueOrDefault(key, 0);
     private void SetListScroll(string key, float val) => _listScrolls[key] = val;
 
-    private readonly ReflectionPropertyRenderer _renderer;
+    private ReflectionPropertyRenderer _renderer = null!;
 
     public ItemEditorWindow(EditorBase ui)
     {
         _ui = ui;
-        _renderer = new ReflectionPropertyRenderer(ui);
     }
 
     public void SetGameData(GameData gameData)
     {
         _gameData = gameData;
+        _renderer = new ReflectionPropertyRenderer(_ui, gameData);
     }
 
     public void Draw(int screenW, int screenH, GameTime gameTime)

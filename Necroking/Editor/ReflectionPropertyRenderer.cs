@@ -4,6 +4,8 @@ using System.Linq;
 using System.Reflection;
 using Microsoft.Xna.Framework;
 using Necroking.Core;
+using Necroking.Data;
+using Necroking.Data.Registries;
 
 namespace Necroking.Editor;
 
@@ -15,7 +17,7 @@ namespace Necroking.Editor;
 /// <code>
 /// // 1. Add a field and create in constructor:
 /// private readonly ReflectionPropertyRenderer _renderer;
-/// _renderer = new ReflectionPropertyRenderer(ui);
+/// _renderer = new ReflectionPropertyRenderer(ui, gameData);
 ///
 /// // 2. Call in your Draw method where you'd normally have manual field blocks:
 /// var (nextY, changed) = _renderer.DrawAnnotatedProperties("myprefix", def, x, curY, w);
@@ -30,12 +32,20 @@ namespace Necroking.Editor;
 /// [EditorCombo("material", "potion", "consumable")]    // renders as dropdown
 /// public string Category { get; set; } = "";
 ///
-/// [EditorField(Label = "Speed", Order = 2, Step = 0.5f)] // custom drag step
+/// [EditorField(Label = "Speed", Order = 2, Step = 0.5f, Decimals = 1)]
 /// public float Speed { get; set; } = 1.0f;
 ///
-/// [EditorField(Label = "Core Color", Order = 3, Group = "VISUALS",
+/// [EditorField(Label = "Core Color", Order = 3, Compact = true, Group = "VISUALS",
 ///     GroupColorR = 120, GroupColorG = 200, GroupColorB = 255)]
 /// public HdrColor CoreColor { get; set; } = new(...);
+///
+/// [EditorField(Label = "Buff ID", Order = 4)]
+/// [EditorRegistryDropdown("Buffs")]   // combo populated from GameData registry
+/// public string BuffID { get; set; } = "";
+///
+/// [EditorVisible("Category", "Buff", "Debuff")]  // only show when Category is Buff or Debuff
+/// [EditorField(Label = "Friendly Only", Order = 5)]
+/// public bool FriendlyOnly { get; set; }
 ///
 /// [EditorHide]   // exclude from reflection rendering
 /// public string InternalField { get; set; } = "";
@@ -43,11 +53,13 @@ namespace Necroking.Editor;
 ///
 /// <para><b>Supported field types:</b></para>
 /// <list type="bullet">
-///   <item><c>string</c> — text field (or combo dropdown with [EditorCombo])</item>
+///   <item><c>string</c> — text field, combo with [EditorCombo], or registry dropdown with [EditorRegistryDropdown]</item>
 ///   <item><c>int</c> — integer drag field</item>
-///   <item><c>float</c> — float drag field (step size via EditorField.Step)</item>
+///   <item><c>float</c> — float drag field (Step, Decimals via EditorField)</item>
 ///   <item><c>bool</c> — checkbox toggle</item>
-///   <item><c>HdrColor</c> — R/G/B/A + intensity editor (variable height)</item>
+///   <item><c>HdrColor</c> — full editor or compact swatch (Compact via EditorField)</item>
+///   <item><c>List&lt;string&gt;</c> — checkbox grid with [EditorCheckboxGrid]</item>
+///   <item>Nullable class objects — collapsible nested section (if type has [EditorField] properties)</item>
 /// </list>
 ///
 /// <para><b>Adding support for a new field type:</b></para>
@@ -63,13 +75,17 @@ namespace Necroking.Editor;
 public class ReflectionPropertyRenderer
 {
     private readonly EditorBase _ui;
+    private readonly GameData? _gameData;
     private readonly Dictionary<Type, TypeLayout> _layoutCache = new();
+    private readonly Dictionary<string, bool> _expandedSections = new();
 
     private const int RowH = 24;
+    private const int LabelW = 130;
 
-    public ReflectionPropertyRenderer(EditorBase ui)
+    public ReflectionPropertyRenderer(EditorBase ui, GameData? gameData = null)
     {
         _ui = ui;
+        _gameData = gameData;
     }
 
     /// <summary>
@@ -87,19 +103,37 @@ public class ReflectionPropertyRenderer
 
         foreach (var entry in layout.Entries)
         {
+            // Check visibility conditions
+            if (!IsVisible(entry, obj))
+                continue;
+
             // Draw section header when group changes
             if (entry.Group != lastGroup && !string.IsNullOrEmpty(entry.Group))
             {
-                curY += 4;
-                _ui.DrawRect(new Rectangle(x, curY, w, 1), new Color(60, 60, 80));
-                curY += 6;
-                _ui.DrawText(entry.Group, new Vector2(x, curY), entry.GroupColor);
-                curY += 22;
+                // Check if any field in this group is visible
+                bool anyVisibleInGroup = layout.Entries.Any(e =>
+                    e.Group == entry.Group && IsVisible(e, obj));
+                if (anyVisibleInGroup)
+                {
+                    curY += 4;
+                    _ui.DrawRect(new Rectangle(x, curY, w, 1), new Color(60, 60, 80));
+                    curY += 6;
+                    _ui.DrawText(entry.Group, new Vector2(x, curY), entry.GroupColor);
+                    curY += 22;
+                }
                 lastGroup = entry.Group;
             }
             else if (entry.Group != lastGroup)
             {
                 lastGroup = entry.Group;
+            }
+
+            // Draw inline sub-header if present
+            if (entry.HeaderText != null)
+            {
+                curY += 4;
+                _ui.DrawText(entry.HeaderText, new Vector2(x, curY), entry.HeaderColor);
+                curY += 18;
             }
 
             string fieldId = $"{prefix}.{entry.Property.Name}";
@@ -110,11 +144,71 @@ public class ReflectionPropertyRenderer
         return (curY, anyChanged);
     }
 
+    // ===========================
+    //  Visibility
+    // ===========================
+
+    private static bool IsVisible(FieldEntry entry, object obj)
+    {
+        if (entry.VisibilityRules == null || entry.VisibilityRules.Count == 0)
+            return true;
+
+        // Group by property name: OR within group, AND across groups
+        foreach (var group in entry.VisibilityRules)
+        {
+            string propName = group.Key;
+            var allowedValues = group.Value;
+
+            // Read the property value
+            var propInfo = obj.GetType().GetProperty(propName, BindingFlags.Public | BindingFlags.Instance);
+            if (propInfo == null) return false;
+
+            var propValue = propInfo.GetValue(obj);
+            string strValue = propValue is bool b ? (b ? "True" : "False") : propValue?.ToString() ?? "";
+
+            bool anyMatch = false;
+            foreach (var allowed in allowedValues)
+            {
+                if (string.Equals(strValue, allowed, StringComparison.OrdinalIgnoreCase))
+                {
+                    anyMatch = true;
+                    break;
+                }
+            }
+            if (!anyMatch) return false;
+        }
+        return true;
+    }
+
+    // ===========================
+    //  Field drawing
+    // ===========================
+
     private bool DrawField(string fieldId, FieldEntry entry, object obj, int x, ref int curY, int w)
     {
         var prop = entry.Property;
         var value = prop.GetValue(obj);
 
+        // Read-only display
+        if (entry.ReadOnly)
+        {
+            _ui.DrawText(entry.Label, new Vector2(x, curY + 2), EditorBase.TextDim);
+            _ui.DrawText(value?.ToString() ?? "", new Vector2(x + LabelW, curY + 2), new Color(140, 140, 165));
+            curY += RowH;
+            return false;
+        }
+
+        // Registry dropdown (string property backed by GameData registry)
+        if (entry.RegistryName != null && _gameData != null)
+        {
+            string strVal = (string?)value ?? "";
+            bool changed = DrawRegistryDropdown(fieldId, entry.Label, ref strVal, entry.RegistryName, x, curY, w);
+            curY += RowH;
+            if (changed) { prop.SetValue(obj, strVal); return true; }
+            return false;
+        }
+
+        // Fixed combo options
         if (entry.ComboOptions != null)
         {
             string strVal = (string?)value ?? "";
@@ -122,6 +216,12 @@ public class ReflectionPropertyRenderer
             curY += RowH;
             if (newVal != strVal) { prop.SetValue(obj, newVal); return true; }
             return false;
+        }
+
+        // Checkbox grid for List<string>
+        if (entry.CheckboxGrid != null && _gameData != null)
+        {
+            return DrawCheckboxGridField(entry, obj, x, ref curY, w);
         }
 
         var propType = prop.PropertyType;
@@ -144,6 +244,11 @@ public class ReflectionPropertyRenderer
         {
             float fVal = (float)(value ?? 0f);
             float newVal = _ui.DrawFloatField(fieldId, entry.Label, fVal, x, curY, w, entry.Step);
+            if (entry.Decimals > 0)
+            {
+                float pow = MathF.Pow(10, entry.Decimals);
+                newVal = MathF.Round(newVal * pow) / pow;
+            }
             curY += RowH;
             if (MathF.Abs(newVal - fVal) > 0.0001f) { prop.SetValue(obj, newVal); return true; }
         }
@@ -157,11 +262,24 @@ public class ReflectionPropertyRenderer
         else if (propType == typeof(HdrColor))
         {
             var hdrVal = (HdrColor)(value ?? new HdrColor());
-            var (newColor, h) = _ui.DrawHdrColorField(fieldId, entry.Label, hdrVal, x, curY, w);
-            curY += h;
-            // HdrColor is a struct so always write back
-            prop.SetValue(obj, newColor);
-            return !hdrVal.Equals(newColor);
+            if (entry.Compact)
+            {
+                bool changed = DrawCompactHdrColor(fieldId, entry.Label, ref hdrVal, x, ref curY, w);
+                prop.SetValue(obj, hdrVal);
+                return changed;
+            }
+            else
+            {
+                var (newColor, h) = _ui.DrawHdrColorField(fieldId, entry.Label, hdrVal, x, curY, w);
+                curY += h;
+                prop.SetValue(obj, newColor);
+                return !hdrVal.Equals(newColor);
+            }
+        }
+        else if (propType.IsClass && HasAnnotatedProperties(propType))
+        {
+            // Nullable nested annotated object (e.g. FlipbookRef?)
+            return DrawNestedObject(fieldId, entry, obj, x, ref curY, w);
         }
         else
         {
@@ -172,6 +290,183 @@ public class ReflectionPropertyRenderer
         }
 
         return false;
+    }
+
+    // ===========================
+    //  Registry dropdown
+    // ===========================
+
+    private bool DrawRegistryDropdown(string fieldId, string label, ref string currentId,
+        string registryName, int x, int y, int w)
+    {
+        var (ids, getDisplayName) = GetRegistryInfo(registryName);
+        if (ids == null) return false;
+
+        // Build options array with display names
+        var options = new string[ids.Count];
+        for (int i = 0; i < ids.Count; i++)
+            options[i] = getDisplayName!(ids[i]) ?? ids[i];
+
+        // Find current display name
+        string currentDisplay = "";
+        if (!string.IsNullOrEmpty(currentId))
+        {
+            int idx = IndexOfId(ids, currentId);
+            if (idx >= 0) currentDisplay = options[idx];
+            else currentDisplay = currentId; // fallback to raw ID
+        }
+
+        string newDisplay = _ui.DrawCombo(fieldId, label, currentDisplay, options, x, y, w, allowNone: true);
+
+        // Map back to ID
+        string newId = "";
+        if (!string.IsNullOrEmpty(newDisplay))
+        {
+            for (int i = 0; i < options.Length; i++)
+            {
+                if (options[i] == newDisplay)
+                {
+                    newId = ids[i];
+                    break;
+                }
+            }
+        }
+
+        if (newId != currentId) { currentId = newId; return true; }
+        return false;
+    }
+
+    private (IReadOnlyList<string>? ids, Func<string, string?>? getDisplayName) GetRegistryInfo(string registryName)
+    {
+        if (_gameData == null) return (null, null);
+
+        return registryName switch
+        {
+            "Buffs" => (_gameData.Buffs.GetIDs(), id => _gameData.Buffs.Get(id)?.DisplayName),
+            "Units" => (_gameData.Units.GetIDs(), id => _gameData.Units.Get(id)?.DisplayName),
+            "Flipbooks" => (_gameData.Flipbooks.GetIDs(), id => _gameData.Flipbooks.Get(id)?.DisplayName),
+            "Weapons" => (_gameData.Weapons.GetIDs(), id => _gameData.Weapons.Get(id)?.DisplayName),
+            "Armors" => (_gameData.Armors.GetIDs(), id => _gameData.Armors.Get(id)?.DisplayName),
+            "Shields" => (_gameData.Shields.GetIDs(), id => _gameData.Shields.Get(id)?.DisplayName),
+            "Items" => (_gameData.Items.GetIDs(), id => _gameData.Items.Get(id)?.DisplayName),
+            "Spells" => (_gameData.Spells.GetIDs(), id => _gameData.Spells.Get(id)?.DisplayName),
+            _ => (null, null),
+        };
+    }
+
+    // ===========================
+    //  Checkbox grid
+    // ===========================
+
+    private bool DrawCheckboxGridField(FieldEntry entry, object obj, int x, ref int curY, int w)
+    {
+        var grid = entry.CheckboxGrid!;
+        var prop = entry.Property;
+        var list = (List<string>?)prop.GetValue(obj);
+        if (list == null)
+        {
+            list = new List<string>();
+            prop.SetValue(obj, list);
+        }
+
+        bool anyChanged = false;
+
+        // Header
+        curY += 4;
+        _ui.DrawRect(new Rectangle(x, curY, w, 1), new Color(60, 60, 80));
+        curY += 4;
+        _ui.DrawText(grid.Header, new Vector2(x, curY), grid.HeaderColor);
+        curY += 18;
+
+        // Hint when empty
+        if (list.Count == 0)
+        {
+            _ui.DrawText("(all units - check to restrict)", new Vector2(x + 4, curY + 2), new Color(120, 120, 140));
+            curY += RowH;
+        }
+
+        // Get registry items
+        var (ids, getDisplayName) = GetRegistryInfo(grid.RegistryName);
+        if (ids == null) return false;
+
+        int cols = grid.Columns;
+        int colW = (w - 8) / cols;
+
+        for (int i = 0; i < ids.Count; i++)
+        {
+            int col = i % cols;
+            int colX = x + 4 + col * colW;
+            string displayLabel = getDisplayName!(ids[i]) ?? ids[i];
+            bool isChecked = list.Contains(ids[i]);
+            bool newChecked = _ui.DrawCheckbox(displayLabel, isChecked, colX, curY);
+            if (newChecked != isChecked)
+            {
+                if (newChecked) list.Add(ids[i]);
+                else list.Remove(ids[i]);
+                anyChanged = true;
+            }
+            if (col == cols - 1 || i == ids.Count - 1)
+                curY += RowH;
+        }
+
+        return anyChanged;
+    }
+
+    // ===========================
+    //  Compact HdrColor swatch
+    // ===========================
+
+    private bool DrawCompactHdrColor(string fieldId, string label, ref HdrColor color, int x, ref int curY, int w)
+    {
+        _ui.DrawText(label, new Vector2(x, curY + 2), EditorBase.TextDim);
+        int swatchX = x + LabelW;
+        bool changed = _ui.DrawColorSwatch(fieldId, swatchX, curY, 40, 18, ref color);
+        string info = $"({color.R},{color.G},{color.B},{color.A}) x{color.Intensity:F1}";
+        _ui.DrawText(info, new Vector2(swatchX + 46, curY + 2), new Color(120, 120, 140));
+        curY += RowH;
+        return changed;
+    }
+
+    // ===========================
+    //  Nested annotated objects
+    // ===========================
+
+    private bool DrawNestedObject(string fieldId, FieldEntry entry, object obj, int x, ref int curY, int w)
+    {
+        var prop = entry.Property;
+        var value = prop.GetValue(obj);
+
+        // Section label
+        _ui.DrawText(entry.Label, new Vector2(x, curY + 2), EditorBase.AccentColor);
+        curY += RowH;
+
+        if (value == null)
+        {
+            // Create button
+            if (_ui.DrawButton($"Create {entry.Label}", x, curY, 180, 28))
+            {
+                try
+                {
+                    var instance = Activator.CreateInstance(prop.PropertyType);
+                    prop.SetValue(obj, instance);
+                    return true;
+                }
+                catch { }
+            }
+            curY += RowH + 4;
+            return false;
+        }
+
+        // Recursively draw nested object's annotated properties
+        var (nextY, changed) = DrawAnnotatedProperties(fieldId, value, x, curY, w);
+        curY = nextY;
+        return changed;
+    }
+
+    private bool HasAnnotatedProperties(Type type)
+    {
+        var props = type.GetProperties(BindingFlags.Public | BindingFlags.Instance);
+        return props.Any(p => p.GetCustomAttribute<EditorFieldAttribute>() != null);
     }
 
     // ===========================
@@ -195,6 +490,39 @@ public class ReflectionPropertyRenderer
             if (editorAttr == null) continue;
 
             var comboAttr = prop.GetCustomAttribute<EditorComboAttribute>();
+            var registryAttr = prop.GetCustomAttribute<EditorRegistryDropdownAttribute>();
+            var checkboxGridAttr = prop.GetCustomAttribute<EditorCheckboxGridAttribute>();
+            var headerAttr = prop.GetCustomAttribute<EditorHeaderAttribute>();
+            var visAttrs = prop.GetCustomAttributes<EditorVisibleAttribute>().ToList();
+
+            // Build visibility rules: Dictionary<propertyName, HashSet<allowedValues>>
+            Dictionary<string, HashSet<string>>? visRules = null;
+            if (visAttrs.Count > 0)
+            {
+                visRules = new();
+                foreach (var va in visAttrs)
+                {
+                    if (!visRules.TryGetValue(va.Property, out var set))
+                    {
+                        set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                        visRules[va.Property] = set;
+                    }
+                    foreach (var v in va.Values)
+                        set.Add(v);
+                }
+            }
+
+            CheckboxGridInfo? gridInfo = null;
+            if (checkboxGridAttr != null)
+            {
+                gridInfo = new CheckboxGridInfo
+                {
+                    RegistryName = checkboxGridAttr.RegistryName,
+                    Columns = checkboxGridAttr.Columns,
+                    Header = checkboxGridAttr.Header,
+                    HeaderColor = new Color(checkboxGridAttr.HeaderColorR, checkboxGridAttr.HeaderColorG, checkboxGridAttr.HeaderColorB),
+                };
+            }
 
             entries.Add(new FieldEntry
             {
@@ -203,23 +531,37 @@ public class ReflectionPropertyRenderer
                 Group = editorAttr.Group,
                 Order = editorAttr.Order,
                 Step = editorAttr.Step,
+                Decimals = editorAttr.Decimals,
+                ReadOnly = editorAttr.ReadOnly,
+                Compact = editorAttr.Compact,
                 GroupColor = new Color(editorAttr.GroupColorR, editorAttr.GroupColorG, editorAttr.GroupColorB),
                 ComboOptions = comboAttr?.Options,
+                RegistryName = registryAttr?.RegistryName,
+                CheckboxGrid = gridInfo,
+                HeaderText = headerAttr?.Text,
+                HeaderColor = headerAttr != null ? new Color(headerAttr.ColorR, headerAttr.ColorG, headerAttr.ColorB) : Color.White,
+                VisibilityRules = visRules,
             });
         }
 
-        // Sort by group order (first field's Order in group), then by Order within group
-        entries.Sort((a, b) =>
-        {
-            int groupCmp = string.Compare(a.Group, b.Group, StringComparison.Ordinal);
-            if (groupCmp != 0) return groupCmp;
-            return a.Order.CompareTo(b.Order);
-        });
+        // Sort by global Order value. Group headers draw when group name changes.
+        entries.Sort((a, b) => a.Order.CompareTo(b.Order));
 
         var layout = new TypeLayout { Entries = entries };
         _layoutCache[type] = layout;
         return layout;
     }
+
+    private static int IndexOfId(IReadOnlyList<string> list, string value)
+    {
+        for (int i = 0; i < list.Count; i++)
+            if (list[i] == value) return i;
+        return -1;
+    }
+
+    // ===========================
+    //  Internal types
+    // ===========================
 
     private class TypeLayout
     {
@@ -233,7 +575,23 @@ public class ReflectionPropertyRenderer
         public string Group = "";
         public int Order;
         public float Step = 0.1f;
+        public int Decimals;
+        public bool ReadOnly;
+        public bool Compact;
         public Color GroupColor = new(200, 200, 200);
         public string[]? ComboOptions;
+        public string? RegistryName;
+        public CheckboxGridInfo? CheckboxGrid;
+        public string? HeaderText;
+        public Color HeaderColor = Color.White;
+        public Dictionary<string, HashSet<string>>? VisibilityRules;
+    }
+
+    private class CheckboxGridInfo
+    {
+        public string RegistryName = "";
+        public int Columns = 2;
+        public string Header = "";
+        public Color HeaderColor = new(200, 180, 255);
     }
 }

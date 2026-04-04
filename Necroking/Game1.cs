@@ -2365,6 +2365,15 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 else if (_menuState == MenuState.UIEditor) _uiEditor.SelectedIndex = 0;
             }
 
+            // Apply spell select-by-name from scenario
+            if (_activeScenario.RequestSelectSpellByName != null)
+            {
+                var name = _activeScenario.RequestSelectSpellByName;
+                _activeScenario.RequestSelectSpellByName = null;
+                if (_menuState == MenuState.SpellEditor)
+                    _spellEditor.SelectByName(name);
+            }
+
             // Apply map editor tab switch from scenario
             if (_activeScenario.RequestedMapTab != null)
             {

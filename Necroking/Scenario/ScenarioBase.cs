@@ -39,6 +39,9 @@ public abstract class ScenarioBase
     // Request that Game1 select the first item in the active editor
     public bool RequestSelectFirst;
 
+    // Request that Game1 select a spell by display name in the spell editor
+    public string? RequestSelectSpellByName;
+
     // Camera override
     public bool HasCameraOverride;
     public float CameraX, CameraY, CameraZoom = 64f;

@@ -27,6 +27,22 @@ public class SpellEditorWindow
     /// <summary>Select the first item in the list (for screenshot scenarios).</summary>
     public void SelectFirst() { _selectedIdx = 0; }
 
+    /// <summary>Select a spell by display name (for screenshot scenarios).</summary>
+    public void SelectByName(string name)
+    {
+        if (_gameData == null) return;
+        var ids = _gameData.Spells.GetIDs();
+        for (int i = 0; i < ids.Count; i++)
+        {
+            var def = _gameData.Spells.Get(ids[i]);
+            if (def != null && def.DisplayName == name)
+            {
+                _selectedIdx = i;
+                return;
+            }
+        }
+    }
+
     /// <summary>Open the buff manager popup (for UI test scenarios).</summary>
     public void OpenBuffManager() { _buffManagerOpen = true; _buffSelectedIdx = 0; }
     private string _searchFilter = "";
@@ -69,30 +85,21 @@ public class SpellEditorWindow
     private SpellDef? _clipboardSpell;
 
     // Category options (no Command/Toggle for editing)
-    private static readonly string[] CategoryOptions =
-        { "Projectile", "Buff", "Debuff", "Summon", "Strike", "Beam", "Drain" };
-    private static readonly string[] AoeTypeOptions = { "Single", "AOE", "Chain" };
-    private static readonly string[] TrajectoryOptions =
-        { "Lob", "DirectFire", "Homing", "Swirly", "HomingSwirly" };
-    private static readonly string[] SummonTargetReqOptions =
-        { "None", "Corpse", "UnitType", "CorpseAOE" };
-    private static readonly string[] SummonModeOptions = { "Spawn", "Transform" };
-    private static readonly string[] SpawnLocOptions =
-        { "NearestTargetToMouse", "NearestTargetToCaster", "AdjacentToCaster", "AtTargetLocation" };
+    // Option arrays still used by buff manager popup and FlipbookRefSection
     private static readonly string[] BlendOptions = { "Alpha", "Additive" };
     private static readonly string[] AlignOptions = { "Ground", "Upright" };
-    private static readonly string[] StrikeVisualOptions = { "Lightning", "GodRay" };
     private static readonly string[] EffectTypeOptions = { "Set", "Add", "Multiply" };
     private static readonly string[] StatOptions =
         { "Strength", "Attack", "Defense", "MagicResist", "NaturalProt", "CombatSpeed", "MaxHP", "Encumbrance" };
     private static readonly string[] IntBlendOptions = { "Alpha", "Additive" };
-    private static readonly string[] TargetFilterOptions = { "AnyEnemy", "UndeadOnly", "LivingOnly" };
 
     // Layout constants
     private const int ListWidth = 300;
     private const int TopBarH = 50;
     private const int RowH = 24;
     private const int LabelW = 130;
+
+    private ReflectionPropertyRenderer _renderer = null!;
 
     public SpellEditorWindow(EditorBase ui)
     {
@@ -102,6 +109,7 @@ public class SpellEditorWindow
     public void SetGameData(GameData gameData)
     {
         _gameData = gameData;
+        _renderer = new ReflectionPropertyRenderer(_ui, gameData);
     }
 
     public void Draw(int screenW, int screenH, GameTime gameTime)
@@ -502,49 +510,28 @@ public class SpellEditorWindow
         // =================== PREVIEW ===================
         curY = DrawSpellPreviewSection(def, x + 8, curY, fieldW);
 
-        // =================== NAME ===================
-        string oldName = def.DisplayName;
-        def.DisplayName = _ui.DrawTextField("sp_name", "Name", def.DisplayName, x + 8, curY, fieldW);
-        if (def.DisplayName != oldName) MarkDirty();
-        curY += RowH;
+        // =================== ALL FIELDS VIA REFLECTION ===================
+        var (nextY, changed) = _renderer.DrawAnnotatedProperties("sp", def, x + 8, curY, fieldW);
+        curY = nextY;
+        if (changed) MarkDirty();
 
-        // =================== ID (read-only) ===================
-        _ui.DrawText("ID", new Vector2(x + 8, curY + 2), EditorBase.TextDim);
-        _ui.DrawText(def.Id, new Vector2(x + 8 + LabelW, curY + 2), new Color(140, 140, 165));
-        curY += RowH;
-
-        // =================== CATEGORY ===================
-        string oldCat = def.Category;
-        def.Category = _ui.DrawCombo("sp_category", "Category", def.Category, CategoryOptions, x + 8, curY, fieldW);
-        if (def.Category != oldCat) MarkDirty();
-        curY += RowH;
-
-        // =================== SEPARATOR: COMMON ===================
-        curY += 4;
-        DrawSectionHeader(x + 8, ref curY, w - 16, "COMMON", EditorBase.TextBright);
-
-        // Range
-        def.Range = DrawFloatField10x("sp_range", "Range", def.Range, x + 8, ref curY, fieldW);
-        // Mana Cost
-        def.ManaCost = DrawFloatField10x("sp_mana", "Mana Cost", def.ManaCost, x + 8, ref curY, fieldW);
-        // Cooldown
-        def.Cooldown = DrawFloatField10x("sp_cd", "Cooldown", def.Cooldown, x + 8, ref curY, fieldW);
-        // Cast Time
-        def.CastTime = DrawFloatField10x("sp_cast", "Cast Time", def.CastTime, x + 8, ref curY, fieldW);
-
-        // Casting Buff dropdown
-        def.CastingBuffID = DrawBuffDropdown("sp_castbuff", "Casting Buff", def.CastingBuffID, x + 8, ref curY, fieldW);
-
-        // =================== CATEGORY-SPECIFIC ===================
-        switch (def.Category)
+        // =================== SHARED FIELDS (manual, compound visibility) ===================
+        // AoeRadius — different conditions per category
+        if (def.Category == "Projectile" ||
+            (def.Category is "Buff" or "Debuff" && def.AoeType == "AOE") ||
+            (def.Category == "Strike" && !def.StrikeTargetUnit))
         {
-            case "Projectile": DrawProjectileFields(def, x + 8, ref curY, fieldW); break;
-            case "Buff":
-            case "Debuff": DrawBuffDebuffFields(def, x + 8, ref curY, fieldW); break;
-            case "Summon": DrawSummonFields(def, x + 8, ref curY, fieldW); break;
-            case "Strike": DrawStrikeFields(def, x + 8, ref curY, fieldW); break;
-            case "Beam": DrawBeamFields(def, x + 8, ref curY, fieldW); break;
-            case "Drain": DrawDrainFields(def, x + 8, ref curY, fieldW); break;
+            float oldAoeR = def.AoeRadius;
+            def.AoeRadius = _ui.DrawFloatField("sp_aoer", "AOE Radius", def.AoeRadius, x + 8, curY, fieldW, 0.1f);
+            def.AoeRadius = MathF.Round(def.AoeRadius * 10f) / 10f;
+            curY += RowH;
+            if (MathF.Abs(def.AoeRadius - oldAoeR) > 0.001f) MarkDirty();
+        }
+
+        // HitEffectFlipbook — shown in Projectile (via reflection) and Strike ground
+        if (def.Category == "Strike" && !def.StrikeTargetUnit)
+        {
+            def.HitEffectFlipbook = DrawFlipbookRefSection("sp_st_hitfb", "Hit Effect", def.HitEffectFlipbook, x + 8, ref curY, fieldW);
         }
 
         // RS22: End scissor clipping
@@ -556,483 +543,15 @@ public class SpellEditorWindow
         _detailScroll = Math.Min(_detailScroll, maxDetailScroll);
     }
 
-    // ===========================
-    //  Projectile fields
-    // ===========================
-    private void DrawProjectileFields(SpellDef def, int x, ref int curY, int w)
-    {
-        curY += 4;
-        DrawSectionHeader(x, ref curY, w, "PROJECTILE", new Color(255, 160, 100));
-
-        // AOE Type
-        string oldAoe = def.AoeType;
-        def.AoeType = _ui.DrawCombo("sp_aoe", "AOE Type", def.AoeType, AoeTypeOptions, x, curY, w);
-        if (def.AoeType != oldAoe) MarkDirty();
-        curY += RowH;
-
-        // Quantity
-        int oldQty = def.Quantity;
-        def.Quantity = _ui.DrawIntField("sp_qty", "Quantity", def.Quantity, x, curY, w);
-        if (def.Quantity != oldQty) MarkDirty();
-        curY += RowH;
-
-        // Trajectory
-        string oldTraj = def.Trajectory;
-        def.Trajectory = _ui.DrawCombo("sp_traj", "Trajectory", def.Trajectory, TrajectoryOptions, x, curY, w);
-        if (def.Trajectory != oldTraj) MarkDirty();
-        curY += RowH;
-
-        // Speed
-        def.ProjectileSpeed = DrawFloatField10x("sp_pspeed", "Proj Speed", def.ProjectileSpeed, x, ref curY, w);
-
-        // Precision
-        int oldPrec = def.PrecisionBonus;
-        def.PrecisionBonus = _ui.DrawIntField("sp_prec", "Precision Bonus", def.PrecisionBonus, x, curY, w);
-        if (def.PrecisionBonus != oldPrec) MarkDirty();
-        curY += RowH;
-
-        // AOE Radius
-        def.AoeRadius = DrawFloatField10x("sp_aoer", "AOE Radius", def.AoeRadius, x, ref curY, w);
-
-        // Damage
-        int oldDmg = def.Damage;
-        def.Damage = _ui.DrawIntField("sp_dmg", "Damage", def.Damage, x, curY, w);
-        if (def.Damage != oldDmg) MarkDirty();
-        curY += RowH;
-
-        // Delay
-        def.ProjectileDelay = DrawFloatField100x("sp_pdelay", "Proj Delay", def.ProjectileDelay, x, ref curY, w);
-
-        // Projectile flipbook ref
-        def.ProjectileFlipbook = DrawFlipbookRefSection("sp_proj_fb", "Projectile Effect", def.ProjectileFlipbook, x, ref curY, w);
-        // Hit effect flipbook ref
-        def.HitEffectFlipbook = DrawFlipbookRefSection("sp_hit_fb", "Hit Effect", def.HitEffectFlipbook, x, ref curY, w);
-    }
+    // Draw*Fields methods removed — all fields now rendered via reflection attributes on SpellDef.
+    // Only DrawFlipbookRefSection kept below for manual HitEffectFlipbook in Strike.
 
     // ===========================
-    //  Buff/Debuff fields
+    //  DELETED: DrawProjectileFields, DrawBuffDebuffFields, DrawSummonFields,
+    //           DrawStrikeFields, DrawBeamFields, DrawDrainFields
+    //  (replaced by [EditorField] attributes on SpellDef properties)
     // ===========================
-    private void DrawBuffDebuffFields(SpellDef def, int x, ref int curY, int w)
-    {
-        curY += 4;
-        bool isBuff = def.Category == "Buff";
-        string title = isBuff ? "BUFF" : "DEBUFF";
-        Color titleColor = isBuff ? new Color(100, 255, 150) : new Color(200, 100, 255);
-        DrawSectionHeader(x, ref curY, w, title, titleColor);
 
-        // AOE Type
-        string oldAoe = def.AoeType;
-        def.AoeType = _ui.DrawCombo("sp_bd_aoe", "AOE Type", def.AoeType, AoeTypeOptions, x, curY, w);
-        if (def.AoeType != oldAoe) MarkDirty();
-        curY += RowH;
-
-        // Buff ID dropdown
-        def.BuffID = DrawBuffDropdown("sp_bd_buff", "Buff ID", def.BuffID, x, ref curY, w);
-
-        // Friendly Only toggle
-        bool oldFriendly = def.FriendlyOnly;
-        def.FriendlyOnly = _ui.DrawCheckbox("Friendly Only", def.FriendlyOnly, x, curY);
-        if (def.FriendlyOnly != oldFriendly) MarkDirty();
-        curY += RowH;
-
-        // Chain-specific fields
-        if (def.AoeType == "Chain")
-        {
-            int oldCQty = def.ChainQuantity;
-            def.ChainQuantity = _ui.DrawIntField("sp_bd_cqty", "Chain Qty", def.ChainQuantity, x, curY, w);
-            if (def.ChainQuantity != oldCQty) MarkDirty();
-            curY += RowH;
-
-            def.ChainRange = DrawFloatField10x("sp_bd_crange", "Chain Range", def.ChainRange, x, ref curY, w);
-            def.ChainDelay = DrawFloatField100x("sp_bd_cdelay", "Chain Delay", def.ChainDelay, x, ref curY, w);
-        }
-
-        // AOE radius (for AOE type)
-        if (def.AoeType == "AOE")
-        {
-            def.AoeRadius = DrawFloatField10x("sp_bd_aoer", "AOE Radius", def.AoeRadius, x, ref curY, w);
-        }
-
-        // Acceptable Targets checklist (unit IDs)
-        curY += 4;
-        _ui.DrawRect(new Rectangle(x, curY, w, 1), new Color(60, 60, 80));
-        curY += 4;
-        _ui.DrawText("ACCEPTABLE TARGETS", new Vector2(x, curY), new Color(200, 180, 255));
-        curY += 18;
-
-        var unitIDs = _gameData.Units.GetIDs();
-        if (def.AcceptableTargets == null)
-            def.AcceptableTargets = new List<string>();
-
-        // "(all)" hint when empty
-        if (def.AcceptableTargets.Count == 0)
-        {
-            _ui.DrawText("(all units - check to restrict)", new Vector2(x + 4, curY + 2), new Color(120, 120, 140));
-            curY += RowH;
-        }
-
-        // RS25: 2-column layout for acceptable targets
-        int colW = (w - 8) / 2;
-        for (int i = 0; i < unitIDs.Count; i++)
-        {
-            int col = i % 2;
-            int colX = x + 4 + col * colW;
-            var ud = _gameData.Units.Get(unitIDs[i]);
-            string displayLabel = ud?.DisplayName ?? unitIDs[i];
-            bool isChecked = def.AcceptableTargets.Contains(unitIDs[i]);
-            bool newChecked = _ui.DrawCheckbox(displayLabel, isChecked, colX, curY);
-            if (newChecked != isChecked)
-            {
-                if (newChecked)
-                    def.AcceptableTargets.Add(unitIDs[i]);
-                else
-                    def.AcceptableTargets.Remove(unitIDs[i]);
-                MarkDirty();
-            }
-            if (col == 1 || i == unitIDs.Count - 1)
-                curY += RowH;
-        }
-
-        // Cast flipbook ref
-        def.CastFlipbook = DrawFlipbookRefSection("sp_cast_fb", "Cast Effect", def.CastFlipbook, x, ref curY, w);
-    }
-
-    // ===========================
-    //  Summon fields
-    // ===========================
-    private void DrawSummonFields(SpellDef def, int x, ref int curY, int w)
-    {
-        curY += 4;
-        DrawSectionHeader(x, ref curY, w, "SUMMON", new Color(80, 200, 255));
-
-        // Target Requirement
-        string oldReq = def.SummonTargetReq;
-        def.SummonTargetReq = _ui.DrawCombo("sp_sm_req", "Target Req", def.SummonTargetReq,
-            SummonTargetReqOptions, x, curY, w);
-        if (def.SummonTargetReq != oldReq) MarkDirty();
-        curY += RowH;
-
-        // Mode
-        string oldMode = def.SummonMode;
-        def.SummonMode = _ui.DrawCombo("sp_sm_mode", "Mode", def.SummonMode,
-            SummonModeOptions, x, curY, w);
-        if (def.SummonMode != oldMode) MarkDirty();
-        curY += RowH;
-
-        // Unit dropdown
-        def.SummonUnitID = DrawUnitDropdown("sp_sm_unit", "Unit", def.SummonUnitID, x, ref curY, w);
-
-        // Quantity
-        int oldQty = def.SummonQuantity;
-        def.SummonQuantity = _ui.DrawIntField("sp_sm_qty", "Quantity", def.SummonQuantity, x, curY, w);
-        if (def.SummonQuantity != oldQty) MarkDirty();
-        curY += RowH;
-
-        // Spawn Location
-        string oldLoc = def.SpawnLocation;
-        def.SpawnLocation = _ui.DrawCombo("sp_sm_loc", "Spawn At", def.SpawnLocation,
-            SpawnLocOptions, x, curY, w);
-        if (def.SpawnLocation != oldLoc) MarkDirty();
-        curY += RowH;
-
-        // RS10: Acceptable Targets checklist when SummonTargetReq == "UnitType"
-        if (def.SummonTargetReq == "UnitType")
-        {
-            curY += 4;
-            _ui.DrawRect(new Rectangle(x, curY, w, 1), new Color(60, 60, 80));
-            curY += 4;
-            _ui.DrawText("ACCEPTABLE TARGETS", new Vector2(x, curY), new Color(200, 180, 255));
-            curY += 18;
-
-            var unitIDs = _gameData.Units.GetIDs();
-            if (def.AcceptableTargets == null)
-                def.AcceptableTargets = new List<string>();
-
-            // "(all)" hint when empty
-            if (def.AcceptableTargets.Count == 0)
-            {
-                _ui.DrawText("(all units - check to restrict)", new Vector2(x + 4, curY + 2), new Color(120, 120, 140));
-                curY += RowH;
-            }
-
-            // RS25: 2-column layout for acceptable targets
-            int smColW = (w - 8) / 2;
-            for (int i = 0; i < unitIDs.Count; i++)
-            {
-                int col = i % 2;
-                int colX = x + 4 + col * smColW;
-                var ud = _gameData.Units.Get(unitIDs[i]);
-                string displayLabel = ud?.DisplayName ?? unitIDs[i];
-                bool isChecked = def.AcceptableTargets.Contains(unitIDs[i]);
-                bool newChecked = _ui.DrawCheckbox(displayLabel, isChecked, colX, curY);
-                if (newChecked != isChecked)
-                {
-                    if (newChecked)
-                        def.AcceptableTargets.Add(unitIDs[i]);
-                    else
-                        def.AcceptableTargets.Remove(unitIDs[i]);
-                    MarkDirty();
-                }
-                if (col == 1 || i == unitIDs.Count - 1)
-                    curY += RowH;
-            }
-        }
-
-        // Summon flipbook ref
-        def.SummonFlipbook = DrawFlipbookRefSection("sp_sm_fb", "Summon Effect", def.SummonFlipbook, x, ref curY, w);
-    }
-
-    // ===========================
-    //  Strike fields
-    // ===========================
-    private void DrawStrikeFields(SpellDef def, int x, ref int curY, int w)
-    {
-        curY += 4;
-        DrawSectionHeader(x, ref curY, w, "STRIKE", new Color(255, 255, 100));
-
-        // Target Filter row (3 toggle buttons)
-        _ui.DrawText("Target Filter", new Vector2(x, curY + 2), EditorBase.TextDim);
-        int tfBtnW = (w - LabelW - 8) / 3;
-        int tfX = x + LabelW;
-        for (int i = 0; i < TargetFilterOptions.Length; i++)
-        {
-            bool isActive = def.TargetFilter == TargetFilterOptions[i];
-            Color btnColor = isActive ? EditorBase.AccentColor : EditorBase.ButtonBg;
-            if (_ui.DrawButton(TargetFilterOptions[i], tfX + i * (tfBtnW + 4), curY, tfBtnW, 20, btnColor))
-            {
-                def.TargetFilter = TargetFilterOptions[i];
-                MarkDirty();
-            }
-        }
-        curY += RowH;
-
-        // Target toggle (Ground vs Unit)
-        bool oldTarget = def.StrikeTargetUnit;
-        def.StrikeTargetUnit = _ui.DrawCheckbox(def.StrikeTargetUnit ? "Target: Unit (Zap)" : "Target: Ground", def.StrikeTargetUnit, x, curY);
-        if (def.StrikeTargetUnit != oldTarget) MarkDirty();
-        curY += RowH;
-
-        // Visual type
-        string oldVis = def.StrikeVisualType;
-        def.StrikeVisualType = _ui.DrawCombo("sp_st_vis", "Visual", def.StrikeVisualType,
-            StrikeVisualOptions, x, curY, w);
-        if (def.StrikeVisualType != oldVis) MarkDirty();
-        curY += RowH;
-
-        // Damage
-        int oldDmg = def.Damage;
-        def.Damage = _ui.DrawIntField("sp_st_dmg", "Damage", def.Damage, x, curY, w);
-        if (def.Damage != oldDmg) MarkDirty();
-        curY += RowH;
-
-        // RS23: AOE Radius only for ground strikes (not unit-targeted zaps)
-        if (!def.StrikeTargetUnit)
-        {
-            def.AoeRadius = DrawFloatField10x("sp_st_aoer", "AOE Radius", def.AoeRadius, x, ref curY, w);
-        }
-
-        if (!def.StrikeTargetUnit)
-        {
-            // Telegraph, Duration
-            def.TelegraphDuration = DrawFloatField100x("sp_st_tele", "Telegraph", def.TelegraphDuration, x, ref curY, w);
-            def.StrikeDuration = DrawFloatField100x("sp_st_dur", "Duration", def.StrikeDuration, x, ref curY, w);
-        }
-        else
-        {
-            // Zap duration
-            def.ZapDuration = DrawFloatField100x("sp_st_zap", "Zap Duration", def.ZapDuration, x, ref curY, w);
-
-            // Chain Lightning sub-section
-            _ui.DrawText("Chain Lightning:", new Vector2(x, curY + 2), new Color(120, 120, 140));
-            curY += 18;
-
-            int oldCBr = def.StrikeChainBranches;
-            def.StrikeChainBranches = _ui.DrawIntField("sp_st_cbr", "Chain Branches", def.StrikeChainBranches, x, curY, w);
-            if (def.StrikeChainBranches != oldCBr) MarkDirty();
-            curY += RowH;
-
-            int oldCDp = def.StrikeChainDepth;
-            def.StrikeChainDepth = _ui.DrawIntField("sp_st_cdp", "Chain Depth", def.StrikeChainDepth, x, curY, w);
-            if (def.StrikeChainDepth != oldCDp) MarkDirty();
-            curY += RowH;
-
-            def.StrikeChainRange = DrawFloatField10x("sp_st_crng", "Chain Range", def.StrikeChainRange, x, ref curY, w);
-            def.StrikeChainWidthDecay = DrawFloatField100x("sp_st_cwdec", "Chain W.Decay", def.StrikeChainWidthDecay, x, ref curY, w);
-        }
-
-        // Common lightning style fields
-        def.StrikeDisplacement = DrawFloatField100x("sp_st_disp", "Displacement", def.StrikeDisplacement, x, ref curY, w);
-
-        int oldBr = def.StrikeBranches;
-        def.StrikeBranches = _ui.DrawIntField("sp_st_br", "Branches", def.StrikeBranches, x, curY, w);
-        if (def.StrikeBranches != oldBr) MarkDirty();
-        curY += RowH;
-
-        def.StrikeCoreWidth = DrawFloatField10x("sp_st_cw", "Core Width", def.StrikeCoreWidth, x, ref curY, w);
-        def.StrikeGlowWidth = DrawFloatField10x("sp_st_gw", "Glow Width", def.StrikeGlowWidth, x, ref curY, w);
-        def.StrikeFlickerMin = DrawFloatField100x("sp_st_fmin", "Flicker Min", def.StrikeFlickerMin, x, ref curY, w);
-        def.StrikeFlickerMax = DrawFloatField100x("sp_st_fmax", "Flicker Max", def.StrikeFlickerMax, x, ref curY, w);
-        def.StrikeFlickerHz = DrawFloatField10x("sp_st_fhz", "Flicker Hz", def.StrikeFlickerHz, x, ref curY, w);
-        def.StrikeJitterHz = DrawFloatField10x("sp_st_jhz", "Jitter Hz", def.StrikeJitterHz, x, ref curY, w);
-
-        // Core Color swatch
-        def.StrikeCoreColor = DrawHdrColorSwatch("sp_st_core", "Core Color", def.StrikeCoreColor, x, ref curY, w);
-        // Glow Color swatch
-        def.StrikeGlowColor = DrawHdrColorSwatch("sp_st_glow", "Glow Color", def.StrikeGlowColor, x, ref curY, w);
-
-        // God Ray sub-section
-        if (def.StrikeVisualType == "GodRay")
-        {
-            curY += 4;
-            _ui.DrawText("GOD RAY", new Vector2(x, curY), new Color(255, 220, 100));
-            curY += 18;
-            def.GodRayEdgeSoftness = DrawFloatField100x("sp_gr_edge", "Edge Softness", def.GodRayEdgeSoftness, x, ref curY, w);
-            def.GodRayNoiseStrength = DrawFloatField100x("sp_gr_nstr", "Noise Strength", def.GodRayNoiseStrength, x, ref curY, w);
-            def.GodRayNoiseSpeed = DrawFloatField10x("sp_gr_nspd", "Noise Speed", def.GodRayNoiseSpeed, x, ref curY, w);
-            def.GodRayNoiseScale = DrawFloatField10x("sp_gr_nscl", "Noise Scale", def.GodRayNoiseScale, x, ref curY, w);
-        }
-
-        // Hit effect flipbook (for ground strikes)
-        if (!def.StrikeTargetUnit)
-        {
-            def.HitEffectFlipbook = DrawFlipbookRefSection("sp_st_hitfb", "Hit Effect", def.HitEffectFlipbook, x, ref curY, w);
-        }
-    }
-
-    // ===========================
-    //  Beam fields
-    // ===========================
-    private void DrawBeamFields(SpellDef def, int x, ref int curY, int w)
-    {
-        curY += 4;
-        DrawSectionHeader(x, ref curY, w, "BEAM", new Color(100, 220, 255));
-
-        // Damage/Tick
-        int oldDmg = def.Damage;
-        def.Damage = _ui.DrawIntField("sp_bm_dmg", "Damage/Tick", def.Damage, x, curY, w);
-        if (def.Damage != oldDmg) MarkDirty();
-        curY += RowH;
-
-        def.BeamTickRate = DrawFloatField100x("sp_bm_tick", "Tick Rate", def.BeamTickRate, x, ref curY, w);
-        def.BeamMaxDuration = DrawFloatField10x("sp_bm_dur", "Max Duration", def.BeamMaxDuration, x, ref curY, w);
-
-        // Show (unlimited) hint
-        if (def.BeamMaxDuration <= 0.01f)
-        {
-            _ui.DrawText("(unlimited)", new Vector2(x + w - 80, curY - RowH + 4), new Color(120, 120, 140));
-        }
-
-        def.BeamRetargetRadius = DrawFloatField10x("sp_bm_retar", "Retarget Radius", def.BeamRetargetRadius, x, ref curY, w);
-        def.BeamDisplacement = DrawFloatField100x("sp_bm_disp", "Displacement", def.BeamDisplacement, x, ref curY, w);
-
-        int oldBr = def.BeamBranches;
-        def.BeamBranches = _ui.DrawIntField("sp_bm_br", "Branches", def.BeamBranches, x, curY, w);
-        if (def.BeamBranches != oldBr) MarkDirty();
-        curY += RowH;
-
-        def.BeamCoreWidth = DrawFloatField10x("sp_bm_cw", "Core Width", def.BeamCoreWidth, x, ref curY, w);
-        def.BeamGlowWidth = DrawFloatField10x("sp_bm_gw", "Glow Width", def.BeamGlowWidth, x, ref curY, w);
-        def.BeamFlickerMin = DrawFloatField100x("sp_bm_fmin", "Flicker Min", def.BeamFlickerMin, x, ref curY, w);
-        def.BeamFlickerMax = DrawFloatField100x("sp_bm_fmax", "Flicker Max", def.BeamFlickerMax, x, ref curY, w);
-        def.BeamFlickerHz = DrawFloatField10x("sp_bm_fhz", "Flicker Hz", def.BeamFlickerHz, x, ref curY, w);
-        def.BeamJitterHz = DrawFloatField10x("sp_bm_jhz", "Jitter Hz", def.BeamJitterHz, x, ref curY, w);
-
-        // Core/Glow colors
-        def.BeamCoreColor = DrawHdrColorSwatch("sp_bm_core", "Core Color", def.BeamCoreColor, x, ref curY, w);
-        def.BeamGlowColor = DrawHdrColorSwatch("sp_bm_glow", "Glow Color", def.BeamGlowColor, x, ref curY, w);
-
-        // Chain Lightning section
-        _ui.DrawText("Chain Lightning:", new Vector2(x, curY + 2), new Color(120, 120, 140));
-        curY += 18;
-
-        int oldCBr = def.BeamChainBranches;
-        def.BeamChainBranches = _ui.DrawIntField("sp_bm_cbr", "Chain Branches", def.BeamChainBranches, x, curY, w);
-        if (def.BeamChainBranches != oldCBr) MarkDirty();
-        curY += RowH;
-
-        int oldCDp = def.BeamChainDepth;
-        def.BeamChainDepth = _ui.DrawIntField("sp_bm_cdp", "Chain Depth", def.BeamChainDepth, x, curY, w);
-        if (def.BeamChainDepth != oldCDp) MarkDirty();
-        curY += RowH;
-
-        def.BeamChainRange = DrawFloatField10x("sp_bm_crng", "Chain Range", def.BeamChainRange, x, ref curY, w);
-        def.BeamChainWidthDecay = DrawFloatField100x("sp_bm_cwdec", "Chain W.Decay", def.BeamChainWidthDecay, x, ref curY, w);
-    }
-
-    // ===========================
-    //  Drain fields
-    // ===========================
-    private void DrawDrainFields(SpellDef def, int x, ref int curY, int w)
-    {
-        curY += 4;
-        DrawSectionHeader(x, ref curY, w, "DRAIN", new Color(80, 255, 80));
-
-        // Damage/Tick
-        int oldDmg = def.Damage;
-        def.Damage = _ui.DrawIntField("sp_dr_dmg", "Damage/Tick", def.Damage, x, curY, w);
-        if (def.Damage != oldDmg) MarkDirty();
-        curY += RowH;
-
-        def.DrainTickRate = DrawFloatField100x("sp_dr_tick", "Tick Rate", def.DrainTickRate, x, ref curY, w);
-        def.DrainHealPercent = DrawFloatField100x("sp_dr_heal", "Heal %", def.DrainHealPercent, x, ref curY, w);
-
-        // Corpse HP
-        int oldCorpse = def.DrainCorpseHP;
-        def.DrainCorpseHP = _ui.DrawIntField("sp_dr_chp", "Corpse HP", def.DrainCorpseHP, x, curY, w);
-        if (def.DrainCorpseHP != oldCorpse) MarkDirty();
-        curY += RowH;
-
-        def.DrainMaxDuration = DrawFloatField10x("sp_dr_dur", "Max Duration", def.DrainMaxDuration, x, ref curY, w);
-        if (def.DrainMaxDuration <= 0.01f)
-            _ui.DrawText("(unlimited)", new Vector2(x + w - 80, curY - RowH + 4), new Color(120, 120, 140));
-
-        def.DrainBreakRange = DrawFloatField10x("sp_dr_brk", "Break Range", def.DrainBreakRange, x, ref curY, w);
-        if (def.DrainBreakRange <= 0.01f)
-            _ui.DrawText("(off)", new Vector2(x + w - 40, curY - RowH + 4), new Color(120, 120, 140));
-
-        // Reversed toggles
-        bool oldRev = def.DrainReversed;
-        def.DrainReversed = _ui.DrawCheckbox("Reversed", def.DrainReversed, x, curY);
-        if (def.DrainReversed != oldRev) MarkDirty();
-        curY += RowH;
-
-        bool oldVRev = def.DrainVisualReversed;
-        def.DrainVisualReversed = _ui.DrawCheckbox("Visual Reversed", def.DrainVisualReversed, x, curY);
-        if (def.DrainVisualReversed != oldVRev) MarkDirty();
-        curY += RowH;
-
-        // Visuals sub-section
-        curY += 4;
-        _ui.DrawRect(new Rectangle(x, curY, w, 1), new Color(50, 50, 60));
-        curY += 4;
-        _ui.DrawText("Visuals:", new Vector2(x, curY), new Color(120, 120, 140));
-        curY += 18;
-
-        // Tendril count
-        int oldTend = def.DrainTendrilCount;
-        def.DrainTendrilCount = _ui.DrawIntField("sp_dr_tend", "Tendrils", def.DrainTendrilCount, x, curY, w);
-        if (def.DrainTendrilCount != oldTend) MarkDirty();
-        curY += RowH;
-
-        def.DrainArcHeight = DrawFloatField10x("sp_dr_arc", "Arc Height", def.DrainArcHeight, x, ref curY, w);
-        def.DrainSwayAmplitude = DrawFloatField10x("sp_dr_samp", "Sway Amp", def.DrainSwayAmplitude, x, ref curY, w);
-        def.DrainSwayHz = DrawFloatField10x("sp_dr_shz", "Sway Hz", def.DrainSwayHz, x, ref curY, w);
-        def.DrainCoreWidth = DrawFloatField10x("sp_dr_cw", "Core Width", def.DrainCoreWidth, x, ref curY, w);
-        def.DrainGlowWidth = DrawFloatField10x("sp_dr_gw", "Glow Width", def.DrainGlowWidth, x, ref curY, w);
-        def.DrainPulseHz = DrawFloatField10x("sp_dr_phz", "Pulse Hz", def.DrainPulseHz, x, ref curY, w);
-        def.DrainPulseStrength = DrawFloatField100x("sp_dr_pstr", "Pulse Str", def.DrainPulseStrength, x, ref curY, w);
-        def.DrainFlickerMin = DrawFloatField100x("sp_dr_fmin", "Flicker Min", def.DrainFlickerMin, x, ref curY, w);
-        def.DrainFlickerMax = DrawFloatField100x("sp_dr_fmax", "Flicker Max", def.DrainFlickerMax, x, ref curY, w);
-
-        // Core/Glow colors
-        def.DrainCoreColor = DrawHdrColorSwatch("sp_dr_core", "Core Color", def.DrainCoreColor, x, ref curY, w);
-        def.DrainGlowColor = DrawHdrColorSwatch("sp_dr_glow", "Glow Color", def.DrainGlowColor, x, ref curY, w);
-
-        // Target effect flipbook ref
-        def.DrainTargetEffect = DrawFlipbookRefSection("sp_dr_tfb", "Target Effect", def.DrainTargetEffect, x, ref curY, w);
-    }
-
-    // ======================================
     //  FlipbookRef sub-editor (reusable)
     //  Returns the (possibly created) ref
     // ======================================
@@ -1922,51 +1441,6 @@ public class SpellEditorWindow
     }
 
     // ======================================
-    //  Helper: Section header
-    // ======================================
-    private void DrawSectionHeader(int x, ref int curY, int w, string text, Color color)
-    {
-        _ui.DrawRect(new Rectangle(x, curY, w, 1), new Color(60, 60, 80));
-        curY += 6;
-        _ui.DrawText(text, new Vector2(x, curY), color);
-        curY += 22;
-    }
-
-    // ======================================
-    //  Helper: Buff ID dropdown
-    // ======================================
-    private string DrawBuffDropdown(string fieldId, string label, string currentId,
-        int x, ref int curY, int w)
-    {
-        var buffIDs = _gameData.Buffs.GetIDs();
-        var names = new string[buffIDs.Count];
-        int currentIdx = -1;
-        for (int i = 0; i < buffIDs.Count; i++)
-        {
-            var bd = _gameData.Buffs.Get(buffIDs[i]);
-            names[i] = bd?.DisplayName ?? buffIDs[i];
-            if (currentId == buffIDs[i]) currentIdx = i;
-        }
-
-        string currentName = currentIdx >= 0 ? names[currentIdx] : "";
-        string newName = _ui.DrawCombo(fieldId, label, currentName, names, x, curY, w, allowNone: true);
-        curY += RowH;
-
-        if (newName != currentName)
-        {
-            MarkDirty();
-            if (string.IsNullOrEmpty(newName)) return "";
-            for (int i = 0; i < buffIDs.Count; i++)
-            {
-                var bd = _gameData.Buffs.Get(buffIDs[i]);
-                if ((bd?.DisplayName ?? buffIDs[i]) == newName)
-                    return buffIDs[i];
-            }
-        }
-        return currentId;
-    }
-
-    // ======================================
     //  Helper: Flipbook ID dropdown
     // ======================================
     private string DrawFlipbookDropdown(string fieldId, string label, string currentId,
@@ -1995,40 +1469,6 @@ public class SpellEditorWindow
                 var fd = _gameData.Flipbooks.Get(fbIDs[i]);
                 if ((fd?.DisplayName ?? fbIDs[i]) == newName)
                     return fbIDs[i];
-            }
-        }
-        return currentId;
-    }
-
-    // ======================================
-    //  Helper: Unit ID dropdown
-    // ======================================
-    private string DrawUnitDropdown(string fieldId, string label, string currentId,
-        int x, ref int curY, int w)
-    {
-        var unitIDs = _gameData.Units.GetIDs();
-        var names = new string[unitIDs.Count];
-        int currentIdx = -1;
-        for (int i = 0; i < unitIDs.Count; i++)
-        {
-            var ud = _gameData.Units.Get(unitIDs[i]);
-            names[i] = ud?.DisplayName ?? unitIDs[i];
-            if (currentId == unitIDs[i]) currentIdx = i;
-        }
-
-        string currentName = currentIdx >= 0 ? names[currentIdx] : "";
-        string newName = _ui.DrawCombo(fieldId, label, currentName, names, x, curY, w, allowNone: true);
-        curY += RowH;
-
-        if (newName != currentName)
-        {
-            MarkDirty();
-            if (string.IsNullOrEmpty(newName)) return "";
-            for (int i = 0; i < unitIDs.Count; i++)
-            {
-                var ud = _gameData.Units.Get(unitIDs[i]);
-                if ((ud?.DisplayName ?? unitIDs[i]) == newName)
-                    return unitIDs[i];
             }
         }
         return currentId;
