@@ -2957,6 +2957,10 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 else
                     targetState = AnimState.Block;
             }
+            else if (_sim.Units[i].GhostMode)
+            {
+                targetState = AnimState.Hover;
+            }
             else
             {
                 float speed = _sim.Units[i].Velocity.Length();

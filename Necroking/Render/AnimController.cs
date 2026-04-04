@@ -12,6 +12,7 @@ public enum AnimState : byte
     JumpTakeoff, JumpLoop, JumpLand, JumpAttackSetup, JumpAttackHit,
     Ranged1,
     Feeding,
+    Hover,
     Count
 }
 
@@ -127,12 +128,29 @@ public class AnimController
 
     // --- Update ---
 
+    /// <summary>
+    /// Resolves the sprite animation for the current state, applying fallback chains
+    /// (e.g. Hover->Fall->Idle, Run->Walk->Idle).
+    /// </summary>
+    private AnimationData? ResolveAnim()
+    {
+        if (_spriteData == null) return null;
+        var anim = _spriteData.GetAnim(StateToAnimName(_currentState));
+        if (anim != null) return anim;
+
+        if (_currentState == AnimState.Run || _currentState == AnimState.Jog)
+            anim = _spriteData.GetAnim("Walk");
+        else if (_currentState == AnimState.Hover)
+            anim = _spriteData.GetAnim("Fall");
+
+        return anim ?? _spriteData.GetAnim("Idle");
+    }
+
     public void Update(float dt)
     {
         if (_spriteData == null) return;
 
-        string animName = StateToAnimName(_currentState);
-        var anim = _spriteData.GetAnim(animName);
+        var anim = ResolveAnim();
         int totalMs = GetEffectiveTotalDurationMs();
 
         if (totalMs > 0)
@@ -208,17 +226,8 @@ public class AnimController
         var result = new FrameResult();
         if (_spriteData == null) return result;
 
-        string animName = StateToAnimName(_currentState);
-        var anim = _spriteData.GetAnim(animName);
-
-        // Fallback chain
-        if (anim == null)
-        {
-            if (_currentState == AnimState.Run || _currentState == AnimState.Jog)
-                anim = _spriteData.GetAnim("Walk");
-            anim ??= _spriteData.GetAnim("Idle");
-            if (anim == null) return result;
-        }
+        var anim = ResolveAnim();
+        if (anim == null) return result;
 
         int spriteAngle = ResolveAngle(facingAngleDeg, out bool flipX);
         result.FlipX = flipX;
@@ -474,8 +483,21 @@ public class AnimController
     private AnimationMeta? GetCurrentMeta()
     {
         if (_animMeta == null || string.IsNullOrEmpty(_unitName)) return null;
-        string key = AnimMetaLoader.MetaKey(_unitName, StateToAnimName(_currentState));
-        return _animMeta.TryGetValue(key, out var meta) ? meta : null;
+        string animName = StateToAnimName(_currentState);
+        string key = AnimMetaLoader.MetaKey(_unitName, animName);
+        if (_animMeta.TryGetValue(key, out var meta)) return meta;
+
+        // Fallback chain for meta (mirrors ResolveAnim)
+        string? fallback = null;
+        if (_currentState == AnimState.Hover) fallback = "Fall";
+        else if (_currentState == AnimState.Run || _currentState == AnimState.Jog) fallback = "Walk";
+
+        if (fallback != null)
+        {
+            key = AnimMetaLoader.MetaKey(_unitName, fallback);
+            if (_animMeta.TryGetValue(key, out meta)) return meta;
+        }
+        return null;
     }
 
     // --- Static helpers ---
@@ -493,6 +515,7 @@ public class AnimController
         AnimState.JumpLand => "JumpLand", AnimState.JumpAttackSetup => "JumpAttackSetup",
         AnimState.JumpAttackHit => "JumpAttackHit",
         AnimState.Feeding => "Feed",
+        AnimState.Hover => "Hover",
         _ => "Idle"
     };
 
@@ -500,7 +523,7 @@ public class AnimController
     {
         AnimState.Idle or AnimState.Walk or AnimState.Jog or AnimState.Run
             or AnimState.Block or AnimState.Stunned or AnimState.JumpLoop
-            or AnimState.Panic or AnimState.Feeding => AnimPlayMode.Loop,
+            or AnimState.Panic or AnimState.Feeding or AnimState.Hover => AnimPlayMode.Loop,
         AnimState.Death or AnimState.Knockdown or AnimState.Fall => AnimPlayMode.PlayOnceHold,
         _ => AnimPlayMode.PlayOnceTransition
     };
