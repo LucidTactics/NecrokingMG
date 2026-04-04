@@ -39,19 +39,10 @@ public class ItemEditorWindow
     // Clipboard
     private ItemDef? _clipboardItem;
 
-    // Category options
-    private static readonly string[] CategoryOptions =
-        { "material", "potion", "consumable", "equipment" };
-    private static readonly string[] TargetTypeOptions =
-        { "Friendly", "Enemy", "Any", "FriendlyOrCorpse" };
-    private static readonly string[] OnHitEffectOptions =
-        { "", "Frenzy", "Paralysis", "Zombie", "Poison" };
-
     // Layout constants
     private const int ListWidth = 300;
     private const int TopBarH = 50;
     private const int RowH = 24;
-    private const int LabelW = 130;
 
     // Scroll state
     private readonly Dictionary<string, float> _listScrolls = new();
@@ -489,53 +480,10 @@ public class ItemEditorWindow
     // ===========================
     private void DrawPotionFields(PotionDef def, int x, ref int curY, int w)
     {
-        // Target Type
-        string oldTarget = def.TargetType;
-        def.TargetType = _ui.DrawCombo("pot_target", "Target Type", def.TargetType, TargetTypeOptions, x, curY, w);
-        if (def.TargetType != oldTarget) MarkDirty();
-        curY += RowH;
-
-        // Throw Range
-        float oldRange = def.ThrowRange;
-        def.ThrowRange = _ui.DrawFloatField("pot_range", "Throw Range", def.ThrowRange, x, curY, w);
-        if (Math.Abs(def.ThrowRange - oldRange) > 0.001f) MarkDirty();
-        curY += RowH;
-
-        // Projectile Scale
-        float oldScale = def.ProjectileScale;
-        def.ProjectileScale = _ui.DrawFloatField("pot_scale", "Proj. Scale", def.ProjectileScale, x, curY, w);
-        if (Math.Abs(def.ProjectileScale - oldScale) > 0.001f) MarkDirty();
-        curY += RowH;
-
-        // Buff ID
-        string oldBuff = def.BuffID;
-        def.BuffID = _ui.DrawTextField("pot_buff", "Buff ID", def.BuffID, x, curY, w);
-        if (def.BuffID != oldBuff) MarkDirty();
-        curY += RowH;
-
-        // Buff Duration
-        float oldDur = def.BuffDuration;
-        def.BuffDuration = _ui.DrawFloatField("pot_buffdur", "Buff Duration", def.BuffDuration, x, curY, w);
-        if (Math.Abs(def.BuffDuration - oldDur) > 0.001f) MarkDirty();
-        curY += RowH;
-
-        // On Hit Effect
-        string oldEffect = def.OnHitEffect;
-        def.OnHitEffect = _ui.DrawCombo("pot_effect", "On Hit Effect", def.OnHitEffect, OnHitEffectOptions, x, curY, w);
-        if (def.OnHitEffect != oldEffect) MarkDirty();
-        curY += RowH;
-
-        // Hits Corpses
-        bool oldHitsCorpses = def.HitsCorpses;
-        def.HitsCorpses = _ui.DrawCheckbox("Hits Corpses", def.HitsCorpses, x + LabelW, curY);
-        if (def.HitsCorpses != oldHitsCorpses) MarkDirty();
-        curY += RowH;
-
-        // Craft Time
-        float oldCraft = def.CraftTime;
-        def.CraftTime = _ui.DrawFloatField("pot_craft", "Craft Time", def.CraftTime, x, curY, w);
-        if (Math.Abs(def.CraftTime - oldCraft) > 0.001f) MarkDirty();
-        curY += RowH;
+        // Draw all annotated PotionDef fields via reflection
+        var (nextY, changed) = _renderer.DrawAnnotatedProperties("pot", def, x, curY, w);
+        curY = nextY;
+        if (changed) MarkDirty();
 
         // =================== RECIPE ===================
         curY += 4;
