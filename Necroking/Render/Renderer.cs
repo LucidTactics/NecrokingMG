@@ -8,7 +8,6 @@ namespace Necroking.Render;
 public class Renderer
 {
     private int _screenW, _screenH;
-    private int _prevScrollValue;
 
     public int ScreenW => _screenW;
     public int ScreenH => _screenH;
@@ -25,25 +24,21 @@ public class Renderer
         _screenH = h;
     }
 
-    public void HandleCameraInput(Camera25D cam, float dt)
+    public void HandleCameraInput(Camera25D cam, InputState input, float dt)
     {
-        var kb = Microsoft.Xna.Framework.Input.Keyboard.GetState();
         float speed = cam.PanSpeed / cam.Zoom * 32f;
 
-        if (kb.IsKeyDown(Microsoft.Xna.Framework.Input.Keys.W) || kb.IsKeyDown(Microsoft.Xna.Framework.Input.Keys.Up))
+        if (input.IsKeyDown(Microsoft.Xna.Framework.Input.Keys.W) || input.IsKeyDown(Microsoft.Xna.Framework.Input.Keys.Up))
             cam.Position.Y -= speed * dt;
-        if (kb.IsKeyDown(Microsoft.Xna.Framework.Input.Keys.S) || kb.IsKeyDown(Microsoft.Xna.Framework.Input.Keys.Down))
+        if (input.IsKeyDown(Microsoft.Xna.Framework.Input.Keys.S) || input.IsKeyDown(Microsoft.Xna.Framework.Input.Keys.Down))
             cam.Position.Y += speed * dt;
-        if (kb.IsKeyDown(Microsoft.Xna.Framework.Input.Keys.A) || kb.IsKeyDown(Microsoft.Xna.Framework.Input.Keys.Left))
+        if (input.IsKeyDown(Microsoft.Xna.Framework.Input.Keys.A) || input.IsKeyDown(Microsoft.Xna.Framework.Input.Keys.Left))
             cam.Position.X -= speed * dt;
-        if (kb.IsKeyDown(Microsoft.Xna.Framework.Input.Keys.D) || kb.IsKeyDown(Microsoft.Xna.Framework.Input.Keys.Right))
+        if (input.IsKeyDown(Microsoft.Xna.Framework.Input.Keys.D) || input.IsKeyDown(Microsoft.Xna.Framework.Input.Keys.Right))
             cam.Position.X += speed * dt;
 
-        var mouse = Microsoft.Xna.Framework.Input.Mouse.GetState();
-        int scrollDelta = mouse.ScrollWheelValue - _prevScrollValue;
-        _prevScrollValue = mouse.ScrollWheelValue;
-        if (scrollDelta != 0)
-            cam.ZoomBy(scrollDelta / 120f);
+        if (!input.IsScrollConsumed && input.ScrollDelta != 0)
+            cam.ZoomBy(input.ScrollDelta / 120f);
     }
 
     public Vector2 WorldToScreen(Vec2 worldPos, float height, Camera25D cam)

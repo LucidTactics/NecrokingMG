@@ -451,7 +451,7 @@ public class MapEditorWindow
 
     public bool IsMouseOverPanel(int screenW, int screenH)
     {
-        var mouse = Mouse.GetState();
+        var mouse = _eb._input.Mouse;
         int panelX = screenW - PanelWidth - 10;
         int panelY = 10;
         int panelH = screenH - 20;
@@ -494,14 +494,14 @@ public class MapEditorWindow
         if (_envObjectEditor != null && _envObjectEditor.IsOpen)
         {
             _envObjectEditor.Update();
-            _prevMouse = Mouse.GetState();
-            _prevKb = Keyboard.GetState();
+            _prevMouse = _eb._input.Mouse;
+            _prevKb = _eb._input.Kb;
             _prevScrollValue = _prevMouse.ScrollWheelValue;
             return;
         }
 
-        var mouse = Mouse.GetState();
-        var kb = Keyboard.GetState();
+        var mouse = _eb._input.Mouse;
+        var kb = _eb._input.Kb;
         float dt = 1f / 60f; // fixed timestep assumption
 
         // If wall editor overlay is open, skip normal input processing
@@ -762,7 +762,7 @@ public class MapEditorWindow
 
         // Handle Save/Load/Undo button clicks
         {
-            var mouse2 = Mouse.GetState();
+            var mouse2 = _eb._input.Mouse;
             if (mouse2.LeftButton == ButtonState.Pressed && _prevMouse.LeftButton == ButtonState.Released)
             {
                 if (mouse2.Y >= bottomY && mouse2.Y < bottomY + ButtonHeight)
@@ -828,7 +828,7 @@ public class MapEditorWindow
 
     private void DrawTabRows(int panelX, int panelY)
     {
-        var mouse = Mouse.GetState();
+        var mouse = _eb._input.Mouse;
 
         // Row 1: Ground, Grass, Objects, Walls
         int tabW1 = PanelWidth / 4;
@@ -974,7 +974,7 @@ public class MapEditorWindow
     {
         DrawSectionHeader(panelX, ref contentY, $"Ground Types ({_groundSystem.TypeCount})");
 
-        var mouse = Mouse.GetState();
+        var mouse = _eb._input.Mouse;
         float scroll = _tabScroll[0];
         int startY = contentY;
 
@@ -1199,7 +1199,7 @@ public class MapEditorWindow
     {
         DrawSectionHeader(panelX, ref contentY, $"Grass Types ({_grassTypes.Count})");
 
-        var mouse = Mouse.GetState();
+        var mouse = _eb._input.Mouse;
         float scroll = _tabScroll[1];
         int y = contentY - (int)scroll;
 
@@ -1686,7 +1686,7 @@ public class MapEditorWindow
             contentY += ButtonHeight + 4;
         }
 
-        var mouse = Mouse.GetState();
+        var mouse = _eb._input.Mouse;
 
         // Category buttons — wrap to multiple rows if they exceed panel width
         int availW = PanelWidth - Margin * 2;
@@ -1838,7 +1838,7 @@ public class MapEditorWindow
     /// </summary>
     private void DrawCollisionOverlay(int screenW, int screenH)
     {
-        var kb = Keyboard.GetState();
+        var kb = _eb._input.Kb;
         bool showNames = kb.IsKeyDown(Keys.LeftAlt) || kb.IsKeyDown(Keys.RightAlt);
         var collisionColor = new Color(255, 100, 100, 120);
         var nameColor = new Color(255, 220, 100, 220);
@@ -2037,7 +2037,7 @@ public class MapEditorWindow
     {
         DrawSectionHeader(panelX, ref contentY, $"Walls ({_wallSystem.DefCount} types)");
 
-        var mouse = Mouse.GetState();
+        var mouse = _eb._input.Mouse;
         float scroll = _tabScroll[3];
         int y = contentY - (int)scroll;
 
@@ -2274,7 +2274,7 @@ public class MapEditorWindow
     {
         DrawSectionHeader(panelX, ref contentY, $"Roads ({_roadSystem.RoadCount} roads, {_roadSystem.JunctionCount} junctions)");
 
-        var mouse = Mouse.GetState();
+        var mouse = _eb._input.Mouse;
         float scroll = _tabScroll[4];
         int y = contentY - (int)scroll;
 
@@ -2851,7 +2851,7 @@ public class MapEditorWindow
     {
         DrawSectionHeader(panelX, ref contentY, $"Regions ({_triggerSystem.Regions.Count})");
 
-        var mouse = Mouse.GetState();
+        var mouse = _eb._input.Mouse;
         float scroll = _tabScroll[5];
         int y = contentY - (int)scroll;
 
@@ -3236,7 +3236,7 @@ public class MapEditorWindow
     {
         DrawSectionHeader(panelX, ref contentY, "Triggers");
 
-        var mouse = Mouse.GetState();
+        var mouse = _eb._input.Mouse;
 
         // Sub-section tabs: Defs | Instances
         int halfW = (PanelWidth - Margin * 2) / 2;
@@ -3337,7 +3337,7 @@ public class MapEditorWindow
 
                     // Click to select effect
                     var effRect = new Rectangle(panelX + Margin, y, PanelWidth - Margin * 2 - 26, LineHeight);
-                    var effMouse = Mouse.GetState();
+                    var effMouse = _eb._input.Mouse;
                     if (IsInRect(effMouse, effRect) && effMouse.LeftButton == ButtonState.Pressed && _prevMouse.LeftButton == ButtonState.Released)
                         SelectedEffectIndex = ei;
 
@@ -3790,7 +3790,7 @@ public class MapEditorWindow
         _unitListItemH = itemH;
         _unitListVisibleCount = Math.Min(unitIds.Count, visibleItems);
 
-        var mouse = Mouse.GetState();
+        var mouse = _eb._input.Mouse;
         for (int i = 0; i < unitIds.Count && i < visibleItems; i++)
         {
             int scrolledIdx = i + (int)(_unitListScroll / itemH);
@@ -4334,7 +4334,7 @@ public class MapEditorWindow
 
     private void DrawBrushSizeControl(int panelX, int y)
     {
-        var mouse = Mouse.GetState();
+        var mouse = _eb._input.Mouse;
 
         DrawSmallText($"Brush: {BrushRadius}", panelX + Margin + 40, y + 3, TextColor);
 
@@ -4349,7 +4349,7 @@ public class MapEditorWindow
         DrawTextCentered("+", plusRect, TextColor);
 
         // Handle clicks
-        if (Mouse.GetState().LeftButton == ButtonState.Pressed && _prevMouse.LeftButton == ButtonState.Released)
+        if (_eb._input.LeftPressed)
         {
             if (IsInRect(mouse, minusRect)) BrushRadius = Math.Max(0, BrushRadius - 1);
             if (IsInRect(mouse, plusRect)) BrushRadius = Math.Min(20, BrushRadius + 1);
@@ -4358,7 +4358,7 @@ public class MapEditorWindow
 
     private void DrawBrushCursor(int screenW, int screenH)
     {
-        var mouse = Mouse.GetState();
+        var mouse = _eb._input.Mouse;
         Vec2 worldPos = _camera.ScreenToWorld(new Vector2(mouse.X, mouse.Y), screenW, screenH);
 
         // Determine grid snapping based on tab
@@ -4429,7 +4429,7 @@ public class MapEditorWindow
 
     private void DrawButtonRect(string text, int x, int y, int w, int h, Color bg)
     {
-        var mouse = Mouse.GetState();
+        var mouse = _eb._input.Mouse;
         var rect = new Rectangle(x, y, w, h);
         bool hovered = IsInRect(mouse, rect);
         _spriteBatch.Draw(_pixel, rect, hovered ? ButtonHoverColor : bg);

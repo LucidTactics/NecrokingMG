@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
+using Necroking.Core;
 using Necroking.Data;
 using Necroking.Data.Registries;
 using Necroking.GameSystems;
@@ -30,6 +31,7 @@ public class CraftingMenuUI
     private Texture2D _pixel = null!;
 
     private bool _visible;
+    private InputState? _lastInput;
     private int _screenX, _screenY;
     private int _widgetW, _widgetH;
 
@@ -226,17 +228,20 @@ public class CraftingMenuUI
         _inventory.AddItem(potion.ItemID, 1);
     }
 
-    public void Update(MouseState mouse, MouseState prevMouse, int screenW, int screenH, float dt)
+    public void Update(InputState input, int screenW, int screenH, float dt)
     {
+        _lastInput = input;
         if (!_visible) return;
 
         SyncItems();
 
+        int mx = (int)input.MousePos.X, my = (int)input.MousePos.Y;
+
         // Click detection
-        if (mouse.LeftButton == ButtonState.Pressed && prevMouse.LeftButton == ButtonState.Released)
+        if (input.LeftPressed)
         {
             int menuRight = _screenX + _widgetW;
-            if (mouse.X < menuRight && mouse.Y >= 0)
+            if (mx < menuRight && my >= 0)
             {
                 var def = _renderer.GetWidgetDef(MenuWidgetId);
                 if (def != null)
@@ -244,7 +249,7 @@ public class CraftingMenuUI
                     var rects = ComputeItemRects(def);
                     for (int i = 0; i < rects.Count && i < _potionIds.Count; i++)
                     {
-                        if (rects[i].Contains(mouse.X, mouse.Y))
+                        if (rects[i].Contains(mx, my))
                         {
                             var potion = _gameData.Potions.Get(_potionIds[i]);
                             if (potion != null && CanAfford(potion))
@@ -254,6 +259,7 @@ public class CraftingMenuUI
                                 _craftProgress = 0f;
                                 _craftingIndex = i;
                             }
+                            input.ConsumeMouse();
                             break;
                         }
                     }
@@ -300,6 +306,14 @@ public class CraftingMenuUI
 
             bool canAfford = CanAfford(potion);
             bool isSelected = (i == _selectedIndex);
+
+            // Hover highlight
+            if (_lastInput != null)
+            {
+                int hmx = (int)_lastInput.MousePos.X, hmy = (int)_lastInput.MousePos.Y;
+                if (rects[i].Contains(hmx, hmy) && canAfford)
+                    _batch.Draw(_pixel, rects[i], new Color(255, 255, 255, 25));
+            }
 
             if (isSelected)
                 DrawBorder(rects[i], new Color(100, 255, 100, 80), 2);

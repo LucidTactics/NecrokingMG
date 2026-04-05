@@ -862,8 +862,8 @@ public partial class UIEditorWindow : EditorBase
 
     public void Update(int screenW, int screenH)
     {
-        var mouse = Mouse.GetState();
-        var kb = Keyboard.GetState();
+        var mouse = _input.Mouse;
+        var kb = _input.Kb;
         var gt = _lastGameTime ?? new GameTime(TimeSpan.Zero, TimeSpan.FromSeconds(1.0 / 60));
         UpdateInput(mouse, _prevMouseLocal, kb, _prevKb, screenW, screenH, gt);
         _textureBrowser.Update(mouse, _prevMouseLocal, kb, _prevKb);
@@ -1059,7 +1059,7 @@ public partial class UIEditorWindow : EditorBase
     {
         int margin = 30;
         var r = new Rectangle(margin, margin, screenW - margin * 2, screenH - margin * 2);
-        var mouse = Mouse.GetState();
+        var mouse = _input.Mouse;
         return r.Contains(mouse.X, mouse.Y);
     }
 

@@ -130,7 +130,7 @@ public class SettingsWindow
 
         // Handle scroll
         int tabIdx = (int)_activeTab;
-        var mouse = Mouse.GetState();
+        var mouse = _ui._input.Mouse;
         var prevMouse = _ui._prevMouse;
         if (clipRect.Contains(mouse.X, mouse.Y) && !_ui.IsScrollConsumed)
         {

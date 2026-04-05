@@ -2,6 +2,7 @@ using System;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
+using Necroking.Core;
 using Necroking.Data.Registries;
 using Necroking.GameSystems;
 using Necroking.UI;
@@ -131,28 +132,31 @@ public class InventoryUI
     public void Close() => _visible = false;
 
     /// <summary>Sync inventory state to widget visual overrides. Call before Draw.</summary>
-    public void Update(MouseState mouse, KeyboardState kb)
+    public void Update(InputState input)
     {
         if (!_visible) return;
 
+        int mx = (int)input.MousePos.X, my = (int)input.MousePos.Y;
+
         // Window dragging
-        if (mouse.LeftButton == ButtonState.Pressed)
+        if (input.LeftDown)
         {
             if (!_dragging)
             {
                 // Start drag if clicking on title bar area (top 90px)
                 var titleRect = new Rectangle(_screenX, _screenY, _widgetW, 90);
-                if (titleRect.Contains(mouse.X, mouse.Y))
+                if (titleRect.Contains(mx, my))
                 {
                     _dragging = true;
-                    _dragOffsetX = mouse.X - _screenX;
-                    _dragOffsetY = mouse.Y - _screenY;
+                    _dragOffsetX = mx - _screenX;
+                    _dragOffsetY = my - _screenY;
+                    input.ConsumeMouse();
                 }
             }
             if (_dragging)
             {
-                _screenX = mouse.X - _dragOffsetX;
-                _screenY = mouse.Y - _dragOffsetY;
+                _screenX = mx - _dragOffsetX;
+                _screenY = my - _dragOffsetY;
             }
         }
         else

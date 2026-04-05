@@ -32,6 +32,7 @@ public class BuildingMenuUI
     private Texture2D _pixel = null!;
 
     private bool _visible;
+    private InputState? _lastInput;
     private int _screenX, _screenY;
     private int _widgetW, _widgetH;
 
@@ -247,18 +248,21 @@ public class BuildingMenuUI
             _inventory.RemoveItem(def.Cost2ItemId, def.Cost2Amount);
     }
 
-    public void Update(MouseState mouse, MouseState prevMouse, int screenW, int screenH)
+    public void Update(InputState input, int screenW, int screenH)
     {
+        _lastInput = input;
         if (!_visible) return;
 
         SyncItems();
 
+        int mx = (int)input.MousePos.X, my = (int)input.MousePos.Y;
+
         // Click detection on building items
-        if (mouse.LeftButton == ButtonState.Pressed && prevMouse.LeftButton == ButtonState.Released)
+        if (input.LeftPressed)
         {
             // Check if click is within the menu panel
             int menuRight = _screenX + _widgetW;
-            if (mouse.X < menuRight && mouse.Y >= 0)
+            if (mx < menuRight && my >= 0)
             {
                 // Hit-test against item rects
                 var def = _renderer.GetWidgetDef(MenuWidgetId);
@@ -267,7 +271,7 @@ public class BuildingMenuUI
                     var rects = ComputeItemRects(def);
                     for (int i = 0; i < rects.Count && i < _buildableDefIndices.Count; i++)
                     {
-                        if (rects[i].Contains(mouse.X, mouse.Y))
+                        if (rects[i].Contains(mx, my))
                         {
                             int envDefIdx = _buildableDefIndices[i];
                             var envDef = _envSystem.Defs[envDefIdx];
@@ -276,6 +280,7 @@ public class BuildingMenuUI
                                 _selectedIndex = i;
                                 _placementActive = true;
                             }
+                            input.ConsumeMouse();
                             break;
                         }
                     }
@@ -284,7 +289,7 @@ public class BuildingMenuUI
         }
 
         // Right-click or Escape cancels placement
-        if (_placementActive && mouse.RightButton == ButtonState.Pressed && prevMouse.RightButton == ButtonState.Released)
+        if (_placementActive && input.RightPressed)
         {
             _placementActive = false;
             _selectedIndex = -1;
@@ -340,17 +345,24 @@ public class BuildingMenuUI
             bool canAfford = CanAfford(envDef);
             bool isSelected = (i == _selectedIndex && _placementActive);
 
+            // Hover highlight
+            if (_lastInput != null)
+            {
+                var r = rects[i];
+                int hmx = (int)_lastInput.MousePos.X, hmy = (int)_lastInput.MousePos.Y;
+                if (r.Contains(hmx, hmy) && canAfford)
+                    DrawRect(r, new Color(255, 255, 255, 25));
+            }
+
             // Selected highlight
             if (isSelected)
             {
-                // Subtle green border for selected
                 var r = rects[i];
                 DrawBorder(r, new Color(100, 255, 100, 80), 2);
             }
 
             if (!canAfford)
             {
-                // Dim overlay for unaffordable
                 var r = rects[i];
                 DrawRect(r, new Color(0, 0, 0, 80));
             }

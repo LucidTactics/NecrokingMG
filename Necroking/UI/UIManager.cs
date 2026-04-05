@@ -55,14 +55,13 @@ public class UIManager
 
     public void CloseAll() => _activeWidgets.Clear();
 
-    public void Update()
+    public void Update(Core.InputState input)
     {
-        var mouseState = Microsoft.Xna.Framework.Input.Mouse.GetState();
-        var mousePos = new Vector2(mouseState.X, mouseState.Y);
-        bool mouseDown = mouseState.LeftButton == Microsoft.Xna.Framework.Input.ButtonState.Pressed;
+        bool mouseDown = input.LeftDown;
+        bool mouseReleased = input.LeftReleased;
 
         foreach (var aw in _activeWidgets)
-            aw.Widget.Update(aw.ScreenPos, mousePos, mouseDown, false);
+            aw.Widget.Update(aw.ScreenPos, input.MousePos, mouseDown, mouseReleased);
     }
 
     public void Draw(SpriteBatch batch)

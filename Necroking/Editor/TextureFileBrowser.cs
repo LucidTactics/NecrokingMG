@@ -130,7 +130,7 @@ public class TextureFileBrowser
     {
         if (!_isOpen) return;
 
-        var mouse = Mouse.GetState();
+        var mouse = ui._input.Mouse;
 
         // Block input to layers beneath
         ui.InputLayer = Math.Max(ui.InputLayer, 1);

@@ -1,4 +1,3 @@
-using System;
 using Necroking.Core;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Input;
@@ -17,19 +16,17 @@ public class Camera25D
     public float MinZoom = 4.0f;
     public float MaxZoom = 128.0f;
 
-    public void HandleInput(float dt, int screenW, int screenH)
+    public void HandleInput(InputState input, float dt)
     {
-        var kb = Keyboard.GetState();
         float speed = PanSpeed / Zoom * 32.0f;
 
-        if (kb.IsKeyDown(Keys.W) || kb.IsKeyDown(Keys.Up)) Position.Y -= speed * dt;
-        if (kb.IsKeyDown(Keys.S) || kb.IsKeyDown(Keys.Down)) Position.Y += speed * dt;
-        if (kb.IsKeyDown(Keys.A) || kb.IsKeyDown(Keys.Left)) Position.X -= speed * dt;
-        if (kb.IsKeyDown(Keys.D) || kb.IsKeyDown(Keys.Right)) Position.X += speed * dt;
+        if (input.IsKeyDown(Keys.W) || input.IsKeyDown(Keys.Up)) Position.Y -= speed * dt;
+        if (input.IsKeyDown(Keys.S) || input.IsKeyDown(Keys.Down)) Position.Y += speed * dt;
+        if (input.IsKeyDown(Keys.A) || input.IsKeyDown(Keys.Left)) Position.X -= speed * dt;
+        if (input.IsKeyDown(Keys.D) || input.IsKeyDown(Keys.Right)) Position.X += speed * dt;
 
-        var mouse = Mouse.GetState();
-        int wheel = mouse.ScrollWheelValue;
-        // MonoGame scroll is cumulative, need delta tracking
+        if (!input.IsScrollConsumed && input.ScrollDelta != 0)
+            ZoomBy(input.ScrollDelta / 120f);
     }
 
     public Vector2 WorldToScreen(Vec2 worldPos, float height, int screenW, int screenH)

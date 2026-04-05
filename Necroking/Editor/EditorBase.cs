@@ -45,6 +45,9 @@ public class EditorBase
     internal MouseState _prevMouse;
     internal KeyboardState _kb;
     internal KeyboardState _prevKb;
+    internal InputState _input = new();
+    /// <summary>Current mouse position from the centralized input state.</summary>
+    public Vector2 MousePos => _input.MousePos;
     protected int _screenW, _screenH;
 
     // INF02: Global scroll consumed flag
@@ -140,12 +143,13 @@ public class EditorBase
     }
 
     public void UpdateInput(MouseState mouse, MouseState prevMouse, KeyboardState kb, KeyboardState prevKb,
-        int screenW, int screenH, GameTime gameTime)
+        int screenW, int screenH, GameTime gameTime, InputState? input = null)
     {
         _mouse = mouse;
         _prevMouse = prevMouse;
         _kb = kb;
         _prevKb = prevKb;
+        if (input != null) _input = input;
         _screenW = screenW;
         _screenH = screenH;
         _cursorBlink += (float)gameTime.ElapsedGameTime.TotalSeconds;

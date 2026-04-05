@@ -110,11 +110,10 @@ public class Game1 : Microsoft.Xna.Framework.Game
     private readonly Dictionary<string, Texture2D?> _itemTextureCache = new();
     private float _spellDropdownScroll;
     private int _hoveredObjectIdx = -1;
-    private int _prevScrollValue;
     private KeyboardState _prevKb;
     private MouseState _prevMouse;
     private float _rawDt;
-    private bool _mouseOverUI;
+    private readonly InputState _input = new();
     private float _editorPanTime; // ramp-up timer for editor camera panning
 
     // Pending projectiles (multi-projectile delay)
@@ -1141,6 +1140,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         _largeFont = Content.Load<SpriteFont>("LargeFont");
         _debugDraw.SetFont(_smallFont);
         _hudRenderer.Init(_spriteBatch, _pixel, _font, _smallFont);
+        _hudRenderer.SetInput(_input);
 
         // Load TrueType fonts via FontStashSharp (dynamic sizing)
         _fontManager.LoadFontsFromDirectory(GamePaths.Resolve(GamePaths.FontsDir));
@@ -1228,6 +1228,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
     {
         var kb = Keyboard.GetState();
         var mouse = Mouse.GetState();
+        _input.Capture(mouse, _prevMouse, kb, _prevKb);
         _rawDt = (float)gameTime.ElapsedGameTime.TotalSeconds;
         float rawDt = _rawDt;
         float dt = MathF.Min(rawDt, 1f / 20f) * _timeScale;
@@ -1248,7 +1249,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // --- Main menu ---
         if (_menuState == MenuState.MainMenu)
         {
-            if (mouse.LeftButton == ButtonState.Pressed && _prevMouse.LeftButton == ButtonState.Released)
+            if (_input.LeftPressed)
             {
                 int screenW2 = GraphicsDevice.Viewport.Width;
                 int screenH2 = GraphicsDevice.Viewport.Height;
@@ -1293,7 +1294,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         if (_menuState == MenuState.ScenarioList)
         {
             // Escape to go back
-            if (WasKeyPressed(kb, Keys.Escape))
+            if (_input.WasKeyPressed(Keys.Escape))
             {
                 _menuState = MenuState.MainMenu;
                 _prevKb = kb;
@@ -1303,12 +1304,10 @@ public class Game1 : Microsoft.Xna.Framework.Game
             }
 
             // Scroll
-            int scenScrollDelta = mouse.ScrollWheelValue - _prevScrollValue;
-            _prevScrollValue = mouse.ScrollWheelValue;
-            if (scenScrollDelta > 0) _scenarioScrollOffset = Math.Max(0, _scenarioScrollOffset - 1);
-            if (scenScrollDelta < 0) _scenarioScrollOffset++;
+            if (_input.ScrollDelta > 0) _scenarioScrollOffset = Math.Max(0, _scenarioScrollOffset - 1);
+            if (_input.ScrollDelta < 0) _scenarioScrollOffset++;
 
-            if (mouse.LeftButton == ButtonState.Pressed && _prevMouse.LeftButton == ButtonState.Released)
+            if (_input.LeftPressed)
             {
                 int screenW2 = GraphicsDevice.Viewport.Width;
                 int screenH2 = GraphicsDevice.Viewport.Height;
@@ -1349,37 +1348,37 @@ public class Game1 : Microsoft.Xna.Framework.Game
             || (_menuState == MenuState.UIEditor && _uiEditor.IsTextInputActive);
 
         // --- F7 gameplay debug toggle (Off → Horde → Unit Info → Off) ---
-        if (!anyTextInputActive && WasKeyPressed(kb, Keys.F7))
+        if (!anyTextInputActive && _input.WasKeyPressed(Keys.F7))
             _gameplayDebugMode = (_gameplayDebugMode + 1) % 3;
 
         // --- F8 collision debug toggle ---
-        if (!anyTextInputActive && WasKeyPressed(kb, Keys.F8))
+        if (!anyTextInputActive && _input.WasKeyPressed(Keys.F8))
         {
             _collisionDebugMode = (CollisionDebugMode)(((int)_collisionDebugMode + 1) % (int)CollisionDebugMode.Count);
         }
 
         // --- F9-F12 editor toggles ---
-        if (!anyTextInputActive && WasKeyPressed(kb, Keys.F9))
+        if (!anyTextInputActive && _input.WasKeyPressed(Keys.F9))
         {
             _menuState = _menuState == MenuState.UnitEditor ? MenuState.None : MenuState.UnitEditor;
             _editorUi.ClearActiveField();
         }
-        if (!anyTextInputActive && WasKeyPressed(kb, Keys.F10))
+        if (!anyTextInputActive && _input.WasKeyPressed(Keys.F10))
         {
             _menuState = _menuState == MenuState.SpellEditor ? MenuState.None : MenuState.SpellEditor;
             _editorUi.ClearActiveField();
         }
-        if (!anyTextInputActive && WasKeyPressed(kb, Keys.F11))
+        if (!anyTextInputActive && _input.WasKeyPressed(Keys.F11))
             _menuState = _menuState == MenuState.MapEditor ? MenuState.None : MenuState.MapEditor;
-        if (!anyTextInputActive && WasKeyPressed(kb, Keys.F12))
+        if (!anyTextInputActive && _input.WasKeyPressed(Keys.F12))
             _menuState = _menuState == MenuState.UIEditor ? MenuState.None : MenuState.UIEditor;
 
         // 'I' key toggles inventory
-        if (!anyTextInputActive && WasKeyPressed(kb, Keys.I) && _menuState == MenuState.None)
+        if (!anyTextInputActive && _input.WasKeyPressed(Keys.I) && _menuState == MenuState.None)
             _inventoryUI.Toggle(GraphicsDevice.Viewport.Width, GraphicsDevice.Viewport.Height);
 
         // --- Pause menu button clicks ---
-        if (_menuState == MenuState.PauseMenu && mouse.LeftButton == ButtonState.Pressed && _prevMouse.LeftButton == ButtonState.Released)
+        if (_menuState == MenuState.PauseMenu && _input.LeftPressed)
         {
             int sw = GraphicsDevice.Viewport.Width;
             int sh = GraphicsDevice.Viewport.Height;
@@ -1439,7 +1438,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // When a popup (color picker, texture browser, confirm dialog) is open, don't close the editor.
         bool popupOpen = _editorUi.IsColorPickerOpen || _editorUi.IsDropdownOpen
             || (_menuState == MenuState.UIEditor && (_uiEditor.IsColorPickerOpen || _uiEditor.IsDropdownOpen));
-        if (!anyTextInputActive && !popupOpen && WasKeyPressed(kb, Keys.Escape))
+        if (!anyTextInputActive && !popupOpen && _input.WasKeyPressed(Keys.Escape))
         {
             if (_menuState == MenuState.Settings)
             {
@@ -1482,7 +1481,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         int screenH = GraphicsDevice.Viewport.Height;
         // Update EditorBase input first so _eb has current mouse/keyboard state for all editors
         if (_menuState == MenuState.UnitEditor || _menuState == MenuState.SpellEditor || _menuState == MenuState.MapEditor || _menuState == MenuState.Settings || _menuState == MenuState.ItemEditor)
-            _editorUi.UpdateInput(mouse, _prevMouse, kb, _prevKb, screenW, screenH, gameTime);
+            _editorUi.UpdateInput(mouse, _prevMouse, kb, _prevKb, screenW, screenH, gameTime, _input);
         if (_menuState == MenuState.MapEditor && _gameWorldLoaded)
             _mapEditor.Update(screenW, screenH);
         if (_menuState == MenuState.Settings)
@@ -1504,10 +1503,10 @@ public class Game1 : Microsoft.Xna.Framework.Game
             if (_menuState != MenuState.MapEditor && !anyTextInputActive)
             {
                 Vec2 camMove = Vec2.Zero;
-                if (kb.IsKeyDown(Keys.Up) || kb.IsKeyDown(Keys.W)) camMove.Y -= 1f;
-                if (kb.IsKeyDown(Keys.Down) || kb.IsKeyDown(Keys.S)) camMove.Y += 1f;
-                if (kb.IsKeyDown(Keys.Left) || kb.IsKeyDown(Keys.A)) camMove.X -= 1f;
-                if (kb.IsKeyDown(Keys.Right) || kb.IsKeyDown(Keys.D)) camMove.X += 1f;
+                if (_input.IsKeyDown(Keys.Up) || _input.IsKeyDown(Keys.W)) camMove.Y -= 1f;
+                if (_input.IsKeyDown(Keys.Down) || _input.IsKeyDown(Keys.S)) camMove.Y += 1f;
+                if (_input.IsKeyDown(Keys.Left) || _input.IsKeyDown(Keys.A)) camMove.X -= 1f;
+                if (_input.IsKeyDown(Keys.Right) || _input.IsKeyDown(Keys.D)) camMove.X += 1f;
                 if (camMove.LengthSq() > 0.01f)
                 {
                     _editorPanTime += rawDt;
@@ -1532,60 +1531,46 @@ public class Game1 : Microsoft.Xna.Framework.Game
             // Free camera pan with arrow keys (scenarios or when no necromancer)
             float camSpeed = 400f / MathF.Max(1f, _camera.Zoom);
             Vec2 camMove = Vec2.Zero;
-            if (kb.IsKeyDown(Keys.Up)) camMove.Y -= 1f;
-            if (kb.IsKeyDown(Keys.Down)) camMove.Y += 1f;
-            if (kb.IsKeyDown(Keys.Left)) camMove.X -= 1f;
-            if (kb.IsKeyDown(Keys.Right)) camMove.X += 1f;
+            if (_input.IsKeyDown(Keys.Up)) camMove.Y -= 1f;
+            if (_input.IsKeyDown(Keys.Down)) camMove.Y += 1f;
+            if (_input.IsKeyDown(Keys.Left)) camMove.X -= 1f;
+            if (_input.IsKeyDown(Keys.Right)) camMove.X += 1f;
             if (camMove.LengthSq() > 0.01f)
                 _camera.Position += camMove.Normalized() * camSpeed * rawDt;
         }
 
-        // Scroll zoom (always active)
-        int scrollDelta = mouse.ScrollWheelValue - _prevScrollValue;
-        _prevScrollValue = mouse.ScrollWheelValue;
-        bool scrollOverUI = _mouseOverUI
-            || (_menuState == MenuState.MapEditor && _mapEditor.IsMouseOverPanel(screenW, screenH));
-        if (scrollDelta != 0 && (_menuState == MenuState.None || _menuState == MenuState.MapEditor) && !scrollOverUI)
-            _camera.ZoomBy(scrollDelta / 120f);
-
-        // Editors pause the game
-        bool editorActive = _menuState == MenuState.UnitEditor || _menuState == MenuState.SpellEditor
-            || _menuState == MenuState.MapEditor || _menuState == MenuState.UIEditor;
-
-        // --- IsMouseOverUI: reset each frame, then test UI elements ---
-        _mouseOverUI = false;
+        // --- IsMouseOverUI: test UI element bounds ---
         if (_menuState == MenuState.None)
         {
+            int mx = mouse.X, my = mouse.Y;
+
             // Primary spell bar area (4 slots, 50x50, centered bottom)
             int uiSlotW = 50, uiSlotH = 50;
             int uiSlotY = screenH - 95;
             int uiBarX = screenW / 2 - 110;
-            if (mouse.X >= uiBarX && mouse.X < uiBarX + 4 * (uiSlotW + 4) && mouse.Y >= uiSlotY && mouse.Y < uiSlotY + uiSlotH)
-                _mouseOverUI = true;
+            if (mx >= uiBarX && mx < uiBarX + 4 * (uiSlotW + 4) && my >= uiSlotY && my < uiSlotY + uiSlotH)
+                _input.MouseOverUI = true;
 
             // Secondary spell bar area (4 slots, 35x35, above primary)
             int secW = 35, secH = 35;
             int secY = uiSlotY - secH - 6;
             int secBarX = screenW / 2 - 80;
-            if (mouse.X >= secBarX && mouse.X < secBarX + 4 * (secW + 4) && mouse.Y >= secY && mouse.Y < secY + secH)
-                _mouseOverUI = true;
+            if (mx >= secBarX && mx < secBarX + 4 * (secW + 4) && my >= secY && my < secY + secH)
+                _input.MouseOverUI = true;
 
             // Spell dropdown open
             if (_spellDropdownSlot >= 0 || _secondaryDropdownSlot >= 0 || _potionDropdownSlot >= 0)
-                _mouseOverUI = true;
+                _input.MouseOverUI = true;
 
             // Inventory window
-            if (_inventoryUI.ContainsMouse(mouse.X, mouse.Y))
-                _mouseOverUI = true;
+            if (_inventoryUI.ContainsMouse(mx, my))
+                _input.MouseOverUI = true;
 
             // Building menu
-            if (_buildingMenuUI.ContainsMouse(mouse.X, mouse.Y))
-                _mouseOverUI = true;
-            if (_craftingMenu.ContainsMouse(mouse.X, mouse.Y))
-                _mouseOverUI = true;
-
-            // Building placement panel (left side, editor mode)
-            // (handled by BuildingMenuUI.ContainsMouse above)
+            if (_buildingMenuUI.ContainsMouse(mx, my))
+                _input.MouseOverUI = true;
+            if (_craftingMenu.ContainsMouse(mx, my))
+                _input.MouseOverUI = true;
 
             // Time control buttons (bottom-right)
             if (_gameData.Settings.General.ShowTimeControls)
@@ -1594,10 +1579,20 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 int tcTotalW = tcNum * tcBtnW + (tcNum - 1) * tcGap;
                 int tcX = screenW - tcTotalW - 10;
                 int tcY = screenH - 52;
-                if (mouse.X >= tcX && mouse.X < tcX + tcTotalW && mouse.Y >= tcY && mouse.Y < tcY + tcBtnH)
-                    _mouseOverUI = true;
+                if (mx >= tcX && mx < tcX + tcTotalW && my >= tcY && my < tcY + tcBtnH)
+                    _input.MouseOverUI = true;
             }
         }
+
+        // Scroll zoom (always active, but not when over UI)
+        bool scrollOverUI = _input.MouseOverUI
+            || (_menuState == MenuState.MapEditor && _mapEditor.IsMouseOverPanel(screenW, screenH));
+        if (_input.ScrollDelta != 0 && (_menuState == MenuState.None || _menuState == MenuState.MapEditor) && !scrollOverUI)
+            _camera.ZoomBy(_input.ScrollDelta / 120f);
+
+        // Editors pause the game
+        bool editorActive = _menuState == MenuState.UnitEditor || _menuState == MenuState.SpellEditor
+            || _menuState == MenuState.MapEditor || _menuState == MenuState.UIEditor;
 
         if (!_paused && !editorActive)
         {
@@ -1608,13 +1603,13 @@ public class Game1 : Microsoft.Xna.Framework.Game
             {
                 // WASD movement
                 Vec2 moveDir = Vec2.Zero;
-                if (kb.IsKeyDown(Keys.W)) moveDir.Y -= 1f;
-                if (kb.IsKeyDown(Keys.S)) moveDir.Y += 1f;
-                if (kb.IsKeyDown(Keys.A)) moveDir.X -= 1f;
-                if (kb.IsKeyDown(Keys.D)) moveDir.X += 1f;
+                if (_input.IsKeyDown(Keys.W)) moveDir.Y -= 1f;
+                if (_input.IsKeyDown(Keys.S)) moveDir.Y += 1f;
+                if (_input.IsKeyDown(Keys.A)) moveDir.X -= 1f;
+                if (_input.IsKeyDown(Keys.D)) moveDir.X += 1f;
                 if (moveDir.LengthSq() > 0.01f) moveDir = moveDir.Normalized();
 
-                bool running = kb.IsKeyDown(Keys.LeftShift) || kb.IsKeyDown(Keys.RightShift);
+                bool running = _input.IsKeyDown(Keys.LeftShift) || _input.IsKeyDown(Keys.RightShift);
                 _sim.SetNecromancerInput(moveDir, running);
 
                 // Mouse facing
@@ -1628,7 +1623,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
             }
 
             // --- Jump input (Space = jump attack) ---
-            if (WasKeyPressed(kb, Keys.Space) && necroIdx >= 0)
+            if (_input.WasKeyPressed(Keys.Space) && necroIdx >= 0)
             {
                 var mu = _sim.UnitsMut;
                 bool canJump = mu[necroIdx].Alive && !mu[necroIdx].Jumping
@@ -1653,10 +1648,10 @@ public class Game1 : Microsoft.Xna.Framework.Game
             {
                 bool stillHeld = _channelingSlot switch
                 {
-                    0 => kb.IsKeyDown(Keys.Q),
-                    1 => kb.IsKeyDown(Keys.E),
-                    2 => mouse.LeftButton == ButtonState.Pressed,
-                    3 => mouse.RightButton == ButtonState.Pressed,
+                    0 => _input.IsKeyDown(Keys.Q),
+                    1 => _input.IsKeyDown(Keys.E),
+                    2 => _input.LeftDown,
+                    3 => _input.RightDown,
                     _ => false
                 };
                 if (!stillHeld)
@@ -1671,7 +1666,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
             }
 
             // --- Spell bar click interaction ---
-            if (mouse.LeftButton == ButtonState.Pressed && _prevMouse.LeftButton == ButtonState.Released)
+            if (_input.LeftPressed)
             {
                 int slotW2 = 50, slotH2 = 50;
                 int slotY2 = screenH - 95;
@@ -1797,10 +1792,10 @@ public class Game1 : Microsoft.Xna.Framework.Game
             {
                 bool pressed = slot switch
                 {
-                    0 => WasKeyPressed(kb, Keys.Q),
-                    1 => WasKeyPressed(kb, Keys.E),
-                    2 => !_mouseOverUI && mouse.LeftButton == ButtonState.Pressed && _prevMouse.LeftButton == ButtonState.Released,
-                    3 => !_mouseOverUI && mouse.RightButton == ButtonState.Pressed && _prevMouse.RightButton == ButtonState.Released,
+                    0 => _input.WasKeyPressed(Keys.Q),
+                    1 => _input.WasKeyPressed(Keys.E),
+                    2 => !_input.MouseOverUI && _input.LeftPressed,
+                    3 => !_input.MouseOverUI && _input.RightPressed,
                     _ => false
                 };
 
@@ -2006,7 +2001,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
             SkipSpellCast:
 
             // --- Ghost mode toggle (G) ---
-            if (WasKeyPressed(kb, Keys.G) && necroIdx >= 0)
+            if (_input.WasKeyPressed(Keys.G) && necroIdx >= 0)
                 _sim.UnitsMut[necroIdx].GhostMode = !_sim.Units[necroIdx].GhostMode;
 
             // --- Secondary spell bar (keys 1-4) ---
@@ -2015,7 +2010,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 Keys[] secKeys = { Keys.D1, Keys.D2, Keys.D3, Keys.D4 };
                 for (int sk = 0; sk < 4; sk++)
                 {
-                    if (!WasKeyPressed(kb, secKeys[sk])) continue;
+                    if (!_input.WasKeyPressed(secKeys[sk])) continue;
                     if (sk >= _secondaryBarState.Slots.Length) continue;
                     string secSpellId = _secondaryBarState.Slots[sk].SpellID;
                     if (string.IsNullOrEmpty(secSpellId)) continue;
@@ -2126,7 +2121,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 Keys[] potionKeys = { Keys.D5, Keys.D6 };
                 for (int pk = 0; pk < 2; pk++)
                 {
-                    if (!WasKeyPressed(kb, potionKeys[pk])) continue;
+                    if (!_input.WasKeyPressed(potionKeys[pk])) continue;
                     if (string.IsNullOrEmpty(_potionSlots[pk])) continue;
                     if (_inventory.GetItemCount(_potionSlots[pk]) <= 0) continue;
                     _activePotionSlot = (_activePotionSlot == pk) ? -1 : pk;
@@ -2134,8 +2129,8 @@ public class Game1 : Microsoft.Xna.Framework.Game
             }
 
             // Potion throw on left-click when a potion slot is active
-            if (_activePotionSlot >= 0 && necroIdx >= 0 && !_mouseOverUI
-                && mouse.LeftButton == ButtonState.Pressed && _prevMouse.LeftButton == ButtonState.Released)
+            if (_activePotionSlot >= 0 && necroIdx >= 0 && !_input.MouseOverUI
+                && _input.LeftPressed)
             {
                 string potionItemId = _potionSlots[_activePotionSlot];
                 var potionDef = FindPotionByItemId(potionItemId);
@@ -2165,11 +2160,11 @@ public class Game1 : Microsoft.Xna.Framework.Game
             }
 
             // Cancel potion selection on right-click
-            if (_activePotionSlot >= 0 && mouse.RightButton == ButtonState.Pressed && _prevMouse.RightButton == ButtonState.Released)
+            if (_activePotionSlot >= 0 && _input.RightPressed)
                 _activePotionSlot = -1;
 
             // --- Corpse drag (F key) ---
-            if (WasKeyPressed(kb, Keys.F) && necroIdx >= 0)
+            if (_input.WasKeyPressed(Keys.F) && necroIdx >= 0)
             {
                 int currentDrag = _sim.Units[necroIdx].DraggingCorpseIdx;
                 if (currentDrag >= 0)
@@ -2212,14 +2207,14 @@ public class Game1 : Microsoft.Xna.Framework.Game
             }
 
             // --- Building placement toggle (B) ---
-            if (WasKeyPressed(kb, Keys.B))
+            if (_input.WasKeyPressed(Keys.B))
             {
                 if (_craftingMenu.IsVisible) _craftingMenu.Close();
                 _buildingMenuUI.Toggle(screenW, screenH);
             }
 
             // --- Crafting menu toggle (C) ---
-            if (WasKeyPressed(kb, Keys.C))
+            if (_input.WasKeyPressed(Keys.C))
             {
                 if (_buildingMenuUI.IsVisible) _buildingMenuUI.Close();
                 _craftingMenu.Toggle(screenW, screenH);
@@ -2228,13 +2223,13 @@ public class Game1 : Microsoft.Xna.Framework.Game
             // --- Building placement click (world click to place) ---
             if (_buildingMenuUI.IsPlacementActive
                 && !_buildingMenuUI.ContainsMouse(mouse.X, mouse.Y)
-                && mouse.LeftButton == ButtonState.Pressed && _prevMouse.LeftButton == ButtonState.Released)
+                && _input.LeftPressed)
             {
                 _buildingMenuUI.TryPlace(mouseWorld.X, mouseWorld.Y);
             }
 
             // --- Foragable collection (right-click within 2 units of necromancer) ---
-            if (!_mouseOverUI && mouse.RightButton == ButtonState.Pressed && _prevMouse.RightButton == ButtonState.Released
+            if (!_input.MouseOverUI && _input.RightPressed
                 && _sim.NecromancerIndex >= 0)
             {
                 int bestIdx = FindNearestForagable(_sim.Units[_sim.NecromancerIndex].Position, 2f);
@@ -2258,16 +2253,16 @@ public class Game1 : Microsoft.Xna.Framework.Game
             }
 
             // --- Time controls (keyboard) ---
-            if (WasKeyPressed(kb, Keys.OemPlus) || WasKeyPressed(kb, Keys.Add))
+            if (_input.WasKeyPressed(Keys.OemPlus) || _input.WasKeyPressed(Keys.Add))
                 _timeScale = MathF.Min(_timeScale * 2f, 8f);
-            if (WasKeyPressed(kb, Keys.OemMinus) || WasKeyPressed(kb, Keys.Subtract))
+            if (_input.WasKeyPressed(Keys.OemMinus) || _input.WasKeyPressed(Keys.Subtract))
                 _timeScale = MathF.Max(_timeScale * 0.5f, 0.25f);
-            if (WasKeyPressed(kb, Keys.D0))
+            if (_input.WasKeyPressed(Keys.D0))
                 _timeScale = 1f;
 
             // --- Time controls (mouse click on buttons) ---
             if (_gameData.Settings.General.ShowTimeControls
-                && mouse.LeftButton == ButtonState.Pressed && _prevMouse.LeftButton == ButtonState.Released)
+                && _input.LeftPressed)
             {
                 ReadOnlySpan<float> tcSpeeds = stackalloc float[] { 0.1f, 0.25f, 0.5f, 1.0f, 1.5f, 2.0f };
                 const int tcBtnW = 32, tcBtnH = 22, tcGap = 2, tcNum = 6;
@@ -2500,7 +2495,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // --- Game over check ---
         if (_gameOver)
         {
-            if (WasKeyPressed(kb, Keys.R))
+            if (_input.WasKeyPressed(Keys.R))
             {
                 _gameOver = false;
                 StartGame();
@@ -2512,9 +2507,9 @@ public class Game1 : Microsoft.Xna.Framework.Game
         }
 
         // Update inventory UI after all sim/scenario ticks (so slot sync sees latest inventory state)
-        _inventoryUI.Update(mouse, kb);
-        _buildingMenuUI.Update(mouse, _prevMouse, screenW, screenH);
-        _craftingMenu.Update(mouse, _prevMouse, screenW, screenH, dt);
+        _inventoryUI.Update(_input);
+        _buildingMenuUI.Update(_input, screenW, screenH);
+        _craftingMenu.Update(_input, screenW, screenH, dt);
 
         _prevKb = kb;
         _prevMouse = mouse;
@@ -2590,9 +2585,6 @@ public class Game1 : Microsoft.Xna.Framework.Game
         }
         DebugLog.Log("startup", $"SpellBar '{key}' loaded: {string.Join(", ", bar.Slots.Select(s => s.SpellID))}");
     }
-
-    private bool WasKeyPressed(KeyboardState current, Keys key) =>
-        current.IsKeyDown(key) && _prevKb.IsKeyUp(key);
 
     private PotionDef? FindPotionByItemId(string itemId)
     {
@@ -3365,7 +3357,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         }
 
         // --- Map editor: Alt shows object names ---
-        if (_menuState == MenuState.MapEditor && Keyboard.GetState().IsKeyDown(Keys.LeftAlt))
+        if (_menuState == MenuState.MapEditor && _input.IsKeyDown(Keys.LeftAlt))
         {
             _spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.PointClamp);
             for (int oi = 0; oi < _envSystem.ObjectCount; oi++)
@@ -3417,8 +3409,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
             // Ghost preview for building placement
             if (_buildingMenuUI.IsPlacementActive)
             {
-                var ms = Mouse.GetState();
-                Vec2 mw = _camera.ScreenToWorld(new Vector2(ms.X, ms.Y), screenW, screenH);
+                Vec2 mw = _camera.ScreenToWorld(_input.MousePos, screenW, screenH);
                 var sp = _renderer.WorldToScreen(mw, 0f, _camera);
                 _buildingMenuUI.DrawGhostPreview(_spriteBatch, _pixel, mw, sp, _camera, _renderer);
             }
@@ -4160,7 +4151,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
             }
 
             // Mouse hover highlight: brighten + enlarge when cursor is over the object
-            var mouseWorld = _renderer.ScreenToWorld(new Vector2(Mouse.GetState().X, Mouse.GetState().Y), _camera);
+            var mouseWorld = _renderer.ScreenToWorld(_input.MousePos, _camera);
             float mouseDist = (objPos - new Vec2(mouseWorld.X, mouseWorld.Y)).Length();
             if (mouseDist < 1.2f && dist < ForagableWiggleRange)
             {
@@ -4567,22 +4558,21 @@ public class Game1 : Microsoft.Xna.Framework.Game
         }
 
         // Menu items
-        var mouse = Mouse.GetState();
         int btnW = 280, btnH = 40, btnGap = 10;
         int menuX = boxX + (boxW - btnW) / 2;
         int menuY = boxY + 60;
 
-        DrawMenuButton("Resume", menuX, ref menuY, btnW, btnH, btnGap, mouse);
-        DrawMenuButton("Unit Editor (F9)", menuX, ref menuY, btnW, btnH, btnGap, mouse);
-        DrawMenuButton("Spell Editor (F10)", menuX, ref menuY, btnW, btnH, btnGap, mouse);
-        DrawMenuButton("Map Editor (F11)", menuX, ref menuY, btnW, btnH, btnGap, mouse);
-        DrawMenuButton("UI Editor (F12)", menuX, ref menuY, btnW, btnH, btnGap, mouse);
-        DrawMenuButton("Item Editor", menuX, ref menuY, btnW, btnH, btnGap, mouse);
-        DrawMenuButton("Settings", menuX, ref menuY, btnW, btnH, btnGap, mouse);
+        DrawMenuButton("Resume", menuX, ref menuY, btnW, btnH, btnGap);
+        DrawMenuButton("Unit Editor (F9)", menuX, ref menuY, btnW, btnH, btnGap);
+        DrawMenuButton("Spell Editor (F10)", menuX, ref menuY, btnW, btnH, btnGap);
+        DrawMenuButton("Map Editor (F11)", menuX, ref menuY, btnW, btnH, btnGap);
+        DrawMenuButton("UI Editor (F12)", menuX, ref menuY, btnW, btnH, btnGap);
+        DrawMenuButton("Item Editor", menuX, ref menuY, btnW, btnH, btnGap);
+        DrawMenuButton("Settings", menuX, ref menuY, btnW, btnH, btnGap);
 
         menuY += 10;
-        DrawMenuButton("Main Menu", menuX, ref menuY, btnW, btnH, btnGap, mouse);
-        DrawMenuButton("Quit", menuX, ref menuY, btnW, btnH, btnGap, mouse);
+        DrawMenuButton("Main Menu", menuX, ref menuY, btnW, btnH, btnGap);
+        DrawMenuButton("Quit", menuX, ref menuY, btnW, btnH, btnGap);
 
         // Controls reference
         if (_smallFont != null)
@@ -4636,14 +4626,13 @@ public class Game1 : Microsoft.Xna.Framework.Game
         }
 
         // Menu buttons
-        var mouse = Mouse.GetState();
         int btnW = 320, btnH = 55, btnGap = 18;
         int menuX = screenW / 2 - btnW / 2;
         int menuY = screenH / 2 + 20;
 
-        DrawMenuButton("Play", menuX, ref menuY, btnW, btnH, btnGap, mouse);
-        DrawMenuButton("Scenarios", menuX, ref menuY, btnW, btnH, btnGap, mouse);
-        DrawMenuButton("Quit", menuX, ref menuY, btnW, btnH, btnGap, mouse);
+        DrawMenuButton("Play", menuX, ref menuY, btnW, btnH, btnGap);
+        DrawMenuButton("Scenarios", menuX, ref menuY, btnW, btnH, btnGap);
+        DrawMenuButton("Quit", menuX, ref menuY, btnW, btnH, btnGap);
 
         // Version info
         DrawText(_smallFont, "MonoGame Port v0.1", new Vector2(10, screenH - 20), new Color(80, 80, 100));
@@ -4688,7 +4677,6 @@ public class Game1 : Microsoft.Xna.Framework.Game
         }
 
         // Scenario buttons
-        var mouse = Mouse.GetState();
         int btnW = 320, btnH = 45, btnGap = 12;
         int menuX = screenW / 2 - btnW / 2;
         int menuY = screenH / 4 + 60;
@@ -4699,21 +4687,22 @@ public class Game1 : Microsoft.Xna.Framework.Game
         {
             int nameIdx = i + _scenarioScrollOffset;
             if (nameIdx >= names.Count) break;
-            DrawMenuButton(names[nameIdx], menuX, ref menuY, btnW, btnH, btnGap, mouse);
+            DrawMenuButton(names[nameIdx], menuX, ref menuY, btnW, btnH, btnGap);
         }
 
         // Back button
         menuY += 10;
-        DrawMenuButton("< Back", menuX, ref menuY, btnW, btnH, btnGap, mouse);
+        DrawMenuButton("< Back", menuX, ref menuY, btnW, btnH, btnGap);
 
         // Scroll hint
         if (names.Count > visibleCount + _scenarioScrollOffset)
             DrawText(_smallFont, "Scroll for more...", new Vector2(screenW / 2f - 50, screenH - 40), new Color(100, 100, 120));
     }
 
-    private void DrawMenuButton(string text, int x, ref int y, int w, int h, int gap, MouseState mouse)
+    private void DrawMenuButton(string text, int x, ref int y, int w, int h, int gap)
     {
-        bool hover = mouse.X >= x && mouse.X < x + w && mouse.Y >= y && mouse.Y < y + h;
+        int mx = (int)_input.MousePos.X, my = (int)_input.MousePos.Y;
+        bool hover = mx >= x && mx < x + w && my >= y && my < y + h;
         Color bg = hover ? new Color(90, 60, 120, 240) : new Color(60, 40, 80, 220);
         _spriteBatch.Draw(_pixel, new Rectangle(x, y, w, h), bg);
         _spriteBatch.Draw(_pixel, new Rectangle(x, y, w, 2), new Color(220, 180, 100, hover ? 255 : 120));

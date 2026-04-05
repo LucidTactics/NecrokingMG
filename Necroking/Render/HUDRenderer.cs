@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
+using Necroking.Core;
 using Necroking.Data;
 using Necroking.Data.Registries;
 using Necroking.GameSystems;
@@ -78,6 +79,7 @@ public class HUDRenderer
     private Texture2D _pixel = null!;
     private SpriteFont? _font;
     private SpriteFont? _smallFont;
+    private InputState _input = new();
 
     public void Init(SpriteBatch batch, Texture2D pixel, SpriteFont? font, SpriteFont? smallFont)
     {
@@ -86,6 +88,9 @@ public class HUDRenderer
         _font = font;
         _smallFont = smallFont;
     }
+
+    /// <summary>Set the input state reference for hover detection in draw calls.</summary>
+    public void SetInput(InputState input) => _input = input;
 
     /// <summary>Draw the complete HUD.</summary>
     public void Draw(int screenW, int screenH, Simulation sim, GameData gameData,
@@ -165,8 +170,15 @@ public class HUDRenderer
             int slotX = screenW / 2 - centerOffset + s * (slotW + SlotSpacing);
             bool hasSpell = s < bar.Slots.Length && !string.IsNullOrEmpty(bar.Slots[s].SpellID);
 
+            // Hover highlight
+            int mx = (int)_input.MousePos.X, my = (int)_input.MousePos.Y;
+            bool hovered = mx >= slotX && mx < slotX + slotW && my >= barY && my < barY + slotH;
+
             _batch.Draw(_pixel, new Rectangle(slotX, barY, slotW, slotH), hasSpell ? filledBg : emptyBg);
-            _batch.Draw(_pixel, new Rectangle(slotX, barY, slotW, SlotBorderHeight), border);
+            if (hovered)
+                _batch.Draw(_pixel, new Rectangle(slotX, barY, slotW, slotH), new Color(255, 255, 255, 30));
+            _batch.Draw(_pixel, new Rectangle(slotX, barY, slotW, SlotBorderHeight),
+                hovered ? new Color(220, 200, 120, 200) : border);
 
             if (_smallFont == null) continue;
 
@@ -256,8 +268,7 @@ public class HUDRenderer
             procStr
         };
 
-        var mouse = Mouse.GetState();
-        int ttX = mouse.X + 16, ttY = mouse.Y - 70;
+        int ttX = (int)_input.MousePos.X + 16, ttY = (int)_input.MousePos.Y - 70;
         int ttW = 160, ttH = lines.Length * 16 + 8;
         _batch.Draw(_pixel, new Rectangle(ttX - 4, ttY - 4, ttW + 8, ttH + 8), TooltipBg);
         _batch.Draw(_pixel, new Rectangle(ttX - 4, ttY - 4, ttW + 8, 2), TooltipBorder);
@@ -285,12 +296,12 @@ public class HUDRenderer
         int baseX = screenW - totalW - 10;
         int baseY = screenH - 52;
 
-        var mouse = Mouse.GetState();
+        int mx = (int)_input.MousePos.X, my = (int)_input.MousePos.Y;
         for (int s = 0; s < TcCount; s++)
         {
             int bx = baseX + s * (TcBtnW + TcGap);
-            bool hover = mouse.X >= bx && mouse.X < bx + TcBtnW
-                      && mouse.Y >= baseY && mouse.Y < baseY + TcBtnH;
+            bool hover = mx >= bx && mx < bx + TcBtnW
+                      && my >= baseY && my < baseY + TcBtnH;
             bool active = MathF.Abs(timeScale - speeds[s]) < 0.001f;
             Color bg = active ? new Color(70, 100, 160, 220)
                      : hover  ? new Color(50, 60, 80, 180)
@@ -364,12 +375,16 @@ public class HUDRenderer
             int qty = hasPotion ? inventory.GetItemCount(potionItemId) : 0;
             bool isActive = s == activePotionSlot;
 
-            // Background
+            // Background + hover
+            int pmx = (int)_input.MousePos.X, pmy = (int)_input.MousePos.Y;
+            bool potionHover = pmx >= slotX && pmx < slotX + SecondarySlotW && pmy >= barY && pmy < barY + SecondarySlotH;
             Color bg = hasPotion && qty > 0 ? SecFilledBg : SecEmptyBg;
             _batch.Draw(_pixel, new Rectangle(slotX, barY, SecondarySlotW, SecondarySlotH), bg);
+            if (potionHover)
+                _batch.Draw(_pixel, new Rectangle(slotX, barY, SecondarySlotW, SecondarySlotH), new Color(255, 255, 255, 30));
 
-            // Border — highlight if active
-            Color border = isActive ? PotionActiveBorder : SecBorder;
+            // Border — highlight if active or hovered
+            Color border = isActive ? PotionActiveBorder : potionHover ? new Color(220, 200, 120, 200) : SecBorder;
             _batch.Draw(_pixel, new Rectangle(slotX, barY, SecondarySlotW, SlotBorderHeight), border);
             if (isActive)
             {

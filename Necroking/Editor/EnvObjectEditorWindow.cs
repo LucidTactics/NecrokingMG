@@ -217,8 +217,8 @@ public class EnvObjectEditorWindow
             _statusTimer -= 1f / 60f;
 
         // Update texture file browser input
-        var mouse = Mouse.GetState();
-        var kb = Keyboard.GetState();
+        var mouse = _ui._input.Mouse;
+        var kb = _ui._input.Kb;
         _textureBrowser.Update(mouse, _prevMouseEnv, kb, _prevKbEnv);
         _prevMouseEnv = mouse;
         _prevKbEnv = kb;
@@ -519,7 +519,7 @@ public class EnvObjectEditorWindow
             // --- Scroll wheel adjusts collision radius when hovering preview ---
             if (!_textureBrowser.IsOpen && !_ui.IsColorPickerOpen && !_ui.IsDropdownOpen)
             {
-                var ms = Mouse.GetState();
+                var ms = _ui._input.Mouse;
                 if (ms.X >= x && ms.X < x + w && ms.Y >= y && ms.Y < y + mainH)
                 {
                     int scrollDelta = ms.ScrollWheelValue - _ui._prevMouse.ScrollWheelValue;
@@ -563,7 +563,7 @@ public class EnvObjectEditorWindow
     {
         if (_draggingCollisionCenter || _draggingCollisionRadius) return; // keep state while dragging
 
-        var mouse = Mouse.GetState();
+        var mouse = _ui._input.Mouse;
         float mx = mouse.X, my = mouse.Y;
         float dx = mx - cx, dy = my - cy;
         float dist = MathF.Sqrt(dx * dx + dy * dy);
@@ -575,7 +575,7 @@ public class EnvObjectEditorWindow
     /// <summary>Handle click-to-set pivot by clicking in the preview area.</summary>
     private void HandlePivotDrag(EnvironmentObjectDef def, int drawX, int drawY, int drawW, int drawH)
     {
-        var mouse = Mouse.GetState();
+        var mouse = _ui._input.Mouse;
         var prevMouse = _ui._prevMouse;
 
         // Right-click to set pivot position (left-click is for collision)
@@ -814,7 +814,7 @@ public class EnvObjectEditorWindow
 
     private void HandleCollisionDrag(EnvironmentObjectDef def, float cx, float cy, float radiusPx, float pixPerWorld)
     {
-        var mouse = Mouse.GetState();
+        var mouse = _ui._input.Mouse;
         var prevMouse = _ui._prevMouse;
         float mx = mouse.X, my = mouse.Y;
         float dx = mx - cx, dy = my - cy;
@@ -879,7 +879,7 @@ public class EnvObjectEditorWindow
         int fx = x + Padding;
 
         // Scroll handling
-        var mouse = Mouse.GetState();
+        var mouse = _ui._input.Mouse;
         var propRect = new Rectangle(x, y, w, h);
         if (propRect.Contains(mouse.X, mouse.Y))
         {

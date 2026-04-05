@@ -124,7 +124,7 @@ public class WallEditorWindow
         if (_statusTimer > 0) _statusTimer -= dt;
 
         // Handle keyboard shortcuts
-        var kb = Keyboard.GetState();
+        var kb = _ui._input.Kb;
         var prevKb = _ui._prevKb;
         bool textActive = _ui.IsTextInputActive;
 
@@ -201,8 +201,8 @@ public class WallEditorWindow
         DrawProperties(col2X, contentY, propsW, contentH);
 
         // RM32: Update and draw texture file browser
-        var wallMouse = Mouse.GetState();
-        var wallKb = Keyboard.GetState();
+        var wallMouse = _ui._input.Mouse;
+        var wallKb = _ui._input.Kb;
         _textureBrowser.Update(wallMouse, _prevMouseWall, wallKb, _prevKbWall);
         _textureBrowser.Draw(_ui, screenW, screenH);
         _prevMouseWall = wallMouse;
