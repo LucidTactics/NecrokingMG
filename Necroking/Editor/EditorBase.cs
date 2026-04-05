@@ -92,7 +92,7 @@ public class EditorBase
     // Input layer system (0=main, 1=popup, 2=dropdown, 3=confirm dialog)
     private int _inputLayer;
     public int InputLayer { get => _inputLayer; set => _inputLayer = value; }
-    public bool IsInputBlocked(int layer) => _inputLayer > layer;
+    public bool IsInputBlocked(int layer) => _inputLayer > layer || (layer == 0 && _colorPicker.ConsumesInput);
 
     // Combo dropdown scroll state (keyed by fieldId)
     private readonly Dictionary<string, int> _comboScrollOffsets = new();
@@ -163,6 +163,10 @@ public class EditorBase
         // Update color picker popup input (with keyboard for value box editing)
         float dt = (float)gameTime.ElapsedGameTime.TotalSeconds;
         _colorPicker.UpdateInput(mouse, prevMouse, kb, prevKb, screenW, screenH, dt);
+
+        // Color picker is modal — block all editor input when it's open
+        if (_colorPicker.ConsumesInput && _inputLayer < 1)
+            _inputLayer = 1;
 
         // Handle key repeat for text input
         if (_activeFieldId != null)
