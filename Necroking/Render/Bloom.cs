@@ -25,7 +25,6 @@ public class BloomRenderer
     private int _screenW, _screenH;
     private bool _initialized;
     private bool _hdrScene;
-
     private XnaEffect? _extractEffect;
     private XnaEffect? _combineEffect;
     private XnaEffect? _blurEffect;
@@ -92,6 +91,9 @@ public class BloomRenderer
             }
         }
 
+        Console.Error.WriteLine($"[Bloom] Scene RT: {_sceneRT!.Format} ({_sceneRT.Width}x{_sceneRT.Height})");
+        for (int i = 0; i < _mipCount; i++)
+            Console.Error.WriteLine($"[Bloom]   mip[{i}]: {_mips[i]!.Format} ({_mips[i]!.Width}x{_mips[i]!.Height})");
         Console.Error.WriteLine($"[Bloom] Mip chain: {_mipCount} levels, HDR={_hdrScene}");
 
         try
@@ -237,9 +239,15 @@ public class BloomRenderer
         // Bind the bloom texture to sampler slot 1 via the effect parameter
         var bloomParam = _combineEffect.Parameters["BloomSampler"];
         if (bloomParam != null)
+        {
             bloomParam.SetValue(_mips[0]);
+        }
         else
-            device.Textures[1] = _mips[0]; // fallback
+        {
+            Console.Error.WriteLine("[Bloom] WARNING: BloomSampler parameter not found, using fallback Textures[1]");
+            device.Textures[1] = _mips[0];
+            device.SamplerStates[1] = SamplerState.LinearClamp;
+        }
 
         batch.Begin(SpriteSortMode.Immediate, BlendState.Opaque, SamplerState.LinearClamp, null, null, _combineEffect);
         batch.Draw(_sceneRT, new Rectangle(0, 0, _screenW, _screenH), Color.White);

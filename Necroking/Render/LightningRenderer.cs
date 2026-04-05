@@ -143,6 +143,7 @@ public class LightningRenderer
     /// Draw god rays in a separate pass. Must be called AFTER the additive SpriteBatch.End().
     /// </summary>
     public void DrawGodRays() => _godRayRenderer.DrawAll();
+    public GodRayRenderer GetGodRayRenderer() => _godRayRenderer;
 
     private void DrawLightningBolt(Vector2 start, Vector2 end, LightningStyle style, float fade)
     {

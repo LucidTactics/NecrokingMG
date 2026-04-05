@@ -701,6 +701,22 @@ public class Game1 : Microsoft.Xna.Framework.Game
         if (scenario is Scenario.Scenarios.BloomDebugScenario bloomDbg)
             bloomDbg.BloomRef = _bloom;
 
+        // Wire up graphics context for blend test
+        if (scenario is Scenario.Scenarios.BlendTestScenario blendTest)
+        {
+            blendTest.Device = GraphicsDevice;
+            blendTest.Batch = _spriteBatch;
+        }
+
+        // Wire up god ray render test
+        if (scenario is Scenario.Scenarios.GodRayRenderTestScenario godRayTest)
+        {
+            godRayTest.Device = GraphicsDevice;
+            godRayTest.SpriteBatchRef = _spriteBatch;
+            godRayTest.GodRayRef = _lightningRenderer.GetGodRayRenderer();
+            godRayTest.HdrEffect = _hdrIntensityEffect;
+        }
+
         // Apply camera override
         if (scenario.HasCameraOverride)
         {

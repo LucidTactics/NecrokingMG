@@ -3267,7 +3267,7 @@
         "a": 255,
         "b": 200,
         "g": 247,
-        "intensity": 7.673076629638672,
+        "intensity": 0.8,
         "r": 255
       },
       "strikeCoreWidth": 1.2000000476837158,
@@ -3280,7 +3280,7 @@
         "a": 180,
         "b": 82,
         "g": 192,
-        "intensity": 11.25,
+        "intensity": 0.8,
         "r": 254
       },
       "strikeGlowWidth": 4.5,

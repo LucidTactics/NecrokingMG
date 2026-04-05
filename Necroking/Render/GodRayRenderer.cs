@@ -62,7 +62,7 @@ public class GodRayRenderer
         var vp = _graphicsDevice.Viewport;
         var wvp = Matrix.CreateOrthographicOffCenter(0, vp.Width, vp.Height, 0, 0, 1);
 
-        _graphicsDevice.BlendState = BlendState.NonPremultiplied;
+        _graphicsDevice.BlendState = BlendState.Additive;
         _graphicsDevice.DepthStencilState = DepthStencilState.None;
         _graphicsDevice.RasterizerState = RasterizerState.CullNone;
 
@@ -122,13 +122,6 @@ public class GodRayRenderer
         float[] layerT = { 1f, 0.66f, 0.33f, 0f };
         Color[] layerColors = { glow, mid, core, core };
         float[] layerAlphas = { 0.12f, 0.25f, 0.45f, 0.75f };
-        float[] layerIntensities = {
-            style.GlowColor.Intensity,
-            (style.CoreColor.Intensity + style.GlowColor.Intensity) * 0.5f,
-            style.CoreColor.Intensity,
-            style.CoreColor.Intensity
-        };
-
         float edgeSoft = MathF.Max(0f, MathF.Min(1f, p.EdgeSoftness));
         const int EdgeSublayers = 3;
         const int Slices = 20;
@@ -150,10 +143,10 @@ public class GodRayRenderer
                 float layerA = baseAlpha * lAlpha * subAlphaMul;
                 if (layerA <= 0.001f) continue;
 
-                // Set HDR intensity per sublayer (matches C++: intensity = color.intensity * layerAlpha)
-                float intensity = layerIntensities[li] * layerA;
+                // Use constant intensity for all sublayers — vertex alpha alone controls falloff.
+                // (C++ raylib batching accidentally did this, producing smooth gradation)
                 FlushTriangles();
-                _hdrIntensityEffect?.Parameters["Intensity"]?.SetValue(intensity);
+                _hdrIntensityEffect?.Parameters["Intensity"]?.SetValue(style.CoreColor.Intensity);
 
                 byte ca = (byte)(lc.A * MathF.Min(1f, layerA));
 
@@ -199,9 +192,8 @@ public class GodRayRenderer
             float auraW = widthBottom * 1.1f;
             float auraH = widthBottom * 0.35f;
             float auraAlpha = baseAlpha * lAlpha * 0.4f;
-            float auraIntensity = layerIntensities[li] * auraAlpha * 0.4f;
             FlushTriangles();
-            _hdrIntensityEffect?.Parameters["Intensity"]?.SetValue(auraIntensity);
+            _hdrIntensityEffect?.Parameters["Intensity"]?.SetValue(style.CoreColor.Intensity);
             byte ga = (byte)(lc.A * MathF.Min(1f, auraAlpha));
             Color auraColor = new(lc.R, lc.G, lc.B, ga);
             const int AuraSegs = 20;
