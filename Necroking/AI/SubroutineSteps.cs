@@ -258,6 +258,14 @@ public static class SubroutineSteps
         }
     }
 
+    /// <summary>Face a specific world position (for waking up toward a threat).</summary>
+    public static void FacePosition(ref AIContext ctx, Vec2 target)
+    {
+        var dir = target - ctx.MyPos;
+        if (dir.LengthSq() > 0.01f)
+            ctx.Units[ctx.UnitIndex].FacingAngle = MathF.Atan2(dir.Y, dir.X) * 180f / MathF.PI;
+    }
+
     /// <summary>Stand still, do nothing (used for sleeping, etc.).</summary>
     public static void Idle(ref AIContext ctx)
     {

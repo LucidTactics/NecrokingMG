@@ -37,6 +37,19 @@ public class WeatherSettings
     [JsonPropertyName("transitionSpeed")] public float TransitionSpeed { get; set; } = 1.0f;
 }
 
+public class DayNightSettings
+{
+    [JsonPropertyName("enabled")] public bool Enabled { get; set; }
+    [JsonPropertyName("dawnDuration")] public float DawnDuration { get; set; } = 60f;   // seconds
+    [JsonPropertyName("dayDuration")] public float DayDuration { get; set; } = 240f;
+    [JsonPropertyName("duskDuration")] public float DuskDuration { get; set; } = 60f;
+    [JsonPropertyName("nightDuration")] public float NightDuration { get; set; } = 240f;
+    [JsonPropertyName("dawnPreset")] public string DawnPreset { get; set; } = "dawn";
+    [JsonPropertyName("dayPreset")] public string DayPreset { get; set; } = "daylight";
+    [JsonPropertyName("duskPreset")] public string DuskPreset { get; set; } = "dusk";
+    [JsonPropertyName("nightPreset")] public string NightPreset { get; set; } = "night";
+}
+
 public class GeneralSettings
 {
     [JsonPropertyName("showTimeControls")] public bool ShowTimeControls { get; set; } = true;
@@ -113,6 +126,7 @@ public class GameSettingsData
     [JsonPropertyName("bloom")] public BloomSettings Bloom { get; set; } = new();
     [JsonPropertyName("grass")] public GrassSettings Grass { get; set; } = new();
     [JsonPropertyName("weather")] public WeatherSettings Weather { get; set; } = new();
+    [JsonPropertyName("dayNight")] public DayNightSettings DayNight { get; set; } = new();
     [JsonPropertyName("general")] public GeneralSettings General { get; set; } = new();
     [JsonPropertyName("shadow")] public ShadowSettings Shadow { get; set; } = new();
     [JsonPropertyName("horde")] public HordeSettings Horde { get; set; } = new();
@@ -130,6 +144,7 @@ public class GameSettingsData
             Bloom = loaded.Bloom;
             Grass = loaded.Grass;
             Weather = loaded.Weather;
+            DayNight = loaded.DayNight;
             General = loaded.General;
             Shadow = loaded.Shadow;
             Horde = loaded.Horde;

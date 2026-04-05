@@ -15,6 +15,7 @@ public class SettingsWindow
     private GameData _gameData = null!;
     private string _settingsJsonPath = "";
     private string _weatherJsonPath = "";
+    private GameSystems.DayNightSystem? _dayNightSystem;
 
     // Tab state
     private enum Tab { Bloom, Shadow, Environment, Weather, General, Horde }
@@ -49,6 +50,8 @@ public class SettingsWindow
         _settingsJsonPath = settingsJsonPath;
         _weatherJsonPath = weatherJsonPath;
     }
+
+    public void SetDayNightSystem(GameSystems.DayNightSystem system) => _dayNightSystem = system;
 
     /// <summary>
     /// Called each frame from Game1.Update when MenuState == Settings.
@@ -162,7 +165,7 @@ public class SettingsWindow
                 MarkDirty();
                 break;
             case Tab.Weather:
-                totalContentHeight = SettingsWeatherTab.Draw(_ui, _gameData.Settings.Weather, _gameData, contentX, y, contentW);
+                totalContentHeight = SettingsWeatherTab.Draw(_ui, _gameData.Settings.Weather, _gameData, contentX, y, contentW, _dayNightSystem);
                 MarkDirty();
                 _weatherDirty = true;
                 break;

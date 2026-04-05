@@ -1,5 +1,6 @@
 using System;
 using Necroking.Core;
+using Necroking.Movement;
 
 namespace Necroking.AI;
 
@@ -39,9 +40,17 @@ public class WolfPackHandler : IArchetypeHandler
     private const byte FightDisengage = 2;
     private const byte FightWaitCooldown = 3;
 
+    // Sleeping subroutine indices
+    private const byte SleepSitting = 0;
+    private const byte SleepAsleep = 1;
+    private const byte SleepWaking = 2;
+
     // Tuning
-    private const float DisengageDistance = 4f; // back off this far after attacking
-    private const float IdleRoamRadius = 10f;   // wander within this of spawn point
+    private const float DisengageDistance = 4f;
+    private const float IdleRoamRadius = 10f;
+    private const float SitDuration = 10f;
+    private const float SleepDetectionScale = 0.6f;
+    private const float StandupDuration = 1.0f;
 
     public void OnSpawn(ref AIContext ctx)
     {
@@ -73,6 +82,25 @@ public class WolfPackHandler : IArchetypeHandler
         // Aggressive alert → enter fighting
         if (alertState == (byte)UnitAlertState.Aggressive && ctx.Routine != RoutineFighting)
         {
+            // If sleeping, standup first
+            if (ctx.Routine == RoutineSleeping && ctx.Subroutine <= SleepAsleep)
+            {
+                if (ctx.AlertTarget != GameConstants.InvalidUnit)
+                {
+                    int threatIdx = UnitUtil.ResolveUnitIndex(ctx.Units, ctx.AlertTarget);
+                    if (threatIdx >= 0)
+                        SubroutineSteps.FacePosition(ref ctx, ctx.Units[threatIdx].Position);
+                }
+                ctx.Subroutine = SleepWaking;
+                ctx.SubroutineTimer = StandupDuration;
+                ctx.Units[ctx.UnitIndex].StandupTimer = StandupDuration;
+                RestoreDetectionRange(ref ctx);
+                return;
+            }
+            // Wait for standup to finish
+            if (ctx.Routine == RoutineSleeping && ctx.Subroutine == SleepWaking)
+                return;
+
             // Acquire the alert target as combat target
             uint threatId = ctx.AlertTarget;
             if (threatId != GameConstants.InvalidUnit)
@@ -119,6 +147,18 @@ public class WolfPackHandler : IArchetypeHandler
         byte target = ctx.IsNight ? RoutineSleeping : RoutineIdleRoaming;
         if (ctx.Routine != target)
         {
+            // Waking from sleep — standup first
+            if (ctx.Routine == RoutineSleeping && ctx.Subroutine <= SleepAsleep && !ctx.IsNight)
+            {
+                ctx.Subroutine = SleepWaking;
+                ctx.SubroutineTimer = StandupDuration;
+                ctx.Units[ctx.UnitIndex].StandupTimer = StandupDuration;
+                RestoreDetectionRange(ref ctx);
+                return;
+            }
+            if (ctx.Routine == RoutineSleeping && ctx.Subroutine == SleepWaking)
+                return;
+
             ctx.Routine = target;
             ctx.Subroutine = 0;
             ctx.SubroutineTimer = 0f;
@@ -140,8 +180,66 @@ public class WolfPackHandler : IArchetypeHandler
 
     private static void UpdateSleeping(ref AIContext ctx)
     {
-        // Just stand still. Could play a sleep animation in the future.
-        SubroutineSteps.Idle(ref ctx);
+        ctx.Units[ctx.UnitIndex].PreferredVel = Vec2.Zero;
+
+        switch (ctx.Subroutine)
+        {
+            case SleepSitting:
+                ctx.SubroutineTimer += ctx.Dt;
+                if (ctx.SubroutineTimer >= SitDuration)
+                {
+                    ctx.Subroutine = SleepAsleep;
+                    ctx.SubroutineTimer = 0f;
+                    ReduceDetectionRange(ref ctx);
+                }
+                break;
+
+            case SleepAsleep:
+                // Stay asleep until woken
+                break;
+
+            case SleepWaking:
+                ctx.SubroutineTimer -= ctx.Dt;
+                if (ctx.SubroutineTimer <= 0f)
+                {
+                    if (ctx.AlertState >= (byte)UnitAlertState.Aggressive)
+                    {
+                        uint threatId = ctx.AlertTarget;
+                        if (threatId != GameConstants.InvalidUnit)
+                        {
+                            ctx.Units[ctx.UnitIndex].Target = CombatTarget.Unit(threatId);
+                            ctx.Routine = RoutineFighting;
+                            ctx.Subroutine = FightMoveToEngage;
+                            ctx.SubroutineTimer = 0f;
+                        }
+                        else
+                            SwitchToTimeOfDayRoutine(ref ctx);
+                    }
+                    else
+                    {
+                        byte target = ctx.IsNight ? RoutineSleeping : RoutineIdleRoaming;
+                        ctx.Routine = target;
+                        ctx.Subroutine = 0;
+                        ctx.SubroutineTimer = 0f;
+                    }
+                }
+                break;
+        }
+    }
+
+    private static void ReduceDetectionRange(ref AIContext ctx)
+    {
+        ctx.Units[ctx.UnitIndex].DetectionRange *= SleepDetectionScale;
+    }
+
+    private static void RestoreDetectionRange(ref AIContext ctx)
+    {
+        if (ctx.GameData != null)
+        {
+            var def = ctx.GameData.Units.Get(ctx.Units[ctx.UnitIndex].UnitDefID);
+            if (def != null)
+                ctx.Units[ctx.UnitIndex].DetectionRange = def.DetectionRange;
+        }
     }
 
     // ═══════════════════════════════════════

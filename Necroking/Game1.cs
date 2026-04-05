@@ -87,6 +87,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
     private EffectManager _effectManager = new();
     private BloomRenderer _bloom = new();
     private WeatherRenderer _weatherRenderer = new();
+    private DayNightSystem _dayNightSystem = new();
     private LightningRenderer _lightningRenderer = new();
     private PoisonCloudRenderer _poisonCloudRenderer = new();
     private DebugDraw _debugDraw = new();
@@ -223,7 +224,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         {
             string localDir = GamePaths.Resolve(GamePaths.LocalSettingsDir);
             System.IO.Directory.CreateDirectory(localDir);
-            _gameData.Settings.Save(GamePaths.Resolve(GamePaths.LocalSettingsJson));
+            _gameData.Settings.Save(GamePaths.Resolve(GamePaths.SettingsJson));
             _gameData.Weather.Save(GamePaths.Resolve(GamePaths.WeatherJson));
         };
 
@@ -337,6 +338,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         _envSystem.ClearDefs();
         _groundSystem.ClearTypes();
         _roadSystem.Init();
+        _dayNightSystem.Init(_gameData.Settings.DayNight);
 
         // Load flipbooks
         foreach (var fbId in _gameData.Flipbooks.GetIDs())
@@ -1235,7 +1237,8 @@ public class Game1 : Microsoft.Xna.Framework.Game
         _itemEditor.SetGameData(_gameData);
         _settingsWindow = new SettingsWindow(_editorUi);
         System.IO.Directory.CreateDirectory(GamePaths.Resolve(GamePaths.LocalSettingsDir));
-        _settingsWindow.SetGameData(_gameData, GamePaths.Resolve(GamePaths.LocalSettingsJson), GamePaths.Resolve(GamePaths.WeatherJson));
+        _settingsWindow.SetGameData(_gameData, GamePaths.Resolve(GamePaths.SettingsJson), GamePaths.Resolve(GamePaths.WeatherJson));
+        _settingsWindow.SetDayNightSystem(_dayNightSystem);
         LogTiming("Editors initialized");
         DebugLog.Log("startup", $"=== LoadContent complete ===");
     }
@@ -2315,6 +2318,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
             // --- Simulate ---
             _sim.Tick(dt);
+            _dayNightSystem.Update(dt, _gameData);
             _weatherRenderer.Update(dt, _gameData);
             _envSystem.UpdateForagables(dt);
             _envSystem.UpdateTraps(dt, _sim.Units);
@@ -3079,6 +3083,17 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 && _sim.Units[i].Routine == 6 /* RoutineFeeding */
                 && _sim.Units[i].Subroutine == 1 /* FeedEating */)
                 targetState = AnimState.Feeding;
+            else if ((_sim.Units[i].Archetype == AI.ArchetypeRegistry.DeerHerd
+                || _sim.Units[i].Archetype == AI.ArchetypeRegistry.WolfPack)
+                && _sim.Units[i].Routine == 1 /* RoutineSleeping */)
+            {
+                if (_sim.Units[i].Subroutine == 0) // Sitting down
+                    targetState = AnimState.Sit;
+                else if (_sim.Units[i].Subroutine == 1) // Sleeping
+                    targetState = AnimState.Sleep;
+                else // Waking — StandupTimer drives the Standup anim via the check above
+                    targetState = AnimState.Idle;
+            }
             else if (_sim.Units[i].BlockReacting)
                 targetState = AnimState.BlockReact;
             else if (_sim.Units[i].PostAttackTimer > 0f)
@@ -3148,7 +3163,18 @@ public class Game1 : Microsoft.Xna.Framework.Game
                     animData.Ctrl.PlaybackSpeed = MathF.Max(1f, animDur / lockout);
             }
 
-            animData.Ctrl.RequestState(targetState);
+            // Break out of Sit/Sleep hold — ForceState needed since PlayOnceHold
+            // blocks normal RequestState transitions
+            var currentAnim = animData.Ctrl.CurrentState;
+            if ((currentAnim == AnimState.Sit || currentAnim == AnimState.Sleep)
+                && targetState != AnimState.Sit && targetState != AnimState.Sleep)
+            {
+                animData.Ctrl.ForceState(targetState);
+            }
+            else
+            {
+                animData.Ctrl.RequestState(targetState);
+            }
             animData.Ctrl.Update(dt);
 
             // Resolve pending attacks at action moment

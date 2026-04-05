@@ -324,9 +324,24 @@ public class Simulation
     private void UpdateAI(float dt)
     {
         // Awareness pass (runs before AI updates)
-        float dayCycleLength = 360f; // 6 minutes = 360 seconds
-        float dayFraction = (_gameTime % dayCycleLength) / dayCycleLength;
-        bool isNight = dayFraction >= 0.5f; // minutes 3-6 are night
+        float dayFraction;
+        bool isNight;
+        var dnSettings = _gameData?.Settings.DayNight;
+        if (dnSettings != null && dnSettings.Enabled)
+        {
+            // Use DayNightSystem phases: Night and Dusk count as "night" for animal AI
+            float totalCycle = dnSettings.DawnDuration + dnSettings.DayDuration +
+                               dnSettings.DuskDuration + dnSettings.NightDuration;
+            dayFraction = totalCycle > 0f ? (_gameTime % totalCycle) / totalCycle : 0f;
+            float elapsed = _gameTime % (totalCycle > 0f ? totalCycle : 1f);
+            isNight = elapsed >= (dnSettings.DawnDuration + dnSettings.DayDuration);
+        }
+        else
+        {
+            float dayCycleLength = 360f; // 6 minutes fallback
+            dayFraction = (_gameTime % dayCycleLength) / dayCycleLength;
+            isNight = dayFraction >= 0.5f;
+        }
         AI.AwarenessSystem.Update(_units, dt, (int)_frameNumber);
 
         for (int i = 0; i < _units.Count; i++)
