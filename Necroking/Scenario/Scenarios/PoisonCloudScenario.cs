@@ -4,6 +4,8 @@ using Necroking.Data;
 using Necroking.Data.Registries;
 using Necroking.GameSystems;
 using Necroking.Movement;
+using Necroking.Render;
+using Necroking.World;
 
 namespace Necroking.Scenario.Scenarios;
 
@@ -20,6 +22,7 @@ public class PoisonCloudScenario : ScenarioBase
     private int _peakPoisoned;
     private int _peakPlagued;
     private int _peakDead;
+    private bool _loggedDepth;
 
     private const float CX = 32f, CY = 32f;
     private const int EnemyCount = 10;
@@ -66,6 +69,40 @@ public class PoisonCloudScenario : ScenarioBase
             });
         }
 
+        // Place objects around the cloud for depth-sorting test
+        var env = sim.EnvironmentSystem;
+        if (env != null)
+        {
+            var treeDef = new EnvironmentObjectDef
+            {
+                Id = "cloud_tree", Name = "Cloud Tree",
+                TexturePath = GamePaths.Resolve("assets/Environment/Trees/BranchlessTree1.png"),
+                SpriteWorldHeight = 6f,
+                PivotX = 0.5f, PivotY = 1f,
+                Scale = 1f
+            };
+            int treeDefIdx = env.AddDef(treeDef);
+
+            var bushDef = new EnvironmentObjectDef
+            {
+                Id = "cloud_bush", Name = "Cloud Bush",
+                TexturePath = GamePaths.Resolve("assets/Environment/Trees/BerryBush.png"),
+                SpriteWorldHeight = 1.5f,
+                PivotX = 0.5f, PivotY = 1f,
+                Scale = 1f
+            };
+            int bushDefIdx = env.AddDef(bushDef);
+
+            // Tree at cloud center
+            env.AddObject((ushort)treeDefIdx, CX, CY);
+            // Bushes at southern edge of cloud (high Y — should be inside cloud)
+            env.AddObject((ushort)bushDefIdx, CX - 2f, CY + 3.5f);
+            env.AddObject((ushort)bushDefIdx, CX + 2f, CY + 3f);
+            // Bush at northern edge (low Y)
+            env.AddObject((ushort)bushDefIdx, CX + 1f, CY - 3f);
+            DebugLog.Log(ScenarioLog, "Placed tree + 3 bushes for depth test");
+        }
+
         DebugLog.Log(ScenarioLog, "Weather disabled, bloom enabled");
         ZoomOnLocation(CX, CY, 40f);
     }
@@ -94,6 +131,39 @@ public class PoisonCloudScenario : ScenarioBase
                 }
             }
             return;
+        }
+
+        // Log depth sort data once during spread phase
+        if (!_loggedDepth && _elapsed >= 4.0f && sim.PoisonClouds.Clouds.Count > 0)
+        {
+            _loggedDepth = true;
+            var cloud = sim.PoisonClouds.Clouds[0];
+            DebugLog.Log(ScenarioLog, $"\n=== DEPTH SORT ANALYSIS ===");
+            DebugLog.Log(ScenarioLog, $"Cloud center: Y={cloud.Position.Y:F1}, radius={cloud.CurrentRadius:F1}");
+            DebugLog.Log(ScenarioLog, $"Cloud Y range: {cloud.Position.Y - cloud.CurrentRadius:F1} to {cloud.Position.Y + cloud.CurrentRadius:F1}");
+
+            // Log env object Y values
+            var env = sim.EnvironmentSystem;
+            if (env != null)
+            {
+                for (int i = 0; i < env.ObjectCount; i++)
+                {
+                    var obj = env.Objects[i];
+                    var def = env.Defs[obj.DefIndex];
+                    DebugLog.Log(ScenarioLog, $"  EnvObj '{def.Name}' sortY={obj.Y:F1} (world pos: {obj.X:F1},{obj.Y:F1})");
+                }
+            }
+
+            // Log unit Y values
+            for (int i = 0; i < sim.Units.Count; i++)
+            {
+                if (!sim.Units[i].Alive) continue;
+                DebugLog.Log(ScenarioLog, $"  Unit {i} sortY={sim.Units[i].Position.Y:F1}");
+            }
+
+            // Trigger puff depth logging on next render frame
+            PoisonCloudRenderer.LogNextFrame = true;
+            DebugLog.Log(ScenarioLog, "");
         }
 
         // Screenshots at key moments

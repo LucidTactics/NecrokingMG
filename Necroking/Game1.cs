@@ -3305,11 +3305,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // --- Corpses ---
         DrawCorpses();
 
-        // --- Poison clouds (ground fog layer, between corpses and units) ---
-        _poisonCloudRenderer.SetContext(_spriteBatch, _glowTex, _camera, _renderer, _flipbooks, _gameTime);
-        _poisonCloudRenderer.DrawAlpha(_sim.PoisonClouds);
-
-        // --- Units + Environment objects (merged Y-sort for correct depth) ---
+        // --- Units + Environment objects + Poison cloud puffs (merged Y-sort for correct depth) ---
         DrawUnitsAndObjects();
 
         // --- Projectiles ---
@@ -3336,10 +3332,9 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
         _spriteBatch.End();
 
-        // --- Additive blend pass (effects, lightning, cloud glow) ---
+        // --- Additive blend pass (effects, lightning) ---
         _spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.Additive, SamplerState.LinearClamp);
         DrawEffects();
-        _poisonCloudRenderer.DrawAdditive(_sim.PoisonClouds);
         _lightningRenderer.SetGameTime(_gameTime);
         _lightningRenderer.Draw();
 
@@ -4010,11 +4005,14 @@ public class Game1 : Microsoft.Xna.Framework.Game
     // Sortable item for merged unit+object depth sorting
     private readonly List<DepthItem> _depthItems = new(256); // reused each frame
 
-    private struct DepthItem : IComparable<DepthItem>
+    internal enum DepthItemType : byte { Unit, EnvObject, CloudPuff }
+
+    internal struct DepthItem : IComparable<DepthItem>
     {
         public float Y;
-        public bool IsUnit;
-        public int Index;
+        public DepthItemType Type;
+        public int Index;       // Unit index, env object index, or cloud index
+        public int SubIndex;    // For cloud puffs: puff index within the cloud
         public int CompareTo(DepthItem other) => Y.CompareTo(other.Y);
     }
 
@@ -4034,7 +4032,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // Add units
         for (int i = 0; i < _sim.Units.Count; i++)
             if (_sim.Units[i].Alive)
-                items.Add(new DepthItem { Y = _sim.Units[i].Position.Y, IsUnit = true, Index = i });
+                items.Add(new DepthItem { Y = _sim.Units[i].Position.Y, Type = DepthItemType.Unit, Index = i });
 
         // Add environment objects (with view culling, skip collected foragables, skip ground-layer objects)
         for (int i = 0; i < _envSystem.ObjectCount; i++)
@@ -4046,17 +4044,29 @@ public class Game1 : Microsoft.Xna.Framework.Game
             if (obj.X < viewLeft || obj.X > viewRight || obj.Y < viewTop || obj.Y > viewBottom)
                 continue;
             if (_envSystem.GetDefTexture(obj.DefIndex) == null) continue;
-            items.Add(new DepthItem { Y = obj.Y, IsUnit = false, Index = i });
+            items.Add(new DepthItem { Y = obj.Y, Type = DepthItemType.EnvObject, Index = i });
         }
+
+        // Add poison cloud puffs
+        _poisonCloudRenderer.SetContext(_spriteBatch, _glowTex, _camera, _renderer, _flipbooks, _gameTime);
+        _poisonCloudRenderer.AddPuffsToDepthList(_sim.PoisonClouds, items);
 
         items.Sort();
 
         foreach (var item in items)
         {
-            if (item.IsUnit)
-                DrawSingleUnit(item.Index);
-            else
-                DrawSingleEnvObject(item.Index);
+            switch (item.Type)
+            {
+                case DepthItemType.Unit:
+                    DrawSingleUnit(item.Index);
+                    break;
+                case DepthItemType.EnvObject:
+                    DrawSingleEnvObject(item.Index);
+                    break;
+                case DepthItemType.CloudPuff:
+                    _poisonCloudRenderer.DrawSinglePuff(item.Index, item.SubIndex);
+                    break;
+            }
         }
     }
 
