@@ -74,3 +74,8 @@
 /processor:EffectProcessor
 /build:HdrIntensity.fx
 
+#begin HdrSprite.fx
+/importer:EffectImporter
+/processor:EffectProcessor
+/build:HdrSprite.fx
+

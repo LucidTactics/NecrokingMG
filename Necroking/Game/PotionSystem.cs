@@ -72,6 +72,8 @@ public static class PotionSystem
                 lastProj.HitEffectFlipbookID = potion.HitEffectFlipbook.FlipbookID;
                 lastProj.HitEffectScale = potion.HitEffectFlipbook.Scale;
                 lastProj.HitEffectColor = potion.HitEffectFlipbook.Color;
+                lastProj.HitEffectBlendMode = potion.HitEffectFlipbook.BlendMode == "Additive" ? 1 : 0;
+                lastProj.HitEffectAlignment = potion.HitEffectFlipbook.Alignment == "Upright" ? 1 : 0;
             }
         }
 

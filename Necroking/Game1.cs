@@ -83,6 +83,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
     private Microsoft.Xna.Framework.Graphics.Effect? _groundEffect;
     private Microsoft.Xna.Framework.Graphics.Effect? _outlineFlatEffect;
     private Microsoft.Xna.Framework.Graphics.Effect? _hdrIntensityEffect;
+    private Microsoft.Xna.Framework.Graphics.Effect? _hdrSpriteEffect;
     private Texture2D? _groundVertexMapTex;
     private EffectManager _effectManager = new();
     private BloomRenderer _bloom = new();
@@ -1055,7 +1056,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         if (spell.CastFlipbook == null || string.IsNullOrEmpty(spell.CastFlipbook.FlipbookID)) return;
 
         var fb = spell.CastFlipbook;
-        var tint = fb.Color.ToScaledColor();
+        var tint = fb.Color.ToColor();
         int blendMode = fb.BlendMode == "Additive" ? 1 : 0;
         int alignment = fb.Alignment == "Upright" ? 1 : 0;
         float duration = fb.Duration >= 0f ? fb.Duration : 0.4f;
@@ -1069,7 +1070,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         if (spell.SummonFlipbook == null || string.IsNullOrEmpty(spell.SummonFlipbook.FlipbookID)) return;
 
         var fb = spell.SummonFlipbook;
-        var tint = fb.Color.ToScaledColor();
+        var tint = fb.Color.ToColor();
         int blendMode = fb.BlendMode == "Additive" ? 1 : 0;
         int alignment = fb.Alignment == "Upright" ? 1 : 0;
         float duration = fb.Duration >= 0f ? fb.Duration : 0.4f;
@@ -1181,6 +1182,8 @@ public class Game1 : Microsoft.Xna.Framework.Game
         catch (Exception ex) { _outlineFlatEffect = null; DebugLog.Log("startup", $"OutlineFlat not loaded: {ex.Message}"); }
         try { _hdrIntensityEffect = Content.Load<Microsoft.Xna.Framework.Graphics.Effect>("HdrIntensity"); }
         catch (Exception ex) { _hdrIntensityEffect = null; DebugLog.Log("startup", $"HdrIntensity not loaded: {ex.Message}"); }
+        try { _hdrSpriteEffect = Content.Load<Microsoft.Xna.Framework.Graphics.Effect>("HdrSprite"); }
+        catch (Exception ex) { _hdrSpriteEffect = null; DebugLog.Log("startup", $"HdrSprite not loaded: {ex.Message}"); }
 
         {
             Microsoft.Xna.Framework.Graphics.Effect? fogEffect = null;
@@ -2922,6 +2925,8 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 lastProj.HitEffectFlipbookID = spell.HitEffectFlipbook.FlipbookID;
                 lastProj.HitEffectScale = spell.HitEffectFlipbook.Scale;
                 lastProj.HitEffectColor = spell.HitEffectFlipbook.Color;
+                lastProj.HitEffectBlendMode = spell.HitEffectFlipbook.BlendMode == "Additive" ? 1 : 0;
+                lastProj.HitEffectAlignment = spell.HitEffectFlipbook.Alignment == "Upright" ? 1 : 0;
             }
         }
     }
@@ -3353,9 +3358,23 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
         _spriteBatch.End();
 
-        // --- Additive blend pass (effects, lightning) ---
+        // Spawn new effects from impacts (once per frame, before drawing)
+        SpawnImpactEffects();
+
+        // --- Alpha-blended effects (clouds, smoke — no HDR shader, plain rendering) ---
+        _spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.LinearClamp);
+        DrawEffectsFiltered(0);
+        _spriteBatch.End();
+
+        // --- Additive HDR effects pass ---
+        _hdrSpriteEffect?.Parameters["AlphaMode"]?.SetValue(0f);
+        _spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.Additive, SamplerState.LinearClamp,
+            effect: _hdrSpriteEffect);
+        DrawEffectsFiltered(1);
+        _spriteBatch.End();
+
+        // --- Additive blend pass (lightning, debug shapes — default shader) ---
         _spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.Additive, SamplerState.LinearClamp);
-        DrawEffects();
         _lightningRenderer.SetGameTime(_gameTime);
         _lightningRenderer.Draw();
 
@@ -4522,11 +4541,12 @@ public class Game1 : Microsoft.Xna.Framework.Game
         }
     }
 
-    private void DrawEffects()
+    /// <summary>Draw effects matching the given blend mode (0=alpha, 1=additive).</summary>
+    private void DrawEffectsFiltered(int blendMode)
     {
         foreach (var eff in _effectManager.Effects)
         {
-            if (!eff.Alive) continue;
+            if (!eff.Alive || eff.BlendMode != blendMode) continue;
             float t = eff.Age / eff.Lifetime;
             float alpha = eff.AlphaCurve.Evaluate(t);
             float scale = eff.ScaleCurve.Evaluate(t) * _camera.Zoom / 32f;
@@ -4543,27 +4563,40 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 float worldSize = scale * 2f; // scale curve gives world units
                 float pixelSize = worldSize * _camera.Zoom;
                 float fbScale = pixelSize / srcRect.Width;
-                var color = new Color(eff.Tint.R, eff.Tint.G, eff.Tint.B, (byte)(alpha * 255));
+                Color color = blendMode == 0
+                    ? new Color(eff.Tint.R, eff.Tint.G, eff.Tint.B, (byte)(alpha * 255))
+                    : HdrColor.ToHdrVertex(eff.Tint, alpha, eff.HdrIntensity);
                 _spriteBatch.Draw(fb.Texture, sp, srcRect, color, 0f, origin, fbScale, SpriteEffects.None, 0f);
             }
             else
             {
                 // Fallback glow (radial gradient circle)
-                byte a = (byte)(alpha * 200);
-                float glowSize = scale * _camera.Zoom * 0.5f / 32f; // divide by half-texture-size to match world scale
-                _spriteBatch.Draw(_glowTex, sp, null, new Color(eff.Tint.R, eff.Tint.G, eff.Tint.B, a),
+                Color color;
+                if (blendMode == 0)
+                    color = new Color(eff.Tint.R, eff.Tint.G, eff.Tint.B, (byte)(alpha * 200));
+                else
+                {
+                    float glowAlpha = alpha * (200f / 255f);
+                    color = HdrColor.ToHdrVertex(eff.Tint, glowAlpha, eff.HdrIntensity);
+                }
+                float glowSize = scale * _camera.Zoom * 0.5f / 32f;
+                _spriteBatch.Draw(_glowTex, sp, null, color,
                     0f, new Vector2(32f, 32f), glowSize, SpriteEffects.None, 0f);
             }
         }
+    }
 
-        // Spawn effects from projectile impacts
+    /// <summary>Spawn new effects from projectile impacts (called once per frame, blend-mode independent).</summary>
+    private void SpawnImpactEffects()
+    {
         foreach (var impact in _sim.Projectiles.Impacts)
         {
             string fbId = impact.HitEffectFlipbookID;
             if (!string.IsNullOrEmpty(fbId))
             {
                 _effectManager.SpawnSpellImpact(impact.Position, impact.HitEffectScale,
-                    impact.HitEffectColor.ToScaledColor(), fbId);
+                    impact.HitEffectColor.ToColor(), fbId, hdrIntensity: impact.HitEffectColor.Intensity,
+                    blendMode: impact.HitEffectBlendMode, alignment: impact.HitEffectAlignment);
             }
             else if (impact.AoeRadius > 0)
             {
