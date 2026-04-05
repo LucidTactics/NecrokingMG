@@ -64,6 +64,7 @@ public class HUDRenderer
     private static readonly Color DropdownNoneColor = new(150, 150, 170);
     private static readonly Color DropdownSelectedColor = new(255, 220, 100);
     private static readonly Color DropdownNormalColor = new(200, 200, 220);
+    private static readonly Color DropdownHoverBg = new(60, 60, 90, 200);
     private static readonly Color TooltipBg = new(15, 15, 25, 220);
     private static readonly Color TooltipBorder = new(100, 100, 160);
     private static readonly Color TooltipText = new(220, 220, 240);
@@ -233,13 +234,25 @@ public class HUDRenderer
         int ddH = (allSpells.Count + 1) * DropdownItemH;
         int ddY = barY - 10;
 
-        _batch.Draw(_pixel, new Rectangle(slotX - 2, ddY - ddH - 2, DropdownWidth, ddH + 4), DropdownBg);
+        int ddLeft = slotX - 2;
+        _batch.Draw(_pixel, new Rectangle(ddLeft, ddY - ddH - 2, DropdownWidth, ddH + 4), DropdownBg);
+
+        int mx = (int)_input.MousePos.X, my = (int)_input.MousePos.Y;
+        int hoverIdx = -1;
+        if (mx >= ddLeft && mx < ddLeft + DropdownWidth && my >= ddY - ddH && my < ddY)
+            hoverIdx = (ddY - my) / DropdownItemH;
+
+        // (None) item — index 0
+        if (hoverIdx == 0)
+            _batch.Draw(_pixel, new Rectangle(ddLeft, ddY - DropdownItemH, DropdownWidth, DropdownItemH), DropdownHoverBg);
         Text(_smallFont, "(None)", new Vector2(slotX + 4, ddY - DropdownItemH), DropdownNoneColor);
 
         for (int si = 0; si < allSpells.Count; si++)
         {
             var spDef = gameData.Spells.Get(allSpells[si]);
             int itemY = ddY - (si + 2) * DropdownItemH;
+            if (hoverIdx == si + 1)
+                _batch.Draw(_pixel, new Rectangle(ddLeft, itemY, DropdownWidth, DropdownItemH), DropdownHoverBg);
             string label = spDef != null ? $"{spDef.DisplayName} [{spDef.Category}]" : allSpells[si];
             Color labelColor = bar.Slots[openSlot].SpellID == allSpells[si]
                 ? DropdownSelectedColor : DropdownNormalColor;
@@ -438,7 +451,16 @@ public class HUDRenderer
         int ddH = (allPotions.Count + 1) * ddItemH;
         int ddY = secondaryY - 10;
 
-        _batch.Draw(_pixel, new Rectangle(slotX - 2, ddY - ddH - 2, DropdownWidth, ddH + 4), DropdownBg);
+        int ddLeft = slotX - 2;
+        _batch.Draw(_pixel, new Rectangle(ddLeft, ddY - ddH - 2, DropdownWidth, ddH + 4), DropdownBg);
+
+        int mx = (int)_input.MousePos.X, my = (int)_input.MousePos.Y;
+        int hoverIdx = -1;
+        if (mx >= ddLeft && mx < ddLeft + DropdownWidth && my >= ddY - ddH && my < ddY)
+            hoverIdx = (ddY - my) / ddItemH;
+
+        if (hoverIdx == 0)
+            _batch.Draw(_pixel, new Rectangle(ddLeft, ddY - ddItemH, DropdownWidth, ddItemH), DropdownHoverBg);
         Text(_smallFont, "(None)", new Vector2(slotX + 4, ddY - ddItemH), DropdownNoneColor);
 
         string currentItemId = potionSlots[openSlot];
@@ -446,6 +468,8 @@ public class HUDRenderer
         {
             var pDef = gameData.Potions.Get(allPotions[pi]);
             int itemY = ddY - (pi + 2) * ddItemH;
+            if (hoverIdx == pi + 1)
+                _batch.Draw(_pixel, new Rectangle(ddLeft, itemY, DropdownWidth, ddItemH), DropdownHoverBg);
             string label = pDef?.DisplayName ?? allPotions[pi];
             bool isSelected = pDef != null && pDef.ItemID == currentItemId;
             Text(_smallFont, label, new Vector2(slotX + 4, itemY),
