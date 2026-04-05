@@ -539,6 +539,81 @@
         "b": 40,
         "a": 100
       }
+    },
+    {
+      "id": "buff_miasma_slow",
+      "name": "Miasma Sickness",
+      "duration": 2,
+      "effects": [
+        {
+          "type": "Multiply",
+          "stat": "CombatSpeed",
+          "value": 0.6
+        }
+      ],
+      "maxStacks": 1,
+      "hasOrbital": false,
+      "orbital": null,
+      "hasGroundAura": false,
+      "groundAura": null,
+      "hasBehindEffect": false,
+      "behindEffect": null,
+      "hasFrontEffect": false,
+      "frontEffect": null,
+      "hasLightningAura": false,
+      "lightningAura": null,
+      "hasImageBehind": false,
+      "imageBehind": null,
+      "hasPulsingOutline": false,
+      "pulsingOutline": null,
+      "hasWeaponParticle": false,
+      "weaponParticle": null,
+      "unitTint": {
+        "r": 80,
+        "g": 140,
+        "b": 40,
+        "a": 40
+      }
+    },
+    {
+      "id": "buff_plagued",
+      "name": "Plagued",
+      "duration": 10,
+      "effects": [
+        {
+          "type": "Multiply",
+          "stat": "CombatSpeed",
+          "value": 0.8
+        },
+        {
+          "type": "Add",
+          "stat": "Defense",
+          "value": -2
+        }
+      ],
+      "maxStacks": 3,
+      "hasOrbital": false,
+      "orbital": null,
+      "hasGroundAura": false,
+      "groundAura": null,
+      "hasBehindEffect": false,
+      "behindEffect": null,
+      "hasFrontEffect": false,
+      "frontEffect": null,
+      "hasLightningAura": false,
+      "lightningAura": null,
+      "hasImageBehind": false,
+      "imageBehind": null,
+      "hasPulsingOutline": false,
+      "pulsingOutline": null,
+      "hasWeaponParticle": false,
+      "weaponParticle": null,
+      "unitTint": {
+        "r": 60,
+        "g": 120,
+        "b": 30,
+        "a": 60
+      }
     }
   ]
 }

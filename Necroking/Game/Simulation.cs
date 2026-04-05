@@ -54,6 +54,7 @@ public class Simulation
     private UnitArrays _units = new();
     private ProjectileManager _projectiles = new();
     private LightningSystem _lightning = new();
+    private PoisonCloudSystem _poisonClouds = new();
     private HordeSystem _horde = new();
     private NecromancerState _necroState = new();
     private CombatLog _combatLog = new();
@@ -82,6 +83,7 @@ public class Simulation
     public IReadOnlyList<SoulOrb> SoulOrbs => _soulOrbs;
     public ProjectileManager Projectiles => _projectiles;
     public LightningSystem Lightning => _lightning;
+    public PoisonCloudSystem PoisonClouds => _poisonClouds;
     public HordeSystem Horde => _horde;
     public CombatLog CombatLog => _combatLog;
     public float GameTime => _gameTime;
@@ -105,6 +107,7 @@ public class Simulation
         _damageEvents.Clear();
         _projectiles.Clear();
         _lightning.Clear();
+        _poisonClouds.Clear();
         _combatLog.Clear();
         _gameTime = 0f;
         _frameNumber = 0;
@@ -273,6 +276,10 @@ public class Simulation
             if (ld.UnitIdx >= 0 && ld.UnitIdx < _units.Count)
                 ApplyDamage(ld.UnitIdx, ld.Damage);
 
+        // Poison clouds
+        _poisonClouds.Update(dt, _units, _quadtree, _corpses, _damageEvents,
+            _gameData?.Buffs);
+
         // Remove dead units
         RemoveDeadUnits();
 
@@ -317,9 +324,24 @@ public class Simulation
     private void UpdateAI(float dt)
     {
         // Awareness pass (runs before AI updates)
-        float dayCycleLength = 360f; // 6 minutes = 360 seconds
-        float dayFraction = (_gameTime % dayCycleLength) / dayCycleLength;
-        bool isNight = dayFraction >= 0.5f; // minutes 3-6 are night
+        float dayFraction;
+        bool isNight;
+        var dnSettings = _gameData?.Settings.DayNight;
+        if (dnSettings != null && dnSettings.Enabled)
+        {
+            // Use DayNightSystem phases: Night and Dusk count as "night" for animal AI
+            float totalCycle = dnSettings.DawnDuration + dnSettings.DayDuration +
+                               dnSettings.DuskDuration + dnSettings.NightDuration;
+            dayFraction = totalCycle > 0f ? (_gameTime % totalCycle) / totalCycle : 0f;
+            float elapsed = _gameTime % (totalCycle > 0f ? totalCycle : 1f);
+            isNight = elapsed >= (dnSettings.DawnDuration + dnSettings.DayDuration);
+        }
+        else
+        {
+            float dayCycleLength = 360f; // 6 minutes fallback
+            dayFraction = (_gameTime % dayCycleLength) / dayCycleLength;
+            isNight = dayFraction >= 0.5f;
+        }
         AI.AwarenessSystem.Update(_units, dt, (int)_frameNumber);
 
         for (int i = 0; i < _units.Count; i++)

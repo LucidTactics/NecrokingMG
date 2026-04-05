@@ -13,6 +13,8 @@ public enum AnimState : byte
     Ranged1,
     Feeding,
     Hover,
+    Sit,
+    Sleep,
     Count
 }
 
@@ -536,6 +538,8 @@ public class AnimController
         AnimState.JumpAttackHit => "JumpAttackHit",
         AnimState.Feeding => "Feed",
         AnimState.Hover => "Hover",
+        AnimState.Sit => "Sit",
+        AnimState.Sleep => "Sleep",
         _ => "Idle"
     };
 
@@ -544,7 +548,8 @@ public class AnimController
         AnimState.Idle or AnimState.Walk or AnimState.Jog or AnimState.Run
             or AnimState.Block or AnimState.Stunned or AnimState.JumpLoop
             or AnimState.Panic or AnimState.Feeding or AnimState.Hover => AnimPlayMode.Loop,
-        AnimState.Death or AnimState.Knockdown or AnimState.Fall => AnimPlayMode.PlayOnceHold,
+        AnimState.Death or AnimState.Knockdown or AnimState.Fall
+            or AnimState.Sit or AnimState.Sleep => AnimPlayMode.PlayOnceHold,
         _ => AnimPlayMode.PlayOnceTransition
     };
 

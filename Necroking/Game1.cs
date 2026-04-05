@@ -87,7 +87,9 @@ public class Game1 : Microsoft.Xna.Framework.Game
     private EffectManager _effectManager = new();
     private BloomRenderer _bloom = new();
     private WeatherRenderer _weatherRenderer = new();
+    private DayNightSystem _dayNightSystem = new();
     private LightningRenderer _lightningRenderer = new();
+    private PoisonCloudRenderer _poisonCloudRenderer = new();
     private DebugDraw _debugDraw = new();
     private List<DamageNumber> _damageNumbers = new();
 
@@ -221,7 +223,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         {
             string localDir = GamePaths.Resolve(GamePaths.LocalSettingsDir);
             System.IO.Directory.CreateDirectory(localDir);
-            _gameData.Settings.Save(GamePaths.Resolve(GamePaths.LocalSettingsJson));
+            _gameData.Settings.Save(GamePaths.Resolve(GamePaths.SettingsJson));
             _gameData.Weather.Save(GamePaths.Resolve(GamePaths.WeatherJson));
         };
 
@@ -335,6 +337,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         _envSystem.ClearDefs();
         _groundSystem.ClearTypes();
         _roadSystem.Init();
+        _dayNightSystem.Init(_gameData.Settings.DayNight);
 
         // Load flipbooks
         foreach (var fbId in _gameData.Flipbooks.GetIDs())
@@ -607,6 +610,21 @@ public class Game1 : Microsoft.Xna.Framework.Game
         _unitAnims.Clear();
         _corpseAnims.Clear();
         _effectManager.Clear();
+
+        // Load flipbooks (needed for cloud effects, hit effects, etc.)
+        if (_flipbooks.Count == 0)
+        {
+            foreach (var fbId in _gameData.Flipbooks.GetIDs())
+            {
+                var fbDef = _gameData.Flipbooks.Get(fbId);
+                if (fbDef == null || string.IsNullOrEmpty(fbDef.Path)) continue;
+                var resolvedPath = GamePaths.Resolve(fbDef.Path);
+                if (!File.Exists(resolvedPath)) continue;
+                var fb = new Flipbook();
+                if (fb.Load(GraphicsDevice, resolvedPath, fbDef.Cols, fbDef.Rows, fbDef.DefaultFPS))
+                    _flipbooks[fbId] = fb;
+            }
+        }
 
         // Init simulation with a grid sized to the scenario's needs
         int gridSize = scenario.GridSize;
@@ -1219,7 +1237,8 @@ public class Game1 : Microsoft.Xna.Framework.Game
         _itemEditor.SetGameData(_gameData);
         _settingsWindow = new SettingsWindow(_editorUi);
         System.IO.Directory.CreateDirectory(GamePaths.Resolve(GamePaths.LocalSettingsDir));
-        _settingsWindow.SetGameData(_gameData, GamePaths.Resolve(GamePaths.LocalSettingsJson), GamePaths.Resolve(GamePaths.WeatherJson));
+        _settingsWindow.SetGameData(_gameData, GamePaths.Resolve(GamePaths.SettingsJson), GamePaths.Resolve(GamePaths.WeatherJson));
+        _settingsWindow.SetDayNightSystem(_dayNightSystem);
         LogTiming("Editors initialized");
         DebugLog.Log("startup", $"=== LoadContent complete ===");
     }
@@ -1965,6 +1984,12 @@ public class Game1 : Microsoft.Xna.Framework.Game
                             break;
                         }
 
+                        case "Cloud":
+                        {
+                            _sim.PoisonClouds.SpawnCloud(mouseWorld, spell, Faction.Undead);
+                            break;
+                        }
+
                         case "Toggle":
                         {
                             // Toggle effect on necromancer
@@ -2056,6 +2081,9 @@ public class Game1 : Microsoft.Xna.Framework.Game
                             }
                             case "Summon":
                                 ExecuteSummonSpell(spell2, _pendingSpell, necroPos2, necroIdx);
+                                break;
+                            case "Cloud":
+                                _sim.PoisonClouds.SpawnCloud(mouseWorld, spell2, Faction.Undead);
                                 break;
                             case "Command":
                                 for (int ci = 0; ci < _sim.Units.Count; ci++)
@@ -2285,6 +2313,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
             // --- Simulate ---
             _sim.Tick(dt);
+            _dayNightSystem.Update(dt, _gameData);
             _weatherRenderer.Update(dt, _gameData);
             _envSystem.UpdateForagables(dt);
             _envSystem.UpdateTraps(dt, _sim.Units);
@@ -3046,6 +3075,17 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 && _sim.Units[i].Routine == 6 /* RoutineFeeding */
                 && _sim.Units[i].Subroutine == 1 /* FeedEating */)
                 targetState = AnimState.Feeding;
+            else if ((_sim.Units[i].Archetype == AI.ArchetypeRegistry.DeerHerd
+                || _sim.Units[i].Archetype == AI.ArchetypeRegistry.WolfPack)
+                && _sim.Units[i].Routine == 1 /* RoutineSleeping */)
+            {
+                if (_sim.Units[i].Subroutine == 0) // Sitting down
+                    targetState = AnimState.Sit;
+                else if (_sim.Units[i].Subroutine == 1) // Sleeping
+                    targetState = AnimState.Sleep;
+                else // Waking — StandupTimer drives the Standup anim via the check above
+                    targetState = AnimState.Idle;
+            }
             else if (_sim.Units[i].BlockReacting)
                 targetState = AnimState.BlockReact;
             else if (_sim.Units[i].PostAttackTimer > 0f)
@@ -3115,7 +3155,18 @@ public class Game1 : Microsoft.Xna.Framework.Game
                     animData.Ctrl.PlaybackSpeed = MathF.Max(1f, animDur / lockout);
             }
 
-            animData.Ctrl.RequestState(targetState);
+            // Break out of Sit/Sleep hold — ForceState needed since PlayOnceHold
+            // blocks normal RequestState transitions
+            var currentAnim = animData.Ctrl.CurrentState;
+            if ((currentAnim == AnimState.Sit || currentAnim == AnimState.Sleep)
+                && targetState != AnimState.Sit && targetState != AnimState.Sleep)
+            {
+                animData.Ctrl.ForceState(targetState);
+            }
+            else
+            {
+                animData.Ctrl.RequestState(targetState);
+            }
             animData.Ctrl.Update(dt);
 
             // Resolve pending attacks at action moment
@@ -3272,7 +3323,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // --- Corpses ---
         DrawCorpses();
 
-        // --- Units + Environment objects (merged Y-sort for correct depth) ---
+        // --- Units + Environment objects + Poison cloud puffs (merged Y-sort for correct depth) ---
         DrawUnitsAndObjects();
 
         // --- Projectiles ---
@@ -3971,11 +4022,14 @@ public class Game1 : Microsoft.Xna.Framework.Game
     // Sortable item for merged unit+object depth sorting
     private readonly List<DepthItem> _depthItems = new(256); // reused each frame
 
-    private struct DepthItem : IComparable<DepthItem>
+    internal enum DepthItemType : byte { Unit, EnvObject, CloudPuff }
+
+    internal struct DepthItem : IComparable<DepthItem>
     {
         public float Y;
-        public bool IsUnit;
-        public int Index;
+        public DepthItemType Type;
+        public int Index;       // Unit index, env object index, or cloud index
+        public int SubIndex;    // For cloud puffs: puff index within the cloud
         public int CompareTo(DepthItem other) => Y.CompareTo(other.Y);
     }
 
@@ -3995,7 +4049,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // Add units
         for (int i = 0; i < _sim.Units.Count; i++)
             if (_sim.Units[i].Alive)
-                items.Add(new DepthItem { Y = _sim.Units[i].Position.Y, IsUnit = true, Index = i });
+                items.Add(new DepthItem { Y = _sim.Units[i].Position.Y, Type = DepthItemType.Unit, Index = i });
 
         // Add environment objects (with view culling, skip collected foragables, skip ground-layer objects)
         for (int i = 0; i < _envSystem.ObjectCount; i++)
@@ -4007,17 +4061,29 @@ public class Game1 : Microsoft.Xna.Framework.Game
             if (obj.X < viewLeft || obj.X > viewRight || obj.Y < viewTop || obj.Y > viewBottom)
                 continue;
             if (_envSystem.GetDefTexture(obj.DefIndex) == null) continue;
-            items.Add(new DepthItem { Y = obj.Y, IsUnit = false, Index = i });
+            items.Add(new DepthItem { Y = obj.Y, Type = DepthItemType.EnvObject, Index = i });
         }
+
+        // Add poison cloud puffs
+        _poisonCloudRenderer.SetContext(_spriteBatch, _glowTex, _camera, _renderer, _flipbooks, _gameTime);
+        _poisonCloudRenderer.AddPuffsToDepthList(_sim.PoisonClouds, items);
 
         items.Sort();
 
         foreach (var item in items)
         {
-            if (item.IsUnit)
-                DrawSingleUnit(item.Index);
-            else
-                DrawSingleEnvObject(item.Index);
+            switch (item.Type)
+            {
+                case DepthItemType.Unit:
+                    DrawSingleUnit(item.Index);
+                    break;
+                case DepthItemType.EnvObject:
+                    DrawSingleEnvObject(item.Index);
+                    break;
+                case DepthItemType.CloudPuff:
+                    _poisonCloudRenderer.DrawSinglePuff(item.Index, item.SubIndex);
+                    break;
+            }
         }
     }
 
@@ -4324,6 +4390,20 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 _spriteBatch.Draw(_pixel, new Rectangle(cx - 6, cy - 2, 12, 1), new Color(255, 80, 80, 150));
                 _spriteBatch.Draw(_pixel, new Rectangle(cx - 6, cy + 2, 12, 1), new Color(255, 80, 80, 150));
                 break;
+            case "Cloud":
+                // Poison cloud icon: hazy green circle
+                for (int dy2 = -7; dy2 <= 7; dy2++)
+                    for (int dx2 = -7; dx2 <= 7; dx2++)
+                    {
+                        int dsq = dx2 * dx2 + dy2 * dy2;
+                        if (dsq <= 49)
+                        {
+                            int alpha = dsq < 16 ? 200 : (dsq < 36 ? 140 : 80);
+                            _spriteBatch.Draw(_pixel, new Rectangle(cx + dx2, cy + dy2, 1, 1),
+                                new Color(80, 200, 60, alpha));
+                        }
+                    }
+                break;
             default:
                 _spriteBatch.Draw(_pixel, new Rectangle(cx - 2, cy - 2, 4, 4), new Color(180, 180, 180, 150));
                 break;
@@ -4541,7 +4621,8 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
     private void DrawPauseMenu(int screenW, int screenH)
     {
-        _spriteBatch.Draw(_pixel, new Rectangle(0, 0, screenW, screenH), new Color(0, 0, 0, 150));
+        if (_gameData.Settings.General.PauseDimBackground)
+            _spriteBatch.Draw(_pixel, new Rectangle(0, 0, screenW, screenH), new Color(0, 0, 0, 150));
 
         int boxW = 350;
         int boxH = 450;

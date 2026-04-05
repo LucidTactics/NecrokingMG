@@ -32,13 +32,8 @@ public class GameData
         ok &= Weather.Load(Path.Combine(dataDir, "weather.json"));
         ok &= UnitGroups.Load(Path.Combine(dataDir, "unit_groups.json"));
 
-        // Settings: load from local bin/settings/ if it exists, otherwise fall back to data/
-        string localSettings = Core.GamePaths.Resolve(Core.GamePaths.LocalSettingsJson);
-        string defaultSettings = Path.Combine(dataDir, "settings.json");
-        if (File.Exists(localSettings))
-            ok &= Settings.Load(localSettings);
-        else
-            ok &= Settings.Load(defaultSettings);
+        // Settings: load from data/settings.json
+        ok &= Settings.Load(Path.Combine(dataDir, "settings.json"));
 
         Items.Load(Path.Combine(dataDir, "items.json")); // optional, don't fail if missing
         Potions.Load(Path.Combine(dataDir, "potions.json")); // optional, don't fail if missing

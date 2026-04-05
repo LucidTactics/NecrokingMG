@@ -197,6 +197,29 @@ When creating a new scenario, **spend real effort designing what to log**. The s
 - Use `--bgcolor R,G,B` to change background when testing sprites that blend into the default (e.g. `--bgcolor 80,80,100` for lighter, `--bgcolor 0,0,0` for pure black)
 - If a screenshot looks wrong because sprites are hard to see, try a different background color
 
+### Visual feature testing strategy
+When a scenario tests a primarily visual feature (spell effects, particles, rendering), visual clarity is the main constraint for debugging. Follow this progression:
+
+**1. Set up for maximum visibility**
+- Choose a background color that contrasts with the feature being tested. Green spell? Use dark purple (`--bgcolor 40,30,50`). Fire effect? Use dark blue. Think about units and other elements in the scene too
+- Disable weather (`sim.GameData.Settings.Weather.Enabled = false`) — weather fog/rain obscures the feature and can be mistaken for it
+- Disable bloom for initial testing (`BloomOverride = new BloomSettings { Enabled = false }`) — bloom smears pixel boundaries and makes it impossible to tell if the raw rendering is correct
+
+**2. Test the simplest version first**
+- Start with the minimal renderable unit: a single particle, one puff, one sprite. Confirm it draws at all, animates correctly, and responds to parameters
+- Only after the basic element works, layer up to the full system (multiple particles, rings, glow passes)
+- If something doesn't render, add a visible fallback (e.g. a red rectangle) so you can distinguish "not rendering" from "rendering invisibly"
+
+**3. Add complexity incrementally**
+- Once the single element works, add the multi-particle system
+- Then re-enable bloom and verify it enhances rather than destroys the visual
+- Then test with weather enabled if the feature should coexist with weather
+
+**4. Test depth ordering last**
+- As a final step, add a game object (tree) positioned behind the feature but visually overlapping, and another object just in front of it
+- Verify the feature renders in the correct depth order using Y-sorting or whatever depth system is appropriate
+- These test objects add visual clutter, so only add them after the feature itself is confirmed working
+
 ## Auto-accept Patterns
 - Reading any file in the project
 - Editing files in `Necroking/`, `tools/`

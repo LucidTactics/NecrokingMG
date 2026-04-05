@@ -46,7 +46,7 @@ public class SpellDef : IHasId
     [JsonPropertyName("id")] public string Id { get; set; } = "";
 
     [EditorField(Label = "Category", Order = 2)]
-    [EditorCombo("Projectile", "Buff", "Debuff", "Summon", "Strike", "Beam", "Drain")]
+    [EditorCombo("Projectile", "Buff", "Debuff", "Summon", "Strike", "Beam", "Drain", "Cloud")]
     [JsonPropertyName("category")] public string Category { get; set; } = "Projectile";
 
     // ============ COMMON ============
@@ -443,6 +443,72 @@ public class SpellDef : IHasId
     [EditorVisible("Category", "Drain")]
     [EditorField(Label = "Target Effect", Group = "DRAIN", Order = 720)]
     [JsonPropertyName("drainTargetEffect")] public FlipbookRef? DrainTargetEffect { get; set; }
+
+    // ============ CLOUD ============
+    [EditorVisible("Category", "Cloud")]
+    [EditorField(Label = "Radius", Group = "CLOUD", Order = 800, Step = 0.1f, Decimals = 1, GroupColorR = 80, GroupColorG = 200, GroupColorB = 80)]
+    [JsonPropertyName("cloudRadius")] public float CloudRadius { get; set; } = 5.0f;
+
+    [EditorVisible("Category", "Cloud")]
+    [EditorField(Label = "Max Radius", Group = "CLOUD", Order = 801, Step = 0.1f, Decimals = 1)]
+    [JsonPropertyName("cloudMaxRadius")] public float CloudMaxRadius { get; set; } = 10.0f;
+
+    [EditorVisible("Category", "Cloud")]
+    [EditorField(Label = "Duration", Group = "CLOUD", Order = 802, Step = 0.1f, Decimals = 1)]
+    [JsonPropertyName("cloudDuration")] public float CloudDuration { get; set; } = 12.0f;
+
+    [EditorVisible("Category", "Cloud")]
+    [EditorField(Label = "Tick Rate", Group = "CLOUD", Order = 803, Step = 0.1f, Decimals = 1)]
+    [JsonPropertyName("cloudTickRate")] public float CloudTickRate { get; set; } = 1.0f;
+
+    [EditorVisible("Category", "Cloud")]
+    [EditorField(Label = "Tick Damage", Group = "CLOUD", Order = 804)]
+    [JsonPropertyName("cloudTickDamage")] public int CloudTickDamage { get; set; } = 3;
+
+    [EditorVisible("Category", "Cloud")]
+    [EditorHeader("CORPSE FEEDING", ColorR = 160, ColorG = 255, ColorB = 120)]
+    [EditorField(Label = "Corpse Bonus", Group = "CLOUD", Order = 810)]
+    [JsonPropertyName("cloudCorpseBonus")] public bool CloudCorpseBonus { get; set; } = true;
+
+    [EditorVisible("Category", "Cloud")]
+    [EditorField(Label = "Consume Rate", Group = "CLOUD", Order = 811, Step = 0.1f, Decimals = 1)]
+    [JsonPropertyName("cloudCorpseConsumeRate")] public float CloudCorpseConsumeRate { get; set; } = 2.0f;
+
+    [EditorVisible("Category", "Cloud")]
+    [EditorField(Label = "Radius Bonus", Group = "CLOUD", Order = 812, Step = 0.1f, Decimals = 1)]
+    [JsonPropertyName("cloudCorpseRadiusBonus")] public float CloudCorpseRadiusBonus { get; set; } = 1.5f;
+
+    [EditorVisible("Category", "Cloud")]
+    [EditorField(Label = "Duration Bonus", Group = "CLOUD", Order = 813, Step = 0.1f, Decimals = 1)]
+    [JsonPropertyName("cloudCorpseDurationBonus")] public float CloudCorpseDurationBonus { get; set; } = 3.0f;
+
+    [EditorVisible("Category", "Cloud")]
+    [EditorField(Label = "Potency Bonus", Group = "CLOUD", Order = 814, Step = 0.01f, Decimals = 2)]
+    [JsonPropertyName("cloudCorpsePotencyBonus")] public float CloudCorpsePotencyBonus { get; set; } = 0.25f;
+
+    [EditorVisible("Category", "Cloud")]
+    [EditorHeader("PHASES", ColorR = 180, ColorG = 140, ColorB = 255)]
+    [EditorField(Label = "Eruption Dur", Group = "CLOUD", Order = 820, Step = 0.1f, Decimals = 1)]
+    [JsonPropertyName("cloudEruptionDuration")] public float CloudEruptionDuration { get; set; } = 2.0f;
+
+    [EditorVisible("Category", "Cloud")]
+    [EditorField(Label = "Spread Dur", Group = "CLOUD", Order = 821, Step = 0.1f, Decimals = 1)]
+    [JsonPropertyName("cloudSpreadDuration")] public float CloudSpreadDuration { get; set; } = 7.0f;
+
+    [EditorVisible("Category", "Cloud")]
+    [EditorHeader("DEBUFFS", ColorR = 255, ColorG = 120, ColorB = 120)]
+    [EditorField(Label = "Slow Buff", Group = "CLOUD", Order = 830)]
+    [EditorRegistryDropdown("Buffs")]
+    [JsonPropertyName("cloudSlowBuffID")] public string CloudSlowBuffID { get; set; } = "";
+
+    [EditorVisible("Category", "Cloud")]
+    [EditorField(Label = "Plagued Buff", Group = "CLOUD", Order = 831)]
+    [EditorRegistryDropdown("Buffs")]
+    [JsonPropertyName("cloudPlaguedBuffID")] public string CloudPlaguedBuffID { get; set; } = "";
+
+    [EditorVisible("Category", "Cloud")]
+    [EditorField(Label = "Plague Threshold", Group = "CLOUD", Order = 832, Step = 0.1f, Decimals = 1)]
+    [JsonPropertyName("cloudPlagueThreshold")] public float CloudPlagueThreshold { get; set; } = 3.0f;
 
     // Toggle (hidden from editor — internal)
     [EditorHide]

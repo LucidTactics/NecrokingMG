@@ -4,6 +4,7 @@ using Microsoft.Xna.Framework;
 using Necroking.Core;
 using Necroking.Data;
 using Necroking.Data.Registries;
+using Necroking.GameSystems;
 
 namespace Necroking.Editor;
 
@@ -20,7 +21,8 @@ public static class SettingsWeatherTab
     /// Draw the full weather settings panel.
     /// Returns the total content height consumed (for scroll calculations).
     /// </summary>
-    public static int Draw(EditorBase ui, WeatherSettings weather, GameData gameData, int x, int y, int w)
+    public static int Draw(EditorBase ui, WeatherSettings weather, GameData gameData, int x, int y, int w,
+        GameSystems.DayNightSystem? dayNight = null)
     {
         int curY = y;
 
@@ -29,7 +31,47 @@ public static class SettingsWeatherTab
         curY += RowH;
 
         weather.Enabled = ui.DrawCheckbox("Weather Enabled", weather.Enabled, x, curY);
+
+        // Day/night toggle on same row, offset to the right
+        var dn = gameData.Settings.DayNight;
+        dn.Enabled = ui.DrawCheckbox("Day night cycle enabled", dn.Enabled, x + 200, curY);
         curY += RowH;
+
+        // Day/night settings (collapsible inline)
+        if (dn.Enabled)
+        {
+            // Show current phase info
+            if (dayNight != null)
+            {
+                string phaseStr = dayNight.Phase.ToString();
+                float progress = dayNight.PhaseProgress * 100f;
+                ui.DrawText($"  Phase: {phaseStr} ({progress:F0}%)", new Vector2(x + 10, curY + 2),
+                    new Color(255, 220, 100));
+                curY += RowH;
+            }
+
+            // Duration fields (in minutes, stored as seconds)
+            float dawnMin = dn.DawnDuration / 60f;
+            dawnMin = ui.DrawFloatField("dn_dawn", "  Dawn (min)", dawnMin, x, curY, w, 0.5f);
+            dn.DawnDuration = Math.Max(5f, dawnMin * 60f);
+            curY += RowH;
+
+            float dayMin = dn.DayDuration / 60f;
+            dayMin = ui.DrawFloatField("dn_day", "  Day (min)", dayMin, x, curY, w, 0.5f);
+            dn.DayDuration = Math.Max(5f, dayMin * 60f);
+            curY += RowH;
+
+            float duskMin = dn.DuskDuration / 60f;
+            duskMin = ui.DrawFloatField("dn_dusk", "  Dusk (min)", duskMin, x, curY, w, 0.5f);
+            dn.DuskDuration = Math.Max(5f, duskMin * 60f);
+            curY += RowH;
+
+            float nightMin = dn.NightDuration / 60f;
+            nightMin = ui.DrawFloatField("dn_night", "  Night (min)", nightMin, x, curY, w, 0.5f);
+            dn.NightDuration = Math.Max(5f, nightMin * 60f);
+            curY += RowH;
+        }
+
 
         // Active Preset dropdown
         var presetIds = gameData.Weather.GetIDs();

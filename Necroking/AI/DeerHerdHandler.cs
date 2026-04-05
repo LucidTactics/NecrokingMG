@@ -1,5 +1,6 @@
 using System;
 using Necroking.Core;
+using Necroking.Movement;
 
 namespace Necroking.AI;
 
@@ -43,10 +44,19 @@ public class DeerHerdHandler : IArchetypeHandler
     private const byte FightStance = 0;  // stand facing attacker, wait for cooldown
     private const byte FightCharge = 1;  // charge in and strike
 
+    // Sleeping subroutines
+    private const byte SleepSitting = 0;    // Play sit animation, hold
+    private const byte SleepAsleep = 1;     // Play sleep animation, hold
+    private const byte SleepWaking = 2;     // Standup animation playing
+
     // Feeding subroutines
     private const byte FeedWalkToBush = 0;
     private const byte FeedEating = 1;
     private const byte FeedIdleAfter = 2;
+
+    private const float SitDuration = 10f;          // Seconds in sit before sleep
+    private const float SleepDetectionScale = 0.6f;  // 40% reduction in alert radius
+    private const float StandupDuration = 1.0f;      // Standup animation time
 
     private const float RoamRadius = 10f;
     private const float FleeDistance = 20f;
@@ -73,7 +83,7 @@ public class DeerHerdHandler : IArchetypeHandler
         switch (ctx.Routine)
         {
             case RoutineIdleRoaming: UpdateIdleRoaming(ref ctx); break;
-            case RoutineSleeping:    SubroutineSteps.Idle(ref ctx); break;
+            case RoutineSleeping:    UpdateSleeping(ref ctx); break;
             case RoutineAlert:       UpdateAlert(ref ctx); break;
             case RoutineFleeing:     UpdateFleeing(ref ctx); break;
             case RoutineCalming:     UpdateCalming(ref ctx); break;
@@ -91,9 +101,30 @@ public class DeerHerdHandler : IArchetypeHandler
         if (alert >= (byte)UnitAlertState.Alert &&
             (ctx.Routine <= RoutineSleeping || ctx.Routine == RoutineFeeding))
         {
+            // If sleeping or sitting, need to standup first
+            if (ctx.Routine == RoutineSleeping && ctx.Subroutine <= SleepAsleep)
+            {
+                // Face the threat before standing up
+                if (ctx.AlertTarget != GameConstants.InvalidUnit)
+                {
+                    int threatIdx = UnitUtil.ResolveUnitIndex(ctx.Units, ctx.AlertTarget);
+                    if (threatIdx >= 0)
+                        SubroutineSteps.FacePosition(ref ctx, ctx.Units[threatIdx].Position);
+                }
+                ctx.Subroutine = SleepWaking;
+                ctx.SubroutineTimer = StandupDuration;
+                ctx.Units[ctx.UnitIndex].StandupTimer = StandupDuration;
+                // Restore detection range
+                RestoreDetectionRange(ref ctx);
+                return;
+            }
+            // If already waking (standup playing), wait for it to finish
+            if (ctx.Routine == RoutineSleeping && ctx.Subroutine == SleepWaking)
+                return;
+
             ctx.Routine = RoutineAlert;
             ctx.Subroutine = AlertWatch;
-            ctx.SubroutineTimer = 0f; // will freeze for 1s before first check
+            ctx.SubroutineTimer = 0f;
             return;
         }
 
@@ -124,6 +155,19 @@ public class DeerHerdHandler : IArchetypeHandler
             byte target = ctx.IsNight ? RoutineSleeping : RoutineIdleRoaming;
             if (ctx.Routine != target)
             {
+                // Waking from sleep — need standup animation first
+                if (ctx.Routine == RoutineSleeping && ctx.Subroutine <= SleepAsleep && !ctx.IsNight)
+                {
+                    ctx.Subroutine = SleepWaking;
+                    ctx.SubroutineTimer = StandupDuration;
+                    ctx.Units[ctx.UnitIndex].StandupTimer = StandupDuration;
+                    RestoreDetectionRange(ref ctx);
+                    return;
+                }
+                // Don't switch while standup is playing
+                if (ctx.Routine == RoutineSleeping && ctx.Subroutine == SleepWaking)
+                    return;
+
                 ctx.Routine = target;
                 ctx.Subroutine = 0;
                 ctx.SubroutineTimer = 0f;
@@ -216,6 +260,71 @@ public class DeerHerdHandler : IArchetypeHandler
             int roll = (ctx.FrameNumber + ctx.UnitIndex * 7) % 100;
             if (roll < (int)(FeedingChance * 100))
                 TryStartFeeding(ref ctx);
+        }
+    }
+
+    // ═══════════════════════════════════════
+    //  Routine: Sleeping (Sit → Sleep → Wake)
+    // ═══════════════════════════════════════
+
+    private static void UpdateSleeping(ref AIContext ctx)
+    {
+        ctx.Units[ctx.UnitIndex].PreferredVel = Vec2.Zero;
+
+        switch (ctx.Subroutine)
+        {
+            case SleepSitting:
+                // Sit animation is PlayOnceHold — it plays and holds on last frame
+                // After SitDuration seconds, transition to sleep
+                ctx.SubroutineTimer += ctx.Dt;
+                if (ctx.SubroutineTimer >= SitDuration)
+                {
+                    ctx.Subroutine = SleepAsleep;
+                    ctx.SubroutineTimer = 0f;
+                    // Reduce detection range while sleeping
+                    ReduceDetectionRange(ref ctx);
+                }
+                break;
+
+            case SleepAsleep:
+                // Sleep animation is PlayOnceHold — plays and holds on last frame
+                // Stay here until woken by alert or dawn
+                break;
+
+            case SleepWaking:
+                // Standup animation is playing — wait for it to finish
+                ctx.SubroutineTimer -= ctx.Dt;
+                if (ctx.SubroutineTimer <= 0f)
+                {
+                    // Standup complete — transition to alert if threat present, else time-of-day routine
+                    if (ctx.AlertState >= (byte)UnitAlertState.Alert)
+                    {
+                        ctx.Routine = RoutineAlert;
+                        ctx.Subroutine = AlertWatch;
+                        ctx.SubroutineTimer = 0f;
+                    }
+                    else
+                    {
+                        SwitchToTimeOfDayRoutine(ref ctx);
+                    }
+                }
+                break;
+        }
+    }
+
+    private static void ReduceDetectionRange(ref AIContext ctx)
+    {
+        ctx.Units[ctx.UnitIndex].DetectionRange *= SleepDetectionScale;
+    }
+
+    private static void RestoreDetectionRange(ref AIContext ctx)
+    {
+        // Restore from UnitDef
+        if (ctx.GameData != null)
+        {
+            var def = ctx.GameData.Units.Get(ctx.Units[ctx.UnitIndex].UnitDefID);
+            if (def != null)
+                ctx.Units[ctx.UnitIndex].DetectionRange = def.DetectionRange;
         }
     }
 
@@ -464,6 +573,12 @@ public class DeerHerdHandler : IArchetypeHandler
                 ctx.SubroutineTimer -= ctx.Dt;
                 if (ctx.SubroutineTimer <= 0f)
                 {
+                    // At night, go to sleep instead of finding another bush
+                    if (ctx.IsNight)
+                    {
+                        SwitchToTimeOfDayRoutine(ref ctx);
+                        break;
+                    }
                     // Try to find another bush nearby, otherwise return to roaming
                     Vec2 nextBush;
                     if (FindNearbyBush(ref ctx, out nextBush, minDist: 3f))
@@ -474,9 +589,7 @@ public class DeerHerdHandler : IArchetypeHandler
                     }
                     else
                     {
-                        ctx.Routine = RoutineIdleRoaming;
-                        ctx.Subroutine = 0;
-                        ctx.SubroutineTimer = 0f;
+                        SwitchToTimeOfDayRoutine(ref ctx);
                     }
                 }
                 break;

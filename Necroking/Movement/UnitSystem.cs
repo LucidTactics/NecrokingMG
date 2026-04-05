@@ -132,6 +132,7 @@ public class Unit
     // Potion effects
     public int PoisonStacks;
     public float PoisonTickTimer;
+    public float CloudExposureTime; // Cumulative time spent in poison clouds
     public float WeaponPoisonCoatTimer;
     public int WeaponPoisonAmount;
     public bool ZombieOnDeath;
