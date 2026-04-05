@@ -134,17 +134,12 @@ public class SettingsWindow
 
         // Handle scroll
         int tabIdx = (int)_activeTab;
-        var mouse = _ui._input.Mouse;
-        var prevMouse = _ui._prevMouse;
-        if (clipRect.Contains(mouse.X, mouse.Y) && !_ui.IsScrollConsumed)
+        int mx = (int)_ui._input.MousePos.X, my = (int)_ui._input.MousePos.Y;
+        if (clipRect.Contains(mx, my) && !_ui._input.IsScrollConsumed && _ui._input.ScrollDelta != 0)
         {
-            int scrollDelta = mouse.ScrollWheelValue - prevMouse.ScrollWheelValue;
-            if (scrollDelta != 0)
-            {
-                _tabScroll[tabIdx] -= scrollDelta * 0.3f;
-                if (_tabScroll[tabIdx] < 0) _tabScroll[tabIdx] = 0;
-                _ui.ConsumeScroll();
-            }
+            _tabScroll[tabIdx] -= _ui._input.ScrollDelta * 0.3f;
+            if (_tabScroll[tabIdx] < 0) _tabScroll[tabIdx] = 0;
+            _ui._input.ConsumeScroll();
         }
 
         int scrollOffset = (int)_tabScroll[tabIdx];
