@@ -60,11 +60,11 @@ public class HUDRenderer
     private static readonly Color CooldownOverlay = new(0, 0, 0, 150);
     private static readonly Color CooldownText = new(255, 200, 100);
     private static readonly Color LowManaOverlay = new(80, 0, 0, 80);
-    private static readonly Color DropdownBg = new(20, 20, 35, 240);
+    private static readonly Color DropdownBg = new(20, 20, 35, 100);
     private static readonly Color DropdownNoneColor = new(150, 150, 170);
     private static readonly Color DropdownSelectedColor = new(255, 220, 100);
     private static readonly Color DropdownNormalColor = new(200, 200, 220);
-    private static readonly Color DropdownHoverBg = new(60, 60, 90, 200);
+    private static readonly Color DropdownHoverBg = new(80, 80, 120, 120);
     private static readonly Color TooltipBg = new(15, 15, 25, 220);
     private static readonly Color TooltipBorder = new(100, 100, 160);
     private static readonly Color TooltipText = new(220, 220, 240);
@@ -111,17 +111,19 @@ public class HUDRenderer
         int primaryY = screenH - PrimaryBarBottomOffset;
         DrawSpellBar(screenW, primaryY, PrimarySlotW, PrimarySlotH, PrimaryBarOffsetX,
             new[] { "Q", "E", "LC", "RC" }, primaryBar, sim, gameData, drawSpellCategoryIcon, 7);
-        DrawSpellDropdown(screenW, primaryY, PrimarySlotW, PrimaryBarOffsetX,
-            spellDropdownSlot, primaryBar, gameData);
 
         int secondaryY = primaryY - SecondarySlotH - SecondaryBarGap;
         DrawSpellBar(screenW, secondaryY, SecondarySlotW, SecondarySlotH, SecondaryBarOffsetX,
             new[] { "1", "2", "3", "4" }, secondaryBar, sim, gameData, drawSpellCategoryIcon, 5);
-        DrawSpellDropdown(screenW, secondaryY, SecondarySlotW, SecondaryBarOffsetX,
-            secondaryDropdownSlot, secondaryBar, gameData);
 
         if (potionSlots != null)
             DrawPotionSlots(screenW, secondaryY, potionSlots, activePotionSlot, inventory, gameData, getItemTexture);
+
+        // Draw all dropdowns after all bars so they render on top
+        DrawSpellDropdown(screenW, primaryY, PrimarySlotW, PrimaryBarOffsetX,
+            spellDropdownSlot, primaryBar, gameData);
+        DrawSpellDropdown(screenW, secondaryY, SecondarySlotW, SecondaryBarOffsetX,
+            secondaryDropdownSlot, secondaryBar, gameData);
         if (potionSlots != null)
             DrawPotionDropdown(screenW, secondaryY, potionSlots, potionDropdownSlot, gameData);
 
