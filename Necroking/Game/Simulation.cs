@@ -54,6 +54,7 @@ public class Simulation
     private UnitArrays _units = new();
     private ProjectileManager _projectiles = new();
     private LightningSystem _lightning = new();
+    private PoisonCloudSystem _poisonClouds = new();
     private HordeSystem _horde = new();
     private NecromancerState _necroState = new();
     private CombatLog _combatLog = new();
@@ -82,6 +83,7 @@ public class Simulation
     public IReadOnlyList<SoulOrb> SoulOrbs => _soulOrbs;
     public ProjectileManager Projectiles => _projectiles;
     public LightningSystem Lightning => _lightning;
+    public PoisonCloudSystem PoisonClouds => _poisonClouds;
     public HordeSystem Horde => _horde;
     public CombatLog CombatLog => _combatLog;
     public float GameTime => _gameTime;
@@ -105,6 +107,7 @@ public class Simulation
         _damageEvents.Clear();
         _projectiles.Clear();
         _lightning.Clear();
+        _poisonClouds.Clear();
         _combatLog.Clear();
         _gameTime = 0f;
         _frameNumber = 0;
@@ -272,6 +275,10 @@ public class Simulation
         foreach (var ld in lightningDmg)
             if (ld.UnitIdx >= 0 && ld.UnitIdx < _units.Count)
                 ApplyDamage(ld.UnitIdx, ld.Damage);
+
+        // Poison clouds
+        _poisonClouds.Update(dt, _units, _quadtree, _corpses, _damageEvents,
+            _gameData?.Buffs);
 
         // Remove dead units
         RemoveDeadUnits();

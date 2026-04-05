@@ -42,6 +42,7 @@
         "hood"
       ],
       "shields": [],
+      "attackAnim": null,
       "attackCooldown": null,
       "postAttackLockout": null,
       "turnSpeed": null,
@@ -1218,6 +1219,7 @@
       ],
       "armors": [],
       "shields": [],
+      "attackAnim": null,
       "attackCooldown": null,
       "postAttackLockout": null,
       "turnSpeed": null,
@@ -1485,6 +1487,7 @@
       ],
       "armors": [],
       "shields": [],
+      "attackAnim": null,
       "attackCooldown": null,
       "postAttackLockout": null,
       "turnSpeed": null,
@@ -1535,6 +1538,7 @@
       ],
       "armors": [],
       "shields": [],
+      "attackAnim": null,
       "attackCooldown": null,
       "postAttackLockout": null,
       "turnSpeed": null,
@@ -1585,6 +1589,7 @@
       ],
       "armors": [],
       "shields": [],
+      "attackAnim": null,
       "attackCooldown": null,
       "postAttackLockout": null,
       "turnSpeed": null,
@@ -1641,6 +1646,7 @@
       ],
       "armors": [],
       "shields": [],
+      "attackAnim": null,
       "attackCooldown": null,
       "postAttackLockout": null,
       "turnSpeed": null,
@@ -1662,7 +1668,6 @@
       "type": "Dynamic",
       "faction": "Animal",
       "ai": "WolfHitAndRun",
-      "attackAnim": "AttackBite",
       "orcaPriority": 0,
       "size": 2,
       "radius": 0.5,
@@ -1693,6 +1698,7 @@
       ],
       "armors": [],
       "shields": [],
+      "attackAnim": "AttackBite",
       "attackCooldown": null,
       "postAttackLockout": null,
       "turnSpeed": null,
@@ -1756,6 +1762,7 @@
       ],
       "armors": [],
       "shields": [],
+      "attackAnim": null,
       "attackCooldown": null,
       "postAttackLockout": null,
       "turnSpeed": null,
@@ -1807,6 +1814,7 @@
       ],
       "armors": [],
       "shields": [],
+      "attackAnim": null,
       "attackCooldown": null,
       "postAttackLockout": null,
       "turnSpeed": null,
@@ -1858,6 +1866,7 @@
       ],
       "armors": [],
       "shields": [],
+      "attackAnim": null,
       "attackCooldown": null,
       "postAttackLockout": null,
       "turnSpeed": null,
@@ -1915,6 +1924,7 @@
         "none"
       ],
       "shields": [],
+      "attackAnim": null,
       "attackCooldown": null,
       "postAttackLockout": null,
       "turnSpeed": null,
@@ -1973,6 +1983,7 @@
         "armor_8"
       ],
       "shields": [],
+      "attackAnim": null,
       "attackCooldown": null,
       "postAttackLockout": null,
       "turnSpeed": null,
@@ -2034,6 +2045,7 @@
       "shields": [
         "none"
       ],
+      "attackAnim": null,
       "attackCooldown": null,
       "postAttackLockout": null,
       "turnSpeed": null,
@@ -2095,6 +2107,7 @@
       "shields": [
         "none"
       ],
+      "attackAnim": null,
       "attackCooldown": null,
       "postAttackLockout": null,
       "turnSpeed": null,
@@ -2155,6 +2168,7 @@
       "shields": [
         "none"
       ],
+      "attackAnim": null,
       "attackCooldown": null,
       "postAttackLockout": null,
       "turnSpeed": null,
@@ -2215,6 +2229,7 @@
       "shields": [
         "none"
       ],
+      "attackAnim": null,
       "attackCooldown": null,
       "postAttackLockout": null,
       "turnSpeed": null,
@@ -2275,6 +2290,7 @@
       "shields": [
         "none"
       ],
+      "attackAnim": null,
       "attackCooldown": null,
       "postAttackLockout": null,
       "turnSpeed": null,
@@ -2335,6 +2351,7 @@
       "shields": [
         "none"
       ],
+      "attackAnim": null,
       "attackCooldown": null,
       "postAttackLockout": null,
       "turnSpeed": null,
@@ -2395,6 +2412,7 @@
       "shields": [
         "none"
       ],
+      "attackAnim": null,
       "attackCooldown": null,
       "postAttackLockout": null,
       "turnSpeed": null,
@@ -2453,6 +2471,7 @@
         "armor_8"
       ],
       "shields": [],
+      "attackAnim": null,
       "attackCooldown": null,
       "postAttackLockout": null,
       "turnSpeed": null,
@@ -2511,6 +2530,7 @@
         "hood"
       ],
       "shields": [],
+      "attackAnim": null,
       "attackCooldown": null,
       "postAttackLockout": null,
       "turnSpeed": null,
@@ -2868,6 +2888,7 @@
       "shields": [
         "tower_shield"
       ],
+      "attackAnim": null,
       "attackCooldown": null,
       "postAttackLockout": null,
       "turnSpeed": null,
@@ -2928,6 +2949,7 @@
       "shields": [
         "tower_shield"
       ],
+      "attackAnim": null,
       "attackCooldown": null,
       "postAttackLockout": null,
       "turnSpeed": null,
@@ -2987,6 +3009,7 @@
         "armor_8"
       ],
       "shields": [],
+      "attackAnim": null,
       "attackCooldown": null,
       "postAttackLockout": null,
       "turnSpeed": null,
@@ -3047,6 +3070,7 @@
       "shields": [
         "shield_4"
       ],
+      "attackAnim": null,
       "attackCooldown": null,
       "postAttackLockout": null,
       "turnSpeed": null,
@@ -3107,6 +3131,7 @@
       "shields": [
         "none"
       ],
+      "attackAnim": null,
       "attackCooldown": null,
       "postAttackLockout": null,
       "turnSpeed": null,
@@ -3165,6 +3190,7 @@
       "shields": [
         "none"
       ],
+      "attackAnim": null,
       "attackCooldown": null,
       "postAttackLockout": null,
       "turnSpeed": null,

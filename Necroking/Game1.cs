@@ -88,6 +88,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
     private BloomRenderer _bloom = new();
     private WeatherRenderer _weatherRenderer = new();
     private LightningRenderer _lightningRenderer = new();
+    private PoisonCloudRenderer _poisonCloudRenderer = new();
     private DebugDraw _debugDraw = new();
     private List<DamageNumber> _damageNumbers = new();
 
@@ -608,6 +609,21 @@ public class Game1 : Microsoft.Xna.Framework.Game
         _unitAnims.Clear();
         _corpseAnims.Clear();
         _effectManager.Clear();
+
+        // Load flipbooks (needed for cloud effects, hit effects, etc.)
+        if (_flipbooks.Count == 0)
+        {
+            foreach (var fbId in _gameData.Flipbooks.GetIDs())
+            {
+                var fbDef = _gameData.Flipbooks.Get(fbId);
+                if (fbDef == null || string.IsNullOrEmpty(fbDef.Path)) continue;
+                var resolvedPath = GamePaths.Resolve(fbDef.Path);
+                if (!File.Exists(resolvedPath)) continue;
+                var fb = new Flipbook();
+                if (fb.Load(GraphicsDevice, resolvedPath, fbDef.Cols, fbDef.Rows, fbDef.DefaultFPS))
+                    _flipbooks[fbId] = fb;
+            }
+        }
 
         // Init simulation with a grid sized to the scenario's needs
         int gridSize = scenario.GridSize;
@@ -1970,6 +1986,12 @@ public class Game1 : Microsoft.Xna.Framework.Game
                             break;
                         }
 
+                        case "Cloud":
+                        {
+                            _sim.PoisonClouds.SpawnCloud(mouseWorld, spell, Faction.Undead);
+                            break;
+                        }
+
                         case "Toggle":
                         {
                             // Toggle effect on necromancer
@@ -2061,6 +2083,9 @@ public class Game1 : Microsoft.Xna.Framework.Game
                             }
                             case "Summon":
                                 ExecuteSummonSpell(spell2, _pendingSpell, necroPos2, necroIdx);
+                                break;
+                            case "Cloud":
+                                _sim.PoisonClouds.SpawnCloud(mouseWorld, spell2, Faction.Undead);
                                 break;
                             case "Command":
                                 for (int ci = 0; ci < _sim.Units.Count; ci++)
@@ -3280,6 +3305,10 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // --- Corpses ---
         DrawCorpses();
 
+        // --- Poison clouds (ground fog layer, between corpses and units) ---
+        _poisonCloudRenderer.SetContext(_spriteBatch, _glowTex, _camera, _renderer, _flipbooks, _gameTime);
+        _poisonCloudRenderer.DrawAlpha(_sim.PoisonClouds);
+
         // --- Units + Environment objects (merged Y-sort for correct depth) ---
         DrawUnitsAndObjects();
 
@@ -3307,9 +3336,10 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
         _spriteBatch.End();
 
-        // --- Additive blend pass (effects, lightning) ---
+        // --- Additive blend pass (effects, lightning, cloud glow) ---
         _spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.Additive, SamplerState.LinearClamp);
         DrawEffects();
+        _poisonCloudRenderer.DrawAdditive(_sim.PoisonClouds);
         _lightningRenderer.SetGameTime(_gameTime);
         _lightningRenderer.Draw();
 
@@ -4333,6 +4363,20 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 _spriteBatch.Draw(_pixel, new Rectangle(cx - 6, cy - 2, 12, 1), new Color(255, 80, 80, 150));
                 _spriteBatch.Draw(_pixel, new Rectangle(cx - 6, cy + 2, 12, 1), new Color(255, 80, 80, 150));
                 break;
+            case "Cloud":
+                // Poison cloud icon: hazy green circle
+                for (int dy2 = -7; dy2 <= 7; dy2++)
+                    for (int dx2 = -7; dx2 <= 7; dx2++)
+                    {
+                        int dsq = dx2 * dx2 + dy2 * dy2;
+                        if (dsq <= 49)
+                        {
+                            int alpha = dsq < 16 ? 200 : (dsq < 36 ? 140 : 80);
+                            _spriteBatch.Draw(_pixel, new Rectangle(cx + dx2, cy + dy2, 1, 1),
+                                new Color(80, 200, 60, alpha));
+                        }
+                    }
+                break;
             default:
                 _spriteBatch.Draw(_pixel, new Rectangle(cx - 2, cy - 2, 4, 4), new Color(180, 180, 180, 150));
                 break;
@@ -4550,7 +4594,8 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
     private void DrawPauseMenu(int screenW, int screenH)
     {
-        _spriteBatch.Draw(_pixel, new Rectangle(0, 0, screenW, screenH), new Color(0, 0, 0, 150));
+        if (_gameData.Settings.General.PauseDimBackground)
+            _spriteBatch.Draw(_pixel, new Rectangle(0, 0, screenW, screenH), new Color(0, 0, 0, 150));
 
         int boxW = 350;
         int boxH = 450;

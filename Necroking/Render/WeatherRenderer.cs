@@ -160,13 +160,23 @@ public class WeatherRenderer
                 }
                 if (fx.TintStrength > 0.01f)
                 {
-                    byte tR = (byte)((1f - fx.TintR) * fx.TintStrength * 255);
-                    byte tG = (byte)((1f - fx.TintG) * fx.TintStrength * 255);
-                    byte tB = (byte)((1f - fx.TintB) * fx.TintStrength * 255);
-                    byte tA = (byte)(MathF.Max(MathF.Max(tR, tG), tB));
-                    if (tA > 0)
+                    // CPU fallback: darken channels where tint < 1 by overlaying black with per-channel alpha
+                    // This approximates multiplicative tint: result *= lerp(1, TintColor, TintStrength)
+                    float rMul = 1f - (1f - MathF.Min(fx.TintR, 1f)) * fx.TintStrength;
+                    float gMul = 1f - (1f - MathF.Min(fx.TintG, 1f)) * fx.TintStrength;
+                    float bMul = 1f - (1f - MathF.Min(fx.TintB, 1f)) * fx.TintStrength;
+                    // Use darkest channel as overlay alpha, tint the overlay toward the tint color
+                    float darkest = MathF.Min(MathF.Min(rMul, gMul), bMul);
+                    if (darkest < 0.99f)
+                    {
+                        byte alpha = (byte)((1f - darkest) * 255);
+                        // Overlay color: channels that should stay bright get the tint color, others black
+                        byte oR = (byte)(MathUtil.Clamp((1f - rMul) / (1f - darkest), 0f, 1f) * 255);
+                        byte oG = (byte)(MathUtil.Clamp((1f - gMul) / (1f - darkest), 0f, 1f) * 255);
+                        byte oB = (byte)(MathUtil.Clamp((1f - bMul) / (1f - darkest), 0f, 1f) * 255);
                         _spriteBatch.Draw(_pixel, new Rectangle(0, 0, screenW, screenH),
-                            new Color(tR, tG, tB, tA));
+                            new Color(oR, oG, oB, alpha));
+                    }
                 }
                 if (_flashIntensity > 0.01f)
                 {

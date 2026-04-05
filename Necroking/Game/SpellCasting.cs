@@ -334,6 +334,14 @@ public static class SpellCaster
                 break;
             }
 
+            case "Cloud":
+            {
+                float dist = (mouseWorld - necroPos).Length();
+                if (dist > spell.Range) return CastResult.OutOfRange;
+                outPending.TargetPos = mouseWorld;
+                break;
+            }
+
             case "Command":
             {
                 outPending.TargetPos = mouseWorld;

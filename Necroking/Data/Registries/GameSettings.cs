@@ -61,6 +61,7 @@ public class GeneralSettings
     [JsonPropertyName("damageNumberFadeTime")] public float DamageNumberFadeTime { get; set; } = 0.75f;
     [JsonPropertyName("damageNumberSpeed")] public float DamageNumberSpeed { get; set; } = 1.5f;
     [JsonPropertyName("autoPickupForagables")] public bool AutoPickupForagables { get; set; }
+    [JsonPropertyName("pauseDimBackground")] public bool PauseDimBackground { get; set; }
 }
 
 public class ShadowSettings

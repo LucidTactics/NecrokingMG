@@ -142,21 +142,12 @@ float4 PixelShaderFunction(float2 texCoord : TEXCOORD0) : COLOR0
         result.a = result.a * (1.0 - darkAlpha) + darkAlpha;
     }
 
-    // --- Tint (colored overlay) ---
+    // --- Tint (multiplicative color grading) ---
     if (TintStrength > 0.001)
     {
-        // Approximate multiplicative tint via darkening overlay
-        // Tint removes light in channels where tintColor < 1.0
-        float3 tintDark = (1.0 - TintColor) * TintStrength;
-        float tintAlpha = max(max(tintDark.r, tintDark.g), tintDark.b);
-        if (tintAlpha > 0.001)
-        {
-            float3 tintRgb = float3(0.0, 0.0, 0.0);
-            // Selective darkening: channels where tintColor is high should not darken
-            tintRgb = (1.0 - TintColor) * TintStrength;
-            result.rgb = result.rgb * (1.0 - tintAlpha) + tintRgb * tintAlpha;
-            result.a = result.a * (1.0 - tintAlpha) + tintAlpha;
-        }
+        // Lerp toward multiplicative tint: at full strength, result *= TintColor
+        float3 tinted = result.rgb * TintColor;
+        result.rgb = lerp(result.rgb, tinted, TintStrength);
     }
 
     // --- Vignette (radial darkening) ---
