@@ -218,9 +218,13 @@ internal class PoisonCloudRenderer
             int ai = (int)(a * 255f);
             ai = Math.Clamp(ai, 0, 255);
 
-            // Compute world Y for this puff (cloud center + offset converted back to world)
+            // Sort by southern visual edge: center Y + half the puff's world-space height
+            // This ensures fog covers objects inside it rather than sorting behind them
             float worldOffsetY = oy / (_camera.Zoom * _camera.YRatio);
-            float worldY = cloud.Position.Y + worldOffsetY;
+            float worldCenterY = cloud.Position.Y + worldOffsetY;
+            float pixelRadius = scale * src.Height * 0.5f;
+            float worldExtentY = pixelRadius / (_camera.Zoom * _camera.YRatio);
+            float sortY = worldCenterY + worldExtentY;
 
             output.Add(new PuffData
             {
@@ -229,7 +233,7 @@ internal class PoisonCloudRenderer
                 Scale = scale,
                 Rotation = rot,
                 Color = new Color(color.R, color.G, color.B, ai),
-                WorldY = worldY,
+                WorldY = sortY,
             });
         }
     }
@@ -264,7 +268,12 @@ internal class PoisonCloudRenderer
         int ga = (int)(gi * 70f * pulse);
         ga = Math.Clamp(ga, 0, 180);
 
-        // Main glow at cloud center Y
+        // Sort by southern visual edge
+        float glowPixelR = scale * src.Height * 0.5f;
+        float glowExtentY = glowPixelR / (_camera.Zoom * _camera.YRatio);
+        float glowSortY = cloud.Position.Y + glowExtentY;
+
+        // Main glow
         output.Add(new PuffData
         {
             ScreenPos = center,
@@ -272,13 +281,15 @@ internal class PoisonCloudRenderer
             Scale = scale,
             Rotation = rot,
             Color = new Color(80, 255, 40, ga),
-            WorldY = cloud.Position.Y,
+            WorldY = glowSortY,
         });
 
         // Inner core
         float innerScale = scale * 0.4f;
         int ca = (int)(gi * 50f * pulse);
         ca = Math.Clamp(ca, 0, 150);
+        float innerPixelR = innerScale * src.Height * 0.5f;
+        float innerExtentY = innerPixelR / (_camera.Zoom * _camera.YRatio);
         output.Add(new PuffData
         {
             ScreenPos = center,
@@ -286,7 +297,7 @@ internal class PoisonCloudRenderer
             Scale = innerScale,
             Rotation = -rot * 1.3f,
             Color = new Color(120, 255, 60, ca),
-            WorldY = cloud.Position.Y,
+            WorldY = cloud.Position.Y + innerExtentY,
         });
     }
 }
