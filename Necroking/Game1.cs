@@ -1401,9 +1401,11 @@ public class Game1 : Microsoft.Xna.Framework.Game
         {
             int sw = GraphicsDevice.Viewport.Width;
             int sh = GraphicsDevice.Viewport.Height;
-            int boxW2 = 350;
-            int boxY2 = (sh - 450) / 2 + 60;
             int btnW2 = 280, btnH2 = 40, btnGap2 = 10;
+            int pauseBtnCount = 9;
+            int pauseControlLines = 4;
+            int pauseBoxH = 60 + pauseBtnCount * (btnH2 + btnGap2) + 10 + pauseControlLines * 16 + 20;
+            int boxY2 = (sh - pauseBoxH) / 2 + 60;
             int menuX2 = (sw - btnW2) / 2;
             int y2 = boxY2;
 
@@ -4625,7 +4627,10 @@ public class Game1 : Microsoft.Xna.Framework.Game
             _spriteBatch.Draw(_pixel, new Rectangle(0, 0, screenW, screenH), new Color(0, 0, 0, 150));
 
         int boxW = 350;
-        int boxH = 450;
+        int btnCount = 9; // Resume + 6 editors + Main Menu + Quit
+        int btnH2 = 40, btnGap2 = 10;
+        int controlLines = 4;
+        int boxH = 60 + btnCount * (btnH2 + btnGap2) + 10 + controlLines * 16 + 20;
         int boxX = (screenW - boxW) / 2;
         int boxY = (screenH - boxH) / 2;
         _spriteBatch.Draw(_pixel, new Rectangle(boxX, boxY, boxW, boxH), new Color(30, 30, 50, 235));
