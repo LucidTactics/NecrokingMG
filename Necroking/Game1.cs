@@ -1189,6 +1189,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
             _weatherRenderer.LoadEffect(fogEffect);
         }
         _weatherRenderer.Init(_graphics.PreferredBackBufferWidth, _graphics.PreferredBackBufferHeight);
+        _weatherRenderer.SetDayNight(_dayNightSystem);
 
         _grassRenderer.Init(GraphicsDevice);
         _lightningRenderer.Init(_spriteBatch, _pixel, _glowTex, _sim, _camera, _renderer, GraphicsDevice, _hdrIntensityEffect);

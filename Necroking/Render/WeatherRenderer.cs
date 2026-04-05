@@ -4,6 +4,7 @@ using Microsoft.Xna.Framework.Graphics;
 using Necroking.Core;
 using Necroking.Data;
 using Necroking.Data.Registries;
+using Necroking.GameSystems;
 
 namespace Necroking.Render;
 
@@ -24,6 +25,7 @@ public class WeatherRenderer
     private GameData _gameData = null!;
     private Microsoft.Xna.Framework.Graphics.Effect? _fogEffect;
     private GraphicsDevice _graphicsDevice = null!;
+    private DayNightSystem? _dayNight;
 
     public void Init(int screenW, int screenH)
     {
@@ -36,6 +38,8 @@ public class WeatherRenderer
         _screenW = screenW;
         _screenH = screenH;
     }
+
+    public void SetDayNight(DayNightSystem? dayNight) => _dayNight = dayNight;
 
     /// <summary>
     /// Load the fog shader effect. Call from Game1.LoadContent.
@@ -66,13 +70,8 @@ public class WeatherRenderer
     /// </summary>
     public void DrawRain(int screenW, int screenH)
     {
-        if (!_gameData.Settings.Weather.Enabled) return;
-        string presetId = _gameData.Settings.Weather.ActivePreset;
-        if (string.IsNullOrEmpty(presetId)) return;
-        var preset = _gameData.Weather.Get(presetId);
-        if (preset == null) return;
-        var fx = preset.Effects;
-        if (fx.RainDensity <= 0f) return;
+        var fx = GetEffectiveEffects();
+        if (fx == null || fx.RainDensity <= 0f) return;
 
         DrawRainParticles(fx, screenW, screenH);
     }
@@ -83,13 +82,8 @@ public class WeatherRenderer
     /// </summary>
     public void DrawFog(int screenW, int screenH)
     {
-        // Check if weather is enabled and has a preset
-        if (!_gameData.Settings.Weather.Enabled) return;
-        string presetId = _gameData.Settings.Weather.ActivePreset;
-        if (string.IsNullOrEmpty(presetId)) return;
-        var preset = _gameData.Weather.Get(presetId);
-        if (preset == null) return;
-        var fx = preset.Effects;
+        var fx = GetEffectiveEffects();
+        if (fx == null) return;
 
         // Rain draws in scene pass via DrawRain() for depth sorting with world objects.
 
@@ -196,12 +190,8 @@ public class WeatherRenderer
     public void Update(float dt, GameData gameData)
     {
         _gameData = gameData;
-        if (!_gameData.Settings.Weather.Enabled) return;
-        string presetId = _gameData.Settings.Weather.ActivePreset;
-        if (string.IsNullOrEmpty(presetId)) return;
-        var preset = _gameData.Weather.Get(presetId);
-        if (preset == null) return;
-        var fx = preset.Effects;
+        var fx = GetEffectiveEffects();
+        if (fx == null) return;
 
         UpdateLightning(fx, dt);
     }
@@ -407,4 +397,20 @@ public class WeatherRenderer
     }
 
     private static float HashFloat(uint h) => (float)(h & 0x00FFFFFFu) / (float)0x01000000u;
+
+    /// <summary>
+    /// Returns the effective weather effects for rendering: day/night runtime blend if active,
+    /// otherwise the raw preset effects. Returns null if no valid preset is configured.
+    /// </summary>
+    private WeatherEffects? GetEffectiveEffects()
+    {
+        if (!_gameData.Settings.Weather.Enabled) return null;
+        string presetId = _gameData.Settings.Weather.ActivePreset;
+        if (string.IsNullOrEmpty(presetId)) return null;
+        var preset = _gameData.Weather.Get(presetId);
+        if (preset == null) return null;
+        if (_dayNight != null && _dayNight.IsActive)
+            return _dayNight.RuntimeEffects;
+        return preset.Effects;
+    }
 }
