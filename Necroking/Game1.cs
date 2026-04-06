@@ -1182,7 +1182,15 @@ public class Game1 : Microsoft.Xna.Framework.Game
         catch (Exception ex) { _outlineFlatEffect = null; DebugLog.Log("startup", $"OutlineFlat not loaded: {ex.Message}"); }
         try { _hdrIntensityEffect = Content.Load<Microsoft.Xna.Framework.Graphics.Effect>("HdrIntensity"); }
         catch (Exception ex) { _hdrIntensityEffect = null; DebugLog.Log("startup", $"HdrIntensity not loaded: {ex.Message}"); }
-        try { _hdrSpriteEffect = Content.Load<Microsoft.Xna.Framework.Graphics.Effect>("HdrSprite"); }
+        try
+        {
+            _hdrSpriteEffect = Content.Load<Microsoft.Xna.Framework.Graphics.Effect>("HdrSprite");
+            if (_hdrSpriteEffect != null)
+            {
+                _hdrSpriteEffect.Parameters["MaxIntensity"]?.SetValue(HdrColor.MaxHdrIntensity);
+                _hdrSpriteEffect.Parameters["AlphaMode"]?.SetValue(0f);
+            }
+        }
         catch (Exception ex) { _hdrSpriteEffect = null; DebugLog.Log("startup", $"HdrSprite not loaded: {ex.Message}"); }
 
         {
@@ -3361,8 +3369,10 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // Spawn new effects from impacts (once per frame, before drawing)
         SpawnImpactEffects();
 
-        // --- Alpha-blended effects (clouds, smoke — no HDR shader, plain rendering) ---
-        _spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.LinearClamp);
+        // --- Alpha-blended HDR effects (clouds, smoke) ---
+        _hdrSpriteEffect?.Parameters["AlphaMode"]?.SetValue(1f);
+        _spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.LinearClamp,
+            effect: _hdrSpriteEffect);
         DrawEffectsFiltered(0);
         _spriteBatch.End();
 
@@ -4564,21 +4574,17 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 float pixelSize = worldSize * _camera.Zoom;
                 float fbScale = pixelSize / srcRect.Width;
                 Color color = blendMode == 0
-                    ? new Color(eff.Tint.R, eff.Tint.G, eff.Tint.B, (byte)(alpha * 255))
+                    ? HdrColor.ToHdrVertexAlpha(eff.Tint, alpha, eff.HdrIntensity)
                     : HdrColor.ToHdrVertex(eff.Tint, alpha, eff.HdrIntensity);
                 _spriteBatch.Draw(fb.Texture, sp, srcRect, color, 0f, origin, fbScale, SpriteEffects.None, 0f);
             }
             else
             {
                 // Fallback glow (radial gradient circle)
-                Color color;
-                if (blendMode == 0)
-                    color = new Color(eff.Tint.R, eff.Tint.G, eff.Tint.B, (byte)(alpha * 200));
-                else
-                {
-                    float glowAlpha = alpha * (200f / 255f);
-                    color = HdrColor.ToHdrVertex(eff.Tint, glowAlpha, eff.HdrIntensity);
-                }
+                float glowAlpha = alpha * (200f / 255f);
+                Color color = blendMode == 0
+                    ? HdrColor.ToHdrVertexAlpha(eff.Tint, glowAlpha, eff.HdrIntensity)
+                    : HdrColor.ToHdrVertex(eff.Tint, glowAlpha, eff.HdrIntensity);
                 float glowSize = scale * _camera.Zoom * 0.5f / 32f;
                 _spriteBatch.Draw(_glowTex, sp, null, color,
                     0f, new Vector2(32f, 32f), glowSize, SpriteEffects.None, 0f);
