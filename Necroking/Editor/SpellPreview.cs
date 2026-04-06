@@ -199,7 +199,8 @@ public class SpellPreview
                 float dist = MathF.Sqrt(dx * dx + dy * dy);
                 float alpha = MathF.Max(0, 1f - dist);
                 alpha *= alpha; // quadratic falloff for soft glow
-                glowData[gy * 64 + gx] = new Color((byte)255, (byte)255, (byte)255, (byte)(alpha * 255));
+                byte a = (byte)(alpha * 255);
+                glowData[gy * 64 + gx] = new Color(a, a, a, a); // premultiplied
             }
         _glowTex.SetData(glowData);
 

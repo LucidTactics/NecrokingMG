@@ -1,11 +1,11 @@
 {
   "bloom": {
     "enabled": true,
-    "threshold": 1.0001,
-    "softKnee": 0.25384617,
+    "threshold": 1,
+    "softKnee": 0.3,
     "intensity": 1,
-    "scatter": 0.50384617,
-    "iterations": 6,
+    "scatter": 0.8,
+    "iterations": 3,
     "bicubicUpsampling": true
   },
   "grass": {
@@ -31,12 +31,12 @@
     "minBladeWidth": true
   },
   "weather": {
-    "enabled": true,
-    "activePreset": "daylight",
+    "enabled": false,
+    "activePreset": "thunderstorm",
     "transitionSpeed": 1
   },
   "dayNight": {
-    "enabled": true,
+    "enabled": false,
     "dawnDuration": 60,
     "dayDuration": 240,
     "duskDuration": 60,

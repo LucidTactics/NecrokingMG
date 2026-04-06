@@ -31,6 +31,8 @@ public class Projectile
     public float ParticleScale = 1f;
     public HdrColor HitEffectColor = new();
     public float HitEffectScale = 1f;
+    public int HitEffectBlendMode; // 0=alpha, 1=additive
+    public int HitEffectAlignment; // 0=ground, 1=upright
     public Vec2 TargetPos;
     public float HomingStrength;
     public Vec2 BaseDirection;
@@ -51,6 +53,8 @@ public class ImpactEvent
     public string HitEffectFlipbookID = "";
     public HdrColor HitEffectColor = new();
     public float HitEffectScale = 1f;
+    public int HitEffectBlendMode;
+    public int HitEffectAlignment;
 }
 
 public class ProjectileHit
@@ -254,7 +258,7 @@ public class ProjectileManager
                         if (proj.NoFriendlyFire && units[hitIdx].Faction == proj.OwnerFaction) continue;
                         _hits.Add(new ProjectileHit { UnitIdx = hitIdx, Damage = proj.Damage, OwnerID = proj.OwnerID, OwnerFaction = proj.OwnerFaction, WeaponName = proj.WeaponName, ProjectileType = proj.Type });
                     }
-                    _impacts.Add(new ImpactEvent { Position = proj.Position, Type = proj.Type, AoeRadius = proj.AoeRadius, HitEffectFlipbookID = proj.HitEffectFlipbookID, HitEffectColor = proj.HitEffectColor, HitEffectScale = proj.HitEffectScale });
+                    _impacts.Add(new ImpactEvent { Position = proj.Position, Type = proj.Type, AoeRadius = proj.AoeRadius, HitEffectFlipbookID = proj.HitEffectFlipbookID, HitEffectColor = proj.HitEffectColor, HitEffectScale = proj.HitEffectScale, HitEffectBlendMode = proj.HitEffectBlendMode, HitEffectAlignment = proj.HitEffectAlignment });
                     proj.Alive = false;
                 }
             }
@@ -330,7 +334,7 @@ public class ProjectileManager
                         PotionID = proj.PotionID, ProjectileType = proj.Type, ImpactPos = proj.Position
                     });
                     _impacts.Add(new ImpactEvent { Position = proj.Position, Type = proj.Type, AoeRadius = 0,
-                        HitEffectFlipbookID = proj.HitEffectFlipbookID, HitEffectColor = proj.HitEffectColor, HitEffectScale = proj.HitEffectScale });
+                        HitEffectFlipbookID = proj.HitEffectFlipbookID, HitEffectColor = proj.HitEffectColor, HitEffectScale = proj.HitEffectScale, HitEffectBlendMode = proj.HitEffectBlendMode, HitEffectAlignment = proj.HitEffectAlignment });
                     proj.Alive = false;
                 }
             }
@@ -345,7 +349,7 @@ public class ProjectileManager
                     PotionID = proj.PotionID, ProjectileType = proj.Type, ImpactPos = proj.Position
                 });
                 _impacts.Add(new ImpactEvent { Position = proj.Position, Type = proj.Type, AoeRadius = 0,
-                    HitEffectFlipbookID = proj.HitEffectFlipbookID, HitEffectColor = proj.HitEffectColor, HitEffectScale = proj.HitEffectScale });
+                    HitEffectFlipbookID = proj.HitEffectFlipbookID, HitEffectColor = proj.HitEffectColor, HitEffectScale = proj.HitEffectScale, HitEffectBlendMode = proj.HitEffectBlendMode, HitEffectAlignment = proj.HitEffectAlignment });
                 proj.Alive = false;
             }
 
@@ -384,7 +388,7 @@ public class ProjectileManager
                     if (bestIdx >= 0)
                         _hits.Add(new ProjectileHit { UnitIdx = bestIdx, Damage = proj.Damage, OwnerID = proj.OwnerID, OwnerFaction = proj.OwnerFaction, Precision = proj.Precision, WeaponName = proj.WeaponName, ProjectileType = proj.Type });
                 }
-                _impacts.Add(new ImpactEvent { Position = proj.Position, Type = proj.Type, AoeRadius = proj.AoeRadius, HitEffectFlipbookID = proj.HitEffectFlipbookID, HitEffectColor = proj.HitEffectColor, HitEffectScale = proj.HitEffectScale });
+                _impacts.Add(new ImpactEvent { Position = proj.Position, Type = proj.Type, AoeRadius = proj.AoeRadius, HitEffectFlipbookID = proj.HitEffectFlipbookID, HitEffectColor = proj.HitEffectColor, HitEffectScale = proj.HitEffectScale, HitEffectBlendMode = proj.HitEffectBlendMode, HitEffectAlignment = proj.HitEffectAlignment });
                 proj.Alive = false;
             }
 

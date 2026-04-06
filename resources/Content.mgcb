@@ -79,3 +79,8 @@
 /processor:EffectProcessor
 /build:MagicCircle.fx
 
+#begin HdrSprite.fx
+/importer:EffectImporter
+/processor:EffectProcessor
+/build:HdrSprite.fx
+

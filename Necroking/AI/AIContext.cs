@@ -23,6 +23,7 @@ public ref struct AIContext
     public GameSystems.HordeSystem? Horde;
     public GameSystems.TriggerSystem? TriggerSystem;
     public World.EnvironmentSystem? EnvSystem;
+    public GameSystems.ProjectileManager? Projectiles;
 
     // Game clock
     public float GameTime;          // total elapsed seconds

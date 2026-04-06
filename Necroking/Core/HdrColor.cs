@@ -7,6 +7,9 @@ namespace Necroking.Core;
 
 public struct HdrColor
 {
+    /// Max intensity the HdrSprite shader can decode. Must match HdrSprite.fx MaxIntensity default.
+    public const float MaxHdrIntensity = 4f;
+
     public byte R { get; set; } = 255;
     public byte G { get; set; } = 255;
     public byte B { get; set; } = 255;
@@ -29,6 +32,49 @@ public struct HdrColor
         (byte)Math.Min(255f, B * Intensity),
         A
     );
+
+    /// <summary>
+    /// Encode for HdrSprite.fx: bake fade alpha into RGB, encode intensity in alpha byte.
+    /// The shader decodes: output.rgb = tex.rgb * color.rgb * (color.a * MaxHdrIntensity).
+    /// </summary>
+    public Color ToHdrVertex(float alpha)
+    {
+        float fade = alpha * (1f / 255f); // normalize A from base color
+        return new Color(
+            (byte)(R * fade),
+            (byte)(G * fade),
+            (byte)(B * fade),
+            (byte)(Math.Clamp(Intensity / MaxHdrIntensity, 0f, 1f) * 255f)
+        );
+    }
+
+    /// Overload for when base color and intensity are separate (Effect.Tint + Effect.HdrIntensity).
+    public static Color ToHdrVertex(Color tint, float alpha, float hdrIntensity)
+    {
+        float fade = alpha;
+        return new Color(
+            (byte)(tint.R * fade),
+            (byte)(tint.G * fade),
+            (byte)(tint.B * fade),
+            (byte)(Math.Clamp(hdrIntensity / MaxHdrIntensity, 0f, 1f) * 255f)
+        );
+    }
+
+    /// <summary>
+    /// Encode for HdrAlpha technique: intensity baked into RGB, alpha carries real fade.
+    /// Shader decodes: output.rgb = tex.rgb * color.rgb * MaxIntensity, output.a = tex.a * color.a.
+    /// High-intensity channels may clip — acceptable since bloom smooths the result.
+    /// </summary>
+    public static Color ToHdrVertexAlpha(Color tint, float alpha, float hdrIntensity)
+    {
+        float scale = hdrIntensity / MaxHdrIntensity;
+        return new Color(
+            (byte)Math.Min(255f, tint.R * scale),
+            (byte)Math.Min(255f, tint.G * scale),
+            (byte)Math.Min(255f, tint.B * scale),
+            (byte)(alpha * 255f)
+        );
+    }
 }
 
 public class HdrColorJsonConverter : JsonConverter<HdrColor>

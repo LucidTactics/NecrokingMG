@@ -83,8 +83,10 @@ public class Game1 : Microsoft.Xna.Framework.Game
     private Microsoft.Xna.Framework.Graphics.Effect? _groundEffect;
     private Microsoft.Xna.Framework.Graphics.Effect? _outlineFlatEffect;
     private Microsoft.Xna.Framework.Graphics.Effect? _hdrIntensityEffect;
+    private Microsoft.Xna.Framework.Graphics.Effect? _hdrSpriteEffect;
     private Texture2D? _groundVertexMapTex;
     private EffectManager _effectManager = new();
+    private BuffVisualSystem _buffVisuals = new();
     private BloomRenderer _bloom = new();
     private WeatherRenderer _weatherRenderer = new();
     private DayNightSystem _dayNightSystem = new();
@@ -102,6 +104,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
     private float _gameTime;
     private float _timeScale = 1f;
     private PendingSpellCast _pendingSpell = new();
+    private PendingCastAnim? _pendingCastAnim;
     private SpellBarState _spellBarState = new();
     private SpellBarState _secondaryBarState = new();
     private int _spellDropdownSlot = -1;
@@ -118,6 +121,16 @@ public class Game1 : Microsoft.Xna.Framework.Game
     private float _rawDt;
     private readonly InputState _input = new();
     private float _editorPanTime; // ramp-up timer for editor camera panning
+
+    // Pending spell cast with animation delay (Spell1 animation → action moment → execute)
+    private struct PendingCastAnim
+    {
+        public string SpellID;
+        public Vec2 Target;
+        public int Slot;           // spellbar slot that was used
+        public bool IsSecondary;   // secondary spellbar
+        public string? CastingBuffID; // to remove on animation end
+    }
 
     // Pending projectiles (multi-projectile delay)
     private struct PendingProjectileGroup
@@ -1056,7 +1069,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         if (spell.CastFlipbook == null || string.IsNullOrEmpty(spell.CastFlipbook.FlipbookID)) return;
 
         var fb = spell.CastFlipbook;
-        var tint = fb.Color.ToScaledColor();
+        var tint = fb.Color.ToColor();
         int blendMode = fb.BlendMode == "Additive" ? 1 : 0;
         int alignment = fb.Alignment == "Upright" ? 1 : 0;
         float duration = fb.Duration >= 0f ? fb.Duration : 0.4f;
@@ -1065,12 +1078,194 @@ public class Game1 : Microsoft.Xna.Framework.Game
             fb.Color.Intensity, blendMode, alignment, duration);
     }
 
+    /// <summary>
+    /// Execute a spell's effect (projectile, buff, strike, etc.). Called either immediately
+    /// (no casting buff) or at the Spell1 animation action moment (deferred cast).
+    /// </summary>
+    private void ExecuteSpellEffect(SpellDef spell, int necroIdx, Vec2 target, int slot)
+    {
+        var necroPos = _sim.Units[necroIdx].Position;
+        var necroUid = _sim.Units[necroIdx].Id;
+        var effectOrigin = _sim.Units[necroIdx].EffectSpawnPos2D;
+
+        // Cast flipbook effect at caster position
+        SpawnCastEffect(spell, effectOrigin);
+
+        switch (spell.Category)
+        {
+            case "Projectile":
+                SpawnSpellProjectile(spell, effectOrigin, target, necroUid);
+                if (spell.Quantity > 1)
+                {
+                    _pendingProjectiles.Add(new PendingProjectileGroup
+                    {
+                        SpellID = spell.Id,
+                        Origin = effectOrigin,
+                        Target = target,
+                        Remaining = spell.Quantity - 1,
+                        Timer = 0f,
+                        Interval = spell.ProjectileDelay > 0f ? spell.ProjectileDelay : 0.1f
+                    });
+                }
+                break;
+
+            case "Buff":
+            case "Debuff":
+                if (!string.IsNullOrEmpty(spell.BuffID))
+                {
+                    var buffDef = _gameData.Buffs.Get(spell.BuffID);
+                    if (buffDef != null)
+                        BuffSystem.ApplyBuff(_sim.UnitsMut, necroIdx, buffDef);
+                }
+                break;
+
+            case "Strike":
+            {
+                var style = new LightningStyle
+                {
+                    CoreColor = spell.StrikeCoreColor,
+                    GlowColor = spell.StrikeGlowColor,
+                    CoreWidth = spell.StrikeCoreWidth,
+                    GlowWidth = spell.StrikeGlowWidth,
+                    Displacement = spell.StrikeDisplacement,
+                    MaxBranches = spell.StrikeBranches
+                };
+                var sVis = spell.StrikeVisualType == "GodRay" ? StrikeVisual.GodRay : StrikeVisual.Lightning;
+                var sGrp = new GodRayParams { EdgeSoftness = spell.GodRayEdgeSoftness,
+                    NoiseSpeed = spell.GodRayNoiseSpeed, NoiseStrength = spell.GodRayNoiseStrength,
+                    NoiseScale = spell.GodRayNoiseScale };
+                Enum.TryParse<SpellTargetFilter>(spell.TargetFilter, out var sTF);
+
+                if (spell.StrikeTargetUnit)
+                {
+                    var casterEffPos = effectOrigin;
+                    float casterH = _sim.Units[necroIdx].EffectSpawnHeight;
+                    int enemy = -1;
+                    float bestDist = spell.Range * spell.Range;
+                    for (int ui = 0; ui < _sim.Units.Count; ui++)
+                    {
+                        if (!_sim.Units[ui].Alive || _sim.Units[ui].Faction == _sim.Units[necroIdx].Faction) continue;
+                        float d = (target - _sim.Units[ui].Position).LengthSq();
+                        if (d < bestDist) { bestDist = d; enemy = ui; }
+                    }
+                    if (enemy >= 0)
+                    {
+                        var targetPos = _sim.Units[enemy].Position;
+                        float targetH = 1.0f;
+                        var tDef = _gameData.Units.Get(_sim.Units[enemy].UnitDefID);
+                        if (tDef != null) targetH = tDef.SpriteWorldHeight * 0.5f;
+
+                        _sim.Lightning.SpawnZap(casterEffPos, targetPos,
+                            spell.ZapDuration > 0 ? spell.ZapDuration : spell.StrikeDuration,
+                            style, casterH, targetH);
+                        _sim.DealDamage(enemy, spell.Damage);
+                        _damageNumbers.Add(new DamageNumber { WorldPos = targetPos, Damage = spell.Damage, Timer = 0f, Height = targetH });
+                    }
+                }
+                else
+                {
+                    _sim.Lightning.SpawnStrike(target, spell.TelegraphDuration,
+                        spell.StrikeDuration, spell.AoeRadius, spell.Damage,
+                        style, spell.Id, sVis, sGrp, sTF);
+                }
+                break;
+            }
+
+            case "Summon":
+                ExecuteSummonSpell(spell, _pendingSpell, necroPos, necroIdx);
+                break;
+
+            case "Beam":
+            {
+                int targetIdx = FindClosestEnemyToPoint(target, 3f);
+                if (targetIdx >= 0)
+                {
+                    _sim.Lightning.SpawnBeam(necroUid, _sim.Units[targetIdx].Id,
+                        spell.Id, spell.Damage, spell.BeamTickRate, spell.BeamRetargetRadius,
+                        new LightningStyle { CoreColor = spell.BeamCoreColor, GlowColor = spell.BeamGlowColor,
+                            CoreWidth = spell.BeamCoreWidth, GlowWidth = spell.BeamGlowWidth,
+                            Displacement = spell.BeamDisplacement, MaxBranches = spell.BeamBranches });
+                    _channelingSlot = slot;
+                }
+                break;
+            }
+
+            case "Drain":
+            {
+                int targetIdx2 = FindClosestEnemyToPoint(target, 5f);
+                if (targetIdx2 >= 0)
+                {
+                    _sim.Lightning.SpawnDrain(necroUid, _sim.Units[targetIdx2].Id,
+                        spell.Id, spell.Damage, spell.DrainTickRate, spell.DrainHealPercent,
+                        spell.DrainCorpseHP, spell.DrainReversed, spell.DrainMaxDuration,
+                        spell.DrainTendrilCount, spell.DrainArcHeight, spell.DrainCoreColor, spell.DrainGlowColor);
+                    _channelingSlot = slot;
+                }
+                break;
+            }
+
+            case "Command":
+            {
+                for (int ci = 0; ci < _sim.Units.Count; ci++)
+                {
+                    if (!_sim.Units[ci].Alive) continue;
+                    if (_sim.Units[ci].Faction != Faction.Undead) continue;
+                    if (_sim.Units[ci].Archetype != AI.ArchetypeRegistry.HordeMinion) continue;
+
+                    _sim.UnitsMut[ci].Routine = 4;
+                    _sim.UnitsMut[ci].Subroutine = 0;
+                    _sim.UnitsMut[ci].SubroutineTimer = 0f;
+                    _sim.UnitsMut[ci].MoveTarget = target;
+                    _sim.UnitsMut[ci].Target = CombatTarget.None;
+                    _sim.UnitsMut[ci].EngagedTarget = CombatTarget.None;
+                }
+                break;
+            }
+
+            case "Cloud":
+                _sim.PoisonClouds.SpawnCloud(target, spell, Faction.Undead);
+                break;
+
+            case "Toggle":
+                if (spell.ToggleEffect == "ghost_mode")
+                    _sim.UnitsMut[necroIdx].GhostMode = !_sim.Units[necroIdx].GhostMode;
+                break;
+        }
+    }
+
+    /// <summary>Remove a specific casting buff from a unit.</summary>
+    private void RemoveCastingBuff(int unitIdx, string? castingBuffID)
+    {
+        if (string.IsNullOrEmpty(castingBuffID)) return;
+        var buffs = _sim.UnitsMut[unitIdx].ActiveBuffs;
+        for (int b = buffs.Count - 1; b >= 0; b--)
+        {
+            if (buffs[b].BuffDefID == castingBuffID)
+            {
+                buffs.RemoveAt(b);
+                break;
+            }
+        }
+    }
+
+    /// <summary>Remove all casting effect buffs from a unit (buff_4 variants).</summary>
+    private void RemoveCastingBuffAll(int unitIdx)
+    {
+        var buffs = _sim.UnitsMut[unitIdx].ActiveBuffs;
+        for (int b = buffs.Count - 1; b >= 0; b--)
+        {
+            var def = _gameData.Buffs.Get(buffs[b].BuffDefID);
+            if (def != null && def.HasWeaponParticle)
+                buffs.RemoveAt(b);
+        }
+    }
+
     private void SpawnSummonEffect(SpellDef spell, Vec2 pos)
     {
         if (spell.SummonFlipbook == null || string.IsNullOrEmpty(spell.SummonFlipbook.FlipbookID)) return;
 
         var fb = spell.SummonFlipbook;
-        var tint = fb.Color.ToScaledColor();
+        var tint = fb.Color.ToColor();
         int blendMode = fb.BlendMode == "Additive" ? 1 : 0;
         int alignment = fb.Alignment == "Upright" ? 1 : 0;
         float duration = fb.Duration >= 0f ? fb.Duration : 0.4f;
@@ -1124,6 +1319,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         _spriteBatch = new SpriteBatch(GraphicsDevice);
         _pixel = new Texture2D(GraphicsDevice, 1, 1);
         _pixel.SetData(new[] { Color.White });
+        _buffVisuals.SetPixel(_pixel);
 
         // Create radial glow texture (64x64 with smooth quadratic falloff)
         _glowTex = new Texture2D(GraphicsDevice, 64, 64);
@@ -1136,7 +1332,8 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 float dist = MathF.Sqrt(dx * dx + dy * dy);
                 float alpha = MathF.Max(0, 1f - dist);
                 alpha *= alpha; // quadratic falloff for soft glow
-                glowData[gy * 64 + gx] = new Color((byte)255, (byte)255, (byte)255, (byte)(alpha * 255));
+                byte a = (byte)(alpha * 255);
+                glowData[gy * 64 + gx] = new Color(a, a, a, a); // premultiplied
             }
         _glowTex.SetData(glowData);
 
@@ -1182,6 +1379,16 @@ public class Game1 : Microsoft.Xna.Framework.Game
         catch (Exception ex) { _outlineFlatEffect = null; DebugLog.Log("startup", $"OutlineFlat not loaded: {ex.Message}"); }
         try { _hdrIntensityEffect = Content.Load<Microsoft.Xna.Framework.Graphics.Effect>("HdrIntensity"); }
         catch (Exception ex) { _hdrIntensityEffect = null; DebugLog.Log("startup", $"HdrIntensity not loaded: {ex.Message}"); }
+        try
+        {
+            _hdrSpriteEffect = Content.Load<Microsoft.Xna.Framework.Graphics.Effect>("HdrSprite");
+            if (_hdrSpriteEffect != null)
+            {
+                _hdrSpriteEffect.Parameters["MaxIntensity"]?.SetValue(HdrColor.MaxHdrIntensity);
+                _hdrSpriteEffect.Parameters["AlphaMode"]?.SetValue(0f);
+            }
+        }
+        catch (Exception ex) { _hdrSpriteEffect = null; DebugLog.Log("startup", $"HdrSprite not loaded: {ex.Message}"); }
 
         {
             Microsoft.Xna.Framework.Graphics.Effect? glyphEffect = null;
@@ -1197,6 +1404,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
             _weatherRenderer.LoadEffect(fogEffect);
         }
         _weatherRenderer.Init(_graphics.PreferredBackBufferWidth, _graphics.PreferredBackBufferHeight);
+        _weatherRenderer.SetDayNight(_dayNightSystem);
 
         _grassRenderer.Init(GraphicsDevice);
         _lightningRenderer.Init(_spriteBatch, _pixel, _glowTex, _sim, _camera, _renderer, GraphicsDevice, _hdrIntensityEffect);
@@ -1840,6 +2048,9 @@ public class Game1 : Microsoft.Xna.Framework.Game
                     continue;
                 }
 
+                // Can't cast while a spell animation is playing
+                if (_pendingCastAnim != null) continue;
+
                 var result = SpellCaster.TryStartSpellCast(spellId, _gameData.Spells, _sim.NecroState,
                     _sim.Units, necroIdx, mouseWorld, _sim.Corpses, _pendingSpell, _gameData);
 
@@ -1847,174 +2058,34 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 {
                     var spell = _gameData.Spells.Get(spellId);
                     if (spell == null) continue;
-                    var necroPos = _sim.Units[necroIdx].Position;
-                    var necroUid = _sim.Units[necroIdx].Id;
-                    var effectOrigin = _sim.Units[necroIdx].EffectSpawnPos2D;
 
-                    // Cast effect at caster position
-                    SpawnCastEffect(spell, effectOrigin);
-
-                    switch (spell.Category)
-                    {
-                        case "Projectile":
-                            // Fire first projectile immediately (from weapon tip)
-                            SpawnSpellProjectile(spell, effectOrigin, mouseWorld, necroUid);
-                            // Queue remaining with delay
-                            if (spell.Quantity > 1)
-                            {
-                                _pendingProjectiles.Add(new PendingProjectileGroup
-                                {
-                                    SpellID = spellId,
-                                    Origin = effectOrigin,
-                                    Target = mouseWorld,
-                                    Remaining = spell.Quantity - 1,
-                                    Timer = 0f,
-                                    Interval = spell.ProjectileDelay > 0f ? spell.ProjectileDelay : 0.1f
-                                });
-                            }
-                            break;
-
-                        case "Buff":
-                        case "Debuff":
-                            // Apply buff to target or self
-                            if (!string.IsNullOrEmpty(spell.BuffID))
-                            {
-                                var buffDef = _gameData.Buffs.Get(spell.BuffID);
-                                if (buffDef != null)
-                                    BuffSystem.ApplyBuff(_sim.UnitsMut, necroIdx, buffDef);
-                            }
-                            break;
-
-                        case "Strike":
-                        {
-                            var style = new LightningStyle
-                            {
-                                CoreColor = spell.StrikeCoreColor,
-                                GlowColor = spell.StrikeGlowColor,
-                                CoreWidth = spell.StrikeCoreWidth,
-                                GlowWidth = spell.StrikeGlowWidth,
-                                Displacement = spell.StrikeDisplacement,
-                                MaxBranches = spell.StrikeBranches
-                            };
-                            var sVis = spell.StrikeVisualType == "GodRay" ? StrikeVisual.GodRay : StrikeVisual.Lightning;
-                            var sGrp = new GodRayParams { EdgeSoftness = spell.GodRayEdgeSoftness,
-                                NoiseSpeed = spell.GodRayNoiseSpeed, NoiseStrength = spell.GodRayNoiseStrength,
-                                NoiseScale = spell.GodRayNoiseScale };
-                            Enum.TryParse<SpellTargetFilter>(spell.TargetFilter, out var sTF);
-
-                            if (spell.StrikeTargetUnit)
-                            {
-                                // Zap: caster weapon tip to nearest enemy near mouse
-                                var casterEffPos = effectOrigin;
-                                float casterH = _sim.Units[necroIdx].EffectSpawnHeight;
-                                // Find nearest enemy to mouse
-                                int enemy = -1;
-                                float bestDist = spell.Range * spell.Range;
-                                for (int ui = 0; ui < _sim.Units.Count; ui++)
-                                {
-                                    if (!_sim.Units[ui].Alive || _sim.Units[ui].Faction == _sim.Units[necroIdx].Faction) continue;
-                                    float d = (mouseWorld - _sim.Units[ui].Position).LengthSq();
-                                    if (d < bestDist) { bestDist = d; enemy = ui; }
-                                }
-                                if (enemy >= 0)
-                                {
-                                    var targetPos = _sim.Units[enemy].Position;
-                                    float targetH = 1.0f;
-                                    var tDef = _gameData.Units.Get(_sim.Units[enemy].UnitDefID);
-                                    if (tDef != null) targetH = tDef.SpriteWorldHeight * 0.5f;
-
-                                    _sim.Lightning.SpawnZap(casterEffPos, targetPos,
-                                        spell.ZapDuration > 0 ? spell.ZapDuration : spell.StrikeDuration,
-                                        style, casterH, targetH);
-                                    // Apply damage + show damage number
-                                    _sim.DealDamage(enemy, spell.Damage);
-                                    _damageNumbers.Add(new DamageNumber { WorldPos = targetPos, Damage = spell.Damage, Timer = 0f, Height = targetH });
-                                }
-                            }
-                            else
-                            {
-                                // Sky strike at mouse position
-                                _sim.Lightning.SpawnStrike(mouseWorld, spell.TelegraphDuration,
-                                    spell.StrikeDuration, spell.AoeRadius, spell.Damage,
-                                    style, spell.Id, sVis, sGrp, sTF);
-                            }
-                            break;
-                        }
-
-                        case "Summon":
-                            ExecuteSummonSpell(spell, _pendingSpell, necroPos, necroIdx);
-                            break;
-
-                        case "Beam":
-                        {
-                            // Find target unit near mouse
-                            int targetIdx = FindClosestEnemyToPoint(mouseWorld, 3f);
-                            if (targetIdx >= 0)
-                            {
-                                _sim.Lightning.SpawnBeam(necroUid, _sim.Units[targetIdx].Id,
-                                    spell.Id, spell.Damage, spell.BeamTickRate, spell.BeamRetargetRadius,
-                                    new LightningStyle { CoreColor = spell.BeamCoreColor, GlowColor = spell.BeamGlowColor,
-                                        CoreWidth = spell.BeamCoreWidth, GlowWidth = spell.BeamGlowWidth,
-                                        Displacement = spell.BeamDisplacement, MaxBranches = spell.BeamBranches });
-                                _channelingSlot = slot;
-                            }
-                            break;
-                        }
-
-                        case "Drain":
-                        {
-                            int targetIdx2 = FindClosestEnemyToPoint(mouseWorld, 5f);
-                            if (targetIdx2 >= 0)
-                            {
-                                _sim.Lightning.SpawnDrain(necroUid, _sim.Units[targetIdx2].Id,
-                                    spell.Id, spell.Damage, spell.DrainTickRate, spell.DrainHealPercent,
-                                    spell.DrainCorpseHP, spell.DrainReversed, spell.DrainMaxDuration,
-                                    spell.DrainTendrilCount, spell.DrainArcHeight, spell.DrainCoreColor, spell.DrainGlowColor);
-                                _channelingSlot = slot;
-                            }
-                            break;
-                        }
-
-                        case "Command":
-                        {
-                            // Order Attack: send horde minions to attack-move toward target
-                            // They stay in the horde and auto-return when area is clear or timeout
-                            for (int ci = 0; ci < _sim.Units.Count; ci++)
-                            {
-                                if (!_sim.Units[ci].Alive) continue;
-                                if (_sim.Units[ci].Faction != Faction.Undead) continue;
-                                if (_sim.Units[ci].Archetype != AI.ArchetypeRegistry.HordeMinion) continue;
-
-                                _sim.UnitsMut[ci].Routine = 4; // RoutineCommanded
-                                _sim.UnitsMut[ci].Subroutine = 0;
-                                _sim.UnitsMut[ci].SubroutineTimer = 0f;
-                                _sim.UnitsMut[ci].MoveTarget = mouseWorld;
-                                _sim.UnitsMut[ci].Target = CombatTarget.None;
-                                _sim.UnitsMut[ci].EngagedTarget = CombatTarget.None;
-                            }
-                            break;
-                        }
-
-                        case "Cloud":
-                        {
-                            _sim.PoisonClouds.SpawnCloud(mouseWorld, spell, Faction.Undead);
-                            break;
-                        }
-
-                        case "Toggle":
-                        {
-                            // Toggle effect on necromancer
-                            if (spell.ToggleEffect == "ghost_mode")
-                                _sim.UnitsMut[necroIdx].GhostMode = !_sim.Units[necroIdx].GhostMode;
-                            break;
-                        }
-                    }
-
-                    // Apply casting buff if defined
+                    // Apply casting buff immediately (visual starts right away)
                     if (!string.IsNullOrEmpty(spell.CastingBuffID))
                     {
                         var castBuff = _gameData.Buffs.Get(spell.CastingBuffID);
                         if (castBuff != null) BuffSystem.ApplyBuff(_sim.UnitsMut, necroIdx, castBuff);
+
+                        // Defer spell execution to Spell1 animation action moment
+                        _pendingCastAnim = new PendingCastAnim
+                        {
+                            SpellID = spellId,
+                            Target = mouseWorld,
+                            Slot = slot,
+                            CastingBuffID = spell.CastingBuffID
+                        };
+
+                        // Request Spell1 animation on necromancer
+                        uint necroUid = _sim.Units[necroIdx].Id;
+                        if (_unitAnims.TryGetValue(necroUid, out var necroAnim))
+                        {
+                            necroAnim.Ctrl.RequestState(AnimState.Spell1);
+                            _unitAnims[necroUid] = necroAnim;
+                        }
+                    }
+                    else
+                    {
+                        // No casting buff → execute immediately (legacy behavior)
+                        ExecuteSpellEffect(spell, necroIdx, mouseWorld, slot);
                     }
                 }
                 else if (slot == 2 && result == CastResult.NoValidTarget)
@@ -2061,77 +2132,39 @@ public class Game1 : Microsoft.Xna.Framework.Game
                     if (sk >= _secondaryBarState.Slots.Length) continue;
                     string secSpellId = _secondaryBarState.Slots[sk].SpellID;
                     if (string.IsNullOrEmpty(secSpellId)) continue;
+                    if (_pendingCastAnim != null) continue;
+
                     var secResult = SpellCaster.TryStartSpellCast(secSpellId, _gameData.Spells, _sim.NecroState,
                         _sim.Units, necroIdx, mouseWorld, _sim.Corpses, _pendingSpell, _gameData);
                     if (secResult == CastResult.Success)
                     {
                         var spell2 = _gameData.Spells.Get(secSpellId);
                         if (spell2 == null) continue;
-                        var necroPos2 = _sim.Units[necroIdx].Position;
-                        var necroUid2 = _sim.Units[necroIdx].Id;
-                        var effectOrigin2 = _sim.Units[necroIdx].EffectSpawnPos2D;
-                        switch (spell2.Category)
-                        {
-                            case "Projectile":
-                                SpawnSpellProjectile(spell2, effectOrigin2, mouseWorld, necroUid2);
-                                if (spell2.Quantity > 1)
-                                {
-                                    _pendingProjectiles.Add(new PendingProjectileGroup
-                                    {
-                                        SpellID = secSpellId,
-                                        Origin = effectOrigin2,
-                                        Target = mouseWorld,
-                                        Remaining = spell2.Quantity - 1,
-                                        Timer = 0f,
-                                        Interval = spell2.ProjectileDelay > 0f ? spell2.ProjectileDelay : 0.1f
-                                    });
-                                }
-                                break;
-                            case "Buff": case "Debuff":
-                                if (!string.IsNullOrEmpty(spell2.BuffID)) { var bd2 = _gameData.Buffs.Get(spell2.BuffID); if (bd2 != null) BuffSystem.ApplyBuff(_sim.UnitsMut, necroIdx, bd2); }
-                                break;
-                            case "Strike":
-                            {
-                                var sv2 = spell2.StrikeVisualType == "GodRay" ? StrikeVisual.GodRay : StrikeVisual.Lightning;
-                                var gr2 = new GodRayParams { EdgeSoftness = spell2.GodRayEdgeSoftness, NoiseSpeed = spell2.GodRayNoiseSpeed, NoiseStrength = spell2.GodRayNoiseStrength, NoiseScale = spell2.GodRayNoiseScale };
-                                Enum.TryParse<SpellTargetFilter>(spell2.TargetFilter, out var tf2);
-                                _sim.Lightning.SpawnStrike(mouseWorld, spell2.TelegraphDuration, spell2.StrikeDuration, spell2.AoeRadius, spell2.Damage,
-                                    new LightningStyle { CoreColor = spell2.StrikeCoreColor, GlowColor = spell2.StrikeGlowColor, CoreWidth = spell2.StrikeCoreWidth, GlowWidth = spell2.StrikeGlowWidth,
-                                        Displacement = spell2.StrikeDisplacement, MaxBranches = spell2.StrikeBranches },
-                                    spell2.Id, sv2, gr2, tf2);
-                                break;
-                            }
-                            case "Summon":
-                                ExecuteSummonSpell(spell2, _pendingSpell, necroPos2, necroIdx);
-                                break;
-                            case "Cloud":
-                                _sim.PoisonClouds.SpawnCloud(mouseWorld, spell2, Faction.Undead);
-                                break;
-                            case "Command":
-                                for (int ci = 0; ci < _sim.Units.Count; ci++)
-                                {
-                                    if (!_sim.Units[ci].Alive) continue;
-                                    if (_sim.Units[ci].Faction != Faction.Undead) continue;
-                                    if (_sim.Units[ci].Archetype != AI.ArchetypeRegistry.HordeMinion) continue;
-                                    _sim.UnitsMut[ci].Routine = 4; // RoutineCommanded
-                                    _sim.UnitsMut[ci].Subroutine = 0;
-                                    _sim.UnitsMut[ci].SubroutineTimer = 0f;
-                                    _sim.UnitsMut[ci].MoveTarget = mouseWorld;
-                                    _sim.UnitsMut[ci].Target = CombatTarget.None;
-                                    _sim.UnitsMut[ci].EngagedTarget = CombatTarget.None;
-                                }
-                                break;
-                            case "Toggle":
-                                if (spell2.ToggleEffect == "ghost_mode")
-                                    _sim.UnitsMut[necroIdx].GhostMode = !_sim.Units[necroIdx].GhostMode;
-                                break;
-                        }
 
-                        // Apply casting buff if defined
                         if (!string.IsNullOrEmpty(spell2.CastingBuffID))
                         {
                             var castBuff2 = _gameData.Buffs.Get(spell2.CastingBuffID);
                             if (castBuff2 != null) BuffSystem.ApplyBuff(_sim.UnitsMut, necroIdx, castBuff2);
+
+                            _pendingCastAnim = new PendingCastAnim
+                            {
+                                SpellID = secSpellId,
+                                Target = mouseWorld,
+                                Slot = sk,
+                                IsSecondary = true,
+                                CastingBuffID = spell2.CastingBuffID
+                            };
+
+                            uint necroUid2 = _sim.Units[necroIdx].Id;
+                            if (_unitAnims.TryGetValue(necroUid2, out var necroAnim2))
+                            {
+                                necroAnim2.Ctrl.RequestState(AnimState.Spell1);
+                                _unitAnims[necroUid2] = necroAnim2;
+                            }
+                        }
+                        else
+                        {
+                            ExecuteSpellEffect(spell2, necroIdx, mouseWorld, sk);
                         }
                     }
                 }
@@ -2942,6 +2975,8 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 lastProj.HitEffectFlipbookID = spell.HitEffectFlipbook.FlipbookID;
                 lastProj.HitEffectScale = spell.HitEffectFlipbook.Scale;
                 lastProj.HitEffectColor = spell.HitEffectFlipbook.Color;
+                lastProj.HitEffectBlendMode = spell.HitEffectFlipbook.BlendMode == "Additive" ? 1 : 0;
+                lastProj.HitEffectAlignment = spell.HitEffectFlipbook.Alignment == "Upright" ? 1 : 0;
             }
         }
     }
@@ -3192,17 +3227,62 @@ public class Game1 : Microsoft.Xna.Framework.Game
             }
             animData.Ctrl.Update(dt);
 
-            // Resolve pending attacks at action moment
-            if (animData.Ctrl.ConsumeActionMoment() && !_sim.Units[i].PendingAttack.IsNone)
-                _sim.ResolvePendingAttack(i);
+            // Action moment handling: route to melee attack or spell cast
+            if (animData.Ctrl.ConsumeActionMoment())
+            {
+                if (_pendingCastAnim != null && i == FindNecromancer()
+                    && animData.Ctrl.CurrentState == AnimState.Spell1)
+                {
+                    // Spell cast action moment: execute the deferred spell
+                    var pca = _pendingCastAnim.Value;
+                    var spell = _gameData.Spells.Get(pca.SpellID);
+                    if (spell != null)
+                        ExecuteSpellEffect(spell, i, pca.Target, pca.Slot);
+                    _pendingCastAnim = null;
+                }
+                else if (!_sim.Units[i].PendingAttack.IsNone)
+                {
+                    _sim.ResolvePendingAttack(i);
+                }
+            }
 
             _unitAnims[uid] = animData;
+        }
+
+        // Spell1 is PlayOnceTransition — it switches to Idle when done, so we can't check
+        // CurrentState == Spell1 after the fact. Instead, detect that the necromancer left
+        // Spell1 (no longer in Spell1) while _pendingCastAnim is still set.
+        if (_pendingCastAnim != null)
+        {
+            int necroIdx = FindNecromancer();
+            if (necroIdx >= 0)
+            {
+                uint nUid = _sim.Units[necroIdx].Id;
+                bool stillCasting = _unitAnims.TryGetValue(nUid, out var nAnim)
+                    && nAnim.Ctrl.CurrentState == AnimState.Spell1;
+                if (!stillCasting)
+                {
+                    // Spell1 ended (transitioned away) — execute spell if action moment didn't fire
+                    var pca = _pendingCastAnim.Value;
+                    var spell = _gameData.Spells.Get(pca.SpellID);
+                    if (spell != null)
+                        ExecuteSpellEffect(spell, necroIdx, pca.Target, pca.Slot);
+                    _pendingCastAnim = null;
+                    RemoveCastingBuffAll(necroIdx);
+                }
+            }
+            else
+            {
+                // Necromancer gone — clear pending cast
+                _pendingCastAnim = null;
+            }
         }
 
         // Update EffectSpawnPos2D / EffectSpawnHeight from weapon tip data
         UpdateEffectSpawnPositions();
 
         _effectManager.Update(dt);
+        _buffVisuals.Update(dt, _sim.Units, _gameData.Buffs, _gameTime);
         UpdateCollectingForagables(dt);
     }
 
@@ -3271,6 +3351,51 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 mu[i].EffectSpawnHeight = 0.6f;
             }
         }
+    }
+
+    /// <summary>
+    /// Compute weapon hilt/tip world positions for buff weapon particle spawning.
+    /// </summary>
+    private WeaponAttachRuntime ComputeWeaponAttach(int unitIdx, UnitDef unitDef, UnitAnimData animData)
+    {
+        var result = new WeaponAttachRuntime();
+        if (unitDef.WeaponPoints.Count == 0 || animData.RefFrameHeight <= 0f) return result;
+
+        string animName = AnimController.StateToAnimName(animData.Ctrl.CurrentState);
+        if (!unitDef.WeaponPoints.TryGetValue(animName, out var yawDict)) return result;
+
+        int spriteAngle = animData.Ctrl.ResolveAngle(_sim.Units[unitIdx].FacingAngle, out bool flipX);
+        string yawKey = spriteAngle.ToString();
+        if (!yawDict.TryGetValue(yawKey, out var frames)) return result;
+
+        int frameIdx = animData.Ctrl.GetCurrentFrameIndex(_sim.Units[unitIdx].FacingAngle);
+        if (frameIdx < 0 || frameIdx >= frames.Count) return result;
+
+        var wpf = frames[frameIdx];
+        bool hiltSet = wpf.Hilt.X != 0f || wpf.Hilt.Y != 0f;
+        bool tipSet = wpf.Tip.X != 0f || wpf.Tip.Y != 0f;
+        if (!hiltSet && !tipSet) return result;
+
+        float flipMul = flipX ? -1f : 1f;
+        float worldH = (unitDef.SpriteWorldHeight > 0 ? unitDef.SpriteWorldHeight : 1.8f)
+                       * _sim.Units[unitIdx].SpriteScale;
+        float worldScale = worldH / animData.RefFrameHeight;
+        float unitHeight = _sim.Units[unitIdx].JumpHeight;
+
+        result.HiltWorld = new Vec2(
+            _sim.Units[unitIdx].Position.X + wpf.Hilt.X * worldScale * flipMul,
+            _sim.Units[unitIdx].Position.Y);
+        result.HiltHeight = unitHeight - wpf.Hilt.Y * worldScale * _camera.Zoom / _camera.HeightScale;
+        result.HiltBehind = wpf.Hilt.Behind;
+
+        result.TipWorld = new Vec2(
+            _sim.Units[unitIdx].Position.X + wpf.Tip.X * worldScale * flipMul,
+            _sim.Units[unitIdx].Position.Y);
+        result.TipHeight = unitHeight - wpf.Tip.Y * worldScale * _camera.Zoom / _camera.HeightScale;
+        result.TipBehind = wpf.Tip.Behind;
+
+        result.Valid = true;
+        return result;
     }
 
     protected override void Draw(GameTime gameTime)
@@ -3377,9 +3502,26 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
         _spriteBatch.End();
 
-        // --- Additive blend pass (effects, lightning, energy columns) ---
+        // Spawn new effects from impacts (once per frame, before drawing)
+        SpawnImpactEffects();
+
+        // --- Alpha-blended HDR effects (clouds, smoke) ---
+        _hdrSpriteEffect?.Parameters["AlphaMode"]?.SetValue(1f);
+        _spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.LinearClamp,
+            effect: _hdrSpriteEffect);
+        DrawEffectsFiltered(0);
+        _spriteBatch.End();
+
+        // --- Additive HDR pass (effects + fireball projectiles) ---
+        _hdrSpriteEffect?.Parameters["AlphaMode"]?.SetValue(0f);
+        _spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.Additive, SamplerState.LinearClamp,
+            effect: _hdrSpriteEffect);
+        DrawProjectilesHdr();
+        DrawEffectsFiltered(1);
+        _spriteBatch.End();
+
+        // --- Additive blend pass (lightning, energy columns, debug shapes) ---
         _spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.Additive, SamplerState.LinearClamp);
-        DrawEffects();
         _glyphRenderer.DrawEnergyColumns(_sim.MagicGlyphs);
         _lightningRenderer.SetGameTime(_gameTime);
         _lightningRenderer.Draw();
@@ -4162,6 +4304,28 @@ public class Game1 : Microsoft.Xna.Framework.Game
         float heightOffset = _sim.Units[i].JumpHeight;
         var sp = _renderer.WorldToScreen(_sim.Units[i].Position, heightOffset, _camera);
 
+        // Compute weapon attachment for weapon particle buff visuals
+        var weaponAttach = ComputeWeaponAttach(i, unitDef, animData);
+
+        // Update weapon particle emitters (like C++, phase 0 only)
+        {
+            var wpDefs = new List<Data.Registries.BuffDef>();
+            foreach (var ab in _sim.Units[i].ActiveBuffs)
+            {
+                var bd = _gameData.Buffs.Get(ab.BuffDefID);
+                if (bd != null && bd.HasWeaponParticle && bd.WeaponParticle != null)
+                    wpDefs.Add(bd);
+            }
+            if (wpDefs.Count > 0 || _buffVisuals.HasEmitters(i))
+                _buffVisuals.UpdateWeaponParticles(i, _rawDt * _timeScale, _gameTime, wpDefs, weaponAttach, _gameData.Buffs);
+        }
+
+        // Buff visuals: phase 0 (behind sprite)
+        _buffVisuals.DrawUnit(i, _sim.Units[i].Position, 0, _gameTime,
+            _spriteBatch, _camera, _renderer, _flipbooks, _gameData.Buffs, _sim.Units,
+            atlas, fr.Frame.Value, scale, fr.FlipX,
+            _sim.Units[i].EffectSpawnPos2D, _sim.Units[i].EffectSpawnHeight);
+
         // Pulsing outline: draw sprite 8 times at directional offsets behind the unit
         DrawUnitPulsingOutline(i, atlas, fr.Frame.Value, sp, scale, fr.FlipX);
 
@@ -4170,6 +4334,13 @@ public class Game1 : Microsoft.Xna.Framework.Game
             DrawGhostOutline(atlas, fr.Frame.Value, sp, scale, fr.FlipX);
 
         DrawSpriteFrame(atlas, fr.Frame.Value, sp, scale, fr.FlipX, tint);
+
+        // Buff visuals: phase 1 (in front of sprite)
+        _buffVisuals.DrawUnit(i, _sim.Units[i].Position, 1, _gameTime,
+            _spriteBatch, _camera, _renderer, _flipbooks, _gameData.Buffs, _sim.Units,
+            atlas, fr.Frame.Value, scale, fr.FlipX,
+            _sim.Units[i].EffectSpawnPos2D, _sim.Units[i].EffectSpawnHeight);
+
         DrawHPBar(i, sp);
 
         // --- Feature 1: Weapon point text during attack ---
@@ -4443,6 +4614,9 @@ public class Game1 : Microsoft.Xna.Framework.Game
         foreach (var proj in _sim.Projectiles.Projectiles)
         {
             if (!proj.Alive) continue;
+            // Fireballs are drawn in the additive HDR pass (DrawProjectilesHdr)
+            if (proj.Type == ProjectileType.Fireball) continue;
+
             var sp = _renderer.WorldToScreen(proj.Position, proj.Height, _camera);
 
             if (proj.Type == ProjectileType.Arrow)
@@ -4478,80 +4652,83 @@ public class Game1 : Microsoft.Xna.Framework.Game
                         0f, new Vector2(0.5f, 0.5f), glowSize, SpriteEffects.None, 0f);
                 }
             }
-            else if (proj.Type == ProjectileType.Fireball)
-            {
-                // This is Fireball Rendering!
-                // Spell projectile — try flipbook rendering
-                string fbId = proj.FlipbookID;
-                if (!string.IsNullOrEmpty(fbId) && _flipbooks.TryGetValue(fbId, out var fb) && fb.IsLoaded)
-                {
-                    int frameIdx = fb.GetFrameAtTime(proj.Age);
-                    var srcRect = fb.GetFrameRect(frameIdx);
-                    // Scale: worldSize * zoom / framePixelSize
-                    float worldSize = proj.ParticleScale * 1.5f; // world units
-                    float pixelSize = worldSize * _camera.Zoom;
-                    float scale = pixelSize / srcRect.Width;
-                    var origin = new Vector2(srcRect.Width / 2f, srcRect.Height / 2f);
-                    // This is unscaled, but scaled ruins the color.
-                    var color = proj.ParticleColor.ToColor();
-                        
-                    // Trail: draw 2 previous frames behind with lower alpha
-                    // This also draws the main sprite.
-                    Vec2 velDir = proj.Velocity.Normalized();
-                    for (int trail = 2; trail >= 0; trail--) {
-                        float trailOffset = trail * 0.4f * _camera.Zoom;
-                        float trailAlpha = (trail == 0) ? 1.0f : (trail == 1) ? 0.5f : 0.25f;
-                        float trailScale = (trail == 0) ? 1.0f : (trail == 1) ? 0.8f : 0.6f;
-
-                        int trailFrame = fb.GetFrameAtTime(proj.Age - trail * 0.05f);
-                        Rectangle trailSrc = fb.GetFrameRect(trailFrame);
-
-                        Vector2 trailPos = new Vector2(
-                            sp.X - velDir.X * trailOffset,
-                            sp.Y - velDir.Y * trailOffset * _camera.YRatio
-                        );
-
-                        byte alpha = (byte)((float)color.A * trailAlpha);
-                        Color tint = new(color.R, color.G, color.B, alpha);
-                        _spriteBatch.Draw(fb.Texture, trailPos, trailSrc, Color.FromNonPremultiplied(tint.R, tint.G, tint.B, tint.A),
-                            proj.Age * 2f, origin, scale * trailScale, SpriteEffects.None, 0f);
-                    }
-                }
-                else
-                {
-                    // Fallback glow dot
-                    float glowSize = 6f * _camera.Zoom / 32f;
-                    _spriteBatch.Draw(_pixel, sp, null, Color.FromNonPremultiplied(255, 120, 40, 200),
-                        0f, new Vector2(0.5f, 0.5f), glowSize, SpriteEffects.None, 0f);
-
-                    // Trail segments
-                    float trailLen = 4f * _camera.Zoom / 32f;
-                    for (int t = 1; t <= 3; t++)
-                    {
-                        var trailPos = _renderer.WorldToScreen(
-                            proj.Position - proj.Velocity.Normalized() * (t * 0.3f),
-                            proj.Height - proj.VelocityZ * t * 0.02f, _camera);
-                        byte alpha = (byte)(120 / t);
-                        float taf = alpha / 255f;
-                        _spriteBatch.Draw(_pixel, trailPos, null, new Color((byte)(255 * taf), (byte)(100 * taf), (byte)(30 * taf), alpha),
-                            0f, new Vector2(0.5f, 0.5f), trailLen / t, SpriteEffects.None, 0f);
-                    }
-                }
-            }
             else
             {
                 // Clean out later.
                 throw new Exception($"Missing ProjectileType: {proj.Type}");
-                
             }
         }
     }
 
-    private void DrawEffects()
+    /// <summary>Draw fireball projectiles with HDR intensity (called in additive HdrSprite pass).</summary>
+    private void DrawProjectilesHdr()
+    {
+        foreach (var proj in _sim.Projectiles.Projectiles)
+        {
+            if (!proj.Alive || proj.Type != ProjectileType.Fireball) continue;
+            var sp = _renderer.WorldToScreen(proj.Position, proj.Height, _camera);
+
+            string fbId = proj.FlipbookID;
+            if (!string.IsNullOrEmpty(fbId) && _flipbooks.TryGetValue(fbId, out var fb) && fb.IsLoaded)
+            {
+                int frameIdx = fb.GetFrameAtTime(proj.Age);
+                var srcRect = fb.GetFrameRect(frameIdx);
+                float worldSize = proj.ParticleScale * 1.5f;
+                float pixelSize = worldSize * _camera.Zoom;
+                float scale = pixelSize / srcRect.Width;
+                var origin = new Vector2(srcRect.Width / 2f, srcRect.Height / 2f);
+
+                // Trail: draw 2 previous frames behind with lower alpha, then main sprite
+                Vec2 velDir = proj.Velocity.Normalized();
+                for (int trail = 2; trail >= 0; trail--)
+                {
+                    float trailOffset = trail * 0.4f * _camera.Zoom;
+                    float trailAlpha = (trail == 0) ? 1.0f : (trail == 1) ? 0.5f : 0.25f;
+                    float trailScale = (trail == 0) ? 1.0f : (trail == 1) ? 0.8f : 0.6f;
+
+                    int trailFrame = fb.GetFrameAtTime(proj.Age - trail * 0.05f);
+                    Rectangle trailSrc = fb.GetFrameRect(trailFrame);
+
+                    Vector2 trailPos = new Vector2(
+                        sp.X - velDir.X * trailOffset,
+                        sp.Y - velDir.Y * trailOffset * _camera.YRatio
+                    );
+
+                    var color = HdrColor.ToHdrVertex(proj.ParticleColor.ToColor(), trailAlpha, proj.ParticleColor.Intensity);
+                    _spriteBatch.Draw(fb.Texture, trailPos, trailSrc, color,
+                        proj.Age * 2f, origin, scale * trailScale, SpriteEffects.None, 0f);
+                }
+            }
+            else
+            {
+                // Fallback glow dot
+                float glowSize = 6f * _camera.Zoom / 32f;
+                var color = HdrColor.ToHdrVertex(new Color(255, 120, 40), 200f / 255f, 1f);
+                _spriteBatch.Draw(_pixel, sp, null, color,
+                    0f, new Vector2(0.5f, 0.5f), glowSize, SpriteEffects.None, 0f);
+
+                // Trail segments
+                float trailLen = 4f * _camera.Zoom / 32f;
+                for (int t = 1; t <= 3; t++)
+                {
+                    var trailPos = _renderer.WorldToScreen(
+                        proj.Position - proj.Velocity.Normalized() * (t * 0.3f),
+                        proj.Height - proj.VelocityZ * t * 0.02f, _camera);
+                    float trailAlpha = (120f / t) / 255f;
+                    var tColor = HdrColor.ToHdrVertex(new Color(255, 100, 30), trailAlpha, 1f);
+                    _spriteBatch.Draw(_pixel, trailPos, null, tColor,
+                        0f, new Vector2(0.5f, 0.5f), trailLen / t, SpriteEffects.None, 0f);
+                }
+            }
+        }
+    }
+
+    /// <summary>Draw effects matching the given blend mode (0=alpha, 1=additive).</summary>
+    private void DrawEffectsFiltered(int blendMode)
     {
         foreach (var eff in _effectManager.Effects)
         {
-            if (!eff.Alive) continue;
+            if (!eff.Alive || eff.BlendMode != blendMode) continue;
             float t = eff.Age / eff.Lifetime;
             float alpha = eff.AlphaCurve.Evaluate(t);
             float scale = eff.ScaleCurve.Evaluate(t) * _camera.Zoom / 32f;
@@ -4568,27 +4745,36 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 float worldSize = scale * 2f; // scale curve gives world units
                 float pixelSize = worldSize * _camera.Zoom;
                 float fbScale = pixelSize / srcRect.Width;
-                var color = new Color(eff.Tint.R, eff.Tint.G, eff.Tint.B, (byte)(alpha * 255));
+                Color color = blendMode == 0
+                    ? HdrColor.ToHdrVertexAlpha(eff.Tint, alpha, eff.HdrIntensity)
+                    : HdrColor.ToHdrVertex(eff.Tint, alpha, eff.HdrIntensity);
                 _spriteBatch.Draw(fb.Texture, sp, srcRect, color, 0f, origin, fbScale, SpriteEffects.None, 0f);
             }
             else
             {
                 // Fallback glow (radial gradient circle)
-                byte a = (byte)(alpha * 200);
-                float glowSize = scale * _camera.Zoom * 0.5f / 32f; // divide by half-texture-size to match world scale
-                _spriteBatch.Draw(_glowTex, sp, null, new Color(eff.Tint.R, eff.Tint.G, eff.Tint.B, a),
+                float glowAlpha = alpha * (200f / 255f);
+                Color color = blendMode == 0
+                    ? HdrColor.ToHdrVertexAlpha(eff.Tint, glowAlpha, eff.HdrIntensity)
+                    : HdrColor.ToHdrVertex(eff.Tint, glowAlpha, eff.HdrIntensity);
+                float glowSize = scale * _camera.Zoom * 0.5f / 32f;
+                _spriteBatch.Draw(_glowTex, sp, null, color,
                     0f, new Vector2(32f, 32f), glowSize, SpriteEffects.None, 0f);
             }
         }
+    }
 
-        // Spawn effects from projectile impacts
+    /// <summary>Spawn new effects from projectile impacts (called once per frame, blend-mode independent).</summary>
+    private void SpawnImpactEffects()
+    {
         foreach (var impact in _sim.Projectiles.Impacts)
         {
             string fbId = impact.HitEffectFlipbookID;
             if (!string.IsNullOrEmpty(fbId))
             {
                 _effectManager.SpawnSpellImpact(impact.Position, impact.HitEffectScale,
-                    impact.HitEffectColor.ToScaledColor(), fbId);
+                    impact.HitEffectColor.ToColor(), fbId, hdrIntensity: impact.HitEffectColor.Intensity,
+                    blendMode: impact.HitEffectBlendMode, alignment: impact.HitEffectAlignment);
             }
             else if (impact.AoeRadius > 0)
             {
