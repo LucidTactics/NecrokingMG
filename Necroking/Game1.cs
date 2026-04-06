@@ -1343,6 +1343,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 int menuY = screenH2 / 4 + 60;
 
                 var names = new List<string>(ScenarioRegistry.GetNames());
+                names.Reverse(); // Newest first (must match draw order)
                 int visibleCount = Math.Min(names.Count - _scenarioScrollOffset, (screenH2 - menuY - 80) / (btnH + btnGap));
                 for (int i = 0; i < visibleCount; i++)
                 {
@@ -4793,6 +4794,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         int menuY = screenH / 4 + 60;
 
         var names = new List<string>(ScenarioRegistry.GetNames());
+        names.Reverse(); // Newest first
         int visibleCount = Math.Min(names.Count - _scenarioScrollOffset, (screenH - menuY - 80) / (btnH + btnGap));
         for (int i = 0; i < visibleCount; i++)
         {
