@@ -177,32 +177,43 @@ public class BloomRenderer
         // --- Step 3: Upsample chain — blend each mip back up with scatter ---
         // Matches C++: optionally uses bicubic upsampling shader
         float scatter = Math.Clamp(settings.Scatter, 0f, 1f);
-        byte scatterAlpha = (byte)(scatter * 255f);
-        var scatterTint = new Color((byte)255, (byte)255, (byte)255, scatterAlpha);
         bool useBicubic = settings.BicubicUpsampling && _bicubicUpsampleEffect != null;
+
+        // Weighted additive: mip[i] = mip[i] + upsample(mip[i+1]) * scatter
+        // BlendFactor controls how much of the wider blur gets added at each level.
+        // Destination stays at full strength (One) so sharp detail is preserved.
+        byte sb = (byte)(scatter * 255f);
+        var scatterBlend = new BlendState
+        {
+            ColorSourceBlend = Blend.BlendFactor,
+            ColorDestinationBlend = Blend.One,
+            AlphaSourceBlend = Blend.BlendFactor,
+            AlphaDestinationBlend = Blend.One,
+            BlendFactor = new Color(sb, sb, sb, sb)
+        };
 
         for (int i = iters - 2; i >= 0; i--)
         {
             device.SetRenderTarget(_mips[i]);
             if (useBicubic)
             {
-                // Set texel size of the SOURCE texture (the smaller mip being upsampled)
                 _bicubicUpsampleEffect!.Parameters["TexelSize"]?.SetValue(
                     new Vector2(1f / _mips[i + 1]!.Width, 1f / _mips[i + 1]!.Height));
-                batch.Begin(SpriteSortMode.Immediate, BlendState.Additive, SamplerState.LinearClamp,
+                batch.Begin(SpriteSortMode.Immediate, scatterBlend, SamplerState.LinearClamp,
                     null, null, _bicubicUpsampleEffect);
             }
             else
             {
-                batch.Begin(SpriteSortMode.Immediate, BlendState.Additive, SamplerState.LinearClamp);
+                batch.Begin(SpriteSortMode.Immediate, scatterBlend, SamplerState.LinearClamp);
             }
-            batch.Draw(_mips[i + 1], new Rectangle(0, 0, _mips[i]!.Width, _mips[i]!.Height), scatterTint);
+            batch.Draw(_mips[i + 1], new Rectangle(0, 0, _mips[i]!.Width, _mips[i]!.Height), Color.White);
             batch.End();
         }
 
-        // Note: C++ does NOT have an extra blur pass — removed to match C++ pipeline
-        // (The mip chain downsample/upsample already provides sufficient blur)
-        if (false && _tempBlurRT != null && _blurEffect != null)
+        scatterBlend.Dispose();
+
+        // Extra Gaussian blur on the final bloom to spread it beyond the mip chain limit
+        if (_tempBlurRT != null && _blurEffect != null)
         {
             float blurScale = 1.5f;
 
