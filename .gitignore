@@ -23,6 +23,7 @@ resources/obj/
 ## IDE
 .vs/
 .vscode/
+.idea/
 *.DotSettings
 
 ## OS
