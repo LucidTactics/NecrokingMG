@@ -148,7 +148,7 @@ public class MapEditorWindow
     // M16: Smooth camera velocity
     private float _camVelX;
     private float _camVelY;
-    private const float CamAcceleration = 40f;
+    private const float CamAcceleration = 100f;
     private const float CamFriction = 8f;
     private const float CamBaseSpeed = 30f;
 
@@ -588,10 +588,14 @@ public class MapEditorWindow
 
             // M16: Smooth WASD camera with acceleration/friction
             // RM37: Arrow keys in addition to WASD
-            if (kb.IsKeyDown(Keys.W) || kb.IsKeyDown(Keys.Up)) _camVelY -= CamAcceleration * dt;
-            if ((kb.IsKeyDown(Keys.S) && !kb.IsKeyDown(Keys.LeftControl)) || kb.IsKeyDown(Keys.Down)) _camVelY += CamAcceleration * dt;
-            if (kb.IsKeyDown(Keys.A) || kb.IsKeyDown(Keys.Left)) _camVelX -= CamAcceleration * dt;
-            if (kb.IsKeyDown(Keys.D) || kb.IsKeyDown(Keys.Right)) _camVelX += CamAcceleration * dt;
+
+            float cam_accel = CamAcceleration;
+            if (kb.IsKeyDown(Keys.LeftShift) || kb.IsKeyDown(Keys.RightShift)) cam_accel *= 5;
+            
+            if (kb.IsKeyDown(Keys.W) || kb.IsKeyDown(Keys.Up)) _camVelY -= cam_accel * dt;
+            if ((kb.IsKeyDown(Keys.S) && !kb.IsKeyDown(Keys.LeftControl)) || kb.IsKeyDown(Keys.Down)) _camVelY += cam_accel * dt;
+            if (kb.IsKeyDown(Keys.A) || kb.IsKeyDown(Keys.Left)) _camVelX -= cam_accel * dt;
+            if (kb.IsKeyDown(Keys.D) || kb.IsKeyDown(Keys.Right)) _camVelX += cam_accel * dt;
 
             // RM10: 'B' hotkey to toggle Single/Paint mode in Objects tab
             if (ActiveTab == MapEditorTab.Objects && kb.IsKeyDown(Keys.B) && _prevKb.IsKeyUp(Keys.B))
