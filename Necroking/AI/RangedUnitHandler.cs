@@ -25,9 +25,7 @@ public class RangedUnitHandler : IArchetypeHandler
 
     private const float DefaultRange = 18f;  // fallback if unit has no RangedRange stat
     private const float TooCloseFrac = 0.25f; // back away if within this fraction of max range
-    private const float DefaultCooldown = 2f;
-    private const int DefaultDamage = 8;
-    private const int DefaultPrecision = 10;
+    private const float DefaultCooldown = 5f;
 
     private readonly byte _archetypeId;
 
@@ -120,7 +118,7 @@ public class RangedUnitHandler : IArchetypeHandler
 
         float dist = (ctx.Units[targetIdx].Position - ctx.MyPos).Length();
 
-        // Tick cooldown locally so the AI doesn't depend on the legacy combat queue.
+        // Tick cooldown locally so the AI doesn't depend on the legacy melee combat queue.
         if (ctx.Units[i].AttackCooldown > 0f)
             ctx.Units[i].AttackCooldown = MathF.Max(0f, ctx.Units[i].AttackCooldown - ctx.Dt);
 
@@ -141,19 +139,19 @@ public class RangedUnitHandler : IArchetypeHandler
             ctx.Units[i].PreferredVel = Vec2.Zero;
         }
 
-        // Fire ranged attack while in range and off cooldown.
-        // Note: ranged units never set EngagedTarget — that path runs the melee resolver.
+        // Queue a ranged attack via PendingAttack so the animation system plays
+        // the attack anim and triggers the actual arrow spawn at the action moment
+        // (Simulation.ResolvePendingAttack handles the ranged-vs-melee dispatch).
+        // Ranged units never set EngagedTarget — that path runs the melee combat queue.
         if (_archetypeId == ArchetypeRegistry.ArcherUnit
             && ctx.Units[i].AttackCooldown <= 0f
             && ctx.Units[i].PendingAttack.IsNone
-            && ctx.Projectiles != null)
+            && ctx.Units[i].PostAttackTimer <= 0f)
         {
-            int damage = stats.RangedDmg.Count > 0 ? stats.RangedDmg[0] : DefaultDamage;
             float cooldown = stats.RangedCooldownTime.Count > 0 ? stats.RangedCooldownTime[0] : DefaultCooldown;
-            bool volley = dist > maxRange * 0.4f;
-            ctx.Projectiles.SpawnArrow(ctx.MyPos, ctx.Units[targetIdx].Position,
-                ctx.Units[i].Faction, ctx.Units[i].Id, damage, volley, DefaultPrecision);
+            ctx.Units[i].PendingAttack = ctx.Units[i].Target;
             ctx.Units[i].AttackCooldown = cooldown;
+            ctx.Units[i].PostAttackTimer = cooldown * 0.5f;
         }
     }
 

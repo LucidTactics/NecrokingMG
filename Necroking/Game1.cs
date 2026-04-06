@@ -3126,7 +3126,11 @@ public class Game1 : Microsoft.Xna.Framework.Game
             else if (_sim.Units[i].Dodging)
                 targetState = AnimState.Dodge;
             else if (!_sim.Units[i].PendingAttack.IsNone)
-                targetState = AnimState.Attack1;
+               if (_sim.Units[i].Archetype == AI.ArchetypeRegistry.ArcherUnit) {
+                  targetState = AnimState.Ranged1;
+               } else {
+                  targetState = AnimState.Attack1;
+               }
             else if (_sim.Units[i].HitReacting)
                 targetState = AnimState.BlockReact;
             else if (_sim.Units[i].Archetype == AI.ArchetypeRegistry.DeerHerd
