@@ -1389,6 +1389,19 @@ public class Simulation
         int defenderIdx = ResolveUnitTarget(t);
         if (defenderIdx < 0) return;
 
+        // Ranged units fire a projectile at the action moment instead of melee.
+        if (_units[unitIdx].Archetype == AI.ArchetypeRegistry.ArcherUnit)
+        {
+            ref var stats = ref _units[unitIdx].Stats;
+            int damage = stats.RangedDmg.Count > 0 ? stats.RangedDmg[0] : 8;
+            float maxRange = stats.RangedRange.Count > 0 ? stats.RangedRange[0] : 18f;
+            float dist = (_units[defenderIdx].Position - _units[unitIdx].Position).Length();
+            bool volley = dist > maxRange * 0.4f;
+            _projectiles.SpawnArrow(_units[unitIdx].Position, _units[defenderIdx].Position,
+                _units[unitIdx].Faction, _units[unitIdx].Id, damage, volley, 10);
+            return;
+        }
+
         ResolveMeleeAttack(unitIdx, defenderIdx);
     }
 
@@ -1488,6 +1501,9 @@ public class Simulation
     private void ApplyDamage(int unitIdx, int damage, int attackerIdx = -1)
     {
         if (unitIdx < 0 || unitIdx >= _units.Count || !_units[unitIdx].Alive) return;
+
+        // Take no damage as ghost.
+        if (_units[unitIdx].GhostMode) damage = 0;
 
         _units[unitIdx].Stats.HP -= damage;
         if (attackerIdx >= 0 && attackerIdx < _units.Count)
