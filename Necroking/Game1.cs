@@ -3376,10 +3376,11 @@ public class Game1 : Microsoft.Xna.Framework.Game
         DrawEffectsFiltered(0);
         _spriteBatch.End();
 
-        // --- Additive HDR effects pass ---
+        // --- Additive HDR pass (effects + fireball projectiles) ---
         _hdrSpriteEffect?.Parameters["AlphaMode"]?.SetValue(0f);
         _spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.Additive, SamplerState.LinearClamp,
             effect: _hdrSpriteEffect);
+        DrawProjectilesHdr();
         DrawEffectsFiltered(1);
         _spriteBatch.End();
 
@@ -4447,6 +4448,9 @@ public class Game1 : Microsoft.Xna.Framework.Game
         foreach (var proj in _sim.Projectiles.Projectiles)
         {
             if (!proj.Alive) continue;
+            // Fireballs are drawn in the additive HDR pass (DrawProjectilesHdr)
+            if (proj.Type == ProjectileType.Fireball) continue;
+
             var sp = _renderer.WorldToScreen(proj.Position, proj.Height, _camera);
 
             if (proj.Type == ProjectileType.Arrow)
@@ -4482,71 +4486,73 @@ public class Game1 : Microsoft.Xna.Framework.Game
                         0f, new Vector2(0.5f, 0.5f), glowSize, SpriteEffects.None, 0f);
                 }
             }
-            else if (proj.Type == ProjectileType.Fireball)
-            {
-                // This is Fireball Rendering!
-                // Spell projectile — try flipbook rendering
-                string fbId = proj.FlipbookID;
-                if (!string.IsNullOrEmpty(fbId) && _flipbooks.TryGetValue(fbId, out var fb) && fb.IsLoaded)
-                {
-                    int frameIdx = fb.GetFrameAtTime(proj.Age);
-                    var srcRect = fb.GetFrameRect(frameIdx);
-                    // Scale: worldSize * zoom / framePixelSize
-                    float worldSize = proj.ParticleScale * 1.5f; // world units
-                    float pixelSize = worldSize * _camera.Zoom;
-                    float scale = pixelSize / srcRect.Width;
-                    var origin = new Vector2(srcRect.Width / 2f, srcRect.Height / 2f);
-                    // This is unscaled, but scaled ruins the color.
-                    var color = proj.ParticleColor.ToColor();
-                        
-                    // Trail: draw 2 previous frames behind with lower alpha
-                    // This also draws the main sprite.
-                    Vec2 velDir = proj.Velocity.Normalized();
-                    for (int trail = 2; trail >= 0; trail--) {
-                        float trailOffset = trail * 0.4f * _camera.Zoom;
-                        float trailAlpha = (trail == 0) ? 1.0f : (trail == 1) ? 0.5f : 0.25f;
-                        float trailScale = (trail == 0) ? 1.0f : (trail == 1) ? 0.8f : 0.6f;
-
-                        int trailFrame = fb.GetFrameAtTime(proj.Age - trail * 0.05f);
-                        Rectangle trailSrc = fb.GetFrameRect(trailFrame);
-
-                        Vector2 trailPos = new Vector2(
-                            sp.X - velDir.X * trailOffset,
-                            sp.Y - velDir.Y * trailOffset * _camera.YRatio
-                        );
-
-                        byte alpha = (byte)((float)color.A * trailAlpha);
-                        Color tint = new(color.R, color.G, color.B, alpha);
-                        _spriteBatch.Draw(fb.Texture, trailPos, trailSrc, Color.FromNonPremultiplied(tint.R, tint.G, tint.B, tint.A),
-                            proj.Age * 2f, origin, scale * trailScale, SpriteEffects.None, 0f);
-                    }
-                }
-                else
-                {
-                    // Fallback glow dot
-                    float glowSize = 6f * _camera.Zoom / 32f;
-                    _spriteBatch.Draw(_pixel, sp, null, Color.FromNonPremultiplied(255, 120, 40, 200),
-                        0f, new Vector2(0.5f, 0.5f), glowSize, SpriteEffects.None, 0f);
-
-                    // Trail segments
-                    float trailLen = 4f * _camera.Zoom / 32f;
-                    for (int t = 1; t <= 3; t++)
-                    {
-                        var trailPos = _renderer.WorldToScreen(
-                            proj.Position - proj.Velocity.Normalized() * (t * 0.3f),
-                            proj.Height - proj.VelocityZ * t * 0.02f, _camera);
-                        byte alpha = (byte)(120 / t);
-                        float taf = alpha / 255f;
-                        _spriteBatch.Draw(_pixel, trailPos, null, new Color((byte)(255 * taf), (byte)(100 * taf), (byte)(30 * taf), alpha),
-                            0f, new Vector2(0.5f, 0.5f), trailLen / t, SpriteEffects.None, 0f);
-                    }
-                }
-            }
             else
             {
                 // Clean out later.
                 throw new Exception($"Missing ProjectileType: {proj.Type}");
-                
+            }
+        }
+    }
+
+    /// <summary>Draw fireball projectiles with HDR intensity (called in additive HdrSprite pass).</summary>
+    private void DrawProjectilesHdr()
+    {
+        foreach (var proj in _sim.Projectiles.Projectiles)
+        {
+            if (!proj.Alive || proj.Type != ProjectileType.Fireball) continue;
+            var sp = _renderer.WorldToScreen(proj.Position, proj.Height, _camera);
+
+            string fbId = proj.FlipbookID;
+            if (!string.IsNullOrEmpty(fbId) && _flipbooks.TryGetValue(fbId, out var fb) && fb.IsLoaded)
+            {
+                int frameIdx = fb.GetFrameAtTime(proj.Age);
+                var srcRect = fb.GetFrameRect(frameIdx);
+                float worldSize = proj.ParticleScale * 1.5f;
+                float pixelSize = worldSize * _camera.Zoom;
+                float scale = pixelSize / srcRect.Width;
+                var origin = new Vector2(srcRect.Width / 2f, srcRect.Height / 2f);
+
+                // Trail: draw 2 previous frames behind with lower alpha, then main sprite
+                Vec2 velDir = proj.Velocity.Normalized();
+                for (int trail = 2; trail >= 0; trail--)
+                {
+                    float trailOffset = trail * 0.4f * _camera.Zoom;
+                    float trailAlpha = (trail == 0) ? 1.0f : (trail == 1) ? 0.5f : 0.25f;
+                    float trailScale = (trail == 0) ? 1.0f : (trail == 1) ? 0.8f : 0.6f;
+
+                    int trailFrame = fb.GetFrameAtTime(proj.Age - trail * 0.05f);
+                    Rectangle trailSrc = fb.GetFrameRect(trailFrame);
+
+                    Vector2 trailPos = new Vector2(
+                        sp.X - velDir.X * trailOffset,
+                        sp.Y - velDir.Y * trailOffset * _camera.YRatio
+                    );
+
+                    var color = HdrColor.ToHdrVertex(proj.ParticleColor.ToColor(), trailAlpha, proj.ParticleColor.Intensity);
+                    _spriteBatch.Draw(fb.Texture, trailPos, trailSrc, color,
+                        proj.Age * 2f, origin, scale * trailScale, SpriteEffects.None, 0f);
+                }
+            }
+            else
+            {
+                // Fallback glow dot
+                float glowSize = 6f * _camera.Zoom / 32f;
+                var color = HdrColor.ToHdrVertex(new Color(255, 120, 40), 200f / 255f, 1f);
+                _spriteBatch.Draw(_pixel, sp, null, color,
+                    0f, new Vector2(0.5f, 0.5f), glowSize, SpriteEffects.None, 0f);
+
+                // Trail segments
+                float trailLen = 4f * _camera.Zoom / 32f;
+                for (int t = 1; t <= 3; t++)
+                {
+                    var trailPos = _renderer.WorldToScreen(
+                        proj.Position - proj.Velocity.Normalized() * (t * 0.3f),
+                        proj.Height - proj.VelocityZ * t * 0.02f, _camera);
+                    float trailAlpha = (120f / t) / 255f;
+                    var tColor = HdrColor.ToHdrVertex(new Color(255, 100, 30), trailAlpha, 1f);
+                    _spriteBatch.Draw(_pixel, trailPos, null, tColor,
+                        0f, new Vector2(0.5f, 0.5f), trailLen / t, SpriteEffects.None, 0f);
+                }
             }
         }
     }
