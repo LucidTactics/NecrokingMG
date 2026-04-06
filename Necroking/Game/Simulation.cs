@@ -360,6 +360,7 @@ public class Simulation
                         UnitIndex = i, Units = _units, Dt = dt, FrameNumber = (int)_frameNumber,
                         GameData = _gameData, Pathfinder = _pathfinder, Quadtree = _quadtree,
                         Horde = _horde, TriggerSystem = _triggerSystem, EnvSystem = _envSystem,
+                        Projectiles = _projectiles,
                         GameTime = _gameTime, DayTime = dayFraction, IsNight = isNight,
                     };
                     handler.Update(ref ctx);

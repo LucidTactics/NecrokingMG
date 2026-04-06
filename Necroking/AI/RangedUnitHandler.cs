@@ -23,8 +23,11 @@ public class RangedUnitHandler : IArchetypeHandler
     private const byte RoutineCombat = 2;
     private const byte RoutineReturn = 3;
 
-    private const float PreferredRange = 8f; // ideal distance to target
-    private const float TooCloseRange = 4f;  // back away if closer
+    private const float DefaultRange = 18f;  // fallback if unit has no RangedRange stat
+    private const float TooCloseFrac = 0.25f; // back away if within this fraction of max range
+    private const float DefaultCooldown = 2f;
+    private const int DefaultDamage = 8;
+    private const int DefaultPrecision = 10;
 
     private readonly byte _archetypeId;
 
@@ -105,29 +108,52 @@ public class RangedUnitHandler : IArchetypeHandler
         SubroutineSteps.AlertStance(ref ctx);
     }
 
-    private static void UpdateCombat(ref AIContext ctx)
+    private void UpdateCombat(ref AIContext ctx)
     {
         int targetIdx = SubroutineSteps.ResolveTarget(ref ctx);
         if (targetIdx < 0) return;
 
+        int i = ctx.UnitIndex;
+        ref var stats = ref ctx.Units[i].Stats;
+        float maxRange = stats.RangedRange.Count > 0 ? stats.RangedRange[0] : DefaultRange;
+        float tooClose = maxRange * TooCloseFrac;
+
         float dist = (ctx.Units[targetIdx].Position - ctx.MyPos).Length();
 
-        if (dist < TooCloseRange)
+        // Tick cooldown locally so the AI doesn't depend on the legacy combat queue.
+        if (ctx.Units[i].AttackCooldown > 0f)
+            ctx.Units[i].AttackCooldown = MathF.Max(0f, ctx.Units[i].AttackCooldown - ctx.Dt);
+
+        if (dist > maxRange)
         {
-            // Too close — back away
-            SubroutineSteps.MoveAwayFrom(ref ctx, ctx.Units[targetIdx].Position, PreferredRange);
+            // Out of range — close in
+            SubroutineSteps.MoveToward(ref ctx, ctx.Units[targetIdx].Position, ctx.MySpeed);
+            return;
         }
-        else if (dist > PreferredRange + 2f)
+
+        if (dist < tooClose && _archetypeId == ArchetypeRegistry.ArcherUnit)
         {
-            // Too far — approach
-            SubroutineSteps.MoveToward(ref ctx, ctx.Units[targetIdx].Position, ctx.MySpeed * 0.6f);
+            // Archer kites — casters stand their ground
+            SubroutineSteps.MoveAwayFrom(ref ctx, ctx.Units[targetIdx].Position, tooClose * 1.5f);
         }
         else
         {
-            // Good range — stand and fight
-            ctx.Units[ctx.UnitIndex].PreferredVel = Vec2.Zero;
-            if (ctx.Units[ctx.UnitIndex].EngagedTarget.IsNone)
-                ctx.Units[ctx.UnitIndex].EngagedTarget = ctx.Units[ctx.UnitIndex].Target;
+            ctx.Units[i].PreferredVel = Vec2.Zero;
+        }
+
+        // Fire ranged attack while in range and off cooldown.
+        // Note: ranged units never set EngagedTarget — that path runs the melee resolver.
+        if (_archetypeId == ArchetypeRegistry.ArcherUnit
+            && ctx.Units[i].AttackCooldown <= 0f
+            && ctx.Units[i].PendingAttack.IsNone
+            && ctx.Projectiles != null)
+        {
+            int damage = stats.RangedDmg.Count > 0 ? stats.RangedDmg[0] : DefaultDamage;
+            float cooldown = stats.RangedCooldownTime.Count > 0 ? stats.RangedCooldownTime[0] : DefaultCooldown;
+            bool volley = dist > maxRange * 0.4f;
+            ctx.Projectiles.SpawnArrow(ctx.MyPos, ctx.Units[targetIdx].Position,
+                ctx.Units[i].Faction, ctx.Units[i].Id, damage, volley, DefaultPrecision);
+            ctx.Units[i].AttackCooldown = cooldown;
         }
     }
 
