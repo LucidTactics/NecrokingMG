@@ -148,8 +148,22 @@ public class RangedUnitHandler : IArchetypeHandler
             && ctx.Units[i].PendingAttack.IsNone
             && ctx.Units[i].PostAttackTimer <= 0f)
         {
-            float cooldown = stats.RangedCooldownTime.Count > 0 ? stats.RangedCooldownTime[0] : DefaultCooldown;
+            // Pick the first ranged weapon in range. Mirrors C++ pendingRangedWeaponIdx pattern.
+            int chosen = -1;
+            for (int w = 0; w < stats.RangedWeapons.Count; w++)
+            {
+                float wRange = w < stats.RangedRange.Count ? stats.RangedRange[w] : maxRange;
+                if (dist <= wRange) { chosen = w; break; }
+            }
+            if (chosen < 0 && stats.RangedWeapons.Count > 0) chosen = 0;
+
+            float cooldown = (chosen >= 0 && chosen < stats.RangedCooldownTime.Count)
+                ? stats.RangedCooldownTime[chosen] : DefaultCooldown;
+
             ctx.Units[i].PendingAttack = ctx.Units[i].Target;
+            ctx.Units[i].PendingWeaponIdx = chosen;
+            ctx.Units[i].PendingWeaponIsRanged = true;
+            ctx.Units[i].PendingRangedTarget = ctx.Units[targetIdx].Id;
             ctx.Units[i].AttackCooldown = cooldown;
             ctx.Units[i].PostAttackTimer = cooldown * 0.5f;
         }

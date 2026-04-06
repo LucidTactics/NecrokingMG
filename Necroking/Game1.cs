@@ -2897,6 +2897,46 @@ public class Game1 : Microsoft.Xna.Framework.Game
         return -1;
     }
 
+    /// <summary>
+    /// Map a pending attack's chosen weapon to an AnimState. Reads the weapon's
+    /// AnimName field; falls back to "Ranged1" for ranged and "Attack1" for melee.
+    /// Custom anim names (e.g. "AttackBite") map onto Attack1/Ranged1 — the
+    /// per-unit AttackAnim override on AnimController handles the actual sprite swap.
+    /// </summary>
+    private static AnimState ResolvePendingAttackAnim(Data.UnitStats stats,
+        int weaponIdx, bool isRanged, byte archetype)
+    {
+        string? animName = null;
+        if (isRanged)
+        {
+            if (weaponIdx >= 0 && weaponIdx < stats.RangedWeapons.Count)
+                animName = stats.RangedWeapons[weaponIdx].AnimName;
+        }
+        else
+        {
+            if (weaponIdx >= 0 && weaponIdx < stats.MeleeWeapons.Count)
+                animName = stats.MeleeWeapons[weaponIdx].AnimName;
+        }
+
+        // Legacy archer fallback: if archetype is ArcherUnit but pending fields weren't
+        // set (e.g. unarmed test scenarios), still play Ranged1.
+        bool effectiveRanged = isRanged || archetype == AI.ArchetypeRegistry.ArcherUnit;
+
+        if (string.IsNullOrEmpty(animName))
+            return effectiveRanged ? AnimState.Ranged1 : AnimState.Attack1;
+
+        return animName switch
+        {
+            "Attack1"  => AnimState.Attack1,
+            "Attack2"  => AnimState.Attack2,
+            "Attack3"  => AnimState.Attack3,
+            "Ranged1"  => AnimState.Ranged1,
+            "Spell1"   => AnimState.Spell1,
+            "Special1" => AnimState.Special1,
+            _          => effectiveRanged ? AnimState.Ranged1 : AnimState.Attack1,
+        };
+    }
+
     private static readonly Random _projRng = new();
 
     private void SpawnSpellProjectile(SpellDef spell, Vec2 origin, Vec2 target, uint ownerUid)
@@ -3126,11 +3166,9 @@ public class Game1 : Microsoft.Xna.Framework.Game
             else if (_sim.Units[i].Dodging)
                 targetState = AnimState.Dodge;
             else if (!_sim.Units[i].PendingAttack.IsNone)
-               if (_sim.Units[i].Archetype == AI.ArchetypeRegistry.ArcherUnit) {
-                  targetState = AnimState.Ranged1;
-               } else {
-                  targetState = AnimState.Attack1;
-               }
+                targetState = ResolvePendingAttackAnim(_sim.Units[i].Stats,
+                    _sim.Units[i].PendingWeaponIdx, _sim.Units[i].PendingWeaponIsRanged,
+                    _sim.Units[i].Archetype);
             else if (_sim.Units[i].HitReacting)
                 targetState = AnimState.BlockReact;
             else if (_sim.Units[i].Archetype == AI.ArchetypeRegistry.DeerHerd

@@ -1376,6 +1376,9 @@ public class Simulation
             // Queue attack — set lockout and cooldown (per-unit overrides)
             var unitDef = _gameData?.Units.Get(_units[i].UnitDefID);
             _units[i].PendingAttack = _units[i].EngagedTarget;
+            _units[i].PendingWeaponIdx = _units[i].Stats.MeleeWeapons.Count > 0 ? 0 : -1;
+            _units[i].PendingWeaponIsRanged = false;
+            _units[i].PendingRangedTarget = GameConstants.InvalidUnit;
             _units[i].AttackCooldown = unitDef?.AttackCooldown ?? attackCooldownTime;
             _units[i].PostAttackTimer = unitDef?.PostAttackLockout ?? postAttackLockout;
         }
@@ -1386,18 +1389,31 @@ public class Simulation
         if (unitIdx < 0 || unitIdx >= _units.Count || !_units[unitIdx].Alive) return;
         var t = _units[unitIdx].PendingAttack;
         if (t.IsNone) return;
+
+        // Snapshot pending weapon state, then clear so animation can re-queue cleanly.
+        int weaponIdx = _units[unitIdx].PendingWeaponIdx;
+        bool isRanged = _units[unitIdx].PendingWeaponIsRanged;
+        uint rangedTargetID = _units[unitIdx].PendingRangedTarget;
+
         _units[unitIdx].PendingAttack = CombatTarget.None;
+        _units[unitIdx].PendingWeaponIdx = -1;
+        _units[unitIdx].PendingWeaponIsRanged = false;
+        _units[unitIdx].PendingRangedTarget = GameConstants.InvalidUnit;
 
-        if (!t.IsUnit) return;
-        int defenderIdx = ResolveUnitTarget(t);
-        if (defenderIdx < 0) return;
-
-        // Ranged units fire a projectile at the action moment instead of melee.
-        if (_units[unitIdx].Archetype == AI.ArchetypeRegistry.ArcherUnit)
+        // Ranged path: prefer stored target ID (target may have died/moved between queue and action moment).
+        if (isRanged || _units[unitIdx].Archetype == AI.ArchetypeRegistry.ArcherUnit)
         {
+            int defenderIdx = -1;
+            if (rangedTargetID != GameConstants.InvalidUnit)
+                defenderIdx = UnitUtil.ResolveUnitIndex(_units, rangedTargetID);
+            if (defenderIdx < 0 && t.IsUnit)
+                defenderIdx = ResolveUnitTarget(t);
+            if (defenderIdx < 0) return;
+
             ref var stats = ref _units[unitIdx].Stats;
-            int damage = stats.RangedDmg.Count > 0 ? stats.RangedDmg[0] : 8;
-            float maxRange = stats.RangedRange.Count > 0 ? stats.RangedRange[0] : 18f;
+            int wIdx = (weaponIdx >= 0 && weaponIdx < stats.RangedDmg.Count) ? weaponIdx : 0;
+            int damage = stats.RangedDmg.Count > 0 ? stats.RangedDmg[wIdx] : 8;
+            float maxRange = stats.RangedRange.Count > 0 ? stats.RangedRange[wIdx] : 18f;
             float dist = (_units[defenderIdx].Position - _units[unitIdx].Position).Length();
             bool volley = dist > maxRange * 0.4f;
             _projectiles.SpawnArrow(_units[unitIdx].Position, _units[defenderIdx].Position,
@@ -1405,7 +1421,11 @@ public class Simulation
             return;
         }
 
-        ResolveMeleeAttack(unitIdx, defenderIdx);
+        if (!t.IsUnit) return;
+        int meleeDefenderIdx = ResolveUnitTarget(t);
+        if (meleeDefenderIdx < 0) return;
+
+        ResolveMeleeAttack(unitIdx, meleeDefenderIdx);
     }
 
     private void ResolveMeleeAttack(int attackerIdx, int defenderIdx)

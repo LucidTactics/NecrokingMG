@@ -141,6 +141,7 @@
       "cooldown": 2,
       "rangedDamage": 8,
       "precision": 10,
+      "anim": "Ranged1",
       "projectileType": "Arrow",
       "bonuses": []
     },
@@ -205,6 +206,7 @@
       "cooldown": 0,
       "rangedDamage": 0,
       "precision": 0,
+      "anim": "AttackBite",
       "projectileType": "Arrow",
       "bonuses": []
     },
@@ -221,6 +223,7 @@
       "cooldown": 0,
       "rangedDamage": 0,
       "precision": 0,
+      "anim": "Attack2",
       "projectileType": "Arrow",
       "bonuses": []
     }

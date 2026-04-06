@@ -9,6 +9,12 @@ public class WeaponStats
     public int DefenseBonus { get; set; }
     public int Length { get; set; } = 1;
     public string Name { get; set; } = "";
+    public bool IsRanged { get; set; }
+    /// <summary>
+    /// Animation name (e.g. "Attack1", "Attack2", "Ranged1", "AttackBite").
+    /// Empty/null = use default ("Ranged1" for ranged, "Attack1" for melee).
+    /// </summary>
+    public string? AnimName { get; set; }
 }
 
 public class ArmorStats

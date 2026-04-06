@@ -188,7 +188,9 @@ public class UnitRegistry : RegistryBase<UnitDef>
                 AttackBonus = w.AttackBonus,
                 DefenseBonus = w.DefenseBonus,
                 Length = w.Length,
-                Name = w.DisplayName
+                Name = w.DisplayName,
+                IsRanged = w.IsRanged,
+                AnimName = w.AnimName
             };
 
             if (w.IsRanged)

@@ -19,6 +19,12 @@ public class WeaponDef : IHasId
     [JsonPropertyName("precision")] public int Precision { get; set; }
     [JsonPropertyName("projectileType")] public string ProjectileType { get; set; } = "Arrow";
     [JsonPropertyName("bonuses")] public List<string> Bonuses { get; set; } = new();
+    /// <summary>
+    /// Animation name to play when this weapon is used. Examples: "Attack1", "Attack2",
+    /// "Ranged1", "AttackBite". If null/empty, defaults to "Ranged1" for ranged weapons
+    /// and "Attack1" for melee weapons. Looked up via AnimController fallback chain.
+    /// </summary>
+    [JsonPropertyName("anim")] public string? AnimName { get; set; }
 }
 
 public class WeaponRegistry : RegistryBase<WeaponDef>

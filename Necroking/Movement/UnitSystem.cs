@@ -48,6 +48,15 @@ public class Unit
     public float FacingAngle = 90f;
     public float AttackCooldown;
     public CombatTarget PendingAttack = CombatTarget.None;
+    /// <summary>
+    /// Index into the chosen weapon list for the pending attack.
+    /// -1 = no specific weapon (unarmed / legacy). Use with PendingWeaponIsRanged
+    /// to pick the right list (Stats.MeleeWeapons vs Stats.RangedWeapons).
+    /// </summary>
+    public int PendingWeaponIdx = -1;
+    public bool PendingWeaponIsRanged;
+    /// <summary>UnitID of the ranged target captured at queue time (target may die before action moment).</summary>
+    public uint PendingRangedTarget = GameConstants.InvalidUnit;
     public float HitShakeTimer;
     public uint LastAttackerID = GameConstants.InvalidUnit;
     public float FleeTimer;
