@@ -3224,23 +3224,36 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 }
             }
 
-            // Spell animation finished: remove casting buff, handle fallback execution
-            if (animData.Ctrl.IsAnimFinished && animData.Ctrl.CurrentState == AnimState.Spell1
-                && i == FindNecromancer())
+            _unitAnims[uid] = animData;
+        }
+
+        // Spell1 is PlayOnceTransition — it switches to Idle when done, so we can't check
+        // CurrentState == Spell1 after the fact. Instead, detect that the necromancer left
+        // Spell1 (no longer in Spell1) while _pendingCastAnim is still set.
+        if (_pendingCastAnim != null)
+        {
+            int necroIdx = FindNecromancer();
+            if (necroIdx >= 0)
             {
-                if (_pendingCastAnim != null)
+                uint nUid = _sim.Units[necroIdx].Id;
+                bool stillCasting = _unitAnims.TryGetValue(nUid, out var nAnim)
+                    && nAnim.Ctrl.CurrentState == AnimState.Spell1;
+                if (!stillCasting)
                 {
-                    // Action moment never fired — execute as fallback
+                    // Spell1 ended (transitioned away) — execute spell if action moment didn't fire
                     var pca = _pendingCastAnim.Value;
                     var spell = _gameData.Spells.Get(pca.SpellID);
                     if (spell != null)
-                        ExecuteSpellEffect(spell, i, pca.Target, pca.Slot);
+                        ExecuteSpellEffect(spell, necroIdx, pca.Target, pca.Slot);
                     _pendingCastAnim = null;
+                    RemoveCastingBuffAll(necroIdx);
                 }
-                RemoveCastingBuffAll(i);
             }
-
-            _unitAnims[uid] = animData;
+            else
+            {
+                // Necromancer gone — clear pending cast
+                _pendingCastAnim = null;
+            }
         }
 
         // Update EffectSpawnPos2D / EffectSpawnHeight from weapon tip data
