@@ -4428,7 +4428,7 @@ public class MapEditorWindow
         if (font == null) return;
         var size = font.MeasureString(text);
         _spriteBatch.DrawString(font, text,
-            new Vector2(rect.X + (rect.Width - size.X) / 2f, rect.Y + (rect.Height - size.Y) / 2f), color);
+            new Vector2((int)(rect.X + (rect.Width - size.X) / 2f), (int)(rect.Y + (rect.Height - size.Y) / 2f)), color);
     }
 
     private void DrawButtonRect(string text, int x, int y, int w, int h, Color bg)
