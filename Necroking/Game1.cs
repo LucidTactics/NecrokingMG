@@ -90,6 +90,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
     private DayNightSystem _dayNightSystem = new();
     private LightningRenderer _lightningRenderer = new();
     private PoisonCloudRenderer _poisonCloudRenderer = new();
+    private MagicGlyphRenderer _glyphRenderer = new();
     private DebugDraw _debugDraw = new();
     private List<DamageNumber> _damageNumbers = new();
 
@@ -1183,6 +1184,13 @@ public class Game1 : Microsoft.Xna.Framework.Game
         catch (Exception ex) { _hdrIntensityEffect = null; DebugLog.Log("startup", $"HdrIntensity not loaded: {ex.Message}"); }
 
         {
+            Microsoft.Xna.Framework.Graphics.Effect? glyphEffect = null;
+            try { glyphEffect = Content.Load<Microsoft.Xna.Framework.Graphics.Effect>("MagicCircle"); }
+            catch (Exception ex) { DebugLog.Log("startup", $"MagicCircle not loaded: {ex.Message}"); }
+            _glyphRenderer.LoadEffect(glyphEffect);
+        }
+
+        {
             Microsoft.Xna.Framework.Graphics.Effect? fogEffect = null;
             try { fogEffect = Content.Load<Microsoft.Xna.Framework.Graphics.Effect>("WeatherFog"); }
             catch (Exception ex) { DebugLog.Log("startup", $"WeatherFog not loaded: {ex.Message}"); }
@@ -2031,6 +2039,17 @@ public class Game1 : Microsoft.Xna.Framework.Game
             if (_input.WasKeyPressed(Keys.G) && necroIdx >= 0)
                 _sim.UnitsMut[necroIdx].GhostMode = !_sim.Units[necroIdx].GhostMode;
 
+            // --- Place magic glyph (T) --- (temp debug shortcut)
+            if (_input.WasKeyPressed(Keys.T))
+            {
+                var g = _sim.MagicGlyphs.SpawnGlyph(mouseWorld, 1.125f, Faction.Undead);
+                g.Color = new HdrColor(140, 80, 200, 255, 1.5f);
+                g.Color2 = new HdrColor(200, 160, 255, 255, 2.0f);
+                g.TriggerDuration = 1.0f;
+                g.ActiveDuration = 4f;
+                g.Damage = 15;
+            }
+
             // --- Secondary spell bar (keys 1-4) ---
             if (necroIdx >= 0)
             {
@@ -2316,6 +2335,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
             // --- Simulate ---
             _sim.Tick(dt);
             _dayNightSystem.Update(dt, _gameData);
+            _sim.MagicGlyphs.Update(dt, _sim.UnitsMut, _sim.Quadtree);
             _weatherRenderer.Update(dt, _gameData);
             _envSystem.UpdateForagables(dt);
             _envSystem.UpdateTraps(dt, _sim.Units);
@@ -3313,6 +3333,10 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // --- Ground-layer objects (traps — render above dirt, below grass) ---
         DrawGroundLayerObjects();
 
+        // --- Magic glyphs (ground level, after traps, before walls) ---
+        _glyphRenderer.SetContext(_spriteBatch, _pixel, _glowTex, _camera, _renderer, _flipbooks, _gameTime);
+        _glyphRenderer.DrawGround(_sim.MagicGlyphs);
+
         // --- Walls ---
         DrawWalls();
 
@@ -3352,9 +3376,10 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
         _spriteBatch.End();
 
-        // --- Additive blend pass (effects, lightning) ---
+        // --- Additive blend pass (effects, lightning, energy columns) ---
         _spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.Additive, SamplerState.LinearClamp);
         DrawEffects();
+        _glyphRenderer.DrawEnergyColumns(_sim.MagicGlyphs);
         _lightningRenderer.SetGameTime(_gameTime);
         _lightningRenderer.Draw();
 

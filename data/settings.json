@@ -32,7 +32,7 @@
   },
   "weather": {
     "enabled": true,
-    "activePreset": "thunderstorm",
+    "activePreset": "daylight",
     "transitionSpeed": 1
   },
   "dayNight": {

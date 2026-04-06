@@ -55,6 +55,7 @@ public class Simulation
     private ProjectileManager _projectiles = new();
     private LightningSystem _lightning = new();
     private PoisonCloudSystem _poisonClouds = new();
+    private MagicGlyphSystem _magicGlyphs = new();
     private HordeSystem _horde = new();
     private NecromancerState _necroState = new();
     private CombatLog _combatLog = new();
@@ -84,6 +85,7 @@ public class Simulation
     public ProjectileManager Projectiles => _projectiles;
     public LightningSystem Lightning => _lightning;
     public PoisonCloudSystem PoisonClouds => _poisonClouds;
+    public MagicGlyphSystem MagicGlyphs => _magicGlyphs;
     public HordeSystem Horde => _horde;
     public CombatLog CombatLog => _combatLog;
     public float GameTime => _gameTime;
@@ -108,6 +110,7 @@ public class Simulation
         _projectiles.Clear();
         _lightning.Clear();
         _poisonClouds.Clear();
+        _magicGlyphs.Clear();
         _combatLog.Clear();
         _gameTime = 0f;
         _frameNumber = 0;

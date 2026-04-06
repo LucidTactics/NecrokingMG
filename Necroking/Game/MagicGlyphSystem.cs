@@ -1,0 +1,175 @@
+using System;
+using System.Collections.Generic;
+using Necroking.Core;
+using Necroking.Data;
+using Necroking.Movement;
+using Necroking.Spatial;
+
+namespace Necroking.GameSystems;
+
+public enum GlyphState : byte { Dormant, Triggering, Active, Fading }
+
+public class MagicGlyph
+{
+    public Vec2 Position;
+    public float Radius = 1f;           // World-space radius
+    public float Age;
+    public GlyphState State = GlyphState.Dormant;
+    public float StateTimer;
+
+    // Visual config
+    public HdrColor Color = new(140, 80, 200, 255, 1.5f);      // Primary color
+    public HdrColor Color2 = new(200, 160, 255, 255, 2.0f);     // Secondary / inner color
+    public float PulseSpeed = 2f;
+    public float RotationSpeed = 0.3f;
+    public int SymbolCount = 6;
+
+    // Timing
+    public float TriggerDuration = 1.0f;    // Charge-up: glyph brightens, no ribbons
+    public float ActiveDuration = 4f;       // Burst then decay over this time
+    public float FadeDuration = 1f;         // Glyph fades out after ribbons done
+
+    // Gameplay
+    public int Damage;
+    public float DamageRadius;              // Can differ from visual radius
+    public Faction OwnerFaction;
+    public bool DamageApplied;
+    public bool Alive = true;
+
+    // Derived
+    public float Activation => State switch
+    {
+        GlyphState.Dormant => 0f,
+        GlyphState.Triggering => MathF.Min(StateTimer / TriggerDuration, 1f),
+        GlyphState.Active => 1f,
+        GlyphState.Fading => MathF.Max(0f, 1f - StateTimer / FadeDuration),
+        _ => 0f
+    };
+
+    public float Intensity => State switch
+    {
+        GlyphState.Dormant => 0.6f,
+        GlyphState.Triggering => 0.6f + 3.4f * Activation, // Charge up to 4x
+        GlyphState.Active => MathF.Max(0.8f, 4f - StateTimer / ActiveDuration * 3.2f), // Peak 4x, decays
+        GlyphState.Fading => MathF.Max(0.05f, 1f - StateTimer / FadeDuration),
+        _ => 0f
+    };
+
+    /// <summary>0 during dormant/triggering, 1.0 at burst start, decays to 0 over ActiveDuration.</summary>
+    public float RibbonIntensity => State switch
+    {
+        GlyphState.Active => MathF.Max(0f, 1f - StateTimer / ActiveDuration),
+        _ => 0f
+    };
+}
+
+public class MagicGlyphSystem
+{
+    private readonly List<MagicGlyph> _glyphs = new();
+
+    public IReadOnlyList<MagicGlyph> Glyphs => _glyphs;
+
+    public MagicGlyph SpawnGlyph(Vec2 position, float radius, Faction owner)
+    {
+        var glyph = new MagicGlyph
+        {
+            Position = position,
+            Radius = radius,
+            OwnerFaction = owner,
+        };
+        _glyphs.Add(glyph);
+        return glyph;
+    }
+
+    private readonly List<DamageEvent> _damageEvents = new();
+    public IReadOnlyList<DamageEvent> DamageEvents => _damageEvents;
+
+    public void Update(float dt, UnitArrays units, Quadtree qt)
+    {
+        _damageEvents.Clear();
+        var nearbyIDs = new List<uint>();
+
+        for (int i = _glyphs.Count - 1; i >= 0; i--)
+        {
+            var g = _glyphs[i];
+            if (!g.Alive) { _glyphs.RemoveAt(i); continue; }
+
+            g.Age += dt;
+            g.StateTimer += dt;
+
+            switch (g.State)
+            {
+                case GlyphState.Dormant:
+                    // Check for enemy units stepping on it
+                    nearbyIDs.Clear();
+                    qt.QueryRadius(g.Position, g.Radius, nearbyIDs);
+                    foreach (uint uid in nearbyIDs)
+                    {
+                        int idx = UnitUtil.ResolveUnitIndex(units, uid);
+                        if (idx < 0 || !units[idx].Alive) continue;
+                        if (units[idx].Faction == g.OwnerFaction) continue;
+
+                        // Enemy stepped on glyph — trigger it
+                        g.State = GlyphState.Triggering;
+                        g.StateTimer = 0f;
+                        break;
+                    }
+                    break;
+
+                case GlyphState.Triggering:
+                    if (g.StateTimer >= g.TriggerDuration)
+                    {
+                        g.State = GlyphState.Active;
+                        g.StateTimer = 0f;
+                    }
+                    break;
+
+                case GlyphState.Active:
+                    // Apply damage once at the start of active phase
+                    if (!g.DamageApplied && g.Damage > 0)
+                    {
+                        g.DamageApplied = true;
+                        float dmgR = g.DamageRadius > 0 ? g.DamageRadius : g.Radius;
+                        nearbyIDs.Clear();
+                        qt.QueryRadius(g.Position, dmgR, nearbyIDs);
+                        foreach (uint uid in nearbyIDs)
+                        {
+                            int idx = UnitUtil.ResolveUnitIndex(units, uid);
+                            if (idx < 0 || !units[idx].Alive) continue;
+                            if (units[idx].Faction == g.OwnerFaction) continue;
+
+                            units[idx].Stats.HP -= g.Damage;
+                            if (units[idx].Stats.HP <= 0)
+                            {
+                                units[idx].Stats.HP = 0;
+                                units[idx].Alive = false;
+                            }
+                            _damageEvents.Add(new DamageEvent
+                            {
+                                Position = units[idx].Position,
+                                Damage = g.Damage,
+                                Height = 1.5f
+                            });
+                        }
+                    }
+
+                    if (g.StateTimer >= g.ActiveDuration)
+                    {
+                        g.State = GlyphState.Fading;
+                        g.StateTimer = 0f;
+                    }
+                    break;
+
+                case GlyphState.Fading:
+                    if (g.StateTimer >= g.FadeDuration)
+                    {
+                        g.Alive = false;
+                        _glyphs.RemoveAt(i);
+                    }
+                    break;
+            }
+        }
+    }
+
+    public void Clear() => _glyphs.Clear();
+}
