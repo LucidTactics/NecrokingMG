@@ -3966,6 +3966,19 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 if (spriteData == null) continue;
                 var ctrl = new AnimController();
                 ctrl.Init(spriteData);
+                if (_animMeta.Count > 0)
+                    ctrl.SetAnimMeta(_animMeta, unitDef.Sprite.SpriteName);
+                if (unitDef.AnimTimings.Count > 0)
+                {
+                    var overrides = new Dictionary<string, AnimTimingOverride>();
+                    foreach (var (anim, ov) in unitDef.AnimTimings)
+                        overrides[anim] = new AnimTimingOverride
+                        {
+                            FrameDurationsMs = new List<int>(ov.FrameDurationsMs),
+                            EffectTimeMs = ov.EffectTimeMs
+                        };
+                    ctrl.SetAnimTimings(overrides);
+                }
                 ctrl.RequestState(AnimState.Death);
 
                 float refH = 128f;
