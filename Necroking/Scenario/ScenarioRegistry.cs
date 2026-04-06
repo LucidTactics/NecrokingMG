@@ -55,6 +55,7 @@ public static class ScenarioRegistry
         Register("blend_test", () => new Scenarios.BlendTestScenario());
         Register("godray_render_test", () => new Scenarios.GodRayRenderTestScenario());
         Register("poison_cloud", () => new Scenarios.PoisonCloudScenario());
+        Register("magic_glyph", () => new Scenarios.MagicGlyphScenario());
     }
 
     public static void Register(string name, Func<ScenarioBase> creator)
