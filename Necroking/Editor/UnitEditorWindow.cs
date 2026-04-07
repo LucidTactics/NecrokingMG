@@ -1020,7 +1020,16 @@ public class UnitEditorWindow
             _lastPreviewAnimName = _previewAnimName;
         }
 
-        var fr = _previewAnim.GetCurrentFrame(_previewAngle);
+        // _previewAngle is a sprite angle (30/60/300), but GetCurrentFrame expects a world angle.
+        // Map sprite angle to a representative world angle so ResolveAngle maps back correctly.
+        float worldAngle = (int)_previewAngle switch
+        {
+            30 => 0f,     // Right → sprite 30
+            60 => 45f,    // Down-Right → sprite 60
+            300 => 270f,  // Up → sprite 300
+            _ => _previewAngle
+        };
+        var fr = _previewAnim.GetCurrentFrame(worldAngle);
         if (!fr.Frame.HasValue) return;
 
         var frame = fr.Frame.Value;
@@ -1448,7 +1457,7 @@ public class UnitEditorWindow
         var anim = spriteData.GetAnim(_previewAnimName);
         if (anim == null) return 0;
 
-        int spriteAngle = _previewAnim.ResolveAngle(_previewAngle, out _);
+        int spriteAngle = (int)_previewAngle; // _previewAngle is already a sprite angle (30/60/300)
         var kfs = anim.GetAngle(spriteAngle);
         if (kfs == null || kfs.Count == 0)
             kfs = anim.GetAngle(30);
@@ -1489,7 +1498,7 @@ public class UnitEditorWindow
         var anim = spriteData.GetAnim(_previewAnimName);
         if (anim == null) return 0;
 
-        int spriteAngle = _previewAnim.ResolveAngle(_previewAngle, out _);
+        int spriteAngle = (int)_previewAngle; // _previewAngle is already a sprite angle (30/60/300)
         var kfs = anim.GetAngle(spriteAngle);
         if (kfs == null || kfs.Count == 0)
             kfs = anim.GetAngle(30);
@@ -1514,7 +1523,7 @@ public class UnitEditorWindow
         var anim = spriteData.GetAnim(_previewAnimName);
         if (anim == null) return;
 
-        int spriteAngle = _previewAnim.ResolveAngle(_previewAngle, out _);
+        int spriteAngle = (int)_previewAngle; // _previewAngle is already a sprite angle (30/60/300)
 
         if (def.AnimTimings.TryGetValue(_previewAnimName, out var timing) && timing.FrameDurationsMs.Count > 0)
         {
@@ -1559,7 +1568,7 @@ public class UnitEditorWindow
         var anim = spriteData.GetAnim(_previewAnimName);
         if (anim == null) return;
 
-        int spriteAngle = _previewAnim.ResolveAngle(_previewAngle, out _);
+        int spriteAngle = (int)_previewAngle; // _previewAngle is already a sprite angle (30/60/300)
 
         if (def.AnimTimings.TryGetValue(_previewAnimName, out var timing) && timing.FrameDurationsMs.Count > 0)
         {

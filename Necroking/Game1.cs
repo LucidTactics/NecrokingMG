@@ -78,6 +78,11 @@ public class Game1 : Microsoft.Xna.Framework.Game
     private SpriteAtlas[] _atlases = new SpriteAtlas[(int)AtlasID.Count];
     private Dictionary<uint, UnitAnimData> _unitAnims = new(); // keyed by stable unit ID
     private Dictionary<int, UnitAnimData> _corpseAnims = new(); // keyed by corpse ID
+
+    // Carried body bag offset and scale (pixel offsets on top of hilt position)
+    private const float CarryOffsetX = 4.5f;
+    private const float CarryOffsetY = 8.5f;
+    private const float CarryBagScale = 3.4f;
     private Dictionary<string, Flipbook> _flipbooks = new(); // keyed by flipbook ID
     private Dictionary<string, AnimationMeta> _animMeta = new(); // animation metadata
     private Microsoft.Xna.Framework.Graphics.Effect? _groundEffect;
@@ -1467,7 +1472,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         _input.Capture(mouse, _prevMouse, kb, _prevKb);
         _rawDt = (float)gameTime.ElapsedGameTime.TotalSeconds;
         float rawDt = _rawDt;
-        float dt = MathF.Min(rawDt, 1f / 20f) * _timeScale;
+        float dt = _paused ? 0f : MathF.Min(rawDt, 1f / 20f) * _timeScale;
         _gameTime += dt;
 
         // --- Auto-start scenario from command line ---
@@ -1811,11 +1816,11 @@ public class Game1 : Microsoft.Xna.Framework.Game
             if (_craftingMenu.ContainsMouse(mx, my))
                 _input.MouseOverUI = true;
 
-            // Time control buttons (bottom-right)
+            // Time control buttons (bottom-right, includes pause button)
             if (_gameData.Settings.General.ShowTimeControls)
             {
                 const int tcBtnW = 32, tcBtnH = 22, tcGap = 2, tcNum = 6;
-                int tcTotalW = tcNum * tcBtnW + (tcNum - 1) * tcGap;
+                int tcTotalW = tcBtnW + tcGap + tcNum * tcBtnW + (tcNum - 1) * tcGap; // pause + speed buttons
                 int tcX = screenW - tcTotalW - 10;
                 int tcY = screenH - 52;
                 if (mx >= tcX && mx < tcX + tcTotalW && my >= tcY && my < tcY + tcBtnH)
@@ -2257,7 +2262,11 @@ public class Game1 : Microsoft.Xna.Framework.Game
                     // Currently carrying -> start PutDown
                     var cc = _sim.FindCorpseByID(nu.CarryingCorpseID);
                     if (cc != null)
-                        cc.LerpStartPos = nu.Position; // anchor for lerp
+                    {
+                        // LerpStartPos = where the bag will land on the ground
+                        float fRad = nu.FacingAngle * MathF.PI / 180f;
+                        cc.LerpStartPos = nu.Position + new Vec2(MathF.Cos(fRad), MathF.Sin(fRad)) * 0.8f;
+                    }
                     _sim.UnitsMut[necroIdx].CorpseInteractPhase = 5; // PutDown
                 }
                 else if (nu.BaggingCorpseID >= 0)
@@ -2389,16 +2398,29 @@ public class Game1 : Microsoft.Xna.Framework.Game
             {
                 ReadOnlySpan<float> tcSpeeds = stackalloc float[] { 0.1f, 0.25f, 0.5f, 1.0f, 1.5f, 2.0f };
                 const int tcBtnW = 32, tcBtnH = 22, tcGap = 2, tcNum = 6;
-                int tcTotalW = tcNum * tcBtnW + (tcNum - 1) * tcGap;
+                int tcTotalW = tcBtnW + tcGap + tcNum * tcBtnW + (tcNum - 1) * tcGap;
                 int tcBaseX = screenW - tcTotalW - 10;
                 int tcBaseY = screenH - 52;
-                for (int s = 0; s < tcNum; s++)
+
+                // Pause button (leftmost)
+                if (mouse.X >= tcBaseX && mouse.X < tcBaseX + tcBtnW
+                    && mouse.Y >= tcBaseY && mouse.Y < tcBaseY + tcBtnH)
                 {
-                    int bx = tcBaseX + s * (tcBtnW + tcGap);
-                    if (mouse.X >= bx && mouse.X < bx + tcBtnW && mouse.Y >= tcBaseY && mouse.Y < tcBaseY + tcBtnH)
+                    _paused = !_paused;
+                }
+                else
+                {
+                    // Speed buttons (right of pause)
+                    int speedBaseX = tcBaseX + tcBtnW + tcGap;
+                    for (int s = 0; s < tcNum; s++)
                     {
-                        _timeScale = tcSpeeds[s];
-                        break;
+                        int bx = speedBaseX + s * (tcBtnW + tcGap);
+                        if (mouse.X >= bx && mouse.X < bx + tcBtnW && mouse.Y >= tcBaseY && mouse.Y < tcBaseY + tcBtnH)
+                        {
+                            _timeScale = tcSpeeds[s];
+                            _paused = false; // unpause when selecting a speed
+                            break;
+                        }
                     }
                 }
             }
@@ -3253,47 +3275,42 @@ public class Game1 : Microsoft.Xna.Framework.Game
                         }
                         break;
 
-                    case 4: // Pickup (PlayOnceHold) — lerp corpse from ground to unit
+                    case 4: // Pickup — body bag tracks hilt visually via DrawCarriedBodyBag
                         if (animData.Ctrl.CurrentState != AnimState.Pickup)
                             animData.Ctrl.ForceState(AnimState.Pickup);
                         {
                             var cc = _sim.FindCorpseByID(_sim.Units[i].CarryingCorpseID);
                             if (cc != null)
                             {
-                                float totalSec = animData.Ctrl.GetTotalDurationSeconds(AnimState.Pickup);
-                                float t = totalSec > 0f ? Math.Clamp(animData.Ctrl.AnimTime / (totalSec * 1000f), 0f, 1f) : 1f;
-                                cc.Position = Vec2.Lerp(cc.LerpStartPos, _sim.Units[i].Position, t);
+                                cc.Position = _sim.Units[i].Position; // keep world pos synced for logic
                                 cc.FacingAngle = _sim.Units[i].FacingAngle;
                             }
                         }
                         if (animData.Ctrl.IsAnimFinished)
                         {
                             _sim.UnitsMut[i].CorpseInteractPhase = 0;
-                            animData.Ctrl.ForceState(AnimState.Idle);
+                            animData.Ctrl.ForceState(AnimState.Carry);
+                            animData.Ctrl.PlaybackSpeed = 0f; // freeze until unit moves
                         }
                         break;
 
-                    case 5: // PutDown (PlayOnceHold) — lerp corpse from unit to ground
+                    case 5: // PutDown — body bag tracks hilt visually via DrawCarriedBodyBag
                         if (animData.Ctrl.CurrentState != AnimState.PutDown)
                             animData.Ctrl.ForceState(AnimState.PutDown);
                         {
                             var cc = _sim.FindCorpseByID(_sim.Units[i].CarryingCorpseID);
                             if (cc != null)
-                            {
-                                float totalSec = animData.Ctrl.GetTotalDurationSeconds(AnimState.PutDown);
-                                float t = totalSec > 0f ? Math.Clamp(animData.Ctrl.AnimTime / (totalSec * 1000f), 0f, 1f) : 1f;
-                                float fRad = _sim.Units[i].FacingAngle * MathF.PI / 180f;
-                                var dropOffset = new Vec2(MathF.Cos(fRad), MathF.Sin(fRad)) * 0.8f;
-                                var dropPos = cc.LerpStartPos + dropOffset;
-                                cc.Position = Vec2.Lerp(cc.LerpStartPos, dropPos, t);
                                 cc.FacingAngle = _sim.Units[i].FacingAngle;
-                            }
                         }
                         if (animData.Ctrl.IsAnimFinished)
                         {
+                            // Place corpse at pre-computed drop position
                             var cc = _sim.FindCorpseByID(_sim.Units[i].CarryingCorpseID);
                             if (cc != null)
+                            {
+                                cc.Position = cc.LerpStartPos;
                                 cc.DraggedByUnitID = GameConstants.InvalidUnit;
+                            }
                             _sim.UnitsMut[i].CarryingCorpseID = -1;
                             _sim.UnitsMut[i].CorpseInteractPhase = 0;
                             animData.Ctrl.ForceState(AnimState.Idle);
@@ -3369,10 +3386,10 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 float runThreshold = 6f + 2f * baseSpeed / 3f;
 
                 bool carrying = _sim.Units[i].CarryingCorpseID >= 0;
-                if (speed <= walkThreshold)
+                if (carrying)
+                    targetState = AnimState.Carry; // always Carry when carrying (speed scaling handles idle)
+                else if (speed <= walkThreshold)
                     targetState = AnimState.Idle;
-                else if (carrying)
-                    targetState = AnimState.Carry; // always Carry anim when carrying, regardless of speed
                 else if (speed < jogThreshold)
                     targetState = AnimState.Walk;
                 else if (speed < runThreshold)
@@ -3399,6 +3416,16 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 movingBackward = dot < -0.3f;
             }
             animData.Ctrl.SetReversePlayback(movingBackward);
+
+            // Carry animation: scale playback speed with movement, freeze when idle
+            if (targetState == AnimState.Carry)
+            {
+                float speed = _sim.Units[i].Velocity.Length();
+                float baseSpeed = _sim.Units[i].Stats.CombatSpeed;
+                // Normalize speed to a 0-1 range, clamp to reasonable playback bounds
+                float speedRatio = baseSpeed > 0f ? speed / baseSpeed : 0f;
+                animData.Ctrl.PlaybackSpeed = Math.Clamp(speedRatio, 0f, 1.5f);
+            }
 
             // When transitioning into attack, calculate playback speed to fit within lockout
             if (targetState == AnimState.Attack1 && animData.Ctrl.CurrentState != AnimState.Attack1)
@@ -4149,27 +4176,10 @@ public class Game1 : Microsoft.Xna.Framework.Game
     {
         foreach (var corpse in _sim.Corpses)
         {
-            // Don't render corpses being carried (phase 0 = fully carried, drawn on unit)
-            // But DO render during pickup/putdown (phases 4,5) at the lerped position
+            // Don't render corpses attached to a unit — drawn on unit in DrawSingleUnit
+            // (covers carried phase 0, pickup phase 4, putdown phase 5)
             if (corpse.Bagged && corpse.DraggedByUnitID != GameConstants.InvalidUnit)
-            {
-                // Find the carrying unit to check its phase
-                bool duringTransition = false;
-                for (int u = 0; u < _sim.Units.Count; u++)
-                {
-                    if (_sim.Units[u].Id == corpse.DraggedByUnitID)
-                    {
-                        byte ph = _sim.Units[u].CorpseInteractPhase;
-                        if (ph == 4 || ph == 5) duringTransition = true;
-                        break;
-                    }
-                }
-                if (!duringTransition)
-                    continue; // fully carried — drawn on unit instead
-                // During pickup/putdown: render at lerped position below
-                DrawBaggedCorpse(corpse);
                 continue;
-            }
 
             // Bagged corpses render as BodyBag from Corpses atlas
             if (corpse.Bagged)
@@ -4214,7 +4224,8 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 _corpseAnims[corpse.CorpseID] = cad;
             }
 
-            if (!cad.Ctrl.IsAnimFinished) cad.Ctrl.Update(1f / 60f); // fixed timestep for corpse anims
+            if (!cad.Ctrl.IsAnimFinished && !_paused)
+                cad.Ctrl.Update(MathF.Min(_rawDt, 1f / 20f) * _timeScale);
 
             int alphaInt = 255;
             if (corpse.Dissolving)
@@ -4298,6 +4309,21 @@ public class Game1 : Microsoft.Xna.Framework.Game
         DrawSpriteFrame(corpsesAtlas, fr.Frame.Value, sp, scale, fr.FlipX, Color.White);
     }
 
+    private void DrawBaggedCorpseAt(Vector2 screenPos, float facingAngle)
+    {
+        var fr = GetBodyBagFrame(facingAngle);
+        if (fr.Frame == null) return;
+
+        var corpsesAtlasId = AtlasDefs.ResolveAtlasName("Corpses");
+        int atlasIdx = (int)corpsesAtlasId;
+        if (atlasIdx >= _atlases.Length || !_atlases[atlasIdx].IsLoaded) return;
+        var corpsesAtlas = _atlases[atlasIdx];
+
+        float refH = GetBodyBagRefHeight();
+        float scale = (3.6f * _camera.Zoom) / refH; // same size as ground body bags
+        DrawSpriteFrame(corpsesAtlas, fr.Frame.Value, screenPos, scale, fr.FlipX, Color.White);
+    }
+
     private void DrawBaggingProgressBar(Vector2 screenPos, float progress)
     {
         float barW = 26f;
@@ -4320,18 +4346,22 @@ public class Game1 : Microsoft.Xna.Framework.Game
         var corpsesAtlas = _atlases[atlasIdx];
 
         float refH = GetBodyBagRefHeight();
-        float bagWorldH = 2.7f;
-        float bagScale = (bagWorldH * _camera.Zoom) / refH;
+        float bagScale = (CarryBagScale * _camera.Zoom) / refH;
 
-        // Try to position at weapon hilt point if available
+        // Flip-aware offset: X offset flips with the sprite
+        bool flipX = fr.FlipX;
+        float ofsX = flipX ? -CarryOffsetX : CarryOffsetX;
+
+        // Position at weapon hilt point if available
         var unitDef = _gameData.Units.Get(_sim.Units[unitIdx].UnitDefID);
         if (unitDef != null && _unitAnims.TryGetValue(_sim.Units[unitIdx].Id, out var animData))
         {
             var attach = ComputeWeaponAttach(unitIdx, unitDef, animData);
             if (attach.Valid)
             {
-                // Use hilt position as body bag anchor
                 var hiltScreen = _renderer.WorldToScreen(attach.HiltWorld, attach.HiltHeight, _camera);
+                hiltScreen.X += ofsX;
+                hiltScreen.Y += CarryOffsetY;
                 DrawSpriteFrame(corpsesAtlas, fr.Frame.Value, hiltScreen, bagScale, fr.FlipX, Color.White);
                 return;
             }
@@ -4341,11 +4371,11 @@ public class Game1 : Microsoft.Xna.Framework.Game
         float angleDeg = ((facingAngle % 360f) + 360f) % 360f;
         float offsetPx = 8f * unitScale;
         float hDir = (angleDeg > 90f && angleDeg < 270f) ? -1f : 1f;
-        float bagX = unitScreenPos.X + offsetPx * hDir * 0.66f;
+        float bagX = unitScreenPos.X + offsetPx * hDir * 0.66f + ofsX;
 
         float spriteWorldH = (unitDef != null && unitDef.SpriteWorldHeight > 0) ? unitDef.SpriteWorldHeight : 1.8f;
         float spritePixelH = spriteWorldH * _sim.Units[unitIdx].SpriteScale * _camera.Zoom;
-        float bagY = unitScreenPos.Y - spritePixelH * 0.35f;
+        float bagY = unitScreenPos.Y - spritePixelH * 0.35f + CarryOffsetY;
 
         DrawSpriteFrame(corpsesAtlas, fr.Frame.Value, new Vector2(bagX, bagY), bagScale, fr.FlipX, Color.White);
     }
@@ -4673,17 +4703,42 @@ public class Game1 : Microsoft.Xna.Framework.Game
         if (_sim.Units[i].GhostMode)
             DrawGhostOutline(atlas, fr.Frame.Value, sp, scale, fr.FlipX);
 
-        // Carried body bag: draw BEHIND unit if facing away (NW/N/NE = 225-315°)
-        bool carriesCorpse = _sim.Units[i].CarryingCorpseID >= 0 && _sim.Units[i].CorpseInteractPhase == 0;
-        float fAngle = ((_sim.Units[i].FacingAngle % 360f) + 360f) % 360f;
-        bool facingAway = fAngle >= 225f && fAngle <= 315f;
-        if (carriesCorpse && facingAway)
+        // Carried body bag rendering (phase-aware: respects effect_ms action moment)
+        byte cPhase = _sim.Units[i].CorpseInteractPhase;
+        bool hasCorpse = _sim.Units[i].CarryingCorpseID >= 0
+            && (cPhase == 0 || cPhase == 4 || cPhase == 5);
+        // Use the same angle resolution as sprite rendering to determine front/back
+        int sprAngle = animData.Ctrl.ResolveAngle(_sim.Units[i].FacingAngle, out _);
+        bool facingAway = sprAngle == 300; // sprite angle 300 = back view
+        bool drawBagAtHilt = false; // whether to draw on unit (vs at ground)
+
+        if (hasCorpse)
+        {
+            if (cPhase == 0)
+                drawBagAtHilt = true; // fully carried
+            else if (cPhase == 4) // Pickup: ground until action moment, then hilt
+                drawBagAtHilt = animData.Ctrl.HasReachedActionMoment();
+            else if (cPhase == 5) // PutDown: hilt until action moment, then ground
+                drawBagAtHilt = !animData.Ctrl.HasReachedActionMoment();
+        }
+
+        if (hasCorpse && drawBagAtHilt && facingAway)
             DrawCarriedBodyBag(i, sp, scale, _sim.Units[i].FacingAngle);
+        if (hasCorpse && !drawBagAtHilt)
+        {
+            // Draw at ground position (corpse's world pos)
+            var cc = _sim.FindCorpseByID(_sim.Units[i].CarryingCorpseID);
+            if (cc != null)
+            {
+                var groundSp = _renderer.WorldToScreen(cc.LerpStartPos, 0f, _camera);
+                DrawBaggedCorpseAt(groundSp, cc.FacingAngle);
+            }
+        }
 
         DrawSpriteFrame(atlas, fr.Frame.Value, sp, scale, fr.FlipX, tint);
 
         // Carried body bag: draw IN FRONT if facing toward camera
-        if (carriesCorpse && !facingAway)
+        if (hasCorpse && drawBagAtHilt && !facingAway)
             DrawCarriedBodyBag(i, sp, scale, _sim.Units[i].FacingAngle);
 
         // Buff visuals: phase 1 (in front of sprite)
@@ -5181,7 +5236,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
             _timeScale, _hoveredObjectIdx, _envSystem,
             DrawSpellCategoryIcon,
             _potionSlots, _activePotionSlot, GetItemTexture,
-            _potionDropdownSlot);
+            _potionDropdownSlot, _paused);
     }
 
     private void DrawPauseMenu(int screenW, int screenH)

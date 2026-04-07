@@ -102,7 +102,7 @@ public class HUDRenderer
         Action<string, int, int> drawSpellCategoryIcon,
         string[]? potionSlots = null, int activePotionSlot = -1,
         Func<string, Texture2D?>? getItemTexture = null,
-        int potionDropdownSlot = -1)
+        int potionDropdownSlot = -1, bool paused = false)
     {
         int necroIdx = FindNecromancer(sim);
 
@@ -129,7 +129,7 @@ public class HUDRenderer
 
         DrawBuildingTooltip(hoveredObjectIdx, envSystem, sim);
         DrawControlsHint(screenH);
-        DrawTimeControls(screenW, screenH, timeScale, gameData);
+        DrawTimeControls(screenW, screenH, timeScale, gameData, paused);
         DrawCombatLog(screenW, screenH, sim, gameData);
     }
 
@@ -301,23 +301,41 @@ public class HUDRenderer
     //  Time Controls
     // ═══════════════════════════════════════
 
-    private void DrawTimeControls(int screenW, int screenH, float timeScale, GameData gameData)
+    private void DrawTimeControls(int screenW, int screenH, float timeScale, GameData gameData, bool paused)
     {
         if (!gameData.Settings.General.ShowTimeControls || _smallFont == null) return;
 
         ReadOnlySpan<float> speeds = stackalloc float[] { 0.1f, 0.25f, 0.5f, 1.0f, 1.5f, 2.0f };
         string[] labels = { "<<<", "<<", "<", "=", ">", ">>" };
-        int totalW = TcCount * TcBtnW + (TcCount - 1) * TcGap;
+        int pauseW = TcBtnW;
+        int totalW = pauseW + TcGap + TcCount * TcBtnW + (TcCount - 1) * TcGap;
         int baseX = screenW - totalW - 10;
         int baseY = screenH - 52;
 
         int mx = (int)_input.MousePos.X, my = (int)_input.MousePos.Y;
+
+        // Pause button (left of speed buttons)
+        {
+            bool hover = mx >= baseX && mx < baseX + pauseW
+                      && my >= baseY && my < baseY + TcBtnH;
+            Color bg = paused ? new Color(160, 70, 70, 220)
+                     : hover  ? new Color(50, 60, 80, 180)
+                              : new Color(20, 20, 30, 140);
+            _batch.Draw(_pixel, new Rectangle(baseX, baseY, pauseW, TcBtnH), bg);
+            string pauseLabel = paused ? ">" : "||";
+            var labelSize = _smallFont.MeasureString(pauseLabel);
+            Text(_smallFont, pauseLabel,
+                new Vector2(baseX + pauseW / 2f - labelSize.X / 2f, baseY + TcBtnH / 2f - labelSize.Y / 2f),
+                Color.White);
+        }
+
+        int speedBaseX = baseX + pauseW + TcGap;
         for (int s = 0; s < TcCount; s++)
         {
-            int bx = baseX + s * (TcBtnW + TcGap);
+            int bx = speedBaseX + s * (TcBtnW + TcGap);
             bool hover = mx >= bx && mx < bx + TcBtnW
                       && my >= baseY && my < baseY + TcBtnH;
-            bool active = MathF.Abs(timeScale - speeds[s]) < 0.001f;
+            bool active = !paused && MathF.Abs(timeScale - speeds[s]) < 0.001f;
             Color bg = active ? new Color(70, 100, 160, 220)
                      : hover  ? new Color(50, 60, 80, 180)
                               : new Color(20, 20, 30, 140);
@@ -328,8 +346,9 @@ public class HUDRenderer
                 Color.White);
         }
 
-        Text(_smallFont, $"{timeScale:G2}x", new Vector2(baseX + totalW + 6, baseY + 5),
-            new Color(180, 180, 200, 200));
+        string speedText = paused ? "Paused" : $"{timeScale:G2}x";
+        Text(_smallFont, speedText, new Vector2(speedBaseX + TcCount * TcBtnW + (TcCount - 1) * TcGap + 6, baseY + 5),
+            paused ? new Color(200, 100, 100, 220) : new Color(180, 180, 200, 200));
     }
 
     // ═══════════════════════════════════════
