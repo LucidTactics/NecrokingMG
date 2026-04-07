@@ -24,6 +24,14 @@ public class Corpse
     public float FacingAngle = 90f;
     public float SpriteScale = 1f;
     public uint DraggedByUnitID = GameConstants.InvalidUnit;
+
+    // Bagging state
+    public bool Bagged;
+    public float BaggingProgress;
+    public uint BaggedByUnitID = GameConstants.InvalidUnit;
+
+    // Lerp anchor for pickup/putdown animation
+    public Vec2 LerpStartPos;
 }
 
 public class DamageEvent
@@ -80,6 +88,19 @@ public class Simulation
     public NecromancerState NecroState => _necroState;
     public IReadOnlyList<Corpse> Corpses => _corpses;
     public List<Corpse> CorpsesMut => _corpses;
+
+    public int FindCorpseIndexByID(int corpseID)
+    {
+        for (int i = 0; i < _corpses.Count; i++)
+            if (_corpses[i].CorpseID == corpseID) return i;
+        return -1;
+    }
+
+    public Corpse? FindCorpseByID(int corpseID)
+    {
+        int idx = FindCorpseIndexByID(corpseID);
+        return idx >= 0 ? _corpses[idx] : null;
+    }
     public IReadOnlyList<DamageEvent> DamageEvents => _damageEvents;
     public IReadOnlyList<SoulOrb> SoulOrbs => _soulOrbs;
     public ProjectileManager Projectiles => _projectiles;
@@ -390,10 +411,15 @@ public class Simulation
                     float speed = _units[i].Stats.CombatSpeed;
                     if (_units[i].GhostMode)
                         speed = 20.0f;
-                    else if (_necroRunning)
+                    else if (_necroRunning && _units[i].CarryingCorpseID < 0)
                         speed *= 1.8f;
                     _units[i].MaxSpeed = speed; // update so ORCA + accel cap respect current speed
-                    _units[i].PreferredVel = _necroMoveInput * speed;
+
+                    // Immobilize during corpse interaction animations
+                    if (_units[i].CorpseInteractPhase != 0)
+                        _units[i].PreferredVel = Vec2.Zero;
+                    else
+                        _units[i].PreferredVel = _necroMoveInput * speed;
                     break;
                 }
 
@@ -1929,41 +1955,61 @@ public class Simulation
 
     private void UpdateCorpses(float dt)
     {
-        // Update dragged corpse positions to follow their dragger
+        // Update carried corpse positions to follow their carrier
         for (int u = 0; u < _units.Count; u++)
         {
-            int dragIdx = _units[u].DraggingCorpseIdx;
-            if (dragIdx < 0 || dragIdx >= _corpses.Count) continue;
+            int carryID = _units[u].CarryingCorpseID;
+            if (carryID < 0) continue;
+            var corpse = FindCorpseByID(carryID);
+            if (corpse == null) { _units[u].CarryingCorpseID = -1; continue; }
             if (!_units[u].Alive)
             {
-                // Unit died while dragging — release the corpse
-                _corpses[dragIdx].DraggedByUnitID = GameConstants.InvalidUnit;
-                _units[u].DraggingCorpseIdx = -1;
+                // Unit died while carrying — release the corpse
+                corpse.DraggedByUnitID = GameConstants.InvalidUnit;
+                _units[u].CarryingCorpseID = -1;
+                _units[u].CorpseInteractPhase = 0;
                 continue;
             }
-            // Corpse follows slightly behind the unit
-            float facingRad = _units[u].FacingAngle * MathF.PI / 180f;
-            var behind = new Vec2(-MathF.Cos(facingRad), -MathF.Sin(facingRad)) * 1.2f;
-            _corpses[dragIdx].Position = _units[u].Position + behind;
+            // Carried corpse follows at unit position (visual offset handled in rendering)
+            corpse.Position = _units[u].Position;
+        }
+
+        // Release bagging if unit died
+        for (int u = 0; u < _units.Count; u++)
+        {
+            int bagID = _units[u].BaggingCorpseID;
+            if (bagID < 0) continue;
+            if (!_units[u].Alive)
+            {
+                var corpse = FindCorpseByID(bagID);
+                if (corpse != null) corpse.BaggedByUnitID = GameConstants.InvalidUnit;
+                _units[u].BaggingCorpseID = -1;
+                _units[u].CorpseInteractPhase = 0;
+            }
         }
 
         for (int i = _corpses.Count - 1; i >= 0; i--)
         {
+            // Bagged corpses don't age or dissolve
+            if (_corpses[i].Bagged && !_corpses[i].Dissolving && !_corpses[i].ConsumedBySummon)
+                continue;
+
             _corpses[i].Age += dt;
             if (_corpses[i].Dissolving)
             {
                 _corpses[i].DissolveTimer += dt;
                 if (_corpses[i].DissolveTimer > 2f)
                 {
-                    // If someone was dragging this corpse, release them
+                    int cid = _corpses[i].CorpseID;
+                    // Release any unit carrying or bagging this corpse
                     for (int u = 0; u < _units.Count; u++)
-                        if (_units[u].DraggingCorpseIdx == i)
-                            _units[u].DraggingCorpseIdx = -1;
+                    {
+                        if (_units[u].CarryingCorpseID == cid)
+                        { _units[u].CarryingCorpseID = -1; _units[u].CorpseInteractPhase = 0; }
+                        if (_units[u].BaggingCorpseID == cid)
+                        { _units[u].BaggingCorpseID = -1; _units[u].CorpseInteractPhase = 0; }
+                    }
                     _corpses.RemoveAt(i);
-                    // Fix up drag indices that pointed past the removed element
-                    for (int u = 0; u < _units.Count; u++)
-                        if (_units[u].DraggingCorpseIdx > i)
-                            _units[u].DraggingCorpseIdx--;
                 }
             }
         }

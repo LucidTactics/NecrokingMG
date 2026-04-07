@@ -86,8 +86,11 @@ public class Unit
     // Buffs
     public List<ActiveBuff> ActiveBuffs = new();
 
-    // Corpse dragging
-    public int DraggingCorpseIdx = -1;
+    // Corpse interaction
+    public int CarryingCorpseID = -1;       // CorpseID being carried (-1 = none)
+    public int BaggingCorpseID = -1;        // CorpseID being bagged (-1 = none)
+    public float BaggingTimer;              // elapsed time during bagging
+    public byte CorpseInteractPhase;        // 0=none, 1=WorkStart, 2=WorkLoop, 3=WorkEnd, 4=Pickup, 5=PutDown
 
     // Spawn/Raid/Patrol
     public int SpawnBuildingIdx = -1;

@@ -14,7 +14,8 @@
       "rangedDamage": 0,
       "precision": 0,
       "projectileType": "Arrow",
-      "bonuses": []
+      "bonuses": [],
+      "anim": null
     },
     {
       "id": "spear",
@@ -30,7 +31,8 @@
       "rangedDamage": 0,
       "precision": 0,
       "projectileType": "Arrow",
-      "bonuses": []
+      "bonuses": [],
+      "anim": null
     },
     {
       "id": "spear_copy",
@@ -46,7 +48,8 @@
       "rangedDamage": 0,
       "precision": 0,
       "projectileType": "Arrow",
-      "bonuses": []
+      "bonuses": [],
+      "anim": null
     },
     {
       "id": "hook",
@@ -62,7 +65,8 @@
       "rangedDamage": 0,
       "precision": 0,
       "projectileType": "Arrow",
-      "bonuses": []
+      "bonuses": [],
+      "anim": null
     },
     {
       "id": "club",
@@ -78,7 +82,8 @@
       "rangedDamage": 0,
       "precision": 0,
       "projectileType": "Arrow",
-      "bonuses": []
+      "bonuses": [],
+      "anim": null
     },
     {
       "id": "shortsword",
@@ -94,7 +99,8 @@
       "rangedDamage": 0,
       "precision": 0,
       "projectileType": "Arrow",
-      "bonuses": []
+      "bonuses": [],
+      "anim": null
     },
     {
       "id": "lance",
@@ -110,7 +116,8 @@
       "rangedDamage": 0,
       "precision": 0,
       "projectileType": "Arrow",
-      "bonuses": []
+      "bonuses": [],
+      "anim": null
     },
     {
       "id": "dagger",
@@ -126,7 +133,8 @@
       "rangedDamage": 0,
       "precision": 0,
       "projectileType": "Arrow",
-      "bonuses": []
+      "bonuses": [],
+      "anim": null
     },
     {
       "id": "longbow",
@@ -141,9 +149,9 @@
       "cooldown": 2,
       "rangedDamage": 8,
       "precision": 10,
-      "anim": "Ranged1",
       "projectileType": "Arrow",
-      "bonuses": []
+      "bonuses": [],
+      "anim": "Ranged1"
     },
     {
       "id": "weapon_8",
@@ -159,7 +167,8 @@
       "rangedDamage": 0,
       "precision": 0,
       "projectileType": "Arrow",
-      "bonuses": []
+      "bonuses": [],
+      "anim": null
     },
     {
       "id": "weapon_10",
@@ -175,7 +184,8 @@
       "rangedDamage": 0,
       "precision": 0,
       "projectileType": "Arrow",
-      "bonuses": []
+      "bonuses": [],
+      "anim": null
     },
     {
       "id": "weapon_11",
@@ -191,7 +201,8 @@
       "rangedDamage": 0,
       "precision": 0,
       "projectileType": "Arrow",
-      "bonuses": []
+      "bonuses": [],
+      "anim": null
     },
     {
       "id": "weapon_174944",
@@ -206,9 +217,9 @@
       "cooldown": 0,
       "rangedDamage": 0,
       "precision": 0,
-      "anim": "AttackBite",
       "projectileType": "Arrow",
-      "bonuses": []
+      "bonuses": [],
+      "anim": "AttackBite"
     },
     {
       "id": "weapon_181921",
@@ -223,9 +234,9 @@
       "cooldown": 0,
       "rangedDamage": 0,
       "precision": 0,
-      "anim": "Attack2",
       "projectileType": "Arrow",
-      "bonuses": []
+      "bonuses": [],
+      "anim": "Attack2"
     }
   ]
 }

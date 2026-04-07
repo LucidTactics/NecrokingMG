@@ -920,6 +920,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 var corpse = _sim.Corpses[i];
                 if (corpse.Dissolving || corpse.ConsumedBySummon) continue;
                 if (corpse.DraggedByUnitID != GameConstants.InvalidUnit) continue;
+                if (corpse.BaggedByUnitID != GameConstants.InvalidUnit) continue; // mid-bagging
                 float dist = (corpse.Position - pending.TargetPos).Length();
                 if (dist > spell.AoeRadius) continue;
 
@@ -2246,31 +2247,70 @@ public class Game1 : Microsoft.Xna.Framework.Game
             if (_activePotionSlot >= 0 && _input.RightPressed)
                 _activePotionSlot = -1;
 
-            // --- Corpse drag (F key) ---
+            // --- Corpse interaction (F key) --- context-sensitive: putdown > pickup bagged > bag unbagged
             if (_input.WasKeyPressed(Keys.F) && necroIdx >= 0)
             {
-                int currentDrag = _sim.Units[necroIdx].DraggingCorpseIdx;
-                if (currentDrag >= 0)
+                var nu = _sim.Units[necroIdx];
+
+                if (nu.CarryingCorpseID >= 0 && nu.CorpseInteractPhase == 0)
                 {
-                    if (currentDrag < _sim.Corpses.Count)
-                        _sim.CorpsesMut[currentDrag].DraggedByUnitID = GameConstants.InvalidUnit;
-                    _sim.UnitsMut[necroIdx].DraggingCorpseIdx = -1;
+                    // Currently carrying -> start PutDown
+                    var cc = _sim.FindCorpseByID(nu.CarryingCorpseID);
+                    if (cc != null)
+                        cc.LerpStartPos = nu.Position; // anchor for lerp
+                    _sim.UnitsMut[necroIdx].CorpseInteractPhase = 5; // PutDown
                 }
-                else
+                else if (nu.BaggingCorpseID >= 0)
                 {
-                    var np3 = _sim.Units[necroIdx].Position;
-                    float bcd = 3f * 3f; int bci = -1;
+                    // Currently bagging -> committed, ignore
+                }
+                else if (nu.CorpseInteractPhase == 0)
+                {
+                    var np = nu.Position;
+                    float bestDist = 3f * 3f;
+
+                    // First: look for nearest bagged corpse to pickup
+                    int bestBaggedIdx = -1;
                     for (int ci = 0; ci < _sim.Corpses.Count; ci++)
                     {
-                        if (_sim.Corpses[ci].Dissolving || _sim.Corpses[ci].ConsumedBySummon) continue;
-                        if (_sim.Corpses[ci].DraggedByUnitID != GameConstants.InvalidUnit) continue;
-                        float cdd = (_sim.Corpses[ci].Position - np3).LengthSq();
-                        if (cdd < bcd) { bcd = cdd; bci = ci; }
+                        var c = _sim.Corpses[ci];
+                        if (!c.Bagged || c.Dissolving || c.ConsumedBySummon) continue;
+                        if (c.DraggedByUnitID != GameConstants.InvalidUnit) continue;
+                        float d = (c.Position - np).LengthSq();
+                        if (d < bestDist) { bestDist = d; bestBaggedIdx = ci; }
                     }
-                    if (bci >= 0)
+
+                    if (bestBaggedIdx >= 0)
                     {
-                        _sim.UnitsMut[necroIdx].DraggingCorpseIdx = bci;
-                        _sim.CorpsesMut[bci].DraggedByUnitID = _sim.Units[necroIdx].Id;
+                        // Start pickup animation
+                        var c = _sim.CorpsesMut[bestBaggedIdx];
+                        c.LerpStartPos = c.Position; // anchor for lerp
+                        _sim.UnitsMut[necroIdx].CarryingCorpseID = c.CorpseID;
+                        _sim.UnitsMut[necroIdx].CorpseInteractPhase = 4; // Pickup
+                        c.DraggedByUnitID = nu.Id;
+                    }
+                    else
+                    {
+                        // Look for nearest un-bagged corpse to start bagging
+                        bestDist = 3f * 3f;
+                        int bestUnbaggedIdx = -1;
+                        for (int ci = 0; ci < _sim.Corpses.Count; ci++)
+                        {
+                            var c = _sim.Corpses[ci];
+                            if (c.Bagged || c.Dissolving || c.ConsumedBySummon) continue;
+                            if (c.DraggedByUnitID != GameConstants.InvalidUnit) continue;
+                            if (c.BaggedByUnitID != GameConstants.InvalidUnit) continue;
+                            float d = (c.Position - np).LengthSq();
+                            if (d < bestDist) { bestDist = d; bestUnbaggedIdx = ci; }
+                        }
+                        if (bestUnbaggedIdx >= 0)
+                        {
+                            var c = _sim.CorpsesMut[bestUnbaggedIdx];
+                            _sim.UnitsMut[necroIdx].BaggingCorpseID = c.CorpseID;
+                            _sim.UnitsMut[necroIdx].BaggingTimer = 0f;
+                            _sim.UnitsMut[necroIdx].CorpseInteractPhase = 1; // WorkStart
+                            c.BaggedByUnitID = nu.Id;
+                        }
                     }
                 }
             }
@@ -3159,6 +3199,117 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 continue;
             }
 
+            // --- Corpse interaction state machine ---
+            // PlayOnceHold states: ForceState on entry, IsAnimFinished for completion
+            if (_sim.Units[i].CorpseInteractPhase != 0)
+            {
+                byte phase = _sim.Units[i].CorpseInteractPhase;
+                const float BaggingDuration = 2.0f;
+
+                switch (phase)
+                {
+                    case 1: // WorkStart (PlayOnceHold)
+                        if (animData.Ctrl.CurrentState != AnimState.WorkStart)
+                            animData.Ctrl.ForceState(AnimState.WorkStart);
+                        if (animData.Ctrl.IsAnimFinished)
+                        {
+                            _sim.UnitsMut[i].CorpseInteractPhase = 2;
+                            _sim.UnitsMut[i].BaggingTimer = 0f;
+                            animData.Ctrl.ForceState(AnimState.WorkLoop);
+                        }
+                        break;
+
+                    case 2: // WorkLoop (Loop — timer driven)
+                        if (animData.Ctrl.CurrentState != AnimState.WorkLoop)
+                            animData.Ctrl.ForceState(AnimState.WorkLoop);
+                        _sim.UnitsMut[i].BaggingTimer += dt;
+                        {
+                            var bc = _sim.FindCorpseByID(_sim.Units[i].BaggingCorpseID);
+                            if (bc != null)
+                                bc.BaggingProgress = Math.Min(1f, _sim.Units[i].BaggingTimer / BaggingDuration);
+                        }
+                        if (_sim.Units[i].BaggingTimer >= BaggingDuration)
+                        {
+                            _sim.UnitsMut[i].CorpseInteractPhase = 3;
+                            animData.Ctrl.ForceState(AnimState.WorkEnd);
+                        }
+                        break;
+
+                    case 3: // WorkEnd (PlayOnceHold)
+                        if (animData.Ctrl.CurrentState != AnimState.WorkEnd)
+                            animData.Ctrl.ForceState(AnimState.WorkEnd);
+                        if (animData.Ctrl.IsAnimFinished)
+                        {
+                            var bc = _sim.FindCorpseByID(_sim.Units[i].BaggingCorpseID);
+                            if (bc != null)
+                            {
+                                bc.Bagged = true;
+                                bc.BaggingProgress = 0f;
+                                bc.BaggedByUnitID = GameConstants.InvalidUnit;
+                            }
+                            _sim.UnitsMut[i].BaggingCorpseID = -1;
+                            _sim.UnitsMut[i].CorpseInteractPhase = 0;
+                            animData.Ctrl.ForceState(AnimState.Idle);
+                        }
+                        break;
+
+                    case 4: // Pickup (PlayOnceHold) — lerp corpse from ground to unit
+                        if (animData.Ctrl.CurrentState != AnimState.Pickup)
+                            animData.Ctrl.ForceState(AnimState.Pickup);
+                        {
+                            var cc = _sim.FindCorpseByID(_sim.Units[i].CarryingCorpseID);
+                            if (cc != null)
+                            {
+                                float totalSec = animData.Ctrl.GetTotalDurationSeconds(AnimState.Pickup);
+                                float t = totalSec > 0f ? Math.Clamp(animData.Ctrl.AnimTime / (totalSec * 1000f), 0f, 1f) : 1f;
+                                cc.Position = Vec2.Lerp(cc.LerpStartPos, _sim.Units[i].Position, t);
+                                cc.FacingAngle = _sim.Units[i].FacingAngle;
+                            }
+                        }
+                        if (animData.Ctrl.IsAnimFinished)
+                        {
+                            _sim.UnitsMut[i].CorpseInteractPhase = 0;
+                            animData.Ctrl.ForceState(AnimState.Idle);
+                        }
+                        break;
+
+                    case 5: // PutDown (PlayOnceHold) — lerp corpse from unit to ground
+                        if (animData.Ctrl.CurrentState != AnimState.PutDown)
+                            animData.Ctrl.ForceState(AnimState.PutDown);
+                        {
+                            var cc = _sim.FindCorpseByID(_sim.Units[i].CarryingCorpseID);
+                            if (cc != null)
+                            {
+                                float totalSec = animData.Ctrl.GetTotalDurationSeconds(AnimState.PutDown);
+                                float t = totalSec > 0f ? Math.Clamp(animData.Ctrl.AnimTime / (totalSec * 1000f), 0f, 1f) : 1f;
+                                float fRad = _sim.Units[i].FacingAngle * MathF.PI / 180f;
+                                var dropOffset = new Vec2(MathF.Cos(fRad), MathF.Sin(fRad)) * 0.8f;
+                                var dropPos = cc.LerpStartPos + dropOffset;
+                                cc.Position = Vec2.Lerp(cc.LerpStartPos, dropPos, t);
+                                cc.FacingAngle = _sim.Units[i].FacingAngle;
+                            }
+                        }
+                        if (animData.Ctrl.IsAnimFinished)
+                        {
+                            var cc = _sim.FindCorpseByID(_sim.Units[i].CarryingCorpseID);
+                            if (cc != null)
+                                cc.DraggedByUnitID = GameConstants.InvalidUnit;
+                            _sim.UnitsMut[i].CarryingCorpseID = -1;
+                            _sim.UnitsMut[i].CorpseInteractPhase = 0;
+                            animData.Ctrl.ForceState(AnimState.Idle);
+                        }
+                        break;
+
+                    default:
+                        _sim.UnitsMut[i].CorpseInteractPhase = 0;
+                        break;
+                }
+
+                animData.Ctrl.Update(dt);
+                _unitAnims[uid] = animData;
+                continue;
+            }
+
             // Determine animation state
             AnimState targetState;
             if (_sim.Units[i].StandupTimer > 0f)
@@ -3217,8 +3368,11 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 float jogThreshold = 4f + baseSpeed / 3f;
                 float runThreshold = 6f + 2f * baseSpeed / 3f;
 
+                bool carrying = _sim.Units[i].CarryingCorpseID >= 0;
                 if (speed <= walkThreshold)
                     targetState = AnimState.Idle;
+                else if (carrying)
+                    targetState = AnimState.Carry; // always Carry anim when carrying, regardless of speed
                 else if (speed < jogThreshold)
                     targetState = AnimState.Walk;
                 else if (speed < runThreshold)
@@ -3995,6 +4149,35 @@ public class Game1 : Microsoft.Xna.Framework.Game
     {
         foreach (var corpse in _sim.Corpses)
         {
+            // Don't render corpses being carried (phase 0 = fully carried, drawn on unit)
+            // But DO render during pickup/putdown (phases 4,5) at the lerped position
+            if (corpse.Bagged && corpse.DraggedByUnitID != GameConstants.InvalidUnit)
+            {
+                // Find the carrying unit to check its phase
+                bool duringTransition = false;
+                for (int u = 0; u < _sim.Units.Count; u++)
+                {
+                    if (_sim.Units[u].Id == corpse.DraggedByUnitID)
+                    {
+                        byte ph = _sim.Units[u].CorpseInteractPhase;
+                        if (ph == 4 || ph == 5) duringTransition = true;
+                        break;
+                    }
+                }
+                if (!duringTransition)
+                    continue; // fully carried — drawn on unit instead
+                // During pickup/putdown: render at lerped position below
+                DrawBaggedCorpse(corpse);
+                continue;
+            }
+
+            // Bagged corpses render as BodyBag from Corpses atlas
+            if (corpse.Bagged)
+            {
+                DrawBaggedCorpse(corpse);
+                continue;
+            }
+
             var unitDef = _gameData.Units.Get(corpse.UnitDefID);
             if (unitDef?.Sprite == null) continue;
             var atlasId = AtlasDefs.ResolveAtlasName(unitDef.Sprite.AtlasName);
@@ -4051,18 +4234,120 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 float scale = pixelH / cad.RefFrameHeight;
 
                 var sp = _renderer.WorldToScreen(corpse.Position, 0f, _camera);
-                // Highlight dragged corpse with brighter tint
-                Color corpseTint;
-                if (corpse.DraggedByUnitID != GameConstants.InvalidUnit)
-                {
-                    float af = alpha / 255f;
-                    corpseTint = new Color((byte)(Math.Min(255, alpha + 80) * af), (byte)(alpha / 2 * af), (byte)(alpha * af), alpha);
-                }
-                else
-                    corpseTint = new Color(alpha, alpha, alpha, alpha);
+                Color corpseTint = new Color(alpha, alpha, alpha, alpha);
                 DrawSpriteFrame(atlas, fr.Frame.Value, sp, scale, fr.FlipX, corpseTint);
             }
+
+            // Draw bagging progress bar
+            if (corpse.BaggedByUnitID != GameConstants.InvalidUnit && corpse.BaggingProgress > 0f)
+            {
+                var sp = _renderer.WorldToScreen(corpse.Position, 0f, _camera);
+                DrawBaggingProgressBar(sp, corpse.BaggingProgress);
+            }
         }
+    }
+
+    private FrameResult GetBodyBagFrame(float facingAngle)
+    {
+        var corpsesAtlasId = AtlasDefs.ResolveAtlasName("Corpses");
+        int atlasIdx = (int)corpsesAtlasId;
+        if (atlasIdx >= _atlases.Length || !_atlases[atlasIdx].IsLoaded) return default;
+        var corpsesAtlas = _atlases[atlasIdx];
+        var bodyBagSprite = corpsesAtlas.GetUnit("BodyBag");
+        if (bodyBagSprite == null) return default;
+
+        var iconAnim = bodyBagSprite.GetAnim("Icon");
+        if (iconAnim == null) return default;
+
+        // Resolve facing angle to sprite angle + flip using AnimController's angle sectors
+        var tmpCtrl = new AnimController();
+        int spriteAngle = tmpCtrl.ResolveAngle(facingAngle, out bool flipX);
+
+        var kfs = iconAnim.GetAngle(spriteAngle) ?? iconAnim.GetAngle(30);
+        if (kfs == null || kfs.Count == 0) return default;
+
+        return new FrameResult { Frame = kfs[0].Frame, FlipX = flipX };
+    }
+
+    private float GetBodyBagRefHeight()
+    {
+        var corpsesAtlasId = AtlasDefs.ResolveAtlasName("Corpses");
+        int atlasIdx = (int)corpsesAtlasId;
+        if (atlasIdx >= _atlases.Length || !_atlases[atlasIdx].IsLoaded) return 128f;
+        var bodyBagSprite = _atlases[atlasIdx].GetUnit("BodyBag");
+        if (bodyBagSprite == null) return 128f;
+        var iconAnim = bodyBagSprite.GetAnim("Icon");
+        if (iconAnim != null) { var kfs = iconAnim.GetAngle(30); if (kfs != null && kfs.Count > 0) return kfs[0].Frame.Rect.Height; }
+        return 128f;
+    }
+
+    private void DrawBaggedCorpse(Corpse corpse)
+    {
+        var fr = GetBodyBagFrame(corpse.FacingAngle);
+        if (fr.Frame == null) return;
+
+        var corpsesAtlasId = AtlasDefs.ResolveAtlasName("Corpses");
+        var corpsesAtlas = _atlases[(int)corpsesAtlasId];
+
+        float refH = GetBodyBagRefHeight();
+        float worldH = 3.6f * corpse.SpriteScale;
+        float pixelH = worldH * _camera.Zoom;
+        float scale = pixelH / refH;
+
+        var sp = _renderer.WorldToScreen(corpse.Position, 0f, _camera);
+        DrawSpriteFrame(corpsesAtlas, fr.Frame.Value, sp, scale, fr.FlipX, Color.White);
+    }
+
+    private void DrawBaggingProgressBar(Vector2 screenPos, float progress)
+    {
+        float barW = 26f;
+        float barH = 3f;
+        float barX = screenPos.X - barW / 2f;
+        float barY = screenPos.Y - 18f;
+
+        _spriteBatch.Draw(_pixel, new Rectangle((int)barX - 1, (int)barY - 1, (int)barW + 2, (int)barH + 2), new Color(0, 0, 0, 180));
+        _spriteBatch.Draw(_pixel, new Rectangle((int)barX, (int)barY, (int)(barW * progress), (int)barH), new Color(220, 180, 40));
+    }
+
+    private void DrawCarriedBodyBag(int unitIdx, Vector2 unitScreenPos, float unitScale, float facingAngle)
+    {
+        var fr = GetBodyBagFrame(facingAngle);
+        if (fr.Frame == null) return;
+
+        var corpsesAtlasId = AtlasDefs.ResolveAtlasName("Corpses");
+        int atlasIdx = (int)corpsesAtlasId;
+        if (atlasIdx >= _atlases.Length || !_atlases[atlasIdx].IsLoaded) return;
+        var corpsesAtlas = _atlases[atlasIdx];
+
+        float refH = GetBodyBagRefHeight();
+        float bagWorldH = 2.7f;
+        float bagScale = (bagWorldH * _camera.Zoom) / refH;
+
+        // Try to position at weapon hilt point if available
+        var unitDef = _gameData.Units.Get(_sim.Units[unitIdx].UnitDefID);
+        if (unitDef != null && _unitAnims.TryGetValue(_sim.Units[unitIdx].Id, out var animData))
+        {
+            var attach = ComputeWeaponAttach(unitIdx, unitDef, animData);
+            if (attach.Valid)
+            {
+                // Use hilt position as body bag anchor
+                var hiltScreen = _renderer.WorldToScreen(attach.HiltWorld, attach.HiltHeight, _camera);
+                DrawSpriteFrame(corpsesAtlas, fr.Frame.Value, hiltScreen, bagScale, fr.FlipX, Color.White);
+                return;
+            }
+        }
+
+        // Fallback: offset-based positioning
+        float angleDeg = ((facingAngle % 360f) + 360f) % 360f;
+        float offsetPx = 8f * unitScale;
+        float hDir = (angleDeg > 90f && angleDeg < 270f) ? -1f : 1f;
+        float bagX = unitScreenPos.X + offsetPx * hDir * 0.66f;
+
+        float spriteWorldH = (unitDef != null && unitDef.SpriteWorldHeight > 0) ? unitDef.SpriteWorldHeight : 1.8f;
+        float spritePixelH = spriteWorldH * _sim.Units[unitIdx].SpriteScale * _camera.Zoom;
+        float bagY = unitScreenPos.Y - spritePixelH * 0.35f;
+
+        DrawSpriteFrame(corpsesAtlas, fr.Frame.Value, new Vector2(bagX, bagY), bagScale, fr.FlipX, Color.White);
     }
 
     // ═══════════════════════════════════════
@@ -4388,7 +4673,18 @@ public class Game1 : Microsoft.Xna.Framework.Game
         if (_sim.Units[i].GhostMode)
             DrawGhostOutline(atlas, fr.Frame.Value, sp, scale, fr.FlipX);
 
+        // Carried body bag: draw BEHIND unit if facing away (NW/N/NE = 225-315°)
+        bool carriesCorpse = _sim.Units[i].CarryingCorpseID >= 0 && _sim.Units[i].CorpseInteractPhase == 0;
+        float fAngle = ((_sim.Units[i].FacingAngle % 360f) + 360f) % 360f;
+        bool facingAway = fAngle >= 225f && fAngle <= 315f;
+        if (carriesCorpse && facingAway)
+            DrawCarriedBodyBag(i, sp, scale, _sim.Units[i].FacingAngle);
+
         DrawSpriteFrame(atlas, fr.Frame.Value, sp, scale, fr.FlipX, tint);
+
+        // Carried body bag: draw IN FRONT if facing toward camera
+        if (carriesCorpse && !facingAway)
+            DrawCarriedBodyBag(i, sp, scale, _sim.Units[i].FacingAngle);
 
         // Buff visuals: phase 1 (in front of sprite)
         _buffVisuals.DrawUnit(i, _sim.Units[i].Position, 1, _gameTime,

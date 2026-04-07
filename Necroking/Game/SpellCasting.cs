@@ -122,6 +122,7 @@ public static class SpellCaster
                     {
                         if (corpses[i].Dissolving || corpses[i].ConsumedBySummon) continue;
                         if (corpses[i].DraggedByUnitID != GameConstants.InvalidUnit) continue;
+                        if (corpses[i].BaggedByUnitID != GameConstants.InvalidUnit) continue;
                         if (needsZombieType && !CorpseHasZombieType(corpses[i], gameData)) continue;
                         float distToNecro = (corpses[i].Position - necroPos).Length();
                         if (distToNecro > spell.Range) continue;
@@ -185,6 +186,7 @@ public static class SpellCaster
                     {
                         if (corpses[i].Dissolving || corpses[i].ConsumedBySummon) continue;
                         if (corpses[i].DraggedByUnitID != GameConstants.InvalidUnit) continue;
+                        if (corpses[i].BaggedByUnitID != GameConstants.InvalidUnit) continue;
                         float distToTarget = (corpses[i].Position - mouseWorld).Length();
                         if (distToTarget > spell.AoeRadius) continue;
                         if (!CorpseHasZombieType(corpses[i], gameData)) continue;

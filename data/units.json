@@ -1169,6 +1169,1120 @@
               }
             }
           ]
+        },
+        "Carry": {
+          "60": [
+            {
+              "hilt": {
+                "x": 0,
+                "y": -33,
+                "behind": false
+              },
+              "tip": {
+                "x": 13,
+                "y": -49,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": -2,
+                "y": -29,
+                "behind": false
+              },
+              "tip": {
+                "x": 11,
+                "y": -48,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": -2,
+                "y": -30,
+                "behind": false
+              },
+              "tip": {
+                "x": 11,
+                "y": -48,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": -1,
+                "y": -30,
+                "behind": false
+              },
+              "tip": {
+                "x": 13,
+                "y": -46,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": 0,
+                "y": -31,
+                "behind": false
+              },
+              "tip": {
+                "x": 13,
+                "y": -47,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": -1,
+                "y": -31,
+                "behind": false
+              },
+              "tip": {
+                "x": 14,
+                "y": -50,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": -1,
+                "y": -30,
+                "behind": false
+              },
+              "tip": {
+                "x": 14,
+                "y": -47,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": -1,
+                "y": -30,
+                "behind": false
+              },
+              "tip": {
+                "x": 14,
+                "y": -48,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": -1,
+                "y": -30,
+                "behind": false
+              },
+              "tip": {
+                "x": 13,
+                "y": -47,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": -2,
+                "y": -31,
+                "behind": false
+              },
+              "tip": {
+                "x": 13,
+                "y": -46,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": -1,
+                "y": -32,
+                "behind": false
+              },
+              "tip": {
+                "x": 12,
+                "y": -49,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": -1,
+                "y": -32,
+                "behind": false
+              },
+              "tip": {
+                "x": 13,
+                "y": -50,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": -1,
+                "y": -31,
+                "behind": false
+              },
+              "tip": {
+                "x": 11,
+                "y": -48,
+                "behind": false
+              }
+            }
+          ],
+          "300": [
+            {
+              "hilt": {
+                "x": 15,
+                "y": -34,
+                "behind": false
+              },
+              "tip": {
+                "x": 15,
+                "y": -55,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": 14,
+                "y": -36,
+                "behind": false
+              },
+              "tip": {
+                "x": 14,
+                "y": -55,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": 15,
+                "y": -36,
+                "behind": false
+              },
+              "tip": {
+                "x": 15,
+                "y": -54,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": 15,
+                "y": -36,
+                "behind": false
+              },
+              "tip": {
+                "x": 15,
+                "y": -54,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": 14,
+                "y": -34,
+                "behind": false
+              },
+              "tip": {
+                "x": 14,
+                "y": -55,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": 15,
+                "y": -33,
+                "behind": false
+              },
+              "tip": {
+                "x": 14,
+                "y": -54,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": 14,
+                "y": -35,
+                "behind": false
+              },
+              "tip": {
+                "x": 13,
+                "y": -56,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": 15,
+                "y": -33,
+                "behind": false
+              },
+              "tip": {
+                "x": 13,
+                "y": -55,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": 15,
+                "y": -34,
+                "behind": false
+              },
+              "tip": {
+                "x": 15,
+                "y": -55,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": 15,
+                "y": -35,
+                "behind": false
+              },
+              "tip": {
+                "x": 13,
+                "y": -56,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": 15,
+                "y": -35,
+                "behind": false
+              },
+              "tip": {
+                "x": 14,
+                "y": -54,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": 15,
+                "y": -36,
+                "behind": false
+              },
+              "tip": {
+                "x": 15,
+                "y": -57,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": 15,
+                "y": -35,
+                "behind": false
+              },
+              "tip": {
+                "x": 15,
+                "y": -55,
+                "behind": false
+              }
+            }
+          ],
+          "30": [
+            {
+              "hilt": {
+                "x": -2,
+                "y": -30,
+                "behind": false
+              },
+              "tip": {
+                "x": 11,
+                "y": -49,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": -2,
+                "y": -32,
+                "behind": false
+              },
+              "tip": {
+                "x": 13,
+                "y": -49,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": -1,
+                "y": -31,
+                "behind": false
+              },
+              "tip": {
+                "x": 15,
+                "y": -51,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": -1,
+                "y": -31,
+                "behind": false
+              },
+              "tip": {
+                "x": 14,
+                "y": -49,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": 0,
+                "y": -31,
+                "behind": false
+              },
+              "tip": {
+                "x": 13,
+                "y": -47,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": 0,
+                "y": -32,
+                "behind": false
+              },
+              "tip": {
+                "x": 14,
+                "y": -51,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": -2,
+                "y": -29,
+                "behind": false
+              },
+              "tip": {
+                "x": 15,
+                "y": -51,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": -1,
+                "y": -29,
+                "behind": false
+              },
+              "tip": {
+                "x": 13,
+                "y": -47,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": 0,
+                "y": -30,
+                "behind": false
+              },
+              "tip": {
+                "x": 11,
+                "y": -47,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": 0,
+                "y": -32,
+                "behind": false
+              },
+              "tip": {
+                "x": 14,
+                "y": -48,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": -1,
+                "y": -31,
+                "behind": false
+              },
+              "tip": {
+                "x": 14,
+                "y": -49,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": -1,
+                "y": -31,
+                "behind": false
+              },
+              "tip": {
+                "x": 15,
+                "y": -50,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": -2,
+                "y": -31,
+                "behind": false
+              },
+              "tip": {
+                "x": 13,
+                "y": -49,
+                "behind": false
+              }
+            }
+          ]
+        },
+        "Pickup": {
+          "60": [
+            {
+              "hilt": {
+                "x": -7,
+                "y": -23,
+                "behind": false
+              },
+              "tip": {
+                "x": 7,
+                "y": -16,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": -4,
+                "y": -15,
+                "behind": false
+              },
+              "tip": {
+                "x": 11,
+                "y": -13,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": 4,
+                "y": -2,
+                "behind": false
+              },
+              "tip": {
+                "x": 17,
+                "y": -4,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": 0,
+                "y": 0,
+                "behind": false
+              },
+              "tip": {
+                "x": 16,
+                "y": 0,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": 0,
+                "y": -3,
+                "behind": false
+              },
+              "tip": {
+                "x": 13,
+                "y": 0,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": 2,
+                "y": -6,
+                "behind": false
+              },
+              "tip": {
+                "x": 12,
+                "y": -6,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": 5,
+                "y": -16,
+                "behind": false
+              },
+              "tip": {
+                "x": 22,
+                "y": -28,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": 4,
+                "y": -22,
+                "behind": false
+              },
+              "tip": {
+                "x": 18,
+                "y": -30,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": 2,
+                "y": -30,
+                "behind": false
+              },
+              "tip": {
+                "x": 19,
+                "y": -37,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": -2,
+                "y": -33,
+                "behind": false
+              },
+              "tip": {
+                "x": 22,
+                "y": -39,
+                "behind": false
+              }
+            }
+          ],
+          "300": [
+            {
+              "hilt": {
+                "x": 9,
+                "y": -23,
+                "behind": false
+              },
+              "tip": {
+                "x": 21,
+                "y": -23,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": 16,
+                "y": -19,
+                "behind": false
+              },
+              "tip": {
+                "x": 23,
+                "y": -23,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": 19,
+                "y": -8,
+                "behind": false
+              },
+              "tip": {
+                "x": 26,
+                "y": -18,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": 18,
+                "y": -5,
+                "behind": false
+              },
+              "tip": {
+                "x": 27,
+                "y": -12,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": 19,
+                "y": -8,
+                "behind": false
+              },
+              "tip": {
+                "x": 34,
+                "y": -15,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": 15,
+                "y": -12,
+                "behind": false
+              },
+              "tip": {
+                "x": 34,
+                "y": -12,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": 12,
+                "y": -20,
+                "behind": false
+              },
+              "tip": {
+                "x": 35,
+                "y": -10,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": 12,
+                "y": -27,
+                "behind": false
+              },
+              "tip": {
+                "x": 34,
+                "y": -23,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": 14,
+                "y": -34,
+                "behind": false
+              },
+              "tip": {
+                "x": 34,
+                "y": -34,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": 14,
+                "y": -36,
+                "behind": false
+              },
+              "tip": {
+                "x": 39,
+                "y": -37,
+                "behind": false
+              }
+            }
+          ],
+          "30": [
+            {
+              "hilt": {
+                "x": -5,
+                "y": -21,
+                "behind": false
+              },
+              "tip": {
+                "x": 10,
+                "y": -15,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": -5,
+                "y": -13,
+                "behind": false
+              },
+              "tip": {
+                "x": 12,
+                "y": -13,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": 2,
+                "y": -2,
+                "behind": false
+              },
+              "tip": {
+                "x": 18,
+                "y": -3,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": 0,
+                "y": 0,
+                "behind": false
+              },
+              "tip": {
+                "x": 16,
+                "y": 0,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": 3,
+                "y": -3,
+                "behind": false
+              },
+              "tip": {
+                "x": 14,
+                "y": -0,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": 3,
+                "y": -6,
+                "behind": false
+              },
+              "tip": {
+                "x": 17,
+                "y": -7,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": 3,
+                "y": -17,
+                "behind": false
+              },
+              "tip": {
+                "x": 20,
+                "y": -27,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": 4,
+                "y": -24,
+                "behind": false
+              },
+              "tip": {
+                "x": 17,
+                "y": -30,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": 1,
+                "y": -30,
+                "behind": false
+              },
+              "tip": {
+                "x": 21,
+                "y": -36,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": 1,
+                "y": -33,
+                "behind": false
+              },
+              "tip": {
+                "x": 19,
+                "y": -39,
+                "behind": false
+              }
+            }
+          ]
+        },
+        "PutDown": {
+          "30": [
+            {
+              "hilt": {
+                "x": -1,
+                "y": -36,
+                "behind": false
+              },
+              "tip": {
+                "x": 23,
+                "y": -40,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": 2,
+                "y": -30,
+                "behind": false
+              },
+              "tip": {
+                "x": 19,
+                "y": -37,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": 2,
+                "y": -22,
+                "behind": false
+              },
+              "tip": {
+                "x": 21,
+                "y": -27,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": 2,
+                "y": -16,
+                "behind": false
+              },
+              "tip": {
+                "x": 19,
+                "y": -24,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": 3,
+                "y": -6,
+                "behind": false
+              },
+              "tip": {
+                "x": 17,
+                "y": -6,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": 2,
+                "y": -1,
+                "behind": false
+              },
+              "tip": {
+                "x": 14,
+                "y": -0,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": 2,
+                "y": 0,
+                "behind": false
+              },
+              "tip": {
+                "x": 21,
+                "y": -1,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": -1,
+                "y": -4,
+                "behind": false
+              },
+              "tip": {
+                "x": 24,
+                "y": -4,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": -3,
+                "y": -13,
+                "behind": false
+              },
+              "tip": {
+                "x": 14,
+                "y": -12,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": -7,
+                "y": -19,
+                "behind": false
+              },
+              "tip": {
+                "x": 13,
+                "y": -13,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": -7,
+                "y": -24,
+                "behind": false
+              },
+              "tip": {
+                "x": 10,
+                "y": -16,
+                "behind": false
+              }
+            }
+          ],
+          "60": [
+            {
+              "hilt": {
+                "x": -1,
+                "y": -34,
+                "behind": false
+              },
+              "tip": {
+                "x": 18,
+                "y": -38,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": 1,
+                "y": -29,
+                "behind": false
+              },
+              "tip": {
+                "x": 19,
+                "y": -35,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": 2,
+                "y": -22,
+                "behind": false
+              },
+              "tip": {
+                "x": 18,
+                "y": -29,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": 5,
+                "y": -17,
+                "behind": false
+              },
+              "tip": {
+                "x": 23,
+                "y": -23,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": 6,
+                "y": -8,
+                "behind": false
+              },
+              "tip": {
+                "x": 21,
+                "y": -10,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": 5,
+                "y": -2,
+                "behind": false
+              },
+              "tip": {
+                "x": 16,
+                "y": -2,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": 3,
+                "y": 0,
+                "behind": false
+              },
+              "tip": {
+                "x": 19,
+                "y": 0,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": 3,
+                "y": -4,
+                "behind": false
+              },
+              "tip": {
+                "x": 20,
+                "y": -6,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": -3,
+                "y": -11,
+                "behind": false
+              },
+              "tip": {
+                "x": 15,
+                "y": -11,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": -3,
+                "y": -18,
+                "behind": false
+              },
+              "tip": {
+                "x": 13,
+                "y": -13,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": -7,
+                "y": -23,
+                "behind": false
+              },
+              "tip": {
+                "x": 9,
+                "y": -15,
+                "behind": false
+              }
+            }
+          ]
         }
       },
       "animTimings": {},

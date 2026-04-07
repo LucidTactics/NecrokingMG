@@ -15,6 +15,12 @@ public enum AnimState : byte
     Hover,
     Sit,
     Sleep,
+    WorkStart,
+    WorkLoop,
+    WorkEnd,
+    Pickup,
+    PutDown,
+    Carry,
     Count
 }
 
@@ -170,6 +176,7 @@ public class AnimController
     {
         AnimState.Run or AnimState.Jog => "Walk",
         AnimState.Hover => "Fall",
+        AnimState.Carry => "Walk",
         _ => null
     };
 
@@ -540,6 +547,12 @@ public class AnimController
         AnimState.Hover => "Hover",
         AnimState.Sit => "Sit",
         AnimState.Sleep => "Sleep",
+        AnimState.WorkStart => "WorkStart",
+        AnimState.WorkLoop => "WorkLoop",
+        AnimState.WorkEnd => "WorkEnd",
+        AnimState.Pickup => "Pickup",
+        AnimState.PutDown => "PutDown",
+        AnimState.Carry => "Carry",
         _ => "Idle"
     };
 
@@ -547,9 +560,12 @@ public class AnimController
     {
         AnimState.Idle or AnimState.Walk or AnimState.Jog or AnimState.Run
             or AnimState.Block or AnimState.Stunned or AnimState.JumpLoop
-            or AnimState.Panic or AnimState.Feeding or AnimState.Hover => AnimPlayMode.Loop,
+            or AnimState.Panic or AnimState.Feeding or AnimState.Hover
+            or AnimState.WorkLoop or AnimState.Carry => AnimPlayMode.Loop,
         AnimState.Death or AnimState.Knockdown or AnimState.Fall
-            or AnimState.Sit or AnimState.Sleep => AnimPlayMode.PlayOnceHold,
+            or AnimState.Sit or AnimState.Sleep
+            or AnimState.WorkStart or AnimState.WorkEnd
+            or AnimState.Pickup or AnimState.PutDown => AnimPlayMode.PlayOnceHold,
         _ => AnimPlayMode.PlayOnceTransition
     };
 
@@ -560,7 +576,9 @@ public class AnimController
             or AnimState.BlockBreak or AnimState.Knockdown or AnimState.Standup
             or AnimState.JumpTakeoff or AnimState.JumpLoop or AnimState.JumpLand
             or AnimState.JumpAttackSetup or AnimState.JumpAttackHit
-            or AnimState.Death => true,
+            or AnimState.Death
+            or AnimState.WorkStart or AnimState.WorkLoop or AnimState.WorkEnd
+            or AnimState.Pickup or AnimState.PutDown => true,
         _ => false
     };
 
@@ -578,7 +596,9 @@ public class AnimController
         AnimState.Block => 2,
         AnimState.Attack1 or AnimState.Attack2 or AnimState.Attack3
             or AnimState.Spell1 or AnimState.Special1 or AnimState.Standup
-            or AnimState.Ranged1 => 3,
+            or AnimState.Ranged1
+            or AnimState.WorkStart or AnimState.WorkLoop or AnimState.WorkEnd
+            or AnimState.Pickup or AnimState.PutDown => 3,
         AnimState.Dodge or AnimState.BlockReact => 4,
         AnimState.JumpTakeoff or AnimState.JumpLoop or AnimState.JumpLand
             or AnimState.JumpAttackSetup or AnimState.JumpAttackHit => 5,

@@ -31,6 +31,9 @@ public struct Vec2
     public Vec2 PerpCW() => new(Y, -X);
     public Vec2 PerpCCW() => new(-Y, X);
 
+    public static Vec2 Lerp(Vec2 a, Vec2 b, float t) =>
+        new(a.X + (b.X - a.X) * t, a.Y + (b.Y - a.Y) * t);
+
     public override string ToString() => $"({X:F2}, {Y:F2})";
 }
 
