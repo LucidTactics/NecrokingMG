@@ -99,14 +99,14 @@ float4 MainPS(VSOutput input) : COLOR0
     float3 color = GlyphColor;
 
     float rot = Rotation;
-    float slowRot = Time * 0.2;
+    float slowRot = 0.0;
 
     // ─── Outer circle (thick, glowing) ───
-    float outer = Ring(dist, 0.90, 0.038);
+    float outer = Ring(dist, 0.90, 0.076);
     alpha += outer * 0.9;
 
     // ─── Outer decorative ring ───
-    float outerThin = Ring(dist, 0.95, 0.018);
+    float outerThin = Ring(dist, 0.95, 0.036);
     alpha += outerThin * 0.5;
 
     // ─── Rune marks between outer rings ───
@@ -120,16 +120,16 @@ float4 MainPS(VSOutput input) : COLOR0
     }
 
     // ─── Inner circle ───
-    float inner = Ring(dist, 0.70, 0.027);
+    float inner = Ring(dist, 0.70, 0.054);
     alpha += inner * 0.8;
 
     // ─── Pentagram (connected to inner circle) ───
-    float penta = Pentagram(uv, 0.70, rot + slowRot, 0.027);
+    float penta = Pentagram(uv, 0.70, rot + slowRot, 0.054);
     alpha += penta * 0.85;
     color = lerp(color, GlyphColor2, penta * 0.3);
 
     // ─── Small inner circle at center ───
-    float centerRing = Ring(dist, 0.18, 0.018);
+    float centerRing = Ring(dist, 0.18, 0.036);
     alpha += centerRing * 0.7;
 
     // ─── Center dot ───
@@ -182,8 +182,8 @@ float4 MainPS(VSOutput input) : COLOR0
     // ─── Edge fade ───
     alpha *= smoothstep(1.0, 0.92, dist);
 
-    // ─── Dormant dimming ───
-    alpha *= lerp(0.5, 1.0, Activation);
+    // ─── Dormant dimming (subtle) ───
+    alpha *= lerp(0.85, 1.0, Activation);
 
     // ─── Apply intensity ───
     alpha *= Intensity;

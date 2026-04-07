@@ -149,6 +149,19 @@ public class DeerHerdHandler : IArchetypeHandler
             }
         }
 
+        // Male deer: if fleeing but actually engaged in combat, fight back
+        if (isMale && ctx.Routine == RoutineFleeing && ctx.Units[ctx.UnitIndex].InCombat)
+        {
+            if (ShouldFightBack(ref ctx))
+            {
+                ctx.Routine = RoutineFightBack;
+                ctx.Subroutine = FightStance;
+                ctx.SubroutineTimer = 0f;
+                ctx.Units[ctx.UnitIndex].Target = CombatTarget.Unit(ctx.AlertTarget);
+                return;
+            }
+        }
+
         // Time of day for idle routines
         if (ctx.Routine <= RoutineSleeping)
         {
@@ -348,16 +361,7 @@ public class DeerHerdHandler : IArchetypeHandler
 
             if (AnyHostileWithinThreshold(ref ctx))
             {
-                // Threat is close — escalate
-                if (isMale && ShouldFightBack(ref ctx))
-                {
-                    ctx.Routine = RoutineFightBack;
-                    ctx.Subroutine = FightStance;
-                    ctx.SubroutineTimer = 0f;
-                    ctx.Units[ctx.UnitIndex].Target = CombatTarget.Unit(ctx.AlertTarget);
-                    return;
-                }
-                else
+                // Threat is close — escalate (always flee, FightBack kept for future use)
                 {
                     ctx.Routine = RoutineFleeing;
                     ctx.Subroutine = 0;

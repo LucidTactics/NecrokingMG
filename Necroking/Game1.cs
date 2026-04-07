@@ -108,6 +108,9 @@ public class Game1 : Microsoft.Xna.Framework.Game
     private bool _gameOver;
     private float _gameTime;
     private float _timeScale = 1f;
+
+    // Glyph trap placement mode
+    private bool _trapPlacementActive;
     private PendingSpellCast _pendingSpell = new();
     private PendingCastAnim? _pendingCastAnim;
     private SpellBarState _spellBarState = new();
@@ -262,6 +265,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         DebugLog.Log("startup", "=== Necroking MG Startup ===");
 
         // Register AI archetypes
+        AI.ArchetypeRegistry.Register(AI.ArchetypeRegistry.PlayerControlled, "PlayerControlled", new AI.PlayerControlledHandler());
         AI.ArchetypeRegistry.Register(AI.ArchetypeRegistry.WolfPack, "WolfPack", new AI.WolfPackHandler());
         AI.ArchetypeRegistry.Register(AI.ArchetypeRegistry.DeerHerd, "DeerHerd", new AI.DeerHerdHandler());
         AI.ArchetypeRegistry.Register(AI.ArchetypeRegistry.HordeMinion, "HordeMinion", new AI.HordeMinionHandler());
@@ -835,7 +839,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 {
                     UnitIndex = idx, Units = _sim.UnitsMut, Dt = 0, FrameNumber = 0,
                     GameData = _gameData, Pathfinder = _sim.Pathfinder,
-                    Horde = _sim.Horde, TriggerSystem = _triggerSystem,
+                    Horde = _sim.Horde, TriggerSystem = _triggerSystem, MagicGlyphs = _sim.MagicGlyphs,
                     GameTime = _sim.GameTime, DayTime = dayFraction, IsNight = dayFraction >= 0.5f,
                 };
                 handler.OnSpawn(ref ctx);
@@ -2117,15 +2121,83 @@ public class Game1 : Microsoft.Xna.Framework.Game
             if (_input.WasKeyPressed(Keys.G) && necroIdx >= 0)
                 _sim.UnitsMut[necroIdx].GhostMode = !_sim.Units[necroIdx].GhostMode;
 
-            // --- Place magic glyph (T) --- (temp debug shortcut)
+            // --- Glyph trap placement (T key) ---
+            const float GlyphRadius = 1.125f;
             if (_input.WasKeyPressed(Keys.T))
+                _trapPlacementActive = !_trapPlacementActive;
+            if (_trapPlacementActive && (_input.WasKeyPressed(Keys.Escape) || _input.RightPressed))
+                _trapPlacementActive = false;
+
+            // Place glyph blueprint on click
+            if (_trapPlacementActive && _input.LeftPressed && necroIdx >= 0)
             {
-                var g = _sim.MagicGlyphs.SpawnGlyph(mouseWorld, 1.125f, Faction.Undead);
-                g.Color = new HdrColor(140, 80, 200, 255, 1.5f);
-                g.Color2 = new HdrColor(200, 160, 255, 255, 2.0f);
-                g.TriggerDuration = 1.0f;
-                g.ActiveDuration = 4f;
-                g.Damage = 15;
+                var mw = new Vec2(mouseWorld.X, mouseWorld.Y);
+                if (_sim.MagicGlyphs.CanPlace(mw, GlyphRadius))
+                {
+                    var glyph = _sim.MagicGlyphs.SpawnBlueprint(mw, GlyphRadius, Faction.Undead);
+                    glyph.Color = new HdrColor(140, 80, 200, 255, 1.5f);
+                    glyph.Color2 = new HdrColor(200, 160, 255, 255, 2.0f);
+                    glyph.TriggerDuration = 0.5f;
+                    glyph.ActiveDuration = 4f;
+                    glyph.Damage = 15;
+
+                    int glyphIdx = _sim.MagicGlyphs.IndexOf(glyph);
+                    _trapPlacementActive = false;
+
+                    // Start building (walk or immediate)
+                    var np = _sim.Units[necroIdx].Position;
+                    float dist = (mw - np).Length();
+                    _sim.UnitsMut[necroIdx].BuildGlyphIdx = glyphIdx;
+                    _sim.UnitsMut[necroIdx].BuildTimer = 0f;
+                    if (dist <= AI.PlayerControlledHandler.InteractRange)
+                    {
+                        _sim.UnitsMut[necroIdx].Routine = AI.PlayerControlledHandler.RoutineBuildGlyph;
+                        _sim.UnitsMut[necroIdx].Subroutine = AI.PlayerControlledHandler.BuildSub_WorkStart;
+                        _sim.UnitsMut[necroIdx].CorpseInteractPhase = 1;
+                        _sim.UnitsMut[necroIdx].PreferredVel = Vec2.Zero;
+                    }
+                    else
+                    {
+                        _sim.UnitsMut[necroIdx].Routine = AI.PlayerControlledHandler.RoutineBuildGlyph;
+                        _sim.UnitsMut[necroIdx].Subroutine = AI.PlayerControlledHandler.BuildSub_WalkToSite;
+                    }
+                }
+            }
+
+            // Click on existing blueprint glyph to build it
+            if (!_trapPlacementActive && _input.LeftPressed && necroIdx >= 0
+                && _sim.Units[necroIdx].Routine == 0 && _sim.Units[necroIdx].CorpseInteractPhase == 0)
+            {
+                float bestDist = 2f * 2f;
+                int bestGlyphIdx = -1;
+                var mw = new Vec2(mouseWorld.X, mouseWorld.Y);
+                for (int gi = 0; gi < _sim.MagicGlyphs.Glyphs.Count; gi++)
+                {
+                    var g = _sim.MagicGlyphs.Glyphs[gi];
+                    if (!g.Alive || g.State != GameSystems.GlyphState.Blueprint) continue;
+                    float d = (g.Position - mw).LengthSq();
+                    if (d < bestDist) { bestDist = d; bestGlyphIdx = gi; }
+                }
+                if (bestGlyphIdx >= 0)
+                {
+                    var g = _sim.MagicGlyphs.Glyphs[bestGlyphIdx];
+                    var np = _sim.Units[necroIdx].Position;
+                    float dist = (g.Position - np).Length();
+                    _sim.UnitsMut[necroIdx].BuildGlyphIdx = bestGlyphIdx;
+                    _sim.UnitsMut[necroIdx].BuildTimer = 0f;
+                    if (dist <= AI.PlayerControlledHandler.InteractRange)
+                    {
+                        _sim.UnitsMut[necroIdx].Routine = AI.PlayerControlledHandler.RoutineBuildGlyph;
+                        _sim.UnitsMut[necroIdx].Subroutine = AI.PlayerControlledHandler.BuildSub_WorkStart;
+                        _sim.UnitsMut[necroIdx].CorpseInteractPhase = 1;
+                        _sim.UnitsMut[necroIdx].PreferredVel = Vec2.Zero;
+                    }
+                    else
+                    {
+                        _sim.UnitsMut[necroIdx].Routine = AI.PlayerControlledHandler.RoutineBuildGlyph;
+                        _sim.UnitsMut[necroIdx].Subroutine = AI.PlayerControlledHandler.BuildSub_WalkToSite;
+                    }
+                }
             }
 
             // --- Secondary spell bar (keys 1-4) ---
@@ -3221,6 +3293,15 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 continue;
             }
 
+            // Force out of work anims if interaction was cancelled (WASD override)
+            if (_sim.Units[i].CorpseInteractPhase == 0)
+            {
+                var cur = animData.Ctrl.CurrentState;
+                if (cur == AnimState.WorkStart || cur == AnimState.WorkLoop || cur == AnimState.WorkEnd
+                    || cur == AnimState.Pickup || cur == AnimState.PutDown)
+                    animData.Ctrl.ForceState(AnimState.Idle);
+            }
+
             // --- Corpse interaction state machine ---
             // PlayOnceHold states: ForceState on entry, IsAnimFinished for completion
             if (_sim.Units[i].CorpseInteractPhase != 0)
@@ -3244,17 +3325,22 @@ public class Game1 : Microsoft.Xna.Framework.Game
                     case 2: // WorkLoop (Loop — timer driven)
                         if (animData.Ctrl.CurrentState != AnimState.WorkLoop)
                             animData.Ctrl.ForceState(AnimState.WorkLoop);
-                        _sim.UnitsMut[i].BaggingTimer += dt;
+                        // Corpse bagging drives timer here; trap building is driven by handler
+                        if (_sim.Units[i].Routine == 0) // not in a handler routine
                         {
-                            var bc = _sim.FindCorpseByID(_sim.Units[i].BaggingCorpseID);
-                            if (bc != null)
-                                bc.BaggingProgress = Math.Min(1f, _sim.Units[i].BaggingTimer / BaggingDuration);
+                            _sim.UnitsMut[i].BaggingTimer += dt;
+                            {
+                                var bc = _sim.FindCorpseByID(_sim.Units[i].BaggingCorpseID);
+                                if (bc != null)
+                                    bc.BaggingProgress = Math.Min(1f, _sim.Units[i].BaggingTimer / BaggingDuration);
+                            }
+                            if (_sim.Units[i].BaggingTimer >= BaggingDuration)
+                            {
+                                _sim.UnitsMut[i].CorpseInteractPhase = 3;
+                                animData.Ctrl.ForceState(AnimState.WorkEnd);
+                            }
                         }
-                        if (_sim.Units[i].BaggingTimer >= BaggingDuration)
-                        {
-                            _sim.UnitsMut[i].CorpseInteractPhase = 3;
-                            animData.Ctrl.ForceState(AnimState.WorkEnd);
-                        }
+                        // else: handler controls timer and transitions CorpseInteractPhase
                         break;
 
                     case 3: // WorkEnd (PlayOnceHold)
@@ -3262,14 +3348,17 @@ public class Game1 : Microsoft.Xna.Framework.Game
                             animData.Ctrl.ForceState(AnimState.WorkEnd);
                         if (animData.Ctrl.IsAnimFinished)
                         {
-                            var bc = _sim.FindCorpseByID(_sim.Units[i].BaggingCorpseID);
-                            if (bc != null)
+                            if (_sim.Units[i].Routine == 0) // corpse bagging
                             {
-                                bc.Bagged = true;
-                                bc.BaggingProgress = 0f;
-                                bc.BaggedByUnitID = GameConstants.InvalidUnit;
+                                var bc = _sim.FindCorpseByID(_sim.Units[i].BaggingCorpseID);
+                                if (bc != null)
+                                {
+                                    bc.Bagged = true;
+                                    bc.BaggingProgress = 0f;
+                                    bc.BaggedByUnitID = GameConstants.InvalidUnit;
+                                }
+                                _sim.UnitsMut[i].BaggingCorpseID = -1;
                             }
-                            _sim.UnitsMut[i].BaggingCorpseID = -1;
                             _sim.UnitsMut[i].CorpseInteractPhase = 0;
                             animData.Ctrl.ForceState(AnimState.Idle);
                         }
@@ -3686,6 +3775,16 @@ public class Game1 : Microsoft.Xna.Framework.Game
         _glyphRenderer.SetContext(_spriteBatch, _pixel, _glowTex, _camera, _renderer, _flipbooks, _gameTime);
         _glyphRenderer.DrawGround(_sim.MagicGlyphs);
 
+        // Build progress bars for blueprint glyphs
+        foreach (var g in _sim.MagicGlyphs.Glyphs)
+        {
+            if (g.State == GameSystems.GlyphState.Blueprint && g.BuildProgress > 0f && g.Alive)
+            {
+                var gsp = _renderer.WorldToScreen(g.Position, 0f, _camera);
+                DrawBuildProgressBar(gsp, g.BuildProgress, g.Radius);
+            }
+        }
+
         // --- Walls ---
         DrawWalls();
 
@@ -3856,6 +3955,18 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 Vec2 mw = _camera.ScreenToWorld(_input.MousePos, screenW, screenH);
                 var sp = _renderer.WorldToScreen(mw, 0f, _camera);
                 _buildingMenuUI.DrawGhostPreview(_spriteBatch, _pixel, mw, sp, _camera, _renderer);
+            }
+
+            // Ghost preview for glyph trap placement (T key)
+            if (_trapPlacementActive)
+            {
+                Vec2 mw = _camera.ScreenToWorld(_input.MousePos, screenW, screenH);
+                var sp = _renderer.WorldToScreen(mw, 0f, _camera);
+                const float glyphR = 1.125f;
+                bool canPlace = _sim.MagicGlyphs.CanPlace(mw, glyphR);
+                float radiusPx = glyphR * _camera.Zoom;
+                Render.DrawUtils.DrawCircleOutline(_spriteBatch, _pixel, sp, radiusPx,
+                    canPlace ? new Color(50, 200, 50, 120) : new Color(200, 50, 50, 120), 24);
             }
         }
 
@@ -4333,6 +4444,30 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
         _spriteBatch.Draw(_pixel, new Rectangle((int)barX - 1, (int)barY - 1, (int)barW + 2, (int)barH + 2), new Color(0, 0, 0, 180));
         _spriteBatch.Draw(_pixel, new Rectangle((int)barX, (int)barY, (int)(barW * progress), (int)barH), new Color(220, 180, 40));
+    }
+
+
+
+    private void DrawBuildProgressBar(Vector2 screenPos, float progress, float worldRadius = 0f)
+    {
+        float barW, barY;
+        if (worldRadius > 0f)
+        {
+            float screenRadiusX = worldRadius * _camera.Zoom;
+            float screenRadiusY = screenRadiusX * _camera.YRatio;
+            barW = screenRadiusX * 2f;
+            barY = screenPos.Y - screenRadiusY - 6f; // above the top of the circle
+        }
+        else
+        {
+            barW = 30f;
+            barY = screenPos.Y - 22f;
+        }
+        float barH = 3f;
+        float barX = screenPos.X - barW / 2f;
+
+        _spriteBatch.Draw(_pixel, new Rectangle((int)barX - 1, (int)barY - 1, (int)barW + 2, (int)barH + 2), new Color(0, 0, 0, 180));
+        _spriteBatch.Draw(_pixel, new Rectangle((int)barX, (int)barY, (int)(barW * progress), (int)barH), new Color(80, 180, 220));
     }
 
     private void DrawCarriedBodyBag(int unitIdx, Vector2 unitScreenPos, float unitScale, float facingAngle)
@@ -4831,7 +4966,19 @@ public class Game1 : Microsoft.Xna.Framework.Game
             }
         }
 
+        // Blueprint visual: semi-transparent with blue tint
+        var rt = _envSystem.GetObjectRuntime(i);
+        if (rt.BuildProgress < 1f)
+        {
+            float bpAlpha = 0.35f + 0.15f * rt.BuildProgress; // 0.35 → 0.5 as progress increases
+            tint = new Color(0.5f * bpAlpha, 0.7f * bpAlpha, 1f * bpAlpha, bpAlpha);
+        }
+
         _spriteBatch.Draw(tex, screenPos, null, tint, rotation, origin, scale, SpriteEffects.None, 0f);
+
+        // Build progress bar for unbuilt objects
+        if (rt.BuildProgress > 0f && rt.BuildProgress < 1f)
+            DrawBuildProgressBar(screenPos, rt.BuildProgress);
     }
 
     private void DrawSpriteFrame(SpriteAtlas atlas, SpriteFrame frame, Vector2 screenPos,

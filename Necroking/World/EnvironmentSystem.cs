@@ -208,8 +208,9 @@ public struct PlacedObjectRuntime
     public TrapVisualState TrapState; // current visual state
     public float TrapStateTimer;    // time remaining in current state
     public bool TrapExpended;       // true when uses depleted (fading out)
+    public float BuildProgress;    // 0 = blueprint, 1 = fully built (default 1 for non-buildable)
 
-    public PlacedObjectRuntime() { HP = 0; Owner = 1; Alive = true; Collected = false; RespawnTimer = 0f; }
+    public PlacedObjectRuntime() { HP = 0; Owner = 1; Alive = true; Collected = false; RespawnTimer = 0f; BuildProgress = 1f; }
 }
 
 public class EnvironmentSystem
@@ -293,7 +294,18 @@ public class EnvironmentSystem
     public int ObjectCount => _objects.Count;
     public PlacedObject GetObject(int idx) => _objects[idx];
     public PlacedObjectRuntime GetObjectRuntime(int idx) => _objectRuntime[idx];
+    public void SetObjectRuntime(int idx, PlacedObjectRuntime rt) => _objectRuntime[idx] = rt;
     public BuildingProcessState GetProcessState(int idx) => _processState[idx];
+
+    /// <summary>Add an object as an unbuilt blueprint (BuildProgress = 0).</summary>
+    public int AddObjectAsBlueprint(ushort defIndex, float x, float y, float scale = 1f)
+    {
+        int idx = AddObject(defIndex, x, y, scale);
+        var rt = _objectRuntime[idx];
+        rt.BuildProgress = 0f;
+        _objectRuntime[idx] = rt;
+        return idx;
+    }
 
     /// <summary>
     /// Collect a foragable object. Returns the ForagableType string, or null if not foragable/already collected.
@@ -364,6 +376,7 @@ public class EnvironmentSystem
             var rt = _objectRuntime[i];
             if (!rt.Alive || rt.Collected) continue;
             if (rt.TrapUsesRemaining < 0) continue; // -1 = not a trap
+            if (rt.BuildProgress < 1f) continue; // unbuilt traps don't trigger
 
             var def = _defs[_objects[i].DefIndex];
             if (string.IsNullOrEmpty(def.TrapSpellId)) continue;

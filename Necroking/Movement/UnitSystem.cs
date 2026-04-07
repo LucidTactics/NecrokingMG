@@ -92,6 +92,11 @@ public class Unit
     public float BaggingTimer;              // elapsed time during bagging
     public byte CorpseInteractPhase;        // 0=none, 1=WorkStart, 2=WorkLoop, 3=WorkEnd, 4=Pickup, 5=PutDown
 
+    // Building interaction
+    public int BuildTargetIdx = -1;         // env object index being built (-1 = none)
+    public int BuildGlyphIdx = -1;          // glyph index being built (-1 = none)
+    public float BuildTimer;                // elapsed time during building
+
     // Spawn/Raid/Patrol
     public int SpawnBuildingIdx = -1;
     public int RaidTargetIdx = -1;

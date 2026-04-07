@@ -2,9 +2,9 @@
   "bloom": {
     "enabled": true,
     "threshold": 1.0001,
-    "softKnee": 0.25384617,
-    "intensity": 1,
-    "scatter": 0.50384617,
+    "softKnee": 0.5,
+    "intensity": 1.9897959,
+    "scatter": 0.8,
     "iterations": 6,
     "bicubicUpsampling": true
   },

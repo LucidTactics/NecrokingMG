@@ -24,6 +24,7 @@ public ref struct AIContext
     public GameSystems.TriggerSystem? TriggerSystem;
     public World.EnvironmentSystem? EnvSystem;
     public GameSystems.ProjectileManager? Projectiles;
+    public GameSystems.MagicGlyphSystem? MagicGlyphs;
 
     // Game clock
     public float GameTime;          // total elapsed seconds

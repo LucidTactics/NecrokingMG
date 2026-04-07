@@ -7,7 +7,7 @@ using Necroking.Spatial;
 
 namespace Necroking.GameSystems;
 
-public enum GlyphState : byte { Dormant, Triggering, Active, Fading }
+public enum GlyphState : byte { Blueprint, Dormant, Triggering, Active, Fading }
 
 public class MagicGlyph
 {
@@ -21,7 +21,7 @@ public class MagicGlyph
     public HdrColor Color = new(140, 80, 200, 255, 1.5f);      // Primary color
     public HdrColor Color2 = new(200, 160, 255, 255, 2.0f);     // Secondary / inner color
     public float PulseSpeed = 2f;
-    public float RotationSpeed = 0.3f;
+    public float RotationSpeed = 0f;
     public int SymbolCount = 6;
 
     // Timing
@@ -37,8 +37,12 @@ public class MagicGlyph
     public bool Alive = true;
 
     // Derived
+    // Build progress: 0 when placed as blueprint, set to 1 when building completes
+    public float BuildProgress;
+
     public float Activation => State switch
     {
+        GlyphState.Blueprint => 0f,
         GlyphState.Dormant => 0f,
         GlyphState.Triggering => MathF.Min(StateTimer / TriggerDuration, 1f),
         GlyphState.Active => 1f,
@@ -48,9 +52,10 @@ public class MagicGlyph
 
     public float Intensity => State switch
     {
-        GlyphState.Dormant => 0.6f,
-        GlyphState.Triggering => 0.6f + 3.4f * Activation, // Charge up to 4x
-        GlyphState.Active => MathF.Max(0.8f, 4f - StateTimer / ActiveDuration * 3.2f), // Peak 4x, decays
+        GlyphState.Blueprint => 0.15f + 0.15f * BuildProgress, // dim, brightens as built
+        GlyphState.Dormant => 0.8f,
+        GlyphState.Triggering => 0.6f + 3.4f * Activation,
+        GlyphState.Active => MathF.Max(0.8f, 4f - StateTimer / ActiveDuration * 3.2f),
         GlyphState.Fading => MathF.Max(0.05f, 1f - StateTimer / FadeDuration),
         _ => 0f
     };
@@ -81,6 +86,45 @@ public class MagicGlyphSystem
         return glyph;
     }
 
+    public MagicGlyph SpawnBlueprint(Vec2 position, float radius, Faction owner)
+    {
+        var glyph = new MagicGlyph
+        {
+            Position = position,
+            Radius = radius,
+            OwnerFaction = owner,
+            State = GlyphState.Blueprint,
+            BuildProgress = 0f,
+        };
+        _glyphs.Add(glyph);
+        return glyph;
+    }
+
+    /// <summary>Get the list index of a glyph, or -1.</summary>
+    public int IndexOf(MagicGlyph glyph)
+    {
+        for (int i = 0; i < _glyphs.Count; i++)
+            if (_glyphs[i] == glyph) return i;
+        return -1;
+    }
+
+    public MagicGlyph? GetGlyph(int index) =>
+        index >= 0 && index < _glyphs.Count ? _glyphs[index] : null;
+
+    /// <summary>Check if a glyph can be placed (no overlap with existing glyphs).</summary>
+    public bool CanPlace(Vec2 position, float radius)
+    {
+        for (int i = 0; i < _glyphs.Count; i++)
+        {
+            if (!_glyphs[i].Alive) continue;
+            float minDist = _glyphs[i].Radius + radius;
+            float dx = _glyphs[i].Position.X - position.X;
+            float dy = _glyphs[i].Position.Y - position.Y;
+            if (dx * dx + dy * dy < minDist * minDist) return false;
+        }
+        return true;
+    }
+
     private readonly List<DamageEvent> _damageEvents = new();
     public IReadOnlyList<DamageEvent> DamageEvents => _damageEvents;
 
@@ -95,10 +139,15 @@ public class MagicGlyphSystem
             if (!g.Alive) { _glyphs.RemoveAt(i); continue; }
 
             g.Age += dt;
-            g.StateTimer += dt;
+            if (g.State != GlyphState.Blueprint)
+                g.StateTimer += dt;
 
             switch (g.State)
             {
+                case GlyphState.Blueprint:
+                    // Inert until built — rendering uses Intensity/BuildProgress
+                    break;
+
                 case GlyphState.Dormant:
                     // Check for enemy units stepping on it
                     nearbyIDs.Clear();

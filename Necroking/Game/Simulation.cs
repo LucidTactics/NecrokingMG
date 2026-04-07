@@ -374,7 +374,8 @@ public class Simulation
             if (_units[i].Jumping || _units[i].KnockdownTimer > 0f) { _units[i].PreferredVel = Vec2.Zero; continue; }
 
             // New archetype system: if Archetype > 0, dispatch to handler
-            if (_units[i].Archetype > 0)
+            // (PlayerControlled units are handled in the legacy switch below)
+            if (_units[i].Archetype > 0 && _units[i].AI != AIBehavior.PlayerControlled)
             {
                 var handler = AI.ArchetypeRegistry.Get(_units[i].Archetype);
                 if (handler != null)
@@ -384,7 +385,7 @@ public class Simulation
                         UnitIndex = i, Units = _units, Dt = dt, FrameNumber = (int)_frameNumber,
                         GameData = _gameData, Pathfinder = _pathfinder, Quadtree = _quadtree,
                         Horde = _horde, TriggerSystem = _triggerSystem, EnvSystem = _envSystem,
-                        Projectiles = _projectiles,
+                        Projectiles = _projectiles, MagicGlyphs = _magicGlyphs,
                         GameTime = _gameTime, DayTime = dayFraction, IsNight = isNight,
                     };
                     handler.Update(ref ctx);
@@ -415,11 +416,42 @@ public class Simulation
                         speed *= 1.8f;
                     _units[i].MaxSpeed = speed; // update so ORCA + accel cap respect current speed
 
-                    // Immobilize during corpse interaction animations
-                    if (_units[i].CorpseInteractPhase != 0)
-                        _units[i].PreferredVel = Vec2.Zero;
+                    // Dispatch to PlayerControlledHandler for structured activities
+                    if (_units[i].Routine != 0)
+                    {
+                        var handler = AI.ArchetypeRegistry.Get(AI.ArchetypeRegistry.PlayerControlled);
+                        if (handler != null)
+                        {
+                            var ctx = new AI.AIContext
+                            {
+                                UnitIndex = i, Units = _units, Dt = dt, FrameNumber = (int)_frameNumber,
+                                GameData = _gameData, Pathfinder = _pathfinder, Quadtree = _quadtree,
+                                Horde = _horde, TriggerSystem = _triggerSystem, EnvSystem = _envSystem,
+                                Projectiles = _projectiles, MagicGlyphs = _magicGlyphs,
+                                GameTime = _gameTime, DayTime = dayFraction, IsNight = isNight,
+                            };
+                            handler.Update(ref ctx);
+                        }
+
+                        // Player movement cancels active routines (WASD override)
+                        if (_necroMoveInput.LengthSq() > 0.01f && _units[i].Routine != 0)
+                        {
+                            _units[i].Routine = 0;
+                            _units[i].Subroutine = 0;
+                            _units[i].CorpseInteractPhase = 0;
+                            _units[i].BuildTargetIdx = -1;
+                            _units[i].BuildGlyphIdx = -1;
+                            _units[i].BuildTimer = 0f;
+                        }
+                    }
                     else
-                        _units[i].PreferredVel = _necroMoveInput * speed;
+                    {
+                        // Normal player control
+                        if (_units[i].CorpseInteractPhase != 0)
+                            _units[i].PreferredVel = Vec2.Zero;
+                        else
+                            _units[i].PreferredVel = _necroMoveInput * speed;
+                    }
                     break;
                 }
 
