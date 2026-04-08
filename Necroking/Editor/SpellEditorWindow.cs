@@ -365,13 +365,17 @@ public class SpellEditorWindow
             }
         }
 
-        float drawItemY = listY - scrollKey;
+        // Use integer scroll offset — avoids float truncation misalignment between
+        // hitbox rects and draw positions. The item rect is the single source of truth
+        // for both click detection and rendering.
+        int scrollInt = (int)scrollKey;
         for (int i = 0; i < _filteredIds.Count; i++)
         {
-            if (drawItemY + itemH < listY) { drawItemY += itemH; continue; }
-            if (drawItemY >= listY + listH) break;
+            int iy = listY + i * itemH - scrollInt;
+            if (iy + itemH < listY) continue;
+            if (iy >= listY + listH) break;
 
-            var itemRect = new Rectangle(x + 2, (int)drawItemY, w - 4, itemH);
+            var itemRect = new Rectangle(x + 2, iy, w - 4, itemH);
             bool hovered = itemRect.Contains(_ui._mouse.X, _ui._mouse.Y) && listRect.Contains(_ui._mouse.X, _ui._mouse.Y);
             bool isSelected = (i == filteredSelectedIdx);
 
@@ -380,34 +384,30 @@ public class SpellEditorWindow
             else if (hovered) bg = EditorBase.ItemHover;
             else bg = (i % 2 == 0) ? new Color(30, 30, 48, 200) : new Color(25, 25, 40, 200);
 
-            if (drawItemY + itemH > listY && drawItemY < listY + listH)
+            _ui.DrawRect(itemRect, bg);
+
+            // Category color circle
+            var def = _gameData.Spells.Get(_filteredIds[i]);
+            if (def != null)
             {
-                _ui.DrawRect(itemRect, bg);
-
-                // Category color circle
-                var def = _gameData.Spells.Get(_filteredIds[i]);
-                if (def != null)
-                {
-                    Color catColor = GetCategoryColor(def.Category);
-                    int dotCX = x + 13;
-                    int dotCY = (int)(drawItemY + itemH / 2);
-                    DrawSmallFilledCircle(dotCX, dotCY, 4, catColor);
-                }
-
-                string displayName = displayItems[i];
-                _ui.DrawText(displayName, new Vector2(x + 22, drawItemY + 3),
-                    isSelected ? EditorBase.TextBright : EditorBase.TextColor);
-
-                if (hovered && _ui._mouse.LeftButton == ButtonState.Pressed &&
-                    _ui._prevMouse.LeftButton == ButtonState.Released)
-                {
-                    string clickedId = _filteredIds[i];
-                    var allIds = _gameData.Spells.GetIDs();
-                    _selectedIdx = IndexOf(allIds, clickedId);
-                    _detailScroll = 0;
-                }
+                Color catColor = GetCategoryColor(def.Category);
+                int dotCX = x + 13;
+                int dotCY = itemRect.Y + itemH / 2;
+                DrawSmallFilledCircle(dotCX, dotCY, 4, catColor);
             }
-            drawItemY += itemH;
+
+            string displayName = displayItems[i];
+            _ui.DrawText(displayName, new Vector2(itemRect.X + 20, itemRect.Y + 3),
+                isSelected ? EditorBase.TextBright : EditorBase.TextColor);
+
+            if (hovered && _ui._mouse.LeftButton == ButtonState.Pressed &&
+                _ui._prevMouse.LeftButton == ButtonState.Released)
+            {
+                string clickedId = _filteredIds[i];
+                var allIds = _gameData.Spells.GetIDs();
+                _selectedIdx = IndexOf(allIds, clickedId);
+                _detailScroll = 0;
+            }
         }
 
         // Scrollbar

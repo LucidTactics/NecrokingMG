@@ -45,6 +45,8 @@ public class PoisonCloud
 
     // Visual
     public float NoiseOffset;          // Per-cloud randomization
+    public byte ColorR = 90, ColorG = 180, ColorB = 55;   // Base cloud color
+    public byte GlowR = 80, GlowG = 255, GlowB = 40;     // Center glow color
 
     public CloudPhase Phase
     {
@@ -107,6 +109,12 @@ public class PoisonCloudSystem
             OwnerFaction = ownerFaction,
             Potency = 1f,
             NoiseOffset = (float)_rng.NextDouble() * 100f,
+            ColorR = spell.CloudColor.R,
+            ColorG = spell.CloudColor.G,
+            ColorB = spell.CloudColor.B,
+            GlowR = spell.CloudGlowColor.R,
+            GlowG = spell.CloudGlowColor.G,
+            GlowB = spell.CloudGlowColor.B,
         });
     }
 
@@ -122,8 +130,16 @@ public class PoisonCloudSystem
 
             cloud.Age += dt;
 
-            // Expire
-            if (cloud.Age >= cloud.Duration)
+            // Expire — also remove early if decay intensity is negligible
+            bool expired = cloud.Age >= cloud.Duration;
+            if (!expired && cloud.Phase == CloudPhase.Decay)
+            {
+                float decayProgress = (cloud.Age - cloud.EruptionDuration - cloud.SpreadDuration)
+                    / MathF.Max(cloud.Duration - cloud.EruptionDuration - cloud.SpreadDuration, 0.01f);
+                float decayIntensity = (1f - decayProgress) * (1f - decayProgress);
+                if (decayIntensity < 0.01f) expired = true;
+            }
+            if (expired)
             {
                 cloud.Alive = false;
                 _clouds.RemoveAt(ci);

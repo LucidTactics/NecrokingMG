@@ -284,6 +284,7 @@ public static class PotionSystem
                     // Deal poison damage: ceil(stacks / 10)
                     int dmg = (int)MathF.Ceiling(units[i].PoisonStacks / 10f);
                     units[i].Stats.HP -= dmg;
+                    if (dmg > 0) units[i].HitReacting = true;
                     units[i].PoisonStacks -= dmg;
                     if (units[i].PoisonStacks <= 0) units[i].PoisonStacks = 0;
 

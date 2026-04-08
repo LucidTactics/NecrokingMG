@@ -263,6 +263,69 @@ public class HUDRenderer
     }
 
     // ═══════════════════════════════════════
+    //  Hit Testing (shared layout with draw)
+    // ═══════════════════════════════════════
+
+    /// <summary>
+    /// Get the Y position and layout params for the primary spell bar.
+    /// Returns (barY, slotW, slotH, centerOffset).
+    /// </summary>
+    public (int barY, int slotW, int slotH, int centerOffset) GetPrimaryBarLayout(int screenH)
+    {
+        int barY = screenH - PrimaryBarBottomOffset;
+        return (barY, PrimarySlotW, PrimarySlotH, PrimaryBarOffsetX);
+    }
+
+    /// <summary>
+    /// Get the Y position and layout params for the secondary spell bar.
+    /// Returns (barY, slotW, slotH, centerOffset).
+    /// </summary>
+    public (int barY, int slotW, int slotH, int centerOffset) GetSecondaryBarLayout(int screenH)
+    {
+        int primaryY = screenH - PrimaryBarBottomOffset;
+        int barY = primaryY - SecondarySlotH - SecondaryBarGap;
+        return (barY, SecondarySlotW, SecondarySlotH, SecondaryBarOffsetX);
+    }
+
+    /// <summary>
+    /// Hit-test a spell bar slot. Returns slot index 0-3, or -1 if not hit.
+    /// Uses the same layout constants as drawing.
+    /// </summary>
+    public int HitTestBarSlot(int screenW, int barY, int slotW, int slotH, int centerOffset,
+        int mouseX, int mouseY)
+    {
+        if (mouseY < barY || mouseY >= barY + slotH) return -1;
+        for (int s = 0; s < 4; s++)
+        {
+            int slotX = screenW / 2 - centerOffset + s * (slotW + SlotSpacing);
+            if (mouseX >= slotX && mouseX < slotX + slotW)
+                return s;
+        }
+        return -1;
+    }
+
+    /// <summary>
+    /// Hit-test a spell dropdown. Returns item index (0 = None, 1+ = spell index),
+    /// or -1 if click is outside the dropdown.
+    /// Uses the exact same layout as DrawSpellDropdown.
+    /// </summary>
+    public int HitTestSpellDropdown(int screenW, int barY, int slotW, int centerOffset,
+        int openSlot, int totalSpells, int mouseX, int mouseY)
+    {
+        if (openSlot < 0 || openSlot >= 4) return -1;
+
+        int slotX = screenW / 2 - centerOffset + openSlot * (slotW + SlotSpacing);
+        int ddH = (totalSpells + 1) * DropdownItemH;
+        int ddY = barY - 10; // Same offset as DrawSpellDropdown
+        int ddLeft = slotX - 2;
+
+        if (mouseX < ddLeft || mouseX >= ddLeft + DropdownWidth) return -1;
+        if (mouseY < ddY - ddH || mouseY >= ddY) return -1;
+
+        return (ddY - mouseY) / DropdownItemH;
+    }
+
+    // ═══════════════════════════════════════
     //  Tooltips & Info
     // ═══════════════════════════════════════
 

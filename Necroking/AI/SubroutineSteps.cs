@@ -272,6 +272,44 @@ public static class SubroutineSteps
         ctx.Units[ctx.UnitIndex].PreferredVel = Vec2.Zero;
     }
 
+    /// <summary>Flee in a random direction for a given distance. Call once to set MoveTarget,
+    /// then use MoveToPosition + MoveToPosition_Arrived to drive movement.</summary>
+    public static void SetFleeRandomTarget(ref AIContext ctx, float distance)
+    {
+        int i = ctx.UnitIndex;
+        // Pick pseudo-random angle based on unit index and frame
+        float angle = ((ctx.FrameNumber * 7 + i * 31) % 628) / 100f;
+        var target = ctx.MyPos + new Vec2(MathF.Cos(angle) * distance, MathF.Sin(angle) * distance);
+
+        // Try to pick a walkable tile (up to 5 attempts)
+        var grid = ctx.Pathfinder?.Grid;
+        if (grid != null)
+        {
+            for (int attempt = 0; attempt < 5; attempt++)
+            {
+                int tx = (int)MathF.Floor(target.X);
+                int ty = (int)MathF.Floor(target.Y);
+                if (tx >= 0 && ty >= 0 && grid.GetCost(tx, ty) != 255) break;
+                angle += 1.26f; // ~72 degrees
+                target = ctx.MyPos + new Vec2(MathF.Cos(angle) * distance, MathF.Sin(angle) * distance);
+            }
+        }
+
+        ctx.Units[i].MoveTarget = target;
+    }
+
+    /// <summary>Flee away from a specific position for a given distance.</summary>
+    public static void SetFleeFromTarget(ref AIContext ctx, Vec2 threatPos, float distance)
+    {
+        int i = ctx.UnitIndex;
+        var dir = ctx.MyPos - threatPos;
+        if (dir.LengthSq() > 0.01f)
+            dir = dir.Normalized();
+        else
+            dir = new Vec2(1f, 0f); // arbitrary fallback
+        ctx.Units[i].MoveTarget = ctx.MyPos + dir * distance;
+    }
+
     // ═══════════════════════════════════════
     //  Helpers
     // ═══════════════════════════════════════

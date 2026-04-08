@@ -510,6 +510,18 @@ public class SpellDef : IHasId
     [EditorField(Label = "Plague Threshold", Group = "CLOUD", Order = 832, Step = 0.1f, Decimals = 1)]
     [JsonPropertyName("cloudPlagueThreshold")] public float CloudPlagueThreshold { get; set; } = 3.0f;
 
+    [EditorVisible("Category", "Cloud")]
+    [EditorField(Label = "Cloud Color", Group = "CLOUD", Order = 835, Compact = true)]
+    [JsonPropertyName("cloudColor")]
+    [JsonConverter(typeof(HdrColorJsonConverter))]
+    public HdrColor CloudColor { get; set; } = new(90, 180, 55, 255, 1.0f);
+
+    [EditorVisible("Category", "Cloud")]
+    [EditorField(Label = "Glow Color", Group = "CLOUD", Order = 836, Compact = true)]
+    [JsonPropertyName("cloudGlowColor")]
+    [JsonConverter(typeof(HdrColorJsonConverter))]
+    public HdrColor CloudGlowColor { get; set; } = new(80, 255, 40, 255, 1.0f);
+
     // Toggle (hidden from editor — internal)
     [EditorHide]
     [JsonPropertyName("toggleEffect")] public string ToggleEffect { get; set; } = "";

@@ -102,6 +102,7 @@ public class Simulation
         return idx >= 0 ? _corpses[idx] : null;
     }
     public IReadOnlyList<DamageEvent> DamageEvents => _damageEvents;
+    public void AddDamageEvent(DamageEvent evt) => _damageEvents.Add(evt);
     public IReadOnlyList<SoulOrb> SoulOrbs => _soulOrbs;
     public ProjectileManager Projectiles => _projectiles;
     public LightningSystem Lightning => _lightning;
@@ -208,6 +209,9 @@ public class Simulation
         // Rebuild quadtree
         RebuildQuadtree();
 
+        // Tick potion effects before AI so poison HitReacting is visible to flee logic
+        PotionSystem.TickPotionEffects(_units, _damageEvents, dt);
+
         // Horde
         _horde.Tick(dt, _units, _necromancerIdx);
 
@@ -217,9 +221,6 @@ public class Simulation
         _horde.UpdateStates(_units, _quadtree, _necromancerIdx, dt);
         UpdateFacingAngles(dt);
         UpdateCombat(dt);
-
-        // Tick potion effects (paralysis, poison DoT, weapon coat timers)
-        PotionSystem.TickPotionEffects(_units, _damageEvents, dt);
 
         // Tick pending zombie raises
         PotionSystem.TickZombieRaises(_pendingZombieRaises, dt, (defId, pos, facing, scale) =>
@@ -796,14 +797,15 @@ public class Simulation
                         }
                         else
                         {
-                            _units[i].FleeTimer = 0;
-                            _units[i].LastAttackerID = GameConstants.InvalidUnit;
-                            _units[i].PreferredVel = Vec2.Zero;
+                            // No attacker found (e.g. poison damage) — flee using current facing
+                            float angle = _units[i].FacingAngle;
+                            Vec2 fleeDest = _units[i].Position + new Vec2(MathF.Cos(angle), MathF.Sin(angle)) * 15f;
+                            MoveTowardPosition(i, fleeDest, _units[i].MaxSpeed);
                         }
                     }
-                    else if (_units[i].LastAttackerID != GameConstants.InvalidUnit)
+                    else if (_units[i].LastAttackerID != GameConstants.InvalidUnit || _units[i].HitReacting)
                     {
-                        // Got hit — check if we can flee now or need to queue
+                        // Got hit (by attacker or poison/environmental damage) — flee
                         if (_units[i].PostAttackTimer > 0f || !_units[i].PendingAttack.IsNone)
                         {
                             // Mid-attack: queue flee for when we're free

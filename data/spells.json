@@ -174,6 +174,20 @@
       "cloudSlowBuffID": "",
       "cloudPlaguedBuffID": "",
       "cloudPlagueThreshold": 3,
+      "cloudColor": {
+        "r": 90,
+        "g": 180,
+        "b": 55,
+        "a": 255,
+        "intensity": 1
+      },
+      "cloudGlowColor": {
+        "r": 80,
+        "g": 255,
+        "b": 40,
+        "a": 255,
+        "intensity": 1
+      },
       "toggleEffect": ""
     },
     {
@@ -350,6 +364,20 @@
       "cloudSlowBuffID": "",
       "cloudPlaguedBuffID": "",
       "cloudPlagueThreshold": 3,
+      "cloudColor": {
+        "r": 90,
+        "g": 180,
+        "b": 55,
+        "a": 255,
+        "intensity": 1
+      },
+      "cloudGlowColor": {
+        "r": 80,
+        "g": 255,
+        "b": 40,
+        "a": 255,
+        "intensity": 1
+      },
       "toggleEffect": ""
     },
     {
@@ -511,6 +539,20 @@
       "cloudSlowBuffID": "",
       "cloudPlaguedBuffID": "",
       "cloudPlagueThreshold": 3,
+      "cloudColor": {
+        "r": 90,
+        "g": 180,
+        "b": 55,
+        "a": 255,
+        "intensity": 1
+      },
+      "cloudGlowColor": {
+        "r": 80,
+        "g": 255,
+        "b": 40,
+        "a": 255,
+        "intensity": 1
+      },
       "toggleEffect": ""
     },
     {
@@ -672,6 +714,20 @@
       "cloudSlowBuffID": "",
       "cloudPlaguedBuffID": "",
       "cloudPlagueThreshold": 3,
+      "cloudColor": {
+        "r": 90,
+        "g": 180,
+        "b": 55,
+        "a": 255,
+        "intensity": 1
+      },
+      "cloudGlowColor": {
+        "r": 80,
+        "g": 255,
+        "b": 40,
+        "a": 255,
+        "intensity": 1
+      },
       "toggleEffect": ""
     },
     {
@@ -833,6 +889,20 @@
       "cloudSlowBuffID": "",
       "cloudPlaguedBuffID": "",
       "cloudPlagueThreshold": 3,
+      "cloudColor": {
+        "r": 90,
+        "g": 180,
+        "b": 55,
+        "a": 255,
+        "intensity": 1
+      },
+      "cloudGlowColor": {
+        "r": 80,
+        "g": 255,
+        "b": 40,
+        "a": 255,
+        "intensity": 1
+      },
       "toggleEffect": ""
     },
     {
@@ -994,6 +1064,20 @@
       "cloudSlowBuffID": "",
       "cloudPlaguedBuffID": "",
       "cloudPlagueThreshold": 3,
+      "cloudColor": {
+        "r": 90,
+        "g": 180,
+        "b": 55,
+        "a": 255,
+        "intensity": 1
+      },
+      "cloudGlowColor": {
+        "r": 80,
+        "g": 255,
+        "b": 40,
+        "a": 255,
+        "intensity": 1
+      },
       "toggleEffect": ""
     },
     {
@@ -1157,6 +1241,20 @@
       "cloudSlowBuffID": "",
       "cloudPlaguedBuffID": "",
       "cloudPlagueThreshold": 3,
+      "cloudColor": {
+        "r": 90,
+        "g": 180,
+        "b": 55,
+        "a": 255,
+        "intensity": 1
+      },
+      "cloudGlowColor": {
+        "r": 80,
+        "g": 255,
+        "b": 40,
+        "a": 255,
+        "intensity": 1
+      },
       "toggleEffect": ""
     },
     {
@@ -1318,6 +1416,20 @@
       "cloudSlowBuffID": "",
       "cloudPlaguedBuffID": "",
       "cloudPlagueThreshold": 3,
+      "cloudColor": {
+        "r": 90,
+        "g": 180,
+        "b": 55,
+        "a": 255,
+        "intensity": 1
+      },
+      "cloudGlowColor": {
+        "r": 80,
+        "g": 255,
+        "b": 40,
+        "a": 255,
+        "intensity": 1
+      },
       "toggleEffect": ""
     },
     {
@@ -1479,6 +1591,20 @@
       "cloudSlowBuffID": "",
       "cloudPlaguedBuffID": "",
       "cloudPlagueThreshold": 3,
+      "cloudColor": {
+        "r": 90,
+        "g": 180,
+        "b": 55,
+        "a": 255,
+        "intensity": 1
+      },
+      "cloudGlowColor": {
+        "r": 80,
+        "g": 255,
+        "b": 40,
+        "a": 255,
+        "intensity": 1
+      },
       "toggleEffect": ""
     },
     {
@@ -1640,6 +1766,20 @@
       "cloudSlowBuffID": "",
       "cloudPlaguedBuffID": "",
       "cloudPlagueThreshold": 3,
+      "cloudColor": {
+        "r": 90,
+        "g": 180,
+        "b": 55,
+        "a": 255,
+        "intensity": 1
+      },
+      "cloudGlowColor": {
+        "r": 80,
+        "g": 255,
+        "b": 40,
+        "a": 255,
+        "intensity": 1
+      },
       "toggleEffect": ""
     },
     {
@@ -1786,6 +1926,20 @@
       "cloudSlowBuffID": "",
       "cloudPlaguedBuffID": "",
       "cloudPlagueThreshold": 3,
+      "cloudColor": {
+        "r": 90,
+        "g": 180,
+        "b": 55,
+        "a": 255,
+        "intensity": 1
+      },
+      "cloudGlowColor": {
+        "r": 80,
+        "g": 255,
+        "b": 40,
+        "a": 255,
+        "intensity": 1
+      },
       "toggleEffect": ""
     },
     {
@@ -1949,6 +2103,20 @@
       "cloudSlowBuffID": "",
       "cloudPlaguedBuffID": "",
       "cloudPlagueThreshold": 3,
+      "cloudColor": {
+        "r": 90,
+        "g": 180,
+        "b": 55,
+        "a": 255,
+        "intensity": 1
+      },
+      "cloudGlowColor": {
+        "r": 80,
+        "g": 255,
+        "b": 40,
+        "a": 255,
+        "intensity": 1
+      },
       "toggleEffect": ""
     },
     {
@@ -2110,6 +2278,20 @@
       "cloudSlowBuffID": "",
       "cloudPlaguedBuffID": "",
       "cloudPlagueThreshold": 3,
+      "cloudColor": {
+        "r": 90,
+        "g": 180,
+        "b": 55,
+        "a": 255,
+        "intensity": 1
+      },
+      "cloudGlowColor": {
+        "r": 80,
+        "g": 255,
+        "b": 40,
+        "a": 255,
+        "intensity": 1
+      },
       "toggleEffect": ""
     },
     {
@@ -2271,6 +2453,20 @@
       "cloudSlowBuffID": "",
       "cloudPlaguedBuffID": "",
       "cloudPlagueThreshold": 3,
+      "cloudColor": {
+        "r": 90,
+        "g": 180,
+        "b": 55,
+        "a": 255,
+        "intensity": 1
+      },
+      "cloudGlowColor": {
+        "r": 80,
+        "g": 255,
+        "b": 40,
+        "a": 255,
+        "intensity": 1
+      },
       "toggleEffect": ""
     },
     {
@@ -2432,6 +2628,20 @@
       "cloudSlowBuffID": "",
       "cloudPlaguedBuffID": "",
       "cloudPlagueThreshold": 3,
+      "cloudColor": {
+        "r": 90,
+        "g": 180,
+        "b": 55,
+        "a": 255,
+        "intensity": 1
+      },
+      "cloudGlowColor": {
+        "r": 80,
+        "g": 255,
+        "b": 40,
+        "a": 255,
+        "intensity": 1
+      },
       "toggleEffect": ""
     },
     {
@@ -2593,6 +2803,20 @@
       "cloudSlowBuffID": "",
       "cloudPlaguedBuffID": "",
       "cloudPlagueThreshold": 3,
+      "cloudColor": {
+        "r": 90,
+        "g": 180,
+        "b": 55,
+        "a": 255,
+        "intensity": 1
+      },
+      "cloudGlowColor": {
+        "r": 80,
+        "g": 255,
+        "b": 40,
+        "a": 255,
+        "intensity": 1
+      },
       "toggleEffect": ""
     },
     {
@@ -2754,6 +2978,20 @@
       "cloudSlowBuffID": "",
       "cloudPlaguedBuffID": "",
       "cloudPlagueThreshold": 3,
+      "cloudColor": {
+        "r": 90,
+        "g": 180,
+        "b": 55,
+        "a": 255,
+        "intensity": 1
+      },
+      "cloudGlowColor": {
+        "r": 80,
+        "g": 255,
+        "b": 40,
+        "a": 255,
+        "intensity": 1
+      },
       "toggleEffect": ""
     },
     {
@@ -2915,6 +3153,20 @@
       "cloudSlowBuffID": "",
       "cloudPlaguedBuffID": "",
       "cloudPlagueThreshold": 3,
+      "cloudColor": {
+        "r": 90,
+        "g": 180,
+        "b": 55,
+        "a": 255,
+        "intensity": 1
+      },
+      "cloudGlowColor": {
+        "r": 80,
+        "g": 255,
+        "b": 40,
+        "a": 255,
+        "intensity": 1
+      },
       "toggleEffect": ""
     },
     {
@@ -3076,6 +3328,20 @@
       "cloudSlowBuffID": "",
       "cloudPlaguedBuffID": "",
       "cloudPlagueThreshold": 3,
+      "cloudColor": {
+        "r": 90,
+        "g": 180,
+        "b": 55,
+        "a": 255,
+        "intensity": 1
+      },
+      "cloudGlowColor": {
+        "r": 80,
+        "g": 255,
+        "b": 40,
+        "a": 255,
+        "intensity": 1
+      },
       "toggleEffect": ""
     },
     {
@@ -3237,6 +3503,20 @@
       "cloudSlowBuffID": "",
       "cloudPlaguedBuffID": "",
       "cloudPlagueThreshold": 3,
+      "cloudColor": {
+        "r": 90,
+        "g": 180,
+        "b": 55,
+        "a": 255,
+        "intensity": 1
+      },
+      "cloudGlowColor": {
+        "r": 80,
+        "g": 255,
+        "b": 40,
+        "a": 255,
+        "intensity": 1
+      },
       "toggleEffect": ""
     },
     {
@@ -3398,6 +3678,20 @@
       "cloudSlowBuffID": "",
       "cloudPlaguedBuffID": "",
       "cloudPlagueThreshold": 3,
+      "cloudColor": {
+        "r": 90,
+        "g": 180,
+        "b": 55,
+        "a": 255,
+        "intensity": 1
+      },
+      "cloudGlowColor": {
+        "r": 80,
+        "g": 255,
+        "b": 40,
+        "a": 255,
+        "intensity": 1
+      },
       "toggleEffect": ""
     },
     {
@@ -3559,6 +3853,20 @@
       "cloudSlowBuffID": "",
       "cloudPlaguedBuffID": "",
       "cloudPlagueThreshold": 3,
+      "cloudColor": {
+        "r": 90,
+        "g": 180,
+        "b": 55,
+        "a": 255,
+        "intensity": 1
+      },
+      "cloudGlowColor": {
+        "r": 80,
+        "g": 255,
+        "b": 40,
+        "a": 255,
+        "intensity": 1
+      },
       "toggleEffect": ""
     },
     {
@@ -3720,6 +4028,20 @@
       "cloudSlowBuffID": "",
       "cloudPlaguedBuffID": "",
       "cloudPlagueThreshold": 3,
+      "cloudColor": {
+        "r": 90,
+        "g": 180,
+        "b": 55,
+        "a": 255,
+        "intensity": 1
+      },
+      "cloudGlowColor": {
+        "r": 80,
+        "g": 255,
+        "b": 40,
+        "a": 255,
+        "intensity": 1
+      },
       "toggleEffect": ""
     },
     {
@@ -3866,6 +4188,20 @@
       "cloudSlowBuffID": "",
       "cloudPlaguedBuffID": "",
       "cloudPlagueThreshold": 3,
+      "cloudColor": {
+        "r": 90,
+        "g": 180,
+        "b": 55,
+        "a": 255,
+        "intensity": 1
+      },
+      "cloudGlowColor": {
+        "r": 80,
+        "g": 255,
+        "b": 40,
+        "a": 255,
+        "intensity": 1
+      },
       "toggleEffect": ""
     },
     {
@@ -4012,6 +4348,20 @@
       "cloudSlowBuffID": "",
       "cloudPlaguedBuffID": "",
       "cloudPlagueThreshold": 3,
+      "cloudColor": {
+        "r": 90,
+        "g": 180,
+        "b": 55,
+        "a": 255,
+        "intensity": 1
+      },
+      "cloudGlowColor": {
+        "r": 80,
+        "g": 255,
+        "b": 40,
+        "a": 255,
+        "intensity": 1
+      },
       "toggleEffect": "ghost_mode"
     },
     {
@@ -4173,6 +4523,20 @@
       "cloudSlowBuffID": "",
       "cloudPlaguedBuffID": "",
       "cloudPlagueThreshold": 3,
+      "cloudColor": {
+        "r": 90,
+        "g": 180,
+        "b": 55,
+        "a": 255,
+        "intensity": 1
+      },
+      "cloudGlowColor": {
+        "r": 80,
+        "g": 255,
+        "b": 40,
+        "a": 255,
+        "intensity": 1
+      },
       "toggleEffect": ""
     },
     {
@@ -4319,6 +4683,180 @@
       "cloudSlowBuffID": "buff_miasma_slow",
       "cloudPlaguedBuffID": "buff_plagued",
       "cloudPlagueThreshold": 3,
+      "cloudColor": {
+        "r": 90,
+        "g": 180,
+        "b": 55,
+        "a": 255,
+        "intensity": 1
+      },
+      "cloudGlowColor": {
+        "r": 80,
+        "g": 255,
+        "b": 40,
+        "a": 255,
+        "intensity": 1
+      },
+      "toggleEffect": ""
+    },
+    {
+      "name": "Poison Burst",
+      "id": "poison_burst",
+      "category": "Cloud",
+      "range": 30,
+      "manaCost": 1,
+      "cooldown": 1,
+      "castTime": 0,
+      "castingBuffID": "",
+      "targetFilter": "AnyEnemy",
+      "aoeType": "AOE",
+      "damage": 10,
+      "aoeRadius": 3,
+      "hitEffectFlipbook": null,
+      "quantity": 1,
+      "trajectory": "Lob",
+      "projectileSpeed": 28.3,
+      "precisionBonus": 0,
+      "projectileDelay": 0,
+      "projectileFlipbook": null,
+      "buffID": "",
+      "friendlyOnly": false,
+      "chainQuantity": 1,
+      "chainRange": 5,
+      "chainDelay": 0.1,
+      "acceptableTargets": null,
+      "castFlipbook": null,
+      "summonTargetReq": "None",
+      "summonMode": "Spawn",
+      "summonUnitID": "",
+      "summonQuantity": 1,
+      "spawnLocation": "AdjacentToCaster",
+      "summonFlipbook": null,
+      "strikeTargetUnit": false,
+      "strikeVisual": "Lightning",
+      "telegraphDuration": 0.2,
+      "strikeDuration": 0.2,
+      "zapDuration": 0.12,
+      "strikeChainBranches": 0,
+      "strikeChainDepth": 0,
+      "strikeChainRange": 8,
+      "strikeChainWidthDecay": 0.8,
+      "strikeDisplacement": 0.35,
+      "strikeBranches": 3,
+      "strikeCoreWidth": 2,
+      "strikeGlowWidth": 8,
+      "strikeFlickerMin": 1,
+      "strikeFlickerMax": 1,
+      "strikeFlickerHz": 0,
+      "strikeJitterHz": 0,
+      "strikeCoreColor": {
+        "r": 255,
+        "g": 255,
+        "b": 255,
+        "a": 255,
+        "intensity": 4
+      },
+      "strikeGlowColor": {
+        "r": 140,
+        "g": 180,
+        "b": 255,
+        "a": 200,
+        "intensity": 2.5
+      },
+      "godRayEdgeSoftness": 0.4,
+      "godRayNoiseStrength": 0.35,
+      "godRayNoiseSpeed": 1.5,
+      "godRayNoiseScale": 3,
+      "beamTickRate": 0.25,
+      "beamMaxDuration": 0,
+      "beamRetargetRadius": 15,
+      "beamDisplacement": 0.25,
+      "beamBranches": 1,
+      "beamCoreWidth": 1.5,
+      "beamGlowWidth": 6,
+      "beamFlickerMin": 1,
+      "beamFlickerMax": 1,
+      "beamFlickerHz": 0,
+      "beamJitterHz": 0,
+      "beamCoreColor": {
+        "r": 255,
+        "g": 255,
+        "b": 255,
+        "a": 255,
+        "intensity": 3
+      },
+      "beamGlowColor": {
+        "r": 100,
+        "g": 160,
+        "b": 255,
+        "a": 180,
+        "intensity": 2
+      },
+      "beamChainBranches": 0,
+      "beamChainDepth": 0,
+      "beamChainRange": 8,
+      "beamChainWidthDecay": 0.8,
+      "drainTickRate": 0.25,
+      "drainHealPercent": 1,
+      "drainCorpseHP": 10,
+      "drainMaxDuration": 0,
+      "drainBreakRange": 0,
+      "drainReversed": false,
+      "drainVisualReversed": false,
+      "drainTendrilCount": 3,
+      "drainArcHeight": 40,
+      "drainSwayAmplitude": 8,
+      "drainSwayHz": 1.5,
+      "drainCoreWidth": 1.5,
+      "drainGlowWidth": 5,
+      "drainPulseHz": 2,
+      "drainPulseStrength": 0.4,
+      "drainFlickerMin": 0.8,
+      "drainFlickerMax": 1.2,
+      "drainCoreColor": {
+        "r": 120,
+        "g": 255,
+        "b": 80,
+        "a": 255,
+        "intensity": 2.5
+      },
+      "drainGlowColor": {
+        "r": 40,
+        "g": 120,
+        "b": 20,
+        "a": 160,
+        "intensity": 1.5
+      },
+      "drainTargetEffect": null,
+      "cloudRadius": 3,
+      "cloudMaxRadius": 3,
+      "cloudDuration": 6,
+      "cloudTickRate": 99,
+      "cloudTickDamage": 0,
+      "cloudCorpseBonus": false,
+      "cloudCorpseConsumeRate": 99,
+      "cloudCorpseRadiusBonus": 0,
+      "cloudCorpseDurationBonus": 0,
+      "cloudCorpsePotencyBonus": 0,
+      "cloudEruptionDuration": 0.3,
+      "cloudSpreadDuration": 0.2,
+      "cloudSlowBuffID": "",
+      "cloudPlaguedBuffID": "",
+      "cloudPlagueThreshold": 99,
+      "cloudColor": {
+        "r": 100,
+        "g": 210,
+        "b": 58,
+        "a": 255,
+        "intensity": 1
+      },
+      "cloudGlowColor": {
+        "r": 80,
+        "g": 255,
+        "b": 40,
+        "a": 255,
+        "intensity": 2.9318182
+      },
       "toggleEffect": ""
     }
   ]

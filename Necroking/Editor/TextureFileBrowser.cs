@@ -204,15 +204,16 @@ public class TextureFileBrowser
         // Draw entries with clipping
         ui.BeginClip(contentRect);
 
-        float drawY = contentY - _scrollOffset;
+        int scrollInt = (int)_scrollOffset;
         for (int i = 0; i < displayEntries.Count; i++)
         {
             var entry = displayEntries[i];
 
-            if (drawY + ItemH < contentY) { drawY += ItemH; continue; }
-            if (drawY >= contentY + contentH) break;
+            int iy = contentY + i * ItemH - scrollInt;
+            if (iy + ItemH < contentY) continue;
+            if (iy >= contentY + contentH) break;
 
-            var itemRect = new Rectangle(px + 2, (int)drawY, PopupW - 4, ItemH);
+            var itemRect = new Rectangle(px + 2, iy, PopupW - 4, ItemH);
             bool hovered = itemRect.Contains(mouse.X, mouse.Y) && contentRect.Contains(mouse.X, mouse.Y);
 
             bool isSelected = !entry.IsDirectory && entry.FullPath.Replace('\\', '/') == _selectedFile;
@@ -241,18 +242,16 @@ public class TextureFileBrowser
             // Icon/prefix and name
             if (entry.IsUpDir)
             {
-                ui.DrawText("[..] Parent Directory", new Vector2(px + Padding, drawY + 3), DirColor);
+                ui.DrawText("[..] Parent Directory", new Vector2(px + Padding, itemRect.Y + 3), DirColor);
             }
             else if (entry.IsDirectory)
             {
-                ui.DrawText("[DIR] " + entry.Name, new Vector2(px + Padding, drawY + 3), DirColor);
+                ui.DrawText("[DIR] " + entry.Name, new Vector2(px + Padding, itemRect.Y + 3), DirColor);
             }
             else
             {
-                ui.DrawText("      " + entry.Name, new Vector2(px + Padding, drawY + 3), FileColor);
+                ui.DrawText("      " + entry.Name, new Vector2(px + Padding, itemRect.Y + 3), FileColor);
             }
-
-            drawY += ItemH;
         }
 
         ui.EndClip();

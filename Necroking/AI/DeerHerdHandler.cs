@@ -97,6 +97,43 @@ public class DeerHerdHandler : IArchetypeHandler
         byte alert = ctx.AlertState;
         bool isMale = IsMale(ref ctx);
 
+        // Spooked: took damage (melee or poison) → flee from any non-flee routine
+        if (ctx.Units[ctx.UnitIndex].HitReacting
+            && ctx.Routine != RoutineFleeing)
+        {
+            // If sleeping, need standup first
+            if (ctx.Routine == RoutineSleeping && ctx.Subroutine <= SleepAsleep)
+            {
+                ctx.Subroutine = SleepWaking;
+                ctx.SubroutineTimer = StandupDuration;
+                ctx.Units[ctx.UnitIndex].StandupTimer = StandupDuration;
+                RestoreDetectionRange(ref ctx);
+                return;
+            }
+            if (ctx.Routine == RoutineSleeping && ctx.Subroutine == SleepWaking)
+                return;
+
+            // Check for nearby enemy to flee from
+            float detRange = ctx.Units[ctx.UnitIndex].DetectionRange;
+            int enemyIdx = SubroutineSteps.FindClosestEnemy(ref ctx, detRange);
+            if (enemyIdx >= 0)
+            {
+                // Flee away from the enemy
+                SubroutineSteps.SetFleeFromTarget(ref ctx, ctx.Units[enemyIdx].Position, 10f);
+                ctx.AlertTarget = ctx.Units[enemyIdx].Id;
+            }
+            else
+            {
+                // No visible enemy — flee in random direction
+                SubroutineSteps.SetFleeRandomTarget(ref ctx, 10f);
+            }
+            ctx.Routine = RoutineFleeing;
+            ctx.Subroutine = 0;
+            ctx.SubroutineTimer = 0f;
+            ctx.AlertState = (byte)UnitAlertState.Alert;
+            return;
+        }
+
         // Alert detected → enter Alert routine (from idle/sleeping/feeding)
         if (alert >= (byte)UnitAlertState.Alert &&
             (ctx.Routine <= RoutineSleeping || ctx.Routine == RoutineFeeding))

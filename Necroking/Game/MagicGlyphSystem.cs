@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using Necroking.Core;
 using Necroking.Data;
+using Necroking.Data.Registries;
 using Necroking.Movement;
 using Necroking.Spatial;
 
@@ -35,6 +36,7 @@ public class MagicGlyph
     public Faction OwnerFaction;
     public bool DamageApplied;
     public bool Alive = true;
+    public string TriggerSpellID = "";      // If set, spawns this spell on trigger instead of flat damage
 
     // Derived
     // Build progress: 0 when placed as blueprint, set to 1 when building completes
@@ -128,7 +130,8 @@ public class MagicGlyphSystem
     private readonly List<DamageEvent> _damageEvents = new();
     public IReadOnlyList<DamageEvent> DamageEvents => _damageEvents;
 
-    public void Update(float dt, UnitArrays units, Quadtree qt)
+    public void Update(float dt, UnitArrays units, Quadtree qt,
+                       PoisonCloudSystem? poisonClouds = null, SpellRegistry? spells = null)
     {
         _damageEvents.Clear();
         var nearbyIDs = new List<uint>();
@@ -174,31 +177,63 @@ public class MagicGlyphSystem
                     break;
 
                 case GlyphState.Active:
-                    // Apply damage once at the start of active phase
-                    if (!g.DamageApplied && g.Damage > 0)
+                    if (!g.DamageApplied)
                     {
                         g.DamageApplied = true;
-                        float dmgR = g.DamageRadius > 0 ? g.DamageRadius : g.Radius;
-                        nearbyIDs.Clear();
-                        qt.QueryRadius(g.Position, dmgR, nearbyIDs);
-                        foreach (uint uid in nearbyIDs)
-                        {
-                            int idx = UnitUtil.ResolveUnitIndex(units, uid);
-                            if (idx < 0 || !units[idx].Alive) continue;
-                            if (units[idx].Faction == g.OwnerFaction) continue;
 
-                            units[idx].Stats.HP -= g.Damage;
-                            if (units[idx].Stats.HP <= 0)
+                        // Spawn trigger spell (poison cloud) if configured
+                        if (!string.IsNullOrEmpty(g.TriggerSpellID) && poisonClouds != null && spells != null)
+                        {
+                            var spell = spells.Get(g.TriggerSpellID);
+                            if (spell != null)
                             {
-                                units[idx].Stats.HP = 0;
-                                units[idx].Alive = false;
+                                poisonClouds.SpawnCloud(g.Position, spell, g.OwnerFaction);
+
+                                // Apply instant AoE poison stacks (mirrors spell cast path)
+                                if (spell.Damage > 0)
+                                {
+                                    float aoeR = spell.AoeRadius > 0 ? spell.AoeRadius : spell.CloudRadius;
+                                    nearbyIDs.Clear();
+                                    qt.QueryRadius(g.Position, aoeR, nearbyIDs);
+                                    foreach (uint uid in nearbyIDs)
+                                    {
+                                        int idx = UnitUtil.ResolveUnitIndex(units, uid);
+                                        if (idx < 0 || !units[idx].Alive) continue;
+                                        if (units[idx].Faction == g.OwnerFaction) continue;
+                                        units[idx].PoisonStacks += spell.Damage;
+                                        units[idx].HitReacting = true;
+                                        if (units[idx].PoisonTickTimer <= 0f)
+                                            units[idx].PoisonTickTimer = 3f;
+                                    }
+                                }
                             }
-                            _damageEvents.Add(new DamageEvent
+                        }
+
+                        // Apply flat damage to nearby enemies (works alongside or instead of spell)
+                        if (g.Damage > 0)
+                        {
+                            float dmgR = g.DamageRadius > 0 ? g.DamageRadius : g.Radius;
+                            nearbyIDs.Clear();
+                            qt.QueryRadius(g.Position, dmgR, nearbyIDs);
+                            foreach (uint uid in nearbyIDs)
                             {
-                                Position = units[idx].Position,
-                                Damage = g.Damage,
-                                Height = 1.5f
-                            });
+                                int idx = UnitUtil.ResolveUnitIndex(units, uid);
+                                if (idx < 0 || !units[idx].Alive) continue;
+                                if (units[idx].Faction == g.OwnerFaction) continue;
+
+                                units[idx].Stats.HP -= g.Damage;
+                                if (units[idx].Stats.HP <= 0)
+                                {
+                                    units[idx].Stats.HP = 0;
+                                    units[idx].Alive = false;
+                                }
+                                _damageEvents.Add(new DamageEvent
+                                {
+                                    Position = units[idx].Position,
+                                    Damage = g.Damage,
+                                    Height = 1.5f
+                                });
+                            }
                         }
                     }
 

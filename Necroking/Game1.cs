@@ -1234,6 +1234,24 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
             case "Cloud":
                 _sim.PoisonClouds.SpawnCloud(target, spell, Faction.Undead);
+                // Instant AoE poison if spell has damage > 0 (e.g. poison_burst)
+                // Applies poison stacks — the standard poison tick system converts to HP loss
+                if (spell.Damage > 0)
+                {
+                    float dmgRadius = spell.AoeRadius > 0 ? spell.AoeRadius : spell.CloudRadius;
+                    var nearbyIDs = new List<uint>();
+                    _sim.Quadtree.QueryRadius(new Vec2(target.X, target.Y), dmgRadius, nearbyIDs);
+                    foreach (uint uid in nearbyIDs)
+                    {
+                        int idx = Movement.UnitUtil.ResolveUnitIndex(_sim.UnitsMut, uid);
+                        if (idx < 0 || !_sim.Units[idx].Alive) continue;
+                        if (_sim.Units[idx].Faction == Faction.Undead) continue;
+                        _sim.UnitsMut[idx].PoisonStacks += spell.Damage;
+                        _sim.UnitsMut[idx].HitReacting = true; // triggers spook on animals
+                        if (_sim.Units[idx].PoisonTickTimer <= 0f)
+                            _sim.UnitsMut[idx].PoisonTickTimer = 3f; // start poison ticking
+                    }
+                }
                 break;
 
             case "Toggle":
@@ -1916,22 +1934,17 @@ public class Game1 : Microsoft.Xna.Framework.Game
             // --- Spell bar click interaction ---
             if (_input.LeftPressed)
             {
-                int slotW2 = 50, slotH2 = 50;
-                int slotY2 = screenH - 95;
+                var priLayout = _hudRenderer.GetPrimaryBarLayout(screenH);
                 bool clickedSlot = false;
 
                 if (_spellDropdownSlot >= 0)
                 {
-                    // Check if click is in dropdown
-                    int ddX = screenW / 2 - 110 + _spellDropdownSlot * (slotW2 + 4);
-                    int ddY = slotY2 - 20; // above the slot
                     var spellIDs = _gameData.Spells.GetIDs();
-                    int ddItemH = 20;
-                    int ddH = (spellIDs.Count + 1) * ddItemH; // +1 for "None"
-
-                    if (mouse.X >= ddX && mouse.X < ddX + 160 && mouse.Y >= ddY - ddH && mouse.Y < ddY)
+                    int itemIdx = _hudRenderer.HitTestSpellDropdown(screenW,
+                        priLayout.barY, priLayout.slotW, priLayout.centerOffset,
+                        _spellDropdownSlot, spellIDs.Count, mouse.X, mouse.Y);
+                    if (itemIdx >= 0)
                     {
-                        int itemIdx = (ddY - mouse.Y) / ddItemH;
                         if (itemIdx == 0)
                             _spellBarState.Slots[_spellDropdownSlot].SpellID = "";
                         else if (itemIdx - 1 < spellIDs.Count)
@@ -1942,37 +1955,28 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 }
                 else
                 {
-                    // Check if click is on a spell slot
-                    for (int s = 0; s < 4; s++)
+                    int s = _hudRenderer.HitTestBarSlot(screenW,
+                        priLayout.barY, priLayout.slotW, priLayout.slotH, priLayout.centerOffset,
+                        mouse.X, mouse.Y);
+                    if (s >= 0)
                     {
-                        int slotX2 = screenW / 2 - 110 + s * (slotW2 + 4);
-                        if (mouse.X >= slotX2 && mouse.X < slotX2 + slotW2 &&
-                            mouse.Y >= slotY2 && mouse.Y < slotY2 + slotH2)
-                        {
-                            _spellDropdownSlot = s;
-                            clickedSlot = true;
-                            break;
-                        }
+                        _spellDropdownSlot = s;
+                        clickedSlot = true;
                     }
                 }
 
                 if (clickedSlot) goto SkipSpellCast;
 
                 // Also check secondary bar click
-                int secSlotW2 = 35, secSlotH2 = 35;
-                int secSlotY2 = screenH - 95 - secSlotH2 - 6;
+                var secLayout = _hudRenderer.GetSecondaryBarLayout(screenH);
                 if (_secondaryDropdownSlot >= 0)
                 {
-                    // Check if click is in secondary dropdown
-                    int sddX = screenW / 2 - 80 + _secondaryDropdownSlot * (secSlotW2 + 4);
-                    int sddY = secSlotY2 - 20;
                     var secSpellIDs = _gameData.Spells.GetIDs();
-                    int sddItemH = 20;
-                    int sddH = (secSpellIDs.Count + 1) * sddItemH;
-
-                    if (mouse.X >= sddX && mouse.X < sddX + 160 && mouse.Y >= sddY - sddH && mouse.Y < sddY)
+                    int sddIdx = _hudRenderer.HitTestSpellDropdown(screenW,
+                        secLayout.barY, secLayout.slotW, secLayout.centerOffset,
+                        _secondaryDropdownSlot, secSpellIDs.Count, mouse.X, mouse.Y);
+                    if (sddIdx >= 0)
                     {
-                        int sddIdx = (sddY - mouse.Y) / sddItemH;
                         if (sddIdx == 0)
                             _secondaryBarState.Slots[_secondaryDropdownSlot].SpellID = "";
                         else if (sddIdx - 1 < secSpellIDs.Count)
@@ -1982,33 +1986,31 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 }
                 else
                 {
-                    for (int ss = 0; ss < 4; ss++)
+                    int ss = _hudRenderer.HitTestBarSlot(screenW,
+                        secLayout.barY, secLayout.slotW, secLayout.slotH, secLayout.centerOffset,
+                        mouse.X, mouse.Y);
+                    if (ss >= 0)
                     {
-                        int ssX = screenW / 2 - 80 + ss * (secSlotW2 + 4);
-                        if (mouse.X >= ssX && mouse.X < ssX + secSlotW2 &&
-                            mouse.Y >= secSlotY2 && mouse.Y < secSlotY2 + secSlotH2)
-                        {
-                            _secondaryDropdownSlot = ss;
-                            goto SkipSpellCast;
-                        }
+                        _secondaryDropdownSlot = ss;
+                        goto SkipSpellCast;
                     }
                 }
 
                 // --- Potion slot dropdown interaction ---
-                int potionBaseX = screenW / 2 - 80 + 4 * (secSlotW2 + 4) + 8;
-                int potionSlotY = secSlotY2;
+                // Potion slots sit to the right of the 4 secondary spell slots
+                int potionBaseX = screenW / 2 - secLayout.centerOffset + 4 * (secLayout.slotW + 4) + 8;
                 if (_potionDropdownSlot >= 0)
                 {
-                    // Check if click is in potion dropdown
-                    int pddX = potionBaseX + _potionDropdownSlot * (secSlotW2 + 4);
-                    int pddY = potionSlotY - 20;
                     var allPotionIds = _gameData.Potions.GetIDs();
-                    int pddItemH = 20;
-                    int pddH = (allPotionIds.Count + 1) * pddItemH;
+                    // Potion dropdown uses same layout as spell dropdown but offset to potion position
+                    int potSlotX = potionBaseX + _potionDropdownSlot * (secLayout.slotW + 4);
+                    int ddH = (allPotionIds.Count + 1) * 20;
+                    int ddY = secLayout.barY - 10;
+                    int ddLeft = potSlotX - 2;
 
-                    if (mouse.X >= pddX && mouse.X < pddX + 160 && mouse.Y >= pddY - pddH && mouse.Y < pddY)
+                    if (mouse.X >= ddLeft && mouse.X < ddLeft + 164 && mouse.Y >= ddY - ddH && mouse.Y < ddY)
                     {
-                        int pddIdx = (pddY - mouse.Y) / pddItemH;
+                        int pddIdx = (ddY - mouse.Y) / 20;
                         if (pddIdx == 0)
                             _potionSlots[_potionDropdownSlot] = "";
                         else if (pddIdx - 1 < allPotionIds.Count)
@@ -2021,12 +2023,11 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 }
                 else
                 {
-                    // Check if click is on a potion slot
                     for (int ps = 0; ps < 2; ps++)
                     {
-                        int psX = potionBaseX + ps * (secSlotW2 + 4);
-                        if (mouse.X >= psX && mouse.X < psX + secSlotW2 &&
-                            mouse.Y >= potionSlotY && mouse.Y < potionSlotY + secSlotH2)
+                        int psX = potionBaseX + ps * (secLayout.slotW + 4);
+                        if (mouse.X >= psX && mouse.X < psX + secLayout.slotW &&
+                            mouse.Y >= secLayout.barY && mouse.Y < secLayout.barY + secLayout.slotH)
                         {
                             _potionDropdownSlot = ps;
                             goto SkipSpellCast;
@@ -2135,11 +2136,12 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 if (_sim.MagicGlyphs.CanPlace(mw, GlyphRadius))
                 {
                     var glyph = _sim.MagicGlyphs.SpawnBlueprint(mw, GlyphRadius, Faction.Undead);
-                    glyph.Color = new HdrColor(140, 80, 200, 255, 1.5f);
-                    glyph.Color2 = new HdrColor(200, 160, 255, 255, 2.0f);
+                    glyph.Color = new HdrColor(50, 160, 40, 255, 1.5f);
+                    glyph.Color2 = new HdrColor(120, 230, 80, 255, 2.0f);
                     glyph.TriggerDuration = 0.5f;
-                    glyph.ActiveDuration = 4f;
-                    glyph.Damage = 15;
+                    glyph.ActiveDuration = 1.5f;
+                    glyph.Damage = 0;
+                    glyph.TriggerSpellID = "poison_burst";
 
                     int glyphIdx = _sim.MagicGlyphs.IndexOf(glyph);
                     _trapPlacementActive = false;
@@ -2503,7 +2505,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
             // --- Simulate ---
             _sim.Tick(dt);
             _dayNightSystem.Update(dt, _gameData);
-            _sim.MagicGlyphs.Update(dt, _sim.UnitsMut, _sim.Quadtree);
+            _sim.MagicGlyphs.Update(dt, _sim.UnitsMut, _sim.Quadtree, _sim.PoisonClouds, _gameData.Spells);
             _weatherRenderer.Update(dt, _gameData);
             _envSystem.UpdateForagables(dt);
             _envSystem.UpdateTraps(dt, _sim.Units);
@@ -3751,19 +3753,23 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // Begin bloom scene capture
         var bloomSettings = _activeScenario?.BloomOverride ?? _gameData.Settings.Bloom;
         bool useBloom = _bloom.IsInitialized && bloomSettings.Enabled;
+        var clearColor = _activeScenario?.BackgroundColor
+            ?? LaunchArgs.BgColor
+            ?? new Color(30, 30, 40);
         if (useBloom)
             _bloom.BeginScene(GraphicsDevice);
         else
-            GraphicsDevice.Clear(new Color(30, 30, 40));
+            GraphicsDevice.Clear(clearColor);
 
         // AlphaBlend with premultiplied-alpha textures (loaded via TextureUtil.LoadPremultiplied)
         _spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.LinearClamp);
 
         if (!useBloom)
-            GraphicsDevice.Clear(new Color(30, 30, 40));
+            GraphicsDevice.Clear(clearColor);
 
         // --- Ground ---
-        DrawGround();
+        if (_activeScenario == null || _activeScenario.WantsGround)
+            DrawGround();
 
         // --- Roads ---
         DrawRoads();

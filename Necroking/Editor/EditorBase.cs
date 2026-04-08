@@ -124,6 +124,12 @@ public class EditorBase
         public bool ShowFilter; // whether the filter text box is shown
         public string FilterText; // current filter string
         public int HighlightIdx; // keyboard highlight index into FilteredOptions
+
+        // Pre-computed item layout — single source of truth for both click and draw
+        public Rectangle[] ItemRects;
+        public Rectangle DropRect;
+        public Rectangle FilterRect;
+        public int ItemsY; // Y where items start (below filter if present)
     }
     private PendingDropdown? _pendingDropdown;
     private bool _dropdownOverlayConsumedClick;
@@ -402,17 +408,20 @@ public class EditorBase
             }
         }
 
-        // Draw items
-        float drawY = y - scroll;
+        // Draw items — use integer Y so hitbox and draw positions are identical
+        int scrollInt = (int)scroll;
+        int visIdx = 0; // visible item counter for alternating row colors
         for (int i = 0; i < items.Count; i++)
         {
             if (searchFilter != null && !items[i].Contains(searchFilter, StringComparison.OrdinalIgnoreCase))
                 continue;
 
-            if (drawY + itemH < y) { drawY += itemH; continue; }
-            if (drawY >= y + h) break;
+            int iy = y + visIdx * itemH - scrollInt;
+            visIdx++;
+            if (iy + itemH < y) continue;
+            if (iy >= y + h) break;
 
-            var itemRect = new Rectangle(x, (int)drawY, w, itemH);
+            var itemRect = new Rectangle(x, iy, w, itemH);
             bool hovered = !inputBlocked && itemRect.Contains(_mouse.X, _mouse.Y) && clipRect.Contains(_mouse.X, _mouse.Y);
 
             Color bg;
@@ -420,19 +429,12 @@ public class EditorBase
             else if (hovered) bg = ItemHover;
             else bg = (i % 2 == 0) ? new Color(30, 30, 48, 200) : new Color(25, 25, 40, 200);
 
-            // Only draw if visible
-            if (drawY + itemH > y && drawY < y + h)
-            {
-                DrawRect(itemRect, bg);
-                float textClipY = Math.Max(drawY, y);
-                if (drawY >= y)
-                    DrawText(items[i], new Vector2(x + 4, drawY + 2), i == selectedIdx ? TextBright : TextColor);
+            DrawRect(itemRect, bg);
+            if (iy >= y)
+                DrawText(items[i], new Vector2(itemRect.X + 4, itemRect.Y + 2), i == selectedIdx ? TextBright : TextColor);
 
-                if (hovered && _mouse.LeftButton == ButtonState.Pressed && _prevMouse.LeftButton == ButtonState.Released)
-                    clicked = i;
-            }
-
-            drawY += itemH;
+            if (hovered && _mouse.LeftButton == ButtonState.Pressed && _prevMouse.LeftButton == ButtonState.Released)
+                clicked = i;
         }
 
         // Scrollbar
@@ -932,8 +934,11 @@ public class EditorBase
                 }
             }
 
-            // The items area starts below the filter row (if present)
+            // Compute layout once — single source of truth for click detection AND rendering
             int itemsY = dropY + filterRowH;
+            var itemRects = new Rectangle[visibleCount];
+            for (int vi = 0; vi < visibleCount; vi++)
+                itemRects[vi] = new Rectangle(inputX, itemsY + vi * ComboItemH, inputW, ComboItemH);
 
             // Handle mouse wheel scrolling within the dropdown + consume scroll
             if (dropRect.Contains(_mouse.X, _mouse.Y))
@@ -952,16 +957,14 @@ public class EditorBase
                 }
             }
 
-            // Check for option clicks (input handling -- no drawing)
+            // Check for option clicks using pre-computed rects
             for (int vi = 0; vi < visibleCount; vi++)
             {
                 int fi = vi + scrollOffset;
                 if (fi >= filteredOptions.Length) break;
 
-                var optRect = new Rectangle(inputX, itemsY + vi * ComboItemH, inputW, ComboItemH);
-                bool optHovered = optRect.Contains(_mouse.X, _mouse.Y);
-
-                if (optHovered && _mouse.LeftButton == ButtonState.Pressed && _prevMouse.LeftButton == ButtonState.Released)
+                if (itemRects[vi].Contains(_mouse.X, _mouse.Y)
+                    && _mouse.LeftButton == ButtonState.Pressed && _prevMouse.LeftButton == ButtonState.Released)
                 {
                     string picked = filteredOptions[fi];
                     _activeFieldId = null;
@@ -983,7 +986,7 @@ public class EditorBase
                 _dropdownOverlayConsumedClick = true;
             }
 
-            // Save for deferred rendering (visual only)
+            // Save layout for deferred rendering — renderer uses these exact rects
             _pendingDropdown = new PendingDropdown
             {
                 FieldId = comboId,
@@ -1001,6 +1004,9 @@ public class EditorBase
                 ShowFilter = showFilter,
                 FilterText = filterText,
                 HighlightIdx = _comboHighlightIdx,
+                ItemRects = itemRects,
+                DropRect = dropRect,
+                ItemsY = itemsY,
             };
         }
 
@@ -1019,11 +1025,10 @@ public class EditorBase
         var dd = _pendingDropdown.Value;
         int inputX = dd.InputRect.X;
         int inputW = dd.InputRect.Width;
-        int filterRowH = dd.ShowFilter ? ComboFilterH : 0;
-        int itemsDropH = dd.VisibleCount * ComboItemH;
-        int dropH = itemsDropH + filterRowH;
-        var dropRect = new Rectangle(inputX, dd.DropY, inputW, dropH);
         int scrollOffset = dd.ScrollOffset;
+
+        // Use pre-computed DropRect from layout (same rect used for click detection)
+        var dropRect = dd.DropRect;
 
         // INF11: Shadow behind the dropdown for visual separation
         var shadowRect = new Rectangle(dropRect.X + 3, dropRect.Y + 3, dropRect.Width, dropRect.Height);
@@ -1035,7 +1040,6 @@ public class EditorBase
         DrawBorder(dropRect, AccentColor, 2);
 
         // Draw filter text box at the top if applicable
-        int itemsY = dd.DropY + filterRowH;
         if (dd.ShowFilter)
         {
             var filterRect = new Rectangle(inputX + 2, dd.DropY + 1, inputW - 4, ComboFilterH - 2);
@@ -1054,15 +1058,17 @@ public class EditorBase
         }
 
         // Use scissor clipping for clean edges on the items area
-        var itemsClip = new Rectangle(inputX, itemsY, inputW, itemsDropH);
+        int itemsDropH = dd.VisibleCount * ComboItemH;
+        var itemsClip = new Rectangle(inputX, dd.ItemsY, inputW, itemsDropH);
         BeginClip(itemsClip);
 
+        // Draw items using the SAME pre-computed rects that click detection used
         for (int vi = 0; vi < dd.VisibleCount; vi++)
         {
             int fi = vi + scrollOffset;
             if (fi >= dd.FilteredOptions.Length) break;
 
-            var optRect = new Rectangle(inputX, itemsY + vi * ComboItemH, inputW, ComboItemH);
+            var optRect = dd.ItemRects[vi]; // Same rect as click detection
             bool optHovered = optRect.Contains(_mouse.X, _mouse.Y);
             bool isSelected = dd.FilteredOptions[fi] == dd.CurrentValue;
             bool isHighlighted = fi == dd.HighlightIdx;
@@ -1073,7 +1079,7 @@ public class EditorBase
                 DrawRect(optRect, optHovered ? ItemHover : ItemSelected);
 
             Color textCol = isSelected ? TextBright : (isHighlighted ? TextBright : TextColor);
-            DrawText(dd.FilteredOptions[fi], new Vector2(inputX + 3, itemsY + vi * ComboItemH + 2), textCol);
+            DrawText(dd.FilteredOptions[fi], new Vector2(optRect.X + 3, optRect.Y + 2), textCol);
         }
 
         EndClip();
@@ -1083,7 +1089,7 @@ public class EditorBase
         {
             float scrollRatio = dd.MaxScroll > 0 ? (float)scrollOffset / dd.MaxScroll : 0;
             int barH = Math.Max(12, itemsDropH * dd.VisibleCount / Math.Max(1, dd.FilteredOptions.Length));
-            int barY = itemsY + (int)(scrollRatio * (itemsDropH - barH));
+            int barY = dd.ItemsY + (int)(scrollRatio * (itemsDropH - barH));
             DrawRect(new Rectangle(inputX + inputW - 6, barY, 5, barH), new Color(100, 100, 140, 180));
         }
     }

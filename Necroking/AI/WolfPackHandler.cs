@@ -79,6 +79,46 @@ public class WolfPackHandler : IArchetypeHandler
     {
         byte alertState = ctx.AlertState;
 
+        // Spooked: took damage while idle/sleeping → fight or flee
+        if (ctx.Units[ctx.UnitIndex].HitReacting
+            && ctx.Routine != RoutineFighting)
+        {
+            // If sleeping, standup first
+            if (ctx.Routine == RoutineSleeping && ctx.Subroutine <= SleepAsleep)
+            {
+                ctx.Subroutine = SleepWaking;
+                ctx.SubroutineTimer = StandupDuration;
+                ctx.Units[ctx.UnitIndex].StandupTimer = StandupDuration;
+                RestoreDetectionRange(ref ctx);
+                return;
+            }
+            if (ctx.Routine == RoutineSleeping && ctx.Subroutine == SleepWaking)
+                return;
+
+            float detRange = ctx.Units[ctx.UnitIndex].DetectionRange;
+            int enemyIdx = SubroutineSteps.FindClosestEnemy(ref ctx, detRange);
+            if (enemyIdx >= 0)
+            {
+                // Enemy nearby — attack it
+                ctx.AlertState = (byte)UnitAlertState.Aggressive;
+                ctx.AlertTarget = ctx.Units[enemyIdx].Id;
+                ctx.Units[ctx.UnitIndex].Target = CombatTarget.Unit(ctx.Units[enemyIdx].Id);
+                ctx.Routine = RoutineFighting;
+                ctx.Subroutine = FightMoveToEngage;
+                ctx.SubroutineTimer = 0f;
+                return;
+            }
+            else
+            {
+                // No enemy visible — flee in random direction then calm down
+                SubroutineSteps.SetFleeRandomTarget(ref ctx, 10f);
+                ctx.Routine = RoutineIdleRoaming;
+                ctx.Subroutine = 0; // walking subroutine will move to MoveTarget
+                ctx.SubroutineTimer = 0f;
+                return;
+            }
+        }
+
         // Aggressive alert → enter fighting
         if (alertState == (byte)UnitAlertState.Aggressive && ctx.Routine != RoutineFighting)
         {

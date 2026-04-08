@@ -1,4 +1,5 @@
 using System;
+using Microsoft.Xna.Framework;
 using Necroking.Core;
 using Necroking.Data.Registries;
 using Necroking.GameSystems;
@@ -25,6 +26,9 @@ public abstract class ScenarioBase
     public abstract void OnTick(Simulation sim, float dt);
     public abstract bool IsComplete { get; }
     public abstract int OnComplete(Simulation sim);
+
+    // Background clear color override (set by scenario, consumed by Game1)
+    public Color? BackgroundColor;
 
     // Bloom settings override (set by scenario, consumed by Game1)
     public BloomSettings? BloomOverride;

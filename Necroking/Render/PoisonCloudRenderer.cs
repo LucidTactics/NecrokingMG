@@ -49,21 +49,34 @@ internal class PoisonCloudRenderer
         return null;
     }
 
+    /// <summary>
+    /// Cloud intensity: 0-1 value controlling overall visibility.
+    /// Eruption ramps up, Spread holds at full, Decay fades out with quadratic curve.
+    /// </summary>
     private float GetIntensity(PoisonCloud cloud)
     {
         return cloud.Phase switch
         {
             CloudPhase.Eruption => 0.7f + 0.3f * cloud.PhaseProgress,
             CloudPhase.Spread => 1.0f,
-            CloudPhase.Decay => MathF.Max(0.1f, 1f - cloud.PhaseProgress * 0.7f),
+            CloudPhase.Decay => MathF.Max(0f, (1f - cloud.PhaseProgress) * (1f - cloud.PhaseProgress)),
             _ => 0f
         };
     }
 
     /// <summary>
+    /// Create a properly premultiplied color for use with BlendState.AlphaBlend.
+    /// This is the key to correct fade-out: Color * alpha premultiplies RGB by alpha.
+    /// </summary>
+    private static Color PremultipliedColor(int r, int g, int b, float alpha)
+    {
+        alpha = MathHelper.Clamp(alpha, 0f, 1f);
+        return new Color(r, g, b) * alpha;
+    }
+
+    /// <summary>
     /// Pre-compute all puff positions and add DepthItems to the sort list.
     /// Call this during DrawUnitsAndObjects before the sort.
-    /// DepthItem must have Type=CloudPuff, Index=cloudIndex, SubIndex=puffIndex.
     /// </summary>
     public void AddPuffsToDepthList(PoisonCloudSystem cloudSystem, List<Game1.DepthItem> items)
     {
@@ -85,23 +98,31 @@ internal class PoisonCloudRenderer
             float screenRadius = cloud.CurrentRadius * _camera.Zoom;
             float intensity = GetIntensity(cloud);
 
-            // Generate puffs for all three rings + glow
+            // Skip rendering when nearly invisible
+            if (intensity < 0.005f) continue;
+
+            // Derive ring shades from base color: outer=darker, middle=base, inner=brighter
+            int cr = cloud.ColorR, cg = cloud.ColorG, cb = cloud.ColorB;
+            int outerR = cr * 3 / 4, outerG = cg * 3 / 4, outerB = cb * 3 / 4;
+            int innerR = Math.Min(cr + 20, 255), innerG = Math.Min(cg + 30, 255), innerB = Math.Min(cb + 10, 255);
+
+            // Three rings of puffs: outer (large, dim), middle, inner (small, bright)
             GenerateRingPuffs(fb, cloud, screenRadius, intensity, _puffCache[ci],
                 count: 8, distFrac: 0.5f, sizeFrac: 0.7f,
-                alpha: 0.35f, speed: 0.08f, rotSpeed: 0.12f,
-                color: new Color(70, 150, 45), frameOff: 0);
+                baseAlpha: 0.35f, speed: 0.08f, rotSpeed: 0.12f,
+                r: outerR, g: outerG, b: outerB, frameOff: 0);
 
             GenerateRingPuffs(fb, cloud, screenRadius, intensity, _puffCache[ci],
                 count: 6, distFrac: 0.25f, sizeFrac: 0.55f,
-                alpha: 0.45f, speed: 0.1f, rotSpeed: 0.18f,
-                color: new Color(90, 180, 55), frameOff: 17);
+                baseAlpha: 0.45f, speed: 0.1f, rotSpeed: 0.18f,
+                r: cr, g: cg, b: cb, frameOff: 17);
 
             GenerateRingPuffs(fb, cloud, screenRadius, intensity, _puffCache[ci],
                 count: 4, distFrac: 0.08f, sizeFrac: 0.45f,
-                alpha: 0.55f, speed: 0.1f, rotSpeed: 0.22f,
-                color: new Color(110, 210, 65), frameOff: 33);
+                baseAlpha: 0.55f, speed: 0.1f, rotSpeed: 0.22f,
+                r: innerR, g: innerG, b: innerB, frameOff: 33);
 
-            // Glow puffs (center)
+            // Glow puffs at center
             GenerateGlowPuffs(fb, cloud, screenRadius, _puffCache[ci]);
 
             // Add each puff as a depth item
@@ -115,13 +136,7 @@ internal class PoisonCloudRenderer
                     SubIndex = pi
                 });
             }
-
-            if (LogNextFrame)
-                LogPuffDepths(ci);
         }
-
-        if (LogNextFrame)
-            LogNextFrame = false;
     }
 
     /// <summary>
@@ -145,46 +160,15 @@ internal class PoisonCloudRenderer
             p.Rotation, origin, p.Scale, SpriteEffects.None, 0f);
     }
 
-    /// Set to true to log puff depths on next frame, auto-resets
-    public static bool LogNextFrame;
-
-    // Legacy entry points (no longer used when Y-sorted, but kept for flexibility)
+    // Legacy entry points kept for interface compatibility
     public void DrawAlpha(PoisonCloudSystem cloudSystem) { }
     public void DrawAdditive(PoisonCloudSystem cloudSystem) { }
-
-    /// <summary>
-    /// Log puff Y values for debugging depth sort issues.
-    /// </summary>
-    public void LogPuffDepths(int cloudIndex)
-    {
-        if (cloudIndex < 0 || cloudIndex >= _puffCache.Count) return;
-        var puffs = _puffCache[cloudIndex];
-        DebugLog.Log("scenario", $"  Cloud {cloudIndex}: {puffs.Count} puffs");
-        float minY = float.MaxValue, maxY = float.MinValue;
-        for (int i = 0; i < puffs.Count; i++)
-        {
-            if (puffs[i].WorldY < minY) minY = puffs[i].WorldY;
-            if (puffs[i].WorldY > maxY) maxY = puffs[i].WorldY;
-        }
-        DebugLog.Log("scenario", $"  Puff Y range: {minY:F2} to {maxY:F2}");
-        // Log each puff with its ring and visual world extent
-        for (int i = 0; i < puffs.Count; i++)
-        {
-            string ring = i < 8 ? "outer" : (i < 14 ? "mid" : (i < 18 ? "inner" : "glow"));
-            // Visual world-space Y extent of this puff
-            float pixelRadius = puffs[i].Scale * puffs[i].SrcRect.Height * 0.5f;
-            float worldExtentY = pixelRadius / (_camera.Zoom * _camera.YRatio);
-            float visualMinY = puffs[i].WorldY - worldExtentY;
-            float visualMaxY = puffs[i].WorldY + worldExtentY;
-            DebugLog.Log("scenario", $"    puff[{i}] {ring} sortY={puffs[i].WorldY:F2}  visualY=[{visualMinY:F2}..{visualMaxY:F2}]  worldExtent={worldExtentY:F2}");
-        }
-    }
 
     private void GenerateRingPuffs(Flipbook fb, PoisonCloud cloud,
         float screenRadius, float intensity, List<PuffData> output,
         int count, float distFrac, float sizeFrac,
-        float alpha, float speed, float rotSpeed,
-        Color color, int frameOff)
+        float baseAlpha, float speed, float rotSpeed,
+        int r, int g, int b, int frameOff)
     {
         float nb = cloud.NoiseOffset;
         var center = _renderer.WorldToScreen(cloud.Position, 0f, _camera);
@@ -194,6 +178,7 @@ internal class PoisonCloudRenderer
             float baseAngle = i * MathF.PI * 2f / count;
             float np = nb + i * 7.31f + frameOff * 0.13f;
 
+            // Simplex noise for organic movement
             float nx = SimplexNoise.Noise2D(np + _gameTime * speed, np * 0.7f + _gameTime * speed * 0.7f);
             float ny = SimplexNoise.Noise2D(np * 1.3f + _gameTime * speed * 0.8f, np * 0.5f - _gameTime * speed * 0.5f);
 
@@ -202,37 +187,41 @@ internal class PoisonCloudRenderer
             float ox = MathF.Cos(angle) * dist + nx * screenRadius * 0.1f;
             float oy = MathF.Sin(angle) * dist * _camera.YRatio + ny * screenRadius * 0.07f;
 
+            // Alpha noise for per-puff variation
             float an = SimplexNoise.Noise2D(np * 2.1f + _gameTime * 0.2f, np * 1.7f + _gameTime * 0.15f);
-            float a = intensity * (alpha + 0.15f * MathF.Max(0f, an));
 
+            // Final alpha: intensity controls the fade, baseAlpha is per-ring opacity
+            // intensity² gives accelerating fade-out during decay
+            float alpha = intensity * intensity * (baseAlpha + intensity * 0.15f * MathF.Max(0f, an));
+
+            // Animated flipbook frame
             float t = _gameTime * 0.8f + np * 0.5f;
             int frame = fb.GetFrameAtTime(t);
             var src = fb.GetFrameRect(frame);
 
+            // Size stays constant — only alpha controls fade (no shrink = no bright dot convergence)
             float pxSize = screenRadius * sizeFrac * (0.8f + 0.2f * ny);
             float scale = pxSize * 2f / src.Width;
-            if (scale < 0.01f) continue;
 
             float rot = _gameTime * rotSpeed + np;
 
-            int ai = (int)(a * 255f);
-            ai = Math.Clamp(ai, 0, 255);
-
-            // Sort by southern visual edge: center Y + half the puff's world-space height
-            // This ensures fog covers objects inside it rather than sorting behind them
+            // Sort by southern visual edge for correct depth ordering
             float worldOffsetY = oy / (_camera.Zoom * _camera.YRatio);
             float worldCenterY = cloud.Position.Y + worldOffsetY;
             float pixelRadius = scale * src.Height * 0.5f;
             float worldExtentY = pixelRadius / (_camera.Zoom * _camera.YRatio);
             float sortY = worldCenterY + worldExtentY;
 
+            // CRITICAL: Use premultiplied alpha color for correct BlendState.AlphaBlend rendering.
+            // Color * alpha correctly scales RGB channels proportional to alpha,
+            // so at low alpha the puffs blend smoothly to transparent instead of showing bright fringing.
             output.Add(new PuffData
             {
                 ScreenPos = new Vector2(center.X + ox, center.Y + oy),
                 SrcRect = src,
                 Scale = scale,
                 Rotation = rot,
-                Color = new Color(color.R, color.G, color.B, ai),
+                Color = PremultipliedColor(r, g, b, alpha),
                 WorldY = sortY,
             });
         }
@@ -241,11 +230,12 @@ internal class PoisonCloudRenderer
     private void GenerateGlowPuffs(Flipbook fb, PoisonCloud cloud,
         float screenRadius, List<PuffData> output)
     {
+        // Glow intensity: builds during eruption, steady in spread, fades quickly in decay
         float gi = cloud.Phase switch
         {
             CloudPhase.Eruption => 0.5f + 0.5f * cloud.PhaseProgress,
             CloudPhase.Spread => 0.6f,
-            CloudPhase.Decay => MathF.Max(0f, 0.6f - cloud.PhaseProgress * 0.5f),
+            CloudPhase.Decay => MathF.Max(0f, 0.6f * (1f - cloud.PhaseProgress * cloud.PhaseProgress)),
             _ => 0f
         };
         if (gi < 0.01f) return;
@@ -265,29 +255,29 @@ internal class PoisonCloudRenderer
 
         float rot = _gameTime * 0.05f + cloud.NoiseOffset;
 
-        int ga = (int)(gi * 70f * pulse);
-        ga = Math.Clamp(ga, 0, 180);
-
         // Sort by southern visual edge
         float glowPixelR = scale * src.Height * 0.5f;
         float glowExtentY = glowPixelR / (_camera.Zoom * _camera.YRatio);
         float glowSortY = cloud.Position.Y + glowExtentY;
 
-        // Main glow
+        int gr = cloud.GlowR, gg = cloud.GlowG, gb = cloud.GlowB;
+        int coreR = Math.Min(gr + 40, 255), coreG = gg, coreB = Math.Min(gb + 20, 255);
+
+        // Main glow — premultiplied
+        float mainAlpha = gi * gi * pulse * 0.27f; // ~70/255 at full
         output.Add(new PuffData
         {
             ScreenPos = center,
             SrcRect = src,
             Scale = scale,
             Rotation = rot,
-            Color = new Color(80, 255, 40, ga),
+            Color = PremultipliedColor(gr, gg, gb, mainAlpha),
             WorldY = glowSortY,
         });
 
-        // Inner core
+        // Inner bright core — premultiplied
         float innerScale = scale * 0.4f;
-        int ca = (int)(gi * 50f * pulse);
-        ca = Math.Clamp(ca, 0, 150);
+        float innerAlpha = gi * pulse * 0.2f; // ~50/255 at full
         float innerPixelR = innerScale * src.Height * 0.5f;
         float innerExtentY = innerPixelR / (_camera.Zoom * _camera.YRatio);
         output.Add(new PuffData
@@ -296,7 +286,7 @@ internal class PoisonCloudRenderer
             SrcRect = src,
             Scale = innerScale,
             Rotation = -rot * 1.3f,
-            Color = new Color(120, 255, 60, ca),
+            Color = PremultipliedColor(coreR, coreG, coreB, innerAlpha),
             WorldY = cloud.Position.Y + innerExtentY,
         });
     }

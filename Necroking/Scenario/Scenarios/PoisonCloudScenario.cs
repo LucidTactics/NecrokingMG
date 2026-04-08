@@ -161,8 +161,7 @@ public class PoisonCloudScenario : ScenarioBase
                 DebugLog.Log(ScenarioLog, $"  Unit {i} sortY={sim.Units[i].Position.Y:F1}");
             }
 
-            // Trigger puff depth logging on next render frame
-            PoisonCloudRenderer.LogNextFrame = true;
+            // Puff depth logging removed (was LogNextFrame)
             DebugLog.Log(ScenarioLog, "");
         }
 
