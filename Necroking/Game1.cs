@@ -2739,6 +2739,9 @@ public class Game1 : Microsoft.Xna.Framework.Game
         {
             var lastProj = projs[projs.Count - 1];
 
+            // Tag projectile with spell ID for physics knockback lookup on impact
+            lastProj.SpellID = spell.Id;
+
             // Apply trajectory type
             var traj = Enum.TryParse<Trajectory>(spell.Trajectory, true, out var t) ? t : Trajectory.Lob;
             var dir = (target - origin).Normalized();
