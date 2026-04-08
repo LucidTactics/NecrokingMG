@@ -205,6 +205,8 @@ public class AnimController
     private static string? GetFallbackAnimName(AnimState state) => state switch
     {
         AnimState.Run or AnimState.Jog => "Walk",
+        AnimState.Fall => "Knockdown",       // Fall → Knockdown if no Fall anim
+        AnimState.Knockdown => "Death",      // Knockdown → Death if no Knockdown anim
         AnimState.Hover => "Fall",
         AnimState.Carry => "Walk",
         _ => null

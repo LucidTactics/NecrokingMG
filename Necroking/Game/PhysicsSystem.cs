@@ -34,6 +34,7 @@ public class PhysicsSystem
         public float VelocityZ;
         public float Drag;
         public bool Active;
+        public float LaunchGrace;  // Seconds before collision checks start (prevents instant re-collision)
     }
 
     private readonly List<PhysicsBody> _bodies = new();
@@ -91,6 +92,7 @@ public class PhysicsSystem
             VelocityZ = launchZ,
             Drag = DefaultDrag,
             Active = true,
+            LaunchGrace = 0.05f,  // 50ms before collision checks start (prevents same-frame re-collision)
         });
 
         DebugLog.Log("physics", $"[Launch] unit#{unitIdx} force={force:F1} effective={effectiveForce:F1} " +
@@ -132,6 +134,9 @@ public class PhysicsSystem
     /// </summary>
     public void Update(float dt, UnitArrays units)
     {
+        if (_bodies.Count > 0 && dt > 0.05f)
+            DebugLog.Log("physics", $"[FRAME] dt={dt * 1000:F0}ms bodies={_bodies.Count} — SLOW FRAME");
+
         for (int bi = _bodies.Count - 1; bi >= 0; bi--)
         {
             var body = _bodies[bi];
@@ -158,8 +163,13 @@ public class PhysicsSystem
             // Also set unit Velocity for animation/rendering
             units[idx].Velocity = body.VelocityXY;
 
+            // Tick launch grace period
+            if (body.LaunchGrace > 0f)
+                body.LaunchGrace -= dt;
+
             // --- Collision: flying unit hits standing unit ---
-            if (units[idx].Z < 1.5f) // only check near ground level
+            // Only check after launch grace expires and near ground level
+            if (body.LaunchGrace <= 0f && units[idx].Z < 1.5f)
             {
                 CheckUnitCollisions(ref body, units, dt);
             }
