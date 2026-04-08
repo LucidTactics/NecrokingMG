@@ -1644,44 +1644,30 @@ public class Game1 : Microsoft.Xna.Framework.Game
         {
             int mx = mouse.X, my = mouse.Y;
 
-            // Primary spell bar area (4 slots, 50x50, centered bottom)
-            int uiSlotW = 50, uiSlotH = 50;
-            int uiSlotY = screenH - 95;
-            int uiBarX = screenW / 2 - 110;
-            if (mx >= uiBarX && mx < uiBarX + 4 * (uiSlotW + 4) && my >= uiSlotY && my < uiSlotY + uiSlotH)
+            // Spell bars — use HUDRenderer layout (single source of truth)
+            var pri = _hudRenderer.GetPrimaryBarLayout(screenH);
+            if (_hudRenderer.HitTestBarSlot(screenW, pri.barY, pri.slotW, pri.slotH, pri.centerOffset, mx, my) >= 0)
                 _input.MouseOverUI = true;
-
-            // Secondary spell bar area (4 slots, 35x35, above primary)
-            int secW = 35, secH = 35;
-            int secY = uiSlotY - secH - 6;
-            int secBarX = screenW / 2 - 80;
-            if (mx >= secBarX && mx < secBarX + 4 * (secW + 4) && my >= secY && my < secY + secH)
+            var sec = _hudRenderer.GetSecondaryBarLayout(screenH);
+            if (_hudRenderer.HitTestBarSlot(screenW, sec.barY, sec.slotW, sec.slotH, sec.centerOffset, mx, my) >= 0)
                 _input.MouseOverUI = true;
 
             // Spell dropdown open
             if (_spellDropdownSlot >= 0 || _secondaryDropdownSlot >= 0 || _potionDropdownSlot >= 0)
                 _input.MouseOverUI = true;
 
-            // Inventory window
+            // Inventory, building, crafting
             if (_inventoryUI.ContainsMouse(mx, my))
                 _input.MouseOverUI = true;
-
-            // Building menu
             if (_buildingMenuUI.ContainsMouse(mx, my))
                 _input.MouseOverUI = true;
             if (_craftingMenu.ContainsMouse(mx, my))
                 _input.MouseOverUI = true;
 
-            // Time control buttons (bottom-right, includes pause button)
-            if (_gameData.Settings.General.ShowTimeControls)
-            {
-                const int tcBtnW = 32, tcBtnH = 22, tcGap = 2, tcNum = 6;
-                int tcTotalW = tcBtnW + tcGap + tcNum * tcBtnW + (tcNum - 1) * tcGap; // pause + speed buttons
-                int tcX = screenW - tcTotalW - 10;
-                int tcY = screenH - 52;
-                if (mx >= tcX && mx < tcX + tcTotalW && my >= tcY && my < tcY + tcBtnH)
-                    _input.MouseOverUI = true;
-            }
+            // Time controls
+            if (_gameData.Settings.General.ShowTimeControls
+                && _hudRenderer.HitTestTimeControls(screenW, screenH, mx, my) != -1)
+                _input.MouseOverUI = true;
         }
 
         // Scroll zoom (always active, but not when over UI)
@@ -2156,35 +2142,15 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 _timeScale = 1f;
 
             // --- Time controls (mouse click on buttons) ---
-            if (_gameData.Settings.General.ShowTimeControls
-                && _input.LeftPressed)
+            if (_gameData.Settings.General.ShowTimeControls && _input.LeftPressed)
             {
-                ReadOnlySpan<float> tcSpeeds = stackalloc float[] { 0.1f, 0.25f, 0.5f, 1.0f, 1.5f, 2.0f };
-                const int tcBtnW = 32, tcBtnH = 22, tcGap = 2, tcNum = 6;
-                int tcTotalW = tcBtnW + tcGap + tcNum * tcBtnW + (tcNum - 1) * tcGap;
-                int tcBaseX = screenW - tcTotalW - 10;
-                int tcBaseY = screenH - 52;
-
-                // Pause button (leftmost)
-                if (mouse.X >= tcBaseX && mouse.X < tcBaseX + tcBtnW
-                    && mouse.Y >= tcBaseY && mouse.Y < tcBaseY + tcBtnH)
-                {
+                int tcHit = _hudRenderer.HitTestTimeControls(screenW, screenH, mouse.X, mouse.Y);
+                if (tcHit == -2)
                     _paused = !_paused;
-                }
-                else
+                else if (tcHit >= 0)
                 {
-                    // Speed buttons (right of pause)
-                    int speedBaseX = tcBaseX + tcBtnW + tcGap;
-                    for (int s = 0; s < tcNum; s++)
-                    {
-                        int bx = speedBaseX + s * (tcBtnW + tcGap);
-                        if (mouse.X >= bx && mouse.X < bx + tcBtnW && mouse.Y >= tcBaseY && mouse.Y < tcBaseY + tcBtnH)
-                        {
-                            _timeScale = tcSpeeds[s];
-                            _paused = false; // unpause when selecting a speed
-                            break;
-                        }
-                    }
+                    _timeScale = HUDRenderer.TimeControlSpeeds[tcHit];
+                    _paused = false;
                 }
             }
 

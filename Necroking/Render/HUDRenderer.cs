@@ -325,6 +325,37 @@ public class HUDRenderer
         return (ddY - mouseY) / DropdownItemH;
     }
 
+    /// <summary>
+    /// Hit-test time control buttons. Returns:
+    /// -1 = not hit, -2 = pause button, 0-5 = speed preset index.
+    /// Uses the same layout constants as DrawTimeControls.
+    /// </summary>
+    public int HitTestTimeControls(int screenW, int screenH, int mouseX, int mouseY)
+    {
+        int tcTotalW = TcBtnW + TcGap + TcCount * TcBtnW + (TcCount - 1) * TcGap;
+        int tcBaseX = screenW - tcTotalW - 10;
+        int tcBaseY = screenH - 52;
+
+        if (mouseY < tcBaseY || mouseY >= tcBaseY + TcBtnH) return -1;
+
+        // Pause button (leftmost)
+        if (mouseX >= tcBaseX && mouseX < tcBaseX + TcBtnW)
+            return -2;
+
+        // Speed buttons (right of pause)
+        int speedBaseX = tcBaseX + TcBtnW + TcGap;
+        for (int s = 0; s < TcCount; s++)
+        {
+            int bx = speedBaseX + s * (TcBtnW + TcGap);
+            if (mouseX >= bx && mouseX < bx + TcBtnW)
+                return s;
+        }
+        return -1;
+    }
+
+    /// <summary>Speed presets matching time control button indices.</summary>
+    public static readonly float[] TimeControlSpeeds = { 0.1f, 0.25f, 0.5f, 1.0f, 1.5f, 2.0f };
+
     // ═══════════════════════════════════════
     //  Tooltips & Info
     // ═══════════════════════════════════════
