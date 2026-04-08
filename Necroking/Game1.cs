@@ -100,6 +100,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
     private MagicGlyphRenderer _glyphRenderer = new();
     private DebugDraw _debugDraw = new();
     private GameSystems.SpellEffectSystem _spellEffects = new();
+    private Game.TrapPlacementManager _trapManager = new();
     private List<GameSystems.DamageNumber> _damageNumbers = new();
 
     // Game state
@@ -111,7 +112,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
     private float _timeScale = 1f;
 
     // Glyph trap placement mode
-    private bool _trapPlacementActive;
+    // _trapPlacementActive moved to TrapPlacementManager
     private PendingSpellCast _pendingSpell = new();
     private PendingCastAnim? _pendingCastAnim;
     private SpellBarState _spellBarState = new();
@@ -1956,84 +1957,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 _sim.UnitsMut[necroIdx].GhostMode = !_sim.Units[necroIdx].GhostMode;
 
             // --- Glyph trap placement (T key) ---
-            const float GlyphRadius = 1.125f;
-            if (_input.WasKeyPressed(Keys.T))
-                _trapPlacementActive = !_trapPlacementActive;
-            if (_trapPlacementActive && (_input.WasKeyPressed(Keys.Escape) || _input.RightPressed))
-                _trapPlacementActive = false;
-
-            // Place glyph blueprint on click
-            if (_trapPlacementActive && _input.LeftPressed && necroIdx >= 0)
-            {
-                var mw = new Vec2(mouseWorld.X, mouseWorld.Y);
-                if (_sim.MagicGlyphs.CanPlace(mw, GlyphRadius))
-                {
-                    var glyph = _sim.MagicGlyphs.SpawnBlueprint(mw, GlyphRadius, Faction.Undead);
-                    glyph.Color = new HdrColor(50, 160, 40, 255, 1.5f);
-                    glyph.Color2 = new HdrColor(120, 230, 80, 255, 2.0f);
-                    glyph.TriggerDuration = 0.5f;
-                    glyph.ActiveDuration = 1.5f;
-                    glyph.Damage = 0;
-                    glyph.TriggerSpellID = "poison_burst";
-
-                    int glyphIdx = _sim.MagicGlyphs.IndexOf(glyph);
-                    _trapPlacementActive = false;
-
-                    // Start building (walk or immediate)
-                    var np = _sim.Units[necroIdx].Position;
-                    float dist = (mw - np).Length();
-                    _sim.UnitsMut[necroIdx].BuildGlyphIdx = glyphIdx;
-                    _sim.UnitsMut[necroIdx].BuildTimer = 0f;
-                    if (dist <= AI.PlayerControlledHandler.InteractRange)
-                    {
-                        _sim.UnitsMut[necroIdx].Routine = AI.PlayerControlledHandler.RoutineBuildGlyph;
-                        _sim.UnitsMut[necroIdx].Subroutine = AI.PlayerControlledHandler.BuildSub_WorkStart;
-                        _sim.UnitsMut[necroIdx].CorpseInteractPhase = 1;
-                        _sim.UnitsMut[necroIdx].PreferredVel = Vec2.Zero;
-                    }
-                    else
-                    {
-                        _sim.UnitsMut[necroIdx].Routine = AI.PlayerControlledHandler.RoutineBuildGlyph;
-                        _sim.UnitsMut[necroIdx].Subroutine = AI.PlayerControlledHandler.BuildSub_WalkToSite;
-                    }
-                }
-            }
-
-            // Click on existing blueprint glyph to build it
-            if (!_trapPlacementActive && _input.LeftPressed && necroIdx >= 0
-                && _sim.Units[necroIdx].Routine == 0 && _sim.Units[necroIdx].CorpseInteractPhase == 0)
-            {
-                float bestDist = 2f * 2f;
-                int bestGlyphIdx = -1;
-                var mw = new Vec2(mouseWorld.X, mouseWorld.Y);
-                for (int gi = 0; gi < _sim.MagicGlyphs.Glyphs.Count; gi++)
-                {
-                    var g = _sim.MagicGlyphs.Glyphs[gi];
-                    if (!g.Alive || g.State != GameSystems.GlyphState.Blueprint) continue;
-                    float d = (g.Position - mw).LengthSq();
-                    if (d < bestDist) { bestDist = d; bestGlyphIdx = gi; }
-                }
-                if (bestGlyphIdx >= 0)
-                {
-                    var g = _sim.MagicGlyphs.Glyphs[bestGlyphIdx];
-                    var np = _sim.Units[necroIdx].Position;
-                    float dist = (g.Position - np).Length();
-                    _sim.UnitsMut[necroIdx].BuildGlyphIdx = bestGlyphIdx;
-                    _sim.UnitsMut[necroIdx].BuildTimer = 0f;
-                    if (dist <= AI.PlayerControlledHandler.InteractRange)
-                    {
-                        _sim.UnitsMut[necroIdx].Routine = AI.PlayerControlledHandler.RoutineBuildGlyph;
-                        _sim.UnitsMut[necroIdx].Subroutine = AI.PlayerControlledHandler.BuildSub_WorkStart;
-                        _sim.UnitsMut[necroIdx].CorpseInteractPhase = 1;
-                        _sim.UnitsMut[necroIdx].PreferredVel = Vec2.Zero;
-                    }
-                    else
-                    {
-                        _sim.UnitsMut[necroIdx].Routine = AI.PlayerControlledHandler.RoutineBuildGlyph;
-                        _sim.UnitsMut[necroIdx].Subroutine = AI.PlayerControlledHandler.BuildSub_WalkToSite;
-                    }
-                }
-            }
+            _trapManager.Update(_input, _sim, necroIdx, mouseWorld);
 
             // --- Secondary spell bar (keys 1-4) ---
             if (necroIdx >= 0)
@@ -2159,77 +2083,9 @@ public class Game1 : Microsoft.Xna.Framework.Game
             if (_activePotionSlot >= 0 && _input.RightPressed)
                 _activePotionSlot = -1;
 
-            // --- Corpse interaction (F key) --- context-sensitive: putdown > pickup bagged > bag unbagged
-            if (_input.WasKeyPressed(Keys.F) && necroIdx >= 0)
-            {
-                var nu = _sim.Units[necroIdx];
-
-                if (nu.CarryingCorpseID >= 0 && nu.CorpseInteractPhase == 0)
-                {
-                    // Currently carrying -> start PutDown
-                    var cc = _sim.FindCorpseByID(nu.CarryingCorpseID);
-                    if (cc != null)
-                    {
-                        // LerpStartPos = where the bag will land on the ground
-                        float fRad = nu.FacingAngle * MathF.PI / 180f;
-                        cc.LerpStartPos = nu.Position + new Vec2(MathF.Cos(fRad), MathF.Sin(fRad)) * 0.8f;
-                    }
-                    _sim.UnitsMut[necroIdx].CorpseInteractPhase = 5; // PutDown
-                }
-                else if (nu.BaggingCorpseID >= 0)
-                {
-                    // Currently bagging -> committed, ignore
-                }
-                else if (nu.CorpseInteractPhase == 0)
-                {
-                    var np = nu.Position;
-                    float bestDist = 3f * 3f;
-
-                    // First: look for nearest bagged corpse to pickup
-                    int bestBaggedIdx = -1;
-                    for (int ci = 0; ci < _sim.Corpses.Count; ci++)
-                    {
-                        var c = _sim.Corpses[ci];
-                        if (!c.Bagged || c.Dissolving || c.ConsumedBySummon) continue;
-                        if (c.DraggedByUnitID != GameConstants.InvalidUnit) continue;
-                        float d = (c.Position - np).LengthSq();
-                        if (d < bestDist) { bestDist = d; bestBaggedIdx = ci; }
-                    }
-
-                    if (bestBaggedIdx >= 0)
-                    {
-                        // Start pickup animation
-                        var c = _sim.CorpsesMut[bestBaggedIdx];
-                        c.LerpStartPos = c.Position; // anchor for lerp
-                        _sim.UnitsMut[necroIdx].CarryingCorpseID = c.CorpseID;
-                        _sim.UnitsMut[necroIdx].CorpseInteractPhase = 4; // Pickup
-                        c.DraggedByUnitID = nu.Id;
-                    }
-                    else
-                    {
-                        // Look for nearest un-bagged corpse to start bagging
-                        bestDist = 3f * 3f;
-                        int bestUnbaggedIdx = -1;
-                        for (int ci = 0; ci < _sim.Corpses.Count; ci++)
-                        {
-                            var c = _sim.Corpses[ci];
-                            if (c.Bagged || c.Dissolving || c.ConsumedBySummon) continue;
-                            if (c.DraggedByUnitID != GameConstants.InvalidUnit) continue;
-                            if (c.BaggedByUnitID != GameConstants.InvalidUnit) continue;
-                            float d = (c.Position - np).LengthSq();
-                            if (d < bestDist) { bestDist = d; bestUnbaggedIdx = ci; }
-                        }
-                        if (bestUnbaggedIdx >= 0)
-                        {
-                            var c = _sim.CorpsesMut[bestUnbaggedIdx];
-                            _sim.UnitsMut[necroIdx].BaggingCorpseID = c.CorpseID;
-                            _sim.UnitsMut[necroIdx].BaggingTimer = 0f;
-                            _sim.UnitsMut[necroIdx].CorpseInteractPhase = 1; // WorkStart
-                            c.BaggedByUnitID = nu.Id;
-                        }
-                    }
-                }
-            }
+            // --- Corpse interaction (F key) ---
+            if (_input.WasKeyPressed(Keys.F))
+                Game.CorpseInteractionManager.TryInteract(_sim, necroIdx);
 
             // --- Building hover detection ---
             _hoveredObjectIdx = -1;
@@ -3797,7 +3653,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
             }
 
             // Ghost preview for glyph trap placement (T key)
-            if (_trapPlacementActive)
+            if (_trapManager.IsActive)
             {
                 Vec2 mw = _camera.ScreenToWorld(_input.MousePos, screenW, screenH);
                 var sp = _renderer.WorldToScreen(mw, 0f, _camera);
