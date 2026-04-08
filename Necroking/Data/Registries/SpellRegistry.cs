@@ -78,6 +78,19 @@ public class SpellDef : IHasId
     [EditorField(Label = "Defense Negating", Group = "COMMON", Order = 107)]
     [JsonPropertyName("defenseNegating")] public bool DefenseNegating { get; set; } = true;
 
+    // Physics knockback (applied on AoE impact)
+    [EditorVisible("Category", "Projectile", "Cloud", "Strike")]
+    [EditorField(Label = "Knockback Force", Group = "PHYSICS", Order = 110, Step = 1f, Decimals = 0)]
+    [JsonPropertyName("knockbackForce")] public float KnockbackForce { get; set; }
+
+    [EditorVisible("Category", "Projectile", "Cloud", "Strike")]
+    [EditorField(Label = "Knockback Up", Group = "PHYSICS", Order = 111, Step = 1f, Decimals = 0)]
+    [JsonPropertyName("knockbackUpward")] public float KnockbackUpward { get; set; }
+
+    [EditorVisible("Category", "Projectile", "Cloud", "Strike")]
+    [EditorField(Label = "Knockback Radius", Group = "PHYSICS", Order = 112, Step = 0.5f, Decimals = 1)]
+    [JsonPropertyName("knockbackRadius")] public float KnockbackRadius { get; set; }
+
     // ============ Shared fields (ungrouped, between COMMON and category sections) ============
     // AoeType — used in Projectile and Buff/Debuff
     [EditorVisible("Category", "Projectile", "Buff", "Debuff")]

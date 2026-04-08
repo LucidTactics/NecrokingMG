@@ -18,10 +18,10 @@ namespace Necroking.GameSystems;
 public class PhysicsSystem
 {
     // --- Tuning ---
-    public float Gravity = 30f;             // units/s² downward
+    public float Gravity = 50f;             // units/s² downward (higher = snappier arcs, less hang time)
     public float DefaultDrag = 2.0f;        // XY velocity decay
-    public float UpwardBias = 1.5f;         // multiplier on Z impulse
-    public float MinLaunchZ = 3.0f;         // minimum upward velocity for visible arc
+    public float UpwardBias = 1.2f;         // multiplier on Z impulse
+    public float MinLaunchZ = 4.0f;         // minimum upward velocity for visible arc
     public float CollisionRadius = 0.8f;    // flying→standing hit detection
     public float KnockdownTimeMin = 1.0f;
     public float KnockdownTimeMax = 2.0f;

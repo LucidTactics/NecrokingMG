@@ -70,6 +70,8 @@ public class ProjectileHit
     public string PotionID = "";
     public Vec2 ImpactPos;
     public int CorpseHitIdx = -1;
+    public string SpellID = "";
+    public float AoeRadius;
 }
 
 public class ProjectileManager
@@ -256,7 +258,7 @@ public class ProjectileManager
                         int hitIdx = UnitUtil.ResolveUnitIndex(units, nid);
                         if (hitIdx < 0) continue;
                         if (proj.NoFriendlyFire && units[hitIdx].Faction == proj.OwnerFaction) continue;
-                        _hits.Add(new ProjectileHit { UnitIdx = hitIdx, Damage = proj.Damage, OwnerID = proj.OwnerID, OwnerFaction = proj.OwnerFaction, WeaponName = proj.WeaponName, ProjectileType = proj.Type });
+                        _hits.Add(new ProjectileHit { UnitIdx = hitIdx, Damage = proj.Damage, OwnerID = proj.OwnerID, OwnerFaction = proj.OwnerFaction, WeaponName = proj.WeaponName, ProjectileType = proj.Type, SpellID = proj.SpellID, AoeRadius = proj.AoeRadius, ImpactPos = proj.Position });
                     }
                     _impacts.Add(new ImpactEvent { Position = proj.Position, Type = proj.Type, AoeRadius = proj.AoeRadius, HitEffectFlipbookID = proj.HitEffectFlipbookID, HitEffectColor = proj.HitEffectColor, HitEffectScale = proj.HitEffectScale, HitEffectBlendMode = proj.HitEffectBlendMode, HitEffectAlignment = proj.HitEffectAlignment });
                     proj.Alive = false;

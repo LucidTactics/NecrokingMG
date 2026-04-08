@@ -302,6 +302,18 @@ public class Simulation
                 DamageSystem.Apply(_units, hit.UnitIdx, hit.Damage,
                     GameSystems.DamageType.Physical, GameSystems.DamageFlags.ArmorNegating,
                     _damageEvents);
+
+            // Physics knockback from AoE projectile impact
+            if (_gameData != null && !string.IsNullOrEmpty(hit.SpellID))
+            {
+                var spellDef = _gameData.Spells.Get(hit.SpellID);
+                if (spellDef != null && spellDef.KnockbackForce > 0f)
+                {
+                    float kbRadius = spellDef.KnockbackRadius > 0f ? spellDef.KnockbackRadius : hit.AoeRadius;
+                    _physics.ApplyRadialImpulse(_units, hit.ImpactPos, kbRadius,
+                        spellDef.KnockbackForce, spellDef.KnockbackUpward, hit.OwnerFaction);
+                }
+            }
         }
 
         // Lightning
