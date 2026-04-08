@@ -87,7 +87,8 @@ public static class PotionSystem
     public static void ApplyPotionEffect(
         string potionId, PotionRegistry potions, BuffRegistry buffs,
         int hitUnitIdx, UnitArrays units, Faction ownerFaction,
-        List<PendingZombieRaise> pendingRaises, List<Corpse> corpses, Vec2 impactPos)
+        List<PendingZombieRaise> pendingRaises, List<Corpse> corpses, Vec2 impactPos,
+        List<DamageEvent>? damageEvents = null)
     {
         var potion = potions.Get(potionId);
         if (potion == null) return;
@@ -104,7 +105,7 @@ public static class PotionSystem
                 ApplyZombie(potion, buffs, hitUnitIdx, units, ownerFaction, pendingRaises, corpses, impactPos);
                 break;
             case "Poison":
-                ApplyPoison(potion, buffs, hitUnitIdx, units, ownerFaction);
+                ApplyPoison(potion, buffs, hitUnitIdx, units, ownerFaction, damageEvents);
                 break;
             default:
                 // Generic buff application
@@ -198,7 +199,7 @@ public static class PotionSystem
         }
     }
 
-    private static void ApplyPoison(PotionDef potion, BuffRegistry buffs, int unitIdx, UnitArrays units, Faction ownerFaction)
+    private static void ApplyPoison(PotionDef potion, BuffRegistry buffs, int unitIdx, UnitArrays units, Faction ownerFaction, List<DamageEvent>? damageEvents = null)
     {
         if (unitIdx < 0 || unitIdx >= units.Count) return;
 
@@ -217,10 +218,10 @@ public static class PotionSystem
         }
         else
         {
-            // Enemy: apply 10 poison stacks
-            units[unitIdx].PoisonStacks += 10;
-            if (units[unitIdx].PoisonTickTimer <= 0f)
-                units[unitIdx].PoisonTickTimer = 3f;
+            // Enemy: apply 10 poison stacks through damage system (potions bypass armor)
+            var dmgEvents = damageEvents ?? new List<DamageEvent>();
+            DamageSystem.Apply(units, unitIdx, 10,
+                DamageType.Poison, DamageFlags.ArmorNegating, dmgEvents);
 
             if (!string.IsNullOrEmpty(potion.BuffID))
             {
@@ -276,34 +277,36 @@ public static class PotionSystem
             }
 
             // --- Poison DoT ---
+            // Poison ticks convert stacks to HP damage. This is the debuff's own
+            // HP reduction — separate from the unified damage formula which *adds* stacks.
             if (units[i].PoisonStacks > 0)
             {
                 units[i].PoisonTickTimer -= dt;
                 if (units[i].PoisonTickTimer <= 0f)
                 {
-                    // Deal poison damage: ceil(stacks / 10)
                     int dmg = (int)MathF.Ceiling(units[i].PoisonStacks / 10f);
-                    units[i].Stats.HP -= dmg;
-                    if (dmg > 0) units[i].HitReacting = true;
                     units[i].PoisonStacks -= dmg;
                     if (units[i].PoisonStacks <= 0) units[i].PoisonStacks = 0;
 
-                    // Green damage number
-                    damageEvents.Add(new DamageEvent
+                    // HP reduction bypasses armor (poison already got through armor when applied)
+                    if (dmg > 0)
                     {
-                        Position = units[i].Position,
-                        Damage = dmg,
-                        Height = 1.5f,
-                        IsPoison = true
-                    });
-
-                    if (units[i].Stats.HP <= 0)
-                    {
-                        units[i].Alive = false;
-                        units[i].Stats.HP = 0;
+                        units[i].Stats.HP -= dmg;
+                        units[i].HitReacting = true;
+                        damageEvents.Add(new DamageEvent
+                        {
+                            Position = units[i].Position,
+                            Damage = dmg,
+                            Height = 1.5f,
+                            IsPoison = true
+                        });
+                        if (units[i].Stats.HP <= 0)
+                        {
+                            units[i].Stats.HP = 0;
+                            units[i].Alive = false;
+                        }
                     }
 
-                    // Reset tick timer if still poisoned
                     if (units[i].PoisonStacks > 0)
                         units[i].PoisonTickTimer = 3f;
                 }

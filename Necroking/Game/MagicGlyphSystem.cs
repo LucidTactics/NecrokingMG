@@ -189,9 +189,13 @@ public class MagicGlyphSystem
                             {
                                 poisonClouds.SpawnCloud(g.Position, spell, g.OwnerFaction);
 
-                                // Apply instant AoE poison stacks (mirrors spell cast path)
+                                // Apply instant AoE poison through unified damage system
                                 if (spell.Damage > 0)
                                 {
+                                    var flags = DamageFlags.None;
+                                    if (spell.ArmorNegating) flags |= DamageFlags.ArmorNegating;
+                                    if (spell.DefenseNegating) flags |= DamageFlags.DefenseNegating;
+
                                     float aoeR = spell.AoeRadius > 0 ? spell.AoeRadius : spell.CloudRadius;
                                     nearbyIDs.Clear();
                                     qt.QueryRadius(g.Position, aoeR, nearbyIDs);
@@ -200,16 +204,14 @@ public class MagicGlyphSystem
                                         int idx = UnitUtil.ResolveUnitIndex(units, uid);
                                         if (idx < 0 || !units[idx].Alive) continue;
                                         if (units[idx].Faction == g.OwnerFaction) continue;
-                                        units[idx].PoisonStacks += spell.Damage;
-                                        units[idx].HitReacting = true;
-                                        if (units[idx].PoisonTickTimer <= 0f)
-                                            units[idx].PoisonTickTimer = 3f;
+                                        DamageSystem.Apply(units, idx, spell.Damage,
+                                            DamageType.Poison, flags, _damageEvents);
                                     }
                                 }
                             }
                         }
 
-                        // Apply flat damage to nearby enemies (works alongside or instead of spell)
+                        // Apply flat physical damage to nearby enemies
                         if (g.Damage > 0)
                         {
                             float dmgR = g.DamageRadius > 0 ? g.DamageRadius : g.Radius;
@@ -220,19 +222,8 @@ public class MagicGlyphSystem
                                 int idx = UnitUtil.ResolveUnitIndex(units, uid);
                                 if (idx < 0 || !units[idx].Alive) continue;
                                 if (units[idx].Faction == g.OwnerFaction) continue;
-
-                                units[idx].Stats.HP -= g.Damage;
-                                if (units[idx].Stats.HP <= 0)
-                                {
-                                    units[idx].Stats.HP = 0;
-                                    units[idx].Alive = false;
-                                }
-                                _damageEvents.Add(new DamageEvent
-                                {
-                                    Position = units[idx].Position,
-                                    Damage = g.Damage,
-                                    Height = 1.5f
-                                });
+                                DamageSystem.Apply(units, idx, g.Damage,
+                                    DamageType.Physical, DamageFlags.None, _damageEvents);
                             }
                         }
                     }

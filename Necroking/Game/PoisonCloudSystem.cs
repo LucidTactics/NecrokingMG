@@ -257,19 +257,9 @@ public class PoisonCloudSystem
             int damage = (int)MathF.Ceiling(cloud.BaseDamagePerTick * cloud.Potency * phaseMult * falloff);
             if (damage < 1) damage = 1;
 
-            // Apply as poison stacks (integrates with existing poison DoT system)
-            units[idx].PoisonStacks += damage * 3; // 3 stacks per damage point
-            if (units[idx].PoisonTickTimer <= 0f)
-                units[idx].PoisonTickTimer = 3f;
-
-            // Green damage event for visual feedback
-            damageEvents.Add(new DamageEvent
-            {
-                Position = units[idx].Position,
-                Damage = damage,
-                Height = 1.5f,
-                IsPoison = true
-            });
+            // Apply poison through unified damage system (AN — clouds bypass armor)
+            DamageSystem.Apply(units, idx, damage * 3,
+                DamageType.Poison, DamageFlags.ArmorNegating, damageEvents);
 
             // Apply slow debuff
             if (buffs != null && !string.IsNullOrEmpty(cloud.SlowBuffID))

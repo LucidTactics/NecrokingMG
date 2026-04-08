@@ -79,11 +79,10 @@ public class PoisonFleeScenario : ScenarioBase
                         if (sim.Units[i].Id == _deerID) { di = i; break; }
                     if (di >= 0)
                     {
-                        sim.UnitsMut[di].PoisonStacks += spell.Damage;
-                        sim.UnitsMut[di].HitReacting = true;
-                        if (sim.Units[di].PoisonTickTimer <= 0f)
-                            sim.UnitsMut[di].PoisonTickTimer = 3f;
-                        DebugLog.Log(ScenarioLog, $"  Applied {spell.Damage} poison stacks + HitReacting to deer");
+                        var flags = GameSystems.DamageFlags.ArmorNegating | GameSystems.DamageFlags.DefenseNegating;
+                        GameSystems.DamageSystem.Apply(sim.UnitsMut, di, spell.Damage,
+                            GameSystems.DamageType.Poison, flags, sim.DamageEventsMut);
+                        DebugLog.Log(ScenarioLog, $"  Applied {spell.Damage} poison through DamageSystem to deer");
                     }
                 }
             }

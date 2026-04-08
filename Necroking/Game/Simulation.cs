@@ -9,8 +9,6 @@ using Necroking.World;
 
 namespace Necroking.GameSystems;
 
-public enum DamageType : byte { Normal, ArmorPiercing, ArmorNegating }
-
 public class Corpse
 {
     public Vec2 Position;
@@ -102,6 +100,7 @@ public class Simulation
         return idx >= 0 ? _corpses[idx] : null;
     }
     public IReadOnlyList<DamageEvent> DamageEvents => _damageEvents;
+    public List<DamageEvent> DamageEventsMut => _damageEvents;
     public void AddDamageEvent(DamageEvent evt) => _damageEvents.Add(evt);
     public IReadOnlyList<SoulOrb> SoulOrbs => _soulOrbs;
     public ProjectileManager Projectiles => _projectiles;
@@ -285,13 +284,16 @@ public class Simulation
                     {
                         Vec2 impactPos = hit.UnitIdx >= 0 ? _units[hit.UnitIdx].Position : hit.ImpactPos;
                         PotionSystem.ApplyPotionEffect(hit.PotionID, _gameData.Potions, _gameData.Buffs,
-                            hit.UnitIdx, _units, hit.OwnerFaction, _pendingZombieRaises, _corpses, impactPos);
+                            hit.UnitIdx, _units, hit.OwnerFaction, _pendingZombieRaises, _corpses, impactPos,
+                            _damageEvents);
                     }
                 }
                 continue;
             }
             if (hit.UnitIdx >= 0 && hit.UnitIdx < _units.Count && _units[hit.UnitIdx].Alive)
-                ApplyDamage(hit.UnitIdx, hit.Damage);
+                DamageSystem.Apply(_units, hit.UnitIdx, hit.Damage,
+                    GameSystems.DamageType.Physical, GameSystems.DamageFlags.ArmorNegating,
+                    _damageEvents);
         }
 
         // Lightning
@@ -299,7 +301,9 @@ public class Simulation
         _lightning.Update(dt, lightningDmg, _quadtree, _units);
         foreach (var ld in lightningDmg)
             if (ld.UnitIdx >= 0 && ld.UnitIdx < _units.Count)
-                ApplyDamage(ld.UnitIdx, ld.Damage);
+                DamageSystem.Apply(_units, ld.UnitIdx, ld.Damage,
+                    GameSystems.DamageType.Physical, GameSystems.DamageFlags.ArmorNegating,
+                    _damageEvents);
 
         // Poison clouds
         _poisonClouds.Update(dt, _units, _quadtree, _corpses, _damageEvents,
@@ -670,7 +674,9 @@ public class Simulation
                                     casterHeight, targetH * 0.5f);
 
                                 // Apply direct damage to target
-                                ApplyDamage(enemy, spell.Damage);
+                                DamageSystem.Apply(_units, enemy, spell.Damage,
+                                    GameSystems.DamageType.Physical, GameSystems.DamageFlags.ArmorNegating,
+                                    _damageEvents);
                             }
                             else
                             {
@@ -1560,16 +1566,17 @@ public class Simulation
         else
             _units[defenderIdx].BlockReacting = true;
 
-        ApplyDamage(defenderIdx, netDmg, attackerIdx);
+        // Melee uses ApplyDirect — armor already calculated above with DRN rolls
+        DamageSystem.ApplyDirect(_units, defenderIdx, netDmg, _damageEvents, attackerIdx);
 
         // Weapon coats: apply poison and/or zombie-on-death to defender
         if (hit && defenderIdx >= 0 && defenderIdx < _units.Count && _units[defenderIdx].Alive)
         {
             if (_units[attackerIdx].WeaponPoisonCoatTimer > 0f && _units[attackerIdx].WeaponPoisonAmount > 0)
             {
-                _units[defenderIdx].PoisonStacks += _units[attackerIdx].WeaponPoisonAmount;
-                if (_units[defenderIdx].PoisonTickTimer <= 0f)
-                    _units[defenderIdx].PoisonTickTimer = 3f;
+                // Weapon poison goes through armor (no AN flag)
+                DamageSystem.Apply(_units, defenderIdx, _units[attackerIdx].WeaponPoisonAmount,
+                    GameSystems.DamageType.Poison, GameSystems.DamageFlags.None, _damageEvents, attackerIdx);
             }
             if (_units[attackerIdx].WeaponZombieCoatTimer > 0f)
             {
@@ -1578,44 +1585,11 @@ public class Simulation
         }
     }
 
-    /// <summary>Apply damage to a unit from an external source (spells, traps, etc.).</summary>
-    public void DealDamage(int unitIdx, int damage) => ApplyDamage(unitIdx, damage);
-
-    private void ApplyDamage(int unitIdx, int damage, int attackerIdx = -1)
-    {
-        if (unitIdx < 0 || unitIdx >= _units.Count || !_units[unitIdx].Alive) return;
-
-        // Take no damage as ghost.
-        if (_units[unitIdx].GhostMode) damage = 0;
-
-        _units[unitIdx].Stats.HP -= damage;
-        if (attackerIdx >= 0 && attackerIdx < _units.Count)
-        {
-            _units[unitIdx].LastAttackerID = _units[attackerIdx].Id;
-
-            // Auto-engage with attacker if not already engaged (AI decides in its update)
-            // Most AIs will engage; FleeWhenHit will queue flee instead
-            if (_units[unitIdx].EngagedTarget.IsNone
-                && _units[unitIdx].AI != AIBehavior.FleeWhenHit
-                && _units[unitIdx].AI != AIBehavior.PlayerControlled)
-            {
-                _units[unitIdx].EngagedTarget = CombatTarget.Unit(_units[attackerIdx].Id);
-                _units[unitIdx].Target = _units[unitIdx].EngagedTarget;
-            }
-        }
-        _damageEvents.Add(new DamageEvent
-        {
-            Position = _units[unitIdx].Position,
-            Damage = damage,
-            Height = 1.5f
-        });
-
-        if (_units[unitIdx].Stats.HP <= 0)
-        {
-            _units[unitIdx].Alive = false;
-            _units[unitIdx].Stats.HP = 0;
-        }
-    }
+    /// <summary>Apply physical damage to a unit from an external source (spells, traps, etc.).</summary>
+    public void DealDamage(int unitIdx, int damage) =>
+        DamageSystem.Apply(_units, unitIdx, damage,
+            GameSystems.DamageType.Physical, GameSystems.DamageFlags.ArmorNegating,
+            _damageEvents);
 
     // --- Helpers ---
     private void MoveTowardUnit(int i, int targetIdx, float speed)

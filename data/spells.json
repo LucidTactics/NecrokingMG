@@ -4707,6 +4707,8 @@
       "manaCost": 1,
       "cooldown": 1,
       "castTime": 0,
+      "armorNegating": true,
+      "defenseNegating": true,
       "castingBuffID": "",
       "targetFilter": "AnyEnemy",
       "aoeType": "AOE",

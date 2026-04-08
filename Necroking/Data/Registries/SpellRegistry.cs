@@ -72,6 +72,12 @@ public class SpellDef : IHasId
     [EditorCombo("AnyEnemy", "UndeadOnly", "LivingOnly")]
     [JsonPropertyName("targetFilter")] public string TargetFilter { get; set; } = "AnyEnemy";
 
+    [EditorField(Label = "Armor Negating", Group = "COMMON", Order = 106)]
+    [JsonPropertyName("armorNegating")] public bool ArmorNegating { get; set; }
+
+    [EditorField(Label = "Defense Negating", Group = "COMMON", Order = 107)]
+    [JsonPropertyName("defenseNegating")] public bool DefenseNegating { get; set; } = true;
+
     // ============ Shared fields (ungrouped, between COMMON and category sections) ============
     // AoeType — used in Projectile and Buff/Debuff
     [EditorVisible("Category", "Projectile", "Buff", "Debuff")]

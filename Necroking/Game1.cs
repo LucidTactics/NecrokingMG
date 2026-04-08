@@ -1234,10 +1234,13 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
             case "Cloud":
                 _sim.PoisonClouds.SpawnCloud(target, spell, Faction.Undead);
-                // Instant AoE poison if spell has damage > 0 (e.g. poison_burst)
-                // Applies poison stacks — the standard poison tick system converts to HP loss
+                // Instant AoE poison damage through unified damage system
                 if (spell.Damage > 0)
                 {
+                    var flags = GameSystems.DamageFlags.None;
+                    if (spell.ArmorNegating) flags |= GameSystems.DamageFlags.ArmorNegating;
+                    if (spell.DefenseNegating) flags |= GameSystems.DamageFlags.DefenseNegating;
+
                     float dmgRadius = spell.AoeRadius > 0 ? spell.AoeRadius : spell.CloudRadius;
                     var nearbyIDs = new List<uint>();
                     _sim.Quadtree.QueryRadius(new Vec2(target.X, target.Y), dmgRadius, nearbyIDs);
@@ -1246,10 +1249,8 @@ public class Game1 : Microsoft.Xna.Framework.Game
                         int idx = Movement.UnitUtil.ResolveUnitIndex(_sim.UnitsMut, uid);
                         if (idx < 0 || !_sim.Units[idx].Alive) continue;
                         if (_sim.Units[idx].Faction == Faction.Undead) continue;
-                        _sim.UnitsMut[idx].PoisonStacks += spell.Damage;
-                        _sim.UnitsMut[idx].HitReacting = true; // triggers spook on animals
-                        if (_sim.Units[idx].PoisonTickTimer <= 0f)
-                            _sim.UnitsMut[idx].PoisonTickTimer = 3f; // start poison ticking
+                        GameSystems.DamageSystem.Apply(_sim.UnitsMut, idx, spell.Damage,
+                            GameSystems.DamageType.Poison, flags, _sim.DamageEventsMut);
                     }
                 }
                 break;
