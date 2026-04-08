@@ -344,79 +344,26 @@ public class SpellEditorWindow
             displayItems.Add(def?.DisplayName ?? id);
         }
 
-        // Draw list background
-        _ui.DrawRect(new Rectangle(x, listY, w, listH), new Color(25, 25, 38, 220));
-
-        // Manual list rendering with color dots
-        float scrollKey = GetListScroll("spellList");
-        int totalItemsH = displayItems.Count * itemH;
-        float maxScroll = Math.Max(0, totalItemsH - listH);
-
-        // Handle scroll
-        var listRect = new Rectangle(x, listY, w, listH);
-        if (listRect.Contains(_ui._mouse.X, _ui._mouse.Y))
-        {
-            int scrollDelta = _ui._mouse.ScrollWheelValue - _ui._prevMouse.ScrollWheelValue;
-            if (scrollDelta != 0)
+        // Shared scrollable list with custom renderer for category color dots
+        int clicked = _ui.DrawScrollableList("spellList", displayItems, filteredSelectedIdx,
+            x, listY, w, listH, customRenderer: (i, rect, isSel) =>
             {
-                scrollKey -= scrollDelta * 0.15f;
-                scrollKey = Math.Clamp(scrollKey, 0, maxScroll);
-                SetListScroll("spellList", scrollKey);
-            }
-        }
+                var def = _gameData.Spells.Get(_filteredIds[i]);
+                if (def != null)
+                {
+                    Color catColor = GetCategoryColor(def.Category);
+                    DrawSmallFilledCircle(x + 13, rect.Y + itemH / 2, 4, catColor);
+                }
+                _ui.DrawText(displayItems[i], new Vector2(rect.X + 20, rect.Y + 2),
+                    isSel ? EditorBase.TextBright : EditorBase.TextColor);
+            });
 
-        // Use integer scroll offset — avoids float truncation misalignment between
-        // hitbox rects and draw positions. The item rect is the single source of truth
-        // for both click detection and rendering.
-        int scrollInt = (int)scrollKey;
-        for (int i = 0; i < _filteredIds.Count; i++)
+        if (clicked >= 0 && clicked < _filteredIds.Count)
         {
-            int iy = listY + i * itemH - scrollInt;
-            if (iy + itemH < listY) continue;
-            if (iy >= listY + listH) break;
-
-            var itemRect = new Rectangle(x + 2, iy, w - 4, itemH);
-            bool hovered = itemRect.Contains(_ui._mouse.X, _ui._mouse.Y) && listRect.Contains(_ui._mouse.X, _ui._mouse.Y);
-            bool isSelected = (i == filteredSelectedIdx);
-
-            Color bg;
-            if (isSelected) bg = EditorBase.ItemSelected;
-            else if (hovered) bg = EditorBase.ItemHover;
-            else bg = (i % 2 == 0) ? new Color(30, 30, 48, 200) : new Color(25, 25, 40, 200);
-
-            _ui.DrawRect(itemRect, bg);
-
-            // Category color circle
-            var def = _gameData.Spells.Get(_filteredIds[i]);
-            if (def != null)
-            {
-                Color catColor = GetCategoryColor(def.Category);
-                int dotCX = x + 13;
-                int dotCY = itemRect.Y + itemH / 2;
-                DrawSmallFilledCircle(dotCX, dotCY, 4, catColor);
-            }
-
-            string displayName = displayItems[i];
-            _ui.DrawText(displayName, new Vector2(itemRect.X + 20, itemRect.Y + 3),
-                isSelected ? EditorBase.TextBright : EditorBase.TextColor);
-
-            if (hovered && _ui._mouse.LeftButton == ButtonState.Pressed &&
-                _ui._prevMouse.LeftButton == ButtonState.Released)
-            {
-                string clickedId = _filteredIds[i];
-                var allIds = _gameData.Spells.GetIDs();
-                _selectedIdx = IndexOf(allIds, clickedId);
-                _detailScroll = 0;
-            }
-        }
-
-        // Scrollbar
-        if (totalItemsH > listH)
-        {
-            float scrollRatio = scrollKey / Math.Max(1, totalItemsH - listH);
-            int barH = Math.Max(20, listH * listH / totalItemsH);
-            int barY = listY + (int)(scrollRatio * (listH - barH));
-            _ui.DrawRect(new Rectangle(x + w - 7, barY, 5, barH), new Color(100, 100, 140, 180));
+            string clickedId = _filteredIds[clicked];
+            var allIds = _gameData.Spells.GetIDs();
+            _selectedIdx = IndexOf(allIds, clickedId);
+            _detailScroll = 0;
         }
 
         // --- Bottom button row ---

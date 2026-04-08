@@ -369,10 +369,19 @@ public class EditorBase
     // === Scrollable List ===
 
     /// <summary>
+    /// Optional callback for custom item rendering in DrawScrollableList.
+    /// Called with (itemIndex, itemRect, isSelected) after the background is drawn.
+    /// If provided, the default text rendering is skipped — the callback owns all drawing.
+    /// </summary>
+    public delegate void ListItemRenderer(int itemIndex, Rectangle itemRect, bool isSelected);
+
+    /// <summary>
     /// Draws a scrollable list of items. Returns the index of the clicked item, or -1.
     /// </summary>
+    /// <param name="customRenderer">Optional callback for custom per-item rendering (e.g. category dots, icons).</param>
     public int DrawScrollableList(string panelId, IReadOnlyList<string> items, int selectedIdx,
-        int x, int y, int w, int h, string? searchFilter = null)
+        int x, int y, int w, int h, string? searchFilter = null,
+        ListItemRenderer? customRenderer = null)
     {
         bool inputBlocked = IsInputBlocked(0);
 
@@ -430,7 +439,9 @@ public class EditorBase
             else bg = (i % 2 == 0) ? new Color(30, 30, 48, 200) : new Color(25, 25, 40, 200);
 
             DrawRect(itemRect, bg);
-            if (iy >= y)
+            if (customRenderer != null)
+                customRenderer(i, itemRect, i == selectedIdx);
+            else if (iy >= y)
                 DrawText(items[i], new Vector2(itemRect.X + 4, itemRect.Y + 2), i == selectedIdx ? TextBright : TextColor);
 
             if (hovered && _mouse.LeftButton == ButtonState.Pressed && _prevMouse.LeftButton == ButtonState.Released)
