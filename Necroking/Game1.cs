@@ -99,7 +99,8 @@ public class Game1 : Microsoft.Xna.Framework.Game
     private PoisonCloudRenderer _poisonCloudRenderer = new();
     private MagicGlyphRenderer _glyphRenderer = new();
     private DebugDraw _debugDraw = new();
-    private List<DamageNumber> _damageNumbers = new();
+    private GameSystems.SpellEffectSystem _spellEffects = new();
+    private List<GameSystems.DamageNumber> _damageNumbers = new();
 
     // Game state
     private MenuState _menuState = MenuState.MainMenu;
@@ -141,16 +142,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
     }
 
     // Pending projectiles (multi-projectile delay)
-    private struct PendingProjectileGroup
-    {
-        public string SpellID;
-        public Vec2 Origin;
-        public Vec2 Target;
-        public int Remaining;
-        public float Timer;
-        public float Interval;
-    }
-    private readonly List<PendingProjectileGroup> _pendingProjectiles = new();
+    private readonly List<GameSystems.PendingProjectileGroup> _pendingProjectiles = new();
 
     // Editors
     private MapEditorWindow _mapEditor = new();
@@ -204,15 +196,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
     private float _autoPickupCooldown;
     private SoundEffect? _pickupSound;
 
-    private struct DamageNumber
-    {
-        public Vec2 WorldPos;
-        public int Damage;
-        public float Timer;
-        public string? PickupText; // non-null = this is a pickup notification, not damage
-        public float Height;
-        public bool IsPoison;
-    }
+    // DamageNumber and PendingProjectileGroup moved to GameSystems.SpellEffectSystem
 
     public Game1()
     {
@@ -1094,172 +1078,20 @@ public class Game1 : Microsoft.Xna.Framework.Game
     /// </summary>
     private void ExecuteSpellEffect(SpellDef spell, int necroIdx, Vec2 target, int slot)
     {
-        var necroPos = _sim.Units[necroIdx].Position;
-        var necroUid = _sim.Units[necroIdx].Id;
-        var effectOrigin = _sim.Units[necroIdx].EffectSpawnPos2D;
-
         // Cast flipbook effect at caster position
-        SpawnCastEffect(spell, effectOrigin);
+        SpawnCastEffect(spell, _sim.Units[necroIdx].EffectSpawnPos2D);
 
-        switch (spell.Category)
-        {
-            case "Projectile":
-                SpawnSpellProjectile(spell, effectOrigin, target, necroUid);
-                if (spell.Quantity > 1)
-                {
-                    _pendingProjectiles.Add(new PendingProjectileGroup
-                    {
-                        SpellID = spell.Id,
-                        Origin = effectOrigin,
-                        Target = target,
-                        Remaining = spell.Quantity - 1,
-                        Timer = 0f,
-                        Interval = spell.ProjectileDelay > 0f ? spell.ProjectileDelay : 0.1f
-                    });
-                }
-                break;
+        // Delegate to SpellEffectSystem — all category logic lives there
+        var result = _spellEffects.Execute(spell, _sim, _gameData, necroIdx, target, slot,
+            _damageNumbers,
+            SpawnSpellProjectile,
+            (sp, cIdx) => ExecuteSummonSpell(sp, _pendingSpell, _sim.Units[cIdx].Position, cIdx));
 
-            case "Buff":
-            case "Debuff":
-                if (!string.IsNullOrEmpty(spell.BuffID))
-                {
-                    var buffDef = _gameData.Buffs.Get(spell.BuffID);
-                    if (buffDef != null)
-                        BuffSystem.ApplyBuff(_sim.UnitsMut, necroIdx, buffDef);
-                }
-                break;
-
-            case "Strike":
-            {
-                var style = new LightningStyle
-                {
-                    CoreColor = spell.StrikeCoreColor,
-                    GlowColor = spell.StrikeGlowColor,
-                    CoreWidth = spell.StrikeCoreWidth,
-                    GlowWidth = spell.StrikeGlowWidth,
-                    Displacement = spell.StrikeDisplacement,
-                    MaxBranches = spell.StrikeBranches
-                };
-                var sVis = spell.StrikeVisualType == "GodRay" ? StrikeVisual.GodRay : StrikeVisual.Lightning;
-                var sGrp = new GodRayParams { EdgeSoftness = spell.GodRayEdgeSoftness,
-                    NoiseSpeed = spell.GodRayNoiseSpeed, NoiseStrength = spell.GodRayNoiseStrength,
-                    NoiseScale = spell.GodRayNoiseScale };
-                Enum.TryParse<SpellTargetFilter>(spell.TargetFilter, out var sTF);
-
-                if (spell.StrikeTargetUnit)
-                {
-                    var casterEffPos = effectOrigin;
-                    float casterH = _sim.Units[necroIdx].EffectSpawnHeight;
-                    int enemy = -1;
-                    float bestDist = spell.Range * spell.Range;
-                    for (int ui = 0; ui < _sim.Units.Count; ui++)
-                    {
-                        if (!_sim.Units[ui].Alive || _sim.Units[ui].Faction == _sim.Units[necroIdx].Faction) continue;
-                        float d = (target - _sim.Units[ui].Position).LengthSq();
-                        if (d < bestDist) { bestDist = d; enemy = ui; }
-                    }
-                    if (enemy >= 0)
-                    {
-                        var targetPos = _sim.Units[enemy].Position;
-                        float targetH = 1.0f;
-                        var tDef = _gameData.Units.Get(_sim.Units[enemy].UnitDefID);
-                        if (tDef != null) targetH = tDef.SpriteWorldHeight * 0.5f;
-
-                        _sim.Lightning.SpawnZap(casterEffPos, targetPos,
-                            spell.ZapDuration > 0 ? spell.ZapDuration : spell.StrikeDuration,
-                            style, casterH, targetH);
-                        _sim.DealDamage(enemy, spell.Damage);
-                        _damageNumbers.Add(new DamageNumber { WorldPos = targetPos, Damage = spell.Damage, Timer = 0f, Height = targetH });
-                    }
-                }
-                else
-                {
-                    _sim.Lightning.SpawnStrike(target, spell.TelegraphDuration,
-                        spell.StrikeDuration, spell.AoeRadius, spell.Damage,
-                        style, spell.Id, sVis, sGrp, sTF);
-                }
-                break;
-            }
-
-            case "Summon":
-                ExecuteSummonSpell(spell, _pendingSpell, necroPos, necroIdx);
-                break;
-
-            case "Beam":
-            {
-                int targetIdx = FindClosestEnemyToPoint(target, 3f);
-                if (targetIdx >= 0)
-                {
-                    _sim.Lightning.SpawnBeam(necroUid, _sim.Units[targetIdx].Id,
-                        spell.Id, spell.Damage, spell.BeamTickRate, spell.BeamRetargetRadius,
-                        new LightningStyle { CoreColor = spell.BeamCoreColor, GlowColor = spell.BeamGlowColor,
-                            CoreWidth = spell.BeamCoreWidth, GlowWidth = spell.BeamGlowWidth,
-                            Displacement = spell.BeamDisplacement, MaxBranches = spell.BeamBranches });
-                    _channelingSlot = slot;
-                }
-                break;
-            }
-
-            case "Drain":
-            {
-                int targetIdx2 = FindClosestEnemyToPoint(target, 5f);
-                if (targetIdx2 >= 0)
-                {
-                    _sim.Lightning.SpawnDrain(necroUid, _sim.Units[targetIdx2].Id,
-                        spell.Id, spell.Damage, spell.DrainTickRate, spell.DrainHealPercent,
-                        spell.DrainCorpseHP, spell.DrainReversed, spell.DrainMaxDuration,
-                        spell.DrainTendrilCount, spell.DrainArcHeight, spell.DrainCoreColor, spell.DrainGlowColor);
-                    _channelingSlot = slot;
-                }
-                break;
-            }
-
-            case "Command":
-            {
-                for (int ci = 0; ci < _sim.Units.Count; ci++)
-                {
-                    if (!_sim.Units[ci].Alive) continue;
-                    if (_sim.Units[ci].Faction != Faction.Undead) continue;
-                    if (_sim.Units[ci].Archetype != AI.ArchetypeRegistry.HordeMinion) continue;
-
-                    _sim.UnitsMut[ci].Routine = 4;
-                    _sim.UnitsMut[ci].Subroutine = 0;
-                    _sim.UnitsMut[ci].SubroutineTimer = 0f;
-                    _sim.UnitsMut[ci].MoveTarget = target;
-                    _sim.UnitsMut[ci].Target = CombatTarget.None;
-                    _sim.UnitsMut[ci].EngagedTarget = CombatTarget.None;
-                }
-                break;
-            }
-
-            case "Cloud":
-                _sim.PoisonClouds.SpawnCloud(target, spell, Faction.Undead);
-                // Instant AoE poison damage through unified damage system
-                if (spell.Damage > 0)
-                {
-                    var flags = GameSystems.DamageFlags.None;
-                    if (spell.ArmorNegating) flags |= GameSystems.DamageFlags.ArmorNegating;
-                    if (spell.DefenseNegating) flags |= GameSystems.DamageFlags.DefenseNegating;
-
-                    float dmgRadius = spell.AoeRadius > 0 ? spell.AoeRadius : spell.CloudRadius;
-                    var nearbyIDs = new List<uint>();
-                    _sim.Quadtree.QueryRadius(new Vec2(target.X, target.Y), dmgRadius, nearbyIDs);
-                    foreach (uint uid in nearbyIDs)
-                    {
-                        int idx = Movement.UnitUtil.ResolveUnitIndex(_sim.UnitsMut, uid);
-                        if (idx < 0 || !_sim.Units[idx].Alive) continue;
-                        if (_sim.Units[idx].Faction == Faction.Undead) continue;
-                        GameSystems.DamageSystem.Apply(_sim.UnitsMut, idx, spell.Damage,
-                            GameSystems.DamageType.Poison, flags, _sim.DamageEventsMut);
-                    }
-                }
-                break;
-
-            case "Toggle":
-                if (spell.ToggleEffect == "ghost_mode")
-                    _sim.UnitsMut[necroIdx].GhostMode = !_sim.Units[necroIdx].GhostMode;
-                break;
-        }
+        // Apply side effects that SpellEffectSystem can't own (Game1 state)
+        if (result.ChannelingSlot >= 0)
+            _channelingSlot = result.ChannelingSlot;
+        if (result.PendingProjectile.HasValue)
+            _pendingProjectiles.Add(result.PendingProjectile.Value);
     }
 
     /// <summary>Remove a specific casting buff from a unit.</summary>
