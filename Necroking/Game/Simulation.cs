@@ -61,6 +61,7 @@ public class Simulation
     private ProjectileManager _projectiles = new();
     private LightningSystem _lightning = new();
     private PoisonCloudSystem _poisonClouds = new();
+    private PhysicsSystem _physics = new();
     private MagicGlyphSystem _magicGlyphs = new();
     private HordeSystem _horde = new();
     private NecromancerState _necroState = new();
@@ -106,6 +107,7 @@ public class Simulation
     public ProjectileManager Projectiles => _projectiles;
     public LightningSystem Lightning => _lightning;
     public PoisonCloudSystem PoisonClouds => _poisonClouds;
+    public PhysicsSystem Physics => _physics;
     public MagicGlyphSystem MagicGlyphs => _magicGlyphs;
     public HordeSystem Horde => _horde;
     public CombatLog CombatLog => _combatLog;
@@ -221,7 +223,8 @@ public class Simulation
         for (int i = 0; i < _units.Count; i++)
             _units[i].HitReacting = false;
 
-        UpdateMovement(dt);
+        UpdateMovement(dt);         // Skips InPhysics units
+        _physics.Update(dt, _units); // 2.5D impulse physics (flying units, collisions, landing)
         _horde.UpdateStates(_units, _quadtree, _necromancerIdx, dt);
         UpdateFacingAngles(dt);
         UpdateCombat(dt);
@@ -381,6 +384,7 @@ public class Simulation
         for (int i = 0; i < _units.Count; i++)
         {
             if (!_units[i].Alive) continue;
+            if (_units[i].InPhysics) continue; // Physics system owns this unit
             if (_units[i].Jumping || _units[i].KnockdownTimer > 0f) { _units[i].PreferredVel = Vec2.Zero; continue; }
 
             // New archetype system: if Archetype > 0, dispatch to handler
@@ -997,6 +1001,7 @@ public class Simulation
         for (int i = 0; i < _units.Count; i++)
         {
             if (!_units[i].Alive) continue;
+            if (_units[i].InPhysics) continue; // Physics system owns this unit's movement
             // Movement blocked by: jumping, knockdown, standup, pending attack, or post-attack lockout
             if (_units[i].Jumping || _units[i].KnockdownTimer > 0f || _units[i].StandupTimer > 0f
                 || !_units[i].PendingAttack.IsNone || _units[i].PostAttackTimer > 0f)

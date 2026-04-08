@@ -4470,7 +4470,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 Math.Min(255, (int)(tint.G * 0.7f + 100)),
                 Math.Min(255, (int)(tint.B * 0.7f + 120)), 100);
 
-        float heightOffset = _sim.Units[i].JumpHeight;
+        float heightOffset = _sim.Units[i].JumpHeight + _sim.Units[i].Z;
         var sp = _renderer.WorldToScreen(_sim.Units[i].Position, heightOffset, _camera);
 
         // Compute weapon attachment for weapon particle buff visuals

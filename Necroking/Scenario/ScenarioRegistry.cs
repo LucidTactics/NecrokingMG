@@ -58,6 +58,9 @@ public static class ScenarioRegistry
         Register("magic_glyph", () => new Scenarios.MagicGlyphScenario());
         Register("poison_burst", () => new Scenarios.PoisonBurstScenario());
         Register("poison_flee", () => new Scenarios.PoisonFleeScenario());
+        Register("physics_single", () => new Scenarios.PhysicsSingleScenario());
+        Register("physics_multi", () => new Scenarios.PhysicsMultiScenario());
+        Register("physics_chain", () => new Scenarios.PhysicsChainScenario());
     }
 
     public static void Register(string name, Func<ScenarioBase> creator)
