@@ -238,22 +238,20 @@ public class SpellEffectSystem
 
         if (spell.Damage > 0)
         {
-            var flags = DamageFlags.None;
-            if (spell.ArmorNegating) flags |= DamageFlags.ArmorNegating;
-            if (spell.DefenseNegating) flags |= DamageFlags.DefenseNegating;
-
-            float dmgRadius = spell.AoeRadius > 0 ? spell.AoeRadius : spell.CloudRadius;
-            var nearbyIDs = new List<uint>();
-            sim.Quadtree.QueryRadius(new Vec2(target.X, target.Y), dmgRadius, nearbyIDs);
-            foreach (uint uid in nearbyIDs)
-            {
-                int idx = UnitUtil.ResolveUnitIndex(sim.UnitsMut, uid);
-                if (idx < 0 || !sim.Units[idx].Alive) continue;
-                if (sim.Units[idx].Faction == Faction.Undead) continue;
-                DamageSystem.Apply(sim.UnitsMut, idx, spell.Damage,
-                    DamageType.Poison, flags, sim.DamageEventsMut);
-            }
+            var flags = SpellDamageFlags(spell);
+            float radius = spell.AoeRadius > 0 ? spell.AoeRadius : spell.CloudRadius;
+            DamageSystem.ApplyAoE(sim.UnitsMut, sim.Quadtree, target, radius,
+                spell.Damage, DamageType.Poison, flags, Faction.Undead, sim.DamageEventsMut);
         }
+    }
+
+    /// <summary>Build DamageFlags from a spell's AN/DN settings.</summary>
+    private static DamageFlags SpellDamageFlags(SpellDef spell)
+    {
+        var flags = DamageFlags.None;
+        if (spell.ArmorNegating) flags |= DamageFlags.ArmorNegating;
+        if (spell.DefenseNegating) flags |= DamageFlags.DefenseNegating;
+        return flags;
     }
 
     /// <summary>Find closest enemy unit to a point within range.</summary>

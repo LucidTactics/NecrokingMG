@@ -195,18 +195,9 @@ public class MagicGlyphSystem
                                     var flags = DamageFlags.None;
                                     if (spell.ArmorNegating) flags |= DamageFlags.ArmorNegating;
                                     if (spell.DefenseNegating) flags |= DamageFlags.DefenseNegating;
-
                                     float aoeR = spell.AoeRadius > 0 ? spell.AoeRadius : spell.CloudRadius;
-                                    nearbyIDs.Clear();
-                                    qt.QueryRadius(g.Position, aoeR, nearbyIDs);
-                                    foreach (uint uid in nearbyIDs)
-                                    {
-                                        int idx = UnitUtil.ResolveUnitIndex(units, uid);
-                                        if (idx < 0 || !units[idx].Alive) continue;
-                                        if (units[idx].Faction == g.OwnerFaction) continue;
-                                        DamageSystem.Apply(units, idx, spell.Damage,
-                                            DamageType.Poison, flags, _damageEvents);
-                                    }
+                                    DamageSystem.ApplyAoE(units, qt, g.Position, aoeR,
+                                        spell.Damage, DamageType.Poison, flags, g.OwnerFaction, _damageEvents);
                                 }
                             }
                         }
@@ -215,16 +206,9 @@ public class MagicGlyphSystem
                         if (g.Damage > 0)
                         {
                             float dmgR = g.DamageRadius > 0 ? g.DamageRadius : g.Radius;
-                            nearbyIDs.Clear();
-                            qt.QueryRadius(g.Position, dmgR, nearbyIDs);
-                            foreach (uint uid in nearbyIDs)
-                            {
-                                int idx = UnitUtil.ResolveUnitIndex(units, uid);
-                                if (idx < 0 || !units[idx].Alive) continue;
-                                if (units[idx].Faction == g.OwnerFaction) continue;
-                                DamageSystem.Apply(units, idx, g.Damage,
-                                    DamageType.Physical, DamageFlags.None, _damageEvents);
-                            }
+                            DamageSystem.ApplyAoE(units, qt, g.Position, dmgR,
+                                g.Damage, DamageType.Physical, DamageFlags.None,
+                                g.OwnerFaction, _damageEvents);
                         }
                     }
 

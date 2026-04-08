@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using Necroking.Core;
 using Necroking.Data;
 using Necroking.Movement;
+using Necroking.Spatial;
 
 namespace Necroking.GameSystems;
 
@@ -149,6 +150,27 @@ public static class DamageSystem
         {
             units[targetIdx].Alive = false;
             units[targetIdx].Stats.HP = 0;
+        }
+    }
+
+    /// <summary>
+    /// Apply damage to all enemies within an AoE radius. Shared helper used by
+    /// Cloud spells, glyph traps, and any future AoE damage source.
+    /// </summary>
+    public static void ApplyAoE(UnitArrays units, Quadtree qt, Vec2 center, float radius,
+        int damage, DamageType type, DamageFlags flags,
+        Faction ownerFaction, List<DamageEvent> damageEvents)
+    {
+        if (damage <= 0) return;
+
+        var nearbyIDs = new List<uint>();
+        qt.QueryRadius(center, radius, nearbyIDs);
+        foreach (uint uid in nearbyIDs)
+        {
+            int idx = UnitUtil.ResolveUnitIndex(units, uid);
+            if (idx < 0 || !units[idx].Alive) continue;
+            if (units[idx].Faction == ownerFaction) continue;
+            Apply(units, idx, damage, type, flags, damageEvents);
         }
     }
 }
