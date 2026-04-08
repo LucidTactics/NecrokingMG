@@ -3205,7 +3205,12 @@ public class Game1 : Microsoft.Xna.Framework.Game
             // Also force INTO Fall/Knockdown from any state
             needsForce |= (targetState == AnimState.Fall || targetState == AnimState.Knockdown)
                 && currentAnim != targetState;
-            if (needsForce)
+            if (_sim.Units[i].SnapAnimToEnd)
+            {
+                animData.Ctrl.ForceStateAtEnd(targetState);
+                _sim.UnitsMut[i].SnapAnimToEnd = false;
+            }
+            else if (needsForce)
                 animData.Ctrl.ForceState(targetState);
             else
                 animData.Ctrl.RequestState(targetState);

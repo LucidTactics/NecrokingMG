@@ -241,6 +241,15 @@ public class AnimController
         SwitchState(newState);
     }
 
+    /// <summary>Force a state and skip to its last frame (for PlayOnceHold animations).</summary>
+    public void ForceStateAtEnd(AnimState newState)
+    {
+        if (_currentState == AnimState.Death) return;
+        SwitchState(newState);
+        _animTime = 999999f; // will be clamped to end on next Update
+        _finished = true;
+    }
+
     private void SwitchState(AnimState newState)
     {
         _currentState = newState;

@@ -304,14 +304,21 @@ public class Simulation
                     _damageEvents);
 
             // Physics knockback from AoE projectile impact
+            DebugLog.Log("physics", $"[Hit] spellID='{hit.SpellID}' type={hit.ProjectileType} " +
+                $"impact=({hit.ImpactPos.X:F1},{hit.ImpactPos.Y:F1}) aoe={hit.AoeRadius:F1} " +
+                $"unitIdx={hit.UnitIdx} faction={hit.OwnerFaction}");
             if (_gameData != null && !string.IsNullOrEmpty(hit.SpellID))
             {
                 var spellDef = _gameData.Spells.Get(hit.SpellID);
+                DebugLog.Log("physics", $"[KB Check] spell={hit.SpellID} found={spellDef != null} " +
+                    $"kbForce={spellDef?.KnockbackForce ?? -1} kbUp={spellDef?.KnockbackUpward ?? -1} " +
+                    $"kbRadius={spellDef?.KnockbackRadius ?? -1}");
                 if (spellDef != null && spellDef.KnockbackForce > 0f)
                 {
                     float kbRadius = spellDef.KnockbackRadius > 0f ? spellDef.KnockbackRadius : hit.AoeRadius;
-                    _physics.ApplyRadialImpulse(_units, hit.ImpactPos, kbRadius,
+                    int launched = _physics.ApplyRadialImpulse(_units, hit.ImpactPos, kbRadius,
                         spellDef.KnockbackForce, spellDef.KnockbackUpward, hit.OwnerFaction);
+                    DebugLog.Log("physics", $"[KB Result] launched={launched} radius={kbRadius:F1}");
                 }
             }
         }

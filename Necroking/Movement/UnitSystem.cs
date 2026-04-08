@@ -24,6 +24,7 @@ public class Unit
     public Vec2 PreferredVel;
     public float Z;             // Height above ground (0 = on ground). Used by 2.5D impulse physics.
     public bool InPhysics;      // True while physics system owns this unit's movement.
+    public bool SnapAnimToEnd;  // If true, next anim state change skips to last frame (e.g. knockdown on landing).
 
     // Movement
     public float Radius = 0.495f;

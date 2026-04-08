@@ -111,7 +111,7 @@ public class PhysicsSystem
         for (int i = 0; i < units.Count; i++)
         {
             if (!units[i].Alive || units[i].InPhysics) continue;
-            if (units[i].Faction == ownerFaction) continue;
+            // Physics knockback hits everyone (friendly fire)
 
             Vec2 delta = units[i].Position - center;
             float dist = delta.Length();
@@ -266,6 +266,7 @@ public class PhysicsSystem
             (KnockdownTimeMax - KnockdownTimeMin) + KnockdownTimeMin);
         units[idx].KnockdownTimer = knockdownTime;
         units[idx].OverrideAnim = AnimRequest.Forced(AnimState.Knockdown);
+        units[idx].SnapAnimToEnd = true;  // Skip to last frame — unit is already on ground
 
         DebugLog.Log("physics", $"[Land] unit#{idx} knockdown={knockdownTime:F1}s " +
             $"pos=({units[idx].Position.X:F1},{units[idx].Position.Y:F1})");

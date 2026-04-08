@@ -50,9 +50,15 @@ public static class AnimResolver
         }
 
         // The resolver has already decided who wins — always ForceState to apply it.
-        // The old RequestState/priority system inside AnimController is bypassed;
-        // all priority decisions happen here in the resolver.
-        ctrl.ForceState(winner.State);
+        if (unit.SnapAnimToEnd)
+        {
+            ctrl.ForceStateAtEnd(winner.State);
+            unit.SnapAnimToEnd = false;
+        }
+        else
+        {
+            ctrl.ForceState(winner.State);
+        }
         ctrl.PlaybackSpeed = winner.PlaybackSpeed;
     }
 
