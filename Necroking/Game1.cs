@@ -3118,8 +3118,12 @@ public class Game1 : Microsoft.Xna.Framework.Game
             {
             // --- Legacy animation selection for non-archetype units ---
             AnimState targetState;
-            if (_sim.Units[i].StandupTimer > 0f)
+            if (_sim.Units[i].InPhysics)
+                targetState = AnimState.Fall;
+            else if (_sim.Units[i].StandupTimer > 0f)
                 targetState = AnimState.Standup;
+            else if (_sim.Units[i].KnockdownTimer > 0f)
+                targetState = AnimState.Knockdown;
             else if (_sim.Units[i].Dodging)
                 targetState = AnimState.Dodge;
             else if (!_sim.Units[i].PendingAttack.IsNone)
@@ -3191,8 +3195,14 @@ public class Game1 : Microsoft.Xna.Framework.Game
             }
 
             var currentAnim = animData.Ctrl.CurrentState;
-            if ((currentAnim == AnimState.Sit || currentAnim == AnimState.Sleep)
-                && targetState != AnimState.Sit && targetState != AnimState.Sleep)
+            // ForceState needed to break out of PlayOnceHold animations
+            bool needsForce = (currentAnim == AnimState.Sit || currentAnim == AnimState.Sleep
+                || currentAnim == AnimState.Fall || currentAnim == AnimState.Knockdown)
+                && currentAnim != targetState;
+            // Also force INTO Fall/Knockdown from any state
+            needsForce |= (targetState == AnimState.Fall || targetState == AnimState.Knockdown)
+                && currentAnim != targetState;
+            if (needsForce)
                 animData.Ctrl.ForceState(targetState);
             else
                 animData.Ctrl.RequestState(targetState);

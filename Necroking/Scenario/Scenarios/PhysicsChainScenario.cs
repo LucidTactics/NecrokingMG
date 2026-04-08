@@ -68,7 +68,7 @@ public class PhysicsChainScenario : ScenarioBase
             if (a >= 0)
             {
                 bool ok = sim.Physics.ApplyImpulse(sim.UnitsMut, a,
-                    new Vec2(1f, 0f), 25f, 5f); // strong horizontal push toward B
+                    new Vec2(1f, 0f), 35f, 5f); // strong horizontal push toward B
                 DebugLog.Log(ScenarioLog, $"[{_elapsed:F2}s] Launched A toward B, ok={ok}");
             }
             DeferredScreenshot = "physics_chain_launch";
