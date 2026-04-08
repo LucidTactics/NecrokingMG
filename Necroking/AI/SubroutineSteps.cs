@@ -87,12 +87,12 @@ public static class SubroutineSteps
             {
                 ctx.Subroutine = 1;
                 ctx.SubroutineTimer = 3f + (i % 6) + ((ctx.FrameNumber + i * 3) % 5); // 3-13s idle
-                ctx.Units[i].PreferredVel = Vec2.Zero;
+                SetIdle(ref ctx);
             }
         }
         else // idle at point
         {
-            ctx.Units[i].PreferredVel = Vec2.Zero;
+            SetIdle(ref ctx);
             ctx.SubroutineTimer -= ctx.Dt;
             if (ctx.SubroutineTimer <= 0f)
             {

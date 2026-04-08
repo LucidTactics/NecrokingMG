@@ -49,12 +49,10 @@ public static class AnimResolver
             return;
         }
 
-        // Decide whether to force or request based on interrupt flag
-        if (winner.Interrupt)
-            ctrl.ForceState(winner.State);
-        else
-            ctrl.RequestState(winner.State);
-
+        // The resolver has already decided who wins — always ForceState to apply it.
+        // The old RequestState/priority system inside AnimController is bypassed;
+        // all priority decisions happen here in the resolver.
+        ctrl.ForceState(winner.State);
         ctrl.PlaybackSpeed = winner.PlaybackSpeed;
     }
 
