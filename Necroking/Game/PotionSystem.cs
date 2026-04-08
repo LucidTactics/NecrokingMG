@@ -293,6 +293,8 @@ public static class PotionSystem
                     {
                         units[i].Stats.HP -= dmg;
                         units[i].HitReacting = true;
+                        DebugLog.Log("ai", $"[PoisonTick] unit#{i} dmg={dmg} stacks={units[i].PoisonStacks} " +
+                            $"HP={units[i].Stats.HP} hitReact=true faction={units[i].Faction}");
                         damageEvents.Add(new DamageEvent
                         {
                             Position = units[i].Position,

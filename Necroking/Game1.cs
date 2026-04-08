@@ -3073,7 +3073,50 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 continue;
             }
 
-            // Determine animation state
+            // --- Two-channel animation for archetype units ---
+            if (_sim.Units[i].Archetype > 0)
+            {
+                // Archetype units use the RoutineAnim/OverrideAnim two-channel system.
+                // AI handlers set RoutineAnim, combat/damage sets OverrideAnim.
+                // AnimResolver picks the winner based on priority.
+
+                // Combat engine overrides: pending attacks get priority 2 override
+                if (!_sim.Units[i].PendingAttack.IsNone)
+                {
+                    var atkState = ResolvePendingAttackAnim(_sim.Units[i].Stats,
+                        _sim.Units[i].PendingWeaponIdx, _sim.Units[i].PendingWeaponIsRanged,
+                        _sim.Units[i].Archetype);
+                    float lockout = _gameData.Settings.Combat.PostAttackLockout;
+                    float animDur = animData.Ctrl.GetTotalDurationSeconds(atkState);
+                    float spd = (animDur > 0f && lockout > 0f) ? MathF.Max(1f, animDur / lockout) : 1f;
+                    _sim.UnitsMut[i].OverrideAnim = AnimRequest.Combat(atkState, spd);
+                }
+                else if (_sim.Units[i].InCombat && _sim.Units[i].AttackCooldown > 0f)
+                {
+                    // Pre-roll: start attack animation early
+                    float cooldownRemaining = _sim.Units[i].AttackCooldown;
+                    float effectTime = animData.Ctrl.GetEffectTimeSeconds(AnimState.Attack1);
+                    float animDur = animData.Ctrl.GetTotalDurationSeconds(AnimState.Attack1);
+                    float lockout = _gameData.Settings.Combat.PostAttackLockout;
+                    float spd = (animDur > 0f && lockout > 0f) ? MathF.Max(1f, animDur / lockout) : 1f;
+                    float preRollTime = effectTime > 0f ? effectTime / spd : 0f;
+                    if (preRollTime > 0f && cooldownRemaining <= preRollTime)
+                        _sim.UnitsMut[i].OverrideAnim = AnimRequest.Combat(AnimState.Attack1, spd);
+                }
+
+                // Reverse walk playback
+                float facingRad2 = _sim.Units[i].FacingAngle * MathF.PI / 180f;
+                var facingDir2 = new Vec2(MathF.Cos(facingRad2), MathF.Sin(facingRad2));
+                var vel2 = _sim.Units[i].Velocity;
+                bool backward2 = vel2.LengthSq() > 0.1f && vel2.Normalized().Dot(facingDir2) < -0.3f;
+                animData.Ctrl.SetReversePlayback(backward2);
+
+                AnimResolver.Resolve(_sim.UnitsMut[i], animData.Ctrl, dt);
+                animData.Ctrl.Update(dt);
+            }
+            else
+            {
+            // --- Legacy animation selection for non-archetype units ---
             AnimState targetState;
             if (_sim.Units[i].StandupTimer > 0f)
                 targetState = AnimState.Standup;
@@ -3085,28 +3128,12 @@ public class Game1 : Microsoft.Xna.Framework.Game
                     _sim.Units[i].Archetype);
             else if (_sim.Units[i].HitReacting)
                 targetState = AnimState.BlockReact;
-            else if (_sim.Units[i].Archetype == AI.ArchetypeRegistry.DeerHerd
-                && _sim.Units[i].Routine == 6 /* RoutineFeeding */
-                && _sim.Units[i].Subroutine == 1 /* FeedEating */)
-                targetState = AnimState.Feeding;
-            else if ((_sim.Units[i].Archetype == AI.ArchetypeRegistry.DeerHerd
-                || _sim.Units[i].Archetype == AI.ArchetypeRegistry.WolfPack)
-                && _sim.Units[i].Routine == 1 /* RoutineSleeping */)
-            {
-                if (_sim.Units[i].Subroutine == 0) // Sitting down
-                    targetState = AnimState.Sit;
-                else if (_sim.Units[i].Subroutine == 1) // Sleeping
-                    targetState = AnimState.Sleep;
-                else // Waking — StandupTimer drives the Standup anim via the check above
-                    targetState = AnimState.Idle;
-            }
             else if (_sim.Units[i].BlockReacting)
                 targetState = AnimState.BlockReact;
             else if (_sim.Units[i].PostAttackTimer > 0f)
                 targetState = AnimState.Block;
             else if (_sim.Units[i].InCombat && _sim.Units[i].AttackCooldown > 0f)
             {
-                // Pre-roll: start attack animation early so effect time aligns with cooldown expiry
                 float cooldownRemaining = _sim.Units[i].AttackCooldown;
                 float effectTime = animData.Ctrl.GetEffectTimeSeconds(AnimState.Attack1);
                 float animDur = animData.Ctrl.GetTotalDurationSeconds(AnimState.Attack1);
@@ -3115,26 +3142,23 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 float preRollTime = effectTime > 0f ? effectTime / speed : 0f;
 
                 if (preRollTime > 0f && cooldownRemaining <= preRollTime)
-                    targetState = AnimState.Attack1; // start wind-up early
+                    targetState = AnimState.Attack1;
                 else
                     targetState = AnimState.Block;
             }
             else if (_sim.Units[i].GhostMode)
-            {
                 targetState = AnimState.Hover;
-            }
             else
             {
                 float speed = _sim.Units[i].Velocity.Length();
                 float baseSpeed = _sim.Units[i].Stats.CombatSpeed;
-                float walkThreshold = 0.25f;
                 float jogThreshold = 4f + baseSpeed / 3f;
                 float runThreshold = 6f + 2f * baseSpeed / 3f;
 
                 bool carrying = _sim.Units[i].CarryingCorpseID >= 0;
                 if (carrying)
-                    targetState = AnimState.Carry; // always Carry when carrying (speed scaling handles idle)
-                else if (speed <= walkThreshold)
+                    targetState = AnimState.Carry;
+                else if (speed <= 0.25f)
                     targetState = AnimState.Idle;
                 else if (speed < jogThreshold)
                     targetState = AnimState.Walk;
@@ -3142,38 +3166,22 @@ public class Game1 : Microsoft.Xna.Framework.Game
                     targetState = AnimState.Jog;
                 else
                     targetState = AnimState.Run;
-
-                // Debug: log state transitions
-                if (animData.Ctrl.CurrentState != targetState && speed > walkThreshold)
-                {
-                    string defId = _sim.Units[i].UnitDefID ?? "?";
-                    DebugLog.Log("anim", $"Unit {i} ({defId}): {animData.Ctrl.CurrentState}->{targetState} speed={speed:F1} base={baseSpeed:F1} walk<{jogThreshold:F1} jog<{runThreshold:F1}");
-                }
             }
 
-            // Reverse walk playback when moving backward relative to facing
+            // Reverse walk playback
             float facingRad = _sim.Units[i].FacingAngle * MathF.PI / 180f;
             var facingDir = new Vec2(MathF.Cos(facingRad), MathF.Sin(facingRad));
             var vel = _sim.Units[i].Velocity;
-            bool movingBackward = false;
-            if (vel.LengthSq() > 0.1f)
-            {
-                float dot = vel.Normalized().Dot(facingDir);
-                movingBackward = dot < -0.3f;
-            }
+            bool movingBackward = vel.LengthSq() > 0.1f && vel.Normalized().Dot(facingDir) < -0.3f;
             animData.Ctrl.SetReversePlayback(movingBackward);
 
-            // Carry animation: scale playback speed with movement, freeze when idle
             if (targetState == AnimState.Carry)
             {
                 float speed = _sim.Units[i].Velocity.Length();
                 float baseSpeed = _sim.Units[i].Stats.CombatSpeed;
-                // Normalize speed to a 0-1 range, clamp to reasonable playback bounds
                 float speedRatio = baseSpeed > 0f ? speed / baseSpeed : 0f;
                 animData.Ctrl.PlaybackSpeed = Math.Clamp(speedRatio, 0f, 1.5f);
             }
-
-            // When transitioning into attack, calculate playback speed to fit within lockout
             if (targetState == AnimState.Attack1 && animData.Ctrl.CurrentState != AnimState.Attack1)
             {
                 float lockout = _gameData.Settings.Combat.PostAttackLockout;
@@ -3182,19 +3190,14 @@ public class Game1 : Microsoft.Xna.Framework.Game
                     animData.Ctrl.PlaybackSpeed = MathF.Max(1f, animDur / lockout);
             }
 
-            // Break out of Sit/Sleep hold — ForceState needed since PlayOnceHold
-            // blocks normal RequestState transitions
             var currentAnim = animData.Ctrl.CurrentState;
             if ((currentAnim == AnimState.Sit || currentAnim == AnimState.Sleep)
                 && targetState != AnimState.Sit && targetState != AnimState.Sleep)
-            {
                 animData.Ctrl.ForceState(targetState);
-            }
             else
-            {
                 animData.Ctrl.RequestState(targetState);
-            }
             animData.Ctrl.Update(dt);
+            } // end legacy path
 
             // Action moment handling: route to melee attack or spell cast
             if (animData.Ctrl.ConsumeActionMoment())

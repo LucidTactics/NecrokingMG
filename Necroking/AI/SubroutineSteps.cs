@@ -2,6 +2,7 @@ using System;
 using Necroking.Core;
 using Necroking.Data;
 using Necroking.Movement;
+using Necroking.Render;
 using Necroking.World;
 
 namespace Necroking.AI;
@@ -244,6 +245,7 @@ public static class SubroutineSteps
     {
         int i = ctx.UnitIndex;
         ctx.Units[i].PreferredVel = Vec2.Zero;
+        ctx.Units[i].RoutineAnim = AnimRequest.Locomotion(AnimState.Idle);
         uint targetId = ctx.AlertTarget;
         if (targetId == GameConstants.InvalidUnit) return;
         for (int j = 0; j < ctx.Units.Count; j++)
@@ -314,7 +316,8 @@ public static class SubroutineSteps
     //  Helpers
     // ═══════════════════════════════════════
 
-    /// <summary>Pathfind toward a position (shared by all movement steps).</summary>
+    /// <summary>Pathfind toward a position (shared by all movement steps).
+    /// Also sets RoutineAnim to the appropriate locomotion state.</summary>
     public static void MoveToward(ref AIContext ctx, Vec2 target, float speed)
     {
         int i = ctx.UnitIndex;
@@ -332,7 +335,42 @@ public static class SubroutineSteps
             ctx.Units[i].PreferredVel = (target - myPos) * (1f / dist) * speed;
         }
         else
+        {
             ctx.Units[i].PreferredVel = Vec2.Zero;
+        }
+
+        // Set locomotion animation based on intended speed
+        SetLocomotionAnim(ref ctx, speed);
+    }
+
+    /// <summary>
+    /// Set the routine animation to the appropriate locomotion state based on speed.
+    /// Uses the same threshold logic as the old Game1.UpdateAnimations velocity check.
+    /// </summary>
+    public static void SetLocomotionAnim(ref AIContext ctx, float speed)
+    {
+        float baseSpeed = ctx.Units[ctx.UnitIndex].Stats.CombatSpeed;
+        float jogThreshold = 4f + baseSpeed / 3f;
+        float runThreshold = 6f + 2f * baseSpeed / 3f;
+
+        AnimState state;
+        if (speed <= 0.25f)
+            state = AnimState.Idle;
+        else if (speed < jogThreshold)
+            state = AnimState.Walk;
+        else if (speed < runThreshold)
+            state = AnimState.Jog;
+        else
+            state = AnimState.Run;
+
+        ctx.Units[ctx.UnitIndex].RoutineAnim = AnimRequest.Locomotion(state);
+    }
+
+    /// <summary>Set routine anim to Idle and zero velocity.</summary>
+    public static void SetIdle(ref AIContext ctx)
+    {
+        ctx.Units[ctx.UnitIndex].PreferredVel = Vec2.Zero;
+        ctx.Units[ctx.UnitIndex].RoutineAnim = AnimRequest.Locomotion(AnimState.Idle);
     }
 
     /// <summary>Find closest enemy unit (different faction, alive).</summary>

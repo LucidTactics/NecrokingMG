@@ -74,10 +74,12 @@ public static class DamageSystem
             case DamageType.Physical:
                 units[targetIdx].Stats.HP -= finalDamage;
                 units[targetIdx].HitReacting = true;
+                units[targetIdx].OverrideAnim = Render.AnimRequest.Combat(Render.AnimState.BlockReact);
                 if (units[targetIdx].Stats.HP <= 0)
                 {
                     units[targetIdx].Stats.HP = 0;
                     units[targetIdx].Alive = false;
+                    units[targetIdx].OverrideAnim = Render.AnimRequest.Forced(Render.AnimState.Death);
                 }
                 break;
 
@@ -86,6 +88,9 @@ public static class DamageSystem
                 units[targetIdx].HitReacting = true;
                 if (units[targetIdx].PoisonTickTimer <= 0f)
                     units[targetIdx].PoisonTickTimer = 3f;
+                DebugLog.Log("ai", $"[DmgSys] Poison applied to unit#{targetIdx} " +
+                    $"stacks+={finalDamage} total={units[targetIdx].PoisonStacks} " +
+                    $"hitReact=true faction={units[targetIdx].Faction}");
                 break;
         }
 
@@ -150,6 +155,7 @@ public static class DamageSystem
         {
             units[targetIdx].Alive = false;
             units[targetIdx].Stats.HP = 0;
+            units[targetIdx].OverrideAnim = Render.AnimRequest.Forced(Render.AnimState.Death);
         }
     }
 

@@ -26,6 +26,36 @@ public enum AnimState : byte
 
 public enum AnimPlayMode : byte { Loop, PlayOnceHold, PlayOnceTransition }
 
+/// <summary>
+/// Animation request from either the Routine channel (AI) or Override channel (combat/physics).
+/// Two-channel system: routine is the persistent base, override is a temporary interrupt.
+/// </summary>
+public struct AnimRequest
+{
+    public AnimState State;
+    public byte Priority;        // 0=locomotion, 1=action, 2=combat, 3=forced
+    public bool Interrupt;       // If winning priority, cut current anim mid-loop?
+    public float Duration;       // >0=auto-expire seconds, 0=play once then expire, -1=loop until replaced
+    public float PlaybackSpeed;  // 1.0=normal
+
+    public bool IsActive => State != AnimState.Idle || Priority > 0;
+
+    public static AnimRequest Locomotion(AnimState state) => new()
+        { State = state, Priority = 0, Interrupt = false, Duration = -1, PlaybackSpeed = 1f };
+
+    public static AnimRequest Action(AnimState state, float duration = -1f) => new()
+        { State = state, Priority = 1, Interrupt = false, Duration = duration, PlaybackSpeed = 1f };
+
+    public static AnimRequest Combat(AnimState state, float playbackSpeed = 1f) => new()
+        { State = state, Priority = 2, Interrupt = true, Duration = 0, PlaybackSpeed = playbackSpeed };
+
+    public static AnimRequest Forced(AnimState state) => new()
+        { State = state, Priority = 3, Interrupt = true, Duration = 0, PlaybackSpeed = 1f };
+
+    public static readonly AnimRequest None = new()
+        { State = AnimState.Idle, Priority = 0, Interrupt = false, Duration = -1, PlaybackSpeed = 1f };
+}
+
 public struct FrameResult
 {
     public SpriteFrame? Frame;

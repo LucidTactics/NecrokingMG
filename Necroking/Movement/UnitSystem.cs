@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using Necroking.Core;
 using Necroking.Data;
 using Necroking.Data.Registries;
+using Necroking.Render;
 
 namespace Necroking.Movement;
 
@@ -138,6 +139,11 @@ public class Unit
     public uint AlertTarget = GameConstants.InvalidUnit;
     public Vec2 SpawnPosition;
     public bool IsSneaking;
+
+    // Two-channel animation system
+    public AnimRequest RoutineAnim;     // Set by AI each frame (locomotion, feeding, etc.)
+    public AnimRequest OverrideAnim;    // Set by combat/physics, auto-expires
+    public float OverrideTimer;         // Counts down, clears override when <= 0
 
     // Per-unit awareness config (set from UnitDef at spawn)
     public float DetectionRange;

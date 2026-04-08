@@ -156,11 +156,10 @@ public class Simulation
         _gameTime += dt;
         _damageEvents.Clear();
 
-        // Clear per-frame flags and tick timers
+        // Clear per-frame flags (HitReacting cleared after AI, see below)
         for (int i = 0; i < _units.Count; i++)
         {
             _units[i].Dodging = false;
-            _units[i].HitReacting = false;
             _units[i].BlockReacting = false;
         }
 
@@ -216,6 +215,12 @@ public class Simulation
 
         // Core subsystems
         UpdateAI(dt);
+
+        // Clear HitReacting AFTER AI has read it — this ensures flags set between frames
+        // (e.g. spell AoE from Game1.Update) persist until the next AI tick sees them
+        for (int i = 0; i < _units.Count; i++)
+            _units[i].HitReacting = false;
+
         UpdateMovement(dt);
         _horde.UpdateStates(_units, _quadtree, _necromancerIdx, dt);
         UpdateFacingAngles(dt);
@@ -1533,6 +1538,8 @@ public class Simulation
         {
             _units[defenderIdx].Harassment++;
             _units[defenderIdx].Dodging = true;
+            _units[defenderIdx].OverrideAnim = new Render.AnimRequest
+                { State = Render.AnimState.Dodge, Priority = 1, Interrupt = true, Duration = 0, PlaybackSpeed = 1f };
             logEntry.Outcome = CombatLogOutcome.Miss;
             _combatLog.AddEntry(logEntry);
             return;
@@ -1562,9 +1569,15 @@ public class Simulation
         _combatLog.AddEntry(logEntry);
 
         if (netDmg > 0)
+        {
             _units[defenderIdx].HitReacting = true;
+            _units[defenderIdx].OverrideAnim = Render.AnimRequest.Combat(Render.AnimState.BlockReact);
+        }
         else
+        {
             _units[defenderIdx].BlockReacting = true;
+            _units[defenderIdx].OverrideAnim = Render.AnimRequest.Combat(Render.AnimState.BlockReact);
+        }
 
         // Melee uses ApplyDirect — armor already calculated above with DRN rolls
         DamageSystem.ApplyDirect(_units, defenderIdx, netDmg, _damageEvents, attackerIdx);

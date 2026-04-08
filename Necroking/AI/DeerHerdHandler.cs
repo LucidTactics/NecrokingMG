@@ -1,6 +1,7 @@
 using System;
 using Necroking.Core;
 using Necroking.Movement;
+using Necroking.Render;
 
 namespace Necroking.AI;
 
@@ -61,6 +62,7 @@ public class DeerHerdHandler : IArchetypeHandler
     private const float RoamRadius = 10f;
     private const float FleeDistance = 20f;
     private const float CalmDuration = 3f;
+    private const float MinFleeDuration = 4f; // Minimum flee time after damage (prevents instant calming)
     private const float AlertRecheckInterval = 1f;
     private const float AlertThresholdFraction = 0.9f;
     private const float FeedDuration = 4f;
@@ -97,13 +99,26 @@ public class DeerHerdHandler : IArchetypeHandler
         byte alert = ctx.AlertState;
         bool isMale = IsMale(ref ctx);
 
+        // Log deer state every 60 frames (~1s) for debugging
+        if (ctx.FrameNumber % 60 == 0)
+        {
+            var u = ctx.Units[ctx.UnitIndex];
+            DebugLog.Log("ai", $"[Deer#{ctx.UnitIndex}] routine={GetRoutineName(ctx.Routine)} " +
+                $"hitReact={u.HitReacting} poison={u.PoisonStacks} HP={u.Stats.HP} " +
+                $"alert={ctx.AlertState} vel={u.Velocity.Length():F2} prefVel={u.PreferredVel.Length():F2} " +
+                $"fleeT={ctx.SubroutineTimer:F1} pos=({u.Position.X:F1},{u.Position.Y:F1})");
+        }
+
         // Spooked: took damage (melee or poison) → flee from any non-flee routine
         if (ctx.Units[ctx.UnitIndex].HitReacting
             && ctx.Routine != RoutineFleeing)
         {
+            DebugLog.Log("ai", $"[Deer#{ctx.UnitIndex}] HitReacting! routine={GetRoutineName(ctx.Routine)} → fleeing");
+
             // If sleeping, need standup first
             if (ctx.Routine == RoutineSleeping && ctx.Subroutine <= SleepAsleep)
             {
+                DebugLog.Log("ai", $"[Deer#{ctx.UnitIndex}] sleeping, starting wakeup first");
                 ctx.Subroutine = SleepWaking;
                 ctx.SubroutineTimer = StandupDuration;
                 ctx.Units[ctx.UnitIndex].StandupTimer = StandupDuration;
@@ -118,18 +133,20 @@ public class DeerHerdHandler : IArchetypeHandler
             int enemyIdx = SubroutineSteps.FindClosestEnemy(ref ctx, detRange);
             if (enemyIdx >= 0)
             {
+                DebugLog.Log("ai", $"[Deer#{ctx.UnitIndex}] fleeing from enemy idx={enemyIdx} at ({ctx.Units[enemyIdx].Position.X:F1},{ctx.Units[enemyIdx].Position.Y:F1})");
                 // Flee away from the enemy
                 SubroutineSteps.SetFleeFromTarget(ref ctx, ctx.Units[enemyIdx].Position, 10f);
                 ctx.AlertTarget = ctx.Units[enemyIdx].Id;
             }
             else
             {
+                DebugLog.Log("ai", $"[Deer#{ctx.UnitIndex}] no enemy in range {detRange:F1}, fleeing random direction");
                 // No visible enemy — flee in random direction
                 SubroutineSteps.SetFleeRandomTarget(ref ctx, 10f);
             }
             ctx.Routine = RoutineFleeing;
             ctx.Subroutine = 0;
-            ctx.SubroutineTimer = 0f;
+            ctx.SubroutineTimer = MinFleeDuration; // Minimum flee time before calming allowed
             ctx.AlertState = (byte)UnitAlertState.Alert;
             return;
         }
@@ -165,10 +182,18 @@ public class DeerHerdHandler : IArchetypeHandler
             return;
         }
 
-        // Threat gone while alert/fleeing → calm down
+        // Threat gone while alert/fleeing → calm down (but respect minimum flee time)
         if (alert == (byte)UnitAlertState.Unaware)
         {
-            if (ctx.Routine == RoutineAlert || ctx.Routine == RoutineFleeing)
+            if (ctx.Routine == RoutineAlert)
+            {
+                ctx.Routine = RoutineCalming;
+                ctx.SubroutineTimer = CalmDuration;
+                ctx.Units[ctx.UnitIndex].Target = CombatTarget.None;
+                ctx.Units[ctx.UnitIndex].EngagedTarget = CombatTarget.None;
+                return;
+            }
+            if (ctx.Routine == RoutineFleeing && ctx.SubroutineTimer <= 0f)
             {
                 ctx.Routine = RoutineCalming;
                 ctx.SubroutineTimer = CalmDuration;
@@ -325,7 +350,7 @@ public class DeerHerdHandler : IArchetypeHandler
         {
             case SleepSitting:
                 // Sit animation is PlayOnceHold — it plays and holds on last frame
-                // After SitDuration seconds, transition to sleep
+                ctx.Units[ctx.UnitIndex].RoutineAnim = AnimRequest.Action(AnimState.Sit);
                 ctx.SubroutineTimer += ctx.Dt;
                 if (ctx.SubroutineTimer >= SitDuration)
                 {
@@ -338,11 +363,12 @@ public class DeerHerdHandler : IArchetypeHandler
 
             case SleepAsleep:
                 // Sleep animation is PlayOnceHold — plays and holds on last frame
-                // Stay here until woken by alert or dawn
+                ctx.Units[ctx.UnitIndex].RoutineAnim = AnimRequest.Action(AnimState.Sleep);
                 break;
 
             case SleepWaking:
-                // Standup animation is playing — wait for it to finish
+                // Standup animation — override since it interrupts sleep
+                ctx.Units[ctx.UnitIndex].OverrideAnim = AnimRequest.Combat(AnimState.Standup);
                 ctx.SubroutineTimer -= ctx.Dt;
                 if (ctx.SubroutineTimer <= 0f)
                 {
@@ -443,6 +469,10 @@ public class DeerHerdHandler : IArchetypeHandler
 
     private static void UpdateFleeing(ref AIContext ctx)
     {
+        // Tick down minimum flee timer
+        if (ctx.SubroutineTimer > 0f)
+            ctx.SubroutineTimer -= ctx.Dt;
+
         int threatIdx = SubroutineSteps.ResolveAlertTarget(ref ctx);
         if (threatIdx >= 0)
         {
@@ -455,9 +485,18 @@ public class DeerHerdHandler : IArchetypeHandler
             Vec2 fleeDest = ctx.MyPos + awayDir * FleeDistance;
             SubroutineSteps.MoveToward(ref ctx, fleeDest, ctx.MySpeed);
         }
+        else if (ctx.SubroutineTimer > 0f)
+        {
+            // No visible threat but still in minimum flee time (e.g. poison damage) —
+            // keep running in current facing direction
+            float fRad = ctx.Units[ctx.UnitIndex].FacingAngle * MathF.PI / 180f;
+            Vec2 fleeDir = new Vec2(MathF.Cos(fRad), MathF.Sin(fRad));
+            Vec2 fleeDest = ctx.MyPos + fleeDir * FleeDistance;
+            SubroutineSteps.MoveToward(ref ctx, fleeDest, ctx.MySpeed);
+        }
         else
         {
-            ctx.Units[ctx.UnitIndex].PreferredVel = Vec2.Zero;
+            SubroutineSteps.SetIdle(ref ctx);
         }
     }
 
@@ -467,7 +506,7 @@ public class DeerHerdHandler : IArchetypeHandler
 
     private static void UpdateCalming(ref AIContext ctx)
     {
-        ctx.Units[ctx.UnitIndex].PreferredVel = Vec2.Zero;
+        SubroutineSteps.SetIdle(ref ctx);
         ctx.SubroutineTimer -= ctx.Dt;
         if (ctx.SubroutineTimer <= 0f)
         {
@@ -507,7 +546,7 @@ public class DeerHerdHandler : IArchetypeHandler
                         ctx.Units[ctx.UnitIndex].FacingAngle = angle;
                     }
                 }
-                ctx.Units[ctx.UnitIndex].PreferredVel = Vec2.Zero;
+                SubroutineSteps.SetIdle(ref ctx);
 
                 // When attack is ready, charge
                 if (ctx.Units[ctx.UnitIndex].AttackCooldown <= 0f &&
@@ -595,6 +634,7 @@ public class DeerHerdHandler : IArchetypeHandler
             {
                 // Stand still facing the bush, playing feed animation
                 ctx.Units[ctx.UnitIndex].PreferredVel = Vec2.Zero;
+                ctx.Units[ctx.UnitIndex].RoutineAnim = AnimRequest.Action(AnimState.Feeding);
                 // Face toward the bush target
                 Vec2 toBush = ctx.Units[ctx.UnitIndex].MoveTarget - ctx.MyPos;
                 if (toBush.LengthSq() > 0.01f)
@@ -610,7 +650,7 @@ public class DeerHerdHandler : IArchetypeHandler
 
             case FeedIdleAfter:
             {
-                ctx.Units[ctx.UnitIndex].PreferredVel = Vec2.Zero;
+                SubroutineSteps.SetIdle(ref ctx);
                 ctx.SubroutineTimer -= ctx.Dt;
                 if (ctx.SubroutineTimer <= 0f)
                 {
