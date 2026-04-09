@@ -4,6 +4,7 @@ using Necroking.Core;
 using Necroking.Data;
 using Necroking.Data.Registries;
 using Necroking.Movement;
+using Necroking.Render;
 
 namespace Necroking.GameSystems;
 
@@ -38,6 +39,9 @@ public static class BuffSystem
         });
     }
 
+    public const string KnockdownBuffID = "buff_knockdown";
+    private const float StandupDuration = 1.0f;
+
     public static void TickBuffs(UnitArrays units, float dt)
     {
         for (int i = 0; i < units.Count; i++)
@@ -50,11 +54,27 @@ public static class BuffSystem
                 if (b.Permanent) continue;
                 b.RemainingDuration -= dt;
                 if (b.RemainingDuration <= 0f)
+                {
+                    // Knockdown buff expiry → trigger standup animation
+                    if (b.BuffDefID == KnockdownBuffID)
+                    {
+                        units[i].StandupTimer = StandupDuration;
+                        units[i].OverrideAnim = AnimRequest.Combat(AnimState.Standup);
+                    }
                     buffs.RemoveAt(j);
+                }
                 else
                     buffs[j] = b;
             }
         }
+    }
+
+    /// <summary>Check if a unit has the knockdown buff active.</summary>
+    public static bool IsKnockedDown(Unit unit)
+    {
+        for (int i = 0; i < unit.ActiveBuffs.Count; i++)
+            if (unit.ActiveBuffs[i].BuffDefID == KnockdownBuffID) return true;
+        return false;
     }
 
     public static void RemoveBuffStack(UnitArrays units, int unitIdx, string buffDefID)

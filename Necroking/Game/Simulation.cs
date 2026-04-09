@@ -123,6 +123,8 @@ public class Simulation
     public void Init(int gridWidth, int gridHeight, GameData? gameData = null)
     {
         _gameData = gameData;
+        if (gameData?.Buffs != null)
+            _physics.Init(gameData.Buffs);
         _grid.Init(gridWidth, gridHeight);
         _grid.RebuildCostField();
         _flowFields.Init(_grid);
@@ -179,11 +181,9 @@ public class Simulation
                 _units[i].MaxSpeed = _units[i].Stats.CombatSpeed;
         }
 
-        // Tick knockdown timers
+        // Tick standup timers (knockdown duration now handled by buff system)
         for (int i = 0; i < _units.Count; i++)
         {
-            if (_units[i].KnockdownTimer > 0f)
-                _units[i].KnockdownTimer = MathF.Max(0f, _units[i].KnockdownTimer - dt);
             if (_units[i].StandupTimer > 0f)
                 _units[i].StandupTimer = MathF.Max(0f, _units[i].StandupTimer - dt);
         }
@@ -404,7 +404,7 @@ public class Simulation
         {
             if (!_units[i].Alive) continue;
             if (_units[i].InPhysics) continue; // Physics system owns this unit
-            if (_units[i].Jumping || _units[i].KnockdownTimer > 0f) { _units[i].PreferredVel = Vec2.Zero; continue; }
+            if (_units[i].Jumping || BuffSystem.IsKnockedDown(_units[i])) { _units[i].PreferredVel = Vec2.Zero; continue; }
 
             // New archetype system: if Archetype > 0, dispatch to handler
             // (PlayerControlled units are handled in the legacy switch below)
@@ -1021,8 +1021,8 @@ public class Simulation
         {
             if (!_units[i].Alive) continue;
             if (_units[i].InPhysics) continue; // Physics system owns this unit's movement
-            // Movement blocked by: jumping, knockdown, standup, pending attack, or post-attack lockout
-            if (_units[i].Jumping || _units[i].KnockdownTimer > 0f || _units[i].StandupTimer > 0f
+            // Movement blocked by: jumping, knockdown (buff), standup, pending attack, or post-attack lockout
+            if (_units[i].Jumping || BuffSystem.IsKnockedDown(_units[i]) || _units[i].StandupTimer > 0f
                 || !_units[i].PendingAttack.IsNone || _units[i].PostAttackTimer > 0f)
             {
                 _units[i].Velocity = Vec2.Zero;
@@ -1453,7 +1453,7 @@ public class Simulation
             if (!_units[i].Alive) continue;
             _units[i].AttackCooldown = MathF.Max(0f, _units[i].AttackCooldown - dt);
 
-            if (_units[i].KnockdownTimer > 0f) continue;
+            if (BuffSystem.IsKnockedDown(_units[i])) continue;
             if (!_units[i].PendingAttack.IsNone) continue;
             if (_units[i].AttackCooldown > 0f) continue;
             if (_units[i].PostAttackTimer > 0f) continue;

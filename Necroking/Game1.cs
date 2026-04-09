@@ -1713,7 +1713,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
             {
                 var mu = _sim.UnitsMut;
                 bool canJump = mu[necroIdx].Alive && !mu[necroIdx].Jumping
-                    && mu[necroIdx].KnockdownTimer <= 0f && !_pendingSpell.Active;
+                    && !GameSystems.BuffSystem.IsKnockedDown(mu[necroIdx]) && !_pendingSpell.Active;
                 if (canJump)
                 {
                     float facingRad = mu[necroIdx].FacingAngle * MathF.PI / 180f;
@@ -3125,7 +3125,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 targetState = AnimState.Fall;
             else if (_sim.Units[i].StandupTimer > 0f)
                 targetState = AnimState.Standup;
-            else if (_sim.Units[i].KnockdownTimer > 0f)
+            else if (GameSystems.BuffSystem.IsKnockedDown(_sim.Units[i]))
                 targetState = AnimState.Knockdown;
             else if (_sim.Units[i].Dodging)
                 targetState = AnimState.Dodge;

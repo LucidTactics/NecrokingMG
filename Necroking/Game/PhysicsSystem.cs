@@ -39,6 +39,15 @@ public class PhysicsSystem
 
     private readonly List<PhysicsBody> _bodies = new();
     private static readonly Random _rng = new();
+    private Data.Registries.BuffDef? _knockdownBuff;
+
+    /// <summary>Call once after game data is loaded to resolve the knockdown buff def.</summary>
+    public void Init(Data.Registries.BuffRegistry buffs)
+    {
+        _knockdownBuff = buffs.Get(BuffSystem.KnockdownBuffID);
+        if (_knockdownBuff == null)
+            DebugLog.Log("physics", $"WARNING: knockdown buff '{BuffSystem.KnockdownBuffID}' not found in registry");
+    }
 
     /// <summary>
     /// Try to launch a unit into physics. Returns false if the unit resists.
@@ -242,9 +251,10 @@ public class PhysicsSystem
             else
             {
                 // Flyer too slow — just stagger the standing unit in place
-                units[i].KnockdownTimer = (float)(_rng.NextDouble() *
-                    (KnockdownTimeMax - KnockdownTimeMin) + KnockdownTimeMin);
+                if (_knockdownBuff != null)
+                    BuffSystem.ApplyBuff(units, i, _knockdownBuff);
                 units[i].OverrideAnim = AnimRequest.Forced(AnimState.Knockdown);
+                units[i].SnapAnimToEnd = true;
 
                 // Flyer stops
                 body.VelocityXY = Vec2.Zero;
@@ -262,14 +272,14 @@ public class PhysicsSystem
         units[idx].Velocity = Vec2.Zero;
         units[idx].PreferredVel = Vec2.Zero;
 
-        float knockdownTime = (float)(_rng.NextDouble() *
-            (KnockdownTimeMax - KnockdownTimeMin) + KnockdownTimeMin);
-        units[idx].KnockdownTimer = knockdownTime;
+        // Apply knockdown buff — duration, expiry, and standup handled by buff system
+        if (_knockdownBuff != null)
+            BuffSystem.ApplyBuff(units, idx, _knockdownBuff);
+
         units[idx].OverrideAnim = AnimRequest.Forced(AnimState.Knockdown);
         units[idx].SnapAnimToEnd = true;  // Skip to last frame — unit is already on ground
 
-        DebugLog.Log("physics", $"[Land] unit#{idx} knockdown={knockdownTime:F1}s " +
-            $"pos=({units[idx].Position.X:F1},{units[idx].Position.Y:F1})");
+        DebugLog.Log("physics", $"[Land] unit#{idx} pos=({units[idx].Position.X:F1},{units[idx].Position.Y:F1})");
 
         // TODO: Apply landing impact damage based on velocity at impact
     }

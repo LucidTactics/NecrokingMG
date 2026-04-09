@@ -614,6 +614,36 @@
         "b": 30,
         "a": 60
       }
+    },
+    {
+      "id": "buff_knockdown",
+      "name": "Knocked Down",
+      "duration": 1.5,
+      "effects": [
+        {
+          "type": "Set",
+          "stat": "CombatSpeed",
+          "value": 0
+        }
+      ],
+      "maxStacks": 1,
+      "hasOrbital": false,
+      "orbital": null,
+      "hasGroundAura": false,
+      "groundAura": null,
+      "hasBehindEffect": false,
+      "behindEffect": null,
+      "hasFrontEffect": false,
+      "frontEffect": null,
+      "hasLightningAura": false,
+      "lightningAura": null,
+      "hasImageBehind": false,
+      "imageBehind": null,
+      "hasPulsingOutline": false,
+      "pulsingOutline": null,
+      "hasWeaponParticle": false,
+      "weaponParticle": null,
+      "unitTint": null
     }
   ]
 }
