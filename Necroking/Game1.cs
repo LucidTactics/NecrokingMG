@@ -3122,20 +3122,11 @@ public class Game1 : Microsoft.Xna.Framework.Game
             // --- Legacy animation selection for non-archetype units ---
             AnimState targetState;
             if (_sim.Units[i].InPhysics)
-            {
                 targetState = AnimState.Fall;
-                if (i == 0) DebugLog.Log("physics", $"[AnimFrame] unit#0 target=Fall current={animData.Ctrl.CurrentState} Z={_sim.Units[i].Z:F2}");
-            }
             else if (_sim.Units[i].StandupTimer > 0f)
-            {
                 targetState = AnimState.Standup;
-                DebugLog.Log("physics", $"[AnimFrame] unit#{i} target=Standup current={animData.Ctrl.CurrentState} finished={animData.Ctrl.IsAnimFinished} animTime={animData.Ctrl.AnimTime:F0} timer={_sim.Units[i].StandupTimer:F3}");
-            }
             else if (GameSystems.BuffSystem.IsKnockedDown(_sim.Units[i]))
-            {
                 targetState = AnimState.Knockdown;
-                if (i == 0) DebugLog.Log("physics", $"[AnimFrame] unit#0 target=Knockdown current={animData.Ctrl.CurrentState} snap={_sim.Units[i].SnapAnimToEnd}");
-            }
             else if (_sim.Units[i].Dodging)
                 targetState = AnimState.Dodge;
             else if (!_sim.Units[i].PendingAttack.IsNone)
@@ -3216,20 +3207,13 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 && currentAnim != targetState;
             if (_sim.Units[i].SnapAnimToEnd)
             {
-                if (i == 0) DebugLog.Log("physics", $"[AnimApply] unit#0 ForceStateAtEnd({targetState})");
                 animData.Ctrl.ForceStateAtEnd(targetState);
                 _sim.UnitsMut[i].SnapAnimToEnd = false;
             }
             else if (needsForce)
-            {
-                if (i == 0) DebugLog.Log("physics", $"[AnimApply] unit#0 ForceState({targetState}) from={currentAnim}");
                 animData.Ctrl.ForceState(targetState);
-            }
             else
-            {
-                if (i == 0 && currentAnim != targetState) DebugLog.Log("physics", $"[AnimApply] unit#0 RequestState({targetState}) from={currentAnim}");
                 animData.Ctrl.RequestState(targetState);
-            }
             animData.Ctrl.Update(dt);
             } // end legacy path
 
