@@ -40,7 +40,7 @@ public static class BuffSystem
     }
 
     public const string KnockdownBuffID = "buff_knockdown";
-    private const float StandupDuration = 1.0f;
+    private const float StandupAnimTime = 0.8f; // Start standup this long before buff expires
 
     public static void TickBuffs(UnitArrays units, float dt)
     {
@@ -55,17 +55,22 @@ public static class BuffSystem
                 b.RemainingDuration -= dt;
                 if (b.RemainingDuration <= 0f)
                 {
-                    // Knockdown buff expiry → trigger standup animation
-                    if (b.BuffDefID == KnockdownBuffID)
-                    {
-                        units[i].StandupTimer = StandupDuration;
-                        units[i].OverrideAnim = AnimRequest.Combat(AnimState.Standup);
-                        units[i].OverrideStarted = false;
-                    }
+                    // Knockdown: standup already started early (below), nothing to do on expiry
                     buffs.RemoveAt(j);
                 }
                 else
+                {
+                    // Knockdown: start standup animation early so it finishes as buff expires
+                    if (b.BuffDefID == KnockdownBuffID
+                        && b.RemainingDuration <= StandupAnimTime
+                        && units[i].StandupTimer <= 0f)
+                    {
+                        units[i].StandupTimer = b.RemainingDuration;
+                        units[i].OverrideAnim = AnimRequest.Combat(AnimState.Standup);
+                        units[i].OverrideStarted = false;
+                    }
                     buffs[j] = b;
+                }
             }
         }
     }
