@@ -28,9 +28,29 @@ public static class AnimResolver
                 unit.OverrideAnim = AnimRequest.None;
         }
 
-        // Auto-expire play-once overrides when the animation finishes
-        if (unit.OverrideAnim.IsActive && unit.OverrideAnim.Duration == 0f && ctrl.IsAnimFinished)
-            unit.OverrideAnim = AnimRequest.None;
+        // Auto-expire play-once overrides (Duration == 0).
+        // PlayOnceTransition anims auto-switch to Idle when done, so we can't just
+        // check IsAnimFinished (the state changed). Instead: once we've applied the
+        // override (controller entered the state), track that. When the controller
+        // leaves that state, the override is done.
+        if (unit.OverrideAnim.IsActive && unit.OverrideAnim.Duration == 0f)
+        {
+            if (ctrl.CurrentState == unit.OverrideAnim.State)
+            {
+                // Controller is playing the override — mark it as started
+                unit.OverrideStarted = true;
+                // If the anim finished in a hold mode, expire
+                if (ctrl.IsAnimFinished)
+                    unit.OverrideAnim = AnimRequest.None;
+            }
+            else if (unit.OverrideStarted)
+            {
+                // Controller moved away from the override state — it played and finished
+                unit.OverrideAnim = AnimRequest.None;
+                unit.OverrideStarted = false;
+            }
+            // else: override not started yet (waiting for ForceState to apply it)
+        }
 
         // Pick the winning request: override wins on tie
         AnimRequest winner;
@@ -74,6 +94,7 @@ public static class AnimResolver
         {
             unit.OverrideAnim = request;
             unit.OverrideTimer = request.Duration > 0f ? request.Duration : 0f;
+            unit.OverrideStarted = false;
         }
     }
 }

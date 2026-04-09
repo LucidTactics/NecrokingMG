@@ -60,6 +60,7 @@ public static class BuffSystem
                     {
                         units[i].StandupTimer = StandupDuration;
                         units[i].OverrideAnim = AnimRequest.Combat(AnimState.Standup);
+                        units[i].OverrideStarted = false;
                     }
                     buffs.RemoveAt(j);
                 }
