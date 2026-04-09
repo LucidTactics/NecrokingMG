@@ -6,6 +6,7 @@ using Microsoft.Xna.Framework.Input;
 using Necroking.Core;
 using Necroking.Data;
 using Necroking.Data.Registries;
+using Necroking.Render;
 
 namespace Necroking.Editor;
 
@@ -21,6 +22,15 @@ public class SpellEditorWindow
 
     /// <summary>Set to true when the user clicks the [X] close button on the top bar.</summary>
     public bool WantsClose { get; set; }
+
+    /// <summary>Set HDR sprite effect for spell preview rendering.</summary>
+    public void SetHdrEffect(Microsoft.Xna.Framework.Graphics.Effect? effect) => _hdrSpriteEffect = effect;
+
+    /// <summary>Set flipbook dictionary for spell preview rendering.</summary>
+    public void SetFlipbooks(Dictionary<string, Flipbook>? flipbooks) => _flipbooks = flipbooks;
+
+    /// <summary>Set content manager for bloom shader loading in preview.</summary>
+    public void SetContent(Microsoft.Xna.Framework.Content.ContentManager? content) => _content = content;
 
     // Spell list state
     private int _selectedIdx = -1;
@@ -77,6 +87,9 @@ public class SpellEditorWindow
 
     // Spell preview
     private SpellPreview? _spellPreview;
+    private Microsoft.Xna.Framework.Graphics.Effect? _hdrSpriteEffect;
+    private Dictionary<string, Flipbook>? _flipbooks;
+    private Microsoft.Xna.Framework.Content.ContentManager? _content;
     private bool _previewBloom = true;
     private bool _buffPreviewBloom = true;
     private int _lastPreviewSelectedIdx = -1;
@@ -153,10 +166,18 @@ public class SpellEditorWindow
         // --- Separator line ---
         _ui.DrawRect(new Rectangle(panelX + ListWidth, contentY, 1, contentH), new Color(80, 80, 100));
 
-        // --- Right panel: scrollable detail editor ---
+        // --- Middle panel: scrollable detail editor (properties) ---
         int detailX = panelX + ListWidth + 1;
-        int detailW = panelW - ListWidth - 1;
+        int previewPanelW = (panelW - ListWidth - 1) / 2;
+        int detailW = panelW - ListWidth - 1 - previewPanelW - 1;
         DrawDetailPanel(detailX, contentY, detailW, contentH);
+
+        // --- Separator line ---
+        _ui.DrawRect(new Rectangle(detailX + detailW, contentY, 1, contentH), new Color(80, 80, 100));
+
+        // --- Right panel: spell preview ---
+        int previewX = detailX + detailW + 1;
+        DrawPreviewPanel(previewX, contentY, previewPanelW, contentH);
 
         // --- Popup overlays (drawn on top) ---
         if (_flipbookManagerOpen)
@@ -453,9 +474,6 @@ public class SpellEditorWindow
 
         int fieldW = w - 24;
         int curY = y + 8 - (int)_detailScroll;
-
-        // =================== PREVIEW ===================
-        curY = DrawSpellPreviewSection(def, x + 8, curY, fieldW);
 
         // =================== ALL FIELDS VIA REFLECTION ===================
         var (nextY, changed) = _renderer.DrawAnnotatedProperties("sp", def, x + 8, curY, fieldW);
@@ -1477,7 +1495,7 @@ public class SpellEditorWindow
         if (_spellPreview != null && _spellPreview.IsInitialized) return;
         if (_ui._gd == null || _ui._pixel == null) return;
         _spellPreview = new SpellPreview();
-        _spellPreview.Init(_ui._gd, _ui._pixel);
+        _spellPreview.Init(_ui._gd, _ui._pixel, _hdrSpriteEffect, _flipbooks, _content);
         _spellPreview.BloomEnabled = _previewBloom;
     }
 
@@ -1525,30 +1543,44 @@ public class SpellEditorWindow
         _ui._sb.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.PointClamp);
     }
 
+    private void DrawPreviewPanel(int x, int y, int w, int h)
+    {
+        var allIds = _gameData.Spells.GetIDs();
+        if (_selectedIdx < 0 || _selectedIdx >= allIds.Count) return;
+        var def = _gameData.Spells.Get(allIds[_selectedIdx]);
+        if (def == null) return;
+
+        // Background
+        _ui.DrawRect(new Rectangle(x, y, w, h), new Color(22, 22, 35, 200));
+
+        int pad = 8;
+        int curY2 = y + pad;
+
+        // Draw preview filling the panel width
+        curY2 = DrawSpellPreviewSection(def, x + pad, curY2, w - pad * 2);
+    }
+
     private int DrawSpellPreviewSection(SpellDef def, int x, int curY, int fieldW)
     {
         if (_spellPreview == null || !_spellPreview.IsInitialized) return curY;
 
+        // Size the preview to fill available width with 5:3 aspect ratio
+        int previewW = fieldW;
+        int previewH = (int)(fieldW * 0.6f);
+        _spellPreview.Resize(previewW, previewH);
+
         var tex = _spellPreview.GetTexture();
         if (tex == null) return curY;
 
-        // Constrain preview width to available field width
-        int previewW = Math.Min(_spellPreview.Width, fieldW);
-        float scale = previewW / (float)_spellPreview.Width;
-        int previewH = (int)(_spellPreview.Height * scale);
-
-        // RS03: Center the preview horizontally within the detail panel
-        int previewX = x + (fieldW - previewW) / 2;
-
         // Border
-        _ui.DrawRect(new Rectangle(previewX - 1, curY - 1, previewW + 2, previewH + 2), new Color(60, 60, 80));
+        _ui.DrawRect(new Rectangle(x - 1, curY - 1, previewW + 2, previewH + 2), new Color(60, 60, 80));
 
-        // Draw the preview texture
-        _ui._sb.Draw(tex, new Rectangle(previewX, curY, previewW, previewH), Color.White);
+        // Draw the preview texture at native resolution (no scaling needed since RT matches)
+        _ui._sb.Draw(tex, new Rectangle(x, curY, previewW, previewH), Color.White);
 
         // Category label overlay
         string catLabel = def.Category.ToUpperInvariant() + " PREVIEW";
-        _ui.DrawText(catLabel, new Vector2(previewX + 4, curY + 2), new Color(255, 255, 255, 120));
+        _ui.DrawText(catLabel, new Vector2(x + 4, curY + 2), new Color(255, 255, 255, 120));
 
         curY += previewH + 4;
 
@@ -1558,7 +1590,7 @@ public class SpellEditorWindow
         if (_previewBloom != oldBloom && _spellPreview != null)
             _spellPreview.BloomEnabled = _previewBloom;
 
-        // RS04: Loop indicator next to Bloom checkbox
+        // Loop indicator next to Bloom checkbox
         _ui.DrawText("Loop", new Vector2(x + 80, curY + 2), new Color(120, 200, 120));
 
         curY += RowH + 4;

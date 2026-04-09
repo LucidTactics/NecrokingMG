@@ -1313,6 +1313,9 @@ public class Game1 : Microsoft.Xna.Framework.Game
         _unitEditor.SetAnimMeta(_animMeta);
         _spellEditor = new SpellEditorWindow(_editorUi);
         _spellEditor.SetGameData(_gameData);
+        _spellEditor.SetHdrEffect(_hdrSpriteEffect);
+        _spellEditor.SetFlipbooks(_flipbooks);
+        _spellEditor.SetContent(Content);
         _itemEditor = new ItemEditorWindow(_editorUi);
         _itemEditor.SetGameData(_gameData);
         _settingsWindow = new SettingsWindow(_editorUi);
@@ -2413,15 +2416,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
             if (spell.Category == "Strike" && spell.StrikeTargetUnit)
             {
                 // Zap from trap to target
-                var style = new LightningStyle
-                {
-                    CoreColor = spell.StrikeCoreColor,
-                    GlowColor = spell.StrikeGlowColor,
-                    CoreWidth = spell.StrikeCoreWidth,
-                    GlowWidth = spell.StrikeGlowWidth,
-                    Displacement = spell.StrikeDisplacement,
-                    MaxBranches = spell.StrikeBranches
-                };
+                var style = spell.BuildStrikeStyle();
                 _sim.Lightning.SpawnZap(evt.TrapPos, targetPos,
                     spell.ZapDuration > 0 ? spell.ZapDuration : 0.2f,
                     style, 0.3f, targetH);
@@ -2434,19 +2429,11 @@ public class Game1 : Microsoft.Xna.Framework.Game
             else if (spell.Category == "Strike")
             {
                 // Ground strike at target position
-                var style = new LightningStyle
-                {
-                    CoreColor = spell.StrikeCoreColor,
-                    GlowColor = spell.StrikeGlowColor,
-                    CoreWidth = spell.StrikeCoreWidth,
-                    GlowWidth = spell.StrikeGlowWidth,
-                    Displacement = spell.StrikeDisplacement,
-                    MaxBranches = spell.StrikeBranches
-                };
+                var style = spell.BuildStrikeStyle();
                 var sVis = spell.StrikeVisualType == "GodRay" ? StrikeVisual.GodRay : StrikeVisual.Lightning;
                 _sim.Lightning.SpawnStrike(targetPos, spell.TelegraphDuration,
                     spell.StrikeDuration, spell.AoeRadius, spell.Damage,
-                    style, spell.Id, sVis);
+                    style, spell.Id, sVis, telegraphVisible: spell.TelegraphVisible);
             }
         }
     }
@@ -3391,13 +3378,15 @@ public class Game1 : Microsoft.Xna.Framework.Game
         result.HiltWorld = new Vec2(
             _sim.Units[unitIdx].Position.X + wpf.Hilt.X * worldScale * flipMul,
             _sim.Units[unitIdx].Position.Y);
-        result.HiltHeight = unitHeight - wpf.Hilt.Y * worldScale * _camera.Zoom / _camera.HeightScale;
+        // Heights in world-scale units (zoom-independent) so particles persist across zoom changes.
+        // Converted to screen height at draw time: height * cam.Zoom / cam.HeightScale
+        result.HiltHeight = unitHeight - wpf.Hilt.Y * worldScale;
         result.HiltBehind = wpf.Hilt.Behind;
 
         result.TipWorld = new Vec2(
             _sim.Units[unitIdx].Position.X + wpf.Tip.X * worldScale * flipMul,
             _sim.Units[unitIdx].Position.Y);
-        result.TipHeight = unitHeight - wpf.Tip.Y * worldScale * _camera.Zoom / _camera.HeightScale;
+        result.TipHeight = unitHeight - wpf.Tip.Y * worldScale;
         result.TipBehind = wpf.Tip.Behind;
 
         result.Valid = true;
@@ -3541,13 +3530,14 @@ public class Game1 : Microsoft.Xna.Framework.Game
             effect: _hdrSpriteEffect);
         DrawProjectilesHdr();
         DrawEffectsFiltered(1);
-        _spriteBatch.End();
-
-        // --- Additive blend pass (lightning, energy columns, debug shapes) ---
-        _spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.Additive, SamplerState.LinearClamp);
-        _glyphRenderer.DrawEnergyColumns(_sim.MagicGlyphs);
+        // Lightning bolts and drains use HDR vertex encoding — draw in this HDR batch
         _lightningRenderer.SetGameTime(_gameTime);
         _lightningRenderer.Draw();
+        _spriteBatch.End();
+
+        // --- Additive blend pass (energy columns, debug shapes) ---
+        _spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.Additive, SamplerState.LinearClamp);
+        _glyphRenderer.DrawEnergyColumns(_sim.MagicGlyphs);
 
         // Bloom debug: draw test HDR shapes (multiple additive layers to exceed 1.0)
         if (_activeScenario is Scenario.Scenarios.BloomDebugScenario bloomDebug && bloomDebug.DrawTestShapes)
@@ -4202,7 +4192,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
             var attach = ComputeWeaponAttach(unitIdx, unitDef, animData);
             if (attach.Valid)
             {
-                var hiltScreen = _renderer.WorldToScreen(attach.HiltWorld, attach.HiltHeight, _camera);
+                var hiltScreen = _renderer.WorldToScreen(attach.HiltWorld, attach.HiltHeight * _camera.Zoom / _camera.HeightScale, _camera);
                 hiltScreen.X += ofsX;
                 hiltScreen.Y += CarryOffsetY;
                 DrawSpriteFrame(corpsesAtlas, fr.Frame.Value, hiltScreen, bagScale, fr.FlipX, _ambientColor);

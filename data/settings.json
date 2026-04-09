@@ -1,11 +1,11 @@
 {
   "bloom": {
     "enabled": true,
-    "threshold": 1.0001,
-    "softKnee": 0.5,
-    "intensity": 1.9897959,
-    "scatter": 0.8,
-    "iterations": 6,
+    "threshold": 1.0510204,
+    "softKnee": 0.4,
+    "intensity": 10,
+    "scatter": 0.6,
+    "iterations": 4,
     "bicubicUpsampling": true
   },
   "grass": {
@@ -36,7 +36,7 @@
     "transitionSpeed": 1
   },
   "dayNight": {
-    "enabled": false,
+    "enabled": true,
     "dawnDuration": 60,
     "dayDuration": 240,
     "duskDuration": 60,

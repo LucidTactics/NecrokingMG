@@ -34,12 +34,13 @@ public struct HdrColor
     );
 
     /// <summary>
-    /// Encode for HdrSprite.fx: bake fade alpha into RGB, encode intensity in alpha byte.
+    /// Encode for HdrSprite.fx additive mode: bake fade alpha into RGB, encode intensity in alpha byte.
     /// The shader decodes: output.rgb = tex.rgb * color.rgb * (color.a * MaxHdrIntensity).
     /// </summary>
+    /// <param name="alpha">Fade multiplier in 0-1 range (e.g. 1.0 = full brightness, 0.5 = half).</param>
     public Color ToHdrVertex(float alpha)
     {
-        float fade = alpha * (1f / 255f); // normalize A from base color
+        float fade = alpha * (A / 255f); // combine external fade with base alpha
         return new Color(
             (byte)(R * fade),
             (byte)(G * fade),

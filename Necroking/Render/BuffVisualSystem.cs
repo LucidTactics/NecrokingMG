@@ -571,7 +571,8 @@ public class BuffVisualSystem
             float lifeFrac = Math.Clamp(p.Age / vis.ParticleLifetime, 0f, 1f);
             float alpha = 1f - lifeFrac;
 
-            var sp = renderer.WorldToScreen(p.Pos, p.Height, cam);
+            // Convert world-scale height to screen height units at current zoom
+            var sp = renderer.WorldToScreen(p.Pos, p.Height * cam.Zoom / cam.HeightScale, cam);
 
             float effectiveFps = vis.FPS > 0f ? vis.FPS : fb.FPS;
             int frameIdx = ((int)(p.Age * effectiveFps)) % fb.TotalFrames;

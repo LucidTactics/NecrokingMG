@@ -4,6 +4,8 @@ using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Necroking.Core;
 using Necroking.Data.Registries;
+using Necroking.GameSystems;
+using Necroking.Render;
 
 namespace Necroking.Editor;
 
@@ -13,8 +15,8 @@ namespace Necroking.Editor;
 /// </summary>
 public class SpellPreview
 {
-    private const int PreviewWidth = 400;
-    private const int PreviewHeight = 250;
+    private int _previewWidth = 400;
+    private int _previewHeight = 250;
     private const float ReplayDelay = 1.5f;
     private const float MaxProjectileAge = 10.0f;
     private const float ProjGravity = 13.89f;
@@ -34,6 +36,10 @@ public class SpellPreview
     private RenderTarget2D? _rt;
     private Texture2D _pixel = null!;
     private Texture2D _glowTex = null!;
+    private Microsoft.Xna.Framework.Graphics.Effect? _hdrSpriteEffect;
+    private Dictionary<string, Flipbook>? _flipbooks;
+    private BloomRenderer? _bloom;
+    private Microsoft.Xna.Framework.Content.ContentManager? _content;
     private bool _initialized;
 
     // Timing
@@ -65,8 +71,9 @@ public class SpellPreview
         public float SwirlAmplitude;
         public float SwirlPhase;
         public Vector2 BaseDirection;
-        public Color ProjectileColor;
+        public HdrColor ProjectileColor;
         public float Scale;
+        public string FlipbookID;
     }
 
     // Strike state
@@ -75,20 +82,14 @@ public class SpellPreview
         public Vector2 TargetPos;
         public float TelegraphTimer;
         public float TelegraphDuration;
+        public bool TelegraphVisible;
         public float EffectTimer;
         public float EffectDuration;
         public bool Alive;
         public float AoeRadius;
-        public Color CoreColor;
-        public Color GlowColor;
-        public float CoreWidth;
-        public float GlowWidth;
+        public LightningStyle Style;
         public bool IsGodRay;
-        // God ray params
-        public float GodRayEdgeSoftness;
-        public float GodRayNoiseSpeed;
-        public float GodRayNoiseStrength;
-        public float GodRayNoiseScale;
+        public GodRayParams? GodRay;
     }
 
     // Zap state (unit-targeted strike)
@@ -99,10 +100,7 @@ public class SpellPreview
         public float Timer;
         public float Duration;
         public bool Alive;
-        public Color CoreColor;
-        public Color GlowColor;
-        public float CoreWidth;
-        public float GlowWidth;
+        public LightningStyle Style;
     }
 
     // Beam state
@@ -113,10 +111,7 @@ public class SpellPreview
         public float Elapsed;
         public float MaxDuration;
         public bool Alive;
-        public Color CoreColor;
-        public Color GlowColor;
-        public float CoreWidth;
-        public float GlowWidth;
+        public LightningStyle Style;
     }
 
     // Drain state
@@ -127,16 +122,7 @@ public class SpellPreview
         public float Elapsed;
         public float MaxDuration;
         public bool Alive;
-        public int TendrilCount;
-        public float ArcHeight;
-        public float SwayHz;
-        public float SwayAmplitude;
-        public Color CoreColor;
-        public Color GlowColor;
-        public float CoreWidth;
-        public float GlowWidth;
-        public float PulseHz;
-        public float PulseStrength;
+        public DrainVisualParams Visuals;
     }
 
     // Buff/Summon effect state
@@ -176,17 +162,67 @@ public class SpellPreview
 
     private static readonly Random _rand = new();
 
-    public int Width => PreviewWidth;
-    public int Height => PreviewHeight;
+    public int Width => _previewWidth;
+    public int Height => _previewHeight;
+
+    /// <summary>Resize the preview render target if dimensions changed.</summary>
+    public void Resize(int w, int h)
+    {
+        if (w == _previewWidth && h == _previewHeight) return;
+        if (w < 100 || h < 60) return;
+        _previewWidth = w;
+        _previewHeight = h;
+        if (_gd != null && _initialized)
+        {
+            _rt?.Dispose();
+            SurfaceFormat rtFormat = SurfaceFormat.Color;
+            try { using var test = new RenderTarget2D(_gd, 4, 4, false, SurfaceFormat.HalfVector4, DepthFormat.None); rtFormat = SurfaceFormat.HalfVector4; }
+            catch { }
+            _rt = new RenderTarget2D(_gd, w, h, false, rtFormat, DepthFormat.None, 0, RenderTargetUsage.PreserveContents);
+            // Reinit bloom at new dimensions if we have content manager access
+            // (bloom creates its own internal RTs sized to the scene)
+            _bloom?.Unload();
+            if (_content != null)
+            {
+                _bloom = new BloomRenderer();
+                _bloom.Init(_gd, _content, w, h);
+            }
+            else
+                _bloom = null;
+        }
+    }
     public bool IsInitialized => _initialized;
 
-    public void Init(GraphicsDevice gd, Texture2D pixel)
+    public void Init(GraphicsDevice gd, Texture2D pixel,
+        Microsoft.Xna.Framework.Graphics.Effect? hdrSpriteEffect = null,
+        Dictionary<string, Flipbook>? flipbooks = null,
+        Microsoft.Xna.Framework.Content.ContentManager? content = null)
     {
         _gd = gd;
         _pixel = pixel;
+        _hdrSpriteEffect = hdrSpriteEffect;
+        _flipbooks = flipbooks;
         _sb = new SpriteBatch(gd);
-        _rt = new RenderTarget2D(gd, PreviewWidth, PreviewHeight, false,
-            SurfaceFormat.Color, DepthFormat.None, 0, RenderTargetUsage.PreserveContents);
+
+        // Initialize mini-bloom for preview (uses same shaders as main bloom)
+        _content = content;
+        if (content != null)
+        {
+            _bloom = new BloomRenderer();
+            _bloom.Init(gd, content, _previewWidth, _previewHeight);
+        }
+
+        // Try HDR format for proper bloom preview, fallback to LDR
+        SurfaceFormat rtFormat = SurfaceFormat.Color;
+        try
+        {
+            using var test = new RenderTarget2D(gd, 4, 4, false, SurfaceFormat.HalfVector4, DepthFormat.None);
+            rtFormat = SurfaceFormat.HalfVector4;
+            test.Dispose();
+        }
+        catch { }
+        _rt = new RenderTarget2D(gd, _previewWidth, _previewHeight, false,
+            rtFormat, DepthFormat.None, 0, RenderTargetUsage.PreserveContents);
 
         // Create radial glow texture (64x64 with smooth quadratic falloff) — matches Game1's _glowTex
         _glowTex = new Texture2D(gd, 64, 64);
@@ -251,10 +287,9 @@ public class SpellPreview
             case "Buff":
             case "Debuff":
             {
-                // RS07: Use the spell's CastFlipbook color if available instead of hardcoded green/purple
                 Color effColor;
                 if (spell.CastFlipbook != null)
-                    effColor = spell.CastFlipbook.Color.ToScaledColor();
+                    effColor = spell.CastFlipbook.Color.ToColor();
                 else
                     effColor = spell.Category == "Buff"
                         ? new Color(80, 255, 120, 200)
@@ -274,10 +309,9 @@ public class SpellPreview
 
             case "Summon":
             {
-                // RS08: Use the spell's SummonFlipbook color if available instead of hardcoded blue
                 Color summonColor;
                 if (spell.SummonFlipbook != null)
-                    summonColor = spell.SummonFlipbook.Color.ToScaledColor();
+                    summonColor = spell.SummonFlipbook.Color.ToColor();
                 else
                     summonColor = new Color(80, 180, 255, 200);
                 _effects.Add(new PreviewEffect
@@ -295,13 +329,11 @@ public class SpellPreview
 
             case "Strike":
             {
-                Color coreCol = spell.StrikeCoreColor.ToScaledColor();
-                Color glowCol = spell.StrikeGlowColor.ToScaledColor();
+                var style = spell.BuildStrikeStyle();
                 bool isGodRay = string.Equals(spell.StrikeVisualType, "GodRay", StringComparison.OrdinalIgnoreCase);
 
                 if (spell.StrikeTargetUnit)
                 {
-                    // Zap from caster to target
                     _zaps.Add(new PreviewZap
                     {
                         StartPos = new Vector2(CasterX, 0),
@@ -309,33 +341,24 @@ public class SpellPreview
                         Timer = 0f,
                         Duration = Math.Max(0.1f, spell.ZapDuration),
                         Alive = true,
-                        CoreColor = coreCol,
-                        GlowColor = glowCol,
-                        CoreWidth = Math.Max(1f, spell.StrikeCoreWidth),
-                        GlowWidth = Math.Max(2f, spell.StrikeGlowWidth),
+                        Style = style,
                     });
                 }
                 else
                 {
-                    // Sky strike with telegraph
                     _strikes.Add(new PreviewStrike
                     {
                         TargetPos = Vector2.Zero,
                         TelegraphTimer = spell.TelegraphDuration,
                         TelegraphDuration = spell.TelegraphDuration,
+                        TelegraphVisible = spell.TelegraphVisible,
                         EffectTimer = 0f,
                         EffectDuration = Math.Max(0.1f, spell.StrikeDuration),
                         Alive = true,
                         AoeRadius = spell.AoeRadius,
-                        CoreColor = coreCol,
-                        GlowColor = glowCol,
-                        CoreWidth = Math.Max(1f, spell.StrikeCoreWidth),
-                        GlowWidth = Math.Max(2f, spell.StrikeGlowWidth),
+                        Style = style,
                         IsGodRay = isGodRay,
-                        GodRayEdgeSoftness = spell.GodRayEdgeSoftness,
-                        GodRayNoiseSpeed = spell.GodRayNoiseSpeed,
-                        GodRayNoiseStrength = spell.GodRayNoiseStrength,
-                        GodRayNoiseScale = spell.GodRayNoiseScale,
+                        GodRay = isGodRay ? spell.BuildGodRayParams() : null,
                     });
                 }
                 break;
@@ -343,8 +366,7 @@ public class SpellPreview
 
             case "Beam":
             {
-                Color coreCol = spell.BeamCoreColor.ToScaledColor();
-                Color glowCol = spell.BeamGlowColor.ToScaledColor();
+                var style = spell.BuildBeamStyle();
                 _beams.Add(new PreviewBeam
                 {
                     StartPos = new Vector2(CasterX, 0),
@@ -353,19 +375,13 @@ public class SpellPreview
                     MaxDuration = spell.BeamMaxDuration > 0f
                         ? Math.Min(spell.BeamMaxDuration, 3f) : 2f,
                     Alive = true,
-                    CoreColor = coreCol,
-                    GlowColor = glowCol,
-                    CoreWidth = Math.Max(1f, spell.BeamCoreWidth),
-                    GlowWidth = Math.Max(2f, spell.BeamGlowWidth),
+                    Style = style,
                 });
                 break;
             }
 
             case "Drain":
             {
-                Color coreCol = spell.DrainCoreColor.ToScaledColor();
-                Color glowCol = spell.DrainGlowColor.ToScaledColor();
-
                 Vector2 src, dst;
                 if (spell.DrainReversed)
                 {
@@ -386,16 +402,24 @@ public class SpellPreview
                     MaxDuration = spell.DrainMaxDuration > 0f
                         ? Math.Min(spell.DrainMaxDuration, 3f) : 2f,
                     Alive = true,
-                    TendrilCount = Math.Max(1, spell.DrainTendrilCount),
-                    ArcHeight = spell.DrainArcHeight,
-                    SwayHz = spell.DrainSwayHz,
-                    SwayAmplitude = spell.DrainSwayAmplitude,
-                    CoreColor = coreCol,
-                    GlowColor = glowCol,
-                    CoreWidth = Math.Max(1f, spell.DrainCoreWidth),
-                    GlowWidth = Math.Max(2f, spell.DrainGlowWidth),
-                    PulseHz = spell.DrainPulseHz,
-                    PulseStrength = spell.DrainPulseStrength,
+                    Visuals = spell.BuildDrainVisuals(),
+                });
+                break;
+            }
+
+            case "Cloud":
+            {
+                // Show expanding cloud as a pulsing circle at the target position
+                Color cloudColor = spell.CloudColor.ToColor();
+                _effects.Add(new PreviewEffect
+                {
+                    Position = new Vector2(TargetX, 0),
+                    Timer = 0f,
+                    Duration = Math.Min(spell.CloudDuration > 0 ? spell.CloudDuration : 3f, 4f),
+                    Alive = true,
+                    EffectColor = cloudColor,
+                    Scale = Math.Max(0.5f, spell.CloudRadius * 0.3f),
+                    IsExpanding = true,
                 });
                 break;
             }
@@ -464,21 +488,37 @@ public class SpellPreview
         if (!_initialized || _rt == null) return;
 
         var prevTargets = _gd.GetRenderTargets();
-        _gd.SetRenderTarget(_rt);
-        _gd.Clear(new Color(18, 18, 28));
+        bool useBloom = BloomEnabled && _bloom != null;
 
+        // When bloom is enabled, render into bloom's scene RT; otherwise directly to preview RT
+        if (useBloom)
+            _bloom!.BeginScene(_gd);
+        else
+        {
+            _gd.SetRenderTarget(_rt);
+            _gd.Clear(new Color(18, 18, 28));
+        }
+
+        // Alpha blend pass: ground, markers, projectiles, effects
         _sb.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.PointClamp);
-
         DrawGround();
         DrawMarkers();
         DrawProjectiles();
         DrawEffects();
         DrawHitEffects();
-
         _sb.End();
 
-        // Additive blend pass for lightning, beams, drains, and glow effects
-        _sb.Begin(SpriteSortMode.Deferred, BlendState.Additive, SamplerState.LinearClamp);
+        // Additive HDR blend pass: lightning, beams, drains, projectile flipbooks
+        if (_hdrSpriteEffect != null)
+        {
+            _hdrSpriteEffect.Parameters["AlphaMode"]?.SetValue(0f);
+            _sb.Begin(SpriteSortMode.Deferred, BlendState.Additive, SamplerState.LinearClamp,
+                effect: _hdrSpriteEffect);
+        }
+        else
+        {
+            _sb.Begin(SpriteSortMode.Deferred, BlendState.Additive, SamplerState.LinearClamp);
+        }
 
         DrawStrikes();
         DrawBeams();
@@ -486,17 +526,19 @@ public class SpellPreview
         DrawZaps();
         DrawProjectileGlows();
         DrawHitGlows();
-
-        // Bloom pass: second additive overlay for extra glow
-        if (BloomEnabled)
-        {
-            DrawStrikes();
-            DrawBeams();
-            DrawZaps();
-            DrawDrains();
-        }
-
         _sb.End();
+
+        // Bloom composites scene + bloom → preview RT; without bloom, already on preview RT
+        if (useBloom)
+        {
+            var bloomSettings = new Data.Registries.BloomSettings
+            {
+                Enabled = true, Threshold = 0.4f, SoftKnee = 0.5f,
+                Intensity = 2.0f, Scatter = 0.7f, Iterations = 4,
+                BicubicUpsampling = true,
+            };
+            _bloom!.EndScene(_gd, _sb, bloomSettings, _rt);
+        }
 
         // Restore previous render target
         if (prevTargets.Length > 0 && prevTargets[0].RenderTarget != null)
@@ -515,8 +557,8 @@ public class SpellPreview
     // ========================================
     private Vector2 WorldToScreen(float wx, float wy)
     {
-        float sx = PreviewWidth * 0.5f + wx * CameraZoom;
-        float sy = PreviewHeight * 0.5f + wy * CameraZoom * CameraYRatio;
+        float sx = _previewWidth * 0.5f + wx * CameraZoom;
+        float sy = _previewHeight * 0.5f + wy * CameraZoom * CameraYRatio;
         return new Vector2(sx, sy);
     }
 
@@ -535,16 +577,16 @@ public class SpellPreview
     private void DrawGround()
     {
         // Draw a ground line
-        int groundY = (int)(PreviewHeight * 0.5f + 0.8f * CameraZoom * CameraYRatio);
+        int groundY = (int)(_previewHeight * 0.5f + 0.8f * CameraZoom * CameraYRatio);
         var groundColor = new Color(40, 45, 55);
-        _sb.Draw(_pixel, new Rectangle(0, groundY, PreviewWidth, 1), groundColor);
+        _sb.Draw(_pixel, new Rectangle(0, groundY, _previewWidth, 1), groundColor);
 
         // Ground gradient below
         for (int i = 0; i < 30; i++)
         {
             float a = 1f - i / 30f;
             var c = new Color(35, 38, 48) * (a * 0.3f);
-            _sb.Draw(_pixel, new Rectangle(0, groundY + i, PreviewWidth, 1), c);
+            _sb.Draw(_pixel, new Rectangle(0, groundY + i, _previewWidth, 1), c);
         }
 
         // Grid dots
@@ -558,7 +600,7 @@ public class SpellPreview
 
     private void DrawMarkers()
     {
-        int groundY = (int)(PreviewHeight * 0.5f + 0.8f * CameraZoom * CameraYRatio);
+        int groundY = (int)(_previewHeight * 0.5f + 0.8f * CameraZoom * CameraYRatio);
 
         // Caster marker (blue diamond)
         var casterScreen = WorldToScreen(CasterX, 0);
@@ -596,14 +638,25 @@ public class SpellPreview
         foreach (var p in _projectiles)
         {
             if (!p.Alive) continue;
+
+            // Shadow on ground (always drawn in alpha pass)
+            var shadowPos = WorldToScreen(p.Position.X, p.Position.Y);
+            int groundY = (int)(_previewHeight * 0.5f + 0.8f * CameraZoom * CameraYRatio);
+            _sb.Draw(_pixel, new Rectangle((int)shadowPos.X - 2, groundY, 4, 1),
+                new Color(0, 0, 0, 60));
+
+            // If flipbook available, skip alpha-pass dot — flipbook draws in HDR additive pass
+            if (!string.IsNullOrEmpty(p.FlipbookID) && _flipbooks != null &&
+                _flipbooks.TryGetValue(p.FlipbookID, out var fb) && fb.IsLoaded)
+                continue;
+
+            // Fallback: core dot + trail (no flipbook)
             var screen = WorldToScreenWithHeight(p.Position.X, p.Position.Y, p.Height);
             float glowSize = 6f * CameraZoom / 32f * p.Scale;
-
-            // Core bright dot (matches Game1 fallback glow dot)
-            _sb.Draw(_pixel, screen, null, p.ProjectileColor,
+            var projColor = p.ProjectileColor.ToColor();
+            _sb.Draw(_pixel, screen, null, projColor,
                 0f, new Vector2(0.5f, 0.5f), glowSize * 0.5f, SpriteEffects.None, 0f);
 
-            // Trail segments (matches Game1's trail rendering)
             var trailDir = p.Velocity;
             if (trailDir.LengthSquared() > 0.01f)
             {
@@ -615,22 +668,16 @@ public class SpellPreview
                                          p.Position.Y - trailDir.Y * t * 0.3f);
                     var ts = WorldToScreenWithHeight(tp.X, tp.Y, Math.Max(0, p.Height - p.VelocityZ * t * 0.02f));
                     byte alpha = (byte)(120 / t);
-                    var trailColor = new Color(p.ProjectileColor.R, p.ProjectileColor.G, p.ProjectileColor.B, alpha);
-                    _sb.Draw(_pixel, ts, null, trailColor,
+                    _sb.Draw(_pixel, ts, null, new Color(projColor.R, projColor.G, projColor.B, alpha),
                         0f, new Vector2(0.5f, 0.5f), trailLen / t, SpriteEffects.None, 0f);
                 }
             }
-
-            // Shadow on ground
-            var shadowPos = WorldToScreen(p.Position.X, p.Position.Y);
-            int groundY = (int)(PreviewHeight * 0.5f + 0.8f * CameraZoom * CameraYRatio);
-            _sb.Draw(_pixel, new Rectangle((int)shadowPos.X - 2, groundY, 4, 1),
-                new Color(0, 0, 0, 60));
         }
     }
 
     /// <summary>
-    /// Draws radial glows for projectiles in the additive pass.
+    /// Draws projectile flipbooks + glows in the HDR additive pass.
+    /// Matches Game1.DrawProjectilesHdr rendering.
     /// </summary>
     private void DrawProjectileGlows()
     {
@@ -638,12 +685,47 @@ public class SpellPreview
         {
             if (!p.Alive) continue;
             var screen = WorldToScreenWithHeight(p.Position.X, p.Position.Y, p.Height);
-            float glowSize = 8f * CameraZoom / 32f * p.Scale;
 
-            // Radial glow using glow texture (additive blend)
-            _sb.Draw(_glowTex, screen, null,
-                new Color(p.ProjectileColor.R, p.ProjectileColor.G, p.ProjectileColor.B, (byte)160),
-                p.Age * 2f, new Vector2(32f, 32f), glowSize / 32f, SpriteEffects.None, 0f);
+            // Try flipbook rendering (matches Game1.DrawProjectilesHdr)
+            if (!string.IsNullOrEmpty(p.FlipbookID) && _flipbooks != null &&
+                _flipbooks.TryGetValue(p.FlipbookID, out var fb) && fb.IsLoaded)
+            {
+                float worldSize = p.Scale * 1.5f;
+                float pixelSize = worldSize * CameraZoom;
+                int frameIdx = fb.GetFrameAtTime(p.Age);
+                var srcRect = fb.GetFrameRect(frameIdx);
+                float scale = pixelSize / srcRect.Width;
+                var origin = new Vector2(srcRect.Width / 2f, srcRect.Height / 2f);
+
+                // Trail: 2 previous frames behind with lower alpha
+                Vec2 velDir = p.Velocity.LengthSquared() > 0.01f
+                    ? new Vec2(p.Velocity.X, p.Velocity.Y).Normalized()
+                    : new Vec2(1f, 0f);
+                for (int trail = 2; trail >= 0; trail--)
+                {
+                    float trailOffset = trail * 0.4f * CameraZoom;
+                    float trailAlpha = trail == 0 ? 1f : trail == 1 ? 0.5f : 0.25f;
+                    float trailScale = trail == 0 ? 1f : trail == 1 ? 0.8f : 0.6f;
+
+                    int trailFrame = fb.GetFrameAtTime(p.Age - trail * 0.05f);
+                    var trailSrc = fb.GetFrameRect(trailFrame);
+                    var trailPos = new Vector2(
+                        screen.X - velDir.X * trailOffset,
+                        screen.Y - velDir.Y * trailOffset * CameraYRatio);
+
+                    var color = HdrColor.ToHdrVertex(p.ProjectileColor.ToColor(), trailAlpha, p.ProjectileColor.Intensity);
+                    _sb.Draw(fb.Texture, trailPos, trailSrc, color,
+                        p.Age * 2f, origin, scale * trailScale, SpriteEffects.None, 0f);
+                }
+            }
+            else
+            {
+                // Fallback: radial glow dot
+                float glowSize = 8f * CameraZoom / 32f * p.Scale;
+                var glowColor = HdrColor.ToHdrVertex(p.ProjectileColor.ToColor(), 160f / 255f, p.ProjectileColor.Intensity);
+                _sb.Draw(_glowTex, screen, null, glowColor,
+                    p.Age * 2f, new Vector2(32f, 32f), glowSize / 32f, SpriteEffects.None, 0f);
+            }
         }
     }
 
@@ -653,48 +735,44 @@ public class SpellPreview
         {
             if (!s.Alive) continue;
             var screen = WorldToScreen(s.TargetPos);
-            int groundY = (int)(PreviewHeight * 0.5f + 0.8f * CameraZoom * CameraYRatio);
+            int groundY = (int)(_previewHeight * 0.5f + 0.8f * CameraZoom * CameraYRatio);
 
             if (s.TelegraphTimer > 0)
             {
-                // Telegraph: pulsing circle on ground (matches Game1)
-                float pulse = 0.5f + 0.5f * MathF.Sin((_elapsed) * 20f);
-                float radius = s.AoeRadius * CameraZoom * pulse;
-                if (radius < 4f) radius = 4f;
-                byte alpha = (byte)(100 * pulse);
-                _sb.Draw(_pixel, new Vector2(screen.X, groundY), null,
-                    new Color(s.GlowColor.R, s.GlowColor.G, s.GlowColor.B, alpha),
-                    0f, new Vector2(0.5f, 0.5f), new Vector2(radius * 2, radius * CameraYRatio),
-                    SpriteEffects.None, 0f);
+                if (s.TelegraphVisible)
+                {
+                    float pulse = 0.5f + 0.5f * MathF.Sin(_elapsed * 20f);
+                    float radius = s.AoeRadius * CameraZoom * pulse;
+                    if (radius < 4f) radius = 4f;
+                    var gc = s.Style.GlowColor;
+                    var telegraphColor = HdrColor.ToHdrVertex(gc.ToColor(), pulse * 0.4f, gc.Intensity * 0.5f);
+                    _sb.Draw(_glowTex, new Vector2(screen.X, groundY), null, telegraphColor,
+                        0f, new Vector2(32f, 32f), new Vector2(radius * 2 / 32f, radius * CameraYRatio / 32f),
+                        SpriteEffects.None, 0f);
+                }
             }
             else
             {
                 float fade = 1f - s.EffectTimer / Math.Max(0.01f, s.EffectDuration);
                 var groundPos = new Vector2(screen.X, groundY);
 
-                if (s.IsGodRay)
+                if (s.IsGodRay && s.GodRay != null)
                 {
-                    // God ray: vertical column from sky to ground
-                    var skyPos = new Vector2(screen.X - PreviewWidth * 0.1f, groundY - PreviewHeight * 0.6f);
-                    DrawGodRay(skyPos, groundPos, s.CoreColor, s.GlowColor,
-                        s.CoreWidth, s.GlowWidth,
-                        s.GodRayEdgeSoftness, s.GodRayNoiseSpeed, s.GodRayNoiseStrength, s.GodRayNoiseScale,
-                        _elapsed, s.EffectTimer, s.EffectDuration);
+                    var skyPos = new Vector2(screen.X - _previewWidth * 0.1f, groundY - _previewHeight * 0.6f);
+                    GodRayRenderer.DrawGodRaySpriteBatch(_sb, _pixel, skyPos, groundPos,
+                        s.Style, s.GodRay, _elapsed, s.EffectTimer, s.EffectDuration);
                 }
                 else
                 {
-                    // Lightning bolt from sky to ground (matches Game1.DrawLightningBolt)
                     var skyPos = new Vector2(screen.X - 20f, 5f);
-                    DrawLightningBolt(skyPos, groundPos,
-                        s.CoreColor, s.GlowColor, s.CoreWidth, s.GlowWidth, fade);
+                    LightningRenderer.DrawLightningBoltStatic(_sb, _pixel, skyPos, groundPos,
+                        s.Style, fade, _elapsed);
 
-                    // Impact glow on ground using radial gradient
+                    // Impact glow
                     float radius = Math.Max(8f, s.AoeRadius * CameraZoom);
-                    float glowScale = radius / 32f;
-                    byte coreAlpha = (byte)(255 * fade);
-                    _sb.Draw(_glowTex, groundPos, null,
-                        new Color(s.CoreColor.R, s.CoreColor.G, s.CoreColor.B, coreAlpha),
-                        0f, new Vector2(32f, 32f), new Vector2(glowScale, glowScale * CameraYRatio * 0.5f),
+                    var splashColor = HdrColor.ToHdrVertex(s.Style.CoreColor.ToColor(), fade, s.Style.CoreColor.Intensity);
+                    _sb.Draw(_glowTex, groundPos, null, splashColor,
+                        0f, new Vector2(32f, 32f), new Vector2(radius / 32f, radius * CameraYRatio * 0.5f / 32f),
                         SpriteEffects.None, 0f);
                 }
             }
@@ -707,12 +785,10 @@ public class SpellPreview
         {
             if (!z.Alive) continue;
             float fade = 1f - z.Timer / Math.Max(0.01f, z.Duration);
-
             var startScreen = WorldToScreenWithHeight(z.StartPos.X, z.StartPos.Y, 1.5f);
             var endScreen = WorldToScreenWithHeight(z.EndPos.X, z.EndPos.Y, 1.0f);
-
-            DrawLightningBolt(startScreen, endScreen,
-                z.CoreColor, z.GlowColor, z.CoreWidth, z.GlowWidth, fade);
+            LightningRenderer.DrawLightningBoltStatic(_sb, _pixel, startScreen, endScreen,
+                z.Style, fade, _elapsed);
         }
     }
 
@@ -721,15 +797,11 @@ public class SpellPreview
         foreach (var b in _beams)
         {
             if (!b.Alive) continue;
-
             var startScreen = WorldToScreenWithHeight(b.StartPos.X, b.StartPos.Y, 1.5f);
             var endScreen = WorldToScreenWithHeight(b.EndPos.X, b.EndPos.Y, 1.0f);
-
-            // Pulsing width to show continuous activity
             float pulse = 1f + 0.3f * MathF.Sin(_elapsed * 8f);
-
-            DrawLightningBolt(startScreen, endScreen,
-                b.CoreColor, b.GlowColor, b.CoreWidth * pulse, b.GlowWidth * pulse, 1f);
+            LightningRenderer.DrawLightningBoltStatic(_sb, _pixel, startScreen, endScreen,
+                b.Style, 1f, _elapsed, widthScale: pulse);
         }
     }
 
@@ -738,23 +810,9 @@ public class SpellPreview
         foreach (var d in _drains)
         {
             if (!d.Alive) continue;
-
             var srcScreen = WorldToScreenWithHeight(d.SourcePos.X, d.SourcePos.Y, 1.0f);
             var dstScreen = WorldToScreenWithHeight(d.DestPos.X, d.DestPos.Y, 1.5f);
-
-            float pulse = 1f + d.PulseStrength * MathF.Sin(_elapsed * d.PulseHz * 2f * PI);
-
-            // Draw multiple tendrils with sway (matches Game1's drain rendering)
-            for (int i = 0; i < d.TendrilCount; i++)
-            {
-                float offset = (i - d.TendrilCount / 2f) * 8f;
-                float sway = MathF.Sin(d.Elapsed * 3f + i * 2f) * 6f;
-                var swayStart = new Vector2(srcScreen.X + offset, srcScreen.Y);
-                var swayEnd = new Vector2(dstScreen.X + sway, dstScreen.Y);
-
-                DrawTendril(swayStart, swayEnd, d.CoreColor, d.GlowColor,
-                    d.CoreWidth * pulse, d.GlowWidth * pulse, d.Elapsed);
-            }
+            LightningRenderer.DrawDrainTendrils(_sb, _pixel, srcScreen, dstScreen, d.Visuals, d.Elapsed);
         }
     }
 
@@ -798,7 +856,7 @@ public class SpellPreview
             float t = h.Timer / Math.Max(0.01f, h.Duration);
             float fade = 1f - t;
             var screen = WorldToScreen(h.Position);
-            int groundY = (int)(PreviewHeight * 0.5f + 0.8f * CameraZoom * CameraYRatio);
+            int groundY = (int)(_previewHeight * 0.5f + 0.8f * CameraZoom * CameraYRatio);
             screen.Y = groundY;
 
             // Expanding ring
@@ -824,7 +882,7 @@ public class SpellPreview
             float t = h.Timer / Math.Max(0.01f, h.Duration);
             float fade = 1f - t;
             var screen = WorldToScreen(h.Position);
-            int groundY = (int)(PreviewHeight * 0.5f + 0.8f * CameraZoom * CameraYRatio);
+            int groundY = (int)(_previewHeight * 0.5f + 0.8f * CameraZoom * CameraYRatio);
             screen.Y = groundY;
 
             // Radial glow burst
@@ -840,209 +898,8 @@ public class SpellPreview
     // Drawing primitives — ported from Game1.cs
     // ========================================
 
-    /// <summary>
-    /// Procedural jagged lightning bolt — matches Game1.DrawLightningBolt exactly.
-    /// Uses time-seeded LCG for jitter so the bolt reshapes each frame.
-    /// </summary>
-    private void DrawLightningBolt(Vector2 start, Vector2 end,
-        Color coreColor, Color glowColor, float coreWidth, float glowWidth, float fade)
-    {
-        var dir = end - start;
-        float length = dir.Length();
-        if (length < 1f) return;
-        var norm = dir / length;
-        var perp = new Vector2(-norm.Y, norm.X);
-
-        int segments = Math.Max(4, (int)(length / 15f));
-        var points = new Vector2[segments + 1];
-        points[0] = start;
-        points[segments] = end;
-
-        // Generate jagged midpoints using LCG (same as Game1)
-        uint seed = (uint)(start.X * 1000 + end.Y * 7 + _elapsed * 60);
-        for (int i = 1; i < segments; i++)
-        {
-            float t = i / (float)segments;
-            var basePos = Vector2.Lerp(start, end, t);
-            seed = seed * 1103515245 + 12345;
-            float displacement = ((seed % 1000) / 500f - 1f) * coreWidth * 8f * (1f - MathF.Abs(t - 0.5f) * 2f);
-            points[i] = basePos + perp * displacement;
-        }
-
-        // Draw segments: glow (wider, dimmer) then core (narrow, bright)
-        byte coreAlpha = (byte)(fade * 255);
-
-        for (int i = 0; i < segments; i++)
-        {
-            var segDir = points[i + 1] - points[i];
-            float segLen = segDir.Length();
-            if (segLen < 0.5f) continue;
-            float angle = MathF.Atan2(segDir.Y, segDir.X);
-
-            // Glow (wider, dimmer)
-            _sb.Draw(_pixel, points[i], null,
-                new Color(glowColor.R, glowColor.G, glowColor.B, (byte)(coreAlpha * 0.4f)),
-                angle, new Vector2(0, 0.5f), new Vector2(segLen, glowWidth * fade),
-                SpriteEffects.None, 0f);
-
-            // Core (narrow, bright)
-            _sb.Draw(_pixel, points[i], null,
-                new Color(coreColor.R, coreColor.G, coreColor.B, coreAlpha),
-                angle, new Vector2(0, 0.5f), new Vector2(segLen, coreWidth * fade),
-                SpriteEffects.None, 0f);
-        }
-    }
-
-    /// <summary>
-    /// God ray column rendering — ported from Game1.DrawGodRay.
-    /// Draws a vertical beam of light from sky to ground with noise distortion.
-    /// </summary>
-    private void DrawGodRay(Vector2 sky, Vector2 ground,
-        Color coreColor, Color glowColor, float coreWidth, float glowWidth,
-        float edgeSoftness, float noiseSpeed, float noiseStrength, float noiseScale,
-        float elapsed, float effectTimer, float effectDuration)
-    {
-        float shimmer = MathF.Sin(elapsed * 8f) * 0.15f + 0.85f;
-        float baseAlpha = shimmer;
-
-        if (effectDuration > 0f)
-        {
-            float remaining = effectDuration - effectTimer;
-            if (remaining < 0.15f) baseAlpha *= MathF.Max(0f, remaining / 0.15f);
-        }
-        if (baseAlpha <= 0.001f) return;
-
-        float cw = coreWidth;
-        float gw = glowWidth;
-
-        var mid = new Color(
-            (byte)((coreColor.R + glowColor.R) / 2),
-            (byte)((coreColor.G + glowColor.G) / 2),
-            (byte)((coreColor.B + glowColor.B) / 2),
-            (byte)((coreColor.A + glowColor.A) / 2));
-
-        // 4 layers from outer glow to inner core
-        float[] layerT = { 1f, 0.66f, 0.33f, 0f };
-        Color[] layerColors = { glowColor, mid, coreColor, coreColor };
-        float[] layerAlphas = { 0.12f, 0.25f, 0.45f, 0.75f };
-
-        float softness = MathF.Max(0f, MathF.Min(1f, edgeSoftness));
-        const int EdgeSublayers = 3;
-        const int Slices = 20;
-
-        for (int li = 0; li < 4; li++)
-        {
-            float w = cw + (gw - cw) * layerT[li];
-            // Scale widths for preview size (preview is smaller than game viewport)
-            float widthTop = 3f * w;
-            float widthBottom = 18f * w;
-            Color lc = layerColors[li];
-            float lAlpha = layerAlphas[li];
-
-            for (int sub = EdgeSublayers; sub >= 0; sub--)
-            {
-                float expand = sub > 0 ? softness * sub / EdgeSublayers : 0f;
-                float subAlphaMul = sub > 0 ? (1f / (sub + 1)) * 0.5f : 1f;
-                float wMul = 1f + expand;
-                float layerA = baseAlpha * lAlpha * subAlphaMul;
-                if (layerA <= 0.001f) continue;
-
-                byte ca = (byte)(lc.A * MathF.Min(1f, layerA));
-
-                for (int s = 0; s < Slices; s++)
-                {
-                    float t0 = s / (float)Slices;
-                    float t1 = (s + 1) / (float)Slices;
-
-                    float y0 = sky.Y + (ground.Y - sky.Y) * t0;
-                    float y1 = sky.Y + (ground.Y - sky.Y) * t1;
-                    float cx0 = sky.X + (ground.X - sky.X) * t0;
-
-                    float hw0 = (widthTop + (widthBottom - widthTop) * t0) * wMul;
-
-                    // Noise modulation on innermost sub-layer
-                    float n = 1f;
-                    if (noiseStrength > 0.001f && sub == 0)
-                    {
-                        float raw = GodRayNoise(t0 * 10f, cx0 * 0.01f, elapsed, noiseScale, noiseSpeed);
-                        n = 1f - noiseStrength * 0.6f + noiseStrength * 0.6f * raw;
-                    }
-
-                    byte sliceA = (byte)(ca * n);
-                    Color sliceColor = new(lc.R, lc.G, lc.B, sliceA);
-
-                    float sliceH = y1 - y0;
-                    if (sliceH < 0.5f) continue;
-
-                    _sb.Draw(_pixel, new Vector2(cx0 - hw0, y0), null, sliceColor,
-                        0f, Vector2.Zero, new Vector2(hw0 * 2, sliceH), SpriteEffects.None, 0f);
-                }
-            }
-
-            // Ground aura ellipse
-            float auraW = widthBottom * 1.1f;
-            float auraH = widthBottom * 0.35f;
-            float auraAlpha = baseAlpha * lAlpha * 0.4f;
-            byte ga = (byte)(lc.A * MathF.Min(1f, auraAlpha));
-            Color auraColor = new(lc.R, lc.G, lc.B, ga);
-
-            _sb.Draw(_pixel, new Vector2(ground.X - auraW, ground.Y - auraH * 0.5f), null,
-                auraColor, 0f, Vector2.Zero, new Vector2(auraW * 2, auraH), SpriteEffects.None, 0f);
-        }
-    }
-
-    private static float GodRayNoise(float y, float x, float t, float scale, float speed)
-    {
-        float s1 = MathF.Sin(y * scale + t * speed * 2.1f + x * 0.3f);
-        float s2 = MathF.Sin(y * scale * 1.7f - t * speed * 1.4f + x * 0.5f);
-        float s3 = MathF.Sin(y * scale * 0.6f + t * speed * 0.8f - x * 0.2f);
-        return (s1 * s2 + s3) * 0.5f + 0.5f;
-    }
-
-    /// <summary>
-    /// Tendril drawing — ported from Game1.DrawTendril.
-    /// Arc + wave displacement with inner core and outer glow.
-    /// </summary>
-    private void DrawTendril(Vector2 start, Vector2 end, Color coreColor, Color glowColor,
-        float coreWidth, float glowWidth, float time)
-    {
-        var dir = end - start;
-        float length = dir.Length();
-        if (length < 1f) return;
-        var norm = dir / length;
-        var perp = new Vector2(-norm.Y, norm.X);
-
-        int segments = Math.Max(3, (int)(length / 20f));
-        var points = new Vector2[segments + 1];
-        points[0] = start;
-        points[segments] = end;
-
-        for (int i = 1; i < segments; i++)
-        {
-            float t = i / (float)segments;
-            var basePos = Vector2.Lerp(start, end, t);
-            float arc = MathF.Sin(t * PI) * 20f;
-            float wave = MathF.Sin(time * 4f + t * 8f) * 5f;
-            points[i] = basePos + perp * (arc + wave);
-        }
-
-        for (int i = 0; i < segments; i++)
-        {
-            var segDir = points[i + 1] - points[i];
-            float segLen = segDir.Length();
-            if (segLen < 0.5f) continue;
-            float angle = MathF.Atan2(segDir.Y, segDir.X);
-
-            // Glow
-            _sb.Draw(_pixel, points[i], null,
-                new Color(glowColor.R, glowColor.G, glowColor.B, (byte)120),
-                angle, new Vector2(0, 0.5f), new Vector2(segLen, glowWidth), SpriteEffects.None, 0f);
-            // Core
-            _sb.Draw(_pixel, points[i], null,
-                new Color(coreColor.R, coreColor.G, coreColor.B, (byte)200),
-                angle, new Vector2(0, 0.5f), new Vector2(segLen, coreWidth), SpriteEffects.None, 0f);
-        }
-    }
+    // Lightning bolt, god ray, and tendril drawing now use shared static methods
+    // from LightningRenderer and GodRayRenderer — no duplication needed.
 
     private void DrawThickLine(Vector2 a, Vector2 b, float thickness, Color color)
     {
@@ -1088,11 +945,17 @@ public class SpellPreview
             SwirlPhase = 0f,
         };
 
-        // Color from projectile flipbook or category default
+        // Color and flipbook from projectile definition
         if (spell.ProjectileFlipbook != null)
-            p.ProjectileColor = spell.ProjectileFlipbook.Color.ToScaledColor();
+        {
+            p.ProjectileColor = spell.ProjectileFlipbook.Color;
+            p.FlipbookID = spell.ProjectileFlipbook.FlipbookID ?? "";
+        }
         else
-            p.ProjectileColor = new Color(255, 160, 80, 255);
+        {
+            p.ProjectileColor = new HdrColor(255, 160, 80, 255, 1.5f);
+            p.FlipbookID = "";
+        }
 
         var diff = new Vector2(TargetX - CasterX, 0);
         float dist = diff.Length();
@@ -1218,8 +1081,8 @@ public class SpellPreview
 
                 // Spawn hit effect
                 Color hitColor = _cachedSpell?.HitEffectFlipbook != null
-                    ? _cachedSpell.HitEffectFlipbook.Color.ToScaledColor()
-                    : p.ProjectileColor;
+                    ? _cachedSpell.HitEffectFlipbook.Color.ToColor()
+                    : p.ProjectileColor.ToColor();
                 float hitScale = _cachedSpell?.HitEffectFlipbook?.Scale ?? 1f;
                 _hitEffects.Add(new PreviewHitEffect
                 {
@@ -1269,7 +1132,7 @@ public class SpellPreview
                         Timer = 0f,
                         Duration = 0.4f,
                         Alive = true,
-                        EffectColor = s.CoreColor,
+                        EffectColor = s.Style.CoreColor.ToColor(),
                         Scale = Math.Max(0.5f, s.AoeRadius * 0.1f + 0.5f),
                     });
                 }

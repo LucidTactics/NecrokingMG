@@ -84,9 +84,99 @@ public class GodRayRenderer
         FlushTriangles();
     }
 
+    /// <summary>
+    /// Draw a single god ray using SpriteBatch rectangles (for use in preview/editor).
+    /// Lower fidelity than triangle-based rendering but works in any SpriteBatch context.
+    /// Requires HdrSprite.fx (additive mode) active on the batch for proper HDR.
+    /// </summary>
+    public static void DrawGodRaySpriteBatch(SpriteBatch batch, Texture2D pixel,
+        Vector2 sky, Vector2 ground, LightningStyle style, GodRayParams p,
+        float elapsed, float effectTimer, float effectDuration)
+    {
+        float shimmer = MathF.Sin(elapsed * 8f) * 0.15f + 0.85f;
+        float baseAlpha = shimmer;
+
+        if (effectDuration > 0f)
+        {
+            float remaining = effectDuration - effectTimer;
+            if (remaining < 0.15f) baseAlpha *= MathF.Max(0f, remaining / 0.15f);
+        }
+        if (baseAlpha <= 0.001f) return;
+
+        float cw = style.CoreWidth;
+        float gw = style.GlowWidth;
+
+        float[] layerT = { 1f, 0.66f, 0.33f, 0f };
+        float[] layerAlphas = { 0.12f, 0.25f, 0.45f, 0.75f };
+        Color[] layerColors = {
+            style.GlowColor.ToColor(),
+            new((byte)((style.CoreColor.R + style.GlowColor.R) / 2),
+                (byte)((style.CoreColor.G + style.GlowColor.G) / 2),
+                (byte)((style.CoreColor.B + style.GlowColor.B) / 2),
+                (byte)((style.CoreColor.A + style.GlowColor.A) / 2)),
+            style.CoreColor.ToColor(),
+            style.CoreColor.ToColor()
+        };
+        const int Slices = 16;
+
+        for (int li = 0; li < 4; li++)
+        {
+            float w = cw + (gw - cw) * layerT[li];
+            float widthTop = 5f * w;
+            float widthBottom = 30f * w;
+            float layerA = baseAlpha * layerAlphas[li];
+            if (layerA <= 0.001f) continue;
+
+            var lc = layerColors[li];
+            var color = HdrColor.ToHdrVertex(lc, layerA, style.CoreColor.Intensity);
+
+            for (int s = 0; s < Slices; s++)
+            {
+                float t0 = s / (float)Slices;
+                float t1 = (s + 1) / (float)Slices;
+
+                float y0 = sky.Y + (ground.Y - sky.Y) * t0;
+                float y1 = sky.Y + (ground.Y - sky.Y) * t1;
+                float cx0 = sky.X + (ground.X - sky.X) * t0;
+                float hw0 = widthTop + (widthBottom - widthTop) * t0;
+                float sliceH = y1 - y0;
+                if (sliceH < 0.5f) continue;
+
+                // Noise modulation
+                float n = 1f;
+                if (p.NoiseStrength > 0.001f)
+                {
+                    float raw = GodRayNoise(t0 * 10f, cx0 * 0.01f, elapsed, p.NoiseScale, p.NoiseSpeed);
+                    n = 1f - p.NoiseStrength * 0.6f + p.NoiseStrength * 0.6f * raw;
+                }
+
+                var sliceColor = HdrColor.ToHdrVertex(lc, layerA * n, style.CoreColor.Intensity);
+                batch.Draw(pixel, new Vector2(cx0 - hw0, y0), null, sliceColor,
+                    0f, Vector2.Zero, new Vector2(hw0 * 2f, sliceH), SpriteEffects.None, 0f);
+            }
+        }
+
+        // Ground aura ellipse (approximated as horizontal rectangles)
+        float auraW = 30f * gw * 1.1f;
+        float auraH = 30f * gw * 0.35f;
+        const int AuraSlices = 10;
+        for (int s = 0; s < AuraSlices; s++)
+        {
+            float a = s / (float)AuraSlices * MathF.PI;
+            float nextA = (s + 1) / (float)AuraSlices * MathF.PI;
+            float sliceY = ground.Y - MathF.Sin(a) * auraH;
+            float sliceH2 = MathF.Abs(MathF.Sin(nextA) - MathF.Sin(a)) * auraH;
+            float sliceW = MathF.Cos(a) * auraW;
+            var aColor = HdrColor.ToHdrVertex(style.CoreColor.ToColor(), baseAlpha * 0.15f, style.CoreColor.Intensity);
+            if (sliceH2 < 0.5f) continue;
+            batch.Draw(pixel, new Vector2(ground.X - MathF.Abs(sliceW), sliceY), null, aColor,
+                0f, Vector2.Zero, new Vector2(MathF.Abs(sliceW) * 2f, sliceH2), SpriteEffects.None, 0f);
+        }
+    }
+
     // --- God ray noise (layered sine pseudo-noise, matches C++) ---
 
-    private static float GodRayNoise(float y, float x, float t, float scale, float speed)
+    public static float GodRayNoise(float y, float x, float t, float scale, float speed)
     {
         float s1 = MathF.Sin(y * scale + t * speed * 2.1f + x * 0.3f);
         float s2 = MathF.Sin(y * scale * 1.7f - t * speed * 1.4f + x * 0.5f);

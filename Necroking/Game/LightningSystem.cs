@@ -40,6 +40,7 @@ public class ActiveStrike
     public Vec2 TargetPos;
     public float TelegraphTimer;
     public float TelegraphDuration;
+    public bool TelegraphVisible = true;
     public float EffectTimer;
     public float EffectDuration;
     public float AoeRadius;
@@ -80,6 +81,21 @@ public class ActiveBeam
     public bool Alive = true;
 }
 
+/// <summary>Visual parameters for drain tendrils. Built from SpellDef.BuildDrainVisuals().</summary>
+public class DrainVisualParams
+{
+    public int TendrilCount = 3;
+    public float ArcHeight = 40f;
+    public float SwayAmplitude = 8f;
+    public float SwayHz = 1.5f;
+    public float CoreWidth = 1.5f;
+    public float GlowWidth = 5f;
+    public float PulseHz = 2f;
+    public float PulseStrength = 0.4f;
+    public HdrColor CoreColor = new(120, 255, 80, 255, 2.5f);
+    public HdrColor GlowColor = new(40, 120, 20, 160, 1.5f);
+}
+
 public class ActiveDrain
 {
     public uint CasterID;
@@ -96,10 +112,7 @@ public class ActiveDrain
     public float MaxDuration;
     public float Elapsed;
     public bool Alive = true;
-    public int TendrilCount = 3;
-    public float ArcHeight = 40f;
-    public HdrColor CoreColor = new(120, 255, 80, 255, 2.5f);
-    public HdrColor GlowColor = new(40, 120, 20, 160, 1.5f);
+    public DrainVisualParams Visuals = new();
 }
 
 public class LightningDamage
@@ -123,12 +136,14 @@ public class LightningSystem
     public void SpawnStrike(Vec2 targetPos, float telegraphDuration, float effectDuration,
                             float aoeRadius, int damage, LightningStyle style, string spellID,
                             StrikeVisual visual = StrikeVisual.Lightning, GodRayParams? godRay = null,
-                            SpellTargetFilter targetFilter = SpellTargetFilter.AnyEnemy)
+                            SpellTargetFilter targetFilter = SpellTargetFilter.AnyEnemy,
+                            bool telegraphVisible = true)
     {
         _strikes.Add(new ActiveStrike
         {
             TargetPos = targetPos,
             TelegraphDuration = telegraphDuration,
+            TelegraphVisible = telegraphVisible,
             EffectDuration = effectDuration,
             AoeRadius = aoeRadius,
             Damage = damage,
@@ -155,16 +170,14 @@ public class LightningSystem
     public void SpawnDrain(uint casterID, uint targetID, string spellID,
                            int damagePerTick, float tickRate, float healPercent,
                            int corpseHP, bool reversed, float maxDuration,
-                           int tendrilCount, float arcHeight,
-                           HdrColor coreColor, HdrColor glowColor)
+                           DrainVisualParams visuals)
     {
         _drains.Add(new ActiveDrain
         {
             CasterID = casterID, TargetID = targetID, SpellID = spellID,
             DamagePerTick = damagePerTick, TickRate = tickRate, HealPercent = healPercent,
             CorpseHP = corpseHP, Reversed = reversed, MaxDuration = maxDuration,
-            TendrilCount = tendrilCount, ArcHeight = arcHeight,
-            CoreColor = coreColor, GlowColor = glowColor
+            Visuals = visuals
         });
     }
 

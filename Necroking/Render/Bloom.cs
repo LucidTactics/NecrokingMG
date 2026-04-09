@@ -128,13 +128,14 @@ public class BloomRenderer
         device.Clear(Color.Black);
     }
 
-    public void EndScene(GraphicsDevice device, SpriteBatch batch, BloomSettings settings)
+    public void EndScene(GraphicsDevice device, SpriteBatch batch, BloomSettings settings,
+        RenderTarget2D? outputTarget = null)
     {
         if (!_initialized || _sceneRT == null || _mipCount < 1 ||
             _extractEffect == null || _blurEffect == null || _combineEffect == null)
         {
             // No bloom — just blit scene
-            device.SetRenderTarget(null);
+            device.SetRenderTarget(outputTarget);
             if (_sceneRT != null)
             {
                 batch.Begin(SpriteSortMode.Immediate, BlendState.Opaque);
@@ -146,7 +147,7 @@ public class BloomRenderer
 
         if (!settings.Enabled)
         {
-            device.SetRenderTarget(null);
+            device.SetRenderTarget(outputTarget);
             batch.Begin(SpriteSortMode.Immediate, BlendState.Opaque);
             batch.Draw(_sceneRT, new Rectangle(0, 0, _screenW, _screenH), Color.White);
             batch.End();
@@ -230,8 +231,8 @@ public class BloomRenderer
             batch.End();
         }
 
-        // --- Step 4: Composite — scene + bloom * intensity → backbuffer ---
-        device.SetRenderTarget(null);
+        // --- Step 4: Composite — scene + bloom * intensity → output target ---
+        device.SetRenderTarget(outputTarget);
 
         if (DebugShowExtract)
         {

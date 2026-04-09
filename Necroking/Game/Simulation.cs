@@ -659,22 +659,10 @@ public class Simulation
                             _units[i].SpellCooldownTimer <= 0f)
                         {
                             // Cast the spell — spawn strike at target
-                            var style = new LightningStyle
-                            {
-                                CoreColor = spell.StrikeCoreColor,
-                                GlowColor = spell.StrikeGlowColor,
-                                CoreWidth = spell.StrikeCoreWidth,
-                                GlowWidth = spell.StrikeGlowWidth
-                            };
+                            var style = spell.BuildStrikeStyle();
                             var visual = spell.StrikeVisualType == "GodRay"
                                 ? StrikeVisual.GodRay : StrikeVisual.Lightning;
-                            var grp = new GodRayParams
-                            {
-                                EdgeSoftness = spell.GodRayEdgeSoftness,
-                                NoiseSpeed = spell.GodRayNoiseSpeed,
-                                NoiseStrength = spell.GodRayNoiseStrength,
-                                NoiseScale = spell.GodRayNoiseScale
-                            };
+                            var grp = spell.BuildGodRayParams();
                             var tFilter = Enum.TryParse<SpellTargetFilter>(spell.TargetFilter, out var tf)
                                 ? tf : SpellTargetFilter.AnyEnemy;
                             if (spell.StrikeTargetUnit)
@@ -706,7 +694,8 @@ public class Simulation
                                 // Sky lightning strike: telegraph then AOE
                                 _lightning.SpawnStrike(_units[enemy].Position,
                                     spell.TelegraphDuration, spell.StrikeDuration,
-                                    spell.AoeRadius, spell.Damage, style, spell.Id, visual, grp, tFilter);
+                                    spell.AoeRadius, spell.Damage, style, spell.Id, visual, grp, tFilter,
+                                    spell.TelegraphVisible);
                             }
 
                             _units[i].Mana -= spell.ManaCost;

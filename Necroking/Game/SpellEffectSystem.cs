@@ -118,12 +118,7 @@ public class SpellEffectSystem
                 {
                     sim.Lightning.SpawnBeam(casterUid, units[beamTarget].Id,
                         spell.Id, spell.Damage, spell.BeamTickRate, spell.BeamRetargetRadius,
-                        new LightningStyle
-                        {
-                            CoreColor = spell.BeamCoreColor, GlowColor = spell.BeamGlowColor,
-                            CoreWidth = spell.BeamCoreWidth, GlowWidth = spell.BeamGlowWidth,
-                            Displacement = spell.BeamDisplacement, MaxBranches = spell.BeamBranches
-                        });
+                        spell.BuildBeamStyle());
                     result.ChannelingSlot = slot;
                 }
                 break;
@@ -137,8 +132,7 @@ public class SpellEffectSystem
                     sim.Lightning.SpawnDrain(casterUid, units[drainTarget].Id,
                         spell.Id, spell.Damage, spell.DrainTickRate, spell.DrainHealPercent,
                         spell.DrainCorpseHP, spell.DrainReversed, spell.DrainMaxDuration,
-                        spell.DrainTendrilCount, spell.DrainArcHeight,
-                        spell.DrainCoreColor, spell.DrainGlowColor);
+                        spell.BuildDrainVisuals());
                     result.ChannelingSlot = slot;
                 }
                 break;
@@ -165,23 +159,9 @@ public class SpellEffectSystem
         int casterIdx, Vec2 target, Vec2 effectOrigin, List<DamageNumber> damageNumbers)
     {
         var units = sim.UnitsMut;
-        var style = new LightningStyle
-        {
-            CoreColor = spell.StrikeCoreColor,
-            GlowColor = spell.StrikeGlowColor,
-            CoreWidth = spell.StrikeCoreWidth,
-            GlowWidth = spell.StrikeGlowWidth,
-            Displacement = spell.StrikeDisplacement,
-            MaxBranches = spell.StrikeBranches
-        };
+        var style = spell.BuildStrikeStyle();
         var sVis = spell.StrikeVisualType == "GodRay" ? StrikeVisual.GodRay : StrikeVisual.Lightning;
-        var sGrp = new GodRayParams
-        {
-            EdgeSoftness = spell.GodRayEdgeSoftness,
-            NoiseSpeed = spell.GodRayNoiseSpeed,
-            NoiseStrength = spell.GodRayNoiseStrength,
-            NoiseScale = spell.GodRayNoiseScale
-        };
+        var sGrp = spell.BuildGodRayParams();
         Enum.TryParse<SpellTargetFilter>(spell.TargetFilter, out var sTF);
 
         if (spell.StrikeTargetUnit)
@@ -210,7 +190,7 @@ public class SpellEffectSystem
         {
             sim.Lightning.SpawnStrike(target, spell.TelegraphDuration,
                 spell.StrikeDuration, spell.AoeRadius, spell.Damage,
-                style, spell.Id, sVis, sGrp, sTF);
+                style, spell.Id, sVis, sGrp, sTF, spell.TelegraphVisible);
         }
     }
 

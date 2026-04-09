@@ -441,9 +441,12 @@ public class SpellVisualTestScenario : ScenarioBase
         {
             sim.Lightning.SpawnDrain(_necroUid, sim.Units[targetIdx].Id,
                 spellID, 5, 0.25f, 1f, 10, false, 2f,
-                3, 40f,
-                new HdrColor(120, 255, 80, 255, 2.5f),
-                new HdrColor(40, 120, 20, 160, 1.5f));
+                new DrainVisualParams
+                {
+                    TendrilCount = 3, ArcHeight = 40f,
+                    CoreColor = new HdrColor(120, 255, 80, 255, 2.5f),
+                    GlowColor = new HdrColor(40, 120, 20, 160, 1.5f),
+                });
             DebugLog.Log(ScenarioLog, $"Cast drain '{spellID}' on enemy idx={targetIdx}");
         }
         else

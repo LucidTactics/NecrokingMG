@@ -1,8 +1,10 @@
+using System;
 using System.Collections.Generic;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Necroking.Core;
 using Necroking.Editor;
+using Necroking.GameSystems;
 
 namespace Necroking.Data.Registries;
 
@@ -218,7 +220,12 @@ public class SpellDef : IHasId
 
     [EditorVisible("Category", "Strike")]
     [EditorVisible("StrikeTargetUnit", "False")]
-    [EditorField(Label = "Duration", Group = "STRIKE", Order = 504, Step = 0.01f, Decimals = 2)]
+    [EditorField(Label = "Telegraph Visible", Group = "STRIKE", Order = 504)]
+    [JsonPropertyName("telegraphVisible")] public bool TelegraphVisible { get; set; } = true;
+
+    [EditorVisible("Category", "Strike")]
+    [EditorVisible("StrikeTargetUnit", "False")]
+    [EditorField(Label = "Duration", Group = "STRIKE", Order = 505, Step = 0.01f, Decimals = 2)]
     [JsonPropertyName("strikeDuration")] public float StrikeDuration { get; set; } = 0.2f;
 
     // Zap fields
@@ -544,6 +551,65 @@ public class SpellDef : IHasId
     // Toggle (hidden from editor — internal)
     [EditorHide]
     [JsonPropertyName("toggleEffect")] public string ToggleEffect { get; set; } = "";
+
+    // ═══════════════════════════════════════
+    //  Style builders — single source of truth
+    //  Used by SpellEffectSystem (game) and SpellPreview (editor)
+    // ═══════════════════════════════════════
+
+    /// <summary>Build a LightningStyle from this spell's strike fields.</summary>
+    public LightningStyle BuildStrikeStyle() => new()
+    {
+        CoreColor = StrikeCoreColor,
+        GlowColor = StrikeGlowColor,
+        CoreWidth = StrikeCoreWidth,
+        GlowWidth = StrikeGlowWidth,
+        Displacement = StrikeDisplacement,
+        MaxBranches = StrikeBranches,
+        FlickerMin = StrikeFlickerMin,
+        FlickerMax = StrikeFlickerMax,
+        FlickerHz = StrikeFlickerHz,
+        JitterHz = StrikeJitterHz,
+    };
+
+    /// <summary>Build a LightningStyle from this spell's beam fields.</summary>
+    public LightningStyle BuildBeamStyle() => new()
+    {
+        CoreColor = BeamCoreColor,
+        GlowColor = BeamGlowColor,
+        CoreWidth = BeamCoreWidth,
+        GlowWidth = BeamGlowWidth,
+        Displacement = BeamDisplacement,
+        MaxBranches = BeamBranches,
+        FlickerMin = BeamFlickerMin,
+        FlickerMax = BeamFlickerMax,
+        FlickerHz = BeamFlickerHz,
+        JitterHz = BeamJitterHz,
+    };
+
+    /// <summary>Build drain visual params from this spell's drain fields.</summary>
+    public DrainVisualParams BuildDrainVisuals() => new()
+    {
+        TendrilCount = Math.Max(1, DrainTendrilCount),
+        ArcHeight = DrainArcHeight,
+        SwayAmplitude = DrainSwayAmplitude,
+        SwayHz = DrainSwayHz,
+        CoreWidth = Math.Max(0.5f, DrainCoreWidth),
+        GlowWidth = Math.Max(1f, DrainGlowWidth),
+        PulseHz = DrainPulseHz,
+        PulseStrength = DrainPulseStrength,
+        CoreColor = DrainCoreColor,
+        GlowColor = DrainGlowColor,
+    };
+
+    /// <summary>Build GodRayParams from this spell's god ray fields.</summary>
+    public GodRayParams BuildGodRayParams() => new()
+    {
+        EdgeSoftness = GodRayEdgeSoftness,
+        NoiseSpeed = GodRayNoiseSpeed,
+        NoiseStrength = GodRayNoiseStrength,
+        NoiseScale = GodRayNoiseScale,
+    };
 }
 
 public class SpellRegistry : RegistryBase<SpellDef>
