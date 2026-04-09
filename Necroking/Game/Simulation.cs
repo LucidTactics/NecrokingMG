@@ -172,7 +172,7 @@ public class Simulation
         _necroState.TickCooldowns(dt);
 
         // Tick buffs
-        BuffSystem.TickBuffs(_units, dt);
+        BuffSystem.TickBuffs(_units, dt, _gameData?.Buffs);
         for (int i = 0; i < _units.Count; i++)
         {
             if (_units[i].ActiveBuffs.Count > 0)
@@ -181,12 +181,7 @@ public class Simulation
                 _units[i].MaxSpeed = _units[i].Stats.CombatSpeed;
         }
 
-        // Tick standup timers (knockdown duration now handled by buff system)
-        for (int i = 0; i < _units.Count; i++)
-        {
-            if (_units[i].StandupTimer > 0f)
-                _units[i].StandupTimer = MathF.Max(0f, _units[i].StandupTimer - dt);
-        }
+        // Standup/recovery timing now handled by IncapState inside BuffSystem.TickBuffs
 
         // Tick hit shake timers and clear dodge flags
         for (int i = 0; i < _units.Count; i++)
@@ -397,7 +392,7 @@ public class Simulation
         {
             if (!_units[i].Alive) continue;
             if (_units[i].InPhysics) continue; // Physics system owns this unit
-            if (_units[i].Jumping || BuffSystem.IsKnockedDown(_units[i]) || _units[i].StandupTimer > 0f) { _units[i].PreferredVel = Vec2.Zero; continue; }
+            if (_units[i].Jumping || _units[i].Incap.IsLocked) { _units[i].PreferredVel = Vec2.Zero; continue; }
 
             // New archetype system: if Archetype > 0, dispatch to handler
             // (PlayerControlled units are handled in the legacy switch below)
@@ -1015,7 +1010,7 @@ public class Simulation
             if (!_units[i].Alive) continue;
             if (_units[i].InPhysics) continue; // Physics system owns this unit's movement
             // Movement blocked by: jumping, knockdown (buff), standup, pending attack, or post-attack lockout
-            if (_units[i].Jumping || BuffSystem.IsKnockedDown(_units[i]) || _units[i].StandupTimer > 0f
+            if (_units[i].Jumping || _units[i].Incap.IsLocked
                 || !_units[i].PendingAttack.IsNone || _units[i].PostAttackTimer > 0f)
             {
                 _units[i].Velocity = Vec2.Zero;
@@ -1340,7 +1335,7 @@ public class Simulation
         for (int i = 0; i < _units.Count; i++)
         {
             if (!_units[i].Alive) continue;
-            if (_units[i].StandupTimer > 0f) continue;
+            if (_units[i].Incap.IsLocked) continue;
 
             // PlayerControlled: facing is set by mouse in Game1, don't override
             if (_units[i].AI == AIBehavior.PlayerControlled) continue;
@@ -1446,7 +1441,7 @@ public class Simulation
             if (!_units[i].Alive) continue;
             _units[i].AttackCooldown = MathF.Max(0f, _units[i].AttackCooldown - dt);
 
-            if (BuffSystem.IsKnockedDown(_units[i])) continue;
+            if (_units[i].Incap.IsLocked) continue;
             if (!_units[i].PendingAttack.IsNone) continue;
             if (_units[i].AttackCooldown > 0f) continue;
             if (_units[i].PostAttackTimer > 0f) continue;

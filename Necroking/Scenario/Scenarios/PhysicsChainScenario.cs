@@ -75,18 +75,18 @@ public class PhysicsChainScenario : ScenarioBase
         }
 
         // Track knockdowns
-        if (a >= 0 && (GameSystems.BuffSystem.IsKnockedDown(sim.Units[a]) || sim.Units[a].InPhysics) && !_wasKnockedDown[0])
+        if (a >= 0 && (sim.Units[a].Incap.IsLocked || sim.Units[a].InPhysics) && !_wasKnockedDown[0])
         {
             _wasKnockedDown[0] = true;
             DebugLog.Log(ScenarioLog, $"[{_elapsed:F2}s] A knocked down/flying");
         }
-        if (b >= 0 && (GameSystems.BuffSystem.IsKnockedDown(sim.Units[b]) || sim.Units[b].InPhysics) && !_wasKnockedDown[1])
+        if (b >= 0 && (sim.Units[b].Incap.IsLocked || sim.Units[b].InPhysics) && !_wasKnockedDown[1])
         {
             _wasKnockedDown[1] = true;
             DebugLog.Log(ScenarioLog, $"[{_elapsed:F2}s] B knocked down/flying (chain hit!)");
             DeferredScreenshot = "physics_chain_b_hit";
         }
-        if (c >= 0 && (GameSystems.BuffSystem.IsKnockedDown(sim.Units[c]) || sim.Units[c].InPhysics) && !_wasKnockedDown[2])
+        if (c >= 0 && (sim.Units[c].Incap.IsLocked || sim.Units[c].InPhysics) && !_wasKnockedDown[2])
         {
             _wasKnockedDown[2] = true;
             DebugLog.Log(ScenarioLog, $"[{_elapsed:F2}s] C knocked down/flying (double chain!)");
@@ -122,8 +122,8 @@ public class PhysicsChainScenario : ScenarioBase
     private static string UnitState(Unit u)
     {
         if (u.InPhysics) return $"flying(Z={u.Z:F1})";
-        if (GameSystems.BuffSystem.IsKnockedDown(u)) return "knocked";
-        if (u.StandupTimer > 0f) return "standup";
+        if (u.Incap.IsLocked) return "knocked";
+        if (u.Incap.Recovering) return "standup";
         return "standing";
     }
 

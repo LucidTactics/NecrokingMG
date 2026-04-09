@@ -16,6 +16,24 @@ public struct ActiveBuff
     public int StackCount;
 }
 
+/// <summary>
+/// Tracks a unit being incapacitated by a debuff (knockdown, stun, freeze, etc.).
+/// The buff system manages the lifecycle; other systems just check Incap.IsLocked.
+/// </summary>
+public struct IncapState
+{
+    public bool Active;                // True while incapacitated (blocks AI/movement/combat)
+    public Render.AnimState HoldAnim;  // Animation to show while incapacitated (e.g. Knockdown)
+    public Render.AnimState RecoverAnim; // Animation to play on recovery (e.g. Standup)
+    public float RecoverTime;          // Duration of recovery animation
+    public float RecoverTimer;         // Countdown for recovery phase
+    public bool Recovering;            // True during recovery animation (after incap ends)
+    public bool HoldAtEnd;             // Snap to last frame of HoldAnim on entry
+
+    /// <summary>Is the unit currently incapacitated or recovering?</summary>
+    public readonly bool IsLocked => Active || Recovering;
+}
+
 public class Unit
 {
     // Hot path
@@ -24,8 +42,7 @@ public class Unit
     public Vec2 PreferredVel;
     public float Z;             // Height above ground (0 = on ground). Used by 2.5D impulse physics.
     public bool InPhysics;      // True while physics system owns this unit's movement.
-    public bool SnapAnimToEnd;  // If true, next anim state change skips to last frame (e.g. knockdown on landing).
-    public bool OverrideStarted; // Tracks whether the current OverrideAnim has been applied to the controller.
+    public bool OverrideStarted; // Tracks whether OverrideAnim has been applied to AnimController
 
     // Movement
     public float Radius = 0.495f;
@@ -78,9 +95,10 @@ public class Unit
     public bool JumpAttackFired;
     public float JumpHeight;
 
-    // Knockdown / Standup
-    public float KnockdownTimer;
-    public float StandupTimer;
+    // Incapacitation (knockdown, stun, freeze, etc.) — managed by buff system
+    public IncapState Incap;
+    public float StandupTimer; // Legacy: used by AI handlers for sleep→standup (separate from incap)
+    public float KnockdownTimer; // Legacy: unused, kept for compatibility
     public int Harassment;
 
     // Rendering

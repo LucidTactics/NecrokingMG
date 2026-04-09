@@ -109,6 +109,13 @@ public class BuffDef : IHasId
     [JsonPropertyName("effects")] public List<BuffEffect> Effects { get; set; } = new();
     [JsonPropertyName("maxStacks")] public int MaxStacks { get; set; } = 1;
 
+    // Incapacitation: buff prevents movement/AI/combat while active
+    [JsonPropertyName("incapacitating")] public bool Incapacitating { get; set; }
+    [JsonPropertyName("incapHoldAnim")] public string IncapHoldAnim { get; set; } = "";     // e.g. "Knockdown", "Stunned"
+    [JsonPropertyName("incapRecoverAnim")] public string IncapRecoverAnim { get; set; } = ""; // e.g. "Standup"
+    [JsonPropertyName("incapRecoverTime")] public float IncapRecoverTime { get; set; } = 0.8f;
+    [JsonPropertyName("incapHoldAtEnd")] public bool IncapHoldAtEnd { get; set; }            // Snap to last frame of hold anim
+
     [JsonPropertyName("hasOrbital")] public bool HasOrbital { get; set; }
     [JsonPropertyName("orbital")] public OrbitalVisual? Orbital { get; set; }
 

@@ -70,10 +70,10 @@ public static class AnimResolver
         }
 
         // The resolver has already decided who wins — always ForceState to apply it.
-        if (unit.SnapAnimToEnd)
+        if (unit.Incap.HoldAtEnd && unit.Incap.Active && !unit.Incap.Recovering)
         {
             ctrl.ForceStateAtEnd(winner.State);
-            unit.SnapAnimToEnd = false;
+            unit.Incap.HoldAtEnd = false; // only snap once
         }
         else
         {

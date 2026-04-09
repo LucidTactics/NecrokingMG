@@ -41,12 +41,14 @@ public class PhysicsSystem
     private static readonly Random _rng = new();
     private Data.Registries.BuffDef? _knockdownBuff;
 
+    private const string KnockdownBuffID = "buff_knockdown";
+
     /// <summary>Call once after game data is loaded to resolve the knockdown buff def.</summary>
     public void Init(Data.Registries.BuffRegistry buffs)
     {
-        _knockdownBuff = buffs.Get(BuffSystem.KnockdownBuffID);
+        _knockdownBuff = buffs.Get(KnockdownBuffID);
         if (_knockdownBuff == null)
-            DebugLog.Log("physics", $"WARNING: knockdown buff '{BuffSystem.KnockdownBuffID}' not found in registry");
+            DebugLog.Log("physics", $"WARNING: knockdown buff '{KnockdownBuffID}' not found in registry");
     }
 
     /// <summary>
@@ -253,12 +255,6 @@ public class PhysicsSystem
                 // Flyer too slow — just stagger the standing unit in place
                 if (_knockdownBuff != null)
                     BuffSystem.ApplyBuff(units, i, _knockdownBuff);
-                units[i].OverrideAnim = new AnimRequest
-                {
-                    State = AnimState.Knockdown, Priority = 3, Interrupt = true,
-                    Duration = -1, PlaybackSpeed = 1f
-                };
-                units[i].SnapAnimToEnd = true;
 
                 // Flyer stops
                 body.VelocityXY = Vec2.Zero;
@@ -276,17 +272,9 @@ public class PhysicsSystem
         units[idx].Velocity = Vec2.Zero;
         units[idx].PreferredVel = Vec2.Zero;
 
-        // Apply knockdown buff — duration, expiry, and standup handled by buff system
+        // Apply knockdown buff — incap state, animation, and recovery all handled by buff system
         if (_knockdownBuff != null)
             BuffSystem.ApplyBuff(units, idx, _knockdownBuff);
-
-        // Knockdown override persists for buff duration (-1 = loop, cleared when buff expires)
-        units[idx].OverrideAnim = new AnimRequest
-        {
-            State = AnimState.Knockdown, Priority = 3, Interrupt = true,
-            Duration = -1, PlaybackSpeed = 1f
-        };
-        units[idx].SnapAnimToEnd = true;  // Skip to last frame — unit is already on ground
 
         DebugLog.Log("physics", $"[Land] unit#{idx} pos=({units[idx].Position.X:F1},{units[idx].Position.Y:F1})");
 

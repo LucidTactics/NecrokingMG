@@ -76,11 +76,11 @@ public class PhysicsSingleScenario : ScenarioBase
         {
             _landed = true;
             float dist = (u.Position - _startPos).Length();
-            DebugLog.Log(ScenarioLog, $"[{_elapsed:F2}s] Landed! dist={dist:F1} knocked={GameSystems.BuffSystem.IsKnockedDown(u)}");
+            DebugLog.Log(ScenarioLog, $"[{_elapsed:F2}s] Landed! dist={dist:F1} knocked={u.Incap.IsLocked}");
             DeferredScreenshot = "physics_single_landed";
         }
 
-        if (_landed && !_stoodUp && !GameSystems.BuffSystem.IsKnockedDown(u) && u.StandupTimer <= 0f)
+        if (_landed && !_stoodUp && !u.Incap.IsLocked && true)
         {
             _stoodUp = true;
             DebugLog.Log(ScenarioLog, $"[{_elapsed:F2}s] Stood up! pos=({u.Position.X:F1},{u.Position.Y:F1})");
@@ -91,7 +91,7 @@ public class PhysicsSingleScenario : ScenarioBase
         if (_launched && (int)(_elapsed * 4) > (int)((_elapsed - dt) * 4))
         {
             DebugLog.Log(ScenarioLog, $"[{_elapsed:F2}s] Z={u.Z:F2} inPhysics={u.InPhysics} " +
-                $"knocked={GameSystems.BuffSystem.IsKnockedDown(u)} standup={u.StandupTimer:F1} " +
+                $"knocked={u.Incap.IsLocked} standup={u.Incap.RecoverTimer:F1} " +
                 $"pos=({u.Position.X:F1},{u.Position.Y:F1})");
         }
 

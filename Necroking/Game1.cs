@@ -1713,7 +1713,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
             {
                 var mu = _sim.UnitsMut;
                 bool canJump = mu[necroIdx].Alive && !mu[necroIdx].Jumping
-                    && !GameSystems.BuffSystem.IsKnockedDown(mu[necroIdx]) && !_pendingSpell.Active;
+                    && !mu[necroIdx].Incap.IsLocked && !_pendingSpell.Active;
                 if (canJump)
                 {
                     float facingRad = mu[necroIdx].FacingAngle * MathF.PI / 180f;
@@ -3123,10 +3123,10 @@ public class Game1 : Microsoft.Xna.Framework.Game
             AnimState targetState;
             if (_sim.Units[i].InPhysics)
                 targetState = AnimState.Fall;
-            else if (_sim.Units[i].StandupTimer > 0f)
-                targetState = AnimState.Standup;
-            else if (GameSystems.BuffSystem.IsKnockedDown(_sim.Units[i]))
-                targetState = AnimState.Knockdown;
+            else if (_sim.Units[i].Incap.Active && !_sim.Units[i].Incap.Recovering)
+                targetState = _sim.Units[i].Incap.HoldAnim;
+            else if (_sim.Units[i].Incap.Recovering)
+                targetState = _sim.Units[i].Incap.RecoverAnim;
             else if (_sim.Units[i].Dodging)
                 targetState = AnimState.Dodge;
             else if (!_sim.Units[i].PendingAttack.IsNone)
@@ -3205,10 +3205,13 @@ public class Game1 : Microsoft.Xna.Framework.Game
             // Also force INTO Fall/Knockdown from any state
             needsForce |= (targetState == AnimState.Fall || targetState == AnimState.Knockdown)
                 && currentAnim != targetState;
-            if (_sim.Units[i].SnapAnimToEnd)
+            if (_sim.Units[i].Incap.HoldAtEnd && _sim.Units[i].Incap.Active
+                && !_sim.Units[i].Incap.Recovering && currentAnim != targetState)
             {
                 animData.Ctrl.ForceStateAtEnd(targetState);
-                _sim.UnitsMut[i].SnapAnimToEnd = false;
+                var incap = _sim.Units[i].Incap;
+                incap.HoldAtEnd = false; // only snap once
+                _sim.UnitsMut[i].Incap = incap;
             }
             else if (needsForce)
                 animData.Ctrl.ForceState(targetState);

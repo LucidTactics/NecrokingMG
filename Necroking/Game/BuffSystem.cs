@@ -37,55 +37,109 @@ public static class BuffSystem
             Effects = def.Effects,
             StackCount = 1
         });
+
+        // If this buff is incapacitating, set up the incap state
+        if (def.Incapacitating)
+        {
+            Enum.TryParse<AnimState>(def.IncapHoldAnim, out var holdAnim);
+            Enum.TryParse<AnimState>(def.IncapRecoverAnim, out var recoverAnim);
+            units[unitIdx].Incap = new IncapState
+            {
+                Active = true,
+                HoldAnim = holdAnim,
+                RecoverAnim = recoverAnim,
+                RecoverTime = def.IncapRecoverTime,
+                RecoverTimer = 0f,
+                Recovering = false,
+                HoldAtEnd = def.IncapHoldAtEnd,
+            };
+
+            // Set the hold animation as a forced override
+            units[unitIdx].OverrideAnim = new AnimRequest
+            {
+                State = holdAnim, Priority = 3, Interrupt = true,
+                Duration = -1, PlaybackSpeed = 1f
+            };
+        }
     }
 
-    public const string KnockdownBuffID = "buff_knockdown";
-    private const float StandupAnimTime = 0.8f; // Start standup this long before buff expires
-
-    public static void TickBuffs(UnitArrays units, float dt)
+    public static void TickBuffs(UnitArrays units, float dt, BuffRegistry? buffRegistry = null)
     {
         for (int i = 0; i < units.Count; i++)
         {
             if (!units[i].Alive) continue;
+
+            // Tick recovery phase (after incap buff expires)
+            if (units[i].Incap.Recovering)
+            {
+                units[i].Incap.RecoverTimer -= dt;
+                if (units[i].Incap.RecoverTimer <= 0f)
+                {
+                    // Recovery complete — unit is free
+                    units[i].Incap = default;
+                }
+            }
+
             var buffs = units[i].ActiveBuffs;
             for (int j = buffs.Count - 1; j >= 0; j--)
             {
                 var b = buffs[j];
                 if (b.Permanent) continue;
                 b.RemainingDuration -= dt;
+
                 if (b.RemainingDuration <= 0f)
                 {
-                    // Knockdown: standup already started early (below), nothing to do on expiry
                     buffs.RemoveAt(j);
+                    continue;
                 }
-                else
+
+                // Incapacitating buffs: start recovery animation early so it finishes as buff expires
+                if (units[i].Incap.Active && !units[i].Incap.Recovering && buffRegistry != null)
                 {
-                    // Knockdown: start standup animation early so it finishes as buff expires.
-                    // StandupTimer extends past buff expiry to keep AI/movement blocked
-                    // until the standup animation actually completes.
-                    if (b.BuffDefID == KnockdownBuffID
-                        && b.RemainingDuration <= StandupAnimTime
-                        && units[i].StandupTimer <= 0f)
+                    var def = buffRegistry.Get(b.BuffDefID);
+                    if (def != null && def.Incapacitating && b.RemainingDuration <= def.IncapRecoverTime)
                     {
-                        // Timer = anim duration, not remaining buff time.
-                        // This ensures StandupTimer outlasts the buff and blocks AI
-                        // until standup visually completes.
-                        units[i].StandupTimer = StandupAnimTime + 0.1f;
-                        units[i].OverrideAnim = AnimRequest.Combat(AnimState.Standup);
+                        // Begin recovery phase — animation plays while buff is still active
+                        var incap = units[i].Incap;
+                        incap.Recovering = true;
+                        incap.RecoverTimer = def.IncapRecoverTime + 0.1f; // Outlasts buff to block AI
+                        units[i].Incap = incap;
+
+                        // Switch override to recovery animation
+                        Enum.TryParse<AnimState>(def.IncapRecoverAnim, out var recoverAnim);
+                        units[i].OverrideAnim = AnimRequest.Combat(recoverAnim);
                         units[i].OverrideStarted = false;
                     }
-                    buffs[j] = b;
+                }
+
+                buffs[j] = b;
+            }
+
+            // If incap is active but the buff was removed (expired this frame), start recovery
+            if (units[i].Incap.Active && !units[i].Incap.Recovering)
+            {
+                bool buffStillActive = false;
+                for (int j = 0; j < buffs.Count; j++)
+                {
+                    if (buffRegistry != null)
+                    {
+                        var def = buffRegistry.Get(buffs[j].BuffDefID);
+                        if (def != null && def.Incapacitating) { buffStillActive = true; break; }
+                    }
+                }
+                if (!buffStillActive)
+                {
+                    // Buff expired without early recovery trigger — immediate recovery
+                    var incap = units[i].Incap;
+                    incap.Recovering = true;
+                    incap.RecoverTimer = incap.RecoverTime;
+                    units[i].Incap = incap;
+
+                    units[i].OverrideAnim = AnimRequest.Combat(incap.RecoverAnim);
+                    units[i].OverrideStarted = false;
                 }
             }
         }
-    }
-
-    /// <summary>Check if a unit has the knockdown buff active.</summary>
-    public static bool IsKnockedDown(Unit unit)
-    {
-        for (int i = 0; i < unit.ActiveBuffs.Count; i++)
-            if (unit.ActiveBuffs[i].BuffDefID == KnockdownBuffID) return true;
-        return false;
     }
 
     public static void RemoveBuffStack(UnitArrays units, int unitIdx, string buffDefID)
@@ -131,14 +185,10 @@ public static class BuffSystem
         return setValue ?? (baseValue + additive) * multiplicative;
     }
 
-    /// <summary>
-    /// Apply buff with combat log output showing stat changes.
-    /// </summary>
     public static void ApplyBuffLogged(UnitArrays units, int unitIdx, BuffDef def, string unitName)
     {
         if (unitIdx < 0 || unitIdx >= units.Count) return;
 
-        // Log the application
         var buffs = units[unitIdx].ActiveBuffs;
         bool stacking = false;
         for (int i = 0; i < buffs.Count; i++)
@@ -151,7 +201,6 @@ public static class BuffSystem
         else
             DebugLog.Log("combat", $"         Buff '{def.Id}' applied to {unitName}");
 
-        // Log stat changes
         foreach (var eff in def.Effects)
             DebugLog.Log("combat", $"           {eff.Type} {eff.Stat} {eff.Value:+0.##;-0.##;0}");
 

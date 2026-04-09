@@ -77,7 +77,7 @@ public class PhysicsMultiScenario : ScenarioBase
             {
                 int idx = FindByID(sim.Units, _unitIDs[i]);
                 if (idx >= 0 && sim.Units[idx].Alive && !sim.Units[idx].InPhysics
-                    && !GameSystems.BuffSystem.IsKnockedDown(sim.Units[idx]) && sim.Units[idx].StandupTimer <= 0f)
+                    && !sim.Units[idx].Incap.IsLocked)
                     standing++;
             }
 
@@ -98,7 +98,7 @@ public class PhysicsMultiScenario : ScenarioBase
                 int idx = FindByID(sim.Units, _unitIDs[i]);
                 if (idx < 0) continue;
                 if (sim.Units[idx].InPhysics) airborne++;
-                else if (GameSystems.BuffSystem.IsKnockedDown(sim.Units[idx]) || sim.Units[idx].StandupTimer > 0f) knocked++;
+                else if (sim.Units[idx].Incap.IsLocked) knocked++;
                 else standing++;
             }
             DebugLog.Log(ScenarioLog, $"[{_elapsed:F2}s] airborne={airborne} knocked={knocked} standing={standing}");
@@ -114,7 +114,7 @@ public class PhysicsMultiScenario : ScenarioBase
         {
             int idx = FindByID(sim.Units, _unitIDs[i]);
             if (idx >= 0 && sim.Units[idx].Alive && !sim.Units[idx].InPhysics
-                && !GameSystems.BuffSystem.IsKnockedDown(sim.Units[idx]) && sim.Units[idx].StandupTimer <= 0f)
+                && !sim.Units[idx].Incap.IsLocked)
                 standing++;
         }
         bool pass = standing == 5;

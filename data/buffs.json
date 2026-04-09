@@ -619,6 +619,11 @@
       "id": "buff_knockdown",
       "name": "Knocked Down",
       "duration": 1.5,
+      "incapacitating": true,
+      "incapHoldAnim": "Knockdown",
+      "incapRecoverAnim": "Standup",
+      "incapRecoverTime": 0.8,
+      "incapHoldAtEnd": true,
       "effects": [
         {
           "type": "Set",
