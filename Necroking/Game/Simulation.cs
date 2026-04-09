@@ -404,7 +404,7 @@ public class Simulation
         {
             if (!_units[i].Alive) continue;
             if (_units[i].InPhysics) continue; // Physics system owns this unit
-            if (_units[i].Jumping || BuffSystem.IsKnockedDown(_units[i])) { _units[i].PreferredVel = Vec2.Zero; continue; }
+            if (_units[i].Jumping || BuffSystem.IsKnockedDown(_units[i]) || _units[i].StandupTimer > 0f) { _units[i].PreferredVel = Vec2.Zero; continue; }
 
             // New archetype system: if Archetype > 0, dispatch to handler
             // (PlayerControlled units are handled in the legacy switch below)

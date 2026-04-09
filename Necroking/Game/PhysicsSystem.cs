@@ -253,7 +253,11 @@ public class PhysicsSystem
                 // Flyer too slow — just stagger the standing unit in place
                 if (_knockdownBuff != null)
                     BuffSystem.ApplyBuff(units, i, _knockdownBuff);
-                units[i].OverrideAnim = AnimRequest.Forced(AnimState.Knockdown);
+                units[i].OverrideAnim = new AnimRequest
+                {
+                    State = AnimState.Knockdown, Priority = 3, Interrupt = true,
+                    Duration = -1, PlaybackSpeed = 1f
+                };
                 units[i].SnapAnimToEnd = true;
 
                 // Flyer stops
@@ -276,7 +280,12 @@ public class PhysicsSystem
         if (_knockdownBuff != null)
             BuffSystem.ApplyBuff(units, idx, _knockdownBuff);
 
-        units[idx].OverrideAnim = AnimRequest.Forced(AnimState.Knockdown);
+        // Knockdown override persists for buff duration (-1 = loop, cleared when buff expires)
+        units[idx].OverrideAnim = new AnimRequest
+        {
+            State = AnimState.Knockdown, Priority = 3, Interrupt = true,
+            Duration = -1, PlaybackSpeed = 1f
+        };
         units[idx].SnapAnimToEnd = true;  // Skip to last frame — unit is already on ground
 
         DebugLog.Log("physics", $"[Land] unit#{idx} pos=({units[idx].Position.X:F1},{units[idx].Position.Y:F1})");
