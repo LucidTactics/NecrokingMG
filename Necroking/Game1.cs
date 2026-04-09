@@ -3125,20 +3125,16 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 targetState = AnimState.Fall;
             else if (_sim.Units[i].StandupTimer > 0f)
             {
-                // Only request Standup if not already playing (or just finished)
-                // Standup is PlayOnceTransition — when done it auto-transitions to Idle.
-                // If we keep requesting Standup, it restarts every frame.
-                if (animData.Ctrl.CurrentState == AnimState.Knockdown
-                    || (animData.Ctrl.CurrentState != AnimState.Standup && animData.Ctrl.CurrentState != AnimState.Idle))
-                    targetState = AnimState.Standup;
+                // StandupTimer is authoritative — unit is locked in standup for its duration.
+                // Request Standup once (from Knockdown), then let it play.
+                // If animation finishes before timer, unit just holds in Idle until timer expires.
+                // Movement/AI are blocked by StandupTimer checks elsewhere.
+                if (animData.Ctrl.CurrentState == AnimState.Knockdown)
+                    targetState = AnimState.Standup; // transition from knockdown
                 else if (animData.Ctrl.CurrentState == AnimState.Standup)
                     targetState = AnimState.Standup; // let it play through
                 else
-                {
-                    // Standup finished (now Idle), clear timer
-                    _sim.UnitsMut[i].StandupTimer = 0f;
-                    targetState = AnimState.Idle;
-                }
+                    targetState = AnimState.Idle; // anim finished or missing, hold idle until timer expires
             }
             else if (GameSystems.BuffSystem.IsKnockedDown(_sim.Units[i]))
                 targetState = AnimState.Knockdown;
@@ -3213,10 +3209,6 @@ public class Game1 : Microsoft.Xna.Framework.Game
             }
 
             var currentAnim = animData.Ctrl.CurrentState;
-            // Debug: log knockdown/standup transitions
-            if ((currentAnim == AnimState.Knockdown || currentAnim == AnimState.Standup || currentAnim == AnimState.Fall)
-                && currentAnim != targetState)
-                DebugLog.Log("physics", $"[Anim] unit#{i} legacy: {currentAnim}→{targetState} standup={_sim.Units[i].StandupTimer:F2} knocked={GameSystems.BuffSystem.IsKnockedDown(_sim.Units[i])} inPhys={_sim.Units[i].InPhysics}");
             // ForceState needed to break out of PlayOnceHold animations
             bool needsForce = (currentAnim == AnimState.Sit || currentAnim == AnimState.Sleep
                 || currentAnim == AnimState.Fall || currentAnim == AnimState.Knockdown)
