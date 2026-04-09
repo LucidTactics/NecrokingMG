@@ -60,12 +60,17 @@ public static class BuffSystem
                 }
                 else
                 {
-                    // Knockdown: start standup animation early so it finishes as buff expires
+                    // Knockdown: start standup animation early so it finishes as buff expires.
+                    // StandupTimer extends past buff expiry to keep AI/movement blocked
+                    // until the standup animation actually completes.
                     if (b.BuffDefID == KnockdownBuffID
                         && b.RemainingDuration <= StandupAnimTime
                         && units[i].StandupTimer <= 0f)
                     {
-                        units[i].StandupTimer = b.RemainingDuration;
+                        // Timer = anim duration, not remaining buff time.
+                        // This ensures StandupTimer outlasts the buff and blocks AI
+                        // until standup visually completes.
+                        units[i].StandupTimer = StandupAnimTime + 0.1f;
                         units[i].OverrideAnim = AnimRequest.Combat(AnimState.Standup);
                         units[i].OverrideStarted = false;
                     }
