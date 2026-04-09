@@ -95,6 +95,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
     private readonly List<Data.Registries.BuffDef> _wpDefsCache = new(); // reused per-unit in DrawSingleUnit
     private BloomRenderer _bloom = new();
     private WeatherRenderer _weatherRenderer = new();
+    private Color _ambientColor = Color.White; // weather ambient tint, applied to lit sprites before bloom
     private DayNightSystem _dayNightSystem = new();
     private LightningRenderer _lightningRenderer = new();
     private PoisonCloudRenderer _poisonCloudRenderer = new();
@@ -3452,6 +3453,9 @@ public class Game1 : Microsoft.Xna.Framework.Game
         else
             GraphicsDevice.Clear(clearColor);
 
+        // Compute ambient color from weather (brightness + tint) for lit sprite tinting
+        _ambientColor = _weatherRenderer.GetAmbientColor();
+
         // AlphaBlend with premultiplied-alpha textures (loaded via TextureUtil.LoadPremultiplied)
         _spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.LinearClamp);
 
@@ -3813,7 +3817,8 @@ public class Game1 : Microsoft.Xna.Framework.Game
         _spriteBatch.End();
 
         // Set shader parameters
-        _groundEffect!.Parameters["CameraPos"]?.SetValue(new Vector2(_camera.Position.X, _camera.Position.Y));
+        _groundEffect!.Parameters["AmbientColor"]?.SetValue(new Vector3(_ambientColor.R / 255f, _ambientColor.G / 255f, _ambientColor.B / 255f));
+        _groundEffect.Parameters["CameraPos"]?.SetValue(new Vector2(_camera.Position.X, _camera.Position.Y));
         _groundEffect.Parameters["Zoom"]?.SetValue(_camera.Zoom);
         _groundEffect.Parameters["YRatio"]?.SetValue(_camera.YRatio);
         _groundEffect.Parameters["ScreenSize"]?.SetValue(new Vector2(_renderer.ScreenW, _renderer.ScreenH));
@@ -3852,7 +3857,8 @@ public class Game1 : Microsoft.Xna.Framework.Game
             _grassMap, _grassW, _grassH,
             _grassBaseColors, _grassTipColors,
             _gameData.Settings.Grass,
-            _gameTime);
+            _gameTime,
+            _ambientColor);
     }
 
     private void DrawRoads()
@@ -3861,7 +3867,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         var junctions = _roadSystem.Junctions;
         if (roads.Count == 0 && junctions.Count == 0) return;
 
-        var roadColor = new Color(100, 90, 80);
+        var roadColor = MultiplyColor(new Color(100, 90, 80), _ambientColor);
 
         // Draw road segments using Catmull-Rom interpolation
         foreach (var road in roads)
@@ -3963,16 +3969,17 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 // Draw colored rectangle as placeholder (using def's Color)
                 // Make wall tiles slightly taller to give a wall appearance
                 float wallH = tileH * 1.5f;
+                var wallColor = MultiplyColor(def.Color, _ambientColor);
                 _spriteBatch.Draw(_pixel, new Vector2(sp.X, sp.Y - wallH + tileH), null,
-                    def.Color, 0f, Vector2.Zero,
+                    wallColor, 0f, Vector2.Zero,
                     new Vector2(tileW + 0.5f, wallH), SpriteEffects.None, 0f);
 
                 // Draw a darker top edge for depth effect
                 var darkColor = new Color(
-                    (byte)(def.Color.R * 0.6f),
-                    (byte)(def.Color.G * 0.6f),
-                    (byte)(def.Color.B * 0.6f),
-                    def.Color.A);
+                    (byte)(wallColor.R * 0.6f),
+                    (byte)(wallColor.G * 0.6f),
+                    (byte)(wallColor.B * 0.6f),
+                    wallColor.A);
                 _spriteBatch.Draw(_pixel, new Vector2(sp.X, sp.Y - wallH + tileH), null,
                     darkColor, 0f, Vector2.Zero,
                     new Vector2(tileW + 0.5f, 2f), SpriteEffects.None, 0f);
@@ -4057,7 +4064,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 float scale = pixelH / cad.RefFrameHeight;
 
                 var sp = _renderer.WorldToScreen(corpse.Position, corpse.Z, _camera);
-                Color corpseTint = new Color(alpha, alpha, alpha, alpha);
+                Color corpseTint = MultiplyColor(new Color(alpha, alpha, alpha, alpha), _ambientColor);
                 DrawSpriteFrame(atlas, fr.Frame.Value, sp, scale, fr.FlipX, corpseTint);
             }
 
@@ -4118,7 +4125,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         float scale = pixelH / refH;
 
         var sp = _renderer.WorldToScreen(corpse.Position, 0f, _camera);
-        DrawSpriteFrame(corpsesAtlas, fr.Frame.Value, sp, scale, fr.FlipX, Color.White);
+        DrawSpriteFrame(corpsesAtlas, fr.Frame.Value, sp, scale, fr.FlipX, _ambientColor);
     }
 
     private void DrawBaggedCorpseAt(Vector2 screenPos, float facingAngle)
@@ -4133,7 +4140,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
         float refH = GetBodyBagRefHeight();
         float scale = (3.6f * _camera.Zoom) / refH; // same size as ground body bags
-        DrawSpriteFrame(corpsesAtlas, fr.Frame.Value, screenPos, scale, fr.FlipX, Color.White);
+        DrawSpriteFrame(corpsesAtlas, fr.Frame.Value, screenPos, scale, fr.FlipX, _ambientColor);
     }
 
     private void DrawBaggingProgressBar(Vector2 screenPos, float progress)
@@ -4198,7 +4205,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 var hiltScreen = _renderer.WorldToScreen(attach.HiltWorld, attach.HiltHeight, _camera);
                 hiltScreen.X += ofsX;
                 hiltScreen.Y += CarryOffsetY;
-                DrawSpriteFrame(corpsesAtlas, fr.Frame.Value, hiltScreen, bagScale, fr.FlipX, Color.White);
+                DrawSpriteFrame(corpsesAtlas, fr.Frame.Value, hiltScreen, bagScale, fr.FlipX, _ambientColor);
                 return;
             }
         }
@@ -4213,7 +4220,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         float spritePixelH = spriteWorldH * _sim.Units[unitIdx].SpriteScale * _camera.Zoom;
         float bagY = unitScreenPos.Y - spritePixelH * 0.35f + CarryOffsetY;
 
-        DrawSpriteFrame(corpsesAtlas, fr.Frame.Value, new Vector2(bagX, bagY), bagScale, fr.FlipX, Color.White);
+        DrawSpriteFrame(corpsesAtlas, fr.Frame.Value, new Vector2(bagX, bagY), bagScale, fr.FlipX, _ambientColor);
     }
 
     // ═══════════════════════════════════════
@@ -4507,6 +4514,9 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 Math.Min(255, (int)(tint.G * 0.7f + 100)),
                 Math.Min(255, (int)(tint.B * 0.7f + 120)), 100);
 
+        // Apply weather ambient light
+        tint = MultiplyColor(tint, _ambientColor);
+
         float heightOffset = _sim.Units[i].JumpHeight + _sim.Units[i].Z;
         var sp = _renderer.WorldToScreen(_sim.Units[i].Position, heightOffset, _camera);
 
@@ -4606,11 +4616,9 @@ public class Game1 : Microsoft.Xna.Framework.Game
             foreach (var buff in _sim.Units[i].ActiveBuffs)
             {
                 var buffDef = _gameData.Buffs.Get(buff.BuffDefID);
-                Color dotColor;
-                if (buffDef?.UnitTint != null && buffDef.UnitTint.A > 0)
-                    dotColor = Color.FromNonPremultiplied(buffDef.UnitTint.R, buffDef.UnitTint.G, buffDef.UnitTint.B, 220);
-                else
-                    dotColor = Color.FromNonPremultiplied(100, 200, 100, 220);
+                // Only show indicator dot for buffs with an explicit UnitTint
+                if (buffDef?.UnitTint == null || buffDef.UnitTint.A == 0) continue;
+                Color dotColor = Color.FromNonPremultiplied(buffDef.UnitTint.R, buffDef.UnitTint.G, buffDef.UnitTint.B, 220);
                 _spriteBatch.Draw(_pixel, new Rectangle((int)(dotStartX + dotIdx * 5), (int)dotY, 4, 4), dotColor);
                 dotIdx++;
             }
@@ -4675,6 +4683,9 @@ public class Game1 : Microsoft.Xna.Framework.Game
             tint = new Color(0.5f * bpAlpha, 0.7f * bpAlpha, 1f * bpAlpha, bpAlpha);
         }
 
+        // Apply weather ambient light
+        tint = MultiplyColor(tint, _ambientColor);
+
         _spriteBatch.Draw(tex, screenPos, null, tint, rotation, origin, scale, SpriteEffects.None, 0f);
 
         // Build progress bar for unbuilt objects
@@ -4694,6 +4705,16 @@ public class Game1 : Microsoft.Xna.Framework.Game
         var origin = new Vector2(pivotX * frame.Rect.Width, pivotY * frame.Rect.Height);
         var effects = flipX ? SpriteEffects.FlipHorizontally : SpriteEffects.None;
         _spriteBatch.Draw(atlas.Texture, screenPos, frame.Rect, tint, 0f, origin, scale, effects, 0f);
+    }
+
+    /// <summary>Multiply two colors component-wise (for ambient tinting).</summary>
+    private static Color MultiplyColor(Color a, Color b)
+    {
+        return new Color(
+            (byte)(a.R * b.R / 255),
+            (byte)(a.G * b.G / 255),
+            (byte)(a.B * b.B / 255),
+            (byte)(a.A * b.A / 255));
     }
 
     // 8-direction offsets: N, NE, E, SE, S, SW, W, NW

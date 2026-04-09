@@ -64,7 +64,8 @@ public class GrassRenderer
         byte[] grassMap, int grassW, int grassH,
         Color[] baseColors, Color[] tipColors,
         GrassSettings settings,
-        float gameTime)
+        float gameTime,
+        Color? ambientColor = null)
     {
         if (grassMap.Length == 0 || grassW == 0 || baseColors.Length == 0) return;
         if (camera.Zoom < MIN_ZOOM_FOR_GRASS) return;
@@ -78,7 +79,8 @@ public class GrassRenderer
         GenerateBlades(camera, screenW, screenH,
             grassMap, grassW, grassH,
             baseColors, tipColors,
-            settings, cellSize, gameTime);
+            settings, cellSize, gameTime,
+            ambientColor ?? Color.White);
 
         if (_vertexCount < 3) return;
 
@@ -113,7 +115,8 @@ public class GrassRenderer
         byte[] grassMap, int grassW, int grassH,
         Color[] baseColors, Color[] tipColors,
         GrassSettings settings,
-        float cellSize, float gameTime)
+        float cellSize, float gameTime,
+        Color ambientColor)
     {
         float zoom = camera.Zoom;
         float yRatio = camera.YRatio;
@@ -224,15 +227,15 @@ public class GrassRenderer
                     float varMul = 0.8f + hueVar * 0.4f;
 
                     Color bladeBase = new(
-                        (byte)Math.Clamp((int)(useBase.R * varMul), 0, 255),
-                        (byte)Math.Clamp((int)(useBase.G * varMul), 0, 255),
-                        (byte)Math.Clamp((int)(useBase.B * varMul), 0, 255),
+                        (byte)Math.Clamp((int)(useBase.R * varMul) * ambientColor.R / 255, 0, 255),
+                        (byte)Math.Clamp((int)(useBase.G * varMul) * ambientColor.G / 255, 0, 255),
+                        (byte)Math.Clamp((int)(useBase.B * varMul) * ambientColor.B / 255, 0, 255),
                         (byte)255
                     );
                     Color bladeTip = new(
-                        (byte)Math.Clamp((int)(useTip.R * varMul), 0, 255),
-                        (byte)Math.Clamp((int)(useTip.G * varMul), 0, 255),
-                        (byte)Math.Clamp((int)(useTip.B * varMul), 0, 255),
+                        (byte)Math.Clamp((int)(useTip.R * varMul) * ambientColor.R / 255, 0, 255),
+                        (byte)Math.Clamp((int)(useTip.G * varMul) * ambientColor.G / 255, 0, 255),
+                        (byte)Math.Clamp((int)(useTip.B * varMul) * ambientColor.B / 255, 0, 255),
                         (byte)220 // slight transparency at tip
                     );
 

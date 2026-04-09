@@ -31,12 +31,12 @@
     "minBladeWidth": true
   },
   "weather": {
-    "enabled": false,
+    "enabled": true,
     "activePreset": "daylight",
     "transitionSpeed": 1
   },
   "dayNight": {
-    "enabled": true,
+    "enabled": false,
     "dawnDuration": 60,
     "dayDuration": 240,
     "duskDuration": 60,

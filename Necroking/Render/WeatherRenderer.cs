@@ -88,8 +88,10 @@ public class WeatherRenderer
         // Rain draws in scene pass via DrawRain() for depth sorting with world objects.
 
         // Weather overlay (fog, haze, brightness, tint, vignette, lightning flash)
-        if (fx.FogDensity > 0.01f || fx.HazeStrength > 0.01f || fx.Brightness < 0.95f
-            || fx.TintStrength > 0.01f || fx.VignetteStrength > 0.01f || _flashIntensity > 0.01f)
+        // Brightness and tint are now pre-bloom (ambient light on sprites).
+        // Only fog, haze, vignette, and lightning flash remain as post-bloom overlays.
+        if (fx.FogDensity > 0.01f || fx.HazeStrength > 0.01f
+            || fx.VignetteStrength > 0.01f || _flashIntensity > 0.01f)
         {
             if (_fogEffect != null)
             {
@@ -112,11 +114,11 @@ public class WeatherRenderer
                 _fogEffect.Parameters["FogWorldScale"]?.SetValue(fogWorldScale);
                 _fogEffect.Parameters["HazeStrength"]?.SetValue(fx.HazeStrength);
                 _fogEffect.Parameters["HazeColor"]?.SetValue(new Vector3(fx.HazeR, fx.HazeG, fx.HazeB));
-                _fogEffect.Parameters["Brightness"]?.SetValue(fx.Brightness);
-
-                // Tint
-                _fogEffect.Parameters["TintColor"]?.SetValue(new Vector3(fx.TintR, fx.TintG, fx.TintB));
-                _fogEffect.Parameters["TintStrength"]?.SetValue(fx.TintStrength);
+                // Brightness and tint are now applied pre-bloom as ambient light on sprites,
+                // so pass neutral values here to avoid double-darkening
+                _fogEffect.Parameters["Brightness"]?.SetValue(1.0f);
+                _fogEffect.Parameters["TintColor"]?.SetValue(new Vector3(1f, 1f, 1f));
+                _fogEffect.Parameters["TintStrength"]?.SetValue(0f);
 
                 // Vignette
                 _fogEffect.Parameters["VignetteStrength"]?.SetValue(fx.VignetteStrength);
@@ -146,32 +148,8 @@ public class WeatherRenderer
                     _spriteBatch.Draw(_pixel, new Rectangle(0, 0, screenW, screenH),
                         new Color(fR, fG, fB, (byte)(fogAlpha * 255)));
                 }
-                if (fx.Brightness < 0.95f)
-                {
-                    float darkAmount = 1f - fx.Brightness;
-                    _spriteBatch.Draw(_pixel, new Rectangle(0, 0, screenW, screenH),
-                        new Color((byte)0, (byte)0, (byte)0, (byte)(darkAmount * 180)));
-                }
-                if (fx.TintStrength > 0.01f)
-                {
-                    // CPU fallback: darken channels where tint < 1 by overlaying black with per-channel alpha
-                    // This approximates multiplicative tint: result *= lerp(1, TintColor, TintStrength)
-                    float rMul = 1f - (1f - MathF.Min(fx.TintR, 1f)) * fx.TintStrength;
-                    float gMul = 1f - (1f - MathF.Min(fx.TintG, 1f)) * fx.TintStrength;
-                    float bMul = 1f - (1f - MathF.Min(fx.TintB, 1f)) * fx.TintStrength;
-                    // Use darkest channel as overlay alpha, tint the overlay toward the tint color
-                    float darkest = MathF.Min(MathF.Min(rMul, gMul), bMul);
-                    if (darkest < 0.99f)
-                    {
-                        byte alpha = (byte)((1f - darkest) * 255);
-                        // Overlay color: channels that should stay bright get the tint color, others black
-                        byte oR = (byte)(MathUtil.Clamp((1f - rMul) / (1f - darkest), 0f, 1f) * 255);
-                        byte oG = (byte)(MathUtil.Clamp((1f - gMul) / (1f - darkest), 0f, 1f) * 255);
-                        byte oB = (byte)(MathUtil.Clamp((1f - bMul) / (1f - darkest), 0f, 1f) * 255);
-                        _spriteBatch.Draw(_pixel, new Rectangle(0, 0, screenW, screenH),
-                            new Color(oR, oG, oB, alpha));
-                    }
-                }
+                // Brightness and tint are now applied pre-bloom as ambient light on sprites.
+                // No post-bloom overlay needed for those — only fog/haze/flash remain here.
                 if (_flashIntensity > 0.01f)
                 {
                     byte flashA = (byte)(MathUtil.Clamp(_flashIntensity * 0.8f, 0f, 1f) * 255);
@@ -402,6 +380,35 @@ public class WeatherRenderer
     /// Returns the effective weather effects for rendering: day/night runtime blend if active,
     /// otherwise the raw preset effects. Returns null if no valid preset is configured.
     /// </summary>
+    /// <summary>
+    /// Compute the ambient light color from weather brightness and tint.
+    /// Applied to lit sprites before bloom so darkness actually reduces emitted light.
+    /// Returns Color.White if weather is disabled or no darkening is active.
+    /// </summary>
+    public Color GetAmbientColor()
+    {
+        var fx = GetEffectiveEffects();
+        if (fx == null) return Color.White;
+
+        // Start with brightness
+        float r = fx.Brightness;
+        float g = fx.Brightness;
+        float b = fx.Brightness;
+
+        // Apply tint: lerp toward tint color by tint strength
+        if (fx.TintStrength > 0.01f)
+        {
+            r *= MathUtil.Lerp(1f, MathF.Min(fx.TintR, 1f), fx.TintStrength);
+            g *= MathUtil.Lerp(1f, MathF.Min(fx.TintG, 1f), fx.TintStrength);
+            b *= MathUtil.Lerp(1f, MathF.Min(fx.TintB, 1f), fx.TintStrength);
+        }
+
+        return new Color(
+            (byte)(MathUtil.Clamp(r, 0f, 1f) * 255),
+            (byte)(MathUtil.Clamp(g, 0f, 1f) * 255),
+            (byte)(MathUtil.Clamp(b, 0f, 1f) * 255));
+    }
+
     private WeatherEffects? GetEffectiveEffects()
     {
         if (!_gameData.Settings.Weather.Enabled) return null;

@@ -16,6 +16,7 @@ float2 WorldSize;   // vertex grid size (worldW+1, worldH+1)
 float TypeWarpStrength;
 float UvWarpAmp;
 float UvWarpFreq;
+float3 AmbientColor = float3(1, 1, 1);
 
 // Textures as named parameters (bound via Effect.Parameters in C#)
 // s0 is used by SpriteBatch for the drawn texture (tilemap/vertex map)
@@ -158,6 +159,7 @@ float4 PixelShaderFunction(float2 texCoord : TEXCOORD0) : COLOR0
         result = lerp(top, bot, s.y);
     }
 
+    result.rgb *= AmbientColor;
     result.a = 1.0;
     return result;
 }
