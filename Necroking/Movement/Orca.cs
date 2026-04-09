@@ -106,7 +106,7 @@ public static class Orca
             else
             {
                 // Already overlapping — push apart
-                float invDT = 1f / dt;
+                float invDT = 1f / MathF.Max(dt, Epsilon);
                 Vec2 w = relVel - relPos * invDT;
                 float wLen = w.Length();
 
@@ -131,7 +131,11 @@ public static class Orca
             orcaLines.Add(line);
         }
 
-        return LinearProgram2D(orcaLines, param.MaxSpeed, preferredVelocity, false);
+        var vel = LinearProgram2D(orcaLines, param.MaxSpeed, preferredVelocity, false);
+        // Guard against NaN/infinity from degenerate cases
+        if (float.IsNaN(vel.X) || float.IsNaN(vel.Y) || float.IsInfinity(vel.X) || float.IsInfinity(vel.Y))
+            return Vec2.Zero;
+        return vel;
     }
 
     private static bool LinearProgram1D(

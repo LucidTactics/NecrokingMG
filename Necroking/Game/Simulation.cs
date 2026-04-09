@@ -30,6 +30,12 @@ public class Corpse
 
     // Lerp anchor for pickup/putdown animation
     public Vec2 LerpStartPos;
+
+    // Physics arc — corpse continues flying if unit died mid-knockback
+    public bool InPhysics;
+    public float Z;
+    public Vec2 VelocityXY;
+    public float VelocityZ;
 }
 
 public class DamageEvent
@@ -285,7 +291,7 @@ public class Simulation
                     }
                     else
                     {
-                        Vec2 impactPos = hit.UnitIdx >= 0 ? _units[hit.UnitIdx].Position : hit.ImpactPos;
+                        Vec2 impactPos = hit.UnitIdx >= 0 && hit.UnitIdx < _units.Count ? _units[hit.UnitIdx].Position : hit.ImpactPos;
                         PotionSystem.ApplyPotionEffect(hit.PotionID, _gameData.Potions, _gameData.Buffs,
                             hit.UnitIdx, _units, hit.OwnerFaction, _pendingZombieRaises, _corpses, impactPos,
                             _damageEvents);
@@ -293,12 +299,8 @@ public class Simulation
                 }
                 continue;
             }
-            if (hit.UnitIdx >= 0 && hit.UnitIdx < _units.Count && _units[hit.UnitIdx].Alive)
-                DamageSystem.Apply(_units, hit.UnitIdx, hit.Damage,
-                    GameSystems.DamageType.Physical, GameSystems.DamageFlags.ArmorNegating,
-                    _damageEvents);
-
-            // Physics knockback from AoE projectile impact
+            // Physics knockback before damage — units enter physics first so if
+            // the damage kills them, the corpse inherits the knockback arc
             if (_gameData != null && !string.IsNullOrEmpty(hit.SpellID))
             {
                 var spellDef = _gameData.Spells.Get(hit.SpellID);
@@ -309,6 +311,11 @@ public class Simulation
                         spellDef.KnockbackForce, spellDef.KnockbackUpward, hit.OwnerFaction);
                 }
             }
+
+            if (hit.UnitIdx >= 0 && hit.UnitIdx < _units.Count && _units[hit.UnitIdx].Alive)
+                DamageSystem.Apply(_units, hit.UnitIdx, hit.Damage,
+                    GameSystems.DamageType.Physical, GameSystems.DamageFlags.ArmorNegating,
+                    _damageEvents);
         }
 
         // Lightning
@@ -1967,6 +1974,13 @@ public class Simulation
                     });
                 }
 
+                // If unit died mid-knockback, transfer physics state to corpse
+                bool wasInPhysics = _units[i].InPhysics;
+                Vec2 corpseVelXY = Vec2.Zero;
+                float corpseVelZ = 0f;
+                if (wasInPhysics)
+                    _physics.TryGetBodyVelocity(i, out corpseVelXY, out corpseVelZ);
+
                 _corpses.Add(new Corpse
                 {
                     Position = _units[i].Position,
@@ -1977,7 +1991,12 @@ public class Simulation
                     CorpseID = _nextCorpseID++,
                     // Mark corpse as consumed so it dissolves while the zombie rises
                     Dissolving = zombieRaise,
-                    ConsumedBySummon = zombieRaise
+                    ConsumedBySummon = zombieRaise,
+                    // Continue physics arc if unit was mid-flight
+                    InPhysics = wasInPhysics,
+                    Z = _units[i].Z,
+                    VelocityXY = corpseVelXY,
+                    VelocityZ = corpseVelZ,
                 });
                 _units.RemoveUnit(i);
                 if (_necromancerIdx == i) _necromancerIdx = -1;
@@ -2018,6 +2037,26 @@ public class Simulation
                 if (corpse != null) corpse.BaggedByUnitID = GameConstants.InvalidUnit;
                 _units[u].BaggingCorpseID = -1;
                 _units[u].CorpseInteractPhase = 0;
+            }
+        }
+
+        // Tick corpse physics — corpses that died mid-knockback continue their arc
+        for (int i = 0; i < _corpses.Count; i++)
+        {
+            if (!_corpses[i].InPhysics) continue;
+            var c = _corpses[i];
+            c.Position += c.VelocityXY * dt;
+            c.Z += c.VelocityZ * dt;
+            c.VelocityZ -= _physics.Gravity * dt;
+            float drag = 1f - _physics.DefaultDrag * dt;
+            if (drag < 0f) drag = 0f;
+            c.VelocityXY *= drag;
+            if (c.Z <= 0f)
+            {
+                c.Z = 0f;
+                c.InPhysics = false;
+                c.VelocityXY = Vec2.Zero;
+                c.VelocityZ = 0f;
             }
         }
 

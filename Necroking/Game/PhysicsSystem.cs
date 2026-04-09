@@ -287,5 +287,25 @@ public class PhysicsSystem
 
     public int ActiveCount => _bodies.Count;
 
+    /// <summary>
+    /// Get physics velocity for a unit (if it has an active body).
+    /// Used to transfer momentum to corpses when units die mid-flight.
+    /// </summary>
+    public bool TryGetBodyVelocity(int unitIdx, out Vec2 velocityXY, out float velocityZ)
+    {
+        for (int i = 0; i < _bodies.Count; i++)
+        {
+            if (_bodies[i].Active && _bodies[i].UnitIdx == unitIdx)
+            {
+                velocityXY = _bodies[i].VelocityXY;
+                velocityZ = _bodies[i].VelocityZ;
+                return true;
+            }
+        }
+        velocityXY = Vec2.Zero;
+        velocityZ = 0f;
+        return false;
+    }
+
     public void Clear() => _bodies.Clear();
 }

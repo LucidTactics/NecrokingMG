@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
@@ -316,7 +317,7 @@ public class UnitRegistry : RegistryBase<UnitDef>
             }
             return true;
         }
-        catch { return false; }
+        catch (Exception ex) { Core.DebugLog.Log("error", $"Failed to load weapon points {path}: {ex.Message}"); return false; }
     }
 
     /// <summary>
@@ -366,6 +367,6 @@ public class UnitRegistry : RegistryBase<UnitDef>
             File.WriteAllText(path, json);
             return true;
         }
-        catch { return false; }
+        catch (Exception ex) { Core.DebugLog.Log("error", $"Failed to save weapon points {path}: {ex.Message}"); return false; }
     }
 }

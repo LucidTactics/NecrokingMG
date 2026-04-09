@@ -100,7 +100,7 @@ public static class AnimMetaLoader
 
                 meta.YawData[yaw] = ym;
             }
-            catch { /* skip malformed lines */ }
+            catch (Exception ex) { Core.DebugLog.Log("error", $"Failed to parse animation meta line in {path}: {ex.Message}"); }
         }
 
         return true;

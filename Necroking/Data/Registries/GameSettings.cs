@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
@@ -152,7 +153,7 @@ public class GameSettingsData
             StartingInventory = loaded.StartingInventory;
             return true;
         }
-        catch { return false; }
+        catch (Exception ex) { Core.DebugLog.Log("error", $"Failed to load settings {path}: {ex.Message}"); return false; }
     }
 
     public bool Save(string path)
@@ -163,6 +164,6 @@ public class GameSettingsData
             File.WriteAllText(path, JsonSerializer.Serialize(this, options));
             return true;
         }
-        catch { return false; }
+        catch (Exception ex) { Core.DebugLog.Log("error", $"Failed to save settings {path}: {ex.Message}"); return false; }
     }
 }

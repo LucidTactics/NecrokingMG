@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Necroking.Core;
 
 namespace Necroking.Data.Registries;
 
@@ -105,7 +106,7 @@ public abstract class RegistryBase<TDef> where TDef : class, IHasId, new()
             }
             return true;
         }
-        catch { return false; }
+        catch (Exception ex) { DebugLog.Log("error", $"Failed to load {path}: {ex.Message}"); return false; }
     }
 
     public virtual bool Save(string path)
@@ -126,7 +127,7 @@ public abstract class RegistryBase<TDef> where TDef : class, IHasId, new()
             File.WriteAllText(path, json);
             return true;
         }
-        catch { return false; }
+        catch (Exception ex) { DebugLog.Log("error", $"Failed to save {path}: {ex.Message}"); return false; }
     }
 
     protected virtual TDef? DeserializeItem(JsonElement elem, JsonSerializerOptions options)

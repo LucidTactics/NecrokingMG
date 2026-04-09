@@ -599,7 +599,7 @@ public class HUDRenderer
     private void Text(SpriteFont? font, string text, Vector2 pos, Color color)
     {
         if (font != null)
-            _batch.DrawString(font, text, pos, color);
+            _batch.DrawString(font, text, new Vector2((int)pos.X, (int)pos.Y), color);
     }
 
     private static int FindNecromancer(Simulation sim)

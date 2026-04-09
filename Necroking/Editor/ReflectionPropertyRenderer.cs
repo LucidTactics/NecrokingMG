@@ -451,7 +451,7 @@ public class ReflectionPropertyRenderer
                     prop.SetValue(obj, instance);
                     return true;
                 }
-                catch { }
+                catch (Exception ex) { DebugLog.Log("error", $"Failed to create instance of {prop.PropertyType.Name}: {ex.Message}"); }
             }
             curY += RowH + 4;
             return false;

@@ -2599,7 +2599,7 @@
         "magicResist": 2,
         "encumbrance": 2,
         "naturalProt": 5,
-        "combatSpeed": 15
+        "combatSpeed": 10
       },
       "zombieTypeID": "group_182459",
       "spellID": "",
@@ -2757,7 +2757,7 @@
         "magicResist": 3,
         "encumbrance": 2,
         "naturalProt": 5,
-        "combatSpeed": 15
+        "combatSpeed": 10
       },
       "zombieTypeID": "group_182459_copy",
       "spellID": "",
@@ -2809,7 +2809,7 @@
         "magicResist": 3,
         "encumbrance": 2,
         "naturalProt": 3,
-        "combatSpeed": 15
+        "combatSpeed": 12
       },
       "zombieTypeID": "ZombieWolf",
       "spellID": "",
@@ -2873,7 +2873,7 @@
         "magicResist": 3,
         "encumbrance": 2,
         "naturalProt": 3,
-        "combatSpeed": 12
+        "combatSpeed": 8
       },
       "zombieTypeID": "group_182459_copy",
       "spellID": "",
@@ -2925,7 +2925,7 @@
         "magicResist": 3,
         "encumbrance": 2,
         "naturalProt": 4,
-        "combatSpeed": 15
+        "combatSpeed": 7
       },
       "zombieTypeID": "",
       "spellID": "",
@@ -2977,7 +2977,7 @@
         "magicResist": 3,
         "encumbrance": 2,
         "naturalProt": 4,
-        "combatSpeed": 15
+        "combatSpeed": 7
       },
       "zombieTypeID": "",
       "spellID": "",

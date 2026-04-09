@@ -92,6 +92,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
     private Texture2D? _groundVertexMapTex;
     private EffectManager _effectManager = new();
     private BuffVisualSystem _buffVisuals = new();
+    private readonly List<Data.Registries.BuffDef> _wpDefsCache = new(); // reused per-unit in DrawSingleUnit
     private BloomRenderer _bloom = new();
     private WeatherRenderer _weatherRenderer = new();
     private DayNightSystem _dayNightSystem = new();
@@ -4021,7 +4022,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
                         };
                     ctrl.SetAnimTimings(overrides);
                 }
-                ctrl.RequestState(AnimState.Death);
+                ctrl.RequestState(corpse.InPhysics ? AnimState.Fall : AnimState.Death);
 
                 float refH = 128f;
                 var idle = spriteData.GetAnim("Idle");
@@ -4030,6 +4031,10 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 cad = new UnitAnimData { Ctrl = ctrl, AtlasID = atlasId, RefFrameHeight = refH, CachedDefID = corpse.UnitDefID };
                 _corpseAnims[corpse.CorpseID] = cad;
             }
+
+            // When corpse lands from knockback arc, snap to final death frame
+            if (!corpse.InPhysics && cad.Ctrl.CurrentState == AnimState.Fall)
+                cad.Ctrl.ForceStateAtEnd(AnimState.Death);
 
             if (!cad.Ctrl.IsAnimFinished && !_paused)
                 cad.Ctrl.Update(MathF.Min(_rawDt, 1f / 20f) * _timeScale);
@@ -4051,7 +4056,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 float pixelH = worldH * _camera.Zoom;
                 float scale = pixelH / cad.RefFrameHeight;
 
-                var sp = _renderer.WorldToScreen(corpse.Position, 0f, _camera);
+                var sp = _renderer.WorldToScreen(corpse.Position, corpse.Z, _camera);
                 Color corpseTint = new Color(alpha, alpha, alpha, alpha);
                 DrawSpriteFrame(atlas, fr.Frame.Value, sp, scale, fr.FlipX, corpseTint);
             }
@@ -4510,15 +4515,15 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
         // Update weapon particle emitters (like C++, phase 0 only)
         {
-            var wpDefs = new List<Data.Registries.BuffDef>();
+            _wpDefsCache.Clear();
             foreach (var ab in _sim.Units[i].ActiveBuffs)
             {
                 var bd = _gameData.Buffs.Get(ab.BuffDefID);
                 if (bd != null && bd.HasWeaponParticle && bd.WeaponParticle != null)
-                    wpDefs.Add(bd);
+                    _wpDefsCache.Add(bd);
             }
-            if (wpDefs.Count > 0 || _buffVisuals.HasEmitters(i))
-                _buffVisuals.UpdateWeaponParticles(i, _rawDt * _timeScale, _gameTime, wpDefs, weaponAttach, _gameData.Buffs);
+            if (_wpDefsCache.Count > 0 || _buffVisuals.HasEmitters(i))
+                _buffVisuals.UpdateWeaponParticles(i, _rawDt * _timeScale, _gameTime, _wpDefsCache, weaponAttach, _gameData.Buffs);
         }
 
         // Buff visuals: phase 0 (behind sprite)

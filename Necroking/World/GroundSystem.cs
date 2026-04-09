@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
+using Necroking.Core;
 
 namespace Necroking.World;
 
@@ -91,7 +92,7 @@ public class GroundSystem
             {
                 _textures[i] = Necroking.Render.TextureUtil.LoadPremultiplied(device, path);
             }
-            catch { }
+            catch (Exception ex) { DebugLog.Log("error", $"Failed to load ground texture '{path}': {ex.Message}"); }
         }
     }
 

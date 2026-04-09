@@ -6,6 +6,7 @@ using System.Text.Json;
 using FontStashSharp;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
+using Necroking.Core;
 using Necroking.Editor;
 using Necroking.Render;
 
@@ -279,7 +280,7 @@ public class RuntimeWidgetRenderer
                 var font = _fontMgr?.GetFont(14);
                 if (font != null)
                     _batch.DrawString(font, child.DefaultText,
-                        new Vector2(rect.X + 4, rect.Y + rect.Height / 2f - 7), new Color(200, 200, 200, 180));
+                        new Vector2((int)(rect.X + 4), (int)(rect.Y + rect.Height / 2f - 7)), new Color(200, 200, 200, 180));
             }
         }
     }
@@ -314,7 +315,7 @@ public class RuntimeWidgetRenderer
         };
 
         if (dynFont != null)
-            _batch.DrawString(dynFont, text, new Vector2(tx, ty), fontColor);
+            _batch.DrawString(dynFont, text, new Vector2((int)tx, (int)ty), fontColor);
     }
 
     private void DrawStroke(UIEditorElementDef elemDef, Rectangle rect)
@@ -419,7 +420,7 @@ public class RuntimeWidgetRenderer
             _textures[texPath] = tex;
             return tex;
         }
-        catch { return null; }
+        catch (Exception ex) { DebugLog.Log("error", $"Failed to load texture '{texPath}': {ex.Message}"); return null; }
     }
 
     private NineSlice? GetOrLoadNineSlice(string nsId)
@@ -470,7 +471,7 @@ public class RuntimeWidgetRenderer
             }
             return true;
         }
-        catch { return false; }
+        catch (Exception ex) { DebugLog.Log("error", $"Failed to load nine slices from {path}: {ex.Message}"); return false; }
     }
 
     private bool LoadElements(string path)
@@ -537,7 +538,7 @@ public class RuntimeWidgetRenderer
             }
             return true;
         }
-        catch { return false; }
+        catch (Exception ex) { DebugLog.Log("error", $"Failed to load UI elements from {path}: {ex.Message}"); return false; }
     }
 
     private bool LoadWidgets(string path)
@@ -630,7 +631,7 @@ public class RuntimeWidgetRenderer
             }
             return true;
         }
-        catch { return false; }
+        catch (Exception ex) { DebugLog.Log("error", $"Failed to load UI widgets from {path}: {ex.Message}"); return false; }
     }
 
     private static byte[]? ReadTintArray(JsonElement el, string prop)
