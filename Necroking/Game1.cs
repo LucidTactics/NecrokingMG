@@ -3126,7 +3126,18 @@ public class Game1 : Microsoft.Xna.Framework.Game
             else if (_sim.Units[i].Incap.Active && !_sim.Units[i].Incap.Recovering)
                 targetState = _sim.Units[i].Incap.HoldAnim;
             else if (_sim.Units[i].Incap.Recovering)
+            {
                 targetState = _sim.Units[i].Incap.RecoverAnim;
+                // Set real recovery timer from actual animation duration (first frame only)
+                if (_sim.Units[i].Incap.RecoverTimer < 0f)
+                {
+                    float realDuration = animData.Ctrl.GetTotalDurationSeconds(targetState);
+                    if (realDuration <= 0f) realDuration = _sim.Units[i].Incap.RecoverTime; // fallback
+                    var incap = _sim.Units[i].Incap;
+                    incap.RecoverTimer = realDuration;
+                    _sim.UnitsMut[i].Incap = incap;
+                }
+            }
             else if (_sim.Units[i].Dodging)
                 targetState = AnimState.Dodge;
             else if (!_sim.Units[i].PendingAttack.IsNone)

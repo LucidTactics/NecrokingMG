@@ -70,15 +70,15 @@ public static class BuffSystem
             if (!units[i].Alive) continue;
 
             // Tick recovery phase (after incap buff expires)
-            if (units[i].Incap.Recovering)
+            if (units[i].Incap.Recovering && units[i].Incap.RecoverTimer > 0f)
             {
-                units[i].Incap.RecoverTimer -= dt;
-                if (units[i].Incap.RecoverTimer <= 0f)
-                {
-                    // Recovery complete — unit is free
-                    units[i].Incap = default;
-                }
+                var incap = units[i].Incap;
+                incap.RecoverTimer -= dt;
+                if (incap.RecoverTimer <= 0f)
+                    incap = default; // Recovery complete — unit is free
+                units[i].Incap = incap;
             }
+            // RecoverTimer == -1 means waiting for animation system to set real duration
 
             var buffs = units[i].ActiveBuffs;
             for (int j = buffs.Count - 1; j >= 0; j--)
@@ -99,10 +99,12 @@ public static class BuffSystem
                     var def = buffRegistry.Get(b.BuffDefID);
                     if (def != null && def.Incapacitating && b.RemainingDuration <= def.IncapRecoverTime)
                     {
-                        // Begin recovery phase — animation plays while buff is still active
+                        // Begin recovery phase — animation plays while buff is still active.
+                        // RecoverTimer set to -1 as signal for animation system to fill in
+                        // the real duration from the unit's actual sprite animation timing.
                         var incap = units[i].Incap;
                         incap.Recovering = true;
-                        incap.RecoverTimer = def.IncapRecoverTime + 0.1f; // Outlasts buff to block AI
+                        incap.RecoverTimer = -1f; // Animation system will set real duration
                         units[i].Incap = incap;
 
                         // Switch override to recovery animation
@@ -132,7 +134,7 @@ public static class BuffSystem
                     // Buff expired without early recovery trigger — immediate recovery
                     var incap = units[i].Incap;
                     incap.Recovering = true;
-                    incap.RecoverTimer = incap.RecoverTime;
+                    incap.RecoverTimer = -1f; // Animation system will set real duration
                     units[i].Incap = incap;
 
                     units[i].OverrideAnim = AnimRequest.Combat(incap.RecoverAnim);

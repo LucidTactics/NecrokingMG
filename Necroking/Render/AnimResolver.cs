@@ -20,6 +20,14 @@ public static class AnimResolver
     /// </summary>
     public static void Resolve(Unit unit, AnimController ctrl, float dt)
     {
+        // Set real recovery timer from actual animation duration (first frame of recovery)
+        if (unit.Incap.Recovering && unit.Incap.RecoverTimer < 0f)
+        {
+            float realDuration = ctrl.GetTotalDurationSeconds(unit.Incap.RecoverAnim);
+            if (realDuration <= 0f) realDuration = unit.Incap.RecoverTime; // fallback
+            unit.Incap.RecoverTimer = realDuration;
+        }
+
         // Tick override timer
         if (unit.OverrideTimer > 0f)
         {
