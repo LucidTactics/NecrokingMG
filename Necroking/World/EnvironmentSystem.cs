@@ -419,13 +419,49 @@ public class EnvironmentSystem
             float speed = 1f;
             float instanceSeed = obj.X * 7.13f + obj.Y * 13.37f;
 
-            // Wind sync: slow spatial wave that nearby objects share
+            // Wind sync: gust envelope that sweeps across the map.
+            // Direction slowly drifts via random walk (layered irrational sines).
+            // Wavefront is warped so gusts aren't perfectly straight.
+            // Power curve crushes lows → trees mostly still, gusts roll through.
             if (def.AnimWindSync > 0f)
             {
-                float windWave = MathF.Sin(gameTime * 0.4f + obj.X * 0.3f + obj.Y * 0.15f);
-                // windWave [-1,1] -> speed contribution: slows down in troughs
-                float windT = (windWave + 1f) * 0.5f; // [0,1]
-                speed *= 1f - def.AnimWindSync * 0.3f * (1f - windT); // up to 30% slowdown
+                // Wind direction: slow random walk, ±~20-30° over minutes
+                // Base angle ~45° (NE-SW), drifts via incommensurate sine layers
+                float windAngle = 0.78f // ~45 degrees base
+                    + 0.30f * MathF.Sin(gameTime * 0.017f)   // ~370s period, ±17°
+                    + 0.15f * MathF.Sin(gameTime * 0.0091f)  // ~690s period, ±8.5°
+                    + 0.08f * MathF.Sin(gameTime * 0.031f);  // ~200s period, ±4.5°
+                float dirX = MathF.Cos(windAngle);
+                float dirY = MathF.Sin(windAngle);
+
+                // Spatial offset along wind direction (wavefront sweep speed)
+                float spatial = (obj.X * dirX + obj.Y * dirY) * 0.60f;
+
+                // Warp the wavefront: bend it so the gust front isn't a straight line
+                float perp = (-obj.X * dirY + obj.Y * dirX);
+                spatial += 0.3f * MathF.Sin(perp * 0.12f + gameTime * 0.07f);
+
+                // Layered gust envelope
+                float wave = 0.6f * MathF.Sin(gameTime * 0.0625f + spatial)
+                           + 0.3f * MathF.Sin(gameTime * 0.1375f + spatial * 1.7f)
+                           + 0.1f * MathF.Sin(gameTime * 0.275f + spatial * 0.4f);
+                // Threshold ramp: only the top portion of the wave produces motion.
+                // 0.5 → ~50% still, 0.7 → ~80% still, 0.8 → ~90% still
+                const float GustThreshold = 0.5f;
+                float gust;
+                if (wave < GustThreshold)
+                {
+                    gust = 0f;
+                }
+                else
+                {
+                    // Smooth ramp from 0 to 1 above threshold
+                    gust = (wave - GustThreshold) / (1f - GustThreshold);
+                    gust *= gust; // ease-in: gentle start, strong peak
+                }
+                // At windSync=1: speed = gust (0 when still, 1 at peak)
+                // At windSync=0.5: speed = lerp(1, gust, 0.5)
+                speed *= 1f - def.AnimWindSync * (1f - gust);
             }
 
             // Per-instance noise (layered sine waves, unique phase per object)
@@ -436,6 +472,13 @@ public class EnvironmentSystem
                         + 0.2f * MathF.Sin(gameTime * 2.9f + instanceSeed * 0.6f);
                 float t = (n + 1f) * 0.5f; // [0,1]
                 speed *= 1f - def.AnimNoise * (1f - t);
+            }
+
+            // Skip all animation logic when speed is effectively zero (tree frozen)
+            if (speed < 0.001f)
+            {
+                _objectRuntime[i] = rt;
+                continue;
             }
 
             // --- Hold: pause at reversal point for a brief cushion ---
