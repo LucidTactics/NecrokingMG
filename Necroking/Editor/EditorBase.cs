@@ -97,6 +97,15 @@ public class EditorBase
     public int InputLayer { get => _inputLayer; set => _inputLayer = value; }
     public bool IsInputBlocked(int layer) => _inputLayer > layer || (layer == 0 && _colorPicker.ConsumesInput);
 
+    /// <summary>Check if a rect is hovered, respecting input layers. Also sets MouseOverUI flag when true.</summary>
+    protected bool IsHovered(Rectangle rect, int layer = 0)
+    {
+        if (IsInputBlocked(layer)) return false;
+        bool hit = rect.Contains(_mouse.X, _mouse.Y);
+        if (hit) SetMouseOverUI();
+        return hit;
+    }
+
     // Combo dropdown scroll state (keyed by fieldId)
     private readonly Dictionary<string, int> _comboScrollOffsets = new();
 
@@ -159,6 +168,12 @@ public class EditorBase
         _screenW = screenW;
         _screenH = screenH;
         _cursorBlink += (float)gameTime.ElapsedGameTime.TotalSeconds;
+
+        // Propagate last frame's mouse-over-UI flag to InputState before resetting.
+        // UI controls set _mouseOverEditorUI during Draw; we propagate here at the start
+        // of the next frame so that game-world click handlers see it.
+        if (_mouseOverEditorUI && _input != null)
+            _input.MouseOverUI = true;
 
         // Reset per-frame flags
         // If a dropdown is open from last frame, pre-set input layer to block all widgets
@@ -352,7 +367,7 @@ public class EditorBase
     public bool DrawButton(string text, int x, int y, int w, int h, Color? bgOverride = null, int layer = 0)
     {
         var rect = new Rectangle(x, y, w, h);
-        bool hovered = !IsInputBlocked(layer) && rect.Contains(_mouse.X, _mouse.Y);
+        bool hovered = IsHovered(rect, layer);
         bool pressed = hovered && _mouse.LeftButton == ButtonState.Pressed;
         bool clicked = hovered && _mouse.LeftButton == ButtonState.Released && _prevMouse.LeftButton == ButtonState.Pressed;
 
@@ -399,6 +414,7 @@ public class EditorBase
         // Handle scroll wheel when hovering
         if (!inputBlocked && !_scrollConsumed && clipRect.Contains(_mouse.X, _mouse.Y))
         {
+            SetMouseOverUI();
             int scrollDelta = _mouse.ScrollWheelValue - _prevMouse.ScrollWheelValue;
             if (scrollDelta != 0)
             {
@@ -432,6 +448,7 @@ public class EditorBase
 
             var itemRect = new Rectangle(x, iy, w, itemH);
             bool hovered = !inputBlocked && itemRect.Contains(_mouse.X, _mouse.Y) && clipRect.Contains(_mouse.X, _mouse.Y);
+            if (hovered) SetMouseOverUI();
 
             Color bg;
             if (i == selectedIdx) bg = ItemSelected;
@@ -480,7 +497,7 @@ public class EditorBase
         var inputRect = new Rectangle(inputX, y, inputW, inputH);
 
         bool isActive = _activeFieldId == fieldId;
-        bool hovered = !IsInputBlocked(0) && inputRect.Contains(_mouse.X, _mouse.Y);
+        bool hovered = IsHovered(inputRect);
 
         // Click to activate (or reposition cursor if already active)
         if (hovered && _mouse.LeftButton == ButtonState.Pressed && _prevMouse.LeftButton == ButtonState.Released)
@@ -576,7 +593,7 @@ public class EditorBase
         // Text display
         var inputRect = new Rectangle(inputX, y, inputW, inputH);
         bool isActive = _activeFieldId == fieldId;
-        bool hovered = !IsInputBlocked(0) && inputRect.Contains(_mouse.X, _mouse.Y);
+        bool hovered = IsHovered(inputRect);
 
         if (hovered && _mouse.LeftButton == ButtonState.Pressed && _prevMouse.LeftButton == ButtonState.Released)
         {
@@ -641,7 +658,7 @@ public class EditorBase
 
         var inputRect = new Rectangle(inputX, y, inputW, inputH);
         bool isActive = _activeFieldId == fieldId;
-        bool hovered = !IsInputBlocked(0) && inputRect.Contains(_mouse.X, _mouse.Y);
+        bool hovered = IsHovered(inputRect);
 
         if (hovered && _mouse.LeftButton == ButtonState.Pressed && _prevMouse.LeftButton == ButtonState.Released)
         {
@@ -701,7 +718,7 @@ public class EditorBase
     {
         int boxSize = 16;
         var boxRect = new Rectangle(x, y + 2, boxSize, boxSize);
-        bool hovered = !IsInputBlocked(0) && boxRect.Contains(_mouse.X, _mouse.Y);
+        bool hovered = IsHovered(boxRect);
         bool clicked = hovered && _mouse.LeftButton == ButtonState.Pressed && _prevMouse.LeftButton == ButtonState.Released;
 
         DrawRect(boxRect, InputBg);
@@ -762,6 +779,7 @@ public class EditorBase
         bool isOpen = _activeFieldId == comboId;
         // The combo button itself is always clickable when it's the open dropdown (to allow closing)
         bool hovered = !_dropdownOverlayConsumedClick && (isOpen || !IsInputBlocked(0)) && inputRect.Contains(_mouse.X, _mouse.Y);
+        if (hovered) SetMouseOverUI();
 
         // Draw the current value
         DrawRect(inputRect, hovered || isOpen ? ItemHover : InputBg);

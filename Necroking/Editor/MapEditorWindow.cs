@@ -494,6 +494,7 @@ public class MapEditorWindow
         if (_envObjectEditor != null && _envObjectEditor.IsOpen)
         {
             _envObjectEditor.Update();
+            _eb.SetMouseOverUI(); // block game-world clicks while overlay is open
             _prevMouse = _eb._input.Mouse;
             _prevKb = _eb._input.Kb;
             _prevScrollValue = _prevMouse.ScrollWheelValue;
@@ -507,6 +508,7 @@ public class MapEditorWindow
         // If wall editor overlay is open, skip normal input processing
         if (_wallEditor != null && _wallEditor.IsOpen)
         {
+            _eb.SetMouseOverUI(); // block game-world clicks while overlay is open
             _prevMouse = mouse;
             _prevKb = kb;
             _prevScrollValue = mouse.ScrollWheelValue;
@@ -1685,7 +1687,10 @@ public class MapEditorWindow
             if (_eb.DrawButton("Edit Defs", panelX + Margin, contentY, PanelWidth - Margin * 2, ButtonHeight, EditorBase.AccentColor))
             {
                 Core.DebugLog.Log("editor", $"Edit Defs clicked, opening EnvObjectEditor (defCount={_envSystem.DefCount})");
-                _envObjectEditor.Open();
+                if (SelectedEnvDefIndex >= 0)
+                    _envObjectEditor.Open(SelectedEnvDefIndex);
+                else
+                    _envObjectEditor.Open();
             }
             contentY += ButtonHeight + 4;
         }

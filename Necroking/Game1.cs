@@ -2168,6 +2168,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
             _sim.MagicGlyphs.Update(dt, _sim.UnitsMut, _sim.Quadtree, _sim.PoisonClouds, _gameData.Spells);
             _weatherRenderer.Update(dt, _gameData);
             _envSystem.UpdateForagables(dt);
+            _envSystem.UpdateAnimations(dt, _gameTime);
             _envSystem.UpdateTraps(dt, _sim.Units);
             ProcessTrapFireEvents();
 
@@ -3590,12 +3591,13 @@ public class Game1 : Microsoft.Xna.Framework.Game
             _spriteBatch.End();
         }
 
-        // --- Map editor: Alt shows object names ---
-        if (_menuState == MenuState.MapEditor && _input.IsKeyDown(Keys.LeftAlt))
+        // --- Alt shows object names (+ animation debug for animated objects) ---
+        if ((_menuState == MenuState.MapEditor || _menuState == MenuState.None) && _input.IsKeyDown(Keys.LeftAlt))
         {
             _spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.PointClamp);
             for (int oi = 0; oi < _envSystem.ObjectCount; oi++)
             {
+                if (!_envSystem.IsObjectVisible(oi)) continue;
                 var obj = _envSystem.GetObject(oi);
                 var def = _envSystem.GetDef(obj.DefIndex);
                 var sp = _renderer.WorldToScreen(new Vec2(obj.X, obj.Y), 0f, _camera);
@@ -3603,11 +3605,18 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 if (sp.X > -100 && sp.X < screenW + 100 && sp.Y > -100 && sp.Y < screenH + 100)
                 {
                     string label = !string.IsNullOrEmpty(def.Name) ? def.Name : def.Id;
+                    // Animated objects: show frame info
+                    if (def.IsAnimated && def.AnimTotalFrames > 1)
+                    {
+                        var rt = _envSystem.GetObjectRuntime(oi);
+                        int frame = Math.Clamp((int)rt.AnimTime, 0, def.AnimTotalFrames - 1);
+                        string dir = rt.AnimReversed ? "<" : ">";
+                        label = $"F{frame}/{def.AnimTotalFrames - 1} {dir}";
+                    }
                     if (!string.IsNullOrEmpty(label))
                     {
                         var textSize = _smallFont != null ? _smallFont.MeasureString(label) : new Vector2(label.Length * 6, 12);
-                        var textPos = new Vector2(sp.X - textSize.X * 0.5f, sp.Y + 4);
-                        // Dark background for readability
+                        var textPos = new Vector2((int)(sp.X - textSize.X * 0.5f), (int)(sp.Y + 4));
                         _spriteBatch.Draw(_pixel, new Rectangle((int)textPos.X - 2, (int)textPos.Y - 1, (int)textSize.X + 4, (int)textSize.Y + 2), new Color(0, 0, 0, 160));
                         if (_smallFont != null)
                             _spriteBatch.DrawString(_smallFont, label, textPos, new Color(220, 220, 255));
@@ -4626,12 +4635,27 @@ public class Game1 : Microsoft.Xna.Framework.Game
         var mainTex = _envSystem.GetDefTexture(obj.DefIndex);
         float refHeight = mainTex != null ? mainTex.Height : tex.Height;
 
+        // Animated spritesheet: use per-frame dimensions
+        Rectangle? sourceRect = null;
+        float frameW = tex.Width;
+        float frameH = tex.Height;
+        if (def.IsAnimated && def.AnimTotalFrames > 1)
+        {
+            int totalFrames = def.AnimTotalFrames;
+            float animTime = _envSystem.GetObjectRuntime(i).AnimTime;
+            int frame = Math.Clamp((int)animTime, 0, totalFrames - 1);
+            sourceRect = def.GetAnimFrameRect(tex.Width, tex.Height, frame);
+            frameW = sourceRect.Value.Width;
+            frameH = sourceRect.Value.Height;
+            refHeight = frameH; // scale relative to frame height, not full sheet
+        }
+
         float worldH = def.SpriteWorldHeight * obj.Scale * def.Scale;
         float pixelH = worldH * _camera.Zoom;
         float scale = pixelH / refHeight;
 
         var screenPos = _renderer.WorldToScreen(new Vec2(obj.X, obj.Y), 0f, _camera);
-        var origin = new Vector2(def.PivotX * tex.Width, def.PivotY * tex.Height);
+        var origin = new Vector2(def.PivotX * frameW, def.PivotY * frameH);
 
         float rotation = 0f;
         Color tint = alpha >= 1f ? Color.White : new Color(alpha, alpha, alpha, alpha);
@@ -4676,7 +4700,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // Apply weather ambient light
         tint = MultiplyColor(tint, _ambientColor);
 
-        _spriteBatch.Draw(tex, screenPos, null, tint, rotation, origin, scale, SpriteEffects.None, 0f);
+        _spriteBatch.Draw(tex, screenPos, sourceRect, tint, rotation, origin, scale, SpriteEffects.None, 0f);
 
         // Build progress bar for unbuilt objects
         if (rt.BuildProgress > 0f && rt.BuildProgress < 1f)
