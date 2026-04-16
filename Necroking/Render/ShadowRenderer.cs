@@ -120,10 +120,10 @@ public class ShadowRenderer
             var tex = envSystem.GetDefTexture(obj.DefIndex);
             if (tex == null) continue;
 
-            // Use per-frame dimensions for animated spritesheets
+            // Use per-frame dimensions for animated spritesheets (skip when placeholder is active)
             float texW = tex.Width;
             float texH = tex.Height;
-            if (def.IsAnimated && def.AnimTotalFrames > 1)
+            if (def.IsAnimated && def.AnimTotalFrames > 1 && !envSystem.IsUsingPlaceholder(obj.DefIndex))
             {
                 texW = tex.Width / (float)Math.Max(def.AnimFramesX, 1);
                 texH = tex.Height / (float)Math.Max(def.AnimFramesY, 1);
@@ -243,11 +243,11 @@ public class ShadowRenderer
             var tex = envSystem.GetDefTexture(obj.DefIndex);
             if (tex == null) continue;
 
-            // Use per-frame dimensions for animated spritesheets
+            // Use per-frame dimensions for animated spritesheets (skip when placeholder is active)
             float fTexW = tex.Width;
             float fTexH = tex.Height;
             float u0 = 0f, v0 = 0f, u1 = 1f, v1 = 1f;
-            if (def.IsAnimated && def.AnimTotalFrames > 1)
+            if (def.IsAnimated && def.AnimTotalFrames > 1 && !envSystem.IsUsingPlaceholder(obj.DefIndex))
             {
                 // Shadow uses first frame only (no animation on shadows)
                 var frameRect = def.GetAnimFrameRect(tex.Width, tex.Height, 0);

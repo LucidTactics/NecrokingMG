@@ -3633,13 +3633,13 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 if (sp.X > -100 && sp.X < screenW + 100 && sp.Y > -100 && sp.Y < screenH + 100)
                 {
                     string label = !string.IsNullOrEmpty(def.Name) ? def.Name : def.Id;
-                    // Animated objects: show frame info
+                    // Animated objects: append frame info after the name
                     if (def.IsAnimated && def.AnimTotalFrames > 1)
                     {
                         var rt = _envSystem.GetObjectRuntime(oi);
                         int frame = Math.Clamp((int)rt.AnimTime, 0, def.AnimTotalFrames - 1);
                         string dir = rt.AnimReversed ? "<" : ">";
-                        label = $"F{frame}/{def.AnimTotalFrames - 1} {dir}";
+                        label = $"{label}  F{frame}/{def.AnimTotalFrames - 1} {dir}";
                     }
                     if (!string.IsNullOrEmpty(label))
                     {
@@ -4556,7 +4556,8 @@ public class Game1 : Microsoft.Xna.Framework.Game
             if (def.Category == "Traps") continue; // drawn in ground layer pass
             if (obj.X < viewLeft || obj.X > viewRight || obj.Y < viewTop || obj.Y > viewBottom)
                 continue;
-            if (_envSystem.GetDefTexture(obj.DefIndex) == null) continue;
+            // Note: defs whose sprites failed to load get a placeholder texture in EnvironmentSystem,
+            // so GetDefTexture is non-null and the object still appears.
             items.Add(new DepthItem { Y = obj.Y, Type = DepthItemType.EnvObject, Index = i });
         }
 
@@ -4749,11 +4750,14 @@ public class Game1 : Microsoft.Xna.Framework.Game
         var mainTex = _envSystem.GetDefTexture(obj.DefIndex);
         float refHeight = mainTex != null ? mainTex.Height : tex.Height;
 
-        // Animated spritesheet: use per-frame dimensions
+        // Animated spritesheet: use per-frame dimensions.
+        // Skip slicing when the placeholder texture is active — it's a single 32x32 swatch,
+        // not a real spritesheet, and slicing would produce near-invisible slivers.
+        bool usingPlaceholder = _envSystem.IsUsingPlaceholder(obj.DefIndex);
         Rectangle? sourceRect = null;
         float frameW = tex.Width;
         float frameH = tex.Height;
-        if (def.IsAnimated && def.AnimTotalFrames > 1)
+        if (def.IsAnimated && def.AnimTotalFrames > 1 && !usingPlaceholder)
         {
             int totalFrames = def.AnimTotalFrames;
             float animTime = _envSystem.GetObjectRuntime(i).AnimTime;

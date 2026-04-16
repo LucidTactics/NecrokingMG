@@ -254,6 +254,7 @@ public class EnvironmentSystem
     private readonly List<Texture2D?> _textures = new();
     private readonly Dictionary<string, Texture2D?> _trapTextures = new(); // cached trap sprite textures
     private GraphicsDevice? _device;
+    private Texture2D? _placeholderTexture; // shared placeholder for defs with missing/failed sprites
     private readonly List<PlacedObject> _objects = new();
     private readonly List<PlacedObjectRuntime> _objectRuntime = new();
     private readonly List<BuildingProcessState> _processState = new();
@@ -788,23 +789,86 @@ public class EnvironmentSystem
         for (int i = 0; i < _defs.Count; i++)
         {
             if (_textures[i] != null) continue;
-            string path = _defs[i].TexturePath;
-            if (string.IsNullOrEmpty(path)) continue;
-            string resolved = Core.GamePaths.Resolve(path);
-            if (!System.IO.File.Exists(resolved)) continue;
-            try
-            {
-                using var stream = System.IO.File.OpenRead(resolved);
-                _textures[i] = Necroking.Render.TextureUtil.LoadPremultiplied(device, stream);
-            }
-            catch { /* skip failed loads */ }
+            _textures[i] = TryLoadDefTexture(device, _defs[i]);
         }
+    }
+
+    /// <summary>
+    /// Attempt to load the sprite for a def. Returns a placeholder texture on
+    /// missing path / missing file / load failure so the object still renders.
+    /// </summary>
+    private Texture2D TryLoadDefTexture(GraphicsDevice device, EnvironmentObjectDef def)
+    {
+        string path = def.TexturePath;
+        if (!string.IsNullOrEmpty(path))
+        {
+            string resolved = Core.GamePaths.Resolve(path);
+            if (System.IO.File.Exists(resolved))
+            {
+                try
+                {
+                    using var stream = System.IO.File.OpenRead(resolved);
+                    return Necroking.Render.TextureUtil.LoadPremultiplied(device, stream);
+                }
+                catch (Exception ex)
+                {
+                    Core.DebugLog.Log("startup", $"  Env def '{def.Id}' sprite load failed: '{path}' ({ex.Message}) — using placeholder");
+                    return GetOrCreatePlaceholder(device);
+                }
+            }
+            Core.DebugLog.Log("startup", $"  Env def '{def.Id}' sprite missing: '{path}' — using placeholder");
+        }
+        else
+        {
+            Core.DebugLog.Log("startup", $"  Env def '{def.Id}' has no sprite path — using placeholder");
+        }
+        return GetOrCreatePlaceholder(device);
+    }
+
+    /// <summary>
+    /// Lazily build a magenta/black checker placeholder with a white border so
+    /// missing sprites are obvious but still visibly present on the map.
+    /// </summary>
+    private Texture2D GetOrCreatePlaceholder(GraphicsDevice device)
+    {
+        if (_placeholderTexture != null) return _placeholderTexture;
+
+        const int size = 32;
+        var tex = new Texture2D(device, size, size);
+        var pixels = new Color[size * size];
+        var magenta = new Color((byte)255, (byte)0, (byte)255, (byte)255);
+        var dark = new Color((byte)40, (byte)0, (byte)40, (byte)255);
+        var border = new Color((byte)255, (byte)255, (byte)255, (byte)255);
+        for (int y = 0; y < size; y++)
+        {
+            for (int x = 0; x < size; x++)
+            {
+                bool isBorder = x == 0 || y == 0 || x == size - 1 || y == size - 1;
+                bool checker = ((x / 8) + (y / 8)) % 2 == 0;
+                pixels[y * size + x] = isBorder ? border : (checker ? magenta : dark);
+            }
+        }
+        tex.SetData(pixels);
+        _placeholderTexture = tex;
+        return tex;
     }
 
     public Texture2D? GetDefTexture(int defIdx)
     {
         if (defIdx < 0 || defIdx >= _textures.Count) return null;
         return _textures[defIdx];
+    }
+
+    /// <summary>
+    /// True when this def's sprite failed to load and the shared placeholder is in use.
+    /// Renderers should avoid animation frame slicing on placeholder textures (the 32x32
+    /// placeholder divided by N frames produces invisibly thin slivers).
+    /// </summary>
+    public bool IsUsingPlaceholder(int defIdx)
+    {
+        if (_placeholderTexture == null) return false;
+        if (defIdx < 0 || defIdx >= _textures.Count) return false;
+        return _textures[defIdx] == _placeholderTexture;
     }
 
     /// <summary>Get the correct texture for an object based on trap visual state. Returns alpha multiplier.</summary>
@@ -864,18 +928,11 @@ public class EnvironmentSystem
     {
         if (_device == null || defIdx < 0 || defIdx >= _defs.Count) return;
         while (_textures.Count <= defIdx) _textures.Add(null);
-        _textures[defIdx]?.Dispose();
-        _textures[defIdx] = null;
-        string path = _defs[defIdx].TexturePath;
-        if (string.IsNullOrEmpty(path)) return;
-        string resolved = Core.GamePaths.Resolve(path);
-        if (!System.IO.File.Exists(resolved)) return;
-        try
-        {
-            using var stream = System.IO.File.OpenRead(resolved);
-            _textures[defIdx] = Necroking.Render.TextureUtil.LoadPremultiplied(_device, stream);
-        }
-        catch { /* skip failed loads */ }
+        // Don't dispose the shared placeholder — it's reused across defs
+        var existing = _textures[defIdx];
+        if (existing != null && existing != _placeholderTexture)
+            existing.Dispose();
+        _textures[defIdx] = TryLoadDefTexture(_device, _defs[defIdx]);
     }
 
     /// <summary>
