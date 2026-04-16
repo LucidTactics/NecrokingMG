@@ -1677,6 +1677,8 @@ public class Game1 : Microsoft.Xna.Framework.Game
             // Inventory, building, crafting
             if (_inventoryUI.ContainsMouse(mx, my))
                 _input.MouseOverUI = true;
+            if (_characterStatsUI.ContainsMouse(screenW, screenH, mx, my, _sim))
+                _input.MouseOverUI = true;
             if (_buildingMenuUI.ContainsMouse(mx, my))
                 _input.MouseOverUI = true;
             if (_craftingMenu.ContainsMouse(mx, my))
@@ -3679,7 +3681,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
         // Character stats panel (Tab)
         if (showUI)
-            _characterStatsUI.Draw(screenW, screenH, _sim, _gameData.Buffs);
+            _characterStatsUI.Draw(screenW, screenH, _sim, _gameData.Buffs, ref _spellBarState, _input);
 
         // Building menu UI (widget-based)
         if (showUI)
