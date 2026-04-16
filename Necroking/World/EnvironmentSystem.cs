@@ -419,48 +419,10 @@ public class EnvironmentSystem
             float speed = 1f;
             float instanceSeed = obj.X * 7.13f + obj.Y * 13.37f;
 
-            // Wind sync: gust envelope that sweeps across the map.
-            // Direction slowly drifts via random walk (layered irrational sines).
-            // Wavefront is warped so gusts aren't perfectly straight.
-            // Power curve crushes lows → trees mostly still, gusts roll through.
+            // Wind sync: gust envelope that sweeps across the map
             if (def.AnimWindSync > 0f)
             {
-                // Wind direction: slow random walk, ±~20-30° over minutes
-                // Base angle ~45° (NE-SW), drifts via incommensurate sine layers
-                float windAngle = 0.78f // ~45 degrees base
-                    + 0.30f * MathF.Sin(gameTime * 0.017f)   // ~370s period, ±17°
-                    + 0.15f * MathF.Sin(gameTime * 0.0091f)  // ~690s period, ±8.5°
-                    + 0.08f * MathF.Sin(gameTime * 0.031f);  // ~200s period, ±4.5°
-                float dirX = MathF.Cos(windAngle);
-                float dirY = MathF.Sin(windAngle);
-
-                // Spatial offset along wind direction (wavefront sweep speed)
-                float spatial = (obj.X * dirX + obj.Y * dirY) * 0.60f;
-
-                // Warp the wavefront: bend it so the gust front isn't a straight line
-                float perp = (-obj.X * dirY + obj.Y * dirX);
-                spatial += 0.3f * MathF.Sin(perp * 0.12f + gameTime * 0.07f);
-
-                // Layered gust envelope
-                float wave = 0.6f * MathF.Sin(gameTime * 0.0625f + spatial)
-                           + 0.3f * MathF.Sin(gameTime * 0.1375f + spatial * 1.7f)
-                           + 0.1f * MathF.Sin(gameTime * 0.275f + spatial * 0.4f);
-                // Threshold ramp: only the top portion of the wave produces motion.
-                // 0.5 → ~50% still, 0.7 → ~80% still, 0.8 → ~90% still
-                const float GustThreshold = 0.5f;
-                float gust;
-                if (wave < GustThreshold)
-                {
-                    gust = 0f;
-                }
-                else
-                {
-                    // Smooth ramp from 0 to 1 above threshold
-                    gust = (wave - GustThreshold) / (1f - GustThreshold);
-                    gust *= gust; // ease-in: gentle start, strong peak
-                }
-                // At windSync=1: speed = gust (0 when still, 1 at peak)
-                // At windSync=0.5: speed = lerp(1, gust, 0.5)
+                float gust = SampleWind(obj.X, obj.Y, gameTime, out _);
                 speed *= 1f - def.AnimWindSync * (1f - gust);
             }
 
@@ -550,6 +512,38 @@ public class EnvironmentSystem
         state ^= state >> 17;
         state ^= state << 5;
         return state;
+    }
+
+    /// <summary>
+    /// Compute wind gust value and direction at a world position. Shared by animation and debug.
+    /// Returns gust intensity [0,1] and wind angle in radians.
+    /// </summary>
+    public static float SampleWind(float worldX, float worldY, float gameTime, out float windAngle)
+    {
+        // Wind direction: slow random walk
+        windAngle = 0.78f
+            + 0.30f * MathF.Sin(gameTime * 0.017f)
+            + 0.15f * MathF.Sin(gameTime * 0.0091f)
+            + 0.08f * MathF.Sin(gameTime * 0.031f);
+        float dirX = MathF.Cos(windAngle);
+        float dirY = MathF.Sin(windAngle);
+
+        // Spatial offset along wind direction — perpendicular to the wind = the gust front.
+        // Low frequency = wide bands (~15 tiles active, ~50 tiles gap)
+        float spatial = (worldX * dirX + worldY * dirY) * 0.10f;
+
+        // Warp the wavefront so it isn't perfectly straight
+        float perp = (-worldX * dirY + worldY * dirX);
+        spatial += 0.15f * MathF.Sin(perp * 0.06f + gameTime * 0.05f);
+
+        float wave = 0.6f * MathF.Sin(gameTime * 0.0625f + spatial)
+                   + 0.3f * MathF.Sin(gameTime * 0.1375f + spatial * 1.4f)
+                   + 0.1f * MathF.Sin(gameTime * 0.275f + spatial * 0.5f);
+
+        const float GustThreshold = 0.35f;
+        if (wave < GustThreshold) return 0f;
+        float gust = (wave - GustThreshold) / (1f - GustThreshold);
+        return gust * gust;
     }
 
     /// <summary>Event emitted when a trap fires a spell.</summary>

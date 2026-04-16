@@ -165,6 +165,9 @@ public class Game1 : Microsoft.Xna.Framework.Game
     // Gameplay debug (F7): 0=Off, 1=Horde, 2=Unit Info
     private int _gameplayDebugMode;
 
+    // Wind debug (F6): shows gust heatmap + direction arrow
+    private bool _windDebug;
+
     // Scenario state
     private ScenarioBase? _activeScenario;
     private int _scenarioScrollOffset;
@@ -1449,6 +1452,10 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // Check if any editor text field is active (persists from previous frame, safe to read before UpdateInput)
         bool anyTextInputActive = (_editorUi != null && _editorUi.IsTextInputActive)
             || (_menuState == MenuState.UIEditor && _uiEditor.IsTextInputActive);
+
+        // --- F6 wind debug toggle ---
+        if (!anyTextInputActive && _input.WasKeyPressed(Keys.F6))
+            _windDebug = !_windDebug;
 
         // --- F7 gameplay debug toggle (Off → Horde → Unit Info → Off) ---
         if (!anyTextInputActive && _input.WasKeyPressed(Keys.F7))
@@ -3591,6 +3598,23 @@ public class Game1 : Microsoft.Xna.Framework.Game
             _spriteBatch.End();
         }
 
+        // --- Wind debug overlay (F6) ---
+        if (_windDebug)
+        {
+            try
+            {
+                _spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.PointClamp);
+                DrawWindDebug(screenW, screenH);
+                _spriteBatch.End();
+            }
+            catch (Exception ex)
+            {
+                Core.DebugLog.Log("error", $"Wind debug crash: {ex}");
+                _windDebug = false;
+                try { _spriteBatch.End(); } catch { }
+            }
+        }
+
         // --- Alt shows object names (+ animation debug for animated objects) ---
         if ((_menuState == MenuState.MapEditor || _menuState == MenuState.None) && _input.IsKeyDown(Keys.LeftAlt))
         {
@@ -4225,6 +4249,92 @@ public class Game1 : Microsoft.Xna.Framework.Game
     // ═══════════════════════════════════════
     //  Gameplay Debug Visualizations (F7)
     // ═══════════════════════════════════════
+
+    private void DrawWindDebug(int screenW, int screenH)
+    {
+        if (_pixel == null || _renderer == null) return;
+
+        // Sample wind at a grid of world positions and draw colored quads
+        // Scale cell size with zoom so we never have too many cells on screen
+        float cellSize = MathF.Max(2f, 40f / MathF.Max(_camera.Zoom, 1f));
+
+        // Get view bounds in world space
+        var topLeft = _renderer.ScreenToWorld(Vector2.Zero, _camera);
+        var bottomRight = _renderer.ScreenToWorld(new Vector2(screenW, screenH), _camera);
+        float minX = MathF.Floor(topLeft.X / cellSize) * cellSize;
+        float minY = MathF.Floor(topLeft.Y / cellSize) * cellSize;
+        float maxX = MathF.Ceiling(bottomRight.X / cellSize) * cellSize;
+        float maxY = MathF.Ceiling(bottomRight.Y / cellSize) * cellSize;
+
+        // Safety cap: limit to ~2500 cells max
+        int maxCells = 50;
+        if ((maxX - minX) / cellSize > maxCells) maxX = minX + maxCells * cellSize;
+        if ((maxY - minY) / cellSize > maxCells) maxY = minY + maxCells * cellSize;
+
+        float windAngle = 0f;
+        for (float wy = minY; wy < maxY; wy += cellSize)
+        {
+            for (float wx = minX; wx < maxX; wx += cellSize)
+            {
+                float gust = EnvironmentSystem.SampleWind(wx, wy, _gameTime, out windAngle);
+                if (gust < 0.01f) continue; // skip fully still cells
+
+                var sp = _renderer.WorldToScreen(new Vec2(wx, wy), 0f, _camera);
+                float halfPx = cellSize * _camera.Zoom * 0.5f;
+                int px = (int)(sp.X - halfPx);
+                int py = (int)(sp.Y - halfPx * _camera.YRatio);
+                int pw = (int)(cellSize * _camera.Zoom);
+                int ph = (int)(cellSize * _camera.Zoom * _camera.YRatio);
+
+                // Color: blue(still) → yellow → white(peak)
+                byte r = (byte)(55 + (int)(200 * gust));
+                byte g = (byte)(55 + (int)(200 * gust));
+                byte b = (byte)(55 + (int)(80 * (1f - gust)));
+                byte a = (byte)(40 + (int)(80 * gust));
+                _spriteBatch.Draw(_pixel, new Rectangle(px, py, pw, ph), new Color(r, g, b, a));
+            }
+        }
+
+        // Direction arrow in top-left corner
+        float arrowLen = 40f;
+        float arrowX = 60f;
+        float arrowY = 60f;
+
+        // Arrow body
+        float adx = MathF.Cos(windAngle) * arrowLen;
+        float ady = MathF.Sin(windAngle) * arrowLen;
+        DrawDebugLine(new Vector2(arrowX - adx * 0.5f, arrowY - ady * 0.5f),
+                      new Vector2(arrowX + adx * 0.5f, arrowY + ady * 0.5f), Color.White);
+        // Arrowhead
+        float headAngle1 = windAngle + 2.5f;
+        float headAngle2 = windAngle - 2.5f;
+        float headLen = 12f;
+        var tip = new Vector2(arrowX + adx * 0.5f, arrowY + ady * 0.5f);
+        DrawDebugLine(tip, tip + new Vector2(MathF.Cos(headAngle1) * headLen, MathF.Sin(headAngle1) * headLen), Color.White);
+        DrawDebugLine(tip, tip + new Vector2(MathF.Cos(headAngle2) * headLen, MathF.Sin(headAngle2) * headLen), Color.White);
+
+        // Background circle for arrow
+        _spriteBatch.Draw(_pixel, new Rectangle((int)arrowX - 45, (int)arrowY - 45, 90, 90), new Color(0, 0, 0, 120));
+
+        // Label
+        if (_smallFont != null)
+        {
+            float angleDeg = windAngle * 180f / MathF.PI;
+            _spriteBatch.DrawString(_smallFont, $"Wind {angleDeg:F0} deg",
+                new Vector2(16, 108), Color.White);
+            _spriteBatch.DrawString(_smallFont, "F6: Wind Debug",
+                new Vector2(16, 122), new Color(180, 180, 180));
+        }
+    }
+
+    private void DrawDebugLine(Vector2 a, Vector2 b, Color color)
+    {
+        float dx = b.X - a.X, dy = b.Y - a.Y;
+        float len = MathF.Sqrt(dx * dx + dy * dy);
+        if (len < 0.5f) return;
+        float angle = MathF.Atan2(dy, dx);
+        _spriteBatch.Draw(_pixel, a, null, color, angle, Vector2.Zero, new Vector2(len, 1f), SpriteEffects.None, 0f);
+    }
 
     private void DrawHordeDebug()
     {
