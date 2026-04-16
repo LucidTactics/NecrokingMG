@@ -456,6 +456,7 @@ public static class MapData
         if (ed.TryGetProperty("scale", out var sc)) def.Scale = sc.GetSingle();
         if (ed.TryGetProperty("placementScale", out var ps)) def.PlacementScale = ps.GetSingle();
         if (ed.TryGetProperty("group", out var grp)) def.Group = grp.GetString() ?? "";
+        if (ed.TryGetProperty("groupWeight", out var gw)) def.GroupWeight = gw.GetSingle();
         if (ed.TryGetProperty("isBuilding", out var ib)) def.IsBuilding = ib.GetBoolean();
         if (ed.TryGetProperty("playerBuildable", out var pb)) def.PlayerBuildable = pb.GetBoolean();
         if (ed.TryGetProperty("buildingMaxHP", out var bmhp)) def.BuildingMaxHP = bmhp.GetInt32();
@@ -479,12 +480,49 @@ public static class MapData
         if (ed.TryGetProperty("trapFadeDuration", out var tfd)) def.TrapFadeDuration = tfd.GetSingle();
         if (ed.TryGetProperty("boundTriggerID", out var btid)) def.BoundTriggerID = btid.GetString() ?? "";
         if (ed.TryGetProperty("processTime", out var pt)) def.ProcessTime = pt.GetSingle();
+        if (ed.TryGetProperty("maxInputQueue", out var miq)) def.MaxInputQueue = miq.GetInt32();
+        if (ed.TryGetProperty("maxOutputQueue", out var moq)) def.MaxOutputQueue = moq.GetInt32();
         if (ed.TryGetProperty("autoSpawn", out var ats)) def.AutoSpawn = ats.GetBoolean();
+        if (ed.TryGetProperty("spawnOffsetX", out var sox)) def.SpawnOffsetX = sox.GetSingle();
+        if (ed.TryGetProperty("spawnOffsetY", out var soy)) def.SpawnOffsetY = soy.GetSingle();
+        if (ed.TryGetProperty("isAnimated", out var ianim)) def.IsAnimated = ianim.GetBoolean();
+        if (ed.TryGetProperty("animFramesX", out var afx)) def.AnimFramesX = afx.GetInt32();
+        if (ed.TryGetProperty("animFramesY", out var afy)) def.AnimFramesY = afy.GetInt32();
+        if (ed.TryGetProperty("animFPS", out var afps)) def.AnimFPS = afps.GetSingle();
+        if (ed.TryGetProperty("animNoise", out var anoise)) def.AnimNoise = anoise.GetSingle();
+        if (ed.TryGetProperty("animWindSync", out var awind)) def.AnimWindSync = awind.GetSingle();
         if (ed.TryGetProperty("isForagable", out var ifor)) def.IsForagable = ifor.GetBoolean();
         if (ed.TryGetProperty("foragableType", out var ftyp)) def.ForagableType = ftyp.GetString() ?? "";
         if (ed.TryGetProperty("respawnTime", out var rst)) def.RespawnTime = rst.GetSingle();
         if (ed.TryGetProperty("scaleMin", out var smin)) def.ScaleMin = smin.GetSingle();
         if (ed.TryGetProperty("scaleMax", out var smax)) def.ScaleMax = smax.GetSingle();
+        // Processing slots
+        if (ed.TryGetProperty("input1", out var in1))
+        {
+            if (in1.TryGetProperty("kind", out var k)) def.Input1.Kind = k.GetString() ?? "";
+            if (in1.TryGetProperty("resourceID", out var r)) def.Input1.ResourceID = r.GetString() ?? "";
+        }
+        if (ed.TryGetProperty("input2", out var in2))
+        {
+            if (in2.TryGetProperty("kind", out var k)) def.Input2.Kind = k.GetString() ?? "";
+            if (in2.TryGetProperty("resourceID", out var r)) def.Input2.ResourceID = r.GetString() ?? "";
+        }
+        if (ed.TryGetProperty("output", out var outp))
+        {
+            if (outp.TryGetProperty("kind", out var k)) def.Output.Kind = k.GetString() ?? "";
+            if (outp.TryGetProperty("resourceID", out var r)) def.Output.ResourceID = r.GetString() ?? "";
+        }
+        // Tint color
+        if (ed.TryGetProperty("tintColor", out var tc))
+        {
+            byte tr = 255, tg = 255, tb = 255, ta = 255; float ti = 1f;
+            if (tc.TryGetProperty("r", out var tcr)) tr = (byte)tcr.GetInt32();
+            if (tc.TryGetProperty("g", out var tcg)) tg = (byte)tcg.GetInt32();
+            if (tc.TryGetProperty("b", out var tcb)) tb = (byte)tcb.GetInt32();
+            if (tc.TryGetProperty("a", out var tca)) ta = (byte)tca.GetInt32();
+            if (tc.TryGetProperty("intensity", out var tci)) ti = tci.GetSingle();
+            def.TintColor = new Necroking.Core.HdrColor(tr, tg, tb, ta, ti);
+        }
         return def;
     }
 }

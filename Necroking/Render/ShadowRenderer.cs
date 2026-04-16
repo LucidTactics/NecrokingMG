@@ -120,9 +120,18 @@ public class ShadowRenderer
             var tex = envSystem.GetDefTexture(obj.DefIndex);
             if (tex == null) continue;
 
+            // Use per-frame dimensions for animated spritesheets
+            float texW = tex.Width;
+            float texH = tex.Height;
+            if (def.IsAnimated && def.AnimTotalFrames > 1)
+            {
+                texW = tex.Width / (float)Math.Max(def.AnimFramesX, 1);
+                texH = tex.Height / (float)Math.Max(def.AnimFramesY, 1);
+            }
+
             float worldH = def.SpriteWorldHeight * obj.Scale * def.Scale;
-            float scale = worldH * camera.Zoom / tex.Height;
-            float objW = tex.Width * scale;
+            float scale = worldH * camera.Zoom / texH;
+            float objW = texW * scale;
             float r = objW * 0.4f;
             float ry = r * camera.YRatio;
 
@@ -234,10 +243,26 @@ public class ShadowRenderer
             var tex = envSystem.GetDefTexture(obj.DefIndex);
             if (tex == null) continue;
 
+            // Use per-frame dimensions for animated spritesheets
+            float fTexW = tex.Width;
+            float fTexH = tex.Height;
+            float u0 = 0f, v0 = 0f, u1 = 1f, v1 = 1f;
+            if (def.IsAnimated && def.AnimTotalFrames > 1)
+            {
+                // Shadow uses first frame only (no animation on shadows)
+                var frameRect = def.GetAnimFrameRect(tex.Width, tex.Height, 0);
+                fTexW = frameRect.Width;
+                fTexH = frameRect.Height;
+                u0 = frameRect.X / (float)tex.Width;
+                v0 = frameRect.Y / (float)tex.Height;
+                u1 = (frameRect.X + frameRect.Width) / (float)tex.Width;
+                v1 = (frameRect.Y + frameRect.Height) / (float)tex.Height;
+            }
+
             float worldH = def.SpriteWorldHeight * obj.Scale * def.Scale;
             float pixelH = worldH * camera.Zoom;
-            float scale = pixelH / tex.Height;
-            float destW = tex.Width * scale;
+            float scale = pixelH / fTexH;
+            float destW = fTexW * scale;
             float destH = pixelH;
 
             var feetSp = renderer.WorldToScreen(new Vec2(obj.X, obj.Y), 0f, camera);
@@ -264,7 +289,7 @@ public class ShadowRenderer
 
                 DrawShadowQuad(device, tex, feetSp.X, feetSp.Y,
                     leftOff, rightOff, shadowH, sdx, sdy,
-                    0f, 0f, 1f, 1f, shadowColor);
+                    u0, v0, u1, v1, shadowColor);
             }
         }
 

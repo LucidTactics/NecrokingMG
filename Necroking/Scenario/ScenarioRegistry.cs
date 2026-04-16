@@ -62,6 +62,7 @@ public static class ScenarioRegistry
         Register("physics_multi", () => new Scenarios.PhysicsMultiScenario());
         Register("physics_chain", () => new Scenarios.PhysicsChainScenario());
         Register("knockback_corpse", () => new Scenarios.KnockbackCorpseScenario());
+        Register("animated_object", () => new Scenarios.AnimatedObjectScenario());
     }
 
     public static void Register(string name, Func<ScenarioBase> creator)

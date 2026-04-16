@@ -197,6 +197,22 @@ public class EnvObjectEditorWindow
         ReloadPreview();
     }
 
+    /// <summary>Open with a specific def selected and category filter set to match.</summary>
+    public void Open(int defIndex)
+    {
+        Open();
+        if (defIndex >= 0 && defIndex < _env.DefCount)
+        {
+            _selectedDef = defIndex;
+            // Set category filter to match the def's category
+            var cats = GetCategories();
+            string defCat = _env.GetDef(defIndex).Category;
+            int catIdx = cats.IndexOf(defCat);
+            _categoryFilter = catIdx >= 0 ? catIdx : 0;
+            ReloadPreview();
+        }
+    }
+
     public void Close()
     {
         IsOpen = false;
@@ -436,15 +452,26 @@ public class EnvObjectEditorWindow
         }
         else
         {
-            // Fit texture in preview area with padding
+            // For animated spritesheets, use first frame dimensions
+            Rectangle? srcRect = null;
+            int srcW = tex.Width;
+            int srcH = tex.Height;
+            if (def.IsAnimated && def.AnimTotalFrames > 1)
+            {
+                srcRect = def.GetAnimFrameRect(tex.Width, tex.Height, 0);
+                srcW = srcRect.Value.Width;
+                srcH = srcRect.Value.Height;
+            }
+
+            // Fit texture/frame in preview area with padding
             int padded = Math.Min(w, mainH) - Padding * 4;
-            float scaleX = (float)padded / tex.Width;
-            float scaleY = (float)padded / tex.Height;
+            float scaleX = (float)padded / srcW;
+            float scaleY = (float)padded / srcH;
             float scale = MathF.Min(scaleX, scaleY);
             if (scale > 4f) scale = 4f; // cap max zoom
 
-            int drawW = (int)(tex.Width * scale);
-            int drawH = (int)(tex.Height * scale);
+            int drawW = (int)(srcW * scale);
+            int drawH = (int)(srcH * scale);
             int drawX = x + (w - drawW) / 2;
             int drawY = y + (mainH - drawH) / 2;
 
@@ -455,7 +482,7 @@ public class EnvObjectEditorWindow
             _pvDrawH = drawH;
             _pvScale = scale;
 
-            _sb.Draw(tex, new Rectangle(drawX, drawY, drawW, drawH), Color.White);
+            _sb.Draw(tex, new Rectangle(drawX, drawY, drawW, drawH), srcRect, Color.White);
 
             // Scale factor: pixels per world-unit (incorporates def.Scale for correct relative sizing)
             float pixPerWorld = drawH / MathF.Max(def.SpriteWorldHeight * def.Scale, 0.01f);
@@ -677,15 +704,25 @@ public class EnvObjectEditorWindow
             return;
         }
 
+        // For animated spritesheets, use first frame dimensions
+        Rectangle? editSrc = null;
+        int editSrcW = tex.Width, editSrcH = tex.Height;
+        if (def.IsAnimated && def.AnimTotalFrames > 1)
+        {
+            editSrc = def.GetAnimFrameRect(tex.Width, tex.Height, 0);
+            editSrcW = editSrc.Value.Width;
+            editSrcH = editSrc.Value.Height;
+        }
+
         // Draw at unified world-scale (incorporating def.Scale)
         float drawH = def.SpriteWorldHeight * def.Scale * pixPerWorld;
-        float refScale = drawH / tex.Height;
-        float drawW = tex.Width * refScale;
+        float refScale = drawH / editSrcH;
+        float drawW = editSrcW * refScale;
 
         // Align to bottom of cell (objects share a ground plane)
         int rx = x + (w - (int)drawW) / 2;
         int ry = y + h - (int)drawH - 4;
-        _sb.Draw(tex, new Rectangle(rx, ry, (int)drawW, (int)drawH), Color.White);
+        _sb.Draw(tex, new Rectangle(rx, ry, (int)drawW, (int)drawH), editSrc, Color.White);
 
         // No label on the edited object slot — it's always the current selection
     }
@@ -724,15 +761,25 @@ public class EnvObjectEditorWindow
 
             if (refTex != null && pixPerWorld > 0.001f)
             {
+                // For animated spritesheets, use first frame
+                Rectangle? refSrc = null;
+                int refSrcW = refTex.Width, refSrcH = refTex.Height;
+                if (refDef.IsAnimated && refDef.AnimTotalFrames > 1)
+                {
+                    refSrc = refDef.GetAnimFrameRect(refTex.Width, refTex.Height, 0);
+                    refSrcW = refSrc.Value.Width;
+                    refSrcH = refSrc.Value.Height;
+                }
+
                 // Draw at unified world-scale (incorporating refDef.Scale)
                 float refDrawH = refDef.SpriteWorldHeight * refDef.Scale * pixPerWorld;
-                float refScale = refDrawH / refTex.Height;
-                float refDrawW = refTex.Width * refScale;
+                float refScale = refDrawH / refSrcH;
+                float refDrawW = refSrcW * refScale;
 
                 // Align to bottom of cell (shared ground plane)
                 int rx = x + (w - (int)refDrawW) / 2;
                 int ry = y + h - (int)refDrawH - 4;
-                _sb.Draw(refTex, new Rectangle(rx, ry, (int)refDrawW, (int)refDrawH), Color.White);
+                _sb.Draw(refTex, new Rectangle(rx, ry, (int)refDrawW, (int)refDrawH), refSrc, Color.White);
             }
 
             // Name label
@@ -1089,6 +1136,51 @@ public class EnvObjectEditorWindow
         {
             curY += 4;
         }
+
+        // --- Section: Animation ---
+        curY = DrawSectionLabel(fx, curY, fieldW, "ANIMATION");
+
+        bool newIsAnimated = _ui.DrawCheckbox("Animated (Spritesheet)", def.IsAnimated, fx, curY);
+        if (newIsAnimated != def.IsAnimated) def.IsAnimated = newIsAnimated;
+        curY += RowH;
+
+        if (def.IsAnimated)
+        {
+            int newFramesX = _ui.DrawIntField("envdef_animfx", "Frames X", def.AnimFramesX, fx, curY, fieldW);
+            if (newFramesX != def.AnimFramesX) def.AnimFramesX = Math.Max(1, newFramesX);
+            curY += RowH;
+
+            int newFramesY = _ui.DrawIntField("envdef_animfy", "Frames Y", def.AnimFramesY, fx, curY, fieldW);
+            if (newFramesY != def.AnimFramesY) def.AnimFramesY = Math.Max(1, newFramesY);
+            curY += RowH;
+
+            float newFPS = _ui.DrawFloatField("envdef_animfps", "Frame Rate", def.AnimFPS, fx, curY, fieldW, 1f);
+            if (MathF.Abs(newFPS - def.AnimFPS) > 0.001f) def.AnimFPS = MathF.Max(0.1f, newFPS);
+            curY += RowH;
+
+            float newNoise = _ui.DrawFloatField("envdef_animnoise", "Noise %", def.AnimNoise * 100f, fx, curY, fieldW, 1f);
+            newNoise = MathHelper.Clamp(newNoise / 100f, 0f, 1f);
+            if (MathF.Abs(newNoise - def.AnimNoise) > 0.0001f) def.AnimNoise = newNoise;
+            curY += RowH;
+
+            float newWind = _ui.DrawFloatField("envdef_animwind", "Wind Sync %", def.AnimWindSync * 100f, fx, curY, fieldW, 1f);
+            newWind = MathHelper.Clamp(newWind / 100f, 0f, 1f);
+            if (MathF.Abs(newWind - def.AnimWindSync) > 0.0001f) def.AnimWindSync = newWind;
+            curY += RowH;
+
+            // Info: total frames and frame size
+            var tex = _env.GetDefTexture(_selectedDef);
+            if (tex != null)
+            {
+                int fw = tex.Width / Math.Max(def.AnimFramesX, 1);
+                int fh = tex.Height / Math.Max(def.AnimFramesY, 1);
+                _ui.DrawText($"Total: {def.AnimTotalFrames} frames, {fw}x{fh}px each",
+                    new Vector2(fx, curY + 4), EditorBase.TextDim);
+                curY += RowH;
+            }
+        }
+
+        curY += 4;
 
         // --- Section: Collision ---
         curY = DrawSectionLabel(fx, curY, fieldW, "COLLISION");
@@ -1499,6 +1591,12 @@ public class EnvObjectEditorWindow
             SpawnOffsetX = src.SpawnOffsetX,
             SpawnOffsetY = src.SpawnOffsetY,
             TintColor = src.TintColor,
+            IsAnimated = src.IsAnimated,
+            AnimFramesX = src.AnimFramesX,
+            AnimFramesY = src.AnimFramesY,
+            AnimFPS = src.AnimFPS,
+            AnimNoise = src.AnimNoise,
+            AnimWindSync = src.AnimWindSync,
             IsForagable = src.IsForagable,
             ForagableType = src.ForagableType,
             RespawnTime = src.RespawnTime,

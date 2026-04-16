@@ -98,12 +98,33 @@ public class EnvironmentObjectDef
     // Tint color (used by color harmonizer M04)
     public HdrColor TintColor { get; set; } = new(255, 255, 255, 255, 1f);
 
+    // Animation (spritesheet) properties
+    public bool IsAnimated { get; set; }
+    public int AnimFramesX { get; set; } = 1;    // columns in spritesheet
+    public int AnimFramesY { get; set; } = 1;    // rows in spritesheet
+    public float AnimFPS { get; set; } = 10f;    // playback frame rate
+    public float AnimNoise { get; set; }         // 0-1, fraction of FPS affected by per-instance noise
+    public float AnimWindSync { get; set; } = 0.5f;  // 0-1, spatial wind coherence (0=none, 1=full)
+
     // Foragable properties
     public bool IsForagable { get; set; }
     public string ForagableType { get; set; } = "";     // resource type name (e.g., "Mushroom", "Branch")
     public float RespawnTime { get; set; } = 180f;      // seconds (default 3 minutes)
     public float ScaleMin { get; set; } = 0.8f;         // random scale variation min
     public float ScaleMax { get; set; } = 1.2f;         // random scale variation max
+
+    /// <summary>Total frame count for animated spritesheets.</summary>
+    public int AnimTotalFrames => AnimFramesX * AnimFramesY;
+
+    /// <summary>Get the source rectangle for a specific frame in the spritesheet.</summary>
+    public Rectangle GetAnimFrameRect(int texWidth, int texHeight, int frame)
+    {
+        int fw = texWidth / Math.Max(AnimFramesX, 1);
+        int fh = texHeight / Math.Max(AnimFramesY, 1);
+        int col = frame % AnimFramesX;
+        int row = frame / AnimFramesX;
+        return new Rectangle(col * fw, row * fh, fw, fh);
+    }
 
     /// <summary>
     /// Write all properties of this def to a Utf8JsonWriter.
@@ -168,6 +189,13 @@ public class EnvironmentObjectDef
         writer.WriteBoolean("autoSpawn", AutoSpawn);
         writer.WriteNumber("spawnOffsetX", SpawnOffsetX);
         writer.WriteNumber("spawnOffsetY", SpawnOffsetY);
+        // Animation
+        writer.WriteBoolean("isAnimated", IsAnimated);
+        writer.WriteNumber("animFramesX", AnimFramesX);
+        writer.WriteNumber("animFramesY", AnimFramesY);
+        writer.WriteNumber("animFPS", AnimFPS);
+        writer.WriteNumber("animNoise", AnimNoise);
+        writer.WriteNumber("animWindSync", AnimWindSync);
         // Foragable
         writer.WriteBoolean("isForagable", IsForagable);
         writer.WriteString("foragableType", ForagableType);
@@ -209,6 +237,10 @@ public struct PlacedObjectRuntime
     public float TrapStateTimer;    // time remaining in current state
     public bool TrapExpended;       // true when uses depleted (fading out)
     public float BuildProgress;    // 0 = blueprint, 1 = fully built (default 1 for non-buildable)
+    public float AnimTime;         // accumulated animation time (frames), advanced at noise-modulated rate
+    public bool AnimReversed;      // true = playing backward (weighted momentum)
+    public float AnimHoldTime;     // remaining hold time in seconds before resuming (reversal cushion)
+    public uint AnimRng;           // per-instance RNG state for reversal rolls
 
     public PlacedObjectRuntime() { HP = 0; Owner = 1; Alive = true; Collected = false; RespawnTimer = 0f; BuildProgress = 1f; }
 }
@@ -250,10 +282,24 @@ public class EnvironmentSystem
         };
         _objects.Add(obj);
         var def = _defs[defIndex];
+
+        // Derive animation start frame and RNG seed from world position for deterministic variety
+        float animStart = 0f;
+        uint animRng = 0;
+        if (def.IsAnimated && def.AnimTotalFrames > 1)
+        {
+            // Hash position into a seed
+            uint hash = (uint)(x * 73856093f) ^ (uint)(y * 19349663f);
+            hash ^= hash >> 16; hash *= 0x45d9f3b; hash ^= hash >> 16;
+            animRng = hash;
+            animStart = (hash % (uint)def.AnimTotalFrames);
+        }
+
         _objectRuntime.Add(new PlacedObjectRuntime
         {
             HP = def.BuildingMaxHP, Owner = def.BuildingDefaultOwner, Alive = true,
             TrapUsesRemaining = !string.IsNullOrEmpty(def.TrapSpellId) ? (def.TrapUses == 0 ? 0 : def.TrapUses) : -1,
+            AnimTime = animStart, AnimRng = animRng,
         });
         _processState.Add(new BuildingProcessState());
 
@@ -351,6 +397,153 @@ public class EnvironmentSystem
         }
         if (anyRespawned)
             OnCollisionsDirty?.Invoke();
+    }
+
+    /// <summary>
+    /// Advance per-instance animation timers with noise-modulated playback speed,
+    /// spatial wind sync, and weighted momentum direction changes.
+    /// Call each frame with dt and the global game time (for noise/wind evaluation).
+    /// </summary>
+    public void UpdateAnimations(float dt, float gameTime)
+    {
+        for (int i = 0; i < _objectRuntime.Count; i++)
+        {
+            var def = _defs[_objects[i].DefIndex];
+            if (!def.IsAnimated || def.AnimTotalFrames <= 1) continue;
+
+            var rt = _objectRuntime[i];
+            var obj = _objects[i];
+            int totalFrames = def.AnimTotalFrames;
+
+            // --- Speed modulation: wind sync + per-instance noise ---
+            float speed = 1f;
+            float instanceSeed = obj.X * 7.13f + obj.Y * 13.37f;
+
+            // Wind sync: gust envelope that sweeps across the map
+            if (def.AnimWindSync > 0f)
+            {
+                float gust = SampleWind(obj.X, obj.Y, gameTime, out _);
+                speed *= 1f - def.AnimWindSync * (1f - gust);
+            }
+
+            // Per-instance noise (layered sine waves, unique phase per object)
+            if (def.AnimNoise > 0f)
+            {
+                float n = 0.5f * MathF.Sin(gameTime * 0.7f + instanceSeed)
+                        + 0.3f * MathF.Sin(gameTime * 1.3f + instanceSeed * 2.1f)
+                        + 0.2f * MathF.Sin(gameTime * 2.9f + instanceSeed * 0.6f);
+                float t = (n + 1f) * 0.5f; // [0,1]
+                speed *= 1f - def.AnimNoise * (1f - t);
+            }
+
+            // Skip all animation logic when speed is effectively zero (tree frozen)
+            if (speed < 0.001f)
+            {
+                _objectRuntime[i] = rt;
+                continue;
+            }
+
+            // --- Hold: pause at reversal point for a brief cushion ---
+            // Number of frame-durations to hold (1 = one frame's worth of time, 2 = two, etc.)
+            const int ReversalHoldCount = 1;
+
+            if (rt.AnimHoldTime > 0f)
+            {
+                rt.AnimHoldTime -= dt;
+                if (rt.AnimHoldTime < 0f) rt.AnimHoldTime = 0f;
+                _objectRuntime[i] = rt;
+                continue;
+            }
+
+            // --- Advance animation time ---
+            float frameDelta = dt * def.AnimFPS * speed;
+            float prevTime = rt.AnimTime;
+
+            if (rt.AnimReversed)
+                rt.AnimTime -= frameDelta;
+            else
+                rt.AnimTime += frameDelta;
+
+            // --- Weighted momentum: consider reversal in turn zones ---
+            // Turn zone = first or last 3 frames (or 1/5 of total, whichever is smaller)
+            int turnZone = Math.Max(1, Math.Min(3, totalFrames / 5));
+            int currentFrame = ((int)rt.AnimTime % totalFrames + totalFrames) % totalFrames;
+
+            bool inTurnZone = currentFrame < turnZone || currentFrame >= totalFrames - turnZone;
+
+            // Only check reversal when we've crossed into a new frame (avoid multiple rolls per frame)
+            int prevFrame = ((int)prevTime % totalFrames + totalFrames) % totalFrames;
+            if (inTurnZone && currentFrame != prevFrame)
+            {
+                // ~25% chance to reverse per frame in turn zone.
+                // With turn zone of 3 frames, ~58% chance to pass through without reversing.
+                rt.AnimRng = XorShift(rt.AnimRng);
+                if ((rt.AnimRng % 100) < 25)
+                {
+                    rt.AnimReversed = !rt.AnimReversed;
+                    rt.AnimHoldTime = ReversalHoldCount / MathF.Max(def.AnimFPS, 0.1f);
+                }
+            }
+
+            // Clamp to valid range — bounce off ends if we overshoot
+            if (rt.AnimTime < 0f)
+            {
+                rt.AnimTime = -rt.AnimTime;
+                rt.AnimReversed = false;
+                rt.AnimHoldTime = ReversalHoldCount / MathF.Max(def.AnimFPS, 0.1f);
+            }
+            else if (rt.AnimTime >= totalFrames)
+            {
+                rt.AnimTime = totalFrames * 2f - rt.AnimTime - 1f;
+                if (rt.AnimTime < 0f) rt.AnimTime = 0f;
+                rt.AnimReversed = true;
+                rt.AnimHoldTime = ReversalHoldCount / MathF.Max(def.AnimFPS, 0.1f);
+            }
+
+            _objectRuntime[i] = rt;
+        }
+    }
+
+    /// <summary>Simple xorshift32 PRNG for per-object reversal rolls.</summary>
+    private static uint XorShift(uint state)
+    {
+        if (state == 0) state = 1;
+        state ^= state << 13;
+        state ^= state >> 17;
+        state ^= state << 5;
+        return state;
+    }
+
+    /// <summary>
+    /// Compute wind gust value and direction at a world position. Shared by animation and debug.
+    /// Returns gust intensity [0,1] and wind angle in radians.
+    /// </summary>
+    public static float SampleWind(float worldX, float worldY, float gameTime, out float windAngle)
+    {
+        // Wind direction: slow random walk
+        windAngle = 0.78f
+            + 0.30f * MathF.Sin(gameTime * 0.017f)
+            + 0.15f * MathF.Sin(gameTime * 0.0091f)
+            + 0.08f * MathF.Sin(gameTime * 0.031f);
+        float dirX = MathF.Cos(windAngle);
+        float dirY = MathF.Sin(windAngle);
+
+        // Spatial offset along wind direction — perpendicular to the wind = the gust front.
+        // Low frequency = wide bands (~15 tiles active, ~50 tiles gap)
+        float spatial = (worldX * dirX + worldY * dirY) * 0.10f;
+
+        // Warp the wavefront so it isn't perfectly straight
+        float perp = (-worldX * dirY + worldY * dirX);
+        spatial += 0.15f * MathF.Sin(perp * 0.06f + gameTime * 0.05f);
+
+        float wave = 0.6f * MathF.Sin(gameTime * 0.0625f + spatial)
+                   + 0.3f * MathF.Sin(gameTime * 0.1375f + spatial * 1.4f)
+                   + 0.1f * MathF.Sin(gameTime * 0.275f + spatial * 0.5f);
+
+        const float GustThreshold = 0.35f;
+        if (wave < GustThreshold) return 0f;
+        float gust = (wave - GustThreshold) / (1f - GustThreshold);
+        return gust * gust;
     }
 
     /// <summary>Event emitted when a trap fires a spell.</summary>
