@@ -1,9 +1,9 @@
 {
   "bloom": {
     "enabled": true,
-    "threshold": 1.0510204,
+    "threshold": 1.2908163,
     "softKnee": 0.4,
-    "intensity": 10,
+    "intensity": 11.135204,
     "scatter": 0.6,
     "iterations": 4,
     "bicubicUpsampling": true
@@ -31,12 +31,12 @@
     "minBladeWidth": true
   },
   "weather": {
-    "enabled": true,
-    "activePreset": "daylight",
+    "enabled": false,
+    "activePreset": "thunderstorm",
     "transitionSpeed": 1
   },
   "dayNight": {
-    "enabled": true,
+    "enabled": false,
     "dawnDuration": 60,
     "dayDuration": 240,
     "duskDuration": 60,
