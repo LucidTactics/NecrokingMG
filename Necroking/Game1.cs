@@ -96,6 +96,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
     private readonly List<Data.Registries.BuffDef> _wpDefsCache = new(); // reused per-unit in DrawSingleUnit
     private BloomRenderer _bloom = new();
     private WeatherRenderer _weatherRenderer = new();
+    private FogOfWarSystem _fogOfWar = new();
     private Color _ambientColor = Color.White; // weather ambient tint, applied to lit sprites before bloom
     private DayNightSystem _dayNightSystem = new();
     private LightningRenderer _lightningRenderer = new();
@@ -452,6 +453,9 @@ public class Game1 : Microsoft.Xna.Framework.Game
         _envSystem.BakeCollisions(_sim.Grid);
         LogTiming($"Baked collisions: {_envSystem.ObjectCount} objects, grid {worldW}x{worldH}");
 
+        // Fog of war
+        _fogOfWar.Init(worldW, worldH, GraphicsDevice, Content);
+
         // Spawn placed units from map data
         float center = worldW * 0.5f;
         foreach (var pu in placedUnits)
@@ -653,6 +657,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         _sim.SetEnvironmentSystem(_envSystem);
         _sim.SetWallSystem(_wallSystem);
         _sim.SetTriggerSystem(_triggerSystem);
+        _fogOfWar.Init(gridSize, gridSize, GraphicsDevice, Content);
 
         // Ensure spell bar state is initialized for HUD safety
         if (_spellBarState.Slots == null)
@@ -794,6 +799,13 @@ public class Game1 : Microsoft.Xna.Framework.Game
             _ => Faction.Undead
         };
 
+        // Initialize awareness config from UnitDef (always, regardless of archetype)
+        _sim.UnitsMut[idx].DetectionRange = unitDef.DetectionRange;
+        _sim.UnitsMut[idx].DetectionBreakRange = unitDef.DetectionBreakRange;
+        _sim.UnitsMut[idx].AlertDuration = unitDef.AlertDuration;
+        _sim.UnitsMut[idx].AlertEscalateRange = unitDef.AlertEscalateRange;
+        _sim.UnitsMut[idx].GroupAlertRadius = unitDef.GroupAlertRadius;
+
         // AI — use new archetype system if specified, otherwise legacy AI enum
         if (!string.IsNullOrEmpty(unitDef.Archetype))
         {
@@ -812,13 +824,6 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 _ => AI.ArchetypeRegistry.None
             };
             _sim.UnitsMut[idx].Archetype = archetypeId;
-
-            // Initialize awareness config from UnitDef
-            _sim.UnitsMut[idx].DetectionRange = unitDef.DetectionRange;
-            _sim.UnitsMut[idx].DetectionBreakRange = unitDef.DetectionBreakRange;
-            _sim.UnitsMut[idx].AlertDuration = unitDef.AlertDuration;
-            _sim.UnitsMut[idx].AlertEscalateRange = unitDef.AlertEscalateRange;
-            _sim.UnitsMut[idx].GroupAlertRadius = unitDef.GroupAlertRadius;
 
             // Call OnSpawn for the archetype handler
             var handler = AI.ArchetypeRegistry.Get(archetypeId);
@@ -3451,6 +3456,14 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // Set weather renderer context for this frame
         _weatherRenderer.SetContext(_spriteBatch, _pixel, _glowTex, _camera, _gameTime, _gameData, GraphicsDevice);
 
+        // Update fog of war render targets (before bloom, since this changes render targets)
+        {
+            bool fogActive = (FogOfWarMode)_gameData.Settings.FogOfWar.Mode != FogOfWarMode.Off;
+            bool editorOpen = _menuState != MenuState.None && _menuState != MenuState.MainMenu;
+            if (fogActive && !editorOpen)
+                _fogOfWar.Update(_spriteBatch, _sim.Units, _gameData.Settings.FogOfWar);
+        }
+
         // Begin bloom scene capture
         var bloomSettings = _activeScenario?.BloomOverride ?? _gameData.Settings.Bloom;
         bool useBloom = _bloom.IsInitialized && bloomSettings.Enabled;
@@ -3589,6 +3602,18 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // End bloom and composite
         if (useBloom)
             _bloom.EndScene(GraphicsDevice, _spriteBatch, bloomSettings);
+
+        // --- Fog of war overlay (after bloom, before HUD) ---
+        // Skip entirely when Off or when any editor is open
+        {
+            bool fogActive = (FogOfWarMode)_gameData.Settings.FogOfWar.Mode != FogOfWarMode.Off;
+            bool editorOpen = _menuState != MenuState.None && _menuState != MenuState.MainMenu;
+            if (fogActive && !editorOpen)
+            {
+                // Draw fog overlay (RTs already updated before bloom pass)
+                _fogOfWar.Draw(_spriteBatch, _camera, _renderer, screenW, screenH, _gameData.Settings.FogOfWar);
+            }
+        }
 
         // --- Collision debug overlay (after world, before HUD) ---
         if (_collisionDebugMode != CollisionDebugMode.Off)
@@ -4598,6 +4623,11 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
     private void DrawSingleUnit(int i)
     {
+        // Fog of war: hide non-undead units (and their buffs, which draw inside
+        // this method) when they're not currently in any undead's detection range.
+        if (_sim.Units[i].Faction != Faction.Undead && !_fogOfWar.IsVisible(_sim.Units[i].Position))
+            return;
+
         uint uid = _sim.Units[i].Id;
         if (!_unitAnims.TryGetValue(uid, out var animData)) return;
 
@@ -5035,6 +5065,8 @@ public class Game1 : Microsoft.Xna.Framework.Game
             if (!proj.Alive) continue;
             // Fireballs are drawn in the additive HDR pass (DrawProjectilesHdr)
             if (proj.Type == ProjectileType.Fireball) continue;
+            // Fog of war: hide projectile if its current tile isn't visible.
+            if (!_fogOfWar.IsVisible(proj.Position)) continue;
 
             var sp = _renderer.WorldToScreen(proj.Position, proj.Height, _camera);
 
@@ -5085,6 +5117,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         foreach (var proj in _sim.Projectiles.Projectiles)
         {
             if (!proj.Alive || proj.Type != ProjectileType.Fireball) continue;
+            if (!_fogOfWar.IsVisible(proj.Position)) continue;
             var sp = _renderer.WorldToScreen(proj.Position, proj.Height, _camera);
 
             string fbId = proj.FlipbookID;
@@ -5214,6 +5247,10 @@ public class Game1 : Microsoft.Xna.Framework.Game
         {
             float fade = 1f - dn.Timer / dnSettings.DamageNumberFadeTime;
             if (fade <= 0f) continue;
+            // Fog of war: hide damage numbers whose position is in fog. This covers
+            // the "from non-undead" case — numbers pinned to hidden enemies don't
+            // render, while numbers appearing on your own (visible) units do.
+            if (!_fogOfWar.IsVisible(dn.WorldPos)) continue;
             var sp = _renderer.WorldToScreen(dn.WorldPos, dn.Height, _camera);
             byte alpha = (byte)(255 * fade);
 

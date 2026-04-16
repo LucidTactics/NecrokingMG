@@ -1695,6 +1695,27 @@ public class UnitEditorWindow
         if (newAI != def.AI) { def.AI = newAI; _unsavedChanges = true; }
         curY += RowH;
 
+        // Vision & Awareness (base values — night/debuffs apply as multipliers at runtime)
+        float newVision = _ui.DrawFloatField("unit_vision", "Vision Range", def.DetectionRange, x, curY, w, 1f);
+        if (MathF.Abs(newVision - def.DetectionRange) > 0.01f) { def.DetectionRange = MathF.Max(0f, newVision); _unsavedChanges = true; }
+        curY += RowH;
+
+        float newBreak = _ui.DrawFloatField("unit_detbreak", "Break Range", def.DetectionBreakRange, x, curY, w, 1f);
+        if (MathF.Abs(newBreak - def.DetectionBreakRange) > 0.01f) { def.DetectionBreakRange = MathF.Max(0f, newBreak); _unsavedChanges = true; }
+        curY += RowH;
+
+        float newAlertDur = _ui.DrawFloatField("unit_alertdur", "Alert Duration", def.AlertDuration, x, curY, w, 0.1f);
+        if (MathF.Abs(newAlertDur - def.AlertDuration) > 0.01f) { def.AlertDuration = MathF.Max(0f, newAlertDur); _unsavedChanges = true; }
+        curY += RowH;
+
+        float newEscalate = _ui.DrawFloatField("unit_alertesc", "Alert Escalate", def.AlertEscalateRange, x, curY, w, 1f);
+        if (MathF.Abs(newEscalate - def.AlertEscalateRange) > 0.01f) { def.AlertEscalateRange = MathF.Max(0f, newEscalate); _unsavedChanges = true; }
+        curY += RowH;
+
+        float newGroupAlert = _ui.DrawFloatField("unit_grpalert", "Group Alert Rad", def.GroupAlertRadius, x, curY, w, 1f);
+        if (MathF.Abs(newGroupAlert - def.GroupAlertRadius) > 0.01f) { def.GroupAlertRadius = MathF.Max(0f, newGroupAlert); _unsavedChanges = true; }
+        curY += RowH;
+
         // ORCA Priority
         int newOrcaPri = _ui.DrawIntField("unit_orca", "ORCA Priority", def.OrcaPriority, x, curY, w);
         if (newOrcaPri != def.OrcaPriority) { def.OrcaPriority = newOrcaPri; _unsavedChanges = true; }

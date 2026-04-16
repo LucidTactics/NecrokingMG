@@ -2296,7 +2296,7 @@
         }
       },
       "archetype": "",
-      "detectionRange": 0,
+      "detectionRange": 30,
       "detectionBreakRange": 0,
       "alertDuration": 2,
       "alertEscalateRange": 0,

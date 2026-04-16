@@ -108,5 +108,11 @@
     "accel80Time": 3,
     "accelFullTime": 6
   },
+  "fogOfWar": {
+    "mode": 1,
+    "defaultSightRange": 10,
+    "unexploredAlpha": 1,
+    "foggedAlpha": 0.7
+  },
   "startingInventory": []
 }

@@ -18,12 +18,12 @@ public class SettingsWindow
     private GameSystems.DayNightSystem? _dayNightSystem;
 
     // Tab state
-    private enum Tab { Bloom, Shadow, Environment, Weather, General, Horde }
+    private enum Tab { Bloom, Shadow, Environment, Weather, General, Horde, FogOfWar }
     private Tab _activeTab = Tab.Bloom;
-    private static readonly string[] TabNames = { "Bloom", "Shadow", "Environment", "Weather", "General", "Horde" };
+    private static readonly string[] TabNames = { "Bloom", "Shadow", "Environ", "Weather", "General", "Horde", "Fog" };
 
     // Scroll state per tab (keyed by tab name)
-    private readonly float[] _tabScroll = new float[6];
+    private readonly float[] _tabScroll = new float[7];
 
     // Track whether we need to save after a frame (dirty flag)
     private bool _dirty;
@@ -169,6 +169,9 @@ public class SettingsWindow
                 break;
             case Tab.Horde:
                 totalContentHeight = DrawHordeTab(contentX, y, contentW);
+                break;
+            case Tab.FogOfWar:
+                totalContentHeight = DrawFogOfWarTab(contentX, y, contentW);
                 break;
             default:
                 totalContentHeight = 0;
@@ -334,6 +337,54 @@ public class SettingsWindow
         int height = SettingsHordeTab.Draw(_ui, _gameData.Settings.Horde, x, y, w);
         MarkDirty();
         return height;
+    }
+
+    // ----------------------------------------------------------------
+    //  Fog of War tab
+    // ----------------------------------------------------------------
+    private static readonly string[] FogModeNames = { "Off", "Explored", "Fog of War" };
+
+    private int DrawFogOfWarTab(int x, int y, int w)
+    {
+        int startY = y;
+        int rowH = 26;
+        var fog = _gameData.Settings.FogOfWar;
+
+        // Mode combo
+        string currentMode = fog.Mode >= 0 && fog.Mode < FogModeNames.Length ? FogModeNames[fog.Mode] : FogModeNames[0];
+        string newMode = _ui.DrawCombo("set_fog_mode", "Mode", currentMode, FogModeNames, x, y, w);
+        int newModeIdx = Array.IndexOf(FogModeNames, newMode);
+        if (newModeIdx >= 0 && newModeIdx != fog.Mode) { fog.Mode = newModeIdx; MarkDirty(); }
+        y += rowH;
+
+        y += 6;
+
+        // Default sight range (for units with 0 detectionRange)
+        float sightRange = _ui.DrawFloatField("set_fog_sight", "Default Sight", fog.DefaultSightRange, x, y, w, 1f);
+        if (MathF.Abs(sightRange - fog.DefaultSightRange) > 0.01f) { fog.DefaultSightRange = MathF.Max(1f, sightRange); MarkDirty(); }
+        y += rowH;
+
+        // Unexplored alpha
+        float unexploredA = _ui.DrawFloatField("set_fog_unexplored", "Unexplored Alpha", fog.UnexploredAlpha, x, y, w, 0.05f);
+        if (MathF.Abs(unexploredA - fog.UnexploredAlpha) > 0.001f) { fog.UnexploredAlpha = Math.Clamp(unexploredA, 0f, 1f); MarkDirty(); }
+        y += rowH;
+
+        // Fogged alpha
+        float foggedA = _ui.DrawFloatField("set_fog_fogged", "Fogged Alpha", fog.FoggedAlpha, x, y, w, 0.05f);
+        if (MathF.Abs(foggedA - fog.FoggedAlpha) > 0.001f) { fog.FoggedAlpha = Math.Clamp(foggedA, 0f, 1f); MarkDirty(); }
+        y += rowH;
+
+        y += 10;
+
+        // Info text
+        _ui.DrawText("Off: Full map vision", new Vector2(x, y), EditorBase.TextDim);
+        y += 16;
+        _ui.DrawText("Explored: Black until scouted, then permanent", new Vector2(x, y), EditorBase.TextDim);
+        y += 16;
+        _ui.DrawText("Fog of War: Unseen=black, fogged=grey, visible=full", new Vector2(x, y), EditorBase.TextDim);
+        y += 20;
+
+        return y - startY;
     }
 
     // ----------------------------------------------------------------

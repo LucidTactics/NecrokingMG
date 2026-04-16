@@ -122,6 +122,16 @@ public class StartingItem
     [JsonPropertyName("quantity")] public int Quantity { get; set; } = 1;
 }
 
+public enum FogOfWarMode { Off = 0, Explored = 1, FogOfWar = 2 }
+
+public class FogOfWarSettings
+{
+    [JsonPropertyName("mode")] public int Mode { get; set; } // 0=Off, 1=Explored, 2=FogOfWar
+    [JsonPropertyName("defaultSightRange")] public float DefaultSightRange { get; set; } = 10f; // for units with 0 detectionRange
+    [JsonPropertyName("unexploredAlpha")] public float UnexploredAlpha { get; set; } = 1.0f;    // 1.0 = fully black
+    [JsonPropertyName("foggedAlpha")] public float FoggedAlpha { get; set; } = 0.7f;            // greyed terrain visible
+}
+
 public class GameSettingsData
 {
     [JsonPropertyName("bloom")] public BloomSettings Bloom { get; set; } = new();
@@ -132,6 +142,7 @@ public class GameSettingsData
     [JsonPropertyName("shadow")] public ShadowSettings Shadow { get; set; } = new();
     [JsonPropertyName("horde")] public HordeSettings Horde { get; set; } = new();
     [JsonPropertyName("combat")] public CombatSettings Combat { get; set; } = new();
+    [JsonPropertyName("fogOfWar")] public FogOfWarSettings FogOfWar { get; set; } = new();
     [JsonPropertyName("startingInventory")] public List<StartingItem> StartingInventory { get; set; } = new();
 
     public bool Load(string path)
@@ -150,6 +161,7 @@ public class GameSettingsData
             Shadow = loaded.Shadow;
             Horde = loaded.Horde;
             Combat = loaded.Combat;
+            FogOfWar = loaded.FogOfWar;
             StartingInventory = loaded.StartingInventory;
             return true;
         }

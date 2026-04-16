@@ -84,3 +84,8 @@
 /processor:EffectProcessor
 /build:HdrSprite.fx
 
+#begin FogComposite.fx
+/importer:EffectImporter
+/processor:EffectProcessor
+/build:FogComposite.fx
+
