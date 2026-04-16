@@ -36,6 +36,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
     private SpriteFont? _largeFont;
     private ShadowRenderer _shadowRenderer = new();
     private HUDRenderer _hudRenderer = new();
+    private CharacterStatsUI _characterStatsUI = new();
 
     // Data
     private GameData _gameData = new();
@@ -1224,6 +1225,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         _debugDraw.SetFont(_smallFont);
         _hudRenderer.Init(_spriteBatch, _pixel, _font, _smallFont);
         _hudRenderer.SetInput(_input);
+        _characterStatsUI.Init(_spriteBatch, _pixel, _font, _smallFont);
 
         // Load TrueType fonts via FontStashSharp (dynamic sizing)
         _fontManager.LoadFontsFromDirectory(GamePaths.Resolve(GamePaths.FontsDir));
@@ -1486,6 +1488,10 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // 'I' key toggles inventory
         if (!anyTextInputActive && _input.WasKeyPressed(Keys.I) && _menuState == MenuState.None)
             _inventoryUI.Toggle(GraphicsDevice.Viewport.Width, GraphicsDevice.Viewport.Height);
+
+        // 'Tab' key toggles character stats
+        if (!anyTextInputActive && _input.WasKeyPressed(Keys.Tab) && _menuState == MenuState.None)
+            _characterStatsUI.Toggle();
 
         // --- Pause menu button clicks ---
         if (_menuState == MenuState.PauseMenu && _input.LeftPressed)
@@ -3670,6 +3676,10 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // Inventory UI (widget-based, drawn over HUD)
         if (showUI)
             _inventoryUI.Draw();
+
+        // Character stats panel (Tab)
+        if (showUI)
+            _characterStatsUI.Draw(screenW, screenH, _sim, _gameData.Buffs);
 
         // Building menu UI (widget-based)
         if (showUI)
