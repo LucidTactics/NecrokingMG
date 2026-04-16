@@ -745,15 +745,8 @@ public class UnitEditorWindow
 
         // --- Scroll handling ---
         var propArea = new Rectangle(x, y, w, h);
-        if (propArea.Contains(_ui._mouse.X, _ui._mouse.Y) && _activeSubEditor == SubEditor.None)
-        {
-            int scrollDelta = _ui._mouse.ScrollWheelValue - _ui._prevMouse.ScrollWheelValue;
-            if (scrollDelta != 0)
-            {
-                _propScrollOffset -= scrollDelta * 0.3f;
-                _propScrollOffset = Math.Clamp(_propScrollOffset, 0, Math.Max(0, _maxPropHeight - h + 40));
-            }
-        }
+        if (_activeSubEditor == SubEditor.None)
+            _ui.HandlePanelScroll(propArea, ref _propScrollOffset, Math.Max(0, _maxPropHeight - h + 40));
 
         int pad = 8;
         int contentW = Math.Min(w - pad * 2, 600);
@@ -2276,11 +2269,7 @@ public class UnitEditorWindow
     {
         // Handle scroll
         var area = new Rectangle(x, y, ww, h);
-        if (area.Contains(_ui._mouse.X, _ui._mouse.Y))
-        {
-            int sd = _ui._mouse.ScrollWheelValue - _ui._prevMouse.ScrollWheelValue;
-            if (sd != 0) { _groupPropScroll -= sd * 0.3f; _groupPropScroll = Math.Max(0, _groupPropScroll); }
-        }
+        _ui.HandlePanelScroll(area, ref _groupPropScroll);
 
         int curY = y + 4 - (int)_groupPropScroll;
 
@@ -2465,11 +2454,7 @@ public class UnitEditorWindow
     {
         // Handle scroll
         var area = new Rectangle(x, y, ww, h);
-        if (area.Contains(_ui._mouse.X, _ui._mouse.Y))
-        {
-            int sd = _ui._mouse.ScrollWheelValue - _ui._prevMouse.ScrollWheelValue;
-            if (sd != 0) { _subPropScroll -= sd * 0.3f; _subPropScroll = Math.Max(0, _subPropScroll); }
-        }
+        _ui.HandlePanelScroll(area, ref _subPropScroll);
 
         int curY = y + 4 - (int)_subPropScroll;
 
@@ -2626,11 +2611,7 @@ public class UnitEditorWindow
     private void DrawArmorDetail(ArmorDef a, int x, int y, int ww, int h)
     {
         var area = new Rectangle(x, y, ww, h);
-        if (area.Contains(_ui._mouse.X, _ui._mouse.Y))
-        {
-            int sd = _ui._mouse.ScrollWheelValue - _ui._prevMouse.ScrollWheelValue;
-            if (sd != 0) { _subPropScroll -= sd * 0.3f; _subPropScroll = Math.Max(0, _subPropScroll); }
-        }
+        _ui.HandlePanelScroll(area, ref _subPropScroll);
 
         int curY = y + 4 - (int)_subPropScroll;
 
@@ -2723,11 +2704,7 @@ public class UnitEditorWindow
     private void DrawShieldDetail(ShieldDef s, int x, int y, int ww, int h)
     {
         var area = new Rectangle(x, y, ww, h);
-        if (area.Contains(_ui._mouse.X, _ui._mouse.Y))
-        {
-            int sd = _ui._mouse.ScrollWheelValue - _ui._prevMouse.ScrollWheelValue;
-            if (sd != 0) { _subPropScroll -= sd * 0.3f; _subPropScroll = Math.Max(0, _subPropScroll); }
-        }
+        _ui.HandlePanelScroll(area, ref _subPropScroll);
 
         int curY = y + 4 - (int)_subPropScroll;
 

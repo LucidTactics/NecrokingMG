@@ -456,15 +456,7 @@ public class SpellEditorWindow
 
         // Scroll handling
         var panelRect = new Rectangle(x, y, w, h);
-        if (panelRect.Contains(_ui._mouse.X, _ui._mouse.Y))
-        {
-            int scrollDelta = _ui._mouse.ScrollWheelValue - _ui._prevMouse.ScrollWheelValue;
-            if (scrollDelta != 0)
-            {
-                _detailScroll -= scrollDelta * 0.4f;
-                _detailScroll = Math.Max(0, _detailScroll);
-            }
-        }
+        _ui.HandlePanelScroll(panelRect, ref _detailScroll, sensitivity: 0.4f);
 
         // Clipping background
         _ui.DrawRect(panelRect, new Color(28, 28, 42, 200));
@@ -637,15 +629,7 @@ public class SpellEditorWindow
         float maxFbScroll = Math.Max(0, totalFbH - listH);
 
         var fbListRect = new Rectangle(px, listY, listW, listH);
-        if (fbListRect.Contains(_ui._mouse.X, _ui._mouse.Y))
-        {
-            int sd = _ui._mouse.ScrollWheelValue - _ui._prevMouse.ScrollWheelValue;
-            if (sd != 0)
-            {
-                _fbManagerScroll -= sd * 0.15f;
-                _fbManagerScroll = Math.Clamp(_fbManagerScroll, 0, maxFbScroll);
-            }
-        }
+        _ui.HandlePanelScroll(fbListRect, ref _fbManagerScroll, maxFbScroll, sensitivity: 0.15f, layer: 1);
 
         float fbDrawY = listY - _fbManagerScroll;
         for (int i = 0; i < fbIDs.Count; i++)
@@ -890,15 +874,7 @@ public class SpellEditorWindow
         float maxBuffScroll = Math.Max(0, totalBuffH - listH);
 
         var buffListRect = new Rectangle(px, listY, listW, listH);
-        if (buffListRect.Contains(_ui._mouse.X, _ui._mouse.Y))
-        {
-            int sd = _ui._mouse.ScrollWheelValue - _ui._prevMouse.ScrollWheelValue;
-            if (sd != 0)
-            {
-                _buffManagerScroll -= sd * 0.15f;
-                _buffManagerScroll = Math.Clamp(_buffManagerScroll, 0, maxBuffScroll);
-            }
-        }
+        _ui.HandlePanelScroll(buffListRect, ref _buffManagerScroll, maxBuffScroll, sensitivity: 0.15f, layer: 1);
 
         float buffDrawY = listY - _buffManagerScroll;
         for (int i = 0; i < buffIDs.Count; i++)
@@ -995,15 +971,7 @@ public class SpellEditorWindow
 
         // Scroll handling for buff detail area
         var detailRect = new Rectangle(contentX, detailY, contentW, detailH);
-        if (detailRect.Contains(_ui._mouse.X, _ui._mouse.Y))
-        {
-            int sd = _ui._mouse.ScrollWheelValue - _ui._prevMouse.ScrollWheelValue;
-            if (sd != 0)
-            {
-                _buffDetailScroll -= sd * 0.4f;
-                _buffDetailScroll = Math.Max(0, _buffDetailScroll);
-            }
-        }
+        _ui.HandlePanelScroll(detailRect, ref _buffDetailScroll, sensitivity: 0.4f, layer: 1);
 
         _ui.DrawRect(detailRect, new Color(28, 28, 42, 200));
 

@@ -1795,6 +1795,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
                         else if (itemIdx - 1 < spellIDs.Count)
                             _spellBarState.Slots[_spellDropdownSlot].SpellID = spellIDs[itemIdx - 1];
                         clickedSlot = true;
+                        _input.ConsumeMouse();
                     }
                     _spellDropdownSlot = -1;
                 }
@@ -1807,6 +1808,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
                     {
                         _spellDropdownSlot = s;
                         clickedSlot = true;
+                        _input.ConsumeMouse();
                     }
                 }
 
@@ -1826,6 +1828,9 @@ public class Game1 : Microsoft.Xna.Framework.Game
                             _secondaryBarState.Slots[_secondaryDropdownSlot].SpellID = "";
                         else if (sddIdx - 1 < secSpellIDs.Count)
                             _secondaryBarState.Slots[_secondaryDropdownSlot].SpellID = secSpellIDs[sddIdx - 1];
+                        _secondaryDropdownSlot = -1;
+                        _input.ConsumeMouse();
+                        goto SkipSpellCast;
                     }
                     _secondaryDropdownSlot = -1;
                 }
@@ -1837,6 +1842,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
                     if (ss >= 0)
                     {
                         _secondaryDropdownSlot = ss;
+                        _input.ConsumeMouse();
                         goto SkipSpellCast;
                     }
                 }
@@ -1863,6 +1869,9 @@ public class Game1 : Microsoft.Xna.Framework.Game
                             var pdef = _gameData.Potions.Get(allPotionIds[pddIdx - 1]);
                             _potionSlots[_potionDropdownSlot] = pdef?.ItemID ?? "";
                         }
+                        _potionDropdownSlot = -1;
+                        _input.ConsumeMouse();
+                        goto SkipSpellCast;
                     }
                     _potionDropdownSlot = -1;
                 }
@@ -1875,6 +1884,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
                             mouse.Y >= secLayout.barY && mouse.Y < secLayout.barY + secLayout.slotH)
                         {
                             _potionDropdownSlot = ps;
+                            _input.ConsumeMouse();
                             goto SkipSpellCast;
                         }
                     }

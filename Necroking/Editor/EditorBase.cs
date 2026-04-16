@@ -55,6 +55,32 @@ public class EditorBase
     public bool IsScrollConsumed => _scrollConsumed;
     public void ConsumeScroll() => _scrollConsumed = true;
 
+    /// <summary>
+    /// Standard per-panel mouse-wheel scroll handler. Mutates <paramref name="scroll"/> in place.
+    /// Skips when input is blocked for <paramref name="layer"/>, when scroll was already consumed
+    /// this frame, or when the mouse is outside <paramref name="rect"/>. On success it marks the
+    /// scroll consumed so dropdowns/popups above don't bubble into panels below.
+    /// </summary>
+    /// <param name="rect">Hit-test rect (typically the panel's clip rect).</param>
+    /// <param name="scroll">Current scroll offset; clamped to [0, maxScroll].</param>
+    /// <param name="maxScroll">Upper bound for scroll. Pass float.MaxValue for unbounded.</param>
+    /// <param name="sensitivity">Pixels scrolled per wheel notch (default 0.3).</param>
+    /// <param name="layer">Input layer (0=main, 1=popup, 2=dropdown).</param>
+    /// <returns>true if the panel scrolled this frame.</returns>
+    public bool HandlePanelScroll(Rectangle rect, ref float scroll, float maxScroll = float.MaxValue,
+        float sensitivity = 0.3f, int layer = 0)
+    {
+        if (IsInputBlocked(layer)) return false;
+        if (_scrollConsumed) return false;
+        if (!rect.Contains(_mouse.X, _mouse.Y)) return false;
+        int delta = _mouse.ScrollWheelValue - _prevMouse.ScrollWheelValue;
+        if (delta == 0) return false;
+        scroll = Math.Clamp(scroll - delta * sensitivity, 0f, maxScroll);
+        SetMouseOverUI();
+        ConsumeScroll();
+        return true;
+    }
+
     // INF03: Global mouse-over-UI flag
     private bool _mouseOverEditorUI;
     public bool IsMouseOverUI => _mouseOverEditorUI;
@@ -142,6 +168,9 @@ public class EditorBase
     }
     private PendingDropdown? _pendingDropdown;
     private bool _dropdownOverlayConsumedClick;
+    // When a dropdown consumes a mouse press, keep input blocked through the release
+    // so release-based click detection (DrawButton) doesn't fire on widgets beneath.
+    private bool _dropdownHoldingMousePress;
 
     // Color picker popup (shared instance)
     private readonly ColorPickerPopup _colorPicker = new();
@@ -179,7 +208,13 @@ public class EditorBase
         // If a dropdown is open from last frame, pre-set input layer to block all widgets
         // This prevents widgets drawn BEFORE the combo from stealing clicks
         bool dropdownWasOpen = _activeFieldId != null && _activeFieldId.EndsWith("_combo");
-        _inputLayer = dropdownWasOpen ? 2 : 0;
+        // Clear the held-press flag once the mouse has been idle for a full frame
+        // (both current and previous state released), so the release event itself is still blocked.
+        if (_dropdownHoldingMousePress
+            && mouse.LeftButton == ButtonState.Released
+            && prevMouse.LeftButton == ButtonState.Released)
+            _dropdownHoldingMousePress = false;
+        _inputLayer = (dropdownWasOpen || _dropdownHoldingMousePress) ? 2 : 0;
         _scrollConsumed = false;
         _mouseOverEditorUI = false;
         _pendingDropdown = null;
@@ -1000,6 +1035,7 @@ public class EditorBase
                     _comboFilterText.Remove(comboId);
                     _comboHighlightIdx = -1;
                     _dropdownOverlayConsumedClick = true;
+                    _dropdownHoldingMousePress = true;
                     if (allowNone && picked == "(none)") return "";
                     return picked;
                 }
@@ -1013,6 +1049,7 @@ public class EditorBase
                 _comboFilterText.Remove(comboId);
                 _comboHighlightIdx = -1;
                 _dropdownOverlayConsumedClick = true;
+                _dropdownHoldingMousePress = true;
             }
 
             // Save layout for deferred rendering — renderer uses these exact rects

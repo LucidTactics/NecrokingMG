@@ -1157,12 +1157,7 @@ public partial class UIEditorWindow : EditorBase
 
         // Handle scroll wheel
         var clipRect = new Rectangle(x, y, w, h);
-        if (!IsColorPickerOpen && clipRect.Contains(_mouse.X, _mouse.Y))
-        {
-            int scrollDelta = _mouse.ScrollWheelValue - _prevMouse.ScrollWheelValue;
-            if (scrollDelta != 0)
-                _nsDetailScroll = Math.Max(0, _nsDetailScroll - scrollDelta * 0.3f);
-        }
+        HandlePanelScroll(clipRect, ref _nsDetailScroll);
 
         BeginClip(clipRect);
 
@@ -1450,12 +1445,7 @@ public partial class UIEditorWindow : EditorBase
 
         // Handle scroll wheel
         var clipRect = new Rectangle(x, y, w, h);
-        if (!IsColorPickerOpen && clipRect.Contains(_mouse.X, _mouse.Y))
-        {
-            int scrollDelta = _mouse.ScrollWheelValue - _prevMouse.ScrollWheelValue;
-            if (scrollDelta != 0)
-                _elemDetailScroll = Math.Max(0, _elemDetailScroll - scrollDelta * 0.3f);
-        }
+        HandlePanelScroll(clipRect, ref _elemDetailScroll);
 
         BeginClip(clipRect);
 
@@ -1949,12 +1939,7 @@ public partial class UIEditorWindow : EditorBase
 
         // Handle scroll wheel
         var clipRect = new Rectangle(x, y, w, h);
-        if (!IsColorPickerOpen && clipRect.Contains(_mouse.X, _mouse.Y))
-        {
-            int scrollDelta = _mouse.ScrollWheelValue - _prevMouse.ScrollWheelValue;
-            if (scrollDelta != 0)
-                _widgetDetailScroll = Math.Max(0, _widgetDetailScroll - scrollDelta * 0.3f);
-        }
+        HandlePanelScroll(clipRect, ref _widgetDetailScroll);
 
         BeginClip(clipRect);
 

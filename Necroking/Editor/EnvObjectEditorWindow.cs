@@ -926,17 +926,8 @@ public class EnvObjectEditorWindow
         int fx = x + Padding;
 
         // Scroll handling
-        var mouse = _ui._input.Mouse;
         var propRect = new Rectangle(x, y, w, h);
-        if (propRect.Contains(mouse.X, mouse.Y))
-        {
-            int scrollDelta = mouse.ScrollWheelValue - _ui._prevMouse.ScrollWheelValue;
-            if (scrollDelta != 0)
-            {
-                _propScrollY -= scrollDelta * 0.3f;
-                if (_propScrollY < 0) _propScrollY = 0;
-            }
-        }
+        _ui.HandlePanelScroll(propRect, ref _propScrollY);
 
         // Begin scissor clip for properties
         _ui.BeginClip(propRect);

@@ -353,15 +353,7 @@ public class ItemEditorWindow
 
         // Scroll handling
         var panelRect = new Rectangle(x, y, w, h);
-        if (panelRect.Contains(_ui._mouse.X, _ui._mouse.Y))
-        {
-            int scrollDelta = _ui._mouse.ScrollWheelValue - _ui._prevMouse.ScrollWheelValue;
-            if (scrollDelta != 0)
-            {
-                _detailScroll -= scrollDelta * 0.4f;
-                _detailScroll = Math.Max(0, _detailScroll);
-            }
-        }
+        _ui.HandlePanelScroll(panelRect, ref _detailScroll, sensitivity: 0.4f);
 
         // Clipping background
         _ui.DrawRect(panelRect, new Color(28, 28, 42, 200));
