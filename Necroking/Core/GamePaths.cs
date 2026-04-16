@@ -43,10 +43,15 @@ public static class GamePaths
     public static string MakeRelative(string absolutePath)
     {
         if (string.IsNullOrEmpty(Root) || string.IsNullOrEmpty(absolutePath)) return absolutePath;
-        string normalized = absolutePath.Replace('\\', '/');
-        string root = Root.Replace('\\', '/').TrimEnd('/') + '/';
-        if (normalized.StartsWith(root, StringComparison.OrdinalIgnoreCase))
-            return normalized.Substring(root.Length);
+        // Normalize both through GetFullPath to resolve any ../, casing, or slash inconsistencies
+        try
+        {
+            string fullAbs = Path.GetFullPath(absolutePath).Replace('\\', '/');
+            string fullRoot = Path.GetFullPath(Root).Replace('\\', '/').TrimEnd('/') + '/';
+            if (fullAbs.StartsWith(fullRoot, StringComparison.OrdinalIgnoreCase))
+                return fullAbs.Substring(fullRoot.Length);
+        }
+        catch { /* fall through on invalid paths */ }
         return absolutePath;
     }
 
