@@ -1286,7 +1286,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         _widgetRenderer.Init(GraphicsDevice, _spriteBatch, _fontManager);
         if (Directory.Exists(uiDefPath))
             _widgetRenderer.LoadDefinitions(uiDefPath);
-        _inventoryUI.Init(_widgetRenderer, _inventory, _gameData.Items);
+        _inventoryUI.Init(_widgetRenderer, _inventory, _gameData.Items, _spriteBatch, _pixel);
         _buildingMenuUI.Init(_widgetRenderer, _envSystem, _inventory, _gameData.Items,
             _graphics.PreferredBackBufferHeight, _spriteBatch, _pixel);
         _craftingMenu.Init(_widgetRenderer, _inventory, _gameData.Items, _gameData,
@@ -2391,6 +2391,10 @@ public class Game1 : Microsoft.Xna.Framework.Game
         _inventoryUI.Update(_input);
         _buildingMenuUI.Update(_input, screenW, screenH);
         _craftingMenu.Update(_input, screenW, screenH, dt);
+
+        // Cursor swap: hand when hovering interactive UI, arrow otherwise
+        bool overInteractiveUI = _input.MouseOverUI || _editorUi.IsMouseOverUI;
+        Mouse.SetCursor(overInteractiveUI ? MouseCursor.Hand : MouseCursor.Arrow);
 
         _prevKb = kb;
         _prevMouse = mouse;

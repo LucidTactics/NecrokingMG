@@ -351,7 +351,7 @@ public class BuildingMenuUI
                 var r = rects[i];
                 int hmx = (int)_lastInput.MousePos.X, hmy = (int)_lastInput.MousePos.Y;
                 if (r.Contains(hmx, hmy) && canAfford)
-                    DrawRect(r, new Color(255, 255, 255, 25));
+                    DrawRect(r, Color.White * 0.1f);
             }
 
             // Selected highlight

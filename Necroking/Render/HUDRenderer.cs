@@ -179,7 +179,7 @@ public class HUDRenderer
 
             _batch.Draw(_pixel, new Rectangle(slotX, barY, slotW, slotH), hasSpell ? filledBg : emptyBg);
             if (hovered)
-                _batch.Draw(_pixel, new Rectangle(slotX, barY, slotW, slotH), new Color(255, 255, 255, 30));
+                _batch.Draw(_pixel, new Rectangle(slotX, barY, slotW, slotH), Color.White * 0.12f);
             _batch.Draw(_pixel, new Rectangle(slotX, barY, slotW, SlotBorderHeight),
                 hovered ? new Color(220, 200, 120, 200) : border);
 
@@ -509,7 +509,7 @@ public class HUDRenderer
             Color bg = hasPotion && qty > 0 ? SecFilledBg : SecEmptyBg;
             _batch.Draw(_pixel, new Rectangle(slotX, barY, SecondarySlotW, SecondarySlotH), bg);
             if (potionHover)
-                _batch.Draw(_pixel, new Rectangle(slotX, barY, SecondarySlotW, SecondarySlotH), new Color(255, 255, 255, 30));
+                _batch.Draw(_pixel, new Rectangle(slotX, barY, SecondarySlotW, SecondarySlotH), Color.White * 0.12f);
 
             // Border — highlight if active or hovered
             Color border = isActive ? PotionActiveBorder : potionHover ? new Color(220, 200, 120, 200) : SecBorder;
