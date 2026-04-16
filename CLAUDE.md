@@ -42,6 +42,7 @@ NecrokingMG/
 - Shaders and fonts in `resources/`
 - Tools/scripts in `tools/`
 - All paths resolved via `GamePaths.Resolve()` — no DualSave, no file copying to build output
+- **Asset paths must be relative** (e.g. `assets/Environment/Trees/Oak1.png`), never absolute (e.g. `E:/Nightfall/NecrokingMG/assets/...`). This applies to JSON data files (`env_defs.json`, etc.), C# code, and editor-saved paths. `GamePaths.Resolve()` converts relative paths to absolute at runtime.
 
 ## Code Style
 - Use `Vec2` (custom type in `Core/`) for world positions, `Vector2` (MonoGame/XNA) for screen positions

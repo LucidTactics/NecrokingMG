@@ -314,7 +314,7 @@ public class TextureFileBrowser
         if (hasSelection && ui.DrawButton("Use", px + totalW - 170, footerY, 70, 24, EditorBase.AccentColor))
         {
             ui.InputLayer = savedLayer;
-            _onSelect?.Invoke(_selectedFile);
+            _onSelect?.Invoke(Necroking.Core.GamePaths.MakeRelative(_selectedFile));
             Close();
             _prevMouseState = mouse;
             return;

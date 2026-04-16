@@ -38,6 +38,18 @@ public static class GamePaths
     /// <summary>Resolve a project-relative path to an absolute path.</summary>
     public static string Resolve(string relativePath) => Path.Combine(Root, relativePath);
 
+    /// <summary>Convert an absolute path to a project-relative path (forward slashes).
+    /// Returns the original path unchanged if it's not under Root.</summary>
+    public static string MakeRelative(string absolutePath)
+    {
+        if (string.IsNullOrEmpty(Root) || string.IsNullOrEmpty(absolutePath)) return absolutePath;
+        string normalized = absolutePath.Replace('\\', '/');
+        string root = Root.Replace('\\', '/').TrimEnd('/') + '/';
+        if (normalized.StartsWith(root, StringComparison.OrdinalIgnoreCase))
+            return normalized.Substring(root.Length);
+        return absolutePath;
+    }
+
     // --- Local user settings (saved per-build, not in source data) ---
     public const string LocalSettingsDir = "bin/settings";
     public const string LocalSettingsJson = "bin/settings/settings.json";
