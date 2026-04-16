@@ -9,9 +9,13 @@ using Necroking.GameSystems;
 namespace Necroking.Render;
 
 /// <summary>
-/// Toggleable panel (Tab) showing the player necromancer's stats.
-/// Stats modified by active buffs are colored green (higher) or red (lower) vs base.
-/// Also shows a skill button list that toggles spells into the right-click slot.
+/// Toggleable panel (Tab) showing the player necromancer's stats, plus two
+/// skill panels to the right:
+///   - "Learn Skills": click to learn/unlearn. Passives apply on learn.
+///   - "Active Skills": shows learned active spells; click to bind / unbind
+///     from the primary bar's right-click slot.
+/// Stats modified by active buffs are colored green (higher) or red (lower)
+/// vs base.
 /// </summary>
 public class CharacterStatsUI
 {
@@ -29,7 +33,7 @@ public class CharacterStatsUI
 
     private enum SkillKind { ActiveSpell, PassiveGhostMode, PassiveArchmage }
 
-    // Skill list: Active skills assign to the RC slot; Passive skills toggle effects on the necromancer.
+    // Skill list: Active skills can be bound to the RC slot; Passive skills toggle effects on the necromancer.
     private static readonly (string Name, string SpellId, SkillKind Kind)[] Skills =
     {
         ("Nether Darts", "nether_darts", SkillKind.ActiveSpell),
@@ -48,16 +52,23 @@ public class CharacterStatsUI
     // Archmage passive bonuses
     private const float ArchmageMaxManaBonus = 150f;
     private const float ArchmageRegenBonus = 5f;
-    private bool _archmageActive;
 
     private const int RcSlotIndex = 3;
 
+    // Learned skills (keyed by Name). Passives apply while in this set;
+    // actives appear in the Active Skills panel while in this set.
+    private readonly HashSet<string> _learned = new();
+
     private static readonly Color SkillBtnBg = new(40, 40, 60, 220);
+    private static readonly Color SkillBtnBgLearned = new(60, 80, 100, 230);
     private static readonly Color SkillBtnBgActive = new(80, 110, 70, 240);
-    private static readonly Color SkillBtnBgHover = new(60, 60, 90, 240);
+    private static readonly Color SkillBtnBgHover = new(80, 80, 120, 240);
+    private static readonly Color SkillBtnBgDisabled = new(30, 30, 40, 180);
     private static readonly Color SkillBtnBorder = new(120, 120, 170, 240);
+    private static readonly Color SkillBtnBorderLearned = new(140, 180, 220, 240);
     private static readonly Color SkillBtnBorderActive = new(180, 230, 140, 255);
     private static readonly Color SkillBtnText = new(230, 230, 240);
+    private static readonly Color SkillBtnTextDim = new(130, 130, 150);
     private static readonly Color SkillBtnTextActive = new(230, 255, 210);
 
     private static readonly Color PanelBg = new(15, 15, 25, 230);
@@ -88,7 +99,7 @@ public class CharacterStatsUI
 
     public void Toggle() => IsVisible = !IsVisible;
 
-    /// <summary>Approximate bounds test: true if the mouse is over either the stats or skills panel.</summary>
+    /// <summary>Bounds test covering all three panels (stats + learn + active).</summary>
     public bool ContainsMouse(int screenW, int screenH, int mx, int my, Simulation sim)
     {
         if (!IsVisible) return false;
@@ -96,18 +107,34 @@ public class CharacterStatsUI
         if (necroIdx < 0 || necroIdx >= sim.Units.Count) return false;
 
         int activeBuffs = sim.Units[necroIdx].ActiveBuffs.Count;
-        int statsRowCount = 22; // matches the rows list below (keep in sync)
+        int statsRowCount = 22; // keep in sync with rows list in Draw
         int buffListH = activeBuffs > 0 ? BuffsHeaderH + activeBuffs * RowH + 6 : 0;
         int statsH = TitleH + PadY * 2 + statsRowCount * RowH + buffListH;
-        int statsX = (screenW - PanelW) / 2;
+        int statsX = (screenW - TotalWidth()) / 2;
         int statsY = (screenH - statsH) / 2;
 
         if (mx >= statsX && mx < statsX + PanelW && my >= statsY && my < statsY + statsH)
             return true;
 
-        int skillsX = statsX + PanelW + SkillsGap;
-        int skillsH = TitleH + PadY * 2 + Skills.Length * (SkillBtnH + SkillBtnGap) - SkillBtnGap;
-        return mx >= skillsX && mx < skillsX + SkillsPanelW && my >= statsY && my < statsY + skillsH;
+        int learnX = statsX + PanelW + SkillsGap;
+        int learnH = LearnPanelHeight();
+        if (mx >= learnX && mx < learnX + SkillsPanelW && my >= statsY && my < statsY + learnH)
+            return true;
+
+        int activeX = learnX + SkillsPanelW + SkillsGap;
+        int activeH = ActivePanelHeight();
+        return mx >= activeX && mx < activeX + SkillsPanelW && my >= statsY && my < statsY + activeH;
+    }
+
+    private static int TotalWidth() => PanelW + SkillsGap + SkillsPanelW + SkillsGap + SkillsPanelW;
+    private static int LearnPanelHeight() => TitleH + PadY * 2 + Skills.Length * (SkillBtnH + SkillBtnGap) - SkillBtnGap;
+    private int ActivePanelHeight()
+    {
+        int count = 0;
+        foreach (var sk in Skills)
+            if (sk.Kind == SkillKind.ActiveSpell && _learned.Contains(sk.Name)) count++;
+        int rows = System.Math.Max(count, 1); // always have at least title + hint space
+        return TitleH + PadY * 2 + rows * (SkillBtnH + SkillBtnGap) - SkillBtnGap;
     }
 
     private readonly struct Row
@@ -115,7 +142,7 @@ public class CharacterStatsUI
         public readonly string Label;
         public readonly string Value;
         public readonly Color Color;
-        public readonly string? BaseSuffix; // e.g. "(base 10)"
+        public readonly string? BaseSuffix;
         public readonly bool IsSection;
 
         public Row(string label, string value, Color color, string? baseSuffix = null, bool isSection = false)
@@ -176,15 +203,14 @@ public class CharacterStatsUI
         int activeBuffCount = unit.ActiveBuffs.Count;
         int buffListH = activeBuffCount > 0 ? BuffsHeaderH + activeBuffCount * RowH + 6 : 0;
 
-        int panelH = TitleH + PadY * 2 + rows.Count * RowH + buffListH;
-        int panelX = (screenW - PanelW) / 2;
-        int panelY = (screenH - panelH) / 2;
+        int statsH = TitleH + PadY * 2 + rows.Count * RowH + buffListH;
+        int totalW = TotalWidth();
+        int panelX = (screenW - totalW) / 2;
+        int panelY = (screenH - statsH) / 2;
 
-        _batch.Draw(_pixel, new Rectangle(panelX, panelY, PanelW, panelH), PanelBg);
-        _batch.Draw(_pixel, new Rectangle(panelX, panelY, PanelW, 2), PanelBorder);
-        _batch.Draw(_pixel, new Rectangle(panelX, panelY + panelH - 2, PanelW, 2), PanelBorder);
-        _batch.Draw(_pixel, new Rectangle(panelX, panelY, 2, panelH), PanelBorder);
-        _batch.Draw(_pixel, new Rectangle(panelX + PanelW - 2, panelY, 2, panelH), PanelBorder);
+        // Stats panel background + border
+        _batch.Draw(_pixel, new Rectangle(panelX, panelY, PanelW, statsH), PanelBg);
+        DrawBorder(panelX, panelY, PanelW, statsH, PanelBorder);
 
         string title = "Character Stats";
         var titleSize = _font.MeasureString(title);
@@ -203,8 +229,6 @@ public class CharacterStatsUI
             else if (!string.IsNullOrEmpty(r.Label))
             {
                 _batch.DrawString(rowFont, r.Label, new Vector2(panelX + PadX, y), LabelColor);
-
-                // Draw value right-aligned, then optional dim base suffix to the left of it.
                 var valSize = rowFont.MeasureString(r.Value);
                 int valX = (int)(panelX + PanelW - PadX - valSize.X);
                 _batch.DrawString(rowFont, r.Value, new Vector2(valX, y), r.Color);
@@ -239,59 +263,52 @@ public class CharacterStatsUI
             }
         }
 
-        DrawSkillsPanel(panelX + PanelW + SkillsGap, panelY, rowFont, ref primaryBar, input, sim, necroIdx);
+        int learnX = panelX + PanelW + SkillsGap;
+        DrawLearnPanel(learnX, panelY, rowFont, input, sim, necroIdx, ref primaryBar);
+
+        int activeX = learnX + SkillsPanelW + SkillsGap;
+        DrawActivePanel(activeX, panelY, rowFont, input, ref primaryBar);
     }
 
-    private void DrawSkillsPanel(int px, int py, SpriteFont rowFont,
-        ref SpellBarState primaryBar, InputState input, Simulation sim, int necroIdx)
+    private void DrawBorder(int x, int y, int w, int h, Color c)
     {
-        int panelH = TitleH + PadY * 2 + Skills.Length * (SkillBtnH + SkillBtnGap) - SkillBtnGap;
+        _batch.Draw(_pixel, new Rectangle(x, y, w, 2), c);
+        _batch.Draw(_pixel, new Rectangle(x, y + h - 2, w, 2), c);
+        _batch.Draw(_pixel, new Rectangle(x, y, 2, h), c);
+        _batch.Draw(_pixel, new Rectangle(x + w - 2, y, 2, h), c);
+    }
+
+    private void DrawLearnPanel(int px, int py, SpriteFont rowFont, InputState input,
+        Simulation sim, int necroIdx, ref SpellBarState primaryBar)
+    {
+        int panelH = LearnPanelHeight();
 
         _batch.Draw(_pixel, new Rectangle(px, py, SkillsPanelW, panelH), PanelBg);
-        _batch.Draw(_pixel, new Rectangle(px, py, SkillsPanelW, 2), PanelBorder);
-        _batch.Draw(_pixel, new Rectangle(px, py + panelH - 2, SkillsPanelW, 2), PanelBorder);
-        _batch.Draw(_pixel, new Rectangle(px, py, 2, panelH), PanelBorder);
-        _batch.Draw(_pixel, new Rectangle(px + SkillsPanelW - 2, py, 2, panelH), PanelBorder);
+        DrawBorder(px, py, SkillsPanelW, panelH, PanelBorder);
 
-        string title = "Skills (RC)";
+        string title = "Learn Skills";
         var titleSize = _font!.MeasureString(title);
         _batch.DrawString(_font, title,
             new Vector2((int)(px + (SkillsPanelW - titleSize.X) / 2), (int)(py + 4)),
             TitleColor);
 
-        string activeId = primaryBar.Slots != null && primaryBar.Slots.Length > RcSlotIndex
-            ? (primaryBar.Slots[RcSlotIndex].SpellID ?? "") : "";
-
         int mx = (int)input.MousePos.X;
         int my = (int)input.MousePos.Y;
-        bool hoveredAny = false;
 
         int btnY = py + TitleH + PadY;
         for (int i = 0; i < Skills.Length; i++)
         {
-            int btnX = px + PadX;
-            int btnW = SkillsPanelW - PadX * 2;
-            var rect = new Rectangle(btnX, btnY, btnW, SkillBtnH);
-
-            bool active = Skills[i].Kind switch
-            {
-                SkillKind.ActiveSpell => Skills[i].SpellId == activeId,
-                SkillKind.PassiveGhostMode => sim.Units[necroIdx].GhostMode,
-                SkillKind.PassiveArchmage => _archmageActive,
-                _ => false,
-            };
+            var rect = new Rectangle(px + PadX, btnY, SkillsPanelW - PadX * 2, SkillBtnH);
+            bool learned = _learned.Contains(Skills[i].Name);
             bool hovered = rect.Contains(mx, my);
-            if (hovered) hoveredAny = true;
 
-            Color bg = active ? SkillBtnBgActive : (hovered ? SkillBtnBgHover : SkillBtnBg);
-            Color border = active ? SkillBtnBorderActive : SkillBtnBorder;
-            Color textColor = active ? SkillBtnTextActive : SkillBtnText;
+            Color bg = hovered ? SkillBtnBgHover
+                : (learned ? SkillBtnBgLearned : SkillBtnBg);
+            Color border = learned ? SkillBtnBorderLearned : SkillBtnBorder;
+            Color textColor = learned ? SkillBtnText : SkillBtnTextDim;
 
             _batch.Draw(_pixel, rect, bg);
-            _batch.Draw(_pixel, new Rectangle(rect.X, rect.Y, rect.Width, 1), border);
-            _batch.Draw(_pixel, new Rectangle(rect.X, rect.Bottom - 1, rect.Width, 1), border);
-            _batch.Draw(_pixel, new Rectangle(rect.X, rect.Y, 1, rect.Height), border);
-            _batch.Draw(_pixel, new Rectangle(rect.Right - 1, rect.Y, 1, rect.Height), border);
+            DrawBorder(rect.X, rect.Y, rect.Width, rect.Height, border);
 
             var tSize = rowFont.MeasureString(Skills[i].Name);
             _batch.DrawString(rowFont, Skills[i].Name,
@@ -301,47 +318,110 @@ public class CharacterStatsUI
 
             if (hovered && input.LeftPressed && !input.IsMouseConsumed)
             {
-                switch (Skills[i].Kind)
-                {
-                    case SkillKind.ActiveSpell:
-                        if (primaryBar.Slots != null && primaryBar.Slots.Length > RcSlotIndex)
-                        {
-                            primaryBar.Slots[RcSlotIndex].SpellID = active ? "" : Skills[i].SpellId;
-                            input.ConsumeMouse();
-                        }
-                        break;
-                    case SkillKind.PassiveGhostMode:
-                        sim.UnitsMut[necroIdx].GhostMode = !active;
-                        input.ConsumeMouse();
-                        break;
-                    case SkillKind.PassiveArchmage:
-                        ToggleArchmage(sim, !active);
-                        input.ConsumeMouse();
-                        break;
-                }
+                bool wantLearn = !learned;
+                SetLearned(Skills[i], wantLearn, sim, necroIdx, ref primaryBar);
+                input.ConsumeMouse();
+            }
+
+            btnY += SkillBtnH + SkillBtnGap;
+        }
+    }
+
+    private void DrawActivePanel(int px, int py, SpriteFont rowFont, InputState input,
+        ref SpellBarState primaryBar)
+    {
+        int panelH = ActivePanelHeight();
+
+        _batch.Draw(_pixel, new Rectangle(px, py, SkillsPanelW, panelH), PanelBg);
+        DrawBorder(px, py, SkillsPanelW, panelH, PanelBorder);
+
+        string title = "Active Skills (RC)";
+        var titleSize = _font!.MeasureString(title);
+        _batch.DrawString(_font, title,
+            new Vector2((int)(px + (SkillsPanelW - titleSize.X) / 2), (int)(py + 4)),
+            TitleColor);
+
+        string boundId = primaryBar.Slots != null && primaryBar.Slots.Length > RcSlotIndex
+            ? (primaryBar.Slots[RcSlotIndex].SpellID ?? "") : "";
+
+        int mx = (int)input.MousePos.X;
+        int my = (int)input.MousePos.Y;
+
+        int btnY = py + TitleH + PadY;
+        int learnedActiveCount = 0;
+        for (int i = 0; i < Skills.Length; i++)
+        {
+            if (Skills[i].Kind != SkillKind.ActiveSpell) continue;
+            if (!_learned.Contains(Skills[i].Name)) continue;
+
+            learnedActiveCount++;
+            var rect = new Rectangle(px + PadX, btnY, SkillsPanelW - PadX * 2, SkillBtnH);
+            bool bound = Skills[i].SpellId == boundId;
+            bool hovered = rect.Contains(mx, my);
+
+            Color bg = bound ? SkillBtnBgActive : (hovered ? SkillBtnBgHover : SkillBtnBg);
+            Color border = bound ? SkillBtnBorderActive : SkillBtnBorder;
+            Color textColor = bound ? SkillBtnTextActive : SkillBtnText;
+
+            _batch.Draw(_pixel, rect, bg);
+            DrawBorder(rect.X, rect.Y, rect.Width, rect.Height, border);
+
+            var tSize = rowFont.MeasureString(Skills[i].Name);
+            _batch.DrawString(rowFont, Skills[i].Name,
+                new Vector2((int)(rect.X + (rect.Width - tSize.X) / 2),
+                           (int)(rect.Y + (rect.Height - tSize.Y) / 2)),
+                textColor);
+
+            if (hovered && input.LeftPressed && !input.IsMouseConsumed
+                && primaryBar.Slots != null && primaryBar.Slots.Length > RcSlotIndex)
+            {
+                primaryBar.Slots[RcSlotIndex].SpellID = bound ? "" : Skills[i].SpellId;
+                input.ConsumeMouse();
             }
 
             btnY += SkillBtnH + SkillBtnGap;
         }
 
-        if (hoveredAny) input.MouseOverUI = true;
+        if (learnedActiveCount == 0)
+        {
+            string hint = "(learn skills to populate)";
+            var hSize = rowFont.MeasureString(hint);
+            _batch.DrawString(rowFont, hint,
+                new Vector2((int)(px + (SkillsPanelW - hSize.X) / 2), btnY + 4),
+                SkillBtnTextDim);
+        }
     }
 
-    private Row MakeBuffedRow(string label, int baseVal, Simulation sim, int unitIdx, BuffStat stat)
+    private void SetLearned((string Name, string SpellId, SkillKind Kind) skill, bool learn,
+        Simulation sim, int necroIdx, ref SpellBarState primaryBar)
     {
-        float buffed = BuffSystem.GetModifiedStat(sim.UnitsMut, unitIdx, stat, baseVal);
-        int buffedI = (int)System.MathF.Round(buffed);
-        bool differs = buffedI != baseVal;
-        Color color = !differs ? ValueColor
-            : (buffedI > baseVal ? BuffedUpColor : BuffedDownColor);
-        string value = buffedI.ToString();
-        string? baseSuffix = differs ? $"(base {baseVal})" : null;
-        return new Row(label, value, color, baseSuffix);
+        bool wasLearned = _learned.Contains(skill.Name);
+        if (wasLearned == learn) return;
+
+        if (learn) _learned.Add(skill.Name);
+        else _learned.Remove(skill.Name);
+
+        switch (skill.Kind)
+        {
+            case SkillKind.ActiveSpell:
+                // Unlearning clears the RC slot if bound.
+                if (!learn && primaryBar.Slots != null && primaryBar.Slots.Length > RcSlotIndex
+                    && primaryBar.Slots[RcSlotIndex].SpellID == skill.SpellId)
+                {
+                    primaryBar.Slots[RcSlotIndex].SpellID = "";
+                }
+                break;
+            case SkillKind.PassiveGhostMode:
+                sim.UnitsMut[necroIdx].GhostMode = learn;
+                break;
+            case SkillKind.PassiveArchmage:
+                ApplyArchmage(sim, learn);
+                break;
+        }
     }
 
-    private void ToggleArchmage(Simulation sim, bool enable)
+    private void ApplyArchmage(Simulation sim, bool enable)
     {
-        if (enable == _archmageActive) return;
         var necro = sim.NecroState;
         if (enable)
         {
@@ -356,7 +436,18 @@ public class CharacterStatsUI
             if (necro.Mana > necro.MaxMana) necro.Mana = necro.MaxMana;
             if (necro.Mana < 0f) necro.Mana = 0f;
         }
-        _archmageActive = enable;
+    }
+
+    private Row MakeBuffedRow(string label, int baseVal, Simulation sim, int unitIdx, BuffStat stat)
+    {
+        float buffed = BuffSystem.GetModifiedStat(sim.UnitsMut, unitIdx, stat, baseVal);
+        int buffedI = (int)System.MathF.Round(buffed);
+        bool differs = buffedI != baseVal;
+        Color color = !differs ? ValueColor
+            : (buffedI > baseVal ? BuffedUpColor : BuffedDownColor);
+        string value = buffedI.ToString();
+        string? baseSuffix = differs ? $"(base {baseVal})" : null;
+        return new Row(label, value, color, baseSuffix);
     }
 
     private Row MakeBuffedRowF(string label, float baseVal, Simulation sim, int unitIdx, BuffStat stat)
