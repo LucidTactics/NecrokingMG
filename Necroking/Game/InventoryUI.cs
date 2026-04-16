@@ -31,6 +31,9 @@ public class InventoryUI
     private RuntimeWidgetRenderer _renderer;
     private Inventory _inventory;
     private ItemRegistry _items;
+    private SpriteBatch? _batch;
+    private Texture2D? _pixel;
+    private InputState? _lastInput;
 
     private bool _visible;
     private int _screenX, _screenY;
@@ -50,11 +53,14 @@ public class InventoryUI
     public RuntimeWidgetRenderer Renderer => _renderer;
     public int[] SlotChildIndices => _slotChildIndices;
 
-    public void Init(RuntimeWidgetRenderer renderer, Inventory inventory, ItemRegistry items)
+    public void Init(RuntimeWidgetRenderer renderer, Inventory inventory, ItemRegistry items,
+        SpriteBatch? batch = null, Texture2D? pixel = null)
     {
         _renderer = renderer;
         _inventory = inventory;
         _items = items;
+        _batch = batch;
+        _pixel = pixel;
 
         var def = renderer.GetWidgetDef(WidgetId);
         if (def == null) return;
@@ -134,6 +140,7 @@ public class InventoryUI
     /// <summary>Sync inventory state to widget visual overrides. Call before Draw.</summary>
     public void Update(InputState input)
     {
+        _lastInput = input;
         if (!_visible) return;
 
         int mx = (int)input.MousePos.X, my = (int)input.MousePos.Y;
@@ -198,6 +205,25 @@ public class InventoryUI
     {
         if (!_visible) return;
         _renderer.DrawWidget(WidgetId, _screenX, _screenY, InstanceId);
+
+        // Slot hover highlight
+        if (_batch == null || _pixel == null || _lastInput == null) return;
+        var def = _renderer.GetWidgetDef(WidgetId);
+        if (def == null) return;
+
+        var rects = Necroking.UI.WidgetLayoutUtils.ComputeLayoutRects(def, _screenX, _screenY);
+        int mx = (int)_lastInput.MousePos.X, my = (int)_lastInput.MousePos.Y;
+        for (int i = 0; i < _slotChildIndices.Length; i++)
+        {
+            int ci = _slotChildIndices[i];
+            if (ci < 0 || ci >= rects.Count) continue;
+            var r = rects[ci];
+            if (r.Contains(mx, my))
+            {
+                _batch.Draw(_pixel, r, Color.White * 0.1f);
+                break;
+            }
+        }
     }
 
     /// <summary>Check if mouse is over the inventory window (for blocking game input).</summary>

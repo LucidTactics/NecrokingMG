@@ -312,7 +312,7 @@ public class CraftingMenuUI
             {
                 int hmx = (int)_lastInput.MousePos.X, hmy = (int)_lastInput.MousePos.Y;
                 if (rects[i].Contains(hmx, hmy) && canAfford)
-                    _batch.Draw(_pixel, rects[i], new Color(255, 255, 255, 25));
+                    _batch.Draw(_pixel, rects[i], Color.White * 0.1f);
             }
 
             if (isSelected)
