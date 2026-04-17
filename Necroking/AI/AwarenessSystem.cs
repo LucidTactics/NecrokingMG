@@ -51,6 +51,7 @@ public static class AwarenessSystem
                         units[i].AlertState = (byte)UnitAlertState.Alert;
                         units[i].AlertTimer = 0f;
                         units[i].AlertTarget = units[threatIdx].Id;
+                        units[i].ShowStatusSymbol(UnitStatusSymbol.Notice, 1.5f);
 
                         // Group propagation
                         float groupRadius = units[i].GroupAlertRadius;
@@ -172,6 +173,7 @@ public static class AwarenessSystem
                 units[j].AlertState = (byte)UnitAlertState.Alert;
                 units[j].AlertTimer = 0f;
                 units[j].AlertTarget = units[threatIdx].Id;
+                units[j].ShowStatusSymbol(UnitStatusSymbol.Notice, 1.5f);
             }
         }
     }

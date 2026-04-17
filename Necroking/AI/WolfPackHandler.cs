@@ -106,6 +106,7 @@ public class WolfPackHandler : IArchetypeHandler
                 ctx.Routine = RoutineFighting;
                 ctx.Subroutine = FightMoveToEngage;
                 ctx.SubroutineTimer = 0f;
+                ctx.Units[ctx.UnitIndex].ShowStatusSymbol(UnitStatusSymbol.React, 1.5f);
                 return;
             }
             else
@@ -149,6 +150,7 @@ public class WolfPackHandler : IArchetypeHandler
                 ctx.Routine = RoutineFighting;
                 ctx.Subroutine = FightMoveToEngage;
                 ctx.SubroutineTimer = 0f;
+                ctx.Units[ctx.UnitIndex].ShowStatusSymbol(UnitStatusSymbol.React, 1.5f);
                 return;
             }
         }
@@ -251,6 +253,7 @@ public class WolfPackHandler : IArchetypeHandler
                             ctx.Routine = RoutineFighting;
                             ctx.Subroutine = FightMoveToEngage;
                             ctx.SubroutineTimer = 0f;
+                            ctx.Units[ctx.UnitIndex].ShowStatusSymbol(UnitStatusSymbol.React, 1.5f);
                         }
                         else
                             SwitchToTimeOfDayRoutine(ref ctx);

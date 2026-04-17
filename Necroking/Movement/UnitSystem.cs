@@ -34,6 +34,25 @@ public struct IncapState
     public readonly bool IsLocked => Active || Recovering;
 }
 
+public enum UnitStatusSymbol : byte
+{
+    None = 0,
+    Notice = 1,  // "?" — unit has spotted a threat (e.g. deer freezes and watches)
+    React = 2,   // "!" — unit is reacting (fleeing, charging, fighting back)
+}
+
+public static class UnitStatusSymbolExt
+{
+    /// <summary>Show a status symbol above the unit. Higher priority symbols (React &gt; Notice)
+    /// don't get downgraded; duration is refreshed to the max of current vs new.</summary>
+    public static void ShowStatusSymbol(this Unit u, UnitStatusSymbol sym, float duration)
+    {
+        if ((byte)sym < u.StatusSymbol) return;
+        u.StatusSymbol = (byte)sym;
+        if (duration > u.StatusSymbolTimer) u.StatusSymbolTimer = duration;
+    }
+}
+
 public class Unit
 {
     // Hot path
@@ -173,6 +192,10 @@ public class Unit
     public float AlertDuration = 2f;
     public float AlertEscalateRange;
     public float GroupAlertRadius;
+
+    // Status symbol above head (? for notice, ! for react). Ticked down by Simulation.
+    public byte StatusSymbol;        // 0=none, 1=Notice (?), 2=React (!)
+    public float StatusSymbolTimer;  // Seconds remaining before symbol clears
 
     // Potion effects
     public int PoisonStacks;

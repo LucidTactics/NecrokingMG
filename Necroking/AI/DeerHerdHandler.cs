@@ -148,6 +148,7 @@ public class DeerHerdHandler : IArchetypeHandler
             ctx.Subroutine = 0;
             ctx.SubroutineTimer = MinFleeDuration; // Minimum flee time before calming allowed
             ctx.AlertState = (byte)UnitAlertState.Alert;
+            ctx.Units[ctx.UnitIndex].ShowStatusSymbol(UnitStatusSymbol.React, 1.5f);
             return;
         }
 
@@ -220,6 +221,7 @@ public class DeerHerdHandler : IArchetypeHandler
                 ctx.Subroutine = FightStance;
                 ctx.SubroutineTimer = 0f;
                 ctx.Units[ctx.UnitIndex].Target = CombatTarget.Unit(ctx.AlertTarget);
+                ctx.Units[ctx.UnitIndex].ShowStatusSymbol(UnitStatusSymbol.React, 1.5f);
                 return;
             }
         }
@@ -429,6 +431,7 @@ public class DeerHerdHandler : IArchetypeHandler
                     ctx.Routine = RoutineFleeing;
                     ctx.Subroutine = 0;
                     ctx.SubroutineTimer = 0f;
+                    ctx.Units[ctx.UnitIndex].ShowStatusSymbol(UnitStatusSymbol.React, 1.5f);
                     // Propagate flee to nearby herd
                     PropagateFleeToHerd(ref ctx);
                     return;
@@ -460,6 +463,7 @@ public class DeerHerdHandler : IArchetypeHandler
             ctx.Units[j].SubroutineTimer = 0f;
             ctx.Units[j].AlertTarget = ctx.AlertTarget;
             ctx.Units[j].AlertState = (byte)UnitAlertState.Aggressive;
+            ctx.Units[j].ShowStatusSymbol(UnitStatusSymbol.React, 1.5f);
         }
     }
 

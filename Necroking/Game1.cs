@@ -4816,6 +4816,29 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
         DrawHPBar(i, sp);
 
+        // --- Status symbol (? / !) above head during notice/react events ---
+        if (_sim.Units[i].StatusSymbol != 0 && _largeFont != null)
+        {
+            string sym = _sim.Units[i].StatusSymbol == (byte)UnitStatusSymbol.Notice ? "?" : "!";
+            Color symColor = _sim.Units[i].StatusSymbol == (byte)UnitStatusSymbol.Notice
+                ? Color.FromNonPremultiplied(255, 240, 80, 255)   // yellow ?
+                : Color.FromNonPremultiplied(255, 80, 60, 255);   // red !
+            Color outline = Color.FromNonPremultiplied(0, 0, 0, 255);
+            var textSize = _largeFont.MeasureString(sym);
+            int symX = (int)(sp.X - textSize.X * 0.5f);
+            int symY = (int)(sp.Y - 80);
+
+            // Black outline (8-way offset) for contrast and bolder look
+            for (int ox = -2; ox <= 2; ox++)
+                for (int oy = -2; oy <= 2; oy++)
+                    if ((ox != 0 || oy != 0) && ox * ox + oy * oy <= 4)
+                        DrawText(_largeFont, sym, new Vector2(symX + ox, symY + oy), outline);
+
+            // Faux-bold: draw colored fill twice with 1px horizontal offset
+            DrawText(_largeFont, sym, new Vector2(symX, symY), symColor);
+            DrawText(_largeFont, sym, new Vector2(symX + 1, symY), symColor);
+        }
+
         // --- Feature 1: Weapon point text during attack ---
         if (!_sim.Units[i].PendingAttack.IsNone)
         {

@@ -835,6 +835,7 @@ public class Simulation
                             _units[i].FleeTimer = 5f;
                             Disengage(i);
                             _units[i].EngagedTarget = CombatTarget.None;
+                            _units[i].ShowStatusSymbol(UnitStatusSymbol.React, 1.5f);
                         }
                     }
                     else if (_units[i].QueuedAction == QueuedUnitAction.Flee
@@ -846,6 +847,7 @@ public class Simulation
                         _units[i].FleeTimer = 5f;
                         Disengage(i);
                         _units[i].EngagedTarget = CombatTarget.None;
+                        _units[i].ShowStatusSymbol(UnitStatusSymbol.React, 1.5f);
                     }
                     else
                     {
@@ -867,6 +869,8 @@ public class Simulation
                                 _units[i].Target = CombatTarget.Unit(_units[i].LastAttackerID);
                             else
                                 _units[i].Target = FindBestEnemyTarget(i);
+                            if (_units[i].Target.IsUnit)
+                                _units[i].ShowStatusSymbol(UnitStatusSymbol.React, 1.5f);
                         }
 
                         if (_units[i].Target.IsUnit)
@@ -1410,6 +1414,17 @@ public class Simulation
         {
             if (_units[i].PostAttackTimer > 0f)
                 _units[i].PostAttackTimer = MathF.Max(0f, _units[i].PostAttackTimer - dt);
+
+            // Status symbol (? / !) above head
+            if (_units[i].StatusSymbolTimer > 0f)
+            {
+                _units[i].StatusSymbolTimer -= dt;
+                if (_units[i].StatusSymbolTimer <= 0f)
+                {
+                    _units[i].StatusSymbolTimer = 0f;
+                    _units[i].StatusSymbol = 0;
+                }
+            }
         }
 
         // Derive InCombat from EngagedTarget + range (read-only flag for AI/animation)
