@@ -4740,6 +4740,8 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
         float heightOffset = _sim.Units[i].JumpHeight + _sim.Units[i].Z;
         var sp = _renderer.WorldToScreen(_sim.Units[i].Position, heightOffset, _camera);
+        // For drawing above unit.
+        var sp_upper = _renderer.WorldToScreen(_sim.Units[i].Position, heightOffset + _sim.Units[i].CollisionHeight, _camera);
 
         // Compute weapon attachment for weapon particle buff visuals
         var weaponAttach = ComputeWeaponAttach(i, unitDef, animData);
@@ -4825,8 +4827,8 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 : Color.FromNonPremultiplied(255, 80, 60, 255);   // red !
             Color outline = Color.FromNonPremultiplied(0, 0, 0, 255);
             var textSize = _largeFont.MeasureString(sym);
-            int symX = (int)(sp.X - textSize.X * 0.5f);
-            int symY = (int)(sp.Y - 80);
+            int symX = (int)(sp_upper.X - textSize.X * 0.5f);
+            int symY = (int)(sp_upper.Y - textSize.Y - 5);
 
             // Black outline (8-way offset) for contrast and bolder look
             for (int ox = -2; ox <= 2; ox++)
