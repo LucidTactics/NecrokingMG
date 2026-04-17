@@ -2584,7 +2584,7 @@
       "orcaPriority": 0,
       "size": 2,
       "radius": 0.5,
-      "spriteScale": 1.5,
+      "spriteScale": 1.7,
       "spriteWorldHeight": 1.8,
       "color": null,
       "sprite": {
@@ -2635,7 +2635,7 @@
       "orcaPriority": 0,
       "size": 2,
       "radius": 0.495,
-      "spriteScale": 1.5,
+      "spriteScale": 1.7,
       "spriteWorldHeight": 1.8,
       "color": null,
       "sprite": {
@@ -2686,7 +2686,7 @@
       "orcaPriority": 0,
       "size": 2,
       "radius": 0.495,
-      "spriteScale": 1.5,
+      "spriteScale": 1.7,
       "spriteWorldHeight": 1.8,
       "color": null,
       "sprite": {
@@ -2742,7 +2742,7 @@
       "orcaPriority": 0,
       "size": 2,
       "radius": 0.5,
-      "spriteScale": 1.2,
+      "spriteScale": 1.5,
       "spriteWorldHeight": 1.8,
       "color": null,
       "sprite": {
@@ -2910,7 +2910,7 @@
       "orcaPriority": 0,
       "size": 2,
       "radius": 0.5,
-      "spriteScale": 1.2,
+      "spriteScale": 1.5,
       "spriteWorldHeight": 1.8,
       "color": null,
       "sprite": {
@@ -2962,7 +2962,7 @@
       "orcaPriority": 0,
       "size": 2,
       "radius": 0.5,
-      "spriteScale": 1.2,
+      "spriteScale": 1.5,
       "spriteWorldHeight": 1.8,
       "color": null,
       "sprite": {

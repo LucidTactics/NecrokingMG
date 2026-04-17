@@ -3528,7 +3528,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
             bool fogActive = (FogOfWarMode)_gameData.Settings.FogOfWar.Mode != FogOfWarMode.Off;
             bool editorOpen = _menuState != MenuState.None && _menuState != MenuState.MainMenu;
             if (fogActive && !editorOpen)
-                _fogOfWar.Update(_spriteBatch, _sim.Units, _gameData.Settings.FogOfWar);
+                _fogOfWar.Update(_spriteBatch, _sim.Units, _gameData.Settings.FogOfWar, _rawDt);
         }
 
         // Begin bloom scene capture
@@ -3582,7 +3582,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // Grass is no longer drawn here — tufts are merged into the unit Y-sort
         // inside DrawUnitsAndObjects so they can render in front of / behind
         // units based on world Y.
-        _shadowRenderer.Draw(GraphicsDevice, _spriteBatch, _glowTex, _camera, _renderer, _sim, _gameData, _unitAnims, _atlases, _envSystem);
+        _shadowRenderer.Draw(GraphicsDevice, _spriteBatch, _glowTex, _camera, _renderer, _sim, _gameData, _unitAnims, _atlases, _envSystem, _fogOfWar);
 
         // --- Corpses ---
         DrawCorpses();

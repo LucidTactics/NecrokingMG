@@ -109,7 +109,7 @@
     "accelFullTime": 6
   },
   "fogOfWar": {
-    "mode": 2,
+    "mode": 0,
     "defaultSightRange": 10,
     "unexploredAlpha": 1,
     "foggedAlpha": 0.7

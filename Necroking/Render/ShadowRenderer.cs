@@ -6,6 +6,7 @@ using Necroking.Core;
 using Necroking.Data;
 using Necroking.Data.Registries;
 using Necroking.GameSystems;
+using Necroking.Movement;
 using Necroking.World;
 
 namespace Necroking.Render;
@@ -36,7 +37,8 @@ public class ShadowRenderer
         GameData gameData,
         Dictionary<uint, Game1.UnitAnimData> unitAnims,
         SpriteAtlas[] atlases,
-        EnvironmentSystem envSystem)
+        EnvironmentSystem envSystem,
+        FogOfWarSystem fogOfWar)
     {
         var shadow = gameData.Settings.Shadow;
         if (!shadow.Enabled) return;
@@ -44,9 +46,20 @@ public class ShadowRenderer
         bool useShader = (UnitShadowMode)shadow.UnitShadowMode == UnitShadowMode.Shader;
 
         if (useShader)
-            DrawShaderShadows(device, spriteBatch, glowTex, camera, renderer, sim, gameData, unitAnims, atlases, envSystem, shadow);
+            DrawShaderShadows(device, spriteBatch, glowTex, camera, renderer, sim, gameData, unitAnims, atlases, envSystem, shadow, fogOfWar);
         else
-            DrawEllipseShadows(spriteBatch, glowTex, camera, renderer, sim, gameData, envSystem, shadow);
+            DrawEllipseShadows(spriteBatch, glowTex, camera, renderer, sim, gameData, envSystem, shadow, fogOfWar);
+    }
+
+    /// <summary>
+    /// Fog-of-war unit culling mirror of Game1.DrawSingleUnit — hide shadows for
+    /// non-undead units outside the necromancer's detection range so we don't get
+    /// unitless shadows floating in previously-explored (currently fogged) areas.
+    /// </summary>
+    private static bool IsUnitHiddenByFog(Simulation sim, int i, FogOfWarSystem fogOfWar)
+    {
+        return sim.Units[i].Faction != Faction.Undead
+            && !fogOfWar.IsVisible(sim.Units[i].Position);
     }
 
     private void DrawEllipseShadows(
@@ -57,7 +70,8 @@ public class ShadowRenderer
         Simulation sim,
         GameData gameData,
         EnvironmentSystem envSystem,
-        ShadowSettings shadow)
+        ShadowSettings shadow,
+        FogOfWarSystem fogOfWar)
     {
         // C++ style: two concentric soft ellipses per unit at ground position
         byte outerAlpha = (byte)Math.Clamp(shadow.Opacity * 255f * 0.6f, 0, 255);
@@ -68,6 +82,7 @@ public class ShadowRenderer
         for (int i = 0; i < sim.Units.Count; i++)
         {
             if (!sim.Units[i].Alive) continue;
+            if (IsUnitHiddenByFog(sim, i, fogOfWar)) continue;
             float unitRadius = sim.Units[i].Radius;
             var worldPos = sim.Units[i].Position;
             var sp = renderer.WorldToScreen(worldPos, 0f, camera);
@@ -159,7 +174,8 @@ public class ShadowRenderer
         Dictionary<uint, Game1.UnitAnimData> unitAnims,
         SpriteAtlas[] atlases,
         EnvironmentSystem envSystem,
-        ShadowSettings shadow)
+        ShadowSettings shadow,
+        FogOfWarSystem fogOfWar)
     {
         // Projected shadows as skewed parallelogram quads (matching C++ implementation).
         // Bottom edge sits at feet, top edge shifted by sun direction vector.
@@ -187,6 +203,7 @@ public class ShadowRenderer
         for (int i = 0; i < sim.Units.Count; i++)
         {
             if (!sim.Units[i].Alive) continue;
+            if (IsUnitHiddenByFog(sim, i, fogOfWar)) continue;
             uint uid = sim.Units[i].Id;
             if (!unitAnims.TryGetValue(uid, out var animData)) continue;
 

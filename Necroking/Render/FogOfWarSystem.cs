@@ -31,18 +31,31 @@ public class FogOfWarSystem
     private const int TexelsPerWorldUnit = 16;
     private int _rtSize = MinRTSize;
 
-    // Update throttle: vision barely changes frame-to-frame, so refresh every N frames.
+    // Update throttle for the *hard* visibility circles: vision barely changes
+    // frame-to-frame, so refresh the raw circle-draw every N frames. The temporal
+    // smoothing still runs every frame so the fade stays buttery.
     private const int UpdateInterval = 2;
     private int _frameCounter;
+
+    // Temporal smoothing: time (seconds) for the displayed visibility to converge
+    // on the true visibility. 0.5s matches the user-facing fade target.
+    private const float FadeTime = 0.5f;
 
     private int _worldW, _worldH;
     private GraphicsDevice? _device;
 
-    // Render targets. We keep visibility + explored as separate RTs for update logic,
-    // then pack them into a single combined RT (R=explored, G=visible) right before
-    // the composite draw — the shader then only needs one sampler at slot 0, which
-    // SpriteBatch binds reliably.
+    // Render targets. Pipeline:
+    //   _visibilityRT         — raw per-tick vision (hard circles drawn by units).
+    //   _smoothedVisibilityRT — temporal lerp toward _visibilityRT each frame,
+    //                           giving a 0.5s fade-in/out so new reveals glide in
+    //                           instead of popping.
+    //   _exploredRT           — cumulative max of _smoothedVisibilityRT (once a
+    //                           pixel fades in, it stays "explored").
+    //   _combinedRT           — R=explored, G=smoothed visibility. Single sampler
+    //                           for the composite shader, sidesteps SpriteBatch's
+    //                           unreliable multi-sampler binding.
     private RenderTarget2D? _visibilityRT;
+    private RenderTarget2D? _smoothedVisibilityRT;
     private RenderTarget2D? _exploredRT;
     private RenderTarget2D? _combinedRT;
 
@@ -95,6 +108,12 @@ public class FogOfWarSystem
         ColorWriteChannels = ColorWriteChannels.Green,
     };
 
+    // Smoothing shader. Outputs premultiplied (src.rgb * Rate, Rate) so that
+    // BlendState.AlphaBlend produces newDst = lerp(oldDst, src, Rate). Portable
+    // across DesktopGL and WindowsDX (Blend.BlendFactor is not reliable in the
+    // OpenGL backend, which is why this project took the shader route).
+    private Microsoft.Xna.Framework.Graphics.Effect? _smoothEffect;
+
     public void Init(int worldW, int worldH, GraphicsDevice device, ContentManager content)
     {
         _worldW = worldW;
@@ -102,6 +121,7 @@ public class FogOfWarSystem
         _device = device;
 
         _visibilityRT?.Dispose();
+        _smoothedVisibilityRT?.Dispose();
         _exploredRT?.Dispose();
         _combinedRT?.Dispose();
 
@@ -110,6 +130,8 @@ public class FogOfWarSystem
 
         _visibilityRT = new RenderTarget2D(device, _rtSize, _rtSize, false, SurfaceFormat.Color, DepthFormat.None,
             0, RenderTargetUsage.PreserveContents);
+        _smoothedVisibilityRT = new RenderTarget2D(device, _rtSize, _rtSize, false, SurfaceFormat.Color, DepthFormat.None,
+            0, RenderTargetUsage.PreserveContents);
         _exploredRT = new RenderTarget2D(device, _rtSize, _rtSize, false, SurfaceFormat.Color, DepthFormat.None,
             0, RenderTargetUsage.PreserveContents);
         _combinedRT = new RenderTarget2D(device, _rtSize, _rtSize, false, SurfaceFormat.Color, DepthFormat.None,
@@ -117,8 +139,13 @@ public class FogOfWarSystem
 
         _visibleTiles = new bool[worldW * worldH];
 
-        // Clear explored to black (all unexplored)
+        // Clear all smoothable RTs to black (all unexplored). Don't need to clear
+        // them every frame — they carry state across frames via PreserveContents.
+        device.SetRenderTarget(_smoothedVisibilityRT);
+        device.Clear(Color.Black);
         device.SetRenderTarget(_exploredRT);
+        device.Clear(Color.Black);
+        device.SetRenderTarget(_combinedRT);
         device.Clear(Color.Black);
         device.SetRenderTarget(null);
 
@@ -128,116 +155,142 @@ public class FogOfWarSystem
         try { _compositeEffect = content.Load<Microsoft.Xna.Framework.Graphics.Effect>("FogComposite"); }
         catch (Exception ex) { DebugLog.Log("error", $"Failed to load FogComposite shader: {ex.Message}"); }
 
+        try { _smoothEffect = content.Load<Microsoft.Xna.Framework.Graphics.Effect>("FogSmooth"); }
+        catch (Exception ex) { DebugLog.Log("error", $"Failed to load FogSmooth shader: {ex.Message}"); }
+
         _frameCounter = 0;
 
         DebugLog.Log("startup", $"FogOfWar GPU init: world {worldW}x{worldH}, RT {_rtSize}x{_rtSize}");
     }
 
     /// <summary>
-    /// Update fog: draw vision circles to visibility RT, composite into explored RT.
-    /// Must be called during the update/draw phase (needs GPU access).
+    /// Update fog. Runs two kinds of work each frame:
+    ///   - (throttled) redraw the raw visibility circles into _visibilityRT
+    ///   - (every frame) temporally lerp _smoothedVisibilityRT toward the raw
+    ///     visibility, accumulate into explored, and pack into combined
+    /// The temporal pass uses GraphicsDevice.BlendFactor to control the lerp
+    /// rate without a custom shader.
     /// </summary>
-    public void Update(SpriteBatch spriteBatch, UnitArrays units, FogOfWarSettings settings)
+    public void Update(SpriteBatch spriteBatch, UnitArrays units, FogOfWarSettings settings, float dt)
     {
-        if (_device == null || _visibilityRT == null || _exploredRT == null || _circleTex == null) return;
+        if (_device == null || _visibilityRT == null || _smoothedVisibilityRT == null
+            || _exploredRT == null || _combinedRT == null || _circleTex == null) return;
         var mode = (FogOfWarMode)settings.Mode;
         _lastMode = mode;
         if (mode == FogOfWarMode.Off) return;
 
-        // Throttle re-render every N frames — skip the whole Update so the
-        // PreserveContents visibility RT retains last frame's circles.
+        // --- Part A: raw visibility circles (throttled) ---
         _frameCounter++;
-        if ((_frameCounter % UpdateInterval) != 0) return;
-
-        float scaleX = (float)_rtSize / _worldW;
-        float scaleY = (float)_rtSize / _worldH;
-
-        // Rebuild the CPU visibility grid in lockstep with the GPU pass. Rasterize
-        // each undead unit's detection circle by tile; single pass, bounded-box loop
-        // so cost is O(M · avg_tiles_per_circle).
-        Array.Clear(_visibleTiles, 0, _visibleTiles.Length);
-
-        // --- Pass 1: Draw vision circles onto visibility RT ---
-        _device.SetRenderTarget(_visibilityRT);
-        _device.Clear(Color.Black);
-
-        spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.Opaque, SamplerState.LinearClamp);
-        for (int i = 0; i < units.Count; i++)
+        bool redrawCircles = (_frameCounter % UpdateInterval) == 0;
+        if (redrawCircles)
         {
-            var unit = units[i];
-            if (!unit.Alive || unit.Faction != Faction.Undead) continue;
+            float scaleX = (float)_rtSize / _worldW;
+            float scaleY = (float)_rtSize / _worldH;
 
-            float sightRange = unit.DetectionRange;
-            if (sightRange <= 0f) sightRange = settings.DefaultSightRange;
+            Array.Clear(_visibleTiles, 0, _visibleTiles.Length);
 
-            float cx = unit.Position.X * scaleX;
-            float cy = unit.Position.Y * scaleY;
-            float radiusX = sightRange * scaleX;
-            float radiusY = sightRange * scaleY;
-
-            spriteBatch.Draw(_circleTex,
-                new Rectangle((int)(cx - radiusX), (int)(cy - radiusY),
-                              (int)(radiusX * 2f), (int)(radiusY * 2f)),
-                Color.White);
-
-            // Stamp into the CPU grid (same circle, 1-world-unit tile resolution).
-            float sightSq = sightRange * sightRange;
-            int minTx = Math.Max(0, (int)(unit.Position.X - sightRange));
-            int maxTx = Math.Min(_worldW - 1, (int)(unit.Position.X + sightRange));
-            int minTy = Math.Max(0, (int)(unit.Position.Y - sightRange));
-            int maxTy = Math.Min(_worldH - 1, (int)(unit.Position.Y + sightRange));
-            for (int ty = minTy; ty <= maxTy; ty++)
-            {
-                float dy = (ty + 0.5f) - unit.Position.Y;
-                float dySq = dy * dy;
-                int row = ty * _worldW;
-                for (int tx = minTx; tx <= maxTx; tx++)
-                {
-                    float dx = (tx + 0.5f) - unit.Position.X;
-                    if (dx * dx + dySq <= sightSq) _visibleTiles[row + tx] = true;
-                }
-            }
-        }
-        spriteBatch.End();
-
-        // --- Pass 2: Composite visibility into explored RT (max blend — only brightens) ---
-        _device.SetRenderTarget(_exploredRT);
-        spriteBatch.Begin(SpriteSortMode.Deferred, MaxBlend, SamplerState.LinearClamp);
-        spriteBatch.Draw(_visibilityRT, new Rectangle(0, 0, _rtSize, _rtSize), Color.White);
-        spriteBatch.End();
-
-        // --- Pass 3: Pack explored (R) + visible (G) into _combinedRT for the shader ---
-        // Done here in Update (not Draw) because Update runs before the main scene is
-        // drawn to the backbuffer — SetRenderTarget(null) at the end of Draw would
-        // otherwise wipe the scene on some GPU drivers due to DiscardContents
-        // semantics on the default backbuffer.
-        if (_combinedRT != null)
-        {
-            _device.SetRenderTarget(_combinedRT);
+            _device.SetRenderTarget(_visibilityRT);
             _device.Clear(Color.Black);
 
-            spriteBatch.Begin(SpriteSortMode.Deferred, OpaqueRedOnly, SamplerState.LinearClamp);
-            spriteBatch.Draw(_exploredRT, new Rectangle(0, 0, _rtSize, _rtSize), Color.White);
-            spriteBatch.End();
+            spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.Opaque, SamplerState.LinearClamp);
+            for (int i = 0; i < units.Count; i++)
+            {
+                var unit = units[i];
+                if (!unit.Alive || unit.Faction != Faction.Undead) continue;
 
-            spriteBatch.Begin(SpriteSortMode.Deferred, OpaqueGreenOnly, SamplerState.LinearClamp);
+                float sightRange = unit.DetectionRange;
+                if (sightRange <= 0f) sightRange = settings.DefaultSightRange;
+
+                float cx = unit.Position.X * scaleX;
+                float cy = unit.Position.Y * scaleY;
+                float radiusX = sightRange * scaleX;
+                float radiusY = sightRange * scaleY;
+
+                spriteBatch.Draw(_circleTex,
+                    new Rectangle((int)(cx - radiusX), (int)(cy - radiusY),
+                                  (int)(radiusX * 2f), (int)(radiusY * 2f)),
+                    Color.White);
+
+                // CPU visibility grid for gameplay queries (stays instant — we
+                // don't want the culling logic to lag behind the renderer).
+                float sightSq = sightRange * sightRange;
+                int minTx = Math.Max(0, (int)(unit.Position.X - sightRange));
+                int maxTx = Math.Min(_worldW - 1, (int)(unit.Position.X + sightRange));
+                int minTy = Math.Max(0, (int)(unit.Position.Y - sightRange));
+                int maxTy = Math.Min(_worldH - 1, (int)(unit.Position.Y + sightRange));
+                for (int ty = minTy; ty <= maxTy; ty++)
+                {
+                    float dy = (ty + 0.5f) - unit.Position.Y;
+                    float dySq = dy * dy;
+                    int row = ty * _worldW;
+                    for (int tx = minTx; tx <= maxTx; tx++)
+                    {
+                        float dx = (tx + 0.5f) - unit.Position.X;
+                        if (dx * dx + dySq <= sightSq) _visibleTiles[row + tx] = true;
+                    }
+                }
+            }
+            spriteBatch.End();
+        }
+
+        // --- Part B: temporal smoothing (every frame, independent of throttle) ---
+        // Lerp smoothedVisibility toward visibilityRT at rate = dt / FadeTime.
+        // Exponential approach gives a natural ~FadeTime-second fade-in/out.
+        float rate = Math.Clamp(dt / FadeTime, 0f, 1f);
+
+        _device.SetRenderTarget(_smoothedVisibilityRT);
+        if (_smoothEffect != null)
+        {
+            _smoothEffect.Parameters["Rate"]?.SetValue(rate);
+            spriteBatch.Begin(SpriteSortMode.Immediate, BlendState.AlphaBlend, SamplerState.LinearClamp,
+                null, null, _smoothEffect);
             spriteBatch.Draw(_visibilityRT, new Rectangle(0, 0, _rtSize, _rtSize), Color.White);
             spriteBatch.End();
         }
+        else
+        {
+            // Fallback without shader: copy hard visibility directly (no smoothing).
+            spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.Opaque, SamplerState.LinearClamp);
+            spriteBatch.Draw(_visibilityRT, new Rectangle(0, 0, _rtSize, _rtSize), Color.White);
+            spriteBatch.End();
+        }
+
+        // Explored = cumulative max of smoothed visibility. Pixels rise smoothly
+        // when first revealed; once at 1 they stay there (max doesn't decrease),
+        // so when units leave they transition visible → fogged but not → unexplored.
+        _device.SetRenderTarget(_exploredRT);
+        spriteBatch.Begin(SpriteSortMode.Deferred, MaxBlend, SamplerState.LinearClamp);
+        spriteBatch.Draw(_smoothedVisibilityRT, new Rectangle(0, 0, _rtSize, _rtSize), Color.White);
+        spriteBatch.End();
+
+        // --- Part C: pack explored (R) + smoothed visibility (G) into combinedRT ---
+        _device.SetRenderTarget(_combinedRT);
+        _device.Clear(Color.Black);
+
+        spriteBatch.Begin(SpriteSortMode.Deferred, OpaqueRedOnly, SamplerState.LinearClamp);
+        spriteBatch.Draw(_exploredRT, new Rectangle(0, 0, _rtSize, _rtSize), Color.White);
+        spriteBatch.End();
+
+        spriteBatch.Begin(SpriteSortMode.Deferred, OpaqueGreenOnly, SamplerState.LinearClamp);
+        spriteBatch.Draw(_smoothedVisibilityRT, new Rectangle(0, 0, _rtSize, _rtSize), Color.White);
+        spriteBatch.End();
 
         _device.SetRenderTarget(null);
     }
 
     /// <summary>
-    /// Returns true if the given world position is inside any friendly undead's
-    /// current detection range (i.e. the tile is currently visible — not fogged
-    /// or unexplored). When fog is disabled, always returns true so nothing gets
-    /// culled. Used by draw code to hide enemy units / their projectiles / damage
-    /// numbers / buffs in fog.
+    /// Returns true if the given world position should be rendered in full:
+    ///   - Mode.Off:      always yes (no fog gameplay)
+    ///   - Mode.Explored: always yes (permanent reveal — explored tiles stay lit,
+    ///                    and the user wants units visible in them too)
+    ///   - Mode.FogOfWar: yes only if the tile is currently inside some friendly
+    ///                    undead's detection range
+    /// Used to cull enemy unit sprites, their shadows, buffs, projectiles, and
+    /// damage numbers when the necromancer can't see them.
     /// </summary>
     public bool IsVisible(Vec2 pos)
     {
-        if (_lastMode == FogOfWarMode.Off) return true;
+        if (_lastMode != FogOfWarMode.FogOfWar) return true;
         int x = (int)pos.X;
         int y = (int)pos.Y;
         if (x < 0 || x >= _worldW || y < 0 || y >= _worldH) return false;
@@ -329,10 +382,12 @@ public class FogOfWarSystem
     public void Dispose()
     {
         _visibilityRT?.Dispose();
+        _smoothedVisibilityRT?.Dispose();
         _exploredRT?.Dispose();
         _combinedRT?.Dispose();
         _circleTex?.Dispose();
         _visibilityRT = null;
+        _smoothedVisibilityRT = null;
         _exploredRT = null;
         _combinedRT = null;
         _circleTex = null;

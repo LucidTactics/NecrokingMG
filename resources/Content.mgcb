@@ -89,3 +89,8 @@
 /processor:EffectProcessor
 /build:FogComposite.fx
 
+#begin FogSmooth.fx
+/importer:EffectImporter
+/processor:EffectProcessor
+/build:FogSmooth.fx
+

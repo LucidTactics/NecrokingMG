@@ -1719,19 +1719,80 @@ public class MapEditorWindow
         }
         else
         {
-            // M28: Batch remove in paint mode (right-click drag)
+            // Paint-mode right-click-drag: wipe every object of the currently
+            // selected category within the brush radius. Matches the "eraser
+            // brush" behaviour from the old C++ editor.
             if (rightDown && !overPanel)
             {
                 if (_batchRemovedObjects == null)
                     _batchRemovedObjects = new();
                 Vec2 worldPos = _camera.ScreenToWorld(new Vector2(mouse.X, mouse.Y), screenW, screenH);
-                int closest = FindClosestObject(worldPos, 3f);
-                if (closest >= 0)
+
+                float radius = BrushRadius;
+                float radSq = radius * radius;
+
+                // --- PERF FIXES ---
+                // (1) Precompute the per-def category filter once — IsInSelectedObjectType
+                //     rebuilds the category list each call; doing that per-tree was the
+                //     dominant cost for large brushes.
+                int defCount = _envSystem.DefCount;
+                Span<bool> defInCategory = defCount <= 256
+                    ? stackalloc bool[defCount]
+                    : new bool[defCount];
+                for (int d = 0; d < defCount; d++) defInCategory[d] = IsInSelectedObjectType(d);
+
+                // (2) Suppress the per-remove OnCollisionsDirty callback (which
+                //     rebuilds the pathfinder). We'll fire one rebuild on mouse-up
+                //     via RebakeObjectCollisions() — same end state, tiny cost.
+                var prevHandler = _envSystem.OnCollisionsDirty;
+                _envSystem.OnCollisionsDirty = null;
+
+                var sw = System.Diagnostics.Stopwatch.StartNew();
+                long tFilter = 0, tRemove = 0, tTrigger = 0;
+                int iterated = 0, removed = 0;
+                try
                 {
-                    var obj = _envSystem.GetObject(closest);
-                    _batchRemovedObjects.Add((obj.DefIndex, obj.X, obj.Y, obj.Scale, obj.Seed));
-                    AutoRemoveTriggerInstance(closest); // RM07
-                    _envSystem.RemoveObject(closest);
+                    // Iterate backwards because RemoveObject shifts indices (RemoveAt).
+                    for (int i = _envSystem.ObjectCount - 1; i >= 0; i--)
+                    {
+                        iterated++;
+                        long t0 = System.Diagnostics.Stopwatch.GetTimestamp();
+                        var obj = _envSystem.GetObject(i);
+                        bool inCat = defInCategory[obj.DefIndex];
+                        float dx = obj.X - worldPos.X;
+                        float dy = obj.Y - worldPos.Y;
+                        bool inBrush = dx * dx + dy * dy <= radSq;
+                        tFilter += System.Diagnostics.Stopwatch.GetTimestamp() - t0;
+
+                        if (!inCat || !inBrush) continue;
+
+                        long t1 = System.Diagnostics.Stopwatch.GetTimestamp();
+                        _batchRemovedObjects.Add((obj.DefIndex, obj.X, obj.Y, obj.Scale, obj.Seed));
+                        AutoRemoveTriggerInstance(i);
+                        tTrigger += System.Diagnostics.Stopwatch.GetTimestamp() - t1;
+
+                        long t2 = System.Diagnostics.Stopwatch.GetTimestamp();
+                        _envSystem.RemoveObject(i);
+                        tRemove += System.Diagnostics.Stopwatch.GetTimestamp() - t2;
+
+                        removed++;
+                    }
+                }
+                finally
+                {
+                    _envSystem.OnCollisionsDirty = prevHandler;
+                }
+
+                sw.Stop();
+                if (removed > 0)
+                {
+                    double tickToMs = 1000.0 / System.Diagnostics.Stopwatch.Frequency;
+                    Core.DebugLog.Log("editor",
+                        $"brush_delete: iter={iterated} rm={removed} " +
+                        $"total={sw.ElapsedTicks * tickToMs:F2}ms " +
+                        $"filter={tFilter * tickToMs:F2}ms " +
+                        $"trigger={tTrigger * tickToMs:F2}ms " +
+                        $"remove={tRemove * tickToMs:F2}ms");
                 }
             }
             if (rightUp && _batchRemovedObjects != null)
@@ -1748,6 +1809,29 @@ public class MapEditorWindow
                 _batchRemovedObjects = null;
             }
         }
+    }
+
+    /// <summary>
+    /// True if the given def index belongs to the currently selected category
+    /// tab (e.g. "Trees", "Buildings"). Used by the eraser brush so right-click-
+    /// drag wipes everything in that category within the brush radius — not just
+    /// the specific def/tree type highlighted in the list.
+    /// Special cases: "All" matches every def; "Groups" matches any def that's
+    /// part of a group.
+    /// </summary>
+    private bool IsInSelectedObjectType(int defIdx)
+    {
+        if (defIdx < 0 || defIdx >= _envSystem.DefCount) return false;
+
+        var categories = GetEnvCategories();
+        if (SelectedEnvCategory < 0 || SelectedEnvCategory >= categories.Count) return false;
+
+        string cat = categories[SelectedEnvCategory];
+        if (cat == "All") return true;
+
+        var def = _envSystem.GetDef(defIdx);
+        if (cat == "Groups") return !string.IsNullOrEmpty(def.Group);
+        return def.Category == cat;
     }
 
     /// <summary>
@@ -1798,55 +1882,140 @@ public class MapEditorWindow
 
     /// <summary>
     /// M28: Paint objects with batch accumulation for undo.
+    /// PERF: suppresses OnCollisionsDirty inside the loop (fires a pathfinder rebuild
+    /// per tree otherwise). RebakeObjectCollisions is called once on mouse-up.
+    /// Group painting: each candidate position independently weighted-random-picks a
+    /// def from the selected group, so one stroke scatters a mix. Grid spacing uses
+    /// the smallest collision radius in the group so smaller trees get their natural
+    /// density; larger trees naturally sparsen via CanPlaceObject rejection.
     /// </summary>
     private void PaintObjectsBatch(MouseState mouse, int screenW, int screenH)
     {
-        int defToPlace = ResolveObjectDefIndex();
-        if (defToPlace < 0) return;
-        Vec2 worldPos = _camera.ScreenToWorld(new Vector2(mouse.X, mouse.Y), screenW, screenH);
-        var def = _envSystem.GetDef(defToPlace);
-        // RM05: Use collision radius in spacing calculation (fallback to PlacementScale)
-        float colRadius = def.CollisionRadius > 0 ? def.CollisionRadius : def.PlacementScale;
-        float spacing = Math.Max(1f, colRadius * 2.2f);
+        // Build the per-stroke candidate pool (either [SelectedDef, 1.0] for single-
+        // def mode, or every group member with its GroupWeight).
+        var members = GetSelectedGroupMembers();
+        if (members.Count == 0) return;
 
-        for (int dy = -BrushRadius; dy <= BrushRadius; dy++)
+        // Normalize weights and find the tightest spacing any member needs.
+        float totalWeight = 0;
+        float minRadius = float.MaxValue;
+        foreach (var (idx, w) in members)
         {
-            for (int dx = -BrushRadius; dx <= BrushRadius; dx++)
+            totalWeight += w;
+            var d = _envSystem.GetDef(idx);
+            float r = d.CollisionRadius > 0 ? d.CollisionRadius : d.PlacementScale;
+            if (r < minRadius) minRadius = r;
+        }
+        if (minRadius == float.MaxValue) minRadius = 1f;
+        float spacing = Math.Max(1f, minRadius * 2.2f);
+
+        Vec2 worldPos = _camera.ScreenToWorld(new Vector2(mouse.X, mouse.Y), screenW, screenH);
+
+        var prevHandler = _envSystem.OnCollisionsDirty;
+        _envSystem.OnCollisionsDirty = null;
+
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        long tCandidates = 0, tCanPlace = 0, tAdd = 0, tTrigger = 0;
+        int candidates = 0, placed = 0;
+
+        try
+        {
+            for (int dy = -BrushRadius; dy <= BrushRadius; dy++)
             {
-                if (dx * dx + dy * dy > BrushRadius * BrushRadius) continue;
-                float ox = dx * spacing + (dy % 2 == 0 ? 0 : spacing * 0.5f);
-                float oy = dy * spacing * 0.866f;
-
-                // RM05: Add random jitter to prevent grid-like appearance
-                float jitter = spacing * 0.25f;
-                ox += (Random.Shared.NextSingle() - 0.5f) * 2f * jitter;
-                oy += (Random.Shared.NextSingle() - 0.5f) * 2f * jitter;
-
-                float px = worldPos.X + ox;
-                float py = worldPos.Y + oy;
-
-                // Check no existing object too close
-                bool tooClose = false;
-                float minDist2 = spacing * spacing * 0.5f;
-                for (int i = 0; i < _envSystem.ObjectCount; i++)
+                for (int dx = -BrushRadius; dx <= BrushRadius; dx++)
                 {
-                    var obj = _envSystem.GetObject(i);
-                    float ddx = obj.X - px, ddy = obj.Y - py;
-                    if (ddx * ddx + ddy * ddy < minDist2) { tooClose = true; break; }
-                }
-                // RM03: Also check collision radius overlap
-                if (!tooClose && !_envSystem.CanPlaceObject(defToPlace, px, py))
-                    tooClose = true;
+                    if (dx * dx + dy * dy > BrushRadius * BrushRadius) continue;
+                    candidates++;
 
-                if (!tooClose)
-                {
+                    long t0 = System.Diagnostics.Stopwatch.GetTimestamp();
+                    float ox = dx * spacing + (dy % 2 == 0 ? 0 : spacing * 0.5f);
+                    float oy = dy * spacing * 0.866f;
+                    float jitter = spacing * 0.25f;
+                    ox += (Random.Shared.NextSingle() - 0.5f) * 2f * jitter;
+                    oy += (Random.Shared.NextSingle() - 0.5f) * 2f * jitter;
+                    float px = worldPos.X + ox;
+                    float py = worldPos.Y + oy;
+
+                    // Weighted random pick from the group members.
+                    float roll = Random.Shared.NextSingle() * totalWeight;
+                    float accum = 0;
+                    int defToPlace = members[^1].defIdx;
+                    foreach (var (idx, w) in members)
+                    {
+                        accum += w;
+                        if (roll <= accum) { defToPlace = idx; break; }
+                    }
+                    tCandidates += System.Diagnostics.Stopwatch.GetTimestamp() - t0;
+
+                    // Placement check uses the picked def's own collision+placement radius.
+                    long t2 = System.Diagnostics.Stopwatch.GetTimestamp();
+                    bool canPlace = _envSystem.CanPlaceObject(defToPlace, px, py);
+                    tCanPlace += System.Diagnostics.Stopwatch.GetTimestamp() - t2;
+                    if (!canPlace) continue;
+
+                    long t3 = System.Diagnostics.Stopwatch.GetTimestamp();
                     float paintScale = GetRandomPlacementScale(defToPlace);
                     int newIdx = _envSystem.AddObject((ushort)defToPlace, px, py, paintScale);
                     _batchPlacedObjects?.Add(((ushort)defToPlace, px, py, paintScale, 0f, newIdx));
+                    tAdd += System.Diagnostics.Stopwatch.GetTimestamp() - t3;
+
+                    long t4 = System.Diagnostics.Stopwatch.GetTimestamp();
                     AutoCreateTriggerInstance(newIdx); // RM06
+                    tTrigger += System.Diagnostics.Stopwatch.GetTimestamp() - t4;
+
+                    placed++;
                 }
             }
         }
+        finally
+        {
+            _envSystem.OnCollisionsDirty = prevHandler;
+        }
+
+        sw.Stop();
+        if (placed > 0)
+        {
+            double tickToMs = 1000.0 / System.Diagnostics.Stopwatch.Frequency;
+            Core.DebugLog.Log("editor",
+                $"brush_place: cand={candidates} placed={placed} pool={members.Count} total={sw.ElapsedTicks * tickToMs:F2}ms " +
+                $"setup={tCandidates * tickToMs:F2}ms " +
+                $"canPlace={tCanPlace * tickToMs:F2}ms " +
+                $"add={tAdd * tickToMs:F2}ms " +
+                $"trigger={tTrigger * tickToMs:F2}ms " +
+                $"objects={_envSystem.ObjectCount}");
+        }
+    }
+
+    /// <summary>
+    /// Returns the (defIndex, weight) pool the paint brush should sample from,
+    /// based on the current Objects-tab selection.
+    /// - Specific def selected → single entry with weight 1.
+    /// - Group selected (SelectedEnvDefIndex is -(groupIndex+1)) → every def whose
+    ///   Group matches the selected group, each with its GroupWeight.
+    /// Called once per paint tick so we don't rescan DefCount per candidate.
+    /// </summary>
+    private List<(int defIdx, float weight)> GetSelectedGroupMembers()
+    {
+        var result = new List<(int, float)>();
+
+        if (SelectedEnvDefIndex >= 0)
+        {
+            result.Add((SelectedEnvDefIndex, 1f));
+            return result;
+        }
+
+        int groupIdx = -(SelectedEnvDefIndex + 1);
+        var groups = GetEnvGroups();
+        if (groupIdx < 0 || groupIdx >= groups.Count) return result;
+        string groupName = groups[groupIdx];
+
+        for (int i = 0; i < _envSystem.DefCount; i++)
+        {
+            var d = _envSystem.GetDef(i);
+            if (d.Group == groupName)
+                result.Add((i, MathF.Max(0.001f, d.GroupWeight)));
+        }
+        return result;
     }
 
     private void PaintObjects(MouseState mouse, int screenW, int screenH)

@@ -726,11 +726,33 @@ public class DeerHerdHandler : IArchetypeHandler
 
         if (!found) return false;
 
-        // Pick a spot just outside the bush collision radius, from a semi-random angle
-        // Use unit index + frame for variety so different deer approach from different sides
-        float angle = ((ctx.UnitIndex * 53 + ctx.FrameNumber / 30) % 628) / 100f;
-        float standoff = bestBushRadius + 0.5f; // just outside collision + small buffer
-        feedSpot = bestBushPos + new Vec2(MathF.Cos(angle) * standoff, MathF.Sin(angle) * standoff);
+        // Pick a spot just outside the bush that's actually pathable. The deer
+        // can't stand inside the bush's collision radius, so the standoff has to
+        // cover both the bush's radius AND the deer's own radius (plus a small
+        // buffer). Then sweep N angles starting from a semi-random offset and
+        // return the first one that isn't blocked — otherwise a bush surrounded
+        // on one side by walls/trees leaves the deer jammed against the far side.
+        float deerRadius = ctx.Units[ctx.UnitIndex].Radius;
+        float standoff = bestBushRadius + deerRadius + 0.2f;
+        float startAngle = ((ctx.UnitIndex * 53 + ctx.FrameNumber / 30) % 628) / 100f;
+        const int AngleSamples = 16;
+
+        var grid = ctx.Pathfinder?.Grid;
+        for (int i = 0; i < AngleSamples; i++)
+        {
+            float a = startAngle + i * (MathF.PI * 2f / AngleSamples);
+            Vec2 candidate = bestBushPos + new Vec2(MathF.Cos(a) * standoff, MathF.Sin(a) * standoff);
+
+            if (grid == null || SubroutineSteps.IsPointWalkable(grid, candidate, deerRadius))
+            {
+                feedSpot = candidate;
+                return true;
+            }
+        }
+
+        // Fallback: no walkable angle found — return the preferred angle and let
+        // the deer try. It may still stall, but this path is rare (bush surrounded).
+        feedSpot = bestBushPos + new Vec2(MathF.Cos(startAngle) * standoff, MathF.Sin(startAngle) * standoff);
         return true;
     }
 

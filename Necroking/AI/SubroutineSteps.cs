@@ -97,27 +97,55 @@ public static class SubroutineSteps
             if (ctx.SubroutineTimer <= 0f)
             {
                 ctx.Subroutine = 0;
-                // Pick a random walkable point within roam radius (try up to 5 times)
+                // Pick a random walkable point within roam radius. Uses the unit's
+                // full-radius footprint (not just the centre tile) so wolves with
+                // radius 0.5 don't target a spot whose body would clip into a tree.
+                // If none of the attempts find a walkable point, leave MoveTarget
+                // alone and stay idle — the unit simply tries again next tick.
                 var grid = ctx.Pathfinder?.Grid;
-                for (int attempt = 0; attempt < 5; attempt++)
+                float unitRadius = ctx.Units[i].Radius;
+                const int MaxAttempts = 12;
+                bool found = false;
+                for (int attempt = 0; attempt < MaxAttempts; attempt++)
                 {
                     int seed = ctx.FrameNumber * 7 + i * 13 + attempt * 31;
                     float angle = (seed % 628) / 100f;
                     float dist = roamRadius * (0.2f + (((seed * 3) & 0x7F) % 80) / 100f);
                     var candidate = center + new Vec2(MathF.Cos(angle) * dist, MathF.Sin(angle) * dist);
 
-                    if (grid != null)
-                    {
-                        int tx = (int)MathF.Floor(candidate.X);
-                        int ty = (int)MathF.Floor(candidate.Y);
-                        if (grid.GetCost(tx, ty) == 255) continue; // impassable, try again
-                    }
+                    if (grid != null && !IsPointWalkable(grid, candidate, unitRadius))
+                        continue;
 
                     ctx.Units[i].MoveTarget = candidate;
+                    found = true;
                     break;
+                }
+
+                // No walkable spot this tick — stay idle for a short beat and try again.
+                if (!found)
+                {
+                    ctx.Subroutine = 1;
+                    ctx.SubroutineTimer = 0.5f;
                 }
             }
         }
+    }
+
+    /// <summary>
+    /// True if a unit of the given radius can stand at worldPos without any blocked
+    /// tile in its footprint. Mirrors Simulation.IsBlocked so AI-picked destinations
+    /// match what the movement system will actually accept.
+    /// </summary>
+    public static bool IsPointWalkable(World.TileGrid grid, Vec2 pos, float radius)
+    {
+        int gx0 = (int)MathF.Floor(pos.X - radius);
+        int gy0 = (int)MathF.Floor(pos.Y - radius);
+        int gx1 = (int)MathF.Floor(pos.X + radius);
+        int gy1 = (int)MathF.Floor(pos.Y + radius);
+        for (int gy = gy0; gy <= gy1; gy++)
+            for (int gx = gx0; gx <= gx1; gx++)
+                if (grid.InBounds(gx, gy) && grid.GetCost(gx, gy) == 255) return false;
+        return true;
     }
 
     /// <summary>Random wander within radius of a center point.</summary>
