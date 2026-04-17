@@ -24,7 +24,7 @@ public class GrassSettings
     [JsonPropertyName("density")] public float Density { get; set; } = 160.0f;
     [JsonPropertyName("height")] public float Height { get; set; } = 150.0f;
     [JsonPropertyName("bladesPerCell")] public int BladesPerCell { get; set; } = 10;
-    [JsonPropertyName("cellSize")] public float CellSize { get; set; } = 0.8f;
+    [JsonPropertyName("cellSize")] public float CellSize { get; set; } = 1.0f;
     [JsonPropertyName("windSpeed")] public float WindSpeed { get; set; } = 1.0f;
     [JsonPropertyName("windStrength")] public float WindStrength { get; set; } = 1.0f;
     [JsonPropertyName("fwidthSmoothing")] public bool FwidthSmoothing { get; set; } = true;

@@ -64,6 +64,8 @@ public static class ScenarioRegistry
         Register("knockback_corpse", () => new Scenarios.KnockbackCorpseScenario());
         Register("animated_object", () => new Scenarios.AnimatedObjectScenario());
         Register("fog_of_war", () => new Scenarios.FogOfWarScenario());
+        Register("grass_tufts", () => new Scenarios.GrassTuftTestScenario());
+        Register("grass_depth", () => new Scenarios.GrassDepthScenario());
     }
 
     public static void Register(string name, Func<ScenarioBase> creator)

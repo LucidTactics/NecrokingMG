@@ -367,6 +367,21 @@ public static class MapData
         public string Id, Name;
         public byte BaseR, BaseG, BaseB;
         public byte TipR, TipG, TipB;
+        /// <summary>
+        /// Sprite paths (relative to project root, e.g. "assets/Environment/Grass/GreenGrass1.png").
+        /// Renderer picks one per cell via hash; null/empty treated as "no sprites".
+        /// </summary>
+        public string[] SpritePaths;
+        /// <summary>
+        /// Per-type rendered-size multiplier (applied on top of the base cell-size
+        /// footprint). Defaults to 1.0 if missing.
+        /// </summary>
+        public float Scale;
+        /// <summary>
+        /// Per-type fraction of painted cells that render a tuft (0.0-1.0). Defaults
+        /// to 1.0 if missing (every painted cell draws).
+        /// </summary>
+        public float Density;
     }
 
     public struct GrassMapInfo
@@ -430,6 +445,24 @@ public static class MapData
                     }
                 }
                 else { info.TipR = 100; info.TipG = 166; info.TipB = 50; }
+
+                if (gt.TryGetProperty("spritePaths", out var sp) && sp.ValueKind == JsonValueKind.Array)
+                {
+                    var paths = new List<string>();
+                    foreach (var p in sp.EnumerateArray())
+                    {
+                        var s = p.GetString();
+                        if (!string.IsNullOrEmpty(s)) paths.Add(s);
+                    }
+                    info.SpritePaths = paths.ToArray();
+                }
+                else
+                {
+                    info.SpritePaths = System.Array.Empty<string>();
+                }
+
+                info.Scale = gt.TryGetProperty("scale", out var sc) ? sc.GetSingle() : 1.0f;
+                info.Density = gt.TryGetProperty("density", out var ds) ? ds.GetSingle() : 1.0f;
 
                 types.Add(info);
             }

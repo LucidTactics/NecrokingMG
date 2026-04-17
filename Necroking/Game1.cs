@@ -71,7 +71,14 @@ public class Game1 : Microsoft.Xna.Framework.Game
     private Color[] _grassTipColors = Array.Empty<Color>();
     private string[] _grassTypeIds = Array.Empty<string>();
     private string[] _grassTypeNames = Array.Empty<string>();
-    private GrassRenderer _grassRenderer = new();
+    // Per-type sprite paths (parallel array to the color arrays). One entry per grass
+    // type; each entry is a list of 0-5 project-relative PNG paths. Drives the tuft
+    // renderer. Populated from the map editor (SyncGrassFromEditor) or the scenario
+    // setup path.
+    private string[][] _grassTypeSpritePaths = Array.Empty<string[]>();
+    private float[] _grassTypeScales = Array.Empty<float>();
+    private float[] _grassTypeDensities = Array.Empty<float>();
+    private GrassTuftRenderer _grassRenderer = new();
 
     // Rendering
     private Renderer _renderer = new();
@@ -411,12 +418,18 @@ public class Game1 : Microsoft.Xna.Framework.Game
                     _grassTipColors = new Color[gi.Types.Length];
                     _grassTypeIds = new string[gi.Types.Length];
                     _grassTypeNames = new string[gi.Types.Length];
+                    _grassTypeSpritePaths = new string[gi.Types.Length][];
+                    _grassTypeScales = new float[gi.Types.Length];
+                    _grassTypeDensities = new float[gi.Types.Length];
                     for (int i = 0; i < gi.Types.Length; i++)
                     {
                         _grassBaseColors[i] = new Color(gi.Types[i].BaseR, gi.Types[i].BaseG, gi.Types[i].BaseB);
                         _grassTipColors[i] = new Color(gi.Types[i].TipR, gi.Types[i].TipG, gi.Types[i].TipB);
                         _grassTypeIds[i] = gi.Types[i].Id ?? $"grass_{i}";
                         _grassTypeNames[i] = gi.Types[i].Name ?? $"Grass {i}";
+                        _grassTypeSpritePaths[i] = gi.Types[i].SpritePaths ?? Array.Empty<string>();
+                        _grassTypeScales[i] = gi.Types[i].Scale > 0f ? gi.Types[i].Scale : 1f;
+                        _grassTypeDensities[i] = gi.Types[i].Density > 0f ? gi.Types[i].Density : 1f;
                     }
                     DebugLog.Log("startup", $"Grass map: {_grassW}x{_grassH}, {gi.Types.Length} types");
                 }
@@ -554,10 +567,14 @@ public class Game1 : Microsoft.Xna.Framework.Game
                     Id = _grassTypeIds != null && gi < _grassTypeIds.Length ? _grassTypeIds[gi] : $"grass_{gi}",
                     Name = _grassTypeNames != null && gi < _grassTypeNames.Length ? _grassTypeNames[gi] : $"Grass {gi}",
                     BaseR = _grassBaseColors[gi].R, BaseG = _grassBaseColors[gi].G, BaseB = _grassBaseColors[gi].B,
-                    TipR = _grassTipColors[gi].R, TipG = _grassTipColors[gi].G, TipB = _grassTipColors[gi].B
+                    TipR = _grassTipColors[gi].R, TipG = _grassTipColors[gi].G, TipB = _grassTipColors[gi].B,
+                    SpritePaths = gi < _grassTypeSpritePaths.Length ? _grassTypeSpritePaths[gi] : Array.Empty<string>(),
+                    Scale = gi < _grassTypeScales.Length ? _grassTypeScales[gi] : 1f,
+                    Density = gi < _grassTypeDensities.Length ? _grassTypeDensities[gi] : 1f,
                 };
             }
             _mapEditor.SetGrassData(_grassMap, _grassW, _grassH, grassTypeInfos, _gameData.Settings.Grass.CellSize);
+            PushGrassSpritesToRenderer();
         }
 
         Window.Title = "Necroking";
@@ -586,7 +603,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
             _grassH = _mapEditor.GrassH;
         }
 
-        // Sync grass type colors from editor definitions
+        // Sync grass type colors + sprite paths from editor definitions.
         var types = _mapEditor.GrassTypes;
         if (types.Count > 0)
         {
@@ -601,6 +618,38 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 _grassTipColors[i] = new Color(types[i].TipR, types[i].TipG, types[i].TipB);
             }
         }
+
+        // Pull sprite paths + scale + density from the editor's type defs into parallel arrays.
+        _grassTypeSpritePaths = new string[types.Count][];
+        _grassTypeScales = new float[types.Count];
+        _grassTypeDensities = new float[types.Count];
+        for (int i = 0; i < types.Count; i++)
+        {
+            _grassTypeSpritePaths[i] = types[i].SpritePaths.ToArray();
+            _grassTypeScales[i] = types[i].Scale > 0f ? types[i].Scale : 1f;
+            _grassTypeDensities[i] = MathF.Max(0f, types[i].Density);
+        }
+
+        PushGrassSpritesToRenderer();
+    }
+
+    /// <summary>
+    /// Push the current _grassTypeSpritePaths + _grassTypeScales + _grassTypeDensities
+    /// to GrassTuftRenderer so its texture cache and per-type tables reflect the live
+    /// grass types. Called from SyncGrassFromEditor and StartScenario after grass data
+    /// is set up.
+    /// </summary>
+    private void PushGrassSpritesToRenderer()
+    {
+        var list = new List<Render.GrassTypeRender>(_grassTypeSpritePaths.Length);
+        for (int i = 0; i < _grassTypeSpritePaths.Length; i++)
+        {
+            var paths = _grassTypeSpritePaths[i] ?? Array.Empty<string>();
+            float scale = i < _grassTypeScales.Length && _grassTypeScales[i] > 0f ? _grassTypeScales[i] : 1f;
+            float density = i < _grassTypeDensities.Length ? _grassTypeDensities[i] : 1f;
+            list.Add(new Render.GrassTypeRender(paths, scale, density));
+        }
+        _grassRenderer.SetGrassTypes(list);
     }
 
     private void StartScenario(string scenarioName)
@@ -680,9 +729,12 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // Setup grass data for scenarios that want it
         if (scenario.WantsGrass)
         {
-            int grassCellsPerUnit = 2; // ~0.8 cell size → ~1.25 cells per unit, round to 2
-            int gw = gridSize * grassCellsPerUnit;
-            int gh = gridSize * grassCellsPerUnit;
+            // Use settings.CellSize so scenarios share the same grass grid layout as
+            // the editor / main game. For a default CellSize of 1.0, a 64-unit world
+            // gets a 64x64 grass grid (one cell per pathability tile).
+            float cs = _gameData.Settings.Grass.CellSize > 0f ? _gameData.Settings.Grass.CellSize : 1.0f;
+            int gw = (int)MathF.Ceiling(gridSize / cs);
+            int gh = (int)MathF.Ceiling(gridSize / cs);
             _grassMap = new byte[gw * gh];
             _grassW = gw;
             _grassH = gh;
@@ -693,12 +745,17 @@ public class Game1 : Microsoft.Xna.Framework.Game
             _grassTipColors = new Color[] {
                 new(100, 166, 50), new(160, 140, 80), new(60, 180, 60)
             };
-            // Fill with no grass (0)
+            // Default: all scenario types share the one sprite we ship.
+            string[] defaultSprites = { "assets/Environment/Grass/GreenGrass1.png" };
+            _grassTypeSpritePaths = new[] { defaultSprites, defaultSprites, defaultSprites };
+            _grassTypeScales = new[] { 1f, 1f, 1f };
+            _grassTypeDensities = new[] { 1f, 1f, 1f };
             Array.Fill(_grassMap, (byte)0);
             scenario.GrassMap = _grassMap;
             scenario.GrassW = gw;
             scenario.GrassH = gh;
-            DebugLog.Log("scenario", $"Grass setup: {gw}x{gh}, 3 types");
+            PushGrassSpritesToRenderer();
+            DebugLog.Log("scenario", $"Grass setup: {gw}x{gh}, cellSize={cs}, 3 types");
         }
 
         // Give scenario access to road system and inventory
@@ -3521,10 +3578,10 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // --- Walls ---
         DrawWalls();
 
-        // --- Grass overlay ---
-        DrawGrass();
-
         // --- Shadows ---
+        // Grass is no longer drawn here — tufts are merged into the unit Y-sort
+        // inside DrawUnitsAndObjects so they can render in front of / behind
+        // units based on world Y.
         _shadowRenderer.Draw(GraphicsDevice, _spriteBatch, _glowTex, _camera, _renderer, _sim, _gameData, _unitAnims, _atlases, _envSystem);
 
         // --- Corpses ---
@@ -3921,19 +3978,6 @@ public class Game1 : Microsoft.Xna.Framework.Game
         _spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.LinearClamp);
     }
 
-    private void DrawGrass()
-    {
-        _grassRenderer.Draw(
-            GraphicsDevice,
-            _spriteBatch,
-            _camera,
-            _renderer.ScreenW, _renderer.ScreenH,
-            _grassMap, _grassW, _grassH,
-            _grassBaseColors, _grassTipColors,
-            _gameData.Settings.Grass,
-            _gameTime,
-            _ambientColor);
-    }
 
     private void DrawRoads()
     {
@@ -4565,7 +4609,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
     // Sortable item for merged unit+object depth sorting
     private readonly List<DepthItem> _depthItems = new(256); // reused each frame
 
-    internal enum DepthItemType : byte { Unit, EnvObject, CloudPuff }
+    internal enum DepthItemType : byte { Unit, EnvObject, CloudPuff, GrassTuft }
 
     internal struct DepthItem : IComparable<DepthItem>
     {
@@ -4612,6 +4656,14 @@ public class Game1 : Microsoft.Xna.Framework.Game
         _poisonCloudRenderer.SetContext(_spriteBatch, _glowTex, _camera, _renderer, _flipbooks, _gameTime);
         _poisonCloudRenderer.AddPuffsToDepthList(_sim.PoisonClouds, items);
 
+        // Add grass tufts — Y-sorted with units so a tuft "in front" (higher Y)
+        // correctly renders over a unit's feet, and one "behind" (lower Y) is
+        // drawn first and hidden by the unit.
+        _grassRenderer.AddTuftsToDepthList(
+            _camera, _renderer.ScreenW, _renderer.ScreenH,
+            _grassMap, _grassW, _grassH,
+            _gameData.Settings.Grass, _ambientColor, items);
+
         items.Sort();
 
         foreach (var item in items)
@@ -4626,6 +4678,9 @@ public class Game1 : Microsoft.Xna.Framework.Game
                     break;
                 case DepthItemType.CloudPuff:
                     _poisonCloudRenderer.DrawSinglePuff(item.Index, item.SubIndex);
+                    break;
+                case DepthItemType.GrassTuft:
+                    _grassRenderer.DrawSingleTuft(_spriteBatch, item.Index);
                     break;
             }
         }

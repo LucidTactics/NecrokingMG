@@ -22,17 +22,41 @@ public enum MapEditorTab { Ground, Grass, Objects, Walls, Roads, Regions, Trigge
 // ============================================================================
 public class GrassTypeDef
 {
+    public const int MaxSprites = 5;
+
     public string Id { get; set; } = "";
     public string Name { get; set; } = "";
+
+    /// <summary>
+    /// Sprite paths (relative to project root, e.g. "assets/Environment/Grass/GreenGrass1.png").
+    /// Up to MaxSprites entries; renderer picks one per cell via a hash of the cell position.
+    /// </summary>
+    public List<string> SpritePaths { get; set; } = new();
+
+    /// <summary>
+    /// Per-type rendered-size multiplier applied on top of the base cell-size tuft
+    /// footprint. 1.0 = tuft fills one cell exactly. Useful for "hero clump" types
+    /// (e.g. 1.5) or fine detail types (e.g. 0.7) without re-authoring the sprites.
+    /// </summary>
+    public float Scale { get; set; } = 1.0f;
+
+    /// <summary>
+    /// Per-type tuft density per painted cell. Below 1.0 it's a probability (0.3 =
+    /// ~30% of cells render a tuft). At or above 1.0 it's a count: integer part =
+    /// guaranteed tufts per cell, fractional part = probability of one extra
+    /// (2.7 = 2 tufts + 70% chance of a 3rd). Each tuft uses a different hash seed
+    /// so position, sprite choice, flip, and scale vary within the cell.
+    /// </summary>
+    public float Density { get; set; } = 1.0f;
+
+    // Legacy blade-era fields — retained for save/load backwards compat; unused by the
+    // sprite-tuft renderer. Can be removed once all maps have been re-saved.
     public byte BaseR { get; set; } = 46;
     public byte BaseG { get; set; } = 102;
     public byte BaseB { get; set; } = 20;
     public byte TipR { get; set; } = 100;
     public byte TipG { get; set; } = 166;
     public byte TipB { get; set; } = 50;
-    public float Density { get; set; } = 1f;
-    public float Height { get; set; } = 1f;
-    public int Blades { get; set; } = 5;
 }
 
 // ============================================================================
@@ -78,8 +102,9 @@ public class MapEditorWindow
     public int SelectedGroundType;
 
     // Grass tab
-    public int SelectedGrassType; // -1 for none, type indices 0-N, 255 = eraser sentinel
+    public int SelectedGrassType; // -1 for none, type indices 0-N
     private bool _grassEraserSelected;
+    private bool _grassGridDebugEnabled;
 
     // Objects tab
     public int SelectedEnvDefIndex = -1;
@@ -428,12 +453,17 @@ public class MapEditorWindow
         _grassTypes.Clear();
         foreach (var t in types)
         {
-            _grassTypes.Add(new GrassTypeDef
+            var def = new GrassTypeDef
             {
                 Id = t.Id, Name = t.Name,
                 BaseR = t.BaseR, BaseG = t.BaseG, BaseB = t.BaseB,
-                TipR = t.TipR, TipG = t.TipG, TipB = t.TipB
-            });
+                TipR = t.TipR, TipG = t.TipG, TipB = t.TipB,
+                Scale = t.Scale > 0f ? t.Scale : 1f,
+                Density = t.Density > 0f ? t.Density : 1f,
+            };
+            if (t.SpritePaths != null)
+                foreach (var p in t.SpritePaths) def.SpritePaths.Add(p);
+            _grassTypes.Add(def);
         }
     }
 
@@ -681,9 +711,47 @@ public class MapEditorWindow
         // Update texture file browser input
         _textureBrowser.Update(mouse, _prevMouse, kb, _prevKb);
 
+        // Save / Load / Undo button clicks (mirrors the Draw-time button layout).
+        UpdateBottomBarClicks(leftClick, mouse, panelX, panelY, screenH);
+
         _prevMouse = mouse;
         _prevKb = kb;
         _prevScrollValue = mouse.ScrollWheelValue;
+    }
+
+    /// <summary>
+    /// Edge-detect clicks on the Save / Load / Undo buttons in the bottom bar.
+    /// Called from Update so we compare against the previous-frame _prevMouse
+    /// *before* it's overwritten — doing this in Draw would always compare the
+    /// current mouse against itself and never fire.
+    /// </summary>
+    private void UpdateBottomBarClicks(bool leftClick, MouseState mouse, int panelX, int panelY, int screenH)
+    {
+        if (!leftClick) return;
+
+        int panelH = screenH - 20;
+        int bottomH = 90;
+        int buttonRowY = panelY + panelH - bottomH + 2 + FieldHeight + 2;
+
+        if (mouse.Y < buttonRowY || mouse.Y >= buttonRowY + ButtonHeight) return;
+
+        int btnW3 = (PanelWidth - Margin * 2 - 8) / 3;
+        int relX = mouse.X - (panelX + Margin);
+
+        if (relX >= 0 && relX < btnW3)
+        {
+            SaveMap();
+        }
+        else if (relX >= btnW3 + 4 && relX < btnW3 * 2 + 4)
+        {
+            LoadMap();
+        }
+        else if (relX >= (btnW3 + 4) * 2 && relX < (btnW3 + 4) * 2 + btnW3)
+        {
+            PerformUndo();
+            _statusMessage = $"Undo ({_undoStack.Count} remaining)";
+            _statusTimer = 1.5f;
+        }
     }
 
     // ========================================================================
@@ -759,34 +827,14 @@ public class MapEditorWindow
         }
         bottomY += FieldHeight + 2;
 
-        // Save / Load / Undo buttons
+        // Save / Load / Undo buttons. Click handling lives in Update() (see
+        // UpdateBottomBarClicks) — doing it here would compare against _prevMouse
+        // after it was already overwritten, which is always-false.
         int btnW3 = (PanelWidth - Margin * 2 - 8) / 3;
         DrawButtonRect("Save", panelX + Margin, bottomY, btnW3, ButtonHeight, ButtonBg);
         DrawButtonRect("Load", panelX + Margin + btnW3 + 4, bottomY, btnW3, ButtonHeight, ButtonBg);
         DrawButtonRect($"Undo ({_undoStack.Count})", panelX + Margin + (btnW3 + 4) * 2, bottomY, btnW3, ButtonHeight,
             _undoStack.Count > 0 ? AccentColor : ButtonBg);
-
-        // Handle Save/Load/Undo button clicks
-        {
-            var mouse2 = _eb._input.Mouse;
-            if (mouse2.LeftButton == ButtonState.Pressed && _prevMouse.LeftButton == ButtonState.Released)
-            {
-                if (mouse2.Y >= bottomY && mouse2.Y < bottomY + ButtonHeight)
-                {
-                    int relX = mouse2.X - (panelX + Margin);
-                    if (relX >= 0 && relX < btnW3)
-                        SaveMap();
-                    else if (relX >= btnW3 + 4 && relX < btnW3 * 2 + 4)
-                        LoadMap();
-                    else if (relX >= (btnW3 + 4) * 2 && relX < (btnW3 + 4) * 2 + btnW3)
-                    {
-                        PerformUndo();
-                        _statusMessage = $"Undo ({_undoStack.Count} remaining)";
-                        _statusTimer = 1.5f;
-                    }
-                }
-            }
-        }
         bottomY += ButtonHeight + 2;
 
         // Keyboard shortcuts hint
@@ -1080,8 +1128,16 @@ public class MapEditorWindow
                 SelectedGrassType = -1;
             }
 
-            // Type list (starts after eraser)
-            int listY = eraserY + ButtonHeight + 4;
+            // Show/Hide Cell Grid toggle (one row below eraser)
+            int gridBtnY = eraserY + ButtonHeight + 4;
+            if (mouse.Y >= gridBtnY && mouse.Y < gridBtnY + ButtonHeight &&
+                mouse.X >= panelX + Margin && mouse.X < panelX + PanelWidth - Margin)
+            {
+                _grassGridDebugEnabled = !_grassGridDebugEnabled;
+            }
+
+            // Type list (starts after eraser + grid toggle)
+            int listY = gridBtnY + ButtonHeight + 4;
             for (int i = 0; i < _grassTypes.Count; i++)
             {
                 int btnY = listY + i * (ButtonHeight + 2);
@@ -1125,7 +1181,7 @@ public class MapEditorWindow
                 for (int gi = 0; gi < _grassMap.Length; gi++)
                 {
                     byte v = _grassMap[gi];
-                    if (v == 255 || v == 0) continue; // eraser or empty
+                    if (v == 0) continue; // empty
                     int typeIdx = v - 1; // 1-based to 0-based
                     if (typeIdx == SelectedGrassType) _grassMap[gi] = 0;
                     else if (typeIdx > SelectedGrassType) _grassMap[gi] = (byte)(v - 1);
@@ -1171,9 +1227,9 @@ public class MapEditorWindow
 
         byte paintValue;
         if (_grassEraserSelected)
-            paintValue = 255;
+            paintValue = 0; // 0 = no grass (previously 255 which the renderer treated as grass type 254)
         else if (SelectedGrassType >= 0 && SelectedGrassType < _grassTypes.Count)
-            paintValue = (byte)(SelectedGrassType + 1); // type index is 1-based in cell grid (0 = no grass, 255 = erased)
+            paintValue = (byte)(SelectedGrassType + 1); // 1-based: 0 reserved for empty
         else
             return;
 
@@ -1201,6 +1257,38 @@ public class MapEditorWindow
         if (changed) _onGrassMapChanged?.Invoke();
     }
 
+    /// <summary>
+    /// Scan assets/Environment/Grass/ for PNG sprites. Returned paths are project-
+    /// relative (e.g. "assets/Environment/Grass/GreenGrass1.png") — cached per
+    /// draw call so the directory isn't scanned every frame inside the sprite
+    /// slot UI loop.
+    /// </summary>
+    private string[] _grassSpriteCache = System.Array.Empty<string>();
+    private float _grassSpriteCacheAge = 999f;
+    private string[] GetAvailableGrassSprites()
+    {
+        // Refresh at most every 2 seconds in case the user drops a new PNG in.
+        _grassSpriteCacheAge += 1f / 60f;
+        if (_grassSpriteCacheAge < 2f && _grassSpriteCache.Length > 0)
+            return _grassSpriteCache;
+
+        _grassSpriteCacheAge = 0f;
+        string dir = Core.GamePaths.Resolve("assets/Environment/Grass");
+        if (!System.IO.Directory.Exists(dir))
+        {
+            _grassSpriteCache = System.Array.Empty<string>();
+            return _grassSpriteCache;
+        }
+
+        var files = System.IO.Directory.GetFiles(dir, "*.png");
+        var rel = new string[files.Length];
+        for (int i = 0; i < files.Length; i++)
+            rel[i] = Core.GamePaths.MakeRelative(files[i]);
+        System.Array.Sort(rel, System.StringComparer.OrdinalIgnoreCase);
+        _grassSpriteCache = rel;
+        return _grassSpriteCache;
+    }
+
     private void DrawGrassTab(int panelX, int contentY, int contentH, int screenW, int screenH)
     {
         DrawSectionHeader(panelX, ref contentY, $"Grass Types ({_grassTypes.Count})");
@@ -1217,7 +1305,19 @@ public class MapEditorWindow
                 _spriteBatch.Draw(_pixel, btnRect, bg);
             // X swatch for eraser
             _spriteBatch.Draw(_pixel, new Rectangle(panelX + Margin + 4, y + 4, 14, 14), new Color(180, 60, 60));
-            DrawSmallText("Eraser (255)", panelX + Margin + 24, y + 3, TextColor);
+            DrawSmallText("Eraser", panelX + Margin + 24, y + 3, TextColor);
+        }
+        y += ButtonHeight + 4;
+
+        // Show Cell Grid toggle
+        {
+            var btnRect = new Rectangle(panelX + Margin, y, PanelWidth - Margin * 2, ButtonHeight);
+            var bg = _grassGridDebugEnabled ? HighlightColor : (IsInRect(mouse, btnRect) ? ButtonHoverColor : Color.Transparent);
+            if (bg != Color.Transparent)
+                _spriteBatch.Draw(_pixel, btnRect, bg);
+            _spriteBatch.Draw(_pixel, new Rectangle(panelX + Margin + 4, y + 4, 14, 14), new Color(200, 200, 120));
+            DrawSmallText(_grassGridDebugEnabled ? "Hide Cell Grid" : "Show Cell Grid",
+                panelX + Margin + 24, y + 3, TextColor);
         }
         y += ButtonHeight + 4;
 
@@ -1289,21 +1389,64 @@ public class MapEditorWindow
             }
             y += FieldHeight + 2;
 
-            // Density
+            // --- Per-type tuft scale (multiplier on base cell-size footprint) ---
+            float newScale = _eb.DrawFloatField("grass_scale", "Scale", gt.Scale, panelX + Margin, y, fw, 0.1f);
+            if (newScale < 0.1f) newScale = 0.1f;
+            if (MathF.Abs(newScale - gt.Scale) > 0.001f) { gt.Scale = newScale; changed = true; }
+            y += FieldHeight + 2;
+
+            // --- Per-type density. <1 = probability of a tuft; >=1 = tuft count per cell. ---
             float newDensity = _eb.DrawFloatField("grass_density", "Density", gt.Density, panelX + Margin, y, fw, 0.1f);
+            if (newDensity < 0f) newDensity = 0f;
             if (MathF.Abs(newDensity - gt.Density) > 0.001f) { gt.Density = newDensity; changed = true; }
-            y += FieldHeight + 2;
+            y += FieldHeight + 6;
 
-            // Height
-            float newHeight = _eb.DrawFloatField("grass_height", "Height", gt.Height, panelX + Margin, y, fw, 0.1f);
-            if (MathF.Abs(newHeight - gt.Height) > 0.001f) { gt.Height = newHeight; changed = true; }
-            y += FieldHeight + 2;
+            // --- Sprite slots (up to MaxSprites per type) ---
+            DrawSmallText($"Sprites (up to {GrassTypeDef.MaxSprites}):", panelX + Margin, y, AccentColor);
+            y += LineHeight;
 
-            // Blades per cell
-            int newBlades = _eb.DrawIntField("grass_blades", "Blades/cell", gt.Blades, panelX + Margin, y, fw);
-            newBlades = Math.Max(1, newBlades);
-            if (newBlades != gt.Blades) { gt.Blades = newBlades; changed = true; }
-            y += FieldHeight + 2;
+            // Build a filename list of available grass sprites on disk for the dropdown.
+            var available = GetAvailableGrassSprites();
+            var options = new string[available.Length];
+            for (int i = 0; i < available.Length; i++)
+                options[i] = System.IO.Path.GetFileName(available[i]);
+
+            // Keep the list padded to MaxSprites so every slot gets a dropdown; empty
+            // strings serialize as "(none)" and render as "unused".
+            while (gt.SpritePaths.Count < GrassTypeDef.MaxSprites) gt.SpritePaths.Add("");
+
+            for (int si = 0; si < GrassTypeDef.MaxSprites; si++)
+            {
+                string currentPath = gt.SpritePaths[si];
+                string currentName = string.IsNullOrEmpty(currentPath)
+                    ? ""
+                    : System.IO.Path.GetFileName(currentPath);
+
+                string pickedName = _eb.DrawCombo(
+                    $"grass_sprite_{si}", $"Slot {si + 1}", currentName, options,
+                    panelX + Margin, y, fw, allowNone: true);
+
+                if (pickedName != currentName)
+                {
+                    if (string.IsNullOrEmpty(pickedName))
+                    {
+                        gt.SpritePaths[si] = "";
+                    }
+                    else
+                    {
+                        for (int oi = 0; oi < options.Length; oi++)
+                        {
+                            if (options[oi] == pickedName)
+                            {
+                                gt.SpritePaths[si] = available[oi];
+                                break;
+                            }
+                        }
+                    }
+                    changed = true;
+                }
+                y += FieldHeight + 2;
+            }
 
             if (changed) _onGrassMapChanged?.Invoke();
         }
@@ -1314,10 +1457,9 @@ public class MapEditorWindow
             y += 4;
             var gt = _grassTypes[SelectedGrassType];
             DrawSmallText($"Name: {gt.Name}", panelX + Margin, y, TextBright); y += LineHeight;
-            DrawSmallText($"Base: R={gt.BaseR} G={gt.BaseG} B={gt.BaseB}", panelX + Margin, y, TextColor); y += LineHeight;
-            DrawSmallText($"Tip:  R={gt.TipR} G={gt.TipG} B={gt.TipB}", panelX + Margin, y, TextColor); y += LineHeight;
-            DrawSmallText($"Density: {gt.Density:F1}  Height: {gt.Height:F1}", panelX + Margin, y, TextColor); y += LineHeight;
-            DrawSmallText($"Blades: {gt.Blades}", panelX + Margin, y, TextColor); y += LineHeight;
+            int assigned = 0;
+            foreach (var p in gt.SpritePaths) if (!string.IsNullOrEmpty(p)) assigned++;
+            DrawSmallText($"Sprites: {assigned}/{GrassTypeDef.MaxSprites}", panelX + Margin, y, TextColor); y += LineHeight;
         }
 
         // Brush size
@@ -1326,9 +1468,93 @@ public class MapEditorWindow
         y += ButtonHeight + 4;
         DrawSmallText($"Grass map: {_grassW}x{_grassH}", panelX + Margin, y, TextDim);
 
+        // Grass cell grid overlay (debug toggle in-panel)
+        if (_grassGridDebugEnabled && _grassMap.Length > 0)
+            DrawGrassGridOverlay(screenW, screenH);
+
         // Brush cursor
         if (!IsMouseOverPanel(screenW, screenH))
             DrawBrushCursor(screenW, screenH);
+    }
+
+    /// <summary>
+    /// Debug overlay for the Grass tab: draws cell boundaries over the visible
+    /// area and semi-transparent fill on painted cells (tinted by grass type).
+    /// Lets the user see how tuft sprites map back to the underlying grid.
+    /// </summary>
+    private void DrawGrassGridOverlay(int screenW, int screenH)
+    {
+        float cs = _grassCellSize > 0f ? _grassCellSize : 0.8f;
+
+        // View frustum in world space (cell coords, clamped to map bounds)
+        float zoom = _camera.Zoom;
+        float yRatio = _camera.YRatio;
+        float viewLeft   = _camera.Position.X - screenW / (2f * zoom) - cs;
+        float viewRight  = _camera.Position.X + screenW / (2f * zoom) + cs;
+        float viewTop    = _camera.Position.Y - screenH / (2f * zoom * yRatio) - cs;
+        float viewBottom = _camera.Position.Y + screenH / (2f * zoom * yRatio) + cs;
+
+        int cx0 = Math.Max(0, (int)MathF.Floor(viewLeft / cs));
+        int cy0 = Math.Max(0, (int)MathF.Floor(viewTop  / cs));
+        int cx1 = Math.Min(_grassW - 1, (int)MathF.Ceiling(viewRight  / cs));
+        int cy1 = Math.Min(_grassH - 1, (int)MathF.Ceiling(viewBottom / cs));
+
+        var lineColor = new Color(255, 255, 255, 60);
+        // Fill painted cells with a tint from their grass type's base color.
+        for (int cy = cy0; cy <= cy1; cy++)
+        {
+            for (int cx = cx0; cx <= cx1; cx++)
+            {
+                byte v = _grassMap[cy * _grassW + cx];
+                if (v == 0) continue;
+                int typeIdx = v - 1;
+                if (typeIdx < 0 || typeIdx >= _grassTypes.Count) continue;
+
+                var gt = _grassTypes[typeIdx];
+                var fill = new Color(gt.BaseR, gt.BaseG, gt.BaseB, (byte)80);
+                FillGrassCellQuad(cx, cy, cs, screenW, screenH, fill);
+            }
+        }
+
+        // Cell boundary lines.
+        for (int cy = cy0; cy <= cy1 + 1; cy++)
+        {
+            var a = _camera.WorldToScreen(new Vec2(cx0 * cs, cy * cs), 0f, screenW, screenH);
+            var b = _camera.WorldToScreen(new Vec2((cx1 + 1) * cs, cy * cs), 0f, screenW, screenH);
+            DrawLine(a, b, lineColor);
+        }
+        for (int cx = cx0; cx <= cx1 + 1; cx++)
+        {
+            var a = _camera.WorldToScreen(new Vec2(cx * cs, cy0 * cs), 0f, screenW, screenH);
+            var b = _camera.WorldToScreen(new Vec2(cx * cs, (cy1 + 1) * cs), 0f, screenW, screenH);
+            DrawLine(a, b, lineColor);
+        }
+    }
+
+    private void FillGrassCellQuad(int cx, int cy, float cs, int screenW, int screenH, Color fill)
+    {
+        // Cell in world space, projected to 4 screen points (parallelogram).
+        var tl = _camera.WorldToScreen(new Vec2(cx * cs,       cy * cs      ), 0f, screenW, screenH);
+        var tr = _camera.WorldToScreen(new Vec2((cx + 1) * cs, cy * cs      ), 0f, screenW, screenH);
+        var br = _camera.WorldToScreen(new Vec2((cx + 1) * cs, (cy + 1) * cs), 0f, screenW, screenH);
+        var bl = _camera.WorldToScreen(new Vec2(cx * cs,       (cy + 1) * cs), 0f, screenW, screenH);
+
+        // SpriteBatch doesn't draw filled quads directly. For axis-aligned cells in
+        // an iso camera, the projected quad is a parallelogram (tl-tr-br-bl). We
+        // approximate the fill by scan-drawing horizontal 1-pixel strips between
+        // the top and bottom edges. Cheap enough for ~hundreds of visible cells.
+        int yTop = (int)MathF.Min(tl.Y, tr.Y);
+        int yBot = (int)MathF.Max(bl.Y, br.Y);
+        for (int y = yTop; y <= yBot; y++)
+        {
+            float t = yBot == yTop ? 0f : (y - yTop) / (float)(yBot - yTop);
+            float xL = MathHelper.Lerp(tl.X, bl.X, t);
+            float xR = MathHelper.Lerp(tr.X, br.X, t);
+            int ix = (int)MathF.Min(xL, xR);
+            int iw = (int)MathF.Abs(xR - xL);
+            if (iw > 0)
+                _spriteBatch.Draw(_pixel, new Rectangle(ix, y, iw, 1), fill);
+        }
     }
 
     // ====================================================================
@@ -3928,6 +4154,15 @@ public class MapEditorWindow
                 writer.WriteNumber("g", gt.TipG);
                 writer.WriteNumber("b", gt.TipB);
                 writer.WriteEndObject();
+
+                writer.WriteStartArray("spritePaths");
+                foreach (var p in gt.SpritePaths)
+                    if (!string.IsNullOrEmpty(p)) writer.WriteStringValue(p);
+                writer.WriteEndArray();
+
+                writer.WriteNumber("scale", gt.Scale);
+                writer.WriteNumber("density", gt.Density);
+
                 writer.WriteEndObject();
             }
             writer.WriteEndArray();
@@ -4070,12 +4305,17 @@ public class MapEditorWindow
                 _grassTypes.Clear();
                 foreach (var t in gi.Types)
                 {
-                    _grassTypes.Add(new GrassTypeDef
+                    var def = new GrassTypeDef
                     {
                         Id = t.Id, Name = t.Name,
                         BaseR = t.BaseR, BaseG = t.BaseG, BaseB = t.BaseB,
-                        TipR = t.TipR, TipG = t.TipG, TipB = t.TipB
-                    });
+                        TipR = t.TipR, TipG = t.TipG, TipB = t.TipB,
+                        Scale = t.Scale > 0f ? t.Scale : 1f,
+                        Density = t.Density > 0f ? t.Density : 1f,
+                    };
+                    if (t.SpritePaths != null)
+                        foreach (var p in t.SpritePaths) def.SpritePaths.Add(p);
+                    _grassTypes.Add(def);
                 }
             }
 

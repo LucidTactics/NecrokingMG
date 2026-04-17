@@ -24,7 +24,7 @@
     "density": 160,
     "height": 150,
     "bladesPerCell": 10,
-    "cellSize": 0.8,
+    "cellSize": 1,
     "windSpeed": 1,
     "windStrength": 1,
     "fwidthSmoothing": true,
@@ -109,7 +109,7 @@
     "accelFullTime": 6
   },
   "fogOfWar": {
-    "mode": 1,
+    "mode": 2,
     "defaultSightRange": 10,
     "unexploredAlpha": 1,
     "foggedAlpha": 0.7
