@@ -225,7 +225,11 @@ public class WeatherRenderer
 
         float zoom = _camera.Zoom;
         float yRatio = _camera.YRatio;
-        float heightScale = _camera.HeightScale;
+        // Rain is a screen-space effect: "height units" are pixels, not world units, so streak
+        // dimensions stay consistent regardless of zoom. RAIN_PX_PER_UNIT is the conversion for
+        // any "height unit" values rain uses internally (e.g. RAIN_FALL_HEIGHT, RainLength).
+        const float RAIN_PX_PER_UNIT = 16.0f;
+        float heightScale = RAIN_PX_PER_UNIT;
         float minZoom = _camera.MinZoom;
         float maxZoom = _camera.MaxZoom;
         float baseFallRate = fx.RainSpeed / 60.0f;

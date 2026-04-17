@@ -41,10 +41,20 @@ public class Renderer
             cam.ZoomBy(input.ScrollDelta / 120f);
     }
 
-    public Vector2 WorldToScreen(Vec2 worldPos, float height, Camera25D cam)
+    // World-unit height: scales with zoom. Use for jumps, projectile altitude, arc heights, Z.
+    public Vector2 WorldToScreen(Vec2 worldPos, float worldHeight, Camera25D cam)
     {
         float sx = (worldPos.X - cam.Position.X) * cam.Zoom + _screenW * 0.5f;
-        float sy = (worldPos.Y - cam.Position.Y) * cam.Zoom * cam.YRatio + _screenH * 0.5f - height * cam.HeightScale;
+        float sy = (worldPos.Y - cam.Position.Y) * cam.Zoom * cam.YRatio + _screenH * 0.5f - worldHeight * cam.Zoom * cam.YRatio;
+        return new Vector2(sx, sy);
+    }
+
+    // Pixel-space height: literal screen pixels, zoom-independent.
+    // Use for screen-space effects (rain streaks, lightning arcs) anchored to a world point.
+    public Vector2 WorldToScreenPx(Vec2 worldPos, float pixelHeight, Camera25D cam)
+    {
+        float sx = (worldPos.X - cam.Position.X) * cam.Zoom + _screenW * 0.5f;
+        float sy = (worldPos.Y - cam.Position.Y) * cam.Zoom * cam.YRatio + _screenH * 0.5f - pixelHeight;
         return new Vector2(sx, sy);
     }
 

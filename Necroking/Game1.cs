@@ -3416,8 +3416,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
                                     _sim.Units[i].Position.Y);
 
                                 float unitHeight = _sim.Units[i].JumpHeight;
-                                mu[i].EffectSpawnHeight = unitHeight - wpf.Tip.Y * worldScale
-                                    * _camera.Zoom / _camera.HeightScale;
+                                mu[i].EffectSpawnHeight = unitHeight - wpf.Tip.Y * worldScale;
 
                                 foundWeaponTip = true;
                             }
@@ -3470,8 +3469,6 @@ public class Game1 : Microsoft.Xna.Framework.Game
         result.HiltWorld = new Vec2(
             _sim.Units[unitIdx].Position.X + wpf.Hilt.X * worldScale * flipMul,
             _sim.Units[unitIdx].Position.Y);
-        // Heights in world-scale units (zoom-independent) so particles persist across zoom changes.
-        // Converted to screen height at draw time: height * cam.Zoom / cam.HeightScale
         result.HiltHeight = unitHeight - wpf.Hilt.Y * worldScale;
         result.HiltBehind = wpf.Hilt.Behind;
 
@@ -4320,7 +4317,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
             var attach = ComputeWeaponAttach(unitIdx, unitDef, animData);
             if (attach.Valid)
             {
-                var hiltScreen = _renderer.WorldToScreen(attach.HiltWorld, attach.HiltHeight * _camera.Zoom / _camera.HeightScale, _camera);
+                var hiltScreen = _renderer.WorldToScreen(attach.HiltWorld, attach.HiltHeight, _camera);
                 hiltScreen.X += ofsX;
                 hiltScreen.Y += CarryOffsetY;
                 DrawSpriteFrame(corpsesAtlas, fr.Frame.Value, hiltScreen, bagScale, fr.FlipX, _ambientColor);

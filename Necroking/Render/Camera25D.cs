@@ -7,8 +7,7 @@ namespace Necroking.Render;
 public class Camera25D
 {
     public Vec2 Position = Vec2.Zero;
-    public float Zoom = 32.0f;         // pixels per world unit
-    public float HeightScale = 16.0f;  // pixels per height unit
+    public float Zoom = 32.0f;         // pixels per world unit (X axis)
     public float YRatio = 0.5f;        // Y foreshortening (0.5 = isometric)
 
     public float PanSpeed = 20.0f;
@@ -29,10 +28,22 @@ public class Camera25D
             ZoomBy(input.ScrollDelta / 120f);
     }
 
-    public Vector2 WorldToScreen(Vec2 worldPos, float height, int screenW, int screenH)
+    // World-unit height: scales with zoom, same scale as Y position (foreshortened).
+    // Use this for anything physical: unit jumps, projectile altitude, arc heights, corpse Z.
+    public Vector2 WorldToScreen(Vec2 worldPos, float worldHeight, int screenW, int screenH)
     {
         float sx = (worldPos.X - Position.X) * Zoom + screenW * 0.5f;
-        float sy = (worldPos.Y - Position.Y) * Zoom * YRatio + screenH * 0.5f - height * HeightScale;
+        float sy = (worldPos.Y - Position.Y) * Zoom * YRatio + screenH * 0.5f - worldHeight * Zoom * YRatio;
+        return new Vector2(sx, sy);
+    }
+
+    // Pixel-space height: literal screen pixels, zoom-independent.
+    // Use this for screen-space effects that should look the same at every zoom:
+    // rain streaks, lightning arc shapes, screen-space overlays anchored to world points.
+    public Vector2 WorldToScreenPx(Vec2 worldPos, float pixelHeight, int screenW, int screenH)
+    {
+        float sx = (worldPos.X - Position.X) * Zoom + screenW * 0.5f;
+        float sy = (worldPos.Y - Position.Y) * Zoom * YRatio + screenH * 0.5f - pixelHeight;
         return new Vector2(sx, sy);
     }
 
