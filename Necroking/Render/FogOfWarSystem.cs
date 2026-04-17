@@ -192,7 +192,7 @@ public class FogOfWarSystem
             _device.SetRenderTarget(_visibilityRT);
             _device.Clear(Color.Black);
 
-            spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.Opaque, SamplerState.LinearClamp);
+            spriteBatch.Begin(SpriteSortMode.Deferred, MaxBlend, SamplerState.LinearClamp);
             for (int i = 0; i < units.Count; i++)
             {
                 var unit = units[i];
