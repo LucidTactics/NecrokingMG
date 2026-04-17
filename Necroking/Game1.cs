@@ -4840,7 +4840,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
             Color outline = Color.FromNonPremultiplied(0, 0, 0, SymAlpha);
             var textSize = _largeFont.MeasureString(sym);
             int symX = (int)(sp_upper.X - textSize.X * 0.5f);
-            int symY = (int)(sp_upper.Y - textSize.Y - 5);
+            int symY = (int)(sp_upper.Y - textSize.Y - 0.25f * _camera.Zoom * _camera.YRatio);
             var symPos = new Vector2(symX, symY);
 
             // Black outline (8-way offset) for contrast and bolder look
