@@ -59,6 +59,14 @@ public class CharacterStatsUI
     // actives appear in the Active Skills panel while in this set.
     private readonly HashSet<string> _learned = new();
 
+    // Skill points: each learned skill costs 1, refunded on unlearn.
+    private const int StartingSkillPoints = 5;
+    private const int SkillCost = 1;
+    private int _skillPoints = StartingSkillPoints;
+
+    // Extra vertical space in the Learn panel for the "Points: N" counter.
+    private const int SkillPointsHeaderH = 22;
+
     private static readonly Color SkillBtnBg = new(40, 40, 60, 220);
     private static readonly Color SkillBtnBgLearned = new(60, 80, 100, 230);
     private static readonly Color SkillBtnBgActive = new(80, 110, 70, 240);
@@ -70,6 +78,8 @@ public class CharacterStatsUI
     private static readonly Color SkillBtnText = new(230, 230, 240);
     private static readonly Color SkillBtnTextDim = new(130, 130, 150);
     private static readonly Color SkillBtnTextActive = new(230, 255, 210);
+    private static readonly Color SkillPointsColor = new(255, 220, 140);
+    private static readonly Color SkillPointsEmptyColor = new(220, 130, 130);
 
     private static readonly Color PanelBg = new(15, 15, 25, 230);
     private static readonly Color PanelBorder = new(120, 120, 170, 240);
@@ -127,7 +137,7 @@ public class CharacterStatsUI
     }
 
     private static int TotalWidth() => PanelW + SkillsGap + SkillsPanelW + SkillsGap + SkillsPanelW;
-    private static int LearnPanelHeight() => TitleH + PadY * 2 + Skills.Length * (SkillBtnH + SkillBtnGap) - SkillBtnGap;
+    private static int LearnPanelHeight() => TitleH + SkillPointsHeaderH + PadY * 2 + Skills.Length * (SkillBtnH + SkillBtnGap) - SkillBtnGap;
     private int ActivePanelHeight()
     {
         int count = 0;
@@ -292,20 +302,45 @@ public class CharacterStatsUI
             new Vector2((int)(px + (SkillsPanelW - titleSize.X) / 2), (int)(py + 4)),
             TitleColor);
 
+        // Skill points counter below the title
+        string pts = $"Points: {_skillPoints}";
+        var ptsSize = _font.MeasureString(pts);
+        _batch.DrawString(_font, pts,
+            new Vector2((int)(px + (SkillsPanelW - ptsSize.X) / 2), (int)(py + TitleH + 2)),
+            _skillPoints > 0 ? SkillPointsColor : SkillPointsEmptyColor);
+
         int mx = (int)input.MousePos.X;
         int my = (int)input.MousePos.Y;
 
-        int btnY = py + TitleH + PadY;
+        int btnY = py + TitleH + SkillPointsHeaderH + PadY;
         for (int i = 0; i < Skills.Length; i++)
         {
             var rect = new Rectangle(px + PadX, btnY, SkillsPanelW - PadX * 2, SkillBtnH);
             bool learned = _learned.Contains(Skills[i].Name);
             bool hovered = rect.Contains(mx, my);
+            bool canAfford = learned || _skillPoints >= SkillCost;
 
-            Color bg = hovered ? SkillBtnBgHover
-                : (learned ? SkillBtnBgLearned : SkillBtnBg);
-            Color border = learned ? SkillBtnBorderLearned : SkillBtnBorder;
-            Color textColor = learned ? SkillBtnText : SkillBtnTextDim;
+            Color bg;
+            Color border;
+            Color textColor;
+            if (learned)
+            {
+                bg = hovered ? SkillBtnBgHover : SkillBtnBgLearned;
+                border = SkillBtnBorderLearned;
+                textColor = SkillBtnText;
+            }
+            else if (!canAfford)
+            {
+                bg = SkillBtnBgDisabled;
+                border = SkillBtnBorder;
+                textColor = SkillBtnTextDim;
+            }
+            else
+            {
+                bg = hovered ? SkillBtnBgHover : SkillBtnBg;
+                border = SkillBtnBorder;
+                textColor = SkillBtnTextDim;
+            }
 
             _batch.Draw(_pixel, rect, bg);
             DrawBorder(rect.X, rect.Y, rect.Width, rect.Height, border);
@@ -316,7 +351,7 @@ public class CharacterStatsUI
                            (int)(rect.Y + (rect.Height - tSize.Y) / 2)),
                 textColor);
 
-            if (hovered && input.LeftPressed && !input.IsMouseConsumed)
+            if (hovered && input.LeftPressed && !input.IsMouseConsumed && canAfford)
             {
                 bool wantLearn = !learned;
                 SetLearned(Skills[i], wantLearn, sim, necroIdx, ref primaryBar);
@@ -397,9 +432,18 @@ public class CharacterStatsUI
     {
         bool wasLearned = _learned.Contains(skill.Name);
         if (wasLearned == learn) return;
+        if (learn && _skillPoints < SkillCost) return;
 
-        if (learn) _learned.Add(skill.Name);
-        else _learned.Remove(skill.Name);
+        if (learn)
+        {
+            _learned.Add(skill.Name);
+            _skillPoints -= SkillCost;
+        }
+        else
+        {
+            _learned.Remove(skill.Name);
+            _skillPoints += SkillCost;
+        }
 
         switch (skill.Kind)
         {
