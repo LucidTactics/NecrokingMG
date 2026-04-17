@@ -219,9 +219,16 @@ public class GrassTuftRenderer
                         Flip = flip,
                     });
 
+                    // Sort by the tuft's visual bottom, not its anchor. The sprite
+                    // is drawn with origin (W/2, H * 0.75) — i.e. 25% of the sprite
+                    // extends below the anchor at wy — so the true feet are lower
+                    // than wy. Bushes / env objects sort by their own feet (obj.Y),
+                    // so aligning here avoids tufts sorting as "equal" with a bush
+                    // whose feet are actually below them.
+                    float sortY = wy + 0.25f * worldSize;
                     depthItems.Add(new Game1.DepthItem
                     {
-                        Y = wy,
+                        Y = sortY,
                         Type = Game1.DepthItemType.GrassTuft,
                         Index = _visibleTufts.Count - 1,
                     });

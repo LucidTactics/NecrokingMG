@@ -4617,7 +4617,20 @@ public class Game1 : Microsoft.Xna.Framework.Game
         public DepthItemType Type;
         public int Index;       // Unit index, env object index, or cloud index
         public int SubIndex;    // For cloud puffs: puff index within the cloud
-        public int CompareTo(DepthItem other) => Y.CompareTo(other.Y);
+        // Sort by Y first, then by (Type, Index, SubIndex) as tiebreaker so items
+        // with equal Y always order deterministically. .NET's List<T>.Sort is
+        // introsort — unstable — so without a tiebreaker, tufts with Y equal to
+        // a bush's Y would flicker in front of / behind it as the camera pans.
+        public int CompareTo(DepthItem other)
+        {
+            int c = Y.CompareTo(other.Y);
+            if (c != 0) return c;
+            c = ((byte)Type).CompareTo((byte)other.Type);
+            if (c != 0) return c;
+            c = Index.CompareTo(other.Index);
+            if (c != 0) return c;
+            return SubIndex.CompareTo(other.SubIndex);
+        }
     }
 
     private void DrawUnitsAndObjects()
@@ -4821,24 +4834,31 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // --- Status symbol (? / !) above head during notice/react events ---
         if (_sim.Units[i].StatusSymbol != 0 && _largeFont != null)
         {
+            const float SymScale = 0.7f;   // ~30% smaller than _largeFont default
+            const byte SymAlpha = 128;      // ~0.5 alpha
             string sym = _sim.Units[i].StatusSymbol == (byte)UnitStatusSymbol.Notice ? "?" : "!";
             Color symColor = _sim.Units[i].StatusSymbol == (byte)UnitStatusSymbol.Notice
-                ? Color.FromNonPremultiplied(255, 240, 80, 255)   // yellow ?
-                : Color.FromNonPremultiplied(255, 80, 60, 255);   // red !
-            Color outline = Color.FromNonPremultiplied(0, 0, 0, 255);
+                ? Color.FromNonPremultiplied(255, 240, 80, SymAlpha)   // yellow ?
+                : Color.FromNonPremultiplied(255, 80, 60, SymAlpha);   // red !
+            Color outline = Color.FromNonPremultiplied(0, 0, 0, SymAlpha);
             var textSize = _largeFont.MeasureString(sym);
             int symX = (int)(sp_upper.X - textSize.X * 0.5f);
             int symY = (int)(sp_upper.Y - textSize.Y - 5);
+            var symPos = new Vector2(symX, symY);
 
             // Black outline (8-way offset) for contrast and bolder look
             for (int ox = -2; ox <= 2; ox++)
                 for (int oy = -2; oy <= 2; oy++)
                     if ((ox != 0 || oy != 0) && ox * ox + oy * oy <= 4)
-                        DrawText(_largeFont, sym, new Vector2(symX + ox, symY + oy), outline);
+                        _spriteBatch.DrawString(_largeFont, sym,
+                            symPos + new Vector2(ox, oy), outline,
+                            0f, Vector2.Zero, SymScale, SpriteEffects.None, 0f);
 
             // Faux-bold: draw colored fill twice with 1px horizontal offset
-            DrawText(_largeFont, sym, new Vector2(symX, symY), symColor);
-            DrawText(_largeFont, sym, new Vector2(symX + 1, symY), symColor);
+            _spriteBatch.DrawString(_largeFont, sym, symPos, symColor,
+                0f, Vector2.Zero, SymScale, SpriteEffects.None, 0f);
+            _spriteBatch.DrawString(_largeFont, sym, symPos + new Vector2(1, 0), symColor,
+                0f, Vector2.Zero, SymScale, SpriteEffects.None, 0f);
         }
 
         // --- Feature 1: Weapon point text during attack ---
