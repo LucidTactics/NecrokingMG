@@ -743,9 +743,21 @@ public class EnvironmentSystem
         return true;
     }
 
+    /// <summary>
+    /// Stamp env objects into per-tier pathfinding cost fields, inflated by the
+    /// tier's reference radius. Movement collision (walls-only _costField) is
+    /// left untouched — runtime unit↔object collision goes through ORCA static
+    /// obstacles, not the grid.
+    ///
+    /// Per-tier inflation amount = TerrainCosts.SizeTierRadius[tier] so a unit
+    /// of size tier T plans paths with enough clearance for its body:
+    ///   tier 0 (small, size ≤2):  +0.50 world units around each obstacle
+    ///   tier 1 (medium, size ≤4): +1.25
+    ///   tier 2 (large, size >4):  +1.75
+    /// </summary>
     public void BakeCollisions(TileGrid grid)
     {
-        // Reset tiered cost fields to base terrain before stamping obstacles
+        // Reset tier fields to the walls-only base before stamping env.
         grid.RebuildTieredCostFields();
 
         for (int i = 0; i < _objects.Count; i++)
@@ -766,10 +778,9 @@ public class EnvironmentSystem
                 float cy = obj.Y + def.CollisionOffsetY * es;
                 float cr = def.CollisionRadius * es;
 
-                grid.StampImpassableCircle(cx, cy, cr);
                 for (int tier = 0; tier < TerrainCosts.NumSizeTiers; tier++)
                 {
-                    grid.StampImpassableCircleTier(tier, cx, cy, cr);
+                    grid.StampImpassableCircleTier(tier, cx, cy, cr + TerrainCosts.SizeTierRadius[tier]);
                 }
             }
         }

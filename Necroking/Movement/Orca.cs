@@ -17,6 +17,12 @@ public struct ORCANeighbor
     public float Radius;
     public uint Id;
     public int Priority;
+    /// <summary>
+    /// Static = immovable obstacle (e.g. a tree). The unit takes 100% of the
+    /// avoidance responsibility since the neighbor cannot move. Velocity is
+    /// assumed to be Vec2.Zero for statics (caller's responsibility).
+    /// </summary>
+    public bool IsStatic;
 }
 
 public struct ORCAParams
@@ -54,12 +60,18 @@ public static class Orca
             float combinedRadius = param.Radius + neighbor.Radius;
             float combinedRadiusSq = combinedRadius * combinedRadius;
 
-            // Responsibility sharing based on priority
-            float responsibility = 0.5f;
-            if (param.Priority < neighbor.Priority)
+            // Responsibility sharing based on priority. Static neighbors (trees,
+            // rocks) can't move, so the unit takes 100% of the avoidance — this is
+            // the canonical ORCA handling for circular static obstacles.
+            float responsibility;
+            if (neighbor.IsStatic)
+                responsibility = 1.0f;
+            else if (param.Priority < neighbor.Priority)
                 responsibility = 0.9f;
             else if (param.Priority > neighbor.Priority)
                 responsibility = 0.1f;
+            else
+                responsibility = 0.5f;
 
             ORCALine line;
 

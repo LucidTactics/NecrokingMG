@@ -461,9 +461,13 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // Wire collision change callback so pathfinding rebuilds when objects change state
         _envSystem.OnCollisionsDirty = () => _sim.RebuildPathfinder();
 
-        // Bake wall and environment object collisions into the tile grid cost field
+        // Bake walls + env (and build the env spatial index used by ORCA). Going
+        // through RebuildPathfinder ensures the env index is populated at startup
+        // — calling BakeCollisions directly leaves it empty until the first
+        // dirty event fires at runtime, which would make units walk through
+        // trees on the starting map.
         _wallSystem.BakeWalls(_sim.Grid);
-        _envSystem.BakeCollisions(_sim.Grid);
+        _sim.RebuildPathfinder();
         LogTiming($"Baked collisions: {_envSystem.ObjectCount} objects, grid {worldW}x{worldH}");
 
         // Fog of war

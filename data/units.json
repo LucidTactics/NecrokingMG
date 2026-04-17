@@ -2650,7 +2650,7 @@
         "magicResist": 2,
         "encumbrance": 2,
         "naturalProt": 4,
-        "combatSpeed": 15
+        "combatSpeed": 5
       },
       "zombieTypeID": "",
       "spellID": "",
@@ -2701,7 +2701,7 @@
         "magicResist": 2,
         "encumbrance": 2,
         "naturalProt": 4,
-        "combatSpeed": 15
+        "combatSpeed": 5
       },
       "zombieTypeID": "",
       "spellID": "",
@@ -2925,7 +2925,7 @@
         "magicResist": 3,
         "encumbrance": 2,
         "naturalProt": 4,
-        "combatSpeed": 7
+        "combatSpeed": 5
       },
       "zombieTypeID": "",
       "spellID": "",
@@ -2977,7 +2977,7 @@
         "magicResist": 3,
         "encumbrance": 2,
         "naturalProt": 4,
-        "combatSpeed": 7
+        "combatSpeed": 5
       },
       "zombieTypeID": "",
       "spellID": "",

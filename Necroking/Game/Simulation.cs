@@ -63,6 +63,9 @@ public class Simulation
     private FlowFieldManager _flowFields = new();
     private Pathfinder _pathfinder = new();
     private Quadtree _quadtree = new();
+    // Spatial index over env objects (trees, rocks, etc.) — rebuilt only on
+    // OnCollisionsDirty, so ORCA static-obstacle queries are free per-frame.
+    private readonly EnvSpatialIndex _envIndex = new();
     private UnitArrays _units = new();
     private ProjectileManager _projectiles = new();
     private LightningSystem _lightning = new();
@@ -1004,6 +1007,7 @@ public class Simulation
     {
         var neighbors = new List<ORCANeighbor>();
         var nearbyIDs = new List<uint>();
+        var envEntries = new List<EnvSpatialIndex.Entry>();
 
         for (int i = 0; i < _units.Count; i++)
         {
@@ -1055,17 +1059,58 @@ public class Simulation
                 });
             }
 
-            // Sort by distance, keep closest 10
+            // Sort dynamic neighbours by distance, keep closest 10
             var myPos = _units[i].Position;
             neighbors.Sort((a, b) => (a.Position - myPos).LengthSq().CompareTo((b.Position - myPos).LengthSq()));
             if (neighbors.Count > 10) neighbors.RemoveRange(10, neighbors.Count - 10);
+
+            // Append up to 6 nearest static env obstacles (trees, rocks). They
+            // participate in ORCA as zero-velocity immovable circles with 100%
+            // responsibility on the unit — the canonical ORCA handling for
+            // circular static obstacles.
+            envEntries.Clear();
+            _envIndex.QueryRadius(myPos, queryRadius, envEntries);
+            if (envEntries.Count > 0)
+            {
+                // Filter by real circle distance; pick nearest 6.
+                envEntries.Sort((a, b) =>
+                {
+                    float da = (a.CX - myPos.X) * (a.CX - myPos.X) + (a.CY - myPos.Y) * (a.CY - myPos.Y);
+                    float db = (b.CX - myPos.X) * (b.CX - myPos.X) + (b.CY - myPos.Y) * (b.CY - myPos.Y);
+                    return da.CompareTo(db);
+                });
+                int staticKept = 0;
+                const int MaxStatic = 6;
+                foreach (var e in envEntries)
+                {
+                    if (staticKept >= MaxStatic) break;
+                    float dx = e.CX - myPos.X, dy = e.CY - myPos.Y;
+                    float combined = _units[i].Radius + e.Radius + 0.1f;
+                    // Query radius is generous (5× unit radius); inside-range trees
+                    // qualify even if far — ORCA handles distance anyway. But skip
+                    // ones too far to matter within the ORCA time horizon.
+                    float reach = _units[i].MaxSpeed * 3f + combined;
+                    if (dx * dx + dy * dy > reach * reach) continue;
+
+                    neighbors.Add(new ORCANeighbor
+                    {
+                        Position = new Vec2(e.CX, e.CY),
+                        Velocity = Vec2.Zero,
+                        Radius = e.Radius,
+                        Id = 0x80000000u | (uint)e.ObjectIndex, // synthetic non-unit id
+                        Priority = int.MaxValue,
+                        IsStatic = true,
+                    });
+                    staticKept++;
+                }
+            }
 
             var param = new ORCAParams
             {
                 TimeHorizon = 3f,
                 MaxSpeed = _units[i].MaxSpeed,
                 Radius = _units[i].Radius,
-                MaxNeighbors = 10,
+                MaxNeighbors = 16,
                 Priority = _units[i].OrcaPriority
             };
 
@@ -1207,6 +1252,41 @@ public class Simulation
                         Vec2 dir = new((bestPos.X - oldPos.X) / dist, (bestPos.Y - oldPos.Y) / dist);
                         oldPos = new Vec2(oldPos.X + dir.X * step, oldPos.Y + dir.Y * step);
                     }
+                    _units[i].Position = oldPos;
+                }
+            }
+
+            // --- Stuck-inside-env-object escape ---
+            // Env objects aren't on the walls-only grid anymore, so the wall escape
+            // above won't catch a unit that spawned on a tree or had one placed on
+            // it. Push outward along the vector from the closest overlapping
+            // object's centre, same feel as the grid escape (MaxSpeed × 3).
+            {
+                envEntries.Clear();
+                float selfR = _units[i].Radius;
+                _envIndex.QueryRadius(oldPos, selfR, envEntries);
+                float bestPenDist2 = 0f;
+                Vec2 pushDir = Vec2.Zero;
+                foreach (var e in envEntries)
+                {
+                    float dx = oldPos.X - e.CX, dy = oldPos.Y - e.CY;
+                    float combined = selfR + e.Radius;
+                    float d2 = dx * dx + dy * dy;
+                    if (d2 >= combined * combined) continue;
+                    // Penetration depth: how far inside the combined circle we are.
+                    float pen = combined - MathF.Sqrt(d2);
+                    if (pen * pen > bestPenDist2)
+                    {
+                        bestPenDist2 = pen * pen;
+                        float len = MathF.Max(0.001f, MathF.Sqrt(d2));
+                        pushDir = new Vec2(dx / len, dy / len);
+                    }
+                }
+                if (bestPenDist2 > 0f)
+                {
+                    float pushSpeed = _units[i].MaxSpeed * 3f;
+                    float step = pushSpeed * dt;
+                    oldPos = new Vec2(oldPos.X + pushDir.X * step, oldPos.Y + pushDir.Y * step);
                     _units[i].Position = oldPos;
                 }
             }
@@ -2190,6 +2270,8 @@ public class Simulation
         _grid.RebuildCostField();
         _envSystem?.BakeCollisions(_grid);
         _wallSystem?.BakeWalls(_grid);
+        if (_envSystem != null)
+            _envIndex.Rebuild(_envSystem, _grid.Width, _grid.Height);
         _pathfinder.Rebuild();
     }
 }

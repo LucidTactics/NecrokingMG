@@ -82,10 +82,26 @@ public class TileGrid
         return h0 + (h1 - h0) * fy;
     }
 
-    public byte GetCost(int x, int y, int tier = 0)
+    /// <summary>
+    /// Walls-only cost (terrain + placed walls). Env objects (trees, rocks) are
+    /// NOT stamped here — they're handled at runtime by ORCA static obstacles.
+    /// Use this for movement-collision / "truly impassable" queries.
+    /// </summary>
+    public byte GetCost(int x, int y)
     {
         if (!InBounds(x, y)) return 255;
-        if (tier == 0) return _costField[Index(x, y)];
+        return _costField[Index(x, y)];
+    }
+
+    /// <summary>
+    /// Per-tier pathfinding cost. Includes walls + env obstacles inflated by
+    /// SizeTierRadius[tier] so a unit of the given size tier plans paths that
+    /// fit through gaps its body can actually cross.
+    /// </summary>
+    public byte GetCost(int x, int y, int tier)
+    {
+        if (!InBounds(x, y)) return 255;
+        if (tier < 0 || tier >= _costFieldTier.Length) tier = 0;
         return _costFieldTier[tier] != null ? _costFieldTier[tier][Index(x, y)] : _costField[Index(x, y)];
     }
 
