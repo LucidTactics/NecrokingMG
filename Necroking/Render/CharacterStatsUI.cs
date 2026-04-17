@@ -31,6 +31,10 @@ public class CharacterStatsUI
     private const int SkillBtnH = 28;
     private const int SkillBtnGap = 4;
 
+    // Top-left anchor: sits under the HP/mana bars (mana bar ends around y=66).
+    private const int AnchorX = 10;
+    private const int AnchorY = 74;
+
     private enum SkillKind { ActiveSpell, PassiveGhostMode, PassiveArchmage }
 
     // Skill list: Active skills can be bound to the RC slot; Passive skills toggle effects on the necromancer.
@@ -120,8 +124,8 @@ public class CharacterStatsUI
         int statsRowCount = 22; // keep in sync with rows list in Draw
         int buffListH = activeBuffs > 0 ? BuffsHeaderH + activeBuffs * RowH + 6 : 0;
         int statsH = TitleH + PadY * 2 + statsRowCount * RowH + buffListH;
-        int statsX = (screenW - TotalWidth()) / 2;
-        int statsY = (screenH - statsH) / 2;
+        int statsX = AnchorX;
+        int statsY = AnchorY;
 
         if (mx >= statsX && mx < statsX + PanelW && my >= statsY && my < statsY + statsH)
             return true;
@@ -136,7 +140,6 @@ public class CharacterStatsUI
         return mx >= activeX && mx < activeX + SkillsPanelW && my >= statsY && my < statsY + activeH;
     }
 
-    private static int TotalWidth() => PanelW + SkillsGap + SkillsPanelW + SkillsGap + SkillsPanelW;
     private static int LearnPanelHeight() => TitleH + SkillPointsHeaderH + PadY * 2 + Skills.Length * (SkillBtnH + SkillBtnGap) - SkillBtnGap;
     private int ActivePanelHeight()
     {
@@ -214,9 +217,8 @@ public class CharacterStatsUI
         int buffListH = activeBuffCount > 0 ? BuffsHeaderH + activeBuffCount * RowH + 6 : 0;
 
         int statsH = TitleH + PadY * 2 + rows.Count * RowH + buffListH;
-        int totalW = TotalWidth();
-        int panelX = (screenW - totalW) / 2;
-        int panelY = (screenH - statsH) / 2;
+        int panelX = AnchorX;
+        int panelY = AnchorY;
 
         // Stats panel background + border
         _batch.Draw(_pixel, new Rectangle(panelX, panelY, PanelW, statsH), PanelBg);
