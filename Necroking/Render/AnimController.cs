@@ -84,11 +84,19 @@ public class AnimController
     // Cached resolved data for _currentState (set once per state transition)
     private AnimationData? _resolvedAnim;
     private AnimationMeta? _resolvedMeta;
+    private AngleScheme _resolvedScheme = AngleScheme.Old;
+    private int _resolvedFallbackAngle = 30;
 
-    // Angle sectors: maps world angle to sprite angle + flip
-    // World: 0=right, 90=down(toward camera), 180=left, 270=up(away)
-    // Sprite angles: 30 (right-ish), 60 (down), 300 (up/away)
-    private static readonly (float min, float max, int angle, bool flip)[] AngleSectors =
+    private enum AngleScheme { Old, New }
+
+    // Angle sectors: map world angle (Y-down: 0=right, 90=down, 180=left, 270=up) → stored sprite angle + flip.
+    //
+    // OldSectors: legacy 3-angle scheme (30 right-ish, 60 down-ish, 300 up-ish). Down and Up are split at the
+    // cardinal so their left half flips. Units authored before the angle refactor use this.
+    //
+    // NewSectors: compass scheme (Y-up math convention: 0=E, 45=NE, 90=N, 270=S, 315=SE). N and S are distinct
+    // sprites (face vs back) — they never flip. W/NW/SW come from horizontal-flipping E/NE/SE.
+    private static readonly (float min, float max, int angle, bool flip)[] OldSectors =
     {
         (-22.5f,  22.5f, 30,  false),  // Right
         ( 22.5f,  67.5f, 60,  false),  // Down-Right
@@ -100,6 +108,18 @@ public class AnimController
         (247.5f, 270.0f, 300, true),   // Up (left half)
         (270.0f, 292.5f, 300, false),  // Up (right half)
         (292.5f, 337.5f, 300, false),  // Up-Right
+    };
+
+    private static readonly (float min, float max, int angle, bool flip)[] NewSectors =
+    {
+        (-22.5f,  22.5f,   0, false),  // E
+        ( 22.5f,  67.5f, 315, false),  // SE (screen down-right = math Y-up 315)
+        ( 67.5f, 112.5f, 270, false),  // S (distinct sprite, never flipped)
+        (112.5f, 157.5f, 315, true),   // SW (flip of SE)
+        (157.5f, 202.5f,   0, true),   // W (flip of E)
+        (202.5f, 247.5f,  45, true),   // NW (flip of NE)
+        (247.5f, 292.5f,  90, false),  // N (distinct sprite, never flipped)
+        (292.5f, 337.5f,  45, false),  // NE
     };
 
     public AnimState CurrentState => _currentState;
@@ -150,6 +170,36 @@ public class AnimController
     {
         _resolvedAnim = ResolveAnimForState(_currentState);
         _resolvedMeta = ResolveMetaForState(_currentState);
+        DetectAngleScheme();
+    }
+
+    private void DetectAngleScheme()
+    {
+        _resolvedScheme = AngleScheme.Old;
+        _resolvedFallbackAngle = 30;
+        if (_resolvedAnim == null) return;
+
+        // New scheme keys: 0, 45, 90, 270, 315. Old scheme keys: 30, 60, 300.
+        // Presence of any new-scheme key switches the whole animation to the new table.
+        foreach (var (a, _) in _resolvedAnim.AngleFrames)
+        {
+            if (a == 0 || a == 45 || a == 90 || a == 270 || a == 315)
+            {
+                _resolvedScheme = AngleScheme.New;
+                break;
+            }
+        }
+
+        // Pick a stable fallback from whatever is actually authored.
+        int[] prefs = _resolvedScheme == AngleScheme.New
+            ? new[] { 0, 45, 315, 90, 270 }
+            : new[] { 30, 60, 300 };
+        foreach (var p in prefs)
+        {
+            if (_resolvedAnim.AngleFrames.ContainsKey(p)) { _resolvedFallbackAngle = p; return; }
+        }
+        // Nothing matched the expected scheme — use any authored angle.
+        foreach (var (a, _) in _resolvedAnim.AngleFrames) { _resolvedFallbackAngle = a; return; }
     }
 
     private AnimationData? ResolveAnimForState(AnimState state)
@@ -366,8 +416,8 @@ public class AnimController
         if (durations != null && durations.Count > 0)
         {
             var kfs = _resolvedAnim.GetAngle(spriteAngle);
-            if ((kfs == null || kfs.Count == 0) && spriteAngle != 30)
-                kfs = _resolvedAnim.GetAngle(30);
+            if ((kfs == null || kfs.Count == 0) && spriteAngle != _resolvedFallbackAngle)
+                kfs = _resolvedAnim.GetAngle(_resolvedFallbackAngle);
 
             // Find frame index from cumulative ms
             int numDurFrames = durations.Count;
@@ -396,7 +446,7 @@ public class AnimController
         // Tick-based fallback
         var tickKfs = _resolvedAnim.GetAngle(spriteAngle);
         if (tickKfs == null || tickKfs.Count == 0)
-            tickKfs = _resolvedAnim.GetAngle(30); // fallback angle
+            tickKfs = _resolvedAnim.GetAngle(_resolvedFallbackAngle);
 
         if (tickKfs != null && tickKfs.Count > 0)
         {
@@ -451,7 +501,7 @@ public class AnimController
         // tick-based fallback
         var tickKfs = _resolvedAnim.GetAngle(spriteAngle);
         if (tickKfs == null || tickKfs.Count == 0)
-            tickKfs = _resolvedAnim.GetAngle(30);
+            tickKfs = _resolvedAnim.GetAngle(_resolvedFallbackAngle);
         if (tickKfs != null && tickKfs.Count > 0)
         {
             for (int i = tickKfs.Count - 1; i >= 0; i--)
@@ -469,7 +519,8 @@ public class AnimController
         angleDeg = ((angleDeg % 360f) + 360f) % 360f;
         if (angleDeg >= 337.5f) angleDeg -= 360f;
 
-        foreach (var (min, max, angle, flip) in AngleSectors)
+        var sectors = _resolvedScheme == AngleScheme.New ? NewSectors : OldSectors;
+        foreach (var (min, max, angle, flip) in sectors)
         {
             if (angleDeg >= min && angleDeg < max)
             {
@@ -478,7 +529,7 @@ public class AnimController
             }
         }
         flipX = false;
-        return 30;
+        return _resolvedFallbackAngle;
     }
 
     // --- Action moment ---

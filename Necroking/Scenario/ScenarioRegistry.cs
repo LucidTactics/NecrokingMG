@@ -66,6 +66,7 @@ public static class ScenarioRegistry
         Register("fog_of_war", () => new Scenarios.FogOfWarScenario());
         Register("grass_tufts", () => new Scenarios.GrassTuftTestScenario());
         Register("grass_depth", () => new Scenarios.GrassDepthScenario());
+        Register("angle_sweep", () => new Scenarios.AngleSweepScenario());
     }
 
     public static void Register(string name, Func<ScenarioBase> creator)
