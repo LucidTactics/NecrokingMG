@@ -6,6 +6,7 @@ using Necroking.Data.Registries;
 using Necroking.GameSystems;
 using Necroking.Movement;
 using Necroking.Render;
+using Necroking.Spatial;
 
 namespace Necroking.Game;
 
@@ -173,6 +174,24 @@ public static class PotionSystem
         units[unitIdx].ParalysisSlowTimer = ParalyzeSlowDuration;
     }
 
+    /// <summary>
+    /// Apply paralysis to every non-owner unit inside a radius. Skips the owner faction
+    /// (no friendly fire). Mirrors DamageSystem.ApplyAoE but for paralysis clouds.
+    /// </summary>
+    public static void ApplyParalysisAoE(UnitArrays units, Quadtree qt,
+        Vec2 center, float radius, Faction ownerFaction)
+    {
+        var nearbyIDs = new List<uint>();
+        qt.QueryRadius(center, radius, nearbyIDs);
+        foreach (uint uid in nearbyIDs)
+        {
+            int idx = UnitUtil.ResolveUnitIndex(units, uid);
+            if (idx < 0 || !units[idx].Alive) continue;
+            if (units[idx].Faction == ownerFaction) continue;
+            ApplyParalysis(idx, units);
+        }
+    }
+
     private static void ApplyZombie(PotionDef potion, BuffRegistry buffs, int unitIdx, UnitArrays units,
         Faction ownerFaction, List<PendingZombieRaise> pendingRaises, List<Corpse> corpses, Vec2 impactPos)
     {
@@ -334,7 +353,7 @@ public static class PotionSystem
                         {
                             Position = units[i].Position,
                             Damage = dmg,
-                            Height = 1.5f,
+                            Height = DamageEvent.DefaultHeight,
                             IsPoison = true
                         });
                         if (units[i].Stats.HP <= 0)

@@ -222,15 +222,7 @@ public class SpellEffectSystem
         if (spell.CloudAppliesParalysis)
         {
             // Paralysis clouds use their AoE burst to apply paralysis (no poison stacks).
-            var nearbyIDs = new List<uint>();
-            sim.Quadtree.QueryRadius(target, radius, nearbyIDs);
-            foreach (uint uid in nearbyIDs)
-            {
-                int idx = UnitUtil.ResolveUnitIndex(sim.UnitsMut, uid);
-                if (idx < 0 || !sim.Units[idx].Alive) continue;
-                if (sim.Units[idx].Faction == Faction.Undead) continue;
-                PotionSystem.ApplyParalysis(idx, sim.UnitsMut);
-            }
+            PotionSystem.ApplyParalysisAoE(sim.UnitsMut, sim.Quadtree, target, radius, Faction.Undead);
             return;
         }
 

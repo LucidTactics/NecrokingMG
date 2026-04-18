@@ -117,7 +117,7 @@ public static class DamageSystem
             {
                 Position = units[targetIdx].Position,
                 Damage = finalDamage,
-                Height = 1.5f,
+                Height = DamageEvent.DefaultHeight,
             });
         }
     }
@@ -152,7 +152,7 @@ public static class DamageSystem
         {
             Position = units[targetIdx].Position,
             Damage = netDamage,
-            Height = 1.5f,
+            Height = DamageEvent.DefaultHeight,
         });
 
         if (units[targetIdx].Stats.HP <= 0)
