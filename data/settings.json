@@ -114,5 +114,18 @@
     "unexploredAlpha": 1,
     "foggedAlpha": 0.7
   },
-  "startingInventory": []
+  "startingInventory": [
+    {
+      "itemId": "Mushroom",
+      "quantity": 10
+    },
+    {
+      "itemId": "PoisonMushroom",
+      "quantity": 10
+    },
+    {
+      "itemId": "MagicMushroom",
+      "quantity": 10
+    }
+  ]
 }
