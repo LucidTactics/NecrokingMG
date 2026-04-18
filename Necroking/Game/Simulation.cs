@@ -40,10 +40,24 @@ public class Corpse
 
 public class DamageEvent
 {
+    /// <summary>Default world-unit height above the unit's position where the floating
+    /// damage number renders. Matches a typical humanoid torso height; used when the
+    /// caller doesn't have a per-unit height to offer.</summary>
+    public const float DefaultHeight = 1.5f;
+
     public Vec2 Position;
     public int Damage;
     public float Height;
     public bool IsPoison;
+
+    /// <summary>Build a floating-damage-number event. Pass a per-unit `height` only
+    /// when you already have the correct value on hand (e.g. from a UnitDef's
+    /// SpriteWorldHeight); otherwise leave it at DefaultHeight.</summary>
+    public static DamageEvent Create(Vec2 position, int damage,
+        float height = DefaultHeight, bool isPoison = false) => new()
+    {
+        Position = position, Damage = damage, Height = height, IsPoison = isPoison,
+    };
 }
 
 public struct SoulOrb
@@ -509,7 +523,8 @@ public class Simulation
                                     int damage = _units[i].Stats.RangedDmg.Count > 0 ? _units[i].Stats.RangedDmg[0] : 8;
                                     bool volley = dist > bestRange * 0.4f;
                                     _projectiles.SpawnArrow(_units[i].Position, _units[targetIdx].Position,
-                                        _units[i].Faction, _units[i].Id, damage, volley, 10);
+                                        _units[i].Faction, _units[i].Id, damage, volley, 10,
+                                        spawnHeight: _units[i].EffectSpawnHeight);
                                     _units[i].AttackCooldown = _units[i].Stats.RangedCooldownTime.Count > 0
                                         ? _units[i].Stats.RangedCooldownTime[0] : 2f;
                                 }
@@ -1030,93 +1045,101 @@ public class Simulation
                 continue;
             }
 
+            // Necromancer (player-controlled): skip the ORCA gather/compute so the
+            // player's input isn't deflected by other units or trees. Other units
+            // still see him via their own ORCA queries on the quadtree and dodge
+            // normally. The wall + env-circle collision steps below still run, so
+            // he can't walk through walls or clip through trees.
+            bool skipOrca = _units[i].AI == AIBehavior.PlayerControlled;
+
             // Build ORCA neighbor list
             neighbors.Clear();
             nearbyIDs.Clear();
-            float queryRadius = MathF.Max(_units[i].Radius * 5f, 3f);
-            _quadtree.QueryRadius(_units[i].Position, queryRadius, nearbyIDs);
-
-            foreach (uint nid in nearbyIDs)
-            {
-                if (nid == _units[i].Id) continue;
-                int j = UnitUtil.ResolveUnitIndex(_units, nid);
-                if (j < 0 || !_units[j].Alive) continue;
-
-                // Necromancer ignores friendly units for ORCA — they dodge around it instead
-                if (_units[i].AI == AIBehavior.PlayerControlled &&
-                    _units[j].Faction == _units[i].Faction)
-                    continue;
-
-                neighbors.Add(new ORCANeighbor
-                {
-                    Position = _units[j].Position,
-                    Velocity = _units[j].Velocity,
-                    Radius = _units[j].Radius,
-                    Id = nid,
-                    Priority = _units[j].Faction != _units[i].Faction
-                        ? _units[i].OrcaPriority  // cross-faction: equal
-                        : _units[j].OrcaPriority  // same-faction: respect hierarchy
-                });
-            }
-
-            // Sort dynamic neighbours by distance, keep closest 10
+            Vec2 newVel;
             var myPos = _units[i].Position;
-            neighbors.Sort((a, b) => (a.Position - myPos).LengthSq().CompareTo((b.Position - myPos).LengthSq()));
-            if (neighbors.Count > 10) neighbors.RemoveRange(10, neighbors.Count - 10);
-
-            // Append up to 6 nearest static env obstacles (trees, rocks). They
-            // participate in ORCA as zero-velocity immovable circles with 100%
-            // responsibility on the unit — the canonical ORCA handling for
-            // circular static obstacles.
-            envEntries.Clear();
-            _envIndex.QueryRadius(myPos, queryRadius, envEntries);
-            if (envEntries.Count > 0)
+            if (skipOrca)
             {
-                // Filter by real circle distance; pick nearest 6.
-                envEntries.Sort((a, b) =>
+                // Player input goes straight through; other units still see the
+                // necromancer via the quadtree so they dodge him normally.
+                newVel = _units[i].PreferredVel;
+            }
+            else
+            {
+                float queryRadius = MathF.Max(_units[i].Radius * 5f, 3f);
+                _quadtree.QueryRadius(_units[i].Position, queryRadius, nearbyIDs);
+
+                foreach (uint nid in nearbyIDs)
                 {
-                    float da = (a.CX - myPos.X) * (a.CX - myPos.X) + (a.CY - myPos.Y) * (a.CY - myPos.Y);
-                    float db = (b.CX - myPos.X) * (b.CX - myPos.X) + (b.CY - myPos.Y) * (b.CY - myPos.Y);
-                    return da.CompareTo(db);
-                });
-                int staticKept = 0;
-                const int MaxStatic = 6;
-                foreach (var e in envEntries)
-                {
-                    if (staticKept >= MaxStatic) break;
-                    float dx = e.CX - myPos.X, dy = e.CY - myPos.Y;
-                    float combined = _units[i].Radius + e.Radius + 0.1f;
-                    // Query radius is generous (5× unit radius); inside-range trees
-                    // qualify even if far — ORCA handles distance anyway. But skip
-                    // ones too far to matter within the ORCA time horizon.
-                    float reach = _units[i].MaxSpeed * 3f + combined;
-                    if (dx * dx + dy * dy > reach * reach) continue;
+                    if (nid == _units[i].Id) continue;
+                    int j = UnitUtil.ResolveUnitIndex(_units, nid);
+                    if (j < 0 || !_units[j].Alive) continue;
 
                     neighbors.Add(new ORCANeighbor
                     {
-                        Position = new Vec2(e.CX, e.CY),
-                        Velocity = Vec2.Zero,
-                        Radius = e.Radius,
-                        Id = 0x80000000u | (uint)e.ObjectIndex, // synthetic non-unit id
-                        Priority = int.MaxValue,
-                        IsStatic = true,
+                        Position = _units[j].Position,
+                        Velocity = _units[j].Velocity,
+                        Radius = _units[j].Radius,
+                        Id = nid,
+                        Priority = _units[j].Faction != _units[i].Faction
+                            ? _units[i].OrcaPriority  // cross-faction: equal
+                            : _units[j].OrcaPriority  // same-faction: respect hierarchy
                     });
-                    staticKept++;
                 }
+
+                // Sort dynamic neighbours by distance, keep closest 10
+                neighbors.Sort((a, b) => (a.Position - myPos).LengthSq().CompareTo((b.Position - myPos).LengthSq()));
+                if (neighbors.Count > 10) neighbors.RemoveRange(10, neighbors.Count - 10);
+
+                // Append up to 6 nearest static env obstacles (trees, rocks). They
+                // participate in ORCA as zero-velocity immovable circles with 100%
+                // responsibility on the unit — the canonical ORCA handling for
+                // circular static obstacles.
+                envEntries.Clear();
+                _envIndex.QueryRadius(myPos, queryRadius, envEntries);
+                if (envEntries.Count > 0)
+                {
+                    envEntries.Sort((a, b) =>
+                    {
+                        float da = (a.CX - myPos.X) * (a.CX - myPos.X) + (a.CY - myPos.Y) * (a.CY - myPos.Y);
+                        float db = (b.CX - myPos.X) * (b.CX - myPos.X) + (b.CY - myPos.Y) * (b.CY - myPos.Y);
+                        return da.CompareTo(db);
+                    });
+                    int staticKept = 0;
+                    const int MaxStatic = 6;
+                    foreach (var e in envEntries)
+                    {
+                        if (staticKept >= MaxStatic) break;
+                        float dx = e.CX - myPos.X, dy = e.CY - myPos.Y;
+                        float combined = _units[i].Radius + e.Radius + 0.1f;
+                        float reach = _units[i].MaxSpeed * 3f + combined;
+                        if (dx * dx + dy * dy > reach * reach) continue;
+
+                        neighbors.Add(new ORCANeighbor
+                        {
+                            Position = new Vec2(e.CX, e.CY),
+                            Velocity = Vec2.Zero,
+                            Radius = e.Radius,
+                            Id = 0x80000000u | (uint)e.ObjectIndex,
+                            Priority = int.MaxValue,
+                            IsStatic = true,
+                        });
+                        staticKept++;
+                    }
+                }
+
+                var param = new ORCAParams
+                {
+                    TimeHorizon = 3f,
+                    MaxSpeed = _units[i].MaxSpeed,
+                    Radius = _units[i].Radius,
+                    MaxNeighbors = 16,
+                    Priority = _units[i].OrcaPriority
+                };
+
+                newVel = Orca.ComputeORCAVelocity(
+                    _units[i].Position, _units[i].Velocity, _units[i].PreferredVel,
+                    neighbors, param, dt);
             }
-
-            var param = new ORCAParams
-            {
-                TimeHorizon = 3f,
-                MaxSpeed = _units[i].MaxSpeed,
-                Radius = _units[i].Radius,
-                MaxNeighbors = 16,
-                Priority = _units[i].OrcaPriority
-            };
-
-            Vec2 newVel = Orca.ComputeORCAVelocity(
-                _units[i].Position, _units[i].Velocity, _units[i].PreferredVel,
-                neighbors, param, dt);
 
             // Stuck detection + perpendicular nudge
             float speed = newVel.Length();
@@ -1197,6 +1220,57 @@ public class Simulation
                 // Stopped — reset acceleration (no deceleration)
                 _units[i].MoveTime = 0f;
                 _units[i].Velocity = Vec2.Zero;
+            }
+
+            // For player-controlled (skipOrca) units: clip velocity against nearby
+            // env circles so the necromancer stops / slides at tree edges instead
+            // of walking through and relying on stuck-escape to shove him back.
+            if (skipOrca && _units[i].Velocity.LengthSq() > 0.0001f)
+            {
+                Vec2 vel = _units[i].Velocity;
+                Vec2 pos = _units[i].Position;
+                float selfR = _units[i].Radius;
+
+                envEntries.Clear();
+                // Look far enough to catch any circle we might hit this frame.
+                float look = selfR + vel.Length() * dt + 0.1f;
+                _envIndex.QueryRadius(pos, look, envEntries);
+
+                foreach (var e in envEntries)
+                {
+                    float dx = pos.X - e.CX, dy = pos.Y - e.CY;
+                    float combined = selfR + e.Radius;
+                    float distSq = dx * dx + dy * dy;
+                    // Skip if already clear of this obstacle and not heading into it.
+                    if (distSq >= combined * combined)
+                    {
+                        // Project velocity onto the obstacle-to-unit vector; if
+                        // we're moving *toward* the circle AND would overlap this
+                        // step, remove the inward component (slide along tangent).
+                        float dist = MathF.Sqrt(distSq);
+                        float nx = dx / dist, ny = dy / dist;
+                        float vNorm = vel.X * nx + vel.Y * ny; // + = away, - = toward
+                        if (vNorm < 0f)
+                        {
+                            float step = -vNorm * dt;
+                            float slack = dist - combined;
+                            if (step > slack)
+                                vel = new Vec2(vel.X - nx * vNorm, vel.Y - ny * vNorm);
+                        }
+                    }
+                    else
+                    {
+                        // Already inside the combined circle — kill any inward
+                        // component. The env stuck-escape will push us out
+                        // proactively on the next tick.
+                        float dist = MathF.Sqrt(MathF.Max(0.0001f, distSq));
+                        float nx = dx / dist, ny = dy / dist;
+                        float vNorm = vel.X * nx + vel.Y * ny;
+                        if (vNorm < 0f)
+                            vel = new Vec2(vel.X - nx * vNorm, vel.Y - ny * vNorm);
+                    }
+                }
+                _units[i].Velocity = vel;
             }
 
             // Move with wall collision (axis-independent, gap probes, wall sliding)
@@ -1591,7 +1665,8 @@ public class Simulation
             float dist = (_units[defenderIdx].Position - _units[unitIdx].Position).Length();
             bool volley = dist > maxRange * 0.4f;
             _projectiles.SpawnArrow(_units[unitIdx].Position, _units[defenderIdx].Position,
-                _units[unitIdx].Faction, _units[unitIdx].Id, damage, volley, 10);
+                _units[unitIdx].Faction, _units[unitIdx].Id, damage, volley, 10,
+                spawnHeight: _units[unitIdx].EffectSpawnHeight);
             return;
         }
 
@@ -1701,7 +1776,12 @@ public class Simulation
         }
     }
 
-    /// <summary>Apply physical damage to a unit from an external source (spells, traps, etc.).</summary>
+    /// <summary>
+    /// Deal a fixed amount of armor-negating physical damage — used by magical strike
+    /// spells and trap triggers that bypass armor by design. For normal combat damage
+    /// go through DamageSystem.Apply directly so the caller controls the flags; this
+    /// shortcut hard-codes ArmorNegating and should not be used for melee / ranged weapons.
+    /// </summary>
     public void DealDamage(int unitIdx, int damage) =>
         DamageSystem.Apply(_units, unitIdx, damage,
             GameSystems.DamageType.Physical, GameSystems.DamageFlags.ArmorNegating,

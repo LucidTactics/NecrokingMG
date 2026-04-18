@@ -2842,10 +2842,11 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
     private static readonly Random _projRng = new();
 
-    private void SpawnSpellProjectile(SpellDef spell, Vec2 origin, Vec2 target, uint ownerUid)
+    private void SpawnSpellProjectile(SpellDef spell, Vec2 origin, Vec2 target, uint ownerUid, float spawnHeight)
     {
         _sim.Projectiles.SpawnFireball(origin, target,
-            Faction.Undead, ownerUid, spell.Damage, spell.AoeRadius, spell.DisplayName);
+            Faction.Undead, ownerUid, spell.Damage, spell.AoeRadius, spell.DisplayName,
+            spawnHeight: spawnHeight);
         var projs = _sim.Projectiles.Projectiles;
         if (projs.Count > 0)
         {
@@ -2944,7 +2945,8 @@ public class Game1 : Microsoft.Xna.Framework.Game
                     int necroIdx = FindNecromancer();
                     uint ownerUid = necroIdx >= 0 ? _sim.Units[necroIdx].Id : 0;
                     Vec2 origin = necroIdx >= 0 ? _sim.Units[necroIdx].EffectSpawnPos2D : pg.Origin;
-                    SpawnSpellProjectile(spell, origin, pg.Target, ownerUid);
+                    float spawnH = necroIdx >= 0 ? _sim.Units[necroIdx].EffectSpawnHeight : 0.6f;
+                    SpawnSpellProjectile(spell, origin, pg.Target, ownerUid, spawnH);
                 }
 
                 if (pg.Remaining <= 0)

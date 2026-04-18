@@ -61,13 +61,14 @@ public class SpellEffectSystem
     /// <param name="target">World-space target position</param>
     /// <param name="slot">Spell bar slot index (for channeling)</param>
     /// <param name="damageNumbers">Visual damage numbers list</param>
-    /// <param name="spawnProjectile">Callback to spawn a projectile (needs Game1 rendering state)</param>
+    /// <param name="spawnProjectile">Callback to spawn a projectile (needs Game1 rendering state).
+    /// Signature: (spell, origin, target, ownerUid, spawnHeight).</param>
     /// <param name="executeSummon">Callback for summon spells (deeply coupled to Game1)</param>
     public SpellEffectResult Execute(
         SpellDef spell, Simulation sim, GameData gameData,
         int casterIdx, Vec2 target, int slot,
         List<DamageNumber> damageNumbers,
-        Action<SpellDef, Vec2, Vec2, uint> spawnProjectile,
+        Action<SpellDef, Vec2, Vec2, uint, float> spawnProjectile,
         Action<SpellDef, int> executeSummon)
     {
         var result = SpellEffectResult.None;
@@ -75,11 +76,12 @@ public class SpellEffectSystem
         var casterPos = units[casterIdx].Position;
         var casterUid = units[casterIdx].Id;
         var effectOrigin = units[casterIdx].EffectSpawnPos2D;
+        var effectOriginH = units[casterIdx].EffectSpawnHeight;
 
         switch (spell.Category)
         {
             case "Projectile":
-                spawnProjectile(spell, effectOrigin, target, casterUid);
+                spawnProjectile(spell, effectOrigin, target, casterUid, effectOriginH);
                 if (spell.Quantity > 1)
                 {
                     result.PendingProjectile = new PendingProjectileGroup
@@ -222,15 +224,7 @@ public class SpellEffectSystem
         if (spell.CloudAppliesParalysis)
         {
             // Paralysis clouds use their AoE burst to apply paralysis (no poison stacks).
-            var nearbyIDs = new List<uint>();
-            sim.Quadtree.QueryRadius(target, radius, nearbyIDs);
-            foreach (uint uid in nearbyIDs)
-            {
-                int idx = UnitUtil.ResolveUnitIndex(sim.UnitsMut, uid);
-                if (idx < 0 || !sim.Units[idx].Alive) continue;
-                if (sim.Units[idx].Faction == Faction.Undead) continue;
-                PotionSystem.ApplyParalysis(idx, sim.UnitsMut);
-            }
+            PotionSystem.ApplyParalysisAoE(sim.UnitsMut, sim.Quadtree, target, radius, Faction.Undead);
             return;
         }
 

@@ -253,52 +253,85 @@ public class DebugDraw
     private void DrawOccupiedTiles(SpriteBatch batch, Simulation sim, Camera25D cam, Renderer renderer,
                                     EnvironmentSystem? envSystem)
     {
-        if (_pixel == null || envSystem == null) return;
+        if (_pixel == null) return;
         var grid = sim.Grid;
 
-        for (int oi = 0; oi < envSystem.ObjectCount; oi++)
+        // --- Env object collision circles (match the runtime math used by
+        //     BakeCollisions + EnvSpatialIndex + ORCA) ---
+        if (envSystem != null)
         {
-            var obj = envSystem.GetObject(oi);
-            if (obj.DefIndex >= envSystem.DefCount) continue;
-            var def = envSystem.GetDef(obj.DefIndex);
-            if (def.CollisionRadius <= 0f) continue;
-
-            float cx = obj.X + def.CollisionOffsetX;
-            float cy = obj.Y + def.CollisionOffsetY;
-            float radius = def.CollisionRadius * obj.Scale;
-
-            // Draw the collision circle in magenta
-            DrawCircle(batch, renderer, cam, new Vec2(cx, cy), radius, new Color(255, 80, 255, 180));
-
-            // Highlight tiles that the object marks as impassable
-            int minTX = Math.Max(0, (int)MathF.Floor(cx - radius));
-            int maxTX = Math.Min(grid.Width - 1, (int)MathF.Ceiling(cx + radius));
-            int minTY = Math.Max(0, (int)MathF.Floor(cy - radius));
-            int maxTY = Math.Min(grid.Height - 1, (int)MathF.Ceiling(cy + radius));
-
-            float r2 = radius * radius;
-            for (int ty = minTY; ty <= maxTY; ty++)
+            for (int oi = 0; oi < envSystem.ObjectCount; oi++)
             {
-                for (int tx = minTX; tx <= maxTX; tx++)
+                var obj = envSystem.GetObject(oi);
+                if (obj.DefIndex >= envSystem.DefCount) continue;
+                var def = envSystem.GetDef(obj.DefIndex);
+                if (def.CollisionRadius <= 0f) continue;
+
+                // Skip destroyed / collected — they aren't in the runtime index.
+                if (oi < envSystem.Objects.Count)
                 {
-                    float dx = tx + 0.5f - cx;
-                    float dy = ty + 0.5f - cy;
-                    if (dx * dx + dy * dy <= r2)
+                    var rt = envSystem.GetObjectRuntime(oi);
+                    if (!rt.Alive || rt.Collected) continue;
+                }
+
+                // Same math as BakeCollisions / EnvSpatialIndex: offset and radius
+                // both scale by def.Scale * obj.Scale.
+                float es = def.Scale * obj.Scale;
+                float cx = obj.X + def.CollisionOffsetX * es;
+                float cy = obj.Y + def.CollisionOffsetY * es;
+                float radius = def.CollisionRadius * es;
+
+                // Magenta outline = what ORCA actually avoids.
+                DrawCircle(batch, renderer, cam, new Vec2(cx, cy), radius, new Color(255, 80, 255, 220));
+
+                // Dim tile fill = the footprint the unscaled radius covers.
+                // Useful only as context; pathfinding uses the per-tier inflated
+                // field, and movement uses circle tests (not tiles) now.
+                int minTX = Math.Max(0, (int)MathF.Floor(cx - radius));
+                int maxTX = Math.Min(grid.Width - 1, (int)MathF.Ceiling(cx + radius));
+                int minTY = Math.Max(0, (int)MathF.Floor(cy - radius));
+                int maxTY = Math.Min(grid.Height - 1, (int)MathF.Ceiling(cy + radius));
+
+                float r2 = radius * radius;
+                for (int ty = minTY; ty <= maxTY; ty++)
+                {
+                    for (int tx = minTX; tx <= maxTX; tx++)
                     {
-                        var screenPos = renderer.WorldToScreen(new Vec2(tx, ty), 0f, cam);
-                        float tileW = cam.Zoom * GameConstants.TileSize;
-                        float tileH = cam.Zoom * cam.YRatio * GameConstants.TileSize;
+                        float dx = tx + 0.5f - cx;
+                        float dy = ty + 0.5f - cy;
+                        if (dx * dx + dy * dy <= r2)
+                        {
+                            var screenPos = renderer.WorldToScreen(new Vec2(tx, ty), 0f, cam);
+                            float tileW = cam.Zoom * GameConstants.TileSize;
+                            float tileH = cam.Zoom * cam.YRatio * GameConstants.TileSize;
 
-                        var rect = new Rectangle(
-                            (int)screenPos.X,
-                            (int)screenPos.Y,
-                            Math.Max(1, (int)tileW),
-                            Math.Max(1, (int)tileH));
+                            var rect = new Rectangle(
+                                (int)screenPos.X,
+                                (int)screenPos.Y,
+                                Math.Max(1, (int)tileW),
+                                Math.Max(1, (int)tileH));
 
-                        batch.Draw(_pixel, rect, new Color(255, 120, 255, 50));
+                            batch.Draw(_pixel, rect, new Color(255, 120, 255, 40));
+                        }
                     }
                 }
             }
+        }
+
+        // --- Unit collision circles (the .Radius value ORCA uses) ---
+        // Necromancer stands out in lime, other undead in cyan, non-undead in
+        // orange so it's easy to see who's colliding with what.
+        var units = sim.Units;
+        int necroIdx = sim.NecromancerIndex;
+        for (int i = 0; i < units.Count; i++)
+        {
+            if (!units[i].Alive) continue;
+            float r = units[i].Radius;
+            if (r <= 0f) continue;
+            Color c = (i == necroIdx) ? new Color(150, 255, 80, 240)
+                    : (units[i].Faction == Faction.Undead) ? new Color(80, 220, 255, 200)
+                    : new Color(255, 170, 60, 200);
+            DrawCircle(batch, renderer, cam, units[i].Position, r, c);
         }
     }
 

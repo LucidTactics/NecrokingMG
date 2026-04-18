@@ -193,16 +193,7 @@ public class MagicGlyphSystem
 
                                 if (spell.CloudAppliesParalysis)
                                 {
-                                    // Apply paralysis to everyone in burst radius.
-                                    nearbyIDs.Clear();
-                                    qt.QueryRadius(g.Position, aoeR, nearbyIDs);
-                                    foreach (uint uid in nearbyIDs)
-                                    {
-                                        int idx = UnitUtil.ResolveUnitIndex(units, uid);
-                                        if (idx < 0 || !units[idx].Alive) continue;
-                                        if (units[idx].Faction == g.OwnerFaction) continue;
-                                        Game.PotionSystem.ApplyParalysis(idx, units);
-                                    }
+                                    Game.PotionSystem.ApplyParalysisAoE(units, qt, g.Position, aoeR, g.OwnerFaction);
                                 }
                                 else if (spell.Damage > 0)
                                 {

@@ -6,6 +6,7 @@ using Necroking.Data.Registries;
 using Necroking.GameSystems;
 using Necroking.Movement;
 using Necroking.Render;
+using Necroking.Spatial;
 
 namespace Necroking.Game;
 
@@ -48,10 +49,10 @@ public static class PotionSystem
             return true; // caller checks dist < 1.0 and applies directly
         }
 
-        // Throw projectile
+        // Throw projectile — arc starts at the thrower's animation-driven hand tip.
         uint necroUid = units[necroIdx].Id;
         projectiles.SpawnPotionLob(necroPos, mouseWorld, units[necroIdx].Faction, necroUid,
-            potionId, potion.ProjectileScale);
+            potionId, potion.ProjectileScale, spawnHeight: units[necroIdx].EffectSpawnHeight);
 
         // Set visuals on the spawned projectile
         var projs = projectiles.Projectiles;
@@ -84,6 +85,20 @@ public static class PotionSystem
 
     /// <summary>
     /// Apply a potion effect on hit. Called when a potion projectile lands.
+    ///
+    /// Dispatches on PotionDef.OnHitEffect. Each branch has different side effects;
+    /// callers that pass optional out-lists need to know which branch writes what:
+    ///   "Frenzy"    — sets Frenzied flag + stacks the permanent buff on the hit unit.
+    ///   "Paralysis" — starts the slow→stun sequence (timers on the hit unit).
+    ///   "Zombie"    — friendlies get a 5-min weapon coat; enemies get ZombieOnDeath;
+    ///                 corpses hit directly are queued into pendingRaises.
+    ///   "Poison"    — friendlies get a weapon coat; enemies take 10 stacks via
+    ///                 DamageSystem.Apply, which *appends to damageEvents* if
+    ///                 non-null (this is the only branch that touches damageEvents).
+    ///   (default)   — plain BuffSystem.ApplyBuff of PotionDef.BuffID if set.
+    ///
+    /// pendingRaises and corpses are only read by the Zombie branch; other branches
+    /// ignore them. Safe to pass empty lists on non-Zombie calls.
     /// </summary>
     public static void ApplyPotionEffect(
         string potionId, PotionRegistry potions, BuffRegistry buffs,
@@ -171,6 +186,24 @@ public static class PotionSystem
         if (unitIdx < 0 || unitIdx >= units.Count || !units[unitIdx].Alive) return;
         if (units[unitIdx].ParalysisSlowTimer > 0f || units[unitIdx].ParalysisStunTimer > 0f) return;
         units[unitIdx].ParalysisSlowTimer = ParalyzeSlowDuration;
+    }
+
+    /// <summary>
+    /// Apply paralysis to every non-owner unit inside a radius. Skips the owner faction
+    /// (no friendly fire). Mirrors DamageSystem.ApplyAoE but for paralysis clouds.
+    /// </summary>
+    public static void ApplyParalysisAoE(UnitArrays units, Quadtree qt,
+        Vec2 center, float radius, Faction ownerFaction)
+    {
+        var nearbyIDs = new List<uint>();
+        qt.QueryRadius(center, radius, nearbyIDs);
+        foreach (uint uid in nearbyIDs)
+        {
+            int idx = UnitUtil.ResolveUnitIndex(units, uid);
+            if (idx < 0 || !units[idx].Alive) continue;
+            if (units[idx].Faction == ownerFaction) continue;
+            ApplyParalysis(idx, units);
+        }
     }
 
     private static void ApplyZombie(PotionDef potion, BuffRegistry buffs, int unitIdx, UnitArrays units,
@@ -330,13 +363,7 @@ public static class PotionSystem
                         units[i].Stats.HP -= dmg;
                         DebugLog.Log("ai", $"[PoisonTick] unit#{i} dmg={dmg} stacks={units[i].PoisonStacks} " +
                             $"HP={units[i].Stats.HP} faction={units[i].Faction}");
-                        damageEvents.Add(new DamageEvent
-                        {
-                            Position = units[i].Position,
-                            Damage = dmg,
-                            Height = 1.5f,
-                            IsPoison = true
-                        });
+                        damageEvents.Add(DamageEvent.Create(units[i].Position, dmg, isPoison: true));
                         if (units[i].Stats.HP <= 0)
                         {
                             units[i].Stats.HP = 0;
