@@ -13,13 +13,13 @@
 //   1 = horizontal linear (ColorA left -> ColorB right)
 //   2 = vertical 3-stop  (A -> B at MidStop -> C)
 //   3 = radial (ColorA at Center -> ColorB at Center+Radius, clamped beyond)
+//   4 = radial 3-stop (A at Center -> B at MidStop*Radius -> C at Radius)
 //
 // Draw by stretching the 1x1 pixel texture across the target rect with
 // SpriteBatch; texCoord varies 0..1 across the rect so the math is local
 // to the rect and independent of pixel coordinates.
 //
-// Output is non-premultiplied RGBA; SpriteBatch BlendState.AlphaBlend will
-// apply the alpha blend.
+// Output is premultiplied RGBA for SpriteBatch BlendState.AlphaBlend.
 float Mode;
 
 float4 ColorA;
@@ -54,11 +54,22 @@ float4 PixelShaderFunction(float2 texCoord : TEXCOORD0) : COLOR0
         else
             c = lerp(ColorB, ColorC, (t - mid) / (1.0 - mid));
     }
-    else
+    else if (Mode < 3.5)
     {
-        // radial: A at center, B at Radius
+        // radial 2-stop: A at center, B at Radius
         float d = length(texCoord - Center) / max(Radius, 0.001);
         c = lerp(ColorA, ColorB, saturate(d));
+    }
+    else
+    {
+        // radial 3-stop: A at center, B at MidStop*Radius, C at Radius
+        float d = length(texCoord - Center) / max(Radius, 0.001);
+        float t = saturate(d);
+        float mid = clamp(MidStop, 0.001, 0.999);
+        if (t < mid)
+            c = lerp(ColorA, ColorB, t / mid);
+        else
+            c = lerp(ColorB, ColorC, (t - mid) / (1.0 - mid));
     }
     // MonoGame SpriteBatch expects premultiplied alpha
     c.rgb *= c.a;

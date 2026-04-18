@@ -59,6 +59,7 @@ public class UIShaders
         HorizontalLinear = 1,
         Vertical3Stop    = 2,
         Radial           = 3,
+        Radial3Stop      = 4,
     }
 
     /// <summary>
@@ -85,6 +86,16 @@ public class UIShaders
         Color inner, Color outer, Vector2 centerUV, float radiusUV)
         => DrawGradientInternal(batch, rect, GradientMode.Radial,
             inner, outer, Color.Transparent, 0.5f, centerUV, radiusUV);
+
+    /// <summary>
+    /// 3-stop radial gradient. `midStop` is the fraction of `radiusUV` where
+    /// `mid` appears (e.g. 0.5 = mid-radius, 0.6 = 60% out).
+    /// </summary>
+    public void DrawRadial3StopGradient(SpriteBatch batch, Rectangle rect,
+        Color inner, Color mid, Color outer, Vector2 centerUV, float radiusUV,
+        float midStop = 0.5f)
+        => DrawGradientInternal(batch, rect, GradientMode.Radial3Stop,
+            inner, mid, outer, midStop, centerUV, radiusUV);
 
     /// <summary>
     /// Draws a soft drop shadow around an inner rect. `outerRect` should

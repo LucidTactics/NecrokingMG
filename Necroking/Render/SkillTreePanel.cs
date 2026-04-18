@@ -479,21 +479,22 @@ public class SkillTreePanel
     // ----- Tome chrome -----
     private void DrawTomeChrome(Rectangle r)
     {
-        // Outer leather: radial gradient (lighter top-left, fading to deep).
-        // Use UV-space radial: center in UV, radius in UV.
+        // Outer leather: 3-stop radial (CSS: ellipse at 30% 20%, #2a1a12 0%, #1a0d08 60%, #0a0504 100%)
         if (_fx != null)
         {
-            _fx.DrawRadialGradient(_batch, r,
-                new Color(42, 26, 18), new Color(10, 5, 4),
-                new Vector2(0.3f, 0.2f), 0.85f);
+            _fx.DrawRadial3StopGradient(_batch, r,
+                new Color(42, 26, 18),  // #2a1a12
+                new Color(26, 13, 8),   // #1a0d08
+                new Color(10, 5, 4),    // #0a0504
+                new Vector2(0.3f, 0.2f), 0.85f, 0.6f);
         }
         else
         {
             _batch.Draw(_pixel, r, LeatherDark);
         }
-        // Drop the cross-hatch -- it reads as a dot grid, not leather.
+        // Inset shadow (CSS: inset 0 0 80px rgba(0,0,0,0.6) -> alpha 153)
         if (_fx != null)
-            _fx.DrawInsetShadow(_batch, r, new Color(0, 0, 0, 200), 40);
+            _fx.DrawInsetShadow(_batch, r, new Color(0, 0, 0, 153), 80);
 
         DrawBorder(r.X, r.Y, r.Width, r.Height, FrameRivet, 2);
         DrawBorder(r.X + 4, r.Y + 4, r.Width - 8, r.Height - 8, new Color(58, 42, 24), 1);
@@ -512,14 +513,15 @@ public class SkillTreePanel
         int plateW = (int)ts.X + 64;
         int plateH = 28;
         var plate = new Rectangle(r.X + (r.Width - plateW) / 2, r.Y - plateH / 2, plateW, plateH);
-        // Soft drop shadow under the plate (draw FIRST so plate covers its inner area)
+        // Soft drop shadow under the plate
+        // CSS: 0 2px 6px rgba(0,0,0,0.6) -> 6px softness, alpha 153, offset (0,2)
         if (_fx != null)
         {
-            int sSoft = 8;
-            var sOuter = new Rectangle(plate.X - sSoft, plate.Y - sSoft,
+            int sSoft = 6;
+            var sOuter = new Rectangle(plate.X - sSoft, plate.Y - sSoft + 2,
                                        plate.Width + sSoft * 2, plate.Height + sSoft * 2);
             _fx.DrawDropShadow(_batch, sOuter, plate,
-                Color.Transparent, new Color(0, 0, 0, 180), sSoft);
+                Color.Transparent, new Color(0, 0, 0, 153), sSoft);
         }
         if (_fx != null)
         {
@@ -533,9 +535,9 @@ public class SkillTreePanel
         {
             _batch.Draw(_pixel, plate, new Color(138, 109, 50));
         }
-        // Top inner highlight
+        // Top inner highlight (CSS: inset 0 1px 0 rgba(255,240,200,0.4) -> alpha 102)
         _batch.Draw(_pixel, new Rectangle(plate.X + 1, plate.Y + 1, plate.Width - 2, 1),
-            new Color(255, 240, 200, 100));
+            new Color(255, 240, 200, 102));
         DrawBorder(plate.X, plate.Y, plate.Width, plate.Height, LeatherDeep, 1);
 
         // Simple 1px text shadow for legibility (not the buggy triple-print emboss)
@@ -574,13 +576,19 @@ public class SkillTreePanel
     private void DrawSidebar(in Layout lay)
     {
         var r = lay.Sidebar;
-        // Parchment background -- radial gradient (light at top, tan at edges)
+        // Parchment bg: CSS ellipse at 50% 20%, #efe3c4 0%, #d8c8a2 50%, #b39c6e 100%
         if (_fx != null)
         {
-            _fx.DrawRadialGradient(_batch, r,
-                new Color(239, 227, 196), new Color(179, 156, 110),
-                new Vector2(0.5f, 0.2f), 1.1f);
-            _fx.DrawInsetShadow(_batch, r, new Color(90, 60, 20, 220), 42);
+            _fx.DrawRadial3StopGradient(_batch, r,
+                new Color(239, 227, 196),  // #efe3c4
+                new Color(216, 200, 162),  // #d8c8a2
+                new Color(179, 156, 110),  // #b39c6e
+                new Vector2(0.5f, 0.2f), 1.1f, 0.5f);
+            // Stacked insets:
+            //   inset 0 0 40px rgba(90,60,20,0.4) -> alpha 102
+            //   inset 0 0 8px rgba(0,0,0,0.35)    -> alpha 89
+            _fx.DrawInsetShadow(_batch, r, new Color(90, 60, 20, 102), 40);
+            _fx.DrawInsetShadow(_batch, r, new Color(0, 0, 0, 89), 8);
         }
         else
         {
@@ -612,14 +620,16 @@ public class SkillTreePanel
         _batch.DrawString(sf, sub, new Vector2((int)(cx - ss.X / 2), y), Gold);
         y += (int)ss.Y + 14;
 
-        // Portrait box -- radial gradient (purple bruise center to black)
+        // Portrait: CSS ellipse at 50% 30%, #3a2a40 0%, #1a0f1a 60%, #000 100%
         int portraitH = Math.Min(200, (int)(r.Height * 0.32f));
         var portrait = new Rectangle(r.X + SidebarPad, y, r.Width - SidebarPad * 2, portraitH);
         if (_fx != null)
         {
-            _fx.DrawRadialGradient(_batch, portrait,
-                new Color(58, 42, 64), new Color(0, 0, 0),
-                new Vector2(0.5f, 0.3f), 0.9f);
+            _fx.DrawRadial3StopGradient(_batch, portrait,
+                new Color(58, 42, 64),  // #3a2a40
+                new Color(26, 15, 26),  // #1a0f1a
+                new Color(0, 0, 0),     // #000
+                new Vector2(0.5f, 0.3f), 0.9f, 0.6f);
         }
         else
         {
@@ -627,9 +637,14 @@ public class SkillTreePanel
         }
         DrawBorder(portrait.X, portrait.Y, portrait.Width, portrait.Height, FrameRivet, 1);
         DrawSilhouette(portrait);
-        // Inner shadow on portrait (shader-based soft inset)
+        // Portrait shadows (CSS stack):
+        //   inset 0 0 20px rgba(0,0,0,0.8)    -> alpha 204
+        //   inset 0 0 4px rgba(180,140,80,0.3) -> alpha 76, tan rim highlight
         if (_fx != null)
-            _fx.DrawInsetShadow(_batch, portrait, new Color(0, 0, 0, 220), 24);
+        {
+            _fx.DrawInsetShadow(_batch, portrait, new Color(0, 0, 0, 204), 20);
+            _fx.DrawInsetShadow(_batch, portrait, new Color(180, 140, 80, 76), 4);
+        }
 
         var plate = new Rectangle(portrait.X + 6, portrait.Bottom - 22, portrait.Width - 12, 16);
         _batch.Draw(_pixel, plate, new Color(20, 12, 8, 220));
@@ -705,6 +720,16 @@ public class SkillTreePanel
                 var fillRect = new Rectangle(bar.X, bar.Y, fillW, bar.Height);
                 if (_fx != null)
                 {
+                    // CSS: box-shadow: 0 0 8px ${color} -> soft colored glow around fill.
+                    // Now that the shader-based drop shadow doesn't halo, enable it.
+                    int gSoft = 8;
+                    var gOuter = new Rectangle(fillRect.X - gSoft, fillRect.Y - gSoft,
+                        fillRect.Width + gSoft * 2, fillRect.Height + gSoft * 2);
+                    _fx.DrawDropShadow(_batch, gOuter, fillRect,
+                        Color.Transparent,
+                        new Color(s.Accent.R, s.Accent.G, s.Accent.B, (byte)180),
+                        gSoft);
+                    // CSS: linear-gradient(90deg, ${color}aa 0%, ${color} 100%) -> alpha 170
                     _fx.DrawHorizontalGradient(_batch, fillRect,
                         new Color(s.Accent.R, s.Accent.G, s.Accent.B, (byte)170), s.Accent);
                 }
@@ -728,28 +753,31 @@ public class SkillTreePanel
         _batch.DrawString(sf, spentLine,
             new Vector2((int)(cx - sps.X / 2), y + 6), Ink2);
 
-        // Reset button -- vertical gradient (blood to dark blood) + inner highlight
+        // Reset button
+        // CSS non-hover: linear-gradient(180deg, #3a0d0d 0%, #1a0505 100%)
+        // CSS hover:     linear-gradient(180deg, #5a1a1a 0%, #2a0a0a 100%)
+        // CSS shadow:    0 2px 4px rgba(0,0,0,0.5) -> 4px softness, alpha 128, offset (0,2)
+        // CSS highlight: inset 0 1px 0 rgba(180,80,80,0.3) -> alpha 76
         var rb = ResetButtonRect(lay);
         bool hover = rb.Contains((int)_mouse.X, (int)_mouse.Y);
-        // Soft drop shadow first so fill covers its inner area
         if (_fx != null)
         {
-            int sSoft = 6;
-            var sOuter = new Rectangle(rb.X - sSoft, rb.Y - sSoft,
+            int sSoft = 4;
+            var sOuter = new Rectangle(rb.X - sSoft, rb.Y - sSoft + 2,
                                        rb.Width + sSoft * 2, rb.Height + sSoft * 2);
             _fx.DrawDropShadow(_batch, sOuter, rb,
-                Color.Transparent, new Color(0, 0, 0, 160), sSoft);
+                Color.Transparent, new Color(0, 0, 0, 128), sSoft);
             _fx.DrawVerticalGradient(_batch, rb,
-                hover ? new Color(110, 28, 28) : new Color(58, 13, 13),
-                hover ? new Color(58,  16, 16) : new Color(26,  5,  5));
+                hover ? new Color(90, 26, 26) : new Color(58, 13, 13),   // #5a1a1a / #3a0d0d
+                hover ? new Color(42, 10, 10) : new Color(26,  5,  5));  // #2a0a0a / #1a0505
         }
         else
         {
-            _batch.Draw(_pixel, rb, hover ? new Color(120, 36, 36) : BloodDark);
+            _batch.Draw(_pixel, rb, hover ? new Color(90, 26, 26) : BloodDark);
         }
         // Top highlight stripe
         _batch.Draw(_pixel, new Rectangle(rb.X + 1, rb.Y + 1, rb.Width - 2, 1),
-            new Color(180, 80, 80, 100));
+            new Color(180, 80, 80, 76));
         DrawBorder(rb.X, rb.Y, rb.Width, rb.Height, Blood, 1);
         string btn = "*  EFFACE THE SIGILS  *";
         var bs = f.MeasureString(btn);
@@ -813,13 +841,19 @@ public class SkillTreePanel
     private void DrawTreePanel(in Layout lay)
     {
         var r = lay.Tree;
-        // Parchment background -- radial gradient (lighter center, darker edges)
+        // CSS: ellipse at 50% 20%, #efe3c4 0%, #d6c4a0 55%, #a88a5a 100%
         if (_fx != null)
         {
-            _fx.DrawRadialGradient(_batch, r,
-                new Color(243, 232, 200), new Color(193, 175, 138),
-                new Vector2(0.5f, 0.4f), 0.7f);
-            _fx.DrawInsetShadow(_batch, r, new Color(110, 80, 30, 170), 44);
+            _fx.DrawRadial3StopGradient(_batch, r,
+                new Color(239, 227, 196),  // #efe3c4
+                new Color(214, 196, 160),  // #d6c4a0
+                new Color(168, 138,  90),  // #a88a5a
+                new Vector2(0.5f, 0.2f), 1.0f, 0.55f);
+            // CSS shadows:
+            //   inset 0 0 60px rgba(90,60,20,0.45) -> alpha 115
+            //   inset 0 0 12px rgba(0,0,0,0.4)    -> alpha 102
+            _fx.DrawInsetShadow(_batch, r, new Color(90, 60, 20, 115), 60);
+            _fx.DrawInsetShadow(_batch, r, new Color(0, 0, 0, 102), 12);
         }
         else
         {
@@ -1147,6 +1181,22 @@ public class SkillTreePanel
         int padX = 18; int padY = 6;
         var rect = new Rectangle(panel.X + (panel.Width - ((int)ts.X + padX * 2)) / 2,
                                  panel.Bottom - 90, (int)ts.X + padX * 2, (int)ts.Y + padY * 2);
+        // CSS shadows:
+        //   0 4px 12px rgba(0,0,0,0.8)       -> dark drop (softness 12, alpha 204, offset 0,4)
+        //   0 0 20px rgba(139,26,26,0.4)     -> red glow (softness 20, alpha 102)
+        if (_fx != null)
+        {
+            int gSoft = 20;
+            var gOuter = new Rectangle(rect.X - gSoft, rect.Y - gSoft,
+                rect.Width + gSoft * 2, rect.Height + gSoft * 2);
+            _fx.DrawDropShadow(_batch, gOuter, rect,
+                Color.Transparent, new Color(139, 26, 26, 102), gSoft);
+            int sSoft = 12;
+            var sOuter = new Rectangle(rect.X - sSoft, rect.Y - sSoft + 4,
+                rect.Width + sSoft * 2, rect.Height + sSoft * 2);
+            _fx.DrawDropShadow(_batch, sOuter, rect,
+                Color.Transparent, new Color(0, 0, 0, 204), sSoft);
+        }
         _batch.Draw(_pixel, rect, BloodDark);
         DrawBorder(rect.X, rect.Y, rect.Width, rect.Height, BloodBright, 1);
         _batch.DrawString(f, "!  " + msg,
