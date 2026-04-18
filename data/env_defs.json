@@ -37,6 +37,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -113,6 +115,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -189,6 +193,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -265,6 +271,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -341,6 +349,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -417,6 +427,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -493,6 +505,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -569,6 +583,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -645,6 +661,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -721,6 +739,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "PS1",
     "input1": {
       "kind": "",
@@ -797,6 +817,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "Cottage1",
     "input1": {
       "kind": "",
@@ -873,6 +895,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -949,6 +973,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -1025,6 +1051,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -1101,6 +1129,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -1177,6 +1207,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -1253,6 +1285,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -1329,6 +1363,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -1405,6 +1441,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -1481,6 +1519,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -1557,6 +1597,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -1633,6 +1675,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -1709,6 +1753,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -1785,6 +1831,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -1861,6 +1909,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -1937,6 +1987,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -2013,6 +2065,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -2089,6 +2143,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -2165,6 +2221,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -2241,6 +2299,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -2317,6 +2377,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -2393,6 +2455,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -2469,6 +2533,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -2545,6 +2611,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -2621,6 +2689,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -2697,6 +2767,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -2773,6 +2845,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -2849,6 +2923,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -2925,6 +3001,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -3001,6 +3079,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -3077,6 +3157,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -3153,6 +3235,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -3229,6 +3313,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -3305,6 +3391,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -3381,6 +3469,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -3457,6 +3547,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -3533,6 +3625,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -3609,6 +3703,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -3685,6 +3781,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -3761,6 +3859,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -3837,6 +3937,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -3913,6 +4015,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -3989,6 +4093,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -4065,6 +4171,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -4141,6 +4249,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -4217,6 +4327,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -4293,6 +4405,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -4369,6 +4483,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -4445,6 +4561,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "RS1",
     "input1": {
       "kind": "",
@@ -4521,6 +4639,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -4597,6 +4717,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -4673,6 +4795,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -4749,6 +4873,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -4825,6 +4951,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -4901,6 +5029,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -4977,6 +5107,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -5053,6 +5185,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -5129,6 +5263,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -5205,6 +5341,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -5281,6 +5419,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -5357,6 +5497,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -5433,6 +5575,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -5509,6 +5653,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -5585,6 +5731,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -5661,6 +5809,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -5737,6 +5887,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -5813,6 +5965,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -5889,6 +6043,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -5965,6 +6121,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -6041,6 +6199,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -6117,6 +6277,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -6193,6 +6355,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -6269,6 +6433,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -6345,6 +6511,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -6421,6 +6589,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -6497,6 +6667,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -6573,6 +6745,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -6649,6 +6823,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -6725,6 +6901,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -6801,6 +6979,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -6877,6 +7057,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -6953,6 +7135,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -7029,6 +7213,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -7105,6 +7291,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -7181,6 +7369,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -7257,6 +7447,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -7333,6 +7525,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -7409,6 +7603,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -7485,6 +7681,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -7561,6 +7759,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -7637,6 +7837,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -7713,6 +7915,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -7789,6 +7993,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -7865,6 +8071,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -7941,6 +8149,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -8017,6 +8227,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -8093,6 +8305,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -8169,6 +8383,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -8245,6 +8461,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -8321,6 +8539,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -8397,6 +8617,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -8473,6 +8695,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -8549,6 +8773,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -8625,6 +8851,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -8701,6 +8929,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -8777,6 +9007,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -8853,6 +9085,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -8929,6 +9163,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -9005,6 +9241,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -9081,6 +9319,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -9157,6 +9397,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -9233,6 +9475,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -9309,6 +9553,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -9385,6 +9631,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -9461,6 +9709,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -9537,6 +9787,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -9613,6 +9865,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -9689,6 +9943,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -9765,6 +10021,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -9841,6 +10099,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -9917,6 +10177,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -9993,6 +10255,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -10069,6 +10333,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -10145,6 +10411,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -10221,6 +10489,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -10297,6 +10567,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -10373,6 +10645,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -10449,6 +10723,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -10525,6 +10801,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -10601,6 +10879,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -10677,6 +10957,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -10753,6 +11035,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -10829,6 +11113,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -10905,6 +11191,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -10981,6 +11269,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -11057,6 +11347,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -11133,6 +11425,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -11209,6 +11503,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -11285,6 +11581,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -11361,6 +11659,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -11437,6 +11737,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -11513,6 +11815,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -11589,6 +11893,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -11665,6 +11971,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -11741,6 +12049,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -11817,6 +12127,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -11893,6 +12205,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -11969,6 +12283,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -12045,6 +12361,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -12121,6 +12439,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -12197,6 +12517,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -12273,6 +12595,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -12349,6 +12673,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -12425,6 +12751,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -12501,6 +12829,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -12577,6 +12907,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -12653,6 +12985,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -12729,6 +13063,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -12805,6 +13141,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -12881,6 +13219,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -12957,6 +13297,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -13033,6 +13375,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -13109,6 +13453,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -13185,6 +13531,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -13261,6 +13609,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -13337,6 +13687,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -13413,6 +13765,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -13489,6 +13843,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -13565,6 +13921,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -13641,6 +13999,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -13717,6 +14077,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -13793,6 +14155,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -13869,6 +14233,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -13945,6 +14311,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -14021,6 +14389,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -14097,6 +14467,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -14173,6 +14545,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -14249,6 +14623,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -14325,6 +14701,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -14401,6 +14779,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -14477,6 +14857,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -14553,6 +14935,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": false,
+    "glyphRadius": 1.5,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -14601,9 +14985,9 @@
     "worldHeight": 0,
     "pivotX": 0.5,
     "pivotY": 1,
-    "collisionRadius": 0.0,
-    "collisionOffsetX": 0.0,
-    "collisionOffsetY": 0.0,
+    "collisionRadius": 0,
+    "collisionOffsetX": 0,
+    "collisionOffsetY": 0,
     "scale": 1,
     "placementScale": 1,
     "group": "",
@@ -14616,10 +15000,10 @@
     "costWood": 0,
     "costStone": 0,
     "costGold": 0,
-    "cost1ItemId": "",
-    "cost1Amount": 0,
-    "cost2ItemId": "",
-    "cost2Amount": 0,
+    "cost1ItemId": "Mushroom",
+    "cost1Amount": 3,
+    "cost2ItemId": "PoisonMushroom",
+    "cost2Amount": 1,
     "placementRadius": 0,
     "shadowType": 2,
     "trapSpellId": "poison_burst",
@@ -14629,6 +15013,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": true,
+    "glyphRadius": 1.3,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -14665,9 +15051,7 @@
       "b": 255,
       "a": 255,
       "intensity": 1
-    },
-    "isGlyphTrap": true,
-    "glyphRadius": 1.5
+    }
   },
   {
     "id": "paralyze_trap",
@@ -14679,9 +15063,9 @@
     "worldHeight": 0,
     "pivotX": 0.5,
     "pivotY": 1,
-    "collisionRadius": 0.0,
-    "collisionOffsetX": 0.0,
-    "collisionOffsetY": 0.0,
+    "collisionRadius": 0,
+    "collisionOffsetX": 0,
+    "collisionOffsetY": 0,
     "scale": 1,
     "placementScale": 1,
     "group": "",
@@ -14694,10 +15078,10 @@
     "costWood": 0,
     "costStone": 0,
     "costGold": 0,
-    "cost1ItemId": "",
-    "cost1Amount": 0,
-    "cost2ItemId": "",
-    "cost2Amount": 0,
+    "cost1ItemId": "Mushroom",
+    "cost1Amount": 3,
+    "cost2ItemId": "MagicMushroom",
+    "cost2Amount": 1,
     "placementRadius": 0,
     "shadowType": 2,
     "trapSpellId": "paralyze_burst",
@@ -14707,6 +15091,8 @@
     "trapTriggeredDuration": 0.3,
     "trapDeployedDuration": 2,
     "trapFadeDuration": 1,
+    "isGlyphTrap": true,
+    "glyphRadius": 1.3,
     "boundTriggerID": "",
     "input1": {
       "kind": "",
@@ -14743,8 +15129,6 @@
       "b": 255,
       "a": 255,
       "intensity": 1
-    },
-    "isGlyphTrap": true,
-    "glyphRadius": 1.5
+    }
   }
 ]
