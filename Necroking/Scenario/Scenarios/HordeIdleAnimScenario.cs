@@ -67,7 +67,7 @@ public class HordeIdleAnimScenario : ScenarioBase
                 DebugLog.Log(ScenarioLog,
                     $"[t={_elapsed:F2}s] skel{k} pos=({u.Position.X:F2},{u.Position.Y:F2}) " +
                     $"|vel|={u.Velocity.Length():F2}  |ema|={u.VelocityEMA.Length():F2}  " +
-                    $"|pref|={u.PreferredVel.Length():F2}");
+                    $"still={(u.AnimIntentStill?'Y':'N')}");
             }
         }
 

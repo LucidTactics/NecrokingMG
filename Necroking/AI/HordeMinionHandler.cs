@@ -118,8 +118,9 @@ public class HordeMinionHandler : IArchetypeHandler
 
             if (ctx.Subroutine == FollowIdle)
             {
-                // Idle at slot — only start moving again if slot drifted far enough
+                // Idle at slot — only start moving again if slot drifted far enough.
                 ctx.Units[ctx.UnitIndex].PreferredVel = Vec2.Zero;
+                ctx.Units[ctx.UnitIndex].AnimIntentStill = true;
                 if (dist > FollowDeadzone)
                     ctx.Subroutine = FollowMoving;
             }
@@ -132,14 +133,20 @@ public class HordeMinionHandler : IArchetypeHandler
                 }
                 else
                 {
-                    // Arrived
+                    // Arrived — declare still-intent now so the anim layer collapses
+                    // the EMA decay tail instead of spending ~1s in Walk while the
+                    // previous chase's smoothed velocity drains.
                     ctx.Units[ctx.UnitIndex].PreferredVel = Vec2.Zero;
+                    ctx.Units[ctx.UnitIndex].AnimIntentStill = true;
                     ctx.Subroutine = FollowIdle;
                 }
             }
         }
         else
+        {
             ctx.Units[ctx.UnitIndex].PreferredVel = Vec2.Zero;
+            ctx.Units[ctx.UnitIndex].AnimIntentStill = true;
+        }
     }
 
     private static void UpdateChasing(ref AIContext ctx)
