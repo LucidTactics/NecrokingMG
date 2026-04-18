@@ -136,7 +136,6 @@ public class Game1 : Microsoft.Xna.Framework.Game
     private int _activePotionSlot = -1;
     private int _potionDropdownSlot = -1;
     private readonly Dictionary<string, Texture2D?> _itemTextureCache = new();
-    private float _spellDropdownScroll;
     private int _hoveredObjectIdx = -1;
     private KeyboardState _prevKb;
     private MouseState _prevMouse;

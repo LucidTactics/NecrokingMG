@@ -248,13 +248,10 @@ public class Simulation
 
         // Standup/recovery timing now handled by IncapState inside BuffSystem.TickBuffs
 
-        // Tick hit shake timers and clear dodge flags
+        // Clear per-tick dodge flags (HitReacting/BlockReacting are cleared later
+        // after AI reads them; Dodging is single-tick and safe to reset here).
         for (int i = 0; i < _units.Count; i++)
-        {
-            if (_units[i].HitShakeTimer > 0f)
-                _units[i].HitShakeTimer = MathF.Max(0f, _units[i].HitShakeTimer - dt);
             _units[i].Dodging = false;
-        }
 
         // Harassment decay
         _harassmentDecayTimer -= dt;
@@ -928,9 +925,6 @@ public class Simulation
                 case AIBehavior.FleeWhenHit:
                 {
                     // Deer-like behavior: idle normally, flee when hit at effect time
-                    if (_frameNumber % 120 == 0)
-                        DebugLog.Log("ai", $"FleeWhenHit unit {i}: LastAttacker={_units[i].LastAttackerID}, FleeTimer={_units[i].FleeTimer:F1}, InCombat={_units[i].InCombat}, HP={_units[i].Stats.HP}");
-
                     if (_units[i].FleeTimer > 0)
                     {
                         // Currently fleeing — force disengage
@@ -1084,12 +1078,6 @@ public class Simulation
                         if (chasingId != GameConstants.InvalidUnit)
                         {
                             _units[i].Target = CombatTarget.Unit(chasingId);
-                            if (_frameNumber % 60 == 0)
-                            {
-                                int tIdx = UnitUtil.ResolveUnitIndex(_units, chasingId);
-                                float cDist = tIdx >= 0 ? (_units[tIdx].Position - _units[i].Position).Length() : -1;
-                                Core.DebugLog.Log("horde", $"Unit {i} Chasing target={chasingId} tIdx={tIdx} dist={cDist:F1} vel={_units[i].PreferredVel.Length():F1}");
-                            }
                         }
                     }
 
@@ -2010,16 +1998,6 @@ public class Simulation
         var ai = _units[i].AI;
         bool isolated = ai == AIBehavior.WolfHitAndRunIsolated || ai == AIBehavior.WolfOpportunistIsolated;
         bool opportunist = ai == AIBehavior.WolfOpportunist || ai == AIBehavior.WolfOpportunistIsolated;
-
-        // Debug logging every 2 seconds
-        if (_frameNumber % 120 == 0)
-        {
-            int tIdx = ResolveUnitTarget(_units[i].Target);
-            float dbgDist = tIdx >= 0 ? (_units[tIdx].Position - _units[i].Position).Length() : -1;
-            DebugLog.Log("ai", $"Wolf unit {i}: phase={_units[i].WolfPhase} timer={_units[i].WolfPhaseTimer:F1} " +
-                $"target={_units[i].Target} dist={dbgDist:F1} cooldown={_units[i].AttackCooldown:F2} " +
-                $"inCombat={_units[i].InCombat} vel={_units[i].PreferredVel.Length():F1}");
-        }
 
         // Find/validate target with aggro range
         if (!IsTargetAlive(_units[i].Target))

@@ -1592,7 +1592,6 @@ public class UnitEditorWindow
     //  RU02: NAME / ID FIELDS (above sprite preview)
     // =========================================================================
 
-    private string _pendingIdEdit = ""; // buffer for ID editing
     private bool _idEditFailed;
     private float _idEditFailTimer;
 

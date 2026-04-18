@@ -34,8 +34,6 @@ public class TriggerSystem
 
     // --- Setup ---
 
-    public void Init() { }
-
     public void SetRegions(List<TriggerRegion> regions) { _regions = regions; RebuildLookups(); }
     public void SetTriggers(List<TriggerDef> triggers) { _triggers = triggers; RebuildLookups(); }
     public void SetInstances(List<TriggerInstance> instances)
@@ -161,11 +159,6 @@ public class TriggerSystem
             rs.KillCounter++;
             _runtimeState[i] = rs;
         }
-    }
-
-    public void OnBuildingDestroyed(string objectID, string defID)
-    {
-        // Mark building-killed flags for relevant triggers
     }
 
     public void ResetRuntime()

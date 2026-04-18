@@ -98,7 +98,6 @@ public class Unit
     public bool PendingWeaponIsRanged;
     /// <summary>UnitID of the ranged target captured at queue time (target may die before action moment).</summary>
     public uint PendingRangedTarget = GameConstants.InvalidUnit;
-    public float HitShakeTimer;
     public uint LastAttackerID = GameConstants.InvalidUnit;
     public float FleeTimer;
     public byte WolfPhase;
@@ -160,7 +159,6 @@ public class Unit
     public float PostAttackTimer;
     public float MoveTime;
     public QueuedUnitAction QueuedAction = QueuedUnitAction.None;
-    public float AnimPlaybackSpeed = 1f;
 
     // Ghost mode
     public bool GhostMode;

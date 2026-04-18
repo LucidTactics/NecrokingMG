@@ -281,10 +281,6 @@ public class PhysicsSystem
         // TODO: Apply landing impact damage based on velocity at impact
     }
 
-    // TODO: Cavalry trample — mounted unit moving at speed applies impulse
-    // to units it passes through. Horse slows from each impact.
-    // public void ProcessCavalryTrample(UnitArrays units, int cavalryIdx, float dt) { }
-
     public int ActiveCount => _bodies.Count;
 
     /// <summary>

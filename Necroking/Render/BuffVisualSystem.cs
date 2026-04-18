@@ -68,7 +68,6 @@ public class BuffVisualSystem
 
     // Per-unit weapon particle emitters
     private readonly List<Dictionary<string, WPEmitterState>> _wpEmitters = new();
-    private float _wpLastTime;
 
     // Per-unit lightning arc state
     private readonly Dictionary<int, List<Vector2[]>> _lightningArcs = new();
@@ -81,7 +80,6 @@ public class BuffVisualSystem
     {
         _mergedRings.Clear();
         _wpEmitters.Clear();
-        _wpLastTime = 0f;
         _lightningArcs.Clear();
         _lightningTimers.Clear();
     }

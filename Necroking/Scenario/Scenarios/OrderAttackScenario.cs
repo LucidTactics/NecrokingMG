@@ -11,7 +11,6 @@ public class OrderAttackScenario : ScenarioBase
     public override string Name => "order_attack";
     private float _elapsed;
     private bool _complete;
-    private int _phase; // 0=marching, 1=fighting, 2=returning, 3=done
     private bool _reachedTarget;
     private bool _fought;
     private bool _returned;

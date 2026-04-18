@@ -68,7 +68,6 @@ public class EnvObjectEditorWindow
 
     // Scroll
     private float _propScrollY;
-    private float _defListScrollY;
 
     // Save status
     private string _statusMessage = "";
@@ -168,7 +167,6 @@ public class EnvObjectEditorWindow
         _categoryFilter = 0;
         _searchFilter = "";
         _propScrollY = 0;
-        _defListScrollY = 0;
         _confirmDeleteOpen = false;
         _newCategoryDialogOpen = false;
         _deleteCategoryDialogOpen = false;

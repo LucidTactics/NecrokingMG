@@ -24,7 +24,6 @@ public class PhysicsSingleScenario : ScenarioBase
     private bool _wasAirborne;
     private bool _landed;
     private bool _stoodUp;
-    private int _screenshotIdx;
 
     public override void OnInit(Simulation sim)
     {

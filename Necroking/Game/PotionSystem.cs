@@ -360,8 +360,6 @@ public static class PotionSystem
                     if (dmg > 0)
                     {
                         units[i].Stats.HP -= dmg;
-                        DebugLog.Log("ai", $"[PoisonTick] unit#{i} dmg={dmg} stacks={units[i].PoisonStacks} " +
-                            $"HP={units[i].Stats.HP} faction={units[i].Faction}");
                         damageEvents.Add(DamageEvent.Create(units[i].Position, dmg, isPoison: true));
                         if (units[i].Stats.HP <= 0)
                         {
