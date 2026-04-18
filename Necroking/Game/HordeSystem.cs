@@ -42,6 +42,10 @@ public class HordeSystem
     private float _globalTime;
     private float _aggroScanTimer;
     private readonly List<HordeUnitData> _hordeUnits = new();
+    // O(1) Id -> _hordeUnits index, mirrored on Add/Remove. FindUnit was the hot
+    // path for every HordeMinion's per-tick GetUnitState/GetTargetPosition calls
+    // — at u=628, ~1.2M linear comparisons per tick.
+    private readonly Dictionary<uint, int> _idToIndex = new();
 
     public Vec2 CircleCenter => _circleCenter;
     public float CircleFacing => _circleFacing;
@@ -53,7 +57,8 @@ public class HordeSystem
 
     public void AddUnit(uint id)
     {
-        if (FindUnit(id) >= 0) return;
+        if (_idToIndex.ContainsKey(id)) return;
+        int idx = _hordeUnits.Count;
         _hordeUnits.Add(new HordeUnitData
         {
             UnitID = id,
@@ -63,6 +68,7 @@ public class HordeSystem
             // Stagger first shift so fresh units don't all re-roll on the same tick.
             NextShiftAt = _globalTime + RandomShiftInterval(),
         });
+        _idToIndex[id] = idx;
         ReassignSlots();
     }
 
@@ -83,12 +89,16 @@ public class HordeSystem
 
     public void RemoveUnit(uint id)
     {
-        int idx = FindUnit(id);
-        if (idx < 0) return;
-        // Swap-and-pop
-        if (idx != _hordeUnits.Count - 1)
-            _hordeUnits[idx] = _hordeUnits[^1];
-        _hordeUnits.RemoveAt(_hordeUnits.Count - 1);
+        if (!_idToIndex.TryGetValue(id, out int idx)) return;
+        int last = _hordeUnits.Count - 1;
+        if (idx != last)
+        {
+            _hordeUnits[idx] = _hordeUnits[last];
+            // The unit that was at `last` now lives at `idx`.
+            _idToIndex[_hordeUnits[idx].UnitID] = idx;
+        }
+        _hordeUnits.RemoveAt(last);
+        _idToIndex.Remove(id);
         ReassignSlots();
     }
 
@@ -360,9 +370,5 @@ public class HordeSystem
     }
 
     private int FindUnit(uint id)
-    {
-        for (int i = 0; i < _hordeUnits.Count; i++)
-            if (_hordeUnits[i].UnitID == id) return i;
-        return -1;
-    }
+        => _idToIndex.TryGetValue(id, out int idx) ? idx : -1;
 }
