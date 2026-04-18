@@ -37,6 +37,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
     private ShadowRenderer _shadowRenderer = new();
     private HUDRenderer _hudRenderer = new();
     private CharacterStatsUI _characterStatsUI = new();
+    private SkillTreePanel _skillTreePanel = new();
 
     // Data
     private GameData _gameData = new();
@@ -765,6 +766,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         scenario.Inventory = _inventory;
         scenario.ItemRegistry = _gameData.Items;
         scenario.InventoryUI = _inventoryUI;
+        scenario.SkillTreePanel = _skillTreePanel;
 
         // Init map editor with scenario systems (needed for editor screenshot scenarios)
         _mapEditor.Init(
@@ -1290,6 +1292,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         _hudRenderer.Init(_spriteBatch, _pixel, _font, _smallFont);
         _hudRenderer.SetInput(_input);
         _characterStatsUI.Init(_spriteBatch, _pixel, _font, _smallFont);
+        _skillTreePanel.Init(_spriteBatch, _pixel, _font, _smallFont, _largeFont);
 
         // Load TrueType fonts via FontStashSharp (dynamic sizing)
         _fontManager.LoadFontsFromDirectory(GamePaths.Resolve(GamePaths.FontsDir));
@@ -1558,6 +1561,10 @@ public class Game1 : Microsoft.Xna.Framework.Game
         if (!anyTextInputActive && _input.WasKeyPressed(Keys.Tab) && _menuState == MenuState.None)
             _characterStatsUI.Toggle();
 
+        // 'K' key toggles skill tree (Grimoire)
+        if (!anyTextInputActive && _input.WasKeyPressed(Keys.K) && _menuState == MenuState.None)
+            _skillTreePanel.Toggle();
+
         // --- Pause menu button clicks ---
         if (_menuState == MenuState.PauseMenu && _input.LeftPressed)
         {
@@ -1651,6 +1658,10 @@ public class Game1 : Microsoft.Xna.Framework.Game
             else if (_menuState == MenuState.None && _inventoryUI.IsVisible)
             {
                 _inventoryUI.Close();
+            }
+            else if (_menuState == MenuState.None && _skillTreePanel.IsVisible)
+            {
+                _skillTreePanel.Close();
             }
             else if (_menuState == MenuState.None)
             {
@@ -1747,6 +1758,8 @@ public class Game1 : Microsoft.Xna.Framework.Game
             if (_buildingMenuUI.ContainsMouse(mx, my))
                 _input.MouseOverUI = true;
             if (_craftingMenu.ContainsMouse(mx, my))
+                _input.MouseOverUI = true;
+            if (_skillTreePanel.ContainsMouse(screenW, screenH, mx, my))
                 _input.MouseOverUI = true;
 
             // Time controls
@@ -2291,6 +2304,16 @@ public class Game1 : Microsoft.Xna.Framework.Game
                     _activeScenario.RequestCloseInventory = false;
                     _inventoryUI.Close();
                 }
+                if (_activeScenario.RequestOpenSkillTree)
+                {
+                    _activeScenario.RequestOpenSkillTree = false;
+                    _skillTreePanel.Open();
+                }
+                if (_activeScenario.RequestCloseSkillTree)
+                {
+                    _activeScenario.RequestCloseSkillTree = false;
+                    _skillTreePanel.Close();
+                }
 
                 // Apply weather preset override from scenario
                 if (_activeScenario.WeatherPreset != null)
@@ -2479,6 +2502,8 @@ public class Game1 : Microsoft.Xna.Framework.Game
         _inventoryUI.Update(_input);
         _buildingMenuUI.Update(_input, screenW, screenH);
         _craftingMenu.Update(_input, screenW, screenH, dt);
+        _skillTreePanel.SetMouse(_input.MousePos);
+        _skillTreePanel.Update(_input, screenW, screenH, gameTime.TotalGameTime.TotalSeconds);
 
         // Cursor swap: hand when hovering interactive UI, arrow otherwise
         bool overInteractiveUI = _input.MouseOverUI || _editorUi.IsMouseOverUI;
@@ -3779,6 +3804,10 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // Character stats panel (Tab)
         if (showUI)
             _characterStatsUI.Draw(screenW, screenH, _sim, _gameData.Buffs, ref _spellBarState, _input);
+
+        // Skill tree panel (K) — modal grimoire
+        if (showUI)
+            _skillTreePanel.Draw(screenW, screenH);
 
         // Building menu UI (widget-based)
         if (showUI)

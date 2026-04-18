@@ -102,6 +102,11 @@ public abstract class ScenarioBase
     public bool RequestOpenInventory;
     public bool RequestCloseInventory;
     public Game.InventoryUI? InventoryUI;
+
+    // Skill tree panel control
+    public bool RequestOpenSkillTree;
+    public bool RequestCloseSkillTree;
+    public Render.SkillTreePanel? SkillTreePanel;
 }
 
 public abstract class UIScenarioBase : ScenarioBase

@@ -25,6 +25,7 @@ public static class ScenarioRegistry
         Register("wall_trap", () => new Scenarios.WallTrapScenario());
         Register("wall_gate", () => new Scenarios.WallGateScenario());
         Register("UIEmpty", () => new Scenarios.UIEmptyScenario());
+        Register("UISkillTree", () => new Scenarios.UISkillTreeScenario());
         Register("grass_test", () => new Scenarios.GrassTestScenario());
         Register("corpse_worker", () => new Scenarios.CorpseWorkerScenario());
         Register("raid_workers", () => new Scenarios.RaidWorkersScenario());
