@@ -104,6 +104,34 @@ public class Pathfinder
     private static readonly int[] Dy4 = { -1, 0, 1, 0 };
     private static readonly int[] Opposite4 = { 2, 3, 0, 1 };
 
+    // --- Budgeted pathfinding (optional) ---
+    // When enabled, synchronous GetFlow* calls check a per-tick Dijkstra time
+    // budget. If the budget is already spent, the miss is enqueued (with a
+    // divergence-based priority) and the caller gets a stale-cache entry if
+    // one exists, else an empty flow (callers fall through to imaginary chunk
+    // or beeline). Each BeginTick() then drains the queue, highest-priority
+    // first, until the budget for that tick is exhausted.
+    public bool BudgetedPathfinding;
+    public float DijkstraBudgetMsPerTick = 3.0f;
+    private float _dijkstraMsThisTick;
+    public float DiagDijkstraMsThisTick => _dijkstraMsThisTick;
+    public int DiagPendingRequestCount => _pendingRequests.Count;
+    public int DiagStaleCacheSize => _staleFlowCache.Count;
+
+    // Evicted entries move here rather than being deleted outright, so they
+    // still inform priority scoring and can serve as a fallback while the
+    // queue catches up. They get purged in the same pass but with a looser
+    // age-out (see EvictStaleFlowFields).
+    private readonly Dictionary<FlowKey, CachedFlow> _staleFlowCache = new();
+
+    private struct PendingRequest
+    {
+        public Vec2 UnitPos;
+        public Vec2 TargetPos;
+        public float Priority; // higher = more urgent (divergence)
+    }
+    private readonly Dictionary<FlowKey, PendingRequest> _pendingRequests = new();
+
     public int SectorCountX => _sectorCountX;
     public int SectorCountY => _sectorCountY;
     public TileGrid? Grid => _grid;
@@ -476,7 +504,8 @@ public class Pathfinder
         };
     }
 
-    private CachedFlow GetFlowToTile(int sx, int sy, int localTX, int localTY, int tier, uint frame)
+    private CachedFlow GetFlowToTile(int sx, int sy, int localTX, int localTY, int tier, uint frame,
+                                     Vec2 unitPos = default, Vec2 targetPos = default)
     {
         var key = MakeFlowKey(sx, sy, 1, localTY * SectorSize + localTX, -1, tier);
         if (_flowCache.TryGetValue(key, out var cached))
@@ -491,6 +520,20 @@ public class Pathfinder
         if (s_keysEverSeen.Add(key)) DiagMissNewKey++; else DiagMissEvicted++;
 
         if (_grid == null) return new CachedFlow { Dirs = new FlowDir[SectorSize * SectorSize] };
+
+        // Budget gate: if over this tick's Dijkstra allowance, defer and hand
+        // back the stale entry if one exists — callers that can't use stale
+        // will fall through to imaginary-chunk fallback.
+        if (!HasDijkstraBudget())
+        {
+            EnqueueMiss(key, sx, sy, unitPos, targetPos);
+            if (_staleFlowCache.TryGetValue(key, out var stale))
+            {
+                stale.FrameAccessed = frame;
+                return stale;
+            }
+            return default;
+        }
 
         int baseX = sx * SectorSize, baseY = sy * SectorSize;
         int targetGlobalX = baseX + localTX;
@@ -507,12 +550,18 @@ public class Pathfinder
             goalCosts.Add(0f);
         }
 
+        var sw = System.Diagnostics.Stopwatch.StartNew();
         var flow = ComputeSectorFlow(sx, sy, goals, tier, frame, goalCosts);
+        sw.Stop();
+        ChargeDijkstraMs((float)sw.Elapsed.TotalMilliseconds);
+
         _flowCache[key] = flow;
+        _staleFlowCache.Remove(key);
         return flow;
     }
 
-    private CachedFlow GetFlowToBorder(int sx, int sy, int borderDir, int tier, uint frame)
+    private CachedFlow GetFlowToBorder(int sx, int sy, int borderDir, int tier, uint frame,
+                                       Vec2 unitPos = default, Vec2 targetPos = default)
     {
         var key = MakeFlowKey(sx, sy, 0, borderDir, -1, tier);
         if (_flowCache.TryGetValue(key, out var cached))
@@ -527,6 +576,17 @@ public class Pathfinder
         if (s_keysEverSeen.Add(key)) DiagMissNewKey++; else DiagMissEvicted++;
 
         if (_grid == null) return new CachedFlow { Dirs = new FlowDir[SectorSize * SectorSize] };
+
+        if (!HasDijkstraBudget())
+        {
+            EnqueueMiss(key, sx, sy, unitPos, targetPos);
+            if (_staleFlowCache.TryGetValue(key, out var stale))
+            {
+                stale.FrameAccessed = frame;
+                return stale;
+            }
+            return default;
+        }
 
         int baseX = sx * SectorSize, baseY = sy * SectorSize;
         int endX = Math.Min(baseX + SectorSize, _grid.Width);
@@ -567,8 +627,8 @@ public class Pathfinder
                 break;
         }
 
+        var sw = System.Diagnostics.Stopwatch.StartNew();
         var flow = ComputeSectorFlow(sx, sy, goals, tier, frame);
-        _flowCache[key] = flow;
 
         // Post-process: border goal tiles get exit direction
         FlowDir[] borderExitDir = { FlowDir.N, FlowDir.E, FlowDir.S, FlowDir.W };
@@ -578,8 +638,11 @@ public class Pathfinder
             if (flow.Dirs[g] == FlowDir.None)
                 flow.Dirs[g] = exitDir;
         }
-        _flowCache[key] = flow;
+        sw.Stop();
+        ChargeDijkstraMs((float)sw.Elapsed.TotalMilliseconds);
 
+        _flowCache[key] = flow;
+        _staleFlowCache.Remove(key);
         return flow;
     }
 
@@ -591,7 +654,8 @@ public class Pathfinder
     /// </summary>
     private CachedFlow GetFlowToMultiBorder(int sx, int sy, byte borderMask, byte lateralMask,
                                              byte extendedMask, int tier, uint frame,
-                                             int clampedLocalTX = -1, int clampedLocalTY = -1)
+                                             int clampedLocalTX = -1, int clampedLocalTY = -1,
+                                             Vec2 unitPos = default, Vec2 targetPos = default)
     {
         int combinedMask = borderMask | (lateralMask << 4) | (extendedMask << 8);
         int clampedIdx = (clampedLocalTX >= 0 && clampedLocalTY >= 0)
@@ -610,6 +674,17 @@ public class Pathfinder
         if (s_keysEverSeen.Add(key)) DiagMissNewKey++; else DiagMissEvicted++;
 
         if (_grid == null) return new CachedFlow { Dirs = new FlowDir[SectorSize * SectorSize] };
+
+        if (!HasDijkstraBudget())
+        {
+            EnqueueMiss(key, sx, sy, unitPos, targetPos);
+            if (_staleFlowCache.TryGetValue(key, out var stale))
+            {
+                stale.FrameAccessed = frame;
+                return stale;
+            }
+            return default;
+        }
 
         int baseX = sx * SectorSize, baseY = sy * SectorSize;
         int endX = Math.Min(baseX + SectorSize, _grid.Width);
@@ -694,6 +769,7 @@ public class Pathfinder
             }
         }
 
+        var sw = System.Diagnostics.Stopwatch.StartNew();
         var flow = ComputeSectorFlow(sx, sy, goals, tier, frame, goalCosts);
 
         // Post-process: border goal tiles get their respective exit direction
@@ -705,8 +781,11 @@ public class Pathfinder
             if (isPrimary || flow.Dirs[goals[i]] == FlowDir.None)
                 flow.Dirs[goals[i]] = borderExitDir[dir];
         }
+        sw.Stop();
+        ChargeDijkstraMs((float)sw.Elapsed.TotalMilliseconds);
 
         _flowCache[key] = flow;
+        _staleFlowCache.Remove(key);
         return flow;
     }
 
@@ -1276,7 +1355,7 @@ public class Pathfinder
             // Same sector: use tile flow to target
             int localTX = Math.Clamp((int)(targetPos.X / GameConstants.TileSize) - unitSX * SectorSize, 0, SectorSize - 1);
             int localTY = Math.Clamp((int)(targetPos.Y / GameConstants.TileSize) - unitSY * SectorSize, 0, SectorSize - 1);
-            var tileFlow = GetFlowToTile(unitSX, unitSY, localTX, localTY, sizeTier, frame);
+            var tileFlow = GetFlowToTile(unitSX, unitSY, localTX, localTY, sizeTier, frame, unitPos, targetPos);
 
             int localUX = Math.Clamp((int)(unitPos.X / GameConstants.TileSize) - unitSX * SectorSize, 0, SectorSize - 1);
             int localUY = Math.Clamp((int)(unitPos.Y / GameConstants.TileSize) - unitSY * SectorSize, 0, SectorSize - 1);
@@ -1337,7 +1416,7 @@ public class Pathfinder
                         {
                             int clTX = Math.Clamp((int)(targetPos.X / GameConstants.TileSize) - unitSX * SectorSize, 0, SectorSize - 1);
                             int clTY = Math.Clamp((int)(targetPos.Y / GameConstants.TileSize) - unitSY * SectorSize, 0, SectorSize - 1);
-                            flow = GetFlowToMultiBorder(unitSX, unitSY, borderMask, 0, 0, fallback, frame, clTX, clTY);
+                            flow = GetFlowToMultiBorder(unitSX, unitSY, borderMask, 0, 0, fallback, frame, clTX, clTY, unitPos, targetPos);
                             hasFlow = true;
                             break;
                         }
@@ -1386,13 +1465,13 @@ public class Pathfinder
                     int clampedLTX = Math.Clamp((int)(targetPos.X / GameConstants.TileSize) - unitSX * SectorSize, 0, SectorSize - 1);
                     int clampedLTY = Math.Clamp((int)(targetPos.Y / GameConstants.TileSize) - unitSY * SectorSize, 0, SectorSize - 1);
                     flow = GetFlowToMultiBorder(unitSX, unitSY, borderMask, lateralMask, extendedMask,
-                                                sizeTier, frame, clampedLTX, clampedLTY);
+                                                sizeTier, frame, clampedLTX, clampedLTY, unitPos, targetPos);
                     hasFlow = true;
                 }
                 else
                 {
                     // Fallback to single border
-                    flow = GetFlowToBorder(unitSX, unitSY, route.NextDir[unitSector], sizeTier, frame);
+                    flow = GetFlowToBorder(unitSX, unitSY, route.NextDir[unitSector], sizeTier, frame, unitPos, targetPos);
                     hasFlow = true;
                 }
             }
@@ -1482,7 +1561,7 @@ public class Pathfinder
                 {
                     int localTX = Math.Clamp((int)(targetPos.X / GameConstants.TileSize) - unitSX * SectorSize, 0, SectorSize - 1);
                     int localTY = Math.Clamp((int)(targetPos.Y / GameConstants.TileSize) - unitSY * SectorSize, 0, SectorSize - 1);
-                    fbFlow = GetFlowToTile(unitSX, unitSY, localTX, localTY, fallbackTier, frame);
+                    fbFlow = GetFlowToTile(unitSX, unitSY, localTX, localTY, fallbackTier, frame, unitPos, targetPos);
                 }
                 else
                 {
@@ -1503,7 +1582,7 @@ public class Pathfinder
                     if (fbBorderMask == 0) continue;
                     int clTX = Math.Clamp((int)(targetPos.X / GameConstants.TileSize) - unitSX * SectorSize, 0, SectorSize - 1);
                     int clTY = Math.Clamp((int)(targetPos.Y / GameConstants.TileSize) - unitSY * SectorSize, 0, SectorSize - 1);
-                    fbFlow = GetFlowToMultiBorder(unitSX, unitSY, fbBorderMask, fbLateralMask, 0, fallbackTier, frame, clTX, clTY);
+                    fbFlow = GetFlowToMultiBorder(unitSX, unitSY, fbBorderMask, fbLateralMask, 0, fallbackTier, frame, clTX, clTY, unitPos, targetPos);
                 }
 
                 if (fbFlow.Dirs == null) continue;
@@ -1643,6 +1722,116 @@ public class Pathfinder
         _unitImagChunks.Remove(unitIdx);
     }
 
+    // --- Budgeted pathfinding ---
+
+    /// <summary>
+    /// Called once per simulation tick at the start of the pathfinder phase.
+    /// Resets the per-tick Dijkstra budget, then drains the deferred request
+    /// queue (highest priority first) until the budget is spent. Remaining
+    /// entries are cleared — callers that still need them will re-enqueue on
+    /// this tick's queries if the work hasn't happened via another path.
+    /// </summary>
+    public void BeginTick(uint frame)
+    {
+        _dijkstraMsThisTick = 0f;
+        if (!BudgetedPathfinding || _pendingRequests.Count == 0)
+        {
+            _pendingRequests.Clear();
+            return;
+        }
+
+        // Materialize + sort by priority desc. Small allocation per tick, but
+        // the queue is tiny (only the overflow from the previous tick).
+        var sorted = new List<KeyValuePair<FlowKey, PendingRequest>>(_pendingRequests);
+        sorted.Sort((a, b) => b.Value.Priority.CompareTo(a.Value.Priority));
+
+        foreach (var (key, _) in sorted)
+        {
+            if (_dijkstraMsThisTick >= DijkstraBudgetMsPerTick) break;
+            if (_flowCache.ContainsKey(key)) continue;  // already computed via another path
+            ProcessPendingRequest(key, frame);
+        }
+        _pendingRequests.Clear();
+    }
+
+    private void ProcessPendingRequest(FlowKey key, uint frame)
+    {
+        // FlowKey round-trips: TargetData encodes per-type params, invertibly.
+        switch (key.TargetType)
+        {
+            case 0: // border
+                GetFlowToBorder(key.SectorX, key.SectorY, key.TargetData, key.SizeTier, frame);
+                break;
+            case 1: // tile
+                int tLY = key.TargetData / SectorSize;
+                int tLX = key.TargetData - tLY * SectorSize;
+                GetFlowToTile(key.SectorX, key.SectorY, tLX, tLY, key.SizeTier, frame);
+                break;
+            case 2: // multi-border
+                byte bm = (byte)(key.TargetData & 0xF);
+                byte lm = (byte)((key.TargetData >> 4) & 0xF);
+                byte em = (byte)((key.TargetData >> 8) & 0xF);
+                int clampIdx = key.TargetData2;
+                int clampTX = -1, clampTY = -1;
+                if (clampIdx >= 0)
+                {
+                    clampTY = clampIdx / SectorSize;
+                    clampTX = clampIdx - clampTY * SectorSize;
+                }
+                GetFlowToMultiBorder(key.SectorX, key.SectorY, bm, lm, em,
+                    key.SizeTier, frame, clampTX, clampTY);
+                break;
+        }
+    }
+
+    /// <summary>
+    /// Returns true when budgeted pathfinding is disabled, or when some budget
+    /// remains this tick. Callers on a cache miss should use this to decide
+    /// whether to compute synchronously or enqueue the request.
+    /// </summary>
+    private bool HasDijkstraBudget()
+    {
+        if (!BudgetedPathfinding) return true;
+        return _dijkstraMsThisTick < DijkstraBudgetMsPerTick;
+    }
+
+    /// <summary>
+    /// Record elapsed ms from a synchronous Dijkstra against the per-tick budget.
+    /// </summary>
+    private void ChargeDijkstraMs(float ms) => _dijkstraMsThisTick += ms;
+
+    /// <summary>
+    /// Enqueue a deferred flow request. Priority ~= 1 - dot(staleFlow, straight),
+    /// so misses whose stale fallback steers badly against the goal get processed
+    /// first. Requests with no stale fallback get a medium priority — the caller
+    /// can fall through to the imaginary-chunk fallback, so they aren't as urgent
+    /// as a stale flow that's actually wrong.
+    /// </summary>
+    private void EnqueueMiss(FlowKey key, int sx, int sy, Vec2 unitPos, Vec2 targetPos)
+    {
+        float priority = 1.0f; // default for no-stale-data case
+        if (_staleFlowCache.TryGetValue(key, out var stale))
+        {
+            Vec2 sFlow = SampleFlow(stale, unitPos, sx, sy);
+            Vec2 toTgt = targetPos - unitPos;
+            float len = toTgt.Length();
+            if (len > 0.01f && sFlow.LengthSq() > 0.001f)
+            {
+                Vec2 straight = toTgt * (1f / len);
+                priority = 1f - (sFlow.X * straight.X + sFlow.Y * straight.Y);
+            }
+        }
+        if (_pendingRequests.TryGetValue(key, out var existing))
+        {
+            if (priority > existing.Priority)
+                _pendingRequests[key] = new PendingRequest { UnitPos = unitPos, TargetPos = targetPos, Priority = priority };
+        }
+        else
+        {
+            _pendingRequests[key] = new PendingRequest { UnitPos = unitPos, TargetPos = targetPos, Priority = priority };
+        }
+    }
+
     // --- Helpers ---
 
     private Vec2 SampleFlow(CachedFlow flow, Vec2 unitPos, int sx, int sy)
@@ -1663,6 +1852,8 @@ public class Pathfinder
             uint oldestFrame = uint.MaxValue;
             foreach (var (k, v) in _flowCache)
                 if (v.FrameAccessed < oldestFrame) { oldestFrame = v.FrameAccessed; oldestKey = k; }
+            if (_flowCache.TryGetValue(oldestKey, out var victim))
+                _staleFlowCache[oldestKey] = victim;
             _flowCache.Remove(oldestKey);
             DiagCacheEvictions++;
         }
@@ -1689,10 +1880,23 @@ public class Pathfinder
         {
             foreach (var k in toRemove)
             {
+                if (_flowCache.TryGetValue(k, out var victim))
+                    _staleFlowCache[k] = victim;
                 _flowCache.Remove(k);
                 DiagCacheEvictions++;
             }
         }
+
+        // Loose age-out for stale entries — anything that hasn't been rescued
+        // back to live within 2x the live age-out is unlikely to be reused.
+        uint staleMax = maxAgeFrames * 2u;
+        List<FlowKey>? staleToRemove = null;
+        foreach (var (k, v) in _staleFlowCache)
+            if (currentFrame - v.FrameAccessed > staleMax)
+                (staleToRemove ??= new List<FlowKey>()).Add(k);
+        if (staleToRemove != null)
+            foreach (var k in staleToRemove)
+                _staleFlowCache.Remove(k);
     }
 
     /// <summary>Current flow-cache entry count. Diagnostic probe.</summary>

@@ -18,6 +18,11 @@ public static class SettingsGeneralTab
     /// </summary>
     public static int Draw(EditorBase ui, GeneralSettings s, int x, int y, int w)
     {
+        return Draw(ui, s, null, x, y, w);
+    }
+
+    public static int Draw(EditorBase ui, GeneralSettings s, PerformanceSettings? perf, int x, int y, int w)
+    {
         int curY = y;
 
         // --- Display toggles ---
@@ -131,6 +136,22 @@ public static class SettingsGeneralTab
         DrawSectionHeader(ui, "Pickup", x, ref curY, w);
         s.AutoPickupForagables = ui.DrawCheckbox("Auto-Pickup Foragables", s.AutoPickupForagables, x + 10, curY);
         curY += RowH;
+
+        if (perf != null)
+        {
+            curY += 4;
+            DrawSectionHeader(ui, "Performance (debug)", x, ref curY, w);
+
+            perf.BudgetedPathfinding = ui.DrawCheckbox("Budgeted Pathfinding", perf.BudgetedPathfinding, x + 10, curY);
+            curY += RowH;
+            perf.DijkstraBudgetMsPerTick = ui.DrawFloatField("perf_dijkstraMs", "Dijkstra Budget (ms/tick)", perf.DijkstraBudgetMsPerTick, x, curY, w, 0.5f);
+            curY += RowH;
+
+            ui.DrawText("Caps Dijkstra work/frame; overflow defers (uses stale flow).", new Vector2(x, curY), EditorBase.TextDim);
+            curY += 16;
+            ui.DrawText("Smooths summon-burst spikes. May hide perf regressions.", new Vector2(x, curY), EditorBase.TextDim);
+            curY += 20;
+        }
 
         return curY - y;
     }

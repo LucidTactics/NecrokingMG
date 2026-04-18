@@ -273,6 +273,17 @@ public class Simulation
         // Horde
         PhaseStart(); _horde.Tick(dt, _units, _necromancerIdx); PhaseEnd("horde_tick");
 
+        // Push optional budgeted-pathfinding settings each tick so edits in the
+        // settings window take effect live. BeginTick resets the per-tick Dijkstra
+        // budget and drains the deferred queue (priority-sorted) up to that budget,
+        // before any AI tries to read fresh flow fields.
+        if (_gameData != null)
+        {
+            _pathfinder.BudgetedPathfinding = _gameData.Settings.Performance.BudgetedPathfinding;
+            _pathfinder.DijkstraBudgetMsPerTick = _gameData.Settings.Performance.DijkstraBudgetMsPerTick;
+        }
+        _pathfinder.BeginTick(_frameNumber);
+
         // Core subsystems
         PhaseStart(); UpdateAI(dt); PhaseEnd("ai");
 
@@ -444,7 +455,10 @@ public class Simulation
               .Append($",imag:{Necroking.World.Pathfinder.DiagImagChunkComputes}")
               .Append($"+{Necroking.World.Pathfinder.DiagImagChunkRecomputes}")
               .Append($",cache:{Necroking.World.Pathfinder.DiagCacheSize}")
-              .Append($",cevict:{Necroking.World.Pathfinder.DiagCacheEvictions}}}");
+              .Append($",cevict:{Necroking.World.Pathfinder.DiagCacheEvictions}")
+              .Append($",dj_ms:{_pathfinder.DiagDijkstraMsThisTick:F2}")
+              .Append($",pend:{_pathfinder.DiagPendingRequestCount}")
+              .Append($",stale:{_pathfinder.DiagStaleCacheSize}}}");
             DebugLog.Log("perf", sb.ToString());
         }
     }

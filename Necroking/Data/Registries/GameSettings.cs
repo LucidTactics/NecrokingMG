@@ -124,6 +124,16 @@ public class StartingItem
 
 public enum FogOfWarMode { Off = 0, Explored = 1, FogOfWar = 2 }
 
+public class PerformanceSettings
+{
+    // Cap Dijkstra work per tick and defer overflow to later ticks, so a burst
+    // of new flow-field requests (e.g. right after summoning) doesn't stall a
+    // frame. Disabled by default so regressions don't hide behind the cap — opt
+    // in when you actually want the smoothing.
+    [JsonPropertyName("budgetedPathfinding")] public bool BudgetedPathfinding { get; set; }
+    [JsonPropertyName("dijkstraBudgetMsPerTick")] public float DijkstraBudgetMsPerTick { get; set; } = 3.0f;
+}
+
 public class FogOfWarSettings
 {
     [JsonPropertyName("mode")] public int Mode { get; set; } // 0=Off, 1=Explored, 2=FogOfWar
@@ -143,6 +153,7 @@ public class GameSettingsData
     [JsonPropertyName("horde")] public HordeSettings Horde { get; set; } = new();
     [JsonPropertyName("combat")] public CombatSettings Combat { get; set; } = new();
     [JsonPropertyName("fogOfWar")] public FogOfWarSettings FogOfWar { get; set; } = new();
+    [JsonPropertyName("performance")] public PerformanceSettings Performance { get; set; } = new();
     [JsonPropertyName("startingInventory")] public List<StartingItem> StartingInventory { get; set; } = new();
 
     public bool Load(string path)
@@ -162,6 +173,7 @@ public class GameSettingsData
             Horde = loaded.Horde;
             Combat = loaded.Combat;
             FogOfWar = loaded.FogOfWar;
+            Performance = loaded.Performance;
             StartingInventory = loaded.StartingInventory;
             return true;
         }

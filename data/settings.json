@@ -114,6 +114,10 @@
     "unexploredAlpha": 1,
     "foggedAlpha": 0.7
   },
+  "performance": {
+    "budgetedPathfinding": false,
+    "dijkstraBudgetMsPerTick": 3
+  },
   "startingInventory": [
     {
       "itemId": "Mushroom",
