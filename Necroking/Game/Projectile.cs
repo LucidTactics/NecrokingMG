@@ -101,8 +101,16 @@ public class ProjectileManager
     public IReadOnlyList<ImpactEvent> Impacts => _impacts;
     public IReadOnlyList<ProjectileHit> Hits => _hits;
 
+    /// <summary>
+    /// Spawn an arrow projectile. <paramref name="spawnHeight"/> is the arrow's
+    /// starting world-unit height above the ground — pass the attacker's
+    /// <c>Unit.EffectSpawnHeight</c> (set by <c>UpdateEffectSpawnPositions</c> from
+    /// the weapon-tip anim point) so the arc starts at the bow tip rather than a
+    /// generic body offset. The 0.6 default is the "no weapon-tip data" fallback
+    /// and should only be used by tests / non-unit sources.
+    /// </summary>
     public void SpawnArrow(Vec2 from, Vec2 target, Faction faction, uint owner, int damage,
-                           bool volley, int precision, string weaponName = "", float spawnHeight = 1.5f)
+                           bool volley, int precision, string weaponName = "", float spawnHeight = 0.6f)
     {
         var dir = (target - from).Normalized();
         float dist = (target - from).Length();
@@ -141,8 +149,12 @@ public class ProjectileManager
         _projectiles.Add(p);
     }
 
+    /// <summary>
+    /// Spawn a fireball projectile. See SpawnArrow for the spawnHeight convention —
+    /// use the caster's <c>Unit.EffectSpawnHeight</c> for animation-accurate origin.
+    /// </summary>
     public void SpawnFireball(Vec2 from, Vec2 target, Faction faction, uint owner,
-                              int damage, float aoeRadius, string weaponName = "", float spawnHeight = 1.5f)
+                              int damage, float aoeRadius, string weaponName = "", float spawnHeight = 0.6f)
     {
         var dir = (target - from).Normalized();
         float dist = (target - from).Length();
@@ -163,8 +175,12 @@ public class ProjectileManager
         });
     }
 
+    /// <summary>
+    /// Spawn a potion-lob projectile. See SpawnArrow for the spawnHeight convention —
+    /// use the thrower's <c>Unit.EffectSpawnHeight</c> so the arc starts at the throwing hand.
+    /// </summary>
     public void SpawnPotionLob(Vec2 from, Vec2 target, Faction faction, uint owner,
-                               string potionId, float scale = 0.5f, float spawnHeight = 1.5f)
+                               string potionId, float scale = 0.5f, float spawnHeight = 0.6f)
     {
         var dir = (target - from).Normalized();
         float dist = (target - from).Length();

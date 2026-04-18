@@ -49,6 +49,15 @@ public class DamageEvent
     public int Damage;
     public float Height;
     public bool IsPoison;
+
+    /// <summary>Build a floating-damage-number event. Pass a per-unit `height` only
+    /// when you already have the correct value on hand (e.g. from a UnitDef's
+    /// SpriteWorldHeight); otherwise leave it at DefaultHeight.</summary>
+    public static DamageEvent Create(Vec2 position, int damage,
+        float height = DefaultHeight, bool isPoison = false) => new()
+    {
+        Position = position, Damage = damage, Height = height, IsPoison = isPoison,
+    };
 }
 
 public struct SoulOrb
@@ -514,7 +523,8 @@ public class Simulation
                                     int damage = _units[i].Stats.RangedDmg.Count > 0 ? _units[i].Stats.RangedDmg[0] : 8;
                                     bool volley = dist > bestRange * 0.4f;
                                     _projectiles.SpawnArrow(_units[i].Position, _units[targetIdx].Position,
-                                        _units[i].Faction, _units[i].Id, damage, volley, 10);
+                                        _units[i].Faction, _units[i].Id, damage, volley, 10,
+                                        spawnHeight: _units[i].EffectSpawnHeight);
                                     _units[i].AttackCooldown = _units[i].Stats.RangedCooldownTime.Count > 0
                                         ? _units[i].Stats.RangedCooldownTime[0] : 2f;
                                 }
@@ -1655,7 +1665,8 @@ public class Simulation
             float dist = (_units[defenderIdx].Position - _units[unitIdx].Position).Length();
             bool volley = dist > maxRange * 0.4f;
             _projectiles.SpawnArrow(_units[unitIdx].Position, _units[defenderIdx].Position,
-                _units[unitIdx].Faction, _units[unitIdx].Id, damage, volley, 10);
+                _units[unitIdx].Faction, _units[unitIdx].Id, damage, volley, 10,
+                spawnHeight: _units[unitIdx].EffectSpawnHeight);
             return;
         }
 

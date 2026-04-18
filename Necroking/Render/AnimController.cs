@@ -463,8 +463,14 @@ public class AnimController
     }
 
     /// <summary>
-    /// Returns the current frame index (0-based) for the given facing angle.
-    /// This mirrors the logic in GetCurrentFrame but returns the index instead of the frame data.
+    /// Returns the current frame index (0-based) for the given facing angle. Mirrors
+    /// GetCurrentFrame but returns the index instead of the frame data.
+    ///
+    /// When the reverse-playback flag is set and the state is Walk/Jog/Run, time is
+    /// mirrored (totalMs - _animTime) before frame lookup so the locomotion plays
+    /// backward — this is how backpedaling reads from the same asset as forward walk.
+    /// Callers should be aware that the returned index is not a monotonic function of
+    /// elapsed time in that case.
     /// </summary>
     public int GetCurrentFrameIndex(float facingAngleDeg)
     {

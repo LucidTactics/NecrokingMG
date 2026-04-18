@@ -113,12 +113,7 @@ public static class DamageSystem
         // can't confuse "stacks piling on" with "HP actually lost".
         if (type == DamageType.Physical)
         {
-            damageEvents.Add(new DamageEvent
-            {
-                Position = units[targetIdx].Position,
-                Damage = finalDamage,
-                Height = DamageEvent.DefaultHeight,
-            });
+            damageEvents.Add(DamageEvent.Create(units[targetIdx].Position, finalDamage));
         }
     }
 
@@ -148,12 +143,7 @@ public static class DamageSystem
             }
         }
 
-        damageEvents.Add(new DamageEvent
-        {
-            Position = units[targetIdx].Position,
-            Damage = netDamage,
-            Height = DamageEvent.DefaultHeight,
-        });
+        damageEvents.Add(DamageEvent.Create(units[targetIdx].Position, netDamage));
 
         if (units[targetIdx].Stats.HP <= 0)
         {
