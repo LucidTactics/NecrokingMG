@@ -1466,6 +1466,14 @@ public class Simulation
             }
 
             _units[i].Position = newPos;
+
+            // Smoothed velocity for anim-layer "am I really moving" detection.
+            // 0.5s time constant — oscillations with period < 1s (horde minion
+            // ping-ponging around its drifting slot) damp toward zero vector;
+            // sustained motion (own locomotion, or a persistent ORCA shove from
+            // a bigger neighbour) is preserved in magnitude and direction.
+            float emaAlpha = 1f - MathF.Exp(-dt / 0.5f);
+            _units[i].VelocityEMA += (_units[i].Velocity - _units[i].VelocityEMA) * emaAlpha;
         }
     }
 

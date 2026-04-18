@@ -3305,21 +3305,22 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 targetState = AnimState.Hover;
             else
             {
-                // Anim intent comes from PreferredVel (what the AI wants to do) as well
-                // as Velocity (what physics actually produced). Without the intent check,
-                // a horde minion sitting at its slot can be jostled by ORCA neighbors so
-                // Velocity > idle threshold and the Walk anim plays while the unit is
-                // visibly standing still.
+                // Idle detection uses smoothed velocity so oscillating motion — e.g. a
+                // horde minion ping-ponging around its drifting slot — averages toward
+                // zero and reads as Idle. Sustained motion (own locomotion, or being
+                // shoved aside by a larger unit) survives the smoothing and reads as
+                // Walk/Jog/Run. Walk/Jog/Run bucket off instantaneous speed so the
+                // pace matches what the unit is visually doing.
                 float speed = _sim.Units[i].Velocity.Length();
+                float smoothedSpeed = _sim.Units[i].VelocityEMA.Length();
                 float baseSpeed = _sim.Units[i].Stats.CombatSpeed;
                 float jogThreshold = 4f + baseSpeed / 3f;
                 float runThreshold = 6f + 2f * baseSpeed / 3f;
-                bool intendsStill = _sim.Units[i].PreferredVel.LengthSq() < 0.04f; // ~0.2 units/s
 
                 bool carrying = _sim.Units[i].CarryingCorpseID >= 0;
                 if (carrying)
                     targetState = AnimState.Carry;
-                else if (intendsStill || speed <= 0.25f)
+                else if (smoothedSpeed <= 0.5f)
                     targetState = AnimState.Idle;
                 else if (speed < jogThreshold)
                     targetState = AnimState.Walk;

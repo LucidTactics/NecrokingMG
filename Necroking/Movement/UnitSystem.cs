@@ -59,6 +59,13 @@ public class Unit
     public Vec2 Position;
     public Vec2 Velocity;
     public Vec2 PreferredVel;
+    /// <summary>Exponentially-smoothed Velocity (time constant ~0.5s). Oscillating
+    /// motion (e.g. a horde minion chasing a drifting slot, or ORCA nudging) averages
+    /// toward zero in this vector, while sustained motion — whether the unit's own
+    /// movement or a persistent shove from a larger neighbor — is preserved. The anim
+    /// layer uses |VelocityEMA| for the Idle/Walk decision so visible "standing still"
+    /// doesn't get stuck in Walk.</summary>
+    public Vec2 VelocityEMA;
     public float Z;             // Height above ground (0 = on ground). Used by 2.5D impulse physics.
     public bool InPhysics;      // True while physics system owns this unit's movement.
     public bool OverrideStarted; // Tracks whether OverrideAnim has been applied to AnimController
