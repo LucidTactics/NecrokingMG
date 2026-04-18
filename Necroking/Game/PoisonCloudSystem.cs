@@ -255,11 +255,11 @@ public class PoisonCloudSystem
             falloff = MathF.Max(falloff, 0.05f); // Minimum 5% at edge
 
             int damage = (int)MathF.Ceiling(cloud.BaseDamagePerTick * cloud.Potency * phaseMult * falloff);
-            if (damage < 1) damage = 1;
-
-            // Apply poison through unified damage system (AN — clouds bypass armor)
-            DamageSystem.Apply(units, idx, damage * 3,
-                DamageType.Poison, DamageFlags.ArmorNegating, damageEvents);
+            if (damage > 0)
+            {
+                DamageSystem.Apply(units, idx, damage,
+                    DamageType.Poison, DamageFlags.ArmorNegating, damageEvents);
+            }
 
             // Apply slow debuff
             if (buffs != null && !string.IsNullOrEmpty(cloud.SlowBuffID))

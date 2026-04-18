@@ -288,13 +288,14 @@ public static class PotionSystem
                     units[i].PoisonStacks -= dmg;
                     if (units[i].PoisonStacks <= 0) units[i].PoisonStacks = 0;
 
-                    // HP reduction bypasses armor (poison already got through armor when applied)
+                    // HP reduction bypasses armor (poison already got through armor when applied).
+                    // Do NOT set HitReacting here — only the initial stack application should
+                    // alert/flee AI. Ticking HitReacting would make poisoned units re-flee every 3s.
                     if (dmg > 0)
                     {
                         units[i].Stats.HP -= dmg;
-                        units[i].HitReacting = true;
                         DebugLog.Log("ai", $"[PoisonTick] unit#{i} dmg={dmg} stacks={units[i].PoisonStacks} " +
-                            $"HP={units[i].Stats.HP} hitReact=true faction={units[i].Faction}");
+                            $"HP={units[i].Stats.HP} faction={units[i].Faction}");
                         damageEvents.Add(new DamageEvent
                         {
                             Position = units[i].Position,

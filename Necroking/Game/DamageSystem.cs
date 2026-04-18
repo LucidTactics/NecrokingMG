@@ -108,14 +108,18 @@ public static class DamageSystem
             }
         }
 
-        // Visual damage number
-        damageEvents.Add(new DamageEvent
+        // Visual damage number — only for physical damage. Poison stack-adds are
+        // silent; the green number is reserved for HP-drain DoT ticks so the player
+        // can't confuse "stacks piling on" with "HP actually lost".
+        if (type == DamageType.Physical)
         {
-            Position = units[targetIdx].Position,
-            Damage = finalDamage,
-            Height = 1.5f,
-            IsPoison = type == DamageType.Poison,
-        });
+            damageEvents.Add(new DamageEvent
+            {
+                Position = units[targetIdx].Position,
+                Damage = finalDamage,
+                Height = 1.5f,
+            });
+        }
     }
 
     /// <summary>
