@@ -1154,6 +1154,12 @@ public class Simulation
         var nearbyIDs = new List<uint>();
         var envEntries = new List<EnvSpatialIndex.Entry>();
 
+        // Top-K neighbor scratch buffers — hoisted outside the loop so the
+        // stackalloc happens once per UpdateMovement call, not per unit.
+        const int TopK = 10;
+        Span<float> topDist = stackalloc float[TopK];
+        Span<int>   topIdx  = stackalloc int[TopK];
+
         for (int i = 0; i < _units.Count; i++)
         {
             if (!_units[i].Alive) continue;
@@ -1198,27 +1204,54 @@ public class Simulation
                 float queryRadius = MathF.Max(_units[i].Radius * 5f, 3f);
                 _quadtree.QueryRadius(_units[i].Position, queryRadius, nearbyIDs);
 
+                // Top-K (10) closest dynamic neighbours, inline without allocating a
+                // lambda sort or a full throwaway list. At u=600+ with dense queries
+                // (~80 nearby units), the prior full sort cost 5M+ compares/tick and
+                // the capturing lambda allocated ~40B per unit (~24KB GC/tick).
+                // Buffers hoisted outside the outer for loop; we just reset contents
+                // at the start of each iteration. Insertion with early-exit on the
+                // worst-kept distance turns this into O(N) once top-10 is full.
+                for (int k = 0; k < TopK; k++) { topDist[k] = float.MaxValue; topIdx[k] = -1; }
+                int topCount = 0;
+
                 foreach (uint nid in nearbyIDs)
                 {
                     if (nid == _units[i].Id) continue;
                     int j = UnitUtil.ResolveUnitIndex(_units, nid);
                     if (j < 0 || !_units[j].Alive) continue;
 
+                    float dx = _units[j].Position.X - myPos.X;
+                    float dy = _units[j].Position.Y - myPos.Y;
+                    float d2 = dx * dx + dy * dy;
+
+                    if (topCount == TopK && d2 >= topDist[TopK - 1]) continue;
+
+                    int ins = Math.Min(topCount, TopK - 1);
+                    while (ins > 0 && topDist[ins - 1] > d2)
+                    {
+                        topDist[ins] = topDist[ins - 1];
+                        topIdx[ins]  = topIdx[ins - 1];
+                        ins--;
+                    }
+                    topDist[ins] = d2;
+                    topIdx[ins]  = j;
+                    if (topCount < TopK) topCount++;
+                }
+
+                for (int k = 0; k < topCount; k++)
+                {
+                    int j = topIdx[k];
                     neighbors.Add(new ORCANeighbor
                     {
                         Position = _units[j].Position,
                         Velocity = _units[j].Velocity,
                         Radius = _units[j].Radius,
-                        Id = nid,
+                        Id = _units[j].Id,
                         Priority = _units[j].Faction != _units[i].Faction
                             ? _units[i].OrcaPriority  // cross-faction: equal
                             : _units[j].OrcaPriority  // same-faction: respect hierarchy
                     });
                 }
-
-                // Sort dynamic neighbours by distance, keep closest 10
-                neighbors.Sort((a, b) => (a.Position - myPos).LengthSq().CompareTo((b.Position - myPos).LengthSq()));
-                if (neighbors.Count > 10) neighbors.RemoveRange(10, neighbors.Count - 10);
 
                 // Append up to 6 nearest static env obstacles (trees, rocks). They
                 // participate in ORCA as zero-velocity immovable circles with 100%

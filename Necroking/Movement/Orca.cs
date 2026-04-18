@@ -43,13 +43,21 @@ public static class Orca
 {
     private const float Epsilon = 1e-5f;
 
+    // Reused across every ComputeORCAVelocity call. Sim is single-threaded; if
+    // we ever parallelize unit movement these should go [ThreadStatic].
+    // Previously `new List<ORCALine>(neighbors.Count)` allocated a list per
+    // unit per tick (~u=600 calls ⇒ 600 small-list allocs/tick of GC pressure).
+    private static readonly List<ORCALine> _orcaLinesScratch = new();
+    private static readonly List<ORCALine> _projLinesScratch = new();
+
     private static float Det(Vec2 a, Vec2 b) => a.X * b.Y - a.Y * b.X;
 
     public static Vec2 ComputeORCAVelocity(
         Vec2 position, Vec2 currentVelocity, Vec2 preferredVelocity,
         List<ORCANeighbor> neighbors, ORCAParams param, float dt)
     {
-        var orcaLines = new List<ORCALine>(neighbors.Count);
+        var orcaLines = _orcaLinesScratch;
+        orcaLines.Clear();
         float invTimeHorizon = 1f / param.TimeHorizon;
 
         foreach (var neighbor in neighbors)
@@ -236,7 +244,8 @@ public static class Orca
             float d = Det(lines[i].Direction, lines[i].Point - result);
             if (d > distance)
             {
-                var projLines = new List<ORCALine>();
+                var projLines = _projLinesScratch;
+                projLines.Clear();
 
                 for (int j = 0; j < i; j++)
                 {
