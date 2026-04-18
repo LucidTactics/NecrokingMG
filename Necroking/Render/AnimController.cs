@@ -94,8 +94,11 @@ public class AnimController
     // OldSectors: legacy 3-angle scheme (30 right-ish, 60 down-ish, 300 up-ish). Down and Up are split at the
     // cardinal so their left half flips. Units authored before the angle refactor use this.
     //
-    // NewSectors: compass scheme (Y-up math convention: 0=E, 45=NE, 90=N, 270=S, 315=SE). N and S are distinct
-    // sprites (face vs back) — they never flip. W/NW/SW come from horizontal-flipping E/NE/SE.
+    // NewSectors: compass scheme matching the Unity authoring convention —
+    //   yaw 0=right (E), yaw 45=down-right (SE), yaw 90=down (S, toward camera),
+    //   yaw 270=up (N, away from camera), yaw 315=up-right (NE).
+    // N and S are distinct sprites (face vs back) — they never flip. W / NW / SW
+    // come from horizontal-flipping E / NE / SE.
     private static readonly (float min, float max, int angle, bool flip)[] OldSectors =
     {
         (-22.5f,  22.5f, 30,  false),  // Right
@@ -113,13 +116,13 @@ public class AnimController
     private static readonly (float min, float max, int angle, bool flip)[] NewSectors =
     {
         (-22.5f,  22.5f,   0, false),  // E
-        ( 22.5f,  67.5f, 315, false),  // SE (screen down-right = math Y-up 315)
-        ( 67.5f, 112.5f, 270, false),  // S (distinct sprite, never flipped)
-        (112.5f, 157.5f, 315, true),   // SW (flip of SE)
+        ( 22.5f,  67.5f,  45, false),  // SE (down-right = Unity yaw 45)
+        ( 67.5f, 112.5f,  90, false),  // S (down = Unity yaw 90, distinct sprite, never flipped)
+        (112.5f, 157.5f,  45, true),   // SW (flip of SE)
         (157.5f, 202.5f,   0, true),   // W (flip of E)
-        (202.5f, 247.5f,  45, true),   // NW (flip of NE)
-        (247.5f, 292.5f,  90, false),  // N (distinct sprite, never flipped)
-        (292.5f, 337.5f,  45, false),  // NE
+        (202.5f, 247.5f, 315, true),   // NW (flip of NE)
+        (247.5f, 292.5f, 270, false),  // N (up = Unity yaw 270, distinct sprite, never flipped)
+        (292.5f, 337.5f, 315, false),  // NE (up-right = Unity yaw 315)
     };
 
     public AnimState CurrentState => _currentState;

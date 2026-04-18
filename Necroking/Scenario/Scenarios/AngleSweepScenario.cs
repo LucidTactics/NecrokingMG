@@ -114,9 +114,9 @@ public class AngleSweepScenario : ScenarioBase
     {
         var newExpected = new Dictionary<int, (int angle, bool flip)>
         {
-            [0]   = (0,   false), [45]  = (315, false), [90]  = (270, false),
-            [135] = (315, true),  [180] = (0,   true),  [225] = (45,  true),
-            [270] = (90,  false), [315] = (45,  false),
+            [0]   = (0,   false), [45]  = (45,  false), [90]  = (90,  false),
+            [135] = (45,  true),  [180] = (0,   true),  [225] = (315, true),
+            [270] = (270, false), [315] = (315, false),
         };
         var oldExpected = new Dictionary<int, (int angle, bool flip)>
         {
