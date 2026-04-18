@@ -132,6 +132,14 @@ public class PerformanceSettings
     // in when you actually want the smoothing.
     [JsonPropertyName("budgetedPathfinding")] public bool BudgetedPathfinding { get; set; }
     [JsonPropertyName("dijkstraBudgetMsPerTick")] public float DijkstraBudgetMsPerTick { get; set; } = 3.0f;
+
+    // Amortize low-urgency AI work (horde follow/return, Unaware awareness
+    // scans) across N frames instead of running for every unit every tick.
+    // ORCA/movement still runs every frame so collision stays correct;
+    // units just hold their last PreferredVel between decisions. Combat
+    // states (Chasing/Engaged, Alert/Aggressive) always run every frame.
+    [JsonPropertyName("amortizedAI")] public bool AmortizedAI { get; set; }
+    [JsonPropertyName("aiUpdateInterval")] public int AIUpdateInterval { get; set; } = 6;
 }
 
 public class FogOfWarSettings

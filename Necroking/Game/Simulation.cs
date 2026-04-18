@@ -98,6 +98,10 @@ public class Simulation
     private float _gameTime;
     private uint _frameNumber;
     private int _necromancerIdx = -1;
+    // Cached per-tick so AIContext construction in the archetype loop doesn't
+    // chase GameData.Settings 600+ times per frame.
+    private bool _amortizedAI;
+    private int _aiUpdateInterval = 6;
     private float _harassmentDecayTimer = CombatTickInterval;
     private int _nextCorpseID;
     private readonly List<PendingZombieRaise> _pendingZombieRaises = new();
@@ -281,6 +285,8 @@ public class Simulation
         {
             _pathfinder.BudgetedPathfinding = _gameData.Settings.Performance.BudgetedPathfinding;
             _pathfinder.DijkstraBudgetMsPerTick = _gameData.Settings.Performance.DijkstraBudgetMsPerTick;
+            _amortizedAI = _gameData.Settings.Performance.AmortizedAI;
+            _aiUpdateInterval = Math.Max(1, _gameData.Settings.Performance.AIUpdateInterval);
         }
         _pathfinder.BeginTick(_frameNumber);
 
@@ -519,7 +525,7 @@ public class Simulation
             isNight = dayFraction >= 0.5f;
         }
         PhaseStart();
-        AI.AwarenessSystem.Update(_units, _quadtree, dt, (int)_frameNumber);
+        AI.AwarenessSystem.Update(_units, _quadtree, dt, (int)_frameNumber, _amortizedAI, _aiUpdateInterval);
         PhaseEnd("ai_awareness");
 
         double archetypeMs = 0, legacyMs = 0;
@@ -546,6 +552,7 @@ public class Simulation
                         Horde = _horde, TriggerSystem = _triggerSystem, EnvSystem = _envSystem,
                         Projectiles = _projectiles, MagicGlyphs = _magicGlyphs,
                         GameTime = _gameTime, DayTime = dayFraction, IsNight = isNight,
+                        AmortizedAI = _amortizedAI, AmortizationInterval = _aiUpdateInterval,
                     };
                     handler.Update(ref ctx);
                 }
@@ -591,6 +598,8 @@ public class Simulation
                                 Horde = _horde, TriggerSystem = _triggerSystem, EnvSystem = _envSystem,
                                 Projectiles = _projectiles, MagicGlyphs = _magicGlyphs,
                                 GameTime = _gameTime, DayTime = dayFraction, IsNight = isNight,
+                                // Player is always every-frame anyway, but pass for consistency.
+                                AmortizedAI = _amortizedAI, AmortizationInterval = _aiUpdateInterval,
                             };
                             handler.Update(ref ctx);
                         }

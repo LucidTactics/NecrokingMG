@@ -29,9 +29,17 @@ public static class AwarenessSystem
     // Reused across the update to avoid allocating a list per unit.
     private static readonly List<uint> _nearbyScratch = new();
 
-    /// <summary>Run awareness pass for all units. Call once per frame before AI updates.</summary>
-    public static void Update(UnitArrays units, Quadtree qt, float dt, int frameNumber)
+    /// <summary>
+    /// Run awareness pass for all units. Call once per frame before AI updates.
+    /// When <paramref name="amortized"/> is true, Unaware units are only checked
+    /// every <paramref name="interval"/> frames (staggered by unit index), since
+    /// they don't need per-frame responsiveness. Alert/Aggressive states always
+    /// run so hostile engagement stays instant.
+    /// </summary>
+    public static void Update(UnitArrays units, Quadtree qt, float dt, int frameNumber,
+                              bool amortized = false, int interval = 1)
     {
+        int amortInterval = amortized && interval > 1 ? interval : 1;
         for (int i = 0; i < units.Count; i++)
         {
             if (!units[i].Alive) continue;
@@ -49,6 +57,14 @@ public static class AwarenessSystem
             {
                 case (byte)UnitAlertState.Unaware:
                 {
+                    // Amortize the Unaware scan when enabled — that scan is the
+                    // expensive part (per-unit QueryRadius + filter). An enemy
+                    // entering detection range gets noticed within `interval`
+                    // frames instead of instantly; at 60 FPS with interval=6
+                    // that's 100ms of latency, fine for ambient detection.
+                    if (amortInterval > 1 && ((frameNumber + i) % amortInterval) != 0)
+                        break;
+
                     // Scan for threats via quadtree — only cross-faction units
                     // come back thanks to faction-aware filtering, so the inner
                     // loop is O(local density) rather than O(all units).

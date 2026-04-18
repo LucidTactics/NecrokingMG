@@ -53,6 +53,14 @@ public class HordeMinionHandler : IArchetypeHandler
         var hordeState = ctx.Horde.GetUnitState(ctx.MyId);
         SyncHordeState(ref ctx, hordeState);
 
+        // Amortize only low-urgency routines: Following drifts to a slot and
+        // Returning walks back after combat — neither reacts to per-frame
+        // events. Chasing/Engaged/Commanded stay every-frame so combat and
+        // player orders respond instantly. On skipped frames the unit keeps
+        // its previous PreferredVel; ORCA still runs, so it keeps moving.
+        bool lowUrgency = ctx.Routine == RoutineFollowing || ctx.Routine == RoutineReturning;
+        if (lowUrgency && !ctx.IsAmortizeTick) return;
+
         // Execute current routine
         switch (ctx.Routine)
         {

@@ -115,8 +115,10 @@
     "foggedAlpha": 0.7
   },
   "performance": {
-    "budgetedPathfinding": false,
-    "dijkstraBudgetMsPerTick": 3
+    "budgetedPathfinding": true,
+    "dijkstraBudgetMsPerTick": 3,
+    "amortizedAI": true,
+    "aiUpdateInterval": 6
   },
   "startingInventory": [
     {

@@ -151,6 +151,17 @@ public static class SettingsGeneralTab
             curY += 16;
             ui.DrawText("Smooths summon-burst spikes. May hide perf regressions.", new Vector2(x, curY), EditorBase.TextDim);
             curY += 20;
+
+            perf.AmortizedAI = ui.DrawCheckbox("Amortized AI", perf.AmortizedAI, x + 10, curY);
+            curY += RowH;
+            int interval = ui.DrawIntField("perf_aiInterval", "AI Update Interval (frames)", perf.AIUpdateInterval, x, curY, w);
+            if (interval != perf.AIUpdateInterval) perf.AIUpdateInterval = System.Math.Max(1, interval);
+            curY += RowH;
+
+            ui.DrawText("Horde follow/return + unaware scans update every N frames.", new Vector2(x, curY), EditorBase.TextDim);
+            curY += 16;
+            ui.DrawText("Combat (chase/engaged/alert) stays every-frame.", new Vector2(x, curY), EditorBase.TextDim);
+            curY += 20;
         }
 
         return curY - y;

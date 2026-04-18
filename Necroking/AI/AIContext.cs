@@ -31,6 +31,18 @@ public ref struct AIContext
     public float DayTime;           // 0..1 fraction of current day cycle
     public bool IsNight;            // true during night period
 
+    // AI amortization (low-urgency state scheduling). When enabled, handlers
+    // running routines that don't need per-frame reactivity should early-out
+    // on frames where IsAmortizeTick is false; the unit keeps its previous
+    // PreferredVel. Units are staggered via (frame + index) % interval so the
+    // cost spreads evenly instead of pulsing every N frames.
+    public bool AmortizedAI;
+    public int AmortizationInterval;
+    public readonly bool IsAmortizeTick =>
+        !AmortizedAI
+        || AmortizationInterval <= 1
+        || ((FrameNumber + UnitIndex) % AmortizationInterval == 0);
+
     // Convenience accessors
     public readonly Vec2 MyPos => Units[UnitIndex].Position;
     public readonly float MySpeed => Units[UnitIndex].MaxSpeed;
