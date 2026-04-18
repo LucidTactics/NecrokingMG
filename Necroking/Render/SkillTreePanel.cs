@@ -44,6 +44,7 @@ public class SkillTreePanel
     private SpriteFont? _font;
     private SpriteFont? _smallFont;
     private SpriteFont? _largeFont;
+    private UIShaders? _fx;
 
     public void Init(SpriteBatch batch, Texture2D pixel,
         SpriteFont? font, SpriteFont? smallFont, SpriteFont? largeFont)
@@ -54,6 +55,8 @@ public class SkillTreePanel
         _smallFont = smallFont;
         _largeFont = largeFont;
     }
+
+    public void SetUIShaders(UIShaders fx) { _fx = fx; }
 
     // ----- Palette -----
     private static readonly Color Ink         = new(23, 17, 13);
@@ -476,16 +479,21 @@ public class SkillTreePanel
     // ----- Tome chrome -----
     private void DrawTomeChrome(Rectangle r)
     {
-        // Outer leather: subtle radial gradient (lighter top-left, fading to deep)
-        UIGfx.FillRadialGradient(_batch, _pixel, r,
-            new Vector2(r.X + r.Width * 0.3f, r.Y + r.Height * 0.2f),
-            0, MathF.Sqrt(r.Width * r.Width + r.Height * r.Height) * 0.7f,
-            new Color(42, 26, 18), new Color(10, 5, 4));
-        // Faint diagonal cross-hatch for leather texture
-        UIGfx.DrawRepeatingDiagonal(_batch, _pixel, r, new Color(0, 0, 0, 24), 6, +1);
-        UIGfx.DrawRepeatingDiagonal(_batch, _pixel, r, new Color(0, 0, 0, 24), 6, -1);
-        // Inner shadow vignette for depth
-        UIGfx.DrawInsetShadow(_batch, _pixel, r, new Color(0, 0, 0, 200), 24);
+        // Outer leather: radial gradient (lighter top-left, fading to deep).
+        // Use UV-space radial: center in UV, radius in UV.
+        if (_fx != null)
+        {
+            _fx.DrawRadialGradient(_batch, r,
+                new Color(42, 26, 18), new Color(10, 5, 4),
+                new Vector2(0.3f, 0.2f), 0.85f);
+        }
+        else
+        {
+            _batch.Draw(_pixel, r, LeatherDark);
+        }
+        // Drop the cross-hatch -- it reads as a dot grid, not leather.
+        if (_fx != null)
+            _fx.DrawInsetShadow(_batch, r, new Color(0, 0, 0, 200), 40);
 
         DrawBorder(r.X, r.Y, r.Width, r.Height, FrameRivet, 2);
         DrawBorder(r.X + 4, r.Y + 4, r.Width - 8, r.Height - 8, new Color(58, 42, 24), 1);
@@ -504,21 +512,36 @@ public class SkillTreePanel
         int plateW = (int)ts.X + 64;
         int plateH = 28;
         var plate = new Rectangle(r.X + (r.Width - plateW) / 2, r.Y - plateH / 2, plateW, plateH);
-        UIGfx.FillVerticalGradient3(_batch, _pixel, plate,
-            new Color(201, 168, 96),    // top: bright gold
-            new Color(138, 109, 50),    // mid: bronze
-            new Color(90,  66, 32),     // bottom: dark
-            0.6f);
-        // Top inner highlight (the CSS `inset 0 1px 0 rgba(255,240,200,0.4)`)
+        // Soft drop shadow under the plate (draw FIRST so plate covers its inner area)
+        if (_fx != null)
+        {
+            int sSoft = 8;
+            var sOuter = new Rectangle(plate.X - sSoft, plate.Y - sSoft,
+                                       plate.Width + sSoft * 2, plate.Height + sSoft * 2);
+            _fx.DrawDropShadow(_batch, sOuter, plate,
+                Color.Transparent, new Color(0, 0, 0, 180), sSoft);
+        }
+        if (_fx != null)
+        {
+            _fx.DrawVertical3StopGradient(_batch, plate,
+                new Color(201, 168, 96),    // top: bright gold
+                new Color(138, 109, 50),    // mid: bronze
+                new Color(90,  66, 32),     // bottom: dark
+                0.6f);
+        }
+        else
+        {
+            _batch.Draw(_pixel, plate, new Color(138, 109, 50));
+        }
+        // Top inner highlight
         _batch.Draw(_pixel, new Rectangle(plate.X + 1, plate.Y + 1, plate.Width - 2, 1),
             new Color(255, 240, 200, 100));
         DrawBorder(plate.X, plate.Y, plate.Width, plate.Height, LeatherDeep, 1);
-        // Soft drop-shadow under the plate
-        UIGfx.DrawRectOuterGlow(_batch, _pixel, plate, new Color(0, 0, 0, 150), 5);
 
-        // Embossed title text
+        // Simple 1px text shadow for legibility (not the buggy triple-print emboss)
         var titlePos = new Vector2((int)(plate.X + (plate.Width - ts.X) / 2),
                                    (int)(plate.Y + (plate.Height - ts.Y) / 2));
+        // (kept here just to avoid orphaning variables; emboss replaced with flat)
         UIGfx.DrawTextEmbossed(_batch, titleFont, title, titlePos,
             new Color(26, 13, 8),                      // ink
             new Color(255, 240, 200, 100),             // highlight (1px up)
@@ -552,12 +575,17 @@ public class SkillTreePanel
     {
         var r = lay.Sidebar;
         // Parchment background -- radial gradient (light at top, tan at edges)
-        UIGfx.FillRadialGradient(_batch, _pixel, r,
-            new Vector2(r.X + r.Width * 0.5f, r.Y + r.Height * 0.2f),
-            0, r.Width * 1.1f,
-            new Color(239, 227, 196), new Color(179, 156, 110));
-        // Inset shadow vignette: brown rim eating into edges
-        UIGfx.DrawInsetShadow(_batch, _pixel, r, new Color(90, 60, 20, 180), 28);
+        if (_fx != null)
+        {
+            _fx.DrawRadialGradient(_batch, r,
+                new Color(239, 227, 196), new Color(179, 156, 110),
+                new Vector2(0.5f, 0.2f), 1.1f);
+            _fx.DrawInsetShadow(_batch, r, new Color(90, 60, 20, 220), 42);
+        }
+        else
+        {
+            _batch.Draw(_pixel, r, Parchment);
+        }
         // Outer rivet frame (the CSS `0 0 0 6px #1a120a, 0 0 0 8px #3a2a18`)
         DrawBorder(r.X, r.Y, r.Width, r.Height, FrameRivet, 1);
         DrawBorder(r.X - 4, r.Y - 4, r.Width + 8, r.Height + 8, LeatherDeep, 2);
@@ -587,14 +615,21 @@ public class SkillTreePanel
         // Portrait box -- radial gradient (purple bruise center to black)
         int portraitH = Math.Min(200, (int)(r.Height * 0.32f));
         var portrait = new Rectangle(r.X + SidebarPad, y, r.Width - SidebarPad * 2, portraitH);
-        UIGfx.FillRadialGradient(_batch, _pixel, portrait,
-            new Vector2(portrait.X + portrait.Width * 0.5f, portrait.Y + portrait.Height * 0.3f),
-            0, portrait.Width * 0.8f,
-            new Color(58, 42, 64), new Color(0, 0, 0));
+        if (_fx != null)
+        {
+            _fx.DrawRadialGradient(_batch, portrait,
+                new Color(58, 42, 64), new Color(0, 0, 0),
+                new Vector2(0.5f, 0.3f), 0.9f);
+        }
+        else
+        {
+            _batch.Draw(_pixel, portrait, new Color(26, 15, 26));
+        }
         DrawBorder(portrait.X, portrait.Y, portrait.Width, portrait.Height, FrameRivet, 1);
         DrawSilhouette(portrait);
-        // Inner shadow on portrait (the CSS `inset 0 0 20px rgba(0,0,0,0.8)`)
-        UIGfx.DrawInsetShadow(_batch, _pixel, portrait, new Color(0, 0, 0, 200), 16);
+        // Inner shadow on portrait (shader-based soft inset)
+        if (_fx != null)
+            _fx.DrawInsetShadow(_batch, portrait, new Color(0, 0, 0, 220), 24);
 
         var plate = new Rectangle(portrait.X + 6, portrait.Bottom - 22, portrait.Width - 12, 16);
         _batch.Draw(_pixel, plate, new Color(20, 12, 8, 220));
@@ -608,8 +643,10 @@ public class SkillTreePanel
 
         // Points block -- vertical gradient (dark brown to deeper)
         var pBox = new Rectangle(r.X + SidebarPad, y, r.Width - SidebarPad * 2, 92);
-        UIGfx.FillVerticalGradient(_batch, _pixel, pBox,
-            new Color(26, 18, 10), new Color(11, 8, 5));
+        if (_fx != null)
+            _fx.DrawVerticalGradient(_batch, pBox, new Color(26, 18, 10), new Color(11, 8, 5));
+        else
+            _batch.Draw(_pixel, pBox, LeatherDark);
         DrawBorder(pBox.X, pBox.Y, pBox.Width, pBox.Height, FrameRivet, 1);
         string head = "UNSPENT SOULS";
         var hs = sf.MeasureString(head);
@@ -665,14 +702,20 @@ public class SkillTreePanel
             int fillW = Math.Max(0, (int)(bar.Width * pct));
             if (fillW > 0)
             {
-                // Horizontal gradient: faded accent on the left, full accent on the right
                 var fillRect = new Rectangle(bar.X, bar.Y, fillW, bar.Height);
-                UIGfx.FillHorizontalGradient(_batch, _pixel, fillRect,
-                    new Color(s.Accent.R, s.Accent.G, s.Accent.B, (byte)170), s.Accent);
-                // Subtle in-bar inner highlight (top 1px row)
+                if (_fx != null)
+                {
+                    _fx.DrawHorizontalGradient(_batch, fillRect,
+                        new Color(s.Accent.R, s.Accent.G, s.Accent.B, (byte)170), s.Accent);
+                }
+                else
+                {
+                    _batch.Draw(_pixel, fillRect, s.Accent);
+                }
                 _batch.Draw(_pixel, new Rectangle(fillRect.X, fillRect.Y, fillRect.Width, 1),
                     new Color(255, 255, 255, 40));
             }
+            // Tick marks (still fine from UIGfx -- simple and not visually broken)
             UIGfx.DrawRepeatingVerticalTicks(_batch, _pixel, bar, new Color(0, 0, 0, 110), 10);
             y += 16;
         }
@@ -688,15 +731,26 @@ public class SkillTreePanel
         // Reset button -- vertical gradient (blood to dark blood) + inner highlight
         var rb = ResetButtonRect(lay);
         bool hover = rb.Contains((int)_mouse.X, (int)_mouse.Y);
-        UIGfx.FillVerticalGradient(_batch, _pixel, rb,
-            hover ? new Color(110, 28, 28) : new Color(58, 13, 13),
-            hover ? new Color(58,  16, 16) : new Color(26,  5,  5));
-        // Top highlight stripe (CSS `inset 0 1px 0 rgba(180,80,80,0.3)`)
+        // Soft drop shadow first so fill covers its inner area
+        if (_fx != null)
+        {
+            int sSoft = 6;
+            var sOuter = new Rectangle(rb.X - sSoft, rb.Y - sSoft,
+                                       rb.Width + sSoft * 2, rb.Height + sSoft * 2);
+            _fx.DrawDropShadow(_batch, sOuter, rb,
+                Color.Transparent, new Color(0, 0, 0, 160), sSoft);
+            _fx.DrawVerticalGradient(_batch, rb,
+                hover ? new Color(110, 28, 28) : new Color(58, 13, 13),
+                hover ? new Color(58,  16, 16) : new Color(26,  5,  5));
+        }
+        else
+        {
+            _batch.Draw(_pixel, rb, hover ? new Color(120, 36, 36) : BloodDark);
+        }
+        // Top highlight stripe
         _batch.Draw(_pixel, new Rectangle(rb.X + 1, rb.Y + 1, rb.Width - 2, 1),
             new Color(180, 80, 80, 100));
         DrawBorder(rb.X, rb.Y, rb.Width, rb.Height, Blood, 1);
-        // Soft drop shadow under the button
-        UIGfx.DrawRectOuterGlow(_batch, _pixel, rb, new Color(0, 0, 0, 120), 3);
         string btn = "*  EFFACE THE SIGILS  *";
         var bs = f.MeasureString(btn);
         _batch.DrawString(f, btn,
@@ -760,19 +814,27 @@ public class SkillTreePanel
     {
         var r = lay.Tree;
         // Parchment background -- radial gradient (lighter center, darker edges)
-        UIGfx.FillRadialGradient(_batch, _pixel, r,
-            new Vector2(r.X + r.Width * 0.5f, r.Y + r.Height * 0.4f),
-            r.Width * 0.05f, r.Width * 0.7f,
-            new Color(243, 232, 200), new Color(193, 175, 138));
-        // Inner shadow vignette inside the parchment area
-        UIGfx.DrawInsetShadow(_batch, _pixel, r, new Color(110, 80, 30, 130), 32);
+        if (_fx != null)
+        {
+            _fx.DrawRadialGradient(_batch, r,
+                new Color(243, 232, 200), new Color(193, 175, 138),
+                new Vector2(0.5f, 0.4f), 0.7f);
+            _fx.DrawInsetShadow(_batch, r, new Color(110, 80, 30, 170), 44);
+        }
+        else
+        {
+            _batch.Draw(_pixel, r, Parchment2);
+        }
         DrawBorder(r.X, r.Y, r.Width, r.Height, FrameRivet, 2);
         DrawBorder(r.X - 4, r.Y - 4, r.Width + 8, r.Height + 8, LeatherDeep, 2);
 
         // Top folio strip -- vertical gradient (leather)
         var strip = new Rectangle(r.X, r.Y, r.Width, 26);
-        UIGfx.FillVerticalGradient(_batch, _pixel, strip,
-            new Color(42, 26, 18), new Color(20, 12, 8));
+        if (_fx != null)
+            _fx.DrawVerticalGradient(_batch, strip,
+                new Color(42, 26, 18), new Color(20, 12, 8));
+        else
+            _batch.Draw(_pixel, strip, LeatherDark);
         DrawBorder(strip.X, strip.Y, strip.Width, strip.Height, FrameRivet, 1);
         var sf = _smallFont ?? _font!;
         _batch.DrawString(sf, "BOOK III - CHAPTER VII",
@@ -906,33 +968,43 @@ public class SkillTreePanel
         bool maxed = rank >= n.Max;
         var schoolAccent = Schools[SchoolIndex(n.School)].Accent;
 
-        // Outer drop shadow
-        FillCircle(cx, cy + 2, r + 2, new Color(0, 0, 0, 170));
-
-        // Active node soft outer glow (the CSS `drop-shadow(0 0 6px schoolColor)`)
-        if (active)
+        // Medallion: AA bone-gradient ring + optional school-color outer glow.
+        // The shader does: drop shadow, bone ring with vertical gradient, and
+        // the active outer glow all in one pass.
+        if (_fx != null)
         {
-            UIGfx.DrawCircleOuterGlow(_batch, _pixel,
-                new Vector2(cx, cy), r,
-                new Color(schoolAccent.R, schoolAccent.G, schoolAccent.B, (byte)200),
-                7);
-        }
+            // Drop shadow (offset slightly down for depth)
+            _fx.DrawCircle(_batch, new Vector2(cx, cy + 2), r + 1, r + 1,
+                new Color(0, 0, 0, 160), new Color(0, 0, 0, 160), Color.Transparent);
 
-        // Bone ring -- radial gradient (light top, dark bottom): build via
-        // concentric scanlines.
-        for (int dy = -r; dy <= r; dy++)
-        {
-            int half = (int)Math.Sqrt(Math.Max(0, r * r - dy * dy));
-            // Vertical position 0..1 from top to bottom
-            float vt = (dy + r) / (float)(2 * r);
-            // Top is bright bone, bottom is dark bronze (matches CSS radial-gradient
-            // cx=50% cy=35% from #e8dcc0 to #8a6d32)
-            var c = Lerp(new Color(232, 220, 192), new Color(138, 109, 50), vt * 0.85f);
-            _batch.Draw(_pixel, new Rectangle(cx - half, cy + dy, half * 2, 1), c);
+            // Bone ring: light top, dark bottom; optional school-color glow if active.
+            float glowR = active ? r + 10 : r;
+            var glowColor = active
+                ? new Color(schoolAccent.R, schoolAccent.G, schoolAccent.B, (byte)220)
+                : Color.Transparent;
+            _fx.DrawCircle(_batch, new Vector2(cx, cy), r, glowR,
+                new Color(232, 220, 192),  // top: bright bone
+                new Color(120, 95, 44),    // bottom: dark bronze
+                glowColor);
+
+            // Inner dark medallion (solid dark circle inside the ring)
+            _fx.DrawCircle(_batch, new Vector2(cx, cy), r - 4, r - 4,
+                new Color(26, 18, 10), new Color(26, 18, 10), Color.Transparent);
         }
-        // Inner dark medallion
-        FillCircle(cx, cy, r - 4, new Color(26, 18, 10));
-        // Outer + inner ring borders
+        else
+        {
+            // Fallback scanline bone ring + inner circle
+            FillCircle(cx, cy + 2, r + 2, new Color(0, 0, 0, 170));
+            for (int dy = -r; dy <= r; dy++)
+            {
+                int half = (int)Math.Sqrt(Math.Max(0, r * r - dy * dy));
+                float vt = (dy + r) / (float)(2 * r);
+                var c = Lerp(new Color(232, 220, 192), new Color(138, 109, 50), vt * 0.85f);
+                _batch.Draw(_pixel, new Rectangle(cx - half, cy + dy, half * 2, 1), c);
+            }
+            FillCircle(cx, cy, r - 4, new Color(26, 18, 10));
+        }
+        // Outer + inner ring borders (thin outlines still useful for edge crispness)
         DrawUtils.DrawCircleOutline(_batch, _pixel, new Vector2(cx, cy), r, FrameRivet, 40);
         DrawUtils.DrawCircleOutline(_batch, _pixel, new Vector2(cx, cy), r - 4, FrameRivet, 40);
 

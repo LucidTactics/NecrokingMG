@@ -1294,6 +1294,8 @@ public class Game1 : Microsoft.Xna.Framework.Game
         _hudRenderer.Init(_spriteBatch, _pixel, _font, _smallFont);
         _hudRenderer.SetInput(_input);
         _characterStatsUI.Init(_spriteBatch, _pixel, _font, _smallFont);
+        // Note: _uiShaders is initialized later after Content.Load path -- we
+        // set it on the panel below after Load completes.
         _skillTreePanel.Init(_spriteBatch, _pixel, _font, _smallFont, _largeFont);
 
         // Load TrueType fonts via FontStashSharp (dynamic sizing)
@@ -1315,6 +1317,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
         _uiShaders = new UIShaders(GraphicsDevice, _pixel, BlendState.AlphaBlend, SamplerState.PointClamp);
         _uiShaders.Load(Content);
+        _skillTreePanel.SetUIShaders(_uiShaders);
 
         try { _outlineFlatEffect = Content.Load<Microsoft.Xna.Framework.Graphics.Effect>("OutlineFlat"); }
         catch (Exception ex) { _outlineFlatEffect = null; DebugLog.Log("startup", $"OutlineFlat not loaded: {ex.Message}"); }
