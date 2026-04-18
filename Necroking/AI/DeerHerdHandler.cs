@@ -99,16 +99,6 @@ public class DeerHerdHandler : IArchetypeHandler
         byte alert = ctx.AlertState;
         bool isMale = IsMale(ref ctx);
 
-        // Log deer state every 60 frames (~1s) for debugging
-        if (ctx.FrameNumber % 60 == 0)
-        {
-            var u = ctx.Units[ctx.UnitIndex];
-            DebugLog.Log("ai", $"[Deer#{ctx.UnitIndex}] routine={GetRoutineName(ctx.Routine)} " +
-                $"hitReact={u.HitReacting} poison={u.PoisonStacks} HP={u.Stats.HP} " +
-                $"alert={ctx.AlertState} vel={u.Velocity.Length():F2} prefVel={u.PreferredVel.Length():F2} " +
-                $"fleeT={ctx.SubroutineTimer:F1} pos=({u.Position.X:F1},{u.Position.Y:F1})");
-        }
-
         // Spooked: took damage (melee or poison) → flee from any non-flee routine
         if (ctx.Units[ctx.UnitIndex].HitReacting
             && ctx.Routine != RoutineFleeing)

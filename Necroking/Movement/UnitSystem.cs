@@ -114,13 +114,13 @@ public class Unit
     public bool JumpAttackFired;
     public float JumpHeight;
 
-    // TODO: Add this in settings!
     public float CollisionHeight = 1.0f;
 
     // Incapacitation (knockdown, stun, freeze, etc.) — managed by buff system
     public IncapState Incap;
-    public float StandupTimer; // Legacy: used by AI handlers for sleep→standup (separate from incap)
-    public float KnockdownTimer; // Legacy: unused, kept for compatibility
+    // AI-driven sleep→standup timer (DeerHerd / WolfPack). Separate from Incap,
+    // which is combat/debuff driven; the two don't overlap in practice.
+    public float StandupTimer;
     public int Harassment;
 
     // Rendering

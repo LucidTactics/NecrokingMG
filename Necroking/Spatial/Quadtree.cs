@@ -55,16 +55,10 @@ public class Quadtree
 
     public bool IsEmpty => _nodes.Count == 0;
 
-    public void Build(ReadOnlySpan<Vec2> positions, ReadOnlySpan<uint> ids, AABB worldBounds)
-    {
-        Build(positions, ids, ReadOnlySpan<byte>.Empty, worldBounds);
-    }
-
     /// <summary>
-    /// Build the tree with a parallel factions array. Pass an empty span to build
-    /// without faction info (all entries get FactionBit=0, so QueryRadiusByFaction
-    /// will return nothing — always use the faction-carrying overload when callers
-    /// need faction filtering).
+    /// Build the tree from parallel arrays of positions, unit IDs, and faction
+    /// bytes. Faction is stored per entry so QueryRadiusByFaction can filter at
+    /// leaf level without a post-query callback.
     /// </summary>
     public void Build(ReadOnlySpan<Vec2> positions, ReadOnlySpan<uint> ids,
                       ReadOnlySpan<byte> factions, AABB worldBounds)
@@ -74,11 +68,12 @@ public class Quadtree
 
         int count = positions.Length;
         if (count == 0) return;
+        if (factions.Length != count)
+            throw new ArgumentException("factions length must match positions length", nameof(factions));
 
-        bool hasFactions = factions.Length == count;
         for (int i = 0; i < count; i++)
         {
-            byte fb = hasFactions ? (byte)(1 << factions[i]) : (byte)0;
+            byte fb = (byte)(1 << factions[i]);
             _entries.Add(new Entry { Pos = positions[i], Id = ids[i], FactionBit = fb });
         }
 

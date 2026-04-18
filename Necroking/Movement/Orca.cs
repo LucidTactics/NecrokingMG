@@ -227,7 +227,7 @@ public static class Orca
                 if (!LinearProgram1D(lines, i, maxSpeed, optVel, directionOpt, ref result))
                 {
                     result = tempResult;
-                    LinearProgram3Fallback(lines, 0, i, maxSpeed, ref result);
+                    LinearProgram3Fallback(lines, i, maxSpeed, ref result);
                     return result;
                 }
             }
@@ -236,9 +236,15 @@ public static class Orca
         return result;
     }
 
+    /// <summary>
+    /// Fallback when the 2D half-plane LP is infeasible. Relaxes each
+    /// constraint in turn by projecting the others onto it and running a
+    /// direction-optimized 2D LP. Rarely hit — only when multiple neighbors
+    /// produce contradictory velocity obstacles that can't all be satisfied
+    /// at max speed.
+    /// </summary>
     private static void LinearProgram3Fallback(
-        List<ORCALine> lines, int numObstLines, int beginLine,
-        float maxSpeed, ref Vec2 result)
+        List<ORCALine> lines, int beginLine, float maxSpeed, ref Vec2 result)
     {
         float distance = 0f;
 

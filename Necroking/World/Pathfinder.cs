@@ -4,11 +4,14 @@ using Necroking.Core;
 
 namespace Necroking.World;
 
+// Classification of the path returned by GetDirection, for the per-unit debug
+// overlay. Added/removed only when needed — keep the enum lean so unused
+// branches don't survive as "ghost" visualization options.
 public enum PathDecision : byte
 {
-    None = 0, ImagChunkPersist, ImagChunkRecompute, TileFlow, TileFlowBadBeeline,
+    None = 0, ImagChunkPersist, ImagChunkRecompute, TileFlow,
     SameSectorImagChunk, BorderFlow, BFSFallback, TierFallback, ImagChunkFallback,
-    BoundaryEscape, Beeline, Unreachable, UnreachableImagChunk, UnreachableTierFallback, NoFlow
+    BoundaryEscape, Beeline, Unreachable, UnreachableImagChunk, NoFlow
 }
 
 public struct PathDecisionInfo
@@ -172,7 +175,15 @@ public class Pathfinder
         BuildConnectivity();
         _routeCache.Clear();
         _flowCache.Clear();
+        _staleFlowCache.Clear();
+        _pendingRequests.Clear();
         _unitImagChunks.Clear();
+        // s_keysEverSeen tracks "has this key ever been requested in this run"
+        // for miss-cause telemetry; after Rebuild all prior keys point into a
+        // now-destroyed grid, so the classifier should start fresh.
+        s_keysEverSeen.Clear();
+        _dijkstraMsThisTick = 0f;
+        _lastQueryDeferred = false;
     }
 
     // --- Sector connectivity ---
