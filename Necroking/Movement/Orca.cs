@@ -47,8 +47,11 @@ public static class Orca
     // we ever parallelize unit movement these should go [ThreadStatic].
     // Previously `new List<ORCALine>(neighbors.Count)` allocated a list per
     // unit per tick (~u=600 calls ⇒ 600 small-list allocs/tick of GC pressure).
+    // NOTE: LinearProgram3Fallback's projLines can NOT use a shared static,
+    // because LinearProgram2D called from the fallback may recursively re-enter
+    // LinearProgram3Fallback on the same list — clearing the list the outer
+    // call is still iterating. See bugfix commit.
     private static readonly List<ORCALine> _orcaLinesScratch = new();
-    private static readonly List<ORCALine> _projLinesScratch = new();
 
     private static float Det(Vec2 a, Vec2 b) => a.X * b.Y - a.Y * b.X;
 
@@ -244,8 +247,12 @@ public static class Orca
             float d = Det(lines[i].Direction, lines[i].Point - result);
             if (d > distance)
             {
-                var projLines = _projLinesScratch;
-                projLines.Clear();
+                // Allocate per-iteration: this path can recursively re-enter
+                // via LinearProgram2D, and a shared static list would get
+                // cleared out from under the outer iteration. The fallback
+                // runs only when LP1D fails, so it's rare enough that the
+                // allocation doesn't matter.
+                var projLines = new List<ORCALine>();
 
                 for (int j = 0; j < i; j++)
                 {
