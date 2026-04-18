@@ -219,11 +219,18 @@ public class Unit
 public class UnitArrays
 {
     private readonly List<Unit> _units = new();
+    // O(1) Id -> array-index map. Maintained in sync with the List via swap-and-pop
+    // in RemoveUnit. Without this, ResolveUnitIndex was O(n), and ORCA's per-unit
+    // neighbor resolve turned into O(u*neighbors*u) per tick (~1.4M comparisons at
+    // u=310) — the biggest single cost after pathfinding was bounded.
+    private readonly Dictionary<uint, int> _idToIndex = new();
     private uint _nextID;
 
     public int Count => _units.Count;
 
     public Unit this[int index] => _units[index];
+
+    public bool TryGetIndex(uint id, out int index) => _idToIndex.TryGetValue(id, out index);
 
     public int AddUnit(Vec2 pos, UnitType type)
     {
@@ -239,6 +246,7 @@ public class UnitArrays
             SpawnPosition = pos,
         };
         _units.Add(u);
+        _idToIndex[u.Id] = idx;
         return idx;
     }
 
@@ -249,13 +257,18 @@ public class UnitArrays
         if (index != last)
         {
             (_units[index], _units[last]) = (_units[last], _units[index]);
+            // The unit that was at `last` now lives at `index`.
+            _idToIndex[_units[index].Id] = index;
         }
+        // The dying unit (now at `last`) drops out of the map before we pop.
+        _idToIndex.Remove(_units[last].Id);
         _units.RemoveAt(last);
     }
 
     public void Clear()
     {
         _units.Clear();
+        _idToIndex.Clear();
     }
 }
 
@@ -264,9 +277,8 @@ public static class UnitUtil
     public static int ResolveUnitIndex(UnitArrays units, uint uid)
     {
         if (uid == GameConstants.InvalidUnit) return -1;
-        for (int i = 0; i < units.Count; i++)
-            if (units[i].Id == uid && units[i].Alive) return i;
-        return -1;
+        if (!units.TryGetIndex(uid, out int idx)) return -1;
+        return units[idx].Alive ? idx : -1;
     }
 
     private static readonly Random _rng = new();

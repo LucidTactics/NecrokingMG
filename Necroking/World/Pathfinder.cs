@@ -114,6 +114,14 @@ public class Pathfinder
     public bool BudgetedPathfinding;
     public float DijkstraBudgetMsPerTick = 3.0f;
     private float _dijkstraMsThisTick;
+    // Set by GetFlow* when they defer a request due to budget. GetDirection
+    // clears this at entry, then on a null-flow result checks the flag to tell
+    // "genuinely unpathable" (run imaginary-chunk fallback, which is correct
+    // but ~4ms per call) apart from "just deferred" (the unit can beeline
+    // this tick; BeginTick will fill in the flow next tick). Critical: imag
+    // chunk costs roughly the same as the Dijkstra we were trying to avoid,
+    // so running it as the defer-fallback completely negates the budget.
+    private bool _lastQueryDeferred;
     public float DiagDijkstraMsThisTick => _dijkstraMsThisTick;
     public int DiagPendingRequestCount => _pendingRequests.Count;
     public int DiagStaleCacheSize => _staleFlowCache.Count;
@@ -527,6 +535,7 @@ public class Pathfinder
         if (!HasDijkstraBudget())
         {
             EnqueueMiss(key, sx, sy, unitPos, targetPos);
+            _lastQueryDeferred = true;
             if (_staleFlowCache.TryGetValue(key, out var stale))
             {
                 stale.FrameAccessed = frame;
@@ -580,6 +589,7 @@ public class Pathfinder
         if (!HasDijkstraBudget())
         {
             EnqueueMiss(key, sx, sy, unitPos, targetPos);
+            _lastQueryDeferred = true;
             if (_staleFlowCache.TryGetValue(key, out var stale))
             {
                 stale.FrameAccessed = frame;
@@ -678,6 +688,7 @@ public class Pathfinder
         if (!HasDijkstraBudget())
         {
             EnqueueMiss(key, sx, sy, unitPos, targetPos);
+            _lastQueryDeferred = true;
             if (_staleFlowCache.TryGetValue(key, out var stale))
             {
                 stale.FrameAccessed = frame;
@@ -1292,6 +1303,10 @@ public class Pathfinder
         if (_grid == null || _sectorConnected == null) return Vec2.Zero;
         sizeTier = Math.Clamp(sizeTier, 0, TerrainCosts.NumSizeTiers - 1);
 
+        // Reset the deferral flag for this query; GetFlow* sets it when it
+        // returns stale/empty flow due to a spent per-tick Dijkstra budget.
+        _lastQueryDeferred = false;
+
         // --- Per-unit persistent imaginary chunk ---
         if (unitIdx >= 0 && _unitImagChunks.TryGetValue(unitIdx, out var existingIc) && existingIc.Active)
         {
@@ -1315,16 +1330,28 @@ public class Pathfinder
             }
             else
             {
-                // Target moved? Recompute flow within existing bounds
+                // Target moved? Recompute flow within existing bounds.
+                // Skip the recompute (same cost as a flow Dijkstra) when over
+                // budget and fall through to the normal flow path, which will
+                // either cache-hit or beeline. Keeps the per-tick cost bounded
+                // even during a summon burst where dozens of units have moved
+                // horde slots this tick.
                 if (tTX != existingIc.TargetTX || tTY != existingIc.TargetTY)
                 {
-                    Vec2 dir = RecomputeImaginaryChunkFlow(existingIc, unitPos, targetPos, sizeTier);
-                    if (dir.LengthSq() > 0.001f)
+                    if (!HasDijkstraBudget())
                     {
-                        RecordDecision(unitIdx, PathDecision.ImagChunkRecompute);
-                        return dir;
+                        existingIc.Active = false;
                     }
-                    existingIc.Active = false;
+                    else
+                    {
+                        Vec2 dir = RecomputeImaginaryChunkFlow(existingIc, unitPos, targetPos, sizeTier);
+                        if (dir.LengthSq() > 0.001f)
+                        {
+                            RecordDecision(unitIdx, PathDecision.ImagChunkRecompute);
+                            return dir;
+                        }
+                        existingIc.Active = false;
+                    }
                 }
                 else
                 {
@@ -1373,7 +1400,7 @@ public class Pathfinder
                 else
                 {
                     // No tile flow at unit tile — use imaginary chunk
-                    Vec2 localDir = GetLocalChunkDirection(unitPos, targetPos, sizeTier, unitIdx);
+                    Vec2 localDir = _lastQueryDeferred ? Vec2.Zero : GetLocalChunkDirection(unitPos, targetPos, sizeTier, unitIdx);
                     if (localDir.LengthSq() > 0.001f)
                     {
                         RecordDecision(unitIdx, PathDecision.SameSectorImagChunk);
@@ -1426,7 +1453,7 @@ public class Pathfinder
                 if (!hasFlow)
                 {
                     // Try imaginary chunk before beeline
-                    Vec2 localDir = GetLocalChunkDirection(unitPos, targetPos, sizeTier, unitIdx);
+                    Vec2 localDir = _lastQueryDeferred ? Vec2.Zero : GetLocalChunkDirection(unitPos, targetPos, sizeTier, unitIdx);
                     if (localDir.LengthSq() > 0.001f)
                     {
                         RecordDecision(unitIdx, PathDecision.UnreachableImagChunk);
@@ -1479,7 +1506,7 @@ public class Pathfinder
 
         if (!hasFlow || flow.Dirs == null)
         {
-            Vec2 localDir = GetLocalChunkDirection(unitPos, targetPos, sizeTier, unitIdx);
+            Vec2 localDir = _lastQueryDeferred ? Vec2.Zero : GetLocalChunkDirection(unitPos, targetPos, sizeTier, unitIdx);
             if (localDir.LengthSq() > 0.001f)
             {
                 RecordDecision(unitIdx, PathDecision.NoFlow);
@@ -1628,7 +1655,7 @@ public class Pathfinder
 
             // Try imaginary chunk
             {
-                Vec2 localDir = GetLocalChunkDirection(unitPos, targetPos, sizeTier, unitIdx);
+                Vec2 localDir = _lastQueryDeferred ? Vec2.Zero : GetLocalChunkDirection(unitPos, targetPos, sizeTier, unitIdx);
                 if (localDir.LengthSq() > 0.001f)
                 {
                     RecordDecision(unitIdx, PathDecision.ImagChunkFallback);
