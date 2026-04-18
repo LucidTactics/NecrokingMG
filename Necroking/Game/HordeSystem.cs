@@ -18,6 +18,13 @@ public class HordeUnitData
     public uint ChasingTarget = GameConstants.InvalidUnit;
     public float NoisePhase;
     public float LeashCheckTimer;
+
+    // Discrete slot offset — added to the Fibonacci slot position to break up the
+    // uniform pattern. Stays constant between shifts so the unit's target tile is
+    // stable (and the pathfinder flow-cache entry keeps hitting) until the next
+    // shuffle. Replaces the old per-frame continuous drift that thrashed the cache.
+    public Vec2 DiscreteOffset;
+    public float NextShiftAt;
 }
 
 public class HordeSystem
@@ -51,10 +58,28 @@ public class HordeSystem
         {
             UnitID = id,
             NoisePhase = (float)(_rng.Next(10000)) / 100f,
-            LeashCheckTimer = CombatTickInterval
+            LeashCheckTimer = CombatTickInterval,
+            DiscreteOffset = RandomShiftOffset(),
+            // Stagger first shift so fresh units don't all re-roll on the same tick.
+            NextShiftAt = _globalTime + RandomShiftInterval(),
         });
         ReassignSlots();
     }
+
+    // Tunables for discrete slot shifting.
+    private const float ShiftIntervalMin = 3.0f;  // seconds
+    private const float ShiftIntervalMax = 6.0f;
+    private const float ShiftDistanceMin = 1.0f;  // tiles (= world units)
+    private const float ShiftDistanceMax = 2.0f;
+
+    private static Vec2 RandomShiftOffset()
+    {
+        float angle = (float)(_rng.NextDouble() * Math.PI * 2);
+        float dist = ShiftDistanceMin + (float)_rng.NextDouble() * (ShiftDistanceMax - ShiftDistanceMin);
+        return new Vec2(MathF.Cos(angle) * dist, MathF.Sin(angle) * dist);
+    }
+    private static float RandomShiftInterval()
+        => ShiftIntervalMin + (float)_rng.NextDouble() * (ShiftIntervalMax - ShiftIntervalMin);
 
     public void RemoveUnit(uint id)
     {
@@ -81,15 +106,10 @@ public class HordeSystem
         }
 
         target = ComputeSlotPosition(hu.SlotIndex, _hordeUnits.Count, _globalTime);
-
-        // Idle wander when necro is stationary (use simple sin noise instead of simplex)
-        if (!_necroMoving && _settings.IdleRadius > 0f)
-        {
-            float nx = MathF.Sin(hu.NoisePhase + _globalTime * _settings.DriftHz * 0.7f);
-            float ny = MathF.Sin(hu.NoisePhase + 50f + _globalTime * _settings.DriftHz * 0.7f + 100f);
-            target.X += nx * _settings.IdleRadius;
-            target.Y += ny * _settings.IdleRadius;
-        }
+        // Apply the unit's discrete offset. This value is stable between shifts,
+        // so the target tile (and therefore the pathfinder cache key) doesn't
+        // change every frame like the old continuous sin-wave drift did.
+        target += hu.DiscreteOffset;
 
         return true;
     }
@@ -138,6 +158,19 @@ public class HordeSystem
         // Smoothly lerp circle rotation toward movement angle
         float rotAlpha = 1f - MathF.Exp(-_settings.RotationLerp * dt);
         _circleFacing = LerpAngle(_circleFacing, _movementAngle, rotAlpha);
+
+        // Discrete per-unit slot shift. Each unit rolls its own next-shift time on
+        // spawn so the horde as a whole doesn't "breathe" in sync — shifts happen
+        // sparsely and at staggered moments. No-op on frames where no unit is due.
+        for (int i = 0; i < _hordeUnits.Count; i++)
+        {
+            var hu = _hordeUnits[i];
+            if (_globalTime >= hu.NextShiftAt)
+            {
+                hu.DiscreteOffset = RandomShiftOffset();
+                hu.NextShiftAt = _globalTime + RandomShiftInterval();
+            }
+        }
     }
 
     /// <summary>
@@ -306,17 +339,8 @@ public class HordeSystem
         float slotAngle = _circleFacing + slotIndex * GoldenAngle;
 
         Vec2 pos = _circleCenter + new Vec2(MathF.Cos(slotAngle) * r, MathF.Sin(slotAngle) * r);
-
-        // Noise drift (simple sin-based instead of simplex)
-        if (_settings.DriftAmplitude > 0f)
-        {
-            float phase = slotIndex * 7.3f;
-            float nx = MathF.Sin(phase + time * _settings.DriftHz);
-            float ny = MathF.Sin(phase + 50f + time * _settings.DriftHz);
-            pos.X += nx * _settings.DriftAmplitude;
-            pos.Y += ny * _settings.DriftAmplitude;
-        }
-
+        // Per-unit discrete offset (applied in GetTargetPosition) handles the
+        // noise/variation that used to live here as a continuous sin-wave drift.
         return pos;
     }
 

@@ -145,6 +145,8 @@ public class Simulation
 
     public void Init(int gridWidth, int gridHeight, GameData? gameData = null)
     {
+        // Fresh perf log per session so the file doesn't grow unbounded across runs.
+        DebugLog.Clear("perf");
         _gameData = gameData;
         if (gameData?.Buffs != null)
             _physics.Init(gameData.Buffs);
@@ -202,6 +204,19 @@ public class Simulation
         _tickStopwatch.Restart();
         Necroking.World.Pathfinder.DiagCallsThisTick = 0;
         Necroking.World.Pathfinder.DiagTotalMsThisTick = 0;
+        Necroking.World.Pathfinder.DiagDijkstraInvocations = 0;
+        Necroking.World.Pathfinder.DiagFlowCacheHits = 0;
+        Necroking.World.Pathfinder.DiagFlowCacheMisses = 0;
+        Necroking.World.Pathfinder.DiagImagChunkComputes = 0;
+        Necroking.World.Pathfinder.DiagImagChunkRecomputes = 0;
+        Necroking.World.Pathfinder.DiagImagChunkMs = 0;
+        Necroking.World.Pathfinder.DiagMissNewKey = 0;
+        Necroking.World.Pathfinder.DiagMissEvicted = 0;
+        Necroking.World.Pathfinder.DiagCacheEvictions = 0;
+        Necroking.World.Pathfinder.DiagCacheSize = _pathfinder.FlowCacheSize;
+        Necroking.World.Pathfinder.DiagMissTile = 0;
+        Necroking.World.Pathfinder.DiagMissBorder = 0;
+        Necroking.World.Pathfinder.DiagMissMultiBorder = 0;
         _frameNumber++;
         _gameTime += dt;
         _damageEvents.Clear();
@@ -385,10 +400,53 @@ public class Simulation
         // Update corpses
         UpdateCorpses(dt);
         _flowFields.EvictIfNeeded();
+        // Age out unused pathfinder flow fields. An entry stays hot as long as any
+        // unit is still reading it (FrameAccessed is bumped on every cache hit).
+        // Stale == "no unit has hit this in 10 seconds" — safe to drop because
+        // recomputing is the same cost whether the field was thrown out yesterday
+        // or right before it was needed again.
+        _pathfinder.EvictStaleFlowFields(_frameNumber, 600);
         PhaseEnd("cleanup");
 
         _tickStopwatch.Stop();
         LastTickMs = _tickStopwatch.Elapsed.TotalMilliseconds;
+
+        // Perf-spike logger: whenever a tick exceeds the threshold, dump a single-line
+        // phase breakdown to log/perf.log. Baseline ticks cost <1ms on an idle map, so
+        // a 3ms threshold triggers only during real work (large summons, combat bursts,
+        // pathfinder cache misses) and never spams in the quiescent state. Tag format:
+        //   gt=<gameTime>  u=<unitCount>  t=<tickMs>  <phase=ms>... pf={calls,hits,miss,imag}
+        if (LastTickMs >= 3.0)
+        {
+            var sb = new System.Text.StringBuilder(256);
+            sb.Append($"gt={_gameTime:F2} u={_units.Count} t={LastTickMs:F2}ms");
+            // List phases in fixed order so columns align in the log.
+            string[] phaseOrder = {
+                "ai", "ai_archetype", "ai_legacy", "ai_awareness",
+                "movement", "physics", "horde_tick", "horde_states",
+                "combat", "facing", "quadtree", "potions",
+                "projectiles", "lightning", "clouds", "cleanup",
+                "pathfinder",
+            };
+            foreach (var p in phaseOrder)
+            {
+                if (LastPhaseMs.TryGetValue(p, out double v) && v >= 0.2)
+                    sb.Append($"  {p}={v:F2}");
+            }
+            sb.Append($"  pf={{calls:{Necroking.World.Pathfinder.DiagCallsThisTick}")
+              .Append($",hits:{Necroking.World.Pathfinder.DiagFlowCacheHits}")
+              .Append($",miss:{Necroking.World.Pathfinder.DiagFlowCacheMisses}")
+              .Append($"(tile:{Necroking.World.Pathfinder.DiagMissTile}")
+              .Append($",bord:{Necroking.World.Pathfinder.DiagMissBorder}")
+              .Append($",mult:{Necroking.World.Pathfinder.DiagMissMultiBorder}")
+              .Append($",new:{Necroking.World.Pathfinder.DiagMissNewKey}")
+              .Append($",evict:{Necroking.World.Pathfinder.DiagMissEvicted})")
+              .Append($",imag:{Necroking.World.Pathfinder.DiagImagChunkComputes}")
+              .Append($"+{Necroking.World.Pathfinder.DiagImagChunkRecomputes}")
+              .Append($",cache:{Necroking.World.Pathfinder.DiagCacheSize}")
+              .Append($",cevict:{Necroking.World.Pathfinder.DiagCacheEvictions}}}");
+            DebugLog.Log("perf", sb.ToString());
+        }
     }
 
     private void RebuildQuadtree()
@@ -1065,6 +1123,12 @@ public class Simulation
         LastPhaseMs["ai_legacy"] = legacyMs;
         LastPhaseMs["pathfinder"] = Necroking.World.Pathfinder.DiagTotalMsThisTick;
         LastPhaseMs["pathfinder_calls"] = Necroking.World.Pathfinder.DiagCallsThisTick;
+        LastPhaseMs["pf_dijkstras"] = Necroking.World.Pathfinder.DiagDijkstraInvocations;
+        LastPhaseMs["pf_cache_hits"] = Necroking.World.Pathfinder.DiagFlowCacheHits;
+        LastPhaseMs["pf_cache_misses"] = Necroking.World.Pathfinder.DiagFlowCacheMisses;
+        LastPhaseMs["pf_imag_new"] = Necroking.World.Pathfinder.DiagImagChunkComputes;
+        LastPhaseMs["pf_imag_recompute"] = Necroking.World.Pathfinder.DiagImagChunkRecomputes;
+        LastPhaseMs["pf_imag_ms"] = Necroking.World.Pathfinder.DiagImagChunkMs;
     }
 
     // --- Movement (with ORCA) ---

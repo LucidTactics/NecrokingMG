@@ -39,6 +39,8 @@ public class SummonLagScenario : ScenarioBase
         "quadtree", "potions", "horde_tick", "ai",
         "ai_awareness", "ai_archetype", "ai_legacy",
         "pathfinder", "pathfinder_calls",
+        "pf_dijkstras", "pf_cache_hits", "pf_cache_misses",
+        "pf_imag_new", "pf_imag_recompute", "pf_imag_ms",
         "movement", "physics", "horde_states", "facing", "combat",
         "projectiles", "lightning", "clouds", "cleanup",
     };
@@ -54,6 +56,10 @@ public class SummonLagScenario : ScenarioBase
         units[_necroIdx].AI = AIBehavior.PlayerControlled;
         units[_necroIdx].Faction = Faction.Undead;
         sim.SetNecromancerIndex(_necroIdx);
+        // Mirror Game1's map-load pipeline: build tiered cost fields + env stamping.
+        // Without this, the tier grid is all zeros and the pathfinder silently
+        // degrades to the imaginary-chunk fallback on every call.
+        sim.RebuildPathfinder();
         DebugLog.Log(ScenarioLog, $"Necromancer at (32,32)");
     }
 
@@ -67,14 +73,16 @@ public class SummonLagScenario : ScenarioBase
             _baselineTicks.Add(ms);
             if (_elapsed >= BaselineSeconds)
             {
-                // Summon — mirrors the debug spell's summon path (SpawnUnitByID
-                // for each unit, spawn-offset from the caster).
+                // Summon several tiles away from the caster so we're NOT inside the
+                // caster's tier-inflation zone — matches the real game where the
+                // debug summon drops skeletons offset from the necromancer.
                 var casterPos = sim.Units[_necroIdx].Position;
+                const float SpawnRadius = 5f;
                 for (int q = 0; q < SummonCount; q++)
                 {
                     float a = q * MathF.Tau / SummonCount;
-                    var pos = new Vec2(casterPos.X + MathF.Cos(a) * 1.2f,
-                                        casterPos.Y + MathF.Sin(a) * 1.2f);
+                    var pos = new Vec2(casterPos.X + MathF.Cos(a) * SpawnRadius,
+                                        casterPos.Y + MathF.Sin(a) * SpawnRadius);
                     int idx = sim.SpawnUnitByID("skeleton", pos);
                     if (idx >= 0)
                     {

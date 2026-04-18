@@ -262,6 +262,7 @@ public class Pathfinder
     private CachedFlow ComputeSectorFlow(int sx, int sy, List<int> goalLocalIndices, int tier, uint frame,
                                           List<float>? goalInitCosts = null)
     {
+        DiagDijkstraInvocations++;
         int cells = SectorSize * SectorSize;
         var flow = new CachedFlow { Dirs = new FlowDir[cells], FrameAccessed = frame };
         if (_grid == null || goalLocalIndices.Count == 0) return flow;
@@ -480,10 +481,14 @@ public class Pathfinder
         var key = MakeFlowKey(sx, sy, 1, localTY * SectorSize + localTX, -1, tier);
         if (_flowCache.TryGetValue(key, out var cached))
         {
+            DiagFlowCacheHits++;
             cached.FrameAccessed = frame;
             _flowCache[key] = cached;
             return cached;
         }
+        DiagFlowCacheMisses++;
+        DiagMissTile++;
+        if (s_keysEverSeen.Add(key)) DiagMissNewKey++; else DiagMissEvicted++;
 
         if (_grid == null) return new CachedFlow { Dirs = new FlowDir[SectorSize * SectorSize] };
 
@@ -512,10 +517,14 @@ public class Pathfinder
         var key = MakeFlowKey(sx, sy, 0, borderDir, -1, tier);
         if (_flowCache.TryGetValue(key, out var cached))
         {
+            DiagFlowCacheHits++;
             cached.FrameAccessed = frame;
             _flowCache[key] = cached;
             return cached;
         }
+        DiagFlowCacheMisses++;
+        DiagMissBorder++;
+        if (s_keysEverSeen.Add(key)) DiagMissNewKey++; else DiagMissEvicted++;
 
         if (_grid == null) return new CachedFlow { Dirs = new FlowDir[SectorSize * SectorSize] };
 
@@ -591,10 +600,14 @@ public class Pathfinder
 
         if (_flowCache.TryGetValue(key, out var cached))
         {
+            DiagFlowCacheHits++;
             cached.FrameAccessed = frame;
             _flowCache[key] = cached;
             return cached;
         }
+        DiagFlowCacheMisses++;
+        DiagMissMultiBorder++;
+        if (s_keysEverSeen.Add(key)) DiagMissNewKey++; else DiagMissEvicted++;
 
         if (_grid == null) return new CachedFlow { Dirs = new FlowDir[SectorSize * SectorSize] };
 
@@ -708,6 +721,9 @@ public class Pathfinder
     /// </summary>
     private Vec2 GetLocalChunkDirection(Vec2 unitPos, Vec2 targetPos, int tier, int unitIdx = -1, bool activate = true)
     {
+        DiagImagChunkComputes++;
+        var _diagSw = System.Diagnostics.Stopwatch.StartNew();
+        try {
         if (_grid == null) return Vec2.Zero;
 
         int unitTX = (int)(unitPos.X / GameConstants.TileSize);
@@ -886,6 +902,8 @@ public class Pathfinder
         }
 
         return FlowDirUtil.ToVec(bestDir);
+        }
+        finally { DiagImagChunkMs += _diagSw.Elapsed.TotalMilliseconds; }
     }
 
     /// <summary>
@@ -893,6 +911,9 @@ public class Pathfinder
     /// </summary>
     private Vec2 RecomputeImaginaryChunkFlow(ImaginaryChunk ic, Vec2 unitPos, Vec2 targetPos, int tier)
     {
+        DiagImagChunkRecomputes++;
+        var _diagSw = System.Diagnostics.Stopwatch.StartNew();
+        try {
         if (_grid == null) return Vec2.Zero;
 
         int unitTX = (int)(unitPos.X / GameConstants.TileSize);
@@ -1027,6 +1048,8 @@ public class Pathfinder
         if (cost[unitTileIdx] >= GameConstants.InfCost) return Vec2.Zero;
 
         return FlowDirUtil.ToVec(ic.Dirs[unitTileIdx]);
+        }
+        finally { DiagImagChunkMs += _diagSw.Elapsed.TotalMilliseconds; }
     }
 
     /// <summary>
@@ -1159,6 +1182,27 @@ public class Pathfinder
     // sums them into LastPhaseMs so a profiling scenario can see pathfinder load.
     public static int DiagCallsThisTick;
     public static double DiagTotalMsThisTick;
+    public static int DiagDijkstraInvocations;     // how many full ComputeSectorFlow runs happened
+    public static int DiagFlowCacheHits;           // cache returned without recomputing
+    public static int DiagFlowCacheMisses;         // had to call ComputeSectorFlow
+    public static int DiagImagChunkComputes;       // GetLocalChunkDirection full sweeps
+    public static int DiagImagChunkRecomputes;     // RecomputeImaginaryChunkFlow sweeps
+    public static double DiagImagChunkMs;          // wall-clock spent in imag-chunk paths
+    // Miss-cause breakdown (reset per tick):
+    //   DiagMissNewKey      = key never requested before in this run
+    //   DiagMissEvicted     = key was in cache earlier but got evicted before this request
+    //   DiagCacheSize       = flow-cache entry count at start of tick
+    //   DiagCacheEvictions  = entries evicted this tick (LRU pressure)
+    public static int DiagMissNewKey;
+    public static int DiagMissEvicted;
+    public static int DiagCacheSize;
+    public static int DiagCacheEvictions;
+    // Per-flow-type miss counters (reset per tick):
+    public static int DiagMissTile;           // GetFlowToTile (same-sector, target tile as goal)
+    public static int DiagMissBorder;         // GetFlowToBorder (cross-sector via single border)
+    public static int DiagMissMultiBorder;    // GetFlowToMultiBorder (cross-sector with weighted borders)
+    // Tracks every FlowKey ever seen. Used to tell "new-key" vs "was-here-got-evicted".
+    private static readonly System.Collections.Generic.HashSet<FlowKey> s_keysEverSeen = new();
 
     public Vec2 GetDirection(Vec2 unitPos, Vec2 targetPos, uint frame, int sizeTier = 0, int unitIdx = -1)
     {
@@ -1620,8 +1664,39 @@ public class Pathfinder
             foreach (var (k, v) in _flowCache)
                 if (v.FrameAccessed < oldestFrame) { oldestFrame = v.FrameAccessed; oldestKey = k; }
             _flowCache.Remove(oldestKey);
+            DiagCacheEvictions++;
         }
     }
+
+    /// <summary>
+    /// Age-based eviction: remove flow-cache entries that no unit has looked at
+    /// for <paramref name="maxAgeFrames"/> ticks. FrameAccessed is bumped on every
+    /// cache hit, so an entry only becomes stale if nothing is currently using it.
+    /// Handles the shared-field case correctly (the field stays fresh as long as
+    /// any unit is reading it) without needing per-unit refcounting.
+    /// </summary>
+    public void EvictStaleFlowFields(uint currentFrame, uint maxAgeFrames)
+    {
+        List<FlowKey>? toRemove = null;
+        foreach (var (k, v) in _flowCache)
+        {
+            // Subtraction is uint-safe: FrameAccessed was set <= currentFrame when the
+            // entry was created or last hit, so currentFrame - FrameAccessed is the age.
+            if (currentFrame - v.FrameAccessed > maxAgeFrames)
+                (toRemove ??= new List<FlowKey>()).Add(k);
+        }
+        if (toRemove != null)
+        {
+            foreach (var k in toRemove)
+            {
+                _flowCache.Remove(k);
+                DiagCacheEvictions++;
+            }
+        }
+    }
+
+    /// <summary>Current flow-cache entry count. Diagnostic probe.</summary>
+    public int FlowCacheSize => _flowCache.Count;
 
     public void EvictRoutes(int maxCached = 96)
     {
