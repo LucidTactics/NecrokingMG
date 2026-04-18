@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using Necroking.Core;
+using Necroking.Data;
 
 namespace Necroking.Spatial;
 
@@ -38,6 +39,7 @@ public class Quadtree
     {
         public Vec2 Pos;
         public uint Id;
+        public byte FactionBit; // 1 << (int)Faction, so we can AND with a FactionMask
     }
 
     private struct Node
@@ -55,14 +57,30 @@ public class Quadtree
 
     public void Build(ReadOnlySpan<Vec2> positions, ReadOnlySpan<uint> ids, AABB worldBounds)
     {
+        Build(positions, ids, ReadOnlySpan<byte>.Empty, worldBounds);
+    }
+
+    /// <summary>
+    /// Build the tree with a parallel factions array. Pass an empty span to build
+    /// without faction info (all entries get FactionBit=0, so QueryRadiusByFaction
+    /// will return nothing — always use the faction-carrying overload when callers
+    /// need faction filtering).
+    /// </summary>
+    public void Build(ReadOnlySpan<Vec2> positions, ReadOnlySpan<uint> ids,
+                      ReadOnlySpan<byte> factions, AABB worldBounds)
+    {
         _nodes.Clear();
         _entries.Clear();
 
         int count = positions.Length;
         if (count == 0) return;
 
+        bool hasFactions = factions.Length == count;
         for (int i = 0; i < count; i++)
-            _entries.Add(new Entry { Pos = positions[i], Id = ids[i] });
+        {
+            byte fb = hasFactions ? (byte)(1 << factions[i]) : (byte)0;
+            _entries.Add(new Entry { Pos = positions[i], Id = ids[i], FactionBit = fb });
+        }
 
         _nodes.Add(new Node { Bounds = worldBounds, FirstChild = -1, EntryStart = 0, EntryCount = count });
         Subdivide(0, 0);
@@ -90,6 +108,53 @@ public class Quadtree
                 for (int i = 0; i < node.EntryCount; i++)
                 {
                     var e = _entries[node.EntryStart + i];
+                    var diff = e.Pos - center;
+                    if (diff.LengthSq() <= r2)
+                    {
+                        results.Add(e.Id);
+                        found++;
+                    }
+                }
+            }
+            else
+            {
+                for (int c = 0; c < 4 && stackSize < 64; c++)
+                    stack[stackSize++] = node.FirstChild + c;
+            }
+        }
+
+        return found;
+    }
+
+    /// <summary>
+    /// Query circle but only include units whose faction is set in <paramref name="mask"/>.
+    /// Requires the tree to have been built with the faction-carrying Build overload;
+    /// otherwise all entries have FactionBit=0 and nothing will be returned.
+    /// </summary>
+    public int QueryRadiusByFaction(Vec2 center, float radius, FactionMask mask, List<uint> results)
+    {
+        if (_nodes.Count == 0 || mask == FactionMask.None) return 0;
+
+        int found = 0;
+        float r2 = radius * radius;
+        byte mb = (byte)mask;
+        Span<int> stack = stackalloc int[64];
+        int stackSize = 0;
+        stack[stackSize++] = 0;
+
+        while (stackSize > 0)
+        {
+            int ni = stack[--stackSize];
+            var node = _nodes[ni];
+
+            if (!node.Bounds.IntersectsCircle(center, radius)) continue;
+
+            if (node.FirstChild == -1)
+            {
+                for (int i = 0; i < node.EntryCount; i++)
+                {
+                    var e = _entries[node.EntryStart + i];
+                    if ((e.FactionBit & mb) == 0) continue;
                     var diff = e.Pos - center;
                     if (diff.LengthSq() <= r2)
                     {

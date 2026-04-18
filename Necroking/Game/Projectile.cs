@@ -267,13 +267,16 @@ public class ProjectileManager
                 {
                     // AOE damage
                     nearbyIDs.Clear();
-                    qt.QueryRadius(proj.Position, proj.AoeRadius, nearbyIDs);
+                    if (proj.NoFriendlyFire)
+                        qt.QueryRadiusByFaction(proj.Position, proj.AoeRadius,
+                            FactionMaskExt.AllExcept(proj.OwnerFaction), nearbyIDs);
+                    else
+                        qt.QueryRadius(proj.Position, proj.AoeRadius, nearbyIDs);
                     foreach (uint nid in nearbyIDs)
                     {
                         if (nid == proj.OwnerID) continue;
                         int hitIdx = UnitUtil.ResolveUnitIndex(units, nid);
                         if (hitIdx < 0) continue;
-                        if (proj.NoFriendlyFire && units[hitIdx].Faction == proj.OwnerFaction) continue;
                         _hits.Add(new ProjectileHit { UnitIdx = hitIdx, Damage = proj.Damage, OwnerID = proj.OwnerID, OwnerFaction = proj.OwnerFaction, WeaponName = proj.WeaponName, ProjectileType = proj.Type, SpellID = proj.SpellID, AoeRadius = proj.AoeRadius, ImpactPos = proj.Position });
                     }
                     _impacts.Add(new ImpactEvent { Position = proj.Position, Type = proj.Type, AoeRadius = proj.AoeRadius, HitEffectFlipbookID = proj.HitEffectFlipbookID, HitEffectColor = proj.HitEffectColor, HitEffectScale = proj.HitEffectScale, HitEffectBlendMode = proj.HitEffectBlendMode, HitEffectAlignment = proj.HitEffectAlignment });
@@ -285,13 +288,16 @@ public class ProjectileManager
             if (proj.Alive && proj.Type == ProjectileType.Arrow && proj.Height < UnitHitHeight && proj.Height > 0f)
             {
                 nearbyIDs.Clear();
-                qt.QueryRadius(proj.Position, HitRadius, nearbyIDs);
+                if (proj.NoFriendlyFire)
+                    qt.QueryRadiusByFaction(proj.Position, HitRadius,
+                        FactionMaskExt.AllExcept(proj.OwnerFaction), nearbyIDs);
+                else
+                    qt.QueryRadius(proj.Position, HitRadius, nearbyIDs);
                 foreach (uint nid in nearbyIDs)
                 {
                     if (nid == proj.OwnerID) continue;
                     int hitIdx = UnitUtil.ResolveUnitIndex(units, nid);
                     if (hitIdx < 0) continue;
-                    if (proj.NoFriendlyFire && units[hitIdx].Faction == proj.OwnerFaction) continue;
                     _hits.Add(new ProjectileHit { UnitIdx = hitIdx, Damage = proj.Damage, OwnerID = proj.OwnerID, OwnerFaction = proj.OwnerFaction, Precision = proj.Precision, WeaponName = proj.WeaponName, ProjectileType = proj.Type });
                     _impacts.Add(new ImpactEvent { Position = proj.Position, Type = proj.Type });
                     proj.Alive = false;
@@ -311,17 +317,20 @@ public class ProjectileManager
                 int bestUnitIdx = -1;
                 float bestUnitDist = searchRSq;
                 nearbyIDs.Clear();
-                qt.QueryRadius(proj.Position, searchR, nearbyIDs);
+                // Narrow the quadtree scan by potion target type — "Friendly" is owner's
+                // faction only, "Enemy" is everything else, "Any" hits both.
+                FactionMask potionMask = proj.PotionTargetType switch
+                {
+                    "Friendly" => proj.OwnerFaction.Bit(),
+                    "Enemy"    => FactionMaskExt.AllExcept(proj.OwnerFaction),
+                    _          => FactionMask.All,
+                };
+                qt.QueryRadiusByFaction(proj.Position, searchR, potionMask, nearbyIDs);
                 foreach (uint nid in nearbyIDs)
                 {
                     if (nid == proj.OwnerID) continue;
                     int hitIdx = UnitUtil.ResolveUnitIndex(units, nid);
                     if (hitIdx < 0) continue;
-                    // Filter by potion target type
-                    bool isFriendly = units[hitIdx].Faction == proj.OwnerFaction;
-                    if (proj.PotionTargetType == "Friendly" && !isFriendly) continue;
-                    if (proj.PotionTargetType == "Enemy" && isFriendly) continue;
-                    // "Any" hits both
                     float d = (units[hitIdx].Position - proj.Position).LengthSq();
                     if (d < bestUnitDist) { bestUnitDist = d; bestUnitIdx = hitIdx; }
                 }
@@ -378,20 +387,27 @@ public class ProjectileManager
                 if (proj.AoeRadius > 0f)
                 {
                     nearbyIDs.Clear();
-                    qt.QueryRadius(proj.Position, proj.AoeRadius, nearbyIDs);
+                    if (proj.NoFriendlyFire)
+                        qt.QueryRadiusByFaction(proj.Position, proj.AoeRadius,
+                            FactionMaskExt.AllExcept(proj.OwnerFaction), nearbyIDs);
+                    else
+                        qt.QueryRadius(proj.Position, proj.AoeRadius, nearbyIDs);
                     foreach (uint nid in nearbyIDs)
                     {
                         if (nid == proj.OwnerID) continue;
                         int hitIdx = UnitUtil.ResolveUnitIndex(units, nid);
                         if (hitIdx < 0) continue;
-                        if (proj.NoFriendlyFire && units[hitIdx].Faction == proj.OwnerFaction) continue;
                         _hits.Add(new ProjectileHit { UnitIdx = hitIdx, Damage = proj.Damage, OwnerID = proj.OwnerID, OwnerFaction = proj.OwnerFaction, Precision = proj.Precision, WeaponName = proj.WeaponName, ProjectileType = proj.Type, SpellID = proj.SpellID, AoeRadius = proj.AoeRadius, ImpactPos = proj.Position });
                     }
                 }
                 else
                 {
                     nearbyIDs.Clear();
-                    qt.QueryRadius(proj.Position, HitRadius * 1.5f, nearbyIDs);
+                    if (proj.NoFriendlyFire)
+                        qt.QueryRadiusByFaction(proj.Position, HitRadius * 1.5f,
+                            FactionMaskExt.AllExcept(proj.OwnerFaction), nearbyIDs);
+                    else
+                        qt.QueryRadius(proj.Position, HitRadius * 1.5f, nearbyIDs);
                     float bestDist = float.MaxValue;
                     int bestIdx = -1;
                     foreach (uint nid in nearbyIDs)
@@ -399,7 +415,6 @@ public class ProjectileManager
                         if (nid == proj.OwnerID) continue;
                         int idx = UnitUtil.ResolveUnitIndex(units, nid);
                         if (idx < 0) continue;
-                        if (proj.NoFriendlyFire && units[idx].Faction == proj.OwnerFaction) continue;
                         float d = (units[idx].Position - proj.Position).LengthSq();
                         if (d < bestDist) { bestDist = d; bestIdx = idx; }
                     }

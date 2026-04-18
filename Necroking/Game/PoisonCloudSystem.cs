@@ -235,7 +235,8 @@ public class PoisonCloudSystem
                                   BuffRegistry? buffs)
     {
         nearbyIDs.Clear();
-        qt.QueryRadius(cloud.Position, cloud.CurrentRadius, nearbyIDs);
+        qt.QueryRadiusByFaction(cloud.Position, cloud.CurrentRadius,
+            FactionMaskExt.AllExcept(cloud.OwnerFaction), nearbyIDs);
 
         // Potency multiplier based on phase
         float phaseMult = cloud.Phase switch
@@ -250,7 +251,6 @@ public class PoisonCloudSystem
         {
             int idx = UnitUtil.ResolveUnitIndex(units, uid);
             if (idx < 0 || !units[idx].Alive) continue;
-            if (units[idx].Faction == cloud.OwnerFaction) continue; // No friendly fire
 
             float dist = (units[idx].Position - cloud.Position).Length();
             if (dist > cloud.CurrentRadius) continue;

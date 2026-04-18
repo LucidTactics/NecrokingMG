@@ -211,21 +211,25 @@ public class LightningSystem
                     if (quadtree != null && units != null && s.AoeRadius > 0f)
                     {
                         var nearby = new List<uint>();
-                        quadtree.QueryRadius(s.TargetPos, s.AoeRadius, nearby);
+                        // Translate SpellTargetFilter directly to a FactionMask so the
+                        // quadtree skips non-matching factions at leaf level. Falls
+                        // through to an unfiltered QueryRadius for "everything".
+                        FactionMask mask = s.TargetFilter switch
+                        {
+                            SpellTargetFilter.AnyEnemy   => FactionMaskExt.AllExcept(Faction.Undead),
+                            SpellTargetFilter.LivingOnly => FactionMaskExt.AllExcept(Faction.Undead),
+                            SpellTargetFilter.UndeadOnly => Faction.Undead.Bit(),
+                            _ => FactionMask.All,
+                        };
+                        if (mask == FactionMask.All)
+                            quadtree.QueryRadius(s.TargetPos, s.AoeRadius, nearby);
+                        else
+                            quadtree.QueryRadiusByFaction(s.TargetPos, s.AoeRadius, mask, nearby);
                         foreach (uint nid in nearby)
                         {
                             int j = UnitUtil.ResolveUnitIndex(units, nid);
                             if (j < 0 || !units[j].Alive) continue;
-
-                            bool shouldHit = s.TargetFilter switch
-                            {
-                                SpellTargetFilter.AnyEnemy => units[j].Faction != Faction.Undead,
-                                SpellTargetFilter.UndeadOnly => units[j].Faction == Faction.Undead,
-                                SpellTargetFilter.LivingOnly => units[j].Faction != Faction.Undead,
-                                _ => true
-                            };
-                            if (shouldHit)
-                                outDamage.Add(new LightningDamage { UnitIdx = j, Damage = s.Damage });
+                            outDamage.Add(new LightningDamage { UnitIdx = j, Damage = s.Damage });
                         }
                     }
                 }

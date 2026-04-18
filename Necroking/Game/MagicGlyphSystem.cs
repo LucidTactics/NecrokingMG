@@ -154,12 +154,12 @@ public class MagicGlyphSystem
                 case GlyphState.Dormant:
                     // Check for enemy units stepping on it
                     nearbyIDs.Clear();
-                    qt.QueryRadius(g.Position, g.Radius, nearbyIDs);
+                    qt.QueryRadiusByFaction(g.Position, g.Radius,
+                        FactionMaskExt.AllExcept(g.OwnerFaction), nearbyIDs);
                     foreach (uint uid in nearbyIDs)
                     {
                         int idx = UnitUtil.ResolveUnitIndex(units, uid);
                         if (idx < 0 || !units[idx].Alive) continue;
-                        if (units[idx].Faction == g.OwnerFaction) continue;
 
                         // Enemy stepped on glyph — trigger it
                         g.State = GlyphState.Triggering;

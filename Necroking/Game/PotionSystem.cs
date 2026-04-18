@@ -196,12 +196,11 @@ public static class PotionSystem
         Vec2 center, float radius, Faction ownerFaction)
     {
         var nearbyIDs = new List<uint>();
-        qt.QueryRadius(center, radius, nearbyIDs);
+        qt.QueryRadiusByFaction(center, radius, FactionMaskExt.AllExcept(ownerFaction), nearbyIDs);
         foreach (uint uid in nearbyIDs)
         {
             int idx = UnitUtil.ResolveUnitIndex(units, uid);
             if (idx < 0 || !units[idx].Alive) continue;
-            if (units[idx].Faction == ownerFaction) continue;
             ApplyParalysis(idx, units);
         }
     }

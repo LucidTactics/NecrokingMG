@@ -454,12 +454,14 @@ public class Simulation
         if (_units.Count <= 0) return;
         var positions = new Vec2[_units.Count];
         var ids = new uint[_units.Count];
+        var factions = new byte[_units.Count];
         for (int i = 0; i < _units.Count; i++)
         {
             positions[i] = _units[i].Position;
             ids[i] = _units[i].Id;
+            factions[i] = (byte)_units[i].Faction;
         }
-        _quadtree.Build(positions, ids, new AABB(0, 0, _grid.Width, _grid.Height));
+        _quadtree.Build(positions, ids, factions, new AABB(0, 0, _grid.Width, _grid.Height));
     }
 
     // Player input (set by Game1 before Tick)

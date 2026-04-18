@@ -11,6 +11,25 @@ public enum UnitType : byte
 
 public enum Faction : byte { Undead = 0, Human = 1, Animal = 2 }
 
+// Bitmask of factions for spatial queries that want to include/exclude multiple
+// factions in a single call (e.g. "everyone except my faction"). Stays in sync
+// with Faction enum values via (1 << (int)Faction).
+[System.Flags]
+public enum FactionMask : byte
+{
+    None   = 0,
+    Undead = 1 << 0,
+    Human  = 1 << 1,
+    Animal = 1 << 2,
+    All    = Undead | Human | Animal,
+}
+
+public static class FactionMaskExt
+{
+    public static FactionMask Bit(this Faction f) => (FactionMask)(1 << (int)f);
+    public static FactionMask AllExcept(Faction f) => FactionMask.All & ~f.Bit();
+}
+
 public enum AIBehavior : byte
 {
     PlayerControlled = 0, AttackClosest, AttackClosestRetarget, GuardKnight,

@@ -195,11 +195,12 @@ public class HordeSystem
                 {
                     // Check if any enemy is within engagement range
                     nearbyIDs.Clear();
-                    qt.QueryRadius(units[idx].Position, _settings.EngagementRange, nearbyIDs);
+                    qt.QueryRadiusByFaction(units[idx].Position, _settings.EngagementRange,
+                        FactionMaskExt.AllExcept(Faction.Undead), nearbyIDs);
                     foreach (uint nid in nearbyIDs)
                     {
                         int ni = UnitUtil.ResolveUnitIndex(units, nid);
-                        if (ni < 0 || units[ni].Faction == Faction.Undead) continue;
+                        if (ni < 0) continue;
                         hu.State = HordeUnitState.Engaged;
                         break;
                     }
@@ -260,12 +261,13 @@ public class HordeSystem
 
                     // Check if any enemy still nearby
                     nearbyIDs.Clear();
-                    qt.QueryRadius(units[idx].Position, _settings.EngagementRange * 1.5f, nearbyIDs);
+                    qt.QueryRadiusByFaction(units[idx].Position, _settings.EngagementRange * 1.5f,
+                        FactionMaskExt.AllExcept(Faction.Undead), nearbyIDs);
                     bool anyEnemy = false;
                     foreach (uint nid in nearbyIDs)
                     {
                         int ni = UnitUtil.ResolveUnitIndex(units, nid);
-                        if (ni < 0 || !units[ni].Alive || units[ni].Faction == Faction.Undead) continue;
+                        if (ni < 0 || !units[ni].Alive) continue;
                         anyEnemy = true;
                         break;
                     }
@@ -290,13 +292,14 @@ public class HordeSystem
             _aggroScanTimer = 0.5f;
 
             nearbyIDs.Clear();
-            qt.QueryRadius(_circleCenter, _settings.CircleRadius, nearbyIDs);
+            qt.QueryRadiusByFaction(_circleCenter, _settings.CircleRadius,
+                FactionMaskExt.AllExcept(Faction.Undead), nearbyIDs);
 
             var enemiesInCircle = new List<int>();
             foreach (uint nid in nearbyIDs)
             {
                 int ni = UnitUtil.ResolveUnitIndex(units, nid);
-                if (ni < 0 || units[ni].Faction == Faction.Undead) continue;
+                if (ni < 0) continue;
                 enemiesInCircle.Add(ni);
             }
 
