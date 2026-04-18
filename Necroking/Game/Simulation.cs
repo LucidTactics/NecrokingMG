@@ -519,7 +519,7 @@ public class Simulation
             isNight = dayFraction >= 0.5f;
         }
         PhaseStart();
-        AI.AwarenessSystem.Update(_units, dt, (int)_frameNumber);
+        AI.AwarenessSystem.Update(_units, _quadtree, dt, (int)_frameNumber);
         PhaseEnd("ai_awareness");
 
         double archetypeMs = 0, legacyMs = 0;

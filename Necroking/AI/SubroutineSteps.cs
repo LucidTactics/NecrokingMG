@@ -274,18 +274,11 @@ public static class SubroutineSteps
         int i = ctx.UnitIndex;
         ctx.Units[i].PreferredVel = Vec2.Zero;
         ctx.Units[i].RoutineAnim = AnimRequest.Locomotion(AnimState.Idle);
-        uint targetId = ctx.AlertTarget;
-        if (targetId == GameConstants.InvalidUnit) return;
-        for (int j = 0; j < ctx.Units.Count; j++)
-        {
-            if (ctx.Units[j].Id == targetId && ctx.Units[j].Alive)
-            {
-                var dir = ctx.Units[j].Position - ctx.MyPos;
-                if (dir.LengthSq() > 0.01f)
-                    ctx.Units[i].FacingAngle = MathF.Atan2(dir.Y, dir.X) * 180f / MathF.PI;
-                break;
-            }
-        }
+        int j = UnitUtil.ResolveUnitIndex(ctx.Units, ctx.AlertTarget);
+        if (j < 0) return;
+        var dir = ctx.Units[j].Position - ctx.MyPos;
+        if (dir.LengthSq() > 0.01f)
+            ctx.Units[i].FacingAngle = MathF.Atan2(dir.Y, dir.X) * 180f / MathF.PI;
     }
 
     /// <summary>Face a specific world position (for waking up toward a threat).</summary>
@@ -402,12 +395,34 @@ public static class SubroutineSteps
     }
 
     /// <summary>Find closest enemy unit (different faction, alive).</summary>
+    // Reused across every FindClosestEnemy call to skip the allocation on the
+    // AI hot path; we clear it at the start of each scan.
+    private static readonly System.Collections.Generic.List<uint> _nearbyScratch = new();
+
     public static int FindClosestEnemy(ref AIContext ctx, float maxRange)
     {
         float bestDist = maxRange * maxRange;
         int bestIdx = -1;
         var myFaction = ctx.MyFaction;
         var myPos = ctx.MyPos;
+
+        // Quadtree pass: only cross-faction units come back thanks to the
+        // faction mask. Falls back to a linear scan if no quadtree is attached
+        // (e.g. some legacy AI paths still run without one).
+        if (ctx.Quadtree != null)
+        {
+            _nearbyScratch.Clear();
+            ctx.Quadtree.QueryRadiusByFaction(myPos, maxRange,
+                FactionMaskExt.AllExcept(myFaction), _nearbyScratch);
+            foreach (uint nid in _nearbyScratch)
+            {
+                int j = UnitUtil.ResolveUnitIndex(ctx.Units, nid);
+                if (j < 0 || j == ctx.UnitIndex) continue;
+                float d = (ctx.Units[j].Position - myPos).LengthSq();
+                if (d < bestDist) { bestDist = d; bestIdx = j; }
+            }
+            return bestIdx;
+        }
 
         for (int j = 0; j < ctx.Units.Count; j++)
         {
@@ -424,19 +439,13 @@ public static class SubroutineSteps
     {
         var target = ctx.Units[ctx.UnitIndex].Target;
         if (!target.IsUnit) return -1;
-        for (int j = 0; j < ctx.Units.Count; j++)
-            if (ctx.Units[j].Id == target.UnitID && ctx.Units[j].Alive) return j;
-        return -1;
+        return UnitUtil.ResolveUnitIndex(ctx.Units, target.UnitID);
     }
 
     /// <summary>Resolve the alert target to a unit index.</summary>
     public static int ResolveAlertTarget(ref AIContext ctx)
     {
-        uint targetId = ctx.AlertTarget;
-        if (targetId == GameConstants.InvalidUnit) return -1;
-        for (int j = 0; j < ctx.Units.Count; j++)
-            if (ctx.Units[j].Id == targetId && ctx.Units[j].Alive) return j;
-        return -1;
+        return UnitUtil.ResolveUnitIndex(ctx.Units, ctx.AlertTarget);
     }
 
     /// <summary>Check if current target is alive.</summary>

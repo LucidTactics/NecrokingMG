@@ -1,6 +1,8 @@
+using System.Collections.Generic;
 using Necroking.Core;
 using Necroking.Data;
 using Necroking.Movement;
+using Necroking.Spatial;
 
 namespace Necroking.AI;
 
@@ -24,8 +26,11 @@ namespace Necroking.AI;
 /// </summary>
 public static class AwarenessSystem
 {
+    // Reused across the update to avoid allocating a list per unit.
+    private static readonly List<uint> _nearbyScratch = new();
+
     /// <summary>Run awareness pass for all units. Call once per frame before AI updates.</summary>
-    public static void Update(UnitArrays units, float dt, int frameNumber)
+    public static void Update(UnitArrays units, Quadtree qt, float dt, int frameNumber)
     {
         for (int i = 0; i < units.Count; i++)
         {
@@ -44,8 +49,10 @@ public static class AwarenessSystem
             {
                 case (byte)UnitAlertState.Unaware:
                 {
-                    // Scan for threats
-                    int threatIdx = FindClosestThreat(units, i, detectionRange);
+                    // Scan for threats via quadtree — only cross-faction units
+                    // come back thanks to faction-aware filtering, so the inner
+                    // loop is O(local density) rather than O(all units).
+                    int threatIdx = FindClosestThreat(units, qt, i, detectionRange);
                     if (threatIdx >= 0)
                     {
                         units[i].AlertState = (byte)UnitAlertState.Alert;
@@ -56,7 +63,7 @@ public static class AwarenessSystem
                         // Group propagation
                         float groupRadius = units[i].GroupAlertRadius;
                         if (groupRadius > 0f)
-                            PropagateAlert(units, i, threatIdx, groupRadius);
+                            PropagateAlert(units, qt, i, threatIdx, groupRadius);
                     }
                     break;
                 }
@@ -64,7 +71,7 @@ public static class AwarenessSystem
                 case (byte)UnitAlertState.Alert:
                 {
                     units[i].AlertTimer += dt;
-                    int threatIdx = ResolveThreat(units, i);
+                    int threatIdx = UnitUtil.ResolveUnitIndex(units, units[i].AlertTarget);
 
                     if (threatIdx < 0)
                     {
@@ -97,7 +104,7 @@ public static class AwarenessSystem
                 case (byte)UnitAlertState.Aggressive:
                 {
                     // Stay aggressive until threat leaves break range
-                    int threatIdx = ResolveThreat(units, i);
+                    int threatIdx = UnitUtil.ResolveUnitIndex(units, units[i].AlertTarget);
                     if (threatIdx < 0)
                     {
                         units[i].AlertState = (byte)UnitAlertState.Unaware;
@@ -117,17 +124,24 @@ public static class AwarenessSystem
         }
     }
 
-    private static int FindClosestThreat(UnitArrays units, int unitIdx, float maxRange)
+    private static int FindClosestThreat(UnitArrays units, Quadtree qt, int unitIdx, float maxRange)
     {
         float bestDist = maxRange * maxRange;
         int bestIdx = -1;
         var myFaction = units[unitIdx].Faction;
         var myPos = units[unitIdx].Position;
 
-        for (int j = 0; j < units.Count; j++)
+        // The running modifier inflates detection range by 1.5x for fast movers;
+        // widen the quadtree query by that factor so we don't miss running enemies
+        // that sit just outside the base range.
+        _nearbyScratch.Clear();
+        qt.QueryRadiusByFaction(myPos, maxRange * 1.5f,
+            FactionMaskExt.AllExcept(myFaction), _nearbyScratch);
+
+        foreach (uint nid in _nearbyScratch)
         {
-            if (j == unitIdx || !units[j].Alive) continue;
-            if (units[j].Faction == myFaction) continue;
+            int j = UnitUtil.ResolveUnitIndex(units, nid);
+            if (j < 0 || j == unitIdx) continue;
 
             // Adjust range based on target movement state
             float effectiveRange = maxRange;
@@ -145,25 +159,20 @@ public static class AwarenessSystem
         return bestIdx;
     }
 
-    private static int ResolveThreat(UnitArrays units, int unitIdx)
-    {
-        uint targetId = units[unitIdx].AlertTarget;
-        if (targetId == GameConstants.InvalidUnit) return -1;
-        for (int j = 0; j < units.Count; j++)
-            if (units[j].Id == targetId && units[j].Alive) return j;
-        return -1;
-    }
-
-    private static void PropagateAlert(UnitArrays units, int alerterIdx, int threatIdx, float radius)
+    private static void PropagateAlert(UnitArrays units, Quadtree qt, int alerterIdx, int threatIdx, float radius)
     {
         float r2 = radius * radius;
         var alerterPos = units[alerterIdx].Position;
         var alerterFaction = units[alerterIdx].Faction;
+        uint threatId = units[threatIdx].Id;
 
-        for (int j = 0; j < units.Count; j++)
+        _nearbyScratch.Clear();
+        qt.QueryRadiusByFaction(alerterPos, radius, alerterFaction.Bit(), _nearbyScratch);
+
+        foreach (uint nid in _nearbyScratch)
         {
-            if (j == alerterIdx || !units[j].Alive) continue;
-            if (units[j].Faction != alerterFaction) continue;
+            int j = UnitUtil.ResolveUnitIndex(units, nid);
+            if (j < 0 || j == alerterIdx) continue;
             if (units[j].AlertState != (byte)UnitAlertState.Unaware) continue;
             if (units[j].DetectionRange <= 0f) continue;
 
@@ -172,7 +181,7 @@ public static class AwarenessSystem
             {
                 units[j].AlertState = (byte)UnitAlertState.Alert;
                 units[j].AlertTimer = 0f;
-                units[j].AlertTarget = units[threatIdx].Id;
+                units[j].AlertTarget = threatId;
                 units[j].ShowStatusSymbol(UnitStatusSymbol.Notice, 1.5f);
             }
         }
