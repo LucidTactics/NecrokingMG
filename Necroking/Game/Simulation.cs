@@ -177,8 +177,15 @@ public class Simulation
     private TriggerSystem? _triggerSystem;
     public void SetNecromancerIndex(int idx) { _necromancerIdx = idx; }
 
+    /// <summary>Wall-clock milliseconds the most recent Tick() took. Written every
+    /// Tick; readable from scenarios/tests to chart per-tick cost. Not intended to
+    /// drive game logic — it's a diagnostic probe.</summary>
+    public double LastTickMs { get; private set; }
+    private readonly System.Diagnostics.Stopwatch _tickStopwatch = new();
+
     public void Tick(float dt)
     {
+        _tickStopwatch.Restart();
         _frameNumber++;
         _gameTime += dt;
         _damageEvents.Clear();
@@ -355,6 +362,9 @@ public class Simulation
         UpdateCorpses(dt);
 
         _flowFields.EvictIfNeeded();
+
+        _tickStopwatch.Stop();
+        LastTickMs = _tickStopwatch.Elapsed.TotalMilliseconds;
     }
 
     private void RebuildQuadtree()

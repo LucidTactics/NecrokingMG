@@ -75,6 +75,7 @@ public static class ScenarioRegistry
         Register("paralyze_burst_test", () => new Scenarios.ParalyzeBurstScenario());
         Register("paralyze_trap_test", () => new Scenarios.ParalyzeTrapScenario());
         Register("horde_idle_anim", () => new Scenarios.HordeIdleAnimScenario());
+        Register("summon_lag", () => new Scenarios.SummonLagScenario());
     }
 
     public static void Register(string name, Func<ScenarioBase> creator)
