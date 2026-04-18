@@ -38,6 +38,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
     private HUDRenderer _hudRenderer = new();
     private CharacterStatsUI _characterStatsUI = new();
     private SkillTreePanel _skillTreePanel = new();
+    private VampireEvolutionPanel _vampireEvoPanel = new();
     private UIShaders _uiShaders = null!;
 
     // Data
@@ -1297,6 +1298,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // Note: _uiShaders is initialized later after Content.Load path -- we
         // set it on the panel below after Load completes.
         _skillTreePanel.Init(_spriteBatch, _pixel, _font, _smallFont, _largeFont);
+        _vampireEvoPanel.Init(_spriteBatch, _pixel, _font, _smallFont, _largeFont);
 
         // Load TrueType fonts via FontStashSharp (dynamic sizing)
         _fontManager.LoadFontsFromDirectory(GamePaths.Resolve(GamePaths.FontsDir));
@@ -1318,6 +1320,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         _uiShaders = new UIShaders(GraphicsDevice, _pixel, BlendState.AlphaBlend, SamplerState.PointClamp);
         _uiShaders.Load(Content);
         _skillTreePanel.SetUIShaders(_uiShaders);
+        _vampireEvoPanel.SetUIShaders(_uiShaders);
 
         try { _outlineFlatEffect = Content.Load<Microsoft.Xna.Framework.Graphics.Effect>("OutlineFlat"); }
         catch (Exception ex) { _outlineFlatEffect = null; DebugLog.Log("startup", $"OutlineFlat not loaded: {ex.Message}"); }
@@ -1573,6 +1576,10 @@ public class Game1 : Microsoft.Xna.Framework.Game
         if (!anyTextInputActive && _input.WasKeyPressed(Keys.K) && _menuState == MenuState.None)
             _skillTreePanel.Toggle();
 
+        // 'N' key toggles vampire evolution panel
+        if (!anyTextInputActive && _input.WasKeyPressed(Keys.N) && _menuState == MenuState.None)
+            _vampireEvoPanel.Toggle();
+
         // --- Pause menu button clicks ---
         if (_menuState == MenuState.PauseMenu && _input.LeftPressed)
         {
@@ -1671,6 +1678,10 @@ public class Game1 : Microsoft.Xna.Framework.Game
             {
                 _skillTreePanel.Close();
             }
+            else if (_menuState == MenuState.None && _vampireEvoPanel.IsVisible)
+            {
+                _vampireEvoPanel.Close();
+            }
             else if (_menuState == MenuState.None)
             {
                 _menuState = MenuState.PauseMenu;
@@ -1768,6 +1779,8 @@ public class Game1 : Microsoft.Xna.Framework.Game
             if (_craftingMenu.ContainsMouse(mx, my))
                 _input.MouseOverUI = true;
             if (_skillTreePanel.ContainsMouse(screenW, screenH, mx, my))
+                _input.MouseOverUI = true;
+            if (_vampireEvoPanel.ContainsMouse(screenW, screenH, mx, my))
                 _input.MouseOverUI = true;
 
             // Time controls
@@ -2512,6 +2525,8 @@ public class Game1 : Microsoft.Xna.Framework.Game
         _craftingMenu.Update(_input, screenW, screenH, dt);
         _skillTreePanel.SetMouse(_input.MousePos);
         _skillTreePanel.Update(_input, screenW, screenH, gameTime.TotalGameTime.TotalSeconds);
+        _vampireEvoPanel.SetMouse(_input.MousePos);
+        _vampireEvoPanel.Update(_input, screenW, screenH, gameTime.TotalGameTime.TotalSeconds);
 
         // Cursor swap: hand when hovering interactive UI, arrow otherwise
         bool overInteractiveUI = _input.MouseOverUI || _editorUi.IsMouseOverUI;
@@ -3818,6 +3833,10 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // Skill tree panel (K) — modal grimoire
         if (showUI)
             _skillTreePanel.Draw(screenW, screenH);
+
+        // Vampire evolution panel (N)
+        if (showUI)
+            _vampireEvoPanel.Draw(screenW, screenH);
 
         // Scenario custom UI hook — for shader-test scenarios that draw raw
         // geometry without a real panel.
