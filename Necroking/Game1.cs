@@ -38,6 +38,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
     private HUDRenderer _hudRenderer = new();
     private CharacterStatsUI _characterStatsUI = new();
     private SkillTreePanel _skillTreePanel = new();
+    private UIShaders _uiShaders = null!;
 
     // Data
     private GameData _gameData = new();
@@ -767,6 +768,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         scenario.ItemRegistry = _gameData.Items;
         scenario.InventoryUI = _inventoryUI;
         scenario.SkillTreePanel = _skillTreePanel;
+        scenario.UIShaders = _uiShaders;
 
         // Init map editor with scenario systems (needed for editor screenshot scenarios)
         _mapEditor.Init(
@@ -1310,6 +1312,9 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
         try { _groundEffect = Content.Load<Microsoft.Xna.Framework.Graphics.Effect>("GroundShader"); }
         catch (Exception ex) { _groundEffect = null; DebugLog.Log("startup", $"GroundShader not loaded: {ex.Message}"); }
+
+        _uiShaders = new UIShaders(GraphicsDevice, _pixel, BlendState.AlphaBlend, SamplerState.PointClamp);
+        _uiShaders.Load(Content);
 
         try { _outlineFlatEffect = Content.Load<Microsoft.Xna.Framework.Graphics.Effect>("OutlineFlat"); }
         catch (Exception ex) { _outlineFlatEffect = null; DebugLog.Log("startup", $"OutlineFlat not loaded: {ex.Message}"); }
@@ -3810,6 +3815,11 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // Skill tree panel (K) — modal grimoire
         if (showUI)
             _skillTreePanel.Draw(screenW, screenH);
+
+        // Scenario custom UI hook — for shader-test scenarios that draw raw
+        // geometry without a real panel.
+        if (_activeScenario?.CustomUIDraw != null)
+            _activeScenario.CustomUIDraw(_spriteBatch, screenW, screenH);
 
         // Building menu UI (widget-based)
         if (showUI)

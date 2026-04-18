@@ -94,3 +94,18 @@
 /processor:EffectProcessor
 /build:FogSmooth.fx
 
+#begin UIGradient.fx
+/importer:EffectImporter
+/processor:EffectProcessor
+/build:UIGradient.fx
+
+#begin UIRectShadow.fx
+/importer:EffectImporter
+/processor:EffectProcessor
+/build:UIRectShadow.fx
+
+#begin UICircleEffect.fx
+/importer:EffectImporter
+/processor:EffectProcessor
+/build:UICircleEffect.fx
+

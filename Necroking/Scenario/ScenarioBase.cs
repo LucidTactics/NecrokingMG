@@ -107,6 +107,14 @@ public abstract class ScenarioBase
     public bool RequestOpenSkillTree;
     public bool RequestCloseSkillTree;
     public Render.SkillTreePanel? SkillTreePanel;
+
+    // Shader-based UI primitives (used by shader test scenarios)
+    public Render.UIShaders? UIShaders;
+
+    // Scenario custom UI hook: called during Game1's UI pass if set, with
+    // the active SpriteBatch. Used by shader-test scenarios to draw test
+    // geometry without needing a full panel. Batch has already been Begun.
+    public Action<Microsoft.Xna.Framework.Graphics.SpriteBatch, int, int>? CustomUIDraw;
 }
 
 public abstract class UIScenarioBase : ScenarioBase
