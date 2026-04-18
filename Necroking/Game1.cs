@@ -4495,9 +4495,10 @@ public class Game1 : Microsoft.Xna.Framework.Game
         var horde = _sim.Horde;
         var settings = horde.Settings;
 
-        // Formation circle
+        // Formation circle — draw the *effective* radius so the overlay matches
+        // the actual horde extent (scales with population, not the static setting).
         _debugDraw.DrawCircle(_spriteBatch, _renderer, _camera,
-            horde.CircleCenter, settings.CircleRadius, new Color(100, 200, 100, 120));
+            horde.CircleCenter, horde.EffectiveRadius, new Color(100, 200, 100, 120));
 
         // Engagement range
         _debugDraw.DrawCircle(_spriteBatch, _renderer, _camera,

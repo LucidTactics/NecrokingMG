@@ -47,21 +47,48 @@ public class HordeSystem
     // — at u=628, ~1.2M linear comparisons per tick.
     private readonly Dictionary<uint, int> _idToIndex = new();
 
+    // Slot indices are permanent per unit. Free slots freed by death are reused
+    // (lowest first) before extending the spiral outward, so inner rings stay
+    // dense and only the outer boundary grows/shrinks with the population.
+    // _nextSlot is the smallest slot that has never been assigned; we keep the
+    // "no trailing free slots" invariant by compacting inside FreeSlot.
+    private readonly SortedSet<int> _freeSlots = new();
+    private int _nextSlot;
+
+    // "Baseline" horde size: the population at which the formation matches the
+    // configured Settings.CircleRadius. SlotSpacing is derived so that slot
+    // (BaselineUnits - 1) sits at radius CircleRadius. At other sizes the
+    // formation scales automatically while per-slot positions stay put.
+    private const int BaselineUnits = 40;
+
     public Vec2 CircleCenter => _circleCenter;
     public float CircleFacing => _circleFacing;
     public bool IsNecroMoving => _necroMoving;
     public IReadOnlyList<HordeUnitData> HordeUnits => _hordeUnits;
     public HordeSettings Settings { get => _settings; set => _settings = value; }
 
+    /// <summary>Per-slot spacing derived from the current CircleRadius setting.</summary>
+    private float SlotSpacing => _settings.CircleRadius / MathF.Sqrt(BaselineUnits);
+
+    /// <summary>
+    /// Outermost occupied slot's radius. Scales as √N so density stays roughly
+    /// constant as the horde grows, without moving existing units' slots.
+    /// </summary>
+    public float EffectiveRadius => _nextSlot > 0
+        ? SlotSpacing * MathF.Sqrt(_nextSlot - 1 + 0.5f)
+        : 0f;
+
     public void Init(HordeSettings settings) { _settings = settings; }
 
     public void AddUnit(uint id)
     {
         if (_idToIndex.ContainsKey(id)) return;
+        int slot = AllocSlot();
         int idx = _hordeUnits.Count;
         _hordeUnits.Add(new HordeUnitData
         {
             UnitID = id,
+            SlotIndex = slot,
             NoisePhase = (float)(_rng.Next(10000)) / 100f,
             LeashCheckTimer = CombatTickInterval,
             DiscreteOffset = RandomShiftOffset(),
@@ -69,7 +96,30 @@ public class HordeSystem
             NextShiftAt = _globalTime + RandomShiftInterval(),
         });
         _idToIndex[id] = idx;
-        ReassignSlots();
+    }
+
+    private int AllocSlot()
+    {
+        if (_freeSlots.Count > 0)
+        {
+            int s = _freeSlots.Min;
+            _freeSlots.Remove(s);
+            return s;
+        }
+        return _nextSlot++;
+    }
+
+    private void FreeSlot(int slot)
+    {
+        _freeSlots.Add(slot);
+        // Shrink the spiral when the top slot is freed — consume any contiguous
+        // free range at the top so EffectiveRadius and the aggro queries see the
+        // real extent, not the high-water mark.
+        while (_nextSlot > 0 && _freeSlots.Contains(_nextSlot - 1))
+        {
+            _freeSlots.Remove(_nextSlot - 1);
+            _nextSlot--;
+        }
     }
 
     // Tunables for discrete slot shifting.
@@ -90,16 +140,18 @@ public class HordeSystem
     public void RemoveUnit(uint id)
     {
         if (!_idToIndex.TryGetValue(id, out int idx)) return;
+        // Free the dead unit's slot before it disappears from the list; other
+        // units keep their SlotIndex unchanged — no reshuffle on death.
+        FreeSlot(_hordeUnits[idx].SlotIndex);
         int last = _hordeUnits.Count - 1;
         if (idx != last)
         {
             _hordeUnits[idx] = _hordeUnits[last];
-            // The unit that was at `last` now lives at `idx`.
+            // The unit that was at `last` now lives at `idx` (SlotIndex unchanged).
             _idToIndex[_hordeUnits[idx].UnitID] = idx;
         }
         _hordeUnits.RemoveAt(last);
         _idToIndex.Remove(id);
-        ReassignSlots();
     }
 
     public bool GetTargetPosition(uint id, out Vec2 target)
@@ -115,7 +167,7 @@ public class HordeSystem
             return false;
         }
 
-        target = ComputeSlotPosition(hu.SlotIndex, _hordeUnits.Count, _globalTime);
+        target = ComputeSlotPosition(hu.SlotIndex);
         // Apply the unit's discrete offset. This value is stable between shifts,
         // so the target tile (and therefore the pathfinder cache key) doesn't
         // change every frame like the old continuous sin-wave drift did.
@@ -233,7 +285,7 @@ public class HordeSystem
                         break;
                     }
                     float targetDistToCircle = (units[targetIdx].Position - _circleCenter).Length();
-                    if (targetDistToCircle > _settings.CircleRadius)
+                    if (targetDistToCircle > EffectiveRadius)
                     {
                         hu.State = HordeUnitState.Following;
                         hu.ChasingTarget = GameConstants.InvalidUnit;
@@ -244,7 +296,7 @@ public class HordeSystem
                 case HordeUnitState.Engaged:
                 {
                     // Leash check: distance from horde slot
-                    Vec2 slotPos = ComputeSlotPosition(hu.SlotIndex, _hordeUnits.Count, _globalTime);
+                    Vec2 slotPos = ComputeSlotPosition(hu.SlotIndex);
                     float distToSlot = (units[idx].Position - slotPos).Length();
 
                     // Hard leash: if way beyond leash radius, force return immediately
@@ -287,7 +339,7 @@ public class HordeSystem
 
                 case HordeUnitState.Returning:
                 {
-                    Vec2 slotPos = ComputeSlotPosition(hu.SlotIndex, _hordeUnits.Count, _globalTime);
+                    Vec2 slotPos = ComputeSlotPosition(hu.SlotIndex);
                     float distToSlot = (units[idx].Position - slotPos).Length();
                     if (distToSlot < 2f) hu.State = HordeUnitState.Following;
                     break;
@@ -302,7 +354,7 @@ public class HordeSystem
             _aggroScanTimer = 0.5f;
 
             nearbyIDs.Clear();
-            qt.QueryRadiusByFaction(_circleCenter, _settings.CircleRadius,
+            qt.QueryRadiusByFaction(_circleCenter, EffectiveRadius,
                 FactionMaskExt.AllExcept(Faction.Undead), nearbyIDs);
 
             var enemiesInCircle = new List<int>();
@@ -342,25 +394,16 @@ public class HordeSystem
         }
     }
 
-    private Vec2 ComputeSlotPosition(int slotIndex, int totalSlots, float time)
+    private Vec2 ComputeSlotPosition(int slotIndex)
     {
-        if (totalSlots <= 0) return _circleCenter;
-
-        // Fibonacci/sunflower spiral distribution
-        float frac = (float)(slotIndex + 1) / (totalSlots + 1);
-        float r = _settings.CircleRadius * MathF.Sqrt(frac);
+        // Vogel spiral (sunflower packing) with a per-slot radius that depends
+        // only on the slot index — not on horde size. Each unit keeps its slot
+        // forever; growth extends the spiral outward and deaths leave holes
+        // that the next spawn fills before extending further. Density stays
+        // constant because the radius of slot k is SlotSpacing * √(k + 0.5).
+        float r = SlotSpacing * MathF.Sqrt(slotIndex + 0.5f);
         float slotAngle = _circleFacing + slotIndex * GoldenAngle;
-
-        Vec2 pos = _circleCenter + new Vec2(MathF.Cos(slotAngle) * r, MathF.Sin(slotAngle) * r);
-        // Per-unit discrete offset (applied in GetTargetPosition) handles the
-        // noise/variation that used to live here as a continuous sin-wave drift.
-        return pos;
-    }
-
-    private void ReassignSlots()
-    {
-        for (int i = 0; i < _hordeUnits.Count; i++)
-            _hordeUnits[i].SlotIndex = i;
+        return _circleCenter + new Vec2(MathF.Cos(slotAngle) * r, MathF.Sin(slotAngle) * r);
     }
 
     private static float LerpAngle(float from, float to, float t)
