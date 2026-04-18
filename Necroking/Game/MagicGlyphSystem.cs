@@ -181,7 +181,7 @@ public class MagicGlyphSystem
                     {
                         g.DamageApplied = true;
 
-                        // Spawn trigger spell (poison cloud) if configured
+                        // Spawn trigger spell (poison / paralyze cloud) if configured.
                         if (!string.IsNullOrEmpty(g.TriggerSpellID) && poisonClouds != null && spells != null)
                         {
                             var spell = spells.Get(g.TriggerSpellID);
@@ -189,13 +189,27 @@ public class MagicGlyphSystem
                             {
                                 poisonClouds.SpawnCloud(g.Position, spell, g.OwnerFaction);
 
-                                // Apply instant AoE poison through unified damage system
-                                if (spell.Damage > 0)
+                                float aoeR = spell.AoeRadius > 0 ? spell.AoeRadius : spell.CloudRadius;
+
+                                if (spell.CloudAppliesParalysis)
                                 {
+                                    // Apply paralysis to everyone in burst radius.
+                                    nearbyIDs.Clear();
+                                    qt.QueryRadius(g.Position, aoeR, nearbyIDs);
+                                    foreach (uint uid in nearbyIDs)
+                                    {
+                                        int idx = UnitUtil.ResolveUnitIndex(units, uid);
+                                        if (idx < 0 || !units[idx].Alive) continue;
+                                        if (units[idx].Faction == g.OwnerFaction) continue;
+                                        Game.PotionSystem.ApplyParalysis(idx, units);
+                                    }
+                                }
+                                else if (spell.Damage > 0)
+                                {
+                                    // Instant AoE poison burst.
                                     var flags = DamageFlags.None;
                                     if (spell.ArmorNegating) flags |= DamageFlags.ArmorNegating;
                                     if (spell.DefenseNegating) flags |= DamageFlags.DefenseNegating;
-                                    float aoeR = spell.AoeRadius > 0 ? spell.AoeRadius : spell.CloudRadius;
                                     DamageSystem.ApplyAoE(units, qt, g.Position, aoeR,
                                         spell.Damage, DamageType.Poison, flags, g.OwnerFaction, _damageEvents);
                                 }

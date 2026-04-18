@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using Necroking.Core;
 using Necroking.Data;
 using Necroking.Data.Registries;
+using Necroking.Game;
 using Necroking.Movement;
 using Necroking.Spatial;
 
@@ -212,14 +213,30 @@ public class SpellEffectSystem
         }
     }
 
-    private void ExecuteCloud(SpellDef spell, Simulation sim, Vec2 target)
+    public void ExecuteCloud(SpellDef spell, Simulation sim, Vec2 target)
     {
         sim.PoisonClouds.SpawnCloud(target, spell, Faction.Undead);
+
+        float radius = spell.AoeRadius > 0 ? spell.AoeRadius : spell.CloudRadius;
+
+        if (spell.CloudAppliesParalysis)
+        {
+            // Paralysis clouds use their AoE burst to apply paralysis (no poison stacks).
+            var nearbyIDs = new List<uint>();
+            sim.Quadtree.QueryRadius(target, radius, nearbyIDs);
+            foreach (uint uid in nearbyIDs)
+            {
+                int idx = UnitUtil.ResolveUnitIndex(sim.UnitsMut, uid);
+                if (idx < 0 || !sim.Units[idx].Alive) continue;
+                if (sim.Units[idx].Faction == Faction.Undead) continue;
+                PotionSystem.ApplyParalysis(idx, sim.UnitsMut);
+            }
+            return;
+        }
 
         if (spell.Damage > 0)
         {
             var flags = SpellDamageFlags(spell);
-            float radius = spell.AoeRadius > 0 ? spell.AoeRadius : spell.CloudRadius;
             DamageSystem.ApplyAoE(sim.UnitsMut, sim.Quadtree, target, radius,
                 spell.Damage, DamageType.Poison, flags, Faction.Undead, sim.DamageEventsMut);
         }

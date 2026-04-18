@@ -1318,6 +1318,21 @@ public class EnvObjectEditorWindow
             if (newUses != def.TrapUses) def.TrapUses = Math.Max(0, newUses);
             curY += RowH;
 
+            // Glyph trap: render as a shader-based magic glyph circle on the ground.
+            // When enabled, placement spawns a MagicGlyph blueprint instead of a sprite-based
+            // env object; trigger spell, glyph colors, radius all derived here.
+            _ui.DrawText("Glyph Trap", new Vector2(fx, curY + 4), EditorBase.TextColor);
+            bool newIsGlyph = _ui.DrawCheckbox("glyphtrap_chk", def.IsGlyphTrap, fx + fieldW - 24, curY + 2);
+            if (newIsGlyph != def.IsGlyphTrap) def.IsGlyphTrap = newIsGlyph;
+            curY += RowH;
+
+            if (def.IsGlyphTrap)
+            {
+                float newGlyphR = _ui.DrawFloatField("envdef_glyphradius", "Glyph Radius", def.GlyphRadius, fx, curY, fieldW, 0.1f);
+                if (MathF.Abs(newGlyphR - def.GlyphRadius) > 0.001f) def.GlyphRadius = MathF.Max(0.25f, newGlyphR);
+                curY += RowH;
+            }
+
             // Trap sprites (with browse buttons)
             int trapBrowseW = 55;
             string newTriggered = _ui.DrawTextField("envdef_traptrigspr", "Triggered Sprite", def.TrapTriggeredSprite, fx, curY, fieldW - trapBrowseW - 4);

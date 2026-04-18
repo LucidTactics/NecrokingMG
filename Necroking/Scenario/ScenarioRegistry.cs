@@ -68,6 +68,8 @@ public static class ScenarioRegistry
         Register("grass_depth", () => new Scenarios.GrassDepthScenario());
         Register("angle_sweep", () => new Scenarios.AngleSweepScenario());
         Register("poison_drain", () => new Scenarios.PoisonDrainScenario());
+        Register("paralyze_burst_test", () => new Scenarios.ParalyzeBurstScenario());
+        Register("paralyze_trap_test", () => new Scenarios.ParalyzeTrapScenario());
     }
 
     public static void Register(string name, Func<ScenarioBase> creator)

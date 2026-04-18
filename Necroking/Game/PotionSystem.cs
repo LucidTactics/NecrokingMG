@@ -5,6 +5,7 @@ using Necroking.Data;
 using Necroking.Data.Registries;
 using Necroking.GameSystems;
 using Necroking.Movement;
+using Necroking.Render;
 
 namespace Necroking.Game;
 
@@ -151,19 +152,25 @@ public static class PotionSystem
 
     private static void ApplyParalysis(PotionDef potion, BuffRegistry buffs, int unitIdx, UnitArrays units)
     {
-        if (unitIdx < 0 || unitIdx >= units.Count) return;
-
-        // Start the slow phase (8 seconds of gradually slowing to 0)
-        units[unitIdx].ParalysisSlowTimer = 8f;
-        units[unitIdx].ParalysisStunTimer = 0f;
-
-        // Apply visual buff
+        ApplyParalysis(unitIdx, units);
         if (!string.IsNullOrEmpty(potion.BuffID))
         {
             var buffDef = buffs.Get(potion.BuffID);
             if (buffDef != null)
                 BuffSystem.ApplyBuff(units, unitIdx, buffDef);
         }
+    }
+
+    /// <summary>
+    /// Start the paralysis sequence on a unit. No-op if the unit is already in the slow
+    /// phase (timer keeps counting down, so staying in the cloud doesn't postpone the stun)
+    /// or stun phase. Call once per tick — re-hits within the same cloud have no effect.
+    /// </summary>
+    public static void ApplyParalysis(int unitIdx, UnitArrays units)
+    {
+        if (unitIdx < 0 || unitIdx >= units.Count || !units[unitIdx].Alive) return;
+        if (units[unitIdx].ParalysisSlowTimer > 0f || units[unitIdx].ParalysisStunTimer > 0f) return;
+        units[unitIdx].ParalysisSlowTimer = ParalyzeSlowDuration;
     }
 
     private static void ApplyZombie(PotionDef potion, BuffRegistry buffs, int unitIdx, UnitArrays units,
@@ -232,15 +239,20 @@ public static class PotionSystem
         }
     }
 
+    // Paralysis timings (seconds).
+    public const float ParalyzeSlowDuration = 8f;
+    public const float ParalyzeStunDuration = 6f;
+    // Speed multiplier at the start of the slow phase — the curve lerps this to 0 over ParalyzeSlowDuration.
+    private const float ParalyzeSlowStartMultiplier = 0.7f;
+
     /// <summary>
-    /// Get the paralysis stat multiplier for a unit (0..1). 1 = no paralysis, 0 = fully stunned.
-    /// Used by combat resolution to scale attack/defense.
+    /// Get the paralysis stat multiplier for a unit (0..1). 1 = no effect on attack/defense,
+    /// 0 = fully stunned. The slow phase only reduces movement speed; attack/defense stay
+    /// at full until the stun phase begins.
     /// </summary>
     public static float GetParalysisFraction(UnitArrays units, int unitIdx)
     {
         if (units[unitIdx].ParalysisStunTimer > 0f) return 0f;
-        if (units[unitIdx].ParalysisSlowTimer > 0f)
-            return MathF.Max(units[unitIdx].ParalysisSlowTimer / 8f, 0f);
         return 1f;
     }
 
@@ -251,29 +263,51 @@ public static class PotionSystem
     {
         for (int i = 0; i < units.Count; i++)
         {
-            // --- Paralysis ---
+            // --- Paralysis slow phase ---
+            // Movement speed lerps from ParalyzeSlowStartMultiplier (0.7x) down to 0 over
+            // ParalyzeSlowDuration seconds. Attack/defense are unaffected in this phase.
             if (units[i].ParalysisSlowTimer > 0f)
             {
                 units[i].ParalysisSlowTimer -= dt;
-                // Lerp speed toward 0 over 8 seconds; attack/defense handled in combat resolution
-                float slowFraction = MathF.Max(units[i].ParalysisSlowTimer / 8f, 0f);
-                units[i].MaxSpeed *= slowFraction;
+                float t = MathF.Max(units[i].ParalysisSlowTimer / ParalyzeSlowDuration, 0f);
+                units[i].MaxSpeed *= ParalyzeSlowStartMultiplier * t;
 
                 if (units[i].ParalysisSlowTimer <= 0f)
                 {
+                    // Transition to stun: lock movement, play Stunned anim, put attack on
+                    // cooldown for the stun duration. GetParalysisFraction returns 0 during
+                    // stun, so combat resolution zeroes Attack and Defense.
                     units[i].ParalysisSlowTimer = 0f;
-                    units[i].ParalysisStunTimer = 6f;
+                    units[i].ParalysisStunTimer = ParalyzeStunDuration;
+                    units[i].AttackCooldown = ParalyzeStunDuration;
+                    units[i].Incap = new IncapState
+                    {
+                        Active = true,
+                        HoldAnim = AnimState.Stunned,
+                        RecoverAnim = AnimState.Idle,
+                        RecoverTime = 0f,
+                        RecoverTimer = 0f,
+                        HoldAtEnd = false,
+                    };
+                    units[i].OverrideAnim = new AnimRequest
+                    {
+                        State = AnimState.Stunned, Priority = 3, Interrupt = true,
+                        Duration = -1, PlaybackSpeed = 1f
+                    };
                 }
             }
 
+            // --- Paralysis stun phase ---
             if (units[i].ParalysisStunTimer > 0f)
             {
                 units[i].ParalysisStunTimer -= dt;
-                // Completely stunned: zero speed; attack/defense handled in combat resolution
                 units[i].MaxSpeed = 0f;
 
                 if (units[i].ParalysisStunTimer <= 0f)
+                {
                     units[i].ParalysisStunTimer = 0f;
+                    units[i].Incap = default; // clear incapacitation, unit recovers
+                }
             }
 
             // --- Poison DoT ---

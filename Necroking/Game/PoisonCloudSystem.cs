@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using Necroking.Core;
 using Necroking.Data;
 using Necroking.Data.Registries;
+using Necroking.Game;
 using Necroking.Movement;
 using Necroking.Spatial;
 
@@ -37,6 +38,9 @@ public class PoisonCloud
     // Phase config
     public float EruptionDuration = 2f;
     public float SpreadDuration = 7f;
+
+    // Effect flags
+    public bool AppliesParalysis;
 
     // Debuff config
     public string SlowBuffID = "";
@@ -86,6 +90,7 @@ public class PoisonCloudSystem
     {
         _clouds.Add(new PoisonCloud
         {
+            AppliesParalysis = spell.CloudAppliesParalysis,
             Position = position,
             Age = 0f,
             Duration = spell.CloudDuration,
@@ -254,11 +259,20 @@ public class PoisonCloudSystem
             float falloff = 1f - (dist / cloud.CurrentRadius) * (dist / cloud.CurrentRadius);
             falloff = MathF.Max(falloff, 0.05f); // Minimum 5% at edge
 
-            int damage = (int)MathF.Ceiling(cloud.BaseDamagePerTick * cloud.Potency * phaseMult * falloff);
-            if (damage > 0)
+            if (cloud.AppliesParalysis)
             {
-                DamageSystem.Apply(units, idx, damage,
-                    DamageType.Poison, DamageFlags.ArmorNegating, damageEvents);
+                // Paralysis clouds don't stack poison; they push the target into the
+                // slow → stun sequence. No-op if already in that sequence.
+                PotionSystem.ApplyParalysis(idx, units);
+            }
+            else
+            {
+                int damage = (int)MathF.Ceiling(cloud.BaseDamagePerTick * cloud.Potency * phaseMult * falloff);
+                if (damage > 0)
+                {
+                    DamageSystem.Apply(units, idx, damage,
+                        DamageType.Poison, DamageFlags.ArmorNegating, damageEvents);
+                }
             }
 
             // Apply slow debuff

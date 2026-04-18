@@ -95,6 +95,12 @@ public class EnvironmentObjectDef
     public float TrapDeployedDuration { get; set; } = 2.0f;  // seconds in deployed state before fade/reset
     public float TrapFadeDuration { get; set; } = 1.0f;      // alpha fade-out duration for expended traps
 
+    // Glyph trap: when true, placing this def spawns a MagicGlyph blueprint (shader-rendered
+    // ground rune that builds to dormant, triggers on proximity, casts TrapSpellId). The def
+    // itself is never instantiated as an env object.
+    public bool IsGlyphTrap { get; set; }
+    public float GlyphRadius { get; set; } = 1.5f;  // world-space radius of the glyph circle
+
     // Tint color (used by color harmonizer M04)
     public HdrColor TintColor { get; set; } = new(255, 255, 255, 255, 1f);
 
@@ -169,6 +175,8 @@ public class EnvironmentObjectDef
         writer.WriteNumber("trapTriggeredDuration", TrapTriggeredDuration);
         writer.WriteNumber("trapDeployedDuration", TrapDeployedDuration);
         writer.WriteNumber("trapFadeDuration", TrapFadeDuration);
+        writer.WriteBoolean("isGlyphTrap", IsGlyphTrap);
+        writer.WriteNumber("glyphRadius", GlyphRadius);
         writer.WriteString("boundTriggerID", BoundTriggerID);
         // Processing slots
         writer.WriteStartObject("input1");

@@ -4,6 +4,7 @@ using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
 using Necroking.Core;
+using Necroking.Data;
 using Necroking.Data.Registries;
 using Necroking.GameSystems;
 using Necroking.Render;
@@ -30,6 +31,9 @@ public class BuildingMenuUI
     private ItemRegistry _items = null!;
     private SpriteBatch _batch = null!;
     private Texture2D _pixel = null!;
+    private MagicGlyphSystem? _glyphs;
+    private SpellRegistry? _spells;
+    private Simulation? _sim;
 
     private bool _visible;
     private InputState? _lastInput;
@@ -51,7 +55,9 @@ public class BuildingMenuUI
 
     public void Init(RuntimeWidgetRenderer renderer, EnvironmentSystem envSystem,
         Inventory inventory, ItemRegistry items, int screenH,
-        SpriteBatch batch, Texture2D pixel)
+        SpriteBatch batch, Texture2D pixel,
+        MagicGlyphSystem? glyphs = null, SpellRegistry? spells = null,
+        Simulation? sim = null)
     {
         _renderer = renderer;
         _envSystem = envSystem;
@@ -59,6 +65,9 @@ public class BuildingMenuUI
         _items = items;
         _batch = batch;
         _pixel = pixel;
+        _glyphs = glyphs;
+        _spells = spells;
+        _sim = sim;
 
         var def = renderer.GetWidgetDef(MenuWidgetId);
         if (def == null) return;
@@ -306,6 +315,38 @@ public class BuildingMenuUI
         var envDef = _envSystem.Defs[defIdx];
 
         if (!CanAfford(envDef)) return false;
+
+        // Glyph traps spawn a MagicGlyph blueprint instead of an env object. The glyph
+        // has its own placement overlap check (radius-based) and its own build progress.
+        // Auto-assigns the necromancer to build it (walk over, work, activate).
+        if (envDef.IsGlyphTrap && _glyphs != null)
+        {
+            var pos = new Vec2(worldX, worldY);
+            if (!_glyphs.CanPlace(pos, envDef.GlyphRadius)) return false;
+
+            DeductCosts(envDef);
+            var glyph = _glyphs.SpawnBlueprint(pos, envDef.GlyphRadius, Faction.Undead);
+            glyph.TriggerSpellID = envDef.TrapSpellId;
+            var spell = _spells?.Get(envDef.TrapSpellId);
+            if (spell != null)
+            {
+                glyph.Color = spell.CloudColor;
+                glyph.Color2 = spell.CloudGlowColor;
+            }
+
+            // Assign the player's necromancer to walk over and build the glyph.
+            if (_sim != null && _sim.NecromancerIndex >= 0)
+            {
+                int glyphIdx = _glyphs.IndexOf(glyph);
+                int necroIdx = _sim.NecromancerIndex;
+                _sim.UnitsMut[necroIdx].BuildGlyphIdx = glyphIdx;
+                _sim.UnitsMut[necroIdx].BuildTimer = 0f;
+                _sim.UnitsMut[necroIdx].Routine = AI.PlayerControlledHandler.RoutineBuildGlyph;
+                _sim.UnitsMut[necroIdx].Subroutine = AI.PlayerControlledHandler.BuildSub_WalkToSite;
+            }
+            return true;
+        }
+
         if (!_envSystem.CanPlaceObject(defIdx, worldX, worldY)) return false;
 
         DeductCosts(envDef);

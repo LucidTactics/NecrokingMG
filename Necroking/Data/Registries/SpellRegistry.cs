@@ -537,6 +537,10 @@ public class SpellDef : IHasId
     [JsonPropertyName("cloudPlagueThreshold")] public float CloudPlagueThreshold { get; set; } = 3.0f;
 
     [EditorVisible("Category", "Cloud")]
+    [EditorField(Label = "Applies Paralysis", Group = "CLOUD", Order = 833)]
+    [JsonPropertyName("cloudAppliesParalysis")] public bool CloudAppliesParalysis { get; set; } = false;
+
+    [EditorVisible("Category", "Cloud")]
     [EditorField(Label = "Cloud Color", Group = "CLOUD", Order = 835, Compact = true)]
     [JsonPropertyName("cloudColor")]
     [JsonConverter(typeof(HdrColorJsonConverter))]

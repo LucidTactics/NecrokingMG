@@ -111,7 +111,6 @@ public class Game1 : Microsoft.Xna.Framework.Game
     private MagicGlyphRenderer _glyphRenderer = new();
     private DebugDraw _debugDraw = new();
     private GameSystems.SpellEffectSystem _spellEffects = new();
-    private Game.TrapPlacementManager _trapManager = new();
     private List<GameSystems.DamageNumber> _damageNumbers = new();
 
     // Game state
@@ -123,7 +122,6 @@ public class Game1 : Microsoft.Xna.Framework.Game
     private float _timeScale = 1f;
 
     // Glyph trap placement mode
-    // _trapPlacementActive moved to TrapPlacementManager
     private PendingSpellCast _pendingSpell = new();
     private PendingCastAnim? _pendingCastAnim;
     private SpellBarState _spellBarState = new();
@@ -1359,7 +1357,8 @@ public class Game1 : Microsoft.Xna.Framework.Game
             _widgetRenderer.LoadDefinitions(uiDefPath);
         _inventoryUI.Init(_widgetRenderer, _inventory, _gameData.Items, _spriteBatch, _pixel);
         _buildingMenuUI.Init(_widgetRenderer, _envSystem, _inventory, _gameData.Items,
-            _graphics.PreferredBackBufferHeight, _spriteBatch, _pixel);
+            _graphics.PreferredBackBufferHeight, _spriteBatch, _pixel,
+            _sim.MagicGlyphs, _gameData.Spells, _sim);
         _craftingMenu.Init(_widgetRenderer, _inventory, _gameData.Items, _gameData,
             _graphics.PreferredBackBufferHeight, _spriteBatch, _pixel);
         LogTiming("Inventory & Building UI initialized");
@@ -2038,9 +2037,6 @@ public class Game1 : Microsoft.Xna.Framework.Game
             if (_input.WasKeyPressed(Keys.G) && necroIdx >= 0)
                 _sim.UnitsMut[necroIdx].GhostMode = !_sim.Units[necroIdx].GhostMode;
 
-            // --- Glyph trap placement (T key) ---
-            _trapManager.Update(_input, _sim, necroIdx, mouseWorld);
-
             // --- Secondary spell bar (keys 1-4) ---
             if (necroIdx >= 0)
             {
@@ -2530,6 +2526,12 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 _sim.Lightning.SpawnStrike(targetPos, spell.TelegraphDuration,
                     spell.StrikeDuration, spell.AoeRadius, spell.Damage,
                     style, spell.Id, sVis, telegraphVisible: spell.TelegraphVisible);
+            }
+            else if (spell.Category == "Cloud")
+            {
+                // Spawn cloud at the trap position (not the target — the trap itself is
+                // where the burst originates). Same code path as a caster casting the spell.
+                _spellEffects.ExecuteCloud(spell, _sim, evt.TrapPos);
             }
         }
     }
@@ -3569,7 +3571,9 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // Build progress bars for blueprint glyphs
         foreach (var g in _sim.MagicGlyphs.Glyphs)
         {
-            if (g.State == GameSystems.GlyphState.Blueprint && g.BuildProgress > 0f && g.Alive)
+            // Show progress bar from the moment the glyph is placed (even at 0%), not only
+            // once construction has begun — so players can see "trap placed, awaiting build".
+            if (g.State == GameSystems.GlyphState.Blueprint && g.BuildProgress < 1f && g.Alive)
             {
                 var gsp = _renderer.WorldToScreen(g.Position, 0f, _camera);
                 DrawBuildProgressBar(gsp, g.BuildProgress, g.Radius);
@@ -3790,17 +3794,6 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 _buildingMenuUI.DrawGhostPreview(_spriteBatch, _pixel, mw, sp, _camera, _renderer);
             }
 
-            // Ghost preview for glyph trap placement (T key)
-            if (_trapManager.IsActive)
-            {
-                Vec2 mw = _camera.ScreenToWorld(_input.MousePos, screenW, screenH);
-                var sp = _renderer.WorldToScreen(mw, 0f, _camera);
-                const float glyphR = 1.125f;
-                bool canPlace = _sim.MagicGlyphs.CanPlace(mw, glyphR);
-                float radiusPx = glyphR * _camera.Zoom;
-                Render.DrawUtils.DrawCircleOutline(_spriteBatch, _pixel, sp, radiusPx,
-                    canPlace ? new Color(50, 200, 50, 120) : new Color(200, 50, 50, 120), 24);
-            }
         }
 
         if (_gameOver && showUI)
@@ -4973,8 +4966,9 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
         _spriteBatch.Draw(tex, screenPos, sourceRect, tint, rotation, origin, scale, SpriteEffects.None, 0f);
 
-        // Build progress bar for unbuilt objects
-        if (rt.BuildProgress > 0f && rt.BuildProgress < 1f)
+        // Build progress bar for unbuilt objects — visible from the moment of placement
+        // (empty bar at 0%) so players can see "placed, awaiting construction".
+        if (rt.BuildProgress < 1f)
             DrawBuildProgressBar(screenPos, rt.BuildProgress);
     }
 

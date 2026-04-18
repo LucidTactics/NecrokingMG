@@ -511,6 +511,8 @@ public static class MapData
         if (ed.TryGetProperty("trapTriggeredDuration", out var ttd)) def.TrapTriggeredDuration = ttd.GetSingle();
         if (ed.TryGetProperty("trapDeployedDuration", out var tdd)) def.TrapDeployedDuration = tdd.GetSingle();
         if (ed.TryGetProperty("trapFadeDuration", out var tfd)) def.TrapFadeDuration = tfd.GetSingle();
+        if (ed.TryGetProperty("isGlyphTrap", out var igt)) def.IsGlyphTrap = igt.GetBoolean();
+        if (ed.TryGetProperty("glyphRadius", out var gr)) def.GlyphRadius = gr.GetSingle();
         if (ed.TryGetProperty("boundTriggerID", out var btid)) def.BoundTriggerID = btid.GetString() ?? "";
         if (ed.TryGetProperty("processTime", out var pt)) def.ProcessTime = pt.GetSingle();
         if (ed.TryGetProperty("maxInputQueue", out var miq)) def.MaxInputQueue = miq.GetInt32();
