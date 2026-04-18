@@ -360,8 +360,13 @@ public static class SubroutineSteps
             ctx.Units[i].PreferredVel = Vec2.Zero;
         }
 
-        // Set locomotion animation based on intended speed
-        SetLocomotionAnim(ref ctx, speed);
+        // Pick the locomotion state from the preferred *speed we actually got*,
+        // not the input speed. If the pathfinder returned a zero direction (e.g.
+        // a deferred budget miss that couldn't even beeline, or the unit was
+        // already at the target), PreferredVel is zero and the unit should show
+        // Idle — not walk-in-place like a high-density horde used to do.
+        float effectiveSpeed = ctx.Units[i].PreferredVel.Length();
+        SetLocomotionAnim(ref ctx, effectiveSpeed);
     }
 
     /// <summary>

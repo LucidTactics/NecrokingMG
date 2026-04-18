@@ -1506,7 +1506,23 @@ public class Pathfinder
 
         if (!hasFlow || flow.Dirs == null)
         {
-            Vec2 localDir = _lastQueryDeferred ? Vec2.Zero : GetLocalChunkDirection(unitPos, targetPos, sizeTier, unitIdx);
+            // Deferred cross-sector flow: beeline rather than falling into the
+            // imag-chunk fallback (same cost as the Dijkstra we just deferred)
+            // or returning zero (which made units walk-in-place at high
+            // density — PreferredVel=0 but Walk anim still playing).
+            if (_lastQueryDeferred)
+            {
+                var beeD = targetPos - unitPos;
+                float beeDLen = beeD.Length();
+                if (beeDLen > 0.01f)
+                {
+                    RecordDecision(unitIdx, PathDecision.Beeline);
+                    return beeD * (1f / beeDLen);
+                }
+                RecordDecision(unitIdx, PathDecision.None);
+                return Vec2.Zero;
+            }
+            Vec2 localDir = GetLocalChunkDirection(unitPos, targetPos, sizeTier, unitIdx);
             if (localDir.LengthSq() > 0.001f)
             {
                 RecordDecision(unitIdx, PathDecision.NoFlow);
