@@ -1188,15 +1188,28 @@ public class Simulation
             // he can't walk through walls or clip through trees.
             bool skipOrca = _units[i].AI == AIBehavior.PlayerControlled;
 
+            // Idle shortcut: a unit whose AI wants 0 velocity and whose current
+            // velocity is already 0 will get 0 back from ORCA anyway — it's a
+            // goal-less solver with no incoming motion. Skipping the gather +
+            // solve for these saves the dense-horde cost when most skeletons
+            // are parked in their formation slots (PreferredVel zeroed by
+            // SetIdle). Other units still see this one in the quadtree, so
+            // movers avoid it normally. The 0.01 threshold is well below any
+            // intended movement speed.
+            bool idleShortcut = !skipOrca
+                && _units[i].PreferredVel.LengthSq() < 0.0001f
+                && _units[i].Velocity.LengthSq() < 0.0001f;
+
             // Build ORCA neighbor list
             neighbors.Clear();
             nearbyIDs.Clear();
             Vec2 newVel;
             var myPos = _units[i].Position;
-            if (skipOrca)
+            if (skipOrca || idleShortcut)
             {
                 // Player input goes straight through; other units still see the
                 // necromancer via the quadtree so they dodge him normally.
+                // Idle shortcut: preferred velocity was zero; return zero.
                 newVel = _units[i].PreferredVel;
             }
             else
