@@ -2,6 +2,7 @@ using System;
 using Necroking.Core;
 using Necroking.Data;
 using Necroking.GameSystems;
+using Necroking.Render;
 
 namespace Necroking.Scenario.Scenarios;
 
@@ -35,13 +36,16 @@ public class HordeIdleAnimScenario : ScenarioBase
         units[nIdx].Faction = Faction.Undead;
         sim.SetNecromancerIndex(nIdx);
 
-        // Spawn 12 skeletons in a small cluster — ORCA pressure will be high.
+        // Spawn 12 skeletons in a small cluster. Crucially: AI must be != PlayerControlled
+        // *and* Archetype must be set, or Simulation won't dispatch to HordeMinionHandler
+        // (the dispatch at Simulation.cs:423 gates on both conditions).
         for (int i = 0; i < 12; i++)
         {
             float a = i * MathF.Tau / 12f;
             var pos = new Vec2(32f + MathF.Cos(a) * 1.5f, 32f + MathF.Sin(a) * 1.5f);
             int idx = units.AddUnit(pos, UnitType.Skeleton);
             units[idx].Faction = Faction.Undead;
+            units[idx].AI = AIBehavior.AttackClosest; // any non-PlayerControlled value to enable dispatch
             units[idx].Archetype = AI.ArchetypeRegistry.HordeMinion;
             sim.Horde.AddUnit(units[idx].Id);
             _skelIds[i] = units[idx].Id;
@@ -66,8 +70,8 @@ public class HordeIdleAnimScenario : ScenarioBase
                 var u = sim.Units[idx];
                 DebugLog.Log(ScenarioLog,
                     $"[t={_elapsed:F2}s] skel{k} pos=({u.Position.X:F2},{u.Position.Y:F2}) " +
-                    $"|vel|={u.Velocity.Length():F2}  |ema|={u.VelocityEMA.Length():F2}  " +
-                    $"still={(u.AnimIntentStill?'Y':'N')}");
+                    $"|vel|={u.Velocity.Length():F2}  routineAnim={u.RoutineAnim.State}  " +
+                    $"hordeState={sim.Horde.GetUnitState(u.Id)} sub={u.Subroutine}");
             }
         }
 

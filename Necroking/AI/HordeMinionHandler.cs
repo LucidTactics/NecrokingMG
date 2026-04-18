@@ -119,33 +119,34 @@ public class HordeMinionHandler : IArchetypeHandler
             if (ctx.Subroutine == FollowIdle)
             {
                 // Idle at slot — only start moving again if slot drifted far enough.
-                ctx.Units[ctx.UnitIndex].PreferredVel = Vec2.Zero;
-                ctx.Units[ctx.UnitIndex].AnimIntentStill = true;
+                // SetIdle() zeros PreferredVel *and* sets RoutineAnim=Idle so the
+                // AnimResolver stops picking whatever locomotion state MoveToward
+                // left behind the last time the unit was chasing the slot.
+                SubroutineSteps.SetIdle(ref ctx);
                 if (dist > FollowDeadzone)
                     ctx.Subroutine = FollowMoving;
             }
             else
             {
-                // Actively moving toward slot
+                // Actively moving toward slot. MoveToward sets PreferredVel and the
+                // Walk/Jog/Run locomotion anim based on intended speed.
                 if (dist > FollowArriveThreshold)
                 {
                     SubroutineSteps.MoveToward(ref ctx, slotPos, ctx.MySpeed);
                 }
                 else
                 {
-                    // Arrived — declare still-intent now so the anim layer collapses
-                    // the EMA decay tail instead of spending ~1s in Walk while the
-                    // previous chase's smoothed velocity drains.
-                    ctx.Units[ctx.UnitIndex].PreferredVel = Vec2.Zero;
-                    ctx.Units[ctx.UnitIndex].AnimIntentStill = true;
+                    // Arrived — flip the routine anim to Idle right away (critical,
+                    // otherwise the last Walk/Jog/Run request sticks and the unit
+                    // walks-in-place until the next chase).
+                    SubroutineSteps.SetIdle(ref ctx);
                     ctx.Subroutine = FollowIdle;
                 }
             }
         }
         else
         {
-            ctx.Units[ctx.UnitIndex].PreferredVel = Vec2.Zero;
-            ctx.Units[ctx.UnitIndex].AnimIntentStill = true;
+            SubroutineSteps.SetIdle(ref ctx);
         }
     }
 

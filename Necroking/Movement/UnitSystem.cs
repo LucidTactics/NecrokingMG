@@ -59,21 +59,6 @@ public class Unit
     public Vec2 Position;
     public Vec2 Velocity;
     public Vec2 PreferredVel;
-    /// <summary>Exponentially-smoothed Velocity. Oscillating motion (e.g. a horde
-    /// minion chasing a drifting slot, or ORCA nudging) averages toward zero in
-    /// this vector, while sustained motion — whether the unit's own movement or a
-    /// persistent shove from a larger neighbor — is preserved. The anim layer uses
-    /// |VelocityEMA| for the Idle/Walk decision so visible "standing still" doesn't
-    /// get stuck in Walk.</summary>
-    public Vec2 VelocityEMA;
-    /// <summary>AI-declared "I intend to stand still" signal. The simulation clears
-    /// this to false each tick before archetype dispatch; AI handlers set it true
-    /// in their idle sub-states. Effect: the VelocityEMA decay constant shortens
-    /// so the anim layer reaches Idle within ~0.1s instead of waiting for the full
-    /// ~1s smoothing tail. If the unit is actually being displaced (persistent
-    /// ORCA shove from a bigger neighbour), the shorter-window EMA still tracks
-    /// that motion, so Walk plays — the flag only removes the post-chase lag.</summary>
-    public bool AnimIntentStill;
     public float Z;             // Height above ground (0 = on ground). Used by 2.5D impulse physics.
     public bool InPhysics;      // True while physics system owns this unit's movement.
     public bool OverrideStarted; // Tracks whether OverrideAnim has been applied to AnimController

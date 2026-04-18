@@ -418,10 +418,6 @@ public class Simulation
             if (_units[i].InPhysics) continue; // Physics system owns this unit
             if (_units[i].Jumping || _units[i].Incap.IsLocked) { _units[i].PreferredVel = Vec2.Zero; continue; }
 
-            // Clear AI-intent flags before the handler runs so each handler tick
-            // is a fresh declaration. Idle sub-states re-set these inside the handler.
-            _units[i].AnimIntentStill = false;
-
             // New archetype system: if Archetype > 0, dispatch to handler
             // (PlayerControlled units are handled in the legacy switch below)
             if (_units[i].Archetype > 0 && _units[i].AI != AIBehavior.PlayerControlled)
@@ -1470,20 +1466,6 @@ public class Simulation
             }
 
             _units[i].Position = newPos;
-
-            // Smoothed velocity for anim-layer "am I really moving" detection.
-            // 0.5s time constant for actively-moving units — oscillations with
-            // period < 1s damp toward zero; sustained motion (own locomotion, or
-            // a persistent ORCA shove from a bigger neighbour) is preserved.
-            //
-            // When the AI declares still-intent we collapse the window to 0.1s so
-            // the anim layer reaches Idle within a frame or two of arrival instead
-            // of spending the full smoothing tail in Walk. A unit being genuinely
-            // shoved has consistent directional velocity, so even with the short
-            // window the EMA tracks the real motion and the anim still reads Walk.
-            float emaTau = _units[i].AnimIntentStill ? 0.1f : 0.5f;
-            float emaAlpha = 1f - MathF.Exp(-dt / emaTau);
-            _units[i].VelocityEMA += (_units[i].Velocity - _units[i].VelocityEMA) * emaAlpha;
         }
     }
 

@@ -3305,14 +3305,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 targetState = AnimState.Hover;
             else
             {
-                // Idle detection uses smoothed velocity so oscillating motion — e.g. a
-                // horde minion ping-ponging around its drifting slot — averages toward
-                // zero and reads as Idle. Sustained motion (own locomotion, or being
-                // shoved aside by a larger unit) survives the smoothing and reads as
-                // Walk/Jog/Run. Walk/Jog/Run bucket off instantaneous speed so the
-                // pace matches what the unit is visually doing.
                 float speed = _sim.Units[i].Velocity.Length();
-                float smoothedSpeed = _sim.Units[i].VelocityEMA.Length();
                 float baseSpeed = _sim.Units[i].Stats.CombatSpeed;
                 float jogThreshold = 4f + baseSpeed / 3f;
                 float runThreshold = 6f + 2f * baseSpeed / 3f;
@@ -3320,7 +3313,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 bool carrying = _sim.Units[i].CarryingCorpseID >= 0;
                 if (carrying)
                     targetState = AnimState.Carry;
-                else if (smoothedSpeed <= 0.5f)
+                else if (speed <= 0.25f)
                     targetState = AnimState.Idle;
                 else if (speed < jogThreshold)
                     targetState = AnimState.Walk;
