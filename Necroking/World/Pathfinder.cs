@@ -1155,8 +1155,17 @@ public class Pathfinder
     // Main API
     // =========================================================================
 
+    // Diagnostic counters — Simulation resets these at the start of each Tick and
+    // sums them into LastPhaseMs so a profiling scenario can see pathfinder load.
+    public static int DiagCallsThisTick;
+    public static double DiagTotalMsThisTick;
+
     public Vec2 GetDirection(Vec2 unitPos, Vec2 targetPos, uint frame, int sizeTier = 0, int unitIdx = -1)
     {
+        var diagSw = System.Diagnostics.Stopwatch.StartNew();
+        DiagCallsThisTick++;
+        try
+        {
         if (_grid == null || _sectorConnected == null) return Vec2.Zero;
         sizeTier = Math.Clamp(sizeTier, 0, TerrainCosts.NumSizeTiers - 1);
 
@@ -1559,6 +1568,11 @@ public class Pathfinder
         // Normal flow direction
         RecordDecision(unitIdx, unitSector == targetSector ? PathDecision.TileFlow : PathDecision.BorderFlow);
         return finalDir;
+        }
+        finally
+        {
+            DiagTotalMsThisTick += diagSw.Elapsed.TotalMilliseconds;
+        }
     }
 
     // --- Decision tracking ---

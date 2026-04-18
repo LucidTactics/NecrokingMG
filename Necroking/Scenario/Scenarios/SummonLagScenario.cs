@@ -31,8 +31,17 @@ public class SummonLagScenario : ScenarioBase
     private float _elapsed;
     private int _necroIdx = -1;
     private readonly List<double> _baselineTicks = new();
-    // (elapsed-since-summon, tickMs)
-    private readonly List<(float t, double ms)> _postSummonTicks = new();
+    // (elapsed-since-summon, tickMs, phase-snapshot-at-this-tick)
+    private readonly List<(float t, double ms, Dictionary<string, double> phases)> _postSummonTicks = new();
+
+    // Phase names we care about (read from Simulation.LastPhaseMs each tick).
+    private static readonly string[] PhaseNames = {
+        "quadtree", "potions", "horde_tick", "ai",
+        "ai_awareness", "ai_archetype", "ai_legacy",
+        "pathfinder", "pathfinder_calls",
+        "movement", "physics", "horde_states", "facing", "combat",
+        "projectiles", "lightning", "clouds", "cleanup",
+    };
 
     public override void OnInit(Simulation sim)
     {
@@ -70,6 +79,10 @@ public class SummonLagScenario : ScenarioBase
                     if (idx >= 0)
                     {
                         sim.UnitsMut[idx].Faction = Faction.Undead;
+                        // SpawnUnitByID doesn't set Archetype — Game1's spawn pipeline does.
+                        // Mirror that here so the units go through the actual archetype dispatch
+                        // path the real "debug summon" code exercises.
+                        sim.UnitsMut[idx].Archetype = AI.ArchetypeRegistry.HordeMinion;
                         sim.Horde.AddUnit(sim.Units[idx].Id);
                     }
                 }
@@ -82,7 +95,9 @@ public class SummonLagScenario : ScenarioBase
         else
         {
             float since = _elapsed - BaselineSeconds;
-            _postSummonTicks.Add((since, ms));
+            // Snapshot phase timings (Simulation reuses its dict, so we copy).
+            var snap = new Dictionary<string, double>(sim.LastPhaseMs);
+            _postSummonTicks.Add((since, ms, snap));
             if (since >= PostSummonSeconds) _complete = true;
         }
     }
@@ -91,45 +106,63 @@ public class SummonLagScenario : ScenarioBase
     {
         double baselineAvg = Average(_baselineTicks);
         double baselineMax = Max(_baselineTicks);
-        double threshold = MathF.Max(2.0f, (float)baselineAvg * 3f); // "lag" = >3x baseline or >2ms
 
         DebugLog.Log(ScenarioLog, "--- Baseline (pre-summon) ---");
         DebugLog.Log(ScenarioLog, $"  avg={baselineAvg:F2}ms  max={baselineMax:F2}ms  n={_baselineTicks.Count}");
-        DebugLog.Log(ScenarioLog, $"  spike threshold = {threshold:F2}ms");
 
-        DebugLog.Log(ScenarioLog, "--- Post-summon per-tick timings (only spikes > threshold logged) ---");
-        int spikeCount = 0;
-        double postMax = 0, postSum = 0;
-        foreach (var (t, ms) in _postSummonTicks)
+        // Bucket post-summon by 0.5s window and report per-phase avg/max.
+        // Format per bucket:
+        //   +0.00s..+0.50s  tick=avg/max   phase1=avg/max  phase2=avg/max ...
+        const float BucketS = 0.5f;
+        var bucketIdx = new Dictionary<int, List<(double tick, Dictionary<string, double> phases)>>();
+        foreach (var (t, ms, phases) in _postSummonTicks)
         {
-            postSum += ms;
-            if (ms > postMax) postMax = ms;
-            if (ms > threshold)
+            int bkt = (int)(t / BucketS);
+            if (!bucketIdx.TryGetValue(bkt, out var list))
+                bucketIdx[bkt] = list = new();
+            list.Add((ms, phases));
+        }
+
+        DebugLog.Log(ScenarioLog, $"--- Per-{BucketS:F1}s bucket: avg tick ms + top phases ---");
+        foreach (var bkt in SortedKeys(bucketIdx))
+        {
+            var samples = bucketIdx[bkt];
+            float start = bkt * BucketS;
+            double tickAvg = 0, tickMax = 0;
+            foreach (var (tick, _) in samples) { tickAvg += tick; if (tick > tickMax) tickMax = tick; }
+            tickAvg /= samples.Count;
+
+            // Per-phase aggregate in this bucket
+            var phaseAvg = new Dictionary<string, double>();
+            var phaseMax = new Dictionary<string, double>();
+            foreach (var name in PhaseNames) { phaseAvg[name] = 0; phaseMax[name] = 0; }
+            foreach (var (_, phases) in samples)
             {
-                spikeCount++;
-                DebugLog.Log(ScenarioLog, $"  t+{t:F3}s  {ms:F2}ms");
+                foreach (var name in PhaseNames)
+                {
+                    if (phases.TryGetValue(name, out double v))
+                    {
+                        phaseAvg[name] += v;
+                        if (v > phaseMax[name]) phaseMax[name] = v;
+                    }
+                }
             }
-        }
-        double postAvg = _postSummonTicks.Count > 0 ? postSum / _postSummonTicks.Count : 0;
+            foreach (var name in PhaseNames) phaseAvg[name] /= samples.Count;
 
-        DebugLog.Log(ScenarioLog, "--- Summary ---");
-        DebugLog.Log(ScenarioLog, $"  post-summon avg={postAvg:F2}ms max={postMax:F2}ms spikes={spikeCount}/{_postSummonTicks.Count}");
+            // Sort phases by this bucket's avg descending; keep top 5
+            var topPhases = new List<(string name, double avg, double max)>();
+            foreach (var name in PhaseNames) topPhases.Add((name, phaseAvg[name], phaseMax[name]));
+            topPhases.Sort((a, b) => b.avg.CompareTo(a.avg));
 
-        // Bucket spikes by 100ms windows to spot "waves"
-        DebugLog.Log(ScenarioLog, "--- Spike density per 0.25s bucket (post-summon) ---");
-        var buckets = new Dictionary<int, (int n, double total, double max)>();
-        foreach (var (t, ms) in _postSummonTicks)
-        {
-            if (ms <= threshold) continue;
-            int bkt = (int)(t * 4); // 0.25s buckets
-            if (!buckets.TryGetValue(bkt, out var b)) b = (0, 0, 0);
-            buckets[bkt] = (b.n + 1, b.total + ms, MathF.Max((float)b.max, (float)ms));
-        }
-        foreach (var bkt in SortedKeys(buckets))
-        {
-            var (n, total, max) = buckets[bkt];
-            float start = bkt * 0.25f;
-            DebugLog.Log(ScenarioLog, $"  +{start:F2}s..+{start+0.25f:F2}s  n={n} sum={total:F2}ms max={max:F2}ms");
+            string topStr = "";
+            for (int k = 0; k < 5 && k < topPhases.Count; k++)
+            {
+                var p = topPhases[k];
+                if (p.avg < 0.01) break;
+                topStr += $"  {p.name}={p.avg:F2}/{p.max:F2}";
+            }
+            DebugLog.Log(ScenarioLog,
+                $"+{start:F2}s..+{start+BucketS:F2}s  tick={tickAvg:F2}/{tickMax:F2}ms  top(avg/max):{topStr}");
         }
 
         return 0;
@@ -137,6 +170,6 @@ public class SummonLagScenario : ScenarioBase
 
     private static double Average(List<double> xs) { double s = 0; foreach (var x in xs) s += x; return xs.Count > 0 ? s / xs.Count : 0; }
     private static double Max(List<double> xs) { double m = 0; foreach (var x in xs) if (x > m) m = x; return m; }
-    private static IEnumerable<int> SortedKeys(Dictionary<int, (int, double, double)> d)
+    private static IEnumerable<int> SortedKeys<TV>(Dictionary<int, TV> d)
     { var a = new List<int>(d.Keys); a.Sort(); return a; }
 }

@@ -181,11 +181,27 @@ public class Simulation
     /// Tick; readable from scenarios/tests to chart per-tick cost. Not intended to
     /// drive game logic — it's a diagnostic probe.</summary>
     public double LastTickMs { get; private set; }
+
+    /// <summary>Per-subsystem wall-clock milliseconds for the most recent Tick. Keys
+    /// are phase names: "quadtree", "ai", "movement", "physics", "horde_tick",
+    /// "horde_states", "combat", "projectiles", "lightning", "clouds", "corpses",
+    /// "misc". Diagnostic only.</summary>
+    public readonly Dictionary<string, double> LastPhaseMs = new();
     private readonly System.Diagnostics.Stopwatch _tickStopwatch = new();
+    private readonly System.Diagnostics.Stopwatch _phaseStopwatch = new();
+
+    private void PhaseStart() => _phaseStopwatch.Restart();
+    private void PhaseEnd(string name)
+    {
+        _phaseStopwatch.Stop();
+        LastPhaseMs[name] = _phaseStopwatch.Elapsed.TotalMilliseconds;
+    }
 
     public void Tick(float dt)
     {
         _tickStopwatch.Restart();
+        Necroking.World.Pathfinder.DiagCallsThisTick = 0;
+        Necroking.World.Pathfinder.DiagTotalMsThisTick = 0;
         _frameNumber++;
         _gameTime += dt;
         _damageEvents.Clear();
@@ -232,27 +248,29 @@ public class Simulation
         }
 
         // Rebuild quadtree
-        RebuildQuadtree();
+        PhaseStart(); RebuildQuadtree(); PhaseEnd("quadtree");
 
         // Tick potion effects before AI so poison HitReacting is visible to flee logic
+        PhaseStart();
         PotionSystem.TickPotionEffects(_units, _damageEvents, dt);
+        PhaseEnd("potions");
 
         // Horde
-        _horde.Tick(dt, _units, _necromancerIdx);
+        PhaseStart(); _horde.Tick(dt, _units, _necromancerIdx); PhaseEnd("horde_tick");
 
         // Core subsystems
-        UpdateAI(dt);
+        PhaseStart(); UpdateAI(dt); PhaseEnd("ai");
 
         // Clear HitReacting AFTER AI has read it — this ensures flags set between frames
         // (e.g. spell AoE from Game1.Update) persist until the next AI tick sees them
         for (int i = 0; i < _units.Count; i++)
             _units[i].HitReacting = false;
 
-        UpdateMovement(dt);         // Skips InPhysics units
-        _physics.Update(dt, _units); // 2.5D impulse physics (flying units, collisions, landing)
-        _horde.UpdateStates(_units, _quadtree, _necromancerIdx, dt);
-        UpdateFacingAngles(dt);
-        UpdateCombat(dt);
+        PhaseStart(); UpdateMovement(dt); PhaseEnd("movement");
+        PhaseStart(); _physics.Update(dt, _units); PhaseEnd("physics");
+        PhaseStart(); _horde.UpdateStates(_units, _quadtree, _necromancerIdx, dt); PhaseEnd("horde_states");
+        PhaseStart(); UpdateFacingAngles(dt); PhaseEnd("facing");
+        PhaseStart(); UpdateCombat(dt); PhaseEnd("combat");
 
         // Tick pending zombie raises
         PotionSystem.TickZombieRaises(_pendingZombieRaises, dt, (defId, pos, facing, scale) =>
@@ -286,6 +304,7 @@ public class Simulation
         });
 
         // Projectiles (with quadtree collision, pass corpses for potion corpse-targeting)
+        PhaseStart();
         _projectiles.Update(dt, _units, _quadtree, _corpses);
         foreach (var hit in _projectiles.Hits)
         {
@@ -341,8 +360,10 @@ public class Simulation
                     GameSystems.DamageType.Physical, GameSystems.DamageFlags.ArmorNegating,
                     _damageEvents);
         }
+        PhaseEnd("projectiles");
 
         // Lightning
+        PhaseStart();
         var lightningDmg = new List<LightningDamage>();
         _lightning.Update(dt, lightningDmg, _quadtree, _units);
         foreach (var ld in lightningDmg)
@@ -350,18 +371,21 @@ public class Simulation
                 DamageSystem.Apply(_units, ld.UnitIdx, ld.Damage,
                     GameSystems.DamageType.Physical, GameSystems.DamageFlags.ArmorNegating,
                     _damageEvents);
+        PhaseEnd("lightning");
 
         // Poison clouds
+        PhaseStart();
         _poisonClouds.Update(dt, _units, _quadtree, _corpses, _damageEvents,
             _gameData?.Buffs);
+        PhaseEnd("clouds");
 
         // Remove dead units
+        PhaseStart();
         RemoveDeadUnits();
-
         // Update corpses
         UpdateCorpses(dt);
-
         _flowFields.EvictIfNeeded();
+        PhaseEnd("cleanup");
 
         _tickStopwatch.Stop();
         LastTickMs = _tickStopwatch.Elapsed.TotalMilliseconds;
@@ -420,7 +444,12 @@ public class Simulation
             dayFraction = (_gameTime % dayCycleLength) / dayCycleLength;
             isNight = dayFraction >= 0.5f;
         }
+        PhaseStart();
         AI.AwarenessSystem.Update(_units, dt, (int)_frameNumber);
+        PhaseEnd("ai_awareness");
+
+        double archetypeMs = 0, legacyMs = 0;
+        var subSw = new System.Diagnostics.Stopwatch();
 
         for (int i = 0; i < _units.Count; i++)
         {
@@ -432,6 +461,7 @@ public class Simulation
             // (PlayerControlled units are handled in the legacy switch below)
             if (_units[i].Archetype > 0 && _units[i].AI != AIBehavior.PlayerControlled)
             {
+                subSw.Restart();
                 var handler = AI.ArchetypeRegistry.Get(_units[i].Archetype);
                 if (handler != null)
                 {
@@ -445,8 +475,11 @@ public class Simulation
                     };
                     handler.Update(ref ctx);
                 }
+                subSw.Stop();
+                archetypeMs += subSw.Elapsed.TotalMilliseconds;
                 continue;
             }
+            subSw.Restart(); // legacy switch from here down
 
             // Legacy AI: FleeWhenHit and wolf AIs handle their own combat/disengage logic
             bool selfManagesCombat = _units[i].AI == AIBehavior.FleeWhenHit
@@ -1024,7 +1057,14 @@ public class Simulation
                     break;
                 }
             }
+            subSw.Stop();
+            legacyMs += subSw.Elapsed.TotalMilliseconds;
         }
+
+        LastPhaseMs["ai_archetype"] = archetypeMs;
+        LastPhaseMs["ai_legacy"] = legacyMs;
+        LastPhaseMs["pathfinder"] = Necroking.World.Pathfinder.DiagTotalMsThisTick;
+        LastPhaseMs["pathfinder_calls"] = Necroking.World.Pathfinder.DiagCallsThisTick;
     }
 
     // --- Movement (with ORCA) ---
