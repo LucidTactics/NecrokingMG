@@ -103,15 +103,28 @@ public class Unit
     public byte WolfPhase;
     public float WolfPhaseTimer;
 
-    // Jumping
+    // Jumping — scripted voluntary jump (JumpSystem). Z holds airborne height.
+    // JumpPhase drives the state machine: 0=None, 1=TakeoffApproach, 2=Airborne,
+    // 3=Landing (in air, JumpLand anim playing), 4=Recovery (on ground, JumpLand finishing).
     public bool Jumping;
-    public float JumpTimer;
-    public float JumpDuration = 1f;
-    public Vec2 JumpStartPos;
-    public Vec2 JumpEndPos;
-    public bool JumpIsAttack;
+    public byte JumpPhase;
+    public byte JumpKind;          // 0=Generic, 1=NecromancerAttack, 2=Pounce
+    public float JumpTimer;        // airborne elapsed time (set at liftoff)
+    public float JumpDuration = 1f;// airborne total time (set at liftoff)
+    public Vec2 JumpStartPos;      // captured at liftoff
+    public Vec2 JumpEndPos;        // locked landing position
+    public float JumpArcPeak = 2f; // parabola peak height
     public bool JumpAttackFired;
-    public float JumpHeight;
+    public uint JumpPounceTargetId = GameConstants.InvalidUnit;
+    // Anim playback speed during the jump (1 = normal). Used to compress the takeoff /
+    // loop / land anims when the required flight time (dist / MaxSpeed) is shorter
+    // than the baseline anim ms timings. 2.0 = anims play twice as fast, etc.
+    public float JumpPlaybackSpeed = 1f;
+
+    // Knockdown (weapon-bonus-driven). Tracks the per-second recovery-roll timer.
+    // First check fires KnockdownCheckInitialDelay (2s) after knockdown begins,
+    // then every KnockdownCheckInterval (1s). Value > 0 means a check is pending.
+    public float KnockdownCheckTimer;
 
     public float CollisionHeight = 1.0f;
 

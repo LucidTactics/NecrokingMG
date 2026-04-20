@@ -98,6 +98,10 @@ public class CombatSettings
     [JsonPropertyName("accelHalfTime")] public float AccelHalfTime { get; set; } = 1.2f;
     [JsonPropertyName("accel80Time")] public float Accel80Time { get; set; } = 3.0f;
     [JsonPropertyName("accelFullTime")] public float AccelFullTime { get; set; } = 6.0f;
+
+    /// <summary>Duration of one round in seconds. Per-weapon attack cycle =
+    /// CooldownRounds × RoundDuration. Also used by rounds-based status effects.</summary>
+    [JsonPropertyName("roundDuration")] public float RoundDuration { get; set; } = 3.0f;
 }
 
 public class HordeSettings

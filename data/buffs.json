@@ -689,6 +689,11 @@
           "type": "Set",
           "stat": "CombatSpeed",
           "value": 0
+        },
+        {
+          "type": "Multiply",
+          "stat": "Defense",
+          "value": 0.3
         }
       ],
       "maxStacks": 1,

@@ -40,7 +40,7 @@ public class AnimationData
 public class UnitSpriteData
 {
     public string UnitName = "";
-    public Dictionary<string, AnimationData> Animations = new();
+    public Dictionary<string, AnimationData> Animations = new(StringComparer.OrdinalIgnoreCase);
 
     public AnimationData? GetAnim(string name) =>
         Animations.TryGetValue(name, out var a) ? a : null;

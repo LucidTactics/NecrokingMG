@@ -106,7 +106,8 @@
     "meleeRange": 0.8,
     "accelHalfTime": 1.2,
     "accel80Time": 3,
-    "accelFullTime": 6
+    "accelFullTime": 6,
+    "roundDuration": 3
   },
   "fogOfWar": {
     "mode": 2,

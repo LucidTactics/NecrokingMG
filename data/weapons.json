@@ -15,7 +15,13 @@
       "precision": 0,
       "projectileType": "Arrow",
       "bonuses": [],
-      "anim": null
+      "anim": null,
+      "archetype": "None",
+      "cooldownRounds": 1,
+      "pounceMinRange": 3,
+      "pounceMaxRange": 8,
+      "pounceArcPeak": 2,
+      "pounceAirSpeed": 6
     },
     {
       "id": "spear",
@@ -32,7 +38,13 @@
       "precision": 0,
       "projectileType": "Arrow",
       "bonuses": [],
-      "anim": null
+      "anim": null,
+      "archetype": "None",
+      "cooldownRounds": 1,
+      "pounceMinRange": 3,
+      "pounceMaxRange": 8,
+      "pounceArcPeak": 2,
+      "pounceAirSpeed": 6
     },
     {
       "id": "spear_copy",
@@ -49,7 +61,13 @@
       "precision": 0,
       "projectileType": "Arrow",
       "bonuses": [],
-      "anim": null
+      "anim": null,
+      "archetype": "None",
+      "cooldownRounds": 1,
+      "pounceMinRange": 3,
+      "pounceMaxRange": 8,
+      "pounceArcPeak": 2,
+      "pounceAirSpeed": 6
     },
     {
       "id": "hook",
@@ -66,7 +84,13 @@
       "precision": 0,
       "projectileType": "Arrow",
       "bonuses": [],
-      "anim": null
+      "anim": null,
+      "archetype": "None",
+      "cooldownRounds": 1,
+      "pounceMinRange": 3,
+      "pounceMaxRange": 8,
+      "pounceArcPeak": 2,
+      "pounceAirSpeed": 6
     },
     {
       "id": "club",
@@ -83,7 +107,13 @@
       "precision": 0,
       "projectileType": "Arrow",
       "bonuses": [],
-      "anim": null
+      "anim": null,
+      "archetype": "None",
+      "cooldownRounds": 1,
+      "pounceMinRange": 3,
+      "pounceMaxRange": 8,
+      "pounceArcPeak": 2,
+      "pounceAirSpeed": 6
     },
     {
       "id": "shortsword",
@@ -100,7 +130,13 @@
       "precision": 0,
       "projectileType": "Arrow",
       "bonuses": [],
-      "anim": null
+      "anim": null,
+      "archetype": "None",
+      "cooldownRounds": 1,
+      "pounceMinRange": 3,
+      "pounceMaxRange": 8,
+      "pounceArcPeak": 2,
+      "pounceAirSpeed": 6
     },
     {
       "id": "lance",
@@ -117,7 +153,13 @@
       "precision": 0,
       "projectileType": "Arrow",
       "bonuses": [],
-      "anim": null
+      "anim": null,
+      "archetype": "None",
+      "cooldownRounds": 1,
+      "pounceMinRange": 3,
+      "pounceMaxRange": 8,
+      "pounceArcPeak": 2,
+      "pounceAirSpeed": 6
     },
     {
       "id": "dagger",
@@ -134,7 +176,13 @@
       "precision": 0,
       "projectileType": "Arrow",
       "bonuses": [],
-      "anim": null
+      "anim": null,
+      "archetype": "None",
+      "cooldownRounds": 1,
+      "pounceMinRange": 3,
+      "pounceMaxRange": 8,
+      "pounceArcPeak": 2,
+      "pounceAirSpeed": 6
     },
     {
       "id": "longbow",
@@ -151,7 +199,13 @@
       "precision": 10,
       "projectileType": "Arrow",
       "bonuses": [],
-      "anim": "Ranged1"
+      "anim": "Ranged1",
+      "archetype": "None",
+      "cooldownRounds": 1,
+      "pounceMinRange": 3,
+      "pounceMaxRange": 8,
+      "pounceArcPeak": 2,
+      "pounceAirSpeed": 6
     },
     {
       "id": "weapon_8",
@@ -168,7 +222,13 @@
       "precision": 0,
       "projectileType": "Arrow",
       "bonuses": [],
-      "anim": null
+      "anim": null,
+      "archetype": "None",
+      "cooldownRounds": 1,
+      "pounceMinRange": 3,
+      "pounceMaxRange": 8,
+      "pounceArcPeak": 2,
+      "pounceAirSpeed": 6
     },
     {
       "id": "weapon_10",
@@ -185,7 +245,13 @@
       "precision": 0,
       "projectileType": "Arrow",
       "bonuses": [],
-      "anim": null
+      "anim": null,
+      "archetype": "None",
+      "cooldownRounds": 1,
+      "pounceMinRange": 3,
+      "pounceMaxRange": 8,
+      "pounceArcPeak": 2,
+      "pounceAirSpeed": 6
     },
     {
       "id": "weapon_11",
@@ -202,7 +268,13 @@
       "precision": 0,
       "projectileType": "Arrow",
       "bonuses": [],
-      "anim": null
+      "anim": null,
+      "archetype": "None",
+      "cooldownRounds": 1,
+      "pounceMinRange": 3,
+      "pounceMaxRange": 8,
+      "pounceArcPeak": 2,
+      "pounceAirSpeed": 6
     },
     {
       "id": "weapon_174944",
@@ -219,7 +291,36 @@
       "precision": 0,
       "projectileType": "Arrow",
       "bonuses": [],
-      "anim": "AttackBite"
+      "anim": "AttackBite",
+      "archetype": "None",
+      "cooldownRounds": 1,
+      "pounceMinRange": 3,
+      "pounceMaxRange": 8,
+      "pounceArcPeak": 2,
+      "pounceAirSpeed": 6
+    },
+    {
+      "id": "wolf_pounce",
+      "name": "Pounce Bite",
+      "damage": 2,
+      "attackBonus": 0,
+      "defenseBonus": 0,
+      "length": 1,
+      "isRanged": false,
+      "range": 0,
+      "directRange": 0,
+      "cooldown": 0,
+      "rangedDamage": 0,
+      "precision": 0,
+      "projectileType": "Arrow",
+      "bonuses": [],
+      "anim": "AttackBite",
+      "archetype": "Pounce",
+      "cooldownRounds": 1,
+      "pounceMinRange": 3,
+      "pounceMaxRange": 8,
+      "pounceArcPeak": 2,
+      "pounceAirSpeed": 6
     },
     {
       "id": "weapon_181921",
@@ -236,7 +337,61 @@
       "precision": 0,
       "projectileType": "Arrow",
       "bonuses": [],
-      "anim": "Attack2"
+      "anim": "Attack2",
+      "archetype": "None",
+      "cooldownRounds": 1,
+      "pounceMinRange": 3,
+      "pounceMaxRange": 8,
+      "pounceArcPeak": 2,
+      "pounceAirSpeed": 6
+    },
+    {
+      "id": "weapon_223651",
+      "name": "Bite",
+      "damage": 3,
+      "attackBonus": 2,
+      "defenseBonus": -1,
+      "length": 1,
+      "isRanged": false,
+      "range": 0,
+      "directRange": 0,
+      "cooldown": 0,
+      "rangedDamage": 0,
+      "precision": 0,
+      "projectileType": "Arrow",
+      "bonuses": [],
+      "anim": null,
+      "archetype": "None",
+      "cooldownRounds": 1,
+      "pounceMinRange": 3,
+      "pounceMaxRange": 8,
+      "pounceArcPeak": 2,
+      "pounceAirSpeed": 6
+    },
+    {
+      "id": "weapon_223651_copy",
+      "name": "Pounce",
+      "damage": -5,
+      "attackBonus": 4,
+      "defenseBonus": 0,
+      "length": 1,
+      "isRanged": false,
+      "range": 0,
+      "directRange": 0,
+      "cooldown": 0,
+      "rangedDamage": 0,
+      "precision": 0,
+      "projectileType": "Arrow",
+      "bonuses": [
+        "Knockdown"
+      ],
+      "anim": null,
+      "archetype": "Pounce",
+      "cooldownRounds": 3,
+      "pounceMinRange": 3,
+      "pounceMaxRange": 8,
+      "pounceArcPeak": 3,
+      "pounceAirSpeed": 6
     }
   ]
 }

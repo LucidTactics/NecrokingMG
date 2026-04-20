@@ -2645,7 +2645,7 @@
       "stats": {
         "maxHP": 10,
         "strength": 4,
-        "attack": 3,
+        "attack": 4,
         "defense": 9,
         "magicResist": 2,
         "encumbrance": 2,
@@ -2696,7 +2696,7 @@
       "stats": {
         "maxHP": 10,
         "strength": 4,
-        "attack": 3,
+        "attack": 4,
         "defense": 9,
         "magicResist": 2,
         "encumbrance": 2,
@@ -2720,12 +2720,7 @@
       "accel80Time": null,
       "accelFullTime": null,
       "weaponPoints": {},
-      "animTimings": {
-        "Idle": {
-          "frameDurationsMs": [],
-          "effectTimeMs": 1
-        }
-      },
+      "animTimings": {},
       "archetype": "HordeMinion",
       "detectionRange": 10,
       "detectionBreakRange": 20,
@@ -2816,8 +2811,8 @@
       "maxMana": 0,
       "manaRegen": 0,
       "weapons": [
-        "weapon_174944",
-        "weapon_181921"
+        "weapon_223651",
+        "weapon_223651_copy"
       ],
       "armors": [],
       "shields": [],
@@ -2880,8 +2875,8 @@
       "maxMana": 0,
       "manaRegen": 0,
       "weapons": [
-        "weapon_174944",
-        "weapon_181921"
+        "weapon_223651",
+        "weapon_223651_copy"
       ],
       "armors": [],
       "shields": [],
@@ -2920,7 +2915,7 @@
       "stats": {
         "maxHP": 15,
         "strength": 7,
-        "attack": 4,
+        "attack": 6,
         "defense": 8,
         "magicResist": 3,
         "encumbrance": 2,
@@ -2972,7 +2967,7 @@
       "stats": {
         "maxHP": 15,
         "strength": 7,
-        "attack": 4,
+        "attack": 6,
         "defense": 8,
         "magicResist": 3,
         "encumbrance": 2,

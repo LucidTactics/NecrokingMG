@@ -52,6 +52,11 @@ public class WolfPackHandler : IArchetypeHandler
     private const float SleepDetectionScale = 0.6f;
     private const float StandupDuration = 1.0f;
 
+    // Pounce is no longer AI-driven — it's weapon-archetype-driven and handled
+    // centrally in Simulation.TryInitiatePounce for any unit whose primary weapon
+    // has the Pounce archetype. WolfPackHandler just respects JumpPhase in its
+    // engagement loop.
+
     public void OnSpawn(ref AIContext ctx)
     {
         ctx.Units[ctx.UnitIndex].SpawnPosition = ctx.MyPos;
@@ -297,12 +302,16 @@ public class WolfPackHandler : IArchetypeHandler
         {
             case FightMoveToEngage:
             {
+                // If the wolf is in any jump phase (pounce takeoff/airborne/landing/recovery),
+                // JumpSystem has control — don't drive AI movement.
+                if (ctx.Units[ctx.UnitIndex].JumpPhase != 0) break;
+
                 SubroutineSteps.MoveToTarget(ref ctx);
                 int targetIdx = SubroutineSteps.ResolveTarget(ref ctx);
                 if (targetIdx >= 0)
                 {
-                    float attackRange = SubroutineSteps.GetMeleeRange(ref ctx, targetIdx);
                     float dist = (ctx.Units[targetIdx].Position - ctx.MyPos).Length();
+                    float attackRange = SubroutineSteps.GetMeleeRange(ref ctx, targetIdx);
                     if (dist <= attackRange)
                     {
                         ctx.Subroutine = FightExecuteAttack;

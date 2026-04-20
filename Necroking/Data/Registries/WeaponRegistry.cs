@@ -25,6 +25,20 @@ public class WeaponDef : IHasId
     /// and "Attack1" for melee weapons. Looked up via AnimController fallback chain.
     /// </summary>
     [JsonPropertyName("anim")] public string? AnimName { get; set; }
+
+    /// <summary>Attack archetype — "None" (default melee) or "Pounce". Weapons have
+    /// exactly one archetype (unlike bonuses, which can stack).</summary>
+    [JsonPropertyName("archetype")] public string Archetype { get; set; } = "None";
+
+    /// <summary>Cooldown in rounds (a round = GameSettings.Combat.RoundDuration seconds).
+    /// 1 round default. Cycle time = CooldownRounds × RoundDuration.</summary>
+    [JsonPropertyName("cooldownRounds")] public int CooldownRounds { get; set; } = 1;
+
+    // --- Pounce archetype parameters (used only when Archetype == "Pounce") ---
+    [JsonPropertyName("pounceMinRange")] public float PounceMinRange { get; set; } = 3f;
+    [JsonPropertyName("pounceMaxRange")] public float PounceMaxRange { get; set; } = 8f;
+    [JsonPropertyName("pounceArcPeak")] public float PounceArcPeak { get; set; } = 2f;
+    [JsonPropertyName("pounceAirSpeed")] public float PounceAirSpeed { get; set; } = 6f;
 }
 
 public class WeaponRegistry : RegistryBase<WeaponDef>

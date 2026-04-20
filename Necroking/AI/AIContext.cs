@@ -1,6 +1,8 @@
+using System.Collections.Generic;
 using Necroking.Core;
 using Necroking.Data;
 using Necroking.Movement;
+using Necroking.Render;
 
 namespace Necroking.AI;
 
@@ -25,6 +27,8 @@ public ref struct AIContext
     public World.EnvironmentSystem? EnvSystem;
     public GameSystems.ProjectileManager? Projectiles;
     public GameSystems.MagicGlyphSystem? MagicGlyphs;
+    // Anim metadata for effect-time lookups (used by AI to time things like pounce takeoffs).
+    public Dictionary<string, AnimationMeta>? AnimMeta;
 
     // Game clock
     public float GameTime;          // total elapsed seconds

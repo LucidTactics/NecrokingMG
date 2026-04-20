@@ -340,6 +340,18 @@ public class Game1 : Microsoft.Xna.Framework.Game
         }
         LogTiming($"Atlases GPU upload: {atlasCount} ({string.Join(", ", AtlasDefs.Names)})");
 
+        // Load animation metadata from all atlas animationmeta files. Done in Initialize so
+        // the dict is populated for BOTH main-game flow (StartGame) and scenario flow
+        // (StartScenario) — AI needs effect_time lookups for pounce timing etc.
+        foreach (string name in AtlasDefs.Names)
+        {
+            string metaPath = GamePaths.Resolve($"assets/Sprites/{name}.animationmeta");
+            if (File.Exists(metaPath))
+                AnimMetaLoader.Load(metaPath, _animMeta);
+        }
+        LogTiming($"Animation metadata: {_animMeta.Count} entries");
+        _sim.SetAnimMeta(_animMeta);
+
         base.Initialize();
     }
 
@@ -374,14 +386,8 @@ public class Game1 : Microsoft.Xna.Framework.Game
         }
         LogTiming($"Flipbooks loaded: {_flipbooks.Count}");
 
-        // Load animation metadata from all atlas spritemeta files
-        foreach (string name in AtlasDefs.Names)
-        {
-            string metaPath = GamePaths.Resolve($"assets/Sprites/{name}.animationmeta");
-            if (File.Exists(metaPath))
-                AnimMetaLoader.Load(metaPath, _animMeta);
-        }
-        LogTiming($"Animation metadata: {_animMeta.Count} entries");
+        // Animation metadata is loaded once in Initialize() and reused across
+        // main-game and scenario flows.
 
         // Load animations.json timing overrides (stub)
         if (File.Exists(GamePaths.Resolve(GamePaths.AnimationsJson)))
@@ -1830,20 +1836,13 @@ public class Game1 : Microsoft.Xna.Framework.Game
             if (_input.WasKeyPressed(Keys.Space) && necroIdx >= 0)
             {
                 var mu = _sim.UnitsMut;
-                bool canJump = mu[necroIdx].Alive && !mu[necroIdx].Jumping
+                bool canJump = mu[necroIdx].Alive && mu[necroIdx].JumpPhase == 0
                     && !mu[necroIdx].Incap.IsLocked && !_pendingSpell.Active;
                 if (canJump)
                 {
                     float facingRad = mu[necroIdx].FacingAngle * MathF.PI / 180f;
                     var facingDir = new Vec2(MathF.Cos(facingRad), MathF.Sin(facingRad));
-                    mu[necroIdx].Jumping = true;
-                    mu[necroIdx].JumpTimer = 0f;
-                    mu[necroIdx].JumpHeight = 0f;
-                    mu[necroIdx].JumpStartPos = mu[necroIdx].Position;
-                    mu[necroIdx].JumpEndPos = mu[necroIdx].Position + facingDir * 4f;
-                    mu[necroIdx].JumpIsAttack = true;
-                    mu[necroIdx].JumpAttackFired = false;
-                    mu[necroIdx].JumpDuration = 1f;
+                    JumpSystem.BeginJumpAttack(mu, necroIdx, mu[necroIdx].Position + facingDir * 4f);
                 }
             }
 
@@ -2822,6 +2821,18 @@ public class Game1 : Microsoft.Xna.Framework.Game
         return -1;
     }
 
+    /// <summary>Per-unit attack cycle in seconds: weapon.CooldownRounds × RoundDuration.
+    /// Falls back to 1 round when the unit has no melee weapon defined.</summary>
+    private float ComputeWeaponCycleSeconds(int unitIdx, int weaponIdx)
+    {
+        float round = _gameData.Settings.Combat.RoundDuration;
+        int cdRounds = 1;
+        var stats = _sim.Units[unitIdx].Stats;
+        if (weaponIdx >= 0 && weaponIdx < stats.MeleeWeapons.Count)
+            cdRounds = Math.Max(1, stats.MeleeWeapons[weaponIdx].CooldownRounds);
+        return cdRounds * round;
+    }
+
     /// <summary>
     /// Map a pending attack's chosen weapon to an AnimState. Reads the weapon's
     /// AnimName field; falls back to "Ranged1" for ranged and "Attack1" for melee.
@@ -3039,54 +3050,14 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 _unitAnims[uid] = animData;
             }
 
-            // --- Jump state machine ---
-            if (_sim.Units[i].Jumping)
+            // --- Jump state machine (voluntary jumps: necromancer attack, wolf pounce) ---
+            if (_sim.Units[i].JumpPhase != 0)
             {
-                var mu = _sim.UnitsMut;
-                mu[i].JumpTimer += dt;
-                float t = MathF.Min(mu[i].JumpTimer / mu[i].JumpDuration, 1f);
-                mu[i].Position = mu[i].JumpStartPos + (mu[i].JumpEndPos - mu[i].JumpStartPos) * t;
-                mu[i].Velocity = Vec2.Zero;
-                mu[i].JumpHeight = t >= 1f ? 0f : 4f * 0.8f * t * (1f - t);
-
-                float takeoffEnd = mu[i].JumpDuration * 0.35f;
-                float landStart = mu[i].JumpDuration - 0.25f;
-                var current = animData.Ctrl.CurrentState;
-                bool isAttack = mu[i].JumpIsAttack;
-                var midAnim = isAttack ? AnimState.JumpAttackSetup : AnimState.JumpLoop;
-                var landAnim = isAttack ? AnimState.JumpAttackHit : AnimState.JumpLand;
-
-                if (mu[i].JumpTimer < takeoffEnd)
+                if (JumpSystem.TickUnit(dt, _sim.UnitsMut, i, animData.Ctrl, _sim))
                 {
-                    if (current != AnimState.JumpTakeoff) animData.Ctrl.ForceState(AnimState.JumpTakeoff);
+                    _unitAnims[uid] = animData;
+                    continue;
                 }
-                else if (mu[i].JumpTimer < landStart)
-                {
-                    if (current != midAnim) animData.Ctrl.ForceState(midAnim);
-                }
-                else
-                {
-                    if (current != landAnim && t < 1f) animData.Ctrl.ForceState(landAnim);
-                    if (isAttack && t >= 1f && !mu[i].JumpAttackFired)
-                    {
-                        mu[i].JumpAttackFired = true;
-                        _sim.ResolvePendingAttack(i); // reuse melee resolution
-                    }
-                    if (t >= 1f && current != landAnim)
-                    {
-                        mu[i].Jumping = false;
-                        mu[i].JumpHeight = 0f;
-                    }
-                }
-                if (mu[i].JumpTimer > mu[i].JumpDuration + 1.5f)
-                {
-                    mu[i].Jumping = false;
-                    mu[i].JumpHeight = 0f;
-                    animData.Ctrl.ForceState(AnimState.Idle);
-                }
-                animData.Ctrl.Update(dt);
-                _unitAnims[uid] = animData;
-                continue;
             }
 
             // Force out of work anims if interaction was cancelled (WASD override)
@@ -3219,25 +3190,29 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 // AI handlers set RoutineAnim, combat/damage sets OverrideAnim.
                 // AnimResolver picks the winner based on priority.
 
-                // Combat engine overrides: pending attacks get priority 2 override
+                // Combat engine overrides: pending attacks get priority 2 override.
+                // Attack anim plays at its natural ms timing unless it won't fit in
+                // the weapon's cycle (CooldownRounds × RoundDuration), in which case
+                // it's compressed to fit.
                 if (!_sim.Units[i].PendingAttack.IsNone)
                 {
                     var atkState = ResolvePendingAttackAnim(_sim.Units[i].Stats,
                         _sim.Units[i].PendingWeaponIdx, _sim.Units[i].PendingWeaponIsRanged,
                         _sim.Units[i].Archetype);
-                    float lockout = _gameData.Settings.Combat.PostAttackLockout;
                     float animDur = animData.Ctrl.GetTotalDurationSeconds(atkState);
-                    float spd = (animDur > 0f && lockout > 0f) ? MathF.Max(1f, animDur / lockout) : 1f;
+                    float cycle = ComputeWeaponCycleSeconds(i, _sim.Units[i].PendingWeaponIdx);
+                    float spd = (animDur > cycle && cycle > 0f) ? animDur / cycle : 1f;
                     _sim.UnitsMut[i].OverrideAnim = AnimRequest.Combat(atkState, spd);
                 }
                 else if (_sim.Units[i].InCombat && _sim.Units[i].AttackCooldown > 0f)
                 {
-                    // Pre-roll: start attack animation early
+                    // Pre-roll: start attack animation early so its effect_time lines up
+                    // with the end of the cooldown.
                     float cooldownRemaining = _sim.Units[i].AttackCooldown;
                     float effectTime = animData.Ctrl.GetEffectTimeSeconds(AnimState.Attack1);
                     float animDur = animData.Ctrl.GetTotalDurationSeconds(AnimState.Attack1);
-                    float lockout = _gameData.Settings.Combat.PostAttackLockout;
-                    float spd = (animDur > 0f && lockout > 0f) ? MathF.Max(1f, animDur / lockout) : 1f;
+                    float cycle = ComputeWeaponCycleSeconds(i, 0);
+                    float spd = (animDur > cycle && cycle > 0f) ? animDur / cycle : 1f;
                     float preRollTime = effectTime > 0f ? effectTime / spd : 0f;
                     if (preRollTime > 0f && cooldownRemaining <= preRollTime)
                         _sim.UnitsMut[i].OverrideAnim = AnimRequest.Combat(AnimState.Attack1, spd);
@@ -3251,6 +3226,16 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 animData.Ctrl.SetReversePlayback(backward2);
 
                 AnimResolver.Resolve(_sim.UnitsMut[i], animData.Ctrl, dt);
+
+                // Locomotion playback scaling — applied after Resolve so we know the
+                // final state the controller landed on. Re-applied every frame because
+                // AnimController.SwitchState resets _playbackSpeed to 1.0 on transitions.
+                {
+                    float locoSpeed = _sim.Units[i].Velocity.Length();
+                    float locoBase = _sim.Units[i].Stats.CombatSpeed;
+                    animData.Ctrl.PlaybackSpeed = LocomotionScaling.ComputeLocomotionPlayback(
+                        animData.Ctrl, animData.Ctrl.CurrentState, locoSpeed, locoBase);
+                }
                 animData.Ctrl.Update(dt);
             }
             else
@@ -3291,8 +3276,8 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 float cooldownRemaining = _sim.Units[i].AttackCooldown;
                 float effectTime = animData.Ctrl.GetEffectTimeSeconds(AnimState.Attack1);
                 float animDur = animData.Ctrl.GetTotalDurationSeconds(AnimState.Attack1);
-                float lockout = _gameData.Settings.Combat.PostAttackLockout;
-                float speed = (animDur > 0f && lockout > 0f) ? MathF.Max(1f, animDur / lockout) : 1f;
+                float cycle = ComputeWeaponCycleSeconds(i, 0);
+                float speed = (animDur > cycle && cycle > 0f) ? animDur / cycle : 1f;
                 float preRollTime = effectTime > 0f ? effectTime / speed : 0f;
 
                 if (preRollTime > 0f && cooldownRemaining <= preRollTime)
@@ -3329,12 +3314,13 @@ public class Game1 : Microsoft.Xna.Framework.Game
             bool movingBackward = vel.LengthSq() > 0.1f && vel.Normalized().Dot(facingDir) < -0.3f;
             animData.Ctrl.SetReversePlayback(movingBackward);
 
-            if (targetState == AnimState.Carry)
+            // Locomotion playback scaling (Walk/Jog/Run/Carry) — keeps foot-cycle
+            // frequency matched to actual velocity so anims don't skate.
             {
-                float speed = _sim.Units[i].Velocity.Length();
-                float baseSpeed = _sim.Units[i].Stats.CombatSpeed;
-                float speedRatio = baseSpeed > 0f ? speed / baseSpeed : 0f;
-                animData.Ctrl.PlaybackSpeed = Math.Clamp(speedRatio, 0f, 1.5f);
+                float locoSpeed = _sim.Units[i].Velocity.Length();
+                float locoBase = _sim.Units[i].Stats.CombatSpeed;
+                animData.Ctrl.PlaybackSpeed = LocomotionScaling.ComputeLocomotionPlayback(
+                    animData.Ctrl, targetState, locoSpeed, locoBase);
             }
             if (targetState == AnimState.Attack1 && animData.Ctrl.CurrentState != AnimState.Attack1)
             {
@@ -3470,7 +3456,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
                                     _sim.Units[i].Position.X + tipDx,
                                     _sim.Units[i].Position.Y);
 
-                                float unitHeight = _sim.Units[i].JumpHeight;
+                                float unitHeight = _sim.Units[i].Z;
                                 mu[i].EffectSpawnHeight = unitHeight - wpf.Tip.Y * worldScale;
 
                                 foundWeaponTip = true;
@@ -3519,7 +3505,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         float worldH = (unitDef.SpriteWorldHeight > 0 ? unitDef.SpriteWorldHeight : 1.8f)
                        * _sim.Units[unitIdx].SpriteScale;
         float worldScale = worldH / animData.RefFrameHeight;
-        float unitHeight = _sim.Units[unitIdx].JumpHeight;
+        float unitHeight = _sim.Units[unitIdx].Z;
 
         result.HiltWorld = new Vec2(
             _sim.Units[unitIdx].Position.X + wpf.Hilt.X * worldScale * flipMul,
@@ -4808,7 +4794,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // Apply weather ambient light
         tint = MultiplyColor(tint, _ambientColor);
 
-        float heightOffset = _sim.Units[i].JumpHeight + _sim.Units[i].Z;
+        float heightOffset = _sim.Units[i].Z;
         var sp = _renderer.WorldToScreen(_sim.Units[i].Position, heightOffset, _camera);
         // For drawing above unit.
         var sp_upper = _renderer.WorldToScreen(_sim.Units[i].Position, heightOffset + _sim.Units[i].CollisionHeight, _camera);

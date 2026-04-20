@@ -2542,6 +2542,37 @@ public class UnitEditorWindow
             curY += RowH;
         }
 
+        // Cooldown (rounds) — applies to any weapon regardless of archetype.
+        int newCdRounds = _ui.DrawIntField("w_cdr", "Cooldown (rounds)", w.CooldownRounds, x, curY, ww);
+        if (newCdRounds != w.CooldownRounds) { w.CooldownRounds = Math.Max(1, newCdRounds); _unsavedChanges = true; }
+        curY += RowH;
+
+        // Archetype dropdown — at most one per weapon (unlike bonuses).
+        string[] archOptions = Enum.GetNames<WeaponArchetype>();
+        string archVal = string.IsNullOrEmpty(w.Archetype) ? "None" : w.Archetype;
+        string newArch = _ui.DrawCombo("w_arch", "Archetype", archVal, archOptions, x, curY, ww);
+        if (newArch != archVal) { w.Archetype = newArch; _unsavedChanges = true; }
+        curY += RowH;
+
+        // Pounce-archetype parameters (only shown when Archetype == Pounce).
+        if (w.Archetype == "Pounce")
+        {
+            _ui.DrawText("Pounce:", new Vector2(x, curY + 2), EditorBase.AccentColor);
+            curY += RowH;
+
+            float newMin = _ui.DrawFloatField("w_pmin", "  Min Range", w.PounceMinRange, x, curY, ww, 0.5f);
+            if (Math.Abs(newMin - w.PounceMinRange) > 0.001f) { w.PounceMinRange = newMin; _unsavedChanges = true; }
+            curY += RowH;
+
+            float newMax = _ui.DrawFloatField("w_pmax", "  Max Range", w.PounceMaxRange, x, curY, ww, 0.5f);
+            if (Math.Abs(newMax - w.PounceMaxRange) > 0.001f) { w.PounceMaxRange = newMax; _unsavedChanges = true; }
+            curY += RowH;
+
+            float newArc = _ui.DrawFloatField("w_parc", "  Arc Peak", w.PounceArcPeak, x, curY, ww, 0.5f);
+            if (Math.Abs(newArc - w.PounceArcPeak) > 0.001f) { w.PounceArcPeak = newArc; _unsavedChanges = true; }
+            curY += RowH;
+        }
+
         // Bonuses
         _ui.DrawText("Bonuses:", new Vector2(x, curY + 2), EditorBase.AccentColor);
         curY += RowH;
@@ -3136,7 +3167,7 @@ public class UnitEditorWindow
     {
         foreach (AnimState state in Enum.GetValues<AnimState>())
         {
-            if (AnimController.StateToAnimName(state) == name)
+            if (string.Equals(AnimController.StateToAnimName(state), name, StringComparison.OrdinalIgnoreCase))
                 return state;
         }
         return AnimState.Idle;

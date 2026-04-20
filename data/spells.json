@@ -180,6 +180,7 @@
       "cloudSlowBuffID": "",
       "cloudPlaguedBuffID": "",
       "cloudPlagueThreshold": 3,
+      "cloudAppliesParalysis": false,
       "cloudColor": {
         "r": 90,
         "g": 180,
@@ -376,6 +377,7 @@
       "cloudSlowBuffID": "",
       "cloudPlaguedBuffID": "",
       "cloudPlagueThreshold": 3,
+      "cloudAppliesParalysis": false,
       "cloudColor": {
         "r": 90,
         "g": 180,
@@ -572,6 +574,7 @@
       "cloudSlowBuffID": "",
       "cloudPlaguedBuffID": "",
       "cloudPlagueThreshold": 3,
+      "cloudAppliesParalysis": false,
       "cloudColor": {
         "r": 90,
         "g": 180,
@@ -753,6 +756,7 @@
       "cloudSlowBuffID": "",
       "cloudPlaguedBuffID": "",
       "cloudPlagueThreshold": 3,
+      "cloudAppliesParalysis": false,
       "cloudColor": {
         "r": 90,
         "g": 180,
@@ -934,6 +938,7 @@
       "cloudSlowBuffID": "",
       "cloudPlaguedBuffID": "",
       "cloudPlagueThreshold": 3,
+      "cloudAppliesParalysis": false,
       "cloudColor": {
         "r": 90,
         "g": 180,
@@ -1115,6 +1120,7 @@
       "cloudSlowBuffID": "",
       "cloudPlaguedBuffID": "",
       "cloudPlagueThreshold": 3,
+      "cloudAppliesParalysis": false,
       "cloudColor": {
         "r": 90,
         "g": 180,
@@ -1296,6 +1302,7 @@
       "cloudSlowBuffID": "",
       "cloudPlaguedBuffID": "",
       "cloudPlagueThreshold": 3,
+      "cloudAppliesParalysis": false,
       "cloudColor": {
         "r": 90,
         "g": 180,
@@ -1479,6 +1486,7 @@
       "cloudSlowBuffID": "",
       "cloudPlaguedBuffID": "",
       "cloudPlagueThreshold": 3,
+      "cloudAppliesParalysis": false,
       "cloudColor": {
         "r": 90,
         "g": 180,
@@ -1660,6 +1668,7 @@
       "cloudSlowBuffID": "",
       "cloudPlaguedBuffID": "",
       "cloudPlagueThreshold": 3,
+      "cloudAppliesParalysis": false,
       "cloudColor": {
         "r": 90,
         "g": 180,
@@ -1841,6 +1850,7 @@
       "cloudSlowBuffID": "",
       "cloudPlaguedBuffID": "",
       "cloudPlagueThreshold": 3,
+      "cloudAppliesParalysis": false,
       "cloudColor": {
         "r": 90,
         "g": 180,
@@ -2022,6 +2032,7 @@
       "cloudSlowBuffID": "",
       "cloudPlaguedBuffID": "",
       "cloudPlagueThreshold": 3,
+      "cloudAppliesParalysis": false,
       "cloudColor": {
         "r": 90,
         "g": 180,
@@ -2188,6 +2199,7 @@
       "cloudSlowBuffID": "",
       "cloudPlaguedBuffID": "",
       "cloudPlagueThreshold": 3,
+      "cloudAppliesParalysis": false,
       "cloudColor": {
         "r": 90,
         "g": 180,
@@ -2371,6 +2383,7 @@
       "cloudSlowBuffID": "",
       "cloudPlaguedBuffID": "",
       "cloudPlagueThreshold": 3,
+      "cloudAppliesParalysis": false,
       "cloudColor": {
         "r": 90,
         "g": 180,
@@ -2552,6 +2565,7 @@
       "cloudSlowBuffID": "",
       "cloudPlaguedBuffID": "",
       "cloudPlagueThreshold": 3,
+      "cloudAppliesParalysis": false,
       "cloudColor": {
         "r": 90,
         "g": 180,
@@ -2733,6 +2747,7 @@
       "cloudSlowBuffID": "",
       "cloudPlaguedBuffID": "",
       "cloudPlagueThreshold": 3,
+      "cloudAppliesParalysis": false,
       "cloudColor": {
         "r": 90,
         "g": 180,
@@ -2914,6 +2929,7 @@
       "cloudSlowBuffID": "",
       "cloudPlaguedBuffID": "",
       "cloudPlagueThreshold": 3,
+      "cloudAppliesParalysis": false,
       "cloudColor": {
         "r": 90,
         "g": 180,
@@ -3095,6 +3111,7 @@
       "cloudSlowBuffID": "",
       "cloudPlaguedBuffID": "",
       "cloudPlagueThreshold": 3,
+      "cloudAppliesParalysis": false,
       "cloudColor": {
         "r": 90,
         "g": 180,
@@ -3276,6 +3293,7 @@
       "cloudSlowBuffID": "",
       "cloudPlaguedBuffID": "",
       "cloudPlagueThreshold": 3,
+      "cloudAppliesParalysis": false,
       "cloudColor": {
         "r": 90,
         "g": 180,
@@ -3457,6 +3475,7 @@
       "cloudSlowBuffID": "",
       "cloudPlaguedBuffID": "",
       "cloudPlagueThreshold": 3,
+      "cloudAppliesParalysis": false,
       "cloudColor": {
         "r": 90,
         "g": 180,
@@ -3638,6 +3657,7 @@
       "cloudSlowBuffID": "",
       "cloudPlaguedBuffID": "",
       "cloudPlagueThreshold": 3,
+      "cloudAppliesParalysis": false,
       "cloudColor": {
         "r": 90,
         "g": 180,
@@ -3819,6 +3839,7 @@
       "cloudSlowBuffID": "",
       "cloudPlaguedBuffID": "",
       "cloudPlagueThreshold": 3,
+      "cloudAppliesParalysis": false,
       "cloudColor": {
         "r": 90,
         "g": 180,
@@ -4000,6 +4021,7 @@
       "cloudSlowBuffID": "",
       "cloudPlaguedBuffID": "",
       "cloudPlagueThreshold": 3,
+      "cloudAppliesParalysis": false,
       "cloudColor": {
         "r": 90,
         "g": 180,
@@ -4181,6 +4203,7 @@
       "cloudSlowBuffID": "",
       "cloudPlaguedBuffID": "",
       "cloudPlagueThreshold": 3,
+      "cloudAppliesParalysis": false,
       "cloudColor": {
         "r": 90,
         "g": 180,
@@ -4362,6 +4385,7 @@
       "cloudSlowBuffID": "",
       "cloudPlaguedBuffID": "",
       "cloudPlagueThreshold": 3,
+      "cloudAppliesParalysis": false,
       "cloudColor": {
         "r": 90,
         "g": 180,
@@ -4528,6 +4552,7 @@
       "cloudSlowBuffID": "",
       "cloudPlaguedBuffID": "",
       "cloudPlagueThreshold": 3,
+      "cloudAppliesParalysis": false,
       "cloudColor": {
         "r": 90,
         "g": 180,
@@ -4694,6 +4719,7 @@
       "cloudSlowBuffID": "",
       "cloudPlaguedBuffID": "",
       "cloudPlagueThreshold": 3,
+      "cloudAppliesParalysis": false,
       "cloudColor": {
         "r": 90,
         "g": 180,
@@ -4860,6 +4886,7 @@
       "cloudSlowBuffID": "buff_miasma_slow",
       "cloudPlaguedBuffID": "buff_plagued",
       "cloudPlagueThreshold": 3,
+      "cloudAppliesParalysis": false,
       "cloudColor": {
         "r": 90,
         "g": 180,
@@ -5026,6 +5053,7 @@
       "cloudSlowBuffID": "",
       "cloudPlaguedBuffID": "",
       "cloudPlagueThreshold": 99,
+      "cloudAppliesParalysis": false,
       "cloudColor": {
         "r": 100,
         "g": 210,

@@ -103,6 +103,8 @@ public class Simulation
     private bool _amortizedAI;
     private int _aiUpdateInterval = 6;
     private float _harassmentDecayTimer = CombatTickInterval;
+    private const float FatigueRegenInterval = 3.0f; // 1 fatigue point recovered per this many seconds
+    private float _fatigueRegenTimer = FatigueRegenInterval;
     private int _nextCorpseID;
     private readonly List<PendingZombieRaise> _pendingZombieRaises = new();
 
@@ -147,6 +149,16 @@ public class Simulation
     public WallSystem? WallSystem => _wallSystem;
     public List<PendingZombieRaise> PendingZombieRaises => _pendingZombieRaises;
 
+    // Anim metadata. Populated by Game1 once the atlases load so AI can look up
+    // effect_time_ms timings (e.g. pounce needs JumpTakeoff's effect_time to know
+    // how many ms of ground travel to allow before liftoff).
+    private Dictionary<string, Render.AnimationMeta>? _animMeta;
+    public void SetAnimMeta(Dictionary<string, Render.AnimationMeta> animMeta)
+    {
+        _animMeta = animMeta;
+        Core.DebugLog.Log("jump", $"[SetAnimMeta] {animMeta.Count} entries");
+    }
+
     public void Init(int gridWidth, int gridHeight, GameData? gameData = null)
     {
         // Fresh perf log per session so the file doesn't grow unbounded across runs.
@@ -172,6 +184,7 @@ public class Simulation
         _necromancerIdx = -1;
         _necroState = new NecromancerState();
         _harassmentDecayTimer = CombatTickInterval;
+        _fatigueRegenTimer = FatigueRegenInterval;
 
         if (gameData?.Settings.Horde != null)
             _horde.Init(gameData.Settings.Horde);
@@ -236,6 +249,10 @@ public class Simulation
         _necroState.Mana = MathF.Min(_necroState.MaxMana, _necroState.Mana + _necroState.ManaRegen * dt);
         _necroState.TickCooldowns(dt);
 
+        // Knockdown recovery rolls — runs BEFORE BuffSystem.TickBuffs so a successful
+        // recovery roll can zero the buff's duration in the same tick it gets decremented.
+        UpdateKnockdownRecovery(dt);
+
         // Tick buffs
         BuffSystem.TickBuffs(_units, dt, _gameData?.Buffs);
         for (int i = 0; i < _units.Count; i++)
@@ -261,6 +278,17 @@ public class Simulation
             for (int i = 0; i < _units.Count; i++)
                 if (_units[i].Harassment > 0)
                     _units[i].Harassment = (_units[i].Harassment + 1) / 2;
+        }
+
+        // Fatigue regen: every FatigueRegenInterval seconds, every unit recovers
+        // 1 fatigue point (clamped at 0). Melee swings add Encumbrance in ResolveMeleeAttack.
+        _fatigueRegenTimer -= dt;
+        if (_fatigueRegenTimer <= 0f)
+        {
+            _fatigueRegenTimer += FatigueRegenInterval;
+            for (int i = 0; i < _units.Count; i++)
+                if (_units[i].Fatigue > 0f)
+                    _units[i].Fatigue = MathF.Max(0f, _units[i].Fatigue - 1f);
         }
 
         // Rebuild quadtree
@@ -550,6 +578,7 @@ public class Simulation
                         Projectiles = _projectiles, MagicGlyphs = _magicGlyphs,
                         GameTime = _gameTime, DayTime = dayFraction, IsNight = isNight,
                         AmortizedAI = _amortizedAI, AmortizationInterval = _aiUpdateInterval,
+                        AnimMeta = _animMeta,
                     };
                     handler.Update(ref ctx);
                 }
@@ -1663,6 +1692,9 @@ public class Simulation
         {
             if (!_units[i].Alive) continue;
             if (_units[i].Incap.IsLocked) continue;
+            // Scripted airborne/landing/recovery: facing was fixed at liftoff — don't
+            // let engaged-target tracking rotate the wolf mid-flight.
+            if (_units[i].JumpPhase >= 2) continue;
 
             // PlayerControlled: facing is set by mouse in Game1, don't override
             if (_units[i].AI == AIBehavior.PlayerControlled) continue;
@@ -1692,10 +1724,20 @@ public class Simulation
             }
 
             // Priority 2: Face movement direction (actual velocity, or intended direction
-            // if still accelerating from zero)
+            // if still accelerating from zero).
             Vec2 faceDir = _units[i].Velocity;
             if (faceDir.LengthSq() < 0.1f)
                 faceDir = _units[i].PreferredVel; // use intended direction during acceleration ramp-up
+
+            // Priority 3: Stationary with a combat target (e.g. wolf waiting for cooldown)
+            // — keep facing the target so the idle frame reads naturally.
+            if (faceDir.LengthSq() < 0.1f && _units[i].Target.IsUnit)
+            {
+                int ti = ResolveUnitTarget(_units[i].Target);
+                if (ti >= 0)
+                    faceDir = _units[ti].Position - _units[i].Position;
+            }
+
             if (faceDir.LengthSq() > 0.1f)
             {
                 float targetAngle = MathF.Atan2(faceDir.Y, faceDir.X) * Rad2Deg;
@@ -1733,8 +1775,7 @@ public class Simulation
     private void UpdateCombat(float dt)
     {
         float meleeRange = _gameData?.Settings.Combat.MeleeRange ?? MeleeRangeBase;
-        float attackCooldownTime = _gameData?.Settings.Combat.AttackCooldown ?? CombatTickInterval;
-        float postAttackLockout = _gameData?.Settings.Combat.PostAttackLockout ?? 1.0f;
+        float roundDuration = _gameData?.Settings.Combat.RoundDuration ?? 3.0f;
 
         // Tick down post-attack timers
         for (int i = 0; i < _units.Count; i++)
@@ -1777,32 +1818,157 @@ public class Simulation
         for (int i = 0; i < _units.Count; i++)
         {
             if (!_units[i].Alive) continue;
-            _units[i].AttackCooldown = MathF.Max(0f, _units[i].AttackCooldown - dt);
+
+            // Tick per-weapon cooldowns, then set the legacy AttackCooldown to the min
+            // (= "time until SOME weapon is ready"). Per-weapon is what actually gates
+            // each weapon's re-use; Unit.AttackCooldown is kept in sync for legacy
+            // consumers (AI transitions, UI) that read it. For units with no melee
+            // weapons (unarmed / test scenarios) we fall back to the legacy decay path.
+            if (_units[i].Stats.MeleeWeapons.Count > 0)
+            {
+                float minCooldown = float.MaxValue;
+                foreach (var w in _units[i].Stats.MeleeWeapons)
+                {
+                    if (w.Cooldown > 0f) w.Cooldown = MathF.Max(0f, w.Cooldown - dt);
+                    if (w.Cooldown < minCooldown) minCooldown = w.Cooldown;
+                }
+                _units[i].AttackCooldown = minCooldown;
+            }
+            else
+            {
+                _units[i].AttackCooldown = MathF.Max(0f, _units[i].AttackCooldown - dt);
+            }
 
             if (_units[i].Incap.IsLocked) continue;
             if (!_units[i].PendingAttack.IsNone) continue;
-            if (_units[i].AttackCooldown > 0f) continue;
-            if (_units[i].PostAttackTimer > 0f) continue;
+            if (_units[i].PostAttackTimer > 0f) continue; // one attack at a time
+            if (_units[i].JumpPhase != 0) continue;        // already airborne / mid-pounce
 
-            // Must have an engaged target in melee range
-            if (!_units[i].InCombat) continue;
-            if (_units[i].EngagedTarget.IsNone || !_units[i].EngagedTarget.IsUnit) continue;
+            // Unified attack selection: scan weapons in list order. First weapon that is
+            // off cooldown AND has its target in its own range AND the unit is facing
+            // (with a target acquired) fires. "One at a time" is enforced by
+            // PostAttackTimer above. Weapon-list order is the priority — e.g. wolves list
+            // Bite (index 0) first, Pounce (index 1) second: on approach only Pounce is
+            // in range so it fires; after landing only Bite is in range so it fires.
+            if (_units[i].Stats.MeleeWeapons.Count == 0)
+            {
+                // Unarmed / test scenario fallback: legacy Unit.AttackCooldown gate.
+                if (_units[i].AttackCooldown > 0f) continue;
+                if (!_units[i].InCombat) continue;
+                if (_units[i].EngagedTarget.IsNone || !_units[i].EngagedTarget.IsUnit) continue;
+                int tUnarmed = ResolveUnitTarget(_units[i].EngagedTarget);
+                if (tUnarmed < 0 || !IsFacingTarget(i, tUnarmed)) continue;
+                float dCycle = roundDuration;
+                _units[i].PendingAttack = _units[i].EngagedTarget;
+                _units[i].PendingWeaponIdx = -1;
+                _units[i].PendingWeaponIsRanged = false;
+                _units[i].PendingRangedTarget = GameConstants.InvalidUnit;
+                _units[i].AttackCooldown = dCycle;
+                _units[i].PostAttackTimer = MathF.Min(dCycle, GetAttackAnimDurationSec(i, -1));
+                continue;
+            }
 
-            int targetIdx = ResolveUnitTarget(_units[i].EngagedTarget);
-            if (targetIdx < 0) continue;
+            // Need a target (combat Target — for pounce's pre-melee check — or the
+            // engagement target for normal melee).
+            var attackTarget = !_units[i].Target.IsNone ? _units[i].Target : _units[i].EngagedTarget;
+            if (attackTarget.IsNone || !attackTarget.IsUnit) continue;
+            int ti = ResolveUnitTarget(attackTarget);
+            if (ti < 0) continue;
+            if (!IsFacingTarget(i, ti)) continue;
 
-            // Must be facing the target
-            if (!IsFacingTarget(i, targetIdx)) continue;
+            float dist = (_units[ti].Position - _units[i].Position).Length();
 
-            // Queue attack — set lockout and cooldown (per-unit overrides)
-            var unitDef = _gameData?.Units.Get(_units[i].UnitDefID);
-            _units[i].PendingAttack = _units[i].EngagedTarget;
-            _units[i].PendingWeaponIdx = _units[i].Stats.MeleeWeapons.Count > 0 ? 0 : -1;
-            _units[i].PendingWeaponIsRanged = false;
-            _units[i].PendingRangedTarget = GameConstants.InvalidUnit;
-            _units[i].AttackCooldown = unitDef?.AttackCooldown ?? attackCooldownTime;
-            _units[i].PostAttackTimer = unitDef?.PostAttackLockout ?? postAttackLockout;
+            bool queued = false;
+            for (int w = 0; w < _units[i].Stats.MeleeWeapons.Count && !queued; w++)
+            {
+                var ws = _units[i].Stats.MeleeWeapons[w];
+                if (ws.Cooldown > 0f) continue;
+
+                if (ws.Archetype == WeaponArchetype.Pounce)
+                {
+                    // In its pounce range? (Strict window, exclusive of melee-reach.)
+                    if (dist < ws.PounceMinRange || dist > ws.PounceMaxRange) continue;
+                    InitiatePounceWithWeapon(i, ti, w, roundDuration);
+                    queued = true;
+                }
+                else
+                {
+                    // Normal melee: unit must be in combat (derived earlier from
+                    // EngagedTarget+meleeRange+weapon length).
+                    if (!_units[i].InCombat) continue;
+                    if (_units[i].EngagedTarget.IsNone || !_units[i].EngagedTarget.IsUnit) continue;
+                    float cycle = Math.Max(1, ws.CooldownRounds) * roundDuration;
+                    float animDur = MathF.Min(cycle, GetAttackAnimDurationSec(i, w));
+                    _units[i].PendingAttack = _units[i].EngagedTarget;
+                    _units[i].PendingWeaponIdx = w;
+                    _units[i].PendingWeaponIsRanged = false;
+                    _units[i].PendingRangedTarget = GameConstants.InvalidUnit;
+                    ws.Cooldown = cycle;
+                    _units[i].AttackCooldown = cycle;
+                    _units[i].PostAttackTimer = animDur;
+                    queued = true;
+                }
+            }
         }
+    }
+
+    /// <summary>
+    /// Initiate a pounce using the specified weapon. Caller has already validated
+    /// the weapon's archetype, cooldown, range, and facing. Locks the landing spot,
+    /// calls JumpSystem.BeginPounce, and queues a melee attack so the landing
+    /// callback resolves damage with the pounce weapon's stats.
+    /// </summary>
+    private void InitiatePounceWithWeapon(int i, int ti, int weaponIdx, float roundDuration)
+    {
+        var weapon = _units[i].Stats.MeleeWeapons[weaponIdx];
+
+        // Locked landing spot: just short of the target, in melee range with a small margin.
+        Vec2 toTarget = _units[ti].Position - _units[i].Position;
+        float len = toTarget.Length();
+        float standoff = _units[ti].Radius + _units[i].Radius + 0.2f;
+        Vec2 landingPos = len > 0.01f
+            ? _units[ti].Position - toTarget * (standoff / len)
+            : _units[ti].Position;
+
+        var def = _gameData?.Units.Get(_units[i].UnitDefID);
+        string spriteName = def?.Sprite?.SpriteName ?? "";
+        JumpSystem.BeginPounce(_units, i, landingPos, _units[ti].Id,
+            _animMeta, spriteName, weapon.PounceArcPeak);
+
+        // Queue the melee attack; JumpSystem resolves it at landing with this weapon.
+        float cycle = Math.Max(1, weapon.CooldownRounds) * roundDuration;
+        float animDur = MathF.Min(cycle, GetAttackAnimDurationSec(i, weaponIdx));
+        _units[i].PendingAttack = CombatTarget.Unit(_units[ti].Id);
+        _units[i].PendingWeaponIdx = weaponIdx;
+        _units[i].PendingWeaponIsRanged = false;
+        _units[i].PendingRangedTarget = GameConstants.InvalidUnit;
+        weapon.Cooldown = cycle;
+        _units[i].AttackCooldown = cycle;
+        _units[i].PostAttackTimer = animDur;
+    }
+
+    /// <summary>Look up the ms-based anim duration for a unit's attack, using the
+    /// weapon's AnimName override or the unit's AttackAnim (e.g. "AttackBite"),
+    /// falling back to "Attack1".</summary>
+    private float GetAttackAnimDurationSec(int unitIdx, int weaponIdx)
+    {
+        if (_animMeta == null) return 1.0f;
+        var def = _gameData?.Units.Get(_units[unitIdx].UnitDefID);
+        if (def?.Sprite == null) return 1.0f;
+
+        string? animName = null;
+        if (weaponIdx >= 0 && weaponIdx < _units[unitIdx].Stats.MeleeWeapons.Count)
+            animName = _units[unitIdx].Stats.MeleeWeapons[weaponIdx].AnimName;
+        if (string.IsNullOrEmpty(animName))
+            animName = string.IsNullOrEmpty(def.AttackAnim) ? "Attack1" : def.AttackAnim;
+
+        string key = Render.AnimMetaLoader.MetaKey(def.Sprite.SpriteName, animName);
+        if (_animMeta.TryGetValue(key, out var meta))
+        {
+            int ms = meta.TotalDurationMs();
+            if (ms > 0) return ms / 1000f;
+        }
+        return 1.0f;
     }
 
     public void ResolvePendingAttack(int unitIdx)
@@ -1855,14 +2021,21 @@ public class Simulation
         var atkStats = _units[attackerIdx].Stats;
         var defStats = _units[defenderIdx].Stats;
 
+        // Every attempted melee swing fatigues the attacker by their Encumbrance.
+        // Fatigue caps at 100 (that's the ceiling of the (100 - Fatigue) knockdown-
+        // recovery formula). Regens at 1/tick every FatigueRegenInterval seconds.
+        _units[attackerIdx].Fatigue = MathF.Min(100f, _units[attackerIdx].Fatigue + atkStats.Encumbrance);
+
         int atkDRN = UnitUtil.RollDRN();
         int defDRN = UnitUtil.RollDRN();
 
-        // Apply paralysis reduction to attack and defense
+        // Apply paralysis reduction + buff modifiers (e.g. knockdown reduces defense by 70%)
         float atkParalysis = PotionSystem.GetParalysisFraction(_units, attackerIdx);
         float defParalysis = PotionSystem.GetParalysisFraction(_units, defenderIdx);
-        int effectiveAtk = (int)(atkStats.Attack * atkParalysis);
-        int effectiveDef = (int)(defStats.Defense * defParalysis);
+        float buffedAtk = BuffSystem.GetModifiedStat(_units, attackerIdx, BuffStat.Attack, atkStats.Attack);
+        float buffedDef = BuffSystem.GetModifiedStat(_units, defenderIdx, BuffStat.Defense, defStats.Defense);
+        int effectiveAtk = (int)(buffedAtk * atkParalysis);
+        int effectiveDef = (int)(buffedDef * defParalysis);
 
         int modAtk = effectiveAtk + atkDRN;
         int harassment = _units[defenderIdx].Harassment;
@@ -1933,6 +2106,12 @@ public class Simulation
         // Melee uses ApplyDirect — armor already calculated above with DRN rolls
         DamageSystem.ApplyDirect(_units, defenderIdx, netDmg, _damageEvents, attackerIdx);
 
+        // On-hit: knockdown check if attacker's weapon has the Knockdown bonus.
+        // Triggers on any successful hit (including shield-blocked hits — a block is
+        // not a full dodge), constrained to targets of size ≤ attacker.size + 1.
+        if (atkStats.HasKnockdown && _units[defenderIdx].Alive)
+            TryApplyKnockdownOnHit(attackerIdx, defenderIdx);
+
         // Weapon coats: apply poison and/or zombie-on-death to defender
         if (hit && defenderIdx >= 0 && defenderIdx < _units.Count && _units[defenderIdx].Alive)
         {
@@ -1945,6 +2124,97 @@ public class Simulation
             if (_units[attackerIdx].WeaponZombieCoatTimer > 0f)
             {
                 _units[defenderIdx].ZombieOnDeath = true;
+            }
+        }
+    }
+
+    // --- Knockdown (weapon bonus) ---
+
+    private const float KnockdownCheckInitialDelay = 2.0f;
+    private const float KnockdownCheckInterval = 1.0f;
+    private const int KnockdownMinDuration = 3; // seconds on a successful check
+
+    /// <summary>
+    /// Attempt a knockdown on the defender. Called after a successful melee hit
+    /// when the attacker's weapon has the Knockdown bonus. Size-gated (target size
+    /// must be ≤ attacker.size + 1), then an opposed STR + Size×2 + DRN roll;
+    /// ties go to the attacker. On success, applies buff_knockdown with duration
+    /// equal to the roll difference (min KnockdownMinDuration seconds).
+    /// </summary>
+    private void TryApplyKnockdownOnHit(int attackerIdx, int defenderIdx)
+    {
+        if (_units[defenderIdx].Size > _units[attackerIdx].Size + 1) return; // too big to knock down
+
+        int atkScore = _units[attackerIdx].Stats.Strength
+                     + _units[attackerIdx].Size * 2
+                     + UnitUtil.RollDRN();
+        int defScore = _units[defenderIdx].Stats.Strength
+                     + _units[defenderIdx].Size * 2
+                     + UnitUtil.RollDRN();
+
+        int diff = atkScore - defScore;
+        if (diff < 0) return; // defender won (ties go to attacker)
+
+        int durationSec = Math.Max(KnockdownMinDuration, diff);
+        var knockdownBuff = _gameData?.Buffs.Get("buff_knockdown");
+        if (knockdownBuff == null) return;
+
+        BuffSystem.ApplyBuffWithDuration(_units, defenderIdx, knockdownBuff, durationSec);
+        _units[defenderIdx].KnockdownCheckTimer = KnockdownCheckInitialDelay;
+
+        DebugLog.Log("combat", $"[Knockdown] atk#{attackerIdx}(str={_units[attackerIdx].Stats.Strength}" +
+            $",sz={_units[attackerIdx].Size},score={atkScore}) vs def#{defenderIdx}" +
+            $"(str={_units[defenderIdx].Stats.Strength},sz={_units[defenderIdx].Size},score={defScore})" +
+            $" → diff={diff} duration={durationSec}s");
+    }
+
+    /// <summary>
+    /// Per-frame tick for the knockdown recovery-roll system. After the initial
+    /// 2 s window, rolls every 1 s: SecondsLeft + DRN vs (100 − Fatigue) + DRN.
+    /// If the defender wins the recovery roll, the buff is expired early.
+    /// </summary>
+    private void UpdateKnockdownRecovery(float dt)
+    {
+        for (int i = 0; i < _units.Count; i++)
+        {
+            if (!_units[i].Alive) continue;
+            if (_units[i].KnockdownCheckTimer <= 0f) continue;
+
+            // Find the active knockdown buff (if still present)
+            int kdIdx = -1;
+            for (int b = 0; b < _units[i].ActiveBuffs.Count; b++)
+            {
+                if (_units[i].ActiveBuffs[b].BuffDefID == "buff_knockdown") { kdIdx = b; break; }
+            }
+            if (kdIdx < 0)
+            {
+                // Buff already gone (natural expire / externally removed). Clear our timer.
+                _units[i].KnockdownCheckTimer = 0f;
+                continue;
+            }
+
+            _units[i].KnockdownCheckTimer -= dt;
+            if (_units[i].KnockdownCheckTimer > 0f) continue;
+
+            // Run the recovery check: knockdown side = secondsLeft + DRN, defender = (100-fatigue) + DRN.
+            var buff = _units[i].ActiveBuffs[kdIdx];
+            int secondsLeft = Math.Max(0, (int)MathF.Ceiling(buff.RemainingDuration));
+            int kdScore = secondsLeft + UnitUtil.RollDRN();
+            int defScore = (int)(100f - _units[i].Fatigue) + UnitUtil.RollDRN();
+
+            if (defScore > kdScore)
+            {
+                // Recovery roll won — stand up immediately (expire the buff).
+                buff.RemainingDuration = 0f;
+                _units[i].ActiveBuffs[kdIdx] = buff;
+                _units[i].KnockdownCheckTimer = 0f;
+                DebugLog.Log("combat", $"[KnockdownRecovery] unit#{i} STANDUP kd={kdScore} def={defScore} left={secondsLeft}s");
+            }
+            else
+            {
+                // Stayed down — another check in 1 s.
+                _units[i].KnockdownCheckTimer = KnockdownCheckInterval;
+                DebugLog.Log("combat", $"[KnockdownRecovery] unit#{i} stays down kd={kdScore} def={defScore} left={secondsLeft}s");
             }
         }
     }

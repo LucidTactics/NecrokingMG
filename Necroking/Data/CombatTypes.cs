@@ -15,6 +15,30 @@ public class WeaponStats
     /// Empty/null = use default ("Ranged1" for ranged, "Attack1" for melee).
     /// </summary>
     public string? AnimName { get; set; }
+
+    /// <summary>Attack archetype — None = default melee, Pounce = leap-then-melee.</summary>
+    public WeaponArchetype Archetype { get; set; } = WeaponArchetype.None;
+
+    /// <summary>Per-weapon cooldown in rounds. Cycle time = CooldownRounds × RoundDuration.</summary>
+    public int CooldownRounds { get; set; } = 1;
+
+    /// <summary>Runtime per-weapon cooldown timer in seconds (ticked down each frame).
+    /// Reset to cycle when this weapon is used. Lets a unit carry both a short-cycle
+    /// normal melee AND a long-cycle pounce — when pounce is on cooldown the normal
+    /// melee can still fire.</summary>
+    public float Cooldown { get; set; }
+
+    // Pounce-archetype parameters (used only when Archetype == Pounce)
+    public float PounceMinRange { get; set; } = 3f;
+    public float PounceMaxRange { get; set; } = 8f;
+    public float PounceArcPeak { get; set; } = 2f;
+    public float PounceAirSpeed { get; set; } = 6f;
+
+    /// <summary>Bonus flags per-weapon (currently also aggregated onto UnitStats for
+    /// backwards compat, but kept here so resolution can check per-weapon accurately).</summary>
+    public bool HasArmorPiercing { get; set; }
+    public bool HasArmorNegating { get; set; }
+    public bool HasKnockdown { get; set; }
 }
 
 public class ArmorStats
@@ -61,6 +85,7 @@ public class UnitStats
     // Bonus flags
     public bool HasArmorPiercing { get; set; }
     public bool HasArmorNegating { get; set; }
+    public bool HasKnockdown { get; set; }
     public bool HasTrueArmor { get; set; }
     public bool HasBarbed { get; set; }
 

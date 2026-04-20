@@ -191,8 +191,15 @@ public class UnitRegistry : RegistryBase<UnitDef>
                 Length = w.Length,
                 Name = w.DisplayName,
                 IsRanged = w.IsRanged,
-                AnimName = w.AnimName
+                AnimName = w.AnimName,
+                CooldownRounds = w.CooldownRounds,
+                PounceMinRange = w.PounceMinRange,
+                PounceMaxRange = w.PounceMaxRange,
+                PounceArcPeak = w.PounceArcPeak,
+                PounceAirSpeed = w.PounceAirSpeed,
             };
+            if (System.Enum.TryParse<WeaponArchetype>(w.Archetype, true, out var arch))
+                ws.Archetype = arch;
 
             if (w.IsRanged)
             {
@@ -209,8 +216,10 @@ public class UnitRegistry : RegistryBase<UnitDef>
 
             foreach (var b in w.Bonuses)
             {
-                if (b == "ArmorPiercing") s.HasArmorPiercing = true;
-                if (b == "ArmorNegating") s.HasArmorNegating = true;
+                // Aggregate on UnitStats for legacy consumers + write per-weapon on WeaponStats.
+                if (b == "ArmorPiercing") { s.HasArmorPiercing = true; ws.HasArmorPiercing = true; }
+                if (b == "ArmorNegating") { s.HasArmorNegating = true; ws.HasArmorNegating = true; }
+                if (b == "Knockdown")     { s.HasKnockdown     = true; ws.HasKnockdown     = true; }
             }
         }
 

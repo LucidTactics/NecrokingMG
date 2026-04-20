@@ -218,6 +218,7 @@ public static class SubroutineSteps
         }
         else
             ctx.Units[i].PreferredVel = Vec2.Zero;
+        SetLocomotionAnim(ref ctx, PickTierSpeed(ctx.Units[i]));
     }
 
     public static bool Disengage_Complete(ref AIContext ctx, float backoffDist)
@@ -261,6 +262,16 @@ public static class SubroutineSteps
         }
         else
             ctx.Units[ctx.UnitIndex].PreferredVel = Vec2.Zero;
+        SetLocomotionAnim(ref ctx, PickTierSpeed(ctx.Units[ctx.UnitIndex]));
+    }
+
+    // Tier-speed helper: use actual Velocity for state tier, but gate Idle on
+    // PreferredVel so zero-intent units don't walk-in-place from residual momentum.
+    private static float PickTierSpeed(Movement.Unit u)
+    {
+        float preferred = u.PreferredVel.Length();
+        if (preferred <= 0.25f) return 0f;
+        return u.Velocity.Length();
     }
 
     public static bool WaitForCooldown_Ready(ref AIContext ctx)
@@ -360,13 +371,15 @@ public static class SubroutineSteps
             ctx.Units[i].PreferredVel = Vec2.Zero;
         }
 
-        // Pick the locomotion state from the preferred *speed we actually got*,
-        // not the input speed. If the pathfinder returned a zero direction (e.g.
-        // a deferred budget miss that couldn't even beeline, or the unit was
-        // already at the target), PreferredVel is zero and the unit should show
-        // Idle — not walk-in-place like a high-density horde used to do.
-        float effectiveSpeed = ctx.Units[i].PreferredVel.Length();
-        SetLocomotionAnim(ref ctx, effectiveSpeed);
+        // Pick locomotion state from actual Velocity (post-accel curve) so units
+        // ramp Idle → Walk → Jog → Run as they accelerate, instead of snapping to
+        // the final tier on tick 1 based on requested MaxSpeed.
+        // Still gate Idle on PreferredVel so a unit that can't pathfind (zero dir)
+        // shows Idle instead of walk-in-place despite momentum.
+        float preferredSpeed = ctx.Units[i].PreferredVel.Length();
+        float actualSpeed = ctx.Units[i].Velocity.Length();
+        float tierSpeed = preferredSpeed <= 0.25f ? 0f : actualSpeed;
+        SetLocomotionAnim(ref ctx, tierSpeed);
     }
 
     /// <summary>
