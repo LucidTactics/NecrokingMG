@@ -313,9 +313,11 @@ public static class JumpSystem
         {
             case Kind.NecromancerAttack:
             case Kind.Pounce:
-                // Resolve the melee attack that was queued when the jump was initiated.
-                // Pounce = "leap then perform a normal melee attack with the pounce weapon's
-                // parameters", so ResolvePendingAttack is the right hook for both.
+                // Pounce + necromancer jump both resolve their melee attack here at
+                // landing. The pounce weapon's damage + bonuses (e.g. Knockdown) apply
+                // at this moment. After this, PendingAttack clears — any subsequent
+                // attacks (e.g. a wolf's Bite once it's in melee range) fire through
+                // the normal combat queue in UpdateCombat with their own anim + effect_time.
                 sim.ResolvePendingAttack(idx);
                 break;
         }

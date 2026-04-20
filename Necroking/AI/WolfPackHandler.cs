@@ -84,6 +84,39 @@ public class WolfPackHandler : IArchetypeHandler
     {
         byte alertState = ctx.AlertState;
 
+        // Retarget-when-hit (already fighting): if the current target is out of melee
+        // reach AND we took damage recently, switch aggro to whoever hit us. Using
+        // LastHitTime (not HitReacting) extends the evaluation window beyond the single
+        // tick HitReacting lasts — the wolf may briefly flip in/out of melee range as
+        // its current target kites, and we need to catch the "out of range" phase even
+        // if the hit landed during a brief "in range" moment.
+        const float RetargetOnHitWindow = 2.0f;
+        if (ctx.Routine == RoutineFighting
+            && !ctx.Units[ctx.UnitIndex].InCombat
+            && ctx.Units[ctx.UnitIndex].LastHitTime >= 0f
+            && (ctx.GameTime - ctx.Units[ctx.UnitIndex].LastHitTime) <= RetargetOnHitWindow)
+        {
+            uint attackerId = ctx.Units[ctx.UnitIndex].LastAttackerID;
+            if (attackerId != GameConstants.InvalidUnit
+                && attackerId != ctx.Units[ctx.UnitIndex].Target.UnitID)
+            {
+                int attackerIdx = UnitUtil.ResolveUnitIndex(ctx.Units, attackerId);
+                if (attackerIdx >= 0 && ctx.Units[attackerIdx].Alive)
+                {
+                    ctx.Units[ctx.UnitIndex].Target = CombatTarget.Unit(attackerId);
+                    ctx.Units[ctx.UnitIndex].EngagedTarget = CombatTarget.None;
+                    ctx.AlertTarget = attackerId;
+                    ctx.AlertState = (byte)UnitAlertState.Aggressive;
+                    ctx.Subroutine = FightMoveToEngage;
+                    ctx.SubroutineTimer = 0f;
+                    ctx.Units[ctx.UnitIndex].ShowStatusSymbol(UnitStatusSymbol.React, 1.0f);
+                    // Clear LastHitTime so we don't retarget repeatedly off a single hit.
+                    ctx.Units[ctx.UnitIndex].LastHitTime = -1f;
+                    return;
+                }
+            }
+        }
+
         // Spooked: took damage while idle/sleeping → fight or flee
         if (ctx.Units[ctx.UnitIndex].HitReacting
             && ctx.Routine != RoutineFighting)

@@ -2013,13 +2013,25 @@ public class Simulation
         int meleeDefenderIdx = ResolveUnitTarget(t);
         if (meleeDefenderIdx < 0) return;
 
-        ResolveMeleeAttack(unitIdx, meleeDefenderIdx);
+        ResolveMeleeAttack(unitIdx, meleeDefenderIdx, weaponIdx);
     }
 
-    private void ResolveMeleeAttack(int attackerIdx, int defenderIdx)
+    private void ResolveMeleeAttack(int attackerIdx, int defenderIdx, int weaponIdx)
     {
         var atkStats = _units[attackerIdx].Stats;
         var defStats = _units[defenderIdx].Stats;
+
+        // Resolve per-weapon stats so multi-weapon units (e.g. wolf's Bite + Pounce)
+        // use the correct weapon's damage/length/name/bonuses. Falls back to the
+        // aggregated unit stats for single-weapon or unarmed units.
+        WeaponStats? weapon = (weaponIdx >= 0 && weaponIdx < atkStats.MeleeWeapons.Count)
+            ? atkStats.MeleeWeapons[weaponIdx] : null;
+        int weaponDamage = weapon?.Damage ?? atkStats.Damage;
+        int weaponAttackBonus = weapon?.AttackBonus ?? 0;
+        int weaponLength = weapon?.Length ?? atkStats.Length;
+        string weaponName = weapon?.Name
+            ?? (atkStats.MeleeWeapons.Count > 0 ? atkStats.MeleeWeapons[0].Name : "Unarmed");
+        bool weaponKnockdown = weapon?.HasKnockdown ?? atkStats.HasKnockdown;
 
         // Every attempted melee swing fatigues the attacker by their Encumbrance.
         // Fatigue caps at 100 (that's the ceiling of the (100 - Fatigue) knockdown-
@@ -2032,7 +2044,7 @@ public class Simulation
         // Apply paralysis reduction + buff modifiers (e.g. knockdown reduces defense by 70%)
         float atkParalysis = PotionSystem.GetParalysisFraction(_units, attackerIdx);
         float defParalysis = PotionSystem.GetParalysisFraction(_units, defenderIdx);
-        float buffedAtk = BuffSystem.GetModifiedStat(_units, attackerIdx, BuffStat.Attack, atkStats.Attack);
+        float buffedAtk = BuffSystem.GetModifiedStat(_units, attackerIdx, BuffStat.Attack, atkStats.Attack + weaponAttackBonus);
         float buffedDef = BuffSystem.GetModifiedStat(_units, defenderIdx, BuffStat.Defense, defStats.Defense);
         int effectiveAtk = (int)(buffedAtk * atkParalysis);
         int effectiveDef = (int)(buffedDef * defParalysis);
@@ -2048,7 +2060,7 @@ public class Simulation
             DefenderName = GetUnitDisplayName(defenderIdx),
             AttackerFaction = _units[attackerIdx].Faction == Faction.Undead ? 'A' : _units[attackerIdx].Faction == Faction.Animal ? 'C' : 'B',
             DefenderFaction = _units[defenderIdx].Faction == Faction.Undead ? 'A' : _units[defenderIdx].Faction == Faction.Animal ? 'C' : 'B',
-            WeaponName = atkStats.MeleeWeapons.Count > 0 ? atkStats.MeleeWeapons[0].Name : "Unarmed",
+            WeaponName = weaponName,
             AttackBase = atkStats.Attack,
             AttackDRN = atkDRN,
             DefenseBase = defStats.Defense,
@@ -2070,11 +2082,10 @@ public class Simulation
         }
 
         // Hit location
-        int weaponLen = atkStats.MeleeWeapons.Count > 0 ? atkStats.MeleeWeapons[0].Length : atkStats.Length;
-        var hitLoc = UnitUtil.RollHitLocation(_units[attackerIdx].Size, _units[defenderIdx].Size, weaponLen);
+        var hitLoc = UnitUtil.RollHitLocation(_units[attackerIdx].Size, _units[defenderIdx].Size, weaponLength);
 
         // Damage roll — protection varies by hit location (paralysis reduces strength)
-        int baseDmg = (int)((atkStats.Strength + atkStats.Damage) * atkParalysis);
+        int baseDmg = (int)((atkStats.Strength + weaponDamage) * atkParalysis);
         int dmgDRN = UnitUtil.RollDRN();
         int protDRN = UnitUtil.RollDRN();
         int dmgRoll = baseDmg + dmgDRN;
@@ -2095,21 +2106,25 @@ public class Simulation
         if (netDmg > 0)
         {
             _units[defenderIdx].HitReacting = true;
+            _units[defenderIdx].LastHitTime = _gameTime;
             _units[defenderIdx].OverrideAnim = Render.AnimRequest.Combat(Render.AnimState.BlockReact);
         }
         else
         {
             _units[defenderIdx].BlockReacting = true;
+            _units[defenderIdx].LastHitTime = _gameTime;
             _units[defenderIdx].OverrideAnim = Render.AnimRequest.Combat(Render.AnimState.BlockReact);
         }
 
         // Melee uses ApplyDirect — armor already calculated above with DRN rolls
         DamageSystem.ApplyDirect(_units, defenderIdx, netDmg, _damageEvents, attackerIdx);
 
-        // On-hit: knockdown check if attacker's weapon has the Knockdown bonus.
-        // Triggers on any successful hit (including shield-blocked hits — a block is
-        // not a full dodge), constrained to targets of size ≤ attacker.size + 1.
-        if (atkStats.HasKnockdown && _units[defenderIdx].Alive)
+        // On-hit: knockdown check if the SPECIFIC weapon used has the Knockdown bonus.
+        // (Reading per-weapon means a wolf's Pounce can carry Knockdown without its
+        // Bite also triggering it.) Triggers on any successful hit (including shield-
+        // blocked hits — a block is not a full dodge), constrained to targets of size
+        // ≤ attacker.size + 1.
+        if (weaponKnockdown && _units[defenderIdx].Alive)
             TryApplyKnockdownOnHit(attackerIdx, defenderIdx);
 
         // Weapon coats: apply poison and/or zombie-on-death to defender

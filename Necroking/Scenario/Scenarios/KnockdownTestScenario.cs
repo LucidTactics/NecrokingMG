@@ -49,7 +49,9 @@ public class KnockdownTestScenario : ScenarioBase
             units[wolfIdx].AlertEscalateRange = wolfDef.AlertEscalateRange;
             units[wolfIdx].GroupAlertRadius = wolfDef.GroupAlertRadius;
         }
-        units[wolfIdx].Stats.HasKnockdown = true;  // test-only flag; normally set via weapon bonus
+        units[wolfIdx].Stats.HasKnockdown = true;  // aggregated flag
+        foreach (var w in units[wolfIdx].Stats.MeleeWeapons)
+            w.HasKnockdown = true;                   // per-weapon flag (what actually gates the check)
         units[wolfIdx].Stats.Strength = 20;        // make the knockdown roll reliably succeed
         units[wolfIdx].Stats.Attack = 20;          // so the wolf actually hits the soldier
         _wolfId = units[wolfIdx].Id;

@@ -115,6 +115,11 @@ public class HordeSettings
     [JsonPropertyName("idleRadius")] public float IdleRadius { get; set; } = 2.0f;
     [JsonPropertyName("engagementRange")] public float EngagementRange { get; set; } = 10.0f;
     [JsonPropertyName("leashRadius")] public float LeashRadius { get; set; } = 25.0f;
+    /// <summary>Floor on the effective horde radius used for aggro scans + chase leash.
+    /// Formation/positioning still uses the raw √N EffectiveRadius; this only kicks in
+    /// so a small horde (few minions) can still aggro things as the necromancer walks
+    /// near them instead of needing to be almost on top of them.</summary>
+    [JsonPropertyName("minAggroRadius")] public float MinAggroRadius { get; set; } = 10.0f;
     [JsonPropertyName("leashChance")] public float LeashChance { get; set; } = 0.25f;
     [JsonPropertyName("returnSpeedMult")] public float ReturnSpeedMult { get; set; } = 0.65f;
     [JsonPropertyName("velocityDirLerp")] public float VelocityDirLerp { get; set; } = 6.0f;

@@ -78,6 +78,14 @@ public class HordeSystem
         ? SlotSpacing * MathF.Sqrt(_nextSlot - 1 + 0.5f)
         : 0f;
 
+    /// <summary>
+    /// Radius used for aggro scans and the chase-leash check — floored at
+    /// Settings.MinAggroRadius so a small horde (few minions) still reacts when
+    /// the necromancer walks near an enemy, instead of needing to be almost on
+    /// top of them. Formation/positioning uses EffectiveRadius unchanged.
+    /// </summary>
+    public float AggroRadius => MathF.Max(EffectiveRadius, _settings.MinAggroRadius);
+
     public void Init(HordeSettings settings) { _settings = settings; }
 
     public void AddUnit(uint id)
@@ -285,7 +293,7 @@ public class HordeSystem
                         break;
                     }
                     float targetDistToCircle = (units[targetIdx].Position - _circleCenter).Length();
-                    if (targetDistToCircle > EffectiveRadius)
+                    if (targetDistToCircle > AggroRadius)
                     {
                         hu.State = HordeUnitState.Following;
                         hu.ChasingTarget = GameConstants.InvalidUnit;
@@ -295,6 +303,17 @@ public class HordeSystem
 
                 case HordeUnitState.Engaged:
                 {
+                    // Target killed — the unit's AI clears Target/EngagedTarget when
+                    // its target dies. If we're "Engaged" but not actually pursuing
+                    // anyone, return to horde regardless of other enemies nearby.
+                    // (The horde-level aggro scan below will re-engage us if a new
+                    // threat wanders into range.)
+                    if (units[idx].Target.IsNone && units[idx].EngagedTarget.IsNone)
+                    {
+                        hu.State = HordeUnitState.Returning;
+                        break;
+                    }
+
                     // Leash check: distance from horde slot
                     Vec2 slotPos = ComputeSlotPosition(hu.SlotIndex);
                     float distToSlot = (units[idx].Position - slotPos).Length();
@@ -354,7 +373,7 @@ public class HordeSystem
             _aggroScanTimer = 0.5f;
 
             nearbyIDs.Clear();
-            qt.QueryRadiusByFaction(_circleCenter, EffectiveRadius,
+            qt.QueryRadiusByFaction(_circleCenter, AggroRadius,
                 FactionMaskExt.AllExcept(Faction.Undead), nearbyIDs);
 
             var enemiesInCircle = new List<int>();

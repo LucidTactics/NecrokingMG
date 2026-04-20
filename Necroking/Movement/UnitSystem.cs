@@ -99,6 +99,11 @@ public class Unit
     /// <summary>UnitID of the ranged target captured at queue time (target may die before action moment).</summary>
     public uint PendingRangedTarget = GameConstants.InvalidUnit;
     public uint LastAttackerID = GameConstants.InvalidUnit;
+    /// <summary>Game time (seconds) at which this unit last took damage. Used by
+    /// retarget-when-hit AI logic: HitReacting clears after one tick, but the
+    /// opportunity to retarget spans several ticks (the unit might be briefly in
+    /// melee with its current target when the hit lands).</summary>
+    public float LastHitTime = -1f;
     public float FleeTimer;
     public byte WolfPhase;
     public float WolfPhaseTimer;

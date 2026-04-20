@@ -94,6 +94,7 @@
     "idleRadius": 2,
     "engagementRange": 10,
     "leashRadius": 25,
+    "minAggroRadius": 10,
     "leashChance": 0.25,
     "returnSpeedMult": 0.65,
     "velocityDirLerp": 6

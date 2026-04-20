@@ -53,6 +53,9 @@ public static class SettingsHordeTab
         s.EngagementRange = ui.DrawFloatField("horde_engagementRange", "Engagement Range", s.EngagementRange, x, curY, w, 0.5f);
         curY += RowH;
 
+        s.MinAggroRadius = ui.DrawFloatField("horde_minAggroRadius", "Min Aggro Radius", s.MinAggroRadius, x, curY, w, 0.5f);
+        curY += RowH;
+
         s.LeashRadius = ui.DrawFloatField("horde_leashRadius", "Leash Radius", s.LeashRadius, x, curY, w, 0.5f);
         curY += RowH;
 

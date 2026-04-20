@@ -78,6 +78,7 @@ public static class ScenarioRegistry
         Register("summon_lag", () => new Scenarios.SummonLagScenario());
         Register("pounce_test", () => new Scenarios.PounceTestScenario());
         Register("knockdown_test", () => new Scenarios.KnockdownTestScenario());
+        Register("wolf_retarget", () => new Scenarios.WolfRetargetScenario());
     }
 
     public static void Register(string name, Func<ScenarioBase> creator)
