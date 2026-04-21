@@ -2025,6 +2025,17 @@ public class UnitEditorWindow
                 _unsavedChanges = true;
             }
             curY += RowH;
+
+            // Cosmetic lunge distance for this unit/weapon combo. Zero = no lunge.
+            // The sprite visually translates toward the target at the hit frame;
+            // gameplay position is untouched.
+            float newLunge = _ui.DrawFloatField($"weap_{i}_lunge", "    Lunge Dist", slot.LungeDist, x, curY, w - 28, 0.1f);
+            if (MathF.Abs(newLunge - slot.LungeDist) > 0.001f)
+            {
+                slot.LungeDist = MathF.Max(0f, newLunge);
+                _unsavedChanges = true;
+            }
+            curY += RowH;
         }
         if (def.Weapons.Count < 4)
         {
@@ -3223,7 +3234,7 @@ public class UnitEditorWindow
             SpellID = src.SpellID,
             MaxMana = src.MaxMana,
             ManaRegen = src.ManaRegen,
-            Weapons = src.Weapons.ConvertAll(s => new UnitWeaponRef(s.Id, s.AnimOverride)),
+            Weapons = src.Weapons.ConvertAll(s => new UnitWeaponRef(s.Id, s.AnimOverride) { LungeDist = s.LungeDist }),
             Armors = new List<string>(src.Armors),
             Shields = new List<string>(src.Shields),
         };

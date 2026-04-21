@@ -360,7 +360,7 @@ public static class PotionSystem
                     if (dmg > 0)
                     {
                         units[i].Stats.HP -= dmg;
-                        damageEvents.Add(DamageEvent.Create(units[i].Position, dmg, isPoison: true));
+                        damageEvents.Add(DamageEvent.Create(units[i].RenderPos, dmg, isPoison: true));
                         if (units[i].Stats.HP <= 0)
                         {
                             units[i].Stats.HP = 0;

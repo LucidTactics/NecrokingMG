@@ -84,7 +84,9 @@ public class ShadowRenderer
             if (!sim.Units[i].Alive) continue;
             if (IsUnitHiddenByFog(sim, i, fogOfWar)) continue;
             float unitRadius = sim.Units[i].Radius;
-            var worldPos = sim.Units[i].Position;
+            // Shadow follows the rendered sprite, not the simulation position — so
+            // lunge moves the shadow with the unit.
+            var worldPos = sim.Units[i].RenderPos;
             var sp = renderer.WorldToScreen(worldPos, 0f, camera);
 
             float r = unitRadius * camera.Zoom * 0.8f;
@@ -233,7 +235,8 @@ public class ShadowRenderer
             float sdx = sdxDir * swLen;
             float sdy = sdyDir * swLen * camera.YRatio;
 
-            var feetSp = renderer.WorldToScreen(sim.Units[i].Position, 0f, camera);
+            // Feet anchor follows the rendered sprite so the shadow lunges with the unit.
+            var feetSp = renderer.WorldToScreen(sim.Units[i].RenderPos, 0f, camera);
 
             // UV coordinates from atlas
             float texW = atlas.Texture.Width;

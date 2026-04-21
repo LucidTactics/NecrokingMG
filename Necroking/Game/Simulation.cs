@@ -1927,6 +1927,7 @@ public class Simulation
                     _units[i].PendingWeaponIdx = w;
                     _units[i].PendingWeaponIsRanged = false;
                     _units[i].PendingRangedTarget = GameConstants.InvalidUnit;
+                    _units[i].CurrentAttackLungeDist = ws.LungeDist;
                     ws.Cooldown = cycle;
                     _units[i].AttackCooldown = cycle;
                     _units[i].PostAttackTimer = animDur;

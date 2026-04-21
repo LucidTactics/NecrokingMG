@@ -3254,6 +3254,10 @@ public class Game1 : Microsoft.Xna.Framework.Game
                         animData.Ctrl, curState, locoSpeed, locoBase);
                 }
                 animData.Ctrl.Update(dt);
+
+                // Cosmetic attack lunge — writes Unit.RenderOffset based on attack anim
+                // progress. All draw sites read Position + RenderOffset via unit.RenderPos.
+                LungeSystem.Update(_sim.UnitsMut[i], animData.Ctrl);
             }
             else
             {
@@ -3479,10 +3483,12 @@ public class Game1 : Microsoft.Xna.Framework.Game
                                                * _sim.Units[i].SpriteScale;
                                 float worldScale = worldH / animData.RefFrameHeight;
 
+                                // Spawn position follows the visible weapon tip — if the
+                                // unit is lunged, the projectile spawns from where the
+                                // weapon visually is.
+                                var spawnBase = _sim.Units[i].RenderPos;
                                 float tipDx = wpf.Tip.X * worldScale * flipMul;
-                                mu[i].EffectSpawnPos2D = new Vec2(
-                                    _sim.Units[i].Position.X + tipDx,
-                                    _sim.Units[i].Position.Y);
+                                mu[i].EffectSpawnPos2D = new Vec2(spawnBase.X + tipDx, spawnBase.Y);
 
                                 float unitHeight = _sim.Units[i].Z;
                                 mu[i].EffectSpawnHeight = unitHeight - wpf.Tip.Y * worldScale;
@@ -3496,10 +3502,10 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
             if (!foundWeaponTip)
             {
-                // Fallback: offset in facing direction
+                // Fallback: offset in facing direction. Use RenderPos so spawn follows lunge.
                 float facingRad = _sim.Units[i].FacingAngle * MathF.PI / 180f;
                 float radius = _sim.Units[i].Radius;
-                mu[i].EffectSpawnPos2D = _sim.Units[i].Position
+                mu[i].EffectSpawnPos2D = _sim.Units[i].RenderPos
                     + new Vec2(MathF.Cos(facingRad), MathF.Sin(facingRad)) * radius * 1.5f;
                 mu[i].EffectSpawnHeight = 0.6f;
             }
@@ -3535,15 +3541,18 @@ public class Game1 : Microsoft.Xna.Framework.Game
         float worldScale = worldH / animData.RefFrameHeight;
         float unitHeight = _sim.Units[unitIdx].Z;
 
+        // Weapon attach points follow the sprite's cosmetic offset — so the weapon
+        // lunges with the unit on attack. Gameplay never reads these.
+        var unitRender = _sim.Units[unitIdx].RenderPos;
         result.HiltWorld = new Vec2(
-            _sim.Units[unitIdx].Position.X + wpf.Hilt.X * worldScale * flipMul,
-            _sim.Units[unitIdx].Position.Y);
+            unitRender.X + wpf.Hilt.X * worldScale * flipMul,
+            unitRender.Y);
         result.HiltHeight = unitHeight - wpf.Hilt.Y * worldScale;
         result.HiltBehind = wpf.Hilt.Behind;
 
         result.TipWorld = new Vec2(
-            _sim.Units[unitIdx].Position.X + wpf.Tip.X * worldScale * flipMul,
-            _sim.Units[unitIdx].Position.Y);
+            unitRender.X + wpf.Tip.X * worldScale * flipMul,
+            unitRender.Y);
         result.TipHeight = unitHeight - wpf.Tip.Y * worldScale;
         result.TipBehind = wpf.Tip.Behind;
 
@@ -4717,10 +4726,12 @@ public class Game1 : Microsoft.Xna.Framework.Game
         _depthItems.Clear();
         var items = _depthItems;
 
-        // Add units
+        // Add units. Use RenderPos.Y so a lunging unit re-sorts against its
+        // neighbors naturally — a forward-lunging sprite that crosses another
+        // unit's Y should draw in front of it during the lunge.
         for (int i = 0; i < _sim.Units.Count; i++)
             if (_sim.Units[i].Alive)
-                items.Add(new DepthItem { Y = _sim.Units[i].Position.Y, Type = DepthItemType.Unit, Index = i });
+                items.Add(new DepthItem { Y = _sim.Units[i].RenderPos.Y, Type = DepthItemType.Unit, Index = i });
 
         // Add environment objects (with view culling, skip collected foragables, skip ground-layer objects)
         for (int i = 0; i < _envSystem.ObjectCount; i++)
@@ -4823,9 +4834,13 @@ public class Game1 : Microsoft.Xna.Framework.Game
         tint = MultiplyColor(tint, _ambientColor);
 
         float heightOffset = _sim.Units[i].Z;
-        var sp = _renderer.WorldToScreen(_sim.Units[i].Position, heightOffset, _camera);
+        // Use RenderPos (Position + RenderOffset) so lunge and any future cosmetic
+        // offsets propagate to every visual attached to this unit: sprite, weapon,
+        // shield, status symbols, health bar, buff visuals, damage numbers, etc.
+        var renderPos = _sim.Units[i].RenderPos;
+        var sp = _renderer.WorldToScreen(renderPos, heightOffset, _camera);
         // For drawing above unit.
-        var sp_upper = _renderer.WorldToScreen(_sim.Units[i].Position, heightOffset + _sim.Units[i].CollisionHeight, _camera);
+        var sp_upper = _renderer.WorldToScreen(renderPos, heightOffset + _sim.Units[i].CollisionHeight, _camera);
 
         // Compute weapon attachment for weapon particle buff visuals
         var weaponAttach = ComputeWeaponAttach(i, unitDef, animData);
@@ -4844,7 +4859,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         }
 
         // Buff visuals: phase 0 (behind sprite)
-        _buffVisuals.DrawUnit(i, _sim.Units[i].Position, 0, _gameTime,
+        _buffVisuals.DrawUnit(i, renderPos, 0, _gameTime,
             _spriteBatch, _camera, _renderer, _flipbooks, _gameData.Buffs, _sim.Units,
             atlas, fr.Frame.Value, scale, fr.FlipX,
             _sim.Units[i].EffectSpawnPos2D, _sim.Units[i].EffectSpawnHeight);
@@ -4895,7 +4910,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
             DrawCarriedBodyBag(i, sp, scale, _sim.Units[i].FacingAngle);
 
         // Buff visuals: phase 1 (in front of sprite)
-        _buffVisuals.DrawUnit(i, _sim.Units[i].Position, 1, _gameTime,
+        _buffVisuals.DrawUnit(i, renderPos, 1, _gameTime,
             _spriteBatch, _camera, _renderer, _flipbooks, _gameData.Buffs, _sim.Units,
             atlas, fr.Frame.Value, scale, fr.FlipX,
             _sim.Units[i].EffectSpawnPos2D, _sim.Units[i].EffectSpawnHeight);

@@ -27,6 +27,12 @@ public class WeaponStats
     /// Prevents "flipping weapon JSON order silently changes combat behavior".</summary>
     public int Priority { get; set; } = 0;
 
+    /// <summary>Cosmetic lunge distance (world units) for this unit-weapon combo.
+    /// The sprite translates forward toward the target at the hit frame and decays
+    /// back by the end of the anim; simulation position is unchanged. 0 = no lunge.
+    /// Sourced from the per-unit-per-slot override on UnitWeaponRef at load time.</summary>
+    public float LungeDist { get; set; }
+
     /// <summary>Runtime per-weapon cooldown timer in seconds (ticked down each frame).
     /// Reset to cycle when this weapon is used. Lets a unit carry both a short-cycle
     /// normal melee AND a long-cycle pounce — when pounce is on cooldown the normal

@@ -32,6 +32,12 @@ public class UnitWeaponRef
     /// else Attack1/Ranged1).</summary>
     [JsonPropertyName("anim")] public string? AnimOverride { get; set; }
 
+    /// <summary>Cosmetic lunge distance (world units) — how far the unit's sprite
+    /// visually translates forward toward the target at the hit frame of this
+    /// weapon's attack. 0 = no lunge. Simulation position is unaffected; only
+    /// Unit.RenderOffset is written, which every draw path inherits.</summary>
+    [JsonPropertyName("lungeDist")] public float LungeDist { get; set; }
+
     public UnitWeaponRef() {}
     public UnitWeaponRef(string id) { Id = id; }
     public UnitWeaponRef(string id, string? anim) { Id = id; AnimOverride = string.IsNullOrEmpty(anim) ? null : anim; }
@@ -58,9 +64,10 @@ public class UnitWeaponRefJsonConverter : JsonConverter<UnitWeaponRef>
             reader.Read();
             switch (prop)
             {
-                case "id":   r.Id = reader.GetString() ?? ""; break;
-                case "anim": r.AnimOverride = reader.TokenType == JsonTokenType.Null ? null : reader.GetString(); break;
-                default:     reader.Skip(); break;
+                case "id":        r.Id = reader.GetString() ?? ""; break;
+                case "anim":      r.AnimOverride = reader.TokenType == JsonTokenType.Null ? null : reader.GetString(); break;
+                case "lungeDist": r.LungeDist = reader.GetSingle(); break;
+                default:          reader.Skip(); break;
             }
         }
         return r;
@@ -68,14 +75,19 @@ public class UnitWeaponRefJsonConverter : JsonConverter<UnitWeaponRef>
 
     public override void Write(Utf8JsonWriter writer, UnitWeaponRef value, JsonSerializerOptions options)
     {
-        if (string.IsNullOrEmpty(value.AnimOverride))
+        // Bare-string form only when nothing extra is set — keeps existing
+        // data/units.json diff-free for unmodified slots.
+        bool hasAnim = !string.IsNullOrEmpty(value.AnimOverride);
+        bool hasLunge = value.LungeDist != 0f;
+        if (!hasAnim && !hasLunge)
         {
             writer.WriteStringValue(value.Id);
             return;
         }
         writer.WriteStartObject();
         writer.WriteString("id", value.Id);
-        writer.WriteString("anim", value.AnimOverride);
+        if (hasAnim) writer.WriteString("anim", value.AnimOverride);
+        if (hasLunge) writer.WriteNumber("lungeDist", value.LungeDist);
         writer.WriteEndObject();
     }
 }
@@ -271,6 +283,7 @@ public class UnitRegistry : RegistryBase<UnitDef>
                 AnimName = resolvedAnim,
                 CooldownRounds = w.CooldownRounds,
                 Priority = w.Priority,
+                LungeDist = slot.LungeDist,
                 PounceMinRange = w.PounceMinRange,
                 PounceMaxRange = w.PounceMaxRange,
                 PounceArcPeak = w.PounceArcPeak,

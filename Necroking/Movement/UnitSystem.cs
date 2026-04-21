@@ -63,6 +63,23 @@ public class Unit
     public bool InPhysics;      // True while physics system owns this unit's movement.
     public bool OverrideStarted; // Tracks whether OverrideAnim has been applied to AnimController
 
+    /// <summary>
+    /// Cosmetic XY offset applied to every visual attached to this unit (sprite,
+    /// weapon, shield, shadow, health bar, damage numbers, buff auras, etc.).
+    /// Written by the animation tick each frame. Gameplay systems (pathfinding,
+    /// ORCA, collisions, AI ranges) must keep reading raw Position — use RenderPos
+    /// only from draw / spawn-visual paths.
+    ///
+    /// Currently driven by the attack-lunge system: on melee swing, the unit's
+    /// sprite lunges forward toward the target at effect_time and decays back
+    /// by the end of the anim, while the simulation position stays put.
+    /// </summary>
+    public Vec2 RenderOffset;
+
+    /// <summary>Convenience: Position + RenderOffset. Use this everywhere a
+    /// visual should follow cosmetic offsets. Gameplay code uses Position.</summary>
+    public Vec2 RenderPos => Position + RenderOffset;
+
     // Movement
     public float Radius = 0.495f;
     public float MaxSpeed = 8f;
@@ -102,6 +119,11 @@ public class Unit
     public float FacingAngle = 90f;
     public float AttackCooldown;
     public CombatTarget PendingAttack = CombatTarget.None;
+    /// <summary>LungeDist of the weapon that initiated the currently-playing attack
+    /// anim. Latched here when the attack is queued (PendingWeaponIdx gets cleared at
+    /// effect_time but the lunge continues into the recovery half of the anim).
+    /// Cleared when the attack anim ends.</summary>
+    public float CurrentAttackLungeDist;
     /// <summary>
     /// Index into the chosen weapon list for the pending attack.
     /// -1 = no specific weapon (unarmed / legacy). Use with PendingWeaponIsRanged

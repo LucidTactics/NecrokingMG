@@ -2811,7 +2811,10 @@
       "maxMana": 0,
       "manaRegen": 0,
       "weapons": [
-        "weapon_223651",
+        {
+          "id": "weapon_223651",
+          "anim": "AttackBite"
+        },
         "weapon_223651_copy"
       ],
       "armors": [],
