@@ -2016,7 +2016,19 @@ public class Simulation
 
         if (!t.IsUnit) return;
         int meleeDefenderIdx = ResolveUnitTarget(t);
-        if (meleeDefenderIdx < 0) return;
+        if (meleeDefenderIdx < 0)
+        {
+            // Target died between queue and resolve. Refund the commitment so the
+            // attacker can immediately line up another target instead of standing
+            // frozen through a full cooldown + PostAttackTimer for an unresolved
+            // ghost-swing. Per-weapon Cooldown stays (the swing was "thrown" even
+            // if it missed the dead target) but the post-attack movement lockout
+            // clears so the unit can reorient.
+            _units[unitIdx].PostAttackTimer = 0f;
+            DebugLog.Log("ai",
+                $"[ResolvePendingAttack] unit#{unitIdx} target vanished (id={t.UnitID}); refunding PostAttackTimer");
+            return;
+        }
 
         ResolveMeleeAttack(unitIdx, meleeDefenderIdx, weaponIdx);
     }

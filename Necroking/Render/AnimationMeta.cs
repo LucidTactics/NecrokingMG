@@ -54,6 +54,17 @@ public static class AnimMetaLoader
 {
     public static string MetaKey(string unitName, string category) => $"{unitName}.{category}";
 
+    // Categories that encode a "moment" event (hit connects, projectile spawns, jump
+    // takeoff fires). Missing/zero effect_time on these causes silent timing bugs:
+    // hits resolve at 50%-through fallback, pounces wait out the full safety timeout.
+    // We log on load so regressions are caught immediately instead of in-game.
+    private static readonly HashSet<string> CategoriesRequiringEffectTime = new()
+    {
+        "Attack1", "Attack2", "Attack3", "AttackBite", "AttackBody", "AttackKick",
+        "Ranged1", "Spell1", "Special1",
+        "JumpTakeoff", "JumpLand", "JumpAttackHit",
+    };
+
     public static bool Load(string path, Dictionary<string, AnimationMeta> output)
     {
         if (!File.Exists(path)) return false;
@@ -101,6 +112,21 @@ public static class AnimMetaLoader
                 meta.YawData[yaw] = ym;
             }
             catch (Exception ex) { Core.DebugLog.Log("error", $"Failed to parse animation meta line in {path}: {ex.Message}"); }
+        }
+
+        // Post-load validation: warn about categories where effect_time is critical but missing.
+        foreach (var (key, meta) in output)
+        {
+            int dotIdx = key.IndexOf('.');
+            if (dotIdx < 0) continue;
+            string category = key.Substring(dotIdx + 1);
+            if (!CategoriesRequiringEffectTime.Contains(category)) continue;
+            if (meta.EffectTimeMs <= 0)
+            {
+                Core.DebugLog.Log("asset",
+                    $"[AnimMeta] {key} has no effect_time_ms — hits/spawns/jump transitions " +
+                    $"will fall back to 50%-of-duration heuristic. Author should add effect_time_ms.");
+            }
         }
 
         return true;

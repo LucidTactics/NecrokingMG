@@ -49,15 +49,34 @@ public static class BuffSystem
         // If this buff is incapacitating, set up the incap state
         if (def.Incapacitating)
         {
-            Enum.TryParse<AnimState>(def.IncapHoldAnim, out var holdAnim);
-            Enum.TryParse<AnimState>(def.IncapRecoverAnim, out var recoverAnim);
+            // Parse the buff's requested hold/recover anim states. Enum.TryParse succeeds
+            // on any string matching an enum name — it does NOT verify that this unit's
+            // sprite actually authored that animation. A missing sprite anim silently
+            // falls back to Idle at render time, making "incapacitated" units look fine.
+            // We don't have the sprite data here (that's on the AnimController, which is
+            // owned by Game1 via _unitAnims), so we can only sanity-check the parse.
+            if (!Enum.TryParse<AnimState>(def.IncapHoldAnim, out var holdAnim))
+            {
+                Necroking.Core.DebugLog.Log("asset",
+                    $"[BuffSystem] Buff '{def.Id}' IncapHoldAnim='{def.IncapHoldAnim}' does not match any AnimState — falling back to Idle");
+                holdAnim = AnimState.Idle;
+            }
+            if (!Enum.TryParse<AnimState>(def.IncapRecoverAnim, out var recoverAnim))
+            {
+                Necroking.Core.DebugLog.Log("asset",
+                    $"[BuffSystem] Buff '{def.Id}' IncapRecoverAnim='{def.IncapRecoverAnim}' does not match any AnimState — falling back to Idle");
+                recoverAnim = AnimState.Idle;
+            }
             units[unitIdx].Incap = new IncapState
             {
                 Active = true,
                 HoldAnim = holdAnim,
                 RecoverAnim = recoverAnim,
                 RecoverTime = def.IncapRecoverTime,
-                RecoverTimer = 0f,
+                // Sentinel -1 tells AnimResolver to initialize from real anim duration
+                // when recovery actually starts. Using 0 here would bypass that path
+                // (the "only init if < 0" guard) and cause instant recovery.
+                RecoverTimer = -1f,
                 Recovering = false,
                 HoldAtEnd = def.IncapHoldAtEnd,
             };

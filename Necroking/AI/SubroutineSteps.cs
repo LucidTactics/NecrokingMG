@@ -174,15 +174,28 @@ public static class SubroutineSteps
     public static void AttackTarget(ref AIContext ctx)
     {
         int targetIdx = ResolveTarget(ref ctx);
-        if (targetIdx < 0) { ctx.Units[ctx.UnitIndex].PreferredVel = Vec2.Zero; return; }
+        if (targetIdx < 0)
+        {
+            ctx.Units[ctx.UnitIndex].PreferredVel = Vec2.Zero;
+            SetLocomotionAnim(ref ctx, 0f);
+            return;
+        }
 
         float dist = (ctx.Units[targetIdx].Position - ctx.MyPos).Length();
         float attackRange = GetMeleeRange(ref ctx, targetIdx);
 
         if (dist > attackRange * 1.5f)
+        {
             MoveToward(ref ctx, ctx.Units[targetIdx].Position, ctx.MySpeed);
+        }
         else
+        {
+            // In melee range — hold position and explicitly go to Idle. Without this,
+            // RoutineAnim stays Walk/Run from the previous MoveToward call; between
+            // OverrideAnim attack anims the unit briefly walks-in-place at velocity 0.
             ctx.Units[ctx.UnitIndex].PreferredVel = Vec2.Zero;
+            SetLocomotionAnim(ref ctx, 0f);
+        }
 
         // Set engaged target so combat system fires
         if (ctx.Units[ctx.UnitIndex].EngagedTarget.IsNone)

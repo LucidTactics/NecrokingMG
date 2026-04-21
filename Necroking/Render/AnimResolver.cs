@@ -92,13 +92,26 @@ public static class AnimResolver
 
     /// <summary>
     /// Set an override animation on a unit. Used by combat, physics, game events.
+    ///
+    /// Replacement rules (priority lanes):
+    ///   - Strictly higher priority always wins.
+    ///   - Same priority only wins if the current override has *already started*
+    ///     (OverrideStarted=true) — i.e. the controller has entered its state and
+    ///     begun playing. A new same-priority request can't steal frame-0 from a
+    ///     same-priority request that was just queued but hasn't hit the controller
+    ///     yet. This prevents two overrides queued on the same frame (e.g. hit +
+    ///     dodge) from last-writer-wins with neither getting to play.
+    ///   - Lower priority never replaces a live override.
     /// </summary>
     public static void SetOverride(Unit unit, AnimRequest request)
     {
-        // Higher priority always replaces. Same priority replaces if current is interruptible or finished.
-        if (request.Priority > unit.OverrideAnim.Priority
-            || !unit.OverrideAnim.IsActive
-            || (request.Priority == unit.OverrideAnim.Priority))
+        bool canReplace;
+        if (!unit.OverrideAnim.IsActive) canReplace = true;
+        else if (request.Priority > unit.OverrideAnim.Priority) canReplace = true;
+        else if (request.Priority == unit.OverrideAnim.Priority) canReplace = unit.OverrideStarted;
+        else canReplace = false;
+
+        if (canReplace)
         {
             unit.OverrideAnim = request;
             unit.OverrideTimer = request.Duration > 0f ? request.Duration : 0f;

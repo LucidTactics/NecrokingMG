@@ -35,7 +35,14 @@ public static class JumpSystem
     private const float AirHorizontalSpeed = 6f;      // units/sec through the air
     private const float MinAirDuration = 0.40f;       // seconds, enforced minimum
     private const float DefaultArcPeak = 2.0f;         // parabola peak height
-    private const float TakeoffSafetyTimeout = 3.0f;   // abort takeoff if effect_time never fires
+    // Per-phase safety timeouts. Each phase should finish naturally via anim callbacks
+    // (ConsumeActionMoment, PlayOnceTransition auto-switch). If anim metadata is broken
+    // or the sprite is missing the expected state, the timeouts force progression so
+    // the unit doesn't get locked out of AI/combat (every handler has
+    // `if (JumpPhase != 0) break` guards).
+    private const float TakeoffSafetyTimeout = 1.0f;   // was 3s — shortened; anims shouldn't wind up that long
+    private const float LandingSafetyTimeout = 1.5f;   // land phase (airborne→touchdown)
+    private const float RecoverySafetyTimeout = 1.5f;  // recovery (post-touchdown anim wind-down)
 
     // --- Initiation API ---
 
@@ -251,6 +258,7 @@ public static class JumpSystem
             units[idx].Velocity = Vec2.Zero;
             units[idx].PreferredVel = Vec2.Zero;
             units[idx].JumpPhase = 4; // Recovery
+            units[idx].JumpTimer = 0f; // reset for recovery timeout
             FireLandingCallback(units, idx, sim);
             DebugLog.Log("jump", $"[Land] unit#{idx} at=({units[idx].Position.X:F1},{units[idx].Position.Y:F1}) kind={units[idx].JumpKind}");
         }
@@ -261,12 +269,20 @@ public static class JumpSystem
         units[idx].Z = 0f;
         units[idx].Velocity = Vec2.Zero;
         units[idx].PreferredVel = Vec2.Zero;
+        units[idx].JumpTimer += dt;
 
         // Landing anim finishes (PlayOnceTransition) → ctrl switches to its pending state
         // (usually Idle). Either way, once CurrentState is no longer the land anim, we're done.
+        // Safety timeout: if the anim asset is missing/broken and ctrl never leaves landAnim,
+        // force recovery end rather than locking the unit out of AI/combat forever.
         var landAnim = LandAnim(units[idx].JumpKind);
-        if (ctrl.CurrentState != landAnim)
+        if (ctrl.CurrentState != landAnim || units[idx].JumpTimer >= RecoverySafetyTimeout)
         {
+            if (ctrl.CurrentState == landAnim && units[idx].JumpTimer >= RecoverySafetyTimeout)
+            {
+                DebugLog.Log("jump",
+                    $"[Recovery TIMEOUT] unit#{idx} ctrl stuck in {landAnim} for {units[idx].JumpTimer:F2}s — forcing EndJump");
+            }
             EndJump(units, idx);
         }
     }
