@@ -88,21 +88,47 @@ public class WolfPackHandler : IArchetypeHandler
         // reach AND we took damage recently, switch aggro to whoever hit us. Using
         // LastHitTime (not HitReacting) extends the evaluation window beyond the single
         // tick HitReacting lasts — the wolf may briefly flip in/out of melee range as
-        // its current target kites, and we need to catch the "out of range" phase even
-        // if the hit landed during a brief "in range" moment.
+        // its current target kites.
         const float RetargetOnHitWindow = 2.0f;
         if (ctx.Routine == RoutineFighting
-            && !ctx.Units[ctx.UnitIndex].InCombat
             && ctx.Units[ctx.UnitIndex].LastHitTime >= 0f
             && (ctx.GameTime - ctx.Units[ctx.UnitIndex].LastHitTime) <= RetargetOnHitWindow)
         {
+            // Log every retarget evaluation so we can see which gate is blocking it.
+            uint curTargetId = ctx.Units[ctx.UnitIndex].Target.IsUnit
+                ? ctx.Units[ctx.UnitIndex].Target.UnitID : 0;
             uint attackerId = ctx.Units[ctx.UnitIndex].LastAttackerID;
-            if (attackerId != GameConstants.InvalidUnit
-                && attackerId != ctx.Units[ctx.UnitIndex].Target.UnitID)
+            float dtSinceHit = ctx.GameTime - ctx.Units[ctx.UnitIndex].LastHitTime;
+            DebugLog.Log("wolf_retarget",
+                $"[Wolf {ctx.MyId}] retarget eval: InCombat={ctx.Units[ctx.UnitIndex].InCombat} " +
+                $"curTarget={curTargetId} attacker={attackerId} dtSinceHit={dtSinceHit:F2}s");
+
+            if (ctx.Units[ctx.UnitIndex].InCombat)
+            {
+                DebugLog.Log("wolf_retarget",
+                    $"  skipped: InCombat=true (current target in melee range)");
+            }
+            else if (attackerId == GameConstants.InvalidUnit)
+            {
+                DebugLog.Log("wolf_retarget", "  skipped: attackerId is Invalid");
+            }
+            else if (attackerId == curTargetId)
+            {
+                DebugLog.Log("wolf_retarget",
+                    $"  skipped: attacker ({attackerId}) is already current target");
+            }
+            else
             {
                 int attackerIdx = UnitUtil.ResolveUnitIndex(ctx.Units, attackerId);
-                if (attackerIdx >= 0 && ctx.Units[attackerIdx].Alive)
+                if (attackerIdx < 0 || !ctx.Units[attackerIdx].Alive)
                 {
+                    DebugLog.Log("wolf_retarget",
+                        $"  skipped: attacker {attackerId} not resolvable or dead");
+                }
+                else
+                {
+                    DebugLog.Log("wolf_retarget",
+                        $"  RETARGET: switching from {curTargetId} → {attackerId}");
                     ctx.Units[ctx.UnitIndex].Target = CombatTarget.Unit(attackerId);
                     ctx.Units[ctx.UnitIndex].EngagedTarget = CombatTarget.None;
                     ctx.AlertTarget = attackerId;

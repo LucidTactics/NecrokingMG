@@ -263,17 +263,16 @@ public class HordeSystem
             {
                 case HordeUnitState.Following:
                 {
-                    // Check if any enemy is within engagement range
-                    nearbyIDs.Clear();
-                    qt.QueryRadiusByFaction(units[idx].Position, _settings.EngagementRange,
-                        FactionMaskExt.AllExcept(Faction.Undead), nearbyIDs);
-                    foreach (uint nid in nearbyIDs)
-                    {
-                        int ni = UnitUtil.ResolveUnitIndex(units, nid);
-                        if (ni < 0) continue;
+                    // Only transition to Engaged when the minion is ACTUALLY in combat
+                    // (has an engaged target within melee range). Previously we flipped
+                    // to Engaged on mere proximity, which made the aggro scan skip them
+                    // (it only considers Following/Returning for new target assignments)
+                    // — so they'd stand around labeled "Engaged" while never actually
+                    // picking up the enemy as a target. Proximity-to-enemy is irrelevant
+                    // here; target acquisition happens via the aggro scan below or via
+                    // the minion's own UpdateFollowing self-aggro check.
+                    if (units[idx].InCombat)
                         hu.State = HordeUnitState.Engaged;
-                        break;
-                    }
                     break;
                 }
 
@@ -384,11 +383,44 @@ public class HordeSystem
                 enemiesInCircle.Add(ni);
             }
 
+            // Count state breakdown for the per-scan summary line.
+            int nFollowing = 0, nChasing = 0, nEngaged = 0, nReturning = 0;
+            foreach (var hu0 in _hordeUnits)
+            {
+                switch (hu0.State)
+                {
+                    case HordeUnitState.Following: nFollowing++; break;
+                    case HordeUnitState.Chasing:   nChasing++;   break;
+                    case HordeUnitState.Engaged:   nEngaged++;   break;
+                    case HordeUnitState.Returning: nReturning++; break;
+                }
+            }
+            DebugLog.Log("horde_aggro",
+                $"[AggroScan] center=({_circleCenter.X:F1},{_circleCenter.Y:F1}) " +
+                $"aggroRadius={AggroRadius:F1} effRadius={EffectiveRadius:F1} " +
+                $"enemies={enemiesInCircle.Count} horde={_hordeUnits.Count} " +
+                $"(F={nFollowing} C={nChasing} E={nEngaged} R={nReturning})");
+
             if (enemiesInCircle.Count > 0)
             {
+                // Log the first few enemies + their distance to center (cap to avoid spam).
+                int nLogged = 0;
+                foreach (int e in enemiesInCircle)
+                {
+                    if (nLogged >= 3) break;
+                    float d = (units[e].Position - _circleCenter).Length();
+                    DebugLog.Log("horde_aggro",
+                        $"  enemy id={units[e].Id} def='{units[e].UnitDefID}' " +
+                        $"faction={units[e].Faction} pos=({units[e].Position.X:F1},{units[e].Position.Y:F1}) " +
+                        $"distFromCenter={d:F1}");
+                    nLogged++;
+                }
+
+                int considered = 0, assigned = 0;
                 foreach (var hu in _hordeUnits)
                 {
                     if (hu.State != HordeUnitState.Following && hu.State != HordeUnitState.Returning) continue;
+                    considered++;
                     if ((float)_rng.NextDouble() >= 0.25f) continue;
 
                     int unitIdx = UnitUtil.ResolveUnitIndex(units, hu.UnitID);
@@ -407,8 +439,14 @@ public class HordeSystem
                     {
                         hu.State = HordeUnitState.Chasing;
                         hu.ChasingTarget = units[bestEnemy].Id;
+                        assigned++;
+                        DebugLog.Log("horde_aggro",
+                            $"  ASSIGN unit={hu.UnitID} → chase enemy id={units[bestEnemy].Id} " +
+                            $"(dist={MathF.Sqrt(bestDist2):F1})");
                     }
                 }
+                DebugLog.Log("horde_aggro",
+                    $"  summary: eligible={considered} (F+R only, 25% chance each) assigned={assigned}");
             }
         }
     }

@@ -2076,6 +2076,18 @@ public class Simulation
             _units[defenderIdx].Dodging = true;
             _units[defenderIdx].OverrideAnim = new Render.AnimRequest
                 { State = Render.AnimState.Dodge, Priority = 1, Interrupt = true, Duration = 0, PlaybackSpeed = 1f };
+            // Record the swing so retarget-on-hit AI still fires on misses — a missed
+            // attack is still active combat engagement. Without this, a low-attack unit
+            // (e.g. zombie deer vs high-defense wolf) whiffs repeatedly and the wolf
+            // never realizes it's being attacked.
+            _units[defenderIdx].LastAttackerID = _units[attackerIdx].Id;
+            _units[defenderIdx].LastHitTime = _gameTime;
+            if (_units[defenderIdx].Archetype == AI.ArchetypeRegistry.WolfPack)
+            {
+                DebugLog.Log("wolf_retarget",
+                    $"[Wolf {_units[defenderIdx].Id}] swung at by id={_units[attackerIdx].Id} " +
+                    $"({_units[attackerIdx].UnitDefID}) → MISS at t={_gameTime:F2}s (LastHitTime + LastAttackerID set)");
+            }
             logEntry.Outcome = CombatLogOutcome.Miss;
             _combatLog.AddEntry(logEntry);
             return;
@@ -2114,6 +2126,16 @@ public class Simulation
             _units[defenderIdx].BlockReacting = true;
             _units[defenderIdx].LastHitTime = _gameTime;
             _units[defenderIdx].OverrideAnim = Render.AnimRequest.Combat(Render.AnimState.BlockReact);
+        }
+
+        // Diagnostic: log every melee hit on a wolf-archetype unit so we can verify
+        // the retarget pipeline is seeing attackers.
+        if (_units[defenderIdx].Archetype == AI.ArchetypeRegistry.WolfPack)
+        {
+            DebugLog.Log("wolf_retarget",
+                $"[Wolf {_units[defenderIdx].Id}] hit by attacker id={_units[attackerIdx].Id} " +
+                $"({_units[attackerIdx].UnitDefID}) netDmg={netDmg} at t={_gameTime:F2}s — " +
+                $"LastHitTime set, LastAttackerID will be set in ApplyDirect");
         }
 
         // Melee uses ApplyDirect — armor already calculated above with DRN rolls

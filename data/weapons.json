@@ -371,7 +371,7 @@
     {
       "id": "weapon_223651_copy",
       "name": "Pounce",
-      "damage": -5,
+      "damage": -10,
       "attackBonus": 4,
       "defenseBonus": 0,
       "length": 1,

@@ -87,6 +87,8 @@ public class HordeMinionHandler : IArchetypeHandler
                 ctx.Units[ctx.UnitIndex].Target = CombatTarget.Unit(chasingId);
                 ctx.Routine = RoutineChasing;
                 ctx.Subroutine = 0;
+                DebugLog.Log("horde_aggro",
+                    $"  [Minion {ctx.MyId}] accepted horde Chasing assignment → target={chasingId}");
             }
         }
 
@@ -105,8 +107,21 @@ public class HordeMinionHandler : IArchetypeHandler
 
     private static void UpdateFollowing(ref AIContext ctx)
     {
-        // Acquire targets within engagement range
-        if (!SubroutineSteps.IsTargetAlive(ref ctx))
+        // If a target is already set (e.g. DamageSystem assigns Target=attacker
+        // on hit for units whose EngagedTarget was None) and it's alive, switch
+        // to Chasing so we actually fight back. Without this, a following minion
+        // hit by a wolf would keep following its slot — target set but ignored.
+        if (SubroutineSteps.IsTargetAlive(ref ctx))
+        {
+            ctx.Routine = RoutineChasing;
+            ctx.Subroutine = 0;
+            DebugLog.Log("horde_aggro",
+                $"  [Minion {ctx.MyId}] UpdateFollowing saw live Target → Chasing " +
+                $"(target id={ctx.Units[ctx.UnitIndex].Target.UnitID})");
+            return;
+        }
+
+        // No target — scan for enemies within engagement range.
         {
             float engageRange = ctx.Horde?.Settings.EngagementRange ?? 10f;
             int enemy = SubroutineSteps.FindClosestEnemy(ref ctx, engageRange);
@@ -115,6 +130,9 @@ public class HordeMinionHandler : IArchetypeHandler
                 ctx.Units[ctx.UnitIndex].Target = CombatTarget.Unit(ctx.Units[enemy].Id);
                 ctx.Routine = RoutineChasing;
                 ctx.Subroutine = 0;
+                DebugLog.Log("horde_aggro",
+                    $"  [Minion {ctx.MyId}] self-aggro (UpdateFollowing) → enemy id={ctx.Units[enemy].Id} " +
+                    $"dist={(ctx.Units[enemy].Position - ctx.MyPos).Length():F1} range={engageRange:F1}");
                 return;
             }
         }
