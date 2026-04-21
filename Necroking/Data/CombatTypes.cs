@@ -22,6 +22,11 @@ public class WeaponStats
     /// <summary>Per-weapon cooldown in rounds. Cycle time = CooldownRounds × RoundDuration.</summary>
     public int CooldownRounds { get; set; } = 1;
 
+    /// <summary>Selection priority for multi-weapon units. Higher = checked first when
+    /// scanning for an eligible attack. Default 0 — ties break by weapon-list order.
+    /// Prevents "flipping weapon JSON order silently changes combat behavior".</summary>
+    public int Priority { get; set; } = 0;
+
     /// <summary>Runtime per-weapon cooldown timer in seconds (ticked down each frame).
     /// Reset to cycle when this weapon is used. Lets a unit carry both a short-cycle
     /// normal melee AND a long-cycle pounce — when pounce is on cooldown the normal

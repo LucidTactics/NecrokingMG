@@ -34,6 +34,10 @@ public class WeaponDef : IHasId
     /// 1 round default. Cycle time = CooldownRounds × RoundDuration.</summary>
     [JsonPropertyName("cooldownRounds")] public int CooldownRounds { get; set; } = 1;
 
+    /// <summary>Selection priority in a multi-weapon unit (higher = checked first).
+    /// Ties break by weapon-list order. Default 0.</summary>
+    [JsonPropertyName("priority")] public int Priority { get; set; } = 0;
+
     // --- Pounce archetype parameters (used only when Archetype == "Pounce") ---
     [JsonPropertyName("pounceMinRange")] public float PounceMinRange { get; set; } = 3f;
     [JsonPropertyName("pounceMaxRange")] public float PounceMaxRange { get; set; } = 8f;

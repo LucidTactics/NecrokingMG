@@ -193,6 +193,7 @@ public class UnitRegistry : RegistryBase<UnitDef>
                 IsRanged = w.IsRanged,
                 AnimName = w.AnimName,
                 CooldownRounds = w.CooldownRounds,
+                Priority = w.Priority,
                 PounceMinRange = w.PounceMinRange,
                 PounceMaxRange = w.PounceMaxRange,
                 PounceArcPeak = w.PounceArcPeak,
@@ -222,6 +223,17 @@ public class UnitRegistry : RegistryBase<UnitDef>
                 if (b == "Knockdown")     { s.HasKnockdown     = true; ws.HasKnockdown     = true; }
             }
         }
+
+        // Stable-sort weapons by Priority descending so Simulation.UpdateCombat's
+        // weapon scan picks higher-priority attacks first. LINQ OrderByDescending is
+        // stable — equal Priority preserves the original list order (ties break by
+        // weapon-list order, same as before the Priority field existed).
+        if (s.MeleeWeapons.Count > 1)
+            s.MeleeWeapons = System.Linq.Enumerable.ToList(
+                System.Linq.Enumerable.OrderByDescending(s.MeleeWeapons, w => w.Priority));
+        if (s.RangedWeapons.Count > 1)
+            s.RangedWeapons = System.Linq.Enumerable.ToList(
+                System.Linq.Enumerable.OrderByDescending(s.RangedWeapons, w => w.Priority));
 
         // Backward compat: populate primary weapon from first melee
         if (s.MeleeWeapons.Count > 0)

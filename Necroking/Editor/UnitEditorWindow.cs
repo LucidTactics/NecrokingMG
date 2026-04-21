@@ -2547,6 +2547,12 @@ public class UnitEditorWindow
         if (newCdRounds != w.CooldownRounds) { w.CooldownRounds = Math.Max(1, newCdRounds); _unsavedChanges = true; }
         curY += RowH;
 
+        // Selection priority for multi-weapon units. Higher = checked first. Ties break
+        // by weapon-list order. Prevents "flipping list order silently changes combat".
+        int newPri = _ui.DrawIntField("w_pri", "Priority", w.Priority, x, curY, ww);
+        if (newPri != w.Priority) { w.Priority = newPri; _unsavedChanges = true; }
+        curY += RowH;
+
         // Archetype dropdown — at most one per weapon (unlike bonuses).
         string[] archOptions = Enum.GetNames<WeaponArchetype>();
         string archVal = string.IsNullOrEmpty(w.Archetype) ? "None" : w.Archetype;
