@@ -42,8 +42,30 @@ Frame:
 
 ## Progress log
 
-- **Round 1 (this branch)** — §1.1, §1.2, §1.3, §1.4 all addressed. See §5.9 for the fallout on "dt spike ghost attack" (closed by §1.1 fix). Regression scenarios pass: `pounce_test`, `wolf_hit_and_run`, `skirmish`, `combat_test`, `knockdown_test`, `wolf_retarget`, `horde_follow`.
-- **Round 2+** — on hold pending review of §5 detailed breakdowns below.
+- **Round 1 (commits 9247c71)** — §1.1 – §1.4 addressed. See §5.9 closed as a downstream effect of §1.1.
+- **Group A (commit bb9dc69)** — §5.3 effect_time load warnings, §5.4 buff-anim validation logs, §5.5 attack refund on dead target, §5.6 SetOverride same-priority-until-started, §5.7 Incap RecoverTimer=-1 re-init, §5.10 RoutineAnim=Idle in AttackTarget, §5.12 Jump phase 3/4 safety timeouts.
+- **Group B (commit c54a0ae)** — §5.11 InCombat single-writer + `JustEnteredCombat` / `JustLeftCombat` edge events; §5.8 amortized minions wake on urgent events (hit, combat edge).
+- **Group C (commit 78766fc)** — §5.2 `Weapon.Priority` field + stable-sort at load; editor exposes it; ties break by list order for backward compat.
+- **Group D (commit 89041a9)** — §5.1 `LocomotionProfile` consolidates thresholds/hysteresis for SetLocomotionAnim and LocomotionScaling; Game1 only overwrites PlaybackSpeed for locomotion states so attack-anim compression survives.
+- **Group E (deferred)** — §5.13 Timers container and §5.14 IAttackArchetype interface are large architectural refactors that don't fix concrete bugs. See scope notes below; recommend gating on design agreement before implementing.
+
+### Group E — scope & recommendation
+
+**§5.13 Timers container (≈200–300 LOC, 50+ touch-sites)**
+- Replace per-field timers (`AttackCooldown`, `PostAttackTimer`, `StatusSymbolTimer`, `BaggingTimer`, `PoisonTickTimer`, `SubroutineTimer`, `JumpTimer`, `Incap.RecoverTimer`, per-weapon `Cooldown`, etc.) with a `TimerBag` indexed by enum key.
+- Each timer key has a documented owner (which system writes) and read semantics.
+- Central per-tick decrement loop instead of ad-hoc decrements scattered across Simulation/BuffSystem/JumpSystem/PotionSystem.
+- **Pros:** single debug view of every timer on a unit; easier to add new timers; one-writer invariant becomes enforceable.
+- **Cons:** touches every timer read/write in the codebase; adds an indirection layer on hot code paths; risks regressing working timer logic without a corresponding bug to fix.
+- **Recommendation:** defer. Revisit if we add more timers (retarget cooldowns, stance timers, ability-charge timers) — right now it's pre-factoring.
+
+**§5.14 IAttackArchetype interface (≈200 LOC)**
+- New interface `IAttackArchetype` with `CanInitiate(unit, target, weapon)`, `Initiate(…)`, `OnResolve(…)`.
+- Implementations: `NormalMeleeArchetype` (current default path), `PounceArchetype` (wraps `JumpSystem.BeginPounce` + landing resolution).
+- Simulation.UpdateCombat's weapon scan dispatches to the archetype instead of inline if-branches; JumpSystem becomes an internal utility called by `PounceArchetype`.
+- **Pros:** adding future archetypes (Charge, Knockback, Stomp) is a new class, not an edit to Simulation. Clean integration point.
+- **Cons:** refactor with no current behavioral win (only one non-None archetype exists). Risks changing combat semantics subtly (order of field writes, exact timing of JumpSystem init).
+- **Recommendation:** defer until we're adding the second non-None archetype. Then doing 5.14 *becomes* the integration pattern for the new one.
 
 ## 1. Confirmed bugs (must-fix)
 
