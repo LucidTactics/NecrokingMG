@@ -134,9 +134,12 @@ public static class BuffSystem
                         incap.RecoverTimer = -1f; // Animation system will set real duration
                         units[i].Incap = incap;
 
-                        // Switch override to recovery animation
+                        // Switch override to recovery animation. Forced (priority 3)
+                        // because the hold anim is also Forced — a Combat (priority 2)
+                        // override can't replace it, which would leave the unit stuck
+                        // playing Knockdown forever after Incap cleanly finishes.
                         Enum.TryParse<AnimState>(def.IncapRecoverAnim, out var recoverAnim);
-                        AnimResolver.SetOverride(units[i], AnimRequest.Combat(recoverAnim));
+                        AnimResolver.SetOverride(units[i], AnimRequest.Forced(recoverAnim));
                     }
                 }
 
@@ -163,7 +166,8 @@ public static class BuffSystem
                     incap.RecoverTimer = -1f; // Animation system will set real duration
                     units[i].Incap = incap;
 
-                    AnimResolver.SetOverride(units[i], AnimRequest.Combat(incap.RecoverAnim));
+                    // Forced so it can replace the Priority-3 Knockdown hold override.
+                    AnimResolver.SetOverride(units[i], AnimRequest.Forced(incap.RecoverAnim));
                 }
             }
         }
