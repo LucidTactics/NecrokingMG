@@ -61,7 +61,12 @@ public class Unit
     public Vec2 PreferredVel;
     public float Z;             // Height above ground (0 = on ground). Used by 2.5D impulse physics.
     public bool InPhysics;      // True while physics system owns this unit's movement.
-    public bool OverrideStarted; // Tracks whether OverrideAnim has been applied to AnimController
+    /// <summary>Tracks whether OverrideAnim has been applied to AnimController.
+    /// Public getter but internal setter — only Necroking.Render.AnimResolver
+    /// mutates this, preventing the "stale OverrideStarted carries into next
+    /// override" class of bug (commit 9247c71). External callers must use
+    /// AnimResolver.SetOverride to queue overrides.</summary>
+    public bool OverrideStarted { get; internal set; }
 
     /// <summary>
     /// Cosmetic XY offset applied to every visual attached to this unit (sprite,
@@ -235,10 +240,16 @@ public class Unit
     public Vec2 SpawnPosition;
     public bool IsSneaking;
 
-    // Two-channel animation system
-    public AnimRequest RoutineAnim;     // Set by AI each frame (locomotion, feeding, etc.)
-    public AnimRequest OverrideAnim;    // Set by combat/physics, auto-expires
-    public float OverrideTimer;         // Counts down, clears override when <= 0
+    // Two-channel animation system.
+    // RoutineAnim is the base layer — AI handlers write it every frame (locomotion,
+    // feeding, etc.) and is a normal public field.
+    // OverrideAnim + OverrideTimer are the interrupt layer — writes MUST go through
+    // AnimResolver.SetOverride so OverrideStarted stays coherent and the priority
+    // replacement rules are enforced. Public getters, internal setters enforce this
+    // at compile time across assemblies.
+    public AnimRequest RoutineAnim;
+    public AnimRequest OverrideAnim { get; internal set; }
+    public float OverrideTimer { get; internal set; }
 
     // Per-unit awareness config (set from UnitDef at spawn)
     public float DetectionRange;

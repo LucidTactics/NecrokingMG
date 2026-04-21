@@ -195,7 +195,8 @@ public static class JumpSystem
             ctrl.ForceState(AnimState.JumpTakeoff);
 
         // When anim hits effect_time_ms → physically lift off.
-        if (ctrl.ConsumeActionMoment() || units[idx].JumpTimer > TakeoffSafetyTimeout)
+        // JustHitEffectFrame is the edge-flag replacement for ConsumeActionMoment.
+        if (ctrl.JustHitEffectFrame || units[idx].JumpTimer > TakeoffSafetyTimeout)
         {
             // Capture current position as the real liftoff start. JumpEndPos was locked at
             // BeginPounce; JumpDuration (airborne seconds) was computed there too, so the
@@ -248,7 +249,7 @@ public static class JumpSystem
         ApplyArc(units, idx, t);
 
         // Touchdown when land anim's effect_time fires, or (safety) timer overruns duration.
-        bool animTouchdown = ctrl.ConsumeActionMoment();
+        bool animTouchdown = ctrl.JustHitEffectFrame;
         bool timerTouchdown = t >= 1f;
 
         if (animTouchdown || timerTouchdown)

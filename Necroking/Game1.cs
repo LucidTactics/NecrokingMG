@@ -3258,6 +3258,11 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 // Cosmetic attack lunge — writes Unit.RenderOffset based on attack anim
                 // progress. All draw sites read Position + RenderOffset via unit.RenderPos.
                 LungeSystem.Update(_sim.UnitsMut[i], animData.Ctrl);
+
+                // DEBUG-only invariant checks. No-op in production; fires at the exact
+                // frame a rule is violated (easier to diagnose than "the anim got weird
+                // 10 frames ago").
+                AnimInvariants.Check(_sim.Units[i], animData.Ctrl);
             }
             else
             {
@@ -3374,31 +3379,30 @@ public class Game1 : Microsoft.Xna.Framework.Game
             animData.Ctrl.Update(dt);
             } // end legacy path
 
-            // Action moment handling: route to melee attack or spell cast.
+            // Action-moment handling via edge flags.
             //
-            // Only consume the moment when something is actually queued. The pre-roll
-            // branch above forces the attack anim to play *before* PendingAttack is set
-            // (so effect_time lines up with the end of the weapon cooldown). If
-            // ConsumeActionMoment fires on the pre-roll frame before Simulation gets to
-            // set PendingAttack, the moment is marked consumed and the real attack —
-            // which arrives one frame later — can never resolve its damage (ghost
-            // attack). Peeking HasReachedActionMoment and only consuming when a real
-            // consumer exists avoids that.
-            bool hasPendingCast = _pendingCastAnim != null && i == FindNecromancer()
-                && animData.Ctrl.CurrentState == AnimState.Spell1;
-            bool hasPendingAttack = !_sim.Units[i].PendingAttack.IsNone;
-            if ((hasPendingCast || hasPendingAttack) && animData.Ctrl.ConsumeActionMoment())
+            // JustHitEffectFrame fires on the single tick where _animTime crosses the
+            // current state's effect_time_ms (or 50% in tick-based fallback). Unlike
+            // the old ConsumeActionMoment model, reading this flag is non-destructive:
+            // every interested system inspects the same flag and decides whether it's
+            // the intended consumer. Pre-roll can't "steal" an action moment from the
+            // real attack anymore — the pre-roll simply has no queued consumer when
+            // the flag fires.
+            if (animData.Ctrl.JustHitEffectFrame)
             {
+                bool hasPendingCast = _pendingCastAnim != null && i == FindNecromancer()
+                    && animData.Ctrl.CurrentState == AnimState.Spell1;
+                bool hasPendingAttack = !_sim.Units[i].PendingAttack.IsNone;
+
                 if (hasPendingCast)
                 {
-                    // Spell cast action moment: execute the deferred spell
                     var pca = _pendingCastAnim.Value;
                     var spell = _gameData.Spells.Get(pca.SpellID);
                     if (spell != null)
                         ExecuteSpellEffect(spell, i, pca.Target, pca.Slot);
                     _pendingCastAnim = null;
                 }
-                else
+                else if (hasPendingAttack)
                 {
                     _sim.ResolvePendingAttack(i);
                 }
@@ -4629,17 +4633,74 @@ public class Game1 : Microsoft.Xna.Framework.Game
             aiLabel = AI.ArchetypeRegistry.GetName(aiArchetypeId);
             var aiArchetype = AI.ArchetypeRegistry.Get(aiArchetypeId);
 
-            if (aiArchetype != null) {
-                
+            if (aiArchetype != null)
+            {
                 string routineLabel = aiArchetype.GetRoutineName(_sim.Units[i].Routine);
-
                 aiLabel = $"{aiLabel} - {routineLabel}";
             }
-                
 
-            // Text above head: AI label + velocity | anim state | max speed
-            string info = $"{aiLabel}\nv:{speed:F1} {animLabel} ms:{maxSpeed:F1}";
-            var textPos = new Vector2(sp.X - info.Length * 3, sp.Y - 28);
+            // Build the info string. Base line always shows AI + velocity + anim +
+            // max speed. Extra lines appear only when the corresponding state is
+            // interesting (non-default) — keeps idle units uncluttered while making
+            // a unit in a weird state (stuck in Knockdown, dangling OverrideAnim,
+            // lost PendingAttack, etc.) obvious at a glance.
+            var sb = new System.Text.StringBuilder();
+            sb.Append(aiLabel).Append('\n');
+            sb.Append($"v:{speed:F1} {animLabel} ms:{maxSpeed:F1}");
+
+            var ov = _sim.Units[i].OverrideAnim;
+            if (ov.IsActive)
+            {
+                string dur = ov.Duration < 0 ? "loop" : (ov.Duration == 0 ? "once" : $"{ov.Duration:F1}s");
+                sb.Append($"\nov:{ov.State} p{ov.Priority} {dur}");
+                if (_sim.Units[i].OverrideStarted) sb.Append(" *");
+            }
+
+            var inc = _sim.Units[i].Incap;
+            if (inc.Active || inc.Recovering)
+            {
+                sb.Append($"\nincap:{(inc.Active ? "A" : "")}{(inc.Recovering ? "R" : "")}");
+                sb.Append($" hold={inc.HoldAnim} rec={inc.RecoverAnim}");
+                if (inc.RecoverTimer != 0f) sb.Append($" t={inc.RecoverTimer:F2}");
+                if (inc.HoldAtEnd) sb.Append(" @end");
+            }
+
+            if (!_sim.Units[i].PendingAttack.IsNone)
+            {
+                uint tgtId = _sim.Units[i].PendingAttack.IsUnit ? _sim.Units[i].PendingAttack.UnitID : 0;
+                sb.Append($"\npend:→{tgtId} w{_sim.Units[i].PendingWeaponIdx}");
+                if (_sim.Units[i].PendingWeaponIsRanged) sb.Append(" R");
+                if (_sim.Units[i].CurrentAttackLungeDist > 0f)
+                    sb.Append($" lunge={_sim.Units[i].CurrentAttackLungeDist:F2}");
+            }
+
+            if (_sim.Units[i].JumpPhase != 0)
+            {
+                string phaseName = _sim.Units[i].JumpPhase switch
+                {
+                    1 => "Takeoff", 2 => "Airborne", 3 => "Landing", 4 => "Recovery",
+                    _ => $"P{_sim.Units[i].JumpPhase}"
+                };
+                sb.Append($"\njump:{phaseName} Z={_sim.Units[i].Z:F2}");
+            }
+
+            float rox = _sim.Units[i].RenderOffset.X, roy = _sim.Units[i].RenderOffset.Y;
+            if (rox * rox + roy * roy > 0.0001f)
+                sb.Append($"\nrenderOff:({rox:F2},{roy:F2})");
+
+            if (_sim.Units[i].InCombat || _sim.Units[i].AttackCooldown > 0f
+                || _sim.Units[i].PostAttackTimer > 0f)
+            {
+                sb.Append("\ncd:");
+                if (_sim.Units[i].InCombat) sb.Append("InCombat ");
+                if (_sim.Units[i].AttackCooldown > 0f) sb.Append($"a{_sim.Units[i].AttackCooldown:F1} ");
+                if (_sim.Units[i].PostAttackTimer > 0f) sb.Append($"p{_sim.Units[i].PostAttackTimer:F1}");
+            }
+
+            string info = sb.ToString();
+            // Approximate width for anchoring — SpriteFont.MeasureString is accurate
+            // but per-unit MeasureString every frame is hot-path waste.
+            var textPos = new Vector2(sp.X - info.Length, sp.Y - 28);
             _spriteBatch.DrawString(_smallFont, info, textPos, new Color(255, 255, 200, 220));
         }
 

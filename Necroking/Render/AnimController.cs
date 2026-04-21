@@ -74,7 +74,6 @@ public class AnimController
     private float[] _stateTickRate = new float[(int)AnimState.Count];
     private bool _finished;
     private bool _reversePlayback;
-    private bool _actionMomentFired;
     private Dictionary<string, AnimTimingOverride>? _timingOverrides;
     private float _playbackSpeed = 1f;
 
@@ -131,6 +130,33 @@ public class AnimController
     public float PlaybackSpeed { get => _playbackSpeed; set => _playbackSpeed = MathF.Max(0.1f, value); }
     public void SetReversePlayback(bool reverse) => _reversePlayback = reverse;
 
+    // --- Edge flags ---
+    // Single-frame "an event happened this tick" flags. Set during Update(),
+    // cleared at the START of the next Update(). Read by consumers in the same
+    // frame between Update calls. Semantics:
+    //
+    //   JustEnteredState    — SwitchState ran this frame; the new state is
+    //                         CurrentState and _animTime == 0.
+    //   JustExitedState     — SwitchState ran this frame; the outgoing state
+    //                         is in ExitedState (for the one-frame window only).
+    //   JustHitEffectFrame  — _animTime just crossed the state's effect_time_ms
+    //                         this frame. Replaces the polled ConsumeActionMoment
+    //                         pattern for consumers that need a reliable edge
+    //                         (subscribers check the flag AND whether they're
+    //                         the intended consumer; no exclusive consumption).
+    //   JustFinished        — a play-once anim finished this frame. For
+    //                         PlayOnceTransition this also implies JustEnteredState
+    //                         will be set (for the target state).
+    //
+    // Why edge flags instead of events: zero allocation, same-frame determinism,
+    // no subscribe/unsubscribe bookkeeping, and the old ConsumeActionMoment
+    // exclusive-consumption model is the bug we're replacing.
+    public bool JustEnteredState { get; private set; }
+    public bool JustExitedState { get; private set; }
+    public bool JustHitEffectFrame { get; private set; }
+    public bool JustFinished { get; private set; }
+    public AnimState ExitedState { get; private set; }
+
     public void Init(UnitSpriteData? spriteData, float tickRate = 30f)
     {
         _spriteData = spriteData;
@@ -138,7 +164,6 @@ public class AnimController
         _pendingState = AnimState.Idle;
         _animTime = 0f;
         _finished = false;
-        _actionMomentFired = false;
         _timingOverrides = null;
         for (int i = 0; i < _stateTickRate.Length; i++)
             _stateTickRate[i] = 30f; // flat fallback
@@ -306,11 +331,14 @@ public class AnimController
 
     private void SwitchState(AnimState newState)
     {
+        // Edge flags: record the transition so same-frame consumers can detect it.
+        ExitedState = _currentState;
+        JustExitedState = true;
+        JustEnteredState = true;
         _currentState = newState;
         _pendingState = newState;
         _animTime = 0f;
         _finished = false;
-        _actionMomentFired = false;
         _playbackSpeed = 1f;
         ResolveForState();
     }
@@ -319,14 +347,32 @@ public class AnimController
 
     public void Update(float dt)
     {
+        // Clear single-frame edge flags at the top of each tick; anything set below
+        // is the current frame's events, which consumers read after Update returns.
+        JustEnteredState = false;
+        JustExitedState = false;
+        JustHitEffectFrame = false;
+        JustFinished = false;
+
         if (_spriteData == null) return;
 
+        float animTimeBefore = _animTime;
         int totalMs = GetEffectiveTotalDurationMs();
 
         if (totalMs > 0)
         {
             // MS-BASED PLAYBACK (scaled by playback speed)
             _animTime += dt * 1000f * _playbackSpeed;
+
+            // Effect-time edge: fires on the single tick where _animTime crosses
+            // the state's effect_time_ms threshold. Replaces the polled
+            // ConsumeActionMoment model — callers read JustHitEffectFrame and
+            // decide on their own whether they're the intended consumer, without
+            // the "someone consumed the moment before my handler ran" race.
+            int effectMs = GetEffectiveEffectTimeMs();
+            if (effectMs > 0 && animTimeBefore < effectMs && _animTime >= effectMs)
+                JustHitEffectFrame = true;
+
             var mode = GetPlayMode(_currentState);
 
             if (mode == AnimPlayMode.Loop)
@@ -340,13 +386,19 @@ public class AnimController
             }
             else if (mode == AnimPlayMode.PlayOnceHold)
             {
-                if (_animTime >= totalMs) { _animTime = totalMs; _finished = true; }
+                if (_animTime >= totalMs)
+                {
+                    if (!_finished) JustFinished = true;
+                    _animTime = totalMs;
+                    _finished = true;
+                }
             }
             else // PlayOnceTransition
             {
                 if (_animTime >= totalMs)
                 {
                     _finished = true;
+                    JustFinished = true;
                     SwitchState(_pendingState != _currentState ? _pendingState : AnimState.Idle);
                 }
             }
@@ -357,6 +409,12 @@ public class AnimController
             _animTime += _stateTickRate[(int)_currentState] * dt * _playbackSpeed;
             int totalT = _resolvedAnim.TotalTicks();
             if (totalT <= 0) return;
+
+            // No effect_time metadata in tick-based → use 50% of total as the
+            // fallback "hit frame" edge, matching HasReachedActionMoment.
+            float effectT = totalT * 0.5f;
+            if (animTimeBefore < effectT && _animTime >= effectT)
+                JustHitEffectFrame = true;
 
             var mode = GetPlayMode(_currentState);
             if (mode == AnimPlayMode.Loop)
@@ -370,13 +428,19 @@ public class AnimController
             }
             else if (mode == AnimPlayMode.PlayOnceHold)
             {
-                if (_animTime >= totalT) { _animTime = totalT; _finished = true; }
+                if (_animTime >= totalT)
+                {
+                    if (!_finished) JustFinished = true;
+                    _animTime = totalT;
+                    _finished = true;
+                }
             }
             else
             {
                 if (_animTime >= totalT)
                 {
                     _finished = true;
+                    JustFinished = true;
                     SwitchState(_pendingState != _currentState ? _pendingState : AnimState.Idle);
                 }
             }
@@ -542,14 +606,10 @@ public class AnimController
     }
 
     // --- Action moment ---
-
-    public bool ConsumeActionMoment()
-    {
-        if (_actionMomentFired) return false;
-        if (!HasReachedActionMoment()) return false;
-        _actionMomentFired = true;
-        return true;
-    }
+    // Consumers use the single-frame edge flag JustHitEffectFrame (set in Update,
+    // cleared at the top of the next Update). The old ConsumeActionMoment method
+    // was removed — non-destructive edge reads are strictly better (no "who
+    // consumed it first" races).
 
     public bool HasReachedActionMoment()
     {
