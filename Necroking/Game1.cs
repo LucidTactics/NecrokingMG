@@ -3240,11 +3240,18 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 // Locomotion playback scaling — applied after Resolve so we know the
                 // final state the controller landed on. Re-applied every frame because
                 // AnimController.SwitchState resets _playbackSpeed to 1.0 on transitions.
+                // Only overwrite PlaybackSpeed for actual locomotion states; for attack /
+                // spell / jump states, AnimResolver's compression-speed from the winning
+                // override must stick through ctrl.Update.
+                var curState = animData.Ctrl.CurrentState;
+                bool isLocoState = curState == AnimState.Walk || curState == AnimState.Jog
+                    || curState == AnimState.Run || curState == AnimState.Carry;
+                if (isLocoState)
                 {
                     float locoSpeed = _sim.Units[i].Velocity.Length();
                     float locoBase = _sim.Units[i].Stats.CombatSpeed;
                     animData.Ctrl.PlaybackSpeed = LocomotionScaling.ComputeLocomotionPlayback(
-                        animData.Ctrl, animData.Ctrl.CurrentState, locoSpeed, locoBase);
+                        animData.Ctrl, curState, locoSpeed, locoBase);
                 }
                 animData.Ctrl.Update(dt);
             }

@@ -397,75 +397,15 @@ public static class SubroutineSteps
 
     /// <summary>
     /// Set the routine animation to the appropriate locomotion state based on speed.
-    /// Uses hysteresis around each tier threshold so a velocity that oscillates near a
-    /// boundary (e.g. ORCA+accel leaving a unit bobbing around 0.25 u/s) doesn't flip
-    /// the anim state every frame — which would reset _animTime in SwitchState and
-    /// keep the walk cycle stuck on its first couple of frames ("twitching"/"sliding").
+    /// Tier thresholds and hysteresis come from the shared LocomotionProfile so this
+    /// and LocomotionScaling can't drift apart.
     /// </summary>
     public static void SetLocomotionAnim(ref AIContext ctx, float speed)
     {
         float baseSpeed = ctx.Units[ctx.UnitIndex].Stats.CombatSpeed;
-        float jogThreshold = 4f + baseSpeed / 3f;
-        float runThreshold = 6f + 2f * baseSpeed / 3f;
-
-        // Hysteresis band around each threshold. Absolute for the Idle/Walk boundary
-        // (fixed threshold 0.25), proportional for Walk/Jog and Jog/Run which scale
-        // with baseSpeed.
-        const float IdleWalkHys = 0.15f;
-        float jogHys = 0.5f + baseSpeed * 0.05f;   // ≈0.9 at speed 8, ≈1.1 at speed 12
-        float runHys = 0.5f + baseSpeed * 0.05f;
-
-        // Resolve the tier the speed is definitively IN (outside any hysteresis band),
-        // then let the current state "hold" if the speed is inside a band adjacent to it.
+        var profile = LocomotionProfile.FromBaseSpeed(baseSpeed);
         AnimState prev = ctx.Units[ctx.UnitIndex].RoutineAnim.State;
-        AnimState state;
-
-        bool prevIsLoco = prev == AnimState.Idle || prev == AnimState.Walk
-            || prev == AnimState.Jog || prev == AnimState.Run;
-
-        if (!prevIsLoco)
-        {
-            // No previous locomotion context — just pick the tier fresh (used on first
-            // call, or when coming out of an attack/feed/sleep state).
-            if (speed <= 0.25f) state = AnimState.Idle;
-            else if (speed < jogThreshold) state = AnimState.Walk;
-            else if (speed < runThreshold) state = AnimState.Jog;
-            else state = AnimState.Run;
-        }
-        else
-        {
-            // Sticky selection: stay in the current tier unless we clearly cross its
-            // upper or lower boundary by the hysteresis amount.
-            state = prev;
-            switch (prev)
-            {
-                case AnimState.Idle:
-                    if (speed > 0.25f + IdleWalkHys) state = AnimState.Walk;
-                    // Allow jumping past Walk if already well above it (e.g. sudden speed jump)
-                    if (speed >= jogThreshold + jogHys) state = AnimState.Jog;
-                    if (speed >= runThreshold + runHys) state = AnimState.Run;
-                    break;
-
-                case AnimState.Walk:
-                    if (speed <= 0.25f - IdleWalkHys * 0.5f) state = AnimState.Idle;
-                    else if (speed >= jogThreshold + jogHys) state = AnimState.Jog;
-                    if (speed >= runThreshold + runHys) state = AnimState.Run;
-                    break;
-
-                case AnimState.Jog:
-                    if (speed <= jogThreshold - jogHys) state = AnimState.Walk;
-                    if (speed <= 0.25f) state = AnimState.Idle;
-                    else if (speed >= runThreshold + runHys) state = AnimState.Run;
-                    break;
-
-                case AnimState.Run:
-                    if (speed <= runThreshold - runHys) state = AnimState.Jog;
-                    if (speed <= jogThreshold - jogHys) state = AnimState.Walk;
-                    if (speed <= 0.25f) state = AnimState.Idle;
-                    break;
-            }
-        }
-
+        AnimState state = profile.PickTier(prev, speed);
         ctx.Units[ctx.UnitIndex].RoutineAnim = AnimRequest.Locomotion(state);
     }
 

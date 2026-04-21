@@ -9,15 +9,11 @@ namespace Necroking.Render;
 /// state's initial playback is chosen so its foot-cycle rate equals the outgoing
 /// state's rate (prevents a visible footfall-rate jump on state switch).
 ///
-/// Thresholds match SetLocomotionAnim: jog at speed ≥ 4 + baseSpeed/3,
-/// run at speed ≥ 6 + 2·baseSpeed/3.
+/// Thresholds and clamps come from the shared LocomotionProfile so this can't drift
+/// apart from SubroutineSteps.SetLocomotionAnim.
 /// </summary>
 public static class LocomotionScaling
 {
-    public const float WalkFloor = 0.25f;
-    public const float RunFullSpeedDelta = 7f; // speed past runThreshold at which run hits 1.0x
-    public const float MaxPlayback = 1.5f;
-
     /// <summary>
     /// Returns the playback-speed scalar for the given locomotion state and current
     /// velocity. Returns 1.0 for non-locomotion states, or when cycle metadata is
@@ -26,18 +22,21 @@ public static class LocomotionScaling
     public static float ComputeLocomotionPlayback(
         AnimController ctrl, AnimState state, float speed, float baseSpeed)
     {
-        float jogThreshold = 4f + baseSpeed / 3f;
-        float runThreshold = 6f + 2f * baseSpeed / 3f;
+        var profile = LocomotionProfile.FromBaseSpeed(baseSpeed);
+        float jogThreshold = profile.JogThreshold;
+        float runThreshold = profile.RunThreshold;
+        float walkFloor = LocomotionProfile.WalkFloorPlayback;
+        float maxPlay = LocomotionProfile.MaxPlayback;
 
         switch (state)
         {
             case AnimState.Walk:
             {
                 // Linear from (IdleThresh, WalkFloor) to (jogThreshold, 1.0).
-                float span = jogThreshold - 0.25f;
+                float span = jogThreshold - LocomotionProfile.IdleWalkEnter;
                 if (span <= 0.01f) return 1f;
-                float t = (speed - 0.25f) / span;
-                return MathUtil.Clamp(MathUtil.Lerp(WalkFloor, 1f, t), WalkFloor, MaxPlayback);
+                float t = (speed - LocomotionProfile.IdleWalkEnter) / span;
+                return MathUtil.Clamp(MathUtil.Lerp(walkFloor, 1f, t), walkFloor, maxPlay);
             }
 
             case AnimState.Jog:
@@ -52,7 +51,7 @@ public static class LocomotionScaling
                 float span = runThreshold - jogThreshold;
                 if (span <= 0.01f) return 1f;
                 float t = (speed - jogThreshold) / span;
-                return MathUtil.Clamp(MathUtil.Lerp(jogStart, 1f, t), WalkFloor, MaxPlayback);
+                return MathUtil.Clamp(MathUtil.Lerp(jogStart, 1f, t), walkFloor, maxPlay);
             }
 
             case AnimState.Run:
@@ -65,8 +64,8 @@ public static class LocomotionScaling
                 float runCycle = ctrl.GetTotalDurationSeconds(AnimState.Run);
                 if (jogCycle <= 0f || runCycle <= 0f) return 1f;
                 float runStart = runCycle / jogCycle;
-                float t = (speed - runThreshold) / RunFullSpeedDelta;
-                return MathUtil.Clamp(MathUtil.Lerp(runStart, 1f, t), WalkFloor, MaxPlayback);
+                float t = (speed - runThreshold) / LocomotionProfile.RunFullSpeedDelta;
+                return MathUtil.Clamp(MathUtil.Lerp(runStart, 1f, t), walkFloor, maxPlay);
             }
 
             case AnimState.Carry:
@@ -74,7 +73,7 @@ public static class LocomotionScaling
                 // Single-state scaling (no transitions): floor at low speed → 1.0
                 // at baseSpeed, capped at MaxPlayback above.
                 if (baseSpeed <= 0.01f) return 1f;
-                return MathUtil.Clamp(speed / baseSpeed, WalkFloor, MaxPlayback);
+                return MathUtil.Clamp(speed / baseSpeed, walkFloor, maxPlay);
             }
 
             default:
