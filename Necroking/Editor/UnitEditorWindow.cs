@@ -681,7 +681,7 @@ public class UnitEditorWindow
                 Stats = new UnitStatsJson(),
                 // RU27: Default sprite and weapon
                 Sprite = new SpriteRef { AtlasName = "VampireFaction", SpriteName = "Skeleton" },
-                Weapons = new List<string> { "club" },
+                Weapons = new List<UnitWeaponRef> { new UnitWeaponRef("club") },
             };
             if (_selectedIdx >= 0 && _selectedIdx < allIds.Count)
                 _gameData.Units.AddAfter(newDef, allIds[_selectedIdx]);
@@ -1955,9 +1955,24 @@ public class UnitEditorWindow
         curY += RowH;
 
         BuildWeaponDropdownLists(out string[] weaponDisplayNames, out string[] weaponIdList);
+
+        // Anim dropdown options for per-slot override: "Default" (null) plus the
+        // unit-sprite's available animations. "Default" falls through to the weapon's
+        // AnimName field, then UnitDef.AttackAnim, then Attack1/Ranged1.
+        string[] unitAnimNames;
+        {
+            string atlas = def.Sprite?.AtlasName ?? "";
+            string sprite = def.Sprite?.SpriteName ?? "";
+            var raw = GetAnimNamesForSprite(atlas, sprite);
+            var combined = new List<string> { "Default" };
+            combined.AddRange(raw);
+            unitAnimNames = combined.ToArray();
+        }
+
         for (int i = 0; i < def.Weapons.Count; i++)
         {
-            string wId = def.Weapons[i];
+            var slot = def.Weapons[i];
+            string wId = slot.Id;
             var wDef = _gameData.Weapons.Get(wId);
 
             // U26: Weapon type tag with color [M] orange for melee, [R] blue for ranged
@@ -1974,7 +1989,7 @@ public class UnitEditorWindow
             string newDisplay = _ui.DrawCombo($"weap_{i}", displayLabel, currentDisplay, weaponDisplayNames, x, curY, w - 28, allowNone: true);
             if (newDisplay != currentDisplay)
             {
-                def.Weapons[i] = string.IsNullOrEmpty(newDisplay) ? "" : MapDisplayToId(newDisplay, weaponDisplayNames, weaponIdList);
+                slot.Id = string.IsNullOrEmpty(newDisplay) ? "" : MapDisplayToId(newDisplay, weaponDisplayNames, weaponIdList);
                 _unsavedChanges = true;
             }
 
@@ -1999,12 +2014,23 @@ public class UnitEditorWindow
                 _ui.DrawText(summary, new Vector2(x + w - 180, curY + 2), EditorBase.TextDim);
             }
             curY += RowH;
+
+            // Per-slot anim override. "Default" means no override; else pin to a
+            // specific animation from the unit's sprite.
+            string currentAnim = string.IsNullOrEmpty(slot.AnimOverride) ? "Default" : slot.AnimOverride!;
+            string newAnim = _ui.DrawCombo($"weap_{i}_anim", "    Animation", currentAnim, unitAnimNames, x, curY, w - 28);
+            if (newAnim != currentAnim)
+            {
+                slot.AnimOverride = (newAnim == "Default") ? null : newAnim;
+                _unsavedChanges = true;
+            }
+            curY += RowH;
         }
         if (def.Weapons.Count < 4)
         {
             if (_ui.DrawButton("+ Add Weapon", x + 10, curY, 100, 20))
             {
-                def.Weapons.Add(weaponIdList.Length > 0 ? weaponIdList[0] : "");
+                def.Weapons.Add(new UnitWeaponRef(weaponIdList.Length > 0 ? weaponIdList[0] : ""));
                 _unsavedChanges = true;
             }
             curY += RowH;
@@ -3197,7 +3223,7 @@ public class UnitEditorWindow
             SpellID = src.SpellID,
             MaxMana = src.MaxMana,
             ManaRegen = src.ManaRegen,
-            Weapons = new List<string>(src.Weapons),
+            Weapons = src.Weapons.ConvertAll(s => new UnitWeaponRef(s.Id, s.AnimOverride)),
             Armors = new List<string>(src.Armors),
             Shields = new List<string>(src.Shields),
         };

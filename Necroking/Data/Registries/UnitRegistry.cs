@@ -13,6 +13,74 @@ public class SpriteRef
 }
 
 /// <summary>
+/// A weapon slot on a unit definition: the weapon id plus optional per-unit-per-slot
+/// animation override. Each slot tracks its own override — a unit that lists the same
+/// weapon twice can give each copy a different anim.
+///
+/// JSON formats accepted on load (via UnitWeaponRefJsonConverter):
+///   "weapon_id"                                  — bare string, no override
+///   { "id": "weapon_id" }                        — object, no override
+///   { "id": "weapon_id", "anim": "AttackBite" }  — object with override
+/// On save, slots without an override are written as bare strings for a minimal diff
+/// against the existing data/units.json.
+/// </summary>
+[JsonConverter(typeof(UnitWeaponRefJsonConverter))]
+public class UnitWeaponRef
+{
+    [JsonPropertyName("id")] public string Id { get; set; } = "";
+    /// <summary>null / empty = "Default" (use WeaponDef.AnimName, else UnitDef.AttackAnim,
+    /// else Attack1/Ranged1).</summary>
+    [JsonPropertyName("anim")] public string? AnimOverride { get; set; }
+
+    public UnitWeaponRef() {}
+    public UnitWeaponRef(string id) { Id = id; }
+    public UnitWeaponRef(string id, string? anim) { Id = id; AnimOverride = string.IsNullOrEmpty(anim) ? null : anim; }
+}
+
+/// <summary>Accepts bare-string and object JSON forms on load; writes bare string
+/// when AnimOverride is unset for minimal diff against existing data.</summary>
+public class UnitWeaponRefJsonConverter : JsonConverter<UnitWeaponRef>
+{
+    public override UnitWeaponRef Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+    {
+        if (reader.TokenType == JsonTokenType.String)
+            return new UnitWeaponRef(reader.GetString() ?? "");
+
+        if (reader.TokenType != JsonTokenType.StartObject)
+            throw new JsonException($"Unexpected token {reader.TokenType} for UnitWeaponRef");
+
+        var r = new UnitWeaponRef();
+        while (reader.Read())
+        {
+            if (reader.TokenType == JsonTokenType.EndObject) return r;
+            if (reader.TokenType != JsonTokenType.PropertyName) continue;
+            string prop = reader.GetString() ?? "";
+            reader.Read();
+            switch (prop)
+            {
+                case "id":   r.Id = reader.GetString() ?? ""; break;
+                case "anim": r.AnimOverride = reader.TokenType == JsonTokenType.Null ? null : reader.GetString(); break;
+                default:     reader.Skip(); break;
+            }
+        }
+        return r;
+    }
+
+    public override void Write(Utf8JsonWriter writer, UnitWeaponRef value, JsonSerializerOptions options)
+    {
+        if (string.IsNullOrEmpty(value.AnimOverride))
+        {
+            writer.WriteStringValue(value.Id);
+            return;
+        }
+        writer.WriteStartObject();
+        writer.WriteString("id", value.Id);
+        writer.WriteString("anim", value.AnimOverride);
+        writer.WriteEndObject();
+    }
+}
+
+/// <summary>
 /// A single weapon attachment point (hilt or tip) with position and behind-flag.
 /// </summary>
 public class WeaponPointData
@@ -71,7 +139,7 @@ public class UnitDef : IHasId
     [JsonPropertyName("spellID")] public string SpellID { get; set; } = "";
     [JsonPropertyName("maxMana")] public float MaxMana { get; set; }
     [JsonPropertyName("manaRegen")] public float ManaRegen { get; set; }
-    [JsonPropertyName("weapons")] public List<string> Weapons { get; set; } = new();
+    [JsonPropertyName("weapons")] public List<UnitWeaponRef> Weapons { get; set; } = new();
     [JsonPropertyName("armors")] public List<string> Armors { get; set; } = new();
     [JsonPropertyName("shields")] public List<string> Shields { get; set; } = new();
 
@@ -116,7 +184,8 @@ public class UnitRegistry : RegistryBase<UnitDef>
     {
         int count = 0;
         foreach (var def in _defs.Values)
-            if (def.Weapons.Contains(weaponID)) count++;
+            foreach (var w in def.Weapons)
+                if (w.Id == weaponID) { count++; break; }
         return count;
     }
 
@@ -139,7 +208,7 @@ public class UnitRegistry : RegistryBase<UnitDef>
     public void RemoveWeaponFromAll(string weaponID)
     {
         foreach (var def in _defs.Values)
-            def.Weapons.Remove(weaponID);
+            def.Weapons.RemoveAll(w => w.Id == weaponID);
     }
 
     public void RemoveArmorFromAll(string armorID)
@@ -177,11 +246,19 @@ public class UnitRegistry : RegistryBase<UnitDef>
             CombatSpeed = stats.CombatSpeed
         };
 
-        // Resolve weapons
-        foreach (var wid in def.Weapons)
+        // Resolve weapons. Each weapon slot can carry a per-unit-per-slot anim override
+        // that wins over the WeaponDef's anim field. Fallback chain at resolve time:
+        //   slot.AnimOverride  (new, per-unit-per-slot)
+        //   → WeaponDef.AnimName  (weapon-level default, data/weapons.json "anim")
+        //   → null (consumer falls through to UnitDef.AttackAnim or Attack1/Ranged1)
+        foreach (var slot in def.Weapons)
         {
-            var w = weapons.Get(wid);
+            var w = weapons.Get(slot.Id);
             if (w == null) continue;
+
+            string? resolvedAnim = !string.IsNullOrEmpty(slot.AnimOverride)
+                ? slot.AnimOverride
+                : w.AnimName;
 
             var ws = new WeaponStats
             {
@@ -191,7 +268,7 @@ public class UnitRegistry : RegistryBase<UnitDef>
                 Length = w.Length,
                 Name = w.DisplayName,
                 IsRanged = w.IsRanged,
-                AnimName = w.AnimName,
+                AnimName = resolvedAnim,
                 CooldownRounds = w.CooldownRounds,
                 Priority = w.Priority,
                 PounceMinRange = w.PounceMinRange,
