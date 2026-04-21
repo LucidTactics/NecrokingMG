@@ -94,7 +94,7 @@ public class PhysicsSystem
         units[unitIdx].Target = CombatTarget.None;
 
         // Set fall animation (priority 3 = forced, can't be interrupted)
-        units[unitIdx].OverrideAnim = AnimRequest.Forced(AnimState.Fall);
+        AnimResolver.SetOverride(units[unitIdx], AnimRequest.Forced(AnimState.Fall));
 
         _bodies.Add(new PhysicsBody
         {

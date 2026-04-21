@@ -321,11 +321,11 @@ public static class PotionSystem
                         RecoverTimer = 0f,
                         HoldAtEnd = false,
                     };
-                    units[i].OverrideAnim = new AnimRequest
+                    AnimResolver.SetOverride(units[i], new AnimRequest
                     {
                         State = AnimState.Stunned, Priority = 3, Interrupt = true,
                         Duration = -1, PlaybackSpeed = 1f
-                    };
+                    });
                 }
             }
 

@@ -3202,20 +3202,30 @@ public class Game1 : Microsoft.Xna.Framework.Game
                     float animDur = animData.Ctrl.GetTotalDurationSeconds(atkState);
                     float cycle = ComputeWeaponCycleSeconds(i, _sim.Units[i].PendingWeaponIdx);
                     float spd = (animDur > cycle && cycle > 0f) ? animDur / cycle : 1f;
-                    _sim.UnitsMut[i].OverrideAnim = AnimRequest.Combat(atkState, spd);
+                    AnimResolver.SetOverride(_sim.UnitsMut[i], AnimRequest.Combat(atkState, spd));
                 }
                 else if (_sim.Units[i].InCombat && _sim.Units[i].AttackCooldown > 0f)
                 {
                     // Pre-roll: start attack animation early so its effect_time lines up
-                    // with the end of the cooldown.
+                    // with the end of the cooldown. Use the FIRST non-pounce weapon's
+                    // anim (most units have one melee weapon; wolves have Bite then Pounce
+                    // and Bite is the in-melee attack).
+                    int preRollWeaponIdx = 0;
+                    for (int w = 0; w < _sim.Units[i].Stats.MeleeWeapons.Count; w++)
+                    {
+                        if (_sim.Units[i].Stats.MeleeWeapons[w].Archetype != Data.WeaponArchetype.Pounce)
+                        { preRollWeaponIdx = w; break; }
+                    }
+                    var preRollState = ResolvePendingAttackAnim(_sim.Units[i].Stats,
+                        preRollWeaponIdx, false, _sim.Units[i].Archetype);
                     float cooldownRemaining = _sim.Units[i].AttackCooldown;
-                    float effectTime = animData.Ctrl.GetEffectTimeSeconds(AnimState.Attack1);
-                    float animDur = animData.Ctrl.GetTotalDurationSeconds(AnimState.Attack1);
-                    float cycle = ComputeWeaponCycleSeconds(i, 0);
+                    float effectTime = animData.Ctrl.GetEffectTimeSeconds(preRollState);
+                    float animDur = animData.Ctrl.GetTotalDurationSeconds(preRollState);
+                    float cycle = ComputeWeaponCycleSeconds(i, preRollWeaponIdx);
                     float spd = (animDur > cycle && cycle > 0f) ? animDur / cycle : 1f;
                     float preRollTime = effectTime > 0f ? effectTime / spd : 0f;
                     if (preRollTime > 0f && cooldownRemaining <= preRollTime)
-                        _sim.UnitsMut[i].OverrideAnim = AnimRequest.Combat(AnimState.Attack1, spd);
+                        AnimResolver.SetOverride(_sim.UnitsMut[i], AnimRequest.Combat(preRollState, spd));
                 }
 
                 // Reverse walk playback
@@ -3353,11 +3363,22 @@ public class Game1 : Microsoft.Xna.Framework.Game
             animData.Ctrl.Update(dt);
             } // end legacy path
 
-            // Action moment handling: route to melee attack or spell cast
-            if (animData.Ctrl.ConsumeActionMoment())
+            // Action moment handling: route to melee attack or spell cast.
+            //
+            // Only consume the moment when something is actually queued. The pre-roll
+            // branch above forces the attack anim to play *before* PendingAttack is set
+            // (so effect_time lines up with the end of the weapon cooldown). If
+            // ConsumeActionMoment fires on the pre-roll frame before Simulation gets to
+            // set PendingAttack, the moment is marked consumed and the real attack —
+            // which arrives one frame later — can never resolve its damage (ghost
+            // attack). Peeking HasReachedActionMoment and only consuming when a real
+            // consumer exists avoids that.
+            bool hasPendingCast = _pendingCastAnim != null && i == FindNecromancer()
+                && animData.Ctrl.CurrentState == AnimState.Spell1;
+            bool hasPendingAttack = !_sim.Units[i].PendingAttack.IsNone;
+            if ((hasPendingCast || hasPendingAttack) && animData.Ctrl.ConsumeActionMoment())
             {
-                if (_pendingCastAnim != null && i == FindNecromancer()
-                    && animData.Ctrl.CurrentState == AnimState.Spell1)
+                if (hasPendingCast)
                 {
                     // Spell cast action moment: execute the deferred spell
                     var pca = _pendingCastAnim.Value;
@@ -3366,7 +3387,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
                         ExecuteSpellEffect(spell, i, pca.Target, pca.Slot);
                     _pendingCastAnim = null;
                 }
-                else if (!_sim.Units[i].PendingAttack.IsNone)
+                else
                 {
                     _sim.ResolvePendingAttack(i);
                 }

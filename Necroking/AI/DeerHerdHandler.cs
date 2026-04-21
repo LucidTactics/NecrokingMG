@@ -360,7 +360,7 @@ public class DeerHerdHandler : IArchetypeHandler
 
             case SleepWaking:
                 // Standup animation — override since it interrupts sleep
-                ctx.Units[ctx.UnitIndex].OverrideAnim = AnimRequest.Combat(AnimState.Standup);
+                AnimResolver.SetOverride(ctx.Units[ctx.UnitIndex], AnimRequest.Combat(AnimState.Standup));
                 ctx.SubroutineTimer -= ctx.Dt;
                 if (ctx.SubroutineTimer <= 0f)
                 {

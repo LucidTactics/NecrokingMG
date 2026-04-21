@@ -588,7 +588,12 @@ public class Simulation
             }
             subSw.Restart(); // legacy switch from here down
 
-            // Legacy AI: FleeWhenHit and wolf AIs handle their own combat/disengage logic
+            // Legacy AI path: only reached when Archetype == 0 (see `continue` above for
+            // archetype units). Wolf-flavored AIBehaviors here don't collide with
+            // WolfPackHandler because the archetype dispatcher short-circuits. The only
+            // live user of these WolfX AIBehaviors is WolfHitAndRunScenario (test); the
+            // "Wolf" unit-def itself uses Archetype=WolfPack which never enters this branch.
+            // FleeWhenHit and wolf AIs self-manage combat/disengage logic.
             bool selfManagesCombat = _units[i].AI == AIBehavior.FleeWhenHit
                 || _units[i].AI == AIBehavior.WolfHitAndRun || _units[i].AI == AIBehavior.WolfHitAndRunIsolated
                 || _units[i].AI == AIBehavior.WolfOpportunist || _units[i].AI == AIBehavior.WolfOpportunistIsolated;
@@ -2074,8 +2079,14 @@ public class Simulation
         {
             _units[defenderIdx].Harassment++;
             _units[defenderIdx].Dodging = true;
-            _units[defenderIdx].OverrideAnim = new Render.AnimRequest
-                { State = Render.AnimState.Dodge, Priority = 1, Interrupt = true, Duration = 0, PlaybackSpeed = 1f };
+            // Don't play a Dodge anim on a prone target — they can't dodge while
+            // knocked down. Leaving the knockdown hold in place. Also skip mid-jump
+            // so the dodge doesn't visually pop the jumper out of the arc.
+            if (!_units[defenderIdx].Incap.Active && _units[defenderIdx].JumpPhase == 0)
+            {
+                Render.AnimResolver.SetOverride(_units[defenderIdx], new Render.AnimRequest
+                    { State = Render.AnimState.Dodge, Priority = 1, Interrupt = true, Duration = 0, PlaybackSpeed = 1f });
+            }
             // Record the swing so retarget-on-hit AI still fires on misses — a missed
             // attack is still active combat engagement. Without this, a low-attack unit
             // (e.g. zombie deer vs high-defense wolf) whiffs repeatedly and the wolf
@@ -2119,13 +2130,17 @@ public class Simulation
         {
             _units[defenderIdx].HitReacting = true;
             _units[defenderIdx].LastHitTime = _gameTime;
-            _units[defenderIdx].OverrideAnim = Render.AnimRequest.Combat(Render.AnimState.BlockReact);
+            // Don't pop a prone unit up into a BlockReact pose — the (priority-3) Knockdown
+            // hold should stay put while they're being hit on the ground. Same for mid-jump.
+            if (!_units[defenderIdx].Incap.Active && _units[defenderIdx].JumpPhase == 0)
+                Render.AnimResolver.SetOverride(_units[defenderIdx], Render.AnimRequest.Combat(Render.AnimState.BlockReact));
         }
         else
         {
             _units[defenderIdx].BlockReacting = true;
             _units[defenderIdx].LastHitTime = _gameTime;
-            _units[defenderIdx].OverrideAnim = Render.AnimRequest.Combat(Render.AnimState.BlockReact);
+            if (!_units[defenderIdx].Incap.Active && _units[defenderIdx].JumpPhase == 0)
+                Render.AnimResolver.SetOverride(_units[defenderIdx], Render.AnimRequest.Combat(Render.AnimState.BlockReact));
         }
 
         // Diagnostic: log every melee hit on a wolf-archetype unit so we can verify

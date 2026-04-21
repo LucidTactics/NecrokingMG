@@ -63,11 +63,11 @@ public static class BuffSystem
             };
 
             // Set the hold animation as a forced override
-            units[unitIdx].OverrideAnim = new AnimRequest
+            AnimResolver.SetOverride(units[unitIdx], new AnimRequest
             {
                 State = holdAnim, Priority = 3, Interrupt = true,
                 Duration = -1, PlaybackSpeed = 1f
-            };
+            });
         }
     }
 
@@ -117,8 +117,7 @@ public static class BuffSystem
 
                         // Switch override to recovery animation
                         Enum.TryParse<AnimState>(def.IncapRecoverAnim, out var recoverAnim);
-                        units[i].OverrideAnim = AnimRequest.Combat(recoverAnim);
-                        units[i].OverrideStarted = false;
+                        AnimResolver.SetOverride(units[i], AnimRequest.Combat(recoverAnim));
                     }
                 }
 
@@ -145,8 +144,7 @@ public static class BuffSystem
                     incap.RecoverTimer = -1f; // Animation system will set real duration
                     units[i].Incap = incap;
 
-                    units[i].OverrideAnim = AnimRequest.Combat(incap.RecoverAnim);
-                    units[i].OverrideStarted = false;
+                    AnimResolver.SetOverride(units[i], AnimRequest.Combat(incap.RecoverAnim));
                 }
             }
         }

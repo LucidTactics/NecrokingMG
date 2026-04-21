@@ -74,12 +74,18 @@ public static class DamageSystem
             case DamageType.Physical:
                 units[targetIdx].Stats.HP -= finalDamage;
                 units[targetIdx].HitReacting = true;
-                units[targetIdx].OverrideAnim = Render.AnimRequest.Combat(Render.AnimState.BlockReact);
+                // BlockReact would pop a knocked-down unit up into a standing pose —
+                // keep the knockdown hold anim in place if they're currently incap'd.
+                // Also skip while mid-jump so the hit doesn't visually pop the unit
+                // out of JumpLoop/JumpLand; the jump finishes, then combat resumes.
+                if (!units[targetIdx].Incap.Active && units[targetIdx].JumpPhase == 0)
+                    Render.AnimResolver.SetOverride(units[targetIdx], Render.AnimRequest.Combat(Render.AnimState.BlockReact));
                 if (units[targetIdx].Stats.HP <= 0)
                 {
                     units[targetIdx].Stats.HP = 0;
                     units[targetIdx].Alive = false;
-                    units[targetIdx].OverrideAnim = Render.AnimRequest.Forced(Render.AnimState.Death);
+                    Render.AnimResolver.SetOverride(units[targetIdx], Render.AnimRequest.Forced(Render.AnimState.Death));
+                    MarkDeathFromProne(units, targetIdx);
                 }
                 break;
 
@@ -149,8 +155,25 @@ public static class DamageSystem
         {
             units[targetIdx].Alive = false;
             units[targetIdx].Stats.HP = 0;
-            units[targetIdx].OverrideAnim = Render.AnimRequest.Forced(Render.AnimState.Death);
+            Render.AnimResolver.SetOverride(units[targetIdx], Render.AnimRequest.Forced(Render.AnimState.Death));
+            MarkDeathFromProne(units, targetIdx);
         }
+    }
+
+    /// <summary>
+    /// If the unit is dying while already knocked down (incap'd), snap the Death
+    /// anim to its final frame instead of playing it from standing pose —
+    /// AnimResolver's HoldAtEnd path handles this as long as Active=true and
+    /// Recovering=false. Without this, a prone dying unit would visibly stand up
+    /// to play Death.
+    /// </summary>
+    private static void MarkDeathFromProne(UnitArrays units, int targetIdx)
+    {
+        if (!units[targetIdx].Incap.Active) return;
+        var incap = units[targetIdx].Incap;
+        incap.HoldAtEnd = true;
+        incap.Recovering = false;
+        units[targetIdx].Incap = incap;
     }
 
     /// <summary>

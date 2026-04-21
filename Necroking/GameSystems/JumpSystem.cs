@@ -318,6 +318,18 @@ public static class JumpSystem
                 // at this moment. After this, PendingAttack clears — any subsequent
                 // attacks (e.g. a wolf's Bite once it's in melee range) fire through
                 // the normal combat queue in UpdateCombat with their own anim + effect_time.
+                //
+                // Guard: PendingAttack is supposed to have been set by InitiatePounce.
+                // If it was lost mid-flight (target died, AI reset, etc.), ResolvePendingAttack
+                // silently no-ops and the pounce does zero damage — easy to miss.
+                // Log a warning so we can spot regressions.
+                if (units[idx].PendingAttack.IsNone)
+                {
+                    DebugLog.Log("jump",
+                        $"[LandingCallback] unit#{idx} kind={(Kind)units[idx].JumpKind} — PendingAttack was cleared before landing; " +
+                        $"no damage will be resolved. targetId={units[idx].JumpPounceTargetId} target={units[idx].Target}");
+                    break;
+                }
                 sim.ResolvePendingAttack(idx);
                 break;
         }
