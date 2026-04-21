@@ -1800,23 +1800,42 @@ public class Simulation
             }
         }
 
-        // Derive InCombat from EngagedTarget + range (read-only flag for AI/animation)
+        // Derive InCombat from EngagedTarget + range. This is the ONLY writer of
+        // InCombat — handlers and other systems read it as a stable flag (one-frame-
+        // stale because this runs after AI; handlers see last frame's value).
+        // Edge flags (JustEnteredCombat / JustLeftCombat) are set exactly on the
+        // frame of transition so event-driven systems can react without polling.
         for (int i = 0; i < _units.Count; i++)
         {
+            bool wasInCombat = _units[i].InCombat;
             _units[i].InCombat = false;
-            if (!_units[i].Alive || _units[i].EngagedTarget.IsNone) continue;
-            if (!_units[i].EngagedTarget.IsUnit) continue;
+            _units[i].JustEnteredCombat = false;
+            _units[i].JustLeftCombat = false;
+            if (!_units[i].Alive || _units[i].EngagedTarget.IsNone)
+            {
+                if (wasInCombat) _units[i].JustLeftCombat = true;
+                continue;
+            }
+            if (!_units[i].EngagedTarget.IsUnit)
+            {
+                if (wasInCombat) _units[i].JustLeftCombat = true;
+                continue;
+            }
             int ti = ResolveUnitTarget(_units[i].EngagedTarget);
             if (ti < 0)
             {
                 // Target dead or gone — clear engagement
                 _units[i].EngagedTarget = CombatTarget.None;
+                if (wasInCombat) _units[i].JustLeftCombat = true;
                 continue;
             }
             float dist = (_units[ti].Position - _units[i].Position).Length();
             float range = meleeRange + _units[i].Stats.Length * 0.15f + _units[i].Radius + _units[ti].Radius;
             if (dist <= range)
                 _units[i].InCombat = true;
+
+            if (_units[i].InCombat && !wasInCombat) _units[i].JustEnteredCombat = true;
+            else if (!_units[i].InCombat && wasInCombat) _units[i].JustLeftCombat = true;
         }
 
         // Attack cooldowns and queuing

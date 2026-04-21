@@ -85,7 +85,20 @@ public class Unit
 
     // State
     public bool Alive = true;
+    /// <summary>
+    /// Derived in Simulation.UpdateCombat from EngagedTarget + melee range. Owned by
+    /// the combat phase — no other system should write this. Handlers in the AI phase
+    /// read LAST frame's value (combat runs after AI). For edge reactions prefer
+    /// JustEnteredCombat / JustLeftCombat, which fire for exactly one frame on the
+    /// tick where the derivation flipped.
+    /// </summary>
     public bool InCombat;
+    /// <summary>Set by Simulation.UpdateCombat when InCombat flips false→true this
+    /// frame. Cleared at the start of the next combat derivation. One-shot edge.</summary>
+    public bool JustEnteredCombat;
+    /// <summary>Set by Simulation.UpdateCombat when InCombat flips true→false this
+    /// frame. Cleared at the start of the next combat derivation. One-shot edge.</summary>
+    public bool JustLeftCombat;
     public float FacingAngle = 90f;
     public float AttackCooldown;
     public CombatTarget PendingAttack = CombatTarget.None;

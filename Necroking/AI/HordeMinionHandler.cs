@@ -58,8 +58,16 @@ public class HordeMinionHandler : IArchetypeHandler
         // events. Chasing/Engaged/Commanded stay every-frame so combat and
         // player orders respond instantly. On skipped frames the unit keeps
         // its previous PreferredVel; ORCA still runs, so it keeps moving.
+        //
+        // Urgent events bypass amortization: an amortized minion that just got
+        // hit, or whose combat state just flipped, needs to react *this* frame
+        // — otherwise the reaction is delayed up to AIUpdateInterval (6 frames
+        // / ~100ms) which reads as input lag in combat.
         bool lowUrgency = ctx.Routine == RoutineFollowing || ctx.Routine == RoutineReturning;
-        if (lowUrgency && !ctx.IsAmortizeTick) return;
+        bool urgent = ctx.Units[ctx.UnitIndex].HitReacting
+            || ctx.Units[ctx.UnitIndex].JustEnteredCombat
+            || ctx.Units[ctx.UnitIndex].JustLeftCombat;
+        if (lowUrgency && !ctx.IsAmortizeTick && !urgent) return;
 
         // Execute current routine
         switch (ctx.Routine)
