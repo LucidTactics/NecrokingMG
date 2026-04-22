@@ -4668,7 +4668,10 @@ public class Game1 : Microsoft.Xna.Framework.Game
             if (!_sim.Units[i].PendingAttack.IsNone)
             {
                 uint tgtId = _sim.Units[i].PendingAttack.IsUnit ? _sim.Units[i].PendingAttack.UnitID : 0;
-                sb.Append($"\npend:→{tgtId} w{_sim.Units[i].PendingWeaponIdx}");
+                // ASCII-only: the small SpriteFont is authored with a limited glyph
+                // range; any char outside that range throws ArgumentException on
+                // DrawString and crashes the game (non-ASCII arrow was the bug).
+                sb.Append($"\npend:>{tgtId} w{_sim.Units[i].PendingWeaponIdx}");
                 if (_sim.Units[i].PendingWeaponIsRanged) sb.Append(" R");
                 if (_sim.Units[i].CurrentAttackLungeDist > 0f)
                     sb.Append($" lunge={_sim.Units[i].CurrentAttackLungeDist:F2}");
