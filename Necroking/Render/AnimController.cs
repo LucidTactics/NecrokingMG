@@ -434,8 +434,15 @@ public class AnimController
             // ConsumeActionMoment model — callers read JustHitEffectFrame and
             // decide on their own whether they're the intended consumer, without
             // the "someone consumed the moment before my handler ran" race.
+            //
+            // If effect_time_ms is missing from meta (0), fall back to 50% of
+            // totalMs — matches the old HasReachedActionMoment fallback. Without
+            // this fallback, attack anims authored without effect_time never fire
+            // the edge, ResolvePendingAttack never runs, PendingAttack never
+            // clears, and the attacker's movement-lockout is permanent.
             int effectMs = GetEffectiveEffectTimeMs();
-            if (effectMs > 0 && animTimeBefore < effectMs && _animTime >= effectMs)
+            float effectThreshold = effectMs > 0 ? effectMs : totalMs * 0.5f;
+            if (effectThreshold > 0 && animTimeBefore < effectThreshold && _animTime >= effectThreshold)
                 JustHitEffectFrame = true;
 
             var mode = GetPlayMode(_currentState);
