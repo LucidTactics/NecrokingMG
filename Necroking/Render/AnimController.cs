@@ -27,33 +27,77 @@ public enum AnimState : byte
 public enum AnimPlayMode : byte { Loop, PlayOnceHold, PlayOnceTransition }
 
 /// <summary>
+/// Explicit lifecycle kind for override anims. Replaces the implicit
+/// Duration=-1 (permanent) vs Duration=0 (one-shot) encoding, which was easy to
+/// misuse — the knockdown-hold bug in e791330 + anim-harness was a case where
+/// the -1 hold silently never set OverrideStarted because the expire logic was
+/// gated on Duration==0.
+///
+///   OneShot    — plays once, auto-clears when the controller leaves the state.
+///   Hold       — stays active until the caller explicitly replaces it (or a
+///                same-channel higher-priority request preempts). No auto-expire.
+///   TimedHold  — stays for Duration seconds, then auto-clears.
+/// </summary>
+public enum OverrideKind : byte
+{
+    OneShot = 0,
+    Hold = 1,
+    TimedHold = 2,
+}
+
+/// <summary>
 /// Animation request from either the Routine channel (AI) or Override channel (combat/physics).
 /// Two-channel system: routine is the persistent base, override is a temporary interrupt.
+///
+/// Priority layering (for override channel):
+///   0 = Locomotion / Idle        (routine only)
+///   1 = Action (routine: Sit, Sleep, Feed)
+///   2 = Combat (attacks, hit-reacts, dodges)
+///   3 = Forced / HardState (incap holds, death, recovery)
+///
+/// Lifecycle is carried by Kind (OneShot/Hold/TimedHold) rather than by Duration
+/// alone. Duration is still used as the timer for TimedHold.
 /// </summary>
 public struct AnimRequest
 {
     public AnimState State;
     public byte Priority;        // 0=locomotion, 1=action, 2=combat, 3=forced
     public bool Interrupt;       // If winning priority, cut current anim mid-loop?
-    public float Duration;       // >0=auto-expire seconds, 0=play once then expire, -1=loop until replaced
+    public OverrideKind Kind;    // OneShot / Hold / TimedHold — see enum docs
+    public float Duration;       // TimedHold: seconds. OneShot: 0. Hold: unused (kept for compat).
     public float PlaybackSpeed;  // 1.0=normal
 
     public bool IsActive => State != AnimState.Idle || Priority > 0;
 
     public static AnimRequest Locomotion(AnimState state) => new()
-        { State = state, Priority = 0, Interrupt = false, Duration = -1, PlaybackSpeed = 1f };
+        { State = state, Priority = 0, Interrupt = false, Kind = OverrideKind.Hold, Duration = -1, PlaybackSpeed = 1f };
 
     public static AnimRequest Action(AnimState state, float duration = -1f) => new()
-        { State = state, Priority = 1, Interrupt = false, Duration = duration, PlaybackSpeed = 1f };
+        { State = state, Priority = 1, Interrupt = false,
+          Kind = duration > 0 ? OverrideKind.TimedHold : OverrideKind.Hold,
+          Duration = duration, PlaybackSpeed = 1f };
 
     public static AnimRequest Combat(AnimState state, float playbackSpeed = 1f) => new()
-        { State = state, Priority = 2, Interrupt = true, Duration = 0, PlaybackSpeed = playbackSpeed };
+        { State = state, Priority = 2, Interrupt = true, Kind = OverrideKind.OneShot,
+          Duration = 0, PlaybackSpeed = playbackSpeed };
 
+    /// <summary>Priority-3 one-shot override. Plays once and auto-clears. Use for
+    /// state exits like Standup, Death (where the anim has PlayOnceHold mode the
+    /// controller will pin the final frame anyway).</summary>
     public static AnimRequest Forced(AnimState state) => new()
-        { State = state, Priority = 3, Interrupt = true, Duration = 0, PlaybackSpeed = 1f };
+        { State = state, Priority = 3, Interrupt = true, Kind = OverrideKind.OneShot,
+          Duration = 0, PlaybackSpeed = 1f };
+
+    /// <summary>Priority-3 permanent hold. Stays until a caller explicitly
+    /// replaces it. Use for incap holds (Knockdown, Stunned, Paralyzed, Sleep)
+    /// where a buff owns the lifetime.</summary>
+    public static AnimRequest Hold(AnimState state, byte priority = 3) => new()
+        { State = state, Priority = priority, Interrupt = true, Kind = OverrideKind.Hold,
+          Duration = -1, PlaybackSpeed = 1f };
 
     public static readonly AnimRequest None = new()
-        { State = AnimState.Idle, Priority = 0, Interrupt = false, Duration = -1, PlaybackSpeed = 1f };
+        { State = AnimState.Idle, Priority = 0, Interrupt = false, Kind = OverrideKind.Hold,
+          Duration = -1, PlaybackSpeed = 1f };
 }
 
 public struct FrameResult

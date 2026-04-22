@@ -36,24 +36,33 @@ public static class AnimResolver
                 unit.OverrideAnim = AnimRequest.None;
         }
 
-        // Auto-expire play-once overrides (Duration == 0).
-        // PlayOnceTransition anims auto-switch to Idle when done, so we can't just
-        // check IsAnimFinished (the state changed). Instead: once we've applied the
-        // override (controller entered the state), track that. When the controller
-        // leaves that state, the override is done.
-        if (unit.OverrideAnim.IsActive && unit.OverrideAnim.Duration == 0f)
+        // Track OverrideStarted for ALL active overrides, regardless of Kind. The
+        // flag means "has the controller ever entered the override state," and is
+        // used for:
+        //   - OneShot auto-expire: if started AND ctrl moved on, the one-shot is done.
+        //   - Same-priority replacement gate in SetOverride: prevents a newly-queued
+        //     request from being stolen at frame 0 by another same-priority caller.
+        //
+        // Both OneShot and Hold need OverrideStarted to be accurate; the earlier
+        // bug was that Hold (Duration==-1) never set it, silently blocking
+        // Knockdown→Standup transitions.
+        if (unit.OverrideAnim.IsActive)
         {
             if (ctrl.CurrentState == unit.OverrideAnim.State)
             {
-                // Controller is playing the override — mark it as started
                 unit.OverrideStarted = true;
-                // If the anim finished in a hold mode, expire
-                if (ctrl.IsAnimFinished)
+                // OneShot auto-expires when the anim finishes in hold mode (Death,
+                // Knockdown-authored-with-PlayOnceHold). For PlayOnceTransition the
+                // controller auto-switches to Idle and the mismatch-branch below
+                // handles it.
+                if (unit.OverrideAnim.Kind == OverrideKind.OneShot && ctrl.IsAnimFinished)
                     unit.OverrideAnim = AnimRequest.None;
             }
-            else if (unit.OverrideStarted)
+            else if (unit.OverrideStarted && unit.OverrideAnim.Kind == OverrideKind.OneShot)
             {
-                // Controller moved away from the override state — it played and finished
+                // Controller moved away from a started OneShot — the override played
+                // out. Clear it. Hold and TimedHold don't auto-clear here (Hold is
+                // caller-owned; TimedHold ticks via OverrideTimer above).
                 unit.OverrideAnim = AnimRequest.None;
                 unit.OverrideStarted = false;
             }

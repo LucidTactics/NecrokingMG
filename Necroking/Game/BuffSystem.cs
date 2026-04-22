@@ -81,12 +81,10 @@ public static class BuffSystem
                 HoldAtEnd = def.IncapHoldAtEnd,
             };
 
-            // Set the hold animation as a forced override
-            AnimResolver.SetOverride(units[unitIdx], new AnimRequest
-            {
-                State = holdAnim, Priority = 3, Interrupt = true,
-                Duration = -1, PlaybackSpeed = 1f
-            });
+            // Set the hold animation as a forced permanent hold. AnimRequest.Hold
+            // expresses "stay until replaced"; the buff owns the lifetime and will
+            // call SetOverride(Forced(RecoverAnim)) when it's time to exit.
+            AnimResolver.SetOverride(units[unitIdx], AnimRequest.Hold(holdAnim, priority: 3));
         }
     }
 

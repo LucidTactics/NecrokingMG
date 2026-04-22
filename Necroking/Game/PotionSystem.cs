@@ -321,11 +321,9 @@ public static class PotionSystem
                         RecoverTimer = 0f,
                         HoldAtEnd = false,
                     };
-                    AnimResolver.SetOverride(units[i], new AnimRequest
-                    {
-                        State = AnimState.Stunned, Priority = 3, Interrupt = true,
-                        Duration = -1, PlaybackSpeed = 1f
-                    });
+                    // Permanent stun hold — lifetime owned by ParalysisStunTimer /
+                    // the paralysis buff, which will explicitly swap this out.
+                    AnimResolver.SetOverride(units[i], AnimRequest.Hold(AnimState.Stunned, priority: 3));
                 }
             }
 

@@ -2116,8 +2116,15 @@ public class Simulation
             // so the dodge doesn't visually pop the jumper out of the arc.
             if (!_units[defenderIdx].Incap.Active && _units[defenderIdx].JumpPhase == 0)
             {
+                // Dodge one-shot at Priority=1 (intentionally below Combat=2 so a
+                // mid-attack dodge doesn't cancel its own swing — the attack anim
+                // continues, the swing just didn't land on the defender because of
+                // the hit/miss roll this method is returning from).
                 Render.AnimResolver.SetOverride(_units[defenderIdx], new Render.AnimRequest
-                    { State = Render.AnimState.Dodge, Priority = 1, Interrupt = true, Duration = 0, PlaybackSpeed = 1f });
+                {
+                    State = Render.AnimState.Dodge, Priority = 1, Interrupt = true,
+                    Kind = Render.OverrideKind.OneShot, Duration = 0, PlaybackSpeed = 1f
+                });
             }
             // Record the swing so retarget-on-hit AI still fires on misses — a missed
             // attack is still active combat engagement. Without this, a low-attack unit

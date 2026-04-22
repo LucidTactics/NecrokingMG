@@ -9,6 +9,7 @@ public static class ScenarioRegistry
 
     static ScenarioRegistry()
     {
+        Register("anim_transitions", () => new Scenarios.AnimTransitionScenario());
         Register("combat_test", () => new Scenarios.CombatTestScenario());
         Register("skirmish", () => new Scenarios.SkirmishScenario());
         Register("empty_map", () => new Scenarios.EmptyMapScenario());
