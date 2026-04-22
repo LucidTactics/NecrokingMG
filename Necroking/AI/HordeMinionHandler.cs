@@ -100,16 +100,21 @@ public class HordeMinionHandler : IArchetypeHandler
             }
         }
 
-        // If horde says Returning but we're still fighting, let combat finish
-        if (hordeState == HordeUnitState.Returning && ctx.Routine == RoutineChasing)
+        // Horde says return → obey even if target is still alive. Previously we
+        // only returned when the target was dead, which let a single chaser drag
+        // the whole horde across the map. The horde system is the authority on
+        // whether a minion should keep pursuing; we trust its Returning signal.
+        // Still-engaged minions (InCombat=true) finish their swing cycle first
+        // (UpdateEngaged will naturally transition to Returning when the target
+        // leaves range or dies).
+        if (hordeState == HordeUnitState.Returning
+            && (ctx.Routine == RoutineChasing
+                || (ctx.Routine == RoutineEngaged && !ctx.Units[ctx.UnitIndex].InCombat)))
         {
-            if (!SubroutineSteps.IsTargetAlive(ref ctx))
-            {
-                ctx.Routine = RoutineReturning;
-                ctx.Units[ctx.UnitIndex].Target = CombatTarget.None;
-                ctx.Units[ctx.UnitIndex].EngagedTarget = CombatTarget.None;
-                ctx.Units[ctx.UnitIndex].InCombat = false;
-            }
+            ctx.Routine = RoutineReturning;
+            ctx.Units[ctx.UnitIndex].Target = CombatTarget.None;
+            ctx.Units[ctx.UnitIndex].EngagedTarget = CombatTarget.None;
+            ctx.Units[ctx.UnitIndex].InCombat = false;
         }
     }
 
@@ -186,14 +191,11 @@ public class HordeMinionHandler : IArchetypeHandler
 
     private static void UpdateChasing(ref AIContext ctx)
     {
-        if (!SubroutineSteps.IsTargetAlive(ref ctx))
-        {
-            // Target dead — return to formation
-            ctx.Routine = RoutineReturning;
-            ctx.Units[ctx.UnitIndex].Target = CombatTarget.None;
-            ctx.Units[ctx.UnitIndex].EngagedTarget = CombatTarget.None;
+        // Canonical chase-exit checks (dead target → Return, leash break → Return).
+        float leash = ctx.Horde?.Settings.LeashRadius ?? 0f;
+        Vec2 center = ctx.Horde?.CircleCenter ?? Vec2.Zero;
+        if (CombatTransitions.StandardChasingExits(ref ctx, RoutineReturning, leash, center))
             return;
-        }
 
         int targetIdx = SubroutineSteps.ResolveTarget(ref ctx);
         if (targetIdx >= 0)
@@ -213,47 +215,21 @@ public class HordeMinionHandler : IArchetypeHandler
 
     private static void UpdateEngaged(ref AIContext ctx)
     {
-        bool frenzied = ctx.Units[ctx.UnitIndex].Frenzied;
-
-        if (!SubroutineSteps.IsTargetAlive(ref ctx))
-        {
-            // Frenzied: search for new target instead of returning
-            if (frenzied)
-            {
-                int next = SubroutineSteps.FindClosestEnemy(ref ctx, 30f);
-                if (next >= 0)
-                {
-                    ctx.Units[ctx.UnitIndex].Target = CombatTarget.Unit(ctx.Units[next].Id);
-                    ctx.Routine = RoutineChasing;
-                }
-                // else no enemies: stay idle, will recheck
-            }
-            else
-            {
-                ctx.Routine = RoutineReturning;
-                ctx.Units[ctx.UnitIndex].Target = CombatTarget.None;
-                ctx.Units[ctx.UnitIndex].EngagedTarget = CombatTarget.None;
-                ctx.Units[ctx.UnitIndex].InCombat = false;
-            }
+        // Canonical engaged-exit checks:
+        //   - target dead → Returning (or Chasing if frenzied with another target)
+        //   - target alive but out of melee (>1.2× range) → Chasing
+        //   - leashed too far from horde center → Returning
+        float leash = ctx.Horde?.Settings.LeashRadius ?? 0f;
+        Vec2 center = ctx.Horde?.CircleCenter ?? Vec2.Zero;
+        if (CombatTransitions.StandardEngagedExits(ref ctx,
+                chasingRoutine: RoutineChasing,
+                returningRoutine: RoutineReturning,
+                leashRadius: leash,
+                leashCenter: center))
             return;
-        }
 
-        // Stay near target, let combat system handle attacks
+        // Stay near target, let combat system handle attacks.
         SubroutineSteps.AttackTarget(ref ctx);
-
-        // Leash check — frenzied units ignore leash
-        if (!frenzied && ctx.Horde != null)
-        {
-            float leashRadius = ctx.Horde.Settings.LeashRadius;
-            float distToCenter = (ctx.MyPos - ctx.Horde.CircleCenter).Length();
-            if (distToCenter > leashRadius * 1.5f)
-            {
-                ctx.Routine = RoutineReturning;
-                ctx.Units[ctx.UnitIndex].Target = CombatTarget.None;
-                ctx.Units[ctx.UnitIndex].EngagedTarget = CombatTarget.None;
-                ctx.Units[ctx.UnitIndex].InCombat = false;
-            }
-        }
     }
 
     private static void UpdateReturning(ref AIContext ctx)

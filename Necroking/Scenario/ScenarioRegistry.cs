@@ -10,6 +10,8 @@ public static class ScenarioRegistry
     static ScenarioRegistry()
     {
         Register("anim_transitions", () => new Scenarios.AnimTransitionScenario());
+        Register("horde_engaged_kiting", () => new Scenarios.HordeEngagedKitingScenario());
+        Register("horde_chase_leash", () => new Scenarios.HordeChaseLeashScenario());
         Register("combat_test", () => new Scenarios.CombatTestScenario());
         Register("skirmish", () => new Scenarios.SkirmishScenario());
         Register("empty_map", () => new Scenarios.EmptyMapScenario());
