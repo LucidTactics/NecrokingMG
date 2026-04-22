@@ -128,7 +128,8 @@ public class HUDRenderer
             DrawPotionDropdown(screenW, secondaryY, potionSlots, potionDropdownSlot, gameData);
 
         DrawBuildingTooltip(hoveredObjectIdx, envSystem, sim);
-        DrawControlsHint(screenH);
+        // Controls hint intentionally omitted — overlapped the FPS/zoom bottom-
+        // left readout. Re-enable if we add a menu page for it.
         DrawTimeControls(screenW, screenH, timeScale, gameData, paused);
         DrawCombatLog(screenW, screenH, sim, gameData);
     }
@@ -467,11 +468,17 @@ public class HUDRenderer
             float fade = age < fadeTime ? 1f : MathF.Max(0f, 1f - (age - fadeTime) / fadeTime);
             byte alpha = (byte)(fade * 200);
 
+            // Weapon name shown on every outcome (Hit / Miss / Blocked) so the
+            // player can tell which attack each line came from — important when a
+            // unit has multiple attacks (e.g. wolf's Pounce vs Bite). Previously
+            // Miss hid the weapon name, making a missed Pounce indistinguishable
+            // from a missed Bite.
+            string weap = string.IsNullOrEmpty(e.WeaponName) ? "" : $" ({e.WeaponName})";
             string logLine = e.Outcome switch
             {
-                CombatLogOutcome.Hit => $"{e.AttackerName} hit {e.DefenderName} for {e.NetDamage} ({e.WeaponName})",
-                CombatLogOutcome.Miss => $"{e.AttackerName} missed {e.DefenderName}",
-                CombatLogOutcome.Blocked => $"{e.DefenderName} blocked {e.AttackerName}'s attack",
+                CombatLogOutcome.Hit => $"{e.AttackerName} hit {e.DefenderName} for {e.NetDamage}{weap}",
+                CombatLogOutcome.Miss => $"{e.AttackerName} missed {e.DefenderName}{weap}",
+                CombatLogOutcome.Blocked => $"{e.DefenderName} blocked {e.AttackerName}'s attack{weap}",
                 _ => ""
             };
 
