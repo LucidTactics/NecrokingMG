@@ -70,6 +70,10 @@ public static class CombatTransitions
 
         // Alive but moved out of melee range — chase again. Hysteresis (1.2×)
         // prevents flipping at the boundary when a target hovers just at range.
+        // Also clear PendingAttack + PostAttackTimer: a queued swing on a target
+        // that's now out of range will never resolve visually AND keeps the unit
+        // pinned via the movement-lockout (Simulation.UpdateMovement zeroes
+        // Velocity while PendingAttack or PostAttackTimer is set).
         int tIdx = SubroutineSteps.ResolveTarget(ref ctx);
         if (tIdx >= 0)
         {
@@ -79,6 +83,8 @@ public static class CombatTransitions
             {
                 ctx.Routine = chasingRoutine;
                 ctx.Units[ctx.UnitIndex].EngagedTarget = CombatTarget.None;
+                ctx.Units[ctx.UnitIndex].PendingAttack = CombatTarget.None;
+                ctx.Units[ctx.UnitIndex].PostAttackTimer = 0f;
                 return true;
             }
         }
@@ -92,6 +98,8 @@ public static class CombatTransitions
                 ctx.Routine = returningRoutine;
                 ctx.Units[ctx.UnitIndex].Target = CombatTarget.None;
                 ctx.Units[ctx.UnitIndex].EngagedTarget = CombatTarget.None;
+                ctx.Units[ctx.UnitIndex].PendingAttack = CombatTarget.None;
+                ctx.Units[ctx.UnitIndex].PostAttackTimer = 0f;
                 ctx.Units[ctx.UnitIndex].InCombat = false;
                 return true;
             }
@@ -122,6 +130,8 @@ public static class CombatTransitions
             ctx.Routine = returningRoutine;
             ctx.Units[ctx.UnitIndex].Target = CombatTarget.None;
             ctx.Units[ctx.UnitIndex].EngagedTarget = CombatTarget.None;
+            ctx.Units[ctx.UnitIndex].PendingAttack = CombatTarget.None;
+            ctx.Units[ctx.UnitIndex].PostAttackTimer = 0f;
             return true;
         }
 
@@ -133,6 +143,8 @@ public static class CombatTransitions
                 ctx.Routine = returningRoutine;
                 ctx.Units[ctx.UnitIndex].Target = CombatTarget.None;
                 ctx.Units[ctx.UnitIndex].EngagedTarget = CombatTarget.None;
+                ctx.Units[ctx.UnitIndex].PendingAttack = CombatTarget.None;
+                ctx.Units[ctx.UnitIndex].PostAttackTimer = 0f;
                 DebugLog.Log("horde_aggro",
                     $"  [unit {ctx.MyId}] leash break while chasing: distToCenter={distToCenter:F1} > leash*1.5={leashRadius * 1.5f:F1}");
                 return true;

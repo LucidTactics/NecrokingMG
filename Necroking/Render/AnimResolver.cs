@@ -28,12 +28,15 @@ public static class AnimResolver
             unit.Incap.RecoverTimer = realDuration;
         }
 
-        // Tick override timer
+        // Tick override timer (TimedHold Duration > 0)
         if (unit.OverrideTimer > 0f)
         {
             unit.OverrideTimer -= dt;
             if (unit.OverrideTimer <= 0f)
+            {
                 unit.OverrideAnim = AnimRequest.None;
+                unit.CurrentOverrideHandleId = 0;
+            }
         }
 
         // Track OverrideStarted for ALL active overrides, regardless of Kind. The
@@ -56,7 +59,10 @@ public static class AnimResolver
                 // controller auto-switches to Idle and the mismatch-branch below
                 // handles it.
                 if (unit.OverrideAnim.Kind == OverrideKind.OneShot && ctrl.IsAnimFinished)
+                {
                     unit.OverrideAnim = AnimRequest.None;
+                    unit.CurrentOverrideHandleId = 0;
+                }
             }
             else if (unit.OverrideStarted && unit.OverrideAnim.Kind == OverrideKind.OneShot)
             {
@@ -65,6 +71,7 @@ public static class AnimResolver
                 // caller-owned; TimedHold ticks via OverrideTimer above).
                 unit.OverrideAnim = AnimRequest.None;
                 unit.OverrideStarted = false;
+                unit.CurrentOverrideHandleId = 0;
             }
             // else: override not started yet (waiting for ForceState to apply it)
         }
@@ -100,7 +107,9 @@ public static class AnimResolver
     }
 
     /// <summary>
-    /// Set an override animation on a unit. Used by combat, physics, game events.
+    /// Set an override animation on a unit. Returns an <see cref="OverrideHandle"/>
+    /// that the caller can stash and later pass to <see cref="ClearIfOwned"/> to
+    /// safely tear down their override without racing a preemption.
     ///
     /// Replacement rules (priority lanes):
     ///   - Strictly higher priority always wins.
@@ -111,8 +120,12 @@ public static class AnimResolver
     ///     yet. This prevents two overrides queued on the same frame (e.g. hit +
     ///     dodge) from last-writer-wins with neither getting to play.
     ///   - Lower priority never replaces a live override.
+    ///
+    /// Returns <see cref="OverrideHandle.None"/> if the request was rejected
+    /// (lower priority than current, no replacement). Otherwise the returned
+    /// handle is owned by this call until it's preempted or auto-expires.
     /// </summary>
-    public static void SetOverride(Unit unit, AnimRequest request)
+    public static OverrideHandle SetOverride(Unit unit, AnimRequest request)
     {
         bool canReplace;
         if (!unit.OverrideAnim.IsActive) canReplace = true;
@@ -120,11 +133,41 @@ public static class AnimResolver
         else if (request.Priority == unit.OverrideAnim.Priority) canReplace = unit.OverrideStarted;
         else canReplace = false;
 
-        if (canReplace)
-        {
-            unit.OverrideAnim = request;
-            unit.OverrideTimer = request.Duration > 0f ? request.Duration : 0f;
-            unit.OverrideStarted = false;
-        }
+        if (!canReplace) return OverrideHandle.None;
+
+        uint id = NextHandleId();
+        unit.OverrideAnim = request;
+        unit.OverrideTimer = request.Duration > 0f ? request.Duration : 0f;
+        unit.OverrideStarted = false;
+        unit.CurrentOverrideHandleId = id;
+        return new OverrideHandle(id);
+    }
+
+    /// <summary>
+    /// Safe teardown by handle: clears the current override iff the passed
+    /// handle still matches the unit's current override ID. No-op if the
+    /// handle is stale (another caller preempted us, or the override already
+    /// auto-expired).
+    ///
+    /// Returns true if the override was actually cleared, false otherwise.
+    /// </summary>
+    public static bool ClearIfOwned(Unit unit, OverrideHandle handle)
+    {
+        if (!handle.IsValid) return false;
+        if (unit.CurrentOverrideHandleId != handle.Id) return false;
+        unit.OverrideAnim = AnimRequest.None;
+        unit.OverrideTimer = 0f;
+        unit.OverrideStarted = false;
+        unit.CurrentOverrideHandleId = 0;
+        return true;
+    }
+
+    // Handle ID counter. 0 is reserved for OverrideHandle.None, so we start at 1
+    // and wrap (~4B overrides before collision, effectively never in gameplay).
+    private static uint _handleCounter;
+    private static uint NextHandleId()
+    {
+        uint next = System.Threading.Interlocked.Increment(ref _handleCounter);
+        return next == 0 ? System.Threading.Interlocked.Increment(ref _handleCounter) : next;
     }
 }

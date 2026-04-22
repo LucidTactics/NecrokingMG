@@ -46,6 +46,27 @@ public enum OverrideKind : byte
 }
 
 /// <summary>
+/// Opaque, allocation-free handle returned from AnimResolver.SetOverride. Pair
+/// it with <see cref="AnimResolver.ClearIfOwned"/> to safely tear down your
+/// override without racing a later caller who preempted you.
+///
+/// Each call to SetOverride mints a fresh monotonic ID and stores it on the
+/// Unit. ClearIfOwned only clears the override if the Unit's current ID still
+/// matches — if a higher-priority override replaced yours, or the override
+/// auto-expired, your handle is stale and the Clear is a no-op.
+///
+/// Callers that don't care (one-shot attacks, forced death) can ignore the
+/// return value.
+/// </summary>
+public readonly struct OverrideHandle
+{
+    public readonly uint Id;
+    public OverrideHandle(uint id) { Id = id; }
+    public bool IsValid => Id != 0;
+    public static readonly OverrideHandle None = default;
+}
+
+/// <summary>
 /// Animation request from either the Routine channel (AI) or Override channel (combat/physics).
 /// Two-channel system: routine is the persistent base, override is a temporary interrupt.
 ///

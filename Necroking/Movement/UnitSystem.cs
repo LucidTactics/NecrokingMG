@@ -251,6 +251,12 @@ public class Unit
     public AnimRequest OverrideAnim { get; internal set; }
     public float OverrideTimer { get; internal set; }
 
+    /// <summary>Monotonic ID of the currently-queued override. Every successful
+    /// SetOverride mints a new ID; 0 means "no override owned." Callers compare
+    /// their stored OverrideHandle against this to detect whether their override
+    /// was preempted or expired, without racing.</summary>
+    public uint CurrentOverrideHandleId { get; internal set; }
+
     // Per-unit awareness config (set from UnitDef at spawn)
     public float DetectionRange;
     public float DetectionBreakRange;
