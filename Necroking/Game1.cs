@@ -5011,11 +5011,24 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 0f, Vector2.Zero, SymScale, SpriteEffects.None, 0f);
         }
 
-        // --- Feature 1: Weapon point text during attack ---
+        // --- Feature 1: Weapon name above head during an attack ---
+        // Read from the unit's currently-queued weapon, not MeleeWeapons[0].
+        // Hardcoded [0] shipped "Bite" over the wolf's head during a Pounce
+        // because Bite is the first-listed weapon; users can't tell which attack
+        // is actually swinging when a unit has multiple (Bite + Pounce).
         if (!_sim.Units[i].PendingAttack.IsNone)
         {
             var stats = _sim.Units[i].Stats;
-            string weaponName = stats.MeleeWeapons.Count > 0 ? stats.MeleeWeapons[0].Name : "Unarmed";
+            int wIdx = _sim.Units[i].PendingWeaponIdx;
+            bool isRanged = _sim.Units[i].PendingWeaponIsRanged;
+            string weaponName;
+            if (isRanged && wIdx >= 0 && wIdx < stats.RangedWeapons.Count)
+                weaponName = stats.RangedWeapons[wIdx].Name;
+            else if (!isRanged && wIdx >= 0 && wIdx < stats.MeleeWeapons.Count)
+                weaponName = stats.MeleeWeapons[wIdx].Name;
+            else
+                weaponName = stats.MeleeWeapons.Count > 0 ? stats.MeleeWeapons[0].Name : "Unarmed";
+
             if (!string.IsNullOrEmpty(weaponName) && _smallFont != null)
             {
                 var weaponPos = new Vector2(sp.X + 10, sp.Y - 55);
