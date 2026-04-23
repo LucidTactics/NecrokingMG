@@ -529,17 +529,11 @@ public class DeerHerdHandler : IArchetypeHandler
         {
             case FightStance:
             {
-                // Stand still facing attacker, wait for attack cooldown
+                // Stand still facing attacker, wait for attack cooldown.
+                // Rate-capped turn toward the target (was a direct facing snap,
+                // which bypassed the unit's TurnSpeed cap).
                 if (targetIdx >= 0)
-                {
-                    // Face the target but don't move
-                    var dir = ctx.Units[targetIdx].Position - ctx.MyPos;
-                    if (dir.LengthSq() > 0.01f)
-                    {
-                        float angle = MathF.Atan2(dir.Y, dir.X) * (180f / MathF.PI);
-                        ctx.Units[ctx.UnitIndex].FacingAngle = angle;
-                    }
-                }
+                    SubroutineSteps.FacePosition(ref ctx, ctx.Units[targetIdx].Position);
                 SubroutineSteps.SetIdle(ref ctx);
 
                 // When attack is ready, charge
@@ -626,13 +620,11 @@ public class DeerHerdHandler : IArchetypeHandler
 
             case FeedEating:
             {
-                // Stand still facing the bush, playing feed animation
+                // Stand still facing the bush, playing feed animation.
                 ctx.Units[ctx.UnitIndex].PreferredVel = Vec2.Zero;
                 ctx.Units[ctx.UnitIndex].RoutineAnim = AnimRequest.Action(AnimState.Feeding);
-                // Face toward the bush target
-                Vec2 toBush = ctx.Units[ctx.UnitIndex].MoveTarget - ctx.MyPos;
-                if (toBush.LengthSq() > 0.01f)
-                    ctx.Units[ctx.UnitIndex].FacingAngle = MathF.Atan2(toBush.Y, toBush.X) * (180f / MathF.PI);
+                // Face toward the bush target (rate-capped).
+                SubroutineSteps.FacePosition(ref ctx, ctx.Units[ctx.UnitIndex].MoveTarget);
                 ctx.SubroutineTimer -= ctx.Dt;
                 if (ctx.SubroutineTimer <= 0f)
                 {

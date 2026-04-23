@@ -883,10 +883,11 @@ public class Simulation
                                 if (castBuff != null) BuffSystem.ApplyBuff(_units, i, castBuff);
                             }
 
-                            // Face target
-                            var toEnemy = _units[enemy].Position - _units[i].Position;
-                            if (toEnemy.LengthSq() > 0.01f)
-                                _units[i].FacingAngle = MathF.Atan2(toEnemy.Y, toEnemy.X) * 180f / MathF.PI;
+                            // Face target (rate-capped by unit TurnSpeed — no
+                            // instant snap, so the caster visibly turns to its
+                            // target as the spell winds up).
+                            Movement.FacingUtil.TurnTowardPosition(
+                                _units[i], _units[enemy].Position, dt, _gameData);
                         }
                     }
                     break;
@@ -1689,26 +1690,21 @@ public class Simulation
     }
 
     // --- Facing Angles ---
+    // Delegates the per-unit rotation math to Movement.FacingUtil so the turn
+    // rate cap is applied identically everywhere (UpdateFacingAngles, handler
+    // FacePosition calls, legacy caster snap). Only the TARGET-ANGLE-SELECTION
+    // priority logic lives here — the rotation step is shared.
     private void UpdateFacingAngles(float dt)
     {
-        float globalTurnSpeed = _gameData?.Settings.Combat.TurnSpeed ?? 360f;
-
         for (int i = 0; i < _units.Count; i++)
         {
             if (!_units[i].Alive) continue;
+            // FacingUtil.TurnToward enforces these guards too, but short-circuiting
+            // at this level saves the target-angle resolution for units that can't
+            // rotate anyway.
             if (_units[i].Incap.IsLocked) continue;
-            // Scripted airborne/landing/recovery: facing was fixed at liftoff — don't
-            // let engaged-target tracking rotate the wolf mid-flight.
             if (_units[i].JumpPhase >= 2) continue;
-
-            // PlayerControlled: facing is set by mouse in Game1, don't override
             if (_units[i].AI == AIBehavior.PlayerControlled) continue;
-
-            // Per-unit turn speed override
-            float turnSpeed = globalTurnSpeed;
-            var unitDef = _gameData?.Units.Get(_units[i].UnitDefID);
-            if (unitDef?.TurnSpeed.HasValue == true)
-                turnSpeed = unitDef.TurnSpeed.Value;
 
             // Priority 1: Always turn toward engaged target when one is set
             if (!_units[i].EngagedTarget.IsNone && _units[i].EngagedTarget.IsUnit)
@@ -1716,26 +1712,19 @@ public class Simulation
                 int ti = ResolveUnitTarget(_units[i].EngagedTarget);
                 if (ti >= 0)
                 {
-                    Vec2 dir = _units[ti].Position - _units[i].Position;
-                    if (dir.LengthSq() > 0.001f)
-                    {
-                        float targetAngle = MathF.Atan2(dir.Y, dir.X) * Rad2Deg;
-                        float diff = AngleDiff(targetAngle, _units[i].FacingAngle);
-                        float maxTurn = turnSpeed * dt;
-                        _units[i].FacingAngle += MathUtil.Clamp(diff, -maxTurn, maxTurn);
-                    }
+                    Movement.FacingUtil.TurnTowardPosition(_units[i], _units[ti].Position, dt, _gameData);
                     continue;
                 }
             }
 
-            // Priority 2: Face movement direction (actual velocity, or intended direction
-            // if still accelerating from zero).
+            // Priority 2: Face movement direction (actual velocity, or intended
+            // direction if still accelerating from zero).
             Vec2 faceDir = _units[i].Velocity;
             if (faceDir.LengthSq() < 0.1f)
-                faceDir = _units[i].PreferredVel; // use intended direction during acceleration ramp-up
+                faceDir = _units[i].PreferredVel;
 
-            // Priority 3: Stationary with a combat target (e.g. wolf waiting for cooldown)
-            // — keep facing the target so the idle frame reads naturally.
+            // Priority 3: Stationary with a combat target (e.g. wolf waiting for
+            // cooldown) — keep facing the target so the idle frame reads naturally.
             if (faceDir.LengthSq() < 0.1f && _units[i].Target.IsUnit)
             {
                 int ti = ResolveUnitTarget(_units[i].Target);
@@ -1746,19 +1735,9 @@ public class Simulation
             if (faceDir.LengthSq() > 0.1f)
             {
                 float targetAngle = MathF.Atan2(faceDir.Y, faceDir.X) * Rad2Deg;
-                float diff = AngleDiff(targetAngle, _units[i].FacingAngle);
-                float maxTurn = turnSpeed * dt;
-                _units[i].FacingAngle += MathUtil.Clamp(diff, -maxTurn, maxTurn);
+                Movement.FacingUtil.TurnToward(_units[i], targetAngle, dt, _gameData);
             }
         }
-    }
-
-    private static float AngleDiff(float target, float current)
-    {
-        float diff = target - current;
-        while (diff > 180f) diff -= 360f;
-        while (diff < -180f) diff += 360f;
-        return diff;
     }
 
     /// <summary>
@@ -1772,7 +1751,7 @@ public class Simulation
         Vec2 dir = _units[ti].Position - _units[i].Position;
         if (dir.LengthSq() < 0.001f) return true;
         float targetAngle = MathF.Atan2(dir.Y, dir.X) * Rad2Deg;
-        float diff = MathF.Abs(AngleDiff(targetAngle, _units[i].FacingAngle));
+        float diff = MathF.Abs(Movement.FacingUtil.AngleDiff(targetAngle, _units[i].FacingAngle));
         return diff <= threshold * 0.5f;
     }
 

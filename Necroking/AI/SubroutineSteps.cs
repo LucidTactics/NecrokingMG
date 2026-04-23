@@ -300,17 +300,15 @@ public static class SubroutineSteps
         ctx.Units[i].RoutineAnim = AnimRequest.Locomotion(AnimState.Idle);
         int j = UnitUtil.ResolveUnitIndex(ctx.Units, ctx.AlertTarget);
         if (j < 0) return;
-        var dir = ctx.Units[j].Position - ctx.MyPos;
-        if (dir.LengthSq() > 0.01f)
-            ctx.Units[i].FacingAngle = MathF.Atan2(dir.Y, dir.X) * 180f / MathF.PI;
+        // Rate-capped turn toward the alert target so the head-snap to face a
+        // freshly-noticed threat respects the unit's TurnSpeed.
+        Movement.FacingUtil.TurnTowardPosition(ctx.Units[i], ctx.Units[j].Position, ctx.Dt, ctx.GameData);
     }
 
-    /// <summary>Face a specific world position (for waking up toward a threat).</summary>
+    /// <summary>Face a specific world position — rate-capped by unit TurnSpeed.</summary>
     public static void FacePosition(ref AIContext ctx, Vec2 target)
     {
-        var dir = target - ctx.MyPos;
-        if (dir.LengthSq() > 0.01f)
-            ctx.Units[ctx.UnitIndex].FacingAngle = MathF.Atan2(dir.Y, dir.X) * 180f / MathF.PI;
+        Movement.FacingUtil.TurnTowardPosition(ctx.Units[ctx.UnitIndex], target, ctx.Dt, ctx.GameData);
     }
 
     /// <summary>Stand still, do nothing (used for sleeping, etc.).</summary>
