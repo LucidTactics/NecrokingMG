@@ -47,10 +47,6 @@
         {
           "unitDefID": "ZombieFemaleDeer",
           "weight": 1
-        },
-        {
-          "unitDefID": "ZombieFemaleDeer2",
-          "weight": 1
         }
       ]
     },
@@ -60,10 +56,6 @@
       "entries": [
         {
           "unitDefID": "ZombieMaleDeer",
-          "weight": 1
-        },
-        {
-          "unitDefID": "ZombieMaleDeer2",
           "weight": 1
         }
       ]

@@ -2678,57 +2678,6 @@
       "groupAlertRadius": 0
     },
     {
-      "id": "ZombieFemaleDeer2",
-      "name": "Zombie Female Deer2",
-      "type": "Dynamic",
-      "faction": "Undead",
-      "ai": "AttackClosest",
-      "orcaPriority": 0,
-      "size": 2,
-      "radius": 0.495,
-      "spriteScale": 1.7,
-      "spriteWorldHeight": 1.8,
-      "color": null,
-      "sprite": {
-        "atlas": "ZombieAnimals",
-        "name": "ZombieFemaleDeer2"
-      },
-      "stats": {
-        "maxHP": 10,
-        "strength": 4,
-        "attack": 4,
-        "defense": 9,
-        "magicResist": 2,
-        "encumbrance": 2,
-        "naturalProt": 4,
-        "combatSpeed": 5
-      },
-      "zombieTypeID": "",
-      "spellID": "",
-      "maxMana": 0,
-      "manaRegen": 0,
-      "weapons": [
-        "weapon_174944"
-      ],
-      "armors": [],
-      "shields": [],
-      "attackAnim": null,
-      "attackCooldown": null,
-      "postAttackLockout": null,
-      "turnSpeed": null,
-      "accelHalfTime": null,
-      "accel80Time": null,
-      "accelFullTime": null,
-      "weaponPoints": {},
-      "animTimings": {},
-      "archetype": "HordeMinion",
-      "detectionRange": 10,
-      "detectionBreakRange": 20,
-      "alertDuration": 0.5,
-      "alertEscalateRange": 8,
-      "groupAlertRadius": 0
-    },
-    {
       "id": "MaleDeer",
       "name": "Male Deer",
       "type": "Dynamic",
@@ -2914,58 +2863,6 @@
       "sprite": {
         "atlas": "ZombieAnimals",
         "name": "ZombieMaleDeer"
-      },
-      "stats": {
-        "maxHP": 15,
-        "strength": 7,
-        "attack": 6,
-        "defense": 8,
-        "magicResist": 3,
-        "encumbrance": 2,
-        "naturalProt": 4,
-        "combatSpeed": 5
-      },
-      "zombieTypeID": "",
-      "spellID": "",
-      "maxMana": 0,
-      "manaRegen": 0,
-      "weapons": [
-        "weapon_174944",
-        "weapon_181921"
-      ],
-      "armors": [],
-      "shields": [],
-      "attackAnim": null,
-      "attackCooldown": null,
-      "postAttackLockout": null,
-      "turnSpeed": null,
-      "accelHalfTime": null,
-      "accel80Time": null,
-      "accelFullTime": null,
-      "weaponPoints": {},
-      "animTimings": {},
-      "archetype": "HordeMinion",
-      "detectionRange": 10,
-      "detectionBreakRange": 20,
-      "alertDuration": 0.5,
-      "alertEscalateRange": 8,
-      "groupAlertRadius": 0
-    },
-    {
-      "id": "ZombieMaleDeer2",
-      "name": "Zombie Male Deer2",
-      "type": "Dynamic",
-      "faction": "Undead",
-      "ai": "AttackClosest",
-      "orcaPriority": 0,
-      "size": 2,
-      "radius": 0.5,
-      "spriteScale": 1.5,
-      "spriteWorldHeight": 1.8,
-      "color": null,
-      "sprite": {
-        "atlas": "ZombieAnimals",
-        "name": "ZombieMaleDeer2"
       },
       "stats": {
         "maxHP": 15,
