@@ -409,6 +409,30 @@
       "pounceMaxRange": 8,
       "pounceArcPeak": 3,
       "pounceAirSpeed": 6
+    },
+    {
+      "id": "weapon_011352",
+      "name": "Claw",
+      "damage": 1,
+      "attackBonus": 1,
+      "defenseBonus": -2,
+      "length": 1,
+      "isRanged": false,
+      "range": 0,
+      "directRange": 0,
+      "cooldown": 0,
+      "rangedDamage": 0,
+      "precision": 0,
+      "projectileType": "Arrow",
+      "bonuses": [],
+      "anim": null,
+      "archetype": "None",
+      "cooldownRounds": 1,
+      "priority": 0,
+      "pounceMinRange": 3,
+      "pounceMaxRange": 8,
+      "pounceArcPeak": 2,
+      "pounceAirSpeed": 6
     }
   ]
 }

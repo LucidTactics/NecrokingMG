@@ -2797,6 +2797,280 @@
       "groupAlertRadius": 12
     },
     {
+      "id": "Bear",
+      "name": "Bear",
+      "type": "Dynamic",
+      "faction": "Animal",
+      "ai": "WolfOpportunist",
+      "orcaPriority": 0,
+      "size": 3,
+      "radius": 0.75,
+      "spriteScale": 2.2,
+      "spriteWorldHeight": 1.8,
+      "color": null,
+      "sprite": {
+        "atlas": "Animals",
+        "name": "JuvenileBear"
+      },
+      "stats": {
+        "maxHP": 25,
+        "strength": 14,
+        "attack": 12,
+        "defense": 8,
+        "magicResist": 3,
+        "encumbrance": 2,
+        "naturalProt": 8,
+        "combatSpeed": 12
+      },
+      "zombieTypeID": "ZombieWolf",
+      "spellID": "",
+      "maxMana": 0,
+      "manaRegen": 0,
+      "weapons": [
+        {
+          "id": "weapon_223651",
+          "anim": "Attack1"
+        },
+        {
+          "id": "weapon_011352",
+          "anim": "Attack2"
+        }
+      ],
+      "armors": [],
+      "shields": [],
+      "attackAnim": null,
+      "attackCooldown": null,
+      "postAttackLockout": null,
+      "turnSpeed": null,
+      "accelHalfTime": null,
+      "accel80Time": null,
+      "accelFullTime": null,
+      "weaponPoints": {},
+      "animTimings": {
+        "Jog": {
+          "frameDurationsMs": [
+            75,
+            75,
+            75,
+            75,
+            75,
+            75
+          ],
+          "effectTimeMs": -1
+        }
+      },
+      "archetype": "",
+      "detectionRange": 0,
+      "detectionBreakRange": 0,
+      "alertDuration": 2,
+      "alertEscalateRange": 0,
+      "groupAlertRadius": 0
+    },
+    {
+      "id": "GrizzlyBear",
+      "name": "Grizzly Bear",
+      "type": "Dynamic",
+      "faction": "Animal",
+      "ai": "WolfOpportunist",
+      "orcaPriority": 0,
+      "size": 4,
+      "radius": 1,
+      "spriteScale": 2.2,
+      "spriteWorldHeight": 1.8,
+      "color": null,
+      "sprite": {
+        "atlas": "Animals",
+        "name": "GrizzlyBear"
+      },
+      "stats": {
+        "maxHP": 35,
+        "strength": 16,
+        "attack": 13,
+        "defense": 8,
+        "magicResist": 4,
+        "encumbrance": 2,
+        "naturalProt": 8,
+        "combatSpeed": 12
+      },
+      "zombieTypeID": "ZombieWolf",
+      "spellID": "",
+      "maxMana": 0,
+      "manaRegen": 0,
+      "weapons": [
+        {
+          "id": "weapon_223651",
+          "anim": "Attack1"
+        },
+        {
+          "id": "weapon_011352",
+          "anim": "Attack2"
+        }
+      ],
+      "armors": [],
+      "shields": [],
+      "attackAnim": null,
+      "attackCooldown": null,
+      "postAttackLockout": null,
+      "turnSpeed": null,
+      "accelHalfTime": null,
+      "accel80Time": null,
+      "accelFullTime": null,
+      "weaponPoints": {},
+      "animTimings": {
+        "Jog": {
+          "frameDurationsMs": [
+            75,
+            75,
+            75,
+            75,
+            75,
+            75
+          ],
+          "effectTimeMs": -1
+        }
+      },
+      "archetype": "",
+      "detectionRange": 0,
+      "detectionBreakRange": 0,
+      "alertDuration": 2,
+      "alertEscalateRange": 0,
+      "groupAlertRadius": 0
+    },
+    {
+      "id": "DireWolf",
+      "name": "Dire Wolf",
+      "type": "Dynamic",
+      "faction": "Animal",
+      "ai": "WolfHitAndRun",
+      "orcaPriority": 0,
+      "size": 3,
+      "radius": 0.75,
+      "spriteScale": 2.4,
+      "spriteWorldHeight": 1.8,
+      "color": null,
+      "sprite": {
+        "atlas": "Animals",
+        "name": "DireWolf"
+      },
+      "stats": {
+        "maxHP": 15,
+        "strength": 12,
+        "attack": 14,
+        "defense": 14,
+        "magicResist": 3,
+        "encumbrance": 2,
+        "naturalProt": 3,
+        "combatSpeed": 14
+      },
+      "zombieTypeID": "ZombieWolf",
+      "spellID": "",
+      "maxMana": 0,
+      "manaRegen": 0,
+      "weapons": [
+        {
+          "id": "weapon_223651",
+          "anim": "AttackBite"
+        },
+        "weapon_223651_copy"
+      ],
+      "armors": [],
+      "shields": [],
+      "attackAnim": null,
+      "attackCooldown": null,
+      "postAttackLockout": null,
+      "turnSpeed": null,
+      "accelHalfTime": null,
+      "accel80Time": null,
+      "accelFullTime": null,
+      "weaponPoints": {},
+      "animTimings": {
+        "Jog": {
+          "frameDurationsMs": [
+            75,
+            75,
+            75,
+            75,
+            75,
+            75
+          ],
+          "effectTimeMs": -1
+        }
+      },
+      "archetype": "",
+      "detectionRange": 0,
+      "detectionBreakRange": 0,
+      "alertDuration": 2,
+      "alertEscalateRange": 0,
+      "groupAlertRadius": 0
+    },
+    {
+      "id": "JuvWolf",
+      "name": "Wolf Cub",
+      "type": "Dynamic",
+      "faction": "Animal",
+      "ai": "WolfHitAndRun",
+      "orcaPriority": 0,
+      "size": 2,
+      "radius": 0.5,
+      "spriteScale": 2.2,
+      "spriteWorldHeight": 1.8,
+      "color": null,
+      "sprite": {
+        "atlas": "Animals",
+        "name": "WolfCub"
+      },
+      "stats": {
+        "maxHP": 5,
+        "strength": 5,
+        "attack": 9,
+        "defense": 11,
+        "magicResist": 3,
+        "encumbrance": 2,
+        "naturalProt": 2,
+        "combatSpeed": 12
+      },
+      "zombieTypeID": "ZombieWolf",
+      "spellID": "",
+      "maxMana": 0,
+      "manaRegen": 0,
+      "weapons": [
+        {
+          "id": "weapon_223651",
+          "anim": "AttackBite"
+        },
+        "weapon_223651_copy"
+      ],
+      "armors": [],
+      "shields": [],
+      "attackAnim": null,
+      "attackCooldown": null,
+      "postAttackLockout": null,
+      "turnSpeed": null,
+      "accelHalfTime": null,
+      "accel80Time": null,
+      "accelFullTime": null,
+      "weaponPoints": {},
+      "animTimings": {
+        "Jog": {
+          "frameDurationsMs": [
+            75,
+            75,
+            75,
+            75,
+            75,
+            75
+          ],
+          "effectTimeMs": -1
+        }
+      },
+      "archetype": "",
+      "detectionRange": 0,
+      "detectionBreakRange": 0,
+      "alertDuration": 2,
+      "alertEscalateRange": 0,
+      "groupAlertRadius": 0
+    },
+    {
       "id": "ZombieWolf",
       "name": "Zombie Wolf",
       "type": "Dynamic",
@@ -2846,6 +3120,58 @@
       "detectionBreakRange": 20,
       "alertDuration": 0.5,
       "alertEscalateRange": 8,
+      "groupAlertRadius": 0
+    },
+    {
+      "id": "WolfCubZombie",
+      "name": "Wolf Cub Zombie",
+      "type": "Dynamic",
+      "faction": "Undead",
+      "ai": "AttackClosest",
+      "orcaPriority": 0,
+      "size": 2,
+      "radius": 0.5,
+      "spriteScale": 2.2,
+      "spriteWorldHeight": 1.8,
+      "color": null,
+      "sprite": {
+        "atlas": "ZombieAnimals",
+        "name": "ZombieWolfCub"
+      },
+      "stats": {
+        "maxHP": 7,
+        "strength": 5,
+        "attack": 4,
+        "defense": 8,
+        "magicResist": 3,
+        "encumbrance": 2,
+        "naturalProt": 3,
+        "combatSpeed": 8
+      },
+      "zombieTypeID": "group_182459_copy",
+      "spellID": "",
+      "maxMana": 0,
+      "manaRegen": 0,
+      "weapons": [
+        "weapon_223651",
+        "weapon_223651_copy"
+      ],
+      "armors": [],
+      "shields": [],
+      "attackAnim": null,
+      "attackCooldown": null,
+      "postAttackLockout": null,
+      "turnSpeed": null,
+      "accelHalfTime": null,
+      "accel80Time": null,
+      "accelFullTime": null,
+      "weaponPoints": {},
+      "animTimings": {},
+      "archetype": "",
+      "detectionRange": 0,
+      "detectionBreakRange": 0,
+      "alertDuration": 2,
+      "alertEscalateRange": 0,
       "groupAlertRadius": 0
     },
     {
