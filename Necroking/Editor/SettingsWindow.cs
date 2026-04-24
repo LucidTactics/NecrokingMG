@@ -323,7 +323,7 @@ public class SettingsWindow
     private int DrawGeneralTab(int x, int y, int w)
     {
         int startY = y;
-        int height = SettingsGeneralTab.Draw(_ui, _gameData.Settings.General, _gameData.Settings.Performance, x, y, w);
+        int height = SettingsGeneralTab.Draw(_ui, _gameData.Settings.General, _gameData.Settings.Performance, _gameData.Settings.Combat, x, y, w);
         MarkDirty(); // any interaction marks dirty; auto-save on next Update
         return height;
     }

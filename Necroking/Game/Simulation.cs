@@ -1894,6 +1894,24 @@ public class Simulation
                     InitiatePounceWithWeapon(i, ti, w, roundDuration);
                     queued = true;
                 }
+                else if (ws.Archetype == WeaponArchetype.Sweep)
+                {
+                    // Sweep: primary target must be in sweep radius AND inside the
+                    // cone (we're already facing it via IsFacingTarget above, so the
+                    // arc check here is just a sanity gate against edge cases).
+                    if (dist > ws.SweepRadius) continue;
+                    float cycle = Math.Max(1, ws.CooldownRounds) * roundDuration;
+                    float animDur = MathF.Min(cycle, GetAttackAnimDurationSec(i, w));
+                    _units[i].PendingAttack = CombatTarget.Unit(_units[ti].Id);
+                    _units[i].PendingWeaponIdx = w;
+                    _units[i].PendingWeaponIsRanged = false;
+                    _units[i].PendingRangedTarget = GameConstants.InvalidUnit;
+                    _units[i].CurrentAttackLungeDist = ws.LungeDist;
+                    ws.Cooldown = cycle;
+                    _units[i].AttackCooldown = cycle;
+                    _units[i].PostAttackTimer = animDur;
+                    queued = true;
+                }
                 else
                 {
                     // Normal melee: unit must be in combat (derived earlier from
@@ -2015,6 +2033,17 @@ public class Simulation
 
         if (!t.IsUnit) return;
         int meleeDefenderIdx = ResolveUnitTarget(t);
+
+        // Sweep: dispatch even if the primary target died — the cone may still
+        // catch other victims. ResolveMeleeSweep handles missing-primary gracefully.
+        WeaponStats? pendingWeapon = (weaponIdx >= 0 && weaponIdx < _units[unitIdx].Stats.MeleeWeapons.Count)
+            ? _units[unitIdx].Stats.MeleeWeapons[weaponIdx] : null;
+        if (pendingWeapon != null && pendingWeapon.Archetype == WeaponArchetype.Sweep)
+        {
+            ResolveMeleeSweep(unitIdx, meleeDefenderIdx, weaponIdx);
+            return;
+        }
+
         if (meleeDefenderIdx < 0)
         {
             // Target died between queue and resolve. Refund the commitment so the
@@ -2030,6 +2059,84 @@ public class Simulation
         }
 
         ResolveMeleeAttack(unitIdx, meleeDefenderIdx, weaponIdx);
+    }
+
+    private static readonly List<uint> _sweepScratch = new(32);
+
+    /// <summary>
+    /// Sweep AOE melee: forward cone centered on attacker's facing. Queries the
+    /// quadtree within SweepRadius, filters by cone arc (and faction unless
+    /// SweepHitsAllies), then runs ResolveMeleeAttack against each victim. Each
+    /// target rolls independently — hit/miss, damage, knockdown, coats all
+    /// resolved per defender. Primary target is always included if still alive.
+    /// </summary>
+    private void ResolveMeleeSweep(int attackerIdx, int primaryDefenderIdx, int weaponIdx)
+    {
+        var atkStats = _units[attackerIdx].Stats;
+        if (weaponIdx < 0 || weaponIdx >= atkStats.MeleeWeapons.Count) return;
+        var weapon = atkStats.MeleeWeapons[weaponIdx];
+
+        Vec2 origin = _units[attackerIdx].Position;
+        float facing = _units[attackerIdx].FacingAngle;
+        float halfArcRad = weapon.SweepArcDegrees * 0.5f * (MathF.PI / 180f);
+        float cosThreshold = MathF.Cos(halfArcRad);
+        float facingCos = MathF.Cos(facing);
+        float facingSin = MathF.Sin(facing);
+        float radius = weapon.SweepRadius;
+
+        Faction atkFaction = _units[attackerIdx].Faction;
+        FactionMask mask = weapon.SweepHitsAllies
+            ? FactionMask.All
+            : FactionMaskExt.AllExcept(atkFaction);
+
+        _sweepScratch.Clear();
+        _quadtree.QueryRadiusByFaction(origin, radius, mask, _sweepScratch);
+
+        int hitCount = 0;
+        uint primaryID = primaryDefenderIdx >= 0 ? _units[primaryDefenderIdx].Id : GameConstants.InvalidUnit;
+        bool primaryResolved = false;
+
+        for (int k = 0; k < _sweepScratch.Count; k++)
+        {
+            int defIdx = UnitUtil.ResolveUnitIndex(_units, _sweepScratch[k]);
+            if (defIdx < 0 || defIdx == attackerIdx || !_units[defIdx].Alive) continue;
+
+            // Cone check: dot product between facing dir and (defender-origin) dir.
+            Vec2 d = _units[defIdx].Position - origin;
+            float dLen = d.Length();
+            if (dLen < 0.0001f) { /* on top of us — count as in-cone */ }
+            else
+            {
+                float dx = d.X / dLen;
+                float dy = d.Y / dLen;
+                float dot = facingCos * dx + facingSin * dy;
+                if (dot < cosThreshold) continue;
+            }
+
+            if (_units[defIdx].Id == primaryID) primaryResolved = true;
+            ResolveMeleeAttack(attackerIdx, defIdx, weaponIdx);
+            hitCount++;
+        }
+
+        // If the primary target is still alive and wasn't picked up by the cone
+        // scan (e.g. quadtree rebuild lag, edge rounding), resolve against them
+        // anyway so the AI's chosen target always gets swung at.
+        if (!primaryResolved && primaryDefenderIdx >= 0 && _units[primaryDefenderIdx].Alive)
+        {
+            ResolveMeleeAttack(attackerIdx, primaryDefenderIdx, weaponIdx);
+            hitCount++;
+        }
+
+        if (hitCount == 0 && primaryDefenderIdx < 0)
+        {
+            // No victims and primary already dead — refund post-attack timer so the
+            // bear isn't locked out swinging at air.
+            _units[attackerIdx].PostAttackTimer = 0f;
+        }
+
+        DebugLog.Log("combat",
+            $"[Sweep] unit#{attackerIdx} ({weapon.Name}) hit {hitCount} target(s) " +
+            $"arc={weapon.SweepArcDegrees:F0}° r={weapon.SweepRadius:F1}");
     }
 
     private void ResolveMeleeAttack(int attackerIdx, int defenderIdx, int weaponIdx)

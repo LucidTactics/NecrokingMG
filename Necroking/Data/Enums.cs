@@ -69,7 +69,7 @@ public enum BuffStat : byte { Strength, Attack, Defense, MagicResist, NaturalPro
 
 public enum WeaponBonus : byte { ArmorPiercing, ArmorNegating, Knockdown }
 public enum ArmorBonus : byte { TrueArmor, Barbed }
-public enum WeaponArchetype : byte { None = 0, Pounce = 1 }
+public enum WeaponArchetype : byte { None = 0, Pounce = 1, Sweep = 2 }
 
 // --- Settings ---
 

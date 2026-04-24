@@ -22,7 +22,10 @@
       "pounceMinRange": 3,
       "pounceMaxRange": 8,
       "pounceArcPeak": 2,
-      "pounceAirSpeed": 6
+      "pounceAirSpeed": 6,
+      "sweepArcDegrees": 120,
+      "sweepRadius": 2.5,
+      "sweepHitsAllies": false
     },
     {
       "id": "spear",
@@ -46,7 +49,10 @@
       "pounceMinRange": 3,
       "pounceMaxRange": 8,
       "pounceArcPeak": 2,
-      "pounceAirSpeed": 6
+      "pounceAirSpeed": 6,
+      "sweepArcDegrees": 120,
+      "sweepRadius": 2.5,
+      "sweepHitsAllies": false
     },
     {
       "id": "spear_copy",
@@ -70,7 +76,10 @@
       "pounceMinRange": 3,
       "pounceMaxRange": 8,
       "pounceArcPeak": 2,
-      "pounceAirSpeed": 6
+      "pounceAirSpeed": 6,
+      "sweepArcDegrees": 120,
+      "sweepRadius": 2.5,
+      "sweepHitsAllies": false
     },
     {
       "id": "hook",
@@ -94,7 +103,10 @@
       "pounceMinRange": 3,
       "pounceMaxRange": 8,
       "pounceArcPeak": 2,
-      "pounceAirSpeed": 6
+      "pounceAirSpeed": 6,
+      "sweepArcDegrees": 120,
+      "sweepRadius": 2.5,
+      "sweepHitsAllies": false
     },
     {
       "id": "club",
@@ -118,7 +130,10 @@
       "pounceMinRange": 3,
       "pounceMaxRange": 8,
       "pounceArcPeak": 2,
-      "pounceAirSpeed": 6
+      "pounceAirSpeed": 6,
+      "sweepArcDegrees": 120,
+      "sweepRadius": 2.5,
+      "sweepHitsAllies": false
     },
     {
       "id": "shortsword",
@@ -142,7 +157,10 @@
       "pounceMinRange": 3,
       "pounceMaxRange": 8,
       "pounceArcPeak": 2,
-      "pounceAirSpeed": 6
+      "pounceAirSpeed": 6,
+      "sweepArcDegrees": 120,
+      "sweepRadius": 2.5,
+      "sweepHitsAllies": false
     },
     {
       "id": "lance",
@@ -166,7 +184,10 @@
       "pounceMinRange": 3,
       "pounceMaxRange": 8,
       "pounceArcPeak": 2,
-      "pounceAirSpeed": 6
+      "pounceAirSpeed": 6,
+      "sweepArcDegrees": 120,
+      "sweepRadius": 2.5,
+      "sweepHitsAllies": false
     },
     {
       "id": "dagger",
@@ -190,7 +211,10 @@
       "pounceMinRange": 3,
       "pounceMaxRange": 8,
       "pounceArcPeak": 2,
-      "pounceAirSpeed": 6
+      "pounceAirSpeed": 6,
+      "sweepArcDegrees": 120,
+      "sweepRadius": 2.5,
+      "sweepHitsAllies": false
     },
     {
       "id": "longbow",
@@ -214,7 +238,10 @@
       "pounceMinRange": 3,
       "pounceMaxRange": 8,
       "pounceArcPeak": 2,
-      "pounceAirSpeed": 6
+      "pounceAirSpeed": 6,
+      "sweepArcDegrees": 120,
+      "sweepRadius": 2.5,
+      "sweepHitsAllies": false
     },
     {
       "id": "weapon_8",
@@ -238,7 +265,10 @@
       "pounceMinRange": 3,
       "pounceMaxRange": 8,
       "pounceArcPeak": 2,
-      "pounceAirSpeed": 6
+      "pounceAirSpeed": 6,
+      "sweepArcDegrees": 120,
+      "sweepRadius": 2.5,
+      "sweepHitsAllies": false
     },
     {
       "id": "weapon_10",
@@ -262,7 +292,10 @@
       "pounceMinRange": 3,
       "pounceMaxRange": 8,
       "pounceArcPeak": 2,
-      "pounceAirSpeed": 6
+      "pounceAirSpeed": 6,
+      "sweepArcDegrees": 120,
+      "sweepRadius": 2.5,
+      "sweepHitsAllies": false
     },
     {
       "id": "weapon_11",
@@ -286,7 +319,10 @@
       "pounceMinRange": 3,
       "pounceMaxRange": 8,
       "pounceArcPeak": 2,
-      "pounceAirSpeed": 6
+      "pounceAirSpeed": 6,
+      "sweepArcDegrees": 120,
+      "sweepRadius": 2.5,
+      "sweepHitsAllies": false
     },
     {
       "id": "weapon_174944",
@@ -310,7 +346,10 @@
       "pounceMinRange": 3,
       "pounceMaxRange": 8,
       "pounceArcPeak": 2,
-      "pounceAirSpeed": 6
+      "pounceAirSpeed": 6,
+      "sweepArcDegrees": 120,
+      "sweepRadius": 2.5,
+      "sweepHitsAllies": false
     },
     {
       "id": "wolf_pounce",
@@ -334,7 +373,10 @@
       "pounceMinRange": 3,
       "pounceMaxRange": 8,
       "pounceArcPeak": 2,
-      "pounceAirSpeed": 6
+      "pounceAirSpeed": 6,
+      "sweepArcDegrees": 120,
+      "sweepRadius": 2.5,
+      "sweepHitsAllies": false
     },
     {
       "id": "weapon_181921",
@@ -358,7 +400,10 @@
       "pounceMinRange": 3,
       "pounceMaxRange": 8,
       "pounceArcPeak": 2,
-      "pounceAirSpeed": 6
+      "pounceAirSpeed": 6,
+      "sweepArcDegrees": 120,
+      "sweepRadius": 2.5,
+      "sweepHitsAllies": false
     },
     {
       "id": "weapon_223651",
@@ -382,7 +427,10 @@
       "pounceMinRange": 3,
       "pounceMaxRange": 8,
       "pounceArcPeak": 2,
-      "pounceAirSpeed": 6
+      "pounceAirSpeed": 6,
+      "sweepArcDegrees": 120,
+      "sweepRadius": 2.5,
+      "sweepHitsAllies": false
     },
     {
       "id": "weapon_223651_copy",
@@ -408,7 +456,10 @@
       "pounceMinRange": 3,
       "pounceMaxRange": 8,
       "pounceArcPeak": 3,
-      "pounceAirSpeed": 6
+      "pounceAirSpeed": 6,
+      "sweepArcDegrees": 120,
+      "sweepRadius": 2.5,
+      "sweepHitsAllies": false
     },
     {
       "id": "weapon_011352",
@@ -432,7 +483,37 @@
       "pounceMinRange": 3,
       "pounceMaxRange": 8,
       "pounceArcPeak": 2,
-      "pounceAirSpeed": 6
+      "pounceAirSpeed": 6,
+      "sweepArcDegrees": 120,
+      "sweepRadius": 2.5,
+      "sweepHitsAllies": false
+    },
+    {
+      "id": "weapon_bear_sweep",
+      "name": "Sweep",
+      "damage": -5,
+      "attackBonus": -2,
+      "defenseBonus": 0,
+      "length": 2,
+      "isRanged": false,
+      "range": 0,
+      "directRange": 0,
+      "cooldown": 0,
+      "rangedDamage": 0,
+      "precision": 0,
+      "projectileType": "Arrow",
+      "bonuses": [],
+      "anim": null,
+      "archetype": "Sweep",
+      "cooldownRounds": 4,
+      "priority": 1,
+      "pounceMinRange": 3,
+      "pounceMaxRange": 8,
+      "pounceArcPeak": 2,
+      "pounceAirSpeed": 6,
+      "sweepArcDegrees": 120,
+      "sweepRadius": 2,
+      "sweepHitsAllies": false
     }
   ]
 }

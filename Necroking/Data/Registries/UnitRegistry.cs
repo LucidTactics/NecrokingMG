@@ -288,6 +288,9 @@ public class UnitRegistry : RegistryBase<UnitDef>
                 PounceMaxRange = w.PounceMaxRange,
                 PounceArcPeak = w.PounceArcPeak,
                 PounceAirSpeed = w.PounceAirSpeed,
+                SweepArcDegrees = w.SweepArcDegrees,
+                SweepRadius = w.SweepRadius,
+                SweepHitsAllies = w.SweepHitsAllies,
             };
             if (System.Enum.TryParse<WeaponArchetype>(w.Archetype, true, out var arch))
                 ws.Archetype = arch;

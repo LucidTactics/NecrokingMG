@@ -43,6 +43,11 @@ public class WeaponDef : IHasId
     [JsonPropertyName("pounceMaxRange")] public float PounceMaxRange { get; set; } = 8f;
     [JsonPropertyName("pounceArcPeak")] public float PounceArcPeak { get; set; } = 2f;
     [JsonPropertyName("pounceAirSpeed")] public float PounceAirSpeed { get; set; } = 6f;
+
+    // --- Sweep archetype parameters (used only when Archetype == "Sweep") ---
+    [JsonPropertyName("sweepArcDegrees")] public float SweepArcDegrees { get; set; } = 120f;
+    [JsonPropertyName("sweepRadius")] public float SweepRadius { get; set; } = 2.5f;
+    [JsonPropertyName("sweepHitsAllies")] public bool SweepHitsAllies { get; set; } = false;
 }
 
 public class WeaponRegistry : RegistryBase<WeaponDef>

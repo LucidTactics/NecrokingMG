@@ -45,6 +45,16 @@ public class WeaponStats
     public float PounceArcPeak { get; set; } = 2f;
     public float PounceAirSpeed { get; set; } = 6f;
 
+    // Sweep-archetype parameters (used only when Archetype == Sweep).
+    // Forward cone centered on attacker's facing: half-arc is SweepArcDegrees/2
+    // on each side. Cone origin is the attacker's center — at short range the
+    // arc is narrow; at range SweepRadius it's the widest.
+    public float SweepArcDegrees { get; set; } = 120f;
+    public float SweepRadius { get; set; } = 2.5f;
+    /// <summary>If true, sweep hits allies caught in the cone as well as enemies.
+    /// Default false — hostiles only, standard AOE melee behaviour.</summary>
+    public bool SweepHitsAllies { get; set; } = false;
+
     /// <summary>Bonus flags per-weapon (currently also aggregated onto UnitStats for
     /// backwards compat, but kept here so resolution can check per-weapon accurately).</summary>
     public bool HasArmorPiercing { get; set; }

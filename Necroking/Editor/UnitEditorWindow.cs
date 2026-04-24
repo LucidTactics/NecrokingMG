@@ -2616,6 +2616,27 @@ public class UnitEditorWindow
             curY += RowH;
         }
 
+        // Sweep-archetype parameters (only shown when Archetype == Sweep).
+        if (w.Archetype == "Sweep")
+        {
+            _ui.DrawText("Sweep:", new Vector2(x, curY + 2), EditorBase.AccentColor);
+            curY += RowH;
+
+            float newArcDeg = _ui.DrawFloatField("w_sarc", "  Arc (deg)", w.SweepArcDegrees, x, curY, ww, 5f);
+            if (Math.Abs(newArcDeg - w.SweepArcDegrees) > 0.001f)
+            { w.SweepArcDegrees = Math.Clamp(newArcDeg, 5f, 360f); _unsavedChanges = true; }
+            curY += RowH;
+
+            float newR = _ui.DrawFloatField("w_srad", "  Radius", w.SweepRadius, x, curY, ww, 0.25f);
+            if (Math.Abs(newR - w.SweepRadius) > 0.001f)
+            { w.SweepRadius = MathF.Max(0.5f, newR); _unsavedChanges = true; }
+            curY += RowH;
+
+            bool newFF = _ui.DrawCheckbox("  Hits Allies", w.SweepHitsAllies, x, curY);
+            if (newFF != w.SweepHitsAllies) { w.SweepHitsAllies = newFF; _unsavedChanges = true; }
+            curY += RowH;
+        }
+
         // Bonuses
         _ui.DrawText("Bonuses:", new Vector2(x, curY + 2), EditorBase.AccentColor);
         curY += RowH;

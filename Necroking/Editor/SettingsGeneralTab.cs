@@ -18,10 +18,15 @@ public static class SettingsGeneralTab
     /// </summary>
     public static int Draw(EditorBase ui, GeneralSettings s, int x, int y, int w)
     {
-        return Draw(ui, s, null, x, y, w);
+        return Draw(ui, s, null, null, x, y, w);
     }
 
     public static int Draw(EditorBase ui, GeneralSettings s, PerformanceSettings? perf, int x, int y, int w)
+    {
+        return Draw(ui, s, perf, null, x, y, w);
+    }
+
+    public static int Draw(EditorBase ui, GeneralSettings s, PerformanceSettings? perf, CombatSettings? combat, int x, int y, int w)
     {
         int curY = y;
 
@@ -136,6 +141,20 @@ public static class SettingsGeneralTab
         DrawSectionHeader(ui, "Pickup", x, ref curY, w);
         s.AutoPickupForagables = ui.DrawCheckbox("Auto-Pickup Foragables", s.AutoPickupForagables, x + 10, curY);
         curY += RowH;
+
+        if (combat != null)
+        {
+            curY += 4;
+            DrawSectionHeader(ui, "Combat", x, ref curY, w);
+
+            float newRd = ui.DrawFloatField("gen_roundDuration", "Round Duration (s)", combat.RoundDuration, x, curY, w, 0.25f);
+            if (System.Math.Abs(newRd - combat.RoundDuration) > 0.001f)
+                combat.RoundDuration = System.MathF.Max(0.25f, newRd);
+            curY += RowH;
+
+            ui.DrawText("Weapon cycle = CooldownRounds × Round Duration.", new Vector2(x, curY), EditorBase.TextDim);
+            curY += 20;
+        }
 
         if (perf != null)
         {

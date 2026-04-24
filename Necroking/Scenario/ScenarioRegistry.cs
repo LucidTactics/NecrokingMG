@@ -81,6 +81,7 @@ public static class ScenarioRegistry
         Register("horde_idle_anim", () => new Scenarios.HordeIdleAnimScenario());
         Register("summon_lag", () => new Scenarios.SummonLagScenario());
         Register("pounce_test", () => new Scenarios.PounceTestScenario());
+        Register("sweep_attack", () => new Scenarios.SweepAttackScenario());
         Register("knockdown_test", () => new Scenarios.KnockdownTestScenario());
         Register("wolf_retarget", () => new Scenarios.WolfRetargetScenario());
     }

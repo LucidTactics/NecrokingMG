@@ -2820,13 +2820,17 @@
         "magicResist": 3,
         "encumbrance": 2,
         "naturalProt": 8,
-        "combatSpeed": 12
+        "combatSpeed": 6
       },
       "zombieTypeID": "ZombieWolf",
       "spellID": "",
       "maxMana": 0,
       "manaRegen": 0,
       "weapons": [
+        {
+          "id": "weapon_bear_sweep",
+          "anim": "Attack3"
+        },
         {
           "id": "weapon_223651",
           "anim": "Attack1"
@@ -2890,13 +2894,17 @@
         "magicResist": 4,
         "encumbrance": 2,
         "naturalProt": 8,
-        "combatSpeed": 12
+        "combatSpeed": 7
       },
       "zombieTypeID": "ZombieWolf",
       "spellID": "",
       "maxMana": 0,
       "manaRegen": 0,
       "weapons": [
+        {
+          "id": "weapon_bear_sweep",
+          "anim": "Attack3"
+        },
         {
           "id": "weapon_223651",
           "anim": "Attack1"
