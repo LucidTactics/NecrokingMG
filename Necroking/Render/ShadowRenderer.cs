@@ -213,10 +213,16 @@ public class ShadowRenderer
             if (unitDef == null) continue;
 
             var atlas = atlases[(int)animData.AtlasID];
-            if (!atlas.IsLoaded || atlas.Texture == null) continue;
+            if (!atlas.IsLoaded) continue;
 
             var fr = animData.Ctrl.GetCurrentFrame(sim.Units[i].FacingAngle);
             if (fr.Frame == null) continue;
+
+            // Look up the backing texture for this specific frame — supports __N
+            // overflow sheets where different units share the same atlas but live
+            // on different PNGs.
+            var frameTex = atlas.GetTextureForFrame(fr.Frame.Value);
+            if (frameTex == null) continue;
 
             float worldH = (unitDef.SpriteWorldHeight > 0 ? unitDef.SpriteWorldHeight : 1.8f) * sim.Units[i].SpriteScale;
             float pixelH = worldH * camera.Zoom;
@@ -238,16 +244,17 @@ public class ShadowRenderer
             // Feet anchor follows the rendered sprite so the shadow lunges with the unit.
             var feetSp = renderer.WorldToScreen(sim.Units[i].RenderPos, 0f, camera);
 
-            // UV coordinates from atlas
-            float texW = atlas.Texture.Width;
-            float texH = atlas.Texture.Height;
+            // UV coordinates from the frame's backing texture (extension sheets
+            // have their own dimensions, so we can't use atlas.Texture.Width here).
+            float texW = frameTex.Width;
+            float texH = frameTex.Height;
             float u0 = srcRect.X / texW;
             float v0 = srcRect.Y / texH;
             float u1 = (srcRect.X + srcRect.Width) / texW;
             float v1 = (srcRect.Y + srcRect.Height) / texH;
             if (fr.FlipX) { (u0, u1) = (u1, u0); }
 
-            DrawShadowQuad(device, atlas.Texture, feetSp.X, feetSp.Y,
+            DrawShadowQuad(device, frameTex, feetSp.X, feetSp.Y,
                 leftOff, rightOff, shadowH, sdx, sdy,
                 u0, v0, u1, v1, shadowColor);
         }

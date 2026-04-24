@@ -496,7 +496,8 @@ public class BuffVisualSystem
         SpriteBatch batch, Camera25D cam, Renderer renderer,
         SpriteAtlas atlas, SpriteFrame frame, float spriteScale, bool flipX, float globalTime)
     {
-        if (atlas.Texture == null) return;
+        var tex = atlas.GetTextureForFrame(frame);
+        if (tex == null) return;
 
         float pulse = ib.Scale + ib.PulseAmount * MathF.Sin(globalTime * ib.PulseSpeed * 2f * MathF.PI);
         var sp = renderer.WorldToScreen(unitPos, 0f, cam);
@@ -517,7 +518,7 @@ public class BuffVisualSystem
 
         var effects = flipX ? SpriteEffects.FlipHorizontally : SpriteEffects.None;
         var color = EncodeColor(ib.Color, 1f, ib.BlendMode);
-        batch.Draw(atlas.Texture, dest, src, color, 0f, Vector2.Zero, effects, 0f);
+        batch.Draw(tex, dest, src, color, 0f, Vector2.Zero, effects, 0f);
     }
 
     // ==========================================

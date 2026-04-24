@@ -323,6 +323,12 @@ public class Simulation
         for (int i = 0; i < _units.Count; i++)
             _units[i].HitReacting = false;
 
+        // Trample: write charge velocity + scan for trampled victims BEFORE
+        // UpdateMovement so velocity writes take effect this frame. Transit
+        // damage + knockback impulse are applied here; wall collision during
+        // UpdateMovement can still stop the charge (TickCharge checks position
+        // movement next frame).
+        PhaseStart(); GameSystems.TrampleSystem.TickAll(this, dt); PhaseEnd("trample");
         PhaseStart(); UpdateMovement(dt); PhaseEnd("movement");
         PhaseStart(); _physics.Update(dt, _units); PhaseEnd("physics");
         PhaseStart(); _horde.UpdateStates(_units, _quadtree, _necromancerIdx, dt); PhaseEnd("horde_states");
@@ -1196,6 +1202,18 @@ public class Simulation
         {
             if (!_units[i].Alive) continue;
             if (_units[i].InPhysics) continue; // Physics system owns this unit's movement
+            // Charging (Trample): TrampleSystem.TickCharge wrote Velocity this frame
+            // at the desired charge speed. Skip ORCA / acceleration ramp / env-circle
+            // clipping — the charger phases through smaller units by design, and
+            // impact handling (larger-unit block, reach target) is in TickCharge.
+            // Wall collision at the bottom of the loop still applies, so solid
+            // geometry stops the charge. MoveTime saturated so if charge ends and
+            // normal movement resumes, there's no spin-up lag.
+            if (_units[i].ChargePhase == 1)
+            {
+                _units[i].MoveTime = 10f;
+                goto __ChargeWallCollision;
+            }
             // Movement blocked by: jumping, knockdown (buff), standup, pending attack, or post-attack lockout
             if (_units[i].Jumping || _units[i].Incap.IsLocked
                 || !_units[i].PendingAttack.IsNone || _units[i].PostAttackTimer > 0f)
@@ -1482,6 +1500,7 @@ public class Simulation
             }
 
             // Move with wall collision (axis-independent, gap probes, wall sliding)
+            __ChargeWallCollision:
             Vec2 oldPos = _units[i].Position;
             Vec2 delta = _units[i].Velocity * dt;
             // Wall collision uses smaller radius than ORCA for 1-tile gap clearance
@@ -1704,6 +1723,7 @@ public class Simulation
             // rotate anyway.
             if (_units[i].Incap.IsLocked) continue;
             if (_units[i].JumpPhase >= 2) continue;
+            if (_units[i].ChargePhase > 0) continue; // TrampleSystem owns facing during charge
             if (_units[i].AI == AIBehavior.PlayerControlled) continue;
 
             // Priority 1: Always turn toward engaged target when one is set
@@ -1846,6 +1866,7 @@ public class Simulation
             if (!_units[i].PendingAttack.IsNone) continue;
             if (_units[i].PostAttackTimer > 0f) continue; // one attack at a time
             if (_units[i].JumpPhase != 0) continue;        // already airborne / mid-pounce
+            if (_units[i].ChargePhase != 0) continue;      // already charging / recovering
 
             // Unified attack selection: scan weapons in list order. First weapon that is
             // off cooldown AND has its target in its own range AND the unit is facing
@@ -1892,6 +1913,19 @@ public class Simulation
                     // In its pounce range? (Strict window, exclusive of melee-reach.)
                     if (dist < ws.PounceMinRange || dist > ws.PounceMaxRange) continue;
                     InitiatePounceWithWeapon(i, ti, w, roundDuration);
+                    queued = true;
+                }
+                else if (ws.Archetype == WeaponArchetype.Trample)
+                {
+                    // Trample: can only charge a smaller-sized target in the range window.
+                    if (_units[ti].Size >= _units[i].Size) continue;
+                    if (dist < ws.TrampleMinRange || dist > ws.TrampleMaxRange) continue;
+                    float cycle = Math.Max(1, ws.CooldownRounds) * roundDuration;
+                    // No PendingAttack — TrampleSystem drives resolution continuously.
+                    // Just lock the weapon cooldown and begin the charge.
+                    GameSystems.TrampleSystem.BeginCharge(_units, i, ti, w, this);
+                    ws.Cooldown = cycle;
+                    _units[i].AttackCooldown = cycle;
                     queued = true;
                 }
                 else if (ws.Archetype == WeaponArchetype.Sweep)
@@ -2077,11 +2111,13 @@ public class Simulation
         var weapon = atkStats.MeleeWeapons[weaponIdx];
 
         Vec2 origin = _units[attackerIdx].Position;
-        float facing = _units[attackerIdx].FacingAngle;
+        // FacingAngle is stored in DEGREES (see Movement/FacingUtil.cs) — convert
+        // before handing to the radian-expecting Cos/Sin.
+        float facingRad = _units[attackerIdx].FacingAngle * (MathF.PI / 180f);
         float halfArcRad = weapon.SweepArcDegrees * 0.5f * (MathF.PI / 180f);
         float cosThreshold = MathF.Cos(halfArcRad);
-        float facingCos = MathF.Cos(facing);
-        float facingSin = MathF.Sin(facing);
+        float facingCos = MathF.Cos(facingRad);
+        float facingSin = MathF.Sin(facingRad);
         float radius = weapon.SweepRadius;
 
         Faction atkFaction = _units[attackerIdx].Faction;
@@ -2138,6 +2174,12 @@ public class Simulation
             $"[Sweep] unit#{attackerIdx} ({weapon.Name}) hit {hitCount} target(s) " +
             $"arc={weapon.SweepArcDegrees:F0}° r={weapon.SweepRadius:F1}");
     }
+
+    /// <summary>Public entrypoint for non-standard melee dispatchers (TrampleSystem,
+    /// SweepSystem, etc.) that resolve multiple hits from a single archetype action
+    /// without routing through PendingAttack. Delegates to the core resolver.</summary>
+    public void ResolveMeleeAttackExternal(int attackerIdx, int defenderIdx, int weaponIdx)
+        => ResolveMeleeAttack(attackerIdx, defenderIdx, weaponIdx);
 
     private void ResolveMeleeAttack(int attackerIdx, int defenderIdx, int weaponIdx)
     {
@@ -2321,6 +2363,11 @@ public class Simulation
     private void TryApplyKnockdownOnHit(int attackerIdx, int defenderIdx)
     {
         if (_units[defenderIdx].Size > _units[attackerIdx].Size + 1) return; // too big to knock down
+        // Chargers are immune to knockdown mid-charge — a stray hit from a
+        // smaller victim shouldn't cancel the commit. Still applies on transit
+        // trample hits the OTHER way (charger knocking down victims), just not
+        // FROM victims TO the charger.
+        if (_units[defenderIdx].ChargePhase == 1) return;
 
         int atkScore = _units[attackerIdx].Stats.Strength
                      + _units[attackerIdx].Size * 2

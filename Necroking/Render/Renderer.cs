@@ -72,7 +72,8 @@ public class Renderer
                            Vec2 worldPos, float height, Camera25D cam,
                            float scale = 1f, bool flipX = false, Color? tint = null)
     {
-        if (atlas.Texture == null) return;
+        var tex = atlas.GetTextureForFrame(frame);
+        if (tex == null) return;
 
         var screenPos = WorldToScreen(worldPos, height, cam);
         float pixelScale = scale * cam.Zoom / 32f; // normalized so zoom=32 → 1:1
@@ -96,7 +97,7 @@ public class Renderer
         // Handle horizontal flip
         SpriteEffects effects = flipX ? SpriteEffects.FlipHorizontally : SpriteEffects.None;
 
-        batch.Draw(atlas.Texture, destRect, sourceRect, tint ?? Color.White,
+        batch.Draw(tex, destRect, sourceRect, tint ?? Color.White,
                    0f, Vector2.Zero, effects, 0f);
     }
 

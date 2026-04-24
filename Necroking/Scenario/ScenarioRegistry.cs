@@ -82,6 +82,7 @@ public static class ScenarioRegistry
         Register("summon_lag", () => new Scenarios.SummonLagScenario());
         Register("pounce_test", () => new Scenarios.PounceTestScenario());
         Register("sweep_attack", () => new Scenarios.SweepAttackScenario());
+        Register("trample_attack", () => new Scenarios.TrampleAttackScenario());
         Register("knockdown_test", () => new Scenarios.KnockdownTestScenario());
         Register("wolf_retarget", () => new Scenarios.WolfRetargetScenario());
     }

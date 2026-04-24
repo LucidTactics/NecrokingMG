@@ -291,6 +291,14 @@ public class UnitRegistry : RegistryBase<UnitDef>
                 SweepArcDegrees = w.SweepArcDegrees,
                 SweepRadius = w.SweepRadius,
                 SweepHitsAllies = w.SweepHitsAllies,
+                TrampleMinRange = w.TrampleMinRange,
+                TrampleMaxRange = w.TrampleMaxRange,
+                TrampleMaxChaseDistance = w.TrampleMaxChaseDistance,
+                TrampleImpactRange = w.TrampleImpactRange,
+                TrampleSpeedBonus = w.TrampleSpeedBonus,
+                TrampleRadius = w.TrampleRadius,
+                TrampleKnockbackForce = w.TrampleKnockbackForce,
+                TrampleImpactForce = w.TrampleImpactForce,
             };
             if (System.Enum.TryParse<WeaponArchetype>(w.Archetype, true, out var arch))
                 ws.Archetype = arch;

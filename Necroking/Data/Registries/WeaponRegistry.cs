@@ -48,6 +48,16 @@ public class WeaponDef : IHasId
     [JsonPropertyName("sweepArcDegrees")] public float SweepArcDegrees { get; set; } = 120f;
     [JsonPropertyName("sweepRadius")] public float SweepRadius { get; set; } = 2.5f;
     [JsonPropertyName("sweepHitsAllies")] public bool SweepHitsAllies { get; set; } = false;
+
+    // --- Trample archetype parameters (used only when Archetype == "Trample") ---
+    [JsonPropertyName("trampleMinRange")] public float TrampleMinRange { get; set; } = 2f;
+    [JsonPropertyName("trampleMaxRange")] public float TrampleMaxRange { get; set; } = 6f;
+    [JsonPropertyName("trampleMaxChaseDistance")] public float TrampleMaxChaseDistance { get; set; } = 4f;
+    [JsonPropertyName("trampleImpactRange")] public float TrampleImpactRange { get; set; } = 1.5f;
+    [JsonPropertyName("trampleSpeedBonus")] public float TrampleSpeedBonus { get; set; } = 0.15f;
+    [JsonPropertyName("trampleRadius")] public float TrampleRadius { get; set; } = 1.5f;
+    [JsonPropertyName("trampleKnockbackForce")] public float TrampleKnockbackForce { get; set; } = 6f;
+    [JsonPropertyName("trampleImpactForce")] public float TrampleImpactForce { get; set; } = 10f;
 }
 
 public class WeaponRegistry : RegistryBase<WeaponDef>

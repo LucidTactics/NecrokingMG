@@ -65,6 +65,10 @@ public class PhysicsSystem
     {
         if (unitIdx < 0 || unitIdx >= units.Count || !units[unitIdx].Alive) return false;
         if (units[unitIdx].InPhysics) return false; // already flying
+        // Charging units (Trample) are immune to ALL impulses — direct radial
+        // blasts, chain collisions from flying victims, anything. The charge is a
+        // committed motion; a stray piece of physics debris shouldn't cancel it.
+        if (units[unitIdx].ChargePhase == 1) return false;
 
         // Resistance check: large units resist weak impulses
         float resistance = bypassResistance ? 0f : units[unitIdx].Size * ResistanceMultiplier;

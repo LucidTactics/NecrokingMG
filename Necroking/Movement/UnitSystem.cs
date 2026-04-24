@@ -166,6 +166,18 @@ public class Unit
     // than the baseline anim ms timings. 2.0 = anims play twice as fast, etc.
     public float JumpPlaybackSpeed = 1f;
 
+    // Trample/Charge — scripted voluntary charge (TrampleSystem). Movement phases
+    // through smaller units while damaging each one it passes over. ChargePhase:
+    // 0=None, 1=Charging (homing at target position), 2=Recovery (post-impact lockout).
+    public byte ChargePhase;
+    public uint ChargeTargetId = GameConstants.InvalidUnit;
+    public int ChargeWeaponIdx = -1;
+    public float ChargeTraveled;    // cumulative distance since BeginCharge
+    public float ChargeRecoveryTimer; // seconds left in ChargePhase==2
+    // Per-charge deduped-victim set; lazy-allocated at BeginCharge and cleared
+    // on EndCharge so the hashset survives future charges without reallocation.
+    public System.Collections.Generic.HashSet<uint>? TrampledIds;
+
     // Knockdown (weapon-bonus-driven). Tracks the per-second recovery-roll timer.
     // First check fires KnockdownCheckInitialDelay (2s) after knockdown begins,
     // then every KnockdownCheckInterval (1s). Value > 0 means a check is pending.

@@ -172,7 +172,12 @@ public class UnitEditorWindow
             {
                 _atlases[i] = new SpriteAtlas();
                 string name = AtlasDefs.Names[i];
-                _atlases[i].Load(_graphicsDevice, GamePaths.Resolve($"assets/Sprites/{name}.png"), GamePaths.Resolve($"assets/Sprites/{name}.spritemeta"));
+                _atlases[i].Load(_graphicsDevice,
+                    GamePaths.Resolve($"assets/Sprites/{name}.png"),
+                    GamePaths.Resolve($"assets/Sprites/{name}.spritemeta"));
+                // Attach overflow __N sheets, if any.
+                foreach (var (extPng, extMeta) in AtlasDefs.FindExtensionSheets(name))
+                    _atlases[i].LoadExtension(_graphicsDevice, extPng, extMeta);
             }
             DebugLog.Log("editor", $"Refreshed atlases: {AtlasDefs.TotalCount} total ({AtlasDefs.TotalCount - oldCount} new)");
         }
@@ -982,7 +987,7 @@ public class UnitEditorWindow
         var atlasId = AtlasDefs.ResolveAtlasName(def.Sprite.AtlasName);
         if ((int)atlasId >= _atlases.Length) return;
         var atlas = _atlases[(int)atlasId];
-        if (!atlas.IsLoaded || atlas.Texture == null) return;
+        if (!atlas.IsLoaded) return;
 
         var spriteData = atlas.GetUnit(def.Sprite.SpriteName);
         if (spriteData == null) return;
@@ -1052,7 +1057,9 @@ public class UnitEditorWindow
         var origin = new Vector2(frame.Rect.Width * 0.5f, frame.Rect.Height * 0.5f);
         var pos = new Vector2(drawX + drawW / 2f, drawY + drawH / 2f);
 
-        _ui.DrawTexture(atlas.Texture, pos, frame.Rect, Color.White, 0f, origin, scale, effects);
+        var frameTex = atlas.GetTextureForFrame(frame);
+        if (frameTex == null) return;
+        _ui.DrawTexture(frameTex, pos, frame.Rect, Color.White, 0f, origin, scale, effects);
 
         // Save geometry for pick mode and weapon line overlay
         _lastPreviewScale = scale;
@@ -2613,6 +2620,45 @@ public class UnitEditorWindow
 
             float newArc = _ui.DrawFloatField("w_parc", "  Arc Peak", w.PounceArcPeak, x, curY, ww, 0.5f);
             if (Math.Abs(newArc - w.PounceArcPeak) > 0.001f) { w.PounceArcPeak = newArc; _unsavedChanges = true; }
+            curY += RowH;
+        }
+
+        // Trample-archetype parameters (only shown when Archetype == Trample).
+        if (w.Archetype == "Trample")
+        {
+            _ui.DrawText("Trample:", new Vector2(x, curY + 2), EditorBase.AccentColor);
+            curY += RowH;
+
+            float v = _ui.DrawFloatField("w_tmin", "  Min Range", w.TrampleMinRange, x, curY, ww, 0.25f);
+            if (Math.Abs(v - w.TrampleMinRange) > 0.001f) { w.TrampleMinRange = MathF.Max(0f, v); _unsavedChanges = true; }
+            curY += RowH;
+
+            v = _ui.DrawFloatField("w_tmax", "  Max Range", w.TrampleMaxRange, x, curY, ww, 0.25f);
+            if (Math.Abs(v - w.TrampleMaxRange) > 0.001f) { w.TrampleMaxRange = MathF.Max(w.TrampleMinRange, v); _unsavedChanges = true; }
+            curY += RowH;
+
+            v = _ui.DrawFloatField("w_tchase", "  Max Chase Dist", w.TrampleMaxChaseDistance, x, curY, ww, 0.5f);
+            if (Math.Abs(v - w.TrampleMaxChaseDistance) > 0.001f) { w.TrampleMaxChaseDistance = MathF.Max(0.5f, v); _unsavedChanges = true; }
+            curY += RowH;
+
+            v = _ui.DrawFloatField("w_timp", "  Impact Range", w.TrampleImpactRange, x, curY, ww, 0.25f);
+            if (Math.Abs(v - w.TrampleImpactRange) > 0.001f) { w.TrampleImpactRange = MathF.Max(0.25f, v); _unsavedChanges = true; }
+            curY += RowH;
+
+            v = _ui.DrawFloatField("w_tspd", "  Speed Bonus", w.TrampleSpeedBonus, x, curY, ww, 0.05f);
+            if (Math.Abs(v - w.TrampleSpeedBonus) > 0.001f) { w.TrampleSpeedBonus = Math.Clamp(v, -0.9f, 3f); _unsavedChanges = true; }
+            curY += RowH;
+
+            v = _ui.DrawFloatField("w_trad", "  Radius", w.TrampleRadius, x, curY, ww, 0.25f);
+            if (Math.Abs(v - w.TrampleRadius) > 0.001f) { w.TrampleRadius = MathF.Max(0.25f, v); _unsavedChanges = true; }
+            curY += RowH;
+
+            v = _ui.DrawFloatField("w_tkbk", "  Knockback Force", w.TrampleKnockbackForce, x, curY, ww, 0.5f);
+            if (Math.Abs(v - w.TrampleKnockbackForce) > 0.001f) { w.TrampleKnockbackForce = MathF.Max(0f, v); _unsavedChanges = true; }
+            curY += RowH;
+
+            v = _ui.DrawFloatField("w_timpf", "  Impact Force", w.TrampleImpactForce, x, curY, ww, 0.5f);
+            if (Math.Abs(v - w.TrampleImpactForce) > 0.001f) { w.TrampleImpactForce = MathF.Max(0f, v); _unsavedChanges = true; }
             curY += RowH;
         }
 

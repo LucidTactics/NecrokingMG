@@ -308,6 +308,12 @@ public class Game1 : Microsoft.Xna.Framework.Game
         for (int i = 0; i < atlasCount; i++)
             _atlases[i] = new SpriteAtlas();
 
+        // Build per-atlas work list: base sheet at index 0, overflow __N sheets after.
+        // Each entry: (atlasIdx, pngPath, metaPath, isExtension).
+        var extSheets = new List<(string png, string meta)>[atlasCount];
+        for (int i = 0; i < atlasCount; i++)
+            extSheets[i] = new List<(string, string)>(AtlasDefs.FindExtensionSheets(AtlasDefs.Names[i]));
+
         System.Threading.Tasks.Parallel.For(0, atlasCount, i =>
         {
             string name = AtlasDefs.Names[i];
@@ -316,7 +322,6 @@ public class Game1 : Microsoft.Xna.Framework.Game
             if (File.Exists(pngPath))
             {
                 pngBytes[i] = File.ReadAllBytes(pngPath);
-                // Decode PNG to raw pixels on background thread (CPU-heavy part)
                 var (pixels, w, h) = TextureUtil.DecodePngPremultiplied(pngBytes[i]);
                 decodedPixels[i] = pixels;
                 decodedW[i] = w;
@@ -326,6 +331,31 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 metaParsed[i] = _atlases[i].ParseMetaOnly(metaPath);
         });
         LogTiming("Atlas PNG decode + metadata parsed (parallel)");
+
+        // Extension sheets: decode PNGs + parse meta in parallel, one list per base
+        // atlas. Extension meta parsing mutates the same SpriteAtlas instance as the
+        // base — safe because no two threads touch the same atlas here (each base
+        // atlas has its own nested loop run serially inside the outer parallel task).
+        var extDecoded = new List<(Color[] pixels, int w, int h, bool ok)>[atlasCount];
+        for (int i = 0; i < atlasCount; i++)
+            extDecoded[i] = new List<(Color[], int, int, bool)>(extSheets[i].Count);
+
+        System.Threading.Tasks.Parallel.For(0, atlasCount, i =>
+        {
+            foreach (var (extPng, extMeta) in extSheets[i])
+            {
+                Color[]? pixels = null; int w = 0, h = 0;
+                if (File.Exists(extPng))
+                {
+                    byte[] bytes = File.ReadAllBytes(extPng);
+                    (pixels, w, h) = TextureUtil.DecodePngPremultiplied(bytes);
+                }
+                bool metaOk = File.Exists(extMeta) && _atlases[i].ParseExtensionMeta(extMeta);
+                extDecoded[i].Add((pixels!, w, h, metaOk && pixels != null));
+            }
+        });
+        if (extSheets.Sum(l => l.Count) > 0)
+            LogTiming($"Atlas extension sheets decoded (parallel): {extSheets.Sum(l => l.Count)}");
 
         // Phase 2: Upload decoded pixels to GPU (fast — just SetData, no PNG decode)
         for (int i = 0; i < atlasCount; i++)
@@ -337,17 +367,28 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 _atlases[i].SetTextureAndFinalize(tex, decodedW[i], decodedH[i]);
                 decodedPixels[i] = null!; // free memory
             }
+            // Attach extension sheets in the order they were decoded (matches the
+            // TextureIndex assigned by ParseExtensionMeta).
+            foreach (var ext in extDecoded[i])
+            {
+                if (!ext.ok) continue;
+                var extTex = TextureUtil.CreateTextureFromPixels(GraphicsDevice,
+                    ext.pixels, ext.w, ext.h);
+                _atlases[i].AttachExtensionTexture(extTex, ext.w, ext.h);
+            }
         }
         LogTiming($"Atlases GPU upload: {atlasCount} ({string.Join(", ", AtlasDefs.Names)})");
 
-        // Load animation metadata from all atlas animationmeta files. Done in Initialize so
-        // the dict is populated for BOTH main-game flow (StartGame) and scenario flow
-        // (StartScenario) — AI needs effect_time lookups for pounce timing etc.
+        // Load animation metadata from all atlas animationmeta files — base + any
+        // __N extensions. Done in Initialize so the dict is populated for BOTH
+        // main-game flow (StartGame) and scenario flow (StartScenario).
         foreach (string name in AtlasDefs.Names)
         {
             string metaPath = GamePaths.Resolve($"assets/Sprites/{name}.animationmeta");
             if (File.Exists(metaPath))
                 AnimMetaLoader.Load(metaPath, _animMeta);
+            foreach (string extMeta in AtlasDefs.FindExtensionAnimMeta(name))
+                AnimMetaLoader.Load(extMeta, _animMeta);
         }
         LogTiming($"Animation metadata: {_animMeta.Count} entries");
         _sim.SetAnimMeta(_animMeta);
@@ -5144,7 +5185,8 @@ public class Game1 : Microsoft.Xna.Framework.Game
     private void DrawSpriteFrame(SpriteAtlas atlas, SpriteFrame frame, Vector2 screenPos,
                                   float scale, bool flipX, Color tint)
     {
-        if (atlas.Texture == null) return;
+        var tex = atlas.GetTextureForFrame(frame);
+        if (tex == null) return;
 
         float pivotX = flipX ? (1f - frame.PivotX) : frame.PivotX;
         // Spritemeta pivots use bottom-left origin — Y needs to be flipped for top-left rendering
@@ -5152,7 +5194,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
         var origin = new Vector2(pivotX * frame.Rect.Width, pivotY * frame.Rect.Height);
         var effects = flipX ? SpriteEffects.FlipHorizontally : SpriteEffects.None;
-        _spriteBatch.Draw(atlas.Texture, screenPos, frame.Rect, tint, 0f, origin, scale, effects, 0f);
+        _spriteBatch.Draw(tex, screenPos, frame.Rect, tint, 0f, origin, scale, effects, 0f);
     }
 
     /// <summary>Multiply two colors component-wise (for ambient tinting).</summary>
@@ -5185,7 +5227,8 @@ public class Game1 : Microsoft.Xna.Framework.Game
                                     float outlineWidth, float pulseWidth, float pulseSpeed,
                                     int blendMode)
     {
-        if (atlas.Texture == null || _outlineFlatEffect == null) return;
+        var tex = atlas.GetTextureForFrame(frame);
+        if (tex == null || _outlineFlatEffect == null) return;
 
         float t = 0.5f + 0.5f * MathF.Sin(_gameTime * pulseSpeed * 2f * MathF.PI);
 
@@ -5214,7 +5257,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         {
             float dx = _outlineDirs[d][0] * offset;
             float dy = _outlineDirs[d][1] * offset;
-            _spriteBatch.Draw(atlas.Texture, new Vector2(screenPos.X + dx, screenPos.Y + dy),
+            _spriteBatch.Draw(tex, new Vector2(screenPos.X + dx, screenPos.Y + dy),
                 frame.Rect, Color.White, 0f, origin, scale, effects, 0f);
         }
 

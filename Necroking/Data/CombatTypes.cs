@@ -55,6 +55,22 @@ public class WeaponStats
     /// Default false — hostiles only, standard AOE melee behaviour.</summary>
     public bool SweepHitsAllies { get; set; } = false;
 
+    // Trample-archetype parameters (used only when Archetype == Trample).
+    // A charging attack: attacker picks a smaller-size target in the range
+    // window, homes toward its current position at CombatSpeed × (1 + SpeedBonus).
+    // While charging it phases through smaller units, damaging each one that
+    // enters TrampleRadius (independent roll + knockback impulse). Impact fires
+    // when the attacker closes within TrampleImpactRange of the target or after
+    // travelling TrampleMaxChaseDistance, whichever comes first.
+    public float TrampleMinRange { get; set; } = 2f;
+    public float TrampleMaxRange { get; set; } = 6f;
+    public float TrampleMaxChaseDistance { get; set; } = 4f;
+    public float TrampleImpactRange { get; set; } = 1.5f;
+    public float TrampleSpeedBonus { get; set; } = 0.15f;
+    public float TrampleRadius { get; set; } = 1.5f;
+    public float TrampleKnockbackForce { get; set; } = 6f;
+    public float TrampleImpactForce { get; set; } = 10f;
+
     /// <summary>Bonus flags per-weapon (currently also aggregated onto UnitStats for
     /// backwards compat, but kept here so resolution can check per-weapon accurately).</summary>
     public bool HasArmorPiercing { get; set; }

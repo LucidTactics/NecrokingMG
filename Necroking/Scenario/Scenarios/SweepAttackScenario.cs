@@ -48,20 +48,25 @@ public class SweepAttackScenario : ScenarioBase
 
         var units = sim.UnitsMut;
 
-        // Attacker bear at origin, facing +X (east)
+        // Attacker bear at origin, facing +X (east). Use IdleAtPoint so the
+        // bear doesn't move during the attack-queue → resolve delay — we want
+        // the sweep to fire from the fixed (10,10) pos so radius geometry is
+        // predictable.
         int bearIdx = sim.SpawnUnitByID("Bear", new Vec2(10f, 10f));
         units[bearIdx].Faction = Faction.Animal;
-        units[bearIdx].AI = AIBehavior.AttackClosest;
+        units[bearIdx].AI = AIBehavior.IdleAtPoint;
         units[bearIdx].FacingAngle = 0f;
         units[bearIdx].Stats.MaxHP = 99999;
         units[bearIdx].Stats.HP = 99999;
         _bearId = units[bearIdx].Id;
-        DebugLog.Log(ScenarioLog, $"Bear: id={_bearId} pos=(10,10) facing=+X (east)");
+        DebugLog.Log(ScenarioLog, $"Bear: id={_bearId} pos=(10,10) facing=+X (east) AI=IdleAtPoint");
 
-        // 3 soldiers clustered in front at ~2.5u, spread ~1u across the cone
-        int fl = units.AddUnit(new Vec2(12.3f, 9.2f), UnitType.Soldier);
-        int fc = units.AddUnit(new Vec2(12.5f, 10f), UnitType.Soldier);
-        int fr = units.AddUnit(new Vec2(12.3f, 10.8f), UnitType.Soldier);
+        // 3 soldiers clustered tightly in front so they all fit inside
+        // SweepRadius=2.0 even if the bear drifts up to 0.5u during the
+        // attack-queue → resolve delay. ~1.3u radial, ±0.4 lateral.
+        int fl = units.AddUnit(new Vec2(11.2f, 9.6f), UnitType.Soldier);
+        int fc = units.AddUnit(new Vec2(11.3f, 10f), UnitType.Soldier);
+        int fr = units.AddUnit(new Vec2(11.2f, 10.4f), UnitType.Soldier);
         foreach (int i in new[] { fl, fc, fr })
         {
             units[i].AI = AIBehavior.IdleAtPoint;
@@ -96,6 +101,9 @@ public class SweepAttackScenario : ScenarioBase
         units[ab].Stats.HP = 99999;
         _allyBearId = units[ab].Id;
         _allyBearHP0 = units[ab].Stats.HP;
+
+        // IdleAtPoint AI doesn't set Target itself; force one so Sweep qualifies.
+        units[bearIdx].Target = CombatTarget.Unit(units[fc].Id);
 
         DebugLog.Log(ScenarioLog, $"Front cluster: fl={_frontLeftId} fc={_frontCenterId} fr={_frontRightId}");
         DebugLog.Log(ScenarioLog, $"Out-of-cone soldier: id={_outOfConeId} at (10,20)");
