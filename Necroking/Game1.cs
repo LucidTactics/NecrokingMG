@@ -5052,29 +5052,16 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 0f, Vector2.Zero, SymScale, SpriteEffects.None, 0f);
         }
 
-        // --- Feature 1: Weapon name above head during an attack ---
-        // Read from the unit's currently-queued weapon, not MeleeWeapons[0].
-        // Hardcoded [0] shipped "Bite" over the wolf's head during a Pounce
-        // because Bite is the first-listed weapon; users can't tell which attack
-        // is actually swinging when a unit has multiple (Bite + Pounce).
-        if (!_sim.Units[i].PendingAttack.IsNone)
+        // --- Feature 1: Action label above head during a committed attack/spell ---
+        // Read from the generic ActionLabel field. Every archetype commit point
+        // (standard melee, sweep, pounce, trample BeginCharge, ranged, spell cast)
+        // writes this field — the renderer doesn't need to know about each path.
+        if (_sim.Units[i].ActionLabelTimer > 0f
+            && !string.IsNullOrEmpty(_sim.Units[i].ActionLabel)
+            && _smallFont != null)
         {
-            var stats = _sim.Units[i].Stats;
-            int wIdx = _sim.Units[i].PendingWeaponIdx;
-            bool isRanged = _sim.Units[i].PendingWeaponIsRanged;
-            string weaponName;
-            if (isRanged && wIdx >= 0 && wIdx < stats.RangedWeapons.Count)
-                weaponName = stats.RangedWeapons[wIdx].Name;
-            else if (!isRanged && wIdx >= 0 && wIdx < stats.MeleeWeapons.Count)
-                weaponName = stats.MeleeWeapons[wIdx].Name;
-            else
-                weaponName = stats.MeleeWeapons.Count > 0 ? stats.MeleeWeapons[0].Name : "Unarmed";
-
-            if (!string.IsNullOrEmpty(weaponName) && _smallFont != null)
-            {
-                var weaponPos = new Vector2(sp.X + 10, sp.Y - 55);
-                DrawText(_smallFont, weaponName, weaponPos, Color.FromNonPremultiplied(255, 220, 140, 220));
-            }
+            var weaponPos = new Vector2(sp.X + 10, sp.Y - 55);
+            DrawText(_smallFont, _sim.Units[i].ActionLabel, weaponPos, Color.FromNonPremultiplied(255, 220, 140, 220));
         }
 
         // --- Feature 2: Buff indicator dots above HP bar ---

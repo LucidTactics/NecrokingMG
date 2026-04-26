@@ -76,6 +76,15 @@ public class GeneralSettings
     [JsonPropertyName("damageNumberSpeed")] public float DamageNumberSpeed { get; set; } = 1.5f;
     [JsonPropertyName("autoPickupForagables")] public bool AutoPickupForagables { get; set; }
     [JsonPropertyName("pauseDimBackground")] public bool PauseDimBackground { get; set; }
+
+    /// <summary>World-Z gravity (units/sec²) applied to physics-launched bodies
+    /// during their flight arc. Realistic value is ~10 if 1 world unit ≈ 1 metre
+    /// (the scale sprites are sized for). The engine default of 15 is moderately
+    /// snappy — between real-world physics and the original "gamey" 50 — chosen
+    /// so trample knockbacks visibly arc without spell knockbacks looking floaty.
+    /// Lower = floatier knockbacks that travel further; higher = punchier but
+    /// less visible.</summary>
+    [JsonPropertyName("gravity")] public float Gravity { get; set; } = 15f;
 }
 
 public class ShadowSettings

@@ -83,6 +83,13 @@ public static class ScenarioRegistry
         Register("pounce_test", () => new Scenarios.PounceTestScenario());
         Register("sweep_attack", () => new Scenarios.SweepAttackScenario());
         Register("trample_attack", () => new Scenarios.TrampleAttackScenario());
+        Register("trample_miss", () => new Scenarios.TrampleMissScenario());
+        Register("trample_necromancer", () => new Scenarios.TrampleNecromancerScenario());
+        Register("trample_greatboar", () => new Scenarios.TrampleGreatBoarScenario());
+        Register("trample_horde_knockdown", () => new Scenarios.TrampleHordeKnockdownScenario());
+        Register("trample_no_escape", () => new Scenarios.TrampleNoEscapeScenario());
+        Register("trample_blocker", () => new Scenarios.TrampleBlockerScenario());
+        Register("trample_kill", () => new Scenarios.TrampleKillScenario());
         Register("knockdown_test", () => new Scenarios.KnockdownTestScenario());
         Register("wolf_retarget", () => new Scenarios.WolfRetargetScenario());
     }

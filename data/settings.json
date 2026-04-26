@@ -74,7 +74,8 @@
     "damageNumberFadeTime": 0.75,
     "damageNumberSpeed": 1.5,
     "autoPickupForagables": true,
-    "pauseDimBackground": false
+    "pauseDimBackground": false,
+    "gravity": 15
   },
   "shadow": {
     "enabled": true,

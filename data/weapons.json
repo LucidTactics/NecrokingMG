@@ -730,14 +730,14 @@
       "sweepArcDegrees": 120,
       "sweepRadius": 2.5,
       "sweepHitsAllies": false,
-      "trampleMinRange": 2,
+      "trampleMinRange": 0,
       "trampleMaxRange": 6,
       "trampleMaxChaseDistance": 4,
       "trampleImpactRange": 1.5,
       "trampleSpeedBonus": 0.15,
       "trampleRadius": 1.5,
-      "trampleKnockbackForce": 6,
-      "trampleImpactForce": 10
+      "trampleKnockbackForce": 120,
+      "trampleImpactForce": 100
     }
   ]
 }

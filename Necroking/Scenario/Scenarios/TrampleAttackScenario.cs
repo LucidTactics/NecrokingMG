@@ -27,6 +27,11 @@ public class TrampleAttackScenario : ScenarioBase
     private float _elapsed;
     private bool _complete;
     private const float MaxDuration = 18f;
+    // End the scenario shortly after the first charge enters recovery — otherwise
+    // the boar's AI re-engages and chases the (now-displaced) primary on a second
+    // charge that can sweep the bystander as a transit victim. The test is about
+    // verifying ONE clean trample, not whatever the AI does afterward.
+    private float _completeBy = -1f;
 
     private uint _boarId;
     private uint _pathLeftId, _pathMidId, _pathRightId;
@@ -38,7 +43,15 @@ public class TrampleAttackScenario : ScenarioBase
 
     private byte _maxChargePhaseReached;
     private byte _lastChargePhase;
+    private bool _followThroughObserved; // saw ChargePhase==3 at some point
+    private bool _labelObserved;         // saw boar.ActionLabel non-empty during charge
+    private bool _boarPassedTargetX;     // boar's X exceeded primary's original X
+    private Vec2 _primaryStartPos;       // primary target position at scenario start
+    private Vec2 _primaryDisplacedPos;   // primary target position right after impact
+    private bool _primaryWasDisplaced;   // primary moved meaningfully from start pos
+    private float _primaryMaxDisp;       // greatest distance from start observed
     private int _initialCombatLogCount;
+    private bool _screenshotPreImpact, _screenshotImpact, _screenshotPostImpact;
 
     public override void OnInit(Simulation sim)
     {
@@ -100,6 +113,8 @@ public class TrampleAttackScenario : ScenarioBase
         units[prim].Stats.Defense = 0;
         _primaryId = units[prim].Id;
         _primaryHP0 = units[prim].Stats.HP;
+        _primaryStartPos = units[prim].Position;
+        _primaryDisplacedPos = _primaryStartPos;
 
         // Force boar to target prim (keeps AttackClosest from retargeting to the
         // closer transit victims, which we want to trample as collateral).
@@ -128,20 +143,93 @@ public class TrampleAttackScenario : ScenarioBase
         if (_complete) return;
 
         int bIdx = FindByID(sim.Units, _boarId);
+        int primIdx = FindByID(sim.Units, _primaryId);
         if (bIdx >= 0)
         {
             byte phase = sim.Units[bIdx].ChargePhase;
+
+            // Floating action label observation: must see something during phase 1 or 3.
+            if ((phase == 1 || phase == 3)
+                && !string.IsNullOrEmpty(sim.Units[bIdx].ActionLabel)
+                && sim.Units[bIdx].ActionLabelTimer > 0f)
+            {
+                if (!_labelObserved)
+                {
+                    DebugLog.Log(ScenarioLog,
+                        $"t={_elapsed:F2}s: ActionLabel observed: \"{sim.Units[bIdx].ActionLabel}\" " +
+                        $"(timer={sim.Units[bIdx].ActionLabelTimer:F2}s) during phase {phase}");
+                }
+                _labelObserved = true;
+            }
+
+            if (phase == 3) _followThroughObserved = true;
+
+            // Pre-impact screenshot: just before the boar reaches the impact zone.
+            if (!_screenshotPreImpact && phase == 1 && primIdx >= 0)
+            {
+                float dToPrim = (sim.Units[primIdx].Position - sim.Units[bIdx].Position).Length();
+                if (dToPrim < 1.6f && dToPrim > 1.3f)
+                {
+                    DeferredScreenshot = "trample_01_pre_impact";
+                    _screenshotPreImpact = true;
+                    DebugLog.Log(ScenarioLog, $"t={_elapsed:F2}s: pre-impact screenshot (dist={dToPrim:F2})");
+                }
+            }
+
             if (phase != _lastChargePhase)
             {
                 DebugLog.Log(ScenarioLog, $"t={_elapsed:F2}s: Boar ChargePhase {_lastChargePhase} → {phase} " +
                     $"pos=({sim.Units[bIdx].Position.X:F2},{sim.Units[bIdx].Position.Y:F2}) " +
                     $"traveled={sim.Units[bIdx].ChargeTraveled:F2}");
+
+                // On entering follow-through, capture the displaced primary position
+                // (the impact's knockback fired the same frame).
+                if (phase == 3 && primIdx >= 0)
+                {
+                    _primaryDisplacedPos = sim.Units[primIdx].Position;
+                    DebugLog.Log(ScenarioLog,
+                        $"  primary displaced to ({_primaryDisplacedPos.X:F2},{_primaryDisplacedPos.Y:F2}) " +
+                        $"from start ({_primaryStartPos.X:F2},{_primaryStartPos.Y:F2}) " +
+                        $"InPhysics={sim.Units[primIdx].InPhysics}");
+                    DeferredScreenshot = "trample_02_at_impact";
+                    _screenshotImpact = true;
+                }
+
+                // On entering recovery (2) after follow-through, take post-impact shot
+                // and schedule scenario end ~1s later (after recovery settles, before
+                // the AI can launch a second chase that would re-engage the displaced
+                // primary and sweep the bystander as collateral).
+                if (phase == 2 && _followThroughObserved && !_screenshotPostImpact)
+                {
+                    DeferredScreenshot = "trample_03_post_followthrough";
+                    _screenshotPostImpact = true;
+                    DebugLog.Log(ScenarioLog,
+                        $"  boar at ({sim.Units[bIdx].Position.X:F2},{sim.Units[bIdx].Position.Y:F2}) " +
+                        $"vs primary start X={_primaryStartPos.X:F2}");
+                    _completeBy = _elapsed + 1f;
+                }
+
                 _lastChargePhase = phase;
                 if (phase > _maxChargePhaseReached) _maxChargePhaseReached = phase;
             }
+
+            // Did the boar's X coordinate ever exceed the primary's original X?
+            // (Charge runs east, primary started at X=7.5 — reaching beyond means
+            // the boar physically drove through where the primary was standing.)
+            if (sim.Units[bIdx].Position.X >= _primaryStartPos.X) _boarPassedTargetX = true;
+        }
+
+        // Snapshot the primary's furthest displacement during the run so we can
+        // verify it was actually shoved (not just took damage).
+        if (primIdx >= 0)
+        {
+            float disp = (sim.Units[primIdx].Position - _primaryStartPos).Length();
+            if (disp > _primaryMaxDisp) _primaryMaxDisp = disp;
+            if (disp > 0.3f) _primaryWasDisplaced = true;
         }
 
         if (_elapsed >= MaxDuration) _complete = true;
+        if (_completeBy > 0f && _elapsed >= _completeBy) _complete = true;
     }
 
     public override bool IsComplete => _complete;
@@ -185,18 +273,28 @@ public class TrampleAttackScenario : ScenarioBase
         int transitDamagedCount = CountDamaged(_pathLeftHP0, plHP) + CountDamaged(_pathMidHP0, pmHP) + CountDamaged(_pathRightHP0, prHP);
 
         bool chargeFired = trampleEntries > 0;
-        bool chargePhaseReached = _maxChargePhaseReached >= 1;
+        bool chargePhaseReached = _maxChargePhaseReached >= 3; // expect to reach follow-through
         bool transitVictimsHit = transitDamagedCount >= 2; // at least 2/3 path soldiers damaged
         bool primaryHit = primaryDamage > 0;
         bool bystanderClean = bystanderDamage == 0;
+        bool primaryDisplaced = _primaryWasDisplaced;
+        bool boarDroveThrough = _boarPassedTargetX;
+        bool labelShown = _labelObserved;
+        bool followThroughHappened = _followThroughObserved;
 
         DebugLog.Log(ScenarioLog, $"Check - Trample attempts logged:   {chargeFired} ({trampleEntries})");
-        DebugLog.Log(ScenarioLog, $"Check - ChargePhase reached:       {chargePhaseReached} ({_maxChargePhaseReached})");
+        DebugLog.Log(ScenarioLog, $"Check - ChargePhase reached >=3:   {chargePhaseReached} ({_maxChargePhaseReached})");
+        DebugLog.Log(ScenarioLog, $"Check - follow-through observed:   {followThroughHappened}");
         DebugLog.Log(ScenarioLog, $"Check - transit victims damaged:   {transitVictimsHit} ({transitDamagedCount}/3, total={transitDamage})");
         DebugLog.Log(ScenarioLog, $"Check - primary target damaged:    {primaryHit} (damage={primaryDamage})");
+        DebugLog.Log(ScenarioLog, $"Check - primary target displaced:  {primaryDisplaced} (maxDisp={_primaryMaxDisp:F2})");
+        DebugLog.Log(ScenarioLog, $"Check - boar drove past primary X: {boarDroveThrough} (primary startX={_primaryStartPos.X:F2})");
+        DebugLog.Log(ScenarioLog, $"Check - ActionLabel rendered:      {labelShown}");
         DebugLog.Log(ScenarioLog, $"Check - bystander untouched:       {bystanderClean} (damage={bystanderDamage})");
 
-        bool pass = chargeFired && chargePhaseReached && transitVictimsHit && primaryHit && bystanderClean;
+        bool pass = chargeFired && chargePhaseReached && followThroughHappened
+                  && transitVictimsHit && primaryHit && primaryDisplaced
+                  && boarDroveThrough && labelShown && bystanderClean;
         DebugLog.Log(ScenarioLog, $"Overall: {(pass ? "PASS" : "FAIL")}");
         return pass ? 0 : 1;
     }

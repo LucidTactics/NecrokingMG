@@ -166,6 +166,11 @@ public class RangedUnitHandler : IArchetypeHandler
             ctx.Units[i].PendingRangedTarget = ctx.Units[targetIdx].Id;
             ctx.Units[i].AttackCooldown = cooldown;
             ctx.Units[i].PostAttackTimer = cooldown * 0.5f;
+            if (chosen >= 0 && chosen < stats.RangedWeapons.Count)
+            {
+                ctx.Units[i].ActionLabel = stats.RangedWeapons[chosen].Name;
+                ctx.Units[i].ActionLabelTimer = cooldown * 0.5f;
+            }
         }
     }
 

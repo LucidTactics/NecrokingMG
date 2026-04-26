@@ -65,6 +65,11 @@ public static class SpellCaster
         outPending.CastingBuffID = spell.CastingBuffID;
         outPending.Active = true;
 
+        // Floating spell-name label above the necromancer for the cast duration.
+        // Generic-action label written by every commit point — see UnitData.ActionLabel.
+        units[necroIdx].ActionLabel = string.IsNullOrEmpty(spell.DisplayName) ? spell.Id : spell.DisplayName;
+        units[necroIdx].ActionLabelTimer = 1.5f;
+
         switch (spell.Category)
         {
             case "Projectile":

@@ -1,3 +1,4 @@
+using System;
 using Microsoft.Xna.Framework;
 using Necroking.Core;
 using Necroking.Data.Registries;
@@ -54,6 +55,17 @@ public static class SettingsGeneralTab
         curY += RowH;
 
         s.GroundUVWarpFreq = ui.DrawFloatField("gen_groundUVWarpFreq", "UV Warp Freq", s.GroundUVWarpFreq, x, curY, w, 0.01f);
+        curY += RowH;
+
+        // --- Physics ---
+        // Gravity scales the Z deceleration on every flying body (knockback,
+        // trample, spell, corpse). Realistic ≈ 10 (1 unit ≈ 1 metre); engine
+        // default 50 is a snappy gamey value. Lower = floatier, longer arcs.
+        curY += 4;
+        DrawSectionHeader(ui, "Physics", x, ref curY, w);
+
+        float newGravity = ui.DrawFloatField("gen_gravity", "Gravity (u/s²)", s.Gravity, x, curY, w, 1.0f);
+        s.Gravity = MathF.Max(0.5f, newGravity);
         curY += RowH;
 
         // --- Editor ---

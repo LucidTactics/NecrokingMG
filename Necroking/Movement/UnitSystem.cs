@@ -168,15 +168,28 @@ public class Unit
 
     // Trample/Charge — scripted voluntary charge (TrampleSystem). Movement phases
     // through smaller units while damaging each one it passes over. ChargePhase:
-    // 0=None, 1=Charging (homing at target position), 2=Recovery (post-impact lockout).
+    // 0=None, 1=Charging (homing at target position), 2=Recovery (post-impact lockout),
+    // 3=FollowThrough (post-impact straight-line drive that physically occupies the
+    // target's vacated tile; locks facing + direction at the moment of impact).
     public byte ChargePhase;
     public uint ChargeTargetId = GameConstants.InvalidUnit;
     public int ChargeWeaponIdx = -1;
     public float ChargeTraveled;    // cumulative distance since BeginCharge
     public float ChargeRecoveryTimer; // seconds left in ChargePhase==2
+    public float ChargeFollowRemaining; // distance left in ChargePhase==3 follow-through
+    public Vec2 ChargeFollowDir;        // unit-vector forward direction locked at impact
     // Per-charge deduped-victim set; lazy-allocated at BeginCharge and cleared
     // on EndCharge so the hashset survives future charges without reallocation.
     public System.Collections.Generic.HashSet<uint>? TrampledIds;
+
+    // Trample-dodge — short snappy hop to a free tile when a trample swing misses.
+    // While DodgeTimer > 0 the unit interpolates from DodgeStartPos to DodgeEndPos
+    // over DodgeTimer seconds; AI / ORCA / facing all skip during the hop. The
+    // Dodge anim is one-shot at this same duration.
+    public float DodgeTimer;       // seconds remaining in the hop (0 = not dodging)
+    public float DodgeDuration;    // total length of the hop, captured at start
+    public Vec2 DodgeStartPos;
+    public Vec2 DodgeEndPos;
 
     // Knockdown (weapon-bonus-driven). Tracks the per-second recovery-roll timer.
     // First check fires KnockdownCheckInitialDelay (2s) after knockdown begins,
@@ -196,6 +209,13 @@ public class Unit
     public float SpriteScale = 1f;
     public Vec2 EffectSpawnPos2D;
     public float EffectSpawnHeight;
+
+    // Floating action label (weapon/spell name shown above unit during a committed
+    // action). Architectural: any attack/spell archetype writes both fields at its
+    // commit point — the renderer polls these instead of probing per-archetype state.
+    // Timer counts down in the main sim tick; reaching <= 0 clears the label.
+    public string ActionLabel = "";
+    public float ActionLabelTimer;
 
     // Buffs
     public List<ActiveBuff> ActiveBuffs = new();

@@ -31,11 +31,16 @@ public class Corpse
     // Lerp anchor for pickup/putdown animation
     public Vec2 LerpStartPos;
 
-    // Physics arc — corpse continues flying if unit died mid-knockback
+    // Physics arc — corpse continues flying if unit died mid-knockback.
+    // GravityMul/DragMul inherit from the unit's PhysicsBody (e.g. trample
+    // launches use 0.3× gravity / 0.5× drag for visible arcs); without these
+    // the corpse drops with full gravity and the dramatic flight collapses.
     public bool InPhysics;
     public float Z;
     public Vec2 VelocityXY;
     public float VelocityZ;
+    public float GravityMul = 1f;
+    public float DragMul = 1f;
 }
 
 public class DamageEvent
@@ -312,6 +317,9 @@ public class Simulation
             _pathfinder.DijkstraBudgetMsPerTick = _gameData.Settings.Performance.DijkstraBudgetMsPerTick;
             _amortizedAI = _gameData.Settings.Performance.AmortizedAI;
             _aiUpdateInterval = Math.Max(1, _gameData.Settings.Performance.AIUpdateInterval);
+            // Live-link gravity from settings — UI changes apply immediately to
+            // both unit-physics integration and corpse-arc continuation.
+            _physics.Gravity = _gameData.Settings.General.Gravity;
         }
         _pathfinder.BeginTick(_frameNumber);
 
@@ -320,8 +328,43 @@ public class Simulation
 
         // Clear HitReacting AFTER AI has read it — this ensures flags set between frames
         // (e.g. spell AoE from Game1.Update) persist until the next AI tick sees them
+        // Decay floating action labels in the same pass.
         for (int i = 0; i < _units.Count; i++)
+        {
             _units[i].HitReacting = false;
+            if (_units[i].ActionLabelTimer > 0f)
+            {
+                _units[i].ActionLabelTimer -= dt;
+                if (_units[i].ActionLabelTimer <= 0f)
+                {
+                    _units[i].ActionLabelTimer = 0f;
+                    _units[i].ActionLabel = "";
+                }
+            }
+        }
+
+        // Trample-dodge: brief snappy hop to a free tile (set by trample miss).
+        // Ticked BEFORE UpdateMovement so the position interpolation happens
+        // before ORCA / wall-collision passes; the dodging unit's body moves
+        // smoothly from start to end over DodgeDuration.
+        for (int i = 0; i < _units.Count; i++)
+        {
+            if (_units[i].DodgeTimer <= 0f) continue;
+            _units[i].DodgeTimer -= dt;
+            if (_units[i].DodgeTimer <= 0f)
+            {
+                _units[i].Position = _units[i].DodgeEndPos;
+                _units[i].DodgeTimer = 0f;
+                _units[i].Velocity = Vec2.Zero;
+            }
+            else
+            {
+                float remaining = _units[i].DodgeTimer;
+                float total = _units[i].DodgeDuration;
+                float t = total > 0.0001f ? 1f - remaining / total : 1f;
+                _units[i].Position = Vec2.Lerp(_units[i].DodgeStartPos, _units[i].DodgeEndPos, t);
+            }
+        }
 
         // Trample: write charge velocity + scan for trampled victims BEFORE
         // UpdateMovement so velocity writes take effect this frame. Transit
@@ -1209,10 +1252,19 @@ public class Simulation
             // Wall collision at the bottom of the loop still applies, so solid
             // geometry stops the charge. MoveTime saturated so if charge ends and
             // normal movement resumes, there's no spin-up lag.
-            if (_units[i].ChargePhase == 1)
+            if (_units[i].ChargePhase == 1 || _units[i].ChargePhase == 3)
             {
                 _units[i].MoveTime = 10f;
                 goto __ChargeWallCollision;
+            }
+            // Dodge hop owns this unit's position interpolation — set in main tick
+            // before UpdateMovement runs. Skip everything (ORCA, wall, env) so the
+            // hop arrives at exactly the chosen safe tile.
+            if (_units[i].DodgeTimer > 0f)
+            {
+                _units[i].Velocity = Vec2.Zero;
+                _units[i].PreferredVel = Vec2.Zero;
+                continue;
             }
             // Movement blocked by: jumping, knockdown (buff), standup, pending attack, or post-attack lockout
             if (_units[i].Jumping || _units[i].Incap.IsLocked
@@ -1944,6 +1996,8 @@ public class Simulation
                     ws.Cooldown = cycle;
                     _units[i].AttackCooldown = cycle;
                     _units[i].PostAttackTimer = animDur;
+                    _units[i].ActionLabel = ws.Name;
+                    _units[i].ActionLabelTimer = animDur;
                     queued = true;
                 }
                 else
@@ -1962,6 +2016,8 @@ public class Simulation
                     ws.Cooldown = cycle;
                     _units[i].AttackCooldown = cycle;
                     _units[i].PostAttackTimer = animDur;
+                    _units[i].ActionLabel = ws.Name;
+                    _units[i].ActionLabelTimer = animDur;
                     queued = true;
                 }
             }
@@ -2001,6 +2057,8 @@ public class Simulation
         weapon.Cooldown = cycle;
         _units[i].AttackCooldown = cycle;
         _units[i].PostAttackTimer = animDur;
+        _units[i].ActionLabel = weapon.Name;
+        _units[i].ActionLabelTimer = animDur;
     }
 
     /// <summary>Look up the ms-based anim duration for a unit's attack, using the
@@ -2178,10 +2236,21 @@ public class Simulation
     /// <summary>Public entrypoint for non-standard melee dispatchers (TrampleSystem,
     /// SweepSystem, etc.) that resolve multiple hits from a single archetype action
     /// without routing through PendingAttack. Delegates to the core resolver.</summary>
-    public void ResolveMeleeAttackExternal(int attackerIdx, int defenderIdx, int weaponIdx)
-        => ResolveMeleeAttack(attackerIdx, defenderIdx, weaponIdx);
+    public void ResolveMeleeAttackExternal(int attackerIdx, int defenderIdx, int weaponIdx,
+        bool suppressDodgeAnim = false, bool forceHit = false, bool peekOnly = false)
+        => ResolveMeleeAttack(attackerIdx, defenderIdx, weaponIdx, suppressDodgeAnim, forceHit, peekOnly);
 
-    private void ResolveMeleeAttack(int attackerIdx, int defenderIdx, int weaponIdx)
+    /// <summary>True if the previous ResolveMeleeAttackExternal call was a hit.
+    /// Captured per-thread; trample uses this to decide between knockback vs dodge
+    /// without re-rolling the dice or peeking at HP deltas.</summary>
+    public bool LastMeleeAttackHit { get; private set; }
+
+    /// <param name="peekOnly">Roll the dice and set LastMeleeAttackHit, but apply
+    /// no side effects (no damage, no anim, no buffs, no log entry). Trample uses
+    /// this to decide hit/miss BEFORE applying knockback — the actual damage call
+    /// follows with forceHit so the corpse inherits the velocity if the unit dies.</param>
+    private void ResolveMeleeAttack(int attackerIdx, int defenderIdx, int weaponIdx,
+        bool suppressDodgeAnim = false, bool forceHit = false, bool peekOnly = false)
     {
         var atkStats = _units[attackerIdx].Stats;
         var defStats = _units[defenderIdx].Stats;
@@ -2233,7 +2302,12 @@ public class Simulation
             HarassmentPenalty = harassment
         };
 
-        bool hit = modAtk >= modDef;
+        bool hit = forceHit ? true : (modAtk >= modDef);
+        LastMeleeAttackHit = hit;
+        // peekOnly: caller wants only the hit/miss decision (above); skip all
+        // side effects below. Useful for callers that need to apply physics
+        // BEFORE damage so corpses inherit knockback velocity (see TrampleSystem).
+        if (peekOnly) return;
 
         if (!hit)
         {
@@ -2242,7 +2316,10 @@ public class Simulation
             // Don't play a Dodge anim on a prone target — they can't dodge while
             // knocked down. Leaving the knockdown hold in place. Also skip mid-jump
             // so the dodge doesn't visually pop the jumper out of the arc.
-            if (!_units[defenderIdx].Incap.Active && _units[defenderIdx].JumpPhase == 0)
+            // suppressDodgeAnim: trample owns its own dodge anim (snappy 0.4s hop)
+            // and only plays it after confirming a safe tile exists, so the standard
+            // dodge anim must not flash here.
+            if (!suppressDodgeAnim && !_units[defenderIdx].Incap.Active && _units[defenderIdx].JumpPhase == 0)
             {
                 // Dodge one-shot at Priority=1 (intentionally below Combat=2 so a
                 // mid-attack dodge doesn't cancel its own swing — the attack anim
@@ -2366,8 +2443,8 @@ public class Simulation
         // Chargers are immune to knockdown mid-charge — a stray hit from a
         // smaller victim shouldn't cancel the commit. Still applies on transit
         // trample hits the OTHER way (charger knocking down victims), just not
-        // FROM victims TO the charger.
-        if (_units[defenderIdx].ChargePhase == 1) return;
+        // FROM victims TO the charger. Both active charge (1) and follow-through (3).
+        if (_units[defenderIdx].ChargePhase == 1 || _units[defenderIdx].ChargePhase == 3) return;
 
         int atkScore = _units[attackerIdx].Stats.Strength
                      + _units[attackerIdx].Size * 2
@@ -2795,12 +2872,20 @@ public class Simulation
                     });
                 }
 
-                // If unit died mid-knockback, transfer physics state to corpse
+                // If unit died mid-knockback, transfer physics state to corpse —
+                // including the per-body gravity/drag scales so e.g. a trample-
+                // killed corpse keeps its low-gravity arc instead of slamming
+                // down with full Gravity at the speed of a dropped brick.
                 bool wasInPhysics = _units[i].InPhysics;
                 Vec2 corpseVelXY = Vec2.Zero;
                 float corpseVelZ = 0f;
+                float corpseGravityMul = 1f;
+                float corpseDragMul = 1f;
                 if (wasInPhysics)
+                {
                     _physics.TryGetBodyVelocity(i, out corpseVelXY, out corpseVelZ);
+                    _physics.TryGetBodyTuning(i, out corpseGravityMul, out corpseDragMul);
+                }
 
                 _corpses.Add(new Corpse
                 {
@@ -2818,7 +2903,15 @@ public class Simulation
                     Z = _units[i].Z,
                     VelocityXY = corpseVelXY,
                     VelocityZ = corpseVelZ,
+                    GravityMul = corpseGravityMul,
+                    DragMul = corpseDragMul,
                 });
+                // Clean up the physics body now that the corpse has captured its
+                // velocity — physics tick keeps bodies alive on death so the
+                // velocity can be read here, but we must remove it before the
+                // unit array shifts (otherwise UnitIdx points to wrong unit).
+                if (wasInPhysics) _physics.RemoveBody(i);
+
                 _units.RemoveUnit(i);
                 if (_necromancerIdx == i) _necromancerIdx = -1;
                 else if (_necromancerIdx == _units.Count) _necromancerIdx = i;
@@ -2868,8 +2961,8 @@ public class Simulation
             var c = _corpses[i];
             c.Position += c.VelocityXY * dt;
             c.Z += c.VelocityZ * dt;
-            c.VelocityZ -= _physics.Gravity * dt;
-            float drag = 1f - _physics.DefaultDrag * dt;
+            c.VelocityZ -= _physics.Gravity * c.GravityMul * dt;
+            float drag = 1f - _physics.DefaultDrag * c.DragMul * dt;
             if (drag < 0f) drag = 0f;
             c.VelocityXY *= drag;
             if (c.Z <= 0f)
