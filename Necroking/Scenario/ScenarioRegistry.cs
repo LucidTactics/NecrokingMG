@@ -81,6 +81,7 @@ public static class ScenarioRegistry
         Register("horde_idle_anim", () => new Scenarios.HordeIdleAnimScenario());
         Register("summon_lag", () => new Scenarios.SummonLagScenario());
         Register("pounce_test", () => new Scenarios.PounceTestScenario());
+        Register("pounce_outrun", () => new Scenarios.PounceOutrunScenario());
         Register("sweep_attack", () => new Scenarios.SweepAttackScenario());
         Register("trample_attack", () => new Scenarios.TrampleAttackScenario());
         Register("trample_miss", () => new Scenarios.TrampleMissScenario());

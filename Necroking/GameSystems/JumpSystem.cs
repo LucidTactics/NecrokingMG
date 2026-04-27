@@ -33,6 +33,13 @@ public static class JumpSystem
 
     // Tuning
     private const float AirHorizontalSpeed = 6f;      // units/sec through the air
+
+    /// <summary>Margin past combined-radius (attacker.R + target.R) within which
+    /// a pounce can still hit at landing. If the target outran the pounce by
+    /// more than this, the pounce lands cleanly but doesn't connect — like a
+    /// missed swipe rather than auto-tracking damage. 0.5u = "they were within
+    /// arm's reach when I landed."</summary>
+    private const float PounceLandingHitMargin = 0.5f;
     private const float MinAirDuration = 0.40f;       // seconds, enforced minimum
     private const float DefaultArcPeak = 2.0f;         // parabola peak height
     // Per-phase safety timeouts. Each phase should finish naturally via anim callbacks
@@ -346,6 +353,38 @@ public static class JumpSystem
                         $"[LandingCallback] unit#{idx} kind={(Kind)units[idx].JumpKind} — PendingAttack was cleared before landing; " +
                         $"no damage will be resolved. targetId={units[idx].JumpPounceTargetId} target={units[idx].Target}");
                     break;
+                }
+                // Pounce-only: combined-radius reach check at landing. If the target
+                // outran the pounce (moved beyond attacker.R + target.R + margin
+                // from the lander's body), the pounce misses cleanly — clear
+                // PendingAttack so ResolvePendingAttack is skipped. The lander
+                // still arrives at the locked landing pos, just without damage.
+                // Necromancer-attack jumps skip this — they're a different
+                // archetype with no "target outran me" semantic to model.
+                if ((Kind)units[idx].JumpKind == Kind.Pounce)
+                {
+                    int targetIdx = UnitUtil.ResolveUnitIndex(units, units[idx].JumpPounceTargetId);
+                    if (targetIdx < 0 || !units[targetIdx].Alive)
+                    {
+                        // Target died/vanished — no swipe to land.
+                        units[idx].PendingAttack = CombatTarget.None;
+                        units[idx].PendingWeaponIdx = -1;
+                        break;
+                    }
+                    Vec2 toTarget = units[targetIdx].Position - units[idx].Position;
+                    float dist = toTarget.Length();
+                    float reach = units[idx].Radius + units[targetIdx].Radius
+                                + PounceLandingHitMargin;
+                    if (dist > reach)
+                    {
+                        DebugLog.Log("jump",
+                            $"[LandingCallback] unit#{idx} pounce target outran the leap " +
+                            $"(dist={dist:F2} > reach={reach:F2}); clean miss, no damage");
+                        units[idx].PendingAttack = CombatTarget.None;
+                        units[idx].PendingWeaponIdx = -1;
+                        units[idx].PostAttackTimer = 0f; // refund the lockout — no swing fired
+                        break;
+                    }
                 }
                 sim.ResolvePendingAttack(idx);
                 break;
