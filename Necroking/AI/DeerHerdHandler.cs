@@ -61,7 +61,9 @@ public class DeerHerdHandler : IArchetypeHandler
 
     private const float RoamRadius = 10f;
     private const float FleeDistance = 20f;
-    private const float CalmDuration = 3f;
+    private const float CalmDuration = 8f;
+    private const float CalmHoldTime = 3f; // Don't let calm tick below this while threat is in wary buffer
+    private const float WaryBufferScale = 1.5f; // Hostile within detRange*this keeps deer wary
     private const float MinFleeDuration = 4f; // Minimum flee time after damage (prevents instant calming)
     private const float AlertRecheckInterval = 1f;
     private const float AlertThresholdFraction = 0.9f;
@@ -283,9 +285,12 @@ public class DeerHerdHandler : IArchetypeHandler
 
     /// <summary>Check if any hostile is within a fraction of the detection range.</summary>
     private static bool AnyHostileWithinThreshold(ref AIContext ctx)
+        => AnyHostileWithinScale(ref ctx, AlertThresholdFraction);
+
+    /// <summary>Check if any hostile is within DetectionRange * scale.</summary>
+    private static bool AnyHostileWithinScale(ref AIContext ctx, float scale)
     {
-        float detRange = ctx.Units[ctx.UnitIndex].DetectionRange;
-        float threshold = detRange * AlertThresholdFraction;
+        float threshold = ctx.Units[ctx.UnitIndex].DetectionRange * scale;
         float threshSq = threshold * threshold;
         var myFaction = ctx.MyFaction;
         for (int j = 0; j < ctx.Units.Count; j++)
@@ -502,6 +507,12 @@ public class DeerHerdHandler : IArchetypeHandler
     {
         SubroutineSteps.SetIdle(ref ctx);
         ctx.SubroutineTimer -= ctx.Dt;
+
+        // Hold the calm timer while a hostile is still in the wary buffer —
+        // deer waits for the player to walk further away before fully calming.
+        if (ctx.SubroutineTimer < CalmHoldTime && AnyHostileWithinScale(ref ctx, WaryBufferScale))
+            ctx.SubroutineTimer = CalmHoldTime;
+
         if (ctx.SubroutineTimer <= 0f)
         {
             ctx.Routine = ctx.IsNight ? RoutineSleeping : RoutineIdleRoaming;
@@ -585,6 +596,10 @@ public class DeerHerdHandler : IArchetypeHandler
     /// <summary>Try to find a nearby bush and start feeding. Returns true if started.</summary>
     private static bool TryStartFeeding(ref AIContext ctx)
     {
+        // Don't path back to a bush while a threat is loitering nearby.
+        if (AnyHostileWithinScale(ref ctx, WaryBufferScale))
+            return false;
+
         Vec2 bushPos;
         if (!FindNearbyBush(ref ctx, out bushPos))
             return false;
