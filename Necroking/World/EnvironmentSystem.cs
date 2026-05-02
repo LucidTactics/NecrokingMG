@@ -35,6 +35,99 @@ public class BuildingProcessState
     public int TotalOutput() { int t = 0; foreach (var e in OutputQueue) t += e.Count; return t; }
 }
 
+/// <summary>
+/// One corpse parked on a table. Captures the data needed to (a) render the body
+/// bag at the table's spawn offset, (b) decide what zombie type to spawn when the
+/// craft completes (UnitDefID → UnitDef.ZombieTypeID resolution), and (c) match
+/// the spawned zombie's facing/scale to the corpse it came from.
+///
+/// Occupied is the *only* source of truth for slot state — checking SourceUnitDefID
+/// emptiness conflates "empty slot" with "loaded but data is missing", which broke
+/// craft validation when scenarios ran without the unit registry available.
+/// </summary>
+public struct TableCorpseSlot
+{
+    public bool Occupied;
+    public string SourceUnitDefID;
+    public float FacingAngle;
+    public float SpriteScale;
+    public bool IsEmpty => !Occupied;
+}
+
+/// <summary>One item parked on a table. Occupied flag distinguishes filled-with-blank-id
+/// (rare, but shouldn't be silently dropped) from empty.</summary>
+public struct TableItemSlot
+{
+    public bool Occupied;
+    public string ItemID;
+    public bool IsEmpty => !Occupied;
+}
+
+/// <summary>
+/// Per-instance state for a craft-table env object (parallel-list-stored next to
+/// PlacedObjectRuntime / BuildingProcessState). Slot-based, NOT queue-based — the
+/// table UI shows fixed slots that the player drops corpses/items into; queues
+/// belong to the obelisk-style streaming pattern.
+///
+/// Corpse and item arrays are sized to def.CorpseSlots / def.ItemSlots at
+/// construction; resizing requires rebuilding the state (cheap — these arrays
+/// are tiny, max 3 each per current design).
+///
+/// Crafting=true while a unit is channeling at this table; CraftTimer counts up
+/// from 0 to def.ProcessTime. ChannelerUnitID identifies the assigned unit so we
+/// only advance the timer while that specific unit is in range and channeling
+/// (any other unit nearby is irrelevant).
+/// </summary>
+public class TableCraftState
+{
+    public TableCorpseSlot[] CorpseSlots = System.Array.Empty<TableCorpseSlot>();
+    public TableItemSlot[] ItemSlots = System.Array.Empty<TableItemSlot>();
+
+    public bool Crafting;
+    public float CraftTimer;
+    public uint ChannelerUnitID;   // 0 = no channeler assigned
+
+    /// <summary>Rebuild slot arrays to match def-declared counts. Idempotent.</summary>
+    public void EnsureSized(int corpseSlots, int itemSlots)
+    {
+        if (CorpseSlots.Length != corpseSlots)
+            CorpseSlots = new TableCorpseSlot[corpseSlots];
+        if (ItemSlots.Length != itemSlots)
+            ItemSlots = new TableItemSlot[itemSlots];
+    }
+
+    /// <summary>Index of first empty corpse slot, or -1 if all full.</summary>
+    public int FindEmptyCorpseSlot()
+    {
+        for (int i = 0; i < CorpseSlots.Length; i++)
+            if (CorpseSlots[i].IsEmpty) return i;
+        return -1;
+    }
+
+    /// <summary>Index of first empty item slot, or -1 if all full.</summary>
+    public int FindEmptyItemSlot()
+    {
+        for (int i = 0; i < ItemSlots.Length; i++)
+            if (ItemSlots[i].IsEmpty) return i;
+        return -1;
+    }
+
+    public bool HasAnyCorpse()
+    {
+        for (int i = 0; i < CorpseSlots.Length; i++)
+            if (!CorpseSlots[i].IsEmpty) return true;
+        return false;
+    }
+
+    /// <summary>Reset crafting progress and clear assigned channeler. Slot contents untouched.</summary>
+    public void CancelChannel()
+    {
+        Crafting = false;
+        CraftTimer = 0f;
+        ChannelerUnitID = 0;
+    }
+}
+
 public class EnvironmentObjectDef
 {
     public string Id { get; set; } = "";
@@ -68,6 +161,17 @@ public class EnvironmentObjectDef
     public bool AutoSpawn { get; set; }
     public float SpawnOffsetX { get; set; }
     public float SpawnOffsetY { get; set; } = 1.5f;
+
+    // ─────────────────────────────────────────────
+    //  Craft table (slot-based recipe)
+    // ─────────────────────────────────────────────
+    /// <summary>Number of corpse slots on this craft-table. >0 marks the def as a table;
+    /// 0 means the def is not a craft-table. See TableCraftState.</summary>
+    public int CorpseSlots { get; set; }
+    /// <summary>Number of item (potion) slots on this craft-table.</summary>
+    public int ItemSlots { get; set; }
+    /// <summary>Essence cost per craft. Consumed from PlayerResources.Essence on craft start.</summary>
+    public int EssenceCost { get; set; }
 
     // Building costs (legacy)
     public int CostWood { get; set; }
@@ -197,6 +301,9 @@ public class EnvironmentObjectDef
         writer.WriteBoolean("autoSpawn", AutoSpawn);
         writer.WriteNumber("spawnOffsetX", SpawnOffsetX);
         writer.WriteNumber("spawnOffsetY", SpawnOffsetY);
+        writer.WriteNumber("corpseSlots", CorpseSlots);
+        writer.WriteNumber("itemSlots", ItemSlots);
+        writer.WriteNumber("essenceCost", EssenceCost);
         // Animation
         writer.WriteBoolean("isAnimated", IsAnimated);
         writer.WriteNumber("animFramesX", AnimFramesX);
@@ -266,6 +373,7 @@ public class EnvironmentSystem
     private readonly List<PlacedObject> _objects = new();
     private readonly List<PlacedObjectRuntime> _objectRuntime = new();
     private readonly List<BuildingProcessState> _processState = new();
+    private readonly List<TableCraftState> _tableState = new();
     private int _nextObjectID;
 
     /// <summary>Called when collision state changes (object placed/removed/collected/destroyed/respawned).
@@ -311,6 +419,10 @@ public class EnvironmentSystem
             AnimTime = animStart, AnimRng = animRng,
         });
         _processState.Add(new BuildingProcessState());
+        var tableState = new TableCraftState();
+        if (def.CorpseSlots > 0 || def.ItemSlots > 0)
+            tableState.EnsureSized(def.CorpseSlots, def.ItemSlots);
+        _tableState.Add(tableState);
 
         if (_defs[defIndex].CollisionRadius > 0)
             OnCollisionsDirty?.Invoke();
@@ -325,6 +437,7 @@ public class EnvironmentSystem
         _objects.RemoveAt(index);
         if (index < _objectRuntime.Count) _objectRuntime.RemoveAt(index);
         if (index < _processState.Count) _processState.RemoveAt(index);
+        if (index < _tableState.Count) _tableState.RemoveAt(index);
 
         if (hadCollision)
             OnCollisionsDirty?.Invoke();
@@ -344,13 +457,14 @@ public class EnvironmentSystem
             OnCollisionsDirty?.Invoke();
     }
 
-    public void ClearObjects() { _objects.Clear(); _objectRuntime.Clear(); _processState.Clear(); }
+    public void ClearObjects() { _objects.Clear(); _objectRuntime.Clear(); _processState.Clear(); _tableState.Clear(); }
     public void ClearDefs() { _defs.Clear(); _textures.Clear(); }
     public int ObjectCount => _objects.Count;
     public PlacedObject GetObject(int idx) => _objects[idx];
     public PlacedObjectRuntime GetObjectRuntime(int idx) => _objectRuntime[idx];
     public void SetObjectRuntime(int idx, PlacedObjectRuntime rt) => _objectRuntime[idx] = rt;
     public BuildingProcessState GetProcessState(int idx) => _processState[idx];
+    public TableCraftState GetTableState(int idx) => _tableState[idx];
 
     /// <summary>Add an object as an unbuilt blueprint (BuildProgress = 0).</summary>
     public int AddObjectAsBlueprint(ushort defIndex, float x, float y, float scale = 1f)

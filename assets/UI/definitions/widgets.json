@@ -411,6 +411,28 @@
           "anchor": 0
         }
       ]
+    },
+    {
+      "id": "TableCraftMenu",
+      "background": "panel_inner",
+      "frame": "RenaiThinBorder",
+      "width": 480,
+      "height": 200,
+      "backgroundScale": 0.65,
+      "backgroundTint": [
+        255,
+        255,
+        255,
+        240
+      ],
+      "frameTint": [
+        255,
+        255,
+        255,
+        255
+      ],
+      "modal": false,
+      "children": []
     }
   ]
 }

@@ -408,6 +408,20 @@ public class RuntimeWidgetRenderer
     //  Asset loading
     // ═══════════════════════════════════════
 
+    /// <summary>
+    /// Draw a cached icon texture into a screen-space rect. Used by code-driven
+    /// menus that don't go through the full widget pipeline (e.g. TableCraftMenuUI)
+    /// but still want to share the same texture cache as the widget renderer.
+    /// Silently no-ops when the path is empty or the file can't be loaded.
+    /// </summary>
+    public void DrawIcon(string iconPath, int x, int y, int w, int h)
+    {
+        if (_batch == null) return;
+        var tex = GetOrLoadTexture(iconPath);
+        if (tex == null) return;
+        _batch.Draw(tex, new Rectangle(x, y, w, h), Color.White);
+    }
+
     private Texture2D? GetOrLoadTexture(string texPath)
     {
         if (string.IsNullOrEmpty(texPath)) return null;

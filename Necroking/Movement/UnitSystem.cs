@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using Necroking.Core;
 using Necroking.Data;
 using Necroking.Data.Registries;
+using Necroking.GameSystems;
 using Necroking.Render;
 
 namespace Necroking.Movement;
@@ -225,11 +226,17 @@ public class Unit
     public int BaggingCorpseID = -1;        // CorpseID being bagged (-1 = none)
     public float BaggingTimer;              // elapsed time during bagging
     public byte CorpseInteractPhase;        // 0=none, 1=WorkStart, 2=WorkLoop, 3=WorkEnd, 4=Pickup, 5=PutDown
+    /// <summary>When non-negative during a PutDown (CorpseInteractPhase==5), the corpse
+    /// will be loaded into env-object[PutDownTableIdx]'s first empty corpse slot at
+    /// anim completion instead of being placed on the ground at LerpStartPos.
+    /// Set by Game1's F-press handler when cursor + range gates pass; cleared at completion.</summary>
+    public int PutDownTableIdx = -1;
 
     // Building interaction
     public int BuildTargetIdx = -1;         // env object index being built (-1 = none)
     public int BuildGlyphIdx = -1;          // glyph index being built (-1 = none)
     public float BuildTimer;                // elapsed time during building
+    public int CraftTableIdx = -1;          // env object index of the craft-table currently being channeled (-1 = none)
 
     // Spawn/Raid/Patrol
     public int SpawnBuildingIdx = -1;
@@ -311,6 +318,11 @@ public class Unit
     public float ParalysisSlowTimer;
     public float ParalysisStunTimer;
     public bool Frenzied;
+
+    // Per-unit weapon bonus effects layered on top of weapon defs (e.g. potion
+    // buffs from table-crafted zombies). Lazy-allocated — null when empty so the
+    // common "no bonuses" case doesn't pay an allocation. See WeaponBonusEffect.cs.
+    public List<WeaponBonusEffect>? BonusEffects;
 }
 
 /// <summary>

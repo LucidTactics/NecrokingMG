@@ -93,6 +93,7 @@ public static class ScenarioRegistry
         Register("trample_kill", () => new Scenarios.TrampleKillScenario());
         Register("knockdown_test", () => new Scenarios.KnockdownTestScenario());
         Register("wolf_retarget", () => new Scenarios.WolfRetargetScenario());
+        Register("craft_table", () => new Scenarios.CraftTableScenario());
     }
 
     public static void Register(string name, Func<ScenarioBase> creator)

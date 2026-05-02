@@ -520,6 +520,9 @@ public static class MapData
         if (ed.TryGetProperty("autoSpawn", out var ats)) def.AutoSpawn = ats.GetBoolean();
         if (ed.TryGetProperty("spawnOffsetX", out var sox)) def.SpawnOffsetX = sox.GetSingle();
         if (ed.TryGetProperty("spawnOffsetY", out var soy)) def.SpawnOffsetY = soy.GetSingle();
+        if (ed.TryGetProperty("corpseSlots", out var cps)) def.CorpseSlots = cps.GetInt32();
+        if (ed.TryGetProperty("itemSlots", out var its)) def.ItemSlots = its.GetInt32();
+        if (ed.TryGetProperty("essenceCost", out var ec)) def.EssenceCost = ec.GetInt32();
         if (ed.TryGetProperty("isAnimated", out var ianim)) def.IsAnimated = ianim.GetBoolean();
         if (ed.TryGetProperty("animFramesX", out var afx)) def.AnimFramesX = afx.GetInt32();
         if (ed.TryGetProperty("animFramesY", out var afy)) def.AnimFramesY = afy.GetInt32();

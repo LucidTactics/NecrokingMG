@@ -727,6 +727,26 @@ public class AnimController
 
     // --- Effective timing helpers (use cached _resolvedMeta) ---
 
+    /// <summary>
+    /// Animation progress in [0, 1] (0 at start, 1 at end of current state's
+    /// authored duration). Returns 0 when no metadata is available. Useful for
+    /// callers that need to interpolate something visual across the duration of
+    /// a one-shot animation (e.g. lerping a body bag from carry pose to table-top
+    /// during a PutDown).
+    /// </summary>
+    public float TimeFraction
+    {
+        get
+        {
+            int totalMs = GetEffectiveTotalDurationMs();
+            if (totalMs <= 0) return 0f;
+            float t = _animTime / totalMs;
+            if (t < 0f) t = 0f;
+            if (t > 1f) t = 1f;
+            return t;
+        }
+    }
+
     private int GetEffectiveTotalDurationMs()
     {
         string animName = StateToAnimName(_currentState);

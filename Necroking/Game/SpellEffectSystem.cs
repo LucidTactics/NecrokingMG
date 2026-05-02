@@ -29,6 +29,7 @@ public struct DamageNumber
     public string? PickupText;
     public float Height;
     public bool IsPoison;
+    public bool IsFatigue;
 }
 
 /// <summary>

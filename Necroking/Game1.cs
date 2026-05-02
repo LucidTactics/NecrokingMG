@@ -52,6 +52,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
     private Game.InventoryUI _inventoryUI = new();
     private Game.BuildingMenuUI _buildingMenuUI = new();
     private CraftingMenuUI _craftingMenu = new();
+    private Game.TableCraftMenuUI _tableMenuUI = new();
     private System.Diagnostics.Stopwatch? _startupTimer;
     private long _startupLastMs;
     private void LogTiming(string step)
@@ -1421,6 +1422,12 @@ public class Game1 : Microsoft.Xna.Framework.Game
             _sim.MagicGlyphs, _gameData.Spells, _sim);
         _craftingMenu.Init(_widgetRenderer, _inventory, _gameData.Items, _gameData,
             _graphics.PreferredBackBufferHeight, _spriteBatch, _pixel);
+        _tableMenuUI.Init(_widgetRenderer, _envSystem, _inventory, _gameData.Items,
+            _sim.PlayerResources, _spriteBatch, _pixel, _font);
+        // Phase E hook: when Start is clicked on the table menu, kick off the craft routine.
+        _tableMenuUI.StartCraftCallback = (envIdx) => StartTableCraft(envIdx);
+        // Corpse-slot icon: render the source unit's idle frame inside the slot.
+        _tableMenuUI.DrawUnitIconCallback = (defId, rect) => DrawUnitIdleSprite(defId, rect);
         LogTiming("Inventory & Building UI initialized");
 
         // Load audio
@@ -2235,8 +2242,64 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 _activePotionSlot = -1;
 
             // --- Corpse interaction (F key) ---
+            // Table-load takes precedence over normal PutDown when carrying a corpse
+            // AND the cursor is over a table within InteractRange of the necromancer.
+            // Full table → blocked (no PutDown either; corpse stays held).
             if (_input.WasKeyPressed(Keys.F))
-                Game.CorpseInteractionManager.TryInteract(_sim, necroIdx);
+            {
+                bool tableHandled = false;
+                if (necroIdx >= 0 && _sim.Units[necroIdx].CarryingCorpseID >= 0
+                    && _sim.Units[necroIdx].CorpseInteractPhase == 0
+                    && _envSystem != null)
+                {
+                    var necroPos = _sim.Units[necroIdx].Position;
+                    int tableIdx = Game.TableSystem.FindTableUnderCursorInRange(_envSystem, mouseWorld, necroPos);
+                    if (tableIdx >= 0)
+                    {
+                        int corpseId = _sim.Units[necroIdx].CarryingCorpseID;
+                        var cc = _sim.FindCorpseByID(corpseId);
+                        bool corpseEligible = cc != null
+                            && Game.TableCraftingSystem.IsCorpseEligibleForTable(_gameData, cc.UnitDefID);
+                        var ts = _envSystem.GetTableState(tableIdx);
+                        int emptySlot = ts.FindEmptyCorpseSlot();
+
+                        DebugLog.Log("table",
+                            $"[F-press] tableIdx={tableIdx} corpseDef='{cc?.UnitDefID ?? "null"}' " +
+                            $"eligible={corpseEligible} emptyCorpseSlot={emptySlot}");
+
+                        if (corpseEligible)
+                        {
+                            if (emptySlot >= 0)
+                            {
+                                if (cc != null)
+                                    cc.LerpStartPos = Game.TableSystem.GetSpawnPos(_envSystem, tableIdx);
+                                _sim.UnitsMut[necroIdx].PutDownTableIdx = tableIdx;
+                                _sim.UnitsMut[necroIdx].CorpseInteractPhase = 5;
+                                DebugLog.Log("table", $"[F-press] Started PutDown anim → table {tableIdx}");
+                            }
+                            else
+                            {
+                                DebugLog.Log("table", $"[F-press] BLOCKED: table {tableIdx} corpse slots full");
+                            }
+                            tableHandled = true;
+                        }
+                        else
+                        {
+                            DebugLog.Log("table",
+                                $"[F-press] Corpse '{cc?.UnitDefID ?? "null"}' not eligible — falling through to normal PutDown");
+                        }
+                    }
+                    else if (_sim.Units[necroIdx].CarryingCorpseID >= 0)
+                    {
+                        // Carrying but no table under cursor — log only when this would have mattered.
+                        DebugLog.Log("table",
+                            $"[F-press] Carrying but no table found under cursor at ({mouseWorld.X:F1},{mouseWorld.Y:F1}) " +
+                            $"within necroRange={Game.TableSystem.InteractRange} cursorRange={Game.TableSystem.CursorRange}");
+                    }
+                }
+                if (!tableHandled)
+                    Game.CorpseInteractionManager.TryInteract(_sim, necroIdx);
+            }
 
             // --- Building hover detection ---
             _hoveredObjectIdx = -1;
@@ -2272,6 +2335,20 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 && _input.LeftPressed)
             {
                 _buildingMenuUI.TryPlace(mouseWorld.X, mouseWorld.Y);
+            }
+
+            // --- Left-click table to reopen its craft menu ---
+            // Only fires when no build placement is active and click hasn't been
+            // consumed by another UI element (e.g. the menu itself, inventory).
+            if (!_input.MouseOverUI && _input.LeftPressed && !_input.IsMouseConsumed
+                && !_buildingMenuUI.IsPlacementActive && _envSystem != null)
+            {
+                int clickedTable = Game.TableSystem.FindTableUnderCursor(_envSystem, mouseWorld);
+                if (clickedTable >= 0)
+                {
+                    _tableMenuUI.OpenForTable(clickedTable, screenW, screenH, _camera, _renderer);
+                    _input.ConsumeMouse();
+                }
             }
 
             // --- Foragable collection (right-click within 2 units of necromancer) ---
@@ -2426,7 +2503,8 @@ public class Game1 : Microsoft.Xna.Framework.Game
                     Damage = dmg.Damage,
                     Timer = 0f,
                     Height = dmg.Height,
-                    IsPoison = dmg.IsPoison
+                    IsPoison = dmg.IsPoison,
+                    IsFatigue = dmg.IsFatigue
                 });
             }
         }
@@ -2562,6 +2640,23 @@ public class Game1 : Microsoft.Xna.Framework.Game
         _inventoryUI.Update(_input);
         _buildingMenuUI.Update(_input, screenW, screenH);
         _craftingMenu.Update(_input, screenW, screenH, dt);
+        _tableMenuUI.Update(_input);
+
+        // Inventory→table item transfer: while the table menu is open, clicking a
+        // filled inventory slot deposits the item into the table's first empty
+        // item slot (and decrements the inventory by 1). Inventory must be visible
+        // for slot rects to be valid.
+        if (_tableMenuUI.IsVisible && _inventoryUI.IsVisible
+            && _input.LeftPressed && !_input.IsMouseConsumed)
+        {
+            int mx = (int)_input.MousePos.X, my = (int)_input.MousePos.Y;
+            if (_inventoryUI.TryGetSlotIndexAt(mx, my, out int slotIdx))
+            {
+                var s = _inventory.GetSlot(slotIdx);
+                if (!s.IsEmpty && _tableMenuUI.TryDepositItem(s.ItemId))
+                    _input.ConsumeMouse();
+            }
+        }
         _skillTreePanel.SetMouse(_input.MousePos);
         _skillTreePanel.Update(_input, screenW, screenH, gameTime.TotalGameTime.TotalSeconds);
         _vampireEvoPanel.SetMouse(_input.MousePos);
@@ -2710,6 +2805,47 @@ public class Game1 : Microsoft.Xna.Framework.Game
             if (dist < bestDist) { bestDist = dist; bestIdx = fi; }
         }
         return bestIdx;
+    }
+
+    /// <summary>
+    /// Start (or resume) a craft on the given table. Spends essence on the FIRST
+    /// start of a fresh craft (ts.Crafting=false). When called while ts.Crafting=true,
+    /// no essence is spent — this is the resume path after the player walked away
+    /// from a paused channel. Always (re)assigns the necromancer to RoutineCraftAtTable.
+    /// Returns true if the craft is now active.
+    /// </summary>
+    private bool StartTableCraft(int envIdx)
+    {
+        if (envIdx < 0 || _envSystem == null) return false;
+        int necroIdx = _sim.NecromancerIndex;
+        if (necroIdx < 0) return false;
+
+        // No-op if the necromancer is already in the craft routine for THIS table —
+        // double-clicking Start mid-channel would otherwise reset WalkToSite and
+        // restart the walk-up animation.
+        if (_sim.Units[necroIdx].Routine == AI.PlayerControlledHandler.RoutineCraftAtTable
+            && _sim.Units[necroIdx].CraftTableIdx == envIdx)
+            return true;
+
+        var def = _envSystem.Defs[_envSystem.GetObject(envIdx).DefIndex];
+        var ts = _envSystem.GetTableState(envIdx);
+
+        if (!ts.Crafting)
+        {
+            // Fresh craft — gate on inputs + spend essence.
+            if (!ts.HasAnyCorpse()) return false;
+            if (!_sim.PlayerResources.SpendEssence(def.EssenceCost)) return false;
+            ts.Crafting = true;
+            ts.CraftTimer = 0f;
+        }
+        // else: resume — essence already spent on first start; just reassign channeler.
+
+        ts.ChannelerUnitID = _sim.Units[necroIdx].Id;
+        _sim.UnitsMut[necroIdx].CraftTableIdx = envIdx;
+        _sim.UnitsMut[necroIdx].Routine = AI.PlayerControlledHandler.RoutineCraftAtTable;
+        _sim.UnitsMut[necroIdx].Subroutine = AI.PlayerControlledHandler.BuildSub_WalkToSite;
+        _sim.UnitsMut[necroIdx].BuildTimer = 0f;
+        return true;
     }
 
     /// <summary>Start a foragable collection with arc animation instead of instant pickup.</summary>
@@ -3201,15 +3337,34 @@ public class Game1 : Microsoft.Xna.Framework.Game
                         }
                         if (animData.Ctrl.IsAnimFinished)
                         {
-                            // Place corpse at pre-computed drop position
-                            var cc = _sim.FindCorpseByID(_sim.Units[i].CarryingCorpseID);
-                            if (cc != null)
+                            // Dispatch on PutDownTableIdx: if a table was targeted at F-press
+                            // time, load the corpse into its slot and remove the corpse from
+                            // the sim. Otherwise, place on ground at LerpStartPos as before.
+                            int tableIdx = _sim.Units[i].PutDownTableIdx;
+                            int corpseId = _sim.Units[i].CarryingCorpseID;
+                            var cc = _sim.FindCorpseByID(corpseId);
+
+                            if (tableIdx >= 0 && _envSystem != null && cc != null
+                                && Game.TableSystem.LoadCorpseIntoTable(_envSystem, tableIdx, cc) >= 0)
                             {
+                                int ci = _sim.FindCorpseIndexByID(corpseId);
+                                if (ci >= 0) _sim.CorpsesMut.RemoveAt(ci);
+                                // Auto-open the table menu so the player can pick items
+                                // and start crafting without an extra click.
+                                int sw = _graphics.PreferredBackBufferWidth;
+                                int sh = _graphics.PreferredBackBufferHeight;
+                                _tableMenuUI.OpenForTable(tableIdx, sw, sh, _camera, _renderer);
+                            }
+                            else if (cc != null)
+                            {
+                                // Ground drop (or table-load fell through e.g. slot taken).
                                 cc.Position = cc.LerpStartPos;
                                 cc.DraggedByUnitID = GameConstants.InvalidUnit;
                             }
+
                             _sim.UnitsMut[i].CarryingCorpseID = -1;
                             _sim.UnitsMut[i].CorpseInteractPhase = 0;
+                            _sim.UnitsMut[i].PutDownTableIdx = -1;
                             animData.Ctrl.ForceState(AnimState.Idle);
                         }
                         break;
@@ -3892,6 +4047,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // Inventory UI (widget-based, drawn over HUD)
         if (showUI)
             _inventoryUI.Draw();
+            _tableMenuUI.Draw();
 
         // Character stats panel (Tab)
         if (showUI)
@@ -4361,16 +4517,20 @@ public class Game1 : Microsoft.Xna.Framework.Game
         var corpsesAtlasId = AtlasDefs.ResolveAtlasName("Corpses");
         var corpsesAtlas = _atlases[(int)corpsesAtlasId];
 
+        // Bag size is the SAME everywhere it appears (carry / ground / table) —
+        // CarryBagScale is the canonical world-height. Doesn't multiply by
+        // corpse.SpriteScale: the bag visual shouldn't grow/shrink with the
+        // source unit's stature (a bear corpse and a soldier corpse get visually
+        // identical bags). The unbagged dead-body sprite still uses SpriteScale
+        // — only the bagged form is uniform.
         float refH = GetBodyBagRefHeight();
-        float worldH = 3.6f * corpse.SpriteScale;
-        float pixelH = worldH * _camera.Zoom;
-        float scale = pixelH / refH;
+        float scale = (CarryBagScale * _camera.Zoom) / refH;
 
         var sp = _renderer.WorldToScreen(corpse.Position, 0f, _camera);
         DrawSpriteFrame(corpsesAtlas, fr.Frame.Value, sp, scale, fr.FlipX, _ambientColor);
     }
 
-    private void DrawBaggedCorpseAt(Vector2 screenPos, float facingAngle)
+    private void DrawBaggedCorpseAt(Vector2 screenPos, float facingAngle, float rotation = 0f)
     {
         var fr = GetBodyBagFrame(facingAngle);
         if (fr.Frame == null) return;
@@ -4381,8 +4541,26 @@ public class Game1 : Microsoft.Xna.Framework.Game
         var corpsesAtlas = _atlases[atlasIdx];
 
         float refH = GetBodyBagRefHeight();
-        float scale = (3.6f * _camera.Zoom) / refH; // same size as ground body bags
-        DrawSpriteFrame(corpsesAtlas, fr.Frame.Value, screenPos, scale, fr.FlipX, _ambientColor);
+        float scale = (CarryBagScale * _camera.Zoom) / refH; // matches carry / ground bag size
+        if (rotation == 0f)
+        {
+            DrawSpriteFrame(corpsesAtlas, fr.Frame.Value, screenPos, scale, fr.FlipX, _ambientColor);
+        }
+        else
+        {
+            // Inline rotation path — DrawSpriteFrame doesn't expose rotation yet
+            // (only the table overlay needs it). Replicates DrawSpriteFrame's pivot
+            // math + adds the rotation argument. Keep this branch tight; if a
+            // second caller ever wants rotation, promote this into DrawSpriteFrame.
+            var frame = fr.Frame.Value;
+            var tex = corpsesAtlas.GetTextureForFrame(frame);
+            if (tex == null) return;
+            float pivotX = fr.FlipX ? (1f - frame.PivotX) : frame.PivotX;
+            float pivotY = 1f - frame.PivotY;
+            var origin = new Vector2(pivotX * frame.Rect.Width, pivotY * frame.Rect.Height);
+            var effects = fr.FlipX ? SpriteEffects.FlipHorizontally : SpriteEffects.None;
+            _spriteBatch.Draw(tex, screenPos, frame.Rect, _ambientColor, rotation, origin, scale, effects, 0f);
+        }
     }
 
     private void DrawBaggingProgressBar(Vector2 screenPos, float progress)
@@ -4444,15 +4622,31 @@ public class Game1 : Microsoft.Xna.Framework.Game
             var attach = ComputeWeaponAttach(unitIdx, unitDef, animData);
             if (attach.Valid)
             {
-                var hiltScreen = _renderer.WorldToScreen(attach.HiltWorld, attach.HiltHeight, _camera);
+                // The bag's spritemeta pivot (0.5, 0.15) sits at the visible bag's
+                // natural anchor — the artist put the pivot ON the bag's visible
+                // center, NOT at the frame's geometric bottom. So drawing at the
+                // hilt screen position lands the visible bag's center directly on
+                // the hilt; no anchor-to-center correction needed.
+                //
+                // HiltHeight is in world units, but the hilt's screen offset must
+                // match the sprite's drawn scale (full Zoom — sprites aren't
+                // yRatio'd, because the artist baked iso perspective into art).
+                // Standard WorldToScreen subtracts `HiltHeight * Zoom * YRatio`,
+                // yielding only half the correct offset. WorldToScreenPx takes
+                // literal pixels and skips the yRatio fold — this restores the
+                // pre-`421fdd3` behavior of `HiltHeight * Zoom / HeightScale`.
+                var hiltScreen = _renderer.WorldToScreenPx(attach.HiltWorld, attach.HiltHeight * _camera.Zoom, _camera);
                 hiltScreen.X += ofsX;
-                hiltScreen.Y += CarryOffsetY;
+                hiltScreen.Y += CarryOffsetY; // small fine-tune; can be negative to nudge bag up
                 DrawSpriteFrame(corpsesAtlas, fr.Frame.Value, hiltScreen, bagScale, fr.FlipX, _ambientColor);
                 return;
             }
         }
 
-        // Fallback: offset-based positioning
+        // Fallback: offset-based positioning (when weapon attach data is missing).
+        // No centerCorrection because the bag's pivot already sits on the visible
+        // bag's center. Estimate hilt at ~30% of unit height (mid-torso) to land
+        // the bag near where the hand would be.
         float angleDeg = ((facingAngle % 360f) + 360f) % 360f;
         float offsetPx = 8f * unitScale;
         float hDir = (angleDeg > 90f && angleDeg < 270f) ? -1f : 1f;
@@ -4460,7 +4654,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
         float spriteWorldH = (unitDef != null && unitDef.SpriteWorldHeight > 0) ? unitDef.SpriteWorldHeight : 1.8f;
         float spritePixelH = spriteWorldH * _sim.Units[unitIdx].SpriteScale * _camera.Zoom;
-        float bagY = unitScreenPos.Y - spritePixelH * 0.35f + CarryOffsetY;
+        float bagY = unitScreenPos.Y - spritePixelH * 0.30f + CarryOffsetY;
 
         DrawSpriteFrame(corpsesAtlas, fr.Frame.Value, new Vector2(bagX, bagY), bagScale, fr.FlipX, _ambientColor);
     }
@@ -4978,6 +5172,9 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
         // Carried body bag rendering (phase-aware: respects effect_ms action moment)
         byte cPhase = _sim.Units[i].CorpseInteractPhase;
+        int putdownTableIdx = _sim.Units[i].PutDownTableIdx;
+        bool tableBoundPutdown = cPhase == 5 && putdownTableIdx >= 0
+            && _envSystem != null && putdownTableIdx < _envSystem.ObjectCount;
         bool hasCorpse = _sim.Units[i].CarryingCorpseID >= 0
             && (cPhase == 0 || cPhase == 4 || cPhase == 5);
         // Use the same angle resolution as sprite rendering to determine front/back
@@ -4985,7 +5182,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         bool facingAway = sprAngle == 300; // sprite angle 300 = back view
         bool drawBagAtHilt = false; // whether to draw on unit (vs at ground)
 
-        if (hasCorpse)
+        if (hasCorpse && !tableBoundPutdown)
         {
             if (cPhase == 0)
                 drawBagAtHilt = true; // fully carried
@@ -4995,11 +5192,47 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 drawBagAtHilt = !animData.Ctrl.HasReachedActionMoment();
         }
 
+        // Pre-compute table-bound PutDown lerp target so we can draw it on the
+        // correct side of the unit (back vs front) by Y-sort convention.
+        Vector2? tableLerpScreen = null;
+        float tableLerpRotation = 0f;
+        if (tableBoundPutdown && hasCorpse)
+        {
+            // t = anim progress: 0 at PutDown start (bag at hand), 1 at completion
+            // (bag on table). MathHelper.Lerp handles position and rotation.
+            float t = animData.Ctrl.TimeFraction;
+
+            // Source pose: hilt + carry offsets (mirrors DrawCarriedBodyBag).
+            Vector2 sourcePos = sp; // fallback to unit screen pos if attach invalid
+            var attach = ComputeWeaponAttach(i, unitDef, animData);
+            if (attach.Valid)
+                sourcePos = _renderer.WorldToScreenPx(attach.HiltWorld, attach.HiltHeight * _camera.Zoom, _camera);
+            var bagFr = GetBodyBagFrame(_sim.Units[i].FacingAngle);
+            float ofsX = bagFr.FlipX ? -CarryOffsetX : CarryOffsetX;
+            sourcePos.X += ofsX;
+            sourcePos.Y += CarryOffsetY;
+
+            // Destination pose: table-overlay anchor (mirrors DrawSingleEnvObject's
+            // table body-bag block). Same lift formula keeps position consistent
+            // when the lerp finishes and the env overlay takes over.
+            var tableObj = _envSystem.GetObject(putdownTableIdx);
+            var tableDef = _envSystem.Defs[tableObj.DefIndex];
+            float tableWorldH = tableDef.SpriteWorldHeight * tableObj.Scale * tableDef.Scale;
+            float bagLift = tableWorldH * tableDef.PivotY * 1.22f;
+            Vector2 destPos = _renderer.WorldToScreen(new Vec2(tableObj.X, tableObj.Y), bagLift, _camera);
+
+            tableLerpScreen = Vector2.Lerp(sourcePos, destPos, t);
+            tableLerpRotation = MathHelper.Lerp(0f, -MathF.PI / 12f, t);
+        }
+
         if (hasCorpse && drawBagAtHilt && facingAway)
             DrawCarriedBodyBag(i, sp, scale, _sim.Units[i].FacingAngle);
-        if (hasCorpse && !drawBagAtHilt)
+        // Table-bound PutDown: draw the lerped bag BEHIND the unit when facing away.
+        if (tableBoundPutdown && tableLerpScreen.HasValue && facingAway)
+            DrawBaggedCorpseAt(tableLerpScreen.Value, _sim.Units[i].FacingAngle, tableLerpRotation);
+        if (hasCorpse && !drawBagAtHilt && !tableBoundPutdown)
         {
-            // Draw at ground position (corpse's world pos)
+            // Ground PutDown (existing): draw at corpse's drop point on the ground.
             var cc = _sim.FindCorpseByID(_sim.Units[i].CarryingCorpseID);
             if (cc != null)
             {
@@ -5013,6 +5246,9 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // Carried body bag: draw IN FRONT if facing toward camera
         if (hasCorpse && drawBagAtHilt && !facingAway)
             DrawCarriedBodyBag(i, sp, scale, _sim.Units[i].FacingAngle);
+        // Table-bound PutDown: draw the lerped bag IN FRONT when facing toward camera.
+        if (tableBoundPutdown && tableLerpScreen.HasValue && !facingAway)
+            DrawBaggedCorpseAt(tableLerpScreen.Value, _sim.Units[i].FacingAngle, tableLerpRotation);
 
         // Buff visuals: phase 1 (in front of sprite)
         _buffVisuals.DrawUnit(i, renderPos, 1, _gameTime,
@@ -5167,6 +5403,129 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // (empty bar at 0%) so players can see "placed, awaiting construction".
         if (rt.BuildProgress < 1f)
             DrawBuildProgressBar(screenPos, rt.BuildProgress);
+
+        // Body bag overlay for craft-tables with a corpse loaded. Drawn immediately
+        // after the table sprite (deferred SpriteBatch = call order = render order),
+        // so the bag is always layered on top of the table within this object's
+        // depth slot. Other Y-sorted objects still occlude correctly via the outer
+        // depth-list pass.
+        //
+        // Lift parametrization: tableWorldH × pivotY locates the visual TOP of the
+        // sprite in world-elevation (artists use pivotY=0.93 to anchor near the
+        // base, so 0.93×height is the height above pivot to reach the sprite's
+        // top edge). The 0.92 trim pulls the bag down a hair so it overlaps the
+        // tabletop instead of floating above the rim. No magic constants — every
+        // factor is sourced from def fields the artist already tuned.
+        if (Game.TableSystem.IsTable(def))
+        {
+            var ts = _envSystem.GetTableState(i);
+            if (ts.HasAnyCorpse())
+            {
+                for (int s = 0; s < ts.CorpseSlots.Length; s++)
+                {
+                    if (ts.CorpseSlots[s].IsEmpty) continue;
+                    float tableWorldH = def.SpriteWorldHeight * obj.Scale * def.Scale;
+                    // Lift = pivotY × 1.22 (slightly higher on the tabletop).
+                    // Rotation = -π/12 (CCW ~15°) — small bump back from -π/15
+                    // to align with the table's true long-axis angle.
+                    float bagLift = tableWorldH * def.PivotY * 1.22f;
+                    var bagScreen = _renderer.WorldToScreen(new Vec2(obj.X, obj.Y), bagLift, _camera);
+                    DrawBaggedCorpseAt(bagScreen, ts.CorpseSlots[s].FacingAngle, -MathF.PI / 12f);
+                    break;
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Draw a unit's Idle (or fallback) first-frame sprite scaled to fit inside
+    /// `dest`. Used by the table craft menu to show what's loaded in each corpse
+    /// slot. Returns silently if the def is missing or its atlas isn't loaded —
+    /// caller can render its own placeholder when nothing was drawn.
+    /// </summary>
+    private void DrawUnitIdleSprite(string unitDefId, Rectangle dest)
+    {
+        if (string.IsNullOrEmpty(unitDefId) || _gameData == null)
+        {
+            DebugLog.Log("table", $"[DrawUnitIdleSprite] aborted: defId='{unitDefId}' gameData={_gameData != null}");
+            return;
+        }
+        var unitDef = _gameData.Units.Get(unitDefId);
+        if (unitDef?.Sprite == null)
+        {
+            DebugLog.Log("table", $"[DrawUnitIdleSprite] '{unitDefId}': unitDef={unitDef != null} sprite={unitDef?.Sprite != null}");
+            return;
+        }
+        var atlasId = AtlasDefs.ResolveAtlasName(unitDef.Sprite.AtlasName);
+        if ((int)atlasId >= _atlases.Length)
+        {
+            DebugLog.Log("table", $"[DrawUnitIdleSprite] '{unitDefId}': atlasId={(int)atlasId} out of range (atlases={_atlases.Length})");
+            return;
+        }
+        var atlas = _atlases[(int)atlasId];
+        if (!atlas.IsLoaded)
+        {
+            DebugLog.Log("table", $"[DrawUnitIdleSprite] '{unitDefId}': atlas '{unitDef.Sprite.AtlasName}' not loaded");
+            return;
+        }
+
+        var spriteData = atlas.GetUnit(unitDef.Sprite.SpriteName);
+        if (spriteData == null)
+        {
+            DebugLog.Log("table", $"[DrawUnitIdleSprite] '{unitDefId}': spriteName '{unitDef.Sprite.SpriteName}' not in atlas");
+            return;
+        }
+
+        // Idle anim, with angle fallback. AnimController has a similar two-pass
+        // resolver — different units author different angle keys (old scheme:
+        // 30/60/300; new scheme: 0/45/90/270/315). We try a sensible preference
+        // list, then fall back to ANY authored angle (mirrors the strategy in
+        // AnimController.ResolveFallbackAngle).
+        var idle = spriteData.GetAnim("Idle");
+        if (idle == null)
+        {
+            DebugLog.Log("table", $"[DrawUnitIdleSprite] '{unitDefId}': no Idle anim in spriteData");
+            return;
+        }
+        System.Collections.Generic.List<Render.Keyframe>? kfs = null;
+        foreach (int pref in new[] { 30, 0, 45, 60, 315, 90, 270, 300 })
+        {
+            kfs = idle.GetAngle(pref);
+            if (kfs != null && kfs.Count > 0) break;
+        }
+        if (kfs == null || kfs.Count == 0)
+        {
+            // Last resort: take whatever is in the dictionary first.
+            foreach (var (_, frames) in idle.AngleFrames)
+            {
+                if (frames.Count > 0) { kfs = frames; break; }
+            }
+        }
+        if (kfs == null || kfs.Count == 0)
+        {
+            DebugLog.Log("table", $"[DrawUnitIdleSprite] '{unitDefId}': Idle has no usable angle keyframes (authored angles: {string.Join(",", idle.AngleFrames.Keys)})");
+            return;
+        }
+
+        var frame = kfs[0].Frame;
+        var tex = atlas.GetTextureForFrame(frame);
+        if (tex == null)
+        {
+            DebugLog.Log("table", $"[DrawUnitIdleSprite] '{unitDefId}': frame texture null");
+            return;
+        }
+
+        // Fit-inside scale: clamp to the smaller axis so the sprite preserves
+        // aspect ratio and never crops out of the slot rect.
+        float fitW = (float)(dest.Width - 4) / frame.Rect.Width;
+        float fitH = (float)(dest.Height - 4) / frame.Rect.Height;
+        float scale = MathF.Min(fitW, fitH);
+
+        // Centered draw — origin at sprite center so we can position by box center.
+        var origin = new Vector2(frame.Rect.Width / 2f, frame.Rect.Height / 2f);
+        var center = new Vector2(dest.X + dest.Width / 2f, dest.Y + dest.Height / 2f);
+        _spriteBatch.Draw(tex, center, frame.Rect, Color.White, 0f, origin, scale,
+            SpriteEffects.None, 0f);
     }
 
     private void DrawSpriteFrame(SpriteAtlas atlas, SpriteFrame frame, Vector2 screenPos,
@@ -5568,12 +5927,14 @@ public class Game1 : Microsoft.Xna.Framework.Game
             _spriteBatch.DrawString(_font, text, new Vector2(pos.X + 1f, pos.Y + 1f), shadowColor,
                 0f, Vector2.Zero, dnScale, SpriteEffects.None, 0f);
 
-            // Text pass — pickup=gold, poison=green, otherwise use DamageNumberColor
+            // Text pass — pickup=gold, poison=green, fatigue=blue, else DamageNumberColor
             Color color;
             if (dn.PickupText != null)
                 color = Color.FromNonPremultiplied(255, 220, 100, alpha);
             else if (dn.IsPoison)
                 color = Color.FromNonPremultiplied(40, 200, 40, alpha);
+            else if (dn.IsFatigue)
+                color = Color.FromNonPremultiplied(80, 140, 255, alpha);
             else
                 color = Color.FromNonPremultiplied(dnColor.R, dnColor.G, dnColor.B, alpha);
             _spriteBatch.DrawString(_font, text, pos, color,

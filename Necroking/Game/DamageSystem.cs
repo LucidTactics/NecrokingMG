@@ -9,12 +9,14 @@ namespace Necroking.GameSystems;
 
 /// <summary>
 /// Damage types determine how damage is applied after formula calculation.
-/// Physical → HP reduction. Poison → poison stack accumulation.
+/// Physical → HP reduction. Poison → poison stack accumulation. Fatigue → drains
+/// the unit's Fatigue meter (capped at 100) instead of HP; never kills directly.
 /// </summary>
 public enum DamageType : byte
 {
     Physical,
     Poison,
+    Fatigue,
 }
 
 /// <summary>
@@ -98,6 +100,13 @@ public static class DamageSystem
                     $"stacks+={finalDamage} total={units[targetIdx].PoisonStacks} " +
                     $"hitReact=true faction={units[targetIdx].Faction}");
                 break;
+
+            case DamageType.Fatigue:
+                // Fatigue caps at 100 (defense roll uses (100 - Fatigue), and a fully-
+                // fatigued unit has 0 defense). No HitReacting / BlockReact — fatigue
+                // doesn't trigger combat-hit anims because it isn't HP loss.
+                units[targetIdx].Fatigue = MathF.Min(100f, units[targetIdx].Fatigue + finalDamage);
+                break;
         }
 
         // Set attacker for AI aggro/flee
@@ -114,12 +123,17 @@ public static class DamageSystem
             }
         }
 
-        // Visual damage number — only for physical damage. Poison stack-adds are
-        // silent; the green number is reserved for HP-drain DoT ticks so the player
-        // can't confuse "stacks piling on" with "HP actually lost".
+        // Visual damage number — physical and fatigue both surface a number (fatigue
+        // shows in blue so the player can tell stamina drain from HP loss). Poison
+        // stack-adds are silent; the green number is reserved for HP-drain DoT ticks
+        // so the player can't confuse "stacks piling on" with "HP actually lost".
         if (type == DamageType.Physical)
         {
             damageEvents.Add(DamageEvent.Create(units[targetIdx].RenderPos, finalDamage));
+        }
+        else if (type == DamageType.Fatigue)
+        {
+            damageEvents.Add(DamageEvent.Create(units[targetIdx].RenderPos, finalDamage, isFatigue: true));
         }
     }
 

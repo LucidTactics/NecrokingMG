@@ -54,14 +54,16 @@ public class DamageEvent
     public int Damage;
     public float Height;
     public bool IsPoison;
+    public bool IsFatigue;
 
     /// <summary>Build a floating-damage-number event. Pass a per-unit `height` only
     /// when you already have the correct value on hand (e.g. from a UnitDef's
     /// SpriteWorldHeight); otherwise leave it at DefaultHeight.</summary>
     public static DamageEvent Create(Vec2 position, int damage,
-        float height = DefaultHeight, bool isPoison = false) => new()
+        float height = DefaultHeight, bool isPoison = false, bool isFatigue = false) => new()
     {
-        Position = position, Damage = damage, Height = height, IsPoison = isPoison,
+        Position = position, Damage = damage, Height = height,
+        IsPoison = isPoison, IsFatigue = isFatigue,
     };
 }
 
@@ -112,6 +114,7 @@ public class Simulation
     private float _fatigueRegenTimer = FatigueRegenInterval;
     private int _nextCorpseID;
     private readonly List<PendingZombieRaise> _pendingZombieRaises = new();
+    private readonly PlayerResources _playerResources = new() { Essence = 100, MaxEssence = 100 };
 
     // Public accessors
     public TileGrid Grid => _grid;
@@ -153,6 +156,7 @@ public class Simulation
     public EnvironmentSystem? EnvironmentSystem => _envSystem;
     public WallSystem? WallSystem => _wallSystem;
     public List<PendingZombieRaise> PendingZombieRaises => _pendingZombieRaises;
+    public PlayerResources PlayerResources => _playerResources;
 
     // Anim metadata. Populated by Game1 once the atlases load so AI can look up
     // effect_time_ms timings (e.g. pounce needs JumpTakeoff's effect_time to know
@@ -303,6 +307,16 @@ public class Simulation
         PhaseStart();
         PotionSystem.TickPotionEffects(_units, _damageEvents, dt);
         PhaseEnd("potions");
+
+        // Table crafting timer + completion. Runs after AI-derived state from the
+        // previous frame is visible (units' Routine/Subroutine fields drive whether
+        // a table's channeler is "actually channeling" right now).
+        if (_envSystem != null && _gameData != null)
+        {
+            PhaseStart();
+            TableCraftingSystem.Tick(this, _envSystem, _gameData, dt);
+            PhaseEnd("table_craft");
+        }
 
         // Horde
         PhaseStart(); _horde.Tick(dt, _units, _necromancerIdx); PhaseEnd("horde_tick");
@@ -684,7 +698,10 @@ public class Simulation
                             handler.Update(ref ctx);
                         }
 
-                        // Player movement cancels active routines (WASD override)
+                        // Player movement cancels active routines (WASD override).
+                        // Note: CraftTableIdx is cleared too, but ts.Crafting / ts.CraftTimer
+                        // on the env-side TableCraftState are left intact so the player can
+                        // resume the craft from where it paused by clicking Start again.
                         if (_necroMoveInput.LengthSq() > 0.01f && _units[i].Routine != 0)
                         {
                             _units[i].Routine = 0;
@@ -693,6 +710,7 @@ public class Simulation
                             _units[i].BuildTargetIdx = -1;
                             _units[i].BuildGlyphIdx = -1;
                             _units[i].BuildTimer = 0f;
+                            _units[i].CraftTableIdx = -1;
                         }
                     }
                     else
@@ -2421,6 +2439,59 @@ public class Simulation
             {
                 _units[defenderIdx].ZombieOnDeath = true;
             }
+
+            // Per-unit weapon bonus effects (e.g. table-crafted permanent buffs).
+            // Each effect runs independently and uses DamageSystem.Apply with its own
+            // DamageType/Flags — that path does not re-enter this block, so an
+            // effect like "5 poison on hit" cannot recurse and stack on itself.
+            ApplyBonusEffectsOnHit(attackerIdx, defenderIdx);
+        }
+    }
+
+    /// <summary>
+    /// Iterate the attacker's per-unit BonusEffects list (lazy-allocated; null=empty)
+    /// at the moment a melee hit lands and the defender is still alive. Roll any
+    /// chance-gated entries; apply BonusDamage via DamageSystem.Apply; set
+    /// ZombieOnDeath on the defender for ZombieOnDeath rolls that succeed.
+    /// </summary>
+    private void ApplyBonusEffectsOnHit(int attackerIdx, int defenderIdx)
+    {
+        var effects = _units[attackerIdx].BonusEffects;
+        if (effects == null || effects.Count == 0) return;
+
+        for (int i = 0; i < effects.Count; i++)
+        {
+            var e = effects[i];
+
+            // Chance roll. 0 or 100 → always (0 default treated as "always" — explicit
+            // BonusEffect.Damage() / ZombieOnDeath() factories set ChancePct=100).
+            if (e.ChancePct > 0 && e.ChancePct < 100)
+            {
+                int roll = Random.Shared.Next(100);
+                if (roll >= e.ChancePct) continue;
+            }
+
+            switch (e.Kind)
+            {
+                case GameSystems.BonusEffectKind.BonusDamage:
+                    if (e.Amount > 0 && _units[defenderIdx].Alive)
+                    {
+                        DebugLog.Log("table",
+                            $"[BonusEffect] attacker#{attackerIdx} ({_units[attackerIdx].UnitDefID}) → " +
+                            $"defender#{defenderIdx} ({_units[defenderIdx].UnitDefID}) : " +
+                            $"{e.Amount} {e.DmgType} dmg flags={e.DmgFlags}");
+                        DamageSystem.Apply(_units, defenderIdx, e.Amount,
+                            e.DmgType, e.DmgFlags, _damageEvents, attackerIdx);
+                    }
+                    break;
+
+                case GameSystems.BonusEffectKind.ZombieOnDeath:
+                    DebugLog.Log("table",
+                        $"[BonusEffect] attacker#{attackerIdx} ({_units[attackerIdx].UnitDefID}) → " +
+                        $"defender#{defenderIdx} ({_units[defenderIdx].UnitDefID}) : ZombieOnDeath set (chance={e.ChancePct}%)");
+                    _units[defenderIdx].ZombieOnDeath = true;
+                    break;
+            }
         }
     }
 
@@ -2893,6 +2964,10 @@ public class Simulation
                     UnitType = _units[i].Type,
                     UnitDefID = _units[i].UnitDefID,
                     FacingAngle = _units[i].FacingAngle,
+                    // The dead-body sprite inherits the unit's scale (so a big bear
+                    // dies as a big bear visual). The body BAG renders at a uniform
+                    // size in DrawBaggedCorpse* paths (independent of corpse.SpriteScale)
+                    // — that's where the "all bags same size" invariant lives.
                     SpriteScale = _units[i].SpriteScale,
                     CorpseID = _nextCorpseID++,
                     // Mark corpse as consumed so it dissolves while the zombie rises

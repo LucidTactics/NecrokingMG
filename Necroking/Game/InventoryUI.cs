@@ -233,4 +233,30 @@ public class InventoryUI
         return mouseX >= _screenX && mouseX < _screenX + _widgetW &&
                mouseY >= _screenY && mouseY < _screenY + _widgetH;
     }
+
+    /// <summary>
+    /// Hit-test a screen position against the inventory's slot rects. Returns
+    /// true and the slot index when the mouse is over a slot. Used by external
+    /// systems (table craft menu) that need to know which item the player just
+    /// clicked without duplicating the layout math.
+    /// </summary>
+    public bool TryGetSlotIndexAt(int mouseX, int mouseY, out int slotIdx)
+    {
+        slotIdx = -1;
+        if (!_visible) return false;
+        var def = _renderer.GetWidgetDef(WidgetId);
+        if (def == null) return false;
+        var rects = Necroking.UI.WidgetLayoutUtils.ComputeLayoutRects(def, _screenX, _screenY);
+        for (int i = 0; i < _slotChildIndices.Length; i++)
+        {
+            int ci = _slotChildIndices[i];
+            if (ci < 0 || ci >= rects.Count) continue;
+            if (rects[ci].Contains(mouseX, mouseY))
+            {
+                slotIdx = i;
+                return true;
+            }
+        }
+        return false;
+    }
 }
