@@ -38,6 +38,8 @@ public class Game1 : Microsoft.Xna.Framework.Game
     private HUDRenderer _hudRenderer = new();
     private CharacterStatsUI _characterStatsUI = new();
     private SkillTreePanel _skillTreePanel = new();
+    private SkillBookPanel _skillBookPanel = new();
+    private SkillBookState _skillBookState = new();
     private VampireEvolutionPanel _vampireEvoPanel = new();
     private UIShaders _uiShaders = null!;
 
@@ -290,6 +292,8 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // Load game data
         _gameData.Load();
         _inventory = new Inventory(20, _gameData.Items);
+        SkillBookDefs.Load();
+        _skillBookState.InitFromDefs();
         LogTiming($"GameData loaded: {_gameData.Units.Count} units, {_gameData.Spells.Count} spells, {_gameData.Weapons.Count} weapons, {_gameData.Items.Count} items");
 
         // Init renderer
@@ -638,6 +642,9 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // Starting inventory
         foreach (var item in _gameData.Settings.StartingInventory)
             _inventory.AddItem(item.ItemId, item.Quantity);
+
+        _skillBookPanel.Bind(_skillBookState, _inventory, _gameData,
+            _spellBarState, _secondaryBarState);
     }
 
     /// <summary>
@@ -816,6 +823,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         scenario.ItemRegistry = _gameData.Items;
         scenario.InventoryUI = _inventoryUI;
         scenario.SkillTreePanel = _skillTreePanel;
+        scenario.SkillBookPanel = _skillBookPanel;
         scenario.UIShaders = _uiShaders;
 
         // Init map editor with scenario systems (needed for editor screenshot scenarios)
@@ -1345,6 +1353,12 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // Note: _uiShaders is initialized later after Content.Load path -- we
         // set it on the panel below after Load completes.
         _skillTreePanel.Init(_spriteBatch, _pixel, _font, _smallFont, _largeFont);
+        _skillBookPanel.Init(_spriteBatch, _pixel, _font, _smallFont, _largeFont);
+        // Early bind so scenarios (which skip StartGame) still have state. The spell-
+        // bar Slots may be null at this point — re-bind happens in StartGame once the
+        // bars are allocated. AddSpellToBarEffect handles null Slots gracefully.
+        _skillBookPanel.Bind(_skillBookState, _inventory, _gameData,
+            _spellBarState, _secondaryBarState);
         _vampireEvoPanel.Init(_spriteBatch, _pixel, _font, _smallFont, _largeFont);
 
         // Load TrueType fonts via FontStashSharp (dynamic sizing)
@@ -1625,9 +1639,15 @@ public class Game1 : Microsoft.Xna.Framework.Game
         if (!anyTextInputActive && _input.WasKeyPressed(Keys.Tab) && _menuState == MenuState.None)
             _characterStatsUI.Toggle();
 
-        // 'K' key toggles skill tree (Grimoire)
+        // 'K' = new SkillBookPanel (tabs: Potions/Necromancy/Magic/Metamorphosis).
+        // 'Shift+K' = old SkillTreePanel (DEFUNCT proof-of-concept "Grimoire of the
+        // Unhallowed"; kept reachable for visual reference. Delete during cleanup.)
         if (!anyTextInputActive && _input.WasKeyPressed(Keys.K) && _menuState == MenuState.None)
-            _skillTreePanel.Toggle();
+        {
+            bool shift = _input.IsKeyDown(Keys.LeftShift) || _input.IsKeyDown(Keys.RightShift);
+            if (shift) _skillTreePanel.Toggle();
+            else       _skillBookPanel.Toggle();
+        }
 
         // 'N' key toggles vampire evolution panel
         if (!anyTextInputActive && _input.WasKeyPressed(Keys.N) && _menuState == MenuState.None)
@@ -1731,6 +1751,10 @@ public class Game1 : Microsoft.Xna.Framework.Game
             {
                 _skillTreePanel.Close();
             }
+            else if (_menuState == MenuState.None && _skillBookPanel.IsVisible)
+            {
+                _skillBookPanel.Close();
+            }
             else if (_menuState == MenuState.None && _vampireEvoPanel.IsVisible)
             {
                 _vampireEvoPanel.Close();
@@ -1832,6 +1856,8 @@ public class Game1 : Microsoft.Xna.Framework.Game
             if (_craftingMenu.ContainsMouse(mx, my))
                 _input.MouseOverUI = true;
             if (_skillTreePanel.ContainsMouse(screenW, screenH, mx, my))
+                _input.MouseOverUI = true;
+            if (_skillBookPanel.ContainsMouse(screenW, screenH, mx, my))
                 _input.MouseOverUI = true;
             if (_vampireEvoPanel.ContainsMouse(screenW, screenH, mx, my))
                 _input.MouseOverUI = true;
@@ -2451,6 +2477,16 @@ public class Game1 : Microsoft.Xna.Framework.Game
                     _activeScenario.RequestCloseSkillTree = false;
                     _skillTreePanel.Close();
                 }
+                if (_activeScenario.RequestOpenSkillBook)
+                {
+                    _activeScenario.RequestOpenSkillBook = false;
+                    _skillBookPanel.Open();
+                }
+                if (_activeScenario.RequestCloseSkillBook)
+                {
+                    _activeScenario.RequestCloseSkillBook = false;
+                    _skillBookPanel.Close();
+                }
 
                 // Apply weather preset override from scenario
                 if (_activeScenario.WeatherPreset != null)
@@ -2659,6 +2695,8 @@ public class Game1 : Microsoft.Xna.Framework.Game
         }
         _skillTreePanel.SetMouse(_input.MousePos);
         _skillTreePanel.Update(_input, screenW, screenH, gameTime.TotalGameTime.TotalSeconds);
+        _skillBookPanel.SetMouse(_input.MousePos);
+        _skillBookPanel.Update(_input, screenW, screenH, gameTime.TotalGameTime.TotalSeconds);
         _vampireEvoPanel.SetMouse(_input.MousePos);
         _vampireEvoPanel.Update(_input, screenW, screenH, gameTime.TotalGameTime.TotalSeconds);
 
@@ -4053,9 +4091,13 @@ public class Game1 : Microsoft.Xna.Framework.Game
         if (showUI)
             _characterStatsUI.Draw(screenW, screenH, _sim, _gameData.Buffs, ref _spellBarState, _input);
 
-        // Skill tree panel (K) — modal grimoire
+        // Skill tree panel (Shift+K) — DEFUNCT old grimoire, kept for visual reference.
         if (showUI)
             _skillTreePanel.Draw(screenW, screenH);
+
+        // Skill book panel (K) — tabbed Potions/Necromancy/Magic/Metamorphosis trees.
+        if (showUI)
+            _skillBookPanel.Draw(screenW, screenH);
 
         // Vampire evolution panel (N)
         if (showUI)

@@ -1,0 +1,90 @@
+{
+  "displayName": "Metamorphosis",
+  "skills": [
+    {
+      "id": "frail_form",
+      "name": "Frail Form",
+      "description": "The thin shape between man and other. Foundation of all change.",
+      "x": 640, "y": 80,
+      "parents": [],
+      "costs": [],
+      "effect": "noop",
+      "startLearned": true
+    },
+    {
+      "id": "bat_form",
+      "name": "Bat Form",
+      "description": "Small, fast, hard to land an arrow on.",
+      "x": 220, "y": 240,
+      "parents": ["frail_form"],
+      "costs": [
+        { "type": "item", "id": "PoisonMushroom", "amount": 2 },
+        { "type": "event", "id": "raise_corpse", "amount": 3 }
+      ],
+      "effect": "passive_stat",
+      "effectArg": "bat_form"
+    },
+    {
+      "id": "wolf_form",
+      "name": "Wolf Form",
+      "description": "Bite, pursuit, and a tongue for blood.",
+      "x": 640, "y": 240,
+      "parents": ["frail_form"],
+      "costs": [
+        { "type": "item", "id": "Rotgill", "amount": 4 }
+      ],
+      "effect": "passive_stat",
+      "effectArg": "wolf_form"
+    },
+    {
+      "id": "mist_form",
+      "name": "Mist Form",
+      "description": "Walls become rumor. Doors mean nothing.",
+      "x": 1060, "y": 240,
+      "parents": ["frail_form"],
+      "costs": [
+        { "type": "event", "id": "cast_spell", "amount": 5 }
+      ],
+      "effect": "passive_stat",
+      "effectArg": "mist_form"
+    },
+    {
+      "id": "vampiric_thirst",
+      "name": "Vampiric Thirst",
+      "description": "A hunger that heals what it harms.",
+      "x": 420, "y": 400,
+      "parents": ["bat_form", "wolf_form"],
+      "costs": [
+        { "type": "item", "id": "Ghostcap", "amount": 2 }
+      ],
+      "effect": "passive_stat",
+      "effectArg": "vampiric_thirst"
+    },
+    {
+      "id": "dread_lord",
+      "name": "Dread Lord",
+      "description": "Your shadow has weight. Your stare has reach.",
+      "x": 860, "y": 400,
+      "parents": ["wolf_form", "mist_form"],
+      "costs": [
+        { "type": "item", "id": "Ghostcap", "amount": 4 },
+        { "type": "event", "id": "raise_corpse", "amount": 10 }
+      ],
+      "effect": "passive_stat",
+      "effectArg": "dread_lord"
+    },
+    {
+      "id": "elder_vampire",
+      "name": "Elder Vampire",
+      "description": "Centuries fold into a single posture. The court bows.",
+      "x": 640, "y": 560,
+      "parents": ["vampiric_thirst", "dread_lord"],
+      "costs": [
+        { "type": "item", "id": "Ghostcap", "amount": 8 },
+        { "type": "event", "id": "raise_corpse", "amount": 20 }
+      ],
+      "effect": "passive_stat",
+      "effectArg": "elder_vampire"
+    }
+  ]
+}

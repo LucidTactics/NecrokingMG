@@ -108,6 +108,11 @@ public abstract class ScenarioBase
     public bool RequestCloseSkillTree;
     public Render.SkillTreePanel? SkillTreePanel;
 
+    // Skill book panel (new tabbed grimoire) control
+    public bool RequestOpenSkillBook;
+    public bool RequestCloseSkillBook;
+    public Render.SkillBookPanel? SkillBookPanel;
+
     // Shader-based UI primitives (used by shader test scenarios)
     public Render.UIShaders? UIShaders;
 

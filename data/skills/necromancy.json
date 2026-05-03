@@ -1,0 +1,102 @@
+{
+  "displayName": "Necromancy",
+  "skills": [
+    {
+      "id": "raise_skeleton",
+      "name": "Raise Skeleton",
+      "description": "Knit bone to bone, breath to dust. Your first servitor.",
+      "x": 320, "y": 80,
+      "parents": [],
+      "costs": [],
+      "effect": "add_spell",
+      "effectArg": "summon_skeleton_copy_copy",
+      "startLearned": true
+    },
+    {
+      "id": "raise_zombie",
+      "name": "Raise Zombie",
+      "description": "Recently dead. Recently risen. Reasonably loyal.",
+      "x": 960, "y": 80,
+      "parents": [],
+      "costs": [
+        { "type": "event", "id": "raise_corpse", "amount": 3 }
+      ],
+      "effect": "add_spell",
+      "effectArg": "raise_zombie"
+    },
+    {
+      "id": "skeleton_mage",
+      "name": "Skeleton Mage",
+      "description": "A jawless caster who chants through the ribcage.",
+      "x": 140, "y": 240,
+      "parents": ["raise_skeleton"],
+      "costs": [
+        { "type": "item", "id": "Mushroom", "amount": 3 },
+        { "type": "event", "id": "raise_corpse", "amount": 5 }
+      ],
+      "effect": "unlock_unit",
+      "effectArg": "skeleton_mage"
+    },
+    {
+      "id": "bone_knight",
+      "name": "Bone Knight",
+      "description": "He wore this armor when it still held flesh.",
+      "x": 500, "y": 240,
+      "parents": ["raise_skeleton"],
+      "costs": [
+        { "type": "item", "id": "MagicMushroom", "amount": 4 }
+      ],
+      "effect": "unlock_unit",
+      "effectArg": "bone_knight"
+    },
+    {
+      "id": "zombie_throng",
+      "name": "Zombie Throng",
+      "description": "Why raise one when seven will do.",
+      "x": 960, "y": 240,
+      "parents": ["raise_zombie"],
+      "costs": [
+        { "type": "event", "id": "raise_corpse", "amount": 8 }
+      ],
+      "effect": "add_spell",
+      "effectArg": "raise_zombie_throng"
+    },
+    {
+      "id": "summon_abomination",
+      "name": "Abomination",
+      "description": "Six corpses. One body. No witnesses.",
+      "x": 320, "y": 400,
+      "parents": ["skeleton_mage"],
+      "costs": [
+        { "type": "event", "id": "raise_corpse", "amount": 12 }
+      ],
+      "effect": "add_spell",
+      "effectArg": "summon_abomination"
+    },
+    {
+      "id": "necromantic_aura",
+      "name": "Necromantic Aura",
+      "description": "Your presence quickens the dead and slows the living.",
+      "x": 780, "y": 400,
+      "parents": ["bone_knight", "zombie_throng"],
+      "costs": [
+        { "type": "item", "id": "Ghostcap", "amount": 3 }
+      ],
+      "effect": "passive_stat",
+      "effectArg": "necro_aura"
+    },
+    {
+      "id": "lichdom",
+      "name": "Lichdom",
+      "description": "You shed the tyranny of flesh. There is paperwork.",
+      "x": 640, "y": 560,
+      "parents": ["summon_abomination", "necromantic_aura"],
+      "costs": [
+        { "type": "item", "id": "Ghostcap", "amount": 5 },
+        { "type": "event", "id": "raise_corpse", "amount": 25 }
+      ],
+      "effect": "passive_stat",
+      "effectArg": "lichdom"
+    }
+  ]
+}

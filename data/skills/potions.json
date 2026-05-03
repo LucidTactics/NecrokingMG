@@ -1,0 +1,101 @@
+{
+  "displayName": "Potions",
+  "skills": [
+    {
+      "id": "potion_basics",
+      "name": "Apothecary Basics",
+      "description": "The first cuts of the mortar and pestle. Unlocks the brewing branches.",
+      "x": 640, "y": 80,
+      "parents": [],
+      "costs": [],
+      "effect": "noop",
+      "startLearned": false
+    },
+    {
+      "id": "heal_brew",
+      "name": "Healing Brew",
+      "description": "A weak draught that knits flesh and dulls pain.",
+      "x": 220, "y": 240,
+      "parents": ["potion_basics"],
+      "costs": [
+        { "type": "item", "id": "Mushroom", "amount": 2 }
+      ],
+      "effect": "unlock_potion",
+      "effectArg": "heal_minor"
+    },
+    {
+      "id": "mana_brew",
+      "name": "Mana Brew",
+      "description": "Bottled wakefulness. Restores spent essence.",
+      "x": 640, "y": 240,
+      "parents": ["potion_basics"],
+      "costs": [
+        { "type": "item", "id": "MagicMushroom", "amount": 2 }
+      ],
+      "effect": "unlock_potion",
+      "effectArg": "mana_minor"
+    },
+    {
+      "id": "poison_brew",
+      "name": "Poison Brew",
+      "description": "A killing tincture for blade or chalice.",
+      "x": 1060, "y": 240,
+      "parents": ["potion_basics"],
+      "costs": [
+        { "type": "item", "id": "PoisonMushroom", "amount": 2 }
+      ],
+      "effect": "unlock_potion",
+      "effectArg": "poison_minor"
+    },
+    {
+      "id": "greater_heal",
+      "name": "Greater Healing",
+      "description": "A reliable draught — restores serious wounds.",
+      "x": 220, "y": 400,
+      "parents": ["heal_brew"],
+      "costs": [
+        { "type": "item", "id": "Mushroom", "amount": 5 }
+      ],
+      "effect": "unlock_potion",
+      "effectArg": "heal_greater"
+    },
+    {
+      "id": "arcane_elixir",
+      "name": "Arcane Elixir",
+      "description": "A shimmering drink for sustained casting.",
+      "x": 640, "y": 400,
+      "parents": ["mana_brew"],
+      "costs": [
+        { "type": "item", "id": "MagicMushroom", "amount": 5 }
+      ],
+      "effect": "unlock_potion",
+      "effectArg": "mana_greater"
+    },
+    {
+      "id": "toxin_bomb",
+      "name": "Toxin Bomb",
+      "description": "Throw it. Run. The fumes do the work.",
+      "x": 1060, "y": 400,
+      "parents": ["poison_brew"],
+      "costs": [
+        { "type": "item", "id": "PoisonMushroom", "amount": 5 },
+        { "type": "item", "id": "Rotgill", "amount": 2 }
+      ],
+      "effect": "unlock_potion",
+      "effectArg": "toxin_bomb"
+    },
+    {
+      "id": "master_alchemy",
+      "name": "Master Alchemist",
+      "description": "Mastery of every flask on the rack. All future potions cost less.",
+      "x": 640, "y": 560,
+      "parents": ["greater_heal", "arcane_elixir", "toxin_bomb"],
+      "costs": [
+        { "type": "item", "id": "Ghostcap", "amount": 3 },
+        { "type": "item", "id": "MagicMushroom", "amount": 5 }
+      ],
+      "effect": "passive_stat",
+      "effectArg": "potion_cost_reduction"
+    }
+  ]
+}

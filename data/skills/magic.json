@@ -1,0 +1,102 @@
+{
+  "displayName": "Magic",
+  "skills": [
+    {
+      "id": "arcane_apprentice",
+      "name": "Arcane Apprentice",
+      "description": "The first cantrips, learned by candlelight.",
+      "x": 640, "y": 80,
+      "parents": [],
+      "costs": [],
+      "effect": "noop",
+      "startLearned": true
+    },
+    {
+      "id": "nether_darts",
+      "name": "Nether Darts",
+      "description": "Three slivers of cold dark, loosed at once.",
+      "x": 220, "y": 240,
+      "parents": ["arcane_apprentice"],
+      "costs": [
+        { "type": "event", "id": "cast_spell", "amount": 2 }
+      ],
+      "effect": "add_spell",
+      "effectArg": "nether_darts"
+    },
+    {
+      "id": "lightning_zap",
+      "name": "Lightning Zap",
+      "description": "A single arc, hand to skull.",
+      "x": 640, "y": 240,
+      "parents": ["arcane_apprentice"],
+      "costs": [
+        { "type": "event", "id": "cast_spell", "amount": 3 }
+      ],
+      "effect": "add_spell",
+      "effectArg": "lightning_zap"
+    },
+    {
+      "id": "god_ray",
+      "name": "God Ray",
+      "description": "Punch a column of light through the world.",
+      "x": 1060, "y": 240,
+      "parents": ["arcane_apprentice"],
+      "costs": [
+        { "type": "event", "id": "cast_spell", "amount": 5 }
+      ],
+      "effect": "add_spell",
+      "effectArg": "god_ray"
+    },
+    {
+      "id": "nether_storm",
+      "name": "Nether Storm",
+      "description": "When one dart will not do.",
+      "x": 220, "y": 400,
+      "parents": ["nether_darts"],
+      "costs": [
+        { "type": "event", "id": "cast_spell", "amount": 8 },
+        { "type": "item", "id": "Ghostcap", "amount": 2 }
+      ],
+      "effect": "passive_stat",
+      "effectArg": "nether_storm"
+    },
+    {
+      "id": "chain_lightning",
+      "name": "Chain Lightning",
+      "description": "It leaps from one breath to the next.",
+      "x": 640, "y": 400,
+      "parents": ["lightning_zap"],
+      "costs": [
+        { "type": "event", "id": "cast_spell", "amount": 10 }
+      ],
+      "effect": "add_spell",
+      "effectArg": "lightning_beam"
+    },
+    {
+      "id": "pyre_of_judgement",
+      "name": "Pyre of Judgement",
+      "description": "Sustained brilliance. Pious and final.",
+      "x": 1060, "y": 400,
+      "parents": ["god_ray"],
+      "costs": [
+        { "type": "event", "id": "cast_spell", "amount": 12 },
+        { "type": "item", "id": "MagicMushroom", "amount": 4 }
+      ],
+      "effect": "passive_stat",
+      "effectArg": "pyre"
+    },
+    {
+      "id": "archmage",
+      "name": "Archmage",
+      "description": "Reduced cooldowns on all schools. Cosmetic robe.",
+      "x": 640, "y": 560,
+      "parents": ["nether_storm", "chain_lightning", "pyre_of_judgement"],
+      "costs": [
+        { "type": "item", "id": "Ghostcap", "amount": 6 },
+        { "type": "event", "id": "cast_spell", "amount": 30 }
+      ],
+      "effect": "passive_stat",
+      "effectArg": "archmage"
+    }
+  ]
+}
