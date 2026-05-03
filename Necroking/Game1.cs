@@ -40,6 +40,15 @@ public class Game1 : Microsoft.Xna.Framework.Game
     private SkillTreePanel _skillTreePanel = new();
     private SkillBookPanel _skillBookPanel = new();
     private SkillBookState _skillBookState = new();
+
+    private struct SkillLearnToast
+    {
+        public string Header;   // e.g. "Recipe Learned"
+        public string SkillName;
+        public float Timer;     // seconds shown so far
+        public float Duration;  // seconds total
+    }
+    private readonly List<SkillLearnToast> _skillLearnToasts = new();
     private VampireEvolutionPanel _vampireEvoPanel = new();
     private UIShaders _uiShaders = null!;
 
@@ -410,6 +419,10 @@ public class Game1 : Microsoft.Xna.Framework.Game
         _corpseAnims.Clear();
         _effectManager.Clear();
         _pendingProjectiles.Clear();
+        // Reset per-game skill book progress (learned set + event tally) so
+        // returning to the main menu and starting a new game wipes prior unlocks.
+        _skillBookState.InitFromDefs();
+        _skillLearnToasts.Clear();
 
         // Clear world systems for clean reload (prevents doubling on second play)
         _envSystem.OnCollisionsDirty = null;
@@ -645,6 +658,144 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
         _skillBookPanel.Bind(_skillBookState, _inventory, _gameData,
             _spellBarState, _secondaryBarState);
+
+        // Drop a starter Deathcap mushroom right next to the necromancer so the
+        // player can immediately discover the pickup → auto-learn flow for the
+        // first alchemy recipe.
+        SpawnStarterMushroom();
+    }
+
+    /// <summary>Auto-learn a skill if not already learned, and surface a corner
+    /// toast on success. Used by gameplay triggers (pickups, milestones, etc.).</summary>
+    private void TryAutoLearn(string skillId, string header)
+    {
+        bool learned = _skillBookState.LearnFree(skillId, new Game.SkillEffects.SkillEffectContext
+        {
+            Inventory = _inventory,
+            GameData = _gameData,
+            PrimaryBar = _spellBarState,
+            SecondaryBar = _secondaryBarState,
+        });
+        if (!learned) return;
+        var def = _skillBookState.FindSkill(skillId);
+        if (def == null) return;
+        _skillLearnToasts.Add(new SkillLearnToast
+        {
+            Header = header,
+            SkillName = def.Name,
+            Timer = 0f,
+            Duration = 5f,
+        });
+    }
+
+    private void UpdateSkillLearnToasts(float dt)
+    {
+        for (int i = _skillLearnToasts.Count - 1; i >= 0; i--)
+        {
+            var t = _skillLearnToasts[i];
+            t.Timer += dt;
+            if (t.Timer >= t.Duration) _skillLearnToasts.RemoveAt(i);
+            else _skillLearnToasts[i] = t;
+        }
+    }
+
+    /// <summary>Bottom-right stack of "Recipe Learned" / "Skill Unlocked" toasts.
+    /// Each toast slides in (first 0.25s), holds, then fades out (last 0.6s).</summary>
+    private void DrawSkillLearnToasts(int sw, int sh)
+    {
+        if (_skillLearnToasts.Count == 0 || _font == null) return;
+        var f = _font!;
+        var sf = _smallFont ?? f;
+
+        const int toastW = 280, toastH = 56, padR = 16, padB = 16, gap = 6;
+        int yCursor = sh - padB - toastH;
+
+        // Palette matches the SkillBookPanel's grimoire chrome.
+        var leatherDark = new Color(26, 13, 8);
+        var leatherMid  = new Color(42, 26, 18);
+        var gold        = new Color(218, 184,  96);
+        var goldDim     = new Color(108,  84,  40);
+        var parchment   = new Color(196, 174, 128);
+
+        for (int i = _skillLearnToasts.Count - 1; i >= 0; i--)
+        {
+            var t = _skillLearnToasts[i];
+            float life = t.Timer / t.Duration;
+            float alpha = 1f;
+            if (life < 0.1f) alpha = life / 0.1f;          // slide in
+            else if (life > 0.85f) alpha = (1f - life) / 0.15f; // fade out
+            alpha = MathHelper.Clamp(alpha, 0f, 1f);
+            int slideX = (int)((1f - alpha) * 30); // also slides slightly from the right
+
+            int x = sw - padR - toastW + slideX;
+            int y = yCursor;
+            byte a = (byte)(255 * alpha);
+
+            var rect = new Rectangle(x, y, toastW, toastH);
+            // Drop shadow
+            _spriteBatch.Draw(_pixel, new Rectangle(rect.X + 3, rect.Y + 3, rect.Width, rect.Height),
+                new Color((byte)0, (byte)0, (byte)0, (byte)(160 * alpha)));
+            _spriteBatch.Draw(_pixel, rect, new Color(leatherMid, alpha));
+            // Top gold accent band
+            _spriteBatch.Draw(_pixel, new Rectangle(rect.X, rect.Y, rect.Width, 2),
+                new Color(gold, alpha));
+            // Border
+            DrawToastBorder(rect, new Color(goldDim, alpha));
+
+            // Text — header + skill name
+            string header = t.Header;
+            string body = t.SkillName;
+            // Sanitize for the embedded ASCII-only SpriteFont.
+            header = SanitizeAscii(header);
+            body = SanitizeAscii(body);
+            DrawTextRounded(sf, header,
+                new Vector2(rect.X + 14, rect.Y + 8),
+                new Color(gold, alpha));
+            DrawTextRounded(f, body,
+                new Vector2(rect.X + 14, rect.Y + 24),
+                new Color(parchment, alpha));
+
+            yCursor -= toastH + gap;
+        }
+    }
+
+    private void DrawToastBorder(Rectangle r, Color c)
+    {
+        _spriteBatch.Draw(_pixel, new Rectangle(r.X, r.Y, r.Width, 1), c);
+        _spriteBatch.Draw(_pixel, new Rectangle(r.X, r.Bottom - 1, r.Width, 1), c);
+        _spriteBatch.Draw(_pixel, new Rectangle(r.X, r.Y, 1, r.Height), c);
+        _spriteBatch.Draw(_pixel, new Rectangle(r.Right - 1, r.Y, 1, r.Height), c);
+    }
+
+    private void DrawTextRounded(SpriteFont f, string text, Vector2 pos, Color color)
+        => _spriteBatch.DrawString(f, text, new Vector2((int)pos.X, (int)pos.Y), color);
+
+    private static string SanitizeAscii(string text)
+    {
+        if (string.IsNullOrEmpty(text)) return text;
+        bool needs = false;
+        for (int i = 0; i < text.Length; i++)
+            if (text[i] > 126 || (text[i] < 32 && text[i] != '\n')) { needs = true; break; }
+        if (!needs) return text;
+        var sb = new System.Text.StringBuilder(text.Length);
+        foreach (var ch in text) sb.Append(ch >= 32 && ch <= 126 ? ch : '?');
+        return sb.ToString();
+    }
+
+    private void SpawnStarterMushroom()
+    {
+        if (_sim.NecromancerIndex < 0) return;
+        int defIdx = _envSystem.FindDef("deathcap");
+        if (defIdx < 0)
+        {
+            DebugLog.Log("startup", "SpawnStarterMushroom: 'deathcap' env def not found.");
+            return;
+        }
+        var necroPos = _sim.Units[_sim.NecromancerIndex].Position;
+        // Offset 2 world units to the south-east of the necromancer.
+        float x = necroPos.X + 2f;
+        float y = necroPos.Y + 2f;
+        _envSystem.AddObject((ushort)defIdx, x, y, scale: 1f);
     }
 
     /// <summary>
@@ -2936,6 +3087,17 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 // Complete collection — add to inventory
                 _inventory.AddItem(cf.ResourceType);
 
+                // Tally pickup-driven skill triggers. First mushroom of any kind
+                // teaches the basic healing brew (the entry-point alchemy recipe).
+                if (cf.ResourceType == "Mushroom"
+                    || cf.ResourceType == "MagicMushroom"
+                    || cf.ResourceType == "PoisonMushroom"
+                    || cf.ResourceType == "Ghostcap"
+                    || cf.ResourceType == "Rotgill")
+                {
+                    TryAutoLearn("heal_brew", "Recipe Learned");
+                }
+
                 // Pop effect at character
                 _effectManager.SpawnDustPuff(cf.TargetPos);
 
@@ -3680,6 +3842,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         _effectManager.Update(dt);
         _buffVisuals.Update(dt, _sim.Units, _gameData.Buffs, _gameTime);
         UpdateCollectingForagables(dt);
+        UpdateSkillLearnToasts(dt);
     }
 
     /// <summary>
@@ -4098,6 +4261,10 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // Skill book panel (K) — tabbed Potions/Necromancy/Magic/Metamorphosis trees.
         if (showUI)
             _skillBookPanel.Draw(screenW, screenH);
+
+        // Bottom-right "Recipe Learned" toasts — drawn even when the panel is closed.
+        if (showUI)
+            DrawSkillLearnToasts(screenW, screenH);
 
         // Vampire evolution panel (N)
         if (showUI)

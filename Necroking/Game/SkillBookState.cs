@@ -67,6 +67,31 @@ public class SkillBookState
         return (n, tab.Skills.Count);
     }
 
+    /// <summary>Find a skill by id across all tabs. Returns null if not found.</summary>
+    public SkillDef? FindSkill(string id)
+    {
+        foreach (var tab in SkillBookDefs.Tabs)
+        {
+            int idx = tab.IndexOf(id);
+            if (idx >= 0) return tab.Skills[idx];
+        }
+        return null;
+    }
+
+    /// <summary>Learn a skill for free (no cost deduction, no prereq check) — for
+    /// gameplay triggers like "picking up your first mushroom teaches you Healing
+    /// Brew." Idempotent: re-calling on an already-learned skill is a no-op.</summary>
+    public bool LearnFree(string skillId, SkillEffectContext ctx)
+    {
+        if (IsLearned(skillId)) return false;
+        var def = FindSkill(skillId);
+        if (def == null) return false;
+        if (!SkillEffectRegistry.Apply(def.Effect, ctx, def.EffectArg)) return false;
+        _learned.Add(def.Id);
+        DebugLog.Log("skillbook", $"Auto-learned: {def.Id} ({def.Name})");
+        return true;
+    }
+
     /// <summary>Learn a skill: deduct item costs, run the effect, mark learned.
     /// Returns false (and changes nothing) if not currently affordable/available.</summary>
     public bool TryLearn(SkillDef def, SkillEffectContext ctx)
