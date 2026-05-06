@@ -16117,5 +16117,20 @@
       "a": 255,
       "intensity": 1
     }
+  },
+  {
+    "id": "blight_altar",
+    "name": "Blight Altar",
+    "category": "Misc",
+    "texturePath": "assets/Environment/Tombstones/Obelisk.png",
+    "spriteWorldHeight": 4,
+    "pivotX": 0.5,
+    "pivotY": 1,
+    "scale": 1.4,
+    "placementScale": 1,
+    "collisionRadius": 1.0,
+    "isBuilding": false,
+    "fogEmitRate": 25,
+    "fogAbsorbRate": 0
   }
 ]

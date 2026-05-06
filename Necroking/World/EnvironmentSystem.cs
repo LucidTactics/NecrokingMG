@@ -216,6 +216,11 @@ public class EnvironmentObjectDef
     public float AnimNoise { get; set; }         // 0-1, fraction of FPS affected by per-instance noise
     public float AnimWindSync { get; set; } = 0.5f;  // 0-1, spatial wind coherence (0=none, 1=full)
 
+    // Death-fog source/sink. Both are units-per-second contributed at the cell
+    // under this object. Zero (default) means the object is inert. See DeathFogSystem.
+    public float FogEmitRate { get; set; }
+    public float FogAbsorbRate { get; set; }
+
     // Foragable properties
     public bool IsForagable { get; set; }
     public string ForagableType { get; set; } = "";     // resource type name (e.g., "Mushroom", "Branch")
@@ -315,6 +320,8 @@ public class EnvironmentObjectDef
         writer.WriteBoolean("isForagable", IsForagable);
         writer.WriteString("foragableType", ForagableType);
         writer.WriteNumber("respawnTime", RespawnTime);
+        writer.WriteNumber("fogEmitRate", FogEmitRate);
+        writer.WriteNumber("fogAbsorbRate", FogAbsorbRate);
         writer.WriteNumber("scaleMin", ScaleMin);
         writer.WriteNumber("scaleMax", ScaleMax);
         // Tint color

@@ -18,6 +18,14 @@ public static class SkillBookDefs
 
     public static List<SkillTab> Tabs { get; private set; } = new();
 
+    /// <summary>Find which tab contains the given skill id. Returns -1 if not found.</summary>
+    public static int FindTabIndexFor(string skillId)
+    {
+        for (int i = 0; i < Tabs.Count; i++)
+            if (Tabs[i].IndexOf(skillId) >= 0) return i;
+        return -1;
+    }
+
     public static void Load()
     {
         Tabs = new List<SkillTab>();

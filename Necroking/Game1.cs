@@ -40,11 +40,13 @@ public class Game1 : Microsoft.Xna.Framework.Game
     private SkillTreePanel _skillTreePanel = new();
     private SkillBookPanel _skillBookPanel = new();
     private SkillBookState _skillBookState = new();
+    private GameSystems.DeathFogSystem _deathFog = new();
 
     private struct SkillLearnToast
     {
         public string Header;   // e.g. "Recipe Learned"
         public string SkillName;
+        public string SkillId;  // for clicking through to the right tab
         public float Timer;     // seconds shown so far
         public float Duration;  // seconds total
     }
@@ -467,6 +469,11 @@ public class Game1 : Microsoft.Xna.Framework.Game
             MapData.LoadRoads(GamePaths.Resolve("data/maps/default_roads.json"), _roadSystem);
             LogTiming($"Map loaded: ground={_groundSystem.WorldW}x{_groundSystem.WorldH}, objects={_envSystem.ObjectCount}, defs={_envSystem.DefCount}");
 
+            // Death fog: coarse grid sized to the map. Auto-tag tree assets as
+            // sinks so we don't need to edit ~40 JSON entries by hand.
+            _deathFog.Init(_groundSystem.WorldW, _groundSystem.WorldH, cellSize: 4);
+            GameSystems.DeathFogSystem.AutoTagTreesAsSinks(_envSystem, absorbRate: 6f);
+
             // Load grass map
             try
             {
@@ -663,6 +670,24 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // player can immediately discover the pickup → auto-learn flow for the
         // first alchemy recipe.
         SpawnStarterMushroom();
+        // Spawn a Blight Altar a short walk away so the death-fog backend has a
+        // visible source for testing (toggle with F5 in-game).
+        SpawnStarterBlightAltar();
+    }
+
+    private void SpawnStarterBlightAltar()
+    {
+        if (_sim.NecromancerIndex < 0) return;
+        int defIdx = _envSystem.FindDef("blight_altar");
+        if (defIdx < 0)
+        {
+            DebugLog.Log("startup", "SpawnStarterBlightAltar: 'blight_altar' env def not found.");
+            return;
+        }
+        var necroPos = _sim.Units[_sim.NecromancerIndex].Position;
+        // Place ~10 world units to the east so it isn't right on top of the
+        // mushroom but is well within view at the starting zoom.
+        _envSystem.AddObject((ushort)defIdx, necroPos.X + 10f, necroPos.Y, scale: 1f);
     }
 
     /// <summary>Auto-learn a skill if not already learned, and surface a corner
@@ -683,9 +708,51 @@ public class Game1 : Microsoft.Xna.Framework.Game
         {
             Header = header,
             SkillName = def.Name,
+            SkillId = skillId,
             Timer = 0f,
             Duration = 5f,
         });
+    }
+
+    /// <summary>Geometry helper — same layout numbers used in DrawSkillLearnToasts.
+    /// Called from the input pass so clicks land on what was just rendered.</summary>
+    private Rectangle GetSkillLearnToastRect(int sw, int sh, int stackIndex)
+    {
+        const int toastW = 280, toastH = 56, padR = 16, padB = 16, gap = 6;
+        int yCursor = sh - padB - toastH - stackIndex * (toastH + gap);
+        return new Rectangle(sw - padR - toastW, yCursor, toastW, toastH);
+    }
+
+    /// <summary>Hit-test corner toasts and route a left-click to opening the skill
+    /// book on the relevant tab. Called from the UI input pass.</summary>
+    private void UpdateSkillLearnToastInput(int sw, int sh)
+    {
+        if (_skillLearnToasts.Count == 0) return;
+        int mx = (int)_input.MousePos.X;
+        int my = (int)_input.MousePos.Y;
+        // Iterate top of stack downward to mirror draw order — most recent toast
+        // is the bottom slot (stackIndex 0).
+        for (int i = 0; i < _skillLearnToasts.Count; i++)
+        {
+            // Toasts are drawn from the most recent (last-added) up the stack.
+            // Slot 0 = newest = bottom rect.
+            int stackSlot = _skillLearnToasts.Count - 1 - i;
+            var rect = GetSkillLearnToastRect(sw, sh, stackSlot);
+            if (rect.Contains(mx, my))
+            {
+                _input.MouseOverUI = true;
+                if (_input.LeftPressed && !_input.IsMouseConsumed)
+                {
+                    var t = _skillLearnToasts[i];
+                    int tabIdx = SkillBookDefs.FindTabIndexFor(t.SkillId);
+                    _skillBookPanel.Open();
+                    if (tabIdx >= 0) _skillBookPanel.SetActiveTab(tabIdx);
+                    _skillLearnToasts.RemoveAt(i);
+                    _input.ConsumeMouse();
+                }
+                return;
+            }
+        }
     }
 
     private void UpdateSkillLearnToasts(float dt)
@@ -1752,6 +1819,11 @@ public class Game1 : Microsoft.Xna.Framework.Game
         bool anyTextInputActive = (_editorUi != null && _editorUi.IsTextInputActive)
             || (_menuState == MenuState.UIEditor && _uiEditor.IsTextInputActive);
 
+        // --- F5 death-fog debug overlay (F9 was requested but is taken by the
+        // unit editor toggle; F5 was free) ---
+        if (!anyTextInputActive && _input.WasKeyPressed(Keys.F5))
+            _deathFog.ToggleDebug();
+
         // --- F6 wind debug toggle ---
         if (!anyTextInputActive && _input.WasKeyPressed(Keys.F6))
             _windDebug = !_windDebug;
@@ -2012,6 +2084,9 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 _input.MouseOverUI = true;
             if (_vampireEvoPanel.ContainsMouse(screenW, screenH, mx, my))
                 _input.MouseOverUI = true;
+
+            // Skill-learn corner toasts (clickable to jump to the relevant tab)
+            UpdateSkillLearnToastInput(screenW, screenH);
 
             // Time controls
             if (_gameData.Settings.General.ShowTimeControls
@@ -3843,6 +3918,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         _buffVisuals.Update(dt, _sim.Units, _gameData.Buffs, _gameTime);
         UpdateCollectingForagables(dt);
         UpdateSkillLearnToasts(dt);
+        _deathFog.Update(_envSystem, dt);
     }
 
     /// <summary>
@@ -4166,6 +4242,14 @@ public class Game1 : Microsoft.Xna.Framework.Game
             _spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.PointClamp);
             _debugDraw.DrawCollisionDebug(_spriteBatch, GraphicsDevice, _sim, _camera, _renderer,
                 _collisionDebugMode, _envSystem, _sim.Pathfinder);
+            _spriteBatch.End();
+        }
+
+        // --- Death-fog debug overlay (F5) ---
+        if (_deathFog.DebugVisible)
+        {
+            _spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.PointClamp);
+            _deathFog.DrawDebug(_spriteBatch, _pixel, _renderer, _camera);
             _spriteBatch.End();
         }
 

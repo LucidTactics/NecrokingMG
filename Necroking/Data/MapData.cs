@@ -534,6 +534,8 @@ public static class MapData
         if (ed.TryGetProperty("respawnTime", out var rst)) def.RespawnTime = rst.GetSingle();
         if (ed.TryGetProperty("scaleMin", out var smin)) def.ScaleMin = smin.GetSingle();
         if (ed.TryGetProperty("scaleMax", out var smax)) def.ScaleMax = smax.GetSingle();
+        if (ed.TryGetProperty("fogEmitRate", out var femit)) def.FogEmitRate = femit.GetSingle();
+        if (ed.TryGetProperty("fogAbsorbRate", out var fabs)) def.FogAbsorbRate = fabs.GetSingle();
         // Processing slots
         if (ed.TryGetProperty("input1", out var in1))
         {
