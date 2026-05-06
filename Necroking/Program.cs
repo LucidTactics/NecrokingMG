@@ -64,9 +64,26 @@ public static class LaunchArgs
 
 public static class Program
 {
+    /// <summary>Captured at the start of Main, so the gap to LoadContent can be
+    /// reported (MonoGame window/GL init + JIT of code paths reached during the
+    /// MonoGame Initialize phase). Use Process.GetCurrentProcess().StartTime to
+    /// also include OS process spawn + .NET runtime init that happens BEFORE
+    /// our managed code runs.</summary>
+    public static System.Diagnostics.Stopwatch ProcessStartStopwatch = null!;
+
+    /// <summary>UTC timestamp the OS process was started — earlier than Main entry
+    /// by the .NET runtime warmup + assembly load time. Used together with
+    /// ProcessStartStopwatch to break "pre-LoadContent" into runtime vs MonoGame
+    /// portions.</summary>
+    public static DateTime ProcessStartTime;
+
     [STAThread]
     static void Main(string[] args)
     {
+        ProcessStartStopwatch = System.Diagnostics.Stopwatch.StartNew();
+        try { ProcessStartTime = System.Diagnostics.Process.GetCurrentProcess().StartTime; }
+        catch { ProcessStartTime = DateTime.UtcNow; }
+
         // Set CWD to executable directory so data/ and assets/ are found
         var exeDir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
         if (!string.IsNullOrEmpty(exeDir))

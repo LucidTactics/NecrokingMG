@@ -66,7 +66,45 @@ public class Game1 : Microsoft.Xna.Framework.Game
     private Game.BuildingMenuUI _buildingMenuUI = new();
     private CraftingMenuUI _craftingMenu = new();
     private Game.TableCraftMenuUI _tableMenuUI = new();
+    /// <summary>True after Inventory/Building/Crafting/Table menu UIs have been
+    /// fully initialized. Initialization is deferred from LoadContent to first-use
+    /// (see EnsureInventoryUIsInitialized) — these four UIs collectively cost
+    /// ~250ms during startup but most launches never open them. Triggered on the
+    /// first input/scenario event that touches an inventory-family UI.</summary>
+    private bool _inventoryUIsInitialized;
+    /// <summary>UI definitions directory path captured during LoadContent so
+    /// EnsureInventoryUIsInitialized can hand it to RuntimeWidgetRenderer when
+    /// the deferred init fires (the widget renderer is only used by inventory
+    /// family UIs, so its init happens with theirs).</summary>
+    private string? _widgetRendererUiDefPath;
     private System.Diagnostics.Stopwatch? _startupTimer;
+
+    /// <summary>Deferred init for Inventory/Building/Crafting/Table menu UIs.
+    /// Called lazily on the first frame any of those UIs needs to be drawn or
+    /// updated. Idempotent — second call is a no-op via the flag.</summary>
+    private void EnsureInventoryUIsInitialized()
+    {
+        if (_inventoryUIsInitialized) return;
+        _inventoryUIsInitialized = true;
+        // Initialize the widget renderer first (its definitions get loaded from
+        // the UI defs dir captured at startup). Without this, the four UIs below
+        // would crash on their first LayoutWidget call.
+        _widgetRenderer.Init(GraphicsDevice, _spriteBatch, _fontManager);
+        if (_widgetRendererUiDefPath != null && Directory.Exists(_widgetRendererUiDefPath))
+            _widgetRenderer.LoadDefinitions(_widgetRendererUiDefPath);
+        _inventoryUI.Init(_widgetRenderer, _inventory, _gameData.Items, _spriteBatch, _pixel);
+        _buildingMenuUI.Init(_widgetRenderer, _envSystem, _inventory, _gameData.Items,
+            _graphics.PreferredBackBufferHeight, _spriteBatch, _pixel,
+            _sim.MagicGlyphs, _gameData.Spells, _sim);
+        _craftingMenu.Init(_widgetRenderer, _inventory, _gameData.Items, _gameData,
+            _graphics.PreferredBackBufferHeight, _spriteBatch, _pixel);
+        _tableMenuUI.Init(_widgetRenderer, _envSystem, _inventory, _gameData.Items,
+            _sim.PlayerResources, _spriteBatch, _pixel, _font);
+        _tableMenuUI.StartCraftCallback = (envIdx) => StartTableCraft(envIdx);
+        _tableMenuUI.DrawUnitIconCallback = (defId, rect) => DrawUnitIdleSprite(defId, rect);
+        Necroking.Core.DebugLog.Log("startup", "  [LazyInit] Inventory/Building/Crafting/Table UIs initialized on demand");
+    }
+
     private long _startupLastMs;
     private void LogTiming(string step)
     {
@@ -294,6 +332,15 @@ public class Game1 : Microsoft.Xna.Framework.Game
             new AI.RangedUnitHandler(AI.ArchetypeRegistry.CasterUnit));
         _startupTimer = System.Diagnostics.Stopwatch.StartNew();
         _startupLastMs = 0;
+        // The pre-LoadContent gap = OS process spawn + .NET runtime init +
+        // MonoGame window/GL setup + JIT of code reached during Initialize.
+        // We can split it: ProcessStartTime is when the OS forked the process;
+        // ProcessStartStopwatch was reset at Main's first instruction.
+        // Difference between those = pure runtime/load overhead before any of
+        // our code ran. From there to here is mostly MonoGame setup.
+        long mainToLoadContentMs = Program.ProcessStartStopwatch.ElapsedMilliseconds;
+        long osToMainMs = (long)(DateTime.UtcNow - Program.ProcessStartTime.ToUniversalTime()).TotalMilliseconds - mainToLoadContentMs;
+        DebugLog.Log("startup", $"  [pre-LoadContent: ~{osToMainMs + mainToLoadContentMs}ms total — process spawn+runtime: {Math.Max(0, osToMainMs)}ms, MonoGame init+JIT: {mainToLoadContentMs}ms]");
 
         if (LaunchArgs.Headless)
             Window.Position = new Point(-10000, -10000);
@@ -348,12 +395,47 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 decodeJobs.Add((i, e, extSheets[i][e].png));
         }
 
+        // BENCHMARK: per-job timing across the flat decode pool. Each job tries
+        // the .pcache (zstd-compressed pre-decoded RGBA) first; on miss falls
+        // back to PNG decode and writes a fresh cache for next launch.
+        var decodeBench = new (string label, int sizeMb, long readMs, long decodeMs, long pmaMs, long totalMs, int threadId, bool skia, bool cacheHit, bool wroteCache)[decodeJobs.Count];
+        var phaseStart = System.Diagnostics.Stopwatch.StartNew();
         System.Threading.Tasks.Parallel.For(0, decodeJobs.Count, j =>
         {
             var (ai, ei, png) = decodeJobs[j];
+            string label = ei < 0 ? AtlasDefs.Names[ai] : $"{AtlasDefs.Names[ai]}__{ei + 1}";
             if (!File.Exists(png)) return;
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            int tid = System.Threading.Thread.CurrentThread.ManagedThreadId;
+
+            // FAST PATH: try the zstd-decoded pixel cache.
+            long t0 = sw.ElapsedMilliseconds;
+            if (Render.AtlasCache.TryLoad(png, out var cachedPixels, out int cw, out int ch))
+            {
+                long readMs = sw.ElapsedMilliseconds - t0;
+                if (ei < 0)
+                {
+                    decodedPixels[ai] = cachedPixels;
+                    decodedW[ai] = cw;
+                    decodedH[ai] = ch;
+                }
+                else
+                {
+                    extDecoded[ai][ei] = (cachedPixels, cw, ch, true);
+                }
+                int sizeMbCache = (int)(new FileInfo(Render.AtlasCache.GetCachePath(png)).Length / (1024 * 1024));
+                decodeBench[j] = (label, sizeMbCache, readMs, 0, 0, sw.ElapsedMilliseconds, tid, true, true, false);
+                return;
+            }
+
+            // SLOW PATH: cache miss. Decode the PNG and write a fresh cache.
+            t0 = sw.ElapsedMilliseconds;
             byte[] bytes = File.ReadAllBytes(png);
-            var (pixels, w, h) = TextureUtil.DecodePngPremultiplied(bytes);
+            long pngReadMs = sw.ElapsedMilliseconds - t0;
+            int sizeMb = bytes.Length / (1024 * 1024);
+            var (pixels, w, h, decTicks, pmaTicks, skia) = TextureUtil.DecodePngPremultipliedTimed(bytes);
+            long decodeMs = decTicks * 1000 / System.Diagnostics.Stopwatch.Frequency;
+            long pmaMs = pmaTicks * 1000 / System.Diagnostics.Stopwatch.Frequency;
             if (ei < 0)
             {
                 decodedPixels[ai] = pixels;
@@ -364,7 +446,11 @@ public class Game1 : Microsoft.Xna.Framework.Game
             {
                 extDecoded[ai][ei] = (pixels, w, h, true);
             }
+            // Write cache for next launch (best-effort; failure logs to startup but doesn't abort).
+            Render.AtlasCache.Save(png, pixels, w, h);
+            decodeBench[j] = (label, sizeMb, pngReadMs, decodeMs, pmaMs, sw.ElapsedMilliseconds, tid, skia, false, true);
         });
+        long phaseWallMs = phaseStart.ElapsedMilliseconds;
 
         // Meta parse: sequential per atlas (base before extensions). Cheap.
         for (int i = 0; i < atlasCount; i++)
@@ -382,6 +468,16 @@ public class Game1 : Microsoft.Xna.Framework.Game
         }
         int extCount = extSheets.Sum(l => l.Count);
         LogTiming($"Atlas PNG decode + metadata parsed (flat parallel, {atlasCount} base + {extCount} ext)");
+        // Aggregate parallelism across the flat decode pool.
+        long sumWork = 0; var threadSet = new HashSet<int>();
+        foreach (var b in decodeBench) { sumWork += b.totalMs; threadSet.Add(b.threadId); }
+        int cacheHits = 0, cacheWrites = 0;
+        foreach (var b in decodeBench) { if (b.cacheHit) cacheHits++; if (b.wroteCache) cacheWrites++; }
+        DebugLog.Log("startup",
+            $"  [BENCH] flat decode pool: wall={phaseWallMs}ms sumWork={sumWork}ms parallelism={(double)sumWork / Math.Max(1, phaseWallMs):F2}x threads={threadSet.Count} cacheHits={cacheHits}/{decodeJobs.Count} cacheWrites={cacheWrites}");
+        foreach (var b in decodeBench)
+            DebugLog.Log("startup",
+                $"  [BENCH] {b.label,-22} {b.sizeMb,3}MB tid={b.threadId,2} read={b.readMs,4}ms decode={b.decodeMs,5}ms pma={b.pmaMs,5}ms total={b.totalMs,5}ms {(b.cacheHit ? "CACHE-HIT" : b.skia ? "skia" : "stb")}{(b.wroteCache && !b.cacheHit ? " (wrote cache)" : "")}");
 
         // Phase 2: Upload decoded pixels to GPU (fast — just SetData, no PNG decode)
         for (int i = 0; i < atlasCount; i++)
@@ -1654,23 +1750,12 @@ public class Game1 : Microsoft.Xna.Framework.Game
             _uiEditor.LoadDefinitions(uiDefPath);
         LogTiming("UI editor initialized");
 
-        // Runtime widget renderer + inventory UI
-        _widgetRenderer.Init(GraphicsDevice, _spriteBatch, _fontManager);
-        if (Directory.Exists(uiDefPath))
-            _widgetRenderer.LoadDefinitions(uiDefPath);
-        _inventoryUI.Init(_widgetRenderer, _inventory, _gameData.Items, _spriteBatch, _pixel);
-        _buildingMenuUI.Init(_widgetRenderer, _envSystem, _inventory, _gameData.Items,
-            _graphics.PreferredBackBufferHeight, _spriteBatch, _pixel,
-            _sim.MagicGlyphs, _gameData.Spells, _sim);
-        _craftingMenu.Init(_widgetRenderer, _inventory, _gameData.Items, _gameData,
-            _graphics.PreferredBackBufferHeight, _spriteBatch, _pixel);
-        _tableMenuUI.Init(_widgetRenderer, _envSystem, _inventory, _gameData.Items,
-            _sim.PlayerResources, _spriteBatch, _pixel, _font);
-        // Phase E hook: when Start is clicked on the table menu, kick off the craft routine.
-        _tableMenuUI.StartCraftCallback = (envIdx) => StartTableCraft(envIdx);
-        // Corpse-slot icon: render the source unit's idle frame inside the slot.
-        _tableMenuUI.DrawUnitIconCallback = (defId, rect) => DrawUnitIdleSprite(defId, rect);
-        LogTiming("Inventory & Building UI initialized");
+        // Runtime widget renderer + inventory family UIs are deferred to
+        // first-needed via EnsureInventoryUIsInitialized(). The widget renderer
+        // is exclusively consumed by Inventory/Building/Crafting/Table UIs —
+        // no other system uses it. Together they cost ~250 ms at startup;
+        // most launches never open any of them so this is pure savings.
+        _widgetRendererUiDefPath = uiDefPath;
 
         // Load audio
         try
@@ -1864,9 +1949,12 @@ public class Game1 : Microsoft.Xna.Framework.Game
         if (!anyTextInputActive && _input.WasKeyPressed(Keys.F12))
             _menuState = _menuState == MenuState.UIEditor ? MenuState.None : MenuState.UIEditor;
 
-        // 'I' key toggles inventory
+        // 'I' key toggles inventory (lazy-inits the UI family on first open)
         if (!anyTextInputActive && _input.WasKeyPressed(Keys.I) && _menuState == MenuState.None)
+        {
+            EnsureInventoryUIsInitialized();
             _inventoryUI.Toggle(GraphicsDevice.Viewport.Width, GraphicsDevice.Viewport.Height);
+        }
 
         // 'Tab' key toggles character stats
         if (!anyTextInputActive && _input.WasKeyPressed(Keys.Tab) && _menuState == MenuState.None)
@@ -2580,6 +2668,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
             // --- Building placement toggle (B) ---
             if (_input.WasKeyPressed(Keys.B))
             {
+                EnsureInventoryUIsInitialized();
                 if (_craftingMenu.IsVisible) _craftingMenu.Close();
                 _buildingMenuUI.Toggle(screenW, screenH);
             }
@@ -2587,6 +2676,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
             // --- Crafting menu toggle (C) ---
             if (_input.WasKeyPressed(Keys.C))
             {
+                EnsureInventoryUIsInitialized();
                 if (_buildingMenuUI.IsVisible) _buildingMenuUI.Close();
                 _craftingMenu.Toggle(screenW, screenH);
             }
@@ -2608,6 +2698,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 int clickedTable = Game.TableSystem.FindTableUnderCursor(_envSystem, mouseWorld);
                 if (clickedTable >= 0)
                 {
+                    EnsureInventoryUIsInitialized();
                     _tableMenuUI.OpenForTable(clickedTable, screenW, screenH, _camera, _renderer);
                     _input.ConsumeMouse();
                 }
@@ -2696,6 +2787,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 if (_activeScenario.RequestOpenInventory)
                 {
                     _activeScenario.RequestOpenInventory = false;
+                    EnsureInventoryUIsInitialized();
                     _inventoryUI.Open(screenW, screenH);
                 }
                 if (_activeScenario.RequestCloseInventory)
@@ -2833,6 +2925,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
             if (_activeScenario.RequestOpenInventory)
             {
                 _activeScenario.RequestOpenInventory = false;
+                EnsureInventoryUIsInitialized();
                 _inventoryUI.Open(screenW, screenH);
             }
             if (_activeScenario.RequestCloseInventory)
@@ -3638,6 +3731,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
                                 // and start crafting without an extra click.
                                 int sw = _graphics.PreferredBackBufferWidth;
                                 int sh = _graphics.PreferredBackBufferHeight;
+                                EnsureInventoryUIsInitialized();
                                 _tableMenuUI.OpenForTable(tableIdx, sw, sh, _camera, _renderer);
                             }
                             else if (cc != null)

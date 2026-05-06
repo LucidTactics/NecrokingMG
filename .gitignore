@@ -55,3 +55,6 @@ data/maps/default_triggers.json
 ## Temp files
 move_stderr.txt
 retarget_stderr.txt
+
+# zstd-cached pre-decoded atlas pixels (regenerated on edit)
+cache/

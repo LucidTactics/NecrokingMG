@@ -91,6 +91,47 @@ public static class TextureUtil
         return (pixels, w, h);
     }
 
+    /// <summary>BENCHMARK: same as DecodePngPremultiplied but returns ticks for the
+    /// native call vs any post-decode work. With the Skia path, post-decode work is
+    /// zero (Skia returns premultiplied pixels directly into the pinned array). With
+    /// the Stb fallback, "post" is the managed PMA loop.</summary>
+    public static (Color[] pixels, int width, int height, long decodeTicks, long pmaTicks, bool usedSkia)
+        DecodePngPremultipliedTimed(byte[] pngBytes)
+    {
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        try
+        {
+            var (pixels, w, h) = DecodePngPremultipliedSkia(pngBytes);
+            return (pixels, w, h, sw.ElapsedTicks, 0, true);
+        }
+        catch
+        {
+            // Stb fallback: split decode vs PMA.
+            sw.Restart();
+            using var ms = new MemoryStream(pngBytes);
+            var img = StbImageSharp.ImageResult.FromStream(ms, StbImageSharp.ColorComponents.RedGreenBlueAlpha);
+            long decodeT = sw.ElapsedTicks;
+            int w = img.Width, h = img.Height;
+            var pixels = new Color[w * h];
+            long pmaStart = sw.ElapsedTicks;
+            for (int i = 0; i < pixels.Length; i++)
+            {
+                int j = i * 4;
+                byte r = img.Data[j], g = img.Data[j + 1], b = img.Data[j + 2], a = img.Data[j + 3];
+                if (a < 255)
+                {
+                    float af = a / 255f;
+                    r = (byte)(r * af);
+                    g = (byte)(g * af);
+                    b = (byte)(b * af);
+                }
+                pixels[i] = new Color(r, g, b, a);
+            }
+            long pmaT = sw.ElapsedTicks - pmaStart;
+            return (pixels, w, h, decodeT, pmaT, false);
+        }
+    }
+
     /// <summary>
     /// Create a Texture2D from pre-decoded pixel data. Must be called on the main/GPU thread.
     /// </summary>
