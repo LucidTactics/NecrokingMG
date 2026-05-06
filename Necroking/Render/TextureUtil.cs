@@ -34,11 +34,43 @@ public static class TextureUtil
     /// <summary>
     /// Decode a PNG stream to raw premultiplied Color[] data on any thread (no GPU needed).
     /// Returns (pixels, width, height). Use CreateTextureFromPixels on the main thread.
+    /// Uses native SkiaSharp; falls back to managed StbImageSharp on failure.
     /// </summary>
     public static (Color[] pixels, int width, int height) DecodePngPremultiplied(byte[] pngBytes)
     {
-        // Use Texture2D-compatible decoding via StbImageSharp or System.Drawing
-        // MonoGame's Texture2D.FromStream uses STB internally — we decode manually
+        try { return DecodePngPremultipliedSkia(pngBytes); }
+        catch { return DecodePngPremultipliedStb(pngBytes); }
+    }
+
+    /// <summary>Native PNG decode via SkiaSharp. Asks Skia for premultiplied RGBA8888 directly.</summary>
+    public static (Color[] pixels, int width, int height) DecodePngPremultipliedSkia(byte[] pngBytes)
+    {
+        using var data = SkiaSharp.SKData.CreateCopy(pngBytes);
+        using var codec = SkiaSharp.SKCodec.Create(data)
+            ?? throw new System.IO.InvalidDataException("SKCodec.Create returned null");
+        var info = new SkiaSharp.SKImageInfo(
+            codec.Info.Width, codec.Info.Height,
+            SkiaSharp.SKColorType.Rgba8888,
+            SkiaSharp.SKAlphaType.Premul);
+
+        int w = info.Width, h = info.Height;
+        var pixels = new Color[w * h];
+        // Pin the managed array and let Skia decode straight into it. Color is
+        // 4 bytes (R,G,B,A) which matches Rgba8888 byte order.
+        var handle = System.Runtime.InteropServices.GCHandle.Alloc(pixels, System.Runtime.InteropServices.GCHandleType.Pinned);
+        try
+        {
+            var result = codec.GetPixels(info, handle.AddrOfPinnedObject());
+            if (result != SkiaSharp.SKCodecResult.Success && result != SkiaSharp.SKCodecResult.IncompleteInput)
+                throw new System.IO.InvalidDataException($"SKCodec.GetPixels failed: {result}");
+        }
+        finally { handle.Free(); }
+        return (pixels, w, h);
+    }
+
+    /// <summary>Managed PNG decode via StbImageSharp. Slower fallback path.</summary>
+    public static (Color[] pixels, int width, int height) DecodePngPremultipliedStb(byte[] pngBytes)
+    {
         using var ms = new MemoryStream(pngBytes);
         var img = StbImageSharp.ImageResult.FromStream(ms, StbImageSharp.ColorComponents.RedGreenBlueAlpha);
         int w = img.Width, h = img.Height;
