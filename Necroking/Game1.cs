@@ -330,48 +330,58 @@ public class Game1 : Microsoft.Xna.Framework.Game
         for (int i = 0; i < atlasCount; i++)
             extSheets[i] = new List<(string, string)>(AtlasDefs.FindExtensionSheets(AtlasDefs.Names[i]));
 
-        System.Threading.Tasks.Parallel.For(0, atlasCount, i =>
+        // Flat parallel decode of every PNG (base + all extension sheets) so the
+        // largest single atlas isn't gated by its own extension on the same thread.
+        // Meta parsing is fast and runs serially after decode (extension meta has
+        // to be parsed after the base meta, per atlas).
+        var extDecoded = new (Color[] pixels, int w, int h, bool decoded)[atlasCount][];
+        for (int i = 0; i < atlasCount; i++)
+            extDecoded[i] = new (Color[], int, int, bool)[extSheets[i].Count];
+
+        // Build flat work list: (atlasIdx, extIdx=-1 for base, pngPath).
+        var decodeJobs = new List<(int ai, int ei, string png)>(atlasCount * 2);
+        for (int i = 0; i < atlasCount; i++)
         {
             string name = AtlasDefs.Names[i];
-            string pngPath = GamePaths.Resolve($"assets/Sprites/{name}.png");
-            string metaPath = GamePaths.Resolve($"assets/Sprites/{name}.spritemeta");
-            if (File.Exists(pngPath))
+            decodeJobs.Add((i, -1, GamePaths.Resolve($"assets/Sprites/{name}.png")));
+            for (int e = 0; e < extSheets[i].Count; e++)
+                decodeJobs.Add((i, e, extSheets[i][e].png));
+        }
+
+        System.Threading.Tasks.Parallel.For(0, decodeJobs.Count, j =>
+        {
+            var (ai, ei, png) = decodeJobs[j];
+            if (!File.Exists(png)) return;
+            byte[] bytes = File.ReadAllBytes(png);
+            var (pixels, w, h) = TextureUtil.DecodePngPremultiplied(bytes);
+            if (ei < 0)
             {
-                pngBytes[i] = File.ReadAllBytes(pngPath);
-                var (pixels, w, h) = TextureUtil.DecodePngPremultiplied(pngBytes[i]);
-                decodedPixels[i] = pixels;
-                decodedW[i] = w;
-                decodedH[i] = h;
+                decodedPixels[ai] = pixels;
+                decodedW[ai] = w;
+                decodedH[ai] = h;
             }
+            else
+            {
+                extDecoded[ai][ei] = (pixels, w, h, true);
+            }
+        });
+
+        // Meta parse: sequential per atlas (base before extensions). Cheap.
+        for (int i = 0; i < atlasCount; i++)
+        {
+            string name = AtlasDefs.Names[i];
+            string metaPath = GamePaths.Resolve($"assets/Sprites/{name}.spritemeta");
             if (File.Exists(metaPath))
                 metaParsed[i] = _atlases[i].ParseMetaOnly(metaPath);
-        });
-        LogTiming("Atlas PNG decode + metadata parsed (parallel)");
-
-        // Extension sheets: decode PNGs + parse meta in parallel, one list per base
-        // atlas. Extension meta parsing mutates the same SpriteAtlas instance as the
-        // base — safe because no two threads touch the same atlas here (each base
-        // atlas has its own nested loop run serially inside the outer parallel task).
-        var extDecoded = new List<(Color[] pixels, int w, int h, bool ok)>[atlasCount];
-        for (int i = 0; i < atlasCount; i++)
-            extDecoded[i] = new List<(Color[], int, int, bool)>(extSheets[i].Count);
-
-        System.Threading.Tasks.Parallel.For(0, atlasCount, i =>
-        {
-            foreach (var (extPng, extMeta) in extSheets[i])
+            for (int e = 0; e < extSheets[i].Count; e++)
             {
-                Color[]? pixels = null; int w = 0, h = 0;
-                if (File.Exists(extPng))
-                {
-                    byte[] bytes = File.ReadAllBytes(extPng);
-                    (pixels, w, h) = TextureUtil.DecodePngPremultiplied(bytes);
-                }
+                string extMeta = extSheets[i][e].meta;
                 bool metaOk = File.Exists(extMeta) && _atlases[i].ParseExtensionMeta(extMeta);
-                extDecoded[i].Add((pixels!, w, h, metaOk && pixels != null));
+                if (!metaOk) extDecoded[i][e] = (extDecoded[i][e].pixels, extDecoded[i][e].w, extDecoded[i][e].h, false);
             }
-        });
-        if (extSheets.Sum(l => l.Count) > 0)
-            LogTiming($"Atlas extension sheets decoded (parallel): {extSheets.Sum(l => l.Count)}");
+        }
+        int extCount = extSheets.Sum(l => l.Count);
+        LogTiming($"Atlas PNG decode + metadata parsed (flat parallel, {atlasCount} base + {extCount} ext)");
 
         // Phase 2: Upload decoded pixels to GPU (fast — just SetData, no PNG decode)
         for (int i = 0; i < atlasCount; i++)
@@ -387,7 +397,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
             // TextureIndex assigned by ParseExtensionMeta).
             foreach (var ext in extDecoded[i])
             {
-                if (!ext.ok) continue;
+                if (!ext.decoded || ext.pixels == null) continue;
                 var extTex = TextureUtil.CreateTextureFromPixels(GraphicsDevice,
                     ext.pixels, ext.w, ext.h);
                 _atlases[i].AttachExtensionTexture(extTex, ext.w, ext.h);
