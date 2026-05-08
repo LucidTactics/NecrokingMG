@@ -2172,7 +2172,16 @@ public class Game1 : Microsoft.Xna.Framework.Game
         if (_menuState == MenuState.Settings)
             _settingsWindow.Update(screenW, screenH, gameTime);
         if (_menuState == MenuState.UIEditor)
+        {
+            // UIEditorWindow IS-A EditorBase with its own private _input field.
+            // Without this UpdateInput call its _input.Mouse stays default
+            // (released) and LeftJustPressed never fires — tab clicks, swatch
+            // clicks, etc. all go nowhere. Mirrors the pattern used for
+            // _editorUi above; the trailing _input arg shares Game1's
+            // captured InputState so the UI editor sees real mouse data.
+            _uiEditor.UpdateInput(mouse, _prevMouse, kb, _prevKb, screenW, screenH, gameTime, _input);
             _uiEditor.Update(screenW, screenH);
+        }
 
         // --- Camera ---
         _renderer.SetScreenSize(screenW, screenH);
