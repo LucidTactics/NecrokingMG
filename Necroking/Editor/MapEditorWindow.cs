@@ -49,14 +49,14 @@ public class GrassTypeDef
     /// </summary>
     public float Density { get; set; } = 1.0f;
 
-    // Legacy blade-era fields — retained for save/load backwards compat; unused by the
-    // sprite-tuft renderer. Can be removed once all maps have been re-saved.
-    public byte BaseR { get; set; } = 46;
-    public byte BaseG { get; set; } = 102;
-    public byte BaseB { get; set; } = 20;
-    public byte TipR { get; set; } = 100;
-    public byte TipG { get; set; } = 166;
-    public byte TipB { get; set; } = 50;
+    /// <summary>Multiplicative tint for healthy tufts. White (default) leaves the
+    /// sprite colors untouched.</summary>
+    public Color DefaultTint { get; set; } = Color.White;
+
+    /// <summary>Multiplicative tint applied once a tuft has fully corrupted. The
+    /// renderer lerps from DefaultTint to this over GrassCorruptionFadeDuration
+    /// when the underlying ground vertex first flips.</summary>
+    public Color CorruptedTint { get; set; } = new Color((byte)80, (byte)60, (byte)70, (byte)255);
 }
 
 // ============================================================================
@@ -456,10 +456,10 @@ public class MapEditorWindow
             var def = new GrassTypeDef
             {
                 Id = t.Id, Name = t.Name,
-                BaseR = t.BaseR, BaseG = t.BaseG, BaseB = t.BaseB,
-                TipR = t.TipR, TipG = t.TipG, TipB = t.TipB,
                 Scale = t.Scale > 0f ? t.Scale : 1f,
                 Density = t.Density > 0f ? t.Density : 1f,
+                DefaultTint   = new Color(t.DefR, t.DefG, t.DefB, t.DefA),
+                CorruptedTint = new Color(t.CorR, t.CorG, t.CorB, t.CorA),
             };
             if (t.SpritePaths != null)
                 foreach (var p in t.SpritePaths) def.SpritePaths.Add(p);
@@ -873,6 +873,9 @@ public class MapEditorWindow
         if (_eb != null)
         {
             _eb.DrawDropdownOverlays();
+            // Color picker popup — must come after all other UI so the swatch
+            // popups (grass tints, etc.) actually render and accept input.
+            _eb.DrawColorPickerPopup();
         }
     }
 
@@ -1086,6 +1089,22 @@ public class MapEditorWindow
                     _groundSystem.LoadTextures(_device);
                 });
             }
+            addY += FieldHeight + 2;
+
+            // Corrupted variant: dropdown of all OTHER type IDs (or "(none)").
+            // Death fog rolls a per-second chance to swap this type to the chosen
+            // variant on each vertex inside it. Leave blank if the type should
+            // never corrupt (e.g. cobblestone).
+            var corrIds = new List<string> { "(none)" };
+            for (int i = 0; i < _groundSystem.TypeCount; i++)
+            {
+                if (i == SelectedGroundType) continue;
+                corrIds.Add(_groundSystem.GetTypeDef(i).Id);
+            }
+            string curCorr = string.IsNullOrEmpty(def.CorruptedTypeId) ? "(none)" : def.CorruptedTypeId;
+            string newCorr = _eb.DrawCombo("ground_corr", "Corrupted", curCorr, corrIds.ToArray(), panelX + Margin, addY, fw);
+            if (newCorr != curCorr)
+                def.CorruptedTypeId = newCorr == "(none)" ? "" : newCorr;
             addY += FieldHeight + 2;
         }
 
@@ -1334,13 +1353,9 @@ public class MapEditorWindow
             if (bg != Color.Transparent)
                 _spriteBatch.Draw(_pixel, btnRect, bg);
 
-            // Base color swatch
-            var baseColor = new Color(gt.BaseR, gt.BaseG, gt.BaseB);
-            _spriteBatch.Draw(_pixel, new Rectangle(panelX + Margin + 4, y + 4, 14, 14), baseColor);
-
-            // Tip color swatch
-            var tipColor = new Color(gt.TipR, gt.TipG, gt.TipB);
-            _spriteBatch.Draw(_pixel, new Rectangle(panelX + Margin + 22, y + 4, 14, 14), tipColor);
+            // Default tint swatch (left), corrupted tint swatch (right of it).
+            _spriteBatch.Draw(_pixel, new Rectangle(panelX + Margin + 4, y + 4, 14, 14), gt.DefaultTint);
+            _spriteBatch.Draw(_pixel, new Rectangle(panelX + Margin + 22, y + 4, 14, 14), gt.CorruptedTint);
 
             DrawSmallText(gt.Name, panelX + Margin + 42, y + 3, TextColor);
             y += ButtonHeight + 2;
@@ -1369,22 +1384,23 @@ public class MapEditorWindow
             if (newName != gt.Name) { gt.Name = newName; changed = true; }
             y += FieldHeight + 2;
 
-            // Base Color — LDR color swatch
-            DrawSmallText("Base Color:", panelX + Margin, y, AccentColor);
-            var baseHdr = new HdrColor(gt.BaseR, gt.BaseG, gt.BaseB, 255, 1.0f);
-            if (_eb.DrawColorSwatch("grass_baseColor", panelX + Margin + 80, y, 40, 18, ref baseHdr, hideIntensity: true))
+            // Default tint — multiplied with the sprite while healthy. White = no tint.
+            DrawSmallText("Default Tint:", panelX + Margin, y, AccentColor);
+            var defHdr = new HdrColor(gt.DefaultTint.R, gt.DefaultTint.G, gt.DefaultTint.B, gt.DefaultTint.A, 1.0f);
+            if (_eb.DrawColorSwatch("grass_defaultTint", panelX + Margin + 90, y, 40, 18, ref defHdr, hideIntensity: true))
             {
-                gt.BaseR = baseHdr.R; gt.BaseG = baseHdr.G; gt.BaseB = baseHdr.B;
+                gt.DefaultTint = new Color(defHdr.R, defHdr.G, defHdr.B, defHdr.A);
                 changed = true;
             }
             y += FieldHeight + 2;
 
-            // Tip Color — LDR color swatch
-            DrawSmallText("Tip Color:", panelX + Margin, y, AccentColor);
-            var tipHdr = new HdrColor(gt.TipR, gt.TipG, gt.TipB, 255, 1.0f);
-            if (_eb.DrawColorSwatch("grass_tipColor", panelX + Margin + 80, y, 40, 18, ref tipHdr, hideIntensity: true))
+            // Corrupted tint — destination tint of the 10s fade once the underlying
+            // ground vertex flips. Renderer lerps Default → Corrupted over the fade.
+            DrawSmallText("Corrupted Tint:", panelX + Margin, y, AccentColor);
+            var corHdr = new HdrColor(gt.CorruptedTint.R, gt.CorruptedTint.G, gt.CorruptedTint.B, gt.CorruptedTint.A, 1.0f);
+            if (_eb.DrawColorSwatch("grass_corruptedTint", panelX + Margin + 90, y, 40, 18, ref corHdr, hideIntensity: true))
             {
-                gt.TipR = tipHdr.R; gt.TipG = tipHdr.G; gt.TipB = tipHdr.B;
+                gt.CorruptedTint = new Color(corHdr.R, corHdr.G, corHdr.B, corHdr.A);
                 changed = true;
             }
             y += FieldHeight + 2;
@@ -1511,7 +1527,7 @@ public class MapEditorWindow
                 if (typeIdx < 0 || typeIdx >= _grassTypes.Count) continue;
 
                 var gt = _grassTypes[typeIdx];
-                var fill = new Color(gt.BaseR, gt.BaseG, gt.BaseB, (byte)80);
+                var fill = new Color(gt.DefaultTint.R, gt.DefaultTint.G, gt.DefaultTint.B, (byte)80);
                 FillGrassCellQuad(cx, cy, cs, screenW, screenH, fill);
             }
         }
@@ -4295,15 +4311,17 @@ public class MapEditorWindow
                 writer.WriteString("id", gt.Id);
                 writer.WriteString("name", gt.Name);
                 writer.WriteString("texturePath", gt.TexturePath);
+                if (!string.IsNullOrEmpty(gt.CorruptedTypeId))
+                    writer.WriteString("corruptedTypeId", gt.CorruptedTypeId);
                 writer.WriteEndObject();
             }
             writer.WriteEndArray();
 
-            // Ground vertex map
+            // Ground vertex map (revert runtime corruption so dev paint is preserved on save)
             writer.WriteStartObject("groundMap");
             writer.WriteNumber("width", _groundSystem.VertexW);
             writer.WriteNumber("height", _groundSystem.VertexH);
-            writer.WriteString("tilesBase64", Convert.ToBase64String(_groundSystem.GetVertexMap()));
+            writer.WriteString("tilesBase64", Convert.ToBase64String(_groundSystem.GetVertexMapForSave()));
             writer.WriteEndObject();
 
             // Grass types
@@ -4313,15 +4331,19 @@ public class MapEditorWindow
                 writer.WriteStartObject();
                 writer.WriteString("id", gt.Id);
                 writer.WriteString("name", gt.Name);
-                writer.WriteStartObject("baseColor");
-                writer.WriteNumber("r", gt.BaseR);
-                writer.WriteNumber("g", gt.BaseG);
-                writer.WriteNumber("b", gt.BaseB);
+
+                writer.WriteStartObject("defaultTint");
+                writer.WriteNumber("r", gt.DefaultTint.R);
+                writer.WriteNumber("g", gt.DefaultTint.G);
+                writer.WriteNumber("b", gt.DefaultTint.B);
+                writer.WriteNumber("a", gt.DefaultTint.A);
                 writer.WriteEndObject();
-                writer.WriteStartObject("tipColor");
-                writer.WriteNumber("r", gt.TipR);
-                writer.WriteNumber("g", gt.TipG);
-                writer.WriteNumber("b", gt.TipB);
+
+                writer.WriteStartObject("corruptedTint");
+                writer.WriteNumber("r", gt.CorruptedTint.R);
+                writer.WriteNumber("g", gt.CorruptedTint.G);
+                writer.WriteNumber("b", gt.CorruptedTint.B);
+                writer.WriteNumber("a", gt.CorruptedTint.A);
                 writer.WriteEndObject();
 
                 writer.WriteStartArray("spritePaths");
@@ -4477,10 +4499,10 @@ public class MapEditorWindow
                     var def = new GrassTypeDef
                     {
                         Id = t.Id, Name = t.Name,
-                        BaseR = t.BaseR, BaseG = t.BaseG, BaseB = t.BaseB,
-                        TipR = t.TipR, TipG = t.TipG, TipB = t.TipB,
                         Scale = t.Scale > 0f ? t.Scale : 1f,
                         Density = t.Density > 0f ? t.Density : 1f,
+                        DefaultTint   = new Color(t.DefR, t.DefG, t.DefB, t.DefA),
+                        CorruptedTint = new Color(t.CorR, t.CorG, t.CorB, t.CorA),
                     };
                     if (t.SpritePaths != null)
                         foreach (var p in t.SpritePaths) def.SpritePaths.Add(p);

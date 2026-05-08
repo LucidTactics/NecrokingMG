@@ -12,6 +12,9 @@ public class GroundTypeDef
     public string Name { get; set; } = "";
     public string TexturePath { get; set; } = "";
     public Color TintColor { get; set; } = Color.White;
+    /// <summary>Id of the ground type to swap in when this type is corrupted by death fog.
+    /// Empty = no corrupted variant; rolls do nothing on this type.</summary>
+    public string CorruptedTypeId { get; set; } = "";
 }
 
 public class GroundSystem
@@ -20,6 +23,55 @@ public class GroundSystem
     private readonly List<GroundTypeDef> _types = new();
     private readonly List<Texture2D?> _textures = new();
     private byte[] _vertexMap = Array.Empty<byte>();
+
+    // Sparse runtime corruption: vertex index → original (pre-corruption) byte.
+    // _vertexMap holds the live (possibly corrupted) state; this dict is only
+    // ever populated by the corruption tick, never by editor paint, so save can
+    // strip out gameplay-driven corruption while preserving dev paint.
+    private readonly Dictionary<int, byte> _corruptionEdits = new();
+
+    // Per-vertex visual fade progress for newly corrupted vertices: 0 = just
+    // started (renders as original type), 1 = fully transitioned (renders as
+    // corrupted type). Vertices not in this dict are stable (no fade in flight).
+    // Encoded into the B channel of the vertex map texture; the GroundShader
+    // lerps between original (G channel) and current (R channel) by this value.
+    private readonly Dictionary<int, float> _corruptionFadeProgress = new();
+    public float CorruptionFadeDuration { get; set; } = 5f;
+    private float _fadeRebuildTimer;
+    public float FadeRebuildInterval { get; set; } = 0.125f; // ~8 Hz GPU re-uploads while fading
+
+    /// <summary>True when the vertex map has changed since the last GPU rebuild.
+    /// Cleared by callers after they re-upload the vertex map texture.</summary>
+    public bool CorruptionDirty { get; private set; }
+    public int CorruptedVertexCount => _corruptionEdits.Count;
+    public int FadingVertexCount   => _corruptionFadeProgress.Count;
+
+    /// <summary>Fired when a vertex newly corrupts (CorruptVertex returns true).
+    /// Used by Game1 to start grass-tuft fades in the affected world region.
+    /// Not fired for editor paint, map load, or ClearAllCorruption.</summary>
+    public Action<int, int>? OnVertexCorrupted;
+
+    // Bounding box of vertex changes since the last GPU upload. UploadDirtyRect
+    // re-encodes only this rect and pushes it into the existing vertex map
+    // texture via Texture2D.SetData(rect, ...). Avoids both the 67 MB full
+    // upload and the per-tick texture allocation.
+    private int _dirtyMinX = int.MaxValue, _dirtyMinY = int.MaxValue;
+    private int _dirtyMaxX = int.MinValue, _dirtyMaxY = int.MinValue;
+    public bool HasDirtyRect => _dirtyMaxX >= _dirtyMinX;
+    private Microsoft.Xna.Framework.Color[] _uploadBuffer = Array.Empty<Microsoft.Xna.Framework.Color>();
+
+    private void MarkDirty(int vx, int vy)
+    {
+        if (vx < _dirtyMinX) _dirtyMinX = vx;
+        if (vy < _dirtyMinY) _dirtyMinY = vy;
+        if (vx > _dirtyMaxX) _dirtyMaxX = vx;
+        if (vy > _dirtyMaxY) _dirtyMaxY = vy;
+    }
+    private void ResetDirtyRect()
+    {
+        _dirtyMinX = int.MaxValue; _dirtyMinY = int.MaxValue;
+        _dirtyMaxX = int.MinValue; _dirtyMaxY = int.MinValue;
+    }
 
     public float TypeWarpStrength = 1.8f;
     public float UvWarpAmp = 0.4f;
@@ -51,17 +103,132 @@ public class GroundSystem
     public void SetVertex(int vx, int vy, byte typeIndex)
     {
         if (vx >= 0 && vx < VertexW && vy >= 0 && vy < VertexH)
-            _vertexMap[vy * VertexW + vx] = typeIndex;
+        {
+            int vi = vy * VertexW + vx;
+            _vertexMap[vi] = typeIndex;
+            // Editor paint always wins as authoritative — drop any prior corruption
+            // record AND any in-flight fade so save preserves the painted value
+            // and the GPU shows the new type without a transition.
+            if (_corruptionEdits.Remove(vi)) CorruptionDirty = true;
+            if (_corruptionFadeProgress.Remove(vi)) CorruptionDirty = true;
+        }
     }
 
     public byte GetVertex(int vx, int vy) =>
         vx >= 0 && vx < VertexW && vy >= 0 && vy < VertexH
             ? _vertexMap[vy * VertexW + vx] : (byte)0;
 
-    public void FillAll(byte typeIndex) => Array.Fill(_vertexMap, typeIndex);
+    public void FillAll(byte typeIndex) { Array.Fill(_vertexMap, typeIndex); _corruptionEdits.Clear(); _corruptionFadeProgress.Clear(); }
 
     public byte[] GetVertexMap() => _vertexMap;
-    public void SetVertexMap(byte[] map) { if (map.Length == _vertexMap.Length) Array.Copy(map, _vertexMap, map.Length); }
+    public void SetVertexMap(byte[] map) { if (map.Length == _vertexMap.Length) Array.Copy(map, _vertexMap, map.Length); _corruptionEdits.Clear(); _corruptionFadeProgress.Clear(); }
+
+    /// <summary>Returns the vertex map with runtime corruption reverted, for serialization.
+    /// Allocates a copy only when corruption is present; otherwise returns the live array.</summary>
+    public byte[] GetVertexMapForSave()
+    {
+        if (_corruptionEdits.Count == 0) return _vertexMap;
+        var temp = new byte[_vertexMap.Length];
+        Array.Copy(_vertexMap, temp, _vertexMap.Length);
+        foreach (var kv in _corruptionEdits)
+            temp[kv.Key] = kv.Value;
+        return temp;
+    }
+
+    /// <summary>Resolve a type Id to its index, or -1 if missing.</summary>
+    public int FindType(string id)
+    {
+        if (string.IsNullOrEmpty(id)) return -1;
+        for (int i = 0; i < _types.Count; i++) if (_types[i].Id == id) return i;
+        return -1;
+    }
+
+    /// <summary>Resolve the corrupted-variant type index for a given type, or -1 if it has no mapping.</summary>
+    public int GetCorruptedIndex(int typeIdx)
+    {
+        if (typeIdx < 0 || typeIdx >= _types.Count) return -1;
+        return FindType(_types[typeIdx].CorruptedTypeId);
+    }
+
+    /// <summary>Attempt to corrupt the vertex at (vx, vy). Returns true if the vertex
+    /// was changed (had a corrupted variant and wasn't already corrupted).</summary>
+    public bool CorruptVertex(int vx, int vy)
+    {
+        if (vx < 0 || vx >= VertexW || vy < 0 || vy >= VertexH) return false;
+        int vi = vy * VertexW + vx;
+        if (_corruptionEdits.ContainsKey(vi)) return false; // already corrupted by tick
+        byte cur = _vertexMap[vi];
+        int corrIdx = GetCorruptedIndex(cur);
+        if (corrIdx < 0) return false; // no mapping (e.g. cobblestone, or already a corrupted variant)
+        _corruptionEdits[vi] = cur;
+        _vertexMap[vi] = (byte)corrIdx;
+        // Start fade-in: shader will lerp from original (cur) to current (corrIdx) over
+        // CorruptionFadeDuration. Without this the swap would render as a hard flip.
+        _corruptionFadeProgress[vi] = 0f;
+        CorruptionDirty = true;
+        MarkDirty(vx, vy);
+        OnVertexCorrupted?.Invoke(vx, vy);
+        return true;
+    }
+
+    /// <summary>Advance per-vertex fade progress. Called every gameplay frame so fades
+    /// animate smoothly between texture rebuilds. Returns true if any fade level
+    /// changed enough to warrant a GPU rebuild this frame (rate-limited internally).</summary>
+    public bool AdvanceCorruptionFades(float dt)
+    {
+        if (_corruptionFadeProgress.Count == 0) return false;
+
+        float fadeRate = 1f / MathF.Max(CorruptionFadeDuration, 0.01f);
+        // Iterate via key snapshot since we may remove entries mid-iteration.
+        if (_fadingKeyBuffer.Length < _corruptionFadeProgress.Count)
+            _fadingKeyBuffer = new int[Math.Max(_corruptionFadeProgress.Count, 64)];
+        int n = 0;
+        foreach (var k in _corruptionFadeProgress.Keys) _fadingKeyBuffer[n++] = k;
+        for (int i = 0; i < n; i++)
+        {
+            int vi = _fadingKeyBuffer[i];
+            float t = _corruptionFadeProgress[vi] + dt * fadeRate;
+            int vx = vi % VertexW;
+            int vy = vi / VertexW;
+            // Every fading vertex's encoded fade byte changes each frame, so we
+            // need its texel re-uploaded at the next tick. Vertices that just
+            // *finished* fading also need one final re-upload to set fade=255.
+            MarkDirty(vx, vy);
+            if (t >= 1f) _corruptionFadeProgress.Remove(vi);
+            else         _corruptionFadeProgress[vi] = t;
+        }
+
+        // Rate-limit the GPU re-upload — even partial uploads are cheap, but
+        // ~8 Hz is plenty smooth and avoids per-frame driver overhead.
+        _fadeRebuildTimer += dt;
+        if (_fadeRebuildTimer >= FadeRebuildInterval)
+        {
+            _fadeRebuildTimer = 0f;
+            CorruptionDirty = true;
+            return true;
+        }
+        return false;
+    }
+    private int[] _fadingKeyBuffer = Array.Empty<int>();
+
+    /// <summary>Revert all runtime corruption. Useful for debugging / mid-session reset.</summary>
+    public void ClearAllCorruption()
+    {
+        if (_corruptionEdits.Count == 0) return;
+        foreach (var kv in _corruptionEdits)
+        {
+            _vertexMap[kv.Key] = kv.Value;
+            int vx = kv.Key % VertexW;
+            int vy = kv.Key / VertexW;
+            MarkDirty(vx, vy);
+        }
+        _corruptionEdits.Clear();
+        _corruptionFadeProgress.Clear();
+        CorruptionDirty = true;
+    }
+
+    /// <summary>Caller signals it has rebuilt the GPU vertex map texture from the latest map.</summary>
+    public void ClearCorruptionDirty() => CorruptionDirty = false;
 
     public void RemoveType(int index)
     {
@@ -102,16 +269,101 @@ public class GroundSystem
         return _textures[typeIdx];
     }
 
+    /// <summary>Push only the dirty rect's pixels into the existing vertex map
+    /// texture via Texture2D.SetData(rect, ...). Avoids re-allocating a 67 MB
+    /// texture and re-uploading 16 M pixels each fade tick — typical fade
+    /// footprints upload a few KB. Returns false if there's no rect to push or
+    /// the supplied texture's dimensions don't match the vertex grid (caller
+    /// should fall back to CreateVertexMapTexture).</summary>
+    public bool UploadDirtyRect(Texture2D tex)
+    {
+        if (!HasDirtyRect) { CorruptionDirty = false; return true; }
+        if (tex == null || tex.Width != VertexW || tex.Height != VertexH) return false;
+
+        int minX = Math.Max(0, _dirtyMinX);
+        int minY = Math.Max(0, _dirtyMinY);
+        int maxX = Math.Min(VertexW - 1, _dirtyMaxX);
+        int maxY = Math.Min(VertexH - 1, _dirtyMaxY);
+        int w = maxX - minX + 1;
+        int h = maxY - minY + 1;
+        if (w <= 0 || h <= 0) { ResetDirtyRect(); CorruptionDirty = false; return true; }
+
+        int needed = w * h;
+        if (_uploadBuffer.Length < needed)
+            _uploadBuffer = new Microsoft.Xna.Framework.Color[Math.Max(needed, 1024)];
+
+        bool anyFading = _corruptionFadeProgress.Count > 0;
+        for (int y = 0; y < h; y++)
+        {
+            int srcY = minY + y;
+            int srcRow = srcY * VertexW;
+            int dstRow = y * w;
+            for (int x = 0; x < w; x++)
+            {
+                int vi = srcRow + minX + x;
+                byte cur = _vertexMap[vi];
+                byte orig = cur;
+                byte fade = 255;
+                if (anyFading
+                    && _corruptionFadeProgress.TryGetValue(vi, out float t01)
+                    && _corruptionEdits.TryGetValue(vi, out byte origByte))
+                {
+                    orig = origByte;
+                    fade = (byte)Math.Clamp((int)(t01 * 255f + 0.5f), 0, 255);
+                }
+                _uploadBuffer[dstRow + x] = new Microsoft.Xna.Framework.Color(cur, orig, fade, (byte)255);
+            }
+        }
+
+        var rect = new Rectangle(minX, minY, w, h);
+        tex.SetData(0, rect, _uploadBuffer, 0, needed);
+
+        ResetDirtyRect();
+        CorruptionDirty = false;
+        return true;
+    }
+
     public Texture2D? CreateVertexMapTexture(GraphicsDevice device)
     {
         if (_vertexMap.Length == 0) return null;
-        // Use Color format (RGBA) to avoid Alpha8 issues with SpriteBatch
-        // Pack type index into R channel, set A=255 so it's not discarded
+        // Channel layout (read by GroundShader.fx):
+        //   R = current type index (what's drawn at fade=1)
+        //   G = original type index (what's drawn at fade=0; equals R for stable vertices)
+        //   B = fade progress 0..255 (255 = stable, < 255 = mid-fade)
+        //   A = 255 (so the channel isn't dropped by premultiplied-alpha paths)
         var tex = new Texture2D(device, VertexW, VertexH, false, SurfaceFormat.Color);
         var colorData = new Microsoft.Xna.Framework.Color[_vertexMap.Length];
-        for (int i = 0; i < _vertexMap.Length; i++)
-            colorData[i] = new Microsoft.Xna.Framework.Color(_vertexMap[i], (byte)0, (byte)0, (byte)255);
+        // Fast path when nothing is fading — avoid per-vertex dict lookup for 16M entries.
+        bool anyFading = _corruptionFadeProgress.Count > 0;
+        if (!anyFading)
+        {
+            for (int i = 0; i < _vertexMap.Length; i++)
+            {
+                byte t = _vertexMap[i];
+                colorData[i] = new Microsoft.Xna.Framework.Color(t, t, (byte)255, (byte)255);
+            }
+        }
+        else
+        {
+            for (int i = 0; i < _vertexMap.Length; i++)
+            {
+                byte cur = _vertexMap[i];
+                byte orig = cur;
+                byte fade = 255;
+                if (_corruptionFadeProgress.TryGetValue(i, out float t01)
+                    && _corruptionEdits.TryGetValue(i, out byte origByte))
+                {
+                    orig = origByte;
+                    fade = (byte)Math.Clamp((int)(t01 * 255f + 0.5f), 0, 255);
+                }
+                colorData[i] = new Microsoft.Xna.Framework.Color(cur, orig, fade, (byte)255);
+            }
+        }
         tex.SetData(colorData);
+        // Any rebuild reflects the latest map state — clear the dirty flag so
+        // the per-frame "rebuild if dirty" check in Game1 doesn't fire spuriously.
+        CorruptionDirty = false;
+        ResetDirtyRect();
         return tex;
     }
 }

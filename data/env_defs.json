@@ -72,6 +72,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 0,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -155,6 +157,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 6,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -238,6 +242,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 6,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -321,6 +327,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 6,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -404,6 +412,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 0,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -487,6 +497,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 0,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -570,6 +582,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 0,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -653,6 +667,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 0,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -736,6 +752,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 0,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -819,6 +837,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 0,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -902,6 +922,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 0,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -985,6 +1007,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 0,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -1068,6 +1092,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 0,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -1151,6 +1177,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 6,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -1234,6 +1262,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 6,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -1317,6 +1347,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 6,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -1400,6 +1432,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 6,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -1483,6 +1517,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 6,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -1566,6 +1602,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 6,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -1649,6 +1687,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 6,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -1732,6 +1772,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 6,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -1815,6 +1857,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 6,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -1898,6 +1942,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 6,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -1981,6 +2027,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 6,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -2064,6 +2112,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 6,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -2147,6 +2197,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 6,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -2230,6 +2282,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 6,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -2313,6 +2367,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 6,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -2396,6 +2452,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 6,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -2479,6 +2537,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 6,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -2562,6 +2622,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 6,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -2645,6 +2707,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 6,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -2728,6 +2792,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 6,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -2811,6 +2877,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 6,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -2894,6 +2962,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 6,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -2977,6 +3047,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 6,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -3060,6 +3132,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 6,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -3143,6 +3217,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 6,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -3226,6 +3302,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 6,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -3309,6 +3387,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 6,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -3392,6 +3472,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 6,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -3475,6 +3557,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 6,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -3558,6 +3642,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 6,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -3641,6 +3727,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 6,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -3724,6 +3812,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 6,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -3807,6 +3897,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 6,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -3890,6 +3982,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 6,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -3973,6 +4067,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 6,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -4056,6 +4152,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 6,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -4139,6 +4237,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 6,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -4222,6 +4322,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 6,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -4305,6 +4407,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 6,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -4388,6 +4492,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 6,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -4471,6 +4577,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 6,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -4554,6 +4662,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 6,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -4637,6 +4747,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 6,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -4720,6 +4832,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 0,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -4803,6 +4917,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 0,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -4886,6 +5002,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 0,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -4969,6 +5087,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 0,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -5052,6 +5172,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 0,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -5135,6 +5257,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 0,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -5218,6 +5342,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 0,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -5301,6 +5427,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 0,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -5384,6 +5512,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 0,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -5467,6 +5597,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 0,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -5550,6 +5682,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 0,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -5633,6 +5767,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 0,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -5716,6 +5852,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 0,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -5799,6 +5937,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 0,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -5882,6 +6022,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 0,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -5965,6 +6107,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 0,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -6048,6 +6192,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 0,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -6131,6 +6277,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 0,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -6214,6 +6362,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 0,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -6297,6 +6447,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 0,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -6380,6 +6532,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 0,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -6463,6 +6617,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 0,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -6546,6 +6702,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 0,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -6629,6 +6787,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 0,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -6712,6 +6872,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 0,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -6795,6 +6957,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 0,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -6878,6 +7042,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 0,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -6961,6 +7127,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 0,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -7044,6 +7212,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 0,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -7127,6 +7297,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 0,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -7210,6 +7382,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 0,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -7293,6 +7467,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 0,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -7376,6 +7552,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 0,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -7459,6 +7637,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 0,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -7542,6 +7722,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 0,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -7625,6 +7807,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 0,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -7708,6 +7892,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 0,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -7791,6 +7977,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 0,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -7874,6 +8062,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 0,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -7957,6 +8147,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 0,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -8040,6 +8232,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 0,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -8123,6 +8317,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 0,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -8206,6 +8402,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 0,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -8289,6 +8487,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 0,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -8372,6 +8572,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 0,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -8455,6 +8657,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 0,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -8538,6 +8742,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 0,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -8621,6 +8827,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 0,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -8704,6 +8912,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 0,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -8787,6 +8997,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 0,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -8870,6 +9082,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 0,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -8953,6 +9167,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 0,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -9036,6 +9252,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 0,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -9119,6 +9337,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 0,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -9202,6 +9422,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 0,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -9285,6 +9507,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 0,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -9368,6 +9592,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 0,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -9451,6 +9677,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 0,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -9534,6 +9762,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 0,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -9617,6 +9847,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 0,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -9700,6 +9932,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 0,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -9783,6 +10017,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 0,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -9866,6 +10102,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 0,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -9949,6 +10187,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 0,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -10032,6 +10272,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 0,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -10115,6 +10357,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 0,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -10198,6 +10442,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 0,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -10281,6 +10527,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 0,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -10364,6 +10612,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 0,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -10447,6 +10697,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 0,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -10530,6 +10782,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 0,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -10613,6 +10867,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 0,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -10696,6 +10952,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 0,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -10779,6 +11037,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 0,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -10862,6 +11122,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 0,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -10945,6 +11207,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 0,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -11028,6 +11292,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 0,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -11111,6 +11377,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 0,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -11194,6 +11462,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 0,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -11277,6 +11547,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 0,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -11360,6 +11632,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 0,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -11443,6 +11717,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 0,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -11526,6 +11802,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 0,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -11609,6 +11887,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 0,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -11692,6 +11972,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 0,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -11775,6 +12057,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 0,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -11858,6 +12142,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 0,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -11941,6 +12227,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 0,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -12024,6 +12312,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 0,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -12107,6 +12397,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 0,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -12190,6 +12482,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 0,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -12273,6 +12567,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 0,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -12356,6 +12652,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 0,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -12439,6 +12737,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 0,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -12522,6 +12822,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 0,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -12605,6 +12907,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 6,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -12688,6 +12992,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 6,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -12771,6 +13077,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 6,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -12854,6 +13162,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 6,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -12937,6 +13247,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 6,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -13020,6 +13332,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 6,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -13103,6 +13417,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 6,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -13186,6 +13502,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 6,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -13269,6 +13587,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 6,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -13352,6 +13672,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 6,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -13435,6 +13757,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 6,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -13518,6 +13842,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 6,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -13601,6 +13927,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 6,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -13684,6 +14012,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 0,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -13767,6 +14097,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 0,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -13850,6 +14182,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 0,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -13933,6 +14267,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 0,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -14016,6 +14352,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 0,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -14099,6 +14437,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 0,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -14182,6 +14522,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 0,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -14265,6 +14607,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 0,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -14348,6 +14692,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 6,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -14431,6 +14777,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 0,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.7,
     "scaleMax": 1.3,
     "tintColor": {
@@ -14514,6 +14862,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 0,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.7,
     "scaleMax": 1.3,
     "tintColor": {
@@ -14597,6 +14947,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 0,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.7,
     "scaleMax": 1.3,
     "tintColor": {
@@ -14680,6 +15032,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 0,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.7,
     "scaleMax": 1.3,
     "tintColor": {
@@ -14763,6 +15117,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 0,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.7,
     "scaleMax": 1.3,
     "tintColor": {
@@ -14846,6 +15202,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 0,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.7,
     "scaleMax": 1.3,
     "tintColor": {
@@ -14929,6 +15287,8 @@
     "respawnTime": 240,
     "fogEmitRate": 0,
     "fogAbsorbRate": 0,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -15012,6 +15372,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 6,
+    "isCorruptable": true,
+    "corruptedSprite": "assets/Environment/Trees/OakExports/OakSprite1_Dead.png",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -15095,6 +15457,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 6,
+    "isCorruptable": true,
+    "corruptedSprite": "assets/Environment/Trees/OakExports/OakSprite2_Dead.png",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -15178,6 +15542,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 6,
+    "isCorruptable": true,
+    "corruptedSprite": "assets/Environment/Trees/OakExports/OakSprite3_Dead.png",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -15261,6 +15627,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 6,
+    "isCorruptable": true,
+    "corruptedSprite": "assets/Environment/Trees/OakExports/OakSprite4_Dead.png",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -15344,6 +15712,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 6,
+    "isCorruptable": true,
+    "corruptedSprite": "assets/Environment/Trees/OakExports/OakSprite5_Dead.png",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -15427,6 +15797,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 6,
+    "isCorruptable": true,
+    "corruptedSprite": "assets/Environment/Trees/OakExports/OakSprite6_Dead.png",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -15510,6 +15882,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 6,
+    "isCorruptable": true,
+    "corruptedSprite": "assets/Environment/Trees/OakExports/OakSprite7_Dead.png",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -15593,6 +15967,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 6,
+    "isCorruptable": true,
+    "corruptedSprite": "assets/Environment/Trees/OakExports/OakSprite8_Dead.png",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -15676,6 +16052,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 6,
+    "isCorruptable": true,
+    "corruptedSprite": "assets/Environment/Trees/OakExports/OakSprite9_Dead.png",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -15697,7 +16075,7 @@
     "pivotX": 0.5027174,
     "pivotY": 0.9782609,
     "collisionRadius": 0.54999995,
-    "collisionOffsetX": -0.012934785,
+    "collisionOffsetX": -0.01,
     "collisionOffsetY": -0.2755162,
     "scale": 2,
     "placementScale": 1.8664922,
@@ -15759,6 +16137,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 6,
+    "isCorruptable": true,
+    "corruptedSprite": "assets/Environment/Trees/OakExports/OakSprite10_Dead.png",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -15842,6 +16222,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 0,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -15925,6 +16307,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 0,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -16008,6 +16392,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 0,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -16091,6 +16477,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 0,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -16174,6 +16562,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 0,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -16257,6 +16647,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 0,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -16340,6 +16732,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 0,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -16423,6 +16817,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 0,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -16506,6 +16902,8 @@
     "respawnTime": 180,
     "fogEmitRate": 0,
     "fogAbsorbRate": 0,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {
@@ -16520,16 +16918,16 @@
     "id": "blight_altar",
     "name": "Blight Altar",
     "category": "Misc",
-    "texturePath": "assets/Environment/Tombstones/Obelisk.png",
+    "texturePath": "assets/Environment/Buildings/DreamCatcher1.png",
     "heightMapPath": "",
     "spriteWorldHeight": 4,
     "worldHeight": 0,
-    "pivotX": 0.5,
-    "pivotY": 1,
-    "collisionRadius": 1,
-    "collisionOffsetX": 0,
-    "collisionOffsetY": 0,
-    "scale": 1.4,
+    "pivotX": 0.5020408,
+    "pivotY": 0.9673913,
+    "collisionRadius": 0.29999992,
+    "collisionOffsetX": -0.01521739,
+    "collisionOffsetY": -0.030434791,
+    "scale": 0.6,
     "placementScale": 1,
     "group": "",
     "groupWeight": 1,
@@ -16589,6 +16987,8 @@
     "respawnTime": 180,
     "fogEmitRate": 25,
     "fogAbsorbRate": 0,
+    "isCorruptable": false,
+    "corruptedSprite": "",
     "scaleMin": 0.8,
     "scaleMax": 1.2,
     "tintColor": {

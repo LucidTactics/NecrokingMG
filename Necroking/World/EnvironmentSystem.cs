@@ -228,6 +228,13 @@ public class EnvironmentObjectDef
     public float ScaleMin { get; set; } = 0.8f;         // random scale variation min
     public float ScaleMax { get; set; } = 1.2f;         // random scale variation max
 
+    // Corruption: when IsCorruptable, instances accumulate stress in death-fog cells
+    // (see DeathFogSystem.ApplySinks) and flip to CorruptedSprite once they cross
+    // the system-wide threshold. Corrupted sprite is single-frame; animation is
+    // suppressed for corrupted instances at render time.
+    public bool IsCorruptable { get; set; }
+    public string CorruptedSprite { get; set; } = "";
+
     /// <summary>Total frame count for animated spritesheets.</summary>
     public int AnimTotalFrames => AnimFramesX * AnimFramesY;
 
@@ -322,6 +329,8 @@ public class EnvironmentObjectDef
         writer.WriteNumber("respawnTime", RespawnTime);
         writer.WriteNumber("fogEmitRate", FogEmitRate);
         writer.WriteNumber("fogAbsorbRate", FogAbsorbRate);
+        writer.WriteBoolean("isCorruptable", IsCorruptable);
+        writer.WriteString("corruptedSprite", CorruptedSprite);
         writer.WriteNumber("scaleMin", ScaleMin);
         writer.WriteNumber("scaleMax", ScaleMax);
         // Tint color
@@ -363,6 +372,9 @@ public struct PlacedObjectRuntime
     public bool AnimReversed;      // true = playing backward (weighted momentum)
     public float AnimHoldTime;     // remaining hold time in seconds before resuming (reversal cushion)
     public uint AnimRng;           // per-instance RNG state for reversal rolls
+    public bool Corrupted;         // true once dissolve transition completed (final corrupted state)
+    public float CorruptionStress; // accumulated absorbed-fog units net of healing; clamped to [0, threshold]
+    public float CorruptionTime;   // 0 = healthy; >0 = transitioning (seconds elapsed in dissolve); reaches DeathFogSystem.CorruptionTransitionDuration when done
 
     public PlacedObjectRuntime() { HP = 0; Owner = 1; Alive = true; Collected = false; RespawnTimer = 0f; BuildProgress = 1f; }
 }
@@ -374,7 +386,7 @@ public class EnvironmentSystem
     private readonly List<string> _groups = new();
     private readonly List<EnvironmentObjectDef> _defs = new();
     private readonly List<Texture2D?> _textures = new();
-    private readonly Dictionary<string, Texture2D?> _trapTextures = new(); // cached trap sprite textures
+    private readonly Dictionary<string, Texture2D?> _overrideTextures = new(); // cached single-frame overrides (trap & corrupted sprites)
     private GraphicsDevice? _device;
     private Texture2D? _placeholderTexture; // shared placeholder for defs with missing/failed sprites
     private readonly List<PlacedObject> _objects = new();
@@ -542,6 +554,10 @@ public class EnvironmentSystem
             if (!def.IsAnimated || def.AnimTotalFrames <= 1) continue;
 
             var rt = _objectRuntime[i];
+            // Freeze animation once dissolve starts — the tree should stop swaying
+            // as it dies. Sampling stays at whatever AnimTime was before; the
+            // dissolve shader explicitly samples frame 0 anyway.
+            if (rt.CorruptionTime > 0f) continue;
             var obj = _objects[i];
             int totalFrames = def.AnimTotalFrames;
 
@@ -1014,51 +1030,95 @@ public class EnvironmentSystem
     /// <summary>Get the correct texture for an object based on trap visual state. Returns alpha multiplier.</summary>
     public Texture2D? GetObjectTexture(int objIdx, out float alpha)
     {
+        return GetObjectTexture(objIdx, out alpha, out _);
+    }
+
+    /// <summary>Get the correct texture for an object, signalling whether the result
+    /// is a single-frame override (corrupted / trap sprite) so callers can skip
+    /// spritesheet slicing. Returns alpha multiplier (used for trap fade-out).</summary>
+    public Texture2D? GetObjectTexture(int objIdx, out float alpha, out bool isOverride)
+    {
         alpha = 1f;
+        isOverride = false;
         if (objIdx < 0 || objIdx >= _objects.Count) return null;
         var obj = _objects[objIdx];
         var def = _defs[obj.DefIndex];
 
-        if (objIdx >= _objectRuntime.Count || _objectRuntime[objIdx].TrapUsesRemaining < 0)
-            return GetDefTexture(obj.DefIndex); // not a trap
-
-        var rt = _objectRuntime[objIdx];
-        switch (rt.TrapState)
+        if (objIdx < _objectRuntime.Count)
         {
-            case TrapVisualState.Triggered:
-                if (!string.IsNullOrEmpty(def.TrapTriggeredSprite))
-                    return GetOrLoadTrapTexture(def.TrapTriggeredSprite);
-                return GetDefTexture(obj.DefIndex);
+            var rt = _objectRuntime[objIdx];
+            // Corrupted overrides any trap state — corrupted trees stay corrupted.
+            if (rt.Corrupted && !string.IsNullOrEmpty(def.CorruptedSprite))
+            {
+                var corrTex = GetOrLoadOverrideTexture(def.CorruptedSprite);
+                if (corrTex != null) { isOverride = true; return corrTex; }
+            }
 
-            case TrapVisualState.Deployed:
-                if (!string.IsNullOrEmpty(def.TrapDeployedSprite))
-                    return GetOrLoadTrapTexture(def.TrapDeployedSprite);
-                return GetDefTexture(obj.DefIndex);
-
-            case TrapVisualState.FadingOut:
-                alpha = MathF.Max(0f, rt.TrapStateTimer / MathF.Max(def.TrapFadeDuration, 0.01f));
-                if (!string.IsNullOrEmpty(def.TrapDeployedSprite))
-                    return GetOrLoadTrapTexture(def.TrapDeployedSprite);
-                return GetDefTexture(obj.DefIndex);
-
-            default: // Hidden
-                return GetDefTexture(obj.DefIndex);
+            if (rt.TrapUsesRemaining >= 0)
+            {
+                switch (rt.TrapState)
+                {
+                    case TrapVisualState.Triggered:
+                        if (!string.IsNullOrEmpty(def.TrapTriggeredSprite))
+                        { isOverride = true; return GetOrLoadOverrideTexture(def.TrapTriggeredSprite); }
+                        break;
+                    case TrapVisualState.Deployed:
+                        if (!string.IsNullOrEmpty(def.TrapDeployedSprite))
+                        { isOverride = true; return GetOrLoadOverrideTexture(def.TrapDeployedSprite); }
+                        break;
+                    case TrapVisualState.FadingOut:
+                        alpha = MathF.Max(0f, rt.TrapStateTimer / MathF.Max(def.TrapFadeDuration, 0.01f));
+                        if (!string.IsNullOrEmpty(def.TrapDeployedSprite))
+                        { isOverride = true; return GetOrLoadOverrideTexture(def.TrapDeployedSprite); }
+                        break;
+                }
+            }
         }
+
+        return GetDefTexture(obj.DefIndex);
     }
 
-    private Texture2D? GetOrLoadTrapTexture(string path)
+    /// <summary>Get the corrupted-variant texture for an object's def, loading it
+    /// on demand. Returns null if the def has no CorruptedSprite or the load failed.
+    /// Used by the dissolve renderer to draw a transitioning tree.</summary>
+    public Texture2D? GetCorruptedTexture(int objIdx)
+    {
+        if (objIdx < 0 || objIdx >= _objects.Count) return null;
+        var def = _defs[_objects[objIdx].DefIndex];
+        if (string.IsNullOrEmpty(def.CorruptedSprite)) return null;
+        return GetOrLoadOverrideTexture(def.CorruptedSprite);
+    }
+
+    private Texture2D? GetOrLoadOverrideTexture(string path)
     {
         if (string.IsNullOrEmpty(path)) return null;
-        if (_trapTextures.TryGetValue(path, out var cached)) return cached;
+        if (_overrideTextures.TryGetValue(path, out var cached)) return cached;
+        if (_device == null)
+        {
+            Core.DebugLog.Log("startup", $"  Override sprite '{path}' requested before GraphicsDevice ready — caching null");
+            _overrideTextures[path] = null;
+            return null;
+        }
         string resolved = Core.GamePaths.Resolve(path);
-        if (_device == null || !System.IO.File.Exists(resolved)) { _trapTextures[path] = null; return null; }
+        if (!System.IO.File.Exists(resolved))
+        {
+            Core.DebugLog.Log("startup", $"  Override sprite missing: '{path}' (resolved to '{resolved}')");
+            _overrideTextures[path] = null;
+            return null;
+        }
         try
         {
             var tex = Render.TextureUtil.LoadPremultiplied(_device, path);
-            _trapTextures[path] = tex;
+            _overrideTextures[path] = tex;
+            Core.DebugLog.Log("startup", $"  Override sprite loaded: '{path}' ({tex.Width}x{tex.Height})");
             return tex;
         }
-        catch { _trapTextures[path] = null; return null; }
+        catch (Exception ex)
+        {
+            Core.DebugLog.Log("startup", $"  Override sprite load FAILED: '{path}' — {ex.Message}");
+            _overrideTextures[path] = null;
+            return null;
+        }
     }
 
     /// <summary>

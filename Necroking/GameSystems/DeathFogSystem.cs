@@ -32,11 +32,36 @@ public class DeathFogSystem
     /// <summary>Read-only view of the current density buffer (row-major y*W+x).</summary>
     public float[] Density => _read;
 
+    /// <summary>Read-only view of the active-cell index set. Renderers iterate this
+    /// rather than the full Width×Height grid so per-frame work scales with fog
+    /// footprint, not map size.</summary>
+    public IReadOnlyCollection<int> ActiveCells => _active;
+
     // Tunables (publicly mutable for now — wire into settings later if needed).
     public float DiffusionRate { get; set; } = 0.18f; // k; must stay < 0.25 for stability
     public float SourceRateScale { get; set; } = 1f;
     public float SinkRateScale   { get; set; } = 1f;
     public float ZeroEpsilon { get; set; } = 0.001f;
+
+    // Corruption tunables. Per-instance stress accumulates from absorbed fog and
+    // decays at HealRate; once it exceeds CorruptionThreshold the instance flips
+    // to the def's CorruptedSprite. After corrupting, the absorber rate drops to
+    // CorruptedAbsorbRate so corrupted forests don't bound fog density.
+    //   HealRate=4 means trees absorbing < 4 fog/sec recover indefinitely.
+    //   Threshold=30 means a tree at full 6/sec absorption corrupts in ~15s.
+    public float CorruptionHealRate           { get; set; } = 4f;
+    public float CorruptionThreshold          { get; set; } = 30f;
+    public float CorruptedAbsorbRate          { get; set; } = 0.5f;
+    /// <summary>Seconds for a tree's dissolve transition once it crosses threshold.
+    /// Defs with no CorruptedSprite skip the transition and flip to Corrupted instantly.</summary>
+    public float CorruptionTransitionDuration { get; set; } = 10f;
+
+    // Ground corruption: probability per second of corrupting a single vertex
+    // at fog density d follows P(d) = GroundCorruptionMaxRate * d * d. Anchors:
+    // P(0)=0%, P(0.5)=5%, P(1.0)=20% with a max-rate of 0.20.
+    public float GroundCorruptionMaxRate { get; set; } = 0.20f;
+    private float _groundCorruptionTickTimer;
+    private readonly Random _groundCorrRng = new();
 
     private float[] _read = Array.Empty<float>();
     private float[] _write = Array.Empty<float>();
@@ -79,8 +104,9 @@ public class DeathFogSystem
     }
 
     /// <summary>One simulation step. Reads sources/sinks from <paramref name="env"/>.
-    /// Caller passes raw frame dt in seconds.</summary>
-    public void Update(EnvironmentSystem env, float dt)
+    /// Caller passes raw frame dt in seconds. Pass <paramref name="ground"/> to
+    /// also tick ground-vertex corruption (once per second based on density).</summary>
+    public void Update(EnvironmentSystem env, float dt, GroundSystem? ground = null)
     {
         if (_read.Length == 0 || dt <= 0f) return;
 
@@ -97,6 +123,48 @@ public class DeathFogSystem
         // 4. Swap, clean small values, refresh active set.
         Swap();
         FinalizeActiveSet();
+
+        // 5. Ground corruption tick (once per second).
+        if (ground != null) TickGroundCorruption(ground, dt);
+    }
+
+    /// <summary>Once-per-second ground-corruption pass over active fog cells.
+    /// Each vertex inside an active cell rolls against P(d) = MaxRate * d^2 and,
+    /// on success, is swapped to its def's corrupted variant (if mapped).</summary>
+    private void TickGroundCorruption(GroundSystem ground, float dt)
+    {
+        _groundCorruptionTickTimer += dt;
+        if (_groundCorruptionTickTimer < 1.0f) return;
+        _groundCorruptionTickTimer = 0f;
+
+        int vertexW = ground.VertexW;
+        int vertexH = ground.VertexH;
+        if (vertexW <= 0 || vertexH <= 0) return;
+
+        foreach (int idx in _active)
+        {
+            float d = _read[idx];
+            if (d <= 0f) continue;
+            if (d > 1f) d = 1f;
+            float chance = GroundCorruptionMaxRate * d * d;
+            if (chance <= 0f) continue;
+
+            int cx = idx % Width;
+            int cy = idx / Width;
+            int vx0 = cx * CellSize;
+            int vy0 = cy * CellSize;
+            int vx1 = Math.Min(vx0 + CellSize, vertexW);
+            int vy1 = Math.Min(vy0 + CellSize, vertexH);
+
+            for (int vy = vy0; vy < vy1; vy++)
+            {
+                for (int vx = vx0; vx < vx1; vx++)
+                {
+                    if (_groundCorrRng.NextSingle() < chance)
+                        ground.CorruptVertex(vx, vy);
+                }
+            }
+        }
     }
 
     private void ApplySources(EnvironmentSystem env, float dt)
@@ -133,18 +201,70 @@ public class DeathFogSystem
             if (rt.Collected) continue; // foragable picked up
 
             var def = env.Defs[obj.DefIndex];
-            float absorb = def.FogAbsorbRate * SinkRateScale;
-            if (absorb <= 0f) continue;
 
-            int cx = Math.Clamp((int)(obj.X / CellSize), 0, Width  - 1);
-            int cy = Math.Clamp((int)(obj.Y / CellSize), 0, Height - 1);
-            int idx = cy * Width + cx;
-            float take = Math.Min(_write[idx], absorb * dt);
-            _write[idx] -= take;
-            if (_write[idx] < 0f) _write[idx] = 0f;
-            // Sink cells must stay active — neighbors will keep flowing into
-            // them until depleted. Mark them so diffusion considers them.
-            MarkActive(cx, cy);
+            // Once a tree starts transitioning OR fully corrupts it stops fighting —
+            // absorb drops to the residual rate so neighbors get hit harder (chain reaction).
+            bool transitioning = rt.CorruptionTime > 0f && !rt.Corrupted;
+            float baseAbsorb = (rt.Corrupted || transitioning) ? CorruptedAbsorbRate : def.FogAbsorbRate;
+            float absorb = baseAbsorb * SinkRateScale;
+
+            float take = 0f;
+            if (absorb > 0f)
+            {
+                int cx = Math.Clamp((int)(obj.X / CellSize), 0, Width  - 1);
+                int cy = Math.Clamp((int)(obj.Y / CellSize), 0, Height - 1);
+                int idx = cy * Width + cx;
+                take = Math.Min(_write[idx], absorb * dt);
+                _write[idx] -= take;
+                if (_write[idx] < 0f) _write[idx] = 0f;
+                // Sink cells must stay active — neighbors will keep flowing into
+                // them until depleted. Mark them so diffusion considers them.
+                MarkActive(cx, cy);
+            }
+
+            if (def.IsCorruptable && !rt.Corrupted)
+            {
+                if (transitioning)
+                {
+                    // Mid-dissolve: advance timer, complete when duration reached.
+                    rt.CorruptionTime += dt;
+                    if (rt.CorruptionTime >= CorruptionTransitionDuration)
+                    {
+                        rt.Corrupted = true;
+                        DebugLog.Log("startup", $"DeathFog: object {i} ({def.Id}) finished dissolve at ({obj.X:F1},{obj.Y:F1})");
+                    }
+                    env.SetObjectRuntime(i, rt);
+                }
+                else
+                {
+                    // Healthy: stress accumulates from absorbed fog and decays at HealRate.
+                    // Trees in light fog (take < HealRate*dt) heal faster than they
+                    // take damage and stay healthy indefinitely.
+                    float stress = rt.CorruptionStress + take - CorruptionHealRate * dt;
+                    if (stress < 0f) stress = 0f;
+                    if (stress >= CorruptionThreshold)
+                    {
+                        rt.CorruptionStress = CorruptionThreshold;
+                        // Defs with no dissolve target skip the transition entirely —
+                        // a 5-second dissolve to nothing visible would just be a no-op.
+                        if (string.IsNullOrEmpty(def.CorruptedSprite))
+                        {
+                            rt.Corrupted = true;
+                            DebugLog.Log("startup", $"DeathFog: object {i} ({def.Id}) corrupted (no transition — no CorruptedSprite) at ({obj.X:F1},{obj.Y:F1})");
+                        }
+                        else
+                        {
+                            rt.CorruptionTime = 0.0001f; // signals transition started
+                            DebugLog.Log("startup", $"DeathFog: object {i} ({def.Id}) starting dissolve at ({obj.X:F1},{obj.Y:F1})");
+                        }
+                    }
+                    else
+                    {
+                        rt.CorruptionStress = stress;
+                    }
+                    env.SetObjectRuntime(i, rt);
+                }
+            }
         }
     }
 

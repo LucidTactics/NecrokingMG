@@ -38,7 +38,8 @@ public class ShadowRenderer
         Dictionary<uint, Game1.UnitAnimData> unitAnims,
         SpriteAtlas[] atlases,
         EnvironmentSystem envSystem,
-        FogOfWarSystem fogOfWar)
+        FogOfWarSystem fogOfWar,
+        DeathFogSystem? deathFog = null)
     {
         var shadow = gameData.Settings.Shadow;
         if (!shadow.Enabled) return;
@@ -46,7 +47,7 @@ public class ShadowRenderer
         bool useShader = (UnitShadowMode)shadow.UnitShadowMode == UnitShadowMode.Shader;
 
         if (useShader)
-            DrawShaderShadows(device, spriteBatch, glowTex, camera, renderer, sim, gameData, unitAnims, atlases, envSystem, shadow, fogOfWar);
+            DrawShaderShadows(device, spriteBatch, glowTex, camera, renderer, sim, gameData, unitAnims, atlases, envSystem, shadow, fogOfWar, deathFog);
         else
             DrawEllipseShadows(spriteBatch, glowTex, camera, renderer, sim, gameData, envSystem, shadow, fogOfWar);
     }
@@ -134,13 +135,16 @@ public class ShadowRenderer
             if (!envSystem.IsObjectVisible(i)) continue;
             var obj = envSystem.Objects[i];
             var def = envSystem.Defs[obj.DefIndex];
-            var tex = envSystem.GetDefTexture(obj.DefIndex);
+            // Use the render-time texture so corrupted trees cast a shadow that
+            // matches their dead silhouette, not the live spritesheet.
+            var tex = envSystem.GetObjectTexture(i, out _, out bool isOverride);
             if (tex == null) continue;
 
-            // Use per-frame dimensions for animated spritesheets (skip when placeholder is active)
+            // Use per-frame dimensions for animated spritesheets (skip when placeholder
+            // is active and for single-frame override textures).
             float texW = tex.Width;
             float texH = tex.Height;
-            if (def.IsAnimated && def.AnimTotalFrames > 1 && !envSystem.IsUsingPlaceholder(obj.DefIndex))
+            if (def.IsAnimated && def.AnimTotalFrames > 1 && !envSystem.IsUsingPlaceholder(obj.DefIndex) && !isOverride)
             {
                 texW = tex.Width / (float)Math.Max(def.AnimFramesX, 1);
                 texH = tex.Height / (float)Math.Max(def.AnimFramesY, 1);
@@ -177,7 +181,8 @@ public class ShadowRenderer
         SpriteAtlas[] atlases,
         EnvironmentSystem envSystem,
         ShadowSettings shadow,
-        FogOfWarSystem fogOfWar)
+        FogOfWarSystem fogOfWar,
+        DeathFogSystem? deathFog)
     {
         // Projected shadows as skewed parallelogram quads (matching C++ implementation).
         // Bottom edge sits at feet, top edge shifted by sun direction vector.
@@ -267,14 +272,31 @@ public class ShadowRenderer
             var def = envSystem.Defs[obj.DefIndex];
             if (def.ShadowType == 2) continue; // None — skip entirely
 
-            var tex = envSystem.GetDefTexture(obj.DefIndex);
+            // Crossfade shadow during corruption transition: the projected
+            // silhouette switches from the live tree's frame 0 to the dead
+            // sprite over the same window the main DrawDissolvingTree uses,
+            // so shadow and sprite stay in lockstep.
+            var rt = envSystem.GetObjectRuntime(i);
+            bool transitioning = rt.CorruptionTime > 0f && !rt.Corrupted
+                && !string.IsNullOrEmpty(def.CorruptedSprite);
+            if (transitioning && def.ShadowType != 1 && deathFog != null)
+            {
+                if (DrawCrossfadingEnvShadow(device, envSystem, camera, renderer,
+                        i, obj, def, rt, shadow, sdxDir, sdyDir, shAlpha, deathFog))
+                    continue;
+            }
+
+            // Use the render-time texture so corrupted trees project the dead
+            // silhouette through the shader-shadow path.
+            var tex = envSystem.GetObjectTexture(i, out _, out bool isOverride);
             if (tex == null) continue;
 
-            // Use per-frame dimensions for animated spritesheets (skip when placeholder is active)
+            // Use per-frame dimensions for animated spritesheets (skip when placeholder
+            // is active and for single-frame override textures).
             float fTexW = tex.Width;
             float fTexH = tex.Height;
             float u0 = 0f, v0 = 0f, u1 = 1f, v1 = 1f;
-            if (def.IsAnimated && def.AnimTotalFrames > 1 && !envSystem.IsUsingPlaceholder(obj.DefIndex))
+            if (def.IsAnimated && def.AnimTotalFrames > 1 && !envSystem.IsUsingPlaceholder(obj.DefIndex) && !isOverride)
             {
                 // Shadow uses first frame only (no animation on shadows)
                 var frameRect = def.GetAnimFrameRect(tex.Width, tex.Height, 0);
@@ -356,5 +378,77 @@ public class ShadowRenderer
             device.DrawUserIndexedPrimitives(
                 PrimitiveType.TriangleList, _shadowVerts, 0, 4, ShadowIndices, 0, 2);
         }
+    }
+
+    /// <summary>
+    /// Draw a transitioning tree's shadow as two crossfading projected silhouettes:
+    /// live frame 0 fading out over the corruption window, dead sprite fading in.
+    /// Both quads use identical projection geometry so the shape morphs smoothly.
+    /// Returns false if the live or dead texture is unavailable (caller falls
+    /// back to the regular single-shadow path).
+    /// </summary>
+    private bool DrawCrossfadingEnvShadow(
+        GraphicsDevice device, EnvironmentSystem envSystem,
+        Camera25D camera, Renderer renderer,
+        int objIdx, in PlacedObject obj, EnvironmentObjectDef def, in PlacedObjectRuntime rt,
+        ShadowSettings shadow, float sdxDir, float sdyDir, byte shAlpha,
+        DeathFogSystem deathFog)
+    {
+        var liveTex = envSystem.GetDefTexture(obj.DefIndex);
+        var deadTex = envSystem.GetCorruptedTexture(objIdx);
+        if (liveTex == null || deadTex == null) return false;
+        if (envSystem.IsUsingPlaceholder(obj.DefIndex)) return false;
+
+        // Live frame 0 UV bounds — animated trees freeze at frame 0 once
+        // CorruptionTime > 0 (see EnvironmentSystem.UpdateAnimations).
+        Rectangle frame0 = (def.IsAnimated && def.AnimTotalFrames > 1)
+            ? def.GetAnimFrameRect(liveTex.Width, liveTex.Height, 0)
+            : new Rectangle(0, 0, liveTex.Width, liveTex.Height);
+        float lu0 = frame0.X / (float)liveTex.Width;
+        float lv0 = frame0.Y / (float)liveTex.Height;
+        float lu1 = (frame0.X + frame0.Width)  / (float)liveTex.Width;
+        float lv1 = (frame0.Y + frame0.Height) / (float)liveTex.Height;
+
+        // Geometry sized to the live frame (dead sprite matches per-frame dims).
+        float fTexW = frame0.Width;
+        float fTexH = frame0.Height;
+        float worldH = def.SpriteWorldHeight * obj.Scale * def.Scale;
+        float pixelH = worldH * camera.Zoom;
+        float scale = pixelH / fTexH;
+        float destW = fTexW * scale;
+        float destH = pixelH;
+
+        var feetSp = renderer.WorldToScreen(new Vec2(obj.X, obj.Y), 0f, camera);
+        float shadowH = destH * shadow.Squash;
+        float leftOff = destW * def.PivotX;
+        float rightOff = destW * (1f - def.PivotX);
+        float swLen = worldH * shadow.LengthScale * camera.Zoom;
+        float sdx = sdxDir * swLen;
+        float sdy = sdyDir * swLen * camera.YRatio;
+
+        float duration = MathF.Max(deathFog.CorruptionTransitionDuration, 0.01f);
+        float t = MathHelper.Clamp(rt.CorruptionTime / duration, 0f, 1f);
+
+        // Live shadow fades out, dead shadow fades in. Modulating the shadow
+        // colour's alpha is enough — DrawShadowQuad uses BasicEffect with
+        // AlphaBlend, and the texture's own alpha gates the silhouette shape.
+        byte aLive = (byte)Math.Clamp((int)(shAlpha * (1f - t) + 0.5f), 0, 255);
+        byte aDead = (byte)Math.Clamp((int)(shAlpha * t          + 0.5f), 0, 255);
+
+        if (aLive > 0)
+        {
+            DrawShadowQuad(device, liveTex, feetSp.X, feetSp.Y,
+                leftOff, rightOff, shadowH, sdx, sdy,
+                lu0, lv0, lu1, lv1,
+                new Color((byte)0, (byte)0, (byte)0, aLive));
+        }
+        if (aDead > 0)
+        {
+            DrawShadowQuad(device, deadTex, feetSp.X, feetSp.Y,
+                leftOff, rightOff, shadowH, sdx, sdy,
+                0f, 0f, 1f, 1f,
+                new Color((byte)0, (byte)0, (byte)0, aDead));
+        }
+        return true;
     }
 }

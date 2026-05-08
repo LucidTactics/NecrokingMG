@@ -1291,6 +1291,35 @@ public class EnvObjectEditorWindow
 
         curY += 4;
 
+        // --- Section: Corruption ---
+        curY = DrawSectionLabel(fx, curY, fieldW, "CORRUPTION");
+
+        bool newCorruptable = _ui.DrawCheckbox("Is Corruptable", def.IsCorruptable, fx, curY);
+        if (newCorruptable != def.IsCorruptable) def.IsCorruptable = newCorruptable;
+        curY += RowH;
+
+        if (def.IsCorruptable)
+        {
+            int corrBrowseW = 55;
+            string newCorrSprite = _ui.DrawTextField("envdef_corrsprite", "Corrupted Sprite", def.CorruptedSprite, fx, curY, fieldW - corrBrowseW - 4);
+            if (newCorrSprite != def.CorruptedSprite) def.CorruptedSprite = newCorrSprite;
+            if (_ui.DrawButton("Browse##corr", fx + fieldW - corrBrowseW, curY, corrBrowseW, 20))
+            {
+                // Default to the directory of the main texture so the dead-tree
+                // sprite usually sits right next to its live spritesheet.
+                string baseDir = !string.IsNullOrEmpty(def.TexturePath)
+                    ? GamePaths.Resolve(System.IO.Path.GetDirectoryName(def.TexturePath) ?? "assets")
+                    : GamePaths.Resolve("assets");
+                _textureBrowser.Open(baseDir, def.CorruptedSprite, path =>
+                {
+                    def.CorruptedSprite = path;
+                });
+            }
+            curY += RowH;
+        }
+
+        curY += 4;
+
         // --- Section: Trap Spell ---
         curY = DrawSectionLabel(fx, curY, fieldW, "TRAP SPELL");
 
@@ -1609,6 +1638,8 @@ public class EnvObjectEditorWindow
             RespawnTime = src.RespawnTime,
             ScaleMin = src.ScaleMin,
             ScaleMax = src.ScaleMax,
+            IsCorruptable = src.IsCorruptable,
+            CorruptedSprite = src.CorruptedSprite,
         };
 
         int newIdx = _env.AddDef(copy);

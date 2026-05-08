@@ -18,12 +18,12 @@ public class SettingsWindow
     private GameSystems.DayNightSystem? _dayNightSystem;
 
     // Tab state
-    private enum Tab { Bloom, Shadow, Environment, Weather, General, Horde, FogOfWar }
+    private enum Tab { Bloom, Shadow, Environment, Weather, General, Horde, FogOfWar, Corruption }
     private Tab _activeTab = Tab.Bloom;
-    private static readonly string[] TabNames = { "Bloom", "Shadow", "Environ", "Weather", "General", "Horde", "Fog" };
+    private static readonly string[] TabNames = { "Bloom", "Shadow", "Environ", "Weather", "General", "Horde", "Fog", "Corrupt" };
 
     // Scroll state per tab (keyed by tab name)
-    private readonly float[] _tabScroll = new float[7];
+    private readonly float[] _tabScroll = new float[8];
 
     // Track whether we need to save after a frame (dirty flag)
     private bool _dirty;
@@ -172,6 +172,9 @@ public class SettingsWindow
                 break;
             case Tab.FogOfWar:
                 totalContentHeight = DrawFogOfWarTab(contentX, y, contentW);
+                break;
+            case Tab.Corruption:
+                totalContentHeight = DrawCorruptionTab(contentX, y, contentW);
                 break;
             default:
                 totalContentHeight = 0;
@@ -385,6 +388,111 @@ public class SettingsWindow
         y += 20;
 
         return y - startY;
+    }
+
+    // ----------------------------------------------------------------
+    //  Corruption tab — death-fog gameplay + visual tunables.
+    //  Values flow back into the live systems each frame via
+    //  Game1.SyncCorruptionSettings, so changes take effect immediately.
+    // ----------------------------------------------------------------
+    private int DrawCorruptionTab(int x, int y, int w)
+    {
+        int startY = y;
+        int rowH = 26;
+        var c = _gameData.Settings.Corruption;
+
+        DrawSectionHeader("Trees", x, ref y);
+
+        float treeHeal = _ui.DrawFloatField("set_corr_treeheal", "Heal Rate (stress/s)", c.TreeHealRate, x, y, w, 0.5f);
+        if (MathF.Abs(treeHeal - c.TreeHealRate) > 0.001f) { c.TreeHealRate = MathF.Max(0f, treeHeal); MarkDirty(); }
+        y += rowH;
+
+        float treeThr = _ui.DrawFloatField("set_corr_treethr", "Threshold (stress)", c.TreeThreshold, x, y, w, 1f);
+        if (MathF.Abs(treeThr - c.TreeThreshold) > 0.001f) { c.TreeThreshold = MathF.Max(0.1f, treeThr); MarkDirty(); }
+        y += rowH;
+
+        float treeAbsorb = _ui.DrawFloatField("set_corr_treeabsorb", "Corrupted Absorb (fog/s)", c.TreeCorruptedAbsorbRate, x, y, w, 0.05f);
+        if (MathF.Abs(treeAbsorb - c.TreeCorruptedAbsorbRate) > 0.001f) { c.TreeCorruptedAbsorbRate = MathF.Max(0f, treeAbsorb); MarkDirty(); }
+        y += rowH;
+
+        float treeFade = _ui.DrawFloatField("set_corr_treefade", "Dissolve Duration (s)", c.TreeFadeDuration, x, y, w, 0.5f);
+        if (MathF.Abs(treeFade - c.TreeFadeDuration) > 0.001f) { c.TreeFadeDuration = MathF.Max(0.1f, treeFade); MarkDirty(); }
+        y += rowH;
+
+        DrawSectionHeader("Ground", x, ref y);
+
+        float groundRate = _ui.DrawFloatField("set_corr_groundrate", "Max Rate at d=1 (/s)", c.GroundMaxRatePerSec, x, y, w, 0.01f);
+        if (MathF.Abs(groundRate - c.GroundMaxRatePerSec) > 0.0001f) { c.GroundMaxRatePerSec = Math.Clamp(groundRate, 0f, 1f); MarkDirty(); }
+        y += rowH;
+
+        float groundFade = _ui.DrawFloatField("set_corr_groundfade", "Fade Duration (s)", c.GroundFadeDuration, x, y, w, 0.5f);
+        if (MathF.Abs(groundFade - c.GroundFadeDuration) > 0.001f) { c.GroundFadeDuration = MathF.Max(0.1f, groundFade); MarkDirty(); }
+        y += rowH;
+
+        DrawSectionHeader("Grass", x, ref y);
+
+        float grassFade = _ui.DrawFloatField("set_corr_grassfade", "Tint Fade Duration (s)", c.GrassFadeDuration, x, y, w, 0.5f);
+        if (MathF.Abs(grassFade - c.GrassFadeDuration) > 0.001f) { c.GrassFadeDuration = MathF.Max(0.1f, grassFade); MarkDirty(); }
+        y += rowH;
+
+        DrawSectionHeader("Fog Simulation", x, ref y);
+
+        float diff = _ui.DrawFloatField("set_corr_diff", "Diffusion Rate (<0.25)", c.DiffusionRate, x, y, w, 0.01f);
+        if (MathF.Abs(diff - c.DiffusionRate) > 0.0001f) { c.DiffusionRate = Math.Clamp(diff, 0f, 0.249f); MarkDirty(); }
+        y += rowH;
+
+        float src = _ui.DrawFloatField("set_corr_src", "Source Rate Scale", c.SourceRateScale, x, y, w, 0.1f);
+        if (MathF.Abs(src - c.SourceRateScale) > 0.001f) { c.SourceRateScale = MathF.Max(0f, src); MarkDirty(); }
+        y += rowH;
+
+        float sink = _ui.DrawFloatField("set_corr_sink", "Sink Rate Scale", c.SinkRateScale, x, y, w, 0.1f);
+        if (MathF.Abs(sink - c.SinkRateScale) > 0.001f) { c.SinkRateScale = MathF.Max(0f, sink); MarkDirty(); }
+        y += rowH;
+
+        DrawSectionHeader("Fog Visual (death-fog overlay)", x, ref y);
+
+        float vis = _ui.DrawFloatField("set_corr_vis", "Visibility Threshold", c.FogVisibilityThreshold, x, y, w, 0.005f);
+        if (MathF.Abs(vis - c.FogVisibilityThreshold) > 0.0001f) { c.FogVisibilityThreshold = Math.Clamp(vis, 0f, 1f); MarkDirty(); }
+        y += rowH;
+
+        float sat = _ui.DrawFloatField("set_corr_sat", "Saturation Density", c.FogSaturationDensity, x, y, w, 0.05f);
+        if (MathF.Abs(sat - c.FogSaturationDensity) > 0.0001f) { c.FogSaturationDensity = MathF.Max(0.01f, sat); MarkDirty(); }
+        y += rowH;
+
+        float maxA = _ui.DrawSliderFloat("set_corr_maxa", "Max Alpha", c.FogMaxAlpha, 0f, 1f, x, y, w);
+        if (MathF.Abs(maxA - c.FogMaxAlpha) > 0.001f) { c.FogMaxAlpha = maxA; MarkDirty(); }
+        y += rowH;
+
+        float cyc = _ui.DrawFloatField("set_corr_cyc", "Flipbook Cycle (s)", c.FogFlipbookCycleSeconds, x, y, w, 0.25f);
+        if (MathF.Abs(cyc - c.FogFlipbookCycleSeconds) > 0.001f) { c.FogFlipbookCycleSeconds = MathF.Max(0.1f, cyc); MarkDirty(); }
+        y += rowH;
+
+        float puffSize = _ui.DrawFloatField("set_corr_puffsize", "Puff Size (× cell)", c.FogPuffWorldSizeMultiplier, x, y, w, 0.1f);
+        if (MathF.Abs(puffSize - c.FogPuffWorldSizeMultiplier) > 0.001f) { c.FogPuffWorldSizeMultiplier = MathF.Max(0.1f, puffSize); MarkDirty(); }
+        y += rowH;
+
+        float jit = _ui.DrawSliderFloat("set_corr_jit", "Position Jitter", c.FogPositionJitter, 0f, 1f, x, y, w);
+        if (MathF.Abs(jit - c.FogPositionJitter) > 0.001f) { c.FogPositionJitter = jit; MarkDirty(); }
+        y += rowH;
+
+        // Fog tint colour swatch
+        _ui.DrawText("Fog Tint:", new Vector2(x, y), EditorBase.AccentColor);
+        var tintHdr = new Core.HdrColor((byte)c.FogTint.R, (byte)c.FogTint.G, (byte)c.FogTint.B, (byte)c.FogTint.A, 1.0f);
+        if (_ui.DrawColorSwatch("set_corr_tint", x + 90, y, 40, 18, ref tintHdr, hideIntensity: true))
+        {
+            c.FogTint.R = tintHdr.R; c.FogTint.G = tintHdr.G; c.FogTint.B = tintHdr.B; c.FogTint.A = tintHdr.A;
+            MarkDirty();
+        }
+        y += rowH;
+
+        return y - startY;
+    }
+
+    private void DrawSectionHeader(string label, int x, ref int y)
+    {
+        y += 4;
+        _ui.DrawText(label.ToUpperInvariant(), new Vector2(x, y), EditorBase.AccentColor);
+        y += 18;
     }
 
     // ----------------------------------------------------------------

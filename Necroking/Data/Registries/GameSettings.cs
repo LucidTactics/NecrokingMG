@@ -168,6 +168,40 @@ public class FogOfWarSettings
     [JsonPropertyName("foggedAlpha")] public float FoggedAlpha { get; set; } = 0.7f;            // greyed terrain visible
 }
 
+/// <summary>Corruption-system tunables: tree dissolve thresholds + durations,
+/// ground/grass fade durations, fog simulation rates, and the visual look of
+/// the death-fog spritesheet overlay. All persisted in settings.json so live
+/// edits via the in-game settings panel survive restarts.</summary>
+public class CorruptionSettings
+{
+    // --- Trees ---
+    [JsonPropertyName("treeHealRate")]            public float TreeHealRate { get; set; } = 4f;
+    [JsonPropertyName("treeThreshold")]           public float TreeThreshold { get; set; } = 30f;
+    [JsonPropertyName("treeCorruptedAbsorbRate")] public float TreeCorruptedAbsorbRate { get; set; } = 0.5f;
+    [JsonPropertyName("treeFadeDuration")]        public float TreeFadeDuration { get; set; } = 10f;
+
+    // --- Ground ---
+    [JsonPropertyName("groundMaxRatePerSec")] public float GroundMaxRatePerSec { get; set; } = 0.20f;
+    [JsonPropertyName("groundFadeDuration")]  public float GroundFadeDuration  { get; set; } = 5f;
+
+    // --- Grass ---
+    [JsonPropertyName("grassFadeDuration")] public float GrassFadeDuration { get; set; } = 10f;
+
+    // --- Fog simulation ---
+    [JsonPropertyName("diffusionRate")]    public float DiffusionRate    { get; set; } = 0.18f;
+    [JsonPropertyName("sourceRateScale")]  public float SourceRateScale  { get; set; } = 1.0f;
+    [JsonPropertyName("sinkRateScale")]    public float SinkRateScale    { get; set; } = 1.0f;
+
+    // --- Fog visual (death-fog sprite overlay) ---
+    [JsonPropertyName("fogVisibilityThreshold")]     public float FogVisibilityThreshold     { get; set; } = 0.02f;
+    [JsonPropertyName("fogSaturationDensity")]       public float FogSaturationDensity       { get; set; } = 1.0f;
+    [JsonPropertyName("fogMaxAlpha")]                public float FogMaxAlpha                { get; set; } = 0.20f;
+    [JsonPropertyName("fogFlipbookCycleSeconds")]    public float FogFlipbookCycleSeconds    { get; set; } = 3f;
+    [JsonPropertyName("fogPuffWorldSizeMultiplier")] public float FogPuffWorldSizeMultiplier { get; set; } = 1.5f;
+    [JsonPropertyName("fogPositionJitter")]          public float FogPositionJitter          { get; set; } = 0.4f;
+    [JsonPropertyName("fogTint")] public ColorJson FogTint { get; set; } = new() { R = 185, G = 210, B = 180, A = 255 };
+}
+
 public class GameSettingsData
 {
     [JsonPropertyName("bloom")] public BloomSettings Bloom { get; set; } = new();
@@ -180,6 +214,7 @@ public class GameSettingsData
     [JsonPropertyName("combat")] public CombatSettings Combat { get; set; } = new();
     [JsonPropertyName("fogOfWar")] public FogOfWarSettings FogOfWar { get; set; } = new();
     [JsonPropertyName("performance")] public PerformanceSettings Performance { get; set; } = new();
+    [JsonPropertyName("corruption")] public CorruptionSettings Corruption { get; set; } = new();
     [JsonPropertyName("startingInventory")] public List<StartingItem> StartingInventory { get; set; } = new();
 
     public bool Load(string path)
@@ -200,6 +235,8 @@ public class GameSettingsData
             Combat = loaded.Combat;
             FogOfWar = loaded.FogOfWar;
             Performance = loaded.Performance;
+            // Corruption defaults if missing from older settings.json files.
+            Corruption = loaded.Corruption ?? new CorruptionSettings();
             StartingInventory = loaded.StartingInventory;
             return true;
         }

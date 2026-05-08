@@ -32,7 +32,8 @@ public static class MapData
                     {
                         Id = gt.GetProperty("id").GetString() ?? "",
                         Name = gt.TryGetProperty("name", out var n) ? n.GetString() ?? "" : "",
-                        TexturePath = gt.TryGetProperty("texturePath", out var tp) ? tp.GetString() ?? "" : ""
+                        TexturePath = gt.TryGetProperty("texturePath", out var tp) ? tp.GetString() ?? "" : "",
+                        CorruptedTypeId = gt.TryGetProperty("corruptedTypeId", out var ct) ? ct.GetString() ?? "" : ""
                     });
                 }
                 DebugLog.Log("startup", $"  Ground types: {ground.TypeCount}");
@@ -365,8 +366,6 @@ public static class MapData
     public struct GrassTypeInfo
     {
         public string Id, Name;
-        public byte BaseR, BaseG, BaseB;
-        public byte TipR, TipG, TipB;
         /// <summary>
         /// Sprite paths (relative to project root, e.g. "assets/Environment/Grass/GreenGrass1.png").
         /// Renderer picks one per cell via hash; null/empty treated as "no sprites".
@@ -382,6 +381,10 @@ public static class MapData
         /// to 1.0 if missing (every painted cell draws).
         /// </summary>
         public float Density;
+        /// <summary>Healthy tint (multiplicative). Defaults to White if missing.</summary>
+        public byte DefR, DefG, DefB, DefA;
+        /// <summary>Corrupted tint (multiplicative). Defaults to a muted purple-grey.</summary>
+        public byte CorR, CorG, CorB, CorA;
     }
 
     public struct GrassMapInfo
@@ -408,43 +411,15 @@ public static class MapData
                 var info = new GrassTypeInfo
                 {
                     Id = gt.TryGetProperty("id", out var id) ? id.GetString() ?? "" : "",
-                    Name = gt.TryGetProperty("name", out var n) ? n.GetString() ?? "" : ""
+                    Name = gt.TryGetProperty("name", out var n) ? n.GetString() ?? "" : "",
+                    DefR = 255, DefG = 255, DefB = 255, DefA = 255,
+                    CorR = 80, CorG = 60, CorB = 70, CorA = 255,
                 };
-                if (gt.TryGetProperty("baseColor", out var bc))
-                {
-                    if (bc.ValueKind == JsonValueKind.Array)
-                    {
-                        var arr = bc.EnumerateArray().ToArray();
-                        info.BaseR = arr.Length > 0 ? (byte)arr[0].GetInt32() : (byte)46;
-                        info.BaseG = arr.Length > 1 ? (byte)arr[1].GetInt32() : (byte)102;
-                        info.BaseB = arr.Length > 2 ? (byte)arr[2].GetInt32() : (byte)20;
-                    }
-                    else
-                    {
-                        info.BaseR = (byte)(bc.TryGetProperty("r", out var r) ? r.GetInt32() : 46);
-                        info.BaseG = (byte)(bc.TryGetProperty("g", out var g) ? g.GetInt32() : 102);
-                        info.BaseB = (byte)(bc.TryGetProperty("b", out var b) ? b.GetInt32() : 20);
-                    }
-                }
-                else { info.BaseR = 46; info.BaseG = 102; info.BaseB = 20; }
-
-                if (gt.TryGetProperty("tipColor", out var tc))
-                {
-                    if (tc.ValueKind == JsonValueKind.Array)
-                    {
-                        var arr = tc.EnumerateArray().ToArray();
-                        info.TipR = arr.Length > 0 ? (byte)arr[0].GetInt32() : (byte)100;
-                        info.TipG = arr.Length > 1 ? (byte)arr[1].GetInt32() : (byte)166;
-                        info.TipB = arr.Length > 2 ? (byte)arr[2].GetInt32() : (byte)50;
-                    }
-                    else
-                    {
-                        info.TipR = (byte)(tc.TryGetProperty("r", out var r) ? r.GetInt32() : 100);
-                        info.TipG = (byte)(tc.TryGetProperty("g", out var g) ? g.GetInt32() : 166);
-                        info.TipB = (byte)(tc.TryGetProperty("b", out var b) ? b.GetInt32() : 50);
-                    }
-                }
-                else { info.TipR = 100; info.TipG = 166; info.TipB = 50; }
+                // Legacy "baseColor"/"tipColor" keys (per-blade colours from the
+                // dead blade renderer) are intentionally not parsed — they're
+                // dropped on the next save. New maps use defaultTint/corruptedTint.
+                if (gt.TryGetProperty("defaultTint", out var dt)) ParseTintInto(dt, ref info.DefR, ref info.DefG, ref info.DefB, ref info.DefA);
+                if (gt.TryGetProperty("corruptedTint", out var ct)) ParseTintInto(ct, ref info.CorR, ref info.CorG, ref info.CorB, ref info.CorA);
 
                 if (gt.TryGetProperty("spritePaths", out var sp) && sp.ValueKind == JsonValueKind.Array)
                 {
@@ -469,6 +444,26 @@ public static class MapData
         }
 
         return new GrassMapInfo { Width = w, Height = h, Cells = cells, Types = types.ToArray() };
+    }
+
+    /// <summary>Parse an LDR colour stored as either {r,g,b[,a]} object or [r,g,b[,a]] array.</summary>
+    private static void ParseTintInto(JsonElement el, ref byte r, ref byte g, ref byte b, ref byte a)
+    {
+        if (el.ValueKind == JsonValueKind.Array)
+        {
+            var arr = el.EnumerateArray().ToArray();
+            if (arr.Length > 0) r = (byte)arr[0].GetInt32();
+            if (arr.Length > 1) g = (byte)arr[1].GetInt32();
+            if (arr.Length > 2) b = (byte)arr[2].GetInt32();
+            if (arr.Length > 3) a = (byte)arr[3].GetInt32();
+        }
+        else if (el.ValueKind == JsonValueKind.Object)
+        {
+            if (el.TryGetProperty("r", out var pr)) r = (byte)pr.GetInt32();
+            if (el.TryGetProperty("g", out var pg)) g = (byte)pg.GetInt32();
+            if (el.TryGetProperty("b", out var pb)) b = (byte)pb.GetInt32();
+            if (el.TryGetProperty("a", out var pa)) a = (byte)pa.GetInt32();
+        }
     }
 
     private static EnvironmentObjectDef ParseEnvDef(JsonElement ed)
@@ -536,6 +531,8 @@ public static class MapData
         if (ed.TryGetProperty("scaleMax", out var smax)) def.ScaleMax = smax.GetSingle();
         if (ed.TryGetProperty("fogEmitRate", out var femit)) def.FogEmitRate = femit.GetSingle();
         if (ed.TryGetProperty("fogAbsorbRate", out var fabs)) def.FogAbsorbRate = fabs.GetSingle();
+        if (ed.TryGetProperty("isCorruptable", out var icor)) def.IsCorruptable = icor.GetBoolean();
+        if (ed.TryGetProperty("corruptedSprite", out var csp)) def.CorruptedSprite = csp.GetString() ?? "";
         // Processing slots
         if (ed.TryGetProperty("input1", out var in1))
         {

@@ -122,10 +122,10 @@ public class Game1 : Microsoft.Xna.Framework.Game
     // Grass
     private byte[] _grassMap = Array.Empty<byte>();
     private int _grassW, _grassH;
-    private Color[] _grassBaseColors = Array.Empty<Color>();
-    private Color[] _grassTipColors = Array.Empty<Color>();
     private string[] _grassTypeIds = Array.Empty<string>();
     private string[] _grassTypeNames = Array.Empty<string>();
+    private Color[] _grassDefaultTints = Array.Empty<Color>();
+    private Color[] _grassCorruptedTints = Array.Empty<Color>();
     // Per-type sprite paths (parallel array to the color arrays). One entry per grass
     // type; each entry is a list of 0-5 project-relative PNG paths. Drives the tuft
     // renderer. Populated from the map editor (SyncGrassFromEditor) or the scenario
@@ -149,6 +149,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
     private Dictionary<string, Flipbook> _flipbooks = new(); // keyed by flipbook ID
     private Dictionary<string, AnimationMeta> _animMeta = new(); // animation metadata
     private Microsoft.Xna.Framework.Graphics.Effect? _groundEffect;
+    private Microsoft.Xna.Framework.Graphics.Effect? _dissolveTreeEffect;
     private Microsoft.Xna.Framework.Graphics.Effect? _outlineFlatEffect;
     private Microsoft.Xna.Framework.Graphics.Effect? _hdrIntensityEffect;
     private Microsoft.Xna.Framework.Graphics.Effect? _hdrSpriteEffect;
@@ -163,6 +164,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
     private DayNightSystem _dayNightSystem = new();
     private LightningRenderer _lightningRenderer = new();
     private PoisonCloudRenderer _poisonCloudRenderer = new();
+    private DeathFogRenderer _deathFogRenderer = new();
     private MagicGlyphRenderer _glyphRenderer = new();
     private DebugDraw _debugDraw = new();
     private GameSystems.SpellEffectSystem _spellEffects = new();
@@ -537,6 +539,10 @@ public class Game1 : Microsoft.Xna.Framework.Game
         _envSystem.ClearObjects();
         _envSystem.ClearDefs();
         _groundSystem.ClearTypes();
+        // Wipe per-cell grass corruption fades — the renderer instance persists
+        // across new-games, so without this stale fade values from the previous
+        // session would render the grass already-corrupted on map load.
+        _grassRenderer.ClearAllFades();
         _roadSystem.Init();
         _dayNightSystem.Init(_gameData.Settings.DayNight);
 
@@ -592,22 +598,22 @@ public class Game1 : Microsoft.Xna.Framework.Game
                     _grassW = gi.Width;
                     _grassH = gi.Height;
                     _grassMap = gi.Cells;
-                    _grassBaseColors = new Color[gi.Types.Length];
-                    _grassTipColors = new Color[gi.Types.Length];
                     _grassTypeIds = new string[gi.Types.Length];
                     _grassTypeNames = new string[gi.Types.Length];
                     _grassTypeSpritePaths = new string[gi.Types.Length][];
                     _grassTypeScales = new float[gi.Types.Length];
                     _grassTypeDensities = new float[gi.Types.Length];
+                    _grassDefaultTints = new Color[gi.Types.Length];
+                    _grassCorruptedTints = new Color[gi.Types.Length];
                     for (int i = 0; i < gi.Types.Length; i++)
                     {
-                        _grassBaseColors[i] = new Color(gi.Types[i].BaseR, gi.Types[i].BaseG, gi.Types[i].BaseB);
-                        _grassTipColors[i] = new Color(gi.Types[i].TipR, gi.Types[i].TipG, gi.Types[i].TipB);
                         _grassTypeIds[i] = gi.Types[i].Id ?? $"grass_{i}";
                         _grassTypeNames[i] = gi.Types[i].Name ?? $"Grass {i}";
                         _grassTypeSpritePaths[i] = gi.Types[i].SpritePaths ?? Array.Empty<string>();
                         _grassTypeScales[i] = gi.Types[i].Scale > 0f ? gi.Types[i].Scale : 1f;
                         _grassTypeDensities[i] = gi.Types[i].Density > 0f ? gi.Types[i].Density : 1f;
+                        _grassDefaultTints[i]   = new Color(gi.Types[i].DefR, gi.Types[i].DefG, gi.Types[i].DefB, gi.Types[i].DefA);
+                        _grassCorruptedTints[i] = new Color(gi.Types[i].CorR, gi.Types[i].CorG, gi.Types[i].CorB, gi.Types[i].CorA);
                     }
                     DebugLog.Log("startup", $"Grass map: {_grassW}x{_grassH}, {gi.Types.Length} types");
                 }
@@ -741,18 +747,20 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // Feed grass data to map editor
         if (_grassMap.Length > 0)
         {
-            var grassTypeInfos = new MapData.GrassTypeInfo[_grassBaseColors.Length];
+            var grassTypeInfos = new MapData.GrassTypeInfo[_grassTypeIds.Length];
             for (int gi = 0; gi < grassTypeInfos.Length; gi++)
             {
+                var dt = gi < _grassDefaultTints.Length ? _grassDefaultTints[gi] : Color.White;
+                var ct = gi < _grassCorruptedTints.Length ? _grassCorruptedTints[gi] : new Color((byte)80, (byte)60, (byte)70, (byte)255);
                 grassTypeInfos[gi] = new MapData.GrassTypeInfo
                 {
-                    Id = _grassTypeIds != null && gi < _grassTypeIds.Length ? _grassTypeIds[gi] : $"grass_{gi}",
-                    Name = _grassTypeNames != null && gi < _grassTypeNames.Length ? _grassTypeNames[gi] : $"Grass {gi}",
-                    BaseR = _grassBaseColors[gi].R, BaseG = _grassBaseColors[gi].G, BaseB = _grassBaseColors[gi].B,
-                    TipR = _grassTipColors[gi].R, TipG = _grassTipColors[gi].G, TipB = _grassTipColors[gi].B,
+                    Id = _grassTypeIds[gi] ?? $"grass_{gi}",
+                    Name = gi < _grassTypeNames.Length && _grassTypeNames[gi] != null ? _grassTypeNames[gi] : $"Grass {gi}",
                     SpritePaths = gi < _grassTypeSpritePaths.Length ? _grassTypeSpritePaths[gi] : Array.Empty<string>(),
                     Scale = gi < _grassTypeScales.Length ? _grassTypeScales[gi] : 1f,
                     Density = gi < _grassTypeDensities.Length ? _grassTypeDensities[gi] : 1f,
+                    DefR = dt.R, DefG = dt.G, DefB = dt.B, DefA = dt.A,
+                    CorR = ct.R, CorG = ct.G, CorB = ct.B, CorA = ct.A,
                 };
             }
             _mapEditor.SetGrassData(_grassMap, _grassW, _grassH, grassTypeInfos, _gameData.Settings.Grass.CellSize);
@@ -986,31 +994,26 @@ public class Game1 : Microsoft.Xna.Framework.Game
             _grassH = _mapEditor.GrassH;
         }
 
-        // Sync grass type colors + sprite paths from editor definitions.
+        // Sync grass type properties from editor definitions.
         var types = _mapEditor.GrassTypes;
-        if (types.Count > 0)
-        {
-            if (_grassBaseColors.Length != types.Count)
-                _grassBaseColors = new Color[types.Count];
-            if (_grassTipColors.Length != types.Count)
-                _grassTipColors = new Color[types.Count];
 
-            for (int i = 0; i < types.Count; i++)
-            {
-                _grassBaseColors[i] = new Color(types[i].BaseR, types[i].BaseG, types[i].BaseB);
-                _grassTipColors[i] = new Color(types[i].TipR, types[i].TipG, types[i].TipB);
-            }
-        }
-
-        // Pull sprite paths + scale + density from the editor's type defs into parallel arrays.
         _grassTypeSpritePaths = new string[types.Count][];
         _grassTypeScales = new float[types.Count];
         _grassTypeDensities = new float[types.Count];
+        _grassDefaultTints = new Color[types.Count];
+        _grassCorruptedTints = new Color[types.Count];
+        if (_grassTypeIds.Length != types.Count) _grassTypeIds = new string[types.Count];
+        if (_grassTypeNames.Length != types.Count) _grassTypeNames = new string[types.Count];
+
         for (int i = 0; i < types.Count; i++)
         {
+            _grassTypeIds[i] = types[i].Id;
+            _grassTypeNames[i] = types[i].Name;
             _grassTypeSpritePaths[i] = types[i].SpritePaths.ToArray();
             _grassTypeScales[i] = types[i].Scale > 0f ? types[i].Scale : 1f;
             _grassTypeDensities[i] = MathF.Max(0f, types[i].Density);
+            _grassDefaultTints[i] = types[i].DefaultTint;
+            _grassCorruptedTints[i] = types[i].CorruptedTint;
         }
 
         PushGrassSpritesToRenderer();
@@ -1022,6 +1025,68 @@ public class Game1 : Microsoft.Xna.Framework.Game
     /// grass types. Called from SyncGrassFromEditor and StartScenario after grass data
     /// is set up.
     /// </summary>
+    /// <summary>Push <see cref="Data.Registries.CorruptionSettings"/> values into
+    /// the live systems that own them. Cheap (a handful of float assignments) so
+    /// it's safe to call every frame — that way live edits via the Settings UI
+    /// take effect immediately on the next gameplay tick. The systems hold their
+    /// own copies in their hot paths; this method is the one place those copies
+    /// get refreshed from settings.json.</summary>
+    private void SyncCorruptionSettings()
+    {
+        if (_gameData == null) return;
+        var c = _gameData.Settings.Corruption;
+
+        _deathFog.CorruptionHealRate = c.TreeHealRate;
+        _deathFog.CorruptionThreshold = c.TreeThreshold;
+        _deathFog.CorruptedAbsorbRate = c.TreeCorruptedAbsorbRate;
+        _deathFog.CorruptionTransitionDuration = c.TreeFadeDuration;
+        _deathFog.GroundCorruptionMaxRate = c.GroundMaxRatePerSec;
+        _deathFog.DiffusionRate = c.DiffusionRate;
+        _deathFog.SourceRateScale = c.SourceRateScale;
+        _deathFog.SinkRateScale = c.SinkRateScale;
+
+        _groundSystem.CorruptionFadeDuration = c.GroundFadeDuration;
+        _grassRenderer.CorruptionFadeDuration = c.GrassFadeDuration;
+
+        _deathFogRenderer.VisibilityThreshold = c.FogVisibilityThreshold;
+        _deathFogRenderer.SaturationDensity = c.FogSaturationDensity;
+        _deathFogRenderer.MaxAlpha = c.FogMaxAlpha;
+        _deathFogRenderer.FlipbookCycleSeconds = c.FogFlipbookCycleSeconds;
+        _deathFogRenderer.PuffWorldSizeMultiplier = c.FogPuffWorldSizeMultiplier;
+        _deathFogRenderer.PositionJitter = c.FogPositionJitter;
+        _deathFogRenderer.FogTint = new Microsoft.Xna.Framework.Color(
+            (byte)c.FogTint.R, (byte)c.FogTint.G, (byte)c.FogTint.B, (byte)c.FogTint.A);
+    }
+
+    /// <summary>Translate a newly-corrupted ground vertex into the grass cells
+    /// it sits under and start their fade. A vertex (vx, vy) is the corner of up
+    /// to four world tiles spanning [vx-1, vx+1) × [vy-1, vy+1); we mark every
+    /// grass cell touching that 2×2 world region. StartCellFade is idempotent,
+    /// so multiple adjacent vertex flips don't reset progress already in flight.</summary>
+    private void OnGroundVertexCorruptedForGrass(int vx, int vy)
+    {
+        if (_grassMap.Length == 0 || _grassW == 0) return;
+        float cellSize = _gameData?.Settings.Grass.CellSize ?? 1f;
+        if (cellSize <= 0f) cellSize = 1f;
+
+        float wx0 = vx - 1f, wx1 = vx + 1f;
+        float wy0 = vy - 1f, wy1 = vy + 1f;
+        int cx0 = Math.Max(0, (int)MathF.Floor(wx0 / cellSize));
+        int cy0 = Math.Max(0, (int)MathF.Floor(wy0 / cellSize));
+        int cx1 = Math.Min(_grassW - 1, (int)MathF.Floor((wx1 - 0.0001f) / cellSize));
+        int cy1 = Math.Min(_grassH - 1, (int)MathF.Floor((wy1 - 0.0001f) / cellSize));
+        for (int cy = cy0; cy <= cy1; cy++)
+        {
+            for (int cx = cx0; cx <= cx1; cx++)
+            {
+                int idx = cy * _grassW + cx;
+                if ((uint)idx >= (uint)_grassMap.Length) continue;
+                if (_grassMap[idx] == 0) continue; // empty cell, no tuft to fade
+                _grassRenderer.StartCellFade(idx);
+            }
+        }
+    }
+
     private void PushGrassSpritesToRenderer()
     {
         var list = new List<Render.GrassTypeRender>(_grassTypeSpritePaths.Length);
@@ -1030,7 +1095,9 @@ public class Game1 : Microsoft.Xna.Framework.Game
             var paths = _grassTypeSpritePaths[i] ?? Array.Empty<string>();
             float scale = i < _grassTypeScales.Length && _grassTypeScales[i] > 0f ? _grassTypeScales[i] : 1f;
             float density = i < _grassTypeDensities.Length ? _grassTypeDensities[i] : 1f;
-            list.Add(new Render.GrassTypeRender(paths, scale, density));
+            Color def = i < _grassDefaultTints.Length ? _grassDefaultTints[i] : Color.White;
+            Color cor = i < _grassCorruptedTints.Length ? _grassCorruptedTints[i] : new Color((byte)80, (byte)60, (byte)70, (byte)255);
+            list.Add(new Render.GrassTypeRender(paths, scale, density, def, cor));
         }
         _grassRenderer.SetGrassTypes(list);
     }
@@ -1121,18 +1188,16 @@ public class Game1 : Microsoft.Xna.Framework.Game
             _grassMap = new byte[gw * gh];
             _grassW = gw;
             _grassH = gh;
-            // Default 3 grass types: green, dead, tall
-            _grassBaseColors = new Color[] {
-                new(46, 102, 20), new(100, 80, 40), new(30, 90, 30)
-            };
-            _grassTipColors = new Color[] {
-                new(100, 166, 50), new(160, 140, 80), new(60, 180, 60)
-            };
-            // Default: all scenario types share the one sprite we ship.
+            // Default 3 grass types — no per-type tint distinction in scenarios.
             string[] defaultSprites = { "assets/Environment/Grass/GreenGrass1.png" };
+            _grassTypeIds = new[] { "grass_0", "grass_1", "grass_2" };
+            _grassTypeNames = new[] { "Grass 0", "Grass 1", "Grass 2" };
             _grassTypeSpritePaths = new[] { defaultSprites, defaultSprites, defaultSprites };
             _grassTypeScales = new[] { 1f, 1f, 1f };
             _grassTypeDensities = new[] { 1f, 1f, 1f };
+            var defaultCorrupted = new Color((byte)80, (byte)60, (byte)70, (byte)255);
+            _grassDefaultTints = new[] { Color.White, Color.White, Color.White };
+            _grassCorruptedTints = new[] { defaultCorrupted, defaultCorrupted, defaultCorrupted };
             Array.Fill(_grassMap, (byte)0);
             scenario.GrassMap = _grassMap;
             scenario.GrassW = gw;
@@ -1702,6 +1767,12 @@ public class Game1 : Microsoft.Xna.Framework.Game
         try { _groundEffect = Content.Load<Microsoft.Xna.Framework.Graphics.Effect>("GroundShader"); }
         catch (Exception ex) { _groundEffect = null; DebugLog.Log("startup", $"GroundShader not loaded: {ex.Message}"); }
 
+        try {
+            _dissolveTreeEffect = Content.Load<Microsoft.Xna.Framework.Graphics.Effect>("DissolveTree");
+            DebugLog.Log("startup", $"DissolveTree shader loaded — params: {string.Join(", ", _dissolveTreeEffect.Parameters.Cast<Microsoft.Xna.Framework.Graphics.EffectParameter>().Select(p => p.Name))}");
+        }
+        catch (Exception ex) { _dissolveTreeEffect = null; DebugLog.Log("startup", $"DissolveTree shader not loaded: {ex.Message}"); }
+
         _uiShaders = new UIShaders(GraphicsDevice, _pixel, BlendState.AlphaBlend, SamplerState.PointClamp);
         _uiShaders.Load(Content);
         _skillTreePanel.SetUIShaders(_uiShaders);
@@ -1740,6 +1811,9 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
         _grassRenderer.Init(GraphicsDevice);
         _lightningRenderer.Init(_spriteBatch, _pixel, _glowTex, _sim, _camera, _renderer, GraphicsDevice, _hdrIntensityEffect);
+        // When a ground vertex newly corrupts, fade nearby grass tufts toward
+        // their CorruptedTint over GrassTuftRenderer.CorruptionFadeDuration.
+        _groundSystem.OnVertexCorrupted = OnGroundVertexCorruptedForGrass;
         LogTiming("Renderers initialized (weather, grass, lightning)");
 
         // Init UI editor (read-only viewer, doesn't depend on game systems)
@@ -4022,7 +4096,31 @@ public class Game1 : Microsoft.Xna.Framework.Game
         _buffVisuals.Update(dt, _sim.Units, _gameData.Buffs, _gameTime);
         UpdateCollectingForagables(dt);
         UpdateSkillLearnToasts(dt);
-        _deathFog.Update(_envSystem, dt);
+        SyncCorruptionSettings();
+        _deathFog.Update(_envSystem, dt, _groundSystem);
+
+        // Advance per-vertex visual fades for newly corrupted grass vertices.
+        // Internally rate-limits texture re-uploads so we don't push pixels
+        // every frame just to bump fade values by ~1/60.
+        _groundSystem.AdvanceCorruptionFades(dt);
+
+        // Advance per-cell grass-tuft tint fades (10s lerp from default to
+        // corrupted tint, started when a ground vertex under the cell flips).
+        _grassRenderer.AdvanceFades(dt);
+
+        // Ground corruption rolls inside DeathFogSystem may have flipped vertices —
+        // push the dirty rect into the existing vertex map texture (partial
+        // SetData) instead of disposing and re-allocating a 67 MB texture.
+        if (_groundSystem.CorruptionDirty)
+        {
+            bool partialOk = _groundVertexMapTex != null
+                && _groundSystem.UploadDirtyRect(_groundVertexMapTex);
+            if (!partialOk)
+            {
+                _groundVertexMapTex?.Dispose();
+                _groundVertexMapTex = _groundSystem.CreateVertexMapTexture(GraphicsDevice);
+            }
+        }
     }
 
     /// <summary>
@@ -4240,7 +4338,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // Grass is no longer drawn here — tufts are merged into the unit Y-sort
         // inside DrawUnitsAndObjects so they can render in front of / behind
         // units based on world Y.
-        _shadowRenderer.Draw(GraphicsDevice, _spriteBatch, _glowTex, _camera, _renderer, _sim, _gameData, _unitAnims, _atlases, _envSystem, _fogOfWar);
+        _shadowRenderer.Draw(GraphicsDevice, _spriteBatch, _glowTex, _camera, _renderer, _sim, _gameData, _unitAnims, _atlases, _envSystem, _fogOfWar, _deathFog);
 
         // --- Corpses ---
         DrawCorpses();
@@ -4251,6 +4349,9 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // --- Projectiles ---
         DrawProjectiles();
         DrawSoulOrbs();
+        // (Death-fog puffs render inside DrawUnitsAndObjects' merged Y-sort
+        // pass so they correctly occlude / are occluded by units & env objects
+        // based on relative ground Y — see DepthItemType.DeathFogPuff.)
 
         // --- Potion throw range indicator ---
         if (_activePotionSlot >= 0 && _sim.NecromancerIndex >= 0)
@@ -4354,6 +4455,55 @@ public class Game1 : Microsoft.Xna.Framework.Game
         {
             _spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.PointClamp);
             _deathFog.DrawDebug(_spriteBatch, _pixel, _renderer, _camera);
+
+            // Per-corruptable-object stress label: "stress/threshold" when stress > 0,
+            // or "DEAD" once corrupted. Skip clean trees to reduce overlay clutter.
+            float threshold = _deathFog.CorruptionThreshold;
+            int corrW = GraphicsDevice.Viewport.Width;
+            int corrH = GraphicsDevice.Viewport.Height;
+            for (int oi = 0; oi < _envSystem.ObjectCount; oi++)
+            {
+                var obj = _envSystem.GetObject(oi);
+                var def = _envSystem.GetDef(obj.DefIndex);
+                if (!def.IsCorruptable) continue;
+                var rt = _envSystem.GetObjectRuntime(oi);
+                if (!rt.Alive) continue;
+                bool dying = rt.CorruptionTime > 0f && !rt.Corrupted;
+                if (!rt.Corrupted && !dying && rt.CorruptionStress <= 0.01f) continue;
+
+                var sp = _renderer.WorldToScreen(new Vec2(obj.X, obj.Y), 0f, _camera);
+                if (sp.X < -50 || sp.X > corrW + 50 || sp.Y < -50 || sp.Y > corrH + 50) continue;
+
+                string label;
+                Color labelColor;
+                if (rt.Corrupted)
+                {
+                    label = "DEAD";
+                    labelColor = new Color(255, 100, 100);
+                }
+                else if (dying)
+                {
+                    float dur = _deathFog.CorruptionTransitionDuration;
+                    label = $"DYING {rt.CorruptionTime:F1}/{dur:F0}s";
+                    labelColor = new Color(255, 160, 80);
+                }
+                else
+                {
+                    label = $"{rt.CorruptionStress:F1}/{threshold:F0}";
+                    labelColor = new Color(255, 220, 120);
+                }
+
+                if (_smallFont != null)
+                {
+                    var size = _smallFont.MeasureString(label);
+                    var pos = new Vector2((int)(sp.X - size.X * 0.5f), (int)(sp.Y - 16));
+                    _spriteBatch.Draw(_pixel,
+                        new Rectangle((int)pos.X - 2, (int)pos.Y - 1, (int)size.X + 4, (int)size.Y + 2),
+                        new Color(0, 0, 0, 180));
+                    _spriteBatch.DrawString(_smallFont, label, pos, labelColor);
+                }
+            }
+
             _spriteBatch.End();
         }
 
@@ -4635,9 +4785,13 @@ public class Game1 : Microsoft.Xna.Framework.Game
         _groundEffect.Parameters["UvWarpAmp"]?.SetValue(_groundSystem.UvWarpAmp);
         _groundEffect.Parameters["UvWarpFreq"]?.SetValue(_groundSystem.UvWarpFreq);
 
-        // Bind ground type textures via Effect.Parameters (named texture params, not register slots)
-        string[] texParamNames = { "GroundTexture0", "GroundTexture1", "GroundTexture2" };
-        for (int i = 0; i < Math.Min(_groundSystem.TypeCount, 3); i++)
+        // Bind ground type textures via Effect.Parameters (named texture params, not register slots).
+        // Shader supports indices 0..7; defs beyond that fall back to type 0 in the shader.
+        string[] texParamNames = {
+            "GroundTexture0", "GroundTexture1", "GroundTexture2", "GroundTexture3",
+            "GroundTexture4", "GroundTexture5", "GroundTexture6", "GroundTexture7",
+        };
+        for (int i = 0; i < Math.Min(_groundSystem.TypeCount, texParamNames.Length); i++)
         {
             var tex = _groundSystem.GetTexture(i);
             if (tex != null)
@@ -5385,7 +5539,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
     // Sortable item for merged unit+object depth sorting
     private readonly List<DepthItem> _depthItems = new(256); // reused each frame
 
-    internal enum DepthItemType : byte { Unit, EnvObject, CloudPuff, GrassTuft }
+    internal enum DepthItemType : byte { Unit, EnvObject, CloudPuff, GrassTuft, DeathFogPuff }
 
     internal struct DepthItem : IComparable<DepthItem>
     {
@@ -5455,6 +5609,15 @@ public class Game1 : Microsoft.Xna.Framework.Game
             _grassMap, _grassW, _grassH,
             _gameData.Settings.Grass, _ambientColor, items);
 
+        // Add death-fog puffs — Y-sorted with units so puffs visually drift in
+        // front of / behind characters depending on their relative ground Y.
+        // Mirrors PoisonCloudRenderer's depth-list integration.
+        if (_flipbooks != null && _flipbooks.TryGetValue("cloud03", out var deathFogFb))
+        {
+            _deathFogRenderer.SetContext(_spriteBatch, _camera, _renderer, deathFogFb, _gameTime);
+            _deathFogRenderer.AddPuffsToDepthList(_deathFog, _renderer.ScreenW, _renderer.ScreenH, items);
+        }
+
         items.Sort();
 
         foreach (var item in items)
@@ -5472,6 +5635,9 @@ public class Game1 : Microsoft.Xna.Framework.Game
                     break;
                 case DepthItemType.GrassTuft:
                     _grassRenderer.DrawSingleTuft(_spriteBatch, item.Index);
+                    break;
+                case DepthItemType.DeathFogPuff:
+                    _deathFogRenderer.DrawSinglePuff(item.Index);
                     break;
             }
         }
@@ -5719,21 +5885,34 @@ public class Game1 : Microsoft.Xna.Framework.Game
     {
         var obj = _envSystem.Objects[i];
         var def = _envSystem.Defs[obj.DefIndex];
-        var tex = _envSystem.GetObjectTexture(i, out float alpha);
+
+        // Dissolve transition: between threshold-cross and full corruption, render
+        // through the dissolve shader instead of the regular path. Shader needs
+        // both textures bound; existing path can't carry a second sampler. Falls
+        // through to the regular draw if either texture / the shader is missing.
+        var rtCheck = _envSystem.GetObjectRuntime(i);
+        if (rtCheck.CorruptionTime > 0f && !rtCheck.Corrupted && _dissolveTreeEffect != null)
+        {
+            if (DrawDissolvingTree(i, rtCheck)) return;
+        }
+
+        var tex = _envSystem.GetObjectTexture(i, out float alpha, out bool isOverride);
         if (tex == null) return;
 
-        // Always compute scale from the main def texture so trap sprites render at same size
+        // Always compute scale from the main def texture so trap sprites render at same size.
+        // For corrupted/override sprites we scale relative to the override texture itself
+        // (it's a single frame, not a spritesheet, so refHeight should be its full height).
         var mainTex = _envSystem.GetDefTexture(obj.DefIndex);
-        float refHeight = mainTex != null ? mainTex.Height : tex.Height;
+        float refHeight = isOverride ? tex.Height : (mainTex != null ? mainTex.Height : tex.Height);
 
         // Animated spritesheet: use per-frame dimensions.
-        // Skip slicing when the placeholder texture is active — it's a single 32x32 swatch,
-        // not a real spritesheet, and slicing would produce near-invisible slivers.
+        // Skip slicing for the placeholder texture (single 32x32 swatch) and for
+        // single-frame override textures (corrupted/trap sprites).
         bool usingPlaceholder = _envSystem.IsUsingPlaceholder(obj.DefIndex);
         Rectangle? sourceRect = null;
         float frameW = tex.Width;
         float frameH = tex.Height;
-        if (def.IsAnimated && def.AnimTotalFrames > 1 && !usingPlaceholder)
+        if (def.IsAnimated && def.AnimTotalFrames > 1 && !usingPlaceholder && !isOverride)
         {
             int totalFrames = def.AnimTotalFrames;
             float animTime = _envSystem.GetObjectRuntime(i).AnimTime;
@@ -5833,6 +6012,82 @@ public class Game1 : Microsoft.Xna.Framework.Game
             }
         }
     }
+
+    /// <summary>
+    /// Render a corruption-transitioning tree via the dissolve shader. Returns
+    /// true if drawn; false if the caller should fall back to the regular path
+    /// (e.g. live or dead texture missing).
+    /// </summary>
+    private bool DrawDissolvingTree(int i, in PlacedObjectRuntime rt)
+    {
+        var obj = _envSystem.Objects[i];
+        var def = _envSystem.Defs[obj.DefIndex];
+
+        var liveTex = _envSystem.GetDefTexture(obj.DefIndex);
+        var deadTex = _envSystem.GetCorruptedTexture(i);
+        if (liveTex == null || deadTex == null) return false;
+        if (_envSystem.IsUsingPlaceholder(obj.DefIndex)) return false;
+
+        // Frame 0 of the live spritesheet — we lock to frame 0 throughout the
+        // dissolve so the live half doesn't keep animating as it fades.
+        Rectangle frame0 = def.IsAnimated && def.AnimTotalFrames > 1
+            ? def.GetAnimFrameRect(liveTex.Width, liveTex.Height, 0)
+            : new Rectangle(0, 0, liveTex.Width, liveTex.Height);
+
+        // Dest rect is sized to the dead texture (which should match per-frame
+        // dimensions of the live sheet — see env_defs.json oak entries).
+        float worldH = def.SpriteWorldHeight * obj.Scale * def.Scale;
+        float pixelH = worldH * _camera.Zoom;
+        float scale = pixelH / deadTex.Height;
+        var screenPos = _renderer.WorldToScreen(new Vec2(obj.X, obj.Y), 0f, _camera);
+        var origin = new Vector2(def.PivotX * deadTex.Width, def.PivotY * deadTex.Height);
+
+        Color tint = MultiplyColor(Color.White, _ambientColor);
+
+        // Set shader params. LiveFrameUV = frame 0 in normalized UV space.
+        float u0 = frame0.X / (float)liveTex.Width;
+        float v0 = frame0.Y / (float)liveTex.Height;
+        float u1 = (frame0.X + frame0.Width)  / (float)liveTex.Width;
+        float v1 = (frame0.Y + frame0.Height) / (float)liveTex.Height;
+        float threshold = MathHelper.Clamp(rt.CorruptionTime / MathF.Max(_deathFog.CorruptionTransitionDuration, 0.01f), 0f, 1f);
+
+        // Set effect parameters before Begin (they upload at Apply time).
+        // Bind LiveSampler texture via the parameter system AND directly on the
+        // GraphicsDevice slot — DesktopGL is finicky about which path actually
+        // takes effect; doing both is harmless and one of them should win.
+        _dissolveTreeEffect!.Parameters["LiveSampler"]?.SetValue(liveTex);
+        _dissolveTreeEffect.Parameters["LiveTexture"]?.SetValue(liveTex);
+        _dissolveTreeEffect.Parameters["LiveFrameUV"]?.SetValue(new Vector4(u0, v0, u1, v1));
+        _dissolveTreeEffect.Parameters["Threshold"]?.SetValue(threshold);
+        _dissolveTreeEffect.Parameters["Seed"]?.SetValue(obj.Seed);
+        _dissolveTreeEffect.Parameters["DebugMode"]?.SetValue(_deathFog.DebugVisible ? 1f : 0f);
+
+        // Throttled per-instance log so we can confirm threshold animates over time.
+        if (!_dissolveLoggedSeeds.TryGetValue(i, out var lastLogged) ||
+            MathF.Abs(threshold - lastLogged) >= 0.1f || (threshold >= 0.99f && lastLogged < 0.99f))
+        {
+            _dissolveLoggedSeeds[i] = threshold;
+            DebugLog.Log("startup", $"Dissolve frame: obj {i} ({def.Id}) t={threshold:F3} CorruptionTime={rt.CorruptionTime:F3} liveTex={liveTex.Width}x{liveTex.Height} deadTex={deadTex.Width}x{deadTex.Height}");
+        }
+
+        // Flush the env-objects batch and start an Immediate batch with our effect.
+        _spriteBatch.End();
+        _spriteBatch.Begin(SpriteSortMode.Immediate, BlendState.AlphaBlend, SamplerState.LinearClamp,
+            null, null, _dissolveTreeEffect);
+
+        // Belt-and-suspenders: also bind directly to GraphicsDevice slot 1.
+        GraphicsDevice.Textures[1] = liveTex;
+        GraphicsDevice.SamplerStates[1] = SamplerState.LinearClamp;
+
+        _spriteBatch.Draw(deadTex, screenPos, null, tint, 0f, origin, scale, SpriteEffects.None, 0f);
+        _spriteBatch.End();
+        // Restore the wrapping batch — the scene-pass Begin (Game1.cs ~line 4220)
+        // uses LinearClamp, NOT PointClamp. Restoring with PointClamp would alter
+        // the rest of the scene's sampler state.
+        _spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.LinearClamp);
+        return true;
+    }
+    private readonly Dictionary<int, float> _dissolveLoggedSeeds = new();
 
     /// <summary>
     /// Draw a unit's Idle (or fallback) first-frame sprite scaled to fit inside

@@ -53,6 +53,56 @@ sampler2D GroundTex2 = sampler_state
     AddressV = Wrap;
 };
 
+texture GroundTexture3;
+sampler2D GroundTex3 = sampler_state
+{
+    Texture = <GroundTexture3>;
+    MinFilter = Linear;
+    MagFilter = Linear;
+    AddressU = Wrap;
+    AddressV = Wrap;
+};
+
+texture GroundTexture4;
+sampler2D GroundTex4 = sampler_state
+{
+    Texture = <GroundTexture4>;
+    MinFilter = Linear;
+    MagFilter = Linear;
+    AddressU = Wrap;
+    AddressV = Wrap;
+};
+
+texture GroundTexture5;
+sampler2D GroundTex5 = sampler_state
+{
+    Texture = <GroundTexture5>;
+    MinFilter = Linear;
+    MagFilter = Linear;
+    AddressU = Wrap;
+    AddressV = Wrap;
+};
+
+texture GroundTexture6;
+sampler2D GroundTex6 = sampler_state
+{
+    Texture = <GroundTexture6>;
+    MinFilter = Linear;
+    MagFilter = Linear;
+    AddressU = Wrap;
+    AddressV = Wrap;
+};
+
+texture GroundTexture7;
+sampler2D GroundTex7 = sampler_state
+{
+    Texture = <GroundTexture7>;
+    MinFilter = Linear;
+    MagFilter = Linear;
+    AddressU = Wrap;
+    AddressV = Wrap;
+};
+
 // --- Noise functions ---
 float hash21(float2 p)
 {
@@ -94,12 +144,14 @@ float4 sampleGroundType(int typeIdx, float2 worldPos)
     float brightness = 0.9875 + 0.025 * valueNoise(worldPos * 0.37 + float2(13.7, 29.3));
 
     float4 color;
-    if (typeIdx == 1)
-        color = tex2D(GroundTex1, uv);
-    else if (typeIdx == 2)
-        color = tex2D(GroundTex2, uv);
-    else
-        color = tex2D(GroundTex0, uv);
+    if (typeIdx == 1)      color = tex2D(GroundTex1, uv);
+    else if (typeIdx == 2) color = tex2D(GroundTex2, uv);
+    else if (typeIdx == 3) color = tex2D(GroundTex3, uv);
+    else if (typeIdx == 4) color = tex2D(GroundTex4, uv);
+    else if (typeIdx == 5) color = tex2D(GroundTex5, uv);
+    else if (typeIdx == 6) color = tex2D(GroundTex6, uv);
+    else if (typeIdx == 7) color = tex2D(GroundTex7, uv);
+    else                   color = tex2D(GroundTex0, uv);
 
     color.rgb *= brightness;
     return color;
@@ -128,27 +180,42 @@ float4 PixelShaderFunction(float2 texCoord : TEXCOORD0) : COLOR0
 
     float2 invWorld = 1.0 / WorldSize;
 
-    // Sample tilemap at 4 corners to get ground type indices
-    // Color format: type index packed into R channel
-    float type00f = tex2D(TilemapSampler, (bpos + float2(0.5, 0.5)) * invWorld).r;
-    float type10f = tex2D(TilemapSampler, (bpos + float2(1.5, 0.5)) * invWorld).r;
-    float type01f = tex2D(TilemapSampler, (bpos + float2(0.5, 1.5)) * invWorld).r;
-    float type11f = tex2D(TilemapSampler, (bpos + float2(1.5, 1.5)) * invWorld).r;
+    // Sample tilemap at 4 corners. Channel layout written by GroundSystem:
+    //   R = current type, G = original type, B = fade progress (255 = stable),
+    // so for fading vertices we lerp between the original and current type.
+    float4 m00 = tex2D(TilemapSampler, (bpos + float2(0.5, 0.5)) * invWorld);
+    float4 m10 = tex2D(TilemapSampler, (bpos + float2(1.5, 0.5)) * invWorld);
+    float4 m01 = tex2D(TilemapSampler, (bpos + float2(0.5, 1.5)) * invWorld);
+    float4 m11 = tex2D(TilemapSampler, (bpos + float2(1.5, 1.5)) * invWorld);
 
-    int type00 = (int)(type00f * 255.0 + 0.5);
-    int type10 = (int)(type10f * 255.0 + 0.5);
-    int type01 = (int)(type01f * 255.0 + 0.5);
-    int type11 = (int)(type11f * 255.0 + 0.5);
+    int  type00  = (int)(m00.r * 255.0 + 0.5);
+    int  type10  = (int)(m10.r * 255.0 + 0.5);
+    int  type01  = (int)(m01.r * 255.0 + 0.5);
+    int  type11  = (int)(m11.r * 255.0 + 0.5);
+    int  orig00  = (int)(m00.g * 255.0 + 0.5);
+    int  orig10  = (int)(m10.g * 255.0 + 0.5);
+    int  orig01  = (int)(m01.g * 255.0 + 0.5);
+    int  orig11  = (int)(m11.g * 255.0 + 0.5);
+    float fade00 = m00.b;
+    float fade10 = m10.b;
+    float fade01 = m01.b;
+    float fade11 = m11.b;
 
-    // Sample ground textures for all 4 corners
+    // Per-corner fade between original and current type. When fade == 1 the
+    // current type wins, so stable vertices (B = 255) skip the second sample.
     float4 c00 = sampleGroundType(type00, worldPos);
     float4 c10 = sampleGroundType(type10, worldPos);
     float4 c01 = sampleGroundType(type01, worldPos);
     float4 c11 = sampleGroundType(type11, worldPos);
+    if (fade00 < 0.999) c00 = lerp(sampleGroundType(orig00, worldPos), c00, fade00);
+    if (fade10 < 0.999) c10 = lerp(sampleGroundType(orig10, worldPos), c10, fade10);
+    if (fade01 < 0.999) c01 = lerp(sampleGroundType(orig01, worldPos), c01, fade01);
+    if (fade11 < 0.999) c11 = lerp(sampleGroundType(orig11, worldPos), c11, fade11);
 
-    // Blend between types using smoothstep
+    // Blend between types using smoothstep across the cell.
     float4 result;
-    if (type00 == type10 && type00 == type01 && type00 == type11)
+    if (type00 == type10 && type00 == type01 && type00 == type11
+        && fade00 > 0.999 && fade10 > 0.999 && fade01 > 0.999 && fade11 > 0.999)
     {
         result = c00;
     }
