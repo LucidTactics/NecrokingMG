@@ -151,6 +151,26 @@ public class UnitDef : IHasId
     [JsonPropertyName("spellID")] public string SpellID { get; set; } = "";
     [JsonPropertyName("maxMana")] public float MaxMana { get; set; }
     [JsonPropertyName("manaRegen")] public float ManaRegen { get; set; }
+
+    /// <summary>Marks this def as a valid form for the player necromancer.
+    /// Metamorphosis evolutions only accept PlayerForm=true targets. Set in
+    /// the unit editor; serialised as "playerForm" in JSON.</summary>
+    [JsonPropertyName("playerForm")] public bool PlayerForm { get; set; }
+
+    /// <summary>Per-path caster level for this unit. Sparse — only non-zero
+    /// entries serialise. Keys are the lowercase MagicPath JsonId
+    /// (e.g. "death", "fire"). Negative values are allowed in storage but
+    /// MagicPathHelpers.Effective() treats them as zero for gameplay.</summary>
+    [JsonPropertyName("paths")] public Dictionary<string, int> Paths { get; set; } = new();
+
+    /// <summary>Convenience accessor used by gameplay code — returns the
+    /// effective (clamp-to-zero) level for the given path.</summary>
+    public int GetPathLevel(MagicPath p)
+    {
+        if (p == MagicPath.None) return 0;
+        return Paths.TryGetValue(MagicPathHelpers.ToJsonId(p), out var v)
+            ? MagicPathHelpers.Effective(v) : 0;
+    }
     [JsonPropertyName("weapons")] public List<UnitWeaponRef> Weapons { get; set; } = new();
     [JsonPropertyName("armors")] public List<string> Armors { get; set; } = new();
     [JsonPropertyName("shields")] public List<string> Shields { get; set; } = new();

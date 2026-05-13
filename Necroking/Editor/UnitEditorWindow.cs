@@ -1931,6 +1931,17 @@ public class UnitEditorWindow
         if (Math.Abs(newMana - def.MaxMana) > 0.001f) { def.MaxMana = newMana; _unsavedChanges = true; }
         curY += RowH;
 
+        // Player-form flag: only defs with this checked are valid morph
+        // targets for Metamorphosis "Become X" skills (see SkillEffects).
+        bool newPlayerForm = _ui.DrawCheckbox("Player Form", def.PlayerForm, x, curY);
+        if (newPlayerForm != def.PlayerForm) { def.PlayerForm = newPlayerForm; _unsavedChanges = true; }
+        curY += RowH;
+
+        // Magic path strip (12 cells in 3 realms). Left-click a cell to increment
+        // the unit's level on that path, right-click to decrement. Negative values
+        // are kept in storage but treated as zero at runtime (UnitDef.GetPathLevel).
+        curY = DrawPathStrip(def, x, curY, w);
+
         // RU10: Mana Regen x10 integer spinner — edit as int, store as value * 0.1f
         int manaRegenX10 = (int)(def.ManaRegen * 10);
         int newRegenX10 = _ui.DrawIntField("unit_mregen", "Mana Regen x10", manaRegenX10, x, curY, w);
@@ -1944,6 +1955,107 @@ public class UnitEditorWindow
         curY += RowH;
 
         return curY;
+    }
+
+    /// <summary>Draw the 12-cell magic-path strip (3 realms × 4 paths) used in
+    /// the Caster section. Layout mirrors the design mockup: realm label row on
+    /// top, icon row in middle, integer row at the bottom. Left-click increments,
+    /// right-click decrements. The raw int is stored in <see cref="UnitDef.Paths"/>
+    /// (sparse — zero entries are removed); negative values are allowed in
+    /// storage but treated as zero at gameplay time.</summary>
+    private int DrawPathStrip(Data.Registries.UnitDef def, int x, int y, int w)
+    {
+        const int cellW = 28;
+        const int cellH = 28;
+        const int realmGap = 10;
+        const int realmHeaderH = 14;
+        const int valueRowH = 18;
+
+        int stripW = cellW * 12 + realmGap * 2;
+        int x0 = x;
+
+        // Realm labels (above each group of four)
+        string[] realmNames = { "Elemental", "Outer", "Inner" };
+        for (int r = 0; r < 3; r++)
+        {
+            int rx = x0 + r * (cellW * 4 + realmGap);
+            int groupW = cellW * 4;
+            var sz = _ui.MeasureText(realmNames[r]);
+            _ui.DrawText(realmNames[r], new Vector2(rx + (groupW - sz.X) / 2, y), EditorBase.TextDim);
+        }
+
+        int iconY = y + realmHeaderH;
+        int valY = iconY + cellH;
+        var paths = Data.Registries.MagicPathHelpers.AllInOrder;
+
+        var mouse = _ui._input.Mouse;
+        var prevMouse = _ui._prevMouse;
+        bool leftClick  = mouse.LeftButton  == Microsoft.Xna.Framework.Input.ButtonState.Pressed
+                       && prevMouse.LeftButton  == Microsoft.Xna.Framework.Input.ButtonState.Released;
+        bool rightClick = mouse.RightButton == Microsoft.Xna.Framework.Input.ButtonState.Pressed
+                       && prevMouse.RightButton == Microsoft.Xna.Framework.Input.ButtonState.Released;
+
+        for (int i = 0; i < 12; i++)
+        {
+            int realmIdx = i / 4;
+            int withinRealm = i % 4;
+            int cx = x0 + realmIdx * (cellW * 4 + realmGap) + withinRealm * cellW;
+
+            var p = paths[i];
+            var iconRect = new Rectangle(cx, iconY, cellW, cellH);
+            var valueRect = new Rectangle(cx, valY, cellW, valueRowH);
+
+            // Icon cell — solid background + thin border
+            _ui.DrawRect(iconRect, EditorBase.InputBg);
+            _ui.DrawBorder(iconRect, EditorBase.InputBorder, 1);
+
+            var tex = Necroking.Render.MagicPathIcons.Get(p, 24);
+            if (tex != null)
+            {
+                int padX = (cellW - 24) / 2;
+                int padY = (cellH - 24) / 2;
+                _ui.SpriteBatch.Draw(tex, new Rectangle(iconRect.X + padX, iconRect.Y + padY, 24, 24),
+                    Microsoft.Xna.Framework.Color.White);
+            }
+            else
+            {
+                // Icon missing — fall back to the short tag so the cell still reads.
+                var tag = Data.Registries.MagicPathHelpers.ShortTag(p);
+                var ts = _ui.MeasureText(tag);
+                _ui.DrawText(tag,
+                    new Vector2(iconRect.X + (cellW - ts.X) / 2, iconRect.Y + (cellH - ts.Y) / 2),
+                    EditorBase.TextBright);
+            }
+
+            // Value cell — current level (sparse dict, default 0)
+            string jsonId = Data.Registries.MagicPathHelpers.ToJsonId(p);
+            int level = def.Paths.TryGetValue(jsonId, out var v) ? v : 0;
+            _ui.DrawRect(valueRect, EditorBase.InputBg);
+            _ui.DrawBorder(valueRect, EditorBase.InputBorder, 1);
+            string txt = level.ToString();
+            var tsz = _ui.MeasureText(txt);
+            _ui.DrawText(txt,
+                new Vector2(valueRect.X + (cellW - tsz.X) / 2, valueRect.Y + (valueRowH - tsz.Y) / 2),
+                level > 0 ? EditorBase.TextBright : EditorBase.TextDim);
+
+            // Click handling: either cell (icon or value) bumps the level.
+            var hitRect = new Rectangle(cx, iconY, cellW, cellH + valueRowH);
+            bool hovered = hitRect.Contains(mouse.X, mouse.Y);
+            if (hovered)
+            {
+                int newLevel = level;
+                if (leftClick)  newLevel = level + 1;
+                if (rightClick) newLevel = level - 1;
+                if (newLevel != level)
+                {
+                    if (newLevel == 0) def.Paths.Remove(jsonId);
+                    else def.Paths[jsonId] = newLevel;
+                    _unsavedChanges = true;
+                }
+            }
+        }
+
+        return y + realmHeaderH + cellH + valueRowH + 4;
     }
 
     // =========================================================================

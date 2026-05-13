@@ -79,12 +79,20 @@ public static class SkillBookDefs
             Effect      = Str(j, "effect", "noop"),
             EffectArg   = Str(j, "effectArg", ""),
             StartLearned = Bool(j, "startLearned", false),
-            Parents = new List<string>(),
-            Costs   = new List<SkillCost>(),
+            Parents     = new List<string>(),
+            ParentsAny  = new List<string>(),
+            ExclusiveOf = new List<string>(),
+            Costs       = new List<SkillCost>(),
         };
         if (j.TryGetProperty("parents", out var pj) && pj.ValueKind == JsonValueKind.Array)
             foreach (var p in pj.EnumerateArray())
                 if (p.ValueKind == JsonValueKind.String) s.Parents.Add(p.GetString()!);
+        if (j.TryGetProperty("parentsAny", out var paj) && paj.ValueKind == JsonValueKind.Array)
+            foreach (var p in paj.EnumerateArray())
+                if (p.ValueKind == JsonValueKind.String) s.ParentsAny.Add(p.GetString()!);
+        if (j.TryGetProperty("exclusiveOf", out var ej) && ej.ValueKind == JsonValueKind.Array)
+            foreach (var e in ej.EnumerateArray())
+                if (e.ValueKind == JsonValueKind.String) s.ExclusiveOf.Add(e.GetString()!);
         if (j.TryGetProperty("costs", out var cj) && cj.ValueKind == JsonValueKind.Array)
             foreach (var c in cj.EnumerateArray())
                 s.Costs.Add(new SkillCost
@@ -147,7 +155,18 @@ public class SkillDef
     public string Description = "";
     public int X;
     public int Y;
+    /// <summary>AND-prereq: every id in this list must be learned. Use for the
+    /// typical "must have parent X before child Y" relationship.</summary>
     public List<string> Parents = new();
+    /// <summary>OR-prereq: at least one id in this list must be learned. Use when
+    /// a skill descends from a branch point (e.g. Soul Consumption needs Wight
+    /// OR Necromancer). Independent of Parents — both checks must pass if both
+    /// are non-empty.</summary>
+    public List<string> ParentsAny = new();
+    /// <summary>Mutex set: this skill is unavailable while any of these is
+    /// learned (and vice versa, by symmetry — the panel checks both directions).
+    /// "Can't have both" relationships in the metamorphosis tree use this.</summary>
+    public List<string> ExclusiveOf = new();
     public List<SkillCost> Costs = new();
     public string Effect = "noop";
     public string EffectArg = "";

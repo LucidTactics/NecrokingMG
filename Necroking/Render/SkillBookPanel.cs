@@ -42,6 +42,7 @@ public class SkillBookPanel
     private GameData _gameData = null!;
     private SpellBarState _primaryBar;
     private SpellBarState _secondaryBar;
+    private Simulation? _sim;
 
     public void Init(SpriteBatch batch, Texture2D pixel,
         SpriteFont? font, SpriteFont? smallFont, SpriteFont? largeFont)
@@ -57,13 +58,14 @@ public class SkillBookPanel
     /// re-call after the spell bar Slots are reallocated so AddSpellToBarEffect
     /// targets the live arrays (SpellBarState is a struct — copies are independent).</summary>
     public void Bind(SkillBookState state, Inventory inv, GameData gd,
-        SpellBarState primaryBar, SpellBarState secondaryBar)
+        SpellBarState primaryBar, SpellBarState secondaryBar, Simulation? sim = null)
     {
         _state = state;
         _inventory = inv;
         _gameData = gd;
         _primaryBar = primaryBar;
         _secondaryBar = secondaryBar;
+        _sim = sim;
     }
 
     // ----- Palette (grimoire) -----
@@ -191,6 +193,14 @@ public class SkillBookPanel
             ShowToast("Already learned.", timeSec);
             return;
         }
+        if (_state.IsExcluded(def))
+        {
+            var blocker = _state.ExclusionBlocker(def);
+            ShowToast(string.IsNullOrEmpty(blocker)
+                ? "Locked - mutually exclusive."
+                : $"Excluded by {blocker}.", timeSec);
+            return;
+        }
         if (!_state.ArePrereqsMet(def))
         {
             ShowToast("Locked - earlier skills required.", timeSec);
@@ -207,6 +217,8 @@ public class SkillBookPanel
             GameData = _gameData,
             PrimaryBar = _primaryBar,
             SecondaryBar = _secondaryBar,
+            BookState = _state,
+            Sim = _sim,
         };
         if (_state.TryLearn(def, ctx))
             ShowToast($"Learned: {def.Name}", timeSec);
@@ -442,6 +454,27 @@ public class SkillBookPanel
 
         // Nodes on top
         foreach (var s in tab.Skills) DrawNode(lay, s);
+
+        // Per-tab resource readout. Potions: skill points earned per craft.
+        // Metamorphosis: inventory count of Death Evolution Potions (the
+        // currency for every node). Drawn top-right of the parchment.
+        string? readout = null;
+        if (tab.Id == "potions" && _state != null)
+            readout = $"Potion Points: {_state.GetSkillPoints("potions")}";
+        else if (tab.Id == "metamorphosis" && _inventory != null)
+            readout = $"Death Evo Potions: {_inventory.GetItemCount("potion_death_evolution")}";
+
+        if (readout != null)
+        {
+            var sf = _smallFont ?? _font!;
+            var sz = sf.MeasureString(readout);
+            int pad = 8;
+            int x = lay.Content.Right - (int)sz.X - pad * 2;
+            int y = lay.Content.Y + 16;
+            Fill(new Rectangle(x - pad, y - 2, (int)sz.X + pad * 2, (int)sz.Y + 4), new Color(40, 28, 18, 220));
+            Border(new Rectangle(x - pad, y - 2, (int)sz.X + pad * 2, (int)sz.Y + 4), GoldDim, 1);
+            DrawText(sf, readout, new Vector2(x, y), GoldBright);
+        }
     }
 
     private void DrawConnector(Vector2 a, Vector2 b, Color color, int thickness)
@@ -466,6 +499,7 @@ public class SkillBookPanel
         var r = NodeRect(lay, def);
         bool learned     = _state?.IsLearned(def.Id) ?? false;
         bool prereqsMet  = _state?.ArePrereqsMet(def) ?? true;
+        bool excluded    = _state?.IsExcluded(def) ?? false;
         bool affordable  = (_state != null && _inventory != null) && _state.CanAfford(def, _inventory);
 
         // Decide visual state
@@ -475,6 +509,14 @@ public class SkillBookPanel
             fill = LearnedFill;
             border = GoldDim;
             titleColor = new Color(220, 208, 180);
+        }
+        else if (excluded)
+        {
+            // Stronger lockout than missing prereqs — mutex partner already
+            // learned, so this branch is permanently barred (for this game).
+            fill = new Color(48, 30, 30);
+            border = new Color(140, 70, 70);
+            titleColor = new Color(140, 90, 90);
         }
         else if (!prereqsMet)
         {
@@ -551,12 +593,10 @@ public class SkillBookPanel
             for (int i = 0; i < def.Costs.Count; i++)
             {
                 var c = def.Costs[i];
-                int have = c.Type == "item"
-                    ? (_inventory?.GetItemCount(c.Id) ?? 0)
-                    : (_state?.Events.Get(c.Id) ?? 0);
+                int have = HaveForCost(c);
                 bool ok = have >= c.Amount;
                 Color cc = !prereqsMet ? new Color(110, 90, 60) : (ok ? CostGood : CostBad);
-                string label = c.Type == "item" ? ShortItemName(c.Id) : EventLabel(c.Id);
+                string label = CostLabel(c);
                 string line = $"{have}/{c.Amount} {label}";
                 line = TruncateToWidth(sf, line, r.Width - 14);
                 var lz = sf.MeasureString(line);
@@ -577,13 +617,29 @@ public class SkillBookPanel
         var parts = new List<string>(def.Costs.Count);
         foreach (var c in def.Costs)
         {
-            int have = c.Type == "item"
-                ? (_inventory?.GetItemCount(c.Id) ?? 0)
-                : (_state?.Events.Get(c.Id) ?? 0);
-            string label = c.Type == "item" ? ShortItemName(c.Id) : EventLabel(c.Id);
+            int have = HaveForCost(c);
+            string label = CostLabel(c);
             parts.Add($"{have}/{c.Amount} {label}");
         }
         return string.Join("  ", parts);
+    }
+
+    /// <summary>Resolve the player's current amount of whatever the cost wants
+    /// — inventory count, event tally, or pooled skill points.</summary>
+    private int HaveForCost(SkillCost c)
+    {
+        if (c.Type == "item")        return _inventory?.GetItemCount(c.Id) ?? 0;
+        if (c.Type == "event")       return _state?.Events.Get(c.Id) ?? 0;
+        if (c.Type == "skillpoints") return _state?.GetSkillPoints(c.Id) ?? 0;
+        return 0;
+    }
+
+    private string CostLabel(SkillCost c)
+    {
+        if (c.Type == "item")        return ShortItemName(c.Id);
+        if (c.Type == "event")       return EventLabel(c.Id);
+        if (c.Type == "skillpoints") return c.Id == "potions" ? "potion pts" : $"{c.Id} pts";
+        return c.Id;
     }
 
     private string ShortItemName(string id)
@@ -694,11 +750,10 @@ public class SkillBookPanel
         bool prereqsMet = _state?.ArePrereqsMet(def) ?? true;
         foreach (var c in def.Costs)
         {
-            int have = c.Type == "item"
-                ? (_inventory?.GetItemCount(c.Id) ?? 0)
-                : (_state?.Events.Get(c.Id) ?? 0);
+            int have = HaveForCost(c);
             bool ok = have >= c.Amount;
-            string lab = c.Type == "item" ? ShortItemName(c.Id) : $"{EventLabel(c.Id)} (event)";
+            string lab = CostLabel(c);
+            if (c.Type == "event") lab += " (event)";
             costLines.Add(($"  - {have}/{c.Amount} {lab}", prereqsMet ? (ok ? CostGood : CostBad) : new Color(120, 100, 70)));
         }
         if (!prereqsMet)

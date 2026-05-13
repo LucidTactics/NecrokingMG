@@ -1,9 +1,11 @@
+using System;
 using System.Collections.Generic;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Necroking.Core;
 using Necroking.Data;
 using Necroking.Data.Registries;
+using Necroking.Game;
 using Necroking.GameSystems;
 
 namespace Necroking.Render;
@@ -169,7 +171,8 @@ public class CharacterStatsUI
     }
 
     public void Draw(int screenW, int screenH, Simulation sim, BuffRegistry buffs,
-        ref SpellBarState primaryBar, InputState input)
+        ref SpellBarState primaryBar, InputState input, GameData? gameData = null,
+        SkillBookState? bookState = null)
     {
         if (!IsVisible || _font == null) return;
         int necroIdx = sim.NecromancerIndex;
@@ -178,6 +181,10 @@ public class CharacterStatsUI
         var unit = sim.Units[necroIdx];
         var s = unit.Stats;
         var necro = sim.NecroState;
+
+        // Necromancer's UnitDef for path lookup. Optional — without GameData
+        // we just skip the inline path row, the rest of the panel renders fine.
+        var necroDef = gameData?.Units.Get(unit.UnitDefID);
 
         float buffedMaxHp = BuffSystem.GetModifiedStat(sim.UnitsMut, necroIdx, BuffStat.MaxHP, s.MaxHP);
         int buffedMaxHpI = (int)System.MathF.Round(buffedMaxHp);
@@ -213,10 +220,32 @@ public class CharacterStatsUI
             MakeBuffedRow("Encumbrance", s.Encumbrance, sim, necroIdx, BuffStat.Encumbrance),
         };
 
+        // Metamorphosis active abilities — buttons render inline when the
+        // matching skill is learned. Height calc up front so the panel sizes
+        // correctly.
+        bool hasCorpseEat   = bookState?.HasPassive("action:corpse_eating") ?? false;
+        bool hasSoulConsume = bookState?.HasPassive("action:soul_consumption") ?? false;
+        int metamorphActions = (hasCorpseEat ? 1 : 0) + (hasSoulConsume ? 1 : 0);
+        int metamorphH = metamorphActions > 0 ? BuffsHeaderH + metamorphActions * (SkillBtnH + SkillBtnGap) : 0;
+
         int activeBuffCount = unit.ActiveBuffs.Count;
         int buffListH = activeBuffCount > 0 ? BuffsHeaderH + activeBuffCount * RowH + 6 : 0;
 
-        int statsH = TitleH + PadY * 2 + rows.Count * RowH + buffListH;
+        // Collect non-zero paths for the inline display row. We render only
+        // paths the unit actually has — zero-paths are hidden per design.
+        // TODO: also hide on the per-unit selection panel when that's wired.
+        var nonZeroPaths = new List<(MagicPath path, int level)>();
+        if (necroDef != null)
+        {
+            foreach (var p in MagicPathHelpers.AllInOrder)
+            {
+                int lvl = necroDef.GetPathLevel(p);
+                if (lvl > 0) nonZeroPaths.Add((p, lvl));
+            }
+        }
+        int pathsRowH = nonZeroPaths.Count > 0 ? BuffsHeaderH + RowH : 0;
+
+        int statsH = TitleH + PadY * 2 + rows.Count * RowH + pathsRowH + metamorphH + buffListH;
         int panelX = AnchorX;
         int panelY = AnchorY;
 
@@ -255,6 +284,91 @@ public class CharacterStatsUI
             y += RowH;
         }
 
+        if (nonZeroPaths.Count > 0)
+        {
+            _batch.DrawString(rowFont, "-- Paths --", new Vector2(panelX + PadX, y), SectionColor);
+            y += BuffsHeaderH;
+
+            int iconSize = 16;
+            int slotW = iconSize + 16; // icon + small gap + 1-2 digits
+            int px = panelX + PadX;
+            foreach (var (path, level) in nonZeroPaths)
+            {
+                if (px + slotW > panelX + PanelW - PadX) break; // single-line clip
+                var tex = MagicPathIcons.Get(path, 24);
+                if (tex != null)
+                {
+                    _batch.Draw(tex, new Rectangle(px, y + 1, iconSize, iconSize),
+                        Color.White);
+                }
+                else
+                {
+                    // Icon missing — show the short tag as a fallback so the entry still reads.
+                    string tag = $"({MagicPathHelpers.ShortTag(path)})";
+                    _batch.DrawString(rowFont, tag, new Vector2(px, y), LabelColor);
+                }
+                string n = level.ToString();
+                _batch.DrawString(rowFont, n, new Vector2(px + iconSize + 2, y), ValueColor);
+                px += slotW;
+            }
+            y += RowH;
+        }
+
+        if (metamorphActions > 0 && bookState != null)
+        {
+            _batch.DrawString(rowFont, "-- Metamorphosis --",
+                new Vector2(panelX + PadX, y), SectionColor);
+            y += BuffsHeaderH;
+
+            int btnMX = (int)input.MousePos.X;
+            int btnMY = (int)input.MousePos.Y;
+
+            if (hasCorpseEat)
+            {
+                int bonus = bookState.CorpseEatingBonus;
+                int cap = SkillBookState.CorpseEatingHPCap;
+                string label = bonus >= cap ? $"Eat Corpse (capped {cap}/{cap})"
+                                            : $"Eat Corpse  (+{bonus}/{cap} HP)";
+                var rect = new Rectangle(panelX + PadX, y, PanelW - PadX * 2, SkillBtnH);
+                bool hovered = rect.Contains(btnMX, btnMY);
+                _batch.Draw(_pixel, rect, hovered ? SkillBtnBgHover : SkillBtnBg);
+                DrawBorder(rect.X, rect.Y, rect.Width, rect.Height, SkillBtnBorder);
+                var lz = rowFont.MeasureString(label);
+                _batch.DrawString(rowFont, label,
+                    new Vector2((int)(rect.X + (rect.Width - lz.X) / 2),
+                                (int)(rect.Y + (rect.Height - lz.Y) / 2)),
+                    SkillBtnText);
+                if (hovered && input.LeftPressed && !input.IsMouseConsumed)
+                {
+                    TryConsumeNearestCorpse(sim, necroIdx, bookState, gameData, humansOnly: false);
+                    input.ConsumeMouse();
+                }
+                y += SkillBtnH + SkillBtnGap;
+            }
+            if (hasSoulConsume)
+            {
+                int bonus = bookState.SoulConsumptionBonus;
+                int cap = SkillBookState.SoulConsumptionManaCap;
+                string label = bonus >= cap ? $"Consume Soul (capped {cap}/{cap})"
+                                            : $"Consume Soul  (+{bonus}/{cap} Mana)";
+                var rect = new Rectangle(panelX + PadX, y, PanelW - PadX * 2, SkillBtnH);
+                bool hovered = rect.Contains(btnMX, btnMY);
+                _batch.Draw(_pixel, rect, hovered ? SkillBtnBgHover : SkillBtnBg);
+                DrawBorder(rect.X, rect.Y, rect.Width, rect.Height, SkillBtnBorder);
+                var lz = rowFont.MeasureString(label);
+                _batch.DrawString(rowFont, label,
+                    new Vector2((int)(rect.X + (rect.Width - lz.X) / 2),
+                                (int)(rect.Y + (rect.Height - lz.Y) / 2)),
+                    SkillBtnText);
+                if (hovered && input.LeftPressed && !input.IsMouseConsumed)
+                {
+                    TryConsumeNearestCorpse(sim, necroIdx, bookState, gameData, humansOnly: true);
+                    input.ConsumeMouse();
+                }
+                y += SkillBtnH + SkillBtnGap;
+            }
+        }
+
         if (activeBuffCount > 0)
         {
             _batch.DrawString(rowFont, "-- Active Buffs --",
@@ -280,6 +394,64 @@ public class CharacterStatsUI
 
         int activeX = learnX + SkillsPanelW + SkillsGap;
         DrawActivePanel(activeX, panelY, rowFont, input, ref primaryBar);
+    }
+
+    /// <summary>Find the closest non-dissolving corpse within range and consume
+    /// it: dissolve the corpse, heal the necromancer (HP for Corpse Eating,
+    /// Mana for Soul Consumption), and grant +1 max-stat bonus on the
+    /// SkillBookState (subject to per-skill cap). humansOnly filters by the
+    /// corpse's source UnitDef's Faction == Human. Returns silently when no
+    /// valid corpse is in range — the player just sees no effect.</summary>
+    private void TryConsumeNearestCorpse(Simulation sim, int necroIdx,
+        SkillBookState bookState, GameData? gameData, bool humansOnly)
+    {
+        if (necroIdx < 0) return;
+        const float Range = 6f;
+        var necroPos = sim.Units[necroIdx].Position;
+        int bestIdx = -1;
+        float bestDistSq = Range * Range;
+        for (int i = 0; i < sim.Corpses.Count; i++)
+        {
+            var c = sim.Corpses[i];
+            if (c.Dissolving) continue;
+            if (humansOnly && gameData != null)
+            {
+                var cDef = gameData.Units.Get(c.UnitDefID);
+                if (cDef == null) continue;
+                if (cDef.Faction != "Human") continue;
+            }
+            float d = (c.Position - necroPos).LengthSq();
+            if (d < bestDistSq) { bestDistSq = d; bestIdx = i; }
+        }
+        if (bestIdx < 0)
+        {
+            Core.DebugLog.Log("skillbook", $"metamorph action: no {(humansOnly ? "human " : "")}corpse in range");
+            return;
+        }
+
+        sim.ConsumeCorpse(bestIdx);
+        if (humansOnly)
+        {
+            var necro = sim.NecroState;
+            necro.Mana = MathF.Min(necro.MaxMana, necro.Mana + 10f);
+            if (bookState.TryGrantSoulConsumptionBonus())
+                necro.MaxMana += 1f;
+            Core.DebugLog.Log("skillbook",
+                $"Soul Consumption: mana {(int)necro.Mana}/{(int)necro.MaxMana}, bonus {bookState.SoulConsumptionBonus}/{SkillBookState.SoulConsumptionManaCap}");
+        }
+        else
+        {
+            // Unit is a class — indexer returns the live reference, so field
+            // mutations land in the array without needing a write-back.
+            var u = sim.UnitsMut[necroIdx];
+            var stats = u.Stats;
+            stats.HP = Math.Min(stats.MaxHP, stats.HP + 10);
+            if (bookState.TryGrantCorpseEatingBonus())
+                stats.MaxHP += 1;
+            u.Stats = stats;
+            Core.DebugLog.Log("skillbook",
+                $"Corpse Eating: hp {u.Stats.HP}/{u.Stats.MaxHP}, bonus {bookState.CorpseEatingBonus}/{SkillBookState.CorpseEatingHPCap}");
+        }
     }
 
     private void DrawBorder(int x, int y, int w, int h, Color c)

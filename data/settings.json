@@ -159,6 +159,18 @@
     {
       "itemId": "MagicMushroom",
       "quantity": 10
+    },
+    {
+      "itemId": "Ghostcap",
+      "quantity": 10
+    },
+    {
+      "itemId": "Rotgill",
+      "quantity": 10
+    },
+    {
+      "itemId": "Toadstool",
+      "quantity": 10
     }
   ]
 }

@@ -63,8 +63,8 @@
       "itemID": "potion_paralysis"
     },
     {
-      "id": "potion_zombie",
-      "displayName": "Zombie Potion",
+      "id": "potion_reanimation",
+      "displayName": "Reanimation Potion",
       "icon": "assets/Items/Potions/ZombiePotion.png",
       "description": "On enemy: raises as zombie on death. On friendly: coats weapons with zombie curse. On corpse: raises after 1 second.",
       "targetType": "Any",
@@ -91,7 +91,69 @@
         }
       ],
       "craftTime": 1,
-      "itemID": "potion_zombie"
+      "itemID": "potion_reanimation"
+    },
+    {
+      "id": "potion_enlargement",
+      "displayName": "Enlargement Potion",
+      "icon": "assets/Items/Potions/FrenzyPotion.png",
+      "description": "Swells the target \u2014 larger sprite, more HP, harder hits. Effect mechanics TBD; placeholder reuses Frenzy buff for now.",
+      "targetType": "Friendly",
+      "throwRange": 10,
+      "projectileScale": 0.5,
+      "buffID": "buff_frenzy",
+      "buffDuration": 0,
+      "onHitEffect": "Frenzy",
+      "hitsCorpses": false,
+      "projectileFlipbook": null,
+      "hitEffectFlipbook": null,
+      "recipe": [
+        {
+          "itemId": "Mushroom",
+          "amount": 2
+        },
+        {
+          "itemId": "Ghostcap",
+          "amount": 1
+        },
+        {
+          "itemId": "",
+          "amount": 1
+        }
+      ],
+      "craftTime": 1,
+      "itemID": "potion_enlargement"
+    },
+    {
+      "id": "potion_greater_reanimation",
+      "displayName": "Greater Reanimation Potion",
+      "icon": "assets/Items/Potions/ZombiePotion.png",
+      "description": "A potent draught \u2014 raises every corpse in a wide radius around the impact. Effect mechanics TBD; placeholder reuses Zombie effect for now.",
+      "targetType": "Any",
+      "throwRange": 10,
+      "projectileScale": 0.5,
+      "buffID": "buff_zombie_mark",
+      "buffDuration": 0,
+      "onHitEffect": "Zombie",
+      "hitsCorpses": true,
+      "projectileFlipbook": null,
+      "hitEffectFlipbook": null,
+      "recipe": [
+        {
+          "itemId": "Rotgill",
+          "amount": 2
+        },
+        {
+          "itemId": "Mushroom",
+          "amount": 2
+        },
+        {
+          "itemId": "",
+          "amount": 1
+        }
+      ],
+      "craftTime": 1,
+      "itemID": "potion_greater_reanimation"
     },
     {
       "id": "potion_poison",
@@ -123,6 +185,68 @@
       ],
       "craftTime": 1,
       "itemID": "potion_poison"
+    },
+    {
+      "id": "potion_death_evolution",
+      "displayName": "Death Evolution Potion",
+      "icon": "assets/Items/Potions/ZombiePotion.png",
+      "description": "A vile dark elixir. Used exclusively to fuel metamorphosis \u2014 drink five to ascend along the path. Free to brew once the recipe is known.",
+      "targetType": "Self",
+      "throwRange": 0,
+      "projectileScale": 0.5,
+      "buffID": "",
+      "buffDuration": 0,
+      "onHitEffect": "",
+      "hitsCorpses": false,
+      "projectileFlipbook": null,
+      "hitEffectFlipbook": null,
+      "recipe": [
+        {
+          "itemId": "",
+          "amount": 1
+        },
+        {
+          "itemId": "",
+          "amount": 1
+        },
+        {
+          "itemId": "",
+          "amount": 1
+        }
+      ],
+      "craftTime": 1,
+      "itemID": "potion_death_evolution"
+    },
+    {
+      "id": "potion_death_poison",
+      "displayName": "Death Poison",
+      "icon": "assets/Items/Potions/PoisonPotion.png",
+      "description": "A vicious tincture \u2014 stronger DOT, longer duration. Effect mechanics TBD; placeholder reuses Poison effect for now.",
+      "targetType": "Any",
+      "throwRange": 10,
+      "projectileScale": 0.5,
+      "buffID": "buff_poison_dot",
+      "buffDuration": 0,
+      "onHitEffect": "Poison",
+      "hitsCorpses": false,
+      "projectileFlipbook": null,
+      "hitEffectFlipbook": null,
+      "recipe": [
+        {
+          "itemId": "PoisonMushroom",
+          "amount": 3
+        },
+        {
+          "itemId": "Rotgill",
+          "amount": 1
+        },
+        {
+          "itemId": "",
+          "amount": 1
+        }
+      ],
+      "craftTime": 1,
+      "itemID": "potion_death_poison"
     }
   ]
 }

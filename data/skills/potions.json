@@ -2,100 +2,99 @@
   "displayName": "Potions",
   "skills": [
     {
-      "id": "potion_basics",
-      "name": "Apothecary Basics",
-      "description": "The first cuts of the mortar and pestle. Unlocks the brewing branches.",
+      "id": "skill_paralysis",
+      "name": "Paralysis Potion",
+      "description": "Unlocks Paralysis Potion. Auto-learned the first time you collect any mushroom.",
       "x": 640, "y": 80,
       "parents": [],
       "costs": [],
-      "effect": "noop",
+      "effect": "unlock_potion",
+      "effectArg": "potion_paralysis",
       "startLearned": false
     },
     {
-      "id": "heal_brew",
-      "name": "Healing Brew",
-      "description": "A weak draught that knits flesh and dulls pain.",
-      "x": 220, "y": 240,
-      "parents": ["potion_basics"],
+      "id": "skill_reanimation",
+      "name": "Reanimation Potion",
+      "description": "Unlocks Reanimation Potion.",
+      "x": 460, "y": 240,
+      "parents": ["skill_paralysis"],
       "costs": [
-        { "type": "item", "id": "Mushroom", "amount": 2 }
+        { "type": "skillpoints", "id": "potions", "amount": 5 }
       ],
       "effect": "unlock_potion",
-      "effectArg": "heal_minor"
+      "effectArg": "potion_reanimation"
     },
     {
-      "id": "mana_brew",
-      "name": "Mana Brew",
-      "description": "Bottled wakefulness. Restores spent essence.",
-      "x": 640, "y": 240,
-      "parents": ["potion_basics"],
+      "id": "skill_death_evolution",
+      "name": "Death Evolution Potion",
+      "description": "Unlocks the Death Evolution Potion recipe — the currency for metamorphosis evolutions.",
+      "x": 820, "y": 240,
+      "parents": ["skill_paralysis"],
       "costs": [
-        { "type": "item", "id": "MagicMushroom", "amount": 2 }
+        { "type": "skillpoints", "id": "potions", "amount": 5 }
       ],
       "effect": "unlock_potion",
-      "effectArg": "mana_minor"
+      "effectArg": "potion_death_evolution"
     },
     {
-      "id": "poison_brew",
-      "name": "Poison Brew",
-      "description": "A killing tincture for blade or chalice.",
-      "x": 1060, "y": 240,
-      "parents": ["potion_basics"],
+      "id": "skill_enlargement",
+      "name": "Enlargement Potion",
+      "description": "Unlocks Enlargement Potion.",
+      "x": 360, "y": 400,
+      "parents": ["skill_reanimation"],
       "costs": [
-        { "type": "item", "id": "PoisonMushroom", "amount": 2 }
+        { "type": "skillpoints", "id": "potions", "amount": 5 }
       ],
       "effect": "unlock_potion",
-      "effectArg": "poison_minor"
+      "effectArg": "potion_enlargement"
     },
     {
-      "id": "greater_heal",
-      "name": "Greater Healing",
-      "description": "A reliable draught — restores serious wounds.",
-      "x": 220, "y": 400,
-      "parents": ["heal_brew"],
+      "id": "skill_poison",
+      "name": "Poison Potion",
+      "description": "Unlocks Poison Potion.",
+      "x": 920, "y": 400,
+      "parents": ["skill_reanimation"],
       "costs": [
-        { "type": "item", "id": "Mushroom", "amount": 5 }
+        { "type": "skillpoints", "id": "potions", "amount": 5 }
       ],
       "effect": "unlock_potion",
-      "effectArg": "heal_greater"
+      "effectArg": "potion_poison"
     },
     {
-      "id": "arcane_elixir",
-      "name": "Arcane Elixir",
-      "description": "A shimmering drink for sustained casting.",
-      "x": 640, "y": 400,
-      "parents": ["mana_brew"],
+      "id": "skill_greater_reanimation",
+      "name": "Greater Reanimation Potion",
+      "description": "Unlocks Greater Reanimation Potion.",
+      "x": 220, "y": 560,
+      "parents": ["skill_enlargement"],
       "costs": [
-        { "type": "item", "id": "MagicMushroom", "amount": 5 }
+        { "type": "skillpoints", "id": "potions", "amount": 5 }
       ],
       "effect": "unlock_potion",
-      "effectArg": "mana_greater"
+      "effectArg": "potion_greater_reanimation"
     },
     {
-      "id": "toxin_bomb",
-      "name": "Toxin Bomb",
-      "description": "Throw it. Run. The fumes do the work.",
-      "x": 1060, "y": 400,
-      "parents": ["poison_brew"],
+      "id": "skill_death_poison",
+      "name": "Death Poison",
+      "description": "Unlocks Death Poison potion.",
+      "x": 800, "y": 560,
+      "parents": ["skill_poison"],
       "costs": [
-        { "type": "item", "id": "PoisonMushroom", "amount": 5 },
-        { "type": "item", "id": "Rotgill", "amount": 2 }
+        { "type": "skillpoints", "id": "potions", "amount": 5 }
       ],
       "effect": "unlock_potion",
-      "effectArg": "toxin_bomb"
+      "effectArg": "potion_death_poison"
     },
     {
-      "id": "master_alchemy",
-      "name": "Master Alchemist",
-      "description": "Mastery of every flask on the rack. All future potions cost less.",
-      "x": 640, "y": 560,
-      "parents": ["greater_heal", "arcane_elixir", "toxin_bomb"],
+      "id": "skill_efficient_tinctures",
+      "name": "Efficient Tinctures",
+      "description": "Passive — 25% chance to craft any potion without consuming the ingredients.",
+      "x": 1060, "y": 560,
+      "parents": ["skill_poison"],
       "costs": [
-        { "type": "item", "id": "Ghostcap", "amount": 3 },
-        { "type": "item", "id": "MagicMushroom", "amount": 5 }
+        { "type": "skillpoints", "id": "potions", "amount": 5 }
       ],
       "effect": "passive_stat",
-      "effectArg": "potion_cost_reduction"
+      "effectArg": "efficient_tinctures"
     }
   ]
 }

@@ -48,7 +48,18 @@ public static class SpellCaster
         if (spell == null) return CastResult.NoValidTarget;
 
         if (necro.GetCooldown(spellID) > 0f) return CastResult.OnCooldown;
-        if (necro.Mana < spell.ManaCost) return CastResult.NotEnoughMana;
+        // Path-aware cost: caster's UnitDef carries Paths, the spell's primary
+        // path scales the mana cost downward when caster level exceeds the
+        // requirement. Secondary path is a hard gate only — meeting it doesn't
+        // reduce cost. Without a UnitDef we fall back to flat ManaCost so
+        // existing test paths keep working.
+        var casterDef = gameData?.Units.Get(units[necroIdx].UnitDefID);
+        Func<MagicPath, int> casterLevel = casterDef != null
+            ? casterDef.GetPathLevel
+            : _ => 0;
+        if (!spell.MeetsPathRequirements(casterLevel)) return CastResult.NotEnoughMana;
+        float effectiveCost = spell.EffectiveManaCost(casterLevel);
+        if (necro.Mana < effectiveCost) return CastResult.NotEnoughMana;
 
         var necroPos = units[necroIdx].Position;
 
@@ -370,8 +381,14 @@ public static class SpellCaster
             }
         }
 
-        // Deduct mana and start cooldown
-        necro.Mana -= spell.ManaCost;
+        // Deduct mana and start cooldown. Recompute the effective cost rather
+        // than capturing it from the eligibility check so we stay in sync if a
+        // future refactor moves the gate around.
+        var castingDef = gameData?.Units.Get(units[necroIdx].UnitDefID);
+        Func<MagicPath, int> castingLevel = castingDef != null
+            ? castingDef.GetPathLevel
+            : _ => 0;
+        necro.Mana -= spell.EffectiveManaCost(castingLevel);
         if (spell.Cooldown > 0f)
             necro.SpellCooldowns[spellID] = spell.Cooldown;
 

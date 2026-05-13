@@ -98,6 +98,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
             _sim.MagicGlyphs, _gameData.Spells, _sim);
         _craftingMenu.Init(_widgetRenderer, _inventory, _gameData.Items, _gameData,
             _graphics.PreferredBackBufferHeight, _spriteBatch, _pixel);
+        _craftingMenu.SetSkillBook(_skillBookState);
         _tableMenuUI.Init(_widgetRenderer, _envSystem, _inventory, _gameData.Items,
             _sim.PlayerResources, _spriteBatch, _pixel, _font);
         _tableMenuUI.StartCraftCallback = (envIdx) => StartTableCraft(envIdx);
@@ -685,11 +686,15 @@ public class Game1 : Microsoft.Xna.Framework.Game
         if (placedUnits.Count > 0)
             LogTiming($"Spawned {placedUnits.Count} placed units");
 
-        // Always ensure necromancer exists
+        // Always ensure the player unit exists. The player starts as the
+        // Wretched form — every other "necromancer-type" UnitDef is reached
+        // via the Metamorphosis skill tree (Become Pale Acolyte, Become Wight,
+        // etc.). Across the codebase we still refer to the player unit as
+        // "the necromancer" regardless of which PlayerForm def it currently is.
         if (_sim.NecromancerIndex < 0)
         {
-            SpawnUnit("necromancer", new Vec2(center, center));
-            DebugLog.Log("startup", "No necromancer in placed units, spawned default at map center");
+            SpawnUnit("wretched", new Vec2(center, center));
+            DebugLog.Log("startup", "No necromancer in placed units, spawned Wretched default at map center");
         }
 
         _camera.Position = _sim.NecromancerIndex >= 0
@@ -778,7 +783,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
             _inventory.AddItem(item.ItemId, item.Quantity);
 
         _skillBookPanel.Bind(_skillBookState, _inventory, _gameData,
-            _spellBarState, _secondaryBarState);
+            _spellBarState, _secondaryBarState, _sim);
 
         // Drop a starter Deathcap mushroom right next to the necromancer so the
         // player can immediately discover the pickup → auto-learn flow for the
@@ -814,6 +819,8 @@ public class Game1 : Microsoft.Xna.Framework.Game
             GameData = _gameData,
             PrimaryBar = _spellBarState,
             SecondaryBar = _secondaryBarState,
+            BookState = _skillBookState,
+            Sim = _sim,
         });
         if (!learned) return;
         var def = _skillBookState.FindSkill(skillId);
@@ -1401,7 +1408,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 var idleAnim = spriteData.GetAnim("Idle");
                 if (idleAnim != null)
                 {
-                    var kfs = idleAnim.GetAngle(30);
+                    var kfs = PickIdleFrames(idleAnim);
                     if (kfs != null && kfs.Count > 0)
                         refH = kfs[0].Frame.Rect.Height;
                 }
@@ -1681,7 +1688,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         var idleAnim = spriteData.GetAnim("Idle");
         if (idleAnim != null)
         {
-            var kfs = idleAnim.GetAngle(30);
+            var kfs = PickIdleFrames(idleAnim);
             if (kfs != null && kfs.Count > 0)
                 refH = kfs[0].Frame.Rect.Height;
         }
@@ -1747,7 +1754,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // bar Slots may be null at this point — re-bind happens in StartGame once the
         // bars are allocated. AddSpellToBarEffect handles null Slots gracefully.
         _skillBookPanel.Bind(_skillBookState, _inventory, _gameData,
-            _spellBarState, _secondaryBarState);
+            _spellBarState, _secondaryBarState, _sim);
         _vampireEvoPanel.Init(_spriteBatch, _pixel, _font, _smallFont, _largeFont);
 
         // Load TrueType fonts via FontStashSharp (dynamic sizing)
@@ -1810,6 +1817,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         _weatherRenderer.SetDayNight(_dayNightSystem);
 
         _grassRenderer.Init(GraphicsDevice);
+        Necroking.Render.MagicPathIcons.SetDevice(GraphicsDevice);
         _lightningRenderer.Init(_spriteBatch, _pixel, _glowTex, _sim, _camera, _renderer, GraphicsDevice, _hdrIntensityEffect);
         // When a ground vertex newly corrupts, fade nearby grass tufts toward
         // their CorruptedTint over GrassTuftRenderer.CorruptionFadeDuration.
@@ -3349,14 +3357,15 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 _inventory.AddItem(cf.ResourceType);
 
                 // Tally pickup-driven skill triggers. First mushroom of any kind
-                // teaches the basic healing brew (the entry-point alchemy recipe).
+                // teaches the root potion recipe (Paralysis), gating the rest of
+                // the alchemy tree behind it.
                 if (cf.ResourceType == "Mushroom"
                     || cf.ResourceType == "MagicMushroom"
                     || cf.ResourceType == "PoisonMushroom"
                     || cf.ResourceType == "Ghostcap"
                     || cf.ResourceType == "Rotgill")
                 {
-                    TryAutoLearn("heal_brew", "Recipe Learned");
+                    TryAutoLearn("skill_paralysis", "Recipe Learned");
                 }
 
                 // Pop effect at character
@@ -3660,6 +3669,13 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
             uint uid = _sim.Units[i].Id;
 
+            // Drop the cached anim if the unit's def was swapped (e.g. necromancer
+            // morph via Metamorphosis skill). Otherwise the controller stays bound
+            // to the old atlas + sprite and the visible form never updates.
+            if (_unitAnims.TryGetValue(uid, out var existing)
+                && existing.CachedDefID != _sim.Units[i].UnitDefID)
+                _unitAnims.Remove(uid);
+
             if (!_unitAnims.TryGetValue(uid, out var animData))
             {
                 // Try to init from defID
@@ -3681,7 +3697,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 var idleAnim = spriteData.GetAnim("Idle");
                 if (idleAnim != null)
                 {
-                    var kfs = idleAnim.GetAngle(30);
+                    var kfs = PickIdleFrames(idleAnim);
                     if (kfs != null && kfs.Count > 0)
                         animData.RefFrameHeight = kfs[0].Frame.Rect.Height;
                 }
@@ -4106,6 +4122,19 @@ public class Game1 : Microsoft.Xna.Framework.Game
         UpdateCollectingForagables(dt);
         UpdateSkillLearnToasts(dt);
         SyncCorruptionSettings();
+
+        // Death Fog Consumption passive: while the necromancer stands in any
+        // non-zero death-fog density, add +2 to their mana regen this tick.
+        // BonusManaRegen is consumed by the next Simulation.Update.
+        var necroState = _sim.NecroState;
+        necroState.BonusManaRegen = 0f;
+        if (_skillBookState.HasPassive("death_fog_consumption") && _sim.NecromancerIndex >= 0)
+        {
+            var necroPos = _sim.Units[_sim.NecromancerIndex].Position;
+            if (_deathFog.Sample(necroPos.X, necroPos.Y) > 0.01f)
+                necroState.BonusManaRegen = 2f;
+        }
+
         _deathFog.Update(_envSystem, dt, _groundSystem);
 
         // Advance per-vertex visual fades for newly corrupted grass vertices.
@@ -4599,7 +4628,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
         // Character stats panel (Tab)
         if (showUI)
-            _characterStatsUI.Draw(screenW, screenH, _sim, _gameData.Buffs, ref _spellBarState, _input);
+            _characterStatsUI.Draw(screenW, screenH, _sim, _gameData.Buffs, ref _spellBarState, _input, _gameData, _skillBookState);
 
         // Skill tree panel (Shift+K) — DEFUNCT old grimoire, kept for visual reference.
         if (showUI)
@@ -4991,7 +5020,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
                 float refH = 128f;
                 var idle = spriteData.GetAnim("Idle");
-                if (idle != null) { var kfs = idle.GetAngle(30); if (kfs != null && kfs.Count > 0) refH = kfs[0].Frame.Rect.Height; }
+                if (idle != null) { var kfs = PickIdleFrames(idle); if (kfs != null && kfs.Count > 0) refH = kfs[0].Frame.Rect.Height; }
 
                 cad = new UnitAnimData { Ctrl = ctrl, AtlasID = atlasId, RefFrameHeight = refH, CachedDefID = corpse.UnitDefID };
                 _corpseAnims[corpse.CorpseID] = cad;
@@ -5057,6 +5086,26 @@ public class Game1 : Microsoft.Xna.Framework.Game
         return new FrameResult { Frame = kfs[0].Frame, FlipX = flipX };
     }
 
+    /// <summary>Pick the keyframe list for the unit's Idle anim using the same
+    /// angle-preference fallback that AnimController and DrawUnitIdleSprite use.
+    /// Old atlases (VampireFaction, Navarre_Units) author angles 30/60/300,
+    /// newer atlases (NecromancerEvolutions) use 0/45/90/270/315 — without this
+    /// fallback, a hardcoded GetAngle(30) returns null on the new atlases and
+    /// RefFrameHeight stays at its 128 default, scaling units to roughly half
+    /// the correct on-screen size.</summary>
+    private static List<Render.Keyframe>? PickIdleFrames(Render.AnimationData idle)
+    {
+        foreach (int pref in new[] { 30, 0, 45, 60, 315, 90, 270, 300 })
+        {
+            var kfs = idle.GetAngle(pref);
+            if (kfs != null && kfs.Count > 0) return kfs;
+        }
+        // Last resort: any authored angle.
+        foreach (var (_, frames) in idle.AngleFrames)
+            if (frames.Count > 0) return frames;
+        return null;
+    }
+
     private float GetBodyBagRefHeight()
     {
         var corpsesAtlasId = AtlasDefs.ResolveAtlasName("Corpses");
@@ -5065,7 +5114,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         var bodyBagSprite = _atlases[atlasIdx].GetUnit("BodyBag");
         if (bodyBagSprite == null) return 128f;
         var iconAnim = bodyBagSprite.GetAnim("Icon");
-        if (iconAnim != null) { var kfs = iconAnim.GetAngle(30); if (kfs != null && kfs.Count > 0) return kfs[0].Frame.Rect.Height; }
+        if (iconAnim != null) { var kfs = PickIdleFrames(iconAnim); if (kfs != null && kfs.Count > 0) return kfs[0].Frame.Rect.Height; }
         return 128f;
     }
 

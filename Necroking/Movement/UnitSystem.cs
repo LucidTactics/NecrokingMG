@@ -435,6 +435,11 @@ public class NecromancerState
     public float Mana { get; set; } = 10f;
     public float MaxMana { get; set; } = 50f;
     public float ManaRegen { get; set; } = 1f;
+    /// <summary>Per-frame additive bonus on top of ManaRegen. Set by Game1 each
+    /// tick from passive skill effects whose condition can change at runtime
+    /// (e.g. Death Fog Consumption: +2 while standing in death fog). Reset to
+    /// zero by the caller before the conditions are re-evaluated.</summary>
+    public float BonusManaRegen { get; set; }
     public Dictionary<string, float> SpellCooldowns { get; set; } = new();
     public Dictionary<string, int> Inventory { get; set; } = new();
 

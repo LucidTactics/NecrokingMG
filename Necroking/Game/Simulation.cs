@@ -254,8 +254,10 @@ public class Simulation
             _units[i].BlockReacting = false;
         }
 
-        // Update mana and cooldowns
-        _necroState.Mana = MathF.Min(_necroState.MaxMana, _necroState.Mana + _necroState.ManaRegen * dt);
+        // Update mana and cooldowns. BonusManaRegen is the dynamic add (e.g.
+        // Death Fog Consumption while in fog) refreshed by Game1 each tick.
+        _necroState.Mana = MathF.Min(_necroState.MaxMana,
+            _necroState.Mana + (_necroState.ManaRegen + _necroState.BonusManaRegen) * dt);
         _necroState.TickCooldowns(dt);
 
         // Knockdown recovery rolls — runs BEFORE BuffSystem.TickBuffs so a successful
@@ -896,8 +898,16 @@ public class Simulation
                     if (enemy >= 0)
                     {
                         float dist = (_units[enemy].Position - _units[i].Position).Length();
+                        // Path-aware gating: caster must meet primary+secondary
+                        // path requirements; cost is scaled down by primary mastery.
+                        var casterDef = _gameData?.Units.Get(_units[i].UnitDefID);
+                        System.Func<Data.Registries.MagicPath, int> casterLevel = casterDef != null
+                            ? casterDef.GetPathLevel
+                            : _ => 0;
+                        float effectiveCost = spell.EffectiveManaCost(casterLevel);
                         if (dist <= spell.Range &&
-                            _units[i].Mana >= spell.ManaCost &&
+                            spell.MeetsPathRequirements(casterLevel) &&
+                            _units[i].Mana >= effectiveCost &&
                             _units[i].SpellCooldownTimer <= 0f)
                         {
                             // Cast the spell — spawn strike at target
@@ -940,7 +950,7 @@ public class Simulation
                                     spell.TelegraphVisible);
                             }
 
-                            _units[i].Mana -= spell.ManaCost;
+                            _units[i].Mana -= effectiveCost;
                             _units[i].SpellCooldownTimer = spell.Cooldown;
 
                             // Apply casting buff

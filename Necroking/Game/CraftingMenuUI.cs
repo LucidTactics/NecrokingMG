@@ -29,6 +29,8 @@ public class CraftingMenuUI
     private GameData _gameData = null!;
     private SpriteBatch _batch = null!;
     private Texture2D _pixel = null!;
+    private SkillBookState? _bookState;
+    private readonly Random _rng = new();
 
     private bool _visible;
     private InputState? _lastInput;
@@ -66,6 +68,11 @@ public class CraftingMenuUI
         def.Height = screenH;
     }
 
+    /// <summary>Wire the skill book so the menu can filter recipes by
+    /// UnlockedPotions, award a potion skill point per craft, and roll the
+    /// 25% skip-cost for the Efficient Tinctures passive.</summary>
+    public void SetSkillBook(SkillBookState bookState) => _bookState = bookState;
+
     public void Open(int screenW, int screenH)
     {
         _visible = true;
@@ -86,9 +93,20 @@ public class CraftingMenuUI
             _widgetW = def.Width;
         }
 
-        // Cache potion IDs
+        // Cache potion IDs — filtered by skill-tree unlocks. Empty book = empty
+        // list (player hasn't learned the root yet). The crafting menu is opt-in
+        // so locked recipes simply don't appear instead of greying out.
         _potionIds.Clear();
-        _potionIds.AddRange(_gameData.Potions.GetIDs());
+        var allIds = _gameData.Potions.GetIDs();
+        if (_bookState == null)
+        {
+            _potionIds.AddRange(allIds);
+        }
+        else
+        {
+            for (int i = 0; i < allIds.Count; i++)
+                if (_bookState.IsPotionUnlocked(allIds[i])) _potionIds.Add(allIds[i]);
+        }
 
         // Ensure enough CraftingItem children
         if (def != null)
@@ -220,12 +238,29 @@ public class CraftingMenuUI
 
     private void CompleteCraft(PotionDef potion)
     {
-        foreach (var ing in potion.Recipe)
+        // Efficient Tinctures: 25% chance to skip the ingredient deduction
+        // entirely. Rolled per-craft, not per-ingredient (one die, all-or-nothing).
+        bool skipCost = _bookState != null
+            && _bookState.HasPassive("efficient_tinctures")
+            && _rng.NextDouble() < 0.25;
+
+        if (!skipCost)
         {
-            if (string.IsNullOrEmpty(ing.ItemId)) continue;
-            _inventory.RemoveItem(ing.ItemId, ing.Amount);
+            foreach (var ing in potion.Recipe)
+            {
+                if (string.IsNullOrEmpty(ing.ItemId)) continue;
+                _inventory.RemoveItem(ing.ItemId, ing.Amount);
+            }
         }
+        else
+        {
+            DebugLog.Log("skillbook", $"Efficient Tinctures: skipped cost on {potion.Id}");
+        }
+
         _inventory.AddItem(potion.ItemID, 1);
+
+        // One potion skill point per successful craft, regardless of cost-skip.
+        _bookState?.AddSkillPoints("potions", 1);
     }
 
     public void Update(InputState input, int screenW, int screenH, float dt)

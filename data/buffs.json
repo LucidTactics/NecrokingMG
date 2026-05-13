@@ -719,6 +719,76 @@
       "hasWeaponParticle": false,
       "weaponParticle": null,
       "unitTint": null
+    },
+    {
+      "id": "buff_unholy_movement",
+      "name": "Unholy Movement",
+      "duration": 9999,
+      "effects": [
+        {
+          "type": "Add",
+          "stat": "CombatSpeed",
+          "value": 5
+        }
+      ],
+      "maxStacks": 1,
+      "incapacitating": false,
+      "incapHoldAnim": "",
+      "incapRecoverAnim": "",
+      "incapRecoverTime": 0.8,
+      "incapHoldAtEnd": false,
+      "hasOrbital": false,
+      "orbital": null,
+      "hasGroundAura": false,
+      "groundAura": null,
+      "hasBehindEffect": false,
+      "behindEffect": null,
+      "hasFrontEffect": false,
+      "frontEffect": null,
+      "hasLightningAura": false,
+      "lightningAura": null,
+      "hasImageBehind": false,
+      "imageBehind": null,
+      "hasPulsingOutline": false,
+      "pulsingOutline": null,
+      "hasWeaponParticle": false,
+      "weaponParticle": null,
+      "unitTint": null
+    },
+    {
+      "id": "buff_unholy_strength",
+      "name": "Unholy Strength",
+      "duration": 9999,
+      "effects": [
+        {
+          "type": "Add",
+          "stat": "Strength",
+          "value": 4
+        }
+      ],
+      "maxStacks": 1,
+      "incapacitating": false,
+      "incapHoldAnim": "",
+      "incapRecoverAnim": "",
+      "incapRecoverTime": 0.8,
+      "incapHoldAtEnd": false,
+      "hasOrbital": false,
+      "orbital": null,
+      "hasGroundAura": false,
+      "groundAura": null,
+      "hasBehindEffect": false,
+      "behindEffect": null,
+      "hasFrontEffect": false,
+      "frontEffect": null,
+      "hasLightningAura": false,
+      "lightningAura": null,
+      "hasImageBehind": false,
+      "imageBehind": null,
+      "hasPulsingOutline": false,
+      "pulsingOutline": null,
+      "hasWeaponParticle": false,
+      "weaponParticle": null,
+      "unitTint": null
     }
   ]
 }

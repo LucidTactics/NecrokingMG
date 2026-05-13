@@ -58,6 +58,64 @@ public class SpellDef : IHasId
     [EditorField(Label = "Mana Cost", Group = "COMMON", Order = 101, Step = 0.1f, Decimals = 1)]
     [JsonPropertyName("manaCost")] public float ManaCost { get; set; } = 2.0f;
 
+    // Path requirements. A spell may have a primary and an optional secondary.
+    // Both must be met by the caster to cast; only the primary's level is used
+    // when computing the cost reduction (mastery beyond the primary requirement).
+    [EditorField(Label = "Primary Path",  Group = "PATHS", Order = 120, GroupColorR = 200, GroupColorG = 180, GroupColorB = 240)]
+    [EditorCombo("", "metal", "shock", "fire", "water", "heavens", "earth", "chaos", "order", "spirit", "body", "nature", "death")]
+    [JsonPropertyName("primaryPath")]    public string PrimaryPath    { get; set; } = "";
+
+    [EditorField(Label = "Primary Level", Group = "PATHS", Order = 121)]
+    [JsonPropertyName("primaryLevel")]   public int    PrimaryLevel   { get; set; }
+
+    [EditorField(Label = "Secondary Path",  Group = "PATHS", Order = 122)]
+    [EditorCombo("", "metal", "shock", "fire", "water", "heavens", "earth", "chaos", "order", "spirit", "body", "nature", "death")]
+    [JsonPropertyName("secondaryPath")]  public string SecondaryPath  { get; set; } = "";
+
+    [EditorField(Label = "Secondary Level", Group = "PATHS", Order = 123)]
+    [JsonPropertyName("secondaryLevel")] public int    SecondaryLevel { get; set; }
+
+    /// <summary>Strongly-typed primary path requirement, resolved from the
+    /// string id. Path == None means "no primary requirement".</summary>
+    public SpellPathReq GetPrimary() => new()
+    {
+        Path = MagicPathHelpers.FromJsonId(PrimaryPath),
+        Level = PrimaryLevel,
+    };
+
+    public SpellPathReq GetSecondary() => new()
+    {
+        Path = MagicPathHelpers.FromJsonId(SecondaryPath),
+        Level = SecondaryLevel,
+    };
+
+    /// <summary>True if the caster meets both primary and secondary path
+    /// requirements (if set). Each effective caster level must be >= the
+    /// spell's requirement on that path.</summary>
+    public bool MeetsPathRequirements(Func<MagicPath, int> casterLevel)
+    {
+        var pri = GetPrimary();
+        if (pri.HasRequirement && casterLevel(pri.Path) < pri.Level) return false;
+        var sec = GetSecondary();
+        if (sec.HasRequirement && casterLevel(sec.Path) < sec.Level) return false;
+        return true;
+    }
+
+    /// <summary>Effective mana cost after primary-path mastery scaling.
+    /// Formula: cost × 1 / (casterLevel − reqLevel + 1). Same-level casters get
+    /// full cost (N=1); each additional level of mastery in the primary path
+    /// shaves another fraction off. Secondary path requirement does not affect
+    /// cost — it's a gate only. Returns ManaCost unchanged if there's no
+    /// primary requirement.</summary>
+    public float EffectiveManaCost(Func<MagicPath, int> casterLevel)
+    {
+        var pri = GetPrimary();
+        if (!pri.HasRequirement) return ManaCost;
+        int n = casterLevel(pri.Path) - pri.Level + 1;
+        if (n <= 0) return ManaCost; // caster lacks primary; cost is moot but return base for safety
+        return ManaCost / n;
+    }
+
     [EditorField(Label = "Cooldown", Group = "COMMON", Order = 102, Step = 0.1f, Decimals = 1)]
     [JsonPropertyName("cooldown")] public float Cooldown { get; set; }
 
