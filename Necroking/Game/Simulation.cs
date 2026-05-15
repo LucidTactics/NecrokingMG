@@ -644,6 +644,7 @@ public class Simulation
                         GameTime = _gameTime, DayTime = dayFraction, IsNight = isNight,
                         AmortizedAI = _amortizedAI, AmortizationInterval = _aiUpdateInterval,
                         AnimMeta = _animMeta,
+                        DamageEvents = _damageEvents,
                     };
                     handler.Update(ref ctx);
                 }
@@ -704,6 +705,8 @@ public class Simulation
                         // Note: CraftTableIdx is cleared too, but ts.Crafting / ts.CraftTimer
                         // on the env-side TableCraftState are left intact so the player can
                         // resume the craft from where it paused by clicking Start again.
+                        // Bush-work routine cancellation here means the potion is NOT
+                        // consumed (consumption only happens on successful WorkLoop completion).
                         if (_necroMoveInput.LengthSq() > 0.01f && _units[i].Routine != 0)
                         {
                             _units[i].Routine = 0;
@@ -713,6 +716,9 @@ public class Simulation
                             _units[i].BuildGlyphIdx = -1;
                             _units[i].BuildTimer = 0f;
                             _units[i].CraftTableIdx = -1;
+                            _units[i].BushWorkObjIdx = -1;
+                            _units[i].BushWorkBuffID = "";
+                            _units[i].BushWorkItemID = "";
                         }
                     }
                     else

@@ -15,13 +15,11 @@ namespace Necroking.Editor;
 /// flipbook manager popup, buff manager popup, and save.
 /// Opened with F10.
 /// </summary>
-public class SpellEditorWindow
+public class SpellEditorWindow : EditorWindow
 {
-    private readonly EditorBase _ui;
-    private GameData _gameData = null!;
+    public override string Title => "SPELL EDITOR";
 
-    /// <summary>Set to true when the user clicks the [X] close button on the top bar.</summary>
-    public bool WantsClose { get; set; }
+    private GameData _gameData = null!;
 
     /// <summary>Set HDR sprite effect for spell preview rendering.</summary>
     public void SetHdrEffect(Microsoft.Xna.Framework.Graphics.Effect? effect) => _hdrSpriteEffect = effect;
@@ -59,10 +57,9 @@ public class SpellEditorWindow
     private float _detailScroll;
     private List<string> _filteredIds = new();
 
-    // Status bar
-    private string _statusMessage = "";
-    private float _statusTimer;
-    private bool _unsavedChanges;
+    // Status bar + dirty flag now inherited from EditorWindow:
+    //   StatusMessage, StatusTimer, IsDirty
+    //   SetStatus(msg, durationSec), MarkDirty() (overridden below), ClearDirty()
 
     // Flipbook manager popup
     private bool _flipbookManagerOpen;
@@ -114,10 +111,7 @@ public class SpellEditorWindow
 
     private ReflectionPropertyRenderer _renderer = null!;
 
-    public SpellEditorWindow(EditorBase ui)
-    {
-        _ui = ui;
-    }
+    public SpellEditorWindow(EditorBase ui) : base(ui) { }
 
     public void SetGameData(GameData gameData)
     {
@@ -130,9 +124,9 @@ public class SpellEditorWindow
         if (_gameData == null) return;
 
         float dt = (float)gameTime.ElapsedGameTime.TotalSeconds;
-        if (_statusTimer > 0) _statusTimer -= dt;
+        TickChrome(dt);
 
-        // Handle Ctrl+S
+        // Handle Ctrl+S (and editor-specific shortcuts Ctrl+C / Ctrl+V)
         HandleKeyboardShortcuts();
 
         // --- Spell preview update and render-to-target ---
@@ -224,7 +218,7 @@ public class SpellEditorWindow
         if (ctrl && sPressed)
         {
             _gameData.Save();
-            _unsavedChanges = false;
+            ClearDirty();
             SetStatus("Saved!");
         }
 
@@ -282,14 +276,14 @@ public class SpellEditorWindow
         _ui.DrawRect(new Rectangle(x, y, w, h), new Color(25, 25, 35, 255));
         _ui.DrawRect(new Rectangle(x, y + h - 1, w, 1), new Color(80, 80, 100));
 
-        // Title
-        string title = _unsavedChanges ? "SPELL EDITOR *" : "SPELL EDITOR";
+        // Title (with dirty asterisk from inherited IsDirty)
+        string title = IsDirty ? $"{Title} *" : Title;
         var titleSize = _ui.MeasureText(title);
         _ui.DrawText(title, new Vector2(x + (w - titleSize.X) / 2, y + (h - titleSize.Y) / 2),
             EditorBase.TextBright);
 
         // Unsaved dot
-        if (_unsavedChanges)
+        if (IsDirty)
         {
             int dotX = (int)(x + (w + titleSize.X) / 2 + 10);
             _ui.DrawRect(new Rectangle(dotX, y + h / 2 - 3, 6, 6), new Color(255, 180, 50));
@@ -307,7 +301,7 @@ public class SpellEditorWindow
         if (_ui.DrawButton("Save (Ctrl+S)", x + w - 210, y + 10, 160, 30, EditorBase.SuccessColor))
         {
             _gameData.Save();
-            _unsavedChanges = false;
+            ClearDirty();
             SetStatus("Saved!");
         }
 
@@ -315,13 +309,13 @@ public class SpellEditorWindow
         if (_ui.DrawButton("X", x + w - 40, y + 10, 30, 30))
             WantsClose = true;
 
-        // Status message
-        if (_statusTimer > 0 && !string.IsNullOrEmpty(_statusMessage))
+        // Status message (inherited from EditorWindow chrome)
+        if (StatusTimer > 0 && !string.IsNullOrEmpty(StatusMessage))
         {
-            float alpha = Math.Min(1f, _statusTimer);
+            float alpha = Math.Min(1f, StatusTimer);
             int a = (int)(alpha * 255);
-            Color c = _statusMessage.Contains("FAIL") ? new Color(255, 80, 80, a) : new Color(100, 255, 100, a);
-            _ui.DrawText(_statusMessage, new Vector2(x + 20, y + 17), c);
+            Color c = StatusMessage.Contains("FAIL") ? new Color(255, 80, 80, a) : new Color(100, 255, 100, a);
+            _ui.DrawText(StatusMessage, new Vector2(x + 20, y + 17), c);
         }
     }
 
@@ -1591,17 +1585,16 @@ public class SpellEditorWindow
         }
     }
 
-    private void MarkDirty()
+    // MarkDirty is the base EditorWindow.MarkDirty plus a preview-cache invalidation.
+    // The base method sets IsDirty; we also tell the spell preview to redraw.
+    protected override void MarkDirty()
     {
-        _unsavedChanges = true;
+        base.MarkDirty();
         _spellPreview?.MarkDirty();
     }
 
-    private void SetStatus(string msg)
-    {
-        _statusMessage = msg;
-        _statusTimer = 3f;
-    }
+    // SetStatus is inherited (default 2s timer). Old SpellEditor used 3s;
+    // the 1s difference is imperceptible.
 
     // Scroll state for spell list
     private readonly Dictionary<string, float> _listScrolls = new();

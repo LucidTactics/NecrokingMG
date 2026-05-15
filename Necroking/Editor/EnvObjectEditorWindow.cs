@@ -378,7 +378,6 @@ public class EnvObjectEditorWindow
         // Def list (scrollable)
         var filtered = GetFilteredDefs();
         int listH = y + h - curY;
-        int listItemH = 22;
 
         // Build label list for DrawScrollableList
         var labels = new List<string>();

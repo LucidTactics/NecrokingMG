@@ -27,6 +27,7 @@ public ref struct AIContext
     public World.EnvironmentSystem? EnvSystem;
     public GameSystems.ProjectileManager? Projectiles;
     public GameSystems.MagicGlyphSystem? MagicGlyphs;
+    public List<GameSystems.DamageEvent>? DamageEvents;
     // Anim metadata for effect-time lookups (used by AI to time things like pounce takeoffs).
     public Dictionary<string, AnimationMeta>? AnimMeta;
 

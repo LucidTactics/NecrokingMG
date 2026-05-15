@@ -49,7 +49,6 @@ public class CraftTableScenario : ScenarioBase
     private bool _zombieSpawned;
     private bool _bonusEffectApplied;
     private bool _combatVerified;
-    private uint _spawnedZombieId;
     private uint _testTargetId;
     private float _combatStartTime;
 

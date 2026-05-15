@@ -126,14 +126,6 @@ public class AnimatedObjectScenario : ScenarioBase
     {
         DebugLog.Log(ScenarioLog, $"[COMPLETE] {_shotsTaken} screenshots over {_elapsed:F2}s");
 
-        // Verify random start frames: noisy oaks (0-3) should NOT all start at 0
-        bool allZero = true;
-        for (int j = 0; j < 4; j++)
-        {
-            var rt = sim.EnvironmentSystem.GetObjectRuntime(j);
-            if ((int)rt.AnimTime != 0) allZero = false; // will have advanced, but check initial divergence
-        }
-
         // Verify desync: noisy oaks should have different AnimTime values
         float[] noisyTimes = new float[4];
         for (int j = 0; j < 4; j++)

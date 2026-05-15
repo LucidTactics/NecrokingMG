@@ -13,7 +13,15 @@ public static class MapData
 {
     public static bool Load(string path, GroundSystem ground, EnvironmentSystem env, WallSystem walls,
         List<PlacedUnit>? placedUnits = null)
+        => Load(path, ground, env, walls, placedUnits, out _);
+
+    /// <summary>Same as <see cref="Load(string, GroundSystem, EnvironmentSystem, WallSystem, List{PlacedUnit}?)"/>
+    /// but also returns the grass map info parsed from the same JsonDocument, so callers
+    /// don't have to re-read and re-parse the 55 MB map JSON just to get grass data.</summary>
+    public static bool Load(string path, GroundSystem ground, EnvironmentSystem env, WallSystem walls,
+        List<PlacedUnit>? placedUnits, out GrassMapInfo? grassInfo)
     {
+        grassInfo = null;
         if (!File.Exists(path)) return false;
 
         try
@@ -22,6 +30,7 @@ public static class MapData
             string json = File.ReadAllText(path);
             using var doc = JsonDocument.Parse(json);
             var root = doc.RootElement;
+            grassInfo = LoadGrass(root);
 
             // --- Ground types ---
             if (root.TryGetProperty("groundTypes", out var gtArr))
@@ -529,6 +538,10 @@ public static class MapData
         if (ed.TryGetProperty("respawnTime", out var rst)) def.RespawnTime = rst.GetSingle();
         if (ed.TryGetProperty("scaleMin", out var smin)) def.ScaleMin = smin.GetSingle();
         if (ed.TryGetProperty("scaleMax", out var smax)) def.ScaleMax = smax.GetSingle();
+        if (ed.TryGetProperty("isBerryBush", out var ibb)) def.IsBerryBush = ibb.GetBoolean();
+        if (ed.TryGetProperty("noBerrySprite", out var nbs)) def.NoBerrySprite = nbs.GetString() ?? "";
+        if (ed.TryGetProperty("poisonedSprite", out var pbs)) def.PoisonedSprite = pbs.GetString() ?? "";
+        if (ed.TryGetProperty("berryRespawnTime", out var brt)) def.BerryRespawnTime = brt.GetSingle();
         if (ed.TryGetProperty("fogEmitRate", out var femit)) def.FogEmitRate = femit.GetSingle();
         if (ed.TryGetProperty("fogAbsorbRate", out var fabs)) def.FogAbsorbRate = fabs.GetSingle();
         if (ed.TryGetProperty("isCorruptable", out var icor)) def.IsCorruptable = icor.GetBoolean();

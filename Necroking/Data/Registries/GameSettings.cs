@@ -248,8 +248,8 @@ public class GameSettingsData
         try
         {
             var options = new JsonSerializerOptions { WriteIndented = true };
-            File.WriteAllText(path, JsonSerializer.Serialize(this, options));
-            return true;
+            // Atomic tmp+rename so a crash mid-write can't corrupt settings.json.
+            return Core.AtomicFile.WriteAllText(path, JsonSerializer.Serialize(this, options));
         }
         catch (Exception ex) { Core.DebugLog.Log("error", $"Failed to save settings {path}: {ex.Message}"); return false; }
     }

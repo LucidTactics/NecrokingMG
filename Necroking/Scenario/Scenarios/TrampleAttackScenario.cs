@@ -51,7 +51,7 @@ public class TrampleAttackScenario : ScenarioBase
     private bool _primaryWasDisplaced;   // primary moved meaningfully from start pos
     private float _primaryMaxDisp;       // greatest distance from start observed
     private int _initialCombatLogCount;
-    private bool _screenshotPreImpact, _screenshotImpact, _screenshotPostImpact;
+    private bool _screenshotPreImpact, _screenshotPostImpact;
 
     public override void OnInit(Simulation sim)
     {
@@ -192,7 +192,6 @@ public class TrampleAttackScenario : ScenarioBase
                         $"from start ({_primaryStartPos.X:F2},{_primaryStartPos.Y:F2}) " +
                         $"InPhysics={sim.Units[primIdx].InPhysics}");
                     DeferredScreenshot = "trample_02_at_impact";
-                    _screenshotImpact = true;
                 }
 
                 // On entering recovery (2) after follow-through, take post-impact shot

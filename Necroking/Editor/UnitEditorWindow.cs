@@ -82,6 +82,12 @@ public class UnitEditorWindow
     private float _lastPreviewPivotScreenY;
     private int _lastPreviewBoxX, _lastPreviewBoxY, _lastPreviewBoxSize;
     private bool _lastPreviewValid;
+    // Native pixel height of the currently-previewed frame. Used by the
+    // weapon-point resolver so meta-derived offsets are converted with the
+    // SAME frame the preview is drawing — otherwise non-idle frames would
+    // place the line off-scale because _lastPreviewScale is also keyed to
+    // this height.
+    private float _lastPreviewFrameNativeH;
 
     // --- Status ---
     private string _statusMessage = "";
@@ -961,9 +967,27 @@ public class UnitEditorWindow
         {
             _previewAnim.Update(dt);
 
-            // Handle non-looping playback (U10)
-            if (!_previewLooping && _previewAnim.IsAnimFinished)
+            // The AnimController has three play modes:
+            //   • Loop                (Idle/Walk/etc) — self-loops, no action needed
+            //   • PlayOnceTransition  (Attack1/etc)   — auto-switches to Idle on finish
+            //   • PlayOnceHold        (Death/Pickup)  — sticks on the last frame
+            // For preview-loop we want the *previewed* clip to repeat in
+            // all three cases. So: force-state back if the controller has
+            // drifted to a different state, AND force-state again if it's
+            // still on our state but finished (PlayOnceHold case) to reset
+            // _animTime to 0.
+            var desiredState = NameToAnimState(_previewAnimName);
+            if (_previewLooping)
+            {
+                if (_previewAnim.CurrentState != desiredState
+                    || _previewAnim.IsAnimFinished)
+                    _previewAnim.ForceState(desiredState);
+            }
+            else if (_previewAnim.IsAnimFinished)
+            {
+                // Handle non-looping playback (U10): pause at the end.
                 _previewPlaying = false;
+            }
         }
 
         curY = Math.Max(previewY + previewSize, ctrlY) + 4;
@@ -1067,6 +1091,7 @@ public class UnitEditorWindow
         _lastPreviewDrawY = drawY;
         _lastPreviewDrawW = drawW;
         _lastPreviewDrawH = drawH;
+        _lastPreviewFrameNativeH = frame.Rect.Height;
         _lastPreviewFlipX = fr.FlipX;
         // Pivot screen position: the sprite's pivot (anchor) in screen coordinates.
         // PivotX is normalized (0-1) across the frame width; PivotY is bottom-left origin so we flip Y.
@@ -1108,15 +1133,91 @@ public class UnitEditorWindow
     }
 
     private WeaponFrameData? TryGetWeaponFrame(UnitDef def, out int frameIndex)
-    {
-        frameIndex = GetCurrentFrameIndex(def);
-        string animName = _previewAnimName;
-        string yawKey = ((int)_previewAngle).ToString();
+        => TryGetWeaponFrame(def, out frameIndex, out _);
 
-        if (!def.WeaponPoints.TryGetValue(animName, out var yawDict)) return null;
-        if (!yawDict.TryGetValue(yawKey, out var frames)) return null;
-        if (frameIndex >= frames.Count) return null;
-        return frames[frameIndex];
+    /// <summary>
+    /// Look up the weapon hilt/tip pixel offsets for the current preview frame.
+    /// Consults the AnimationMeta first (the export pipeline's authoritative
+    /// source), then falls back to legacy JSON weapon points. Returns null if
+    /// neither source has data for this animation/yaw/frame.
+    /// </summary>
+    private WeaponFrameData? TryGetWeaponFrame(UnitDef def, out int frameIndex, out bool fromMeta)
+    {
+        fromMeta = false;
+        string animName = _previewAnimName;
+
+        // The unit editor exposes only old-scheme angles (30/60/300) in
+        // AngleOptions, but new-scheme atlases author at 0/45/90/270/315.
+        // _previewAngle maps to a representative world angle (matching the
+        // sprite-preview draw path), then ResolveAngle gives the actual
+        // sprite yaw the AnimController is showing — which is also the yaw
+        // the .animationmeta indexes by.
+        float worldAngle = (int)_previewAngle switch
+        {
+            30  => 0f,
+            60  => 45f,
+            300 => 270f,
+            _   => _previewAngle
+        };
+        int spriteAngle = _previewAnim.ResolveAngle(worldAngle, out _);
+
+        // The local GetCurrentFrameIndex path used `_previewAngle` directly
+        // as the sprite-angle key, which fails for new-scheme atlases (whose
+        // angles are 0/45/etc) and silently returns 0 — leaving the weapon
+        // line stuck on frame 0 across the whole animation. The
+        // AnimController already does the right thing because it resolves
+        // via the angle scheme it detected from the sprite data.
+        frameIndex = _previewAnim.GetCurrentFrameIndex(worldAngle);
+
+        AnimationMeta? meta = null;
+        if (_animMeta != null && def.Sprite != null)
+            _animMeta.TryGetValue(AnimMetaLoader.MetaKey(def.Sprite.SpriteName, animName), out meta);
+
+        // The exporter renders the rig at a CONSTANT pixels-per-meter — the
+        // cropped frame's pixel height varies by pose (an attack swing has
+        // a bigger bounding box than idle), but the rig inside it is always
+        // the same px/m. Use the idle frame's height as the reference; it's
+        // tight against the rig with minimal extra padding, so it's the
+        // best proxy for the exporter's actual px/m. Using the *current*
+        // frame's height here over-scaled attack frames by 15+% and put the
+        // weapon line several pixels above the visible weapon.
+        float refH = GetEditorRefFrameHeight(def);
+
+        if (WeaponPointResolver.TryResolve(def, meta, animName, spriteAngle, frameIndex, refH,
+                out var resolved, out fromMeta))
+            return resolved;
+
+        // No meta, and JSON didn't have the resolved-angle key. Try the
+        // legacy editor-angle key (older saves used the OldSectors angle as
+        // the JSON yawKey even on new-scheme sprites).
+        string legacyYawKey = ((int)_previewAngle).ToString();
+        if (def.WeaponPoints.TryGetValue(animName, out var yawDict)
+            && yawDict.TryGetValue(legacyYawKey, out var frames)
+            && frameIndex < frames.Count)
+            return frames[frameIndex];
+
+        return null;
+    }
+
+    private float GetEditorRefFrameHeight(UnitDef def)
+    {
+        if (def.Sprite == null) return 128f;
+        var atlasId = AtlasDefs.ResolveAtlasName(def.Sprite.AtlasName);
+        if ((int)atlasId >= _atlases.Length) return 128f;
+        var atlas = _atlases[(int)atlasId];
+        if (!atlas.IsLoaded) return 128f;
+        var spriteData = atlas.GetUnit(def.Sprite.SpriteName);
+        if (spriteData == null) return 128f;
+        var idle = spriteData.GetAnim("Idle");
+        if (idle == null) return 128f;
+        foreach (int pref in new[] { 30, 0, 45, 60, 315, 90, 270, 300 })
+        {
+            var kfs = idle.GetAngle(pref);
+            if (kfs != null && kfs.Count > 0) return kfs[0].Frame.Rect.Height;
+        }
+        foreach (var (_, frames) in idle.AngleFrames)
+            if (frames.Count > 0) return frames[0].Frame.Rect.Height;
+        return 128f;
     }
 
     private int DrawWeaponPointSection(UnitDef def, int x, int y, int w)
@@ -1125,10 +1226,11 @@ public class UnitEditorWindow
         DrawSectionHeader("Weapon Points", x, ref curY, w);
 
         int frameIdx = GetCurrentFrameIndex(def);
-        var wpFrame = TryGetWeaponFrame(def, out _);
+        var wpFrame = TryGetWeaponFrame(def, out _, out bool fromMeta);
 
-        _ui.DrawText($"Frame: {frameIdx}  Anim: {_previewAnimName}  Yaw: {(int)_previewAngle}",
-            new Vector2(x, curY + 2), EditorBase.TextDim);
+        string sourceTag = fromMeta ? "  [animationmeta]" : "";
+        _ui.DrawText($"Frame: {frameIdx}  Anim: {_previewAnimName}  Yaw: {(int)_previewAngle}{sourceTag}",
+            new Vector2(x, curY + 2), fromMeta ? EditorBase.TextBright : EditorBase.TextDim);
         curY += RowH;
 
         // U01: Hilt coordinates (RU37: slightly wider fields)
@@ -1228,12 +1330,18 @@ public class UnitEditorWindow
         var hiltScreen = WeaponPointToScreen(wpFrame.Hilt.X, wpFrame.Hilt.Y);
         var tipScreen = WeaponPointToScreen(wpFrame.Tip.X, wpFrame.Tip.Y);
 
-        var lineColor = new Color(_weaponLineColor.R, _weaponLineColor.G, _weaponLineColor.B, _weaponLineColor.A);
+        // SpriteBatch runs with BlendState.AlphaBlend (premultiplied
+        // convention), so build via FromNonPremultiplied — otherwise the
+        // alpha slider in the colour swatch has no visible effect and
+        // partially-transparent values render as solid.
+        var lineColor = Color.FromNonPremultiplied(_weaponLineColor.R, _weaponLineColor.G, _weaponLineColor.B, _weaponLineColor.A);
         _ui.DrawLine(hiltScreen, tipScreen, lineColor, 2);
 
-        // U02: Draw circles at hilt and tip positions (4px radius approximated with line segments)
-        DrawCircleOverlay(hiltScreen, 4, new Color(80, 200, 255));
-        DrawCircleOverlay(tipScreen, 4, new Color(255, 200, 80));
+        // U02: Draw circles at hilt and tip positions (4px radius approximated with line segments).
+        // Reuse the swatch alpha so you can see through the markers too.
+        byte a = _weaponLineColor.A;
+        DrawCircleOverlay(hiltScreen, 4, Color.FromNonPremultiplied(80, 200, 255, a));
+        DrawCircleOverlay(tipScreen,  4, Color.FromNonPremultiplied(255, 200, 80, a));
     }
 
     /// <summary>Draw a circle at the given screen position using line segments.</summary>
@@ -1443,43 +1551,19 @@ public class UnitEditorWindow
 
     private int GetCurrentFrameIndex(UnitDef def)
     {
-        if (def.Sprite == null || string.IsNullOrEmpty(def.Sprite.AtlasName) || string.IsNullOrEmpty(def.Sprite.SpriteName))
-            return 0;
-
-        var atlasId = AtlasDefs.ResolveAtlasName(def.Sprite.AtlasName);
-        if ((int)atlasId >= _atlases.Length) return 0;
-        var atlas = _atlases[(int)atlasId];
-        if (!atlas.IsLoaded) return 0;
-
-        var spriteData = atlas.GetUnit(def.Sprite.SpriteName);
-        if (spriteData == null) return 0;
-
-        var anim = spriteData.GetAnim(_previewAnimName);
-        if (anim == null) return 0;
-
-        int spriteAngle = (int)_previewAngle; // _previewAngle is already a sprite angle (30/60/300)
-        var kfs = anim.GetAngle(spriteAngle);
-        if (kfs == null || kfs.Count == 0)
-            kfs = anim.GetAngle(30);
-        if (kfs == null || kfs.Count == 0) return 0;
-
-        if (def.AnimTimings.TryGetValue(_previewAnimName, out var timing) && timing.FrameDurationsMs.Count > 0)
+        // Delegate to the AnimController so we stay in sync with what's
+        // actually being drawn. Walking the anim data ourselves with
+        // `_previewAngle` (always 30/60/300) silently fell back to frame 0
+        // on new-scheme atlases whose angles are 0/45/90/270/315.
+        if (def.Sprite == null) return 0;
+        float worldAngle = (int)_previewAngle switch
         {
-            float cumMs = 0;
-            for (int i = 0; i < timing.FrameDurationsMs.Count; i++)
-            {
-                cumMs += timing.FrameDurationsMs[i];
-                if (_previewAnim.AnimTime < cumMs) return i;
-            }
-            return Math.Max(0, timing.FrameDurationsMs.Count - 1);
-        }
-
-        int frameIdx = 0;
-        for (int i = kfs.Count - 1; i >= 0; i--)
-        {
-            if (_previewAnim.AnimTime >= kfs[i].Time) { frameIdx = i; break; }
-        }
-        return frameIdx;
+            30  => 0f,
+            60  => 45f,
+            300 => 270f,
+            _   => _previewAngle
+        };
+        return _previewAnim.GetCurrentFrameIndex(worldAngle);
     }
 
     private int GetFrameCountForCurrentAnim(UnitDef def)
@@ -1505,7 +1589,23 @@ public class UnitEditorWindow
         return kfs?.Count ?? 0;
     }
 
-    private void StepAnimForward()
+    private void StepAnimForward() => StepAnim(+1);
+    private void StepAnimBackward() => StepAnim(-1);
+
+    /// <summary>
+    /// Advance (delta=+1) or rewind (delta=-1) the preview by one frame and
+    /// snap _animTime to that frame's start. Wraps modulo frame count so
+    /// stepping past the end loops, which is what the user wants when the
+    /// clip is paused on the last frame of a Death / Attack and they keep
+    /// clicking forward.
+    ///
+    /// Resolving the sprite angle through the AnimController is critical:
+    /// the local `_previewAngle` is always an OldSectors angle (30/60/300),
+    /// but new-scheme atlases author keyframes at 0/45/90/270/315. Looking
+    /// up `anim.GetAngle(60)` on those returns null and the step silently
+    /// no-ops — which is the bug the user hit on the necromancer.
+    /// </summary>
+    private void StepAnim(int delta)
     {
         var allIds = _gameData.Units.GetIDs();
         if (_selectedIdx < 0 || _selectedIdx >= allIds.Count) return;
@@ -1523,22 +1623,31 @@ public class UnitEditorWindow
         var anim = spriteData.GetAnim(_previewAnimName);
         if (anim == null) return;
 
-        int spriteAngle = (int)_previewAngle; // _previewAngle is already a sprite angle (30/60/300)
-
+        // Per-anim timing override (ms-based) — when set, frame indices
+        // map directly into FrameDurationsMs.
         if (def.AnimTimings.TryGetValue(_previewAnimName, out var timing) && timing.FrameDurationsMs.Count > 0)
         {
-            int currentFrame = GetCurrentFrameIndex(def);
-            int nextFrame = (currentFrame + 1) % timing.FrameDurationsMs.Count;
+            int count = timing.FrameDurationsMs.Count;
+            int cur = GetCurrentFrameIndex(def);
+            int next = ((cur + delta) % count + count) % count;
             float targetMs = 0;
-            for (int i = 0; i < nextFrame; i++)
-                targetMs += timing.FrameDurationsMs[i];
+            for (int i = 0; i < next; i++) targetMs += timing.FrameDurationsMs[i];
             _previewAnim.AnimTime = targetMs;
             return;
         }
 
+        // Tick-based fallback. Resolve the sprite angle the AnimController
+        // is actually rendering, then advance/rewind through its keyframe
+        // list.
+        float worldAngle = (int)_previewAngle switch
+        {
+            30  => 0f,
+            60  => 45f,
+            300 => 270f,
+            _   => _previewAngle
+        };
+        int spriteAngle = _previewAnim.ResolveAngle(worldAngle, out _);
         var kfs = anim.GetAngle(spriteAngle);
-        if (kfs == null || kfs.Count == 0)
-            kfs = anim.GetAngle(30);
         if (kfs == null || kfs.Count == 0) return;
 
         int curIdx = 0;
@@ -1546,53 +1655,8 @@ public class UnitEditorWindow
         {
             if (_previewAnim.AnimTime >= kfs[i].Time) { curIdx = i; break; }
         }
-        int nextIdx = (curIdx + 1) % kfs.Count;
+        int nextIdx = ((curIdx + delta) % kfs.Count + kfs.Count) % kfs.Count;
         _previewAnim.AnimTime = kfs[nextIdx].Time;
-    }
-
-    private void StepAnimBackward()
-    {
-        var allIds = _gameData.Units.GetIDs();
-        if (_selectedIdx < 0 || _selectedIdx >= allIds.Count) return;
-        var def = _gameData.Units.Get(allIds[_selectedIdx]);
-        if (def?.Sprite == null) return;
-
-        var atlasId = AtlasDefs.ResolveAtlasName(def.Sprite.AtlasName);
-        if ((int)atlasId >= _atlases.Length) return;
-        var atlas = _atlases[(int)atlasId];
-        if (!atlas.IsLoaded) return;
-
-        var spriteData = atlas.GetUnit(def.Sprite.SpriteName);
-        if (spriteData == null) return;
-
-        var anim = spriteData.GetAnim(_previewAnimName);
-        if (anim == null) return;
-
-        int spriteAngle = (int)_previewAngle; // _previewAngle is already a sprite angle (30/60/300)
-
-        if (def.AnimTimings.TryGetValue(_previewAnimName, out var timing) && timing.FrameDurationsMs.Count > 0)
-        {
-            int currentFrame = GetCurrentFrameIndex(def);
-            int prevFrame = (currentFrame - 1 + timing.FrameDurationsMs.Count) % timing.FrameDurationsMs.Count;
-            float targetMs = 0;
-            for (int i = 0; i < prevFrame; i++)
-                targetMs += timing.FrameDurationsMs[i];
-            _previewAnim.AnimTime = targetMs;
-            return;
-        }
-
-        var kfs = anim.GetAngle(spriteAngle);
-        if (kfs == null || kfs.Count == 0)
-            kfs = anim.GetAngle(30);
-        if (kfs == null || kfs.Count == 0) return;
-
-        int curIdx = 0;
-        for (int i = kfs.Count - 1; i >= 0; i--)
-        {
-            if (_previewAnim.AnimTime >= kfs[i].Time) { curIdx = i; break; }
-        }
-        int prevIdx = (curIdx - 1 + kfs.Count) % kfs.Count;
-        _previewAnim.AnimTime = kfs[prevIdx].Time;
     }
 
     // =========================================================================
@@ -1971,7 +2035,6 @@ public class UnitEditorWindow
         const int realmHeaderH = 14;
         const int valueRowH = 18;
 
-        int stripW = cellW * 12 + realmGap * 2;
         int x0 = x;
 
         // Realm labels (above each group of four)

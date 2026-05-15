@@ -429,27 +429,13 @@ public class SkillBookPanel
         if (_activeTab < 0 || _activeTab >= SkillBookDefs.Tabs.Count) return;
         var tab = SkillBookDefs.Tabs[_activeTab];
 
-        // Connectors first (under nodes)
+        // Connectors first (under nodes). Both Parents (AND) and ParentsAny (OR)
+        // edges are drawn so OR-prereq trees like Soul Consumption show their
+        // upstream connections instead of looking orphaned.
         foreach (var s in tab.Skills)
         {
-            foreach (var pid in s.Parents)
-            {
-                int pi = tab.IndexOf(pid);
-                if (pi < 0) continue;
-                var parent = tab.Skills[pi];
-                var pr = NodeRect(lay, parent);
-                var cr = NodeRect(lay, s);
-                var a = new Vector2(pr.X + pr.Width / 2f, pr.Bottom);
-                var b = new Vector2(cr.X + cr.Width / 2f, cr.Y);
-
-                bool parentLearned = _state?.IsLearned(parent.Id) ?? false;
-                bool childLearned  = _state?.IsLearned(s.Id) ?? false;
-                Color line = childLearned ? GoldBright
-                           : parentLearned ? Gold
-                                           : new Color(120, 100, 70, 140);
-                int thick = childLearned ? 3 : 2;
-                DrawConnector(a, b, line, thick);
-            }
+            foreach (var pid in s.Parents)     DrawParentEdge(lay, tab, s, pid);
+            foreach (var pid in s.ParentsAny)  DrawParentEdge(lay, tab, s, pid);
         }
 
         // Nodes on top
@@ -475,6 +461,27 @@ public class SkillBookPanel
             Border(new Rectangle(x - pad, y - 2, (int)sz.X + pad * 2, (int)sz.Y + 4), GoldDim, 1);
             DrawText(sf, readout, new Vector2(x, y), GoldBright);
         }
+    }
+
+    private void DrawParentEdge(Layout lay, Necroking.Data.SkillTab tab, Necroking.Data.SkillDef child, string parentId)
+    {
+        int pi = tab.IndexOf(parentId);
+        if (pi < 0) return;
+        var parent = tab.Skills[pi];
+        var pr = NodeRect(lay, parent);
+        var cr = NodeRect(lay, child);
+        var a = new Vector2(pr.X + pr.Width / 2f, pr.Bottom);
+        var b = new Vector2(cr.X + cr.Width / 2f, cr.Y);
+
+        bool parentLearned = _state?.IsLearned(parent.Id) ?? false;
+        bool childLearned  = _state?.IsLearned(child.Id) ?? false;
+        // Dark ink for unlearned edges so they read clearly against parchment;
+        // gold once the parent is learned, bright gold when the child is too.
+        Color line = childLearned ? GoldBright
+                   : parentLearned ? Gold
+                                   : new Color(50, 32, 18, 230);
+        int thick = childLearned ? 3 : 2;
+        DrawConnector(a, b, line, thick);
     }
 
     private void DrawConnector(Vector2 a, Vector2 b, Color color, int thickness)

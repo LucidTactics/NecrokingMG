@@ -5352,6 +5352,32 @@
         "intensity": 2.5
       },
       "toggleEffect": ""
+    },
+    {
+      "name": "Poison Berries (Poison)",
+      "id": "poison_berries_poison",
+      "category": "Buff",
+      "range": 30,
+      "manaCost": 0,
+      "primaryPath": "",
+      "primaryLevel": 0,
+      "secondaryPath": "",
+      "secondaryLevel": 0,
+      "cooldown": 0,
+      "castTime": 0
+    },
+    {
+      "name": "Poison Berries (Paralysis)",
+      "id": "poison_berries_paralysis",
+      "category": "Buff",
+      "range": 30,
+      "manaCost": 0,
+      "primaryPath": "",
+      "primaryLevel": 0,
+      "secondaryPath": "",
+      "secondaryLevel": 0,
+      "cooldown": 0,
+      "castTime": 0
     }
   ]
 }

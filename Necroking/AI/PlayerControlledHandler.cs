@@ -26,17 +26,27 @@ public class PlayerControlledHandler : IArchetypeHandler
     public const byte RoutinePutDownCorpse = 4;
     public const byte RoutineBuildGlyph = 5;
     public const byte RoutineCraftAtTable = 6;
+    public const byte RoutineWorkOnBush = 7;
 
     // Build subroutines (shared by BuildTrap and BuildGlyph)
     public const byte BuildSub_WalkToSite = 0;
     public const byte BuildSub_WorkStart = 1;
     public const byte BuildSub_WorkLoop = 2;
     public const byte BuildSub_WorkEnd = 3;
+    /// <summary>Sentinel emitted at the WorkLoop → WorkEnd transition. Game1's
+    /// post-AI hook observes this on the same frame, applies the bush poison
+    /// + consumes the potion, then sets the subroutine back to WorkEnd so the
+    /// standup animation continues normally. The unit's BushWork* fields stay
+    /// populated through WorkEnd so the AI can keep facing the bush.</summary>
+    public const byte BushSub_AwaitFinalize = 250;
 
     public const float GlyphBuildDuration = 1.5f;
     public const float TrapBuildDuration = 1.5f;
     public const float BagDuration = 2.0f;
     public const float InteractRange = 1.0f;
+    public const float BushWorkDuration = 2.0f;
+    /// <summary>Bushes have collision_radius=0 so InteractRange (1.0) is close enough.</summary>
+    public const float BushInteractRange = 1.2f;
     /// <summary>"Arrived at table" range — larger than InteractRange because tables
     /// have a collision radius (~0.5) plus the unit's own radius, so the closest
     /// the necromancer can stand center-to-center is ~1.0. 1.6 gives ORCA tolerance.</summary>
@@ -63,6 +73,9 @@ public class PlayerControlledHandler : IArchetypeHandler
             case RoutineCraftAtTable:
                 UpdateCraftAtTable(ref ctx);
                 break;
+            case RoutineWorkOnBush:
+                UpdateWorkOnBush(ref ctx);
+                break;
             case RoutineBagCorpse:
             case RoutinePickupCorpse:
             case RoutinePutDownCorpse:
@@ -78,70 +91,35 @@ public class PlayerControlledHandler : IArchetypeHandler
     private void UpdateBuildGlyph(ref AIContext ctx)
     {
         int i = ctx.UnitIndex;
-        int glyphIdx = ctx.Units[i].BuildGlyphIdx;
+        bool inWorkEnd = ctx.Subroutine == WorkRoutine.WorkEnd;
+        var glyph = ctx.MagicGlyphs?.GetGlyph(ctx.Units[i].BuildGlyphIdx);
 
-        var glyph = ctx.MagicGlyphs?.GetGlyph(glyphIdx);
-        if (glyph == null || !glyph.Alive || glyph.State != GlyphState.Blueprint)
+        // Validate only during approach/work — once we're in standup the glyph
+        // is intentionally no longer Blueprint (we activated it on WorkComplete).
+        if (!inWorkEnd && (glyph == null || !glyph.Alive || glyph.State != GlyphState.Blueprint))
         {
             CancelBuild(ref ctx);
             return;
         }
 
-        switch (ctx.Subroutine)
+        Vec2 targetPos = glyph != null ? glyph.Position : ctx.MyPos;
+        var phase = WorkRoutine.Update(ref ctx, targetPos, InteractRange,
+            GlyphBuildDuration, out float progress01);
+
+        if (ctx.Subroutine == WorkRoutine.WorkLoop && glyph != null)
+            glyph.BuildProgress = progress01;
+
+        if (phase == WorkRoutine.Phase.WorkComplete && glyph != null)
         {
-            case BuildSub_WalkToSite:
-            {
-                ctx.Units[i].MoveTarget = glyph.Position;
-                SubroutineSteps.MoveToPosition(ref ctx, ctx.MySpeed);
-
-                var dir = glyph.Position - ctx.MyPos;
-                if (dir.LengthSq() > 0.01f)
-                    ctx.Units[i].FacingAngle = MathF.Atan2(dir.Y, dir.X) * 180f / MathF.PI;
-
-                if (SubroutineSteps.MoveToPosition_Arrived(ref ctx, InteractRange))
-                {
-                    ctx.Subroutine = BuildSub_WorkStart;
-                    ctx.Units[i].PreferredVel = Vec2.Zero;
-                    ctx.Units[i].CorpseInteractPhase = 1;
-                }
-                break;
-            }
-
-            case BuildSub_WorkStart:
-                ctx.Units[i].PreferredVel = Vec2.Zero;
-                if (ctx.Units[i].CorpseInteractPhase == 2)
-                {
-                    ctx.Subroutine = BuildSub_WorkLoop;
-                    ctx.Units[i].BuildTimer = 0f;
-                }
-                break;
-
-            case BuildSub_WorkLoop:
-                ctx.Units[i].PreferredVel = Vec2.Zero;
-                ctx.Units[i].BuildTimer += ctx.Dt;
-                glyph.BuildProgress = Math.Min(1f, ctx.Units[i].BuildTimer / GlyphBuildDuration);
-                if (ctx.Units[i].BuildTimer >= GlyphBuildDuration)
-                {
-                    // Activate glyph immediately when progress completes
-                    glyph.State = GlyphState.Dormant;
-                    glyph.BuildProgress = 1f;
-                    glyph.StateTimer = 0f;
-                    ctx.Units[i].BuildGlyphIdx = -1;
-                    // Transition to WorkEnd standup animation (cosmetic only)
-                    ctx.Subroutine = BuildSub_WorkEnd;
-                    ctx.Units[i].CorpseInteractPhase = 3;
-                }
-                break;
-
-            case BuildSub_WorkEnd:
-                ctx.Units[i].PreferredVel = Vec2.Zero;
-                if (ctx.Units[i].CorpseInteractPhase == 0)
-                {
-                    // Standup animation finished — return to idle
-                    ctx.Routine = RoutineIdle;
-                    ctx.Subroutine = 0;
-                }
-                break;
+            glyph.State = GlyphState.Dormant;
+            glyph.BuildProgress = 1f;
+            glyph.StateTimer = 0f;
+        }
+        else if (phase == WorkRoutine.Phase.Done)
+        {
+            ctx.Units[i].BuildGlyphIdx = -1;
+            ctx.Routine = RoutineIdle;
+            ctx.Subroutine = 0;
         }
     }
 
@@ -153,75 +131,47 @@ public class PlayerControlledHandler : IArchetypeHandler
     {
         int i = ctx.UnitIndex;
         int objIdx = ctx.Units[i].BuildTargetIdx;
+        bool inWorkEnd = ctx.Subroutine == WorkRoutine.WorkEnd;
 
-        if (objIdx < 0 || ctx.EnvSystem == null
+        // Validate only during approach/work — BuildProgress hits 1f on
+        // WorkComplete so we'd self-cancel into the standup otherwise.
+        if (!inWorkEnd && (objIdx < 0 || ctx.EnvSystem == null
             || objIdx >= ctx.EnvSystem.ObjectCount
             || !ctx.EnvSystem.GetObjectRuntime(objIdx).Alive
-            || ctx.EnvSystem.GetObjectRuntime(objIdx).BuildProgress >= 1f)
+            || ctx.EnvSystem.GetObjectRuntime(objIdx).BuildProgress >= 1f))
         {
             CancelBuild(ref ctx);
             return;
         }
 
-        switch (ctx.Subroutine)
+        Vec2 targetPos = ctx.MyPos;
+        if (objIdx >= 0 && ctx.EnvSystem != null && objIdx < ctx.EnvSystem.ObjectCount)
         {
-            case BuildSub_WalkToSite:
-            {
-                var obj = ctx.EnvSystem.GetObject(objIdx);
-                var targetPos = new Vec2(obj.X, obj.Y);
-                ctx.Units[i].MoveTarget = targetPos;
-                SubroutineSteps.MoveToPosition(ref ctx, ctx.MySpeed);
+            var obj = ctx.EnvSystem.GetObject(objIdx);
+            targetPos = new Vec2(obj.X, obj.Y);
+        }
 
-                var dir = targetPos - ctx.MyPos;
-                if (dir.LengthSq() > 0.01f)
-                    ctx.Units[i].FacingAngle = MathF.Atan2(dir.Y, dir.X) * 180f / MathF.PI;
+        var phase = WorkRoutine.Update(ref ctx, targetPos, InteractRange,
+            TrapBuildDuration, out float progress01);
 
-                if (SubroutineSteps.MoveToPosition_Arrived(ref ctx, InteractRange))
-                {
-                    ctx.Subroutine = BuildSub_WorkStart;
-                    ctx.Units[i].PreferredVel = Vec2.Zero;
-                    ctx.Units[i].CorpseInteractPhase = 1;
-                }
-                break;
-            }
+        if (ctx.Subroutine == WorkRoutine.WorkLoop && ctx.EnvSystem != null && objIdx >= 0)
+        {
+            var rt = ctx.EnvSystem.GetObjectRuntime(objIdx);
+            rt.BuildProgress = progress01;
+            ctx.EnvSystem.SetObjectRuntime(objIdx, rt);
+        }
 
-            case BuildSub_WorkStart:
-                ctx.Units[i].PreferredVel = Vec2.Zero;
-                if (ctx.Units[i].CorpseInteractPhase == 2)
-                {
-                    ctx.Subroutine = BuildSub_WorkLoop;
-                    ctx.Units[i].BuildTimer = 0f;
-                }
-                break;
-
-            case BuildSub_WorkLoop:
-                ctx.Units[i].PreferredVel = Vec2.Zero;
-                ctx.Units[i].BuildTimer += ctx.Dt;
-                {
-                    float progress = Math.Min(1f, ctx.Units[i].BuildTimer / TrapBuildDuration);
-                    var rt = ctx.EnvSystem.GetObjectRuntime(objIdx);
-                    rt.BuildProgress = progress;
-                    ctx.EnvSystem.SetObjectRuntime(objIdx, rt);
-                }
-                if (ctx.Units[i].BuildTimer >= TrapBuildDuration)
-                {
-                    ctx.Subroutine = BuildSub_WorkEnd;
-                    ctx.Units[i].CorpseInteractPhase = 3;
-                }
-                break;
-
-            case BuildSub_WorkEnd:
-                ctx.Units[i].PreferredVel = Vec2.Zero;
-                if (ctx.Units[i].CorpseInteractPhase == 0)
-                {
-                    var rt = ctx.EnvSystem.GetObjectRuntime(objIdx);
-                    rt.BuildProgress = 1f;
-                    ctx.EnvSystem.SetObjectRuntime(objIdx, rt);
-                    ctx.Units[i].BuildTargetIdx = -1;
-                    ctx.Routine = RoutineIdle;
-                    ctx.Subroutine = 0;
-                }
-                break;
+        if (phase == WorkRoutine.Phase.WorkComplete && ctx.EnvSystem != null && objIdx >= 0)
+        {
+            var rt = ctx.EnvSystem.GetObjectRuntime(objIdx);
+            rt.BuildProgress = 1f;
+            ctx.EnvSystem.SetObjectRuntime(objIdx, rt);
+        }
+        else if (phase == WorkRoutine.Phase.Done)
+        {
+            ctx.Units[i].BuildTargetIdx = -1;
+            ctx.Routine = RoutineIdle;
+            ctx.Subroutine = 0;
         }
     }
 
@@ -230,19 +180,17 @@ public class PlayerControlledHandler : IArchetypeHandler
     // ═══════════════════════════════════════
 
     /// <summary>
-    /// Routine driver for channeling a table craft. Walks to the table, plays
-    /// WorkStart → WorkLoop → WorkEnd. The actual craft timer + completion live
-    /// in TableCraftingSystem.Tick (called from Simulation) so this handler is
-    /// pure animation control — when ts.Crafting flips false (TableCraftingSystem
-    /// completed the craft), we transition to WorkEnd; when WorkEnd's anim ends
-    /// we drop back to Idle.
+    /// Routine driver for channeling a table craft. Uses <see cref="WorkRoutine"/>
+    /// for walk + animation phases. The completion signal is external: the loop
+    /// runs indefinitely until <c>ts.Crafting</c> flips false (driven by
+    /// <c>TableCraftingSystem.Tick</c>), at which point we call EndLoopNow to
+    /// transition into the standup phase.
     /// </summary>
     private void UpdateCraftAtTable(ref AIContext ctx)
     {
         int i = ctx.UnitIndex;
         int envIdx = ctx.Units[i].CraftTableIdx;
 
-        // Validate target table.
         if (envIdx < 0 || ctx.EnvSystem == null
             || envIdx >= ctx.EnvSystem.ObjectCount
             || !ctx.EnvSystem.GetObjectRuntime(envIdx).Alive)
@@ -255,63 +203,20 @@ public class PlayerControlledHandler : IArchetypeHandler
         var obj = ctx.EnvSystem.GetObject(envIdx);
         var tablePos = new Vec2(obj.X, obj.Y);
 
-        // Craft completed externally? Transition to WorkEnd from any active phase.
-        if (!ts.Crafting && ctx.Subroutine == BuildSub_WorkLoop)
+        // Craft completed externally? End the WorkLoop early so standup plays.
+        if (!ts.Crafting && ctx.Subroutine == WorkRoutine.WorkLoop)
+            WorkRoutine.EndLoopNow(ref ctx);
+
+        // Duration is "infinite" — only EndLoopNow above transitions out of WorkLoop.
+        var phase = WorkRoutine.Update(ref ctx, tablePos, CraftInteractRange,
+            float.MaxValue, out _);
+
+        if (phase == WorkRoutine.Phase.Done)
         {
-            ctx.Subroutine = BuildSub_WorkEnd;
-            ctx.Units[i].CorpseInteractPhase = 3;
+            ctx.Units[i].CraftTableIdx = -1;
+            ctx.Routine = RoutineIdle;
+            ctx.Subroutine = 0;
         }
-
-        switch (ctx.Subroutine)
-        {
-            case BuildSub_WalkToSite:
-            {
-                ctx.Units[i].MoveTarget = tablePos;
-                SubroutineSteps.MoveToPosition(ref ctx, ctx.MySpeed);
-
-                var dir = tablePos - ctx.MyPos;
-                if (dir.LengthSq() > 0.01f)
-                    ctx.Units[i].FacingAngle = MathF.Atan2(dir.Y, dir.X) * 180f / MathF.PI;
-
-                if (SubroutineSteps.MoveToPosition_Arrived(ref ctx, CraftInteractRange))
-                {
-                    ctx.Subroutine = BuildSub_WorkStart;
-                    ctx.Units[i].PreferredVel = Vec2.Zero;
-                    ctx.Units[i].CorpseInteractPhase = 1; // WorkStart anim
-                }
-                break;
-            }
-            case BuildSub_WorkStart:
-                ctx.Units[i].PreferredVel = Vec2.Zero;
-                FaceTowards(ref ctx, tablePos);
-                if (ctx.Units[i].CorpseInteractPhase == 2)
-                    ctx.Subroutine = BuildSub_WorkLoop;
-                break;
-
-            case BuildSub_WorkLoop:
-                ctx.Units[i].PreferredVel = Vec2.Zero;
-                FaceTowards(ref ctx, tablePos);
-                // Craft timer is advanced by TableCraftingSystem; we sit in WorkLoop
-                // (animation is Loop play mode) until ts.Crafting flips false above.
-                break;
-
-            case BuildSub_WorkEnd:
-                ctx.Units[i].PreferredVel = Vec2.Zero;
-                if (ctx.Units[i].CorpseInteractPhase == 0)
-                {
-                    ctx.Units[i].CraftTableIdx = -1;
-                    ctx.Routine = RoutineIdle;
-                    ctx.Subroutine = 0;
-                }
-                break;
-        }
-    }
-
-    private static void FaceTowards(ref AIContext ctx, Vec2 target)
-    {
-        var dir = target - ctx.MyPos;
-        if (dir.LengthSq() > 0.01f)
-            ctx.Units[ctx.UnitIndex].FacingAngle = MathF.Atan2(dir.Y, dir.X) * 180f / MathF.PI;
     }
 
     /// <summary>Reset a unit out of the craft routine. Does NOT touch table state
@@ -323,6 +228,93 @@ public class PlayerControlledHandler : IArchetypeHandler
         ctx.Units[ctx.UnitIndex].CorpseInteractPhase = 0;
         ctx.Routine = RoutineIdle;
         ctx.Subroutine = 0;
+    }
+
+    // ═══════════════════════════════════════
+    //  Work on Berry Bush (Poison Berries ability)
+    // ═══════════════════════════════════════
+
+    /// <summary>
+    /// Player channels poison/paralysis onto a berry bush. Uses the shared
+    /// <see cref="WorkRoutine"/> driver. Validates the target each tick — if
+    /// the bush is no longer a valid Berries-state bush (destroyed, eaten,
+    /// already poisoned by someone else), cancels with no inventory change.
+    /// Successful WorkLoop completion applies the buff to the bush via
+    /// <see cref="World.EnvironmentSystem.PoisonBerryBush"/> and consumes one
+    /// of the matching potion item. Both side-effects are driven by Game1's
+    /// post-AI hook, which inspects Routine/Subroutine and the BushWork fields
+    /// to dispatch — the AI handler itself never touches inventory directly.
+    /// </summary>
+    private void UpdateWorkOnBush(ref AIContext ctx)
+    {
+        int i = ctx.UnitIndex;
+        int objIdx = ctx.Units[i].BushWorkObjIdx;
+
+        // AwaitFinalize: WorkLoop just ended this same frame. Hold position
+        // facing the bush while Game1's post-AI hook applies the bush mutation
+        // and switches us back to WorkEnd to play the standup animation.
+        if (ctx.Subroutine == BushSub_AwaitFinalize)
+        {
+            ctx.Units[i].PreferredVel = Vec2.Zero;
+            if (objIdx >= 0 && ctx.EnvSystem != null && objIdx < ctx.EnvSystem.ObjectCount)
+            {
+                var aobj = ctx.EnvSystem.GetObject(objIdx);
+                WorkRoutine.FaceTowards(ref ctx, new Vec2(aobj.X, aobj.Y));
+            }
+            return;
+        }
+
+        // Validate target only while approaching / mid-work. Once we're in
+        // WorkEnd the side effects have already fired so the bush has
+        // legitimately flipped to Poisoned — must not cancel standup.
+        bool inPostWork = ctx.Subroutine == WorkRoutine.WorkEnd;
+        if (!inPostWork)
+        {
+            if (objIdx < 0 || ctx.EnvSystem == null
+                || objIdx >= ctx.EnvSystem.ObjectCount
+                || !ctx.EnvSystem.GetObjectRuntime(objIdx).Alive)
+            {
+                CancelBushWork(ref ctx);
+                return;
+            }
+            var def = ctx.EnvSystem.GetDef(ctx.EnvSystem.GetObject(objIdx).DefIndex);
+            if (!def.IsBerryBush
+                || ctx.EnvSystem.GetObjectRuntime(objIdx).BerryState != World.BerryState.Berries)
+            {
+                CancelBushWork(ref ctx);
+                return;
+            }
+        }
+
+        Vec2 targetPos = Vec2.Zero;
+        if (objIdx >= 0 && ctx.EnvSystem != null && objIdx < ctx.EnvSystem.ObjectCount)
+        {
+            var obj = ctx.EnvSystem.GetObject(objIdx);
+            targetPos = new Vec2(obj.X, obj.Y);
+        }
+
+        var phase = WorkRoutine.Update(ref ctx, targetPos, BushInteractRange,
+            BushWorkDuration, out _);
+        if (phase == WorkRoutine.Phase.WorkComplete)
+        {
+            // One-shot transition: WorkLoop just finished. Game1's hook will
+            // apply the bush + inventory change this same frame and flip us
+            // back to WorkEnd so the standup animation plays out.
+            ctx.Subroutine = BushSub_AwaitFinalize;
+        }
+        else if (phase == WorkRoutine.Phase.Done)
+        {
+            CancelBushWork(ref ctx);
+        }
+    }
+
+    public static void CancelBushWork(ref AIContext ctx)
+    {
+        ctx.Units[ctx.UnitIndex].BushWorkObjIdx = -1;
+        ctx.Units[ctx.UnitIndex].BushWorkBuffID = "";
+        ctx.Units[ctx.UnitIndex].BushWorkItemID = "";
+        WorkRoutine.Reset(ref ctx);
+        ctx.Routine = RoutineIdle;
     }
 
     // ═══════════════════════════════════════

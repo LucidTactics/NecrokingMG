@@ -124,8 +124,8 @@ public abstract class RegistryBase<TDef> where TDef : class, IHasId, new()
 
             var doc = new Dictionary<string, object> { [RootKey] = items };
             string json = JsonSerializer.Serialize(doc, options);
-            File.WriteAllText(path, json);
-            return true;
+            // Atomic tmp+rename so a crash mid-write can't corrupt the registry file.
+            return Core.AtomicFile.WriteAllText(path, json);
         }
         catch (Exception ex) { DebugLog.Log("error", $"Failed to save {path}: {ex.Message}"); return false; }
     }

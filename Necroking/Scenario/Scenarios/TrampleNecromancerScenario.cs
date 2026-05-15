@@ -24,7 +24,6 @@ public class TrampleNecromancerScenario : ScenarioBase
 
     private float _elapsed;
     private bool _complete;
-    private float _completeBy = -1f;
     private const float MaxDuration = 25f;
     private int _chargesObserved;
     private int _chargesWithFollowThrough;

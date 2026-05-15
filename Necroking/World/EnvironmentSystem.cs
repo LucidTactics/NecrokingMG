@@ -228,6 +228,14 @@ public class EnvironmentObjectDef
     public float ScaleMin { get; set; } = 0.8f;         // random scale variation min
     public float ScaleMax { get; set; } = 1.2f;         // random scale variation max
 
+    // Berry bush state. When IsBerryBush is true the instance carries a
+    // three-state machine (Berries → NoBerry → Berries, with Poisoned as a
+    // side-branch from Berries). Each state has its own sprite path.
+    public bool IsBerryBush { get; set; }
+    public string NoBerrySprite { get; set; } = "";     // sprite when berries have been eaten
+    public string PoisonedSprite { get; set; } = "";    // sprite when berries have been treated with a potion
+    public float BerryRespawnTime { get; set; } = 120f; // seconds NoBerry → Berries
+
     // Corruption: when IsCorruptable, instances accumulate stress in death-fog cells
     // (see DeathFogSystem.ApplySinks) and flip to CorruptedSprite once they cross
     // the system-wide threshold. Corrupted sprite is single-frame; animation is
@@ -333,6 +341,11 @@ public class EnvironmentObjectDef
         writer.WriteString("corruptedSprite", CorruptedSprite);
         writer.WriteNumber("scaleMin", ScaleMin);
         writer.WriteNumber("scaleMax", ScaleMax);
+        // Berry bush
+        writer.WriteBoolean("isBerryBush", IsBerryBush);
+        writer.WriteString("noBerrySprite", NoBerrySprite);
+        writer.WriteString("poisonedSprite", PoisonedSprite);
+        writer.WriteNumber("berryRespawnTime", BerryRespawnTime);
         // Tint color
         writer.WriteStartObject("tintColor");
         writer.WriteNumber("r", TintColor.R);
@@ -355,6 +368,8 @@ public struct PlacedObject
 
 public enum TrapVisualState : byte { Hidden, Triggered, Deployed, FadingOut }
 
+public enum BerryState : byte { Berries, NoBerry, Poisoned }
+
 public struct PlacedObjectRuntime
 {
     public int HP;
@@ -376,7 +391,12 @@ public struct PlacedObjectRuntime
     public float CorruptionStress; // accumulated absorbed-fog units net of healing; clamped to [0, threshold]
     public float CorruptionTime;   // 0 = healthy; >0 = transitioning (seconds elapsed in dissolve); reaches DeathFogSystem.CorruptionTransitionDuration when done
 
-    public PlacedObjectRuntime() { HP = 0; Owner = 1; Alive = true; Collected = false; RespawnTimer = 0f; BuildProgress = 1f; }
+    // Berry bush state. Only meaningful when the def has IsBerryBush=true; ignored otherwise.
+    public BerryState BerryState;
+    public float BerryStateTimer;  // counts up in NoBerry; when >= def.BerryRespawnTime → Berries
+    public string AppliedBuffID;   // buff to apply to the eater when bush is Poisoned (empty for vanilla Berries)
+
+    public PlacedObjectRuntime() { HP = 0; Owner = 1; Alive = true; Collected = false; RespawnTimer = 0f; BuildProgress = 1f; AppliedBuffID = ""; }
 }
 
 public class EnvironmentSystem
@@ -539,6 +559,64 @@ public class EnvironmentSystem
         }
         if (anyRespawned)
             OnCollisionsDirty?.Invoke();
+    }
+
+    /// <summary>Tick berry-bush state machines. NoBerry bushes count up to
+    /// BerryRespawnTime then return to Berries (clearing any prior AppliedBuffID).
+    /// Poisoned bushes do not decay back on their own — they stay Poisoned until
+    /// a deer eats them (consuming the poison) or they're destroyed.</summary>
+    public void UpdateBerryBushes(float dt)
+    {
+        for (int i = 0; i < _objectRuntime.Count; i++)
+        {
+            var def = _defs[_objects[i].DefIndex];
+            if (!def.IsBerryBush) continue;
+            var rt = _objectRuntime[i];
+            if (rt.BerryState != BerryState.NoBerry) continue;
+            rt.BerryStateTimer += dt;
+            if (rt.BerryStateTimer >= def.BerryRespawnTime)
+            {
+                rt.BerryState = BerryState.Berries;
+                rt.BerryStateTimer = 0f;
+                rt.AppliedBuffID = "";
+            }
+            _objectRuntime[i] = rt;
+        }
+    }
+
+    /// <summary>Apply a poison/paralysis treatment to a berry bush. Only valid
+    /// when the bush is in Berries state. Returns true if applied.</summary>
+    public bool PoisonBerryBush(int objIdx, string buffID)
+    {
+        if (objIdx < 0 || objIdx >= _objectRuntime.Count) return false;
+        var def = _defs[_objects[objIdx].DefIndex];
+        if (!def.IsBerryBush) return false;
+        var rt = _objectRuntime[objIdx];
+        if (rt.BerryState != BerryState.Berries) return false;
+        rt.BerryState = BerryState.Poisoned;
+        rt.AppliedBuffID = buffID ?? "";
+        rt.BerryStateTimer = 0f;
+        _objectRuntime[objIdx] = rt;
+        return true;
+    }
+
+    /// <summary>Consume berries (deer ate the bush). Returns the buff id that
+    /// should apply to the eater — empty string if the bush was vanilla Berries
+    /// (caller should apply satiation), or the AppliedBuffID if Poisoned.
+    /// Returns null if the bush isn't a berry bush or has no berries to eat.</summary>
+    public string? ConsumeBerryBush(int objIdx)
+    {
+        if (objIdx < 0 || objIdx >= _objectRuntime.Count) return null;
+        var def = _defs[_objects[objIdx].DefIndex];
+        if (!def.IsBerryBush) return null;
+        var rt = _objectRuntime[objIdx];
+        if (rt.BerryState == BerryState.NoBerry) return null;
+        string result = rt.BerryState == BerryState.Poisoned ? (rt.AppliedBuffID ?? "") : "";
+        rt.BerryState = BerryState.NoBerry;
+        rt.BerryStateTimer = 0f;
+        rt.AppliedBuffID = "";
+        _objectRuntime[objIdx] = rt;
+        return result;
     }
 
     /// <summary>
@@ -1034,8 +1112,9 @@ public class EnvironmentSystem
     }
 
     /// <summary>Get the correct texture for an object, signalling whether the result
-    /// is a single-frame override (corrupted / trap sprite) so callers can skip
-    /// spritesheet slicing. Returns alpha multiplier (used for trap fade-out).</summary>
+    /// is a single-frame override (corrupted / trap / berry sprite) so callers
+    /// can skip spritesheet slicing. Returns alpha multiplier (used for trap
+    /// fade-out). State precedence lives in <see cref="TryStateOverride"/>.</summary>
     public Texture2D? GetObjectTexture(int objIdx, out float alpha, out bool isOverride)
     {
         alpha = 1f;
@@ -1044,38 +1123,69 @@ public class EnvironmentSystem
         var obj = _objects[objIdx];
         var def = _defs[obj.DefIndex];
 
-        if (objIdx < _objectRuntime.Count)
+        if (objIdx < _objectRuntime.Count
+            && TryStateOverride(_objectRuntime[objIdx], def, out var stateTex, out alpha))
         {
-            var rt = _objectRuntime[objIdx];
-            // Corrupted overrides any trap state — corrupted trees stay corrupted.
-            if (rt.Corrupted && !string.IsNullOrEmpty(def.CorruptedSprite))
-            {
-                var corrTex = GetOrLoadOverrideTexture(def.CorruptedSprite);
-                if (corrTex != null) { isOverride = true; return corrTex; }
-            }
+            isOverride = true;
+            return stateTex;
+        }
+        return GetDefTexture(obj.DefIndex);
+    }
 
-            if (rt.TrapUsesRemaining >= 0)
+    /// <summary>Check each per-instance state for a sprite override in
+    /// precedence order: Corrupted → Berry → Trap. First hit wins. Returns
+    /// false if the base def texture should be used. New states (Burning,
+    /// Frozen, etc.) get added as another branch here.</summary>
+    private bool TryStateOverride(PlacedObjectRuntime rt, EnvironmentObjectDef def,
+        out Texture2D? tex, out float alpha)
+    {
+        tex = null;
+        alpha = 1f;
+
+        // Corrupted overrides any trap/berry state — corrupted trees stay corrupted.
+        if (rt.Corrupted && !string.IsNullOrEmpty(def.CorruptedSprite))
+        {
+            tex = GetOrLoadOverrideTexture(def.CorruptedSprite);
+            if (tex != null) return true;
+        }
+
+        // Berry state. The default Berries state uses the base def texture.
+        if (def.IsBerryBush)
+        {
+            string? path = rt.BerryState switch
             {
-                switch (rt.TrapState)
-                {
-                    case TrapVisualState.Triggered:
-                        if (!string.IsNullOrEmpty(def.TrapTriggeredSprite))
-                        { isOverride = true; return GetOrLoadOverrideTexture(def.TrapTriggeredSprite); }
-                        break;
-                    case TrapVisualState.Deployed:
-                        if (!string.IsNullOrEmpty(def.TrapDeployedSprite))
-                        { isOverride = true; return GetOrLoadOverrideTexture(def.TrapDeployedSprite); }
-                        break;
-                    case TrapVisualState.FadingOut:
-                        alpha = MathF.Max(0f, rt.TrapStateTimer / MathF.Max(def.TrapFadeDuration, 0.01f));
-                        if (!string.IsNullOrEmpty(def.TrapDeployedSprite))
-                        { isOverride = true; return GetOrLoadOverrideTexture(def.TrapDeployedSprite); }
-                        break;
-                }
+                BerryState.NoBerry  => def.NoBerrySprite,
+                BerryState.Poisoned => def.PoisonedSprite,
+                _ => null,
+            };
+            if (!string.IsNullOrEmpty(path))
+            {
+                tex = GetOrLoadOverrideTexture(path);
+                if (tex != null) return true;
             }
         }
 
-        return GetDefTexture(obj.DefIndex);
+        // Trap visual state. Fade-out is the only state that touches alpha.
+        if (rt.TrapUsesRemaining >= 0)
+        {
+            string? path = null;
+            switch (rt.TrapState)
+            {
+                case TrapVisualState.Triggered: path = def.TrapTriggeredSprite; break;
+                case TrapVisualState.Deployed:  path = def.TrapDeployedSprite;  break;
+                case TrapVisualState.FadingOut:
+                    path = def.TrapDeployedSprite;
+                    alpha = MathF.Max(0f, rt.TrapStateTimer / MathF.Max(def.TrapFadeDuration, 0.01f));
+                    break;
+            }
+            if (!string.IsNullOrEmpty(path))
+            {
+                tex = GetOrLoadOverrideTexture(path);
+                if (tex != null) return true;
+            }
+        }
+
+        return false;
     }
 
     /// <summary>Get the corrupted-variant texture for an object's def, loading it

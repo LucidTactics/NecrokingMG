@@ -12,6 +12,18 @@ namespace Necroking.Render;
 ///
 /// Resolution: override wins on tie. Higher priority always wins.
 /// The interrupt flag controls whether the winner can cut the current animation mid-loop.
+///
+/// Same-priority replacement (e.g. one Combat request immediately followed by
+/// another) is rejected unless the current override has already started
+/// playing (OverrideStarted=true). This protects a queued request from being
+/// stolen by a later same-priority request on the next frame. SetOverride
+/// returns an OverrideHandle the caller can pass to ClearIfOwned later; the
+/// handle compare prevents "I queued X, but Y preempted me, and my ClearIfOwned
+/// shouldn't touch Y" races.
+///
+/// See the larger doc-block at the top of AnimController.cs for the full rules
+/// (priority scale, OverrideKind lifecycle, CorpseInteractPhase contract,
+/// JustFinished one-frame edge, etc).
 /// </summary>
 public static class AnimResolver
 {

@@ -51,7 +51,6 @@ public class Game1 : Microsoft.Xna.Framework.Game
         public float Duration;  // seconds total
     }
     private readonly List<SkillLearnToast> _skillLearnToasts = new();
-    private VampireEvolutionPanel _vampireEvoPanel = new();
     private UIShaders _uiShaders = null!;
 
     // Data
@@ -245,26 +244,15 @@ public class Game1 : Microsoft.Xna.Framework.Game
         public string CachedDefID;
     }
 
-    private struct CollectingForagable
-    {
-        public int ObjIdx;           // environment object index
-        public Vec2 StartPos;        // world position where object was
-        public float StartHeight;    // initial upward pop height
-        public Vec2 TargetPos;       // necromancer position at time of collection
-        public float Timer;          // 0..ArcDuration
-        public float ArcDuration;    // total flight time
-        public string ResourceType;  // what to add to inventory on complete
-        public Texture2D? Texture;   // cached texture for rendering
-        public float BaseScale;      // original render scale
-        public float PivotX, PivotY; // texture pivot
-    }
-
-    private readonly List<CollectingForagable> _collectingForagables = new();
-    private const float ForagableArcDuration = 0.35f;
-    private const float ForagableWiggleRange = 3f;     // start wiggling at this distance
-    private const float ForagableAutoPickupRange = 1.5f;
-    private float _autoPickupCooldown;
+    // Foragable arc-pickup state was moved to Game.ForagableSystem (the first
+    // Game1 subsystem split, 2026-05-13). Game1 owns the instance and the
+    // pickup-sound asset; everything else lives in the system.
     private SoundEffect? _pickupSound;
+    private readonly Game.ForagableSystem _foragables = new();
+    /// <summary>Wiggle/hover proximity for *idle* on-map foragables (not the
+    /// in-flight arc visuals — those live in ForagableSystem). Stays in Game1
+    /// because it's read by the on-map render pass, not by the pickup system.</summary>
+    private const float ForagableWiggleRange = 3f;
 
     // DamageNumber and PendingProjectileGroup moved to GameSystems.SpellEffectSystem
 
@@ -294,13 +282,15 @@ public class Game1 : Microsoft.Xna.Framework.Game
         Content.RootDirectory = "resources";
         IsMouseVisible = true;
 
-        // Save settings (to local bin/settings/) and weather presets when the game exits
+        // Save settings (to local bin/settings/), weather presets, and spell bar
+        // slot assignments when the game exits. All writes are atomic.
         Exiting += (_, _) =>
         {
             string localDir = GamePaths.Resolve(GamePaths.LocalSettingsDir);
             System.IO.Directory.CreateDirectory(localDir);
             _gameData.Settings.Save(GamePaths.Resolve(GamePaths.SettingsJson));
             _gameData.Weather.Save(GamePaths.Resolve(GamePaths.WeatherJson));
+            SaveSpellBars();
         };
 
         if (LaunchArgs.Headless)
@@ -577,7 +567,10 @@ public class Game1 : Microsoft.Xna.Framework.Game
             DebugLog.Log("startup", "Loading map from file...");
             // Load env defs from canonical location (before map, so placed objects can resolve IDs)
             MapData.LoadEnvDefs(GamePaths.Resolve(GamePaths.EnvDefsJson), _envSystem);
-            MapData.Load(mapPath, _groundSystem, _envSystem, _wallSystem, placedUnits);
+            // Parse the 55MB map JSON exactly once — Load returns the grass info from
+            // the same JsonDocument it already parsed, avoiding a redundant disk+parse pass.
+            MapData.Load(mapPath, _groundSystem, _envSystem, _wallSystem, placedUnits,
+                out var grassInfo);
             MapData.LoadTriggers(GamePaths.Resolve("data/maps/default_triggers.json"), _triggerSystem);
             MapData.LoadRoads(GamePaths.Resolve("data/maps/default_roads.json"), _roadSystem);
             LogTiming($"Map loaded: ground={_groundSystem.WorldW}x{_groundSystem.WorldH}, objects={_envSystem.ObjectCount}, defs={_envSystem.DefCount}");
@@ -587,39 +580,32 @@ public class Game1 : Microsoft.Xna.Framework.Game
             _deathFog.Init(_groundSystem.WorldW, _groundSystem.WorldH, cellSize: 4);
             GameSystems.DeathFogSystem.AutoTagTreesAsSinks(_envSystem, absorbRate: 6f);
 
-            // Load grass map
-            try
+            // Unpack grass data returned from the same map JSON parse.
+            if (grassInfo.HasValue)
             {
-                string mapJson = File.ReadAllText(mapPath);
-                using var mapDoc = System.Text.Json.JsonDocument.Parse(mapJson);
-                var grassInfo = MapData.LoadGrass(mapDoc.RootElement);
-                if (grassInfo.HasValue)
+                var gi = grassInfo.Value;
+                _grassW = gi.Width;
+                _grassH = gi.Height;
+                _grassMap = gi.Cells;
+                _grassTypeIds = new string[gi.Types.Length];
+                _grassTypeNames = new string[gi.Types.Length];
+                _grassTypeSpritePaths = new string[gi.Types.Length][];
+                _grassTypeScales = new float[gi.Types.Length];
+                _grassTypeDensities = new float[gi.Types.Length];
+                _grassDefaultTints = new Color[gi.Types.Length];
+                _grassCorruptedTints = new Color[gi.Types.Length];
+                for (int i = 0; i < gi.Types.Length; i++)
                 {
-                    var gi = grassInfo.Value;
-                    _grassW = gi.Width;
-                    _grassH = gi.Height;
-                    _grassMap = gi.Cells;
-                    _grassTypeIds = new string[gi.Types.Length];
-                    _grassTypeNames = new string[gi.Types.Length];
-                    _grassTypeSpritePaths = new string[gi.Types.Length][];
-                    _grassTypeScales = new float[gi.Types.Length];
-                    _grassTypeDensities = new float[gi.Types.Length];
-                    _grassDefaultTints = new Color[gi.Types.Length];
-                    _grassCorruptedTints = new Color[gi.Types.Length];
-                    for (int i = 0; i < gi.Types.Length; i++)
-                    {
-                        _grassTypeIds[i] = gi.Types[i].Id ?? $"grass_{i}";
-                        _grassTypeNames[i] = gi.Types[i].Name ?? $"Grass {i}";
-                        _grassTypeSpritePaths[i] = gi.Types[i].SpritePaths ?? Array.Empty<string>();
-                        _grassTypeScales[i] = gi.Types[i].Scale > 0f ? gi.Types[i].Scale : 1f;
-                        _grassTypeDensities[i] = gi.Types[i].Density > 0f ? gi.Types[i].Density : 1f;
-                        _grassDefaultTints[i]   = new Color(gi.Types[i].DefR, gi.Types[i].DefG, gi.Types[i].DefB, gi.Types[i].DefA);
-                        _grassCorruptedTints[i] = new Color(gi.Types[i].CorR, gi.Types[i].CorG, gi.Types[i].CorB, gi.Types[i].CorA);
-                    }
-                    DebugLog.Log("startup", $"Grass map: {_grassW}x{_grassH}, {gi.Types.Length} types");
+                    _grassTypeIds[i] = gi.Types[i].Id ?? $"grass_{i}";
+                    _grassTypeNames[i] = gi.Types[i].Name ?? $"Grass {i}";
+                    _grassTypeSpritePaths[i] = gi.Types[i].SpritePaths ?? Array.Empty<string>();
+                    _grassTypeScales[i] = gi.Types[i].Scale > 0f ? gi.Types[i].Scale : 1f;
+                    _grassTypeDensities[i] = gi.Types[i].Density > 0f ? gi.Types[i].Density : 1f;
+                    _grassDefaultTints[i]   = new Color(gi.Types[i].DefR, gi.Types[i].DefG, gi.Types[i].DefB, gi.Types[i].DefA);
+                    _grassCorruptedTints[i] = new Color(gi.Types[i].CorR, gi.Types[i].CorG, gi.Types[i].CorB, gi.Types[i].CorA);
                 }
+                DebugLog.Log("startup", $"Grass map: {_grassW}x{_grassH}, {gi.Types.Length} types");
             }
-            catch (Exception ex) { DebugLog.Log("startup", $"Grass load error: {ex.Message}"); }
         }
         else
         {
@@ -785,28 +771,6 @@ public class Game1 : Microsoft.Xna.Framework.Game
         _skillBookPanel.Bind(_skillBookState, _inventory, _gameData,
             _spellBarState, _secondaryBarState, _sim);
 
-        // Drop a starter Deathcap mushroom right next to the necromancer so the
-        // player can immediately discover the pickup → auto-learn flow for the
-        // first alchemy recipe.
-        SpawnStarterMushroom();
-        // Spawn a Blight Altar a short walk away so the death-fog backend has a
-        // visible source for testing (toggle with F5 in-game).
-        SpawnStarterBlightAltar();
-    }
-
-    private void SpawnStarterBlightAltar()
-    {
-        if (_sim.NecromancerIndex < 0) return;
-        int defIdx = _envSystem.FindDef("blight_altar");
-        if (defIdx < 0)
-        {
-            DebugLog.Log("startup", "SpawnStarterBlightAltar: 'blight_altar' env def not found.");
-            return;
-        }
-        var necroPos = _sim.Units[_sim.NecromancerIndex].Position;
-        // Place ~10 world units to the east so it isn't right on top of the
-        // mushroom but is well within view at the starting zoom.
-        _envSystem.AddObject((ushort)defIdx, necroPos.X + 10f, necroPos.Y, scale: 1f);
     }
 
     /// <summary>Auto-learn a skill if not already learned, and surface a corner
@@ -968,22 +932,6 @@ public class Game1 : Microsoft.Xna.Framework.Game
         var sb = new System.Text.StringBuilder(text.Length);
         foreach (var ch in text) sb.Append(ch >= 32 && ch <= 126 ? ch : '?');
         return sb.ToString();
-    }
-
-    private void SpawnStarterMushroom()
-    {
-        if (_sim.NecromancerIndex < 0) return;
-        int defIdx = _envSystem.FindDef("deathcap");
-        if (defIdx < 0)
-        {
-            DebugLog.Log("startup", "SpawnStarterMushroom: 'deathcap' env def not found.");
-            return;
-        }
-        var necroPos = _sim.Units[_sim.NecromancerIndex].Position;
-        // Offset 2 world units to the south-east of the necromancer.
-        float x = necroPos.X + 2f;
-        float y = necroPos.Y + 2f;
-        _envSystem.AddObject((ushort)defIdx, x, y, scale: 1f);
     }
 
     /// <summary>
@@ -1444,16 +1392,10 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 float dist = (corpse.Position - pending.TargetPos).Length();
                 if (dist > spell.AoeRadius) continue;
 
-                // Resolve zombie type from corpse's UnitDef
-                var corpseDef = _gameData.Units.Get(corpse.UnitDefID);
-                if (corpseDef == null || string.IsNullOrEmpty(corpseDef.ZombieTypeID)) continue;
-
-                // Resolve actual unit ID: check unit registry first, then groups
-                string resolvedID;
-                if (_gameData.Units.Get(corpseDef.ZombieTypeID) != null)
-                    resolvedID = corpseDef.ZombieTypeID;
-                else
-                    resolvedID = _gameData.UnitGroups.PickRandom(corpseDef.ZombieTypeID) ?? "";
+                // Resolve zombie type from corpse's UnitDef. Shared with
+                // TableCraftingSystem so the same source corpse always raises
+                // into the same unit class regardless of how it was triggered.
+                string resolvedID = Game.TableCraftingSystem.ResolveZombieUnitID(_gameData, corpse.UnitDefID);
                 if (string.IsNullOrEmpty(resolvedID)) continue;
 
                 var spawnPos = corpse.Position;
@@ -1485,18 +1427,12 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
             if (spell.SummonTargetReq == "Corpse" && pending.TargetCorpseIdx >= 0)
             {
-                // Resolve zombie type from corpse if summonUnitID is empty
+                // Resolve zombie type from corpse if summonUnitID is empty.
+                // Shared helper: see comment on the AOE branch above.
                 if (string.IsNullOrEmpty(summonUnitID) && pending.TargetCorpseIdx < _sim.Corpses.Count)
                 {
                     var corpse = _sim.Corpses[pending.TargetCorpseIdx];
-                    var corpseDef = _gameData.Units.Get(corpse.UnitDefID);
-                    if (corpseDef != null && !string.IsNullOrEmpty(corpseDef.ZombieTypeID))
-                    {
-                        if (_gameData.Units.Get(corpseDef.ZombieTypeID) != null)
-                            summonUnitID = corpseDef.ZombieTypeID;
-                        else
-                            summonUnitID = _gameData.UnitGroups.PickRandom(corpseDef.ZombieTypeID) ?? "";
-                    }
+                    summonUnitID = Game.TableCraftingSystem.ResolveZombieUnitID(_gameData, corpse.UnitDefID);
                 }
                 if (pending.TargetCorpseIdx < _sim.Corpses.Count)
                 {
@@ -1621,21 +1557,6 @@ public class Game1 : Microsoft.Xna.Framework.Game
             _pendingProjectiles.Add(result.PendingProjectile.Value);
     }
 
-    /// <summary>Remove a specific casting buff from a unit.</summary>
-    private void RemoveCastingBuff(int unitIdx, string? castingBuffID)
-    {
-        if (string.IsNullOrEmpty(castingBuffID)) return;
-        var buffs = _sim.UnitsMut[unitIdx].ActiveBuffs;
-        for (int b = buffs.Count - 1; b >= 0; b--)
-        {
-            if (buffs[b].BuffDefID == castingBuffID)
-            {
-                buffs.RemoveAt(b);
-                break;
-            }
-        }
-    }
-
     /// <summary>Remove all casting effect buffs from a unit (buff_4 variants).</summary>
     private void RemoveCastingBuffAll(int unitIdx)
     {
@@ -1755,7 +1676,6 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // bars are allocated. AddSpellToBarEffect handles null Slots gracefully.
         _skillBookPanel.Bind(_skillBookState, _inventory, _gameData,
             _spellBarState, _secondaryBarState, _sim);
-        _vampireEvoPanel.Init(_spriteBatch, _pixel, _font, _smallFont, _largeFont);
 
         // Load TrueType fonts via FontStashSharp (dynamic sizing)
         _fontManager.LoadFontsFromDirectory(GamePaths.Resolve(GamePaths.FontsDir));
@@ -1783,7 +1703,6 @@ public class Game1 : Microsoft.Xna.Framework.Game
         _uiShaders = new UIShaders(GraphicsDevice, _pixel, BlendState.AlphaBlend, SamplerState.PointClamp);
         _uiShaders.Load(Content);
         _skillTreePanel.SetUIShaders(_uiShaders);
-        _vampireEvoPanel.SetUIShaders(_uiShaders);
 
         try { _outlineFlatEffect = Content.Load<Microsoft.Xna.Framework.Graphics.Effect>("OutlineFlat"); }
         catch (Exception ex) { _outlineFlatEffect = null; DebugLog.Log("startup", $"OutlineFlat not loaded: {ex.Message}"); }
@@ -1850,6 +1769,13 @@ public class Game1 : Microsoft.Xna.Framework.Game
             }
         }
         catch { /* audio is optional */ }
+
+        // Wire the foragable subsystem now that all its dependencies exist.
+        // Callbacks bridge back to Game1-private state (damage numbers, skill book).
+        _foragables.Bind(_envSystem, _sim, _camera, _renderer, _spriteBatch,
+            _inventory, _effectManager, _pickupSound,
+            onPickup: OnForagablePickedUp,
+            onLearnTrigger: OnForagableLearnTrigger);
 
         // Init property editor infrastructure
         _editorUi.SetContext(_spriteBatch, _pixel, _font, _smallFont, _largeFont);
@@ -2052,10 +1978,6 @@ public class Game1 : Microsoft.Xna.Framework.Game
             else       _skillBookPanel.Toggle();
         }
 
-        // 'N' key toggles vampire evolution panel
-        if (!anyTextInputActive && _input.WasKeyPressed(Keys.N) && _menuState == MenuState.None)
-            _vampireEvoPanel.Toggle();
-
         // --- Pause menu button clicks ---
         if (_menuState == MenuState.PauseMenu && _input.LeftPressed)
         {
@@ -2157,10 +2079,6 @@ public class Game1 : Microsoft.Xna.Framework.Game
             else if (_menuState == MenuState.None && _skillBookPanel.IsVisible)
             {
                 _skillBookPanel.Close();
-            }
-            else if (_menuState == MenuState.None && _vampireEvoPanel.IsVisible)
-            {
-                _vampireEvoPanel.Close();
             }
             else if (_menuState == MenuState.None)
             {
@@ -2271,8 +2189,6 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 _input.MouseOverUI = true;
             if (_skillBookPanel.ContainsMouse(screenW, screenH, mx, my))
                 _input.MouseOverUI = true;
-            if (_vampireEvoPanel.ContainsMouse(screenW, screenH, mx, my))
-                _input.MouseOverUI = true;
 
             // Skill-learn corner toasts (clickable to jump to the relevant tab)
             UpdateSkillLearnToastInput(screenW, screenH);
@@ -2375,6 +2291,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
                             _spellBarState.Slots[_spellDropdownSlot].SpellID = "";
                         else if (itemIdx - 1 < spellIDs.Count)
                             _spellBarState.Slots[_spellDropdownSlot].SpellID = spellIDs[itemIdx - 1];
+                        SaveSpellBars();
                         clickedSlot = true;
                         _input.ConsumeMouse();
                     }
@@ -2409,6 +2326,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
                             _secondaryBarState.Slots[_secondaryDropdownSlot].SpellID = "";
                         else if (sddIdx - 1 < secSpellIDs.Count)
                             _secondaryBarState.Slots[_secondaryDropdownSlot].SpellID = secSpellIDs[sddIdx - 1];
+                        SaveSpellBars();
                         _secondaryDropdownSlot = -1;
                         _input.ConsumeMouse();
                         goto SkipSpellCast;
@@ -2472,7 +2390,11 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 }
             }
 
-            // --- Spell casting (Q = slot 0, E = slot 1, LClick = slot 2, RClick = slot 3) ---
+            // --- Spell casting ---
+            // Primary bar: Q = slot 0, E = slot 1, LClick = slot 2, RClick = slot 3
+            // Secondary bar: D1-D4 = slots 0-3
+            // Both bars share the same dispatch via DispatchSpellCast; the LMB
+            // melee-fallback is primary-only and lives just after this loop.
             for (int slot = 0; slot < 4; slot++)
             {
                 bool pressed = slot switch
@@ -2483,71 +2405,20 @@ public class Game1 : Microsoft.Xna.Framework.Game
                     3 => !_input.MouseOverUI && _input.RightPressed,
                     _ => false
                 };
-
                 if (!pressed || slot >= _spellBarState.Slots.Length) continue;
                 string spellId = _spellBarState.Slots[slot].SpellID;
-                if (string.IsNullOrEmpty(spellId) || necroIdx < 0) continue;
+                var result = DispatchSpellCast(spellId, necroIdx, slot, mouseWorld, isSecondary: false);
 
-                // --- Melee & Gather: special built-in ability ---
-                if (spellId == "melee_gather")
+                // LMB on empty/failed primary slot = melee swing at nearest enemy.
+                if (slot == 2 && result == CastResult.NoValidTarget && necroIdx >= 0
+                    && !_sim.Units[necroIdx].PendingAttack.IsNone == false)
                 {
-                    TryMeleeOrGather(necroIdx, mouseWorld);
-                    continue;
-                }
-
-                // Can't cast while a spell animation is playing
-                if (_pendingCastAnim != null) continue;
-
-                var result = SpellCaster.TryStartSpellCast(spellId, _gameData.Spells, _sim.NecroState,
-                    _sim.Units, necroIdx, mouseWorld, _sim.Corpses, _pendingSpell, _gameData);
-
-                if (result == CastResult.Success)
-                {
-                    var spell = _gameData.Spells.Get(spellId);
-                    if (spell == null) continue;
-
-                    // Apply casting buff immediately (visual starts right away)
-                    if (!string.IsNullOrEmpty(spell.CastingBuffID))
+                    int meleeTarget = FindClosestEnemyToPoint(_sim.Units[necroIdx].Position, 2f);
+                    if (meleeTarget >= 0)
                     {
-                        var castBuff = _gameData.Buffs.Get(spell.CastingBuffID);
-                        if (castBuff != null) BuffSystem.ApplyBuff(_sim.UnitsMut, necroIdx, castBuff);
-
-                        // Defer spell execution to Spell1 animation action moment
-                        _pendingCastAnim = new PendingCastAnim
-                        {
-                            SpellID = spellId,
-                            Target = mouseWorld,
-                            Slot = slot,
-                            CastingBuffID = spell.CastingBuffID
-                        };
-
-                        // Request Spell1 animation on necromancer
-                        uint necroUid = _sim.Units[necroIdx].Id;
-                        if (_unitAnims.TryGetValue(necroUid, out var necroAnim))
-                        {
-                            necroAnim.Ctrl.RequestState(AnimState.Spell1);
-                            _unitAnims[necroUid] = necroAnim;
-                        }
-                    }
-                    else
-                    {
-                        // No casting buff → execute immediately (legacy behavior)
-                        ExecuteSpellEffect(spell, necroIdx, mouseWorld, slot);
-                    }
-                }
-                else if (slot == 2 && result == CastResult.NoValidTarget)
-                {
-                    // LClick on empty slot or failed cast = melee attack
-                    if (necroIdx >= 0 && !_sim.Units[necroIdx].PendingAttack.IsNone == false)
-                    {
-                        int meleeTarget = FindClosestEnemyToPoint(
-                            _sim.Units[necroIdx].Position, 2f);
-                        if (meleeTarget >= 0)
-                        {
-                            _sim.UnitsMut[necroIdx].Target = CombatTarget.Unit(_sim.Units[meleeTarget].Id);
-                            _sim.UnitsMut[necroIdx].PendingAttack = CombatTarget.Unit(_sim.Units[meleeTarget].Id);
-                            _sim.UnitsMut[necroIdx].AttackCooldown = 2f;
-                        }
+                        _sim.UnitsMut[necroIdx].Target = CombatTarget.Unit(_sim.Units[meleeTarget].Id);
+                        _sim.UnitsMut[necroIdx].PendingAttack = CombatTarget.Unit(_sim.Units[meleeTarget].Id);
+                        _sim.UnitsMut[necroIdx].AttackCooldown = 2f;
                     }
                 }
             }
@@ -2567,42 +2438,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
                     if (!_input.WasKeyPressed(secKeys[sk])) continue;
                     if (sk >= _secondaryBarState.Slots.Length) continue;
                     string secSpellId = _secondaryBarState.Slots[sk].SpellID;
-                    if (string.IsNullOrEmpty(secSpellId)) continue;
-                    if (_pendingCastAnim != null) continue;
-
-                    var secResult = SpellCaster.TryStartSpellCast(secSpellId, _gameData.Spells, _sim.NecroState,
-                        _sim.Units, necroIdx, mouseWorld, _sim.Corpses, _pendingSpell, _gameData);
-                    if (secResult == CastResult.Success)
-                    {
-                        var spell2 = _gameData.Spells.Get(secSpellId);
-                        if (spell2 == null) continue;
-
-                        if (!string.IsNullOrEmpty(spell2.CastingBuffID))
-                        {
-                            var castBuff2 = _gameData.Buffs.Get(spell2.CastingBuffID);
-                            if (castBuff2 != null) BuffSystem.ApplyBuff(_sim.UnitsMut, necroIdx, castBuff2);
-
-                            _pendingCastAnim = new PendingCastAnim
-                            {
-                                SpellID = secSpellId,
-                                Target = mouseWorld,
-                                Slot = sk,
-                                IsSecondary = true,
-                                CastingBuffID = spell2.CastingBuffID
-                            };
-
-                            uint necroUid2 = _sim.Units[necroIdx].Id;
-                            if (_unitAnims.TryGetValue(necroUid2, out var necroAnim2))
-                            {
-                                necroAnim2.Ctrl.RequestState(AnimState.Spell1);
-                                _unitAnims[necroUid2] = necroAnim2;
-                            }
-                        }
-                        else
-                        {
-                            ExecuteSpellEffect(spell2, necroIdx, mouseWorld, sk);
-                        }
-                    }
+                    DispatchSpellCast(secSpellId, necroIdx, sk, mouseWorld, isSecondary: true);
                 }
             }
 
@@ -2799,25 +2635,13 @@ public class Game1 : Microsoft.Xna.Framework.Game
             if (!_input.MouseOverUI && _input.RightPressed
                 && _sim.NecromancerIndex >= 0)
             {
-                int bestIdx = FindNearestForagable(_sim.Units[_sim.NecromancerIndex].Position, 2f);
+                int bestIdx = _foragables.FindNearest(_sim.Units[_sim.NecromancerIndex].Position, 2f);
                 if (bestIdx >= 0)
-                    StartForagableCollection(bestIdx);
+                    _foragables.StartCollection(bestIdx);
             }
 
             // --- Auto-pickup foragables ---
-            if (_gameData.Settings.General.AutoPickupForagables && _sim.NecromancerIndex >= 0)
-            {
-                _autoPickupCooldown -= dt;
-                if (_autoPickupCooldown <= 0f)
-                {
-                    int autoIdx = FindNearestForagable(_sim.Units[_sim.NecromancerIndex].Position, ForagableAutoPickupRange);
-                    if (autoIdx >= 0)
-                    {
-                        StartForagableCollection(autoIdx);
-                        _autoPickupCooldown = 0.3f; // stagger auto-pickups
-                    }
-                }
-            }
+            _foragables.TickAutoPickup(dt, _gameData.Settings.General.AutoPickupForagables);
 
             // --- Time controls (keyboard) ---
             if (_input.WasKeyPressed(Keys.OemPlus) || _input.WasKeyPressed(Keys.Add))
@@ -2845,10 +2669,12 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
             // --- Simulate ---
             _sim.Tick(dt);
+            FinalizeBushWorkIfPending();
             _dayNightSystem.Update(dt, _gameData);
             _sim.MagicGlyphs.Update(dt, _sim.UnitsMut, _sim.Quadtree, _sim.PoisonClouds, _gameData.Spells);
             _weatherRenderer.Update(dt, _gameData);
             _envSystem.UpdateForagables(dt);
+            _envSystem.UpdateBerryBushes(dt);
             _envSystem.UpdateAnimations(dt, _gameTime);
             _envSystem.UpdateTraps(dt, _sim.Units);
             ProcessTrapFireEvents();
@@ -3117,8 +2943,6 @@ public class Game1 : Microsoft.Xna.Framework.Game
         _skillTreePanel.Update(_input, screenW, screenH, gameTime.TotalGameTime.TotalSeconds);
         _skillBookPanel.SetMouse(_input.MousePos);
         _skillBookPanel.Update(_input, screenW, screenH, gameTime.TotalGameTime.TotalSeconds);
-        _vampireEvoPanel.SetMouse(_input.MousePos);
-        _vampireEvoPanel.Update(_input, screenW, screenH, gameTime.TotalGameTime.TotalSeconds);
 
         // Cursor swap: hand when hovering interactive UI, arrow otherwise
         bool overInteractiveUI = _input.MouseOverUI || _editorUi.IsMouseOverUI;
@@ -3189,6 +3013,32 @@ public class Game1 : Microsoft.Xna.Framework.Game
         DebugLog.Log("startup", $"SpellBar '{key}' loaded: {string.Join(", ", bar.Slots.Select(s => s.SpellID))}");
     }
 
+    /// <summary>Persist the current primary + secondary spell bar slot
+    /// assignments to spellbar.json. Called whenever the player edits a slot
+    /// via the in-game dropdown, and on game exit. Atomic write — partial
+    /// writes can't corrupt the file.</summary>
+    private void SaveSpellBars()
+    {
+        try
+        {
+            var doc = new Dictionary<string, object>
+            {
+                ["slots"] = _spellBarState.Slots.Select(s => new Dictionary<string, string>
+                {
+                    ["spellID"] = s.SpellID ?? ""
+                }).Cast<object>().ToList(),
+                ["secondary"] = _secondaryBarState.Slots.Select(s => new Dictionary<string, string>
+                {
+                    ["spellID"] = s.SpellID ?? ""
+                }).Cast<object>().ToList(),
+            };
+            var options = new System.Text.Json.JsonSerializerOptions { WriteIndented = true };
+            string json = System.Text.Json.JsonSerializer.Serialize(doc, options);
+            Core.AtomicFile.WriteAllText(GamePaths.Resolve(GamePaths.SpellBarJson), json);
+        }
+        catch (Exception ex) { DebugLog.Log("error", $"SaveSpellBars failed: {ex.Message}"); }
+    }
+
     private PotionDef? FindPotionByItemId(string itemId)
     {
         foreach (var id in _gameData.Potions.GetIDs())
@@ -3250,20 +3100,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
     }
 
     private int FindNearestForagable(Vec2 fromPos, float maxDist)
-    {
-        float bestDist = maxDist;
-        int bestIdx = -1;
-        for (int fi = 0; fi < _envSystem.ObjectCount; fi++)
-        {
-            if (!_envSystem.IsObjectVisible(fi)) continue;
-            var def = _envSystem.Defs[_envSystem.Objects[fi].DefIndex];
-            if (!def.IsForagable) continue;
-            var obj = _envSystem.Objects[fi];
-            float dist = (new Vec2(obj.X, obj.Y) - fromPos).Length();
-            if (dist < bestDist) { bestDist = dist; bestIdx = fi; }
-        }
-        return bestIdx;
-    }
+        => _foragables.FindNearest(fromPos, maxDist);
 
     /// <summary>
     /// Start (or resume) a craft on the given table. Spends essence on the FIRST
@@ -3306,114 +3143,197 @@ public class Game1 : Microsoft.Xna.Framework.Game
         return true;
     }
 
-    /// <summary>Start a foragable collection with arc animation instead of instant pickup.</summary>
-    private void StartForagableCollection(int objIdx)
+    /// <summary>Single dispatch path for both spell bars. Handles built-in
+    /// ability intercepts (melee_gather, poison_berries_*) before falling
+    /// through to the normal SpellCaster + casting-buff + pending-anim pipeline.
+    /// Returns the cast result so callers can react (e.g. LMB melee fallback).</summary>
+    private CastResult DispatchSpellCast(string spellId, int necroIdx, int slot,
+        Vec2 mouseWorld, bool isSecondary)
     {
-        if (_sim.NecromancerIndex < 0) return;
-        string? resourceType = _envSystem.CollectForagable(objIdx);
-        if (resourceType == null) return;
+        if (string.IsNullOrEmpty(spellId) || necroIdx < 0) return CastResult.NoValidTarget;
 
-        var obj = _envSystem.Objects[objIdx];
-        var def = _envSystem.Defs[obj.DefIndex];
-        var tex = _envSystem.GetDefTexture(obj.DefIndex);
+        // Built-in abilities short-circuit the normal spell pipeline.
+        if (TryDispatchBuiltinAbility(spellId, necroIdx, mouseWorld))
+            return CastResult.Success;
 
-        float worldH = def.SpriteWorldHeight * obj.Scale * def.Scale;
-        float pixelH = worldH * _camera.Zoom;
-        float baseScale = tex != null ? pixelH / tex.Height : 1f;
+        // Can't cast a real spell while one is mid-animation.
+        if (_pendingCastAnim != null) return CastResult.NoValidTarget;
 
-        _collectingForagables.Add(new CollectingForagable
+        var result = SpellCaster.TryStartSpellCast(spellId, _gameData.Spells, _sim.NecroState,
+            _sim.Units, necroIdx, mouseWorld, _sim.Corpses, _pendingSpell, _gameData);
+        if (result != CastResult.Success) return result;
+
+        var spell = _gameData.Spells.Get(spellId);
+        if (spell == null) return result;
+
+        if (!string.IsNullOrEmpty(spell.CastingBuffID))
         {
-            ObjIdx = objIdx,
-            StartPos = new Vec2(obj.X, obj.Y),
-            StartHeight = 0f,
-            TargetPos = _sim.Units[_sim.NecromancerIndex].Position,
-            Timer = 0f,
-            ArcDuration = ForagableArcDuration,
-            ResourceType = resourceType,
-            Texture = tex,
-            BaseScale = baseScale,
-            PivotX = def.PivotX,
-            PivotY = def.PivotY,
-        });
+            // Defer execution to the Spell1 animation event.
+            var castBuff = _gameData.Buffs.Get(spell.CastingBuffID);
+            if (castBuff != null) BuffSystem.ApplyBuff(_sim.UnitsMut, necroIdx, castBuff);
+
+            _pendingCastAnim = new PendingCastAnim
+            {
+                SpellID = spellId,
+                Target = mouseWorld,
+                Slot = slot,
+                IsSecondary = isSecondary,
+                CastingBuffID = spell.CastingBuffID,
+            };
+
+            uint necroUid = _sim.Units[necroIdx].Id;
+            if (_unitAnims.TryGetValue(necroUid, out var necroAnim))
+            {
+                necroAnim.Ctrl.RequestState(AnimState.Spell1);
+                _unitAnims[necroUid] = necroAnim;
+            }
+        }
+        else
+        {
+            // No casting buff → execute immediately (legacy behavior).
+            ExecuteSpellEffect(spell, necroIdx, mouseWorld, slot);
+        }
+        return CastResult.Success;
     }
 
-    /// <summary>Update collecting foragable arcs. Called each frame.</summary>
-    private void UpdateCollectingForagables(float dt)
+    /// <summary>Built-in abilities don't live in spells.json — they're hard-wired
+    /// IDs that bypass the SpellCaster pipeline entirely. Returns true if the id
+    /// was a built-in (handled or rejected); false if the caller should fall
+    /// through to normal spell dispatch.</summary>
+    private bool TryDispatchBuiltinAbility(string spellId, int necroIdx, Vec2 mouseWorld)
     {
-        for (int i = _collectingForagables.Count - 1; i >= 0; i--)
+        switch (spellId)
         {
-            var cf = _collectingForagables[i];
-            cf.Timer += dt;
-
-            // Update target to follow necromancer
-            if (_sim.NecromancerIndex >= 0)
-                cf.TargetPos = _sim.Units[_sim.NecromancerIndex].Position;
-
-            _collectingForagables[i] = cf;
-
-            if (cf.Timer >= cf.ArcDuration)
-            {
-                // Complete collection — add to inventory
-                _inventory.AddItem(cf.ResourceType);
-
-                // Tally pickup-driven skill triggers. First mushroom of any kind
-                // teaches the root potion recipe (Paralysis), gating the rest of
-                // the alchemy tree behind it.
-                if (cf.ResourceType == "Mushroom"
-                    || cf.ResourceType == "MagicMushroom"
-                    || cf.ResourceType == "PoisonMushroom"
-                    || cf.ResourceType == "Ghostcap"
-                    || cf.ResourceType == "Rotgill")
-                {
-                    TryAutoLearn("skill_paralysis", "Recipe Learned");
-                }
-
-                // Pop effect at character
-                _effectManager.SpawnDustPuff(cf.TargetPos);
-
-                // Pickup sound
-                _pickupSound?.Play(0.3f, 0f, 0f);
-
-                // Floating pickup text (green, rising)
-                _damageNumbers.Add(new DamageNumber
-                {
-                    WorldPos = cf.TargetPos,
-                    Damage = 0, // we'll use a special marker
-                    Timer = 0f,
-                    Height = 2f,
-                    IsPoison = false,
-                    PickupText = cf.ResourceType
-                });
-
-                _collectingForagables.RemoveAt(i);
-            }
+            case "melee_gather":
+                TryMeleeOrGather(necroIdx, mouseWorld);
+                return true;
+            case "poison_berries_poison":
+                TryStartPoisonBerries(necroIdx, mouseWorld, "buff_poison_dot", "potion_poison");
+                return true;
+            case "poison_berries_paralysis":
+                TryStartPoisonBerries(necroIdx, mouseWorld, "buff_paralysis_slow", "potion_paralysis");
+                return true;
+            default:
+                return false;
         }
     }
 
-    /// <summary>Draw collecting foragable arcs (objects flying toward character).</summary>
-    private void DrawCollectingForagables()
+    /// <summary>Player clicked a target while holding the Poison Berries ability.
+    /// Picks the nearest berry bush within range of the mouse, validates that
+    /// the bush is in Berries state, that the player has the matching potion,
+    /// and starts the work routine. Does NOT consume the potion — consumption
+    /// only happens when the routine completes successfully (see
+    /// <see cref="FinalizeBushWorkIfPending"/>).</summary>
+    private void TryStartPoisonBerries(int necroIdx, Vec2 mouseWorld, string buffID, string itemID)
     {
-        foreach (var cf in _collectingForagables)
+        if (necroIdx < 0) return;
+        if (_inventory.GetItemCount(itemID) <= 0)
         {
-            if (cf.Texture == null) continue;
-            float t = cf.Timer / cf.ArcDuration; // 0..1
+            DebugLog.Log("ai", $"[PoisonBerries] no {itemID} in inventory — ignored");
+            return;
+        }
 
-            // Position: lerp from start to target
-            Vec2 pos = cf.StartPos + (cf.TargetPos - cf.StartPos) * t;
+        // Two-stage pick: prefer the bush closest to the cursor (small radius);
+        // if the click was nowhere near a bush, fall back to the bush closest to
+        // the necromancer within a larger range so the ability is forgiving.
+        int bushIdx = FindBerryBushNear(mouseWorld, 4f);
+        if (bushIdx < 0)
+        {
+            var necroPos = _sim.Units[necroIdx].Position;
+            bushIdx = FindBerryBushNear(necroPos, 20f);
+        }
+        if (bushIdx < 0)
+        {
+            DebugLog.Log("ai", "[PoisonBerries] no Berries-state berry bush near cursor or player");
+            return;
+        }
 
-            // Height: arc upward then down (parabola peaking at t=0.3)
-            float arcHeight = 2f * (1f - (t - 0.3f) * (t - 0.3f) / 0.49f);
-            if (arcHeight < 0f) arcHeight = 0f;
+        var u = _sim.UnitsMut[necroIdx];
+        u.Routine = AI.PlayerControlledHandler.RoutineWorkOnBush;
+        u.Subroutine = AI.PlayerControlledHandler.BuildSub_WalkToSite;
+        u.BushWorkObjIdx = bushIdx;
+        u.BushWorkBuffID = buffID;
+        u.BushWorkItemID = itemID;
+        u.BuildTimer = 0f;
+        u.CorpseInteractPhase = 0;
+        DebugLog.Log("ai", $"[PoisonBerries] start: bushIdx={bushIdx} buff={buffID} item={itemID}");
+    }
 
-            // Scale: shrink from 100% to 40%
-            float scale = cf.BaseScale * (1f - t * 0.6f);
+    /// <summary>Pick a berry bush in Berries state nearest to <paramref name="worldPos"/>.
+    /// Returns -1 if no eligible bush is within <paramref name="maxRadius"/>.</summary>
+    private int FindBerryBushNear(Vec2 worldPos, float maxRadius)
+    {
+        int best = -1;
+        float bestD = maxRadius * maxRadius;
+        for (int i = 0; i < _envSystem.ObjectCount; i++)
+        {
+            var def = _envSystem.GetDef(_envSystem.GetObject(i).DefIndex);
+            if (!def.IsBerryBush) continue;
+            var rt = _envSystem.GetObjectRuntime(i);
+            if (!rt.Alive || rt.BerryState != World.BerryState.Berries) continue;
+            var obj = _envSystem.GetObject(i);
+            float dx = obj.X - worldPos.X, dy = obj.Y - worldPos.Y;
+            float d = dx * dx + dy * dy;
+            if (d < bestD) { bestD = d; best = i; }
+        }
+        return best;
+    }
 
-            // Rotation: spin faster over time
-            float rotation = t * t * 6f;
+    /// <summary>Post-AI hook. Fires the moment WorkLoop completes (signalled
+    /// by Subroutine == BushSub_AwaitFinalize) — applies the bush poison and
+    /// consumes one of the matching potion immediately, then hands the routine
+    /// back to WorkEnd so the standup animation plays out. The BushWork*
+    /// fields stay populated through standup; they're cleared by the AI
+    /// handler's CancelBushWork on Phase.Done.</summary>
+    private void FinalizeBushWorkIfPending()
+    {
+        int necroIdx = _sim.NecromancerIndex;
+        if (necroIdx < 0) return;
+        if (_sim.Units[necroIdx].Routine != AI.PlayerControlledHandler.RoutineWorkOnBush) return;
+        if (_sim.Units[necroIdx].Subroutine != AI.PlayerControlledHandler.BushSub_AwaitFinalize) return;
 
-            var sp = _renderer.WorldToScreen(pos, arcHeight, _camera);
-            var origin = new Vector2(cf.PivotX * cf.Texture.Width, cf.PivotY * cf.Texture.Height);
-            _spriteBatch.Draw(cf.Texture, sp, null, Color.White, rotation, origin, scale, SpriteEffects.None, 0f);
+        int bushIdx = _sim.Units[necroIdx].BushWorkObjIdx;
+        string buffID = _sim.Units[necroIdx].BushWorkBuffID;
+        string itemID = _sim.Units[necroIdx].BushWorkItemID;
+
+        bool applied = bushIdx >= 0 && _envSystem.PoisonBerryBush(bushIdx, buffID);
+        if (applied && !string.IsNullOrEmpty(itemID))
+            _inventory.RemoveItem(itemID, 1);
+
+        // Continue to WorkEnd so the standup plays normally.
+        var u = _sim.UnitsMut[necroIdx];
+        u.Subroutine = AI.WorkRoutine.WorkEnd;
+    }
+
+    /// <summary>Start a foragable collection with arc animation instead of instant pickup.</summary>
+    private void StartForagableCollection(int objIdx) => _foragables.StartCollection(objIdx);
+
+    /// <summary>Game1 hook fired by ForagableSystem after a pickup lands.
+    /// Spawns the floating green pickup text in the damage-numbers list.</summary>
+    private void OnForagablePickedUp(Vec2 worldPos, string resourceType)
+    {
+        _damageNumbers.Add(new DamageNumber
+        {
+            WorldPos = worldPos,
+            Damage = 0,
+            Timer = 0f,
+            Height = 2f,
+            IsPoison = false,
+            PickupText = resourceType,
+        });
+    }
+
+    /// <summary>Game1 hook fired by ForagableSystem on every pickup. First
+    /// mushroom of any kind teaches the root Paralysis potion recipe.</summary>
+    private void OnForagableLearnTrigger(string resourceType)
+    {
+        if (resourceType == "Mushroom"
+            || resourceType == "MagicMushroom"
+            || resourceType == "PoisonMushroom"
+            || resourceType == "Ghostcap"
+            || resourceType == "Rotgill")
+        {
+            TryAutoLearn("skill_paralysis", "Recipe Learned");
         }
     }
 
@@ -4119,7 +4039,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
         _effectManager.Update(dt);
         _buffVisuals.Update(dt, _sim.Units, _gameData.Buffs, _gameTime);
-        UpdateCollectingForagables(dt);
+        _foragables.Update(dt);
         UpdateSkillLearnToasts(dt);
         SyncCorruptionSettings();
 
@@ -4179,40 +4099,37 @@ public class Game1 : Microsoft.Xna.Framework.Game
             var unitDef = _gameData.Units.Get(defID);
             bool foundWeaponTip = false;
 
-            if (unitDef != null && unitDef.WeaponPoints.Count > 0 && animData.RefFrameHeight > 0f)
+            if (unitDef != null && unitDef.Sprite != null && animData.RefFrameHeight > 0f)
             {
                 string animName = AnimController.StateToAnimName(animData.Ctrl.CurrentState);
-                if (unitDef.WeaponPoints.TryGetValue(animName, out var yawDict))
+                int spriteAngle = animData.Ctrl.ResolveAngle(_sim.Units[i].FacingAngle, out bool flipX);
+                int frameIdx = animData.Ctrl.GetCurrentFrameIndex(_sim.Units[i].FacingAngle);
+
+                AnimationMeta? meta = null;
+                _animMeta.TryGetValue(AnimMetaLoader.MetaKey(unitDef.Sprite.SpriteName, animName), out meta);
+
+                if (WeaponPointResolver.TryResolve(unitDef, meta, animName, spriteAngle, frameIdx,
+                        animData.RefFrameHeight, out var wpf, out _))
                 {
-                    int spriteAngle = animData.Ctrl.ResolveAngle(_sim.Units[i].FacingAngle, out bool flipX);
-                    string yawKey = spriteAngle.ToString();
-                    if (yawDict.TryGetValue(yawKey, out var frames))
+                    bool tipSet = wpf.Tip.X != 0f || wpf.Tip.Y != 0f;
+                    if (tipSet)
                     {
-                        int frameIdx = animData.Ctrl.GetCurrentFrameIndex(_sim.Units[i].FacingAngle);
-                        if (frameIdx >= 0 && frameIdx < frames.Count)
-                        {
-                            var wpf = frames[frameIdx];
-                            bool tipSet = wpf.Tip.X != 0f || wpf.Tip.Y != 0f;
-                            if (tipSet)
-                            {
-                                float flipMul = flipX ? -1f : 1f;
-                                float worldH = (unitDef.SpriteWorldHeight > 0 ? unitDef.SpriteWorldHeight : 1.8f)
-                                               * _sim.Units[i].SpriteScale;
-                                float worldScale = worldH / animData.RefFrameHeight;
+                        float flipMul = flipX ? -1f : 1f;
+                        float worldH = (unitDef.SpriteWorldHeight > 0 ? unitDef.SpriteWorldHeight : 1.8f)
+                                       * _sim.Units[i].SpriteScale;
+                        float worldScale = worldH / animData.RefFrameHeight;
 
-                                // Spawn position follows the visible weapon tip — if the
-                                // unit is lunged, the projectile spawns from where the
-                                // weapon visually is.
-                                var spawnBase = _sim.Units[i].RenderPos;
-                                float tipDx = wpf.Tip.X * worldScale * flipMul;
-                                mu[i].EffectSpawnPos2D = new Vec2(spawnBase.X + tipDx, spawnBase.Y);
+                        // Spawn position follows the visible weapon tip — if the
+                        // unit is lunged, the projectile spawns from where the
+                        // weapon visually is.
+                        var spawnBase = _sim.Units[i].RenderPos;
+                        float tipDx = wpf.Tip.X * worldScale * flipMul;
+                        mu[i].EffectSpawnPos2D = new Vec2(spawnBase.X + tipDx, spawnBase.Y);
 
-                                float unitHeight = _sim.Units[i].Z;
-                                mu[i].EffectSpawnHeight = unitHeight - wpf.Tip.Y * worldScale;
+                        float unitHeight = _sim.Units[i].Z;
+                        mu[i].EffectSpawnHeight = unitHeight - wpf.Tip.Y * worldScale;
 
-                                foundWeaponTip = true;
-                            }
-                        }
+                        foundWeaponTip = true;
                     }
                 }
             }
@@ -4235,19 +4152,18 @@ public class Game1 : Microsoft.Xna.Framework.Game
     private WeaponAttachRuntime ComputeWeaponAttach(int unitIdx, UnitDef unitDef, UnitAnimData animData)
     {
         var result = new WeaponAttachRuntime();
-        if (unitDef.WeaponPoints.Count == 0 || animData.RefFrameHeight <= 0f) return result;
+        if (unitDef.Sprite == null || animData.RefFrameHeight <= 0f) return result;
 
         string animName = AnimController.StateToAnimName(animData.Ctrl.CurrentState);
-        if (!unitDef.WeaponPoints.TryGetValue(animName, out var yawDict)) return result;
-
         int spriteAngle = animData.Ctrl.ResolveAngle(_sim.Units[unitIdx].FacingAngle, out bool flipX);
-        string yawKey = spriteAngle.ToString();
-        if (!yawDict.TryGetValue(yawKey, out var frames)) return result;
-
         int frameIdx = animData.Ctrl.GetCurrentFrameIndex(_sim.Units[unitIdx].FacingAngle);
-        if (frameIdx < 0 || frameIdx >= frames.Count) return result;
 
-        var wpf = frames[frameIdx];
+        AnimationMeta? meta = null;
+        _animMeta.TryGetValue(AnimMetaLoader.MetaKey(unitDef.Sprite.SpriteName, animName), out meta);
+
+        if (!WeaponPointResolver.TryResolve(unitDef, meta, animName, spriteAngle, frameIdx,
+                animData.RefFrameHeight, out var wpf, out _)) return result;
+
         bool hiltSet = wpf.Hilt.X != 0f || wpf.Hilt.Y != 0f;
         bool tipSet = wpf.Tip.X != 0f || wpf.Tip.Y != 0f;
         if (!hiltSet && !tipSet) return result;
@@ -4275,6 +4191,47 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
         result.Valid = true;
         return result;
+    }
+
+    /// <summary>
+    /// Scenario debug overlay: draw a green dot at each unit's resolved weapon
+    /// hilt and a red dot at the tip, with a magenta line connecting them.
+    /// Use this to visually validate that the WeaponPointResolver lines up
+    /// with the visible weapon in the rendered sprite.
+    /// </summary>
+    private void DrawWeaponAttachDebug()
+    {
+        _debugDraw.EnsurePixel(GraphicsDevice);
+        for (int i = 0; i < _sim.Units.Count; i++)
+        {
+            if (!_sim.Units[i].Alive) continue;
+            uint uid = _sim.Units[i].Id;
+            if (!_unitAnims.TryGetValue(uid, out var animData)) continue;
+            var unitDef = _gameData.Units.Get(_sim.Units[i].UnitDefID);
+            if (unitDef == null) continue;
+
+            var attach = ComputeWeaponAttach(i, unitDef, animData);
+            if (!attach.Valid) continue;
+
+            var hiltSp = _renderer.WorldToScreenPx(attach.HiltWorld, attach.HiltHeight * _camera.Zoom, _camera);
+            var tipSp  = _renderer.WorldToScreenPx(attach.TipWorld,  attach.TipHeight  * _camera.Zoom, _camera);
+
+            // Magenta line / lime hilt / red tip — saturated channels that
+            // don't collide with the sprite's natural palette so the dots
+            // stay visible against any pose.
+            _debugDraw.DrawLine(_spriteBatch, hiltSp, tipSp, new Color(255, 0, 255, 220));
+            DrawDebugDot(hiltSp, new Color(60, 255, 60));
+            DrawDebugDot(tipSp,  new Color(255, 40, 40));
+        }
+    }
+
+    private void DrawDebugDot(Vector2 pos, Color color)
+    {
+        int r = 3;
+        for (int dy = -r; dy <= r; dy++)
+            for (int dx = -r; dx <= r; dx++)
+                if (dx * dx + dy * dy <= r * r)
+                    _spriteBatch.Draw(_pixel, new Rectangle((int)pos.X + dx, (int)pos.Y + dy, 1, 1), color);
     }
 
     protected override void Draw(GameTime gameTime)
@@ -4459,7 +4416,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
         // --- Alpha blend pass (collecting foragables + damage numbers on top) ---
         _spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.LinearClamp);
-        DrawCollectingForagables();
+        _foragables.Draw();
         DrawDamageNumbers();
         _spriteBatch.End();
 
@@ -4485,6 +4442,14 @@ public class Game1 : Microsoft.Xna.Framework.Game
             _spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.PointClamp);
             _debugDraw.DrawCollisionDebug(_spriteBatch, GraphicsDevice, _sim, _camera, _renderer,
                 _collisionDebugMode, _envSystem, _sim.Pathfinder);
+            _spriteBatch.End();
+        }
+
+        // --- Weapon attach debug overlay (scenario opt-in) ---
+        if (_activeScenario != null && _activeScenario.ShowWeaponAttachDebug)
+        {
+            _spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.PointClamp);
+            DrawWeaponAttachDebug();
             _spriteBatch.End();
         }
 
@@ -4641,10 +4606,6 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // Bottom-right "Recipe Learned" toasts — drawn even when the panel is closed.
         if (showUI)
             DrawSkillLearnToasts(screenW, screenH);
-
-        // Vampire evolution panel (N)
-        if (showUI)
-            _vampireEvoPanel.Draw(screenW, screenH);
 
         // Scenario custom UI hook — for shader-test scenarios that draw raw
         // geometry without a real panel.

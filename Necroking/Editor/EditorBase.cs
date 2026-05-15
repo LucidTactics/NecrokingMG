@@ -163,7 +163,6 @@ public class EditorBase
         // Pre-computed item layout — single source of truth for both click and draw
         public Rectangle[] ItemRects;
         public Rectangle DropRect;
-        public Rectangle FilterRect;
         public int ItemsY; // Y where items start (below filter if present)
     }
     private PendingDropdown? _pendingDropdown;

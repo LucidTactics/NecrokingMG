@@ -120,6 +120,14 @@ public abstract class ScenarioBase
     // the active SpriteBatch. Used by shader-test scenarios to draw test
     // geometry without needing a full panel. Batch has already been Begun.
     public Action<Microsoft.Xna.Framework.Graphics.SpriteBatch, int, int>? CustomUIDraw;
+
+    /// <summary>
+    /// When true, the renderer overlays a debug marker at each unit's resolved
+    /// weapon hilt (cyan) and tip (yellow) on top of the sprite. Used by the
+    /// weapon-attach validation scenario to verify exporter mount points and
+    /// the pixel/world conversion line up with the visible weapon.
+    /// </summary>
+    public bool ShowWeaponAttachDebug;
 }
 
 public abstract class UIScenarioBase : ScenarioBase

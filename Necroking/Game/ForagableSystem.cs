@@ -1,0 +1,194 @@
+using System;
+using System.Collections.Generic;
+using Microsoft.Xna.Framework;
+using Microsoft.Xna.Framework.Audio;
+using Microsoft.Xna.Framework.Graphics;
+using Necroking.Core;
+using Necroking.GameSystems;
+using Necroking.Render;
+using Necroking.World;
+
+namespace Necroking.Game;
+
+/// <summary>
+/// Owns the player's foragable collection mechanic: right-click or auto-pickup
+/// pulls a nearby foragable env object into an arc-flight animation that drops
+/// the resource into inventory on landing. Includes the auto-pickup cadence.
+///
+/// Extracted from Game1 (2026-05-13) as the first proof-of-concept Game1
+/// subsystem split. Game1 holds a single instance and forwards trigger /
+/// update / draw calls. The system caches long-lived references (env, sim,
+/// camera, renderer, inventory, effects) up front; per-call dependencies
+/// (skill-book auto-learn, damage numbers list) come in via callbacks.
+/// </summary>
+public class ForagableSystem
+{
+    private struct CollectingForagable
+    {
+        public int ObjIdx;             // environment object index at start (just for debug)
+        public Vec2 StartPos;          // world position where object was
+        public Vec2 TargetPos;         // necromancer position at time of collection
+        public float Timer;            // 0..ArcDuration
+        public float ArcDuration;      // total flight time
+        public string ResourceType;    // what to add to inventory on complete
+        public Texture2D? Texture;     // cached texture for rendering
+        public float BaseScale;        // original render scale
+        public float PivotX, PivotY;   // texture pivot
+    }
+
+    public const float ArcDuration = 0.35f;
+    public const float AutoPickupRange = 1.5f;
+
+    private readonly List<CollectingForagable> _inFlight = new();
+    private float _autoPickupCooldown;
+
+    // Long-lived references — set once via Bind().
+    private EnvironmentSystem _env = null!;
+    private Simulation _sim = null!;
+    private Render.Camera25D _camera = null!;
+    private Render.Renderer _renderer = null!;
+    private SpriteBatch _spriteBatch = null!;
+    private Inventory _inventory = null!;
+    private EffectManager _effects = null!;
+    private SoundEffect? _pickupSound;
+
+    // Per-pickup hooks (Game1 wires these — callbacks rather than direct refs
+    // so the system doesn't reach into Game1-private state like the damage
+    // numbers list or the skill book).
+    private Action<Vec2, string>? _onPickup;       // (worldPos, resourceType) — Game1 spawns floating text
+    private Action<string>? _onLearnTrigger;       // (resourceType) — Game1 runs skill-book triggers
+
+    public void Bind(
+        EnvironmentSystem env, Simulation sim,
+        Render.Camera25D camera, Render.Renderer renderer, SpriteBatch spriteBatch,
+        Inventory inventory, EffectManager effects, SoundEffect? pickupSound,
+        Action<Vec2, string>? onPickup, Action<string>? onLearnTrigger)
+    {
+        _env = env; _sim = sim;
+        _camera = camera; _renderer = renderer; _spriteBatch = spriteBatch;
+        _inventory = inventory; _effects = effects; _pickupSound = pickupSound;
+        _onPickup = onPickup;
+        _onLearnTrigger = onLearnTrigger;
+    }
+
+    /// <summary>Reset on new game / map reload.</summary>
+    public void Clear() { _inFlight.Clear(); _autoPickupCooldown = 0f; }
+
+    /// <summary>Walk the env objects looking for the nearest foragable within
+    /// <paramref name="maxDist"/> of <paramref name="fromPos"/>. Returns -1 if none.</summary>
+    public int FindNearest(Vec2 fromPos, float maxDist)
+    {
+        float bestDist = maxDist;
+        int bestIdx = -1;
+        for (int fi = 0; fi < _env.ObjectCount; fi++)
+        {
+            if (!_env.IsObjectVisible(fi)) continue;
+            var def = _env.Defs[_env.Objects[fi].DefIndex];
+            if (!def.IsForagable) continue;
+            var obj = _env.Objects[fi];
+            float dist = (new Vec2(obj.X, obj.Y) - fromPos).Length();
+            if (dist < bestDist) { bestDist = dist; bestIdx = fi; }
+        }
+        return bestIdx;
+    }
+
+    /// <summary>Begin an arc-pickup animation on the env object at
+    /// <paramref name="objIdx"/>. Marks the object collected immediately so
+    /// it stops blocking new picks. No-op if the necromancer is missing or
+    /// the object isn't a foragable.</summary>
+    public void StartCollection(int objIdx)
+    {
+        if (_sim.NecromancerIndex < 0) return;
+        string? resourceType = _env.CollectForagable(objIdx);
+        if (resourceType == null) return;
+
+        var obj = _env.Objects[objIdx];
+        var def = _env.Defs[obj.DefIndex];
+        var tex = _env.GetDefTexture(obj.DefIndex);
+
+        float worldH = def.SpriteWorldHeight * obj.Scale * def.Scale;
+        float pixelH = worldH * _camera.Zoom;
+        float baseScale = tex != null ? pixelH / tex.Height : 1f;
+
+        _inFlight.Add(new CollectingForagable
+        {
+            ObjIdx = objIdx,
+            StartPos = new Vec2(obj.X, obj.Y),
+            TargetPos = _sim.Units[_sim.NecromancerIndex].Position,
+            Timer = 0f,
+            ArcDuration = ArcDuration,
+            ResourceType = resourceType,
+            Texture = tex,
+            BaseScale = baseScale,
+            PivotX = def.PivotX,
+            PivotY = def.PivotY,
+        });
+    }
+
+    /// <summary>Tick all in-flight arcs. On landing: add to inventory, fire
+    /// learn-trigger hook, play sound, spawn dust puff, fire onPickup.</summary>
+    public void Update(float dt)
+    {
+        for (int i = _inFlight.Count - 1; i >= 0; i--)
+        {
+            var cf = _inFlight[i];
+            cf.Timer += dt;
+
+            // Target tracks the necromancer in case they move during flight.
+            if (_sim.NecromancerIndex >= 0)
+                cf.TargetPos = _sim.Units[_sim.NecromancerIndex].Position;
+
+            _inFlight[i] = cf;
+
+            if (cf.Timer >= cf.ArcDuration)
+            {
+                _inventory.AddItem(cf.ResourceType);
+                _onLearnTrigger?.Invoke(cf.ResourceType);
+                _effects.SpawnDustPuff(cf.TargetPos);
+                _pickupSound?.Play(0.3f, 0f, 0f);
+                _onPickup?.Invoke(cf.TargetPos, cf.ResourceType);
+                _inFlight.RemoveAt(i);
+            }
+        }
+    }
+
+    /// <summary>Each frame the player is on the map and auto-pickup is enabled,
+    /// pull the nearest in-range foragable. Cooldown-staggered so a tile of
+    /// many objects gets picked over multiple frames.</summary>
+    public void TickAutoPickup(float dt, bool enabled)
+    {
+        if (!enabled || _sim.NecromancerIndex < 0) return;
+        _autoPickupCooldown -= dt;
+        if (_autoPickupCooldown > 0f) return;
+        int idx = FindNearest(_sim.Units[_sim.NecromancerIndex].Position, AutoPickupRange);
+        if (idx >= 0)
+        {
+            StartCollection(idx);
+            _autoPickupCooldown = 0.3f;
+        }
+    }
+
+    /// <summary>Render all in-flight arcs. Sprites are flying world objects
+    /// in screen-space, so this is a pass over the cached textures.</summary>
+    public void Draw()
+    {
+        foreach (var cf in _inFlight)
+        {
+            if (cf.Texture == null) continue;
+            float t = cf.Timer / cf.ArcDuration;
+
+            Vec2 pos = cf.StartPos + (cf.TargetPos - cf.StartPos) * t;
+
+            // Arc parabola peaking at t=0.3, max height ~2 world units.
+            float arcHeight = 2f * (1f - (t - 0.3f) * (t - 0.3f) / 0.49f);
+            if (arcHeight < 0f) arcHeight = 0f;
+
+            float scale = cf.BaseScale * (1f - t * 0.6f);
+            float rotation = t * t * 6f;
+
+            var sp = _renderer.WorldToScreen(pos, arcHeight, _camera);
+            var origin = new Vector2(cf.PivotX * cf.Texture.Width, cf.PivotY * cf.Texture.Height);
+            _spriteBatch.Draw(cf.Texture, sp, null, Color.White, rotation, origin, scale, SpriteEffects.None, 0f);
+        }
+    }
+}

@@ -30,7 +30,6 @@ public class TrampleGreatBoarScenario : ScenarioBase
     private byte _maxChargePhaseReached;
     private byte _lastChargePhase;
     private bool _followThroughObserved;
-    private float _boarMaxDispFromCharge;
     private Vec2 _chargeStartPos;
     private bool _boarDamagedTarget;
     private int _targetHP0;

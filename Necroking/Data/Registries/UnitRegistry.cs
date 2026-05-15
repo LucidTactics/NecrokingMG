@@ -506,8 +506,8 @@ public class UnitRegistry : RegistryBase<UnitDef>
             var doc = new Dictionary<string, object> { ["units"] = unitArr };
             var options = new JsonSerializerOptions { WriteIndented = true };
             string json = JsonSerializer.Serialize(doc, options);
-            File.WriteAllText(path, json);
-            return true;
+            // Atomic tmp+rename — protects against crash mid-write corruption.
+            return Core.AtomicFile.WriteAllText(path, json);
         }
         catch (Exception ex) { Core.DebugLog.Log("error", $"Failed to save weapon points {path}: {ex.Message}"); return false; }
     }

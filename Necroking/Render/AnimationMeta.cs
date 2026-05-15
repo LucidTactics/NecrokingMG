@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
+using Microsoft.Xna.Framework;
 
 namespace Necroking.Render;
 
@@ -12,6 +13,16 @@ public class AnimYawMeta
     public float EffectSpawnZ;
     public List<int> FrameDurationsMs = new();
     public List<int> FrameTicks = new();
+
+    /// <summary>
+    /// Per-frame 3D mount markers exported from the source sprite rig. Key is
+    /// the mount id (e.g. "WeaponBase", "WeaponTip", "Main_Hand", "Off_Hand",
+    /// "Mouth"). Each list has one Vector3 per animation frame, in world units
+    /// relative to the unit's pivot (which sits at the feet: +X right, +Y up,
+    /// +Z toward camera). Empty if the exporter didn't write markers for this
+    /// animation.
+    /// </summary>
+    public Dictionary<string, List<Vector3>> Mounts = new();
 }
 
 public class AnimationMeta
@@ -40,6 +51,20 @@ public class AnimationMeta
             return;
         }
         x = 0f; y = 0.6f; z = 0f;
+    }
+
+    /// <summary>
+    /// Look up a mount marker position for a given sprite yaw, mount id, and
+    /// frame index. Returns false if the meta has no data for that combination.
+    /// </summary>
+    public bool TryGetMount(int spriteAngle, string mountId, int frameIdx, out Vector3 pos)
+    {
+        pos = Vector3.Zero;
+        if (!YawData.TryGetValue(spriteAngle, out var ym)) return false;
+        if (!ym.Mounts.TryGetValue(mountId, out var list)) return false;
+        if (frameIdx < 0 || frameIdx >= list.Count) return false;
+        pos = list[frameIdx];
+        return true;
     }
 }
 
@@ -99,15 +124,51 @@ public static class AnimMetaLoader
                     meta.LoopEndIndex = (int)Math.Round(le.GetDouble());
 
                 var ym = new AnimYawMeta();
-                if (root.TryGetProperty("effect_spawn_x", out var esx)) ym.EffectSpawnX = esx.GetSingle();
-                if (root.TryGetProperty("effect_spawn_y", out var esy)) ym.EffectSpawnY = esy.GetSingle();
-                if (root.TryGetProperty("effect_spawn_z", out var esz)) ym.EffectSpawnZ = esz.GetSingle();
+                // Current exporter writes effect_spawn_pos as a {x,y,z} object;
+                // older exporters wrote flat effect_spawn_{x,y,z} keys. Accept both.
+                if (root.TryGetProperty("effect_spawn_pos", out var esp) && esp.ValueKind == JsonValueKind.Object)
+                {
+                    if (esp.TryGetProperty("x", out var espx)) ym.EffectSpawnX = espx.GetSingle();
+                    if (esp.TryGetProperty("y", out var espy)) ym.EffectSpawnY = espy.GetSingle();
+                    if (esp.TryGetProperty("z", out var espz)) ym.EffectSpawnZ = espz.GetSingle();
+                }
+                else
+                {
+                    if (root.TryGetProperty("effect_spawn_x", out var esx)) ym.EffectSpawnX = esx.GetSingle();
+                    if (root.TryGetProperty("effect_spawn_y", out var esy)) ym.EffectSpawnY = esy.GetSingle();
+                    if (root.TryGetProperty("effect_spawn_z", out var esz)) ym.EffectSpawnZ = esz.GetSingle();
+                }
 
                 if (root.TryGetProperty("time_ms", out var tms) && tms.ValueKind == JsonValueKind.Array)
                     foreach (var v in tms.EnumerateArray()) ym.FrameDurationsMs.Add((int)Math.Round(v.GetDouble()));
 
                 if (root.TryGetProperty("frame_ticks", out var ft) && ft.ValueKind == JsonValueKind.Array)
                     foreach (var v in ft.EnumerateArray()) ym.FrameTicks.Add((int)Math.Round(v.GetDouble()));
+
+                // Per-frame 3D mount markers (WeaponBase/WeaponTip/Main_Hand/Off_Hand/Mouth/None).
+                // The exporter emits one list of positions per marker, with one entry per
+                // animation frame. We index by mount_id so consumers can pick the marker
+                // they care about (e.g. WeaponBase + WeaponTip for the weapon line).
+                if (root.TryGetProperty("markers", out var markers) && markers.ValueKind == JsonValueKind.Array)
+                {
+                    foreach (var m in markers.EnumerateArray())
+                    {
+                        if (!m.TryGetProperty("mount_id", out var midProp)) continue;
+                        string mountId = midProp.GetString() ?? "";
+                        if (mountId.Length == 0) continue;
+                        if (!m.TryGetProperty("mount_pos", out var mp) || mp.ValueKind != JsonValueKind.Array) continue;
+
+                        var list = new List<Vector3>(mp.GetArrayLength());
+                        foreach (var p in mp.EnumerateArray())
+                        {
+                            float px = p.TryGetProperty("x", out var xx) ? xx.GetSingle() : 0f;
+                            float py = p.TryGetProperty("y", out var yy) ? yy.GetSingle() : 0f;
+                            float pz = p.TryGetProperty("z", out var zz) ? zz.GetSingle() : 0f;
+                            list.Add(new Vector3(px, py, pz));
+                        }
+                        ym.Mounts[mountId] = list;
+                    }
+                }
 
                 meta.YawData[yaw] = ym;
             }

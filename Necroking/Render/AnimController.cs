@@ -3,6 +3,54 @@ using System.Collections.Generic;
 
 namespace Necroking.Render;
 
+// ═════════════════════════════════════════════════════════════════════════════
+//  Animation system — rules of the road
+// ═════════════════════════════════════════════════════════════════════════════
+//
+//  Two channels feed each unit per frame, resolved by AnimResolver into one
+//  state played by AnimController:
+//    1. RoutineAnim — what the AI/locomotion code wants (Idle, Walk, Feeding…).
+//    2. OverrideAnim — combat / hit-reacts / forced states (Death, Knockdown…).
+//
+//  Priority scale (higher always wins):
+//      0  Locomotion (Idle, Walk/Jog/Run)
+//      1  Action     (Sit, Sleep, Feeding, Carry)
+//      2  Combat     (Attack1-3, Dodge, BlockReact, hit reacts)
+//      3  Forced/Hold (Death, Fall, Knockdown, Stunned, Standup)
+//
+//  Construct requests via AnimRequest.Locomotion / Action / Combat / Forced /
+//  Hold — DO NOT pass raw Priority ints to AnimRequest.SetOverride. The factory
+//  methods enforce the priority/kind pairing.
+//
+//  OverrideKind controls lifecycle:
+//      OneShot   — auto-clears after the anim plays and controller leaves it.
+//      Hold      — caller-owned. Stays until SetOverride replaces it or owner
+//                  calls AnimResolver.ClearIfOwned(handle).
+//      TimedHold — Hold that auto-expires after Duration seconds.
+//
+//  Same-priority replacement: rejected unless the current override has actually
+//  started (OverrideStarted=true). This prevents a same-frame request from
+//  stealing a slot from a request queued one frame earlier.
+//
+//  CorpseInteractPhase (Unit.cs byte field) doubles as an animation event
+//  signal for the WorkRoutine / corpse-pickup state machines:
+//      0 = none, 1 = WorkStart, 2 = WorkLoop, 3 = WorkEnd, 4 = Pickup, 5 = PutDown
+//  The AI handler sets 1, waits for it to flip to 2 (Game1 promotes 1→2 once
+//  WorkStart PlayOnceHold finishes), runs the loop, sets 3, then Game1 promotes
+//  3→0 when WorkEnd's PlayOnceHold finishes. Game1 owns the 1→2 / 3→0
+//  transitions; if a code path exits the state machine early the phase can
+//  leak — callers must reset it explicitly (e.g. via WorkRoutine.Reset).
+//
+//  Gotchas worth knowing:
+//    • JustFinished is a ONE-FRAME edge flag — guard side-effects so they only
+//      fire once per anim completion (use a flag or transition state field).
+//    • Anim metadata missing effect_time_ms falls back to 50% of duration
+//      silently. Author effect_time for all attack/spell anims.
+//    • RequestState may queue to _pendingState if the current anim is locked
+//      in PlayOnceHold. Don't poll CurrentState immediately after.
+//
+// ═════════════════════════════════════════════════════════════════════════════
+
 public enum AnimState : byte
 {
     Idle = 0, Walk, Jog, Run,

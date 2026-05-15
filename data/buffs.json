@@ -789,6 +789,35 @@
       "hasWeaponParticle": false,
       "weaponParticle": null,
       "unitTint": null
+    },
+    {
+      "id": "buff_satiated",
+      "name": "Satiated",
+      "duration": 30,
+      "effects": [],
+      "maxStacks": 1,
+      "incapacitating": false,
+      "incapHoldAnim": "",
+      "incapRecoverAnim": "",
+      "incapRecoverTime": 0.8,
+      "incapHoldAtEnd": false,
+      "hasOrbital": false,
+      "orbital": null,
+      "hasGroundAura": false,
+      "groundAura": null,
+      "hasBehindEffect": false,
+      "behindEffect": null,
+      "hasFrontEffect": false,
+      "frontEffect": null,
+      "hasLightningAura": false,
+      "lightningAura": null,
+      "hasImageBehind": false,
+      "imageBehind": null,
+      "hasPulsingOutline": false,
+      "pulsingOutline": null,
+      "hasWeaponParticle": false,
+      "weaponParticle": null,
+      "unitTint": null
     }
   ]
 }

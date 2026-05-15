@@ -238,6 +238,12 @@ public class Unit
     public float BuildTimer;                // elapsed time during building
     public int CraftTableIdx = -1;          // env object index of the craft-table currently being channeled (-1 = none)
 
+    // Bush-work routine (Poison Berries ability). Set when the player initiates
+    // a bush-work action; cleared on completion or cancel.
+    public int BushWorkObjIdx = -1;         // env object index of the berry bush being worked on (-1 = none)
+    public string BushWorkBuffID = "";      // buff applied to the eater on consume (e.g. buff_poison_dot)
+    public string BushWorkItemID = "";      // inventory item consumed on successful completion (e.g. potion_poison)
+
     // Spawn/Raid/Patrol
     public int SpawnBuildingIdx = -1;
     public int RaidTargetIdx = -1;

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Necroking.Core;
 using Necroking.Movement;
 using Necroking.Render;
@@ -72,6 +73,18 @@ public class DeerHerdHandler : IArchetypeHandler
     private const float BushSearchRadius = 20f;
     private const float FeedingChance = 0.3f; // 30% chance to feed instead of roam
 
+    /// <summary>Distance bonus (in world units) used to score Poisoned-state
+    /// berry bushes as "closer" than they really are during foraging selection.
+    /// A poisoned bush this many units away ties with a fresh bush at 0u.
+    /// Lore: the deer sees them as ripest — can't smell the poison itself.</summary>
+    private const float PoisonedBushAttractBonus = 6f;
+
+    /// <summary>Multiplier on satiation tick-down while a poisoned berry bush
+    /// is within the deer's detection range. The "fresh scent" makes them
+    /// hungry again faster — 3x means a 30s satiation feels like 10s when a
+    /// freshly-poisoned bush is nearby.</summary>
+    private const float SatiationBuffPoisonedAccel = 3f;
+
     public void OnSpawn(ref AIContext ctx)
     {
         ctx.Units[ctx.UnitIndex].SpawnPosition = ctx.MyPos;
@@ -82,6 +95,7 @@ public class DeerHerdHandler : IArchetypeHandler
 
     public void Update(ref AIContext ctx)
     {
+        AcceleratePoisonedSatiation(ref ctx);
         EvaluateRoutine(ref ctx);
 
         switch (ctx.Routine)
@@ -94,6 +108,48 @@ public class DeerHerdHandler : IArchetypeHandler
             case RoutineFightBack:   UpdateFightBack(ref ctx); break;
             case RoutineFeeding:     UpdateFeeding(ref ctx); break;
         }
+    }
+
+    /// <summary>If a poisoned berry bush is within the deer's detection range,
+    /// drain the buff_satiated timer faster (multiplier on per-tick decay).
+    /// Compounds with #1 (poisoned bushes pulled toward higher-priority targets):
+    /// here we make the deer get hungry again sooner so it actually gets to the
+    /// foraging decision while the poisoned bush is still there. Skipped if the
+    /// deer has no satiation buff or no poisoned bush is near — zero cost in
+    /// the common case (the inner scan returns early on the first miss).</summary>
+    private static void AcceleratePoisonedSatiation(ref AIContext ctx)
+    {
+        var envSystem = ctx.EnvSystem;
+        if (envSystem == null) return;
+        var buffs = ctx.Units[ctx.UnitIndex].ActiveBuffs;
+        int satiatedIdx = -1;
+        for (int j = 0; j < buffs.Count; j++)
+            if (buffs[j].BuffDefID == "buff_satiated") { satiatedIdx = j; break; }
+        if (satiatedIdx < 0) return; // no satiation to accelerate
+
+        float detRange = ctx.Units[ctx.UnitIndex].DetectionRange;
+        if (detRange <= 0f) return;
+        float detRangeSq = detRange * detRange;
+        var myPos = ctx.MyPos;
+
+        bool anyPoisonedInRange = false;
+        for (int i = 0; i < envSystem.ObjectCount; i++)
+        {
+            var def = envSystem.Defs[envSystem.GetObject(i).DefIndex];
+            if (!def.IsBerryBush) continue;
+            var rt = envSystem.GetObjectRuntime(i);
+            if (!rt.Alive || rt.BerryState != World.BerryState.Poisoned) continue;
+            var obj = envSystem.GetObject(i);
+            float dx = obj.X - myPos.X, dy = obj.Y - myPos.Y;
+            if (dx * dx + dy * dy <= detRangeSq) { anyPoisonedInRange = true; break; }
+        }
+        if (!anyPoisonedInRange) return;
+
+        // Subtract the *extra* decay on top of the natural BuffSystem tick.
+        // (factor-1) × dt because the normal tick already takes 1× dt.
+        var b = buffs[satiatedIdx];
+        b.RemainingDuration -= ctx.Dt * (SatiationBuffPoisonedAccel - 1f);
+        buffs[satiatedIdx] = b;
     }
 
     private void EvaluateRoutine(ref AIContext ctx)
@@ -144,9 +200,11 @@ public class DeerHerdHandler : IArchetypeHandler
             return;
         }
 
-        // Alert detected → enter Alert routine (from idle/sleeping/feeding)
+        // Alert detected → enter Alert routine. Re-entering from Calming is
+        // important: a deer post-flee with a fresh threat walking back into
+        // detection should react, not stand there waiting out its calm timer.
         if (alert >= (byte)UnitAlertState.Alert &&
-            (ctx.Routine <= RoutineSleeping || ctx.Routine == RoutineFeeding))
+            (ctx.Routine <= RoutineSleeping || ctx.Routine == RoutineFeeding || ctx.Routine == RoutineCalming))
         {
             // If sleeping or sitting, need to standup first
             if (ctx.Routine == RoutineSleeping && ctx.Subroutine <= SleepAsleep)
@@ -593,22 +651,85 @@ public class DeerHerdHandler : IArchetypeHandler
     //  Routine: Feeding (walk to bush, eat, idle, repeat)
     // ═══════════════════════════════════════
 
-    /// <summary>Try to find a nearby bush and start feeding. Returns true if started.</summary>
+    /// <summary>Try to find a nearby berry bush and start feeding. Skipped
+    /// while the deer is satiated (buff_satiated active). Returns true if started.</summary>
     private static bool TryStartFeeding(ref AIContext ctx)
     {
         // Don't path back to a bush while a threat is loitering nearby.
         if (AnyHostileWithinScale(ref ctx, WaryBufferScale))
             return false;
 
-        Vec2 bushPos;
-        if (!FindNearbyBush(ref ctx, out bushPos))
+        // Recently ate — wait for the satiated buff to wear off.
+        if (HasSatiationBuff(ref ctx))
+            return false;
+
+        if (!FindNearbyBush(ref ctx, out var bushPos, out int bushIdx))
             return false;
 
         ctx.Routine = RoutineFeeding;
         ctx.Subroutine = FeedWalkToBush;
         ctx.SubroutineTimer = 0f;
         ctx.Units[ctx.UnitIndex].MoveTarget = bushPos;
+        ctx.Units[ctx.UnitIndex].BushWorkObjIdx = bushIdx;
         return true;
+    }
+
+    private static bool HasSatiationBuff(ref AIContext ctx)
+    {
+        var buffs = ctx.Units[ctx.UnitIndex].ActiveBuffs;
+        for (int i = 0; i < buffs.Count; i++)
+            if (buffs[i].BuffDefID == "buff_satiated") return true;
+        return false;
+    }
+
+    /// <summary>End of FeedEating: actually consume the targeted bush and apply
+    /// the resulting effect to the deer.
+    ///   • Vanilla berries  → buff_satiated (blocks foraging for ~60s).
+    ///   • Poisoned berries → the same full mechanic the thrown potion produces:
+    ///        - buff_poison_dot    → DamageSystem.Apply(10, Poison, ArmorNegating)
+    ///                                (PoisonStacks tick HP loss via TickPotionEffects)
+    ///        - buff_paralysis_slow → PotionSystem.ApplyParalysis (8s slow → 6s stun)
+    ///     The cosmetic buff is also applied so the unit tints + outlines match.
+    ///     No satiation when poisoned — the deer's behavior reads as "sick" instead
+    ///     of "full," and the slow/stun would lock foraging anyway.</summary>
+    private static void ConsumeBushAndApplyEffect(ref AIContext ctx)
+    {
+        int unitIdx = ctx.UnitIndex;
+        int bushIdx = ctx.Units[unitIdx].BushWorkObjIdx;
+        ctx.Units[unitIdx].BushWorkObjIdx = -1;
+        if (bushIdx < 0 || ctx.EnvSystem == null || ctx.GameData == null) return;
+
+        string? appliedBuffID = ctx.EnvSystem.ConsumeBerryBush(bushIdx);
+        if (appliedBuffID == null) return; // bush no longer eligible (eaten by someone else, destroyed, etc.)
+
+        if (string.IsNullOrEmpty(appliedBuffID))
+        {
+            // Vanilla berries — apply satiation marker buff.
+            var satDef = ctx.GameData.Buffs.Get("buff_satiated");
+            if (satDef != null)
+                GameSystems.BuffSystem.ApplyBuff(ctx.Units, unitIdx, satDef);
+            return;
+        }
+
+        // Tainted berries — run the full potion mechanic plus the cosmetic buff.
+        switch (appliedBuffID)
+        {
+            case "buff_poison_dot":
+            {
+                var events = ctx.DamageEvents ?? new List<GameSystems.DamageEvent>();
+                GameSystems.DamageSystem.Apply(ctx.Units, unitIdx, 10,
+                    GameSystems.DamageType.Poison,
+                    GameSystems.DamageFlags.ArmorNegating, events);
+                break;
+            }
+            case "buff_paralysis_slow":
+                Game.PotionSystem.ApplyParalysis(unitIdx, ctx.Units);
+                break;
+        }
+
+        var visualBuff = ctx.GameData.Buffs.Get(appliedBuffID);
+        if (visualBuff != null)
+            GameSystems.BuffSystem.ApplyBuff(ctx.Units, unitIdx, visualBuff);
     }
 
     private static void UpdateFeeding(ref AIContext ctx)
@@ -643,6 +764,7 @@ public class DeerHerdHandler : IArchetypeHandler
                 ctx.SubroutineTimer -= ctx.Dt;
                 if (ctx.SubroutineTimer <= 0f)
                 {
+                    ConsumeBushAndApplyEffect(ref ctx);
                     ctx.Subroutine = FeedIdleAfter;
                     ctx.SubroutineTimer = FeedIdleDuration;
                 }
@@ -661,13 +783,19 @@ public class DeerHerdHandler : IArchetypeHandler
                         SwitchToTimeOfDayRoutine(ref ctx);
                         break;
                     }
-                    // Try to find another bush nearby, otherwise return to roaming
-                    Vec2 nextBush;
-                    if (FindNearbyBush(ref ctx, out nextBush, minDist: 3f))
+                    // Deer with satiation can't immediately start another forage —
+                    // they fall back to roaming until the buff lapses.
+                    if (HasSatiationBuff(ref ctx))
+                    {
+                        SwitchToTimeOfDayRoutine(ref ctx);
+                        break;
+                    }
+                    if (FindNearbyBush(ref ctx, out var nextBush, out int nextIdx, minDist: 3f))
                     {
                         ctx.Subroutine = FeedWalkToBush;
                         ctx.SubroutineTimer = 0f;
                         ctx.Units[ctx.UnitIndex].MoveTarget = nextBush;
+                        ctx.Units[ctx.UnitIndex].BushWorkObjIdx = nextIdx;
                     }
                     else
                     {
@@ -679,11 +807,20 @@ public class DeerHerdHandler : IArchetypeHandler
         }
     }
 
-    /// <summary>Find a nearby bush within BushSearchRadius of spawn position.
-    /// Returns a pathable spot adjacent to the bush, not the bush center.</summary>
-    private static bool FindNearbyBush(ref AIContext ctx, out Vec2 feedSpot, float minDist = 0f)
+    /// <summary>Find a nearby berry bush (only) within BushSearchRadius of
+    /// the deer's spawn position whose runtime state has visible berries
+    /// (Berries or Poisoned — deer can't tell the difference). NoBerry bushes
+    /// and non-berry bushes are filtered out. Returns a pathable spot adjacent
+    /// to the bush and the bush's object index for downstream consumption.
+    ///
+    /// Poisoned bushes get a "ripe scent" bias: they're scored as if they were
+    /// <see cref="PoisonedBushAttractBonus"/> world units closer than their
+    /// actual distance. So a poisoned bush at 8u beats a normal bush at 5u.
+    /// The deer can't smell poison — they just prefer fresher-looking berries.</summary>
+    private static bool FindNearbyBush(ref AIContext ctx, out Vec2 feedSpot, out int bushIdx, float minDist = 0f)
     {
         feedSpot = Vec2.Zero;
+        bushIdx = -1;
         var envSystem = ctx.EnvSystem;
         if (envSystem == null) return false;
 
@@ -691,10 +828,10 @@ public class DeerHerdHandler : IArchetypeHandler
         float searchRadiusSq = BushSearchRadius * BushSearchRadius;
         float minDistSq = minDist * minDist;
 
-        float bestDist = float.MaxValue;
+        float bestScore = float.MaxValue;
         Vec2 bestBushPos = Vec2.Zero;
         float bestBushRadius = 0f;
-        bool found = false;
+        int bestIdx = -1;
 
         // Use a semi-random offset to avoid all deer targeting the same bush
         int offset = (ctx.UnitIndex * 37 + ctx.FrameNumber / 60) % Math.Max(envSystem.ObjectCount, 1);
@@ -705,7 +842,11 @@ public class DeerHerdHandler : IArchetypeHandler
             var obj = envSystem.GetObject(i);
             var def = envSystem.Defs[obj.DefIndex];
 
-            if (def.Category != "Bush") continue;
+            // Berry-bush only — plain bushes no longer attract deer.
+            if (!def.IsBerryBush) continue;
+            var rt = envSystem.GetObjectRuntime(i);
+            if (!rt.Alive) continue;
+            if (rt.BerryState == World.BerryState.NoBerry) continue;
 
             Vec2 objPos = new Vec2(obj.X, obj.Y);
 
@@ -716,16 +857,23 @@ public class DeerHerdHandler : IArchetypeHandler
             float distSq = (objPos - ctx.MyPos).LengthSq();
             if (distSq < minDistSq) continue;
 
-            if (distSq < bestDist)
+            // Score = distance, with a "ripe scent" subtraction for poisoned berries.
+            // Negative scores are clamped to 0 so adjacent bushes can't tie pathologically.
+            float score = MathF.Sqrt(distSq);
+            if (rt.BerryState == World.BerryState.Poisoned)
+                score = MathF.Max(0f, score - PoisonedBushAttractBonus);
+
+            if (score < bestScore)
             {
-                bestDist = distSq;
+                bestScore = score;
                 bestBushPos = objPos;
                 bestBushRadius = def.CollisionRadius * obj.Scale;
-                found = true;
+                bestIdx = i;
             }
         }
 
-        if (!found) return false;
+        if (bestIdx < 0) return false;
+        bushIdx = bestIdx;
 
         // Pick a spot just outside the bush that's actually pathable. The deer
         // can't stand inside the bush's collision radius, so the standoff has to
