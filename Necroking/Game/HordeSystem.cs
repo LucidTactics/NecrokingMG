@@ -17,7 +17,6 @@ public class HordeUnitData
     public HordeUnitState State = HordeUnitState.Following;
     public uint ChasingTarget = GameConstants.InvalidUnit;
     public float NoisePhase;
-    public float LeashCheckTimer;
 
     // Discrete slot offset — added to the Fibonacci slot position to break up the
     // uniform pattern. Stays constant between shifts so the unit's target tile is
@@ -30,7 +29,6 @@ public class HordeUnitData
 public class HordeSystem
 {
     private const float GoldenAngle = 2.39996322972865f; // pi * (3 - sqrt(5))
-    private const float CombatTickInterval = 2.0f;
     private static readonly Random _rng = new();
 
     private HordeSettings _settings = new();
@@ -79,12 +77,22 @@ public class HordeSystem
         : 0f;
 
     /// <summary>
-    /// Radius used for aggro scans and the chase-leash check — floored at
-    /// Settings.MinAggroRadius so a small horde (few minions) still reacts when
-    /// the necromancer walks near an enemy, instead of needing to be almost on
-    /// top of them. Formation/positioning uses EffectiveRadius unchanged.
+    /// Radius used for aggro scans — floored at Settings.MinAggroRadius so a
+    /// small horde (few minions) still reacts when the necromancer walks near
+    /// an enemy, instead of needing to be almost on top of them. Formation/
+    /// positioning uses EffectiveRadius unchanged.
     /// </summary>
     public float AggroRadius => MathF.Max(EffectiveRadius, _settings.MinAggroRadius);
+
+    /// <summary>Engagement band: how close an enemy has to be before the horde
+    /// engages it. Stacked on top of <see cref="EffectiveRadius"/> so the band
+    /// scales with horde size. Drawn as the orange F7 debug circle.</summary>
+    public float EngagementRange => EffectiveRadius + _settings.EngagementOffset;
+
+    /// <summary>Leash boundary: a chaser crossing this is force-returned to
+    /// its formation slot. Stacked on top of <see cref="EngagementRange"/>,
+    /// not configured directly. Drawn as the red F7 debug circle.</summary>
+    public float LeashRadius => EngagementRange + _settings.LeashOffset;
 
     public void Init(HordeSettings settings) { _settings = settings; }
 
@@ -98,7 +106,6 @@ public class HordeSystem
             UnitID = id,
             SlotIndex = slot,
             NoisePhase = (float)(_rng.Next(10000)) / 100f,
-            LeashCheckTimer = CombatTickInterval,
             DiscreteOffset = RandomShiftOffset(),
             // Stagger first shift so fresh units don't all re-roll on the same tick.
             NextShiftAt = _globalTime + RandomShiftInterval(),
@@ -313,35 +320,25 @@ public class HordeSystem
                         break;
                     }
 
-                    // Leash check: distance from horde slot
+                    // Leash check: minion past the horde's LeashRadius (= dynamic,
+                    // green + EngagementOffset + LeashOffset) force-returns. Previously
+                    // there were two thresholds (probabilistic soft return at 1× leash,
+                    // forced hard return at 1.5×); now consolidated into one because
+                    // the user wants a clear "cross the red circle → start returning"
+                    // rule with no fuzzy band beyond it.
                     Vec2 slotPos = ComputeSlotPosition(hu.SlotIndex);
                     float distToSlot = (units[idx].Position - slotPos).Length();
-
-                    // Hard leash: if way beyond leash radius, force return immediately
-                    if (distToSlot > _settings.LeashRadius * 1.5f)
+                    if (distToSlot > LeashRadius)
                     {
                         hu.State = HordeUnitState.Returning;
                         break;
                     }
 
-                    // Soft leash: probabilistic return check
-                    if (distToSlot > _settings.LeashRadius)
-                    {
-                        hu.LeashCheckTimer -= dt;
-                        if (hu.LeashCheckTimer <= 0f)
-                        {
-                            hu.LeashCheckTimer = CombatTickInterval;
-                            if ((float)_rng.NextDouble() < _settings.LeashChance)
-                            {
-                                hu.State = HordeUnitState.Returning;
-                                break;
-                            }
-                        }
-                    }
-
-                    // Check if any enemy still nearby
+                    // Check if any enemy still nearby (use the dynamic engagement
+                    // range so this scales with horde size, with a small 1.5× to
+                    // give a brief hysteresis after engagement starts).
                     nearbyIDs.Clear();
-                    qt.QueryRadiusByFaction(units[idx].Position, _settings.EngagementRange * 1.5f,
+                    qt.QueryRadiusByFaction(units[idx].Position, EngagementRange * 1.5f,
                         FactionMaskExt.AllExcept(Faction.Undead), nearbyIDs);
                     bool anyEnemy = false;
                     foreach (uint nid in nearbyIDs)

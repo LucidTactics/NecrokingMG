@@ -107,7 +107,17 @@ public class HordeMinionHandler : IArchetypeHandler
         // Still-engaged minions (InCombat=true) finish their swing cycle first
         // (UpdateEngaged will naturally transition to Returning when the target
         // leaves range or dies).
-        if (hordeState == HordeUnitState.Returning
+        //
+        // Following counts too: HordeSystem.UpdateStates flips Chasing→Following
+        // (not Returning) when the chase target leaves AggroRadius, expecting the
+        // minion to fall back. Without this branch the minion kept Chasing on its
+        // own until the hard leash break at `leashRadius * 1.5` — so between
+        // leashRadius and 1.5× a chaser dragged east of the necromancer would
+        // pursue a fleeing wild deer indefinitely.
+        bool hordeSaysGiveUp =
+            hordeState == HordeUnitState.Returning
+            || hordeState == HordeUnitState.Following;
+        if (hordeSaysGiveUp
             && (ctx.Routine == RoutineChasing
                 || (ctx.Routine == RoutineEngaged && !ctx.Units[ctx.UnitIndex].InCombat)))
         {
@@ -136,7 +146,7 @@ public class HordeMinionHandler : IArchetypeHandler
 
         // No target — scan for enemies within engagement range.
         {
-            float engageRange = ctx.Horde?.Settings.EngagementRange ?? 10f;
+            float engageRange = ctx.Horde?.EngagementRange ?? 10f;
             int enemy = SubroutineSteps.FindClosestEnemy(ref ctx, engageRange);
             if (enemy >= 0)
             {
@@ -192,7 +202,7 @@ public class HordeMinionHandler : IArchetypeHandler
     private static void UpdateChasing(ref AIContext ctx)
     {
         // Canonical chase-exit checks (dead target → Return, leash break → Return).
-        float leash = ctx.Horde?.Settings.LeashRadius ?? 0f;
+        float leash = ctx.Horde?.LeashRadius ?? 0f;
         Vec2 center = ctx.Horde?.CircleCenter ?? Vec2.Zero;
         if (CombatTransitions.StandardChasingExits(ref ctx, RoutineReturning, leash, center))
             return;
@@ -219,7 +229,7 @@ public class HordeMinionHandler : IArchetypeHandler
         //   - target dead → Returning (or Chasing if frenzied with another target)
         //   - target alive but out of melee (>1.2× range) → Chasing
         //   - leashed too far from horde center → Returning
-        float leash = ctx.Horde?.Settings.LeashRadius ?? 0f;
+        float leash = ctx.Horde?.LeashRadius ?? 0f;
         Vec2 center = ctx.Horde?.CircleCenter ?? Vec2.Zero;
         if (CombatTransitions.StandardEngagedExits(ref ctx,
                 chasingRoutine: RoutineChasing,

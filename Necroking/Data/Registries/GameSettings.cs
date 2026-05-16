@@ -122,14 +122,22 @@ public class HordeSettings
     [JsonPropertyName("driftHz")] public float DriftHz { get; set; } = 0.2f;
     [JsonPropertyName("driftAmplitude")] public float DriftAmplitude { get; set; } = 0.7f;
     [JsonPropertyName("idleRadius")] public float IdleRadius { get; set; } = 2.0f;
-    [JsonPropertyName("engagementRange")] public float EngagementRange { get; set; } = 10.0f;
-    [JsonPropertyName("leashRadius")] public float LeashRadius { get; set; } = 25.0f;
-    /// <summary>Floor on the effective horde radius used for aggro scans + chase leash.
+    /// <summary>How far past EffectiveRadius (the green formation circle) the
+    /// horde will engage incoming enemies — the orange F7 debug circle is at
+    /// `EffectiveRadius + EngagementOffset`. Static absolute ranges were
+    /// replaced with offsets so the engagement + leash bands scale with the
+    /// horde as it grows; previously a 30-unit horde had its leash *inside*
+    /// its own formation.</summary>
+    [JsonPropertyName("engagementOffset")] public float EngagementOffset { get; set; } = 10.0f;
+    /// <summary>How far past the engagement circle the leash extends. The red
+    /// F7 debug circle is at `EngagementRange + LeashOffset`. A chasing minion
+    /// that crosses this is force-returned to its formation slot.</summary>
+    [JsonPropertyName("leashOffset")] public float LeashOffset { get; set; } = 10.0f;
+    /// <summary>Floor on the effective horde radius used for aggro scans.
     /// Formation/positioning still uses the raw √N EffectiveRadius; this only kicks in
     /// so a small horde (few minions) can still aggro things as the necromancer walks
     /// near them instead of needing to be almost on top of them.</summary>
     [JsonPropertyName("minAggroRadius")] public float MinAggroRadius { get; set; } = 10.0f;
-    [JsonPropertyName("leashChance")] public float LeashChance { get; set; } = 0.25f;
     [JsonPropertyName("returnSpeedMult")] public float ReturnSpeedMult { get; set; } = 0.65f;
     [JsonPropertyName("velocityDirLerp")] public float VelocityDirLerp { get; set; } = 6.0f;
 }

@@ -31,8 +31,8 @@
     "minBladeWidth": true
   },
   "weather": {
-    "enabled": false,
-    "activePreset": "thunderstorm",
+    "enabled": true,
+    "activePreset": "dreary_rain",
     "transitionSpeed": 1
   },
   "dayNight": {
@@ -93,10 +93,9 @@
     "driftHz": 0.2,
     "driftAmplitude": 0.7,
     "idleRadius": 2,
-    "engagementRange": 10,
-    "leashRadius": 25,
+    "engagementOffset": 10,
+    "leashOffset": 10,
     "minAggroRadius": 10,
-    "leashChance": 0.25,
     "returnSpeedMult": 0.65,
     "velocityDirLerp": 6
   },
@@ -112,7 +111,7 @@
     "roundDuration": 3
   },
   "fogOfWar": {
-    "mode": 2,
+    "mode": 1,
     "defaultSightRange": 10,
     "unexploredAlpha": 1,
     "foggedAlpha": 0.7
@@ -170,6 +169,10 @@
     },
     {
       "itemId": "Toadstool",
+      "quantity": 10
+    },
+    {
+      "itemId": "Log",
       "quantity": 10
     }
   ]

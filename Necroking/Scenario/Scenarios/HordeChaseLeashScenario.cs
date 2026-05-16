@@ -71,7 +71,7 @@ public class HordeChaseLeashScenario : ScenarioBase
 
         var m = sim.Units[mIdx];
         float distToCenter = (m.Position - sim.Horde.CircleCenter).Length();
-        float leash = sim.Horde.Settings.LeashRadius;
+        float leash = sim.Horde.LeashRadius;
 
         if (_elapsed % 1f < dt)
         {
@@ -83,7 +83,11 @@ public class HordeChaseLeashScenario : ScenarioBase
 
         if (_elapsed > 10f)
         {
-            if (distToCenter > leash * 2f && (m.Routine == 1 || m.Routine == 2))
+            // Was `leash * 2f` from when the break threshold was leash × 1.5
+            // with a safety margin. Leash break now fires at exactly leash, so
+            // anything past leash * 1.2 (small margin for one tick of lag) and
+            // still chasing means the break failed.
+            if (distToCenter > leash * 1.2f && (m.Routine == 1 || m.Routine == 2))
             {
                 _fail = true;
                 _failReason = $"After 10s minion is {distToCenter:F1}u from center "

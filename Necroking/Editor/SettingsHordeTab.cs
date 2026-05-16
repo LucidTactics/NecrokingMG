@@ -50,16 +50,17 @@ public static class SettingsHordeTab
         curY += 4;
         DrawSectionHeader(ui, "Combat AI", x, ref curY, w);
 
-        s.EngagementRange = ui.DrawFloatField("horde_engagementRange", "Engagement Range", s.EngagementRange, x, curY, w, 0.5f);
+        // Orange (engagement) and red (leash) F7 circles are stacked offsets
+        // on top of the green EffectiveRadius — so they scale with the horde
+        // and the absolute values aren't editable anymore. Direct EngagementRange
+        // and LeashRadius fields were removed; tune via these offsets instead.
+        s.EngagementOffset = ui.DrawFloatField("horde_engagementOffset", "Engagement Offset (over Effective)", s.EngagementOffset, x, curY, w, 0.5f);
+        curY += RowH;
+
+        s.LeashOffset = ui.DrawFloatField("horde_leashOffset", "Leash Offset (over Engagement)", s.LeashOffset, x, curY, w, 0.5f);
         curY += RowH;
 
         s.MinAggroRadius = ui.DrawFloatField("horde_minAggroRadius", "Min Aggro Radius", s.MinAggroRadius, x, curY, w, 0.5f);
-        curY += RowH;
-
-        s.LeashRadius = ui.DrawFloatField("horde_leashRadius", "Leash Radius", s.LeashRadius, x, curY, w, 0.5f);
-        curY += RowH;
-
-        s.LeashChance = ui.DrawFloatField("horde_leashChance", "Leash Chance", s.LeashChance, x, curY, w, 0.05f);
         curY += RowH;
 
         s.ReturnSpeedMult = ui.DrawFloatField("horde_returnSpeedMult", "Return Speed Mult", s.ReturnSpeedMult, x, curY, w, 0.05f);

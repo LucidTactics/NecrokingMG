@@ -1204,7 +1204,7 @@ public class Simulation
                     {
                         if (inHorde)
                         {
-                            int nearby = FindClosestEnemy(i, _horde.Settings.EngagementRange);
+                            int nearby = FindClosestEnemy(i, _horde.EngagementRange);
                             _units[i].Target = nearby >= 0 ? CombatTarget.Unit(_units[nearby].Id) : CombatTarget.None;
                         }
                         else

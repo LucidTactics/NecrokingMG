@@ -5037,11 +5037,13 @@ public class Game1 : Microsoft.Xna.Framework.Game
         var iconAnim = bodyBagSprite.GetAnim("Icon");
         if (iconAnim == null) return default;
 
-        // Resolve facing angle to sprite angle + flip using AnimController's angle sectors
-        var tmpCtrl = new AnimController();
-        int spriteAngle = tmpCtrl.ResolveAngle(facingAngle, out bool flipX);
+        // Use the static angle resolver so the body-bag picks the right scheme
+        // (Old 30/60/300 vs New 0/45/90/270/315) from what's actually authored
+        // in this anim. A throwaway AnimController without Init defaults to
+        // Old, which silently misses on the now-new-scheme Corpses atlas.
+        int spriteAngle = AnimController.ResolveAngleFor(iconAnim, facingAngle, out bool flipX);
 
-        var kfs = iconAnim.GetAngle(spriteAngle) ?? iconAnim.GetAngle(30);
+        var kfs = iconAnim.GetAngle(spriteAngle);
         if (kfs == null || kfs.Count == 0) return default;
 
         return new FrameResult { Frame = kfs[0].Frame, FlipX = flipX };
@@ -5331,13 +5333,13 @@ public class Game1 : Microsoft.Xna.Framework.Game
         _debugDraw.DrawCircle(_spriteBatch, _renderer, _camera,
             horde.CircleCenter, horde.EffectiveRadius, new Color(100, 200, 100, 120));
 
-        // Engagement range
+        // Engagement range (orange) — dynamic: green + EngagementOffset
         _debugDraw.DrawCircle(_spriteBatch, _renderer, _camera,
-            horde.CircleCenter, settings.EngagementRange, new Color(255, 200, 80, 80));
+            horde.CircleCenter, horde.EngagementRange, new Color(255, 200, 80, 80));
 
-        // Leash radius
+        // Leash radius (red) — dynamic: orange + LeashOffset
         _debugDraw.DrawCircle(_spriteBatch, _renderer, _camera,
-            horde.CircleCenter, settings.LeashRadius, new Color(255, 80, 80, 60));
+            horde.CircleCenter, horde.LeashRadius, new Color(255, 80, 80, 60));
 
         // Formation facing arrow
         var facingDir = new Vec2(MathF.Cos(horde.CircleFacing), MathF.Sin(horde.CircleFacing));
@@ -5761,7 +5763,15 @@ public class Game1 : Microsoft.Xna.Framework.Game
             && (cPhase == 0 || cPhase == 4 || cPhase == 5);
         // Use the same angle resolution as sprite rendering to determine front/back
         int sprAngle = animData.Ctrl.ResolveAngle(_sim.Units[i].FacingAngle, out _);
-        bool facingAway = sprAngle == 300; // sprite angle 300 = back view
+        // facingAway = the unit's back is toward the camera (NE / N / NW), so
+        // the carried corpse should render *behind* the sprite. Determined by
+        // the world facing angle (NOT the resolved sprite angle), so the
+        // check works for both the old 30/60/300 atlases and the new-scheme
+        // 0/45/90/270/315 atlases. With Y-down world coords:
+        //   0=E, 90=S, 180=W, 270=N. The "behind" half is NW..N..NE, i.e.
+        //   roughly 202.5° to 337.5°.
+        float facingDeg = ((_sim.Units[i].FacingAngle % 360f) + 360f) % 360f;
+        bool facingAway = facingDeg >= 202.5f && facingDeg < 337.5f;
         bool drawBagAtHilt = false; // whether to draw on unit (vs at ground)
 
         if (hasCorpse && !tableBoundPutdown)

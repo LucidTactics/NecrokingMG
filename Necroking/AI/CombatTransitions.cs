@@ -89,11 +89,13 @@ public static class CombatTransitions
             }
         }
 
-        // Leash
+        // Leash — fire exactly at leashRadius (the red F7 circle). The earlier
+        // `× 1.5` headroom was removed: the user wants "cross the leash → return"
+        // semantics with no fuzzy band beyond the visible boundary.
         if (leashRadius > 0f && !frenzied)
         {
             float distToCenter = (ctx.MyPos - leashCenter).Length();
-            if (distToCenter > leashRadius * 1.5f)
+            if (distToCenter > leashRadius)
             {
                 ctx.Routine = returningRoutine;
                 ctx.Units[ctx.UnitIndex].Target = CombatTarget.None;
@@ -138,7 +140,7 @@ public static class CombatTransitions
         if (leashRadius > 0f && !frenzied)
         {
             float distToCenter = (ctx.MyPos - leashCenter).Length();
-            if (distToCenter > leashRadius * 1.5f)
+            if (distToCenter > leashRadius)
             {
                 ctx.Routine = returningRoutine;
                 ctx.Units[ctx.UnitIndex].Target = CombatTarget.None;
@@ -146,7 +148,7 @@ public static class CombatTransitions
                 ctx.Units[ctx.UnitIndex].PendingAttack = CombatTarget.None;
                 ctx.Units[ctx.UnitIndex].PostAttackTimer = 0f;
                 DebugLog.Log("horde_aggro",
-                    $"  [unit {ctx.MyId}] leash break while chasing: distToCenter={distToCenter:F1} > leash*1.5={leashRadius * 1.5f:F1}");
+                    $"  [unit {ctx.MyId}] leash break while chasing: distToCenter={distToCenter:F1} > leash={leashRadius:F1}");
                 return true;
             }
         }

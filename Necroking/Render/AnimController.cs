@@ -725,6 +725,49 @@ public class AnimController
         return _resolvedFallbackAngle;
     }
 
+    /// <summary>
+    /// Resolve a world facing angle to (sprite angle, flipX) for an animation
+    /// whose authored angles aren't known up front. Auto-detects the angle
+    /// scheme from <paramref name="anim"/> — presence of any new-scheme key
+    /// (0/45/90/270/315) switches the resolution to NewSectors.
+    ///
+    /// Use this for one-off lookups where there's no AnimController instance
+    /// to call <see cref="ResolveAngle"/> on — e.g. the body-bag (Corpses
+    /// atlas) doesn't get its own controller, and after the atlas migrated
+    /// from old-scheme angles to new-scheme angles the previous "spin up a
+    /// throwaway controller" path silently returned old-scheme angles and
+    /// every lookup missed.
+    /// </summary>
+    public static int ResolveAngleFor(AnimationData anim, float angleDeg, out bool flipX)
+    {
+        bool newScheme = false;
+        int fallback = 30;
+        foreach (var (a, _) in anim.AngleFrames)
+        {
+            if (a == 0 || a == 45 || a == 90 || a == 270 || a == 315) { newScheme = true; break; }
+        }
+        if (newScheme)
+        {
+            int[] prefs = { 0, 45, 315, 90, 270 };
+            foreach (var p in prefs) { if (anim.GetAngle(p) is { Count: > 0 }) { fallback = p; break; } }
+        }
+        else
+        {
+            int[] prefs = { 30, 60, 300 };
+            foreach (var p in prefs) { if (anim.GetAngle(p) is { Count: > 0 }) { fallback = p; break; } }
+        }
+
+        angleDeg = ((angleDeg % 360f) + 360f) % 360f;
+        if (angleDeg >= 337.5f) angleDeg -= 360f;
+        var sectors = newScheme ? NewSectors : OldSectors;
+        foreach (var (min, max, angle, flip) in sectors)
+        {
+            if (angleDeg >= min && angleDeg < max) { flipX = flip; return angle; }
+        }
+        flipX = false;
+        return fallback;
+    }
+
     // --- Action moment ---
     // Consumers use the single-frame edge flag JustHitEffectFrame (set in Update,
     // cleared at the top of the next Update). The old ConsumeActionMoment method
@@ -736,7 +779,18 @@ public class AnimController
         int effectMs = GetEffectiveEffectTimeMs();
         if (effectMs > 0) return _animTime >= effectMs;
 
-        // Fallback: 50% of total ticks
+        // Fallback: 50% of total duration. Must match the Update() path, which
+        // chose `totalMs * 0.5f` when the anim plays in ms mode (animationmeta
+        // time_ms[] present). Falling back to TotalTicks() here made the
+        // action moment fire after a handful of ms on ms-driven anims like
+        // Pickup/PutDown — _animTime accumulates in ms there, while
+        // TotalTicks() returns the last keyframe tick number (~68), so the
+        // comparison `_animTime >= 34` triggered on frame 1 and made the
+        // carried corpse snap to/from the hand immediately instead of at
+        // mid-anim.
+        int totalMs = GetEffectiveTotalDurationMs();
+        if (totalMs > 0) return _animTime >= totalMs * 0.5f;
+
         if (_resolvedAnim != null)
         {
             int total = _resolvedAnim.TotalTicks();

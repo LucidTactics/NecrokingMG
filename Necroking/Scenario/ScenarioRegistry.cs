@@ -97,6 +97,8 @@ public static class ScenarioRegistry
         Register("wolf_retarget", () => new Scenarios.WolfRetargetScenario());
         Register("craft_table", () => new Scenarios.CraftTableScenario());
         Register("weapon_attach_debug", () => new Scenarios.WeaponAttachDebugScenario());
+        Register("corpse_carry_depth", () => new Scenarios.CorpseCarryDepthScenario());
+        Register("zombie_deer_leash", () => new Scenarios.ZombieDeerLeashScenario());
     }
 
     public static void Register(string name, Func<ScenarioBase> creator)
