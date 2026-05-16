@@ -79,11 +79,17 @@ public class DeerHerdHandler : IArchetypeHandler
     /// Lore: the deer sees them as ripest — can't smell the poison itself.</summary>
     private const float PoisonedBushAttractBonus = 6f;
 
+    /// <summary>Multiplier on the deer's detection range used specifically
+    /// for "poisoned bush nearby → speed up appetite" — wider than the
+    /// alert/flee detection so the scent reaches deer further away than they
+    /// can spot a threat. 3× of a 12-tile deer = 36 tile poisoned-bush radius.</summary>
+    private const float PoisonedSatiationRangeScale = 3f;
+
     /// <summary>Multiplier on satiation tick-down while a poisoned berry bush
-    /// is within the deer's detection range. The "fresh scent" makes them
-    /// hungry again faster — 3x means a 30s satiation feels like 10s when a
+    /// is within the poisoned-detection range. The "fresh scent" makes them
+    /// hungry again faster — 6x means a 30s satiation drains in 5s when a
     /// freshly-poisoned bush is nearby.</summary>
-    private const float SatiationBuffPoisonedAccel = 3f;
+    private const float SatiationBuffPoisonedAccel = 6f;
 
     public void OnSpawn(ref AIContext ctx)
     {
@@ -127,7 +133,9 @@ public class DeerHerdHandler : IArchetypeHandler
             if (buffs[j].BuffDefID == "buff_satiated") { satiatedIdx = j; break; }
         if (satiatedIdx < 0) return; // no satiation to accelerate
 
-        float detRange = ctx.Units[ctx.UnitIndex].DetectionRange;
+        // Use a wider radius than alert/flee detection — the appetite-trigger
+        // scent reaches further than a deer's visual threat awareness.
+        float detRange = ctx.Units[ctx.UnitIndex].DetectionRange * PoisonedSatiationRangeScale;
         if (detRange <= 0f) return;
         float detRangeSq = detRange * detRange;
         var myPos = ctx.MyPos;

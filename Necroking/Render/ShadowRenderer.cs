@@ -318,12 +318,42 @@ public class ShadowRenderer
 
             if (def.ShadowType == 1)
             {
-                // Diffuse ellipse — simple oval at feet using the glow texture
-                float ellipseW = destW * 0.7f;
-                float ellipseH = ellipseW * 0.4f * camera.YRatio;
-                DrawShadowQuad(device, glowTex ?? tex, feetSp.X, feetSp.Y,
-                    ellipseW * 0.5f, ellipseW * 0.5f, ellipseH, 0f, 0f,
-                    0f, 0f, 1f, 1f, shadowColor);
+                // Diffuse ellipse — flat oval *centered* on the feet point,
+                // not extruded upward like the sprite-projection path. The
+                // shader-path DrawShadowQuad otherwise puts the quad's bottom
+                // at feetY which is correct for a standing silhouette but
+                // wrong for a ground decal — the radial-glow center ends up
+                // floating half its height above the object. Compensated by
+                // shifting feetY down by ellipseH/2 so the quad spans
+                // [feetY - H/2, feetY + H/2].
+                //
+                // Stacked outer + inner pass so the centre reads darker than
+                // a single soft glow at the same opacity — matches the
+                // non-shader DrawEllipseShadows layering and gets the shadow
+                // out of "barely visible" territory.
+                //
+                // Per-def scale factors let individual objects tune their own
+                // shadow size + darkness on top of the global Settings.Shadow.
+                // Outer is the wide soft halo, inner is the darker core.
+                float baseW = destW * 0.7f;
+                float baseH = baseW * 0.4f * camera.YRatio;
+                float outerW = baseW * def.ShadowOuterWScale;
+                float outerH = baseH * def.ShadowOuterHScale;
+                float innerW = baseW * def.ShadowInnerWScale;
+                float innerH = baseH * def.ShadowInnerHScale;
+                float opacity = shadow.Opacity * def.ShadowOpacityScale;
+                byte outerA = (byte)Math.Clamp(opacity * 255f * 1.6f, 0, 255);
+                byte innerA = (byte)Math.Clamp(opacity * 255f * 1.2f, 0, 255);
+                var outerC = new Color((byte)0, (byte)0, (byte)0, outerA);
+                var innerC = new Color((byte)0, (byte)0, (byte)0, innerA);
+                DrawShadowQuad(device, glowTex ?? tex,
+                    feetSp.X, feetSp.Y + outerH * 0.5f,
+                    outerW * 0.5f, outerW * 0.5f, outerH, 0f, 0f,
+                    0f, 0f, 1f, 1f, outerC);
+                DrawShadowQuad(device, glowTex ?? tex,
+                    feetSp.X, feetSp.Y + innerH * 0.5f,
+                    innerW * 0.5f, innerW * 0.5f, innerH, 0f, 0f,
+                    0f, 0f, 1f, 1f, innerC);
             }
             else
             {

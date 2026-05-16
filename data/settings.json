@@ -32,7 +32,7 @@
   },
   "weather": {
     "enabled": true,
-    "activePreset": "dreary_rain",
+    "activePreset": "clear",
     "transitionSpeed": 1
   },
   "dayNight": {

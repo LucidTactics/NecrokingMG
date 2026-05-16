@@ -61,6 +61,11 @@ public class EnvObjectEditorWindow
     private int _previewDefIdx = -1;
     private string _previewTexPath = "";
 
+    // Lazily-built radial glow used to render diffuse-ellipse shadows in the
+    // preview the same way ShadowRenderer renders them in-game. Generated on
+    // first use so we don't need to plumb _glowTex through the editor chain.
+    private Texture2D? _glowTex;
+
     // Cached preview layout (set during DrawPreviewPanel, used by HandleCollisionDrag / HandlePivotDrag)
     private int _pvDrawX, _pvDrawY, _pvDrawW, _pvDrawH;
     private float _pvScale;
@@ -479,14 +484,21 @@ public class EnvObjectEditorWindow
             _pvDrawH = drawH;
             _pvScale = scale;
 
+            // Pivot position in screen pixels (computed before sprite draw so the
+            // shadow can anchor to it). The pivot is the object's ground-contact
+            // point; in-game ShadowRenderer projects shadows from this point.
+            float pivotPxX = drawX + def.PivotX * drawW;
+            float pivotPxY = drawY + def.PivotY * drawH;
+
+            // Shadow pass — drawn BEFORE the sprite so it sits underneath.
+            // Matches the in-game render order (ShadowRenderer runs before
+            // DrawSingleEnvObject).
+            DrawPreviewShadow(def, tex, srcRect, drawX, drawY, drawW, drawH, pivotPxX, pivotPxY);
+
             _sb.Draw(tex, new Rectangle(drawX, drawY, drawW, drawH), srcRect, Color.White);
 
             // Scale factor: pixels per world-unit (incorporates def.Scale for correct relative sizing)
             float pixPerWorld = drawH / MathF.Max(def.SpriteWorldHeight * def.Scale, 0.01f);
-
-            // Pivot position in screen pixels
-            float pivotPxX = drawX + def.PivotX * drawW;
-            float pivotPxY = drawY + def.PivotY * drawH;
 
             // --- Draw pivot crosshair ---
             DrawPivotCrosshair(pivotPxX, pivotPxY);
@@ -580,6 +592,108 @@ public class EnvObjectEditorWindow
         DrawLine(new Vector2(px, py - armLen), new Vector2(px, py + armLen), PivotColor);
         // Small filled center
         _ui.DrawRect(new Rectangle((int)px - 1, (int)py - 1, 3, 3), PivotColor);
+    }
+
+    /// <summary>
+    /// Mirror the in-game ShadowRenderer for the preview: same ellipse + sprite
+    /// projection math, scaled to the preview's pixel space. Pivot screen
+    /// position is the "feet" anchor (= world ground contact). Settings.Shadow
+    /// values are hard-coded to the defaults here since the editor isn't wired
+    /// to a live <see cref="GameData"/>; if the user tunes the global shadow
+    /// settings the preview won't reflect it, but the per-def tuning IS
+    /// reflected.
+    /// </summary>
+    private void DrawPreviewShadow(EnvironmentObjectDef def, Texture2D tex, Rectangle? srcRect,
+        int drawX, int drawY, int drawW, int drawH, float pivotPxX, float pivotPxY)
+    {
+        if (def.ShadowType == 2) return; // None
+
+        // Defaults match data/settings.json ShadowSettings — opacity/lengthScale/squash.
+        const float sOpacity = 0.35f;
+        const float sLengthScale = 0.6f;
+        const float sSquash = 0.3f;
+        const float sSunAngle = 225f;
+        // Mimic the in-game camera Y-foreshortening so the preview ellipse
+        // reads like the angled top-down view rather than head-on.
+        const float yRatio = 0.5f;
+
+        if (def.ShadowType == 1)
+        {
+            EnsureGlowTex();
+            if (_glowTex == null) return;
+
+            // destW analog for preview is the sprite's rendered width.
+            float baseW = drawW * 0.7f;
+            float baseH = baseW * 0.4f * yRatio;
+            float outerW = baseW * def.ShadowOuterWScale;
+            float outerH = baseH * def.ShadowOuterHScale;
+            float innerW = baseW * def.ShadowInnerWScale;
+            float innerH = baseH * def.ShadowInnerHScale;
+            float opacity = sOpacity * def.ShadowOpacityScale;
+            byte outerA = (byte)System.Math.Clamp(opacity * 255f * 1.6f, 0f, 255f);
+            byte innerA = (byte)System.Math.Clamp(opacity * 255f * 1.2f, 0f, 255f);
+            var outerC = new Color((byte)0, (byte)0, (byte)0, outerA);
+            var innerC = new Color((byte)0, (byte)0, (byte)0, innerA);
+
+            _sb.Draw(_glowTex,
+                new Rectangle((int)(pivotPxX - outerW * 0.5f), (int)(pivotPxY - outerH * 0.5f),
+                              (int)outerW, (int)outerH),
+                outerC);
+            _sb.Draw(_glowTex,
+                new Rectangle((int)(pivotPxX - innerW * 0.5f), (int)(pivotPxY - innerH * 0.5f),
+                              (int)innerW, (int)innerH),
+                innerC);
+            return;
+        }
+
+        // ShadowType == 0: sprite projection. The in-game renderer skews the
+        // sprite into a parallelogram with BasicEffect, which requires
+        // ending the SpriteBatch — risky in the editor where the scissor
+        // state set by EditorBase wrappers would be lost. Approximate with
+        // SpriteBatch.Draw using rotation + Y-squash + bottom-pivot, which
+        // captures the lean direction and squash close enough for tuning.
+        byte alpha = (byte)System.Math.Clamp(sOpacity * 255f, 0, 255);
+        var shadowColor = new Color((byte)0, (byte)0, (byte)0, alpha);
+
+        float sunRad = sSunAngle * MathF.PI / 180f;
+        // Lean angle: how far the top of the shadow tilts away from vertical
+        // toward the sun direction. atan2(sdx, lengthScale) gives the slope
+        // of the parallelogram's side edge in 2D.
+        float leanAngle = MathF.Atan2(MathF.Cos(sunRad) * sLengthScale,
+                                      1f - MathF.Sin(sunRad) * sLengthScale * yRatio);
+        // Y-squash: vertical compression representing the camera angle +
+        // the configured Squash setting.
+        float yScale = sSquash;
+
+        int texW = srcRect?.Width ?? tex.Width;
+        int texH = srcRect?.Height ?? tex.Height;
+        // Bottom-pivot origin so the sprite rotates around the feet point.
+        var origin = new Vector2(texW * def.PivotX, texH);
+        // Scale: match the on-screen sprite's X size; Y compressed by yScale.
+        float baseScale = drawW / (float)texW;
+        var posVec = new Vector2(pivotPxX, pivotPxY);
+        _sb.Draw(tex, posVec, srcRect, shadowColor, leanAngle, origin,
+                 new Vector2(baseScale, baseScale * yScale),
+                 SpriteEffects.None, 0f);
+    }
+
+    private void EnsureGlowTex()
+    {
+        if (_glowTex != null) return;
+        _glowTex = new Texture2D(_device, 64, 64);
+        var data = new Color[64 * 64];
+        for (int gy = 0; gy < 64; gy++)
+            for (int gx = 0; gx < 64; gx++)
+            {
+                float dx = (gx - 31.5f) / 31.5f;
+                float dy = (gy - 31.5f) / 31.5f;
+                float dist = MathF.Sqrt(dx * dx + dy * dy);
+                float alpha = MathF.Max(0f, 1f - dist);
+                alpha *= alpha; // quadratic falloff, same as Game1._glowTex
+                byte a = (byte)(alpha * 255);
+                data[gy * 64 + gx] = new Color(a, a, a, a); // premultiplied
+            }
+        _glowTex.SetData(data);
     }
 
     /// <summary>Update hover flags for collision center / edge.</summary>
@@ -1193,6 +1307,33 @@ public class EnvObjectEditorWindow
             if (shadowTypes[si] == newShadow && si != def.ShadowType) def.ShadowType = si;
         curY += RowH;
 
+        // Diffuse-ellipse only: per-def darkness + inner/outer scale. The base
+        // size + opacity come from Settings.Shadow; these are multipliers on
+        // top so each object can dial in a tighter/wider, lighter/darker
+        // ground decal without changing the global setting.
+        if (def.ShadowType == 1)
+        {
+            float newOp = _ui.DrawFloatField("envdef_shadowOpacityScale", "  Shadow Opacity x", def.ShadowOpacityScale, fx, curY, fieldW, 0.05f);
+            if (MathF.Abs(newOp - def.ShadowOpacityScale) > 0.001f) def.ShadowOpacityScale = newOp;
+            curY += RowH;
+
+            float newOW = _ui.DrawFloatField("envdef_shadowOuterW", "  Outer Width x", def.ShadowOuterWScale, fx, curY, fieldW, 0.1f);
+            if (MathF.Abs(newOW - def.ShadowOuterWScale) > 0.001f) def.ShadowOuterWScale = newOW;
+            curY += RowH;
+
+            float newOH = _ui.DrawFloatField("envdef_shadowOuterH", "  Outer Height x", def.ShadowOuterHScale, fx, curY, fieldW, 0.1f);
+            if (MathF.Abs(newOH - def.ShadowOuterHScale) > 0.001f) def.ShadowOuterHScale = newOH;
+            curY += RowH;
+
+            float newIW = _ui.DrawFloatField("envdef_shadowInnerW", "  Inner Width x", def.ShadowInnerWScale, fx, curY, fieldW, 0.1f);
+            if (MathF.Abs(newIW - def.ShadowInnerWScale) > 0.001f) def.ShadowInnerWScale = newIW;
+            curY += RowH;
+
+            float newIH = _ui.DrawFloatField("envdef_shadowInnerH", "  Inner Height x", def.ShadowInnerHScale, fx, curY, fieldW, 0.1f);
+            if (MathF.Abs(newIH - def.ShadowInnerHScale) > 0.001f) def.ShadowInnerHScale = newIH;
+            curY += RowH;
+        }
+
         curY += 4;
 
         // --- Section: Building ---
@@ -1605,6 +1746,11 @@ public class EnvObjectEditorWindow
             Cost2Amount = src.Cost2Amount,
             PlacementRadius = src.PlacementRadius,
             ShadowType = src.ShadowType,
+            ShadowOpacityScale = src.ShadowOpacityScale,
+            ShadowOuterWScale = src.ShadowOuterWScale,
+            ShadowOuterHScale = src.ShadowOuterHScale,
+            ShadowInnerWScale = src.ShadowInnerWScale,
+            ShadowInnerHScale = src.ShadowInnerHScale,
             TrapSpellId = src.TrapSpellId,
             TrapUses = src.TrapUses,
             TrapTriggeredSprite = src.TrapTriggeredSprite,

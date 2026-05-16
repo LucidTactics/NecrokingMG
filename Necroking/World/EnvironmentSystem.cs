@@ -190,6 +190,18 @@ public class EnvironmentObjectDef
     // Shadow type: 0=SpriteProjection (default), 1=DiffuseEllipse, 2=None
     public int ShadowType { get; set; }
 
+    // Per-def overrides for the diffuse-ellipse shadow (ShadowType == 1).
+    // Multiplied against the global Settings.Shadow.Opacity and the base
+    // ellipse dimensions computed from the sprite size. Defaults give the
+    // tuned values used when the feature shipped (outer 2.5× wider / 1.7×
+    // taller than the base, inner 0.6× of base) so existing defs that don't
+    // set these still render the same.
+    public float ShadowOpacityScale { get; set; } = 1.0f;
+    public float ShadowOuterWScale { get; set; } = 2.5f;
+    public float ShadowOuterHScale { get; set; } = 1.7f;
+    public float ShadowInnerWScale { get; set; } = 0.6f;
+    public float ShadowInnerHScale { get; set; } = 0.6f;
+
     // Trap spell system
     public string TrapSpellId { get; set; } = "";   // spell to cast when enemy enters range
     public int TrapUses { get; set; }                // 0 = infinite uses
@@ -292,6 +304,11 @@ public class EnvironmentObjectDef
         writer.WriteNumber("cost2Amount", Cost2Amount);
         writer.WriteNumber("placementRadius", PlacementRadius);
         writer.WriteNumber("shadowType", ShadowType);
+        writer.WriteNumber("shadowOpacityScale", ShadowOpacityScale);
+        writer.WriteNumber("shadowOuterWScale", ShadowOuterWScale);
+        writer.WriteNumber("shadowOuterHScale", ShadowOuterHScale);
+        writer.WriteNumber("shadowInnerWScale", ShadowInnerWScale);
+        writer.WriteNumber("shadowInnerHScale", ShadowInnerHScale);
         writer.WriteString("trapSpellId", TrapSpellId);
         writer.WriteNumber("trapUses", TrapUses);
         writer.WriteString("trapTriggeredSprite", TrapTriggeredSprite);

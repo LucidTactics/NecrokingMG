@@ -508,6 +508,11 @@ public static class MapData
         if (ed.TryGetProperty("cost2Amount", out var c2a)) def.Cost2Amount = c2a.GetInt32();
         if (ed.TryGetProperty("placementRadius", out var pr)) def.PlacementRadius = pr.GetSingle();
         if (ed.TryGetProperty("shadowType", out var sht)) def.ShadowType = sht.GetInt32();
+        if (ed.TryGetProperty("shadowOpacityScale", out var sos)) def.ShadowOpacityScale = sos.GetSingle();
+        if (ed.TryGetProperty("shadowOuterWScale", out var sows)) def.ShadowOuterWScale = sows.GetSingle();
+        if (ed.TryGetProperty("shadowOuterHScale", out var sohs)) def.ShadowOuterHScale = sohs.GetSingle();
+        if (ed.TryGetProperty("shadowInnerWScale", out var siws)) def.ShadowInnerWScale = siws.GetSingle();
+        if (ed.TryGetProperty("shadowInnerHScale", out var sihs)) def.ShadowInnerHScale = sihs.GetSingle();
         if (ed.TryGetProperty("trapSpellId", out var tsi)) def.TrapSpellId = tsi.GetString() ?? "";
         if (ed.TryGetProperty("trapUses", out var tu)) def.TrapUses = tu.GetInt32();
         if (ed.TryGetProperty("trapTriggeredSprite", out var tts)) def.TrapTriggeredSprite = tts.GetString() ?? "";
