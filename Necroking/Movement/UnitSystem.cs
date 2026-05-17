@@ -226,6 +226,17 @@ public class Unit
     public int BaggingCorpseID = -1;        // CorpseID being bagged (-1 = none)
     public float BaggingTimer;              // elapsed time during bagging
     public byte CorpseInteractPhase;        // 0=none, 1=WorkStart, 2=WorkLoop, 3=WorkEnd, 4=Pickup, 5=PutDown
+
+    /// <summary>True when the unit is mid-scripted-action and should ignore
+    /// manual position / facing input. Covers corpse pickup/putdown, channeling
+    /// at a craft bench (WorkRoutine phases), incapacitation buffs (stun/freeze),
+    /// and mid-jump frames. Add new "the player is committed for a moment"
+    /// states here so input gating stays in one place — currently consumed by
+    /// Game1's mouse-facing path to stop the body rotating during corpse
+    /// placement. Routine != 0 is intentionally NOT included: the existing
+    /// WASD-cancels-routine logic in Simulation needs the raw input to fire.</summary>
+    public bool IsLockedByAction()
+        => CorpseInteractPhase != 0 || Incap.IsLocked || JumpPhase != 0;
     /// <summary>When non-negative during a PutDown (CorpseInteractPhase==5), the corpse
     /// will be loaded into env-object[PutDownTableIdx]'s first empty corpse slot at
     /// anim completion instead of being placed on the ground at LerpStartPos.

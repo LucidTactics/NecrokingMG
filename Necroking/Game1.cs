@@ -2241,13 +2241,22 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 bool running = _input.IsKeyDown(Keys.LeftShift) || _input.IsKeyDown(Keys.RightShift);
                 _sim.SetNecromancerInput(moveDir, running);
 
-                // Mouse facing
-                var necroPos = _sim.Units[necroIdx].Position;
-                var toMouse = mouseWorld - necroPos;
-                if (toMouse.LengthSq() > 0.01f)
+                // Mouse facing — skipped when the necromancer is mid-scripted-
+                // action (e.g. corpse pickup/putdown, channeling at bench). The
+                // movement subsystem already zeros velocity in those states, but
+                // facing would otherwise still snap to the cursor every frame
+                // and swing the bag around mid-animation. WASD input is left
+                // ungated so cancel-by-WASD on routines still works through
+                // Simulation's existing path.
+                if (!_sim.Units[necroIdx].IsLockedByAction())
                 {
-                    float mouseAngle = MathF.Atan2(toMouse.Y, toMouse.X) * 180f / MathF.PI;
-                    _sim.SetNecromancerFacing(mouseAngle);
+                    var necroPos = _sim.Units[necroIdx].Position;
+                    var toMouse = mouseWorld - necroPos;
+                    if (toMouse.LengthSq() > 0.01f)
+                    {
+                        float mouseAngle = MathF.Atan2(toMouse.Y, toMouse.X) * 180f / MathF.PI;
+                        _sim.SetNecromancerFacing(mouseAngle);
+                    }
                 }
             }
 

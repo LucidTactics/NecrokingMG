@@ -77,12 +77,16 @@ public class HordeSystem
         : 0f;
 
     /// <summary>
-    /// Radius used for aggro scans — floored at Settings.MinAggroRadius so a
-    /// small horde (few minions) still reacts when the necromancer walks near
-    /// an enemy, instead of needing to be almost on top of them. Formation/
-    /// positioning uses EffectiveRadius unchanged.
+    /// Radius used for the horde-level aggro scan and the "target left the
+    /// zone, stop chasing" check. Equal to <see cref="EngagementRange"/> so the
+    /// scan matches the orange F7 debug circle exactly — previously the scan
+    /// queried max(EffectiveRadius, MinAggroRadius), which is strictly smaller
+    /// and left a "ghost band" where an enemy visually inside the orange ring
+    /// wasn't actually seen by the scan. The 10-unit floor that
+    /// <see cref="HordeSettings.MinAggroRadius"/> used to provide is now baked
+    /// into the same EngagementOffset that draws the ring.
     /// </summary>
-    public float AggroRadius => MathF.Max(EffectiveRadius, _settings.MinAggroRadius);
+    public float AggroRadius => EngagementRange;
 
     /// <summary>Engagement band: how close an enemy has to be before the horde
     /// engages it. Stacked on top of <see cref="EffectiveRadius"/> so the band
@@ -279,7 +283,21 @@ public class HordeSystem
                     // here; target acquisition happens via the aggro scan below or via
                     // the minion's own UpdateFollowing self-aggro check.
                     if (units[idx].InCombat)
+                    {
                         hu.State = HordeUnitState.Engaged;
+                    }
+                    // A minion can self-aggro from UpdateFollowing (when an enemy walks
+                    // inside its personal EngagementRange) — that path sets the unit's
+                    // Routine to Chasing but doesn't have a back-channel to tell the
+                    // horde. Mirror it here so hu.State reflects what the unit is
+                    // actually doing (and the F7 debug label tells the truth instead
+                    // of showing "Following" through the entire chase).
+                    else if (units[idx].Target.IsUnit
+                        && UnitUtil.ResolveUnitIndex(units, units[idx].Target.UnitID) >= 0)
+                    {
+                        hu.State = HordeUnitState.Chasing;
+                        hu.ChasingTarget = units[idx].Target.UnitID;
+                    }
                     break;
                 }
 
