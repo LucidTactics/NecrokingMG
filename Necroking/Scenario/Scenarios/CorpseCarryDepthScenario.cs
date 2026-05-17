@@ -29,7 +29,7 @@ public class CorpseCarryDepthScenario : ScenarioBase
     {
         DebugLog.Clear(ScenarioLog);
         DebugLog.Log(ScenarioLog, "=== Corpse Carry Depth Scenario ===");
-        BackgroundColor = new Color(200, 195, 205);
+        BackgroundColor = new Color(220, 215, 225);
         BloomOverride = new BloomSettings { Enabled = false };
         WeatherPreset = "clear";
 

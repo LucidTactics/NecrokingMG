@@ -345,7 +345,9 @@ public class SettingsWindow
     // ----------------------------------------------------------------
     //  Fog of War tab
     // ----------------------------------------------------------------
-    private static readonly string[] FogModeNames = { "Off", "Explored", "Fog of War" };
+    // Index order must match the FogOfWarMode enum
+    // (Off = 0, Explored = 1, FogOfWar = 2, Hybrid = 3).
+    private static readonly string[] FogModeNames = { "Off", "Explored", "Fog of War", "Hybrid" };
 
     private int DrawFogOfWarTab(int x, int y, int w)
     {

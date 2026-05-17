@@ -5024,7 +5024,9 @@
       "maxMana": 0,
       "manaRegen": 0,
       "playerForm": true,
-      "paths": {},
+      "paths": {
+        "death": 3
+      },
       "weapons": [
         "dagger"
       ],

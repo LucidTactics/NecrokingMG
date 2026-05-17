@@ -71,6 +71,11 @@ public class FogOfWarSystem
     // culling). One bool per world tile; rebuilt in Update alongside the GPU RTs.
     // O(1) lookup via IsVisible(pos). Mirrors what the GPU visibility RT shows.
     private bool[] _visibleTiles = Array.Empty<bool>();
+    // Cumulative ever-seen tiles. OR'd from _visibleTiles each tick and never
+    // cleared after init. Hybrid mode uses this so units in already-explored
+    // tiles stay visible after the necromancer's vision moves on. FoW mode
+    // ignores this (only current vision counts there).
+    private bool[] _exploredTiles = Array.Empty<bool>();
     private FogOfWarMode _lastMode = FogOfWarMode.Off;
 
     // Max blend: only brighten (used when accumulating visibility into explored).
@@ -138,6 +143,7 @@ public class FogOfWarSystem
             0, RenderTargetUsage.PreserveContents);
 
         _visibleTiles = new bool[worldW * worldH];
+        _exploredTiles = new bool[worldW * worldH];
 
         // Clear all smoothable RTs to black (all unexplored). Don't need to clear
         // them every frame — they carry state across frames via PreserveContents.
@@ -226,7 +232,11 @@ public class FogOfWarSystem
                     for (int tx = minTx; tx <= maxTx; tx++)
                     {
                         float dx = (tx + 0.5f) - unit.Position.X;
-                        if (dx * dx + dySq <= sightSq) _visibleTiles[row + tx] = true;
+                        if (dx * dx + dySq <= sightSq)
+                        {
+                            _visibleTiles[row + tx] = true;
+                            _exploredTiles[row + tx] = true;
+                        }
                     }
                 }
             }
@@ -280,21 +290,27 @@ public class FogOfWarSystem
 
     /// <summary>
     /// Returns true if the given world position should be rendered in full:
-    ///   - Mode.Off:      always yes (no fog gameplay)
-    ///   - Mode.Explored: always yes (permanent reveal — explored tiles stay lit,
-    ///                    and the user wants units visible in them too)
+    ///   - Mode.Off:      always yes (no fog gameplay).
+    ///   - Mode.Explored: always yes (permanent reveal — explored tiles stay lit
+    ///                    and units visible in them).
     ///   - Mode.FogOfWar: yes only if the tile is currently inside some friendly
-    ///                    undead's detection range
+    ///                    undead's detection range.
+    ///   - Mode.Hybrid:   yes if the tile is currently visible OR has been seen
+    ///                    at least once. Same culling as FoW for never-explored
+    ///                    tiles, but units stay rendered in the fogged band.
     /// Used to cull enemy unit sprites, their shadows, buffs, projectiles, and
     /// damage numbers when the necromancer can't see them.
     /// </summary>
     public bool IsVisible(Vec2 pos)
     {
-        if (_lastMode != FogOfWarMode.FogOfWar) return true;
+        if (_lastMode == FogOfWarMode.Off || _lastMode == FogOfWarMode.Explored) return true;
         int x = (int)pos.X;
         int y = (int)pos.Y;
         if (x < 0 || x >= _worldW || y < 0 || y >= _worldH) return false;
-        return _visibleTiles[y * _worldW + x];
+        int idx = y * _worldW + x;
+        if (_lastMode == FogOfWarMode.Hybrid)
+            return _visibleTiles[idx] || _exploredTiles[idx];
+        return _visibleTiles[idx];
     }
 
     /// <summary>

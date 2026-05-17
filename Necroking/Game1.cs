@@ -494,6 +494,15 @@ public class Game1 : Microsoft.Xna.Framework.Game
         }
         LogTiming($"Atlases GPU upload: {atlasCount} ({string.Join(", ", AtlasDefs.Names)})");
 
+        // Push corpse.json pivot overrides into the BodyBag/Icon atlas frames now
+        // that the Corpses atlas exists. Spritemeta provides the defaults; this
+        // step lets the editor tune per-angle hand-attach points without re-export.
+        {
+            int corpsesIdx = (int)AtlasDefs.ResolveAtlasName("Corpses");
+            if (corpsesIdx >= 0 && corpsesIdx < _atlases.Length)
+                _gameData.Corpse.ApplyToAtlas(_atlases[corpsesIdx]);
+        }
+
         // Load animation metadata from all atlas animationmeta files — base + any
         // __N extensions. Done in Initialize so the dict is populated for BOTH
         // main-game flow (StartGame) and scenario flow (StartScenario).
@@ -734,6 +743,11 @@ public class Game1 : Microsoft.Xna.Framework.Game
         _mapEditor.SetItemRegistry(_gameData.Items);
         _mapEditor.SetSpellRegistry(_gameData.Spells);
         _mapEditor.SetGameData(_gameData);
+        {
+            int corpsesIdx = (int)AtlasDefs.ResolveAtlasName("Corpses");
+            var corpsesAtlas = (corpsesIdx >= 0 && corpsesIdx < _atlases.Length) ? _atlases[corpsesIdx] : null;
+            _mapEditor.SetCorpseSettings(_gameData.Corpse, corpsesAtlas);
+        }
 
         // Feed grass data to map editor
         if (_grassMap.Length > 0)

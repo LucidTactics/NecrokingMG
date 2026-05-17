@@ -37,6 +37,21 @@ public class EnvObjectEditorWindow
     private int _categoryFilter; // 0 = All
     private string _searchFilter = "";
 
+    // Top-level mode tabs. Defaults to env-object editing; switching to Corpse
+    // hides the env def list / preview / property panels in favour of a
+    // per-angle body-bag pivot tuner so the carried-bag attach point can be
+    // dialed in visually without re-exporting art.
+    private enum EditorMode { EnvObject, Corpse }
+    private EditorMode _mode = EditorMode.EnvObject;
+
+    // Corpse-tab state (injected by SetCorpseSettings)
+    private Data.Registries.CorpseSettings? _corpseSettings;
+    private Render.SpriteAtlas? _corpsesAtlas;
+    // The 5 authored body-bag angles. Order matches what the artist drew and
+    // what NewSectors expects for resolution (E / SE / S / N / NE).
+    private static readonly int[] CorpseAngles = { 0, 45, 90, 270, 315 };
+    private int _corpseSelectedAngleIdx;
+
     // Collision editing via drag
     private bool _draggingCollisionCenter;
     private bool _draggingCollisionRadius;
@@ -145,6 +160,17 @@ public class EnvObjectEditorWindow
     {
         _itemRegistry = items;
         _costItemOptions = null;
+    }
+
+    /// <summary>Wire the Corpse tab to the live <see cref="CorpseSettings"/>
+    /// (so edits persist and round-trip to <c>data/corpse.json</c>) and the
+    /// Corpses atlas (so the preview can render the body-bag sprites). Safe
+    /// to call before the atlas is loaded — the tab handles a null atlas by
+    /// showing a placeholder.</summary>
+    public void SetCorpseSettings(Data.Registries.CorpseSettings? settings, Render.SpriteAtlas? corpsesAtlas)
+    {
+        _corpseSettings = settings;
+        _corpsesAtlas = corpsesAtlas;
     }
 
     public void SetSpellRegistry(Data.Registries.SpellRegistry? spells)
@@ -261,41 +287,77 @@ public class EnvObjectEditorWindow
         // Title bar
         _ui.DrawRect(new Rectangle(winX, winY, winW, TopBarH), HeaderBg);
         _ui.DrawRect(new Rectangle(winX, winY + TopBarH, winW, 1), BorderColor);
-        _ui.DrawText("Environment Object Definition Editor", new Vector2(winX + 10, winY + 8), EditorBase.TextBright, _font);
+        _ui.DrawText("Object Editor", new Vector2(winX + 10, winY + 8), EditorBase.TextBright, _font);
+
+        // Mode tabs (immediately right of the title)
+        int tabX = winX + 130;
+        var objBg = _mode == EditorMode.EnvObject ? EditorBase.AccentColor : new Color(60, 60, 90);
+        var corpseBg = _mode == EditorMode.Corpse ? EditorBase.AccentColor : new Color(60, 60, 90);
+        if (_ui.DrawButton("Env Objects", tabX, winY + 4, 110, 24, objBg))
+            _mode = EditorMode.EnvObject;
+        if (_ui.DrawButton("Corpse", tabX + 114, winY + 4, 80, 24, corpseBg))
+            _mode = EditorMode.Corpse;
 
         // Close button (top-right)
         if (_ui.DrawButton("X", winX + winW - 36, winY + 4, 28, 24, EditorBase.DangerColor))
             Close();
 
-        // Save button
+        // Save button — wires to whichever mode is active so the user doesn't
+        // have to think about "which save" they want.
         if (_ui.DrawButton("Save (Ctrl+S)", winX + winW - 180, winY + 4, 130, 24, EditorBase.AccentColor))
-            SaveDefs();
+        {
+            if (_mode == EditorMode.Corpse) SaveCorpseSettings();
+            else SaveDefs();
+        }
 
         // Status message
         if (_statusTimer > 0 && !string.IsNullOrEmpty(_statusMessage))
         {
-            _ui.DrawText(_statusMessage, new Vector2(winX + 220, winY + 10), EditorBase.SuccessColor);
+            _ui.DrawText(_statusMessage, new Vector2(winX + 320, winY + 10), EditorBase.SuccessColor);
         }
 
         // Content area
         int contentY = winY + TopBarH + 2;
         int contentH = winH - TopBarH - 2;
 
+        if (_mode == EditorMode.Corpse)
+        {
+            // Left panel: angle list
+            int leftX = winX;
+            int leftW = LeftPanelW;
+            DrawCorpseAngleListPanel(leftX, contentY, leftW, contentH);
+
+            // Center panel: per-angle sprite preview with pivot crosshair
+            int centerX = leftX + leftW + 1;
+            int centerW = CenterPanelW;
+            if (centerW > winW - leftW - 200) centerW = winW - leftW - 200;
+            DrawCorpsePreviewPanel(centerX, contentY, centerW, contentH);
+
+            // Right panel: pivot fields
+            int rightX = centerX + centerW + 1;
+            int rightW = winW - leftW - centerW - 2;
+            DrawCorpsePropertiesPanel(rightX, contentY, rightW, contentH);
+
+            HandleKeyboard();
+            _ui.DrawDropdownOverlays();
+            return;
+        }
+
         // Left panel: def list
-        int leftX = winX;
-        int leftW = LeftPanelW;
-        DrawDefListPanel(leftX, contentY, leftW, contentH);
+        int leftX2 = winX;
+        int leftW2 = LeftPanelW;
+        DrawDefListPanel(leftX2, contentY, leftW2, contentH);
 
         // Center panel: preview
-        int centerX = leftX + leftW + 1;
-        int centerW = CenterPanelW;
-        if (centerW > winW - leftW - 200) centerW = winW - leftW - 200; // ensure right panel has space
-        DrawPreviewPanel(centerX, contentY, centerW, contentH);
+        int centerX2 = leftX2 + leftW2 + 1;
+        int centerW2 = CenterPanelW;
+        if (centerW2 > winW - leftW2 - 200) centerW2 = winW - leftW2 - 200; // ensure right panel has space
+        DrawPreviewPanel(centerX2, contentY, centerW2, contentH);
 
         // Right panel: properties
-        int rightX = centerX + centerW + 1;
-        int rightW = winW - leftW - centerW - 2;
-        DrawPropertiesPanel(rightX, contentY, rightW, contentH);
+        int rightX2 = centerX2 + centerW2 + 1;
+        int rightW2 = winW - leftW2 - centerW2 - 2;
+        DrawPropertiesPanel(rightX2, contentY, rightW2, contentH);
 
         // Handle keyboard
         HandleKeyboard();
@@ -504,11 +566,18 @@ public class EnvObjectEditorWindow
             DrawPivotCrosshair(pivotPxX, pivotPxY);
 
             // --- Draw collision circle overlay ---
+            // Runtime convention: the effective radius/offset are scaled by
+            // def.Scale * obj.Scale (see EnvSpatialIndex / ShadowRenderer /
+            // DebugDraw / BakeCollisions). Apply def.Scale here so what the
+            // editor shows matches what gets baked at placement time — without
+            // this, an asset with def.Scale=0.32 (e.g. Necro Bench) drew a
+            // circle ~3× larger than the actual in-game collision.
             if (def.CollisionRadius > 0)
             {
-                float cx = pivotPxX + def.CollisionOffsetX * pixPerWorld;
-                float cy = pivotPxY + def.CollisionOffsetY * pixPerWorld;
-                float radiusPx = def.CollisionRadius * pixPerWorld;
+                float effScale = MathF.Max(def.Scale, 0.001f);
+                float cx = pivotPxX + def.CollisionOffsetX * effScale * pixPerWorld;
+                float cy = pivotPxY + def.CollisionOffsetY * effScale * pixPerWorld;
+                float radiusPx = def.CollisionRadius * effScale * pixPerWorld;
 
                 // Update hover state
                 UpdateCollisionHover(cx, cy, radiusPx);
@@ -543,12 +612,15 @@ public class EnvObjectEditorWindow
             }
 
             // --- Draw placement radius circle (dashed style, different color) ---
+            // Same effScale treatment as the collision overlay above so this
+            // ring sits on the runtime's effective ring, not the un-scaled one.
             float effectivePlacementR = def.CollisionRadius + def.PlacementRadius;
             if (effectivePlacementR > 0.01f)
             {
-                float prPx = effectivePlacementR * pixPerWorld;
-                float prCx = pivotPxX + def.CollisionOffsetX * pixPerWorld;
-                float prCy = pivotPxY + def.CollisionOffsetY * pixPerWorld;
+                float effScale = MathF.Max(def.Scale, 0.001f);
+                float prPx = effectivePlacementR * effScale * pixPerWorld;
+                float prCx = pivotPxX + def.CollisionOffsetX * effScale * pixPerWorld;
+                float prCy = pivotPxY + def.CollisionOffsetY * effScale * pixPerWorld;
                 DrawCircleOutline(new Vector2(prCx, prCy), prPx, new Color(100, 180, 255, 80), 48);
             }
 
@@ -997,10 +1069,18 @@ public class EnvObjectEditorWindow
             _draggingCollisionRadius = false;
         }
 
+        // Inverse of the draw-side scaling: the radius/offset displayed are
+        // multiplied by def.Scale, so to write back from pixel deltas we have
+        // to divide by it. Without this, dragging an asset with def.Scale=0.32
+        // would mis-store the radius by ~3× and the in-game collision would be
+        // tiny relative to the visible bench.
+        float effScale = MathF.Max(def.Scale, 0.001f);
+        float worldPerPx = 1f / (pixPerWorld * effScale);
+
         if (_draggingCollisionCenter && leftDown && pixPerWorld > 0.001f)
         {
-            float deltaX = (mouse.X - prevMouse.X) / pixPerWorld;
-            float deltaY = (mouse.Y - prevMouse.Y) / pixPerWorld;
+            float deltaX = (mouse.X - prevMouse.X) * worldPerPx;
+            float deltaY = (mouse.Y - prevMouse.Y) * worldPerPx;
             def.CollisionOffsetX += deltaX;
             def.CollisionOffsetY += deltaY;
         }
@@ -1008,7 +1088,7 @@ public class EnvObjectEditorWindow
         if (_draggingCollisionRadius && leftDown && pixPerWorld > 0.001f)
         {
             float newDist = MathF.Sqrt(dx * dx + dy * dy);
-            def.CollisionRadius = MathF.Max(0f, newDist / pixPerWorld);
+            def.CollisionRadius = MathF.Max(0f, newDist * worldPerPx);
         }
 
         // Draw hover hint text
@@ -2304,5 +2384,215 @@ public class EnvObjectEditorWindow
         }
 
         _ui.InputLayer = savedLayer;
+    }
+
+    // ========================================================================
+    //  CORPSE TAB
+    // ========================================================================
+    //
+    // Compact mirror of the env-object editor: list of authored sprite angles
+    // on the left, sprite preview with a draggable pivot crosshair in the
+    // centre, and pivot X/Y fields on the right. Every mutation also writes
+    // through to the live atlas frames (via ApplyToAtlas) so the in-game body
+    // bag picks up the change without closing the editor.
+
+    private static string AngleLabel(int angle) => angle switch
+    {
+        0   => "0 — E",
+        45  => "45 — SE",
+        90  => "90 — S",
+        270 => "270 — N",
+        315 => "315 — NE",
+        _   => angle.ToString()
+    };
+
+    private void DrawCorpseAngleListPanel(int x, int y, int w, int h)
+    {
+        _ui.DrawRect(new Rectangle(x, y, w, h), new Color(20, 20, 35, 230));
+        _ui.DrawRect(new Rectangle(x + w, y, 1, h), BorderColor);
+
+        int curY = y + Padding;
+        _ui.DrawText("Sprite Angle", new Vector2(x + Padding, curY), EditorBase.TextBright);
+        curY += RowH;
+
+        var labels = new List<string>(CorpseAngles.Length);
+        for (int i = 0; i < CorpseAngles.Length; i++) labels.Add(AngleLabel(CorpseAngles[i]));
+
+        int listH = y + h - curY - Padding;
+        int clicked = _ui.DrawScrollableList("corpse_angle_list", labels, _corpseSelectedAngleIdx,
+            x + 2, curY, w - 4, listH);
+        if (clicked >= 0 && clicked < CorpseAngles.Length)
+            _corpseSelectedAngleIdx = clicked;
+    }
+
+    private void DrawCorpsePreviewPanel(int x, int y, int w, int h)
+    {
+        _ui.DrawRect(new Rectangle(x, y, w, h), PreviewBg);
+        _ui.DrawRect(new Rectangle(x + w, y, 1, h), BorderColor);
+
+        _pvAreaX = x; _pvAreaY = y; _pvAreaW = w; _pvAreaH = h;
+
+        if (_corpsesAtlas == null || !_corpsesAtlas.IsLoaded)
+        {
+            _ui.DrawText("Corpses atlas not loaded", new Vector2(x + w / 2 - 90, y + h / 2), EditorBase.TextDim);
+            return;
+        }
+
+        int angle = CorpseAngles[_corpseSelectedAngleIdx];
+        var iconAnim = _corpsesAtlas.GetUnit("BodyBag")?.GetAnim("Icon");
+        var kfs = iconAnim?.GetAngle(angle);
+        if (kfs == null || kfs.Count == 0)
+        {
+            _ui.DrawText($"No frame for angle {angle}", new Vector2(x + Padding, y + Padding), EditorBase.TextDim);
+            return;
+        }
+
+        var frame = kfs[0].Frame;
+        var tex = _corpsesAtlas.GetTextureForFrame(frame);
+        if (tex == null) return;
+
+        int srcW = frame.Rect.Width;
+        int srcH = frame.Rect.Height;
+        int padded = Math.Min(w, h) - Padding * 4;
+        float scale = MathF.Min((float)padded / srcW, (float)padded / srcH);
+        if (scale > 4f) scale = 4f;
+
+        int drawW = (int)(srcW * scale);
+        int drawH = (int)(srcH * scale);
+        int drawX = x + (w - drawW) / 2;
+        int drawY = y + (h - drawH) / 2;
+
+        _pvDrawX = drawX; _pvDrawY = drawY; _pvDrawW = drawW; _pvDrawH = drawH; _pvScale = scale;
+
+        _sb.Draw(tex, new Rectangle(drawX, drawY, drawW, drawH), frame.Rect, Color.White);
+
+        // Pivot crosshair sits where the renderer pins the bag to the hand.
+        // PivotY uses bottom-left origin so flip for screen-space (top-left).
+        float pivotPxX = drawX + frame.PivotX * drawW;
+        float pivotPxY = drawY + (1f - frame.PivotY) * drawH;
+        DrawPivotCrosshair(pivotPxX, pivotPxY);
+
+        // Right-click drag (matches env-object pivot UX). Updates the atlas
+        // frame and the in-memory CorpseSettings in lockstep; save persists.
+        if (!_textureBrowser.IsOpen && !_ui.IsColorPickerOpen && !_ui.IsDropdownOpen)
+            HandleCorpsePivotDrag(frame, kfs, drawX, drawY, drawW, drawH, angle);
+    }
+
+    private void HandleCorpsePivotDrag(Render.SpriteFrame frame, List<Render.Keyframe> kfs,
+        int drawX, int drawY, int drawW, int drawH, int angle)
+    {
+        var mouse = _ui._input.Mouse;
+        var prevMouse = _ui._prevMouse;
+        bool rightClick = mouse.RightButton == ButtonState.Pressed && prevMouse.RightButton == ButtonState.Released;
+        bool rightDown = mouse.RightButton == ButtonState.Pressed;
+        bool rightUp = mouse.RightButton == ButtonState.Released && prevMouse.RightButton == ButtonState.Pressed;
+
+        if (rightClick && mouse.X >= drawX && mouse.X <= drawX + drawW &&
+                          mouse.Y >= drawY && mouse.Y <= drawY + drawH)
+            _draggingPivot = true;
+        if (rightUp) _draggingPivot = false;
+
+        if (_draggingPivot && rightDown && drawW > 0 && drawH > 0)
+        {
+            float nx = MathHelper.Clamp((float)(mouse.X - drawX) / drawW, 0f, 1f);
+            // Screen-space Y → bottom-left-origin pivot Y
+            float ny = MathHelper.Clamp(1f - (float)(mouse.Y - drawY) / drawH, 0f, 1f);
+            SetCorpsePivot(angle, nx, ny, kfs);
+        }
+    }
+
+    private void DrawCorpsePropertiesPanel(int x, int y, int w, int h)
+    {
+        _ui.DrawRect(new Rectangle(x, y, w, h), new Color(25, 25, 40, 245));
+
+        int curY = y + Padding;
+        _ui.DrawText("Body Bag Pivot", new Vector2(x + Padding, curY), EditorBase.TextBright, _font);
+        curY += RowH + 4;
+
+        int angle = CorpseAngles[_corpseSelectedAngleIdx];
+        _ui.DrawText($"Angle: {AngleLabel(angle)}", new Vector2(x + Padding, curY), EditorBase.TextDim);
+        curY += RowH;
+
+        if (_corpsesAtlas == null || _corpseSettings == null)
+        {
+            _ui.DrawText("(corpse data not wired)", new Vector2(x + Padding, curY), EditorBase.TextDim);
+            return;
+        }
+
+        var iconAnim = _corpsesAtlas.GetUnit("BodyBag")?.GetAnim("Icon");
+        var kfs = iconAnim?.GetAngle(angle);
+        if (kfs == null || kfs.Count == 0)
+        {
+            _ui.DrawText("(no frame for this angle)", new Vector2(x + Padding, curY), EditorBase.TextDim);
+            return;
+        }
+
+        // Source of truth for the editor is whatever is currently on the atlas
+        // frame — that started either from spritemeta or from corpse.json (via
+        // ApplyToAtlas at startup), and stays in sync as the user drags.
+        var frame = kfs[0].Frame;
+        float newX = _ui.DrawFloatField($"corpse_px_{angle}", "Pivot X", frame.PivotX, x + Padding, curY, w - Padding * 2, 0.01f);
+        curY += RowH;
+        float newY = _ui.DrawFloatField($"corpse_py_{angle}", "Pivot Y", frame.PivotY, x + Padding, curY, w - Padding * 2, 0.01f);
+        curY += RowH + 4;
+
+        if (Math.Abs(newX - frame.PivotX) > 1e-6f || Math.Abs(newY - frame.PivotY) > 1e-6f)
+            SetCorpsePivot(angle, MathHelper.Clamp(newX, 0f, 1f), MathHelper.Clamp(newY, 0f, 1f), kfs);
+
+        if (_ui.DrawButton("Reset to spritemeta default", x + Padding, curY, w - Padding * 2, BtnH))
+        {
+            // The spritemeta default for the body bag (per assets/Sprites/Corpses.spritemeta).
+            SetCorpsePivot(angle, 0.5f, 0.15f, kfs);
+        }
+        curY += BtnH + 8;
+
+        _ui.DrawText("Right-click and drag the sprite", new Vector2(x + Padding, curY), EditorBase.TextDim);
+        curY += RowH - 6;
+        _ui.DrawText("to set pivot visually.", new Vector2(x + Padding, curY), EditorBase.TextDim);
+    }
+
+    /// <summary>Update both the atlas frame (so the change is visible in-game
+    /// immediately) and the CorpseSettings list (so the next Save persists it).
+    /// Kept in one place so the right-click drag and the numeric fields can't
+    /// drift out of sync.</summary>
+    private void SetCorpsePivot(int angle, float x, float y, List<Render.Keyframe> kfs)
+    {
+        for (int i = 0; i < kfs.Count; i++)
+        {
+            var kf = kfs[i];
+            kf.Frame.PivotX = x;
+            kf.Frame.PivotY = y;
+            kfs[i] = kf;
+        }
+        _corpseSettings?.SetPivot(angle, x, y);
+    }
+
+    private void SaveCorpseSettings()
+    {
+        if (_corpseSettings == null)
+        {
+            _statusMessage = "Corpse settings not wired";
+            _statusTimer = 3f;
+            return;
+        }
+        try
+        {
+            string path = GamePaths.Resolve("data/corpse.json");
+            if (_corpseSettings.Save(path))
+            {
+                _statusMessage = $"Saved corpse pivots to {path}";
+                _statusTimer = 3f;
+            }
+            else
+            {
+                _statusMessage = "Save failed";
+                _statusTimer = 4f;
+            }
+        }
+        catch (Exception ex)
+        {
+            _statusMessage = $"Save failed: {ex.Message}";
+            _statusTimer = 4f;
+        }
     }
 }

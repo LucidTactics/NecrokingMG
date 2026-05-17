@@ -148,7 +148,17 @@ public class StartingItem
     [JsonPropertyName("quantity")] public int Quantity { get; set; } = 1;
 }
 
-public enum FogOfWarMode { Off = 0, Explored = 1, FogOfWar = 2 }
+/// <summary>
+/// Off       — no fog, full visibility (units + terrain).
+/// Explored  — permanent full reveal once any unit walks within sight (terrain + units).
+/// FogOfWar  — classic three-state: visible / fogged (terrain only, units hidden) /
+///             unexplored (hidden). Enemy units outside current sight aren't drawn.
+/// Hybrid    — visible in current sight, fogged tint over explored-but-not-current
+///             areas (terrain AND units stay visible), unexplored stays hidden.
+///             Cheat-y visibility: you see all live unit positions on tiles you've
+///             walked at least once, with the atmospheric fog of FoW.
+/// </summary>
+public enum FogOfWarMode { Off = 0, Explored = 1, FogOfWar = 2, Hybrid = 3 }
 
 public class PerformanceSettings
 {

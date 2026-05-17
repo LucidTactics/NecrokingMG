@@ -505,6 +505,11 @@ public class MapEditorWindow
         _envObjectEditor?.SetSpellRegistry(spells);
     }
 
+    public void SetCorpseSettings(Data.Registries.CorpseSettings? settings, Render.SpriteAtlas? corpsesAtlas)
+    {
+        _envObjectEditor?.SetCorpseSettings(settings, corpsesAtlas);
+    }
+
     public void SetGameData(Data.GameData? data) => _gameData = data;
 
     public void SetPlacedUnits(List<PlacedUnit> units)

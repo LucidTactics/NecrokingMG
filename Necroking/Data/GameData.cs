@@ -17,6 +17,7 @@ public class GameData
     public GameSettingsData Settings { get; } = new();
     public ItemRegistry Items { get; } = new();
     public PotionRegistry Potions { get; } = new();
+    public CorpseSettings Corpse { get; } = new();
 
     public bool Load()
     {
@@ -37,6 +38,7 @@ public class GameData
 
         Items.Load(Path.Combine(dataDir, "items.json")); // optional, don't fail if missing
         Potions.Load(Path.Combine(dataDir, "potions.json")); // optional, don't fail if missing
+        Corpse.Load(Path.Combine(dataDir, "corpse.json")); // optional, falls back to spritemeta pivots
         // Load weapon_points.json (must be after units.json so UnitDefs exist)
         ok &= Units.LoadWeaponPoints(Path.Combine(dataDir, "weapon_points.json"));
         return ok;
@@ -63,6 +65,7 @@ public class GameData
 
         ok &= Items.Save(Path.Combine(dataDir, "items.json"));
         ok &= Potions.Save(Path.Combine(dataDir, "potions.json"));
+        ok &= Corpse.Save(Path.Combine(dataDir, "corpse.json"));
         ok &= Units.SaveWeaponPoints(Path.Combine(dataDir, "weapon_points.json"));
         return ok;
     }
