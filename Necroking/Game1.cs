@@ -472,7 +472,26 @@ public class Game1 : Microsoft.Xna.Framework.Game
             DebugLog.Log("startup",
                 $"  [BENCH] {b.label,-22} {b.sizeMb,3}MB tid={b.threadId,2} read={b.readMs,4}ms decode={b.decodeMs,5}ms pma={b.pmaMs,5}ms total={b.totalMs,5}ms {(b.cacheHit ? "CACHE-HIT" : b.skia ? "skia" : "stb")}{(b.wroteCache && !b.cacheHit ? " (wrote cache)" : "")}");
 
-        // Phase 2: Upload decoded pixels to GPU (fast — just SetData, no PNG decode)
+        // Load animation metadata BEFORE GPU upload so the stride calibration pass
+        // (which runs in the upload loop, while decoded pixels are still live) can
+        // read per-gait cycle durations from animationmeta. Animationmeta is CPU-
+        // only — no dependency on GPU textures.
+        foreach (string name in AtlasDefs.Names)
+        {
+            string metaPath = GamePaths.Resolve($"assets/Sprites/{name}.animationmeta");
+            if (File.Exists(metaPath))
+                AnimMetaLoader.Load(metaPath, _animMeta);
+            foreach (string extMeta in AtlasDefs.FindExtensionAnimMeta(name))
+                AnimMetaLoader.Load(extMeta, _animMeta);
+        }
+        LogTiming($"Animation metadata: {_animMeta.Count} entries");
+        _sim.SetAnimMeta(_animMeta);
+
+        // Phase 2: Upload decoded pixels to GPU (fast — just SetData, no PNG decode).
+        // Stride calibration runs per-atlas in this loop, BEFORE pixels are freed,
+        // so it can scan the source rgba without a GPU readback. Cache hit skips
+        // the pixel scan; only the first launch (or asset edit) pays the cost.
+        int strideCacheHits = 0, strideCacheBuilds = 0;
         for (int i = 0; i < atlasCount; i++)
         {
             if (decodedPixels[i] != null && metaParsed[i])
@@ -480,7 +499,19 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 var tex = TextureUtil.CreateTextureFromPixels(GraphicsDevice,
                     decodedPixels[i], decodedW[i], decodedH[i]);
                 _atlases[i].SetTextureAndFinalize(tex, decodedW[i], decodedH[i]);
-                decodedPixels[i] = null!; // free memory
+
+                // Calibrate stride per unit. Y-coords in the spritemeta have been
+                // flipped by SetTextureAndFinalize (top-left origin), matching the
+                // pixel buffer layout we're handing to StrideCalibration.
+                string atlasName = AtlasDefs.Names[i];
+                string pngPath = GamePaths.Resolve($"assets/Sprites/{atlasName}.png");
+                string smPath  = GamePaths.Resolve($"assets/Sprites/{atlasName}.spritemeta");
+                string amPath  = GamePaths.Resolve($"assets/Sprites/{atlasName}.animationmeta");
+                bool cacheHit = Render.StrideCalibration.CalibrateAtlas(_atlases[i], atlasName,
+                    pngPath, smPath, amPath, decodedPixels[i], decodedW[i], decodedH[i], _animMeta);
+                if (cacheHit) strideCacheHits++; else strideCacheBuilds++;
+
+                decodedPixels[i] = null!; // free memory after calibration is done with it
             }
             // Attach extension sheets in the order they were decoded (matches the
             // TextureIndex assigned by ParseExtensionMeta).
@@ -492,7 +523,22 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 _atlases[i].AttachExtensionTexture(extTex, ext.w, ext.h);
             }
         }
-        LogTiming($"Atlases GPU upload: {atlasCount} ({string.Join(", ", AtlasDefs.Names)})");
+        LogTiming($"Atlases GPU upload + stride calibration: {atlasCount} ({string.Join(", ", AtlasDefs.Names)}) — strideCacheHits={strideCacheHits} builds={strideCacheBuilds}");
+
+        // Wire each UnitDef's runtime SpriteData reference now that both registries
+        // (loaded in _gameData.Load above) and atlases (just uploaded) exist. Lets
+        // LocomotionProfile.FromUnit reach stride calibration without separately
+        // plumbing atlas access through AI / render call sites.
+        int spriteWireCount = 0;
+        foreach (var def in _gameData.Units.All())
+        {
+            if (def.Sprite == null || string.IsNullOrEmpty(def.Sprite.AtlasName)) continue;
+            int aIdx = (int)AtlasDefs.ResolveAtlasName(def.Sprite.AtlasName);
+            if (aIdx < 0 || aIdx >= _atlases.Length) continue;
+            def.SpriteData = _atlases[aIdx].GetUnit(def.Sprite.SpriteName);
+            if (def.SpriteData != null) spriteWireCount++;
+        }
+        LogTiming($"UnitDef→SpriteData wired for {spriteWireCount}/{_gameData.Units.Count} units");
 
         // Push corpse.json pivot overrides into the BodyBag/Icon atlas frames now
         // that the Corpses atlas exists. Spritemeta provides the defaults; this
@@ -502,20 +548,6 @@ public class Game1 : Microsoft.Xna.Framework.Game
             if (corpsesIdx >= 0 && corpsesIdx < _atlases.Length)
                 _gameData.Corpse.ApplyToAtlas(_atlases[corpsesIdx]);
         }
-
-        // Load animation metadata from all atlas animationmeta files — base + any
-        // __N extensions. Done in Initialize so the dict is populated for BOTH
-        // main-game flow (StartGame) and scenario flow (StartScenario).
-        foreach (string name in AtlasDefs.Names)
-        {
-            string metaPath = GamePaths.Resolve($"assets/Sprites/{name}.animationmeta");
-            if (File.Exists(metaPath))
-                AnimMetaLoader.Load(metaPath, _animMeta);
-            foreach (string extMeta in AtlasDefs.FindExtensionAnimMeta(name))
-                AnimMetaLoader.Load(extMeta, _animMeta);
-        }
-        LogTiming($"Animation metadata: {_animMeta.Count} entries");
-        _sim.SetAnimMeta(_animMeta);
 
         base.Initialize();
     }
@@ -3866,9 +3898,12 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 if (isLocoState)
                 {
                     float locoSpeed = _sim.Units[i].Velocity.Length();
-                    float locoBase = _sim.Units[i].Stats.CombatSpeed;
+                    var locoDef = _gameData.Units.Get(_sim.Units[i].UnitDefID);
+                    var locoProfile = locoDef != null
+                        ? LocomotionProfile.FromUnit(locoDef)
+                        : LocomotionProfile.FromBaseSpeed(_sim.Units[i].Stats.CombatSpeed);
                     animData.Ctrl.PlaybackSpeed = LocomotionScaling.ComputeLocomotionPlayback(
-                        animData.Ctrl, curState, locoSpeed, locoBase);
+                        animData.Ctrl, locoProfile, curState, locoSpeed);
                 }
                 animData.Ctrl.Update(dt);
 
@@ -3961,9 +3996,12 @@ public class Game1 : Microsoft.Xna.Framework.Game
             // frequency matched to actual velocity so anims don't skate.
             {
                 float locoSpeed = _sim.Units[i].Velocity.Length();
-                float locoBase = _sim.Units[i].Stats.CombatSpeed;
+                var locoDef = _gameData.Units.Get(_sim.Units[i].UnitDefID);
+                var locoProfile = locoDef != null
+                    ? LocomotionProfile.FromUnit(locoDef)
+                    : LocomotionProfile.FromBaseSpeed(_sim.Units[i].Stats.CombatSpeed);
                 animData.Ctrl.PlaybackSpeed = LocomotionScaling.ComputeLocomotionPlayback(
-                    animData.Ctrl, targetState, locoSpeed, locoBase);
+                    animData.Ctrl, locoProfile, targetState, locoSpeed);
             }
             if (targetState == AnimState.Attack1 && animData.Ctrl.CurrentState != AnimState.Attack1)
             {

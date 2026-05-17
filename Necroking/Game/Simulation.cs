@@ -579,6 +579,24 @@ public class Simulation
     private bool _necroRunning;
     private float _necroFacingOverride = float.NaN;
 
+    // Sprint ramp: 0.0 = walking at base CombatSpeed, 1.0 = full sprint at 4×.
+    // Tracks how far we've ramped through the build-up while shift is held; gives
+    // the unit a deliberate 3-second wind-up to full speed (not an instant snap)
+    // and a faster ~1-second decay on release so it doesn't keep coasting at
+    // sprint speed after letting go. Lerped into _sprintMultiplier each AI tick
+    // in the PlayerControlled case; multiplier scales MaxSpeed and biases the
+    // unit's MoveEffort toward Sprint so the gait picker shows Run earlier than
+    // raw velocity would warrant (= unit visibly cycles Walk → Jog → Run during
+    // the ramp instead of staying in Walk until ~mid-ramp).
+    private const float SprintRampUpSeconds = 3.0f;
+    private const float SprintRampDownSeconds = 1.0f;
+    private const float SprintMaxMultiplier = 4.0f;
+    private float _sprintRampValue; // 0..1
+
+    /// <summary>Public accessor for debug / HUD readout — current sprint ramp
+    /// fraction (0 = walking, 1 = full sprint).</summary>
+    public float SprintRampValue => _sprintRampValue;
+
     public void SetNecromancerInput(Vec2 moveDir, bool running)
     {
         _necroMoveInput = moveDir;
@@ -675,12 +693,32 @@ public class Simulation
             {
                 case AIBehavior.PlayerControlled:
                 {
+                    // Sprint ramp: integrate _sprintRampValue toward 1 while shift
+                    // is held + the unit is allowed to sprint, otherwise toward 0.
+                    // Carrying a corpse disqualifies sprinting (preserves the prior
+                    // behavior where carrying suppressed the run bonus).
+                    bool canSprint = _necroRunning && _units[i].CarryingCorpseID < 0 && !_units[i].GhostMode;
+                    float rampRate = canSprint
+                        ? dt / SprintRampUpSeconds
+                        : -dt / SprintRampDownSeconds;
+                    _sprintRampValue = Necroking.Core.MathUtil.Clamp(_sprintRampValue + rampRate, 0f, 1f);
+                    float sprintMultiplier = 1f + (SprintMaxMultiplier - 1f) * _sprintRampValue;
+
                     float speed = _units[i].Stats.CombatSpeed;
                     if (_units[i].GhostMode)
                         speed = 20.0f;
-                    else if (_necroRunning && _units[i].CarryingCorpseID < 0)
-                        speed *= 1.8f;
+                    else
+                        speed *= sprintMultiplier;
                     _units[i].MaxSpeed = speed; // update so ORCA + accel cap respect current speed
+
+                    // Bias the gait picker toward Sprint while ramping so the player
+                    // sees the gait transition early (Walk → Jog → Run cycles through
+                    // during the 3-second ramp) rather than the gait lagging actual
+                    // velocity. Tiny ramp values (<5%) snap back to Normal so a
+                    // single-frame shift-tap doesn't lock the unit into Sprint intent.
+                    _units[i].MoveEffort = _sprintRampValue > 0.05f
+                        ? Movement.MoveEffort.Sprint
+                        : Movement.MoveEffort.Normal;
 
                     // Dispatch to PlayerControlledHandler for structured activities
                     if (_units[i].Routine != 0)

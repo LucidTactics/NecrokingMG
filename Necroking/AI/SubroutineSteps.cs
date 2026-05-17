@@ -396,14 +396,18 @@ public static class SubroutineSteps
     /// <summary>
     /// Set the routine animation to the appropriate locomotion state based on speed.
     /// Tier thresholds and hysteresis come from the shared LocomotionProfile so this
-    /// and LocomotionScaling can't drift apart.
+    /// and LocomotionScaling can't drift apart. The unit's MoveEffort biases the
+    /// pick (Walk effort stays in Walk gait at high speed; Sprint snaps to Run
+    /// even before velocity catches up).
     /// </summary>
     public static void SetLocomotionAnim(ref AIContext ctx, float speed)
     {
-        float baseSpeed = ctx.Units[ctx.UnitIndex].Stats.CombatSpeed;
-        var profile = LocomotionProfile.FromBaseSpeed(baseSpeed);
+        var def = ctx.GameData?.Units.Get(ctx.Units[ctx.UnitIndex].UnitDefID);
+        var profile = def != null
+            ? LocomotionProfile.FromUnit(def)
+            : LocomotionProfile.FromBaseSpeed(ctx.Units[ctx.UnitIndex].Stats.CombatSpeed);
         AnimState prev = ctx.Units[ctx.UnitIndex].RoutineAnim.State;
-        AnimState state = profile.PickTier(prev, speed);
+        AnimState state = profile.PickTier(prev, speed, ctx.Units[ctx.UnitIndex].MoveEffort);
         ctx.Units[ctx.UnitIndex].RoutineAnim = AnimRequest.Locomotion(state);
     }
 

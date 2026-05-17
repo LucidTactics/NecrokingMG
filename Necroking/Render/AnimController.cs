@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Necroking.Core;
 
 namespace Necroking.Render;
 
@@ -442,18 +443,42 @@ public class AnimController
         _finished = true;
     }
 
+    private static bool IsLocomotionState(AnimState s) =>
+        s == AnimState.Walk || s == AnimState.Jog || s == AnimState.Run;
+
     private void SwitchState(AnimState newState)
     {
         // Edge flags: record the transition so same-frame consumers can detect it.
         ExitedState = _currentState;
         JustExitedState = true;
         JustEnteredState = true;
+
+        // Foot-phase carryover: locomotion ↔ locomotion transitions preserve the
+        // unit's cycle phase (e.g. "55% through Walk") into the new gait's cycle,
+        // instead of snapping back to frame 0 every switch. Without this, a fast
+        // unit oscillating around the Walk/Jog threshold visibly resets its feet
+        // each crossing — which is what the legacy hysteresis bands were sized to
+        // suppress. With carryover, the visual hitch goes to zero and hysteresis
+        // can shrink to a noise-suppression role. Idle↔Walk and locomotion↔non-
+        // locomotion transitions still reset to 0 (a fresh standing/attack/jump
+        // cycle has no phase to inherit).
+        bool isLocoToLoco = IsLocomotionState(_currentState) && IsLocomotionState(newState);
+        int oldTotalMs = isLocoToLoco ? GetEffectiveTotalDurationMs() : 0;
+        float oldPhase = (isLocoToLoco && oldTotalMs > 0) ? _animTime / oldTotalMs : 0f;
+
         _currentState = newState;
         _pendingState = newState;
         _animTime = 0f;
         _finished = false;
         _playbackSpeed = 1f;
         ResolveForState();
+
+        if (isLocoToLoco)
+        {
+            int newTotalMs = GetEffectiveTotalDurationMs();
+            if (newTotalMs > 0)
+                _animTime = MathUtil.Clamp(oldPhase, 0f, 0.999f) * newTotalMs;
+        }
     }
 
     // --- Update ---

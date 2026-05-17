@@ -47,6 +47,15 @@ public class UnitSpriteData
     public string UnitName = "";
     public Dictionary<string, AnimationData> Animations = new(StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>Pixel-derived stride lengths per gait (Walk/Jog/Run) measured by
+    /// <see cref="StrideCalibration"/> at atlas load. Used by LocomotionScaling
+    /// to produce a feet-locked playback rate. Null until calibration runs —
+    /// runtime falls back to legacy scaling when null. One calibration per
+    /// sprite (not per unit-def), so multiple unit-defs that share a sprite
+    /// share the calibration; per-def world-height conversion happens at
+    /// runtime via <see cref="StrideCalibration.ResolveAnimVel"/>.</summary>
+    public StrideCalibration.UnitCalibration? Calibration;
+
     public AnimationData? GetAnim(string name) =>
         Animations.TryGetValue(name, out var a) ? a : null;
 }

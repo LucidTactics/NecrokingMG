@@ -206,6 +206,36 @@ public class UnitDef : IHasId
     [JsonPropertyName("alertDuration")] public float AlertDuration { get; set; } = 2f;
     [JsonPropertyName("alertEscalateRange")] public float AlertEscalateRange { get; set; }
     [JsonPropertyName("groupAlertRadius")] public float GroupAlertRadius { get; set; }
+
+    // Locomotion animation tuning (new pixel-stride system, default ON).
+    /// <summary>When true, this unit reverts to the original CombatSpeed-derived
+    /// gait thresholds and clamped-Lerp playback scaling. Default false = use the
+    /// pixel-stride calibration. Per-unit escape hatch for the cases where the
+    /// new system mis-handles a specific sprite (long downward-pointing weapons,
+    /// unusual silhouettes). See <see cref="Render.StrideCalibration"/>.</summary>
+    [JsonPropertyName("legacyGaitMode")] public bool LegacyGaitMode { get; set; }
+
+    /// <summary>Hand-tuned override for the Walk feet-lock velocity (world units /
+    /// sec). When set, replaces the pixel-stride-computed value at runtime. Null =
+    /// use the auto-computed value. Persisted as "animWalkVelOverride" in JSON;
+    /// edited in the unit editor.</summary>
+    [JsonPropertyName("animWalkVelOverride")] public float? AnimWalkVelOverride { get; set; }
+
+    /// <summary>Hand-tuned override for the Jog feet-lock velocity. Same semantics
+    /// as <see cref="AnimWalkVelOverride"/>.</summary>
+    [JsonPropertyName("animJogVelOverride")] public float? AnimJogVelOverride { get; set; }
+
+    /// <summary>Hand-tuned override for the Run feet-lock velocity. Same semantics
+    /// as <see cref="AnimWalkVelOverride"/>.</summary>
+    [JsonPropertyName("animRunVelOverride")] public float? AnimRunVelOverride { get; set; }
+
+    /// <summary>Runtime-only — resolved sprite-data reference (atlas → sprite name
+    /// lookup), wired up by Game1 once both registries and atlases are loaded.
+    /// Lets <see cref="Render.LocomotionProfile.FromUnit"/> reach calibration data
+    /// without separately plumbing atlas access through the AI / render call sites.
+    /// Marked [JsonIgnore] so editor-save passes don't try to serialize it.</summary>
+    [JsonIgnore]
+    public Render.UnitSpriteData? SpriteData { get; set; }
 }
 
 public class UnitRegistry : RegistryBase<UnitDef>

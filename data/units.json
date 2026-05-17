@@ -29,7 +29,7 @@
         "magicResist": 16,
         "encumbrance": 2,
         "naturalProt": 0,
-        "combatSpeed": 5
+        "combatSpeed": 2.5
       },
       "zombieTypeID": "",
       "spellID": "",
@@ -2304,7 +2304,11 @@
       "detectionBreakRange": 0,
       "alertDuration": 2,
       "alertEscalateRange": 0,
-      "groupAlertRadius": 0
+      "groupAlertRadius": 0,
+      "legacyGaitMode": false,
+      "animWalkVelOverride": null,
+      "animJogVelOverride": null,
+      "animRunVelOverride": null
     },
     {
       "id": "skeleton",
@@ -2579,7 +2583,11 @@
       "detectionBreakRange": 20,
       "alertDuration": 0.5,
       "alertEscalateRange": 8,
-      "groupAlertRadius": 0
+      "groupAlertRadius": 0,
+      "legacyGaitMode": false,
+      "animWalkVelOverride": null,
+      "animJogVelOverride": null,
+      "animRunVelOverride": null
     },
     {
       "id": "FemaleDeer",
@@ -2632,7 +2640,11 @@
       "detectionBreakRange": 18,
       "alertDuration": 2,
       "alertEscalateRange": 5,
-      "groupAlertRadius": 15
+      "groupAlertRadius": 15,
+      "legacyGaitMode": false,
+      "animWalkVelOverride": null,
+      "animJogVelOverride": null,
+      "animRunVelOverride": null
     },
     {
       "id": "ZombieFemaleDeer",
@@ -2685,7 +2697,11 @@
       "detectionBreakRange": 20,
       "alertDuration": 0.5,
       "alertEscalateRange": 8,
-      "groupAlertRadius": 0
+      "groupAlertRadius": 0,
+      "legacyGaitMode": false,
+      "animWalkVelOverride": null,
+      "animJogVelOverride": null,
+      "animRunVelOverride": null
     },
     {
       "id": "MaleDeer",
@@ -2739,7 +2755,11 @@
       "detectionBreakRange": 18,
       "alertDuration": 2.5,
       "alertEscalateRange": 4,
-      "groupAlertRadius": 15
+      "groupAlertRadius": 15,
+      "legacyGaitMode": false,
+      "animWalkVelOverride": null,
+      "animJogVelOverride": null,
+      "animRunVelOverride": null
     },
     {
       "id": "Wolf",
@@ -2808,7 +2828,11 @@
       "detectionBreakRange": 15,
       "alertDuration": 1,
       "alertEscalateRange": 6,
-      "groupAlertRadius": 12
+      "groupAlertRadius": 12,
+      "legacyGaitMode": false,
+      "animWalkVelOverride": null,
+      "animJogVelOverride": null,
+      "animRunVelOverride": null
     },
     {
       "id": "Bear",
@@ -2884,7 +2908,11 @@
       "detectionBreakRange": 0,
       "alertDuration": 2,
       "alertEscalateRange": 0,
-      "groupAlertRadius": 0
+      "groupAlertRadius": 0,
+      "legacyGaitMode": false,
+      "animWalkVelOverride": null,
+      "animJogVelOverride": null,
+      "animRunVelOverride": null
     },
     {
       "id": "GrizzlyBear",
@@ -2960,7 +2988,11 @@
       "detectionBreakRange": 0,
       "alertDuration": 2,
       "alertEscalateRange": 0,
-      "groupAlertRadius": 0
+      "groupAlertRadius": 0,
+      "legacyGaitMode": false,
+      "animWalkVelOverride": null,
+      "animJogVelOverride": null,
+      "animRunVelOverride": null
     },
     {
       "id": "DireWolf",
@@ -3029,7 +3061,11 @@
       "detectionBreakRange": 0,
       "alertDuration": 2,
       "alertEscalateRange": 0,
-      "groupAlertRadius": 0
+      "groupAlertRadius": 0,
+      "legacyGaitMode": false,
+      "animWalkVelOverride": null,
+      "animJogVelOverride": null,
+      "animRunVelOverride": null
     },
     {
       "id": "JuvWolf",
@@ -3098,7 +3134,11 @@
       "detectionBreakRange": 0,
       "alertDuration": 2,
       "alertEscalateRange": 0,
-      "groupAlertRadius": 0
+      "groupAlertRadius": 0,
+      "legacyGaitMode": false,
+      "animWalkVelOverride": null,
+      "animJogVelOverride": null,
+      "animRunVelOverride": null
     },
     {
       "id": "ZombieWolf",
@@ -3152,7 +3192,11 @@
       "detectionBreakRange": 20,
       "alertDuration": 0.5,
       "alertEscalateRange": 8,
-      "groupAlertRadius": 0
+      "groupAlertRadius": 0,
+      "legacyGaitMode": false,
+      "animWalkVelOverride": null,
+      "animJogVelOverride": null,
+      "animRunVelOverride": null
     },
     {
       "id": "WolfCubZombie",
@@ -3206,7 +3250,11 @@
       "detectionBreakRange": 0,
       "alertDuration": 2,
       "alertEscalateRange": 0,
-      "groupAlertRadius": 0
+      "groupAlertRadius": 0,
+      "legacyGaitMode": false,
+      "animWalkVelOverride": null,
+      "animJogVelOverride": null,
+      "animRunVelOverride": null
     },
     {
       "id": "ZombieMaleDeer",
@@ -3260,7 +3308,11 @@
       "detectionBreakRange": 20,
       "alertDuration": 0.5,
       "alertEscalateRange": 8,
-      "groupAlertRadius": 0
+      "groupAlertRadius": 0,
+      "legacyGaitMode": false,
+      "animWalkVelOverride": null,
+      "animJogVelOverride": null,
+      "animRunVelOverride": null
     },
     {
       "id": "abomination",
@@ -3320,7 +3372,11 @@
       "detectionBreakRange": 20,
       "alertDuration": 0.5,
       "alertEscalateRange": 8,
-      "groupAlertRadius": 0
+      "groupAlertRadius": 0,
+      "legacyGaitMode": false,
+      "animWalkVelOverride": null,
+      "animJogVelOverride": null,
+      "animRunVelOverride": null
     },
     {
       "id": "militia",
@@ -3381,7 +3437,11 @@
       "detectionBreakRange": 25,
       "alertDuration": 1.5,
       "alertEscalateRange": 8,
-      "groupAlertRadius": 12
+      "groupAlertRadius": 12,
+      "legacyGaitMode": false,
+      "animWalkVelOverride": null,
+      "animJogVelOverride": null,
+      "animRunVelOverride": null
     },
     {
       "id": "militia_copy2",
@@ -3445,7 +3505,11 @@
       "detectionBreakRange": 20,
       "alertDuration": 0.5,
       "alertEscalateRange": 8,
-      "groupAlertRadius": 0
+      "groupAlertRadius": 0,
+      "legacyGaitMode": false,
+      "animWalkVelOverride": null,
+      "animJogVelOverride": null,
+      "animRunVelOverride": null
     },
     {
       "id": "militia_copy2_copy",
@@ -3509,7 +3573,11 @@
       "detectionBreakRange": 20,
       "alertDuration": 0.5,
       "alertEscalateRange": 8,
-      "groupAlertRadius": 0
+      "groupAlertRadius": 0,
+      "legacyGaitMode": false,
+      "animWalkVelOverride": null,
+      "animJogVelOverride": null,
+      "animRunVelOverride": null
     },
     {
       "id": "militia_copy2_copy_copy",
@@ -3572,7 +3640,11 @@
       "detectionBreakRange": 20,
       "alertDuration": 0.5,
       "alertEscalateRange": 8,
-      "groupAlertRadius": 0
+      "groupAlertRadius": 0,
+      "legacyGaitMode": false,
+      "animWalkVelOverride": null,
+      "animJogVelOverride": null,
+      "animRunVelOverride": null
     },
     {
       "id": "militia_copy2_copy_copy_copy",
@@ -3635,7 +3707,11 @@
       "detectionBreakRange": 20,
       "alertDuration": 0.5,
       "alertEscalateRange": 8,
-      "groupAlertRadius": 0
+      "groupAlertRadius": 0,
+      "legacyGaitMode": false,
+      "animWalkVelOverride": null,
+      "animJogVelOverride": null,
+      "animRunVelOverride": null
     },
     {
       "id": "militia_copy2_copy_copy_copy_copy",
@@ -3698,7 +3774,11 @@
       "detectionBreakRange": 20,
       "alertDuration": 0.5,
       "alertEscalateRange": 8,
-      "groupAlertRadius": 0
+      "groupAlertRadius": 0,
+      "legacyGaitMode": false,
+      "animWalkVelOverride": null,
+      "animJogVelOverride": null,
+      "animRunVelOverride": null
     },
     {
       "id": "militia_copy2_copy_copy_copy_copy_copy",
@@ -3761,7 +3841,11 @@
       "detectionBreakRange": 20,
       "alertDuration": 0.5,
       "alertEscalateRange": 8,
-      "groupAlertRadius": 0
+      "groupAlertRadius": 0,
+      "legacyGaitMode": false,
+      "animWalkVelOverride": null,
+      "animJogVelOverride": null,
+      "animRunVelOverride": null
     },
     {
       "id": "militia_copy2_copy_copy_copy_copy_copy_copy",
@@ -3824,7 +3908,11 @@
       "detectionBreakRange": 20,
       "alertDuration": 0.5,
       "alertEscalateRange": 8,
-      "groupAlertRadius": 0
+      "groupAlertRadius": 0,
+      "legacyGaitMode": false,
+      "animWalkVelOverride": null,
+      "animJogVelOverride": null,
+      "animRunVelOverride": null
     },
     {
       "id": "militia_copy",
@@ -3885,7 +3973,11 @@
       "detectionBreakRange": 25,
       "alertDuration": 1.5,
       "alertEscalateRange": 8,
-      "groupAlertRadius": 12
+      "groupAlertRadius": 12,
+      "legacyGaitMode": false,
+      "animWalkVelOverride": null,
+      "animJogVelOverride": null,
+      "animRunVelOverride": null
     },
     {
       "id": "militia_copy_copy",
@@ -4243,7 +4335,11 @@
       "detectionBreakRange": 22,
       "alertDuration": 1,
       "alertEscalateRange": 8,
-      "groupAlertRadius": 0
+      "groupAlertRadius": 0,
+      "legacyGaitMode": false,
+      "animWalkVelOverride": null,
+      "animJogVelOverride": null,
+      "animRunVelOverride": null
     },
     {
       "id": "soldier",
@@ -4306,7 +4402,11 @@
       "detectionBreakRange": 25,
       "alertDuration": 1.5,
       "alertEscalateRange": 8,
-      "groupAlertRadius": 12
+      "groupAlertRadius": 12,
+      "legacyGaitMode": false,
+      "animWalkVelOverride": null,
+      "animJogVelOverride": null,
+      "animRunVelOverride": null
     },
     {
       "id": "knight",
@@ -4369,7 +4469,11 @@
       "detectionBreakRange": 25,
       "alertDuration": 1.5,
       "alertEscalateRange": 8,
-      "groupAlertRadius": 12
+      "groupAlertRadius": 12,
+      "legacyGaitMode": false,
+      "animWalkVelOverride": null,
+      "animJogVelOverride": null,
+      "animRunVelOverride": null
     },
     {
       "id": "archer",
@@ -4431,7 +4535,11 @@
       "detectionBreakRange": 25,
       "alertDuration": 1,
       "alertEscalateRange": 10,
-      "groupAlertRadius": 0
+      "groupAlertRadius": 0,
+      "legacyGaitMode": false,
+      "animWalkVelOverride": null,
+      "animJogVelOverride": null,
+      "animRunVelOverride": null
     },
     {
       "id": "skeleton_copy",
@@ -4494,7 +4602,11 @@
       "detectionBreakRange": 20,
       "alertDuration": 0.5,
       "alertEscalateRange": 8,
-      "groupAlertRadius": 0
+      "groupAlertRadius": 0,
+      "legacyGaitMode": false,
+      "animWalkVelOverride": null,
+      "animJogVelOverride": null,
+      "animRunVelOverride": null
     },
     {
       "id": "skeleton_copy_copy",
@@ -4557,7 +4669,11 @@
       "detectionBreakRange": 20,
       "alertDuration": 0.5,
       "alertEscalateRange": 8,
-      "groupAlertRadius": 0
+      "groupAlertRadius": 0,
+      "legacyGaitMode": false,
+      "animWalkVelOverride": null,
+      "animJogVelOverride": null,
+      "animRunVelOverride": null
     },
     {
       "id": "skeleton_copy_copy_copy",
@@ -4618,7 +4734,11 @@
       "detectionBreakRange": 20,
       "alertDuration": 0.5,
       "alertEscalateRange": 8,
-      "groupAlertRadius": 0
+      "groupAlertRadius": 0,
+      "legacyGaitMode": false,
+      "animWalkVelOverride": null,
+      "animJogVelOverride": null,
+      "animRunVelOverride": null
     },
     {
       "id": "Boar",
@@ -4678,7 +4798,11 @@
       "detectionBreakRange": 22,
       "alertDuration": 0.5,
       "alertEscalateRange": 10,
-      "groupAlertRadius": 4
+      "groupAlertRadius": 4,
+      "legacyGaitMode": false,
+      "animWalkVelOverride": null,
+      "animJogVelOverride": null,
+      "animRunVelOverride": null
     },
     {
       "id": "GreatBoar",
@@ -4738,7 +4862,11 @@
       "detectionBreakRange": 22,
       "alertDuration": 0.5,
       "alertEscalateRange": 10,
-      "groupAlertRadius": 4
+      "groupAlertRadius": 4,
+      "legacyGaitMode": false,
+      "animWalkVelOverride": null,
+      "animJogVelOverride": null,
+      "animRunVelOverride": null
     },
     {
       "id": "ZombieJuvenileBear",
@@ -4802,7 +4930,11 @@
       "detectionBreakRange": 20,
       "alertDuration": 0.5,
       "alertEscalateRange": 8,
-      "groupAlertRadius": 0
+      "groupAlertRadius": 0,
+      "legacyGaitMode": false,
+      "animWalkVelOverride": null,
+      "animJogVelOverride": null,
+      "animRunVelOverride": null
     },
     {
       "id": "ZombieGrizzlyBear",
@@ -4866,7 +4998,11 @@
       "detectionBreakRange": 20,
       "alertDuration": 0.5,
       "alertEscalateRange": 8,
-      "groupAlertRadius": 0
+      "groupAlertRadius": 0,
+      "legacyGaitMode": false,
+      "animWalkVelOverride": null,
+      "animJogVelOverride": null,
+      "animRunVelOverride": null
     },
     {
       "id": "ZombieBoar",
@@ -4926,7 +5062,11 @@
       "detectionBreakRange": 20,
       "alertDuration": 0.5,
       "alertEscalateRange": 8,
-      "groupAlertRadius": 0
+      "groupAlertRadius": 0,
+      "legacyGaitMode": false,
+      "animWalkVelOverride": null,
+      "animJogVelOverride": null,
+      "animRunVelOverride": null
     },
     {
       "id": "ZombieGreatBoar",
@@ -4986,7 +5126,11 @@
       "detectionBreakRange": 20,
       "alertDuration": 0.5,
       "alertEscalateRange": 8,
-      "groupAlertRadius": 0
+      "groupAlertRadius": 0,
+      "legacyGaitMode": false,
+      "animWalkVelOverride": null,
+      "animJogVelOverride": null,
+      "animRunVelOverride": null
     },
     {
       "id": "wretched",
@@ -5017,7 +5161,7 @@
         "magicResist": 16,
         "encumbrance": 2,
         "naturalProt": 0,
-        "combatSpeed": 5
+        "combatSpeed": 2.5
       },
       "zombieTypeID": "",
       "spellID": "",
@@ -5041,14 +5185,35 @@
       "accelHalfTime": null,
       "accel80Time": null,
       "accelFullTime": null,
-      "weaponPoints": {},
+      "weaponPoints": {
+        "Idle": {
+          "60": [
+            {
+              "hilt": {
+                "x": 0,
+                "y": 0,
+                "behind": false
+              },
+              "tip": {
+                "x": -11.992376,
+                "y": -36.81,
+                "behind": false
+              }
+            }
+          ]
+        }
+      },
       "animTimings": {},
       "archetype": "",
       "detectionRange": 20,
       "detectionBreakRange": 0,
       "alertDuration": 2,
       "alertEscalateRange": 0,
-      "groupAlertRadius": 0
+      "groupAlertRadius": 0,
+      "legacyGaitMode": false,
+      "animWalkVelOverride": null,
+      "animJogVelOverride": null,
+      "animRunVelOverride": null
     },
     {
       "id": "pale_acolyte",
@@ -5079,7 +5244,7 @@
         "magicResist": 16,
         "encumbrance": 2,
         "naturalProt": 40,
-        "combatSpeed": 5
+        "combatSpeed": 2.5
       },
       "zombieTypeID": "",
       "spellID": "",
@@ -5110,7 +5275,11 @@
       "detectionBreakRange": 0,
       "alertDuration": 2,
       "alertEscalateRange": 0,
-      "groupAlertRadius": 0
+      "groupAlertRadius": 0,
+      "legacyGaitMode": false,
+      "animWalkVelOverride": null,
+      "animJogVelOverride": null,
+      "animRunVelOverride": null
     },
     {
       "id": "wight",
@@ -5141,7 +5310,7 @@
         "magicResist": 16,
         "encumbrance": 2,
         "naturalProt": 10,
-        "combatSpeed": 8
+        "combatSpeed": 2.5
       },
       "zombieTypeID": "",
       "spellID": "",
@@ -5172,7 +5341,11 @@
       "detectionBreakRange": 0,
       "alertDuration": 2,
       "alertEscalateRange": 0,
-      "groupAlertRadius": 0
+      "groupAlertRadius": 0,
+      "legacyGaitMode": false,
+      "animWalkVelOverride": null,
+      "animJogVelOverride": null,
+      "animRunVelOverride": null
     },
     {
       "id": "lich",
@@ -5203,7 +5376,7 @@
         "magicResist": 16,
         "encumbrance": 0,
         "naturalProt": 15,
-        "combatSpeed": 10
+        "combatSpeed": 2.5
       },
       "zombieTypeID": "",
       "spellID": "",
@@ -5234,7 +5407,11 @@
       "detectionBreakRange": 0,
       "alertDuration": 2,
       "alertEscalateRange": 0,
-      "groupAlertRadius": 0
+      "groupAlertRadius": 0,
+      "legacyGaitMode": false,
+      "animWalkVelOverride": null,
+      "animJogVelOverride": null,
+      "animRunVelOverride": null
     },
     {
       "id": "grand_necromancer",
@@ -5265,7 +5442,7 @@
         "magicResist": 16,
         "encumbrance": 2,
         "naturalProt": 0,
-        "combatSpeed": 5
+        "combatSpeed": 2.5
       },
       "zombieTypeID": "",
       "spellID": "",
@@ -5296,7 +5473,11 @@
       "detectionBreakRange": 0,
       "alertDuration": 2,
       "alertEscalateRange": 0,
-      "groupAlertRadius": 0
+      "groupAlertRadius": 0,
+      "legacyGaitMode": false,
+      "animWalkVelOverride": null,
+      "animJogVelOverride": null,
+      "animRunVelOverride": null
     }
   ]
 }

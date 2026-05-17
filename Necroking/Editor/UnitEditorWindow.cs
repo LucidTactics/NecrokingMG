@@ -776,6 +776,10 @@ public class UnitEditorWindow
         drawY = DrawSpritePreview(def, drawX, drawY, contentW, dt);
         drawY += 8;
 
+        // ==== LOCOMOTION CALIBRATION ====
+        drawY = DrawLocomotionCalibrationSection(def, drawX, drawY, contentW);
+        drawY += 8;
+
         // RU01: Combat Stats BEFORE Identity
         // ==== STATS SECTION ====
         drawY = DrawStatsSection(def, drawX, drawY, contentW);
@@ -1901,6 +1905,94 @@ public class UnitEditorWindow
         if (Math.Abs(newCS - s.CombatSpeed) > 0.001f) { s.CombatSpeed = newCS; _unsavedChanges = true; }
         curY += RowH;
 
+        return curY;
+    }
+
+    // =========================================================================
+    //  LOCOMOTION CALIBRATION SECTION (pixel-stride animVel system)
+    // =========================================================================
+
+    private int DrawLocomotionCalibrationSection(UnitDef def, int x, int y, int w)
+    {
+        int curY = y;
+        DrawSectionHeader("Locomotion Calibration", x, ref curY, w);
+
+        // Per-unit toggle to fall back to the original CombatSpeed-derived system.
+        // Default OFF — the new pixel-stride math is what we want for everything;
+        // this exists for the cases where the heuristic mis-handles a sprite.
+        bool newLegacy = _ui.DrawCheckbox("Legacy gait mode (use CombatSpeed-derived thresholds)",
+            def.LegacyGaitMode, x, curY);
+        if (newLegacy != def.LegacyGaitMode) { def.LegacyGaitMode = newLegacy; _unsavedChanges = true; }
+        curY += RowH;
+
+        var profile = Render.LocomotionProfile.FromUnit(def);
+        var spriteData = def.SpriteData;
+        var cal = spriteData?.Calibration;
+
+        // Mode banner — tell the user which formula is actually live for this unit.
+        string mode = profile.IsLegacy
+            ? (def.LegacyGaitMode ? "MODE: Legacy (toggled on)" : "MODE: Legacy (calibration unavailable)")
+            : "MODE: Pixel-stride (new)";
+        _ui.DrawText(mode, new Vector2(x + 6, curY + 2),
+            profile.IsLegacy ? EditorBase.TextDim : EditorBase.TextBright);
+        curY += RowH;
+
+        if (cal == null)
+        {
+            _ui.DrawText("No sprite calibration loaded for this unit.",
+                new Vector2(x + 6, curY + 2), EditorBase.TextDim);
+            curY += RowH;
+        }
+
+        // Threshold readout (works in both modes). Shows the actual jog/run
+        // thresholds the gait picker is using right now.
+        _ui.DrawText(
+            $"Thresholds  jog≥ {profile.JogThreshold:F2}   run≥ {profile.RunThreshold:F2}   (hys ±{profile.JogHysteresis:F2}/±{profile.RunHysteresis:F2})",
+            new Vector2(x + 6, curY + 2), EditorBase.TextDim);
+        curY += RowH;
+
+        // Per-gait rows
+        curY = DrawGaitRow("Walk", def, profile, cal?.Walk, profile.AnimWalkVel,
+            def.AnimWalkVelOverride, v => { def.AnimWalkVelOverride = v; _unsavedChanges = true; },
+            "loc_walk_ov", x, curY, w);
+        curY = DrawGaitRow("Jog", def, profile, cal?.Jog, profile.AnimJogVel,
+            def.AnimJogVelOverride, v => { def.AnimJogVelOverride = v; _unsavedChanges = true; },
+            "loc_jog_ov", x, curY, w);
+        curY = DrawGaitRow("Run", def, profile, cal?.Run, profile.AnimRunVel,
+            def.AnimRunVelOverride, v => { def.AnimRunVelOverride = v; _unsavedChanges = true; },
+            "loc_run_ov", x, curY, w);
+
+        return curY;
+    }
+
+    /// <summary>Renders one gait's calibration: measured stride + cycle + computed
+    /// animVel on a first line, then a nullable-float override field that wins
+    /// over the auto value when set.</summary>
+    private int DrawGaitRow(string gaitName, UnitDef def,
+        in Render.LocomotionProfile profile, Render.StrideCalibration.GaitCalibration? g,
+        float autoComputedVel, float? overrideVal, Action<float?> setOverride,
+        string fieldId, int x, int y, int w)
+    {
+        int curY = y;
+
+        // Diagnostic line: stride / cycle / computed velocity. In legacy mode this
+        // info is still useful for understanding what the pixel measurement said
+        // (so you can decide whether to flip off legacy mode for this unit).
+        string strideStr = g != null && g.StridePx > 0f
+            ? $"{g.StridePx:F0}px{(g.WasExtrapolated ? " (extrap)" : "")}"
+            : "—";
+        string cycleStr = g != null && g.CycleSeconds > 0f ? $"{g.CycleSeconds:F2}s" : "—";
+        string velStr = autoComputedVel > 0f ? $"{autoComputedVel:F2}/s" : "—";
+
+        var color = (g != null && g.WasExtrapolated) ? EditorBase.TextDim : EditorBase.TextBright;
+        _ui.DrawText($"{gaitName,-4}  stride {strideStr,-16}  cycle {cycleStr,-7}  computedVel {velStr}",
+            new Vector2(x + 6, curY + 2), color);
+        curY += RowH;
+
+        // Override field (nullable). Uses the same checkbox-to-enable pattern as
+        // Combat Overrides so callers can clear the override by unticking.
+        curY = DrawNullableFloat(fieldId, $"  {gaitName} velOverride", overrideVal,
+            x, curY, w, 0.1f, setOverride);
         return curY;
     }
 

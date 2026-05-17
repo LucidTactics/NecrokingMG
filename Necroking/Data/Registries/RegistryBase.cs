@@ -22,6 +22,13 @@ public abstract class RegistryBase<TDef> where TDef : class, IHasId, new()
     public TDef? Get(string id) => _defs.GetValueOrDefault(id);
     public IReadOnlyList<string> GetIDs() => _orderedIDs;
     public int Count => _orderedIDs.Count;
+    /// <summary>Iterate every loaded def in registration order. Used for post-load
+    /// passes (e.g. wiring SpriteData refs after atlases load).</summary>
+    public IEnumerable<TDef> All()
+    {
+        foreach (var id in _orderedIDs)
+            if (_defs.TryGetValue(id, out var d)) yield return d;
+    }
 
     public void Add(TDef def)
     {
