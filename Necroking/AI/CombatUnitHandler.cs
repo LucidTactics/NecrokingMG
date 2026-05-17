@@ -1,5 +1,6 @@
 using System;
 using Necroking.Core;
+using Necroking.Movement;
 
 namespace Necroking.AI;
 
@@ -144,10 +145,12 @@ public class CombatUnitHandler : IArchetypeHandler
 
     private static void UpdatePatrol(ref AIContext ctx)
     {
-        // Walk to current waypoint, pause, advance
+        // Walk to current waypoint, pause, advance. Walk effort, full walk
+        // speed — patrol is purposeful but unhurried.
         if (ctx.Subroutine == PatrolWalking)
         {
-            SubroutineSteps.MoveToward(ref ctx, ctx.Units[ctx.UnitIndex].MoveTarget, ctx.MySpeed * 0.5f);
+            SubroutineSteps.SetEffort(ref ctx, MoveEffort.Walk);
+            SubroutineSteps.MoveToward(ref ctx, ctx.Units[ctx.UnitIndex].MoveTarget, ctx.MySpeed);
             if ((ctx.Units[ctx.UnitIndex].MoveTarget - ctx.MyPos).LengthSq() < 2f)
             {
                 ctx.Subroutine = PatrolWaiting;
@@ -181,16 +184,23 @@ public class CombatUnitHandler : IArchetypeHandler
 
     private static void UpdateGuard(ref AIContext ctx)
     {
-        // Stand at spawn position, face outward
+        // Stand at spawn position. Walk effort if drifted off, lazier cap
+        // (0.5) since guards repositioning shouldn't look hurried.
         float dist = (ctx.MyPos - ctx.Units[ctx.UnitIndex].SpawnPosition).Length();
         if (dist > 1f)
-            SubroutineSteps.MoveToward(ref ctx, ctx.Units[ctx.UnitIndex].SpawnPosition, ctx.MySpeed * 0.5f);
+        {
+            SubroutineSteps.SetEffort(ref ctx, MoveEffort.Walk, 0.5f);
+            SubroutineSteps.MoveToward(ref ctx, ctx.Units[ctx.UnitIndex].SpawnPosition, ctx.MySpeed);
+        }
         else
             ctx.Units[ctx.UnitIndex].PreferredVel = Vec2.Zero;
     }
 
     private static void UpdateIdleRoam(ref AIContext ctx)
     {
+        // Roaming/wandering: Walk effort, half walk speed so it reads as a
+        // casual stroll. IdleRoam itself uses ctx.MySpeed as the cap.
+        SubroutineSteps.SetEffort(ref ctx, MoveEffort.Walk, 0.5f);
         SubroutineSteps.IdleRoam(ref ctx, 8f);
     }
 
@@ -207,6 +217,10 @@ public class CombatUnitHandler : IArchetypeHandler
 
         if (ctx.Subroutine == CombatChase)
         {
+            // Chase = full Sprint effort. Unit ramps from current velocity up
+            // to CombatSpeed × sprintMultiplier; the gait picker shows Walk →
+            // Jog → Run as velocity catches up.
+            SubroutineSteps.SetEffort(ref ctx, MoveEffort.Sprint);
             SubroutineSteps.MoveToTarget(ref ctx);
             int targetIdx = SubroutineSteps.ResolveTarget(ref ctx);
             if (targetIdx >= 0)
@@ -242,7 +256,18 @@ public class CombatUnitHandler : IArchetypeHandler
         Vec2 returnPos = ctx.Units[ctx.UnitIndex].SpawnPosition;
         float dist = (ctx.MyPos - returnPos).Length();
         if (dist > 2f)
-            SubroutineSteps.MoveToward(ref ctx, returnPos, ctx.MySpeed * 0.6f);
+        {
+            // Effort depends on whether threats are still detected. Awareness
+            // state Alert/Aggressive (and a non-Unaware AlertState) means
+            // enemies haven't fully cleared yet — retreat under pursuit
+            // warrants Sprint. Otherwise it's just a stroll home.
+            bool stillThreatened = ctx.AlertState >= (byte)UnitAlertState.Alert;
+            if (stillThreatened)
+                SubroutineSteps.SetEffort(ref ctx, MoveEffort.Sprint);
+            else
+                SubroutineSteps.SetEffort(ref ctx, MoveEffort.Walk);
+            SubroutineSteps.MoveToward(ref ctx, returnPos, ctx.MySpeed);
+        }
         else
         {
             ctx.Routine = RoutineIdle;

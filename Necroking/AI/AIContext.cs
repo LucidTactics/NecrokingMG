@@ -31,6 +31,12 @@ public ref struct AIContext
     // Anim metadata for effect-time lookups (used by AI to time things like pounce takeoffs).
     public Dictionary<string, AnimationMeta>? AnimMeta;
 
+    /// <summary>Player necromancer's sprint-ramp scalar (0=walking, 1=full sprint).
+    /// Used by HordeMinion handler's distance-banded effort logic — the bands
+    /// compress as the necro speeds up so minions escalate effort faster when
+    /// they're falling behind a sprinting master.</summary>
+    public float NecroSprintT;
+
     // Game clock
     public float GameTime;          // total elapsed seconds
     public float DayTime;           // 0..1 fraction of current day cycle

@@ -331,6 +331,12 @@ public class Unit
     public Vec2 SpawnPosition;
     public bool IsSneaking;
 
+    /// <summary>Time spent in the current flee since entering Fleeing routine.
+    /// Used by DeerHerdHandler to ramp effort (Hurry for first 2s, then Sprint).
+    /// Reset to 0 whenever Routine becomes Fleeing OR is not Fleeing — so a deer
+    /// that stops fleeing and starts again gets the 2s ramp from scratch.</summary>
+    public float FleeElapsed;
+
     // Two-channel animation system.
     // RoutineAnim is the base layer — AI handlers write it every frame (locomotion,
     // feeding, etc.) and is a normal public field.

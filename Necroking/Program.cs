@@ -14,6 +14,9 @@ public static class LaunchArgs
     public static Color? BgColor;
     public static int ResolutionW;
     public static int ResolutionH;
+    /// <summary>Optional unit id selector. Used by debug scenarios like
+    /// <c>stride_debug</c> to pick which unit's calibration to visualize.</summary>
+    public static string? Unit;
 
     public static void Parse(string[] args)
     {
@@ -32,6 +35,9 @@ public static class LaunchArgs
                     break;
                 case "--headless":
                     Headless = true;
+                    break;
+                case "--unit" when i + 1 < args.Length:
+                    Unit = args[++i];
                     break;
                 case "--bgcolor" when i + 1 < args.Length:
                 {

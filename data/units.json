@@ -2306,6 +2306,11 @@
       "alertEscalateRange": 0,
       "groupAlertRadius": 0,
       "legacyGaitMode": false,
+      "isQuadruped": false,
+      "dutyCycle": 0,
+      "targetWalkCycle": 1.2,
+      "jogSpeedMultiplier": 0,
+      "sprintSpeedMultiplier": 0,
       "animWalkVelOverride": null,
       "animJogVelOverride": null,
       "animRunVelOverride": null
@@ -2339,7 +2344,7 @@
         "magicResist": 6,
         "encumbrance": 0,
         "naturalProt": 0,
-        "combatSpeed": 3.6
+        "combatSpeed": 1.41
       },
       "zombieTypeID": "",
       "spellID": "",
@@ -2585,6 +2590,11 @@
       "alertEscalateRange": 8,
       "groupAlertRadius": 0,
       "legacyGaitMode": false,
+      "isQuadruped": false,
+      "dutyCycle": 0,
+      "targetWalkCycle": 1.2,
+      "jogSpeedMultiplier": 0,
+      "sprintSpeedMultiplier": 0,
       "animWalkVelOverride": null,
       "animJogVelOverride": null,
       "animRunVelOverride": null
@@ -2613,7 +2623,7 @@
         "magicResist": 2,
         "encumbrance": 2,
         "naturalProt": 5,
-        "combatSpeed": 10
+        "combatSpeed": 3
       },
       "zombieTypeID": "group_182459",
       "spellID": "",
@@ -2642,9 +2652,17 @@
       "alertEscalateRange": 5,
       "groupAlertRadius": 15,
       "legacyGaitMode": false,
+      "isQuadruped": true,
+      "dutyCycle": 0.5,
+      "targetWalkCycle": 1,
+      "jogSpeedMultiplier": 3,
+      "sprintSpeedMultiplier": 9,
       "animWalkVelOverride": null,
       "animJogVelOverride": null,
-      "animRunVelOverride": null
+      "animRunVelOverride": null,
+      "maxAcceleration": 12.0,
+      "maxDeceleration": 60.0,
+      "maxLateralAccel": 35.0
     },
     {
       "id": "ZombieFemaleDeer",
@@ -2670,7 +2688,7 @@
         "magicResist": 2,
         "encumbrance": 2,
         "naturalProt": 4,
-        "combatSpeed": 5
+        "combatSpeed": 1.3
       },
       "zombieTypeID": "",
       "spellID": "",
@@ -2699,9 +2717,17 @@
       "alertEscalateRange": 8,
       "groupAlertRadius": 0,
       "legacyGaitMode": false,
+      "isQuadruped": true,
+      "dutyCycle": 0.5,
+      "targetWalkCycle": 1,
+      "jogSpeedMultiplier": 3,
+      "sprintSpeedMultiplier": 9,
       "animWalkVelOverride": null,
       "animJogVelOverride": null,
-      "animRunVelOverride": null
+      "animRunVelOverride": null,
+      "maxAcceleration": 8.0,
+      "maxDeceleration": 40.0,
+      "maxLateralAccel": 22.0
     },
     {
       "id": "MaleDeer",
@@ -2727,7 +2753,7 @@
         "magicResist": 3,
         "encumbrance": 2,
         "naturalProt": 5,
-        "combatSpeed": 10
+        "combatSpeed": 3
       },
       "zombieTypeID": "group_182459_copy",
       "spellID": "",
@@ -2757,9 +2783,17 @@
       "alertEscalateRange": 4,
       "groupAlertRadius": 15,
       "legacyGaitMode": false,
+      "isQuadruped": true,
+      "dutyCycle": 0.5,
+      "targetWalkCycle": 1,
+      "jogSpeedMultiplier": 3,
+      "sprintSpeedMultiplier": 9,
       "animWalkVelOverride": null,
       "animJogVelOverride": null,
-      "animRunVelOverride": null
+      "animRunVelOverride": null,
+      "maxAcceleration": 12.0,
+      "maxDeceleration": 60.0,
+      "maxLateralAccel": 35.0
     },
     {
       "id": "Wolf",
@@ -2785,7 +2819,7 @@
         "magicResist": 3,
         "encumbrance": 2,
         "naturalProt": 3,
-        "combatSpeed": 12
+        "combatSpeed": 2.5
       },
       "zombieTypeID": "ZombieWolf",
       "spellID": "",
@@ -2809,7 +2843,48 @@
       "accelHalfTime": null,
       "accel80Time": null,
       "accelFullTime": null,
-      "weaponPoints": {},
+      "weaponPoints": {
+        "Idle": {
+          "60": [
+            {
+              "hilt": {
+                "x": 0,
+                "y": 0,
+                "behind": false
+              },
+              "tip": {
+                "x": 0,
+                "y": 0,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": 0,
+                "y": 0,
+                "behind": false
+              },
+              "tip": {
+                "x": 0,
+                "y": 0,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": 0,
+                "y": 0,
+                "behind": false
+              },
+              "tip": {
+                "x": 0,
+                "y": 1,
+                "behind": false
+              }
+            }
+          ]
+        }
+      },
       "animTimings": {
         "Jog": {
           "frameDurationsMs": [
@@ -2830,9 +2905,17 @@
       "alertEscalateRange": 6,
       "groupAlertRadius": 12,
       "legacyGaitMode": false,
+      "isQuadruped": true,
+      "dutyCycle": 0.5,
+      "targetWalkCycle": 0.8,
+      "jogSpeedMultiplier": 3,
+      "sprintSpeedMultiplier": 9,
       "animWalkVelOverride": null,
       "animJogVelOverride": null,
-      "animRunVelOverride": null
+      "animRunVelOverride": null,
+      "maxAcceleration": 10.0,
+      "maxDeceleration": 50.0,
+      "maxLateralAccel": 30.0
     },
     {
       "id": "Bear",
@@ -2858,7 +2941,7 @@
         "magicResist": 3,
         "encumbrance": 2,
         "naturalProt": 8,
-        "combatSpeed": 6
+        "combatSpeed": 0.8
       },
       "zombieTypeID": "ZombieJuvenileBear",
       "spellID": "",
@@ -2910,9 +2993,17 @@
       "alertEscalateRange": 0,
       "groupAlertRadius": 0,
       "legacyGaitMode": false,
+      "isQuadruped": true,
+      "dutyCycle": 0.5,
+      "targetWalkCycle": 1.7,
+      "jogSpeedMultiplier": 3,
+      "sprintSpeedMultiplier": 9,
       "animWalkVelOverride": null,
       "animJogVelOverride": null,
-      "animRunVelOverride": null
+      "animRunVelOverride": null,
+      "maxAcceleration": 4.0,
+      "maxDeceleration": 20.0,
+      "maxLateralAccel": 10.0
     },
     {
       "id": "GrizzlyBear",
@@ -2938,7 +3029,7 @@
         "magicResist": 4,
         "encumbrance": 2,
         "naturalProt": 8,
-        "combatSpeed": 7
+        "combatSpeed": 1.1
       },
       "zombieTypeID": "ZombieGrizzlyBear",
       "spellID": "",
@@ -2990,9 +3081,17 @@
       "alertEscalateRange": 0,
       "groupAlertRadius": 0,
       "legacyGaitMode": false,
+      "isQuadruped": true,
+      "dutyCycle": 0.5,
+      "targetWalkCycle": 1.8,
+      "jogSpeedMultiplier": 3,
+      "sprintSpeedMultiplier": 9,
       "animWalkVelOverride": null,
       "animJogVelOverride": null,
-      "animRunVelOverride": null
+      "animRunVelOverride": null,
+      "maxAcceleration": 3.0,
+      "maxDeceleration": 16.0,
+      "maxLateralAccel": 8.0
     },
     {
       "id": "DireWolf",
@@ -3018,7 +3117,7 @@
         "magicResist": 3,
         "encumbrance": 2,
         "naturalProt": 3,
-        "combatSpeed": 14
+        "combatSpeed": 3
       },
       "zombieTypeID": "ZombieWolf",
       "spellID": "",
@@ -3063,9 +3162,17 @@
       "alertEscalateRange": 0,
       "groupAlertRadius": 0,
       "legacyGaitMode": false,
+      "isQuadruped": true,
+      "dutyCycle": 0.5,
+      "targetWalkCycle": 1,
+      "jogSpeedMultiplier": 3,
+      "sprintSpeedMultiplier": 9,
       "animWalkVelOverride": null,
       "animJogVelOverride": null,
-      "animRunVelOverride": null
+      "animRunVelOverride": null,
+      "maxAcceleration": 8.0,
+      "maxDeceleration": 40.0,
+      "maxLateralAccel": 22.0
     },
     {
       "id": "JuvWolf",
@@ -3091,7 +3198,7 @@
         "magicResist": 3,
         "encumbrance": 2,
         "naturalProt": 2,
-        "combatSpeed": 12
+        "combatSpeed": 2
       },
       "zombieTypeID": "ZombieWolf",
       "spellID": "",
@@ -3136,9 +3243,17 @@
       "alertEscalateRange": 0,
       "groupAlertRadius": 0,
       "legacyGaitMode": false,
+      "isQuadruped": true,
+      "dutyCycle": 0.5,
+      "targetWalkCycle": 0.6,
+      "jogSpeedMultiplier": 3,
+      "sprintSpeedMultiplier": 9,
       "animWalkVelOverride": null,
       "animJogVelOverride": null,
-      "animRunVelOverride": null
+      "animRunVelOverride": null,
+      "maxAcceleration": 12.0,
+      "maxDeceleration": 55.0,
+      "maxLateralAccel": 35.0
     },
     {
       "id": "ZombieWolf",
@@ -3164,7 +3279,7 @@
         "magicResist": 3,
         "encumbrance": 2,
         "naturalProt": 3,
-        "combatSpeed": 8
+        "combatSpeed": 1.93
       },
       "zombieTypeID": "group_182459_copy",
       "spellID": "",
@@ -3194,9 +3309,17 @@
       "alertEscalateRange": 8,
       "groupAlertRadius": 0,
       "legacyGaitMode": false,
+      "isQuadruped": true,
+      "dutyCycle": 0.5,
+      "targetWalkCycle": 0.8,
+      "jogSpeedMultiplier": 3,
+      "sprintSpeedMultiplier": 9,
       "animWalkVelOverride": null,
       "animJogVelOverride": null,
-      "animRunVelOverride": null
+      "animRunVelOverride": null,
+      "maxAcceleration": 8.0,
+      "maxDeceleration": 40.0,
+      "maxLateralAccel": 25.0
     },
     {
       "id": "WolfCubZombie",
@@ -3222,7 +3345,7 @@
         "magicResist": 3,
         "encumbrance": 2,
         "naturalProt": 3,
-        "combatSpeed": 8
+        "combatSpeed": 2.23
       },
       "zombieTypeID": "group_182459_copy",
       "spellID": "",
@@ -3252,9 +3375,17 @@
       "alertEscalateRange": 0,
       "groupAlertRadius": 0,
       "legacyGaitMode": false,
+      "isQuadruped": true,
+      "dutyCycle": 0.5,
+      "targetWalkCycle": 0.5,
+      "jogSpeedMultiplier": 3,
+      "sprintSpeedMultiplier": 9,
       "animWalkVelOverride": null,
       "animJogVelOverride": null,
-      "animRunVelOverride": null
+      "animRunVelOverride": null,
+      "maxAcceleration": 10.0,
+      "maxDeceleration": 45.0,
+      "maxLateralAccel": 30.0
     },
     {
       "id": "ZombieMaleDeer",
@@ -3280,7 +3411,7 @@
         "magicResist": 3,
         "encumbrance": 2,
         "naturalProt": 4,
-        "combatSpeed": 5
+        "combatSpeed": 1.3
       },
       "zombieTypeID": "",
       "spellID": "",
@@ -3310,9 +3441,17 @@
       "alertEscalateRange": 8,
       "groupAlertRadius": 0,
       "legacyGaitMode": false,
+      "isQuadruped": true,
+      "dutyCycle": 0.5,
+      "targetWalkCycle": 1,
+      "jogSpeedMultiplier": 3,
+      "sprintSpeedMultiplier": 9,
       "animWalkVelOverride": null,
       "animJogVelOverride": null,
-      "animRunVelOverride": null
+      "animRunVelOverride": null,
+      "maxAcceleration": 8.0,
+      "maxDeceleration": 40.0,
+      "maxLateralAccel": 22.0
     },
     {
       "id": "abomination",
@@ -3343,7 +3482,7 @@
         "magicResist": 14,
         "encumbrance": 0,
         "naturalProt": 8,
-        "combatSpeed": 3
+        "combatSpeed": 5.59
       },
       "zombieTypeID": "",
       "spellID": "",
@@ -3374,9 +3513,17 @@
       "alertEscalateRange": 8,
       "groupAlertRadius": 0,
       "legacyGaitMode": false,
+      "isQuadruped": false,
+      "dutyCycle": 0,
+      "targetWalkCycle": 1.5,
+      "jogSpeedMultiplier": 0,
+      "sprintSpeedMultiplier": 0,
       "animWalkVelOverride": null,
       "animJogVelOverride": null,
-      "animRunVelOverride": null
+      "animRunVelOverride": null,
+      "maxAcceleration": 4.0,
+      "maxDeceleration": 18.0,
+      "maxLateralAccel": 9.0
     },
     {
       "id": "militia",
@@ -3407,7 +3554,7 @@
         "magicResist": 11,
         "encumbrance": 4,
         "naturalProt": 1,
-        "combatSpeed": 3
+        "combatSpeed": 1.62
       },
       "zombieTypeID": "group_0",
       "spellID": "",
@@ -3439,6 +3586,11 @@
       "alertEscalateRange": 8,
       "groupAlertRadius": 12,
       "legacyGaitMode": false,
+      "isQuadruped": false,
+      "dutyCycle": 0,
+      "targetWalkCycle": 1.2,
+      "jogSpeedMultiplier": 0,
+      "sprintSpeedMultiplier": 0,
       "animWalkVelOverride": null,
       "animJogVelOverride": null,
       "animRunVelOverride": null
@@ -3507,6 +3659,11 @@
       "alertEscalateRange": 8,
       "groupAlertRadius": 0,
       "legacyGaitMode": false,
+      "isQuadruped": false,
+      "dutyCycle": 0,
+      "targetWalkCycle": 0,
+      "jogSpeedMultiplier": 0,
+      "sprintSpeedMultiplier": 0,
       "animWalkVelOverride": null,
       "animJogVelOverride": null,
       "animRunVelOverride": null
@@ -3575,6 +3732,11 @@
       "alertEscalateRange": 8,
       "groupAlertRadius": 0,
       "legacyGaitMode": false,
+      "isQuadruped": false,
+      "dutyCycle": 0,
+      "targetWalkCycle": 0,
+      "jogSpeedMultiplier": 0,
+      "sprintSpeedMultiplier": 0,
       "animWalkVelOverride": null,
       "animJogVelOverride": null,
       "animRunVelOverride": null
@@ -3642,6 +3804,11 @@
       "alertEscalateRange": 8,
       "groupAlertRadius": 0,
       "legacyGaitMode": false,
+      "isQuadruped": false,
+      "dutyCycle": 0,
+      "targetWalkCycle": 0,
+      "jogSpeedMultiplier": 0,
+      "sprintSpeedMultiplier": 0,
       "animWalkVelOverride": null,
       "animJogVelOverride": null,
       "animRunVelOverride": null
@@ -3709,6 +3876,11 @@
       "alertEscalateRange": 8,
       "groupAlertRadius": 0,
       "legacyGaitMode": false,
+      "isQuadruped": false,
+      "dutyCycle": 0,
+      "targetWalkCycle": 0,
+      "jogSpeedMultiplier": 0,
+      "sprintSpeedMultiplier": 0,
       "animWalkVelOverride": null,
       "animJogVelOverride": null,
       "animRunVelOverride": null
@@ -3776,6 +3948,11 @@
       "alertEscalateRange": 8,
       "groupAlertRadius": 0,
       "legacyGaitMode": false,
+      "isQuadruped": false,
+      "dutyCycle": 0,
+      "targetWalkCycle": 0,
+      "jogSpeedMultiplier": 0,
+      "sprintSpeedMultiplier": 0,
       "animWalkVelOverride": null,
       "animJogVelOverride": null,
       "animRunVelOverride": null
@@ -3843,6 +4020,11 @@
       "alertEscalateRange": 8,
       "groupAlertRadius": 0,
       "legacyGaitMode": false,
+      "isQuadruped": false,
+      "dutyCycle": 0,
+      "targetWalkCycle": 0,
+      "jogSpeedMultiplier": 0,
+      "sprintSpeedMultiplier": 0,
       "animWalkVelOverride": null,
       "animJogVelOverride": null,
       "animRunVelOverride": null
@@ -3910,13 +4092,18 @@
       "alertEscalateRange": 8,
       "groupAlertRadius": 0,
       "legacyGaitMode": false,
+      "isQuadruped": false,
+      "dutyCycle": 0,
+      "targetWalkCycle": 0,
+      "jogSpeedMultiplier": 0,
+      "sprintSpeedMultiplier": 0,
       "animWalkVelOverride": null,
       "animJogVelOverride": null,
       "animRunVelOverride": null
     },
     {
       "id": "militia_copy",
-      "name": "Light Infantry Sword \u0026 Shield",
+      "name": "Light Infantry Sword & Shield",
       "type": "Dynamic",
       "faction": "Human",
       "ai": "AttackClosest",
@@ -3933,7 +4120,7 @@
       },
       "sprite": {
         "atlas": "Navarre_Units",
-        "name": "NavarreLightInfantry_Sword\u0026Shield"
+        "name": "NavarreLightInfantry_Sword&Shield"
       },
       "stats": {
         "maxHP": 10,
@@ -3975,6 +4162,11 @@
       "alertEscalateRange": 8,
       "groupAlertRadius": 12,
       "legacyGaitMode": false,
+      "isQuadruped": false,
+      "dutyCycle": 0,
+      "targetWalkCycle": 0,
+      "jogSpeedMultiplier": 0,
+      "sprintSpeedMultiplier": 0,
       "animWalkVelOverride": null,
       "animJogVelOverride": null,
       "animRunVelOverride": null
@@ -4337,6 +4529,11 @@
       "alertEscalateRange": 8,
       "groupAlertRadius": 0,
       "legacyGaitMode": false,
+      "isQuadruped": false,
+      "dutyCycle": 0,
+      "targetWalkCycle": 0,
+      "jogSpeedMultiplier": 0,
+      "sprintSpeedMultiplier": 0,
       "animWalkVelOverride": null,
       "animJogVelOverride": null,
       "animRunVelOverride": null
@@ -4360,7 +4557,7 @@
       },
       "sprite": {
         "atlas": "Navarre_Units",
-        "name": "NavarreTemplar_Sword\u0026Shield"
+        "name": "NavarreTemplar_Sword&Shield"
       },
       "stats": {
         "maxHP": 10,
@@ -4370,7 +4567,7 @@
         "magicResist": 10,
         "encumbrance": 6,
         "naturalProt": 0,
-        "combatSpeed": 2.5
+        "combatSpeed": 1.97
       },
       "zombieTypeID": "group_1",
       "spellID": "",
@@ -4404,6 +4601,11 @@
       "alertEscalateRange": 8,
       "groupAlertRadius": 12,
       "legacyGaitMode": false,
+      "isQuadruped": false,
+      "dutyCycle": 0,
+      "targetWalkCycle": 1.2,
+      "jogSpeedMultiplier": 0,
+      "sprintSpeedMultiplier": 0,
       "animWalkVelOverride": null,
       "animJogVelOverride": null,
       "animRunVelOverride": null
@@ -4437,7 +4639,7 @@
         "magicResist": 12,
         "encumbrance": 5,
         "naturalProt": 0,
-        "combatSpeed": 3
+        "combatSpeed": 1.97
       },
       "zombieTypeID": "group_1",
       "spellID": "",
@@ -4471,9 +4673,17 @@
       "alertEscalateRange": 8,
       "groupAlertRadius": 12,
       "legacyGaitMode": false,
+      "isQuadruped": false,
+      "dutyCycle": 0,
+      "targetWalkCycle": 1.2,
+      "jogSpeedMultiplier": 0,
+      "sprintSpeedMultiplier": 0,
       "animWalkVelOverride": null,
       "animJogVelOverride": null,
-      "animRunVelOverride": null
+      "animRunVelOverride": null,
+      "maxAcceleration": 3.0,
+      "maxDeceleration": 15.0,
+      "maxLateralAccel": 8.0
     },
     {
       "id": "archer",
@@ -4504,7 +4714,7 @@
         "magicResist": 10,
         "encumbrance": 2,
         "naturalProt": 0,
-        "combatSpeed": 2.5
+        "combatSpeed": 1.72
       },
       "zombieTypeID": "group_0",
       "spellID": "",
@@ -4537,6 +4747,11 @@
       "alertEscalateRange": 10,
       "groupAlertRadius": 0,
       "legacyGaitMode": false,
+      "isQuadruped": false,
+      "dutyCycle": 0,
+      "targetWalkCycle": 1.2,
+      "jogSpeedMultiplier": 0,
+      "sprintSpeedMultiplier": 0,
       "animWalkVelOverride": null,
       "animJogVelOverride": null,
       "animRunVelOverride": null
@@ -4604,6 +4819,11 @@
       "alertEscalateRange": 8,
       "groupAlertRadius": 0,
       "legacyGaitMode": false,
+      "isQuadruped": false,
+      "dutyCycle": 0,
+      "targetWalkCycle": 0,
+      "jogSpeedMultiplier": 0,
+      "sprintSpeedMultiplier": 0,
       "animWalkVelOverride": null,
       "animJogVelOverride": null,
       "animRunVelOverride": null
@@ -4671,6 +4891,11 @@
       "alertEscalateRange": 8,
       "groupAlertRadius": 0,
       "legacyGaitMode": false,
+      "isQuadruped": false,
+      "dutyCycle": 0,
+      "targetWalkCycle": 0,
+      "jogSpeedMultiplier": 0,
+      "sprintSpeedMultiplier": 0,
       "animWalkVelOverride": null,
       "animJogVelOverride": null,
       "animRunVelOverride": null
@@ -4736,6 +4961,11 @@
       "alertEscalateRange": 8,
       "groupAlertRadius": 0,
       "legacyGaitMode": false,
+      "isQuadruped": false,
+      "dutyCycle": 0,
+      "targetWalkCycle": 0,
+      "jogSpeedMultiplier": 0,
+      "sprintSpeedMultiplier": 0,
       "animWalkVelOverride": null,
       "animJogVelOverride": null,
       "animRunVelOverride": null
@@ -4764,7 +4994,7 @@
         "magicResist": 2,
         "encumbrance": 2,
         "naturalProt": 6,
-        "combatSpeed": 10
+        "combatSpeed": 0.91
       },
       "zombieTypeID": "ZombieBoar",
       "spellID": "",
@@ -4800,9 +5030,17 @@
       "alertEscalateRange": 10,
       "groupAlertRadius": 4,
       "legacyGaitMode": false,
+      "isQuadruped": true,
+      "dutyCycle": 0.5,
+      "targetWalkCycle": 1,
+      "jogSpeedMultiplier": 3,
+      "sprintSpeedMultiplier": 9,
       "animWalkVelOverride": null,
       "animJogVelOverride": null,
-      "animRunVelOverride": null
+      "animRunVelOverride": null,
+      "maxAcceleration": 5.0,
+      "maxDeceleration": 15.0,
+      "maxLateralAccel": 8.0
     },
     {
       "id": "GreatBoar",
@@ -4828,7 +5066,7 @@
         "magicResist": 3,
         "encumbrance": 2,
         "naturalProt": 8,
-        "combatSpeed": 9
+        "combatSpeed": 1.14
       },
       "zombieTypeID": "ZombieGreatBoar",
       "spellID": "",
@@ -4864,9 +5102,17 @@
       "alertEscalateRange": 10,
       "groupAlertRadius": 4,
       "legacyGaitMode": false,
+      "isQuadruped": true,
+      "dutyCycle": 0.5,
+      "targetWalkCycle": 1.4,
+      "jogSpeedMultiplier": 3,
+      "sprintSpeedMultiplier": 9,
       "animWalkVelOverride": null,
       "animJogVelOverride": null,
-      "animRunVelOverride": null
+      "animRunVelOverride": null,
+      "maxAcceleration": 4.0,
+      "maxDeceleration": 12.0,
+      "maxLateralAccel": 6.0
     },
     {
       "id": "ZombieJuvenileBear",
@@ -4892,7 +5138,7 @@
         "magicResist": 3,
         "encumbrance": 2,
         "naturalProt": 6,
-        "combatSpeed": 10
+        "combatSpeed": 0.97
       },
       "zombieTypeID": "",
       "spellID": "",
@@ -4932,9 +5178,17 @@
       "alertEscalateRange": 8,
       "groupAlertRadius": 0,
       "legacyGaitMode": false,
+      "isQuadruped": true,
+      "dutyCycle": 0.5,
+      "targetWalkCycle": 1.4,
+      "jogSpeedMultiplier": 3,
+      "sprintSpeedMultiplier": 9,
       "animWalkVelOverride": null,
       "animJogVelOverride": null,
-      "animRunVelOverride": null
+      "animRunVelOverride": null,
+      "maxAcceleration": 3.0,
+      "maxDeceleration": 16.0,
+      "maxLateralAccel": 8.0
     },
     {
       "id": "ZombieGrizzlyBear",
@@ -4960,7 +5214,7 @@
         "magicResist": 4,
         "encumbrance": 2,
         "naturalProt": 6,
-        "combatSpeed": 10
+        "combatSpeed": 1.1
       },
       "zombieTypeID": "",
       "spellID": "",
@@ -5000,9 +5254,17 @@
       "alertEscalateRange": 8,
       "groupAlertRadius": 0,
       "legacyGaitMode": false,
+      "isQuadruped": true,
+      "dutyCycle": 0.5,
+      "targetWalkCycle": 1.8,
+      "jogSpeedMultiplier": 3,
+      "sprintSpeedMultiplier": 9,
       "animWalkVelOverride": null,
       "animJogVelOverride": null,
-      "animRunVelOverride": null
+      "animRunVelOverride": null,
+      "maxAcceleration": 2.5,
+      "maxDeceleration": 12.0,
+      "maxLateralAccel": 6.0
     },
     {
       "id": "ZombieBoar",
@@ -5028,7 +5290,7 @@
         "magicResist": 2,
         "encumbrance": 2,
         "naturalProt": 6,
-        "combatSpeed": 10
+        "combatSpeed": 0.75
       },
       "zombieTypeID": "",
       "spellID": "",
@@ -5064,9 +5326,17 @@
       "alertEscalateRange": 8,
       "groupAlertRadius": 0,
       "legacyGaitMode": false,
+      "isQuadruped": true,
+      "dutyCycle": 0.5,
+      "targetWalkCycle": 1,
+      "jogSpeedMultiplier": 3,
+      "sprintSpeedMultiplier": 9,
       "animWalkVelOverride": null,
       "animJogVelOverride": null,
-      "animRunVelOverride": null
+      "animRunVelOverride": null,
+      "maxAcceleration": 4.0,
+      "maxDeceleration": 12.0,
+      "maxLateralAccel": 6.0
     },
     {
       "id": "ZombieGreatBoar",
@@ -5092,7 +5362,7 @@
         "magicResist": 3,
         "encumbrance": 2,
         "naturalProt": 8,
-        "combatSpeed": 9
+        "combatSpeed": 2.5
       },
       "zombieTypeID": "",
       "spellID": "",
@@ -5128,9 +5398,17 @@
       "alertEscalateRange": 8,
       "groupAlertRadius": 0,
       "legacyGaitMode": false,
+      "isQuadruped": true,
+      "dutyCycle": 0.5,
+      "targetWalkCycle": 1.4,
+      "jogSpeedMultiplier": 3,
+      "sprintSpeedMultiplier": 9,
       "animWalkVelOverride": null,
       "animJogVelOverride": null,
-      "animRunVelOverride": null
+      "animRunVelOverride": null,
+      "maxAcceleration": 3.0,
+      "maxDeceleration": 10.0,
+      "maxLateralAccel": 5.0
     },
     {
       "id": "wretched",
@@ -5211,6 +5489,11 @@
       "alertEscalateRange": 0,
       "groupAlertRadius": 0,
       "legacyGaitMode": false,
+      "isQuadruped": false,
+      "dutyCycle": 0,
+      "targetWalkCycle": 1,
+      "jogSpeedMultiplier": 0,
+      "sprintSpeedMultiplier": 0,
       "animWalkVelOverride": null,
       "animJogVelOverride": null,
       "animRunVelOverride": null
@@ -5277,6 +5560,11 @@
       "alertEscalateRange": 0,
       "groupAlertRadius": 0,
       "legacyGaitMode": false,
+      "isQuadruped": false,
+      "dutyCycle": 0,
+      "targetWalkCycle": 1.2,
+      "jogSpeedMultiplier": 0,
+      "sprintSpeedMultiplier": 0,
       "animWalkVelOverride": null,
       "animJogVelOverride": null,
       "animRunVelOverride": null
@@ -5343,6 +5631,11 @@
       "alertEscalateRange": 0,
       "groupAlertRadius": 0,
       "legacyGaitMode": false,
+      "isQuadruped": false,
+      "dutyCycle": 0,
+      "targetWalkCycle": 1.2,
+      "jogSpeedMultiplier": 0,
+      "sprintSpeedMultiplier": 0,
       "animWalkVelOverride": null,
       "animJogVelOverride": null,
       "animRunVelOverride": null
@@ -5409,6 +5702,11 @@
       "alertEscalateRange": 0,
       "groupAlertRadius": 0,
       "legacyGaitMode": false,
+      "isQuadruped": false,
+      "dutyCycle": 0,
+      "targetWalkCycle": 1.2,
+      "jogSpeedMultiplier": 0,
+      "sprintSpeedMultiplier": 0,
       "animWalkVelOverride": null,
       "animJogVelOverride": null,
       "animRunVelOverride": null
@@ -5475,6 +5773,11 @@
       "alertEscalateRange": 0,
       "groupAlertRadius": 0,
       "legacyGaitMode": false,
+      "isQuadruped": false,
+      "dutyCycle": 0,
+      "targetWalkCycle": 1.2,
+      "jogSpeedMultiplier": 0,
+      "sprintSpeedMultiplier": 0,
       "animWalkVelOverride": null,
       "animJogVelOverride": null,
       "animRunVelOverride": null

@@ -776,10 +776,6 @@ public class UnitEditorWindow
         drawY = DrawSpritePreview(def, drawX, drawY, contentW, dt);
         drawY += 8;
 
-        // ==== LOCOMOTION CALIBRATION ====
-        drawY = DrawLocomotionCalibrationSection(def, drawX, drawY, contentW);
-        drawY += 8;
-
         // RU01: Combat Stats BEFORE Identity
         // ==== STATS SECTION ====
         drawY = DrawStatsSection(def, drawX, drawY, contentW);
@@ -803,6 +799,10 @@ public class UnitEditorWindow
 
         // ==== COLOR SECTION ====
         drawY = DrawColorSection(def, drawX, drawY, contentW);
+        drawY += 8;
+
+        // ==== LOCOMOTION CALIBRATION ==== (bottom — rarely-edited tuning data)
+        drawY = DrawLocomotionCalibrationSection(def, drawX, drawY, contentW);
         drawY += 16;
 
         _maxPropHeight = (drawY - startDrawY) + (int)_propScrollOffset;
@@ -1901,11 +1901,49 @@ public class UnitEditorWindow
         if (newProt != s.NaturalProt) { s.NaturalProt = newProt; _unsavedChanges = true; }
         curY += RowH;
 
-        float newCS = _ui.DrawFloatField("st_cs", "CombatSpeed", s.CombatSpeed, x, curY, w, 0.5f);
+        // CombatSpeed input — shrunk to leave room for the suggestion hint and
+        // Apply button to the right. Suggestion comes from the pixel-stride
+        // calibration: the CombatSpeed at which walk plays feet-locked AND
+        // hits the unit's TargetWalkCycle (or the artist's authored cycle if
+        // TargetWalkCycle is 0). User can ignore the suggestion entirely —
+        // CombatSpeed is whatever they put. The walk anim playback rate auto-
+        // adjusts to keep feet locked at whatever CombatSpeed is set.
+        int csInputW = w - 200;
+        float newCS = _ui.DrawFloatField("st_cs", "CombatSpeed", s.CombatSpeed, x, curY, csInputW, 0.5f);
         if (Math.Abs(newCS - s.CombatSpeed) > 0.001f) { s.CombatSpeed = newCS; _unsavedChanges = true; }
+        // Suggested-walk-speed hint + Apply button to the right.
+        float suggestedCS = ComputeSuggestedCombatSpeed(def);
+        if (suggestedCS > 0f)
+        {
+            string hint = $"sugg {suggestedCS:F2}";
+            _ui.DrawText(hint, new Vector2(x + csInputW + 6, curY + 4), EditorBase.TextDim);
+            int applyBtnX = x + csInputW + 100;
+            if (_ui.DrawButton("Apply", applyBtnX, curY + 2, 60, 18))
+            {
+                s.CombatSpeed = suggestedCS;
+                _unsavedChanges = true;
+            }
+        }
         curY += RowH;
 
         return curY;
+    }
+
+    /// <summary>Pixel-stride-derived suggestion for CombatSpeed: body velocity
+    /// at which walk anim plays feet-locked AND hits <see cref="UnitDef.TargetWalkCycle"/>
+    /// (or the artist's authored cycle if TargetWalkCycle is 0). Returns 0
+    /// when calibration data is missing or the unit is in legacy gait mode —
+    /// caller hides the suggestion in that case.</summary>
+    private float ComputeSuggestedCombatSpeed(UnitDef def)
+    {
+        if (def.LegacyGaitMode) return 0f;
+        var cal = def.SpriteData?.Calibration;
+        if (cal == null) return 0f;
+        float bodySub = def.IsQuadruped ? cal.IdleFootSpreadPx : 0f;
+        float duty = def.DutyCycle > 0f ? def.DutyCycle : Render.StrideCalibration.DefaultDutyCycle;
+        return Render.StrideCalibration.ResolveSuggestedCombatSpeed(
+            cal.Walk, def.SpriteWorldHeight, def.SpriteScale, bodySub, duty,
+            def.TargetWalkCycle);
     }
 
     // =========================================================================
@@ -1917,82 +1955,83 @@ public class UnitEditorWindow
         int curY = y;
         DrawSectionHeader("Locomotion Calibration", x, ref curY, w);
 
-        // Per-unit toggle to fall back to the original CombatSpeed-derived system.
-        // Default OFF — the new pixel-stride math is what we want for everything;
-        // this exists for the cases where the heuristic mis-handles a sprite.
-        bool newLegacy = _ui.DrawCheckbox("Legacy gait mode (use CombatSpeed-derived thresholds)",
+        // Action-affecting controls only. For detailed diagnostics (per-frame
+        // strides, threshold readouts, idle foot-spread, ghost overlay etc.)
+        // launch the stride_debug scenario — it visualizes everything against
+        // the actual sprite.
+
+        bool newLegacy = _ui.DrawCheckbox("Legacy gait mode (CombatSpeed-derived thresholds — escape hatch)",
             def.LegacyGaitMode, x, curY);
         if (newLegacy != def.LegacyGaitMode) { def.LegacyGaitMode = newLegacy; _unsavedChanges = true; }
         curY += RowH;
 
-        var profile = Render.LocomotionProfile.FromUnit(def);
-        var spriteData = def.SpriteData;
-        var cal = spriteData?.Calibration;
-
-        // Mode banner — tell the user which formula is actually live for this unit.
-        string mode = profile.IsLegacy
-            ? (def.LegacyGaitMode ? "MODE: Legacy (toggled on)" : "MODE: Legacy (calibration unavailable)")
-            : "MODE: Pixel-stride (new)";
-        _ui.DrawText(mode, new Vector2(x + 6, curY + 2),
-            profile.IsLegacy ? EditorBase.TextDim : EditorBase.TextBright);
+        bool newQuad = _ui.DrawCheckbox("Quadruped (subtract body length from stride)",
+            def.IsQuadruped, x, curY);
+        if (newQuad != def.IsQuadruped) { def.IsQuadruped = newQuad; _unsavedChanges = true; }
         curY += RowH;
 
-        if (cal == null)
+        float curDuty = def.DutyCycle;
+        float newDuty = _ui.DrawFloatField("loc_duty",
+            "Duty cycle (0.5 default; 0=fallback to 0.5)",
+            curDuty, x, curY, w, 0.05f);
+        if (Math.Abs(newDuty - curDuty) > 0.001f)
         {
-            _ui.DrawText("No sprite calibration loaded for this unit.",
-                new Vector2(x + 6, curY + 2), EditorBase.TextDim);
-            curY += RowH;
+            def.DutyCycle = MathF.Max(0f, MathF.Min(0.95f, newDuty));
+            _unsavedChanges = true;
         }
-
-        // Threshold readout (works in both modes). Shows the actual jog/run
-        // thresholds the gait picker is using right now.
-        _ui.DrawText(
-            $"Thresholds  jog≥ {profile.JogThreshold:F2}   run≥ {profile.RunThreshold:F2}   (hys ±{profile.JogHysteresis:F2}/±{profile.RunHysteresis:F2})",
-            new Vector2(x + 6, curY + 2), EditorBase.TextDim);
         curY += RowH;
 
-        // Per-gait rows
-        curY = DrawGaitRow("Walk", def, profile, cal?.Walk, profile.AnimWalkVel,
-            def.AnimWalkVelOverride, v => { def.AnimWalkVelOverride = v; _unsavedChanges = true; },
-            "loc_walk_ov", x, curY, w);
-        curY = DrawGaitRow("Jog", def, profile, cal?.Jog, profile.AnimJogVel,
-            def.AnimJogVelOverride, v => { def.AnimJogVelOverride = v; _unsavedChanges = true; },
-            "loc_jog_ov", x, curY, w);
-        curY = DrawGaitRow("Run", def, profile, cal?.Run, profile.AnimRunVel,
-            def.AnimRunVelOverride, v => { def.AnimRunVelOverride = v; _unsavedChanges = true; },
-            "loc_run_ov", x, curY, w);
-
-        return curY;
-    }
-
-    /// <summary>Renders one gait's calibration: measured stride + cycle + computed
-    /// animVel on a first line, then a nullable-float override field that wins
-    /// over the auto value when set.</summary>
-    private int DrawGaitRow(string gaitName, UnitDef def,
-        in Render.LocomotionProfile profile, Render.StrideCalibration.GaitCalibration? g,
-        float autoComputedVel, float? overrideVal, Action<float?> setOverride,
-        string fieldId, int x, int y, int w)
-    {
-        int curY = y;
-
-        // Diagnostic line: stride / cycle / computed velocity. In legacy mode this
-        // info is still useful for understanding what the pixel measurement said
-        // (so you can decide whether to flip off legacy mode for this unit).
-        string strideStr = g != null && g.StridePx > 0f
-            ? $"{g.StridePx:F0}px{(g.WasExtrapolated ? " (extrap)" : "")}"
-            : "—";
-        string cycleStr = g != null && g.CycleSeconds > 0f ? $"{g.CycleSeconds:F2}s" : "—";
-        string velStr = autoComputedVel > 0f ? $"{autoComputedVel:F2}/s" : "—";
-
-        var color = (g != null && g.WasExtrapolated) ? EditorBase.TextDim : EditorBase.TextBright;
-        _ui.DrawText($"{gaitName,-4}  stride {strideStr,-16}  cycle {cycleStr,-7}  computedVel {velStr}",
-            new Vector2(x + 6, curY + 2), color);
+        float curTgt = def.TargetWalkCycle;
+        float newTgt = _ui.DrawFloatField("loc_tgtcycle",
+            "Target walk cycle sec (0=use authored)",
+            curTgt, x, curY, w, 0.1f);
+        if (Math.Abs(newTgt - curTgt) > 0.001f)
+        {
+            def.TargetWalkCycle = MathF.Max(0f, newTgt);
+            _unsavedChanges = true;
+        }
         curY += RowH;
 
-        // Override field (nullable). Uses the same checkbox-to-enable pattern as
-        // Combat Overrides so callers can clear the override by unticking.
-        curY = DrawNullableFloat(fieldId, $"  {gaitName} velOverride", overrideVal,
-            x, curY, w, 0.1f, setOverride);
+        // Per-effort velocity multipliers. Drive both the unit's max velocity
+        // at Hurry/Sprint effort AND the gait-switch thresholds (placed at
+        // midpoints between adjacent gait max-velocities). Biped default 2/4;
+        // quadruped typical 3/9; cheetah-class extremes up to 5/30.
+        float curJogMult = def.JogSpeedMultiplier;
+        float newJogMult = _ui.DrawFloatField("loc_jogmult",
+            "Jog speed mult (default 2; quad 3; 0=default)",
+            curJogMult, x, curY, w, 0.5f);
+        if (Math.Abs(newJogMult - curJogMult) > 0.001f)
+        {
+            def.JogSpeedMultiplier = MathF.Max(0f, newJogMult);
+            _unsavedChanges = true;
+        }
+        curY += RowH;
+
+        float curSprintMult = def.SprintSpeedMultiplier;
+        float newSprintMult = _ui.DrawFloatField("loc_sprintmult",
+            "Sprint speed mult (default 4; quad 9; 0=default)",
+            curSprintMult, x, curY, w, 0.5f);
+        if (Math.Abs(newSprintMult - curSprintMult) > 0.001f)
+        {
+            def.SprintSpeedMultiplier = MathF.Max(0f, newSprintMult);
+            _unsavedChanges = true;
+        }
+        curY += RowH;
+
+        // Per-gait velocity overrides. Rarely needed now that the calibration
+        // works; left in as an escape hatch for sprites where the auto-derived
+        // value is wrong. Each override wins over the pixel-derived value when
+        // set; checkbox to enable/disable per gait.
+        curY = DrawNullableFloat("loc_walk_ov", "Walk velOverride",
+            def.AnimWalkVelOverride, x, curY, w, 0.1f,
+            v => { def.AnimWalkVelOverride = v; _unsavedChanges = true; });
+        curY = DrawNullableFloat("loc_jog_ov", "Jog velOverride",
+            def.AnimJogVelOverride, x, curY, w, 0.1f,
+            v => { def.AnimJogVelOverride = v; _unsavedChanges = true; });
+        curY = DrawNullableFloat("loc_run_ov", "Run velOverride",
+            def.AnimRunVelOverride, x, curY, w, 0.1f,
+            v => { def.AnimRunVelOverride = v; _unsavedChanges = true; });
+
         return curY;
     }
 

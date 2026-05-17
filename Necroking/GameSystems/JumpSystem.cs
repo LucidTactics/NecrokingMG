@@ -88,15 +88,18 @@ public static class JumpSystem
     /// </summary>
     public static void BeginPounce(UnitArrays units, int idx, Vec2 landingPos, uint targetId,
         System.Collections.Generic.Dictionary<string, AnimationMeta>? animMeta, string spriteName,
-        float arcPeak = DefaultArcPeak)
+        float arcPeak = DefaultArcPeak, float speedOverride = 0f)
     {
         if (idx < 0 || idx >= units.Count || !units[idx].Alive) return;
         var u = units[idx];
 
-        // Required total duration: dist / MaxSpeed (user's model — unit traverses
-        // the full gap at max speed through the takeoff/air/land sequence).
+        // Required total duration: dist / speed (unit traverses the full gap
+        // at this speed through takeoff/air/land). speedOverride lets the
+        // caller specify sprint-top-speed instead of the unit's current
+        // MaxSpeed — important for predators leaping out of an idle state
+        // (their MaxSpeed reflects current effort, not pounce potential).
         float dist = (landingPos - u.Position).Length();
-        float speed = MathF.Max(1f, u.MaxSpeed);
+        float speed = MathF.Max(1f, speedOverride > 0f ? speedOverride : u.MaxSpeed);
         float requiredMs = (dist / speed) * 1000f;
 
         // Baseline anim timings (from pounce-start to physical touchdown, one JumpLoop pass).

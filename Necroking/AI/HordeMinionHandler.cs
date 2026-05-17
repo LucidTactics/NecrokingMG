@@ -1,5 +1,7 @@
 using Necroking.Core;
 using Necroking.GameSystems;
+using Necroking.Movement;
+using Microsoft.Xna.Framework;
 
 namespace Necroking.AI;
 
@@ -177,8 +179,22 @@ public class HordeMinionHandler : IArchetypeHandler
             }
             else
             {
-                // Actively moving toward slot. MoveToward sets PreferredVel and the
-                // Walk/Jog/Run locomotion anim based on intended speed.
+                // Actively moving toward slot. Effort is distance-banded, with
+                // bands compressing as the necromancer's sprint ramp goes up:
+                //   necro walking (t=0):  <3 Walk, 3-8 Hurry, >8 Sprint
+                //   necro sprinting (t=1): <1 Walk, 1-3 Hurry, >3 Sprint
+                // The linear lerp keeps the bands smooth between those points.
+                // Intent: minions don't try to sprint when close to slot, but
+                // escalate effort faster when necro is moving fast so they
+                // don't lag behind.
+                float t = MathHelper.Clamp(ctx.NecroSprintT, 0f, 1f);
+                float walkHurry  = MathHelper.Lerp(3f, 1f, t);
+                float hurrySprint = MathHelper.Lerp(8f, 3f, t);
+                MoveEffort effort = dist < walkHurry  ? MoveEffort.Walk
+                                  : dist < hurrySprint ? MoveEffort.Hurry
+                                  : MoveEffort.Sprint;
+                SubroutineSteps.SetEffort(ref ctx, effort);
+
                 if (dist > FollowArriveThreshold)
                 {
                     SubroutineSteps.MoveToward(ref ctx, slotPos, ctx.MySpeed);
@@ -210,6 +226,8 @@ public class HordeMinionHandler : IArchetypeHandler
         int targetIdx = SubroutineSteps.ResolveTarget(ref ctx);
         if (targetIdx >= 0)
         {
+            // Full Sprint commit when chasing an enemy.
+            SubroutineSteps.SetEffort(ref ctx, MoveEffort.Sprint);
             SubroutineSteps.MoveToward(ref ctx, ctx.Units[targetIdx].Position, ctx.MySpeed);
 
             // Auto-engage when in melee range
@@ -253,7 +271,12 @@ public class HordeMinionHandler : IArchetypeHandler
         {
             float dist = (ctx.MyPos - slotPos).Length();
             if (dist > 1.5f)
-                SubroutineSteps.MoveToward(ref ctx, slotPos, ctx.MySpeed * (ctx.Horde.Settings.ReturnSpeedMult));
+            {
+                // Sprint home — Returning is triggered by leash break (out of
+                // place after combat). Definitionally urgent.
+                SubroutineSteps.SetEffort(ref ctx, MoveEffort.Sprint);
+                SubroutineSteps.MoveToward(ref ctx, slotPos, ctx.MySpeed);
+            }
             else
             {
                 ctx.Routine = RoutineFollowing;
@@ -296,6 +319,8 @@ public class HordeMinionHandler : IArchetypeHandler
                 }
                 else
                 {
+                    // Commanded chase = Sprint (player issued attack-move).
+                    SubroutineSteps.SetEffort(ref ctx, MoveEffort.Sprint);
                     SubroutineSteps.MoveToward(ref ctx, ctx.Units[targetIdx].Position, ctx.MySpeed);
                 }
             }
@@ -306,9 +331,10 @@ public class HordeMinionHandler : IArchetypeHandler
         float distToTarget = (ctx.MyPos - commandTarget).Length();
         if (distToTarget > 2f)
         {
-            // Still moving to command point
+            // Still moving to command point — Hurry (purposeful but not panic).
             ctx.Units[ctx.UnitIndex].Target = CombatTarget.None;
             ctx.Units[ctx.UnitIndex].EngagedTarget = CombatTarget.None;
+            SubroutineSteps.SetEffort(ref ctx, MoveEffort.Hurry);
             SubroutineSteps.MoveToward(ref ctx, commandTarget, ctx.MySpeed);
         }
         else

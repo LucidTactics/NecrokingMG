@@ -100,6 +100,7 @@ public static class ScenarioRegistry
         Register("corpse_carry_depth", () => new Scenarios.CorpseCarryDepthScenario());
         Register("zombie_deer_leash", () => new Scenarios.ZombieDeerLeashScenario());
         Register("log_shadow", () => new Scenarios.LogShadowScenario());
+        Register("stride_debug", () => new Scenarios.StrideDebugScenario());
     }
 
     public static void Register(string name, Func<ScenarioBase> creator)

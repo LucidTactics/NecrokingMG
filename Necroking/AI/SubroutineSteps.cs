@@ -418,6 +418,58 @@ public static class SubroutineSteps
         ctx.Units[ctx.UnitIndex].RoutineAnim = AnimRequest.Locomotion(AnimState.Idle);
     }
 
+    /// <summary>Set the unit's <see cref="MoveEffort"/> AND derive its
+    /// <c>MaxSpeed</c> from that effort × per-unit jog/sprint multipliers.
+    /// This is the AI-side equivalent of the player's shift-sprint logic —
+    /// it raises the velocity cap so the unit can actually reach Jog/Run
+    /// gait velocity (without this, AI is forever stuck at walk speed even
+    /// when intent says Sprint).
+    ///
+    /// <paramref name="routineCapMult"/> is an optional further cap as a
+    /// fraction of the effort-max speed. Used for "lazy" routines where the
+    /// gait should be Walk but the velocity is less than full walk speed —
+    /// e.g. <c>SetEffort(Walk, 0.5f)</c> for IdleRoaming gives the unit a
+    /// half-walk-speed stroll. Default null = no extra cap.
+    ///
+    /// Acceleration ramping (AccelHalfTime etc.) is unaffected — this just
+    /// raises the velocity ceiling. Sudden effort change → unit accelerates
+    /// toward new cap; effort drop → unit decelerates. That's the natural
+    /// ramp-through-gaits behavior the system relies on.</summary>
+    public static void SetEffort(ref AIContext ctx, MoveEffort effort, float? routineCapMult = null)
+    {
+        ctx.Units[ctx.UnitIndex].MoveEffort = effort;
+        ctx.Units[ctx.UnitIndex].MaxSpeed = ResolveEffortSpeed(ref ctx, effort, routineCapMult);
+        // Note: the velocity-update code uses a Newtonian accel model (per-unit
+        // maxAccel/maxDecel/maxLateral caps on velocity delta per frame), so a
+        // MaxSpeed bump naturally ramps via that model. No MoveTime rewind
+        // needed.
+    }
+
+    /// <summary>Compute the velocity cap for a given effort on this unit,
+    /// without actually mutating MoveEffort/MaxSpeed. Useful when a routine
+    /// needs the cap for clamping <c>PreferredVel</c> but isn't changing
+    /// effort itself.</summary>
+    public static float ResolveEffortSpeed(ref AIContext ctx, MoveEffort effort,
+        float? routineCapMult = null)
+    {
+        float baseSpeed = ctx.Units[ctx.UnitIndex].Stats.CombatSpeed;
+        var def = ctx.GameData?.Units.Get(ctx.Units[ctx.UnitIndex].UnitDefID);
+        float jogMult = (def?.JogSpeedMultiplier > 0f)
+            ? def.JogSpeedMultiplier : LocomotionProfile.DefaultJogMult;
+        float sprintMult = (def?.SprintSpeedMultiplier > 0f)
+            ? def.SprintSpeedMultiplier : LocomotionProfile.DefaultSprintMult;
+        float effortMult = effort switch
+        {
+            MoveEffort.Walk => 1.0f,
+            MoveEffort.Hurry => jogMult,
+            MoveEffort.Sprint => sprintMult,
+            _ => 1.0f,  // Normal — walk-effort cap
+        };
+        float speed = baseSpeed * effortMult;
+        if (routineCapMult.HasValue) speed *= routineCapMult.Value;
+        return speed;
+    }
+
     /// <summary>Find closest enemy unit (different faction, alive).</summary>
     // Reused across every FindClosestEnemy call to skip the allocation on the
     // AI hot path; we clear it at the start of each scan.

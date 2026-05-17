@@ -104,6 +104,11 @@ public class DeerHerdHandler : IArchetypeHandler
         AcceleratePoisonedSatiation(ref ctx);
         EvaluateRoutine(ref ctx);
 
+        // Reset flee-elapsed counter whenever the deer isn't currently fleeing,
+        // so the next fresh flee starts with the 2-second Hurry ramp from zero.
+        if (ctx.Routine != RoutineFleeing)
+            ctx.Units[ctx.UnitIndex].FleeElapsed = 0f;
+
         switch (ctx.Routine)
         {
             case RoutineIdleRoaming: UpdateIdleRoaming(ref ctx); break;
@@ -388,6 +393,8 @@ public class DeerHerdHandler : IArchetypeHandler
 
     private static void UpdateIdleRoaming(ref AIContext ctx)
     {
+        // Casual grazing-area wander.
+        SubroutineSteps.SetEffort(ref ctx, Movement.MoveEffort.Walk, 0.5f);
         byte prevSub = ctx.Subroutine;
         SubroutineSteps.IdleRoam(ref ctx, RoamRadius);
 
@@ -538,6 +545,16 @@ public class DeerHerdHandler : IArchetypeHandler
         if (ctx.SubroutineTimer > 0f)
             ctx.SubroutineTimer -= ctx.Dt;
 
+        // Effort ramp: first 2 seconds capped at Hurry (jog gait — deer
+        // accelerating into a controlled bound), after 2s unlocks to Sprint
+        // (full panic gallop). FleeElapsed resets to 0 when the deer stops
+        // fleeing (see Update entry below), so every fresh flee gets the
+        // 2s build-up.
+        ctx.Units[ctx.UnitIndex].FleeElapsed += ctx.Dt;
+        bool sprintUnlocked = ctx.Units[ctx.UnitIndex].FleeElapsed >= 2.0f;
+        SubroutineSteps.SetEffort(ref ctx,
+            sprintUnlocked ? Movement.MoveEffort.Sprint : Movement.MoveEffort.Hurry);
+
         int threatIdx = SubroutineSteps.ResolveAlertTarget(ref ctx);
         if (threatIdx >= 0)
         {
@@ -646,7 +663,8 @@ public class DeerHerdHandler : IArchetypeHandler
                     }
                     else
                     {
-                        // Still closing distance
+                        // Still closing distance — full commit charge.
+                        SubroutineSteps.SetEffort(ref ctx, Movement.MoveEffort.Sprint);
                         SubroutineSteps.MoveToward(ref ctx, ctx.Units[targetIdx].Position, ctx.MySpeed);
                     }
                 }
@@ -746,11 +764,13 @@ public class DeerHerdHandler : IArchetypeHandler
         {
             case FeedWalkToBush:
             {
+                // Lazy walk to the bush — 0.3 cap = very slow stroll (grazing pace).
+                SubroutineSteps.SetEffort(ref ctx, Movement.MoveEffort.Walk, 0.3f);
                 Vec2 target = ctx.Units[ctx.UnitIndex].MoveTarget;
                 float dist = (ctx.MyPos - target).Length();
                 if (dist > 1.5f)
                 {
-                    SubroutineSteps.MoveToward(ref ctx, target, ctx.MySpeed * 0.3f);
+                    SubroutineSteps.MoveToward(ref ctx, target, ctx.MySpeed);
                 }
                 else
                 {

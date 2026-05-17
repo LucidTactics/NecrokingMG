@@ -116,6 +116,16 @@ public abstract class ScenarioBase
     // Shader-based UI primitives (used by shader test scenarios)
     public Render.UIShaders? UIShaders;
 
+    // Sprite atlases (used by debug scenarios that need to draw arbitrary sprite
+    // frames — e.g. stride calibration visualizer). Plumbed from Game1 before OnInit.
+    public Render.SpriteAtlas[]? Atlases;
+
+    // Font + pixel texture for debug scenarios that draw text and outlines.
+    // Plumbed from Game1 before OnInit (same path as Atlases).
+    public Microsoft.Xna.Framework.Graphics.SpriteFont? Font;
+    public Microsoft.Xna.Framework.Graphics.SpriteFont? SmallFont;
+    public Microsoft.Xna.Framework.Graphics.Texture2D? PixelTexture;
+
     // Scenario custom UI hook: called during Game1's UI pass if set, with
     // the active SpriteBatch. Used by shader-test scenarios to draw test
     // geometry without needing a full panel. Batch has already been Begun.

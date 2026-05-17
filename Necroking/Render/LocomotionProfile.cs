@@ -47,12 +47,13 @@ public readonly struct LocomotionProfile
     public const float MaxPlayback = 3.0f;
     public const float RunFullSpeedDelta = 7f; // (legacy only) units past runThreshold until Run reaches 1.0x
 
-    // Gait thresholds in units of animWalkVel (= CombatSpeed when anchored). Imported
-    // from the Nightfall Rogue project's threshold choice (BattleRenderer.cs:429-431).
-    // At velocity = JogThresholdRatio × walkAnimVel, the unit transitions to Jog;
-    // at velocity = RunThresholdRatio × walkAnimVel, it transitions to Run.
-    public const float JogThresholdRatio = 1.4f;
-    public const float RunThresholdRatio = 2.7f;
+    // Default per-effort velocity multipliers used when a UnitDef doesn't
+    // specify its own. Biped pattern: jog ≈ 2× walk, sprint ≈ 4× walk. Per-
+    // unit overrides via UnitDef.JogSpeedMultiplier / SprintSpeedMultiplier
+    // (e.g. wolf 3/9, horse 3/9, cheetah 5/30). Gait thresholds derive from
+    // these as midpoints between adjacent gait max-velocities.
+    public const float DefaultJogMult = 2.0f;
+    public const float DefaultSprintMult = 4.0f;
 
     /// <summary>True if this profile uses the original CombatSpeed-derived formula
     /// (no pixel-stride data). LocomotionScaling branches on this.</summary>
@@ -91,14 +92,24 @@ public readonly struct LocomotionProfile
     /// missing. Per-gait override values on the UnitDef win over auto-computed
     /// values when present.
     ///
-    /// Anchoring strategy (matches Nightfall Rogue's design):
-    /// <c>animWalkVel</c> is anchored to <c>CombatSpeed</c> by definition — i.e.
-    /// when a unit moves at its CombatSpeed it's "walking" with feet locked.
-    /// <c>animJogVel</c> and <c>animRunVel</c> are derived by scaling that anchor
-    /// up by the per-gait stride ratio measured from the sprite pixels — so the
-    /// artist's intent for "how much bigger is a run stride than a walk stride"
-    /// is preserved, but the absolute scale follows CombatSpeed (designer
-    /// intent). Per-gait <c>AnimXxxVelOverride</c> fields win over both.</summary>
+    /// Two decoupled anchors:
+    ///   - <b>Playback anchor</b> for each gait is the pixel-derived feet-lock
+    ///     velocity. <c>animWalkVel = (walk_stride_px × 2 / pxPerWorld) / cycle</c>
+    ///     and same shape for Jog/Run. This is what makes feet actually lock to
+    ///     ground motion at any velocity — playback = velocity / animVel.
+    ///   - <b>Threshold anchor</b> for gait switching is <c>CombatSpeed</c>,
+    ///     with per-unit jog/sprint multipliers. Default biped (2.0/4.0) gives
+    ///     Jog at 1.5xCS and Run at 3.0xCS (midpoints between adjacent gait
+    ///     max-velocities). Quadrupeds run much faster than they walk — a
+    ///     wolf at (3.0/9.0) has Jog at 2xCS and Run at 6xCS, keeping the Run
+    ///     anim's playback near native cadence even at sprint velocity.
+    ///
+    /// Trade-off the designer should know about: when CombatSpeed differs from
+    /// the pixel walk velocity, the Walk anim plays at a non-1.0× cadence at
+    /// CombatSpeed (rushed if CombatSpeed > pixelWalk, lazy if &lt;). The unit
+    /// editor surfaces this discrepancy. Per-gait <c>AnimXxxVelOverride</c>
+    /// fields let the designer force playback to a custom value if they want
+    /// natural cadence at the cost of skating.</summary>
     public static LocomotionProfile FromUnit(UnitDef def)
     {
         float baseSpeed = def.Stats?.CombatSpeed ?? 8f;
@@ -106,41 +117,76 @@ public readonly struct LocomotionProfile
             return FromBaseSpeed(baseSpeed);
 
         var cal = def.SpriteData.Calibration;
-        float pixelWalk = StrideCalibration.ResolveAnimVel(cal.Walk, def.SpriteWorldHeight);
-        float pixelJog  = StrideCalibration.ResolveAnimVel(cal.Jog,  def.SpriteWorldHeight);
-        float pixelRun  = StrideCalibration.ResolveAnimVel(cal.Run,  def.SpriteWorldHeight);
+        // Pass SpriteScale alongside SpriteWorldHeight so the pixel→world
+        // conversion uses the unit's actual rendered height (some units like
+        // Wretched render at 0.9× scale). Omitting it would overstate cycle
+        // distance and underestimate feet-lock velocity, causing the playback
+        // rate at any given velocity to be too low — feet would drag.
+        //
+        // For quadrupeds (def.IsQuadruped), subtract IdleFootSpreadPx from
+        // each gait's stride. The "stride spread" pixel measurement on a 4-
+        // legged unit captures front-paw-to-rear-paw distance, which is
+        // dominated by body length, not by leg stride. Idle stance pose gives
+        // us the body length to strip out so the residual is the actual
+        // leg-stride that drives ground motion.
+        float bodySub = def.IsQuadruped ? cal.IdleFootSpreadPx : 0f;
+        // 0 means "use default (biped 0.5)"; non-zero values like 0.75 reshape
+        // the cycle-distance formula. Per-unit override lets quadrupeds with
+        // unusual gait patterns (high-bound run, gallop) be tuned later.
+        float duty = def.DutyCycle > 0f ? def.DutyCycle : StrideCalibration.DefaultDutyCycle;
+        float pixelWalk = StrideCalibration.ResolveAnimVel(cal.Walk, def.SpriteWorldHeight, def.SpriteScale, bodySub, duty);
+        float pixelJog  = StrideCalibration.ResolveAnimVel(cal.Jog,  def.SpriteWorldHeight, def.SpriteScale, bodySub, duty);
+        float pixelRun  = StrideCalibration.ResolveAnimVel(cal.Run,  def.SpriteWorldHeight, def.SpriteScale, bodySub, duty);
 
-        // Need a valid pixel walk velocity to compute the gait ratios. If any
-        // gait is missing entirely, drop back to legacy.
+        // Need valid pixel velocities to use the new mode. If any gait is missing,
+        // drop back to legacy.
         if (pixelWalk <= 0f || pixelJog <= 0f || pixelRun <= 0f)
             return FromBaseSpeed(baseSpeed);
 
-        // Anchor on CombatSpeed; derive jog/run via stride/cycle ratios from
-        // the pixel measurement. The ratios preserve "jog stride is 1.62× walk
-        // stride" regardless of how fast the designer wants the unit to walk.
-        float jogRatio = pixelJog / pixelWalk;
-        float runRatio = pixelRun / pixelWalk;
+        // Playback anchors = pixel-derived per-gait feet-lock velocities. Override
+        // fields win when set (designer escape hatch — e.g. force walk to lock at
+        // CombatSpeed instead, trading groundedness for natural cadence).
+        float walk = def.AnimWalkVelOverride ?? pixelWalk;
+        float jog  = def.AnimJogVelOverride  ?? pixelJog;
+        float run  = def.AnimRunVelOverride  ?? pixelRun;
 
-        float walk = def.AnimWalkVelOverride ?? baseSpeed;
-        float jog  = def.AnimJogVelOverride  ?? baseSpeed * jogRatio;
-        float run  = def.AnimRunVelOverride  ?? baseSpeed * runRatio;
-
-        return FromAnimVels(walk, jog, run);
+        // Threshold anchor = CombatSpeed, modulated by per-unit jog/sprint
+        // multipliers. JogThreshold = midpoint between walk-max (CS) and jog-max
+        // (CS × jogMult). RunThreshold = midpoint between jog-max and sprint-max
+        // (CS × sprintMult). For biped (2/4): 1.5xCS and 3xCS. For quadruped
+        // (3/9): 2xCS and 6xCS.
+        float jogMult = def.JogSpeedMultiplier > 0f
+            ? def.JogSpeedMultiplier : DefaultJogMult;
+        float sprintMult = def.SprintSpeedMultiplier > 0f
+            ? def.SprintSpeedMultiplier : DefaultSprintMult;
+        float jogThresh = baseSpeed * (1f + jogMult) * 0.5f;
+        float runThresh = baseSpeed * (jogMult + sprintMult) * 0.5f;
+        return BuildNewModeProfile(walk, jog, run, jogThresh, runThresh);
     }
 
     /// <summary>Build a new-mode profile directly from per-gait feet-lock
-    /// velocities. Thresholds are placed at fixed multiples of the walk anchor
-    /// (<see cref="JogThresholdRatio"/> / <see cref="RunThresholdRatio"/>),
-    /// matching the Nightfall Rogue project's design. With <c>animWalkVel ==
-    /// CombatSpeed</c> from <see cref="FromUnit"/>, this means the unit shows
-    /// Walk gait through its full walk-effort range, transitions to Jog as
-    /// velocity ramps past <c>1.4 × CombatSpeed</c>, and to Run past
-    /// <c>2.7 × CombatSpeed</c> — landing solidly in Run at the sprint cap
-    /// of <c>4 × CombatSpeed</c>.</summary>
-    public static LocomotionProfile FromAnimVels(float walk, float jog, float run)
+    /// velocities. Thresholds derived from a per-unit anchor + biped-default
+    /// multipliers (jog at 1.5×anchor, run at 3×anchor). For per-unit-tuned
+    /// thresholds (different jog/sprint multipliers like quadruped 3/9), use
+    /// the FromUnit path which feeds the right values to
+    /// <see cref="BuildNewModeProfile"/>.</summary>
+    public static LocomotionProfile FromAnimVels(float walk, float jog, float run,
+        float? thresholdAnchor = null)
     {
-        float jogThresh = walk * JogThresholdRatio;
-        float runThresh = walk * RunThresholdRatio;
+        float anchor = thresholdAnchor ?? walk;
+        // Biped defaults: jog at midpoint of (1, jogMult=2) = 1.5x anchor;
+        // run at midpoint of (2, sprintMult=4) = 3x anchor.
+        float jogThresh = anchor * (1f + DefaultJogMult) * 0.5f;
+        float runThresh = anchor * (DefaultJogMult + DefaultSprintMult) * 0.5f;
+        return BuildNewModeProfile(walk, jog, run, jogThresh, runThresh);
+    }
+
+    /// <summary>Final assembly of a new-mode profile given per-gait feet-lock
+    /// velocities and pre-computed gait thresholds. Hysteresis bands derived
+    /// from gait-velocity spread.</summary>
+    private static LocomotionProfile BuildNewModeProfile(
+        float walk, float jog, float run, float jogThresh, float runThresh)
+    {
         // Hysteresis is small in new mode — just enough to suppress single-frame
         // velocity noise (ORCA jitter, accel ramp wobble). The visual hitch that
         // legacy needed big bands for (frame-reset on SwitchState) is handled by

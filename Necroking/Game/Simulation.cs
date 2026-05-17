@@ -663,6 +663,7 @@ public class Simulation
                         AmortizedAI = _amortizedAI, AmortizationInterval = _aiUpdateInterval,
                         AnimMeta = _animMeta,
                         DamageEvents = _damageEvents,
+                        NecroSprintT = _sprintRampValue,
                     };
                     handler.Update(ref ctx);
                 }
@@ -702,7 +703,16 @@ public class Simulation
                         ? dt / SprintRampUpSeconds
                         : -dt / SprintRampDownSeconds;
                     _sprintRampValue = Necroking.Core.MathUtil.Clamp(_sprintRampValue + rampRate, 0f, 1f);
-                    float sprintMultiplier = 1f + (SprintMaxMultiplier - 1f) * _sprintRampValue;
+                    // Per-unit sprint cap: necromancer evolutions and other player
+                    // forms can have different sprint multipliers. Falls back to
+                    // the system default (4× biped sprint) when the def doesn't
+                    // specify. Each different player form (Lich, GrandNecromancer,
+                    // etc.) can have its own sprint character via this knob.
+                    var playerDef = _gameData?.Units.Get(_units[i].UnitDefID);
+                    float maxSprintMult = (playerDef?.SprintSpeedMultiplier > 0f)
+                        ? playerDef.SprintSpeedMultiplier
+                        : SprintMaxMultiplier;
+                    float sprintMultiplier = 1f + (maxSprintMult - 1f) * _sprintRampValue;
 
                     float speed = _units[i].Stats.CombatSpeed;
                     if (_units[i].GhostMode)
@@ -735,6 +745,7 @@ public class Simulation
                                 GameTime = _gameTime, DayTime = dayFraction, IsNight = isNight,
                                 // Player is always every-frame anyway, but pass for consistency.
                                 AmortizedAI = _amortizedAI, AmortizationInterval = _aiUpdateInterval,
+                                NecroSprintT = _sprintRampValue,
                             };
                             handler.Update(ref ctx);
                         }
@@ -1518,59 +1529,53 @@ public class Simulation
                 _units[i].StuckFrames = 0;
             }
 
-            // --- Turn penalty: reduce MoveTime when changing direction ---
-            // Measures angle between previous velocity and new desired direction.
-            // Small corrections (< threshold) are free; larger turns drain MoveTime
-            // proportionally, so the unit must re-accelerate after sharp turns.
-            // NOTE: To disable turn penalty for player, change this condition:
-            float targetSpeed = newVel.Length();
-            bool applyTurnPenalty = _units[i].AI != AIBehavior.PlayerControlled;
-            if (applyTurnPenalty && targetSpeed > 0.001f && _units[i].Velocity.LengthSq() > 0.01f)
-            {
-                Vec2 oldDir = _units[i].Velocity.Normalized();
-                Vec2 newDir = newVel * (1f / targetSpeed);
-                // dot = cos(angle), clamp for safety
-                float dot = MathUtil.Clamp(oldDir.X * newDir.X + oldDir.Y * newDir.Y, -1f, 1f);
-                float angleDeg = MathF.Acos(dot) * Rad2Deg;
+            // --- Newtonian acceleration model ---
+            // Treat newVel (ORCA-resolved, MaxSpeed-capped) as the desired velocity.
+            // Decompose (desired - current) into forward (along current velocity)
+            // and lateral (perpendicular) components, cap each independently:
+            //   - Forward+: maxAcceleration  (speeding up)
+            //   - Forward-: maxDeceleration  (braking; typically ~5× accel)
+            //   - Lateral:  maxLateralAccel  (turn capacity; r = v² / lat)
+            // This gives realistic legged locomotion: 180° reversal must pass
+            // through 0 (decel then accel), sharp turns at speed are impossible
+            // without first slowing down, slight turns at speed cost only the
+            // lateral budget.
+            var accelDef = _gameData?.Units.Get(_units[i].UnitDefID);
+            float maxAccel = accelDef?.MaxAcceleration
+                ?? _gameData?.Settings.Combat.MaxAcceleration ?? 6f;
+            float maxDecel = accelDef?.MaxDeceleration
+                ?? _gameData?.Settings.Combat.MaxDeceleration ?? 25f;
+            float maxLateral = accelDef?.MaxLateralAccel
+                ?? _gameData?.Settings.Combat.MaxLateralAccel ?? 15f;
 
-                const float TurnFreeThreshold = 20f;  // degrees — no penalty below this
-                const float TurnFullPenalty = 180f;    // degrees — full MoveTime reset
+            Vec2 curVel = _units[i].Velocity;
+            Vec2 deltaVel = newVel - curVel;
+            float curSpeedSq = curVel.LengthSq();
 
-                if (angleDeg > TurnFreeThreshold)
-                {
-                    // Blend: quadratic ramp for small turns, linear for large
-                    // normalized 0..1 across the penalty range
-                    float t = (angleDeg - TurnFreeThreshold) / (TurnFullPenalty - TurnFreeThreshold);
-                    t = MathUtil.Clamp(t, 0f, 1f);
-                    // Smoothstep-ish: gentle at small angles, aggressive at large
-                    float penalty = t * t * (3f - 2f * t); // smoothstep [0,1]
-                    _units[i].MoveTime *= (1f - penalty);
-                }
-            }
-
-            // Apply exponential acceleration curve
-            // speed = maxSpeed * (1 - e^(-k * moveTime))
-            // k derived from accelHalfTime: k = -ln(0.5) / accelHalfTime
-            if (targetSpeed > 0.001f)
-            {
-                _units[i].MoveTime += dt;
-
-                var accelDef = _gameData?.Units.Get(_units[i].UnitDefID);
-                float accelHalfTime = accelDef?.AccelHalfTime ?? _gameData?.Settings.Combat.AccelHalfTime ?? 1.2f;
-                float accelK = 0.6931f / accelHalfTime; // ln(2) / halfTime
-                // Player-controlled gets instant acceleration
-                float speedFraction = _units[i].AI == AIBehavior.PlayerControlled
-                    ? 1f
-                    : 1f - MathF.Exp(-accelK * _units[i].MoveTime);
-                float finalSpeed = MathF.Min(targetSpeed, _units[i].MaxSpeed * speedFraction);
-                _units[i].Velocity = (newVel * (1f / targetSpeed)) * finalSpeed;
-            }
+            // Pick the "forward" axis: current velocity direction if moving,
+            // else the desired direction (so a unit starting from rest still
+            // applies accel along its intended path).
+            Vec2 fwdDir;
+            if (curSpeedSq > 0.0001f)
+                fwdDir = curVel * (1f / MathF.Sqrt(curSpeedSq));
+            else if (newVel.LengthSq() > 0.0001f)
+                fwdDir = newVel.Normalized();
             else
-            {
-                // Stopped — reset acceleration (no deceleration)
-                _units[i].MoveTime = 0f;
-                _units[i].Velocity = Vec2.Zero;
-            }
+                fwdDir = new Vec2(1, 0);
+            Vec2 latDir = new Vec2(-fwdDir.Y, fwdDir.X);
+
+            float fwdComp = deltaVel.X * fwdDir.X + deltaVel.Y * fwdDir.Y;
+            float latComp = deltaVel.X * latDir.X + deltaVel.Y * latDir.Y;
+
+            float fwdCap = (fwdComp > 0f ? maxAccel : maxDecel) * dt;
+            if (fwdComp > 0f) fwdComp = MathF.Min(fwdComp, fwdCap);
+            else fwdComp = MathF.Max(fwdComp, -fwdCap);
+
+            float latCap = maxLateral * dt;
+            if (latComp > latCap) latComp = latCap;
+            else if (latComp < -latCap) latComp = -latCap;
+
+            _units[i].Velocity = curVel + fwdDir * fwdComp + latDir * latComp;
 
             // For player-controlled (skipOrca) units: clip velocity against nearby
             // env circles so the necromancer stops / slides at tree edges instead
@@ -2116,8 +2121,15 @@ public class Simulation
 
         var def = _gameData?.Units.Get(_units[i].UnitDefID);
         string spriteName = def?.Sprite?.SpriteName ?? "";
+        // Pounce traverses at sprint-top-speed regardless of current MaxSpeed
+        // (a predator springing from idle still leaps fast). Falls back to
+        // default biped sprint mult (4×) if def doesn't specify.
+        float pounceSprintMult = (def?.SprintSpeedMultiplier > 0f)
+            ? def.SprintSpeedMultiplier
+            : Render.LocomotionProfile.DefaultSprintMult;
+        float pounceSpeed = _units[i].Stats.CombatSpeed * pounceSprintMult;
         JumpSystem.BeginPounce(_units, i, landingPos, _units[ti].Id,
-            _animMeta, spriteName, weapon.PounceArcPeak);
+            _animMeta, spriteName, weapon.PounceArcPeak, speedOverride: pounceSpeed);
 
         // Queue the melee attack; JumpSystem resolves it at landing with this weapon.
         float cycle = Math.Max(1, weapon.CooldownRounds) * roundDuration;

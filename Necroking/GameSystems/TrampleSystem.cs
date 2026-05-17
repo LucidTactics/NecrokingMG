@@ -113,7 +113,15 @@ public static class TrampleSystem
         units[idx].ActionLabel = string.IsNullOrEmpty(weapon.Name) ? "Charge" : weapon.Name;
         units[idx].ActionLabelTimer = 0.5f;
 
-        float chargeSpeed = units[idx].Stats.CombatSpeed * (1f + weapon.TrampleSpeedBonus);
+        // Charge speed = sprint top speed × (1 + weapon trample bonus). Pre-v8
+        // this was CombatSpeed × (1 + bonus), but CombatSpeed is now walk
+        // speed — a trample at walk-speed-with-bonus would barely move.
+        // Sprint multiplier from UnitDef (4× biped, 9× quadruped default).
+        var trampleDef = sim.GameData?.Units.Get(units[idx].UnitDefID);
+        float sprintMult = (trampleDef?.SprintSpeedMultiplier > 0f)
+            ? trampleDef.SprintSpeedMultiplier
+            : Render.LocomotionProfile.DefaultSprintMult;
+        float chargeSpeed = units[idx].Stats.CombatSpeed * sprintMult * (1f + weapon.TrampleSpeedBonus);
 
         // Phase 3 — follow-through. Locked direction, no homing, no impact checks.
         if (units[idx].ChargePhase == 3)

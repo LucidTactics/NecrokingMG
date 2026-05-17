@@ -1,5 +1,6 @@
 using System;
 using Necroking.Core;
+using Necroking.Movement;
 
 namespace Necroking.AI;
 
@@ -98,6 +99,8 @@ public class RangedUnitHandler : IArchetypeHandler
 
     private static void UpdateIdle(ref AIContext ctx)
     {
+        // Roaming archer/caster: lazy stroll at half walk speed.
+        SubroutineSteps.SetEffort(ref ctx, MoveEffort.Walk, 0.5f);
         SubroutineSteps.IdleRoam(ref ctx, 6f);
     }
 
@@ -124,14 +127,17 @@ public class RangedUnitHandler : IArchetypeHandler
 
         if (dist > maxRange)
         {
-            // Out of range — close in
+            // Out of range — close in with Hurry effort (jog up to firing line,
+            // not a full Sprint commit since they want to stop and shoot).
+            SubroutineSteps.SetEffort(ref ctx, MoveEffort.Hurry);
             SubroutineSteps.MoveToward(ref ctx, ctx.Units[targetIdx].Position, ctx.MySpeed);
             return;
         }
 
         if (dist < tooClose && _archetypeId == ArchetypeRegistry.ArcherUnit)
         {
-            // Archer kites — casters stand their ground
+            // Archer kites — Walk effort, deliberate backpedal not panic flee.
+            SubroutineSteps.SetEffort(ref ctx, MoveEffort.Walk);
             SubroutineSteps.MoveAwayFrom(ref ctx, ctx.Units[targetIdx].Position, tooClose * 1.5f);
         }
         else
@@ -181,7 +187,13 @@ public class RangedUnitHandler : IArchetypeHandler
 
         Vec2 returnPos = ctx.Units[ctx.UnitIndex].SpawnPosition;
         if ((ctx.MyPos - returnPos).Length() > 2f)
-            SubroutineSteps.MoveToward(ref ctx, returnPos, ctx.MySpeed * 0.5f);
+        {
+            // Same context-aware return as melee: Sprint under pursuit,
+            // Walk if all clear.
+            bool stillThreatened = ctx.AlertState >= (byte)UnitAlertState.Alert;
+            SubroutineSteps.SetEffort(ref ctx, stillThreatened ? MoveEffort.Sprint : MoveEffort.Walk);
+            SubroutineSteps.MoveToward(ref ctx, returnPos, ctx.MySpeed);
+        }
         else
         {
             ctx.Routine = RoutineIdle;

@@ -277,6 +277,8 @@ public class WolfPackHandler : IArchetypeHandler
 
     private static void UpdateIdleRoaming(ref AIContext ctx)
     {
+        // Roaming wolf: lazy stroll at half walk-effort speed.
+        SubroutineSteps.SetEffort(ref ctx, Movement.MoveEffort.Walk, 0.5f);
         SubroutineSteps.IdleRoam(ref ctx, IdleRoamRadius);
     }
 
@@ -365,6 +367,18 @@ public class WolfPackHandler : IArchetypeHandler
                 // JumpSystem has control — don't drive AI movement.
                 if (ctx.Units[ctx.UnitIndex].JumpPhase != 0) break;
 
+                // Three-phase commitment ramp on time-in-routine:
+                //   0-1s: Walk (stalking approach)
+                //   1-2s: Hurry (closing in)
+                //   2s+:  Sprint (full rush)
+                // No distance bypass — even if the wolf starts close, it
+                // still does the stalk-then-commit sequence. Reads as a
+                // predator winding up rather than a flat sprint.
+                float t = ctx.SubroutineTimer;
+                Movement.MoveEffort effort = t < 1.0f ? Movement.MoveEffort.Walk
+                                          : t < 2.0f ? Movement.MoveEffort.Hurry
+                                          : Movement.MoveEffort.Sprint;
+                SubroutineSteps.SetEffort(ref ctx, effort);
                 SubroutineSteps.MoveToTarget(ref ctx);
                 int targetIdx = SubroutineSteps.ResolveTarget(ref ctx);
                 if (targetIdx >= 0)
@@ -398,6 +412,9 @@ public class WolfPackHandler : IArchetypeHandler
 
             case FightDisengage:
             {
+                // Controlled withdrawal — Hurry, not Sprint. Reads as "tactical
+                // retreat" rather than panic.
+                SubroutineSteps.SetEffort(ref ctx, Movement.MoveEffort.Hurry);
                 int targetIdx = SubroutineSteps.ResolveTarget(ref ctx);
                 if (targetIdx >= 0)
                 {
@@ -418,6 +435,9 @@ public class WolfPackHandler : IArchetypeHandler
 
             case FightWaitCooldown:
             {
+                // Maintain distance at Walk effort — the wolf is biding time
+                // between hits, not actively retreating.
+                SubroutineSteps.SetEffort(ref ctx, Movement.MoveEffort.Walk);
                 SubroutineSteps.WaitForCooldown(ref ctx);
                 if (SubroutineSteps.WaitForCooldown_Ready(ref ctx))
                 {

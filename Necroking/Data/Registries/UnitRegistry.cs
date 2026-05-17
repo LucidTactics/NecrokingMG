@@ -185,6 +185,22 @@ public class UnitDef : IHasId
     [JsonPropertyName("accel80Time")] public float? Accel80Time { get; set; }
     [JsonPropertyName("accelFullTime")] public float? AccelFullTime { get; set; }
 
+    /// <summary>Forward acceleration cap (wu/s²) — how fast this unit can
+    /// speed up. Lower for heavy/lumbering units, higher for nimble ones.
+    /// Null = use system default from CombatSettings.</summary>
+    [JsonPropertyName("maxAcceleration")] public float? MaxAcceleration { get; set; }
+
+    /// <summary>Deceleration cap (wu/s²) — how fast this unit can brake.
+    /// Typically 4-5× higher than MaxAcceleration for legged units (you can
+    /// stop faster than you can start). Null = system default.</summary>
+    [JsonPropertyName("maxDeceleration")] public float? MaxDeceleration { get; set; }
+
+    /// <summary>Lateral acceleration cap (wu/s²) — how hard the unit can push
+    /// sideways. Drives turn radius via r = v² / lateralAccel. Higher → tighter
+    /// turns at speed. Bears: low (lumbering, wide turns). Deer: high (sharp
+    /// pivots). Null = system default.</summary>
+    [JsonPropertyName("maxLateralAccel")] public float? MaxLateralAccel { get; set; }
+
     /// <summary>
     /// Weapon attachment points: anim name -> yaw angle -> list of WeaponFrameData (one per frame).
     /// </summary>
@@ -214,6 +230,52 @@ public class UnitDef : IHasId
     /// new system mis-handles a specific sprite (long downward-pointing weapons,
     /// unusual silhouettes). See <see cref="Render.StrideCalibration"/>.</summary>
     [JsonPropertyName("legacyGaitMode")] public bool LegacyGaitMode { get; set; }
+
+    /// <summary>Marks the unit as a four-legged creature (wolf, deer, bear,
+    /// boar, etc.). When true, the locomotion profile subtracts the calibrated
+    /// IdleFootSpreadPx (≈ body length, captured from Idle stance) from each
+    /// gait's measured stride before computing feet-lock velocity — strips out
+    /// the body-length component that a 4-legged silhouette unavoidably folds
+    /// into the "stride spread" pixel measurement. Default false (biped),
+    /// which leaves the measurement as-is.</summary>
+    [JsonPropertyName("isQuadruped")] public bool IsQuadruped { get; set; }
+
+    /// <summary>Per-leg duty cycle for the walk gait — what fraction of one
+    /// cycle each leg spends planted on the ground. Drives the cycle-distance
+    /// formula: <c>cycle_dist = stride / dutyCycle</c>. Biped walks use 0.5
+    /// (each leg planted half the cycle, alternating). Quadruped lateral-
+    /// sequence walks use ~0.75 (each leg planted 3/4 of the cycle, with all
+    /// four legs phase-staggered). 0 falls back to the default
+    /// <see cref="Render.StrideCalibration.DefaultDutyCycle"/> (0.5).
+    ///
+    /// In principle this varies per gait (gallops are ~0.25-0.4 due to airborne
+    /// phases), but we apply one number per unit for simplicity. Tunes via the
+    /// unit editor.</summary>
+    [JsonPropertyName("dutyCycle")] public float DutyCycle { get; set; }
+
+    /// <summary>Target walk-cycle time in seconds — used by the editor to
+    /// compute the suggested CombatSpeed ("walk this fast and the cycle will
+    /// take exactly this long while feet stay locked"). Sets aesthetic cadence:
+    /// bigger creatures want longer cycles (e.g. bear 1.7s) to read as bulky;
+    /// smaller creatures want shorter (e.g. wolf 0.8s). 0 = use the artist's
+    /// authored cycle as the target (suggestion = grounded velocity at native
+    /// cadence). Not directly used by gameplay — only by the editor's PropCS
+    /// suggestion.</summary>
+    [JsonPropertyName("targetWalkCycle")] public float TargetWalkCycle { get; set; }
+
+    /// <summary>Max velocity at Hurry/Jog effort, as a multiplier of CombatSpeed.
+    /// Biped default ≈ 2.0 (jog is roughly 2× walk). Quadrupeds run much faster
+    /// than they walk: typical 3.0. Cheetah-class extremes up to 5+. Also drives
+    /// the Walk→Jog gait threshold (midpoint between walk-max and jog-max).
+    /// 0 = use system default of 2.0.</summary>
+    [JsonPropertyName("jogSpeedMultiplier")] public float JogSpeedMultiplier { get; set; }
+
+    /// <summary>Max velocity at Sprint effort, as a multiplier of CombatSpeed.
+    /// Biped default ≈ 4.0 (sprint is roughly 4× walk). Quadrupeds: typical 9.0
+    /// (horse, wolf, deer). Cheetah-class extremes 20-30+. Drives the Jog→Run
+    /// gait threshold (midpoint between jog-max and sprint-max) AND the player
+    /// necromancer's shift-sprint cap. 0 = use system default of 4.0.</summary>
+    [JsonPropertyName("sprintSpeedMultiplier")] public float SprintSpeedMultiplier { get; set; }
 
     /// <summary>Hand-tuned override for the Walk feet-lock velocity (world units /
     /// sec). When set, replaces the pixel-stride-computed value at runtime. Null =

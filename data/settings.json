@@ -108,6 +108,9 @@
     "accelHalfTime": 1.2,
     "accel80Time": 3,
     "accelFullTime": 6,
+    "maxAcceleration": 6,
+    "maxDeceleration": 25,
+    "maxLateralAccel": 15,
     "roundDuration": 3
   },
   "fogOfWar": {

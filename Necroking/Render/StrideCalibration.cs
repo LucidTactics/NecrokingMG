@@ -49,25 +49,73 @@ public static class StrideCalibration
     /// <summary>Bump when the measurement algorithm changes in any way that would
     /// produce different numbers (different percentile, different cut-off row,
     /// different cycle-distance multiplier, etc.). Existing caches with a lower
-    /// version are treated as misses and rebuilt.</summary>
-    public const int AlgorithmVersion = 1;
+    /// version are treated as misses and rebuilt.
+    /// v2: added IdleFootSpreadPx measurement for quadruped body-width subtraction.
+    /// v3: switched gait stride measurement from 90th-percentile to max across
+    ///     frames. Locomotion anims are smooth (no outlier weapon-thrust frames
+    ///     like attack anims have), so max captures the true peak-stride frame
+    ///     instead of clipping it as an outlier.
+    /// v4: strip fraction now measured from content vertical extent (topmost to
+    ///     bottommost non-transparent rows), not from bounding rect. Avoids
+    ///     transparent padding at the top of the rect skewing the strip into
+    ///     unintended body parts (tail, cape, etc).
+    /// v5: gait strip fraction lowered from 50% to 25% (matching idle). The
+    ///     wolf body silhouette at 50%-of-content was still dominating the
+    ///     measurement, masking actual paw motion. With both gait + idle at
+    ///     25% the subtraction (walk_extent - idle_extent) measures consistent
+    ///     paw-only regions and reflects real leg-swing amplitude. May miss
+    ///     lifted back-paws in run gaits — revisit if that becomes visible.
+    /// v6: per-gait strip fractions — Walk + Idle still at 25% (consistent for
+    ///     the subtraction, tight to ground), Jog + Run back to 50% (catches
+    ///     lifted trailing paw at peak stride in faster gaits).
+    /// v7: Jog + Run strip lowered from 50% to 40% — 50% was still catching
+    ///     too much body silhouette on quadrupeds, 40% empirically captures
+    ///     lifted paws without being overrun by the body.
+    /// v8: gait stride is now the ENVELOPE of leg positions across the whole
+    ///     cycle (max rightmost-in-body-frame across frames − min leftmost-
+    ///     in-body-frame across frames), instead of max single-frame inter-
+    ///     paw spread. The old approach under-measured quadruped walks where
+    ///     legs are phase-staggered: no single frame had both legs at peak
+    ///     extremes simultaneously, so per-frame spread was always < 2A
+    ///     (the true leg amplitude). The envelope captures the full 2A
+    ///     because the front-leg's extreme-forward frame and the rear-leg's
+    ///     extreme-back frame are different frames, but their extremes are
+    ///     both visible across the cycle.</summary>
+    public const int AlgorithmVersion = 8;
 
-    /// <summary>Fraction of the sprite's pixel height (measured from the bottom)
-    /// to scan for foot pixels. Picked so a lifted trailing foot in a run cycle
-    /// is still inside the strip — knee-to-hip height on a humanoid sits roughly
-    /// at 40-50% from the bottom.</summary>
-    private const float BottomStripFraction = 0.50f;
+    /// <summary>Strip fraction for Walk + Idle — both use 25% to keep their
+    /// measurements like-for-like (the body-subtraction walk-idle is comparing
+    /// regions of the same vertical proportion). Tight enough to avoid the
+    /// body silhouette that dominates 50%+ strips on quadrupeds.</summary>
+    private const float WalkStripFraction = 0.25f;
 
-    /// <summary>Percentile of per-frame foot-spread extents used as the stride
-    /// length. 0.9 drops the top 10% of frames as likely outliers (weapon thrust
-    /// poses, cape flare) without losing the genuine peak-stride frame.</summary>
-    private const float StridePercentile = 0.90f;
+    /// <summary>Strip fraction for Jog + Run — 40%, because the trailing paw
+    /// lifts toward knee height at peak stride in faster gaits. Tight 25%
+    /// would miss the lifted paw; 50% pulls in too much body silhouette.
+    /// 40% is the empirical middle ground that captures lifted paws without
+    /// being overrun by the body.</summary>
+    private const float RunStripFraction = 0.40f;
 
-    /// <summary>Each gait cycle covers two strides (left foot, right foot), so
-    /// cycle_distance = stride × this constant. 2.0 is right for bipeds; some
-    /// quadrupeds want ~1.6 but that's handled per-unit via override values,
-    /// not by changing this constant.</summary>
-    private const float StridesPerCycle = 2.0f;
+    /// <summary>Legacy alias: callers that don't differentiate by gait get
+    /// the conservative (smaller) value. Used by tests / generic call paths.</summary>
+    private const float BottomStripFraction = WalkStripFraction;
+
+    // v3: Removed StridePercentile in favor of max-across-frames. For locomotion
+    // anims (walk/jog/run) the cycle is smooth and there are no outlier frames
+    // to filter out — the percentile was systematically clipping the genuine
+    // peak-stride frame and biasing stride low by ~half the true amplitude.
+    // (For attack anims with weapon thrust outliers, we'd want the percentile
+    // back, but those don't go through StrideCalibration.)
+
+    /// <summary>Per-leg duty cycle used for biped walks (and the formula's
+    /// default). Each leg is planted half the cycle, swinging the other half.
+    /// During its planted phase a leg traverses 2A in body frame (peak-to-peak
+    /// amplitude), so body covers 2A/d per cycle = 4A for d=0.5. The "× 2 strides
+    /// per cycle" identity comes from this: with `walk_extent = 2A`, cycle_dist
+    /// = walk_extent / d = 2 × walk_extent. Per-unit dutyCycle override (e.g.
+    /// 0.75 for typical quadruped lateral walks) reshapes the formula
+    /// accordingly.</summary>
+    public const float DefaultDutyCycle = 0.5f;
 
     // Jog/Run extrapolation factors when measurement is missing or implausible.
     public const float JogToWalkRatio = 1.5f;
@@ -116,6 +164,15 @@ public static class StrideCalibration
         /// the project's coordinate system; falls back to any available yaw if
         /// east isn't authored). Mostly diagnostic.</summary>
         public int MeasuredYaw;
+
+        /// <summary>Horizontal extent of the bottom 25% of the Idle anim (east
+        /// yaw). For a biped this is roughly stance width (a few px). For a
+        /// quadruped this is roughly body length (front-to-back paw spread at
+        /// rest). Subtracted from each gait's measured stride for units flagged
+        /// <c>IsQuadruped=true</c> in their UnitDef — strips out the
+        /// body-length component that contaminates the leg-stride measurement.
+        /// Zero if no Idle anim is authored.</summary>
+        public float IdleFootSpreadPx;
     }
 
     // =========================================================================
@@ -136,15 +193,28 @@ public static class StrideCalibration
     {
         var cal = new UnitCalibration();
 
-        // Walk first — it's the anchor for the sanity check on Jog/Run.
-        MeasureGait(cal.Walk, unitName, spriteData, "Walk",
+        // Walk first — it's the anchor for the sanity check on Jog/Run. Walk
+        // scans the same 25% strip as Idle so the subtraction (walk - idle) is
+        // measuring comparable regions. Jog/Run use 50% to catch lifted paws
+        // at peak stride in faster gaits where the trailing foot leaves the
+        // ground.
+        MeasureGait(cal.Walk, unitName, spriteData, "Walk", WalkStripFraction,
             atlasPixels, atlasWidth, atlasHeight, animMeta, out int yaw);
         cal.MeasuredYaw = yaw;
 
-        MeasureGait(cal.Jog, unitName, spriteData, "Jog",
+        MeasureGait(cal.Jog, unitName, spriteData, "Jog", RunStripFraction,
             atlasPixels, atlasWidth, atlasHeight, animMeta, out _);
-        MeasureGait(cal.Run, unitName, spriteData, "Run",
+        MeasureGait(cal.Run, unitName, spriteData, "Run", RunStripFraction,
             atlasPixels, atlasWidth, atlasHeight, animMeta, out _);
+
+        // Idle foot-spread: bottom 25% horizontal extent of the Idle anim's east
+        // yaw. Captures stance width for bipeds (~small) and body length for
+        // quadrupeds (~large) — when subtracted from a quadruped's gait stride
+        // measurements, strips out the body-length contamination that otherwise
+        // makes 4-legged "stride spread" look much bigger than the actual leg
+        // stride that drives ground motion.
+        cal.IdleFootSpreadPx = MeasureIdleFootSpread(spriteData,
+            atlasPixels, atlasWidth, atlasHeight);
 
         // Walk-anchored sanity check on Jog and Run: if measured stride relative
         // to walk is implausible (or wasn't measured at all), extrapolate from
@@ -156,6 +226,41 @@ public static class StrideCalibration
         }
 
         return cal;
+    }
+
+    /// <summary>Measure the horizontal extent of the bottom 25% of the Idle anim's
+    /// content vertical extent (NOT bounding rect — see MeasureFrameFootSpread).
+    /// Picks the first authored Idle keyframe at yaw=0 (or any yaw if east is
+    /// missing). Returns 0 if Idle is missing or empty — callers treat 0 as
+    /// "no idle data, skip body subtraction."</summary>
+    private static float MeasureIdleFootSpread(UnitSpriteData spriteData,
+        Color[] pixels, int atlasW, int atlasH)
+    {
+        var idle = spriteData.GetAnim("Idle");
+        if (idle == null) return 0f;
+        var kfs = idle.GetAngle(0);
+        if (kfs == null || kfs.Count == 0)
+        {
+            foreach (var (_, list) in idle.AngleFrames)
+            {
+                if (list.Count > 0) { kfs = list; break; }
+            }
+            if (kfs == null) return 0f;
+        }
+        // Tighter strip (25%) than the gait scan (50%) — Idle's feet are firmly
+        // on the ground so we don't need the headroom for lifted-foot capture.
+        // Max across frames catches the most extended pose if Idle breathes / shifts.
+        int maxExtent = 0;
+        foreach (var kf in kfs)
+        {
+            var r = kf.Frame.Rect;
+            if (r.Width <= 0 || r.Height <= 0) continue;
+            var (l, rPx) = MeasureFrameFootBounds(pixels, atlasW, atlasH, r, 0.25f);
+            if (l < 0) continue;
+            int ext = rPx - l;
+            if (ext > maxExtent) maxExtent = ext;
+        }
+        return maxExtent;
     }
 
     /// <summary>Replace a gait's measurement with walk × ratio if it's missing
@@ -179,6 +284,7 @@ public static class StrideCalibration
 
     private static void MeasureGait(GaitCalibration g,
         string unitName, UnitSpriteData spriteData, string animName,
+        float stripFraction,
         Color[] atlasPixels, int atlasWidth, int atlasHeight,
         Dictionary<string, AnimationMeta>? animMeta, out int measuredYaw)
     {
@@ -199,27 +305,39 @@ public static class StrideCalibration
             if (kfs == null) return;
         }
 
-        // Per-frame foot spread (horizontal extent of bottom 50% non-transparent pixels).
-        var extents = new List<int>(kfs.Count);
+        // Envelope-of-leg-positions across the cycle (v8). For each frame, get
+        // the leftmost & rightmost non-transparent pixel in the bottom strip,
+        // converted to pivot-relative ("body frame") coordinates. Then take
+        // the GLOBAL min(leftmost_body) and max(rightmost_body) across all
+        // frames. The envelope's width = the full peak-to-peak amplitude of
+        // leg motion in body frame, regardless of whether any single frame
+        // captures both extremes. Solves the quadruped under-measurement
+        // where phase-staggered legs never extend simultaneously.
+        int globalLeftBody = int.MaxValue;
+        int globalRightBody = int.MinValue;
         float heightSum = 0f;
         int heightCount = 0;
+        bool anyHit = false;
         foreach (var kf in kfs)
         {
             var r = kf.Frame.Rect;
             if (r.Width <= 0 || r.Height <= 0) continue;
-            int ext = MeasureFrameFootSpread(atlasPixels, atlasWidth, atlasHeight, r);
-            if (ext > 0) extents.Add(ext);
             heightSum += r.Height;
             heightCount++;
+            var (l, rPx) = MeasureFrameFootBounds(atlasPixels, atlasWidth, atlasHeight, r, stripFraction);
+            if (l < 0) continue;
+            // Convert atlas-X to pivot-relative ("body frame") X so frames at
+            // different atlas positions can be compared like-for-like.
+            float pivotAtlasX = r.X + kf.Frame.PivotX * r.Width;
+            int lBody  = l   - (int)pivotAtlasX;
+            int rBody  = rPx - (int)pivotAtlasX;
+            if (lBody < globalLeftBody) globalLeftBody = lBody;
+            if (rBody > globalRightBody) globalRightBody = rBody;
+            anyHit = true;
         }
+        if (!anyHit) return;
 
-        if (extents.Count == 0) return;
-
-        extents.Sort();
-        int idx = (int)Math.Floor(StridePercentile * (extents.Count - 1));
-        if (idx < 0) idx = 0;
-        if (idx >= extents.Count) idx = extents.Count - 1;
-        g.StridePx = extents[idx];
+        g.StridePx = globalRightBody - globalLeftBody;
         g.AvgPixelHeight = heightCount > 0 ? heightSum / heightCount : 0f;
 
         if (animMeta != null
@@ -230,26 +348,48 @@ public static class StrideCalibration
         }
     }
 
-    /// <summary>For a single sprite frame, scan the bottom 50% of rows and return
-    /// the horizontal distance between the leftmost and rightmost non-transparent
-    /// pixel. Returns 0 if the frame is empty.</summary>
-    private static int MeasureFrameFootSpread(Color[] pixels, int atlasW, int atlasH,
-        Rectangle rect)
+    /// <summary>For a single sprite frame, scan the bottom `stripFraction` of
+    /// the frame's CONTENT vertical extent (not the bounding rect) and return
+    /// the leftmost / rightmost non-transparent pixel X (in atlas coords) in
+    /// that strip. Returns (-1, -1) if the frame is empty. Callers can take
+    /// (right - left) for single-frame spread, or aggregate across frames
+    /// (with pivot-relative coordinates) for envelope measurement.</summary>
+    private static (int left, int right) MeasureFrameFootBounds(
+        Color[] pixels, int atlasW, int atlasH, Rectangle rect,
+        float stripFraction = BottomStripFraction)
     {
-        int rowsToScan = Math.Max(1, (int)(rect.Height * BottomStripFraction));
-        int firstRowFromTop = rect.Y + (rect.Height - rowsToScan);
-        // Defensive clamps — atlas frames should always be in-bounds, but tolerate
-        // off-by-ones from rescale rounding.
-        if (firstRowFromTop < 0) firstRowFromTop = 0;
-        int endRow = firstRowFromTop + rowsToScan;
-        if (endRow > atlasH) endRow = atlasH;
+        // First pass: find the content's vertical extent (top-most and bottom-most
+        // rows with any non-transparent pixel). This is what defines "the
+        // silhouette" for strip-fraction purposes.
+        int xStart = Math.Max(0, rect.X);
+        int xEnd = Math.Min(atlasW, rect.X + rect.Width);
+        int yStart = Math.Max(0, rect.Y);
+        int yEnd = Math.Min(atlasH, rect.Y + rect.Height);
+        int contentTop = -1, contentBot = -1;
+        for (int y = yStart; y < yEnd; y++)
+        {
+            int rowOffset = y * atlasW;
+            bool hasPixel = false;
+            for (int x = xStart; x < xEnd; x++)
+            {
+                if (pixels[rowOffset + x].A > 0) { hasPixel = true; break; }
+            }
+            if (hasPixel)
+            {
+                if (contentTop < 0) contentTop = y;
+                contentBot = y;
+            }
+        }
+        if (contentTop < 0) return (-1, -1); // empty frame
+
+        int contentHeight = contentBot - contentTop + 1;
+        int rowsToScan = Math.Max(1, (int)(contentHeight * stripFraction));
+        int firstRowFromTop = contentBot - rowsToScan + 1;
+        if (firstRowFromTop < contentTop) firstRowFromTop = contentTop;
 
         int leftmost = int.MaxValue;
         int rightmost = int.MinValue;
-        int xStart = Math.Max(0, rect.X);
-        int xEnd = Math.Min(atlasW, rect.X + rect.Width);
-
-        for (int y = firstRowFromTop; y < endRow; y++)
+        for (int y = firstRowFromTop; y <= contentBot; y++)
         {
             int rowOffset = y * atlasW;
             for (int x = xStart; x < xEnd; x++)
@@ -263,8 +403,8 @@ public static class StrideCalibration
             }
         }
 
-        if (leftmost == int.MaxValue) return 0;
-        return rightmost - leftmost;
+        if (leftmost == int.MaxValue) return (-1, -1);
+        return (leftmost, rightmost);
     }
 
     // =========================================================================
@@ -272,17 +412,63 @@ public static class StrideCalibration
     // =========================================================================
 
     /// <summary>Convert a measured stride (in pixels) to a "feet-lock velocity"
-    /// in world units per second, using a unit's world height + the sprite's
-    /// average pixel height as the px-per-world-unit anchor. Returns 0 if any
-    /// input is missing — caller should treat 0 as "unknown" and fall back to
-    /// the legacy code path.</summary>
-    public static float ResolveAnimVel(GaitCalibration g, float spriteWorldHeight)
+    /// in world units per second. The pixel→world conversion uses the unit's
+    /// effective rendered height = <paramref name="spriteWorldHeight"/> ×
+    /// <paramref name="spriteScale"/>, mirroring how the renderer actually sizes
+    /// the sprite on the map (see <c>ShadowRenderer.cs:232</c>:
+    /// <c>worldH = SpriteWorldHeight × SpriteScale</c>). Omitting SpriteScale
+    /// would silently overstate cycle distance for any unit drawn at less than
+    /// 1.0× scale (e.g. Wretched at 0.9 would overstate by 11%), causing the
+    /// playback rate to underestimate and feet to drag behind body motion.
+    /// Returns 0 if any input is missing — caller treats 0 as "unknown" and
+    /// falls back to the legacy code path.</summary>
+    /// <summary>Compute the "suggested CombatSpeed" for a unit — the body
+    /// velocity at which the walk anim plays such that one full cycle takes
+    /// <paramref name="targetCycleSeconds"/> while feet stay perfectly locked
+    /// to the ground. If <paramref name="targetCycleSeconds"/> is 0 or
+    /// negative, falls back to the artist's authored cycle (= the
+    /// <see cref="ResolveAnimVel"/> value for the gait). Returns 0 when
+    /// calibration data is missing — caller should hide the suggestion in
+    /// that case rather than display "0".</summary>
+    public static float ResolveSuggestedCombatSpeed(
+        GaitCalibration g, float spriteWorldHeight, float spriteScale,
+        float bodySubtractionPx, float dutyCycle, float targetCycleSeconds)
+    {
+        if (g.StridePx <= 0f || g.AvgPixelHeight <= 0f
+            || spriteWorldHeight <= 0f || spriteScale <= 0f
+            || dutyCycle <= 0f || dutyCycle >= 1f)
+            return 0f;
+        float effectiveStridePx = MathF.Max(g.StridePx - bodySubtractionPx, 1f);
+        float effectiveWorldHeight = spriteWorldHeight * spriteScale;
+        float pixelsPerWorldUnit = g.AvgPixelHeight / effectiveWorldHeight;
+        float cycleDistanceWorld = (effectiveStridePx / dutyCycle) / pixelsPerWorldUnit;
+        // Use target cycle if specified, otherwise the artist's authored cycle.
+        float t = targetCycleSeconds > 0f ? targetCycleSeconds : g.CycleSeconds;
+        if (t <= 0f) return 0f;
+        return cycleDistanceWorld / t;
+    }
+
+    public static float ResolveAnimVel(GaitCalibration g, float spriteWorldHeight,
+        float spriteScale = 1f, float bodySubtractionPx = 0f,
+        float dutyCycle = DefaultDutyCycle)
     {
         if (g.StridePx <= 0f || g.CycleSeconds <= 0f
-            || g.AvgPixelHeight <= 0f || spriteWorldHeight <= 0f)
+            || g.AvgPixelHeight <= 0f || spriteWorldHeight <= 0f || spriteScale <= 0f
+            || dutyCycle <= 0f || dutyCycle >= 1f)
             return 0f;
-        float pixelsPerWorldUnit = g.AvgPixelHeight / spriteWorldHeight;
-        float cycleDistanceWorld = (g.StridePx * StridesPerCycle) / pixelsPerWorldUnit;
+        // Subtract body-width contamination for quadrupeds (caller passes the
+        // unit's IdleFootSpreadPx when the def is flagged IsQuadruped). Clamped
+        // to a small positive value so a pathological subtraction (idle wider
+        // than gait stride) doesn't drive the result to zero or negative.
+        float effectiveStridePx = MathF.Max(g.StridePx - bodySubtractionPx, 1f);
+        float effectiveWorldHeight = spriteWorldHeight * spriteScale;
+        float pixelsPerWorldUnit = g.AvgPixelHeight / effectiveWorldHeight;
+        // cycle_distance = stride / dutyCycle. Biped d=0.5 → × 2 (matches the
+        // original "× StridesPerCycle" formula). Quadruped lateral walk d=0.75
+        // → × 1.33, accounting for the fact that with 75% duty, the per-leg
+        // amplitude in body frame is traversed in 0.75T (not 0.5T), so body
+        // covers stride/0.75 per cycle, not stride/0.5.
+        float cycleDistanceWorld = (effectiveStridePx / dutyCycle) / pixelsPerWorldUnit;
         return cycleDistanceWorld / g.CycleSeconds;
     }
 
@@ -319,6 +505,7 @@ public static class StrideCalibration
     public class CacheEntry
     {
         public int MeasuredYaw { get; set; }
+        public float IdleFootSpreadPx { get; set; }
         public CacheGait Walk { get; set; } = new();
         public CacheGait Jog { get; set; } = new();
         public CacheGait Run { get; set; } = new();
@@ -348,6 +535,7 @@ public static class StrideCalibration
                 cache[unit] = new UnitCalibration
                 {
                     MeasuredYaw = entry.MeasuredYaw,
+                    IdleFootSpreadPx = entry.IdleFootSpreadPx,
                     Walk = FromCache(entry.Walk),
                     Jog = FromCache(entry.Jog),
                     Run = FromCache(entry.Run),
@@ -377,6 +565,7 @@ public static class StrideCalibration
                 file.Units[unit] = new CacheEntry
                 {
                     MeasuredYaw = cal.MeasuredYaw,
+                    IdleFootSpreadPx = cal.IdleFootSpreadPx,
                     Walk = ToCache(cal.Walk),
                     Jog = ToCache(cal.Jog),
                     Run = ToCache(cal.Run),

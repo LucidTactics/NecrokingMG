@@ -108,6 +108,17 @@ public class CombatSettings
     [JsonPropertyName("accel80Time")] public float Accel80Time { get; set; } = 3.0f;
     [JsonPropertyName("accelFullTime")] public float AccelFullTime { get; set; } = 6.0f;
 
+    // Newtonian acceleration caps (replacing the exponential MoveTime model).
+    // wu/s² caps on how fast a unit's velocity vector can change in each axis.
+    // - Forward (along current velocity): accel when speeding up, decel when braking.
+    //   Decel is ~4-5× accel for legged units (you can brake faster than you push).
+    // - Lateral (perpendicular to current velocity): how hard a unit can change
+    //   direction. With a constant lateral cap, turn radius scales with v²:
+    //   r = v² / maxLateralAccel. Sharp turns at speed → must slow down first.
+    [JsonPropertyName("maxAcceleration")] public float MaxAcceleration { get; set; } = 6.0f;
+    [JsonPropertyName("maxDeceleration")] public float MaxDeceleration { get; set; } = 25.0f;
+    [JsonPropertyName("maxLateralAccel")] public float MaxLateralAccel { get; set; } = 15.0f;
+
     /// <summary>Duration of one round in seconds. Per-weapon attack cycle =
     /// CooldownRounds × RoundDuration. Also used by rounds-based status effects.</summary>
     [JsonPropertyName("roundDuration")] public float RoundDuration { get; set; } = 3.0f;

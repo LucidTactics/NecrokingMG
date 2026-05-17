@@ -1215,6 +1215,10 @@ public class Game1 : Microsoft.Xna.Framework.Game
         scenario.SkillTreePanel = _skillTreePanel;
         scenario.SkillBookPanel = _skillBookPanel;
         scenario.UIShaders = _uiShaders;
+        scenario.Atlases = _atlases;
+        scenario.Font = _font;
+        scenario.SmallFont = _smallFont;
+        scenario.PixelTexture = _pixel;
 
         // Init map editor with scenario systems (needed for editor screenshot scenarios)
         _mapEditor.Init(
