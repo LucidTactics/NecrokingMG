@@ -268,6 +268,9 @@ public class WolfPackHandler : IArchetypeHandler
             ctx.Routine = target;
             ctx.Subroutine = 0;
             ctx.SubroutineTimer = 0f;
+            // Combat exit: clear the engage-ramp-done flag so a fresh combat
+            // starts with the predator stalk-then-commit sequence again.
+            ctx.Units[ctx.UnitIndex].FightCommitted = false;
         }
     }
 
@@ -367,17 +370,29 @@ public class WolfPackHandler : IArchetypeHandler
                 // JumpSystem has control — don't drive AI movement.
                 if (ctx.Units[ctx.UnitIndex].JumpPhase != 0) break;
 
-                // Three-phase commitment ramp on time-in-routine:
+                // Three-phase commitment ramp on time-in-routine, ONLY on the
+                // first engage of a fresh combat:
                 //   0-1s: Walk (stalking approach)
                 //   1-2s: Hurry (closing in)
                 //   2s+:  Sprint (full rush)
-                // No distance bypass — even if the wolf starts close, it
-                // still does the stalk-then-commit sequence. Reads as a
-                // predator winding up rather than a flat sprint.
-                float t = ctx.SubroutineTimer;
-                Movement.MoveEffort effort = t < 1.0f ? Movement.MoveEffort.Walk
-                                          : t < 2.0f ? Movement.MoveEffort.Hurry
-                                          : Movement.MoveEffort.Sprint;
+                // Once the wolf has landed an attack (FightCommitted flag set
+                // when ExecuteAttack→Disengage transitions), re-engages from
+                // WaitCooldown skip the ramp and go straight to Sprint — the
+                // predator has already committed; the stalk only reads right
+                // for initial contact, not for every cycle of the hit-and-run
+                // loop. Flag resets when the unit leaves Fighting.
+                Movement.MoveEffort effort;
+                if (ctx.Units[ctx.UnitIndex].FightCommitted)
+                {
+                    effort = Movement.MoveEffort.Sprint;
+                }
+                else
+                {
+                    float t = ctx.SubroutineTimer;
+                    effort = t < 1.0f ? Movement.MoveEffort.Walk
+                          : t < 2.0f ? Movement.MoveEffort.Hurry
+                          : Movement.MoveEffort.Sprint;
+                }
                 SubroutineSteps.SetEffort(ref ctx, effort);
                 SubroutineSteps.MoveToTarget(ref ctx);
                 int targetIdx = SubroutineSteps.ResolveTarget(ref ctx);
@@ -406,6 +421,9 @@ public class WolfPackHandler : IArchetypeHandler
                     ctx.Subroutine = FightDisengage;
                     ctx.SubroutineTimer = 0f;
                     ctx.Units[ctx.UnitIndex].EngagedTarget = CombatTarget.None;
+                    // First attack landed — skip the stalk ramp on subsequent
+                    // MoveToEngage cycles within this combat.
+                    ctx.Units[ctx.UnitIndex].FightCommitted = true;
                 }
                 break;
             }

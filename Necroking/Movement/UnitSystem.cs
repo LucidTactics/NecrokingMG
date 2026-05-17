@@ -95,6 +95,13 @@ public class Unit
     /// "no bias, pick gait purely from velocity." Reset per-routine by AI
     /// when the unit changes posture (patrol → engage → flee).</summary>
     public MoveEffort MoveEffort;
+
+    /// <summary>Hysteresis flag for the necromancer's facing source. True =
+    /// face velocity direction (jog/run); false = face mouse direction (walk).
+    /// Enter true when speed crosses JogThreshold + hysteresis upward, exit
+    /// back to false when speed drops below JogThreshold − hysteresis. Only
+    /// read for PlayerControlled units in UpdateFacingAngles.</summary>
+    public bool FaceVelocityMode;
     public float Z;             // Height above ground (0 = on ground). Used by 2.5D impulse physics.
     public bool InPhysics;      // True while physics system owns this unit's movement.
     /// <summary>Tracks whether OverrideAnim has been applied to AnimController.
@@ -336,6 +343,15 @@ public class Unit
     /// Reset to 0 whenever Routine becomes Fleeing OR is not Fleeing — so a deer
     /// that stops fleeing and starts again gets the 2s ramp from scratch.</summary>
     public float FleeElapsed;
+
+    /// <summary>True once the unit has completed its first attack in the current
+    /// combat. Used by WolfPackHandler to skip the Walk→Hurry→Sprint stalk ramp
+    /// on re-engages within a hit-and-run cycle — the predator only stalks on
+    /// initial contact; subsequent passes after the wait-cooldown go straight
+    /// to Sprint. Reset to false when the unit leaves the Fighting routine for
+    /// any reason (target dead, alert dropped, etc.) so a fresh combat starts
+    /// with the stalk again.</summary>
+    public bool FightCommitted;
 
     // Two-channel animation system.
     // RoutineAnim is the base layer — AI handlers write it every frame (locomotion,

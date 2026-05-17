@@ -603,11 +603,14 @@ public class Simulation
         _necroRunning = running;
     }
 
+    /// <summary>Sets the mouse-driven target facing angle for the necromancer.
+    /// The actual rotation is applied by <see cref="UpdateFacingAngles"/> at the
+    /// unit's turn rate. While jogging or running the player branch picks the
+    /// velocity direction over this override; once velocity drops back into walk
+    /// gait, this becomes the target again and the body swings to face it.</summary>
     public void SetNecromancerFacing(float angleDeg)
     {
         _necroFacingOverride = angleDeg;
-        if (_necromancerIdx >= 0 && _necromancerIdx < _units.Count)
-            _units[_necromancerIdx].FacingAngle = angleDeg;
     }
 
     // --- AI ---
@@ -1853,7 +1856,49 @@ public class Simulation
             if (_units[i].Incap.IsLocked) continue;
             if (_units[i].JumpPhase >= 2) continue;
             if (_units[i].ChargePhase > 0) continue; // TrampleSystem owns facing during charge
-            if (_units[i].AI == AIBehavior.PlayerControlled) continue;
+
+            // Player-controlled (necromancer): two facing sources, hysteresis between
+            // them. Walk gait → face the mouse (cursor angle stored in
+            // _necroFacingOverride). Jog/Run gait → face actual velocity direction so
+            // sprinting backward doesn't reverse-play the animation. Turn rate is
+            // applied either way.
+            if (_units[i].AI == AIBehavior.PlayerControlled)
+            {
+                if (_units[i].IsLockedByAction()) continue;
+
+                var def = _gameData?.Units.Get(_units[i].UnitDefID);
+                if (def != null)
+                {
+                    var profile = Render.LocomotionProfile.FromUnit(def);
+                    float speed = _units[i].Velocity.Length();
+                    float enterT = profile.JogThreshold + profile.JogHysteresis;
+                    float exitT  = profile.JogThreshold - profile.JogHysteresis;
+                    if (_units[i].FaceVelocityMode)
+                    {
+                        if (speed <= exitT) _units[i].FaceVelocityMode = false;
+                    }
+                    else
+                    {
+                        if (speed >= enterT) _units[i].FaceVelocityMode = true;
+                    }
+                }
+
+                float targetAngle;
+                if (_units[i].FaceVelocityMode && _units[i].Velocity.LengthSq() > 0.01f)
+                {
+                    targetAngle = MathF.Atan2(_units[i].Velocity.Y, _units[i].Velocity.X) * Rad2Deg;
+                }
+                else if (!float.IsNaN(_necroFacingOverride))
+                {
+                    targetAngle = _necroFacingOverride;
+                }
+                else
+                {
+                    continue; // nothing to aim at yet (pre-input frames)
+                }
+                Movement.FacingUtil.TurnToward(_units[i], targetAngle, dt, _gameData);
+                continue;
+            }
 
             // Priority 1: Always turn toward engaged target when one is set
             if (!_units[i].EngagedTarget.IsNone && _units[i].EngagedTarget.IsUnit)
@@ -1866,22 +1911,29 @@ public class Simulation
                 }
             }
 
-            // Priority 2: Face movement direction (actual velocity, or intended
-            // direction if still accelerating from zero).
+            // Priority 2: Face movement direction. Prefer actual velocity over
+            // intended direction so the body matches motion — important under
+            // the Newtonian movement model where Velocity lags PreferredVel
+            // during turns / decel. Only fall back to PreferredVel when the
+            // unit is essentially stopped (about-to-start-moving anticipation).
+            // The old threshold (0.316 wu/s mag) was safe only when Velocity
+            // and PreferredVel were instantly aligned; under accel/decel it
+            // caused the body to snap to PreferredVel direction while still
+            // drifting along Velocity.
             Vec2 faceDir = _units[i].Velocity;
-            if (faceDir.LengthSq() < 0.1f)
+            if (faceDir.LengthSq() < 0.0025f) // < 0.05 wu/s — essentially stopped
                 faceDir = _units[i].PreferredVel;
 
             // Priority 3: Stationary with a combat target (e.g. wolf waiting for
             // cooldown) — keep facing the target so the idle frame reads naturally.
-            if (faceDir.LengthSq() < 0.1f && _units[i].Target.IsUnit)
+            if (faceDir.LengthSq() < 0.0025f && _units[i].Target.IsUnit)
             {
                 int ti = ResolveUnitTarget(_units[i].Target);
                 if (ti >= 0)
                     faceDir = _units[ti].Position - _units[i].Position;
             }
 
-            if (faceDir.LengthSq() > 0.1f)
+            if (faceDir.LengthSq() > 0.0025f)
             {
                 float targetAngle = MathF.Atan2(faceDir.Y, faceDir.X) * Rad2Deg;
                 Movement.FacingUtil.TurnToward(_units[i], targetAngle, dt, _gameData);

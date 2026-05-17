@@ -53,6 +53,9 @@
       "accelHalfTime": null,
       "accel80Time": null,
       "accelFullTime": null,
+      "maxAcceleration": null,
+      "maxDeceleration": null,
+      "maxLateralAccel": null,
       "weaponPoints": {
         "Idle": {
           "30": [
@@ -2364,6 +2367,9 @@
       "accelHalfTime": null,
       "accel80Time": null,
       "accelFullTime": null,
+      "maxAcceleration": null,
+      "maxDeceleration": null,
+      "maxLateralAccel": null,
       "weaponPoints": {
         "Attack1": {
           "60": [
@@ -2643,6 +2649,9 @@
       "accelHalfTime": null,
       "accel80Time": null,
       "accelFullTime": null,
+      "maxAcceleration": 12,
+      "maxDeceleration": 60,
+      "maxLateralAccel": 35,
       "weaponPoints": {},
       "animTimings": {},
       "archetype": "DeerHerd",
@@ -2659,10 +2668,7 @@
       "sprintSpeedMultiplier": 9,
       "animWalkVelOverride": null,
       "animJogVelOverride": null,
-      "animRunVelOverride": null,
-      "maxAcceleration": 12.0,
-      "maxDeceleration": 60.0,
-      "maxLateralAccel": 35.0
+      "animRunVelOverride": null
     },
     {
       "id": "ZombieFemaleDeer",
@@ -2708,6 +2714,9 @@
       "accelHalfTime": null,
       "accel80Time": null,
       "accelFullTime": null,
+      "maxAcceleration": 8,
+      "maxDeceleration": 40,
+      "maxLateralAccel": 22,
       "weaponPoints": {},
       "animTimings": {},
       "archetype": "HordeMinion",
@@ -2724,10 +2733,7 @@
       "sprintSpeedMultiplier": 9,
       "animWalkVelOverride": null,
       "animJogVelOverride": null,
-      "animRunVelOverride": null,
-      "maxAcceleration": 8.0,
-      "maxDeceleration": 40.0,
-      "maxLateralAccel": 22.0
+      "animRunVelOverride": null
     },
     {
       "id": "MaleDeer",
@@ -2774,6 +2780,9 @@
       "accelHalfTime": null,
       "accel80Time": null,
       "accelFullTime": null,
+      "maxAcceleration": 12,
+      "maxDeceleration": 60,
+      "maxLateralAccel": 35,
       "weaponPoints": {},
       "animTimings": {},
       "archetype": "DeerHerd",
@@ -2790,10 +2799,7 @@
       "sprintSpeedMultiplier": 9,
       "animWalkVelOverride": null,
       "animJogVelOverride": null,
-      "animRunVelOverride": null,
-      "maxAcceleration": 12.0,
-      "maxDeceleration": 60.0,
-      "maxLateralAccel": 35.0
+      "animRunVelOverride": null
     },
     {
       "id": "Wolf",
@@ -2819,7 +2825,7 @@
         "magicResist": 3,
         "encumbrance": 2,
         "naturalProt": 3,
-        "combatSpeed": 2.5
+        "combatSpeed": 2
       },
       "zombieTypeID": "ZombieWolf",
       "spellID": "",
@@ -2843,6 +2849,9 @@
       "accelHalfTime": null,
       "accel80Time": null,
       "accelFullTime": null,
+      "maxAcceleration": 10,
+      "maxDeceleration": 50,
+      "maxLateralAccel": 30,
       "weaponPoints": {
         "Idle": {
           "60": [
@@ -2912,10 +2921,7 @@
       "sprintSpeedMultiplier": 9,
       "animWalkVelOverride": null,
       "animJogVelOverride": null,
-      "animRunVelOverride": null,
-      "maxAcceleration": 10.0,
-      "maxDeceleration": 50.0,
-      "maxLateralAccel": 30.0
+      "animRunVelOverride": null
     },
     {
       "id": "Bear",
@@ -2972,6 +2978,9 @@
       "accelHalfTime": null,
       "accel80Time": null,
       "accelFullTime": null,
+      "maxAcceleration": 4,
+      "maxDeceleration": 20,
+      "maxLateralAccel": 10,
       "weaponPoints": {},
       "animTimings": {
         "Jog": {
@@ -3000,10 +3009,7 @@
       "sprintSpeedMultiplier": 9,
       "animWalkVelOverride": null,
       "animJogVelOverride": null,
-      "animRunVelOverride": null,
-      "maxAcceleration": 4.0,
-      "maxDeceleration": 20.0,
-      "maxLateralAccel": 10.0
+      "animRunVelOverride": null
     },
     {
       "id": "GrizzlyBear",
@@ -3060,6 +3066,9 @@
       "accelHalfTime": null,
       "accel80Time": null,
       "accelFullTime": null,
+      "maxAcceleration": 3,
+      "maxDeceleration": 16,
+      "maxLateralAccel": 8,
       "weaponPoints": {},
       "animTimings": {
         "Jog": {
@@ -3088,10 +3097,7 @@
       "sprintSpeedMultiplier": 9,
       "animWalkVelOverride": null,
       "animJogVelOverride": null,
-      "animRunVelOverride": null,
-      "maxAcceleration": 3.0,
-      "maxDeceleration": 16.0,
-      "maxLateralAccel": 8.0
+      "animRunVelOverride": null
     },
     {
       "id": "DireWolf",
@@ -3141,6 +3147,9 @@
       "accelHalfTime": null,
       "accel80Time": null,
       "accelFullTime": null,
+      "maxAcceleration": 8,
+      "maxDeceleration": 40,
+      "maxLateralAccel": 22,
       "weaponPoints": {},
       "animTimings": {
         "Jog": {
@@ -3169,10 +3178,7 @@
       "sprintSpeedMultiplier": 9,
       "animWalkVelOverride": null,
       "animJogVelOverride": null,
-      "animRunVelOverride": null,
-      "maxAcceleration": 8.0,
-      "maxDeceleration": 40.0,
-      "maxLateralAccel": 22.0
+      "animRunVelOverride": null
     },
     {
       "id": "JuvWolf",
@@ -3222,6 +3228,9 @@
       "accelHalfTime": null,
       "accel80Time": null,
       "accelFullTime": null,
+      "maxAcceleration": 12,
+      "maxDeceleration": 55,
+      "maxLateralAccel": 35,
       "weaponPoints": {},
       "animTimings": {
         "Jog": {
@@ -3250,10 +3259,7 @@
       "sprintSpeedMultiplier": 9,
       "animWalkVelOverride": null,
       "animJogVelOverride": null,
-      "animRunVelOverride": null,
-      "maxAcceleration": 12.0,
-      "maxDeceleration": 55.0,
-      "maxLateralAccel": 35.0
+      "animRunVelOverride": null
     },
     {
       "id": "ZombieWolf",
@@ -3300,6 +3306,9 @@
       "accelHalfTime": null,
       "accel80Time": null,
       "accelFullTime": null,
+      "maxAcceleration": 8,
+      "maxDeceleration": 40,
+      "maxLateralAccel": 25,
       "weaponPoints": {},
       "animTimings": {},
       "archetype": "HordeMinion",
@@ -3316,10 +3325,7 @@
       "sprintSpeedMultiplier": 9,
       "animWalkVelOverride": null,
       "animJogVelOverride": null,
-      "animRunVelOverride": null,
-      "maxAcceleration": 8.0,
-      "maxDeceleration": 40.0,
-      "maxLateralAccel": 25.0
+      "animRunVelOverride": null
     },
     {
       "id": "WolfCubZombie",
@@ -3366,6 +3372,9 @@
       "accelHalfTime": null,
       "accel80Time": null,
       "accelFullTime": null,
+      "maxAcceleration": 10,
+      "maxDeceleration": 45,
+      "maxLateralAccel": 30,
       "weaponPoints": {},
       "animTimings": {},
       "archetype": "",
@@ -3382,10 +3391,7 @@
       "sprintSpeedMultiplier": 9,
       "animWalkVelOverride": null,
       "animJogVelOverride": null,
-      "animRunVelOverride": null,
-      "maxAcceleration": 10.0,
-      "maxDeceleration": 45.0,
-      "maxLateralAccel": 30.0
+      "animRunVelOverride": null
     },
     {
       "id": "ZombieMaleDeer",
@@ -3432,6 +3438,9 @@
       "accelHalfTime": null,
       "accel80Time": null,
       "accelFullTime": null,
+      "maxAcceleration": 8,
+      "maxDeceleration": 40,
+      "maxLateralAccel": 22,
       "weaponPoints": {},
       "animTimings": {},
       "archetype": "HordeMinion",
@@ -3448,10 +3457,7 @@
       "sprintSpeedMultiplier": 9,
       "animWalkVelOverride": null,
       "animJogVelOverride": null,
-      "animRunVelOverride": null,
-      "maxAcceleration": 8.0,
-      "maxDeceleration": 40.0,
-      "maxLateralAccel": 22.0
+      "animRunVelOverride": null
     },
     {
       "id": "abomination",
@@ -3504,6 +3510,9 @@
       "accelHalfTime": null,
       "accel80Time": null,
       "accelFullTime": null,
+      "maxAcceleration": 4,
+      "maxDeceleration": 18,
+      "maxLateralAccel": 9,
       "weaponPoints": {},
       "animTimings": {},
       "archetype": "HordeMinion",
@@ -3520,10 +3529,7 @@
       "sprintSpeedMultiplier": 0,
       "animWalkVelOverride": null,
       "animJogVelOverride": null,
-      "animRunVelOverride": null,
-      "maxAcceleration": 4.0,
-      "maxDeceleration": 18.0,
-      "maxLateralAccel": 9.0
+      "animRunVelOverride": null
     },
     {
       "id": "militia",
@@ -3577,6 +3583,9 @@
       "accelHalfTime": null,
       "accel80Time": null,
       "accelFullTime": null,
+      "maxAcceleration": null,
+      "maxDeceleration": null,
+      "maxLateralAccel": null,
       "weaponPoints": {},
       "animTimings": {},
       "archetype": "ArmyUnit",
@@ -3650,6 +3659,9 @@
       "accelHalfTime": null,
       "accel80Time": null,
       "accelFullTime": null,
+      "maxAcceleration": null,
+      "maxDeceleration": null,
+      "maxLateralAccel": null,
       "weaponPoints": {},
       "animTimings": {},
       "archetype": "HordeMinion",
@@ -3723,6 +3735,9 @@
       "accelHalfTime": null,
       "accel80Time": null,
       "accelFullTime": null,
+      "maxAcceleration": null,
+      "maxDeceleration": null,
+      "maxLateralAccel": null,
       "weaponPoints": {},
       "animTimings": {},
       "archetype": "HordeMinion",
@@ -3795,6 +3810,9 @@
       "accelHalfTime": null,
       "accel80Time": null,
       "accelFullTime": null,
+      "maxAcceleration": null,
+      "maxDeceleration": null,
+      "maxLateralAccel": null,
       "weaponPoints": {},
       "animTimings": {},
       "archetype": "HordeMinion",
@@ -3867,6 +3885,9 @@
       "accelHalfTime": null,
       "accel80Time": null,
       "accelFullTime": null,
+      "maxAcceleration": null,
+      "maxDeceleration": null,
+      "maxLateralAccel": null,
       "weaponPoints": {},
       "animTimings": {},
       "archetype": "HordeMinion",
@@ -3939,6 +3960,9 @@
       "accelHalfTime": null,
       "accel80Time": null,
       "accelFullTime": null,
+      "maxAcceleration": null,
+      "maxDeceleration": null,
+      "maxLateralAccel": null,
       "weaponPoints": {},
       "animTimings": {},
       "archetype": "HordeMinion",
@@ -4011,6 +4035,9 @@
       "accelHalfTime": null,
       "accel80Time": null,
       "accelFullTime": null,
+      "maxAcceleration": null,
+      "maxDeceleration": null,
+      "maxLateralAccel": null,
       "weaponPoints": {},
       "animTimings": {},
       "archetype": "HordeMinion",
@@ -4083,6 +4110,9 @@
       "accelHalfTime": null,
       "accel80Time": null,
       "accelFullTime": null,
+      "maxAcceleration": null,
+      "maxDeceleration": null,
+      "maxLateralAccel": null,
       "weaponPoints": {},
       "animTimings": {},
       "archetype": "HordeMinion",
@@ -4103,7 +4133,7 @@
     },
     {
       "id": "militia_copy",
-      "name": "Light Infantry Sword & Shield",
+      "name": "Light Infantry Sword \u0026 Shield",
       "type": "Dynamic",
       "faction": "Human",
       "ai": "AttackClosest",
@@ -4120,7 +4150,7 @@
       },
       "sprite": {
         "atlas": "Navarre_Units",
-        "name": "NavarreLightInfantry_Sword&Shield"
+        "name": "NavarreLightInfantry_Sword\u0026Shield"
       },
       "stats": {
         "maxHP": 10,
@@ -4153,6 +4183,9 @@
       "accelHalfTime": null,
       "accel80Time": null,
       "accelFullTime": null,
+      "maxAcceleration": null,
+      "maxDeceleration": null,
+      "maxLateralAccel": null,
       "weaponPoints": {},
       "animTimings": {},
       "archetype": "ArmyUnit",
@@ -4223,6 +4256,9 @@
       "accelHalfTime": null,
       "accel80Time": null,
       "accelFullTime": null,
+      "maxAcceleration": null,
+      "maxDeceleration": null,
+      "maxLateralAccel": null,
       "weaponPoints": {
         "Spell1": {
           "30": [
@@ -4557,7 +4593,7 @@
       },
       "sprite": {
         "atlas": "Navarre_Units",
-        "name": "NavarreTemplar_Sword&Shield"
+        "name": "NavarreTemplar_Sword\u0026Shield"
       },
       "stats": {
         "maxHP": 10,
@@ -4592,6 +4628,9 @@
       "accelHalfTime": null,
       "accel80Time": null,
       "accelFullTime": null,
+      "maxAcceleration": null,
+      "maxDeceleration": null,
+      "maxLateralAccel": null,
       "weaponPoints": {},
       "animTimings": {},
       "archetype": "ArmyUnit",
@@ -4664,6 +4703,9 @@
       "accelHalfTime": null,
       "accel80Time": null,
       "accelFullTime": null,
+      "maxAcceleration": 3,
+      "maxDeceleration": 15,
+      "maxLateralAccel": 8,
       "weaponPoints": {},
       "animTimings": {},
       "archetype": "ArmyUnit",
@@ -4680,10 +4722,7 @@
       "sprintSpeedMultiplier": 0,
       "animWalkVelOverride": null,
       "animJogVelOverride": null,
-      "animRunVelOverride": null,
-      "maxAcceleration": 3.0,
-      "maxDeceleration": 15.0,
-      "maxLateralAccel": 8.0
+      "animRunVelOverride": null
     },
     {
       "id": "archer",
@@ -4738,6 +4777,9 @@
       "accelHalfTime": null,
       "accel80Time": null,
       "accelFullTime": null,
+      "maxAcceleration": null,
+      "maxDeceleration": null,
+      "maxLateralAccel": null,
       "weaponPoints": {},
       "animTimings": {},
       "archetype": "ArcherUnit",
@@ -4810,6 +4852,9 @@
       "accelHalfTime": null,
       "accel80Time": null,
       "accelFullTime": null,
+      "maxAcceleration": null,
+      "maxDeceleration": null,
+      "maxLateralAccel": null,
       "weaponPoints": {},
       "animTimings": {},
       "archetype": "HordeMinion",
@@ -4882,6 +4927,9 @@
       "accelHalfTime": null,
       "accel80Time": null,
       "accelFullTime": null,
+      "maxAcceleration": null,
+      "maxDeceleration": null,
+      "maxLateralAccel": null,
       "weaponPoints": {},
       "animTimings": {},
       "archetype": "HordeMinion",
@@ -4952,6 +5000,9 @@
       "accelHalfTime": null,
       "accel80Time": null,
       "accelFullTime": null,
+      "maxAcceleration": null,
+      "maxDeceleration": null,
+      "maxLateralAccel": null,
       "weaponPoints": {},
       "animTimings": {},
       "archetype": "HordeMinion",
@@ -5021,6 +5072,9 @@
       "accelHalfTime": null,
       "accel80Time": null,
       "accelFullTime": null,
+      "maxAcceleration": 5,
+      "maxDeceleration": 15,
+      "maxLateralAccel": 8,
       "weaponPoints": {},
       "animTimings": {},
       "archetype": "",
@@ -5037,10 +5091,7 @@
       "sprintSpeedMultiplier": 9,
       "animWalkVelOverride": null,
       "animJogVelOverride": null,
-      "animRunVelOverride": null,
-      "maxAcceleration": 5.0,
-      "maxDeceleration": 15.0,
-      "maxLateralAccel": 8.0
+      "animRunVelOverride": null
     },
     {
       "id": "GreatBoar",
@@ -5093,6 +5144,9 @@
       "accelHalfTime": null,
       "accel80Time": null,
       "accelFullTime": null,
+      "maxAcceleration": 4,
+      "maxDeceleration": 12,
+      "maxLateralAccel": 6,
       "weaponPoints": {},
       "animTimings": {},
       "archetype": "",
@@ -5109,10 +5163,7 @@
       "sprintSpeedMultiplier": 9,
       "animWalkVelOverride": null,
       "animJogVelOverride": null,
-      "animRunVelOverride": null,
-      "maxAcceleration": 4.0,
-      "maxDeceleration": 12.0,
-      "maxLateralAccel": 6.0
+      "animRunVelOverride": null
     },
     {
       "id": "ZombieJuvenileBear",
@@ -5169,6 +5220,9 @@
       "accelHalfTime": null,
       "accel80Time": null,
       "accelFullTime": null,
+      "maxAcceleration": 3,
+      "maxDeceleration": 16,
+      "maxLateralAccel": 8,
       "weaponPoints": {},
       "animTimings": {},
       "archetype": "HordeMinion",
@@ -5185,10 +5239,7 @@
       "sprintSpeedMultiplier": 9,
       "animWalkVelOverride": null,
       "animJogVelOverride": null,
-      "animRunVelOverride": null,
-      "maxAcceleration": 3.0,
-      "maxDeceleration": 16.0,
-      "maxLateralAccel": 8.0
+      "animRunVelOverride": null
     },
     {
       "id": "ZombieGrizzlyBear",
@@ -5245,6 +5296,9 @@
       "accelHalfTime": null,
       "accel80Time": null,
       "accelFullTime": null,
+      "maxAcceleration": 2.5,
+      "maxDeceleration": 12,
+      "maxLateralAccel": 6,
       "weaponPoints": {},
       "animTimings": {},
       "archetype": "HordeMinion",
@@ -5261,10 +5315,7 @@
       "sprintSpeedMultiplier": 9,
       "animWalkVelOverride": null,
       "animJogVelOverride": null,
-      "animRunVelOverride": null,
-      "maxAcceleration": 2.5,
-      "maxDeceleration": 12.0,
-      "maxLateralAccel": 6.0
+      "animRunVelOverride": null
     },
     {
       "id": "ZombieBoar",
@@ -5317,6 +5368,9 @@
       "accelHalfTime": null,
       "accel80Time": null,
       "accelFullTime": null,
+      "maxAcceleration": 4,
+      "maxDeceleration": 12,
+      "maxLateralAccel": 6,
       "weaponPoints": {},
       "animTimings": {},
       "archetype": "HordeMinion",
@@ -5333,10 +5387,7 @@
       "sprintSpeedMultiplier": 9,
       "animWalkVelOverride": null,
       "animJogVelOverride": null,
-      "animRunVelOverride": null,
-      "maxAcceleration": 4.0,
-      "maxDeceleration": 12.0,
-      "maxLateralAccel": 6.0
+      "animRunVelOverride": null
     },
     {
       "id": "ZombieGreatBoar",
@@ -5389,6 +5440,9 @@
       "accelHalfTime": null,
       "accel80Time": null,
       "accelFullTime": null,
+      "maxAcceleration": 3,
+      "maxDeceleration": 10,
+      "maxLateralAccel": 5,
       "weaponPoints": {},
       "animTimings": {},
       "archetype": "HordeMinion",
@@ -5405,10 +5459,7 @@
       "sprintSpeedMultiplier": 9,
       "animWalkVelOverride": null,
       "animJogVelOverride": null,
-      "animRunVelOverride": null,
-      "maxAcceleration": 3.0,
-      "maxDeceleration": 10.0,
-      "maxLateralAccel": 5.0
+      "animRunVelOverride": null
     },
     {
       "id": "wretched",
@@ -5463,6 +5514,9 @@
       "accelHalfTime": null,
       "accel80Time": null,
       "accelFullTime": null,
+      "maxAcceleration": null,
+      "maxDeceleration": null,
+      "maxLateralAccel": null,
       "weaponPoints": {
         "Idle": {
           "60": [
@@ -5551,6 +5605,9 @@
       "accelHalfTime": null,
       "accel80Time": null,
       "accelFullTime": null,
+      "maxAcceleration": null,
+      "maxDeceleration": null,
+      "maxLateralAccel": null,
       "weaponPoints": {},
       "animTimings": {},
       "archetype": "",
@@ -5622,6 +5679,9 @@
       "accelHalfTime": null,
       "accel80Time": null,
       "accelFullTime": null,
+      "maxAcceleration": null,
+      "maxDeceleration": null,
+      "maxLateralAccel": null,
       "weaponPoints": {},
       "animTimings": {},
       "archetype": "",
@@ -5693,6 +5753,9 @@
       "accelHalfTime": null,
       "accel80Time": null,
       "accelFullTime": null,
+      "maxAcceleration": null,
+      "maxDeceleration": null,
+      "maxLateralAccel": null,
       "weaponPoints": {},
       "animTimings": {},
       "archetype": "",
@@ -5764,6 +5827,9 @@
       "accelHalfTime": null,
       "accel80Time": null,
       "accelFullTime": null,
+      "maxAcceleration": null,
+      "maxDeceleration": null,
+      "maxLateralAccel": null,
       "weaponPoints": {},
       "animTimings": {},
       "archetype": "",

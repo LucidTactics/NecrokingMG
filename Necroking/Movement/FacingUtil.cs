@@ -5,7 +5,7 @@ namespace Necroking.Movement;
 
 /// <summary>
 /// Central turn-rate-limited facing helper. Every voluntary facing change on
-/// an AI unit should go through <see cref="TurnToward"/> or
+/// any unit should go through <see cref="TurnToward"/> or
 /// <see cref="TurnTowardPosition"/> so the angular-velocity cap
 /// (<c>UnitDef.TurnSpeed</c> or <c>GameSettings.Combat.TurnSpeed</c>) is
 /// respected. Before this helper existed, handlers wrote
@@ -13,10 +13,11 @@ namespace Necroking.Movement;
 /// rate cap that <see cref="Necroking.GameSystems.Simulation.UpdateFacingAngles"/>
 /// was supposed to enforce.
 ///
-/// PlayerControlled units are exempt — the necromancer's facing is driven by
-/// the mouse and must be instantaneous. Incap-locked and airborne units
-/// (JumpPhase ≥ 2) also skip the rotation because their facing is frozen by
-/// other systems.
+/// PlayerControlled units obey turn rate too: mouse-driven facing rotates
+/// smoothly toward the cursor (and toward velocity direction during jog/run,
+/// see <see cref="Necroking.GameSystems.Simulation.UpdateFacingAngles"/>).
+/// Incap-locked and airborne units (JumpPhase ≥ 2) skip the rotation because
+/// their facing is frozen by other systems.
 ///
 /// No turn acceleration is modeled — turn speed is a flat deg/s. Units always
 /// rotate at the same rate when they do rotate; they don't ramp up/down.
@@ -38,16 +39,10 @@ public static class FacingUtil
     /// <summary>
     /// Rotate <paramref name="unit"/>'s facing toward <paramref name="targetAngle"/>
     /// (degrees), clamped by the unit's turn speed × <paramref name="dt"/>.
-    /// PlayerControlled units snap instantly; incap'd / airborne units don't rotate.
+    /// Incap'd / airborne units don't rotate.
     /// </summary>
     public static void TurnToward(Unit unit, float targetAngle, float dt, GameData? gameData)
     {
-        // Necromancer / player-controlled: mouse owns facing, snap.
-        if (unit.AI == AIBehavior.PlayerControlled)
-        {
-            unit.FacingAngle = targetAngle;
-            return;
-        }
         // Can't rotate while knocked down / airborne.
         if (unit.Incap.IsLocked) return;
         if (unit.JumpPhase >= 2) return;
