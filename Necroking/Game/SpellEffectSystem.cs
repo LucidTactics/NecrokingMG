@@ -30,6 +30,9 @@ public struct DamageNumber
     public float Height;
     public bool IsPoison;
     public bool IsFatigue;
+    /// <summary>Render the PickupText as a warning (no "+" prefix, red colour).
+    /// Used for things like "Horde Full" where the text isn't a pickup gain.</summary>
+    public bool IsAlert;
 }
 
 /// <summary>

@@ -3,11 +3,12 @@ using System.Collections.Generic;
 using Necroking.Core;
 using Necroking.Data;
 using Necroking.Data.Registries;
+using Necroking.Game;
 using Necroking.Movement;
 
 namespace Necroking.GameSystems;
 
-public enum CastResult { Success, NotEnoughMana, OnCooldown, NoValidTarget, OutOfRange, NoNecromancer }
+public enum CastResult { Success, NotEnoughMana, OnCooldown, NoValidTarget, OutOfRange, NoNecromancer, HordeCapFull }
 
 public class PendingSpellCast
 {
@@ -52,11 +53,11 @@ public static class SpellCaster
         // path scales the mana cost downward when caster level exceeds the
         // requirement. Secondary path is a hard gate only — meeting it doesn't
         // reduce cost. Without a UnitDef we fall back to flat ManaCost so
-        // existing test paths keep working.
+        // existing test paths keep working. Buff "AllPaths" Set effects floor
+        // every path level (e.g. god mode = 9 everywhere) without overwriting
+        // higher native levels.
         var casterDef = gameData?.Units.Get(units[necroIdx].UnitDefID);
-        Func<MagicPath, int> casterLevel = casterDef != null
-            ? casterDef.GetPathLevel
-            : _ => 0;
+        Func<MagicPath, int> casterLevel = ResolveCasterLevel(casterDef, units, necroIdx);
         if (!spell.MeetsPathRequirements(casterLevel)) return CastResult.NotEnoughMana;
         float effectiveCost = spell.EffectiveManaCost(casterLevel);
         if (necro.Mana < effectiveCost) return CastResult.NotEnoughMana;
@@ -228,6 +229,33 @@ public static class SpellCaster
                         outPending.TargetPos = necroPos; // spawn near caster
                     }
                 }
+
+                // Horde-cap pre-check. Refuses the cast outright (no mana spent,
+                // no cooldown) when the target category is full. Skipped for
+                // Transform mode — it replaces an existing unit, doesn't grow
+                // the army — and for CorpseAOE-without-a-fixed-summonUnitID,
+                // since per-corpse category resolution happens at execute time
+                // (different corpses may produce different categories).
+                if (spell.SummonMode != "Transform")
+                {
+                    string predictId = outPending.SummonUnitID;
+                    if (string.IsNullOrEmpty(predictId)
+                        && spell.SummonTargetReq == "Corpse"
+                        && outPending.TargetCorpseIdx >= 0)
+                    {
+                        predictId = TableCraftingSystem.ResolveZombieUnitID(
+                            gameData!, corpses[outPending.TargetCorpseIdx].UnitDefID);
+                    }
+                    if (!string.IsNullOrEmpty(predictId))
+                    {
+                        var cat = HordeCapTracker.CategoryFor(gameData, predictId);
+                        if (cat != UndeadCategory.None
+                            && HordeCapTracker.Available(units, gameData, necro, cat) <= 0)
+                        {
+                            return CastResult.HordeCapFull;
+                        }
+                    }
+                }
                 break;
             }
 
@@ -385,13 +413,30 @@ public static class SpellCaster
         // than capturing it from the eligibility check so we stay in sync if a
         // future refactor moves the gate around.
         var castingDef = gameData?.Units.Get(units[necroIdx].UnitDefID);
-        Func<MagicPath, int> castingLevel = castingDef != null
-            ? castingDef.GetPathLevel
-            : _ => 0;
+        Func<MagicPath, int> castingLevel = ResolveCasterLevel(castingDef, units, necroIdx);
         necro.Mana -= spell.EffectiveManaCost(castingLevel);
         if (spell.Cooldown > 0f)
             necro.SpellCooldowns[spellID] = spell.Cooldown;
 
         return CastResult.Success;
+    }
+
+    /// <summary>Build the magic-path level lookup used for both requirement
+    /// gating and mana-cost scaling. Native def levels are floored by buff
+    /// "AllPaths" Set effects (e.g. god mode pinning every path to 9). Higher
+    /// native levels win over the buff floor so investing further in a path
+    /// isn't wasted while the buff is up.</summary>
+    private static Func<MagicPath, int> ResolveCasterLevel(UnitDef? def, UnitArrays units, int necroIdx)
+    {
+        float? floor = necroIdx >= 0 ? BuffSystem.MaxSetExtra(units, necroIdx, "AllPaths") : null;
+        int floorInt = floor.HasValue ? (int)floor.Value : 0;
+        if (def == null && floor == null) return _ => 0;
+        if (def == null) return _ => floorInt;
+        if (floor == null) return def.GetPathLevel;
+        return p =>
+        {
+            int native = def.GetPathLevel(p);
+            return native > floorInt ? native : floorInt;
+        };
     }
 }

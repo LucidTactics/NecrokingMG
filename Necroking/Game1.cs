@@ -1448,6 +1448,14 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 string resolvedID = Game.TableCraftingSystem.ResolveZombieUnitID(_gameData, corpse.UnitDefID);
                 if (string.IsNullOrEmpty(resolvedID)) continue;
 
+                // Per-corpse cap check — AOE may mix categories. Skip corpses
+                // whose category is full but keep iterating to consume others
+                // whose category still has room.
+                var aoeCat = HordeCapTracker.CategoryFor(_gameData, resolvedID);
+                if (aoeCat != UndeadCategory.None
+                    && HordeCapTracker.Available(_sim.Units, _gameData, _sim.NecroState, aoeCat) <= 0)
+                    continue;
+
                 var spawnPos = corpse.Position;
                 float corpseFacing = corpse.FacingAngle;
                 _sim.ConsumeCorpse(i);
@@ -1535,7 +1543,18 @@ public class Game1 : Microsoft.Xna.Framework.Game
                         break;
                 }
 
-                for (int q = 0; q < spell.SummonQuantity; q++)
+                // Cap-limited summon count: spawn min(SummonQuantity, available
+                // slots in the resolved category). Pre-check in SpellCaster
+                // already refused when available=0; this clamps the multi-spawn
+                // case so we never overshoot the cap.
+                int spawnQty = spell.SummonQuantity;
+                var spawnCat = HordeCapTracker.CategoryFor(_gameData, summonUnitID);
+                if (spawnCat != UndeadCategory.None)
+                {
+                    int avail = HordeCapTracker.Available(_sim.Units, _gameData, _sim.NecroState, spawnCat);
+                    if (avail < spawnQty) spawnQty = avail;
+                }
+                for (int q = 0; q < spawnQty; q++)
                 {
                     var unitSpawnPos = spawnPos;
                     if (q > 0)
@@ -2488,6 +2507,17 @@ public class Game1 : Microsoft.Xna.Framework.Game
             if (_input.WasKeyPressed(Keys.G) && necroIdx >= 0)
                 _sim.UnitsMut[necroIdx].GhostMode = !_sim.Units[necroIdx].GhostMode;
 
+            // --- God mode toggle (Shift+P) ---
+            // Cheat / debug toggle. Applies/removes buff_god_mode on the
+            // necromancer; the buff's effects (path-9, +caps, +mana, +regen,
+            // 2x movement) come from data/buffs.json. Duration=0 on the def
+            // means the buff is Permanent until removed.
+            if (_input.WasKeyPressed(Keys.P) && necroIdx >= 0
+                && (_input.IsKeyDown(Keys.LeftShift) || _input.IsKeyDown(Keys.RightShift)))
+            {
+                ToggleGodMode(necroIdx);
+            }
+
             // --- Secondary spell bar (keys 1-4) ---
             if (necroIdx >= 0)
             {
@@ -3188,6 +3218,31 @@ public class Game1 : Microsoft.Xna.Framework.Game
         {
             // Fresh craft — gate on inputs + spend essence.
             if (!ts.HasAnyCorpse()) return false;
+
+            // Horde-cap gate: peek at the corpse that's about to be raised and
+            // refuse if the resulting unit's category is full. Mirrors the spell
+            // pre-check so essence isn't spent on a craft that would produce
+            // nothing. The actual completion in TableCraftingSystem.CompleteCraft
+            // re-checks under the same conditions (state may have shifted).
+            int peekSlot = -1;
+            for (int i = 0; i < ts.CorpseSlots.Length; i++)
+                if (!ts.CorpseSlots[i].IsEmpty) { peekSlot = i; break; }
+            if (peekSlot >= 0)
+            {
+                string peekZombie = Game.TableCraftingSystem.ResolveZombieUnitID(
+                    _gameData, ts.CorpseSlots[peekSlot].SourceUnitDefID);
+                if (!string.IsNullOrEmpty(peekZombie))
+                {
+                    var peekCat = HordeCapTracker.CategoryFor(_gameData, peekZombie);
+                    if (peekCat != UndeadCategory.None
+                        && HordeCapTracker.Available(_sim.Units, _gameData, _sim.NecroState, peekCat) <= 0)
+                    {
+                        SpawnHordeCapText(necroIdx);
+                        return false;
+                    }
+                }
+            }
+
             if (!_sim.PlayerResources.SpendEssence(def.EssenceCost)) return false;
             ts.Crafting = true;
             ts.CraftTimer = 0f;
@@ -3220,6 +3275,8 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
         var result = SpellCaster.TryStartSpellCast(spellId, _gameData.Spells, _sim.NecroState,
             _sim.Units, necroIdx, mouseWorld, _sim.Corpses, _pendingSpell, _gameData);
+        if (result == CastResult.HordeCapFull)
+            SpawnHordeCapText(necroIdx);
         if (result != CastResult.Success) return result;
 
         var spell = _gameData.Spells.Get(spellId);
@@ -3379,6 +3436,55 @@ public class Game1 : Microsoft.Xna.Framework.Game
             Height = 2f,
             IsPoison = false,
             PickupText = resourceType,
+        });
+    }
+
+    /// <summary>Floating "Horde Full" text above the necromancer when a summon
+    /// is refused for hitting the cap. Reuses the DamageNumber PickupText
+    /// channel so the existing renderer + fade-out apply unchanged.</summary>
+    /// <summary>Shift+P cheat. Applies / removes buff_god_mode on the
+    /// necromancer. On apply, also tops mana up to the new effective cap so
+    /// the +999 mana effect is felt immediately rather than slowly filling
+    /// at the buffed regen rate.</summary>
+    private void ToggleGodMode(int necroIdx)
+    {
+        if (necroIdx < 0 || _gameData == null) return;
+        const string godBuffId = "buff_god_mode";
+        if (BuffSystem.HasBuff(_sim.Units, necroIdx, godBuffId))
+        {
+            BuffSystem.RemoveBuff(_sim.UnitsMut, necroIdx, godBuffId);
+            // Clamp mana back down to the base cap since the +999 just went
+            // away — without this, Mana would stay at e.g. 1049 against a 50
+            // MaxMana and read weirdly in the HUD.
+            if (_sim.NecroState.Mana > _sim.NecroState.MaxMana)
+                _sim.NecroState.Mana = _sim.NecroState.MaxMana;
+            return;
+        }
+        var def = _gameData.Buffs.Get(godBuffId);
+        if (def == null)
+        {
+            DebugLog.Log("ai", "[GodMode] buff_god_mode missing from buffs.json — toggle ignored.");
+            return;
+        }
+        BuffSystem.ApplyBuff(_sim.UnitsMut, necroIdx, def);
+        // Instant top-up to the buffed cap.
+        float maxManaEff = _sim.NecroState.MaxMana
+            + BuffSystem.SumExtraAdd(_sim.Units, necroIdx, "MaxMana");
+        _sim.NecroState.Mana = maxManaEff;
+    }
+
+    private void SpawnHordeCapText(int necroIdx)
+    {
+        if (necroIdx < 0 || necroIdx >= _sim.Units.Count) return;
+        _damageNumbers.Add(new DamageNumber
+        {
+            WorldPos = _sim.Units[necroIdx].Position,
+            Damage = 0,
+            Timer = 0f,
+            Height = 2f,
+            IsPoison = false,
+            PickupText = "Horde Full",
+            IsAlert = true,
         });
     }
 
@@ -6663,8 +6769,13 @@ public class Game1 : Microsoft.Xna.Framework.Game
             var sp = _renderer.WorldToScreen(dn.WorldPos, dn.Height, _camera);
             byte alpha = (byte)(255 * fade);
 
-            // Pickup text or damage number
-            string text = dn.PickupText != null ? $"+{dn.PickupText}" : dn.Damage.ToString();
+            // Pickup text or damage number. Alerts (e.g. "Horde Full") render
+            // raw — no "+" prefix — since they're not a numeric gain.
+            string text;
+            if (dn.PickupText != null)
+                text = dn.IsAlert ? dn.PickupText : $"+{dn.PickupText}";
+            else
+                text = dn.Damage.ToString();
             var size = _font.MeasureString(text) * dnScale;
             var pos = new Vector2(sp.X - size.X / 2f, sp.Y - size.Y / 2f);
 
@@ -6673,9 +6784,11 @@ public class Game1 : Microsoft.Xna.Framework.Game
             _spriteBatch.DrawString(_font, text, new Vector2(pos.X + 1f, pos.Y + 1f), shadowColor,
                 0f, Vector2.Zero, dnScale, SpriteEffects.None, 0f);
 
-            // Text pass — pickup=gold, poison=green, fatigue=blue, else DamageNumberColor
+            // Text pass — alert=red, pickup=gold, poison=green, fatigue=blue, else DamageNumberColor
             Color color;
-            if (dn.PickupText != null)
+            if (dn.IsAlert)
+                color = Color.FromNonPremultiplied(255, 80, 80, alpha);
+            else if (dn.PickupText != null)
                 color = Color.FromNonPremultiplied(255, 220, 100, alpha);
             else if (dn.IsPoison)
                 color = Color.FromNonPremultiplied(40, 200, 40, alpha);

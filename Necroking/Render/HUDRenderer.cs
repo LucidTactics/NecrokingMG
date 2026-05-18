@@ -131,7 +131,49 @@ public class HUDRenderer
         // Controls hint intentionally omitted — overlapped the FPS/zoom bottom-
         // left readout. Re-enable if we add a menu page for it.
         DrawTimeControls(screenW, screenH, timeScale, gameData, paused);
+        DrawHordeCaps(screenW, sim, gameData);
         DrawCombatLog(screenW, screenH, sim, gameData);
+    }
+
+    // ═══════════════════════════════════════
+    //  Horde Caps (top-right)
+    // ═══════════════════════════════════════
+
+    /// <summary>Top-right readouts: "Monsters used/cap", "Humans used/cap".
+    /// Each line only renders when its cap > 0 (i.e. the player has unlocked
+    /// that category via the skill tree). Colour goes red when at-or-over cap
+    /// so the player notices the gate.</summary>
+    private void DrawHordeCaps(int screenW, Simulation sim, GameData gameData)
+    {
+        if (_smallFont == null) return;
+        var necro = sim.NecroState;
+        int necroIdx = FindNecromancer(sim);
+
+        int humanCap = HordeCapTracker.GetCap(sim.Units, necroIdx, necro, UndeadCategory.Human);
+        int monsterCap = HordeCapTracker.GetCap(sim.Units, necroIdx, necro, UndeadCategory.Monster);
+        if (monsterCap <= 0 && humanCap <= 0) return;
+
+        int x = screenW - 110;
+        int y = 10;
+        const int lineH = 16;
+
+        if (humanCap > 0)
+        {
+            int used = HordeCapTracker.CountUsed(sim.Units, gameData, UndeadCategory.Human);
+            Color col = used >= humanCap
+                ? new Color(255, 90, 90)
+                : new Color(220, 200, 180);
+            Text(_smallFont, $"Humans  {used}/{humanCap}", new Vector2(x, y), col);
+            y += lineH;
+        }
+        if (monsterCap > 0)
+        {
+            int used = HordeCapTracker.CountUsed(sim.Units, gameData, UndeadCategory.Monster);
+            Color col = used >= monsterCap
+                ? new Color(255, 90, 90)
+                : new Color(200, 220, 180);
+            Text(_smallFont, $"Monsters {used}/{monsterCap}", new Vector2(x, y), col);
+        }
     }
 
     // ═══════════════════════════════════════
@@ -149,10 +191,12 @@ public class HUDRenderer
             Text(_font, $"HP: {stats.HP}/{stats.MaxHP}", new Vector2(BarX + 5, HpBarY + 1), Color.White);
         }
 
-        float manaFrac = sim.NecroState.MaxMana > 0 ? sim.NecroState.Mana / sim.NecroState.MaxMana : 0f;
+        float maxManaEff = sim.NecroState.MaxMana
+            + (necroIdx >= 0 ? BuffSystem.SumExtraAdd(sim.Units, necroIdx, "MaxMana") : 0f);
+        float manaFrac = maxManaEff > 0 ? sim.NecroState.Mana / maxManaEff : 0f;
         _batch.Draw(_pixel, new Rectangle(BarX, ManaBarY, BarWidth, BarHeight), ManaBarBg);
         _batch.Draw(_pixel, new Rectangle(BarX, ManaBarY, (int)(BarWidth * manaFrac), BarHeight), ManaBarFg);
-        Text(_font, $"Mana: {(int)sim.NecroState.Mana}/{(int)sim.NecroState.MaxMana}", new Vector2(BarX + 5, ManaBarY + 1), Color.White);
+        Text(_font, $"Mana: {(int)sim.NecroState.Mana}/{(int)maxManaEff}", new Vector2(BarX + 5, ManaBarY + 1), Color.White);
     }
 
 

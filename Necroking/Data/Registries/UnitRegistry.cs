@@ -6,6 +6,22 @@ using System.Text.Json.Serialization;
 
 namespace Necroking.Data.Registries;
 
+/// <summary>Which horde-cap pool a permanent undead unit counts against.
+/// Caps are enforced by HordeCapTracker; cosmetic-only undead / the player
+/// necromancer / temporary summons should stay <see cref="None"/> so they
+/// never consume a slot.</summary>
+public enum UndeadCategory : byte
+{
+    /// <summary>Doesn't count against any cap. Default for living units, the
+    /// player necromancer's evolutions, and any temporary summons we add later.</summary>
+    None = 0,
+    /// <summary>Undead raised from a human corpse — skeletons, abominations, etc.</summary>
+    Human = 1,
+    /// <summary>Undead raised from an animal/monster corpse — zombie wolves,
+    /// deer, bears, boars, etc.</summary>
+    Monster = 2,
+}
+
 public class SpriteRef
 {
     [JsonPropertyName("atlas")] public string AtlasName { get; set; } = "";
@@ -149,6 +165,14 @@ public class UnitDef : IHasId
     [JsonPropertyName("stats")] public UnitStatsJson? Stats { get; set; }
     [JsonPropertyName("zombieTypeID")] public string ZombieTypeID { get; set; } = "";
     [JsonPropertyName("spellID")] public string SpellID { get; set; } = "";
+
+    /// <summary>Which horde-cap pool this unit consumes if spawned as a
+    /// permanent undead minion. Stored as the enum's string name in JSON
+    /// ("None" | "Human" | "Monster"). Living units, the player necromancer,
+    /// and temporary summons should stay <see cref="UndeadCategory.None"/> so
+    /// they never count against either cap. See HordeCapTracker.</summary>
+    [JsonConverter(typeof(JsonStringEnumConverter))]
+    [JsonPropertyName("undeadCategory")] public UndeadCategory UndeadCategory { get; set; } = UndeadCategory.None;
     [JsonPropertyName("maxMana")] public float MaxMana { get; set; }
     [JsonPropertyName("manaRegen")] public float ManaRegen { get; set; }
 

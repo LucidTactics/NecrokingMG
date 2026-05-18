@@ -257,13 +257,28 @@ public class DeerHerdHandler : IArchetypeHandler
                 ctx.Units[ctx.UnitIndex].EngagedTarget = CombatTarget.None;
                 return;
             }
-            if (ctx.Routine == RoutineFleeing && ctx.SubroutineTimer <= 0f)
+            if (ctx.Routine == RoutineFleeing)
             {
-                ctx.Routine = RoutineCalming;
-                ctx.SubroutineTimer = CalmDuration;
-                ctx.Units[ctx.UnitIndex].Target = CombatTarget.None;
-                ctx.Units[ctx.UnitIndex].EngagedTarget = CombatTarget.None;
-                return;
+                // Two cases:
+                //   - Threat-driven flee (AlertTarget set): calm as soon as alert
+                //     drops to Unaware. AwarenessSystem's own hysteresis is the
+                //     buffer; no artificial wall-clock timer. Sprint covering ground
+                //     fast naturally triggers calm sooner, but only because the deer
+                //     actually escaped detection — not because the clock ran out.
+                //   - Poison/random-spook (no AlertTarget): there's nothing for
+                //     AwarenessSystem to detect, so alert drops almost immediately.
+                //     Fall back to the MinFleeDuration timer so the deer runs at
+                //     least a few seconds before calming.
+                bool hasAlertTarget = ctx.Units[ctx.UnitIndex].AlertTarget != GameConstants.InvalidUnit;
+                bool canCalm = hasAlertTarget || ctx.SubroutineTimer <= 0f;
+                if (canCalm)
+                {
+                    ctx.Routine = RoutineCalming;
+                    ctx.SubroutineTimer = CalmDuration;
+                    ctx.Units[ctx.UnitIndex].Target = CombatTarget.None;
+                    ctx.Units[ctx.UnitIndex].EngagedTarget = CombatTarget.None;
+                    return;
+                }
             }
             if (ctx.Routine == RoutineFightBack && !SubroutineSteps.IsTargetAlive(ref ctx))
             {

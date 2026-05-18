@@ -37,13 +37,18 @@ public static class BuffSystem
             }
         }
 
-        // New buff
+        // New buff. A duration of 0 (or below) at apply time means "permanent
+        // until explicitly removed" — used for toggles like god mode. The
+        // tick-down path in TickBuffs respects ActiveBuff.Permanent so the
+        // buff never expires on its own. Buffs with a positive duration that
+        // tick to 0 follow the normal removal path.
         buffs.Add(new ActiveBuff
         {
             BuffDefID = def.Id,
             RemainingDuration = durationSeconds,
             Effects = def.Effects,
-            StackCount = 1
+            StackCount = 1,
+            Permanent = durationSeconds <= 0f,
         });
 
         // If this buff is incapacitating, set up the incap state
@@ -188,6 +193,65 @@ public static class BuffSystem
                 return;
             }
         }
+    }
+
+    /// <summary>Remove every stack of the named buff in one call. Returns true
+    /// if anything was actually removed. Used by toggle-style buffs (e.g. god
+    /// mode) where partial removal doesn't make sense.</summary>
+    public static bool RemoveBuff(UnitArrays units, int unitIdx, string buffDefID)
+    {
+        if (unitIdx < 0 || unitIdx >= units.Count) return false;
+        var buffs = units[unitIdx].ActiveBuffs;
+        bool removed = false;
+        for (int i = buffs.Count - 1; i >= 0; i--)
+        {
+            if (buffs[i].BuffDefID == buffDefID)
+            {
+                buffs.RemoveAt(i);
+                removed = true;
+            }
+        }
+        return removed;
+    }
+
+    /// <summary>Is the named buff currently active on this unit?</summary>
+    public static bool HasBuff(UnitArrays units, int unitIdx, string buffDefID)
+    {
+        if (unitIdx < 0 || unitIdx >= units.Count) return false;
+        var buffs = units[unitIdx].ActiveBuffs;
+        for (int i = 0; i < buffs.Count; i++)
+            if (buffs[i].BuffDefID == buffDefID) return true;
+        return false;
+    }
+
+    /// <summary>Sum of all "Add"-type buff effects on this unit whose Stat
+    /// name matches <paramref name="stat"/>. Used for resource fields that
+    /// aren't unit stats (MaxMana, ManaRegen, MonsterCap, HumanCap, etc.) —
+    /// the unit-stat path goes through <see cref="GetModifiedStat"/>.</summary>
+    public static float SumExtraAdd(UnitArrays units, int unitIdx, string stat)
+    {
+        if (unitIdx < 0 || unitIdx >= units.Count) return 0f;
+        float sum = 0f;
+        foreach (var buff in units[unitIdx].ActiveBuffs)
+            foreach (var eff in buff.Effects)
+                if (eff.Stat == stat && eff.Type == "Add")
+                    sum += eff.Value * buff.StackCount;
+        return sum;
+    }
+
+    /// <summary>Largest "Set" buff effect value on this unit with the named
+    /// stat, or null when no such effect is active. Used for floor-style
+    /// overrides (e.g. god-mode "AllPaths = 9" raises every magic path level
+    /// to at least 9, leaving higher native levels untouched).</summary>
+    public static float? MaxSetExtra(UnitArrays units, int unitIdx, string stat)
+    {
+        if (unitIdx < 0 || unitIdx >= units.Count) return null;
+        float? result = null;
+        foreach (var buff in units[unitIdx].ActiveBuffs)
+            foreach (var eff in buff.Effects)
+                if (eff.Stat == stat && eff.Type == "Set")
+                    result = result.HasValue ? MathF.Max(result.Value, eff.Value) : eff.Value;
+        return result;
     }
 
     public static float GetModifiedStat(UnitArrays units, int unitIdx, BuffStat stat, float baseValue)

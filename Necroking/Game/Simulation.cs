@@ -256,8 +256,15 @@ public class Simulation
 
         // Update mana and cooldowns. BonusManaRegen is the dynamic add (e.g.
         // Death Fog Consumption while in fog) refreshed by Game1 each tick.
-        _necroState.Mana = MathF.Min(_necroState.MaxMana,
-            _necroState.Mana + (_necroState.ManaRegen + _necroState.BonusManaRegen) * dt);
+        // Buff overrides (e.g. god-mode Add MaxMana / Add ManaRegen) are looked
+        // up against the necromancer unit's active buffs each tick — applying
+        // and removing the buff transparently bumps both the cap and the
+        // refill rate without ever mutating the base NecromancerState fields.
+        float maxManaEff = _necroState.MaxMana
+            + (_necromancerIdx >= 0 ? BuffSystem.SumExtraAdd(_units, _necromancerIdx, "MaxMana") : 0f);
+        float regenEff = _necroState.ManaRegen + _necroState.BonusManaRegen
+            + (_necromancerIdx >= 0 ? BuffSystem.SumExtraAdd(_units, _necromancerIdx, "ManaRegen") : 0f);
+        _necroState.Mana = MathF.Min(maxManaEff, _necroState.Mana + regenEff * dt);
         _necroState.TickCooldowns(dt);
 
         // Knockdown recovery rolls — runs BEFORE BuffSystem.TickBuffs so a successful

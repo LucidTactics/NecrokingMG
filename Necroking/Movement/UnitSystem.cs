@@ -517,6 +517,18 @@ public class NecromancerState
     public Dictionary<string, float> SpellCooldowns { get; set; } = new();
     public Dictionary<string, int> Inventory { get; set; } = new();
 
+    /// <summary>Max permanent undead minions of UndeadCategory.Monster the
+    /// player can field at once (zombie animals/monsters). Skill-tree nodes
+    /// raise this. Starts at 1 so the player can summon one starter pet
+    /// before any investment. Player necromancer + temporary summons don't
+    /// count. See HordeCapTracker for the count logic.</summary>
+    public int MonsterCap { get; set; } = 1;
+
+    /// <summary>Max permanent undead minions of UndeadCategory.Human the
+    /// player can field at once (skeletons, abominations). Starts at 0 —
+    /// human raising is gated behind an early skill-tree node.</summary>
+    public int HumanCap { get; set; } = 0;
+
     public void TickCooldowns(float dt)
     {
         var keys = new List<string>(SpellCooldowns.Keys);

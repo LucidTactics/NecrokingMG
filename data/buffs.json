@@ -818,6 +818,90 @@
       "hasWeaponParticle": false,
       "weaponParticle": null,
       "unitTint": null
+    },
+    {
+      "id": "buff_god_mode",
+      "name": "God Mode",
+      "duration": 0,
+      "effects": [
+        {
+          "type": "Multiply",
+          "stat": "CombatSpeed",
+          "value": 2
+        },
+        {
+          "type": "Add",
+          "stat": "MaxMana",
+          "value": 999
+        },
+        {
+          "type": "Add",
+          "stat": "ManaRegen",
+          "value": 50
+        },
+        {
+          "type": "Add",
+          "stat": "MonsterCap",
+          "value": 999
+        },
+        {
+          "type": "Add",
+          "stat": "HumanCap",
+          "value": 999
+        },
+        {
+          "type": "Set",
+          "stat": "AllPaths",
+          "value": 9
+        }
+      ],
+      "maxStacks": 1,
+      "incapacitating": false,
+      "incapHoldAnim": "",
+      "incapRecoverAnim": "",
+      "incapRecoverTime": 0.8,
+      "incapHoldAtEnd": false,
+      "hasOrbital": false,
+      "orbital": null,
+      "hasGroundAura": false,
+      "groundAura": null,
+      "hasBehindEffect": false,
+      "behindEffect": null,
+      "hasFrontEffect": false,
+      "frontEffect": null,
+      "hasLightningAura": false,
+      "lightningAura": null,
+      "hasImageBehind": false,
+      "imageBehind": null,
+      "hasPulsingOutline": true,
+      "pulsingOutline": {
+        "color": {
+          "r": 255,
+          "g": 240,
+          "b": 160,
+          "a": 220,
+          "intensity": 0.6
+        },
+        "pulseColor": {
+          "r": 255,
+          "g": 255,
+          "b": 220,
+          "a": 255,
+          "intensity": 0.8
+        },
+        "outlineWidth": 2,
+        "pulseWidth": 4,
+        "pulseSpeed": 2.5,
+        "blendMode": 1
+      },
+      "hasWeaponParticle": false,
+      "weaponParticle": null,
+      "unitTint": {
+        "r": 255,
+        "g": 235,
+        "b": 130,
+        "a": 110
+      }
     }
   ]
 }
