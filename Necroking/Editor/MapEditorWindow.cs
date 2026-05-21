@@ -1681,10 +1681,27 @@ public class MapEditorWindow
                         if (_envSystem.CanPlaceObject(defToPlace, worldPos.X, worldPos.Y))
                         {
                             float placeScale = GetRandomPlacementScale(defToPlace);
-                            int newIdx = _envSystem.AddObject((ushort)defToPlace, worldPos.X, worldPos.Y, placeScale);
+                            // Suppress the OnCollisionsDirty callback during the add — it
+                            // triggers Sim.RebuildPathfinder which is O(grid+objects) and
+                            // not needed in the editor (AI isn't running). We stamp the
+                            // new tree's collision incrementally below for O(radius²) cost
+                            // instead of the full O(total_objects) rebake.
+                            var prevHandler = _envSystem.OnCollisionsDirty;
+                            _envSystem.OnCollisionsDirty = null;
+                            int newIdx;
+                            try
+                            {
+                                newIdx = _envSystem.AddObject((ushort)defToPlace, worldPos.X, worldPos.Y, placeScale);
+                            }
+                            finally
+                            {
+                                _envSystem.OnCollisionsDirty = prevHandler;
+                            }
                             PushUndo(new UndoObjectPlace { Env = _envSystem, ObjectIndex = newIdx });
                             AutoCreateTriggerInstance(newIdx); // RM06
-                            RebakeObjectCollisions(); // RM04
+                            // RM04 incremental: stamp just this object's collision into
+                            // the tier cost fields. No need to rebuild everything else.
+                            _envSystem.StampObjectCollisionAt(_tileGrid, newIdx);
                         }
                     }
                 }
@@ -1707,7 +1724,8 @@ public class MapEditorWindow
                             Env = _envSystem,
                             ObjectIndices = new List<int>(_batchPlacedObjects.Select(b => b.objIdx))
                         });
-                        RebakeObjectCollisions(); // RM04
+                        // Tier fields were kept current via StampObjectCollisionAt
+                        // inside the stroke loop — no full rebake needed here.
                     }
                     _batchPlacedObjects = null;
                 }
@@ -1732,8 +1750,28 @@ public class MapEditorWindow
                         X = obj.X, Y = obj.Y,
                         Scale = obj.Scale, Seed = obj.Seed
                     });
-                    AutoRemoveTriggerInstance(closest); // RM07
-                    _envSystem.RemoveObject(closest);
+                    // Suppress per-remove pathfinder rebuild (same reasoning as
+                    // single placement). The MapEditor→exit transition in
+                    // Game1.Update fires one rebuild for the whole edit session,
+                    // so paths are current the moment gameplay resumes.
+                    var prevHandler = _envSystem.OnCollisionsDirty;
+                    _envSystem.OnCollisionsDirty = null;
+                    try
+                    {
+                        AutoRemoveTriggerInstance(closest); // RM07
+                        _envSystem.RemoveObject(closest);
+                    }
+                    finally
+                    {
+                        _envSystem.OnCollisionsDirty = prevHandler;
+                    }
+                    // Remove invalidates the tier fields for the area the
+                    // object covered. Cheapest correct fix is a full rebake of
+                    // env collision stamps (incremental "unstamp" would also
+                    // need to re-stamp neighbours whose stamps overlapped).
+                    // Editor-mode AI doesn't read these so the cost only
+                    // matters for very large maps; if it becomes a hotspot we
+                    // can defer this too via a dirty flag.
                     RebakeObjectCollisions(); // RM04
                 }
             }
@@ -1978,6 +2016,10 @@ public class MapEditorWindow
                     float paintScale = GetRandomPlacementScale(defToPlace);
                     int newIdx = _envSystem.AddObject((ushort)defToPlace, px, py, paintScale);
                     _batchPlacedObjects?.Add(((ushort)defToPlace, px, py, paintScale, 0f, newIdx));
+                    // Incremental stamp: skip the per-stroke full rebake on
+                    // mouse-up by keeping tier fields in sync as we go. O(r²)
+                    // per object vs O(total_objects) on stroke end.
+                    _envSystem.StampObjectCollisionAt(_tileGrid, newIdx);
                     tAdd += System.Diagnostics.Stopwatch.GetTimestamp() - t3;
 
                     long t4 = System.Diagnostics.Stopwatch.GetTimestamp();
@@ -2048,45 +2090,57 @@ public class MapEditorWindow
         float colRadius = def.CollisionRadius > 0 ? def.CollisionRadius : def.PlacementScale;
         float spacing = Math.Max(1f, colRadius * 2.2f);
 
-        for (int dy = -BrushRadius; dy <= BrushRadius; dy++)
+        // Suppress per-AddObject pathfinder rebuilds and use incremental
+        // collision stamping for the whole stroke. One brush press = O(brush²)
+        // instead of O(brush² × total_objects).
+        var prevHandler = _envSystem.OnCollisionsDirty;
+        _envSystem.OnCollisionsDirty = null;
+        try
         {
-            for (int dx = -BrushRadius; dx <= BrushRadius; dx++)
+            for (int dy = -BrushRadius; dy <= BrushRadius; dy++)
             {
-                if (dx * dx + dy * dy > BrushRadius * BrushRadius) continue;
-                // Hex-grid offset
-                float ox = dx * spacing + (dy % 2 == 0 ? 0 : spacing * 0.5f);
-                float oy = dy * spacing * 0.866f; // sqrt(3)/2
-
-                // RM05: Random jitter
-                float jitter = spacing * 0.25f;
-                ox += (Random.Shared.NextSingle() - 0.5f) * 2f * jitter;
-                oy += (Random.Shared.NextSingle() - 0.5f) * 2f * jitter;
-
-                float px = worldPos.X + ox;
-                float py = worldPos.Y + oy;
-
-                // Check no existing object too close
-                bool tooClose = false;
-                float minDist2 = spacing * spacing * 0.5f;
-                for (int i = 0; i < _envSystem.ObjectCount; i++)
+                for (int dx = -BrushRadius; dx <= BrushRadius; dx++)
                 {
-                    var obj = _envSystem.GetObject(i);
-                    float ddx = obj.X - px, ddy = obj.Y - py;
-                    if (ddx * ddx + ddy * ddy < minDist2) { tooClose = true; break; }
-                }
-                // RM03: Check collision overlap
-                if (!tooClose && !_envSystem.CanPlaceObject(SelectedEnvDefIndex, px, py))
-                    tooClose = true;
+                    if (dx * dx + dy * dy > BrushRadius * BrushRadius) continue;
+                    // Hex-grid offset
+                    float ox = dx * spacing + (dy % 2 == 0 ? 0 : spacing * 0.5f);
+                    float oy = dy * spacing * 0.866f; // sqrt(3)/2
 
-                if (!tooClose)
-                {
-                    float groupScale = GetRandomPlacementScale(SelectedEnvDefIndex);
-                    int newIdx = _envSystem.AddObject((ushort)SelectedEnvDefIndex, px, py, groupScale);
-                    AutoCreateTriggerInstance(newIdx); // RM06
+                    // RM05: Random jitter
+                    float jitter = spacing * 0.25f;
+                    ox += (Random.Shared.NextSingle() - 0.5f) * 2f * jitter;
+                    oy += (Random.Shared.NextSingle() - 0.5f) * 2f * jitter;
+
+                    float px = worldPos.X + ox;
+                    float py = worldPos.Y + oy;
+
+                    // Check no existing object too close
+                    bool tooClose = false;
+                    float minDist2 = spacing * spacing * 0.5f;
+                    for (int i = 0; i < _envSystem.ObjectCount; i++)
+                    {
+                        var obj = _envSystem.GetObject(i);
+                        float ddx = obj.X - px, ddy = obj.Y - py;
+                        if (ddx * ddx + ddy * ddy < minDist2) { tooClose = true; break; }
+                    }
+                    // RM03: Check collision overlap
+                    if (!tooClose && !_envSystem.CanPlaceObject(SelectedEnvDefIndex, px, py))
+                        tooClose = true;
+
+                    if (!tooClose)
+                    {
+                        float groupScale = GetRandomPlacementScale(SelectedEnvDefIndex);
+                        int newIdx = _envSystem.AddObject((ushort)SelectedEnvDefIndex, px, py, groupScale);
+                        AutoCreateTriggerInstance(newIdx); // RM06
+                        _envSystem.StampObjectCollisionAt(_tileGrid, newIdx);
+                    }
                 }
             }
         }
-        RebakeObjectCollisions(); // RM04
+        finally
+        {
+            _envSystem.OnCollisionsDirty = prevHandler;
+        }
     }
 
     private void DrawObjectsTab(int panelX, int contentY, int contentH, int screenW, int screenH)

@@ -1001,29 +1001,42 @@ public class EnvironmentSystem
         grid.RebuildTieredCostFields();
 
         for (int i = 0; i < _objects.Count; i++)
+            StampObjectCollisionInto(grid, i);
+    }
+
+    /// <summary>Incremental version of <see cref="BakeCollisions"/> — stamps a
+    /// single object's collision into the tier cost fields without touching
+    /// existing stamps. Use when an object is added at runtime so we don't
+    /// pay O(total_objects) per placement; the full bake is only needed when
+    /// objects are removed (which clears the tier fields and requires
+    /// re-stamping all remaining objects). The new tree blocks fresh
+    /// pathing immediately without rebuilding everything else.</summary>
+    public void StampObjectCollisionAt(TileGrid grid, int objectIndex)
+    {
+        if (objectIndex < 0 || objectIndex >= _objects.Count) return;
+        // Defensive: caller may invoke before tier fields exist (fresh grid).
+        // Bake-from-scratch falls back to the full path.
+        StampObjectCollisionInto(grid, objectIndex);
+    }
+
+    private void StampObjectCollisionInto(TileGrid grid, int i)
+    {
+        if (i < _objectRuntime.Count)
         {
-            // Skip collected foragables and destroyed objects
-            if (i < _objectRuntime.Count)
-            {
-                var rt = _objectRuntime[i];
-                if (rt.Collected || !rt.Alive) continue;
-            }
-
-            var obj = _objects[i];
-            var def = _defs[obj.DefIndex];
-            if (def.CollisionRadius > 0)
-            {
-                float es = def.Scale * obj.Scale;
-                float cx = obj.X + def.CollisionOffsetX * es;
-                float cy = obj.Y + def.CollisionOffsetY * es;
-                float cr = def.CollisionRadius * es;
-
-                for (int tier = 0; tier < TerrainCosts.NumSizeTiers; tier++)
-                {
-                    grid.StampImpassableCircleTier(tier, cx, cy, cr + TerrainCosts.SizeTierRadius[tier]);
-                }
-            }
+            var rt = _objectRuntime[i];
+            if (rt.Collected || !rt.Alive) return;
         }
+        var obj = _objects[i];
+        var def = _defs[obj.DefIndex];
+        if (def.CollisionRadius <= 0) return;
+
+        float es = def.Scale * obj.Scale;
+        float cx = obj.X + def.CollisionOffsetX * es;
+        float cy = obj.Y + def.CollisionOffsetY * es;
+        float cr = def.CollisionRadius * es;
+
+        for (int tier = 0; tier < TerrainCosts.NumSizeTiers; tier++)
+            grid.StampImpassableCircleTier(tier, cx, cy, cr + TerrainCosts.SizeTierRadius[tier]);
     }
 
     public IReadOnlyList<EnvironmentObjectDef> Defs => _defs;

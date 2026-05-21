@@ -173,6 +173,12 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
     // Game state
     private MenuState _menuState = MenuState.MainMenu;
+    /// <summary>Last frame's <see cref="_menuState"/>, snapshotted at end of
+    /// Update. Used to detect transitions — specifically MapEditor → anything
+    /// else, where the suppressed per-click pathfinder rebuilds during the
+    /// editor session need to fire once so gameplay resumes with current
+    /// collision data.</summary>
+    private MenuState _prevMenuState = MenuState.MainMenu;
     private bool _gameWorldLoaded;
     private bool _paused;
     private bool _gameOver;
@@ -1891,6 +1897,16 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // this call is a no-op and input flows to gameplay normally. See
         // Necroking/UI/PopupManager.cs for the contract.
         _popups.RouteInput(_input);
+
+        // MapEditor → gameplay transition: fire the suppressed pathfinder
+        // rebuild once. Per-click placement skips it (would be O(N) per
+        // click for a populated map) so we batch into a single rebuild when
+        // the editor closes. Catches all exit routes — ESC, pause-menu Resume,
+        // main-menu, etc. — because we react to the state change, not the
+        // closing action itself.
+        if (_prevMenuState == MenuState.MapEditor && _menuState != MenuState.MapEditor)
+            _envSystem.OnCollisionsDirty?.Invoke();
+        _prevMenuState = _menuState;
 
         _rawDt = (float)gameTime.ElapsedGameTime.TotalSeconds;
         float rawDt = _rawDt;
