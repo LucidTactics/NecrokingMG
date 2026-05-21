@@ -37,7 +37,7 @@ public class CollisionDebugTestScenario : ScenarioBase
         // Water patch (center-left)
         for (int y = 12; y <= 16; y++)
             for (int x = 4; x <= 8; x++)
-                grid.SetTerrain(x, y, TerrainType.Water);
+                grid.SetTerrain(x, y, TerrainType.ShallowWater);
 
         // Wall tiles forming an L-shape obstacle (right side)
         for (int x = 20; x <= 26; x++)

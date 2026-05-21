@@ -403,6 +403,9 @@ public class Simulation
         // UpdateMovement can still stop the charge (TickCharge checks position
         // movement next frame).
         PhaseStart(); GameSystems.TrampleSystem.TickAll(this, dt); PhaseEnd("trample");
+        // Slow units in water (and other costly terrain). Applied after AI's
+        // SetEffort/potion mults so ORCA's velocity cap sees the final value.
+        ApplyTerrainSpeedModulation();
         PhaseStart(); UpdateMovement(dt); PhaseEnd("movement");
         PhaseStart(); _physics.Update(dt, _units); PhaseEnd("physics");
         PhaseStart(); _horde.UpdateStates(_units, _quadtree, _necromancerIdx, dt); PhaseEnd("horde_states");
@@ -1334,6 +1337,36 @@ public class Simulation
         LastPhaseMs["pf_imag_new"] = Necroking.World.Pathfinder.DiagImagChunkComputes;
         LastPhaseMs["pf_imag_recompute"] = Necroking.World.Pathfinder.DiagImagChunkRecomputes;
         LastPhaseMs["pf_imag_ms"] = Necroking.World.Pathfinder.DiagImagChunkMs;
+    }
+
+    // Apply a multiplicative speed penalty for the terrain the unit's currently
+    // standing on (e.g. shallow water = 0.5×). Runs between AI/effort writes and
+    // UpdateMovement so ORCA's velocity cap sees the slowed value. Skips units
+    // not currently controlled by the movement system (physics-owned, dodging,
+    // charging) — those have their own velocity authorities.
+    private void ApplyTerrainSpeedModulation()
+    {
+        int w = _grid.Width;
+        int h = _grid.Height;
+        if (w <= 0 || h <= 0) return;
+
+        for (int i = 0; i < _units.Count; i++)
+        {
+            if (!_units[i].Alive) continue;
+            if (_units[i].InPhysics) continue;
+            if (_units[i].DodgeTimer > 0f) continue;
+            if (_units[i].ChargePhase == 1 || _units[i].ChargePhase == 3) continue;
+
+            int gx = (int)MathF.Floor(_units[i].Position.X);
+            int gy = (int)MathF.Floor(_units[i].Position.Y);
+            if (gx < 0 || gx >= w || gy < 0 || gy >= h) continue;
+
+            var terrain = _grid.GetTerrain(gx, gy);
+            if (terrain == TerrainType.Open) continue; // fast path: most tiles
+
+            float mult = TerrainCosts.GetSpeedMultiplier(terrain);
+            if (mult < 1f) _units[i].MaxSpeed *= mult;
+        }
     }
 
     // --- Movement (with ORCA) ---

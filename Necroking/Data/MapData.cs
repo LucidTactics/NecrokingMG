@@ -37,13 +37,22 @@ public static class MapData
             {
                 foreach (var gt in gtArr.EnumerateArray())
                 {
-                    ground.AddGroundType(new GroundTypeDef
+                    var def = new GroundTypeDef
                     {
                         Id = gt.GetProperty("id").GetString() ?? "",
                         Name = gt.TryGetProperty("name", out var n) ? n.GetString() ?? "" : "",
                         TexturePath = gt.TryGetProperty("texturePath", out var tp) ? tp.GetString() ?? "" : "",
                         CorruptedTypeId = gt.TryGetProperty("corruptedTypeId", out var ct) ? ct.GetString() ?? "" : ""
-                    });
+                    };
+                    // Parse movementTerrain (enum name, case-insensitive). Missing = Open.
+                    // Valid values: Open, Rough, ShallowWater, DeepWater, Wall.
+                    if (gt.TryGetProperty("movementTerrain", out var mt)
+                        && mt.ValueKind == JsonValueKind.String
+                        && Enum.TryParse<TerrainType>(mt.GetString(), ignoreCase: true, out var parsed))
+                    {
+                        def.MovementTerrain = parsed;
+                    }
+                    ground.AddGroundType(def);
                 }
                 DebugLog.Log("startup", $"  Ground types: {ground.TypeCount}");
             }

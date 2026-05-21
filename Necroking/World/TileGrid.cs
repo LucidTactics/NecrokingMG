@@ -4,7 +4,7 @@ using Necroking.Core;
 
 namespace Necroking.World;
 
-public enum TerrainType : byte { Open = 0, Rough = 1, Water = 2, Wall = 3, Count }
+public enum TerrainType : byte { Open = 0, Rough = 1, ShallowWater = 2, DeepWater = 3, Wall = 4, Count }
 
 public static class TerrainCosts
 {
@@ -15,9 +15,24 @@ public static class TerrainCosts
     {
         TerrainType.Open => 1f,
         TerrainType.Rough => 2f,
-        TerrainType.Water => 5f,
+        TerrainType.ShallowWater => 3f,
+        TerrainType.DeepWater => 255f,
         TerrainType.Wall => 255f,
         _ => 1f
+    };
+
+    /// <summary>Per-terrain movement-speed multiplier applied to MaxSpeed just
+    /// before ORCA/accel-cap reads it. 1.0 = full speed; lower = slowed.
+    /// Deep water is 0 because nothing should be moving across it (it's
+    /// impassable in the cost field too) — value is defensive only.</summary>
+    public static float GetSpeedMultiplier(TerrainType t) => t switch
+    {
+        TerrainType.Open => 1.0f,
+        TerrainType.Rough => 0.7f,
+        TerrainType.ShallowWater => 0.5f,
+        TerrainType.DeepWater => 0.0f,
+        TerrainType.Wall => 0.0f,
+        _ => 1.0f
     };
 
     public static int SizeToTier(int unitSize) => unitSize switch

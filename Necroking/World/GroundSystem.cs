@@ -15,6 +15,12 @@ public class GroundTypeDef
     /// <summary>Id of the ground type to swap in when this type is corrupted by death fog.
     /// Empty = no corrupted variant; rolls do nothing on this type.</summary>
     public string CorruptedTypeId { get; set; } = "";
+    /// <summary>Movement terrain class this visual ground type implies. Drives the
+    /// pathfinding cost field via <see cref="GroundSystem.StampTerrainOnto"/>
+    /// (worst-of-4-corners per tile). Defaults to Open — paint a water-textured
+    /// ground type and set this to ShallowWater/DeepWater to make pathfinding
+    /// respect it.</summary>
+    public TerrainType MovementTerrain { get; set; } = TerrainType.Open;
 }
 
 public class GroundSystem
@@ -321,6 +327,55 @@ public class GroundSystem
         ResetDirtyRect();
         CorruptionDirty = false;
         return true;
+    }
+
+    /// <summary>Resolve each tile's pathfinding TerrainType from the 4 corner
+    /// vertex ground types: tile gets the highest-cost terrain of its 4 corners
+    /// (worst-of-4). Walls already stamped into the grid are left alone — the
+    /// caller is expected to BakeWalls afterwards so walls win cleanly.
+    /// Safe to call repeatedly (overwrites all non-wall tiles).</summary>
+    public void StampTerrainOnto(TileGrid grid)
+    {
+        if (_worldW <= 0 || _worldH <= 0 || _types.Count == 0) return;
+        if (grid.Width != _worldW || grid.Height != _worldH) return;
+
+        // Cache type-index → TerrainType (and its cost) so we don't switch per vertex.
+        int n = _types.Count;
+        var terrainPerType = new TerrainType[n];
+        var costPerType = new float[n];
+        for (int i = 0; i < n; i++)
+        {
+            terrainPerType[i] = _types[i].MovementTerrain;
+            costPerType[i] = TerrainCosts.GetCost(terrainPerType[i]);
+        }
+
+        int vw = VertexW;
+        for (int ty = 0; ty < _worldH; ty++)
+        {
+            int row0 = ty * vw;
+            int row1 = (ty + 1) * vw;
+            for (int tx = 0; tx < _worldW; tx++)
+            {
+                // Don't clobber walls written by WallSystem.
+                if (grid.GetTerrain(tx, ty) == TerrainType.Wall) continue;
+
+                byte v00 = _vertexMap[row0 + tx];
+                byte v10 = _vertexMap[row0 + tx + 1];
+                byte v01 = _vertexMap[row1 + tx];
+                byte v11 = _vertexMap[row1 + tx + 1];
+
+                TerrainType worst = TerrainType.Open;
+                float worstCost = -1f;
+                for (int c = 0; c < 4; c++)
+                {
+                    byte v = c == 0 ? v00 : c == 1 ? v10 : c == 2 ? v01 : v11;
+                    if (v >= n) continue;
+                    float cc = costPerType[v];
+                    if (cc > worstCost) { worstCost = cc; worst = terrainPerType[v]; }
+                }
+                grid.SetTerrain(tx, ty, worst);
+            }
+        }
     }
 
     public Texture2D? CreateVertexMapTexture(GraphicsDevice device)

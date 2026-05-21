@@ -688,6 +688,12 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // Wire collision change callback so pathfinding rebuilds when objects change state
         _envSystem.OnCollisionsDirty = () => _sim.RebuildPathfinder();
 
+        // Stamp pathfinding terrain from ground vertex types (e.g. water-textured
+        // tiles become ShallowWater/DeepWater for the cost field). Must happen
+        // BEFORE BakeWalls so walls win on shared tiles, and BEFORE
+        // RebuildPathfinder so the cost-field rebuild picks up the new terrain.
+        _groundSystem.StampTerrainOnto(_sim.Grid);
+
         // Bake walls + env (and build the env spatial index used by ORCA). Going
         // through RebuildPathfinder ensures the env index is populated at startup
         // — calling BakeCollisions directly leaves it empty until the first

@@ -4372,6 +4372,8 @@ public class MapEditorWindow
                 writer.WriteString("texturePath", gt.TexturePath);
                 if (!string.IsNullOrEmpty(gt.CorruptedTypeId))
                     writer.WriteString("corruptedTypeId", gt.CorruptedTypeId);
+                if (gt.MovementTerrain != Necroking.World.TerrainType.Open)
+                    writer.WriteString("movementTerrain", gt.MovementTerrain.ToString());
                 writer.WriteEndObject();
             }
             writer.WriteEndArray();
