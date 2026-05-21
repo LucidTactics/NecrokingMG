@@ -203,12 +203,61 @@ public class UnitEditorWindow
     //  MAIN DRAW
     // =========================================================================
 
+    // Modal-stack adapters — see SpellEditorWindow.SyncSubPopupsModalState for
+    // the explanatory comment; same pattern for each sub-popup the unit editor
+    // can have open. ConfirmDeleteOpen comes from EditorBase's DrawConfirmDialog
+    // so it doesn't need its own layer here (EditorBase tracks it).
+    private readonly Necroking.UI.ActionModalLayer _confirmDeleteLayer = new() { LightDismiss = false };
+    private readonly Necroking.UI.ActionModalLayer _confirmDeleteUnitLayer = new() { LightDismiss = false };
+    private readonly Necroking.UI.ActionModalLayer _confirmDeleteGroupLayer = new() { LightDismiss = false };
+    private readonly Necroking.UI.ActionModalLayer _pickModeLayer = new() { LightDismiss = false };
+    private readonly Necroking.UI.ActionModalLayer _activeSubEditorLayer = new() { LightDismiss = false };
+    private readonly Necroking.UI.ActionModalLayer _groupEditorLayer = new() { LightDismiss = false };
+    private bool _unitModalLayersWired;
+
+    private void SyncSubPopupsModalState(int screenW, int screenH)
+    {
+        if (!_unitModalLayersWired)
+        {
+            _confirmDeleteLayer.OnCancelAction = () => _confirmDeleteOpen = false;
+            _confirmDeleteUnitLayer.OnCancelAction = () => _confirmDeleteUnit = false;
+            _confirmDeleteGroupLayer.OnCancelAction = () => _confirmDeleteGroup = false;
+            _pickModeLayer.OnCancelAction = () => _pickMode = PickTarget.None;
+            _activeSubEditorLayer.OnCancelAction = () => { _activeSubEditor = SubEditor.None; _subSelectedIdx = -1; };
+            _groupEditorLayer.OnCancelAction = () => _groupEditorOpen = false;
+            _unitModalLayersWired = true;
+        }
+        var full = new Rectangle(0, 0, screenW, screenH);
+        _confirmDeleteLayer.Panel = full;
+        _confirmDeleteUnitLayer.Panel = full;
+        _confirmDeleteGroupLayer.Panel = full;
+        _pickModeLayer.Panel = full;
+        _activeSubEditorLayer.Panel = full;
+        _groupEditorLayer.Panel = full;
+
+        SyncOne(_groupEditorLayer, _groupEditorOpen);
+        SyncOne(_activeSubEditorLayer, _activeSubEditor != SubEditor.None);
+        SyncOne(_pickModeLayer, _pickMode != PickTarget.None);
+        SyncOne(_confirmDeleteGroupLayer, _confirmDeleteGroup);
+        SyncOne(_confirmDeleteUnitLayer, _confirmDeleteUnit);
+        SyncOne(_confirmDeleteLayer, _confirmDeleteOpen);
+
+        static void SyncOne(Necroking.UI.IModalLayer layer, bool open)
+        {
+            bool onStack = Necroking.Game1.Popups.Contains(layer);
+            if (open && !onStack) Necroking.Game1.Popups.Push(layer);
+            else if (!open && onStack) Necroking.Game1.Popups.Pop(layer);
+        }
+    }
+
     public void Draw(int screenW, int screenH, GameTime gameTime)
     {
         if (_gameData == null) return;
 
         float dt = (float)gameTime.ElapsedGameTime.TotalSeconds;
         if (_statusTimer > 0) _statusTimer -= dt;
+
+        SyncSubPopupsModalState(screenW, screenH);
 
         // --- Dark overlay behind panel ---
         _ui.DrawRect(new Rectangle(0, 0, screenW, screenH), new Color(0, 0, 0, 160));

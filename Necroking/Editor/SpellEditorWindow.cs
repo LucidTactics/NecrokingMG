@@ -119,12 +119,47 @@ public class SpellEditorWindow : EditorWindow
         _renderer = new ReflectionPropertyRenderer(_ui, gameData);
     }
 
+    // Modal-stack adapters for the two sub-popups. PopupManager pushes/pops
+    // them automatically via SyncSubPopupsModalState (called below) so ESC
+    // routes here without also closing the SpellEditor.
+    private readonly Necroking.UI.ActionModalLayer _buffManagerLayer = new() { LightDismiss = false };
+    private readonly Necroking.UI.ActionModalLayer _flipbookManagerLayer = new() { LightDismiss = false };
+    private bool _modalLayersWired;
+
+    private void SyncSubPopupsModalState(int screenW, int screenH)
+    {
+        if (!_modalLayersWired)
+        {
+            _buffManagerLayer.OnCancelAction = () => _buffManagerOpen = false;
+            _flipbookManagerLayer.OnCancelAction = () => _flipbookManagerOpen = false;
+            _modalLayersWired = true;
+        }
+        // Whole-screen rect — these popups are full-overlay so any click
+        // anywhere is "inside." LightDismiss is false so this never matters
+        // for outside-click handling, but matters for ContainsMouse contract.
+        var full = new Rectangle(0, 0, screenW, screenH);
+        _buffManagerLayer.Panel = full;
+        _flipbookManagerLayer.Panel = full;
+
+        bool buffOnStack = Necroking.Game1.Popups.Contains(_buffManagerLayer);
+        if (_buffManagerOpen && !buffOnStack) Necroking.Game1.Popups.Push(_buffManagerLayer);
+        else if (!_buffManagerOpen && buffOnStack) Necroking.Game1.Popups.Pop(_buffManagerLayer);
+
+        bool flipOnStack = Necroking.Game1.Popups.Contains(_flipbookManagerLayer);
+        if (_flipbookManagerOpen && !flipOnStack) Necroking.Game1.Popups.Push(_flipbookManagerLayer);
+        else if (!_flipbookManagerOpen && flipOnStack) Necroking.Game1.Popups.Pop(_flipbookManagerLayer);
+    }
+
     public void Draw(int screenW, int screenH, GameTime gameTime)
     {
         if (_gameData == null) return;
 
         float dt = (float)gameTime.ElapsedGameTime.TotalSeconds;
         TickChrome(dt);
+
+        // Run modal stack sync BEFORE the existing keyboard / shortcut code so
+        // PopupManager has consumed ESC correctly when this frame's chain runs.
+        SyncSubPopupsModalState(screenW, screenH);
 
         // Handle Ctrl+S (and editor-specific shortcuts Ctrl+C / Ctrl+V)
         HandleKeyboardShortcuts();

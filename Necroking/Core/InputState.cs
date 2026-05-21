@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Input;
 
@@ -31,6 +32,11 @@ public class InputState
     private bool _mouseConsumed;
     private bool _scrollConsumed;
     private bool _kbConsumed;
+    // Per-key consumption — lets a top-of-stack popup eat ESC for itself without
+    // blocking unrelated keys (movement, hotkeys) on the same frame. The kb-wide
+    // _kbConsumed flag is kept for text-input scenarios where a popup wants to
+    // swallow every key for that frame (text fields, hex-edit boxes, etc.).
+    private readonly HashSet<Keys> _consumedKeys = new();
 
     public bool IsMouseConsumed => _mouseConsumed;
     public bool IsScrollConsumed => _scrollConsumed;
@@ -39,6 +45,15 @@ public class InputState
     public void ConsumeMouse() { _mouseConsumed = true; MouseOverUI = true; }
     public void ConsumeScroll() => _scrollConsumed = true;
     public void ConsumeKb() => _kbConsumed = true;
+    public void ConsumeKey(Keys key) => _consumedKeys.Add(key);
+    public bool IsKeyConsumed(Keys key) => _kbConsumed || _consumedKeys.Contains(key);
+
+    /// <summary>WasKeyPressed gated by per-key consumption. Use this in any
+    /// site that should respect a higher-layer's claim on the key. The original
+    /// <see cref="WasKeyPressed"/> ignores consumption for cases (text-input
+    /// fields, debug toggles) that genuinely want raw access.</summary>
+    public bool WasKeyPressedUnhandled(Keys key)
+        => WasKeyPressed(key) && !IsKeyConsumed(key);
 
     /// <summary>
     /// True when the mouse is hovering over any UI element (even without clicking).
@@ -70,6 +85,7 @@ public class InputState
         _mouseConsumed = false;
         _scrollConsumed = false;
         _kbConsumed = false;
+        _consumedKeys.Clear();
         MouseOverUI = false;
     }
 

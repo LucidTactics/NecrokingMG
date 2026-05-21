@@ -11,7 +11,7 @@ namespace Necroking.Editor;
 /// RGB+A+Intensity sliders, preview swatches, eyedropper, value box editing,
 /// and OK/Cancel buttons.
 /// </summary>
-public class ColorPickerPopup
+public class ColorPickerPopup : Necroking.UI.IModalLayer
 {
     // Drawing context (set externally via SetContext)
     private SpriteBatch _sb = null!;
@@ -179,6 +179,8 @@ public class ColorPickerPopup
         int popupH = _hideIntensity ? PopupBaseH - 24 : PopupBaseH;
         _popupX = (_screenW - PopupW) / 2;
         _popupY = (_screenH - popupH) / 2;
+
+        Necroking.Game1.Popups.Push(this);
     }
 
     public void Close()
@@ -188,6 +190,29 @@ public class ColorPickerPopup
         _dragging = false;
         _dropperActive = false;
         _editingField = -1;
+        Necroking.Game1.Popups.Pop(this);
+    }
+
+    // === IModalLayer ===
+    // Hard modal — outside clicks are eaten but the picker stays open. ESC
+    // cancels (restores original color); the manager calls OnCancel which
+    // mirrors the in-popup ESC handler at the bottom of this file.
+    public bool LightDismiss => false;
+    public bool IsBlocking => true;
+    public bool ContainsMouse(int mx, int my)
+    {
+        if (!_isOpen) return false;
+        int popupH = _hideIntensity ? PopupBaseH - 24 : PopupBaseH;
+        return new Microsoft.Xna.Framework.Rectangle(_popupX, _popupY, PopupW, popupH).Contains(mx, my);
+    }
+    public void OnCancel()
+    {
+        // Matches the in-Draw ESC path: revert to the color the popup opened
+        // with, flag cancelled so the caller's pollSelected loop sees it.
+        if (!_isOpen) return;
+        _currentColor = _originalColor;
+        _cancelled = true;
+        Close();
     }
 
     /// <summary>
@@ -616,13 +641,11 @@ public class ColorPickerPopup
 
         if (!_isOpen) return;
 
-        // Escape cancels the popup (restores original color)
-        if (_kb.IsKeyDown(Keys.Escape) && _prevKb.IsKeyUp(Keys.Escape) && _editingField < 0)
-        {
-            _currentColor = _originalColor;
-            _cancelled = true;
-            return;
-        }
+        // ESC handling lives on the PopupManager (see OnCancel above) — the
+        // legacy check here remains only as a one-frame-lag fallback for the
+        // rare case the popup isn't on the stack yet (e.g. opened+cancelled
+        // in the same frame). When PopupManager has consumed the key already,
+        // this branch is dead.
 
         int popupH = _hideIntensity ? PopupBaseH - 24 : PopupBaseH;
 

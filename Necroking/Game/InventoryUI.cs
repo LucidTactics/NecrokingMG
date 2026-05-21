@@ -18,7 +18,7 @@ namespace Necroking.Game;
 /// This class owns the data binding — which slots show which items.
 /// Cosmetic edits in the widget editor flow through automatically.
 /// </summary>
-public class InventoryUI
+public class InventoryUI : Necroking.UI.IModalLayer
 {
     private const string WidgetId = "EquipmentWindow";
     private const string FilledSlotWidget = "Item Slot";
@@ -124,18 +124,35 @@ public class InventoryUI
 
     public void Toggle(int screenW, int screenH)
     {
-        _visible = !_visible;
-        if (_visible)
-            CenterOnScreen(screenW, screenH);
+        if (_visible) Close();
+        else Open(screenW, screenH);
     }
 
     public void Open(int screenW, int screenH)
     {
         _visible = true;
         CenterOnScreen(screenW, screenH);
+        Necroking.Game1.Popups.Push(this);
     }
 
-    public void Close() => _visible = false;
+    public void Close()
+    {
+        _visible = false;
+        Necroking.Game1.Popups.Pop(this);
+    }
+
+    // === IModalLayer ===
+    // Inventory is a "soft modal" — gameplay continues behind it but clicks on
+    // the panel rect are eaten so the spell bar / world don't accidentally
+    // fire. LightDismiss is false so the user must explicitly close it; this
+    // matches RPG inventory conventions (clicking outside ≠ close).
+    public bool LightDismiss => false;
+    // Non-blocking side panel — clicks outside fall through to gameplay
+    // (you can spellcast with the inventory open). Panel clicks still
+    // consumed via PopupManager.RouteInput's inside-rect path. ContainsMouse
+    // is the existing public method below.
+    public bool IsBlocking => false;
+    public void OnCancel() => Close();
 
     /// <summary>Sync inventory state to widget visual overrides. Call before Draw.</summary>
     public void Update(InputState input)

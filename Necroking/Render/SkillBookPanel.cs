@@ -23,12 +23,29 @@ namespace Necroking.Render;
 /// no <see cref="UIGfx"/>. Each node is a rectangular button with title + cost
 /// subtitle, color-coded by affordability, with a button press-down animation.
 /// </summary>
-public class SkillBookPanel
+public class SkillBookPanel : Necroking.UI.IModalLayer
 {
     public bool IsVisible { get; private set; }
-    public void Toggle() { IsVisible = !IsVisible; }
-    public void Open()   { IsVisible = true;  }
-    public void Close()  { IsVisible = false; }
+    public void Toggle() { if (IsVisible) Close(); else Open(); }
+    public void Open()
+    {
+        IsVisible = true;
+        Necroking.Game1.Popups.Push(this);
+    }
+    public void Close()
+    {
+        IsVisible = false;
+        Necroking.Game1.Popups.Pop(this);
+    }
+
+    // === IModalLayer ===
+    // Full-screen tabbed book. Blocking — covers everything, no world
+    // interaction underneath. Not light-dismiss; user must press K or ESC.
+    public bool LightDismiss => false;
+    public bool IsBlocking => true;
+    private Microsoft.Xna.Framework.Rectangle _lastPanelRect;
+    public bool ContainsMouse(int mx, int my) => _lastPanelRect.Contains(mx, my);
+    public void OnCancel() => Close();
 
     // ----- Wiring -----
     private SpriteBatch _batch = null!;
@@ -108,6 +125,12 @@ public class SkillBookPanel
         public float Scale;             // scale from logical to content px
         public int TreeOriginX;
         public int TreeOriginY;
+        /// <summary>Effective node width for this tab's layout. Starts at the
+        /// global NodeW constant and shrinks per-tab when the densest row of
+        /// nodes wouldn't otherwise fit without overlap. Computed in
+        /// BuildLayout and consumed by NodeRect / drawing.</summary>
+        public int NodeW;
+        public int NodeH;
     }
 
     private int _activeTab;
@@ -133,6 +156,7 @@ public class SkillBookPanel
         if (_toast != null && timeSec >= _toastUntil) _toast = null;
 
         var lay = BuildLayout(sw, sh);
+        _lastPanelRect = lay.Panel; // cache for IModalLayer.ContainsMouse
         int mx = (int)input.MousePos.X;
         int my = (int)input.MousePos.Y;
         if (!lay.Panel.Contains(mx, my)) { _pressedSkillId = null; return; }
@@ -259,10 +283,13 @@ public class SkillBookPanel
         var content = new Rectangle(innerX, tabBar.Bottom + 6,
                                     innerW, footer.Y - 6 - (tabBar.Bottom + 6));
 
-        // Per-tab scaling: positions scale to fit, node W/H stays fixed pixels.
+        // Per-tab scaling: positions scale to fit, node W/H shrinks when the
+        // densest row would force neighboring nodes to overlap.
         float scale = 1f;
         int treeOX = content.X + content.Width / 2;
         int treeOY = content.Y + content.Height / 2;
+        int effNodeW = NodeW;
+        int effNodeH = NodeH;
         if (_activeTab >= 0 && _activeTab < SkillBookDefs.Tabs.Count)
         {
             var tab = SkillBookDefs.Tabs[_activeTab];
@@ -280,6 +307,35 @@ public class SkillBookPanel
             int treeH = (int)(rangeH * scale);
             treeOX = content.X + (content.Width  - treeW) / 2 - (int)(tab.MinX * scale);
             treeOY = content.Y + (content.Height - treeH) / 2 - (int)(tab.MinY * scale);
+
+            // Densest-pair pass — find the minimum horizontal and vertical
+            // distance between any two nodes that share a row (vertical) or
+            // column (horizontal) at the current scale, and shrink the node
+            // dimension that would otherwise force them to overlap. This is
+            // O(N²) but N is the per-tab skill count (<30), so cost is trivial
+            // and runs once per layout pass.
+            //
+            // Per-row threshold uses the *base* NodeH so a tall row of nodes
+            // counts the row members correctly even before NodeH itself
+            // shrinks. The 8px breathing-room mirrors the panel edge gap.
+            const int Gap = 8;
+            int minDxPx = int.MaxValue;
+            int minDyPx = int.MaxValue;
+            var skills = tab.Skills;
+            for (int i = 0; i < skills.Count; i++)
+            for (int j = i + 1; j < skills.Count; j++)
+            {
+                int dxPx = (int)(Math.Abs(skills[i].X - skills[j].X) * scale);
+                int dyPx = (int)(Math.Abs(skills[i].Y - skills[j].Y) * scale);
+                if (dyPx < NodeH) // same row
+                    if (dxPx > 0 && dxPx < minDxPx) minDxPx = dxPx;
+                if (dxPx < NodeW) // same column
+                    if (dyPx > 0 && dyPx < minDyPx) minDyPx = dyPx;
+            }
+            if (minDxPx != int.MaxValue && minDxPx - Gap < NodeW)
+                effNodeW = Math.Max(80, minDxPx - Gap);
+            if (minDyPx != int.MaxValue && minDyPx - Gap < NodeH)
+                effNodeH = Math.Max(32, minDyPx - Gap);
         }
 
         return new Layout
@@ -289,6 +345,8 @@ public class SkillBookPanel
             Scale = scale,
             TreeOriginX = treeOX,
             TreeOriginY = treeOY,
+            NodeW = effNodeW,
+            NodeH = effNodeH,
         };
     }
 
@@ -307,7 +365,7 @@ public class SkillBookPanel
         int cx = lay.TreeOriginX + (int)(def.X * lay.Scale);
         int cy = lay.TreeOriginY + (int)(def.Y * lay.Scale);
         int dy = (def.Id == _pressedSkillId) ? 2 : 0;
-        return new Rectangle(cx - NodeW / 2, cy - NodeH / 2 + dy, NodeW, NodeH);
+        return new Rectangle(cx - lay.NodeW / 2, cy - lay.NodeH / 2 + dy, lay.NodeW, lay.NodeH);
     }
 
     // ----- Drawing -----
@@ -742,16 +800,18 @@ public class SkillBookPanel
         var f = _font!;
         var sf = _smallFont ?? f;
 
-        // Wrap description to a max width
-        const int maxW = 320;
-        var titleSize = f.MeasureString(def.Name);
-        var lines = WrapText(sf, def.Description, maxW);
-        int lineH = (int)sf.MeasureString("X").Y + 1;
+        // Size the tooltip to its content (title + wrapped description + cost
+        // lines + Prerequisites-not-met footer). Width tracks the longest
+        // measured row up to MaxW so short skills get a compact box and long
+        // descriptions get a fuller one.
+        const int MaxW = 320;
+        const int MinW = 160;
         int padX = 8, padY = 6;
-        int w = Math.Max((int)titleSize.X + 16, maxW) + padX * 2;
-        int h = padY * 2 + (int)titleSize.Y + 4 + lines.Count * lineH;
+        int titleH = (int)f.MeasureString(def.Name).Y;
+        var lines = WrapText(sf, def.Description, MaxW);
+        int lineH = (int)sf.MeasureString("X").Y + 1;
 
-        // Add cost lines
+        // Compose cost lines first so we know how many we'll draw.
         var costLines = new List<(string text, Color color)>();
         if (def.Costs.Count == 0) costLines.Add(("Free", CostGood));
         bool prereqsMet = _state?.ArePrereqsMet(def) ?? true;
@@ -765,14 +825,68 @@ public class SkillBookPanel
         }
         if (!prereqsMet)
             costLines.Add(("  Prerequisites not met.", new Color(168, 70, 70)));
-        h += 6 + costLines.Count * lineH;
 
-        int x = (int)_mouse.X + 16;
-        int y = (int)_mouse.Y + 16;
-        if (x + w > lay.Panel.Right - 6) x = (int)_mouse.X - w - 12;
-        if (y + h > lay.Panel.Bottom - 6) y = (int)_mouse.Y - h - 12;
-        x = Math.Max(lay.Panel.X + 6, x);
-        y = Math.Max(lay.Panel.Y + 6, y);
+        // Width = widest of {title, longest wrapped line, longest cost line},
+        // clamped to [MinW, MaxW]. Without this, a one-line tooltip would always
+        // draw at MaxW with mostly empty space; with it, "Boar Charge\nBoar
+        // zombies gain..." sizes to the actual text.
+        int contentW = (int)f.MeasureString(def.Name).X;
+        foreach (var ln in lines)
+            contentW = Math.Max(contentW, (int)sf.MeasureString(ln).X);
+        foreach (var (text, _) in costLines)
+            contentW = Math.Max(contentW, (int)sf.MeasureString(text).X);
+        contentW = Math.Clamp(contentW, MinW, MaxW);
+
+        int w = contentW + padX * 2;
+        int h = padY * 2 + titleH + 4 + lines.Count * lineH + 6 + costLines.Count * lineH;
+
+        // Anchor against the hovered node's rect, not the mouse cursor — at
+        // mouse+(16,16) the tooltip starts inside wide nodes and visually
+        // covers their "0/5 pts" footer. Preferred placement is just below
+        // the node; fall back to above / right / left in order, picking the
+        // first side that fits inside the panel. Final clamp catches the
+        // corner case where no side fits (tooltip taller than the panel).
+        const int Gap = 6;
+        var pad = lay.Panel;
+        var node = NodeRect(lay, def);
+        int xCenterUnderNode = node.X + node.Width / 2 - w / 2;
+
+        int x, y;
+        // Below
+        if (node.Bottom + Gap + h <= pad.Bottom - 6)
+        {
+            x = xCenterUnderNode;
+            y = node.Bottom + Gap;
+        }
+        // Above
+        else if (node.Y - Gap - h >= pad.Y + 6)
+        {
+            x = xCenterUnderNode;
+            y = node.Y - Gap - h;
+        }
+        // Right
+        else if (node.Right + Gap + w <= pad.Right - 6)
+        {
+            x = node.Right + Gap;
+            y = node.Y + node.Height / 2 - h / 2;
+        }
+        // Left
+        else if (node.X - Gap - w >= pad.X + 6)
+        {
+            x = node.X - Gap - w;
+            y = node.Y + node.Height / 2 - h / 2;
+        }
+        else
+        {
+            // Nothing fits cleanly — push it to mouse and accept the overlap.
+            x = (int)_mouse.X + 16;
+            y = (int)_mouse.Y + 16;
+        }
+
+        // Final clamp so the tooltip stays inside the panel even if the chosen
+        // side was a poor centered fit (e.g. node near the panel edge).
+        x = Math.Clamp(x, pad.X + 6, pad.Right - 6 - w);
+        y = Math.Clamp(y, pad.Y + 6, pad.Bottom - 6 - h);
 
         var rect = new Rectangle(x, y, w, h);
         Fill(new Rectangle(rect.X + 3, rect.Y + 3, rect.Width, rect.Height), new Color(0, 0, 0, 140));
@@ -781,7 +895,7 @@ public class SkillBookPanel
 
         int ty = rect.Y + padY;
         DrawText(f, def.Name, new Vector2(rect.X + padX, ty), GoldBright);
-        ty += (int)titleSize.Y + 4;
+        ty += titleH + 4;
         foreach (var ln in lines)
         {
             DrawText(sf, ln, new Vector2(rect.X + padX, ty), new Color(232, 220, 192));
@@ -935,4 +1049,10 @@ public class SkillBookPanel
         }
         return false;
     }
+
+    /// <summary>Force the hovered-skill id for tooltip-screenshot tests.
+    /// Production hover comes from Update()'s NodeRect.Contains check against
+    /// the live mouse; scenarios drive this directly because the headless
+    /// runner has no mouse cursor in the panel space.</summary>
+    public void DebugSetHoverSkill(string? skillId) { _hoverSkillId = skillId; }
 }

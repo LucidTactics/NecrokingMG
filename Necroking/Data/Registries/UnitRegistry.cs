@@ -199,6 +199,22 @@ public class UnitDef : IHasId
     [JsonPropertyName("armors")] public List<string> Armors { get; set; } = new();
     [JsonPropertyName("shields")] public List<string> Shields { get; set; } = new();
 
+    /// <summary>Free-form classification tags ("wolf", "zombie", "monster", "humanoid", ...).
+    /// Read by skill-tree intrinsic-buff matching: a skill that grants buff X "to all units
+    /// tagged 'wolf' and 'zombie'" walks every UnitDef and applies the buff wherever both
+    /// tags are present. Order-insensitive; comparison is case-sensitive.</summary>
+    [JsonPropertyName("tags")] public List<string> Tags { get; set; } = new();
+
+    /// <summary>True if every tag in <paramref name="required"/> is present.
+    /// Empty/null required list returns true (no constraint).</summary>
+    public bool HasAllTags(IEnumerable<string>? required)
+    {
+        if (required == null) return true;
+        foreach (var t in required)
+            if (!Tags.Contains(t)) return false;
+        return true;
+    }
+
     [JsonPropertyName("attackAnim")] public string? AttackAnim { get; set; }
 
     // Combat overrides (nullable = use global CombatSettings default)

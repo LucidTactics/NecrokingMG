@@ -10,15 +10,15 @@ namespace Necroking.GameSystems;
 
 public static class BuffSystem
 {
-    public static void ApplyBuff(UnitArrays units, int unitIdx, BuffDef def)
-        => ApplyBuffWithDuration(units, unitIdx, def, def.Duration);
+    public static void ApplyBuff(UnitArrays units, int unitIdx, BuffDef def, GameData? gameData = null)
+        => ApplyBuffWithDuration(units, unitIdx, def, def.Duration, gameData);
 
     /// <summary>
     /// Apply a buff with an override duration (instead of the def's default).
     /// Used where duration is computed at runtime — e.g. knockdown-on-hit, where
     /// duration comes from the STR/Size/DRN roll difference.
     /// </summary>
-    public static void ApplyBuffWithDuration(UnitArrays units, int unitIdx, BuffDef def, float durationSeconds)
+    public static void ApplyBuffWithDuration(UnitArrays units, int unitIdx, BuffDef def, float durationSeconds, GameData? gameData = null)
     {
         if (unitIdx < 0 || unitIdx >= units.Count) return;
         var buffs = units[unitIdx].ActiveBuffs;
@@ -36,6 +36,12 @@ public static class BuffSystem
                 return;
             }
         }
+
+        // First-time apply for this buff on this unit: layer in any weapons the
+        // buff grants. Skipped on stack increments (above) so a single intrinsic
+        // weapon doesn't multiply across stacks.
+        if (def.GrantedWeapons.Count > 0 && gameData != null)
+            ApplyGrantedWeapons(units, unitIdx, def, gameData);
 
         // New buff. A duration of 0 (or below) at apply time means "permanent
         // until explicitly removed" — used for toggles like god mode. The
@@ -119,7 +125,9 @@ public static class BuffSystem
 
                 if (b.RemainingDuration <= 0f)
                 {
+                    string expiringId = b.BuffDefID;
                     buffs.RemoveAt(j);
+                    StripGrantedWeapons(units, i, expiringId);
                     continue;
                 }
 
@@ -187,7 +195,10 @@ public static class BuffSystem
                 var b = buffs[i];
                 b.StackCount--;
                 if (b.StackCount <= 0)
+                {
                     buffs.RemoveAt(i);
+                    StripGrantedWeapons(units, unitIdx, buffDefID);
+                }
                 else
                     buffs[i] = b;
                 return;
@@ -211,7 +222,116 @@ public static class BuffSystem
                 removed = true;
             }
         }
+        if (removed) StripGrantedWeapons(units, unitIdx, buffDefID);
         return removed;
+    }
+
+    /// <summary>Append the weapons in <paramref name="def"/>.GrantedWeapons to the
+    /// unit's effective weapon list. Each pushed WeaponStats is tagged with
+    /// SourceBuffID = def.Id so removal can scrub exactly the entries this buff
+    /// contributed (without touching base-equipment slots that happen to share
+    /// an ID). Caller is responsible for skipping this on stack increments —
+    /// granted weapons don't multiply across stacks.</summary>
+    private static void ApplyGrantedWeapons(UnitArrays units, int unitIdx, BuffDef def, GameData gameData)
+    {
+        var stats = units[unitIdx].Stats;
+        bool anyMelee = false, anyRanged = false;
+        foreach (var weaponId in def.GrantedWeapons)
+        {
+            var w = gameData.Weapons.Get(weaponId);
+            if (w == null)
+            {
+                Necroking.Core.DebugLog.Log("skillbook", $"[BuffSystem] buff '{def.Id}' grants weapon '{weaponId}' that isn't in WeaponRegistry — skipped.");
+                continue;
+            }
+
+            var ws = new WeaponStats
+            {
+                Damage = w.Damage,
+                AttackBonus = w.AttackBonus,
+                DefenseBonus = w.DefenseBonus,
+                Length = w.Length,
+                Name = w.DisplayName,
+                IsRanged = w.IsRanged,
+                AnimName = w.AnimName,
+                CooldownRounds = w.CooldownRounds,
+                Priority = w.Priority,
+                PounceMinRange = w.PounceMinRange,
+                PounceMaxRange = w.PounceMaxRange,
+                PounceArcPeak = w.PounceArcPeak,
+                PounceAirSpeed = w.PounceAirSpeed,
+                SweepArcDegrees = w.SweepArcDegrees,
+                SweepRadius = w.SweepRadius,
+                SweepHitsAllies = w.SweepHitsAllies,
+                TrampleMinRange = w.TrampleMinRange,
+                TrampleMaxRange = w.TrampleMaxRange,
+                TrampleMaxChaseDistance = w.TrampleMaxChaseDistance,
+                TrampleImpactRange = w.TrampleImpactRange,
+                TrampleSpeedBonus = w.TrampleSpeedBonus,
+                TrampleRadius = w.TrampleRadius,
+                TrampleKnockbackForce = w.TrampleKnockbackForce,
+                TrampleImpactForce = w.TrampleImpactForce,
+                SourceBuffID = def.Id,
+            };
+            if (System.Enum.TryParse<WeaponArchetype>(w.Archetype, true, out var arch))
+                ws.Archetype = arch;
+            foreach (var b in w.Bonuses)
+            {
+                if (b == "ArmorPiercing") ws.HasArmorPiercing = true;
+                if (b == "ArmorNegating") ws.HasArmorNegating = true;
+                if (b == "Knockdown")     ws.HasKnockdown     = true;
+            }
+
+            if (w.IsRanged)
+            {
+                stats.RangedWeapons.Add(ws);
+                stats.RangedRange.Add(w.Range);
+                stats.RangedDirectRange.Add(w.DirectRange);
+                stats.RangedCooldownTime.Add(w.Cooldown);
+                stats.RangedDmg.Add(w.RangedDamage);
+                anyRanged = true;
+            }
+            else
+            {
+                stats.MeleeWeapons.Add(ws);
+                anyMelee = true;
+            }
+        }
+
+        // Keep priority-ordered scan invariant intact — UnitRegistry.BuildStats
+        // sorts both lists by Priority desc; granted weapons must slot into
+        // their priority position too so combat selection stays deterministic.
+        if (anyMelee && stats.MeleeWeapons.Count > 1)
+            stats.MeleeWeapons = System.Linq.Enumerable.ToList(
+                System.Linq.Enumerable.OrderByDescending(stats.MeleeWeapons, w => w.Priority));
+        if (anyRanged && stats.RangedWeapons.Count > 1)
+            stats.RangedWeapons = System.Linq.Enumerable.ToList(
+                System.Linq.Enumerable.OrderByDescending(stats.RangedWeapons, w => w.Priority));
+    }
+
+    /// <summary>Inverse of ApplyGrantedWeapons — drop any WeaponStats tagged with
+    /// SourceBuffID == buffDefID from the unit's effective weapon list. Safe to
+    /// call when the buff didn't grant weapons (no-op in that case).</summary>
+    private static void StripGrantedWeapons(UnitArrays units, int unitIdx, string buffDefID)
+    {
+        if (string.IsNullOrEmpty(buffDefID)) return;
+        var stats = units[unitIdx].Stats;
+
+        // Ranged removal needs to keep the parallel side-lists (RangedRange,
+        // RangedDirectRange, RangedCooldownTime, RangedDmg) in lockstep, so
+        // walk the indexes manually rather than using RemoveAll.
+        for (int i = stats.RangedWeapons.Count - 1; i >= 0; i--)
+        {
+            if (stats.RangedWeapons[i].SourceBuffID == buffDefID)
+            {
+                stats.RangedWeapons.RemoveAt(i);
+                if (i < stats.RangedRange.Count) stats.RangedRange.RemoveAt(i);
+                if (i < stats.RangedDirectRange.Count) stats.RangedDirectRange.RemoveAt(i);
+                if (i < stats.RangedCooldownTime.Count) stats.RangedCooldownTime.RemoveAt(i);
+                if (i < stats.RangedDmg.Count) stats.RangedDmg.RemoveAt(i);
+            }
+        }
+        stats.MeleeWeapons.RemoveAll(w => w.SourceBuffID == buffDefID);
     }
 
     /// <summary>Is the named buff currently active on this unit?</summary>

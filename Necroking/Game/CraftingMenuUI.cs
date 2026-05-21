@@ -17,7 +17,7 @@ namespace Necroking.Game;
 /// up to 2 ingredient costs. Handles selection, affordability, 1s crafting
 /// progress bar, and inventory output.
 /// </summary>
-public class CraftingMenuUI
+public class CraftingMenuUI : Necroking.UI.IModalLayer
 {
     private const string MenuWidgetId = "CraftingMenu";
     private const string ItemWidgetId = "CraftingItem";
@@ -80,6 +80,7 @@ public class CraftingMenuUI
         _crafting = false;
         _craftProgress = 0f;
         _craftingIndex = -1;
+        Necroking.Game1.Popups.Push(this);
 
         // Left-aligned, same as build menu
         _screenX = -12;
@@ -120,7 +121,14 @@ public class CraftingMenuUI
         _visible = false;
         _crafting = false;
         _selectedIndex = -1;
+        Necroking.Game1.Popups.Pop(this);
     }
+
+    // === IModalLayer ===
+    public bool LightDismiss => false;
+    public bool IsBlocking => false;  // side panel — gameplay coexists
+    // ContainsMouse is the existing public method on this class.
+    public void OnCancel() => Close();
 
     public void Toggle(int screenW, int screenH)
     {

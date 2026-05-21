@@ -19,7 +19,7 @@ namespace Necroking.Render;
 /// Stats modified by active buffs are colored green (higher) or red (lower)
 /// vs base.
 /// </summary>
-public class CharacterStatsUI
+public class CharacterStatsUI : Necroking.UI.IModalLayer
 {
     private const int PanelW = 340;
     private const int RowH = 18;
@@ -113,7 +113,29 @@ public class CharacterStatsUI
         _smallFont = smallFont;
     }
 
-    public void Toggle() => IsVisible = !IsVisible;
+    public void Toggle()
+    {
+        if (IsVisible)
+        {
+            IsVisible = false;
+            Necroking.Game1.Popups.Pop(this);
+        }
+        else
+        {
+            IsVisible = true;
+            Necroking.Game1.Popups.Push(this);
+        }
+    }
+
+    // === IModalLayer ===
+    public bool LightDismiss => false;
+    public bool IsBlocking => false;  // side panel — gameplay coexists
+    /// <summary>Cached during the most recent Draw call. PopupManager calls
+    /// ContainsMouse(mx,my) with no other context, so we precompute the union
+    /// of the three panel rects each frame and let the manager hit-test that.</summary>
+    private Microsoft.Xna.Framework.Rectangle _lastBoundsRect;
+    public bool ContainsMouse(int mx, int my) => _lastBoundsRect.Contains(mx, my);
+    public void OnCancel() => Toggle();
 
     /// <summary>Bounds test covering all three panels (stats + learn + active).</summary>
     public bool ContainsMouse(int screenW, int screenH, int mx, int my, Simulation sim)
@@ -177,6 +199,23 @@ public class CharacterStatsUI
         if (!IsVisible || _font == null) return;
         int necroIdx = sim.NecromancerIndex;
         if (necroIdx < 0 || necroIdx >= sim.Units.Count) return;
+
+        // Refresh the cached bounds rect for IModalLayer.ContainsMouse. The
+        // existing five-arg ContainsMouse(screenW,screenH,mx,my,sim) is still
+        // used by Game1's MouseOverUI block; this just provides the manager-
+        // compatible (mx,my)-only overload with the same geometry.
+        {
+            int _activeBuffs = sim.Units[necroIdx].ActiveBuffs.Count;
+            int _statsRowCount = 22;
+            int _buffListH = _activeBuffs > 0 ? BuffsHeaderH + _activeBuffs * RowH + 6 : 0;
+            int _statsH = TitleH + PadY * 2 + _statsRowCount * RowH + _buffListH;
+            int _learnX = AnchorX + PanelW + SkillsGap;
+            int _activeX = _learnX + SkillsPanelW + SkillsGap;
+            int _totalRight = _activeX + SkillsPanelW;
+            int _maxPanelH = System.Math.Max(System.Math.Max(_statsH, LearnPanelHeight()), ActivePanelHeight());
+            _lastBoundsRect = new Microsoft.Xna.Framework.Rectangle(
+                AnchorX, AnchorY, _totalRight - AnchorX, _maxPanelH);
+        }
 
         var unit = sim.Units[necroIdx];
         var s = unit.Stats;

@@ -100,6 +100,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         _craftingMenu.SetSkillBook(_skillBookState);
         _tableMenuUI.Init(_widgetRenderer, _envSystem, _inventory, _gameData.Items,
             _sim.PlayerResources, _spriteBatch, _pixel, _font);
+        _tableMenuUI.SetSkillBook(_skillBookState);
         _tableMenuUI.StartCraftCallback = (envIdx) => StartTableCraft(envIdx);
         _tableMenuUI.DrawUnitIconCallback = (defId, rect) => DrawUnitIdleSprite(defId, rect);
         Necroking.Core.DebugLog.Log("startup", "  [LazyInit] Inventory/Building/Crafting/Table UIs initialized on demand");
@@ -195,6 +196,12 @@ public class Game1 : Microsoft.Xna.Framework.Game
     private MouseState _prevMouse;
     private float _rawDt;
     private readonly InputState _input = new();
+    private readonly Necroking.UI.PopupManager _popups = new();
+    /// <summary>Process-wide accessor — popups call <c>Game1.Popups.Push(this)</c>
+    /// on open and <c>Pop</c> on close. Static because the alternative is
+    /// threading the manager through 20+ existing UI constructors. Lifetime
+    /// matches the Game1 instance; assigned in the ctor.</summary>
+    public static Necroking.UI.PopupManager Popups { get; private set; } = null!;
     private float _editorPanTime; // ramp-up timer for editor camera panning
 
     // Pending spell cast with animation delay (Spell1 animation → action moment → execute)
@@ -258,6 +265,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
     public Game1()
     {
+        Popups = _popups;
         _graphics = new GraphicsDeviceManager(this);
         _graphics.GraphicsProfile = GraphicsProfile.HiDef;
 
@@ -669,6 +677,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         _sim.SetEnvironmentSystem(_envSystem);
         _sim.SetWallSystem(_wallSystem);
         _sim.SetTriggerSystem(_triggerSystem);
+        _sim.SetSkillBook(_skillBookState);
 
         // Wire collision change callback so pathfinding rebuilds when objects change state
         _envSystem.OnCollisionsDirty = () => _sim.RebuildPathfinder();
@@ -1157,6 +1166,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         _sim.SetEnvironmentSystem(_envSystem);
         _sim.SetWallSystem(_wallSystem);
         _sim.SetTriggerSystem(_triggerSystem);
+        _sim.SetSkillBook(_skillBookState);
         _fogOfWar.Init(gridSize, gridSize, GraphicsDevice, Content);
 
         // Ensure spell bar state is initialized for HUD safety
@@ -1872,6 +1882,16 @@ public class Game1 : Microsoft.Xna.Framework.Game
         var kb = Keyboard.GetState();
         var mouse = Mouse.GetState();
         _input.Capture(mouse, _prevMouse, kb, _prevKb);
+
+        // Modal stack input routing. Runs *before* anything else reads input so:
+        //   - ESC is dispatched to the topmost popup, never two layers at once.
+        //   - Outside-clicks on light-dismiss popups (dropdowns / popovers)
+        //     close them and swallow the click.
+        // Popups Push themselves on open, Pop on close. When the stack is empty
+        // this call is a no-op and input flows to gameplay normally. See
+        // Necroking/UI/PopupManager.cs for the contract.
+        _popups.RouteInput(_input);
+
         _rawDt = (float)gameTime.ElapsedGameTime.TotalSeconds;
         float rawDt = _rawDt;
         float dt = _paused ? 0f : MathF.Min(rawDt, 1f / 20f) * _timeScale;
@@ -2105,12 +2125,20 @@ public class Game1 : Microsoft.Xna.Framework.Game
             _menuState = MenuState.PauseMenu;
         }
 
-        // --- ESC toggles pause menu / closes editor ---
-        // When a text field is active, Escape is consumed by EditorBase.HandleTextInput to deactivate the field.
-        // When a popup (color picker, texture browser, confirm dialog) is open, don't close the editor.
-        bool popupOpen = _editorUi.IsColorPickerOpen || _editorUi.IsDropdownOpen
-            || (_menuState == MenuState.UIEditor && (_uiEditor.IsColorPickerOpen || _uiEditor.IsDropdownOpen));
-        if (!anyTextInputActive && !popupOpen && _input.WasKeyPressed(Keys.Escape))
+        // --- ESC: editors + pause menu only ---
+        // The modal stack (PopupManager) handles ESC for every popup that
+        // registered itself via IModalLayer: color picker, dropdown, confirm
+        // dialog, sub-editor popups (BuffManager / FlipbookManager /
+        // EdgeTweaker / GroupEditor), the game-side panels (inventory,
+        // crafting, building, skill book, skill tree, character stats), and
+        // table-craft. When any of those is on top, PopupManager.RouteInput
+        // calls its OnCancel and consumes Keys.Escape — and the IsKeyConsumed
+        // guard below short-circuits this chain. The chain only fires for
+        // top-level menu states (editors, pause menu) that aren't on the
+        // stack and for the "no popup → toggle pause" fallback.
+        // Text-field ESC is handled by EditorBase.HandleTextInput (deactivates
+        // the field), independent of all this.
+        if (!anyTextInputActive && !_input.IsKeyConsumed(Keys.Escape) && _input.WasKeyPressed(Keys.Escape))
         {
             if (_menuState == MenuState.Settings)
             {
@@ -2128,26 +2156,6 @@ public class Game1 : Microsoft.Xna.Framework.Game
             {
                 _menuState = MenuState.None;
                 _paused = false;
-            }
-            else if (_menuState == MenuState.None && _buildingMenuUI.IsVisible)
-            {
-                _buildingMenuUI.Close();
-            }
-            else if (_menuState == MenuState.None && _craftingMenu.IsVisible)
-            {
-                _craftingMenu.Close();
-            }
-            else if (_menuState == MenuState.None && _inventoryUI.IsVisible)
-            {
-                _inventoryUI.Close();
-            }
-            else if (_menuState == MenuState.None && _skillTreePanel.IsVisible)
-            {
-                _skillTreePanel.Close();
-            }
-            else if (_menuState == MenuState.None && _skillBookPanel.IsVisible)
-            {
-                _skillBookPanel.Close();
             }
             else if (_menuState == MenuState.None)
             {

@@ -397,6 +397,21 @@ public class Unit
     // buffs from table-crafted zombies). Lazy-allocated — null when empty so the
     // common "no bonuses" case doesn't pay an allocation. See WeaponBonusEffect.cs.
     public List<WeaponBonusEffect>? BonusEffects;
+
+    /// <summary>Number of corpses this unit has eaten via the Corpse Eater AI
+    /// behavior. Capped at the SkillBookState payload (1 for Corpse Eater, 2
+    /// for Improved Corpse Eating). Persisted on the Unit so the cap follows
+    /// the individual zombie; once it's full it never eats another corpse,
+    /// even after a respec.</summary>
+    public byte CorpsesEaten;
+    /// <summary>Eat-cycle timer (seconds left in the eating animation). > 0 means
+    /// the unit is mid-eat and other AI should leave it alone. When it ticks to
+    /// 0, the buff is granted and the corpse marked consumed.</summary>
+    public float CorpseEatTimer;
+    /// <summary>CorpseID currently being eaten (matches CorpseEatTimer's lifetime).
+    /// -1 when not eating. Used to validate the corpse still exists when the
+    /// timer expires.</summary>
+    public int CorpseEatTargetID = -1;
 }
 
 /// <summary>

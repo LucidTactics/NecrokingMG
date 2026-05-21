@@ -205,6 +205,14 @@ public class Simulation
     private TriggerSystem? _triggerSystem;
     public void SetNecromancerIndex(int idx) { _necromancerIdx = idx; }
 
+    /// <summary>Reference to the per-game skill-book state. When non-null,
+    /// SpawnUnitByID consults SkillBookState.IntrinsicBuffs and applies any
+    /// buff whose required tag set matches the spawning unit's UnitDef.Tags.
+    /// Null in scenario / test paths that don't run the full skill system.</summary>
+    private SkillBookState? _skillBookState;
+    public SkillBookState? SkillBook => _skillBookState;
+    public void SetSkillBook(SkillBookState state) { _skillBookState = state; }
+
     /// <summary>Wall-clock milliseconds the most recent Tick() took. Written every
     /// Tick; readable from scenarios/tests to chart per-tick cost. Not intended to
     /// drive game logic — it's a diagnostic probe.</summary>
@@ -507,6 +515,13 @@ public class Simulation
         _poisonClouds.Update(dt, _units, _quadtree, _corpses, _damageEvents,
             _gameData?.Buffs);
         PhaseEnd("clouds");
+
+        // Corpse Eater AI — passive eat by wolves/bears once corpses age past
+        // the threshold. Runs before RemoveDeadUnits / UpdateCorpses so a
+        // corpse marked for consumption this frame still dissolves on schedule.
+        PhaseStart();
+        AI.CorpseEatAI.Update(this, dt);
+        PhaseEnd("corpse_eat");
 
         // Remove dead units
         PhaseStart();
@@ -3054,6 +3069,35 @@ public class Simulation
         {
             if (!_units[i].Alive)
             {
+                // Skill-tree event ticks. monster_kill / human_kill gate the
+                // Monster Summoner / Brothers Keeper root nodes. Use UnitDef.Tags
+                // when available — falls back to Faction so untagged units still
+                // count. We only want kills by *us* / our undead, not random
+                // peasant-vs-wolf scuffles, so require LastAttackerID to belong
+                // to a player-aligned unit (Undead faction or PlayerControlled).
+                if (_skillBookState != null && _gameData != null)
+                {
+                    uint attackerId = _units[i].LastAttackerID;
+                    bool playerCausedKill = false;
+                    if (attackerId != GameConstants.InvalidUnit)
+                    {
+                        int aIdx = UnitUtil.ResolveUnitIndex(_units, attackerId);
+                        if (aIdx >= 0)
+                            playerCausedKill = _units[aIdx].Faction == Faction.Undead
+                                || _units[aIdx].AI == AIBehavior.PlayerControlled;
+                    }
+                    if (playerCausedKill)
+                    {
+                        var killedDef = _gameData.Units.Get(_units[i].UnitDefID);
+                        bool isMonster = killedDef != null && killedDef.Tags.Contains("monster")
+                            || _units[i].Faction == Faction.Animal;
+                        bool isHuman = killedDef != null && killedDef.Tags.Contains("humanoid")
+                            || _units[i].Faction == Faction.Human;
+                        if (isMonster) _skillBookState.Events.Tally("monster_kill");
+                        if (isHuman)   _skillBookState.Events.Tally("human_kill");
+                    }
+                }
+
                 // Queue zombie raise if unit had ZombieOnDeath
                 bool zombieRaise = _units[i].ZombieOnDeath;
                 if (zombieRaise)
@@ -3227,6 +3271,21 @@ public class Simulation
                 var stats = _gameData.Units.BuildStats(unitID, _gameData.Weapons, _gameData.Armors, _gameData.Shields);
                 _units[idx].Stats = stats;
                 _units[idx].MaxSpeed = stats.CombatSpeed;
+
+                // Apply any skill-tree intrinsic buffs whose tag filter matches
+                // this unit's def. Skipped when SkillBook isn't wired (scenarios,
+                // tests) — those paths get raw UnitDef behaviour with no skill
+                // overlay.
+                if (_skillBookState != null)
+                {
+                    foreach (var entry in _skillBookState.IntrinsicBuffs)
+                    {
+                        if (!def.HasAllTags(entry.RequiredTags)) continue;
+                        var buffDef = _gameData.Buffs.Get(entry.BuffID);
+                        if (buffDef == null) continue;
+                        GameSystems.BuffSystem.ApplyBuff(_units, idx, buffDef, _gameData);
+                    }
+                }
             }
         }
         return idx;

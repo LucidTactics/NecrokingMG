@@ -109,6 +109,20 @@ public class BuffDef : IHasId
     [JsonPropertyName("effects")] public List<BuffEffect> Effects { get; set; } = new();
     [JsonPropertyName("maxStacks")] public int MaxStacks { get; set; } = 1;
 
+    /// <summary>Weapon IDs this buff appends to the bearer's effective weapon list
+    /// while active. Resolved against WeaponRegistry at buff-apply time and pushed
+    /// into Stats.MeleeWeapons / Stats.RangedWeapons; removed on buff expiry.
+    /// Used by skill-tree intrinsic buffs (Wolf Lunge → buff_wolf_pounce →
+    /// grants weapon_wolf_pounce) to layer attacks onto a unit without mutating
+    /// its UnitDef.</summary>
+    [JsonPropertyName("grantedWeapons")] public List<string> GrantedWeapons { get; set; } = new();
+
+    /// <summary>True for buffs that come from skill-tree intrinsic effects
+    /// (permanent, no countdown, no UI icon). Hides them from the buff bar
+    /// display and skips most "buff applied to X" combat-log lines so the log
+    /// isn't spammed with every wolf gaining buff_wolf_pounce at spawn.</summary>
+    [JsonPropertyName("intrinsic")] public bool Intrinsic { get; set; }
+
     // Incapacitation: buff prevents movement/AI/combat while active
     [JsonPropertyName("incapacitating")] public bool Incapacitating { get; set; }
     [JsonPropertyName("incapHoldAnim")] public string IncapHoldAnim { get; set; } = "";     // e.g. "Knockdown", "Stunned"

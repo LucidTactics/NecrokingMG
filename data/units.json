@@ -2675,6 +2675,7 @@
     },
     {
       "id": "ZombieFemaleDeer",
+      "tags": ["deer", "zombie", "monster"],
       "name": "Zombie Female Deer",
       "type": "Dynamic",
       "faction": "Undead",
@@ -3273,6 +3274,7 @@
     },
     {
       "id": "ZombieWolf",
+      "tags": ["wolf", "zombie", "monster"],
       "name": "Zombie Wolf",
       "type": "Dynamic",
       "faction": "Undead",
@@ -3407,6 +3409,7 @@
     },
     {
       "id": "ZombieMaleDeer",
+      "tags": ["deer", "zombie", "monster"],
       "name": "Zombie Male Deer",
       "type": "Dynamic",
       "faction": "Undead",
@@ -5199,6 +5202,7 @@
     },
     {
       "id": "ZombieJuvenileBear",
+      "tags": ["bear", "zombie", "monster"],
       "name": "Zombie Juvenile Bear",
       "type": "Dynamic",
       "faction": "Undead",
@@ -5231,10 +5235,6 @@
       "playerForm": false,
       "paths": {},
       "weapons": [
-        {
-          "id": "weapon_bear_sweep",
-          "anim": "Attack1"
-        },
         {
           "id": "weapon_223651",
           "anim": "Attack1"
@@ -5276,6 +5276,7 @@
     },
     {
       "id": "ZombieGrizzlyBear",
+      "tags": ["bear", "zombie", "monster"],
       "name": "Zombie Grizzly Bear",
       "type": "Dynamic",
       "faction": "Undead",
@@ -5308,10 +5309,6 @@
       "playerForm": false,
       "paths": {},
       "weapons": [
-        {
-          "id": "weapon_bear_sweep",
-          "anim": "Attack1"
-        },
         {
           "id": "weapon_223651",
           "anim": "Attack1"
@@ -5353,6 +5350,7 @@
     },
     {
       "id": "ZombieBoar",
+      "tags": ["boar", "zombie", "monster"],
       "name": "Zombie Boar",
       "type": "Dynamic",
       "faction": "Undead",
@@ -5385,10 +5383,6 @@
       "playerForm": false,
       "paths": {},
       "weapons": [
-        {
-          "id": "weapon_boar_charge",
-          "anim": "Attack1"
-        },
         {
           "id": "weapon_boar_tusk",
           "anim": "Attack1"
@@ -5426,6 +5420,7 @@
     },
     {
       "id": "ZombieGreatBoar",
+      "tags": ["boar", "zombie", "monster"],
       "name": "Zombie Great Boar",
       "type": "Dynamic",
       "faction": "Undead",
@@ -5458,10 +5453,6 @@
       "playerForm": false,
       "paths": {},
       "weapons": [
-        {
-          "id": "weapon_boar_charge",
-          "anim": "Attack2"
-        },
         {
           "id": "weapon_boar_tusk",
           "anim": "Attack1"

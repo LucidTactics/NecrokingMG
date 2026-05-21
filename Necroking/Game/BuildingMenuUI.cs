@@ -19,7 +19,7 @@ namespace Necroking.Game;
 /// resource costs with icons and quantities. Handles selection, resource checking,
 /// ghost preview, and placement.
 /// </summary>
-public class BuildingMenuUI
+public class BuildingMenuUI : Necroking.UI.IModalLayer
 {
     private const string MenuWidgetId = "BuildingMenu";
     private const string ItemWidgetId = "BuildingItem";
@@ -82,6 +82,7 @@ public class BuildingMenuUI
         _visible = true;
         _placementActive = false;
         _selectedIndex = -1;
+        Necroking.Game1.Popups.Push(this);
 
         // Position: left-aligned, 12px off-screen
         _screenX = -12;
@@ -116,7 +117,19 @@ public class BuildingMenuUI
         _visible = false;
         _placementActive = false;
         _selectedIndex = -1;
+        Necroking.Game1.Popups.Pop(this);
     }
+
+    // === IModalLayer ===
+    // Side-panel UI. Not light-dismiss — clicking outside doesn't auto-close
+    // (the menu stays open while the user picks a placement target out in
+    // the world). PopupManager still consumes clicks while it's open so the
+    // spell-bar and world-edit code don't dual-fire.
+    public bool LightDismiss => false;
+    // Non-blocking side panel — placement mode needs world clicks to land.
+    // ContainsMouse is the existing public method.
+    public bool IsBlocking => false;
+    public void OnCancel() => Close();
 
     public void Toggle(int screenW, int screenH)
     {

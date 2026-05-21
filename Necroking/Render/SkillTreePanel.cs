@@ -31,13 +31,31 @@ namespace Necroking.Render;
 /// state machinery -- not the visual effects, until UIGfx is rewritten or
 /// replaced with a proper shader-based path.
 /// </summary>
-public class SkillTreePanel
+public class SkillTreePanel : Necroking.UI.IModalLayer
 {
     public bool IsVisible { get; private set; }
 
-    public void Toggle() { IsVisible = !IsVisible; if (IsVisible) EnsureInit(); }
-    public void Open()   { IsVisible = true;       EnsureInit(); }
-    public void Close()  { IsVisible = false; }
+    public void Toggle() { if (IsVisible) Close(); else Open(); }
+    public void Open()
+    {
+        IsVisible = true;
+        EnsureInit();
+        Necroking.Game1.Popups.Push(this);
+    }
+    public void Close()
+    {
+        IsVisible = false;
+        Necroking.Game1.Popups.Pop(this);
+    }
+
+    // === IModalLayer ===
+    // Full-screen tree view. Blocking modal — see SkillBookPanel for the same
+    // semantics.
+    public bool LightDismiss => false;
+    public bool IsBlocking => true;
+    private Microsoft.Xna.Framework.Rectangle _lastPanelRect;
+    public bool ContainsMouse(int mx, int my) => _lastPanelRect.Contains(mx, my);
+    public void OnCancel() => Close();
 
     private SpriteBatch _batch = null!;
     private Texture2D _pixel = null!;
@@ -355,6 +373,7 @@ public class SkillTreePanel
 
         var lay = BuildLayout(screenW, screenH);
         _cachedLayout = lay;
+        _lastPanelRect = lay.Panel;
         int mx = (int)input.MousePos.X;
         int my = (int)input.MousePos.Y;
 

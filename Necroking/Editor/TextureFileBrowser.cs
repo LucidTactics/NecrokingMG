@@ -13,7 +13,7 @@ namespace Necroking.Editor;
 /// Opens over the current editor, shows directory listing with navigation,
 /// filter field, and returns the selected relative path via callback.
 /// </summary>
-public class TextureFileBrowser
+public class TextureFileBrowser : Necroking.UI.IModalLayer
 {
     // Popup state
     private bool _isOpen;
@@ -72,6 +72,8 @@ public class TextureFileBrowser
         _selectedFile = "";
         _previewTexture = null;
 
+        Necroking.Game1.Popups.Push(this);
+
         // Normalize root dir
         _rootDir = string.IsNullOrEmpty(rootDir) ? "assets" : rootDir.TrimEnd('/', '\\');
 
@@ -106,6 +108,7 @@ public class TextureFileBrowser
     {
         _isOpen = false;
         _onSelect = null;
+        Necroking.Game1.Popups.Pop(this);
     }
 
     /// <summary>
@@ -114,13 +117,19 @@ public class TextureFileBrowser
     public void Update(MouseState mouse, MouseState prevMouse, KeyboardState kb, KeyboardState prevKb)
     {
         if (!_isOpen) return;
-
-        // Escape to close
-        if (kb.IsKeyDown(Keys.Escape) && prevKb.IsKeyUp(Keys.Escape))
-        {
-            Close();
-        }
+        // ESC handling moved to OnCancel — PopupManager dispatches when the
+        // browser is the top of the stack.
     }
+
+    // === IModalLayer ===
+    public bool LightDismiss => false;  // hard modal; outside click doesn't close
+    public bool IsBlocking => true;
+    public bool ContainsMouse(int mx, int my) => _panelRect.Contains(mx, my);
+    public void OnCancel() => Close();
+    /// <summary>Updated by Draw each frame so PopupManager has the live screen
+    /// rect for outside-hit-tests. Browser is centered, so changes only when
+    /// the window resizes.</summary>
+    private Microsoft.Xna.Framework.Rectangle _panelRect;
 
     /// <summary>
     /// Draw the file browser overlay. Call each frame while IsOpen is true.
@@ -143,6 +152,10 @@ public class TextureFileBrowser
         int px = (screenW - totalW) / 2;
         int py = (screenH - PopupH) / 2;
         int listW = PopupW - PreviewW;
+
+        // Cache rect for IModalLayer.ContainsMouse so PopupManager can decide
+        // outside-vs-inside on click events the same frame they happen.
+        _panelRect = new Rectangle(px, py, totalW, PopupH);
 
         // Background + border
         ui.DrawRect(new Rectangle(px, py, totalW, PopupH), PopupBg);

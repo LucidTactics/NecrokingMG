@@ -253,6 +253,46 @@ public class EnvObjectEditorWindow
     //  Update + Draw (called from MapEditorWindow)
     // ========================================================================
 
+    // Modal-stack adapters for sub-popups. PopupManager routes ESC to the
+    // topmost open layer; the OnCancel callback flips the editor's existing
+    // open-flag, and SyncSubPopupsModalState reconciles Push/Pop with state
+    // each frame. Outside-clicks consumed by PopupManager so they don't leak
+    // to the editor controls behind the dialogs.
+    private readonly Necroking.UI.ActionModalLayer _confirmDeleteLayer = new() { LightDismiss = false };
+    private readonly Necroking.UI.ActionModalLayer _newCategoryLayer = new() { LightDismiss = false };
+    private readonly Necroking.UI.ActionModalLayer _deleteCategoryLayer = new() { LightDismiss = false };
+    private readonly Necroking.UI.ActionModalLayer _edgeTweakerLayer = new() { LightDismiss = false };
+    private bool _envModalLayersWired;
+
+    private void SyncSubPopupsModalState(int screenW, int screenH)
+    {
+        if (!_envModalLayersWired)
+        {
+            _confirmDeleteLayer.OnCancelAction = () => _confirmDeleteOpen = false;
+            _newCategoryLayer.OnCancelAction = () => _newCategoryDialogOpen = false;
+            _deleteCategoryLayer.OnCancelAction = () => _deleteCategoryDialogOpen = false;
+            _edgeTweakerLayer.OnCancelAction = () => _edgeTweakerOpen = false;
+            _envModalLayersWired = true;
+        }
+        var full = new Rectangle(0, 0, screenW, screenH);
+        _confirmDeleteLayer.Panel = full;
+        _newCategoryLayer.Panel = full;
+        _deleteCategoryLayer.Panel = full;
+        _edgeTweakerLayer.Panel = full;
+
+        SyncOne(_confirmDeleteLayer, _confirmDeleteOpen);
+        SyncOne(_newCategoryLayer, _newCategoryDialogOpen);
+        SyncOne(_deleteCategoryLayer, _deleteCategoryDialogOpen);
+        SyncOne(_edgeTweakerLayer, _edgeTweakerOpen);
+
+        static void SyncOne(Necroking.UI.IModalLayer layer, bool open)
+        {
+            bool onStack = Necroking.Game1.Popups.Contains(layer);
+            if (open && !onStack) Necroking.Game1.Popups.Push(layer);
+            else if (!open && onStack) Necroking.Game1.Popups.Pop(layer);
+        }
+    }
+
     public void Update()
     {
         if (!IsOpen) return;
@@ -272,6 +312,11 @@ public class EnvObjectEditorWindow
     public void Draw(int screenW, int screenH)
     {
         if (!IsOpen) return;
+
+        // Keep PopupManager's stack in sync with our sub-popup flags. Cheap
+        // (4 hash lookups + maybe 4 pushes/pops) and ensures ESC routing is
+        // correct without scattering Push/Pop calls at every open/close site.
+        SyncSubPopupsModalState(screenW, screenH);
 
         // Dark overlay
         _ui.DrawRect(new Rectangle(0, 0, screenW, screenH), OverlayBg);

@@ -101,6 +101,9 @@ public static class ScenarioRegistry
         Register("zombie_deer_leash", () => new Scenarios.ZombieDeerLeashScenario());
         Register("log_shadow", () => new Scenarios.LogShadowScenario());
         Register("stride_debug", () => new Scenarios.StrideDebugScenario());
+        Register("intrinsic_buff", () => new Scenarios.IntrinsicBuffScenario());
+        Register("corpse_eater", () => new Scenarios.CorpseEaterScenario());
+        Register("UITooltipPlacement", () => new Scenarios.TooltipPlacementScenario());
     }
 
     public static void Register(string name, Func<ScenarioBase> creator)

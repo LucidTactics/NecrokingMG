@@ -14,7 +14,7 @@ namespace Necroking.Data;
 public static class SkillBookDefs
 {
     /// <summary>Source order = tab order in the UI.</summary>
-    public static readonly string[] TabIds = { "potions", "necromancy", "magic", "metamorphosis" };
+    public static readonly string[] TabIds = { "potions", "monstrology", "necromancy", "magic", "metamorphosis" };
 
     public static List<SkillTab> Tabs { get; private set; } = new();
 

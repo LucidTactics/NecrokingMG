@@ -13,6 +13,19 @@ namespace Necroking.Editor;
 /// </summary>
 public class EditorBase
 {
+    public EditorBase()
+    {
+        // OnCancel fires when the manager light-dismisses the dropdown
+        // (outside click) or routes ESC to it. Clearing _activeFieldId is the
+        // existing "close dropdown" signal; SyncDropdownModalState below pops
+        // the layer when it sees the state change next frame.
+        _dropdownLayer.OnCancelAction = () =>
+        {
+            _activeFieldId = null;
+            Necroking.Game1.Popups.Pop(_dropdownLayer);
+        };
+    }
+
     // Colors
     public static readonly Color PanelBg = new(25, 25, 40, 240);
     public static readonly Color PanelHeader = new(40, 40, 65, 250);
@@ -85,6 +98,20 @@ public class EditorBase
     private bool _mouseOverEditorUI;
     public bool IsMouseOverUI => _mouseOverEditorUI;
     public void SetMouseOverUI() => _mouseOverEditorUI = true;
+
+    // Modal stack integration. The combo dropdown is a light-dismiss popup —
+    // outside click closes it and ESC closes it. The layer is shared across
+    // every combo in this EditorBase instance (only one can be open at a time
+    // because _activeFieldId is single-valued) and its Panel rect updates each
+    // frame as the dropdown draws. SyncDropdownModalState reconciles "is the
+    // dropdown open?" with "is the layer on Game1.Popups?" once per frame so
+    // we don't have to manually Push/Pop at every state-change site.
+    private readonly Necroking.UI.ActionModalLayer _dropdownLayer = new() { LightDismiss = true };
+    /// <summary>Hot-path setter the combo's draw code uses each frame to
+    /// publish its current screen rect. ContainsMouse on the layer reads this
+    /// directly, so a click anywhere outside it counts as "outside the
+    /// dropdown" for the manager's light-dismiss logic.</summary>
+    protected void SetDropdownRect(Microsoft.Xna.Framework.Rectangle r) => _dropdownLayer.Panel = r;
 
     // Text input state
     protected string? _activeFieldId;
@@ -230,6 +257,22 @@ public class EditorBase
         // Handle key repeat for text input
         if (_activeFieldId != null)
             HandleTextInput(gameTime);
+
+        // Reconcile the dropdown's IModalLayer presence with its open state.
+        // Single sync point means we don't have to chase every place that
+        // assigns _activeFieldId to keep Push/Pop in lockstep.
+        SyncDropdownModalState();
+    }
+
+    /// <summary>Push or pop <see cref="_dropdownLayer"/> on <see cref="Game1.Popups"/>
+    /// to mirror whether a combo dropdown is open. Cheap to call every frame —
+    /// hash-lookup inside the manager.</summary>
+    private void SyncDropdownModalState()
+    {
+        bool open = IsDropdownOpen;
+        bool onStack = Necroking.Game1.Popups.Contains(_dropdownLayer);
+        if (open && !onStack) Necroking.Game1.Popups.Push(_dropdownLayer);
+        else if (!open && onStack) Necroking.Game1.Popups.Pop(_dropdownLayer);
     }
 
     // === Drawing primitives ===
@@ -1095,6 +1138,11 @@ public class EditorBase
         // Use pre-computed DropRect from layout (same rect used for click detection)
         var dropRect = dd.DropRect;
 
+        // Publish the dropdown's screen rect so PopupManager's outside-click
+        // light-dismiss uses the correct hit area this frame. Combined panel:
+        // input row above + the dropdown list below = whole "active" area.
+        SetDropdownRect(Microsoft.Xna.Framework.Rectangle.Union(dd.InputRect, dropRect));
+
         // INF11: Shadow behind the dropdown for visual separation
         var shadowRect = new Rectangle(dropRect.X + 3, dropRect.Y + 3, dropRect.Width, dropRect.Height);
         DrawRect(shadowRect, new Color(0, 0, 0, 100));
@@ -1858,6 +1906,10 @@ public class EditorBase
 
     // === Confirmation Dialog ===
 
+    // Singleton layer for confirm dialogs — only one can be open per editor.
+    // Push on entry when isOpen=true, pop when buttons / ESC flip it to false.
+    private readonly Necroking.UI.ActionModalLayer _confirmDialogLayer = new() { LightDismiss = false };
+
     /// <summary>
     /// Draw a centered confirmation dialog with dark overlay.
     /// Returns true if Confirm is clicked. Sets isOpen to false on either button.
@@ -1865,7 +1917,14 @@ public class EditorBase
     /// </summary>
     public bool DrawConfirmDialog(string title, string message, ref bool isOpen)
     {
-        if (!isOpen) return false;
+        if (!isOpen)
+        {
+            // Caller decided to close between frames — make sure the modal
+            // stack doesn't think we're still here.
+            if (Necroking.Game1.Popups.Contains(_confirmDialogLayer))
+                Necroking.Game1.Popups.Pop(_confirmDialogLayer);
+            return false;
+        }
 
         // Set input layer to block all lower-layer interactions
         _inputLayer = 3;
@@ -1878,6 +1937,13 @@ public class EditorBase
         int dialogH = 160;
         int dx = (_screenW - dialogW) / 2;
         int dy = (_screenH - dialogH) / 2;
+
+        // Publish rect + register with the modal stack so PopupManager routes
+        // ESC here (consuming the key before Game1's ESC chain runs) and eats
+        // clicks outside the dialog.
+        _confirmDialogLayer.Panel = new Rectangle(dx, dy, dialogW, dialogH);
+        if (!Necroking.Game1.Popups.Contains(_confirmDialogLayer))
+            Necroking.Game1.Popups.Push(_confirmDialogLayer);
 
         // Dialog background
         DrawRect(new Rectangle(dx, dy, dialogW, dialogH), PanelBg);
@@ -1908,20 +1974,26 @@ public class EditorBase
         {
             confirmed = true;
             isOpen = false;
+            Necroking.Game1.Popups.Pop(_confirmDialogLayer);
         }
 
         if (DrawButton("Cancel", cancelX, btnY, btnW, btnH))
         {
             isOpen = false;
+            Necroking.Game1.Popups.Pop(_confirmDialogLayer);
         }
 
         // Restore input layer
         _inputLayer = savedLayer;
 
-        // Also close on Escape
+        // Also close on Escape — PopupManager has already consumed ESC for
+        // the manager-aware path. This direct read remains so the dialog
+        // closes its caller's ref-bool in the same frame instead of waiting
+        // a tick.
         if (_kb.IsKeyDown(Keys.Escape) && _prevKb.IsKeyUp(Keys.Escape))
         {
             isOpen = false;
+            Necroking.Game1.Popups.Pop(_confirmDialogLayer);
         }
 
         return confirmed;

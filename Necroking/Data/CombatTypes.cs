@@ -76,6 +76,12 @@ public class WeaponStats
     public bool HasArmorPiercing { get; set; }
     public bool HasArmorNegating { get; set; }
     public bool HasKnockdown { get; set; }
+
+    /// <summary>ID of the buff that contributed this weapon to the unit's effective
+    /// list, or empty for weapons that come from the UnitDef. Lets the buff-removal
+    /// path strip granted weapons without touching base-equipment slots that happen
+    /// to share an ID.</summary>
+    public string SourceBuffID { get; set; } = "";
 }
 
 public class ArmorStats

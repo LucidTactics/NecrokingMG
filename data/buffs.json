@@ -902,6 +902,94 @@
         "b": 130,
         "a": 110
       }
+    },
+    {
+      "id": "buff_wolf_pounce",
+      "name": "Pounce",
+      "duration": 0,
+      "effects": [],
+      "maxStacks": 1,
+      "intrinsic": true,
+      "grantedWeapons": ["wolf_pounce"]
+    },
+    {
+      "id": "buff_boar_charge",
+      "name": "Boar Charge",
+      "duration": 0,
+      "effects": [],
+      "maxStacks": 1,
+      "intrinsic": true,
+      "grantedWeapons": ["weapon_boar_charge"]
+    },
+    {
+      "id": "buff_bear_sweep",
+      "name": "Bear Sweep",
+      "duration": 0,
+      "effects": [],
+      "maxStacks": 1,
+      "intrinsic": true,
+      "grantedWeapons": ["weapon_bear_sweep"]
+    },
+    {
+      "id": "buff_corpse_meal",
+      "name": "Corpse Meal",
+      "duration": 0,
+      "effects": [
+        {
+          "type": "Add",
+          "stat": "MaxHP",
+          "value": 5
+        }
+      ],
+      "maxStacks": 1,
+      "intrinsic": true
+    },
+    {
+      "id": "buff_corpse_meal_improved",
+      "name": "Corpse Meal (Improved)",
+      "duration": 0,
+      "effects": [
+        {
+          "type": "Add",
+          "stat": "MaxHP",
+          "value": 5
+        },
+        {
+          "type": "Add",
+          "stat": "Strength",
+          "value": 1
+        }
+      ],
+      "maxStacks": 2,
+      "intrinsic": true
+    },
+    {
+      "id": "buff_monster_cap",
+      "name": "Monster Limit",
+      "duration": 0,
+      "effects": [
+        {
+          "type": "Add",
+          "stat": "MonsterCap",
+          "value": 1
+        }
+      ],
+      "maxStacks": 100,
+      "intrinsic": true
+    },
+    {
+      "id": "buff_human_cap",
+      "name": "Human Limit",
+      "duration": 0,
+      "effects": [
+        {
+          "type": "Add",
+          "stat": "HumanCap",
+          "value": 1
+        }
+      ],
+      "maxStacks": 100,
+      "intrinsic": true
     }
   ]
 }

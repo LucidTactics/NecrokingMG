@@ -30,7 +30,7 @@ namespace Necroking.Game;
 /// slot boxes / progress bar / button / X via primitives for tight pixel control
 /// (slot widget "Item Slot" is sized for the equipment grid, too large here).
 /// </summary>
-public class TableCraftMenuUI
+public class TableCraftMenuUI : Necroking.UI.IModalLayer
 {
     private const string PanelWidgetId = "TableCraftMenu";
 
@@ -103,6 +103,25 @@ public class TableCraftMenuUI
     public bool IsVisible => _visible;
     public int EnvIdx => _envIdx;
 
+    /// <summary>Skill-book state used to gate how many of the table's item slots
+    /// are actually surfaced — only the first <see cref="SkillBookState.PotionSlotsUnlocked"/>
+    /// slots draw and accept deposits, even if <c>def.ItemSlots</c> declares more.
+    /// Null = no gating (legacy / scenarios), which is equivalent to "all slots
+    /// available." Improved Monstrology bumps the unlocked count to 1.</summary>
+    private SkillBookState? _skillBook;
+    public void SetSkillBook(SkillBookState? bookState) { _skillBook = bookState; }
+
+    /// <summary>How many item slots this table actually shows right now —
+    /// clamped to <see cref="SkillBookState.PotionSlotsUnlocked"/>. Returns
+    /// <c>def.ItemSlots</c> if no skill book is wired (scenarios). Iterators
+    /// and Update / Draw paths use this in place of <c>def.ItemSlots</c>.</summary>
+    private int EffectiveItemSlots(EnvironmentObjectDef def)
+    {
+        if (_skillBook == null) return def.ItemSlots;
+        int unlocked = _skillBook.PotionSlotsUnlocked;
+        return def.ItemSlots < unlocked ? def.ItemSlots : unlocked;
+    }
+
     public void Init(RuntimeWidgetRenderer renderer, EnvironmentSystem envSystem,
         Inventory inventory, ItemRegistry items, PlayerResources resources,
         SpriteBatch batch, Texture2D pixel, SpriteFont? font)
@@ -134,18 +153,29 @@ public class TableCraftMenuUI
         // Initial position; Update() re-anchors every frame so the menu tracks
         // the table as the camera pans.
         RepositionAboveTable();
+        Necroking.Game1.Popups.Push(this);
     }
 
     public void Close()
     {
         _visible = false;
         _envIdx = -1;
+        Necroking.Game1.Popups.Pop(this);
     }
+
+    // === IModalLayer ===
+    // World-anchored popover near a craft table. Doesn't light-dismiss because
+    // the player wants to drop items into it from inventory (cross-popup
+    // interaction), but is non-blocking so gameplay continues underneath.
+    public bool LightDismiss => false;
+    public bool IsBlocking => false;
+    // ContainsMouse is the existing public method on this class.
+    public void OnCancel() => Close();
 
     /// <summary>Auto-size the panel def to fit the table's slot counts at current UI scale.</summary>
     private void ResizeToDef(EnvironmentObjectDef def)
     {
-        int slotsTotal = def.CorpseSlots + def.ItemSlots + 1; // +1 for essence display
+        int slotsTotal = def.CorpseSlots + EffectiveItemSlots(def) + 1; // +1 for essence display
         int contentW = slotsTotal * Scaled(SlotSize) + (slotsTotal - 1) * Scaled(SlotSpacing);
         _widgetW = Scaled(PadX) * 2 + contentW;
         _widgetH = Scaled(PadTop) + Scaled(SlotSize) + Scaled(LabelHeight) + Scaled(RowGap) + Scaled(ActionRowHeight) + Scaled(PadBottom);
@@ -246,7 +276,8 @@ public class TableCraftMenuUI
         // Right-click on table item slot returns the item to inventory.
         if (input.RightPressed)
         {
-            for (int i = 0; i < def.ItemSlots; i++)
+            int itemSlots = EffectiveItemSlots(def);
+            for (int i = 0; i < itemSlots; i++)
             {
                 var r = GetItemSlotRect(def, i);
                 if (r.Contains(mx, my) && !ts.ItemSlots[i].IsEmpty)
@@ -275,6 +306,17 @@ public class TableCraftMenuUI
     {
         if (!_visible || _envIdx < 0 || string.IsNullOrEmpty(itemId)) return false;
         if (_inventory.GetItemCount(itemId) <= 0) return false;
+        // Respect the skill-gated cap: a table with 2 declared item slots is
+        // limited to the first <PotionSlotsUnlocked> until Improved Monstrology
+        // raises that count. LoadItemIntoTable's "first empty slot" doesn't
+        // know about the gate, so check before calling.
+        var def = _envSystem.Defs[_envSystem.GetObject(_envIdx).DefIndex];
+        var ts = _envSystem.GetTableState(_envIdx);
+        int allowed = EffectiveItemSlots(def);
+        bool spaceAvailable = false;
+        for (int i = 0; i < allowed && i < ts.ItemSlots.Length; i++)
+            if (ts.ItemSlots[i].IsEmpty) { spaceAvailable = true; break; }
+        if (!spaceAvailable) return false;
         int slot = Game.TableSystem.LoadItemIntoTable(_envSystem, _envIdx, itemId);
         if (slot < 0) return false;
         _inventory.RemoveItem(itemId, 1);
@@ -343,7 +385,7 @@ public class TableCraftMenuUI
 
     private Rectangle GetEssenceSlotRect(EnvironmentObjectDef def)
     {
-        int idx = def.CorpseSlots + def.ItemSlots;
+        int idx = def.CorpseSlots + EffectiveItemSlots(def);
         int s = Scaled(SlotSize);
         return new(SlotRowX + idx * (s + Scaled(SlotSpacing)), SlotRowY, s, s);
     }
@@ -399,8 +441,10 @@ public class TableCraftMenuUI
                 DrawUnitIconCallback?.Invoke(ts.CorpseSlots[i].SourceUnitDefID, r);
             }
         }
-        // Item slots
-        for (int i = 0; i < def.ItemSlots; i++)
+        // Item slots — clamped to skill-unlocked count so locked potion slots
+        // disappear entirely until Improved Monstrology surfaces them.
+        int itemSlotCount = EffectiveItemSlots(def);
+        for (int i = 0; i < itemSlotCount; i++)
         {
             var r = GetItemSlotRect(def, i);
             DrawSlotBackground(r, ts.ItemSlots[i].IsEmpty);
