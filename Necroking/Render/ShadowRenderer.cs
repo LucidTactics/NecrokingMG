@@ -39,6 +39,7 @@ public class ShadowRenderer
         SpriteAtlas[] atlases,
         EnvironmentSystem envSystem,
         FogOfWarSystem fogOfWar,
+        GroundSystem? groundSystem = null,
         DeathFogSystem? deathFog = null)
     {
         var shadow = gameData.Settings.Shadow;
@@ -47,7 +48,7 @@ public class ShadowRenderer
         bool useShader = (UnitShadowMode)shadow.UnitShadowMode == UnitShadowMode.Shader;
 
         if (useShader)
-            DrawShaderShadows(device, spriteBatch, glowTex, camera, renderer, sim, gameData, unitAnims, atlases, envSystem, shadow, fogOfWar, deathFog);
+            DrawShaderShadows(device, spriteBatch, glowTex, camera, renderer, sim, gameData, unitAnims, atlases, envSystem, shadow, fogOfWar, groundSystem, deathFog);
         else
             DrawEllipseShadows(spriteBatch, glowTex, camera, renderer, sim, gameData, envSystem, shadow, fogOfWar);
     }
@@ -182,6 +183,7 @@ public class ShadowRenderer
         EnvironmentSystem envSystem,
         ShadowSettings shadow,
         FogOfWarSystem fogOfWar,
+        GroundSystem? groundSystem,
         DeathFogSystem? deathFog)
     {
         // Projected shadows as skewed parallelogram quads (matching C++ implementation).
@@ -236,15 +238,10 @@ public class ShadowRenderer
             var srcRect = fr.Frame.Value.Rect;
             float destW = srcRect.Width * scale;
             float destH = srcRect.Height * scale;
-            float shadowH = destH * shadow.Squash;
 
             float anchorX = fr.FlipX ? (1f - fr.Frame.Value.PivotX) : fr.Frame.Value.PivotX;
             float leftOff = destW * anchorX;
             float rightOff = destW * (1f - anchorX);
-
-            float swLen = worldH * shadow.LengthScale * camera.Zoom;
-            float sdx = sdxDir * swLen;
-            float sdy = sdyDir * swLen * camera.YRatio;
 
             // Feet anchor follows the rendered sprite so the shadow lunges with the unit.
             var feetSp = renderer.WorldToScreen(sim.Units[i].RenderPos, 0f, camera);
@@ -259,9 +256,43 @@ public class ShadowRenderer
             float v1 = (srcRect.Y + srcRect.Height) / texH;
             if (fr.FlipX) { (u0, u1) = (u1, u0); }
 
-            DrawShadowQuad(device, frameTex, feetSp.X, feetSp.Y,
-                leftOff, rightOff, shadowH, sdx, sdy,
-                u0, v0, u1, v1, shadowColor);
+            // Wading + shadow: WadingState provides the same parameters the
+            // sprite shader uses, so the silhouette crop stays in sync with
+            // the on-sprite waterline cut.
+            var wading = WadingState.Compute(
+                sim.Units[i].RenderPos, sim.Units[i].FacingAngle,
+                fr.Frame.Value, unitDef, animData.Ctrl, groundSystem, camera.YRatio);
+            var (visibleTopV, visibleBottomV) = wading.GetVisibleBodyRange(fr.Frame.Value);
+
+            // Quadrupeds in water fade their silhouette out with waterness.
+            // The projected-silhouette shadow overlaps the body badly when
+            // wading; the flat-ellipse alternative didn't look great either.
+            // For now, fade to invisible — no shadow at full depth, no shadow
+            // pop at the shore either.
+            Color shadowColorEff = shadowColor;
+            if (unitDef.IsQuadruped && wading.Active)
+            {
+                float alpha01 = MathHelper.Clamp(1f - wading.Waterness, 0f, 1f);
+                if (alpha01 <= 0.01f) continue;   // fully faded — skip the draw
+                byte a = (byte)Math.Clamp((int)(shadowColor.A * alpha01), 0, 255);
+                shadowColorEff = new Color(shadowColor.R, shadowColor.G, shadowColor.B, a);
+            }
+
+            // --- Everyone else: projected silhouette, cropped to body bbox ---
+            float v0Src = v0, v1Src = v1;
+            v0 = v0Src + (v1Src - v0Src) * visibleTopV;
+            v1 = v0Src + (v1Src - v0Src) * visibleBottomV;
+
+            float visibleVSpan = visibleBottomV - visibleTopV;
+            float anchorY = feetSp.Y - destH * (1f - visibleBottomV);
+            float swLen = worldH * visibleVSpan * shadow.LengthScale * camera.Zoom;
+            float sdx = sdxDir * swLen;
+            float sdy = sdyDir * swLen * camera.YRatio;
+            float shadowHCropped = destH * visibleVSpan * shadow.Squash;
+
+            DrawShadowQuad(device, frameTex, feetSp.X, anchorY,
+                leftOff, rightOff, shadowHCropped, sdx, sdy,
+                u0, v0, u1, v1, shadowColorEff);
         }
 
         // Environment object shadows (skip collected foragables)

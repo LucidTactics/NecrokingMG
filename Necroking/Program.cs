@@ -11,6 +11,7 @@ public static class LaunchArgs
     public static int Timeout = 30;
     public static int Speed = 1;
     public static bool Headless;
+    public static bool NoVsync;
     public static Color? BgColor;
     public static int ResolutionW;
     public static int ResolutionH;
@@ -35,6 +36,9 @@ public static class LaunchArgs
                     break;
                 case "--headless":
                     Headless = true;
+                    break;
+                case "--no-vsync":
+                    NoVsync = true;
                     break;
                 case "--unit" when i + 1 < args.Length:
                     Unit = args[++i];

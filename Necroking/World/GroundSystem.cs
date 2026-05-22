@@ -96,11 +96,30 @@ public class GroundSystem
         _vertexMap = new byte[VertexW * VertexH];
     }
 
+    /// <summary>Bool-per-type-index, true if that ground type's MovementTerrain
+    /// is a water variant. Refreshed by <see cref="RebuildIsWaterCache"/>
+    /// whenever types are added/removed/cleared. Hot path: SampleWaterness
+    /// does 4 of these lookups per call, and SampleWaternessSmoothed does
+    /// 5×4 per call — caching this saves a property + enum compare per lookup.</summary>
+    private bool[] _isWaterByTypeIdx = Array.Empty<bool>();
+
     public int AddGroundType(GroundTypeDef def)
     {
         _types.Add(def);
         _textures.Add(null);
+        RebuildIsWaterCache();
         return _types.Count - 1;
+    }
+
+    private void RebuildIsWaterCache()
+    {
+        if (_isWaterByTypeIdx.Length != _types.Count)
+            _isWaterByTypeIdx = new bool[_types.Count];
+        for (int i = 0; i < _types.Count; i++)
+        {
+            var t = _types[i].MovementTerrain;
+            _isWaterByTypeIdx[i] = (t == TerrainType.ShallowWater || t == TerrainType.DeepWater);
+        }
     }
 
     public int TypeCount => _types.Count;
@@ -241,6 +260,7 @@ public class GroundSystem
         if (index < 0 || index >= _types.Count) return;
         _types.RemoveAt(index);
         _textures.RemoveAt(index);
+        RebuildIsWaterCache();
         // Remap vertex map
         for (int i = 0; i < _vertexMap.Length; i++)
         {
@@ -249,7 +269,7 @@ public class GroundSystem
         }
     }
 
-    public void ClearTypes() { _types.Clear(); _textures.Clear(); }
+    public void ClearTypes() { _types.Clear(); _textures.Clear(); RebuildIsWaterCache(); }
 
     public void LoadTextures(GraphicsDevice device)
     {
@@ -329,6 +349,57 @@ public class GroundSystem
         return true;
     }
 
+    /// <summary>Bilinear sample of how "in water" a world position is, 0..1.
+    /// Each of the 4 surrounding vertices contributes 0 (not water) or 1
+    /// (water — type's MovementTerrain is ShallowWater or DeepWater); the
+    /// returned value is the bilerp at the fractional position. Used to
+    /// smoothly transition wading depth as a unit crosses the shoreline so
+    /// the waterline rises on the body rather than snapping to full depth.
+    ///
+    /// Returns 0 if the position is outside the map.</summary>
+    public float SampleWaterness(Vec2 worldPos)
+    {
+        if (_worldW <= 0 || _worldH <= 0 || _types.Count == 0) return 0f;
+        float u = worldPos.X;
+        float v = worldPos.Y;
+        int x0 = (int)MathF.Floor(u);
+        int y0 = (int)MathF.Floor(v);
+        if (x0 < 0 || x0 >= _worldW || y0 < 0 || y0 >= _worldH) return 0f;
+        float fx = u - x0;
+        float fy = v - y0;
+
+        int vw = VertexW;
+        // Read all 4 vertex types and convert to 1/0 by water-ness.
+        float w00 = IsWaterTypeIdx(_vertexMap[y0 * vw + x0]) ? 1f : 0f;
+        float w10 = IsWaterTypeIdx(_vertexMap[y0 * vw + (x0 + 1)]) ? 1f : 0f;
+        float w01 = IsWaterTypeIdx(_vertexMap[(y0 + 1) * vw + x0]) ? 1f : 0f;
+        float w11 = IsWaterTypeIdx(_vertexMap[(y0 + 1) * vw + (x0 + 1)]) ? 1f : 0f;
+
+        float wTop = w00 * (1f - fx) + w10 * fx;
+        float wBot = w01 * (1f - fx) + w11 * fx;
+        return wTop * (1f - fy) + wBot * fy;
+    }
+
+    private bool IsWaterTypeIdx(byte typeIdx) =>
+        typeIdx < _isWaterByTypeIdx.Length && _isWaterByTypeIdx[typeIdx];
+
+    /// <summary>Like <see cref="SampleWaterness"/> but averages over a small
+    /// kernel (centre + 4 cardinal offsets at <paramref name="kernelRadius"/>
+    /// world units). Spreads the 0→1 transition across roughly
+    /// 2 × kernelRadius world units instead of the ~0.5-unit span you get
+    /// from a single bilinear sample — so a unit walking onto a shore feels
+    /// like it's wading deeper gradually over multiple tiles, not snapping
+    /// to full depth as soon as it clears the shoreline.</summary>
+    public float SampleWaternessSmoothed(Vec2 worldPos, float kernelRadius = 1f)
+    {
+        float w0 = SampleWaterness(worldPos);
+        float wE = SampleWaterness(new Vec2(worldPos.X + kernelRadius, worldPos.Y));
+        float wW = SampleWaterness(new Vec2(worldPos.X - kernelRadius, worldPos.Y));
+        float wS = SampleWaterness(new Vec2(worldPos.X, worldPos.Y + kernelRadius));
+        float wN = SampleWaterness(new Vec2(worldPos.X, worldPos.Y - kernelRadius));
+        return (w0 + wE + wW + wS + wN) * 0.2f;
+    }
+
     /// <summary>Resolve each tile's pathfinding TerrainType from the 4 corner
     /// vertex ground types: tile gets the highest-cost terrain of its 4 corners
     /// (worst-of-4). Walls already stamped into the grid are left alone — the
@@ -336,19 +407,32 @@ public class GroundSystem
     /// Safe to call repeatedly (overwrites all non-wall tiles).</summary>
     public void StampTerrainOnto(TileGrid grid)
     {
-        if (_worldW <= 0 || _worldH <= 0 || _types.Count == 0) return;
-        if (grid.Width != _worldW || grid.Height != _worldH) return;
+        if (_worldW <= 0 || _worldH <= 0 || _types.Count == 0)
+        {
+            DebugLog.Log("startup", $"  StampTerrainOnto: skipped (worldW={_worldW} worldH={_worldH} types={_types.Count})");
+            return;
+        }
+        if (grid.Width != _worldW || grid.Height != _worldH)
+        {
+            DebugLog.Log("startup", $"  StampTerrainOnto: skipped (grid {grid.Width}x{grid.Height} != ground {_worldW}x{_worldH})");
+            return;
+        }
 
         // Cache type-index → TerrainType (and its cost) so we don't switch per vertex.
         int n = _types.Count;
         var terrainPerType = new TerrainType[n];
         var costPerType = new float[n];
+        var typeNameTerrain = new System.Text.StringBuilder();
         for (int i = 0; i < n; i++)
         {
             terrainPerType[i] = _types[i].MovementTerrain;
             costPerType[i] = TerrainCosts.GetCost(terrainPerType[i]);
+            if (typeNameTerrain.Length > 0) typeNameTerrain.Append(", ");
+            typeNameTerrain.Append($"{i}={_types[i].Id}->{terrainPerType[i]}");
         }
+        DebugLog.Log("startup", $"  StampTerrainOnto type map: {typeNameTerrain}");
 
+        int countOpen = 0, countRough = 0, countShallow = 0, countDeep = 0, countWall = 0;
         int vw = VertexW;
         for (int ty = 0; ty < _worldH; ty++)
         {
@@ -357,7 +441,7 @@ public class GroundSystem
             for (int tx = 0; tx < _worldW; tx++)
             {
                 // Don't clobber walls written by WallSystem.
-                if (grid.GetTerrain(tx, ty) == TerrainType.Wall) continue;
+                if (grid.GetTerrain(tx, ty) == TerrainType.Wall) { countWall++; continue; }
 
                 byte v00 = _vertexMap[row0 + tx];
                 byte v10 = _vertexMap[row0 + tx + 1];
@@ -374,8 +458,16 @@ public class GroundSystem
                     if (cc > worstCost) { worstCost = cc; worst = terrainPerType[v]; }
                 }
                 grid.SetTerrain(tx, ty, worst);
+                switch (worst)
+                {
+                    case TerrainType.Open: countOpen++; break;
+                    case TerrainType.Rough: countRough++; break;
+                    case TerrainType.ShallowWater: countShallow++; break;
+                    case TerrainType.DeepWater: countDeep++; break;
+                }
             }
         }
+        DebugLog.Log("startup", $"  StampTerrainOnto wrote: Open={countOpen} Rough={countRough} ShallowWater={countShallow} DeepWater={countDeep} (Wall left alone={countWall})");
     }
 
     public Texture2D? CreateVertexMapTexture(GraphicsDevice device)

@@ -4374,6 +4374,17 @@ public class MapEditorWindow
                     writer.WriteString("corruptedTypeId", gt.CorruptedTypeId);
                 if (gt.MovementTerrain != Necroking.World.TerrainType.Open)
                     writer.WriteString("movementTerrain", gt.MovementTerrain.ToString());
+                // Save tintColor when it diverges from white so PNGs stay the
+                // authoritative palette source for un-tinted types.
+                if (gt.TintColor != Microsoft.Xna.Framework.Color.White)
+                {
+                    writer.WriteStartObject("tintColor");
+                    writer.WriteNumber("r", gt.TintColor.R);
+                    writer.WriteNumber("g", gt.TintColor.G);
+                    writer.WriteNumber("b", gt.TintColor.B);
+                    if (gt.TintColor.A != 255) writer.WriteNumber("a", gt.TintColor.A);
+                    writer.WriteEndObject();
+                }
                 writer.WriteEndObject();
             }
             writer.WriteEndArray();

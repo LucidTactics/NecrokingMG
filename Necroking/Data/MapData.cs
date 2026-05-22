@@ -52,6 +52,14 @@ public static class MapData
                     {
                         def.MovementTerrain = parsed;
                     }
+                    // Optional per-type tint (multiplied over the sampled texture in the
+                    // shader). {r,g,b[,a]} object or [r,g,b[,a]] array, 0..255.
+                    if (gt.TryGetProperty("tintColor", out var tcEl))
+                    {
+                        byte tr = 255, tg = 255, tb = 255, ta = 255;
+                        ParseTintInto(tcEl, ref tr, ref tg, ref tb, ref ta);
+                        def.TintColor = new Microsoft.Xna.Framework.Color(tr, tg, tb, ta);
+                    }
                     ground.AddGroundType(def);
                 }
                 DebugLog.Log("startup", $"  Ground types: {ground.TypeCount}");

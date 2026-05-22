@@ -160,6 +160,31 @@ public class UnitDef : IHasId
     [JsonPropertyName("radius")] public float Radius { get; set; } = 0.495f;
     [JsonPropertyName("spriteScale")] public float SpriteScale { get; set; } = 1.0f;
     [JsonPropertyName("spriteWorldHeight")] public float SpriteWorldHeight { get; set; } = 1.8f;
+    /// <summary>Biped fallback: how far up the visible body the water cuts
+    /// when this unit is wading. 0 = waterline at the feet, 1 = top of body.
+    /// Default 0.35 reproduces the old hardcoded waterline. Only consulted
+    /// when <see cref="IsQuadruped"/> is false AND
+    /// <see cref="WadingFractionByDirection"/> is null — quadrupeds use
+    /// <see cref="Render.WadingDefaults.QuadrupedBottom"/> instead.</summary>
+    [JsonPropertyName("wadingWaterlineFraction")] public float WadingWaterlineFraction { get; set; } = 0.35f;
+
+    /// <summary>Optional per-cardinal-direction bottom waterline override.
+    /// LEAVE NULL for typical units — quadrupeds automatically get
+    /// <see cref="Render.WadingDefaults.QuadrupedBottom"/> (wolf-tuned values
+    /// that look right on most four-legged sprites), bipeds use the scalar
+    /// <see cref="WadingWaterlineFraction"/>. Only set this when a specific
+    /// unit's body proportions don't match the default — e.g. very tall
+    /// quadrupeds like horses, or stubby ones like badgers.
+    /// Smoothly interpolates between cardinals based on facing angle.</summary>
+    [JsonPropertyName("wadingFractionByDirection")] public DirectionalFractions? WadingFractionByDirection { get; set; }
+
+    /// <summary>Optional per-cardinal-direction top waterline override (for
+    /// "back submerged" poses). LEAVE NULL for typical units — quadrupeds
+    /// automatically get <see cref="Render.WadingDefaults.QuadrupedTop"/>
+    /// (hides the wolf's back when facing the camera), bipeds get no top
+    /// cut. Set explicitly only if the unit needs a different profile, or
+    /// set to all zeros to disable the default top cut on a quadruped.</summary>
+    [JsonPropertyName("wadingTopFractionByDirection")] public DirectionalFractions? WadingTopFractionByDirection { get; set; }
     [JsonPropertyName("color")] public ColorJson? Color { get; set; }
     [JsonPropertyName("sprite")] public SpriteRef? Sprite { get; set; }
     [JsonPropertyName("stats")] public UnitStatsJson? Stats { get; set; }
@@ -338,6 +363,38 @@ public class UnitDef : IHasId
     /// Marked [JsonIgnore] so editor-save passes don't try to serialize it.</summary>
     [JsonIgnore]
     public Render.UnitSpriteData? SpriteData { get; set; }
+}
+
+/// <summary>Four values keyed by cardinal compass direction. Used by per-
+/// direction wading config: lerps between the two nearest cardinals based on
+/// the unit's facing angle so transitions are smooth.</summary>
+public class DirectionalFractions
+{
+    [JsonPropertyName("n")] public float N { get; set; }
+    [JsonPropertyName("e")] public float E { get; set; }
+    [JsonPropertyName("s")] public float S { get; set; }
+    [JsonPropertyName("w")] public float W { get; set; }
+
+    /// <summary>Interpolate the four values by facing angle. Necroking
+    /// convention: 0° = E, 90° = S, 180° = W, 270° = N. Linear blend between
+    /// the two nearest cardinals.</summary>
+    public float Sample(float facingDeg)
+    {
+        // Normalize to [0, 360).
+        float a = facingDeg % 360f;
+        if (a < 0f) a += 360f;
+
+        // Quartile [0, 4): 0=E, 1=S, 2=W, 3=N.
+        float q = a / 90f;
+        int lo = (int)MathF.Floor(q) % 4;
+        int hi = (lo + 1) % 4;
+        float t = q - MathF.Floor(q);
+
+        // Lookup table in quartile order.
+        float vLo = lo switch { 0 => E, 1 => S, 2 => W, 3 => N, _ => E };
+        float vHi = hi switch { 0 => E, 1 => S, 2 => W, 3 => N, _ => E };
+        return Microsoft.Xna.Framework.MathHelper.Lerp(vLo, vHi, t);
+    }
 }
 
 public class UnitRegistry : RegistryBase<UnitDef>

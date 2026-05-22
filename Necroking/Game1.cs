@@ -152,6 +152,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
     private Microsoft.Xna.Framework.Graphics.Effect? _groundEffect;
     private Microsoft.Xna.Framework.Graphics.Effect? _dissolveTreeEffect;
     private Microsoft.Xna.Framework.Graphics.Effect? _outlineFlatEffect;
+    private Microsoft.Xna.Framework.Graphics.Effect? _wadingEffect;
     private Microsoft.Xna.Framework.Graphics.Effect? _hdrIntensityEffect;
     private Microsoft.Xna.Framework.Graphics.Effect? _hdrSpriteEffect;
     private Texture2D? _groundVertexMapTex;
@@ -201,6 +202,20 @@ public class Game1 : Microsoft.Xna.Framework.Game
     private KeyboardState _prevKb;
     private MouseState _prevMouse;
     private float _rawDt;
+
+    /// <summary>F2 — overlay raw waterness, computed waterline V, slope, and
+    /// the body-bbox bounds on each wading unit. Tuning helper for the per-
+    /// direction WadingFractionByDirection values.</summary>
+    private bool _waterDebug;
+
+    // Per-frame perf timers — populated each Draw, smoothed via EMA for the
+    // HUD readout so the numbers don't jitter. Stale frames keep the EMA
+    // value so a paused game shows the last working number.
+    private readonly System.Diagnostics.Stopwatch _drawStopwatch = new();
+    private readonly System.Diagnostics.Stopwatch _groundDrawStopwatch = new();
+    private double _drawMsAvg;
+    private double _groundMsAvg;
+    private double _gpuPresentMsAvg;
     private readonly InputState _input = new();
     private readonly Necroking.UI.PopupManager _popups = new();
     /// <summary>Process-wide accessor — popups call <c>Game1.Popups.Push(this)</c>
@@ -314,6 +329,15 @@ public class Game1 : Microsoft.Xna.Framework.Game
             _graphics.PreferredBackBufferWidth = LaunchArgs.ResolutionW > 0 ? LaunchArgs.ResolutionW : 320;
             _graphics.PreferredBackBufferHeight = LaunchArgs.ResolutionH > 0 ? LaunchArgs.ResolutionH : 240;
             _graphics.IsFullScreen = false;
+        }
+
+        // Unlock frame-rate up front (must happen before GraphicsDevice is created
+        // — toggling SynchronizeWithVerticalRetrace mid-run is unreliable on the
+        // DesktopGL backend). Lets benchmark scenarios measure raw GPU throughput.
+        if (LaunchArgs.NoVsync)
+        {
+            _graphics.SynchronizeWithVerticalRetrace = false;
+            IsFixedTimeStep = false;
         }
     }
 
@@ -1193,11 +1217,27 @@ public class Game1 : Microsoft.Xna.Framework.Game
             _groundSystem.AddGroundType(new World.GroundTypeDef { Id = "grass", Name = "Grass", TexturePath = "assets/Environment/Ground/GroundGrass1.png" });
             _groundSystem.AddGroundType(new World.GroundTypeDef { Id = "dirt", Name = "Dirt", TexturePath = "assets/Environment/Ground/GroundDirt1.png" });
             _groundSystem.AddGroundType(new World.GroundTypeDef { Id = "cobblestone", Name = "Cobblestone", TexturePath = "assets/Environment/Ground/GroundCobblestone1.png" });
+            _groundSystem.AddGroundType(new World.GroundTypeDef { Id = "shallow_water", Name = "Shallow Water", TexturePath = "assets/Environment/Ground/ShallowWater.png", MovementTerrain = World.TerrainType.ShallowWater });
+            _groundSystem.AddGroundType(new World.GroundTypeDef { Id = "deep_water", Name = "Deep Water", TexturePath = "assets/Environment/Ground/DeepWater.png", MovementTerrain = World.TerrainType.DeepWater });
             _groundSystem.FillAll(0); // Default to grass
+            scenario.GroundSystem = _groundSystem;
+            // Scenario.OnInit may paint additional types into the vertex map;
+            // we (re)build the vertex map texture AFTER OnInit (see below).
             _groundSystem.LoadTextures(GraphicsDevice);
             _groundVertexMapTex = _groundSystem.CreateVertexMapTexture(GraphicsDevice);
             DebugLog.Log("scenario", $"Ground setup: types={_groundSystem.TypeCount}, vertexMap={(_groundVertexMapTex != null ? "OK" : "NONE")}, effect={(_groundEffect != null ? "OK" : "NONE")}");
         }
+
+        // Benchmark mode: unlock framerate so GPU cost shows up in the timing.
+        if (scenario.BenchmarkMode)
+        {
+            IsFixedTimeStep = false;
+            _graphics.SynchronizeWithVerticalRetrace = false;
+            _graphics.ApplyChanges();
+        }
+        // Mirror current state back so the scenario can verify post-OnInit.
+        scenario.VsyncEnabled = _graphics.SynchronizeWithVerticalRetrace;
+        scenario.FixedTimeStepEnabled = IsFixedTimeStep;
 
         // Setup grass data for scenarios that want it
         if (scenario.WantsGrass)
@@ -1263,6 +1303,16 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
         // Reload env textures in case the scenario added new defs
         _envSystem.LoadTextures(GraphicsDevice);
+
+        // Rebuild the vertex map texture if the scenario painted ground in OnInit.
+        if (scenario.WantsGround)
+        {
+            _groundSystem.LoadTextures(GraphicsDevice);
+            _groundVertexMapTex?.Dispose();
+            _groundVertexMapTex = _groundSystem.CreateVertexMapTexture(GraphicsDevice);
+            _groundSystem.StampTerrainOnto(_sim.Grid);
+            _sim.RebuildPathfinder();
+        }
 
         // Wire up UnitEditorAccessor for AnimButtonTestScenario
         if (scenario is Scenario.Scenarios.AnimButtonTestScenario animTest)
@@ -1797,6 +1847,12 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
         try { _outlineFlatEffect = Content.Load<Microsoft.Xna.Framework.Graphics.Effect>("OutlineFlat"); }
         catch (Exception ex) { _outlineFlatEffect = null; DebugLog.Log("startup", $"OutlineFlat not loaded: {ex.Message}"); }
+        try {
+            _wadingEffect = Content.Load<Microsoft.Xna.Framework.Graphics.Effect>("Wading");
+            var pnames = string.Join(",", _wadingEffect.Parameters.Select(p => p.Name));
+            DebugLog.Log("startup", $"Wading loaded. params=[{pnames}]");
+        }
+        catch (Exception ex) { _wadingEffect = null; DebugLog.Log("startup", $"Wading NOT loaded: {ex.Message}"); }
         try { _hdrIntensityEffect = Content.Load<Microsoft.Xna.Framework.Graphics.Effect>("HdrIntensity"); }
         catch (Exception ex) { _hdrIntensityEffect = null; DebugLog.Log("startup", $"HdrIntensity not loaded: {ex.Message}"); }
         try
@@ -1911,7 +1967,15 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // main-menu, etc. — because we react to the state change, not the
         // closing action itself.
         if (_prevMenuState == MenuState.MapEditor && _menuState != MenuState.MapEditor)
+        {
+            // Re-derive pathfinding terrain from the (possibly re-painted)
+            // vertex map BEFORE the env-driven rebuild — otherwise newly
+            // painted shallow/deep water tiles won't have their cost field
+            // updated and units would walk through deep water until the next
+            // map load.
+            _groundSystem.StampTerrainOnto(_sim.Grid);
             _envSystem.OnCollisionsDirty?.Invoke();
+        }
         _prevMenuState = _menuState;
 
         _rawDt = (float)gameTime.ElapsedGameTime.TotalSeconds;
@@ -2032,6 +2096,10 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // Check if any editor text field is active (persists from previous frame, safe to read before UpdateInput)
         bool anyTextInputActive = (_editorUi != null && _editorUi.IsTextInputActive)
             || (_menuState == MenuState.UIEditor && _uiEditor.IsTextInputActive);
+
+        // --- F2 water debug toggle ---
+        if (!anyTextInputActive && _input.WasKeyPressed(Keys.F2))
+            _waterDebug = !_waterDebug;
 
         // --- F5 death-fog debug overlay (F9 was requested but is taken by the
         // unit editor toggle; F5 was free) ---
@@ -4437,6 +4505,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
     protected override void Draw(GameTime gameTime)
     {
+        _drawStopwatch.Restart();
         int screenW = GraphicsDevice.Viewport.Width;
         int screenH = GraphicsDevice.Viewport.Height;
 
@@ -4503,7 +4572,21 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
         // --- Ground ---
         if (_activeScenario == null || _activeScenario.WantsGround)
+        {
             DrawGround();
+            // Perf scenarios can ask Game1 to redraw the ground N extra times to
+            // stress the GPU past the 16.67ms vsync budget. The redraws happen
+            // BEFORE the rest of the scene so they overwrite each other; only the
+            // last write contributes visually.
+            if (_activeScenario != null && _activeScenario.ExtraGroundDrawsPerFrame > 0
+                && _groundEffect != null && _groundVertexMapTex != null && _groundSystem.TypeCount > 0)
+            {
+                int worldW2 = _groundSystem.WorldW > 0 ? _groundSystem.WorldW : WorldSize;
+                int worldH2 = _groundSystem.WorldH > 0 ? _groundSystem.WorldH : WorldSize;
+                for (int e = 0; e < _activeScenario.ExtraGroundDrawsPerFrame; e++)
+                    DrawGroundShader(worldW2, worldH2);
+            }
+        }
 
         // --- Roads ---
         DrawRoads();
@@ -4534,7 +4617,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // Grass is no longer drawn here — tufts are merged into the unit Y-sort
         // inside DrawUnitsAndObjects so they can render in front of / behind
         // units based on world Y.
-        _shadowRenderer.Draw(GraphicsDevice, _spriteBatch, _glowTex, _camera, _renderer, _sim, _gameData, _unitAnims, _atlases, _envSystem, _fogOfWar, _deathFog);
+        _shadowRenderer.Draw(GraphicsDevice, _spriteBatch, _glowTex, _camera, _renderer, _sim, _gameData, _unitAnims, _atlases, _envSystem, _fogOfWar, _groundSystem, _deathFog);
 
         // --- Corpses ---
         DrawCorpses();
@@ -4881,7 +4964,12 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
         if (_font != null && showUI)
         {
-            string dbg = $"Zoom:{_camera.Zoom:F0} Pos:({_camera.Position.X:F0},{_camera.Position.Y:F0}) Speed:{_timeScale:F1}x FPS:{(_rawDt > 0 ? 1f / _rawDt : 0):F0}";
+            double frameMs = _rawDt > 0 ? _rawDt * 1000.0 : 0.0;
+            double simMs = _sim.LastTickMs;
+            // gpuish: total frame minus CPU portions ≈ what the GPU + vsync is
+            // costing us. Useful as a quick "are we GPU bound?" gauge.
+            double gpuish = System.Math.Max(0, frameMs - _drawMsAvg - simMs);
+            string dbg = $"Zoom:{_camera.Zoom:F0} Pos:({_camera.Position.X:F0},{_camera.Position.Y:F0}) Speed:{_timeScale:F1}x FPS:{(_rawDt > 0 ? 1f / _rawDt : 0):F0} | frame:{frameMs:F1}ms sim:{simMs:F2} draw:{_drawMsAvg:F2} ground:{_groundMsAvg:F2} present:{_gpuPresentMsAvg:F2} gpuish:{gpuish:F2}";
             DrawText(_smallFont, dbg, new Vector2(10, screenH - 18), new Color(120, 120, 120));
         }
 
@@ -4891,10 +4979,35 @@ public class Game1 : Microsoft.Xna.Framework.Game
             string label = $"[F8] Collision Debug: {DebugDraw.GetModeLabel(_collisionDebugMode)}";
             DrawText(_smallFont, label, new Vector2(10, screenH - 36), new Color(255, 200, 80));
         }
+        if (_waterDebug && _smallFont != null)
+        {
+            DrawText(_smallFont, "[F2] Water Debug", new Vector2(10, screenH - 54), new Color(120, 220, 255));
+        }
 
         _spriteBatch.End();
 
+        _drawStopwatch.Stop();
+        // EMA so the HUD doesn't jitter frame-to-frame.
+        const double EmaAlpha = 0.1;
+        double drawMs = _drawStopwatch.Elapsed.TotalMilliseconds;
+        _drawMsAvg = _drawMsAvg * (1.0 - EmaAlpha) + drawMs * EmaAlpha;
+
+        // Feed perf scenarios raw per-frame samples (EMA hides bench detail).
+        if (_activeScenario is Scenario.Scenarios.PerfWaterScenario perf)
+        {
+            perf.LastDrawMs = drawMs;
+            perf.LastFrameMs = _rawDt * 1000.0;
+        }
+
+        // Time the Present()/blit done by base.Draw — anything that doesn't
+        // overlap with CPU work shows up here. Present blocks until the GPU
+        // can accept the frame, so this approximates GPU+vsync wait time.
+        var presentSw = System.Diagnostics.Stopwatch.StartNew();
         base.Draw(gameTime);
+        presentSw.Stop();
+        _gpuPresentMsAvg = _gpuPresentMsAvg * (1.0 - EmaAlpha)
+                         + presentSw.Elapsed.TotalMilliseconds * EmaAlpha;
+        return;
 
         // Handle deferred screenshots from scenarios
         if (_activeScenario?.DeferredScreenshot != null)
@@ -4971,6 +5084,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
     private void DrawGroundShader(int worldW, int worldH)
     {
+        _groundDrawStopwatch.Restart();
         // End the current SpriteBatch and start a new one with the ground shader
         _spriteBatch.End();
 
@@ -4984,6 +5098,23 @@ public class Game1 : Microsoft.Xna.Framework.Game
         _groundEffect.Parameters["TypeWarpStrength"]?.SetValue(_groundSystem.TypeWarpStrength);
         _groundEffect.Parameters["UvWarpAmp"]?.SetValue(_groundSystem.UvWarpAmp);
         _groundEffect.Parameters["UvWarpFreq"]?.SetValue(_groundSystem.UvWarpFreq);
+        _groundEffect.Parameters["Time"]?.SetValue(_gameTime);
+
+        // Per-type uniforms: tint (defaults white) and water-animation flag.
+        // Shader treats array slots 0..7; unused slots are harmless defaults.
+        var tintArr = new Vector4[8];
+        var waterArr = new float[8];
+        for (int i = 0; i < 8; i++) { tintArr[i] = Vector4.One; waterArr[i] = 0f; }
+        int typeCap = Math.Min(_groundSystem.TypeCount, 8);
+        for (int i = 0; i < typeCap; i++)
+        {
+            var def = _groundSystem.GetTypeDef(i);
+            tintArr[i] = def.TintColor.ToVector4();
+            waterArr[i] = (def.MovementTerrain == Necroking.World.TerrainType.ShallowWater
+                        || def.MovementTerrain == Necroking.World.TerrainType.DeepWater) ? 1f : 0f;
+        }
+        _groundEffect.Parameters["TintColors"]?.SetValue(tintArr);
+        _groundEffect.Parameters["IsWaterType"]?.SetValue(waterArr);
 
         // Bind ground type textures via Effect.Parameters (named texture params, not register slots).
         // Shader supports indices 0..7; defs beyond that fall back to type 0 in the shader.
@@ -5007,6 +5138,14 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
         // Resume normal SpriteBatch (premultiplied alpha)
         _spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.LinearClamp);
+
+        _groundDrawStopwatch.Stop();
+        double groundDrawMs = _groundDrawStopwatch.Elapsed.TotalMilliseconds;
+        const double GroundEmaAlpha = 0.1;
+        _groundMsAvg = _groundMsAvg * (1.0 - GroundEmaAlpha) + groundDrawMs * GroundEmaAlpha;
+
+        if (_activeScenario is Scenario.Scenarios.PerfWaterScenario perf)
+            perf.LastGroundMs = groundDrawMs;
     }
 
 
@@ -6034,7 +6173,31 @@ public class Game1 : Microsoft.Xna.Framework.Game
             }
         }
 
-        DrawSpriteFrame(atlas, fr.Frame.Value, sp, scale, fr.FlipX, tint);
+        // Wading visual: see Render/WadingState.cs for the math + constants.
+        // All per-unit wading parameters (waterness, waterline V, top cut V,
+        // diagonal slope, sprite angle) are computed in one place; the same
+        // struct is used by the shadow renderer for consistency.
+        WadingState wading = WadingState.Compute(
+            _sim.Units[i].Position, _sim.Units[i].FacingAngle,
+            fr.Frame.Value, unitDef, animData.Ctrl, _groundSystem, _camera.YRatio);
+        if (wading.Active)
+        {
+            // Sprite with waterline fade. Top cut V = -1 sentinel disables the
+            // top cut in the shader (used for 3/4 facings where the back-cut
+            // line never read cleanly). Top slope always 0 — top cut only ever
+            // applies on cardinal facings, which have no body-axis tilt.
+            DrawWadingSpriteFrame(atlas, fr.Frame.Value, sp, scale, fr.FlipX, tint,
+                                  wading.WaterlineV, wading.TopWaterlineV,
+                                  wading.Slope, 0f);
+        }
+        else
+        {
+            DrawSpriteFrame(atlas, fr.Frame.Value, sp, scale, fr.FlipX, tint);
+        }
+
+        // F2 water debug overlay — render after the sprite so it's not occluded.
+        if (_waterDebug && _smallFont != null)
+            DrawWaterDebugOverlay(i, fr.Frame.Value, sp, pixelH, wading);
 
         // Carried body bag: draw IN FRONT if facing toward camera
         if (hasCorpse && drawBagAtHilt && !facingAway)
@@ -6093,22 +6256,6 @@ public class Game1 : Microsoft.Xna.Framework.Game
             DrawText(_smallFont, _sim.Units[i].ActionLabel, weaponPos, Color.FromNonPremultiplied(255, 220, 140, 220));
         }
 
-        // --- Feature 2: Buff indicator dots above HP bar ---
-        if (_sim.Units[i].ActiveBuffs.Count > 0)
-        {
-            float dotStartX = sp.X - (_sim.Units[i].ActiveBuffs.Count * 5f) / 2f;
-            float dotY = sp.Y - 52f;
-            int dotIdx = 0;
-            foreach (var buff in _sim.Units[i].ActiveBuffs)
-            {
-                var buffDef = _gameData.Buffs.Get(buff.BuffDefID);
-                // Only show indicator dot for buffs with an explicit UnitTint
-                if (buffDef?.UnitTint == null || buffDef.UnitTint.A == 0) continue;
-                Color dotColor = Color.FromNonPremultiplied(buffDef.UnitTint.R, buffDef.UnitTint.G, buffDef.UnitTint.B, 220);
-                _spriteBatch.Draw(_pixel, new Rectangle((int)(dotStartX + dotIdx * 5), (int)dotY, 4, 4), dotColor);
-                dotIdx++;
-            }
-        }
     }
 
     private void DrawSingleEnvObject(int i)
@@ -6423,6 +6570,148 @@ public class Game1 : Microsoft.Xna.Framework.Game
         var origin = new Vector2(pivotX * frame.Rect.Width, pivotY * frame.Rect.Height);
         var effects = flipX ? SpriteEffects.FlipHorizontally : SpriteEffects.None;
         _spriteBatch.Draw(tex, screenPos, frame.Rect, tint, 0f, origin, scale, effects, 0f);
+    }
+
+    /// <summary>Draw a unit sprite with the wading shader applied — fades alpha
+    /// below <paramref name="waterlineV"/> (V coord, 0=top, 1=bottom) and adds a
+    /// foam smear at the line. Wraps the call in End()/Begin(effect)/End()/
+    /// Begin() so other sprites this frame keep using the default batch. Caller
+    /// should only invoke when the unit is actually in shallow water — every
+    /// invocation pays the cost of two batch transitions.</summary>
+    /// <summary>F2 overlay: draws the body bbox and the computed waterline
+    /// cut directly on top of the rendered unit, plus a small text label
+    /// with the raw + remapped waterness, slope, and fractions in play. Used
+    /// for tuning per-unit WadingFractionByDirection values without bouncing
+    /// between game and JSON editor.</summary>
+    private void DrawWaterDebugOverlay(int unitIdx, SpriteFrame frame, Vector2 sp,
+                                        float pixelH, in WadingState wading)
+    {
+        var unit = _sim.Units[unitIdx];
+        // Body bbox bounds in screen Y.
+        float pivotFlippedV = 1f - frame.PivotY;
+        float bodyTopY = sp.Y + (frame.BodyTopV - pivotFlippedV) * pixelH;
+        float bodyBotY = sp.Y + (frame.BodyBottomV - pivotFlippedV) * pixelH;
+
+        // Estimate body width in screen px (no real frame X bounds — use the
+        // sprite frame's PixelW. Approximation: assume body roughly spans the
+        // frame minus 20% padding on each side; close enough for an overlay).
+        float pixelW = frame.Rect.Width * (pixelH / frame.Rect.Height);
+        float bodyHalfW = pixelW * 0.4f;
+        var bboxCol = new Color(80, 200, 255, 110);
+        DrawRectOutline(new Rectangle(
+            (int)(sp.X - bodyHalfW), (int)bodyTopY,
+            (int)(bodyHalfW * 2),    (int)(bodyBotY - bodyTopY)),
+            bboxCol);
+
+        // Bottom waterline (with slope) as a short line across the body.
+        if (wading.Active)
+        {
+            float waterY = sp.Y + (wading.WaterlineV - pivotFlippedV) * pixelH;
+            // Slope is dV/dU in local frame UV; convert: dY/dX in screen.
+            float slopeYpx = wading.Slope * pixelH / pixelW;
+            float lineHalfW = bodyHalfW;
+            var lineCol = new Color(255, 100, 100, 200);
+            DrawLine(new Vector2(sp.X - lineHalfW, waterY - lineHalfW * slopeYpx),
+                     new Vector2(sp.X + lineHalfW, waterY + lineHalfW * slopeYpx),
+                     lineCol, 2);
+
+            // Top waterline (if active).
+            if (wading.TopWaterlineV >= 0f)
+            {
+                float topY = sp.Y + (wading.TopWaterlineV - pivotFlippedV) * pixelH;
+                var topCol = new Color(255, 180, 100, 200);
+                DrawLine(new Vector2(sp.X - lineHalfW, topY - lineHalfW * slopeYpx),
+                         new Vector2(sp.X + lineHalfW, topY + lineHalfW * slopeYpx),
+                         topCol, 2);
+            }
+        }
+
+        // Text label above the sprite.
+        var unitDef = _gameData.Units.Get(unit.UnitDefID);
+        string topStr = wading.TopWaterlineV >= 0f ? $"topV={wading.TopWaterlineV:F2}" : "topV=-";
+        string label = wading.Active
+            ? $"w={wading.Waterness:F2} V={wading.WaterlineV:F2} {topStr} s={wading.Slope:F2} ang={wading.SpriteAngle}"
+            : $"w=0  (dry)  ang={wading.SpriteAngle}";
+        DrawText(_smallFont, label,
+            new Vector2((int)(sp.X - 60), (int)(bodyTopY - 14)),
+            new Color(255, 255, 255, 220));
+    }
+
+    /// <summary>Draw a 1px outline rectangle.</summary>
+    private void DrawRectOutline(Rectangle r, Color c)
+    {
+        _spriteBatch.Draw(_pixel, new Rectangle(r.X, r.Y, r.Width, 1), c);
+        _spriteBatch.Draw(_pixel, new Rectangle(r.X, r.Y + r.Height - 1, r.Width, 1), c);
+        _spriteBatch.Draw(_pixel, new Rectangle(r.X, r.Y, 1, r.Height), c);
+        _spriteBatch.Draw(_pixel, new Rectangle(r.X + r.Width - 1, r.Y, 1, r.Height), c);
+    }
+
+    /// <summary>Draw a 2D line by rotating the _pixel sprite. Cheap, AA-free.</summary>
+    private void DrawLine(Vector2 a, Vector2 b, Color c, int thickness)
+    {
+        var d = b - a;
+        float len = d.Length();
+        if (len < 0.5f) return;
+        float angle = MathF.Atan2(d.Y, d.X);
+        _spriteBatch.Draw(_pixel, a, null, c, angle, Vector2.Zero,
+            new Vector2(len, thickness), SpriteEffects.None, 0f);
+    }
+
+    private void DrawWadingSpriteFrame(SpriteAtlas atlas, SpriteFrame frame, Vector2 screenPos,
+                                        float scale, bool flipX, Color tint,
+                                        float waterlineCenterV, float topWaterlineCenterV,
+                                        float waterlineSlope, float topWaterlineSlope)
+    {
+        var tex = atlas.GetTextureForFrame(frame);
+        if (tex == null) return;
+        if (_wadingEffect == null)
+        {
+            // Fall back to normal draw if shader missing — at least the unit is
+            // still visible; just no waterline effect.
+            DrawSpriteFrame(atlas, frame, screenPos, scale, flipX, tint);
+            return;
+        }
+
+        // Atlas U/V range of this frame — shader uses them to normalize the
+        // incoming atlas texCoord into local 0..1 frame UV.
+        float atlasW = (float)tex.Width;
+        float atlasH = (float)tex.Height;
+        float frameLeftU = frame.Rect.X / atlasW;
+        float frameRightU = (frame.Rect.X + frame.Rect.Width) / atlasW;
+        float frameTopV = frame.Rect.Y / atlasH;
+        float frameBotV = (frame.Rect.Y + frame.Rect.Height) / atlasH;
+        _wadingEffect.Parameters["FrameLeftU"]?.SetValue(frameLeftU);
+        _wadingEffect.Parameters["FrameRightU"]?.SetValue(frameRightU);
+        _wadingEffect.Parameters["FrameTopV"]?.SetValue(frameTopV);
+        _wadingEffect.Parameters["FrameBottomV"]?.SetValue(frameBotV);
+
+        // No flipX correction on the slope: SpriteBatch flipping reverses
+        // texCoord.x sweep through the atlas frame, which gives the shader a
+        // naturally-reversed localU. Passing slope as-is and letting the
+        // reversed localU flip it produces the right output diagonal for
+        // mirrored sprites. (Earlier code negated here, which double-flipped
+        // and caused NW to show the same diagonal direction as NE.)
+        _wadingEffect.Parameters["WaterlineCenterV"]?.SetValue(waterlineCenterV);
+        _wadingEffect.Parameters["WaterlineSlope"]?.SetValue(waterlineSlope);
+        _wadingEffect.Parameters["TopWaterlineCenterV"]?.SetValue(topWaterlineCenterV);
+        _wadingEffect.Parameters["TopWaterlineSlope"]?.SetValue(topWaterlineSlope);
+        _wadingEffect.Parameters["FoamHalfWidth"]?.SetValue(0.05f);
+        _wadingEffect.Parameters["TopFoamHalfWidth"]?.SetValue(0.05f);
+        _wadingEffect.Parameters["UnderwaterAlpha"]?.SetValue(0.0f);
+        _wadingEffect.Parameters["FoamColor"]?.SetValue(new Vector3(0.88f, 0.94f, 0.96f));
+
+        _spriteBatch.End();
+        _spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.LinearClamp,
+            null, null, _wadingEffect);
+
+        float pivotX = flipX ? (1f - frame.PivotX) : frame.PivotX;
+        float pivotY = 1f - frame.PivotY;
+        var origin = new Vector2(pivotX * frame.Rect.Width, pivotY * frame.Rect.Height);
+        var effects = flipX ? SpriteEffects.FlipHorizontally : SpriteEffects.None;
+        _spriteBatch.Draw(tex, screenPos, frame.Rect, tint, 0f, origin, scale, effects, 0f);
+
+        _spriteBatch.End();
+        _spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.LinearClamp);
     }
 
     /// <summary>Multiply two colors component-wise (for ambient tinting).</summary>

@@ -104,6 +104,8 @@ public static class ScenarioRegistry
         Register("intrinsic_buff", () => new Scenarios.IntrinsicBuffScenario());
         Register("corpse_eater", () => new Scenarios.CorpseEaterScenario());
         Register("UITooltipPlacement", () => new Scenarios.TooltipPlacementScenario());
+        Register("perf_water", () => new Scenarios.PerfWaterScenario());
+        Register("deep_water_blocks", () => new Scenarios.DeepWaterBlocksScenario());
     }
 
     public static void Register(string name, Func<ScenarioBase> creator)

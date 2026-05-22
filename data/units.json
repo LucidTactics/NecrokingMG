@@ -3486,6 +3486,7 @@
       "radius": 0.495,
       "spriteScale": 1,
       "spriteWorldHeight": 2.5,
+      "isQuadruped": true,
       "color": {
         "r": 30,
         "g": 30,

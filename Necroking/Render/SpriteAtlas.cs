@@ -15,6 +15,17 @@ public struct SpriteFrame
     /// sheets (atlas name + "__N" suffix). Lets a single logical atlas span
     /// multiple PNGs without callers needing to know.</summary>
     public int TextureIndex;
+
+    /// <summary>V coord (0=top of frame, 1=bottom) of the topmost non-transparent
+    /// row inside the frame. Computed by <see cref="SpriteAtlas.ComputeFrameBoundingBoxes"/>
+    /// after the texture is attached. Used to drive the wading waterline so a
+    /// quadruped with empty space above the body still gets the cut at the
+    /// right place. Defaults to 0 (body fills frame) — safe fallback when
+    /// the scan hasn't run yet.</summary>
+    public float BodyTopV;
+    /// <summary>V coord of the bottommost non-transparent row inside the frame.
+    /// Defaults to 1 (body fills frame).</summary>
+    public float BodyBottomV;
 }
 
 public struct Keyframe
@@ -136,6 +147,7 @@ public class SpriteAtlas
 
         FixupYOrigin();
         RescaleAllFrames();
+        ComputeFrameBoundingBoxes(0);
         IsLoaded = true;
         return true;
     }
@@ -173,6 +185,7 @@ public class SpriteAtlas
         }
 
         FixupYOrigin();
+        ComputeFrameBoundingBoxes(newIdx);
         // RescaleAllFrames is a no-op when _scaleX/Y = 1, which is the normal
         // runtime path. Extension rescale would need per-texture scales; skip.
         return true;
@@ -203,6 +216,7 @@ public class SpriteAtlas
         _scaleY = 1f;
         FixupYOrigin();
         RescaleAllFrames();
+        ComputeFrameBoundingBoxes(0);
         IsLoaded = true;
     }
 
@@ -212,11 +226,13 @@ public class SpriteAtlas
     /// fast path without blocking on a separate <see cref="LoadExtension"/> call.</summary>
     public void AttachExtensionTexture(Texture2D texture, int width, int height)
     {
+        int newIdx = _textures.Count;
         _textures.Add(texture);
         _originalWidths.Add(width);
         _originalHeights.Add(height);
         _yFixupPending.Add(true);
         FixupYOrigin();
+        ComputeFrameBoundingBoxes(newIdx);
     }
 
     /// <summary>Parse an extension spritemeta and tag its frames with the next
@@ -274,6 +290,86 @@ public class SpriteAtlas
                 _yFixupPending[ti] = false;
     }
 
+    /// <summary>Scan the texture at <paramref name="textureIndex"/> and fill
+    /// in <see cref="SpriteFrame.BodyTopV"/> / <see cref="SpriteFrame.BodyBottomV"/>
+    /// for every frame on that texture. Body bbox is the V range of the
+    /// topmost/bottommost rows containing any pixel with alpha above a small
+    /// threshold. Used by the wading waterline so quadrupeds (which have a
+    /// lot of empty space above the body in the frame) get the cut at the
+    /// right place. Must run on the main thread (calls GetData).
+    ///
+    /// Idempotent — safe to call multiple times for the same index.</summary>
+    public void ComputeFrameBoundingBoxes(int textureIndex)
+    {
+        if (textureIndex < 0 || textureIndex >= _textures.Count) return;
+        var tex = _textures[textureIndex];
+        if (tex == null) return;
+        int W = tex.Width;
+        int H = tex.Height;
+        if (W <= 0 || H <= 0) return;
+
+        var data = new Color[W * H];
+        try { tex.GetData(data); }
+        catch { return; }
+
+        const byte AlphaThreshold = 16; // ignore near-transparent edges / antialias halo
+
+        foreach (var udata in _units.Values)
+            foreach (var adata in udata.Animations.Values)
+                foreach (var (_, kfs) in adata.AngleFrames)
+                    for (int i = 0; i < kfs.Count; i++)
+                    {
+                        var kf = kfs[i];
+                        if (kf.Frame.TextureIndex != textureIndex) continue;
+                        var rect = kf.Frame.Rect;
+                        if (rect.Width <= 0 || rect.Height <= 0) continue;
+
+                        // Clip rect to texture bounds defensively.
+                        int x0 = Math.Max(0, rect.Left);
+                        int y0 = Math.Max(0, rect.Top);
+                        int x1 = Math.Min(W, rect.Right);
+                        int y1 = Math.Min(H, rect.Bottom);
+                        if (x0 >= x1 || y0 >= y1) continue;
+
+                        int topPx = -1;
+                        int bottomPx = -1;
+                        for (int py = y0; py < y1; py++)
+                        {
+                            int rowBase = py * W;
+                            bool rowHasVisible = false;
+                            for (int px = x0; px < x1; px++)
+                            {
+                                if (data[rowBase + px].A > AlphaThreshold)
+                                {
+                                    rowHasVisible = true;
+                                    break;
+                                }
+                            }
+                            if (rowHasVisible)
+                            {
+                                if (topPx == -1) topPx = py;
+                                bottomPx = py;
+                            }
+                        }
+
+                        if (topPx == -1)
+                        {
+                            // Fully transparent frame — keep the default full-frame bbox.
+                            kf.Frame.BodyTopV = 0f;
+                            kf.Frame.BodyBottomV = 1f;
+                        }
+                        else
+                        {
+                            // Convert pixel rows to local V in [0..1] where 0=top of frame.
+                            float h = rect.Height;
+                            kf.Frame.BodyTopV = (topPx - rect.Top) / h;
+                            // +1 makes the bottom edge inclusive of the last row.
+                            kf.Frame.BodyBottomV = (bottomPx - rect.Top + 1) / h;
+                        }
+                        kfs[i] = kf;
+                    }
+    }
+
     public void Unload()
     {
         foreach (var t in _textures) t.Dispose();
@@ -313,7 +409,12 @@ public class SpriteAtlas
                 Rect = new Rectangle(
                     int.Parse(rectParts[0]), int.Parse(rectParts[1]),
                     int.Parse(rectParts[2]), int.Parse(rectParts[3])),
-                TextureIndex = textureIndex
+                TextureIndex = textureIndex,
+                // Body bbox defaults to the full frame so anything reading it
+                // before the bbox scan runs gets a sane fallback (whole sprite
+                // is body). ComputeFrameBoundingBoxes overwrites these.
+                BodyTopV = 0f,
+                BodyBottomV = 1f,
             };
 
             var pivotParts = tabParts[2].Split(',');

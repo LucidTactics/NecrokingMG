@@ -31,7 +31,7 @@
     "minBladeWidth": true
   },
   "weather": {
-    "enabled": true,
+    "enabled": false,
     "activePreset": "clear",
     "transitionSpeed": 1
   },

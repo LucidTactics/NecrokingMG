@@ -16,6 +16,27 @@ public abstract class ScenarioBase
     public virtual bool WantsUI => false;
     public virtual bool WantsGrass => false;
     public virtual bool WantsGround => false;
+    /// <summary>When true, Game1 disables IsFixedTimeStep + vsync so the game
+    /// runs at unlocked framerate. Used by perf scenarios to measure raw GPU
+    /// throughput without the 60Hz cap and sleep-padding masking the cost.
+    /// Has no effect outside scenarios.</summary>
+    public virtual bool BenchmarkMode => false;
+
+    /// <summary>Plumbed by Game1 before OnInit when WantsGround is true so
+    /// the scenario can register new ground types and paint the vertex map.</summary>
+    public World.GroundSystem? GroundSystem;
+
+    /// <summary>Set by Game1 to mirror its IsFixedTimeStep/vsync state after
+    /// BenchmarkMode has been applied. Lets a scenario verify the toggle
+    /// actually took effect.</summary>
+    public bool VsyncEnabled = true;
+    public bool FixedTimeStepEnabled = true;
+
+    /// <summary>When > 0, Game1 calls DrawGroundShader this many extra times
+    /// per frame. Used by perf scenarios to stress the GPU past the vsync
+    /// budget so cost differences become measurable in real frame time.
+    /// Has no effect when WantsGround is false.</summary>
+    public int ExtraGroundDrawsPerFrame;
 
     /// <summary>
     /// Override to request a larger grid for the scenario. Default is 64.
