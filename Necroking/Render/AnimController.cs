@@ -202,6 +202,28 @@ public class AnimController
 
     private enum AngleScheme { Old, New }
 
+    /// <summary>Hysteresis margin (degrees) added beyond a sprite bucket's
+    /// half-width before switching to an adjacent bucket. With raw 45°
+    /// buckets a unit whose facing angle wobbles ±a few degrees across a
+    /// boundary flickers between sprites every frame — at slow walk speeds
+    /// the AI's target angle is noisy because it comes from atan2(velocity)
+    /// and velocity is small relative to steering jiggle. 10° means the
+    /// effective sector when held is 22.5° + 10° = 32.5° half-width; the
+    /// unit has to commit ~10° past the boundary before the sprite snaps.</summary>
+    public const float SpriteBucketHysteresisDeg = 10f;
+
+    // Last (spriteAngle, flipX) returned by ResolveAngle on this controller,
+    // plus the matched sector's geometric center and halfwidth. Caching the
+    // sector rather than recomputing it from the sprite angle is necessary
+    // for OLD scheme — its sprite angles (30/60/300) are AUTHORED angles,
+    // not the world-facing centers of their sectors. Hysteresis distance
+    // must be measured against the actual sector center.
+    private bool _hasLastResolved;
+    private int _lastResolvedSpriteAngle;
+    private bool _lastResolvedFlipX;
+    private float _lastResolvedSectorCenter;
+    private float _lastResolvedSectorHalfWidth;
+
     // Angle sectors: map world angle (Y-down: 0=right, 90=down, 180=left, 270=up) → stored sprite angle + flip.
     //
     // OldSectors: legacy 3-angle scheme (30 right-ish, 60 down-ish, 300 up-ish). Down and Up are split at the
@@ -734,20 +756,71 @@ public class AnimController
 
     public int ResolveAngle(float angleDeg, out bool flipX)
     {
-        angleDeg = ((angleDeg % 360f) + 360f) % 360f;
-        if (angleDeg >= 337.5f) angleDeg -= 360f;
+        // Wrapped form in [0,360) used for the hysteresis distance check.
+        float wrapped = ((angleDeg % 360f) + 360f) % 360f;
+        // Sector-lookup form: same domain but with E's wrap pulled into [-22.5, 22.5).
+        float forSector = wrapped >= 337.5f ? wrapped - 360f : wrapped;
 
         var sectors = _resolvedScheme == AngleScheme.New ? NewSectors : OldSectors;
+        int newAngle = _resolvedFallbackAngle;
+        bool newFlip = false;
+        float newSectorMin = 0f, newSectorMax = 0f;
+        bool matched = false;
         foreach (var (min, max, angle, flip) in sectors)
         {
-            if (angleDeg >= min && angleDeg < max)
+            if (forSector >= min && forSector < max)
             {
-                flipX = flip;
-                return angle;
+                newAngle = angle;
+                newFlip = flip;
+                newSectorMin = min;
+                newSectorMax = max;
+                matched = true;
+                break;
             }
         }
-        flipX = false;
-        return _resolvedFallbackAngle;
+
+        // Hysteresis: if the new (angle, flip) differs from the last one we
+        // returned, only commit the switch when the facing has moved more
+        // than HysteresisDeg past the previous sector's edge. Within the
+        // margin we keep returning the previous bucket — that's what
+        // prevents single-frame swings of atan2(velocity) at slow speeds
+        // from flicker-flipping the rendered sprite.
+        if (_hasLastResolved &&
+            (newAngle != _lastResolvedSpriteAngle || newFlip != _lastResolvedFlipX))
+        {
+            float diff = MathF.Abs(SignedAngleDelta(wrapped, _lastResolvedSectorCenter));
+            if (diff < _lastResolvedSectorHalfWidth + SpriteBucketHysteresisDeg)
+            {
+                flipX = _lastResolvedFlipX;
+                return _lastResolvedSpriteAngle;
+            }
+        }
+
+        _lastResolvedSpriteAngle = newAngle;
+        _lastResolvedFlipX = newFlip;
+        if (matched)
+        {
+            _lastResolvedSectorCenter = ((newSectorMin + newSectorMax) * 0.5f + 360f) % 360f;
+            _lastResolvedSectorHalfWidth = (newSectorMax - newSectorMin) * 0.5f;
+            _hasLastResolved = true;
+        }
+        else
+        {
+            // Fallback path (no sector matched, e.g. malformed sweep). Don't
+            // seed the cache with bogus geometry — keep the prior cache or
+            // leave it unset.
+        }
+        flipX = newFlip;
+        return newAngle;
+    }
+
+    /// <summary>Shortest signed angular distance a → b in (-180, 180].</summary>
+    private static float SignedAngleDelta(float a, float b)
+    {
+        float d = (a - b) % 360f;
+        if (d > 180f) d -= 360f;
+        if (d <= -180f) d += 360f;
+        return d;
     }
 
     /// <summary>
