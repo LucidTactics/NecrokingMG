@@ -120,6 +120,10 @@ public class WakeEmitterState
     public int SplashRemainingCount;
     public float SplashSpawnAccum;
     public float SplashEntrySpeed; // captured at session start, used for size scaling
+    /// <summary>Body half-vector captured at entry-splash session start.
+    /// Trickle spawns reuse this so the spawn axis stays coherent even if
+    /// the unit turns mid-session.</summary>
+    public Vec2 BodyHalfAtStart;
 
     // --- Exit splash session (mirrors entry layout but for drips
     // falling FROM the waterline TO the ground after the unit leaves
@@ -130,6 +134,10 @@ public class WakeEmitterState
     public float ExitSpawnAccum;
     public float ExitSpeedAtStart; // captured at exit, for size scaling
     public float ExitWaterlineHeight; // captured at exit, for drip spawn height
+    /// <summary>Body half-vector captured at exit moment. Drip trickle
+    /// spawns use this so all drips spread along the same body axis the
+    /// unit had when exiting, even if the unit turns on dry land.</summary>
+    public Vec2 ExitBodyHalf;
 }
 
 /// <summary>
@@ -200,6 +208,17 @@ public class WadingWakeSystem
     /// can't accumulate thousands of particles. Raised to 48 to make room
     /// for the bow wave + occasional entry splash burst.</summary>
     public const int MaxParticlesPerUnit = 48;
+
+    /// <summary>Default body length (world units) used for quadrupeds when
+    /// the unit def's <c>BodyLengthWorld</c> is 0 (unset). The wolf-like
+    /// reference body — head-to-tail extent on a typical quadruped sprite
+    /// — sits around 0.9 wu. Particles spawned by the wake system spread
+    /// across this length along the unit's facing axis so the trail
+    /// emerges from the rear, the bow wave from the front, and splashes
+    /// distribute across the body silhouette instead of clustering at the
+    /// single pivot point. Per-unit overrides via UnitDef.BodyLengthWorld
+    /// for unusual proportions (horses, snakes, badgers).</summary>
+    public const float QuadrupedDefaultBodyLength = 0.9f;
 
     // --- Bow wave (front foam streak) ---
     // Reference: Sea of Thieves, Witcher 3, RIME — small crescent of foam
@@ -691,6 +710,7 @@ public class WadingWakeSystem
     public void UpdateAndDrawBack(
         int unitIdx, float dt,
         Vec2 unitPos, Vec2 unitVel,
+        float facingDeg, float bodyLengthWorld,
         float waterlineWorldHeight,
         bool wadingActive,
         SpriteBatch sb, Texture2D pixel,
@@ -710,14 +730,25 @@ public class WadingWakeSystem
             _perUnit[unitIdx] = state;
         }
 
+        // Body-axis half-vector: pointing from the unit's center toward
+        // the FRONT (along facing) at half the body length. For
+        // humanoid (bodyLength=0) this is a zero vector, all spawn
+        // positions stay at the unit's pivot. For quadrupeds it spreads
+        // spawn positions across the body silhouette.
+        float facingRad = facingDeg * (MathF.PI / 180f);
+        var bodyHalf = new Vec2(
+            MathF.Cos(facingRad) * bodyLengthWorld * 0.5f,
+            MathF.Sin(facingRad) * bodyLengthWorld * 0.5f);
+
         AgeParticles(state, dt);
 
         // Entry-splash edge — wading false → true. Also resets the
-        // max-depth tracker so a new wading session starts fresh.
+        // max-depth tracker + caches the body half-vector for the
+        // session so trickle spawns stay coherent if the unit turns.
         if (wadingActive && !state.WasWading)
         {
             state.MaxWaterlineHeightThisSession = waterlineWorldHeight;
-            StartEntrySplash(state, unitPos, unitVel, waterlineWorldHeight);
+            StartEntrySplash(state, unitPos, unitVel, waterlineWorldHeight, bodyHalf);
         }
 
         // Exit-splash edge — wading true → false. We use the MAX waterline
@@ -726,27 +757,23 @@ public class WadingWakeSystem
         // that went chest-deep then came back to ankle-deep before exiting
         // still has drips from chest-height.
         if (!wadingActive && state.WasWading)
-            StartExitSplash(state, unitPos, unitVel, state.MaxWaterlineHeightThisSession);
+            StartExitSplash(state, unitPos, unitVel, state.MaxWaterlineHeightThisSession, bodyHalf);
 
         // Entry-splash session trickle — releases the remaining 80%
         // over EntrySplashSessionDurationSec at the unit's current
-        // position.
+        // position. Uses the CACHED body-half (from session start) so
+        // the spread axis stays coherent through the session.
         if (state.SplashRemainingDuration > 0f)
-            TrickleEntrySplash(state, dt, unitPos, unitVel, waterlineWorldHeight);
+            TrickleEntrySplash(state, dt, unitPos, unitVel, waterlineWorldHeight, state.BodyHalfAtStart);
 
-        // Exit-splash session trickle — drips continue to spawn off the
-        // body at the cached waterline height for the duration. Uses
-        // the unit's current XY position (drips track the unit as it
-        // moves on dry land) but the cached waterline height and
-        // cached velocity (so the drips' motion stays coherent if the
-        // unit stops abruptly).
+        // Exit-splash session trickle.
         if (state.ExitRemainingDuration > 0f)
-            TrickleExitSplash(state, dt, unitPos, state.ExitVelocity, state.ExitWaterlineHeight);
+            TrickleExitSplash(state, dt, unitPos, state.ExitVelocity, state.ExitWaterlineHeight, state.ExitBodyHalf);
 
         if (wadingActive)
         {
-            SpawnTrail(state, dt, unitPos, unitVel, waterlineWorldHeight);
-            SpawnBowWave(state, dt, unitPos, unitVel, waterlineWorldHeight);
+            SpawnTrail(state, dt, unitPos, unitVel, waterlineWorldHeight, bodyHalf);
+            SpawnBowWave(state, dt, unitPos, unitVel, waterlineWorldHeight, bodyHalf);
             // Cache the waterline so we can use it on the next frame's
             // exit edge (which won't carry a fresh waterline height).
             state.LastWaterlineHeight = waterlineWorldHeight;
@@ -895,7 +922,8 @@ public class WadingWakeSystem
     private static void SpawnTrail(
         WakeEmitterState state, float dt,
         Vec2 unitPos, Vec2 unitVel,
-        float waterlineWorldHeight)
+        float waterlineWorldHeight,
+        Vec2 bodyHalf)
     {
         float speed = unitVel.Length();
         if (speed < MinSpeedToEmit)
@@ -916,6 +944,11 @@ public class WadingWakeSystem
         float velAngle = MathF.Atan2(unitVel.Y, unitVel.X);
         float rearAngle = velAngle + MathF.PI;
 
+        // Trail emits from the REAR end of the body — for a quadruped,
+        // that's at the tail. For a humanoid (bodyHalf=0,0) this is
+        // just the unit pivot.
+        var rearAnchor = new Vec2(unitPos.X - bodyHalf.X, unitPos.Y - bodyHalf.Y);
+
         for (int n = 0; n < toSpawn; n++)
         {
             float spread = ((float)_rand.NextDouble() * 2f - 1f) * SpreadHalfConeRad;
@@ -926,8 +959,8 @@ public class WadingWakeSystem
             float jitterR = (float)_rand.NextDouble() * SpawnJitterRadius;
             float jitterA = (float)(_rand.NextDouble() * 2.0 * Math.PI);
             var spawnPos = new Vec2(
-                unitPos.X + MathF.Cos(jitterA) * jitterR,
-                unitPos.Y + MathF.Sin(jitterA) * jitterR);
+                rearAnchor.X + MathF.Cos(jitterA) * jitterR,
+                rearAnchor.Y + MathF.Sin(jitterA) * jitterR);
 
             float life = MinLifetimeSec + (float)_rand.NextDouble() * (MaxLifetimeSec - MinLifetimeSec);
             float size = TrailMiniSplashMinSizeWorld
@@ -955,7 +988,8 @@ public class WadingWakeSystem
     private static void SpawnBowWave(
         WakeEmitterState state, float dt,
         Vec2 unitPos, Vec2 unitVel,
-        float waterlineWorldHeight)
+        float waterlineWorldHeight,
+        Vec2 bodyHalf)
     {
         float speed = unitVel.Length();
         if (speed < BowWaveMinSpeedToEmit)
@@ -980,6 +1014,12 @@ public class WadingWakeSystem
         float perpX = -fwdY;
         float perpY = fwdX;
 
+        // Bow wave emits from the FRONT end of the body (head). For a
+        // quadruped this places the foam crescent at the wolf's chest
+        // rather than at its middle. Humanoids (bodyHalf=0,0) get the
+        // existing pivot-based behavior.
+        var frontAnchor = new Vec2(unitPos.X + bodyHalf.X, unitPos.Y + bodyHalf.Y);
+
         for (int n = 0; n < toSpawn; n++)
         {
             // Spawn ahead of the unit center with a small lateral fan —
@@ -991,8 +1031,8 @@ public class WadingWakeSystem
             float lateralFrac = (float)_rand.NextDouble() * 2f - 1f; // [-1, +1]
             float lateral = lateralFrac * BowWaveLateralSpread;
             var spawnPos = new Vec2(
-                unitPos.X + fwdX * forwardDist + perpX * lateral,
-                unitPos.Y + fwdY * forwardDist + perpY * lateral);
+                frontAnchor.X + fwdX * forwardDist + perpX * lateral,
+                frontAnchor.Y + fwdY * forwardDist + perpY * lateral);
 
             // Drift: outward (in the lateral direction this particle was
             // offset to) + slightly backward (slipping past the unit as
@@ -1036,7 +1076,8 @@ public class WadingWakeSystem
     private static void StartEntrySplash(
         WakeEmitterState state,
         Vec2 unitPos, Vec2 unitVel,
-        float waterlineWorldHeight)
+        float waterlineWorldHeight,
+        Vec2 bodyHalf)
     {
         float speed = unitVel.Length();
         int totalRequested = EntrySplashBaseCount + (int)(speed * EntrySplashCountPerSpeed);
@@ -1052,8 +1093,9 @@ public class WadingWakeSystem
         state.SplashRemainingCount = trickle;
         state.SplashRemainingDuration = EntrySplashSessionDurationSec;
         state.SplashSpawnAccum = 0f;
+        state.BodyHalfAtStart = bodyHalf;
 
-        EmitSplashParticles(state, initialBurst, speed, unitPos, unitVel, waterlineWorldHeight);
+        EmitSplashParticles(state, initialBurst, speed, unitPos, unitVel, waterlineWorldHeight, bodyHalf);
     }
 
     /// <summary>Per-frame trickle spawn during an active splash session.
@@ -1064,7 +1106,8 @@ public class WadingWakeSystem
     private static void TrickleEntrySplash(
         WakeEmitterState state, float dt,
         Vec2 unitPos, Vec2 unitVel,
-        float waterlineWorldHeight)
+        float waterlineWorldHeight,
+        Vec2 bodyHalf)
     {
         // End-of-session housekeeping. If duration expired we drop any
         // un-spawned remainder (rather than dumping a final burst), which
@@ -1090,7 +1133,7 @@ public class WadingWakeSystem
         if (toSpawn > 0)
         {
             EmitSplashParticles(state, toSpawn, state.SplashEntrySpeed,
-                                unitPos, unitVel, waterlineWorldHeight);
+                                unitPos, unitVel, waterlineWorldHeight, bodyHalf);
             state.SplashRemainingCount -= toSpawn;
         }
 
@@ -1107,7 +1150,8 @@ public class WadingWakeSystem
         WakeEmitterState state, int n,
         float entrySpeed,
         Vec2 unitPos, Vec2 unitVel,
-        float waterlineWorldHeight)
+        float waterlineWorldHeight,
+        Vec2 bodyHalf)
     {
         int allowed = MaxParticlesPerUnit - state.Particles.Count;
         if (allowed <= 0) return;
@@ -1165,13 +1209,18 @@ public class WadingWakeSystem
             float vertVel = (EntrySplashUpBaseSpeed + vertEffectiveSpeed * EntrySplashUpPerSpeed)
                 * (0.5f + (float)_rand.NextDouble() * 0.5f);
 
-            // Spawn at footprint with small jitter — splash radiates from
-            // one contact point, not the entire body.
+            // Spawn position spreads along the body axis: pick a random
+            // offset in [-1, +1] along bodyHalf so droplets distribute
+            // across the unit's silhouette (head to tail for quadrupeds).
+            // For humanoids (bodyHalf=0,0) this collapses to the existing
+            // point-source pattern. Small jitter on top so the spawn
+            // doesn't read as a straight line.
+            float bodyOffset = (float)_rand.NextDouble() * 2f - 1f; // [-1, +1]
             float jR = (float)_rand.NextDouble() * 0.10f;
             float jA = (float)(_rand.NextDouble() * 2.0 * Math.PI);
             var pos = new Vec2(
-                unitPos.X + MathF.Cos(jA) * jR,
-                unitPos.Y + MathF.Sin(jA) * jR);
+                unitPos.X + bodyHalf.X * bodyOffset + MathF.Cos(jA) * jR,
+                unitPos.Y + bodyHalf.Y * bodyOffset + MathF.Sin(jA) * jR);
 
             // Lifetime = predicted airborne arc time, with a 10% buffer so
             // numerical drift in the ballistic integration doesn't trip the
@@ -1222,7 +1271,8 @@ public class WadingWakeSystem
     private static void StartExitSplash(
         WakeEmitterState state,
         Vec2 unitPos, Vec2 unitVel,
-        float waterlineHeight)
+        float waterlineHeight,
+        Vec2 bodyHalf)
     {
         float speed = unitVel.Length();
         int totalRequested = ExitSplashBaseCount + (int)(speed * ExitSplashCountPerSpeed);
@@ -1242,8 +1292,9 @@ public class WadingWakeSystem
         state.ExitRemainingCount = trickle;
         state.ExitRemainingDuration = ExitSplashSessionDurationSec;
         state.ExitSpawnAccum = 0f;
+        state.ExitBodyHalf = bodyHalf;
 
-        EmitExitSplashParticles(state, initialBurst, speed, unitPos, unitVel, waterlineHeight);
+        EmitExitSplashParticles(state, initialBurst, speed, unitPos, unitVel, waterlineHeight, bodyHalf);
     }
 
     /// <summary>Per-frame trickle release of exit drips over an active
@@ -1253,7 +1304,8 @@ public class WadingWakeSystem
     /// + spawn elevation remain coherent through the session).</summary>
     private static void TrickleExitSplash(
         WakeEmitterState state, float dt,
-        Vec2 unitPos, Vec2 unitVel, float waterlineHeight)
+        Vec2 unitPos, Vec2 unitVel, float waterlineHeight,
+        Vec2 bodyHalf)
     {
         if (state.ExitRemainingDuration <= 0f || state.ExitRemainingCount <= 0)
         {
@@ -1272,7 +1324,7 @@ public class WadingWakeSystem
         if (toSpawn > 0)
         {
             EmitExitSplashParticles(state, toSpawn, state.ExitSpeedAtStart,
-                                    unitPos, unitVel, waterlineHeight);
+                                    unitPos, unitVel, waterlineHeight, bodyHalf);
             state.ExitRemainingCount -= toSpawn;
         }
 
@@ -1287,7 +1339,8 @@ public class WadingWakeSystem
     private static void EmitExitSplashParticles(
         WakeEmitterState state, int n,
         float speedAtStart,
-        Vec2 unitPos, Vec2 unitVel, float waterlineHeight)
+        Vec2 unitPos, Vec2 unitVel, float waterlineHeight,
+        Vec2 bodyHalf)
     {
         int allowed = MaxParticlesPerUnit - state.Particles.Count;
         if (allowed <= 0) return;
@@ -1336,17 +1389,17 @@ public class WadingWakeSystem
             float vertVel = -ExitSplashInitialDownSpeed
                 * (0.5f + (float)_rand.NextDouble() * 1.0f);
 
-            // Spawn at the unit's footprint XY with small jitter, at
-            // a randomized height between the body's lower body and
-            // the MAX waterline height. Variation per droplet so drips
-            // appear to fall from multiple wet body parts, not just one
-            // height. Bias toward upper body via the exponent so most
-            // drips come from "where the body got the wettest".
+            // Spawn position: distribute along the body axis (head to
+            // tail for a quadruped) plus small jitter, plus a randomized
+            // height between low body and the MAX waterline height. The
+            // body-axis spread means drips fall from across the wet
+            // silhouette, not just from the pivot point.
+            float bodyOffset = (float)_rand.NextDouble() * 2f - 1f; // [-1, +1]
             float jR = (float)_rand.NextDouble() * 0.12f;
             float jA = (float)(_rand.NextDouble() * 2.0 * Math.PI);
             var pos = new Vec2(
-                unitPos.X + MathF.Cos(jA) * jR,
-                unitPos.Y + MathF.Sin(jA) * jR);
+                unitPos.X + bodyHalf.X * bodyOffset + MathF.Cos(jA) * jR,
+                unitPos.Y + bodyHalf.Y * bodyOffset + MathF.Sin(jA) * jR);
 
             float heightFraction = MathF.Pow(
                 (float)_rand.NextDouble(), ExitSplashHeightBiasExponent);

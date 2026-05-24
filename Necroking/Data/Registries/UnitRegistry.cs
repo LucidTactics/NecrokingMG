@@ -160,6 +160,17 @@ public class UnitDef : IHasId
     [JsonPropertyName("radius")] public float Radius { get; set; } = 0.495f;
     [JsonPropertyName("spriteScale")] public float SpriteScale { get; set; } = 1.0f;
     [JsonPropertyName("spriteWorldHeight")] public float SpriteWorldHeight { get; set; } = 1.8f;
+
+    /// <summary>Body length in world units along the unit's facing axis,
+    /// used by the wading-wake system to spread particle spawn positions
+    /// across the unit's silhouette instead of all clustering at the
+    /// single pivot point. 0 (default) means "point source" — appropriate
+    /// for humanoids whose body is roughly as wide as tall. Quadrupeds
+    /// fall back to <see cref="Render.WadingWakeSystem.QuadrupedDefaultBodyLength"/>
+    /// when this is 0, so most don't need an override. Set explicitly only
+    /// for units with unusual proportions (very long: horses/snakes,
+    /// very short: badgers, bear cubs).</summary>
+    [JsonPropertyName("bodyLengthWorld")] public float BodyLengthWorld { get; set; } = 0f;
     /// <summary>Biped fallback: how far up the visible body the water cuts
     /// when this unit is wading. 0 = waterline at the feet, 1 = top of body.
     /// Default 0.35 reproduces the old hardcoded waterline. Only consulted

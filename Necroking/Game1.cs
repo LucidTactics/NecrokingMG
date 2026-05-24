@@ -6209,9 +6209,13 @@ public class Game1 : Microsoft.Xna.Framework.Game
             // BACK pass — trail particles render behind the sprite so the
             // body covers anything drifting into its silhouette. Also runs
             // the per-frame update + edge-detect for entry splash spawning.
+            float bodyLen = unitDef.BodyLengthWorld > 0f
+                ? unitDef.BodyLengthWorld
+                : (unitDef.IsQuadruped ? Render.WadingWakeSystem.QuadrupedDefaultBodyLength : 0f);
             _wakeSystem.UpdateAndDrawBack(
                 i, _frameDt,
                 _sim.Units[i].Position, _sim.Units[i].Velocity,
+                _sim.Units[i].FacingAngle, bodyLen,
                 wakeLiftWorldH, true,
                 _spriteBatch, _pixel, _renderer, _camera);
 
@@ -6233,11 +6237,15 @@ public class Game1 : Microsoft.Xna.Framework.Game
         else
         {
             // Out of water but live particles may still be fading. The back
-            // pass advances + dims the remaining tail (and would catch any
-            // exit splash if we added one); fast-exits if no state.
+            // pass advances + dims the remaining tail and catches the
+            // exit-splash edge; fast-exits if no state.
+            float bodyLen = unitDef.BodyLengthWorld > 0f
+                ? unitDef.BodyLengthWorld
+                : (unitDef.IsQuadruped ? Render.WadingWakeSystem.QuadrupedDefaultBodyLength : 0f);
             _wakeSystem.UpdateAndDrawBack(
                 i, _frameDt,
                 _sim.Units[i].Position, _sim.Units[i].Velocity,
+                _sim.Units[i].FacingAngle, bodyLen,
                 0f, false,
                 _spriteBatch, _pixel, _renderer, _camera);
 
