@@ -293,6 +293,18 @@ public class AnimController
     public bool JustFinished { get; private set; }
     public AnimState ExitedState { get; private set; }
 
+    /// <summary>Per-orientation reference body bbox (averaged across the
+    /// reference Idle/Walk animation's frames at that angle). Returns
+    /// fallback values when no sprite data is wired — typically the
+    /// caller passes the current frame's bbox as fallback. Used by the
+    /// wading-state calculator to stabilize the waterline V across
+    /// animation frames within the same orientation.</summary>
+    public (float topV, float bottomV) GetReferenceBodyBbox(int spriteAngle, float fallbackTopV, float fallbackBottomV)
+    {
+        if (_spriteData == null) return (fallbackTopV, fallbackBottomV);
+        return _spriteData.GetReferenceBodyBbox(spriteAngle, fallbackTopV, fallbackBottomV);
+    }
+
     public void Init(UnitSpriteData? spriteData, float tickRate = 30f)
     {
         _spriteData = spriteData;

@@ -145,10 +145,17 @@ public readonly struct WadingState
 
         int spriteAngle = animCtrl.ResolveAngle(facingAngle, out _);
 
-        // Default values when not wading: cut lands at body bottom (no effective
-        // hidden area), top cut disabled, no slope.
-        float bodyTopV = frame.BodyTopV;
-        float bodyBottomV = frame.BodyBottomV;
+        // Per-orientation reference body bbox — averaged across the idle
+        // animation's frames at this angle. We use this instead of the
+        // current frame's pixel-derived bbox so the waterline stays in
+        // the same screen position as the unit cycles through animation
+        // frames. Without this, each frame's bbox shifts (e.g. as a
+        // quadruped's legs extend/tuck) and the waterline appears to
+        // float up and down on the body. Fallback to the current frame's
+        // values when the sprite data has no reference (test scenarios,
+        // missing Idle anim, etc).
+        var (bodyTopV, bodyBottomV) = animCtrl.GetReferenceBodyBbox(
+            spriteAngle, frame.BodyTopV, frame.BodyBottomV);
         float waterlineV = bodyBottomV;
         float topWaterlineV = -1f;
         float slope = 0f;

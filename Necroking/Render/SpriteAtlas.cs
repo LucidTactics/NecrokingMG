@@ -69,6 +69,58 @@ public class UnitSpriteData
 
     public AnimationData? GetAnim(string name) =>
         Animations.TryGetValue(name, out var a) ? a : null;
+
+    /// <summary>Per-sprite-angle reference body bbox, averaged across the
+    /// Idle animation's frames at that angle. Used by the wading effect
+    /// to keep the waterline stable across animation frames — without
+    /// this, each frame's pixel-derived bbox (legs extending, body
+    /// bobbing) would shift the waterline V from frame to frame, making
+    /// the visible water level appear to fluctuate on the unit's body.
+    /// Lazily computed on first access. Idle is preferred as the
+    /// reference because it represents the unit's neutral pose; if the
+    /// sprite has no Idle anim, falls back to the first available.</summary>
+    private Dictionary<int, (float topV, float bottomV)>? _refBodyBboxByAngle;
+
+    /// <summary>Reference body bbox for a sprite angle (averaged across
+    /// the reference animation's frames at that angle). Falls back to
+    /// the fallback parameter if no reference data is available.</summary>
+    public (float topV, float bottomV) GetReferenceBodyBbox(int spriteAngle, float fallbackTopV, float fallbackBottomV)
+    {
+        if (_refBodyBboxByAngle == null) ComputeReferenceBodyBboxes();
+        if (_refBodyBboxByAngle!.TryGetValue(spriteAngle, out var bbox))
+            return bbox;
+        // No data for this exact angle — fall back to whatever we have,
+        // preferring the first registered angle (usually the cardinal).
+        foreach (var kv in _refBodyBboxByAngle)
+            return kv.Value;
+        return (fallbackTopV, fallbackBottomV);
+    }
+
+    private void ComputeReferenceBodyBboxes()
+    {
+        _refBodyBboxByAngle = new Dictionary<int, (float, float)>();
+        // Prefer Idle as the reference. If absent, walk anim is a decent
+        // alternative; otherwise just take whatever exists.
+        AnimationData? refAnim = GetAnim("Idle") ?? GetAnim("Walk");
+        if (refAnim == null)
+        {
+            foreach (var a in Animations.Values) { refAnim = a; break; }
+            if (refAnim == null) return;
+        }
+        foreach (var (angle, kfs) in refAnim.AngleFrames)
+        {
+            if (kfs.Count == 0) continue;
+            float topSum = 0f, bottomSum = 0f;
+            int n = 0;
+            foreach (var kf in kfs)
+            {
+                topSum += kf.Frame.BodyTopV;
+                bottomSum += kf.Frame.BodyBottomV;
+                n++;
+            }
+            if (n > 0) _refBodyBboxByAngle[angle] = (topSum / n, bottomSum / n);
+        }
+    }
 }
 
 public class SpriteAtlas
