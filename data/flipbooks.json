@@ -23,6 +23,30 @@
       "cols": 1,
       "rows": 1,
       "defaultFPS": 1
+    },
+    {
+      "id": "mini_splash",
+      "name": "Mini Splash (trail)",
+      "path": "assets/Effects/FX_TX_MiniSplash_2x6_01_Grayscale.png",
+      "cols": 2,
+      "rows": 6,
+      "defaultFPS": 30
+    },
+    {
+      "id": "bubble_magic",
+      "name": "Bubble Magic (airborne splash)",
+      "path": "assets/Effects/FX_TX_BubbleMagic_5x5_01.png",
+      "cols": 5,
+      "rows": 5,
+      "defaultFPS": 30
+    },
+    {
+      "id": "rain_splash",
+      "name": "Rain Splash (landed splash)",
+      "path": "assets/Effects/FX_TX_RainSplash_03_Grayscale.png",
+      "cols": 3,
+      "rows": 3,
+      "defaultFPS": 30
     }
   ]
 }

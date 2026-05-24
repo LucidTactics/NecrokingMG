@@ -106,6 +106,7 @@ public static class ScenarioRegistry
         Register("UITooltipPlacement", () => new Scenarios.TooltipPlacementScenario());
         Register("perf_water", () => new Scenarios.PerfWaterScenario());
         Register("deep_water_blocks", () => new Scenarios.DeepWaterBlocksScenario());
+        Register("wake_color_check", () => new Scenarios.WakeColorCheckScenario());
     }
 
     public static void Register(string name, Func<ScenarioBase> creator)

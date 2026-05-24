@@ -154,6 +154,11 @@ public class Game1 : Microsoft.Xna.Framework.Game
     private Microsoft.Xna.Framework.Graphics.Effect? _outlineFlatEffect;
     private Microsoft.Xna.Framework.Graphics.Effect? _wadingEffect;
     private Microsoft.Xna.Framework.Graphics.Effect? _hdrIntensityEffect;
+    private readonly Render.WadingWakeSystem _wakeSystem = new();
+    /// <summary>Cached gameplay delta from the last Update tick. Drives
+    /// frame-rate-independent systems that need dt during the Draw pass
+    /// (e.g. wading wake particles). Respects pause and time scale.</summary>
+    private float _frameDt;
     private Microsoft.Xna.Framework.Graphics.Effect? _hdrSpriteEffect;
     private Texture2D? _groundVertexMapTex;
     private EffectManager _effectManager = new();
@@ -628,6 +633,9 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 _flipbooks[fbId] = fb;
         }
         LogTiming($"Flipbooks loaded: {_flipbooks.Count}");
+        // Now that flipbooks are loaded, hand the dictionary to systems
+        // that need to look up the trail / splash / rain-splash animations.
+        _wakeSystem.Init(_flipbooks);
 
         // Animation metadata is loaded once in Initialize() and reused across
         // main-game and scenario flows.
@@ -1188,6 +1196,9 @@ public class Game1 : Microsoft.Xna.Framework.Game
                     _flipbooks[fbId] = fb;
             }
         }
+        // Init systems that consume the flipbook dictionary. LoadGame does
+        // this for main-game runs; scenarios use this code path instead.
+        _wakeSystem.Init(_flipbooks);
 
         // Init simulation with a grid sized to the scenario's needs
         int gridSize = scenario.GridSize;
@@ -1982,6 +1993,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         float rawDt = _rawDt;
         float dt = _paused ? 0f : MathF.Min(rawDt, 1f / 20f) * _timeScale;
         _gameTime += dt;
+        _frameDt = dt;
 
         // --- Auto-start scenario from command line ---
         if (_menuState == MenuState.MainMenu && LaunchArgs.Scenario != null)
@@ -4999,6 +5011,17 @@ public class Game1 : Microsoft.Xna.Framework.Game
             perf.LastFrameMs = _rawDt * 1000.0;
         }
 
+        // Handle deferred screenshots from scenarios BEFORE the present so
+        // GetBackBufferData reads the just-rendered frame. (This used to
+        // sit after `return;` below, which made it dead code and silently
+        // disabled the screenshot path for scenarios that didn't directly
+        // call TakeScreenshot.)
+        if (_activeScenario?.DeferredScreenshot != null)
+        {
+            ScenarioScreenshot.TakeScreenshot(GraphicsDevice, _activeScenario.DeferredScreenshot);
+            _activeScenario.DeferredScreenshot = null;
+        }
+
         // Time the Present()/blit done by base.Draw — anything that doesn't
         // overlap with CPU work shows up here. Present blocks until the GPU
         // can accept the frame, so this approximates GPU+vsync wait time.
@@ -5007,14 +5030,6 @@ public class Game1 : Microsoft.Xna.Framework.Game
         presentSw.Stop();
         _gpuPresentMsAvg = _gpuPresentMsAvg * (1.0 - EmaAlpha)
                          + presentSw.Elapsed.TotalMilliseconds * EmaAlpha;
-        return;
-
-        // Handle deferred screenshots from scenarios
-        if (_activeScenario?.DeferredScreenshot != null)
-        {
-            ScenarioScreenshot.TakeScreenshot(GraphicsDevice, _activeScenario.DeferredScreenshot);
-            _activeScenario.DeferredScreenshot = null;
-        }
     }
 
     private void DrawGround()
@@ -6182,6 +6197,24 @@ public class Game1 : Microsoft.Xna.Framework.Game
             fr.Frame.Value, unitDef, animData.Ctrl, _groundSystem, _camera.YRatio);
         if (wading.Active)
         {
+            // World height that puts a particle drawn at the unit's foot
+            // position level with the visual waterline cut on the sprite.
+            // pivotFlippedV - waterlineV is the V distance from the cut up
+            // to the pivot in sprite-V; multiplying by worldH gives the
+            // equivalent world height, and dividing by YRatio undoes the
+            // isometric squish that WorldToScreen applies to world Y.
+            float pivotFlippedV = 1f - fr.Frame.Value.PivotY;
+            float wakeLiftWorldH = (pivotFlippedV - wading.WaterlineV) * worldH / _camera.YRatio;
+
+            // BACK pass — trail particles render behind the sprite so the
+            // body covers anything drifting into its silhouette. Also runs
+            // the per-frame update + edge-detect for entry splash spawning.
+            _wakeSystem.UpdateAndDrawBack(
+                i, _frameDt,
+                _sim.Units[i].Position, _sim.Units[i].Velocity,
+                wakeLiftWorldH, true,
+                _spriteBatch, _pixel, _renderer, _camera);
+
             // Sprite with waterline fade. Top cut V = -1 sentinel disables the
             // top cut in the shader (used for 3/4 facings where the back-cut
             // line never read cleanly). Top slope always 0 — top cut only ever
@@ -6189,10 +6222,30 @@ public class Game1 : Microsoft.Xna.Framework.Game
             DrawWadingSpriteFrame(atlas, fr.Frame.Value, sp, scale, fr.FlipX, tint,
                                   wading.WaterlineV, wading.TopWaterlineV,
                                   wading.Slope, 0f);
+
+            // FRONT pass — bow wave + entry splash render in front of the
+            // sprite. Needed because for N-facing motion the "ahead of
+            // unit" position projects to the same screen Y range as the
+            // visible body; drawing front-class particles after the sprite
+            // keeps the front foam crescent visible.
+            _wakeSystem.DrawFront(i, _spriteBatch, _renderer, _camera);
         }
         else
         {
+            // Out of water but live particles may still be fading. The back
+            // pass advances + dims the remaining tail (and would catch any
+            // exit splash if we added one); fast-exits if no state.
+            _wakeSystem.UpdateAndDrawBack(
+                i, _frameDt,
+                _sim.Units[i].Position, _sim.Units[i].Velocity,
+                0f, false,
+                _spriteBatch, _pixel, _renderer, _camera);
+
             DrawSpriteFrame(atlas, fr.Frame.Value, sp, scale, fr.FlipX, tint);
+
+            // Any lingering front-class particles (a bow wave fading out
+            // as the unit steps onto land) also need the after-sprite pass.
+            _wakeSystem.DrawFront(i, _spriteBatch, _renderer, _camera);
         }
 
         // F2 water debug overlay — render after the sprite so it's not occluded.

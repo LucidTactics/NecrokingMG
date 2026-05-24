@@ -61,6 +61,24 @@ public class Flipbook
         return frame % TotalFrames;
     }
 
+    /// <summary>Map a normalized [0, 1] timeline onto the flipbook's frames,
+    /// playing the animation exactly ONCE — t=0 returns frame 0, t=1
+    /// (and beyond) returns the last frame. Callers that want a fixed-
+    /// length animation matched to some external duration (a particle
+    /// lifetime, a projectile flight time, an airborne arc) compute
+    /// <c>t = age / duration</c> and pass it here. Use this instead of
+    /// <see cref="GetFrameAtTime"/> when the animation should play
+    /// once and stop, not loop.</summary>
+    public int GetFrameAtNormalizedTime(float t)
+    {
+        if (!IsLoaded || TotalFrames <= 0) return 0;
+        if (t <= 0f) return 0;
+        if (t >= 1f) return TotalFrames - 1;
+        int frame = (int)(t * TotalFrames);
+        if (frame >= TotalFrames) frame = TotalFrames - 1;
+        return frame;
+    }
+
     public void Unload()
     {
         Texture?.Dispose();
