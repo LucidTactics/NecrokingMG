@@ -1778,7 +1778,10 @@ public class EnvObjectEditorWindow
         // Don't handle hotkeys if text input is active
         if (_ui.IsTextInputActive) return;
 
-        // Escape to close (unless a dialog is open)
+        // Escape to close (unless a dialog is open). Consume the key so the
+        // global Game1 ESC handler doesn't *also* close the underlying map
+        // editor on the same press — without this, one ESC press here would
+        // first close this popup AND then collapse the map editor too.
         if (kb.IsKeyDown(Keys.Escape) && prevKb.IsKeyUp(Keys.Escape))
         {
             if (_edgeTweakerOpen)
@@ -1791,6 +1794,7 @@ public class EnvObjectEditorWindow
                 _newCategoryDialogOpen = false;
             else
                 Close();
+            _ui._input.ConsumeKey(Keys.Escape);
         }
 
         // Ctrl+S to save

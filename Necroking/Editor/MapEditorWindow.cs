@@ -783,6 +783,16 @@ public class MapEditorWindow
         int contentY = tabsBottom + 2;
         int contentH = panelH - (tabsBottom - panelY) - 2 - 92;
 
+        // Scissor-clip the tab content panel so partially-scrolled list items
+        // can't spill above the section header or below the bottom bar. Each
+        // tab is hand-rolled (no DrawScrollableList wrapper) and only culls
+        // *fully*-offscreen items, so without this clip a half-scrolled top
+        // entry would draw its background up into the tab row. Dropdowns
+        // inside tabs are deferred to DrawDropdownOverlays() after the tab
+        // panel finishes, so clipping the tab body doesn't truncate them.
+        var tabContentRect = new Rectangle(panelX, contentY, PanelWidth, contentH);
+        _eb.BeginClip(tabContentRect);
+
         switch (ActiveTab)
         {
             case MapEditorTab.Ground:
@@ -810,6 +820,8 @@ public class MapEditorWindow
                 DrawUnitsTab(panelX, contentY, contentH, screenW, screenH);
                 break;
         }
+
+        _eb.EndClip();
 
         // Always draw placed unit markers (visible on all tabs)
         DrawPlacedUnitMarkers(screenW, screenH);

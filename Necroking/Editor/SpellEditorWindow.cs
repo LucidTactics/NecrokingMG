@@ -660,6 +660,9 @@ public class SpellEditorWindow : EditorWindow
         var fbListRect = new Rectangle(px, listY, listW, listH);
         _ui.HandlePanelScroll(fbListRect, ref _fbManagerScroll, maxFbScroll, sensitivity: 0.15f, layer: 1);
 
+        // Clip the list area so partially-scrolled top/bottom rows don't spill
+        // into the surrounding popup chrome.
+        _ui.BeginClip(fbListRect);
         float fbDrawY = listY - _fbManagerScroll;
         for (int i = 0; i < fbIDs.Count; i++)
         {
@@ -682,6 +685,7 @@ public class SpellEditorWindow : EditorWindow
 
             fbDrawY += itemH;
         }
+        _ui.EndClip();
 
         // Button row
         int btnRowY = py + ph - 44;
@@ -905,6 +909,9 @@ public class SpellEditorWindow : EditorWindow
         var buffListRect = new Rectangle(px, listY, listW, listH);
         _ui.HandlePanelScroll(buffListRect, ref _buffManagerScroll, maxBuffScroll, sensitivity: 0.15f, layer: 1);
 
+        // Clip the list area so partially-scrolled top/bottom rows don't spill
+        // into the surrounding popup chrome.
+        _ui.BeginClip(buffListRect);
         float buffDrawY = listY - _buffManagerScroll;
         for (int i = 0; i < buffIDs.Count; i++)
         {
@@ -927,6 +934,7 @@ public class SpellEditorWindow : EditorWindow
 
             buffDrawY += itemH;
         }
+        _ui.EndClip();
 
         // Button row
         int btnRowY = py + ph - 44;
