@@ -50,6 +50,11 @@ public class EditorBase
     internal SpriteBatch _sb = null!;
     public SpriteBatch SpriteBatch => _sb;
     internal Texture2D _pixel = null!;
+    /// <summary>1×1 white pixel texture, exposed for editor consumers
+    /// that draw their own primitives (e.g. tilted lines via rotated
+    /// quad). Same instance the built-in DrawRect uses, so we don't
+    /// allocate a duplicate.</summary>
+    public Texture2D PixelTexture => _pixel;
     protected SpriteFont? _font;
     protected SpriteFont? _smallFont;
     protected SpriteFont? _largeFont;
@@ -149,6 +154,13 @@ public class EditorBase
     private int _inputLayer;
     public int InputLayer { get => _inputLayer; set => _inputLayer = value; }
     public bool IsInputBlocked(int layer) => _inputLayer > layer || (layer == 0 && _colorPicker.ConsumesInput);
+
+    /// <summary>Current mouse state for editor consumers that need raw
+    /// position / button data without reading the OS again. Same instance
+    /// the built-in widgets (DrawButton etc.) use, so input-layer checks
+    /// remain consistent.</summary>
+    public MouseState GetMouseState() => _mouse;
+    public MouseState GetPrevMouseState() => _prevMouse;
 
     /// <summary>Check if a rect is hovered, respecting input layers. Also sets MouseOverUI flag when true.</summary>
     protected bool IsHovered(Rectangle rect, int layer = 0)
@@ -510,6 +522,12 @@ public class EditorBase
             }
         }
 
+        // Scissor-clip everything drawn by the item loop so partially-
+        // scrolled top/bottom rows can't spill out — covers the row
+        // background, the default text label, AND anything a custom
+        // renderer draws at the unclipped itemRect.
+        BeginClip(clipRect);
+
         // Draw items — use integer Y so hitbox and draw positions are identical
         int scrollInt = (int)scroll;
         int visIdx = 0; // visible item counter for alternating row colors
@@ -535,12 +553,14 @@ public class EditorBase
             DrawRect(itemRect, bg);
             if (customRenderer != null)
                 customRenderer(i, itemRect, i == selectedIdx);
-            else if (iy >= y)
+            else
                 DrawText(items[i], new Vector2(itemRect.X + 4, itemRect.Y + 2), i == selectedIdx ? TextBright : TextColor);
 
             if (hovered && _mouse.LeftButton == ButtonState.Pressed && _prevMouse.LeftButton == ButtonState.Released)
                 clicked = i;
         }
+
+        EndClip();
 
         // Scrollbar
         int totalItems = 0;

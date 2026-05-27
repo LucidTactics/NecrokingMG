@@ -124,9 +124,25 @@ public class Unit
     /// </summary>
     public Vec2 RenderOffset;
 
-    /// <summary>Convenience: Position + RenderOffset. Use this everywhere a
-    /// visual should follow cosmetic offsets. Gameplay code uses Position.</summary>
-    public Vec2 RenderPos => Position + RenderOffset;
+    /// <summary>Cosmetic Y-only sink applied when the unit is wading.
+    /// Written each frame by the pre-draw wading pass (see Game1.
+    /// UpdateWadingSinkOffsets); zero when not wading or for units that
+    /// don't sink. Positive value = sprite renders below the unit's
+    /// world Y (sinks toward the south on screen).
+    ///
+    /// Separated from <see cref="RenderOffset"/> so it composes cleanly
+    /// with the attack lunge: LungeSystem unconditionally resets
+    /// RenderOffset to zero between attacks; the sink shouldn't get
+    /// stomped along with it. They combine in <see cref="RenderPos"/>
+    /// so callers don't need to know about either.</summary>
+    public float WadingSinkOffsetY;
+
+    /// <summary>Convenience: Position + RenderOffset + wading sink. Use
+    /// this everywhere a visual should follow cosmetic offsets. Gameplay
+    /// code uses Position.</summary>
+    public Vec2 RenderPos => new Vec2(
+        Position.X + RenderOffset.X,
+        Position.Y + RenderOffset.Y + WadingSinkOffsetY);
 
     // Movement
     public float Radius = 0.495f;

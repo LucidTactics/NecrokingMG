@@ -171,6 +171,16 @@ public class UnitDef : IHasId
     /// for units with unusual proportions (very long: horses/snakes,
     /// very short: badgers, bear cubs).</summary>
     [JsonPropertyName("bodyLengthWorld")] public float BodyLengthWorld { get; set; } = 0f;
+
+    /// <summary>Per-unit override for the maximum visual sink offset (world
+    /// units, south on screen) applied when fully wading. The actual sink
+    /// each frame is <c>waterness × this</c>. 0 (default) → fall back to
+    /// <see cref="Render.WadingWakeSystem.DefaultMaxSinkWorld"/>. Negative
+    /// disables sinking entirely for this unit (e.g. a floating spirit).
+    /// Tune this when a unit reads as "too sunken" or "not sinking enough"
+    /// at full wading — usually correlates with sprite world height and
+    /// the waterline fraction.</summary>
+    [JsonPropertyName("wadingSinkWorld")] public float WadingSinkWorld { get; set; } = 0f;
     /// <summary>Biped fallback: how far up the visible body the water cuts
     /// when this unit is wading. 0 = waterline at the feet, 1 = top of body.
     /// Default 0.35 reproduces the old hardcoded waterline. Only consulted
@@ -376,36 +386,125 @@ public class UnitDef : IHasId
     public Render.UnitSpriteData? SpriteData { get; set; }
 }
 
-/// <summary>Four values keyed by cardinal compass direction. Used by per-
-/// direction wading config: lerps between the two nearest cardinals based on
-/// the unit's facing angle so transitions are smooth.</summary>
+/// <summary>Eight values keyed by compass direction (cardinals + intercardinals).
+/// Used by per-direction wading config: lerps between the two nearest of the
+/// eight sectors based on the unit's facing angle so transitions are smooth.
+///
+/// Backward compat: JSON files written before the 4→8 extension only have
+/// N/E/S/W. Missing intercardinal values are auto-populated from the linear
+/// lerp between adjacent cardinals on first <see cref="Sample"/> (so old
+/// files render identically to their old behavior). Once any of the new
+/// fields is touched, all 8 are explicit and the auto-fill is skipped.
+///
+/// Necroking convention: facing 0° = E, 45° = SE, 90° = S, 135° = SW,
+/// 180° = W, 225° = NW, 270° = N, 315° = NE.</summary>
 public class DirectionalFractions
 {
-    [JsonPropertyName("n")] public float N { get; set; }
-    [JsonPropertyName("e")] public float E { get; set; }
-    [JsonPropertyName("s")] public float S { get; set; }
-    [JsonPropertyName("w")] public float W { get; set; }
+    [JsonPropertyName("n")]  public float N  { get; set; }
+    [JsonPropertyName("ne")] public float NE { get; set; }
+    [JsonPropertyName("e")]  public float E  { get; set; }
+    [JsonPropertyName("se")] public float SE { get; set; }
+    [JsonPropertyName("s")]  public float S  { get; set; }
+    [JsonPropertyName("sw")] public float SW { get; set; }
+    [JsonPropertyName("w")]  public float W  { get; set; }
+    [JsonPropertyName("nw")] public float NW { get; set; }
 
-    /// <summary>Interpolate the four values by facing angle. Necroking
-    /// convention: 0° = E, 90° = S, 180° = W, 270° = N. Linear blend between
-    /// the two nearest cardinals.</summary>
+    /// <summary>True once the 4→8 backfill has run (or the values were
+    /// explicitly set programmatically/in JSON with intercardinals). Not
+    /// serialized — internal state for one-time migration logic.</summary>
+    [JsonIgnore] private bool _diagonalsBackfilled;
+
+    /// <summary>Apply lerp-from-cardinals to any intercardinal slot that's
+    /// currently 0. Idempotent — only runs once per instance. Called
+    /// lazily on Sample() and explicitly when the editor opens an old
+    /// 4-direction unit so legacy data preserves its rendered behavior
+    /// after the migration.</summary>
+    public void EnsureDiagonalsBackfilled()
+    {
+        if (_diagonalsBackfilled) return;
+        _diagonalsBackfilled = true;
+        if (NE == 0f) NE = (N + E) * 0.5f;
+        if (SE == 0f) SE = (S + E) * 0.5f;
+        if (SW == 0f) SW = (S + W) * 0.5f;
+        if (NW == 0f) NW = (N + W) * 0.5f;
+    }
+
+    /// <summary>Get the value for a specific sector index (0=E, 1=SE,
+    /// 2=S, 3=SW, 4=W, 5=NW, 6=N, 7=NE). For editor use where you want
+    /// to address a specific orientation by index rather than lerp.</summary>
+    public float GetByIndex(int sector)
+    {
+        EnsureDiagonalsBackfilled();
+        return sector switch
+        {
+            0 => E,  1 => SE, 2 => S,  3 => SW,
+            4 => W,  5 => NW, 6 => N,  7 => NE,
+            _ => 0f
+        };
+    }
+
+    /// <summary>Set the value for a specific sector index — counterpart
+    /// to <see cref="GetByIndex"/>. Used by the wading editor when the
+    /// user drags a waterline.</summary>
+    public void SetByIndex(int sector, float value)
+    {
+        // Setting any value implies the caller knows what they're doing —
+        // mark backfilled so we don't later overwrite their value with a
+        // lerp from adjacent cardinals.
+        _diagonalsBackfilled = true;
+        switch (sector)
+        {
+            case 0: E  = value; break;
+            case 1: SE = value; break;
+            case 2: S  = value; break;
+            case 3: SW = value; break;
+            case 4: W  = value; break;
+            case 5: NW = value; break;
+            case 6: N  = value; break;
+            case 7: NE = value; break;
+        }
+    }
+
+    /// <summary>Interpolate by facing angle. Lerps between the two
+    /// nearest of the 8 sectors. Necroking convention: 0=E, 45=SE,
+    /// 90=S, 135=SW, 180=W, 225=NW, 270=N, 315=NE.</summary>
     public float Sample(float facingDeg)
     {
-        // Normalize to [0, 360).
+        EnsureDiagonalsBackfilled();
         float a = facingDeg % 360f;
         if (a < 0f) a += 360f;
-
-        // Quartile [0, 4): 0=E, 1=S, 2=W, 3=N.
-        float q = a / 90f;
-        int lo = (int)MathF.Floor(q) % 4;
-        int hi = (lo + 1) % 4;
+        // Eighth [0, 8): 0=E, 1=SE, 2=S, 3=SW, 4=W, 5=NW, 6=N, 7=NE.
+        float q = a / 45f;
+        int lo = (int)MathF.Floor(q) % 8;
+        int hi = (lo + 1) % 8;
         float t = q - MathF.Floor(q);
-
-        // Lookup table in quartile order.
-        float vLo = lo switch { 0 => E, 1 => S, 2 => W, 3 => N, _ => E };
-        float vHi = hi switch { 0 => E, 1 => S, 2 => W, 3 => N, _ => E };
-        return Microsoft.Xna.Framework.MathHelper.Lerp(vLo, vHi, t);
+        return Microsoft.Xna.Framework.MathHelper.Lerp(GetByIndex(lo), GetByIndex(hi), t);
     }
+
+    /// <summary>Mirror E-side values to W-side (NE→NW, E→W, SE→SW).
+    /// Most quadrupeds are left-right symmetric; the editor's "Mirror L↔R"
+    /// button calls this so the artist only has to tune one side.</summary>
+    public void MirrorEastToWest()
+    {
+        _diagonalsBackfilled = true;
+        NW = NE;
+        W  = E;
+        SW = SE;
+    }
+
+    /// <summary>Copy all 8 values from another instance. Used by the
+    /// editor for "Reset to default" and undo-style operations.</summary>
+    public void CopyFrom(DirectionalFractions other)
+    {
+        N = other.N;   NE = other.NE; E = other.E;  SE = other.SE;
+        S = other.S;   SW = other.SW; W = other.W;  NW = other.NW;
+        _diagonalsBackfilled = other._diagonalsBackfilled;
+    }
+
+    /// <summary>Sector labels for editor UI, in render order (E first,
+    /// going clockwise). Matches the sector indices used by
+    /// <see cref="GetByIndex"/> / <see cref="SetByIndex"/>.</summary>
+    public static readonly string[] SectorLabels = { "E", "SE", "S", "SW", "W", "NW", "N", "NE" };
 }
 
 public class UnitRegistry : RegistryBase<UnitDef>

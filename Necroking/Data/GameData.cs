@@ -41,6 +41,10 @@ public class GameData
         Corpse.Load(Path.Combine(dataDir, "corpse.json")); // optional, falls back to spritemeta pivots
         // Load weapon_points.json (must be after units.json so UnitDefs exist)
         ok &= Units.LoadWeaponPoints(Path.Combine(dataDir, "weapon_points.json"));
+        // Wading defaults override the code-level WadingDefaults constants if
+        // the file is present. Falls back silently to the code defaults when
+        // missing (acceptable for fresh setups / scenarios).
+        WadingDefaultsFile.Load(Path.Combine(dataDir, "wading_defaults.json"));
         return ok;
     }
 

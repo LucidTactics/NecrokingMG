@@ -21,6 +21,7 @@ public class UnitEditorWindow
     private readonly EditorBase _ui;
     private GameData _gameData = null!;
     private SpriteAtlas[] _atlases = Array.Empty<SpriteAtlas>();
+    private readonly WadingEditorPopup _wadingEditor;
 
     // --- Unit list state ---
     private int _selectedIdx = -1;
@@ -148,6 +149,7 @@ public class UnitEditorWindow
     public UnitEditorWindow(EditorBase ui)
     {
         _ui = ui;
+        _wadingEditor = new WadingEditorPopup(ui);
     }
 
     public void SetGameData(GameData gameData)
@@ -199,6 +201,16 @@ public class UnitEditorWindow
     }
     private Dictionary<string, AnimationMeta>? _animMeta;
 
+    /// <summary>Hand the loaded wading shader effect + camera Y-ratio to
+    /// the wading-editor popup so it can render its sprite preview the
+    /// same way the in-game unit renderer does. Optional: the popup
+    /// falls back to a no-shader overlay when the effect isn't wired,
+    /// so this can be called at any point after Game1 loads its shaders.</summary>
+    public void SetWadingShader(Microsoft.Xna.Framework.Graphics.Effect? effect, float cameraYRatio)
+    {
+        _wadingEditor.SetShaderContext(effect, cameraYRatio);
+    }
+
     // =========================================================================
     //  MAIN DRAW
     // =========================================================================
@@ -241,6 +253,7 @@ public class UnitEditorWindow
         SyncOne(_confirmDeleteGroupLayer, _confirmDeleteGroup);
         SyncOne(_confirmDeleteUnitLayer, _confirmDeleteUnit);
         SyncOne(_confirmDeleteLayer, _confirmDeleteOpen);
+        SyncOne(_wadingEditor.ModalLayer, _wadingEditor.IsOpen);
 
         static void SyncOne(Necroking.UI.IModalLayer layer, bool open)
         {
@@ -531,6 +544,21 @@ public class UnitEditorWindow
         // =================================================================
         if (_groupEditorOpen)
             DrawGroupEditor(screenW, screenH);
+
+        // =================================================================
+        //  WADING EDITOR POPUP (if open) — drawn after main panels so it
+        //  overlays them. Sets _unsavedChanges when Apply&Close is hit.
+        // =================================================================
+        if (_wadingEditor.IsOpen)
+        {
+            _wadingEditor.Draw(screenW, screenH, dt);
+            if (_wadingEditor.HasUnsavedChanges)
+            {
+                _unsavedChanges = true;
+                // Clear so we don't keep setting it every frame.
+                // (HasUnsavedChanges is one-shot per Apply.)
+            }
+        }
 
         // =================================================================
         //  CONFIRM DELETE DIALOG (drawn last, on top of everything)
@@ -824,6 +852,17 @@ public class UnitEditorWindow
         // ==== SPRITE PREVIEW ====
         drawY = DrawSpritePreview(def, drawX, drawY, contentW, dt);
         drawY += 8;
+
+        // ==== WADING EDITOR LAUNCH ==== (only on units that wade — gating
+        // on isQuadruped catches the main use case; humanoids use the
+        // simpler scalar WadingWaterlineFraction which is in the stats
+        // section already.)
+        if (def.IsQuadruped)
+        {
+            if (_ui.DrawButton("Edit Wading Waterlines…", drawX, drawY, contentW, 24, EditorBase.AccentColor))
+                _wadingEditor.Open(def, _gameData, _atlases);
+            drawY += 28;
+        }
 
         // RU01: Combat Stats BEFORE Identity
         // ==== STATS SECTION ====
@@ -2659,7 +2698,11 @@ public class UnitEditorWindow
         {
             var gDef = _gameData.UnitGroups.Get(groupIds[_groupSelectedIdx]);
             if (gDef != null)
+            {
+                _ui.BeginClip(new Rectangle(rightX, contentY, rightW, contentH));
                 DrawGroupDetail(gDef, rightX, contentY, rightW, contentH);
+                _ui.EndClip();
+            }
         }
     }
 
@@ -2844,7 +2887,11 @@ public class UnitEditorWindow
         {
             var wDef = _gameData.Weapons.Get(ids[_subSelectedIdx]);
             if (wDef != null)
+            {
+                _ui.BeginClip(new Rectangle(rightX, contentY, rightW, contentH));
                 DrawWeaponDetail(wDef, rightX, contentY, rightW, contentH);
+                _ui.EndClip();
+            }
         }
     }
 
@@ -3099,7 +3146,11 @@ public class UnitEditorWindow
         {
             var aDef = _gameData.Armors.Get(ids[_subSelectedIdx]);
             if (aDef != null)
+            {
+                _ui.BeginClip(new Rectangle(rightX, contentY, rightW, contentH));
                 DrawArmorDetail(aDef, rightX, contentY, rightW, contentH);
+                _ui.EndClip();
+            }
         }
     }
 
@@ -3192,7 +3243,11 @@ public class UnitEditorWindow
         {
             var sDef = _gameData.Shields.Get(ids[_subSelectedIdx]);
             if (sDef != null)
+            {
+                _ui.BeginClip(new Rectangle(rightX, contentY, rightW, contentH));
                 DrawShieldDetail(sDef, rightX, contentY, rightW, contentH);
+                _ui.EndClip();
+            }
         }
     }
 

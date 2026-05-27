@@ -220,6 +220,25 @@ public class WadingWakeSystem
     /// for unusual proportions (horses, snakes, badgers).</summary>
     public const float QuadrupedDefaultBodyLength = 0.9f;
 
+    /// <summary>Default maximum sink offset in world units at full wading
+    /// (waterness = 1). Positive Y is south on screen — the sprite shifts
+    /// downward so the body appears to descend into the water. Combined
+    /// with the existing waterline-cut-on-body effect (which covers more
+    /// of the upper body as waterness rises), this creates the impression
+    /// of the unit walking into deeper water. Per-unit overrides via
+    /// UnitDef.WadingSinkWorld (or set to a negative value to disable).
+    /// 0.5 wu is roughly belly-deep for a typical humanoid at full wading.</summary>
+    public const float DefaultMaxSinkWorld = 0.5f;
+
+    /// <summary>Resolve the per-frame sink offset for a unit at the given
+    /// waterness. Centralised so the pre-draw pass and any future
+    /// callers (potential debug overlay) compute it the same way.</summary>
+    public static float ComputeSinkOffset(float waterness, float maxSinkWorld)
+    {
+        if (maxSinkWorld <= 0f) return 0f;
+        return MathHelper.Clamp(waterness, 0f, 1f) * maxSinkWorld;
+    }
+
     // --- Bow wave (front foam streak) ---
     // Reference: Sea of Thieves, Witcher 3, RIME — small crescent of foam
     // riding just ahead of the wading character, oriented along motion.

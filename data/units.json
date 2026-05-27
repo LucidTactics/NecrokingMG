@@ -11,6 +11,11 @@
       "radius": 0.495,
       "spriteScale": 0.9,
       "spriteWorldHeight": 2,
+      "bodyLengthWorld": 0,
+      "wadingSinkWorld": 0,
+      "wadingWaterlineFraction": 0.35,
+      "wadingFractionByDirection": null,
+      "wadingTopFractionByDirection": null,
       "color": {
         "r": 0,
         "g": 200,
@@ -47,6 +52,7 @@
         "hood"
       ],
       "shields": [],
+      "tags": [],
       "attackAnim": null,
       "attackCooldown": null,
       "postAttackLockout": null,
@@ -2330,6 +2336,11 @@
       "radius": 0.495,
       "spriteScale": 0.9,
       "spriteWorldHeight": 1.8,
+      "bodyLengthWorld": 0,
+      "wadingSinkWorld": 0,
+      "wadingWaterlineFraction": 0.35,
+      "wadingFractionByDirection": null,
+      "wadingTopFractionByDirection": null,
       "color": {
         "r": 160,
         "g": 160,
@@ -2362,6 +2373,7 @@
       ],
       "armors": [],
       "shields": [],
+      "tags": [],
       "attackAnim": null,
       "attackCooldown": null,
       "postAttackLockout": null,
@@ -2618,6 +2630,11 @@
       "radius": 0.5,
       "spriteScale": 1.7,
       "spriteWorldHeight": 1.8,
+      "bodyLengthWorld": 0,
+      "wadingSinkWorld": 0,
+      "wadingWaterlineFraction": 0.35,
+      "wadingFractionByDirection": null,
+      "wadingTopFractionByDirection": null,
       "color": null,
       "sprite": {
         "atlas": "Animals",
@@ -2645,6 +2662,7 @@
       ],
       "armors": [],
       "shields": [],
+      "tags": [],
       "attackAnim": null,
       "attackCooldown": null,
       "postAttackLockout": null,
@@ -2675,7 +2693,6 @@
     },
     {
       "id": "ZombieFemaleDeer",
-      "tags": ["deer", "zombie", "monster"],
       "name": "Zombie Female Deer",
       "type": "Dynamic",
       "faction": "Undead",
@@ -2685,6 +2702,11 @@
       "radius": 0.495,
       "spriteScale": 1.7,
       "spriteWorldHeight": 1.8,
+      "bodyLengthWorld": 0,
+      "wadingSinkWorld": 0,
+      "wadingWaterlineFraction": 0.35,
+      "wadingFractionByDirection": null,
+      "wadingTopFractionByDirection": null,
       "color": null,
       "sprite": {
         "atlas": "ZombieAnimals1",
@@ -2712,6 +2734,11 @@
       ],
       "armors": [],
       "shields": [],
+      "tags": [
+        "deer",
+        "zombie",
+        "monster"
+      ],
       "attackAnim": null,
       "attackCooldown": null,
       "postAttackLockout": null,
@@ -2751,6 +2778,11 @@
       "radius": 0.5,
       "spriteScale": 1.5,
       "spriteWorldHeight": 1.8,
+      "bodyLengthWorld": 0,
+      "wadingSinkWorld": 0,
+      "wadingWaterlineFraction": 0.35,
+      "wadingFractionByDirection": null,
+      "wadingTopFractionByDirection": null,
       "color": null,
       "sprite": {
         "atlas": "Animals",
@@ -2779,6 +2811,7 @@
       ],
       "armors": [],
       "shields": [],
+      "tags": [],
       "attackAnim": null,
       "attackCooldown": null,
       "postAttackLockout": null,
@@ -2818,6 +2851,11 @@
       "radius": 0.5,
       "spriteScale": 2.2,
       "spriteWorldHeight": 1.8,
+      "bodyLengthWorld": 0,
+      "wadingSinkWorld": 0,
+      "wadingWaterlineFraction": 0.35,
+      "wadingFractionByDirection": null,
+      "wadingTopFractionByDirection": null,
       "color": null,
       "sprite": {
         "atlas": "Animals",
@@ -2849,6 +2887,7 @@
       ],
       "armors": [],
       "shields": [],
+      "tags": [],
       "attackAnim": "AttackBite",
       "attackCooldown": null,
       "postAttackLockout": null,
@@ -2941,6 +2980,11 @@
       "radius": 0.75,
       "spriteScale": 2.2,
       "spriteWorldHeight": 1.8,
+      "bodyLengthWorld": 0,
+      "wadingSinkWorld": 0,
+      "wadingWaterlineFraction": 0.35,
+      "wadingFractionByDirection": null,
+      "wadingTopFractionByDirection": null,
       "color": null,
       "sprite": {
         "atlas": "Animals",
@@ -2979,6 +3023,7 @@
       ],
       "armors": [],
       "shields": [],
+      "tags": [],
       "attackAnim": null,
       "attackCooldown": null,
       "postAttackLockout": null,
@@ -3030,6 +3075,11 @@
       "radius": 1,
       "spriteScale": 2.2,
       "spriteWorldHeight": 1.8,
+      "bodyLengthWorld": 0,
+      "wadingSinkWorld": 0,
+      "wadingWaterlineFraction": 0.35,
+      "wadingFractionByDirection": null,
+      "wadingTopFractionByDirection": null,
       "color": null,
       "sprite": {
         "atlas": "Animals",
@@ -3068,6 +3118,7 @@
       ],
       "armors": [],
       "shields": [],
+      "tags": [],
       "attackAnim": null,
       "attackCooldown": null,
       "postAttackLockout": null,
@@ -3119,6 +3170,11 @@
       "radius": 0.75,
       "spriteScale": 2.4,
       "spriteWorldHeight": 1.8,
+      "bodyLengthWorld": 0,
+      "wadingSinkWorld": 0,
+      "wadingWaterlineFraction": 0.35,
+      "wadingFractionByDirection": null,
+      "wadingTopFractionByDirection": null,
       "color": null,
       "sprite": {
         "atlas": "Animals",
@@ -3150,6 +3206,7 @@
       ],
       "armors": [],
       "shields": [],
+      "tags": [],
       "attackAnim": null,
       "attackCooldown": null,
       "postAttackLockout": null,
@@ -3201,6 +3258,11 @@
       "radius": 0.5,
       "spriteScale": 2.2,
       "spriteWorldHeight": 1.8,
+      "bodyLengthWorld": 0,
+      "wadingSinkWorld": 0,
+      "wadingWaterlineFraction": 0.35,
+      "wadingFractionByDirection": null,
+      "wadingTopFractionByDirection": null,
       "color": null,
       "sprite": {
         "atlas": "Animals",
@@ -3232,6 +3294,7 @@
       ],
       "armors": [],
       "shields": [],
+      "tags": [],
       "attackAnim": null,
       "attackCooldown": null,
       "postAttackLockout": null,
@@ -3274,7 +3337,6 @@
     },
     {
       "id": "ZombieWolf",
-      "tags": ["wolf", "zombie", "monster"],
       "name": "Zombie Wolf",
       "type": "Dynamic",
       "faction": "Undead",
@@ -3284,6 +3346,29 @@
       "radius": 0.5,
       "spriteScale": 2.2,
       "spriteWorldHeight": 1.8,
+      "bodyLengthWorld": 0,
+      "wadingSinkWorld": 0,
+      "wadingWaterlineFraction": 0.35,
+      "wadingFractionByDirection": {
+        "n": 0.28404,
+        "ne": 0.2930427,
+        "e": 0.55,
+        "se": 0.4,
+        "s": 0.09854565,
+        "sw": 0.4,
+        "w": 0.55,
+        "nw": 0.3003989
+      },
+      "wadingTopFractionByDirection": {
+        "n": 0,
+        "ne": 0,
+        "e": 0,
+        "se": 0.05,
+        "s": 0.1,
+        "sw": 0.05,
+        "w": 0,
+        "nw": 0
+      },
       "color": null,
       "sprite": {
         "atlas": "ZombieAnimals1",
@@ -3312,6 +3397,11 @@
       ],
       "armors": [],
       "shields": [],
+      "tags": [
+        "wolf",
+        "zombie",
+        "monster"
+      ],
       "attackAnim": null,
       "attackCooldown": null,
       "postAttackLockout": null,
@@ -3351,6 +3441,11 @@
       "radius": 0.5,
       "spriteScale": 2.2,
       "spriteWorldHeight": 1.8,
+      "bodyLengthWorld": 0,
+      "wadingSinkWorld": 0,
+      "wadingWaterlineFraction": 0.35,
+      "wadingFractionByDirection": null,
+      "wadingTopFractionByDirection": null,
       "color": null,
       "sprite": {
         "atlas": "ZombieAnimals1",
@@ -3379,6 +3474,7 @@
       ],
       "armors": [],
       "shields": [],
+      "tags": [],
       "attackAnim": null,
       "attackCooldown": null,
       "postAttackLockout": null,
@@ -3409,7 +3505,6 @@
     },
     {
       "id": "ZombieMaleDeer",
-      "tags": ["deer", "zombie", "monster"],
       "name": "Zombie Male Deer",
       "type": "Dynamic",
       "faction": "Undead",
@@ -3419,6 +3514,11 @@
       "radius": 0.5,
       "spriteScale": 1.5,
       "spriteWorldHeight": 1.8,
+      "bodyLengthWorld": 0,
+      "wadingSinkWorld": 0,
+      "wadingWaterlineFraction": 0.35,
+      "wadingFractionByDirection": null,
+      "wadingTopFractionByDirection": null,
       "color": null,
       "sprite": {
         "atlas": "ZombieAnimals1",
@@ -3447,6 +3547,11 @@
       ],
       "armors": [],
       "shields": [],
+      "tags": [
+        "deer",
+        "zombie",
+        "monster"
+      ],
       "attackAnim": null,
       "attackCooldown": null,
       "postAttackLockout": null,
@@ -3486,7 +3591,11 @@
       "radius": 0.495,
       "spriteScale": 1,
       "spriteWorldHeight": 2.5,
-      "isQuadruped": true,
+      "bodyLengthWorld": 0,
+      "wadingSinkWorld": 0,
+      "wadingWaterlineFraction": 0.35,
+      "wadingFractionByDirection": null,
+      "wadingTopFractionByDirection": null,
       "color": {
         "r": 30,
         "g": 30,
@@ -3521,6 +3630,7 @@
         "none"
       ],
       "shields": [],
+      "tags": [],
       "attackAnim": null,
       "attackCooldown": null,
       "postAttackLockout": null,
@@ -3560,6 +3670,11 @@
       "radius": 0.495,
       "spriteScale": 1,
       "spriteWorldHeight": 1.9,
+      "bodyLengthWorld": 0,
+      "wadingSinkWorld": 0,
+      "wadingWaterlineFraction": 0.35,
+      "wadingFractionByDirection": null,
+      "wadingTopFractionByDirection": null,
       "color": {
         "r": 180,
         "g": 140,
@@ -3595,6 +3710,7 @@
         "armor_8"
       ],
       "shields": [],
+      "tags": [],
       "attackAnim": null,
       "attackCooldown": null,
       "postAttackLockout": null,
@@ -3634,6 +3750,11 @@
       "radius": 0.495,
       "spriteScale": 1,
       "spriteWorldHeight": 1.9,
+      "bodyLengthWorld": 0,
+      "wadingSinkWorld": 0,
+      "wadingWaterlineFraction": 0.35,
+      "wadingFractionByDirection": null,
+      "wadingTopFractionByDirection": null,
       "color": {
         "r": 180,
         "g": 140,
@@ -3672,6 +3793,7 @@
       "shields": [
         "none"
       ],
+      "tags": [],
       "attackAnim": null,
       "attackCooldown": null,
       "postAttackLockout": null,
@@ -3711,6 +3833,11 @@
       "radius": 0.495,
       "spriteScale": 1,
       "spriteWorldHeight": 1.9,
+      "bodyLengthWorld": 0,
+      "wadingSinkWorld": 0,
+      "wadingWaterlineFraction": 0.35,
+      "wadingFractionByDirection": null,
+      "wadingTopFractionByDirection": null,
       "color": {
         "r": 180,
         "g": 140,
@@ -3749,6 +3876,7 @@
       "shields": [
         "none"
       ],
+      "tags": [],
       "attackAnim": null,
       "attackCooldown": null,
       "postAttackLockout": null,
@@ -3788,6 +3916,11 @@
       "radius": 0.495,
       "spriteScale": 1,
       "spriteWorldHeight": 1.9,
+      "bodyLengthWorld": 0,
+      "wadingSinkWorld": 0,
+      "wadingWaterlineFraction": 0.35,
+      "wadingFractionByDirection": null,
+      "wadingTopFractionByDirection": null,
       "color": {
         "r": 180,
         "g": 140,
@@ -3825,6 +3958,7 @@
       "shields": [
         "none"
       ],
+      "tags": [],
       "attackAnim": null,
       "attackCooldown": null,
       "postAttackLockout": null,
@@ -3864,6 +3998,11 @@
       "radius": 0.495,
       "spriteScale": 1,
       "spriteWorldHeight": 1.9,
+      "bodyLengthWorld": 0,
+      "wadingSinkWorld": 0,
+      "wadingWaterlineFraction": 0.35,
+      "wadingFractionByDirection": null,
+      "wadingTopFractionByDirection": null,
       "color": {
         "r": 180,
         "g": 140,
@@ -3901,6 +4040,7 @@
       "shields": [
         "none"
       ],
+      "tags": [],
       "attackAnim": null,
       "attackCooldown": null,
       "postAttackLockout": null,
@@ -3940,6 +4080,11 @@
       "radius": 0.495,
       "spriteScale": 1,
       "spriteWorldHeight": 1.9,
+      "bodyLengthWorld": 0,
+      "wadingSinkWorld": 0,
+      "wadingWaterlineFraction": 0.35,
+      "wadingFractionByDirection": null,
+      "wadingTopFractionByDirection": null,
       "color": {
         "r": 180,
         "g": 140,
@@ -3977,6 +4122,7 @@
       "shields": [
         "none"
       ],
+      "tags": [],
       "attackAnim": null,
       "attackCooldown": null,
       "postAttackLockout": null,
@@ -4016,6 +4162,11 @@
       "radius": 0.495,
       "spriteScale": 1,
       "spriteWorldHeight": 1.9,
+      "bodyLengthWorld": 0,
+      "wadingSinkWorld": 0,
+      "wadingWaterlineFraction": 0.35,
+      "wadingFractionByDirection": null,
+      "wadingTopFractionByDirection": null,
       "color": {
         "r": 180,
         "g": 140,
@@ -4053,6 +4204,7 @@
       "shields": [
         "none"
       ],
+      "tags": [],
       "attackAnim": null,
       "attackCooldown": null,
       "postAttackLockout": null,
@@ -4092,6 +4244,11 @@
       "radius": 0.495,
       "spriteScale": 1,
       "spriteWorldHeight": 1.9,
+      "bodyLengthWorld": 0,
+      "wadingSinkWorld": 0,
+      "wadingWaterlineFraction": 0.35,
+      "wadingFractionByDirection": null,
+      "wadingTopFractionByDirection": null,
       "color": {
         "r": 180,
         "g": 140,
@@ -4129,6 +4286,7 @@
       "shields": [
         "none"
       ],
+      "tags": [],
       "attackAnim": null,
       "attackCooldown": null,
       "postAttackLockout": null,
@@ -4168,6 +4326,11 @@
       "radius": 0.495,
       "spriteScale": 1,
       "spriteWorldHeight": 1.8,
+      "bodyLengthWorld": 0,
+      "wadingSinkWorld": 0,
+      "wadingWaterlineFraction": 0.35,
+      "wadingFractionByDirection": null,
+      "wadingTopFractionByDirection": null,
       "color": {
         "r": 180,
         "g": 140,
@@ -4203,6 +4366,7 @@
         "armor_8"
       ],
       "shields": [],
+      "tags": [],
       "attackAnim": null,
       "attackCooldown": null,
       "postAttackLockout": null,
@@ -4242,6 +4406,11 @@
       "radius": 0.495,
       "spriteScale": 1,
       "spriteWorldHeight": 1.8,
+      "bodyLengthWorld": 0,
+      "wadingSinkWorld": 0,
+      "wadingWaterlineFraction": 0.35,
+      "wadingFractionByDirection": null,
+      "wadingTopFractionByDirection": null,
       "color": {
         "r": 180,
         "g": 140,
@@ -4277,6 +4446,7 @@
         "hood"
       ],
       "shields": [],
+      "tags": [],
       "attackAnim": null,
       "attackCooldown": null,
       "postAttackLockout": null,
@@ -4613,6 +4783,11 @@
       "radius": 0.495,
       "spriteScale": 1,
       "spriteWorldHeight": 1.8,
+      "bodyLengthWorld": 0,
+      "wadingSinkWorld": 0,
+      "wadingWaterlineFraction": 0.35,
+      "wadingFractionByDirection": null,
+      "wadingTopFractionByDirection": null,
       "color": {
         "r": 100,
         "g": 100,
@@ -4650,6 +4825,7 @@
       "shields": [
         "tower_shield"
       ],
+      "tags": [],
       "attackAnim": null,
       "attackCooldown": null,
       "postAttackLockout": null,
@@ -4689,6 +4865,11 @@
       "radius": 0.495,
       "spriteScale": 1,
       "spriteWorldHeight": 1.8,
+      "bodyLengthWorld": 0,
+      "wadingSinkWorld": 0,
+      "wadingWaterlineFraction": 0.35,
+      "wadingFractionByDirection": null,
+      "wadingTopFractionByDirection": null,
       "color": {
         "r": 220,
         "g": 200,
@@ -4726,6 +4907,7 @@
       "shields": [
         "tower_shield"
       ],
+      "tags": [],
       "attackAnim": null,
       "attackCooldown": null,
       "postAttackLockout": null,
@@ -4765,6 +4947,11 @@
       "radius": 0.495,
       "spriteScale": 1,
       "spriteWorldHeight": 1.8,
+      "bodyLengthWorld": 0,
+      "wadingSinkWorld": 0,
+      "wadingWaterlineFraction": 0.35,
+      "wadingFractionByDirection": null,
+      "wadingTopFractionByDirection": null,
       "color": {
         "r": 180,
         "g": 100,
@@ -4801,6 +4988,7 @@
         "armor_8"
       ],
       "shields": [],
+      "tags": [],
       "attackAnim": null,
       "attackCooldown": null,
       "postAttackLockout": null,
@@ -4840,6 +5028,11 @@
       "radius": 0.495,
       "spriteScale": 1,
       "spriteWorldHeight": 1.9,
+      "bodyLengthWorld": 0,
+      "wadingSinkWorld": 0,
+      "wadingWaterlineFraction": 0.35,
+      "wadingFractionByDirection": null,
+      "wadingTopFractionByDirection": null,
       "color": {
         "r": 160,
         "g": 160,
@@ -4877,6 +5070,7 @@
       "shields": [
         "shield_4"
       ],
+      "tags": [],
       "attackAnim": null,
       "attackCooldown": null,
       "postAttackLockout": null,
@@ -4916,6 +5110,11 @@
       "radius": 0.495,
       "spriteScale": 1,
       "spriteWorldHeight": 1.8,
+      "bodyLengthWorld": 0,
+      "wadingSinkWorld": 0,
+      "wadingWaterlineFraction": 0.35,
+      "wadingFractionByDirection": null,
+      "wadingTopFractionByDirection": null,
       "color": {
         "r": 160,
         "g": 160,
@@ -4953,6 +5152,7 @@
       "shields": [
         "none"
       ],
+      "tags": [],
       "attackAnim": null,
       "attackCooldown": null,
       "postAttackLockout": null,
@@ -4992,6 +5192,11 @@
       "radius": 0.495,
       "spriteScale": 1.3,
       "spriteWorldHeight": 1.8,
+      "bodyLengthWorld": 0,
+      "wadingSinkWorld": 0,
+      "wadingWaterlineFraction": 0.35,
+      "wadingFractionByDirection": null,
+      "wadingTopFractionByDirection": null,
       "color": {
         "r": 160,
         "g": 160,
@@ -5027,6 +5232,7 @@
       "shields": [
         "none"
       ],
+      "tags": [],
       "attackAnim": null,
       "attackCooldown": null,
       "postAttackLockout": null,
@@ -5066,6 +5272,11 @@
       "radius": 0.5,
       "spriteScale": 2.8,
       "spriteWorldHeight": 1.3,
+      "bodyLengthWorld": 0,
+      "wadingSinkWorld": 0,
+      "wadingWaterlineFraction": 0.35,
+      "wadingFractionByDirection": null,
+      "wadingTopFractionByDirection": null,
       "color": null,
       "sprite": {
         "atlas": "Animals",
@@ -5100,6 +5311,7 @@
       ],
       "armors": [],
       "shields": [],
+      "tags": [],
       "attackAnim": null,
       "attackCooldown": null,
       "postAttackLockout": null,
@@ -5139,6 +5351,11 @@
       "radius": 0.75,
       "spriteScale": 3,
       "spriteWorldHeight": 1.7,
+      "bodyLengthWorld": 0,
+      "wadingSinkWorld": 0,
+      "wadingWaterlineFraction": 0.35,
+      "wadingFractionByDirection": null,
+      "wadingTopFractionByDirection": null,
       "color": null,
       "sprite": {
         "atlas": "Animals",
@@ -5173,6 +5390,7 @@
       ],
       "armors": [],
       "shields": [],
+      "tags": [],
       "attackAnim": null,
       "attackCooldown": null,
       "postAttackLockout": null,
@@ -5203,7 +5421,6 @@
     },
     {
       "id": "ZombieJuvenileBear",
-      "tags": ["bear", "zombie", "monster"],
       "name": "Zombie Juvenile Bear",
       "type": "Dynamic",
       "faction": "Undead",
@@ -5213,6 +5430,11 @@
       "radius": 0.75,
       "spriteScale": 2.2,
       "spriteWorldHeight": 1.8,
+      "bodyLengthWorld": 0,
+      "wadingSinkWorld": 0,
+      "wadingWaterlineFraction": 0.35,
+      "wadingFractionByDirection": null,
+      "wadingTopFractionByDirection": null,
       "color": null,
       "sprite": {
         "atlas": "ZombieAnimals2",
@@ -5247,6 +5469,11 @@
       ],
       "armors": [],
       "shields": [],
+      "tags": [
+        "bear",
+        "zombie",
+        "monster"
+      ],
       "attackAnim": null,
       "attackCooldown": null,
       "postAttackLockout": null,
@@ -5277,7 +5504,6 @@
     },
     {
       "id": "ZombieGrizzlyBear",
-      "tags": ["bear", "zombie", "monster"],
       "name": "Zombie Grizzly Bear",
       "type": "Dynamic",
       "faction": "Undead",
@@ -5287,6 +5513,11 @@
       "radius": 1,
       "spriteScale": 2.2,
       "spriteWorldHeight": 1.8,
+      "bodyLengthWorld": 0,
+      "wadingSinkWorld": 0,
+      "wadingWaterlineFraction": 0.35,
+      "wadingFractionByDirection": null,
+      "wadingTopFractionByDirection": null,
       "color": null,
       "sprite": {
         "atlas": "ZombieAnimals2",
@@ -5321,6 +5552,11 @@
       ],
       "armors": [],
       "shields": [],
+      "tags": [
+        "bear",
+        "zombie",
+        "monster"
+      ],
       "attackAnim": null,
       "attackCooldown": null,
       "postAttackLockout": null,
@@ -5351,7 +5587,6 @@
     },
     {
       "id": "ZombieBoar",
-      "tags": ["boar", "zombie", "monster"],
       "name": "Zombie Boar",
       "type": "Dynamic",
       "faction": "Undead",
@@ -5361,6 +5596,11 @@
       "radius": 0.5,
       "spriteScale": 2.3,
       "spriteWorldHeight": 1.3,
+      "bodyLengthWorld": 0,
+      "wadingSinkWorld": 0,
+      "wadingWaterlineFraction": 0.35,
+      "wadingFractionByDirection": null,
+      "wadingTopFractionByDirection": null,
       "color": null,
       "sprite": {
         "atlas": "Animals",
@@ -5391,6 +5631,11 @@
       ],
       "armors": [],
       "shields": [],
+      "tags": [
+        "boar",
+        "zombie",
+        "monster"
+      ],
       "attackAnim": null,
       "attackCooldown": null,
       "postAttackLockout": null,
@@ -5421,7 +5666,6 @@
     },
     {
       "id": "ZombieGreatBoar",
-      "tags": ["boar", "zombie", "monster"],
       "name": "Zombie Great Boar",
       "type": "Dynamic",
       "faction": "Undead",
@@ -5431,6 +5675,11 @@
       "radius": 0.75,
       "spriteScale": 2.3,
       "spriteWorldHeight": 1.7,
+      "bodyLengthWorld": 0,
+      "wadingSinkWorld": 0,
+      "wadingWaterlineFraction": 0.35,
+      "wadingFractionByDirection": null,
+      "wadingTopFractionByDirection": null,
       "color": null,
       "sprite": {
         "atlas": "Animals",
@@ -5461,6 +5710,11 @@
       ],
       "armors": [],
       "shields": [],
+      "tags": [
+        "boar",
+        "zombie",
+        "monster"
+      ],
       "attackAnim": null,
       "attackCooldown": null,
       "postAttackLockout": null,
@@ -5500,6 +5754,11 @@
       "radius": 0.495,
       "spriteScale": 0.9,
       "spriteWorldHeight": 2,
+      "bodyLengthWorld": 0,
+      "wadingSinkWorld": 0,
+      "wadingWaterlineFraction": 0.35,
+      "wadingFractionByDirection": null,
+      "wadingTopFractionByDirection": null,
       "color": {
         "r": 0,
         "g": 200,
@@ -5534,6 +5793,7 @@
         "hood"
       ],
       "shields": [],
+      "tags": [],
       "attackAnim": null,
       "attackCooldown": null,
       "postAttackLockout": null,
@@ -5590,6 +5850,11 @@
       "radius": 0.495,
       "spriteScale": 0.9,
       "spriteWorldHeight": 2,
+      "bodyLengthWorld": 0,
+      "wadingSinkWorld": 0,
+      "wadingWaterlineFraction": 0.35,
+      "wadingFractionByDirection": null,
+      "wadingTopFractionByDirection": null,
       "color": {
         "r": 0,
         "g": 200,
@@ -5626,6 +5891,7 @@
         "hood"
       ],
       "shields": [],
+      "tags": [],
       "attackAnim": null,
       "attackCooldown": null,
       "postAttackLockout": null,
@@ -5665,6 +5931,11 @@
       "radius": 0.495,
       "spriteScale": 0.9,
       "spriteWorldHeight": 2,
+      "bodyLengthWorld": 0,
+      "wadingSinkWorld": 0,
+      "wadingWaterlineFraction": 0.35,
+      "wadingFractionByDirection": null,
+      "wadingTopFractionByDirection": null,
       "color": {
         "r": 0,
         "g": 200,
@@ -5701,6 +5972,7 @@
         "hood"
       ],
       "shields": [],
+      "tags": [],
       "attackAnim": null,
       "attackCooldown": null,
       "postAttackLockout": null,
@@ -5740,6 +6012,11 @@
       "radius": 0.9,
       "spriteScale": 1,
       "spriteWorldHeight": 2,
+      "bodyLengthWorld": 0,
+      "wadingSinkWorld": 0,
+      "wadingWaterlineFraction": 0.35,
+      "wadingFractionByDirection": null,
+      "wadingTopFractionByDirection": null,
       "color": {
         "r": 0,
         "g": 200,
@@ -5776,6 +6053,7 @@
         "hood"
       ],
       "shields": [],
+      "tags": [],
       "attackAnim": null,
       "attackCooldown": null,
       "postAttackLockout": null,
@@ -5815,6 +6093,11 @@
       "radius": 0.495,
       "spriteScale": 0.85,
       "spriteWorldHeight": 2,
+      "bodyLengthWorld": 0,
+      "wadingSinkWorld": 0,
+      "wadingWaterlineFraction": 0.35,
+      "wadingFractionByDirection": null,
+      "wadingTopFractionByDirection": null,
       "color": {
         "r": 0,
         "g": 200,
@@ -5851,6 +6134,7 @@
         "hood"
       ],
       "shields": [],
+      "tags": [],
       "attackAnim": null,
       "attackCooldown": null,
       "postAttackLockout": null,

@@ -53,27 +53,37 @@ public static class WadingConfig
 /// Bipeds fall back to the scalar <see cref="UnitDef.WadingWaterlineFraction"/>
 /// (uniform across facings) — that matched the original hardcoded behavior.
 ///
-/// LIMITATION — 4-cardinal lerp coupling: <see cref="DirectionalFractions"/>
-/// stores N/E/S/W only and computes intercardinals by averaging the two
-/// nearest cardinals. That means you cannot tune SE/SW independently of NE/NW
-/// or of pure S — every cardinal touches two diagonals. The values below
-/// reflect that constraint: e.g. the pure-S bottom fraction is higher than
-/// the head-on view "naturally" wants because raising it was the only way
-/// to bump SE/SW without disturbing NE/NW. If future tuning hits a wall here
-/// (a request that genuinely needs one diagonal moved alone), the fix is to
-/// extend <see cref="DirectionalFractions"/> to 8 slots — N/NE/E/SE/S/SW/W/NW
-/// — and have <c>Sample</c> lerp between the two adjacent eighths instead.</summary>
+/// <see cref="DirectionalFractions"/> now stores all 8 sectors (cardinals +
+/// intercardinals) so each can be tuned independently. The defaults below
+/// are the loaded-at-startup values from <c>data/wading_defaults.json</c>
+/// — when that file is missing, the embedded literals here apply.
+///
+/// Editable from the unit editor's wading sub-tool: the "Save as default"
+/// button writes the in-editor values back to the JSON file, replacing
+/// these on the next game launch.</summary>
 public static class WadingDefaults
 {
     public static readonly DirectionalFractions QuadrupedBottom = new()
     {
-        N = 0.35f, E = 0.55f, S = 0.25f, W = 0.55f
+        N = 0.35f, NE = 0.45f, E = 0.55f, SE = 0.40f,
+        S = 0.25f, SW = 0.40f, W = 0.55f, NW = 0.45f
     };
 
     public static readonly DirectionalFractions QuadrupedTop = new()
     {
-        N = 0.0f, E = 0.0f, S = 0.10f, W = 0.0f
+        N = 0.0f, NE = 0.0f, E = 0.0f, SE = 0.05f,
+        S = 0.10f, SW = 0.05f, W = 0.0f, NW = 0.0f
     };
+
+    /// <summary>Replace the static defaults with values loaded from
+    /// data/wading_defaults.json. Called at startup by GameData.Load
+    /// after the JSON is read. If any field is missing in the JSON the
+    /// embedded literal value above is kept for that field.</summary>
+    public static void Apply(DirectionalFractions? bottom, DirectionalFractions? top)
+    {
+        if (bottom != null) QuadrupedBottom.CopyFrom(bottom);
+        if (top != null) QuadrupedTop.CopyFrom(top);
+    }
 }
 
 /// <summary>Snapshot of a unit's wading state for one frame. Computed once
