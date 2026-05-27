@@ -1941,6 +1941,9 @@ public class Game1 : Microsoft.Xna.Framework.Game
         _unitEditor.SetGameData(_gameData);
         _unitEditor.SetAtlases(_atlases, GraphicsDevice);
         _unitEditor.SetAnimMeta(_animMeta);
+        // Hand the wading effect + camera Y-ratio to the wading sub-editor
+        // so its preview applies the actual shader (matching in-game look).
+        _unitEditor.SetWadingShader(_wadingEffect, _camera.YRatio);
         _spellEditor = new SpellEditorWindow(_editorUi);
         _spellEditor.SetGameData(_gameData);
         _spellEditor.SetHdrEffect(_hdrSpriteEffect);
@@ -4625,6 +4628,13 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // --- Walls ---
         DrawWalls();
 
+        // --- Wading sink offsets ---
+        // Compute Unit.WadingSinkOffsetY for every unit before any visual
+        // pass reads it. Must run before _shadowRenderer.Draw (which reads
+        // RenderPos to position shadows) and before DrawUnitsAndObjects
+        // (which reads RenderPos for sprites, buffs, damage numbers, etc.).
+        UpdateWadingSinkOffsets();
+
         // --- Shadows ---
         // Grass is no longer drawn here — tufts are merged into the unit Y-sort
         // inside DrawUnitsAndObjects so they can render in front of / behind
@@ -5117,10 +5127,17 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
         // Per-type uniforms: tint (defaults white) and water-animation flag.
         // Shader treats array slots 0..7; unused slots are harmless defaults.
-        var tintArr = new Vector4[8];
-        var waterArr = new float[8];
-        for (int i = 0; i < 8; i++) { tintArr[i] = Vector4.One; waterArr[i] = 0f; }
-        int typeCap = Math.Min(_groundSystem.TypeCount, 8);
+        // Per-ground-type uniform arrays. Indexed by ground-type id (0..31)
+        // matching the bottom 5 bits of the tilemap byte; the top 3 bits hold
+        // the texture-slot id (0..7) which drives the shader cascade. The
+        // tint/iswater arrays must match the shader's array length (32 in
+        // GroundShader.fx).
+        const int MaxGroundTypes = 16;
+        const int MaxTextureSlots = 8;
+        var tintArr = new Vector4[MaxGroundTypes];
+        var waterArr = new float[MaxGroundTypes];
+        for (int i = 0; i < MaxGroundTypes; i++) { tintArr[i] = Vector4.One; waterArr[i] = 0f; }
+        int typeCap = Math.Min(_groundSystem.TypeCount, MaxGroundTypes);
         for (int i = 0; i < typeCap; i++)
         {
             var def = _groundSystem.GetTypeDef(i);
@@ -5131,15 +5148,16 @@ public class Game1 : Microsoft.Xna.Framework.Game
         _groundEffect.Parameters["TintColors"]?.SetValue(tintArr);
         _groundEffect.Parameters["IsWaterType"]?.SetValue(waterArr);
 
-        // Bind ground type textures via Effect.Parameters (named texture params, not register slots).
-        // Shader supports indices 0..7; defs beyond that fall back to type 0 in the shader.
+        // Bind unique ground textures via Effect.Parameters (named texture params, not register slots).
+        // Shader cascade supports MaxTextureSlots unique texture slots; types past those reuse slot 0 fallback.
         string[] texParamNames = {
             "GroundTexture0", "GroundTexture1", "GroundTexture2", "GroundTexture3",
             "GroundTexture4", "GroundTexture5", "GroundTexture6", "GroundTexture7",
         };
-        for (int i = 0; i < Math.Min(_groundSystem.TypeCount, texParamNames.Length); i++)
+        int slotCap = Math.Min(_groundSystem.UniqueTextureCount, Math.Min(texParamNames.Length, MaxTextureSlots));
+        for (int i = 0; i < slotCap; i++)
         {
-            var tex = _groundSystem.GetTexture(i);
+            var tex = _groundSystem.GetUniqueTexture(i);
             if (tex != null)
                 _groundEffect.Parameters[texParamNames[i]]?.SetValue(tex);
         }
@@ -5287,6 +5305,40 @@ public class Game1 : Microsoft.Xna.Framework.Game
                     darkColor, 0f, Vector2.Zero,
                     new Vector2(tileW + 0.5f, 2f), SpriteEffects.None, 0f);
             }
+        }
+    }
+
+    /// <summary>Pre-draw pass: write Unit.WadingSinkOffsetY for every
+    /// alive unit based on its current waterness and per-unit (or default)
+    /// sink magnitude. Runs before shadow / sprite / buff passes so they
+    /// all see the consistent sunken RenderPos. Cheap: per-unit it's a
+    /// single waterness sample + scale.</summary>
+    private void UpdateWadingSinkOffsets()
+    {
+        if (_groundSystem == null) return;
+        for (int i = 0; i < _sim.Units.Count; i++)
+        {
+            if (!_sim.Units[i].Alive)
+            {
+                _sim.UnitsMut[i].WadingSinkOffsetY = 0f;
+                continue;
+            }
+            var unitDef = _gameData.Units.Get(_sim.Units[i].UnitDefID);
+            // Negative WadingSinkWorld = explicit "no sink" opt-out.
+            float maxSink = unitDef != null && unitDef.WadingSinkWorld != 0f
+                ? unitDef.WadingSinkWorld
+                : Render.WadingWakeSystem.DefaultMaxSinkWorld;
+            if (maxSink <= 0f)
+            {
+                _sim.UnitsMut[i].WadingSinkOffsetY = 0f;
+                continue;
+            }
+            float waternessRaw = _groundSystem.SampleWaternessSmoothed(
+                _sim.Units[i].Position, Render.WadingConfig.KernelRadius);
+            float waterness = MathHelper.Clamp(
+                (waternessRaw - Render.WadingConfig.ShorelineMidpoint) * 2f, 0f, 1f);
+            _sim.UnitsMut[i].WadingSinkOffsetY =
+                Render.WadingWakeSystem.ComputeSinkOffset(waterness, maxSink);
         }
     }
 
@@ -6212,9 +6264,13 @@ public class Game1 : Microsoft.Xna.Framework.Game
             float bodyLen = unitDef.BodyLengthWorld > 0f
                 ? unitDef.BodyLengthWorld
                 : (unitDef.IsQuadruped ? Render.WadingWakeSystem.QuadrupedDefaultBodyLength : 0f);
+            // Use RenderPos (Position + sink offset) so wake particles
+            // spawn at the body's *visual* footprint — when the unit sinks
+            // into deep water, the trail and bow wave follow the sunken
+            // body instead of floating above it at the sim Y.
             _wakeSystem.UpdateAndDrawBack(
                 i, _frameDt,
-                _sim.Units[i].Position, _sim.Units[i].Velocity,
+                _sim.Units[i].RenderPos, _sim.Units[i].Velocity,
                 _sim.Units[i].FacingAngle, bodyLen,
                 wakeLiftWorldH, true,
                 _spriteBatch, _pixel, _renderer, _camera);
@@ -6244,7 +6300,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 : (unitDef.IsQuadruped ? Render.WadingWakeSystem.QuadrupedDefaultBodyLength : 0f);
             _wakeSystem.UpdateAndDrawBack(
                 i, _frameDt,
-                _sim.Units[i].Position, _sim.Units[i].Velocity,
+                _sim.Units[i].RenderPos, _sim.Units[i].Velocity,
                 _sim.Units[i].FacingAngle, bodyLen,
                 0f, false,
                 _spriteBatch, _pixel, _renderer, _camera);

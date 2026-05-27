@@ -103,11 +103,39 @@ public class GroundSystem
     /// 5×4 per call — caching this saves a property + enum compare per lookup.</summary>
     private bool[] _isWaterByTypeIdx = Array.Empty<bool>();
 
+    // Texture-slot deduplication. Multiple ground types can share the same
+    // PNG (e.g. shallow_water + swamp_shallow_water both use ShallowWater.png
+    // but differ in tint). The shader cascade is keyed by texture slot, not
+    // ground-type index, so that growing the ground-type count doesn't
+    // expand the cascade and blow the PS_3_0 temp-register budget.
+    private int[] _textureSlotByTypeIdx = Array.Empty<int>();
+    private List<Texture2D?> _uniqueTextures = new();
+    public int UniqueTextureCount => _uniqueTextures.Count;
+    public int GetTextureSlot(int typeIdx) =>
+        (typeIdx >= 0 && typeIdx < _textureSlotByTypeIdx.Length) ? _textureSlotByTypeIdx[typeIdx] : 0;
+    public Texture2D? GetUniqueTexture(int slot) =>
+        (slot >= 0 && slot < _uniqueTextures.Count) ? _uniqueTextures[slot] : null;
+
+    /// <summary>Pack (textureSlot, groundType) into a single byte for the tilemap
+    /// R/G channels. Top 3 bits = texture slot (0..7), bottom 5 bits = ground
+    /// type id (0..31). The shader decodes both to (a) sample the texture
+    /// cascade by slot — no dynamic-index uniform array read inside the
+    /// cascade, which is what keeps PS_3_0's temp-register budget — and
+    /// (b) look up per-type tint and iswater flag separately.</summary>
+    public byte PackSlotType(byte typeIdx)
+    {
+        int slot = (typeIdx < _textureSlotByTypeIdx.Length) ? _textureSlotByTypeIdx[typeIdx] : 0;
+        slot = Math.Clamp(slot, 0, 7);
+        int t = Math.Clamp((int)typeIdx, 0, 31);
+        return (byte)((slot << 5) | t);
+    }
+
     public int AddGroundType(GroundTypeDef def)
     {
         _types.Add(def);
         _textures.Add(null);
         RebuildIsWaterCache();
+        RebuildTextureSlotCache();
         return _types.Count - 1;
     }
 
@@ -119,6 +147,29 @@ public class GroundSystem
         {
             var t = _types[i].MovementTerrain;
             _isWaterByTypeIdx[i] = (t == TerrainType.ShallowWater || t == TerrainType.DeepWater);
+        }
+    }
+
+    // Build slot mapping by deduplicating ground types' texture paths. Types
+    // with empty TexturePath share slot 0 (the fallback). Called after types
+    // are added/removed and after LoadTextures so slot references stay in sync.
+    private void RebuildTextureSlotCache()
+    {
+        if (_textureSlotByTypeIdx.Length != _types.Count)
+            _textureSlotByTypeIdx = new int[_types.Count];
+        var pathToSlot = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        _uniqueTextures.Clear();
+        for (int i = 0; i < _types.Count; i++)
+        {
+            string path = _types[i].TexturePath ?? "";
+            if (string.IsNullOrEmpty(path)) { _textureSlotByTypeIdx[i] = 0; continue; }
+            if (!pathToSlot.TryGetValue(path, out int slot))
+            {
+                slot = _uniqueTextures.Count;
+                pathToSlot[path] = slot;
+                _uniqueTextures.Add(i < _textures.Count ? _textures[i] : null);
+            }
+            _textureSlotByTypeIdx[i] = slot;
         }
     }
 
@@ -261,6 +312,7 @@ public class GroundSystem
         _types.RemoveAt(index);
         _textures.RemoveAt(index);
         RebuildIsWaterCache();
+        RebuildTextureSlotCache();
         // Remap vertex map
         for (int i = 0; i < _vertexMap.Length; i++)
         {
@@ -269,24 +321,32 @@ public class GroundSystem
         }
     }
 
-    public void ClearTypes() { _types.Clear(); _textures.Clear(); RebuildIsWaterCache(); }
+    public void ClearTypes() { _types.Clear(); _textures.Clear(); RebuildIsWaterCache(); RebuildTextureSlotCache(); }
 
     public void LoadTextures(GraphicsDevice device)
     {
         while (_textures.Count < _types.Count) _textures.Add(null);
+        // Cache-by-path so types sharing a texture path (e.g. shallow_water and
+        // swamp_shallow_water) reference the same Texture2D rather than loading
+        // it twice.
+        var byPath = new Dictionary<string, Texture2D>(StringComparer.OrdinalIgnoreCase);
         for (int i = 0; i < _types.Count; i++)
         {
             if (_textures[i] != null) continue;
             string path = _types[i].TexturePath;
             if (string.IsNullOrEmpty(path)) continue;
+            if (byPath.TryGetValue(path, out var cached)) { _textures[i] = cached; continue; }
             string resolved = Core.GamePaths.Resolve(path);
             if (!System.IO.File.Exists(resolved)) continue;
             try
             {
-                _textures[i] = Necroking.Render.TextureUtil.LoadPremultiplied(device, path);
+                var loaded = Necroking.Render.TextureUtil.LoadPremultiplied(device, path);
+                _textures[i] = loaded;
+                if (loaded != null) byPath[path] = loaded;
             }
             catch (Exception ex) { DebugLog.Log("error", $"Failed to load ground texture '{path}': {ex.Message}"); }
         }
+        RebuildTextureSlotCache();
     }
 
     public Texture2D? GetTexture(int typeIdx)
@@ -337,7 +397,8 @@ public class GroundSystem
                     orig = origByte;
                     fade = (byte)Math.Clamp((int)(t01 * 255f + 0.5f), 0, 255);
                 }
-                _uploadBuffer[dstRow + x] = new Microsoft.Xna.Framework.Color(cur, orig, fade, (byte)255);
+                _uploadBuffer[dstRow + x] = new Microsoft.Xna.Framework.Color(
+                    PackSlotType(cur), PackSlotType(orig), fade, (byte)255);
             }
         }
 
@@ -474,10 +535,15 @@ public class GroundSystem
     {
         if (_vertexMap.Length == 0) return null;
         // Channel layout (read by GroundShader.fx):
-        //   R = current type index (what's drawn at fade=1)
-        //   G = original type index (what's drawn at fade=0; equals R for stable vertices)
-        //   B = fade progress 0..255 (255 = stable, < 255 = mid-fade)
-        //   A = 255 (so the channel isn't dropped by premultiplied-alpha paths)
+        //   R = current PackSlotType byte: top 3 bits = texture slot (0..7),
+        //       bottom 5 bits = ground type id (0..31). Shader cascade reads
+        //       the slot directly without an array indirection (which keeps
+        //       PS_3_0 temp-register pressure inside the 32-register limit)
+        //       and indexes per-type tint / iswater via the type bits.
+        //   G = original PackSlotType byte (same encoding; equals R for
+        //       stable vertices).
+        //   B = fade progress 0..255 (255 = stable, < 255 = mid-fade).
+        //   A = 255 (so the channel isn't dropped by premultiplied-alpha paths).
         var tex = new Texture2D(device, VertexW, VertexH, false, SurfaceFormat.Color);
         var colorData = new Microsoft.Xna.Framework.Color[_vertexMap.Length];
         // Fast path when nothing is fading — avoid per-vertex dict lookup for 16M entries.
@@ -486,8 +552,8 @@ public class GroundSystem
         {
             for (int i = 0; i < _vertexMap.Length; i++)
             {
-                byte t = _vertexMap[i];
-                colorData[i] = new Microsoft.Xna.Framework.Color(t, t, (byte)255, (byte)255);
+                byte packed = PackSlotType(_vertexMap[i]);
+                colorData[i] = new Microsoft.Xna.Framework.Color(packed, packed, (byte)255, (byte)255);
             }
         }
         else
@@ -503,7 +569,8 @@ public class GroundSystem
                     orig = origByte;
                     fade = (byte)Math.Clamp((int)(t01 * 255f + 0.5f), 0, 255);
                 }
-                colorData[i] = new Microsoft.Xna.Framework.Color(cur, orig, fade, (byte)255);
+                colorData[i] = new Microsoft.Xna.Framework.Color(
+                    PackSlotType(cur), PackSlotType(orig), fade, (byte)255);
             }
         }
         tex.SetData(colorData);
