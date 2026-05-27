@@ -162,7 +162,8 @@ public class InventoryUI : Necroking.UI.IModalLayer
 
         int mx = (int)input.MousePos.X, my = (int)input.MousePos.Y;
 
-        // Window dragging
+        // Window dragging — title-bar grab is inside the panel rect, so
+        // PopupManager has already consumed the click for this layer.
         if (input.LeftDown)
         {
             if (!_dragging)
@@ -174,7 +175,6 @@ public class InventoryUI : Necroking.UI.IModalLayer
                     _dragging = true;
                     _dragOffsetX = mx - _screenX;
                     _dragOffsetY = my - _screenY;
-                    input.ConsumeMouse();
                 }
             }
             if (_dragging)

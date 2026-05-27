@@ -234,13 +234,9 @@ public class TableCraftMenuUI : Necroking.UI.IModalLayer
         // menu doesn't drift away from the table when the camera pans/zooms.
         RepositionAboveTable();
 
-        // Escape closes
-        if (input.WasKeyPressed(Keys.Escape))
-        {
-            Close();
-            input.ConsumeMouse();
-            return;
-        }
+        // ESC + inside-panel click consumption are owned by PopupManager
+        // now — this layer is on Game1.Popups, OnCancel calls Close(), and
+        // RouteInput pre-consumes any click that falls inside ContainsMouse.
 
         var def = _envSystem.Defs[_envSystem.GetObject(_envIdx).DefIndex];
         var ts = _envSystem.GetTableState(_envIdx);
@@ -253,7 +249,6 @@ public class TableCraftMenuUI : Necroking.UI.IModalLayer
         if (input.LeftPressed && closeRect.Contains(mx, my))
         {
             Close();
-            input.ConsumeMouse();
             return;
         }
 
@@ -262,14 +257,7 @@ public class TableCraftMenuUI : Necroking.UI.IModalLayer
         if (input.LeftPressed && startRect.Contains(mx, my))
         {
             if (CanStartCraft(def, ts) && StartCraftCallback != null)
-            {
-                if (StartCraftCallback(_envIdx))
-                    input.ConsumeMouse();
-            }
-            else
-            {
-                input.ConsumeMouse(); // swallow even if can't start, to avoid misclicks pass-through
-            }
+                StartCraftCallback(_envIdx);
             return;
         }
 
@@ -285,15 +273,10 @@ public class TableCraftMenuUI : Necroking.UI.IModalLayer
                     string id = ts.ItemSlots[i].ItemID;
                     _inventory.AddItem(id, 1);
                     ts.ItemSlots[i] = default;
-                    input.ConsumeMouse(); // shared L/R consumption flag
                     return;
                 }
             }
         }
-
-        // Left-click on a panel slot consumes the click (so the world doesn't get it).
-        if (input.LeftPressed && ContainsMouse(mx, my))
-            input.ConsumeMouse();
     }
 
     /// <summary>

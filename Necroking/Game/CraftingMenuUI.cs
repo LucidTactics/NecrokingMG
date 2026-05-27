@@ -302,7 +302,7 @@ public class CraftingMenuUI : Necroking.UI.IModalLayer
                                 _craftProgress = 0f;
                                 _craftingIndex = i;
                             }
-                            input.ConsumeMouse();
+                            // PopupManager already consumed this inside-panel click.
                             break;
                         }
                     }

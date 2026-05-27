@@ -377,10 +377,10 @@ public class CharacterStatsUI : Necroking.UI.IModalLayer
                     new Vector2((int)(rect.X + (rect.Width - lz.X) / 2),
                                 (int)(rect.Y + (rect.Height - lz.Y) / 2)),
                     SkillBtnText);
-                if (hovered && input.LeftPressed && !input.IsMouseConsumed)
+                // Inside-panel click — PopupManager already consumed.
+                if (hovered && input.LeftPressed)
                 {
                     TryConsumeNearestCorpse(sim, necroIdx, bookState, gameData, humansOnly: false);
-                    input.ConsumeMouse();
                 }
                 y += SkillBtnH + SkillBtnGap;
             }
@@ -399,10 +399,9 @@ public class CharacterStatsUI : Necroking.UI.IModalLayer
                     new Vector2((int)(rect.X + (rect.Width - lz.X) / 2),
                                 (int)(rect.Y + (rect.Height - lz.Y) / 2)),
                     SkillBtnText);
-                if (hovered && input.LeftPressed && !input.IsMouseConsumed)
+                if (hovered && input.LeftPressed)
                 {
                     TryConsumeNearestCorpse(sim, necroIdx, bookState, gameData, humansOnly: true);
-                    input.ConsumeMouse();
                 }
                 y += SkillBtnH + SkillBtnGap;
             }
@@ -564,11 +563,10 @@ public class CharacterStatsUI : Necroking.UI.IModalLayer
                            (int)(rect.Y + (rect.Height - tSize.Y) / 2)),
                 textColor);
 
-            if (hovered && input.LeftPressed && !input.IsMouseConsumed && canAfford)
+            if (hovered && input.LeftPressed && canAfford)
             {
                 bool wantLearn = !learned;
                 SetLearned(Skills[i], wantLearn, sim, necroIdx, ref primaryBar);
-                input.ConsumeMouse();
             }
 
             btnY += SkillBtnH + SkillBtnGap;
@@ -620,11 +618,10 @@ public class CharacterStatsUI : Necroking.UI.IModalLayer
                            (int)(rect.Y + (rect.Height - tSize.Y) / 2)),
                 textColor);
 
-            if (hovered && input.LeftPressed && !input.IsMouseConsumed
+            if (hovered && input.LeftPressed
                 && primaryBar.Slots != null && primaryBar.Slots.Length > RcSlotIndex)
             {
                 primaryBar.Slots[RcSlotIndex].SpellID = bound ? "" : Skills[i].SpellId;
-                input.ConsumeMouse();
             }
 
             btnY += SkillBtnH + SkillBtnGap;

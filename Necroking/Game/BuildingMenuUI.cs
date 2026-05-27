@@ -302,7 +302,7 @@ public class BuildingMenuUI : Necroking.UI.IModalLayer
                                 _selectedIndex = i;
                                 _placementActive = true;
                             }
-                            input.ConsumeMouse();
+                            // PopupManager already consumed this inside-panel click.
                             break;
                         }
                     }

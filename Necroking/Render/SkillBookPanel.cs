@@ -163,13 +163,15 @@ public class SkillBookPanel : Necroking.UI.IModalLayer
         input.MouseOverUI = true;
 
         // --- Tab clicks ---
+        // PopupManager has already consumed this click for our layer (we're
+        // top-of-stack and the click is inside our panel). No IsMouseConsumed
+        // check needed and no further ConsumeMouse needed.
         for (int i = 0; i < SkillBookDefs.Tabs.Count; i++)
         {
             var r = TabRect(lay, i);
-            if (r.Contains(mx, my) && input.LeftPressed && !input.IsMouseConsumed)
+            if (r.Contains(mx, my) && input.LeftPressed)
             {
                 _activeTab = i;
-                input.ConsumeMouse();
                 _pressedSkillId = null;
                 return;
             }
@@ -191,11 +193,12 @@ public class SkillBookPanel : Necroking.UI.IModalLayer
             }
         }
 
-        // Track button press (down on click, fires on release inside same node)
-        if (input.LeftPressed && !input.IsMouseConsumed && hovered != null)
+        // Track button press (down on click, fires on release inside same node).
+        // PopupManager pre-consumed this click (inside our panel), no need to
+        // gate on or call ConsumeMouse here.
+        if (input.LeftPressed && hovered != null)
         {
             _pressedSkillId = hovered.Id;
-            input.ConsumeMouse();
         }
         else if (!IsLeftDown(input) && _pressedSkillId != null)
         {

@@ -384,11 +384,12 @@ public class SkillTreePanel : Necroking.UI.IModalLayer
         var resetRect = ResetButtonRect(lay);
         if (resetRect.Contains(mx, my))
         {
-            if (input.LeftPressed && !input.IsMouseConsumed)
+            // Inside-panel click — PopupManager has already consumed it;
+            // no IsMouseConsumed gate and no further ConsumeMouse needed.
+            if (input.LeftPressed)
             {
                 foreach (var n in Nodes) _ranks[n.Id] = 0;
                 _points = TotalPoints;
-                input.ConsumeMouse();
             }
             return;
         }
@@ -404,15 +405,14 @@ public class SkillTreePanel : Necroking.UI.IModalLayer
             bool unlocked = IsUnlocked(n);
             int rank = _ranks[n.Id];
 
-            if (input.LeftPressed && !input.IsMouseConsumed)
+            if (input.LeftPressed)
             {
                 if (!unlocked) { Warn("Sealed -- prerequisites unmet", timeSec); }
                 else if (rank >= n.Max) { Warn("Already mastered", timeSec); }
                 else if (_points <= 0) { Warn("No unspent souls", timeSec); }
                 else { _ranks[n.Id] = rank + 1; _points--; }
-                input.ConsumeMouse();
             }
-            else if (input.RightPressed && !input.IsMouseConsumed)
+            else if (input.RightPressed)
             {
                 if (rank > 0)
                 {
@@ -427,7 +427,6 @@ public class SkillTreePanel : Necroking.UI.IModalLayer
                     }
                     else { _points++; }
                 }
-                input.ConsumeMouse();
             }
             break;
         }
