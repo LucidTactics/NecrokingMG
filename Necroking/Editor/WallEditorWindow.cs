@@ -15,7 +15,7 @@ namespace Necroking.Editor;
 /// Layout: Left panel (def list), Center panel (preview + neighbor sim), Right panel (properties).
 /// Opened from the Walls tab "Edit Wall Defs" button.
 /// </summary>
-public class WallEditorWindow
+public class WallEditorWindow : Necroking.UI.IModalLayer
 {
     private readonly EditorBase _ui;
     private WallSystem _walls = null!;
@@ -106,12 +106,23 @@ public class WallEditorWindow
             _selectedDef = 0;
         _selectedSegment = 0;
         // Reset scroll state (managed by EditorBase internally)
+        // Push onto the modal stack so PopupManager routes ESC / outside-
+        // clicks here BEFORE they reach the map editor layer underneath.
+        if (!Necroking.Game1.Popups.Contains(this))
+            Necroking.Game1.Popups.Push(this);
     }
 
     public void Close()
     {
         _open = false;
+        Necroking.Game1.Popups.Pop(this);
     }
+
+    // === IModalLayer ===
+    bool Necroking.UI.IModalLayer.ContainsMouse(int mx, int my) => _open;
+    void Necroking.UI.IModalLayer.OnCancel() => Close();
+    bool Necroking.UI.IModalLayer.LightDismiss => false;
+    bool Necroking.UI.IModalLayer.IsBlocking => true;
 
     /// <summary>
     /// Draw the wall editor overlay. Returns true if the overlay is open (blocks input to parent).
@@ -128,15 +139,9 @@ public class WallEditorWindow
         var prevKb = _ui._prevKb;
         bool textActive = _ui.IsTextInputActive;
 
-        // Escape: close dropdown first, then close window (suppress when text field is active — EditorBase handles Escape)
-        if (!textActive && kb.IsKeyDown(Keys.Escape) && prevKb.IsKeyUp(Keys.Escape))
-        {
-            if (!_ui.CloseActiveDropdown())
-            {
-                _open = false;
-                return false;
-            }
-        }
+        // ESC handling moved to PopupManager — this window registers as an
+        // IModalLayer in Open() so RouteInput pops it (or its dropdown sub-
+        // layer) ahead of the map editor underneath.
 
         // Ctrl+S to save (suppress when text field is active)
         if (!textActive && kb.IsKeyDown(Keys.LeftControl) && kb.IsKeyDown(Keys.S) && prevKb.IsKeyUp(Keys.S))

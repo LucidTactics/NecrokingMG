@@ -16,7 +16,7 @@ namespace Necroking.Editor;
 /// Provides a left panel (def list), center panel (sprite preview with collision overlay),
 /// and right panel (property editing fields).
 /// </summary>
-public class EnvObjectEditorWindow
+public class EnvObjectEditorWindow : Necroking.UI.IModalLayer
 {
     // --- Dependencies ---
     private EditorBase _ui = null!;
@@ -194,6 +194,12 @@ public class EnvObjectEditorWindow
     public void Open()
     {
         IsOpen = true;
+        // Push onto the modal stack so PopupManager routes ESC / outside-
+        // clicks here BEFORE they reach the underlying map editor layer.
+        // Without this, ESC inside the env editor would cancel the map
+        // editor on top of (or instead of) this window.
+        if (!Necroking.Game1.Popups.Contains(this))
+            Necroking.Game1.Popups.Push(this);
         _selectedDef = _env.DefCount > 0 ? 0 : -1;
         _categoryFilter = 0;
         _searchFilter = "";
@@ -247,7 +253,17 @@ public class EnvObjectEditorWindow
         IsOpen = false;
         _previewTex = null;
         _previewDefIdx = -1;
+        Necroking.Game1.Popups.Pop(this);
     }
+
+    // === IModalLayer ===
+    // Full-screen window, so ContainsMouse always returns true — every
+    // click while open is consumed by this layer. OnCancel hits Close()
+    // which pops us off the stack.
+    bool Necroking.UI.IModalLayer.ContainsMouse(int mx, int my) => IsOpen;
+    void Necroking.UI.IModalLayer.OnCancel() => Close();
+    bool Necroking.UI.IModalLayer.LightDismiss => false;
+    bool Necroking.UI.IModalLayer.IsBlocking => true;
 
     // ========================================================================
     //  Update + Draw (called from MapEditorWindow)
@@ -1778,24 +1794,12 @@ public class EnvObjectEditorWindow
         // Don't handle hotkeys if text input is active
         if (_ui.IsTextInputActive) return;
 
-        // Escape to close (unless a dialog is open). Consume the key so the
-        // global Game1 ESC handler doesn't *also* close the underlying map
-        // editor on the same press — without this, one ESC press here would
-        // first close this popup AND then collapse the map editor too.
-        if (kb.IsKeyDown(Keys.Escape) && prevKb.IsKeyUp(Keys.Escape))
-        {
-            if (_edgeTweakerOpen)
-                _edgeTweakerOpen = false;
-            else if (_confirmDeleteOpen)
-                _confirmDeleteOpen = false;
-            else if (_deleteCategoryDialogOpen)
-                _deleteCategoryDialogOpen = false;
-            else if (_newCategoryDialogOpen)
-                _newCategoryDialogOpen = false;
-            else
-                Close();
-            _ui._input.ConsumeKey(Keys.Escape);
-        }
+        // ESC handling now lives in PopupManager — this window pushes
+        // itself onto the modal stack in Open(), and each sub-popup
+        // (_confirmDelete / _newCategory / _deleteCategory / _edgeTweaker)
+        // pushes its own ActionModalLayer on top of that. RouteInput pops
+        // them in LIFO order, one ESC per layer, no leakage to the map
+        // editor underneath.
 
         // Ctrl+S to save
         if (kb.IsKeyDown(Keys.LeftControl) && kb.IsKeyDown(Keys.S) && prevKb.IsKeyUp(Keys.S))

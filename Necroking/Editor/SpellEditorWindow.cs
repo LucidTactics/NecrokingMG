@@ -292,15 +292,10 @@ public class SpellEditorWindow : EditorWindow
             SetStatus("Pasted: " + newId);
         }
 
-        // Escape hierarchy: dropdown -> delete confirm -> buff manager -> flipbook manager -> (let parent handle close)
-        bool escPressed = _ui._kb.IsKeyDown(Keys.Escape) && !_ui._prevKb.IsKeyDown(Keys.Escape);
-        if (escPressed)
-        {
-            if (_ui.CloseActiveDropdown()) return; // dropdown was open, consumed escape
-            if (_deleteConfirmOpen) { _deleteConfirmOpen = false; return; }
-            if (_buffManagerOpen) { _buffManagerOpen = false; return; }
-            if (_flipbookManagerOpen) { _flipbookManagerOpen = false; return; }
-        }
+        // ESC handled by PopupManager — dropdown, confirm dialog, buff
+        // manager, flipbook manager all push their own modal layers. The
+        // spell editor itself sits on the stack via Game1's
+        // _spellEditorLayer. RouteInput pops in LIFO order.
     }
 
     // ===========================

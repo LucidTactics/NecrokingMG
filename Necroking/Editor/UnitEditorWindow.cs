@@ -436,39 +436,12 @@ public class UnitEditorWindow
             }
         }
 
-        // Escape key hierarchy: confirm dialog -> dropdown -> pick mode -> sub-editors -> group editor -> (caller handles closing unit editor)
-        if (!textActive && _ui._kb.IsKeyDown(Keys.Escape) && _ui._prevKb.IsKeyUp(Keys.Escape))
-        {
-            if (_confirmDeleteOpen)
-            {
-                _confirmDeleteOpen = false;
-            }
-            else if (_confirmDeleteUnit)
-            {
-                _confirmDeleteUnit = false;
-            }
-            else if (_confirmDeleteGroup)
-            {
-                _confirmDeleteGroup = false;
-            }
-            else if (_ui.CloseActiveDropdown())
-            {
-                // Dropdown was open, consumed escape
-            }
-            else if (_pickMode != PickTarget.None)
-            {
-                _pickMode = PickTarget.None;
-            }
-            else if (_activeSubEditor != SubEditor.None)
-            {
-                _activeSubEditor = SubEditor.None;
-                _subSelectedIdx = -1;
-            }
-            else if (_groupEditorOpen)
-            {
-                _groupEditorOpen = false;
-            }
-        }
+        // ESC is fully owned by PopupManager — each sub-popup (confirm
+        // dialogs, dropdown, pick-mode, sub-editor, group editor) has its
+        // own IModalLayer pushed via SyncOne above, and the unit editor
+        // itself sits on the stack via Game1's _unitEditorLayer. RouteInput
+        // pops them in LIFO order; this method no longer needs to mirror
+        // the chain.
 
         // RU15: Right-click cancels pick mode
         if (_pickMode != PickTarget.None &&

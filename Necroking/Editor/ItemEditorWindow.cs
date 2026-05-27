@@ -171,13 +171,9 @@ public class ItemEditorWindow
             SetStatus("Pasted: " + newId);
         }
 
-        // Escape hierarchy: dropdown -> delete confirm -> close
-        bool escPressed = _ui._kb.IsKeyDown(Keys.Escape) && !_ui._prevKb.IsKeyDown(Keys.Escape);
-        if (escPressed)
-        {
-            if (_ui.CloseActiveDropdown()) return;
-            if (_deleteConfirmOpen) { _deleteConfirmOpen = false; return; }
-        }
+        // ESC handled by PopupManager — dropdown + delete-confirm dialog
+        // both push their own modal layers; the item editor itself sits on
+        // the stack via Game1's _itemEditorLayer.
     }
 
     // ===========================

@@ -228,6 +228,21 @@ public class Game1 : Microsoft.Xna.Framework.Game
     /// threading the manager through 20+ existing UI constructors. Lifetime
     /// matches the Game1 instance; assigned in the ctor.</summary>
     public static Necroking.UI.PopupManager Popups { get; private set; } = null!;
+
+    // Modal-stack adapters for the top-level editor windows. Each is
+    // pushed/popped to keep the stack in sync with <see cref="_menuState"/>;
+    // OnCancel transitions the menu state back so PopupManager's ESC routing
+    // closes the editor exactly like the old Game1 ESC branch did — except
+    // PopupManager handles the entire stack uniformly, so opening sub-popups
+    // (eg env-object editor on top of map editor) and closing them with ESC
+    // no longer leaks through to the parent editor.
+    private readonly Necroking.UI.ActionModalLayer _unitEditorLayer  = new() { LightDismiss = false, IsBlocking = true };
+    private readonly Necroking.UI.ActionModalLayer _spellEditorLayer = new() { LightDismiss = false, IsBlocking = true };
+    private readonly Necroking.UI.ActionModalLayer _mapEditorLayer   = new() { LightDismiss = false, IsBlocking = true };
+    private readonly Necroking.UI.ActionModalLayer _uiEditorLayer    = new() { LightDismiss = false, IsBlocking = true };
+    private readonly Necroking.UI.ActionModalLayer _itemEditorLayer  = new() { LightDismiss = false, IsBlocking = true };
+    private readonly Necroking.UI.ActionModalLayer _settingsLayer    = new() { LightDismiss = false, IsBlocking = true };
+    private readonly Necroking.UI.ActionModalLayer _pauseMenuLayer   = new() { LightDismiss = false, IsBlocking = true };
     private float _editorPanTime; // ramp-up timer for editor camera panning
 
     // Pending spell cast with animation delay (Spell1 animation → action moment → execute)
@@ -292,6 +307,22 @@ public class Game1 : Microsoft.Xna.Framework.Game
     public Game1()
     {
         Popups = _popups;
+
+        // Wire the top-level editor modal layers. Each layer's OnCancel
+        // transitions _menuState back; ReconcileTopLevelEditorLayers (run
+        // before _popups.RouteInput each frame) keeps the stack in sync
+        // with the current menu state, so any keybind / button / pause-
+        // menu path that flips the state also flips stack membership.
+        _unitEditorLayer.OnCancelAction  = () => { _editorUi?.ResetAllState(); _menuState = MenuState.None; };
+        _spellEditorLayer.OnCancelAction = () => { _editorUi?.ResetAllState(); _menuState = MenuState.None; };
+        _mapEditorLayer.OnCancelAction   = () => { _editorUi?.ResetAllState(); _menuState = MenuState.None; };
+        _uiEditorLayer.OnCancelAction    = () => { _editorUi?.ResetAllState(); _menuState = MenuState.None; };
+        _itemEditorLayer.OnCancelAction  = () => { _editorUi?.ResetAllState(); _menuState = MenuState.None; };
+        // Settings is reachable only from the pause menu; ESC returns there.
+        _settingsLayer.OnCancelAction    = () => { _editorUi?.ResetAllState(); _menuState = MenuState.PauseMenu; };
+        // Pause menu: ESC unpauses back to gameplay.
+        _pauseMenuLayer.OnCancelAction   = () => { _menuState = MenuState.None; _paused = false; };
+
         _graphics = new GraphicsDeviceManager(this);
         _graphics.GraphicsProfile = GraphicsProfile.HiDef;
 
@@ -1972,6 +2003,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // Popups Push themselves on open, Pop on close. When the stack is empty
         // this call is a no-op and input flows to gameplay normally. See
         // Necroking/UI/PopupManager.cs for the contract.
+        ReconcileTopLevelEditorLayers();
         _popups.RouteInput(_input);
 
         // MapEditor → gameplay transition: fire the suppressed pathfinder
@@ -2230,39 +2262,17 @@ public class Game1 : Microsoft.Xna.Framework.Game
             _menuState = MenuState.PauseMenu;
         }
 
-        // --- ESC: editors + pause menu only ---
-        // The modal stack (PopupManager) handles ESC for every popup that
-        // registered itself via IModalLayer: color picker, dropdown, confirm
-        // dialog, sub-editor popups (BuffManager / FlipbookManager /
-        // EdgeTweaker / GroupEditor), the game-side panels (inventory,
-        // crafting, building, skill book, skill tree, character stats), and
-        // table-craft. When any of those is on top, PopupManager.RouteInput
-        // calls its OnCancel and consumes Keys.Escape — and the IsKeyConsumed
-        // guard below short-circuits this chain. The chain only fires for
-        // top-level menu states (editors, pause menu) that aren't on the
-        // stack and for the "no popup → toggle pause" fallback.
+        // --- ESC: gameplay → pause menu only ---
+        // Every other ESC case (editors, settings, sub-popups, in-game panels)
+        // is handled by PopupManager.RouteInput via the IModalLayer.OnCancel
+        // path — see ReconcileTopLevelEditorLayers + Game1.Popups. By the time
+        // we get here, IsKeyConsumed is true unless the stack was empty, so
+        // the only branch left is "no popup, no editor → pause the game".
         // Text-field ESC is handled by EditorBase.HandleTextInput (deactivates
         // the field), independent of all this.
         if (!anyTextInputActive && !_input.IsKeyConsumed(Keys.Escape) && _input.WasKeyPressed(Keys.Escape))
         {
-            if (_menuState == MenuState.Settings)
-            {
-                _editorUi.ResetAllState();
-                _menuState = MenuState.PauseMenu;
-            }
-            else if (_menuState == MenuState.UnitEditor || _menuState == MenuState.SpellEditor ||
-                _menuState == MenuState.MapEditor || _menuState == MenuState.UIEditor ||
-                _menuState == MenuState.ItemEditor)
-            {
-                _editorUi.ResetAllState();
-                _menuState = MenuState.None;
-            }
-            else if (_menuState == MenuState.PauseMenu)
-            {
-                _menuState = MenuState.None;
-                _paused = false;
-            }
-            else if (_menuState == MenuState.None)
+            if (_menuState == MenuState.None)
             {
                 _menuState = MenuState.PauseMenu;
                 _paused = true;
@@ -5305,6 +5315,36 @@ public class Game1 : Microsoft.Xna.Framework.Game
                     darkColor, 0f, Vector2.Zero,
                     new Vector2(tileW + 0.5f, 2f), SpriteEffects.None, 0f);
             }
+        }
+    }
+
+    /// <summary>Keep the modal stack in sync with <see cref="_menuState"/>:
+    /// push the matching top-level editor layer when its state becomes
+    /// active, pop it when the state changes away. Called every frame
+    /// just before <see cref="Necroking.UI.PopupManager.RouteInput"/> so
+    /// the freshly-pushed layer participates in this frame's ESC / click
+    /// routing immediately. The layer's panel rect is the full viewport
+    /// since editors paint full-screen.</summary>
+    private void ReconcileTopLevelEditorLayers()
+    {
+        int sw = GraphicsDevice.Viewport.Width;
+        int sh = GraphicsDevice.Viewport.Height;
+        var fullScreen = new Rectangle(0, 0, sw, sh);
+
+        Sync(_unitEditorLayer,  _menuState == MenuState.UnitEditor);
+        Sync(_spellEditorLayer, _menuState == MenuState.SpellEditor);
+        Sync(_mapEditorLayer,   _menuState == MenuState.MapEditor);
+        Sync(_uiEditorLayer,    _menuState == MenuState.UIEditor);
+        Sync(_itemEditorLayer,  _menuState == MenuState.ItemEditor);
+        Sync(_settingsLayer,    _menuState == MenuState.Settings);
+        Sync(_pauseMenuLayer,   _menuState == MenuState.PauseMenu);
+
+        void Sync(Necroking.UI.ActionModalLayer layer, bool open)
+        {
+            layer.Panel = fullScreen;
+            bool onStack = _popups.Contains(layer);
+            if (open && !onStack) _popups.Push(layer);
+            else if (!open && onStack) _popups.Pop(layer);
         }
     }
 
