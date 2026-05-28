@@ -444,6 +444,24 @@ public class GroundSystem
     private bool IsWaterTypeIdx(byte typeIdx) =>
         typeIdx < _isWaterByTypeIdx.Length && _isWaterByTypeIdx[typeIdx];
 
+    /// <summary>Sample the tint of the nearest water vertex around a world
+    /// position. Used by the wake system to colour spawned particles to
+    /// match the water they're in: pre-baked particle texture variants are
+    /// keyed on this tint, and the variant lookup just compares it to the
+    /// known set. Returns <see cref="Color.White"/> when the nearest
+    /// vertex isn't water (or the position is outside the map), so the
+    /// caller falls back to the default (untinted) variant cleanly.</summary>
+    public Color SampleNearestWaterTint(Vec2 worldPos)
+    {
+        if (_worldW <= 0 || _worldH <= 0 || _types.Count == 0) return Color.White;
+        int vx = (int)MathF.Round(worldPos.X);
+        int vy = (int)MathF.Round(worldPos.Y);
+        if (vx < 0 || vx >= VertexW || vy < 0 || vy >= VertexH) return Color.White;
+        byte typeIdx = _vertexMap[vy * VertexW + vx];
+        if (!IsWaterTypeIdx(typeIdx)) return Color.White;
+        return _types[typeIdx].TintColor;
+    }
+
     /// <summary>Like <see cref="SampleWaterness"/> but averages over a small
     /// kernel (centre + 4 cardinal offsets at <paramref name="kernelRadius"/>
     /// world units). Spreads the 0→1 transition across roughly

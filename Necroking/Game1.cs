@@ -738,6 +738,10 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // Load textures
         _groundSystem.LoadTextures(GraphicsDevice);
         _groundVertexMapTex = _groundSystem.CreateVertexMapTexture(GraphicsDevice);
+        // Now that the ground types are populated, bake a wake-particle
+        // gradient variant per unique water tint so swamp shallow water
+        // produces a swamp-green wake instead of the default shoreline cyan.
+        _wakeSystem.InitWaterVariants(_groundSystem);
         _envSystem.LoadTextures(GraphicsDevice);
         LogTiming($"Ground textures: {_groundSystem.TypeCount}, Env textures: {_envSystem.DefCount}, VertexMap: {(_groundVertexMapTex != null ? "OK" : "NONE")}");
 
@@ -1267,6 +1271,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
             // we (re)build the vertex map texture AFTER OnInit (see below).
             _groundSystem.LoadTextures(GraphicsDevice);
             _groundVertexMapTex = _groundSystem.CreateVertexMapTexture(GraphicsDevice);
+            _wakeSystem.InitWaterVariants(_groundSystem);
             DebugLog.Log("scenario", $"Ground setup: types={_groundSystem.TypeCount}, vertexMap={(_groundVertexMapTex != null ? "OK" : "NONE")}, effect={(_groundEffect != null ? "OK" : "NONE")}");
         }
 
@@ -1352,6 +1357,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
             _groundSystem.LoadTextures(GraphicsDevice);
             _groundVertexMapTex?.Dispose();
             _groundVertexMapTex = _groundSystem.CreateVertexMapTexture(GraphicsDevice);
+            _wakeSystem.InitWaterVariants(_groundSystem);
             _groundSystem.StampTerrainOnto(_sim.Grid);
             _sim.RebuildPathfinder();
         }

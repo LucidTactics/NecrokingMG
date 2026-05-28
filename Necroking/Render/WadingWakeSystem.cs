@@ -76,6 +76,13 @@ public struct WakeParticle
     public WakeParticleKind Kind;
     public bool IsFront;
     public bool HasGravity;
+    /// <summary>Index into <see cref="WadingWakeSystem"/>'s per-water-tint
+    /// pre-baked texture arrays. 0 = default (untinted) variant; > 0 = a
+    /// variant tinted to match the water type at the spawn position. The
+    /// particle keeps its spawn-time tint for its whole lifetime — a real
+    /// water droplet doesn't change colour mid-air just because the unit
+    /// drifted across a shoreline.</summary>
+    public byte VariantIdx;
 }
 
 /// <summary>Per-unit emitter state. Separate spawn accumulators for trail
@@ -568,6 +575,15 @@ public class WadingWakeSystem
     /// closer to bright); values &gt; 1 bias toward shadow.</summary>
     public const float ParticleGradientGamma = 1.0f;
 
+    /// <summary>How strongly the source water's tint pushes the wake
+    /// gradient endpoints away from the default shoreline colours.
+    /// 0 = ignore water tint (every variant looks like default shallow
+    /// water); 1 = full multiply (swamp shallow water → swamp-green
+    /// wake). The default of 1.0 matches how the in-shader shoreline
+    /// foam in GroundShader.fx already tints its band; lower it if the
+    /// per-water tint reads as too muddy in dark variants.</summary>
+    public const float WaterTintInfluence = 1.0f;
+
     /// <summary>Soft-edged round particle texture, generated once on first
     /// draw. Used for the bow-wave (SoftCircle kind) — the trail and
     /// splash kinds use the flipbook textures instead.</summary>
@@ -584,14 +600,27 @@ public class WadingWakeSystem
     private Flipbook? _fbBubbleMagic;
     private Flipbook? _fbRainSplash;
 
-    // Gradient-colored textures baked once at Init from the grayscale
-    // source flipbooks. Source grey 0 → ParticleShadowColor (water-ish
-    // dark hue), source grey 255 → FoamColor (foam highlight). Drawing
-    // these with a white tint + alpha-modulated color reproduces the
-    // gradient verbatim, no shader needed.
-    private Texture2D? _miniSplashColored;
-    private Texture2D? _bubbleMagicColored;
-    private Texture2D? _rainSplashColored;
+    // Gradient-colored textures baked at Init from the grayscale source
+    // flipbooks. One entry per water-tint variant: index 0 = default
+    // (shadow → FoamColorBright), index N = same gradient but with both
+    // endpoints multiplied by the Nth unique water tint discovered in
+    // GroundSystem. WakeParticle.VariantIdx selects which to draw with.
+    // Drawn with a white tint + alpha-modulated color so the gradient
+    // reproduces verbatim, no shader needed.
+    private Texture2D?[] _miniSplashByVariant = System.Array.Empty<Texture2D?>();
+    private Texture2D?[] _bubbleMagicByVariant = System.Array.Empty<Texture2D?>();
+    private Texture2D?[] _rainSplashByVariant = System.Array.Empty<Texture2D?>();
+    /// <summary>One entry per baked variant. Index 0 is Color.White (the
+    /// untinted default). Subsequent entries are unique tints harvested
+    /// from <see cref="GroundSystem"/> at InitWaterVariants time.
+    /// LookupVariantForPos compares against these to pick a particle's
+    /// variant at spawn.</summary>
+    private readonly List<Color> _variantTints = new();
+    /// <summary>GroundSystem captured at InitWaterVariants. Re-sampled at
+    /// every particle spawn to pick the right variant. Null until
+    /// InitWaterVariants is called; in that null state every particle
+    /// uses variant 0 (untinted default).</summary>
+    private Necroking.World.GroundSystem? _groundRef;
 
     /// <summary>World-size range for trail particles (MiniSplash). Bumped
     /// up substantially from the previous soft-circle sizing because the
@@ -626,24 +655,119 @@ public class WadingWakeSystem
     private readonly List<WakeEmitterState?> _perUnit = new();
 
     /// <summary>Wire up flipbook references after the flipbooks dictionary
-    /// has been populated in Game1.LoadGame. Also bakes gradient-colored
-    /// copies of each source texture (source grey 0→shadow,
-    /// 255→foam highlight). Safe to call multiple times — the previous
-    /// baked textures get disposed, then re-baked from the new sources.
-    /// Missing flipbooks stay null and their particle kinds render as
-    /// no-ops in the draw path.</summary>
+    /// has been populated in Game1.LoadGame. Bakes the default (untinted)
+    /// gradient variant only — call <see cref="InitWaterVariants"/>
+    /// afterwards (once the GroundSystem has been populated) to also
+    /// bake variants for each tinted water type. Safe to call multiple
+    /// times — the previous baked textures get disposed, then re-baked
+    /// from the new sources. Missing flipbooks stay null and their
+    /// particle kinds render as no-ops in the draw path.</summary>
     public void Init(Dictionary<string, Flipbook> flipbooks)
     {
         flipbooks.TryGetValue("mini_splash", out _fbMiniSplash);
         flipbooks.TryGetValue("bubble_magic", out _fbBubbleMagic);
         flipbooks.TryGetValue("rain_splash", out _fbRainSplash);
 
-        _miniSplashColored?.Dispose();
-        _bubbleMagicColored?.Dispose();
-        _rainSplashColored?.Dispose();
-        _miniSplashColored = BakeGradientTexture(_fbMiniSplash);
-        _bubbleMagicColored = BakeGradientTexture(_fbBubbleMagic);
-        _rainSplashColored = BakeGradientTexture(_fbRainSplash);
+        DisposeAllVariants();
+        _variantTints.Clear();
+        _variantTints.Add(Color.White);
+        BakeAllVariants();
+        // Drop the ground reference — InitWaterVariants will set it again
+        // if there are tinted water types this session.
+        _groundRef = null;
+    }
+
+    /// <summary>Discover the unique water tints in <paramref name="ground"/>
+    /// and bake one extra variant of each colored flipbook per tint, so
+    /// particles spawned over swamp shallow water can render with a
+    /// swamp-green wake gradient while plain shallow water keeps the
+    /// default shoreline colours. Idempotent — calling again disposes
+    /// the previous variant set and rebuilds from the current ground.
+    /// Must be called AFTER <see cref="Init"/>; the GroundSystem
+    /// reference is stashed so <see cref="LookupVariantForPos"/> can
+    /// resolve a particle's variant at spawn time.</summary>
+    public void InitWaterVariants(Necroking.World.GroundSystem ground)
+    {
+        _groundRef = ground;
+
+        // Re-collect the unique water tints (Color.White is always idx 0).
+        _variantTints.Clear();
+        _variantTints.Add(Color.White);
+        for (int i = 0; i < ground.TypeCount; i++)
+        {
+            var def = ground.GetTypeDef(i);
+            bool isWater = def.MovementTerrain == Necroking.World.TerrainType.ShallowWater
+                        || def.MovementTerrain == Necroking.World.TerrainType.DeepWater;
+            if (!isWater) continue;
+            // Skip exact dupes (including white) — keeps variant 0 as the
+            // canonical untinted fallback.
+            var t = def.TintColor;
+            bool dup = false;
+            for (int j = 0; j < _variantTints.Count; j++)
+                if (_variantTints[j].PackedValue == t.PackedValue) { dup = true; break; }
+            if (!dup) _variantTints.Add(t);
+        }
+
+        DisposeAllVariants();
+        BakeAllVariants();
+    }
+
+    private void DisposeAllVariants()
+    {
+        for (int i = 0; i < _miniSplashByVariant.Length; i++) _miniSplashByVariant[i]?.Dispose();
+        for (int i = 0; i < _bubbleMagicByVariant.Length; i++) _bubbleMagicByVariant[i]?.Dispose();
+        for (int i = 0; i < _rainSplashByVariant.Length; i++) _rainSplashByVariant[i]?.Dispose();
+        _miniSplashByVariant = System.Array.Empty<Texture2D?>();
+        _bubbleMagicByVariant = System.Array.Empty<Texture2D?>();
+        _rainSplashByVariant = System.Array.Empty<Texture2D?>();
+    }
+
+    private void BakeAllVariants()
+    {
+        int n = _variantTints.Count;
+        _miniSplashByVariant = new Texture2D?[n];
+        _bubbleMagicByVariant = new Texture2D?[n];
+        _rainSplashByVariant = new Texture2D?[n];
+        for (int v = 0; v < n; v++)
+        {
+            var tint = _variantTints[v];
+            var shadow = ApplyWaterTint(ParticleShadowColor, tint, WaterTintInfluence);
+            var foam = ApplyWaterTint(FoamColorBright, tint, WaterTintInfluence);
+            _miniSplashByVariant[v] = BakeGradientTexture(_fbMiniSplash, shadow, foam);
+            _bubbleMagicByVariant[v] = BakeGradientTexture(_fbBubbleMagic, shadow, foam);
+            _rainSplashByVariant[v] = BakeGradientTexture(_fbRainSplash, shadow, foam);
+        }
+    }
+
+    /// <summary>Multiply <paramref name="baseColor"/> by <paramref name="tint"/>,
+    /// blended toward identity by <paramref name="influence"/>. influence=1
+    /// is a full multiply (swamp shallow water tint = (120,165,100)/255
+    /// pulls the foam endpoint from (225,255,249) to ~(106,165,97));
+    /// influence=0 returns baseColor unchanged.</summary>
+    private static Color ApplyWaterTint(Color baseColor, Color tint, float influence)
+    {
+        float tr = MathHelper.Lerp(1f, tint.R / 255f, influence);
+        float tg = MathHelper.Lerp(1f, tint.G / 255f, influence);
+        float tb = MathHelper.Lerp(1f, tint.B / 255f, influence);
+        return new Color(
+            (byte)Math.Clamp((int)(baseColor.R * tr), 0, 255),
+            (byte)Math.Clamp((int)(baseColor.G * tg), 0, 255),
+            (byte)Math.Clamp((int)(baseColor.B * tb), 0, 255));
+    }
+
+    /// <summary>Pick the variant index whose tint matches the water at
+    /// <paramref name="pos"/>. Returns 0 (untinted default) when there's
+    /// no ground reference, the position is over a non-water vertex, or
+    /// the sampled tint doesn't match any registered variant.</summary>
+    private byte LookupVariantForPos(Vec2 pos)
+    {
+        if (_groundRef == null || _variantTints.Count <= 1) return 0;
+        var tint = _groundRef.SampleNearestWaterTint(pos);
+        // Linear scan — _variantTints is tiny (one per unique water tint),
+        // so the cost is negligible vs the dict overhead.
+        for (int i = 1; i < _variantTints.Count; i++)
+            if (_variantTints[i].PackedValue == tint.PackedValue) return (byte)i;
+        return 0;
     }
 
     /// <summary>Bake a gradient-colored copy of a grayscale source.
@@ -668,7 +792,10 @@ public class WadingWakeSystem
     /// BubbleMagic (~215), and RainSplash (~163) each get their own
     /// max-grey, so all three render with the same visible foam color
     /// in their brightest spots.</summary>
-    private static Texture2D? BakeGradientTexture(Flipbook? fb)
+    private static Texture2D? BakeGradientTexture(Flipbook? fb) =>
+        BakeGradientTexture(fb, ParticleShadowColor, FoamColorBright);
+
+    private static Texture2D? BakeGradientTexture(Flipbook? fb, Color shadowColor, Color foamColor)
     {
         if (fb == null || fb.Texture == null) return null;
         var src = fb.Texture;
@@ -707,9 +834,9 @@ public class WadingWakeSystem
             float tLin = MathHelper.Clamp(grey01 / maxGrey, 0f, 1f);
             float t = ParticleGradientGamma == 1f ? tLin : MathF.Pow(tLin, ParticleGradientGamma);
             // Lerp colors then re-premultiply by alpha.
-            float r = MathHelper.Lerp(ParticleShadowColor.R, FoamColorBright.R, t) * a01;
-            float g = MathHelper.Lerp(ParticleShadowColor.G, FoamColorBright.G, t) * a01;
-            float b = MathHelper.Lerp(ParticleShadowColor.B, FoamColorBright.B, t) * a01;
+            float r = MathHelper.Lerp(shadowColor.R, foamColor.R, t) * a01;
+            float g = MathHelper.Lerp(shadowColor.G, foamColor.G, t) * a01;
+            float b = MathHelper.Lerp(shadowColor.B, foamColor.B, t) * a01;
             pixels[i] = new Color((byte)r, (byte)g, (byte)b, p.A);
         }
         var baked = new Texture2D(src.GraphicsDevice, src.Width, src.Height);
@@ -761,13 +888,18 @@ public class WadingWakeSystem
 
         AgeParticles(state, dt);
 
+        // Pre-resolve the water-tint variant for this unit's position
+        // once per frame — every particle that spawns this tick lives in
+        // the same body of water and gets the same gradient colours.
+        byte variantIdx = LookupVariantForPos(unitPos);
+
         // Entry-splash edge — wading false → true. Also resets the
         // max-depth tracker + caches the body half-vector for the
         // session so trickle spawns stay coherent if the unit turns.
         if (wadingActive && !state.WasWading)
         {
             state.MaxWaterlineHeightThisSession = waterlineWorldHeight;
-            StartEntrySplash(state, unitPos, unitVel, waterlineWorldHeight, bodyHalf);
+            StartEntrySplash(state, unitPos, unitVel, waterlineWorldHeight, bodyHalf, variantIdx);
         }
 
         // Exit-splash edge — wading true → false. We use the MAX waterline
@@ -776,23 +908,23 @@ public class WadingWakeSystem
         // that went chest-deep then came back to ankle-deep before exiting
         // still has drips from chest-height.
         if (!wadingActive && state.WasWading)
-            StartExitSplash(state, unitPos, unitVel, state.MaxWaterlineHeightThisSession, bodyHalf);
+            StartExitSplash(state, unitPos, unitVel, state.MaxWaterlineHeightThisSession, bodyHalf, variantIdx);
 
         // Entry-splash session trickle — releases the remaining 80%
         // over EntrySplashSessionDurationSec at the unit's current
         // position. Uses the CACHED body-half (from session start) so
         // the spread axis stays coherent through the session.
         if (state.SplashRemainingDuration > 0f)
-            TrickleEntrySplash(state, dt, unitPos, unitVel, waterlineWorldHeight, state.BodyHalfAtStart);
+            TrickleEntrySplash(state, dt, unitPos, unitVel, waterlineWorldHeight, state.BodyHalfAtStart, variantIdx);
 
         // Exit-splash session trickle.
         if (state.ExitRemainingDuration > 0f)
-            TrickleExitSplash(state, dt, unitPos, state.ExitVelocity, state.ExitWaterlineHeight, state.ExitBodyHalf);
+            TrickleExitSplash(state, dt, unitPos, state.ExitVelocity, state.ExitWaterlineHeight, state.ExitBodyHalf, variantIdx);
 
         if (wadingActive)
         {
-            SpawnTrail(state, dt, unitPos, unitVel, waterlineWorldHeight, bodyHalf);
-            SpawnBowWave(state, dt, unitPos, unitVel, waterlineWorldHeight, bodyHalf);
+            SpawnTrail(state, dt, unitPos, unitVel, waterlineWorldHeight, bodyHalf, variantIdx);
+            SpawnBowWave(state, dt, unitPos, unitVel, waterlineWorldHeight, bodyHalf, variantIdx);
             // Cache the waterline so we can use it on the next frame's
             // exit edge (which won't carry a fresh waterline height).
             state.LastWaterlineHeight = waterlineWorldHeight;
@@ -942,7 +1074,8 @@ public class WadingWakeSystem
         WakeEmitterState state, float dt,
         Vec2 unitPos, Vec2 unitVel,
         float waterlineWorldHeight,
-        Vec2 bodyHalf)
+        Vec2 bodyHalf,
+        byte variantIdx)
     {
         float speed = unitVel.Length();
         if (speed < MinSpeedToEmit)
@@ -999,7 +1132,8 @@ public class WadingWakeSystem
                 Size = size,
                 Rotation = rotation,
                 Kind = WakeParticleKind.MiniSplash,
-                IsFront = false
+                IsFront = false,
+                VariantIdx = variantIdx
             });
         }
     }
@@ -1008,7 +1142,8 @@ public class WadingWakeSystem
         WakeEmitterState state, float dt,
         Vec2 unitPos, Vec2 unitVel,
         float waterlineWorldHeight,
-        Vec2 bodyHalf)
+        Vec2 bodyHalf,
+        byte variantIdx)
     {
         float speed = unitVel.Length();
         if (speed < BowWaveMinSpeedToEmit)
@@ -1083,7 +1218,8 @@ public class WadingWakeSystem
                 Size = size,
                 Rotation = rotation,
                 Kind = WakeParticleKind.MiniSplash,
-                IsFront = true
+                IsFront = true,
+                VariantIdx = variantIdx
             });
         }
     }
@@ -1096,7 +1232,8 @@ public class WadingWakeSystem
         WakeEmitterState state,
         Vec2 unitPos, Vec2 unitVel,
         float waterlineWorldHeight,
-        Vec2 bodyHalf)
+        Vec2 bodyHalf,
+        byte variantIdx)
     {
         float speed = unitVel.Length();
         int totalRequested = EntrySplashBaseCount + (int)(speed * EntrySplashCountPerSpeed);
@@ -1114,7 +1251,7 @@ public class WadingWakeSystem
         state.SplashSpawnAccum = 0f;
         state.BodyHalfAtStart = bodyHalf;
 
-        EmitSplashParticles(state, initialBurst, speed, unitPos, unitVel, waterlineWorldHeight, bodyHalf);
+        EmitSplashParticles(state, initialBurst, speed, unitPos, unitVel, waterlineWorldHeight, bodyHalf, variantIdx);
     }
 
     /// <summary>Per-frame trickle spawn during an active splash session.
@@ -1126,7 +1263,8 @@ public class WadingWakeSystem
         WakeEmitterState state, float dt,
         Vec2 unitPos, Vec2 unitVel,
         float waterlineWorldHeight,
-        Vec2 bodyHalf)
+        Vec2 bodyHalf,
+        byte variantIdx)
     {
         // End-of-session housekeeping. If duration expired we drop any
         // un-spawned remainder (rather than dumping a final burst), which
@@ -1152,7 +1290,7 @@ public class WadingWakeSystem
         if (toSpawn > 0)
         {
             EmitSplashParticles(state, toSpawn, state.SplashEntrySpeed,
-                                unitPos, unitVel, waterlineWorldHeight, bodyHalf);
+                                unitPos, unitVel, waterlineWorldHeight, bodyHalf, variantIdx);
             state.SplashRemainingCount -= toSpawn;
         }
 
@@ -1170,7 +1308,8 @@ public class WadingWakeSystem
         float entrySpeed,
         Vec2 unitPos, Vec2 unitVel,
         float waterlineWorldHeight,
-        Vec2 bodyHalf)
+        Vec2 bodyHalf,
+        byte variantIdx)
     {
         int allowed = MaxParticlesPerUnit - state.Particles.Count;
         if (allowed <= 0) return;
@@ -1276,7 +1415,8 @@ public class WadingWakeSystem
                 Rotation = rotation,
                 Kind = WakeParticleKind.BubbleMagic,
                 IsFront = true,
-                HasGravity = true
+                HasGravity = true,
+                VariantIdx = variantIdx
             });
         }
     }
@@ -1291,7 +1431,8 @@ public class WadingWakeSystem
         WakeEmitterState state,
         Vec2 unitPos, Vec2 unitVel,
         float waterlineHeight,
-        Vec2 bodyHalf)
+        Vec2 bodyHalf,
+        byte variantIdx)
     {
         float speed = unitVel.Length();
         int totalRequested = ExitSplashBaseCount + (int)(speed * ExitSplashCountPerSpeed);
@@ -1313,7 +1454,7 @@ public class WadingWakeSystem
         state.ExitSpawnAccum = 0f;
         state.ExitBodyHalf = bodyHalf;
 
-        EmitExitSplashParticles(state, initialBurst, speed, unitPos, unitVel, waterlineHeight, bodyHalf);
+        EmitExitSplashParticles(state, initialBurst, speed, unitPos, unitVel, waterlineHeight, bodyHalf, variantIdx);
     }
 
     /// <summary>Per-frame trickle release of exit drips over an active
@@ -1324,7 +1465,8 @@ public class WadingWakeSystem
     private static void TrickleExitSplash(
         WakeEmitterState state, float dt,
         Vec2 unitPos, Vec2 unitVel, float waterlineHeight,
-        Vec2 bodyHalf)
+        Vec2 bodyHalf,
+        byte variantIdx)
     {
         if (state.ExitRemainingDuration <= 0f || state.ExitRemainingCount <= 0)
         {
@@ -1343,7 +1485,7 @@ public class WadingWakeSystem
         if (toSpawn > 0)
         {
             EmitExitSplashParticles(state, toSpawn, state.ExitSpeedAtStart,
-                                    unitPos, unitVel, waterlineHeight, bodyHalf);
+                                    unitPos, unitVel, waterlineHeight, bodyHalf, variantIdx);
             state.ExitRemainingCount -= toSpawn;
         }
 
@@ -1359,7 +1501,8 @@ public class WadingWakeSystem
         WakeEmitterState state, int n,
         float speedAtStart,
         Vec2 unitPos, Vec2 unitVel, float waterlineHeight,
-        Vec2 bodyHalf)
+        Vec2 bodyHalf,
+        byte variantIdx)
     {
         int allowed = MaxParticlesPerUnit - state.Particles.Count;
         if (allowed <= 0) return;
@@ -1444,7 +1587,8 @@ public class WadingWakeSystem
                 Rotation = rotation,
                 Kind = WakeParticleKind.BubbleMagic,
                 IsFront = true,
-                HasGravity = true
+                HasGravity = true,
+                VariantIdx = variantIdx
             });
         }
     }
@@ -1522,21 +1666,32 @@ public class WadingWakeSystem
             // baked texture has the same dimensions as the source.
             Texture2D? tex;
             Rectangle src;
+            // VariantIdx selects which of the pre-baked tint variants to
+            // sample. Clamp defensively so an out-of-range index (e.g. a
+            // unit re-init mid-game) falls back to the default rather
+            // than crashing.
+            int variantIdx = p.VariantIdx;
             switch (p.Kind)
             {
                 case WakeParticleKind.MiniSplash:
-                    if (_miniSplashColored == null || _fbMiniSplash == null) continue;
-                    tex = _miniSplashColored;
+                    if (_fbMiniSplash == null || _miniSplashByVariant.Length == 0) continue;
+                    if (variantIdx >= _miniSplashByVariant.Length) variantIdx = 0;
+                    tex = _miniSplashByVariant[variantIdx];
+                    if (tex == null) continue;
                     src = _fbMiniSplash.GetFrameRect(_fbMiniSplash.GetFrameAtNormalizedTime(t));
                     break;
                 case WakeParticleKind.BubbleMagic:
-                    if (_bubbleMagicColored == null || _fbBubbleMagic == null) continue;
-                    tex = _bubbleMagicColored;
+                    if (_fbBubbleMagic == null || _bubbleMagicByVariant.Length == 0) continue;
+                    if (variantIdx >= _bubbleMagicByVariant.Length) variantIdx = 0;
+                    tex = _bubbleMagicByVariant[variantIdx];
+                    if (tex == null) continue;
                     src = _fbBubbleMagic.GetFrameRect(_fbBubbleMagic.GetFrameAtNormalizedTime(t));
                     break;
                 case WakeParticleKind.RainSplash:
-                    if (_rainSplashColored == null || _fbRainSplash == null) continue;
-                    tex = _rainSplashColored;
+                    if (_fbRainSplash == null || _rainSplashByVariant.Length == 0) continue;
+                    if (variantIdx >= _rainSplashByVariant.Length) variantIdx = 0;
+                    tex = _rainSplashByVariant[variantIdx];
+                    if (tex == null) continue;
                     src = _fbRainSplash.GetFrameRect(_fbRainSplash.GetFrameAtNormalizedTime(t));
                     break;
                 case WakeParticleKind.SoftCircle:
