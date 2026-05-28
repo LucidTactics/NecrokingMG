@@ -187,11 +187,22 @@ public sealed class PopupManager
             // else: non-blocking + not-light-dismiss — let it through.
         }
 
-        // Scroll-wheel: only swallowed when the cursor is over the layer.
-        // Side panels with scrollable contents (inventory list) consume their
-        // own scroll inside Update; this catches the modal/popover case where
-        // a click anywhere should still consume the scroll wheel.
-        if (input.ScrollDelta != 0 && top.ContainsMouse(mx, my)) input.ConsumeScroll();
+        // Scroll-wheel routing. Three cases mirror the click rules above:
+        //   inside the panel:  consume — the layer owns scroll.
+        //   outside + blocking (modal): consume — game world / lower panels
+        //                      shouldn't scroll behind a modal. This is what
+        //                      prevents the texture-file browser's scroll from
+        //                      leaking into the env editor's HandlePanelScroll
+        //                      and the map editor's sidebar.
+        //   outside + non-blocking (side panel): let it through, so the user
+        //                      can scroll the game world while inventory etc.
+        //                      are visible.
+        if (input.ScrollDelta != 0)
+        {
+            bool insideScroll = top.ContainsMouse(mx, my);
+            if (insideScroll || top.IsBlocking)
+                input.ConsumeScroll();
+        }
 
         // ESC routing — the canonical bug fix. Top layer cancels; key is
         // consumed so the Game1 ESC handler downstream sees IsKeyConsumed and

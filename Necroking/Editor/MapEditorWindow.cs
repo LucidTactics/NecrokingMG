@@ -661,11 +661,16 @@ public class MapEditorWindow
         }
 
         // --- Scroll per-tab ---
+        // Gate on InputState.IsScrollConsumed so a higher-stack popup
+        // (texture file browser, color picker, blocking modal, etc.)
+        // captures scroll first — without this the sidebar scrolls
+        // simultaneously with the top layer.
         int scrollDelta = mouse.ScrollWheelValue - _prevScrollValue;
-        if (scrollDelta != 0 && overPanel)
+        if (scrollDelta != 0 && overPanel && !_eb._input.IsScrollConsumed)
         {
             int tabIdx = (int)ActiveTab;
             _tabScroll[tabIdx] = MathF.Max(0, _tabScroll[tabIdx] - scrollDelta * 0.2f);
+            _eb._input.ConsumeScroll();
         }
 
         // --- Save (Ctrl+S) — suppress when text field is active ---
@@ -1671,8 +1676,11 @@ public class MapEditorWindow
 
         // Scroll env list
         int scrollDelta2 = mouse.ScrollWheelValue - _prevScrollValue;
-        if (scrollDelta2 != 0 && overPanel)
+        if (scrollDelta2 != 0 && overPanel && !_eb._input.IsScrollConsumed)
+        {
             _envListScroll = MathF.Max(0, _envListScroll - scrollDelta2 * 0.2f);
+            _eb._input.ConsumeScroll();
+        }
 
         // M17: Resolve def index (may be a group selection using weighted random)
         int resolvedDefIndex = ResolveObjectDefIndex();
@@ -3719,8 +3727,11 @@ public class MapEditorWindow
 
         // Scroll
         var scrollDelta = mouse.ScrollWheelValue - _prevScrollValue;
-        if (scrollDelta != 0 && overPanel)
+        if (scrollDelta != 0 && overPanel && !_eb._input.IsScrollConsumed)
+        {
             _tabScroll[6] = MathF.Max(0, _tabScroll[6] - scrollDelta * 0.2f);
+            _eb._input.ConsumeScroll();
+        }
     }
 
     private void DrawTriggersTab(int panelX, int contentY, int contentH)
