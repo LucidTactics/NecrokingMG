@@ -114,9 +114,16 @@ public class TextureFileBrowser : Necroking.UI.IModalLayer
     /// <summary>
     /// Update input. Call each frame while IsOpen is true.
     /// </summary>
-    public void Update(MouseState mouse, MouseState prevMouse, KeyboardState kb, KeyboardState prevKb)
+    public void Update(EditorBase ui, MouseState mouse, MouseState prevMouse, KeyboardState kb, KeyboardState prevKb)
     {
         if (!_isOpen) return;
+        // Raise the editor input layer NOW (in Update, not Draw) so any
+        // HandlePanelScroll / DrawScrollableList calls in the underlying
+        // editor's Draw pass that runs before our own Draw will see
+        // IsInputBlocked(0) == true and bail out. Without this, the env
+        // editor's property panel scroll fires before our Draw sets the
+        // layer, and the scroll wheel "leaks" through.
+        ui.InputLayer = Math.Max(ui.InputLayer, 1);
         // ESC handling moved to OnCancel — PopupManager dispatches when the
         // browser is the top of the stack.
     }

@@ -603,7 +603,7 @@ public class SpellEditorWindow : EditorWindow
     private void DrawFlipbookManagerPopup(int screenW, int screenH)
     {
         // Update texture file browser input
-        _fbTextureBrowser.Update(_ui._mouse, _ui._prevMouse, _ui._kb, _ui._prevKb);
+        _fbTextureBrowser.Update(_ui, _ui._mouse, _ui._prevMouse, _ui._kb, _ui._prevKb);
 
         // Modal overlay
         _ui.DrawRect(new Rectangle(0, 0, screenW, screenH), new Color(0, 0, 0, 100));

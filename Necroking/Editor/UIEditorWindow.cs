@@ -866,7 +866,7 @@ public partial class UIEditorWindow : EditorBase
         var kb = _input.Kb;
         var gt = _lastGameTime ?? new GameTime(TimeSpan.Zero, TimeSpan.FromSeconds(1.0 / 60));
         UpdateInput(mouse, _prevMouseLocal, kb, _prevKb, screenW, screenH, gt);
-        _textureBrowser.Update(mouse, _prevMouseLocal, kb, _prevKb);
+        _textureBrowser.Update(this, mouse, _prevMouseLocal, kb, _prevKb);
         _prevMouseLocal = mouse;
         _prevKb = kb;
     }

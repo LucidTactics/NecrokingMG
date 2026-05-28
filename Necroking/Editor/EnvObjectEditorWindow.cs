@@ -320,7 +320,7 @@ public class EnvObjectEditorWindow : Necroking.UI.IModalLayer
         // Update texture file browser input
         var mouse = _ui._input.Mouse;
         var kb = _ui._input.Kb;
-        _textureBrowser.Update(mouse, _prevMouseEnv, kb, _prevKbEnv);
+        _textureBrowser.Update(_ui, mouse, _prevMouseEnv, kb, _prevKbEnv);
         _prevMouseEnv = mouse;
         _prevKbEnv = kb;
     }

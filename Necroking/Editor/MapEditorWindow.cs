@@ -489,6 +489,14 @@ public class MapEditorWindow
                mouse.Y >= panelY && mouse.Y < panelY + panelH;
     }
 
+    /// <summary>True if any sub-popup is open over the map editor and should
+    /// own input — texture file browser, color picker, dropdown. Used to gate
+    /// the hand-rolled scroll / click handlers in per-tab updaters so they
+    /// don't fire under a modal overlay.</summary>
+    private bool IsAnyPopupBlocking() =>
+        _textureBrowser.IsOpen
+        || (_eb != null && (_eb.IsColorPickerOpen || _eb.IsDropdownOpen));
+
     // ========================================================================
     //  Update
     // ========================================================================
@@ -550,9 +558,10 @@ public class MapEditorWindow
             return;
         }
 
-        // Block all clicks when any popup/overlay is open (texture browser, color picker, dropdown)
-        bool popupBlocking = _textureBrowser.IsOpen
-            || (_eb != null && (_eb.IsColorPickerOpen || _eb.IsDropdownOpen));
+        // Block all clicks when any popup/overlay is open (texture browser, color picker, dropdown).
+        // Shared with sub-tab updaters via IsAnyPopupBlocking() so per-tab
+        // scroll handlers can gate themselves too.
+        bool popupBlocking = IsAnyPopupBlocking();
 
         bool leftClick = !popupBlocking && mouse.LeftButton == ButtonState.Pressed && _prevMouse.LeftButton == ButtonState.Released;
         bool leftDown = !popupBlocking && mouse.LeftButton == ButtonState.Pressed;
@@ -661,16 +670,17 @@ public class MapEditorWindow
         }
 
         // --- Scroll per-tab ---
-        // Gate on InputState.IsScrollConsumed so a higher-stack popup
-        // (texture file browser, color picker, blocking modal, etc.)
-        // captures scroll first — without this the sidebar scrolls
-        // simultaneously with the top layer.
+        // Gate on popupBlocking so a sub-popup (texture file browser, color
+        // picker, dropdown) captures scroll first. PopupManager's
+        // preemptive consumption can't be used here because _mapEditorLayer
+        // is the top of the stack while the map editor is active — its own
+        // sidebar IS the legitimate consumer, but it reads raw mouse, so
+        // gating on InputState.IsScrollConsumed would bail spuriously.
         int scrollDelta = mouse.ScrollWheelValue - _prevScrollValue;
-        if (scrollDelta != 0 && overPanel && !_eb._input.IsScrollConsumed)
+        if (scrollDelta != 0 && overPanel && !popupBlocking)
         {
             int tabIdx = (int)ActiveTab;
             _tabScroll[tabIdx] = MathF.Max(0, _tabScroll[tabIdx] - scrollDelta * 0.2f);
-            _eb._input.ConsumeScroll();
         }
 
         // --- Save (Ctrl+S) — suppress when text field is active ---
@@ -719,7 +729,7 @@ public class MapEditorWindow
         }
 
         // Update texture file browser input
-        _textureBrowser.Update(mouse, _prevMouse, kb, _prevKb);
+        _textureBrowser.Update(_eb, mouse, _prevMouse, kb, _prevKb);
 
         // Save / Load / Undo button clicks (mirrors the Draw-time button layout).
         UpdateBottomBarClicks(leftClick, mouse, panelX, panelY, screenH);
@@ -1676,11 +1686,8 @@ public class MapEditorWindow
 
         // Scroll env list
         int scrollDelta2 = mouse.ScrollWheelValue - _prevScrollValue;
-        if (scrollDelta2 != 0 && overPanel && !_eb._input.IsScrollConsumed)
-        {
+        if (scrollDelta2 != 0 && overPanel && !IsAnyPopupBlocking())
             _envListScroll = MathF.Max(0, _envListScroll - scrollDelta2 * 0.2f);
-            _eb._input.ConsumeScroll();
-        }
 
         // M17: Resolve def index (may be a group selection using weighted random)
         int resolvedDefIndex = ResolveObjectDefIndex();
@@ -3727,11 +3734,8 @@ public class MapEditorWindow
 
         // Scroll
         var scrollDelta = mouse.ScrollWheelValue - _prevScrollValue;
-        if (scrollDelta != 0 && overPanel && !_eb._input.IsScrollConsumed)
-        {
+        if (scrollDelta != 0 && overPanel && !IsAnyPopupBlocking())
             _tabScroll[6] = MathF.Max(0, _tabScroll[6] - scrollDelta * 0.2f);
-            _eb._input.ConsumeScroll();
-        }
     }
 
     private void DrawTriggersTab(int panelX, int contentY, int contentH)

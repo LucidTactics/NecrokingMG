@@ -208,7 +208,7 @@ public class WallEditorWindow : Necroking.UI.IModalLayer
         // RM32: Update and draw texture file browser
         var wallMouse = _ui._input.Mouse;
         var wallKb = _ui._input.Kb;
-        _textureBrowser.Update(wallMouse, _prevMouseWall, wallKb, _prevKbWall);
+        _textureBrowser.Update(_ui, wallMouse, _prevMouseWall, wallKb, _prevKbWall);
         _textureBrowser.Draw(_ui, screenW, screenH);
         _prevMouseWall = wallMouse;
         _prevKbWall = wallKb;

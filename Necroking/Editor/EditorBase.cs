@@ -253,12 +253,7 @@ public class EditorBase
             && prevMouse.LeftButton == ButtonState.Released)
             _dropdownHoldingMousePress = false;
         _inputLayer = (dropdownWasOpen || _dropdownHoldingMousePress) ? 2 : 0;
-        // Sync scroll-consume from the shared InputState. PopupManager (and
-        // any other system that consumes scroll via input.ConsumeScroll())
-        // sets InputState._scrollConsumed; without mirroring that into
-        // EditorBase's own flag, HandlePanelScroll would still scroll its
-        // panels under a top-of-stack popup like TextureFileBrowser.
-        _scrollConsumed = _input != null && _input.IsScrollConsumed;
+        _scrollConsumed = false;
         _mouseOverEditorUI = false;
         _pendingDropdown = null;
         _dropdownOverlayConsumedClick = false;

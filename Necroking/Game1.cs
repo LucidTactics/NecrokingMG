@@ -2391,11 +2391,26 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 _input.MouseOverUI = true;
         }
 
-        // Scroll zoom (always active, but not when over UI)
-        bool scrollOverUI = _input.MouseOverUI
-            || (_menuState == MenuState.MapEditor && _mapEditor.IsMouseOverPanel(screenW, screenH));
-        if (_input.ScrollDelta != 0 && (_menuState == MenuState.None || _menuState == MenuState.MapEditor) && !scrollOverUI)
-            _camera.ZoomBy(_input.ScrollDelta / 120f);
+        // Scroll zoom.
+        //   Gameplay: zoom when cursor isn't over any UI element.
+        //   Map editor: zoom when cursor is over the world area (not the
+        //     sidebar) AND only when the map editor itself is the top of the
+        //     popup stack — any sub-popup (texture file browser, color picker,
+        //     env editor, etc.) sits above and should own the scroll instead.
+        //     We can't gate on _input.MouseOverUI here because PopupManager
+        //     sets it whenever _mapEditorLayer is on the stack (full-screen
+        //     ContainsMouse), which would block zoom even in the world area.
+        if (_input.ScrollDelta != 0)
+        {
+            bool canZoomGameplay = _menuState == MenuState.None
+                && !_input.MouseOverUI
+                && !_input.IsScrollConsumed;
+            bool canZoomMapEditor = _menuState == MenuState.MapEditor
+                && _popups.Top == _mapEditorLayer
+                && !_mapEditor.IsMouseOverPanel(screenW, screenH);
+            if (canZoomGameplay || canZoomMapEditor)
+                _camera.ZoomBy(_input.ScrollDelta / 120f);
+        }
 
         // Editors pause the game
         bool editorActive = _menuState == MenuState.UnitEditor || _menuState == MenuState.SpellEditor
