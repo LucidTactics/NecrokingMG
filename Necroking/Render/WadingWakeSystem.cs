@@ -145,6 +145,14 @@ public class WakeEmitterState
     /// spawns use this so all drips spread along the same body axis the
     /// unit had when exiting, even if the unit turns on dry land.</summary>
     public Vec2 ExitBodyHalf;
+
+    /// <summary>Wake-particle variant index from the last frame the unit
+    /// was actually in water. Used to tint exit-splash drips with the
+    /// colour of the water they just left rather than re-sampling at the
+    /// dry-land spawn position (which would always return 0 = untinted).
+    /// Refreshed every wading frame and frozen at the wading-true→false
+    /// edge until the next session.</summary>
+    public byte LastWaterVariantIdx;
 }
 
 /// <summary>
@@ -891,7 +899,15 @@ public class WadingWakeSystem
         // Pre-resolve the water-tint variant for this unit's position
         // once per frame — every particle that spawns this tick lives in
         // the same body of water and gets the same gradient colours.
+        // Exit-splash drips are a special case: by the time they spawn,
+        // the unit has left the water (unitPos sits on dry land) and a
+        // fresh lookup would return variant 0 (untinted default). Use
+        // state.LastWaterVariantIdx instead — that's the variant from
+        // the last frame the unit was actually wading.
         byte variantIdx = LookupVariantForPos(unitPos);
+        if (wadingActive)
+            state.LastWaterVariantIdx = variantIdx;
+        byte exitVariantIdx = state.LastWaterVariantIdx;
 
         // Entry-splash edge — wading false → true. Also resets the
         // max-depth tracker + caches the body half-vector for the
@@ -908,7 +924,7 @@ public class WadingWakeSystem
         // that went chest-deep then came back to ankle-deep before exiting
         // still has drips from chest-height.
         if (!wadingActive && state.WasWading)
-            StartExitSplash(state, unitPos, unitVel, state.MaxWaterlineHeightThisSession, bodyHalf, variantIdx);
+            StartExitSplash(state, unitPos, unitVel, state.MaxWaterlineHeightThisSession, bodyHalf, exitVariantIdx);
 
         // Entry-splash session trickle — releases the remaining 80%
         // over EntrySplashSessionDurationSec at the unit's current
@@ -917,9 +933,12 @@ public class WadingWakeSystem
         if (state.SplashRemainingDuration > 0f)
             TrickleEntrySplash(state, dt, unitPos, unitVel, waterlineWorldHeight, state.BodyHalfAtStart, variantIdx);
 
-        // Exit-splash session trickle.
+        // Exit-splash session trickle — drips spawn from the body's
+        // sunken silhouette on dry land, but their colour should match
+        // the water the unit just left (exitVariantIdx), not the dry
+        // ground underneath.
         if (state.ExitRemainingDuration > 0f)
-            TrickleExitSplash(state, dt, unitPos, state.ExitVelocity, state.ExitWaterlineHeight, state.ExitBodyHalf, variantIdx);
+            TrickleExitSplash(state, dt, unitPos, state.ExitVelocity, state.ExitWaterlineHeight, state.ExitBodyHalf, exitVariantIdx);
 
         if (wadingActive)
         {
