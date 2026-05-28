@@ -448,18 +448,45 @@ public class GroundSystem
     /// position. Used by the wake system to colour spawned particles to
     /// match the water they're in: pre-baked particle texture variants are
     /// keyed on this tint, and the variant lookup just compares it to the
-    /// known set. Returns <see cref="Color.White"/> when the nearest
-    /// vertex isn't water (or the position is outside the map), so the
-    /// caller falls back to the default (untinted) variant cleanly.</summary>
+    /// known set. Returns <see cref="Color.White"/> when none of the
+    /// surrounding vertices are water (or the position is outside the
+    /// map), so the caller falls back to the default (untinted) variant
+    /// cleanly.
+    ///
+    /// Examines all 4 corner vertices of the tile the position sits in
+    /// and picks the *nearest water vertex by distance* — using just the
+    /// rounded-nearest vertex (the obvious one-tap version) misses the
+    /// shoreline case: a unit standing in water right next to a grass
+    /// vertex can round to that grass vertex and return White even
+    /// though three other corners are water. Wading edge events (entry
+    /// splash, first-step trail) fire exactly at that shoreline, which
+    /// is where this would have shown up as "no tint" in swamp water.</summary>
     public Color SampleNearestWaterTint(Vec2 worldPos)
     {
         if (_worldW <= 0 || _worldH <= 0 || _types.Count == 0) return Color.White;
-        int vx = (int)MathF.Round(worldPos.X);
-        int vy = (int)MathF.Round(worldPos.Y);
-        if (vx < 0 || vx >= VertexW || vy < 0 || vy >= VertexH) return Color.White;
-        byte typeIdx = _vertexMap[vy * VertexW + vx];
-        if (!IsWaterTypeIdx(typeIdx)) return Color.White;
-        return _types[typeIdx].TintColor;
+        int x0 = (int)MathF.Floor(worldPos.X);
+        int y0 = (int)MathF.Floor(worldPos.Y);
+
+        float bestDistSq = float.MaxValue;
+        Color bestTint = Color.White;
+        for (int dy = 0; dy <= 1; dy++)
+        for (int dx = 0; dx <= 1; dx++)
+        {
+            int vx = x0 + dx;
+            int vy = y0 + dy;
+            if (vx < 0 || vx >= VertexW || vy < 0 || vy >= VertexH) continue;
+            byte typeIdx = _vertexMap[vy * VertexW + vx];
+            if (!IsWaterTypeIdx(typeIdx)) continue;
+            float ddx = worldPos.X - vx;
+            float ddy = worldPos.Y - vy;
+            float distSq = ddx * ddx + ddy * ddy;
+            if (distSq < bestDistSq)
+            {
+                bestDistSq = distSq;
+                bestTint = _types[typeIdx].TintColor;
+            }
+        }
+        return bestTint;
     }
 
     /// <summary>Like <see cref="SampleWaterness"/> but averages over a small
