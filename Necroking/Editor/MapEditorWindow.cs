@@ -83,7 +83,14 @@ public class MapEditorWindow
 
     // Callbacks
     private Action? _onVertexMapChanged;
+    // Fired when grass CELLS change (painting). The grass map array is shared
+    // with the renderer and read live, so this is a cheap reference-reconcile —
+    // it must NOT trigger a full grass-type/sprite resync per painted frame.
     private Action? _onGrassMapChanged;
+    // Fired when grass TYPE DEFINITIONS change (add/remove type, edit sprites,
+    // load). This is the expensive path that rebuilds type tables and re-pushes
+    // sprites to the renderer; it only runs on structural edits, not painting.
+    private Action? _onGrassTypesChanged;
 
     // ---- Grass data (owned by editor, synced back to Game1) ----
     private readonly List<GrassTypeDef> _grassTypes = new();
@@ -410,7 +417,8 @@ public class MapEditorWindow
         RoadSystem? roadSystem = null,
         TileGrid? tileGrid = null,
         Action? onGrassMapChanged = null,
-        EditorBase? editorBase = null)
+        EditorBase? editorBase = null,
+        Action? onGrassTypesChanged = null)
     {
         _groundSystem = groundSystem;
         _envSystem = envSystem;
@@ -426,6 +434,7 @@ public class MapEditorWindow
         _roadSystem = roadSystem ?? new RoadSystem();
         _tileGrid = tileGrid ?? new TileGrid();
         _onGrassMapChanged = onGrassMapChanged;
+        _onGrassTypesChanged = onGrassTypesChanged;
         _eb = editorBase;
 
         // Initialize the environment object def editor sub-window
@@ -1219,7 +1228,7 @@ public class MapEditorWindow
                     _grassH = (int)MathF.Ceiling(_groundSystem.WorldH / cs);
                     _grassMap = new byte[_grassW * _grassH];
                 }
-                _onGrassMapChanged?.Invoke();
+                _onGrassTypesChanged?.Invoke();
             }
 
             // Delete Type button (next to Add button)
@@ -1238,7 +1247,7 @@ public class MapEditorWindow
                     else if (typeIdx > SelectedGrassType) _grassMap[gi] = (byte)(v - 1);
                 }
                 SelectedGrassType = Math.Min(SelectedGrassType, _grassTypes.Count - 1);
-                _onGrassMapChanged?.Invoke();
+                _onGrassTypesChanged?.Invoke();
             }
         }
 
@@ -1264,9 +1273,36 @@ public class MapEditorWindow
             _grassStrokeOld = null;
             _painting = false;
         }
+
+        // Right-drag to erase grass regardless of the selected type (mirrors the
+        // walls tab's right-drag erase). Lets you wipe grass without first
+        // selecting the eraser tool.
+        bool rightDown = mouse.RightButton == ButtonState.Pressed;
+        bool rightUp = mouse.RightButton == ButtonState.Released && _prevMouse.RightButton == ButtonState.Pressed;
+        if (rightDown && !overPanel && _grassMap.Length > 0)
+        {
+            if (!_painting)
+                _grassStrokeOld = new Dictionary<int, byte>();
+            _painting = true;
+            PaintGrass(mouse, screenW, screenH, erase: true);
+        }
+        if (rightUp)
+        {
+            if (_painting && _grassStrokeOld != null && _grassStrokeOld.Count > 0)
+            {
+                PushUndo(new UndoGrassStroke
+                {
+                    GrassMap = _grassMap,
+                    OldValues = _grassStrokeOld,
+                    OnChanged = _onGrassMapChanged
+                });
+            }
+            _grassStrokeOld = null;
+            _painting = false;
+        }
     }
 
-    private void PaintGrass(MouseState mouse, int screenW, int screenH)
+    private void PaintGrass(MouseState mouse, int screenW, int screenH, bool erase = false)
     {
         if (_grassW == 0 || _grassH == 0) return;
 
@@ -1277,7 +1313,7 @@ public class MapEditorWindow
         int cy = (int)MathF.Floor(worldPos.Y / cs);
 
         byte paintValue;
-        if (_grassEraserSelected)
+        if (erase || _grassEraserSelected)
             paintValue = 0; // 0 = no grass (previously 255 which the renderer treated as grass type 254)
         else if (SelectedGrassType >= 0 && SelectedGrassType < _grassTypes.Count)
             paintValue = (byte)(SelectedGrassType + 1); // 1-based: 0 reserved for empty
@@ -1496,7 +1532,7 @@ public class MapEditorWindow
                 y += FieldHeight + 2;
             }
 
-            if (changed) _onGrassMapChanged?.Invoke();
+            if (changed) _onGrassTypesChanged?.Invoke();
         }
         else if (!_grassEraserSelected && SelectedGrassType >= 0 && SelectedGrassType < _grassTypes.Count)
         {
@@ -1759,28 +1795,26 @@ public class MapEditorWindow
             }
         }
 
-        // Right-click to remove nearest (single or batch)
+        // Right-click to remove (single mode: drag to wipe nearest; paint mode: batch brush)
         if (!_objectPaintMode)
         {
-            // Single remove
-            if (rightClick && !overPanel)
+            // Single mode: hold right and drag to continuously remove the nearest
+            // object (any category) under the cursor. Previously this was a single
+            // right-click removing one object at a time. Removals accumulate into
+            // one batch undo finalized on mouse-up.
+            if (rightDown && !overPanel)
             {
+                if (_batchRemovedObjects == null)
+                    _batchRemovedObjects = new();
                 Vec2 worldPos = _camera.ScreenToWorld(new Vector2(mouse.X, mouse.Y), screenW, screenH);
                 int closest = FindClosestObject(worldPos, 3f);
                 if (closest >= 0)
                 {
                     var obj = _envSystem.GetObject(closest);
-                    PushUndo(new UndoObjectRemove
-                    {
-                        Env = _envSystem,
-                        DefIndex = obj.DefIndex,
-                        X = obj.X, Y = obj.Y,
-                        Scale = obj.Scale, Seed = obj.Seed
-                    });
+                    _batchRemovedObjects.Add((obj.DefIndex, obj.X, obj.Y, obj.Scale, obj.Seed));
                     // Suppress per-remove pathfinder rebuild (same reasoning as
-                    // single placement). The MapEditor→exit transition in
-                    // Game1.Update fires one rebuild for the whole edit session,
-                    // so paths are current the moment gameplay resumes.
+                    // single placement). One rebake fires on mouse-up below; the
+                    // MapEditor→exit transition also rebuilds for the session.
                     var prevHandler = _envSystem.OnCollisionsDirty;
                     _envSystem.OnCollisionsDirty = null;
                     try
@@ -1792,15 +1826,25 @@ public class MapEditorWindow
                     {
                         _envSystem.OnCollisionsDirty = prevHandler;
                     }
-                    // Remove invalidates the tier fields for the area the
-                    // object covered. Cheapest correct fix is a full rebake of
-                    // env collision stamps (incremental "unstamp" would also
-                    // need to re-stamp neighbours whose stamps overlapped).
-                    // Editor-mode AI doesn't read these so the cost only
-                    // matters for very large maps; if it becomes a hotspot we
-                    // can defer this too via a dirty flag.
+                }
+            }
+            if (rightUp && _batchRemovedObjects != null)
+            {
+                if (_batchRemovedObjects.Count > 0)
+                {
+                    PushUndo(new UndoObjectBatchRemove
+                    {
+                        Env = _envSystem,
+                        Removed = new(_batchRemovedObjects)
+                    });
+                    // Remove invalidates the tier fields for the area the objects
+                    // covered; one full rebake on mouse-up is the cheapest correct
+                    // fix (incremental "unstamp" would need to re-stamp overlapping
+                    // neighbours). Editor-mode AI doesn't read these, so cost only
+                    // matters on very large maps.
                     RebakeObjectCollisions(); // RM04
                 }
+                _batchRemovedObjects = null;
             }
         }
         else
@@ -4222,9 +4266,11 @@ public class MapEditorWindow
             }
         }
 
-        // Right-click to delete nearest placed unit
-        bool rightClick = mouse.RightButton == ButtonState.Pressed && _prevMouse.RightButton == ButtonState.Released;
-        if (rightClick && !overPanel && _placedUnits.Count > 0)
+        // Right-drag to delete placed units: while held, continuously remove the
+        // nearest unit under the cursor so you can sweep over several. Previously
+        // this was a single right-click per unit.
+        bool rightDown = mouse.RightButton == ButtonState.Pressed;
+        if (rightDown && !overPanel && _placedUnits.Count > 0)
         {
             Vec2 worldPos = _camera.ScreenToWorld(new Vector2(mouse.X, mouse.Y), screenW, screenH);
             float bestDist = 4f * 4f; // generous click radius
@@ -4618,9 +4664,10 @@ public class MapEditorWindow
             // Reload env textures
             _envSystem.LoadTextures(_device);
 
-            // Notify listeners
+            // Notify listeners. Load swaps the grass map array reference and may
+            // bring new grass types, so it needs the full type resync.
             _onVertexMapChanged?.Invoke();
-            _onGrassMapChanged?.Invoke();
+            _onGrassTypesChanged?.Invoke();
 
             _statusMessage = $"Loaded: {mapPath}";
             _statusTimer = 3f;

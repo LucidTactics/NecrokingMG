@@ -852,14 +852,24 @@ public class Game1 : Microsoft.Xna.Framework.Game
             _spriteBatch, _pixel, _font, _smallFont, GraphicsDevice,
             onVertexMapChanged: () =>
             {
-                _groundVertexMapTex?.Dispose();
-                _groundVertexMapTex = _groundSystem.CreateVertexMapTexture(GraphicsDevice);
+                // Incremental: patch only the brush-sized dirty rect into the
+                // existing texture (a few hundred texels) instead of allocating
+                // and uploading a fresh 4097x4097 (~67 MB) texture every painted
+                // frame. Fall back to a full rebuild only if the texture is
+                // missing or its size no longer matches the vertex map.
+                if (_groundVertexMapTex == null
+                    || !_groundSystem.UploadDirtyRect(_groundVertexMapTex))
+                {
+                    _groundVertexMapTex?.Dispose();
+                    _groundVertexMapTex = _groundSystem.CreateVertexMapTexture(GraphicsDevice);
+                }
             },
             wallSystem: _wallSystem,
             roadSystem: _roadSystem,
             tileGrid: _sim.Grid,
-            onGrassMapChanged: SyncGrassFromEditor,
-            editorBase: _editorUi);
+            onGrassMapChanged: SyncGrassMapReference,
+            editorBase: _editorUi,
+            onGrassTypesChanged: SyncGrassFromEditor);
         _mapEditor.SetItemRegistry(_gameData.Items);
         _mapEditor.SetSpellRegistry(_gameData.Spells);
         _mapEditor.SetGameData(_gameData);
@@ -1072,9 +1082,16 @@ public class Game1 : Microsoft.Xna.Framework.Game
     /// Sync grass data from the map editor back to Game1's rendering arrays.
     /// Called by the editor whenever the grass map or grass type properties change.
     /// </summary>
-    private void SyncGrassFromEditor()
+    /// <summary>
+    /// Cheap cell-paint notification: the grass map array is shared with the
+    /// renderer and read live each frame, so painting cells needs no work beyond
+    /// re-pointing at the editor's array if it was swapped (it isn't during a
+    /// paint stroke — only after Add-first-type or Load, which both go through
+    /// the full <see cref="SyncGrassFromEditor"/> path). O(1), safe to call per
+    /// painted frame.
+    /// </summary>
+    private void SyncGrassMapReference()
     {
-        // The editor may have a new/different grass map reference (e.g. after editor Load)
         var editorMap = _mapEditor.GetGrassMap();
         if (editorMap != _grassMap && editorMap.Length > 0)
         {
@@ -1082,6 +1099,12 @@ public class Game1 : Microsoft.Xna.Framework.Game
             _grassW = _mapEditor.GrassW;
             _grassH = _mapEditor.GrassH;
         }
+    }
+
+    private void SyncGrassFromEditor()
+    {
+        // The editor may have a new/different grass map reference (e.g. after editor Load)
+        SyncGrassMapReference();
 
         // Sync grass type properties from editor definitions.
         var types = _mapEditor.GrassTypes;
@@ -1335,14 +1358,24 @@ public class Game1 : Microsoft.Xna.Framework.Game
             _spriteBatch, _pixel, _font, _smallFont, GraphicsDevice,
             onVertexMapChanged: () =>
             {
-                _groundVertexMapTex?.Dispose();
-                _groundVertexMapTex = _groundSystem.CreateVertexMapTexture(GraphicsDevice);
+                // Incremental: patch only the brush-sized dirty rect into the
+                // existing texture (a few hundred texels) instead of allocating
+                // and uploading a fresh 4097x4097 (~67 MB) texture every painted
+                // frame. Fall back to a full rebuild only if the texture is
+                // missing or its size no longer matches the vertex map.
+                if (_groundVertexMapTex == null
+                    || !_groundSystem.UploadDirtyRect(_groundVertexMapTex))
+                {
+                    _groundVertexMapTex?.Dispose();
+                    _groundVertexMapTex = _groundSystem.CreateVertexMapTexture(GraphicsDevice);
+                }
             },
             wallSystem: _wallSystem,
             roadSystem: _roadSystem,
             tileGrid: _sim.Grid,
-            onGrassMapChanged: SyncGrassFromEditor,
-            editorBase: _editorUi);
+            onGrassMapChanged: SyncGrassMapReference,
+            editorBase: _editorUi,
+            onGrassTypesChanged: SyncGrassFromEditor);
         _mapEditor.SetItemRegistry(_gameData.Items);
 
         // Initialize the scenario

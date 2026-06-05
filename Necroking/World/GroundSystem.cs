@@ -187,6 +187,11 @@ public class GroundSystem
             // and the GPU shows the new type without a transition.
             if (_corruptionEdits.Remove(vi)) CorruptionDirty = true;
             if (_corruptionFadeProgress.Remove(vi)) CorruptionDirty = true;
+            // Track the changed texel so the GPU texture can be patched with an
+            // incremental UploadDirtyRect() instead of a full 16.8M-texel rebuild
+            // per painted frame. Without this the editor's onVertexMapChanged
+            // callback is forced into CreateVertexMapTexture every stroke frame.
+            MarkDirty(vx, vy);
         }
     }
 
