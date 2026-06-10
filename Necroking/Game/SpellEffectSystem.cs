@@ -185,12 +185,17 @@ public class SpellEffectSystem
                 sim.Lightning.SpawnZap(effectOrigin, targetPos,
                     spell.ZapDuration > 0 ? spell.ZapDuration : spell.StrikeDuration,
                     style, casterH, targetH);
-                sim.DealDamage(enemy, spell.Damage);
-                damageNumbers.Add(new DamageNumber
+                // Magic-resistance gate: an MR-checked strike only lands if it
+                // penetrates the target's MR.
+                if (SpellPenetration.Affects(gameData, units, casterIdx, enemy, spell))
                 {
-                    WorldPos = targetPos, Damage = spell.Damage,
-                    Timer = 0f, Height = targetH
-                });
+                    sim.DealDamage(enemy, spell.Damage);
+                    damageNumbers.Add(new DamageNumber
+                    {
+                        WorldPos = targetPos, Damage = spell.Damage,
+                        Timer = 0f, Height = targetH
+                    });
+                }
             }
         }
         else

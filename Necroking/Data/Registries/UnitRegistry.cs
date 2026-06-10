@@ -143,6 +143,7 @@ public class UnitStatsJson
     [JsonPropertyName("attack")] public int Attack { get; set; } = 10;
     [JsonPropertyName("defense")] public int Defense { get; set; } = 10;
     [JsonPropertyName("magicResist")] public int MagicResist { get; set; } = 10;
+    [JsonPropertyName("morale")] public int Morale { get; set; } = 10;
     [JsonPropertyName("encumbrance")] public int Encumbrance { get; set; }
     [JsonPropertyName("naturalProt")] public int NaturalProt { get; set; }
     [JsonPropertyName("combatSpeed")] public float CombatSpeed { get; set; } = 8.0f;
@@ -572,6 +573,7 @@ public class UnitRegistry : RegistryBase<UnitDef>
             Attack = stats.Attack,
             Defense = stats.Defense,
             MagicResist = stats.MagicResist,
+            Morale = stats.Morale,
             Encumbrance = stats.Encumbrance,
             NaturalProt = stats.NaturalProt,
             CombatSpeed = stats.CombatSpeed

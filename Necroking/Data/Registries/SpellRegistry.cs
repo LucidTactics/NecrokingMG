@@ -126,6 +126,14 @@ public class SpellDef : IHasId
     [EditorRegistryDropdown("Buffs")]
     [JsonPropertyName("castingBuffID")] public string CastingBuffID { get; set; } = "";
 
+    // Caster animation while casting. "Spell1" (default) = the single-shot cast
+    // anim (effect fires at the anim's effect frame). "ImbueGround"/"Raise" are
+    // channeled Start->Loop->Finish casts (Raise has no Finish); the effect fires
+    // at the END of the loop. See the channeled-cast machine in Game1.
+    [EditorField(Label = "Cast Anim", Group = "COMMON", Order = 105)]
+    [EditorCombo("Spell1", "ImbueGround", "Raise")]
+    [JsonPropertyName("castAnim")] public string CastAnim { get; set; } = "Spell1";
+
     // Target Filter — only shown for Strike
     [EditorVisible("Category", "Strike")]
     [EditorField(Label = "Target Filter", Group = "COMMON", Order = 105)]
@@ -137,6 +145,26 @@ public class SpellDef : IHasId
 
     [EditorField(Label = "Defense Negating", Group = "COMMON", Order = 107)]
     [JsonPropertyName("defenseNegating")] public bool DefenseNegating { get; set; } = true;
+
+    // Magic Resistance — when ChecksMagicResist is set, the spell must penetrate the
+    // target's MR to affect it: (penetration + DRN) vs (MR + DRN). ResistDifficulty
+    // shifts penetration like a Dominions spell difficulty: Hard +4, Easy −4.
+    [EditorField(Label = "Checks Magic Resist", Group = "COMMON", Order = 108)]
+    [JsonPropertyName("checksMagicResist")] public bool ChecksMagicResist { get; set; }
+
+    [EditorVisible("ChecksMagicResist", "True")]
+    [EditorField(Label = "Resist Difficulty", Group = "COMMON", Order = 109)]
+    [EditorCombo("Normal", "Easy", "Hard")]
+    [JsonPropertyName("resistDifficulty")] public string ResistDifficulty { get; set; } = "Normal";
+
+    /// <summary>Penetration modifier from the easy/hard tag: Hard +4 (harder to
+    /// resist), Easy −4 (easier to resist), Normal 0.</summary>
+    public int ResistDifficultyMod => ResistDifficulty switch
+    {
+        "Hard" => 4,
+        "Easy" => -4,
+        _ => 0,
+    };
 
     // Physics knockback (applied on AoE impact)
     [EditorVisible("Category", "Projectile", "Cloud", "Strike")]

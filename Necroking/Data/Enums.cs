@@ -47,6 +47,20 @@ public enum QueuedUnitAction : byte { None, Flee, Disengage }
 public enum ProjectileType : byte { Arrow, Fireball, Potion }
 public enum HitLocation : byte { Head, Arms, Chest, Legs, Feet }
 
+/// <summary>
+/// Permanent battle wounds (manual p.60). Applied when a slashing weapon scores a
+/// limb/head hit costing >= 50% of the target's max HP: arms/legs are maimed, a head
+/// is severed (lethal). Each is a one-time flag — a unit can lose each part once.
+/// </summary>
+[System.Flags]
+public enum Affliction : byte
+{
+    None    = 0,
+    LostEye = 1,  // head hit — reduced Attack/Precision
+    LostArm = 2,  // arm chopped — reduced Attack + Strength
+    LostLeg = 4,  // leg chopped — reduced Defense + Combat Speed
+}
+
 // --- Spell ---
 
 public enum SpellCategory : byte { Projectile, Buff, Debuff, Summon, Strike, Beam, Drain, Command, Toggle }

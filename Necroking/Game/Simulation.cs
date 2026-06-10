@@ -31,6 +31,13 @@ public class Corpse
     // Lerp anchor for pickup/putdown animation
     public Vec2 LerpStartPos;
 
+    // Frozen carry orientation: the exact resolved death-sprite angle + flip the
+    // corpse was last shown at while carried. -1 = never carried. Used so a
+    // dropped corpse keeps the precise pose it had in-hand (no re-resolve jump),
+    // and so the carried/putdown/settled renders all agree.
+    public int CarryDisplayAngle = -1;
+    public bool CarryDisplayFlip;
+
     // Physics arc — corpse continues flying if unit died mid-knockback.
     // GravityMul/DragMul inherit from the unit's PhysicsBody (e.g. trample
     // launches use 0.3× gravity / 0.5× drag for visible arcs); without these
@@ -112,6 +119,21 @@ public class Simulation
     private float _harassmentDecayTimer = CombatTickInterval;
     private const float FatigueRegenInterval = 3.0f; // 1 fatigue point recovered per this many seconds
     private float _fatigueRegenTimer = FatigueRegenInterval;
+    private const float UnconsciousFatigueRegen = 5.0f;   // fatigue recovered per interval while collapsed (manual: ~5/turn)
+    private const float UnconsciousWakeThreshold = 50.0f; // wake once rested below this (hysteresis vs the 100 collapse point)
+
+    // --- Morale / rout ---
+    private const float MoraleCheckInterval = 1.5f;     // how often in-combat units roll morale
+    private float _moraleCheckTimer = MoraleCheckInterval;
+    private const float MoraleBaseThreshold = 10f;      // baseline rout difficulty
+    private const float MoraleRoutMinDuration = 4f;     // min seconds a broken unit keeps fleeing
+    private const float ArmyRoutHpFraction = 0.25f;     // a faction below this fraction of peak HP routs en masse
+    private const float MindlessMoraleThreshold = 50;   // Morale >= this (or Undead faction) = fearless, never routs
+    private const float MoraleLocalRadius = 8f;         // radius for local outnumbering + rally checks
+    private const float RoutFleeDistance = 18f;         // how far a routing unit aims to flee
+    private readonly float[] _factionCurHP = new float[3];
+    private readonly float[] _factionPeakHP = new float[3];
+    private readonly System.Collections.Generic.List<uint> _moraleScratch = new();
     private int _nextCorpseID;
     private readonly List<PendingZombieRaise> _pendingZombieRaises = new();
     private readonly PlayerResources _playerResources = new() { Essence = 100, MaxEssence = 100 };
@@ -279,6 +301,10 @@ public class Simulation
         // recovery roll can zero the buff's duration in the same tick it gets decremented.
         UpdateKnockdownRecovery(dt);
 
+        // Morale checks (amortized): units that are losing badly or locally swarmed
+        // may break and rout. Routing movement itself is steered in the AI pass.
+        UpdateMorale(dt);
+
         // Tick buffs
         BuffSystem.TickBuffs(_units, dt, _gameData?.Buffs);
         for (int i = 0; i < _units.Count; i++)
@@ -307,14 +333,21 @@ public class Simulation
         }
 
         // Fatigue regen: every FatigueRegenInterval seconds, every unit recovers
-        // 1 fatigue point (clamped at 0). Melee swings add Encumbrance in ResolveMeleeAttack.
+        // fatigue (clamped at 0). Melee swings add Encumbrance in ResolveMeleeAttack.
+        // Collapsed (unconscious) units recover faster and stay down until rested
+        // below the wake threshold (manual p.61).
         _fatigueRegenTimer -= dt;
         if (_fatigueRegenTimer <= 0f)
         {
             _fatigueRegenTimer += FatigueRegenInterval;
             for (int i = 0; i < _units.Count; i++)
+            {
+                if (!_units[i].Alive) continue;
+                float regen = _units[i].Unconscious ? UnconsciousFatigueRegen : 1f;
                 if (_units[i].Fatigue > 0f)
-                    _units[i].Fatigue = MathF.Max(0f, _units[i].Fatigue - 1f);
+                    _units[i].Fatigue = MathF.Max(0f, _units[i].Fatigue - regen);
+                UpdateUnconsciousState(i);
+            }
         }
 
         // Rebuild quadtree
@@ -482,23 +515,34 @@ public class Simulation
                 }
                 continue;
             }
+            var spellDef = (_gameData != null && !string.IsNullOrEmpty(hit.SpellID))
+                ? _gameData.Spells.Get(hit.SpellID) : null;
+
             // Physics knockback before damage — units enter physics first so if
             // the damage kills them, the corpse inherits the knockback arc
-            if (_gameData != null && !string.IsNullOrEmpty(hit.SpellID))
+            if (spellDef != null && spellDef.KnockbackForce > 0f)
             {
-                var spellDef = _gameData.Spells.Get(hit.SpellID);
-                if (spellDef != null && spellDef.KnockbackForce > 0f)
-                {
-                    float kbRadius = spellDef.KnockbackRadius > 0f ? spellDef.KnockbackRadius : hit.AoeRadius;
-                    _physics.ApplyRadialImpulse(_units, hit.ImpactPos, kbRadius,
-                        spellDef.KnockbackForce, spellDef.KnockbackUpward, hit.OwnerFaction);
-                }
+                float kbRadius = spellDef.KnockbackRadius > 0f ? spellDef.KnockbackRadius : hit.AoeRadius;
+                _physics.ApplyRadialImpulse(_units, hit.ImpactPos, kbRadius,
+                    spellDef.KnockbackForce, spellDef.KnockbackUpward, hit.OwnerFaction);
             }
 
             if (hit.UnitIdx >= 0 && hit.UnitIdx < _units.Count && _units[hit.UnitIdx].Alive)
-                DamageSystem.Apply(_units, hit.UnitIdx, hit.Damage,
-                    GameSystems.DamageType.Physical, GameSystems.DamageFlags.ArmorNegating,
-                    _damageEvents);
+            {
+                // Magic-resistance gate: an MR-checked spell projectile only damages
+                // a target whose MR its caster penetrates.
+                bool affects = true;
+                if (spellDef != null && spellDef.ChecksMagicResist)
+                {
+                    int casterIdx = UnitUtil.ResolveUnitIndex(_units, hit.OwnerID);
+                    affects = GameSystems.SpellPenetration.Penetrates(_units, hit.UnitIdx,
+                        GameSystems.SpellPenetration.Compute(_gameData, _units, casterIdx, spellDef));
+                }
+                if (affects)
+                    DamageSystem.Apply(_units, hit.UnitIdx, hit.Damage,
+                        GameSystems.DamageType.Physical, GameSystems.DamageFlags.ArmorNegating,
+                        _damageEvents);
+            }
         }
         PhaseEnd("projectiles");
 
@@ -672,6 +716,11 @@ public class Simulation
             if (!_units[i].Alive) continue;
             if (_units[i].InPhysics) continue; // Physics system owns this unit
             if (_units[i].Jumping || _units[i].Incap.IsLocked) { _units[i].PreferredVel = Vec2.Zero; continue; }
+
+            // Routing overrides all AI: a broken unit flees the field regardless of
+            // archetype/legacy behavior, until it rallies. Runs before the dispatch
+            // so it applies uniformly to every unit type.
+            if (_units[i].Routing) { SteerRout(i, dt); continue; }
 
             // New archetype system: if Archetype > 0, dispatch to handler
             // (PlayerControlled units are handled in the legacy switch below)
@@ -2099,6 +2148,8 @@ public class Simulation
             }
 
             if (_units[i].Incap.IsLocked) continue;
+            if (_units[i].Unconscious || _units[i].Fatigue >= 100f) continue; // exhausted: can't attack
+            if (_units[i].Routing) continue; // broken units flee, they don't fight
             if (!_units[i].PendingAttack.IsNone) continue;
             if (_units[i].PostAttackTimer > 0f) continue; // one attack at a time
             if (_units[i].JumpPhase != 0) continue;        // already airborne / mid-pounce
@@ -2466,13 +2517,24 @@ public class Simulation
         int atkDRN = UnitUtil.RollDRN();
         int defDRN = UnitUtil.RollDRN();
 
+        // Fatigue penalties (manual p.61): attack −1 per 20 fatigue, defense −1 per
+        // 10 fatigue (rounded down). This is what makes a tired unit easier to hit
+        // and less likely to land its own blows — the master clock of melee.
+        int atkFatiguePenalty = (int)(_units[attackerIdx].Fatigue / 20f);
+        int defFatiguePenalty = (int)(_units[defenderIdx].Fatigue / 10f);
+
+        // The defender's wielded weapon contributes its DefenseBonus, and its shield
+        // contributes ShieldDefense (a penalty in the data, e.g. −1) — both were
+        // previously dropped on the floor while the attacker's AttackBonus was applied.
+        int defWeaponDefBonus = defStats.MeleeWeapons.Count > 0 ? defStats.MeleeWeapons[0].DefenseBonus : 0;
+
         // Apply paralysis reduction + buff modifiers (e.g. knockdown reduces defense by 70%)
         float atkParalysis = PotionSystem.GetParalysisFraction(_units, attackerIdx);
         float defParalysis = PotionSystem.GetParalysisFraction(_units, defenderIdx);
         float buffedAtk = BuffSystem.GetModifiedStat(_units, attackerIdx, BuffStat.Attack, atkStats.Attack + weaponAttackBonus);
         float buffedDef = BuffSystem.GetModifiedStat(_units, defenderIdx, BuffStat.Defense, defStats.Defense);
-        int effectiveAtk = (int)(buffedAtk * atkParalysis);
-        int effectiveDef = (int)(buffedDef * defParalysis);
+        int effectiveAtk = (int)(buffedAtk * atkParalysis) - atkFatiguePenalty;
+        int effectiveDef = (int)(buffedDef * defParalysis) + defWeaponDefBonus + defStats.ShieldDefense - defFatiguePenalty;
 
         int modAtk = effectiveAtk + atkDRN;
         int harassment = _units[defenderIdx].Harassment;
@@ -2539,24 +2601,77 @@ public class Simulation
             return;
         }
 
+        // Shield hit (manual p.59-60): a shield interposes unless the attack also
+        // beats Defense + Parry. On a shield hit the shield's Protection is added to
+        // the defender's protection roll; a clean hit (attack beat def+parry) ignores it.
+        bool hasShield = defStats.ShieldProtection > 0 || defStats.ShieldParry > 0;
+        bool shieldHit = hasShield && (modAtk < modDef + defStats.ShieldParry);
+
         // Hit location
         var hitLoc = UnitUtil.RollHitLocation(_units[attackerIdx].Size, _units[defenderIdx].Size, weaponLength);
 
-        // Damage roll — protection varies by hit location (paralysis reduces strength)
-        int baseDmg = (int)((atkStats.Strength + weaponDamage) * atkParalysis);
+        // Weapon damage type + two-handedness (inferred from weapon name) and AP/AN.
+        WeaponDamageType wType = weapon?.DamageType
+            ?? (atkStats.MeleeWeapons.Count > 0 ? atkStats.MeleeWeapons[0].DamageType : WeaponDamageType.Slashing);
+        bool twoHanded = weapon?.TwoHanded
+            ?? (atkStats.MeleeWeapons.Count > 0 && atkStats.MeleeWeapons[0].TwoHanded);
+        bool weaponAP = weapon?.HasArmorPiercing ?? atkStats.HasArmorPiercing;
+        bool weaponAN = weapon?.HasArmorNegating ?? atkStats.HasArmorNegating;
+
+        // Damage roll: Strength (×1.25 if two-handed, manual p.61) + weapon damage + DRN.
+        int strContribution = twoHanded ? (int)(atkStats.Strength * 1.25f) : atkStats.Strength;
+        int baseDmg = (int)((strContribution + weaponDamage) * atkParalysis);
         int dmgDRN = UnitUtil.RollDRN();
-        int protDRN = UnitUtil.RollDRN();
         int dmgRoll = baseDmg + dmgDRN;
+        // Blunt: +25% on HEAD hits, BEFORE protection is deducted.
+        if (wType == WeaponDamageType.Blunt && hitLoc == HitLocation.Head)
+            dmgRoll = (int)(dmgRoll * 1.25f);
+
+        // Protection roll: location armor (head→helmet) + natural + shield-on-shield-hit,
+        // with piercing / armor-piercing / armor-defeating reductions, then + DRN.
+        int protDRN = UnitUtil.RollDRN();
         int armorProt = hitLoc == HitLocation.Head ? defStats.Armor.HeadProtection : defStats.Armor.BodyProtection;
-        int prot = defStats.NaturalProt + armorProt + protDRN;
-        int netDmg = Math.Max(1, dmgRoll - prot);
+        float protStat = defStats.NaturalProt + armorProt + (shieldHit ? defStats.ShieldProtection : 0);
+
+        // Armor-defeating hit (manual p.60): a very low protection roll bypasses 25%
+        // of armor, gated by defender fatigue. Hard to land on a fresh unit.
+        float defFatigue = _units[defenderIdx].Fatigue;
+        bool armorDefeating = protDRN == 2
+            || (protDRN == 3 && defFatigue >= 50f)
+            || (protDRN == 4 && defFatigue >= 100f);
+
+        if (weaponAN)
+        {
+            protStat = 0f; // armor-negating ignores protection entirely
+        }
+        else
+        {
+            float reduction = 0f;
+            if (wType == WeaponDamageType.Piercing) reduction += 0.15f; // piercing weapon type
+            if (weaponAP) reduction += 0.50f;                            // armor-piercing ability
+            if (armorDefeating) reduction += 0.25f;                      // low protection roll
+            reduction = MathF.Min(reduction, 1f);
+            protStat *= (1f - reduction);
+        }
+        int prot = (int)protStat + protDRN;
+
+        int netDmg = dmgRoll - prot;
+        // Slashing: +25% AFTER protection is deducted (manual p.61).
+        if (wType == WeaponDamageType.Slashing && netDmg > 0)
+            netDmg = (int)(netDmg * 1.25f);
+        // Limb cap (manual p.62): an arm/leg hit can't deal more than half max HP —
+        // the limb is maimed instead of the whole body destroyed.
+        if (hitLoc == HitLocation.Arms || hitLoc == HitLocation.Legs)
+            netDmg = Math.Min(netDmg, Math.Max(1, defStats.MaxHP / 2));
+        // Dominions allows a glancing blow to deal zero damage when protection wins.
+        if (netDmg < 0) netDmg = 0;
 
         logEntry.Outcome = CombatLogOutcome.Hit;
         logEntry.HitLoc = hitLoc;
         logEntry.HitLocationName = hitLoc.ToString();
         logEntry.DamageBase = baseDmg;
         logEntry.DamageDRN = dmgDRN;
-        logEntry.ProtBase = defStats.NaturalProt + armorProt;
+        logEntry.ProtBase = (int)protStat;
         logEntry.ProtDRN = protDRN;
         logEntry.NetDamage = netDmg;
         _combatLog.AddEntry(logEntry);
@@ -2590,6 +2705,11 @@ public class Simulation
 
         // Melee uses ApplyDirect — armor already calculated above with DRN rolls
         DamageSystem.ApplyDirect(_units, defenderIdx, netDmg, _damageEvents, attackerIdx);
+
+        // Limb loss / decapitation: a slashing blow that costs >= 50% max HP to a
+        // limb or head maims it (manual p.60). Runs after damage so HP is current.
+        if (netDmg > 0)
+            TryApplyLimbChop(attackerIdx, defenderIdx, hitLoc, wType, netDmg);
 
         // On-hit: knockdown check if the SPECIFIC weapon used has the Knockdown bonus.
         // (Reading per-weapon means a wolf's Pounce can carry Knockdown without its
@@ -2711,6 +2831,274 @@ public class Simulation
             $",sz={_units[attackerIdx].Size},score={atkScore}) vs def#{defenderIdx}" +
             $"(str={_units[defenderIdx].Stats.Strength},sz={_units[defenderIdx].Size},score={defScore})" +
             $" → diff={diff} duration={durationSec}s");
+    }
+
+    /// <summary>
+    /// Drive the unconscious (collapsed-from-exhaustion) state from Fatigue.
+    /// At 100 fatigue the unit collapses into the Incap prone hold — reusing the
+    /// knockdown mechanism so every existing Incap gate (movement/facing/attack)
+    /// applies for free. It wakes once rested below the wake threshold. Called
+    /// each fatigue tick (after regen) so the transition is hysteretic and cheap.
+    /// </summary>
+    private void UpdateUnconsciousState(int i)
+    {
+        if (!_units[i].Unconscious)
+        {
+            if (_units[i].Fatigue >= 100f)
+            {
+                _units[i].Unconscious = true;
+                _units[i].PreferredVel = Vec2.Zero;
+                _units[i].PendingAttack = CombatTarget.None;
+                _units[i].EngagedTarget = CombatTarget.None;
+                // Collapse: drive the prone hold via the Incap mechanism (same as
+                // knockdown). Don't stomp an existing buff-driven incap if one's active.
+                if (!_units[i].Incap.Active)
+                {
+                    var incap = _units[i].Incap;
+                    incap.Active = true;
+                    incap.Recovering = false;
+                    incap.HoldAtEnd = false;
+                    incap.HoldAnim = Render.AnimState.Knockdown;
+                    incap.RecoverAnim = Render.AnimState.Standup;
+                    _units[i].Incap = incap;
+                }
+                DebugLog.Log("combat", $"[Unconscious] unit#{i} ({_units[i].UnitDefID}) collapsed at fatigue={_units[i].Fatigue:F0}");
+            }
+        }
+        else if (_units[i].Fatigue < UnconsciousWakeThreshold)
+        {
+            _units[i].Unconscious = false;
+            // Release the collapse hold (only the one we set — a concurrent buff
+            // incap will manage its own lifecycle).
+            if (_units[i].Incap.Active && _units[i].Incap.HoldAnim == Render.AnimState.Knockdown)
+            {
+                var incap = _units[i].Incap;
+                incap.Active = false;
+                incap.Recovering = false;
+                _units[i].Incap = incap;
+            }
+            DebugLog.Log("combat", $"[Unconscious] unit#{i} ({_units[i].UnitDefID}) recovered at fatigue={_units[i].Fatigue:F0}");
+        }
+    }
+
+    /// <summary>Fraction of max HP a single slashing limb/head hit must cost to
+    /// sever that part (manual p.60). Tunable — with low-HP/high-damage units this
+    /// triggers often; raise it if dismemberment feels too frequent.</summary>
+    private const float LimbChopHpFraction = 0.5f;
+
+    /// <summary>
+    /// Slashing limb/head dismemberment (manual p.60). A slashing hit to an arm,
+    /// leg, or head that costs >= 50% of max HP severs that part: arms/legs become
+    /// permanent afflictions (stat penalties), a head is severed → instant death.
+    /// </summary>
+    private void TryApplyLimbChop(int attackerIdx, int defenderIdx, HitLocation loc, WeaponDamageType wType, int netDmg)
+    {
+        if (wType != WeaponDamageType.Slashing) return;
+        if (!_units[defenderIdx].Alive) return; // already killed by the HP loss
+        int threshold = Math.Max(1, (int)(_units[defenderIdx].Stats.MaxHP * LimbChopHpFraction));
+        if (netDmg < threshold) return;
+
+        switch (loc)
+        {
+            case HitLocation.Head:
+                // Decapitation — lethal.
+                _units[defenderIdx].Stats.HP = 0;
+                _units[defenderIdx].Alive = false;
+                Render.AnimResolver.SetOverride(_units[defenderIdx], Render.AnimRequest.Forced(Render.AnimState.Death));
+                DebugLog.Log("combat", $"[Decapitate] unit#{defenderIdx} ({_units[defenderIdx].UnitDefID}) beheaded by " +
+                    $"unit#{attackerIdx} ({_units[attackerIdx].UnitDefID}) — netDmg={netDmg} >= {threshold}");
+                break;
+            case HitLocation.Arms:
+                ApplyAffliction(defenderIdx, Data.Affliction.LostArm);
+                break;
+            case HitLocation.Legs:
+                ApplyAffliction(defenderIdx, Data.Affliction.LostLeg);
+                break;
+        }
+    }
+
+    /// <summary>
+    /// Apply a permanent affliction, baking its stat penalty straight into the
+    /// unit's Stats (battle wounds persist for the fight). Each affliction applies
+    /// at most once per unit.
+    /// </summary>
+    private void ApplyAffliction(int idx, Data.Affliction a)
+    {
+        if ((_units[idx].Afflictions & a) != 0) return; // already maimed there
+        _units[idx].Afflictions |= a;
+        var s = _units[idx].Stats;
+        switch (a)
+        {
+            case Data.Affliction.LostArm:
+                s.Attack = Math.Max(0, s.Attack - 4);
+                s.Strength = Math.Max(0, s.Strength - 2);
+                break;
+            case Data.Affliction.LostLeg:
+                s.Defense = Math.Max(0, s.Defense - 4);
+                s.CombatSpeed *= 0.6f;
+                break;
+            case Data.Affliction.LostEye:
+                s.Attack = Math.Max(0, s.Attack - 2);
+                break;
+        }
+        DebugLog.Log("combat", $"[Affliction] unit#{idx} ({_units[idx].UnitDefID}) suffered {a} " +
+            $"→ Att={s.Attack} Def={s.Defense} Str={s.Strength} Spd={s.CombatSpeed:F1}");
+    }
+
+    /// <summary>
+    /// Morale check pass (Dominions-style, manual p.57). Amortized: every
+    /// MoraleCheckInterval seconds each in-combat unit rolls Morale + 2*DRN vs a
+    /// threshold that rises with its faction's casualties, local outnumbering, and
+    /// its own wounds. A failure breaks the unit and it routs; once a faction drops
+    /// below the army-rout HP fraction every one of its units breaks. Undead are
+    /// mindless (will-bound to the necromancer) and never rout.
+    /// </summary>
+    private void UpdateMorale(float dt)
+    {
+        _moraleCheckTimer -= dt;
+        if (_moraleCheckTimer > 0f) return;
+        _moraleCheckTimer += MoraleCheckInterval;
+        if (_quadtree == null) return;
+
+        // Per-faction live HP and running peak (peak ≈ the faction's full strength).
+        System.Array.Clear(_factionCurHP, 0, _factionCurHP.Length);
+        for (int i = 0; i < _units.Count; i++)
+        {
+            if (!_units[i].Alive) continue;
+            int f = (int)_units[i].Faction;
+            if (f >= 0 && f < _factionCurHP.Length) _factionCurHP[f] += _units[i].Stats.HP;
+        }
+        for (int f = 0; f < _factionCurHP.Length; f++)
+        {
+            if (_factionCurHP[f] <= 0f) _factionPeakHP[f] = 0f;             // wiped → reset baseline
+            else if (_factionCurHP[f] > _factionPeakHP[f]) _factionPeakHP[f] = _factionCurHP[f];
+        }
+
+        for (int i = 0; i < _units.Count; i++)
+        {
+            if (!_units[i].Alive || _units[i].Routing) continue;
+            if (!_units[i].InCombat) continue;   // only units in the thick of it check
+            if (IsFearless(i)) continue;
+
+            int f = (int)_units[i].Faction;
+            float peak = (f >= 0 && f < _factionPeakHP.Length) ? _factionPeakHP[f] : 0f;
+            float lossFraction = peak > 0f ? 1f - _factionCurHP[f] / peak : 0f;
+
+            // Army-wide collapse: once the side is below the rout HP fraction, break.
+            if (lossFraction >= 1f - ArmyRoutHpFraction) { StartRouting(i); continue; }
+
+            float ownHpFrac = _units[i].Stats.MaxHP > 0 ? (float)_units[i].Stats.HP / _units[i].Stats.MaxHP : 1f;
+
+            // Fresh, whole units hold the line — morale is driven by CASUALTIES, not
+            // by being outnumbered at the outset. Only check once the side is taking
+            // losses or this unit is personally wounded (Dominions: checks fire on
+            // casualties, not at deployment).
+            bool takingLosses = lossFraction > 0.10f;
+            bool wounded = ownHpFrac < 0.6f;
+            if (!takingLosses && !wounded) continue;
+
+            // Local pressure: enemies vs allies within MoraleLocalRadius (a mild
+            // modifier on top of the casualty-driven term).
+            int enemies = _quadtree.QueryRadiusByFaction(_units[i].Position, MoraleLocalRadius,
+                FactionMaskExt.AllExcept(_units[i].Faction), _moraleScratch);
+            int allies = _quadtree.QueryRadiusByFaction(_units[i].Position, MoraleLocalRadius,
+                _units[i].Faction.Bit(), _moraleScratch);
+            int outnumber = Math.Max(0, enemies - allies);
+
+            float threshold = MoraleBaseThreshold
+                + lossFraction * 30f
+                + outnumber * 0.5f
+                + (ownHpFrac < 0.5f ? (0.5f - ownHpFrac) * 25f : 0f);
+
+            int roll = _units[i].Stats.Morale + 2 * UnitUtil.RollDRN();
+            if (roll < threshold)
+            {
+                DebugLog.Log("combat", $"[Morale] unit#{i} ({_units[i].UnitDefID}) BROKE — " +
+                    $"morale={_units[i].Stats.Morale} roll={roll} < thr={threshold:F0} " +
+                    $"(loss={lossFraction:P0} outnum={outnumber} hp={ownHpFrac:P0})");
+                StartRouting(i);
+            }
+        }
+    }
+
+    /// <summary>Undead are mindless (will-bound to the necromancer) and never rout;
+    /// any unit with Morale &gt;= the mindless threshold is likewise fearless.</summary>
+    private bool IsFearless(int i)
+        => _units[i].Faction == Faction.Undead || _units[i].Stats.Morale >= MindlessMoraleThreshold;
+
+    /// <summary>Break a unit: it disengages and begins fleeing for at least the
+    /// minimum rout duration.</summary>
+    private void StartRouting(int i)
+    {
+        _units[i].Routing = true;
+        _units[i].RoutTimer = MoraleRoutMinDuration;
+        Disengage(i);
+        _units[i].EngagedTarget = CombatTarget.None;
+        _units[i].Target = CombatTarget.None;
+        _units[i].PendingAttack = CombatTarget.None;
+        _units[i].ShowStatusSymbol(UnitStatusSymbol.React, 1.5f);
+    }
+
+    /// <summary>Per-frame steering for a routing unit: sprint away from the nearest
+    /// threat; rally once the min-rout timer elapses and no enemy is close.</summary>
+    private void SteerRout(int i, float dt)
+    {
+        _units[i].EngagedTarget = CombatTarget.None;
+        _units[i].Target = CombatTarget.None;
+        _units[i].PendingAttack = CombatTarget.None;
+        _units[i].MoveEffort = MoveEffort.Sprint;
+        _units[i].RoutTimer -= dt;
+
+        int threat = FindNearestEnemyIndex(i, MoraleLocalRadius * 1.5f);
+        if (threat < 0 && _units[i].RoutTimer <= 0f)
+        {
+            // Safe and rested — rally back into the fight.
+            _units[i].Routing = false;
+            _units[i].MoveEffort = MoveEffort.Normal;
+            _units[i].PreferredVel = Vec2.Zero;
+            _units[i].ShowStatusSymbol(UnitStatusSymbol.Notice, 1f);
+            return;
+        }
+
+        Vec2 away;
+        if (threat >= 0)
+        {
+            away = _units[i].Position - _units[threat].Position;
+            float d = away.Length();
+            away = d > 0.01f ? away * (1f / d) : FleeFallbackDir(i);
+        }
+        else
+        {
+            away = FleeFallbackDir(i);
+        }
+        // Direct steering away from the threat — fleeing doesn't need a pathfind
+        // (and pathfinding every frame for a whole routed army is a perf trap).
+        // ORCA/movement handles obstacle avoidance from the velocity.
+        _units[i].MoveTarget = _units[i].Position + away * RoutFleeDistance;
+        _units[i].PreferredVel = away * _units[i].MaxSpeed;
+    }
+
+    /// <summary>Flee heading when no specific threat is resolvable: keep current
+    /// momentum, else a default direction.</summary>
+    private Vec2 FleeFallbackDir(int i)
+    {
+        Vec2 v = _units[i].Velocity;
+        return v.LengthSq() > 0.01f ? v.Normalized() : new Vec2(0f, 1f);
+    }
+
+    private int FindNearestEnemyIndex(int i, float radius)
+    {
+        _quadtree.QueryRadiusByFaction(_units[i].Position, radius,
+            FactionMaskExt.AllExcept(_units[i].Faction), _moraleScratch);
+        int best = -1; float bestD = float.MaxValue;
+        for (int k = 0; k < _moraleScratch.Count; k++)
+        {
+            int idx = UnitUtil.ResolveUnitIndex(_units, _moraleScratch[k]);
+            if (idx < 0 || !_units[idx].Alive) continue;
+            float d = (_units[idx].Position - _units[i].Position).LengthSq();
+            if (d < bestD) { bestD = d; best = idx; }
+        }
+        return best;
     }
 
     /// <summary>
@@ -3389,9 +3777,14 @@ public class Simulation
 
     public void RebuildPathfinder()
     {
+        // Walls first: they write TerrainType.Wall into the grid's terrain, which
+        // RebuildCostField then reads into the cost field (and RebuildTieredCostFields
+        // copies into the per-size tier fields). Baking walls after the cost field
+        // would leave walls out of it on a from-scratch terrain. This ordering makes
+        // the rebuild self-contained, so the caller no longer needs a separate bake.
+        _wallSystem?.BakeWalls(_grid);
         _grid.RebuildCostField();
         _envSystem?.BakeCollisions(_grid);
-        _wallSystem?.BakeWalls(_grid);
         if (_envSystem != null)
             _envIndex.Rebuild(_envSystem, _grid.Width, _grid.Height);
         _pathfinder.Rebuild();

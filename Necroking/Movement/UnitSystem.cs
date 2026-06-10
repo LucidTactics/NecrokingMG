@@ -161,6 +161,20 @@ public class Unit
     // Combat
     public UnitStats Stats = new();
     public float Fatigue;
+    /// <summary>True while the unit is collapsed from exhaustion (Fatigue reached 100,
+    /// manual p.61). Managed by Simulation's fatigue tick: it drives the unit into the
+    /// Incap (prone) state so all the existing Incap gates (movement/facing/attack)
+    /// apply, recovers fatigue faster while down, and wakes below the wake threshold.</summary>
+    public bool Unconscious;
+    /// <summary>Permanent battle wounds (limb loss). Applied by slashing limb hits
+    /// that cost >= 50% max HP; stat penalties are baked into Stats on application.</summary>
+    public Data.Affliction Afflictions;
+    /// <summary>True while the unit has broken and is fleeing the battle (morale rout).
+    /// Driven by MoraleSystem; a routing unit ignores its normal AI and sprints away
+    /// from the nearest threat until it rallies (RoutTimer elapsed + no threat near).</summary>
+    public bool Routing;
+    /// <summary>Minimum time remaining before a routing unit may rally.</summary>
+    public float RoutTimer;
     public CombatTarget Target = CombatTarget.None;
     public float RetargetTimer;
 

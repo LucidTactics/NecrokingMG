@@ -245,6 +245,7 @@ public class CharacterStatsUI : Necroking.UI.IModalLayer
             MakeBuffedRow("Attack", s.Attack, sim, necroIdx, BuffStat.Attack),
             MakeBuffedRow("Defense", s.Defense, sim, necroIdx, BuffStat.Defense),
             MakeBuffedRow("Magic Resist", s.MagicResist, sim, necroIdx, BuffStat.MagicResist),
+            new("Morale", s.Morale.ToString(), ValueColor),
             MakeBuffedRowF("Combat Speed", s.CombatSpeed, sim, necroIdx, BuffStat.CombatSpeed),
             new("Damage", s.Damage.ToString(), ValueColor),
             new("Weapon Length", s.Length.ToString(), ValueColor),

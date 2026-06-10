@@ -1954,6 +1954,10 @@ public class UnitEditorWindow
         if (newMR != s.MagicResist) { s.MagicResist = newMR; _unsavedChanges = true; }
         curY += RowH;
 
+        int newMorale = _ui.DrawIntField("st_morale", "Morale", s.Morale, x, curY, w);
+        if (newMorale != s.Morale) { s.Morale = newMorale; _unsavedChanges = true; }
+        curY += RowH;
+
         int newEnc = _ui.DrawIntField("st_enc", "Encumbrance", s.Encumbrance, x, curY, w);
         if (newEnc != s.Encumbrance) { s.Encumbrance = newEnc; _unsavedChanges = true; }
         curY += RowH;

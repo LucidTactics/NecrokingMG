@@ -77,6 +77,18 @@ public class WeaponStats
     public bool HasArmorNegating { get; set; }
     public bool HasKnockdown { get; set; }
 
+    /// <summary>Dominions damage type (Slashing/Piercing/Blunt), inferred from the
+    /// weapon's <see cref="Name"/> at access time — existing weapons carry no
+    /// explicit type field. Drives the per-type damage modifiers in melee
+    /// resolution (piercing armor-reduction, blunt head bonus, slashing post-prot
+    /// bonus + limb-chopping). See <see cref="WeaponClassifier"/>.</summary>
+    public WeaponDamageType DamageType => WeaponClassifier.Classify(Name);
+
+    /// <summary>True for unambiguously two-handed weapons (greatsword, maul, pike,
+    /// halberd, …). Two-handed weapons add 125% of Strength to damage instead of
+    /// 100% (manual p.61). Inferred from <see cref="Name"/>.</summary>
+    public bool TwoHanded => WeaponClassifier.IsTwoHanded(Name);
+
     /// <summary>ID of the buff that contributed this weapon to the unit's effective
     /// list, or empty for weapons that come from the UnitDef. Lets the buff-removal
     /// path strip granted weapons without touching base-equipment slots that happen
@@ -107,6 +119,10 @@ public class UnitStats
     public int Attack { get; set; } = 10;
     public int Defense { get; set; } = 10;
     public int MagicResist { get; set; } = 10;
+    /// <summary>Dominions Morale — likelihood of not routing. Checked when the unit
+    /// takes casualties / is locally outnumbered (see MoraleSystem). Higher = steadier.
+    /// Mindless/fearless units use a very high value (e.g. 50).</summary>
+    public int Morale { get; set; } = 10;
     public int Encumbrance { get; set; }
     public int NaturalProt { get; set; }
     public float CombatSpeed { get; set; } = 8.0f;
