@@ -195,11 +195,10 @@ public class UnitInfoPanel : IModalLayer
                 return null; // TBD stats have no tabulation
         }
 
+        // The header value IS the final (colored vs base) — no redundant row.
         var col = fv > bv ? ResourceTooltip.ValueGreen
                 : fv < bv ? ResourceTooltip.ValueRed : ResourceTooltip.ValueDefault;
-        string final = fv.ToString("0.#");
-        rows.Add(new ResourceTooltip.Row("Final", final, col));
-        return (rows, final, col);
+        return (rows, fv.ToString("0.#"), col);
     }
 
     private void Populate(Movement.Unit unit)
