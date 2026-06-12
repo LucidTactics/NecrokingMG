@@ -41,16 +41,27 @@ public partial class UIEditorWindow
     /// When drawFrame=false, only draws background + stencil (for inserting children between stencil and frame).</summary>
     private void DrawWidgetLayers(UIEditorWidgetDef def, int drawX, int drawY, int drawW, int drawH, bool drawFrame = true)
     {
-        // Layer 1: Background (with inset)
+        // Layer 1: Background (with inset) — nine-slice or direct image
         if (!string.IsNullOrEmpty(def.Background))
         {
-            var bgNs = GetNineSlice(def.Background, "bg");
+            var bgNs = GetNineSlice(def.Background, "bg:" + def.Id);
             if (bgNs != null)
             {
                 int bi = def.BackgroundInset;
                 var bgRect = new Rectangle(drawX + bi, drawY + bi, drawW - bi * 2, drawH - bi * 2);
                 var bgColor = def.BackgroundTint != null ? ByteColor(def.BackgroundTint) : Color.White;
                 bgNs.Draw(_sb, bgRect, bgColor, def.BackgroundScale);
+            }
+        }
+        else if (!string.IsNullOrEmpty(def.BackgroundImagePath))
+        {
+            var bgTex = GetTexture(def.BackgroundImagePath, "bg:" + def.Id);
+            if (bgTex != null)
+            {
+                int bi = def.BackgroundInset;
+                var bgRect = new Rectangle(drawX + bi, drawY + bi, drawW - bi * 2, drawH - bi * 2);
+                var bgColor = def.BackgroundTint != null ? ByteColor(def.BackgroundTint) : Color.White;
+                DrawImageLayerCropTop(bgTex, bgRect, bgColor, def.Height - bi * 2);
             }
         }
 
@@ -62,26 +73,110 @@ public partial class UIEditorWindow
 
             if (!string.IsNullOrEmpty(def.StencilImagePath))
             {
-                var stTex = GetTexture(def.StencilImagePath, "st");
-                if (stTex != null) _sb.Draw(stTex, stRect, stColor);
+                var stTex = GetTexture(def.StencilImagePath, "st:" + def.Id);
+                if (stTex != null) DrawImageLayerCropTop(stTex, stRect, stColor, def.Height - si * 2);
             }
             else if (!string.IsNullOrEmpty(def.Stencil))
             {
-                var stNs = GetNineSlice(def.Stencil, "st");
+                var stNs = GetNineSlice(def.Stencil, "st:" + def.Id);
                 if (stNs != null) stNs.Draw(_sb, stRect, stColor);
             }
         }
 
         // Layer 3: Frame (topmost, full bounds)
-        if (drawFrame && !string.IsNullOrEmpty(def.Frame))
+        if (drawFrame)
+            DrawWidgetFrame(def, drawX, drawY, drawW, drawH);
+    }
+
+    /// <summary>Image layers on auto-size widgets are baked at the widget's MAX
+    /// height; when drawn shorter, crop from the top instead of squashing
+    /// (mirrors RuntimeWidgetRenderer.DrawImageLayerCropTop).</summary>
+    private void DrawImageLayerCropTop(Texture2D tex, Rectangle rect, Color color, int defMaxH)
+    {
+        if (defMaxH > 0 && rect.Height < defMaxH)
         {
-            var frNs = GetNineSlice(def.Frame, "fr");
-            if (frNs != null)
+            int srcH = (int)System.Math.Round(tex.Height * (rect.Height / (float)defMaxH));
+            _sb.Draw(tex, rect, new Rectangle(0, 0, tex.Width, System.Math.Max(1, srcH)), color);
+        }
+        else
+        {
+            _sb.Draw(tex, rect, color);
+        }
+    }
+
+    // ─── Auto-size preview (editor-side mirror of the runtime's instance-aware
+    //     layout: hide trailing rows, measure, stack) ───
+    private int _previewHiddenRows;
+
+    private int MeasureAutoHeight(UIEditorWidgetDef def, System.Collections.Generic.HashSet<int> hiddenIdx)
+    {
+        if (!def.AutoSizeHeight || def.Layout != "vertical") return def.Height;
+        int padT = def.LayoutPadTop > 0 ? def.LayoutPadTop : def.LayoutPadding;
+        int padB = def.LayoutPadBottom > 0 ? def.LayoutPadBottom : def.LayoutPadding;
+        int spacY = def.LayoutSpacingY > 0 ? def.LayoutSpacingY : def.LayoutSpacing;
+        int total = 0, count = 0;
+        for (int i = 0; i < def.Children.Count; i++)
+        {
+            var child = def.Children[i];
+            if (child.IgnoreLayout || hiddenIdx.Contains(i)) continue;
+            total += PreviewChildHeight(child);
+            count++;
+        }
+        if (count > 1) total += (count - 1) * spacY;
+        return padT + total + padB;
+    }
+
+    private int PreviewChildHeight(UIEditorChildDef child)
+    {
+        if (!string.IsNullOrEmpty(child.Widget))
+        {
+            var sub = _widgets.Find(w => w.Id == child.Widget);
+            if (sub != null && sub.AutoSizeHeight)
+                return MeasureAutoHeight(sub, new System.Collections.Generic.HashSet<int>());
+        }
+        return child.Height > 0 ? child.Height : 40;
+    }
+
+    private System.Collections.Generic.List<Rectangle> ComputePreviewRects(
+        UIEditorWidgetDef def, int wdX, int wdY, System.Collections.Generic.HashSet<int> hiddenIdx)
+    {
+        var rects = new System.Collections.Generic.List<Rectangle>();
+        int padL = def.LayoutPadLeft > 0 ? def.LayoutPadLeft : def.LayoutPadding;
+        int padT = def.LayoutPadTop > 0 ? def.LayoutPadTop : def.LayoutPadding;
+        int spacY = def.LayoutSpacingY > 0 ? def.LayoutSpacingY : def.LayoutSpacing;
+        int spacX = def.LayoutSpacingX > 0 ? def.LayoutSpacingX : def.LayoutSpacing;
+        bool isHoriz = def.Layout == "horizontal";
+        int curX = padL, curY = padT;
+        for (int i = 0; i < def.Children.Count; i++)
+        {
+            var child = def.Children[i];
+            if (hiddenIdx.Contains(i)) { rects.Add(Rectangle.Empty); continue; }
+            int cw = child.Width > 0 ? child.Width : 100;
+            int ch = PreviewChildHeight(child);
+            if ((def.Layout == "vertical" || isHoriz) && !child.IgnoreLayout)
             {
-                var frColor = def.FrameTint != null ? ByteColor(def.FrameTint) : Color.White;
-                frNs.Draw(_sb, new Rectangle(drawX, drawY, drawW, drawH), frColor);
+                int crossX = def.AutoSizeHeight ? child.X : 0;
+                int crossY = def.AutoSizeHeight ? child.Y : 0;
+                if (isHoriz)
+                {
+                    rects.Add(new Rectangle(wdX + curX, wdY + curY + crossY, cw, ch));
+                    curX += cw + spacX;
+                }
+                else
+                {
+                    rects.Add(new Rectangle(wdX + curX + crossX, wdY + curY, cw, ch));
+                    curY += ch + spacY;
+                }
+            }
+            else
+            {
+                int col = child.Anchor % 3, row = child.Anchor / 3;
+                int anchorX = col switch { 0 => 0, 1 => def.Width / 2, 2 => def.Width, _ => 0 };
+                int anchorY = row switch { 0 => 0, 1 => def.Height / 2, 2 => def.Height, _ => 0 };
+                rects.Add(new Rectangle(wdX + anchorX + child.X, wdY + anchorY + child.Y, cw, ch));
             }
         }
+        return rects;
     }
 
     /// <summary>Draw just the frame layer of a widget.</summary>
@@ -89,11 +184,13 @@ public partial class UIEditorWindow
     {
         if (!string.IsNullOrEmpty(def.Frame))
         {
-            var frNs = GetNineSlice(def.Frame, "fr");
+            var frNs = GetNineSlice(def.Frame, "fr:" + def.Id);
             if (frNs != null)
             {
                 var frColor = def.FrameTint != null ? ByteColor(def.FrameTint) : Color.White;
-                frNs.Draw(_sb, new Rectangle(drawX, drawY, drawW, drawH), frColor);
+                int fi = def.FrameInset;
+                frNs.Draw(_sb, new Rectangle(drawX + fi, drawY + fi, drawW - fi * 2 - def.FrameInsetR, drawH - fi * 2),
+                    frColor, def.FrameScale);
             }
         }
     }
@@ -191,47 +288,8 @@ public partial class UIEditorWindow
     /// Also writes the live color picker value to settings every frame for live preview.
     /// Returns true if any setting changed.</summary>
     private bool DrawInlineHarmonizeSliders(string swatchId, HarmonizeSettings settings, int x, ref int curY, int w)
-    {
-        bool changed = false;
-        int labelW = 80;
-        int fieldX = x + labelW;
-
-        // Target color — write live every frame (not just on OK) for live preview
-        DrawText("Target:", new Vector2(x, curY + 2), TextDim);
-        var targHdr = BytesToHdr(settings.TargetColor);
-        DrawColorSwatch(swatchId, fieldX, curY, 40, 18, ref targHdr, hideIntensity: false);
-        byte[] liveTarget = HdrToBytes(targHdr);
-        if (!liveTarget.SequenceEqual(settings.TargetColor))
-        {
-            settings.TargetColor = liveTarget;
-            changed = true;
-        }
-        curY += 22;
-
-        // Mode toggle
-        DrawText("Mode:", new Vector2(x, curY + 2), TextDim);
-        if (DrawButton(settings.UseHcl ? "HCL" : "HSV", fieldX, curY, 48, 18))
-        {
-            settings.UseHcl = !settings.UseHcl;
-            changed = true;
-        }
-        curY += 22;
-
-        // 3 sliders
-        string[] labels = settings.UseHcl ? new[] { "Hue:", "Chroma:", "Lum:" } : new[] { "Hue:", "Sat:", "Value:" };
-        float[] vals = { settings.HueStrength, settings.SatStrength, settings.ValStrength };
-        for (int i = 0; i < 3; i++)
-        {
-            float newVal = DrawSliderFloat($"{swatchId}_s{i}", labels[i], vals[i], 0f, 1f, x, curY, w);
-            if (MathF.Abs(newVal - vals[i]) > 0.001f) { vals[i] = newVal; changed = true; }
-            curY += 22;
-        }
-        settings.HueStrength = vals[0];
-        settings.SatStrength = vals[1];
-        settings.ValStrength = vals[2];
-
-        return changed;
-    }
+        // Delegates to the canonical EditorBase implementation (shared with the env-object editor).
+        => DrawHarmonizeSliders(swatchId, settings, x, ref curY, w);
 
     /// <summary>Draw a complete layer harmonize section: tint swatch + toggle + sliders.
     /// Handles both nine-slice and image paths.</summary>
@@ -279,18 +337,18 @@ public partial class UIEditorWindow
             {
                 string imgPath = el.Type == "image" ? el.ImagePath : "";
                 string nsRef = el.Type == "nineSlice" ? el.NineSlice : "";
-                ApplyHarmonize(nsRef, imgPath, "el", el.Harmonize);
+                ApplyHarmonize(nsRef, imgPath, "el:" + el.Id, el.Harmonize);
             }
         }
         else if (ActiveTab == UIEditorTab.Widgets && SelectedIndex >= 0 && SelectedIndex < _widgets.Count)
         {
             var wd = _widgets[SelectedIndex];
             if (wd.BgHarmonize != null && wd.BgHarmonize.HasEffect)
-                ApplyHarmonize(wd.Background, "", "bg", wd.BgHarmonize);
+                ApplyHarmonize(wd.Background, "", "bg:" + wd.Id, wd.BgHarmonize);
             if (wd.StencilHarmonize != null && wd.StencilHarmonize.HasEffect)
-                ApplyHarmonize(wd.Stencil, wd.StencilImagePath, "st", wd.StencilHarmonize);
+                ApplyHarmonize(wd.Stencil, wd.StencilImagePath, "st:" + wd.Id, wd.StencilHarmonize);
             if (wd.FrameHarmonize != null && wd.FrameHarmonize.HasEffect)
-                ApplyHarmonize(wd.Frame, "", "fr", wd.FrameHarmonize);
+                ApplyHarmonize(wd.Frame, "", "fr:" + wd.Id, wd.FrameHarmonize);
         }
     }
 
@@ -302,16 +360,16 @@ public partial class UIEditorWindow
             if (el.Harmonize == null || !el.Harmonize.HasEffect) continue;
             string imgPath = el.Type == "image" ? el.ImagePath : "";
             string nsRef = el.Type == "nineSlice" ? el.NineSlice : "";
-            ApplyHarmonize(nsRef, imgPath, "el", el.Harmonize);
+            ApplyHarmonize(nsRef, imgPath, "el:" + el.Id, el.Harmonize);
         }
         foreach (var wd in _widgets)
         {
             if (wd.BgHarmonize != null && wd.BgHarmonize.HasEffect)
-                ApplyHarmonize(wd.Background, "", "bg", wd.BgHarmonize);
+                ApplyHarmonize(wd.Background, "", "bg:" + wd.Id, wd.BgHarmonize);
             if (wd.StencilHarmonize != null && wd.StencilHarmonize.HasEffect)
-                ApplyHarmonize(wd.Stencil, wd.StencilImagePath, "st", wd.StencilHarmonize);
+                ApplyHarmonize(wd.Stencil, wd.StencilImagePath, "st:" + wd.Id, wd.StencilHarmonize);
             if (wd.FrameHarmonize != null && wd.FrameHarmonize.HasEffect)
-                ApplyHarmonize(wd.Frame, "", "fr", wd.FrameHarmonize);
+                ApplyHarmonize(wd.Frame, "", "fr:" + wd.Id, wd.FrameHarmonize);
         }
     }
 

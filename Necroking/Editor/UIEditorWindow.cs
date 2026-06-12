@@ -2093,7 +2093,21 @@ public partial class UIEditorWindow : EditorBase
         if (newBg != def.Background) { def.Background = newBg; _unsavedChanges = true; }
         curY += 24;
 
-        if (!string.IsNullOrEmpty(def.Background))
+        // Background image browse (alternative to nine-slice; crops from top
+        // when an auto-size widget draws below its max height)
+        {
+            int browseBtnW = 60;
+            string bgDisplay = string.IsNullOrEmpty(def.BackgroundImagePath) ? "(none)" : def.BackgroundImagePath;
+            DrawTextField("wd_bgimg", "BG Img", bgDisplay, x + pad, curY, propW - browseBtnW - 4);
+            if (DrawButton("Browse", x + pad + propW - browseBtnW, curY, browseBtnW, 20))
+            {
+                _textureBrowser.Open("assets", def.BackgroundImagePath,
+                    path => { def.BackgroundImagePath = path; _unsavedChanges = true; });
+            }
+            curY += 24;
+        }
+
+        if (!string.IsNullOrEmpty(def.Background) || !string.IsNullOrEmpty(def.BackgroundImagePath))
         {
             // Negative inset = background overhangs the widget bounds (e.g. textures
             // with baked-in transparent margins like EmbossedLeatherBorderInner)
@@ -2157,6 +2171,20 @@ public partial class UIEditorWindow : EditorBase
 
         if (def.Layout != "none" && !string.IsNullOrEmpty(def.Layout))
         {
+            // Auto-size: drawn height = measured visible content (vertical only)
+            bool newAuto = DrawCheckbox("Auto-Size Height", def.AutoSizeHeight, x + pad, curY);
+            if (newAuto != def.AutoSizeHeight) { def.AutoSizeHeight = newAuto; _unsavedChanges = true; }
+            curY += 24;
+
+            if (def.AutoSizeHeight)
+            {
+                // Editor-only preview: hide the last N layout children on the
+                // canvas to see the collapsed state. Not saved to JSON.
+                int newPrev = DrawIntField("wd_prevhide", "Preview Hide", _previewHiddenRows, x + pad, curY, propW);
+                if (newPrev != _previewHiddenRows) _previewHiddenRows = Math.Max(0, newPrev);
+                curY += 22;
+            }
+
             // Uniform padding/spacing (legacy)
             int newPad = DrawIntField("wd_lpad", "Padding", def.LayoutPadding, x + pad, curY, propW);
             if (newPad != def.LayoutPadding) { def.LayoutPadding = Math.Max(0, newPad); _unsavedChanges = true; }
@@ -2827,10 +2855,23 @@ public partial class UIEditorWindow : EditorBase
         if (SelectedIndex < 0 || SelectedIndex >= _widgets.Count) return;
         var def = _widgets[SelectedIndex];
 
+        // Auto-size preview: hide the last "Preview Hide" layout children and
+        // draw at the measured (collapsed) height — what the runtime does when
+        // a panel hides rows via SetHidden.
+        var prevHidden = new HashSet<int>();
+        int defH = def.Height;
+        if (def.AutoSizeHeight && def.Layout == "vertical")
+        {
+            int left = _previewHiddenRows;
+            for (int i = def.Children.Count - 1; i >= 0 && left > 0; i--)
+                if (!def.Children[i].IgnoreLayout) { prevHidden.Add(i); left--; }
+            defH = MeasureAutoHeight(def, prevHidden);
+        }
+
         // Center widget in canvas
         int wdX = x + (w - def.Width) / 2;
-        int wdY = y + (h - def.Height) / 2;
-        var wdRect = new Rectangle(wdX, wdY, def.Width, def.Height);
+        int wdY = y + (h - defH) / 2;
+        var wdRect = new Rectangle(wdX, wdY, def.Width, defH);
 
         // Background + stencil layers (children render between stencil and frame)
         if (!string.IsNullOrEmpty(def.Background))
@@ -2839,9 +2880,20 @@ public partial class UIEditorWindow : EditorBase
             if (bgNs != null)
             {
                 int bi = def.BackgroundInset;
-                var bgRect = new Rectangle(wdX + bi, wdY + bi, def.Width - bi * 2, def.Height - bi * 2);
+                var bgRect = new Rectangle(wdX + bi, wdY + bi, def.Width - bi * 2, defH - bi * 2);
                 var bgColor = def.BackgroundTint != null ? ByteColor(def.BackgroundTint) : Color.White;
                 bgNs.Draw(_sb, bgRect, bgColor, def.BackgroundScale);
+            }
+        }
+        else if (!string.IsNullOrEmpty(def.BackgroundImagePath))
+        {
+            var bgTex = GetTexture(def.BackgroundImagePath, "bg:" + def.Id);
+            if (bgTex != null)
+            {
+                int bi = def.BackgroundInset;
+                var bgRect = new Rectangle(wdX + bi, wdY + bi, def.Width - bi * 2, defH - bi * 2);
+                var bgColor = def.BackgroundTint != null ? ByteColor(def.BackgroundTint) : Color.White;
+                DrawImageLayerCropTop(bgTex, bgRect, bgColor, def.Height - bi * 2);
             }
         }
         else
@@ -2851,14 +2903,14 @@ public partial class UIEditorWindow : EditorBase
 
         {
             int si = def.StencilInset;
-            var stRect = new Rectangle(wdX + si, wdY + si, def.Width - si * 2, def.Height - si * 2);
+            var stRect = new Rectangle(wdX + si, wdY + si, def.Width - si * 2, defH - si * 2);
             var stColor = def.StencilTint != null ? ByteColor(def.StencilTint) : Color.White;
 
             if (!string.IsNullOrEmpty(def.StencilImagePath))
             {
                 var stTex = GetTexture(def.StencilImagePath, "st:" + def.Id);
                 if (stTex != null)
-                    _sb.Draw(stTex, stRect, stColor);
+                    DrawImageLayerCropTop(stTex, stRect, stColor, def.Height - si * 2);
             }
             else if (!string.IsNullOrEmpty(def.Stencil))
             {
@@ -2871,15 +2923,18 @@ public partial class UIEditorWindow : EditorBase
         // Children render here (between stencil and frame)
         DrawBorder(wdRect, PanelBorder, 1);
 
-        // Draw children (layout-aware positioning)
-        var childRects = ComputeLayoutRects(def, wdX, wdY);
+        // Draw children (layout-aware positioning; preview-hidden ones skipped)
+        var childRects = prevHidden.Count > 0
+            ? ComputePreviewRects(def, wdX, wdY, prevHidden)
+            : ComputeLayoutRects(def, wdX, wdY);
         for (int i = 0; i < def.Children.Count; i++)
         {
+            if (prevHidden.Contains(i)) continue;
             DrawWidgetChild(def.Children[i], childRects[i], i == _selectedChildIdx);
         }
 
         // Frame layer (topmost, over children)
-        DrawWidgetFrame(def, wdX, wdY, def.Width, def.Height);
+        DrawWidgetFrame(def, wdX, wdY, def.Width, defH);
 
         // Widget outline
         DrawBorder(wdRect, AccentColor, 1);
