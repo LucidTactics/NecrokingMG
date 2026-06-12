@@ -3594,6 +3594,355 @@
           "anchor": 0
         }
       ]
+    },
+    {
+      "id": "RTD_Row",
+      "width": 207,
+      "height": 24,
+      "modal": false,
+      "children": [
+        {
+          "name": "label",
+          "x": 4,
+          "y": 0,
+          "width": 163,
+          "height": 24,
+          "anchor": 0,
+          "element": "RTD_RowLabel"
+        },
+        {
+          "name": "value",
+          "x": 162,
+          "y": 1,
+          "width": 41,
+          "height": 24,
+          "anchor": 0,
+          "element": "RTD_RowValue"
+        }
+      ]
+    },
+    {
+      "id": "RTD_Header",
+      "width": 222,
+      "height": 40,
+      "modal": false,
+      "children": [
+        {
+          "name": "icon",
+          "x": 5,
+          "y": 5,
+          "width": 36,
+          "height": 36,
+          "anchor": 0,
+          "element": "RT_HumansIcon"
+        },
+        {
+          "name": "underline",
+          "x": 44,
+          "y": 32,
+          "width": 140,
+          "height": 3,
+          "anchor": 0,
+          "element": "TT_Underline"
+        },
+        {
+          "name": "title",
+          "x": 44,
+          "y": 6,
+          "width": 136,
+          "height": 31,
+          "anchor": 0,
+          "element": "RT_Title"
+        },
+        {
+          "name": "value",
+          "x": 182,
+          "y": 11,
+          "width": 32,
+          "height": 24,
+          "anchor": 0,
+          "element": "RT_HeaderValue"
+        }
+      ]
+    },
+    {
+      "id": "RTD_TabBox",
+      "width": 207,
+      "height": 288,
+      "autoSizeHeight": true,
+      "layout": "vertical",
+      "backgroundInset": 2,
+      "stencilInset": 2,
+      "backgroundImagePath": "assets/UI/Patterns/Parchment_203x284.png",
+      "backgroundTint": [
+        255,
+        255,
+        255,
+        255
+      ],
+      "bgHarmonize": {
+        "targetColor": [
+          7,
+          6,
+          3,
+          255
+        ],
+        "hueStrength": 0,
+        "satStrength": 0.438,
+        "valStrength": 0.787,
+        "useHcl": false
+      },
+      "stencilImagePath": "assets/UI/Patterns/Thatch_203x284.png",
+      "stencilTint": [
+        255,
+        255,
+        255,
+        10
+      ],
+      "frame": "RenaiThinBorder16",
+      "frameScale": 0.25,
+      "frameTint": [
+        255,
+        255,
+        255,
+        255
+      ],
+      "frameHarmonize": {
+        "targetColor": [
+          150,
+          134,
+          107,
+          255
+        ],
+        "hueStrength": 1,
+        "satStrength": 0.266,
+        "valStrength": 0.466,
+        "useHcl": false
+      },
+      "modal": false,
+      "children": [
+        {
+          "name": "row0",
+          "x": 0,
+          "y": 0,
+          "width": 207,
+          "height": 24,
+          "anchor": 0,
+          "widget": "RTD_Row"
+        },
+        {
+          "name": "row1",
+          "x": 0,
+          "y": 0,
+          "width": 207,
+          "height": 24,
+          "anchor": 0,
+          "widget": "RTD_Row"
+        },
+        {
+          "name": "row2",
+          "x": 0,
+          "y": 0,
+          "width": 207,
+          "height": 24,
+          "anchor": 0,
+          "widget": "RTD_Row"
+        },
+        {
+          "name": "row3",
+          "x": 0,
+          "y": 0,
+          "width": 207,
+          "height": 24,
+          "anchor": 0,
+          "widget": "RTD_Row"
+        },
+        {
+          "name": "row4",
+          "x": 0,
+          "y": 0,
+          "width": 207,
+          "height": 24,
+          "anchor": 0,
+          "widget": "RTD_Row"
+        },
+        {
+          "name": "row5",
+          "x": 0,
+          "y": 0,
+          "width": 207,
+          "height": 24,
+          "anchor": 0,
+          "widget": "RTD_Row"
+        },
+        {
+          "name": "row6",
+          "x": 0,
+          "y": 0,
+          "width": 207,
+          "height": 24,
+          "anchor": 0,
+          "widget": "RTD_Row"
+        },
+        {
+          "name": "row7",
+          "x": 0,
+          "y": 0,
+          "width": 207,
+          "height": 24,
+          "anchor": 0,
+          "widget": "RTD_Row"
+        },
+        {
+          "name": "row8",
+          "x": 0,
+          "y": 0,
+          "width": 207,
+          "height": 24,
+          "anchor": 0,
+          "widget": "RTD_Row"
+        },
+        {
+          "name": "row9",
+          "x": 0,
+          "y": 0,
+          "width": 207,
+          "height": 24,
+          "anchor": 0,
+          "widget": "RTD_Row"
+        },
+        {
+          "name": "row10",
+          "x": 0,
+          "y": 0,
+          "width": 207,
+          "height": 24,
+          "anchor": 0,
+          "widget": "RTD_Row"
+        },
+        {
+          "name": "row11",
+          "x": 0,
+          "y": 0,
+          "width": 207,
+          "height": 24,
+          "anchor": 0,
+          "widget": "RTD_Row"
+        }
+      ]
+    },
+    {
+      "id": "ResourceTooltipDyn",
+      "width": 222,
+      "height": 396,
+      "autoSizeHeight": true,
+      "layout": "vertical",
+      "layoutSpacing": 4,
+      "layoutPadBottom": 4,
+      "background": "LeatherBackground",
+      "backgroundScale": 0.019,
+      "backgroundInset": -2,
+      "backgroundTint": [
+        255,
+        255,
+        255,
+        255
+      ],
+      "stencilImagePath": "assets/UI/Background/dragonpattern_rtd_222x396.png",
+      "stencilTint": [
+        255,
+        255,
+        255,
+        36
+      ],
+      "frame": "RenaiThinBorder16",
+      "frameScale": 0.36,
+      "frameTint": [
+        255,
+        255,
+        255,
+        255
+      ],
+      "bgHarmonize": {
+        "targetColor": [
+          31,
+          24,
+          17,
+          255
+        ],
+        "hueStrength": 1,
+        "satStrength": 0.756,
+        "valStrength": 0.588,
+        "useHcl": false,
+        "gradColor": [
+          18,
+          15,
+          11,
+          112
+        ],
+        "gradStrength": 0.992
+      },
+      "stencilHarmonize": {
+        "targetColor": [
+          170,
+          102,
+          31,
+          255
+        ],
+        "hueStrength": 1,
+        "satStrength": 0.756,
+        "valStrength": 0.544,
+        "useHcl": false,
+        "gradColor": [
+          18,
+          15,
+          11,
+          112
+        ],
+        "gradStrength": 0.992
+      },
+      "frameHarmonize": {
+        "targetColor": [
+          118,
+          97,
+          60,
+          255
+        ],
+        "hueStrength": 1,
+        "satStrength": 0.75,
+        "valStrength": 0.665,
+        "useHcl": false
+      },
+      "modal": false,
+      "children": [
+        {
+          "name": "rtd_header",
+          "x": 0,
+          "y": 0,
+          "width": 222,
+          "height": 40,
+          "anchor": 0,
+          "widget": "RTD_Header"
+        },
+        {
+          "name": "rtd_box",
+          "x": 7,
+          "y": 0,
+          "width": 207,
+          "height": 288,
+          "anchor": 0,
+          "widget": "RTD_TabBox"
+        },
+        {
+          "name": "rtd_desc",
+          "x": 13,
+          "y": 0,
+          "width": 196,
+          "height": 56,
+          "anchor": 0,
+          "element": "RT_Desc"
+        }
+      ]
     }
   ]
 }

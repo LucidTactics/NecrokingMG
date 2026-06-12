@@ -130,27 +130,32 @@ public static class WidgetLayoutUtils
 
             if (useLayout && !child.IgnoreLayout)
             {
+                // Auto-size widgets honor the child's CROSS-AXIS offset and
+                // never column/row-wrap (mirrors RuntimeWidgetRenderer's
+                // instance-aware layout; legacy layout widgets are unchanged).
+                int crossX = def.AutoSizeHeight ? child.X : 0;
+                int crossY = def.AutoSizeHeight ? child.Y : 0;
                 if (isHoriz)
                 {
-                    if (curX > padL && curX + cw > def.Width - padR)
+                    if (!def.AutoSizeHeight && curX > padL && curX + cw > def.Width - padR)
                     {
                         curY += rowMaxH + spacY;
                         curX = padL;
                         rowMaxH = 0;
                     }
-                    rects.Add(new Rectangle(wdX + curX, wdY + curY, cw, ch));
+                    rects.Add(new Rectangle(wdX + curX, wdY + curY + crossY, cw, ch));
                     curX += cw + spacX;
                     if (ch > rowMaxH) rowMaxH = ch;
                 }
                 else
                 {
-                    if (curY > padT && curY + ch > def.Height - padB)
+                    if (!def.AutoSizeHeight && curY > padT && curY + ch > def.Height - padB)
                     {
                         curX += colMaxW + spacX;
                         curY = padT;
                         colMaxW = 0;
                     }
-                    rects.Add(new Rectangle(wdX + curX, wdY + curY, cw, ch));
+                    rects.Add(new Rectangle(wdX + curX + crossX, wdY + curY, cw, ch));
                     curY += ch + spacY;
                     if (cw > colMaxW) colMaxW = cw;
                 }

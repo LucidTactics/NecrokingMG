@@ -3720,6 +3720,82 @@
           150
         ]
       }
+    },
+    {
+      "id": "RTD_RowLabel",
+      "type": "text",
+      "width": 163,
+      "height": 24,
+      "tintColor": [
+        255,
+        255,
+        255,
+        0
+      ],
+      "defaultText": "",
+      "textRegion": {
+        "x": 0,
+        "y": 0,
+        "w": 163,
+        "h": 24,
+        "align": "right",
+        "valign": "center",
+        "fontFamily": "Quintessential",
+        "fontSize": 24,
+        "fontColor": [
+          248,
+          219,
+          184,
+          255
+        ],
+        "bold": true,
+        "boldStrength": 0.7,
+        "charSpacing": 1.25,
+        "outlineWidth": 1,
+        "outlineColor": [
+          0,
+          0,
+          0,
+          150
+        ]
+      }
+    },
+    {
+      "id": "RTD_RowValue",
+      "type": "text",
+      "width": 41,
+      "height": 24,
+      "tintColor": [
+        255,
+        255,
+        255,
+        0
+      ],
+      "defaultText": "",
+      "textRegion": {
+        "x": 0,
+        "y": 0,
+        "w": 41,
+        "h": 24,
+        "align": "right",
+        "valign": "center",
+        "fontFamily": "Roboto",
+        "fontSize": 22,
+        "fontColor": [
+          202,
+          179,
+          143,
+          255
+        ],
+        "bold": true,
+        "outlineWidth": 1,
+        "outlineColor": [
+          0,
+          0,
+          0,
+          140
+        ]
+      }
     }
   ]
 }

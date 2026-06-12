@@ -34,6 +34,9 @@ public static class ScenarioRegistry
         Register("UIGradientTest", () => new Scenarios.UIGradientTestScenario());
         Register("UIRectShadowTest", () => new Scenarios.UIRectShadowTestScenario());
         Register("UICircleTest", () => new Scenarios.UICircleTestScenario());
+        Register("UIBlankWindow", () => new Scenarios.UIBlankWindowScenario());
+        Register("UIUnitInfo", () => new Scenarios.UIUnitInfoScenario());
+        Register("UIResourceTipDyn", () => new Scenarios.UIResourceTipDynScenario());
         Register("grass_test", () => new Scenarios.GrassTestScenario());
         Register("corpse_worker", () => new Scenarios.CorpseWorkerScenario());
         Register("raid_workers", () => new Scenarios.RaidWorkersScenario());
@@ -107,6 +110,9 @@ public static class ScenarioRegistry
         Register("perf_water", () => new Scenarios.PerfWaterScenario());
         Register("deep_water_blocks", () => new Scenarios.DeepWaterBlocksScenario());
         Register("wake_color_check", () => new Scenarios.WakeColorCheckScenario());
+        Register("editor_undo_lag", () => new Scenarios.EditorUndoLagScenario());
+        Register("harmonize_object", () => new Scenarios.HarmonizeObjectScenario());
+        Register("object_flip", () => new Scenarios.ObjectFlipScenario());
     }
 
     public static void Register(string name, Func<ScenarioBase> creator)

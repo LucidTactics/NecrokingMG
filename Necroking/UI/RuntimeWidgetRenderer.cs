@@ -40,6 +40,8 @@ public class RuntimeWidgetRenderer
     // Per-widget text overrides: widgetInstanceId -> (childName -> text)
     // This allows runtime code to change text without mutating defs
     private readonly Dictionary<string, Dictionary<string, string>> _textOverrides = new();
+    private readonly Dictionary<string, HashSet<string>> _hiddenChildren = new();
+    private readonly Dictionary<string, Dictionary<string, Color>> _textColorOverrides = new();
 
     // Per-widget image overrides: widgetInstanceId -> (childName -> texturePath)
     private readonly Dictionary<string, Dictionary<string, string>> _imageOverrides = new();
@@ -118,24 +120,201 @@ public class RuntimeWidgetRenderer
         map[childIndex] = widgetId;
     }
 
+    /// <summary>Override the font color of a named text child within a widget
+    /// instance (e.g. green/red tabulation values).</summary>
+    public void SetTextColor(string instanceId, string childName, byte rr, byte g, byte b, byte a = 255)
+    {
+        if (!_textColorOverrides.TryGetValue(instanceId, out var map))
+        {
+            map = new Dictionary<string, Color>();
+            _textColorOverrides[instanceId] = map;
+        }
+        map[childName] = new Color(rr, g, b, a);
+    }
+
+    /// <summary>Hide or show a named child within a widget instance (hidden
+    /// children are skipped entirely, including nested widget content). On
+    /// AutoSizeHeight vertical-layout widgets, hidden children also collapse
+    /// out of the layout (rows above/below close the gap).</summary>
+    public void SetHidden(string instanceId, string childName, bool hidden)
+    {
+        if (!_hiddenChildren.TryGetValue(instanceId, out var set))
+        {
+            if (!hidden) return;
+            set = new HashSet<string>();
+            _hiddenChildren[instanceId] = set;
+        }
+        if (hidden) set.Add(childName);
+        else set.Remove(childName);
+    }
+
     /// <summary>Clear all overrides for a widget instance.</summary>
     public void ClearOverrides(string instanceId)
     {
         _textOverrides.Remove(instanceId);
         _imageOverrides.Remove(instanceId);
         _childWidgetOverrides.Remove(instanceId);
+        _hiddenChildren.Remove(instanceId);
+        _textColorOverrides.Remove(instanceId);
+    }
+
+    /// <summary>Clear overrides for an instance AND all its nested
+    /// sub-instances ("{id}", "{id}.3", "{id}.3.0", ...).</summary>
+    public void ClearOverridesRecursive(string instanceId)
+    {
+        string prefix = instanceId + ".";
+        foreach (var dict in new System.Collections.IDictionary[]
+                 { _textOverrides, _imageOverrides, _childWidgetOverrides, _hiddenChildren, _textColorOverrides })
+        {
+            var stale = new List<object>();
+            foreach (var key in dict.Keys)
+                if (key is string k && (k == instanceId || k.StartsWith(prefix))) stale.Add(key);
+            foreach (var k in stale) dict.Remove(k);
+        }
+    }
+
+    /// <summary>Screen rect of a named child when the widget is drawn at (x,y).
+    /// Returns Rectangle.Empty if the widget or child doesn't exist.</summary>
+    public Rectangle GetChildRect(string widgetId, string childName, int x, int y, string? instanceId = null)
+    {
+        var def = _widgetDefs.FirstOrDefault(w => w.Id == widgetId);
+        if (def == null) return Rectangle.Empty;
+        var rects = ComputeInstanceRects(def, x, y, instanceId ?? widgetId);
+        for (int i = 0; i < def.Children.Count && i < rects.Count; i++)
+            if (def.Children[i].Name == childName) return rects[i];
+        return Rectangle.Empty;
     }
 
     // ═══════════════════════════════════════
     //  Drawing
     // ═══════════════════════════════════════
 
-    /// <summary>Draw a widget at screen position. instanceId is used for override lookups.</summary>
+    /// <summary>Draw a widget at screen position. instanceId is used for override lookups.
+    /// AutoSizeHeight widgets draw at their measured (visible-content) height.</summary>
     public void DrawWidget(string widgetId, int x, int y, string? instanceId = null)
     {
         var def = _widgetDefs.FirstOrDefault(w => w.Id == widgetId);
         if (def == null) return;
-        DrawWidgetDef(def, x, y, def.Width, def.Height, instanceId ?? widgetId);
+        string inst = instanceId ?? widgetId;
+        DrawWidgetDef(def, x, y, def.Width, MeasureHeight(def, inst), inst);
+    }
+
+    /// <summary>Measured height of a widget instance: AutoSizeHeight vertical-
+    /// layout widgets report visible content height (recursively — nested
+    /// auto-size sections propagate up); everything else reports def Height.</summary>
+    public int MeasureWidgetHeight(string widgetId, string? instanceId = null)
+    {
+        var def = _widgetDefs.FirstOrDefault(w => w.Id == widgetId);
+        return def == null ? 0 : MeasureHeight(def, instanceId ?? widgetId);
+    }
+
+    private int MeasureHeight(UIEditorWidgetDef def, string instanceId)
+    {
+        if (!def.AutoSizeHeight || def.Layout != "vertical") return def.Height;
+        int padT = def.LayoutPadTop > 0 ? def.LayoutPadTop : def.LayoutPadding;
+        int padB = def.LayoutPadBottom > 0 ? def.LayoutPadBottom : def.LayoutPadding;
+        int spacY = def.LayoutSpacingY > 0 ? def.LayoutSpacingY : def.LayoutSpacing;
+        _hiddenChildren.TryGetValue(instanceId, out var hidden);
+        int total = 0, count = 0;
+        for (int i = 0; i < def.Children.Count; i++)
+        {
+            var child = def.Children[i];
+            if (child.IgnoreLayout) continue;
+            if (hidden != null && hidden.Contains(child.Name)) continue;
+            total += ChildLayoutHeight(child, $"{instanceId}.{i}");
+            count++;
+        }
+        if (count > 1) total += (count - 1) * spacY;
+        return padT + total + padB;
+    }
+
+    private int ChildLayoutHeight(UIEditorChildDef child, string subInstanceId)
+    {
+        if (!string.IsNullOrEmpty(child.Widget))
+        {
+            var sub = _widgetDefs.FirstOrDefault(w => w.Id == child.Widget);
+            if (sub != null && sub.AutoSizeHeight) return MeasureHeight(sub, subInstanceId);
+        }
+        return child.Height > 0 ? child.Height : 40;
+    }
+
+    /// <summary>Instance-aware layout: like WidgetLayoutUtils.ComputeLayoutRects
+    /// but skips hidden children (they get Rectangle.Empty, preserving index
+    /// alignment, and don't advance the layout cursor) and sizes auto-height
+    /// sub-widget children by their measured content. AutoSizeHeight widgets
+    /// never column-wrap (their height IS the content).</summary>
+    private List<Rectangle> ComputeInstanceRects(UIEditorWidgetDef def, int wdX, int wdY, string instanceId)
+    {
+        _hiddenChildren.TryGetValue(instanceId, out var hidden);
+        bool isHoriz = def.Layout == "horizontal";
+        bool isVert = def.Layout == "vertical";
+        if (!isHoriz && !isVert && hidden == null)
+            return WidgetLayoutUtils.ComputeLayoutRects(def, wdX, wdY);
+
+        var rects = new List<Rectangle>();
+        bool useLayout = isHoriz || isVert;
+        int padL = def.LayoutPadLeft > 0 ? def.LayoutPadLeft : def.LayoutPadding;
+        int padR = def.LayoutPadRight > 0 ? def.LayoutPadRight : def.LayoutPadding;
+        int padT = def.LayoutPadTop > 0 ? def.LayoutPadTop : def.LayoutPadding;
+        int padB = def.LayoutPadBottom > 0 ? def.LayoutPadBottom : def.LayoutPadding;
+        int spacX = def.LayoutSpacingX > 0 ? def.LayoutSpacingX : def.LayoutSpacing;
+        int spacY = def.LayoutSpacingY > 0 ? def.LayoutSpacingY : def.LayoutSpacing;
+
+        int curX = padL, curY = padT;
+        int rowMaxH = 0, colMaxW = 0;
+
+        for (int i = 0; i < def.Children.Count; i++)
+        {
+            var child = def.Children[i];
+            if (hidden != null && hidden.Contains(child.Name))
+            {
+                rects.Add(Rectangle.Empty);
+                continue;
+            }
+            int cw = child.Width > 0 ? child.Width : 100;
+            int ch = ChildLayoutHeight(child, $"{instanceId}.{i}");
+
+            if (useLayout && !child.IgnoreLayout)
+            {
+                // Auto-size widgets honor the child's CROSS-AXIS offset (x for
+                // vertical stacks, y for horizontal) — the analog of a per-child
+                // margin. Legacy layout widgets keep ignoring offsets.
+                int crossX = def.AutoSizeHeight ? child.X : 0;
+                int crossY = def.AutoSizeHeight ? child.Y : 0;
+                if (isHoriz)
+                {
+                    if (!def.AutoSizeHeight && curX > padL && curX + cw > def.Width - padR)
+                    {
+                        curY += rowMaxH + spacY;
+                        curX = padL;
+                        rowMaxH = 0;
+                    }
+                    rects.Add(new Rectangle(wdX + curX, wdY + curY + crossY, cw, ch));
+                    curX += cw + spacX;
+                    if (ch > rowMaxH) rowMaxH = ch;
+                }
+                else
+                {
+                    if (!def.AutoSizeHeight && curY > padT && curY + ch > def.Height - padB)
+                    {
+                        curX += colMaxW + spacX;
+                        curY = padT;
+                        colMaxW = 0;
+                    }
+                    rects.Add(new Rectangle(wdX + curX + crossX, wdY + curY, cw, ch));
+                    curY += ch + spacY;
+                    if (cw > colMaxW) colMaxW = cw;
+                }
+            }
+            else
+            {
+                int col = child.Anchor % 3, row = child.Anchor / 3;
+                int anchorX = col switch { 0 => 0, 1 => def.Width / 2, 2 => def.Width, _ => 0 };
+                int anchorY = row switch { 0 => 0, 1 => def.Height / 2, 2 => def.Height, _ => 0 };
+                rects.Add(new Rectangle(wdX + anchorX + child.X, wdY + anchorY + child.Y, cw, ch));
+            }
+        }
+        return rects;
     }
 
     /// <summary>Draw a widget def at a specific rect.</summary>
@@ -145,7 +324,7 @@ public class RuntimeWidgetRenderer
         DrawWidgetLayers(def, x, y, w, h, drawFrame: false);
 
         // Children (between stencil and frame)
-        var rects = ComputeLayoutRects(def, x, y);
+        var rects = ComputeInstanceRects(def, x, y, instanceId);
         for (int i = 0; i < def.Children.Count && i < rects.Count; i++)
         {
             // Check for child widget override
@@ -190,6 +369,9 @@ public class RuntimeWidgetRenderer
 
     private void DrawChild(UIEditorChildDef child, Rectangle rect, string instanceId, int childIndex, string? overrideWidget)
     {
+        if (_hiddenChildren.TryGetValue(instanceId, out var hidden) && hidden.Contains(child.Name))
+            return;
+
         bool drawn = false;
         string widgetRef = overrideWidget ?? child.Widget;
 
@@ -204,7 +386,7 @@ public class RuntimeWidgetRenderer
 
                 // Nested children — use a sub-instance ID for override scoping
                 string subId = $"{instanceId}.{childIndex}";
-                var nestedRects = ComputeLayoutRects(widgetDef, rect.X, rect.Y);
+                var nestedRects = ComputeInstanceRects(widgetDef, rect.X, rect.Y, subId);
                 for (int ci = 0; ci < widgetDef.Children.Count && ci < nestedRects.Count; ci++)
                 {
                     string? nestedOverride = null;
@@ -242,7 +424,10 @@ public class RuntimeWidgetRenderer
                     {
                         // Apply child text override if present
                         var txo = (child.HasTextOverride && child.TextOverride != null) ? child.TextOverride : null;
-                        DrawTextElement(text, elemDef, rect, txo);
+                        Color? colorOv = null;
+                        if (_textColorOverrides.TryGetValue(instanceId, out var cMap) && cMap.TryGetValue(child.Name, out var c))
+                            colorOv = c;
+                        DrawTextElement(text, elemDef, rect, txo, colorOv);
                     }
                 }
                 else if (elemDef.Type == "image")
@@ -287,13 +472,13 @@ public class RuntimeWidgetRenderer
     }
 
     private void DrawTextElement(string text, UIEditorElementDef elemDef, Rectangle rect,
-        UIEditorTextRegion? textOverride = null)
+        UIEditorTextRegion? textOverride = null, Color? colorOverride = null)
     {
         // Apply child text override if present, falling back to element def
         var tr = elemDef.TextRegion;
         var txo = textOverride;
 
-        var fontColor = ByteColor(txo?.FontColor ?? tr?.FontColor ?? new byte[] { 255, 255, 255, 255 });
+        var fontColor = colorOverride ?? ByteColor(txo?.FontColor ?? tr?.FontColor ?? new byte[] { 255, 255, 255, 255 });
         int fontSize = (txo != null && txo.FontSize > 0) ? txo.FontSize : tr?.FontSize ?? 14;
         string fontFamily = !string.IsNullOrEmpty(txo?.FontFamily) ? txo.FontFamily : tr?.FontFamily ?? "";
         string align = !string.IsNullOrEmpty(txo?.Align) ? txo.Align : tr?.Align ?? "left";
@@ -354,6 +539,17 @@ public class RuntimeWidgetRenderer
                 bgNs.Draw(_batch, bgRect, bgColor, def.BackgroundScale);
             }
         }
+        else if (!string.IsNullOrEmpty(def.BackgroundImagePath))
+        {
+            var bgTex = GetTexture(def.BackgroundImagePath, "bg:" + def.Id);
+            if (bgTex != null)
+            {
+                int bi = def.BackgroundInset;
+                var bgRect = new Rectangle(x + bi, y + bi, w - bi * 2, h - bi * 2);
+                var bgColor = def.BackgroundTint != null ? ByteColor(def.BackgroundTint) : Color.White;
+                DrawImageLayerCropTop(bgTex, bgRect, bgColor, def.Height - bi * 2);
+            }
+        }
 
         // Stencil (use harmonized if available)
         {
@@ -364,7 +560,7 @@ public class RuntimeWidgetRenderer
             if (!string.IsNullOrEmpty(def.StencilImagePath))
             {
                 var stTex = GetTexture(def.StencilImagePath, "st:" + def.Id);
-                if (stTex != null) _batch.Draw(stTex, stRect, stColor);
+                if (stTex != null) DrawImageLayerCropTop(stTex, stRect, stColor, def.Height - si * 2);
             }
             else if (!string.IsNullOrEmpty(def.Stencil))
             {
@@ -384,6 +580,23 @@ public class RuntimeWidgetRenderer
                 frNs.Draw(_batch, new Rectangle(x + fi, y + fi, w - fi * 2 - def.FrameInsetR, h - fi * 2),
                     frColor, def.FrameScale);
             }
+        }
+    }
+
+    /// <summary>Image layers on auto-size widgets are baked at the widget's
+    /// MAX height (def.Height). When drawn shorter, CROP the texture from the
+    /// top (1:1 pixels, no resampling — the PointClamp rule) instead of
+    /// squashing it. Drawn at full height this is an ordinary stretch-fit.</summary>
+    private void DrawImageLayerCropTop(Texture2D tex, Rectangle rect, Color color, int defMaxH)
+    {
+        if (defMaxH > 0 && rect.Height < defMaxH)
+        {
+            int srcH = (int)System.Math.Round(tex.Height * (rect.Height / (float)defMaxH));
+            _batch.Draw(tex, rect, new Rectangle(0, 0, tex.Width, System.Math.Max(1, srcH)), color);
+        }
+        else
+        {
+            _batch.Draw(tex, rect, color);
         }
     }
 
@@ -591,6 +804,8 @@ public class RuntimeWidgetRenderer
                     Background = el.TryGetProperty("background", out var bg) ? bg.GetString() ?? "" : "",
                     Stencil = el.TryGetProperty("stencil", out var st) ? st.GetString() ?? "" : "",
                     StencilImagePath = el.TryGetProperty("stencilImagePath", out var sip) ? sip.GetString() ?? "" : "",
+                    BackgroundImagePath = el.TryGetProperty("backgroundImagePath", out var bip) ? bip.GetString() ?? "" : "",
+                    AutoSizeHeight = el.TryGetProperty("autoSizeHeight", out var ash) && ash.GetBoolean(),
                     Frame = el.TryGetProperty("frame", out var fr) ? fr.GetString() ?? "" : "",
                     Width = el.TryGetProperty("width", out var w) ? w.GetInt32() : 200,
                     Height = el.TryGetProperty("height", out var h) ? h.GetInt32() : 100,
@@ -787,12 +1002,13 @@ public class RuntimeWidgetRenderer
     /// <summary>Generate harmonized textures for all widgets/elements that have harmonize settings.</summary>
     private void GenerateHarmonizedTextures()
     {
+        var sw = System.Diagnostics.Stopwatch.StartNew();
         // Per-widget prefixes: different widgets may harmonize the SAME texture
         // differently (e.g. the leather background dark vs light).
         foreach (var wd in _widgetDefs)
         {
             if (wd.BgHarmonize != null && wd.BgHarmonize.HasEffect)
-                ApplyHarmonize(wd.Background, "", "bg:" + wd.Id, wd.BgHarmonize);
+                ApplyHarmonize(wd.Background, wd.BackgroundImagePath, "bg:" + wd.Id, wd.BgHarmonize);
             if (wd.StencilHarmonize != null && wd.StencilHarmonize.HasEffect)
                 ApplyHarmonize(wd.Stencil, wd.StencilImagePath, "st:" + wd.Id, wd.StencilHarmonize);
             if (wd.FrameHarmonize != null && wd.FrameHarmonize.HasEffect)
@@ -807,6 +1023,7 @@ public class RuntimeWidgetRenderer
             string nsRef = elem.Type == "nineSlice" ? elem.NineSlice : "";
             ApplyHarmonize(nsRef, imgPath, "el:" + elem.Id, elem.Harmonize);
         }
+        Core.DebugLog.Log("startup", $"  [WidgetRenderer] harmonize bake: {sw.ElapsedMilliseconds}ms");
     }
 
     /// <summary>Apply harmonization to a texture and cache the result (mirrors editor ApplyHarmonize).</summary>

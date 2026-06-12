@@ -43,6 +43,14 @@ public class UIEditorTextRegion
     public int FontSize { get; set; } = 14;
     public byte[] FontColor { get; set; } = { 255, 255, 255, 255 };
     public bool WordWrap { get; set; }  // RI21
+    public int LineSpacing { get; set; } // extra px between wrapped lines
+    public float CharSpacing { get; set; } // extra px between characters (TMP bold tracking)
+    public bool Bold { get; set; }       // poor-man's bold: second draw at +1px
+    public float BoldStrength { get; set; } = 1f; // opacity of the bold pass (TMP _WeightBold analog)
+    public byte[]? TextOutlineColor { get; set; } // crisp stroked outline under the glyphs
+    public int TextOutlineWidth { get; set; }     // outline thickness in px (0 = none)
+    public int OutlineOffsetX { get; set; }       // shift of the outline pass (TMP underlay offset)
+    public int OutlineOffsetY { get; set; }
 }
 
 // ─────────────────────────────────────────────
@@ -124,17 +132,26 @@ public class UIEditorWidgetDef
     public string Id { get; set; } = "";
     // Three-layer system: Background (bottom) → Stencil (middle) → Children → Frame (top)
     public string Background { get; set; } = "";       // nine-slice ID for background layer
+    public string BackgroundImagePath { get; set; } = ""; // direct image path for background (crops from top when taller than draw rect)
     public string Stencil { get; set; } = "";           // nine-slice ID for stencil overlay
-    public string StencilImagePath { get; set; } = "";  // direct image path for stencil (stretched sprite)
+    public string StencilImagePath { get; set; } = "";  // direct image path for stencil (crops from top when taller than draw rect)
     public string Frame { get; set; } = "";             // nine-slice ID for frame (topmost)
     public int Width { get; set; } = 200;
-    public int Height { get; set; } = 100;
+    public int Height { get; set; } = 100;              // for AutoSizeHeight widgets: the MAX height (image layers are baked at it)
+    /// <summary>Vertical-layout widgets only: drawn height = measured content
+    /// (visible children + padding + spacing) instead of Height. Children
+    /// hidden via SetHidden are excluded, so rows collapse and the widget
+    /// shrinks — the analog of Unity's VerticalLayoutGroup + ContentSizeFitter.</summary>
+    public bool AutoSizeHeight { get; set; }
     public float BackgroundScale { get; set; } = 1f;
+    public float FrameScale { get; set; } = 1f;          // multiplier on frame nine-slice border thickness
+    public int FrameInsetR { get; set; }                 // extra inset on the frame's right side only
     public byte[]? BackgroundTint { get; set; }
     public byte[]? StencilTint { get; set; }
     public byte[]? FrameTint { get; set; }
     public int BackgroundInset { get; set; }            // pixels inset from frame on all sides
     public int StencilInset { get; set; }               // pixels inset from frame on all sides
+    public int FrameInset { get; set; }                 // pixels inset of frame from widget bounds
     public HarmonizeSettings? BgHarmonize { get; set; }
     public HarmonizeSettings? StencilHarmonize { get; set; }
     public HarmonizeSettings? FrameHarmonize { get; set; }
@@ -360,9 +377,19 @@ public partial class UIEditorWindow : EditorBase
                         VAlign = tr.GetStringProp("valign", "top"),
                         FontFamily = tr.GetStringProp("fontFamily"),
                         FontSize = tr.GetIntProp("fontSize", 14),
+                        WordWrap = tr.GetBoolProp("wordWrap"),
+                        LineSpacing = tr.GetIntProp("lineSpacing"),
+                        CharSpacing = tr.GetFloatProp("charSpacing"),
+                        Bold = tr.GetBoolProp("bold"),
+                        BoldStrength = tr.GetFloatProp("boldStrength", 1f),
+                        TextOutlineWidth = tr.GetIntProp("outlineWidth"),
+                        OutlineOffsetX = tr.GetIntProp("outlineOffsetX"),
+                        OutlineOffsetY = tr.GetIntProp("outlineOffsetY"),
                     };
                     if (tr.TryGetProperty("fontColor", out var fc) && fc.ValueKind == JsonValueKind.Array)
                         def.TextRegion.FontColor = ReadColorArray(fc);
+                    if (tr.TryGetProperty("outlineColor", out var toc) && toc.ValueKind == JsonValueKind.Array)
+                        def.TextRegion.TextOutlineColor = ReadColorArray(toc);
                 }
                 _elements.Add(def);
             }
@@ -405,9 +432,14 @@ public partial class UIEditorWindow : EditorBase
                 };
                 def.Stencil = item.GetStringProp("stencil");
                 def.StencilImagePath = item.GetStringProp("stencilImagePath");
+                def.BackgroundImagePath = item.GetStringProp("backgroundImagePath");
+                def.AutoSizeHeight = item.GetBoolProp("autoSizeHeight");
                 def.Frame = item.GetStringProp("frame");
+                def.FrameScale = item.GetFloatProp("frameScale", 1f);
                 def.BackgroundInset = item.GetIntProp("backgroundInset");
                 def.StencilInset = item.GetIntProp("stencilInset");
+                def.FrameInset = item.GetIntProp("frameInset");
+                def.FrameInsetR = item.GetIntProp("frameInsetR");
                 if (item.TryGetProperty("bgHarmonize", out var bgH)) def.BgHarmonize = ReadHarmonize(bgH);
                 if (item.TryGetProperty("stencilHarmonize", out var stH)) def.StencilHarmonize = ReadHarmonize(stH);
                 if (item.TryGetProperty("frameHarmonize", out var frH)) def.FrameHarmonize = ReadHarmonize(frH);
@@ -463,6 +495,15 @@ public partial class UIEditorWindow : EditorBase
                             if (txo.TryGetProperty("fontColor", out var txfc) && txfc.ValueKind == JsonValueKind.Array)
                                 child.TextOverride.FontColor = ReadColorArray(txfc);
                             child.TextOverride.WordWrap = txo.GetBoolProp("wordWrap");
+                            child.TextOverride.LineSpacing = txo.GetIntProp("lineSpacing");
+                            child.TextOverride.CharSpacing = txo.GetFloatProp("charSpacing");
+                            child.TextOverride.Bold = txo.GetBoolProp("bold");
+                            child.TextOverride.BoldStrength = txo.GetFloatProp("boldStrength", 1f);
+                            child.TextOverride.TextOutlineWidth = txo.GetIntProp("outlineWidth");
+                            child.TextOverride.OutlineOffsetX = txo.GetIntProp("outlineOffsetX");
+                            child.TextOverride.OutlineOffsetY = txo.GetIntProp("outlineOffsetY");
+                            if (txo.TryGetProperty("outlineColor", out var txoc) && txoc.ValueKind == JsonValueKind.Array)
+                                child.TextOverride.TextOutlineColor = ReadColorArray(txoc);
                         }
                         // RI22: child overrides
                         if (ch.TryGetProperty("childOverrides", out var coArr) && coArr.ValueKind == JsonValueKind.Array)
@@ -585,6 +626,25 @@ public partial class UIEditorWindow : EditorBase
                     writer.WriteString("fontFamily", el.TextRegion.FontFamily);
                 writer.WriteNumber("fontSize", el.TextRegion.FontSize);
                 WriteColorArray(writer, "fontColor", el.TextRegion.FontColor);
+                if (el.TextRegion.WordWrap)
+                    writer.WriteBoolean("wordWrap", true);
+                if (el.TextRegion.LineSpacing != 0)
+                    writer.WriteNumber("lineSpacing", el.TextRegion.LineSpacing);
+                if (el.TextRegion.CharSpacing != 0)
+                    writer.WriteNumber("charSpacing", el.TextRegion.CharSpacing);
+                if (el.TextRegion.Bold)
+                    writer.WriteBoolean("bold", true);
+                if (el.TextRegion.BoldStrength != 1f)
+                    writer.WriteNumber("boldStrength", el.TextRegion.BoldStrength);
+                if (el.TextRegion.TextOutlineWidth > 0 && el.TextRegion.TextOutlineColor != null)
+                {
+                    writer.WriteNumber("outlineWidth", el.TextRegion.TextOutlineWidth);
+                    WriteColorArray(writer, "outlineColor", el.TextRegion.TextOutlineColor);
+                    if (el.TextRegion.OutlineOffsetX != 0)
+                        writer.WriteNumber("outlineOffsetX", el.TextRegion.OutlineOffsetX);
+                    if (el.TextRegion.OutlineOffsetY != 0)
+                        writer.WriteNumber("outlineOffsetY", el.TextRegion.OutlineOffsetY);
+                }
                 writer.WriteEndObject();
             }
             writer.WriteEndObject();
@@ -613,15 +673,25 @@ public partial class UIEditorWindow : EditorBase
                 writer.WriteString("stencil", wd.Stencil);
             if (!string.IsNullOrEmpty(wd.StencilImagePath))
                 writer.WriteString("stencilImagePath", wd.StencilImagePath);
+            if (!string.IsNullOrEmpty(wd.BackgroundImagePath))
+                writer.WriteString("backgroundImagePath", wd.BackgroundImagePath);
+            if (wd.AutoSizeHeight)
+                writer.WriteBoolean("autoSizeHeight", true);
             if (!string.IsNullOrEmpty(wd.Frame))
                 writer.WriteString("frame", wd.Frame);
             writer.WriteNumber("width", wd.Width);
             writer.WriteNumber("height", wd.Height);
             writer.WriteNumber("backgroundScale", wd.BackgroundScale);
+            if (wd.FrameScale != 1f)
+                writer.WriteNumber("frameScale", wd.FrameScale);
             if (wd.BackgroundInset != 0)
                 writer.WriteNumber("backgroundInset", wd.BackgroundInset);
             if (wd.StencilInset != 0)
                 writer.WriteNumber("stencilInset", wd.StencilInset);
+            if (wd.FrameInset != 0)
+                writer.WriteNumber("frameInset", wd.FrameInset);
+            if (wd.FrameInsetR != 0)
+                writer.WriteNumber("frameInsetR", wd.FrameInsetR);
             if (wd.BackgroundTint != null)
                 WriteColorArray(writer, "backgroundTint", wd.BackgroundTint);
             if (wd.StencilTint != null)
@@ -715,6 +785,23 @@ public partial class UIEditorWindow : EditorBase
                         WriteColorArray(writer, "fontColor", ch.TextOverride.FontColor);
                         if (ch.TextOverride.WordWrap)
                             writer.WriteBoolean("wordWrap", true);
+                        if (ch.TextOverride.LineSpacing != 0)
+                            writer.WriteNumber("lineSpacing", ch.TextOverride.LineSpacing);
+                        if (ch.TextOverride.CharSpacing != 0)
+                            writer.WriteNumber("charSpacing", ch.TextOverride.CharSpacing);
+                        if (ch.TextOverride.Bold)
+                            writer.WriteBoolean("bold", true);
+                        if (ch.TextOverride.BoldStrength != 1f)
+                            writer.WriteNumber("boldStrength", ch.TextOverride.BoldStrength);
+                        if (ch.TextOverride.TextOutlineWidth > 0 && ch.TextOverride.TextOutlineColor != null)
+                        {
+                            writer.WriteNumber("outlineWidth", ch.TextOverride.TextOutlineWidth);
+                            WriteColorArray(writer, "outlineColor", ch.TextOverride.TextOutlineColor);
+                            if (ch.TextOverride.OutlineOffsetX != 0)
+                                writer.WriteNumber("outlineOffsetX", ch.TextOverride.OutlineOffsetX);
+                            if (ch.TextOverride.OutlineOffsetY != 0)
+                                writer.WriteNumber("outlineOffsetY", ch.TextOverride.OutlineOffsetY);
+                        }
                         writer.WriteEndObject();
                     }
                     // RI22: child overrides
@@ -769,6 +856,13 @@ public partial class UIEditorWindow : EditorBase
         h.SatStrength = el.GetFloatProp("satStrength");
         h.ValStrength = el.GetFloatProp("valStrength");
         h.UseHcl = el.GetBoolProp("useHcl");
+        if (el.TryGetProperty("gradColor", out var gc) && gc.ValueKind == JsonValueKind.Array)
+            h.GradColor = ReadColorArray(gc);
+        h.GradStrength = el.GetFloatProp("gradStrength");
+        if (el.TryGetProperty("outlineColor", out var oc) && oc.ValueKind == JsonValueKind.Array)
+            h.OutlineColor = ReadColorArray(oc);
+        h.OutlineThickness = el.GetFloatProp("outlineThickness");
+        h.OutlineOpacity = el.GetFloatProp("outlineOpacity", 1f);
         return h;
     }
 
@@ -781,6 +875,17 @@ public partial class UIEditorWindow : EditorBase
         writer.WriteNumber("satStrength", h.SatStrength);
         writer.WriteNumber("valStrength", h.ValStrength);
         writer.WriteBoolean("useHcl", h.UseHcl);
+        if (h.HasGradient)
+        {
+            WriteColorArray(writer, "gradColor", h.GradColor!);
+            writer.WriteNumber("gradStrength", h.GradStrength);
+        }
+        if (h.HasOutline)
+        {
+            WriteColorArray(writer, "outlineColor", h.OutlineColor!);
+            writer.WriteNumber("outlineThickness", h.OutlineThickness);
+            writer.WriteNumber("outlineOpacity", h.OutlineOpacity);
+        }
         writer.WriteEndObject();
     }
 
@@ -800,10 +905,13 @@ public partial class UIEditorWindow : EditorBase
         if (string.IsNullOrEmpty(texPath) || _device == null) return null;
         if (_textures.TryGetValue(texPath, out var tex)) return tex;
 
-        if (!File.Exists(texPath)) return null;
+        // Resolve project-relative paths (assets/...) — at runtime the CWD is
+        // the exe directory, not the project root, so raw File.Exists fails.
+        string resolved = Core.GamePaths.Resolve(texPath);
+        if (!File.Exists(resolved)) return null;
         try
         {
-            tex = Render.TextureUtil.LoadPremultiplied(_device, texPath);
+            tex = Render.TextureUtil.LoadPremultiplied(_device, resolved);
             _textures[texPath] = tex;
             return tex;
         }
@@ -1537,7 +1645,7 @@ public partial class UIEditorWindow : EditorBase
             {
                 string imgPath = def.Type == "image" ? def.ImagePath : "";
                 string nsRef = def.Type == "nineSlice" ? def.NineSlice : "";
-                ApplyHarmonize(nsRef, imgPath, "el", def.Harmonize);
+                ApplyHarmonize(nsRef, imgPath, "el:" + def.Id, def.Harmonize);
                 _unsavedChanges = true;
             }
         }
@@ -1682,7 +1790,7 @@ public partial class UIEditorWindow : EditorBase
         // Use harmonized texture if available, otherwise original with tint
         if (def.Type == "image" && !string.IsNullOrEmpty(def.ImagePath))
         {
-            var imgTex = GetTexture(def.ImagePath, "el");
+            var imgTex = GetTexture(def.ImagePath, "el:" + def.Id);
             if (imgTex != null)
             {
                 var tint = ByteColor(def.TintColor ?? new byte[] { 255, 255, 255, 255 });
@@ -1695,7 +1803,7 @@ public partial class UIEditorWindow : EditorBase
         }
         else
         {
-            var ns = GetNineSlice(def.NineSlice, "el");
+            var ns = GetNineSlice(def.NineSlice, "el:" + def.Id);
             if (ns != null)
             {
                 ns.Draw(_sb, elRect, ByteColor(def.TintColor ?? new byte[] { 255, 255, 255, 255 }));
@@ -1966,6 +2074,18 @@ public partial class UIEditorWindow : EditorBase
         if (newFrame != def.Frame) { def.Frame = newFrame; _unsavedChanges = true; }
         curY += 24;
 
+        if (!string.IsNullOrEmpty(def.Frame))
+        {
+            float newFrScale = DrawFloatField("wd_frsc", "Frame Scale", def.FrameScale, x + pad, curY, propW, 0.05f);
+            if (Math.Abs(newFrScale - def.FrameScale) > 0.001f) { def.FrameScale = newFrScale; _unsavedChanges = true; }
+            curY += 22;
+
+            // Negative inset = frame overhangs the widget bounds
+            int newFrInset = DrawIntField("wd_frins", "Frame Inset", def.FrameInset, x + pad, curY, propW);
+            if (newFrInset != def.FrameInset) { def.FrameInset = newFrInset; _unsavedChanges = true; }
+            curY += 22;
+        }
+
         // Background
         string curBg = string.IsNullOrEmpty(def.Background) ? "(none)" : def.Background;
         string newBg = DrawCombo("wd_bg", "Background", curBg, nsIds, x + pad, curY, propW);
@@ -1975,8 +2095,10 @@ public partial class UIEditorWindow : EditorBase
 
         if (!string.IsNullOrEmpty(def.Background))
         {
+            // Negative inset = background overhangs the widget bounds (e.g. textures
+            // with baked-in transparent margins like EmbossedLeatherBorderInner)
             int newBgInset = DrawIntField("wd_bgins", "BG Inset", def.BackgroundInset, x + pad, curY, propW);
-            if (newBgInset != def.BackgroundInset) { def.BackgroundInset = Math.Max(0, newBgInset); _unsavedChanges = true; }
+            if (newBgInset != def.BackgroundInset) { def.BackgroundInset = newBgInset; _unsavedChanges = true; }
             curY += 22;
         }
 
@@ -2104,9 +2226,9 @@ public partial class UIEditorWindow : EditorBase
         }
 
         // Per-layer harmonize controls
-        { var bt = def.BackgroundTint; var bh = def.BgHarmonize; DrawLayerHarmonizeSection("BG", "wd_bgtint", "bg", def.Background, "", ref bt, ref bh, x, pad, propW, ref curY); def.BackgroundTint = bt; def.BgHarmonize = bh; }
-        { var st2 = def.StencilTint; var sh2 = def.StencilHarmonize; DrawLayerHarmonizeSection("Stencil", "wd_sttint", "st", def.Stencil, def.StencilImagePath, ref st2, ref sh2, x, pad, propW, ref curY); def.StencilTint = st2; def.StencilHarmonize = sh2; }
-        { var ft = def.FrameTint; var fh = def.FrameHarmonize; DrawLayerHarmonizeSection("Frame", "wd_frtint", "fr", def.Frame, "", ref ft, ref fh, x, pad, propW, ref curY); def.FrameTint = ft; def.FrameHarmonize = fh; }
+        { var bt = def.BackgroundTint; var bh = def.BgHarmonize; DrawLayerHarmonizeSection("BG", "wd_bgtint", "bg:" + def.Id, def.Background, "", ref bt, ref bh, x, pad, propW, ref curY); def.BackgroundTint = bt; def.BgHarmonize = bh; }
+        { var st2 = def.StencilTint; var sh2 = def.StencilHarmonize; DrawLayerHarmonizeSection("Stencil", "wd_sttint", "st:" + def.Id, def.Stencil, def.StencilImagePath, ref st2, ref sh2, x, pad, propW, ref curY); def.StencilTint = st2; def.StencilHarmonize = sh2; }
+        { var ft = def.FrameTint; var fh = def.FrameHarmonize; DrawLayerHarmonizeSection("Frame", "wd_frtint", "fr:" + def.Id, def.Frame, "", ref ft, ref fh, x, pad, propW, ref curY); def.FrameTint = ft; def.FrameHarmonize = fh; }
 
         // Children section
         DrawRect(new Rectangle(x + pad, curY, propW, 1), PanelBorder);
@@ -2713,7 +2835,7 @@ public partial class UIEditorWindow : EditorBase
         // Background + stencil layers (children render between stencil and frame)
         if (!string.IsNullOrEmpty(def.Background))
         {
-            var bgNs = GetNineSlice(def.Background, "bg");
+            var bgNs = GetNineSlice(def.Background, "bg:" + def.Id);
             if (bgNs != null)
             {
                 int bi = def.BackgroundInset;
@@ -2734,13 +2856,13 @@ public partial class UIEditorWindow : EditorBase
 
             if (!string.IsNullOrEmpty(def.StencilImagePath))
             {
-                var stTex = GetTexture(def.StencilImagePath, "st");
+                var stTex = GetTexture(def.StencilImagePath, "st:" + def.Id);
                 if (stTex != null)
                     _sb.Draw(stTex, stRect, stColor);
             }
             else if (!string.IsNullOrEmpty(def.Stencil))
             {
-                var stNs = GetNineSlice(def.Stencil, "st");
+                var stNs = GetNineSlice(def.Stencil, "st:" + def.Id);
                 if (stNs != null)
                     stNs.Draw(_sb, stRect, stColor);
             }
@@ -2963,42 +3085,53 @@ public partial class UIEditorWindow : EditorBase
                         string valign = !string.IsNullOrEmpty(txo?.VAlign) ? txo.VAlign : tr?.VAlign ?? "top";
 
                         var dynFont = _fontMgr?.GetFont(fontSize, string.IsNullOrEmpty(fontFamily) ? null : fontFamily);
-                        Vector2 textSize;
                         if (dynFont != null)
-                            textSize = dynFont.MeasureString(text);
-                        else
-                            textSize = MeasureText(text);
-
-                        int trW = rect.Width;
-                        int trH = rect.Height;
-
-                        float tx = align switch
                         {
-                            "center" => rect.X + (trW - textSize.X) / 2,
-                            "right" => rect.X + trW - textSize.X - 2,
-                            _ => rect.X + 2
-                        };
-                        float ty = valign switch
-                        {
-                            "center" => rect.Y + (trH - textSize.Y) / 2,
-                            "bottom" => rect.Y + trH - textSize.Y - 2,
-                            _ => rect.Y + 2
-                        };
+                            bool wordWrap = txo?.WordWrap ?? tr?.WordWrap ?? false;
+                            float charSpacing = txo?.CharSpacing ?? tr?.CharSpacing ?? 0f;
+                            bool bold = txo?.Bold ?? tr?.Bold ?? false;
+                            if (wordWrap)
+                                text = UI.WidgetLayoutUtils.WrapText(dynFont, text, rect.Width - 4, charSpacing);
+                            int lineSpacing = txo?.LineSpacing ?? tr?.LineSpacing ?? 0;
 
-                        if (dynFont != null)
-                            _sb.DrawString(dynFont, text, new Vector2(tx, ty), fontColor);
+                            int outlineW = txo?.TextOutlineWidth ?? tr?.TextOutlineWidth ?? 0;
+                            byte[]? outlineCol = txo?.TextOutlineColor ?? tr?.TextOutlineColor;
+                            Color outlineColor = outlineCol != null ? ByteColor(outlineCol) : default;
+                            if (outlineCol == null) outlineW = 0;
+                            float boldStrength = txo?.BoldStrength ?? tr?.BoldStrength ?? 1f;
+                            int outlineOffX = txo?.OutlineOffsetX ?? tr?.OutlineOffsetX ?? 0;
+                            int outlineOffY = txo?.OutlineOffsetY ?? tr?.OutlineOffsetY ?? 0;
+                            UI.WidgetLayoutUtils.DrawTextBlock(_sb, dynFont, text, rect, fontColor, align, valign,
+                                lineSpacing, charSpacing, bold, outlineW, outlineColor, boldStrength,
+                                outlineOffX, outlineOffY);
+                        }
                         else
+                        {
+                            var textSize = MeasureText(text);
+                            float tx = align switch
+                            {
+                                "center" => rect.X + (rect.Width - textSize.X) / 2,
+                                "right" => rect.X + rect.Width - textSize.X - 2,
+                                _ => rect.X + 2
+                            };
+                            float ty = valign switch
+                            {
+                                "center" => rect.Y + (rect.Height - textSize.Y) / 2,
+                                "bottom" => rect.Y + rect.Height - textSize.Y - 2,
+                                _ => rect.Y + 2
+                            };
                             DrawText(text, new Vector2(tx, ty), fontColor);
+                        }
                     }
                 }
                 else if (elemDef.Type == "image" && !string.IsNullOrEmpty(elemDef.ImagePath))
                 {
-                    var imgTex = GetTexture(elemDef.ImagePath, "el");
+                    var imgTex = GetTexture(elemDef.ImagePath, "el:" + elemDef.Id);
                     if (imgTex != null) { _sb.Draw(imgTex, rect, tint); drawn = true; }
                 }
                 else if (!string.IsNullOrEmpty(elemDef.NineSlice))
                 {
-                    var childNs = GetNineSlice(elemDef.NineSlice, "el");
+                    var childNs = GetNineSlice(elemDef.NineSlice, "el:" + elemDef.Id);
                     if (childNs != null) { childNs.Draw(_sb, rect, tint); drawn = true; }
                 }
 

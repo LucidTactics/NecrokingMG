@@ -137,6 +137,15 @@ public abstract class ScenarioBase
     // Shader-based UI primitives (used by shader test scenarios)
     public Render.UIShaders? UIShaders;
 
+    // Widget renderer access for UI widget test scenarios. Only plumbed when
+    // WantsWidgetRenderer is true — initializing it drags in the inventory
+    // family UIs, which other scenarios shouldn't pay for.
+    public virtual bool WantsWidgetRenderer => false;
+    public UI.RuntimeWidgetRenderer? WidgetRenderer;
+    /// <summary>Draws a unit def's idle atlas sprite into a screen rect
+    /// (Game1.DrawUnitIdleSprite). Plumbed when WantsWidgetRenderer is true.</summary>
+    public Action<string, Microsoft.Xna.Framework.Rectangle>? DrawUnitSprite;
+
     // Sprite atlases (used by debug scenarios that need to draw arbitrary sprite
     // frames — e.g. stride calibration visualizer). Plumbed from Game1 before OnInit.
     public Render.SpriteAtlas[]? Atlases;

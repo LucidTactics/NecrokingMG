@@ -37,6 +37,8 @@ public class Game1 : Microsoft.Xna.Framework.Game
     private ShadowRenderer _shadowRenderer = new();
     private HUDRenderer _hudRenderer = new();
     private CharacterStatsUI _characterStatsUI = new();
+    private UI.UnitInfoPanel _unitInfoPanel = new();
+    private bool _pausedByInspect;
     private SkillTreePanel _skillTreePanel = new();
     private SkillBookPanel _skillBookPanel = new();
     private SkillBookState _skillBookState = new();
@@ -103,6 +105,12 @@ public class Game1 : Microsoft.Xna.Framework.Game
         _tableMenuUI.SetSkillBook(_skillBookState);
         _tableMenuUI.StartCraftCallback = (envIdx) => StartTableCraft(envIdx);
         _tableMenuUI.DrawUnitIconCallback = (defId, rect) => DrawUnitIdleSprite(defId, rect);
+        _unitInfoPanel.Init(_widgetRenderer, _gameData);
+        _unitInfoPanel.DrawUnitIconCallback = (defId, rect) => DrawUnitIdleSprite(defId, rect);
+        _unitInfoPanel.OnClosed = () =>
+        {
+            if (_pausedByInspect) { _paused = false; _pausedByInspect = false; }
+        };
         Necroking.Core.DebugLog.Log("startup", "  [LazyInit] Inventory/Building/Crafting/Table UIs initialized on demand");
     }
 
@@ -147,6 +155,13 @@ public class Game1 : Microsoft.Xna.Framework.Game
     private const float CarryOffsetX = 4.5f;
     private const float CarryOffsetY = 8.5f;
     private const float CarryBagScale = 3.4f;
+    // Raw-corpse carry: nudge the centroid-pegged corpse vertically off the hands
+    // (negative = up, so the body rests slightly on top of the hands). Tunable.
+    private const float CarriedCorpseHandOffsetY = -2f;
+    // Cache of opaque-pixel centroids per (atlas texture, frame rect), in frame-local
+    // top-left pixels. Computed once via GetData; used to balance carried corpses.
+    private readonly Dictionary<(Microsoft.Xna.Framework.Graphics.Texture2D, Rectangle), Vector2> _frameCentroidCache = new();
+    private bool _autostartExitPending; // --autostart headless: exit once world is loaded
     private Dictionary<string, Flipbook> _flipbooks = new(); // keyed by flipbook ID
     private Dictionary<string, AnimationMeta> _animMeta = new(); // animation metadata
     private Microsoft.Xna.Framework.Graphics.Effect? _groundEffect;
@@ -253,6 +268,32 @@ public class Game1 : Microsoft.Xna.Framework.Game
         public int Slot;           // spellbar slot that was used
         public bool IsSecondary;   // secondary spellbar
         public string? CastingBuffID; // to remove on animation end
+
+        // Channeled casts (CastAnim ImbueGround/Raise): a Start→Loop→Finish state
+        // machine. The effect fires at the END of the loop. Empty/"Spell1" = the
+        // legacy single-shot path (effect on the Spell1 effect frame).
+        public string CastAnim;
+        public byte ChannelPhase;     // 0=Start, 1=Loop, 2=Finish
+        public float ChannelElapsed;  // seconds since the cast began
+        public float LoopElapsed;     // seconds spent in the Loop phase
+        public float CastTime;        // total target cast time (start + loop)
+        public bool Executed;         // effect already fired (end of loop)
+    }
+
+    private static bool IsChanneledCast(string? castAnim)
+        => castAnim == "ImbueGround" || castAnim == "Raise";
+
+    /// <summary>Resolve the Start/Loop/Finish anim states for a channeled cast.
+    /// Raise has no Finish (finish == null → go straight to Idle after the loop).</summary>
+    private static void GetChannelStates(string castAnim, out AnimState start, out AnimState loop, out AnimState? finish)
+    {
+        switch (castAnim)
+        {
+            case "Raise":
+                start = AnimState.RaiseStart; loop = AnimState.RaiseLoop; finish = null; break;
+            default: // "ImbueGround"
+                start = AnimState.ImbueGroundStart; loop = AnimState.ImbueGroundLoop; finish = AnimState.ImbueGroundFinish; break;
+        }
     }
 
     // Pending projectiles (multi-projectile delay)
@@ -743,6 +784,11 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // produces a swamp-green wake instead of the default shoreline cyan.
         _wakeSystem.InitWaterVariants(_groundSystem);
         _envSystem.LoadTextures(GraphicsDevice);
+        // NOTE: corpse-carry centroids are computed lazily on first carry (see
+        // GetFrameCentroid). Pre-baking them all here stalled Start-Game ~13s —
+        // each GetData read-back on the huge unit atlases is ~85ms and there are
+        // ~200 death frames. One brief hitch per carried corpse type is the
+        // cheaper trade until centroids can be baked offline into the spritemeta.
         LogTiming($"Ground textures: {_groundSystem.TypeCount}, Env textures: {_envSystem.DefCount}, VertexMap: {(_groundVertexMapTex != null ? "OK" : "NONE")}");
 
         // Init simulation with map size
@@ -761,12 +807,10 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // RebuildPathfinder so the cost-field rebuild picks up the new terrain.
         _groundSystem.StampTerrainOnto(_sim.Grid);
 
-        // Bake walls + env (and build the env spatial index used by ORCA). Going
-        // through RebuildPathfinder ensures the env index is populated at startup
-        // — calling BakeCollisions directly leaves it empty until the first
-        // dirty event fires at runtime, which would make units walk through
-        // trees on the starting map.
-        _wallSystem.BakeWalls(_sim.Grid);
+        // Bake walls + env (and build the env spatial index used by ORCA).
+        // RebuildPathfinder now bakes walls itself (before the cost field) and
+        // populates the env index, so a separate BakeWalls call here would just
+        // re-walk the whole 4096² grid redundantly.
         _sim.RebuildPathfinder();
         LogTiming($"Baked collisions: {_envSystem.ObjectCount} objects, grid {worldW}x{worldH}");
 
@@ -903,6 +947,10 @@ public class Game1 : Microsoft.Xna.Framework.Game
         }
 
         Window.Title = "Necroking";
+        // Warm the widget-UI family here, inside the load phase: LoadDefinitions
+        // bakes every harmonized texture (~seconds of CPU work) — paying it
+        // lazily froze the game on the FIRST UI keypress (I/C/U/O) instead.
+        EnsureInventoryUIsInitialized();
         LogTiming("Game world loaded");
         DebugLog.Log("startup", $"=== Total startup: {_startupTimer?.ElapsedMilliseconds ?? 0}ms ===");
         _gameWorldLoaded = true;
@@ -1351,6 +1399,12 @@ public class Game1 : Microsoft.Xna.Framework.Game
         scenario.Font = _font;
         scenario.SmallFont = _smallFont;
         scenario.PixelTexture = _pixel;
+        if (scenario.WantsWidgetRenderer)
+        {
+            EnsureInventoryUIsInitialized();
+            scenario.WidgetRenderer = _widgetRenderer;
+            scenario.DrawUnitSprite = (defId, rect) => DrawUnitIdleSprite(defId, rect);
+        }
 
         // Init map editor with scenario systems (needed for editor screenshot scenarios)
         _mapEditor.Init(
@@ -2033,6 +2087,22 @@ public class Game1 : Microsoft.Xna.Framework.Game
     {
         var kb = Keyboard.GetState();
         var mouse = Mouse.GetState();
+
+        // Window unfocused or minimized: skip all input handling so background
+        // clicks (taskbar, other apps) read by the global Mouse.GetState() aren't
+        // consumed by the game. We still advance _prevMouse/_prevKb to the real
+        // states so the click that refocuses the window isn't seen as an in-game
+        // press. IsActive is MonoGame's canonical window-focus flag.
+        // Exempt scenario / headless runs — automated runs often lack window
+        // focus, and freezing them would break the scenario test harness.
+        if (!IsActive && _activeScenario == null && LaunchArgs.Scenario == null && !LaunchArgs.Headless)
+        {
+            _prevKb = kb;
+            _prevMouse = mouse;
+            base.Update(gameTime);
+            return;
+        }
+
         _input.Capture(mouse, _prevMouse, kb, _prevKb);
 
         // Modal stack input routing. Runs *before* anything else reads input so:
@@ -2068,6 +2138,20 @@ public class Game1 : Microsoft.Xna.Framework.Game
         float dt = _paused ? 0f : MathF.Min(rawDt, 1f / 20f) * _timeScale;
         _gameTime += dt;
         _frameDt = dt;
+
+        // --- Diagnostic: auto-click Start Game from command line (--autostart) ---
+        if (_menuState == MenuState.MainMenu && LaunchArgs.AutoStart)
+        {
+            LaunchArgs.AutoStart = false; // once
+            StartGame();
+            DebugLog.Log("startup", "[autostart] StartGame() returned — world loaded");
+            if (LaunchArgs.BakeCentroids) BakeAllCorpseCentroids();
+            if (LaunchArgs.Headless) _autostartExitPending = true; // exit on next frame
+            _prevKb = kb;
+            _prevMouse = mouse;
+            base.Update(gameTime);
+            return;
+        }
 
         // --- Auto-start scenario from command line ---
         if (_menuState == MenuState.MainMenu && LaunchArgs.Scenario != null)
@@ -2241,6 +2325,46 @@ public class Game1 : Microsoft.Xna.Framework.Game
             bool shift = _input.IsKeyDown(Keys.LeftShift) || _input.IsKeyDown(Keys.RightShift);
             if (shift) _skillTreePanel.Toggle();
             else       _skillBookPanel.Toggle();
+        }
+
+        // 'U' = character sheet for the player necromancer (current form)
+        if (!anyTextInputActive && _input.WasKeyPressed(Keys.U) && _menuState == MenuState.None)
+        {
+            EnsureInventoryUIsInitialized();
+            if (_unitInfoPanel.IsVisible)
+                _unitInfoPanel.Hide();
+            else if (_sim.NecromancerIndex >= 0)
+                _unitInfoPanel.ShowForUnit(_sim.NecromancerIndex);
+        }
+
+        // 'O' = inspect the unit under the cursor (auto-pauses while open;
+        // closing restores only the pause WE set, not a user pause)
+        if (!anyTextInputActive && _input.WasKeyPressed(Keys.O) && _menuState == MenuState.None)
+        {
+            EnsureInventoryUIsInitialized();
+            if (_unitInfoPanel.IsVisible)
+            {
+                _unitInfoPanel.Hide();
+            }
+            else
+            {
+                int sw = GraphicsDevice.Viewport.Width, sh = GraphicsDevice.Viewport.Height;
+                Vec2 cursorWorld = _camera.ScreenToWorld(new Vector2(mouse.X, mouse.Y), sw, sh);
+                int best = -1;
+                float bestD2 = 1.5f * 1.5f; // pick radius in world units
+                for (int i = 0; i < _sim.Units.Count; i++)
+                {
+                    var u = _sim.Units[i];
+                    if (!u.Alive) continue;
+                    float d2 = (u.Position - cursorWorld).LengthSq();
+                    if (d2 < bestD2) { bestD2 = d2; best = i; }
+                }
+                if (best >= 0)
+                {
+                    _unitInfoPanel.ShowForUnit(best);
+                    if (!_paused) { _paused = true; _pausedByInspect = true; }
+                }
+            }
         }
 
         // --- Pause menu button clicks ---
@@ -3423,6 +3547,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
             if (!_sim.PlayerResources.SpendEssence(def.EssenceCost)) return false;
             ts.Crafting = true;
             ts.CraftTimer = 0f;
+            ts.LoopBudget = 0f; // recomputed render-side once the imbue loop starts
         }
         // else: resume — essence already spent on first start; just reassign channeler.
 
@@ -3459,7 +3584,37 @@ public class Game1 : Microsoft.Xna.Framework.Game
         var spell = _gameData.Spells.Get(spellId);
         if (spell == null) return result;
 
-        if (!string.IsNullOrEmpty(spell.CastingBuffID))
+        if (IsChanneledCast(spell.CastAnim))
+        {
+            // Channeled reanimation cast (Start→Loop→Finish). Effect fires at the
+            // end of the loop; the necromancer faces the target for the duration.
+            if (!string.IsNullOrEmpty(spell.CastingBuffID))
+            {
+                var cb = _gameData.Buffs.Get(spell.CastingBuffID);
+                if (cb != null) BuffSystem.ApplyBuff(_sim.UnitsMut, necroIdx, cb);
+            }
+
+            var dir = mouseWorld - _sim.Units[necroIdx].Position;
+            if (dir.LengthSq() > 0.0001f)
+                _sim.UnitsMut[necroIdx].FacingAngle = MathF.Atan2(dir.Y, dir.X) * 180f / MathF.PI;
+
+            _pendingCastAnim = new PendingCastAnim
+            {
+                SpellID = spellId, Target = mouseWorld, Slot = slot, IsSecondary = isSecondary,
+                CastingBuffID = spell.CastingBuffID,
+                CastAnim = spell.CastAnim, ChannelPhase = 0,
+                ChannelElapsed = 0f, LoopElapsed = 0f, CastTime = spell.CastTime, Executed = false,
+            };
+
+            GetChannelStates(spell.CastAnim, out var startS, out _, out _);
+            uint nUid = _sim.Units[necroIdx].Id;
+            if (_unitAnims.TryGetValue(nUid, out var nAnim))
+            {
+                nAnim.Ctrl.ForceState(startS);
+                _unitAnims[nUid] = nAnim;
+            }
+        }
+        else if (!string.IsNullOrEmpty(spell.CastingBuffID))
         {
             // Defer execution to the Spell1 animation event.
             var castBuff = _gameData.Buffs.Get(spell.CastingBuffID);
@@ -3923,6 +4078,106 @@ public class Game1 : Microsoft.Xna.Framework.Game
         }
     }
 
+    /// <summary>Drive a channeled reanimation cast: Start → Loop → (Finish). The
+    /// spell effect fires at the END of the loop; total loop time = CastTime minus
+    /// the Start duration, with a minimum of one full loop cycle. The necromancer
+    /// faces the target throughout. Raise has no Finish → straight to Idle.</summary>
+    private void UpdateChanneledCast(float dt)
+    {
+        if (_pendingCastAnim == null) return;
+        int necroIdx = FindNecromancer();
+        if (necroIdx < 0) { _pendingCastAnim = null; return; }
+        uint uid = _sim.Units[necroIdx].Id;
+        if (!_unitAnims.TryGetValue(uid, out var anim)) { _pendingCastAnim = null; return; }
+        var ctrl = anim.Ctrl;
+
+        var pca = _pendingCastAnim.Value;
+        GetChannelStates(pca.CastAnim, out var startS, out var loopS, out var finishS);
+
+        // Keep facing the target for the whole channel.
+        var dir = pca.Target - _sim.Units[necroIdx].Position;
+        if (dir.LengthSq() > 0.0001f)
+            _sim.UnitsMut[necroIdx].FacingAngle = MathF.Atan2(dir.Y, dir.X) * 180f / MathF.PI;
+
+        pca.ChannelElapsed += dt;
+
+        switch (pca.ChannelPhase)
+        {
+            case 0: // Start (play once, hold at end)
+                if (ctrl.CurrentState != startS) ctrl.ForceState(startS);
+                if (ctrl.IsAnimFinished)
+                {
+                    pca.ChannelPhase = 1;
+                    pca.LoopElapsed = 0f;
+                    ctrl.ForceState(loopS);
+                }
+                break;
+
+            case 1: // Loop — fire the effect at the end of the loop
+                if (ctrl.CurrentState != loopS) ctrl.ForceState(loopS);
+                pca.LoopElapsed += dt;
+                float startDur = pca.ChannelElapsed - pca.LoopElapsed;
+                float oneCycle = MathF.Max(0.05f, ctrl.CurrentAnimDurationMs / 1000f);
+                float loopTarget = MathF.Max(pca.CastTime - startDur, oneCycle);
+                if (pca.LoopElapsed >= loopTarget)
+                {
+                    var spell = _gameData.Spells.Get(pca.SpellID);
+                    if (spell != null) ExecuteSpellEffect(spell, necroIdx, pca.Target, pca.Slot);
+                    if (finishS.HasValue)
+                    {
+                        pca.ChannelPhase = 2;
+                        ctrl.ForceState(finishS.Value);
+                    }
+                    else
+                    {
+                        ctrl.ForceState(AnimState.Idle);
+                        RemoveCastingBuffAll(necroIdx);
+                        _pendingCastAnim = null;
+                        return;
+                    }
+                }
+                break;
+
+            case 2: // Finish (play once)
+                if (finishS.HasValue && ctrl.CurrentState != finishS.Value) ctrl.ForceState(finishS.Value);
+                if (ctrl.IsAnimFinished)
+                {
+                    ctrl.ForceState(AnimState.Idle);
+                    RemoveCastingBuffAll(necroIdx);
+                    _pendingCastAnim = null;
+                    return;
+                }
+                break;
+        }
+
+        _pendingCastAnim = pca;
+    }
+
+    // "CastingEffect Green" buff — visual glow shown on the necromancer while it
+    // channels a reanimation at the necro table.
+    private const string TableChannelBuffId = "buff_4_copy";
+
+    /// <summary>Apply/remove the green casting glow on the necromancer based on
+    /// whether it's actively channeling (imbuing) at a craft table. Idempotent —
+    /// covers every start/cancel/complete path in one place.</summary>
+    private void UpdateTableChannelBuff()
+    {
+        int necroIdx = FindNecromancer();
+        if (necroIdx < 0) return;
+        bool channeling = _sim.Units[necroIdx].CraftTableIdx >= 0
+            && _sim.Units[necroIdx].CorpseInteractPhase != 0;
+        bool has = BuffSystem.HasBuff(_sim.UnitsMut, necroIdx, TableChannelBuffId);
+        if (channeling && !has)
+        {
+            var b = _gameData.Buffs.Get(TableChannelBuffId);
+            if (b != null) BuffSystem.ApplyBuff(_sim.UnitsMut, necroIdx, b);
+        }
+        else if (!channeling && has)
+        {
+            BuffSystem.RemoveBuff(_sim.UnitsMut, necroIdx, TableChannelBuffId);
+        }
+    }
+
     private void UpdateAnimations(float dt)
     {
         for (int i = 0; i < _sim.Units.Count; i++)
@@ -3981,8 +4236,12 @@ public class Game1 : Microsoft.Xna.Framework.Game
             {
                 var cur = animData.Ctrl.CurrentState;
                 if (cur == AnimState.WorkStart || cur == AnimState.WorkLoop || cur == AnimState.WorkEnd
-                    || cur == AnimState.Pickup || cur == AnimState.PutDown)
+                    || cur == AnimState.Pickup || cur == AnimState.PutDown
+                    || cur == AnimState.ImbueTableStart || cur == AnimState.ImbueTableLoop || cur == AnimState.ImbueTableFinish)
+                {
                     animData.Ctrl.ForceState(AnimState.Idle);
+                    animData.Ctrl.PlaybackSpeed = 1f; // clear any channel time-stretch
+                }
             }
 
             // --- Corpse interaction state machine ---
@@ -3992,22 +4251,51 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 byte phase = _sim.Units[i].CorpseInteractPhase;
                 const float BaggingDuration = 2.0f;
 
+                // Reanimating a corpse on a craft table uses the ImbueTable
+                // animation set instead of the generic Work set. Keyed off the
+                // unit's active craft-table index so only table channeling swaps.
+                bool imbueTable = _sim.Units[i].CraftTableIdx >= 0;
+                AnimState wStart = imbueTable ? AnimState.ImbueTableStart : AnimState.WorkStart;
+                AnimState wLoop  = imbueTable ? AnimState.ImbueTableLoop  : AnimState.WorkLoop;
+                AnimState wEnd   = imbueTable ? AnimState.ImbueTableFinish : AnimState.WorkEnd;
+
+                // Fit the whole Start+Loop+Finish into the table's ProcessTime: the
+                // loop is the flexible middle, and if the natural total exceeds
+                // ProcessTime the playback is time-stretched (frame-rate accelerated)
+                // to fit, keeping at least one full loop cycle. Computed each frame
+                // (cheap) so it tracks ProcessTime edits live.
+                if (imbueTable && _envSystem != null
+                    && _sim.Units[i].CraftTableIdx < _envSystem.ObjectCount)
+                {
+                    int tIdx = _sim.Units[i].CraftTableIdx;
+                    var tdef = _envSystem.Defs[_envSystem.GetObject(tIdx).DefIndex];
+                    float pt = tdef.ProcessTime;
+                    float sD = animData.Ctrl.AnimDurationMsFor(AnimState.ImbueTableStart) / 1000f;
+                    float lC = animData.Ctrl.AnimDurationMsFor(AnimState.ImbueTableLoop) / 1000f;
+                    float fD = animData.Ctrl.AnimDurationMsFor(AnimState.ImbueTableFinish) / 1000f;
+                    float baseTotal = sD + lC + fD;
+                    float spd = (pt > 0.01f && baseTotal > pt) ? baseTotal / pt : 1f;
+                    float budget = baseTotal > pt ? lC / spd : MathF.Max(lC, pt - sD - fD);
+                    animData.Ctrl.PlaybackSpeed = spd;
+                    _envSystem.GetTableState(tIdx).LoopBudget = budget;
+                }
+
                 switch (phase)
                 {
-                    case 1: // WorkStart (PlayOnceHold)
-                        if (animData.Ctrl.CurrentState != AnimState.WorkStart)
-                            animData.Ctrl.ForceState(AnimState.WorkStart);
+                    case 1: // Start (PlayOnceHold)
+                        if (animData.Ctrl.CurrentState != wStart)
+                            animData.Ctrl.ForceState(wStart);
                         if (animData.Ctrl.IsAnimFinished)
                         {
                             _sim.UnitsMut[i].CorpseInteractPhase = 2;
                             _sim.UnitsMut[i].BaggingTimer = 0f;
-                            animData.Ctrl.ForceState(AnimState.WorkLoop);
+                            animData.Ctrl.ForceState(wLoop);
                         }
                         break;
 
-                    case 2: // WorkLoop (Loop — timer driven)
-                        if (animData.Ctrl.CurrentState != AnimState.WorkLoop)
-                            animData.Ctrl.ForceState(AnimState.WorkLoop);
+                    case 2: // Loop (Loop — timer driven)
+                        if (animData.Ctrl.CurrentState != wLoop)
+                            animData.Ctrl.ForceState(wLoop);
                         // Corpse bagging drives timer here; trap building is driven by handler
                         if (_sim.Units[i].Routine == 0) // not in a handler routine
                         {
@@ -4020,15 +4308,15 @@ public class Game1 : Microsoft.Xna.Framework.Game
                             if (_sim.Units[i].BaggingTimer >= BaggingDuration)
                             {
                                 _sim.UnitsMut[i].CorpseInteractPhase = 3;
-                                animData.Ctrl.ForceState(AnimState.WorkEnd);
+                                animData.Ctrl.ForceState(wEnd);
                             }
                         }
                         // else: handler controls timer and transitions CorpseInteractPhase
                         break;
 
-                    case 3: // WorkEnd (PlayOnceHold)
-                        if (animData.Ctrl.CurrentState != AnimState.WorkEnd)
-                            animData.Ctrl.ForceState(AnimState.WorkEnd);
+                    case 3: // End/Finish (PlayOnceHold)
+                        if (animData.Ctrl.CurrentState != wEnd)
+                            animData.Ctrl.ForceState(wEnd);
                         if (animData.Ctrl.IsAnimFinished)
                         {
                             if (_sim.Units[i].Routine == 0) // corpse bagging
@@ -4044,6 +4332,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
                             }
                             _sim.UnitsMut[i].CorpseInteractPhase = 0;
                             animData.Ctrl.ForceState(AnimState.Idle);
+                            animData.Ctrl.PlaybackSpeed = 1f; // clear any channel time-stretch
                         }
                         break;
 
@@ -4098,7 +4387,11 @@ public class Game1 : Microsoft.Xna.Framework.Game
                             else if (cc != null)
                             {
                                 // Ground drop (or table-load fell through e.g. slot taken).
+                                // Land flat at the drop point — zero Z/physics so the
+                                // settled draw lands exactly where the put-down draw was.
                                 cc.Position = cc.LerpStartPos;
+                                cc.Z = 0f;
+                                cc.InPhysics = false;
                                 cc.DraggedByUnitID = GameConstants.InvalidUnit;
                             }
 
@@ -4353,10 +4646,15 @@ public class Game1 : Microsoft.Xna.Framework.Game
             _unitAnims[uid] = animData;
         }
 
+        // Channeled reanimation casts run their own Start→Loop→Finish machine.
+        if (_pendingCastAnim != null && IsChanneledCast(_pendingCastAnim.Value.CastAnim))
+        {
+            UpdateChanneledCast(dt);
+        }
         // Spell1 is PlayOnceTransition — it switches to Idle when done, so we can't check
         // CurrentState == Spell1 after the fact. Instead, detect that the necromancer left
         // Spell1 (no longer in Spell1) while _pendingCastAnim is still set.
-        if (_pendingCastAnim != null)
+        else if (_pendingCastAnim != null)
         {
             int necroIdx = FindNecromancer();
             if (necroIdx >= 0)
@@ -4381,6 +4679,12 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 _pendingCastAnim = null;
             }
         }
+
+        // Casting glow while channeling a reanimation at the necro table.
+        UpdateTableChannelBuff();
+
+        // --autostart headless diagnostic: world is loaded, exit.
+        if (_autostartExitPending) Exit();
 
         // Update EffectSpawnPos2D / EffectSpawnHeight from weapon tip data
         UpdateEffectSpawnPositions();
@@ -4965,6 +5269,10 @@ public class Game1 : Microsoft.Xna.Framework.Game
         if (showUI)
             _characterStatsUI.Draw(screenW, screenH, _sim, _gameData.Buffs, ref _spellBarState, _input, _gameData, _skillBookState);
 
+        // Unit info sheet (U = player character, O = inspect under cursor)
+        if (showUI)
+            _unitInfoPanel.Draw(screenW, screenH, _sim);
+
         // Skill tree panel (Shift+K) — DEFUNCT old grimoire, kept for visual reference.
         if (showUI)
             _skillTreePanel.Draw(screenW, screenH);
@@ -5441,14 +5749,25 @@ public class Game1 : Microsoft.Xna.Framework.Game
         foreach (var corpse in _sim.Corpses)
         {
             // Don't render corpses attached to a unit — drawn on unit in DrawSingleUnit
-            // (covers carried phase 0, pickup phase 4, putdown phase 5)
-            if (corpse.Bagged && corpse.DraggedByUnitID != GameConstants.InvalidUnit)
+            // (covers carried phase 0, pickup phase 4, putdown phase 5). Applies to
+            // both the bagged-bag flow and the raw-corpse carry flow.
+            if (corpse.DraggedByUnitID != GameConstants.InvalidUnit)
                 continue;
 
             // Bagged corpses render as BodyBag from Corpses atlas
             if (corpse.Bagged)
             {
                 DrawBaggedCorpse(corpse);
+                continue;
+            }
+
+            // A corpse that was carried + dropped keeps its exact carried pose
+            // (frozen angle + centroid anchor), so the settled draw matches the
+            // put-down draw with no jump. Skip while flying (physics) so a
+            // knocked-back dropped corpse still tumbles via the normal path.
+            if (corpse.CarryDisplayAngle >= 0 && !corpse.InPhysics)
+            {
+                DrawCorpseCarriedFrame(corpse, _renderer.WorldToScreen(corpse.Position, corpse.Z, _camera));
                 continue;
             }
 
@@ -5730,6 +6049,317 @@ public class Game1 : Microsoft.Xna.Framework.Game
         float bagY = unitScreenPos.Y - spritePixelH * 0.30f + CarryOffsetY;
 
         DrawSpriteFrame(corpsesAtlas, fr.Frame.Value, new Vector2(bagX, bagY), bagScale, fr.FlipX, _ambientColor);
+    }
+
+    // ── Raw-corpse carry (body bag mothballed; see GameConstants.UseBodyBag) ──
+
+    /// <summary>Resolve the final death-pose frame for a corpse's unit def at a
+    /// facing angle. refH is the unit's Idle height so corpse scale matches the
+    /// living unit (and the on-ground corpse). Returns false if unavailable.</summary>
+    private bool TryGetCorpseDeathFrame(string unitDefID, float facingAngle,
+        out SpriteAtlas atlas, out SpriteFrame frame, out bool flipX, out float refH)
+    {
+        atlas = default!; frame = default; flipX = false; refH = 128f;
+        var unitDef = _gameData.Units.Get(unitDefID);
+        if (unitDef?.Sprite == null) return false;
+        var atlasId = AtlasDefs.ResolveAtlasName(unitDef.Sprite.AtlasName);
+        int ai = (int)atlasId;
+        if (ai < 0 || ai >= _atlases.Length || !_atlases[ai].IsLoaded) return false;
+        atlas = _atlases[ai];
+        var spriteData = atlas.GetUnit(unitDef.Sprite.SpriteName);
+        if (spriteData == null) return false;
+        var death = spriteData.GetAnim("Death");
+        if (death == null) return false;
+        int spriteAngle = AnimController.ResolveAngleFor(death, facingAngle, out flipX);
+        var kfs = death.GetAngle(spriteAngle);
+        if (kfs == null || kfs.Count == 0) return false;
+        frame = kfs[kfs.Count - 1].Frame; // final death pose (settled corpse)
+        var idle = spriteData.GetAnim("Idle");
+        if (idle != null) { var ik = PickIdleFrames(idle); if (ik != null && ik.Count > 0) refH = ik[0].Frame.Rect.Height; }
+        return true;
+    }
+
+    /// <summary>Draw a corpse's death sprite at a screen position, optionally
+    /// rotated (used for the table overlay + putdown lerp). Mirrors the body-bag
+    /// draw path so it slots in wherever DrawBaggedCorpseAt was used.</summary>
+    private void DrawCorpseSpriteAt(string unitDefID, Vector2 screenPos, float facingAngle, float spriteScale, float rotation = 0f)
+    {
+        if (!TryGetCorpseDeathFrame(unitDefID, facingAngle, out var atlas, out var frame, out bool flipX, out float refH))
+            return;
+        var tex = atlas.GetTextureForFrame(frame);
+        if (tex == null) return;
+        var unitDef = _gameData.Units.Get(unitDefID);
+        float worldH = (unitDef != null && unitDef.SpriteWorldHeight > 0 ? unitDef.SpriteWorldHeight : 1.8f) * spriteScale;
+        float scale = (worldH * _camera.Zoom) / refH;
+        float pivotX = flipX ? (1f - frame.PivotX) : frame.PivotX;
+        float pivotY = 1f - frame.PivotY; // spritemeta pivots are bottom-left origin
+        var origin = new Vector2(pivotX * frame.Rect.Width, pivotY * frame.Rect.Height);
+        var effects = flipX ? SpriteEffects.FlipHorizontally : SpriteEffects.None;
+        _spriteBatch.Draw(tex, screenPos, frame.Rect, _ambientColor, rotation, origin, scale, effects, 0f);
+    }
+
+    /// <summary>Opaque-pixel centroid of a frame, in frame-local top-left pixels.
+    /// Used to balance a carried corpse on the carrier's hands. Cached two ways:
+    /// in-memory by (texture, rect), and on disk in <c>data/frame_centroids.json</c>
+    /// keyed by (atlas name, page, rect) — so the ~85ms GetData read-back on the
+    /// huge unit atlases is paid at most once per frame, ever, across all runs.</summary>
+    private Vector2 GetFrameCentroid(Microsoft.Xna.Framework.Graphics.Texture2D tex, SpriteFrame frame)
+    {
+        var key = (tex, frame.Rect);
+        if (_frameCentroidCache.TryGetValue(key, out var cached)) return cached;
+
+        if (_persistedCentroids == null) LoadPersistedCentroids();
+        string? pkey = CentroidKeyFor(tex, frame);
+        if (pkey != null && _persistedCentroids!.TryGetValue(pkey, out var persisted))
+        {
+            _frameCentroidCache[key] = persisted;
+            return persisted;
+        }
+
+        int w = frame.Rect.Width, h = frame.Rect.Height;
+        Vector2 result = new Vector2(w * 0.5f, h * 0.5f);
+        if (w > 0 && h > 0)
+        {
+            var data = new Color[w * h];
+            tex.GetData(0, frame.Rect, data, 0, data.Length);
+            double sx = 0, sy = 0; long n = 0;
+            for (int y = 0; y < h; y++)
+                for (int x = 0; x < w; x++)
+                    if (data[y * w + x].A > 16) { sx += x; sy += y; n++; }
+            if (n > 0) result = new Vector2((float)(sx / n), (float)(sy / n));
+        }
+        _frameCentroidCache[key] = result;
+        if (pkey != null)
+        {
+            _persistedCentroids![pkey] = result;
+            _centroidsDirty = true;
+            // Persist immediately on a genuinely-new frame (rare) so it survives a
+            // crash. Suppressed during the bulk bake, which saves once at the end.
+            if (!_bulkCentroidBake) SavePersistedCentroids();
+        }
+        return result;
+    }
+
+    // --- Persistent frame-centroid cache (data/frame_centroids.json) ---
+    private Dictionary<string, Vector2>? _persistedCentroids;
+    private bool _centroidsDirty;
+    private bool _bulkCentroidBake;
+    private Dictionary<Microsoft.Xna.Framework.Graphics.Texture2D, int>? _texToAtlasIdx;
+    private static string CentroidCachePath => Core.GamePaths.Resolve("data/frame_centroids.json");
+
+    /// <summary>Stable disk key for a frame: atlas name + page index + rect. Independent
+    /// of the runtime Texture2D identity so it survives across runs. Null if the
+    /// texture isn't part of a loaded atlas.</summary>
+    private string? CentroidKeyFor(Microsoft.Xna.Framework.Graphics.Texture2D tex, in SpriteFrame frame)
+    {
+        int ai = AtlasIdxForTexture(tex);
+        if (ai < 0) return null;
+        string name = ai < Core.AtlasDefs.Names.Length ? Core.AtlasDefs.Names[ai] : ai.ToString();
+        var r = frame.Rect;
+        return $"{name}#{frame.TextureIndex}#{r.X},{r.Y},{r.Width},{r.Height}";
+    }
+
+    private int AtlasIdxForTexture(Microsoft.Xna.Framework.Graphics.Texture2D tex)
+    {
+        if (_texToAtlasIdx == null)
+        {
+            _texToAtlasIdx = new();
+            for (int i = 0; i < _atlases.Length; i++)
+            {
+                var a = _atlases[i];
+                if (a == null || !a.IsLoaded) continue;
+                foreach (var t in a.Textures)
+                    if (t != null) _texToAtlasIdx[t] = i;
+            }
+        }
+        return _texToAtlasIdx.TryGetValue(tex, out int idx) ? idx : -1;
+    }
+
+    private void LoadPersistedCentroids()
+    {
+        _persistedCentroids = new();
+        try
+        {
+            string path = CentroidCachePath;
+            if (!File.Exists(path)) return;
+            using var doc = System.Text.Json.JsonDocument.Parse(File.ReadAllText(path));
+            foreach (var p in doc.RootElement.EnumerateObject())
+            {
+                var s = p.Value.GetString();
+                if (string.IsNullOrEmpty(s)) continue;
+                int comma = s.IndexOf(',');
+                if (comma < 0) continue;
+                if (float.TryParse(s.AsSpan(0, comma), System.Globalization.NumberStyles.Float,
+                        System.Globalization.CultureInfo.InvariantCulture, out float cx) &&
+                    float.TryParse(s.AsSpan(comma + 1), System.Globalization.NumberStyles.Float,
+                        System.Globalization.CultureInfo.InvariantCulture, out float cy))
+                    _persistedCentroids[p.Name] = new Vector2(cx, cy);
+            }
+        }
+        catch { /* corrupt/missing cache → recompute lazily */ }
+    }
+
+    private void SavePersistedCentroids()
+    {
+        if (_persistedCentroids == null || !_centroidsDirty) return;
+        try
+        {
+            var ci = System.Globalization.CultureInfo.InvariantCulture;
+            var map = new Dictionary<string, string>(_persistedCentroids.Count);
+            foreach (var kv in _persistedCentroids)
+                map[kv.Key] = kv.Value.X.ToString(ci) + "," + kv.Value.Y.ToString(ci);
+            var json = System.Text.Json.JsonSerializer.Serialize(map,
+                new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+            File.WriteAllText(CentroidCachePath, json);
+            _centroidsDirty = false;
+        }
+        catch { /* read-only data dir → cache stays in-memory only */ }
+    }
+
+    /// <summary>Compute + persist every unit's final death-frame centroid so the disk
+    /// cache is complete and no carry ever stalls on a GetData read-back. Run once
+    /// offline via <c>--bake-centroids</c>; the resulting file ships with the build.</summary>
+    private void BakeAllCorpseCentroids()
+    {
+        if (_gameData?.Units == null) return;
+        if (_persistedCentroids == null) LoadPersistedCentroids();
+        _bulkCentroidBake = true;
+        int total = 0;
+        foreach (var def in _gameData.Units.All())
+        {
+            if (def?.Sprite == null) continue;
+            int ai = (int)Core.AtlasDefs.ResolveAtlasName(def.Sprite.AtlasName);
+            if (ai < 0 || ai >= _atlases.Length || !_atlases[ai].IsLoaded) continue;
+            var death = _atlases[ai].GetUnit(def.Sprite.SpriteName)?.GetAnim("Death");
+            if (death == null) continue;
+            foreach (var (_, kfs) in death.AngleFrames)
+            {
+                if (kfs == null || kfs.Count == 0) continue;
+                var frame = kfs[kfs.Count - 1].Frame;
+                var tex = _atlases[ai].GetTextureForFrame(frame);
+                if (tex == null) continue;
+                GetFrameCentroid(tex, frame); // computes + marks dirty
+                total++;
+            }
+        }
+        _bulkCentroidBake = false;
+        SavePersistedCentroids();
+        DebugLog.Log("startup", $"[bake] corpse centroids: {total} frames -> {CentroidCachePath}");
+    }
+
+    /// <summary>Draw the carried corpse balanced on the carrier's hands. Resolves
+    /// orientation through the CARRIER's own controller (lockstep with the
+    /// necromancer's facing), records that exact angle+flip on the corpse so it
+    /// survives the drop unchanged, then renders the centroid-pegged frame.</summary>
+    private void DrawCarriedCorpse(int unitIdx, Vector2 unitScreenPos)
+    {
+        var cc = _sim.FindCorpseByID(_sim.Units[unitIdx].CarryingCorpseID);
+        if (cc == null) return;
+        if (!_unitAnims.TryGetValue(_sim.Units[unitIdx].Id, out var carrierAnim)) return;
+
+        var corpseDef = _gameData.Units.Get(cc.UnitDefID);
+        if (corpseDef?.Sprite == null) return;
+        var atlasId = AtlasDefs.ResolveAtlasName(corpseDef.Sprite.AtlasName);
+        int ai = (int)atlasId;
+        if (ai < 0 || ai >= _atlases.Length || !_atlases[ai].IsLoaded) return;
+        var death = _atlases[ai].GetUnit(corpseDef.Sprite.SpriteName)?.GetAnim("Death");
+        if (death == null) return;
+
+        // Resolve through the CARRIER's controller (same scheme + hysteresis as the
+        // necromancer's body) so they snap together. Fall back to the corpse's own
+        // resolution only if its art lacks that angle (e.g. a different-scheme
+        // animal). Freeze the result on the corpse so the dropped pose matches.
+        float carryFacing = _sim.Units[unitIdx].FacingAngle;
+        int angle = carrierAnim.Ctrl.ResolveAngle(carryFacing, out bool flipX);
+        if (death.GetAngle(angle) is not { Count: > 0 })
+            angle = AnimController.ResolveAngleFor(death, carryFacing, out flipX);
+        cc.CarryDisplayAngle = angle;
+        cc.CarryDisplayFlip = flipX;
+
+        // Hand/carry anchor — weapon hilt (the carry pose holds both hands out front).
+        Vector2 pos = unitScreenPos;
+        var carrierDef = _gameData.Units.Get(_sim.Units[unitIdx].UnitDefID);
+        if (carrierDef != null)
+        {
+            var attach = ComputeWeaponAttach(unitIdx, carrierDef, carrierAnim);
+            if (attach.Valid)
+                pos = _renderer.WorldToScreenPx(attach.HiltWorld, attach.HiltHeight * _camera.Zoom, _camera);
+        }
+        pos.Y += CarriedCorpseHandOffsetY;
+
+        DrawCorpseCarriedFrame(cc, pos);
+    }
+
+    /// <summary>Render a corpse using its frozen carry orientation
+    /// (<see cref="Corpse.CarryDisplayAngle"/>/Flip), centroid-pegged to
+    /// <paramref name="screenPos"/>. Shared by the carry, the ground put-down,
+    /// and the settled-on-ground draw so all three are pixel-identical — no jump
+    /// at hand-off and the placed corpse keeps its carried pose.</summary>
+    private void DrawCorpseCarriedFrame(Corpse cc, Vector2 screenPos)
+    {
+        if (cc.CarryDisplayAngle < 0) return;
+        var corpseDef = _gameData.Units.Get(cc.UnitDefID);
+        if (corpseDef?.Sprite == null) return;
+        var atlasId = AtlasDefs.ResolveAtlasName(corpseDef.Sprite.AtlasName);
+        int ai = (int)atlasId;
+        if (ai < 0 || ai >= _atlases.Length || !_atlases[ai].IsLoaded) return;
+        var atlas = _atlases[ai];
+        var spriteData = atlas.GetUnit(corpseDef.Sprite.SpriteName);
+        var death = spriteData?.GetAnim("Death");
+        var kfs = death?.GetAngle(cc.CarryDisplayAngle);
+        if (kfs == null || kfs.Count == 0) return;
+        var frame = kfs[kfs.Count - 1].Frame;
+        var tex = atlas.GetTextureForFrame(frame);
+        if (tex == null) return;
+
+        float refH = 128f;
+        var idle = spriteData!.GetAnim("Idle");
+        if (idle != null) { var ik = PickIdleFrames(idle); if (ik != null && ik.Count > 0) refH = ik[0].Frame.Rect.Height; }
+        float worldH = (corpseDef.SpriteWorldHeight > 0 ? corpseDef.SpriteWorldHeight : 1.8f) * cc.SpriteScale;
+        float scale = (worldH * _camera.Zoom) / refH;
+
+        // Dissolve fade (mirrors DrawCorpses) so a placed corpse still fades when consumed.
+        int alphaInt = 255;
+        if (cc.Dissolving)
+        {
+            float t = cc.DissolveTimer / 2f;
+            float a = 255f * (1f - t);
+            if ((int)(cc.DissolveTimer * 8f) % 2 == 0) a *= 0.3f;
+            alphaInt = (int)MathUtil.Clamp(a, 0f, 255f);
+        }
+        byte alpha = (byte)alphaInt;
+        Color tint = MultiplyColor(new Color(alpha, alpha, alpha, alpha), _ambientColor);
+
+        bool flipX = cc.CarryDisplayFlip;
+        var centroid = GetFrameCentroid(tex, frame);
+        float originX = flipX ? (frame.Rect.Width - centroid.X) : centroid.X;
+        var origin = new Vector2(originX, centroid.Y);
+        var effects = flipX ? SpriteEffects.FlipHorizontally : SpriteEffects.None;
+        _spriteBatch.Draw(tex, screenPos, frame.Rect, tint, 0f, origin, scale, effects, 0f);
+    }
+
+    /// <summary>Carried visual anchored on the carrier — bag or raw corpse per
+    /// GameConstants.UseBodyBag.</summary>
+    private void DrawCarriedVisual(int unitIdx, Vector2 unitScreenPos, float unitScale)
+    {
+        if (GameConstants.UseBodyBag)
+            DrawCarriedBodyBag(unitIdx, unitScreenPos, unitScale, _sim.Units[unitIdx].FacingAngle);
+        else
+            DrawCarriedCorpse(unitIdx, unitScreenPos);
+    }
+
+    /// <summary>Carried visual at an explicit screen position (table-putdown lerp
+    /// or ground drop) — bag or raw corpse per GameConstants.UseBodyBag.</summary>
+    private void DrawCarriedVisualAt(int unitIdx, Vector2 screenPos, float facingAngle, float rotation = 0f)
+    {
+        if (GameConstants.UseBodyBag)
+        {
+            DrawBaggedCorpseAt(screenPos, facingAngle, rotation);
+            return;
+        }
+        var cc = _sim.FindCorpseByID(_sim.Units[unitIdx].CarryingCorpseID);
+        if (cc != null)
+            DrawCorpseSpriteAt(cc.UnitDefID, screenPos, facingAngle, cc.SpriteScale, rotation);
     }
 
     // ═══════════════════════════════════════
@@ -6262,17 +6892,14 @@ public class Game1 : Microsoft.Xna.Framework.Game
             && _envSystem != null && putdownTableIdx < _envSystem.ObjectCount;
         bool hasCorpse = _sim.Units[i].CarryingCorpseID >= 0
             && (cPhase == 0 || cPhase == 4 || cPhase == 5);
-        // Use the same angle resolution as sprite rendering to determine front/back
+        // facingAway = the unit's back is toward the camera, so the carried corpse
+        // renders *behind* the sprite. Keyed off the RESOLVED sprite angle (not the
+        // raw mouse angle) so the render order flips exactly when the sprite flips —
+        // with the same buckets + hysteresis — instead of jittering on tiny mouse
+        // moves. Back angles: new scheme N=270 / NE-NW=315, old scheme up=300.
+        // Everything else (E/W=0, S=90, SE/SW=45, old 30/60) is front → on top.
         int sprAngle = animData.Ctrl.ResolveAngle(_sim.Units[i].FacingAngle, out _);
-        // facingAway = the unit's back is toward the camera (NE / N / NW), so
-        // the carried corpse should render *behind* the sprite. Determined by
-        // the world facing angle (NOT the resolved sprite angle), so the
-        // check works for both the old 30/60/300 atlases and the new-scheme
-        // 0/45/90/270/315 atlases. With Y-down world coords:
-        //   0=E, 90=S, 180=W, 270=N. The "behind" half is NW..N..NE, i.e.
-        //   roughly 202.5° to 337.5°.
-        float facingDeg = ((_sim.Units[i].FacingAngle % 360f) + 360f) % 360f;
-        bool facingAway = facingDeg >= 202.5f && facingDeg < 337.5f;
+        bool facingAway = sprAngle == 270 || sprAngle == 315 || sprAngle == 300;
         bool drawBagAtHilt = false; // whether to draw on unit (vs at ground)
 
         if (hasCorpse && !tableBoundPutdown)
@@ -6319,18 +6946,23 @@ public class Game1 : Microsoft.Xna.Framework.Game
         }
 
         if (hasCorpse && drawBagAtHilt && facingAway)
-            DrawCarriedBodyBag(i, sp, scale, _sim.Units[i].FacingAngle);
-        // Table-bound PutDown: draw the lerped bag BEHIND the unit when facing away.
+            DrawCarriedVisual(i, sp, scale);
+        // Table-bound PutDown: draw the lerped corpse BEHIND the unit when facing away.
         if (tableBoundPutdown && tableLerpScreen.HasValue && facingAway)
-            DrawBaggedCorpseAt(tableLerpScreen.Value, _sim.Units[i].FacingAngle, tableLerpRotation);
+            DrawCarriedVisualAt(i, tableLerpScreen.Value, _sim.Units[i].FacingAngle, tableLerpRotation);
         if (hasCorpse && !drawBagAtHilt && !tableBoundPutdown)
         {
-            // Ground PutDown (existing): draw at corpse's drop point on the ground.
+            // Ground PutDown: draw at the corpse's drop point. In corpse mode use
+            // the frozen carry frame (centroid-pegged) so it's identical to the
+            // settled corpse that takes over at anim-finish — no hand-off jump.
             var cc = _sim.FindCorpseByID(_sim.Units[i].CarryingCorpseID);
             if (cc != null)
             {
                 var groundSp = _renderer.WorldToScreen(cc.LerpStartPos, 0f, _camera);
-                DrawBaggedCorpseAt(groundSp, cc.FacingAngle);
+                if (!GameConstants.UseBodyBag && cc.CarryDisplayAngle >= 0)
+                    DrawCorpseCarriedFrame(cc, groundSp);
+                else
+                    DrawCarriedVisualAt(i, groundSp, cc.FacingAngle);
             }
         }
 
@@ -6410,12 +7042,12 @@ public class Game1 : Microsoft.Xna.Framework.Game
         if (_waterDebug && _smallFont != null)
             DrawWaterDebugOverlay(i, fr.Frame.Value, sp, pixelH, wading);
 
-        // Carried body bag: draw IN FRONT if facing toward camera
+        // Carried visual: draw IN FRONT if facing toward camera
         if (hasCorpse && drawBagAtHilt && !facingAway)
-            DrawCarriedBodyBag(i, sp, scale, _sim.Units[i].FacingAngle);
-        // Table-bound PutDown: draw the lerped bag IN FRONT when facing toward camera.
+            DrawCarriedVisual(i, sp, scale);
+        // Table-bound PutDown: draw the lerped corpse IN FRONT when facing toward camera.
         if (tableBoundPutdown && tableLerpScreen.HasValue && !facingAway)
-            DrawBaggedCorpseAt(tableLerpScreen.Value, _sim.Units[i].FacingAngle, tableLerpRotation);
+            DrawCarriedVisualAt(i, tableLerpScreen.Value, _sim.Units[i].FacingAngle, tableLerpRotation);
 
         // Buff visuals: phase 1 (in front of sprite)
         _buffVisuals.DrawUnit(i, renderPos, 1, _gameTime,
@@ -6516,7 +7148,10 @@ public class Game1 : Microsoft.Xna.Framework.Game
         float scale = pixelH / refHeight;
 
         var screenPos = _renderer.WorldToScreen(new Vec2(obj.X, obj.Y), 0f, _camera);
-        var origin = new Vector2(def.PivotX * frameW, def.PivotY * frameH);
+        // Random per-instance horizontal flip (deterministic from seed). Mirror
+        // the pivot's X so the sprite's base stays anchored at the same world point.
+        bool flipX = _envSystem.ShouldFlipObject(i);
+        var origin = new Vector2((flipX ? (1f - def.PivotX) : def.PivotX) * frameW, def.PivotY * frameH);
 
         float rotation = 0f;
         Color tint = alpha >= 1f ? Color.White : new Color(alpha, alpha, alpha, alpha);
@@ -6561,7 +7196,8 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // Apply weather ambient light
         tint = MultiplyColor(tint, _ambientColor);
 
-        _spriteBatch.Draw(tex, screenPos, sourceRect, tint, rotation, origin, scale, SpriteEffects.None, 0f);
+        _spriteBatch.Draw(tex, screenPos, sourceRect, tint, rotation, origin, scale,
+            flipX ? SpriteEffects.FlipHorizontally : SpriteEffects.None, 0f);
 
         // Build progress bar for unbuilt objects — visible from the moment of placement
         // (empty bar at 0%) so players can see "placed, awaiting construction".
@@ -6594,7 +7230,13 @@ public class Game1 : Microsoft.Xna.Framework.Game
                     // to align with the table's true long-axis angle.
                     float bagLift = tableWorldH * def.PivotY * 1.22f;
                     var bagScreen = _renderer.WorldToScreen(new Vec2(obj.X, obj.Y), bagLift, _camera);
-                    DrawBaggedCorpseAt(bagScreen, ts.CorpseSlots[s].FacingAngle, -MathF.PI / 12f);
+                    var slot = ts.CorpseSlots[s];
+                    // Same lift + rotation as the body bag, but render the actual
+                    // corpse sprite when the bag is mothballed.
+                    if (GameConstants.UseBodyBag)
+                        DrawBaggedCorpseAt(bagScreen, slot.FacingAngle, -MathF.PI / 12f);
+                    else
+                        DrawCorpseSpriteAt(slot.SourceUnitDefID, bagScreen, slot.FacingAngle, slot.SpriteScale, -MathF.PI / 12f);
                     break;
                 }
             }
@@ -6716,34 +7358,39 @@ public class Game1 : Microsoft.Xna.Framework.Game
             return;
         }
 
-        // Idle anim, with angle fallback. AnimController has a similar two-pass
-        // resolver — different units author different angle keys (old scheme:
-        // 30/60/300; new scheme: 0/45/90/270/315). We try a sensible preference
-        // list, then fall back to ANY authored angle (mirrors the strategy in
-        // AnimController.ResolveFallbackAngle).
-        var idle = spriteData.GetAnim("Idle");
-        if (idle == null)
+        // Prefer the dedicated "Icon" pose — a single camera-facing frame
+        // (yaw 45 faces the viewer; verified visually against the atlas).
+        // Units without an Icon pose fall back to Idle with the angle
+        // preference list (different units author different angle keys —
+        // old scheme: 30/60/300; new scheme: 0/45/90/270/315), then to ANY
+        // authored angle (mirrors AnimController.ResolveFallbackAngle).
+        var anim = spriteData.GetAnim("Icon");
+        int[] anglePrefs = anim != null
+            ? new[] { 45, 0, 315, 90, 270 }
+            : new[] { 30, 0, 45, 60, 315, 90, 270, 300 };
+        anim ??= spriteData.GetAnim("Idle");
+        if (anim == null)
         {
-            DebugLog.Log("table", $"[DrawUnitIdleSprite] '{unitDefId}': no Idle anim in spriteData");
+            DebugLog.Log("table", $"[DrawUnitIdleSprite] '{unitDefId}': no Icon/Idle anim in spriteData");
             return;
         }
         System.Collections.Generic.List<Render.Keyframe>? kfs = null;
-        foreach (int pref in new[] { 30, 0, 45, 60, 315, 90, 270, 300 })
+        foreach (int pref in anglePrefs)
         {
-            kfs = idle.GetAngle(pref);
+            kfs = anim.GetAngle(pref);
             if (kfs != null && kfs.Count > 0) break;
         }
         if (kfs == null || kfs.Count == 0)
         {
             // Last resort: take whatever is in the dictionary first.
-            foreach (var (_, frames) in idle.AngleFrames)
+            foreach (var (_, frames) in anim.AngleFrames)
             {
                 if (frames.Count > 0) { kfs = frames; break; }
             }
         }
         if (kfs == null || kfs.Count == 0)
         {
-            DebugLog.Log("table", $"[DrawUnitIdleSprite] '{unitDefId}': Idle has no usable angle keyframes (authored angles: {string.Join(",", idle.AngleFrames.Keys)})");
+            DebugLog.Log("table", $"[DrawUnitIdleSprite] '{unitDefId}': no usable angle keyframes (authored angles: {string.Join(",", anim.AngleFrames.Keys)})");
             return;
         }
 

@@ -160,4 +160,20 @@ o.save('assets/UI/Patterns/Thatch_206x123.png')
 renai = Image.open('assets/UI/Frames/RenaiThinFrame.png').convert('RGBA')
 bake_nine(renai, 207, 125, (16, 16, 16, 16), (4, 4, 4, 4), 'assets/UI/Frames/Renai_207x125.png')
 
+# --- Dynamic resource tooltip (RTD_, auto-size layout) ---
+# Image layers are baked at the widget's MAX height; the renderer crops from
+# the top when the measured height is shorter (1:1 pixels, no resample).
+# Box max: 12 rows x 24 = 288 (layers inset 2 -> 284). Root max: 396.
+resize_premul(par, (203, 284)).save('assets/UI/Patterns/Parchment_203x284.png')
+t3 = resize_premul(thatch, (72, 109))
+o = Image.new('RGBA', (203, 284), (0, 0, 0, 0))
+ty = 284
+while ty > -109:
+    ty -= 109
+    for tx in (0, 72, 144):
+        o.paste(t3, (tx, ty))
+o.save('assets/UI/Patterns/Thatch_203x284.png')
+crop = dp.crop((0, 1536 - 936, 526, 1536))  # bottom 396/648.7 of the tile
+resize_premul(crop, (222, 396)).save('assets/UI/Background/dragonpattern_rtd_222x396.png')
+
 print('all extra-panel textures baked')
