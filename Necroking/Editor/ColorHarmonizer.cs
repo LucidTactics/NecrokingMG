@@ -257,33 +257,138 @@ public class ColorHarmonizer
         float alphaMul = targetA / 255f;
         bool hasColorShift = settings.HueStrength > 0f || settings.SatStrength > 0f || settings.ValStrength > 0f;
         bool hasAlphaShift = alphaMul < 0.999f;
-        if (!hasColorShift && !hasAlphaShift) return null;
+        bool hasGradient = settings.HasGradient;
+        bool hasOutline = settings.HasOutline;
+        if (!hasColorShift && !hasAlphaShift && !hasGradient && !hasOutline) return null;
 
         var targetCol = new Color(settings.TargetColor[0], settings.TargetColor[1], settings.TargetColor[2], targetA);
         var pixels = new Color[source.Width * source.Height];
         source.GetData(pixels);
 
+        // Vertical gradient: blend toward GradColor by yFrac * strength * gradAlpha
+        // (top row untouched, bottom row at full factor) — Unity VerGradD2U equivalent.
+        float gradMax = hasGradient ? settings.GradStrength * settings.GradColor![3] / 255f : 0f;
+        float gradR = hasGradient ? settings.GradColor![0] : 0f;
+        float gradG = hasGradient ? settings.GradColor![1] : 0f;
+        float gradB = hasGradient ? settings.GradColor![2] : 0f;
+        int w = source.Width, h = source.Height;
+
+        // Source textures are premultiplied (TextureUtil.LoadPremultiplied), but
+        // all the color math below is defined on straight alpha — un-premultiply
+        // first or semi-transparent edge pixels get brightened into halos.
         for (int i = 0; i < pixels.Length; i++)
         {
-            if (pixels[i].A == 0) continue;
+            byte a = pixels[i].A;
+            if (a == 0) continue;
 
             Color c = pixels[i];
+            if (a < 255)
+            {
+                c.R = (byte)Math.Min(255, c.R * 255 / a);
+                c.G = (byte)Math.Min(255, c.G * 255 / a);
+                c.B = (byte)Math.Min(255, c.B * 255 / a);
+            }
             if (hasColorShift)
             {
                 c = settings.UseHcl
                     ? HarmonizeHcl(c, targetCol, settings.HueStrength, settings.SatStrength, settings.ValStrength)
                     : Harmonize(c, targetCol, settings.HueStrength, settings.SatStrength, settings.ValStrength);
             }
+            if (hasGradient)
+            {
+                float t = gradMax * (i / w) / (h - 1);
+                c.R = (byte)(c.R + (gradR - c.R) * t + 0.5f);
+                c.G = (byte)(c.G + (gradG - c.G) * t + 0.5f);
+                c.B = (byte)(c.B + (gradB - c.B) * t + 0.5f);
+            }
             if (hasAlphaShift)
             {
                 c.A = (byte)(c.A * alphaMul);
             }
-            pixels[i] = c;
+            pixels[i] = c; // straight alpha from here on
+        }
+
+        if (hasOutline)
+            BakeOutline(pixels, w, h, settings);
+
+        // Re-premultiply for the standard AlphaBlend pipeline.
+        for (int i = 0; i < pixels.Length; i++)
+        {
+            byte a = pixels[i].A;
+            if (a == 0) { pixels[i] = Color.Transparent; continue; }
+            if (a < 255)
+            {
+                var c = pixels[i];
+                pixels[i] = new Color((byte)(c.R * a / 255), (byte)(c.G * a / 255), (byte)(c.B * a / 255), a);
+            }
         }
 
         var result = new Texture2D(device, source.Width, source.Height);
         result.SetData(pixels);
         return result;
+    }
+
+    /// <summary>Bake a silhouette outline into a straight-alpha pixel array:
+    /// pixels near opaque ones get OutlineColor composited UNDER their existing
+    /// color. Thickness is in texture pixels (fractional = reduced coverage),
+    /// mirroring the Unity outline shader.</summary>
+    private static void BakeOutline(Color[] pixels, int w, int h, HarmonizeSettings settings)
+    {
+        float thickness = settings.OutlineThickness;
+        float opacity = settings.OutlineOpacity;
+        byte or_ = settings.OutlineColor![0], og = settings.OutlineColor[1], ob = settings.OutlineColor[2];
+        int r = (int)MathF.Ceiling(thickness + 1f); // band + antialiased rim
+        var srcA = new byte[pixels.Length];
+        for (int i = 0; i < pixels.Length; i++) srcA[i] = pixels[i].A;
+
+        for (int y = 0; y < h; y++)
+        {
+            for (int x = 0; x < w; x++)
+            {
+                int i = y * w + x;
+                // Outline only in the silhouette boundary region. Semi-transparent
+                // INTERIOR pixels (e.g. a swatch's damask pattern) must not get a
+                // dark underlay — Unity's shader outline only shows outside edges.
+                if (srcA[i] >= 128) continue;
+
+                // Coverage = strongest nearby opaque neighbor, faded past thickness
+                float cov = 0f;
+                for (int dy = -r; dy <= r && cov < 0.999f; dy++)
+                {
+                    int ny = y + dy;
+                    if (ny < 0 || ny >= h) continue;
+                    for (int dx = -r; dx <= r; dx++)
+                    {
+                        if (dx == 0 && dy == 0) continue;
+                        int nx = x + dx;
+                        if (nx < 0 || nx >= w) continue;
+                        byte na = srcA[ny * w + nx];
+                        if (na == 0) continue;
+                        float dist = MathF.Sqrt(dx * dx + dy * dy);
+                        // Unity's outline samples alpha at radius = thickness:
+                        // a hard band with a ~1px antialiased rim. Sub-pixel
+                        // thickness still yields a visible ring (0.6 -> 0.6
+                        // alpha at dist 1, same as before), but a thick outline
+                        // must NOT get a 1/d halo tail (th 3 stayed half-strong
+                        // out to dist 6 and read as double-width).
+                        float c2 = Math.Clamp(thickness + 1f - dist, 0f, 1f) * (na / 255f);
+                        if (c2 > cov) cov = c2;
+                    }
+                }
+                float outA = cov * opacity;
+                if (outA <= 0.002f) continue;
+
+                // Composite existing (straight-alpha) pixel OVER the outline color
+                float sa = srcA[i] / 255f;
+                float combA = sa + outA * (1f - sa);
+                var p = pixels[i];
+                pixels[i] = new Color(
+                    (byte)((p.R * sa + or_ * outA * (1f - sa)) / combA + 0.5f),
+                    (byte)((p.G * sa + og * outA * (1f - sa)) / combA + 0.5f),
+                    (byte)((p.B * sa + ob * outA * (1f - sa)) / combA + 0.5f),
+                    (byte)(combA * 255f + 0.5f));
+            }
+        }
     }
 
     /// <summary>

@@ -433,6 +433,3167 @@
       ],
       "modal": false,
       "children": []
+    },
+    {
+      "id": "UnitTooltipWindow",
+      "background": "LeatherBackground",
+      "frame": "RenaiThinBorder16",
+      "width": 468,
+      "height": 745,
+      "backgroundScale": 0.14,
+      "backgroundInset": -17,
+      "frameScale": 0.25,
+      "frameInset": 0,
+      "frameInsetR": 2,
+      "backgroundTint": [
+        255,
+        255,
+        255,
+        255
+      ],
+      "frameTint": [
+        255,
+        255,
+        255,
+        255
+      ],
+      "bgHarmonize": {
+        "targetColor": [
+          31,
+          24,
+          17,
+          255
+        ],
+        "hueStrength": 1,
+        "satStrength": 0.756,
+        "valStrength": 0.588,
+        "useHcl": false,
+        "gradColor": [
+          18,
+          15,
+          11,
+          112
+        ],
+        "gradStrength": 0.992
+      },
+      "frameHarmonize": {
+        "targetColor": [
+          111,
+          92,
+          57,
+          255
+        ],
+        "hueStrength": 1,
+        "satStrength": 0.75,
+        "valStrength": 0.665,
+        "useHcl": false
+      },
+      "modal": false,
+      "children": [
+        {
+          "name": "ud_box",
+          "widget": "UD_Box",
+          "x": 5,
+          "y": 40,
+          "width": 457,
+          "height": 164,
+          "anchor": 0
+        },
+        {
+          "name": "ud_boxpattern",
+          "element": "UD_BoxPattern",
+          "x": 6,
+          "y": 43,
+          "width": 452,
+          "height": 157,
+          "anchor": 0
+        },
+        {
+          "name": "ud_pframe_shadow",
+          "widget": "UD_PortraitFrameShadow",
+          "x": 15,
+          "y": 50,
+          "width": 148,
+          "height": 148,
+          "anchor": 0
+        },
+        {
+          "name": "ud_parchment",
+          "element": "UD_PortraitParchment",
+          "x": 15,
+          "y": 50,
+          "width": 142,
+          "height": 143,
+          "anchor": 0
+        },
+        {
+          "name": "ud_pstencil",
+          "element": "UD_PortraitStencil",
+          "x": 16,
+          "y": 50,
+          "width": 140,
+          "height": 143,
+          "anchor": 0
+        },
+        {
+          "name": "ud_portrait",
+          "element": "UD_UnitPortrait",
+          "x": 19,
+          "y": 53,
+          "width": 138,
+          "height": 139,
+          "anchor": 0
+        },
+        {
+          "name": "ud_pframe",
+          "widget": "UD_PortraitFrame",
+          "x": 12,
+          "y": 48,
+          "width": 147,
+          "height": 147,
+          "anchor": 0
+        },
+        {
+          "name": "ud_desc",
+          "element": "UD_Description",
+          "x": 173,
+          "y": 50,
+          "width": 284,
+          "height": 143,
+          "anchor": 0,
+          "textOverride": {
+            "x": 0,
+            "y": 0,
+            "w": 284,
+            "h": 143,
+            "align": "left",
+            "valign": "top",
+            "fontFamily": "Quintessential",
+            "fontSize": 21,
+            "fontColor": [
+              242,
+              212,
+              170,
+              255
+            ],
+            "wordWrap": true,
+            "lineSpacing": 2,
+            "bold": true,
+            "boldStrength": 0.7,
+            "outlineWidth": 1,
+            "outlineColor": [
+              0,
+              0,
+              0,
+              150
+            ]
+          }
+        },
+        {
+          "name": "ud_title_swatch",
+          "element": "UD_TitleSwatchImg",
+          "x": 5,
+          "y": 4,
+          "width": 457,
+          "height": 40,
+          "anchor": 0
+        },
+        {
+          "name": "ud_title_heraldry",
+          "element": "UD_TitleHeraldry",
+          "x": 5,
+          "y": 4,
+          "width": 457,
+          "height": 40,
+          "anchor": 0
+        },
+        {
+          "name": "ud_title_drop",
+          "element": "UD_TitleTextShadow",
+          "x": 30,
+          "y": 5,
+          "width": 401,
+          "height": 42,
+          "anchor": 0
+        },
+        {
+          "name": "ud_title",
+          "element": "UD_TitleText",
+          "x": 28,
+          "y": 3,
+          "width": 401,
+          "height": 42,
+          "anchor": 0
+        },
+        {
+          "name": "st_box",
+          "element": "ST_StatBox",
+          "x": 3,
+          "y": 223,
+          "width": 463,
+          "height": 137,
+          "anchor": 0
+        },
+        {
+          "name": "st_rowswatch0",
+          "element": "ST_RowSwatch",
+          "x": 3,
+          "y": 223,
+          "width": 463,
+          "height": 30,
+          "anchor": 0
+        },
+        {
+          "name": "st_rowswatch2",
+          "element": "ST_RowSwatch",
+          "x": 3,
+          "y": 277,
+          "width": 463,
+          "height": 30,
+          "anchor": 0
+        },
+        {
+          "name": "st_rowswatch4",
+          "element": "ST_RowSwatch",
+          "x": 3,
+          "y": 331,
+          "width": 463,
+          "height": 30,
+          "anchor": 0
+        },
+        {
+          "name": "st_r0c0_icon",
+          "element": "ST_Icon_HP",
+          "x": 7,
+          "y": 226,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "st_r0c0_label",
+          "element": "ST_Label",
+          "x": 34,
+          "y": 226,
+          "width": 90,
+          "height": 24,
+          "anchor": 0,
+          "defaultText": "Hp"
+        },
+        {
+          "name": "st_r0c0_value",
+          "element": "ST_Value",
+          "x": 93,
+          "y": 226,
+          "width": 54,
+          "height": 24,
+          "anchor": 0,
+          "defaultText": "10/10"
+        },
+        {
+          "name": "st_r0c1_icon",
+          "element": "ST_Icon_Spirit",
+          "x": 160,
+          "y": 226,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "st_r0c1_label",
+          "element": "ST_Label",
+          "x": 187,
+          "y": 226,
+          "width": 90,
+          "height": 24,
+          "anchor": 0,
+          "defaultText": "Spirit"
+        },
+        {
+          "name": "st_r0c1_value",
+          "element": "ST_Value",
+          "x": 246,
+          "y": 226,
+          "width": 54,
+          "height": 24,
+          "anchor": 0,
+          "defaultText": "2"
+        },
+        {
+          "name": "st_r0c2_icon",
+          "element": "ST_Icon_Morale",
+          "x": 313,
+          "y": 226,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "st_r0c2_label",
+          "element": "ST_Label",
+          "x": 340,
+          "y": 226,
+          "width": 90,
+          "height": 24,
+          "anchor": 0,
+          "defaultText": "Morale"
+        },
+        {
+          "name": "st_r0c2_value",
+          "element": "ST_Value",
+          "x": 399,
+          "y": 226,
+          "width": 54,
+          "height": 24,
+          "anchor": 0,
+          "defaultText": "16/16"
+        },
+        {
+          "name": "st_r1c0_icon",
+          "element": "ST_Icon_Size",
+          "x": 7,
+          "y": 253,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "st_r1c0_label",
+          "element": "ST_Label",
+          "x": 34,
+          "y": 253,
+          "width": 90,
+          "height": 24,
+          "anchor": 0,
+          "defaultText": "Size"
+        },
+        {
+          "name": "st_r1c0_value",
+          "element": "ST_Value",
+          "x": 93,
+          "y": 253,
+          "width": 54,
+          "height": 24,
+          "anchor": 0,
+          "defaultText": "2"
+        },
+        {
+          "name": "st_r1c1_icon",
+          "element": "ST_Icon_Tough",
+          "x": 160,
+          "y": 253,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "st_r1c1_label",
+          "element": "ST_Label",
+          "x": 187,
+          "y": 253,
+          "width": 90,
+          "height": 24,
+          "anchor": 0,
+          "defaultText": "Toughness"
+        },
+        {
+          "name": "st_r1c1_value",
+          "element": "ST_Value",
+          "x": 246,
+          "y": 253,
+          "width": 54,
+          "height": 24,
+          "anchor": 0,
+          "defaultText": "1"
+        },
+        {
+          "name": "st_r1c2_icon",
+          "element": "ST_Icon_Magic",
+          "x": 313,
+          "y": 253,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "st_r1c2_label",
+          "element": "ST_Label",
+          "x": 340,
+          "y": 253,
+          "width": 90,
+          "height": 24,
+          "anchor": 0,
+          "defaultText": "Magic Power",
+          "textOverride": {
+            "x": 0,
+            "y": 0,
+            "w": 90,
+            "h": 24,
+            "align": "left",
+            "valign": "center",
+            "fontFamily": "Quintessential",
+            "fontSize": 22,
+            "fontColor": [
+              242,
+              212,
+              170,
+              255
+            ],
+            "bold": true,
+            "boldStrength": 0.7,
+            "outlineWidth": 1,
+            "outlineColor": [
+              0,
+              0,
+              0,
+              150
+            ]
+          }
+        },
+        {
+          "name": "st_r1c2_value",
+          "element": "ST_Value",
+          "x": 399,
+          "y": 253,
+          "width": 54,
+          "height": 24,
+          "anchor": 0,
+          "defaultText": "2"
+        },
+        {
+          "name": "st_r2c0_icon",
+          "element": "ST_Icon_Strength",
+          "x": 7,
+          "y": 280,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "st_r2c0_label",
+          "element": "ST_Label",
+          "x": 34,
+          "y": 280,
+          "width": 90,
+          "height": 24,
+          "anchor": 0,
+          "defaultText": "Strength"
+        },
+        {
+          "name": "st_r2c0_value",
+          "element": "ST_Value",
+          "x": 93,
+          "y": 280,
+          "width": 54,
+          "height": 24,
+          "anchor": 0,
+          "defaultText": "10"
+        },
+        {
+          "name": "st_r2c1_icon",
+          "element": "ST_Icon_Prot",
+          "x": 160,
+          "y": 280,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "st_r2c1_label",
+          "element": "ST_Label",
+          "x": 187,
+          "y": 280,
+          "width": 90,
+          "height": 24,
+          "anchor": 0,
+          "defaultText": "Protectrion"
+        },
+        {
+          "name": "st_r2c1_value",
+          "element": "ST_Value",
+          "x": 246,
+          "y": 280,
+          "width": 54,
+          "height": 24,
+          "anchor": 0,
+          "defaultText": "16"
+        },
+        {
+          "name": "st_r2c2_icon",
+          "element": "ST_Icon_Coverage",
+          "x": 313,
+          "y": 280,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "st_r2c2_label",
+          "element": "ST_Label",
+          "x": 340,
+          "y": 280,
+          "width": 90,
+          "height": 24,
+          "anchor": 0,
+          "defaultText": "Coverage"
+        },
+        {
+          "name": "st_r2c2_value",
+          "element": "ST_Value",
+          "x": 399,
+          "y": 280,
+          "width": 54,
+          "height": 24,
+          "anchor": 0,
+          "defaultText": "80%"
+        },
+        {
+          "name": "st_r3c0_icon",
+          "element": "ST_Icon_Attack",
+          "x": 7,
+          "y": 307,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "st_r3c0_label",
+          "element": "ST_Label",
+          "x": 34,
+          "y": 307,
+          "width": 90,
+          "height": 24,
+          "anchor": 0,
+          "defaultText": "Attack"
+        },
+        {
+          "name": "st_r3c0_value",
+          "element": "ST_Value",
+          "x": 93,
+          "y": 307,
+          "width": 54,
+          "height": 24,
+          "anchor": 0,
+          "defaultText": "12"
+        },
+        {
+          "name": "st_r3c1_icon",
+          "element": "ST_Icon_Defense",
+          "x": 160,
+          "y": 307,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "st_r3c1_label",
+          "element": "ST_Label",
+          "x": 187,
+          "y": 307,
+          "width": 90,
+          "height": 24,
+          "anchor": 0,
+          "defaultText": "Defense"
+        },
+        {
+          "name": "st_r3c1_value",
+          "element": "ST_Value",
+          "x": 246,
+          "y": 307,
+          "width": 54,
+          "height": 24,
+          "anchor": 0,
+          "defaultText": "15"
+        },
+        {
+          "name": "st_r3c2_icon",
+          "element": "ST_Icon_Prec",
+          "x": 313,
+          "y": 307,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "st_r3c2_label",
+          "element": "ST_Label",
+          "x": 340,
+          "y": 307,
+          "width": 90,
+          "height": 24,
+          "anchor": 0,
+          "defaultText": "Precision"
+        },
+        {
+          "name": "st_r3c2_value",
+          "element": "ST_Value",
+          "x": 399,
+          "y": 307,
+          "width": 54,
+          "height": 24,
+          "anchor": 0,
+          "defaultText": "10"
+        },
+        {
+          "name": "st_r4c0_icon",
+          "element": "ST_Icon_Speed",
+          "x": 7,
+          "y": 334,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "st_r4c0_label",
+          "element": "ST_Label",
+          "x": 34,
+          "y": 334,
+          "width": 90,
+          "height": 24,
+          "anchor": 0,
+          "defaultText": "Speed"
+        },
+        {
+          "name": "st_r4c0_value",
+          "element": "ST_Value",
+          "x": 93,
+          "y": 334,
+          "width": 54,
+          "height": 24,
+          "anchor": 0,
+          "defaultText": "8"
+        },
+        {
+          "name": "st_r4c1_icon",
+          "element": "ST_Icon_Enc",
+          "x": 160,
+          "y": 334,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "st_r4c1_label",
+          "element": "ST_Label",
+          "x": 187,
+          "y": 334,
+          "width": 90,
+          "height": 24,
+          "anchor": 0,
+          "defaultText": "Encumberance",
+          "textOverride": {
+            "x": 0,
+            "y": 0,
+            "w": 90,
+            "h": 24,
+            "align": "left",
+            "valign": "center",
+            "fontFamily": "Quintessential",
+            "fontSize": 21,
+            "fontColor": [
+              242,
+              212,
+              170,
+              255
+            ],
+            "bold": true,
+            "boldStrength": 0.7,
+            "outlineWidth": 1,
+            "outlineColor": [
+              0,
+              0,
+              0,
+              150
+            ]
+          }
+        },
+        {
+          "name": "st_r4c1_value",
+          "element": "ST_Value",
+          "x": 246,
+          "y": 334,
+          "width": 54,
+          "height": 24,
+          "anchor": 0,
+          "defaultText": "4"
+        },
+        {
+          "name": "st_r4c2_icon",
+          "element": "ST_Icon_Gold",
+          "x": 313,
+          "y": 334,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "st_r4c2_label",
+          "element": "ST_Label",
+          "x": 340,
+          "y": 334,
+          "width": 90,
+          "height": 24,
+          "anchor": 0,
+          "defaultText": "Upkeep"
+        },
+        {
+          "name": "st_r4c2_value",
+          "element": "ST_Value",
+          "x": 399,
+          "y": 334,
+          "width": 54,
+          "height": 24,
+          "anchor": 0,
+          "defaultText": "2"
+        },
+        {
+          "name": "st_col1",
+          "element": "ST_ColumnBar",
+          "x": 154,
+          "y": 214,
+          "width": 3,
+          "height": 154,
+          "anchor": 0
+        },
+        {
+          "name": "st_col2",
+          "element": "ST_ColumnBar",
+          "x": 308,
+          "y": 214,
+          "width": 3,
+          "height": 154,
+          "anchor": 0
+        },
+        {
+          "name": "st_title_swatch",
+          "element": "ST_TitleSwatch",
+          "x": 4,
+          "y": 197,
+          "width": 459,
+          "height": 27,
+          "anchor": 0
+        },
+        {
+          "name": "st_title_heraldry",
+          "element": "ST_TitleHeraldry",
+          "x": 6,
+          "y": 198,
+          "width": 457,
+          "height": 26,
+          "anchor": 0
+        },
+        {
+          "name": "st_gradient",
+          "element": "ST_Gradient",
+          "x": 7,
+          "y": 215,
+          "width": 456,
+          "height": 144,
+          "anchor": 0
+        },
+        {
+          "name": "st_boxpattern",
+          "element": "ST_BoxPattern",
+          "x": 7,
+          "y": 224,
+          "width": 456,
+          "height": 134,
+          "anchor": 0
+        },
+        {
+          "name": "st_title",
+          "element": "ST_Title",
+          "x": 7,
+          "y": 192,
+          "width": 463,
+          "height": 38,
+          "anchor": 0
+        },
+        {
+          "name": "eq_box",
+          "element": "EQ_StatBox",
+          "x": 3,
+          "y": 385,
+          "width": 463,
+          "height": 198,
+          "anchor": 0
+        },
+        {
+          "name": "eq_boxpattern",
+          "element": "EQ_BoxPattern",
+          "x": 7,
+          "y": 387,
+          "width": 456,
+          "height": 187,
+          "anchor": 0
+        },
+        {
+          "name": "eq_rowswatch0",
+          "element": "EQ_RowSwatch27",
+          "x": 3,
+          "y": 385,
+          "width": 463,
+          "height": 27,
+          "anchor": 0
+        },
+        {
+          "name": "eq_rowswatch2",
+          "element": "EQ_RowSwatch30",
+          "x": 3,
+          "y": 437,
+          "width": 463,
+          "height": 30,
+          "anchor": 0
+        },
+        {
+          "name": "eq_rowswatch4",
+          "element": "EQ_RowSwatch30",
+          "x": 3,
+          "y": 491,
+          "width": 463,
+          "height": 30,
+          "anchor": 0
+        },
+        {
+          "name": "eq_rowswatch6",
+          "element": "EQ_RowSwatch30",
+          "x": 3,
+          "y": 545,
+          "width": 463,
+          "height": 30,
+          "anchor": 0
+        },
+        {
+          "name": "eq_r0_icon",
+          "element": "EQ_Item_Sword",
+          "x": 7,
+          "y": 386,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "eq_r0_name",
+          "element": "EQ_Name",
+          "x": 31,
+          "y": 384,
+          "width": 186,
+          "height": 27,
+          "anchor": 0,
+          "defaultText": "Broad Sword"
+        },
+        {
+          "name": "eq_r0v0",
+          "element": "ST_Value",
+          "x": 217,
+          "y": 386,
+          "width": 36,
+          "height": 24,
+          "anchor": 0,
+          "defaultText": "4"
+        },
+        {
+          "name": "eq_r0s0",
+          "element": "EQ_Icon_Slash",
+          "x": 253,
+          "y": 386,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "eq_r0v1",
+          "element": "ST_Value",
+          "x": 277,
+          "y": 386,
+          "width": 36,
+          "height": 24,
+          "anchor": 0,
+          "defaultText": "2"
+        },
+        {
+          "name": "eq_r0s1",
+          "element": "EQ_Icon_AttackEq",
+          "x": 313,
+          "y": 386,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "eq_r0v2",
+          "element": "ST_Value",
+          "x": 337,
+          "y": 386,
+          "width": 36,
+          "height": 24,
+          "anchor": 0,
+          "defaultText": "2"
+        },
+        {
+          "name": "eq_r0s2",
+          "element": "EQ_Len",
+          "x": 373,
+          "y": 386,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "eq_r0v3",
+          "element": "ST_Value",
+          "x": 397,
+          "y": 386,
+          "width": 36,
+          "height": 24,
+          "anchor": 0,
+          "defaultText": "1"
+        },
+        {
+          "name": "eq_r0s3",
+          "element": "EQ_Icon_DefEq",
+          "x": 433,
+          "y": 386,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "eq_r1_icon",
+          "element": "EQ_Item_Shield",
+          "x": 7,
+          "y": 413,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "eq_r1_name",
+          "element": "EQ_Name",
+          "x": 31,
+          "y": 411,
+          "width": 186,
+          "height": 27,
+          "anchor": 0,
+          "defaultText": "Kite Shield"
+        },
+        {
+          "name": "eq_r1v0",
+          "element": "ST_Value",
+          "x": 217,
+          "y": 413,
+          "width": 36,
+          "height": 24,
+          "anchor": 0,
+          "defaultText": "00"
+        },
+        {
+          "name": "eq_r1s0",
+          "element": "EQ_Icon_ProtEq",
+          "x": 253,
+          "y": 413,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "eq_r1v1",
+          "element": "ST_Value",
+          "x": 277,
+          "y": 413,
+          "width": 36,
+          "height": 24,
+          "anchor": 0,
+          "defaultText": "00"
+        },
+        {
+          "name": "eq_r1s1",
+          "element": "EQ_Icon_Parry",
+          "x": 313,
+          "y": 413,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "eq_r1v2",
+          "element": "ST_Value",
+          "x": 337,
+          "y": 413,
+          "width": 36,
+          "height": 24,
+          "anchor": 0,
+          "defaultText": "00"
+        },
+        {
+          "name": "eq_r1s2",
+          "element": "EQ_Icon_EncEq",
+          "x": 373,
+          "y": 413,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "eq_r1v3",
+          "element": "ST_Value",
+          "x": 397,
+          "y": 413,
+          "width": 36,
+          "height": 24,
+          "anchor": 0,
+          "defaultText": "00"
+        },
+        {
+          "name": "eq_r1s3",
+          "element": "EQ_Icon_DefEq",
+          "x": 433,
+          "y": 413,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "eq_r2_icon",
+          "element": "EQ_Item_Helmet",
+          "x": 7,
+          "y": 440,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "eq_r2_name",
+          "element": "EQ_Name",
+          "x": 31,
+          "y": 438,
+          "width": 186,
+          "height": 27,
+          "anchor": 0,
+          "defaultText": "Templar Helm"
+        },
+        {
+          "name": "eq_r2v0",
+          "element": "ST_Value",
+          "x": 217,
+          "y": 440,
+          "width": 36,
+          "height": 24,
+          "anchor": 0,
+          "defaultText": "00"
+        },
+        {
+          "name": "eq_r2s0",
+          "element": "EQ_Icon_ProtEq",
+          "x": 253,
+          "y": 440,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "eq_r2v1",
+          "element": "ST_Value",
+          "x": 277,
+          "y": 440,
+          "width": 36,
+          "height": 24,
+          "anchor": 0,
+          "defaultText": "100%",
+          "textOverride": {
+            "x": 0,
+            "y": 0,
+            "w": 36,
+            "h": 24,
+            "align": "right",
+            "valign": "center",
+            "fontFamily": "Roboto",
+            "fontSize": 17,
+            "fontColor": [
+              213,
+              189,
+              151,
+              255
+            ],
+            "bold": true,
+            "outlineWidth": 1,
+            "outlineColor": [
+              0,
+              0,
+              0,
+              140
+            ]
+          }
+        },
+        {
+          "name": "eq_r2s1",
+          "element": "EQ_Icon_CovEq",
+          "x": 313,
+          "y": 440,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "eq_r2v2",
+          "element": "ST_Value",
+          "x": 337,
+          "y": 440,
+          "width": 36,
+          "height": 24,
+          "anchor": 0,
+          "defaultText": "00"
+        },
+        {
+          "name": "eq_r2s2",
+          "element": "EQ_Icon_EncEq",
+          "x": 373,
+          "y": 440,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "eq_r2v3",
+          "element": "ST_Value",
+          "x": 397,
+          "y": 440,
+          "width": 36,
+          "height": 24,
+          "anchor": 0,
+          "defaultText": "00"
+        },
+        {
+          "name": "eq_r2s3",
+          "element": "EQ_Icon_DefEq",
+          "x": 433,
+          "y": 440,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "eq_r3_icon",
+          "element": "EQ_Item_Chest",
+          "x": 7,
+          "y": 467,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "eq_r3_name",
+          "element": "EQ_Name",
+          "x": 31,
+          "y": 465,
+          "width": 186,
+          "height": 27,
+          "anchor": 0,
+          "defaultText": "Chainmail"
+        },
+        {
+          "name": "eq_r3v0",
+          "element": "ST_Value",
+          "x": 217,
+          "y": 467,
+          "width": 36,
+          "height": 24,
+          "anchor": 0,
+          "defaultText": "12"
+        },
+        {
+          "name": "eq_r3s0",
+          "element": "EQ_Icon_ProtEq",
+          "x": 253,
+          "y": 467,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "eq_r3v1",
+          "element": "ST_Value",
+          "x": 277,
+          "y": 467,
+          "width": 36,
+          "height": 24,
+          "anchor": 0,
+          "defaultText": "100%",
+          "textOverride": {
+            "x": 0,
+            "y": 0,
+            "w": 36,
+            "h": 24,
+            "align": "right",
+            "valign": "center",
+            "fontFamily": "Roboto",
+            "fontSize": 17,
+            "fontColor": [
+              213,
+              189,
+              151,
+              255
+            ],
+            "bold": true,
+            "outlineWidth": 1,
+            "outlineColor": [
+              0,
+              0,
+              0,
+              140
+            ]
+          }
+        },
+        {
+          "name": "eq_r3s1",
+          "element": "EQ_Icon_CovEq",
+          "x": 313,
+          "y": 467,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "eq_r3v2",
+          "element": "ST_Value",
+          "x": 337,
+          "y": 467,
+          "width": 36,
+          "height": 24,
+          "anchor": 0,
+          "defaultText": "00"
+        },
+        {
+          "name": "eq_r3s2",
+          "element": "EQ_Icon_EncEq",
+          "x": 373,
+          "y": 467,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "eq_r3v3",
+          "element": "ST_Value",
+          "x": 397,
+          "y": 467,
+          "width": 36,
+          "height": 24,
+          "anchor": 0,
+          "defaultText": "00"
+        },
+        {
+          "name": "eq_r3s3",
+          "element": "EQ_Icon_DefEq",
+          "x": 433,
+          "y": 467,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "eq_r4_icon",
+          "element": "EQ_Item_Boot",
+          "x": 7,
+          "y": 494,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "eq_r4_name",
+          "element": "EQ_Name",
+          "x": 31,
+          "y": 492,
+          "width": 186,
+          "height": 27,
+          "anchor": 0,
+          "defaultText": "Leather Boots"
+        },
+        {
+          "name": "eq_r4v0",
+          "element": "ST_Value",
+          "x": 217,
+          "y": 494,
+          "width": 36,
+          "height": 24,
+          "anchor": 0,
+          "defaultText": "12"
+        },
+        {
+          "name": "eq_r4s0",
+          "element": "EQ_Icon_ProtEq",
+          "x": 253,
+          "y": 494,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "eq_r4v1",
+          "element": "ST_Value",
+          "x": 277,
+          "y": 494,
+          "width": 36,
+          "height": 24,
+          "anchor": 0,
+          "defaultText": "100%",
+          "textOverride": {
+            "x": 0,
+            "y": 0,
+            "w": 36,
+            "h": 24,
+            "align": "right",
+            "valign": "center",
+            "fontFamily": "Roboto",
+            "fontSize": 17,
+            "fontColor": [
+              213,
+              189,
+              151,
+              255
+            ],
+            "bold": true,
+            "outlineWidth": 1,
+            "outlineColor": [
+              0,
+              0,
+              0,
+              140
+            ]
+          }
+        },
+        {
+          "name": "eq_r4s1",
+          "element": "EQ_Icon_CovEq",
+          "x": 313,
+          "y": 494,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "eq_r4v2",
+          "element": "ST_Value",
+          "x": 337,
+          "y": 494,
+          "width": 36,
+          "height": 24,
+          "anchor": 0,
+          "defaultText": "00"
+        },
+        {
+          "name": "eq_r4s2",
+          "element": "EQ_Icon_EncEq",
+          "x": 373,
+          "y": 494,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "eq_r4v3",
+          "element": "ST_Value",
+          "x": 397,
+          "y": 494,
+          "width": 36,
+          "height": 24,
+          "anchor": 0,
+          "defaultText": "00"
+        },
+        {
+          "name": "eq_r4s3",
+          "element": "EQ_Icon_DefEq",
+          "x": 433,
+          "y": 494,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "eq_r5_icon",
+          "element": "EQ_Item_Ring",
+          "x": 7,
+          "y": 521,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "eq_r5_name",
+          "element": "EQ_Name",
+          "x": 31,
+          "y": 519,
+          "width": 186,
+          "height": 27,
+          "anchor": 0,
+          "defaultText": "Dagger"
+        },
+        {
+          "name": "eq_r5v0",
+          "element": "ST_Value",
+          "x": 217,
+          "y": 521,
+          "width": 36,
+          "height": 24,
+          "anchor": 0,
+          "defaultText": "1"
+        },
+        {
+          "name": "eq_r5s0",
+          "element": "EQ_Icon_Pierce",
+          "x": 253,
+          "y": 521,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "eq_r5v1",
+          "element": "ST_Value",
+          "x": 277,
+          "y": 521,
+          "width": 36,
+          "height": 24,
+          "anchor": 0,
+          "defaultText": "4"
+        },
+        {
+          "name": "eq_r5s1",
+          "element": "EQ_Icon_AttackEq",
+          "x": 313,
+          "y": 521,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "eq_r5v2",
+          "element": "ST_Value",
+          "x": 337,
+          "y": 521,
+          "width": 36,
+          "height": 24,
+          "anchor": 0,
+          "defaultText": "0"
+        },
+        {
+          "name": "eq_r5s2",
+          "element": "EQ_Len",
+          "x": 373,
+          "y": 521,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "eq_r5v3",
+          "element": "ST_Value",
+          "x": 397,
+          "y": 521,
+          "width": 36,
+          "height": 24,
+          "anchor": 0,
+          "defaultText": "3"
+        },
+        {
+          "name": "eq_r5s3",
+          "element": "EQ_Icon_DefEq",
+          "x": 433,
+          "y": 521,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "eq_r6_icon",
+          "element": "EQ_Item_Ring",
+          "x": 7,
+          "y": 548,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "eq_r6_name",
+          "element": "EQ_Name",
+          "x": 31,
+          "y": 546,
+          "width": 186,
+          "height": 27,
+          "anchor": 0,
+          "defaultText": "(Empty)"
+        },
+        {
+          "name": "eq_col1",
+          "element": "ST_ColumnBar",
+          "x": 224,
+          "y": 387,
+          "width": 3,
+          "height": 200,
+          "anchor": 0
+        },
+        {
+          "name": "eq_col2",
+          "element": "ST_ColumnBar",
+          "x": 282,
+          "y": 383,
+          "width": 3,
+          "height": 203,
+          "anchor": 0
+        },
+        {
+          "name": "eq_col3",
+          "element": "ST_ColumnBar",
+          "x": 344,
+          "y": 382,
+          "width": 3,
+          "height": 205,
+          "anchor": 0
+        },
+        {
+          "name": "eq_col4",
+          "element": "ST_ColumnBar",
+          "x": 405,
+          "y": 381,
+          "width": 3,
+          "height": 206,
+          "anchor": 0
+        },
+        {
+          "name": "eq_title_swatch",
+          "element": "EQ_TitleSwatch",
+          "x": 5,
+          "y": 357,
+          "width": 458,
+          "height": 30,
+          "anchor": 0
+        },
+        {
+          "name": "eq_title_heraldry",
+          "element": "EQ_TitleHeraldry",
+          "x": 7,
+          "y": 359,
+          "width": 455,
+          "height": 28,
+          "anchor": 0
+        },
+        {
+          "name": "eq_title",
+          "element": "EQ_Title",
+          "x": 7,
+          "y": 359,
+          "width": 463,
+          "height": 34,
+          "anchor": 0
+        },
+        {
+          "name": "at_box",
+          "element": "AT_StatBox",
+          "x": 3,
+          "y": 600,
+          "width": 463,
+          "height": 83,
+          "anchor": 0
+        },
+        {
+          "name": "at_boxpattern",
+          "element": "AT_BoxPattern",
+          "x": 7,
+          "y": 601,
+          "width": 456,
+          "height": 80,
+          "anchor": 0
+        },
+        {
+          "name": "at_rowswatch0",
+          "element": "AT_RowSwatch",
+          "x": 3,
+          "y": 598,
+          "width": 463,
+          "height": 30,
+          "anchor": 0
+        },
+        {
+          "name": "at_rowswatch2",
+          "element": "AT_RowSwatch",
+          "x": 3,
+          "y": 652,
+          "width": 463,
+          "height": 30,
+          "anchor": 0
+        },
+        {
+          "name": "at_r0_icon",
+          "element": "EQ_Item_Sword",
+          "x": 7,
+          "y": 601,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "at_r0_name",
+          "element": "EQ_Name",
+          "x": 31,
+          "y": 599,
+          "width": 186,
+          "height": 27,
+          "anchor": 0,
+          "defaultText": "Broadsword Slash"
+        },
+        {
+          "name": "at_r0v0",
+          "element": "ST_Value",
+          "x": 217,
+          "y": 601,
+          "width": 36,
+          "height": 24,
+          "anchor": 0,
+          "defaultText": "14"
+        },
+        {
+          "name": "at_r0s0",
+          "element": "EQ_Icon_Slash",
+          "x": 253,
+          "y": 601,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "at_r0v1",
+          "element": "ST_Value",
+          "x": 277,
+          "y": 601,
+          "width": 36,
+          "height": 24,
+          "anchor": 0,
+          "defaultText": "14"
+        },
+        {
+          "name": "at_r0s1",
+          "element": "EQ_Icon_AttackEq",
+          "x": 313,
+          "y": 601,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "at_r0v2",
+          "element": "ST_Value",
+          "x": 337,
+          "y": 601,
+          "width": 36,
+          "height": 24,
+          "anchor": 0,
+          "defaultText": "2"
+        },
+        {
+          "name": "at_r0s2",
+          "element": "EQ_Len",
+          "x": 373,
+          "y": 601,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "at_r0v3",
+          "element": "ST_Value",
+          "x": 397,
+          "y": 601,
+          "width": 36,
+          "height": 24,
+          "anchor": 0,
+          "defaultText": "4"
+        },
+        {
+          "name": "at_r0s3",
+          "element": "AT_Icon_Fat",
+          "x": 433,
+          "y": 601,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "at_r1_icon",
+          "element": "EQ_Item_Sword",
+          "x": 7,
+          "y": 628,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "at_r1_name",
+          "element": "EQ_Name",
+          "x": 31,
+          "y": 626,
+          "width": 186,
+          "height": 27,
+          "anchor": 0,
+          "defaultText": "Broadsword Stab"
+        },
+        {
+          "name": "at_r1v0",
+          "element": "ST_Value",
+          "x": 217,
+          "y": 628,
+          "width": 36,
+          "height": 24,
+          "anchor": 0,
+          "defaultText": "14"
+        },
+        {
+          "name": "at_r1s0",
+          "element": "EQ_Icon_Pierce",
+          "x": 253,
+          "y": 628,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "at_r1v1",
+          "element": "ST_Value",
+          "x": 277,
+          "y": 628,
+          "width": 36,
+          "height": 24,
+          "anchor": 0,
+          "defaultText": "14"
+        },
+        {
+          "name": "at_r1s1",
+          "element": "EQ_Icon_AttackEq",
+          "x": 313,
+          "y": 628,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "at_r1v2",
+          "element": "ST_Value",
+          "x": 337,
+          "y": 628,
+          "width": 36,
+          "height": 24,
+          "anchor": 0,
+          "defaultText": "2"
+        },
+        {
+          "name": "at_r1s2",
+          "element": "EQ_Len",
+          "x": 373,
+          "y": 628,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "at_r1v3",
+          "element": "ST_Value",
+          "x": 397,
+          "y": 628,
+          "width": 36,
+          "height": 24,
+          "anchor": 0,
+          "defaultText": "4"
+        },
+        {
+          "name": "at_r1s3",
+          "element": "AT_Icon_Fat",
+          "x": 433,
+          "y": 628,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "at_r2_icon",
+          "element": "EQ_Item_Sword",
+          "x": 7,
+          "y": 655,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "at_r2_name",
+          "element": "EQ_Name",
+          "x": 31,
+          "y": 653,
+          "width": 186,
+          "height": 27,
+          "anchor": 0,
+          "defaultText": "Dagger Stab"
+        },
+        {
+          "name": "at_r2v0",
+          "element": "ST_Value",
+          "x": 217,
+          "y": 655,
+          "width": 36,
+          "height": 24,
+          "anchor": 0,
+          "defaultText": "11"
+        },
+        {
+          "name": "at_r2s0",
+          "element": "EQ_Icon_Pierce",
+          "x": 253,
+          "y": 655,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "at_r2v1",
+          "element": "ST_Value",
+          "x": 277,
+          "y": 655,
+          "width": 36,
+          "height": 24,
+          "anchor": 0,
+          "defaultText": "14"
+        },
+        {
+          "name": "at_r2s1",
+          "element": "EQ_Icon_AttackEq",
+          "x": 313,
+          "y": 655,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "at_r2v2",
+          "element": "ST_Value",
+          "x": 337,
+          "y": 655,
+          "width": 36,
+          "height": 24,
+          "anchor": 0,
+          "defaultText": "2"
+        },
+        {
+          "name": "at_r2s2",
+          "element": "EQ_Len",
+          "x": 373,
+          "y": 655,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "at_r2v3",
+          "element": "ST_Value",
+          "x": 397,
+          "y": 655,
+          "width": 36,
+          "height": 24,
+          "anchor": 0,
+          "defaultText": "4"
+        },
+        {
+          "name": "at_r2s3",
+          "element": "AT_Icon_Fat",
+          "x": 433,
+          "y": 655,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "at_col1",
+          "element": "ST_ColumnBar",
+          "x": 224,
+          "y": 601,
+          "width": 3,
+          "height": 90,
+          "anchor": 0
+        },
+        {
+          "name": "at_col2",
+          "element": "ST_ColumnBar",
+          "x": 282,
+          "y": 599,
+          "width": 3,
+          "height": 91,
+          "anchor": 0
+        },
+        {
+          "name": "at_col3",
+          "element": "ST_ColumnBar",
+          "x": 344,
+          "y": 599,
+          "width": 3,
+          "height": 92,
+          "anchor": 0
+        },
+        {
+          "name": "at_col4",
+          "element": "ST_ColumnBar",
+          "x": 405,
+          "y": 598,
+          "width": 3,
+          "height": 93,
+          "anchor": 0
+        },
+        {
+          "name": "at_title_swatch",
+          "element": "AT_TitleSwatch",
+          "x": 5,
+          "y": 573,
+          "width": 458,
+          "height": 28,
+          "anchor": 0
+        },
+        {
+          "name": "at_title_heraldry",
+          "element": "AT_TitleHeraldry",
+          "x": 7,
+          "y": 575,
+          "width": 456,
+          "height": 26,
+          "anchor": 0
+        },
+        {
+          "name": "at_title",
+          "element": "AT_Title",
+          "x": 7,
+          "y": 574,
+          "width": 463,
+          "height": 34,
+          "anchor": 0
+        },
+        {
+          "name": "ab_box",
+          "element": "AB_StatBox",
+          "x": 3,
+          "y": 707,
+          "width": 463,
+          "height": 35,
+          "anchor": 0
+        },
+        {
+          "name": "ab_boxpattern",
+          "element": "AB_BoxPattern",
+          "x": 7,
+          "y": 710,
+          "width": 456,
+          "height": 30,
+          "anchor": 0
+        },
+        {
+          "name": "ab_title_swatch",
+          "element": "AB_TitleSwatch",
+          "x": 5,
+          "y": 680,
+          "width": 457,
+          "height": 29,
+          "anchor": 0
+        },
+        {
+          "name": "ab_title_heraldry",
+          "element": "AB_TitleHeraldry",
+          "x": 7,
+          "y": 680,
+          "width": 456,
+          "height": 29,
+          "anchor": 0
+        },
+        {
+          "name": "ab_title",
+          "element": "AB_Title",
+          "x": 7,
+          "y": 679,
+          "width": 463,
+          "height": 34,
+          "anchor": 0
+        },
+        {
+          "name": "ab_r0_icon",
+          "element": "AB_Icon_Flying",
+          "x": 7,
+          "y": 713,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        }
+      ]
+    },
+    {
+      "id": "UD_Box",
+      "background": "CircleBox",
+      "width": 457,
+      "height": 164,
+      "backgroundScale": 0.025,
+      "backgroundTint": [
+        255,
+        255,
+        255,
+        255
+      ],
+      "bgHarmonize": {
+        "targetColor": [
+          31,
+          24,
+          17,
+          255
+        ],
+        "hueStrength": 1,
+        "satStrength": 0.756,
+        "valStrength": 0.588,
+        "useHcl": false,
+        "gradColor": [
+          18,
+          15,
+          11,
+          112
+        ],
+        "gradStrength": 0.992
+      },
+      "modal": false
+    },
+    {
+      "id": "UD_PortraitFrameShadow",
+      "background": "RenaiThinBorder16",
+      "width": 148,
+      "height": 148,
+      "backgroundScale": 0.39,
+      "backgroundTint": [
+        0,
+        0,
+        0,
+        58
+      ],
+      "modal": false
+    },
+    {
+      "id": "UD_PortraitFrame",
+      "background": "RenaiThinBorder16",
+      "width": 147,
+      "height": 147,
+      "backgroundScale": 0.39,
+      "backgroundTint": [
+        255,
+        255,
+        255,
+        217
+      ],
+      "bgHarmonize": {
+        "targetColor": [
+          105,
+          95,
+          75,
+          255
+        ],
+        "hueStrength": 1,
+        "satStrength": 0.266,
+        "valStrength": 0.481,
+        "useHcl": false
+      },
+      "modal": false
+    },
+    {
+      "id": "CommanderEquipWindow",
+      "background": "LeatherBackground",
+      "frame": "RenaiThinBorder16",
+      "width": 312,
+      "height": 366,
+      "backgroundScale": 0.14,
+      "backgroundInset": -17,
+      "frameScale": 0.49,
+      "backgroundTint": [
+        199,
+        215,
+        229,
+        255
+      ],
+      "frameTint": [
+        255,
+        255,
+        255,
+        255
+      ],
+      "bgHarmonize": {
+        "targetColor": [
+          157,
+          123,
+          82,
+          255
+        ],
+        "hueStrength": 1,
+        "satStrength": 1,
+        "valStrength": 0.72,
+        "useHcl": false,
+        "gradColor": [
+          18,
+          15,
+          11,
+          112
+        ],
+        "gradStrength": 0.992
+      },
+      "frameHarmonize": {
+        "targetColor": [
+          118,
+          97,
+          60,
+          255
+        ],
+        "hueStrength": 1,
+        "satStrength": 0.75,
+        "valStrength": 0.665,
+        "useHcl": false
+      },
+      "modal": false,
+      "children": [
+        {
+          "name": "cb_blacksmith",
+          "element": "CB_Blacksmith",
+          "x": 25,
+          "y": 79,
+          "width": 287,
+          "height": 246,
+          "anchor": 0
+        },
+        {
+          "name": "cb_s0_tex",
+          "element": "CB_SlotTex",
+          "x": 114,
+          "y": 64,
+          "width": 75,
+          "height": 75,
+          "anchor": 0
+        },
+        {
+          "name": "cb_s0_stencil",
+          "element": "CB_SlotStencil",
+          "x": 114,
+          "y": 64,
+          "width": 75,
+          "height": 75,
+          "anchor": 0
+        },
+        {
+          "name": "cb_s0_border",
+          "element": "CB_SlotBorder",
+          "x": 114,
+          "y": 64,
+          "width": 75,
+          "height": 75,
+          "anchor": 0
+        },
+        {
+          "name": "cb_s0_highlight",
+          "element": "CB_SlotHighlight",
+          "x": 119,
+          "y": 69,
+          "width": 66,
+          "height": 64,
+          "anchor": 0
+        },
+        {
+          "name": "cb_s0_icon",
+          "element": "CB_Icon_Helmet4",
+          "x": 128,
+          "y": 76,
+          "width": 48,
+          "height": 48,
+          "anchor": 0
+        },
+        {
+          "name": "cb_s0_label",
+          "element": "CB_SlotLabel",
+          "x": 103,
+          "y": 132,
+          "width": 97,
+          "height": 26,
+          "anchor": 0,
+          "defaultText": "Helm"
+        },
+        {
+          "name": "cb_s1_tex",
+          "element": "CB_SlotTex",
+          "x": 215,
+          "y": 64,
+          "width": 75,
+          "height": 75,
+          "anchor": 0
+        },
+        {
+          "name": "cb_s1_stencil",
+          "element": "CB_SlotStencil",
+          "x": 215,
+          "y": 64,
+          "width": 75,
+          "height": 75,
+          "anchor": 0
+        },
+        {
+          "name": "cb_s1_border",
+          "element": "CB_SlotBorder",
+          "x": 215,
+          "y": 64,
+          "width": 75,
+          "height": 75,
+          "anchor": 0
+        },
+        {
+          "name": "cb_s1_highlight",
+          "element": "CB_SlotHighlight",
+          "x": 220,
+          "y": 69,
+          "width": 66,
+          "height": 64,
+          "anchor": 0
+        },
+        {
+          "name": "cb_s1_icon",
+          "element": "CB_Icon_ChestArmor3",
+          "x": 229,
+          "y": 76,
+          "width": 48,
+          "height": 48,
+          "anchor": 0
+        },
+        {
+          "name": "cb_s1_label",
+          "element": "CB_SlotLabel",
+          "x": 204,
+          "y": 132,
+          "width": 97,
+          "height": 26,
+          "anchor": 0,
+          "defaultText": "Armor"
+        },
+        {
+          "name": "cb_s2_tex",
+          "element": "CB_SlotTex",
+          "x": 215,
+          "y": 162,
+          "width": 75,
+          "height": 75,
+          "anchor": 0
+        },
+        {
+          "name": "cb_s2_stencil",
+          "element": "CB_SlotStencil",
+          "x": 215,
+          "y": 162,
+          "width": 75,
+          "height": 75,
+          "anchor": 0
+        },
+        {
+          "name": "cb_s2_border",
+          "element": "CB_SlotBorder",
+          "x": 215,
+          "y": 162,
+          "width": 75,
+          "height": 75,
+          "anchor": 0
+        },
+        {
+          "name": "cb_s2_highlight",
+          "element": "CB_SlotHighlight",
+          "x": 220,
+          "y": 167,
+          "width": 66,
+          "height": 64,
+          "anchor": 0
+        },
+        {
+          "name": "cb_s2_icon",
+          "element": "CB_Icon_Shield3",
+          "x": 229,
+          "y": 174,
+          "width": 48,
+          "height": 48,
+          "anchor": 0
+        },
+        {
+          "name": "cb_s2_label",
+          "element": "CB_SlotLabel",
+          "x": 204,
+          "y": 230,
+          "width": 97,
+          "height": 26,
+          "anchor": 0,
+          "defaultText": "Off-Hand"
+        },
+        {
+          "name": "cb_s3_tex",
+          "element": "CB_SlotTex",
+          "x": 215,
+          "y": 261,
+          "width": 75,
+          "height": 75,
+          "anchor": 0
+        },
+        {
+          "name": "cb_s3_stencil",
+          "element": "CB_SlotStencil",
+          "x": 215,
+          "y": 261,
+          "width": 75,
+          "height": 75,
+          "anchor": 0
+        },
+        {
+          "name": "cb_s3_border",
+          "element": "CB_SlotBorder",
+          "x": 215,
+          "y": 261,
+          "width": 75,
+          "height": 75,
+          "anchor": 0
+        },
+        {
+          "name": "cb_s3_highlight",
+          "element": "CB_SlotHighlight",
+          "x": 220,
+          "y": 266,
+          "width": 66,
+          "height": 64,
+          "anchor": 0
+        },
+        {
+          "name": "cb_s3_icon",
+          "element": "CB_Icon_Ring2",
+          "x": 229,
+          "y": 273,
+          "width": 48,
+          "height": 48,
+          "anchor": 0
+        },
+        {
+          "name": "cb_s3_label",
+          "element": "CB_SlotLabel",
+          "x": 204,
+          "y": 329,
+          "width": 97,
+          "height": 26,
+          "anchor": 0,
+          "defaultText": "Misc"
+        },
+        {
+          "name": "cb_s4_tex",
+          "element": "CB_SlotTex",
+          "x": 114,
+          "y": 261,
+          "width": 75,
+          "height": 75,
+          "anchor": 0
+        },
+        {
+          "name": "cb_s4_stencil",
+          "element": "CB_SlotStencil",
+          "x": 114,
+          "y": 261,
+          "width": 75,
+          "height": 75,
+          "anchor": 0
+        },
+        {
+          "name": "cb_s4_border",
+          "element": "CB_SlotBorder",
+          "x": 114,
+          "y": 261,
+          "width": 75,
+          "height": 75,
+          "anchor": 0
+        },
+        {
+          "name": "cb_s4_highlight",
+          "element": "CB_SlotHighlight",
+          "x": 119,
+          "y": 266,
+          "width": 66,
+          "height": 64,
+          "anchor": 0
+        },
+        {
+          "name": "cb_s4_icon",
+          "element": "CB_Icon_Boots2",
+          "x": 128,
+          "y": 273,
+          "width": 48,
+          "height": 48,
+          "anchor": 0
+        },
+        {
+          "name": "cb_s4_label",
+          "element": "CB_SlotLabel",
+          "x": 103,
+          "y": 329,
+          "width": 97,
+          "height": 26,
+          "anchor": 0,
+          "defaultText": "Boots"
+        },
+        {
+          "name": "cb_s5_tex",
+          "element": "CB_SlotTex",
+          "x": 19,
+          "y": 261,
+          "width": 75,
+          "height": 75,
+          "anchor": 0
+        },
+        {
+          "name": "cb_s5_stencil",
+          "element": "CB_SlotStencil",
+          "x": 19,
+          "y": 261,
+          "width": 75,
+          "height": 75,
+          "anchor": 0
+        },
+        {
+          "name": "cb_s5_border",
+          "element": "CB_SlotBorder",
+          "x": 19,
+          "y": 261,
+          "width": 75,
+          "height": 75,
+          "anchor": 0
+        },
+        {
+          "name": "cb_s5_highlight",
+          "element": "CB_SlotHighlight",
+          "x": 24,
+          "y": 266,
+          "width": 66,
+          "height": 64,
+          "anchor": 0
+        },
+        {
+          "name": "cb_s5_icon",
+          "element": "CB_Icon_Ring2",
+          "x": 33,
+          "y": 273,
+          "width": 48,
+          "height": 48,
+          "anchor": 0
+        },
+        {
+          "name": "cb_s5_label",
+          "element": "CB_SlotLabel",
+          "x": 8,
+          "y": 329,
+          "width": 97,
+          "height": 26,
+          "anchor": 0,
+          "defaultText": "Misc"
+        },
+        {
+          "name": "cb_s6_tex",
+          "element": "CB_SlotTex",
+          "x": 19,
+          "y": 162,
+          "width": 75,
+          "height": 75,
+          "anchor": 0
+        },
+        {
+          "name": "cb_s6_stencil",
+          "element": "CB_SlotStencil",
+          "x": 19,
+          "y": 162,
+          "width": 75,
+          "height": 75,
+          "anchor": 0
+        },
+        {
+          "name": "cb_s6_border",
+          "element": "CB_SlotBorder",
+          "x": 19,
+          "y": 162,
+          "width": 75,
+          "height": 75,
+          "anchor": 0
+        },
+        {
+          "name": "cb_s6_highlight",
+          "element": "CB_SlotHighlight",
+          "x": 24,
+          "y": 167,
+          "width": 66,
+          "height": 64,
+          "anchor": 0
+        },
+        {
+          "name": "cb_s6_icon",
+          "element": "CB_Icon_Sword2",
+          "x": 33,
+          "y": 174,
+          "width": 48,
+          "height": 48,
+          "anchor": 0
+        },
+        {
+          "name": "cb_s6_label",
+          "element": "CB_SlotLabel",
+          "x": 8,
+          "y": 230,
+          "width": 97,
+          "height": 26,
+          "anchor": 0,
+          "defaultText": "Misc"
+        },
+        {
+          "name": "cb_unitshadow",
+          "element": "CB_UnitShadow",
+          "x": 81,
+          "y": 231,
+          "width": 149,
+          "height": 34,
+          "anchor": 0
+        },
+        {
+          "name": "cb_unit",
+          "element": "CB_Unit",
+          "x": 112,
+          "y": 163,
+          "width": 88,
+          "height": 91,
+          "anchor": 0
+        },
+        {
+          "name": "cb_b0_tex",
+          "element": "CB_BtnTex108",
+          "x": -5,
+          "y": 350,
+          "width": 108,
+          "height": 60,
+          "anchor": 0
+        },
+        {
+          "name": "cb_b0_border",
+          "element": "CB_BtnBorder108",
+          "x": -5,
+          "y": 350,
+          "width": 108,
+          "height": 60,
+          "anchor": 0
+        },
+        {
+          "name": "cb_b0_icon",
+          "element": "CB_BtnIcon_Stats",
+          "x": 8,
+          "y": 362,
+          "width": 39,
+          "height": 36,
+          "anchor": 0
+        },
+        {
+          "name": "cb_b0_label",
+          "element": "CB_BtnLabel",
+          "x": 47,
+          "y": 362,
+          "width": 52,
+          "height": 36,
+          "anchor": 0,
+          "defaultText": "Stats"
+        },
+        {
+          "name": "cb_b1_tex",
+          "element": "CB_BtnTex101",
+          "x": 100,
+          "y": 350,
+          "width": 101,
+          "height": 60,
+          "anchor": 0
+        },
+        {
+          "name": "cb_b1_border",
+          "element": "CB_BtnBorder101",
+          "x": 100,
+          "y": 350,
+          "width": 101,
+          "height": 60,
+          "anchor": 0
+        },
+        {
+          "name": "cb_b1_icon",
+          "element": "CB_BtnIcon_Attack2",
+          "x": 113,
+          "y": 362,
+          "width": 39,
+          "height": 36,
+          "anchor": 0
+        },
+        {
+          "name": "cb_b1_label",
+          "element": "CB_BtnLabel",
+          "x": 152,
+          "y": 362,
+          "width": 45,
+          "height": 36,
+          "anchor": 0,
+          "defaultText": "Job"
+        },
+        {
+          "name": "cb_b2_tex",
+          "element": "CB_BtnTex114",
+          "x": 198,
+          "y": 350,
+          "width": 114,
+          "height": 60,
+          "anchor": 0
+        },
+        {
+          "name": "cb_b2_border",
+          "element": "CB_BtnBorder114",
+          "x": 198,
+          "y": 350,
+          "width": 114,
+          "height": 60,
+          "anchor": 0
+        },
+        {
+          "name": "cb_b2_icon",
+          "element": "CB_BtnIcon_Attack",
+          "x": 211,
+          "y": 362,
+          "width": 39,
+          "height": 36,
+          "anchor": 0
+        },
+        {
+          "name": "cb_b2_label",
+          "element": "CB_BtnLabel",
+          "x": 250,
+          "y": 362,
+          "width": 58,
+          "height": 36,
+          "anchor": 0,
+          "defaultText": "Deploy"
+        },
+        {
+          "name": "cb_title_swatch",
+          "element": "CB_TitleSwatch",
+          "x": 4,
+          "y": 3,
+          "width": 304,
+          "height": 56,
+          "anchor": 0
+        },
+        {
+          "name": "cb_title_bar",
+          "element": "CB_TitleBar",
+          "x": 4,
+          "y": 58,
+          "width": 304,
+          "height": 5,
+          "anchor": 0
+        },
+        {
+          "name": "cb_seam",
+          "element": "CB_SeamLine",
+          "x": 4,
+          "y": 58,
+          "width": 304,
+          "height": 1,
+          "anchor": 0
+        },
+        {
+          "name": "cb_title_shadow",
+          "element": "CB_TitleShadow",
+          "x": 6,
+          "y": 5,
+          "width": 304,
+          "height": 55,
+          "anchor": 0
+        },
+        {
+          "name": "cb_title",
+          "element": "CB_Title",
+          "x": 4,
+          "y": 3,
+          "width": 304,
+          "height": 55,
+          "anchor": 0
+        }
+      ]
+    },
+    {
+      "id": "StatTooltipWindow",
+      "background": "LeatherBackground",
+      "frame": "RenaiThinBorder16",
+      "width": 222,
+      "height": 103,
+      "backgroundScale": 0.019,
+      "backgroundInset": -2,
+      "frameScale": 0.36,
+      "backgroundTint": [
+        255,
+        255,
+        255,
+        255
+      ],
+      "frameTint": [
+        255,
+        255,
+        255,
+        255
+      ],
+      "stencilImagePath": "assets/UI/Background/dragonpattern_stattip_222x103.png",
+      "stencilTint": [
+        255,
+        255,
+        255,
+        36
+      ],
+      "bgHarmonize": {
+        "targetColor": [
+          31,
+          24,
+          17,
+          255
+        ],
+        "hueStrength": 1,
+        "satStrength": 0.756,
+        "valStrength": 0.588,
+        "useHcl": false,
+        "gradColor": [
+          18,
+          15,
+          11,
+          112
+        ],
+        "gradStrength": 0.992
+      },
+      "stencilHarmonize": {
+        "targetColor": [
+          170,
+          102,
+          31,
+          255
+        ],
+        "hueStrength": 1,
+        "satStrength": 0.756,
+        "valStrength": 0.544,
+        "useHcl": false,
+        "gradColor": [
+          18,
+          15,
+          11,
+          112
+        ],
+        "gradStrength": 0.992
+      },
+      "frameHarmonize": {
+        "targetColor": [
+          118,
+          97,
+          60,
+          255
+        ],
+        "hueStrength": 1,
+        "satStrength": 0.75,
+        "valStrength": 0.665,
+        "useHcl": false
+      },
+      "modal": false,
+      "children": [
+        {
+          "name": "tt_line_top",
+          "element": "TT_GoldLineBright",
+          "x": 0,
+          "y": 0,
+          "width": 222,
+          "height": 1,
+          "anchor": 0
+        },
+        {
+          "name": "tt_line_left",
+          "element": "TT_GoldLine",
+          "x": 0,
+          "y": 1,
+          "width": 1,
+          "height": 101,
+          "anchor": 0
+        },
+        {
+          "name": "tt_line_right",
+          "element": "TT_GoldLine",
+          "x": 218,
+          "y": 5,
+          "width": 1,
+          "height": 94,
+          "anchor": 0
+        },
+        {
+          "name": "tt_line_bottom",
+          "element": "TT_GoldLineBright",
+          "x": 5,
+          "y": 99,
+          "width": 213,
+          "height": 1,
+          "anchor": 0
+        },
+        {
+          "name": "tt_icon",
+          "element": "TT_StrengthIcon",
+          "x": 5,
+          "y": 4,
+          "width": 36,
+          "height": 36,
+          "anchor": 0
+        },
+        {
+          "name": "tt_underline",
+          "element": "TT_Underline",
+          "x": 42,
+          "y": 36,
+          "width": 173,
+          "height": 3,
+          "anchor": 0
+        },
+        {
+          "name": "tt_title",
+          "element": "TT_Title",
+          "x": 41,
+          "y": 5,
+          "width": 178,
+          "height": 31,
+          "anchor": 0
+        },
+        {
+          "name": "tt_desc",
+          "element": "TT_Desc",
+          "x": 8,
+          "y": 38,
+          "width": 204,
+          "height": 61,
+          "anchor": 0,
+          "textOverride": {
+            "x": 0,
+            "y": 0,
+            "w": 204,
+            "h": 61,
+            "align": "left",
+            "valign": "center",
+            "fontFamily": "Quintessential",
+            "fontSize": 17,
+            "fontColor": [
+              250,
+              224,
+              186,
+              255
+            ],
+            "bold": true,
+            "boldStrength": 0.6,
+            "wordWrap": true,
+            "lineSpacing": -3,
+            "outlineWidth": 1,
+            "outlineColor": [
+              0,
+              0,
+              0,
+              150
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "ResourceTooltipWindow",
+      "background": "LeatherBackground",
+      "frame": "RenaiThinBorder16",
+      "width": 222,
+      "height": 231,
+      "backgroundScale": 0.019,
+      "backgroundInset": -2,
+      "frameScale": 0.36,
+      "backgroundTint": [
+        255,
+        255,
+        255,
+        255
+      ],
+      "frameTint": [
+        255,
+        255,
+        255,
+        255
+      ],
+      "stencilImagePath": "assets/UI/Background/dragonpattern_rt_222x231.png",
+      "stencilTint": [
+        255,
+        255,
+        255,
+        36
+      ],
+      "bgHarmonize": {
+        "targetColor": [
+          31,
+          24,
+          17,
+          255
+        ],
+        "hueStrength": 1,
+        "satStrength": 0.756,
+        "valStrength": 0.588,
+        "useHcl": false,
+        "gradColor": [
+          18,
+          15,
+          11,
+          112
+        ],
+        "gradStrength": 0.992
+      },
+      "stencilHarmonize": {
+        "targetColor": [
+          170,
+          102,
+          31,
+          255
+        ],
+        "hueStrength": 1,
+        "satStrength": 0.756,
+        "valStrength": 0.544,
+        "useHcl": false,
+        "gradColor": [
+          18,
+          15,
+          11,
+          112
+        ],
+        "gradStrength": 0.992
+      },
+      "frameHarmonize": {
+        "targetColor": [
+          118,
+          97,
+          60,
+          255
+        ],
+        "hueStrength": 1,
+        "satStrength": 0.75,
+        "valStrength": 0.665,
+        "useHcl": false
+      },
+      "modal": false,
+      "children": [
+        {
+          "name": "rt_line_top",
+          "element": "TT_GoldLineBright",
+          "x": 0,
+          "y": 0,
+          "width": 222,
+          "height": 1,
+          "anchor": 0
+        },
+        {
+          "name": "rt_line_left",
+          "element": "TT_GoldLine",
+          "x": 0,
+          "y": 1,
+          "width": 1,
+          "height": 229,
+          "anchor": 0
+        },
+        {
+          "name": "rt_line_right",
+          "element": "TT_GoldLine",
+          "x": 218,
+          "y": 5,
+          "width": 1,
+          "height": 222,
+          "anchor": 0
+        },
+        {
+          "name": "rt_line_bottom",
+          "element": "TT_GoldLineBright",
+          "x": 5,
+          "y": 227,
+          "width": 213,
+          "height": 1,
+          "anchor": 0
+        },
+        {
+          "name": "rt_icon",
+          "element": "RT_HumansIcon",
+          "x": 5,
+          "y": 5,
+          "width": 36,
+          "height": 36,
+          "anchor": 0
+        },
+        {
+          "name": "rt_underline",
+          "element": "TT_Underline",
+          "x": 44,
+          "y": 32,
+          "width": 140,
+          "height": 3,
+          "anchor": 0
+        },
+        {
+          "name": "rt_title",
+          "element": "RT_Title",
+          "x": 41,
+          "y": 6,
+          "width": 139,
+          "height": 31,
+          "anchor": 0
+        },
+        {
+          "name": "rt_header_value",
+          "element": "RT_HeaderValue",
+          "x": 182,
+          "y": 11,
+          "width": 32,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "rt_box_parchment",
+          "element": "RT_Parchment",
+          "x": 9,
+          "y": 44,
+          "width": 205,
+          "height": 123,
+          "anchor": 0
+        },
+        {
+          "name": "rt_box_stencil",
+          "element": "RT_BoxStencil",
+          "x": 8,
+          "y": 44,
+          "width": 206,
+          "height": 123,
+          "anchor": 0
+        },
+        {
+          "name": "rt_box_frame",
+          "element": "RT_BoxFrame",
+          "x": 7,
+          "y": 42,
+          "width": 207,
+          "height": 125,
+          "anchor": 0
+        },
+        {
+          "name": "rt_r0_label",
+          "element": "RT_Label",
+          "x": 5,
+          "y": 44,
+          "width": 167,
+          "height": 24,
+          "anchor": 0,
+          "defaultText": "(Population Cap)"
+        },
+        {
+          "name": "rt_r0_value",
+          "element": "RT_ValueDefault",
+          "x": 167,
+          "y": 45,
+          "width": 45,
+          "height": 24,
+          "anchor": 0,
+          "defaultText": "200"
+        },
+        {
+          "name": "rt_r1_label",
+          "element": "RT_Label",
+          "x": 5,
+          "y": 68,
+          "width": 167,
+          "height": 24,
+          "anchor": 0,
+          "defaultText": "Total Population"
+        },
+        {
+          "name": "rt_r1_value",
+          "element": "RT_ValueGreen",
+          "x": 167,
+          "y": 69,
+          "width": 45,
+          "height": 24,
+          "anchor": 0,
+          "defaultText": "100"
+        },
+        {
+          "name": "rt_r2_label",
+          "element": "RT_Label",
+          "x": 5,
+          "y": 92,
+          "width": 167,
+          "height": 24,
+          "anchor": 0,
+          "defaultText": "Allocated"
+        },
+        {
+          "name": "rt_r2_value",
+          "element": "RT_ValueRed",
+          "x": 167,
+          "y": 93,
+          "width": 45,
+          "height": 24,
+          "anchor": 0,
+          "defaultText": "80"
+        },
+        {
+          "name": "rt_r3_label",
+          "element": "RT_Label",
+          "x": 5,
+          "y": 116,
+          "width": 167,
+          "height": 24,
+          "anchor": 0,
+          "defaultText": "Available Population"
+        },
+        {
+          "name": "rt_r3_value",
+          "element": "RT_ValueGreen",
+          "x": 167,
+          "y": 117,
+          "width": 45,
+          "height": 24,
+          "anchor": 0,
+          "defaultText": "20"
+        },
+        {
+          "name": "rt_r4_label",
+          "element": "RT_Label",
+          "x": 5,
+          "y": 140,
+          "width": 167,
+          "height": 24,
+          "anchor": 0,
+          "defaultText": "Growth"
+        },
+        {
+          "name": "rt_r4_value",
+          "element": "RT_ValueGreen",
+          "x": 167,
+          "y": 141,
+          "width": 45,
+          "height": 24,
+          "anchor": 0,
+          "defaultText": "+10"
+        },
+        {
+          "name": "rt_desc",
+          "element": "RT_Desc",
+          "x": 13,
+          "y": 169,
+          "width": 200,
+          "height": 60,
+          "anchor": 0
+        }
+      ]
     }
   ]
 }

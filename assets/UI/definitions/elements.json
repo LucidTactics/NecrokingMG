@@ -165,6 +165,3561 @@
           255
         ]
       }
+    },
+    {
+      "id": "UD_BoxPattern",
+      "type": "image",
+      "imagePath": "assets/UI/Background/dragonpattern_ud_box.png",
+      "width": 452,
+      "height": 157,
+      "tintColor": [
+        178,
+        178,
+        178,
+        50
+      ],
+      "harmonize": {
+        "targetColor": [
+          75,
+          42,
+          21,
+          255
+        ],
+        "hueStrength": 1,
+        "satStrength": 0.29,
+        "valStrength": 0.761,
+        "useHcl": false
+      }
+    },
+    {
+      "id": "UD_PortraitParchment",
+      "type": "image",
+      "imagePath": "assets/UI/Patterns/Parchment-2-Tile.png",
+      "width": 142,
+      "height": 143,
+      "tintColor": [
+        255,
+        255,
+        255,
+        126
+      ],
+      "harmonize": {
+        "targetColor": [
+          244,
+          231,
+          178,
+          255
+        ],
+        "hueStrength": 0,
+        "satStrength": 0.288,
+        "valStrength": 0.719,
+        "useHcl": false
+      }
+    },
+    {
+      "id": "UD_PortraitStencil",
+      "type": "image",
+      "imagePath": "assets/UI/Background/dragonpattern_stencil.png",
+      "width": 140,
+      "height": 143,
+      "tintColor": [
+        255,
+        255,
+        255,
+        25
+      ]
+    },
+    {
+      "id": "UD_UnitPortrait",
+      "type": "image",
+      "imagePath": "assets/UI/Portraits/Dragon3-Transp-Bust2_138.png",
+      "width": 138,
+      "height": 139,
+      "tintColor": [
+        255,
+        255,
+        255,
+        255
+      ],
+      "harmonize": {
+        "targetColor": [
+          255,
+          255,
+          255,
+          255
+        ],
+        "hueStrength": 0,
+        "satStrength": 0,
+        "valStrength": 0,
+        "useHcl": false,
+        "outlineColor": [
+          255,
+          247,
+          242,
+          255
+        ],
+        "outlineThickness": 2.5,
+        "outlineOpacity": 0.329
+      }
+    },
+    {
+      "id": "UD_TitleSwatchImg",
+      "type": "image",
+      "imagePath": "assets/UI/Ribbons/Swatch1.3_457x40.png",
+      "width": 457,
+      "height": 40,
+      "tintColor": [
+        255,
+        255,
+        255,
+        230
+      ],
+      "harmonize": {
+        "targetColor": [
+          73,
+          83,
+          147,
+          255
+        ],
+        "hueStrength": 1,
+        "satStrength": 0.8,
+        "valStrength": 0.44,
+        "useHcl": false,
+        "outlineColor": [
+          0,
+          0,
+          0,
+          255
+        ],
+        "outlineThickness": 1.0,
+        "outlineOpacity": 1
+      }
+    },
+    {
+      "id": "UD_TitleHeraldry",
+      "type": "image",
+      "imagePath": "assets/UI/Background/heraldry_title_strip.png",
+      "width": 457,
+      "height": 40,
+      "tintColor": [
+        178,
+        178,
+        178,
+        12
+      ],
+      "harmonize": {
+        "targetColor": [
+          255,
+          255,
+          255,
+          255
+        ],
+        "hueStrength": 1,
+        "satStrength": 1,
+        "valStrength": 0.761,
+        "useHcl": false
+      }
+    },
+    {
+      "id": "UD_Description",
+      "type": "text",
+      "width": 284,
+      "height": 143,
+      "tintColor": [
+        255,
+        255,
+        255,
+        0
+      ],
+      "defaultText": "Powerful adult dragon. Flying monster with fire breath and melee attacks. Lives in a large dragon den in which it can attract mates and breed its young. Dragons evolve over the course of their lives and pass on traits to their offspring. Red dragons wield fire magic.",
+      "textRegion": {
+        "x": 0,
+        "y": 0,
+        "w": 284,
+        "h": 143,
+        "align": "left",
+        "valign": "top",
+        "fontFamily": "Quintessential",
+        "fontSize": 21,
+        "fontColor": [
+          242,
+          212,
+          170,
+          255
+        ],
+        "wordWrap": true,
+        "lineSpacing": 2,
+        "bold": true,
+        "boldStrength": 0.7,
+        "outlineWidth": 1,
+        "outlineColor": [
+          0,
+          0,
+          0,
+          150
+        ]
+      }
+    },
+    {
+      "id": "UD_TitleText",
+      "type": "text",
+      "width": 401,
+      "height": 42,
+      "tintColor": [
+        255,
+        255,
+        255,
+        0
+      ],
+      "defaultText": "Red Dragon",
+      "textRegion": {
+        "x": 0,
+        "y": 0,
+        "w": 401,
+        "h": 42,
+        "align": "center",
+        "valign": "center",
+        "fontFamily": "Quintessential",
+        "fontSize": 56,
+        "fontColor": [
+          237,
+          207,
+          167,
+          255
+        ],
+        "charSpacing": 2,
+        "bold": true,
+        "outlineWidth": 2,
+        "outlineColor": [
+          25,
+          14,
+          8,
+          230
+        ]
+      }
+    },
+    {
+      "id": "UD_TitleTextShadow",
+      "type": "text",
+      "width": 401,
+      "height": 42,
+      "tintColor": [
+        255,
+        255,
+        255,
+        0
+      ],
+      "defaultText": "Red Dragon",
+      "textRegion": {
+        "x": 0,
+        "y": 0,
+        "w": 401,
+        "h": 42,
+        "align": "center",
+        "valign": "center",
+        "fontFamily": "Quintessential",
+        "fontSize": 56,
+        "fontColor": [
+          25,
+          14,
+          8,
+          255
+        ],
+        "charSpacing": 2,
+        "bold": true
+      }
+    },
+    {
+      "id": "ST_Icon_HP",
+      "type": "image",
+      "imagePath": "assets/UI/Icons/NewIcons/Health24.png",
+      "width": 24,
+      "height": 24,
+      "tintColor": [
+        255,
+        255,
+        255,
+        255
+      ],
+      "harmonize": {
+        "targetColor": [
+          226,
+          169,
+          82,
+          255
+        ],
+        "hueStrength": 0,
+        "satStrength": 0.475,
+        "valStrength": 0,
+        "useHcl": false,
+        "outlineColor": [
+          255,
+          255,
+          255,
+          255
+        ],
+        "outlineThickness": 0.6,
+        "outlineOpacity": 0.64
+      }
+    },
+    {
+      "id": "ST_Icon_Spirit",
+      "type": "image",
+      "imagePath": "assets/UI/Icons/SturmIcons/Spirit2_24.png",
+      "width": 24,
+      "height": 24,
+      "tintColor": [
+        255,
+        255,
+        255,
+        255
+      ],
+      "harmonize": {
+        "targetColor": [
+          255,
+          255,
+          255,
+          255
+        ],
+        "hueStrength": 0,
+        "satStrength": 0,
+        "valStrength": 0,
+        "useHcl": false,
+        "outlineColor": [
+          255,
+          255,
+          255,
+          255
+        ],
+        "outlineThickness": 0.6,
+        "outlineOpacity": 0.64
+      }
+    },
+    {
+      "id": "ST_Icon_Morale",
+      "type": "image",
+      "imagePath": "assets/UI/Icons/SturmIcons/morale2_24.png",
+      "width": 24,
+      "height": 24,
+      "tintColor": [
+        255,
+        255,
+        255,
+        255
+      ],
+      "harmonize": {
+        "targetColor": [
+          255,
+          255,
+          255,
+          255
+        ],
+        "hueStrength": 0,
+        "satStrength": 0,
+        "valStrength": 0,
+        "useHcl": false,
+        "outlineColor": [
+          255,
+          255,
+          255,
+          255
+        ],
+        "outlineThickness": 0.7,
+        "outlineOpacity": 0.47
+      }
+    },
+    {
+      "id": "ST_Icon_Size",
+      "type": "image",
+      "imagePath": "assets/UI/Icons/NewIcons/Size324.png",
+      "width": 24,
+      "height": 24,
+      "tintColor": [
+        255,
+        255,
+        255,
+        255
+      ],
+      "harmonize": {
+        "targetColor": [
+          226,
+          169,
+          82,
+          255
+        ],
+        "hueStrength": 1,
+        "satStrength": 0.57,
+        "valStrength": 0,
+        "useHcl": false,
+        "outlineColor": [
+          255,
+          255,
+          255,
+          255
+        ],
+        "outlineThickness": 0.6,
+        "outlineOpacity": 0.64
+      }
+    },
+    {
+      "id": "ST_Icon_Tough",
+      "type": "image",
+      "imagePath": "assets/UI/Icons/NewIcons/Tough24.png",
+      "width": 24,
+      "height": 24,
+      "tintColor": [
+        255,
+        255,
+        255,
+        255
+      ],
+      "harmonize": {
+        "targetColor": [
+          255,
+          255,
+          255,
+          255
+        ],
+        "hueStrength": 0,
+        "satStrength": 0,
+        "valStrength": 0,
+        "useHcl": false,
+        "outlineColor": [
+          255,
+          255,
+          255,
+          255
+        ],
+        "outlineThickness": 0.6,
+        "outlineOpacity": 0.64
+      }
+    },
+    {
+      "id": "ST_Icon_Magic",
+      "type": "image",
+      "imagePath": "assets/UI/Icons/NewIcons/MagicWand48.png",
+      "width": 24,
+      "height": 24,
+      "tintColor": [
+        255,
+        255,
+        255,
+        255
+      ],
+      "harmonize": {
+        "targetColor": [
+          255,
+          255,
+          255,
+          255
+        ],
+        "hueStrength": 0,
+        "satStrength": 0,
+        "valStrength": 0,
+        "useHcl": false,
+        "outlineColor": [
+          255,
+          255,
+          255,
+          255
+        ],
+        "outlineThickness": 0.7,
+        "outlineOpacity": 0.47
+      }
+    },
+    {
+      "id": "ST_Icon_Strength",
+      "type": "image",
+      "imagePath": "assets/UI/Icons/SturmIcons/SturmStrength24.png",
+      "width": 24,
+      "height": 24,
+      "tintColor": [
+        255,
+        255,
+        255,
+        255
+      ],
+      "harmonize": {
+        "targetColor": [
+          255,
+          255,
+          255,
+          255
+        ],
+        "hueStrength": 0,
+        "satStrength": 0,
+        "valStrength": 0,
+        "useHcl": false,
+        "outlineColor": [
+          255,
+          255,
+          255,
+          255
+        ],
+        "outlineThickness": 0.5,
+        "outlineOpacity": 0.88
+      }
+    },
+    {
+      "id": "ST_Icon_Prot",
+      "type": "image",
+      "imagePath": "assets/UI/Icons/NewIcons/Prot24.png",
+      "width": 24,
+      "height": 24,
+      "tintColor": [
+        255,
+        255,
+        255,
+        255
+      ],
+      "harmonize": {
+        "targetColor": [
+          255,
+          255,
+          255,
+          255
+        ],
+        "hueStrength": 0,
+        "satStrength": 0,
+        "valStrength": 0,
+        "useHcl": false,
+        "outlineColor": [
+          255,
+          255,
+          255,
+          255
+        ],
+        "outlineThickness": 0.6,
+        "outlineOpacity": 0.64
+      }
+    },
+    {
+      "id": "ST_Icon_Coverage",
+      "type": "image",
+      "imagePath": "assets/UI/Icons/NewIcons/Coverage24.png",
+      "width": 24,
+      "height": 24,
+      "tintColor": [
+        255,
+        255,
+        255,
+        255
+      ],
+      "harmonize": {
+        "targetColor": [
+          255,
+          255,
+          255,
+          255
+        ],
+        "hueStrength": 0,
+        "satStrength": 0,
+        "valStrength": 0,
+        "useHcl": false,
+        "outlineColor": [
+          255,
+          255,
+          255,
+          255
+        ],
+        "outlineThickness": 0.6,
+        "outlineOpacity": 0.64
+      }
+    },
+    {
+      "id": "ST_Icon_Attack",
+      "type": "image",
+      "imagePath": "assets/UI/Icons/NewIcons/Attack24.png",
+      "width": 24,
+      "height": 24,
+      "tintColor": [
+        255,
+        255,
+        255,
+        255
+      ],
+      "harmonize": {
+        "targetColor": [
+          138,
+          136,
+          117,
+          255
+        ],
+        "hueStrength": 0,
+        "satStrength": 0.1,
+        "valStrength": 0.12,
+        "useHcl": false,
+        "outlineColor": [
+          255,
+          255,
+          255,
+          255
+        ],
+        "outlineThickness": 0.4,
+        "outlineOpacity": 0.64
+      }
+    },
+    {
+      "id": "ST_Icon_Defense",
+      "type": "image",
+      "imagePath": "assets/UI/Icons/NewIcons/Defense24.png",
+      "width": 24,
+      "height": 24,
+      "tintColor": [
+        255,
+        255,
+        255,
+        255
+      ],
+      "harmonize": {
+        "targetColor": [
+          120,
+          74,
+          22,
+          255
+        ],
+        "hueStrength": 0,
+        "satStrength": 0,
+        "valStrength": 0.3,
+        "useHcl": false,
+        "outlineColor": [
+          255,
+          255,
+          255,
+          255
+        ],
+        "outlineThickness": 0.6,
+        "outlineOpacity": 0.64
+      }
+    },
+    {
+      "id": "ST_Icon_Prec",
+      "type": "image",
+      "imagePath": "assets/UI/Icons/NewIcons/Prec24.png",
+      "width": 24,
+      "height": 24,
+      "tintColor": [
+        255,
+        255,
+        255,
+        255
+      ],
+      "harmonize": {
+        "targetColor": [
+          255,
+          255,
+          255,
+          255
+        ],
+        "hueStrength": 0,
+        "satStrength": 0,
+        "valStrength": 0,
+        "useHcl": false,
+        "outlineColor": [
+          255,
+          255,
+          255,
+          255
+        ],
+        "outlineThickness": 0.6,
+        "outlineOpacity": 0.64
+      }
+    },
+    {
+      "id": "ST_Icon_Speed",
+      "type": "image",
+      "imagePath": "assets/UI/Icons/NewIcons/Speed24.png",
+      "width": 24,
+      "height": 24,
+      "tintColor": [
+        255,
+        255,
+        255,
+        255
+      ],
+      "harmonize": {
+        "targetColor": [
+          255,
+          255,
+          255,
+          255
+        ],
+        "hueStrength": 0,
+        "satStrength": 0,
+        "valStrength": 0,
+        "useHcl": false,
+        "outlineColor": [
+          255,
+          255,
+          255,
+          255
+        ],
+        "outlineThickness": 0.6,
+        "outlineOpacity": 0.64
+      }
+    },
+    {
+      "id": "ST_Icon_Enc",
+      "type": "image",
+      "imagePath": "assets/UI/Icons/NewIcons/Enc24.png",
+      "width": 24,
+      "height": 24,
+      "tintColor": [
+        255,
+        255,
+        255,
+        255
+      ],
+      "harmonize": {
+        "targetColor": [
+          255,
+          255,
+          255,
+          255
+        ],
+        "hueStrength": 0,
+        "satStrength": 0,
+        "valStrength": 0,
+        "useHcl": false,
+        "outlineColor": [
+          255,
+          255,
+          255,
+          255
+        ],
+        "outlineThickness": 0.6,
+        "outlineOpacity": 0.64
+      }
+    },
+    {
+      "id": "ST_Icon_Gold",
+      "type": "image",
+      "imagePath": "assets/UI/Icons/NewIcons/Gold24.png",
+      "width": 24,
+      "height": 24,
+      "tintColor": [
+        255,
+        255,
+        255,
+        255
+      ],
+      "harmonize": {
+        "targetColor": [
+          255,
+          255,
+          255,
+          255
+        ],
+        "hueStrength": 0,
+        "satStrength": 0,
+        "valStrength": 0,
+        "useHcl": false,
+        "outlineColor": [
+          255,
+          255,
+          255,
+          255
+        ],
+        "outlineThickness": 0.6,
+        "outlineOpacity": 0.64
+      }
+    },
+    {
+      "id": "ST_Label",
+      "type": "text",
+      "width": 90,
+      "height": 24,
+      "tintColor": [
+        255,
+        255,
+        255,
+        0
+      ],
+      "defaultText": "Label",
+      "textRegion": {
+        "x": 0,
+        "y": 0,
+        "w": 90,
+        "h": 24,
+        "align": "left",
+        "valign": "center",
+        "fontFamily": "Quintessential",
+        "fontSize": 24,
+        "fontColor": [
+          242,
+          212,
+          170,
+          255
+        ],
+        "bold": true,
+        "boldStrength": 0.7,
+        "outlineWidth": 1,
+        "outlineColor": [
+          0,
+          0,
+          0,
+          150
+        ]
+      }
+    },
+    {
+      "id": "ST_Value",
+      "type": "text",
+      "width": 54,
+      "height": 24,
+      "tintColor": [
+        255,
+        255,
+        255,
+        0
+      ],
+      "defaultText": "0",
+      "textRegion": {
+        "x": 0,
+        "y": 0,
+        "w": 54,
+        "h": 24,
+        "align": "right",
+        "valign": "center",
+        "fontFamily": "Roboto",
+        "fontSize": 25,
+        "fontColor": [
+          213,
+          189,
+          151,
+          255
+        ],
+        "bold": true,
+        "outlineWidth": 1,
+        "outlineColor": [
+          0,
+          0,
+          0,
+          140
+        ]
+      }
+    },
+    {
+      "id": "ST_StatBox",
+      "type": "image",
+      "imagePath": "assets/UI/Ribbons/BlueSwath_statbox_463x137.png",
+      "width": 463,
+      "height": 137,
+      "tintColor": [
+        255,
+        255,
+        255,
+        56
+      ],
+      "harmonize": {
+        "targetColor": [
+          46,
+          41,
+          30,
+          255
+        ],
+        "hueStrength": 1,
+        "satStrength": 0.36,
+        "valStrength": 0.33,
+        "useHcl": false
+      }
+    },
+    {
+      "id": "ST_RowSwatch",
+      "type": "image",
+      "imagePath": "assets/UI/Ribbons/BlueSwath_row_463x30.png",
+      "width": 463,
+      "height": 30,
+      "tintColor": [
+        255,
+        255,
+        255,
+        61
+      ],
+      "harmonize": {
+        "targetColor": [
+          20,
+          18,
+          14,
+          255
+        ],
+        "hueStrength": 1,
+        "satStrength": 0.36,
+        "valStrength": 0.187,
+        "useHcl": false
+      }
+    },
+    {
+      "id": "ST_TitleSwatch",
+      "type": "image",
+      "imagePath": "assets/UI/Ribbons/Swatch1.3_459x27.png",
+      "width": 459,
+      "height": 27,
+      "tintColor": [
+        255,
+        255,
+        255,
+        230
+      ],
+      "harmonize": {
+        "targetColor": [
+          228,
+          143,
+          20,
+          255
+        ],
+        "hueStrength": 1,
+        "satStrength": 0.369,
+        "valStrength": 0.412,
+        "useHcl": false,
+        "outlineColor": [
+          0,
+          0,
+          0,
+          255
+        ],
+        "outlineThickness": 0.6,
+        "outlineOpacity": 1
+      }
+    },
+    {
+      "id": "ST_TitleHeraldry",
+      "type": "image",
+      "imagePath": "assets/UI/Background/heraldry_stats_strip.png",
+      "width": 457,
+      "height": 26,
+      "tintColor": [
+        178,
+        178,
+        178,
+        18
+      ],
+      "harmonize": {
+        "targetColor": [
+          255,
+          255,
+          255,
+          255
+        ],
+        "hueStrength": 1,
+        "satStrength": 1,
+        "valStrength": 0.761,
+        "useHcl": false
+      }
+    },
+    {
+      "id": "ST_Gradient",
+      "type": "image",
+      "imagePath": "assets/UI/Fills/DiagnolFade_stats_456x144.png",
+      "width": 456,
+      "height": 144,
+      "tintColor": [
+        255,
+        255,
+        255,
+        18
+      ],
+      "harmonize": {
+        "targetColor": [
+          20,
+          12,
+          2,
+          255
+        ],
+        "hueStrength": 1,
+        "satStrength": 1,
+        "valStrength": 1,
+        "useHcl": false
+      }
+    },
+    {
+      "id": "ST_BoxPattern",
+      "type": "image",
+      "imagePath": "assets/UI/Background/dragonpattern_stats_box.png",
+      "width": 456,
+      "height": 134,
+      "tintColor": [
+        178,
+        178,
+        178,
+        10
+      ],
+      "harmonize": {
+        "targetColor": [
+          231,
+          133,
+          71,
+          255
+        ],
+        "hueStrength": 1,
+        "satStrength": 0.29,
+        "valStrength": 0.761,
+        "useHcl": false
+      }
+    },
+    {
+      "id": "ST_ColumnBar",
+      "type": "image",
+      "imagePath": "assets/UI/Bars/goldbar_v_3x154.png",
+      "width": 3,
+      "height": 154,
+      "tintColor": [
+        42,
+        41,
+        36,
+        116
+      ],
+      "harmonize": {
+        "targetColor": [
+          72,
+          58,
+          32,
+          255
+        ],
+        "hueStrength": 1,
+        "satStrength": 0.8,
+        "valStrength": 0.36,
+        "useHcl": false,
+        "outlineColor": [
+          0,
+          0,
+          0,
+          255
+        ],
+        "outlineThickness": 0.5,
+        "outlineOpacity": 1
+      }
+    },
+    {
+      "id": "ST_Title",
+      "type": "text",
+      "width": 463,
+      "height": 38,
+      "tintColor": [
+        255,
+        255,
+        255,
+        0
+      ],
+      "defaultText": "Stats",
+      "textRegion": {
+        "x": 0,
+        "y": 0,
+        "w": 463,
+        "h": 38,
+        "align": "center",
+        "valign": "bottom",
+        "fontFamily": "Quintessential",
+        "fontSize": 34,
+        "fontColor": [
+          237,
+          207,
+          167,
+          255
+        ],
+        "bold": true,
+        "charSpacing": 1,
+        "outlineWidth": 1,
+        "outlineColor": [
+          25,
+          14,
+          8,
+          230
+        ]
+      }
+    },
+    {
+      "id": "EQ_Icon_Slash",
+      "type": "image",
+      "imagePath": "assets/UI/Icons/DamageTypes/Slash_24.png",
+      "width": 24,
+      "height": 24,
+      "tintColor": [
+        255,
+        255,
+        255,
+        255
+      ],
+      "harmonize": {
+        "targetColor": [
+          48,
+          9,
+          7,
+          255
+        ],
+        "hueStrength": 1,
+        "satStrength": 0.481,
+        "valStrength": 0.812,
+        "useHcl": false,
+        "outlineColor": [
+          221,
+          166,
+          166,
+          255
+        ],
+        "outlineThickness": 2,
+        "outlineOpacity": 0.4
+      }
+    },
+    {
+      "id": "EQ_Icon_Pierce",
+      "type": "image",
+      "imagePath": "assets/UI/Icons/DamageTypes/Pierce_24.png",
+      "width": 24,
+      "height": 24,
+      "tintColor": [
+        255,
+        255,
+        255,
+        255
+      ],
+      "harmonize": {
+        "targetColor": [
+          48,
+          9,
+          7,
+          255
+        ],
+        "hueStrength": 1,
+        "satStrength": 0.481,
+        "valStrength": 0.812,
+        "useHcl": false,
+        "outlineColor": [
+          221,
+          166,
+          166,
+          255
+        ],
+        "outlineThickness": 2,
+        "outlineOpacity": 0.4
+      }
+    },
+    {
+      "id": "EQ_Icon_ProtEq",
+      "type": "image",
+      "imagePath": "assets/UI/Icons/NewIcons/Prot24.png",
+      "width": 24,
+      "height": 24,
+      "tintColor": [
+        255,
+        255,
+        255,
+        255
+      ],
+      "harmonize": {
+        "targetColor": [
+          255,
+          255,
+          255,
+          255
+        ],
+        "hueStrength": 0,
+        "satStrength": 0,
+        "valStrength": 0,
+        "useHcl": false,
+        "outlineColor": [
+          221,
+          166,
+          166,
+          255
+        ],
+        "outlineThickness": 1,
+        "outlineOpacity": 0.4
+      }
+    },
+    {
+      "id": "EQ_Icon_Parry",
+      "type": "image",
+      "imagePath": "assets/UI/Icons/NewIcons/Parry24.png",
+      "width": 24,
+      "height": 24,
+      "tintColor": [
+        255,
+        255,
+        255,
+        255
+      ],
+      "harmonize": {
+        "targetColor": [
+          255,
+          255,
+          255,
+          255
+        ],
+        "hueStrength": 0,
+        "satStrength": 0,
+        "valStrength": 0,
+        "useHcl": false,
+        "outlineColor": [
+          255,
+          255,
+          255,
+          255
+        ],
+        "outlineThickness": 1,
+        "outlineOpacity": 0.256
+      }
+    },
+    {
+      "id": "EQ_Icon_EncEq",
+      "type": "image",
+      "imagePath": "assets/UI/Icons/NewIcons/Enc24.png",
+      "width": 24,
+      "height": 24,
+      "tintColor": [
+        255,
+        255,
+        255,
+        255
+      ],
+      "harmonize": {
+        "targetColor": [
+          255,
+          255,
+          255,
+          255
+        ],
+        "hueStrength": 0,
+        "satStrength": 0,
+        "valStrength": 0,
+        "useHcl": false,
+        "outlineColor": [
+          255,
+          255,
+          255,
+          255
+        ],
+        "outlineThickness": 1,
+        "outlineOpacity": 0.256
+      }
+    },
+    {
+      "id": "EQ_Icon_AttackEq",
+      "type": "image",
+      "imagePath": "assets/UI/Icons/NewIcons/Attack24.png",
+      "width": 24,
+      "height": 24,
+      "tintColor": [
+        255,
+        255,
+        255,
+        255
+      ],
+      "harmonize": {
+        "targetColor": [
+          138,
+          136,
+          117,
+          255
+        ],
+        "hueStrength": 0,
+        "satStrength": 0.1,
+        "valStrength": 0.12,
+        "useHcl": false,
+        "outlineColor": [
+          255,
+          255,
+          255,
+          255
+        ],
+        "outlineThickness": 0.4,
+        "outlineOpacity": 0.64
+      }
+    },
+    {
+      "id": "EQ_Icon_DefEq",
+      "type": "image",
+      "imagePath": "assets/UI/Icons/NewIcons/Defense24.png",
+      "width": 24,
+      "height": 24,
+      "tintColor": [
+        255,
+        255,
+        255,
+        255
+      ],
+      "harmonize": {
+        "targetColor": [
+          138,
+          136,
+          117,
+          255
+        ],
+        "hueStrength": 0,
+        "satStrength": 0.1,
+        "valStrength": 0.12,
+        "useHcl": false,
+        "outlineColor": [
+          255,
+          255,
+          255,
+          255
+        ],
+        "outlineThickness": 0.4,
+        "outlineOpacity": 0.64
+      }
+    },
+    {
+      "id": "EQ_Icon_CovEq",
+      "type": "image",
+      "imagePath": "assets/UI/Icons/NewIcons/Coverage24.png",
+      "width": 24,
+      "height": 24,
+      "tintColor": [
+        255,
+        255,
+        255,
+        255
+      ],
+      "harmonize": {
+        "targetColor": [
+          138,
+          136,
+          117,
+          255
+        ],
+        "hueStrength": 0,
+        "satStrength": 0.1,
+        "valStrength": 0.12,
+        "useHcl": false,
+        "outlineColor": [
+          255,
+          255,
+          255,
+          255
+        ],
+        "outlineThickness": 0.4,
+        "outlineOpacity": 0.64
+      }
+    },
+    {
+      "id": "EQ_Item_Sword",
+      "type": "image",
+      "imagePath": "assets/UI/Icons/Equipment/Sword_24.png",
+      "width": 24,
+      "height": 24,
+      "tintColor": [
+        255,
+        255,
+        255,
+        255
+      ],
+      "harmonize": {
+        "targetColor": [
+          226,
+          169,
+          82,
+          255
+        ],
+        "hueStrength": 0,
+        "satStrength": 0.475,
+        "valStrength": 0,
+        "useHcl": false,
+        "outlineColor": [
+          255,
+          255,
+          255,
+          255
+        ],
+        "outlineThickness": 0.6,
+        "outlineOpacity": 0.64
+      }
+    },
+    {
+      "id": "EQ_Item_Shield",
+      "type": "image",
+      "imagePath": "assets/UI/Icons/Equipment/Shield_24.png",
+      "width": 24,
+      "height": 24,
+      "tintColor": [
+        255,
+        255,
+        255,
+        255
+      ],
+      "harmonize": {
+        "targetColor": [
+          226,
+          169,
+          82,
+          255
+        ],
+        "hueStrength": 0,
+        "satStrength": 0.475,
+        "valStrength": 0,
+        "useHcl": false,
+        "outlineColor": [
+          255,
+          255,
+          255,
+          255
+        ],
+        "outlineThickness": 0.6,
+        "outlineOpacity": 0.64
+      }
+    },
+    {
+      "id": "EQ_Item_Helmet",
+      "type": "image",
+      "imagePath": "assets/UI/Icons/Equipment/Helmet_24.png",
+      "width": 24,
+      "height": 24,
+      "tintColor": [
+        255,
+        255,
+        255,
+        255
+      ],
+      "harmonize": {
+        "targetColor": [
+          226,
+          169,
+          82,
+          255
+        ],
+        "hueStrength": 0,
+        "satStrength": 0.475,
+        "valStrength": 0,
+        "useHcl": false,
+        "outlineColor": [
+          255,
+          255,
+          255,
+          255
+        ],
+        "outlineThickness": 0.6,
+        "outlineOpacity": 0.64
+      }
+    },
+    {
+      "id": "EQ_Item_Chest",
+      "type": "image",
+      "imagePath": "assets/UI/Icons/Equipment/ChestArmor_24.png",
+      "width": 24,
+      "height": 24,
+      "tintColor": [
+        255,
+        255,
+        255,
+        255
+      ],
+      "harmonize": {
+        "targetColor": [
+          226,
+          169,
+          82,
+          255
+        ],
+        "hueStrength": 0,
+        "satStrength": 0.475,
+        "valStrength": 0,
+        "useHcl": false,
+        "outlineColor": [
+          255,
+          255,
+          255,
+          255
+        ],
+        "outlineThickness": 0.6,
+        "outlineOpacity": 0.64
+      }
+    },
+    {
+      "id": "EQ_Item_Boot",
+      "type": "image",
+      "imagePath": "assets/UI/Icons/Equipment/Boot_24.png",
+      "width": 24,
+      "height": 24,
+      "tintColor": [
+        255,
+        255,
+        255,
+        255
+      ],
+      "harmonize": {
+        "targetColor": [
+          226,
+          169,
+          82,
+          255
+        ],
+        "hueStrength": 0,
+        "satStrength": 0.475,
+        "valStrength": 0,
+        "useHcl": false,
+        "outlineColor": [
+          255,
+          255,
+          255,
+          255
+        ],
+        "outlineThickness": 0.6,
+        "outlineOpacity": 0.64
+      }
+    },
+    {
+      "id": "EQ_Item_Ring",
+      "type": "image",
+      "imagePath": "assets/UI/Icons/Equipment/Ring_24.png",
+      "width": 24,
+      "height": 24,
+      "tintColor": [
+        255,
+        255,
+        255,
+        255
+      ],
+      "harmonize": {
+        "targetColor": [
+          226,
+          169,
+          82,
+          255
+        ],
+        "hueStrength": 0,
+        "satStrength": 0.475,
+        "valStrength": 0,
+        "useHcl": false,
+        "outlineColor": [
+          255,
+          255,
+          255,
+          255
+        ],
+        "outlineThickness": 0.6,
+        "outlineOpacity": 0.64
+      }
+    },
+    {
+      "id": "EQ_Name",
+      "type": "text",
+      "width": 186,
+      "height": 27,
+      "tintColor": [
+        255,
+        255,
+        255,
+        0
+      ],
+      "defaultText": "Item",
+      "textRegion": {
+        "x": 0,
+        "y": 0,
+        "w": 186,
+        "h": 27,
+        "align": "left",
+        "valign": "center",
+        "fontFamily": "Quintessential",
+        "fontSize": 27,
+        "fontColor": [
+          242,
+          212,
+          170,
+          255
+        ],
+        "bold": true,
+        "boldStrength": 0.7,
+        "outlineWidth": 1,
+        "outlineColor": [
+          0,
+          0,
+          0,
+          150
+        ]
+      }
+    },
+    {
+      "id": "EQ_Len",
+      "type": "text",
+      "width": 24,
+      "height": 24,
+      "tintColor": [
+        255,
+        255,
+        255,
+        0
+      ],
+      "defaultText": " Len",
+      "textRegion": {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 24,
+        "align": "left",
+        "valign": "center",
+        "fontFamily": "Quintessential",
+        "fontSize": 20,
+        "fontColor": [
+          242,
+          212,
+          170,
+          255
+        ],
+        "bold": true,
+        "boldStrength": 0.7,
+        "outlineWidth": 1,
+        "outlineColor": [
+          0,
+          0,
+          0,
+          150
+        ]
+      }
+    },
+    {
+      "id": "EQ_StatBox",
+      "type": "image",
+      "imagePath": "assets/UI/Ribbons/BlueSwath_eqbox_463x198.png",
+      "width": 463,
+      "height": 198,
+      "tintColor": [
+        255,
+        255,
+        255,
+        116
+      ],
+      "harmonize": {
+        "targetColor": [
+          27,
+          22,
+          21,
+          255
+        ],
+        "hueStrength": 1,
+        "satStrength": 0.36,
+        "valStrength": 0.368,
+        "useHcl": false
+      }
+    },
+    {
+      "id": "EQ_RowSwatch27",
+      "type": "image",
+      "imagePath": "assets/UI/Ribbons/BlueSwath_row_463x27.png",
+      "width": 463,
+      "height": 27,
+      "tintColor": [
+        255,
+        255,
+        255,
+        53
+      ],
+      "harmonize": {
+        "targetColor": [
+          16,
+          13,
+          12,
+          255
+        ],
+        "hueStrength": 1,
+        "satStrength": 0.36,
+        "valStrength": 0.192,
+        "useHcl": false
+      }
+    },
+    {
+      "id": "EQ_RowSwatch30",
+      "type": "image",
+      "imagePath": "assets/UI/Ribbons/BlueSwath_row_463x30.png",
+      "width": 463,
+      "height": 30,
+      "tintColor": [
+        255,
+        255,
+        255,
+        53
+      ],
+      "harmonize": {
+        "targetColor": [
+          16,
+          13,
+          12,
+          255
+        ],
+        "hueStrength": 1,
+        "satStrength": 0.36,
+        "valStrength": 0.192,
+        "useHcl": false
+      }
+    },
+    {
+      "id": "EQ_TitleSwatch",
+      "type": "image",
+      "imagePath": "assets/UI/Ribbons/Swatch1.3_458x30.png",
+      "width": 458,
+      "height": 30,
+      "tintColor": [
+        255,
+        255,
+        255,
+        230
+      ],
+      "harmonize": {
+        "targetColor": [
+          163,
+          78,
+          78,
+          255
+        ],
+        "hueStrength": 1,
+        "satStrength": 0.8,
+        "valStrength": 0.46,
+        "useHcl": false,
+        "outlineColor": [
+          0,
+          0,
+          0,
+          255
+        ],
+        "outlineThickness": 0.6,
+        "outlineOpacity": 1
+      }
+    },
+    {
+      "id": "EQ_TitleHeraldry",
+      "type": "image",
+      "imagePath": "assets/UI/Background/heraldry_eq_strip.png",
+      "width": 455,
+      "height": 28,
+      "tintColor": [
+        178,
+        178,
+        178,
+        12
+      ],
+      "harmonize": {
+        "targetColor": [
+          255,
+          255,
+          255,
+          255
+        ],
+        "hueStrength": 1,
+        "satStrength": 1,
+        "valStrength": 0.761,
+        "useHcl": false
+      }
+    },
+    {
+      "id": "EQ_BoxPattern",
+      "type": "image",
+      "imagePath": "assets/UI/Background/nations_eq_box.png",
+      "width": 456,
+      "height": 187,
+      "tintColor": [
+        178,
+        178,
+        178,
+        10
+      ],
+      "harmonize": {
+        "targetColor": [
+          231,
+          133,
+          71,
+          255
+        ],
+        "hueStrength": 1,
+        "satStrength": 0.29,
+        "valStrength": 0.761,
+        "useHcl": false
+      }
+    },
+    {
+      "id": "EQ_Title",
+      "type": "text",
+      "width": 463,
+      "height": 34,
+      "tintColor": [
+        255,
+        255,
+        255,
+        0
+      ],
+      "defaultText": "Equipment",
+      "textRegion": {
+        "x": 0,
+        "y": 0,
+        "w": 463,
+        "h": 34,
+        "align": "center",
+        "valign": "bottom",
+        "fontFamily": "Quintessential",
+        "fontSize": 36,
+        "fontColor": [
+          237,
+          207,
+          167,
+          255
+        ],
+        "bold": true,
+        "charSpacing": 2,
+        "outlineWidth": 1,
+        "outlineColor": [
+          25,
+          14,
+          8,
+          230
+        ]
+      }
+    },
+    {
+      "id": "AT_Icon_Fat",
+      "type": "image",
+      "imagePath": "assets/UI/Icons/SturmIcons/exhausted.2.24.png",
+      "width": 24,
+      "height": 24,
+      "tintColor": [
+        255,
+        255,
+        255,
+        255
+      ],
+      "harmonize": {
+        "targetColor": [
+          138,
+          136,
+          117,
+          255
+        ],
+        "hueStrength": 0,
+        "satStrength": 0.1,
+        "valStrength": 0.12,
+        "useHcl": false,
+        "outlineColor": [
+          255,
+          255,
+          255,
+          255
+        ],
+        "outlineThickness": 0.4,
+        "outlineOpacity": 0.64
+      }
+    },
+    {
+      "id": "AT_RowSwatch",
+      "type": "image",
+      "imagePath": "assets/UI/Ribbons/BlueSwath_row_463x30.png",
+      "width": 463,
+      "height": 30,
+      "tintColor": [
+        255,
+        255,
+        255,
+        42
+      ],
+      "harmonize": {
+        "targetColor": [
+          5,
+          8,
+          11,
+          255
+        ],
+        "hueStrength": 1,
+        "satStrength": 0.591,
+        "valStrength": 0.142,
+        "useHcl": false
+      }
+    },
+    {
+      "id": "AT_StatBox",
+      "type": "image",
+      "imagePath": "assets/UI/Ribbons/BlueSwath_atbox_463x83.png",
+      "width": 463,
+      "height": 83,
+      "tintColor": [
+        255,
+        255,
+        255,
+        115
+      ],
+      "harmonize": {
+        "targetColor": [
+          20,
+          22,
+          25,
+          255
+        ],
+        "hueStrength": 1,
+        "satStrength": 0.36,
+        "valStrength": 0.269,
+        "useHcl": false
+      }
+    },
+    {
+      "id": "AT_TitleSwatch",
+      "type": "image",
+      "imagePath": "assets/UI/Ribbons/Swatch1.3_458x28.png",
+      "width": 458,
+      "height": 28,
+      "tintColor": [
+        255,
+        255,
+        255,
+        230
+      ],
+      "harmonize": {
+        "targetColor": [
+          85,
+          92,
+          136,
+          255
+        ],
+        "hueStrength": 1,
+        "satStrength": 0.8,
+        "valStrength": 0.46,
+        "useHcl": false,
+        "outlineColor": [
+          0,
+          0,
+          0,
+          255
+        ],
+        "outlineThickness": 0.6,
+        "outlineOpacity": 1
+      }
+    },
+    {
+      "id": "AT_TitleHeraldry",
+      "type": "image",
+      "imagePath": "assets/UI/Background/heraldry_at_strip.png",
+      "width": 456,
+      "height": 26,
+      "tintColor": [
+        178,
+        178,
+        178,
+        12
+      ],
+      "harmonize": {
+        "targetColor": [
+          255,
+          255,
+          255,
+          255
+        ],
+        "hueStrength": 1,
+        "satStrength": 1,
+        "valStrength": 0.761,
+        "useHcl": false
+      }
+    },
+    {
+      "id": "AT_BoxPattern",
+      "type": "image",
+      "imagePath": "assets/UI/Background/nations_at_box.png",
+      "width": 456,
+      "height": 80,
+      "tintColor": [
+        178,
+        178,
+        178,
+        10
+      ],
+      "harmonize": {
+        "targetColor": [
+          231,
+          133,
+          71,
+          255
+        ],
+        "hueStrength": 1,
+        "satStrength": 0.29,
+        "valStrength": 0.761,
+        "useHcl": false
+      }
+    },
+    {
+      "id": "AT_Title",
+      "type": "text",
+      "width": 463,
+      "height": 34,
+      "tintColor": [
+        255,
+        255,
+        255,
+        0
+      ],
+      "defaultText": "Attacks",
+      "textRegion": {
+        "x": 0,
+        "y": 0,
+        "w": 463,
+        "h": 34,
+        "align": "center",
+        "valign": "bottom",
+        "fontFamily": "Quintessential",
+        "fontSize": 36,
+        "fontColor": [
+          237,
+          207,
+          167,
+          255
+        ],
+        "bold": true,
+        "charSpacing": 2,
+        "outlineWidth": 1,
+        "outlineColor": [
+          25,
+          14,
+          8,
+          230
+        ]
+      }
+    },
+    {
+      "id": "AB_StatBox",
+      "type": "image",
+      "imagePath": "assets/UI/Ribbons/BlueSwath_abbox_463x35.png",
+      "width": 463,
+      "height": 35,
+      "tintColor": [
+        255,
+        255,
+        255,
+        255
+      ],
+      "harmonize": {
+        "targetColor": [
+          26,
+          27,
+          26,
+          255
+        ],
+        "hueStrength": 1,
+        "satStrength": 0.674,
+        "valStrength": 0.774,
+        "useHcl": false
+      }
+    },
+    {
+      "id": "AB_Icon_Flying",
+      "type": "image",
+      "imagePath": "assets/UI/Abilities/Flying_24.png",
+      "width": 24,
+      "height": 24,
+      "tintColor": [
+        255,
+        255,
+        255,
+        255
+      ],
+      "harmonize": {
+        "targetColor": [
+          255,
+          255,
+          255,
+          255
+        ],
+        "hueStrength": 0,
+        "satStrength": 0.262,
+        "valStrength": 0.137,
+        "useHcl": false,
+        "outlineColor": [
+          255,
+          255,
+          255,
+          255
+        ],
+        "outlineThickness": 0.75,
+        "outlineOpacity": 0.33
+      }
+    },
+    {
+      "id": "AB_TitleSwatch",
+      "type": "image",
+      "imagePath": "assets/UI/Ribbons/Swatch1.3_457x29.png",
+      "width": 457,
+      "height": 29,
+      "tintColor": [
+        255,
+        255,
+        255,
+        230
+      ],
+      "harmonize": {
+        "targetColor": [
+          54,
+          80,
+          52,
+          255
+        ],
+        "hueStrength": 1,
+        "satStrength": 0.8,
+        "valStrength": 0.46,
+        "useHcl": false,
+        "outlineColor": [
+          0,
+          0,
+          0,
+          255
+        ],
+        "outlineThickness": 0.6,
+        "outlineOpacity": 1
+      }
+    },
+    {
+      "id": "AB_TitleHeraldry",
+      "type": "image",
+      "imagePath": "assets/UI/Background/heraldry_ab_strip.png",
+      "width": 456,
+      "height": 29,
+      "tintColor": [
+        178,
+        178,
+        178,
+        12
+      ],
+      "harmonize": {
+        "targetColor": [
+          255,
+          255,
+          255,
+          255
+        ],
+        "hueStrength": 1,
+        "satStrength": 1,
+        "valStrength": 0.761,
+        "useHcl": false
+      }
+    },
+    {
+      "id": "AB_BoxPattern",
+      "type": "image",
+      "imagePath": "assets/UI/Background/nations_ab_box.png",
+      "width": 456,
+      "height": 30,
+      "tintColor": [
+        178,
+        178,
+        178,
+        10
+      ],
+      "harmonize": {
+        "targetColor": [
+          231,
+          133,
+          71,
+          255
+        ],
+        "hueStrength": 1,
+        "satStrength": 0.29,
+        "valStrength": 0.761,
+        "useHcl": false
+      }
+    },
+    {
+      "id": "AB_Title",
+      "type": "text",
+      "width": 463,
+      "height": 34,
+      "tintColor": [
+        255,
+        255,
+        255,
+        0
+      ],
+      "defaultText": "Abilities & Buffs",
+      "textRegion": {
+        "x": 0,
+        "y": 0,
+        "w": 463,
+        "h": 34,
+        "align": "center",
+        "valign": "bottom",
+        "fontFamily": "Quintessential",
+        "fontSize": 36,
+        "fontColor": [
+          237,
+          207,
+          167,
+          255
+        ],
+        "bold": true,
+        "charSpacing": 2,
+        "outlineWidth": 1,
+        "outlineColor": [
+          25,
+          14,
+          8,
+          230
+        ]
+      }
+    },
+    {
+      "id": "CB_Blacksmith",
+      "type": "image",
+      "imagePath": "assets/UI/Background/blacksmith_cb_287x246.png",
+      "width": 287,
+      "height": 246,
+      "tintColor": [
+        255,
+        255,
+        255,
+        26
+      ],
+      "harmonize": {
+        "targetColor": [
+          132,
+          100,
+          69,
+          255
+        ],
+        "hueStrength": 1,
+        "satStrength": 0.191,
+        "valStrength": 0.267,
+        "useHcl": false
+      }
+    },
+    {
+      "id": "CB_TitleSwatch",
+      "type": "image",
+      "imagePath": "assets/UI/Ribbons/Swatch1.3_304x56.png",
+      "width": 304,
+      "height": 56,
+      "tintColor": [
+        255,
+        255,
+        255,
+        230
+      ],
+      "harmonize": {
+        "targetColor": [
+          71,
+          76,
+          106,
+          255
+        ],
+        "hueStrength": 1,
+        "satStrength": 0.8,
+        "valStrength": 0.46,
+        "useHcl": false
+      }
+    },
+    {
+      "id": "CB_SeamLine",
+      "type": "image",
+      "imagePath": "assets/UI/Misc/white4.png",
+      "width": 4,
+      "height": 4,
+      "tintColor": [
+        25,
+        18,
+        12,
+        160
+      ]
+    },
+    {
+      "id": "CB_TitleBar",
+      "type": "image",
+      "imagePath": "assets/UI/Bars/RenaiThinBar_304x5.png",
+      "width": 304,
+      "height": 5,
+      "tintColor": [
+        255,
+        255,
+        255,
+        230
+      ],
+      "harmonize": {
+        "targetColor": [
+          118,
+          97,
+          60,
+          255
+        ],
+        "hueStrength": 1,
+        "satStrength": 0.75,
+        "valStrength": 0.665,
+        "useHcl": false
+      }
+    },
+    {
+      "id": "CB_Title",
+      "type": "text",
+      "width": 304,
+      "height": 55,
+      "tintColor": [
+        255,
+        255,
+        255,
+        0
+      ],
+      "defaultText": "Templar",
+      "textRegion": {
+        "x": 0,
+        "y": 0,
+        "w": 304,
+        "h": 55,
+        "align": "center",
+        "valign": "center",
+        "fontFamily": "Quintessential",
+        "fontSize": 75,
+        "fontColor": [
+          245,
+          223,
+          182,
+          255
+        ],
+        "bold": true,
+        "charSpacing": 2,
+        "outlineWidth": 2,
+        "outlineColor": [
+          25,
+          14,
+          8,
+          230
+        ]
+      }
+    },
+    {
+      "id": "CB_TitleShadow",
+      "type": "text",
+      "width": 304,
+      "height": 55,
+      "tintColor": [
+        255,
+        255,
+        255,
+        0
+      ],
+      "defaultText": "Templar",
+      "textRegion": {
+        "x": 0,
+        "y": 0,
+        "w": 304,
+        "h": 55,
+        "align": "center",
+        "valign": "center",
+        "fontFamily": "Quintessential",
+        "fontSize": 75,
+        "fontColor": [
+          25,
+          14,
+          8,
+          255
+        ],
+        "bold": true,
+        "charSpacing": 2
+      }
+    },
+    {
+      "id": "CB_SlotTex",
+      "type": "image",
+      "imagePath": "assets/UI/Frames/CF2I_75x75.png",
+      "width": 75,
+      "height": 75,
+      "tintColor": [
+        255,
+        255,
+        255,
+        255
+      ],
+      "harmonize": {
+        "targetColor": [
+          121,
+          99,
+          54,
+          255
+        ],
+        "hueStrength": 1,
+        "satStrength": 1,
+        "valStrength": 0.325,
+        "useHcl": false
+      }
+    },
+    {
+      "id": "CB_SlotStencil",
+      "type": "image",
+      "imagePath": "assets/UI/Patterns/Thatch_75x75.png",
+      "width": 75,
+      "height": 75,
+      "tintColor": [
+        255,
+        255,
+        255,
+        22
+      ],
+      "harmonize": {
+        "targetColor": [
+          81,
+          66,
+          36,
+          255
+        ],
+        "hueStrength": 1,
+        "satStrength": 1,
+        "valStrength": 0.233,
+        "useHcl": false
+      }
+    },
+    {
+      "id": "CB_SlotBorder",
+      "type": "image",
+      "imagePath": "assets/UI/Frames/Cloth_75x75.png",
+      "width": 75,
+      "height": 75,
+      "tintColor": [
+        152,
+        152,
+        152,
+        255
+      ],
+      "harmonize": {
+        "targetColor": [
+          123,
+          100,
+          55,
+          255
+        ],
+        "hueStrength": 1,
+        "satStrength": 1,
+        "valStrength": 0.302,
+        "useHcl": false,
+        "outlineColor": [
+          55,
+          25,
+          9,
+          255
+        ],
+        "outlineThickness": 1.56,
+        "outlineOpacity": 0.257
+      }
+    },
+    {
+      "id": "CB_SlotHighlight",
+      "type": "image",
+      "imagePath": "assets/UI/Frames/Cloth_66x64.png",
+      "width": 66,
+      "height": 64,
+      "tintColor": [
+        255,
+        255,
+        255,
+        96
+      ],
+      "harmonize": {
+        "targetColor": [
+          38,
+          33,
+          23,
+          255
+        ],
+        "hueStrength": 1,
+        "satStrength": 1,
+        "valStrength": 0.052,
+        "useHcl": false,
+        "outlineColor": [
+          2,
+          1,
+          0,
+          255
+        ],
+        "outlineThickness": 1.87,
+        "outlineOpacity": 0.456
+      }
+    },
+    {
+      "id": "CB_Icon_Helmet4",
+      "type": "image",
+      "imagePath": "assets/UI/Icons/Equipment/Helmet4.png",
+      "width": 48,
+      "height": 48,
+      "tintColor": [
+        137,
+        137,
+        137,
+        91
+      ],
+      "harmonize": {
+        "targetColor": [
+          255,
+          255,
+          255,
+          255
+        ],
+        "hueStrength": 0,
+        "satStrength": 0.0,
+        "valStrength": 0.0,
+        "useHcl": false,
+        "outlineColor": [
+          233,
+          233,
+          233,
+          255
+        ],
+        "outlineThickness": 0.95,
+        "outlineOpacity": 0.812
+      }
+    },
+    {
+      "id": "CB_Icon_ChestArmor3",
+      "type": "image",
+      "imagePath": "assets/UI/Icons/Equipment/ChestArmor3.png",
+      "width": 48,
+      "height": 48,
+      "tintColor": [
+        137,
+        137,
+        137,
+        99
+      ],
+      "harmonize": {
+        "targetColor": [
+          255,
+          255,
+          255,
+          255
+        ],
+        "hueStrength": 0,
+        "satStrength": 0.0,
+        "valStrength": 0.0,
+        "useHcl": false,
+        "outlineColor": [
+          233,
+          233,
+          233,
+          255
+        ],
+        "outlineThickness": 0.95,
+        "outlineOpacity": 0.812
+      }
+    },
+    {
+      "id": "CB_Icon_Shield3",
+      "type": "image",
+      "imagePath": "assets/UI/Icons/Equipment/Shield3.png",
+      "width": 48,
+      "height": 48,
+      "tintColor": [
+        137,
+        137,
+        137,
+        80
+      ],
+      "harmonize": {
+        "targetColor": [
+          255,
+          255,
+          255,
+          255
+        ],
+        "hueStrength": 0,
+        "satStrength": 0.0,
+        "valStrength": 0.0,
+        "useHcl": false,
+        "outlineColor": [
+          233,
+          233,
+          233,
+          255
+        ],
+        "outlineThickness": 0.87,
+        "outlineOpacity": 0.812
+      }
+    },
+    {
+      "id": "CB_Icon_Ring2",
+      "type": "image",
+      "imagePath": "assets/UI/Icons/Equipment/Ring2.png",
+      "width": 48,
+      "height": 48,
+      "tintColor": [
+        137,
+        137,
+        137,
+        113
+      ],
+      "harmonize": {
+        "targetColor": [
+          20,
+          44,
+          79,
+          255
+        ],
+        "hueStrength": 0,
+        "satStrength": 0.517,
+        "valStrength": 0.258,
+        "useHcl": false,
+        "outlineColor": [
+          233,
+          233,
+          233,
+          255
+        ],
+        "outlineThickness": 0.95,
+        "outlineOpacity": 0.812
+      }
+    },
+    {
+      "id": "CB_Icon_Boots2",
+      "type": "image",
+      "imagePath": "assets/UI/Icons/Equipment/Boots2.png",
+      "width": 48,
+      "height": 48,
+      "tintColor": [
+        137,
+        137,
+        137,
+        99
+      ],
+      "harmonize": {
+        "targetColor": [
+          255,
+          255,
+          255,
+          255
+        ],
+        "hueStrength": 0,
+        "satStrength": 0.0,
+        "valStrength": 0.0,
+        "useHcl": false,
+        "outlineColor": [
+          233,
+          233,
+          233,
+          255
+        ],
+        "outlineThickness": 0.95,
+        "outlineOpacity": 0.812
+      }
+    },
+    {
+      "id": "CB_Icon_Sword2",
+      "type": "image",
+      "imagePath": "assets/UI/Icons/Equipment/Sword2.png",
+      "width": 48,
+      "height": 48,
+      "tintColor": [
+        137,
+        137,
+        137,
+        128
+      ],
+      "harmonize": {
+        "targetColor": [
+          255,
+          255,
+          255,
+          255
+        ],
+        "hueStrength": 0,
+        "satStrength": 0.0,
+        "valStrength": 0.0,
+        "useHcl": false,
+        "outlineColor": [
+          233,
+          233,
+          233,
+          255
+        ],
+        "outlineThickness": 0.95,
+        "outlineOpacity": 0.812
+      }
+    },
+    {
+      "id": "CB_SlotLabel",
+      "type": "text",
+      "width": 97,
+      "height": 26,
+      "tintColor": [
+        255,
+        255,
+        255,
+        0
+      ],
+      "defaultText": "Slot",
+      "textRegion": {
+        "x": 0,
+        "y": 0,
+        "w": 97,
+        "h": 26,
+        "align": "center",
+        "valign": "center",
+        "fontFamily": "Quintessential",
+        "fontSize": 28,
+        "fontColor": [
+          242,
+          212,
+          170,
+          255
+        ],
+        "bold": true,
+        "boldStrength": 0.7,
+        "outlineWidth": 1,
+        "outlineColor": [
+          0,
+          0,
+          0,
+          150
+        ]
+      }
+    },
+    {
+      "id": "CB_UnitShadow",
+      "type": "image",
+      "imagePath": "assets/UI/Misc/Diffuse_149x34.png",
+      "width": 149,
+      "height": 34,
+      "tintColor": [
+        0,
+        0,
+        0,
+        141
+      ]
+    },
+    {
+      "id": "CB_Unit",
+      "type": "image",
+      "imagePath": "assets/UI/Portraits/SampleUnit_88x91.png",
+      "width": 88,
+      "height": 91,
+      "tintColor": [
+        255,
+        255,
+        255,
+        255
+      ]
+    },
+    {
+      "id": "CB_BtnTex108",
+      "type": "image",
+      "imagePath": "assets/UI/Frames/CF2I_108x60.png",
+      "width": 108,
+      "height": 60,
+      "tintColor": [
+        255,
+        255,
+        255,
+        255
+      ],
+      "harmonize": {
+        "targetColor": [
+          67,
+          55,
+          30,
+          255
+        ],
+        "hueStrength": 1,
+        "satStrength": 1,
+        "valStrength": 0.5,
+        "useHcl": false
+      }
+    },
+    {
+      "id": "CB_BtnBorder108",
+      "type": "image",
+      "imagePath": "assets/UI/Frames/Cloth_108x60.png",
+      "width": 108,
+      "height": 60,
+      "tintColor": [
+        152,
+        152,
+        152,
+        255
+      ],
+      "harmonize": {
+        "targetColor": [
+          123,
+          100,
+          55,
+          255
+        ],
+        "hueStrength": 1,
+        "satStrength": 1,
+        "valStrength": 0.5,
+        "useHcl": false,
+        "outlineColor": [
+          0,
+          0,
+          0,
+          255
+        ],
+        "outlineThickness": 1.56,
+        "outlineOpacity": 0.133
+      }
+    },
+    {
+      "id": "CB_BtnTex101",
+      "type": "image",
+      "imagePath": "assets/UI/Frames/CF2I_101x60.png",
+      "width": 101,
+      "height": 60,
+      "tintColor": [
+        255,
+        255,
+        255,
+        255
+      ],
+      "harmonize": {
+        "targetColor": [
+          67,
+          55,
+          30,
+          255
+        ],
+        "hueStrength": 1,
+        "satStrength": 1,
+        "valStrength": 0.5,
+        "useHcl": false
+      }
+    },
+    {
+      "id": "CB_BtnBorder101",
+      "type": "image",
+      "imagePath": "assets/UI/Frames/Cloth_101x60.png",
+      "width": 101,
+      "height": 60,
+      "tintColor": [
+        152,
+        152,
+        152,
+        255
+      ],
+      "harmonize": {
+        "targetColor": [
+          123,
+          100,
+          55,
+          255
+        ],
+        "hueStrength": 1,
+        "satStrength": 1,
+        "valStrength": 0.5,
+        "useHcl": false,
+        "outlineColor": [
+          0,
+          0,
+          0,
+          255
+        ],
+        "outlineThickness": 1.56,
+        "outlineOpacity": 0.133
+      }
+    },
+    {
+      "id": "CB_BtnTex114",
+      "type": "image",
+      "imagePath": "assets/UI/Frames/CF2I_114x60.png",
+      "width": 114,
+      "height": 60,
+      "tintColor": [
+        255,
+        255,
+        255,
+        255
+      ],
+      "harmonize": {
+        "targetColor": [
+          67,
+          55,
+          30,
+          255
+        ],
+        "hueStrength": 1,
+        "satStrength": 1,
+        "valStrength": 0.5,
+        "useHcl": false
+      }
+    },
+    {
+      "id": "CB_BtnBorder114",
+      "type": "image",
+      "imagePath": "assets/UI/Frames/Cloth_114x60.png",
+      "width": 114,
+      "height": 60,
+      "tintColor": [
+        152,
+        152,
+        152,
+        255
+      ],
+      "harmonize": {
+        "targetColor": [
+          123,
+          100,
+          55,
+          255
+        ],
+        "hueStrength": 1,
+        "satStrength": 1,
+        "valStrength": 0.5,
+        "useHcl": false,
+        "outlineColor": [
+          0,
+          0,
+          0,
+          255
+        ],
+        "outlineThickness": 1.56,
+        "outlineOpacity": 0.133
+      }
+    },
+    {
+      "id": "CB_BtnIcon_Stats",
+      "type": "image",
+      "imagePath": "assets/UI/Icons/Actions/Stats_39x36.png",
+      "width": 39,
+      "height": 36,
+      "tintColor": [
+        255,
+        255,
+        255,
+        242
+      ],
+      "harmonize": {
+        "targetColor": [
+          255,
+          255,
+          255,
+          255
+        ],
+        "hueStrength": 0,
+        "satStrength": 0.0,
+        "valStrength": 0.0,
+        "useHcl": false,
+        "outlineColor": [
+          255,
+          255,
+          255,
+          255
+        ],
+        "outlineThickness": 0.7,
+        "outlineOpacity": 0.24
+      }
+    },
+    {
+      "id": "CB_BtnIcon_Attack2",
+      "type": "image",
+      "imagePath": "assets/UI/Icons/Actions/Attack2_39x36.png",
+      "width": 39,
+      "height": 36,
+      "tintColor": [
+        255,
+        255,
+        255,
+        242
+      ],
+      "harmonize": {
+        "targetColor": [
+          255,
+          255,
+          255,
+          255
+        ],
+        "hueStrength": 0,
+        "satStrength": 0.0,
+        "valStrength": 0.0,
+        "useHcl": false,
+        "outlineColor": [
+          255,
+          255,
+          255,
+          255
+        ],
+        "outlineThickness": 0.7,
+        "outlineOpacity": 0.24
+      }
+    },
+    {
+      "id": "CB_BtnIcon_Attack",
+      "type": "image",
+      "imagePath": "assets/UI/Icons/Actions/Attack_39x36.png",
+      "width": 39,
+      "height": 36,
+      "tintColor": [
+        255,
+        255,
+        255,
+        242
+      ],
+      "harmonize": {
+        "targetColor": [
+          255,
+          255,
+          255,
+          255
+        ],
+        "hueStrength": 0,
+        "satStrength": 0.0,
+        "valStrength": 0.0,
+        "useHcl": false,
+        "outlineColor": [
+          255,
+          255,
+          255,
+          255
+        ],
+        "outlineThickness": 0.7,
+        "outlineOpacity": 0.24
+      }
+    },
+    {
+      "id": "CB_BtnLabel",
+      "type": "text",
+      "width": 62,
+      "height": 36,
+      "tintColor": [
+        255,
+        255,
+        255,
+        0
+      ],
+      "defaultText": "Btn",
+      "textRegion": {
+        "x": 0,
+        "y": 0,
+        "w": 62,
+        "h": 36,
+        "align": "left",
+        "valign": "center",
+        "fontFamily": "Quintessential",
+        "fontSize": 28,
+        "fontColor": [
+          242,
+          212,
+          170,
+          255
+        ],
+        "bold": true,
+        "boldStrength": 0.7,
+        "outlineWidth": 1,
+        "outlineColor": [
+          0,
+          0,
+          0,
+          150
+        ]
+      }
+    },
+    {
+      "id": "TT_GoldLine",
+      "type": "image",
+      "imagePath": "assets/UI/Misc/white4.png",
+      "width": 4,
+      "height": 4,
+      "tintColor": [
+        255,
+        207,
+        118,
+        102
+      ]
+    },
+    {
+      "id": "TT_GoldLineBright",
+      "type": "image",
+      "imagePath": "assets/UI/Misc/white4.png",
+      "width": 4,
+      "height": 4,
+      "tintColor": [
+        255,
+        207,
+        118,
+        154
+      ]
+    },
+    {
+      "id": "TT_StrengthIcon",
+      "type": "image",
+      "imagePath": "assets/UI/Icons/SturmIcons/SturmStrength_36.png",
+      "width": 36,
+      "height": 36,
+      "tintColor": [
+        255,
+        255,
+        255,
+        255
+      ],
+      "harmonize": {
+        "targetColor": [
+          255,
+          255,
+          255,
+          255
+        ],
+        "hueStrength": 0,
+        "satStrength": 0.0,
+        "valStrength": 0.0,
+        "useHcl": false,
+        "outlineColor": [
+          51,
+          40,
+          40,
+          255
+        ],
+        "outlineThickness": 0.5,
+        "outlineOpacity": 0.88
+      }
+    },
+    {
+      "id": "TT_Underline",
+      "type": "image",
+      "imagePath": "assets/UI/Bars/goldbar_h_173x3.png",
+      "width": 173,
+      "height": 3,
+      "tintColor": [
+        42,
+        41,
+        36,
+        120
+      ],
+      "harmonize": {
+        "targetColor": [
+          72,
+          58,
+          32,
+          255
+        ],
+        "hueStrength": 1,
+        "satStrength": 0.8,
+        "valStrength": 0.36,
+        "useHcl": false,
+        "outlineColor": [
+          0,
+          0,
+          0,
+          255
+        ],
+        "outlineThickness": 0.5,
+        "outlineOpacity": 1
+      }
+    },
+    {
+      "id": "TT_Title",
+      "type": "text",
+      "width": 178,
+      "height": 31,
+      "tintColor": [
+        255,
+        255,
+        255,
+        0
+      ],
+      "defaultText": "Strength",
+      "textRegion": {
+        "x": 0,
+        "y": 0,
+        "w": 178,
+        "h": 31,
+        "align": "left",
+        "valign": "center",
+        "fontFamily": "Quintessential",
+        "fontSize": 31,
+        "fontColor": [
+          245,
+          217,
+          180,
+          255
+        ],
+        "bold": true,
+        "outlineWidth": 1,
+        "outlineColor": [
+          25,
+          14,
+          8,
+          255
+        ]
+      }
+    },
+    {
+      "id": "TT_Desc",
+      "type": "text",
+      "width": 204,
+      "height": 61,
+      "tintColor": [
+        255,
+        255,
+        255,
+        0
+      ],
+      "defaultText": "Strength is raw physical power and increases most melee attacks (and some ranged). Its also used for various effect checks (knockdown).",
+      "textRegion": {
+        "x": 0,
+        "y": 0,
+        "w": 204,
+        "h": 61,
+        "align": "left",
+        "valign": "center",
+        "fontFamily": "Quintessential",
+        "fontSize": 17,
+        "fontColor": [
+          250,
+          224,
+          186,
+          255
+        ],
+        "bold": true,
+        "boldStrength": 0.6,
+        "wordWrap": true,
+        "lineSpacing": -3,
+        "outlineWidth": 1,
+        "outlineColor": [
+          0,
+          0,
+          0,
+          150
+        ]
+      }
+    },
+    {
+      "id": "RT_HumansIcon",
+      "type": "image",
+      "imagePath": "assets/UI/Icons/Population/Humans_36.png",
+      "width": 36,
+      "height": 36,
+      "tintColor": [
+        255,
+        255,
+        255,
+        255
+      ],
+      "harmonize": {
+        "targetColor": [
+          255,
+          255,
+          255,
+          255
+        ],
+        "hueStrength": 0,
+        "satStrength": 0.0,
+        "valStrength": 0.0,
+        "useHcl": false,
+        "outlineColor": [
+          51,
+          40,
+          40,
+          255
+        ],
+        "outlineThickness": 0.5,
+        "outlineOpacity": 0.88
+      }
+    },
+    {
+      "id": "RT_Title",
+      "type": "text",
+      "width": 143,
+      "height": 31,
+      "tintColor": [
+        255,
+        255,
+        255,
+        0
+      ],
+      "defaultText": "Human Population",
+      "textRegion": {
+        "x": 0,
+        "y": 0,
+        "w": 143,
+        "h": 31,
+        "align": "left",
+        "valign": "center",
+        "fontFamily": "Quintessential",
+        "fontSize": 24,
+        "fontColor": [
+          245,
+          217,
+          180,
+          255
+        ],
+        "bold": true,
+        "charSpacing": 1.4,
+        "outlineWidth": 1,
+        "outlineColor": [
+          25,
+          14,
+          8,
+          255
+        ]
+      }
+    },
+    {
+      "id": "RT_HeaderValue",
+      "type": "text",
+      "width": 30,
+      "height": 24,
+      "tintColor": [
+        255,
+        255,
+        255,
+        0
+      ],
+      "defaultText": "20",
+      "textRegion": {
+        "x": 0,
+        "y": 0,
+        "w": 30,
+        "h": 24,
+        "align": "right",
+        "valign": "center",
+        "fontFamily": "Roboto",
+        "fontSize": 30,
+        "fontColor": [
+          88,
+          130,
+          90,
+          255
+        ],
+        "bold": true,
+        "outlineWidth": 1,
+        "outlineColor": [
+          0,
+          0,
+          0,
+          140
+        ]
+      }
+    },
+    {
+      "id": "RT_Parchment",
+      "type": "image",
+      "imagePath": "assets/UI/Patterns/Parchment_205x123.png",
+      "width": 205,
+      "height": 123,
+      "tintColor": [
+        255,
+        255,
+        255,
+        255
+      ],
+      "harmonize": {
+        "targetColor": [
+          7,
+          6,
+          3,
+          255
+        ],
+        "hueStrength": 0,
+        "satStrength": 0.438,
+        "valStrength": 0.787,
+        "useHcl": false
+      }
+    },
+    {
+      "id": "RT_BoxStencil",
+      "type": "image",
+      "imagePath": "assets/UI/Patterns/Thatch_206x123.png",
+      "width": 206,
+      "height": 123,
+      "tintColor": [
+        255,
+        255,
+        255,
+        10
+      ]
+    },
+    {
+      "id": "RT_BoxFrame",
+      "type": "image",
+      "imagePath": "assets/UI/Frames/Renai_207x125.png",
+      "width": 207,
+      "height": 125,
+      "tintColor": [
+        255,
+        255,
+        255,
+        255
+      ],
+      "harmonize": {
+        "targetColor": [
+          150,
+          134,
+          107,
+          255
+        ],
+        "hueStrength": 1,
+        "satStrength": 0.266,
+        "valStrength": 0.466,
+        "useHcl": false
+      }
+    },
+    {
+      "id": "RT_Label",
+      "type": "text",
+      "width": 167,
+      "height": 24,
+      "tintColor": [
+        255,
+        255,
+        255,
+        0
+      ],
+      "defaultText": "Label",
+      "textRegion": {
+        "x": 0,
+        "y": 0,
+        "w": 167,
+        "h": 24,
+        "align": "right",
+        "valign": "center",
+        "fontFamily": "Quintessential",
+        "fontSize": 24,
+        "fontColor": [
+          248,
+          219,
+          184,
+          255
+        ],
+        "bold": true,
+        "boldStrength": 0.7,
+        "charSpacing": 1.25,
+        "outlineWidth": 1,
+        "outlineColor": [
+          0,
+          0,
+          0,
+          150
+        ]
+      }
+    },
+    {
+      "id": "RT_ValueDefault",
+      "type": "text",
+      "width": 45,
+      "height": 24,
+      "tintColor": [
+        255,
+        255,
+        255,
+        0
+      ],
+      "defaultText": "0",
+      "textRegion": {
+        "x": 0,
+        "y": 0,
+        "w": 45,
+        "h": 24,
+        "align": "right",
+        "valign": "center",
+        "fontFamily": "Roboto",
+        "fontSize": 22,
+        "fontColor": [
+          202,
+          179,
+          143,
+          255
+        ],
+        "bold": true,
+        "outlineWidth": 1,
+        "outlineColor": [
+          0,
+          0,
+          0,
+          140
+        ]
+      }
+    },
+    {
+      "id": "RT_ValueGreen",
+      "type": "text",
+      "width": 45,
+      "height": 24,
+      "tintColor": [
+        255,
+        255,
+        255,
+        0
+      ],
+      "defaultText": "0",
+      "textRegion": {
+        "x": 0,
+        "y": 0,
+        "w": 45,
+        "h": 24,
+        "align": "right",
+        "valign": "center",
+        "fontFamily": "Roboto",
+        "fontSize": 22,
+        "fontColor": [
+          88,
+          130,
+          90,
+          255
+        ],
+        "bold": true,
+        "outlineWidth": 1,
+        "outlineColor": [
+          0,
+          0,
+          0,
+          140
+        ]
+      }
+    },
+    {
+      "id": "RT_ValueRed",
+      "type": "text",
+      "width": 45,
+      "height": 24,
+      "tintColor": [
+        255,
+        255,
+        255,
+        0
+      ],
+      "defaultText": "0",
+      "textRegion": {
+        "x": 0,
+        "y": 0,
+        "w": 45,
+        "h": 24,
+        "align": "right",
+        "valign": "center",
+        "fontFamily": "Roboto",
+        "fontSize": 22,
+        "fontColor": [
+          153,
+          45,
+          37,
+          255
+        ],
+        "bold": true,
+        "outlineWidth": 1,
+        "outlineColor": [
+          0,
+          0,
+          0,
+          140
+        ]
+      }
+    },
+    {
+      "id": "RT_Desc",
+      "type": "text",
+      "width": 200,
+      "height": 60,
+      "tintColor": [
+        255,
+        255,
+        255,
+        0
+      ],
+      "defaultText": "The population of humans in your town. Only available humans can be used for new assignments.",
+      "textRegion": {
+        "x": 0,
+        "y": 0,
+        "w": 200,
+        "h": 60,
+        "align": "left",
+        "valign": "top",
+        "fontFamily": "Quintessential",
+        "fontSize": 21,
+        "fontColor": [
+          241,
+          216,
+          180,
+          255
+        ],
+        "bold": true,
+        "boldStrength": 0.6,
+        "wordWrap": true,
+        "lineSpacing": -4,
+        "outlineWidth": 1,
+        "outlineColor": [
+          0,
+          0,
+          0,
+          150
+        ]
+      }
     }
   ]
 }

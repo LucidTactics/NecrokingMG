@@ -98,6 +98,33 @@
       "borderTop": 150,
       "borderBottom": 150,
       "tileEdges": false
+    },
+    {
+      "id": "RenaiThinBorder16",
+      "texture": "assets/UI/Frames/RenaiThinFrame.png",
+      "borderLeft": 16,
+      "borderRight": 16,
+      "borderTop": 16,
+      "borderBottom": 16,
+      "tileEdges": false
+    },
+    {
+      "id": "CircleBox",
+      "texture": "assets/UI/Frames/CircleFrame2Inner.png",
+      "borderLeft": 126,
+      "borderRight": 129,
+      "borderTop": 129,
+      "borderBottom": 133,
+      "tileEdges": false
+    },
+    {
+      "id": "SwatchBanner",
+      "texture": "assets/UI/Ribbons/Swatch1.3.png",
+      "borderLeft": 10,
+      "borderRight": 7,
+      "borderTop": 9,
+      "borderBottom": 8,
+      "tileEdges": false
     }
   ]
 }

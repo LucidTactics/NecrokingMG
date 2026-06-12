@@ -254,13 +254,14 @@ public class RuntimeWidgetRenderer
 
                     if (!string.IsNullOrEmpty(imgPath))
                     {
-                        var imgTex = GetOrLoadTexture(imgPath);
+                        // Harmonized lookup falls back to the raw texture (overrides miss the cache)
+                        var imgTex = GetTexture(imgPath, "el:" + elemDef.Id);
                         if (imgTex != null) { _batch.Draw(imgTex, rect, tint); drawn = true; }
                     }
                 }
                 else if (!string.IsNullOrEmpty(elemDef.NineSlice))
                 {
-                    var childNs = GetOrLoadNineSlice(elemDef.NineSlice);
+                    var childNs = GetNineSlice(elemDef.NineSlice, "el:" + elemDef.Id);
                     if (childNs != null) { childNs.Draw(_batch, rect, tint); drawn = true; }
                 }
 
@@ -299,23 +300,23 @@ public class RuntimeWidgetRenderer
         string valign = !string.IsNullOrEmpty(txo?.VAlign) ? txo.VAlign : tr?.VAlign ?? "top";
 
         var dynFont = _fontMgr?.GetFont(fontSize, string.IsNullOrEmpty(fontFamily) ? null : fontFamily);
-        Vector2 textSize = dynFont?.MeasureString(text) ?? new Vector2(text.Length * 8, 14);
+        if (dynFont == null) return;
+        bool wordWrap = txo?.WordWrap ?? tr?.WordWrap ?? false;
+        float charSpacing = txo?.CharSpacing ?? tr?.CharSpacing ?? 0f;
+        bool bold = txo?.Bold ?? tr?.Bold ?? false;
+        if (wordWrap)
+            text = WidgetLayoutUtils.WrapText(dynFont, text, rect.Width - 4, charSpacing);
+        int lineSpacing = txo?.LineSpacing ?? tr?.LineSpacing ?? 0;
 
-        float tx = align switch
-        {
-            "center" => rect.X + (rect.Width - textSize.X) / 2,
-            "right" => rect.X + rect.Width - textSize.X - 2,
-            _ => rect.X + 2
-        };
-        float ty = valign switch
-        {
-            "center" => rect.Y + (rect.Height - textSize.Y) / 2,
-            "bottom" => rect.Y + rect.Height - textSize.Y - 2,
-            _ => rect.Y + 2
-        };
-
-        if (dynFont != null)
-            _batch.DrawString(dynFont, text, new Vector2((int)tx, (int)ty), fontColor);
+        int outlineW = txo?.TextOutlineWidth ?? tr?.TextOutlineWidth ?? 0;
+        byte[]? outlineCol = txo?.TextOutlineColor ?? tr?.TextOutlineColor;
+        Color outlineColor = outlineCol != null ? ByteColor(outlineCol) : default;
+        if (outlineCol == null) outlineW = 0;
+        float boldStrength = txo?.BoldStrength ?? tr?.BoldStrength ?? 1f;
+        int outlineOffX = txo?.OutlineOffsetX ?? tr?.OutlineOffsetX ?? 0;
+        int outlineOffY = txo?.OutlineOffsetY ?? tr?.OutlineOffsetY ?? 0;
+        WidgetLayoutUtils.DrawTextBlock(_batch, dynFont, text, rect, fontColor, align, valign,
+            lineSpacing, charSpacing, bold, outlineW, outlineColor, boldStrength, outlineOffX, outlineOffY);
     }
 
     private void DrawStroke(UIEditorElementDef elemDef, Rectangle rect)
@@ -344,7 +345,7 @@ public class RuntimeWidgetRenderer
         // Background (use harmonized if available)
         if (!string.IsNullOrEmpty(def.Background))
         {
-            var bgNs = GetNineSlice(def.Background, "bg");
+            var bgNs = GetNineSlice(def.Background, "bg:" + def.Id);
             if (bgNs != null)
             {
                 int bi = def.BackgroundInset;
@@ -362,12 +363,12 @@ public class RuntimeWidgetRenderer
 
             if (!string.IsNullOrEmpty(def.StencilImagePath))
             {
-                var stTex = GetTexture(def.StencilImagePath, "st");
+                var stTex = GetTexture(def.StencilImagePath, "st:" + def.Id);
                 if (stTex != null) _batch.Draw(stTex, stRect, stColor);
             }
             else if (!string.IsNullOrEmpty(def.Stencil))
             {
-                var stNs = GetNineSlice(def.Stencil, "st");
+                var stNs = GetNineSlice(def.Stencil, "st:" + def.Id);
                 if (stNs != null) stNs.Draw(_batch, stRect, stColor);
             }
         }
@@ -375,11 +376,13 @@ public class RuntimeWidgetRenderer
         // Frame (use harmonized if available)
         if (drawFrame && !string.IsNullOrEmpty(def.Frame))
         {
-            var frNs = GetNineSlice(def.Frame, "fr");
+            var frNs = GetNineSlice(def.Frame, "fr:" + def.Id);
             if (frNs != null)
             {
                 var frColor = def.FrameTint != null ? ByteColor(def.FrameTint) : Color.White;
-                frNs.Draw(_batch, new Rectangle(x, y, w, h), frColor);
+                int fi = def.FrameInset;
+                frNs.Draw(_batch, new Rectangle(x + fi, y + fi, w - fi * 2 - def.FrameInsetR, h - fi * 2),
+                    frColor, def.FrameScale);
             }
         }
     }
@@ -388,11 +391,13 @@ public class RuntimeWidgetRenderer
     {
         if (!string.IsNullOrEmpty(def.Frame))
         {
-            var frNs = GetNineSlice(def.Frame, "fr");
+            var frNs = GetNineSlice(def.Frame, "fr:" + def.Id);
             if (frNs != null)
             {
                 var frColor = def.FrameTint != null ? ByteColor(def.FrameTint) : Color.White;
-                frNs.Draw(_batch, new Rectangle(x, y, w, h), frColor);
+                int fi = def.FrameInset;
+                frNs.Draw(_batch, new Rectangle(x + fi, y + fi, w - fi * 2 - def.FrameInsetR, h - fi * 2),
+                    frColor, def.FrameScale);
             }
         }
     }
@@ -527,7 +532,22 @@ public class RuntimeWidgetRenderer
                         FontFamily = trEl.TryGetProperty("fontFamily", out var ff) ? ff.GetString() ?? "" : "",
                         FontSize = trEl.TryGetProperty("fontSize", out var fs) ? fs.GetInt32() : 14,
                         FontColor = new byte[] { 255, 255, 255, 255 },
+                        WordWrap = trEl.TryGetProperty("wordWrap", out var ww) && ww.GetBoolean(),
+                        LineSpacing = trEl.TryGetProperty("lineSpacing", out var lsp) ? lsp.GetInt32() : 0,
+                        CharSpacing = trEl.TryGetProperty("charSpacing", out var csp) ? csp.GetSingle() : 0f,
+                        Bold = trEl.TryGetProperty("bold", out var bld) && bld.GetBoolean(),
+                        BoldStrength = trEl.TryGetProperty("boldStrength", out var bst) ? bst.GetSingle() : 1f,
+                        TextOutlineWidth = trEl.TryGetProperty("outlineWidth", out var tow) ? tow.GetInt32() : 0,
+                        OutlineOffsetX = trEl.TryGetProperty("outlineOffsetX", out var oox) ? oox.GetInt32() : 0,
+                        OutlineOffsetY = trEl.TryGetProperty("outlineOffsetY", out var ooy) ? ooy.GetInt32() : 0,
                     };
+                    if (trEl.TryGetProperty("outlineColor", out var tocArr) && tocArr.ValueKind == JsonValueKind.Array)
+                    {
+                        var toc = tocArr.EnumerateArray().ToArray();
+                        if (toc.Length >= 4)
+                            elem.TextRegion.TextOutlineColor = new byte[] { (byte)toc[0].GetInt32(),
+                                (byte)toc[1].GetInt32(), (byte)toc[2].GetInt32(), (byte)toc[3].GetInt32() };
+                    }
                     if (trEl.TryGetProperty("fontColor", out var fcArr) && fcArr.ValueKind == JsonValueKind.Array)
                     {
                         var fca = fcArr.EnumerateArray().ToArray();
@@ -547,6 +567,7 @@ public class RuntimeWidgetRenderer
                 }
                 if (el.TryGetProperty("strokeMode", out var sm))
                     elem.StrokeMode = sm.GetString() ?? "inside";
+                elem.Harmonize = ReadHarmonizeSettings(el, "harmonize");
 
                 _elementDefs.Add(elem);
             }
@@ -574,8 +595,11 @@ public class RuntimeWidgetRenderer
                     Width = el.TryGetProperty("width", out var w) ? w.GetInt32() : 200,
                     Height = el.TryGetProperty("height", out var h) ? h.GetInt32() : 100,
                     BackgroundScale = el.TryGetProperty("backgroundScale", out var bs) ? bs.GetSingle() : 1f,
+                    FrameScale = el.TryGetProperty("frameScale", out var fs) ? fs.GetSingle() : 1f,
                     BackgroundInset = el.TryGetProperty("backgroundInset", out var bii) ? bii.GetInt32() : 0,
                     StencilInset = el.TryGetProperty("stencilInset", out var sii) ? sii.GetInt32() : 0,
+                    FrameInset = el.TryGetProperty("frameInset", out var fii) ? fii.GetInt32() : 0,
+                    FrameInsetR = el.TryGetProperty("frameInsetR", out var fir) ? fir.GetInt32() : 0,
                     Modal = el.TryGetProperty("modal", out var md) && md.GetBoolean(),
                     Layout = el.TryGetProperty("layout", out var ly) ? ly.GetString() ?? "none" : "none",
                     LayoutPadding = el.TryGetProperty("layoutPadding", out var lp) ? lp.GetInt32() : 0,
@@ -637,6 +661,27 @@ public class RuntimeWidgetRenderer
                             }
                             if (txo.TryGetProperty("wordWrap", out var txww))
                                 child.TextOverride.WordWrap = txww.GetBoolean();
+                            if (txo.TryGetProperty("lineSpacing", out var txls))
+                                child.TextOverride.LineSpacing = txls.GetInt32();
+                            if (txo.TryGetProperty("charSpacing", out var txcs))
+                                child.TextOverride.CharSpacing = txcs.GetSingle();
+                            if (txo.TryGetProperty("bold", out var txbd))
+                                child.TextOverride.Bold = txbd.GetBoolean();
+                            if (txo.TryGetProperty("boldStrength", out var txbs))
+                                child.TextOverride.BoldStrength = txbs.GetSingle();
+                            if (txo.TryGetProperty("outlineWidth", out var txow))
+                                child.TextOverride.TextOutlineWidth = txow.GetInt32();
+                            if (txo.TryGetProperty("outlineOffsetX", out var txoox))
+                                child.TextOverride.OutlineOffsetX = txoox.GetInt32();
+                            if (txo.TryGetProperty("outlineOffsetY", out var txooy))
+                                child.TextOverride.OutlineOffsetY = txooy.GetInt32();
+                            if (txo.TryGetProperty("outlineColor", out var txoc2) && txoc2.ValueKind == JsonValueKind.Array)
+                            {
+                                var oca = txoc2.EnumerateArray().ToArray();
+                                if (oca.Length >= 4)
+                                    child.TextOverride.TextOutlineColor = new byte[] { (byte)oca[0].GetInt32(),
+                                        (byte)oca[1].GetInt32(), (byte)oca[2].GetInt32(), (byte)oca[3].GetInt32() };
+                            }
                         }
                         wd.Children.Add(child);
                     }
@@ -678,6 +723,21 @@ public class RuntimeWidgetRenderer
                 s.TargetColor = new byte[] { (byte)a[0].GetInt32(), (byte)a[1].GetInt32(),
                     (byte)a[2].GetInt32(), (byte)a[3].GetInt32() };
         }
+        if (h.TryGetProperty("gradColor", out var gc) && gc.ValueKind == JsonValueKind.Array && gc.GetArrayLength() >= 4)
+        {
+            var a = gc.EnumerateArray().ToArray();
+            s.GradColor = new byte[] { (byte)a[0].GetInt32(), (byte)a[1].GetInt32(),
+                (byte)a[2].GetInt32(), (byte)a[3].GetInt32() };
+        }
+        if (h.TryGetProperty("gradStrength", out var gst)) s.GradStrength = gst.GetSingle();
+        if (h.TryGetProperty("outlineColor", out var oc) && oc.ValueKind == JsonValueKind.Array && oc.GetArrayLength() >= 4)
+        {
+            var a = oc.EnumerateArray().ToArray();
+            s.OutlineColor = new byte[] { (byte)a[0].GetInt32(), (byte)a[1].GetInt32(),
+                (byte)a[2].GetInt32(), (byte)a[3].GetInt32() };
+        }
+        if (h.TryGetProperty("outlineThickness", out var oth)) s.OutlineThickness = oth.GetSingle();
+        if (h.TryGetProperty("outlineOpacity", out var oop)) s.OutlineOpacity = oop.GetSingle();
         return s.HasEffect ? s : null;
     }
 
@@ -724,17 +784,28 @@ public class RuntimeWidgetRenderer
     //  Harmonization
     // ═══════════════════════════════════════
 
-    /// <summary>Generate harmonized textures for all widgets that have harmonize settings.</summary>
+    /// <summary>Generate harmonized textures for all widgets/elements that have harmonize settings.</summary>
     private void GenerateHarmonizedTextures()
     {
+        // Per-widget prefixes: different widgets may harmonize the SAME texture
+        // differently (e.g. the leather background dark vs light).
         foreach (var wd in _widgetDefs)
         {
             if (wd.BgHarmonize != null && wd.BgHarmonize.HasEffect)
-                ApplyHarmonize(wd.Background, "", "bg", wd.BgHarmonize);
+                ApplyHarmonize(wd.Background, "", "bg:" + wd.Id, wd.BgHarmonize);
             if (wd.StencilHarmonize != null && wd.StencilHarmonize.HasEffect)
-                ApplyHarmonize(wd.Stencil, wd.StencilImagePath, "st", wd.StencilHarmonize);
+                ApplyHarmonize(wd.Stencil, wd.StencilImagePath, "st:" + wd.Id, wd.StencilHarmonize);
             if (wd.FrameHarmonize != null && wd.FrameHarmonize.HasEffect)
-                ApplyHarmonize(wd.Frame, "", "fr", wd.FrameHarmonize);
+                ApplyHarmonize(wd.Frame, "", "fr:" + wd.Id, wd.FrameHarmonize);
+        }
+        // Elements use a per-id prefix: the same texture can be harmonized
+        // differently by different elements (e.g. a frame as shadow vs as gold).
+        foreach (var elem in _elementDefs)
+        {
+            if (elem.Harmonize == null || !elem.Harmonize.HasEffect) continue;
+            string imgPath = elem.Type == "image" ? elem.ImagePath : "";
+            string nsRef = elem.Type == "nineSlice" ? elem.NineSlice : "";
+            ApplyHarmonize(nsRef, imgPath, "el:" + elem.Id, elem.Harmonize);
         }
     }
 

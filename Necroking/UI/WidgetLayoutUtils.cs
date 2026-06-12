@@ -1,4 +1,6 @@
 using System.Collections.Generic;
+using System.Text;
+using FontStashSharp;
 using Microsoft.Xna.Framework;
 using Necroking.Editor;
 
@@ -10,6 +12,99 @@ namespace Necroking.UI;
 /// </summary>
 public static class WidgetLayoutUtils
 {
+    /// <summary>Greedy word-wrap to maxWidth using the font's measurements.
+    /// Existing newlines are preserved as paragraph breaks. Shared by the
+    /// editor preview and runtime renderer so wrapped text matches.</summary>
+    public static string WrapText(FontStashSharp.SpriteFontBase font, string text, float maxWidth,
+        float charSpacing = 0f)
+    {
+        if (maxWidth <= 0 || string.IsNullOrEmpty(text)) return text;
+        var sb = new StringBuilder();
+        var paragraphs = text.Split('\n');
+        for (int p = 0; p < paragraphs.Length; p++)
+        {
+            if (p > 0) sb.Append('\n');
+            string line = "";
+            foreach (var word in paragraphs[p].Split(' '))
+            {
+                if (word.Length == 0) continue;
+                string candidate = line.Length == 0 ? word : line + " " + word;
+                float cw = font.MeasureString(candidate).X + charSpacing * (candidate.Length - 1);
+                if (line.Length > 0 && cw > maxWidth)
+                {
+                    sb.Append(line).Append('\n');
+                    line = word;
+                }
+                else
+                {
+                    line = candidate;
+                }
+            }
+            sb.Append(line);
+        }
+        return sb.ToString();
+    }
+
+    /// <summary>Draw a (possibly multi-line) text block into rect with per-line
+    /// horizontal alignment, block vertical alignment, and extra line spacing in
+    /// px. Shared by the editor preview and runtime renderer. Positions are
+    /// rounded to integer pixels (PointClamp text rule).</summary>
+    public static void DrawTextBlock(Microsoft.Xna.Framework.Graphics.SpriteBatch batch,
+        FontStashSharp.SpriteFontBase font, string text, Rectangle rect, Color color,
+        string align, string valign, int lineSpacing, float charSpacing = 0f, bool bold = false,
+        int outlineWidth = 0, Color outlineColor = default, float boldStrength = 1f,
+        int outlineOffsetX = 0, int outlineOffsetY = 0)
+    {
+        var lines = text.Split('\n');
+        // Exact per-line advance as DrawString uses internally (version-proof:
+        // two-line measurement minus one-line measurement).
+        float oneLine = font.MeasureString("Ay").Y;
+        float lineH = font.MeasureString("Ay\nAy").Y - oneLine;
+        float blockH = oneLine + (lines.Length - 1) * (lineH + lineSpacing);
+
+        float y = valign switch
+        {
+            "center" => rect.Y + (rect.Height - blockH) / 2,
+            "bottom" => rect.Y + rect.Height - blockH - 2,
+            _ => rect.Y + 2
+        };
+
+        foreach (var line in lines)
+        {
+            if (line.Length > 0)
+            {
+                float lw = font.MeasureString(line).X + charSpacing * (line.Length - 1);
+                float x = align switch
+                {
+                    "center" => rect.X + (rect.Width - lw) / 2,
+                    "right" => rect.X + rect.Width - lw - 2,
+                    _ => rect.X + 2
+                };
+                if (outlineWidth > 0)
+                {
+                    // TMP-style UNDERLAY: a dilated silhouette of the glyphs drawn
+                    // BEHIND the face, optionally offset. A stroked draw tinted with
+                    // the (dark) underlay color renders the whole silhouette dark
+                    // (FontStash bakes the stroke black and the face takes the tint),
+                    // dilated by effectAmount px. Exactly one pass — never bold-doubled
+                    // (a second semi-transparent dark pass reads as mud).
+                    // NOTE: FontStash anchors the stroked bitmap so the expansion
+                    // lands down-right — offset by -amount to center the dilation.
+                    batch.DrawString(font, line,
+                        new Vector2((int)x + outlineOffsetX - outlineWidth, (int)y + outlineOffsetY - outlineWidth),
+                        outlineColor, characterSpacing: charSpacing,
+                        effect: FontSystemEffect.Stroked, effectAmount: outlineWidth);
+                }
+                batch.DrawString(font, line, new Vector2((int)x, (int)y), color,
+                    characterSpacing: charSpacing);
+                if (bold) // face weight only: +1px horizontal pass, boldStrength = opacity
+                    batch.DrawString(font, line, new Vector2((int)x + 1, (int)y), color * boldStrength,
+                        characterSpacing: charSpacing);
+            }
+            y += lineH + lineSpacing;
+        }
+    }
+
     public static List<Rectangle> ComputeLayoutRects(UIEditorWidgetDef def, int wdX, int wdY)
     {
         var rects = new List<Rectangle>();
