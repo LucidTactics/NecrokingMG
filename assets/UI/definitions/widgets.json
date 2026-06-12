@@ -4936,11 +4936,11 @@
     {
       "id": "UTD_eqBox",
       "width": 463,
-      "height": 198,
+      "height": 190,
       "autoSizeHeight": true,
       "layout": "vertical",
       "layoutPadTop": 1,
-      "layoutPadBottom": 8,
+      "layoutPadBottom": 0,
       "backgroundImagePath": "assets/UI/Ribbons/BlueSwath_eqbox_463x198.png",
       "backgroundTint": [
         255,
@@ -5050,7 +5050,7 @@
     {
       "id": "UTD_eqSection",
       "width": 468,
-      "height": 226,
+      "height": 218,
       "autoSizeHeight": true,
       "layout": "vertical",
       "modal": false,
@@ -5070,7 +5070,7 @@
           "x": 3,
           "y": 0,
           "width": 463,
-          "height": 198,
+          "height": 190,
           "anchor": 0
         }
       ]
@@ -5261,11 +5261,11 @@
     {
       "id": "UTD_atBox",
       "width": 463,
-      "height": 90,
+      "height": 82,
       "autoSizeHeight": true,
       "layout": "vertical",
       "layoutPadTop": 1,
-      "layoutPadBottom": 8,
+      "layoutPadBottom": 0,
       "backgroundImagePath": "assets/UI/Ribbons/BlueSwath_atbox_463x83.png",
       "backgroundTint": [
         255,
@@ -5339,7 +5339,7 @@
     {
       "id": "UTD_atSection",
       "width": 468,
-      "height": 117,
+      "height": 109,
       "autoSizeHeight": true,
       "layout": "vertical",
       "modal": false,
@@ -5359,7 +5359,7 @@
           "x": 3,
           "y": 0,
           "width": 463,
-          "height": 90,
+          "height": 82,
           "anchor": 0
         }
       ]

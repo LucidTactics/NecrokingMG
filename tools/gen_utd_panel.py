@@ -57,10 +57,14 @@ def main():
 
         box = els[box_el]
         pat = els[pat_el]
-        box_h = n_rows * ROW_H + 9
+        # No bottom pad: in the static design the next section's banner
+        # OVERLAPS the box's bottom 8-10px, so the pad was never visible —
+        # stacked sections must end the box at the last row or the pad shows
+        # as a bare strip above the following banner.
+        box_h = n_rows * ROW_H + 1
         wd['widgets'].append(dict(
             id=f'UTD_{prefix}Box', width=463, height=box_h, autoSizeHeight=True,
-            layout='vertical', layoutPadTop=1, layoutPadBottom=8,
+            layout='vertical', layoutPadTop=1, layoutPadBottom=0,
             backgroundImagePath=box['imagePath'], backgroundTint=box['tintColor'],
             bgHarmonize=box['harmonize'],
             stencilImagePath=pat['imagePath'], stencilTint=pat['tintColor'], stencilInset=4,
