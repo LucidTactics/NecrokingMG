@@ -3943,6 +3943,1531 @@
           "element": "RT_Desc"
         }
       ]
+    },
+    {
+      "id": "UTD_DescSection",
+      "width": 468,
+      "height": 192,
+      "modal": false,
+      "children": [
+        {
+          "name": "ud_box",
+          "widget": "UD_Box",
+          "x": 5,
+          "y": 40,
+          "width": 457,
+          "height": 164,
+          "anchor": 0
+        },
+        {
+          "name": "ud_boxpattern",
+          "element": "UD_BoxPattern",
+          "x": 6,
+          "y": 43,
+          "width": 452,
+          "height": 157,
+          "anchor": 0
+        },
+        {
+          "name": "ud_pframe_shadow",
+          "widget": "UD_PortraitFrameShadow",
+          "x": 15,
+          "y": 50,
+          "width": 148,
+          "height": 148,
+          "anchor": 0
+        },
+        {
+          "name": "ud_parchment",
+          "element": "UD_PortraitParchment",
+          "x": 15,
+          "y": 50,
+          "width": 142,
+          "height": 143,
+          "anchor": 0
+        },
+        {
+          "name": "ud_pstencil",
+          "element": "UD_PortraitStencil",
+          "x": 16,
+          "y": 50,
+          "width": 140,
+          "height": 143,
+          "anchor": 0
+        },
+        {
+          "name": "ud_portrait",
+          "element": "UD_UnitPortrait",
+          "x": 19,
+          "y": 53,
+          "width": 138,
+          "height": 139,
+          "anchor": 0
+        },
+        {
+          "name": "ud_pframe",
+          "widget": "UD_PortraitFrame",
+          "x": 12,
+          "y": 48,
+          "width": 147,
+          "height": 147,
+          "anchor": 0
+        },
+        {
+          "name": "ud_desc",
+          "element": "UD_Description",
+          "x": 173,
+          "y": 50,
+          "width": 284,
+          "height": 143,
+          "anchor": 0,
+          "textOverride": {
+            "x": 0,
+            "y": 0,
+            "w": 284,
+            "h": 143,
+            "align": "left",
+            "valign": "top",
+            "fontFamily": "Quintessential",
+            "fontSize": 21,
+            "fontColor": [
+              242,
+              212,
+              170,
+              255
+            ],
+            "wordWrap": true,
+            "lineSpacing": 2,
+            "bold": true,
+            "boldStrength": 0.7,
+            "outlineWidth": 1,
+            "outlineColor": [
+              0,
+              0,
+              0,
+              150
+            ]
+          }
+        },
+        {
+          "name": "ud_title_swatch",
+          "element": "UD_TitleSwatchImg",
+          "x": 5,
+          "y": 4,
+          "width": 457,
+          "height": 40,
+          "anchor": 0
+        },
+        {
+          "name": "ud_title_heraldry",
+          "element": "UD_TitleHeraldry",
+          "x": 5,
+          "y": 4,
+          "width": 457,
+          "height": 40,
+          "anchor": 0
+        },
+        {
+          "name": "ud_title_drop",
+          "element": "UD_TitleTextShadow",
+          "x": 30,
+          "y": 5,
+          "width": 401,
+          "height": 42,
+          "anchor": 0
+        },
+        {
+          "name": "ud_title",
+          "element": "UD_TitleText",
+          "x": 28,
+          "y": 3,
+          "width": 401,
+          "height": 42,
+          "anchor": 0
+        }
+      ]
+    },
+    {
+      "id": "UTD_StatsSection",
+      "width": 468,
+      "height": 165,
+      "modal": false,
+      "children": [
+        {
+          "name": "st_box",
+          "element": "ST_StatBox",
+          "x": 3,
+          "y": 31,
+          "width": 463,
+          "height": 137,
+          "anchor": 0
+        },
+        {
+          "name": "st_rowswatch0",
+          "element": "ST_RowSwatch",
+          "x": 3,
+          "y": 31,
+          "width": 463,
+          "height": 30,
+          "anchor": 0
+        },
+        {
+          "name": "st_rowswatch2",
+          "element": "ST_RowSwatch",
+          "x": 3,
+          "y": 85,
+          "width": 463,
+          "height": 30,
+          "anchor": 0
+        },
+        {
+          "name": "st_rowswatch4",
+          "element": "ST_RowSwatch",
+          "x": 3,
+          "y": 139,
+          "width": 463,
+          "height": 30,
+          "anchor": 0
+        },
+        {
+          "name": "st_r0c0_icon",
+          "element": "ST_Icon_HP",
+          "x": 7,
+          "y": 34,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "st_r0c0_label",
+          "element": "ST_Label",
+          "x": 34,
+          "y": 34,
+          "width": 90,
+          "height": 24,
+          "anchor": 0,
+          "defaultText": "Hp"
+        },
+        {
+          "name": "st_r0c0_value",
+          "element": "ST_Value",
+          "x": 93,
+          "y": 34,
+          "width": 54,
+          "height": 24,
+          "anchor": 0,
+          "defaultText": "10/10"
+        },
+        {
+          "name": "st_r0c1_icon",
+          "element": "ST_Icon_Spirit",
+          "x": 160,
+          "y": 34,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "st_r0c1_label",
+          "element": "ST_Label",
+          "x": 187,
+          "y": 34,
+          "width": 90,
+          "height": 24,
+          "anchor": 0,
+          "defaultText": "Spirit"
+        },
+        {
+          "name": "st_r0c1_value",
+          "element": "ST_Value",
+          "x": 246,
+          "y": 34,
+          "width": 54,
+          "height": 24,
+          "anchor": 0,
+          "defaultText": "2"
+        },
+        {
+          "name": "st_r0c2_icon",
+          "element": "ST_Icon_Morale",
+          "x": 313,
+          "y": 34,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "st_r0c2_label",
+          "element": "ST_Label",
+          "x": 340,
+          "y": 34,
+          "width": 90,
+          "height": 24,
+          "anchor": 0,
+          "defaultText": "Morale"
+        },
+        {
+          "name": "st_r0c2_value",
+          "element": "ST_Value",
+          "x": 399,
+          "y": 34,
+          "width": 54,
+          "height": 24,
+          "anchor": 0,
+          "defaultText": "16/16"
+        },
+        {
+          "name": "st_r1c0_icon",
+          "element": "ST_Icon_Size",
+          "x": 7,
+          "y": 61,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "st_r1c0_label",
+          "element": "ST_Label",
+          "x": 34,
+          "y": 61,
+          "width": 90,
+          "height": 24,
+          "anchor": 0,
+          "defaultText": "Size"
+        },
+        {
+          "name": "st_r1c0_value",
+          "element": "ST_Value",
+          "x": 93,
+          "y": 61,
+          "width": 54,
+          "height": 24,
+          "anchor": 0,
+          "defaultText": "2"
+        },
+        {
+          "name": "st_r1c1_icon",
+          "element": "ST_Icon_Tough",
+          "x": 160,
+          "y": 61,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "st_r1c1_label",
+          "element": "ST_Label",
+          "x": 187,
+          "y": 61,
+          "width": 90,
+          "height": 24,
+          "anchor": 0,
+          "defaultText": "Toughness"
+        },
+        {
+          "name": "st_r1c1_value",
+          "element": "ST_Value",
+          "x": 246,
+          "y": 61,
+          "width": 54,
+          "height": 24,
+          "anchor": 0,
+          "defaultText": "1"
+        },
+        {
+          "name": "st_r1c2_icon",
+          "element": "ST_Icon_Magic",
+          "x": 313,
+          "y": 61,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "st_r1c2_label",
+          "element": "ST_Label",
+          "x": 340,
+          "y": 61,
+          "width": 90,
+          "height": 24,
+          "anchor": 0,
+          "defaultText": "Magic Power",
+          "textOverride": {
+            "x": 0,
+            "y": 0,
+            "w": 90,
+            "h": 24,
+            "align": "left",
+            "valign": "center",
+            "fontFamily": "Quintessential",
+            "fontSize": 22,
+            "fontColor": [
+              242,
+              212,
+              170,
+              255
+            ],
+            "bold": true,
+            "boldStrength": 0.7,
+            "outlineWidth": 1,
+            "outlineColor": [
+              0,
+              0,
+              0,
+              150
+            ]
+          }
+        },
+        {
+          "name": "st_r1c2_value",
+          "element": "ST_Value",
+          "x": 399,
+          "y": 61,
+          "width": 54,
+          "height": 24,
+          "anchor": 0,
+          "defaultText": "2"
+        },
+        {
+          "name": "st_r2c0_icon",
+          "element": "ST_Icon_Strength",
+          "x": 7,
+          "y": 88,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "st_r2c0_label",
+          "element": "ST_Label",
+          "x": 34,
+          "y": 88,
+          "width": 90,
+          "height": 24,
+          "anchor": 0,
+          "defaultText": "Strength"
+        },
+        {
+          "name": "st_r2c0_value",
+          "element": "ST_Value",
+          "x": 93,
+          "y": 88,
+          "width": 54,
+          "height": 24,
+          "anchor": 0,
+          "defaultText": "10"
+        },
+        {
+          "name": "st_r2c1_icon",
+          "element": "ST_Icon_Prot",
+          "x": 160,
+          "y": 88,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "st_r2c1_label",
+          "element": "ST_Label",
+          "x": 187,
+          "y": 88,
+          "width": 90,
+          "height": 24,
+          "anchor": 0,
+          "defaultText": "Protectrion"
+        },
+        {
+          "name": "st_r2c1_value",
+          "element": "ST_Value",
+          "x": 246,
+          "y": 88,
+          "width": 54,
+          "height": 24,
+          "anchor": 0,
+          "defaultText": "16"
+        },
+        {
+          "name": "st_r2c2_icon",
+          "element": "ST_Icon_Coverage",
+          "x": 313,
+          "y": 88,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "st_r2c2_label",
+          "element": "ST_Label",
+          "x": 340,
+          "y": 88,
+          "width": 90,
+          "height": 24,
+          "anchor": 0,
+          "defaultText": "Coverage"
+        },
+        {
+          "name": "st_r2c2_value",
+          "element": "ST_Value",
+          "x": 399,
+          "y": 88,
+          "width": 54,
+          "height": 24,
+          "anchor": 0,
+          "defaultText": "80%"
+        },
+        {
+          "name": "st_r3c0_icon",
+          "element": "ST_Icon_Attack",
+          "x": 7,
+          "y": 115,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "st_r3c0_label",
+          "element": "ST_Label",
+          "x": 34,
+          "y": 115,
+          "width": 90,
+          "height": 24,
+          "anchor": 0,
+          "defaultText": "Attack"
+        },
+        {
+          "name": "st_r3c0_value",
+          "element": "ST_Value",
+          "x": 93,
+          "y": 115,
+          "width": 54,
+          "height": 24,
+          "anchor": 0,
+          "defaultText": "12"
+        },
+        {
+          "name": "st_r3c1_icon",
+          "element": "ST_Icon_Defense",
+          "x": 160,
+          "y": 115,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "st_r3c1_label",
+          "element": "ST_Label",
+          "x": 187,
+          "y": 115,
+          "width": 90,
+          "height": 24,
+          "anchor": 0,
+          "defaultText": "Defense"
+        },
+        {
+          "name": "st_r3c1_value",
+          "element": "ST_Value",
+          "x": 246,
+          "y": 115,
+          "width": 54,
+          "height": 24,
+          "anchor": 0,
+          "defaultText": "15"
+        },
+        {
+          "name": "st_r3c2_icon",
+          "element": "ST_Icon_Prec",
+          "x": 313,
+          "y": 115,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "st_r3c2_label",
+          "element": "ST_Label",
+          "x": 340,
+          "y": 115,
+          "width": 90,
+          "height": 24,
+          "anchor": 0,
+          "defaultText": "Precision"
+        },
+        {
+          "name": "st_r3c2_value",
+          "element": "ST_Value",
+          "x": 399,
+          "y": 115,
+          "width": 54,
+          "height": 24,
+          "anchor": 0,
+          "defaultText": "10"
+        },
+        {
+          "name": "st_r4c0_icon",
+          "element": "ST_Icon_Speed",
+          "x": 7,
+          "y": 142,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "st_r4c0_label",
+          "element": "ST_Label",
+          "x": 34,
+          "y": 142,
+          "width": 90,
+          "height": 24,
+          "anchor": 0,
+          "defaultText": "Speed"
+        },
+        {
+          "name": "st_r4c0_value",
+          "element": "ST_Value",
+          "x": 93,
+          "y": 142,
+          "width": 54,
+          "height": 24,
+          "anchor": 0,
+          "defaultText": "8"
+        },
+        {
+          "name": "st_r4c1_icon",
+          "element": "ST_Icon_Enc",
+          "x": 160,
+          "y": 142,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "st_r4c1_label",
+          "element": "ST_Label",
+          "x": 187,
+          "y": 142,
+          "width": 90,
+          "height": 24,
+          "anchor": 0,
+          "defaultText": "Encumberance",
+          "textOverride": {
+            "x": 0,
+            "y": 0,
+            "w": 90,
+            "h": 24,
+            "align": "left",
+            "valign": "center",
+            "fontFamily": "Quintessential",
+            "fontSize": 21,
+            "fontColor": [
+              242,
+              212,
+              170,
+              255
+            ],
+            "bold": true,
+            "boldStrength": 0.7,
+            "outlineWidth": 1,
+            "outlineColor": [
+              0,
+              0,
+              0,
+              150
+            ]
+          }
+        },
+        {
+          "name": "st_r4c1_value",
+          "element": "ST_Value",
+          "x": 246,
+          "y": 142,
+          "width": 54,
+          "height": 24,
+          "anchor": 0,
+          "defaultText": "4"
+        },
+        {
+          "name": "st_r4c2_icon",
+          "element": "ST_Icon_Gold",
+          "x": 313,
+          "y": 142,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "st_r4c2_label",
+          "element": "ST_Label",
+          "x": 340,
+          "y": 142,
+          "width": 90,
+          "height": 24,
+          "anchor": 0,
+          "defaultText": "Upkeep"
+        },
+        {
+          "name": "st_r4c2_value",
+          "element": "ST_Value",
+          "x": 399,
+          "y": 142,
+          "width": 54,
+          "height": 24,
+          "anchor": 0,
+          "defaultText": "2"
+        },
+        {
+          "name": "st_col1",
+          "element": "ST_ColumnBar",
+          "x": 154,
+          "y": 22,
+          "width": 3,
+          "height": 154,
+          "anchor": 0
+        },
+        {
+          "name": "st_col2",
+          "element": "ST_ColumnBar",
+          "x": 308,
+          "y": 22,
+          "width": 3,
+          "height": 154,
+          "anchor": 0
+        },
+        {
+          "name": "st_title_swatch",
+          "element": "ST_TitleSwatch",
+          "x": 4,
+          "y": 5,
+          "width": 459,
+          "height": 27,
+          "anchor": 0
+        },
+        {
+          "name": "st_title_heraldry",
+          "element": "ST_TitleHeraldry",
+          "x": 6,
+          "y": 6,
+          "width": 457,
+          "height": 26,
+          "anchor": 0
+        },
+        {
+          "name": "st_gradient",
+          "element": "ST_Gradient",
+          "x": 7,
+          "y": 23,
+          "width": 456,
+          "height": 144,
+          "anchor": 0
+        },
+        {
+          "name": "st_boxpattern",
+          "element": "ST_BoxPattern",
+          "x": 7,
+          "y": 32,
+          "width": 456,
+          "height": 134,
+          "anchor": 0
+        },
+        {
+          "name": "st_title",
+          "element": "ST_Title",
+          "x": 7,
+          "y": 0,
+          "width": 463,
+          "height": 38,
+          "anchor": 0
+        }
+      ]
+    },
+    {
+      "id": "UTD_AbilitiesSection",
+      "width": 468,
+      "height": 65,
+      "modal": false,
+      "children": [
+        {
+          "name": "ab_box",
+          "element": "AB_StatBox",
+          "x": 3,
+          "y": 27,
+          "width": 463,
+          "height": 35,
+          "anchor": 0
+        },
+        {
+          "name": "ab_boxpattern",
+          "element": "AB_BoxPattern",
+          "x": 7,
+          "y": 30,
+          "width": 456,
+          "height": 30,
+          "anchor": 0
+        },
+        {
+          "name": "ab_title_swatch",
+          "element": "AB_TitleSwatch",
+          "x": 5,
+          "y": 0,
+          "width": 457,
+          "height": 29,
+          "anchor": 0
+        },
+        {
+          "name": "ab_title_heraldry",
+          "element": "AB_TitleHeraldry",
+          "x": 7,
+          "y": 0,
+          "width": 456,
+          "height": 29,
+          "anchor": 0
+        },
+        {
+          "name": "ab_title",
+          "element": "AB_Title",
+          "x": 7,
+          "y": -1,
+          "width": 463,
+          "height": 34,
+          "anchor": 0
+        },
+        {
+          "name": "ab_r0_icon",
+          "element": "AB_Icon_Flying",
+          "x": 7,
+          "y": 33,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        }
+      ]
+    },
+    {
+      "id": "UTD_eqTitle",
+      "width": 463,
+      "height": 28,
+      "modal": false,
+      "children": [
+        {
+          "name": "eq_title_swatch",
+          "element": "EQ_TitleSwatch",
+          "x": 0,
+          "y": 0,
+          "width": 458,
+          "height": 30,
+          "anchor": 0
+        },
+        {
+          "name": "eq_title_heraldry",
+          "element": "EQ_TitleHeraldry",
+          "x": 2,
+          "y": 2,
+          "width": 455,
+          "height": 28,
+          "anchor": 0
+        },
+        {
+          "name": "eq_title",
+          "element": "EQ_Title",
+          "x": 2,
+          "y": 2,
+          "width": 463,
+          "height": 34,
+          "anchor": 0
+        }
+      ]
+    },
+    {
+      "id": "UTD_eqRow",
+      "width": 463,
+      "height": 27,
+      "modal": false,
+      "children": [
+        {
+          "name": "swatch",
+          "element": "EQ_RowSwatch27",
+          "x": 0,
+          "y": 0,
+          "width": 463,
+          "height": 27,
+          "anchor": 0
+        },
+        {
+          "name": "icon",
+          "element": "EQ_Item_Sword",
+          "x": 4,
+          "y": 0,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "name",
+          "element": "EQ_Name",
+          "x": 28,
+          "y": -2,
+          "width": 186,
+          "height": 27,
+          "anchor": 0,
+          "defaultText": "Broad Sword"
+        },
+        {
+          "name": "v0",
+          "element": "ST_Value",
+          "x": 214,
+          "y": 0,
+          "width": 36,
+          "height": 24,
+          "anchor": 0,
+          "defaultText": "4"
+        },
+        {
+          "name": "s0",
+          "element": "EQ_Icon_Slash",
+          "x": 250,
+          "y": 0,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "v1",
+          "element": "ST_Value",
+          "x": 274,
+          "y": 0,
+          "width": 36,
+          "height": 24,
+          "anchor": 0,
+          "defaultText": "2"
+        },
+        {
+          "name": "s1",
+          "element": "EQ_Icon_AttackEq",
+          "x": 310,
+          "y": 0,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "v2",
+          "element": "ST_Value",
+          "x": 334,
+          "y": 0,
+          "width": 36,
+          "height": 24,
+          "anchor": 0,
+          "defaultText": "2"
+        },
+        {
+          "name": "s2",
+          "element": "EQ_Len",
+          "x": 370,
+          "y": 0,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "v3",
+          "element": "ST_Value",
+          "x": 394,
+          "y": 0,
+          "width": 36,
+          "height": 24,
+          "anchor": 0,
+          "defaultText": "1"
+        },
+        {
+          "name": "s3",
+          "element": "EQ_Icon_DefEq",
+          "x": 430,
+          "y": 0,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "s2b",
+          "element": "EQ_Icon_EncEq",
+          "x": 370,
+          "y": 0,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "col0",
+          "element": "ST_ColumnBar",
+          "x": 221,
+          "y": 0,
+          "width": 3,
+          "height": 27,
+          "anchor": 0
+        },
+        {
+          "name": "col1",
+          "element": "ST_ColumnBar",
+          "x": 279,
+          "y": 0,
+          "width": 3,
+          "height": 27,
+          "anchor": 0
+        },
+        {
+          "name": "col2",
+          "element": "ST_ColumnBar",
+          "x": 341,
+          "y": 0,
+          "width": 3,
+          "height": 27,
+          "anchor": 0
+        },
+        {
+          "name": "col3",
+          "element": "ST_ColumnBar",
+          "x": 402,
+          "y": 0,
+          "width": 3,
+          "height": 27,
+          "anchor": 0
+        }
+      ]
+    },
+    {
+      "id": "UTD_eqBox",
+      "width": 463,
+      "height": 198,
+      "autoSizeHeight": true,
+      "layout": "vertical",
+      "layoutPadTop": 1,
+      "layoutPadBottom": 8,
+      "backgroundImagePath": "assets/UI/Ribbons/BlueSwath_eqbox_463x198.png",
+      "backgroundTint": [
+        255,
+        255,
+        255,
+        116
+      ],
+      "bgHarmonize": {
+        "targetColor": [
+          27,
+          22,
+          21,
+          255
+        ],
+        "hueStrength": 1,
+        "satStrength": 0.36,
+        "valStrength": 0.368,
+        "useHcl": false
+      },
+      "stencilImagePath": "assets/UI/Background/nations_eq_box.png",
+      "stencilTint": [
+        178,
+        178,
+        178,
+        10
+      ],
+      "stencilInset": 4,
+      "stencilHarmonize": {
+        "targetColor": [
+          231,
+          133,
+          71,
+          255
+        ],
+        "hueStrength": 1,
+        "satStrength": 0.29,
+        "valStrength": 0.761,
+        "useHcl": false
+      },
+      "modal": false,
+      "children": [
+        {
+          "name": "row0",
+          "widget": "UTD_eqRow",
+          "x": 0,
+          "y": 0,
+          "width": 463,
+          "height": 27,
+          "anchor": 0
+        },
+        {
+          "name": "row1",
+          "widget": "UTD_eqRow",
+          "x": 0,
+          "y": 0,
+          "width": 463,
+          "height": 27,
+          "anchor": 0
+        },
+        {
+          "name": "row2",
+          "widget": "UTD_eqRow",
+          "x": 0,
+          "y": 0,
+          "width": 463,
+          "height": 27,
+          "anchor": 0
+        },
+        {
+          "name": "row3",
+          "widget": "UTD_eqRow",
+          "x": 0,
+          "y": 0,
+          "width": 463,
+          "height": 27,
+          "anchor": 0
+        },
+        {
+          "name": "row4",
+          "widget": "UTD_eqRow",
+          "x": 0,
+          "y": 0,
+          "width": 463,
+          "height": 27,
+          "anchor": 0
+        },
+        {
+          "name": "row5",
+          "widget": "UTD_eqRow",
+          "x": 0,
+          "y": 0,
+          "width": 463,
+          "height": 27,
+          "anchor": 0
+        },
+        {
+          "name": "row6",
+          "widget": "UTD_eqRow",
+          "x": 0,
+          "y": 0,
+          "width": 463,
+          "height": 27,
+          "anchor": 0
+        }
+      ]
+    },
+    {
+      "id": "UTD_eqSection",
+      "width": 468,
+      "height": 226,
+      "autoSizeHeight": true,
+      "layout": "vertical",
+      "modal": false,
+      "children": [
+        {
+          "name": "title",
+          "widget": "UTD_eqTitle",
+          "x": 5,
+          "y": 0,
+          "width": 463,
+          "height": 28,
+          "anchor": 0
+        },
+        {
+          "name": "box",
+          "widget": "UTD_eqBox",
+          "x": 3,
+          "y": 0,
+          "width": 463,
+          "height": 198,
+          "anchor": 0
+        }
+      ]
+    },
+    {
+      "id": "UTD_atTitle",
+      "width": 463,
+      "height": 27,
+      "modal": false,
+      "children": [
+        {
+          "name": "at_title_swatch",
+          "element": "AT_TitleSwatch",
+          "x": 0,
+          "y": 0,
+          "width": 458,
+          "height": 28,
+          "anchor": 0
+        },
+        {
+          "name": "at_title_heraldry",
+          "element": "AT_TitleHeraldry",
+          "x": 2,
+          "y": 2,
+          "width": 456,
+          "height": 26,
+          "anchor": 0
+        },
+        {
+          "name": "at_title",
+          "element": "AT_Title",
+          "x": 2,
+          "y": 1,
+          "width": 463,
+          "height": 34,
+          "anchor": 0
+        }
+      ]
+    },
+    {
+      "id": "UTD_atRow",
+      "width": 463,
+      "height": 27,
+      "modal": false,
+      "children": [
+        {
+          "name": "swatch",
+          "element": "AT_RowSwatch",
+          "x": 0,
+          "y": 0,
+          "width": 463,
+          "height": 27,
+          "anchor": 0
+        },
+        {
+          "name": "icon",
+          "element": "EQ_Item_Sword",
+          "x": 4,
+          "y": 0,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "name",
+          "element": "EQ_Name",
+          "x": 28,
+          "y": -2,
+          "width": 186,
+          "height": 27,
+          "anchor": 0,
+          "defaultText": "Broadsword Slash"
+        },
+        {
+          "name": "v0",
+          "element": "ST_Value",
+          "x": 214,
+          "y": 0,
+          "width": 36,
+          "height": 24,
+          "anchor": 0,
+          "defaultText": "14"
+        },
+        {
+          "name": "s0",
+          "element": "EQ_Icon_Slash",
+          "x": 250,
+          "y": 0,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "v1",
+          "element": "ST_Value",
+          "x": 274,
+          "y": 0,
+          "width": 36,
+          "height": 24,
+          "anchor": 0,
+          "defaultText": "14"
+        },
+        {
+          "name": "s1",
+          "element": "EQ_Icon_AttackEq",
+          "x": 310,
+          "y": 0,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "v2",
+          "element": "ST_Value",
+          "x": 334,
+          "y": 0,
+          "width": 36,
+          "height": 24,
+          "anchor": 0,
+          "defaultText": "2"
+        },
+        {
+          "name": "s2",
+          "element": "EQ_Len",
+          "x": 370,
+          "y": 0,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "v3",
+          "element": "ST_Value",
+          "x": 394,
+          "y": 0,
+          "width": 36,
+          "height": 24,
+          "anchor": 0,
+          "defaultText": "4"
+        },
+        {
+          "name": "s3",
+          "element": "AT_Icon_Fat",
+          "x": 430,
+          "y": 0,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "col0",
+          "element": "ST_ColumnBar",
+          "x": 221,
+          "y": 0,
+          "width": 3,
+          "height": 27,
+          "anchor": 0
+        },
+        {
+          "name": "col1",
+          "element": "ST_ColumnBar",
+          "x": 279,
+          "y": 0,
+          "width": 3,
+          "height": 27,
+          "anchor": 0
+        },
+        {
+          "name": "col2",
+          "element": "ST_ColumnBar",
+          "x": 341,
+          "y": 0,
+          "width": 3,
+          "height": 27,
+          "anchor": 0
+        },
+        {
+          "name": "col3",
+          "element": "ST_ColumnBar",
+          "x": 402,
+          "y": 0,
+          "width": 3,
+          "height": 27,
+          "anchor": 0
+        }
+      ]
+    },
+    {
+      "id": "UTD_atBox",
+      "width": 463,
+      "height": 90,
+      "autoSizeHeight": true,
+      "layout": "vertical",
+      "layoutPadTop": 1,
+      "layoutPadBottom": 8,
+      "backgroundImagePath": "assets/UI/Ribbons/BlueSwath_atbox_463x83.png",
+      "backgroundTint": [
+        255,
+        255,
+        255,
+        115
+      ],
+      "bgHarmonize": {
+        "targetColor": [
+          20,
+          22,
+          25,
+          255
+        ],
+        "hueStrength": 1,
+        "satStrength": 0.36,
+        "valStrength": 0.269,
+        "useHcl": false
+      },
+      "stencilImagePath": "assets/UI/Background/nations_at_box.png",
+      "stencilTint": [
+        178,
+        178,
+        178,
+        10
+      ],
+      "stencilInset": 4,
+      "stencilHarmonize": {
+        "targetColor": [
+          231,
+          133,
+          71,
+          255
+        ],
+        "hueStrength": 1,
+        "satStrength": 0.29,
+        "valStrength": 0.761,
+        "useHcl": false
+      },
+      "modal": false,
+      "children": [
+        {
+          "name": "row0",
+          "widget": "UTD_atRow",
+          "x": 0,
+          "y": 0,
+          "width": 463,
+          "height": 27,
+          "anchor": 0
+        },
+        {
+          "name": "row1",
+          "widget": "UTD_atRow",
+          "x": 0,
+          "y": 0,
+          "width": 463,
+          "height": 27,
+          "anchor": 0
+        },
+        {
+          "name": "row2",
+          "widget": "UTD_atRow",
+          "x": 0,
+          "y": 0,
+          "width": 463,
+          "height": 27,
+          "anchor": 0
+        }
+      ]
+    },
+    {
+      "id": "UTD_atSection",
+      "width": 468,
+      "height": 117,
+      "autoSizeHeight": true,
+      "layout": "vertical",
+      "modal": false,
+      "children": [
+        {
+          "name": "title",
+          "widget": "UTD_atTitle",
+          "x": 5,
+          "y": 0,
+          "width": 463,
+          "height": 27,
+          "anchor": 0
+        },
+        {
+          "name": "box",
+          "widget": "UTD_atBox",
+          "x": 3,
+          "y": 0,
+          "width": 463,
+          "height": 90,
+          "anchor": 0
+        }
+      ]
+    },
+    {
+      "id": "UnitSheetDyn",
+      "width": 468,
+      "height": 745,
+      "autoSizeHeight": true,
+      "layout": "vertical",
+      "background": "LeatherBackground",
+      "frame": "RenaiThinBorder16",
+      "backgroundScale": 0.14,
+      "backgroundInset": -17,
+      "frameScale": 0.25,
+      "frameInset": 0,
+      "frameInsetR": 2,
+      "backgroundTint": [
+        255,
+        255,
+        255,
+        255
+      ],
+      "frameTint": [
+        255,
+        255,
+        255,
+        255
+      ],
+      "bgHarmonize": {
+        "targetColor": [
+          31,
+          24,
+          17,
+          255
+        ],
+        "hueStrength": 1,
+        "satStrength": 0.756,
+        "valStrength": 0.588,
+        "useHcl": false,
+        "gradColor": [
+          18,
+          15,
+          11,
+          112
+        ],
+        "gradStrength": 0.992
+      },
+      "frameHarmonize": {
+        "targetColor": [
+          111,
+          92,
+          57,
+          255
+        ],
+        "hueStrength": 1,
+        "satStrength": 0.75,
+        "valStrength": 0.665,
+        "useHcl": false
+      },
+      "modal": false,
+      "children": [
+        {
+          "name": "sec_desc",
+          "widget": "UTD_DescSection",
+          "x": 0,
+          "y": 0,
+          "width": 468,
+          "height": 192,
+          "anchor": 0
+        },
+        {
+          "name": "sec_stats",
+          "widget": "UTD_StatsSection",
+          "x": 0,
+          "y": 0,
+          "width": 468,
+          "height": 165,
+          "anchor": 0
+        },
+        {
+          "name": "sec_eq",
+          "widget": "UTD_eqSection",
+          "x": 0,
+          "y": 0,
+          "width": 468,
+          "height": 216,
+          "anchor": 0
+        },
+        {
+          "name": "sec_at",
+          "widget": "UTD_atSection",
+          "x": 0,
+          "y": 0,
+          "width": 468,
+          "height": 107,
+          "anchor": 0
+        },
+        {
+          "name": "sec_ab",
+          "widget": "UTD_AbilitiesSection",
+          "x": 0,
+          "y": 0,
+          "width": 468,
+          "height": 65,
+          "anchor": 0
+        }
+      ]
     }
   ]
 }
