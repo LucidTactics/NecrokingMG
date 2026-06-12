@@ -5468,6 +5468,3552 @@
           "anchor": 0
         }
       ]
+    },
+    {
+      "id": "SpiritFormTip",
+      "width": 428,
+      "height": 271,
+      "modal": false,
+      "children": [
+        {
+          "name": "spt_1_WindowBorder(1)",
+          "element": "SPT_0",
+          "x": 8,
+          "y": 8,
+          "width": 414,
+          "height": 255,
+          "anchor": 0
+        },
+        {
+          "name": "spt_2_BoxBackground",
+          "element": "SPT_1",
+          "x": 88,
+          "y": 52,
+          "width": 321,
+          "height": 27,
+          "anchor": 0
+        },
+        {
+          "name": "spt_3_BoxStencil",
+          "element": "SPT_2",
+          "x": 87,
+          "y": 52,
+          "width": 322,
+          "height": 27,
+          "anchor": 0
+        },
+        {
+          "name": "spt_4_BoxFrame",
+          "element": "SPT_3",
+          "x": 86,
+          "y": 51,
+          "width": 324,
+          "height": 30,
+          "anchor": 0
+        },
+        {
+          "name": "spt_5_Prompt",
+          "element": "SPT_4",
+          "x": 96,
+          "y": 55,
+          "width": 38,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "spt_6_Value",
+          "element": "SPT_5",
+          "x": 134,
+          "y": 55,
+          "width": 22,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "spt_7_Icon",
+          "element": "SPT_6",
+          "x": 156,
+          "y": 55,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "spt_8_Seperator",
+          "element": "SPT_7",
+          "x": 230,
+          "y": 54,
+          "width": 3,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "spt_9_Prompt",
+          "element": "SPT_8",
+          "x": 234,
+          "y": 55,
+          "width": 51,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "spt_10_Value",
+          "element": "SPT_9",
+          "x": 285,
+          "y": 55,
+          "width": 31,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "spt_11_PerkIcon",
+          "element": "SPT_10",
+          "x": 18,
+          "y": 17,
+          "width": 63,
+          "height": 64,
+          "anchor": 0
+        },
+        {
+          "name": "spt_12_PerkFrame",
+          "element": "SPT_11",
+          "x": 15,
+          "y": 15,
+          "width": 68,
+          "height": 66,
+          "anchor": 0
+        },
+        {
+          "name": "spt_13_SpellTitle",
+          "element": "SPT_12",
+          "x": 93,
+          "y": 4,
+          "width": 333,
+          "height": 54,
+          "anchor": 0
+        },
+        {
+          "name": "spt_14_BoxBackground",
+          "element": "SPT_13",
+          "x": 15,
+          "y": 84,
+          "width": 50,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "spt_15_BoxStencil",
+          "element": "SPT_14",
+          "x": 15,
+          "y": 84,
+          "width": 50,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "spt_16_BoxFrame",
+          "element": "SPT_15",
+          "x": 15,
+          "y": 84,
+          "width": 50,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "spt_17_Prompt",
+          "element": "SPT_16",
+          "x": 15,
+          "y": 84,
+          "width": 50,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "spt_18_BoxBackground",
+          "element": "SPT_17",
+          "x": 69,
+          "y": 84,
+          "width": 86,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "spt_19_BoxStencil",
+          "element": "SPT_18",
+          "x": 69,
+          "y": 84,
+          "width": 86,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "spt_20_BoxFrame",
+          "element": "SPT_19",
+          "x": 69,
+          "y": 84,
+          "width": 86,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "spt_21_Prompt",
+          "element": "SPT_20",
+          "x": 69,
+          "y": 84,
+          "width": 86,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "spt_22_BoxBackground",
+          "element": "SPT_21",
+          "x": 15,
+          "y": 111,
+          "width": 395,
+          "height": 95,
+          "anchor": 0
+        },
+        {
+          "name": "spt_23_BoxStencil",
+          "element": "SPT_22",
+          "x": 15,
+          "y": 111,
+          "width": 395,
+          "height": 95,
+          "anchor": 0
+        },
+        {
+          "name": "spt_24_BoxFrame",
+          "element": "SPT_23",
+          "x": 15,
+          "y": 111,
+          "width": 395,
+          "height": 95,
+          "anchor": 0
+        },
+        {
+          "name": "spt_25_Prompt",
+          "element": "SPT_24",
+          "x": 25,
+          "y": 116,
+          "width": 102,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "spt_26_Value",
+          "element": "SPT_25",
+          "x": 132,
+          "y": 116,
+          "width": 72,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "spt_27_Icon",
+          "element": "SPT_26",
+          "x": 209,
+          "y": 116,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "spt_28_Swatch",
+          "element": "SPT_27",
+          "x": 78,
+          "y": 138,
+          "width": 327,
+          "height": 23,
+          "anchor": 0
+        },
+        {
+          "name": "spt_29_Prompt",
+          "element": "SPT_28",
+          "x": 25,
+          "y": 136,
+          "width": 102,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "spt_30_Value",
+          "element": "SPT_29",
+          "x": 132,
+          "y": 136,
+          "width": 277,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "spt_31_Prompt",
+          "element": "SPT_30",
+          "x": 25,
+          "y": 157,
+          "width": 102,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "spt_32_Value",
+          "element": "SPT_31",
+          "x": 132,
+          "y": 157,
+          "width": 72,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "spt_33_Prompt",
+          "element": "SPT_32",
+          "x": 25,
+          "y": 177,
+          "width": 102,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "spt_34_Value",
+          "element": "SPT_33",
+          "x": 132,
+          "y": 177,
+          "width": 72,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "spt_35_Description",
+          "element": "SPT_34",
+          "x": 15,
+          "y": 205,
+          "width": 395,
+          "height": 52,
+          "anchor": 0
+        }
+      ],
+      "background": "LeatherBackground",
+      "backgroundScale": 0.14,
+      "backgroundInset": -17,
+      "backgroundTint": [
+        255,
+        255,
+        255,
+        255
+      ],
+      "bgHarmonize": {
+        "targetColor": [
+          31,
+          24,
+          17,
+          255
+        ],
+        "hueStrength": 1,
+        "satStrength": 0.756,
+        "valStrength": 0.588,
+        "useHcl": false,
+        "gradColor": [
+          18,
+          15,
+          11,
+          71
+        ],
+        "gradStrength": 0.992
+      }
+    },
+    {
+      "id": "ShadowBoltTip",
+      "width": 428,
+      "height": 344,
+      "modal": false,
+      "children": [
+        {
+          "name": "sbt_1_WindowBorder(1)",
+          "element": "SBT_0",
+          "x": 8,
+          "y": 8,
+          "width": 414,
+          "height": 328,
+          "anchor": 0
+        },
+        {
+          "name": "sbt_2_BoxBackground",
+          "element": "SBT_1",
+          "x": 88,
+          "y": 52,
+          "width": 321,
+          "height": 27,
+          "anchor": 0
+        },
+        {
+          "name": "sbt_3_BoxStencil",
+          "element": "SBT_2",
+          "x": 87,
+          "y": 52,
+          "width": 322,
+          "height": 27,
+          "anchor": 0
+        },
+        {
+          "name": "sbt_4_BoxFrame",
+          "element": "SBT_3",
+          "x": 86,
+          "y": 51,
+          "width": 324,
+          "height": 30,
+          "anchor": 0
+        },
+        {
+          "name": "sbt_5_Prompt",
+          "element": "SBT_4",
+          "x": 96,
+          "y": 55,
+          "width": 38,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "sbt_6_Value",
+          "element": "SBT_5",
+          "x": 134,
+          "y": 55,
+          "width": 22,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "sbt_7_Icon",
+          "element": "SBT_6",
+          "x": 156,
+          "y": 55,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "sbt_8_Seperator",
+          "element": "SBT_7",
+          "x": 230,
+          "y": 54,
+          "width": 3,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "sbt_9_Prompt",
+          "element": "SBT_8",
+          "x": 234,
+          "y": 55,
+          "width": 51,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "sbt_10_Value",
+          "element": "SBT_9",
+          "x": 285,
+          "y": 55,
+          "width": 31,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "sbt_11_PerkIcon",
+          "element": "SBT_10",
+          "x": 18,
+          "y": 17,
+          "width": 63,
+          "height": 64,
+          "anchor": 0
+        },
+        {
+          "name": "sbt_12_PerkFrame",
+          "element": "SBT_11",
+          "x": 15,
+          "y": 15,
+          "width": 68,
+          "height": 66,
+          "anchor": 0
+        },
+        {
+          "name": "sbt_13_SpellTitle",
+          "element": "SBT_12",
+          "x": 93,
+          "y": 4,
+          "width": 333,
+          "height": 54,
+          "anchor": 0
+        },
+        {
+          "name": "sbt_14_BoxBackground",
+          "element": "SBT_13",
+          "x": 15,
+          "y": 84,
+          "width": 63,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "sbt_15_BoxStencil",
+          "element": "SBT_14",
+          "x": 15,
+          "y": 84,
+          "width": 63,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "sbt_16_BoxFrame",
+          "element": "SBT_15",
+          "x": 15,
+          "y": 84,
+          "width": 63,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "sbt_17_Prompt",
+          "element": "SBT_16",
+          "x": 15,
+          "y": 84,
+          "width": 63,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "sbt_18_BoxBackground",
+          "element": "SBT_17",
+          "x": 82,
+          "y": 84,
+          "width": 55,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "sbt_19_BoxStencil",
+          "element": "SBT_18",
+          "x": 82,
+          "y": 84,
+          "width": 55,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "sbt_20_BoxFrame",
+          "element": "SBT_19",
+          "x": 82,
+          "y": 84,
+          "width": 55,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "sbt_21_Prompt",
+          "element": "SBT_20",
+          "x": 82,
+          "y": 84,
+          "width": 55,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "sbt_22_BoxBackground",
+          "element": "SBT_21",
+          "x": 141,
+          "y": 84,
+          "width": 55,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "sbt_23_BoxStencil",
+          "element": "SBT_22",
+          "x": 141,
+          "y": 84,
+          "width": 55,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "sbt_24_BoxFrame",
+          "element": "SBT_23",
+          "x": 141,
+          "y": 84,
+          "width": 55,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "sbt_25_Prompt",
+          "element": "SBT_24",
+          "x": 141,
+          "y": 84,
+          "width": 55,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "sbt_26_BoxBackground",
+          "element": "SBT_25",
+          "x": 15,
+          "y": 111,
+          "width": 395,
+          "height": 176,
+          "anchor": 0
+        },
+        {
+          "name": "sbt_27_BoxStencil",
+          "element": "SBT_26",
+          "x": 15,
+          "y": 111,
+          "width": 395,
+          "height": 176,
+          "anchor": 0
+        },
+        {
+          "name": "sbt_28_BoxFrame",
+          "element": "SBT_27",
+          "x": 15,
+          "y": 111,
+          "width": 395,
+          "height": 176,
+          "anchor": 0
+        },
+        {
+          "name": "sbt_29_Prompt",
+          "element": "SBT_28",
+          "x": 25,
+          "y": 116,
+          "width": 102,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "sbt_30_DamageValue",
+          "element": "SBT_29",
+          "x": 132,
+          "y": 116,
+          "width": 26,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "sbt_31_Icon",
+          "element": "SBT_30",
+          "x": 163,
+          "y": 116,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "sbt_32_Prompt",
+          "element": "SBT_31",
+          "x": 25,
+          "y": 136,
+          "width": 102,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "sbt_33_Value",
+          "element": "SBT_32",
+          "x": 132,
+          "y": 136,
+          "width": 72,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "sbt_34_RowSwatch",
+          "element": "SBT_33",
+          "x": 15,
+          "y": 136,
+          "width": 390,
+          "height": 22,
+          "anchor": 0
+        },
+        {
+          "name": "sbt_35_Prompt",
+          "element": "SBT_34",
+          "x": 25,
+          "y": 157,
+          "width": 102,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "sbt_36_Value",
+          "element": "SBT_35",
+          "x": 132,
+          "y": 157,
+          "width": 72,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "sbt_37_Prompt",
+          "element": "SBT_36",
+          "x": 25,
+          "y": 177,
+          "width": 102,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "sbt_38_Value",
+          "element": "SBT_37",
+          "x": 132,
+          "y": 177,
+          "width": 72,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "sbt_39_RowSwatch",
+          "element": "SBT_38",
+          "x": 15,
+          "y": 177,
+          "width": 390,
+          "height": 22,
+          "anchor": 0
+        },
+        {
+          "name": "sbt_40_Prompt",
+          "element": "SBT_39",
+          "x": 25,
+          "y": 198,
+          "width": 102,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "sbt_41_Value",
+          "element": "SBT_40",
+          "x": 132,
+          "y": 198,
+          "width": 29,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "sbt_42_Icon",
+          "element": "SBT_41",
+          "x": 166,
+          "y": 198,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "sbt_43_Value",
+          "element": "SBT_42",
+          "x": 195,
+          "y": 198,
+          "width": 72,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "sbt_44_Prompt",
+          "element": "SBT_43",
+          "x": 25,
+          "y": 218,
+          "width": 102,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "sbt_45_Tag(1)",
+          "element": "SBT_44",
+          "x": 132,
+          "y": 218,
+          "width": 102,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "sbt_46_RowSwatch",
+          "element": "SBT_45",
+          "x": 15,
+          "y": 218,
+          "width": 390,
+          "height": 22,
+          "anchor": 0
+        },
+        {
+          "name": "sbt_47_Prompt",
+          "element": "SBT_46",
+          "x": 25,
+          "y": 239,
+          "width": 102,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "sbt_48_Tag(2)",
+          "element": "SBT_47",
+          "x": 132,
+          "y": 239,
+          "width": 81,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "sbt_49_Prompt",
+          "element": "SBT_48",
+          "x": 25,
+          "y": 259,
+          "width": 102,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "sbt_50_Tag(2)",
+          "element": "SBT_49",
+          "x": 132,
+          "y": 259,
+          "width": 126,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "sbt_51_Tag(3)",
+          "element": "SBT_50",
+          "x": 263,
+          "y": 259,
+          "width": 135,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "sbt_52_RowSwatch",
+          "element": "SBT_51",
+          "x": 15,
+          "y": 258,
+          "width": 390,
+          "height": 22,
+          "anchor": 0
+        },
+        {
+          "name": "sbt_53_Description",
+          "element": "SBT_52",
+          "x": 15,
+          "y": 286,
+          "width": 395,
+          "height": 52,
+          "anchor": 0
+        }
+      ],
+      "background": "LeatherBackground",
+      "backgroundScale": 0.14,
+      "backgroundInset": -17,
+      "backgroundTint": [
+        255,
+        255,
+        255,
+        255
+      ],
+      "bgHarmonize": {
+        "targetColor": [
+          31,
+          24,
+          17,
+          255
+        ],
+        "hueStrength": 1,
+        "satStrength": 0.756,
+        "valStrength": 0.588,
+        "useHcl": false,
+        "gradColor": [
+          18,
+          15,
+          11,
+          71
+        ],
+        "gradStrength": 0.992
+      }
+    },
+    {
+      "id": "SummonWolvesTip",
+      "width": 428,
+      "height": 572,
+      "modal": false,
+      "children": [
+        {
+          "name": "swt_1_WindowBorder(1)",
+          "element": "SWT_0",
+          "x": 8,
+          "y": 8,
+          "width": 414,
+          "height": 557,
+          "anchor": 0
+        },
+        {
+          "name": "swt_2_BoxBackground",
+          "element": "SWT_1",
+          "x": 88,
+          "y": 52,
+          "width": 321,
+          "height": 27,
+          "anchor": 0
+        },
+        {
+          "name": "swt_3_BoxStencil",
+          "element": "SWT_2",
+          "x": 87,
+          "y": 52,
+          "width": 322,
+          "height": 27,
+          "anchor": 0
+        },
+        {
+          "name": "swt_4_BoxFrame",
+          "element": "SWT_3",
+          "x": 86,
+          "y": 51,
+          "width": 324,
+          "height": 30,
+          "anchor": 0
+        },
+        {
+          "name": "swt_5_Prompt",
+          "element": "SWT_4",
+          "x": 96,
+          "y": 55,
+          "width": 38,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "swt_6_Value",
+          "element": "SWT_5",
+          "x": 134,
+          "y": 55,
+          "width": 22,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "swt_7_Icon",
+          "element": "SWT_6",
+          "x": 156,
+          "y": 55,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "swt_8_Seperator",
+          "element": "SWT_7",
+          "x": 230,
+          "y": 54,
+          "width": 3,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "swt_9_Prompt",
+          "element": "SWT_8",
+          "x": 234,
+          "y": 55,
+          "width": 38,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "swt_10_Value",
+          "element": "SWT_9",
+          "x": 272,
+          "y": 55,
+          "width": 22,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "swt_11_Icon",
+          "element": "SWT_10",
+          "x": 294,
+          "y": 55,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "swt_12_PerkIcon",
+          "element": "SWT_11",
+          "x": 18,
+          "y": 17,
+          "width": 63,
+          "height": 64,
+          "anchor": 0
+        },
+        {
+          "name": "swt_13_PerkFrame",
+          "element": "SWT_12",
+          "x": 15,
+          "y": 15,
+          "width": 68,
+          "height": 66,
+          "anchor": 0
+        },
+        {
+          "name": "swt_14_SpellTitle",
+          "element": "SWT_13",
+          "x": 93,
+          "y": 4,
+          "width": 333,
+          "height": 54,
+          "anchor": 0
+        },
+        {
+          "name": "swt_15_BoxBackground",
+          "element": "SWT_14",
+          "x": 15,
+          "y": 84,
+          "width": 79,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "swt_16_BoxStencil",
+          "element": "SWT_15",
+          "x": 15,
+          "y": 84,
+          "width": 79,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "swt_17_BoxFrame",
+          "element": "SWT_16",
+          "x": 15,
+          "y": 84,
+          "width": 79,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "swt_18_Prompt",
+          "element": "SWT_17",
+          "x": 15,
+          "y": 84,
+          "width": 79,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "swt_19_BoxBackground",
+          "element": "SWT_18",
+          "x": 98,
+          "y": 84,
+          "width": 57,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "swt_20_BoxStencil",
+          "element": "SWT_19",
+          "x": 98,
+          "y": 84,
+          "width": 57,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "swt_21_BoxFrame",
+          "element": "SWT_20",
+          "x": 98,
+          "y": 84,
+          "width": 57,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "swt_22_Prompt",
+          "element": "SWT_21",
+          "x": 98,
+          "y": 84,
+          "width": 57,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "swt_23_BoxBackground",
+          "element": "SWT_22",
+          "x": 159,
+          "y": 84,
+          "width": 90,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "swt_24_BoxStencil",
+          "element": "SWT_23",
+          "x": 159,
+          "y": 84,
+          "width": 90,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "swt_25_BoxFrame",
+          "element": "SWT_24",
+          "x": 159,
+          "y": 84,
+          "width": 90,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "swt_26_Prompt",
+          "element": "SWT_25",
+          "x": 159,
+          "y": 84,
+          "width": 90,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "swt_27_BoxBackground",
+          "element": "SWT_26",
+          "x": 15,
+          "y": 111,
+          "width": 395,
+          "height": 416,
+          "anchor": 0
+        },
+        {
+          "name": "swt_28_BoxStencil",
+          "element": "SWT_27",
+          "x": 15,
+          "y": 111,
+          "width": 395,
+          "height": 416,
+          "anchor": 0
+        },
+        {
+          "name": "swt_29_BoxFrame",
+          "element": "SWT_28",
+          "x": 15,
+          "y": 111,
+          "width": 395,
+          "height": 416,
+          "anchor": 0
+        },
+        {
+          "name": "swt_30_Prompt",
+          "element": "SWT_29",
+          "x": 25,
+          "y": 116,
+          "width": 100,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "swt_31_Value",
+          "element": "SWT_30",
+          "x": 130,
+          "y": 116,
+          "width": 16,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "swt_32_Value",
+          "element": "SWT_31",
+          "x": 152,
+          "y": 116,
+          "width": 53,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "swt_33_Icon",
+          "element": "SWT_32",
+          "x": 210,
+          "y": 116,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "swt_34_Swatch",
+          "element": "SWT_33",
+          "x": 18,
+          "y": 145,
+          "width": 389,
+          "height": 26,
+          "anchor": 0
+        },
+        {
+          "name": "swt_35_TitleTextDropSha",
+          "element": "SWT_34",
+          "x": 15,
+          "y": 138,
+          "width": 395,
+          "height": 38,
+          "anchor": 0
+        },
+        {
+          "name": "swt_36_TitleText",
+          "element": "SWT_35",
+          "x": 15,
+          "y": 138,
+          "width": 395,
+          "height": 38,
+          "anchor": 0
+        },
+        {
+          "name": "swt_37_StatBox",
+          "element": "SWT_36",
+          "x": 18,
+          "y": 172,
+          "width": 391,
+          "height": 127,
+          "anchor": 0
+        },
+        {
+          "name": "swt_38_RowSwatch",
+          "element": "SWT_37",
+          "x": 16,
+          "y": 169,
+          "width": 394,
+          "height": 30,
+          "anchor": 0
+        },
+        {
+          "name": "swt_39_Attribute_String",
+          "element": "SWT_38",
+          "x": 48,
+          "y": 172,
+          "width": 89,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "swt_40_Value_String",
+          "element": "SWT_39",
+          "x": 77,
+          "y": 172,
+          "width": 53,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "swt_41_Icon",
+          "element": "SWT_40",
+          "x": 20,
+          "y": 172,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "swt_42_Attribute_String",
+          "element": "SWT_41",
+          "x": 171,
+          "y": 172,
+          "width": 89,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "swt_43_Value_String",
+          "element": "SWT_42",
+          "x": 239,
+          "y": 172,
+          "width": 26,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "swt_44_Icon",
+          "element": "SWT_43",
+          "x": 143,
+          "y": 172,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "swt_45_Attribute_String",
+          "element": "SWT_44",
+          "x": 306,
+          "y": 172,
+          "width": 89,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "swt_46_Value_String",
+          "element": "SWT_45",
+          "x": 378,
+          "y": 172,
+          "width": 26,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "swt_47_Icon",
+          "element": "SWT_46",
+          "x": 278,
+          "y": 172,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "swt_48_Attribute_String",
+          "element": "SWT_47",
+          "x": 48,
+          "y": 199,
+          "width": 89,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "swt_49_Value_String",
+          "element": "SWT_48",
+          "x": 104,
+          "y": 199,
+          "width": 26,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "swt_50_Icon",
+          "element": "SWT_49",
+          "x": 20,
+          "y": 199,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "swt_51_Attribute_String",
+          "element": "SWT_50",
+          "x": 171,
+          "y": 199,
+          "width": 89,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "swt_52_Value_String",
+          "element": "SWT_51",
+          "x": 239,
+          "y": 199,
+          "width": 26,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "swt_53_Icon",
+          "element": "SWT_52",
+          "x": 143,
+          "y": 199,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "swt_54_Attribute_String",
+          "element": "SWT_53",
+          "x": 305,
+          "y": 199,
+          "width": 89,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "swt_55_Value_String",
+          "element": "SWT_54",
+          "x": 377,
+          "y": 199,
+          "width": 26,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "swt_56_Icon",
+          "element": "SWT_55",
+          "x": 278,
+          "y": 199,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "swt_57_RowSwatch",
+          "element": "SWT_56",
+          "x": 16,
+          "y": 223,
+          "width": 394,
+          "height": 30,
+          "anchor": 0
+        },
+        {
+          "name": "swt_58_Attribute_String",
+          "element": "SWT_57",
+          "x": 48,
+          "y": 226,
+          "width": 89,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "swt_59_Value_String",
+          "element": "SWT_58",
+          "x": 105,
+          "y": 226,
+          "width": 26,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "swt_60_Icon",
+          "element": "SWT_59",
+          "x": 20,
+          "y": 226,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "swt_61_Attribute_String",
+          "element": "SWT_60",
+          "x": 171,
+          "y": 226,
+          "width": 89,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "swt_62_Value_String",
+          "element": "SWT_61",
+          "x": 239,
+          "y": 226,
+          "width": 26,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "swt_63_Icon",
+          "element": "SWT_62",
+          "x": 143,
+          "y": 226,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "swt_64_Attribute_String",
+          "element": "SWT_63",
+          "x": 306,
+          "y": 226,
+          "width": 89,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "swt_65_Value_String",
+          "element": "SWT_64",
+          "x": 378,
+          "y": 226,
+          "width": 26,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "swt_66_Icon",
+          "element": "SWT_65",
+          "x": 278,
+          "y": 226,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "swt_67_Attribute_String",
+          "element": "SWT_66",
+          "x": 48,
+          "y": 253,
+          "width": 89,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "swt_68_Value_String",
+          "element": "SWT_67",
+          "x": 105,
+          "y": 253,
+          "width": 26,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "swt_69_Icon",
+          "element": "SWT_68",
+          "x": 20,
+          "y": 253,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "swt_70_Attribute_String",
+          "element": "SWT_69",
+          "x": 171,
+          "y": 253,
+          "width": 89,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "swt_71_Value_String",
+          "element": "SWT_70",
+          "x": 239,
+          "y": 253,
+          "width": 26,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "swt_72_Icon",
+          "element": "SWT_71",
+          "x": 143,
+          "y": 253,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "swt_73_Attribute_String",
+          "element": "SWT_72",
+          "x": 306,
+          "y": 253,
+          "width": 89,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "swt_74_Value_String",
+          "element": "SWT_73",
+          "x": 378,
+          "y": 253,
+          "width": 26,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "swt_75_Icon",
+          "element": "SWT_74",
+          "x": 278,
+          "y": 253,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "swt_76_RowSwatch",
+          "element": "SWT_75",
+          "x": 16,
+          "y": 277,
+          "width": 394,
+          "height": 30,
+          "anchor": 0
+        },
+        {
+          "name": "swt_77_Attribute_String",
+          "element": "SWT_76",
+          "x": 48,
+          "y": 280,
+          "width": 89,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "swt_78_Value_String",
+          "element": "SWT_77",
+          "x": 105,
+          "y": 280,
+          "width": 26,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "swt_79_Icon",
+          "element": "SWT_78",
+          "x": 20,
+          "y": 280,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "swt_80_Attribute_String",
+          "element": "SWT_79",
+          "x": 171,
+          "y": 280,
+          "width": 89,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "swt_81_Value_String",
+          "element": "SWT_80",
+          "x": 239,
+          "y": 280,
+          "width": 26,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "swt_82_Icon",
+          "element": "SWT_81",
+          "x": 143,
+          "y": 280,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "swt_83_Attribute_String",
+          "element": "SWT_82",
+          "x": 306,
+          "y": 280,
+          "width": 89,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "swt_84_Value_String",
+          "element": "SWT_83",
+          "x": 378,
+          "y": 280,
+          "width": 26,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "swt_85_Icon",
+          "element": "SWT_84",
+          "x": 278,
+          "y": 280,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "swt_86_Column1",
+          "element": "SWT_85",
+          "x": 71,
+          "y": 236,
+          "width": 133,
+          "height": 3,
+          "anchor": 0
+        },
+        {
+          "name": "swt_87_Column2",
+          "element": "SWT_86",
+          "x": 205,
+          "y": 236,
+          "width": 133,
+          "height": 3,
+          "anchor": 0
+        },
+        {
+          "name": "swt_88_StatBox",
+          "element": "SWT_87",
+          "x": 17,
+          "y": 333,
+          "width": 391,
+          "height": 67,
+          "anchor": 0
+        },
+        {
+          "name": "swt_89_RowSwatch",
+          "element": "SWT_88",
+          "x": 11,
+          "y": 358,
+          "width": 399,
+          "height": 30,
+          "anchor": 0
+        },
+        {
+          "name": "swt_90_Icon",
+          "element": "SWT_89",
+          "x": 15,
+          "y": 361,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "swt_91_EquipmentName",
+          "element": "SWT_90",
+          "x": 39,
+          "y": 361,
+          "width": 115,
+          "height": 27,
+          "anchor": 0
+        },
+        {
+          "name": "swt_92_Column1",
+          "element": "SWT_91",
+          "x": 129,
+          "y": 357,
+          "width": 56,
+          "height": 3,
+          "anchor": 0
+        },
+        {
+          "name": "swt_93_Column2",
+          "element": "SWT_92",
+          "x": 194,
+          "y": 356,
+          "width": 57,
+          "height": 3,
+          "anchor": 0
+        },
+        {
+          "name": "swt_94_Column3",
+          "element": "SWT_93",
+          "x": 256,
+          "y": 356,
+          "width": 58,
+          "height": 3,
+          "anchor": 0
+        },
+        {
+          "name": "swt_95_Column4",
+          "element": "SWT_94",
+          "x": 317,
+          "y": 356,
+          "width": 58,
+          "height": 3,
+          "anchor": 0
+        },
+        {
+          "name": "swt_96_Swatch",
+          "element": "SWT_95",
+          "x": 18,
+          "y": 305,
+          "width": 389,
+          "height": 30,
+          "anchor": 0
+        },
+        {
+          "name": "swt_97_TitleText",
+          "element": "SWT_96",
+          "x": 15,
+          "y": 299,
+          "width": 399,
+          "height": 42,
+          "anchor": 0
+        },
+        {
+          "name": "swt_98_StatBox",
+          "element": "SWT_97",
+          "x": 17,
+          "y": 414,
+          "width": 393,
+          "height": 56,
+          "anchor": 0
+        },
+        {
+          "name": "swt_99_BoxTexture",
+          "element": "SWT_98",
+          "x": -20,
+          "y": 402,
+          "width": 427,
+          "height": 80,
+          "anchor": 0
+        },
+        {
+          "name": "swt_100_RowSwatch",
+          "element": "SWT_99",
+          "x": 17,
+          "y": 412,
+          "width": 392,
+          "height": 30,
+          "anchor": 0
+        },
+        {
+          "name": "swt_101_Icon",
+          "element": "SWT_100",
+          "x": 15,
+          "y": 415,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "swt_102_EquipmentName",
+          "element": "SWT_101",
+          "x": 39,
+          "y": 415,
+          "width": 113,
+          "height": 27,
+          "anchor": 0
+        },
+        {
+          "name": "swt_103_Damage_Value",
+          "element": "SWT_102",
+          "x": 152,
+          "y": 415,
+          "width": 36,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "swt_104_SlashDamageIcon",
+          "element": "SWT_103",
+          "x": 188,
+          "y": 415,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "swt_105_Attack_Value",
+          "element": "SWT_104",
+          "x": 212,
+          "y": 415,
+          "width": 36,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "swt_106_AttackIcon",
+          "element": "SWT_105",
+          "x": 248,
+          "y": 415,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "swt_107_Len_Value",
+          "element": "SWT_106",
+          "x": 272,
+          "y": 415,
+          "width": 36,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "swt_108_Len",
+          "element": "SWT_107",
+          "x": 308,
+          "y": 415,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "swt_109_Fat_Value",
+          "element": "SWT_108",
+          "x": 332,
+          "y": 415,
+          "width": 36,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "swt_110_Fat_Icon",
+          "element": "SWT_109",
+          "x": 368,
+          "y": 415,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "swt_111_Column1",
+          "element": "SWT_110",
+          "x": 131,
+          "y": 439,
+          "width": 54,
+          "height": 3,
+          "anchor": 0
+        },
+        {
+          "name": "swt_112_Column2",
+          "element": "SWT_111",
+          "x": 196,
+          "y": 439,
+          "width": 55,
+          "height": 3,
+          "anchor": 0
+        },
+        {
+          "name": "swt_113_Column3",
+          "element": "SWT_112",
+          "x": 257,
+          "y": 439,
+          "width": 55,
+          "height": 3,
+          "anchor": 0
+        },
+        {
+          "name": "swt_114_Column4",
+          "element": "SWT_113",
+          "x": 318,
+          "y": 439,
+          "width": 56,
+          "height": 3,
+          "anchor": 0
+        },
+        {
+          "name": "swt_115_Swatch",
+          "element": "SWT_114",
+          "x": 18,
+          "y": 387,
+          "width": 389,
+          "height": 28,
+          "anchor": 0
+        },
+        {
+          "name": "swt_116_TitleText",
+          "element": "SWT_115",
+          "x": 14,
+          "y": 379,
+          "width": 400,
+          "height": 49,
+          "anchor": 0
+        },
+        {
+          "name": "swt_117_Description",
+          "element": "SWT_116",
+          "x": 15,
+          "y": 526,
+          "width": 395,
+          "height": 42,
+          "anchor": 0
+        }
+      ],
+      "background": "LeatherBackground",
+      "backgroundScale": 0.14,
+      "backgroundInset": -17,
+      "backgroundTint": [
+        255,
+        255,
+        255,
+        255
+      ],
+      "bgHarmonize": {
+        "targetColor": [
+          31,
+          24,
+          17,
+          255
+        ],
+        "hueStrength": 1,
+        "satStrength": 0.756,
+        "valStrength": 0.588,
+        "useHcl": false,
+        "gradColor": [
+          18,
+          15,
+          11,
+          71
+        ],
+        "gradStrength": 0.992
+      }
+    },
+    {
+      "id": "GrimoireWindow",
+      "width": 706,
+      "height": 1080,
+      "modal": false,
+      "children": [
+        {
+          "name": "gmw_1_SpellOverlay",
+          "element": "GMW_0",
+          "x": 0,
+          "y": 0,
+          "width": 706,
+          "height": 1080,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_2_WindowBorder",
+          "element": "GMW_1",
+          "x": 0,
+          "y": 0,
+          "width": 706,
+          "height": 1080,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_3_Row1",
+          "element": "GMW_2",
+          "x": 24,
+          "y": 171,
+          "width": 658,
+          "height": 21,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_4_Ribbon",
+          "element": "GMW_3",
+          "x": 27,
+          "y": 91,
+          "width": 652,
+          "height": 83,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_5_Tab-Backing",
+          "element": "GMW_4",
+          "x": 26,
+          "y": 130,
+          "width": 54,
+          "height": 45,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_6_ALLText",
+          "element": "GMW_5",
+          "x": 26,
+          "y": 138,
+          "width": 54,
+          "height": 26,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_7_Tab-Frame",
+          "element": "GMW_6",
+          "x": 26,
+          "y": 130,
+          "width": 54,
+          "height": 45,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_8_Tab-Backing",
+          "element": "GMW_7",
+          "x": 78,
+          "y": 130,
+          "width": 51,
+          "height": 45,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_9_Tab-Frame",
+          "element": "GMW_8",
+          "x": 78,
+          "y": 130,
+          "width": 51,
+          "height": 45,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_10_PathIcon",
+          "element": "GMW_9",
+          "x": 92,
+          "y": 141,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_11_Tab-Backing",
+          "element": "GMW_10",
+          "x": 128,
+          "y": 130,
+          "width": 51,
+          "height": 45,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_12_Tab-Frame",
+          "element": "GMW_11",
+          "x": 128,
+          "y": 130,
+          "width": 51,
+          "height": 45,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_13_PathIcon",
+          "element": "GMW_12",
+          "x": 142,
+          "y": 141,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_14_Tab-Backing",
+          "element": "GMW_13",
+          "x": 178,
+          "y": 130,
+          "width": 51,
+          "height": 45,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_15_Tab-Frame",
+          "element": "GMW_14",
+          "x": 178,
+          "y": 130,
+          "width": 51,
+          "height": 45,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_16_PathIcon",
+          "element": "GMW_15",
+          "x": 192,
+          "y": 141,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_17_Tab-Backing",
+          "element": "GMW_16",
+          "x": 228,
+          "y": 130,
+          "width": 51,
+          "height": 45,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_18_Tab-Frame",
+          "element": "GMW_17",
+          "x": 228,
+          "y": 130,
+          "width": 51,
+          "height": 45,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_19_PathIcon",
+          "element": "GMW_18",
+          "x": 242,
+          "y": 141,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_20_Tab-Backing",
+          "element": "GMW_19",
+          "x": 278,
+          "y": 130,
+          "width": 51,
+          "height": 45,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_21_Tab-Frame",
+          "element": "GMW_20",
+          "x": 278,
+          "y": 130,
+          "width": 51,
+          "height": 45,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_22_PathIcon",
+          "element": "GMW_21",
+          "x": 292,
+          "y": 141,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_23_Tab-Backing",
+          "element": "GMW_22",
+          "x": 328,
+          "y": 130,
+          "width": 51,
+          "height": 45,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_24_Tab-Frame",
+          "element": "GMW_23",
+          "x": 328,
+          "y": 130,
+          "width": 51,
+          "height": 45,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_25_PathIcon",
+          "element": "GMW_24",
+          "x": 342,
+          "y": 141,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_26_Tab-Backing",
+          "element": "GMW_25",
+          "x": 378,
+          "y": 130,
+          "width": 51,
+          "height": 45,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_27_Tab-Frame",
+          "element": "GMW_26",
+          "x": 378,
+          "y": 130,
+          "width": 51,
+          "height": 45,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_28_PathIcon",
+          "element": "GMW_27",
+          "x": 392,
+          "y": 141,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_29_Tab-Backing",
+          "element": "GMW_28",
+          "x": 428,
+          "y": 130,
+          "width": 51,
+          "height": 45,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_30_Tab-Frame",
+          "element": "GMW_29",
+          "x": 428,
+          "y": 130,
+          "width": 51,
+          "height": 45,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_31_PathIcon",
+          "element": "GMW_30",
+          "x": 442,
+          "y": 141,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_32_Tab-Backing",
+          "element": "GMW_31",
+          "x": 478,
+          "y": 130,
+          "width": 51,
+          "height": 45,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_33_Tab-Frame",
+          "element": "GMW_32",
+          "x": 478,
+          "y": 130,
+          "width": 51,
+          "height": 45,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_34_PathIcon",
+          "element": "GMW_33",
+          "x": 492,
+          "y": 141,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_35_Tab-Backing",
+          "element": "GMW_34",
+          "x": 528,
+          "y": 130,
+          "width": 51,
+          "height": 45,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_36_Tab-Frame",
+          "element": "GMW_35",
+          "x": 528,
+          "y": 130,
+          "width": 51,
+          "height": 45,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_37_PathIcon",
+          "element": "GMW_36",
+          "x": 542,
+          "y": 141,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_38_Tab-Backing",
+          "element": "GMW_37",
+          "x": 578,
+          "y": 130,
+          "width": 51,
+          "height": 45,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_39_Tab-Frame",
+          "element": "GMW_38",
+          "x": 578,
+          "y": 130,
+          "width": 51,
+          "height": 45,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_40_PathIcon",
+          "element": "GMW_39",
+          "x": 592,
+          "y": 141,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_41_Tab-Backing",
+          "element": "GMW_40",
+          "x": 628,
+          "y": 130,
+          "width": 51,
+          "height": 45,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_42_Tab-Frame",
+          "element": "GMW_41",
+          "x": 628,
+          "y": 130,
+          "width": 51,
+          "height": 45,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_43_PathIcon",
+          "element": "GMW_42",
+          "x": 642,
+          "y": 141,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_44_Tab-Backing",
+          "element": "GMW_43",
+          "x": 24,
+          "y": 98,
+          "width": 86,
+          "height": 33,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_45_TabText",
+          "element": "GMW_44",
+          "x": 27,
+          "y": 101,
+          "width": 80,
+          "height": 27,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_46_Tab-Frame",
+          "element": "GMW_45",
+          "x": 26,
+          "y": 96,
+          "width": 82,
+          "height": 35,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_47_Tab-Backing",
+          "element": "GMW_46",
+          "x": 104,
+          "y": 98,
+          "width": 148,
+          "height": 33,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_48_TabText",
+          "element": "GMW_47",
+          "x": 101,
+          "y": 102,
+          "width": 159,
+          "height": 26,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_49_Tab-Frame",
+          "element": "GMW_48",
+          "x": 107,
+          "y": 96,
+          "width": 144,
+          "height": 35,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_50_Tab-Backing",
+          "element": "GMW_49",
+          "x": 248,
+          "y": 98,
+          "width": 148,
+          "height": 33,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_51_TabText",
+          "element": "GMW_50",
+          "x": 244,
+          "y": 102,
+          "width": 159,
+          "height": 26,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_52_Tab-Frame",
+          "element": "GMW_51",
+          "x": 250,
+          "y": 96,
+          "width": 144,
+          "height": 35,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_53_Tab-Backing",
+          "element": "GMW_52",
+          "x": 390,
+          "y": 98,
+          "width": 148,
+          "height": 33,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_54_TabText",
+          "element": "GMW_53",
+          "x": 387,
+          "y": 102,
+          "width": 159,
+          "height": 26,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_55_Tab-Frame",
+          "element": "GMW_54",
+          "x": 393,
+          "y": 96,
+          "width": 144,
+          "height": 35,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_56_Tab-Backing",
+          "element": "GMW_55",
+          "x": 534,
+          "y": 98,
+          "width": 148,
+          "height": 33,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_57_TabText",
+          "element": "GMW_56",
+          "x": 530,
+          "y": 102,
+          "width": 159,
+          "height": 26,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_58_Tab-Frame",
+          "element": "GMW_57",
+          "x": 536,
+          "y": 96,
+          "width": 144,
+          "height": 35,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_59_BoxBackground",
+          "element": "GMW_58",
+          "x": 98,
+          "y": 195,
+          "width": 254,
+          "height": 65,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_60_BoxBackgroundGra",
+          "element": "GMW_59",
+          "x": 98,
+          "y": 194,
+          "width": 252,
+          "height": 65,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_61_BoxFrame",
+          "element": "GMW_60",
+          "x": 37,
+          "y": 191,
+          "width": 316,
+          "height": 72,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_62_Underline",
+          "element": "GMW_61",
+          "x": 100,
+          "y": 229,
+          "width": 212,
+          "height": 3,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_63_PerkIcon",
+          "element": "GMW_62",
+          "x": 38,
+          "y": 196,
+          "width": 63,
+          "height": 64,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_64_PerkFrame",
+          "element": "GMW_63",
+          "x": 30,
+          "y": 188,
+          "width": 79,
+          "height": 80,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_65_PerkTitle",
+          "element": "GMW_64",
+          "x": 110,
+          "y": 193,
+          "width": 197,
+          "height": 42,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_66_PathPrompt",
+          "element": "GMW_65",
+          "x": 110,
+          "y": 238,
+          "width": 23,
+          "height": 15,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_67_PathReqText",
+          "element": "GMW_66",
+          "x": 134,
+          "y": 232,
+          "width": 12,
+          "height": 25,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_68_PathReqIcon",
+          "element": "GMW_67",
+          "x": 145,
+          "y": 233,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_69_CostPrompt",
+          "element": "GMW_68",
+          "x": 202,
+          "y": 238,
+          "width": 23,
+          "height": 15,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_70_Cost",
+          "element": "GMW_69",
+          "x": 226,
+          "y": 233,
+          "width": 15,
+          "height": 26,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_71_CostIcon",
+          "element": "GMW_70",
+          "x": 240,
+          "y": 233,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_72_TargetIcon",
+          "element": "GMW_71",
+          "x": 296,
+          "y": 209,
+          "width": 48,
+          "height": 48,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_73_BoxBackground",
+          "element": "GMW_72",
+          "x": 420,
+          "y": 195,
+          "width": 254,
+          "height": 65,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_74_BoxBackgroundGra",
+          "element": "GMW_73",
+          "x": 420,
+          "y": 194,
+          "width": 252,
+          "height": 65,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_75_BoxFrame",
+          "element": "GMW_74",
+          "x": 359,
+          "y": 191,
+          "width": 316,
+          "height": 72,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_76_Underline",
+          "element": "GMW_75",
+          "x": 422,
+          "y": 229,
+          "width": 212,
+          "height": 3,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_77_PerkIcon",
+          "element": "GMW_76",
+          "x": 360,
+          "y": 196,
+          "width": 63,
+          "height": 64,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_78_PerkFrame",
+          "element": "GMW_77",
+          "x": 352,
+          "y": 188,
+          "width": 79,
+          "height": 80,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_79_PerkTitle",
+          "element": "GMW_78",
+          "x": 432,
+          "y": 193,
+          "width": 197,
+          "height": 42,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_80_PathPrompt",
+          "element": "GMW_79",
+          "x": 433,
+          "y": 238,
+          "width": 23,
+          "height": 15,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_81_PathReqText",
+          "element": "GMW_80",
+          "x": 457,
+          "y": 232,
+          "width": 12,
+          "height": 25,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_82_PathReqIcon",
+          "element": "GMW_81",
+          "x": 468,
+          "y": 233,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_83_CostPrompt",
+          "element": "GMW_82",
+          "x": 525,
+          "y": 238,
+          "width": 23,
+          "height": 15,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_84_Cost",
+          "element": "GMW_83",
+          "x": 548,
+          "y": 233,
+          "width": 15,
+          "height": 26,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_85_CostIcon",
+          "element": "GMW_84",
+          "x": 563,
+          "y": 233,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_86_DamageText",
+          "element": "GMW_85",
+          "x": 616,
+          "y": 199,
+          "width": 34,
+          "height": 34,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_87_DamgeMod1Text",
+          "element": "GMW_86",
+          "x": 622,
+          "y": 227,
+          "width": 25,
+          "height": 11,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_88_DamgeMod2Text",
+          "element": "GMW_87",
+          "x": 650,
+          "y": 227,
+          "width": 25,
+          "height": 11,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_89_Path2ReqIcon",
+          "element": "GMW_88",
+          "x": 648,
+          "y": 203,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_90_BoxBackground",
+          "element": "GMW_89",
+          "x": 98,
+          "y": 272,
+          "width": 254,
+          "height": 65,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_91_BoxBackgroundGra",
+          "element": "GMW_90",
+          "x": 98,
+          "y": 271,
+          "width": 252,
+          "height": 65,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_92_BoxFrame",
+          "element": "GMW_91",
+          "x": 37,
+          "y": 268,
+          "width": 316,
+          "height": 72,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_93_Underline",
+          "element": "GMW_92",
+          "x": 100,
+          "y": 306,
+          "width": 212,
+          "height": 3,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_94_PerkIcon",
+          "element": "GMW_93",
+          "x": 38,
+          "y": 273,
+          "width": 63,
+          "height": 64,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_95_PerkFrame",
+          "element": "GMW_94",
+          "x": 30,
+          "y": 265,
+          "width": 79,
+          "height": 80,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_96_PerkTitle",
+          "element": "GMW_95",
+          "x": 110,
+          "y": 270,
+          "width": 197,
+          "height": 42,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_97_PathPrompt",
+          "element": "GMW_96",
+          "x": 110,
+          "y": 315,
+          "width": 23,
+          "height": 15,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_98_PathReqText",
+          "element": "GMW_97",
+          "x": 134,
+          "y": 309,
+          "width": 12,
+          "height": 25,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_99_PathReqIcon",
+          "element": "GMW_98",
+          "x": 145,
+          "y": 310,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_100_CostPrompt",
+          "element": "GMW_99",
+          "x": 202,
+          "y": 315,
+          "width": 23,
+          "height": 15,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_101_Cost",
+          "element": "GMW_100",
+          "x": 226,
+          "y": 310,
+          "width": 15,
+          "height": 26,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_102_CostIcon",
+          "element": "GMW_101",
+          "x": 240,
+          "y": 310,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_103_BuffText",
+          "element": "GMW_102",
+          "x": 286,
+          "y": 283,
+          "width": 28,
+          "height": 16,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_104_BuffIcon",
+          "element": "GMW_103",
+          "x": 317,
+          "y": 279,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_105_BoxBackground",
+          "element": "GMW_104",
+          "x": 420,
+          "y": 272,
+          "width": 254,
+          "height": 65,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_106_BoxBackgroundGra",
+          "element": "GMW_105",
+          "x": 420,
+          "y": 271,
+          "width": 252,
+          "height": 65,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_107_BoxFrame",
+          "element": "GMW_106",
+          "x": 359,
+          "y": 268,
+          "width": 316,
+          "height": 72,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_108_Underline",
+          "element": "GMW_107",
+          "x": 422,
+          "y": 306,
+          "width": 212,
+          "height": 3,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_109_PerkIcon",
+          "element": "GMW_108",
+          "x": 360,
+          "y": 273,
+          "width": 63,
+          "height": 64,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_110_PerkFrame",
+          "element": "GMW_109",
+          "x": 352,
+          "y": 265,
+          "width": 79,
+          "height": 80,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_111_PerkTitle",
+          "element": "GMW_110",
+          "x": 432,
+          "y": 270,
+          "width": 197,
+          "height": 42,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_112_PathPrompt",
+          "element": "GMW_111",
+          "x": 433,
+          "y": 315,
+          "width": 23,
+          "height": 15,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_113_PathReqText",
+          "element": "GMW_112",
+          "x": 457,
+          "y": 309,
+          "width": 12,
+          "height": 25,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_114_PathReqIcon",
+          "element": "GMW_113",
+          "x": 468,
+          "y": 310,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_115_Path2ReqText",
+          "element": "GMW_114",
+          "x": 490,
+          "y": 309,
+          "width": 12,
+          "height": 25,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_116_Path2ReqIcon",
+          "element": "GMW_115",
+          "x": 501,
+          "y": 310,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_117_CostPrompt",
+          "element": "GMW_116",
+          "x": 525,
+          "y": 315,
+          "width": 23,
+          "height": 15,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_118_Cost",
+          "element": "GMW_117",
+          "x": 548,
+          "y": 310,
+          "width": 15,
+          "height": 26,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_119_CostIcon",
+          "element": "GMW_118",
+          "x": 563,
+          "y": 310,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_120_BuffText",
+          "element": "GMW_119",
+          "x": 600,
+          "y": 283,
+          "width": 37,
+          "height": 16,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_121_BuffIcon",
+          "element": "GMW_120",
+          "x": 640,
+          "y": 279,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_122_BoxBackground",
+          "element": "GMW_121",
+          "x": 98,
+          "y": 349,
+          "width": 254,
+          "height": 65,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_123_BoxBackgroundGra",
+          "element": "GMW_122",
+          "x": 98,
+          "y": 348,
+          "width": 252,
+          "height": 65,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_124_BoxFrame",
+          "element": "GMW_123",
+          "x": 37,
+          "y": 345,
+          "width": 316,
+          "height": 72,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_125_Underline",
+          "element": "GMW_124",
+          "x": 100,
+          "y": 383,
+          "width": 212,
+          "height": 3,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_126_PerkIcon",
+          "element": "GMW_125",
+          "x": 38,
+          "y": 350,
+          "width": 63,
+          "height": 64,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_127_PerkFrame",
+          "element": "GMW_126",
+          "x": 30,
+          "y": 342,
+          "width": 79,
+          "height": 80,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_128_PerkTitle",
+          "element": "GMW_127",
+          "x": 110,
+          "y": 347,
+          "width": 197,
+          "height": 42,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_129_PathPrompt",
+          "element": "GMW_128",
+          "x": 110,
+          "y": 392,
+          "width": 23,
+          "height": 15,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_130_PathReqText",
+          "element": "GMW_129",
+          "x": 134,
+          "y": 386,
+          "width": 12,
+          "height": 25,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_131_PathReqIcon",
+          "element": "GMW_130",
+          "x": 145,
+          "y": 387,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_132_CostPrompt",
+          "element": "GMW_131",
+          "x": 186,
+          "y": 393,
+          "width": 23,
+          "height": 15,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_133_Cost",
+          "element": "GMW_132",
+          "x": 209,
+          "y": 387,
+          "width": 15,
+          "height": 26,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_134_CostIcon",
+          "element": "GMW_133",
+          "x": 224,
+          "y": 387,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_135_Cost2",
+          "element": "GMW_134",
+          "x": 246,
+          "y": 387,
+          "width": 15,
+          "height": 26,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_136_Cost2Icon",
+          "element": "GMW_135",
+          "x": 260,
+          "y": 387,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_137_DamageText",
+          "element": "GMW_136",
+          "x": 293,
+          "y": 353,
+          "width": 34,
+          "height": 34,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_138_Path2ReqIcon",
+          "element": "GMW_137",
+          "x": 323,
+          "y": 357,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_139_BoxBackground",
+          "element": "GMW_138",
+          "x": 421,
+          "y": 349,
+          "width": 254,
+          "height": 65,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_140_BoxBackgroundGra",
+          "element": "GMW_139",
+          "x": 421,
+          "y": 348,
+          "width": 252,
+          "height": 65,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_141_BoxFrame",
+          "element": "GMW_140",
+          "x": 360,
+          "y": 345,
+          "width": 316,
+          "height": 72,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_142_Underline",
+          "element": "GMW_141",
+          "x": 423,
+          "y": 383,
+          "width": 212,
+          "height": 3,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_143_PerkIcon",
+          "element": "GMW_142",
+          "x": 360,
+          "y": 350,
+          "width": 63,
+          "height": 64,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_144_PerkFrame",
+          "element": "GMW_143",
+          "x": 352,
+          "y": 342,
+          "width": 79,
+          "height": 80,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_145_PerkTitle",
+          "element": "GMW_144",
+          "x": 433,
+          "y": 347,
+          "width": 176,
+          "height": 42,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_146_PathPrompt",
+          "element": "GMW_145",
+          "x": 434,
+          "y": 392,
+          "width": 23,
+          "height": 15,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_147_PathReqText",
+          "element": "GMW_146",
+          "x": 457,
+          "y": 386,
+          "width": 12,
+          "height": 25,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_148_PathReqIcon",
+          "element": "GMW_147",
+          "x": 468,
+          "y": 387,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_149_CostPrompt",
+          "element": "GMW_148",
+          "x": 526,
+          "y": 392,
+          "width": 23,
+          "height": 15,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_150_Cost",
+          "element": "GMW_149",
+          "x": 548,
+          "y": 387,
+          "width": 15,
+          "height": 26,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_151_CostIcon",
+          "element": "GMW_150",
+          "x": 563,
+          "y": 387,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_152_BuffText",
+          "element": "GMW_151",
+          "x": 609,
+          "y": 360,
+          "width": 28,
+          "height": 16,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_153_BuffIcon",
+          "element": "GMW_152",
+          "x": 640,
+          "y": 356,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_154_BoxBackground",
+          "element": "GMW_153",
+          "x": 98,
+          "y": 426,
+          "width": 254,
+          "height": 65,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_155_BoxBackgroundGra",
+          "element": "GMW_154",
+          "x": 98,
+          "y": 425,
+          "width": 252,
+          "height": 65,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_156_BoxFrame",
+          "element": "GMW_155",
+          "x": 37,
+          "y": 422,
+          "width": 316,
+          "height": 72,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_157_Underline",
+          "element": "GMW_156",
+          "x": 100,
+          "y": 460,
+          "width": 212,
+          "height": 3,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_158_PerkIcon",
+          "element": "GMW_157",
+          "x": 38,
+          "y": 427,
+          "width": 63,
+          "height": 64,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_159_PerkFrame",
+          "element": "GMW_158",
+          "x": 30,
+          "y": 419,
+          "width": 79,
+          "height": 80,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_160_PerkTitle",
+          "element": "GMW_159",
+          "x": 110,
+          "y": 424,
+          "width": 197,
+          "height": 42,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_161_PathPrompt",
+          "element": "GMW_160",
+          "x": 110,
+          "y": 469,
+          "width": 23,
+          "height": 15,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_162_PathReqText",
+          "element": "GMW_161",
+          "x": 134,
+          "y": 463,
+          "width": 12,
+          "height": 25,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_163_PathReqIcon",
+          "element": "GMW_162",
+          "x": 145,
+          "y": 464,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_164_CostPrompt",
+          "element": "GMW_163",
+          "x": 202,
+          "y": 469,
+          "width": 23,
+          "height": 15,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_165_Cost",
+          "element": "GMW_164",
+          "x": 226,
+          "y": 464,
+          "width": 15,
+          "height": 26,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_166_CostIcon",
+          "element": "GMW_165",
+          "x": 240,
+          "y": 464,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_167_Cost2",
+          "element": "GMW_166",
+          "x": 262,
+          "y": 464,
+          "width": 15,
+          "height": 26,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_168_Cost2Icon",
+          "element": "GMW_167",
+          "x": 277,
+          "y": 464,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_169_BuffText",
+          "element": "GMW_168",
+          "x": 286,
+          "y": 437,
+          "width": 28,
+          "height": 16,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_170_BuffIcon",
+          "element": "GMW_169",
+          "x": 317,
+          "y": 433,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_171_Slider",
+          "element": "GMW_170",
+          "x": 667,
+          "y": 183,
+          "width": 25,
+          "height": 20,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_172_Ribbon",
+          "element": "GMW_171",
+          "x": 10,
+          "y": 12,
+          "width": 689,
+          "height": 94,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_173_TitleText",
+          "element": "GMW_172",
+          "x": 38,
+          "y": 28,
+          "width": 648,
+          "height": 62,
+          "anchor": 0
+        }
+      ],
+      "background": "LeatherBackground",
+      "backgroundScale": 0.14,
+      "backgroundInset": -17,
+      "backgroundTint": [
+        199,
+        215,
+        229,
+        255
+      ],
+      "bgHarmonize": {
+        "targetColor": [
+          73,
+          58,
+          41,
+          255
+        ],
+        "hueStrength": 1,
+        "satStrength": 1.0,
+        "valStrength": 0.48,
+        "useHcl": false,
+        "gradColor": [
+          18,
+          15,
+          11,
+          112
+        ],
+        "gradStrength": 0.992
+      }
     }
   ]
 }

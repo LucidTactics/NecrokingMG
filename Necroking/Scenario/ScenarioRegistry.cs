@@ -37,6 +37,7 @@ public static class ScenarioRegistry
         Register("UIBlankWindow", () => new Scenarios.UIBlankWindowScenario());
         Register("UIUnitInfo", () => new Scenarios.UIUnitInfoScenario());
         Register("UIResourceTipDyn", () => new Scenarios.UIResourceTipDynScenario());
+        Register("UIGrimoire", () => new Scenarios.UIGrimoireScenario());
         Register("grass_test", () => new Scenarios.GrassTestScenario());
         Register("corpse_worker", () => new Scenarios.CorpseWorkerScenario());
         Register("raid_workers", () => new Scenarios.RaidWorkersScenario());
