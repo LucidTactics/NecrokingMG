@@ -71,10 +71,35 @@ public class UIUnitInfoScenario : ScenarioBase
         }
         else if (_phase == 2 && DeferredScreenshot == null)
         {
+            // Hover the Strength LABEL (simple tooltip): panel x=800, soldier
+            // sheet y~157; stats sec at +192; r2c0 label ~(34+45, 88+12).
+            _panel!.ShowForUnit(_soldierIdx);
+            _panel!.DebugMouseOverride = new Point(880, 449);
+            _elapsed = 0f;
+            _phase = 3;
+        }
+        else if (_phase == 3 && _elapsed > 6f)
+        {
+            DeferredScreenshot = "ui_stattip_label";
+            _phase = 4;
+        }
+        else if (_phase == 4 && DeferredScreenshot == null)
+        {
+            _panel!.DebugMouseOverride = new Point(920, 449); // Strength VALUE
+            _elapsed = 0f;
+            _phase = 5;
+        }
+        else if (_phase == 5 && _elapsed > 6f)
+        {
+            DeferredScreenshot = "ui_stattip_value";
+            _phase = 6;
+        }
+        else if (_phase == 6 && DeferredScreenshot == null)
+        {
             if (LaunchArgs.Headless)
             {
                 _panel?.Hide();
-                DebugLog.Log(ScenarioLog, "both screenshots taken, complete");
+                DebugLog.Log(ScenarioLog, "all screenshots taken, complete");
                 _complete = true;
             }
         }

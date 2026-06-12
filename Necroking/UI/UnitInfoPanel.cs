@@ -101,6 +101,105 @@ public class UnitInfoPanel : IModalLayer
             if (rect != Rectangle.Empty)
                 DrawUnitIconCallback(unit.UnitDefID, rect);
         }
+
+        DrawStatTooltips(screenW, screenH, unit);
+    }
+
+    // ───────────────────────── stat hover tooltips ─────────────────────────
+
+    private static readonly (string Cell, string Key)[] CellKeys =
+    {
+        ("st_r0c0", "hp"), ("st_r0c1", "magicres"), ("st_r0c2", "morale"),
+        ("st_r1c0", "size"), ("st_r1c1", "toughness"), ("st_r1c2", "magicpower"),
+        ("st_r2c0", "strength"), ("st_r2c1", "protection"), ("st_r2c2", "shield"),
+        ("st_r3c0", "attack"), ("st_r3c1", "defense"), ("st_r3c2", "parry"),
+        ("st_r4c0", "speed"), ("st_r4c1", "encumbrance"), ("st_r4c2", "upkeep"),
+    };
+
+    private readonly StatTooltips _tips = new();
+
+    /// <summary>Test hook: scenarios can't move the OS cursor on a hidden
+    /// window, so they inject a cursor position here.</summary>
+    public Point? DebugMouseOverride;
+
+    private void DrawStatTooltips(int screenW, int screenH, Movement.Unit unit)
+    {
+        var ms = Microsoft.Xna.Framework.Input.Mouse.GetState();
+        int mx = DebugMouseOverride?.X ?? ms.X, my = DebugMouseOverride?.Y ?? ms.Y;
+        var sec = _renderer.GetChildRect(WidgetId, "sec_stats", _panelX, _panelY, InstanceId);
+
+        string? key = null;
+        bool isValue = false;
+        if (sec != Rectangle.Empty)
+        {
+            foreach (var (cell, k) in CellKeys)
+            {
+                var lab = _renderer.GetChildRect("UTD_StatsSection", cell + "_label", sec.X, sec.Y);
+                var ico = _renderer.GetChildRect("UTD_StatsSection", cell + "_icon", sec.X, sec.Y);
+                var val = _renderer.GetChildRect("UTD_StatsSection", cell + "_value", sec.X, sec.Y);
+                if (val.Contains(mx, my)) { key = k; isValue = true; break; }
+                if (lab.Contains(mx, my) || ico.Contains(mx, my)) { key = k; break; }
+            }
+        }
+        _tips.Update(key, isValue, 1f / 60f);
+        _tips.Draw(_renderer, mx, my, screenW, screenH, k => BuildBreakdown(k, unit));
+    }
+
+    /// <summary>Tabulation rows for a stat: Base (default color), itemized
+    /// contributions (green/red), Final colored vs base (yellow if equal).</summary>
+    private (List<ResourceTooltip.Row> Rows, string Final, Color FinalColor)? BuildBreakdown(
+        string key, Movement.Unit unit)
+    {
+        var gd = _gameData;
+        var s = unit.Stats;
+        var b = gd != null && !string.IsNullOrEmpty(unit.UnitDefID)
+            ? gd.Units.BuildStats(unit.UnitDefID, gd.Weapons, gd.Armors, gd.Shields) : s;
+
+        var rows = new List<ResourceTooltip.Row>();
+        void Generic(float baseV, float finalV, string fmt = "0.#")
+        {
+            rows.Add(new ResourceTooltip.Row("Base", baseV.ToString(fmt), ResourceTooltip.ValueDefault));
+            float d = finalV - baseV;
+            if (Math.Abs(d) > 0.001f) rows.Add(ResourceTooltip.Entry("Effects", (int)Math.Round(d)));
+        }
+
+        float bv, fv;
+        switch (key)
+        {
+            case "hp":
+                rows.Add(new ResourceTooltip.Row("Max Hp", s.MaxHP.ToString(), ResourceTooltip.ValueDefault));
+                if (s.HP < s.MaxHP)
+                    rows.Add(new ResourceTooltip.Row("Damage", (s.HP - s.MaxHP).ToString(), ResourceTooltip.ValueRed));
+                bv = s.MaxHP; fv = s.HP;
+                break;
+            case "protection":
+                rows.Add(new ResourceTooltip.Row("Natural", s.NaturalProt.ToString(), ResourceTooltip.ValueDefault));
+                if (s.Armor.BodyProtection != 0)
+                    rows.Add(ResourceTooltip.Entry("Body Armor", s.Armor.BodyProtection));
+                bv = b.NaturalProt + b.Armor.BodyProtection; fv = s.NaturalProt + s.Armor.BodyProtection;
+                break;
+            case "shield": Generic(b.ShieldProtection, fv = s.ShieldProtection); bv = b.ShieldProtection; break;
+            case "parry": Generic(b.ShieldParry, fv = s.ShieldParry); bv = b.ShieldParry; break;
+            case "magicres": Generic(b.MagicResist, fv = s.MagicResist); bv = b.MagicResist; break;
+            case "morale": Generic(b.Morale, fv = s.Morale); bv = b.Morale; break;
+            case "strength": Generic(b.Strength, fv = s.Strength); bv = b.Strength; break;
+            case "attack": Generic(b.Attack, fv = s.Attack); bv = b.Attack; break;
+            case "defense": Generic(b.Defense, fv = s.Defense); bv = b.Defense; break;
+            case "speed": Generic(b.CombatSpeed, fv = s.CombatSpeed); bv = b.CombatSpeed; break;
+            case "encumbrance": Generic(b.Encumbrance, fv = s.Encumbrance); bv = b.Encumbrance; break;
+            case "size":
+                bv = fv = _gameData?.Units.Get(unit.UnitDefID)?.Size ?? 2;
+                rows.Add(new ResourceTooltip.Row("Base", fv.ToString("0"), ResourceTooltip.ValueDefault));
+                break;
+            default:
+                return null; // TBD stats have no tabulation
+        }
+
+        var col = fv > bv ? ResourceTooltip.ValueGreen
+                : fv < bv ? ResourceTooltip.ValueRed : ResourceTooltip.ValueDefault;
+        string final = fv.ToString("0.#");
+        rows.Add(new ResourceTooltip.Row("Final", final, col));
+        return (rows, final, col);
     }
 
     private void Populate(Movement.Unit unit)

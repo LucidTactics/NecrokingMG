@@ -140,6 +140,33 @@ resize_premul(gb, (173, 3)).save('assets/UI/Bars/goldbar_h_173x3.png')
 bake_icon('assets/UI/Icons/SturmIcons/SturmStrength24.png', 36, 36, 'assets/UI/Icons/SturmIcons/SturmStrength_36.png')
 Image.new('RGBA', (4, 4), (255, 255, 255, 255)).save('assets/UI/Misc/white4.png')
 
+# --- Stat tooltip icons: 36px versions of the 24px stat icons, with the
+# Unity-style texture-space outline pre-baked (matches the Strength icon) ---
+from bake_unity_icon import bake_outline, dilate_rgb as _dil
+STAT_ICONS = {
+    'hp': 'assets/UI/Icons/NewIcons/Health24.png',
+    'morale': 'assets/UI/Icons/SturmIcons/morale2_24.png',
+    'size': 'assets/UI/Icons/NewIcons/Size324.png',
+    'toughness': 'assets/UI/Icons/NewIcons/Tough24.png',
+    'magicpower': 'assets/UI/Icons/NewIcons/MagicWand48.png',
+    'magicres': 'assets/UI/Icons/SturmIcons/Spirit2_24.png',
+    'strength': 'assets/UI/Icons/SturmIcons/SturmStrength24.png',
+    'protection': 'assets/UI/Icons/NewIcons/Prot24.png',
+    'shield': 'assets/UI/Icons/NewIcons/Coverage24.png',
+    'attack': 'assets/UI/Icons/NewIcons/Attack24.png',
+    'defense': 'assets/UI/Icons/NewIcons/Defense24.png',
+    'parry': 'assets/UI/Icons/NewIcons/Parry24.png',
+    'speed': 'assets/UI/Icons/NewIcons/Speed24.png',
+    'encumbrance': 'assets/UI/Icons/NewIcons/Enc24.png',
+    'upkeep': 'assets/UI/Icons/NewIcons/Gold24.png',
+}
+for key, src_p in STAT_ICONS.items():
+    arr = np.asarray(Image.open(src_p).convert('RGBA'))
+    arr = bake_outline(arr, 0.5, (51, 40, 40), 0.88)
+    arr = dilate_rgb(arr)
+    Image.fromarray(arr, 'RGBA').resize((36, 36), Image.BILINEAR).save(
+        f'assets/UI/Icons/StatTips/{key}_36.png')
+
 # --- Resource HUD tooltip (222x231) ---
 bake_icon('assets/UI/Icons/Population/Humans24.png', 36, 36, 'assets/UI/Icons/Population/Humans_36.png')
 # Dragon stencil: tiled PPUMult 3.7 -> tile 222.1 x 648.7 units (width = window
