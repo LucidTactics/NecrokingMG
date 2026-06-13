@@ -104,6 +104,7 @@ public static class ScenarioRegistry
         Register("weapon_attach_debug", () => new Scenarios.WeaponAttachDebugScenario());
         Register("cast_point_debug", () => new Scenarios.CastPointDebugScenario());
         Register("water_shed_depth", () => new Scenarios.WaterShedDepthScenario());
+        Register("UISpellBar", () => new Scenarios.UISpellBarScenario());
         Register("corpse_carry_depth", () => new Scenarios.CorpseCarryDepthScenario());
         Register("zombie_deer_leash", () => new Scenarios.ZombieDeerLeashScenario());
         Register("log_shadow", () => new Scenarios.LogShadowScenario());

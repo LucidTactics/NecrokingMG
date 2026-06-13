@@ -16,6 +16,10 @@ public abstract class ScenarioBase
     public virtual bool WantsUI => false;
     public virtual bool WantsGrass => false;
     public virtual bool WantsGround => false;
+    /// <summary>Optional spell IDs to seed the primary / secondary spell bars
+    /// (UI tests don't run StartGame, which normally loads spellbar.json).</summary>
+    public virtual string[]? DebugPrimarySpells => null;
+    public virtual string[]? DebugSecondarySpells => null;
     /// <summary>When true, Game1 disables IsFixedTimeStep + vsync so the game
     /// runs at unlocked framerate. Used by perf scenarios to measure raw GPU
     /// throughput without the 60Hz cap and sleep-padding masking the cost.

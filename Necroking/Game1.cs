@@ -1329,6 +1329,13 @@ public class Game1 : Microsoft.Xna.Framework.Game
             _spellBarState.Slots = new SpellBarSlot[4] { new(), new(), new(), new() };
         if (_secondaryBarState.Slots == null)
             _secondaryBarState.Slots = new SpellBarSlot[4] { new(), new(), new(), new() };
+        // UI tests can seed the bars (StartGame's spellbar.json load doesn't run).
+        if (scenario.DebugPrimarySpells != null)
+            for (int i = 0; i < 4 && i < scenario.DebugPrimarySpells.Length; i++)
+                _spellBarState.Slots[i] = new SpellBarSlot { SpellID = scenario.DebugPrimarySpells[i] };
+        if (scenario.DebugSecondarySpells != null)
+            for (int i = 0; i < 4 && i < scenario.DebugSecondarySpells.Length; i++)
+                _secondaryBarState.Slots[i] = new SpellBarSlot { SpellID = scenario.DebugSecondarySpells[i] };
 
         // Load ground data for scenarios that want it
         if (scenario.WantsGround)
@@ -1942,7 +1949,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         _smallFont = Content.Load<SpriteFont>("SmallFont");
         _largeFont = Content.Load<SpriteFont>("LargeFont");
         _debugDraw.SetFont(_smallFont);
-        _hudRenderer.Init(_spriteBatch, _pixel, _font, _smallFont);
+        _hudRenderer.Init(_spriteBatch, _pixel, _font, _smallFont, _widgetRenderer);
         _hudRenderer.SetInput(_input);
         _characterStatsUI.Init(_spriteBatch, _pixel, _font, _smallFont);
         // Note: _uiShaders is initialized later after Content.Load path -- we
@@ -2751,12 +2758,13 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
                 // --- Potion slot dropdown interaction ---
                 // Potion slots sit to the right of the 4 secondary spell slots
-                int potionBaseX = screenW / 2 - secLayout.centerOffset + 4 * (secLayout.slotW + 4) + 8;
+                // Potions are boxes 4-5 of the contiguous 6-box top row (spacing 6).
+                int potionBaseX = screenW / 2 - secLayout.centerOffset + 4 * (secLayout.slotW + 6);
                 if (_potionDropdownSlot >= 0)
                 {
                     var allPotionIds = _gameData.Potions.GetIDs();
                     // Potion dropdown uses same layout as spell dropdown but offset to potion position
-                    int potSlotX = potionBaseX + _potionDropdownSlot * (secLayout.slotW + 4);
+                    int potSlotX = potionBaseX + _potionDropdownSlot * (secLayout.slotW + 6);
                     int ddH = (allPotionIds.Count + 1) * 20;
                     int ddY = secLayout.barY - 10;
                     int ddLeft = potSlotX - 2;
@@ -2781,7 +2789,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 {
                     for (int ps = 0; ps < 2; ps++)
                     {
-                        int psX = potionBaseX + ps * (secLayout.slotW + 4);
+                        int psX = potionBaseX + ps * (secLayout.slotW + 6);
                         if (mouse.X >= psX && mouse.X < psX + secLayout.slotW &&
                             mouse.Y >= secLayout.barY && mouse.Y < secLayout.barY + secLayout.slotH)
                         {

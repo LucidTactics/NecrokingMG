@@ -1,6 +1,15 @@
 {
   "elements": [
     {
+      "id": "SBSlotBg",
+      "type": "image",
+      "imagePath": "assets/UI/Imported/FancyFrame2_Inner.png",
+      "width": 60,
+      "height": 60,
+      "tintColor": [ 255, 255, 255, 255 ],
+      "harmonize": { "targetColor": [ 144, 109, 47, 255 ], "hueStrength": 1, "satStrength": 0.322, "valStrength": 0.86, "useHcl": false }
+    },
+    {
       "id": "Window",
       "type": "nineSlice",
       "nineSlice": "frame_fancy",

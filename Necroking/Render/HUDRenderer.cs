@@ -24,17 +24,28 @@ public class HUDRenderer
     private const int HpBarY = 32;
     private const int ManaBarY = 50;
 
-    private const int PrimarySlotW = 50;
-    private const int PrimarySlotH = 50;
-    private const int PrimaryBarOffsetX = 110; // screenW/2 - this
+    // Two rows of grimoire-style frame slots, sized so both rows span the same
+    // total width (bottom: 4 boxes; top: 6 = 4 secondary spells + 2 potions),
+    // centred and aligned. Bottom box fits the 96px spell icon at an exact 2:1
+    // downscale (48px) — pixel-perfect; top boxes are smaller with scaled icons.
+    // 4*60 + 3*6 = 258 == 6*38 + 5*6, so both offsets are 258/2 = 129.
+    private const int PrimarySlotW = 60;
+    private const int PrimarySlotH = 60;
+    private const int PrimaryBarOffsetX = 129; // screenW/2 - this
     private const int PrimaryBarBottomOffset = 95; // screenH - this
 
-    private const int SecondarySlotW = 35;
-    private const int SecondarySlotH = 35;
-    private const int SecondaryBarOffsetX = 80;
+    private const int SecondarySlotW = 38;
+    private const int SecondarySlotH = 38;
+    private const int SecondaryBarOffsetX = 129;
     private const int SecondaryBarGap = 6;
-    private const int SlotSpacing = 4;
+    private const int SlotSpacing = 6;
     private const int SlotBorderHeight = 2;
+
+    // Grimoire elements reused for slot chrome (harmonized via the widget renderer):
+    // GMT_5 = SpiderFrame icon frame, GMW_4 = FancyFrame2_Inner parchment backing.
+    private const string SlotFrameElem = "GMT_5";
+    private const string SlotBgElem = "SBSlotBg";
+    private const float SlotIconRatio = 0.80f; // icon size as a fraction of the box
 
     private const int DropdownItemH = 20;
     private const int DropdownWidth = 164;
@@ -80,14 +91,19 @@ public class HUDRenderer
     private Texture2D _pixel = null!;
     private SpriteFont? _font;
     private SpriteFont? _smallFont;
+    // Shares Game1's SpriteBatch, so its element/icon draws land in the same
+    // pass. Used to reuse the grimoire's frame + parchment backing for slots.
+    private UI.RuntimeWidgetRenderer? _widgets;
     private InputState _input = new();
 
-    public void Init(SpriteBatch batch, Texture2D pixel, SpriteFont? font, SpriteFont? smallFont)
+    public void Init(SpriteBatch batch, Texture2D pixel, SpriteFont? font, SpriteFont? smallFont,
+        UI.RuntimeWidgetRenderer? widgets = null)
     {
         _batch = batch;
         _pixel = pixel;
         _font = font;
         _smallFont = smallFont;
+        _widgets = widgets;
     }
 
     /// <summary>Set the input state reference for hover detection in draw calls.</summary>
@@ -209,66 +225,82 @@ public class HUDRenderer
         Action<string, int, int> drawCategoryIcon, int nameTruncLen)
     {
         bool isSecondary = slotW < PrimarySlotW;
-        var filledBg = isSecondary ? SecFilledBg : SlotFilledBg;
-        var emptyBg = isSecondary ? SecEmptyBg : SlotEmptyBg;
-        var border = isSecondary ? SecBorder : SlotBorder;
 
         for (int s = 0; s < 4; s++)
         {
             int slotX = screenW / 2 - centerOffset + s * (slotW + SlotSpacing);
+            var slot = new Rectangle(slotX, barY, slotW, slotH);
+            var inner = SlotInterior(slot);
             bool hasSpell = s < bar.Slots.Length && !string.IsNullOrEmpty(bar.Slots[s].SpellID);
 
-            // Hover highlight
             int mx = (int)_input.MousePos.X, my = (int)_input.MousePos.Y;
-            bool hovered = mx >= slotX && mx < slotX + slotW && my >= barY && my < barY + slotH;
+            bool hovered = slot.Contains(mx, my);
 
-            _batch.Draw(_pixel, new Rectangle(slotX, barY, slotW, slotH), hasSpell ? filledBg : emptyBg);
+            string slotSpellId = hasSpell ? bar.Slots[s].SpellID : "";
+            SpellDef? spell = hasSpell && slotSpellId != "melee_gather"
+                ? gameData.Spells.Get(slotSpellId) : null;
+
+            // Frame box: parchment backing + icon + frame (grimoire chrome).
+            DrawFramedSlot(slot, innerRect =>
+            {
+                if (spell != null && !string.IsNullOrEmpty(spell.Icon))
+                    _widgets?.DrawIcon(spell.Icon, innerRect.X, innerRect.Y, innerRect.Width, innerRect.Height);
+                else if (spell != null && !isSecondary)
+                    drawCategoryIcon(spell.Category, innerRect.Center.X, innerRect.Center.Y);
+            });
+
             if (hovered)
-                _batch.Draw(_pixel, new Rectangle(slotX, barY, slotW, slotH), Color.White * 0.12f);
-            _batch.Draw(_pixel, new Rectangle(slotX, barY, slotW, SlotBorderHeight),
-                hovered ? new Color(220, 200, 120, 200) : border);
+                _batch.Draw(_pixel, inner, Color.White * 0.12f);
+
+            // Cooldown sweep (over the icon interior).
+            if (spell != null)
+            {
+                float cd = sim.NecroState.GetCooldown(spell.Id);
+                if (cd > 0f)
+                {
+                    float cdFrac = MathF.Min(cd / MathF.Max(spell.Cooldown, 0.1f), 1f);
+                    int cdH = (int)(inner.Height * cdFrac);
+                    _batch.Draw(_pixel, new Rectangle(inner.X, inner.Bottom - cdH, inner.Width, cdH), CooldownOverlay);
+                    if (!isSecondary && _smallFont != null)
+                        Text(_smallFont, $"{cd:F1}", new Vector2(inner.Center.X - 10, inner.Center.Y - 6), CooldownText);
+                }
+                if (sim.NecroState.Mana < spell.ManaCost)
+                    _batch.Draw(_pixel, inner, LowManaOverlay);
+            }
 
             if (_smallFont == null) continue;
-
-            Text(_smallFont, keys[s], new Vector2(slotX + 2, barY + 2), KeyLabelColor);
-
-            if (!hasSpell) continue;
-
-            // Special built-in abilities
-            string slotSpellId = bar.Slots[s].SpellID;
+            // melee_gather has no icon — label it.
             if (slotSpellId == "melee_gather")
-            {
-                Text(_smallFont, "Melee", new Vector2(slotX + 3, barY + slotH - 14), SpellNameColor);
-                continue;
-            }
-
-            var spell = gameData.Spells.Get(slotSpellId);
-            if (spell == null) continue;
-
-            // Name (truncated)
-            string name = spell.DisplayName.Length > nameTruncLen
-                ? spell.DisplayName[..nameTruncLen] : spell.DisplayName;
-            Text(_smallFont, name, new Vector2(slotX + 3, barY + slotH - 14), SpellNameColor);
-
-            // Category icon (only on primary bar)
-            if (!isSecondary)
-                drawCategoryIcon(spell.Category, slotX + slotW / 2, barY + slotH / 2 - 2);
-
-            // Cooldown overlay
-            float cd = sim.NecroState.GetCooldown(spell.Id);
-            if (cd > 0f)
-            {
-                float cdFrac = MathF.Min(cd / MathF.Max(spell.Cooldown, 0.1f), 1f);
-                int cdH = (int)(slotH * cdFrac);
-                _batch.Draw(_pixel, new Rectangle(slotX, barY + slotH - cdH, slotW, cdH), CooldownOverlay);
-                if (!isSecondary)
-                    Text(_smallFont, $"{cd:F1}", new Vector2(slotX + 12, barY + 18), CooldownText);
-            }
-
-            // Low mana indicator
-            if (sim.NecroState.Mana < spell.ManaCost)
-                _batch.Draw(_pixel, new Rectangle(slotX, barY, slotW, slotH), LowManaOverlay);
+                Text(_smallFont, "Melee", new Vector2(inner.X + 1, inner.Center.Y - 6), SpellNameColor);
+            // Hotkey label, top-left, on top of the frame.
+            Text(_smallFont, keys[s], new Vector2(slotX + 4, barY + 2), KeyLabelColor);
         }
+    }
+
+    /// <summary>The icon area inside a slot frame (centered, SlotIconRatio of the
+    /// box) — matches the grimoire frame's transparent interior.</summary>
+    private static Rectangle SlotInterior(Rectangle slot)
+    {
+        int icon = (int)MathF.Round(slot.Width * SlotIconRatio);
+        int off = (slot.Width - icon) / 2;
+        return new Rectangle(slot.X + off, slot.Y + off, icon, icon);
+    }
+
+    /// <summary>Draw a grimoire-style slot: parchment backing + interior content
+    /// (drawn by the callback) + the SpiderFrame on top. Falls back to a plain
+    /// box if the widget renderer isn't available.</summary>
+    private void DrawFramedSlot(Rectangle slot, Action<Rectangle> drawInterior)
+    {
+        var inner = SlotInterior(slot);
+        if (_widgets == null)
+        {
+            _batch.Draw(_pixel, slot, SlotEmptyBg);
+            drawInterior(inner);
+            return;
+        }
+        _widgets.DrawElementImage(SlotBgElem, inner);
+        drawInterior(inner);
+        _widgets.DrawElementImage(SlotFrameElem, slot);
     }
 
     private void DrawSpellDropdown(int screenW, int barY, int slotW, int centerOffset,
@@ -542,65 +574,39 @@ public class HUDRenderer
     {
         if (_smallFont == null) return;
 
-        // Position: to the right of the secondary bar (4 slots * (35+4) = 156, so offset = 80 + 156 + 8)
-        int baseX = screenW / 2 - SecondaryBarOffsetX + 4 * (SecondarySlotW + SlotSpacing) + 8;
+        // Potion slots are boxes 4-5 of the top row (right after the 4 secondary
+        // spell slots), forming one contiguous 6-box row above the primary 4.
+        int baseX = screenW / 2 - SecondaryBarOffsetX + 4 * (SecondarySlotW + SlotSpacing);
         int barY = secondaryY;
 
         for (int s = 0; s < potionSlots.Length && s < 2; s++)
         {
             int slotX = baseX + s * (SecondarySlotW + SlotSpacing);
+            var slot = new Rectangle(slotX, barY, SecondarySlotW, SecondarySlotH);
+            var inner = SlotInterior(slot);
             string potionItemId = potionSlots[s];
             bool hasPotion = !string.IsNullOrEmpty(potionItemId);
             int qty = hasPotion ? inventory.GetItemCount(potionItemId) : 0;
             bool isActive = s == activePotionSlot;
 
-            // Background + hover
             int pmx = (int)_input.MousePos.X, pmy = (int)_input.MousePos.Y;
-            bool potionHover = pmx >= slotX && pmx < slotX + SecondarySlotW && pmy >= barY && pmy < barY + SecondarySlotH;
-            Color bg = hasPotion && qty > 0 ? SecFilledBg : SecEmptyBg;
-            _batch.Draw(_pixel, new Rectangle(slotX, barY, SecondarySlotW, SecondarySlotH), bg);
-            if (potionHover)
-                _batch.Draw(_pixel, new Rectangle(slotX, barY, SecondarySlotW, SecondarySlotH), Color.White * 0.12f);
+            bool potionHover = slot.Contains(pmx, pmy);
 
-            // Border — highlight if active or hovered
-            Color border = isActive ? PotionActiveBorder : potionHover ? new Color(220, 200, 120, 200) : SecBorder;
-            _batch.Draw(_pixel, new Rectangle(slotX, barY, SecondarySlotW, SlotBorderHeight), border);
-            if (isActive)
+            Texture2D? potTex = hasPotion && getItemTexture != null ? getItemTexture(potionItemId) : null;
+            DrawFramedSlot(slot, ir => { if (potTex != null) _batch.Draw(potTex, ir, Color.White); });
+
+            if (isActive) _batch.Draw(_pixel, slot, PotionActiveBorder * 0.30f);
+            if (potionHover) _batch.Draw(_pixel, inner, Color.White * 0.12f);
+            if (hasPotion && qty <= 0) _batch.Draw(_pixel, inner, PotionEmptyColor); // out of stock
+
+            // Quantity (bottom-right) + hotkey label (top-left), on top.
+            if (hasPotion && qty > 0)
             {
-                _batch.Draw(_pixel, new Rectangle(slotX, barY + SecondarySlotH - SlotBorderHeight, SecondarySlotW, SlotBorderHeight), border);
-                _batch.Draw(_pixel, new Rectangle(slotX, barY, SlotBorderHeight, SecondarySlotH), border);
-                _batch.Draw(_pixel, new Rectangle(slotX + SecondarySlotW - SlotBorderHeight, barY, SlotBorderHeight, SecondarySlotH), border);
+                string qtyStr = qty.ToString();
+                var qtySize = _smallFont.MeasureString(qtyStr);
+                Text(_smallFont, qtyStr, new Vector2(slot.Right - qtySize.X - 3, slot.Bottom - qtySize.Y - 2), PotionQtyColor);
             }
-
-            // Key label
-            Text(_smallFont, (s + 5).ToString(), new Vector2(slotX + 2, barY + 2), KeyLabelColor);
-
-            if (hasPotion && getItemTexture != null)
-            {
-                // Draw potion icon
-                var texture = getItemTexture(potionItemId);
-                if (texture != null)
-                {
-                    int iconSize = SecondarySlotW - 6;
-                    var iconRect = new Rectangle(slotX + 3, barY + 3, iconSize, iconSize);
-                    _batch.Draw(texture, iconRect, Color.White);
-                }
-
-                // Quantity in bottom-right
-                if (qty > 0)
-                {
-                    string qtyStr = qty.ToString();
-                    var qtySize = _smallFont.MeasureString(qtyStr);
-                    Text(_smallFont, qtyStr,
-                        new Vector2(slotX + SecondarySlotW - qtySize.X - 2, barY + SecondarySlotH - qtySize.Y - 1),
-                        PotionQtyColor);
-                }
-                else
-                {
-                    // Dim overlay when out of stock
-                    _batch.Draw(_pixel, new Rectangle(slotX, barY, SecondarySlotW, SecondarySlotH), PotionEmptyColor);
-                }
-            }
+            Text(_smallFont, (s + 5).ToString(), new Vector2(slotX + 4, barY + 2), KeyLabelColor);
         }
     }
 
@@ -609,7 +615,7 @@ public class HUDRenderer
     {
         if (openSlot < 0 || openSlot >= 2 || _smallFont == null) return;
 
-        int baseX = screenW / 2 - SecondaryBarOffsetX + 4 * (SecondarySlotW + SlotSpacing) + 8;
+        int baseX = screenW / 2 - SecondaryBarOffsetX + 4 * (SecondarySlotW + SlotSpacing);
         int slotX = baseX + openSlot * (SecondarySlotW + SlotSpacing);
 
         var allPotions = gameData.Potions.GetIDs();
