@@ -19,6 +19,7 @@ public static class GrimoirePanel
     private const int MaxTiles = 22;
 
     private const string IcoDeathPath = "assets/UI/Imported/Death24.png";
+    private const string IcoFatigue = "assets/UI/Imported/exhausted.2.24.png";
 
     /// <summary>Write all overrides for the grimoire instance. school = null
     /// shows every visible spell (the "All" tab); otherwise filters.</summary>
@@ -56,7 +57,12 @@ public static class GrimoirePanel
         r.SetText(inst, "title", s.DisplayName);
         r.SetText(inst, "path_v", Math.Max(1, s.PrimaryLevel).ToString());
         r.SetImage(inst, "path_i", IcoDeathPath); // all current spells are death path
+        // Cost = the spell's casting cost (mana — the fatigue-analog), shown
+        // with the fatigue icon. The green gem icon is reserved for future
+        // gem-cost spells (none authored yet); without the override the
+        // summon-tile template default (NatureCrystal gem) leaks through.
         r.SetText(inst, "cost_v", s.ManaCost.ToString("0.#"));
+        r.SetImage(inst, "cost_i", IcoFatigue);
         if (!string.IsNullOrEmpty(s.Icon))
             r.SetImage(inst, "icon", s.Icon);
 
