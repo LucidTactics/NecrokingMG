@@ -9008,7 +9008,7 @@
     },
     {
       "id": "GM_Tile",
-      "width": 330,
+      "width": 348,
       "height": 80,
       "modal": false,
       "children": [
@@ -9017,7 +9017,7 @@
           "element": "GMT_0",
           "x": 61,
           "y": 1,
-          "width": 254,
+          "width": 272,
           "height": 65,
           "anchor": 0
         },
@@ -9026,7 +9026,7 @@
           "element": "GMT_1",
           "x": 61,
           "y": 0,
-          "width": 252,
+          "width": 270,
           "height": 65,
           "anchor": 0
         },
@@ -9035,7 +9035,7 @@
           "element": "GMT_2",
           "x": 0,
           "y": -3,
-          "width": 316,
+          "width": 334,
           "height": 72,
           "anchor": 0
         },
@@ -9071,7 +9071,7 @@
           "element": "GMT_6",
           "x": 73,
           "y": -2,
-          "width": 197,
+          "width": 215,
           "height": 42,
           "anchor": 0
         },
@@ -9132,7 +9132,7 @@
         {
           "name": "target",
           "element": "GMT_13",
-          "x": 260,
+          "x": 278,
           "y": 24,
           "width": 48,
           "height": 28,
@@ -9141,7 +9141,7 @@
         {
           "name": "dmg_v",
           "element": "GMT_14",
-          "x": 256,
+          "x": 274,
           "y": 4,
           "width": 34,
           "height": 34,
@@ -9150,7 +9150,7 @@
         {
           "name": "dmg_m1",
           "element": "GMT_15",
-          "x": 263,
+          "x": 281,
           "y": 33,
           "width": 25,
           "height": 11,
@@ -9159,7 +9159,7 @@
         {
           "name": "dmg_m2",
           "element": "GMT_16",
-          "x": 291,
+          "x": 309,
           "y": 33,
           "width": 25,
           "height": 11,
@@ -9177,7 +9177,7 @@
         {
           "name": "buff_p",
           "element": "GMT_18",
-          "x": 250,
+          "x": 268,
           "y": 12,
           "width": 28,
           "height": 16,
@@ -9186,7 +9186,7 @@
         {
           "name": "buff_i",
           "element": "GMT_19",
-          "x": 280,
+          "x": 298,
           "y": 8,
           "width": 24,
           "height": 24,
@@ -9770,198 +9770,198 @@
         {
           "name": "tile0",
           "widget": "GM_Tile",
-          "x": 24,
+          "x": 16,
           "y": 185,
-          "width": 330,
+          "width": 348,
           "height": 80,
           "anchor": 0
         },
         {
           "name": "tile1",
           "widget": "GM_Tile",
-          "x": 346,
+          "x": 356,
           "y": 185,
-          "width": 330,
+          "width": 348,
           "height": 80,
           "anchor": 0
         },
         {
           "name": "tile2",
           "widget": "GM_Tile",
-          "x": 24,
+          "x": 16,
           "y": 262,
-          "width": 330,
+          "width": 348,
           "height": 80,
           "anchor": 0
         },
         {
           "name": "tile3",
           "widget": "GM_Tile",
-          "x": 346,
+          "x": 356,
           "y": 262,
-          "width": 330,
+          "width": 348,
           "height": 80,
           "anchor": 0
         },
         {
           "name": "tile4",
           "widget": "GM_Tile",
-          "x": 24,
+          "x": 16,
           "y": 339,
-          "width": 330,
+          "width": 348,
           "height": 80,
           "anchor": 0
         },
         {
           "name": "tile5",
           "widget": "GM_Tile",
-          "x": 346,
+          "x": 356,
           "y": 339,
-          "width": 330,
+          "width": 348,
           "height": 80,
           "anchor": 0
         },
         {
           "name": "tile6",
           "widget": "GM_Tile",
-          "x": 24,
+          "x": 16,
           "y": 416,
-          "width": 330,
+          "width": 348,
           "height": 80,
           "anchor": 0
         },
         {
           "name": "tile7",
           "widget": "GM_Tile",
-          "x": 346,
+          "x": 356,
           "y": 416,
-          "width": 330,
+          "width": 348,
           "height": 80,
           "anchor": 0
         },
         {
           "name": "tile8",
           "widget": "GM_Tile",
-          "x": 24,
+          "x": 16,
           "y": 493,
-          "width": 330,
+          "width": 348,
           "height": 80,
           "anchor": 0
         },
         {
           "name": "tile9",
           "widget": "GM_Tile",
-          "x": 346,
+          "x": 356,
           "y": 493,
-          "width": 330,
+          "width": 348,
           "height": 80,
           "anchor": 0
         },
         {
           "name": "tile10",
           "widget": "GM_Tile",
-          "x": 24,
+          "x": 16,
           "y": 570,
-          "width": 330,
+          "width": 348,
           "height": 80,
           "anchor": 0
         },
         {
           "name": "tile11",
           "widget": "GM_Tile",
-          "x": 346,
+          "x": 356,
           "y": 570,
-          "width": 330,
+          "width": 348,
           "height": 80,
           "anchor": 0
         },
         {
           "name": "tile12",
           "widget": "GM_Tile",
-          "x": 24,
+          "x": 16,
           "y": 647,
-          "width": 330,
+          "width": 348,
           "height": 80,
           "anchor": 0
         },
         {
           "name": "tile13",
           "widget": "GM_Tile",
-          "x": 346,
+          "x": 356,
           "y": 647,
-          "width": 330,
+          "width": 348,
           "height": 80,
           "anchor": 0
         },
         {
           "name": "tile14",
           "widget": "GM_Tile",
-          "x": 24,
+          "x": 16,
           "y": 724,
-          "width": 330,
+          "width": 348,
           "height": 80,
           "anchor": 0
         },
         {
           "name": "tile15",
           "widget": "GM_Tile",
-          "x": 346,
+          "x": 356,
           "y": 724,
-          "width": 330,
+          "width": 348,
           "height": 80,
           "anchor": 0
         },
         {
           "name": "tile16",
           "widget": "GM_Tile",
-          "x": 24,
+          "x": 16,
           "y": 801,
-          "width": 330,
+          "width": 348,
           "height": 80,
           "anchor": 0
         },
         {
           "name": "tile17",
           "widget": "GM_Tile",
-          "x": 346,
+          "x": 356,
           "y": 801,
-          "width": 330,
+          "width": 348,
           "height": 80,
           "anchor": 0
         },
         {
           "name": "tile18",
           "widget": "GM_Tile",
-          "x": 24,
+          "x": 16,
           "y": 878,
-          "width": 330,
+          "width": 348,
           "height": 80,
           "anchor": 0
         },
         {
           "name": "tile19",
           "widget": "GM_Tile",
-          "x": 346,
+          "x": 356,
           "y": 878,
-          "width": 330,
+          "width": 348,
           "height": 80,
           "anchor": 0
         },
         {
           "name": "tile20",
           "widget": "GM_Tile",
-          "x": 24,
+          "x": 16,
           "y": 955,
-          "width": 330,
+          "width": 348,
           "height": 80,
           "anchor": 0
         },
         {
           "name": "tile21",
           "widget": "GM_Tile",
-          "x": 346,
+          "x": 356,
           "y": 955,
-          "width": 330,
+          "width": 348,
           "height": 80,
           "anchor": 0
         }

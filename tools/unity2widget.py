@@ -253,12 +253,18 @@ def bake_variant(unity_rel, base_tex, img_type, ppu_mult, w, h):
             bot = scaled(piece(sl, sh - sb, sw - sr, sh), top.width, db)
             x = dl
             while x < w - dr:
-                o.paste(top, (x, 0)); o.paste(bot, (x, h - db)); x += top.width
+                run = min(top.width, (w - dr) - x)  # clip the last tile — never stamp over corners
+                o.paste(top.crop((0, 0, run, dt)), (x, 0))
+                o.paste(bot.crop((0, 0, run, db)), (x, h - db))
+                x += top.width
             left = scaled(piece(0, st, sl, sh - sb), dl, max(1, round((sh - st - sb) * scale)))
             right = scaled(piece(sw - sr, st, sw, sh - sb), dr, left.height)
             y = dt
             while y < h - db:
-                o.paste(left, (0, y)); o.paste(right, (w - dr, y)); y += left.height
+                run = min(left.height, (h - db) - y)
+                o.paste(left.crop((0, 0, dl, run)), (0, y))
+                o.paste(right.crop((0, 0, dr, run)), (w - dr, y))
+                y += left.height
             o.save(out); return out
         tw, th = max(1, round(src_im.width * scale)), max(1, round(src_im.height * scale))
         tile = src_im.resize((tw, th), Image.LANCZOS)

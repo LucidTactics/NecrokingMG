@@ -14,9 +14,12 @@ import unity2widget as u2w
 
 DUMP = 'log/bag_inspect/grimoire_tree.txt'
 COLS, ROWS_VISIBLE = 2, 11
-TILE_W, TILE_H, STRIDE_Y = 330, 80, 77
-GRID_X = (24, 346)
+TILE_W, TILE_H, STRIDE_Y = 348, 80, 77
+GRID_X = (16, 356)
 GRID_Y0 = 185
+WIDEN = 18  # widen tile boxes so two columns fill the window (user request)
+WIDEN_NAMES = {'Box Background', 'Box Background Gradient', 'BoxFrame', 'PerkTitle'}
+SHIFT_NAMES = {'DamageText', 'DamgeMod1Text', 'DamgeMod2Text', 'TargetIcon', 'BuffText', 'BuffIcon'}
 
 # tile-variant child name -> stable binder name
 RENAME = {
@@ -122,9 +125,16 @@ def main():
     # Core + target from the summon tile; damage block from evocation
     # (TargetIcon inactive there); buff block from the buff tile; second
     # path/cost slots are inactive everywhere — force-include from debuff.
+    def stretch(n):
+        x, y, w, h = n.rect
+        if n.name in WIDEN_NAMES: n.rect = (x, y, w + WIDEN, h)
+        elif n.name in SHIFT_NAMES: n.rect = (x + WIDEN, y, w, h)
+        for c in n.children: stretch(c)
+
     for variant, extras in (('summon', ()), ('evocation', ()), ('buff', ()),
                             ('debuff', ('Path2ReqText', 'Path2ReqIcon', 'Cost2', 'Cost2Icon'))):
         t = tiles[variant]
+        stretch(t)
         ox, oy = t.rect[0], t.rect[1]
         walk_emit(t, ox, oy, extras)
 
