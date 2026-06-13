@@ -298,7 +298,9 @@ public class HUDRenderer
             drawInterior(inner);
             return;
         }
-        _widgets.DrawElementImage(SlotBgElem, inner);
+        // Crop the parchment's transparent margin/notches so its solid body
+        // fills the frame interior at both box sizes.
+        _widgets.DrawElementImage(SlotBgElem, inner, 0.16f);
         drawInterior(inner);
         _widgets.DrawElementImage(SlotFrameElem, slot);
     }

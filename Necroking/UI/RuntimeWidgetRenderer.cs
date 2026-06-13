@@ -698,14 +698,23 @@ public class RuntimeWidgetRenderer
     /// as widget children — the harmonized (recolored) texture plus the element's
     /// tint. Lets code-driven layout (e.g. a wrapping abilities box) reuse a
     /// widget element's exact look at a dynamic size. No-op for non-image elements.</summary>
-    public void DrawElementImage(string elementId, Rectangle rect)
+    public void DrawElementImage(string elementId, Rectangle rect, float srcInset = 0f)
     {
         if (_batch == null) return;
         var elemDef = _elementDefs.FirstOrDefault(e => e.Id == elementId);
         if (elemDef == null || elemDef.Type != "image" || string.IsNullOrEmpty(elemDef.ImagePath)) return;
         var tex = GetTexture(elemDef.ImagePath, "el:" + elemDef.Id);
         if (tex == null) return;
-        _batch.Draw(tex, rect, ByteColor(elemDef.TintColor ?? new byte[] { 255, 255, 255, 255 }));
+        var tint = ByteColor(elemDef.TintColor ?? new byte[] { 255, 255, 255, 255 });
+        // srcInset crops a fraction off each edge of the source texture — used to
+        // discard a texture's transparent margin / corner notches so its solid
+        // body fills the destination at any size (a stretch-fit can't do that).
+        if (srcInset > 0f)
+        {
+            int ix = (int)(tex.Width * srcInset), iy = (int)(tex.Height * srcInset);
+            _batch.Draw(tex, rect, new Rectangle(ix, iy, tex.Width - 2 * ix, tex.Height - 2 * iy), tint);
+        }
+        else _batch.Draw(tex, rect, tint);
     }
 
     /// <summary>Draw a line of text directly (for code-driven content layered
