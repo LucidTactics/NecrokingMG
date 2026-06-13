@@ -2549,6 +2549,8 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 _input.MouseOverUI = true;
             if (_craftingMenu.ContainsMouse(mx, my))
                 _input.MouseOverUI = true;
+            if (_grimoireOverlay.ContainsMouse(mx, my))
+                _input.MouseOverUI = true;
             if (_skillTreePanel.ContainsMouse(screenW, screenH, mx, my))
                 _input.MouseOverUI = true;
             if (_skillBookPanel.ContainsMouse(screenW, screenH, mx, my))
@@ -2692,7 +2694,14 @@ public class Game1 : Microsoft.Xna.Framework.Game
                         mouse.X, mouse.Y);
                     if (s >= 0)
                     {
-                        _spellDropdownSlot = s;
+                        // Clicking a slot opens the grimoire to pick a spell for it.
+                        int slot = s;
+                        EnsureInventoryUIsInitialized();
+                        _grimoireOverlay.OpenForAssign(id =>
+                        {
+                            _spellBarState.Slots[slot].SpellID = id;
+                            SaveSpellBars();
+                        });
                         clickedSlot = true;
                         _input.ConsumeMouse();
                     }
@@ -2728,7 +2737,13 @@ public class Game1 : Microsoft.Xna.Framework.Game
                         mouse.X, mouse.Y);
                     if (ss >= 0)
                     {
-                        _secondaryDropdownSlot = ss;
+                        int slot = ss;
+                        EnsureInventoryUIsInitialized();
+                        _grimoireOverlay.OpenForAssign(id =>
+                        {
+                            _secondaryBarState.Slots[slot].SpellID = id;
+                            SaveSpellBars();
+                        });
                         _input.ConsumeMouse();
                         goto SkipSpellCast;
                     }
@@ -3321,6 +3336,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         _inventoryUI.Update(_input);
         _buildingMenuUI.Update(_input, screenW, screenH);
         _craftingMenu.Update(_input, screenW, screenH, dt);
+        _grimoireOverlay.Update(_input, screenW, screenH);
         _tableMenuUI.Update(_input);
 
         // Inventory→table item transfer: while the table menu is open, clicking a

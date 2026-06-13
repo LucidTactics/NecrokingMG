@@ -7,32 +7,34 @@ using Necroking.Data.Registries;
 namespace Necroking.UI;
 
 /// <summary>
-/// Phase-1 binder for GrimoireDyn: populates the 2-wide tile grid from the
-/// spell registry. Each GM_Tile is a union of the four GodMenu3 tile variants;
-/// the spell's tileTemplate (summon / evocation / buff / debuff) decides which
-/// optional parts show. Interaction (tabs, scrolling, clicks) is Phase 2 —
-/// this only renders the data.
+/// Binder for GrimoireDyn: populates the 2-wide tile grid from the spell
+/// registry, optionally filtered by school (tab) and/or magic path (icon
+/// strip). Each GM_Tile is a union of the four GodMenu3 tile variants; the
+/// spell's tileTemplate (summon / evocation / buff / debuff) decides which
+/// optional parts show. Returns the shown spells (index = tile index) so the
+/// overlay can map a tile click back to a spell.
 /// </summary>
 public static class GrimoirePanel
 {
     public const string WidgetId = "GrimoireDyn";
-    private const int MaxTiles = 22;
+    public const int MaxTiles = 22;
 
-    private const string IcoDeathPath = "assets/UI/Imported/Death24.png";
     private const string IcoFatigue = "assets/UI/Imported/exhausted.2.24.png";
 
-    /// <summary>Write all overrides for the grimoire instance. school = null
-    /// shows every visible spell (the "All" tab); otherwise filters.</summary>
-    public static void Populate(RuntimeWidgetRenderer r, GameData gameData, string instanceId,
-        string? school = null)
+    /// <summary>Write all overrides for the grimoire instance and return the
+    /// spells shown (parallel to tile indices). school == null and
+    /// path == None mean "no filter on that axis".</summary>
+    public static List<SpellDef> Populate(RuntimeWidgetRenderer r, GameData gameData,
+        string instanceId, string? school = null, MagicPath path = MagicPath.None)
     {
         r.ClearOverridesRecursive(instanceId);
         var def = r.GetWidgetDef(WidgetId);
-        if (def == null) return;
+        if (def == null) return new List<SpellDef>();
 
         var spells = gameData.Spells.All()
             .Where(s => !s.Hidden && !string.IsNullOrEmpty(s.DisplayName))
             .Where(s => school == null || s.School == school)
+            .Where(s => path == MagicPath.None || MagicPathHelpers.FromJsonId(s.PrimaryPath) == path)
             .ToList();
 
         int shown = Math.Min(spells.Count, MaxTiles);
@@ -50,13 +52,17 @@ public static class GrimoirePanel
             }
             BindTile(r, $"{instanceId}.{childIdx}", spells[i]);
         }
+        return spells.Take(shown).ToList();
     }
 
     private static void BindTile(RuntimeWidgetRenderer r, string inst, SpellDef s)
     {
         r.SetText(inst, "title", s.DisplayName);
         r.SetText(inst, "path_v", Math.Max(1, s.PrimaryLevel).ToString());
-        r.SetImage(inst, "path_i", IcoDeathPath); // all current spells are death path
+        var primPath = MagicPathHelpers.FromJsonId(s.PrimaryPath);
+        string pathIcon = MagicPathHelpers.IconPath(
+            primPath == MagicPath.None ? MagicPath.Death : primPath, 24);
+        r.SetImage(inst, "path_i", pathIcon);
         // Cost = the spell's casting cost (mana — the fatigue-analog), shown
         // with the fatigue icon. The green gem icon is reserved for future
         // gem-cost spells (none authored yet); without the override the

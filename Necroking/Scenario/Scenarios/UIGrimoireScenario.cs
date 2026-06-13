@@ -33,13 +33,18 @@ public class UIGrimoireScenario : ScenarioBase
             if (!bound)
             {
                 bound = true;
-                // Phase 1: populate from the real spell registry (the "All" view)
+                // All view (left) + filter verification (logged counts)
+                var all = UI.GrimoirePanel.Populate(WidgetRenderer, sim.GameData, "grimoire");
+                var evo = UI.GrimoirePanel.Populate(WidgetRenderer, sim.GameData, "grim_evo", "Evocation");
+                var shock = UI.GrimoirePanel.Populate(WidgetRenderer, sim.GameData, "grim_shock",
+                    null, Necroking.Data.Registries.MagicPath.Shock);
+                DebugLog.Log(ScenarioLog, $"All={all.Count} Evocation={evo.Count} Shock={shock.Count}");
+                DebugLog.Log(ScenarioLog, "Shock spells: " + string.Join(", ", shock.ConvertAll(s => s.DisplayName)));
+                // Re-bind the left instance to the All view for the screenshot
                 UI.GrimoirePanel.Populate(WidgetRenderer, sim.GameData, "grimoire");
             }
             WidgetRenderer.DrawWidget(UI.GrimoirePanel.WidgetId, 10, 10, "grimoire");
-            WidgetRenderer.DrawWidget("SpiritFormTip", 730, 10);
-            WidgetRenderer.DrawWidget("ShadowBoltTip", 730, 300);
-            WidgetRenderer.DrawWidget("SummonWolvesTip", 730, 660);
+            WidgetRenderer.DrawWidget(UI.GrimoirePanel.WidgetId, 730, 10, "grim_shock");
         };
     }
 

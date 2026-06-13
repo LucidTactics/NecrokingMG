@@ -1,23 +1,53 @@
 using System;
+using System.Collections.Generic;
+using Microsoft.Xna.Framework;
+using Necroking.Core;
 using Necroking.Data;
+using Necroking.Data.Registries;
 
 namespace Necroking.UI;
 
 /// <summary>
-/// In-game wrapper for the GrimoireDyn widget ('J' to toggle). Phase 1:
-/// display only — populated from the spell registry on open; tabs/scroll/
-/// clicking are phase 2. Taller than most screens (1080), so it top-anchors
-/// and clips at the bottom on small windows.
+/// In-game grimoire ('J' to browse; also opened in ASSIGN mode when a spell-bar
+/// slot is clicked). Owns the filter state (school tab + magic-path icon strip)
+/// and routes clicks: a school/path tab re-filters; a spell tile either assigns
+/// to the pending slot (assign mode) or does nothing yet (browse — direct cast
+/// is a later phase).
 /// </summary>
 public class GrimoireOverlay : IModalLayer
 {
     private const string InstanceId = "grimoire_ingame";
     private const int PanelW = 706;
     private const int PanelH = 1080;
+    private const string TitleChild = "gmw_173_TitleText";
+
+    // path-tab index (1..12) -> MagicPath, from the icon strip order
+    // (confirmed via the baked PathIcon images).
+    private static readonly MagicPath[] PathTabOrder =
+    {
+        MagicPath.Shock, MagicPath.Fire, MagicPath.Metal, MagicPath.Water,
+        MagicPath.Heavens, MagicPath.Order, MagicPath.Earth, MagicPath.Chaos,
+        MagicPath.Spirit, MagicPath.Nature, MagicPath.Body, MagicPath.Death,
+    };
+
+    // school tab text children, in tab order; null school = the "All" tab.
+    private static readonly (string Child, string? School)[] SchoolTabs =
+    {
+        ("gmw_45_TabText", null), ("gmw_48_TabText", "Conjuration"),
+        ("gmw_51_TabText", "Alteration"), ("gmw_54_TabText", "Evocation"),
+        ("gmw_57_TabText", "Construction"),
+    };
+    private static readonly Color TabActive = new(245, 223, 182);
+    private static readonly Color TabInactive = new(150, 138, 116);
 
     private RuntimeWidgetRenderer _renderer = null!;
     private GameData? _gameData;
     private int _x, _y;
+
+    private string? _schoolFilter;
+    private MagicPath _pathFilter = MagicPath.None;
+    private List<SpellDef> _shown = new();
+    private Action<string>? _onPick;   // non-null => assign mode
 
     public bool IsVisible { get; private set; }
 
@@ -27,12 +57,28 @@ public class GrimoireOverlay : IModalLayer
         _gameData = gameData;
     }
 
+    /// <summary>'J' — open in browse mode (or close if open).</summary>
     public void Toggle()
     {
         if (IsVisible) { Hide(); return; }
+        _onPick = null;
+        Open();
+    }
+
+    /// <summary>Open to pick a spell for a bar slot; onPick gets the spell id.</summary>
+    public void OpenForAssign(Action<string> onPick)
+    {
+        _onPick = onPick;
+        if (!IsVisible) Open();
+        else Refresh();
+    }
+
+    private void Open()
+    {
         IsVisible = true;
-        if (_gameData != null)
-            GrimoirePanel.Populate(_renderer, _gameData, InstanceId);
+        _schoolFilter = null;
+        _pathFilter = MagicPath.None;
+        Refresh();
         Game1.Popups.Push(this);
     }
 
@@ -40,21 +86,110 @@ public class GrimoireOverlay : IModalLayer
     {
         if (!IsVisible) return;
         IsVisible = false;
+        _onPick = null;
         Game1.Popups.Pop(this);
     }
 
+    private void Refresh()
+    {
+        if (_gameData == null) return;
+        _shown = GrimoirePanel.Populate(_renderer, _gameData, InstanceId, _schoolFilter, _pathFilter);
+        _renderer.SetText(InstanceId, TitleChild, _onPick != null ? "Choose a Spell" : "Spells");
+        foreach (var (child, school) in SchoolTabs)
+        {
+            var c = school == _schoolFilter ? TabActive : TabInactive;
+            _renderer.SetTextColor(InstanceId, child, c.R, c.G, c.B);
+        }
+    }
+
+    // === IModalLayer ===
     public bool ContainsMouse(int mx, int my)
         => IsVisible && mx >= _x && mx < _x + PanelW && my >= _y && my < _y + PanelH;
-
     public void OnCancel() => Hide();
     public bool LightDismiss => false;
     public bool IsBlocking => false;
 
+    public void Update(InputState input, int screenW, int screenH)
+    {
+        if (!IsVisible) return;
+        Layout(screenH);
+        // IsMouseConsumed guard: the bar-slot click that OPENS this overlay
+        // consumes the mouse but LeftPressed stays set this frame — don't
+        // re-handle that same click as a tile/tab hit.
+        if (!input.LeftPressed || input.IsMouseConsumed) return;
+        int mx = (int)input.MousePos.X, my = (int)input.MousePos.Y;
+        if (!ContainsMouse(mx, my)) return;
+        input.ConsumeMouse();
+
+        // School tabs (hit-test the backing — the text element is wider than
+        // its tab and would overlap neighbours).
+        foreach (var (child, school) in SchoolTabs)
+        {
+            if (HitChild("gmw_" + BackingFor(child), mx, my))
+            {
+                _schoolFilter = school;
+                Refresh();
+                return;
+            }
+        }
+        // Path "All" tab clears the path filter
+        if (HitChild("gmw_5_Tab-Backing", mx, my))
+        {
+            _pathFilter = MagicPath.None;
+            Refresh();
+            return;
+        }
+        // Path icon tabs (backing at gmw_{8 + (i-1)*3}_Tab-Backing)
+        for (int i = 1; i <= 12; i++)
+        {
+            if (HitChild($"gmw_{8 + (i - 1) * 3}_Tab-Backing", mx, my))
+            {
+                var p = PathTabOrder[i - 1];
+                _pathFilter = _pathFilter == p ? MagicPath.None : p; // click again clears
+                Refresh();
+                return;
+            }
+        }
+        // Spell tiles
+        for (int i = 0; i < _shown.Count; i++)
+        {
+            if (HitChild($"tile{i}", mx, my))
+            {
+                if (_onPick != null)
+                {
+                    _onPick(_shown[i].Id);
+                    Hide();
+                }
+                return;
+            }
+        }
+    }
+
     public void Draw(int screenW, int screenH)
     {
         if (!IsVisible) return;
+        Layout(screenH);
+        _renderer.DrawWidget(GrimoirePanel.WidgetId, _x, _y, InstanceId);
+    }
+
+    private void Layout(int screenH)
+    {
         _x = 16;
         _y = Math.Min(0, (screenH - PanelH) / 2);
-        _renderer.DrawWidget(GrimoirePanel.WidgetId, _x, _y, InstanceId);
+    }
+
+    private bool HitChild(string child, int mx, int my)
+    {
+        var r = _renderer.GetChildRect(GrimoirePanel.WidgetId, child, _x, _y, InstanceId);
+        return r != Rectangle.Empty && r.Contains(mx, my);
+    }
+
+    // School text child "gmw_45_TabText" -> its backing "45_..." sibling is
+    // one index lower ("gmw_44_Tab-Backing"); just hit-test both the text and
+    // the backing for a generous click target.
+    private static string BackingFor(string textChild)
+    {
+        int n = int.Parse(textChild.Substring(4, textChild.IndexOf('_', 4) - 4));
+        return $"{n - 1}_Tab-Backing";
     }
 }
