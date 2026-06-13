@@ -17,10 +17,13 @@ COLS, ROWS_VISIBLE = 2, 11
 # Grid fitted to the window border's transparent interior (measured from the
 # baked border: hole x 27..678, y 27..1052). Two columns + 6px gutter with a
 # 2px inset: tile visual width 321 (7px icon-frame overhang + 314 box).
-TILE_W, TILE_H, STRIDE_Y = 328, 80, 77
-GRID_X = (29, 356)
-GRID_Y0 = 190
-WIDEN = -2  # box width delta vs the Unity original (316 -> 314)
+# Tile-local origin = BOX left edge; the icon frame overhangs at x-7. Border
+# inner edges render at x27/x680. Gaps of 3: icon frame at 30 (x=37), middle
+# box-right -> next icon-frame = 3, col2 box right at 677.
+TILE_W, TILE_H, STRIDE_Y = 322, 80, 77
+GRID_X = (37, 362)
+GRID_Y0 = 193
+WIDEN = -1  # box width delta vs the Unity original (316 -> 315)
 WIDEN_NAMES = {'Box Background', 'Box Background Gradient', 'BoxFrame', 'PerkTitle'}
 SHIFT_NAMES = {'DamageText', 'DamgeMod1Text', 'DamgeMod2Text', 'TargetIcon', 'BuffText', 'BuffIcon'}
 
