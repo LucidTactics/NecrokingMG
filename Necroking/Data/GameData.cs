@@ -38,6 +38,7 @@ public class GameData
 
         Items.Load(Path.Combine(dataDir, "items.json")); // optional, don't fail if missing
         Potions.Load(Path.Combine(dataDir, "potions.json")); // optional, don't fail if missing
+        GeneratePotionSpells(); // surface each potion as a Construction spell
         Corpse.Load(Path.Combine(dataDir, "corpse.json")); // optional, falls back to spritemeta pivots
         // Load weapon_points.json (must be after units.json so UnitDefs exist)
         ok &= Units.LoadWeaponPoints(Path.Combine(dataDir, "weapon_points.json"));
@@ -46,6 +47,34 @@ public class GameData
         // missing (acceptable for fresh setups / scenarios).
         WadingDefaultsFile.Load(Path.Combine(dataDir, "wading_defaults.json"));
         return ok;
+    }
+
+    /// <summary>Surface every potion as a Construction-school spell (id == potion
+    /// id) so potions live in the grimoire and the spell bar like any other spell.
+    /// Casting is intercepted in Game1 and routed to the existing PotionSystem
+    /// (throw / drink + inventory consume); ConsumesItem drives the bar charge
+    /// count. Idempotent — skips ids that already exist as spells.</summary>
+    private void GeneratePotionSpells()
+    {
+        foreach (var pid in Potions.GetIDs())
+        {
+            var p = Potions.Get(pid);
+            if (p == null || string.IsNullOrEmpty(p.ItemID) || Spells.Get(pid) != null) continue;
+            Spells.Add(new SpellDef
+            {
+                Id = pid,
+                DisplayName = string.IsNullOrEmpty(p.DisplayName) ? pid : p.DisplayName,
+                Icon = p.Icon,
+                School = "Construction",
+                Category = "Buff",
+                TileTemplate = "buff",
+                ConsumesItem = p.ItemID,
+                ManaCost = 0f,
+                PrimaryPath = "",
+                PrimaryLevel = 0,
+                Range = p.ThrowRange < 1f ? 1f : p.ThrowRange,
+            });
+        }
     }
 
     public bool Save()

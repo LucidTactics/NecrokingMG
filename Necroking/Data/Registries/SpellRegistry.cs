@@ -66,6 +66,12 @@ public class SpellDef : IHasId
     /// <summary>Hide from the grimoire (debug/internal spells).</summary>
     [JsonPropertyName("hidden")] public bool Hidden { get; set; }
 
+    /// <summary>Inventory item this spell consumes on cast (e.g. a potion). When
+    /// set, the spell needs &gt;=1 of the item in the inventory and a use decrements
+    /// it; the spell bar shows the remaining count. Potions are surfaced as such
+    /// spells (id == the potion id) so they live in the grimoire / spell bar.</summary>
+    [JsonPropertyName("consumesItem")] public string ConsumesItem { get; set; } = "";
+
     // ============ COMMON ============
     [EditorField(Label = "Range", Group = "COMMON", Order = 100, Step = 0.1f, Decimals = 1, GroupColorR = 200, GroupColorG = 200, GroupColorB = 220)]
     [JsonPropertyName("range")] public float Range { get; set; } = 20.0f;

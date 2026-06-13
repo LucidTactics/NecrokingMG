@@ -126,22 +126,17 @@ public class HUDRenderer
 
         int primaryY = screenH - PrimaryBarBottomOffset;
         DrawSpellBar(screenW, primaryY, PrimarySlotW, PrimarySlotH, PrimaryBarOffsetX,
-            new[] { "Q", "E", "LC", "RC" }, primaryBar, sim, gameData, drawSpellCategoryIcon, 7);
+            new[] { "Q", "E", "LC", "RC" }, primaryBar, sim, gameData, inventory, drawSpellCategoryIcon);
 
         int secondaryY = primaryY - SecondarySlotH - SecondaryBarGap;
         DrawSpellBar(screenW, secondaryY, SecondarySlotW, SecondarySlotH, SecondaryBarOffsetX,
-            new[] { "1", "2", "3", "4" }, secondaryBar, sim, gameData, drawSpellCategoryIcon, 5);
-
-        if (potionSlots != null)
-            DrawPotionSlots(screenW, secondaryY, potionSlots, activePotionSlot, inventory, gameData, getItemTexture);
+            new[] { "1", "2", "3", "4", "5", "6" }, secondaryBar, sim, gameData, inventory, drawSpellCategoryIcon);
 
         // Draw all dropdowns after all bars so they render on top
         DrawSpellDropdown(screenW, primaryY, PrimarySlotW, PrimaryBarOffsetX,
             spellDropdownSlot, primaryBar, gameData);
         DrawSpellDropdown(screenW, secondaryY, SecondarySlotW, SecondaryBarOffsetX,
             secondaryDropdownSlot, secondaryBar, gameData);
-        if (potionSlots != null)
-            DrawPotionDropdown(screenW, secondaryY, potionSlots, potionDropdownSlot, gameData);
 
         DrawBuildingTooltip(hoveredObjectIdx, envSystem, sim);
         // Controls hint intentionally omitted — overlapped the FPS/zoom bottom-
@@ -222,11 +217,11 @@ public class HUDRenderer
 
     private void DrawSpellBar(int screenW, int barY, int slotW, int slotH, int centerOffset,
         string[] keys, SpellBarState bar, Simulation sim, GameData gameData,
-        Action<string, int, int> drawCategoryIcon, int nameTruncLen)
+        Inventory inventory, Action<string, int, int> drawCategoryIcon)
     {
         bool isSecondary = slotW < PrimarySlotW;
 
-        for (int s = 0; s < 4; s++)
+        for (int s = 0; s < keys.Length; s++)
         {
             int slotX = screenW / 2 - centerOffset + s * (slotW + SlotSpacing);
             var slot = new Rectangle(slotX, barY, slotW, slotH);
@@ -266,6 +261,20 @@ public class HUDRenderer
                 }
                 if (sim.NecroState.Mana < spell.ManaCost)
                     _batch.Draw(_pixel, inner, LowManaOverlay);
+
+                // Consumable charges (potion-spells): show the inventory count,
+                // grey out at 0.
+                if (!string.IsNullOrEmpty(spell.ConsumesItem))
+                {
+                    int qty = inventory.GetItemCount(spell.ConsumesItem);
+                    if (qty <= 0) _batch.Draw(_pixel, inner, PotionEmptyColor);
+                    if (_smallFont != null)
+                    {
+                        string q = qty.ToString();
+                        var qs = _smallFont.MeasureString(q);
+                        Text(_smallFont, q, new Vector2(slot.Right - qs.X - 3, slot.Bottom - qs.Y - 2), PotionQtyColor);
+                    }
+                }
             }
 
             if (_smallFont == null) continue;
@@ -371,10 +380,10 @@ public class HUDRenderer
     /// Uses the same layout constants as drawing.
     /// </summary>
     public int HitTestBarSlot(int screenW, int barY, int slotW, int slotH, int centerOffset,
-        int mouseX, int mouseY)
+        int mouseX, int mouseY, int slotCount = 4)
     {
         if (mouseY < barY || mouseY >= barY + slotH) return -1;
-        for (int s = 0; s < 4; s++)
+        for (int s = 0; s < slotCount; s++)
         {
             int slotX = screenW / 2 - centerOffset + s * (slotW + SlotSpacing);
             if (mouseX >= slotX && mouseX < slotX + slotW)

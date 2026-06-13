@@ -868,12 +868,9 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // Load spell bar from data file
         // Load both spell bars from single JSON read
         _spellBarState.Slots = new SpellBarSlot[4];
-        _secondaryBarState.Slots = new SpellBarSlot[4];
-        for (int si = 0; si < 4; si++)
-        {
-            _spellBarState.Slots[si] = new SpellBarSlot { SpellID = "" };
-            _secondaryBarState.Slots[si] = new SpellBarSlot { SpellID = "" };
-        }
+        _secondaryBarState.Slots = new SpellBarSlot[6]; // 1-6 (was 4 spells + 2 potion slots)
+        for (int si = 0; si < 4; si++) _spellBarState.Slots[si] = new SpellBarSlot { SpellID = "" };
+        for (int si = 0; si < 6; si++) _secondaryBarState.Slots[si] = new SpellBarSlot { SpellID = "" };
         try
         {
             string sbJson = File.ReadAllText(GamePaths.Resolve(GamePaths.SpellBarJson));
@@ -1328,13 +1325,13 @@ public class Game1 : Microsoft.Xna.Framework.Game
         if (_spellBarState.Slots == null)
             _spellBarState.Slots = new SpellBarSlot[4] { new(), new(), new(), new() };
         if (_secondaryBarState.Slots == null)
-            _secondaryBarState.Slots = new SpellBarSlot[4] { new(), new(), new(), new() };
+            _secondaryBarState.Slots = new SpellBarSlot[6] { new(), new(), new(), new(), new(), new() };
         // UI tests can seed the bars (StartGame's spellbar.json load doesn't run).
         if (scenario.DebugPrimarySpells != null)
             for (int i = 0; i < 4 && i < scenario.DebugPrimarySpells.Length; i++)
                 _spellBarState.Slots[i] = new SpellBarSlot { SpellID = scenario.DebugPrimarySpells[i] };
         if (scenario.DebugSecondarySpells != null)
-            for (int i = 0; i < 4 && i < scenario.DebugSecondarySpells.Length; i++)
+            for (int i = 0; i < 6 && i < scenario.DebugSecondarySpells.Length; i++)
                 _secondaryBarState.Slots[i] = new SpellBarSlot { SpellID = scenario.DebugSecondarySpells[i] };
 
         // Load ground data for scenarios that want it
@@ -2540,7 +2537,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
             if (_hudRenderer.HitTestBarSlot(screenW, pri.barY, pri.slotW, pri.slotH, pri.centerOffset, mx, my) >= 0)
                 _input.MouseOverUI = true;
             var sec = _hudRenderer.GetSecondaryBarLayout(screenH);
-            if (_hudRenderer.HitTestBarSlot(screenW, sec.barY, sec.slotW, sec.slotH, sec.centerOffset, mx, my) >= 0)
+            if (_hudRenderer.HitTestBarSlot(screenW, sec.barY, sec.slotW, sec.slotH, sec.centerOffset, mx, my, slotCount: 6) >= 0)
                 _input.MouseOverUI = true;
 
             // Spell dropdown open
@@ -2741,7 +2738,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 {
                     int ss = _hudRenderer.HitTestBarSlot(screenW,
                         secLayout.barY, secLayout.slotW, secLayout.slotH, secLayout.centerOffset,
-                        mouse.X, mouse.Y);
+                        mouse.X, mouse.Y, slotCount: 6);
                     if (ss >= 0)
                     {
                         int slot = ss;
@@ -2753,50 +2750,6 @@ public class Game1 : Microsoft.Xna.Framework.Game
                         });
                         _input.ConsumeMouse();
                         goto SkipSpellCast;
-                    }
-                }
-
-                // --- Potion slot dropdown interaction ---
-                // Potion slots sit to the right of the 4 secondary spell slots
-                // Potions are boxes 4-5 of the contiguous 6-box top row (spacing 6).
-                int potionBaseX = screenW / 2 - secLayout.centerOffset + 4 * (secLayout.slotW + 6);
-                if (_potionDropdownSlot >= 0)
-                {
-                    var allPotionIds = _gameData.Potions.GetIDs();
-                    // Potion dropdown uses same layout as spell dropdown but offset to potion position
-                    int potSlotX = potionBaseX + _potionDropdownSlot * (secLayout.slotW + 6);
-                    int ddH = (allPotionIds.Count + 1) * 20;
-                    int ddY = secLayout.barY - 10;
-                    int ddLeft = potSlotX - 2;
-
-                    if (mouse.X >= ddLeft && mouse.X < ddLeft + 164 && mouse.Y >= ddY - ddH && mouse.Y < ddY)
-                    {
-                        int pddIdx = (ddY - mouse.Y) / 20;
-                        if (pddIdx == 0)
-                            _potionSlots[_potionDropdownSlot] = "";
-                        else if (pddIdx - 1 < allPotionIds.Count)
-                        {
-                            var pdef = _gameData.Potions.Get(allPotionIds[pddIdx - 1]);
-                            _potionSlots[_potionDropdownSlot] = pdef?.ItemID ?? "";
-                        }
-                        _potionDropdownSlot = -1;
-                        _input.ConsumeMouse();
-                        goto SkipSpellCast;
-                    }
-                    _potionDropdownSlot = -1;
-                }
-                else
-                {
-                    for (int ps = 0; ps < 2; ps++)
-                    {
-                        int psX = potionBaseX + ps * (secLayout.slotW + 6);
-                        if (mouse.X >= psX && mouse.X < psX + secLayout.slotW &&
-                            mouse.Y >= secLayout.barY && mouse.Y < secLayout.barY + secLayout.slotH)
-                        {
-                            _potionDropdownSlot = ps;
-                            _input.ConsumeMouse();
-                            goto SkipSpellCast;
-                        }
                     }
                 }
             }
@@ -2854,8 +2807,8 @@ public class Game1 : Microsoft.Xna.Framework.Game
             // --- Secondary spell bar (keys 1-4) ---
             if (necroIdx >= 0)
             {
-                Keys[] secKeys = { Keys.D1, Keys.D2, Keys.D3, Keys.D4 };
-                for (int sk = 0; sk < 4; sk++)
+                Keys[] secKeys = { Keys.D1, Keys.D2, Keys.D3, Keys.D4, Keys.D5, Keys.D6 };
+                for (int sk = 0; sk < 6; sk++)
                 {
                     if (!_input.WasKeyPressed(secKeys[sk])) continue;
                     if (sk >= _secondaryBarState.Slots.Length) continue;
@@ -2864,81 +2817,9 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 }
             }
 
-            // --- Auto-populate potion slots from inventory ---
-            {
-                var potionItemIds = new List<string>();
-                foreach (var pid in _gameData.Potions.GetIDs())
-                {
-                    var pdef = _gameData.Potions.Get(pid);
-                    if (pdef != null && !string.IsNullOrEmpty(pdef.ItemID) && _inventory.GetItemCount(pdef.ItemID) > 0)
-                        potionItemIds.Add(pdef.ItemID);
-                }
-                for (int pk = 0; pk < 2; pk++)
-                {
-                    // Clear slot if item is gone from inventory
-                    if (!string.IsNullOrEmpty(_potionSlots[pk]) && _inventory.GetItemCount(_potionSlots[pk]) <= 0)
-                        _potionSlots[pk] = "";
-                    // Fill empty slot with next available potion not already assigned
-                    if (string.IsNullOrEmpty(_potionSlots[pk]))
-                    {
-                        foreach (var itemId in potionItemIds)
-                        {
-                            bool alreadyAssigned = false;
-                            for (int other = 0; other < 2; other++)
-                                if (other != pk && _potionSlots[other] == itemId) alreadyAssigned = true;
-                            if (!alreadyAssigned) { _potionSlots[pk] = itemId; break; }
-                        }
-                    }
-                }
-            }
-
-            // --- Potion slots (keys 5, 6) — select for throwing ---
-            if (necroIdx >= 0)
-            {
-                Keys[] potionKeys = { Keys.D5, Keys.D6 };
-                for (int pk = 0; pk < 2; pk++)
-                {
-                    if (!_input.WasKeyPressed(potionKeys[pk])) continue;
-                    if (string.IsNullOrEmpty(_potionSlots[pk])) continue;
-                    if (_inventory.GetItemCount(_potionSlots[pk]) <= 0) continue;
-                    _activePotionSlot = (_activePotionSlot == pk) ? -1 : pk;
-                }
-            }
-
-            // Potion throw on left-click when a potion slot is active
-            if (_activePotionSlot >= 0 && necroIdx >= 0 && !_input.MouseOverUI
-                && _input.LeftPressed)
-            {
-                string potionItemId = _potionSlots[_activePotionSlot];
-                var potionDef = FindPotionByItemId(potionItemId);
-                if (potionDef != null)
-                {
-                    var necroPos = _sim.Units[necroIdx].Position;
-                    float dist = (mouseWorld - necroPos).Length();
-
-                    if (dist < 1.0f)
-                    {
-                        // Self-target: apply directly
-                        if (_inventory.GetItemCount(potionItemId) > 0)
-                        {
-                            _inventory.RemoveItem(potionItemId, 1);
-                            PotionSystem.ApplyPotionEffect(potionDef.Id, _gameData.Potions, _gameData.Buffs,
-                                necroIdx, _sim.UnitsMut, _sim.Units[necroIdx].Faction,
-                                _sim.PendingZombieRaises, _sim.CorpsesMut, necroPos);
-                        }
-                    }
-                    else
-                    {
-                        PotionSystem.TryThrowPotion(potionDef.Id, _gameData.Potions, _inventory,
-                            _sim.UnitsMut, necroIdx, mouseWorld, _sim.Corpses, _sim.Projectiles);
-                    }
-                }
-                _activePotionSlot = -1;
-            }
-
-            // Cancel potion selection on right-click
-            if (_activePotionSlot >= 0 && _input.RightPressed)
-                _activePotionSlot = -1;
+            // Potions are now Construction spells (assignable to any spell slot,
+            // keys 1-6 / Q E LC RC) — the old dedicated potion slots 5-6 and their
+            // throw-on-click flow are gone; casting routes through CastPotionSpell.
 
             // --- Corpse interaction (F key) ---
             // Table-load takes precedence over normal PutDown when carrying a corpse
@@ -3462,6 +3343,31 @@ public class Game1 : Microsoft.Xna.Framework.Game
         catch (Exception ex) { DebugLog.Log("error", $"SaveSpellBars failed: {ex.Message}"); }
     }
 
+    /// <summary>Cast a potion-spell: drink it (self, cursor near the necromancer)
+    /// or throw it (at the cursor), consuming the inventory item — the same logic
+    /// the old potion hotkeys used, now reachable from any spell slot.</summary>
+    private void CastPotionSpell(string potionId, string itemId, int necroIdx, Vec2 mouseWorld)
+    {
+        if (necroIdx < 0 || _inventory.GetItemCount(itemId) <= 0) return;
+        var potionDef = _gameData.Potions.Get(potionId);
+        if (potionDef == null) return;
+
+        var necroPos = _sim.Units[necroIdx].Position;
+        if ((mouseWorld - necroPos).Length() < 1.0f)
+        {
+            // Self-target: drink.
+            _inventory.RemoveItem(itemId, 1);
+            PotionSystem.ApplyPotionEffect(potionDef.Id, _gameData.Potions, _gameData.Buffs,
+                necroIdx, _sim.UnitsMut, _sim.Units[necroIdx].Faction,
+                _sim.PendingZombieRaises, _sim.CorpsesMut, necroPos);
+        }
+        else
+        {
+            PotionSystem.TryThrowPotion(potionDef.Id, _gameData.Potions, _inventory,
+                _sim.UnitsMut, necroIdx, mouseWorld, _sim.Corpses, _sim.Projectiles);
+        }
+    }
+
     private PotionDef? FindPotionByItemId(string itemId)
     {
         foreach (var id in _gameData.Potions.GetIDs())
@@ -3604,6 +3510,15 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // Built-in abilities short-circuit the normal spell pipeline.
         if (TryDispatchBuiltinAbility(spellId, necroIdx, mouseWorld))
             return CastResult.Success;
+
+        // Potion-spells (ConsumesItem set) run through the existing PotionSystem
+        // throw/drink path + inventory consume, not the normal spell pipeline.
+        var spellDef = _gameData.Spells.Get(spellId);
+        if (spellDef != null && !string.IsNullOrEmpty(spellDef.ConsumesItem))
+        {
+            CastPotionSpell(spellId, spellDef.ConsumesItem, necroIdx, mouseWorld);
+            return CastResult.Success;
+        }
 
         // Can't cast a real spell while one is mid-animation.
         if (_pendingCastAnim != null) return CastResult.NoValidTarget;

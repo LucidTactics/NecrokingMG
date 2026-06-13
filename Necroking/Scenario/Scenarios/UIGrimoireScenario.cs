@@ -38,18 +38,18 @@ public class UIGrimoireScenario : ScenarioBase
                 var evo = UI.GrimoirePanel.Populate(WidgetRenderer, sim.GameData, "grim_evo", "Evocation");
                 var shock = UI.GrimoirePanel.Populate(WidgetRenderer, sim.GameData, "grim_shock",
                     null, Necroking.Data.Registries.MagicPath.Shock);
-                DebugLog.Log(ScenarioLog, $"All={all.Count} Evocation={evo.Count} Shock={shock.Count}");
-                DebugLog.Log(ScenarioLog, "Shock spells: " + string.Join(", ", shock.ConvertAll(s => s.DisplayName)));
+                var constr = UI.GrimoirePanel.Populate(WidgetRenderer, sim.GameData, "grim_shock", "Construction");
+                DebugLog.Log(ScenarioLog, $"All={all.Count} Evocation={evo.Count} Shock={shock.Count} Construction={constr.Count}");
+                DebugLog.Log(ScenarioLog, "Construction spells: " + string.Join(", ", constr.ConvertAll(s => s.DisplayName)));
                 // Left: default All view, "All" tabs lit. Right: Evocation school
                 // + Shock path selected, so the screenshot shows both school-tab
                 // and path-tab highlighting (active bright, rest dimmed).
                 UI.GrimoirePanel.Populate(WidgetRenderer, sim.GameData, "grimoire");
                 UI.GrimoireOverlay.ApplyTabHighlights(WidgetRenderer, "grimoire",
                     null, Necroking.Data.Registries.MagicPath.None);
-                UI.GrimoirePanel.Populate(WidgetRenderer, sim.GameData, "grim_shock",
-                    "Evocation", Necroking.Data.Registries.MagicPath.Shock);
+                UI.GrimoirePanel.Populate(WidgetRenderer, sim.GameData, "grim_shock", "Construction");
                 UI.GrimoireOverlay.ApplyTabHighlights(WidgetRenderer, "grim_shock",
-                    "Evocation", Necroking.Data.Registries.MagicPath.Shock);
+                    "Construction", Necroking.Data.Registries.MagicPath.None);
             }
             WidgetRenderer.DrawWidget(UI.GrimoirePanel.WidgetId, 10, 10, "grimoire");
             WidgetRenderer.DrawWidget(UI.GrimoirePanel.WidgetId, 730, 10, "grim_shock");
