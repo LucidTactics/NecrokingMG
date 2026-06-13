@@ -3800,7 +3800,7 @@
     {
       "id": "SPT_0",
       "type": "image",
-      "imagePath": "assets/UI/Imported/RenaiThinFrame.png",
+      "imagePath": "assets/UI/Imported/baked_RenaiThinFrame_414x255.png",
       "width": 414,
       "height": 255,
       "tintColor": [
@@ -3875,7 +3875,7 @@
     {
       "id": "SPT_3",
       "type": "image",
-      "imagePath": "assets/UI/Imported/RenaiThinFrame.png",
+      "imagePath": "assets/UI/Imported/baked_RenaiThinFrame_324x30.png",
       "width": 324,
       "height": 30,
       "tintColor": [
@@ -3908,7 +3908,7 @@
         255,
         0
       ],
-      "defaultText": "'Path:'",
+      "defaultText": "Path:",
       "textRegion": {
         "x": 0,
         "y": 0,
@@ -3919,9 +3919,9 @@
         "fontFamily": "Quintessential",
         "fontSize": 20,
         "fontColor": [
-          255,
-          255,
-          255,
+          240,
+          218,
+          178,
           255
         ],
         "bold": true,
@@ -4040,7 +4040,7 @@
         255,
         0
       ],
-      "defaultText": "'Fatigue:'",
+      "defaultText": "Fatigue:",
       "textRegion": {
         "x": 0,
         "y": 0,
@@ -4051,9 +4051,9 @@
         "fontFamily": "Quintessential",
         "fontSize": 20,
         "fontColor": [
-          255,
-          255,
-          255,
+          240,
+          218,
+          178,
           255
         ],
         "bold": true,
@@ -4139,7 +4139,7 @@
     {
       "id": "SPT_11",
       "type": "image",
-      "imagePath": "assets/UI/Imported/RenaiThinFrame.png",
+      "imagePath": "assets/UI/Imported/baked_RenaiThinFrame_68x66.png",
       "width": 68,
       "height": 66,
       "tintColor": [
@@ -4183,9 +4183,9 @@
         "fontFamily": "Quintessential",
         "fontSize": 51,
         "fontColor": [
-          255,
-          255,
-          255,
+          240,
+          218,
+          178,
           255
         ],
         "bold": true,
@@ -4226,7 +4226,7 @@
     {
       "id": "SPT_14",
       "type": "image",
-      "imagePath": "assets/UI/Imported/dragonpattern-transparent.png",
+      "imagePath": "assets/UI/Imported/baked_dragonpattern-transparent_50x24.png",
       "width": 50,
       "height": 24,
       "tintColor": [
@@ -4239,7 +4239,7 @@
     {
       "id": "SPT_15",
       "type": "image",
-      "imagePath": "assets/UI/Imported/RenaiThinFrame.png",
+      "imagePath": "assets/UI/Imported/baked_RenaiThinFrame_50x24.png",
       "width": 50,
       "height": 24,
       "tintColor": [
@@ -4283,9 +4283,9 @@
         "fontFamily": "Quintessential",
         "fontSize": 17,
         "fontColor": [
-          255,
-          255,
-          255,
+          240,
+          218,
+          178,
           255
         ],
         "bold": true,
@@ -4326,7 +4326,7 @@
     {
       "id": "SPT_18",
       "type": "image",
-      "imagePath": "assets/UI/Imported/dragonpattern-transparent.png",
+      "imagePath": "assets/UI/Imported/baked_dragonpattern-transparent_86x24.png",
       "width": 86,
       "height": 24,
       "tintColor": [
@@ -4339,7 +4339,7 @@
     {
       "id": "SPT_19",
       "type": "image",
-      "imagePath": "assets/UI/Imported/RenaiThinFrame.png",
+      "imagePath": "assets/UI/Imported/baked_RenaiThinFrame_86x24.png",
       "width": 86,
       "height": 24,
       "tintColor": [
@@ -4383,9 +4383,9 @@
         "fontFamily": "Quintessential",
         "fontSize": 17,
         "fontColor": [
-          255,
-          255,
-          255,
+          240,
+          218,
+          178,
           255
         ],
         "bold": true,
@@ -4426,7 +4426,7 @@
     {
       "id": "SPT_22",
       "type": "image",
-      "imagePath": "assets/UI/Imported/dragonpattern-transparent.png",
+      "imagePath": "assets/UI/Imported/baked_dragonpattern-transparent_395x95.png",
       "width": 395,
       "height": 95,
       "tintColor": [
@@ -4439,7 +4439,7 @@
     {
       "id": "SPT_23",
       "type": "image",
-      "imagePath": "assets/UI/Imported/RenaiThinFrame.png",
+      "imagePath": "assets/UI/Imported/baked_RenaiThinFrame_395x95.png",
       "width": 395,
       "height": 95,
       "tintColor": [
@@ -4472,7 +4472,7 @@
         255,
         0
       ],
-      "defaultText": "'Buff Friendly:'",
+      "defaultText": "Buff Friendly:",
       "textRegion": {
         "x": 0,
         "y": 0,
@@ -4483,9 +4483,9 @@
         "fontFamily": "Quintessential",
         "fontSize": 20,
         "fontColor": [
-          255,
-          255,
-          255,
+          240,
+          218,
+          178,
           255
         ],
         "bold": true,
@@ -4571,7 +4571,7 @@
     {
       "id": "SPT_27",
       "type": "image",
-      "imagePath": "assets/UI/Imported/Swatch1.3.png",
+      "imagePath": "assets/UI/Imported/baked_Swatch1.3_327x23.png",
       "width": 327,
       "height": 23,
       "tintColor": [
@@ -4612,7 +4612,7 @@
         255,
         0
       ],
-      "defaultText": "'Effect:'",
+      "defaultText": "Effect:",
       "textRegion": {
         "x": 0,
         "y": 0,
@@ -4623,9 +4623,9 @@
         "fontFamily": "Quintessential",
         "fontSize": 20,
         "fontColor": [
-          255,
-          255,
-          255,
+          240,
+          218,
+          178,
           255
         ],
         "bold": true,
@@ -4686,7 +4686,7 @@
         255,
         0
       ],
-      "defaultText": "'Range:'",
+      "defaultText": "Range:",
       "textRegion": {
         "x": 0,
         "y": 0,
@@ -4697,9 +4697,9 @@
         "fontFamily": "Quintessential",
         "fontSize": 20,
         "fontColor": [
-          255,
-          255,
-          255,
+          240,
+          218,
+          178,
           255
         ],
         "bold": true,
@@ -4760,7 +4760,7 @@
         255,
         0
       ],
-      "defaultText": "'Area of Effect:'",
+      "defaultText": "Area of Effect:",
       "textRegion": {
         "x": 0,
         "y": 0,
@@ -4771,9 +4771,9 @@
         "fontFamily": "Quintessential",
         "fontSize": 20,
         "fontColor": [
-          255,
-          255,
-          255,
+          240,
+          218,
+          178,
           255
         ],
         "bold": true,
@@ -4845,9 +4845,9 @@
         "fontFamily": "Quintessential",
         "fontSize": 21,
         "fontColor": [
-          255,
-          255,
-          255,
+          240,
+          218,
+          178,
           255
         ],
         "bold": true,
@@ -4863,7 +4863,7 @@
     {
       "id": "SBT_0",
       "type": "image",
-      "imagePath": "assets/UI/Imported/RenaiThinFrame.png",
+      "imagePath": "assets/UI/Imported/baked_RenaiThinFrame_414x328.png",
       "width": 414,
       "height": 328,
       "tintColor": [
@@ -4938,7 +4938,7 @@
     {
       "id": "SBT_3",
       "type": "image",
-      "imagePath": "assets/UI/Imported/RenaiThinFrame.png",
+      "imagePath": "assets/UI/Imported/baked_RenaiThinFrame_324x30.png",
       "width": 324,
       "height": 30,
       "tintColor": [
@@ -4971,7 +4971,7 @@
         255,
         0
       ],
-      "defaultText": "'Path:'",
+      "defaultText": "Path:",
       "textRegion": {
         "x": 0,
         "y": 0,
@@ -4982,9 +4982,9 @@
         "fontFamily": "Quintessential",
         "fontSize": 20,
         "fontColor": [
-          255,
-          255,
-          255,
+          240,
+          218,
+          178,
           255
         ],
         "bold": true,
@@ -5103,7 +5103,7 @@
         255,
         0
       ],
-      "defaultText": "'Fatigue:'",
+      "defaultText": "Fatigue:",
       "textRegion": {
         "x": 0,
         "y": 0,
@@ -5114,9 +5114,9 @@
         "fontFamily": "Quintessential",
         "fontSize": 20,
         "fontColor": [
-          255,
-          255,
-          255,
+          240,
+          218,
+          178,
           255
         ],
         "bold": true,
@@ -5202,7 +5202,7 @@
     {
       "id": "SBT_11",
       "type": "image",
-      "imagePath": "assets/UI/Imported/RenaiThinFrame.png",
+      "imagePath": "assets/UI/Imported/baked_RenaiThinFrame_68x66.png",
       "width": 68,
       "height": 66,
       "tintColor": [
@@ -5246,9 +5246,9 @@
         "fontFamily": "Quintessential",
         "fontSize": 51,
         "fontColor": [
-          255,
-          255,
-          255,
+          240,
+          218,
+          178,
           255
         ],
         "bold": true,
@@ -5289,7 +5289,7 @@
     {
       "id": "SBT_14",
       "type": "image",
-      "imagePath": "assets/UI/Imported/dragonpattern-transparent.png",
+      "imagePath": "assets/UI/Imported/baked_dragonpattern-transparent_63x24.png",
       "width": 63,
       "height": 24,
       "tintColor": [
@@ -5302,7 +5302,7 @@
     {
       "id": "SBT_15",
       "type": "image",
-      "imagePath": "assets/UI/Imported/RenaiThinFrame.png",
+      "imagePath": "assets/UI/Imported/baked_RenaiThinFrame_63x24.png",
       "width": 63,
       "height": 24,
       "tintColor": [
@@ -5346,9 +5346,9 @@
         "fontFamily": "Quintessential",
         "fontSize": 17,
         "fontColor": [
-          255,
-          255,
-          255,
+          240,
+          218,
+          178,
           255
         ],
         "bold": true,
@@ -5389,7 +5389,7 @@
     {
       "id": "SBT_18",
       "type": "image",
-      "imagePath": "assets/UI/Imported/dragonpattern-transparent.png",
+      "imagePath": "assets/UI/Imported/baked_dragonpattern-transparent_55x24.png",
       "width": 55,
       "height": 24,
       "tintColor": [
@@ -5402,7 +5402,7 @@
     {
       "id": "SBT_19",
       "type": "image",
-      "imagePath": "assets/UI/Imported/RenaiThinFrame.png",
+      "imagePath": "assets/UI/Imported/baked_RenaiThinFrame_55x24.png",
       "width": 55,
       "height": 24,
       "tintColor": [
@@ -5446,9 +5446,9 @@
         "fontFamily": "Quintessential",
         "fontSize": 17,
         "fontColor": [
-          255,
-          255,
-          255,
+          240,
+          218,
+          178,
           255
         ],
         "bold": true,
@@ -5489,7 +5489,7 @@
     {
       "id": "SBT_22",
       "type": "image",
-      "imagePath": "assets/UI/Imported/dragonpattern-transparent.png",
+      "imagePath": "assets/UI/Imported/baked_dragonpattern-transparent_55x24.png",
       "width": 55,
       "height": 24,
       "tintColor": [
@@ -5502,7 +5502,7 @@
     {
       "id": "SBT_23",
       "type": "image",
-      "imagePath": "assets/UI/Imported/RenaiThinFrame.png",
+      "imagePath": "assets/UI/Imported/baked_RenaiThinFrame_55x24.png",
       "width": 55,
       "height": 24,
       "tintColor": [
@@ -5546,9 +5546,9 @@
         "fontFamily": "Quintessential",
         "fontSize": 17,
         "fontColor": [
-          255,
-          255,
-          255,
+          240,
+          218,
+          178,
           255
         ],
         "bold": true,
@@ -5589,7 +5589,7 @@
     {
       "id": "SBT_26",
       "type": "image",
-      "imagePath": "assets/UI/Imported/dragonpattern-transparent.png",
+      "imagePath": "assets/UI/Imported/baked_dragonpattern-transparent_395x176.png",
       "width": 395,
       "height": 176,
       "tintColor": [
@@ -5602,7 +5602,7 @@
     {
       "id": "SBT_27",
       "type": "image",
-      "imagePath": "assets/UI/Imported/RenaiThinFrame.png",
+      "imagePath": "assets/UI/Imported/baked_RenaiThinFrame_395x176.png",
       "width": 395,
       "height": 176,
       "tintColor": [
@@ -5635,7 +5635,7 @@
         255,
         0
       ],
-      "defaultText": "'Damage:'",
+      "defaultText": "Damage:",
       "textRegion": {
         "x": 0,
         "y": 0,
@@ -5646,9 +5646,9 @@
         "fontFamily": "Quintessential",
         "fontSize": 20,
         "fontColor": [
-          255,
-          255,
-          255,
+          240,
+          218,
+          178,
           255
         ],
         "bold": true,
@@ -5742,7 +5742,7 @@
         255,
         0
       ],
-      "defaultText": "'Range:'",
+      "defaultText": "Range:",
       "textRegion": {
         "x": 0,
         "y": 0,
@@ -5753,9 +5753,9 @@
         "fontFamily": "Quintessential",
         "fontSize": 20,
         "fontColor": [
-          255,
-          255,
-          255,
+          240,
+          218,
+          178,
           255
         ],
         "bold": true,
@@ -5808,7 +5808,7 @@
     {
       "id": "SBT_33",
       "type": "image",
-      "imagePath": "assets/UI/Imported/BrightBlueSwathNoBG.png",
+      "imagePath": "assets/UI/Imported/baked_BrightBlueSwathNoBG_390x22.png",
       "width": 390,
       "height": 22,
       "tintColor": [
@@ -5841,7 +5841,7 @@
         255,
         0
       ],
-      "defaultText": "'AOE:'",
+      "defaultText": "AOE:",
       "textRegion": {
         "x": 0,
         "y": 0,
@@ -5852,9 +5852,9 @@
         "fontFamily": "Quintessential",
         "fontSize": 20,
         "fontColor": [
-          255,
-          255,
-          255,
+          240,
+          218,
+          178,
           255
         ],
         "bold": true,
@@ -5915,7 +5915,7 @@
         255,
         0
       ],
-      "defaultText": "'Quantity:'",
+      "defaultText": "Quantity:",
       "textRegion": {
         "x": 0,
         "y": 0,
@@ -5926,9 +5926,9 @@
         "fontFamily": "Quintessential",
         "fontSize": 20,
         "fontColor": [
-          255,
-          255,
-          255,
+          240,
+          218,
+          178,
           255
         ],
         "bold": true,
@@ -5981,7 +5981,7 @@
     {
       "id": "SBT_38",
       "type": "image",
-      "imagePath": "assets/UI/Imported/BrightBlueSwathNoBG.png",
+      "imagePath": "assets/UI/Imported/baked_BrightBlueSwathNoBG_390x22.png",
       "width": 390,
       "height": 22,
       "tintColor": [
@@ -6014,7 +6014,7 @@
         255,
         0
       ],
-      "defaultText": "'Checks:'",
+      "defaultText": "Checks:",
       "textRegion": {
         "x": 0,
         "y": 0,
@@ -6025,9 +6025,9 @@
         "fontFamily": "Quintessential",
         "fontSize": 20,
         "fontColor": [
-          255,
-          255,
-          255,
+          240,
+          218,
+          178,
           255
         ],
         "bold": true,
@@ -6158,7 +6158,7 @@
         255,
         0
       ],
-      "defaultText": "'Tags:'",
+      "defaultText": "Tags:",
       "textRegion": {
         "x": 0,
         "y": 0,
@@ -6169,9 +6169,9 @@
         "fontFamily": "Quintessential",
         "fontSize": 20,
         "fontColor": [
-          255,
-          255,
-          255,
+          240,
+          218,
+          178,
           255
         ],
         "bold": true,
@@ -6224,7 +6224,7 @@
     {
       "id": "SBT_45",
       "type": "image",
-      "imagePath": "assets/UI/Imported/BrightBlueSwathNoBG.png",
+      "imagePath": "assets/UI/Imported/baked_BrightBlueSwathNoBG_390x22.png",
       "width": 390,
       "height": 22,
       "tintColor": [
@@ -6257,7 +6257,7 @@
         255,
         0
       ],
-      "defaultText": "'Effects on Hit:'",
+      "defaultText": "Effects on Hit:",
       "textRegion": {
         "x": 0,
         "y": 0,
@@ -6268,9 +6268,9 @@
         "fontFamily": "Quintessential",
         "fontSize": 20,
         "fontColor": [
-          255,
-          255,
-          255,
+          240,
+          218,
+          178,
           255
         ],
         "bold": true,
@@ -6331,7 +6331,7 @@
         255,
         0
       ],
-      "defaultText": "'Effects on Death:'",
+      "defaultText": "Effects on Death:",
       "textRegion": {
         "x": 0,
         "y": 0,
@@ -6342,9 +6342,9 @@
         "fontFamily": "Quintessential",
         "fontSize": 19,
         "fontColor": [
-          255,
-          255,
-          255,
+          240,
+          218,
+          178,
           255
         ],
         "bold": true,
@@ -6434,7 +6434,7 @@
     {
       "id": "SBT_51",
       "type": "image",
-      "imagePath": "assets/UI/Imported/BrightBlueSwathNoBG.png",
+      "imagePath": "assets/UI/Imported/baked_BrightBlueSwathNoBG_390x22.png",
       "width": 390,
       "height": 22,
       "tintColor": [
@@ -6478,9 +6478,9 @@
         "fontFamily": "Quintessential",
         "fontSize": 22,
         "fontColor": [
-          255,
-          255,
-          255,
+          240,
+          218,
+          178,
           255
         ],
         "bold": true,
@@ -6496,7 +6496,7 @@
     {
       "id": "SWT_0",
       "type": "image",
-      "imagePath": "assets/UI/Imported/RenaiThinFrame.png",
+      "imagePath": "assets/UI/Imported/baked_RenaiThinFrame_414x557.png",
       "width": 414,
       "height": 557,
       "tintColor": [
@@ -6571,7 +6571,7 @@
     {
       "id": "SWT_3",
       "type": "image",
-      "imagePath": "assets/UI/Imported/RenaiThinFrame.png",
+      "imagePath": "assets/UI/Imported/baked_RenaiThinFrame_324x30.png",
       "width": 324,
       "height": 30,
       "tintColor": [
@@ -6604,7 +6604,7 @@
         255,
         0
       ],
-      "defaultText": "'Path:'",
+      "defaultText": "Path:",
       "textRegion": {
         "x": 0,
         "y": 0,
@@ -6615,9 +6615,9 @@
         "fontFamily": "Quintessential",
         "fontSize": 20,
         "fontColor": [
-          255,
-          255,
-          255,
+          240,
+          218,
+          178,
           255
         ],
         "bold": true,
@@ -6736,7 +6736,7 @@
         255,
         0
       ],
-      "defaultText": "'Cost:'",
+      "defaultText": "Cost:",
       "textRegion": {
         "x": 0,
         "y": 0,
@@ -6747,9 +6747,9 @@
         "fontFamily": "Quintessential",
         "fontSize": 20,
         "fontColor": [
-          255,
-          255,
-          255,
+          240,
+          218,
+          178,
           255
         ],
         "bold": true,
@@ -6868,7 +6868,7 @@
     {
       "id": "SWT_12",
       "type": "image",
-      "imagePath": "assets/UI/Imported/RenaiThinFrame.png",
+      "imagePath": "assets/UI/Imported/baked_RenaiThinFrame_68x66.png",
       "width": 68,
       "height": 66,
       "tintColor": [
@@ -6912,9 +6912,9 @@
         "fontFamily": "Quintessential",
         "fontSize": 51,
         "fontColor": [
-          255,
-          255,
-          255,
+          240,
+          218,
+          178,
           255
         ],
         "bold": true,
@@ -6955,7 +6955,7 @@
     {
       "id": "SWT_15",
       "type": "image",
-      "imagePath": "assets/UI/Imported/dragonpattern-transparent.png",
+      "imagePath": "assets/UI/Imported/baked_dragonpattern-transparent_79x24.png",
       "width": 79,
       "height": 24,
       "tintColor": [
@@ -6968,7 +6968,7 @@
     {
       "id": "SWT_16",
       "type": "image",
-      "imagePath": "assets/UI/Imported/RenaiThinFrame.png",
+      "imagePath": "assets/UI/Imported/baked_RenaiThinFrame_79x24.png",
       "width": 79,
       "height": 24,
       "tintColor": [
@@ -7012,9 +7012,9 @@
         "fontFamily": "Quintessential",
         "fontSize": 17,
         "fontColor": [
-          255,
-          255,
-          255,
+          240,
+          218,
+          178,
           255
         ],
         "bold": true,
@@ -7055,7 +7055,7 @@
     {
       "id": "SWT_19",
       "type": "image",
-      "imagePath": "assets/UI/Imported/dragonpattern-transparent.png",
+      "imagePath": "assets/UI/Imported/baked_dragonpattern-transparent_57x24.png",
       "width": 57,
       "height": 24,
       "tintColor": [
@@ -7068,7 +7068,7 @@
     {
       "id": "SWT_20",
       "type": "image",
-      "imagePath": "assets/UI/Imported/RenaiThinFrame.png",
+      "imagePath": "assets/UI/Imported/baked_RenaiThinFrame_57x24.png",
       "width": 57,
       "height": 24,
       "tintColor": [
@@ -7112,9 +7112,9 @@
         "fontFamily": "Quintessential",
         "fontSize": 17,
         "fontColor": [
-          255,
-          255,
-          255,
+          240,
+          218,
+          178,
           255
         ],
         "bold": true,
@@ -7155,7 +7155,7 @@
     {
       "id": "SWT_23",
       "type": "image",
-      "imagePath": "assets/UI/Imported/dragonpattern-transparent.png",
+      "imagePath": "assets/UI/Imported/baked_dragonpattern-transparent_90x24.png",
       "width": 90,
       "height": 24,
       "tintColor": [
@@ -7168,7 +7168,7 @@
     {
       "id": "SWT_24",
       "type": "image",
-      "imagePath": "assets/UI/Imported/RenaiThinFrame.png",
+      "imagePath": "assets/UI/Imported/baked_RenaiThinFrame_90x24.png",
       "width": 90,
       "height": 24,
       "tintColor": [
@@ -7212,9 +7212,9 @@
         "fontFamily": "Quintessential",
         "fontSize": 17,
         "fontColor": [
-          255,
-          255,
-          255,
+          240,
+          218,
+          178,
           255
         ],
         "bold": true,
@@ -7255,7 +7255,7 @@
     {
       "id": "SWT_27",
       "type": "image",
-      "imagePath": "assets/UI/Imported/dragonpattern-transparent.png",
+      "imagePath": "assets/UI/Imported/baked_dragonpattern-transparent_395x416.png",
       "width": 395,
       "height": 416,
       "tintColor": [
@@ -7268,7 +7268,7 @@
     {
       "id": "SWT_28",
       "type": "image",
-      "imagePath": "assets/UI/Imported/RenaiThinFrame.png",
+      "imagePath": "assets/UI/Imported/baked_RenaiThinFrame_395x416.png",
       "width": 395,
       "height": 416,
       "tintColor": [
@@ -7301,7 +7301,7 @@
         255,
         0
       ],
-      "defaultText": "'Summon:'",
+      "defaultText": "Summon:",
       "textRegion": {
         "x": 0,
         "y": 0,
@@ -7312,9 +7312,9 @@
         "fontFamily": "Quintessential",
         "fontSize": 20,
         "fontColor": [
-          255,
-          255,
-          255,
+          240,
+          218,
+          178,
           255
         ],
         "bold": true,
@@ -7437,7 +7437,7 @@
     {
       "id": "SWT_33",
       "type": "image",
-      "imagePath": "assets/UI/Imported/Swatch1.3.png",
+      "imagePath": "assets/UI/Imported/baked_Swatch1.3_389x26.png",
       "width": 389,
       "height": 26,
       "tintColor": [
@@ -7487,11 +7487,11 @@
         "align": "center",
         "valign": "center",
         "fontFamily": "Quintessential",
-        "fontSize": 51,
+        "fontSize": 26,
         "fontColor": [
-          221,
-          213,
-          174,
+          240,
+          218,
+          178,
           255
         ],
         "bold": true,
@@ -7506,45 +7506,8 @@
     },
     {
       "id": "SWT_35",
-      "type": "text",
-      "width": 395,
-      "height": 38,
-      "tintColor": [
-        255,
-        255,
-        255,
-        0
-      ],
-      "defaultText": "Wolf",
-      "textRegion": {
-        "x": 0,
-        "y": 0,
-        "w": 395,
-        "h": 38,
-        "align": "center",
-        "valign": "center",
-        "fontFamily": "Quintessential",
-        "fontSize": 51,
-        "fontColor": [
-          255,
-          255,
-          255,
-          255
-        ],
-        "bold": true,
-        "outlineWidth": 1,
-        "outlineColor": [
-          0,
-          0,
-          0,
-          150
-        ]
-      }
-    },
-    {
-      "id": "SWT_36",
       "type": "image",
-      "imagePath": "assets/UI/Imported/BrightBlueSwathNoBG.png",
+      "imagePath": "assets/UI/Imported/baked_BrightBlueSwathNoBG_391x127.png",
       "width": 391,
       "height": 127,
       "tintColor": [
@@ -7567,9 +7530,9 @@
       }
     },
     {
-      "id": "SWT_37",
+      "id": "SWT_36",
       "type": "image",
-      "imagePath": "assets/UI/Imported/BrightBlueSwathNoBG.png",
+      "imagePath": "assets/UI/Imported/baked_BrightBlueSwathNoBG_394x30.png",
       "width": 394,
       "height": 30,
       "tintColor": [
@@ -7592,7 +7555,7 @@
       }
     },
     {
-      "id": "SWT_38",
+      "id": "SWT_37",
       "type": "text",
       "width": 89,
       "height": 24,
@@ -7629,7 +7592,7 @@
       }
     },
     {
-      "id": "SWT_39",
+      "id": "SWT_38",
       "type": "text",
       "width": 53,
       "height": 24,
@@ -7666,7 +7629,7 @@
       }
     },
     {
-      "id": "SWT_40",
+      "id": "SWT_39",
       "type": "image",
       "imagePath": "assets/UI/Imported/Health24.png",
       "width": 24,
@@ -7699,7 +7662,7 @@
       }
     },
     {
-      "id": "SWT_41",
+      "id": "SWT_40",
       "type": "text",
       "width": 89,
       "height": 24,
@@ -7736,7 +7699,7 @@
       }
     },
     {
-      "id": "SWT_42",
+      "id": "SWT_41",
       "type": "text",
       "width": 26,
       "height": 24,
@@ -7773,7 +7736,7 @@
       }
     },
     {
-      "id": "SWT_43",
+      "id": "SWT_42",
       "type": "image",
       "imagePath": "assets/UI/Imported/Spirit2_24.png",
       "width": 24,
@@ -7806,7 +7769,7 @@
       }
     },
     {
-      "id": "SWT_44",
+      "id": "SWT_43",
       "type": "text",
       "width": 89,
       "height": 24,
@@ -7843,7 +7806,7 @@
       }
     },
     {
-      "id": "SWT_45",
+      "id": "SWT_44",
       "type": "text",
       "width": 26,
       "height": 24,
@@ -7880,7 +7843,7 @@
       }
     },
     {
-      "id": "SWT_46",
+      "id": "SWT_45",
       "type": "image",
       "imagePath": "assets/UI/Imported/morale2_24.png",
       "width": 24,
@@ -7913,7 +7876,7 @@
       }
     },
     {
-      "id": "SWT_47",
+      "id": "SWT_46",
       "type": "text",
       "width": 89,
       "height": 24,
@@ -7950,7 +7913,7 @@
       }
     },
     {
-      "id": "SWT_48",
+      "id": "SWT_47",
       "type": "text",
       "width": 26,
       "height": 24,
@@ -7987,7 +7950,7 @@
       }
     },
     {
-      "id": "SWT_49",
+      "id": "SWT_48",
       "type": "image",
       "imagePath": "assets/UI/Imported/Size324.png",
       "width": 24,
@@ -8020,7 +7983,7 @@
       }
     },
     {
-      "id": "SWT_50",
+      "id": "SWT_49",
       "type": "text",
       "width": 89,
       "height": 24,
@@ -8057,7 +8020,7 @@
       }
     },
     {
-      "id": "SWT_51",
+      "id": "SWT_50",
       "type": "text",
       "width": 26,
       "height": 24,
@@ -8094,7 +8057,7 @@
       }
     },
     {
-      "id": "SWT_52",
+      "id": "SWT_51",
       "type": "image",
       "imagePath": "assets/UI/Imported/Tough24.png",
       "width": 24,
@@ -8127,7 +8090,7 @@
       }
     },
     {
-      "id": "SWT_53",
+      "id": "SWT_52",
       "type": "text",
       "width": 89,
       "height": 24,
@@ -8164,7 +8127,7 @@
       }
     },
     {
-      "id": "SWT_54",
+      "id": "SWT_53",
       "type": "text",
       "width": 26,
       "height": 24,
@@ -8201,7 +8164,7 @@
       }
     },
     {
-      "id": "SWT_55",
+      "id": "SWT_54",
       "type": "image",
       "imagePath": "assets/UI/Imported/MagicWand48.png",
       "width": 24,
@@ -8234,9 +8197,9 @@
       }
     },
     {
-      "id": "SWT_56",
+      "id": "SWT_55",
       "type": "image",
-      "imagePath": "assets/UI/Imported/BrightBlueSwathNoBG.png",
+      "imagePath": "assets/UI/Imported/baked_BrightBlueSwathNoBG_394x30.png",
       "width": 394,
       "height": 30,
       "tintColor": [
@@ -8259,7 +8222,7 @@
       }
     },
     {
-      "id": "SWT_57",
+      "id": "SWT_56",
       "type": "text",
       "width": 89,
       "height": 24,
@@ -8296,7 +8259,7 @@
       }
     },
     {
-      "id": "SWT_58",
+      "id": "SWT_57",
       "type": "text",
       "width": 26,
       "height": 24,
@@ -8333,7 +8296,7 @@
       }
     },
     {
-      "id": "SWT_59",
+      "id": "SWT_58",
       "type": "image",
       "imagePath": "assets/UI/Imported/SturmStrength24.png",
       "width": 24,
@@ -8366,7 +8329,7 @@
       }
     },
     {
-      "id": "SWT_60",
+      "id": "SWT_59",
       "type": "text",
       "width": 89,
       "height": 24,
@@ -8403,7 +8366,7 @@
       }
     },
     {
-      "id": "SWT_61",
+      "id": "SWT_60",
       "type": "text",
       "width": 26,
       "height": 24,
@@ -8440,7 +8403,7 @@
       }
     },
     {
-      "id": "SWT_62",
+      "id": "SWT_61",
       "type": "image",
       "imagePath": "assets/UI/Imported/Prot24.png",
       "width": 24,
@@ -8473,7 +8436,7 @@
       }
     },
     {
-      "id": "SWT_63",
+      "id": "SWT_62",
       "type": "text",
       "width": 89,
       "height": 24,
@@ -8510,7 +8473,7 @@
       }
     },
     {
-      "id": "SWT_64",
+      "id": "SWT_63",
       "type": "text",
       "width": 26,
       "height": 24,
@@ -8547,7 +8510,7 @@
       }
     },
     {
-      "id": "SWT_65",
+      "id": "SWT_64",
       "type": "image",
       "imagePath": "assets/UI/Imported/Coverage24.png",
       "width": 24,
@@ -8580,7 +8543,7 @@
       }
     },
     {
-      "id": "SWT_66",
+      "id": "SWT_65",
       "type": "text",
       "width": 89,
       "height": 24,
@@ -8617,7 +8580,7 @@
       }
     },
     {
-      "id": "SWT_67",
+      "id": "SWT_66",
       "type": "text",
       "width": 26,
       "height": 24,
@@ -8654,7 +8617,7 @@
       }
     },
     {
-      "id": "SWT_68",
+      "id": "SWT_67",
       "type": "image",
       "imagePath": "assets/UI/Imported/Attack24.png",
       "width": 24,
@@ -8687,7 +8650,7 @@
       }
     },
     {
-      "id": "SWT_69",
+      "id": "SWT_68",
       "type": "text",
       "width": 89,
       "height": 24,
@@ -8724,7 +8687,7 @@
       }
     },
     {
-      "id": "SWT_70",
+      "id": "SWT_69",
       "type": "text",
       "width": 26,
       "height": 24,
@@ -8761,7 +8724,7 @@
       }
     },
     {
-      "id": "SWT_71",
+      "id": "SWT_70",
       "type": "image",
       "imagePath": "assets/UI/Imported/Defense24.png",
       "width": 24,
@@ -8794,7 +8757,7 @@
       }
     },
     {
-      "id": "SWT_72",
+      "id": "SWT_71",
       "type": "text",
       "width": 89,
       "height": 24,
@@ -8831,7 +8794,7 @@
       }
     },
     {
-      "id": "SWT_73",
+      "id": "SWT_72",
       "type": "text",
       "width": 26,
       "height": 24,
@@ -8868,7 +8831,7 @@
       }
     },
     {
-      "id": "SWT_74",
+      "id": "SWT_73",
       "type": "image",
       "imagePath": "assets/UI/Imported/Prec24.png",
       "width": 24,
@@ -8901,9 +8864,9 @@
       }
     },
     {
-      "id": "SWT_75",
+      "id": "SWT_74",
       "type": "image",
-      "imagePath": "assets/UI/Imported/BrightBlueSwathNoBG.png",
+      "imagePath": "assets/UI/Imported/baked_BrightBlueSwathNoBG_394x30.png",
       "width": 394,
       "height": 30,
       "tintColor": [
@@ -8926,7 +8889,7 @@
       }
     },
     {
-      "id": "SWT_76",
+      "id": "SWT_75",
       "type": "text",
       "width": 89,
       "height": 24,
@@ -8963,7 +8926,7 @@
       }
     },
     {
-      "id": "SWT_77",
+      "id": "SWT_76",
       "type": "text",
       "width": 26,
       "height": 24,
@@ -9000,7 +8963,7 @@
       }
     },
     {
-      "id": "SWT_78",
+      "id": "SWT_77",
       "type": "image",
       "imagePath": "assets/UI/Imported/Speed24.png",
       "width": 24,
@@ -9033,7 +8996,7 @@
       }
     },
     {
-      "id": "SWT_79",
+      "id": "SWT_78",
       "type": "text",
       "width": 89,
       "height": 24,
@@ -9070,7 +9033,7 @@
       }
     },
     {
-      "id": "SWT_80",
+      "id": "SWT_79",
       "type": "text",
       "width": 26,
       "height": 24,
@@ -9107,7 +9070,7 @@
       }
     },
     {
-      "id": "SWT_81",
+      "id": "SWT_80",
       "type": "image",
       "imagePath": "assets/UI/Imported/Enc24.png",
       "width": 24,
@@ -9140,7 +9103,7 @@
       }
     },
     {
-      "id": "SWT_82",
+      "id": "SWT_81",
       "type": "text",
       "width": 89,
       "height": 24,
@@ -9177,7 +9140,7 @@
       }
     },
     {
-      "id": "SWT_83",
+      "id": "SWT_82",
       "type": "text",
       "width": 26,
       "height": 24,
@@ -9214,7 +9177,7 @@
       }
     },
     {
-      "id": "SWT_84",
+      "id": "SWT_83",
       "type": "image",
       "imagePath": "assets/UI/Imported/Gold24.png",
       "width": 24,
@@ -9244,6 +9207,39 @@
         ],
         "outlineThickness": 0.6,
         "outlineOpacity": 0.64
+      }
+    },
+    {
+      "id": "SWT_84",
+      "type": "image",
+      "imagePath": "assets/UI/Imported/goldbar.png",
+      "width": 133,
+      "height": 3,
+      "tintColor": [
+        42,
+        41,
+        36,
+        76
+      ],
+      "harmonize": {
+        "targetColor": [
+          72,
+          58,
+          32,
+          255
+        ],
+        "hueStrength": 1,
+        "satStrength": 0.8,
+        "valStrength": 0.36,
+        "useHcl": false,
+        "outlineColor": [
+          0,
+          0,
+          0,
+          255
+        ],
+        "outlineThickness": 0.5,
+        "outlineOpacity": 1.0
       }
     },
     {
@@ -9282,40 +9278,7 @@
     {
       "id": "SWT_86",
       "type": "image",
-      "imagePath": "assets/UI/Imported/goldbar.png",
-      "width": 133,
-      "height": 3,
-      "tintColor": [
-        42,
-        41,
-        36,
-        76
-      ],
-      "harmonize": {
-        "targetColor": [
-          72,
-          58,
-          32,
-          255
-        ],
-        "hueStrength": 1,
-        "satStrength": 0.8,
-        "valStrength": 0.36,
-        "useHcl": false,
-        "outlineColor": [
-          0,
-          0,
-          0,
-          255
-        ],
-        "outlineThickness": 0.5,
-        "outlineOpacity": 1.0
-      }
-    },
-    {
-      "id": "SWT_87",
-      "type": "image",
-      "imagePath": "assets/UI/Imported/BrightBlueSwathNoBG.png",
+      "imagePath": "assets/UI/Imported/baked_BrightBlueSwathNoBG_391x67.png",
       "width": 391,
       "height": 67,
       "tintColor": [
@@ -9338,9 +9301,9 @@
       }
     },
     {
-      "id": "SWT_88",
+      "id": "SWT_87",
       "type": "image",
-      "imagePath": "assets/UI/Imported/BrightBlueSwathNoBG.png",
+      "imagePath": "assets/UI/Imported/baked_BrightBlueSwathNoBG_399x30.png",
       "width": 399,
       "height": 30,
       "tintColor": [
@@ -9363,7 +9326,7 @@
       }
     },
     {
-      "id": "SWT_89",
+      "id": "SWT_88",
       "type": "image",
       "imagePath": "assets/UI/Imported/Ring.Png",
       "width": 24,
@@ -9396,7 +9359,7 @@
       }
     },
     {
-      "id": "SWT_90",
+      "id": "SWT_89",
       "type": "text",
       "width": 115,
       "height": 27,
@@ -9433,7 +9396,7 @@
       }
     },
     {
-      "id": "SWT_91",
+      "id": "SWT_90",
       "type": "image",
       "imagePath": "assets/UI/Imported/goldbar.png",
       "width": 56,
@@ -9466,10 +9429,43 @@
       }
     },
     {
-      "id": "SWT_92",
+      "id": "SWT_91",
       "type": "image",
       "imagePath": "assets/UI/Imported/goldbar.png",
       "width": 57,
+      "height": 3,
+      "tintColor": [
+        42,
+        41,
+        36,
+        116
+      ],
+      "harmonize": {
+        "targetColor": [
+          72,
+          58,
+          32,
+          255
+        ],
+        "hueStrength": 1,
+        "satStrength": 0.8,
+        "valStrength": 0.36,
+        "useHcl": false,
+        "outlineColor": [
+          0,
+          0,
+          0,
+          255
+        ],
+        "outlineThickness": 0.5,
+        "outlineOpacity": 1.0
+      }
+    },
+    {
+      "id": "SWT_92",
+      "type": "image",
+      "imagePath": "assets/UI/Imported/goldbar.png",
+      "width": 58,
       "height": 3,
       "tintColor": [
         42,
@@ -9534,40 +9530,7 @@
     {
       "id": "SWT_94",
       "type": "image",
-      "imagePath": "assets/UI/Imported/goldbar.png",
-      "width": 58,
-      "height": 3,
-      "tintColor": [
-        42,
-        41,
-        36,
-        116
-      ],
-      "harmonize": {
-        "targetColor": [
-          72,
-          58,
-          32,
-          255
-        ],
-        "hueStrength": 1,
-        "satStrength": 0.8,
-        "valStrength": 0.36,
-        "useHcl": false,
-        "outlineColor": [
-          0,
-          0,
-          0,
-          255
-        ],
-        "outlineThickness": 0.5,
-        "outlineOpacity": 1.0
-      }
-    },
-    {
-      "id": "SWT_95",
-      "type": "image",
-      "imagePath": "assets/UI/Imported/Swatch1.3.png",
+      "imagePath": "assets/UI/Imported/baked_Swatch1.3_389x30.png",
       "width": 389,
       "height": 30,
       "tintColor": [
@@ -9598,7 +9561,7 @@
       }
     },
     {
-      "id": "SWT_96",
+      "id": "SWT_95",
       "type": "text",
       "width": 399,
       "height": 42,
@@ -9617,7 +9580,7 @@
         "align": "center",
         "valign": "center",
         "fontFamily": "Quintessential",
-        "fontSize": 58,
+        "fontSize": 26,
         "fontColor": [
           235,
           226,
@@ -9635,9 +9598,9 @@
       }
     },
     {
-      "id": "SWT_97",
+      "id": "SWT_96",
       "type": "image",
-      "imagePath": "assets/UI/Imported/BrightBlueSwathNoBG.png",
+      "imagePath": "assets/UI/Imported/baked_BrightBlueSwathNoBG_393x56.png",
       "width": 393,
       "height": 56,
       "tintColor": [
@@ -9660,9 +9623,9 @@
       }
     },
     {
-      "id": "SWT_98",
+      "id": "SWT_97",
       "type": "image",
-      "imagePath": "assets/UI/Imported/NationsTransparent.png",
+      "imagePath": "assets/UI/Imported/baked_NationsTransparent_427x80.png",
       "width": 427,
       "height": 80,
       "tintColor": [
@@ -9685,9 +9648,9 @@
       }
     },
     {
-      "id": "SWT_99",
+      "id": "SWT_98",
       "type": "image",
-      "imagePath": "assets/UI/Imported/BrightBlueSwathNoBG.png",
+      "imagePath": "assets/UI/Imported/baked_BrightBlueSwathNoBG_392x30.png",
       "width": 392,
       "height": 30,
       "tintColor": [
@@ -9710,7 +9673,7 @@
       }
     },
     {
-      "id": "SWT_100",
+      "id": "SWT_99",
       "type": "image",
       "imagePath": "assets/UI/Imported/Sword.png",
       "width": 24,
@@ -9743,7 +9706,7 @@
       }
     },
     {
-      "id": "SWT_101",
+      "id": "SWT_100",
       "type": "text",
       "width": 113,
       "height": 27,
@@ -9780,7 +9743,7 @@
       }
     },
     {
-      "id": "SWT_102",
+      "id": "SWT_101",
       "type": "text",
       "width": 36,
       "height": 24,
@@ -9817,7 +9780,7 @@
       }
     },
     {
-      "id": "SWT_103",
+      "id": "SWT_102",
       "type": "image",
       "imagePath": "assets/UI/Imported/Slash.png",
       "width": 24,
@@ -9850,7 +9813,7 @@
       }
     },
     {
-      "id": "SWT_104",
+      "id": "SWT_103",
       "type": "text",
       "width": 36,
       "height": 24,
@@ -9887,7 +9850,7 @@
       }
     },
     {
-      "id": "SWT_105",
+      "id": "SWT_104",
       "type": "image",
       "imagePath": "assets/UI/Imported/Attack24.png",
       "width": 24,
@@ -9920,7 +9883,7 @@
       }
     },
     {
-      "id": "SWT_106",
+      "id": "SWT_105",
       "type": "text",
       "width": 36,
       "height": 24,
@@ -9957,7 +9920,7 @@
       }
     },
     {
-      "id": "SWT_107",
+      "id": "SWT_106",
       "type": "text",
       "width": 24,
       "height": 24,
@@ -9967,7 +9930,7 @@
         255,
         0
       ],
-      "defaultText": "' Len'",
+      "defaultText": " Len",
       "textRegion": {
         "x": 0,
         "y": 0,
@@ -9994,7 +9957,7 @@
       }
     },
     {
-      "id": "SWT_108",
+      "id": "SWT_107",
       "type": "text",
       "width": 36,
       "height": 24,
@@ -10031,7 +9994,7 @@
       }
     },
     {
-      "id": "SWT_109",
+      "id": "SWT_108",
       "type": "image",
       "imagePath": "assets/UI/Imported/exhausted.2.24.png",
       "width": 24,
@@ -10064,10 +10027,43 @@
       }
     },
     {
-      "id": "SWT_110",
+      "id": "SWT_109",
       "type": "image",
       "imagePath": "assets/UI/Imported/goldbar.png",
       "width": 54,
+      "height": 3,
+      "tintColor": [
+        42,
+        41,
+        36,
+        116
+      ],
+      "harmonize": {
+        "targetColor": [
+          72,
+          58,
+          32,
+          255
+        ],
+        "hueStrength": 1,
+        "satStrength": 0.8,
+        "valStrength": 0.36,
+        "useHcl": false,
+        "outlineColor": [
+          0,
+          0,
+          0,
+          255
+        ],
+        "outlineThickness": 0.5,
+        "outlineOpacity": 1.0
+      }
+    },
+    {
+      "id": "SWT_110",
+      "type": "image",
+      "imagePath": "assets/UI/Imported/goldbar.png",
+      "width": 55,
       "height": 3,
       "tintColor": [
         42,
@@ -10133,7 +10129,7 @@
       "id": "SWT_112",
       "type": "image",
       "imagePath": "assets/UI/Imported/goldbar.png",
-      "width": 55,
+      "width": 56,
       "height": 3,
       "tintColor": [
         42,
@@ -10165,40 +10161,7 @@
     {
       "id": "SWT_113",
       "type": "image",
-      "imagePath": "assets/UI/Imported/goldbar.png",
-      "width": 56,
-      "height": 3,
-      "tintColor": [
-        42,
-        41,
-        36,
-        116
-      ],
-      "harmonize": {
-        "targetColor": [
-          72,
-          58,
-          32,
-          255
-        ],
-        "hueStrength": 1,
-        "satStrength": 0.8,
-        "valStrength": 0.36,
-        "useHcl": false,
-        "outlineColor": [
-          0,
-          0,
-          0,
-          255
-        ],
-        "outlineThickness": 0.5,
-        "outlineOpacity": 1.0
-      }
-    },
-    {
-      "id": "SWT_114",
-      "type": "image",
-      "imagePath": "assets/UI/Imported/Swatch1.3.png",
+      "imagePath": "assets/UI/Imported/baked_Swatch1.3_389x28.png",
       "width": 389,
       "height": 28,
       "tintColor": [
@@ -10229,7 +10192,7 @@
       }
     },
     {
-      "id": "SWT_115",
+      "id": "SWT_114",
       "type": "text",
       "width": 400,
       "height": 49,
@@ -10248,7 +10211,7 @@
         "align": "center",
         "valign": "center",
         "fontFamily": "Quintessential",
-        "fontSize": 58,
+        "fontSize": 26,
         "fontColor": [
           235,
           226,
@@ -10266,7 +10229,7 @@
       }
     },
     {
-      "id": "SWT_116",
+      "id": "SWT_115",
       "type": "text",
       "width": 395,
       "height": 42,
@@ -10287,9 +10250,9 @@
         "fontFamily": "Quintessential",
         "fontSize": 29,
         "fontColor": [
-          255,
-          255,
-          255,
+          240,
+          218,
+          178,
           255
         ],
         "bold": true,
@@ -10330,7 +10293,7 @@
     {
       "id": "GMW_1",
       "type": "image",
-      "imagePath": "assets/UI/Imported/ClothUpgradeFrame2-DarkBorder1.png",
+      "imagePath": "assets/UI/Imported/baked_ClothUpgradeFrame2-DarkBorder1_706x1080.png",
       "width": 706,
       "height": 1080,
       "tintColor": [
@@ -10355,7 +10318,7 @@
     {
       "id": "GMW_2",
       "type": "image",
-      "imagePath": "assets/UI/Imported/ClothUpgradedRowThinDarkEdge.png",
+      "imagePath": "assets/UI/Imported/baked_ClothUpgradedRowThinDarkEdge_658x21.png",
       "width": 658,
       "height": 21,
       "tintColor": [
@@ -10388,7 +10351,7 @@
     {
       "id": "GMW_3",
       "type": "image",
-      "imagePath": "assets/UI/Imported/SimpleSquareFilled1.png",
+      "imagePath": "assets/UI/Imported/baked_SimpleSquareFilled1_652x83.png",
       "width": 652,
       "height": 83,
       "tintColor": [
@@ -10421,7 +10384,7 @@
     {
       "id": "GMW_4",
       "type": "image",
-      "imagePath": "assets/UI/Imported/FancyFrame2_Inner.png",
+      "imagePath": "assets/UI/Imported/baked_FancyFrame2_Inner_54x45.png",
       "width": 54,
       "height": 45,
       "tintColor": [
@@ -10463,7 +10426,7 @@
         "align": "center",
         "valign": "center",
         "fontFamily": "Roboto",
-        "fontSize": 19,
+        "fontSize": 24,
         "fontColor": [
           236,
           221,
@@ -10483,7 +10446,7 @@
     {
       "id": "GMW_6",
       "type": "image",
-      "imagePath": "assets/UI/Imported/InnerCornersButton.png",
+      "imagePath": "assets/UI/Imported/baked_InnerCornersButton_54x45.png",
       "width": 54,
       "height": 45,
       "tintColor": [
@@ -10508,7 +10471,7 @@
     {
       "id": "GMW_7",
       "type": "image",
-      "imagePath": "assets/UI/Imported/FancyFrame2_Inner.png",
+      "imagePath": "assets/UI/Imported/baked_FancyFrame2_Inner_51x45.png",
       "width": 51,
       "height": 45,
       "tintColor": [
@@ -10533,7 +10496,7 @@
     {
       "id": "GMW_8",
       "type": "image",
-      "imagePath": "assets/UI/Imported/InnerCornersButton.png",
+      "imagePath": "assets/UI/Imported/baked_InnerCornersButton_51x45.png",
       "width": 51,
       "height": 45,
       "tintColor": [
@@ -10591,7 +10554,7 @@
     {
       "id": "GMW_10",
       "type": "image",
-      "imagePath": "assets/UI/Imported/FancyFrame2_Inner.png",
+      "imagePath": "assets/UI/Imported/baked_FancyFrame2_Inner_51x45.png",
       "width": 51,
       "height": 45,
       "tintColor": [
@@ -10616,7 +10579,7 @@
     {
       "id": "GMW_11",
       "type": "image",
-      "imagePath": "assets/UI/Imported/InnerCornersButton.png",
+      "imagePath": "assets/UI/Imported/baked_InnerCornersButton_51x45.png",
       "width": 51,
       "height": 45,
       "tintColor": [
@@ -10674,7 +10637,7 @@
     {
       "id": "GMW_13",
       "type": "image",
-      "imagePath": "assets/UI/Imported/FancyFrame2_Inner.png",
+      "imagePath": "assets/UI/Imported/baked_FancyFrame2_Inner_51x45.png",
       "width": 51,
       "height": 45,
       "tintColor": [
@@ -10699,7 +10662,7 @@
     {
       "id": "GMW_14",
       "type": "image",
-      "imagePath": "assets/UI/Imported/InnerCornersButton.png",
+      "imagePath": "assets/UI/Imported/baked_InnerCornersButton_51x45.png",
       "width": 51,
       "height": 45,
       "tintColor": [
@@ -10757,7 +10720,7 @@
     {
       "id": "GMW_16",
       "type": "image",
-      "imagePath": "assets/UI/Imported/FancyFrame2_Inner.png",
+      "imagePath": "assets/UI/Imported/baked_FancyFrame2_Inner_51x45.png",
       "width": 51,
       "height": 45,
       "tintColor": [
@@ -10782,7 +10745,7 @@
     {
       "id": "GMW_17",
       "type": "image",
-      "imagePath": "assets/UI/Imported/InnerCornersButton.png",
+      "imagePath": "assets/UI/Imported/baked_InnerCornersButton_51x45.png",
       "width": 51,
       "height": 45,
       "tintColor": [
@@ -10840,7 +10803,7 @@
     {
       "id": "GMW_19",
       "type": "image",
-      "imagePath": "assets/UI/Imported/FancyFrame2_Inner.png",
+      "imagePath": "assets/UI/Imported/baked_FancyFrame2_Inner_51x45.png",
       "width": 51,
       "height": 45,
       "tintColor": [
@@ -10865,7 +10828,7 @@
     {
       "id": "GMW_20",
       "type": "image",
-      "imagePath": "assets/UI/Imported/InnerCornersButton.png",
+      "imagePath": "assets/UI/Imported/baked_InnerCornersButton_51x45.png",
       "width": 51,
       "height": 45,
       "tintColor": [
@@ -10923,7 +10886,7 @@
     {
       "id": "GMW_22",
       "type": "image",
-      "imagePath": "assets/UI/Imported/FancyFrame2_Inner.png",
+      "imagePath": "assets/UI/Imported/baked_FancyFrame2_Inner_51x45.png",
       "width": 51,
       "height": 45,
       "tintColor": [
@@ -10948,7 +10911,7 @@
     {
       "id": "GMW_23",
       "type": "image",
-      "imagePath": "assets/UI/Imported/InnerCornersButton.png",
+      "imagePath": "assets/UI/Imported/baked_InnerCornersButton_51x45.png",
       "width": 51,
       "height": 45,
       "tintColor": [
@@ -11006,7 +10969,7 @@
     {
       "id": "GMW_25",
       "type": "image",
-      "imagePath": "assets/UI/Imported/FancyFrame2_Inner.png",
+      "imagePath": "assets/UI/Imported/baked_FancyFrame2_Inner_51x45.png",
       "width": 51,
       "height": 45,
       "tintColor": [
@@ -11031,7 +10994,7 @@
     {
       "id": "GMW_26",
       "type": "image",
-      "imagePath": "assets/UI/Imported/InnerCornersButton.png",
+      "imagePath": "assets/UI/Imported/baked_InnerCornersButton_51x45.png",
       "width": 51,
       "height": 45,
       "tintColor": [
@@ -11089,7 +11052,7 @@
     {
       "id": "GMW_28",
       "type": "image",
-      "imagePath": "assets/UI/Imported/FancyFrame2_Inner.png",
+      "imagePath": "assets/UI/Imported/baked_FancyFrame2_Inner_51x45.png",
       "width": 51,
       "height": 45,
       "tintColor": [
@@ -11114,7 +11077,7 @@
     {
       "id": "GMW_29",
       "type": "image",
-      "imagePath": "assets/UI/Imported/InnerCornersButton.png",
+      "imagePath": "assets/UI/Imported/baked_InnerCornersButton_51x45.png",
       "width": 51,
       "height": 45,
       "tintColor": [
@@ -11172,7 +11135,7 @@
     {
       "id": "GMW_31",
       "type": "image",
-      "imagePath": "assets/UI/Imported/FancyFrame2_Inner.png",
+      "imagePath": "assets/UI/Imported/baked_FancyFrame2_Inner_51x45.png",
       "width": 51,
       "height": 45,
       "tintColor": [
@@ -11197,7 +11160,7 @@
     {
       "id": "GMW_32",
       "type": "image",
-      "imagePath": "assets/UI/Imported/InnerCornersButton.png",
+      "imagePath": "assets/UI/Imported/baked_InnerCornersButton_51x45.png",
       "width": 51,
       "height": 45,
       "tintColor": [
@@ -11255,7 +11218,7 @@
     {
       "id": "GMW_34",
       "type": "image",
-      "imagePath": "assets/UI/Imported/FancyFrame2_Inner.png",
+      "imagePath": "assets/UI/Imported/baked_FancyFrame2_Inner_51x45.png",
       "width": 51,
       "height": 45,
       "tintColor": [
@@ -11280,7 +11243,7 @@
     {
       "id": "GMW_35",
       "type": "image",
-      "imagePath": "assets/UI/Imported/InnerCornersButton.png",
+      "imagePath": "assets/UI/Imported/baked_InnerCornersButton_51x45.png",
       "width": 51,
       "height": 45,
       "tintColor": [
@@ -11338,7 +11301,7 @@
     {
       "id": "GMW_37",
       "type": "image",
-      "imagePath": "assets/UI/Imported/FancyFrame2_Inner.png",
+      "imagePath": "assets/UI/Imported/baked_FancyFrame2_Inner_51x45.png",
       "width": 51,
       "height": 45,
       "tintColor": [
@@ -11363,7 +11326,7 @@
     {
       "id": "GMW_38",
       "type": "image",
-      "imagePath": "assets/UI/Imported/InnerCornersButton.png",
+      "imagePath": "assets/UI/Imported/baked_InnerCornersButton_51x45.png",
       "width": 51,
       "height": 45,
       "tintColor": [
@@ -11421,7 +11384,7 @@
     {
       "id": "GMW_40",
       "type": "image",
-      "imagePath": "assets/UI/Imported/FancyFrame2_Inner.png",
+      "imagePath": "assets/UI/Imported/baked_FancyFrame2_Inner_51x45.png",
       "width": 51,
       "height": 45,
       "tintColor": [
@@ -11446,7 +11409,7 @@
     {
       "id": "GMW_41",
       "type": "image",
-      "imagePath": "assets/UI/Imported/InnerCornersButton.png",
+      "imagePath": "assets/UI/Imported/baked_InnerCornersButton_51x45.png",
       "width": 51,
       "height": 45,
       "tintColor": [
@@ -11504,7 +11467,7 @@
     {
       "id": "GMW_43",
       "type": "image",
-      "imagePath": "assets/UI/Imported/FancyFrame2_Inner.png",
+      "imagePath": "assets/UI/Imported/baked_FancyFrame2_Inner_86x33.png",
       "width": 86,
       "height": 33,
       "tintColor": [
@@ -11537,7 +11500,7 @@
         255,
         0
       ],
-      "defaultText": "'All",
+      "defaultText": "All",
       "textRegion": {
         "x": 0,
         "y": 0,
@@ -11546,7 +11509,7 @@
         "align": "center",
         "valign": "center",
         "fontFamily": "Roboto",
-        "fontSize": 21,
+        "fontSize": 24,
         "fontColor": [
           236,
           221,
@@ -11566,7 +11529,7 @@
     {
       "id": "GMW_45",
       "type": "image",
-      "imagePath": "assets/UI/Imported/InnerCornersButton.png",
+      "imagePath": "assets/UI/Imported/baked_InnerCornersButton_82x35.png",
       "width": 82,
       "height": 35,
       "tintColor": [
@@ -11591,7 +11554,7 @@
     {
       "id": "GMW_46",
       "type": "image",
-      "imagePath": "assets/UI/Imported/FancyFrame2_Inner.png",
+      "imagePath": "assets/UI/Imported/baked_FancyFrame2_Inner_148x33.png",
       "width": 148,
       "height": 33,
       "tintColor": [
@@ -11633,7 +11596,7 @@
         "align": "center",
         "valign": "center",
         "fontFamily": "Roboto",
-        "fontSize": 25,
+        "fontSize": 24,
         "fontColor": [
           236,
           221,
@@ -11653,7 +11616,7 @@
     {
       "id": "GMW_48",
       "type": "image",
-      "imagePath": "assets/UI/Imported/InnerCornersButton.png",
+      "imagePath": "assets/UI/Imported/baked_InnerCornersButton_144x35.png",
       "width": 144,
       "height": 35,
       "tintColor": [
@@ -11678,7 +11641,7 @@
     {
       "id": "GMW_49",
       "type": "image",
-      "imagePath": "assets/UI/Imported/FancyFrame2_Inner.png",
+      "imagePath": "assets/UI/Imported/baked_FancyFrame2_Inner_148x33.png",
       "width": 148,
       "height": 33,
       "tintColor": [
@@ -11720,7 +11683,7 @@
         "align": "center",
         "valign": "center",
         "fontFamily": "Roboto",
-        "fontSize": 25,
+        "fontSize": 24,
         "fontColor": [
           236,
           221,
@@ -11740,7 +11703,7 @@
     {
       "id": "GMW_51",
       "type": "image",
-      "imagePath": "assets/UI/Imported/InnerCornersButton.png",
+      "imagePath": "assets/UI/Imported/baked_InnerCornersButton_144x35.png",
       "width": 144,
       "height": 35,
       "tintColor": [
@@ -11765,7 +11728,7 @@
     {
       "id": "GMW_52",
       "type": "image",
-      "imagePath": "assets/UI/Imported/FancyFrame2_Inner.png",
+      "imagePath": "assets/UI/Imported/baked_FancyFrame2_Inner_148x33.png",
       "width": 148,
       "height": 33,
       "tintColor": [
@@ -11807,7 +11770,7 @@
         "align": "center",
         "valign": "center",
         "fontFamily": "Roboto",
-        "fontSize": 25,
+        "fontSize": 24,
         "fontColor": [
           236,
           221,
@@ -11827,7 +11790,7 @@
     {
       "id": "GMW_54",
       "type": "image",
-      "imagePath": "assets/UI/Imported/InnerCornersButton.png",
+      "imagePath": "assets/UI/Imported/baked_InnerCornersButton_144x35.png",
       "width": 144,
       "height": 35,
       "tintColor": [
@@ -11852,7 +11815,7 @@
     {
       "id": "GMW_55",
       "type": "image",
-      "imagePath": "assets/UI/Imported/FancyFrame2_Inner.png",
+      "imagePath": "assets/UI/Imported/baked_FancyFrame2_Inner_148x33.png",
       "width": 148,
       "height": 33,
       "tintColor": [
@@ -11894,7 +11857,7 @@
         "align": "center",
         "valign": "center",
         "fontFamily": "Roboto",
-        "fontSize": 25,
+        "fontSize": 24,
         "fontColor": [
           236,
           221,
@@ -11914,7 +11877,7 @@
     {
       "id": "GMW_57",
       "type": "image",
-      "imagePath": "assets/UI/Imported/InnerCornersButton.png",
+      "imagePath": "assets/UI/Imported/baked_InnerCornersButton_144x35.png",
       "width": 144,
       "height": 35,
       "tintColor": [
@@ -11939,7 +11902,7 @@
     {
       "id": "GMW_58",
       "type": "image",
-      "imagePath": "assets/UI/Imported/FancyFrame2_Inner.png",
+      "imagePath": "assets/UI/Imported/baked_FancyFrame2_Inner_254x65.png",
       "width": 254,
       "height": 65,
       "tintColor": [
@@ -11989,7 +11952,7 @@
     {
       "id": "GMW_60",
       "type": "image",
-      "imagePath": "assets/UI/Imported/SpiderFrame84px.png",
+      "imagePath": "assets/UI/Imported/baked_SpiderFrame84px_316x72.png",
       "width": 316,
       "height": 72,
       "tintColor": [
@@ -12014,7 +11977,7 @@
     {
       "id": "GMW_61",
       "type": "image",
-      "imagePath": "assets/UI/Imported/FadingBar.png",
+      "imagePath": "assets/UI/Imported/baked_FadingBar_212x3.png",
       "width": 212,
       "height": 3,
       "tintColor": [
@@ -12114,11 +12077,11 @@
         "align": "left",
         "valign": "center",
         "fontFamily": "Quintessential",
-        "fontSize": 36,
+        "fontSize": 30,
         "fontColor": [
-          255,
-          255,
-          255,
+          240,
+          218,
+          178,
           255
         ],
         "bold": true,
@@ -12142,7 +12105,7 @@
         255,
         0
       ],
-      "defaultText": "'Path:'",
+      "defaultText": "Path:",
       "textRegion": {
         "x": 0,
         "y": 0,
@@ -12151,11 +12114,11 @@
         "align": "left",
         "valign": "center",
         "fontFamily": "Quintessential",
-        "fontSize": 14,
+        "fontSize": 17,
         "fontColor": [
-          255,
-          255,
-          255,
+          240,
+          218,
+          178,
           255
         ],
         "bold": true,
@@ -12188,7 +12151,7 @@
         "align": "left",
         "valign": "center",
         "fontFamily": "Roboto",
-        "fontSize": 25,
+        "fontSize": 22,
         "fontColor": [
           236,
           221,
@@ -12249,7 +12212,7 @@
         255,
         0
       ],
-      "defaultText": "'Cost:'",
+      "defaultText": "Cost:",
       "textRegion": {
         "x": 0,
         "y": 0,
@@ -12258,11 +12221,11 @@
         "align": "left",
         "valign": "center",
         "fontFamily": "Quintessential",
-        "fontSize": 14,
+        "fontSize": 17,
         "fontColor": [
-          255,
-          255,
-          255,
+          240,
+          218,
+          178,
           255
         ],
         "bold": true,
@@ -12295,7 +12258,7 @@
         "align": "left",
         "valign": "center",
         "fontFamily": "Roboto",
-        "fontSize": 25,
+        "fontSize": 22,
         "fontColor": [
           236,
           221,
@@ -12381,7 +12344,7 @@
     {
       "id": "GMW_72",
       "type": "image",
-      "imagePath": "assets/UI/Imported/FancyFrame2_Inner.png",
+      "imagePath": "assets/UI/Imported/baked_FancyFrame2_Inner_254x65.png",
       "width": 254,
       "height": 65,
       "tintColor": [
@@ -12431,7 +12394,7 @@
     {
       "id": "GMW_74",
       "type": "image",
-      "imagePath": "assets/UI/Imported/SpiderFrame84px.png",
+      "imagePath": "assets/UI/Imported/baked_SpiderFrame84px_316x72.png",
       "width": 316,
       "height": 72,
       "tintColor": [
@@ -12456,7 +12419,7 @@
     {
       "id": "GMW_75",
       "type": "image",
-      "imagePath": "assets/UI/Imported/FadingBar.png",
+      "imagePath": "assets/UI/Imported/baked_FadingBar_212x3.png",
       "width": 212,
       "height": 3,
       "tintColor": [
@@ -12556,11 +12519,11 @@
         "align": "left",
         "valign": "center",
         "fontFamily": "Quintessential",
-        "fontSize": 36,
+        "fontSize": 30,
         "fontColor": [
-          255,
-          255,
-          255,
+          240,
+          218,
+          178,
           255
         ],
         "bold": true,
@@ -12584,7 +12547,7 @@
         255,
         0
       ],
-      "defaultText": "'Path:'",
+      "defaultText": "Path:",
       "textRegion": {
         "x": 0,
         "y": 0,
@@ -12593,11 +12556,11 @@
         "align": "left",
         "valign": "center",
         "fontFamily": "Quintessential",
-        "fontSize": 14,
+        "fontSize": 17,
         "fontColor": [
-          255,
-          255,
-          255,
+          240,
+          218,
+          178,
           255
         ],
         "bold": true,
@@ -12630,7 +12593,7 @@
         "align": "left",
         "valign": "center",
         "fontFamily": "Roboto",
-        "fontSize": 25,
+        "fontSize": 22,
         "fontColor": [
           236,
           221,
@@ -12691,7 +12654,7 @@
         255,
         0
       ],
-      "defaultText": "'Cost:'",
+      "defaultText": "Cost:",
       "textRegion": {
         "x": 0,
         "y": 0,
@@ -12700,11 +12663,11 @@
         "align": "left",
         "valign": "center",
         "fontFamily": "Quintessential",
-        "fontSize": 14,
+        "fontSize": 17,
         "fontColor": [
-          255,
-          255,
-          255,
+          240,
+          218,
+          178,
           255
         ],
         "bold": true,
@@ -12737,7 +12700,7 @@
         "align": "left",
         "valign": "center",
         "fontFamily": "Roboto",
-        "fontSize": 16,
+        "fontSize": 22,
         "fontColor": [
           236,
           221,
@@ -12807,7 +12770,7 @@
         "align": "left",
         "valign": "center",
         "fontFamily": "Roboto",
-        "fontSize": 31,
+        "fontSize": 16,
         "fontColor": [
           236,
           221,
@@ -12844,7 +12807,7 @@
         "align": "left",
         "valign": "center",
         "fontFamily": "Roboto",
-        "fontSize": 12,
+        "fontSize": 16,
         "fontColor": [
           179,
           184,
@@ -12881,7 +12844,7 @@
         "align": "left",
         "valign": "center",
         "fontFamily": "Roboto",
-        "fontSize": 12,
+        "fontSize": 16,
         "fontColor": [
           142,
           0,
@@ -12934,7 +12897,7 @@
     {
       "id": "GMW_89",
       "type": "image",
-      "imagePath": "assets/UI/Imported/FancyFrame2_Inner.png",
+      "imagePath": "assets/UI/Imported/baked_FancyFrame2_Inner_254x65.png",
       "width": 254,
       "height": 65,
       "tintColor": [
@@ -12984,7 +12947,7 @@
     {
       "id": "GMW_91",
       "type": "image",
-      "imagePath": "assets/UI/Imported/SpiderFrame84px.png",
+      "imagePath": "assets/UI/Imported/baked_SpiderFrame84px_316x72.png",
       "width": 316,
       "height": 72,
       "tintColor": [
@@ -13009,7 +12972,7 @@
     {
       "id": "GMW_92",
       "type": "image",
-      "imagePath": "assets/UI/Imported/FadingBar.png",
+      "imagePath": "assets/UI/Imported/baked_FadingBar_212x3.png",
       "width": 212,
       "height": 3,
       "tintColor": [
@@ -13109,11 +13072,11 @@
         "align": "left",
         "valign": "center",
         "fontFamily": "Quintessential",
-        "fontSize": 36,
+        "fontSize": 30,
         "fontColor": [
-          255,
-          255,
-          255,
+          240,
+          218,
+          178,
           255
         ],
         "bold": true,
@@ -13137,7 +13100,7 @@
         255,
         0
       ],
-      "defaultText": "'Path:'",
+      "defaultText": "Path:",
       "textRegion": {
         "x": 0,
         "y": 0,
@@ -13146,11 +13109,11 @@
         "align": "left",
         "valign": "center",
         "fontFamily": "Quintessential",
-        "fontSize": 14,
+        "fontSize": 17,
         "fontColor": [
-          255,
-          255,
-          255,
+          240,
+          218,
+          178,
           255
         ],
         "bold": true,
@@ -13183,7 +13146,7 @@
         "align": "left",
         "valign": "center",
         "fontFamily": "Roboto",
-        "fontSize": 25,
+        "fontSize": 22,
         "fontColor": [
           236,
           221,
@@ -13244,7 +13207,7 @@
         255,
         0
       ],
-      "defaultText": "'Cost:'",
+      "defaultText": "Cost:",
       "textRegion": {
         "x": 0,
         "y": 0,
@@ -13253,11 +13216,11 @@
         "align": "left",
         "valign": "center",
         "fontFamily": "Quintessential",
-        "fontSize": 14,
+        "fontSize": 17,
         "fontColor": [
-          255,
-          255,
-          255,
+          240,
+          218,
+          178,
           255
         ],
         "bold": true,
@@ -13290,7 +13253,7 @@
         "align": "left",
         "valign": "center",
         "fontFamily": "Roboto",
-        "fontSize": 16,
+        "fontSize": 22,
         "fontColor": [
           236,
           221,
@@ -13351,7 +13314,7 @@
         255,
         0
       ],
-      "defaultText": "'Buff:'",
+      "defaultText": "Buff:",
       "textRegion": {
         "x": 0,
         "y": 0,
@@ -13360,7 +13323,7 @@
         "align": "left",
         "valign": "center",
         "fontFamily": "Roboto",
-        "fontSize": 15,
+        "fontSize": 16,
         "fontColor": [
           179,
           184,
@@ -13393,7 +13356,7 @@
     {
       "id": "GMW_104",
       "type": "image",
-      "imagePath": "assets/UI/Imported/FancyFrame2_Inner.png",
+      "imagePath": "assets/UI/Imported/baked_FancyFrame2_Inner_254x65.png",
       "width": 254,
       "height": 65,
       "tintColor": [
@@ -13443,7 +13406,7 @@
     {
       "id": "GMW_106",
       "type": "image",
-      "imagePath": "assets/UI/Imported/SpiderFrame84px.png",
+      "imagePath": "assets/UI/Imported/baked_SpiderFrame84px_316x72.png",
       "width": 316,
       "height": 72,
       "tintColor": [
@@ -13468,7 +13431,7 @@
     {
       "id": "GMW_107",
       "type": "image",
-      "imagePath": "assets/UI/Imported/FadingBar.png",
+      "imagePath": "assets/UI/Imported/baked_FadingBar_212x3.png",
       "width": 212,
       "height": 3,
       "tintColor": [
@@ -13568,11 +13531,11 @@
         "align": "left",
         "valign": "center",
         "fontFamily": "Quintessential",
-        "fontSize": 36,
+        "fontSize": 30,
         "fontColor": [
-          255,
-          255,
-          255,
+          240,
+          218,
+          178,
           255
         ],
         "bold": true,
@@ -13596,7 +13559,7 @@
         255,
         0
       ],
-      "defaultText": "'Path:'",
+      "defaultText": "Path:",
       "textRegion": {
         "x": 0,
         "y": 0,
@@ -13605,11 +13568,11 @@
         "align": "left",
         "valign": "center",
         "fontFamily": "Quintessential",
-        "fontSize": 14,
+        "fontSize": 17,
         "fontColor": [
-          255,
-          255,
-          255,
+          240,
+          218,
+          178,
           255
         ],
         "bold": true,
@@ -13642,7 +13605,7 @@
         "align": "left",
         "valign": "center",
         "fontFamily": "Roboto",
-        "fontSize": 25,
+        "fontSize": 22,
         "fontColor": [
           236,
           221,
@@ -13773,7 +13736,7 @@
         255,
         0
       ],
-      "defaultText": "'Cost:'",
+      "defaultText": "Cost:",
       "textRegion": {
         "x": 0,
         "y": 0,
@@ -13782,11 +13745,11 @@
         "align": "left",
         "valign": "center",
         "fontFamily": "Quintessential",
-        "fontSize": 14,
+        "fontSize": 17,
         "fontColor": [
-          255,
-          255,
-          255,
+          240,
+          218,
+          178,
           255
         ],
         "bold": true,
@@ -13819,7 +13782,7 @@
         "align": "left",
         "valign": "center",
         "fontFamily": "Roboto",
-        "fontSize": 25,
+        "fontSize": 22,
         "fontColor": [
           236,
           221,
@@ -13880,7 +13843,7 @@
         255,
         0
       ],
-      "defaultText": "'Debuff:'",
+      "defaultText": "Debuff:",
       "textRegion": {
         "x": 0,
         "y": 0,
@@ -13889,7 +13852,7 @@
         "align": "left",
         "valign": "center",
         "fontFamily": "Roboto",
-        "fontSize": 13,
+        "fontSize": 16,
         "fontColor": [
           179,
           184,
@@ -13922,7 +13885,7 @@
     {
       "id": "GMW_121",
       "type": "image",
-      "imagePath": "assets/UI/Imported/FancyFrame2_Inner.png",
+      "imagePath": "assets/UI/Imported/baked_FancyFrame2_Inner_254x65.png",
       "width": 254,
       "height": 65,
       "tintColor": [
@@ -13972,7 +13935,7 @@
     {
       "id": "GMW_123",
       "type": "image",
-      "imagePath": "assets/UI/Imported/SpiderFrame84px.png",
+      "imagePath": "assets/UI/Imported/baked_SpiderFrame84px_316x72.png",
       "width": 316,
       "height": 72,
       "tintColor": [
@@ -13997,7 +13960,7 @@
     {
       "id": "GMW_124",
       "type": "image",
-      "imagePath": "assets/UI/Imported/FadingBar.png",
+      "imagePath": "assets/UI/Imported/baked_FadingBar_212x3.png",
       "width": 212,
       "height": 3,
       "tintColor": [
@@ -14088,7 +14051,7 @@
         255,
         0
       ],
-      "defaultText": "'Thunderstrike",
+      "defaultText": "Thunderstrike",
       "textRegion": {
         "x": 0,
         "y": 0,
@@ -14097,11 +14060,11 @@
         "align": "left",
         "valign": "center",
         "fontFamily": "Quintessential",
-        "fontSize": 36,
+        "fontSize": 30,
         "fontColor": [
-          255,
-          255,
-          255,
+          240,
+          218,
+          178,
           255
         ],
         "bold": true,
@@ -14125,7 +14088,7 @@
         255,
         0
       ],
-      "defaultText": "'Path:'",
+      "defaultText": "Path:",
       "textRegion": {
         "x": 0,
         "y": 0,
@@ -14134,11 +14097,11 @@
         "align": "left",
         "valign": "center",
         "fontFamily": "Quintessential",
-        "fontSize": 14,
+        "fontSize": 17,
         "fontColor": [
-          255,
-          255,
-          255,
+          240,
+          218,
+          178,
           255
         ],
         "bold": true,
@@ -14171,7 +14134,7 @@
         "align": "left",
         "valign": "center",
         "fontFamily": "Roboto",
-        "fontSize": 25,
+        "fontSize": 22,
         "fontColor": [
           236,
           221,
@@ -14232,7 +14195,7 @@
         255,
         0
       ],
-      "defaultText": "'Cost:'",
+      "defaultText": "Cost:",
       "textRegion": {
         "x": 0,
         "y": 0,
@@ -14241,11 +14204,11 @@
         "align": "left",
         "valign": "center",
         "fontFamily": "Quintessential",
-        "fontSize": 14,
+        "fontSize": 17,
         "fontColor": [
-          255,
-          255,
-          255,
+          240,
+          218,
+          178,
           255
         ],
         "bold": true,
@@ -14278,7 +14241,7 @@
         "align": "left",
         "valign": "center",
         "fontFamily": "Roboto",
-        "fontSize": 16,
+        "fontSize": 22,
         "fontColor": [
           236,
           221,
@@ -14348,7 +14311,7 @@
         "align": "left",
         "valign": "center",
         "fontFamily": "Roboto",
-        "fontSize": 25,
+        "fontSize": 22,
         "fontColor": [
           236,
           221,
@@ -14418,7 +14381,7 @@
         "align": "left",
         "valign": "center",
         "fontFamily": "Roboto",
-        "fontSize": 31,
+        "fontSize": 16,
         "fontColor": [
           236,
           221,
@@ -14471,7 +14434,7 @@
     {
       "id": "GMW_138",
       "type": "image",
-      "imagePath": "assets/UI/Imported/FancyFrame2_Inner.png",
+      "imagePath": "assets/UI/Imported/baked_FancyFrame2_Inner_254x65.png",
       "width": 254,
       "height": 65,
       "tintColor": [
@@ -14521,7 +14484,7 @@
     {
       "id": "GMW_140",
       "type": "image",
-      "imagePath": "assets/UI/Imported/SpiderFrame84px.png",
+      "imagePath": "assets/UI/Imported/baked_SpiderFrame84px_316x72.png",
       "width": 316,
       "height": 72,
       "tintColor": [
@@ -14546,7 +14509,7 @@
     {
       "id": "GMW_141",
       "type": "image",
-      "imagePath": "assets/UI/Imported/FadingBar.png",
+      "imagePath": "assets/UI/Imported/baked_FadingBar_212x3.png",
       "width": 212,
       "height": 3,
       "tintColor": [
@@ -14648,9 +14611,9 @@
         "fontFamily": "Quintessential",
         "fontSize": 30,
         "fontColor": [
-          255,
-          255,
-          255,
+          240,
+          218,
+          178,
           255
         ],
         "bold": true,
@@ -14674,7 +14637,7 @@
         255,
         0
       ],
-      "defaultText": "'Path:'",
+      "defaultText": "Path:",
       "textRegion": {
         "x": 0,
         "y": 0,
@@ -14683,11 +14646,11 @@
         "align": "left",
         "valign": "center",
         "fontFamily": "Quintessential",
-        "fontSize": 14,
+        "fontSize": 17,
         "fontColor": [
-          255,
-          255,
-          255,
+          240,
+          218,
+          178,
           255
         ],
         "bold": true,
@@ -14720,7 +14683,7 @@
         "align": "left",
         "valign": "center",
         "fontFamily": "Roboto",
-        "fontSize": 25,
+        "fontSize": 22,
         "fontColor": [
           236,
           221,
@@ -14781,7 +14744,7 @@
         255,
         0
       ],
-      "defaultText": "'Cost:'",
+      "defaultText": "Cost:",
       "textRegion": {
         "x": 0,
         "y": 0,
@@ -14790,11 +14753,11 @@
         "align": "left",
         "valign": "center",
         "fontFamily": "Quintessential",
-        "fontSize": 14,
+        "fontSize": 17,
         "fontColor": [
-          255,
-          255,
-          255,
+          240,
+          218,
+          178,
           255
         ],
         "bold": true,
@@ -14827,7 +14790,7 @@
         "align": "left",
         "valign": "center",
         "fontFamily": "Roboto",
-        "fontSize": 16,
+        "fontSize": 22,
         "fontColor": [
           236,
           221,
@@ -14888,7 +14851,7 @@
         255,
         0
       ],
-      "defaultText": "'Buff:'",
+      "defaultText": "Buff:",
       "textRegion": {
         "x": 0,
         "y": 0,
@@ -14897,7 +14860,7 @@
         "align": "left",
         "valign": "center",
         "fontFamily": "Roboto",
-        "fontSize": 15,
+        "fontSize": 16,
         "fontColor": [
           179,
           184,
@@ -14930,7 +14893,7 @@
     {
       "id": "GMW_153",
       "type": "image",
-      "imagePath": "assets/UI/Imported/FancyFrame2_Inner.png",
+      "imagePath": "assets/UI/Imported/baked_FancyFrame2_Inner_254x65.png",
       "width": 254,
       "height": 65,
       "tintColor": [
@@ -14980,7 +14943,7 @@
     {
       "id": "GMW_155",
       "type": "image",
-      "imagePath": "assets/UI/Imported/SpiderFrame84px.png",
+      "imagePath": "assets/UI/Imported/baked_SpiderFrame84px_316x72.png",
       "width": 316,
       "height": 72,
       "tintColor": [
@@ -15005,7 +14968,7 @@
     {
       "id": "GMW_156",
       "type": "image",
-      "imagePath": "assets/UI/Imported/FadingBar.png",
+      "imagePath": "assets/UI/Imported/baked_FadingBar_212x3.png",
       "width": 212,
       "height": 3,
       "tintColor": [
@@ -15105,11 +15068,11 @@
         "align": "left",
         "valign": "center",
         "fontFamily": "Quintessential",
-        "fontSize": 36,
+        "fontSize": 30,
         "fontColor": [
-          255,
-          255,
-          255,
+          240,
+          218,
+          178,
           255
         ],
         "bold": true,
@@ -15133,7 +15096,7 @@
         255,
         0
       ],
-      "defaultText": "'Path:'",
+      "defaultText": "Path:",
       "textRegion": {
         "x": 0,
         "y": 0,
@@ -15142,11 +15105,11 @@
         "align": "left",
         "valign": "center",
         "fontFamily": "Quintessential",
-        "fontSize": 14,
+        "fontSize": 17,
         "fontColor": [
-          255,
-          255,
-          255,
+          240,
+          218,
+          178,
           255
         ],
         "bold": true,
@@ -15179,7 +15142,7 @@
         "align": "left",
         "valign": "center",
         "fontFamily": "Roboto",
-        "fontSize": 25,
+        "fontSize": 22,
         "fontColor": [
           236,
           221,
@@ -15240,7 +15203,7 @@
         255,
         0
       ],
-      "defaultText": "'Cost:'",
+      "defaultText": "Cost:",
       "textRegion": {
         "x": 0,
         "y": 0,
@@ -15249,11 +15212,11 @@
         "align": "left",
         "valign": "center",
         "fontFamily": "Quintessential",
-        "fontSize": 14,
+        "fontSize": 17,
         "fontColor": [
-          255,
-          255,
-          255,
+          240,
+          218,
+          178,
           255
         ],
         "bold": true,
@@ -15286,7 +15249,7 @@
         "align": "left",
         "valign": "center",
         "fontFamily": "Roboto",
-        "fontSize": 16,
+        "fontSize": 22,
         "fontColor": [
           236,
           221,
@@ -15356,7 +15319,7 @@
         "align": "left",
         "valign": "center",
         "fontFamily": "Roboto",
-        "fontSize": 25,
+        "fontSize": 22,
         "fontColor": [
           236,
           221,
@@ -15417,7 +15380,7 @@
         255,
         0
       ],
-      "defaultText": "'Buff:'",
+      "defaultText": "Buff:",
       "textRegion": {
         "x": 0,
         "y": 0,
@@ -15426,7 +15389,7 @@
         "align": "left",
         "valign": "center",
         "fontFamily": "Roboto",
-        "fontSize": 15,
+        "fontSize": 16,
         "fontColor": [
           179,
           184,
@@ -15492,7 +15455,7 @@
     {
       "id": "GMW_171",
       "type": "image",
-      "imagePath": "assets/UI/Imported/Ribbon6.png",
+      "imagePath": "assets/UI/Imported/baked_Ribbon6_689x94.png",
       "width": 689,
       "height": 94,
       "tintColor": [
@@ -15542,11 +15505,11 @@
         "align": "center",
         "valign": "center",
         "fontFamily": "Quintessential",
-        "fontSize": 130,
+        "fontSize": 72,
         "fontColor": [
-          255,
-          255,
-          255,
+          240,
+          218,
+          178,
           255
         ],
         "bold": true,

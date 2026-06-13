@@ -6646,7 +6646,7 @@
           "anchor": 0
         },
         {
-          "name": "swt_35_TitleTextDropSha",
+          "name": "swt_35_TitleText",
           "element": "SWT_34",
           "x": 15,
           "y": 138,
@@ -6655,17 +6655,8 @@
           "anchor": 0
         },
         {
-          "name": "swt_36_TitleText",
+          "name": "swt_36_StatBox",
           "element": "SWT_35",
-          "x": 15,
-          "y": 138,
-          "width": 395,
-          "height": 38,
-          "anchor": 0
-        },
-        {
-          "name": "swt_37_StatBox",
-          "element": "SWT_36",
           "x": 18,
           "y": 172,
           "width": 391,
@@ -6673,8 +6664,8 @@
           "anchor": 0
         },
         {
-          "name": "swt_38_RowSwatch",
-          "element": "SWT_37",
+          "name": "swt_37_RowSwatch",
+          "element": "SWT_36",
           "x": 16,
           "y": 169,
           "width": 394,
@@ -6682,8 +6673,8 @@
           "anchor": 0
         },
         {
-          "name": "swt_39_Attribute_String",
-          "element": "SWT_38",
+          "name": "swt_38_Attribute_String",
+          "element": "SWT_37",
           "x": 48,
           "y": 172,
           "width": 89,
@@ -6691,8 +6682,8 @@
           "anchor": 0
         },
         {
-          "name": "swt_40_Value_String",
-          "element": "SWT_39",
+          "name": "swt_39_Value_String",
+          "element": "SWT_38",
           "x": 77,
           "y": 172,
           "width": 53,
@@ -6700,8 +6691,8 @@
           "anchor": 0
         },
         {
-          "name": "swt_41_Icon",
-          "element": "SWT_40",
+          "name": "swt_40_Icon",
+          "element": "SWT_39",
           "x": 20,
           "y": 172,
           "width": 24,
@@ -6709,8 +6700,8 @@
           "anchor": 0
         },
         {
-          "name": "swt_42_Attribute_String",
-          "element": "SWT_41",
+          "name": "swt_41_Attribute_String",
+          "element": "SWT_40",
           "x": 171,
           "y": 172,
           "width": 89,
@@ -6718,8 +6709,8 @@
           "anchor": 0
         },
         {
-          "name": "swt_43_Value_String",
-          "element": "SWT_42",
+          "name": "swt_42_Value_String",
+          "element": "SWT_41",
           "x": 239,
           "y": 172,
           "width": 26,
@@ -6727,8 +6718,8 @@
           "anchor": 0
         },
         {
-          "name": "swt_44_Icon",
-          "element": "SWT_43",
+          "name": "swt_43_Icon",
+          "element": "SWT_42",
           "x": 143,
           "y": 172,
           "width": 24,
@@ -6736,8 +6727,8 @@
           "anchor": 0
         },
         {
-          "name": "swt_45_Attribute_String",
-          "element": "SWT_44",
+          "name": "swt_44_Attribute_String",
+          "element": "SWT_43",
           "x": 306,
           "y": 172,
           "width": 89,
@@ -6745,8 +6736,8 @@
           "anchor": 0
         },
         {
-          "name": "swt_46_Value_String",
-          "element": "SWT_45",
+          "name": "swt_45_Value_String",
+          "element": "SWT_44",
           "x": 378,
           "y": 172,
           "width": 26,
@@ -6754,8 +6745,8 @@
           "anchor": 0
         },
         {
-          "name": "swt_47_Icon",
-          "element": "SWT_46",
+          "name": "swt_46_Icon",
+          "element": "SWT_45",
           "x": 278,
           "y": 172,
           "width": 24,
@@ -6763,8 +6754,8 @@
           "anchor": 0
         },
         {
-          "name": "swt_48_Attribute_String",
-          "element": "SWT_47",
+          "name": "swt_47_Attribute_String",
+          "element": "SWT_46",
           "x": 48,
           "y": 199,
           "width": 89,
@@ -6772,8 +6763,8 @@
           "anchor": 0
         },
         {
-          "name": "swt_49_Value_String",
-          "element": "SWT_48",
+          "name": "swt_48_Value_String",
+          "element": "SWT_47",
           "x": 104,
           "y": 199,
           "width": 26,
@@ -6781,8 +6772,8 @@
           "anchor": 0
         },
         {
-          "name": "swt_50_Icon",
-          "element": "SWT_49",
+          "name": "swt_49_Icon",
+          "element": "SWT_48",
           "x": 20,
           "y": 199,
           "width": 24,
@@ -6790,8 +6781,8 @@
           "anchor": 0
         },
         {
-          "name": "swt_51_Attribute_String",
-          "element": "SWT_50",
+          "name": "swt_50_Attribute_String",
+          "element": "SWT_49",
           "x": 171,
           "y": 199,
           "width": 89,
@@ -6799,8 +6790,8 @@
           "anchor": 0
         },
         {
-          "name": "swt_52_Value_String",
-          "element": "SWT_51",
+          "name": "swt_51_Value_String",
+          "element": "SWT_50",
           "x": 239,
           "y": 199,
           "width": 26,
@@ -6808,8 +6799,8 @@
           "anchor": 0
         },
         {
-          "name": "swt_53_Icon",
-          "element": "SWT_52",
+          "name": "swt_52_Icon",
+          "element": "SWT_51",
           "x": 143,
           "y": 199,
           "width": 24,
@@ -6817,8 +6808,8 @@
           "anchor": 0
         },
         {
-          "name": "swt_54_Attribute_String",
-          "element": "SWT_53",
+          "name": "swt_53_Attribute_String",
+          "element": "SWT_52",
           "x": 305,
           "y": 199,
           "width": 89,
@@ -6826,8 +6817,8 @@
           "anchor": 0
         },
         {
-          "name": "swt_55_Value_String",
-          "element": "SWT_54",
+          "name": "swt_54_Value_String",
+          "element": "SWT_53",
           "x": 377,
           "y": 199,
           "width": 26,
@@ -6835,8 +6826,8 @@
           "anchor": 0
         },
         {
-          "name": "swt_56_Icon",
-          "element": "SWT_55",
+          "name": "swt_55_Icon",
+          "element": "SWT_54",
           "x": 278,
           "y": 199,
           "width": 24,
@@ -6844,8 +6835,8 @@
           "anchor": 0
         },
         {
-          "name": "swt_57_RowSwatch",
-          "element": "SWT_56",
+          "name": "swt_56_RowSwatch",
+          "element": "SWT_55",
           "x": 16,
           "y": 223,
           "width": 394,
@@ -6853,26 +6844,26 @@
           "anchor": 0
         },
         {
-          "name": "swt_58_Attribute_String",
+          "name": "swt_57_Attribute_String",
+          "element": "SWT_56",
+          "x": 48,
+          "y": 226,
+          "width": 89,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "swt_58_Value_String",
           "element": "SWT_57",
-          "x": 48,
+          "x": 105,
           "y": 226,
-          "width": 89,
+          "width": 26,
           "height": 24,
           "anchor": 0
         },
         {
-          "name": "swt_59_Value_String",
+          "name": "swt_59_Icon",
           "element": "SWT_58",
-          "x": 105,
-          "y": 226,
-          "width": 26,
-          "height": 24,
-          "anchor": 0
-        },
-        {
-          "name": "swt_60_Icon",
-          "element": "SWT_59",
           "x": 20,
           "y": 226,
           "width": 24,
@@ -6880,8 +6871,8 @@
           "anchor": 0
         },
         {
-          "name": "swt_61_Attribute_String",
-          "element": "SWT_60",
+          "name": "swt_60_Attribute_String",
+          "element": "SWT_59",
           "x": 171,
           "y": 226,
           "width": 89,
@@ -6889,8 +6880,8 @@
           "anchor": 0
         },
         {
-          "name": "swt_62_Value_String",
-          "element": "SWT_61",
+          "name": "swt_61_Value_String",
+          "element": "SWT_60",
           "x": 239,
           "y": 226,
           "width": 26,
@@ -6898,8 +6889,8 @@
           "anchor": 0
         },
         {
-          "name": "swt_63_Icon",
-          "element": "SWT_62",
+          "name": "swt_62_Icon",
+          "element": "SWT_61",
           "x": 143,
           "y": 226,
           "width": 24,
@@ -6907,8 +6898,8 @@
           "anchor": 0
         },
         {
-          "name": "swt_64_Attribute_String",
-          "element": "SWT_63",
+          "name": "swt_63_Attribute_String",
+          "element": "SWT_62",
           "x": 306,
           "y": 226,
           "width": 89,
@@ -6916,8 +6907,8 @@
           "anchor": 0
         },
         {
-          "name": "swt_65_Value_String",
-          "element": "SWT_64",
+          "name": "swt_64_Value_String",
+          "element": "SWT_63",
           "x": 378,
           "y": 226,
           "width": 26,
@@ -6925,8 +6916,8 @@
           "anchor": 0
         },
         {
-          "name": "swt_66_Icon",
-          "element": "SWT_65",
+          "name": "swt_65_Icon",
+          "element": "SWT_64",
           "x": 278,
           "y": 226,
           "width": 24,
@@ -6934,8 +6925,8 @@
           "anchor": 0
         },
         {
-          "name": "swt_67_Attribute_String",
-          "element": "SWT_66",
+          "name": "swt_66_Attribute_String",
+          "element": "SWT_65",
           "x": 48,
           "y": 253,
           "width": 89,
@@ -6943,8 +6934,8 @@
           "anchor": 0
         },
         {
-          "name": "swt_68_Value_String",
-          "element": "SWT_67",
+          "name": "swt_67_Value_String",
+          "element": "SWT_66",
           "x": 105,
           "y": 253,
           "width": 26,
@@ -6952,8 +6943,8 @@
           "anchor": 0
         },
         {
-          "name": "swt_69_Icon",
-          "element": "SWT_68",
+          "name": "swt_68_Icon",
+          "element": "SWT_67",
           "x": 20,
           "y": 253,
           "width": 24,
@@ -6961,8 +6952,8 @@
           "anchor": 0
         },
         {
-          "name": "swt_70_Attribute_String",
-          "element": "SWT_69",
+          "name": "swt_69_Attribute_String",
+          "element": "SWT_68",
           "x": 171,
           "y": 253,
           "width": 89,
@@ -6970,8 +6961,8 @@
           "anchor": 0
         },
         {
-          "name": "swt_71_Value_String",
-          "element": "SWT_70",
+          "name": "swt_70_Value_String",
+          "element": "SWT_69",
           "x": 239,
           "y": 253,
           "width": 26,
@@ -6979,8 +6970,8 @@
           "anchor": 0
         },
         {
-          "name": "swt_72_Icon",
-          "element": "SWT_71",
+          "name": "swt_71_Icon",
+          "element": "SWT_70",
           "x": 143,
           "y": 253,
           "width": 24,
@@ -6988,8 +6979,8 @@
           "anchor": 0
         },
         {
-          "name": "swt_73_Attribute_String",
-          "element": "SWT_72",
+          "name": "swt_72_Attribute_String",
+          "element": "SWT_71",
           "x": 306,
           "y": 253,
           "width": 89,
@@ -6997,8 +6988,8 @@
           "anchor": 0
         },
         {
-          "name": "swt_74_Value_String",
-          "element": "SWT_73",
+          "name": "swt_73_Value_String",
+          "element": "SWT_72",
           "x": 378,
           "y": 253,
           "width": 26,
@@ -7006,8 +6997,8 @@
           "anchor": 0
         },
         {
-          "name": "swt_75_Icon",
-          "element": "SWT_74",
+          "name": "swt_74_Icon",
+          "element": "SWT_73",
           "x": 278,
           "y": 253,
           "width": 24,
@@ -7015,8 +7006,8 @@
           "anchor": 0
         },
         {
-          "name": "swt_76_RowSwatch",
-          "element": "SWT_75",
+          "name": "swt_75_RowSwatch",
+          "element": "SWT_74",
           "x": 16,
           "y": 277,
           "width": 394,
@@ -7024,8 +7015,8 @@
           "anchor": 0
         },
         {
-          "name": "swt_77_Attribute_String",
-          "element": "SWT_76",
+          "name": "swt_76_Attribute_String",
+          "element": "SWT_75",
           "x": 48,
           "y": 280,
           "width": 89,
@@ -7033,8 +7024,8 @@
           "anchor": 0
         },
         {
-          "name": "swt_78_Value_String",
-          "element": "SWT_77",
+          "name": "swt_77_Value_String",
+          "element": "SWT_76",
           "x": 105,
           "y": 280,
           "width": 26,
@@ -7042,8 +7033,8 @@
           "anchor": 0
         },
         {
-          "name": "swt_79_Icon",
-          "element": "SWT_78",
+          "name": "swt_78_Icon",
+          "element": "SWT_77",
           "x": 20,
           "y": 280,
           "width": 24,
@@ -7051,8 +7042,8 @@
           "anchor": 0
         },
         {
-          "name": "swt_80_Attribute_String",
-          "element": "SWT_79",
+          "name": "swt_79_Attribute_String",
+          "element": "SWT_78",
           "x": 171,
           "y": 280,
           "width": 89,
@@ -7060,8 +7051,8 @@
           "anchor": 0
         },
         {
-          "name": "swt_81_Value_String",
-          "element": "SWT_80",
+          "name": "swt_80_Value_String",
+          "element": "SWT_79",
           "x": 239,
           "y": 280,
           "width": 26,
@@ -7069,8 +7060,8 @@
           "anchor": 0
         },
         {
-          "name": "swt_82_Icon",
-          "element": "SWT_81",
+          "name": "swt_81_Icon",
+          "element": "SWT_80",
           "x": 143,
           "y": 280,
           "width": 24,
@@ -7078,8 +7069,8 @@
           "anchor": 0
         },
         {
-          "name": "swt_83_Attribute_String",
-          "element": "SWT_82",
+          "name": "swt_82_Attribute_String",
+          "element": "SWT_81",
           "x": 306,
           "y": 280,
           "width": 89,
@@ -7087,8 +7078,8 @@
           "anchor": 0
         },
         {
-          "name": "swt_84_Value_String",
-          "element": "SWT_83",
+          "name": "swt_83_Value_String",
+          "element": "SWT_82",
           "x": 378,
           "y": 280,
           "width": 26,
@@ -7096,8 +7087,8 @@
           "anchor": 0
         },
         {
-          "name": "swt_85_Icon",
-          "element": "SWT_84",
+          "name": "swt_84_Icon",
+          "element": "SWT_83",
           "x": 278,
           "y": 280,
           "width": 24,
@@ -7105,8 +7096,8 @@
           "anchor": 0
         },
         {
-          "name": "swt_86_Column1",
-          "element": "SWT_85",
+          "name": "swt_85_Column1",
+          "element": "SWT_84",
           "x": 71,
           "y": 236,
           "width": 133,
@@ -7114,8 +7105,8 @@
           "anchor": 0
         },
         {
-          "name": "swt_87_Column2",
-          "element": "SWT_86",
+          "name": "swt_86_Column2",
+          "element": "SWT_85",
           "x": 205,
           "y": 236,
           "width": 133,
@@ -7123,8 +7114,8 @@
           "anchor": 0
         },
         {
-          "name": "swt_88_StatBox",
-          "element": "SWT_87",
+          "name": "swt_87_StatBox",
+          "element": "SWT_86",
           "x": 17,
           "y": 333,
           "width": 391,
@@ -7132,8 +7123,8 @@
           "anchor": 0
         },
         {
-          "name": "swt_89_RowSwatch",
-          "element": "SWT_88",
+          "name": "swt_88_RowSwatch",
+          "element": "SWT_87",
           "x": 11,
           "y": 358,
           "width": 399,
@@ -7141,8 +7132,8 @@
           "anchor": 0
         },
         {
-          "name": "swt_90_Icon",
-          "element": "SWT_89",
+          "name": "swt_89_Icon",
+          "element": "SWT_88",
           "x": 15,
           "y": 361,
           "width": 24,
@@ -7150,8 +7141,8 @@
           "anchor": 0
         },
         {
-          "name": "swt_91_EquipmentName",
-          "element": "SWT_90",
+          "name": "swt_90_EquipmentName",
+          "element": "SWT_89",
           "x": 39,
           "y": 361,
           "width": 115,
@@ -7159,8 +7150,8 @@
           "anchor": 0
         },
         {
-          "name": "swt_92_Column1",
-          "element": "SWT_91",
+          "name": "swt_91_Column1",
+          "element": "SWT_90",
           "x": 129,
           "y": 357,
           "width": 56,
@@ -7168,8 +7159,8 @@
           "anchor": 0
         },
         {
-          "name": "swt_93_Column2",
-          "element": "SWT_92",
+          "name": "swt_92_Column2",
+          "element": "SWT_91",
           "x": 194,
           "y": 356,
           "width": 57,
@@ -7177,8 +7168,8 @@
           "anchor": 0
         },
         {
-          "name": "swt_94_Column3",
-          "element": "SWT_93",
+          "name": "swt_93_Column3",
+          "element": "SWT_92",
           "x": 256,
           "y": 356,
           "width": 58,
@@ -7186,8 +7177,8 @@
           "anchor": 0
         },
         {
-          "name": "swt_95_Column4",
-          "element": "SWT_94",
+          "name": "swt_94_Column4",
+          "element": "SWT_93",
           "x": 317,
           "y": 356,
           "width": 58,
@@ -7195,8 +7186,8 @@
           "anchor": 0
         },
         {
-          "name": "swt_96_Swatch",
-          "element": "SWT_95",
+          "name": "swt_95_Swatch",
+          "element": "SWT_94",
           "x": 18,
           "y": 305,
           "width": 389,
@@ -7204,8 +7195,8 @@
           "anchor": 0
         },
         {
-          "name": "swt_97_TitleText",
-          "element": "SWT_96",
+          "name": "swt_96_TitleText",
+          "element": "SWT_95",
           "x": 15,
           "y": 299,
           "width": 399,
@@ -7213,8 +7204,8 @@
           "anchor": 0
         },
         {
-          "name": "swt_98_StatBox",
-          "element": "SWT_97",
+          "name": "swt_97_StatBox",
+          "element": "SWT_96",
           "x": 17,
           "y": 414,
           "width": 393,
@@ -7222,8 +7213,8 @@
           "anchor": 0
         },
         {
-          "name": "swt_99_BoxTexture",
-          "element": "SWT_98",
+          "name": "swt_98_BoxTexture",
+          "element": "SWT_97",
           "x": -20,
           "y": 402,
           "width": 427,
@@ -7231,8 +7222,8 @@
           "anchor": 0
         },
         {
-          "name": "swt_100_RowSwatch",
-          "element": "SWT_99",
+          "name": "swt_99_RowSwatch",
+          "element": "SWT_98",
           "x": 17,
           "y": 412,
           "width": 392,
@@ -7240,8 +7231,8 @@
           "anchor": 0
         },
         {
-          "name": "swt_101_Icon",
-          "element": "SWT_100",
+          "name": "swt_100_Icon",
+          "element": "SWT_99",
           "x": 15,
           "y": 415,
           "width": 24,
@@ -7249,8 +7240,8 @@
           "anchor": 0
         },
         {
-          "name": "swt_102_EquipmentName",
-          "element": "SWT_101",
+          "name": "swt_101_EquipmentName",
+          "element": "SWT_100",
           "x": 39,
           "y": 415,
           "width": 113,
@@ -7258,8 +7249,8 @@
           "anchor": 0
         },
         {
-          "name": "swt_103_Damage_Value",
-          "element": "SWT_102",
+          "name": "swt_102_Damage_Value",
+          "element": "SWT_101",
           "x": 152,
           "y": 415,
           "width": 36,
@@ -7267,8 +7258,8 @@
           "anchor": 0
         },
         {
-          "name": "swt_104_SlashDamageIcon",
-          "element": "SWT_103",
+          "name": "swt_103_SlashDamageIcon",
+          "element": "SWT_102",
           "x": 188,
           "y": 415,
           "width": 24,
@@ -7276,8 +7267,8 @@
           "anchor": 0
         },
         {
-          "name": "swt_105_Attack_Value",
-          "element": "SWT_104",
+          "name": "swt_104_Attack_Value",
+          "element": "SWT_103",
           "x": 212,
           "y": 415,
           "width": 36,
@@ -7285,8 +7276,8 @@
           "anchor": 0
         },
         {
-          "name": "swt_106_AttackIcon",
-          "element": "SWT_105",
+          "name": "swt_105_AttackIcon",
+          "element": "SWT_104",
           "x": 248,
           "y": 415,
           "width": 24,
@@ -7294,8 +7285,8 @@
           "anchor": 0
         },
         {
-          "name": "swt_107_Len_Value",
-          "element": "SWT_106",
+          "name": "swt_106_Len_Value",
+          "element": "SWT_105",
           "x": 272,
           "y": 415,
           "width": 36,
@@ -7303,8 +7294,8 @@
           "anchor": 0
         },
         {
-          "name": "swt_108_Len",
-          "element": "SWT_107",
+          "name": "swt_107_Len",
+          "element": "SWT_106",
           "x": 308,
           "y": 415,
           "width": 24,
@@ -7312,8 +7303,8 @@
           "anchor": 0
         },
         {
-          "name": "swt_109_Fat_Value",
-          "element": "SWT_108",
+          "name": "swt_108_Fat_Value",
+          "element": "SWT_107",
           "x": 332,
           "y": 415,
           "width": 36,
@@ -7321,8 +7312,8 @@
           "anchor": 0
         },
         {
-          "name": "swt_110_Fat_Icon",
-          "element": "SWT_109",
+          "name": "swt_109_Fat_Icon",
+          "element": "SWT_108",
           "x": 368,
           "y": 415,
           "width": 24,
@@ -7330,8 +7321,8 @@
           "anchor": 0
         },
         {
-          "name": "swt_111_Column1",
-          "element": "SWT_110",
+          "name": "swt_110_Column1",
+          "element": "SWT_109",
           "x": 131,
           "y": 439,
           "width": 54,
@@ -7339,8 +7330,8 @@
           "anchor": 0
         },
         {
-          "name": "swt_112_Column2",
-          "element": "SWT_111",
+          "name": "swt_111_Column2",
+          "element": "SWT_110",
           "x": 196,
           "y": 439,
           "width": 55,
@@ -7348,8 +7339,8 @@
           "anchor": 0
         },
         {
-          "name": "swt_113_Column3",
-          "element": "SWT_112",
+          "name": "swt_112_Column3",
+          "element": "SWT_111",
           "x": 257,
           "y": 439,
           "width": 55,
@@ -7357,8 +7348,8 @@
           "anchor": 0
         },
         {
-          "name": "swt_114_Column4",
-          "element": "SWT_113",
+          "name": "swt_113_Column4",
+          "element": "SWT_112",
           "x": 318,
           "y": 439,
           "width": 56,
@@ -7366,8 +7357,8 @@
           "anchor": 0
         },
         {
-          "name": "swt_115_Swatch",
-          "element": "SWT_114",
+          "name": "swt_114_Swatch",
+          "element": "SWT_113",
           "x": 18,
           "y": 387,
           "width": 389,
@@ -7375,8 +7366,8 @@
           "anchor": 0
         },
         {
-          "name": "swt_116_TitleText",
-          "element": "SWT_115",
+          "name": "swt_115_TitleText",
+          "element": "SWT_114",
           "x": 14,
           "y": 379,
           "width": 400,
@@ -7384,8 +7375,8 @@
           "anchor": 0
         },
         {
-          "name": "swt_117_Description",
-          "element": "SWT_116",
+          "name": "swt_116_Description",
+          "element": "SWT_115",
           "x": 15,
           "y": 526,
           "width": 395,

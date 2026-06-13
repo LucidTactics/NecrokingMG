@@ -113,7 +113,10 @@ def parse(path):
                 cur.swapper['inert_material'] = True
         elif section == 'tmp':
             if s.startswith('m_text:'):
-                cur.tmp['text'] = s[len('m_text:'):].strip()
+                t = s[len('m_text:'):].strip()
+                if len(t) >= 2 and t[0] == t[-1] and t[0] in ("'", '"'):
+                    t = t[1:-1]
+                cur.tmp['text'] = t.lstrip("'\"")
             elif s.startswith('m_fontSize:'):
                 cur.tmp['fontSize'] = float(s.split()[-1])
             elif s.startswith('m_fontColor:'):
@@ -177,6 +180,70 @@ def harm_from_swapper(sw):
     return d
 
 
+SIZE_OVERRIDES = {  # '[prefix:]name' -> FontStash size (measured vs captures)
+    'GMW:Title Text': 72, 'SWT:Title Text': 26, 'PerkTitle': 30, 'Tab Text': 24, 'ALLText': 24,
+    'PathPrompt': 17, 'CostPrompt': 17, 'PathReqText': 22, 'Cost': 22,
+    'Cost2': 22, 'BuffText': 16, 'DamageText': 16, 'DamgeMod1Text': 16,
+    'DamgeMod2Text': 16,
+}
+WARM_FACE = [240, 218, 178, 255]
+
+_meta_cache = {}
+
+def sprite_meta(unity_rel):
+    if unity_rel in _meta_cache: return _meta_cache[unity_rel]
+    import re as _re
+    p = os.path.join(UNITY_ASSETS, unity_rel.replace('\\', os.sep)) + '.meta'
+    border, ppu = (0, 0, 0, 0), 100.0
+    if os.path.exists(p):
+        txt = open(p, encoding='utf-8', errors='ignore').read()
+        mb = _re.search(r'spriteBorder: \{x: ([\d.]+), y: ([\d.]+), z: ([\d.]+), w: ([\d.]+)', txt)
+        if mb: border = tuple(float(v) for v in mb.groups())  # L,B,R,T
+        mp = _re.search(r'spritePixelsToUnits: ([\d.]+)', txt)
+        if mp: ppu = float(mp.group(1))
+    _meta_cache[unity_rel] = (border, ppu)
+    return border, ppu
+
+
+def bake_variant(unity_rel, base_tex, img_type, ppu_mult, w, h):
+    """Bake sliced (nine) or tiled sprites at the drawn size (PointClamp rule)."""
+    from PIL import Image
+    border, ppu = sprite_meta(unity_rel)
+    name = os.path.splitext(os.path.basename(base_tex))[0]
+    out = f'{IMPORT_DIR}/baked_{name}_{w}x{h}.png'
+    if os.path.exists(out): return out
+    src_im = Image.open(base_tex).convert('RGBA')
+    if img_type == 1 and any(b > 0 for b in border):
+        sl, sb, sr, st = (int(b) for b in border)
+        scale = 100.0 / (ppu * ppu_mult) if ppu * ppu_mult else 1.0
+        dl, db, dr, dt = (max(1, round(b * scale)) for b in (sl, sb, sr, st))
+        sw, sh = src_im.size
+        sx = [0, sl, sw - sr, sw]; sy = [0, st, sh - sb, sh]
+        dx = [0, dl, w - dr, w]; dy = [0, dt, h - db, h]
+        o = Image.new('RGBA', (w, h), (0, 0, 0, 0))
+        for ry in range(3):
+            for rx in range(3):
+                ssw, ssh = sx[rx+1]-sx[rx], sy[ry+1]-sy[ry]
+                ddw, ddh = dx[rx+1]-dx[rx], dy[ry+1]-dy[ry]
+                if ssw <= 0 or ssh <= 0 or ddw <= 0 or ddh <= 0: continue
+                o.paste(src_im.crop((sx[rx], sy[ry], sx[rx+1], sy[ry+1])).resize((ddw, ddh), Image.LANCZOS), (dx[rx], dy[ry]))
+        o.save(out); return out
+    if img_type == 2:
+        scale = 100.0 / (ppu * ppu_mult) if ppu * ppu_mult else 1.0
+        tw, th = max(1, round(src_im.width * scale)), max(1, round(src_im.height * scale))
+        tile = src_im.resize((tw, th), Image.LANCZOS)
+        o = Image.new('RGBA', (w, h), (0, 0, 0, 0))
+        ty = h
+        while ty > -th:
+            ty -= th
+            tx = 0
+            while tx < w:
+                o.paste(tile, (tx, ty))
+                tx += tw
+        o.save(out); return out
+    return base_tex
+
+
 def copy_texture(unity_rel):
     src = os.path.join(UNITY_ASSETS, unity_rel.replace('\\', os.sep))
     base = os.path.basename(unity_rel).replace('.psd', '.png')
@@ -232,6 +299,8 @@ def convert(dump_path, widget_id, prefix, root_override_active=True):
         cx, cy, cw, chh = round(x), round(y), max(1, round(w)), max(1, round(h))
         if node.image and node.image['sprite']:
             tex = copy_texture(node.image['sprite'])
+            if tex and node.image['type'] in (1, 2):
+                tex = bake_variant(node.image['sprite'], tex, node.image['type'], node.image['ppu'], cw, chh)
             if tex:
                 col = node.image['color']
                 tint = [round(col[0] * 255), round(col[1] * 255), round(col[2] * 255), round(col[3] * 255)]
@@ -243,12 +312,17 @@ def convert(dump_path, widget_id, prefix, root_override_active=True):
                 elements.append(el)
                 children.append(dict(name=f'{prefix.lower()}_{counter[0]}_{node.name[:18].replace(" ", "")}',
                                      element=eid, x=cx, y=cy, width=cw, height=chh, anchor=0))
-        if node.tmp and node.tmp['text']:
+        if node.tmp and node.tmp['text'] and 'DropShadow' not in node.name:
             tm = node.tmp
             font = tm.get('font', 'Quintessential')
             fs = max(8, round(tm['fontSize'] * (ROBOTO_RATIO if font == 'Roboto' else QUINT_RATIO)))
+            fs = SIZE_OVERRIDES.get(f'{prefix}:{node.name}', SIZE_OVERRIDES.get(node.name, fs))
             colr = tm['color']
             fc = [round(colr[0] * 255), round(colr[1] * 255), round(colr[2] * 255), 255]
+            # Near-white Quintessential faces render warm parchment via the
+            # TMP DropShadow material — measured (240,218,178) on captures.
+            if font == 'Quintessential' and fc[0] > 230 and fc[1] > 230 and fc[2] > 230:
+                fc = list(WARM_FACE)
             align = {1: 'left', 2: 'center', 4: 'right'}.get(tm['align'], 'left')
             text = re.sub(r'<.*?>', '', tm['text'])
             eid = f'{prefix}_{counter[0]}'
