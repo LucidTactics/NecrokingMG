@@ -38,6 +38,7 @@ public static class ScenarioRegistry
         Register("UIUnitInfo", () => new Scenarios.UIUnitInfoScenario());
         Register("UIResourceTipDyn", () => new Scenarios.UIResourceTipDynScenario());
         Register("UIGrimoire", () => new Scenarios.UIGrimoireScenario());
+        Register("UIGrimoireClick", () => new Scenarios.UIGrimoireClickScenario());
         Register("grass_test", () => new Scenarios.GrassTestScenario());
         Register("corpse_worker", () => new Scenarios.CorpseWorkerScenario());
         Register("raid_workers", () => new Scenarios.RaidWorkersScenario());

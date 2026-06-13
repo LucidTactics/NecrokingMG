@@ -48,6 +48,7 @@ public class GrimoireOverlay : IModalLayer
     private MagicPath _pathFilter = MagicPath.None;
     private List<SpellDef> _shown = new();
     private Action<string>? _onPick;   // non-null => assign mode
+    private bool _justOpened;          // skip the click that opened us
 
     public bool IsVisible { get; private set; }
 
@@ -76,6 +77,7 @@ public class GrimoireOverlay : IModalLayer
     private void Open()
     {
         IsVisible = true;
+        _justOpened = true;
         _schoolFilter = null;
         _pathFilter = MagicPath.None;
         Refresh();
@@ -113,14 +115,22 @@ public class GrimoireOverlay : IModalLayer
     {
         if (!IsVisible) return;
         Layout(screenH);
-        // IsMouseConsumed guard: the bar-slot click that OPENS this overlay
-        // consumes the mouse but LeftPressed stays set this frame — don't
-        // re-handle that same click as a tile/tab hit.
-        if (!input.LeftPressed || input.IsMouseConsumed) return;
+        // The PopupManager already consumed the mouse for clicks inside us
+        // (that's its contract — we handle them here via LeftPressed). But skip
+        // the very click that OPENED us this frame (a bar-slot click lands
+        // where a tile now is) — one-frame guard.
+        if (_justOpened) { _justOpened = false; return; }
+        if (!input.LeftPressed) return;
         int mx = (int)input.MousePos.X, my = (int)input.MousePos.Y;
         if (!ContainsMouse(mx, my)) return;
-        input.ConsumeMouse();
+        HandleClickAt(mx, my);
+    }
 
+    /// <summary>Resolve a click at screen (mx,my) to a tab/path/tile action.
+    /// Returns true if it hit something. Public so scenarios can drive it
+    /// without an OS cursor (the panel layout must already be set via Draw).</summary>
+    public bool HandleClickAt(int mx, int my)
+    {
         // School tabs (hit-test the backing — the text element is wider than
         // its tab and would overlap neighbours).
         foreach (var (child, school) in SchoolTabs)
@@ -129,7 +139,7 @@ public class GrimoireOverlay : IModalLayer
             {
                 _schoolFilter = school;
                 Refresh();
-                return;
+                return true;
             }
         }
         // Path "All" tab clears the path filter
@@ -137,7 +147,7 @@ public class GrimoireOverlay : IModalLayer
         {
             _pathFilter = MagicPath.None;
             Refresh();
-            return;
+            return true;
         }
         // Path icon tabs (backing at gmw_{8 + (i-1)*3}_Tab-Backing)
         for (int i = 1; i <= 12; i++)
@@ -147,7 +157,7 @@ public class GrimoireOverlay : IModalLayer
                 var p = PathTabOrder[i - 1];
                 _pathFilter = _pathFilter == p ? MagicPath.None : p; // click again clears
                 Refresh();
-                return;
+                return true;
             }
         }
         // Spell tiles
@@ -160,10 +170,20 @@ public class GrimoireOverlay : IModalLayer
                     _onPick(_shown[i].Id);
                     Hide();
                 }
-                return;
+                return true;
             }
         }
+        return false;
     }
+
+    // Test seam: the centre point of a named chrome child (tab) or a tile.
+    public Point DebugChildCenter(string child)
+    {
+        var r = _renderer.GetChildRect(GrimoirePanel.WidgetId, child, _x, _y, InstanceId);
+        return r == Rectangle.Empty ? Point.Zero : r.Center;
+    }
+    public int DebugShownCount => _shown.Count;
+    public string DebugShownId(int i) => i < _shown.Count ? _shown[i].Id : "";
 
     public void Draw(int screenW, int screenH)
     {
