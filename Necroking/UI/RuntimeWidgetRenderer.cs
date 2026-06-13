@@ -694,6 +694,20 @@ public class RuntimeWidgetRenderer
         _batch.Draw(tex, new Rectangle(x, y, w, h), Color.White);
     }
 
+    /// <summary>Draw a named image element into a rect using the SAME pipeline
+    /// as widget children — the harmonized (recolored) texture plus the element's
+    /// tint. Lets code-driven layout (e.g. a wrapping abilities box) reuse a
+    /// widget element's exact look at a dynamic size. No-op for non-image elements.</summary>
+    public void DrawElementImage(string elementId, Rectangle rect)
+    {
+        if (_batch == null) return;
+        var elemDef = _elementDefs.FirstOrDefault(e => e.Id == elementId);
+        if (elemDef == null || elemDef.Type != "image" || string.IsNullOrEmpty(elemDef.ImagePath)) return;
+        var tex = GetTexture(elemDef.ImagePath, "el:" + elemDef.Id);
+        if (tex == null) return;
+        _batch.Draw(tex, rect, ByteColor(elemDef.TintColor ?? new byte[] { 255, 255, 255, 255 }));
+    }
+
     /// <summary>Draw a line of text directly (for code-driven content layered
     /// over a widget, e.g. the unit sheet's magic-path levels). Position is the
     /// top-left; caller rounds to integer pixels.</summary>

@@ -327,8 +327,6 @@ public class UnitInfoPanel : IModalLayer
     private static readonly Dictionary<string, bool> _fileCache = new();
 
     private static readonly Color PathNumColor = new(232, 214, 170);
-    private const string AbBoxImg = "assets/UI/Ribbons/BlueSwath_abbox_463x35.png";
-    private const string AbBoxPattern = "assets/UI/Background/nations_ab_box.png";
     private const int AbBoxTop = 27;   // box top, relative to the section
     private const int AbRowH = 28;     // height per wrapped icon row
     private const int AbUsableW = 456; // icon area width inside the box
@@ -423,10 +421,12 @@ public class UnitInfoPanel : IModalLayer
         _pathRects.Clear();
         _buffRects.Clear();
 
+        // Box background via the same widget elements (harmonized + tinted) so it
+        // matches the original swatch exactly, just sized to the row count.
         int boxH = _abRows * AbRowH + 7;
         int boxTop = sec.Y + AbBoxTop;
-        _renderer.DrawIcon(AbBoxImg, sec.X + 3, boxTop, 463, boxH);
-        _renderer.DrawIcon(AbBoxPattern, sec.X + 7, boxTop + 3, AbUsableW, boxH - 6);
+        _renderer.DrawElementImage("AB_StatBox", new Rectangle(sec.X + 3, boxTop, 463, boxH));
+        _renderer.DrawElementImage("AB_BoxPattern", new Rectangle(sec.X + 7, boxTop + 3, AbUsableW, boxH - 6));
 
         foreach (var e in _abEntries)
         {
