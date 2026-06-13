@@ -3,6 +3,7 @@
     {
       "id": "iron_skin",
       "name": "Iron Skin",
+      "icon": "assets/UI/Icons/Buffs/iron_skin.png",
       "duration": 6,
       "effects": [
         {
@@ -64,6 +65,7 @@
     {
       "id": "strength_buff",
       "name": "Strength",
+      "icon": "assets/UI/Icons/Buffs/strength_buff.png",
       "duration": 30,
       "effects": [
         {
@@ -101,6 +103,7 @@
     {
       "id": "iron_skin_copy",
       "name": "Quickness",
+      "icon": "assets/UI/Icons/Buffs/iron_skin_copy.png",
       "duration": 60,
       "effects": [
         {
@@ -159,6 +162,7 @@
     {
       "id": "buff_3",
       "name": "Lucky",
+      "icon": "assets/UI/Icons/Buffs/buff_3.png",
       "duration": 100,
       "effects": [
         {
@@ -387,6 +391,7 @@
     {
       "id": "buff_frenzy",
       "name": "Frenzy",
+      "icon": "assets/UI/Icons/Buffs/buff_frenzy.png",
       "duration": 9999,
       "effects": [
         {
@@ -453,6 +458,7 @@
     {
       "id": "buff_paralysis_slow",
       "name": "Paralysis",
+      "icon": "assets/UI/Icons/Buffs/buff_paralysis_slow.png",
       "duration": 8,
       "effects": [],
       "maxStacks": 1,
@@ -508,6 +514,7 @@
     {
       "id": "buff_zombie_mark",
       "name": "Zombie Curse",
+      "icon": "assets/UI/Icons/Buffs/buff_zombie_mark.png",
       "duration": 9999,
       "effects": [],
       "maxStacks": 1,
@@ -565,6 +572,7 @@
     {
       "id": "buff_poison_dot",
       "name": "Poisoned",
+      "icon": "assets/UI/Icons/Buffs/buff_poison_dot.png",
       "duration": 9999,
       "effects": [],
       "maxStacks": 1,
@@ -620,6 +628,7 @@
     {
       "id": "buff_miasma_slow",
       "name": "Miasma Sickness",
+      "icon": "assets/UI/Icons/Buffs/buff_miasma_slow.png",
       "duration": 2,
       "effects": [
         {
@@ -662,6 +671,7 @@
     {
       "id": "buff_plagued",
       "name": "Plagued",
+      "icon": "assets/UI/Icons/Buffs/buff_plagued.png",
       "duration": 10,
       "effects": [
         {
@@ -709,6 +719,7 @@
     {
       "id": "buff_knockdown",
       "name": "Knocked Down",
+      "icon": "assets/UI/Icons/Buffs/buff_knockdown.png",
       "duration": 1.5,
       "effects": [
         {
@@ -751,6 +762,7 @@
     {
       "id": "buff_unholy_movement",
       "name": "Unholy Movement",
+      "icon": "assets/UI/Icons/Buffs/buff_unholy_movement.png",
       "duration": 9999,
       "effects": [
         {
@@ -788,6 +800,7 @@
     {
       "id": "buff_unholy_strength",
       "name": "Unholy Strength",
+      "icon": "assets/UI/Icons/Buffs/buff_unholy_strength.png",
       "duration": 9999,
       "effects": [
         {
@@ -825,6 +838,7 @@
     {
       "id": "buff_satiated",
       "name": "Satiated",
+      "icon": "assets/UI/Icons/Buffs/buff_satiated.png",
       "duration": 30,
       "effects": [],
       "maxStacks": 1,
@@ -856,12 +870,13 @@
     {
       "id": "buff_god_mode",
       "name": "God Mode",
+      "icon": "assets/UI/Icons/Buffs/buff_god_mode.png",
       "duration": 0,
       "effects": [
         {
           "type": "Multiply",
           "stat": "CombatSpeed",
-          "value": 2
+          "value": 3
         },
         {
           "type": "Add",
@@ -912,21 +927,21 @@
       "hasPulsingOutline": true,
       "pulsingOutline": {
         "color": {
-          "r": 255,
-          "g": 240,
-          "b": 160,
+          "r": 215,
+          "g": 202,
+          "b": 132,
           "a": 220,
           "intensity": 0.6
         },
         "pulseColor": {
-          "r": 255,
-          "g": 255,
-          "b": 220,
+          "r": 247,
+          "g": 247,
+          "b": 204,
           "a": 255,
           "intensity": 0.8
         },
         "outlineWidth": 2,
-        "pulseWidth": 4,
+        "pulseWidth": 2,
         "pulseSpeed": 2.5,
         "blendMode": 1
       },

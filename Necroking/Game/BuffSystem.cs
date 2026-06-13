@@ -374,18 +374,41 @@ public static class BuffSystem
         return result;
     }
 
+    /// <summary>A unit's effective caster level in a magic path: the larger of
+    /// its native UnitDef level and any active "Set AllPaths" buff floor (god
+    /// mode). Single source of truth shared by spell casting (whether a unit
+    /// may cast a spell) and the unit-sheet path display.</summary>
+    public static int EffectivePathLevel(UnitArrays units, int unitIdx,
+        Data.Registries.UnitDef? def, Data.Registries.MagicPath p)
+    {
+        int native = def?.GetPathLevel(p) ?? 0;
+        float? floor = MaxSetExtra(units, unitIdx, "AllPaths");
+        return floor.HasValue && floor.Value > native ? (int)floor.Value : native;
+    }
+
     public static float GetModifiedStat(UnitArrays units, int unitIdx, BuffStat stat, float baseValue)
     {
         if (unitIdx < 0 || unitIdx >= units.Count) return baseValue;
+        return GetModifiedStat(units[unitIdx].ActiveBuffs, stat, baseValue);
+    }
+
+    /// <summary>Apply a unit's active-buff modifiers to a base stat value.
+    /// Overload that takes the buff list directly so UI code can compute an
+    /// effective stat from a <see cref="Movement.Unit"/> without a unit index.
+    /// Combination: (base + sum of Add) * product of Multiply, unless a Set
+    /// effect is present (last Set wins, overriding everything).</summary>
+    public static float GetModifiedStat(IReadOnlyList<ActiveBuff> buffs, BuffStat stat, float baseValue)
+    {
+        string statName = stat.ToString();
         float additive = 0f;
         float multiplicative = 1f;
         float? setValue = null;
 
-        foreach (var buff in units[unitIdx].ActiveBuffs)
+        foreach (var buff in buffs)
         {
             foreach (var eff in buff.Effects)
             {
-                if (eff.Stat != stat.ToString()) continue;
+                if (eff.Stat != statName) continue;
                 switch (eff.Type)
                 {
                     case "Add": additive += eff.Value * buff.StackCount; break;

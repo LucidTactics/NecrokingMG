@@ -3605,16 +3605,16 @@
           "name": "label",
           "x": 4,
           "y": 0,
-          "width": 163,
+          "width": 143,
           "height": 24,
           "anchor": 0,
           "element": "RTD_RowLabel"
         },
         {
           "name": "value",
-          "x": 162,
+          "x": 148,
           "y": 1,
-          "width": 41,
+          "width": 56,
           "height": 24,
           "anchor": 0,
           "element": "RTD_RowValue"
@@ -4734,6 +4734,105 @@
           "name": "ab_r0_icon",
           "element": "AB_Icon_Flying",
           "x": 7,
+          "y": 33,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "ab_r1_icon",
+          "element": "AB_Icon_Flying",
+          "x": 35,
+          "y": 33,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "ab_r2_icon",
+          "element": "AB_Icon_Flying",
+          "x": 63,
+          "y": 33,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "ab_r3_icon",
+          "element": "AB_Icon_Flying",
+          "x": 91,
+          "y": 33,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "ab_r4_icon",
+          "element": "AB_Icon_Flying",
+          "x": 119,
+          "y": 33,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "ab_r5_icon",
+          "element": "AB_Icon_Flying",
+          "x": 147,
+          "y": 33,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "ab_r6_icon",
+          "element": "AB_Icon_Flying",
+          "x": 175,
+          "y": 33,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "ab_r7_icon",
+          "element": "AB_Icon_Flying",
+          "x": 203,
+          "y": 33,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "ab_r8_icon",
+          "element": "AB_Icon_Flying",
+          "x": 231,
+          "y": 33,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "ab_r9_icon",
+          "element": "AB_Icon_Flying",
+          "x": 259,
+          "y": 33,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "ab_r10_icon",
+          "element": "AB_Icon_Flying",
+          "x": 287,
+          "y": 33,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "ab_r11_icon",
+          "element": "AB_Icon_Flying",
+          "x": 315,
           "y": 33,
           "width": 24,
           "height": 24,

@@ -427,16 +427,5 @@ public static class SpellCaster
     /// native levels win over the buff floor so investing further in a path
     /// isn't wasted while the buff is up.</summary>
     private static Func<MagicPath, int> ResolveCasterLevel(UnitDef? def, UnitArrays units, int necroIdx)
-    {
-        float? floor = necroIdx >= 0 ? BuffSystem.MaxSetExtra(units, necroIdx, "AllPaths") : null;
-        int floorInt = floor.HasValue ? (int)floor.Value : 0;
-        if (def == null && floor == null) return _ => 0;
-        if (def == null) return _ => floorInt;
-        if (floor == null) return def.GetPathLevel;
-        return p =>
-        {
-            int native = def.GetPathLevel(p);
-            return native > floorInt ? native : floorInt;
-        };
-    }
+        => p => BuffSystem.EffectivePathLevel(units, necroIdx, def, p);
 }

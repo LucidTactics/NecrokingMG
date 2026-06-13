@@ -105,6 +105,11 @@ public class BuffDef : IHasId
 {
     [JsonPropertyName("id")] public string Id { get; set; } = "";
     [JsonPropertyName("name")] public string DisplayName { get; set; } = "";
+    /// <summary>Icon shown in the unit sheet's Abilities &amp; Buffs row and the
+    /// buff tooltip header (e.g. assets/UI/Icons/Buffs/iron_skin.png). When
+    /// empty or the file is missing, the UI falls back to the buff's primary
+    /// stat-effect icon. Generate art via tools/gen_buff_icons.py.</summary>
+    [JsonPropertyName("icon")] public string Icon { get; set; } = "";
     [JsonPropertyName("duration")] public float Duration { get; set; } = 10.0f;
     [JsonPropertyName("effects")] public List<BuffEffect> Effects { get; set; } = new();
     [JsonPropertyName("maxStacks")] public int MaxStacks { get; set; } = 1;

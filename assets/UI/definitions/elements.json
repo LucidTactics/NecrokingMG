@@ -3724,7 +3724,7 @@
     {
       "id": "RTD_RowLabel",
       "type": "text",
-      "width": 163,
+      "width": 143,
       "height": 24,
       "tintColor": [
         255,
@@ -3736,9 +3736,9 @@
       "textRegion": {
         "x": 0,
         "y": 0,
-        "w": 163,
+        "w": 143,
         "h": 24,
-        "align": "right",
+        "align": "left",
         "valign": "center",
         "fontFamily": "Quintessential",
         "fontSize": 24,

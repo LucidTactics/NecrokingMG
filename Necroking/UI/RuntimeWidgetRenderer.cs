@@ -47,6 +47,11 @@ public class RuntimeWidgetRenderer
     // tab, brighten the active one) without mutating the shared element def.
     private readonly Dictionary<string, Dictionary<string, Color>> _elementTintOverrides = new();
 
+    // Per-widget child height override: widgetInstanceId -> (childName -> height).
+    // Lets runtime code grow a section (e.g. the unit sheet's Abilities & Buffs
+    // row wrapping to multiple rows) so the auto-height panel + frame expand.
+    private readonly Dictionary<string, Dictionary<string, int>> _childHeightOverrides = new();
+
     // Per-widget image overrides: widgetInstanceId -> (childName -> texturePath)
     private readonly Dictionary<string, Dictionary<string, string>> _imageOverrides = new();
 
@@ -150,6 +155,29 @@ public class RuntimeWidgetRenderer
         map[childName] = tint;
     }
 
+    /// <summary>Override a child's layout height within a widget instance, used
+    /// to grow an auto-height section (e.g. a wrapping icon row). Pass a value
+    /// &lt;= 0 to clear the override for that child.</summary>
+    public void SetChildHeight(string instanceId, string childName, int height)
+    {
+        if (!_childHeightOverrides.TryGetValue(instanceId, out var map))
+        {
+            map = new Dictionary<string, int>();
+            _childHeightOverrides[instanceId] = map;
+        }
+        if (height > 0) map[childName] = height;
+        else map.Remove(childName);
+    }
+
+    /// <summary>A child's effective layout height: instance override if set,
+    /// else the auto-measured / def height.</summary>
+    private int ChildHeightFor(UIEditorChildDef child, string instanceId, int childIndex)
+    {
+        if (_childHeightOverrides.TryGetValue(instanceId, out var m) && m.TryGetValue(child.Name, out var h))
+            return h;
+        return ChildLayoutHeight(child, $"{instanceId}.{childIndex}");
+    }
+
     /// <summary>Hide or show a named child within a widget instance (hidden
     /// children are skipped entirely, including nested widget content). On
     /// AutoSizeHeight vertical-layout widgets, hidden children also collapse
@@ -175,6 +203,7 @@ public class RuntimeWidgetRenderer
         _hiddenChildren.Remove(instanceId);
         _textColorOverrides.Remove(instanceId);
         _elementTintOverrides.Remove(instanceId);
+        _childHeightOverrides.Remove(instanceId);
     }
 
     /// <summary>Clear overrides for an instance AND all its nested
@@ -184,7 +213,7 @@ public class RuntimeWidgetRenderer
         string prefix = instanceId + ".";
         foreach (var dict in new System.Collections.IDictionary[]
                  { _textOverrides, _imageOverrides, _childWidgetOverrides, _hiddenChildren,
-                   _textColorOverrides, _elementTintOverrides })
+                   _textColorOverrides, _elementTintOverrides, _childHeightOverrides })
         {
             var stale = new List<object>();
             foreach (var key in dict.Keys)
@@ -241,7 +270,7 @@ public class RuntimeWidgetRenderer
             var child = def.Children[i];
             if (child.IgnoreLayout) continue;
             if (hidden != null && hidden.Contains(child.Name)) continue;
-            total += ChildLayoutHeight(child, $"{instanceId}.{i}");
+            total += ChildHeightFor(child, instanceId, i);
             count++;
         }
         if (count > 1) total += (count - 1) * spacY;
@@ -292,7 +321,7 @@ public class RuntimeWidgetRenderer
                 continue;
             }
             int cw = child.Width > 0 ? child.Width : 100;
-            int ch = ChildLayoutHeight(child, $"{instanceId}.{i}");
+            int ch = ChildHeightFor(child, instanceId, i);
 
             if (useLayout && !child.IgnoreLayout)
             {
@@ -663,6 +692,25 @@ public class RuntimeWidgetRenderer
         var tex = GetOrLoadTexture(iconPath);
         if (tex == null) return;
         _batch.Draw(tex, new Rectangle(x, y, w, h), Color.White);
+    }
+
+    /// <summary>Draw a line of text directly (for code-driven content layered
+    /// over a widget, e.g. the unit sheet's magic-path levels). Position is the
+    /// top-left; caller rounds to integer pixels.</summary>
+    public void DrawText(string text, int x, int y, int fontSize, Color color, string? fontFamily = null)
+    {
+        if (_batch == null || string.IsNullOrEmpty(text)) return;
+        var font = _fontMgr?.GetFont(fontSize, string.IsNullOrEmpty(fontFamily) ? null : fontFamily);
+        if (font == null) return;
+        _batch.DrawString(font, text, new Vector2(x, y), color);
+    }
+
+    /// <summary>Measure a line of text in the given font (for layout).</summary>
+    public Vector2 MeasureText(string text, int fontSize, string? fontFamily = null)
+    {
+        if (string.IsNullOrEmpty(text)) return Vector2.Zero;
+        var font = _fontMgr?.GetFont(fontSize, string.IsNullOrEmpty(fontFamily) ? null : fontFamily);
+        return font == null ? Vector2.Zero : font.MeasureString(text);
     }
 
     private Texture2D? GetOrLoadTexture(string texPath)
