@@ -19,7 +19,7 @@ public class GrimoireOverlay : IModalLayer
     private const string InstanceId = "grimoire_ingame";
     private const int PanelW = 706;
     private const int PanelH = 1080;
-    private const string TitleChild = "gmw_173_TitleText";
+    private const string TitleChild = "TitleText";
 
     // path-tab index (1..12) -> MagicPath, from the icon strip order
     // (confirmed via the baked PathIcon images).
@@ -30,12 +30,13 @@ public class GrimoireOverlay : IModalLayer
         MagicPath.Spirit, MagicPath.Nature, MagicPath.Body, MagicPath.Death,
     };
 
-    // school tab text children, in tab order; null school = the "All" tab.
-    private static readonly (string Child, string? School)[] SchoolTabs =
+    // school tabs in tab order: a name token (drives the SchoolTab_{name}_Text /
+    // _Backing child names) + the school it filters to; "All" clears the filter.
+    private static readonly (string Name, string? School)[] SchoolTabs =
     {
-        ("gmw_45_TabText", null), ("gmw_48_TabText", "Conjuration"),
-        ("gmw_51_TabText", "Alteration"), ("gmw_54_TabText", "Evocation"),
-        ("gmw_57_TabText", "Construction"),
+        ("All", null), ("Conjuration", "Conjuration"),
+        ("Alteration", "Alteration"), ("Evocation", "Evocation"),
+        ("Construction", "Construction"),
     };
     private static readonly Color TabActive = new(245, 223, 182);
     private static readonly Color TabInactive = new(150, 138, 116);
@@ -119,26 +120,25 @@ public class GrimoireOverlay : IModalLayer
         bool allPaths = pathFilter == MagicPath.None;
 
         // School tabs — text colour + backing tint.
-        foreach (var (textChild, school) in SchoolTabs)
+        foreach (var (name, school) in SchoolTabs)
         {
             bool lit = allSchools || school == schoolFilter;
             var tc = lit ? TabActive : TabInactive;
-            r.SetTextColor(instanceId, textChild, tc.R, tc.G, tc.B);
-            r.SetElementTint(instanceId, "gmw_" + BackingFor(textChild),
+            r.SetTextColor(instanceId, $"SchoolTab_{name}_Text", tc.R, tc.G, tc.B);
+            r.SetElementTint(instanceId, $"SchoolTab_{name}_Backing",
                 lit ? ChromeActive : ChromeInactive);
         }
         // Path "All" tab (no icon) — the active filter when no path is picked.
-        r.SetElementTint(instanceId, "gmw_5_Tab-Backing",
+        r.SetElementTint(instanceId, "PathTab_All_Backing",
             allPaths ? ChromeActive : ChromeInactive);
         // Path icon tabs — backing + icon dim together so the whole tab reads
         // as one unit. In all-paths mode every icon stays lit; once a path is
         // picked only it stays lit and the others dim.
-        for (int i = 1; i <= 12; i++)
+        foreach (var path in PathTabOrder)
         {
-            bool lit = allPaths || PathTabOrder[i - 1] == pathFilter;
-            var chrome = lit ? ChromeActive : ChromeInactive;
-            r.SetElementTint(instanceId, $"gmw_{8 + (i - 1) * 3}_Tab-Backing", chrome);
-            r.SetElementTint(instanceId, $"gmw_{10 + (i - 1) * 3}_PathIcon", chrome);
+            var chrome = (allPaths || path == pathFilter) ? ChromeActive : ChromeInactive;
+            r.SetElementTint(instanceId, $"PathTab_{path}_Backing", chrome);
+            r.SetElementTint(instanceId, $"PathTab_{path}_Icon", chrome);
         }
     }
 
@@ -171,9 +171,9 @@ public class GrimoireOverlay : IModalLayer
     {
         // School tabs (hit-test the backing — the text element is wider than
         // its tab and would overlap neighbours).
-        foreach (var (child, school) in SchoolTabs)
+        foreach (var (name, school) in SchoolTabs)
         {
-            if (HitChild("gmw_" + BackingFor(child), mx, my))
+            if (HitChild($"SchoolTab_{name}_Backing", mx, my))
             {
                 _schoolFilter = school;
                 Refresh();
@@ -181,19 +181,18 @@ public class GrimoireOverlay : IModalLayer
             }
         }
         // Path "All" tab clears the path filter
-        if (HitChild("gmw_5_Tab-Backing", mx, my))
+        if (HitChild("PathTab_All_Backing", mx, my))
         {
             _pathFilter = MagicPath.None;
             Refresh();
             return true;
         }
-        // Path icon tabs (backing at gmw_{8 + (i-1)*3}_Tab-Backing)
-        for (int i = 1; i <= 12; i++)
+        // Path icon tabs (hit-test each path's backing)
+        foreach (var path in PathTabOrder)
         {
-            if (HitChild($"gmw_{8 + (i - 1) * 3}_Tab-Backing", mx, my))
+            if (HitChild($"PathTab_{path}_Backing", mx, my))
             {
-                var p = PathTabOrder[i - 1];
-                _pathFilter = _pathFilter == p ? MagicPath.None : p; // click again clears
+                _pathFilter = _pathFilter == path ? MagicPath.None : path; // click again clears
                 Refresh();
                 return true;
             }
@@ -240,14 +239,5 @@ public class GrimoireOverlay : IModalLayer
     {
         var r = _renderer.GetChildRect(GrimoirePanel.WidgetId, child, _x, _y, InstanceId);
         return r != Rectangle.Empty && r.Contains(mx, my);
-    }
-
-    // School text child "gmw_45_TabText" -> its backing "45_..." sibling is
-    // one index lower ("gmw_44_Tab-Backing"); just hit-test both the text and
-    // the backing for a generous click target.
-    private static string BackingFor(string textChild)
-    {
-        int n = int.Parse(textChild.Substring(4, textChild.IndexOf('_', 4) - 4));
-        return $"{n - 1}_Tab-Backing";
     }
 }

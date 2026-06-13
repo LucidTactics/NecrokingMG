@@ -10275,7 +10275,7 @@
       }
     },
     {
-      "id": "GMW_0",
+      "id": "Grim_SpellListOverlay",
       "type": "image",
       "imagePath": "assets/UI/Imported/LibraryScene.png",
       "width": 706,
@@ -10300,7 +10300,7 @@
       }
     },
     {
-      "id": "GMW_1",
+      "id": "Grim_WindowBorder",
       "type": "image",
       "imagePath": "assets/UI/Imported/baked_ClothUpgradeFrame2-DarkBorder1_706x1080.png",
       "width": 706,
@@ -10325,7 +10325,7 @@
       }
     },
     {
-      "id": "GMW_2",
+      "id": "Grim_HeaderDivider",
       "type": "image",
       "imagePath": "assets/UI/Imported/baked_ClothUpgradedRowThinDarkEdge_658x21.png",
       "width": 658,
@@ -10358,7 +10358,7 @@
       }
     },
     {
-      "id": "GMW_3",
+      "id": "Grim_TabStripRibbon",
       "type": "image",
       "imagePath": "assets/UI/Imported/baked_SimpleSquareFilled1_652x83.png",
       "width": 652,
@@ -10391,7 +10391,7 @@
       }
     },
     {
-      "id": "GMW_4",
+      "id": "Grim_PathTab_All_Backing",
       "type": "image",
       "imagePath": "assets/UI/Imported/baked_FancyFrame2_Inner_54x45.png",
       "width": 54,
@@ -10416,7 +10416,7 @@
       }
     },
     {
-      "id": "GMW_5",
+      "id": "Grim_PathTab_All_Text",
       "type": "text",
       "width": 54,
       "height": 26,
@@ -10453,7 +10453,7 @@
       }
     },
     {
-      "id": "GMW_6",
+      "id": "Grim_PathTab_All_Frame",
       "type": "image",
       "imagePath": "assets/UI/Imported/baked_InnerCornersButton_54x45.png",
       "width": 54,
@@ -10478,7 +10478,7 @@
       }
     },
     {
-      "id": "GMW_7",
+      "id": "Grim_PathTab_Shock_Backing",
       "type": "image",
       "imagePath": "assets/UI/Imported/baked_FancyFrame2_Inner_51x45.png",
       "width": 51,
@@ -10503,7 +10503,7 @@
       }
     },
     {
-      "id": "GMW_8",
+      "id": "Grim_PathTab_Shock_Frame",
       "type": "image",
       "imagePath": "assets/UI/Imported/baked_InnerCornersButton_51x45.png",
       "width": 51,
@@ -10528,7 +10528,7 @@
       }
     },
     {
-      "id": "GMW_9",
+      "id": "Grim_PathTab_Shock_Icon",
       "type": "image",
       "imagePath": "assets/UI/Imported/Shock24.png",
       "width": 24,
@@ -10561,7 +10561,7 @@
       }
     },
     {
-      "id": "GMW_10",
+      "id": "Grim_PathTab_Fire_Backing",
       "type": "image",
       "imagePath": "assets/UI/Imported/baked_FancyFrame2_Inner_51x45.png",
       "width": 51,
@@ -10586,7 +10586,7 @@
       }
     },
     {
-      "id": "GMW_11",
+      "id": "Grim_PathTab_Fire_Frame",
       "type": "image",
       "imagePath": "assets/UI/Imported/baked_InnerCornersButton_51x45.png",
       "width": 51,
@@ -10611,7 +10611,7 @@
       }
     },
     {
-      "id": "GMW_12",
+      "id": "Grim_PathTab_Fire_Icon",
       "type": "image",
       "imagePath": "assets/UI/Imported/Fire24.png",
       "width": 24,
@@ -10644,7 +10644,7 @@
       }
     },
     {
-      "id": "GMW_13",
+      "id": "Grim_PathTab_Metal_Backing",
       "type": "image",
       "imagePath": "assets/UI/Imported/baked_FancyFrame2_Inner_51x45.png",
       "width": 51,
@@ -10669,7 +10669,7 @@
       }
     },
     {
-      "id": "GMW_14",
+      "id": "Grim_PathTab_Metal_Frame",
       "type": "image",
       "imagePath": "assets/UI/Imported/baked_InnerCornersButton_51x45.png",
       "width": 51,
@@ -10694,7 +10694,7 @@
       }
     },
     {
-      "id": "GMW_15",
+      "id": "Grim_PathTab_Metal_Icon",
       "type": "image",
       "imagePath": "assets/UI/Imported/Metal24.png",
       "width": 24,
@@ -10727,7 +10727,7 @@
       }
     },
     {
-      "id": "GMW_16",
+      "id": "Grim_PathTab_Water_Backing",
       "type": "image",
       "imagePath": "assets/UI/Imported/baked_FancyFrame2_Inner_51x45.png",
       "width": 51,
@@ -10752,7 +10752,7 @@
       }
     },
     {
-      "id": "GMW_17",
+      "id": "Grim_PathTab_Water_Frame",
       "type": "image",
       "imagePath": "assets/UI/Imported/baked_InnerCornersButton_51x45.png",
       "width": 51,
@@ -10777,7 +10777,7 @@
       }
     },
     {
-      "id": "GMW_18",
+      "id": "Grim_PathTab_Water_Icon",
       "type": "image",
       "imagePath": "assets/UI/Imported/water24.png",
       "width": 24,
@@ -10810,7 +10810,7 @@
       }
     },
     {
-      "id": "GMW_19",
+      "id": "Grim_PathTab_Heavens_Backing",
       "type": "image",
       "imagePath": "assets/UI/Imported/baked_FancyFrame2_Inner_51x45.png",
       "width": 51,
@@ -10835,7 +10835,7 @@
       }
     },
     {
-      "id": "GMW_20",
+      "id": "Grim_PathTab_Heavens_Frame",
       "type": "image",
       "imagePath": "assets/UI/Imported/baked_InnerCornersButton_51x45.png",
       "width": 51,
@@ -10860,7 +10860,7 @@
       }
     },
     {
-      "id": "GMW_21",
+      "id": "Grim_PathTab_Heavens_Icon",
       "type": "image",
       "imagePath": "assets/UI/Imported/Heavens.2.24.png",
       "width": 24,
@@ -10893,7 +10893,7 @@
       }
     },
     {
-      "id": "GMW_22",
+      "id": "Grim_PathTab_Order_Backing",
       "type": "image",
       "imagePath": "assets/UI/Imported/baked_FancyFrame2_Inner_51x45.png",
       "width": 51,
@@ -10918,7 +10918,7 @@
       }
     },
     {
-      "id": "GMW_23",
+      "id": "Grim_PathTab_Order_Frame",
       "type": "image",
       "imagePath": "assets/UI/Imported/baked_InnerCornersButton_51x45.png",
       "width": 51,
@@ -10943,7 +10943,7 @@
       }
     },
     {
-      "id": "GMW_24",
+      "id": "Grim_PathTab_Order_Icon",
       "type": "image",
       "imagePath": "assets/UI/Imported/Order24.png",
       "width": 24,
@@ -10976,7 +10976,7 @@
       }
     },
     {
-      "id": "GMW_25",
+      "id": "Grim_PathTab_Earth_Backing",
       "type": "image",
       "imagePath": "assets/UI/Imported/baked_FancyFrame2_Inner_51x45.png",
       "width": 51,
@@ -11001,7 +11001,7 @@
       }
     },
     {
-      "id": "GMW_26",
+      "id": "Grim_PathTab_Earth_Frame",
       "type": "image",
       "imagePath": "assets/UI/Imported/baked_InnerCornersButton_51x45.png",
       "width": 51,
@@ -11026,7 +11026,7 @@
       }
     },
     {
-      "id": "GMW_27",
+      "id": "Grim_PathTab_Earth_Icon",
       "type": "image",
       "imagePath": "assets/UI/Imported/Earth24.png",
       "width": 24,
@@ -11059,7 +11059,7 @@
       }
     },
     {
-      "id": "GMW_28",
+      "id": "Grim_PathTab_Chaos_Backing",
       "type": "image",
       "imagePath": "assets/UI/Imported/baked_FancyFrame2_Inner_51x45.png",
       "width": 51,
@@ -11084,7 +11084,7 @@
       }
     },
     {
-      "id": "GMW_29",
+      "id": "Grim_PathTab_Chaos_Frame",
       "type": "image",
       "imagePath": "assets/UI/Imported/baked_InnerCornersButton_51x45.png",
       "width": 51,
@@ -11109,7 +11109,7 @@
       }
     },
     {
-      "id": "GMW_30",
+      "id": "Grim_PathTab_Chaos_Icon",
       "type": "image",
       "imagePath": "assets/UI/Imported/Chaos24.png",
       "width": 24,
@@ -11142,7 +11142,7 @@
       }
     },
     {
-      "id": "GMW_31",
+      "id": "Grim_PathTab_Spirit_Backing",
       "type": "image",
       "imagePath": "assets/UI/Imported/baked_FancyFrame2_Inner_51x45.png",
       "width": 51,
@@ -11167,7 +11167,7 @@
       }
     },
     {
-      "id": "GMW_32",
+      "id": "Grim_PathTab_Spirit_Frame",
       "type": "image",
       "imagePath": "assets/UI/Imported/baked_InnerCornersButton_51x45.png",
       "width": 51,
@@ -11192,7 +11192,7 @@
       }
     },
     {
-      "id": "GMW_33",
+      "id": "Grim_PathTab_Spirit_Icon",
       "type": "image",
       "imagePath": "assets/UI/Imported/Spirit24.png",
       "width": 24,
@@ -11225,7 +11225,7 @@
       }
     },
     {
-      "id": "GMW_34",
+      "id": "Grim_PathTab_Nature_Backing",
       "type": "image",
       "imagePath": "assets/UI/Imported/baked_FancyFrame2_Inner_51x45.png",
       "width": 51,
@@ -11250,7 +11250,7 @@
       }
     },
     {
-      "id": "GMW_35",
+      "id": "Grim_PathTab_Nature_Frame",
       "type": "image",
       "imagePath": "assets/UI/Imported/baked_InnerCornersButton_51x45.png",
       "width": 51,
@@ -11275,7 +11275,7 @@
       }
     },
     {
-      "id": "GMW_36",
+      "id": "Grim_PathTab_Nature_Icon",
       "type": "image",
       "imagePath": "assets/UI/Imported/Nature24.png",
       "width": 24,
@@ -11308,7 +11308,7 @@
       }
     },
     {
-      "id": "GMW_37",
+      "id": "Grim_PathTab_Body_Backing",
       "type": "image",
       "imagePath": "assets/UI/Imported/baked_FancyFrame2_Inner_51x45.png",
       "width": 51,
@@ -11333,7 +11333,7 @@
       }
     },
     {
-      "id": "GMW_38",
+      "id": "Grim_PathTab_Body_Frame",
       "type": "image",
       "imagePath": "assets/UI/Imported/baked_InnerCornersButton_51x45.png",
       "width": 51,
@@ -11358,7 +11358,7 @@
       }
     },
     {
-      "id": "GMW_39",
+      "id": "Grim_PathTab_Body_Icon",
       "type": "image",
       "imagePath": "assets/UI/Imported/Body24.png",
       "width": 24,
@@ -11391,7 +11391,7 @@
       }
     },
     {
-      "id": "GMW_40",
+      "id": "Grim_PathTab_Death_Backing",
       "type": "image",
       "imagePath": "assets/UI/Imported/baked_FancyFrame2_Inner_51x45.png",
       "width": 51,
@@ -11416,7 +11416,7 @@
       }
     },
     {
-      "id": "GMW_41",
+      "id": "Grim_PathTab_Death_Frame",
       "type": "image",
       "imagePath": "assets/UI/Imported/baked_InnerCornersButton_51x45.png",
       "width": 51,
@@ -11441,7 +11441,7 @@
       }
     },
     {
-      "id": "GMW_42",
+      "id": "Grim_PathTab_Death_Icon",
       "type": "image",
       "imagePath": "assets/UI/Imported/Death24.png",
       "width": 24,
@@ -11474,7 +11474,7 @@
       }
     },
     {
-      "id": "GMW_43",
+      "id": "Grim_SchoolTab_All_Backing",
       "type": "image",
       "imagePath": "assets/UI/Imported/baked_FancyFrame2_Inner_86x33.png",
       "width": 86,
@@ -11499,7 +11499,7 @@
       }
     },
     {
-      "id": "GMW_44",
+      "id": "Grim_SchoolTab_All_Text",
       "type": "text",
       "width": 80,
       "height": 27,
@@ -11536,7 +11536,7 @@
       }
     },
     {
-      "id": "GMW_45",
+      "id": "Grim_SchoolTab_All_Frame",
       "type": "image",
       "imagePath": "assets/UI/Imported/baked_InnerCornersButton_82x35.png",
       "width": 82,
@@ -11561,7 +11561,7 @@
       }
     },
     {
-      "id": "GMW_46",
+      "id": "Grim_SchoolTab_Conjuration_Backing",
       "type": "image",
       "imagePath": "assets/UI/Imported/baked_FancyFrame2_Inner_148x33.png",
       "width": 148,
@@ -11586,7 +11586,7 @@
       }
     },
     {
-      "id": "GMW_47",
+      "id": "Grim_SchoolTab_Conjuration_Text",
       "type": "text",
       "width": 159,
       "height": 26,
@@ -11623,7 +11623,7 @@
       }
     },
     {
-      "id": "GMW_48",
+      "id": "Grim_SchoolTab_Conjuration_Frame",
       "type": "image",
       "imagePath": "assets/UI/Imported/baked_InnerCornersButton_144x35.png",
       "width": 144,
@@ -11648,7 +11648,7 @@
       }
     },
     {
-      "id": "GMW_49",
+      "id": "Grim_SchoolTab_Alteration_Backing",
       "type": "image",
       "imagePath": "assets/UI/Imported/baked_FancyFrame2_Inner_148x33.png",
       "width": 148,
@@ -11673,7 +11673,7 @@
       }
     },
     {
-      "id": "GMW_50",
+      "id": "Grim_SchoolTab_Alteration_Text",
       "type": "text",
       "width": 159,
       "height": 26,
@@ -11710,7 +11710,7 @@
       }
     },
     {
-      "id": "GMW_51",
+      "id": "Grim_SchoolTab_Alteration_Frame",
       "type": "image",
       "imagePath": "assets/UI/Imported/baked_InnerCornersButton_144x35.png",
       "width": 144,
@@ -11735,7 +11735,7 @@
       }
     },
     {
-      "id": "GMW_52",
+      "id": "Grim_SchoolTab_Evocation_Backing",
       "type": "image",
       "imagePath": "assets/UI/Imported/baked_FancyFrame2_Inner_148x33.png",
       "width": 148,
@@ -11760,7 +11760,7 @@
       }
     },
     {
-      "id": "GMW_53",
+      "id": "Grim_SchoolTab_Evocation_Text",
       "type": "text",
       "width": 159,
       "height": 26,
@@ -11797,7 +11797,7 @@
       }
     },
     {
-      "id": "GMW_54",
+      "id": "Grim_SchoolTab_Evocation_Frame",
       "type": "image",
       "imagePath": "assets/UI/Imported/baked_InnerCornersButton_144x35.png",
       "width": 144,
@@ -11822,7 +11822,7 @@
       }
     },
     {
-      "id": "GMW_55",
+      "id": "Grim_SchoolTab_Construction_Backing",
       "type": "image",
       "imagePath": "assets/UI/Imported/baked_FancyFrame2_Inner_148x33.png",
       "width": 148,
@@ -11847,7 +11847,7 @@
       }
     },
     {
-      "id": "GMW_56",
+      "id": "Grim_SchoolTab_Construction_Text",
       "type": "text",
       "width": 159,
       "height": 26,
@@ -11884,7 +11884,7 @@
       }
     },
     {
-      "id": "GMW_57",
+      "id": "Grim_SchoolTab_Construction_Frame",
       "type": "image",
       "imagePath": "assets/UI/Imported/baked_InnerCornersButton_144x35.png",
       "width": 144,
@@ -15462,7 +15462,7 @@
       }
     },
     {
-      "id": "GMW_171",
+      "id": "Grim_TitleRibbon",
       "type": "image",
       "imagePath": "assets/UI/Imported/baked_Ribbon6_689x94.png",
       "width": 689,
@@ -15495,7 +15495,7 @@
       }
     },
     {
-      "id": "GMW_172",
+      "id": "Grim_TitleText",
       "type": "text",
       "width": 648,
       "height": 62,
