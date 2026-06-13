@@ -40,8 +40,16 @@ public class UIGrimoireScenario : ScenarioBase
                     null, Necroking.Data.Registries.MagicPath.Shock);
                 DebugLog.Log(ScenarioLog, $"All={all.Count} Evocation={evo.Count} Shock={shock.Count}");
                 DebugLog.Log(ScenarioLog, "Shock spells: " + string.Join(", ", shock.ConvertAll(s => s.DisplayName)));
-                // Re-bind the left instance to the All view for the screenshot
+                // Left: default All view, "All" tabs lit. Right: Evocation school
+                // + Shock path selected, so the screenshot shows both school-tab
+                // and path-tab highlighting (active bright, rest dimmed).
                 UI.GrimoirePanel.Populate(WidgetRenderer, sim.GameData, "grimoire");
+                UI.GrimoireOverlay.ApplyTabHighlights(WidgetRenderer, "grimoire",
+                    null, Necroking.Data.Registries.MagicPath.None);
+                UI.GrimoirePanel.Populate(WidgetRenderer, sim.GameData, "grim_shock",
+                    "Evocation", Necroking.Data.Registries.MagicPath.Shock);
+                UI.GrimoireOverlay.ApplyTabHighlights(WidgetRenderer, "grim_shock",
+                    "Evocation", Necroking.Data.Registries.MagicPath.Shock);
             }
             WidgetRenderer.DrawWidget(UI.GrimoirePanel.WidgetId, 10, 10, "grimoire");
             WidgetRenderer.DrawWidget(UI.GrimoirePanel.WidgetId, 730, 10, "grim_shock");

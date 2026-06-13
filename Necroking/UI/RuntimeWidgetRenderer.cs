@@ -42,6 +42,10 @@ public class RuntimeWidgetRenderer
     private readonly Dictionary<string, Dictionary<string, string>> _textOverrides = new();
     private readonly Dictionary<string, HashSet<string>> _hiddenChildren = new();
     private readonly Dictionary<string, Dictionary<string, Color>> _textColorOverrides = new();
+    // Per-widget image/nine-slice tint: widgetInstanceId -> (childName -> tint).
+    // Lets runtime code recolor a backing/icon element (e.g. dim an unselected
+    // tab, brighten the active one) without mutating the shared element def.
+    private readonly Dictionary<string, Dictionary<string, Color>> _elementTintOverrides = new();
 
     // Per-widget image overrides: widgetInstanceId -> (childName -> texturePath)
     private readonly Dictionary<string, Dictionary<string, string>> _imageOverrides = new();
@@ -132,6 +136,20 @@ public class RuntimeWidgetRenderer
         map[childName] = new Color(rr, g, b, a);
     }
 
+    /// <summary>Override the tint of a named image / nine-slice child within a
+    /// widget instance. Multiplies the (possibly harmonized) source texture, so
+    /// white = unchanged, grey = dimmed. Used to show selected/pressed button
+    /// state (bright = active, dim = inactive).</summary>
+    public void SetElementTint(string instanceId, string childName, Color tint)
+    {
+        if (!_elementTintOverrides.TryGetValue(instanceId, out var map))
+        {
+            map = new Dictionary<string, Color>();
+            _elementTintOverrides[instanceId] = map;
+        }
+        map[childName] = tint;
+    }
+
     /// <summary>Hide or show a named child within a widget instance (hidden
     /// children are skipped entirely, including nested widget content). On
     /// AutoSizeHeight vertical-layout widgets, hidden children also collapse
@@ -156,6 +174,7 @@ public class RuntimeWidgetRenderer
         _childWidgetOverrides.Remove(instanceId);
         _hiddenChildren.Remove(instanceId);
         _textColorOverrides.Remove(instanceId);
+        _elementTintOverrides.Remove(instanceId);
     }
 
     /// <summary>Clear overrides for an instance AND all its nested
@@ -164,7 +183,8 @@ public class RuntimeWidgetRenderer
     {
         string prefix = instanceId + ".";
         foreach (var dict in new System.Collections.IDictionary[]
-                 { _textOverrides, _imageOverrides, _childWidgetOverrides, _hiddenChildren, _textColorOverrides })
+                 { _textOverrides, _imageOverrides, _childWidgetOverrides, _hiddenChildren,
+                   _textColorOverrides, _elementTintOverrides })
         {
             var stale = new List<object>();
             foreach (var key in dict.Keys)
@@ -407,6 +427,11 @@ public class RuntimeWidgetRenderer
             {
                 byte[] tc = elemDef.TintColor ?? new byte[] { 255, 255, 255, 255 };
                 var tint = ByteColor(tc);
+                // Per-instance tint override (selected/pressed state). Applies to
+                // image + nine-slice draws below; text uses its own color path.
+                if (_elementTintOverrides.TryGetValue(instanceId, out var etMap)
+                    && etMap.TryGetValue(child.Name, out var etOv))
+                    tint = etOv;
 
                 if (elemDef.Type == "text")
                 {

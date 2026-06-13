@@ -39,6 +39,11 @@ public class GrimoireOverlay : IModalLayer
     };
     private static readonly Color TabActive = new(245, 223, 182);
     private static readonly Color TabInactive = new(150, 138, 116);
+    // Backing/icon tint for the active vs inactive tab. Active draws at full
+    // brightness; inactive dims (warm grey multiply) so the selected school/path
+    // tab clearly reads as pressed-in against the rest of the strip.
+    private static readonly Color ChromeActive = Color.White;
+    private static readonly Color ChromeInactive = new(112, 104, 92);
 
     private RuntimeWidgetRenderer _renderer = null!;
     private GameData? _gameData;
@@ -97,10 +102,43 @@ public class GrimoireOverlay : IModalLayer
         if (_gameData == null) return;
         _shown = GrimoirePanel.Populate(_renderer, _gameData, InstanceId, _schoolFilter, _pathFilter);
         _renderer.SetText(InstanceId, TitleChild, _onPick != null ? "Choose a Spell" : "Spells");
-        foreach (var (child, school) in SchoolTabs)
+        ApplyTabHighlights(_renderer, InstanceId, _schoolFilter, _pathFilter);
+    }
+
+    /// <summary>Light the active school + path tabs (backing, icon, and school
+    /// text) and dim the rest, so the current filter reads as selected/pressed.
+    /// Static + instance-parameterised so the live overlay and the UI
+    /// screenshot scenario drive identical visuals off the same code.</summary>
+    public static void ApplyTabHighlights(RuntimeWidgetRenderer r, string instanceId,
+        string? schoolFilter, MagicPath pathFilter)
+    {
+        // "All" mode (no specific filter) lights the whole group — nothing is
+        // filtered out, so nothing dims. Selecting a specific school/path lights
+        // just that tab and dims the rest, so the filtered-out options recede.
+        bool allSchools = schoolFilter == null;
+        bool allPaths = pathFilter == MagicPath.None;
+
+        // School tabs — text colour + backing tint.
+        foreach (var (textChild, school) in SchoolTabs)
         {
-            var c = school == _schoolFilter ? TabActive : TabInactive;
-            _renderer.SetTextColor(InstanceId, child, c.R, c.G, c.B);
+            bool lit = allSchools || school == schoolFilter;
+            var tc = lit ? TabActive : TabInactive;
+            r.SetTextColor(instanceId, textChild, tc.R, tc.G, tc.B);
+            r.SetElementTint(instanceId, "gmw_" + BackingFor(textChild),
+                lit ? ChromeActive : ChromeInactive);
+        }
+        // Path "All" tab (no icon) — the active filter when no path is picked.
+        r.SetElementTint(instanceId, "gmw_5_Tab-Backing",
+            allPaths ? ChromeActive : ChromeInactive);
+        // Path icon tabs — backing + icon dim together so the whole tab reads
+        // as one unit. In all-paths mode every icon stays lit; once a path is
+        // picked only it stays lit and the others dim.
+        for (int i = 1; i <= 12; i++)
+        {
+            bool lit = allPaths || PathTabOrder[i - 1] == pathFilter;
+            var chrome = lit ? ChromeActive : ChromeInactive;
+            r.SetElementTint(instanceId, $"gmw_{8 + (i - 1) * 3}_Tab-Backing", chrome);
+            r.SetElementTint(instanceId, $"gmw_{10 + (i - 1) * 3}_PathIcon", chrome);
         }
     }
 
