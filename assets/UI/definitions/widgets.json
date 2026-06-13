@@ -492,7 +492,7 @@
       "children": [
         {
           "name": "ud_box",
-          "widget": "UD_Box",
+          "widget": "UnitDescBox",
           "x": 5,
           "y": 40,
           "width": 457,
@@ -501,7 +501,7 @@
         },
         {
           "name": "ud_boxpattern",
-          "element": "UD_BoxPattern",
+          "element": "UnitDescPattern",
           "x": 6,
           "y": 43,
           "width": 452,
@@ -510,7 +510,7 @@
         },
         {
           "name": "ud_pframe_shadow",
-          "widget": "UD_PortraitFrameShadow",
+          "widget": "UnitPortraitFrameShadow",
           "x": 15,
           "y": 50,
           "width": 148,
@@ -519,7 +519,7 @@
         },
         {
           "name": "ud_parchment",
-          "element": "UD_PortraitParchment",
+          "element": "UnitPortraitParchment",
           "x": 15,
           "y": 50,
           "width": 142,
@@ -528,7 +528,7 @@
         },
         {
           "name": "ud_pstencil",
-          "element": "UD_PortraitStencil",
+          "element": "UnitPortraitStencil",
           "x": 16,
           "y": 50,
           "width": 140,
@@ -537,7 +537,7 @@
         },
         {
           "name": "ud_portrait",
-          "element": "UD_UnitPortrait",
+          "element": "UnitPortrait",
           "x": 19,
           "y": 53,
           "width": 138,
@@ -546,7 +546,7 @@
         },
         {
           "name": "ud_pframe",
-          "widget": "UD_PortraitFrame",
+          "widget": "UnitPortraitFrame",
           "x": 12,
           "y": 48,
           "width": 147,
@@ -555,7 +555,7 @@
         },
         {
           "name": "ud_desc",
-          "element": "UD_Description",
+          "element": "UnitDescText",
           "x": 173,
           "y": 50,
           "width": 284,
@@ -591,7 +591,7 @@
         },
         {
           "name": "ud_title_swatch",
-          "element": "UD_TitleSwatchImg",
+          "element": "UnitTitleSwatch",
           "x": 5,
           "y": 4,
           "width": 457,
@@ -600,7 +600,7 @@
         },
         {
           "name": "ud_title_heraldry",
-          "element": "UD_TitleHeraldry",
+          "element": "UnitTitleHeraldry",
           "x": 5,
           "y": 4,
           "width": 457,
@@ -609,7 +609,7 @@
         },
         {
           "name": "ud_title_drop",
-          "element": "UD_TitleTextShadow",
+          "element": "UnitTitleTextShadow",
           "x": 30,
           "y": 5,
           "width": 401,
@@ -618,7 +618,7 @@
         },
         {
           "name": "ud_title",
-          "element": "UD_TitleText",
+          "element": "UnitTitleText",
           "x": 28,
           "y": 3,
           "width": 401,
@@ -2373,7 +2373,7 @@
         },
         {
           "name": "ab_box",
-          "element": "AB_StatBox",
+          "element": "AbilitiesBox",
           "x": 3,
           "y": 707,
           "width": 463,
@@ -2382,7 +2382,7 @@
         },
         {
           "name": "ab_boxpattern",
-          "element": "AB_BoxPattern",
+          "element": "AbilitiesPattern",
           "x": 7,
           "y": 710,
           "width": 456,
@@ -2391,7 +2391,7 @@
         },
         {
           "name": "ab_title_swatch",
-          "element": "AB_TitleSwatch",
+          "element": "AbilitiesTitleSwatch",
           "x": 5,
           "y": 680,
           "width": 457,
@@ -2400,7 +2400,7 @@
         },
         {
           "name": "ab_title_heraldry",
-          "element": "AB_TitleHeraldry",
+          "element": "AbilitiesTitleHeraldry",
           "x": 7,
           "y": 680,
           "width": 456,
@@ -2409,7 +2409,7 @@
         },
         {
           "name": "ab_title",
-          "element": "AB_Title",
+          "element": "AbilitiesTitle",
           "x": 7,
           "y": 679,
           "width": 463,
@@ -2418,7 +2418,7 @@
         },
         {
           "name": "ab_r0_icon",
-          "element": "AB_Icon_Flying",
+          "element": "AbilityIcon_Flying",
           "x": 7,
           "y": 713,
           "width": 24,
@@ -2428,7 +2428,7 @@
       ]
     },
     {
-      "id": "UD_Box",
+      "id": "UnitDescBox",
       "background": "CircleBox",
       "width": 457,
       "height": 164,
@@ -2461,7 +2461,7 @@
       "modal": false
     },
     {
-      "id": "UD_PortraitFrameShadow",
+      "id": "UnitPortraitFrameShadow",
       "background": "RenaiThinBorder16",
       "width": 148,
       "height": 148,
@@ -2475,7 +2475,7 @@
       "modal": false
     },
     {
-      "id": "UD_PortraitFrame",
+      "id": "UnitPortraitFrame",
       "background": "RenaiThinBorder16",
       "width": 147,
       "height": 147,
@@ -3596,7 +3596,7 @@
       ]
     },
     {
-      "id": "RTD_Row",
+      "id": "TooltipStatRow",
       "width": 207,
       "height": 24,
       "modal": false,
@@ -3608,7 +3608,7 @@
           "width": 143,
           "height": 24,
           "anchor": 0,
-          "element": "RTD_RowLabel"
+          "element": "TooltipStatRowLabel"
         },
         {
           "name": "value",
@@ -3617,12 +3617,12 @@
           "width": 56,
           "height": 24,
           "anchor": 0,
-          "element": "RTD_RowValue"
+          "element": "TooltipStatRowValue"
         }
       ]
     },
     {
-      "id": "RTD_Header",
+      "id": "TooltipStatHeader",
       "width": 222,
       "height": 40,
       "modal": false,
@@ -3666,7 +3666,7 @@
       ]
     },
     {
-      "id": "RTD_TabBox",
+      "id": "TooltipStatList",
       "width": 207,
       "height": 288,
       "autoSizeHeight": true,
@@ -3728,7 +3728,7 @@
           "width": 207,
           "height": 24,
           "anchor": 0,
-          "widget": "RTD_Row"
+          "widget": "TooltipStatRow"
         },
         {
           "name": "row1",
@@ -3737,7 +3737,7 @@
           "width": 207,
           "height": 24,
           "anchor": 0,
-          "widget": "RTD_Row"
+          "widget": "TooltipStatRow"
         },
         {
           "name": "row2",
@@ -3746,7 +3746,7 @@
           "width": 207,
           "height": 24,
           "anchor": 0,
-          "widget": "RTD_Row"
+          "widget": "TooltipStatRow"
         },
         {
           "name": "row3",
@@ -3755,7 +3755,7 @@
           "width": 207,
           "height": 24,
           "anchor": 0,
-          "widget": "RTD_Row"
+          "widget": "TooltipStatRow"
         },
         {
           "name": "row4",
@@ -3764,7 +3764,7 @@
           "width": 207,
           "height": 24,
           "anchor": 0,
-          "widget": "RTD_Row"
+          "widget": "TooltipStatRow"
         },
         {
           "name": "row5",
@@ -3773,7 +3773,7 @@
           "width": 207,
           "height": 24,
           "anchor": 0,
-          "widget": "RTD_Row"
+          "widget": "TooltipStatRow"
         },
         {
           "name": "row6",
@@ -3782,7 +3782,7 @@
           "width": 207,
           "height": 24,
           "anchor": 0,
-          "widget": "RTD_Row"
+          "widget": "TooltipStatRow"
         },
         {
           "name": "row7",
@@ -3791,7 +3791,7 @@
           "width": 207,
           "height": 24,
           "anchor": 0,
-          "widget": "RTD_Row"
+          "widget": "TooltipStatRow"
         },
         {
           "name": "row8",
@@ -3800,7 +3800,7 @@
           "width": 207,
           "height": 24,
           "anchor": 0,
-          "widget": "RTD_Row"
+          "widget": "TooltipStatRow"
         },
         {
           "name": "row9",
@@ -3809,7 +3809,7 @@
           "width": 207,
           "height": 24,
           "anchor": 0,
-          "widget": "RTD_Row"
+          "widget": "TooltipStatRow"
         },
         {
           "name": "row10",
@@ -3818,7 +3818,7 @@
           "width": 207,
           "height": 24,
           "anchor": 0,
-          "widget": "RTD_Row"
+          "widget": "TooltipStatRow"
         },
         {
           "name": "row11",
@@ -3827,7 +3827,7 @@
           "width": 207,
           "height": 24,
           "anchor": 0,
-          "widget": "RTD_Row"
+          "widget": "TooltipStatRow"
         }
       ]
     },
@@ -3922,7 +3922,7 @@
           "width": 222,
           "height": 40,
           "anchor": 0,
-          "widget": "RTD_Header"
+          "widget": "TooltipStatHeader"
         },
         {
           "name": "rtd_box",
@@ -3931,7 +3931,7 @@
           "width": 207,
           "height": 288,
           "anchor": 0,
-          "widget": "RTD_TabBox"
+          "widget": "TooltipStatList"
         },
         {
           "name": "rtd_desc",
@@ -3945,14 +3945,14 @@
       ]
     },
     {
-      "id": "UTD_DescSection",
+      "id": "UnitDescSection",
       "width": 468,
       "height": 192,
       "modal": false,
       "children": [
         {
           "name": "ud_box",
-          "widget": "UD_Box",
+          "widget": "UnitDescBox",
           "x": 5,
           "y": 40,
           "width": 457,
@@ -3961,7 +3961,7 @@
         },
         {
           "name": "ud_boxpattern",
-          "element": "UD_BoxPattern",
+          "element": "UnitDescPattern",
           "x": 6,
           "y": 43,
           "width": 452,
@@ -3970,7 +3970,7 @@
         },
         {
           "name": "ud_pframe_shadow",
-          "widget": "UD_PortraitFrameShadow",
+          "widget": "UnitPortraitFrameShadow",
           "x": 15,
           "y": 50,
           "width": 148,
@@ -3979,7 +3979,7 @@
         },
         {
           "name": "ud_parchment",
-          "element": "UD_PortraitParchment",
+          "element": "UnitPortraitParchment",
           "x": 15,
           "y": 50,
           "width": 142,
@@ -3988,7 +3988,7 @@
         },
         {
           "name": "ud_pstencil",
-          "element": "UD_PortraitStencil",
+          "element": "UnitPortraitStencil",
           "x": 16,
           "y": 50,
           "width": 140,
@@ -3997,7 +3997,7 @@
         },
         {
           "name": "ud_portrait",
-          "element": "UD_UnitPortrait",
+          "element": "UnitPortrait",
           "x": 19,
           "y": 53,
           "width": 138,
@@ -4006,7 +4006,7 @@
         },
         {
           "name": "ud_pframe",
-          "widget": "UD_PortraitFrame",
+          "widget": "UnitPortraitFrame",
           "x": 12,
           "y": 48,
           "width": 147,
@@ -4015,7 +4015,7 @@
         },
         {
           "name": "ud_desc",
-          "element": "UD_Description",
+          "element": "UnitDescText",
           "x": 173,
           "y": 50,
           "width": 284,
@@ -4051,7 +4051,7 @@
         },
         {
           "name": "ud_title_swatch",
-          "element": "UD_TitleSwatchImg",
+          "element": "UnitTitleSwatch",
           "x": 5,
           "y": 4,
           "width": 457,
@@ -4060,7 +4060,7 @@
         },
         {
           "name": "ud_title_heraldry",
-          "element": "UD_TitleHeraldry",
+          "element": "UnitTitleHeraldry",
           "x": 5,
           "y": 4,
           "width": 457,
@@ -4069,7 +4069,7 @@
         },
         {
           "name": "ud_title_drop",
-          "element": "UD_TitleTextShadow",
+          "element": "UnitTitleTextShadow",
           "x": 30,
           "y": 5,
           "width": 401,
@@ -4078,7 +4078,7 @@
         },
         {
           "name": "ud_title",
-          "element": "UD_TitleText",
+          "element": "UnitTitleText",
           "x": 28,
           "y": 3,
           "width": 401,
@@ -4088,7 +4088,7 @@
       ]
     },
     {
-      "id": "UTD_StatsSection",
+      "id": "UnitStatsGrid",
       "width": 468,
       "height": 165,
       "modal": false,
@@ -4680,7 +4680,7 @@
       ]
     },
     {
-      "id": "UTD_AbilitiesSection",
+      "id": "UnitAbilitiesSection",
       "width": 468,
       "height": 65,
       "modal": false,
@@ -4689,7 +4689,7 @@
         
         {
           "name": "ab_title_swatch",
-          "element": "AB_TitleSwatch",
+          "element": "AbilitiesTitleSwatch",
           "x": 5,
           "y": 0,
           "width": 457,
@@ -4698,7 +4698,7 @@
         },
         {
           "name": "ab_title_heraldry",
-          "element": "AB_TitleHeraldry",
+          "element": "AbilitiesTitleHeraldry",
           "x": 7,
           "y": 0,
           "width": 456,
@@ -4707,7 +4707,7 @@
         },
         {
           "name": "ab_title",
-          "element": "AB_Title",
+          "element": "AbilitiesTitle",
           "x": 7,
           "y": -1,
           "width": 463,
@@ -4717,7 +4717,7 @@
       ]
     },
     {
-      "id": "UTD_eqTitle",
+      "id": "UnitEquipmentTitle",
       "width": 463,
       "height": 28,
       "modal": false,
@@ -4752,7 +4752,7 @@
       ]
     },
     {
-      "id": "UTD_eqRow",
+      "id": "UnitStatRow",
       "width": 463,
       "height": 27,
       "modal": false,
@@ -4909,7 +4909,7 @@
       ]
     },
     {
-      "id": "UTD_eqBox",
+      "id": "UnitEquipmentBox",
       "width": 463,
       "height": 190,
       "autoSizeHeight": true,
@@ -4959,7 +4959,7 @@
       "children": [
         {
           "name": "row0",
-          "widget": "UTD_eqRow",
+          "widget": "UnitStatRow",
           "x": 0,
           "y": 0,
           "width": 463,
@@ -4968,7 +4968,7 @@
         },
         {
           "name": "row1",
-          "widget": "UTD_eqRow",
+          "widget": "UnitStatRow",
           "x": 0,
           "y": 0,
           "width": 463,
@@ -4977,7 +4977,7 @@
         },
         {
           "name": "row2",
-          "widget": "UTD_eqRow",
+          "widget": "UnitStatRow",
           "x": 0,
           "y": 0,
           "width": 463,
@@ -4986,7 +4986,7 @@
         },
         {
           "name": "row3",
-          "widget": "UTD_eqRow",
+          "widget": "UnitStatRow",
           "x": 0,
           "y": 0,
           "width": 463,
@@ -4995,7 +4995,7 @@
         },
         {
           "name": "row4",
-          "widget": "UTD_eqRow",
+          "widget": "UnitStatRow",
           "x": 0,
           "y": 0,
           "width": 463,
@@ -5004,7 +5004,7 @@
         },
         {
           "name": "row5",
-          "widget": "UTD_eqRow",
+          "widget": "UnitStatRow",
           "x": 0,
           "y": 0,
           "width": 463,
@@ -5013,7 +5013,7 @@
         },
         {
           "name": "row6",
-          "widget": "UTD_eqRow",
+          "widget": "UnitStatRow",
           "x": 0,
           "y": 0,
           "width": 463,
@@ -5023,7 +5023,7 @@
       ]
     },
     {
-      "id": "UTD_eqSection",
+      "id": "UnitEquipmentSection",
       "width": 468,
       "height": 218,
       "autoSizeHeight": true,
@@ -5032,7 +5032,7 @@
       "children": [
         {
           "name": "title",
-          "widget": "UTD_eqTitle",
+          "widget": "UnitEquipmentTitle",
           "x": 5,
           "y": 0,
           "width": 463,
@@ -5041,7 +5041,7 @@
         },
         {
           "name": "box",
-          "widget": "UTD_eqBox",
+          "widget": "UnitEquipmentBox",
           "x": 3,
           "y": 0,
           "width": 463,
@@ -5051,7 +5051,7 @@
       ]
     },
     {
-      "id": "UTD_atTitle",
+      "id": "UnitAttackTitle",
       "width": 463,
       "height": 27,
       "modal": false,
@@ -5087,7 +5087,7 @@
     },
     
     {
-      "id": "UTD_atBox",
+      "id": "UnitAttackBox",
       "width": 463,
       "height": 82,
       "autoSizeHeight": true,
@@ -5137,7 +5137,7 @@
       "children": [
         {
           "name": "row0",
-          "widget": "UTD_eqRow",
+          "widget": "UnitStatRow",
           "x": 0,
           "y": 0,
           "width": 463,
@@ -5146,7 +5146,7 @@
         },
         {
           "name": "row1",
-          "widget": "UTD_eqRow",
+          "widget": "UnitStatRow",
           "x": 0,
           "y": 0,
           "width": 463,
@@ -5155,7 +5155,7 @@
         },
         {
           "name": "row2",
-          "widget": "UTD_eqRow",
+          "widget": "UnitStatRow",
           "x": 0,
           "y": 0,
           "width": 463,
@@ -5165,7 +5165,7 @@
       ]
     },
     {
-      "id": "UTD_atSection",
+      "id": "UnitAttackSection",
       "width": 468,
       "height": 109,
       "autoSizeHeight": true,
@@ -5174,7 +5174,7 @@
       "children": [
         {
           "name": "title",
-          "widget": "UTD_atTitle",
+          "widget": "UnitAttackTitle",
           "x": 5,
           "y": 0,
           "width": 463,
@@ -5183,7 +5183,7 @@
         },
         {
           "name": "box",
-          "widget": "UTD_atBox",
+          "widget": "UnitAttackBox",
           "x": 3,
           "y": 0,
           "width": 463,
@@ -5252,7 +5252,7 @@
       "children": [
         {
           "name": "sec_desc",
-          "widget": "UTD_DescSection",
+          "widget": "UnitDescSection",
           "x": 0,
           "y": 0,
           "width": 468,
@@ -5261,7 +5261,7 @@
         },
         {
           "name": "sec_stats",
-          "widget": "UTD_StatsSection",
+          "widget": "UnitStatsGrid",
           "x": 0,
           "y": 0,
           "width": 468,
@@ -5270,7 +5270,7 @@
         },
         {
           "name": "sec_eq",
-          "widget": "UTD_eqSection",
+          "widget": "UnitEquipmentSection",
           "x": 0,
           "y": 0,
           "width": 468,
@@ -5279,7 +5279,7 @@
         },
         {
           "name": "sec_at",
-          "widget": "UTD_atSection",
+          "widget": "UnitAttackSection",
           "x": 0,
           "y": 0,
           "width": 468,
@@ -5288,7 +5288,7 @@
         },
         {
           "name": "sec_ab",
-          "widget": "UTD_AbilitiesSection",
+          "widget": "UnitAbilitiesSection",
           "x": 0,
           "y": 0,
           "width": 468,
@@ -8835,7 +8835,7 @@
       }
     },
     {
-      "id": "GM_Tile",
+      "id": "GrimoireSpellTile",
       "width": 322,
       "height": 80,
       "modal": false,
@@ -8887,7 +8887,7 @@
         },
         {
           "name": "iconframe",
-          "element": "GMT_5",
+          "element": "SpiderFrameBorder",
           "x": -7,
           "y": -6,
           "width": 79,
@@ -9588,7 +9588,7 @@
         },
         {
           "name": "tile0",
-          "widget": "GM_Tile",
+          "widget": "GrimoireSpellTile",
           "x": 37,
           "y": 193,
           "width": 322,
@@ -9597,7 +9597,7 @@
         },
         {
           "name": "tile1",
-          "widget": "GM_Tile",
+          "widget": "GrimoireSpellTile",
           "x": 362,
           "y": 193,
           "width": 322,
@@ -9606,7 +9606,7 @@
         },
         {
           "name": "tile2",
-          "widget": "GM_Tile",
+          "widget": "GrimoireSpellTile",
           "x": 37,
           "y": 270,
           "width": 322,
@@ -9615,7 +9615,7 @@
         },
         {
           "name": "tile3",
-          "widget": "GM_Tile",
+          "widget": "GrimoireSpellTile",
           "x": 362,
           "y": 270,
           "width": 322,
@@ -9624,7 +9624,7 @@
         },
         {
           "name": "tile4",
-          "widget": "GM_Tile",
+          "widget": "GrimoireSpellTile",
           "x": 37,
           "y": 347,
           "width": 322,
@@ -9633,7 +9633,7 @@
         },
         {
           "name": "tile5",
-          "widget": "GM_Tile",
+          "widget": "GrimoireSpellTile",
           "x": 362,
           "y": 347,
           "width": 322,
@@ -9642,7 +9642,7 @@
         },
         {
           "name": "tile6",
-          "widget": "GM_Tile",
+          "widget": "GrimoireSpellTile",
           "x": 37,
           "y": 424,
           "width": 322,
@@ -9651,7 +9651,7 @@
         },
         {
           "name": "tile7",
-          "widget": "GM_Tile",
+          "widget": "GrimoireSpellTile",
           "x": 362,
           "y": 424,
           "width": 322,
@@ -9660,7 +9660,7 @@
         },
         {
           "name": "tile8",
-          "widget": "GM_Tile",
+          "widget": "GrimoireSpellTile",
           "x": 37,
           "y": 501,
           "width": 322,
@@ -9669,7 +9669,7 @@
         },
         {
           "name": "tile9",
-          "widget": "GM_Tile",
+          "widget": "GrimoireSpellTile",
           "x": 362,
           "y": 501,
           "width": 322,
@@ -9678,7 +9678,7 @@
         },
         {
           "name": "tile10",
-          "widget": "GM_Tile",
+          "widget": "GrimoireSpellTile",
           "x": 37,
           "y": 578,
           "width": 322,
@@ -9687,7 +9687,7 @@
         },
         {
           "name": "tile11",
-          "widget": "GM_Tile",
+          "widget": "GrimoireSpellTile",
           "x": 362,
           "y": 578,
           "width": 322,
@@ -9696,7 +9696,7 @@
         },
         {
           "name": "tile12",
-          "widget": "GM_Tile",
+          "widget": "GrimoireSpellTile",
           "x": 37,
           "y": 655,
           "width": 322,
@@ -9705,7 +9705,7 @@
         },
         {
           "name": "tile13",
-          "widget": "GM_Tile",
+          "widget": "GrimoireSpellTile",
           "x": 362,
           "y": 655,
           "width": 322,
@@ -9714,7 +9714,7 @@
         },
         {
           "name": "tile14",
-          "widget": "GM_Tile",
+          "widget": "GrimoireSpellTile",
           "x": 37,
           "y": 732,
           "width": 322,
@@ -9723,7 +9723,7 @@
         },
         {
           "name": "tile15",
-          "widget": "GM_Tile",
+          "widget": "GrimoireSpellTile",
           "x": 362,
           "y": 732,
           "width": 322,
@@ -9732,7 +9732,7 @@
         },
         {
           "name": "tile16",
-          "widget": "GM_Tile",
+          "widget": "GrimoireSpellTile",
           "x": 37,
           "y": 809,
           "width": 322,
@@ -9741,7 +9741,7 @@
         },
         {
           "name": "tile17",
-          "widget": "GM_Tile",
+          "widget": "GrimoireSpellTile",
           "x": 362,
           "y": 809,
           "width": 322,
@@ -9750,7 +9750,7 @@
         },
         {
           "name": "tile18",
-          "widget": "GM_Tile",
+          "widget": "GrimoireSpellTile",
           "x": 37,
           "y": 886,
           "width": 322,
@@ -9759,7 +9759,7 @@
         },
         {
           "name": "tile19",
-          "widget": "GM_Tile",
+          "widget": "GrimoireSpellTile",
           "x": 362,
           "y": 886,
           "width": 322,
@@ -9768,7 +9768,7 @@
         },
         {
           "name": "tile20",
-          "widget": "GM_Tile",
+          "widget": "GrimoireSpellTile",
           "x": 37,
           "y": 963,
           "width": 322,
@@ -9777,7 +9777,7 @@
         },
         {
           "name": "tile21",
-          "widget": "GM_Tile",
+          "widget": "GrimoireSpellTile",
           "x": 362,
           "y": 963,
           "width": 322,

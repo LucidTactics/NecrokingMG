@@ -99,7 +99,7 @@ public class UnitInfoPanel : IModalLayer
             var sec = _renderer.GetChildRect(WidgetId, "sec_desc", _panelX, _panelY, InstanceId);
             // No instance id here: the child is hidden in the Desc instance
             // (we draw the live sprite instead), so ask for the STATIC rect.
-            var rect = _renderer.GetChildRect("UTD_DescSection", "ud_portrait", sec.X, sec.Y);
+            var rect = _renderer.GetChildRect("UnitDescSection", "ud_portrait", sec.X, sec.Y);
             if (rect != Rectangle.Empty)
                 DrawUnitIconCallback(unit.UnitDefID, rect);
         }
@@ -138,7 +138,7 @@ public class UnitInfoPanel : IModalLayer
     {
         var sec = _renderer.GetChildRect(WidgetId, "sec_stats", _panelX, _panelY, InstanceId);
         if (sec == Rectangle.Empty) return Point.Zero;
-        var r = _renderer.GetChildRect("UTD_StatsSection", cell + (value ? "_value" : "_label"), sec.X, sec.Y);
+        var r = _renderer.GetChildRect("UnitStatsGrid", cell + (value ? "_value" : "_label"), sec.X, sec.Y);
         return r == Rectangle.Empty ? Point.Zero : r.Center;
     }
 
@@ -159,9 +159,9 @@ public class UnitInfoPanel : IModalLayer
         {
             foreach (var (cell, k) in CellKeys)
             {
-                var lab = _renderer.GetChildRect("UTD_StatsSection", cell + "_label", sec.X, sec.Y);
-                var ico = _renderer.GetChildRect("UTD_StatsSection", cell + "_icon", sec.X, sec.Y);
-                var val = _renderer.GetChildRect("UTD_StatsSection", cell + "_value", sec.X, sec.Y);
+                var lab = _renderer.GetChildRect("UnitStatsGrid", cell + "_label", sec.X, sec.Y);
+                var ico = _renderer.GetChildRect("UnitStatsGrid", cell + "_icon", sec.X, sec.Y);
+                var val = _renderer.GetChildRect("UnitStatsGrid", cell + "_value", sec.X, sec.Y);
                 if (val.Contains(mx, my)) { key = k; isValue = true; break; }
                 if (lab.Contains(mx, my) || ico.Contains(mx, my)) { key = k; break; }
             }
@@ -423,8 +423,8 @@ public class UnitInfoPanel : IModalLayer
         // matches the original swatch exactly, just sized to the row count.
         int boxH = _abRows * AbRowH + 7;
         int boxTop = sec.Y + AbBoxTop;
-        _renderer.DrawElementImage("AB_StatBox", new Rectangle(sec.X + 3, boxTop, 463, boxH));
-        _renderer.DrawElementImage("AB_BoxPattern", new Rectangle(sec.X + 7, boxTop + 3, AbUsableW, boxH - 6));
+        _renderer.DrawElementImage("AbilitiesBox", new Rectangle(sec.X + 3, boxTop, 463, boxH));
+        _renderer.DrawElementImage("AbilitiesPattern", new Rectangle(sec.X + 7, boxTop + 3, AbUsableW, boxH - 6));
 
         foreach (var e in _abEntries)
         {

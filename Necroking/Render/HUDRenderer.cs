@@ -42,9 +42,10 @@ public class HUDRenderer
     private const int SlotBorderHeight = 2;
 
     // Grimoire elements reused for slot chrome (harmonized via the widget renderer):
-    // GMT_5 = SpiderFrame icon frame, GMW_4 = FancyFrame2_Inner parchment backing.
-    private const string SlotFrameElem = "GMT_5";
-    private const string SlotBgElem = "SBSlotBg";
+    // SpiderFrameBorder = the spider-frame icon border, SpellSlotBg = the
+    // FancyFrame2_Inner parchment backing behind each slot's icon.
+    private const string SlotFrameElem = "SpiderFrameBorder";
+    private const string SlotBgElem = "SpellSlotBg";
     private const float SlotIconRatio = 0.80f; // icon size as a fraction of the box
 
     private const int DropdownItemH = 20;

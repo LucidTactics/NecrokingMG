@@ -9,7 +9,7 @@ namespace Necroking.UI;
 /// <summary>
 /// Binder for GrimoireDyn: populates the 2-wide tile grid from the spell
 /// registry, optionally filtered by school (tab) and/or magic path (icon
-/// strip). Each GM_Tile is a union of the four GodMenu3 tile variants; the
+/// strip). Each GrimoireSpellTile is a union of the four GodMenu3 tile variants; the
 /// spell's tileTemplate (summon / evocation / buff / debuff) decides which
 /// optional parts show. Returns the shown spells (index = tile index) so the
 /// overlay can map a tile click back to a spell.

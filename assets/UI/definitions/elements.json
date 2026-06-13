@@ -1,7 +1,7 @@
 {
   "elements": [
     {
-      "id": "SBSlotBg",
+      "id": "SpellSlotBg",
       "type": "image",
       "imagePath": "assets/UI/Imported/FancyFrame2_Inner.png",
       "width": 60,
@@ -176,7 +176,7 @@
       }
     },
     {
-      "id": "UD_BoxPattern",
+      "id": "UnitDescPattern",
       "type": "image",
       "imagePath": "assets/UI/Background/dragonpattern_ud_box.png",
       "width": 452,
@@ -201,7 +201,7 @@
       }
     },
     {
-      "id": "UD_PortraitParchment",
+      "id": "UnitPortraitParchment",
       "type": "image",
       "imagePath": "assets/UI/Patterns/Parchment-2-Tile.png",
       "width": 142,
@@ -226,7 +226,7 @@
       }
     },
     {
-      "id": "UD_PortraitStencil",
+      "id": "UnitPortraitStencil",
       "type": "image",
       "imagePath": "assets/UI/Background/dragonpattern_stencil.png",
       "width": 140,
@@ -239,7 +239,7 @@
       ]
     },
     {
-      "id": "UD_UnitPortrait",
+      "id": "UnitPortrait",
       "type": "image",
       "imagePath": "assets/UI/Portraits/Dragon3-Transp-Bust2_138.png",
       "width": 138,
@@ -272,7 +272,7 @@
       }
     },
     {
-      "id": "UD_TitleSwatchImg",
+      "id": "UnitTitleSwatch",
       "type": "image",
       "imagePath": "assets/UI/Ribbons/Swatch1.3_457x40.png",
       "width": 457,
@@ -305,7 +305,7 @@
       }
     },
     {
-      "id": "UD_TitleHeraldry",
+      "id": "UnitTitleHeraldry",
       "type": "image",
       "imagePath": "assets/UI/Background/heraldry_title_strip.png",
       "width": 457,
@@ -330,7 +330,7 @@
       }
     },
     {
-      "id": "UD_Description",
+      "id": "UnitDescText",
       "type": "text",
       "width": 284,
       "height": 143,
@@ -370,7 +370,7 @@
       }
     },
     {
-      "id": "UD_TitleText",
+      "id": "UnitTitleText",
       "type": "text",
       "width": 401,
       "height": 42,
@@ -408,7 +408,7 @@
       }
     },
     {
-      "id": "UD_TitleTextShadow",
+      "id": "UnitTitleTextShadow",
       "type": "text",
       "width": 401,
       "height": 42,
@@ -2176,7 +2176,7 @@
       }
     },
     {
-      "id": "AB_StatBox",
+      "id": "AbilitiesBox",
       "type": "image",
       "imagePath": "assets/UI/Ribbons/BlueSwath_abbox_463x35.png",
       "width": 463,
@@ -2201,7 +2201,7 @@
       }
     },
     {
-      "id": "AB_Icon_Flying",
+      "id": "AbilityIcon_Flying",
       "type": "image",
       "imagePath": "assets/UI/Abilities/Flying_24.png",
       "width": 24,
@@ -2234,7 +2234,7 @@
       }
     },
     {
-      "id": "AB_TitleSwatch",
+      "id": "AbilitiesTitleSwatch",
       "type": "image",
       "imagePath": "assets/UI/Ribbons/Swatch1.3_457x29.png",
       "width": 457,
@@ -2267,7 +2267,7 @@
       }
     },
     {
-      "id": "AB_TitleHeraldry",
+      "id": "AbilitiesTitleHeraldry",
       "type": "image",
       "imagePath": "assets/UI/Background/heraldry_ab_strip.png",
       "width": 456,
@@ -2292,7 +2292,7 @@
       }
     },
     {
-      "id": "AB_BoxPattern",
+      "id": "AbilitiesPattern",
       "type": "image",
       "imagePath": "assets/UI/Background/nations_ab_box.png",
       "width": 456,
@@ -2317,7 +2317,7 @@
       }
     },
     {
-      "id": "AB_Title",
+      "id": "AbilitiesTitle",
       "type": "text",
       "width": 463,
       "height": 34,
@@ -3731,7 +3731,7 @@
       }
     },
     {
-      "id": "RTD_RowLabel",
+      "id": "TooltipStatRowLabel",
       "type": "text",
       "width": 143,
       "height": 24,
@@ -3770,7 +3770,7 @@
       }
     },
     {
-      "id": "RTD_RowValue",
+      "id": "TooltipStatRowValue",
       "type": "text",
       "width": 41,
       "height": 24,
@@ -15665,7 +15665,7 @@
       }
     },
     {
-      "id": "GMT_5",
+      "id": "SpiderFrameBorder",
       "type": "image",
       "imagePath": "assets/UI/Imported/SpiderFrame84px.png",
       "width": 79,
