@@ -116,6 +116,22 @@ public class Game1 : Microsoft.Xna.Framework.Game
         Necroking.Core.DebugLog.Log("startup", "  [LazyInit] Inventory/Building/Crafting/Table UIs initialized on demand");
     }
 
+    private bool _uiEditorInitialized;
+    /// <summary>Deferred init for the UI editor (F12 / menu). LoadDefinitions bakes
+    /// every harmonized widget/element texture (~4s of CPU work) — a dev-only tool
+    /// that most launches never open, so it's paid on first open, not at startup.</summary>
+    private void EnsureUIEditorInitialized()
+    {
+        if (_uiEditorInitialized) return;
+        _uiEditorInitialized = true;
+        _uiEditor.Init(_spriteBatch, _pixel, _font, _smallFont);
+        _uiEditor.SetFontManager(_fontManager);
+        string uiDefPath = GamePaths.Resolve(GamePaths.UIDefsDir);
+        if (Directory.Exists(uiDefPath))
+            _uiEditor.LoadDefinitions(uiDefPath);
+        Necroking.Core.DebugLog.Log("startup", "  [LazyInit] UI editor initialized on demand");
+    }
+
     private long _startupLastMs;
     private void LogTiming(string step)
     {
@@ -2028,13 +2044,11 @@ public class Game1 : Microsoft.Xna.Framework.Game
         _groundSystem.OnVertexCorrupted = OnGroundVertexCorruptedForGrass;
         LogTiming("Renderers initialized (weather, grass, lightning)");
 
-        // Init UI editor (read-only viewer, doesn't depend on game systems)
-        _uiEditor.Init(_spriteBatch, _pixel, _font, _smallFont);
-        _uiEditor.SetFontManager(_fontManager);
+        // UI editor (F12 / menu) is a dev-only tool — its LoadDefinitions bakes
+        // every harmonized texture (~4s). Deferred to first open via
+        // EnsureUIEditorInitialized() so it never costs startup time.
         string uiDefPath = GamePaths.Resolve(GamePaths.UIDefsDir);
-        if (Directory.Exists(uiDefPath))
-            _uiEditor.LoadDefinitions(uiDefPath);
-        LogTiming("UI editor initialized");
+        LogTiming("UI editor init deferred");
 
         // Runtime widget renderer + inventory family UIs are deferred to
         // first-needed via EnsureInventoryUIsInitialized(). The widget renderer
@@ -2307,7 +2321,10 @@ public class Game1 : Microsoft.Xna.Framework.Game
         if (!anyTextInputActive && _input.WasKeyPressed(Keys.F11))
             _menuState = _menuState == MenuState.MapEditor ? MenuState.None : MenuState.MapEditor;
         if (!anyTextInputActive && _input.WasKeyPressed(Keys.F12))
-            _menuState = _menuState == MenuState.UIEditor ? MenuState.None : MenuState.UIEditor;
+        {
+            if (_menuState == MenuState.UIEditor) _menuState = MenuState.None;
+            else { EnsureUIEditorInitialized(); _menuState = MenuState.UIEditor; }
+        }
 
         // 'I' key toggles inventory (lazy-inits the UI family on first open)
         if (!anyTextInputActive && _input.WasKeyPressed(Keys.I) && _menuState == MenuState.None)
@@ -2408,7 +2425,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
             y2 += btnH2 + btnGap2;
             // UI Editor
             if (mouse.X >= menuX2 && mouse.X < menuX2 + btnW2 && mouse.Y >= y2 && mouse.Y < y2 + btnH2)
-            { _menuState = MenuState.UIEditor; _paused = false; }
+            { EnsureUIEditorInitialized(); _menuState = MenuState.UIEditor; _paused = false; }
             y2 += btnH2 + btnGap2;
             // Item Editor
             if (mouse.X >= menuX2 && mouse.X < menuX2 + btnW2 && mouse.Y >= y2 && mouse.Y < y2 + btnH2)
@@ -2464,6 +2481,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
             _settingsWindow.Update(screenW, screenH, gameTime);
         if (_menuState == MenuState.UIEditor)
         {
+            EnsureUIEditorInitialized(); // safety net: idempotent, covers any entry path
             // UIEditorWindow IS-A EditorBase with its own private _input field.
             // Without this UpdateInput call its _input.Mouse stays default
             // (released) and LeftJustPressed never fires — tab clicks, swatch
