@@ -81,7 +81,7 @@ def parse(path):
             if mm: cur.scale = fnum(mm.group(1))
         elif s.startswith('Image:'):
             section = 'img'
-            cur.image = {'sprite': '', 'color': (1, 1, 1, 1), 'type': 0, 'ppu': 1.0}
+            cur.image = {'sprite': '', 'color': (1, 1, 1, 1), 'type': 0, 'ppu': 1.0, 'preserve': False}
         elif s.startswith('Script['):
             section = 'swap' if 'Swapper' in s else None
             if section == 'swap':
@@ -98,6 +98,8 @@ def parse(path):
                 cur.image['color'] = tuple(float(v) for v in vals[:4])
             elif s.startswith('m_Type:'):
                 cur.image['type'] = int(s.split()[-1])
+            elif s.startswith('m_PreserveAspect: 1'):
+                cur.image['preserve'] = True
             elif s.startswith('m_PixelsPerUnitMultiplier:'):
                 cur.image['ppu'] = float(s.split()[-1])
         elif section == 'swap' and cur.swapper is not None:
@@ -182,9 +184,9 @@ def harm_from_swapper(sw):
 
 SIZE_OVERRIDES = {  # '[prefix:]name' -> FontStash size (measured vs captures)
     'GMW:Title Text': 72, 'SWT:Title Text': 26, 'PerkTitle': 30, 'Tab Text': 24, 'ALLText': 24,
-    'PathPrompt': 17, 'CostPrompt': 17, 'PathReqText': 22, 'Cost': 22,
-    'Cost2': 22, 'BuffText': 16, 'DamageText': 16, 'DamgeMod1Text': 16,
-    'DamgeMod2Text': 16,
+    'PathPrompt': 17, 'CostPrompt': 17, 'PathReqText': 22, 'Cost': 16,
+    'Cost2': 16, 'BuffText': 16, 'GMW:DamageText': 24, 'DamageText': 16, 'DamgeMod1Text': 12,
+    'DamgeMod2Text': 12,
 }
 WARM_FACE = [240, 218, 178, 255]
 
@@ -331,6 +333,15 @@ def convert(dump_path, widget_id, prefix, root_override_active=True):
             tex = copy_texture(node.image['sprite'])
             if tex and node.image['type'] in (1, 2):
                 tex = bake_variant(node.image['sprite'], tex, node.image['type'], node.image['ppu'], cw, chh)
+            elif tex and node.image['preserve']:
+                # Unity preserveAspect: fit the sprite inside the rect, centered
+                from PIL import Image as _Im
+                tw, th = _Im.open(tex).size
+                fit = min(cw / tw, chh / th)
+                fw, fh = max(1, round(tw * fit)), max(1, round(th * fit))
+                cx += (cw - fw) // 2
+                cy += (chh - fh) // 2
+                cw, chh = fw, fh
             if tex:
                 col = node.image['color']
                 tint = [round(col[0] * 255), round(col[1] * 255), round(col[2] * 255), round(col[3] * 255)]
