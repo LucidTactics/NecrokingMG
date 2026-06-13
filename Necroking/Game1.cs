@@ -216,9 +216,6 @@ public class Game1 : Microsoft.Xna.Framework.Game
     private int _spellDropdownSlot = -1;
     private int _secondaryDropdownSlot = -1;
     private int _channelingSlot = -1;
-    private string[] _potionSlots = new string[2] { "", "" };
-    private int _activePotionSlot = -1;
-    private int _potionDropdownSlot = -1;
     private readonly Dictionary<string, Texture2D?> _itemTextureCache = new();
     private int _hoveredObjectIdx = -1;
     private KeyboardState _prevKb;
@@ -2541,7 +2538,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 _input.MouseOverUI = true;
 
             // Spell dropdown open
-            if (_spellDropdownSlot >= 0 || _secondaryDropdownSlot >= 0 || _potionDropdownSlot >= 0)
+            if (_spellDropdownSlot >= 0 || _secondaryDropdownSlot >= 0)
                 _input.MouseOverUI = true;
 
             // Inventory, building, crafting
@@ -3366,16 +3363,6 @@ public class Game1 : Microsoft.Xna.Framework.Game
             PotionSystem.TryThrowPotion(potionDef.Id, _gameData.Potions, _inventory,
                 _sim.UnitsMut, necroIdx, mouseWorld, _sim.Corpses, _sim.Projectiles);
         }
-    }
-
-    private PotionDef? FindPotionByItemId(string itemId)
-    {
-        foreach (var id in _gameData.Potions.GetIDs())
-        {
-            var p = _gameData.Potions.Get(id);
-            if (p != null && p.ItemID == itemId) return p;
-        }
-        return null;
     }
 
     /// <summary>
@@ -4969,21 +4956,6 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // (Death-fog puffs render inside DrawUnitsAndObjects' merged Y-sort
         // pass so they correctly occlude / are occluded by units & env objects
         // based on relative ground Y — see DepthItemType.DeathFogPuff.)
-
-        // --- Potion throw range indicator ---
-        if (_activePotionSlot >= 0 && _sim.NecromancerIndex >= 0)
-        {
-            string potionItemId = _potionSlots[_activePotionSlot];
-            var potionDef = FindPotionByItemId(potionItemId);
-            if (potionDef != null)
-            {
-                _debugDraw.EnsurePixel(GraphicsDevice);
-                var necroPos = _sim.Units[_sim.NecromancerIndex].Position;
-                float range = potionDef.ThrowRange + 1f;
-                _debugDraw.DrawCircle(_spriteBatch, _renderer, _camera,
-                    necroPos, range, new Color(180, 200, 100, 100), 48);
-            }
-        }
 
         // --- Rain (world-space, depth-sorted with scene objects) ---
         _weatherRenderer.DrawRain(screenW, screenH);
@@ -7937,9 +7909,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
             _spellBarState, _secondaryBarState,
             _spellDropdownSlot, _secondaryDropdownSlot,
             _timeScale, _hoveredObjectIdx, _envSystem,
-            DrawSpellCategoryIcon,
-            _potionSlots, _activePotionSlot, GetItemTexture,
-            _potionDropdownSlot, _paused);
+            DrawSpellCategoryIcon, _paused);
     }
 
     private void DrawPauseMenu(int screenW, int screenH)
