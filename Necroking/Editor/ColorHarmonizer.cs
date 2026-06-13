@@ -252,18 +252,30 @@ public class ColorHarmonizer
     {
         if (source == null || device == null || settings == null) return null;
         if (!settings.HasEffect) return null;
+        var pixels = new Color[source.Width * source.Height];
+        source.GetData(pixels);                                  // GPU read (main thread)
+        if (!TransformPixels(pixels, source.Width, source.Height, settings)) return null;
+        var result = new Texture2D(device, source.Width, source.Height);
+        result.SetData(pixels);                                  // GPU write (main thread)
+        return result;
+    }
 
+    /// <summary>Pure-CPU in-place harmonization of a PREMULTIPLIED pixel buffer
+    /// (un-premultiply → colour/gradient/alpha shift → outline → re-premultiply).
+    /// Touches no GPU state, so the bake can run this across textures in parallel
+    /// (GetData/SetData stay on the main thread). Returns false if the settings
+    /// produce no change, so the caller can skip creating a texture.</summary>
+    public static bool TransformPixels(Color[] pixels, int w, int h, HarmonizeSettings settings)
+    {
         byte targetA = settings.TargetColor.Length > 3 ? settings.TargetColor[3] : (byte)255;
         float alphaMul = targetA / 255f;
         bool hasColorShift = settings.HueStrength > 0f || settings.SatStrength > 0f || settings.ValStrength > 0f;
         bool hasAlphaShift = alphaMul < 0.999f;
         bool hasGradient = settings.HasGradient;
         bool hasOutline = settings.HasOutline;
-        if (!hasColorShift && !hasAlphaShift && !hasGradient && !hasOutline) return null;
+        if (!hasColorShift && !hasAlphaShift && !hasGradient && !hasOutline) return false;
 
         var targetCol = new Color(settings.TargetColor[0], settings.TargetColor[1], settings.TargetColor[2], targetA);
-        var pixels = new Color[source.Width * source.Height];
-        source.GetData(pixels);
 
         // Vertical gradient: blend toward GradColor by yFrac * strength * gradAlpha
         // (top row untouched, bottom row at full factor) — Unity VerGradD2U equivalent.
@@ -271,7 +283,6 @@ public class ColorHarmonizer
         float gradR = hasGradient ? settings.GradColor![0] : 0f;
         float gradG = hasGradient ? settings.GradColor![1] : 0f;
         float gradB = hasGradient ? settings.GradColor![2] : 0f;
-        int w = source.Width, h = source.Height;
 
         // Source textures are premultiplied (TextureUtil.LoadPremultiplied), but
         // all the color math below is defined on straight alpha — un-premultiply
@@ -322,10 +333,7 @@ public class ColorHarmonizer
                 pixels[i] = new Color((byte)(c.R * a / 255), (byte)(c.G * a / 255), (byte)(c.B * a / 255), a);
             }
         }
-
-        var result = new Texture2D(device, source.Width, source.Height);
-        result.SetData(pixels);
-        return result;
+        return true;
     }
 
     /// <summary>Bake a silhouette outline into a straight-alpha pixel array:

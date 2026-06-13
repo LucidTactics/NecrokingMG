@@ -1095,76 +1095,106 @@ public class RuntimeWidgetRenderer
     //  Harmonization
     // ═══════════════════════════════════════
 
-    /// <summary>Generate harmonized textures for all widgets/elements that have harmonize settings.</summary>
+    /// <summary>One harmonize job: a source pixel buffer (read on the main thread)
+    /// transformed in parallel, then uploaded to a Texture2D on the main thread.</summary>
+    private sealed class HarmonizeJob
+    {
+        public string CacheKey = "", Prefix = "";
+        public string? NsLookupId;
+        public Color[] Pixels = System.Array.Empty<Color>();
+        public int W, H;
+        public HarmonizeSettings Settings = null!;
+        public bool Changed;
+    }
+
+    /// <summary>Generate harmonized textures for all widgets/elements that have
+    /// harmonize settings. The per-pixel colour transform dominates the cost, so
+    /// it runs in three phases: GetData (main thread) → parallel CPU transform →
+    /// SetData + nine-slice build (main thread). GetData/SetData must stay on the
+    /// GraphicsDevice thread; only the pure pixel math is parallelized.</summary>
     private void GenerateHarmonizedTextures()
     {
         var sw = System.Diagnostics.Stopwatch.StartNew();
-        // Per-widget prefixes: different widgets may harmonize the SAME texture
-        // differently (e.g. the leather background dark vs light).
+        var jobs = new List<HarmonizeJob>();
+
+        // Phase A (main thread): resolve each source texture + read its pixels.
+        // Per-widget/-element prefixes: the SAME texture can be harmonized
+        // differently by different owners (leather bg dark vs light; frame as
+        // shadow vs gold), so each (prefix|texture) is a distinct cache entry.
+        void Collect(string nsId, string imagePath, string cachePrefix, HarmonizeSettings settings)
+        {
+            Texture2D? sourceTex = null;
+            string texKey = "";
+            string? nsLookupId = null;
+            if (!string.IsNullOrEmpty(imagePath))
+            {
+                sourceTex = GetOrLoadTexture(imagePath);
+                texKey = imagePath;
+            }
+            else if (!string.IsNullOrEmpty(nsId))
+            {
+                var nsDef = _nineSliceDefs.FirstOrDefault(n => n.Id == nsId);
+                if (nsDef != null && !string.IsNullOrEmpty(nsDef.Texture))
+                {
+                    sourceTex = GetOrLoadTexture(nsDef.Texture);
+                    texKey = nsDef.Texture;
+                    nsLookupId = nsId;
+                }
+            }
+            if (sourceTex == null || string.IsNullOrEmpty(texKey)) return;
+            var pixels = new Color[sourceTex.Width * sourceTex.Height];
+            sourceTex.GetData(pixels);
+            jobs.Add(new HarmonizeJob
+            {
+                CacheKey = cachePrefix + "|" + texKey, Prefix = cachePrefix, NsLookupId = nsLookupId,
+                Pixels = pixels, W = sourceTex.Width, H = sourceTex.Height, Settings = settings,
+            });
+        }
         foreach (var wd in _widgetDefs)
         {
             if (wd.BgHarmonize != null && wd.BgHarmonize.HasEffect)
-                ApplyHarmonize(wd.Background, wd.BackgroundImagePath, "bg:" + wd.Id, wd.BgHarmonize);
+                Collect(wd.Background, wd.BackgroundImagePath, "bg:" + wd.Id, wd.BgHarmonize);
             if (wd.StencilHarmonize != null && wd.StencilHarmonize.HasEffect)
-                ApplyHarmonize(wd.Stencil, wd.StencilImagePath, "st:" + wd.Id, wd.StencilHarmonize);
+                Collect(wd.Stencil, wd.StencilImagePath, "st:" + wd.Id, wd.StencilHarmonize);
             if (wd.FrameHarmonize != null && wd.FrameHarmonize.HasEffect)
-                ApplyHarmonize(wd.Frame, "", "fr:" + wd.Id, wd.FrameHarmonize);
+                Collect(wd.Frame, "", "fr:" + wd.Id, wd.FrameHarmonize);
         }
-        // Elements use a per-id prefix: the same texture can be harmonized
-        // differently by different elements (e.g. a frame as shadow vs as gold).
         foreach (var elem in _elementDefs)
         {
             if (elem.Harmonize == null || !elem.Harmonize.HasEffect) continue;
             string imgPath = elem.Type == "image" ? elem.ImagePath : "";
             string nsRef = elem.Type == "nineSlice" ? elem.NineSlice : "";
-            ApplyHarmonize(nsRef, imgPath, "el:" + elem.Id, elem.Harmonize);
+            Collect(nsRef, imgPath, "el:" + elem.Id, elem.Harmonize);
         }
-        Core.DebugLog.Log("startup", $"  [WidgetRenderer] harmonize bake: {sw.ElapsedMilliseconds}ms");
-    }
+        long getDataMs = sw.ElapsedMilliseconds; sw.Restart();
 
-    /// <summary>Apply harmonization to a texture and cache the result (mirrors editor ApplyHarmonize).</summary>
-    private void ApplyHarmonize(string nsId, string imagePath, string cachePrefix, HarmonizeSettings settings)
-    {
-        Texture2D? sourceTex = null;
-        string texKey = "";
-        string? nsLookupId = null;
+        // Phase B (parallel, CPU only): the per-pixel transform — the bottleneck.
+        System.Threading.Tasks.Parallel.For(0, jobs.Count, i =>
+            jobs[i].Changed = ColorHarmonizer.TransformPixels(jobs[i].Pixels, jobs[i].W, jobs[i].H, jobs[i].Settings));
+        long pixelMs = sw.ElapsedMilliseconds; sw.Restart();
 
-        if (!string.IsNullOrEmpty(imagePath))
+        // Phase C (main thread): upload to GPU + build harmonized nine-slices.
+        foreach (var job in jobs)
         {
-            sourceTex = GetOrLoadTexture(imagePath);
-            texKey = imagePath;
-        }
-        else if (!string.IsNullOrEmpty(nsId))
-        {
-            var nsDef = _nineSliceDefs.FirstOrDefault(n => n.Id == nsId);
-            if (nsDef != null && !string.IsNullOrEmpty(nsDef.Texture))
+            if (!job.Changed) continue; // settings produced no change (matches old null skip)
+            var tex = new Texture2D(_device, job.W, job.H);
+            tex.SetData(job.Pixels);
+            _harmonizedTextures[job.CacheKey] = tex;
+            if (!string.IsNullOrEmpty(job.NsLookupId))
             {
-                sourceTex = GetOrLoadTexture(nsDef.Texture);
-                texKey = nsDef.Texture;
-                nsLookupId = nsId;
+                var nsDef = _nineSliceDefs.FirstOrDefault(n => n.Id == job.NsLookupId);
+                if (nsDef != null)
+                {
+                    var nsInst = new NineSlice();
+                    nsInst.LoadFromTexture(tex, nsDef.BorderLeft, nsDef.BorderRight,
+                        nsDef.BorderTop, nsDef.BorderBottom, nsDef.TileEdges);
+                    _harmonizedNineSlices[job.Prefix + "|" + job.NsLookupId] = nsInst;
+                }
             }
         }
-
-        if (sourceTex == null || string.IsNullOrEmpty(texKey)) return;
-
-        string cacheKey = cachePrefix + "|" + texKey;
-        var harmonized = ColorHarmonizer.HarmonizeTexture(sourceTex, _device, settings);
-        if (harmonized == null) return;
-
-        _harmonizedTextures[cacheKey] = harmonized;
-
-        // Also build a harmonized NineSlice if this was a nine-slice source
-        if (!string.IsNullOrEmpty(nsLookupId))
-        {
-            var nsDef = _nineSliceDefs.FirstOrDefault(n => n.Id == nsLookupId);
-            if (nsDef != null)
-            {
-                var nsInst = new NineSlice();
-                nsInst.LoadFromTexture(harmonized, nsDef.BorderLeft, nsDef.BorderRight,
-                    nsDef.BorderTop, nsDef.BorderBottom, nsDef.TileEdges);
-                _harmonizedNineSlices[cachePrefix + "|" + nsLookupId] = nsInst;
-            }
-        }
+        long uploadMs = sw.ElapsedMilliseconds;
+        Core.DebugLog.Log("startup", $"  [WidgetRenderer] harmonize bake: {getDataMs + pixelMs + uploadMs}ms " +
+            $"(n={jobs.Count} getData={getDataMs}ms pixel(parallel)={pixelMs}ms upload={uploadMs}ms)");
     }
 
     /// <summary>Get harmonized nine-slice if available, otherwise original.</summary>
