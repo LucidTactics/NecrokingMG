@@ -15525,8 +15525,8 @@
     {
       "id": "GMT_0",
       "type": "image",
-      "imagePath": "assets/UI/Imported/baked_FancyFrame2_Inner_272x65.png",
-      "width": 272,
+      "imagePath": "assets/UI/Imported/baked_FancyFrame2_Inner_252x65.png",
+      "width": 252,
       "height": 65,
       "tintColor": [
         255,
@@ -15551,7 +15551,7 @@
       "id": "GMT_1",
       "type": "image",
       "imagePath": "assets/UI/Imported/DiagnolFadeGradientCutTop.png",
-      "width": 270,
+      "width": 250,
       "height": 65,
       "tintColor": [
         255,
@@ -15575,8 +15575,8 @@
     {
       "id": "GMT_2",
       "type": "image",
-      "imagePath": "assets/UI/Imported/baked_SpiderFrame84px_334x72.png",
-      "width": 334,
+      "imagePath": "assets/UI/Imported/baked_SpiderFrame84px_314x72.png",
+      "width": 314,
       "height": 72,
       "tintColor": [
         255,
@@ -15683,7 +15683,7 @@
     {
       "id": "GMT_6",
       "type": "text",
-      "width": 215,
+      "width": 195,
       "height": 42,
       "tintColor": [
         255,
@@ -15695,7 +15695,7 @@
       "textRegion": {
         "x": 0,
         "y": 0,
-        "w": 215,
+        "w": 195,
         "h": 42,
         "align": "left",
         "valign": "center",

@@ -14,10 +14,13 @@ import unity2widget as u2w
 
 DUMP = 'log/bag_inspect/grimoire_tree.txt'
 COLS, ROWS_VISIBLE = 2, 11
-TILE_W, TILE_H, STRIDE_Y = 348, 80, 77
-GRID_X = (16, 356)
-GRID_Y0 = 185
-WIDEN = 18  # widen tile boxes so two columns fill the window (user request)
+# Grid fitted to the window border's transparent interior (measured from the
+# baked border: hole x 27..678, y 27..1052). Two columns + 6px gutter with a
+# 2px inset: tile visual width 321 (7px icon-frame overhang + 314 box).
+TILE_W, TILE_H, STRIDE_Y = 328, 80, 77
+GRID_X = (29, 356)
+GRID_Y0 = 190
+WIDEN = -2  # box width delta vs the Unity original (316 -> 314)
 WIDEN_NAMES = {'Box Background', 'Box Background Gradient', 'BoxFrame', 'PerkTitle'}
 SHIFT_NAMES = {'DamageText', 'DamgeMod1Text', 'DamgeMod2Text', 'TargetIcon', 'BuffText', 'BuffIcon'}
 
@@ -169,8 +172,12 @@ def main():
         grid.append(dict(name=f'tile{i}', widget='GM_Tile', x=GRID_X[col], y=GRID_Y0 + row * STRIDE_Y,
                          width=TILE_W, height=TILE_H, anchor=0))
 
+    # The window border draws IN FRONT of the tiles (they'll scroll beneath
+    # it); everything else in the chrome stays behind.
+    border = [c for c in chrome if 'WindowBorder' in c['name']]
+    behind = [c for c in chrome if 'WindowBorder' not in c['name']]
     dyn = dict(id='GrimoireDyn', width=gmw['width'], height=gmw['height'], modal=False,
-               children=chrome + grid)
+               children=behind + grid + border)
     for k in ('background', 'backgroundScale', 'backgroundInset', 'backgroundTint', 'bgHarmonize'):
         if k in gmw: dyn[k] = gmw[k]
     wd['widgets'].append(dyn)
