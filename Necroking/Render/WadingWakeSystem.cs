@@ -153,6 +153,13 @@ public class WakeEmitterState
     /// Refreshed every wading frame and frozen at the wading-true→false
     /// edge until the next session.</summary>
     public byte LastWaterVariantIdx;
+
+    /// <summary>The owning unit's world Y (RenderPos.Y) from the most
+    /// recent update. Splash droplets depth-sort against this so the body
+    /// occludes the water it shed once it walks into the foreground. Cached
+    /// here because the after-sprite front pass (<see cref="WadingWakeSystem.DrawFront"/>)
+    /// doesn't carry the unit position through its call signature.</summary>
+    public float LastUnitY;
 }
 
 /// <summary>
@@ -883,6 +890,10 @@ public class WadingWakeSystem
             state = new WakeEmitterState();
             _perUnit[unitIdx] = state;
         }
+
+        // Cache the unit's depth Y so the front pass (which doesn't get the
+        // unit position) can depth-sort splash droplets against the body.
+        state.LastUnitY = unitPos.Y;
 
         // Body-axis half-vector: pointing from the unit's center toward
         // the FRONT (along facing) at half the body length. For
@@ -1620,7 +1631,22 @@ public class WadingWakeSystem
     {
         foreach (var p in state.Particles)
         {
-            if (p.IsFront != drawFront) continue;
+            // Splash droplets (entry/exit drips + their landed RainSplash
+            // crowns) depth-sort against the owning unit by world Y instead
+            // of using a fixed layer: the drip is anchored where it was shed,
+            // so once the unit walks into the foreground (its RenderPos.Y
+            // grows past the drip's Pos.Y) the body draws over it. A drip
+            // at or ahead of the unit (Pos.Y >= unit Y) stays in the front
+            // pass — so freshly-shed and just-stepped-out drips read in front
+            // until the unit clearly passes them, matching the old look at
+            // the moment of shedding. Trail (MiniSplash) and bow wave
+            // (SoftCircle) keep their authored fixed layer: they track the
+            // unit continuously, so "spawn location" doesn't apply to them.
+            bool particleFront =
+                (p.Kind == WakeParticleKind.BubbleMagic || p.Kind == WakeParticleKind.RainSplash)
+                    ? p.Pos.Y >= state.LastUnitY
+                    : p.IsFront;
+            if (particleFront != drawFront) continue;
 
             // Per-kind alpha + size scaling. Trail/bow rely on age-based
             // fade because their texture doesn't dissipate on its own;

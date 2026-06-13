@@ -570,7 +570,14 @@ public class BuffVisualSystem
             float lifeFrac = Math.Clamp(p.Age / vis.ParticleLifetime, 0f, 1f);
             float alpha = 1f - lifeFrac;
 
-            var sp = renderer.WorldToScreen(p.Pos, p.Height, cam);
+            // Height must use the sprite's vertical convention (height × Zoom,
+            // NOT foreshortened by YRatio). The weapon-attach points these
+            // particles spawn from are authored against the sprite rig, whose
+            // body height renders at worldH × Zoom (see DrawSingleUnit). Using
+            // WorldToScreen here would foreshorten the height by YRatio (0.5),
+            // dropping the casting glow to ~half height — well below the hand.
+            // Matches the carried-body-bag / weapon-attach debug overlay.
+            var sp = renderer.WorldToScreenPx(p.Pos, p.Height * cam.Zoom, cam);
 
             float effectiveFps = vis.FPS > 0f ? vis.FPS : fb.FPS;
             int frameIdx = ((int)(p.Age * effectiveFps)) % fb.TotalFrames;
