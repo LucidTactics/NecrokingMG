@@ -51,6 +51,21 @@ public class SpellDef : IHasId
     [EditorCombo("Projectile", "Buff", "Debuff", "Summon", "Strike", "Beam", "Drain", "Cloud")]
     [JsonPropertyName("category")] public string Category { get; set; } = "Projectile";
 
+    // ===== Grimoire presentation (tab school + tile template + icon) =====
+    [EditorField(Label = "School", Order = 3)]
+    [EditorCombo("Conjuration", "Alteration", "Evocation", "Construction")]
+    [JsonPropertyName("school")] public string School { get; set; } = "";
+
+    [EditorField(Label = "Tile Template", Order = 4)]
+    [EditorCombo("summon", "evocation", "buff", "debuff")]
+    [JsonPropertyName("tileTemplate")] public string TileTemplate { get; set; } = "";
+
+    [EditorField(Label = "Icon", Order = 5)]
+    [JsonPropertyName("icon")] public string Icon { get; set; } = "";
+
+    /// <summary>Hide from the grimoire (debug/internal spells).</summary>
+    [JsonPropertyName("hidden")] public bool Hidden { get; set; }
+
     // ============ COMMON ============
     [EditorField(Label = "Range", Group = "COMMON", Order = 100, Step = 0.1f, Decimals = 1, GroupColorR = 200, GroupColorG = 200, GroupColorB = 220)]
     [JsonPropertyName("range")] public float Range { get; set; } = 20.0f;

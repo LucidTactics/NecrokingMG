@@ -9005,6 +9005,995 @@
         ],
         "gradStrength": 0.992
       }
+    },
+    {
+      "id": "GM_Tile",
+      "width": 330,
+      "height": 80,
+      "modal": false,
+      "children": [
+        {
+          "name": "bg",
+          "element": "GMT_0",
+          "x": 61,
+          "y": 1,
+          "width": 254,
+          "height": 65,
+          "anchor": 0
+        },
+        {
+          "name": "grad",
+          "element": "GMT_1",
+          "x": 61,
+          "y": 0,
+          "width": 252,
+          "height": 65,
+          "anchor": 0
+        },
+        {
+          "name": "frame",
+          "element": "GMT_2",
+          "x": 0,
+          "y": -3,
+          "width": 316,
+          "height": 72,
+          "anchor": 0
+        },
+        {
+          "name": "underline",
+          "element": "GMT_3",
+          "x": 63,
+          "y": 35,
+          "width": 212,
+          "height": 3,
+          "anchor": 0
+        },
+        {
+          "name": "icon",
+          "element": "GMT_4",
+          "x": 1,
+          "y": 3,
+          "width": 63,
+          "height": 62,
+          "anchor": 0
+        },
+        {
+          "name": "iconframe",
+          "element": "GMT_5",
+          "x": -7,
+          "y": -6,
+          "width": 79,
+          "height": 79,
+          "anchor": 0
+        },
+        {
+          "name": "title",
+          "element": "GMT_6",
+          "x": 73,
+          "y": -2,
+          "width": 197,
+          "height": 42,
+          "anchor": 0
+        },
+        {
+          "name": "path_p",
+          "element": "GMT_7",
+          "x": 74,
+          "y": 44,
+          "width": 23,
+          "height": 15,
+          "anchor": 0
+        },
+        {
+          "name": "path_v",
+          "element": "GMT_8",
+          "x": 98,
+          "y": 38,
+          "width": 12,
+          "height": 25,
+          "anchor": 0
+        },
+        {
+          "name": "path_i",
+          "element": "GMT_9",
+          "x": 108,
+          "y": 38,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "cost_p",
+          "element": "GMT_10",
+          "x": 166,
+          "y": 44,
+          "width": 23,
+          "height": 15,
+          "anchor": 0
+        },
+        {
+          "name": "cost_v",
+          "element": "GMT_11",
+          "x": 189,
+          "y": 38,
+          "width": 15,
+          "height": 26,
+          "anchor": 0
+        },
+        {
+          "name": "cost_i",
+          "element": "GMT_12",
+          "x": 204,
+          "y": 38,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "target",
+          "element": "GMT_13",
+          "x": 260,
+          "y": 24,
+          "width": 48,
+          "height": 28,
+          "anchor": 0
+        },
+        {
+          "name": "dmg_v",
+          "element": "GMT_14",
+          "x": 256,
+          "y": 4,
+          "width": 34,
+          "height": 34,
+          "anchor": 0
+        },
+        {
+          "name": "dmg_m1",
+          "element": "GMT_15",
+          "x": 263,
+          "y": 33,
+          "width": 25,
+          "height": 11,
+          "anchor": 0
+        },
+        {
+          "name": "dmg_m2",
+          "element": "GMT_16",
+          "x": 291,
+          "y": 33,
+          "width": 25,
+          "height": 11,
+          "anchor": 0
+        },
+        {
+          "name": "path2_i",
+          "element": "GMT_17",
+          "x": 288,
+          "y": 8,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "buff_p",
+          "element": "GMT_18",
+          "x": 250,
+          "y": 12,
+          "width": 28,
+          "height": 16,
+          "anchor": 0
+        },
+        {
+          "name": "buff_i",
+          "element": "GMT_19",
+          "x": 280,
+          "y": 8,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "path2_v",
+          "element": "GMT_20",
+          "x": 130,
+          "y": 38,
+          "width": 12,
+          "height": 25,
+          "anchor": 0
+        },
+        {
+          "name": "cost2_v",
+          "element": "GMT_21",
+          "x": 226,
+          "y": 38,
+          "width": 15,
+          "height": 26,
+          "anchor": 0
+        },
+        {
+          "name": "cost2_i",
+          "element": "GMT_22",
+          "x": 240,
+          "y": 38,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        }
+      ]
+    },
+    {
+      "id": "GrimoireDyn",
+      "width": 706,
+      "height": 1080,
+      "modal": false,
+      "children": [
+        {
+          "name": "gmw_1_SpellOverlay",
+          "element": "GMW_0",
+          "x": 0,
+          "y": 0,
+          "width": 706,
+          "height": 1080,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_2_WindowBorder",
+          "element": "GMW_1",
+          "x": 0,
+          "y": 0,
+          "width": 706,
+          "height": 1080,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_3_Row1",
+          "element": "GMW_2",
+          "x": 24,
+          "y": 171,
+          "width": 658,
+          "height": 21,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_4_Ribbon",
+          "element": "GMW_3",
+          "x": 27,
+          "y": 91,
+          "width": 652,
+          "height": 83,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_5_Tab-Backing",
+          "element": "GMW_4",
+          "x": 26,
+          "y": 130,
+          "width": 54,
+          "height": 45,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_6_ALLText",
+          "element": "GMW_5",
+          "x": 26,
+          "y": 138,
+          "width": 54,
+          "height": 26,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_7_Tab-Frame",
+          "element": "GMW_6",
+          "x": 26,
+          "y": 130,
+          "width": 54,
+          "height": 45,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_8_Tab-Backing",
+          "element": "GMW_7",
+          "x": 78,
+          "y": 130,
+          "width": 51,
+          "height": 45,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_9_Tab-Frame",
+          "element": "GMW_8",
+          "x": 78,
+          "y": 130,
+          "width": 51,
+          "height": 45,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_10_PathIcon",
+          "element": "GMW_9",
+          "x": 92,
+          "y": 141,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_11_Tab-Backing",
+          "element": "GMW_10",
+          "x": 128,
+          "y": 130,
+          "width": 51,
+          "height": 45,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_12_Tab-Frame",
+          "element": "GMW_11",
+          "x": 128,
+          "y": 130,
+          "width": 51,
+          "height": 45,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_13_PathIcon",
+          "element": "GMW_12",
+          "x": 142,
+          "y": 141,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_14_Tab-Backing",
+          "element": "GMW_13",
+          "x": 178,
+          "y": 130,
+          "width": 51,
+          "height": 45,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_15_Tab-Frame",
+          "element": "GMW_14",
+          "x": 178,
+          "y": 130,
+          "width": 51,
+          "height": 45,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_16_PathIcon",
+          "element": "GMW_15",
+          "x": 192,
+          "y": 141,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_17_Tab-Backing",
+          "element": "GMW_16",
+          "x": 228,
+          "y": 130,
+          "width": 51,
+          "height": 45,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_18_Tab-Frame",
+          "element": "GMW_17",
+          "x": 228,
+          "y": 130,
+          "width": 51,
+          "height": 45,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_19_PathIcon",
+          "element": "GMW_18",
+          "x": 242,
+          "y": 141,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_20_Tab-Backing",
+          "element": "GMW_19",
+          "x": 278,
+          "y": 130,
+          "width": 51,
+          "height": 45,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_21_Tab-Frame",
+          "element": "GMW_20",
+          "x": 278,
+          "y": 130,
+          "width": 51,
+          "height": 45,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_22_PathIcon",
+          "element": "GMW_21",
+          "x": 292,
+          "y": 141,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_23_Tab-Backing",
+          "element": "GMW_22",
+          "x": 328,
+          "y": 130,
+          "width": 51,
+          "height": 45,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_24_Tab-Frame",
+          "element": "GMW_23",
+          "x": 328,
+          "y": 130,
+          "width": 51,
+          "height": 45,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_25_PathIcon",
+          "element": "GMW_24",
+          "x": 342,
+          "y": 141,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_26_Tab-Backing",
+          "element": "GMW_25",
+          "x": 378,
+          "y": 130,
+          "width": 51,
+          "height": 45,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_27_Tab-Frame",
+          "element": "GMW_26",
+          "x": 378,
+          "y": 130,
+          "width": 51,
+          "height": 45,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_28_PathIcon",
+          "element": "GMW_27",
+          "x": 392,
+          "y": 141,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_29_Tab-Backing",
+          "element": "GMW_28",
+          "x": 428,
+          "y": 130,
+          "width": 51,
+          "height": 45,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_30_Tab-Frame",
+          "element": "GMW_29",
+          "x": 428,
+          "y": 130,
+          "width": 51,
+          "height": 45,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_31_PathIcon",
+          "element": "GMW_30",
+          "x": 442,
+          "y": 141,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_32_Tab-Backing",
+          "element": "GMW_31",
+          "x": 478,
+          "y": 130,
+          "width": 51,
+          "height": 45,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_33_Tab-Frame",
+          "element": "GMW_32",
+          "x": 478,
+          "y": 130,
+          "width": 51,
+          "height": 45,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_34_PathIcon",
+          "element": "GMW_33",
+          "x": 492,
+          "y": 141,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_35_Tab-Backing",
+          "element": "GMW_34",
+          "x": 528,
+          "y": 130,
+          "width": 51,
+          "height": 45,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_36_Tab-Frame",
+          "element": "GMW_35",
+          "x": 528,
+          "y": 130,
+          "width": 51,
+          "height": 45,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_37_PathIcon",
+          "element": "GMW_36",
+          "x": 542,
+          "y": 141,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_38_Tab-Backing",
+          "element": "GMW_37",
+          "x": 578,
+          "y": 130,
+          "width": 51,
+          "height": 45,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_39_Tab-Frame",
+          "element": "GMW_38",
+          "x": 578,
+          "y": 130,
+          "width": 51,
+          "height": 45,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_40_PathIcon",
+          "element": "GMW_39",
+          "x": 592,
+          "y": 141,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_41_Tab-Backing",
+          "element": "GMW_40",
+          "x": 628,
+          "y": 130,
+          "width": 51,
+          "height": 45,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_42_Tab-Frame",
+          "element": "GMW_41",
+          "x": 628,
+          "y": 130,
+          "width": 51,
+          "height": 45,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_43_PathIcon",
+          "element": "GMW_42",
+          "x": 642,
+          "y": 141,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_44_Tab-Backing",
+          "element": "GMW_43",
+          "x": 24,
+          "y": 98,
+          "width": 86,
+          "height": 33,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_45_TabText",
+          "element": "GMW_44",
+          "x": 27,
+          "y": 101,
+          "width": 80,
+          "height": 27,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_46_Tab-Frame",
+          "element": "GMW_45",
+          "x": 26,
+          "y": 96,
+          "width": 82,
+          "height": 35,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_47_Tab-Backing",
+          "element": "GMW_46",
+          "x": 104,
+          "y": 98,
+          "width": 148,
+          "height": 33,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_48_TabText",
+          "element": "GMW_47",
+          "x": 101,
+          "y": 102,
+          "width": 159,
+          "height": 26,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_49_Tab-Frame",
+          "element": "GMW_48",
+          "x": 107,
+          "y": 96,
+          "width": 144,
+          "height": 35,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_50_Tab-Backing",
+          "element": "GMW_49",
+          "x": 248,
+          "y": 98,
+          "width": 148,
+          "height": 33,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_51_TabText",
+          "element": "GMW_50",
+          "x": 244,
+          "y": 102,
+          "width": 159,
+          "height": 26,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_52_Tab-Frame",
+          "element": "GMW_51",
+          "x": 250,
+          "y": 96,
+          "width": 144,
+          "height": 35,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_53_Tab-Backing",
+          "element": "GMW_52",
+          "x": 390,
+          "y": 98,
+          "width": 148,
+          "height": 33,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_54_TabText",
+          "element": "GMW_53",
+          "x": 387,
+          "y": 102,
+          "width": 159,
+          "height": 26,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_55_Tab-Frame",
+          "element": "GMW_54",
+          "x": 393,
+          "y": 96,
+          "width": 144,
+          "height": 35,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_56_Tab-Backing",
+          "element": "GMW_55",
+          "x": 534,
+          "y": 98,
+          "width": 148,
+          "height": 33,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_57_TabText",
+          "element": "GMW_56",
+          "x": 530,
+          "y": 102,
+          "width": 159,
+          "height": 26,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_58_Tab-Frame",
+          "element": "GMW_57",
+          "x": 536,
+          "y": 96,
+          "width": 144,
+          "height": 35,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_172_Ribbon",
+          "element": "GMW_171",
+          "x": 10,
+          "y": 12,
+          "width": 689,
+          "height": 94,
+          "anchor": 0
+        },
+        {
+          "name": "gmw_173_TitleText",
+          "element": "GMW_172",
+          "x": 38,
+          "y": 28,
+          "width": 648,
+          "height": 62,
+          "anchor": 0
+        },
+        {
+          "name": "tile0",
+          "widget": "GM_Tile",
+          "x": 24,
+          "y": 185,
+          "width": 330,
+          "height": 80,
+          "anchor": 0
+        },
+        {
+          "name": "tile1",
+          "widget": "GM_Tile",
+          "x": 346,
+          "y": 185,
+          "width": 330,
+          "height": 80,
+          "anchor": 0
+        },
+        {
+          "name": "tile2",
+          "widget": "GM_Tile",
+          "x": 24,
+          "y": 262,
+          "width": 330,
+          "height": 80,
+          "anchor": 0
+        },
+        {
+          "name": "tile3",
+          "widget": "GM_Tile",
+          "x": 346,
+          "y": 262,
+          "width": 330,
+          "height": 80,
+          "anchor": 0
+        },
+        {
+          "name": "tile4",
+          "widget": "GM_Tile",
+          "x": 24,
+          "y": 339,
+          "width": 330,
+          "height": 80,
+          "anchor": 0
+        },
+        {
+          "name": "tile5",
+          "widget": "GM_Tile",
+          "x": 346,
+          "y": 339,
+          "width": 330,
+          "height": 80,
+          "anchor": 0
+        },
+        {
+          "name": "tile6",
+          "widget": "GM_Tile",
+          "x": 24,
+          "y": 416,
+          "width": 330,
+          "height": 80,
+          "anchor": 0
+        },
+        {
+          "name": "tile7",
+          "widget": "GM_Tile",
+          "x": 346,
+          "y": 416,
+          "width": 330,
+          "height": 80,
+          "anchor": 0
+        },
+        {
+          "name": "tile8",
+          "widget": "GM_Tile",
+          "x": 24,
+          "y": 493,
+          "width": 330,
+          "height": 80,
+          "anchor": 0
+        },
+        {
+          "name": "tile9",
+          "widget": "GM_Tile",
+          "x": 346,
+          "y": 493,
+          "width": 330,
+          "height": 80,
+          "anchor": 0
+        },
+        {
+          "name": "tile10",
+          "widget": "GM_Tile",
+          "x": 24,
+          "y": 570,
+          "width": 330,
+          "height": 80,
+          "anchor": 0
+        },
+        {
+          "name": "tile11",
+          "widget": "GM_Tile",
+          "x": 346,
+          "y": 570,
+          "width": 330,
+          "height": 80,
+          "anchor": 0
+        },
+        {
+          "name": "tile12",
+          "widget": "GM_Tile",
+          "x": 24,
+          "y": 647,
+          "width": 330,
+          "height": 80,
+          "anchor": 0
+        },
+        {
+          "name": "tile13",
+          "widget": "GM_Tile",
+          "x": 346,
+          "y": 647,
+          "width": 330,
+          "height": 80,
+          "anchor": 0
+        },
+        {
+          "name": "tile14",
+          "widget": "GM_Tile",
+          "x": 24,
+          "y": 724,
+          "width": 330,
+          "height": 80,
+          "anchor": 0
+        },
+        {
+          "name": "tile15",
+          "widget": "GM_Tile",
+          "x": 346,
+          "y": 724,
+          "width": 330,
+          "height": 80,
+          "anchor": 0
+        },
+        {
+          "name": "tile16",
+          "widget": "GM_Tile",
+          "x": 24,
+          "y": 801,
+          "width": 330,
+          "height": 80,
+          "anchor": 0
+        },
+        {
+          "name": "tile17",
+          "widget": "GM_Tile",
+          "x": 346,
+          "y": 801,
+          "width": 330,
+          "height": 80,
+          "anchor": 0
+        },
+        {
+          "name": "tile18",
+          "widget": "GM_Tile",
+          "x": 24,
+          "y": 878,
+          "width": 330,
+          "height": 80,
+          "anchor": 0
+        },
+        {
+          "name": "tile19",
+          "widget": "GM_Tile",
+          "x": 346,
+          "y": 878,
+          "width": 330,
+          "height": 80,
+          "anchor": 0
+        },
+        {
+          "name": "tile20",
+          "widget": "GM_Tile",
+          "x": 24,
+          "y": 955,
+          "width": 330,
+          "height": 80,
+          "anchor": 0
+        },
+        {
+          "name": "tile21",
+          "widget": "GM_Tile",
+          "x": 346,
+          "y": 955,
+          "width": 330,
+          "height": 80,
+          "anchor": 0
+        }
+      ],
+      "background": "LeatherBackground",
+      "backgroundScale": 0.136,
+      "backgroundInset": -17,
+      "backgroundTint": [
+        199,
+        215,
+        229,
+        255
+      ],
+      "bgHarmonize": {
+        "targetColor": [
+          73,
+          58,
+          41,
+          255
+        ],
+        "hueStrength": 1,
+        "satStrength": 1.0,
+        "valStrength": 0.48,
+        "useHcl": false,
+        "gradColor": [
+          18,
+          15,
+          11,
+          112
+        ],
+        "gradStrength": 0.992
+      }
     }
   ]
 }

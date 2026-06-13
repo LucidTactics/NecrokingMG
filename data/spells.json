@@ -199,7 +199,11 @@
         "a": 255,
         "intensity": 1
       },
-      "toggleEffect": ""
+      "toggleEffect": "",
+      "hidden": false,
+      "school": "Evocation",
+      "tileTemplate": "evocation",
+      "icon": "assets/UI/Icons/Spells/fireball.png"
     },
     {
       "name": "Nether Blast (KB)",
@@ -400,7 +404,11 @@
         "a": 255,
         "intensity": 1
       },
-      "toggleEffect": ""
+      "toggleEffect": "",
+      "hidden": false,
+      "school": "Evocation",
+      "tileTemplate": "evocation",
+      "icon": "assets/UI/Icons/Spells/fireball_kb.png"
     },
     {
       "name": "Nether Darts",
@@ -601,7 +609,11 @@
         "a": 255,
         "intensity": 1
       },
-      "toggleEffect": ""
+      "toggleEffect": "",
+      "hidden": false,
+      "school": "Evocation",
+      "tileTemplate": "evocation",
+      "icon": "assets/UI/Icons/Spells/nether_darts.png"
     },
     {
       "name": "Summon Skeleton",
@@ -787,7 +799,11 @@
         "a": 255,
         "intensity": 1
       },
-      "toggleEffect": ""
+      "toggleEffect": "",
+      "hidden": false,
+      "school": "Conjuration",
+      "tileTemplate": "summon",
+      "icon": "assets/UI/Icons/Spells/summon_skeleton.png"
     },
     {
       "name": "Summon Deer",
@@ -973,7 +989,11 @@
         "a": 255,
         "intensity": 1
       },
-      "toggleEffect": ""
+      "toggleEffect": "",
+      "hidden": false,
+      "school": "Conjuration",
+      "tileTemplate": "summon",
+      "icon": "assets/UI/Icons/Spells/summon_skeleton_copy.png"
     },
     {
       "name": "Summon Wolf",
@@ -1159,7 +1179,11 @@
         "a": 255,
         "intensity": 1
       },
-      "toggleEffect": ""
+      "toggleEffect": "",
+      "hidden": false,
+      "school": "Conjuration",
+      "tileTemplate": "summon",
+      "icon": "assets/UI/Icons/Spells/summon_skeleton_copy_copy.png"
     },
     {
       "name": "Summon Wolf Zombie",
@@ -1345,7 +1369,11 @@
         "a": 255,
         "intensity": 1
       },
-      "toggleEffect": ""
+      "toggleEffect": "",
+      "hidden": false,
+      "school": "Conjuration",
+      "tileTemplate": "summon",
+      "icon": "assets/UI/Icons/Spells/summon_skeleton_copy_copy_copy.png"
     },
     {
       "name": "Skeleton Warrior Upgrade",
@@ -1533,7 +1561,11 @@
         "a": 255,
         "intensity": 1
       },
-      "toggleEffect": ""
+      "toggleEffect": "",
+      "hidden": false,
+      "school": "Construction",
+      "tileTemplate": "summon",
+      "icon": "assets/UI/Icons/Spells/skeleton_warrior_upgrade.png"
     },
     {
       "name": "Summon Abomination",
@@ -1719,7 +1751,11 @@
         "a": 255,
         "intensity": 1
       },
-      "toggleEffect": ""
+      "toggleEffect": "",
+      "hidden": false,
+      "school": "Conjuration",
+      "tileTemplate": "summon",
+      "icon": "assets/UI/Icons/Spells/summon_abomination.png"
     },
     {
       "name": "Sky Lightning",
@@ -1905,7 +1941,11 @@
         "a": 255,
         "intensity": 1
       },
-      "toggleEffect": ""
+      "toggleEffect": "",
+      "hidden": false,
+      "school": "Evocation",
+      "tileTemplate": "evocation",
+      "icon": "assets/UI/Icons/Spells/sky_lightning.png"
     },
     {
       "name": "Lightning Zap",
@@ -2091,7 +2131,11 @@
         "a": 255,
         "intensity": 1
       },
-      "toggleEffect": ""
+      "toggleEffect": "",
+      "hidden": false,
+      "school": "Evocation",
+      "tileTemplate": "evocation",
+      "icon": "assets/UI/Icons/Spells/lightning_zap.png"
     },
     {
       "name": "Lightning Beam",
@@ -2262,7 +2306,11 @@
         "a": 255,
         "intensity": 1
       },
-      "toggleEffect": ""
+      "toggleEffect": "",
+      "hidden": false,
+      "school": "Evocation",
+      "tileTemplate": "evocation",
+      "icon": "assets/UI/Icons/Spells/lightning_beam.png"
     },
     {
       "name": "Elite Skeleton Upgrade",
@@ -2450,7 +2498,11 @@
         "a": 255,
         "intensity": 1
       },
-      "toggleEffect": ""
+      "toggleEffect": "",
+      "hidden": false,
+      "school": "Construction",
+      "tileTemplate": "summon",
+      "icon": "assets/UI/Icons/Spells/skeleton_warrior_upgrade_copy.png"
     },
     {
       "name": "Iron Skin",
@@ -2636,7 +2688,11 @@
         "a": 255,
         "intensity": 1
       },
-      "toggleEffect": ""
+      "toggleEffect": "",
+      "hidden": false,
+      "school": "Alteration",
+      "tileTemplate": "buff",
+      "icon": "assets/UI/Icons/Spells/spell_9.png"
     },
     {
       "name": "Quickness",
@@ -2822,7 +2878,11 @@
         "a": 255,
         "intensity": 1
       },
-      "toggleEffect": ""
+      "toggleEffect": "",
+      "hidden": false,
+      "school": "Alteration",
+      "tileTemplate": "buff",
+      "icon": "assets/UI/Icons/Spells/spell_9_copy.png"
     },
     {
       "name": "Lucky",
@@ -3008,7 +3068,11 @@
         "a": 255,
         "intensity": 1
       },
-      "toggleEffect": ""
+      "toggleEffect": "",
+      "hidden": false,
+      "school": "Alteration",
+      "tileTemplate": "buff",
+      "icon": "assets/UI/Icons/Spells/spell_11.png"
     },
     {
       "name": "Lifedrain",
@@ -3194,7 +3258,11 @@
         "a": 255,
         "intensity": 1
       },
-      "toggleEffect": ""
+      "toggleEffect": "",
+      "hidden": false,
+      "school": "Evocation",
+      "tileTemplate": "evocation",
+      "icon": "assets/UI/Icons/Spells/spell_12.png"
     },
     {
       "name": "Debug Militia Summon",
@@ -3380,7 +3448,11 @@
         "a": 255,
         "intensity": 1
       },
-      "toggleEffect": ""
+      "toggleEffect": "",
+      "hidden": true,
+      "school": "Conjuration",
+      "tileTemplate": "summon",
+      "icon": ""
     },
     {
       "name": "Debug Priest",
@@ -3566,7 +3638,11 @@
         "a": 255,
         "intensity": 1
       },
-      "toggleEffect": ""
+      "toggleEffect": "",
+      "hidden": true,
+      "school": "Conjuration",
+      "tileTemplate": "summon",
+      "icon": ""
     },
     {
       "name": "Debug Skeleton Summon",
@@ -3752,7 +3828,11 @@
         "a": 255,
         "intensity": 1
       },
-      "toggleEffect": ""
+      "toggleEffect": "",
+      "hidden": true,
+      "school": "Conjuration",
+      "tileTemplate": "summon",
+      "icon": ""
     },
     {
       "name": "Raise Zombie",
@@ -3938,7 +4018,11 @@
         "a": 255,
         "intensity": 1
       },
-      "toggleEffect": ""
+      "toggleEffect": "",
+      "hidden": false,
+      "school": "Conjuration",
+      "tileTemplate": "summon",
+      "icon": "assets/UI/Icons/Spells/raise_zombie.png"
     },
     {
       "name": "Raise Zombie Throng",
@@ -4124,7 +4208,11 @@
         "a": 255,
         "intensity": 1
       },
-      "toggleEffect": ""
+      "toggleEffect": "",
+      "hidden": false,
+      "school": "Conjuration",
+      "tileTemplate": "summon",
+      "icon": "assets/UI/Icons/Spells/raise_zombie_throng.png"
     },
     {
       "name": "Life Drain",
@@ -4310,7 +4398,11 @@
         "a": 255,
         "intensity": 1
       },
-      "toggleEffect": ""
+      "toggleEffect": "",
+      "hidden": false,
+      "school": "Evocation",
+      "tileTemplate": "evocation",
+      "icon": "assets/UI/Icons/Spells/life_drain.png"
     },
     {
       "name": "God Ray",
@@ -4496,7 +4588,11 @@
         "a": 255,
         "intensity": 1
       },
-      "toggleEffect": ""
+      "toggleEffect": "",
+      "hidden": false,
+      "school": "Evocation",
+      "tileTemplate": "evocation",
+      "icon": "assets/UI/Icons/Spells/god_ray.png"
     },
     {
       "name": "",
@@ -4667,7 +4763,11 @@
         "a": 255,
         "intensity": 1
       },
-      "toggleEffect": ""
+      "toggleEffect": "",
+      "hidden": true,
+      "school": "Evocation",
+      "tileTemplate": "debuff",
+      "icon": ""
     },
     {
       "name": "Ghost Mode",
@@ -4838,7 +4938,11 @@
         "a": 255,
         "intensity": 1
       },
-      "toggleEffect": "ghost_mode"
+      "toggleEffect": "ghost_mode",
+      "hidden": false,
+      "school": "Alteration",
+      "tileTemplate": "buff",
+      "icon": "assets/UI/Icons/Spells/ghost_mode.png"
     },
     {
       "name": "Necromantic Miasma",
@@ -5009,7 +5113,11 @@
         "a": 255,
         "intensity": 1
       },
-      "toggleEffect": ""
+      "toggleEffect": "",
+      "hidden": false,
+      "school": "Alteration",
+      "tileTemplate": "debuff",
+      "icon": "assets/UI/Icons/Spells/poison_cloud.png"
     },
     {
       "name": "Poison Burst",
@@ -5180,7 +5288,11 @@
         "a": 255,
         "intensity": 2.9318182
       },
-      "toggleEffect": ""
+      "toggleEffect": "",
+      "hidden": false,
+      "school": "Evocation",
+      "tileTemplate": "evocation",
+      "icon": "assets/UI/Icons/Spells/poison_burst.png"
     },
     {
       "name": "Paralyze Burst",
@@ -5351,7 +5463,11 @@
         "a": 255,
         "intensity": 2.5
       },
-      "toggleEffect": ""
+      "toggleEffect": "",
+      "hidden": false,
+      "school": "Alteration",
+      "tileTemplate": "debuff",
+      "icon": "assets/UI/Icons/Spells/paralyze_burst.png"
     },
     {
       "name": "Poison Berries (Poison)",
@@ -5522,7 +5638,11 @@
         "a": 255,
         "intensity": 1
       },
-      "toggleEffect": ""
+      "toggleEffect": "",
+      "hidden": false,
+      "school": "Alteration",
+      "tileTemplate": "buff",
+      "icon": "assets/UI/Icons/Spells/poison_berries_poison.png"
     },
     {
       "name": "Poison Berries (Paralysis)",
@@ -5693,7 +5813,55 @@
         "a": 255,
         "intensity": 1
       },
-      "toggleEffect": ""
+      "toggleEffect": "",
+      "hidden": false,
+      "school": "Alteration",
+      "tileTemplate": "buff",
+      "icon": "assets/UI/Icons/Spells/poison_berries_paralysis.png"
+    },
+    {
+      "name": "Reanimate (Imbue)",
+      "id": "reanimate_imbue",
+      "category": "Summon",
+      "range": 2.5,
+      "manaCost": 2,
+      "primaryPath": "",
+      "primaryLevel": 0,
+      "cooldown": 0.5,
+      "castTime": 1.5,
+      "castingBuffID": "",
+      "castAnim": "ImbueGround",
+      "summonTargetReq": "Corpse",
+      "summonMode": "Spawn",
+      "summonUnitID": "skeleton",
+      "summonQuantity": 1,
+      "spawnLocation": "NearestTargetToMouse",
+      "hidden": false,
+      "school": "Conjuration",
+      "tileTemplate": "summon",
+      "icon": "assets/UI/Icons/Spells/reanimate_imbue.png"
+    },
+    {
+      "name": "Reanimate (Raise)",
+      "id": "reanimate_raise",
+      "category": "Summon",
+      "range": 18,
+      "manaCost": 3,
+      "primaryPath": "",
+      "primaryLevel": 0,
+      "cooldown": 0.5,
+      "castTime": 2.0,
+      "castingBuffID": "",
+      "castAnim": "Raise",
+      "summonTargetReq": "Corpse",
+      "summonMode": "Spawn",
+      "summonUnitID": "skeleton",
+      "summonQuantity": 1,
+      "spawnLocation": "NearestTargetToMouse",
+      "hidden": false,
+      "school": "Conjuration",
+      "tileTemplate": "summon",
+      "icon": "assets/UI/Icons/Spells/reanimate_raise.png"
     }
   ]
 }

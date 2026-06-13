@@ -26,10 +26,17 @@ public class UIGrimoireScenario : ScenarioBase
         BackgroundColor = new Color(58, 62, 72);
         BloomOverride = new Data.Registries.BloomSettings { Enabled = false };
 
+        bool bound = false;
         CustomUIDraw = (batch, screenW, screenH) =>
         {
             if (WidgetRenderer == null) return;
-            WidgetRenderer.DrawWidget("GrimoireWindow", 10, 10);
+            if (!bound)
+            {
+                bound = true;
+                // Phase 1: populate from the real spell registry (the "All" view)
+                UI.GrimoirePanel.Populate(WidgetRenderer, sim.GameData, "grimoire");
+            }
+            WidgetRenderer.DrawWidget(UI.GrimoirePanel.WidgetId, 10, 10, "grimoire");
             WidgetRenderer.DrawWidget("SpiritFormTip", 730, 10);
             WidgetRenderer.DrawWidget("ShadowBoltTip", 730, 300);
             WidgetRenderer.DrawWidget("SummonWolvesTip", 730, 660);
