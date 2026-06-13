@@ -230,6 +230,34 @@ def bake_variant(unity_rel, base_tex, img_type, ppu_mult, w, h):
         o.save(out); return out
     if img_type == 2:
         scale = 100.0 / (ppu * ppu_mult) if ppu * ppu_mult else 1.0
+        if any(b > 0 for b in border):
+            # Unity Tiled + sprite borders = nine-slice frame whose edges TILE
+            # along their axis (center tiles too; usually transparent).
+            sl, sb, sr, st = (int(b) for b in border)
+            sw, sh = src_im.size
+            dl, db, dr, dt = (max(1, round(b * scale)) for b in (sl, sb, sr, st))
+            o = Image.new('RGBA', (w, h), (0, 0, 0, 0))
+            def piece(x0, y0, x1, y1):
+                return src_im.crop((x0, y0, x1, y1))
+            def scaled(im2, fw, fh):
+                return im2.resize((max(1, fw), max(1, fh)), Image.LANCZOS)
+            # corners
+            o.paste(scaled(piece(0, 0, sl, st), dl, dt), (0, 0))
+            o.paste(scaled(piece(sw - sr, 0, sw, st), dr, dt), (w - dr, 0))
+            o.paste(scaled(piece(0, sh - sb, sl, sh), dl, db), (0, h - db))
+            o.paste(scaled(piece(sw - sr, sh - sb, sw, sh), dr, db), (w - dr, h - db))
+            # edges: tile along the run
+            top = scaled(piece(sl, 0, sw - sr, st), max(1, round((sw - sl - sr) * scale)), dt)
+            bot = scaled(piece(sl, sh - sb, sw - sr, sh), top.width, db)
+            x = dl
+            while x < w - dr:
+                o.paste(top, (x, 0)); o.paste(bot, (x, h - db)); x += top.width
+            left = scaled(piece(0, st, sl, sh - sb), dl, max(1, round((sh - st - sb) * scale)))
+            right = scaled(piece(sw - sr, st, sw, sh - sb), dr, left.height)
+            y = dt
+            while y < h - db:
+                o.paste(left, (0, y)); o.paste(right, (w - dr, y)); y += left.height
+            o.save(out); return out
         tw, th = max(1, round(src_im.width * scale)), max(1, round(src_im.height * scale))
         tile = src_im.resize((tw, th), Image.LANCZOS)
         o = Image.new('RGBA', (w, h), (0, 0, 0, 0))
@@ -284,9 +312,11 @@ def convert(dump_path, widget_id, prefix, root_override_active=True):
         # layer (inset -17 handles the texture's baked margins + gradient),
         # not a stretched element — proven recipe from the earlier panels.
         if node.image and 'EmbossedLeatherBorderInner' in node.image['sprite']:
+            ppu_mult = node.image['ppu'] or 11.2
+            bscale = round(1.57 / ppu_mult, 3)   # 0.019@80.4, 0.14@11.2 (proven panels)
             widget_layers['background'] = 'LeatherBackground'
-            widget_layers['backgroundScale'] = 0.14
-            widget_layers['backgroundInset'] = -17
+            widget_layers['backgroundScale'] = bscale
+            widget_layers['backgroundInset'] = -round(122 * bscale)
             col = node.image['color']
             widget_layers['backgroundTint'] = [round(col[0] * 255), round(col[1] * 255), round(col[2] * 255), 255]
             hm = harm_from_swapper(node.swapper)

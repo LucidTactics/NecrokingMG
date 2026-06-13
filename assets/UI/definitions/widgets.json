@@ -5792,8 +5792,8 @@
         }
       ],
       "background": "LeatherBackground",
-      "backgroundScale": 0.14,
-      "backgroundInset": -17,
+      "backgroundScale": 0.031,
+      "backgroundInset": -4,
       "backgroundTint": [
         255,
         255,
@@ -6305,8 +6305,8 @@
         }
       ],
       "background": "LeatherBackground",
-      "backgroundScale": 0.14,
-      "backgroundInset": -17,
+      "backgroundScale": 0.031,
+      "backgroundInset": -4,
       "backgroundTint": [
         255,
         255,
@@ -7385,8 +7385,8 @@
         }
       ],
       "background": "LeatherBackground",
-      "backgroundScale": 0.14,
-      "backgroundInset": -17,
+      "backgroundScale": 0.031,
+      "backgroundInset": -4,
       "backgroundTint": [
         255,
         255,
@@ -8978,7 +8978,7 @@
         }
       ],
       "background": "LeatherBackground",
-      "backgroundScale": 0.14,
+      "backgroundScale": 0.136,
       "backgroundInset": -17,
       "backgroundTint": [
         199,
