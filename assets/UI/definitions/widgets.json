@@ -5085,154 +5085,7 @@
         }
       ]
     },
-    {
-      "id": "UTD_atRow",
-      "width": 463,
-      "height": 27,
-      "modal": false,
-      "children": [
-        {
-          "name": "swatch",
-          "element": "AT_RowSwatch",
-          "x": 0,
-          "y": 0,
-          "width": 463,
-          "height": 27,
-          "anchor": 0
-        },
-        {
-          "name": "icon",
-          "element": "EQ_Item_Sword",
-          "x": 4,
-          "y": 0,
-          "width": 24,
-          "height": 24,
-          "anchor": 0
-        },
-        {
-          "name": "name",
-          "element": "EQ_Name",
-          "x": 28,
-          "y": -2,
-          "width": 186,
-          "height": 27,
-          "anchor": 0,
-          "defaultText": "Broadsword Slash"
-        },
-        {
-          "name": "v0",
-          "element": "ST_Value",
-          "x": 214,
-          "y": 0,
-          "width": 36,
-          "height": 24,
-          "anchor": 0,
-          "defaultText": "14"
-        },
-        {
-          "name": "s0",
-          "element": "EQ_Icon_Slash",
-          "x": 250,
-          "y": 0,
-          "width": 24,
-          "height": 24,
-          "anchor": 0
-        },
-        {
-          "name": "v1",
-          "element": "ST_Value",
-          "x": 274,
-          "y": 0,
-          "width": 36,
-          "height": 24,
-          "anchor": 0,
-          "defaultText": "14"
-        },
-        {
-          "name": "s1",
-          "element": "EQ_Icon_AttackEq",
-          "x": 310,
-          "y": 0,
-          "width": 24,
-          "height": 24,
-          "anchor": 0
-        },
-        {
-          "name": "v2",
-          "element": "ST_Value",
-          "x": 334,
-          "y": 0,
-          "width": 36,
-          "height": 24,
-          "anchor": 0,
-          "defaultText": "2"
-        },
-        {
-          "name": "s2",
-          "element": "EQ_Len",
-          "x": 370,
-          "y": 0,
-          "width": 24,
-          "height": 24,
-          "anchor": 0
-        },
-        {
-          "name": "v3",
-          "element": "ST_Value",
-          "x": 394,
-          "y": 0,
-          "width": 36,
-          "height": 24,
-          "anchor": 0,
-          "defaultText": "4"
-        },
-        {
-          "name": "s3",
-          "element": "AT_Icon_Fat",
-          "x": 430,
-          "y": 0,
-          "width": 24,
-          "height": 24,
-          "anchor": 0
-        },
-        {
-          "name": "col0",
-          "element": "ST_ColumnBar",
-          "x": 221,
-          "y": 0,
-          "width": 3,
-          "height": 27,
-          "anchor": 0
-        },
-        {
-          "name": "col1",
-          "element": "ST_ColumnBar",
-          "x": 279,
-          "y": 0,
-          "width": 3,
-          "height": 27,
-          "anchor": 0
-        },
-        {
-          "name": "col2",
-          "element": "ST_ColumnBar",
-          "x": 341,
-          "y": 0,
-          "width": 3,
-          "height": 27,
-          "anchor": 0
-        },
-        {
-          "name": "col3",
-          "element": "ST_ColumnBar",
-          "x": 402,
-          "y": 0,
-          "width": 3,
-          "height": 27,
-          "anchor": 0
-        }
-      ]
-    },
+    
     {
       "id": "UTD_atBox",
       "width": 463,
@@ -5284,7 +5137,7 @@
       "children": [
         {
           "name": "row0",
-          "widget": "UTD_atRow",
+          "widget": "UTD_eqRow",
           "x": 0,
           "y": 0,
           "width": 463,
@@ -5293,7 +5146,7 @@
         },
         {
           "name": "row1",
-          "widget": "UTD_atRow",
+          "widget": "UTD_eqRow",
           "x": 0,
           "y": 0,
           "width": 463,
@@ -5302,7 +5155,7 @@
         },
         {
           "name": "row2",
-          "widget": "UTD_atRow",
+          "widget": "UTD_eqRow",
           "x": 0,
           "y": 0,
           "width": 463,

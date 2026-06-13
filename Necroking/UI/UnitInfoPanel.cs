@@ -36,6 +36,7 @@ public class UnitInfoPanel : IModalLayer
     private const string IcoProt = "assets/UI/Icons/NewIcons/Prot24.png";
     private const string IcoParry = "assets/UI/Icons/NewIcons/Parry24.png";
     private const string IcoCov = "assets/UI/Icons/NewIcons/Coverage24.png";
+    private const string IcoFat = "assets/UI/Icons/SturmIcons/exhausted.2.24.png";
 
     private RuntimeWidgetRenderer _renderer = null!;
     private GameData? _gameData;
@@ -623,6 +624,18 @@ public class UnitInfoPanel : IModalLayer
             r.SetHidden(EqBox, $"row{i}", true);
     }
 
+    /// <summary>Attack rows share the equipment row template (UnitStatRow). Two
+    /// columns differ from the equipment defaults: the 4th stat is encumbrance
+    /// (fatigue icon, not defense), and the armor-only "Enc" alternate (s2b) must
+    /// stay hidden so the length label (s2) shows for the length column.</summary>
+    private void AtRowTemplate(string row, bool zebraHidden)
+    {
+        _renderer.SetHidden(row, "swatch", zebraHidden);
+        _renderer.SetImage(row, "s3", IcoFat);
+        _renderer.SetHidden(row, "s2b", true);
+        _renderer.SetHidden(row, "s2", false);
+    }
+
     private void PopulateAttacks(RuntimeWidgetRenderer r, UnitStats s)
     {
         var attacks = new List<(WeaponStats W, bool Ranged)>();
@@ -634,7 +647,7 @@ public class UnitInfoPanel : IModalLayer
         {
             if (i >= AtRows) break;
             string row = $"{AtBox}.{i}";
-            r.SetHidden(row, "swatch", i % 2 != 0);
+            AtRowTemplate(row, i % 2 != 0);
             r.SetText(row, "name", string.IsNullOrEmpty(w.Name) ? "Attack" : w.Name);
             r.SetText(row, "v0", (w.Damage + (ranged ? 0 : s.Strength)).ToString());
             r.SetImage(row, "s0", DmgTypeIcon(w));
@@ -646,6 +659,7 @@ public class UnitInfoPanel : IModalLayer
         if (i == 0)
         {
             string row = $"{AtBox}.0";
+            AtRowTemplate(row, false);
             r.SetText(row, "name", "(None)");
             foreach (var v in new[] { "v0", "v1", "v2", "v3" }) r.SetText(row, v, "-");
             i = 1;
