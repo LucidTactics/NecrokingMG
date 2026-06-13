@@ -26,7 +26,6 @@ public class UnitInfoPanel : IModalLayer
     private const string Stats = InstanceId + ".1";
     private const string EqBox = InstanceId + ".2.1";
     private const string AtBox = InstanceId + ".3.1";
-    private const string AbSec = InstanceId + ".4";
 
     private const string IcoSword = "assets/UI/Icons/Equipment/Sword_24.png";
     private const string IcoShield = "assets/UI/Icons/Equipment/Shield_24.png";
@@ -404,13 +403,11 @@ public class UnitInfoPanel : IModalLayer
         _abRows = row + 1;
 
         // Grow the section (title + N rows of box) so the panel/frame expand.
+        // The box + per-row icons are drawn directly in DrawAbilitiesRow (sized to
+        // the row count); the section JSON keeps only the title bar, so there's no
+        // static single-row box / placeholder icons left to hide here.
         int boxH = _abRows * AbRowH + 7;
         _renderer.SetChildHeight(InstanceId, "sec_ab", AbBoxTop + boxH + 3);
-        // We draw the (multi-row) box ourselves; hide the static single-row box.
-        _renderer.SetHidden(AbSec, "ab_box", true);
-        _renderer.SetHidden(AbSec, "ab_boxpattern", true);
-        for (int i = 0; i < MaxBuffIcons; i++)
-            _renderer.SetHidden(AbSec, $"ab_r{i}_icon", true);
     }
 
     /// <summary>Draw the laid-out Abilities &amp; Buffs row(s): a box background

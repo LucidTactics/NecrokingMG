@@ -4685,24 +4685,8 @@
       "height": 65,
       "modal": false,
       "children": [
-        {
-          "name": "ab_box",
-          "element": "AB_StatBox",
-          "x": 3,
-          "y": 27,
-          "width": 463,
-          "height": 35,
-          "anchor": 0
-        },
-        {
-          "name": "ab_boxpattern",
-          "element": "AB_BoxPattern",
-          "x": 7,
-          "y": 30,
-          "width": 456,
-          "height": 30,
-          "anchor": 0
-        },
+        
+        
         {
           "name": "ab_title_swatch",
           "element": "AB_TitleSwatch",
@@ -4728,114 +4712,6 @@
           "y": -1,
           "width": 463,
           "height": 34,
-          "anchor": 0
-        },
-        {
-          "name": "ab_r0_icon",
-          "element": "AB_Icon_Flying",
-          "x": 7,
-          "y": 33,
-          "width": 24,
-          "height": 24,
-          "anchor": 0
-        },
-        {
-          "name": "ab_r1_icon",
-          "element": "AB_Icon_Flying",
-          "x": 35,
-          "y": 33,
-          "width": 24,
-          "height": 24,
-          "anchor": 0
-        },
-        {
-          "name": "ab_r2_icon",
-          "element": "AB_Icon_Flying",
-          "x": 63,
-          "y": 33,
-          "width": 24,
-          "height": 24,
-          "anchor": 0
-        },
-        {
-          "name": "ab_r3_icon",
-          "element": "AB_Icon_Flying",
-          "x": 91,
-          "y": 33,
-          "width": 24,
-          "height": 24,
-          "anchor": 0
-        },
-        {
-          "name": "ab_r4_icon",
-          "element": "AB_Icon_Flying",
-          "x": 119,
-          "y": 33,
-          "width": 24,
-          "height": 24,
-          "anchor": 0
-        },
-        {
-          "name": "ab_r5_icon",
-          "element": "AB_Icon_Flying",
-          "x": 147,
-          "y": 33,
-          "width": 24,
-          "height": 24,
-          "anchor": 0
-        },
-        {
-          "name": "ab_r6_icon",
-          "element": "AB_Icon_Flying",
-          "x": 175,
-          "y": 33,
-          "width": 24,
-          "height": 24,
-          "anchor": 0
-        },
-        {
-          "name": "ab_r7_icon",
-          "element": "AB_Icon_Flying",
-          "x": 203,
-          "y": 33,
-          "width": 24,
-          "height": 24,
-          "anchor": 0
-        },
-        {
-          "name": "ab_r8_icon",
-          "element": "AB_Icon_Flying",
-          "x": 231,
-          "y": 33,
-          "width": 24,
-          "height": 24,
-          "anchor": 0
-        },
-        {
-          "name": "ab_r9_icon",
-          "element": "AB_Icon_Flying",
-          "x": 259,
-          "y": 33,
-          "width": 24,
-          "height": 24,
-          "anchor": 0
-        },
-        {
-          "name": "ab_r10_icon",
-          "element": "AB_Icon_Flying",
-          "x": 287,
-          "y": 33,
-          "width": 24,
-          "height": 24,
-          "anchor": 0
-        },
-        {
-          "name": "ab_r11_icon",
-          "element": "AB_Icon_Flying",
-          "x": 315,
-          "y": 33,
-          "width": 24,
-          "height": 24,
           "anchor": 0
         }
       ]
