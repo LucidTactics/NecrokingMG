@@ -38,6 +38,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
     private HUDRenderer _hudRenderer = new();
     private CharacterStatsUI _characterStatsUI = new();
     private UI.UnitInfoPanel _unitInfoPanel = new();
+    private UI.GrimoireOverlay _grimoireOverlay = new();
     private bool _pausedByInspect;
     private SkillTreePanel _skillTreePanel = new();
     private SkillBookPanel _skillBookPanel = new();
@@ -106,6 +107,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         _tableMenuUI.StartCraftCallback = (envIdx) => StartTableCraft(envIdx);
         _tableMenuUI.DrawUnitIconCallback = (defId, rect) => DrawUnitIdleSprite(defId, rect);
         _unitInfoPanel.Init(_widgetRenderer, _gameData);
+        _grimoireOverlay.Init(_widgetRenderer, _gameData);
         _unitInfoPanel.DrawUnitIconCallback = (defId, rect) => DrawUnitIdleSprite(defId, rect);
         _unitInfoPanel.OnClosed = () =>
         {
@@ -2325,6 +2327,13 @@ public class Game1 : Microsoft.Xna.Framework.Game
             bool shift = _input.IsKeyDown(Keys.LeftShift) || _input.IsKeyDown(Keys.RightShift);
             if (shift) _skillTreePanel.Toggle();
             else       _skillBookPanel.Toggle();
+        }
+
+        // 'J' = spell grimoire (phase 1: display only)
+        if (!anyTextInputActive && _input.WasKeyPressed(Keys.J) && _menuState == MenuState.None)
+        {
+            EnsureInventoryUIsInitialized();
+            _grimoireOverlay.Toggle();
         }
 
         // 'U' = character sheet for the player necromancer (current form)
@@ -5272,6 +5281,10 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // Unit info sheet (U = player character, O = inspect under cursor)
         if (showUI)
             _unitInfoPanel.Draw(screenW, screenH, _sim);
+
+        // Spell grimoire (J)
+        if (showUI)
+            _grimoireOverlay.Draw(screenW, screenH);
 
         // Skill tree panel (Shift+K) — DEFUNCT old grimoire, kept for visual reference.
         if (showUI)
