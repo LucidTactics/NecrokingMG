@@ -96,7 +96,7 @@ public partial class HUDRenderer
         bar(mana, manaFrac, ManaFillA, ManaFillB, manaTint, manaLabel);
 
         if (_smallFont != null && skin > 0)
-            Text(_smallFont, $"Bar Style {skin}/10  (Shift+H)",
+            Text(_smallFont, $"Bar Style {skin}  (Shift+H)",
                 new Vector2(BarX + 1, mana.Bottom + 3), new Color(170, 160, 140));
     }
 

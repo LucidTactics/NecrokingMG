@@ -20,8 +20,16 @@ public partial class HUDRenderer
     /// <summary>Which HP/Mana bar skin to draw (cycled with Shift+H for design
     /// review). 0 = the original flat bars; 1..N reuse grimoire / unit-sheet /
     /// tooltip chrome. See HUDRenderer.StatusBars.cs.</summary>
-    public int StatusBarSkin = 0;
+    public int StatusBarSkin = 1;
     public const int StatusBarSkinCount = 11; // skin 0 (original) + 10 designs
+    /// <summary>Shortlisted designs Shift+H cycles between (the rest stay defined
+    /// for reference until one is chosen).</summary>
+    private static readonly int[] ActiveSkins = { 1, 2, 4, 8 };
+    public void CycleStatusBarSkin()
+    {
+        int i = System.Array.IndexOf(ActiveSkins, StatusBarSkin);
+        StatusBarSkin = ActiveSkins[(i + 1) % ActiveSkins.Length]; // i == -1 → starts at ActiveSkins[0]
+    }
     /// <summary>Scenario test seam: when &gt;= 0, overrides StatusBarSkin so a
     /// screenshot scenario can render each design. -1 = use the instance value.</summary>
     public static int DebugSkinOverride = -1;

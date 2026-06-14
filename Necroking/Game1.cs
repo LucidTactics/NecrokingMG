@@ -2331,7 +2331,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         if (!anyTextInputActive && _input.WasKeyPressed(Keys.H)
             && (_input.IsKeyDown(Keys.LeftShift) || _input.IsKeyDown(Keys.RightShift)))
         {
-            _hudRenderer.StatusBarSkin = (_hudRenderer.StatusBarSkin + 1) % HUDRenderer.StatusBarSkinCount;
+            _hudRenderer.CycleStatusBarSkin();
         }
 
         // 'I' key toggles inventory (lazy-inits the UI family on first open)
