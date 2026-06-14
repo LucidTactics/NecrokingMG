@@ -467,20 +467,23 @@ public partial class SkillBookPanel : Necroking.UI.IModalLayer
 
             var skin = Active;
             string? tabBg = active ? skin.TabActBg : skin.TabIdleBg;
-            if (Has(tabBg))
+            string? tabNs = active ? skin.TabActNs : skin.TabIdleNs;
+            // Background
+            if (Has(tabBg)) Tex(tabBg, r);
+            else if (Has(tabNs)) Fill(r, active ? ParchmentDark : LeatherMid); // base under the frame/swatch
+            else Fill(r, active ? Parchment : hover ? new Color(72, 50, 28) : LeatherMid);
+            // Frame / ornate swatch
+            if (Has(tabNs)) Ns(tabNs, r, skin.TabNsScale);
+            // Dim idle / highlight hover for textured tabs
+            if (Has(tabBg) || Has(tabNs))
             {
-                Tex(tabBg, r);
-                if (!active) Fill(r, new Color(0, 0, 0, 90));       // dim idle tabs
-                else if (hover) Fill(r, new Color(255, 255, 255, 30));
+                if (!active) Fill(r, new Color(0, 0, 0, 85));
+                else if (hover) Fill(r, new Color(255, 255, 255, 28));
             }
-            else
-            {
-                Color fill = active ? Parchment : hover ? new Color(72, 50, 28) : LeatherMid;
-                Fill(r, fill);
-            }
-            // Top accent on active tab (gold band)
-            if (active) Fill(new Rectangle(r.X, r.Y, r.Width, 2), GoldBright);
-            if (!Has(tabBg)) Border(r, active ? Gold : GoldDim, 1);
+            // Gold accent band on the active tab
+            if (active && skin.TabGoldAccent) Fill(new Rectangle(r.X, r.Y, r.Width, 2), GoldBright);
+            // Flat border only when the tab has no textured chrome
+            if (!Has(tabBg) && !Has(tabNs)) Border(r, active ? Gold : GoldDim, 1);
 
             var (learned, total) = _state?.GetProgress(tab) ?? (0, tab.Skills.Count);
             string label = tab.DisplayName;
