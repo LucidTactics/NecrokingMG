@@ -27,6 +27,10 @@ public partial class HUDRenderer
     private void Solid(Rectangle r, Color c) => _batch.Draw(_pixel, r, c);
     private void Elem(string id, Rectangle r, float inset = 0f) => _widgets?.DrawElementImage(id, r, inset);
     private void Ns(string nsId, Rectangle r, Color? tint = null) => _widgets?.DrawNineSlice(nsId, r, tint);
+    // Thin the RenaiThinFrame's 10px borders down to ~4-5px so the gold frame
+    // matches skin 4's slim gold trim instead of eating the bar height.
+    private const float ThinFrame = 0.45f;
+    private void NsThin(string nsId, Rectangle r) => _widgets?.DrawNineSlice(nsId, r, null, ThinFrame);
 
     /// <summary>Solid fill with a lighter top band (cheap gradient).</summary>
     private void GradFill(Rectangle inner, float frac, Color top, Color body)
@@ -109,7 +113,7 @@ public partial class HUDRenderer
     {
         Elem("SpellSlotBg", r, 0.16f);
         GradFill(Inset(r, 4), f, a, b);
-        Ns("RenaiThinBorder", r);
+        NsThin("RenaiThinBorder", r);
         BarValue(s, r);
     }
 
@@ -119,7 +123,7 @@ public partial class HUDRenderer
         Elem("SpellSlotBg", r, 0.16f);
         Elem("AbilitiesPattern", Inset(r, 3));
         GradFill(Inset(r, 4), f, a, b);
-        Ns("RenaiThinBorder", r);
+        NsThin("RenaiThinBorder", r);
         BarValue(s, r);
     }
 
@@ -178,7 +182,7 @@ public partial class HUDRenderer
     {
         Elem("ST_StatBox", r);
         GradFill(Inset(r, 4), f, a, b);
-        Ns("RenaiThinBorder", r);
+        NsThin("RenaiThinBorder", r);
         BarValue(s, r);
     }
 
@@ -190,7 +194,7 @@ public partial class HUDRenderer
         GradFill(inner, f, a, b);
         for (int x = inner.X + 18; x < inner.Right - 2; x += 18)         // dark pips segment the fill
             Solid(new Rectangle(x, inner.Y, 1, inner.Height), new Color(0, 0, 0, 110));
-        Ns("RenaiThinBorder", r);
+        NsThin("RenaiThinBorder", r);
         BarValue(s, r);
     }
 
@@ -201,7 +205,7 @@ public partial class HUDRenderer
         Solid(r, SkinTrack);
         Solid(FillR(inner, f), b);              // solid base guarantees a visible fill
         ElemFill("SpellSlotBg", inner, f, tint); // textured parchment over it
-        Ns("RenaiThinBorder", r);
+        NsThin("RenaiThinBorder", r);
         BarValue(s, r);
     }
 }
