@@ -15,6 +15,15 @@
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationIcon>Icon.ico</ApplicationIcon>
   </PropertyGroup>
+  <!-- The self-contained ship build uses a custom 'Publish' configuration so its
+       runtime DLLs land in bin/Publish/ instead of polluting bin/Release/ (see
+       CLAUDE.md). But the .NET SDK only enables JIT optimization for the 'Release'
+       configuration by default — every other config name, including 'Publish',
+       defaults to Optimize=false. Without this the shipped build ran UNOPTIMIZED
+       (startup + gameplay ~35% slower). Match Release's optimization explicitly. -->
+  <PropertyGroup Condition="'$(Configuration)' == 'Publish'">
+    <Optimize>true</Optimize>
+  </PropertyGroup>
   <ItemGroup>
     <None Remove="Icon.ico" />
     <None Remove="Icon.bmp" />
