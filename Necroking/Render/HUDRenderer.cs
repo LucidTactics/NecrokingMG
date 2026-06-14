@@ -17,22 +17,6 @@ namespace Necroking.Render;
 /// </summary>
 public partial class HUDRenderer
 {
-    /// <summary>Which HP/Mana bar skin to draw (cycled with Shift+H for design
-    /// review). 0 = the original flat bars; 1..N reuse grimoire / unit-sheet /
-    /// tooltip chrome. See HUDRenderer.StatusBars.cs.</summary>
-    public int StatusBarSkin = 1;
-    public const int StatusBarSkinCount = 11; // skin 0 (original) + 10 designs
-    /// <summary>Shortlisted designs Shift+H cycles between (the rest stay defined
-    /// for reference until one is chosen).</summary>
-    private static readonly int[] ActiveSkins = { 1, 2, 4, 8 };
-    public void CycleStatusBarSkin()
-    {
-        int i = System.Array.IndexOf(ActiveSkins, StatusBarSkin);
-        StatusBarSkin = ActiveSkins[(i + 1) % ActiveSkins.Length]; // i == -1 → starts at ActiveSkins[0]
-    }
-    /// <summary>Scenario test seam: when &gt;= 0, overrides StatusBarSkin so a
-    /// screenshot scenario can render each design. -1 = use the instance value.</summary>
-    public static int DebugSkinOverride = -1;
 
     // Layout constants
     private const int BarWidth = 200;
@@ -49,7 +33,10 @@ public partial class HUDRenderer
     private const int PrimarySlotW = 60;
     private const int PrimarySlotH = 60;
     private const int PrimaryBarOffsetX = 129; // screenW/2 - this
-    private const int PrimaryBarBottomOffset = 95; // screenH - this
+    // Sits the primary row's bottom edge ~2px above the screen bottom
+    // (slot height 60 + 1px gap; the frame's own margin makes ~2 visible).
+    // The secondary row stacks above it.
+    private const int PrimaryBarBottomOffset = 61; // screenH - this
 
     private const int SecondarySlotW = 38;
     private const int SecondarySlotH = 38;
@@ -230,9 +217,8 @@ public partial class HUDRenderer
         string hpLabel = necroIdx >= 0 ? $"{hp}/{maxHp}" : "";
         string manaLabel = $"{mana}/{maxMana}";
 
-        int skin = DebugSkinOverride >= 0 ? DebugSkinOverride : StatusBarSkin;
-        DrawStatusBarSkin(skin, necroIdx >= 0,
-            hpRect, hpFrac, hpLabel, manaRect, manaFrac, manaLabel);
+        if (necroIdx >= 0) DrawStatBar(hpRect, hpFrac, HpFillA, HpFillB, hpLabel);
+        DrawStatBar(manaRect, manaFrac, ManaFillA, ManaFillB, manaLabel);
     }
 
 

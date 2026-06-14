@@ -242,6 +242,9 @@ public class Game1 : Microsoft.Xna.Framework.Game
     /// the body-bbox bounds on each wading unit. Tuning helper for the per-
     /// direction WadingFractionByDirection values.</summary>
     private bool _waterDebug;
+    // Bottom-left perf/zoom readout (frame/sim/draw/present ms). Off by default —
+    // toggle with F3 when debugging; it otherwise just clutters the screen.
+    private bool _showPerfReadout;
 
     // Per-frame perf timers — populated each Draw, smoothed via EMA for the
     // HUD readout so the numbers don't jitter. Stale frames keep the EMA
@@ -2288,6 +2291,10 @@ public class Game1 : Microsoft.Xna.Framework.Game
         if (!anyTextInputActive && _input.WasKeyPressed(Keys.F2))
             _waterDebug = !_waterDebug;
 
+        // --- F3 toggles the bottom-left perf/zoom readout ---
+        if (!anyTextInputActive && _input.WasKeyPressed(Keys.F3))
+            _showPerfReadout = !_showPerfReadout;
+
         // --- F5 death-fog debug overlay (F9 was requested but is taken by the
         // unit editor toggle; F5 was free) ---
         if (!anyTextInputActive && _input.WasKeyPressed(Keys.F5))
@@ -2324,14 +2331,6 @@ public class Game1 : Microsoft.Xna.Framework.Game
         {
             if (_menuState == MenuState.UIEditor) _menuState = MenuState.None;
             else { EnsureUIEditorInitialized(); _menuState = MenuState.UIEditor; }
-        }
-
-        // Shift+H cycles the HP/Mana bar skin (design review — see
-        // HUDRenderer.StatusBars.cs; the cycling is removed once a design is picked).
-        if (!anyTextInputActive && _input.WasKeyPressed(Keys.H)
-            && (_input.IsKeyDown(Keys.LeftShift) || _input.IsKeyDown(Keys.RightShift)))
-        {
-            _hudRenderer.CycleStatusBarSkin();
         }
 
         // 'I' key toggles inventory (lazy-inits the UI family on first open)
@@ -5306,7 +5305,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         if (_menuState == MenuState.UnitEditor || _menuState == MenuState.SpellEditor)
             _editorUi.DrawColorPickerPopup();
 
-        if (_font != null && showUI)
+        if (_font != null && showUI && _showPerfReadout)
         {
             double frameMs = _rawDt > 0 ? _rawDt * 1000.0 : 0.0;
             double simMs = _sim.LastTickMs;
