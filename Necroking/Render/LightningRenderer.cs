@@ -93,7 +93,10 @@ public class LightningRenderer
         foreach (var zap in _sim.Lightning.Zaps)
         {
             if (!zap.Alive) continue;
-            var startSp = _renderer.WorldToScreen(zap.StartPos, zap.StartHeight, _camera);
+            // StartHeight is the caster's casting-anchor height (EffectSpawnHeight),
+            // authored against the sprite rig — project with the sprite convention so
+            // the zap channels from the hand, not foreshortened to half height.
+            var startSp = _renderer.WorldToScreenPx(zap.StartPos, zap.StartHeight * _camera.Zoom, _camera);
             var endSp = _renderer.WorldToScreen(zap.EndPos, zap.EndHeight, _camera);
             float fade = 1f - zap.Timer / zap.Duration;
             DrawLightningBolt(startSp, endSp, zap.Style, fade);
@@ -107,8 +110,13 @@ public class LightningRenderer
             int targetIdx = UnitUtil.ResolveUnitIndex(_sim.Units, beam.TargetID);
             if (casterIdx < 0 || targetIdx < 0) continue;
 
-            var startSp = _renderer.WorldToScreen(_sim.Units[casterIdx].EffectSpawnPos2D,
-                _sim.Units[casterIdx].EffectSpawnHeight, _camera);
+            // Channel origin = the caster's casting anchor (weapon tip). Its height
+            // is authored against the sprite rig, so project with the sprite
+            // convention (height × Zoom, NO YRatio foreshortening) — exactly like
+            // the casting glow (BuffVisualSystem). Plain WorldToScreen foreshortens
+            // it to ~half height, channeling the beam from below the hand.
+            var startSp = _renderer.WorldToScreenPx(_sim.Units[casterIdx].EffectSpawnPos2D,
+                _sim.Units[casterIdx].EffectSpawnHeight * _camera.Zoom, _camera);
             var endSp = _renderer.WorldToScreen(_sim.Units[targetIdx].Position, 1f, _camera);
             DrawLightningBolt(startSp, endSp, beam.Style, 1f);
         }
@@ -124,8 +132,10 @@ public class LightningRenderer
             int targetIdx = UnitUtil.ResolveUnitIndex(_sim.Units, drain.TargetID);
             if (targetIdx >= 0) targetPos = _sim.Units[targetIdx].Position;
 
-            var startSp = _renderer.WorldToScreen(_sim.Units[casterIdx].EffectSpawnPos2D,
-                _sim.Units[casterIdx].EffectSpawnHeight, _camera);
+            // Same casting-anchor convention as the beam above (sprite height, no
+            // YRatio foreshortening) so the drain channels from the caster's hand.
+            var startSp = _renderer.WorldToScreenPx(_sim.Units[casterIdx].EffectSpawnPos2D,
+                _sim.Units[casterIdx].EffectSpawnHeight * _camera.Zoom, _camera);
             var endSp = _renderer.WorldToScreen(targetPos, 1f, _camera);
 
             DrawDrainTendrils(_spriteBatch, _pixel, startSp, endSp, drain.Visuals, drain.Elapsed);
