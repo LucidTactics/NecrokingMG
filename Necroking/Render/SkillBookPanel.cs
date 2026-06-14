@@ -658,6 +658,7 @@ public partial class SkillBookPanel : Necroking.UI.IModalLayer
         {
             Tex("SpellSlotBg", r, 0.16f);                       // parchment base
             Fill(r, NodeStateOverlay(learned, excluded, prereqsMet, affordable)); // state tint
+            Tex(skin.NodeGrad, r);                              // diagonal lit gradient sheen (grimoire)
         }
         else
         {
@@ -674,16 +675,28 @@ public partial class SkillBookPanel : Necroking.UI.IModalLayer
                 Border(Inset(r, 2), new Color(255, 235, 180, 90), 1);
         }
 
-        // Title
+        // Title — grimoire skins use a gold serif name; others keep the state ink.
         var f = _font!;
         var sf = _smallFont ?? f;
+        if (skin.NameGold)
+            titleColor = learned ? new Color(196, 176, 128)
+                       : !prereqsMet ? new Color(150, 124, 70)
+                       : excluded ? new Color(170, 120, 110)
+                       : GoldBright;
         string title = def.Name;
         var ts = f.MeasureString(title);
         // Truncate if too wide
         title = TruncateToWidth(f, title, r.Width - 14);
         ts = f.MeasureString(title);
         var titlePos = new Vector2((int)(r.X + (r.Width - ts.X) / 2), r.Y + 6);
-        DrawText(f, title, titlePos, titleColor);
+        DrawShadowText(f, title, titlePos, titleColor);
+        // Gold fading underline under the name (grimoire tile method).
+        if (skin.NodeUnderline)
+        {
+            int uy = r.Y + 6 + (int)ts.Y + 1;
+            if (Has("TT_Underline")) Tex("TT_Underline", new Rectangle(r.X + 8, uy, r.Width - 16, 3));
+            else Fill(new Rectangle(r.X + 8, uy, r.Width - 16, 1), GoldDim);
+        }
 
         // Cost / status — for unlearned multi-cost skills, render each cost on its own
         // line, color-coded per cost so the player sees exactly which is short.

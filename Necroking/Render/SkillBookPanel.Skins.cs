@@ -26,6 +26,11 @@ public partial class SkillBookPanel
         public Color TabIdleText = new(210, 196, 168);
         public string? NodeNs;             public float NodeNsScale = 1f;    // node frame (nine-slice)
         public bool NodeParchment;         // texture the node interior with parchment (else solid state fill)
+        // Grimoire node methods: a diagonal lit gradient sheen over the parchment,
+        // a gold serif name, and a gold fading underline (as on a grimoire spell tile).
+        public string? NodeGrad;           // diagonal sheen element (GMT_1)
+        public bool NodeUnderline;         // gold underline under the node name
+        public bool NameGold;              // gold serif node name (else state ink)
         public bool GoldTrim;              // gold lines on the content page edges
         public bool Corners = true;        // original corner brackets
         public Color Accent = Gold;
@@ -45,6 +50,27 @@ public partial class SkillBookPanel
     {
         var s = Base(name);
         setTabs(s);
+        return s;
+    }
+
+    // Grimoire base: the illuminated-manuscript methods — cloth window border,
+    // maroon ribbon title, parchment page, parchment nodes with a diagonal lit
+    // gradient sheen + gold serif name + gold underline, parchment+gold tabs.
+    private static Skin Grim(string name) => new()
+    {
+        Name = name,
+        PanelNs = "Thinclothborder", PanelNsScale = 0.6f,
+        TitleBg = "Grim_TitleRibbon", TitleText = new(236, 210, 150),
+        ContentBg = "SpellSlotBg", ContentInset = 0.16f,
+        TabActBg = "SpellSlotBg", TabActNs = "RenaiThinBorder", TabIdleNs = "RenaiThinBorder", TabNsScale = 0.4f,
+        TabActText = new(40, 28, 14), TabIdleText = new(214, 198, 162), TabGoldAccent = false,
+        NodeParchment = true, NodeGrad = "GMT_1", NodeNs = "RenaiThinBorder", NodeNsScale = 0.4f,
+        NodeUnderline = true, NameGold = true, Corners = false,
+    };
+    private static Skin GrimVariant(string name, Action<Skin> tweak)
+    {
+        var s = Grim(name);
+        tweak(s);
         return s;
     }
 
@@ -74,6 +100,36 @@ public partial class SkillBookPanel
         // 5 — Minimal: flat parchment active / leather idle + gold accent bar.
         TabVariant("Minimal Tabs", s => {
             s.TabActText = new(23, 17, 13); s.TabIdleText = new(210, 196, 168); s.TabGoldAccent = true; }),
+
+        // ---- 10 grimoire-style variants (illuminated-manuscript methods) ----
+        // Kept from the first pass (closest to the grimoire tile): #8 Fancy Frame,
+        // #13 Library Fancy. The other 8 were redone toward them per my own review:
+        // ornate node frames that FIT a 64px node (button_rounded / FancyButton —
+        // frame_fancy's 110px border only fits a node at ~0.28 where it dominates),
+        // on warm parchment / library pages only (the weak ones had thin frames or
+        // dark/leather surfaces). All keep the sheen + gold serif + underline.
+        GrimVariant("Grim Tile", s => { s.NodeNs = "button_rounded"; s.NodeNsScale = 0.7f; }),               // 6
+        GrimVariant("Grim Library Tile", s => {                                                              // 7
+            s.ContentBg = "Grim_SpellListOverlay"; s.NodeNs = "button_rounded"; s.NodeNsScale = 0.7f; }),
+        GrimVariant("Grim Fancy Frame", s => {                                                               // 8 (kept)
+            s.PanelNs = "frame_fancy"; s.PanelNsScale = 0.5f; s.NodeNs = "frame_fancy"; s.NodeNsScale = 0.28f; }),
+        GrimVariant("Grim Fancy Button", s => { s.NodeNs = "FancyButton"; s.NodeNsScale = 0.6f; }),          // 9
+        GrimVariant("Grim Rounded Heavy", s => {                                                             // 10
+            s.PanelNs = "frame_fancy"; s.PanelNsScale = 0.6f; s.NodeNs = "button_rounded"; s.NodeNsScale = 0.85f; }),
+        GrimVariant("Grim Button Tabs", s => {                                                               // 11
+            s.TabActNs = "FancyButton"; s.TabIdleNs = "FancyButton"; s.TabNsScale = 0.7f;
+            s.NodeNs = "FancyButton"; s.NodeNsScale = 0.6f; }),
+        GrimVariant("Grim Library Rounded", s => {                                                           // 12
+            s.ContentBg = "Grim_SpellListOverlay"; s.NodeNs = "FancyButton"; s.NodeNsScale = 0.6f; }),
+        GrimVariant("Grim Library Fancy", s => {                                                             // 13 (kept)
+            s.ContentBg = "Grim_SpellListOverlay"; s.PanelNs = "frame_fancy"; s.PanelNsScale = 0.55f;
+            s.NodeNs = "frame_fancy"; s.NodeNsScale = 0.28f; }),
+        GrimVariant("Grim Ornate", s => {                                                                    // 14
+            s.PanelNs = "frame_fancy"; s.PanelNsScale = 0.6f; s.NodeNs = "button_rounded"; s.NodeNsScale = 0.85f;
+            s.GoldTrim = true; }),
+        GrimVariant("Grim Ornate Library", s => {                                                            // 15
+            s.PanelNs = "frame_fancy"; s.PanelNsScale = 0.55f; s.ContentBg = "Grim_SpellListOverlay";
+            s.NodeNs = "FancyButton"; s.NodeNsScale = 0.6f; s.GoldTrim = true; }),
     };
 
     private int _skinIndex;

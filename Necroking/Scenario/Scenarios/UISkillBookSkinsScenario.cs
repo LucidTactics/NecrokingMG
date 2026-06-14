@@ -14,7 +14,7 @@ public class UISkillBookSkinsScenario : UIScenarioBase
     public override string Name => "UISkillBookSkins";
     public override bool WantsWidgetRenderer => true; // skins use harmonized chrome
 
-    private const int Count = 5; // 5 tab variants of the chosen base design
+    private const int Count = 15; // 5 tab variants + 10 grimoire-style variants
     private int _skin;
     private int _phase;
     private float _t;
