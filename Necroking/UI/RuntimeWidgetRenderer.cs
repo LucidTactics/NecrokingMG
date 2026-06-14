@@ -717,6 +717,23 @@ public class RuntimeWidgetRenderer
         else _batch.Draw(tex, rect, tint);
     }
 
+    /// <summary>Draw a horizontal sub-region [u0..u1] of an element's harmonized
+    /// texture into destRect (no stretching of the unshown part). Used for bar
+    /// fills that reveal a textured swatch left-to-right, optionally re-tinted
+    /// (e.g. a blue swath drawn red for an HP fill). No-op for non-image elements.</summary>
+    public void DrawElementImageCropped(string elementId, Rectangle destRect, float u0, float u1, Color? tintOverride = null)
+    {
+        if (_batch == null || u1 <= u0) return;
+        var elemDef = _elementDefs.FirstOrDefault(e => e.Id == elementId);
+        if (elemDef == null || elemDef.Type != "image" || string.IsNullOrEmpty(elemDef.ImagePath)) return;
+        var tex = GetTexture(elemDef.ImagePath, "el:" + elemDef.Id);
+        if (tex == null) return;
+        var tint = tintOverride ?? ByteColor(elemDef.TintColor ?? new byte[] { 255, 255, 255, 255 });
+        int sx = (int)(tex.Width * Math.Clamp(u0, 0f, 1f));
+        int sw = Math.Max(1, (int)(tex.Width * Math.Clamp(u1 - u0, 0f, 1f)));
+        _batch.Draw(tex, destRect, new Rectangle(sx, 0, sw, tex.Height), tint);
+    }
+
     /// <summary>Draw a line of text directly (for code-driven content layered
     /// over a widget, e.g. the unit sheet's magic-path levels). Position is the
     /// top-left; caller rounds to integer pixels.</summary>

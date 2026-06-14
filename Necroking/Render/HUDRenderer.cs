@@ -15,8 +15,17 @@ namespace Necroking.Render;
 /// Renders the in-game HUD: HP/mana bars, spell bars, tooltips, unit counts,
 /// time controls, combat log. Extracted from Game1 to reduce its size.
 /// </summary>
-public class HUDRenderer
+public partial class HUDRenderer
 {
+    /// <summary>Which HP/Mana bar skin to draw (cycled with Shift+H for design
+    /// review). 0 = the original flat bars; 1..N reuse grimoire / unit-sheet /
+    /// tooltip chrome. See HUDRenderer.StatusBars.cs.</summary>
+    public int StatusBarSkin = 0;
+    public const int StatusBarSkinCount = 11; // skin 0 (original) + 10 designs
+    /// <summary>Scenario test seam: when &gt;= 0, overrides StatusBarSkin so a
+    /// screenshot scenario can render each design. -1 = use the instance value.</summary>
+    public static int DebugSkinOverride = -1;
+
     // Layout constants
     private const int BarWidth = 200;
     private const int BarHeight = 16;
@@ -190,21 +199,28 @@ public class HUDRenderer
 
     private void DrawStatusBars(int necroIdx, Simulation sim)
     {
+        // Gather HP/Mana values + fractions, then hand off to the selected skin.
+        int hp = 0, maxHp = 0;
+        float hpFrac = 0f;
         if (necroIdx >= 0)
         {
             var stats = sim.Units[necroIdx].Stats;
-            float hpFrac = stats.MaxHP > 0 ? (float)stats.HP / stats.MaxHP : 0f;
-            _batch.Draw(_pixel, new Rectangle(BarX, HpBarY, BarWidth, BarHeight), HpBarBg);
-            _batch.Draw(_pixel, new Rectangle(BarX, HpBarY, (int)(BarWidth * hpFrac), BarHeight), HpBarFg);
-            Text(_font, $"HP: {stats.HP}/{stats.MaxHP}", new Vector2(BarX + 5, HpBarY + 1), Color.White);
+            hp = stats.HP; maxHp = stats.MaxHP;
+            hpFrac = maxHp > 0 ? (float)hp / maxHp : 0f;
         }
-
         float maxManaEff = sim.NecroState.MaxMana
             + (necroIdx >= 0 ? BuffSystem.SumExtraAdd(sim.Units, necroIdx, "MaxMana") : 0f);
         float manaFrac = maxManaEff > 0 ? sim.NecroState.Mana / maxManaEff : 0f;
-        _batch.Draw(_pixel, new Rectangle(BarX, ManaBarY, BarWidth, BarHeight), ManaBarBg);
-        _batch.Draw(_pixel, new Rectangle(BarX, ManaBarY, (int)(BarWidth * manaFrac), BarHeight), ManaBarFg);
-        Text(_font, $"Mana: {(int)sim.NecroState.Mana}/{(int)maxManaEff}", new Vector2(BarX + 5, ManaBarY + 1), Color.White);
+        int mana = (int)sim.NecroState.Mana, maxMana = (int)maxManaEff;
+
+        var hpRect = new Rectangle(BarX, HpBarY, BarWidth, BarHeight);
+        var manaRect = new Rectangle(BarX, ManaBarY, BarWidth, BarHeight);
+        string hpLabel = necroIdx >= 0 ? $"HP: {hp}/{maxHp}" : "";
+        string manaLabel = $"Mana: {mana}/{maxMana}";
+
+        int skin = DebugSkinOverride >= 0 ? DebugSkinOverride : StatusBarSkin;
+        DrawStatusBarSkin(skin, necroIdx >= 0,
+            hpRect, hpFrac, hpLabel, manaRect, manaFrac, manaLabel);
     }
 
 

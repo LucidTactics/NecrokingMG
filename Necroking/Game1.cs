@@ -2326,6 +2326,14 @@ public class Game1 : Microsoft.Xna.Framework.Game
             else { EnsureUIEditorInitialized(); _menuState = MenuState.UIEditor; }
         }
 
+        // Shift+H cycles the HP/Mana bar skin (design review — see
+        // HUDRenderer.StatusBars.cs; the cycling is removed once a design is picked).
+        if (!anyTextInputActive && _input.WasKeyPressed(Keys.H)
+            && (_input.IsKeyDown(Keys.LeftShift) || _input.IsKeyDown(Keys.RightShift)))
+        {
+            _hudRenderer.StatusBarSkin = (_hudRenderer.StatusBarSkin + 1) % HUDRenderer.StatusBarSkinCount;
+        }
+
         // 'I' key toggles inventory (lazy-inits the UI family on first open)
         if (!anyTextInputActive && _input.WasKeyPressed(Keys.I) && _menuState == MenuState.None)
         {
