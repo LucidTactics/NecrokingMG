@@ -59,6 +59,19 @@ public partial class HUDRenderer
     private const int TcBtnH = 22;
     private const int TcGap = 2;
     private const int TcCount = 6;
+    private const int TcSpeedTextReserve = 56; // room on the right for the "Paused"/"1.5x" readout
+    private const int TcRightMargin = 8;
+
+    /// <summary>Time-control button block layout, shared by DrawTimeControls and
+    /// HitTestTimeControls so they never desync. The block is right-aligned with
+    /// room reserved for the speed-text readout (so it can't crop off-screen), and
+    /// bottom-aligned like the spell bar (~2px gap).</summary>
+    private static void TimeControlLayout(int screenW, int screenH, out int baseX, out int baseY)
+    {
+        int buttonsW = TcBtnW + TcGap + TcCount * TcBtnW + (TcCount - 1) * TcGap;
+        baseX = screenW - (buttonsW + TcSpeedTextReserve + TcRightMargin);
+        baseY = screenH - TcBtnH - 2;
+    }
 
     // Colors
     private static readonly Color HpBarBg = new(60, 20, 20);
@@ -71,7 +84,7 @@ public partial class HUDRenderer
     private static readonly Color SecFilledBg = new(45, 50, 65, 180);
     private static readonly Color SecEmptyBg = new(25, 25, 35, 120);
     private static readonly Color SecBorder = new(90, 90, 120, 180);
-    private static readonly Color KeyLabelColor = new(180, 180, 200);
+    private static readonly Color KeyLabelColor = new(0x3e, 0x31, 0x11); // dark brown, reads on the parchment slot
     private static readonly Color SpellNameColor = new(200, 200, 220);
     private static readonly Color CooldownOverlay = new(0, 0, 0, 150);
     private static readonly Color CooldownText = new(255, 200, 100);
@@ -292,8 +305,8 @@ public partial class HUDRenderer
             // melee_gather has no icon — label it.
             if (slotSpellId == "melee_gather")
                 Text(_smallFont, "Melee", new Vector2(inner.X + 1, inner.Center.Y - 6), SpellNameColor);
-            // Hotkey label, top-left, on top of the frame.
-            Text(_smallFont, keys[s], new Vector2(slotX + 4, barY + 2), KeyLabelColor);
+            // Hotkey label, just inside the frame at the parchment's top-left.
+            Text(_smallFont, keys[s], new Vector2(inner.X, inner.Y - 2), KeyLabelColor);
         }
     }
 
@@ -431,9 +444,7 @@ public partial class HUDRenderer
     /// </summary>
     public int HitTestTimeControls(int screenW, int screenH, int mouseX, int mouseY)
     {
-        int tcTotalW = TcBtnW + TcGap + TcCount * TcBtnW + (TcCount - 1) * TcGap;
-        int tcBaseX = screenW - tcTotalW - 10;
-        int tcBaseY = screenH - 52;
+        TimeControlLayout(screenW, screenH, out int tcBaseX, out int tcBaseY);
 
         if (mouseY < tcBaseY || mouseY >= tcBaseY + TcBtnH) return -1;
 
@@ -501,9 +512,7 @@ public partial class HUDRenderer
         ReadOnlySpan<float> speeds = stackalloc float[] { 0.1f, 0.25f, 0.5f, 1.0f, 1.5f, 2.0f };
         string[] labels = { "<<<", "<<", "<", "=", ">", ">>" };
         int pauseW = TcBtnW;
-        int totalW = pauseW + TcGap + TcCount * TcBtnW + (TcCount - 1) * TcGap;
-        int baseX = screenW - totalW - 10;
-        int baseY = screenH - 52;
+        TimeControlLayout(screenW, screenH, out int baseX, out int baseY);
 
         int mx = (int)_input.MousePos.X, my = (int)_input.MousePos.Y;
 
