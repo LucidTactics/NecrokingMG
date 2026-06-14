@@ -23,7 +23,7 @@ namespace Necroking.Render;
 /// no <see cref="UIGfx"/>. Each node is a rectangular button with title + cost
 /// subtitle, color-coded by affordability, with a button press-down animation.
 /// </summary>
-public class SkillBookPanel : Necroking.UI.IModalLayer
+public partial class SkillBookPanel : Necroking.UI.IModalLayer
 {
     public bool IsVisible { get; private set; }
     public void Toggle() { if (IsVisible) Close(); else Open(); }
@@ -53,6 +53,7 @@ public class SkillBookPanel : Necroking.UI.IModalLayer
     private SpriteFont? _font;
     private SpriteFont? _smallFont;
     private SpriteFont? _largeFont;
+    private Necroking.UI.RuntimeWidgetRenderer? _widgets; // grimoire/unit-sheet harmonized chrome
 
     private SkillBookState _state = null!;
     private Inventory _inventory = null!;
@@ -62,13 +63,15 @@ public class SkillBookPanel : Necroking.UI.IModalLayer
     private Simulation? _sim;
 
     public void Init(SpriteBatch batch, Texture2D pixel,
-        SpriteFont? font, SpriteFont? smallFont, SpriteFont? largeFont)
+        SpriteFont? font, SpriteFont? smallFont, SpriteFont? largeFont,
+        Necroking.UI.RuntimeWidgetRenderer? widgets = null)
     {
         _batch = batch;
         _pixel = pixel;
         _font = font;
         _smallFont = smallFont;
         _largeFont = largeFont;
+        _widgets = widgets;
     }
 
     /// <summary>Wire runtime references — call once after game systems exist. Also
@@ -392,21 +395,33 @@ public class SkillBookPanel : Necroking.UI.IModalLayer
 
     private void DrawChrome(in Layout lay)
     {
-        // Leather background
-        Fill(lay.Panel, LeatherMid);
-        // Inner darker frame band
-        var inner = Inset(lay.Panel, 6);
-        Fill(new Rectangle(lay.Panel.X, lay.Panel.Y, lay.Panel.Width, 6), LeatherDark);
-        Fill(new Rectangle(lay.Panel.X, lay.Panel.Bottom - 6, lay.Panel.Width, 6), LeatherDark);
-        Fill(new Rectangle(lay.Panel.X, lay.Panel.Y, 6, lay.Panel.Height), LeatherDark);
-        Fill(new Rectangle(lay.Panel.Right - 6, lay.Panel.Y, 6, lay.Panel.Height), LeatherDark);
-        Border(lay.Panel, GoldDim, 1);
-        Border(inner, LeatherDark, 1);
-        // Corner brackets
-        DrawCorner(lay.Panel.X + 4, lay.Panel.Y + 4, 22, false, false);
-        DrawCorner(lay.Panel.Right - 26, lay.Panel.Y + 4, 22, true, false);
-        DrawCorner(lay.Panel.X + 4, lay.Panel.Bottom - 26, 22, false, true);
-        DrawCorner(lay.Panel.Right - 26, lay.Panel.Bottom - 26, 22, true, true);
+        var skin = Active;
+        // Panel interior backing: textured or flat leather.
+        if (Has(skin.PanelBg)) { Fill(lay.Panel, LeatherMid); Tex(skin.PanelBg, lay.Panel, skin.PanelBgInset); }
+        else Fill(lay.Panel, LeatherMid);
+
+        if (Has(skin.PanelNs))
+        {
+            Ns(skin.PanelNs, lay.Panel, skin.PanelNsScale);
+        }
+        else
+        {
+            // Original flat leather frame.
+            var inner = Inset(lay.Panel, 6);
+            Fill(new Rectangle(lay.Panel.X, lay.Panel.Y, lay.Panel.Width, 6), LeatherDark);
+            Fill(new Rectangle(lay.Panel.X, lay.Panel.Bottom - 6, lay.Panel.Width, 6), LeatherDark);
+            Fill(new Rectangle(lay.Panel.X, lay.Panel.Y, 6, lay.Panel.Height), LeatherDark);
+            Fill(new Rectangle(lay.Panel.Right - 6, lay.Panel.Y, 6, lay.Panel.Height), LeatherDark);
+            Border(lay.Panel, GoldDim, 1);
+            Border(inner, LeatherDark, 1);
+        }
+        if (skin.Corners)
+        {
+            DrawCorner(lay.Panel.X + 4, lay.Panel.Y + 4, 22, false, false);
+            DrawCorner(lay.Panel.Right - 26, lay.Panel.Y + 4, 22, true, false);
+            DrawCorner(lay.Panel.X + 4, lay.Panel.Bottom - 26, 22, false, true);
+            DrawCorner(lay.Panel.Right - 26, lay.Panel.Bottom - 26, 22, true, true);
+        }
     }
 
     private void DrawCorner(int x, int y, int size, bool flipX, bool flipY)
@@ -422,15 +437,21 @@ public class SkillBookPanel : Necroking.UI.IModalLayer
 
     private void DrawTitle(in Layout lay)
     {
+        var skin = Active;
         var r = lay.Title;
-        Fill(r, LeatherDark);
-        Border(r, GoldDim, 1);
+        if (Has(skin.TitleBg)) Tex(skin.TitleBg, new Rectangle(r.X - 4, r.Y - 4, r.Width + 8, r.Height + 8));
+        else { Fill(r, LeatherDark); Border(r, GoldDim, 1); }
         var f = _largeFont ?? _font!;
         string title = "TOME OF THE NECROKING";
         var size = f.MeasureString(title);
         var pos = new Vector2((int)(r.X + (r.Width - size.X) / 2),
                               (int)(r.Y + (r.Height - size.Y) / 2));
-        DrawShadowText(f, title, pos, GoldBright);
+        DrawShadowText(f, title, pos, skin.TitleText);
+
+        // Design-review tag: which skin is showing.
+        if (_smallFont != null)
+            DrawText(_smallFont, $"Skin {CurrentSkinName}  (Shift+B)",
+                new Vector2(r.X + 2, r.Y + 1), new Color(180, 168, 140));
     }
 
     private void DrawTabBar(in Layout lay)
@@ -444,16 +465,22 @@ public class SkillBookPanel : Necroking.UI.IModalLayer
             bool active = i == _activeTab;
             bool hover = r.Contains((int)_mouse.X, (int)_mouse.Y);
 
-            Color fill = active ? Parchment
-                       : hover  ? new Color(72, 50, 28)
-                                : LeatherMid;
-            Fill(r, fill);
-
+            var skin = Active;
+            string? tabBg = active ? skin.TabActBg : skin.TabIdleBg;
+            if (Has(tabBg))
+            {
+                Tex(tabBg, r);
+                if (!active) Fill(r, new Color(0, 0, 0, 90));       // dim idle tabs
+                else if (hover) Fill(r, new Color(255, 255, 255, 30));
+            }
+            else
+            {
+                Color fill = active ? Parchment : hover ? new Color(72, 50, 28) : LeatherMid;
+                Fill(r, fill);
+            }
             // Top accent on active tab (gold band)
-            if (active)
-                Fill(new Rectangle(r.X, r.Y, r.Width, 2), GoldBright);
-
-            Border(r, active ? Gold : GoldDim, 1);
+            if (active) Fill(new Rectangle(r.X, r.Y, r.Width, 2), GoldBright);
+            if (!Has(tabBg)) Border(r, active ? Gold : GoldDim, 1);
 
             var (learned, total) = _state?.GetProgress(tab) ?? (0, tab.Skills.Count);
             string label = tab.DisplayName;
@@ -463,8 +490,8 @@ public class SkillBookPanel : Necroking.UI.IModalLayer
             var lblSize = f.MeasureString(label);
             var fracSize = sf.MeasureString(frac);
             int textY = r.Y + (r.Height - (int)lblSize.Y - (int)fracSize.Y - 2) / 2;
-            Color textColor = active ? Ink : new Color(210, 196, 168);
-            Color fracColor = active ? InkSoft : new Color(180, 168, 140);
+            Color textColor = active ? Active.TabActText : Active.TabIdleText;
+            Color fracColor = active ? Active.TabActText : Active.TabIdleText;
             DrawText(f, label,
                 new Vector2((int)(r.X + (r.Width - lblSize.X) / 2), textY), textColor);
             DrawText(sf, frac,
@@ -475,17 +502,30 @@ public class SkillBookPanel : Necroking.UI.IModalLayer
 
     private void DrawContent(in Layout lay)
     {
-        // Parchment tree area: base fill, then a vignette + flecks so it doesn't
-        // read as a flat off-white rectangle once bloom hits it in the main game.
-        Fill(lay.Content, Parchment);
-        DrawParchmentVignette(lay.Content);
-        DrawParchmentFlecks(lay.Content);
-        // Top folio band — a darker leather strip sells the "page in a tome" feel
-        // and prevents the parchment from running edge-to-edge as a single white block.
-        var folio = new Rectangle(lay.Content.X, lay.Content.Y, lay.Content.Width, 12);
-        Fill(folio, LeatherMid);
-        Fill(new Rectangle(folio.X, folio.Bottom - 1, folio.Width, 1), GoldDim);
-        Border(lay.Content, LeatherDark, 1);
+        var skin = Active;
+        if (Has(skin.ContentBg))
+        {
+            // Textured page (parchment / dragon damask / nations / swath box).
+            Fill(lay.Content, ParchmentDeep);                  // base so any texture alpha reads dark, not black
+            Tex(skin.ContentBg, lay.Content, skin.ContentInset);
+            if (skin.GoldTrim)
+            {
+                Tex("TT_Underline", new Rectangle(lay.Content.X, lay.Content.Y, lay.Content.Width, 3));
+                Tex("TT_Underline", new Rectangle(lay.Content.X, lay.Content.Bottom - 3, lay.Content.Width, 3));
+            }
+            else Border(lay.Content, LeatherDark, 1);
+        }
+        else
+        {
+            // Original flat parchment with a vignette + flecks + folio band.
+            Fill(lay.Content, Parchment);
+            DrawParchmentVignette(lay.Content);
+            DrawParchmentFlecks(lay.Content);
+            var folio = new Rectangle(lay.Content.X, lay.Content.Y, lay.Content.Width, 12);
+            Fill(folio, LeatherMid);
+            Fill(new Rectangle(folio.X, folio.Bottom - 1, folio.Width, 1), GoldDim);
+            Border(lay.Content, LeatherDark, 1);
+        }
 
         if (_activeTab < 0 || _activeTab >= SkillBookDefs.Tabs.Count) return;
         var tab = SkillBookDefs.Tabs[_activeTab];
@@ -605,20 +645,31 @@ public class SkillBookPanel : Necroking.UI.IModalLayer
             titleColor = InkSoft;
         }
 
+        var skin = Active;
         // Drop shadow under interactive nodes (not pressed)
         bool pressed = def.Id == _pressedSkillId;
         if (!pressed && !learned)
             Fill(new Rectangle(r.X + 2, r.Bottom, r.Width - 2, 2), new Color(0, 0, 0, 80));
 
-        Fill(r, fill);
-        // Top highlight (1px) — subtle emboss
-        Fill(new Rectangle(r.X + 1, r.Y + 1, r.Width - 2, 1), new Color(255, 255, 255, learned ? 30 : 60));
-        // Bottom shade
-        Fill(new Rectangle(r.X + 1, r.Bottom - 2, r.Width - 2, 1), new Color(0, 0, 0, learned ? 60 : 40));
-        Border(r, border, 1);
-        // Inner accent line for affordable nodes
-        if (!learned && prereqsMet && affordable)
-            Border(Inset(r, 2), new Color(255, 235, 180, 90), 1);
+        if (skin.NodeParchment && Has("SpellSlotBg"))
+        {
+            Tex("SpellSlotBg", r, 0.16f);                       // parchment base
+            Fill(r, NodeStateOverlay(learned, excluded, prereqsMet, affordable)); // state tint
+        }
+        else
+        {
+            Fill(r, fill);
+            Fill(new Rectangle(r.X + 1, r.Y + 1, r.Width - 2, 1), new Color(255, 255, 255, learned ? 30 : 60));
+            Fill(new Rectangle(r.X + 1, r.Bottom - 2, r.Width - 2, 1), new Color(0, 0, 0, learned ? 60 : 40));
+        }
+
+        if (Has(skin.NodeNs)) Ns(skin.NodeNs, r, skin.NodeNsScale);
+        else
+        {
+            Border(r, border, 1);
+            if (!learned && prereqsMet && affordable)
+                Border(Inset(r, 2), new Color(255, 235, 180, 90), 1);
+        }
 
         // Title
         var f = _font!;

@@ -1968,7 +1968,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // Note: _uiShaders is initialized later after Content.Load path -- we
         // set it on the panel below after Load completes.
         _skillTreePanel.Init(_spriteBatch, _pixel, _font, _smallFont, _largeFont);
-        _skillBookPanel.Init(_spriteBatch, _pixel, _font, _smallFont, _largeFont);
+        _skillBookPanel.Init(_spriteBatch, _pixel, _font, _smallFont, _largeFont, _widgetRenderer);
         // Early bind so scenarios (which skip StartGame) still have state. The spell-
         // bar Slots may be null at this point — re-bind happens in StartGame once the
         // bars are allocated. AddSpellToBarEffect handles null Slots gracefully.
@@ -2352,6 +2352,13 @@ public class Game1 : Microsoft.Xna.Framework.Game
             bool shift = _input.IsKeyDown(Keys.LeftShift) || _input.IsKeyDown(Keys.RightShift);
             if (shift) _skillTreePanel.Toggle();
             else       _skillBookPanel.Toggle();
+        }
+
+        // Shift+B cycles the skill book skin (design review; removed once chosen).
+        if (!anyTextInputActive && _skillBookPanel.IsVisible && _input.WasKeyPressed(Keys.B)
+            && (_input.IsKeyDown(Keys.LeftShift) || _input.IsKeyDown(Keys.RightShift)))
+        {
+            _skillBookPanel.CycleSkin(1);
         }
 
         // 'J' = spell grimoire (phase 1: display only)

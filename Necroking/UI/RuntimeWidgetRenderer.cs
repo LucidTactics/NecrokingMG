@@ -717,6 +717,16 @@ public class RuntimeWidgetRenderer
         else _batch.Draw(tex, rect, tint);
     }
 
+    /// <summary>Draw a named nine-slice (from nine_slices.json — e.g. frame_fancy,
+    /// LeatherBackground, RenaiThinBorder) into a rect with fixed corners and
+    /// stretched edges, so a frame doesn't distort the way a stretched image does.
+    /// borderScale shrinks the corner/edge size (use &lt;1 for a thinner frame).</summary>
+    public void DrawNineSlice(string nsId, Rectangle rect, Color? tint = null, float borderScale = 1f)
+    {
+        if (_batch == null) return;
+        GetOrLoadNineSlice(nsId)?.Draw(_batch, rect, tint ?? Color.White, borderScale);
+    }
+
     /// <summary>Draw a line of text directly (for code-driven content layered
     /// over a widget, e.g. the unit sheet's magic-path levels). Position is the
     /// top-left; caller rounds to integer pixels.</summary>
