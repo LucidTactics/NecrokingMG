@@ -5,6 +5,7 @@ using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Necroking.Core;
 using Necroking.Data;
+using Necroking.Editor;
 using Necroking.Movement;
 
 namespace Necroking.World;
@@ -86,6 +87,12 @@ public class TableCraftState
     public bool Crafting;
     public float CraftTimer;
     public uint ChannelerUnitID;   // 0 = no channeler assigned
+
+    // The loop portion's real-time budget (seconds), computed render-side from the
+    // ImbueTable Start/Loop/Finish anim durations so the WHOLE start+loop+finish
+    // sequence fits the table's ProcessTime. Craft completes when CraftTimer hits
+    // this (not ProcessTime). 0 = not set → fall back to ProcessTime.
+    public float LoopBudget;
 
     /// <summary>Rebuild slot arrays to match def-declared counts. Idempotent.</summary>
     public void EnsureSized(int corpseSlots, int itemSlots)
@@ -217,8 +224,42 @@ public class EnvironmentObjectDef
     public bool IsGlyphTrap { get; set; }
     public float GlyphRadius { get; set; } = 1.5f;  // world-space radius of the glyph circle
 
-    // Tint color (used by color harmonizer M04)
+    // Tint color (cheap multiply applied at draw)
     public HdrColor TintColor { get; set; } = new(255, 255, 255, 255, 1f);
+
+    // Per-pixel color harmonization (non-destructive). null = disabled (the
+    // presence of the object IS the enable toggle — no UI/bake/JSON when null).
+    // Harmonize → main sprite texture; HarmonizeCorrupt → the corrupted variant.
+    // The harmonized texture is baked once at load from the source PNG, so no
+    // duplicate asset files exist on disk.
+    public HarmonizeSettings? Harmonize { get; set; }
+    public HarmonizeSettings? HarmonizeCorrupt { get; set; }
+
+    // When true, each placed instance is deterministically (per-seed) flipped
+    // horizontally ~50% of the time, adding natural variety. Default depends on
+    // category (see DefaultRandomFlipForCategory) — on for organic props like
+    // trees/bushes/rocks, off for directional/readable things like buildings.
+    public bool RandomFlip { get; set; }
+
+    /// <summary>Sensible default for <see cref="RandomFlip"/> based on category.
+    /// Off for structured/directional/readable objects (they look wrong mirrored
+    /// or need consistent silhouettes for quick reading); on for organic props
+    /// where mirroring adds diversity.</summary>
+    public static bool DefaultRandomFlipForCategory(string? category)
+    {
+        switch ((category ?? "").Trim().ToLowerInvariant())
+        {
+            case "building":
+            case "crypt":
+            case "wall":
+            case "trap":
+            case "tombstone":
+            case "ground":
+                return false;
+            default:
+                return true; // trees, bushes, rocks, foragables, grave, misc, etc.
+        }
+    }
 
     // Animation (spritesheet) properties
     public bool IsAnimated { get; set; }
@@ -371,6 +412,15 @@ public class EnvironmentObjectDef
         writer.WriteNumber("a", TintColor.A);
         writer.WriteNumber("intensity", TintColor.Intensity);
         writer.WriteEndObject();
+
+        // Harmonization recipes (only written when present & meaningful, so
+        // un-harmonized defs stay clean in JSON).
+        if (Harmonize != null && Harmonize.HasEffect)
+            Harmonize.Write(writer, "harmonize");
+        if (HarmonizeCorrupt != null && HarmonizeCorrupt.HasEffect)
+            HarmonizeCorrupt.Write(writer, "harmonizeCorrupt");
+
+        writer.WriteBoolean("randomFlip", RandomFlip);
     }
 }
 
@@ -424,6 +474,12 @@ public class EnvironmentSystem
     private readonly List<EnvironmentObjectDef> _defs = new();
     private readonly List<Texture2D?> _textures = new();
     private readonly Dictionary<string, Texture2D?> _overrideTextures = new(); // cached single-frame overrides (trap & corrupted sprites)
+    // Per-def harmonized corrupt textures. Keyed by def index (NOT path) because
+    // defs can share a corrupt sprite path but harmonize it differently. The
+    // cached value is the texture to return (may be the shared raw on fallback);
+    // _corruptHarmonizedOwned tracks which ones we created and must dispose.
+    private readonly Dictionary<int, Texture2D?> _corruptHarmonized = new();
+    private readonly HashSet<int> _corruptHarmonizedOwned = new();
     private GraphicsDevice? _device;
     private Texture2D? _placeholderTexture; // shared placeholder for defs with missing/failed sprites
     private readonly List<PlacedObject> _objects = new();
@@ -1050,10 +1106,55 @@ public class EnvironmentSystem
         // Ensure texture list matches defs
         while (_textures.Count < _defs.Count) _textures.Add(null);
 
+        // Phase A (parallel, no GPU): read + decode each PNG to pixels, and apply
+        // the def's harmonize recipe in CPU (TransformPixels is thread-safe), so a
+        // harmonized def needs no GPU GetData round-trip. DebugLog isn't thread-safe,
+        // so failures are captured here and logged serially in phase B.
+        var decoded = new (Color[]? pixels, int w, int h, string? warn)[_defs.Count];
+        System.Threading.Tasks.Parallel.For(0, _defs.Count, i =>
+        {
+            if (_textures[i] != null) return;
+            var def = _defs[i];
+            string path = def.TexturePath;
+            if (string.IsNullOrEmpty(path))
+            {
+                decoded[i] = (null, 0, 0, $"Env def '{def.Id}' has no sprite path — using placeholder");
+                return;
+            }
+            string resolved = Core.GamePaths.Resolve(path);
+            if (!System.IO.File.Exists(resolved))
+            {
+                decoded[i] = (null, 0, 0, $"Env def '{def.Id}' sprite missing: '{path}' — using placeholder");
+                return;
+            }
+            try
+            {
+                byte[] bytes = System.IO.File.ReadAllBytes(resolved);
+                var (pixels, w, h) = Necroking.Render.TextureUtil.DecodePngPremultiplied(bytes);
+                if (def.Harmonize != null && def.Harmonize.HasEffect)
+                    ColorHarmonizer.TransformPixels(pixels, w, h, def.Harmonize);
+                decoded[i] = (pixels, w, h, null);
+            }
+            catch (Exception ex)
+            {
+                decoded[i] = (null, 0, 0, $"Env def '{def.Id}' sprite load failed: '{path}' ({ex.Message}) — using placeholder");
+            }
+        });
+
+        // Phase B (main thread): upload to GPU, or fall back to a placeholder.
         for (int i = 0; i < _defs.Count; i++)
         {
             if (_textures[i] != null) continue;
-            _textures[i] = TryLoadDefTexture(device, _defs[i]);
+            var d = decoded[i];
+            if (d.pixels != null)
+            {
+                _textures[i] = Necroking.Render.TextureUtil.CreateTextureFromPixels(device, d.pixels, d.w, d.h);
+            }
+            else
+            {
+                if (d.warn != null) Core.DebugLog.Log("startup", "  " + d.warn);
+                _textures[i] = GetOrCreatePlaceholder(device);
+            }
         }
     }
 
@@ -1072,7 +1173,8 @@ public class EnvironmentSystem
                 try
                 {
                     using var stream = System.IO.File.OpenRead(resolved);
-                    return Necroking.Render.TextureUtil.LoadPremultiplied(device, stream);
+                    var raw = Necroking.Render.TextureUtil.LoadPremultiplied(device, stream);
+                    return ApplyDefHarmonize(device, raw, def.Harmonize);
                 }
                 catch (Exception ex)
                 {
@@ -1087,6 +1189,20 @@ public class EnvironmentSystem
             Core.DebugLog.Log("startup", $"  Env def '{def.Id}' has no sprite path — using placeholder");
         }
         return GetOrCreatePlaceholder(device);
+    }
+
+    /// <summary>
+    /// If the def has an active harmonize recipe, bake a per-pixel color-shifted
+    /// copy of <paramref name="raw"/> and return it (disposing the raw). Otherwise
+    /// returns <paramref name="raw"/> untouched — zero cost for un-harmonized defs.
+    /// </summary>
+    private Texture2D ApplyDefHarmonize(GraphicsDevice device, Texture2D raw, HarmonizeSettings? settings)
+    {
+        if (settings == null || !settings.HasEffect) return raw;
+        var harmonized = ColorHarmonizer.HarmonizeTexture(raw, device, settings);
+        if (harmonized == null) return raw;
+        raw.Dispose();
+        return harmonized;
     }
 
     /// <summary>
@@ -1135,6 +1251,22 @@ public class EnvironmentSystem
         return _textures[defIdx] == _placeholderTexture;
     }
 
+    /// <summary>Whether this placed object should render horizontally flipped.
+    /// Deterministic per-instance (hashed from the object's seed) so it's stable
+    /// across frames and reloads, ~50/50 when the def opts in via RandomFlip.
+    /// Both the sprite and shadow render paths call this so they stay in sync.</summary>
+    public bool ShouldFlipObject(int objIdx)
+    {
+        if (objIdx < 0 || objIdx >= _objects.Count) return false;
+        var obj = _objects[objIdx];
+        if (obj.DefIndex >= _defs.Count || !_defs[obj.DefIndex].RandomFlip) return false;
+        // Hash the seed's bits so the flip doesn't correlate with the seed's other
+        // uses (anim start frame, foragable wiggle).
+        uint bits = unchecked((uint)BitConverter.SingleToInt32Bits(obj.Seed));
+        bits ^= bits >> 16; bits *= 0x45d9f3bu; bits ^= bits >> 16;
+        return (bits & 1u) != 0;
+    }
+
     /// <summary>Get the correct texture for an object based on trap visual state. Returns alpha multiplier.</summary>
     public Texture2D? GetObjectTexture(int objIdx, out float alpha)
     {
@@ -1154,7 +1286,7 @@ public class EnvironmentSystem
         var def = _defs[obj.DefIndex];
 
         if (objIdx < _objectRuntime.Count
-            && TryStateOverride(_objectRuntime[objIdx], def, out var stateTex, out alpha))
+            && TryStateOverride(_objectRuntime[objIdx], obj.DefIndex, def, out var stateTex, out alpha))
         {
             isOverride = true;
             return stateTex;
@@ -1166,7 +1298,7 @@ public class EnvironmentSystem
     /// precedence order: Corrupted → Berry → Trap. First hit wins. Returns
     /// false if the base def texture should be used. New states (Burning,
     /// Frozen, etc.) get added as another branch here.</summary>
-    private bool TryStateOverride(PlacedObjectRuntime rt, EnvironmentObjectDef def,
+    private bool TryStateOverride(PlacedObjectRuntime rt, int defIdx, EnvironmentObjectDef def,
         out Texture2D? tex, out float alpha)
     {
         tex = null;
@@ -1175,7 +1307,7 @@ public class EnvironmentSystem
         // Corrupted overrides any trap/berry state — corrupted trees stay corrupted.
         if (rt.Corrupted && !string.IsNullOrEmpty(def.CorruptedSprite))
         {
-            tex = GetOrLoadOverrideTexture(def.CorruptedSprite);
+            tex = GetCorruptTexture(defIdx, def);
             if (tex != null) return true;
         }
 
@@ -1224,9 +1356,44 @@ public class EnvironmentSystem
     public Texture2D? GetCorruptedTexture(int objIdx)
     {
         if (objIdx < 0 || objIdx >= _objects.Count) return null;
-        var def = _defs[_objects[objIdx].DefIndex];
+        int defIdx = _objects[objIdx].DefIndex;
+        var def = _defs[defIdx];
         if (string.IsNullOrEmpty(def.CorruptedSprite)) return null;
-        return GetOrLoadOverrideTexture(def.CorruptedSprite);
+        return GetCorruptTexture(defIdx, def);
+    }
+
+    /// <summary>Corrupted-variant texture for a def, applying the def's
+    /// HarmonizeCorrupt recipe if active. Falls back to the shared (path-keyed)
+    /// override texture when no corrupt harmonize is set — zero extra cost.
+    /// Harmonized results are cached per def index (paths can be shared across
+    /// defs with different recipes).</summary>
+    private Texture2D? GetCorruptTexture(int defIdx, EnvironmentObjectDef def)
+    {
+        var settings = def.HarmonizeCorrupt;
+        if (settings == null || !settings.HasEffect || string.IsNullOrEmpty(def.CorruptedSprite))
+            return GetOrLoadOverrideTexture(def.CorruptedSprite);
+
+        if (_corruptHarmonized.TryGetValue(defIdx, out var cached)) return cached;
+
+        var raw = GetOrLoadOverrideTexture(def.CorruptedSprite);
+        Texture2D? result = raw;
+        if (raw != null && _device != null)
+        {
+            var h = ColorHarmonizer.HarmonizeTexture(raw, _device, settings);
+            if (h != null) { result = h; _corruptHarmonizedOwned.Add(defIdx); }
+        }
+        _corruptHarmonized[defIdx] = result;
+        return result;
+    }
+
+    /// <summary>Drop a def's cached harmonized corrupt texture so it re-bakes on
+    /// next request (after the recipe or source changes in the editor).</summary>
+    private void InvalidateCorruptHarmonized(int defIdx)
+    {
+        if (_corruptHarmonizedOwned.Remove(defIdx)
+            && _corruptHarmonized.TryGetValue(defIdx, out var owned) && owned != null)
+            owned.Dispose();
+        _corruptHarmonized.Remove(defIdx);
     }
 
     private Texture2D? GetOrLoadOverrideTexture(string path)
@@ -1273,6 +1440,8 @@ public class EnvironmentSystem
         if (existing != null && existing != _placeholderTexture)
             existing.Dispose();
         _textures[defIdx] = TryLoadDefTexture(_device, _defs[defIdx]);
+        // Re-bake the harmonized corrupt variant too (recipe may have changed).
+        InvalidateCorruptHarmonized(defIdx);
     }
 
     /// <summary>

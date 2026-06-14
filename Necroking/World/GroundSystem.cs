@@ -331,25 +331,51 @@ public class GroundSystem
     public void LoadTextures(GraphicsDevice device)
     {
         while (_textures.Count < _types.Count) _textures.Add(null);
-        // Cache-by-path so types sharing a texture path (e.g. shallow_water and
-        // swamp_shallow_water) reference the same Texture2D rather than loading
-        // it twice.
-        var byPath = new Dictionary<string, Texture2D>(StringComparer.OrdinalIgnoreCase);
+
+        // Unique texture paths — types sharing a path (e.g. shallow_water and
+        // swamp_shallow_water) reference the same Texture2D rather than loading it
+        // twice. Decode each unique PNG once.
+        var uniquePaths = new List<string>();
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         for (int i = 0; i < _types.Count; i++)
         {
             if (_textures[i] != null) continue;
             string path = _types[i].TexturePath;
-            if (string.IsNullOrEmpty(path)) continue;
-            if (byPath.TryGetValue(path, out var cached)) { _textures[i] = cached; continue; }
+            if (!string.IsNullOrEmpty(path) && seen.Add(path)) uniquePaths.Add(path);
+        }
+
+        // Phase A (parallel, no GPU): read + decode each unique PNG to pixels.
+        // DebugLog isn't thread-safe, so errors are captured and logged in phase B.
+        var decoded = new (Color[]? pixels, int w, int h, string? err)[uniquePaths.Count];
+        System.Threading.Tasks.Parallel.For(0, uniquePaths.Count, k =>
+        {
+            string path = uniquePaths[k];
             string resolved = Core.GamePaths.Resolve(path);
-            if (!System.IO.File.Exists(resolved)) continue;
+            if (!System.IO.File.Exists(resolved)) return;
             try
             {
-                var loaded = Necroking.Render.TextureUtil.LoadPremultiplied(device, path);
-                _textures[i] = loaded;
-                if (loaded != null) byPath[path] = loaded;
+                byte[] bytes = System.IO.File.ReadAllBytes(resolved);
+                var (pixels, w, h) = Necroking.Render.TextureUtil.DecodePngPremultiplied(bytes);
+                decoded[k] = (pixels, w, h, null);
             }
-            catch (Exception ex) { DebugLog.Log("error", $"Failed to load ground texture '{path}': {ex.Message}"); }
+            catch (Exception ex) { decoded[k] = (null, 0, 0, $"Failed to load ground texture '{path}': {ex.Message}"); }
+        });
+
+        // Phase B (main thread): upload each unique texture, then map types to them.
+        var byPath = new Dictionary<string, Texture2D>(StringComparer.OrdinalIgnoreCase);
+        for (int k = 0; k < uniquePaths.Count; k++)
+        {
+            var d = decoded[k];
+            if (d.pixels != null)
+                byPath[uniquePaths[k]] = Necroking.Render.TextureUtil.CreateTextureFromPixels(device, d.pixels, d.w, d.h);
+            else if (d.err != null)
+                DebugLog.Log("error", d.err);
+        }
+        for (int i = 0; i < _types.Count; i++)
+        {
+            if (_textures[i] != null) continue;
+            string path = _types[i].TexturePath;
+            if (!string.IsNullOrEmpty(path) && byPath.TryGetValue(path, out var tex)) _textures[i] = tex;
         }
         RebuildTextureSlotCache();
     }
@@ -543,42 +569,49 @@ public class GroundSystem
         }
         DebugLog.Log("startup", $"  StampTerrainOnto type map: {typeNameTerrain}");
 
-        int countOpen = 0, countRough = 0, countShallow = 0, countDeep = 0, countWall = 0;
         int vw = VertexW;
-        for (int ty = 0; ty < _worldH; ty++)
-        {
-            int row0 = ty * vw;
-            int row1 = (ty + 1) * vw;
-            for (int tx = 0; tx < _worldW; tx++)
+        // Per-tile independent (reads _vertexMap, writes disjoint grid tiles);
+        // parallelize over rows. Counts are aggregated thread-locally then summed
+        // (indices: 0=Open 1=Rough 2=Shallow 3=Deep 4=Wall).
+        long[] totals = new long[5];
+        System.Threading.Tasks.Parallel.For(0, _worldH,
+            () => new int[5],
+            (ty, _, local) =>
             {
-                // Don't clobber walls written by WallSystem.
-                if (grid.GetTerrain(tx, ty) == TerrainType.Wall) { countWall++; continue; }
-
-                byte v00 = _vertexMap[row0 + tx];
-                byte v10 = _vertexMap[row0 + tx + 1];
-                byte v01 = _vertexMap[row1 + tx];
-                byte v11 = _vertexMap[row1 + tx + 1];
-
-                TerrainType worst = TerrainType.Open;
-                float worstCost = -1f;
-                for (int c = 0; c < 4; c++)
+                int row0 = ty * vw;
+                int row1 = (ty + 1) * vw;
+                for (int tx = 0; tx < _worldW; tx++)
                 {
-                    byte v = c == 0 ? v00 : c == 1 ? v10 : c == 2 ? v01 : v11;
-                    if (v >= n) continue;
-                    float cc = costPerType[v];
-                    if (cc > worstCost) { worstCost = cc; worst = terrainPerType[v]; }
+                    // Don't clobber walls written by WallSystem.
+                    if (grid.GetTerrain(tx, ty) == TerrainType.Wall) { local[4]++; continue; }
+
+                    byte v00 = _vertexMap[row0 + tx];
+                    byte v10 = _vertexMap[row0 + tx + 1];
+                    byte v01 = _vertexMap[row1 + tx];
+                    byte v11 = _vertexMap[row1 + tx + 1];
+
+                    TerrainType worst = TerrainType.Open;
+                    float worstCost = -1f;
+                    for (int c = 0; c < 4; c++)
+                    {
+                        byte v = c == 0 ? v00 : c == 1 ? v10 : c == 2 ? v01 : v11;
+                        if (v >= n) continue;
+                        float cc = costPerType[v];
+                        if (cc > worstCost) { worstCost = cc; worst = terrainPerType[v]; }
+                    }
+                    grid.SetTerrain(tx, ty, worst);
+                    switch (worst)
+                    {
+                        case TerrainType.Open: local[0]++; break;
+                        case TerrainType.Rough: local[1]++; break;
+                        case TerrainType.ShallowWater: local[2]++; break;
+                        case TerrainType.DeepWater: local[3]++; break;
+                    }
                 }
-                grid.SetTerrain(tx, ty, worst);
-                switch (worst)
-                {
-                    case TerrainType.Open: countOpen++; break;
-                    case TerrainType.Rough: countRough++; break;
-                    case TerrainType.ShallowWater: countShallow++; break;
-                    case TerrainType.DeepWater: countDeep++; break;
-                }
-            }
-        }
-        DebugLog.Log("startup", $"  StampTerrainOnto wrote: Open={countOpen} Rough={countRough} ShallowWater={countShallow} DeepWater={countDeep} (Wall left alone={countWall})");
+                return local;
+            },
+            local => { lock (totals) { for (int k = 0; k < 5; k++) totals[k] += local[k]; } });
+        DebugLog.Log("startup", $"  StampTerrainOnto wrote: Open={totals[0]} Rough={totals[1]} ShallowWater={totals[2]} DeepWater={totals[3]} (Wall left alone={totals[4]})");
     }
 
     public Texture2D? CreateVertexMapTexture(GraphicsDevice device)
