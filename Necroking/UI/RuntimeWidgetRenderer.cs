@@ -717,6 +717,15 @@ public class RuntimeWidgetRenderer
         else _batch.Draw(tex, rect, tint);
     }
 
+    /// <summary>Draw a named nine-slice (from nine_slices.json — e.g. RenaiThinBorder,
+    /// SwatchBanner, FancyButton) into a rect with fixed corners and stretched edges,
+    /// so a frame doesn't distort the way a plain stretched image does.</summary>
+    public void DrawNineSlice(string nsId, Rectangle rect, Color? tint = null)
+    {
+        if (_batch == null) return;
+        GetOrLoadNineSlice(nsId)?.Draw(_batch, rect, tint ?? Color.White);
+    }
+
     /// <summary>Draw a horizontal sub-region [u0..u1] of an element's harmonized
     /// texture into destRect (no stretching of the unshown part). Used for bar
     /// fills that reveal a textured swatch left-to-right, optionally re-tinted

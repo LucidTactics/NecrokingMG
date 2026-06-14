@@ -5,28 +5,28 @@ using Microsoft.Xna.Framework.Graphics;
 namespace Necroking.Render;
 
 /// <summary>
-/// HP/Mana bar skins for design review (cycle with Shift+H). Each skin reuses
-/// chrome elements from the spell grimoire / unit sheet / tooltip UIs (frames,
-/// swaths, ribbons, parchment, gold trim) so the bars match that visual family.
-/// Skin 0 is the original flat bars. Once a design is chosen the others (and the
-/// cycling) get removed.
+/// HP/Mana bar skins for design review (cycle with Shift+H). Each reuses chrome
+/// from the spell grimoire / unit sheet / tooltip UIs. Bar colour implies HP vs
+/// Mana, so the text is just the value. Frames use real nine-slices so corners
+/// don't distort. Skin 0 = the original flat bars; once a design is picked the
+/// rest (and the cycling) get removed.
 /// </summary>
 public partial class HUDRenderer
 {
-    // Vivid fills so HP/Mana read instantly regardless of the chrome behind them.
-    private static readonly Color HpFillA = new(214, 64, 52);   // HP top highlight
-    private static readonly Color HpFillB = new(150, 30, 24);   // HP body
-    private static readonly Color ManaFillA = new(86, 108, 234); // Mana top highlight
-    private static readonly Color ManaFillB = new(42, 54, 156);  // Mana body
-    private static readonly Color SkinTrack = new(16, 12, 9, 235);
-    private static readonly Color SkinTextLight = new(246, 238, 218);
-    private static readonly Color SkinTextDark = new(28, 20, 12);
-    private static readonly Color SkinShadow = new(0, 0, 0, 140);
+    private static readonly Color HpFillA = new(216, 70, 56);   // HP highlight
+    private static readonly Color HpFillB = new(146, 28, 22);   // HP body
+    private static readonly Color ManaFillA = new(92, 116, 238); // Mana highlight
+    private static readonly Color ManaFillB = new(40, 52, 150);  // Mana body
+    private static readonly Color SkinTrack = new(14, 11, 8, 235);
+    private static readonly Color SkinTextLight = new(247, 240, 222);
+    private static readonly Color SkinShadow = new(0, 0, 0, 165);
+    private const int ValueSize = 15;
 
-    private Rectangle FillR(Rectangle r, float frac)
-        => new(r.X, r.Y, (int)(r.Width * MathHelper.Clamp(frac, 0f, 1f)), r.Height);
-
+    private static Rectangle Inset(Rectangle r, int n) => new(r.X + n, r.Y + n, r.Width - 2 * n, r.Height - 2 * n);
+    private Rectangle FillR(Rectangle r, float frac) => new(r.X, r.Y, (int)(r.Width * MathHelper.Clamp(frac, 0f, 1f)), r.Height);
     private void Solid(Rectangle r, Color c) => _batch.Draw(_pixel, r, c);
+    private void Elem(string id, Rectangle r, float inset = 0f) => _widgets?.DrawElementImage(id, r, inset);
+    private void Ns(string nsId, Rectangle r, Color? tint = null) => _widgets?.DrawNineSlice(nsId, r, tint);
 
     /// <summary>Solid fill with a lighter top band (cheap gradient).</summary>
     private void GradFill(Rectangle inner, float frac, Color top, Color body)
@@ -37,212 +37,171 @@ public partial class HUDRenderer
         _batch.Draw(_pixel, new Rectangle(fr.X, fr.Y, fr.Width, Math.Max(1, fr.Height * 2 / 5)), top);
     }
 
-    private void Elem(string id, Rectangle r, float inset = 0f) => _widgets?.DrawElementImage(id, r, inset);
-
-    /// <summary>Reveal a textured element as the fill (tinted toward the bar color).</summary>
+    /// <summary>Reveal a textured element as the fill, tinted toward the bar colour.</summary>
     private void ElemFill(string id, Rectangle inner, float frac, Color tint)
     {
         float f = MathHelper.Clamp(frac, 0f, 1f);
-        if (f <= 0f) return;
-        _widgets?.DrawElementImageCropped(id, FillR(inner, f), 0f, f, tint);
+        if (f > 0f) _widgets?.DrawElementImageCropped(id, FillR(inner, f), 0f, f, tint);
     }
 
-    private void CenterLabel(SpriteFont? f, string s, Rectangle r, Color c, bool shadow = true)
+    /// <summary>Centered value text (scalable UI font, light with a shadow so it
+    /// reads over both the dark fill and a light parchment track).</summary>
+    private void BarValue(string text, Rectangle r, bool shadow = true)
     {
-        if (f == null || string.IsNullOrEmpty(s)) return;
-        var sz = f.MeasureString(s);
-        var pos = new Vector2((int)(r.Center.X - sz.X / 2f), (int)(r.Center.Y - sz.Y / 2f));
-        if (shadow) Text(f, s, pos + new Vector2(1, 1), SkinShadow);
-        Text(f, s, pos, c);
+        if (string.IsNullOrEmpty(text)) return;
+        if (_widgets != null)
+        {
+            var sz = _widgets.MeasureText(text, ValueSize);
+            int x = (int)(r.Center.X - sz.X / 2f), y = (int)(r.Center.Y - sz.Y / 2f);
+            if (shadow) _widgets.DrawText(text, x + 1, y + 1, ValueSize, SkinShadow);
+            _widgets.DrawText(text, x, y, ValueSize, SkinTextLight);
+        }
+        else if (_smallFont != null)
+        {
+            var sz = _smallFont.MeasureString(text);
+            var pos = new Vector2((int)(r.Center.X - sz.X / 2f), (int)(r.Center.Y - sz.Y / 2f));
+            if (shadow) Text(_smallFont, text, pos + new Vector2(1, 1), SkinShadow);
+            Text(_smallFont, text, pos, SkinTextLight);
+        }
     }
 
-    private void LeftLabel(SpriteFont? f, string s, Rectangle r, Color c, bool shadow = true)
-    {
-        if (f == null || string.IsNullOrEmpty(s)) return;
-        var sz = f.MeasureString(s);
-        var pos = new Vector2(r.X + 6, (int)(r.Center.Y - sz.Y / 2f));
-        if (shadow) Text(f, s, pos + new Vector2(1, 1), SkinShadow);
-        Text(f, s, pos, c);
-    }
+    private void GoldH(Rectangle r) => Elem("TT_Underline", r);
+    private void GoldCap(int x, Rectangle bar) => Elem("ST_ColumnBar", new Rectangle(x, bar.Y, 3, bar.Height));
 
     /// <summary>Dispatch to the selected skin, drawing both the HP and Mana bars.</summary>
     private void DrawStatusBarSkin(int skin, bool hasHp,
-        Rectangle hp, float hpFrac, string hpLabel,
-        Rectangle mana, float manaFrac, string manaLabel)
+        Rectangle hp, float hpFrac, string hpLabel, Rectangle mana, float manaFrac, string manaLabel)
     {
-        switch (skin)
+        Action<Rectangle, float, Color, Color, Color, string> bar = skin switch
         {
-            case 1: Skin1(hasHp, hp, hpFrac, hpLabel, mana, manaFrac, manaLabel); break;
-            case 2: Skin2(hasHp, hp, hpFrac, hpLabel, mana, manaFrac, manaLabel); break;
-            case 3: Skin3(hasHp, hp, hpFrac, hpLabel, mana, manaFrac, manaLabel); break;
-            case 4: Skin4(hasHp, hp, hpFrac, hpLabel, mana, manaFrac, manaLabel); break;
-            case 5: Skin5(hasHp, hp, hpFrac, hpLabel, mana, manaFrac, manaLabel); break;
-            case 6: Skin6(hasHp, hp, hpFrac, hpLabel, mana, manaFrac, manaLabel); break;
-            case 7: Skin7(hasHp, hp, hpFrac, hpLabel, mana, manaFrac, manaLabel); break;
-            case 8: Skin8(hasHp, hp, hpFrac, hpLabel, mana, manaFrac, manaLabel); break;
-            case 9: Skin9(hasHp, hp, hpFrac, hpLabel, mana, manaFrac, manaLabel); break;
-            case 10: Skin10(hasHp, hp, hpFrac, hpLabel, mana, manaFrac, manaLabel); break;
-            default: Skin0(hasHp, hp, hpFrac, hpLabel, mana, manaFrac, manaLabel); break;
-        }
-        // Small "Bar Style N/10" tag under the bars so it's clear which is showing.
+            1 => BarRenaiParchment,
+            2 => BarParchmentPattern,
+            3 => BarSwatchBanner,
+            4 => BarParchmentGold,
+            5 => BarSwathCaps,
+            6 => BarClothDivider,
+            7 => BarDragonTrim,
+            8 => BarStatBox,
+            9 => BarSegmented,
+            10 => BarTexturedReveal,
+            _ => BarOriginal,
+        };
+        var hpTint = new Color(255, 150, 130);
+        var manaTint = new Color(150, 170, 255);
+        if (hasHp) bar(hp, hpFrac, HpFillA, HpFillB, hpTint, hpLabel);
+        bar(mana, manaFrac, ManaFillA, ManaFillB, manaTint, manaLabel);
+
         if (_smallFont != null && skin > 0)
             Text(_smallFont, $"Bar Style {skin}/10  (Shift+H)",
                 new Vector2(BarX + 1, mana.Bottom + 3), new Color(170, 160, 140));
     }
 
-    // 0 — original flat bars (unchanged look).
-    private void Skin0(bool hasHp, Rectangle hp, float hpF, string hpL, Rectangle mn, float mnF, string mnL)
+    // 0 — original flat bars, value-only text.
+    private void BarOriginal(Rectangle r, float f, Color a, Color b, Color tint, string s)
     {
-        if (hasHp) { Solid(hp, HpBarBg); Solid(FillR(hp, hpF), HpBarFg); LeftLabel(_font, hpL, hp, Color.White, false); }
-        Solid(mn, ManaBarBg); Solid(FillR(mn, mnF), ManaBarFg); LeftLabel(_font, mnL, mn, Color.White, false);
+        Solid(r, a == HpFillA ? HpBarBg : ManaBarBg);
+        Solid(FillR(r, f), a == HpFillA ? HpBarFg : ManaBarFg);
+        BarValue(s, r);
     }
 
-    // 1 — Unit-sheet blue swath rows (BlueSwath_row) with a clean colored fill.
-    private void Skin1(bool hasHp, Rectangle hp, float hpF, string hpL, Rectangle mn, float mnF, string mnL)
+    // 1 — Renai thin frame + grimoire parchment (refined #9).
+    private void BarRenaiParchment(Rectangle r, float f, Color a, Color b, Color tint, string s)
     {
-        void Bar(Rectangle r, float f, Color a, Color b, string s)
-        {
-            Solid(r, SkinTrack);
-            Elem("ST_RowSwatch", r);                 // blue swath as the empty track
-            GradFill(new Rectangle(r.X + 1, r.Y + 1, r.Width - 2, r.Height - 2), f, a, b);
-            CenterLabel(_font, s, r, SkinTextLight);
-        }
-        if (hasHp) Bar(hp, hpF, HpFillA, HpFillB, hpL);
-        Bar(mn, mnF, ManaFillA, ManaFillB, mnL);
+        Elem("SpellSlotBg", r, 0.16f);
+        GradFill(Inset(r, 4), f, a, b);
+        Ns("RenaiThinBorder", r);
+        BarValue(s, r);
     }
 
-    // 2 — Grimoire dark cloth divider track + gold underline.
-    private void Skin2(bool hasHp, Rectangle hp, float hpF, string hpL, Rectangle mn, float mnF, string mnL)
+    // 2 — Parchment + nations pattern + Renai frame (refined #4).
+    private void BarParchmentPattern(Rectangle r, float f, Color a, Color b, Color tint, string s)
     {
-        void Bar(Rectangle r, float f, Color a, Color b, string s)
-        {
-            Elem("Grim_HeaderDivider", r);
-            GradFill(new Rectangle(r.X + 2, r.Y + 2, r.Width - 4, r.Height - 4), f, a, b);
-            Elem("TT_Underline", new Rectangle(r.X, r.Bottom - 3, r.Width, 3));
-            LeftLabel(_font, s, r, SkinTextLight);
-        }
-        if (hasHp) Bar(hp, hpF, HpFillA, HpFillB, hpL);
-        Bar(mn, mnF, ManaFillA, ManaFillB, mnL);
+        Elem("SpellSlotBg", r, 0.16f);
+        Elem("AbilitiesPattern", Inset(r, 3));
+        GradFill(Inset(r, 4), f, a, b);
+        Ns("RenaiThinBorder", r);
+        BarValue(s, r);
     }
 
-    // 3 — Ornate title ribbon (Ribbon6) framing a recessed fill.
-    private void Skin3(bool hasHp, Rectangle hp, float hpF, string hpL, Rectangle mn, float mnF, string mnL)
+    // 3 — Ornate Swatch1.3 banner (nine-slice) with a recessed fill.
+    private void BarSwatchBanner(Rectangle r, float f, Color a, Color b, Color tint, string s)
     {
-        void Bar(Rectangle r, float f, Color a, Color b, string s)
-        {
-            var ribbon = new Rectangle(r.X - 3, r.Y - 4, r.Width + 6, r.Height + 8);
-            var inner = new Rectangle(r.X + 16, r.Y + 2, r.Width - 32, r.Height - 4);
-            Elem("Grim_TitleRibbon", ribbon);        // ornate ribbon first (its centre is opaque)
-            Solid(inner, SkinTrack);                 // recessed slot in the ribbon's flat middle
-            GradFill(inner, f, a, b);                // fill sits on top so the level reads
-            CenterLabel(_font, s, inner, SkinTextLight);
-        }
-        if (hasHp) Bar(hp, hpF, HpFillA, HpFillB, hpL);
-        Bar(mn, mnF, ManaFillA, ManaFillB, mnL);
+        Ns("SwatchBanner", r);
+        var inner = Inset(r, 5);
+        Solid(inner, SkinTrack);
+        GradFill(inner, f, a, b);
+        BarValue(s, r);
     }
 
-    // 4 — Tooltip parchment (FancyFrame2_Inner) + nations pattern, dark text.
-    private void Skin4(bool hasHp, Rectangle hp, float hpF, string hpL, Rectangle mn, float mnF, string mnL)
+    // 4 — Grimoire parchment with gold trim (lines + end caps, no stretched frame).
+    private void BarParchmentGold(Rectangle r, float f, Color a, Color b, Color tint, string s)
     {
-        void Bar(Rectangle r, float f, Color a, Color b, string s)
-        {
-            Elem("SpellSlotBg", r, 0.16f);
-            Elem("AbilitiesPattern", r);
-            GradFill(new Rectangle(r.X + 2, r.Y + 2, r.Width - 4, r.Height - 4), f, a, b);
-            Elem("Grim_SchoolTab_All_Frame", r);
-            CenterLabel(_font, s, r, SkinTextLight);
-        }
-        if (hasHp) Bar(hp, hpF, HpFillA, HpFillB, hpL);
-        Bar(mn, mnF, ManaFillA, ManaFillB, mnL);
+        Elem("SpellSlotBg", r, 0.16f);
+        GradFill(Inset(r, 3), f, a, b);
+        GoldH(new Rectangle(r.X, r.Y, r.Width, 3));
+        GoldH(new Rectangle(r.X, r.Bottom - 3, r.Width, 3));
+        GoldCap(r.X, r); GoldCap(r.Right - 3, r);
+        BarValue(s, r);
     }
 
-    // 5 — Stat-box container (BlueSwath_statbox) with gold end caps.
-    private void Skin5(bool hasHp, Rectangle hp, float hpF, string hpL, Rectangle mn, float mnF, string mnL)
+    // 5 — Unit-sheet blue swath row + gold end caps.
+    private void BarSwathCaps(Rectangle r, float f, Color a, Color b, Color tint, string s)
     {
-        void Bar(Rectangle r, float f, Color a, Color b, string s)
-        {
-            Solid(r, SkinTrack);
-            Elem("ST_StatBox", r);
-            GradFill(new Rectangle(r.X + 3, r.Y + 2, r.Width - 6, r.Height - 4), f, a, b);
-            Elem("ST_ColumnBar", new Rectangle(r.X, r.Y, 3, r.Height));
-            Elem("ST_ColumnBar", new Rectangle(r.Right - 3, r.Y, 3, r.Height));
-            CenterLabel(_font, s, r, SkinTextLight);
-        }
-        if (hasHp) Bar(hp, hpF, HpFillA, HpFillB, hpL);
-        Bar(mn, mnF, ManaFillA, ManaFillB, mnL);
+        Elem("ST_RowSwatch", r);
+        GradFill(Inset(r, 2), f, a, b);
+        GoldCap(r.X, r); GoldCap(r.Right - 3, r);
+        BarValue(s, r);
     }
 
-    // 6 — Abilities swath row with a heraldry strip header.
-    private void Skin6(bool hasHp, Rectangle hp, float hpF, string hpL, Rectangle mn, float mnF, string mnL)
+    // 6 — Grimoire dark cloth divider + gold underline (minimal).
+    private void BarClothDivider(Rectangle r, float f, Color a, Color b, Color tint, string s)
     {
-        void Bar(Rectangle r, float f, Color a, Color b, string s)
-        {
-            Elem("AbilitiesBox", r);
-            GradFill(new Rectangle(r.X + 2, r.Y + 3, r.Width - 4, r.Height - 5), f, a, b);
-            Elem("AbilitiesTitleHeraldry", new Rectangle(r.X, r.Y, r.Width, 4));
-            LeftLabel(_font, s, r, SkinTextLight);
-        }
-        if (hasHp) Bar(hp, hpF, HpFillA, HpFillB, hpL);
-        Bar(mn, mnF, ManaFillA, ManaFillB, mnL);
+        Elem("Grim_HeaderDivider", r);
+        GradFill(Inset(r, 3), f, a, b);
+        GoldH(new Rectangle(r.X, r.Bottom - 3, r.Width, 3));
+        BarValue(s, r);
     }
 
-    // 7 — Textured reveal fill: a parchment swatch is revealed left→right, tinted.
-    private void Skin7(bool hasHp, Rectangle hp, float hpF, string hpL, Rectangle mn, float mnF, string mnL)
+    // 7 — Dragon damask over the fill + gold trim top & bottom.
+    private void BarDragonTrim(Rectangle r, float f, Color a, Color b, Color tint, string s)
     {
-        void Bar(Rectangle r, float f, Color tint, Color baseC, string s)
-        {
-            Solid(r, SkinTrack);
-            Solid(FillR(r, f), baseC);               // solid base guarantees a visible fill
-            ElemFill("SpellSlotBg", r, f, tint);     // textured parchment over it
-            Elem("Grim_SchoolTab_All_Frame", r);
-            CenterLabel(_font, s, r, SkinTextLight);
-        }
-        if (hasHp) Bar(hp, hpF, new Color(255, 150, 130), HpFillB, hpL);
-        Bar(mn, mnF, new Color(150, 170, 255), ManaFillB, mnL);
+        Solid(r, SkinTrack);
+        GradFill(r, f, a, b);
+        Elem("UnitDescPattern", r);
+        GoldH(new Rectangle(r.X, r.Y, r.Width, 3));
+        GoldH(new Rectangle(r.X, r.Bottom - 3, r.Width, 3));
+        BarValue(s, r);
     }
 
-    // 8 — Dragon pattern field with gold trim top & bottom.
-    private void Skin8(bool hasHp, Rectangle hp, float hpF, string hpL, Rectangle mn, float mnF, string mnL)
+    // 8 — Blue stat-box container + Renai thin frame.
+    private void BarStatBox(Rectangle r, float f, Color a, Color b, Color tint, string s)
     {
-        void Bar(Rectangle r, float f, Color a, Color b, string s)
-        {
-            Solid(r, SkinTrack);
-            GradFill(r, f, a, b);
-            Elem("UnitDescPattern", r);              // dragon damask over the fill
-            Elem("TT_Underline", new Rectangle(r.X, r.Y, r.Width, 3));
-            Elem("TT_Underline", new Rectangle(r.X, r.Bottom - 3, r.Width, 3));
-            CenterLabel(_font, s, r, SkinTextLight);
-        }
-        if (hasHp) Bar(hp, hpF, HpFillA, HpFillB, hpL);
-        Bar(mn, mnF, ManaFillA, ManaFillB, mnL);
+        Elem("ST_StatBox", r);
+        GradFill(Inset(r, 4), f, a, b);
+        Ns("RenaiThinBorder", r);
+        BarValue(s, r);
     }
 
-    // 9 — Renai tooltip frame + parchment backing.
-    private void Skin9(bool hasHp, Rectangle hp, float hpF, string hpL, Rectangle mn, float mnF, string mnL)
+    // 9 — Parchment with segmented (ticked) fill + Renai frame.
+    private void BarSegmented(Rectangle r, float f, Color a, Color b, Color tint, string s)
     {
-        void Bar(Rectangle r, float f, Color a, Color b, string s)
-        {
-            Elem("RT_Parchment", r);
-            GradFill(new Rectangle(r.X + 3, r.Y + 3, r.Width - 6, r.Height - 6), f, a, b);
-            Elem("RT_BoxFrame", r);
-            CenterLabel(_font, s, r, SkinTextDark, shadow: false);
-        }
-        if (hasHp) Bar(hp, hpF, HpFillA, HpFillB, hpL);
-        Bar(mn, mnF, ManaFillA, ManaFillB, mnL);
+        Elem("SpellSlotBg", r, 0.16f);
+        var inner = Inset(r, 4);
+        GradFill(inner, f, a, b);
+        for (int x = inner.X + 18; x < inner.Right - 2; x += 18)         // dark pips segment the fill
+            Solid(new Rectangle(x, inner.Y, 1, inner.Height), new Color(0, 0, 0, 110));
+        Ns("RenaiThinBorder", r);
+        BarValue(s, r);
     }
 
-    // 10 — Swatch1.3 title ribbon with a recessed inner fill.
-    private void Skin10(bool hasHp, Rectangle hp, float hpF, string hpL, Rectangle mn, float mnF, string mnL)
+    // 10 — Textured parchment fill revealed left→right (tinted) + Renai frame.
+    private void BarTexturedReveal(Rectangle r, float f, Color a, Color b, Color tint, string s)
     {
-        void Bar(Rectangle r, float f, Color a, Color b, string s)
-        {
-            Elem("UnitTitleSwatch", r);
-            var inner = new Rectangle(r.X + 5, r.Y + 4, r.Width - 10, r.Height - 8);
-            Solid(inner, SkinTrack);
-            GradFill(inner, f, a, b);
-            CenterLabel(_font, s, r, SkinTextLight);
-        }
-        if (hasHp) Bar(hp, hpF, HpFillA, HpFillB, hpL);
-        Bar(mn, mnF, ManaFillA, ManaFillB, mnL);
+        var inner = Inset(r, 4);
+        Solid(r, SkinTrack);
+        Solid(FillR(inner, f), b);              // solid base guarantees a visible fill
+        ElemFill("SpellSlotBg", inner, f, tint); // textured parchment over it
+        Ns("RenaiThinBorder", r);
+        BarValue(s, r);
     }
 }

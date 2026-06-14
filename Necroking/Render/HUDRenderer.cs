@@ -213,10 +213,14 @@ public partial class HUDRenderer
         float manaFrac = maxManaEff > 0 ? sim.NecroState.Mana / maxManaEff : 0f;
         int mana = (int)sim.NecroState.Mana, maxMana = (int)maxManaEff;
 
-        var hpRect = new Rectangle(BarX, HpBarY, BarWidth, BarHeight);
-        var manaRect = new Rectangle(BarX, ManaBarY, BarWidth, BarHeight);
-        string hpLabel = necroIdx >= 0 ? $"HP: {hp}/{maxHp}" : "";
-        string manaLabel = $"Mana: {mana}/{maxMana}";
+        // Taller bars than the original 16px so thin nine-slice frames render
+        // without crushing their corners. Colour implies HP vs Mana, so the text
+        // is just the value (no "HP:"/"Mana:" prefix).
+        const int barH = 24;
+        var hpRect = new Rectangle(BarX, 30, BarWidth, barH);
+        var manaRect = new Rectangle(BarX, 30 + barH + 4, BarWidth, barH);
+        string hpLabel = necroIdx >= 0 ? $"{hp}/{maxHp}" : "";
+        string manaLabel = $"{mana}/{maxMana}";
 
         int skin = DebugSkinOverride >= 0 ? DebugSkinOverride : StatusBarSkin;
         DrawStatusBarSkin(skin, necroIdx >= 0,
