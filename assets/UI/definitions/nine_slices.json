@@ -128,12 +128,24 @@
     },
     {
       "id": "grim_cloth_frame",
-      "texture": "assets/UI/Frames/ClothFrameHarmonized.png",
+      "texture": "assets/UI/Frames/ClothUpgradeFrame2-DarkBorder1.png",
       "borderLeft": 51,
       "borderRight": 51,
       "borderTop": 51,
       "borderBottom": 51,
-      "tileEdges": true
+      "tileEdges": true,
+      "harmonize": {
+        "targetColor": [
+          38,
+          31,
+          17,
+          255
+        ],
+        "hueStrength": 1,
+        "satStrength": 1.0,
+        "valStrength": 0.052,
+        "useHcl": false
+      }
     }
   ]
 }

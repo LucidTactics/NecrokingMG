@@ -724,7 +724,8 @@ public class RuntimeWidgetRenderer
     public void DrawNineSlice(string nsId, Rectangle rect, Color? tint = null, float borderScale = 1f)
     {
         if (_batch == null) return;
-        GetOrLoadNineSlice(nsId)?.Draw(_batch, rect, tint ?? Color.White, borderScale);
+        // Prefer a harmonized copy (if the def carries a harmonize block), else raw.
+        GetNineSlice(nsId, "ns")?.Draw(_batch, rect, tint ?? Color.White, borderScale);
     }
 
     /// <summary>Draw a line of text directly (for code-driven content layered
@@ -804,6 +805,7 @@ public class RuntimeWidgetRenderer
                     BorderTop = el.TryGetProperty("borderTop", out var bt) ? bt.GetInt32() : 0,
                     BorderBottom = el.TryGetProperty("borderBottom", out var bb) ? bb.GetInt32() : 0,
                     TileEdges = el.TryGetProperty("tileEdges", out var te) && te.GetBoolean(),
+                    Harmonize = ReadHarmonizeSettings(el, "harmonize"),
                 };
                 _nineSliceDefs.Add(ns);
             }
@@ -1176,6 +1178,11 @@ public class RuntimeWidgetRenderer
             string nsRef = elem.Type == "nineSlice" ? elem.NineSlice : "";
             Collect(nsRef, imgPath, "el:" + elem.Id, elem.Harmonize);
         }
+        // Standalone nine-slices with their own harmonize block (looked up via the
+        // "ns" prefix by the public DrawNineSlice).
+        foreach (var ns in _nineSliceDefs)
+            if (ns.Harmonize != null && ns.Harmonize.HasEffect)
+                Collect(ns.Id, "", "ns", ns.Harmonize);
         long getDataMs = sw.ElapsedMilliseconds; sw.Restart();
 
         // Phase B (parallel, CPU only): the per-pixel transform — the bottleneck.

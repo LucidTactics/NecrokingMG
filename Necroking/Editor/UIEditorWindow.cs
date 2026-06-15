@@ -26,6 +26,10 @@ public class UIEditorNineSliceDef
     public int BorderTop { get; set; }
     public int BorderBottom { get; set; }
     public bool TileEdges { get; set; }
+    /// <summary>Optional recolor applied to the source texture at load time, the
+    /// same way element/widget textures are harmonized — so a 9-slice can match a
+    /// harmonized element instead of needing a pre-baked recolored png.</summary>
+    public HarmonizeSettings? Harmonize { get; set; }
 }
 
 // ─────────────────────────────────────────────

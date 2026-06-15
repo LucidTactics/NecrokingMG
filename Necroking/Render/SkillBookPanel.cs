@@ -433,12 +433,12 @@ public partial class SkillBookPanel : Necroking.UI.IModalLayer
             DrawTabBar(lay);
             DrawContent(lay);
             DrawFooter(lay);
-            // Ornate cloth frame, 9-sliced so the wider window keeps clean corners.
-            // Uses a pre-harmonized copy of the grimoire's own border texture (baked
-            // dark bronze by tools/bake_frame_harmonized.py), drawn untinted so the
-            // colour matches Grim_WindowBorder exactly; borderScale ~ the old weight.
+            // Ornate cloth frame, 9-sliced (tiled edges, clean corners at any width).
+            // grim_cloth_frame carries a harmonize block, so the renderer recolours
+            // the raw border texture to the grimoire's dark bronze at load — the
+            // [156,156,156] tint mirrors Grim_WindowBorder's tintColor.
             float fs = lay.Panel.Width / 706f;
-            _widgets.DrawNineSlice("grim_cloth_frame", lay.Panel, null, Math.Max(0.4f, fs * 0.5f));
+            _widgets.DrawNineSlice("grim_cloth_frame", lay.Panel, new Color(156, 156, 156), Math.Max(0.36f, fs * 0.44f));
         }
         else
         {
