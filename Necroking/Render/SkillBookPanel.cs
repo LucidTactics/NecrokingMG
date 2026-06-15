@@ -438,7 +438,7 @@ public partial class SkillBookPanel : Necroking.UI.IModalLayer
             // dark bronze by tools/bake_frame_harmonized.py), drawn untinted so the
             // colour matches Grim_WindowBorder exactly; borderScale ~ the old weight.
             float fs = lay.Panel.Width / 706f;
-            _widgets.DrawNineSlice("grim_cloth_frame", lay.Panel, null, Math.Max(0.5f, fs * 0.7f));
+            _widgets.DrawNineSlice("grim_cloth_frame", lay.Panel, null, Math.Max(0.4f, fs * 0.5f));
         }
         else
         {
