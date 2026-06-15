@@ -4685,8 +4685,6 @@
       "height": 65,
       "modal": false,
       "children": [
-        
-        
         {
           "name": "ab_title_swatch",
           "element": "AbilitiesTitleSwatch",
@@ -5085,7 +5083,6 @@
         }
       ]
     },
-    
     {
       "id": "UnitAttackBox",
       "width": 463,
@@ -9782,6 +9779,446 @@
           "y": 963,
           "width": 322,
           "height": 80,
+          "anchor": 0
+        },
+        {
+          "name": "WindowBorder",
+          "element": "Grim_WindowBorder",
+          "x": 0,
+          "y": 0,
+          "width": 706,
+          "height": 1080,
+          "anchor": 0
+        }
+      ],
+      "background": "LeatherBackground",
+      "backgroundScale": 0.136,
+      "backgroundInset": -17,
+      "backgroundTint": [
+        199,
+        215,
+        229,
+        255
+      ],
+      "bgHarmonize": {
+        "targetColor": [
+          73,
+          58,
+          41,
+          255
+        ],
+        "hueStrength": 1,
+        "satStrength": 1.0,
+        "valStrength": 0.48,
+        "useHcl": false,
+        "gradColor": [
+          18,
+          15,
+          11,
+          112
+        ],
+        "gradStrength": 0.992
+      }
+    },
+    {
+      "id": "SkillTile",
+      "width": 322,
+      "height": 80,
+      "modal": false,
+      "children": [
+        {
+          "name": "bg",
+          "element": "GMT_0",
+          "x": 61,
+          "y": 1,
+          "width": 253,
+          "height": 65,
+          "anchor": 0
+        },
+        {
+          "name": "grad",
+          "element": "GMT_1",
+          "x": 61,
+          "y": 0,
+          "width": 251,
+          "height": 65,
+          "anchor": 0
+        },
+        {
+          "name": "frame",
+          "element": "GMT_2",
+          "x": 0,
+          "y": -3,
+          "width": 315,
+          "height": 72,
+          "anchor": 0
+        },
+        {
+          "name": "underline",
+          "element": "GMT_3",
+          "x": 63,
+          "y": 35,
+          "width": 212,
+          "height": 3,
+          "anchor": 0
+        },
+        {
+          "name": "icon",
+          "element": "GMT_4",
+          "x": 1,
+          "y": 3,
+          "width": 63,
+          "height": 62,
+          "anchor": 0
+        },
+        {
+          "name": "iconframe",
+          "element": "SpiderFrameBorder",
+          "x": -7,
+          "y": -6,
+          "width": 79,
+          "height": 79,
+          "anchor": 0
+        },
+        {
+          "name": "title",
+          "element": "GMT_6",
+          "x": 73,
+          "y": -2,
+          "width": 196,
+          "height": 42,
+          "anchor": 0
+        },
+        {
+          "name": "path_p",
+          "element": "GMT_7",
+          "x": 74,
+          "y": 44,
+          "width": 23,
+          "height": 15,
+          "anchor": 0
+        },
+        {
+          "name": "path_v",
+          "element": "GMT_8",
+          "x": 98,
+          "y": 38,
+          "width": 12,
+          "height": 25,
+          "anchor": 0
+        },
+        {
+          "name": "path_i",
+          "element": "GMT_9",
+          "x": 108,
+          "y": 38,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "cost_p",
+          "element": "GMT_10",
+          "x": 166,
+          "y": 44,
+          "width": 23,
+          "height": 15,
+          "anchor": 0
+        },
+        {
+          "name": "cost_v",
+          "element": "GMT_11",
+          "x": 189,
+          "y": 38,
+          "width": 15,
+          "height": 26,
+          "anchor": 0
+        },
+        {
+          "name": "cost_i",
+          "element": "GMT_12",
+          "x": 204,
+          "y": 38,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "target",
+          "element": "GMT_13",
+          "x": 259,
+          "y": 24,
+          "width": 48,
+          "height": 28,
+          "anchor": 0
+        },
+        {
+          "name": "dmg_v",
+          "element": "GMT_14",
+          "x": 256,
+          "y": 4,
+          "width": 34,
+          "height": 34,
+          "anchor": 0
+        },
+        {
+          "name": "dmg_m1",
+          "element": "GMT_15",
+          "x": 262,
+          "y": 33,
+          "width": 25,
+          "height": 11,
+          "anchor": 0
+        },
+        {
+          "name": "dmg_m2",
+          "element": "GMT_16",
+          "x": 290,
+          "y": 33,
+          "width": 25,
+          "height": 11,
+          "anchor": 0
+        },
+        {
+          "name": "path2_i",
+          "element": "GMT_17",
+          "x": 288,
+          "y": 8,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "buff_p",
+          "element": "GMT_18",
+          "x": 248,
+          "y": 12,
+          "width": 28,
+          "height": 16,
+          "anchor": 0
+        },
+        {
+          "name": "buff_i",
+          "element": "GMT_19",
+          "x": 280,
+          "y": 8,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        },
+        {
+          "name": "path2_v",
+          "element": "GMT_20",
+          "x": 130,
+          "y": 38,
+          "width": 12,
+          "height": 25,
+          "anchor": 0
+        },
+        {
+          "name": "cost2_v",
+          "element": "GMT_21",
+          "x": 226,
+          "y": 38,
+          "width": 15,
+          "height": 26,
+          "anchor": 0
+        },
+        {
+          "name": "cost2_i",
+          "element": "GMT_22",
+          "x": 240,
+          "y": 38,
+          "width": 24,
+          "height": 24,
+          "anchor": 0
+        }
+      ]
+    },
+    {
+      "id": "SkillBookWindow",
+      "width": 706,
+      "height": 1080,
+      "modal": false,
+      "children": [
+        {
+          "name": "SpellListOverlay",
+          "element": "Grim_SpellListOverlay",
+          "x": 0,
+          "y": 0,
+          "width": 706,
+          "height": 1080,
+          "anchor": 0
+        },
+        {
+          "name": "HeaderDivider",
+          "element": "Grim_HeaderDivider",
+          "x": 24,
+          "y": 171,
+          "width": 658,
+          "height": 21,
+          "anchor": 0
+        },
+        {
+          "name": "TabStripRibbon",
+          "element": "Grim_TabStripRibbon",
+          "x": 27,
+          "y": 91,
+          "width": 652,
+          "height": 83,
+          "anchor": 0
+        },
+        {
+          "name": "SchoolTab_All_Backing",
+          "element": "Grim_SchoolTab_All_Backing",
+          "x": 24,
+          "y": 98,
+          "width": 86,
+          "height": 33,
+          "anchor": 0
+        },
+        {
+          "name": "SchoolTab_All_Text",
+          "element": "Grim_SchoolTab_All_Text",
+          "x": 27,
+          "y": 101,
+          "width": 80,
+          "height": 27,
+          "anchor": 0
+        },
+        {
+          "name": "SchoolTab_All_Frame",
+          "element": "Grim_SchoolTab_All_Frame",
+          "x": 26,
+          "y": 96,
+          "width": 82,
+          "height": 35,
+          "anchor": 0
+        },
+        {
+          "name": "SchoolTab_Conjuration_Backing",
+          "element": "Grim_SchoolTab_Conjuration_Backing",
+          "x": 104,
+          "y": 98,
+          "width": 148,
+          "height": 33,
+          "anchor": 0
+        },
+        {
+          "name": "SchoolTab_Conjuration_Text",
+          "element": "Grim_SchoolTab_Conjuration_Text",
+          "x": 101,
+          "y": 102,
+          "width": 159,
+          "height": 26,
+          "anchor": 0
+        },
+        {
+          "name": "SchoolTab_Conjuration_Frame",
+          "element": "Grim_SchoolTab_Conjuration_Frame",
+          "x": 107,
+          "y": 96,
+          "width": 144,
+          "height": 35,
+          "anchor": 0
+        },
+        {
+          "name": "SchoolTab_Alteration_Backing",
+          "element": "Grim_SchoolTab_Alteration_Backing",
+          "x": 248,
+          "y": 98,
+          "width": 148,
+          "height": 33,
+          "anchor": 0
+        },
+        {
+          "name": "SchoolTab_Alteration_Text",
+          "element": "Grim_SchoolTab_Alteration_Text",
+          "x": 244,
+          "y": 102,
+          "width": 159,
+          "height": 26,
+          "anchor": 0
+        },
+        {
+          "name": "SchoolTab_Alteration_Frame",
+          "element": "Grim_SchoolTab_Alteration_Frame",
+          "x": 250,
+          "y": 96,
+          "width": 144,
+          "height": 35,
+          "anchor": 0
+        },
+        {
+          "name": "SchoolTab_Evocation_Backing",
+          "element": "Grim_SchoolTab_Evocation_Backing",
+          "x": 390,
+          "y": 98,
+          "width": 148,
+          "height": 33,
+          "anchor": 0
+        },
+        {
+          "name": "SchoolTab_Evocation_Text",
+          "element": "Grim_SchoolTab_Evocation_Text",
+          "x": 387,
+          "y": 102,
+          "width": 159,
+          "height": 26,
+          "anchor": 0
+        },
+        {
+          "name": "SchoolTab_Evocation_Frame",
+          "element": "Grim_SchoolTab_Evocation_Frame",
+          "x": 393,
+          "y": 96,
+          "width": 144,
+          "height": 35,
+          "anchor": 0
+        },
+        {
+          "name": "SchoolTab_Construction_Backing",
+          "element": "Grim_SchoolTab_Construction_Backing",
+          "x": 534,
+          "y": 98,
+          "width": 148,
+          "height": 33,
+          "anchor": 0
+        },
+        {
+          "name": "SchoolTab_Construction_Text",
+          "element": "Grim_SchoolTab_Construction_Text",
+          "x": 530,
+          "y": 102,
+          "width": 159,
+          "height": 26,
+          "anchor": 0
+        },
+        {
+          "name": "SchoolTab_Construction_Frame",
+          "element": "Grim_SchoolTab_Construction_Frame",
+          "x": 536,
+          "y": 96,
+          "width": 144,
+          "height": 35,
+          "anchor": 0
+        },
+        {
+          "name": "TitleRibbon",
+          "element": "Grim_TitleRibbon",
+          "x": 10,
+          "y": 12,
+          "width": 689,
+          "height": 94,
+          "anchor": 0
+        },
+        {
+          "name": "TitleText",
+          "element": "Grim_TitleText",
+          "x": 38,
+          "y": 28,
+          "width": 648,
+          "height": 62,
           "anchor": 0
         },
         {
