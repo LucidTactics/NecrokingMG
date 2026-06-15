@@ -292,8 +292,8 @@ public partial class SkillBookPanel : Necroking.UI.IModalLayer
         bool grim = Active.Grimoire;
         float gs = p.Width / 706f; // grimoire native scale
 
-        int pad     = grim ? (int)(30 * gs) : InnerPad;   // clear the ornate frame band
-        int titleH  = grim ? (int)(64 * gs) : TitleH;     // ribbon
+        int pad     = grim ? (int)(24 * gs) : InnerPad;   // tab strip / tree inset
+        int titleH  = grim ? (int)(64 * gs) : TitleH;     // ribbon (non-grim only)
         int tabH    = grim ? (int)(54 * gs) : TabBarH;    // tall enough for label + fraction rows
         int divH    = grim ? (int)(24 * gs) : 0;          // header divider band
         int footerH = grim ? (int)(24 * gs) : FooterH;
@@ -304,8 +304,21 @@ public partial class SkillBookPanel : Necroking.UI.IModalLayer
         int innerY = p.Y + pad;
         int innerW = p.Width - pad * 2;
 
-        var title = new Rectangle(innerX, innerY, innerW, titleH);
-        var tabBar = new Rectangle(innerX, title.Bottom + titleGap, innerW, tabH);
+        Rectangle title, tabBar;
+        if (grim)
+        {
+            // Ribbon runs near-full width at the very top — its end-caps tuck under
+            // the ornate frame (drawn last, on top) so they read flush — and the tab
+            // strip starts right beneath it with no gap. Mirrors the grimoire.
+            int sideM = (int)(13 * gs);
+            title  = new Rectangle(p.X + sideM, p.Y + (int)(11 * gs), p.Width - 2 * sideM, (int)(84 * gs));
+            tabBar = new Rectangle(innerX, title.Bottom, innerW, tabH);
+        }
+        else
+        {
+            title  = new Rectangle(innerX, innerY, innerW, titleH);
+            tabBar = new Rectangle(innerX, title.Bottom + titleGap, innerW, tabH);
+        }
         var footer = new Rectangle(innerX, p.Bottom - pad - footerH, innerW, footerH);
         int contentTop = tabBar.Bottom + divH + cGap;
         var content = new Rectangle(innerX, contentTop,
@@ -500,8 +513,11 @@ public partial class SkillBookPanel : Necroking.UI.IModalLayer
 
         if (Active.Grimoire)
         {
-            // Maroon ribbon banner (the grimoire's Ribbon6), title centered on it.
-            Tex("Grim_TitleRibbon", new Rectangle(r.X - 2, r.Y, r.Width + 4, r.Height));
+            // Maroon ribbon banner (the grimoire's Ribbon6): near-full width so its
+            // end-caps tuck under the frame (flush), extended a touch below so the
+            // tabs cover its bottom fold (no seam). Title centered on the visible band.
+            float gs = lay.Panel.Width / 706f;
+            Tex("Grim_TitleRibbon", new Rectangle(r.X - 2, r.Y, r.Width + 4, r.Height + (int)(10 * gs)));
             string t = TruncateToWidth(f, title, r.Width - 40);
             var sz = f.MeasureString(t);
             var pos = new Vector2((int)(r.X + (r.Width - sz.X) / 2),
@@ -509,7 +525,7 @@ public partial class SkillBookPanel : Necroking.UI.IModalLayer
             DrawShadowText(f, t, pos, new Color(238, 218, 158));
             if (_smallFont != null)
                 DrawText(_smallFont, $"{CurrentSkinName}  (Shift+B)",
-                    new Vector2(r.X + 6, r.Y + 2), new Color(150, 130, 96));
+                    new Vector2(r.X + 8, r.Bottom - 15), new Color(150, 130, 96));
             return;
         }
 
