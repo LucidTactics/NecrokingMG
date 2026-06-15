@@ -128,7 +128,7 @@
     },
     {
       "id": "grim_cloth_frame",
-      "texture": "assets/UI/Frames/ClothUpgradeFrame2-DarkBorder1.png",
+      "texture": "assets/UI/Frames/ClothFrameHarmonized.png",
       "borderLeft": 51,
       "borderRight": 51,
       "borderTop": 51,
