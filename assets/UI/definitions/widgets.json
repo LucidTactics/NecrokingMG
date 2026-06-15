@@ -10069,8 +10069,8 @@
           "anchor": 0
         },
         {
-          "name": "SchoolTab_All_Backing",
-          "element": "Grim_SchoolTab_All_Backing",
+          "name": "Tab_Potions_Backing",
+          "element": "SkillTab_Backing",
           "x": 24,
           "y": 98,
           "width": 86,
@@ -10078,17 +10078,26 @@
           "anchor": 0
         },
         {
-          "name": "SchoolTab_All_Text",
-          "element": "Grim_SchoolTab_All_Text",
+          "name": "Tab_Potions_Name",
+          "element": "SkillTab_Potions_Name",
           "x": 27,
-          "y": 101,
+          "y": 98,
           "width": 80,
-          "height": 27,
+          "height": 18,
           "anchor": 0
         },
         {
-          "name": "SchoolTab_All_Frame",
-          "element": "Grim_SchoolTab_All_Frame",
+          "name": "Tab_Potions_Frac",
+          "element": "SkillTab_Frac",
+          "x": 27,
+          "y": 114,
+          "width": 80,
+          "height": 12,
+          "anchor": 0
+        },
+        {
+          "name": "Tab_Potions_Frame",
+          "element": "SkillTab_Frame",
           "x": 26,
           "y": 96,
           "width": 82,
@@ -10096,8 +10105,8 @@
           "anchor": 0
         },
         {
-          "name": "SchoolTab_Conjuration_Backing",
-          "element": "Grim_SchoolTab_Conjuration_Backing",
+          "name": "Tab_Monstrology_Backing",
+          "element": "SkillTab_Backing",
           "x": 104,
           "y": 98,
           "width": 148,
@@ -10105,17 +10114,26 @@
           "anchor": 0
         },
         {
-          "name": "SchoolTab_Conjuration_Text",
-          "element": "Grim_SchoolTab_Conjuration_Text",
+          "name": "Tab_Monstrology_Name",
+          "element": "SkillTab_Monstrology_Name",
           "x": 101,
-          "y": 102,
+          "y": 99,
           "width": 159,
-          "height": 26,
+          "height": 18,
           "anchor": 0
         },
         {
-          "name": "SchoolTab_Conjuration_Frame",
-          "element": "Grim_SchoolTab_Conjuration_Frame",
+          "name": "Tab_Monstrology_Frac",
+          "element": "SkillTab_Frac",
+          "x": 101,
+          "y": 115,
+          "width": 159,
+          "height": 12,
+          "anchor": 0
+        },
+        {
+          "name": "Tab_Monstrology_Frame",
+          "element": "SkillTab_Frame",
           "x": 107,
           "y": 96,
           "width": 144,
@@ -10123,8 +10141,8 @@
           "anchor": 0
         },
         {
-          "name": "SchoolTab_Alteration_Backing",
-          "element": "Grim_SchoolTab_Alteration_Backing",
+          "name": "Tab_Necromancy_Backing",
+          "element": "SkillTab_Backing",
           "x": 248,
           "y": 98,
           "width": 148,
@@ -10132,17 +10150,26 @@
           "anchor": 0
         },
         {
-          "name": "SchoolTab_Alteration_Text",
-          "element": "Grim_SchoolTab_Alteration_Text",
+          "name": "Tab_Necromancy_Name",
+          "element": "SkillTab_Necromancy_Name",
           "x": 244,
-          "y": 102,
+          "y": 99,
           "width": 159,
-          "height": 26,
+          "height": 18,
           "anchor": 0
         },
         {
-          "name": "SchoolTab_Alteration_Frame",
-          "element": "Grim_SchoolTab_Alteration_Frame",
+          "name": "Tab_Necromancy_Frac",
+          "element": "SkillTab_Frac",
+          "x": 244,
+          "y": 115,
+          "width": 159,
+          "height": 12,
+          "anchor": 0
+        },
+        {
+          "name": "Tab_Necromancy_Frame",
+          "element": "SkillTab_Frame",
           "x": 250,
           "y": 96,
           "width": 144,
@@ -10150,8 +10177,8 @@
           "anchor": 0
         },
         {
-          "name": "SchoolTab_Evocation_Backing",
-          "element": "Grim_SchoolTab_Evocation_Backing",
+          "name": "Tab_Magic_Backing",
+          "element": "SkillTab_Backing",
           "x": 390,
           "y": 98,
           "width": 148,
@@ -10159,17 +10186,26 @@
           "anchor": 0
         },
         {
-          "name": "SchoolTab_Evocation_Text",
-          "element": "Grim_SchoolTab_Evocation_Text",
+          "name": "Tab_Magic_Name",
+          "element": "SkillTab_Magic_Name",
           "x": 387,
-          "y": 102,
+          "y": 99,
           "width": 159,
-          "height": 26,
+          "height": 18,
           "anchor": 0
         },
         {
-          "name": "SchoolTab_Evocation_Frame",
-          "element": "Grim_SchoolTab_Evocation_Frame",
+          "name": "Tab_Magic_Frac",
+          "element": "SkillTab_Frac",
+          "x": 387,
+          "y": 115,
+          "width": 159,
+          "height": 12,
+          "anchor": 0
+        },
+        {
+          "name": "Tab_Magic_Frame",
+          "element": "SkillTab_Frame",
           "x": 393,
           "y": 96,
           "width": 144,
@@ -10177,8 +10213,8 @@
           "anchor": 0
         },
         {
-          "name": "SchoolTab_Construction_Backing",
-          "element": "Grim_SchoolTab_Construction_Backing",
+          "name": "Tab_Metamorphosis_Backing",
+          "element": "SkillTab_Backing",
           "x": 534,
           "y": 98,
           "width": 148,
@@ -10186,17 +10222,26 @@
           "anchor": 0
         },
         {
-          "name": "SchoolTab_Construction_Text",
-          "element": "Grim_SchoolTab_Construction_Text",
+          "name": "Tab_Metamorphosis_Name",
+          "element": "SkillTab_Metamorphosis_Name",
           "x": 530,
-          "y": 102,
+          "y": 99,
           "width": 159,
-          "height": 26,
+          "height": 18,
           "anchor": 0
         },
         {
-          "name": "SchoolTab_Construction_Frame",
-          "element": "Grim_SchoolTab_Construction_Frame",
+          "name": "Tab_Metamorphosis_Frac",
+          "element": "SkillTab_Frac",
+          "x": 530,
+          "y": 115,
+          "width": 159,
+          "height": 12,
+          "anchor": 0
+        },
+        {
+          "name": "Tab_Metamorphosis_Frame",
+          "element": "SkillTab_Frame",
           "x": 536,
           "y": 96,
           "width": 144,

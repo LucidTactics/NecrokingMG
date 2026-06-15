@@ -29,11 +29,11 @@ public class SkillBookOverlay : IModalLayer
     private const string TileId   = "SkillTile";
     private const string Instance = "skillbook";
 
-    // The five window tab slots (cloned from the grimoire's school tabs) mapped to
-    // our skill trees in order. The child names stay SchoolTab_<slot>_*; only the
-    // label text is bound.
+    // The window's five tab slots, in SkillBookDefs.Tabs order. Each is a group of
+    // SkillBookWindow children: Tab_<slot>_Backing / _Name (static, editable in the
+    // editor) / _Frac (the learned/total, filled here) / _Frame.
     private static readonly string[] TabSlots =
-        { "All", "Conjuration", "Alteration", "Evocation", "Construction" };
+        { "Potions", "Monstrology", "Necromancy", "Magic", "Metamorphosis" };
 
     private RuntimeWidgetRenderer _renderer = null!;
     private SpriteBatch _batch = null!;
@@ -118,7 +118,7 @@ public class SkillBookOverlay : IModalLayer
         // Tab clicks (hit-test the tab backing rects).
         for (int i = 0; i < SkillBookDefs.Tabs.Count && i < TabSlots.Length; i++)
         {
-            var r = _renderer.GetChildRect(WindowId, $"SchoolTab_{TabSlots[i]}_Backing", _x, _y, Instance);
+            var r = _renderer.GetChildRect(WindowId, $"Tab_{TabSlots[i]}_Backing", _x, _y, Instance);
             if (r != Rectangle.Empty && r.Contains(mx, my)) { _activeTab = i; return; }
         }
         // Tile clicks (the rects we stamped last Draw).
@@ -154,26 +154,17 @@ public class SkillBookOverlay : IModalLayer
     private void BindChrome()
     {
         _renderer.SetText(Instance, "TitleText", "TOME OF THE NECROKING");
-        for (int i = 0; i < TabSlots.Length; i++)
+        for (int i = 0; i < TabSlots.Length && i < SkillBookDefs.Tabs.Count; i++)
         {
             string slot = TabSlots[i];
-            if (i < SkillBookDefs.Tabs.Count)
-            {
-                var tab = SkillBookDefs.Tabs[i];
-                var (learned, total) = _state?.GetProgress(tab) ?? (0, tab.Skills.Count);
-                _renderer.SetText(Instance, $"SchoolTab_{slot}_Text", $"{tab.DisplayName}  {learned}/{total}");
-                bool active = i == _activeTab;
-                var tc = active ? new Color(40, 26, 12) : new Color(120, 96, 54);
-                _renderer.SetTextColor(Instance, $"SchoolTab_{slot}_Text", tc.R, tc.G, tc.B);
-                _renderer.SetElementTint(Instance, $"SchoolTab_{slot}_Backing",
-                    active ? Color.White : new Color(150, 140, 120));
-            }
-            else
-            {
-                _renderer.SetHidden(Instance, $"SchoolTab_{slot}_Backing", true);
-                _renderer.SetHidden(Instance, $"SchoolTab_{slot}_Frame", true);
-                _renderer.SetHidden(Instance, $"SchoolTab_{slot}_Text", true);
-            }
+            var tab = SkillBookDefs.Tabs[i];
+            var (learned, total) = _state?.GetProgress(tab) ?? (0, tab.Skills.Count);
+            // The tab name is static (the element's default text, edited in the UI
+            // editor); only the learned/total fraction is filled at runtime.
+            _renderer.SetText(Instance, $"Tab_{slot}_Frac", $"{learned}/{total}");
+            bool active = i == _activeTab;
+            _renderer.SetElementTint(Instance, $"Tab_{slot}_Backing",
+                active ? Color.White : new Color(150, 140, 120));
         }
     }
 
