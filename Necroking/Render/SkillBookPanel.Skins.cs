@@ -30,17 +30,11 @@ public partial class SkillBookPanel
 
     private static readonly Skin[] Skins =
     {
-        // 0 — deep grimoire overhaul.
-        new()
-        {
-            Name = "Grimoire", Grimoire = true,
-            PanelNs = "Thinclothborder", PanelNsScale = 0.7f,
-            TitleBg = "Grim_TitleRibbon", TitleText = new(236, 210, 150),
-            ContentBg = "Grim_SpellListOverlay",
-            TabActBg = "SpellSlotBg", TabActNs = "button_rounded", TabIdleNs = "button_rounded", TabNsScale = 0.6f,
-            TabActText = new(40, 28, 14), TabIdleText = new(214, 198, 162), TabGoldAccent = false,
-            Corners = false,
-        },
+        // 0 — deep grimoire overhaul. The Grimoire path in SkillBookPanel.Draw
+        // reproduces the spell grimoire directly from its baked Grim_* elements
+        // (window frame, ribbon, tab strip, divider, page) + the spell-tile
+        // elements, so this descriptor only needs the master switch.
+        new() { Name = "Grimoire", Grimoire = true },
         // 1 — original flat tome (kept for comparison).
         new() { Name = "Original" },
     };
