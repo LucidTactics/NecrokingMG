@@ -293,7 +293,7 @@ public partial class SkillBookPanel : Necroking.UI.IModalLayer
 
         int pad     = grim ? (int)(30 * gs) : InnerPad;   // clear the ornate frame band
         int titleH  = grim ? (int)(64 * gs) : TitleH;     // ribbon
-        int tabH    = grim ? (int)(38 * gs) : TabBarH;
+        int tabH    = grim ? (int)(54 * gs) : TabBarH;    // tall enough for label + fraction rows
         int divH    = grim ? (int)(24 * gs) : 0;          // header divider band
         int footerH = grim ? (int)(24 * gs) : FooterH;
         int titleGap = grim ? (int)(6 * gs) : 4;
@@ -521,15 +521,16 @@ public partial class SkillBookPanel : Necroking.UI.IModalLayer
                 bool active = i == _activeTab;
                 bool hover = r.Contains((int)_mouse.X, (int)_mouse.Y);
 
-                // Parchment backing + gold InnerCornersButton frame (grimoire tabs).
-                // The backing harmonizes to a dark tan, so the ACTIVE tab gets a
-                // bright parchment wash (lifted, selected) and idle tabs recede.
+                // Background exactly as the spell grimoire renders its school tabs:
+                // the tan parchment backing shown as-is (no darkening), with the
+                // gold InnerCornersButton frame. The active tab gets a soft warm
+                // lift + a gold underline so it still reads as selected.
                 Tex("Grim_SchoolTab_All_Backing", r);
-                if (active) Fill(r, new Color(255, 236, 184, 70));
-                else Fill(r, new Color(0, 0, 0, 120));
-                if (hover && !active) Fill(r, new Color(255, 245, 210, 30));
+                Fill(r, new Color(255, 236, 178, 24)); // lift to the grimoire strip's golden tan
+                if (active) Fill(r, new Color(255, 238, 190, 42));
+                else if (hover) Fill(r, new Color(255, 245, 210, 22));
                 Tex("Grim_SchoolTab_All_Frame", r);
-                if (active) Fill(new Rectangle(r.X + 3, r.Y + 2, r.Width - 6, 2), GoldBright);
+                if (active) Fill(new Rectangle(r.X + 4, r.Bottom - 4, r.Width - 8, 2), GoldBright);
 
                 var (learned, total) = _state?.GetProgress(tab) ?? (0, tab.Skills.Count);
                 var f = _font!;
@@ -539,10 +540,11 @@ public partial class SkillBookPanel : Necroking.UI.IModalLayer
                 var lblSz = f.MeasureString(label);
                 var frSz = sf.MeasureString(frac);
                 int ty = r.Y + (r.Height - (int)lblSz.Y - (int)frSz.Y) / 2;
-                Color tc = active ? new Color(34, 22, 10) : new Color(118, 92, 52);
+                // Dark ink reads cleanly on the tan backing for every tab.
+                Color tc = active ? new Color(34, 22, 10) : new Color(58, 40, 18);
                 DrawText(f, label, new Vector2((int)(r.X + (r.Width - lblSz.X) / 2), ty), tc);
                 DrawText(sf, frac, new Vector2((int)(r.X + (r.Width - frSz.X) / 2),
-                    ty + (int)lblSz.Y), active ? new Color(72, 50, 24) : new Color(130, 102, 58));
+                    ty + (int)lblSz.Y + 1), active ? new Color(72, 50, 24) : new Color(96, 70, 36));
             }
             // Ornate header divider beneath the tab strip.
             int dy = lay.TabBar.Bottom + (int)(4 * gs);
