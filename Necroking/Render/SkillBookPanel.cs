@@ -311,7 +311,7 @@ public partial class SkillBookPanel : Necroking.UI.IModalLayer
             // the ornate frame (drawn last, on top) so they read flush — and the tab
             // strip starts right beneath it with no gap. Mirrors the grimoire.
             int sideM = (int)(13 * gs);
-            title  = new Rectangle(p.X + sideM, p.Y + (int)(11 * gs), p.Width - 2 * sideM, (int)(84 * gs));
+            title  = new Rectangle(p.X + sideM, p.Y + (int)(11 * gs), p.Width - 2 * sideM, (int)(62 * gs));
             tabBar = new Rectangle(innerX, title.Bottom, innerW, tabH);
         }
         else
@@ -451,7 +451,7 @@ public partial class SkillBookPanel : Necroking.UI.IModalLayer
             // the raw border texture to the grimoire's dark bronze at load — the
             // [156,156,156] tint mirrors Grim_WindowBorder's tintColor.
             float fs = lay.Panel.Width / 706f;
-            _widgets.DrawNineSlice("grim_cloth_frame", lay.Panel, new Color(156, 156, 156), Math.Max(0.36f, fs * 0.44f));
+            _widgets.DrawNineSlice("grim_cloth_frame", lay.Panel, new Color(156, 156, 156), Math.Max(0.2f, fs * 0.24f));
         }
         else
         {
