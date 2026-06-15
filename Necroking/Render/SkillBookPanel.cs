@@ -396,9 +396,7 @@ public partial class SkillBookPanel : Necroking.UI.IModalLayer
     private void DrawChrome(in Layout lay)
     {
         var skin = Active;
-        // Panel interior backing: textured or flat leather.
-        if (Has(skin.PanelBg)) { Fill(lay.Panel, LeatherMid); Tex(skin.PanelBg, lay.Panel, skin.PanelBgInset); }
-        else Fill(lay.Panel, LeatherMid);
+        Fill(lay.Panel, LeatherMid); // dark interior under the frame
 
         if (Has(skin.PanelNs))
         {
@@ -508,15 +506,13 @@ public partial class SkillBookPanel : Necroking.UI.IModalLayer
         var skin = Active;
         if (Has(skin.ContentBg))
         {
-            // Textured page (parchment / dragon damask / nations / swath box).
-            Fill(lay.Content, ParchmentDeep);                  // base so any texture alpha reads dark, not black
+            // Grimoire page: a dark LibraryScene backdrop (like the spell list).
+            Fill(lay.Content, new Color(36, 28, 18));          // dark base under the scene
             Tex(skin.ContentBg, lay.Content, skin.ContentInset);
-            if (skin.GoldTrim)
-            {
-                Tex("TT_Underline", new Rectangle(lay.Content.X, lay.Content.Y, lay.Content.Width, 3));
-                Tex("TT_Underline", new Rectangle(lay.Content.X, lay.Content.Bottom - 3, lay.Content.Width, 3));
-            }
-            else Border(lay.Content, LeatherDark, 1);
+            Fill(lay.Content, new Color(20, 14, 8, 90));       // darken so gold tiles/lines pop
+            // Ornate header divider just inside the top (grimoire method).
+            Tex("Grim_HeaderDivider", new Rectangle(lay.Content.X + 2, lay.Content.Y + 1, lay.Content.Width - 4, 12));
+            Border(lay.Content, LeatherDark, 1);
         }
         else
         {
@@ -579,6 +575,17 @@ public partial class SkillBookPanel : Necroking.UI.IModalLayer
 
         bool parentLearned = _state?.IsLearned(parent.Id) ?? false;
         bool childLearned  = _state?.IsLearned(child.Id) ?? false;
+
+        if (Active.Grimoire)
+        {
+            // Gold filigree on the dark page: a dark outline + a gold core so the
+            // line reads ornately against the LibraryScene backdrop.
+            Color core = childLearned ? GoldBright : parentLearned ? Gold : new Color(158, 126, 72);
+            DrawConnector(a, b, new Color(0, 0, 0, 170), childLearned ? 5 : 4);
+            DrawConnector(a, b, core, childLearned ? 2 : 1);
+            return;
+        }
+
         // Dark ink for unlearned edges so they read clearly against parchment;
         // gold once the parent is learned, bright gold when the child is too.
         Color line = childLearned ? GoldBright
@@ -648,55 +655,29 @@ public partial class SkillBookPanel : Necroking.UI.IModalLayer
             titleColor = InkSoft;
         }
 
-        var skin = Active;
-        // Drop shadow under interactive nodes (not pressed)
+        // Grimoire skin: render the whole node as a grimoire spell tile.
+        if (Active.Grimoire) { DrawGrimoireNode(r, def, learned, excluded, prereqsMet, affordable); return; }
+
+        // ---- Original flat node ----
         bool pressed = def.Id == _pressedSkillId;
         if (!pressed && !learned)
             Fill(new Rectangle(r.X + 2, r.Bottom, r.Width - 2, 2), new Color(0, 0, 0, 80));
+        Fill(r, fill);
+        Fill(new Rectangle(r.X + 1, r.Y + 1, r.Width - 2, 1), new Color(255, 255, 255, learned ? 30 : 60));
+        Fill(new Rectangle(r.X + 1, r.Bottom - 2, r.Width - 2, 1), new Color(0, 0, 0, learned ? 60 : 40));
+        Border(r, border, 1);
+        if (!learned && prereqsMet && affordable)
+            Border(Inset(r, 2), new Color(255, 235, 180, 90), 1);
 
-        if (skin.NodeParchment && Has("SpellSlotBg"))
-        {
-            Tex("SpellSlotBg", r, 0.16f);                       // parchment base
-            Fill(r, NodeStateOverlay(learned, excluded, prereqsMet, affordable)); // state tint
-            Tex(skin.NodeGrad, r);                              // diagonal lit gradient sheen (grimoire)
-        }
-        else
-        {
-            Fill(r, fill);
-            Fill(new Rectangle(r.X + 1, r.Y + 1, r.Width - 2, 1), new Color(255, 255, 255, learned ? 30 : 60));
-            Fill(new Rectangle(r.X + 1, r.Bottom - 2, r.Width - 2, 1), new Color(0, 0, 0, learned ? 60 : 40));
-        }
-
-        if (Has(skin.NodeNs)) Ns(skin.NodeNs, r, skin.NodeNsScale);
-        else
-        {
-            Border(r, border, 1);
-            if (!learned && prereqsMet && affordable)
-                Border(Inset(r, 2), new Color(255, 235, 180, 90), 1);
-        }
-
-        // Title — grimoire skins use a gold serif name; others keep the state ink.
+        // Title
         var f = _font!;
         var sf = _smallFont ?? f;
-        if (skin.NameGold)
-            titleColor = learned ? new Color(196, 176, 128)
-                       : !prereqsMet ? new Color(150, 124, 70)
-                       : excluded ? new Color(170, 120, 110)
-                       : GoldBright;
         string title = def.Name;
         var ts = f.MeasureString(title);
-        // Truncate if too wide
         title = TruncateToWidth(f, title, r.Width - 14);
         ts = f.MeasureString(title);
         var titlePos = new Vector2((int)(r.X + (r.Width - ts.X) / 2), r.Y + 6);
-        DrawShadowText(f, title, titlePos, titleColor);
-        // Gold fading underline under the name (grimoire tile method).
-        if (skin.NodeUnderline)
-        {
-            int uy = r.Y + 6 + (int)ts.Y + 1;
-            if (Has("TT_Underline")) Tex("TT_Underline", new Rectangle(r.X + 8, uy, r.Width - 16, 3));
-            else Fill(new Rectangle(r.X + 8, uy, r.Width - 16, 1), GoldDim);
-        }
+        DrawText(f, title, titlePos, titleColor);
 
         // Cost / status — for unlearned multi-cost skills, render each cost on its own
         // line, color-coded per cost so the player sees exactly which is short.
@@ -744,6 +725,87 @@ public partial class SkillBookPanel : Necroking.UI.IModalLayer
         if (!learned && !prereqsMet) DrawLockIcon(r.Right - 14, r.Y + 4);
         // Checkmark for learned (top-right)
         if (learned) DrawCheck(r.Right - 14, r.Y + 4);
+    }
+
+    /// <summary>Render a skill node as a grimoire spell tile: parchment + diagonal
+    /// lit sheen + spider-framed icon + gold serif name + gold underline + cost
+    /// icon/value, in an ornate rounded frame. State shown via tint + lock/check.</summary>
+    private void DrawGrimoireNode(Rectangle r, SkillDef def, bool learned, bool excluded, bool prereqsMet, bool affordable)
+    {
+        var f = _font!;
+        var sf = _smallFont ?? f;
+        bool pressed = def.Id == _pressedSkillId;
+        if (!pressed && !learned)
+            Fill(new Rectangle(r.X + 2, r.Bottom, r.Width - 2, 2), new Color(0, 0, 0, 90));
+
+        // Parchment + diagonal lit sheen + state tint (grimoire tile method).
+        if (Has("SpellSlotBg")) Tex("SpellSlotBg", r, 0.16f); else Fill(r, Parchment);
+        Tex("GMT_1", r);
+        Fill(r, GrimTint(learned, excluded, prereqsMet, affordable));
+
+        // Spider-framed icon on the left (the grimoire tile's signature element).
+        int iconSz = System.Math.Min(r.Height - 14, 40);
+        var iconR = new Rectangle(r.X + 6, r.Y + (r.Height - iconSz) / 2, iconSz, iconSz);
+        _widgets?.DrawIcon(SkillTileIcon(def), iconR.X, iconR.Y, iconR.Width, iconR.Height);
+        int sfi = (int)(iconSz * 0.18f);
+        Tex("SpiderFrameBorder", new Rectangle(iconR.X - sfi, iconR.Y - sfi, iconR.Width + 2 * sfi, iconR.Height + 2 * sfi));
+
+        // Gold serif name + gold underline to the right of the icon.
+        int tx = iconR.Right + 8;
+        int tw = System.Math.Max(20, r.Right - 7 - tx);
+        Color nameCol = learned ? new Color(206, 186, 138)
+                      : !prereqsMet ? new Color(150, 124, 70)
+                      : excluded ? new Color(176, 126, 116)
+                      : GoldBright;
+        string title = TruncateToWidth(f, def.Name, tw);
+        var ts = f.MeasureString(title);
+        DrawShadowText(f, title, new Vector2(tx, r.Y + 5), nameCol);
+        int uy = r.Y + 5 + (int)ts.Y;
+        if (Has("GMT_3")) Tex("GMT_3", new Rectangle(tx, uy, tw, 3));
+        else Fill(new Rectangle(tx, uy, tw, 1), GoldDim);
+
+        // Cost / status (icon + value, color-coded) below the underline.
+        int cy = uy + 4;
+        if (learned)
+            DrawText(sf, "Learned", new Vector2(tx, cy), new Color(186, 172, 140));
+        else if (def.Costs.Count == 0)
+            DrawText(sf, "Free", new Vector2(tx, cy), affordable ? CostGood : CostBad);
+        else
+        {
+            var c = def.Costs[0];
+            int have = HaveForCost(c);
+            bool ok = have >= c.Amount;
+            Color cc = !prereqsMet ? new Color(120, 100, 66) : ok ? CostGood : CostBad;
+            string? ci = CostIconPath(c);
+            if (ci != null) _widgets?.DrawIcon(ci, tx, cy, 16, 16);
+            int vx = ci != null ? tx + 18 : tx;
+            string line = def.Costs.Count > 1 ? $"{have}/{c.Amount} +" : $"{have}/{c.Amount}";
+            DrawText(sf, line, new Vector2(vx, cy + 1), cc);
+        }
+
+        Ns("button_rounded", r, 0.55f); // ornate rounded frame on top
+        if (!learned && !prereqsMet) DrawLockIcon(r.Right - 14, r.Y + 4);
+        if (learned) DrawCheck(r.Right - 14, r.Y + 4);
+    }
+
+    private static Color GrimTint(bool learned, bool excluded, bool prereqsMet, bool affordable)
+    {
+        if (learned)     return new Color(38, 34, 28, 150);
+        if (excluded)    return new Color(72, 18, 18, 140);
+        if (!prereqsMet) return new Color(28, 20, 11, 150);
+        if (affordable)  return new Color(255, 238, 188, 22);
+        return new Color(66, 50, 26, 70);
+    }
+
+    private string? CostIconPath(SkillCost c)
+    {
+        if (c.Type == "item")
+        {
+            var it = _gameData?.Items?.Get(c.Id);
+            return it != null && !string.IsNullOrEmpty(it.Icon) ? it.Icon : null;
+        }
+        if (c.Type == "skillpoints") return "assets/UI/Imported/exhausted.2.24.png";
+        return null;
     }
 
     private string FormatCosts(SkillDef def)
