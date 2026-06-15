@@ -41,7 +41,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
     private UI.GrimoireOverlay _grimoireOverlay = new();
     private bool _pausedByInspect;
     private SkillTreePanel _skillTreePanel = new();
-    private SkillBookPanel _skillBookPanel = new();
+    private UI.SkillBookOverlay _skillBookOverlay = new();
     private SkillBookState _skillBookState = new();
     private GameSystems.DeathFogSystem _deathFog = new();
 
@@ -975,7 +975,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         foreach (var item in _gameData.Settings.StartingInventory)
             _inventory.AddItem(item.ItemId, item.Quantity);
 
-        _skillBookPanel.Bind(_skillBookState, _inventory, _gameData,
+        _skillBookOverlay.Bind(_skillBookState, _inventory, _gameData,
             _spellBarState, _secondaryBarState, _sim);
 
     }
@@ -1037,8 +1037,8 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 {
                     var t = _skillLearnToasts[i];
                     int tabIdx = SkillBookDefs.FindTabIndexFor(t.SkillId);
-                    _skillBookPanel.Open();
-                    if (tabIdx >= 0) _skillBookPanel.SetActiveTab(tabIdx);
+                    _skillBookOverlay.Open();
+                    if (tabIdx >= 0) _skillBookOverlay.SetActiveTab(tabIdx);
                     _skillLearnToasts.RemoveAt(i);
                     _input.ConsumeMouse();
                 }
@@ -1415,7 +1415,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         scenario.ItemRegistry = _gameData.Items;
         scenario.InventoryUI = _inventoryUI;
         scenario.SkillTreePanel = _skillTreePanel;
-        scenario.SkillBookPanel = _skillBookPanel;
+        scenario.SkillBookOverlay = _skillBookOverlay;
         scenario.UIShaders = _uiShaders;
         scenario.Atlases = _atlases;
         scenario.Font = _font;
@@ -1968,11 +1968,11 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // Note: _uiShaders is initialized later after Content.Load path -- we
         // set it on the panel below after Load completes.
         _skillTreePanel.Init(_spriteBatch, _pixel, _font, _smallFont, _largeFont);
-        _skillBookPanel.Init(_spriteBatch, _pixel, _font, _smallFont, _largeFont, _widgetRenderer);
+        _skillBookOverlay.Init(_widgetRenderer, _spriteBatch, _pixel);
         // Early bind so scenarios (which skip StartGame) still have state. The spell-
         // bar Slots may be null at this point — re-bind happens in StartGame once the
         // bars are allocated. AddSpellToBarEffect handles null Slots gracefully.
-        _skillBookPanel.Bind(_skillBookState, _inventory, _gameData,
+        _skillBookOverlay.Bind(_skillBookState, _inventory, _gameData,
             _spellBarState, _secondaryBarState, _sim);
 
         // Load TrueType fonts via FontStashSharp (dynamic sizing)
@@ -2351,7 +2351,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         {
             bool shift = _input.IsKeyDown(Keys.LeftShift) || _input.IsKeyDown(Keys.RightShift);
             if (shift) _skillTreePanel.Toggle();
-            else       _skillBookPanel.Toggle();
+            else       _skillBookOverlay.Toggle();
         }
 
         // 'J' = spell grimoire (phase 1: display only)
@@ -2579,7 +2579,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 _input.MouseOverUI = true;
             if (_skillTreePanel.ContainsMouse(screenW, screenH, mx, my))
                 _input.MouseOverUI = true;
-            if (_skillBookPanel.ContainsMouse(screenW, screenH, mx, my))
+            if (_skillBookOverlay.ContainsMouse(mx, my))
                 _input.MouseOverUI = true;
 
             // Skill-learn corner toasts (clickable to jump to the relevant tab)
@@ -3050,12 +3050,12 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 if (_activeScenario.RequestOpenSkillBook)
                 {
                     _activeScenario.RequestOpenSkillBook = false;
-                    _skillBookPanel.Open();
+                    _skillBookOverlay.Open();
                 }
                 if (_activeScenario.RequestCloseSkillBook)
                 {
                     _activeScenario.RequestCloseSkillBook = false;
-                    _skillBookPanel.Close();
+                    _skillBookOverlay.Close();
                 }
 
                 // Apply weather preset override from scenario
@@ -3267,8 +3267,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         }
         _skillTreePanel.SetMouse(_input.MousePos);
         _skillTreePanel.Update(_input, screenW, screenH, gameTime.TotalGameTime.TotalSeconds);
-        _skillBookPanel.SetMouse(_input.MousePos);
-        _skillBookPanel.Update(_input, screenW, screenH, gameTime.TotalGameTime.TotalSeconds);
+        _skillBookOverlay.Update(_input, screenW, screenH, gameTime.TotalGameTime.TotalSeconds);
 
         // Cursor swap: hand when hovering interactive UI, arrow otherwise
         bool overInteractiveUI = _input.MouseOverUI || _editorUi.IsMouseOverUI;
@@ -5228,7 +5227,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
         // Skill book panel (K) — tabbed Potions/Necromancy/Magic/Metamorphosis trees.
         if (showUI)
-            _skillBookPanel.Draw(screenW, screenH);
+            _skillBookOverlay.Draw(screenW, screenH);
 
         // Bottom-right "Recipe Learned" toasts — drawn even when the panel is closed.
         if (showUI)

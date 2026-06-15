@@ -4,7 +4,7 @@ using Necroking.GameSystems;
 namespace Necroking.Scenario.Scenarios;
 
 /// <summary>
-/// Visual smoke test for the new tabbed SkillBookPanel:
+/// Visual smoke test for the new tabbed SkillBookOverlay:
 ///  1. Open it, screenshot the default tab (Potions).
 ///  2. Switch to Necromancy, screenshot — root "Raise Skeleton" should already be
 ///     learned (StartLearned=true) and one of its children (Bone Knight) should be
@@ -53,10 +53,10 @@ public class UISkillBookScenario : UIScenarioBase
         switch (_phase)
         {
             case 0:
-                if (SkillBookPanel?.IsVisible == true && _phaseT > 0.4f)
+                if (SkillBookOverlay?.IsVisible == true && _phaseT > 0.4f)
                 {
                     DebugLog.Log(ScenarioLog, "Phase 0: panel visible, default tab");
-                    SkillBookPanel.SetActiveTab(0); // Potions
+                    SkillBookOverlay.SetActiveTab(0); // Potions
                     DeferredScreenshot = "ui_skillbook_potions";
                     _waitingForScreenshot = true;
                     _phase = 1;
@@ -72,7 +72,7 @@ public class UISkillBookScenario : UIScenarioBase
                 if (_phaseT > 0.3f)
                 {
                     DebugLog.Log(ScenarioLog, "Phase 1: switch to Necromancy tab");
-                    SkillBookPanel!.SetActiveTab(1);
+                    SkillBookOverlay!.SetActiveTab(1);
                     DeferredScreenshot = "ui_skillbook_necromancy";
                     _waitingForScreenshot = true;
                     _phase = 2;
@@ -83,9 +83,9 @@ public class UISkillBookScenario : UIScenarioBase
                 if (_phaseT > 0.3f)
                 {
                     DebugLog.Log(ScenarioLog, "Phase 2: try to re-learn raise_skeleton (no-op)");
-                    SkillBookPanel!.TryLearnById("raise_skeleton");
+                    SkillBookOverlay!.TryLearnById("raise_skeleton");
                     DebugLog.Log(ScenarioLog, "Phase 2: learn bone_knight (cost: 4 MagicMushroom)");
-                    bool ok = SkillBookPanel.TryLearnById("bone_knight");
+                    bool ok = SkillBookOverlay.TryLearnById("bone_knight");
                     DebugLog.Log(ScenarioLog, $"  bone_knight learned={ok}");
                     DeferredScreenshot = "ui_skillbook_learned";
                     _waitingForScreenshot = true;
@@ -97,7 +97,7 @@ public class UISkillBookScenario : UIScenarioBase
                 if (_phaseT > 0.3f)
                 {
                     DebugLog.Log(ScenarioLog, "Phase 3: switch to Magic tab");
-                    SkillBookPanel!.SetActiveTab(2);
+                    SkillBookOverlay!.SetActiveTab(2);
                     DeferredScreenshot = "ui_skillbook_magic";
                     _waitingForScreenshot = true;
                     _phase = 4;
@@ -108,7 +108,7 @@ public class UISkillBookScenario : UIScenarioBase
                 if (_phaseT > 0.3f)
                 {
                     DebugLog.Log(ScenarioLog, "Phase 4: switch to Metamorphosis tab");
-                    SkillBookPanel!.SetActiveTab(3);
+                    SkillBookOverlay!.SetActiveTab(3);
                     DeferredScreenshot = "ui_skillbook_metamorphosis";
                     _waitingForScreenshot = true;
                     _phase = 5;

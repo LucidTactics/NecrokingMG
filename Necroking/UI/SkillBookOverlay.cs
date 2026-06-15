@@ -87,17 +87,22 @@ public class SkillBookOverlay : IModalLayer
     {
         if (i >= 0 && i < SkillBookDefs.Tabs.Count) _activeTab = i;
     }
+    public bool TryLearnById(string id, double timeSec = 0)
+    {
+        TryLearn(id, timeSec);
+        return _state?.IsLearned(id) ?? false;
+    }
 
     private void Layout(int sw, int sh)
     {
         var def = _renderer.GetWidgetDef(WindowId);
         _w = def?.Width ?? 706;
         _h = def?.Height ?? 1080;
-        // Fixed size, centred; clamp top up like the grimoire so a tall window
-        // doesn't push its title off the bottom.
+        // Fixed size, centred horizontally. If the window is taller than the
+        // screen, anchor its top (clip the bottom) so the ribbon + tabs stay
+        // usable; otherwise centre vertically.
         _x = (sw - _w) / 2;
-        _y = Math.Min((sh - _h) / 2, Math.Max(0, (sh - _h) / 2));
-        if (_y > 0) _y = (sh - _h) / 2;
+        _y = _h <= sh - 16 ? (sh - _h) / 2 : 8;
     }
 
     public void Update(InputState input, int sw, int sh, double timeSec)
