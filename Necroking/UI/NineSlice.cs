@@ -1,3 +1,4 @@
+using System;
 using System.IO;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
@@ -81,21 +82,67 @@ public class NineSlice
         batch.Draw(Texture, new Rectangle(dest.X, dest.Y + dest.Height - bb, bl, bb), srcBL, c);
         batch.Draw(Texture, new Rectangle(dest.X + dest.Width - br, dest.Y + dest.Height - bb, br, bb), srcBR, c);
 
-        // Edges
+        // Edges — stretched by default, or repeated at native (scaled) size when
+        // TileEdges is set, so a patterned border (e.g. the Greek-key cloth frame)
+        // keeps a constant cell size instead of stretching on wide/tall windows.
         if (midW > 0)
         {
-            batch.Draw(Texture, new Rectangle(dest.X + bl, dest.Y, midW, bt), srcT, c);
-            batch.Draw(Texture, new Rectangle(dest.X + bl, dest.Y + dest.Height - bb, midW, bb), srcB, c);
+            if (TileEdges)
+            {
+                int unit = Math.Max(1, (int)(srcT.Width * scale));
+                TileH(batch, Texture, dest.X + bl, dest.Y, midW, bt, srcT, unit, c);
+                TileH(batch, Texture, dest.X + bl, dest.Y + dest.Height - bb, midW, bb, srcB, unit, c);
+            }
+            else
+            {
+                batch.Draw(Texture, new Rectangle(dest.X + bl, dest.Y, midW, bt), srcT, c);
+                batch.Draw(Texture, new Rectangle(dest.X + bl, dest.Y + dest.Height - bb, midW, bb), srcB, c);
+            }
         }
         if (midH > 0)
         {
-            batch.Draw(Texture, new Rectangle(dest.X, dest.Y + bt, bl, midH), srcL, c);
-            batch.Draw(Texture, new Rectangle(dest.X + dest.Width - br, dest.Y + bt, br, midH), srcR, c);
+            if (TileEdges)
+            {
+                int unit = Math.Max(1, (int)(srcL.Height * scale));
+                TileV(batch, Texture, dest.X, dest.Y + bt, bl, midH, srcL, unit, c);
+                TileV(batch, Texture, dest.X + dest.Width - br, dest.Y + bt, br, midH, srcR, unit, c);
+            }
+            else
+            {
+                batch.Draw(Texture, new Rectangle(dest.X, dest.Y + bt, bl, midH), srcL, c);
+                batch.Draw(Texture, new Rectangle(dest.X + dest.Width - br, dest.Y + bt, br, midH), srcR, c);
+            }
         }
 
         // Center
         if (midW > 0 && midH > 0)
             batch.Draw(Texture, new Rectangle(dest.X + bl, dest.Y + bt, midW, midH), srcC, c);
+    }
+
+    /// <summary>Repeat an edge source horizontally across [x0, x0+totalW), each
+    /// copy <paramref name="unit"/> px wide (the source scaled to native), clipping
+    /// the final partial copy so the pattern stays continuous.</summary>
+    private static void TileH(SpriteBatch b, Texture2D tex, int x0, int y, int totalW, int h,
+        Rectangle src, int unit, Color c)
+    {
+        for (int x = x0; x < x0 + totalW; x += unit)
+        {
+            int w = Math.Min(unit, x0 + totalW - x);
+            var s = new Rectangle(src.X, src.Y, Math.Max(1, src.Width * w / unit), src.Height);
+            b.Draw(tex, new Rectangle(x, y, w, h), s, c);
+        }
+    }
+
+    /// <summary>Repeat an edge source vertically across [y0, y0+totalH).</summary>
+    private static void TileV(SpriteBatch b, Texture2D tex, int x, int y0, int w, int totalH,
+        Rectangle src, int unit, Color c)
+    {
+        for (int y = y0; y < y0 + totalH; y += unit)
+        {
+            int hh = Math.Min(unit, y0 + totalH - y);
+            var s = new Rectangle(src.X, src.Y, src.Width, Math.Max(1, src.Height * hh / unit));
+            b.Draw(tex, new Rectangle(x, y, w, hh), s, c);
+        }
     }
 
     public void Unload()

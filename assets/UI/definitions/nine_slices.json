@@ -133,7 +133,7 @@
       "borderRight": 51,
       "borderTop": 51,
       "borderBottom": 51,
-      "tileEdges": false
+      "tileEdges": true
     }
   ]
 }
