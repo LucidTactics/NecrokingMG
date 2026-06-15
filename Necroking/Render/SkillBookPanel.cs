@@ -265,11 +265,12 @@ public partial class SkillBookPanel : Necroking.UI.IModalLayer
     {
         if (Active.Grimoire)
         {
-            // Portrait, at the spell grimoire's exact proportions (706:1080) so its
-            // baked window frame / ribbon / page reproduce without distortion.
-            int h = sh - Math.Max(24, sh / 18);
-            int w = (int)(h * (706f / 1080f));
-            if (w > sw - 40) { w = sw - 40; h = (int)(w * (1080f / 706f)); }
+            // Wider than the grimoire's narrow 0.65 so the landscape skill trees
+            // (W/H ~1.3-1.8) and the tab labels get room. The ornate frame is
+            // 9-sliced, so a wider aspect still keeps clean corners.
+            int h = sh - Math.Max(20, sh / 22);
+            int w = (int)(h * 0.92f);
+            if (w > sw - 40) { w = sw - 40; h = Math.Min(h, (int)(w / 0.92f)); }
             return new Rectangle((sw - w) / 2, (sh - h) / 2, w, h);
         }
         int marginX = Math.Max(40, sw / 24);
@@ -332,7 +333,8 @@ public partial class SkillBookPanel : Necroking.UI.IModalLayer
             float availH = content.Height - baseNodeH - 16;
             scale = Math.Min(availW / rangeW, availH / rangeH);
             if (scale < 0.25f) scale = 0.25f;
-            if (scale > 1.5f)  scale = 1.5f;
+            float scaleCap = grim ? 2.4f : 1.5f; // let small trees grow to fill the wider page
+            if (scale > scaleCap) scale = scaleCap;
             // Origin so that (MinX, MinY) maps to the upper-left of the centered tree.
             int treeW = (int)(rangeW * scale);
             int treeH = (int)(rangeH * scale);
@@ -384,6 +386,15 @@ public partial class SkillBookPanel : Necroking.UI.IModalLayer
     private Rectangle TabRect(in Layout lay, int i)
     {
         int n = Math.Max(1, SkillBookDefs.Tabs.Count);
+        // Grimoire tabs sit flush (no gaps) — derive each edge from the full
+        // width so they tile the strip exactly with no remainder. The other
+        // skin keeps a small gap.
+        if (Active.Grimoire)
+        {
+            int gx0 = lay.TabBar.X + (int)((long)i * lay.TabBar.Width / n);
+            int gx1 = lay.TabBar.X + (int)((long)(i + 1) * lay.TabBar.Width / n);
+            return new Rectangle(gx0, lay.TabBar.Y, gx1 - gx0, lay.TabBar.Height);
+        }
         int gap = 4;
         int totalGap = gap * (n - 1);
         int w = (lay.TabBar.Width - totalGap) / n;
@@ -414,7 +425,7 @@ public partial class SkillBookPanel : Necroking.UI.IModalLayer
             // Layered exactly like the spell grimoire (GrimoireDyn): leather
             // interior, LibraryScene page, ribbon title, parchment+gold tab strip,
             // header divider, the skill tiles, then the ornate cloth window frame
-            // ON TOP (Grim_WindowBorder is drawn last, framing everything).
+            // ON TOP, framing everything.
             Fill(lay.Panel, LeatherDark);
             Tex("Grim_SpellListOverlay", lay.Panel);
             Fill(lay.Panel, new Color(14, 9, 4, 64)); // settle the page so gold pops
@@ -422,7 +433,10 @@ public partial class SkillBookPanel : Necroking.UI.IModalLayer
             DrawTabBar(lay);
             DrawContent(lay);
             DrawFooter(lay);
-            Tex("Grim_WindowBorder", lay.Panel);
+            // Ornate cloth frame, 9-sliced so the wider aspect keeps clean corners
+            // (same texture as the grimoire's border, tinted to its dark bronze).
+            float fs = lay.Panel.Width / 706f;
+            _widgets.DrawNineSlice("grim_cloth_frame", lay.Panel, new Color(150, 120, 72), Math.Max(0.5f, fs * 0.8f));
         }
         else
         {
@@ -535,14 +549,17 @@ public partial class SkillBookPanel : Necroking.UI.IModalLayer
                 var (learned, total) = _state?.GetProgress(tab) ?? (0, tab.Skills.Count);
                 var f = _font!;
                 var sf = _smallFont ?? f;
-                string label = TruncateToWidth(f, tab.DisplayName, r.Width - 8);
+                // Drop a too-long label (e.g. Metamorphosis) to the small font so it
+                // fits the tab rather than truncating.
+                var lf = (f.MeasureString(tab.DisplayName).X > r.Width - 8 && sf != f) ? sf : f;
+                string label = TruncateToWidth(lf, tab.DisplayName, r.Width - 6);
                 string frac = $"{learned}/{total}";
-                var lblSz = f.MeasureString(label);
+                var lblSz = lf.MeasureString(label);
                 var frSz = sf.MeasureString(frac);
                 int ty = r.Y + (r.Height - (int)lblSz.Y - (int)frSz.Y) / 2;
                 // Dark ink reads cleanly on the tan backing for every tab.
                 Color tc = active ? new Color(34, 22, 10) : new Color(58, 40, 18);
-                DrawText(f, label, new Vector2((int)(r.X + (r.Width - lblSz.X) / 2), ty), tc);
+                DrawText(lf, label, new Vector2((int)(r.X + (r.Width - lblSz.X) / 2), ty), tc);
                 DrawText(sf, frac, new Vector2((int)(r.X + (r.Width - frSz.X) / 2),
                     ty + (int)lblSz.Y + 1), active ? new Color(72, 50, 24) : new Color(96, 70, 36));
             }

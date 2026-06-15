@@ -5,10 +5,15 @@
       "id": "monster_summoner",
       "name": "Monster Summoner",
       "description": "Monster Limit +1.\nUnlock Deer Zombie and Juvenile Wolf zombie.\nKill a Monster.",
-      "x": 480, "y": 60,
+      "x": 480,
+      "y": 60,
       "parents": [],
       "costs": [
-        { "type": "event", "id": "monster_kill", "amount": 1 }
+        {
+          "type": "event",
+          "id": "monster_kill",
+          "amount": 1
+        }
       ],
       "effect": "compound",
       "effectArg": "cap_buff=monster:1|unlock_summon=ZombieFemaleDeer,ZombieMaleDeer,ZombieWolf"
@@ -17,10 +22,17 @@
       "id": "improved_monstrology",
       "name": "Improved Monstrology",
       "description": "Allows adding a potion to zombies in the reanimation process.\nCost 5 Skill Research Points.",
-      "x": 200, "y": 200,
-      "parents": ["monster_summoner"],
+      "x": 200,
+      "y": 200,
+      "parents": [
+        "monster_summoner"
+      ],
       "costs": [
-        { "type": "skillpoints", "id": "monstrology", "amount": 5 }
+        {
+          "type": "skillpoints",
+          "id": "monstrology",
+          "amount": 5
+        }
       ],
       "effect": "unlock_potion_slot",
       "effectArg": "1"
@@ -29,10 +41,17 @@
       "id": "monsterous_pets",
       "name": "Monsterous Pets",
       "description": "Monster Limit +3.\nCost 5 Skill Research Points.",
-      "x": 480, "y": 200,
-      "parents": ["monster_summoner"],
+      "x": 480,
+      "y": 200,
+      "parents": [
+        "monster_summoner"
+      ],
       "costs": [
-        { "type": "skillpoints", "id": "monstrology", "amount": 5 }
+        {
+          "type": "skillpoints",
+          "id": "monstrology",
+          "amount": 5
+        }
       ],
       "effect": "cap_buff",
       "effectArg": "monster:3"
@@ -41,10 +60,17 @@
       "id": "wolf_autopsy",
       "name": "Wolf Autopsy",
       "description": "Unlocks Wolf Zombies.\nCost 5 Skill Research Points.",
-      "x": 760, "y": 200,
-      "parents": ["monster_summoner"],
+      "x": 760,
+      "y": 200,
+      "parents": [
+        "monster_summoner"
+      ],
       "costs": [
-        { "type": "skillpoints", "id": "monstrology", "amount": 5 }
+        {
+          "type": "skillpoints",
+          "id": "monstrology",
+          "amount": 5
+        }
       ],
       "effect": "unlock_summon",
       "effectArg": "ZombieWolf"
@@ -53,10 +79,17 @@
       "id": "boar_autopsy",
       "name": "Boar Autopsy",
       "description": "Unlocks Boar Zombies.\nCost 5 Skill Research Points.",
-      "x": 320, "y": 320,
-      "parents": ["monsterous_pets"],
+      "x": 320,
+      "y": 320,
+      "parents": [
+        "monsterous_pets"
+      ],
       "costs": [
-        { "type": "skillpoints", "id": "monstrology", "amount": 5 }
+        {
+          "type": "skillpoints",
+          "id": "monstrology",
+          "amount": 5
+        }
       ],
       "effect": "unlock_summon",
       "effectArg": "ZombieBoar"
@@ -65,10 +98,17 @@
       "id": "monsterous_horde",
       "name": "Monsterous Horde",
       "description": "Monster Limit +5.\nCost 5 Skill Research Points.",
-      "x": 480, "y": 320,
-      "parents": ["monsterous_pets"],
+      "x": 480,
+      "y": 320,
+      "parents": [
+        "monsterous_pets"
+      ],
       "costs": [
-        { "type": "skillpoints", "id": "monstrology", "amount": 5 }
+        {
+          "type": "skillpoints",
+          "id": "monstrology",
+          "amount": 5
+        }
       ],
       "effect": "cap_buff",
       "effectArg": "monster:5"
@@ -77,10 +117,17 @@
       "id": "dire_wolf_reanimation",
       "name": "Dire Wolf Reanimation",
       "description": "Unlocks Dire Wolf Zombies.\nCost 5 Skill Research Points.",
-      "x": 660, "y": 320,
-      "parents": ["wolf_autopsy"],
+      "x": 660,
+      "y": 320,
+      "parents": [
+        "wolf_autopsy"
+      ],
       "costs": [
-        { "type": "skillpoints", "id": "monstrology", "amount": 5 }
+        {
+          "type": "skillpoints",
+          "id": "monstrology",
+          "amount": 5
+        }
       ],
       "effect": "unlock_summon",
       "effectArg": "ZombieWolf"
@@ -89,10 +136,17 @@
       "id": "wolf_lunge",
       "name": "Wolf Lunge",
       "description": "Wolf zombies gain a lunge attack.\nCost 5 Skill Research Points.",
-      "x": 840, "y": 320,
-      "parents": ["wolf_autopsy"],
+      "x": 840,
+      "y": 320,
+      "parents": [
+        "wolf_autopsy"
+      ],
       "costs": [
-        { "type": "skillpoints", "id": "monstrology", "amount": 5 }
+        {
+          "type": "skillpoints",
+          "id": "monstrology",
+          "amount": 5
+        }
       ],
       "effect": "grant_intrinsic_buff",
       "effectArg": "buff_wolf_pounce:wolf,zombie"
@@ -101,10 +155,17 @@
       "id": "boar_charge",
       "name": "Boar Charge",
       "description": "Boar zombies gain a trample attack.\nCost 5 Skill Research Points.",
-      "x": 160, "y": 440,
-      "parents": ["boar_autopsy"],
+      "x": 160,
+      "y": 440,
+      "parents": [
+        "boar_autopsy"
+      ],
       "costs": [
-        { "type": "skillpoints", "id": "monstrology", "amount": 5 }
+        {
+          "type": "skillpoints",
+          "id": "monstrology",
+          "amount": 5
+        }
       ],
       "effect": "grant_intrinsic_buff",
       "effectArg": "buff_boar_charge:boar,zombie"
@@ -113,10 +174,17 @@
       "id": "ancient_boar_reanimation",
       "name": "Ancient Boar Reanimation",
       "description": "Unlocks Ancient Boar Zombies.\nCost 5 Skill Research Points.",
-      "x": 320, "y": 440,
-      "parents": ["boar_autopsy"],
+      "x": 320,
+      "y": 440,
+      "parents": [
+        "boar_autopsy"
+      ],
       "costs": [
-        { "type": "skillpoints", "id": "monstrology", "amount": 5 }
+        {
+          "type": "skillpoints",
+          "id": "monstrology",
+          "amount": 5
+        }
       ],
       "effect": "unlock_summon",
       "effectArg": "ZombieGreatBoar"
@@ -125,10 +193,17 @@
       "id": "monsterous_army",
       "name": "Monsterous Army",
       "description": "Monster Limit +7.\nCost 5 Skill Research Points.",
-      "x": 480, "y": 440,
-      "parents": ["monsterous_horde"],
+      "x": 480,
+      "y": 440,
+      "parents": [
+        "monsterous_horde"
+      ],
       "costs": [
-        { "type": "skillpoints", "id": "monstrology", "amount": 5 }
+        {
+          "type": "skillpoints",
+          "id": "monstrology",
+          "amount": 5
+        }
       ],
       "effect": "cap_buff",
       "effectArg": "monster:7"
@@ -137,10 +212,17 @@
       "id": "bear_autopsy",
       "name": "Bear Autopsy",
       "description": "Unlocks Bear Zombies.\nCost 5 Skill Research Points.",
-      "x": 760, "y": 440,
-      "parents": ["monsterous_army"],
+      "x": 760,
+      "y": 440,
+      "parents": [
+        "monsterous_army"
+      ],
       "costs": [
-        { "type": "skillpoints", "id": "monstrology", "amount": 5 }
+        {
+          "type": "skillpoints",
+          "id": "monstrology",
+          "amount": 5
+        }
       ],
       "effect": "unlock_summon",
       "effectArg": "ZombieJuvenileBear,ZombieGrizzlyBear"
@@ -149,10 +231,17 @@
       "id": "monsterous_legion",
       "name": "Monsterous Legion",
       "description": "Monster Limit +10.\nCost 5 Skill Research Points.",
-      "x": 480, "y": 560,
-      "parents": ["monsterous_army"],
+      "x": 480,
+      "y": 560,
+      "parents": [
+        "monsterous_army"
+      ],
       "costs": [
-        { "type": "skillpoints", "id": "monstrology", "amount": 5 }
+        {
+          "type": "skillpoints",
+          "id": "monstrology",
+          "amount": 5
+        }
       ],
       "effect": "cap_buff",
       "effectArg": "monster:10"
@@ -161,10 +250,17 @@
       "id": "corpse_eater",
       "name": "Corpse Eater",
       "description": "Bears & Wolves may eat corpses that are >10 seconds old.\nGain 5 Max HP. Stack once.\nCost 5 Skill Research Points.",
-      "x": 640, "y": 560,
-      "parents": ["bear_autopsy"],
+      "x": 640,
+      "y": 560,
+      "parents": [
+        "bear_autopsy"
+      ],
       "costs": [
-        { "type": "skillpoints", "id": "monstrology", "amount": 5 }
+        {
+          "type": "skillpoints",
+          "id": "monstrology",
+          "amount": 5
+        }
       ],
       "effect": "unlock_ai_behavior",
       "effectArg": "corpse_eat:1"
@@ -173,10 +269,17 @@
       "id": "improved_corpse_eating",
       "name": "Improved Corpse Eating",
       "description": "Bears & Wolves may eat corpses that are >10 seconds old.\nGain 5 Max HP + 1 Str. Stack Twice.\nCost 5 Skill Research Points.",
-      "x": 640, "y": 660,
-      "parents": ["corpse_eater"],
+      "x": 640,
+      "y": 660,
+      "parents": [
+        "corpse_eater"
+      ],
       "costs": [
-        { "type": "skillpoints", "id": "monstrology", "amount": 5 }
+        {
+          "type": "skillpoints",
+          "id": "monstrology",
+          "amount": 5
+        }
       ],
       "effect": "unlock_ai_behavior",
       "effectArg": "corpse_eat:2"
@@ -185,10 +288,17 @@
       "id": "bear_sweep",
       "name": "Bear Sweep",
       "description": "Bear zombies gain a sweep attack.\nCost 5 Skill Research Points.",
-      "x": 940, "y": 560,
-      "parents": ["bear_autopsy"],
+      "x": 960,
+      "y": 560,
+      "parents": [
+        "bear_autopsy"
+      ],
       "costs": [
-        { "type": "skillpoints", "id": "monstrology", "amount": 5 }
+        {
+          "type": "skillpoints",
+          "id": "monstrology",
+          "amount": 5
+        }
       ],
       "effect": "grant_intrinsic_buff",
       "effectArg": "buff_bear_sweep:bear,zombie"
@@ -197,10 +307,17 @@
       "id": "ancient_bear_reanimation",
       "name": "Ancient Bear Reanimation",
       "description": "Unlocks Ancient Bear Zombies.\nCost 5 Skill Research Points.",
-      "x": 820, "y": 560,
-      "parents": ["bear_autopsy"],
+      "x": 800,
+      "y": 560,
+      "parents": [
+        "bear_autopsy"
+      ],
       "costs": [
-        { "type": "skillpoints", "id": "monstrology", "amount": 5 }
+        {
+          "type": "skillpoints",
+          "id": "monstrology",
+          "amount": 5
+        }
       ],
       "effect": "unlock_summon",
       "effectArg": "ZombieGrizzlyBear"
