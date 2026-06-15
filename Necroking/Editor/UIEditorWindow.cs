@@ -197,6 +197,21 @@ public partial class UIEditorWindow : EditorBase
     public int SelectedIndex = -1;
     private int _selectedChildIdx = -1;
 
+    // --- Undo/redo (memento: snapshot the three def lists as JSON, restore on Ctrl+Z) ---
+    private sealed class EditorSnapshot
+    {
+        public List<UIEditorNineSliceDef> NineSlices { get; set; } = new();
+        public List<UIEditorElementDef> Elements { get; set; } = new();
+        public List<UIEditorWidgetDef> Widgets { get; set; } = new();
+    }
+    private static readonly JsonSerializerOptions _undoJson = new() { IncludeFields = true };
+    private readonly List<string> _undoStack = new();
+    private readonly List<string> _redoStack = new();
+    private string _committedState = "";
+    private bool _undoInit;
+    private int _undoSettle;   // frames to keep snapshotting after activity ends
+    private const int UndoMax = 200;
+
     // Hierarchical child tree state (UI11)
     private List<int> _selectedChildPath = new();  // path of indices for nested selection
     private readonly HashSet<string> _expandedPaths = new(); // "0", "0/1", etc.
@@ -984,6 +999,84 @@ public partial class UIEditorWindow : EditorBase
     }
 
     // ═══════════════════════════════════════
+    //  Undo / redo
+    // ═══════════════════════════════════════
+    private string SnapshotState()
+        => JsonSerializer.Serialize(
+            new EditorSnapshot { NineSlices = _nineSlices, Elements = _elements, Widgets = _widgets },
+            _undoJson);
+
+    private void RestoreState(string json)
+    {
+        var s = JsonSerializer.Deserialize<EditorSnapshot>(json, _undoJson);
+        if (s == null) return;
+        _nineSlices.Clear(); _nineSlices.AddRange(s.NineSlices);
+        _elements.Clear();   _elements.AddRange(s.Elements);
+        _widgets.Clear();    _widgets.AddRange(s.Widgets);
+        // Keep the selection valid; drop child selection (indices may have shifted).
+        int count = ActiveTab switch
+        {
+            UIEditorTab.NineSlices => _nineSlices.Count,
+            UIEditorTab.Elements   => _elements.Count,
+            UIEditorTab.Widgets    => _widgets.Count,
+            _ => 0,
+        };
+        SelectedIndex = Math.Clamp(SelectedIndex, -1, count - 1);
+        _selectedChildIdx = -1;
+        _selectedChildPath.Clear();
+    }
+
+    /// <summary>Commit a snapshot once an edit settles (mouse released, no keys
+    /// held, not typing) so a whole drag/keystroke run is one undo step. Called
+    /// at the top of Draw so it captures the previous frame's finished edits.</summary>
+    private void CommitUndoState()
+    {
+        if (!_undoInit) { _committedState = SnapshotState(); _undoInit = true; return; }
+        // While editing (mouse held, typing, or any key down) just arm a short
+        // settle window — no serialization. Once idle, snapshot for a few frames so
+        // a whole drag/keystroke run becomes ONE undo step (and a release-frame
+        // adjustment is still caught). Fully-idle frames do nothing.
+        bool busy = LeftHeld || IsTextInputActive || _kb.GetPressedKeyCount() > 0;
+        if (busy) { _undoSettle = 3; return; }
+        if (_undoSettle <= 0) return;
+        _undoSettle--;
+        string cur = SnapshotState();
+        if (cur == _committedState) return;
+        _undoStack.Add(_committedState);
+        if (_undoStack.Count > UndoMax) _undoStack.RemoveAt(0);
+        _redoStack.Clear();
+        _committedState = cur;
+    }
+
+    private void HandleUndoRedo()
+    {
+        if (IsTextInputActive) return;
+        bool ctrl = _kb.IsKeyDown(Keys.LeftControl) || _kb.IsKeyDown(Keys.RightControl);
+        if (!ctrl) return;
+        bool shift = _kb.IsKeyDown(Keys.LeftShift) || _kb.IsKeyDown(Keys.RightShift);
+        if (_kb.IsKeyDown(Keys.Z) && _prevKb.IsKeyUp(Keys.Z)) { if (shift) Redo(); else Undo(); }
+        else if (_kb.IsKeyDown(Keys.Y) && _prevKb.IsKeyUp(Keys.Y)) Redo();
+    }
+
+    private void Undo()
+    {
+        if (_undoStack.Count == 0) return;
+        _redoStack.Add(_committedState);
+        string prev = _undoStack[^1]; _undoStack.RemoveAt(_undoStack.Count - 1);
+        RestoreState(prev);
+        _committedState = prev;
+    }
+
+    private void Redo()
+    {
+        if (_redoStack.Count == 0) return;
+        _undoStack.Add(_committedState);
+        string next = _redoStack[^1]; _redoStack.RemoveAt(_redoStack.Count - 1);
+        RestoreState(next);
+        _committedState = next;
+    }
+
+    // ═══════════════════════════════════════
     //  Main Draw (called each frame)
     // ═══════════════════════════════════════
 
@@ -1021,6 +1114,12 @@ public partial class UIEditorWindow : EditorBase
         {
             SaveAll();
         }
+
+        // Undo/redo: commit the previous frame's finished edit, then handle Ctrl+Z /
+        // Ctrl+Shift+Z / Ctrl+Y. (This frame's edits, made by the panels below, are
+        // committed next frame.)
+        CommitUndoState();
+        HandleUndoRedo();
 
         // Panel fills most of the screen
         int margin = 30;
