@@ -31,7 +31,6 @@ public static class ScenarioRegistry
         Register("UIEmpty", () => new Scenarios.UIEmptyScenario());
         Register("UISkillTree", () => new Scenarios.UISkillTreeScenario());
         Register("UISkillBook", () => new Scenarios.UISkillBookScenario());
-        Register("UISkillBookSkins", () => new Scenarios.UISkillBookSkinsScenario());
         Register("UIGradientTest", () => new Scenarios.UIGradientTestScenario());
         Register("UIRectShadowTest", () => new Scenarios.UIRectShadowTestScenario());
         Register("UICircleTest", () => new Scenarios.UICircleTestScenario());

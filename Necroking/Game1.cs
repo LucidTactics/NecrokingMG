@@ -2354,13 +2354,6 @@ public class Game1 : Microsoft.Xna.Framework.Game
             else       _skillBookPanel.Toggle();
         }
 
-        // Shift+B cycles the skill book skin (design review; removed once chosen).
-        if (!anyTextInputActive && _skillBookPanel.IsVisible && _input.WasKeyPressed(Keys.B)
-            && (_input.IsKeyDown(Keys.LeftShift) || _input.IsKeyDown(Keys.RightShift)))
-        {
-            _skillBookPanel.CycleSkin(1);
-        }
-
         // 'J' = spell grimoire (phase 1: display only)
         if (!anyTextInputActive && _input.WasKeyPressed(Keys.J) && _menuState == MenuState.None)
         {

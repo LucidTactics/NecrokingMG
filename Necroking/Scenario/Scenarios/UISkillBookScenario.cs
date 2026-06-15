@@ -17,6 +17,7 @@ namespace Necroking.Scenario.Scenarios;
 public class UISkillBookScenario : UIScenarioBase
 {
     public override string Name => "UISkillBook";
+    public override bool WantsWidgetRenderer => true; // grimoire chrome (frame/ribbon/tiles)
 
     private int _phase;
     private float _phaseT;

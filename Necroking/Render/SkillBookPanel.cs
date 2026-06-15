@@ -12,16 +12,19 @@ using Necroking.GameSystems;
 namespace Necroking.Render;
 
 /// <summary>
-/// Skill book panel — modal "tome" UI toggled with lowercase K. Tabs across the
-/// top (Potions / Necromancy / Magic / Metamorphosis), each showing a manually
-/// laid-out skill tree of one-time-unlock nodes with AND-style dependencies.
-/// Costs deduct from the inventory or check the cumulative event tally
-/// (<see cref="SkillEventTracker"/>); see <see cref="SkillBookState"/>.
+/// Skill book panel — the "Tome of the Necroking", a modal opened with K. Tabs
+/// across the top (Potions / Monstrology / Necromancy / Magic / Metamorphosis),
+/// each showing a manually laid-out skill tree of one-time-unlock nodes with
+/// AND-style dependencies. Costs deduct from the inventory or check the cumulative
+/// event tally (<see cref="SkillEventTracker"/>); see <see cref="SkillBookState"/>.
 ///
-/// Visuals adapt the grimoire palette from the older <see cref="SkillTreePanel"/>
-/// (now defunct, see Shift+K) but draws everything with verified primitives only —
-/// no <see cref="UIGfx"/>. Each node is a rectangular button with title + cost
-/// subtitle, color-coded by affordability, with a button press-down animation.
+/// Rendered to match the spell grimoire (<c>GrimoireDyn</c>): it reuses that
+/// window's elements via <see cref="Necroking.UI.RuntimeWidgetRenderer"/> — the
+/// 9-sliced cloth frame, maroon ribbon, parchment+gold tabs, header divider, the
+/// LibraryScene page and the spell-tile look — so editing those elements in the UI
+/// editor restyles this panel too. Each skill draws as a grimoire spell tile
+/// (parchment + sheen + spider-framed icon + serif name + cost), state shown by a
+/// light wash + lock/check.
 /// </summary>
 public partial class SkillBookPanel : Necroking.UI.IModalLayer
 {
@@ -92,46 +95,32 @@ public partial class SkillBookPanel : Necroking.UI.IModalLayer
     // Parchment is intentionally muted — bloom in the main game pushes anything
     // bright toward pure white, which made the original cream look like blank paper.
     private static readonly Color Parchment       = new(196, 174, 128);
-    private static readonly Color ParchmentDark   = new(170, 148, 104);
-    private static readonly Color ParchmentDeep   = new(132, 110,  74);
-    private static readonly Color Ink             = new(23, 17, 13);
-    private static readonly Color InkSoft         = new(56, 42, 28);
     private static readonly Color LeatherDark     = new(26, 13, 8);
     private static readonly Color LeatherMid      = new(42, 26, 18);
-    private static readonly Color LeatherLight    = new(72, 50, 28);
     private static readonly Color Gold            = new(174, 138,  60);
     private static readonly Color GoldBright      = new(218, 184,  96);
     private static readonly Color GoldDim         = new(108,  84,  40);
     private static readonly Color BloodDark       = new( 80,  18,  18);
     private static readonly Color CostGood        = new( 60, 130,  56);
     private static readonly Color CostBad         = new(168,  44,  44);
-    private static readonly Color LearnedFill     = new( 90,  82,  68);
-    private static readonly Color LockedFill      = new(150, 138, 110);
 
     // ----- Layout -----
-    // Node sizes are FIXED in screen pixels — only positions are scaled — so that
-    // titles and cost subtitles remain readable regardless of viewport size.
-    private const int NodeW = 180;
-    private const int NodeH = 64;
-    private const int TabBarH = 36;
-    private const int TitleH  = 30;
-    private const int FooterH = 26;
-    private const int InnerPad = 16;
-
+    // All chrome/tree metrics scale with the panel width (gs = panelW / 706),
+    // computed per-frame in BuildLayout.
     private struct Layout
     {
-        public Rectangle Panel;         // outer leather frame
-        public Rectangle Title;         // top title plate
+        public Rectangle Panel;         // outer window
+        public Rectangle Title;         // ribbon band
         public Rectangle TabBar;        // tab strip
-        public Rectangle Content;       // parchment tree area (clipped)
+        public Rectangle Content;       // tree area (the LibraryScene page)
         public Rectangle Footer;        // hint strip at bottom
         public float Scale;             // scale from logical to content px
         public int TreeOriginX;
         public int TreeOriginY;
-        /// <summary>Effective node width for this tab's layout. Starts at the
-        /// global NodeW constant and shrinks per-tab when the densest row of
-        /// nodes wouldn't otherwise fit without overlap. Computed in
-        /// BuildLayout and consumed by NodeRect / drawing.</summary>
+        /// <summary>Effective node width for this tab's layout. Starts at the base
+        /// tile width and shrinks per-tab when the densest row of nodes wouldn't
+        /// otherwise fit without overlap. Computed in BuildLayout, consumed by
+        /// NodeRect / drawing.</summary>
         public int NodeW;
         public int NodeH;
     }
@@ -263,73 +252,46 @@ public partial class SkillBookPanel : Necroking.UI.IModalLayer
     // ----- Layout helpers -----
     private Rectangle PanelRect(int sw, int sh)
     {
-        if (Active.Grimoire)
-        {
-            // Wider than the grimoire's narrow 0.65 so the landscape skill trees
-            // (W/H ~1.3-1.8) and the tab labels get room. The ornate frame is
-            // 9-sliced, so a wider aspect still keeps clean corners.
-            int h = sh - Math.Max(20, sh / 22);
-            int w = (int)(h * 0.92f);
-            if (w > sw - 40) { w = sw - 40; h = Math.Min(h, (int)(w / 0.92f)); }
-            return new Rectangle((sw - w) / 2, (sh - h) / 2, w, h);
-        }
-        int marginX = Math.Max(40, sw / 24);
-        int marginY = Math.Max(30, sh / 22);
-        int totalW = sw - marginX * 2;
-        int totalH = sh - marginY * 2;
-        int maxW = (int)(totalH * 1.85f);
-        if (totalW > maxW) totalW = maxW;
-        totalW = Math.Max(totalW, 880);
-        totalH = Math.Max(totalH, 600);
-        int x = (sw - totalW) / 2;
-        int y = (sh - totalH) / 2;
-        return new Rectangle(x, y, totalW, totalH);
+        // Wider than the grimoire's narrow 0.65 so the landscape skill trees
+        // (W/H ~1.3-1.8) and the tab labels get room. The ornate frame is
+        // 9-sliced, so a wider aspect still keeps clean corners.
+        int h = sh - Math.Max(20, sh / 22);
+        int w = (int)(h * 0.92f);
+        if (w > sw - 40) { w = sw - 40; h = Math.Min(h, (int)(w / 0.92f)); }
+        return new Rectangle((sw - w) / 2, (sh - h) / 2, w, h);
     }
 
     private Layout BuildLayout(int sw, int sh)
     {
         var p = PanelRect(sw, sh);
-        bool grim = Active.Grimoire;
         float gs = p.Width / 706f; // grimoire native scale
 
-        int pad     = grim ? (int)(24 * gs) : InnerPad;   // tab strip / tree inset
-        int titleH  = grim ? (int)(64 * gs) : TitleH;     // ribbon (non-grim only)
-        int tabH    = grim ? (int)(54 * gs) : TabBarH;    // tall enough for label + fraction rows
-        int divH    = grim ? (int)(24 * gs) : 0;          // header divider band
-        int footerH = grim ? (int)(24 * gs) : FooterH;
-        int titleGap = grim ? (int)(6 * gs) : 4;
-        int cGap    = grim ? (int)(6 * gs) : 6;
+        int pad     = (int)(24 * gs);   // tab strip / tree inset
+        int tabH    = (int)(54 * gs);   // tall enough for label + fraction rows
+        int divH    = (int)(24 * gs);   // header divider band
+        int footerH = (int)(24 * gs);
+        int cGap    = (int)(6 * gs);
 
         int innerX = p.X + pad;
-        int innerY = p.Y + pad;
         int innerW = p.Width - pad * 2;
 
-        Rectangle title, tabBar;
-        if (grim)
-        {
-            // Ribbon runs near-full width at the very top — its end-caps tuck under
-            // the ornate frame (drawn last, on top) so they read flush — and the tab
-            // strip starts right beneath it with no gap. Mirrors the grimoire.
-            int sideM = (int)(13 * gs);
-            title  = new Rectangle(p.X + sideM, p.Y + (int)(11 * gs), p.Width - 2 * sideM, (int)(62 * gs));
-            tabBar = new Rectangle(innerX, title.Bottom, innerW, tabH);
-        }
-        else
-        {
-            title  = new Rectangle(innerX, innerY, innerW, titleH);
-            tabBar = new Rectangle(innerX, title.Bottom + titleGap, innerW, tabH);
-        }
+        // Ribbon runs near-full width at the very top — its end-caps tuck under
+        // the ornate frame (drawn last, on top) so they read flush — and the tab
+        // strip starts right beneath it with no gap. Mirrors the grimoire.
+        int sideM = (int)(13 * gs);
+        var title  = new Rectangle(p.X + sideM, p.Y + (int)(11 * gs), p.Width - 2 * sideM, (int)(62 * gs));
+        var tabBar = new Rectangle(innerX, title.Bottom, innerW, tabH);
         var footer = new Rectangle(innerX, p.Bottom - pad - footerH, innerW, footerH);
         int contentTop = tabBar.Bottom + divH + cGap;
         var content = new Rectangle(innerX, contentTop,
                                     innerW, footer.Y - cGap - contentTop);
 
         // Per-tab scaling: positions scale to fit, node W/H shrinks when the
-        // densest row would force neighboring nodes to overlap.
-        // Grimoire tiles want a wider, shorter footprint (closer to the spell
-        // tile's 4:1) so the framed icon + name + underline + cost all fit.
-        int baseNodeW = grim ? 224 : NodeW;
-        int baseNodeH = grim ? 60  : NodeH;
+        // densest row would force neighboring nodes to overlap. Tiles want a
+        // wide, short footprint (close to the spell tile's 4:1) so the framed
+        // icon + name + underline + cost all fit.
+        int baseNodeW = 224;
+        int baseNodeH = 60;
         float scale = 1f;
         int treeOX = content.X + content.Width / 2;
         int treeOY = content.Y + content.Height / 2;
@@ -346,8 +308,7 @@ public partial class SkillBookPanel : Necroking.UI.IModalLayer
             float availH = content.Height - baseNodeH - 16;
             scale = Math.Min(availW / rangeW, availH / rangeH);
             if (scale < 0.25f) scale = 0.25f;
-            float scaleCap = grim ? 2.4f : 1.5f; // let small trees grow to fill the wider page
-            if (scale > scaleCap) scale = scaleCap;
+            if (scale > 2.4f) scale = 2.4f; // let small trees grow to fill the wider page
             // Origin so that (MinX, MinY) maps to the upper-left of the centered tree.
             int treeW = (int)(rangeW * scale);
             int treeH = (int)(rangeH * scale);
@@ -379,9 +340,9 @@ public partial class SkillBookPanel : Necroking.UI.IModalLayer
                     if (dyPx > 0 && dyPx < minDyPx) minDyPx = dyPx;
             }
             if (minDxPx != int.MaxValue && minDxPx - Gap < baseNodeW)
-                effNodeW = Math.Max(grim ? 150 : 80, minDxPx - Gap);
+                effNodeW = Math.Max(150, minDxPx - Gap);
             if (minDyPx != int.MaxValue && minDyPx - Gap < baseNodeH)
-                effNodeH = Math.Max(grim ? 44 : 32, minDyPx - Gap);
+                effNodeH = Math.Max(44, minDyPx - Gap);
         }
 
         return new Layout
@@ -398,21 +359,12 @@ public partial class SkillBookPanel : Necroking.UI.IModalLayer
 
     private Rectangle TabRect(in Layout lay, int i)
     {
+        // Tabs sit flush (no gaps) — derive each edge from the full width so they
+        // tile the strip exactly with no remainder.
         int n = Math.Max(1, SkillBookDefs.Tabs.Count);
-        // Grimoire tabs sit flush (no gaps) — derive each edge from the full
-        // width so they tile the strip exactly with no remainder. The other
-        // skin keeps a small gap.
-        if (Active.Grimoire)
-        {
-            int gx0 = lay.TabBar.X + (int)((long)i * lay.TabBar.Width / n);
-            int gx1 = lay.TabBar.X + (int)((long)(i + 1) * lay.TabBar.Width / n);
-            return new Rectangle(gx0, lay.TabBar.Y, gx1 - gx0, lay.TabBar.Height);
-        }
-        int gap = 4;
-        int totalGap = gap * (n - 1);
-        int w = (lay.TabBar.Width - totalGap) / n;
-        int x = lay.TabBar.X + i * (w + gap);
-        return new Rectangle(x, lay.TabBar.Y, w, lay.TabBar.Height);
+        int gx0 = lay.TabBar.X + (int)((long)i * lay.TabBar.Width / n);
+        int gx1 = lay.TabBar.X + (int)((long)(i + 1) * lay.TabBar.Width / n);
+        return new Rectangle(gx0, lay.TabBar.Y, gx1 - gx0, lay.TabBar.Height);
     }
 
     private Rectangle NodeRect(in Layout lay, SkillDef def)
@@ -433,76 +385,24 @@ public partial class SkillBookPanel : Necroking.UI.IModalLayer
         _batch.Draw(_pixel, new Rectangle(0, 0, sw, sh), new Color(0, 0, 0, 180));
 
         var lay = BuildLayout(sw, sh);
-        if (Active.Grimoire && _widgets != null)
-        {
-            // Layered exactly like the spell grimoire (GrimoireDyn): leather
-            // interior, LibraryScene page, ribbon title, parchment+gold tab strip,
-            // header divider, the skill tiles, then the ornate cloth window frame
-            // ON TOP, framing everything.
-            Fill(lay.Panel, LeatherDark);
-            Tex("Grim_SpellListOverlay", lay.Panel);
-            Fill(lay.Panel, new Color(14, 9, 4, 64)); // settle the page so gold pops
-            DrawTitle(lay);
-            DrawTabBar(lay);
-            DrawContent(lay);
-            DrawFooter(lay);
-            // Ornate cloth frame, 9-sliced (tiled edges, clean corners at any width).
-            // grim_cloth_frame carries a harmonize block, so the renderer recolours
-            // the raw border texture to the grimoire's dark bronze at load — the
-            // [156,156,156] tint mirrors Grim_WindowBorder's tintColor.
-            float fs = lay.Panel.Width / 706f;
-            _widgets.DrawNineSlice("grim_cloth_frame", lay.Panel, new Color(156, 156, 156), Math.Max(0.2f, fs * 0.24f));
-        }
-        else
-        {
-            DrawChrome(lay);
-            DrawTitle(lay);
-            DrawTabBar(lay);
-            DrawContent(lay);
-            DrawFooter(lay);
-        }
+        // Layered exactly like the spell grimoire (GrimoireDyn): leather interior,
+        // LibraryScene page, ribbon title, parchment+gold tab strip, header divider,
+        // the skill tiles, then the ornate cloth window frame ON TOP, framing all.
+        Fill(lay.Panel, LeatherDark);
+        Tex("Grim_SpellListOverlay", lay.Panel);
+        Fill(lay.Panel, new Color(14, 9, 4, 64)); // settle the page so gold pops
+        DrawTitle(lay);
+        DrawTabBar(lay);
+        DrawContent(lay);
+        DrawFooter(lay);
+        // Ornate cloth frame, 9-sliced (tiled edges, clean corners at any width).
+        // grim_cloth_frame carries a harmonize block, so the renderer recolours the
+        // raw border texture to the grimoire's dark bronze at load — the
+        // [156,156,156] tint mirrors Grim_WindowBorder's tintColor.
+        float fs = lay.Panel.Width / 706f;
+        _widgets?.DrawNineSlice("grim_cloth_frame", lay.Panel, new Color(156, 156, 156), Math.Max(0.2f, fs * 0.24f));
         if (_hoverSkillId != null) DrawTooltip(lay);
         if (_toast != null) DrawToast(lay);
-    }
-
-    private void DrawChrome(in Layout lay)
-    {
-        var skin = Active;
-        Fill(lay.Panel, LeatherMid); // dark interior under the frame
-
-        if (Has(skin.PanelNs))
-        {
-            Ns(skin.PanelNs, lay.Panel, skin.PanelNsScale);
-        }
-        else
-        {
-            // Original flat leather frame.
-            var inner = Inset(lay.Panel, 6);
-            Fill(new Rectangle(lay.Panel.X, lay.Panel.Y, lay.Panel.Width, 6), LeatherDark);
-            Fill(new Rectangle(lay.Panel.X, lay.Panel.Bottom - 6, lay.Panel.Width, 6), LeatherDark);
-            Fill(new Rectangle(lay.Panel.X, lay.Panel.Y, 6, lay.Panel.Height), LeatherDark);
-            Fill(new Rectangle(lay.Panel.Right - 6, lay.Panel.Y, 6, lay.Panel.Height), LeatherDark);
-            Border(lay.Panel, GoldDim, 1);
-            Border(inner, LeatherDark, 1);
-        }
-        if (skin.Corners)
-        {
-            DrawCorner(lay.Panel.X + 4, lay.Panel.Y + 4, 22, false, false);
-            DrawCorner(lay.Panel.Right - 26, lay.Panel.Y + 4, 22, true, false);
-            DrawCorner(lay.Panel.X + 4, lay.Panel.Bottom - 26, 22, false, true);
-            DrawCorner(lay.Panel.Right - 26, lay.Panel.Bottom - 26, 22, true, true);
-        }
-    }
-
-    private void DrawCorner(int x, int y, int size, bool flipX, bool flipY)
-    {
-        int t = 4;
-        Fill(new Rectangle(x, flipY ? y + size - t : y, size, t), Gold);
-        Fill(new Rectangle(flipX ? x + size - t : x, y, t, size), Gold);
-        // rivet
-        int rx = flipX ? x + size - 4 : x + 1;
-        int ry = flipY ? y + size - 4 : y + 1;
-        Fill(new Rectangle(rx, ry, 3, 3), LeatherDark);
     }
 
     private void DrawTitle(in Layout lay)
@@ -511,84 +411,21 @@ public partial class SkillBookPanel : Necroking.UI.IModalLayer
         var f = _largeFont ?? _font!;
         const string title = "TOME OF THE NECROKING";
 
-        if (Active.Grimoire)
-        {
-            // Maroon ribbon banner (the grimoire's Ribbon6): near-full width so its
-            // end-caps tuck under the frame (flush), extended a touch below so the
-            // tabs cover its bottom fold (no seam). Title centered on the visible band.
-            float gs = lay.Panel.Width / 706f;
-            Tex("Grim_TitleRibbon", new Rectangle(r.X - 2, r.Y, r.Width + 4, r.Height + (int)(10 * gs)));
-            string t = TruncateToWidth(f, title, r.Width - 40);
-            var sz = f.MeasureString(t);
-            var pos = new Vector2((int)(r.X + (r.Width - sz.X) / 2),
-                                  (int)(r.Y + (r.Height - sz.Y) / 2));
-            DrawShadowText(f, t, pos, new Color(238, 218, 158));
-            if (_smallFont != null)
-                DrawText(_smallFont, $"{CurrentSkinName}  (Shift+B)",
-                    new Vector2(r.X + 8, r.Bottom - 15), new Color(150, 130, 96));
-            return;
-        }
-
-        var skin = Active;
-        if (Has(skin.TitleBg)) Tex(skin.TitleBg, new Rectangle(r.X - 4, r.Y - 4, r.Width + 8, r.Height + 8));
-        else { Fill(r, LeatherDark); Border(r, GoldDim, 1); }
-        var size = f.MeasureString(title);
-        var p2 = new Vector2((int)(r.X + (r.Width - size.X) / 2),
-                             (int)(r.Y + (r.Height - size.Y) / 2));
-        DrawShadowText(f, title, p2, skin.TitleText);
-        if (_smallFont != null)
-            DrawText(_smallFont, $"Skin {CurrentSkinName}  (Shift+B)",
-                new Vector2(r.X + 2, r.Y + 1), new Color(180, 168, 140));
+        // Maroon ribbon banner (the grimoire's Ribbon6): near-full width so its
+        // end-caps tuck under the frame (flush), extended a touch below so the tabs
+        // cover its bottom fold (no seam). Title centered on the visible band.
+        float gs = lay.Panel.Width / 706f;
+        Tex("Grim_TitleRibbon", new Rectangle(r.X - 2, r.Y, r.Width + 4, r.Height + (int)(10 * gs)));
+        string t = TruncateToWidth(f, title, r.Width - 40);
+        var sz = f.MeasureString(t);
+        var pos = new Vector2((int)(r.X + (r.Width - sz.X) / 2),
+                              (int)(r.Y + (r.Height - sz.Y) / 2));
+        DrawShadowText(f, t, pos, new Color(238, 218, 158));
     }
 
     private void DrawTabBar(in Layout lay)
     {
-        if (Active.Grimoire)
-        {
-            float gs = lay.Panel.Width / 706f;
-            for (int i = 0; i < SkillBookDefs.Tabs.Count; i++)
-            {
-                var r = TabRect(lay, i);
-                var tab = SkillBookDefs.Tabs[i];
-                bool active = i == _activeTab;
-                bool hover = r.Contains((int)_mouse.X, (int)_mouse.Y);
-
-                // Background exactly as the spell grimoire renders its school tabs:
-                // the tan parchment backing shown as-is (no darkening), with the
-                // gold InnerCornersButton frame. The active tab gets a soft warm
-                // lift + a gold underline so it still reads as selected.
-                Tex("Grim_SchoolTab_All_Backing", r);
-                Fill(r, new Color(255, 236, 178, 24)); // lift to the grimoire strip's golden tan
-                if (active) Fill(r, new Color(255, 238, 190, 42));
-                else if (hover) Fill(r, new Color(255, 245, 210, 22));
-                Tex("Grim_SchoolTab_All_Frame", r);
-                if (active) Fill(new Rectangle(r.X + 4, r.Bottom - 4, r.Width - 8, 2), GoldBright);
-
-                var (learned, total) = _state?.GetProgress(tab) ?? (0, tab.Skills.Count);
-                var f = _font!;
-                var sf = _smallFont ?? f;
-                // Drop a too-long label (e.g. Metamorphosis) to the small font so it
-                // fits the tab rather than truncating.
-                var lf = (f.MeasureString(tab.DisplayName).X > r.Width - 8 && sf != f) ? sf : f;
-                string label = TruncateToWidth(lf, tab.DisplayName, r.Width - 6);
-                string frac = $"{learned}/{total}";
-                var lblSz = lf.MeasureString(label);
-                var frSz = sf.MeasureString(frac);
-                int ty = r.Y + (r.Height - (int)lblSz.Y - (int)frSz.Y) / 2;
-                // Dark ink reads cleanly on the tan backing for every tab.
-                Color tc = active ? new Color(34, 22, 10) : new Color(58, 40, 18);
-                DrawText(lf, label, new Vector2((int)(r.X + (r.Width - lblSz.X) / 2), ty), tc);
-                DrawText(sf, frac, new Vector2((int)(r.X + (r.Width - frSz.X) / 2),
-                    ty + (int)lblSz.Y + 1), active ? new Color(72, 50, 24) : new Color(96, 70, 36));
-            }
-            // Ornate header divider beneath the tab strip.
-            int dy = lay.TabBar.Bottom + (int)(4 * gs);
-            Tex("Grim_HeaderDivider", new Rectangle(lay.Content.X, dy, lay.Content.Width, (int)(20 * gs)));
-            return;
-        }
-
-        // Backing strip
-        Fill(lay.TabBar, LeatherDark);
+        float gs = lay.Panel.Width / 706f;
         for (int i = 0; i < SkillBookDefs.Tabs.Count; i++)
         {
             var r = TabRect(lay, i);
@@ -596,63 +433,43 @@ public partial class SkillBookPanel : Necroking.UI.IModalLayer
             bool active = i == _activeTab;
             bool hover = r.Contains((int)_mouse.X, (int)_mouse.Y);
 
-            var skin = Active;
-            string? tabBg = active ? skin.TabActBg : skin.TabIdleBg;
-            string? tabNs = active ? skin.TabActNs : skin.TabIdleNs;
-            // Background
-            if (Has(tabBg)) Tex(tabBg, r);
-            else if (Has(tabNs)) Fill(r, active ? ParchmentDark : LeatherMid); // base under the frame/swatch
-            else Fill(r, active ? Parchment : hover ? new Color(72, 50, 28) : LeatherMid);
-            // Frame / ornate swatch
-            if (Has(tabNs)) Ns(tabNs, r, skin.TabNsScale);
-            // Dim idle / highlight hover for textured tabs
-            if (Has(tabBg) || Has(tabNs))
-            {
-                if (!active) Fill(r, new Color(0, 0, 0, 85));
-                else if (hover) Fill(r, new Color(255, 255, 255, 28));
-            }
-            // Gold accent band on the active tab
-            if (active && skin.TabGoldAccent) Fill(new Rectangle(r.X, r.Y, r.Width, 2), GoldBright);
-            // Flat border only when the tab has no textured chrome
-            if (!Has(tabBg) && !Has(tabNs)) Border(r, active ? Gold : GoldDim, 1);
+            // Background exactly as the spell grimoire renders its school tabs: the
+            // tan parchment backing shown as-is (no darkening), with the gold
+            // InnerCornersButton frame. The active tab gets a soft warm lift + a
+            // gold underline so it still reads as selected.
+            Tex("Grim_SchoolTab_All_Backing", r);
+            Fill(r, new Color(255, 236, 178, 24)); // lift to the grimoire strip's golden tan
+            if (active) Fill(r, new Color(255, 238, 190, 42));
+            else if (hover) Fill(r, new Color(255, 245, 210, 22));
+            Tex("Grim_SchoolTab_All_Frame", r);
+            if (active) Fill(new Rectangle(r.X + 4, r.Bottom - 4, r.Width - 8, 2), GoldBright);
 
             var (learned, total) = _state?.GetProgress(tab) ?? (0, tab.Skills.Count);
-            string label = tab.DisplayName;
-            string frac = $"{learned}/{total}";
             var f = _font!;
             var sf = _smallFont ?? f;
-            var lblSize = f.MeasureString(label);
-            var fracSize = sf.MeasureString(frac);
-            int textY = r.Y + (r.Height - (int)lblSize.Y - (int)fracSize.Y - 2) / 2;
-            Color textColor = active ? Active.TabActText : Active.TabIdleText;
-            Color fracColor = active ? Active.TabActText : Active.TabIdleText;
-            DrawText(f, label,
-                new Vector2((int)(r.X + (r.Width - lblSize.X) / 2), textY), textColor);
-            DrawText(sf, frac,
-                new Vector2((int)(r.X + (r.Width - fracSize.X) / 2),
-                            textY + (int)lblSize.Y + 2), fracColor);
+            // Drop a too-long label (e.g. Metamorphosis) to the small font so it
+            // fits the tab rather than truncating.
+            var lf = (f.MeasureString(tab.DisplayName).X > r.Width - 8 && sf != f) ? sf : f;
+            string label = TruncateToWidth(lf, tab.DisplayName, r.Width - 6);
+            string frac = $"{learned}/{total}";
+            var lblSz = lf.MeasureString(label);
+            var frSz = sf.MeasureString(frac);
+            int ty = r.Y + (r.Height - (int)lblSz.Y - (int)frSz.Y) / 2;
+            // Dark ink reads cleanly on the tan backing for every tab.
+            Color tc = active ? new Color(34, 22, 10) : new Color(58, 40, 18);
+            DrawText(lf, label, new Vector2((int)(r.X + (r.Width - lblSz.X) / 2), ty), tc);
+            DrawText(sf, frac, new Vector2((int)(r.X + (r.Width - frSz.X) / 2),
+                ty + (int)lblSz.Y + 1), active ? new Color(72, 50, 24) : new Color(96, 70, 36));
         }
+        // Ornate header divider beneath the tab strip.
+        int dy = lay.TabBar.Bottom + (int)(4 * gs);
+        Tex("Grim_HeaderDivider", new Rectangle(lay.Content.X, dy, lay.Content.Width, (int)(20 * gs)));
     }
 
     private void DrawContent(in Layout lay)
     {
-        if (Active.Grimoire)
-        {
-            // Page (LibraryScene) was already drawn full-panel in Draw(); here we
-            // only lay the tree (connectors + tiles) on it, like the grimoire list.
-        }
-        else
-        {
-            // Original flat parchment with a vignette + flecks + folio band.
-            Fill(lay.Content, Parchment);
-            DrawParchmentVignette(lay.Content);
-            DrawParchmentFlecks(lay.Content);
-            var folio = new Rectangle(lay.Content.X, lay.Content.Y, lay.Content.Width, 12);
-            Fill(folio, LeatherMid);
-            Fill(new Rectangle(folio.X, folio.Bottom - 1, folio.Width, 1), GoldDim);
-            Border(lay.Content, LeatherDark, 1);
-        }
-
+        // The page (LibraryScene) was already drawn full-panel in Draw(); here we
+        // only lay the tree (connectors + tiles) on it, like the grimoire list.
         if (_activeTab < 0 || _activeTab >= SkillBookDefs.Tabs.Count) return;
         var tab = SkillBookDefs.Tabs[_activeTab];
 
@@ -703,23 +520,11 @@ public partial class SkillBookPanel : Necroking.UI.IModalLayer
         bool parentLearned = _state?.IsLearned(parent.Id) ?? false;
         bool childLearned  = _state?.IsLearned(child.Id) ?? false;
 
-        if (Active.Grimoire)
-        {
-            // Gold filigree on the dark page: a dark outline + a gold core so the
-            // line reads ornately against the LibraryScene backdrop.
-            Color core = childLearned ? GoldBright : parentLearned ? Gold : new Color(158, 126, 72);
-            DrawConnector(a, b, new Color(0, 0, 0, 170), childLearned ? 5 : 4);
-            DrawConnector(a, b, core, childLearned ? 2 : 1);
-            return;
-        }
-
-        // Dark ink for unlearned edges so they read clearly against parchment;
-        // gold once the parent is learned, bright gold when the child is too.
-        Color line = childLearned ? GoldBright
-                   : parentLearned ? Gold
-                                   : new Color(50, 32, 18, 230);
-        int thick = childLearned ? 3 : 2;
-        DrawConnector(a, b, line, thick);
+        // Gold filigree on the dark page: a dark outline + a gold core so the line
+        // reads ornately against the LibraryScene backdrop.
+        Color core = childLearned ? GoldBright : parentLearned ? Gold : new Color(158, 126, 72);
+        DrawConnector(a, b, new Color(0, 0, 0, 170), childLearned ? 5 : 4);
+        DrawConnector(a, b, core, childLearned ? 2 : 1);
     }
 
     private void DrawConnector(Vector2 a, Vector2 b, Color color, int thickness)
@@ -746,112 +551,7 @@ public partial class SkillBookPanel : Necroking.UI.IModalLayer
         bool prereqsMet  = _state?.ArePrereqsMet(def) ?? true;
         bool excluded    = _state?.IsExcluded(def) ?? false;
         bool affordable  = (_state != null && _inventory != null) && _state.CanAfford(def, _inventory);
-
-        // Decide visual state
-        Color fill, border, titleColor;
-        if (learned)
-        {
-            fill = LearnedFill;
-            border = GoldDim;
-            titleColor = new Color(220, 208, 180);
-        }
-        else if (excluded)
-        {
-            // Stronger lockout than missing prereqs — mutex partner already
-            // learned, so this branch is permanently barred (for this game).
-            fill = new Color(48, 30, 30);
-            border = new Color(140, 70, 70);
-            titleColor = new Color(140, 90, 90);
-        }
-        else if (!prereqsMet)
-        {
-            fill = LockedFill;
-            border = new Color(120, 100, 70);
-            titleColor = new Color(80, 70, 50);
-        }
-        else if (affordable)
-        {
-            fill = Parchment;
-            border = GoldBright;
-            titleColor = Ink;
-        }
-        else
-        {
-            fill = ParchmentDark;
-            border = Gold;
-            titleColor = InkSoft;
-        }
-
-        // Grimoire skin: render the whole node as a grimoire spell tile.
-        if (Active.Grimoire) { DrawGrimoireNode(r, def, learned, excluded, prereqsMet, affordable); return; }
-
-        // ---- Original flat node ----
-        bool pressed = def.Id == _pressedSkillId;
-        if (!pressed && !learned)
-            Fill(new Rectangle(r.X + 2, r.Bottom, r.Width - 2, 2), new Color(0, 0, 0, 80));
-        Fill(r, fill);
-        Fill(new Rectangle(r.X + 1, r.Y + 1, r.Width - 2, 1), new Color(255, 255, 255, learned ? 30 : 60));
-        Fill(new Rectangle(r.X + 1, r.Bottom - 2, r.Width - 2, 1), new Color(0, 0, 0, learned ? 60 : 40));
-        Border(r, border, 1);
-        if (!learned && prereqsMet && affordable)
-            Border(Inset(r, 2), new Color(255, 235, 180, 90), 1);
-
-        // Title
-        var f = _font!;
-        var sf = _smallFont ?? f;
-        string title = def.Name;
-        var ts = f.MeasureString(title);
-        title = TruncateToWidth(f, title, r.Width - 14);
-        ts = f.MeasureString(title);
-        var titlePos = new Vector2((int)(r.X + (r.Width - ts.X) / 2), r.Y + 6);
-        DrawText(f, title, titlePos, titleColor);
-
-        // Cost / status — for unlearned multi-cost skills, render each cost on its own
-        // line, color-coded per cost so the player sees exactly which is short.
-        Color baseStatusColor;
-        if (!prereqsMet) baseStatusColor = new Color(110, 90, 60);
-        else baseStatusColor = affordable ? CostGood : CostBad;
-
-        if (learned)
-        {
-            string statusLine = "Learned";
-            var ss = sf.MeasureString(statusLine);
-            var sPos = new Vector2((int)(r.X + (r.Width - ss.X) / 2),
-                                   r.Bottom - 6 - (int)ss.Y);
-            DrawText(sf, statusLine, sPos, new Color(180, 168, 140));
-        }
-        else if (def.Costs.Count == 0)
-        {
-            string statusLine = "Free";
-            var ss = sf.MeasureString(statusLine);
-            var sPos = new Vector2((int)(r.X + (r.Width - ss.X) / 2),
-                                   r.Bottom - 6 - (int)ss.Y);
-            DrawText(sf, statusLine, sPos, baseStatusColor);
-        }
-        else
-        {
-            int lineH = (int)sf.MeasureString("X").Y + 1;
-            int totalH = lineH * def.Costs.Count;
-            int yStart = r.Bottom - 5 - totalH;
-            for (int i = 0; i < def.Costs.Count; i++)
-            {
-                var c = def.Costs[i];
-                int have = HaveForCost(c);
-                bool ok = have >= c.Amount;
-                Color cc = !prereqsMet ? new Color(110, 90, 60) : (ok ? CostGood : CostBad);
-                string label = CostLabel(c);
-                string line = $"{have}/{c.Amount} {label}";
-                line = TruncateToWidth(sf, line, r.Width - 14);
-                var lz = sf.MeasureString(line);
-                DrawText(sf, line,
-                    new Vector2((int)(r.X + (r.Width - lz.X) / 2), yStart + i * lineH), cc);
-            }
-        }
-
-        // Lock icon overlay for locked nodes (small, top-right)
-        if (!learned && !prereqsMet) DrawLockIcon(r.Right - 14, r.Y + 4);
-        // Checkmark for learned (top-right)
-        if (learned) DrawCheck(r.Right - 14, r.Y + 4);
+        DrawGrimoireNode(r, def, learned, excluded, prereqsMet, affordable);
     }
 
     /// <summary>Render a skill node as a grimoire spell tile: parchment + diagonal
@@ -952,19 +652,6 @@ public partial class SkillBookPanel : Necroking.UI.IModalLayer
         return null;
     }
 
-    private string FormatCosts(SkillDef def)
-    {
-        if (def.Costs.Count == 0) return "Free";
-        var parts = new List<string>(def.Costs.Count);
-        foreach (var c in def.Costs)
-        {
-            int have = HaveForCost(c);
-            string label = CostLabel(c);
-            parts.Add($"{have}/{c.Amount} {label}");
-        }
-        return string.Join("  ", parts);
-    }
-
     /// <summary>Resolve the player's current amount of whatever the cost wants
     /// — inventory count, event tally, or pooled skill points.</summary>
     private int HaveForCost(SkillCost c)
@@ -1048,23 +735,19 @@ public partial class SkillBookPanel : Necroking.UI.IModalLayer
     private void DrawFooter(in Layout lay)
     {
         var r = lay.Footer;
-        bool grim = Active.Grimoire;
-        if (!grim) { Fill(r, LeatherDark); Border(r, GoldDim, 1); }
         var sf = _smallFont ?? _font!;
         string[] parts = {
             "[CLICK] LEARN",
             "[HOVER] DETAILS",
             "[K / ESC] CLOSE",
         };
-        Color hint = grim ? new Color(170, 142, 84) : Gold;
+        var hint = new Color(170, 142, 84);
         int slotW = r.Width / parts.Length;
         for (int i = 0; i < parts.Length; i++)
         {
             var ts = sf.MeasureString(parts[i]);
             int sx = r.X + slotW * i + (slotW - (int)ts.X) / 2;
-            var pos = new Vector2(sx, r.Y + (r.Height - (int)ts.Y) / 2);
-            if (grim) DrawShadowText(sf, parts[i], pos, hint);
-            else DrawText(sf, parts[i], pos, hint);
+            DrawShadowText(sf, parts[i], new Vector2(sx, r.Y + (r.Height - (int)ts.Y) / 2), hint);
         }
     }
 
@@ -1221,48 +904,6 @@ public partial class SkillBookPanel : Necroking.UI.IModalLayer
         Fill(rect, LeatherDark);
         Border(rect, GoldBright, 1);
         DrawText(f, _toast!, new Vector2(rect.X + padX, rect.Y + padY), GoldBright);
-    }
-
-    /// <summary>Soft inner shadow on the parchment to give it depth instead of a
-    /// flat color. Implemented as concentric translucent rect bands — no shaders.</summary>
-    private void DrawParchmentVignette(Rectangle r)
-    {
-        // 6 concentric shadow rings, each slightly inset and slightly stronger
-        // toward the edge, so the parchment looks bowl-shaped / aged at the rim.
-        const int rings = 6;
-        for (int i = 0; i < rings; i++)
-        {
-            int alpha = 18 - i * 2; // outermost strongest
-            if (alpha <= 0) break;
-            var shadow = new Color(60, 38, 18, alpha);
-            // top + bottom strips
-            Fill(new Rectangle(r.X + i, r.Y + i, r.Width - i * 2, 1), shadow);
-            Fill(new Rectangle(r.X + i, r.Bottom - 1 - i, r.Width - i * 2, 1), shadow);
-            // left + right strips
-            Fill(new Rectangle(r.X + i, r.Y + i + 1, 1, r.Height - i * 2 - 2), shadow);
-            Fill(new Rectangle(r.Right - 1 - i, r.Y + i + 1, 1, r.Height - i * 2 - 2), shadow);
-        }
-    }
-
-    /// <summary>Stable pseudo-random parchment "grain" — a sparse spray of darker
-    /// 1px specks. Seeded by rect size so a given panel size always renders the
-    /// same flecks (no per-frame jitter). Cheap and breaks up the flat color.</summary>
-    private void DrawParchmentFlecks(Rectangle r)
-    {
-        int seed = unchecked(r.Width * 73856093 ^ r.Height * 19349663);
-        var rnd = new Random(seed);
-        int count = (r.Width * r.Height) / 1400; // density
-        for (int i = 0; i < count; i++)
-        {
-            int x = r.X + rnd.Next(r.Width);
-            int y = r.Y + rnd.Next(r.Height);
-            int alpha = 18 + rnd.Next(28);
-            // mix of warm dark and cool dark for variety
-            Color c = (i & 1) == 0
-                ? new Color(70, 50, 28, alpha)
-                : new Color(40, 30, 20, alpha);
-            Fill(new Rectangle(x, y, 1, 1), c);
-        }
     }
 
     // ----- Primitive helpers -----
