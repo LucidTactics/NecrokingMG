@@ -295,10 +295,10 @@ public partial class SkillBookPanel : Necroking.UI.IModalLayer
         int pad     = grim ? (int)(34 * gs) : InnerPad;   // clear the ornate frame band
         int titleH  = grim ? (int)(60 * gs) : TitleH;     // ribbon
         int tabH    = grim ? (int)(54 * gs) : TabBarH;    // taller tabs
-        int divH    = grim ? (int)(24 * gs) : 0;          // header divider band
+        int divH    = grim ? (int)(22 * gs) : 0;          // header divider band
         int footerH = grim ? (int)(24 * gs) : FooterH;
-        int titleGap = grim ? (int)(6 * gs) : 4;
-        int cGap    = grim ? (int)(6 * gs) : 6;
+        int titleGap = grim ? 0 : 4;                      // title expands down to meet the tabs
+        int cGap    = grim ? (int)(4 * gs) : 6;
 
         int innerX = p.X + pad;
         int innerY = p.Y + pad;
@@ -425,7 +425,7 @@ public partial class SkillBookPanel : Necroking.UI.IModalLayer
             DrawContent(lay);
             // (No footer hint strip — the grimoire has none.)
             // Ornate cloth frame on top — 9-sliced (clean corners at any width),
-            // tinted to the grimoire's dark bronze.
+            // tinted to the grimoire's dark bronze. (Left as approved.)
             float fs = lay.Panel.Width / 706f;
             _widgets!.DrawNineSlice("grim_cloth_frame", lay.Panel, new Color(150, 120, 72), Math.Max(0.5f, fs * 0.8f));
         }
@@ -489,10 +489,11 @@ public partial class SkillBookPanel : Necroking.UI.IModalLayer
 
         if (Active.Grimoire)
         {
-            // Maroon ribbon banner (the grimoire's Ribbon6), title centered on it
-            // in the grimoire's own Quintessential serif.
-            Tex("Grim_TitleRibbon", new Rectangle(r.X - 2, r.Y, r.Width + 4, r.Height));
-            int ts = Math.Clamp((int)(r.Height * 0.62f), 16, 44);
+            // Maroon ribbon banner, 9-sliced so the folded end-caps keep their
+            // shape while the middle stretches. Title centered in the grimoire's
+            // own Quintessential serif.
+            _widgets!.DrawNineSlice("grim_ribbon", new Rectangle(r.X - 2, r.Y, r.Width + 4, r.Height), null, 1f);
+            int ts = Math.Clamp((int)(r.Height * 0.46f), 16, 40);
             string t = GFit(title, r.Width - 56, ts, FontSerif);
             int tw = GW(t, ts, FontSerif), th = GH(ts, FontSerif);
             GText(t, r.X + (r.Width - tw) / 2, r.Y + (r.Height - th) / 2 - 1,
@@ -527,31 +528,34 @@ public partial class SkillBookPanel : Necroking.UI.IModalLayer
                 bool active = i == _activeTab;
                 bool hover = r.Contains((int)_mouse.X, (int)_mouse.Y);
 
-                // Tan parchment backing + gold InnerCornersButton frame, exactly
-                // like the grimoire school tabs. Idle tabs recede; the active tab
-                // is lifted with a bright wash + a gold underline.
+                // Tan parchment backing + gold InnerCornersButton frame, the same
+                // colour as the grimoire's spell-school tabs (Conjuration etc.).
+                // The backing already reads as warm tan, so idle tabs are left at
+                // that colour (cream outlined text); the active tab is lifted with
+                // a soft warm wash + a gold underline.
                 Tex("Grim_SchoolTab_All_Backing", r);
-                if (active) Fill(r, new Color(255, 236, 184, 64));
-                else Fill(r, new Color(0, 0, 0, 110));
-                if (hover && !active) Fill(r, new Color(255, 245, 210, 28));
+                if (active) Fill(r, new Color(255, 238, 192, 60));
+                else Fill(r, new Color(20, 12, 4, 46)); // a whisper of shade, not a blackout
+                if (hover && !active) Fill(r, new Color(255, 245, 210, 26));
                 Tex("Grim_SchoolTab_All_Frame", r);
-                if (active) Fill(new Rectangle(r.X + 4, r.Bottom - 4, r.Width - 8, 2), GoldBright);
+                if (active) Fill(new Rectangle(r.X + 5, r.Bottom - 4, r.Width - 10, 2), GoldBright);
 
                 var (learned, total) = _state?.GetProgress(tab) ?? (0, tab.Skills.Count);
-                // Grimoire tabs: Roboto label (cream) over a small fraction.
-                int lblSize = Math.Clamp((int)(r.Height * 0.34f), 12, 22);
+                // Grimoire tabs: cream Roboto label (the grimoire's tab colour)
+                // over a small fraction, on every tab.
+                int lblSize = Math.Clamp((int)(r.Height * 0.30f), 13, 22);
                 int frSize = Math.Max(10, lblSize - 5);
-                string label = GFit(tab.DisplayName, r.Width - 10, lblSize, FontSans);
+                string label = GFit(tab.DisplayName, r.Width - 12, lblSize, FontSans);
                 string frac = $"{learned}/{total}";
                 int lblH = GH(lblSize, FontSans), frH = GH(frSize, FontSans);
                 int ty = r.Y + (r.Height - lblH - frH) / 2;
-                Color tc = active ? new Color(54, 36, 14) : new Color(214, 196, 152);
-                Color fc = active ? new Color(86, 60, 26) : new Color(176, 156, 116);
+                Color tc = active ? new Color(248, 232, 188) : new Color(232, 216, 172);
+                Color fc = active ? new Color(212, 188, 138) : new Color(186, 166, 124);
                 GText(label, r.X + (r.Width - GW(label, lblSize, FontSans)) / 2, ty, lblSize, tc, FontSans);
                 GText(frac, r.X + (r.Width - GW(frac, frSize, FontSans)) / 2, ty + lblH, frSize, fc, FontSans);
             }
-            // Ornate header divider beneath the tab strip.
-            int dy = lay.TabBar.Bottom + (int)(4 * gs);
+            // Ornate header divider risen up to sit right under the tab strip.
+            int dy = lay.TabBar.Bottom - (int)(2 * gs);
             Tex("Grim_HeaderDivider", new Rectangle(lay.Content.X, dy, lay.Content.Width, (int)(20 * gs)));
             return;
         }

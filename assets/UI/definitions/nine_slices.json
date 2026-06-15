@@ -134,6 +134,15 @@
       "borderTop": 51,
       "borderBottom": 51,
       "tileEdges": false
+    },
+    {
+      "id": "grim_ribbon",
+      "texture": "assets/UI/Imported/baked_Ribbon6_689x94.png",
+      "borderLeft": 84,
+      "borderRight": 84,
+      "borderTop": 10,
+      "borderBottom": 10,
+      "tileEdges": false
     }
   ]
 }
