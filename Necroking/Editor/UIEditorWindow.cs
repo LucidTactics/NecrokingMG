@@ -65,6 +65,10 @@ public class UIEditorElementDef
     public string Id { get; set; } = "";
     public string Type { get; set; } = "nineSlice";
     public string NineSlice { get; set; } = "";
+    /// <summary>nineSlice type only: multiplier on the nine-slice's border thickness
+    /// for THIS element (1 = the def's native borders). Lets one shared nine-slice
+    /// render thinner/thicker per element without editing the shared def.</summary>
+    public float NineSliceScale { get; set; } = 1f;
     public string ImagePath { get; set; } = "";  // texture path for image type
     public int Width { get; set; } = 100;
     public int Height { get; set; } = 40;
@@ -400,6 +404,7 @@ public partial class UIEditorWindow : EditorBase
                     Id = item.GetStringProp("id"),
                     Type = item.GetStringProp("type", "nineSlice"),
                     NineSlice = item.GetStringProp("nineSlice"),
+                    NineSliceScale = item.GetFloatProp("nineSliceScale", 1f),
                     ImagePath = item.GetStringProp("imagePath"),
                     Width = item.GetIntProp("width", 100),
                     Height = item.GetIntProp("height", 40),
@@ -643,6 +648,8 @@ public partial class UIEditorWindow : EditorBase
             writer.WriteString("type", el.Type);
             if (!string.IsNullOrEmpty(el.NineSlice))
                 writer.WriteString("nineSlice", el.NineSlice);
+            if (System.Math.Abs(el.NineSliceScale - 1f) > 0.001f)
+                writer.WriteNumber("nineSliceScale", el.NineSliceScale);
             if (!string.IsNullOrEmpty(el.ImagePath))
                 writer.WriteString("imagePath", el.ImagePath);
             writer.WriteNumber("width", el.Width);
@@ -1732,6 +1739,10 @@ public partial class UIEditorWindow : EditorBase
             if (newNs == "(none)") newNs = "";
             if (newNs != def.NineSlice) { def.NineSlice = newNs; _unsavedChanges = true; }
             curY += 24;
+            // Per-element border-thickness multiplier on the shared nine-slice.
+            float newScale = DrawFloatField("el_nsscale", "9-Slice Scale", def.NineSliceScale, x + pad, curY, propW, 0.05f);
+            if (System.Math.Abs(newScale - def.NineSliceScale) > 0.001f) { def.NineSliceScale = System.Math.Max(0f, newScale); _unsavedChanges = true; }
+            curY += 24;
         }
 
         // Image path picker (for image type) — uses texture file browser
@@ -1950,7 +1961,7 @@ public partial class UIEditorWindow : EditorBase
             var ns = GetNineSlice(def.NineSlice, "el:" + def.Id);
             if (ns != null)
             {
-                ns.Draw(_sb, elRect, ByteColor(def.TintColor ?? new byte[] { 255, 255, 255, 255 }));
+                ns.Draw(_sb, elRect, ByteColor(def.TintColor ?? new byte[] { 255, 255, 255, 255 }), def.NineSliceScale);
             }
             else
             {
@@ -3330,7 +3341,7 @@ public partial class UIEditorWindow : EditorBase
                 else if (!string.IsNullOrEmpty(elemDef.NineSlice))
                 {
                     var childNs = GetNineSlice(elemDef.NineSlice, "el:" + elemDef.Id);
-                    if (childNs != null) { childNs.Draw(_sb, rect, tint); drawn = true; }
+                    if (childNs != null) { childNs.Draw(_sb, rect, tint, elemDef.NineSliceScale); drawn = true; }
                 }
 
                 // Stroke/outline

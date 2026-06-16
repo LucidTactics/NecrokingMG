@@ -443,7 +443,7 @@ public class RuntimeWidgetRenderer
                 else if (!string.IsNullOrEmpty(elemDef.NineSlice))
                 {
                     var childNs = GetNineSlice(elemDef.NineSlice, "el:" + elemDef.Id);
-                    if (childNs != null) { childNs.Draw(_batch, rect, tint); drawn = true; }
+                    if (childNs != null) { childNs.Draw(_batch, rect, tint, elemDef.NineSliceScale); drawn = true; }
                 }
 
                 // Stroke
@@ -651,7 +651,7 @@ public class RuntimeWidgetRenderer
         // apply — the nine-slice's own borders handle the corners.
         if (elemDef.Type == "nineSlice" && !string.IsNullOrEmpty(elemDef.NineSlice))
         {
-            GetNineSlice(elemDef.NineSlice, "el:" + elemDef.Id)?.Draw(_batch, rect, elemTint);
+            GetNineSlice(elemDef.NineSlice, "el:" + elemDef.Id)?.Draw(_batch, rect, elemTint, elemDef.NineSliceScale);
             return;
         }
         if (elemDef.Type != "image" || string.IsNullOrEmpty(elemDef.ImagePath)) return;
@@ -780,6 +780,7 @@ public class RuntimeWidgetRenderer
                     Id = el.GetProperty("id").GetString() ?? "",
                     Type = el.TryGetProperty("type", out var tp) ? tp.GetString() ?? "nineSlice" : "nineSlice",
                     NineSlice = el.TryGetProperty("nineSlice", out var ns) ? ns.GetString() ?? "" : "",
+                    NineSliceScale = el.TryGetProperty("nineSliceScale", out var nss) ? nss.GetSingle() : 1f,
                     ImagePath = el.TryGetProperty("imagePath", out var ip) ? ip.GetString() ?? "" : "",
                     Width = el.TryGetProperty("width", out var w) ? w.GetInt32() : 100,
                     Height = el.TryGetProperty("height", out var h) ? h.GetInt32() : 40,
