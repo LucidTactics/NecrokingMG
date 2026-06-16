@@ -210,6 +210,9 @@ public partial class UIEditorWindow : EditorBase
     private string _committedState = "";
     private bool _undoInit;
     private int _undoSettle;   // frames to keep snapshotting after activity ends
+    // The editor's shared _prevKb is overwritten at the end of Update, so edge
+    // detection in Draw (where this runs) is unreliable — track our own.
+    private KeyboardState _undoPrevKb;
     private const int UndoMax = 200;
 
     // Hierarchical child tree state (UI11)
@@ -1036,7 +1039,9 @@ public partial class UIEditorWindow : EditorBase
         // settle window — no serialization. Once idle, snapshot for a few frames so
         // a whole drag/keystroke run becomes ONE undo step (and a release-frame
         // adjustment is still caught). Fully-idle frames do nothing.
-        bool busy = LeftHeld || IsTextInputActive || _kb.GetPressedKeyCount() > 0;
+        // "Busy" = mid-edit: a drag, or any key held (covers typing). Not gated on
+        // IsTextInputActive — a merely-focused (idle) field must not block commits.
+        bool busy = LeftHeld || _kb.GetPressedKeyCount() > 0;
         if (busy) { _undoSettle = 3; return; }
         if (_undoSettle <= 0) return;
         _undoSettle--;
@@ -1050,12 +1055,16 @@ public partial class UIEditorWindow : EditorBase
 
     private void HandleUndoRedo()
     {
-        if (IsTextInputActive) return;
+        // Guard against typing a 'z'/'y' into a focused field (text fields don't
+        // filter Ctrl combos); the user clicks out, then undoes.
         bool ctrl = _kb.IsKeyDown(Keys.LeftControl) || _kb.IsKeyDown(Keys.RightControl);
-        if (!ctrl) return;
-        bool shift = _kb.IsKeyDown(Keys.LeftShift) || _kb.IsKeyDown(Keys.RightShift);
-        if (_kb.IsKeyDown(Keys.Z) && _prevKb.IsKeyUp(Keys.Z)) { if (shift) Redo(); else Undo(); }
-        else if (_kb.IsKeyDown(Keys.Y) && _prevKb.IsKeyUp(Keys.Y)) Redo();
+        if (ctrl && !IsTextInputActive)
+        {
+            bool shift = _kb.IsKeyDown(Keys.LeftShift) || _kb.IsKeyDown(Keys.RightShift);
+            if (_kb.IsKeyDown(Keys.Z) && _undoPrevKb.IsKeyUp(Keys.Z)) { if (shift) Redo(); else Undo(); }
+            else if (_kb.IsKeyDown(Keys.Y) && _undoPrevKb.IsKeyUp(Keys.Y)) Redo();
+        }
+        _undoPrevKb = _kb;  // our own prev-frame snapshot for reliable edge detection
     }
 
     private void Undo()
