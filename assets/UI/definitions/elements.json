@@ -10402,8 +10402,7 @@
     },
     {
       "id": "Grim_PathTab_All_Frame",
-      "type": "image",
-      "imagePath": "assets/UI/Imported/baked_InnerCornersButton_54x45.png",
+      "type": "nineSlice",
       "width": 54,
       "height": 45,
       "tintColor": [
@@ -10423,7 +10422,8 @@
         "satStrength": 0.45,
         "valStrength": 0.175,
         "useHcl": false
-      }
+      },
+      "nineSlice": "inner_corners_button"
     },
     {
       "id": "Grim_PathTab_Shock_Backing",
@@ -10452,8 +10452,7 @@
     },
     {
       "id": "Grim_PathTab_Shock_Frame",
-      "type": "image",
-      "imagePath": "assets/UI/Imported/baked_InnerCornersButton_51x45.png",
+      "type": "nineSlice",
       "width": 51,
       "height": 45,
       "tintColor": [
@@ -10473,7 +10472,8 @@
         "satStrength": 0.45,
         "valStrength": 0.175,
         "useHcl": false
-      }
+      },
+      "nineSlice": "inner_corners_button"
     },
     {
       "id": "Grim_PathTab_Shock_Icon",
@@ -10535,8 +10535,7 @@
     },
     {
       "id": "Grim_PathTab_Fire_Frame",
-      "type": "image",
-      "imagePath": "assets/UI/Imported/baked_InnerCornersButton_51x45.png",
+      "type": "nineSlice",
       "width": 51,
       "height": 45,
       "tintColor": [
@@ -10556,7 +10555,8 @@
         "satStrength": 0.45,
         "valStrength": 0.175,
         "useHcl": false
-      }
+      },
+      "nineSlice": "inner_corners_button"
     },
     {
       "id": "Grim_PathTab_Fire_Icon",
@@ -10618,8 +10618,7 @@
     },
     {
       "id": "Grim_PathTab_Metal_Frame",
-      "type": "image",
-      "imagePath": "assets/UI/Imported/baked_InnerCornersButton_51x45.png",
+      "type": "nineSlice",
       "width": 51,
       "height": 45,
       "tintColor": [
@@ -10639,7 +10638,8 @@
         "satStrength": 0.45,
         "valStrength": 0.175,
         "useHcl": false
-      }
+      },
+      "nineSlice": "inner_corners_button"
     },
     {
       "id": "Grim_PathTab_Metal_Icon",
@@ -10701,8 +10701,7 @@
     },
     {
       "id": "Grim_PathTab_Water_Frame",
-      "type": "image",
-      "imagePath": "assets/UI/Imported/baked_InnerCornersButton_51x45.png",
+      "type": "nineSlice",
       "width": 51,
       "height": 45,
       "tintColor": [
@@ -10722,7 +10721,8 @@
         "satStrength": 0.45,
         "valStrength": 0.175,
         "useHcl": false
-      }
+      },
+      "nineSlice": "inner_corners_button"
     },
     {
       "id": "Grim_PathTab_Water_Icon",
@@ -10784,8 +10784,7 @@
     },
     {
       "id": "Grim_PathTab_Heavens_Frame",
-      "type": "image",
-      "imagePath": "assets/UI/Imported/baked_InnerCornersButton_51x45.png",
+      "type": "nineSlice",
       "width": 51,
       "height": 45,
       "tintColor": [
@@ -10805,7 +10804,8 @@
         "satStrength": 0.45,
         "valStrength": 0.175,
         "useHcl": false
-      }
+      },
+      "nineSlice": "inner_corners_button"
     },
     {
       "id": "Grim_PathTab_Heavens_Icon",
@@ -10867,8 +10867,7 @@
     },
     {
       "id": "Grim_PathTab_Order_Frame",
-      "type": "image",
-      "imagePath": "assets/UI/Imported/baked_InnerCornersButton_51x45.png",
+      "type": "nineSlice",
       "width": 51,
       "height": 45,
       "tintColor": [
@@ -10888,7 +10887,8 @@
         "satStrength": 0.45,
         "valStrength": 0.175,
         "useHcl": false
-      }
+      },
+      "nineSlice": "inner_corners_button"
     },
     {
       "id": "Grim_PathTab_Order_Icon",
@@ -10950,8 +10950,7 @@
     },
     {
       "id": "Grim_PathTab_Earth_Frame",
-      "type": "image",
-      "imagePath": "assets/UI/Imported/baked_InnerCornersButton_51x45.png",
+      "type": "nineSlice",
       "width": 51,
       "height": 45,
       "tintColor": [
@@ -10971,7 +10970,8 @@
         "satStrength": 0.45,
         "valStrength": 0.175,
         "useHcl": false
-      }
+      },
+      "nineSlice": "inner_corners_button"
     },
     {
       "id": "Grim_PathTab_Earth_Icon",
@@ -11033,8 +11033,7 @@
     },
     {
       "id": "Grim_PathTab_Chaos_Frame",
-      "type": "image",
-      "imagePath": "assets/UI/Imported/baked_InnerCornersButton_51x45.png",
+      "type": "nineSlice",
       "width": 51,
       "height": 45,
       "tintColor": [
@@ -11054,7 +11053,8 @@
         "satStrength": 0.45,
         "valStrength": 0.175,
         "useHcl": false
-      }
+      },
+      "nineSlice": "inner_corners_button"
     },
     {
       "id": "Grim_PathTab_Chaos_Icon",
@@ -11116,8 +11116,7 @@
     },
     {
       "id": "Grim_PathTab_Spirit_Frame",
-      "type": "image",
-      "imagePath": "assets/UI/Imported/baked_InnerCornersButton_51x45.png",
+      "type": "nineSlice",
       "width": 51,
       "height": 45,
       "tintColor": [
@@ -11137,7 +11136,8 @@
         "satStrength": 0.45,
         "valStrength": 0.175,
         "useHcl": false
-      }
+      },
+      "nineSlice": "inner_corners_button"
     },
     {
       "id": "Grim_PathTab_Spirit_Icon",
@@ -11199,8 +11199,7 @@
     },
     {
       "id": "Grim_PathTab_Nature_Frame",
-      "type": "image",
-      "imagePath": "assets/UI/Imported/baked_InnerCornersButton_51x45.png",
+      "type": "nineSlice",
       "width": 51,
       "height": 45,
       "tintColor": [
@@ -11220,7 +11219,8 @@
         "satStrength": 0.45,
         "valStrength": 0.175,
         "useHcl": false
-      }
+      },
+      "nineSlice": "inner_corners_button"
     },
     {
       "id": "Grim_PathTab_Nature_Icon",
@@ -11282,8 +11282,7 @@
     },
     {
       "id": "Grim_PathTab_Body_Frame",
-      "type": "image",
-      "imagePath": "assets/UI/Imported/baked_InnerCornersButton_51x45.png",
+      "type": "nineSlice",
       "width": 51,
       "height": 45,
       "tintColor": [
@@ -11303,7 +11302,8 @@
         "satStrength": 0.45,
         "valStrength": 0.175,
         "useHcl": false
-      }
+      },
+      "nineSlice": "inner_corners_button"
     },
     {
       "id": "Grim_PathTab_Body_Icon",
@@ -11365,8 +11365,7 @@
     },
     {
       "id": "Grim_PathTab_Death_Frame",
-      "type": "image",
-      "imagePath": "assets/UI/Imported/baked_InnerCornersButton_51x45.png",
+      "type": "nineSlice",
       "width": 51,
       "height": 45,
       "tintColor": [
@@ -11386,7 +11385,8 @@
         "satStrength": 0.45,
         "valStrength": 0.175,
         "useHcl": false
-      }
+      },
+      "nineSlice": "inner_corners_button"
     },
     {
       "id": "Grim_PathTab_Death_Icon",
@@ -11485,8 +11485,7 @@
     },
     {
       "id": "Grim_SchoolTab_All_Frame",
-      "type": "image",
-      "imagePath": "assets/UI/Imported/baked_InnerCornersButton_82x35.png",
+      "type": "nineSlice",
       "width": 82,
       "height": 35,
       "tintColor": [
@@ -11506,7 +11505,8 @@
         "satStrength": 0.45,
         "valStrength": 0.175,
         "useHcl": false
-      }
+      },
+      "nineSlice": "inner_corners_button"
     },
     {
       "id": "Grim_SchoolTab_Conjuration_Backing",
@@ -11572,8 +11572,7 @@
     },
     {
       "id": "Grim_SchoolTab_Conjuration_Frame",
-      "type": "image",
-      "imagePath": "assets/UI/Imported/baked_InnerCornersButton_144x35.png",
+      "type": "nineSlice",
       "width": 144,
       "height": 35,
       "tintColor": [
@@ -11593,7 +11592,8 @@
         "satStrength": 0.45,
         "valStrength": 0.175,
         "useHcl": false
-      }
+      },
+      "nineSlice": "inner_corners_button"
     },
     {
       "id": "Grim_SchoolTab_Alteration_Backing",
@@ -11659,8 +11659,7 @@
     },
     {
       "id": "Grim_SchoolTab_Alteration_Frame",
-      "type": "image",
-      "imagePath": "assets/UI/Imported/baked_InnerCornersButton_144x35.png",
+      "type": "nineSlice",
       "width": 144,
       "height": 35,
       "tintColor": [
@@ -11680,7 +11679,8 @@
         "satStrength": 0.45,
         "valStrength": 0.175,
         "useHcl": false
-      }
+      },
+      "nineSlice": "inner_corners_button"
     },
     {
       "id": "Grim_SchoolTab_Evocation_Backing",
@@ -11746,8 +11746,7 @@
     },
     {
       "id": "Grim_SchoolTab_Evocation_Frame",
-      "type": "image",
-      "imagePath": "assets/UI/Imported/baked_InnerCornersButton_144x35.png",
+      "type": "nineSlice",
       "width": 144,
       "height": 35,
       "tintColor": [
@@ -11767,7 +11766,8 @@
         "satStrength": 0.45,
         "valStrength": 0.175,
         "useHcl": false
-      }
+      },
+      "nineSlice": "inner_corners_button"
     },
     {
       "id": "Grim_SchoolTab_Construction_Backing",
@@ -11833,8 +11833,7 @@
     },
     {
       "id": "Grim_SchoolTab_Construction_Frame",
-      "type": "image",
-      "imagePath": "assets/UI/Imported/baked_InnerCornersButton_144x35.png",
+      "type": "nineSlice",
       "width": 144,
       "height": 35,
       "tintColor": [
@@ -11854,7 +11853,8 @@
         "satStrength": 0.45,
         "valStrength": 0.175,
         "useHcl": false
-      }
+      },
+      "nineSlice": "inner_corners_button"
     },
     {
       "id": "Grim_TitleRibbon",
@@ -11978,8 +11978,7 @@
     },
     {
       "id": "GMT_2",
-      "type": "image",
-      "imagePath": "assets/UI/Imported/baked_SpiderFrame84px_315x72.png",
+      "type": "nineSlice",
       "width": 315,
       "height": 72,
       "tintColor": [
@@ -11999,7 +11998,8 @@
         "satStrength": 0.133,
         "valStrength": 0.255,
         "useHcl": false
-      }
+      },
+      "nineSlice": "spider_frame"
     },
     {
       "id": "GMT_3",
@@ -12696,8 +12696,7 @@
     },
     {
       "id": "SkillTab_Frame",
-      "type": "image",
-      "imagePath": "assets/UI/Imported/baked_InnerCornersButton_82x35.png",
+      "type": "nineSlice",
       "width": 82,
       "height": 35,
       "tintColor": [
@@ -12717,7 +12716,8 @@
         "satStrength": 0.45,
         "valStrength": 0.175,
         "useHcl": false
-      }
+      },
+      "nineSlice": "inner_corners_button"
     },
     {
       "id": "SkillTab_Frac",
@@ -12820,8 +12820,7 @@
     },
     {
       "id": "SkillTile_Frame",
-      "type": "image",
-      "imagePath": "assets/UI/Imported/baked_SpiderFrame84px_315x72.png",
+      "type": "nineSlice",
       "width": 315,
       "height": 72,
       "tintColor": [
@@ -12841,7 +12840,8 @@
         "satStrength": 0.133,
         "valStrength": 0.255,
         "useHcl": false
-      }
+      },
+      "nineSlice": "spider_frame"
     },
     {
       "id": "SkillTile_Underline",

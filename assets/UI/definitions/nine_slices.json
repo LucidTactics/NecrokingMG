@@ -80,6 +80,24 @@
       "borderTop": 51,
       "borderBottom": 51,
       "tileEdges": true
+    },
+    {
+      "id": "spider_frame",
+      "texture": "assets/UI/Imported/SpiderFrame84px.png",
+      "borderLeft": 16,
+      "borderRight": 16,
+      "borderTop": 16,
+      "borderBottom": 16,
+      "tileEdges": false
+    },
+    {
+      "id": "inner_corners_button",
+      "texture": "assets/UI/Imported/InnerCornersButton.png",
+      "borderLeft": 14,
+      "borderRight": 14,
+      "borderTop": 14,
+      "borderBottom": 14,
+      "tileEdges": false
     }
   ]
 }
