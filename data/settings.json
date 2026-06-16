@@ -114,7 +114,7 @@
     "roundDuration": 3
   },
   "fogOfWar": {
-    "mode": 1,
+    "mode": 3,
     "defaultSightRange": 10,
     "unexploredAlpha": 1,
     "foggedAlpha": 0.7

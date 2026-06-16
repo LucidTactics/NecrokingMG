@@ -305,7 +305,7 @@ public partial class HUDRenderer
             if (slotSpellId == "melee_gather")
                 Text(_smallFont, "Melee", new Vector2(inner.X + 1, inner.Center.Y - 6), SpellNameColor);
             // Hotkey label, just inside the frame at the parchment's top-left.
-            Text(_smallFont, keys[s], new Vector2(inner.X, inner.Y - 2), KeyLabelColor);
+            Text(_smallFont, keys[s], new Vector2(inner.X + 3, inner.Y), KeyLabelColor);
         }
     }
 

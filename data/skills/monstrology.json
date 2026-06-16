@@ -4,9 +4,9 @@
     {
       "id": "monster_summoner",
       "name": "Monster Summoner",
-      "description": "Monster Limit +1.\nUnlock Deer Zombie and Juvenile Wolf zombie.\nKill a Monster.",
-      "x": 480,
-      "y": 60,
+      "description": "Monster Limit \u002B1.\nUnlock Deer Zombie and Juvenile Wolf zombie.\nKill a Monster.",
+      "x": 579,
+      "y": -438,
       "parents": [],
       "costs": [
         {
@@ -22,8 +22,8 @@
       "id": "improved_monstrology",
       "name": "Improved Monstrology",
       "description": "Allows adding a potion to zombies in the reanimation process.\nCost 5 Skill Research Points.",
-      "x": 200,
-      "y": 200,
+      "x": -84,
+      "y": -247,
       "parents": [
         "monster_summoner"
       ],
@@ -40,9 +40,9 @@
     {
       "id": "monsterous_pets",
       "name": "Monsterous Pets",
-      "description": "Monster Limit +3.\nCost 5 Skill Research Points.",
-      "x": 480,
-      "y": 200,
+      "description": "Monster Limit \u002B3.\nCost 5 Skill Research Points.",
+      "x": 382,
+      "y": -247,
       "parents": [
         "monster_summoner"
       ],
@@ -60,8 +60,8 @@
       "id": "wolf_autopsy",
       "name": "Wolf Autopsy",
       "description": "Unlocks Wolf Zombies.\nCost 5 Skill Research Points.",
-      "x": 760,
-      "y": 200,
+      "x": 1080,
+      "y": -249,
       "parents": [
         "monster_summoner"
       ],
@@ -79,8 +79,8 @@
       "id": "boar_autopsy",
       "name": "Boar Autopsy",
       "description": "Unlocks Boar Zombies.\nCost 5 Skill Research Points.",
-      "x": 320,
-      "y": 320,
+      "x": 343,
+      "y": 96,
       "parents": [
         "monsterous_pets"
       ],
@@ -97,9 +97,9 @@
     {
       "id": "monsterous_horde",
       "name": "Monsterous Horde",
-      "description": "Monster Limit +5.\nCost 5 Skill Research Points.",
-      "x": 480,
-      "y": 320,
+      "description": "Monster Limit \u002B5.\nCost 5 Skill Research Points.",
+      "x": -82,
+      "y": -60,
       "parents": [
         "monsterous_pets"
       ],
@@ -117,8 +117,8 @@
       "id": "dire_wolf_reanimation",
       "name": "Dire Wolf Reanimation",
       "description": "Unlocks Dire Wolf Zombies.\nCost 5 Skill Research Points.",
-      "x": 660,
-      "y": 320,
+      "x": 700,
+      "y": -63,
       "parents": [
         "wolf_autopsy"
       ],
@@ -136,8 +136,8 @@
       "id": "wolf_lunge",
       "name": "Wolf Lunge",
       "description": "Wolf zombies gain a lunge attack.\nCost 5 Skill Research Points.",
-      "x": 840,
-      "y": 320,
+      "x": 1229,
+      "y": -56,
       "parents": [
         "wolf_autopsy"
       ],
@@ -155,8 +155,8 @@
       "id": "boar_charge",
       "name": "Boar Charge",
       "description": "Boar zombies gain a trample attack.\nCost 5 Skill Research Points.",
-      "x": 160,
-      "y": 440,
+      "x": 84,
+      "y": 284,
       "parents": [
         "boar_autopsy"
       ],
@@ -174,8 +174,8 @@
       "id": "ancient_boar_reanimation",
       "name": "Ancient Boar Reanimation",
       "description": "Unlocks Ancient Boar Zombies.\nCost 5 Skill Research Points.",
-      "x": 320,
-      "y": 440,
+      "x": 574,
+      "y": 280,
       "parents": [
         "boar_autopsy"
       ],
@@ -192,9 +192,9 @@
     {
       "id": "monsterous_army",
       "name": "Monsterous Army",
-      "description": "Monster Limit +7.\nCost 5 Skill Research Points.",
-      "x": 480,
-      "y": 440,
+      "description": "Monster Limit \u002B7.\nCost 5 Skill Research Points.",
+      "x": 42,
+      "y": 492,
       "parents": [
         "monsterous_horde"
       ],
@@ -212,8 +212,8 @@
       "id": "bear_autopsy",
       "name": "Bear Autopsy",
       "description": "Unlocks Bear Zombies.\nCost 5 Skill Research Points.",
-      "x": 760,
-      "y": 440,
+      "x": 632,
+      "y": 679,
       "parents": [
         "monsterous_army"
       ],
@@ -230,9 +230,9 @@
     {
       "id": "monsterous_legion",
       "name": "Monsterous Legion",
-      "description": "Monster Limit +10.\nCost 5 Skill Research Points.",
-      "x": 480,
-      "y": 560,
+      "description": "Monster Limit \u002B10.\nCost 5 Skill Research Points.",
+      "x": 35,
+      "y": 684,
       "parents": [
         "monsterous_army"
       ],
@@ -249,9 +249,9 @@
     {
       "id": "corpse_eater",
       "name": "Corpse Eater",
-      "description": "Bears & Wolves may eat corpses that are >10 seconds old.\nGain 5 Max HP. Stack once.\nCost 5 Skill Research Points.",
-      "x": 640,
-      "y": 560,
+      "description": "Bears \u0026 Wolves may eat corpses that are \u003E10 seconds old.\nGain 5 Max HP. Stack once.\nCost 5 Skill Research Points.",
+      "x": 637,
+      "y": 849,
       "parents": [
         "bear_autopsy"
       ],
@@ -268,9 +268,9 @@
     {
       "id": "improved_corpse_eating",
       "name": "Improved Corpse Eating",
-      "description": "Bears & Wolves may eat corpses that are >10 seconds old.\nGain 5 Max HP + 1 Str. Stack Twice.\nCost 5 Skill Research Points.",
-      "x": 640,
-      "y": 660,
+      "description": "Bears \u0026 Wolves may eat corpses that are \u003E10 seconds old.\nGain 5 Max HP \u002B 1 Str. Stack Twice.\nCost 5 Skill Research Points.",
+      "x": 668,
+      "y": 1005,
       "parents": [
         "corpse_eater"
       ],
@@ -288,8 +288,8 @@
       "id": "bear_sweep",
       "name": "Bear Sweep",
       "description": "Bear zombies gain a sweep attack.\nCost 5 Skill Research Points.",
-      "x": 960,
-      "y": 560,
+      "x": 158,
+      "y": 865,
       "parents": [
         "bear_autopsy"
       ],
@@ -307,8 +307,8 @@
       "id": "ancient_bear_reanimation",
       "name": "Ancient Bear Reanimation",
       "description": "Unlocks Ancient Bear Zombies.\nCost 5 Skill Research Points.",
-      "x": 800,
-      "y": 560,
+      "x": 1118,
+      "y": 847,
       "parents": [
         "bear_autopsy"
       ],

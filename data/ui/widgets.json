@@ -8190,7 +8190,7 @@
           "name": "HeaderDivider",
           "element": "Grim_HeaderDivider",
           "x": 24,
-          "y": 131,
+          "y": 126,
           "width": 1030,
           "height": 17,
           "anchor": 0
@@ -8198,7 +8198,7 @@
         {
           "name": "TabStripRibbon",
           "element": "Grim_TabStripRibbon",
-          "x": 27,
+          "x": 25,
           "y": 91,
           "width": 1027,
           "height": 40,
@@ -8207,8 +8207,8 @@
         {
           "name": "TabBar",
           "widget": "TabBar",
-          "x": 24,
-          "y": 99,
+          "x": 30,
+          "y": 95,
           "width": 1027,
           "height": 35,
           "anchor": 0
@@ -8237,7 +8237,7 @@
     },
     {
       "id": "SkillBookTab",
-      "width": 128,
+      "width": 188,
       "height": 35,
       "backgroundScale": 1,
       "modal": false,
@@ -8247,7 +8247,7 @@
           "element": "SkillTab_Backing",
           "x": 0,
           "y": 0,
-          "width": 128,
+          "width": 188,
           "height": 35,
           "anchor": 0
         },
@@ -8256,7 +8256,7 @@
           "element": "SkillTab_Name",
           "x": 2,
           "y": 3,
-          "width": 124,
+          "width": 188,
           "height": 19,
           "anchor": 0
         },
@@ -8265,7 +8265,7 @@
           "element": "SkillTab_Frac",
           "x": 2,
           "y": 21,
-          "width": 124,
+          "width": 188,
           "height": 12,
           "anchor": 0
         },
@@ -8274,21 +8274,22 @@
           "element": "SkillTab_Frame",
           "x": 0,
           "y": 0,
-          "width": 128,
+          "width": 188,
           "height": 35,
-          "anchor": 0
+          "anchor": 0,
+          "nineSliceScale": 0.8
         }
       ]
     },
     {
       "id": "TabBar",
-      "width": 1003,
+      "width": 1000,
       "height": 35,
       "backgroundScale": 1,
       "modal": false,
       "layout": "horizontal",
       "layoutPadding": 0,
-      "layoutSpacing": 1,
+      "layoutSpacing": 61,
       "layoutPadTop": 0,
       "layoutPadBottom": 0,
       "layoutPadLeft": 0,
@@ -8434,6 +8435,7 @@
       "width": 60,
       "height": 60,
       "backgroundScale": 0.1,
+      "frameScale": 0.7,
       "backgroundTint": [
         255,
         255,

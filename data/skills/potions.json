@@ -5,7 +5,8 @@
       "id": "skill_paralysis",
       "name": "Paralysis Potion",
       "description": "Unlocks Paralysis Potion. Auto-learned the first time you collect any mushroom.",
-      "x": 640, "y": 80,
+      "x": 629,
+      "y": -488,
       "parents": [],
       "costs": [],
       "effect": "unlock_potion",
@@ -16,10 +17,17 @@
       "id": "skill_reanimation",
       "name": "Reanimation Potion",
       "description": "Unlocks Reanimation Potion.",
-      "x": 460, "y": 240,
-      "parents": ["skill_paralysis"],
+      "x": 359,
+      "y": -264,
+      "parents": [
+        "skill_paralysis"
+      ],
       "costs": [
-        { "type": "skillpoints", "id": "potions", "amount": 5 }
+        {
+          "type": "skillpoints",
+          "id": "potions",
+          "amount": 5
+        }
       ],
       "effect": "unlock_potion",
       "effectArg": "potion_reanimation"
@@ -27,11 +35,18 @@
     {
       "id": "skill_death_evolution",
       "name": "Death Evolution Potion",
-      "description": "Unlocks the Death Evolution Potion recipe — the currency for metamorphosis evolutions.",
-      "x": 820, "y": 240,
-      "parents": ["skill_paralysis"],
+      "description": "Unlocks the Death Evolution Potion recipe \u2014 the currency for metamorphosis evolutions.",
+      "x": 903,
+      "y": -264,
+      "parents": [
+        "skill_paralysis"
+      ],
       "costs": [
-        { "type": "skillpoints", "id": "potions", "amount": 5 }
+        {
+          "type": "skillpoints",
+          "id": "potions",
+          "amount": 5
+        }
       ],
       "effect": "unlock_potion",
       "effectArg": "potion_death_evolution"
@@ -40,10 +55,17 @@
       "id": "skill_enlargement",
       "name": "Enlargement Potion",
       "description": "Unlocks Enlargement Potion.",
-      "x": 360, "y": 400,
-      "parents": ["skill_reanimation"],
+      "x": 252,
+      "y": 29,
+      "parents": [
+        "skill_reanimation"
+      ],
       "costs": [
-        { "type": "skillpoints", "id": "potions", "amount": 5 }
+        {
+          "type": "skillpoints",
+          "id": "potions",
+          "amount": 5
+        }
       ],
       "effect": "unlock_potion",
       "effectArg": "potion_enlargement"
@@ -52,10 +74,17 @@
       "id": "skill_poison",
       "name": "Poison Potion",
       "description": "Unlocks Poison Potion.",
-      "x": 920, "y": 400,
-      "parents": ["skill_reanimation"],
+      "x": 791,
+      "y": 35,
+      "parents": [
+        "skill_reanimation"
+      ],
       "costs": [
-        { "type": "skillpoints", "id": "potions", "amount": 5 }
+        {
+          "type": "skillpoints",
+          "id": "potions",
+          "amount": 5
+        }
       ],
       "effect": "unlock_potion",
       "effectArg": "potion_poison"
@@ -64,10 +93,17 @@
       "id": "skill_greater_reanimation",
       "name": "Greater Reanimation Potion",
       "description": "Unlocks Greater Reanimation Potion.",
-      "x": 220, "y": 560,
-      "parents": ["skill_enlargement"],
+      "x": 252,
+      "y": 273,
+      "parents": [
+        "skill_enlargement"
+      ],
       "costs": [
-        { "type": "skillpoints", "id": "potions", "amount": 5 }
+        {
+          "type": "skillpoints",
+          "id": "potions",
+          "amount": 5
+        }
       ],
       "effect": "unlock_potion",
       "effectArg": "potion_greater_reanimation"
@@ -76,10 +112,17 @@
       "id": "skill_death_poison",
       "name": "Death Poison",
       "description": "Unlocks Death Poison potion.",
-      "x": 800, "y": 560,
-      "parents": ["skill_poison"],
+      "x": 484,
+      "y": 522,
+      "parents": [
+        "skill_poison"
+      ],
       "costs": [
-        { "type": "skillpoints", "id": "potions", "amount": 5 }
+        {
+          "type": "skillpoints",
+          "id": "potions",
+          "amount": 5
+        }
       ],
       "effect": "unlock_potion",
       "effectArg": "potion_death_poison"
@@ -87,11 +130,18 @@
     {
       "id": "skill_efficient_tinctures",
       "name": "Efficient Tinctures",
-      "description": "Passive — 25% chance to craft any potion without consuming the ingredients.",
-      "x": 1060, "y": 560,
-      "parents": ["skill_poison"],
+      "description": "Passive \u2014 25% chance to craft any potion without consuming the ingredients.",
+      "x": 1031,
+      "y": 524,
+      "parents": [
+        "skill_poison"
+      ],
       "costs": [
-        { "type": "skillpoints", "id": "potions", "amount": 5 }
+        {
+          "type": "skillpoints",
+          "id": "potions",
+          "amount": 5
+        }
       ],
       "effect": "passive_stat",
       "effectArg": "efficient_tinctures"

@@ -4,11 +4,16 @@
     {
       "id": "brothers_keeper",
       "name": "Brothers Keeper",
-      "description": "Human Limit +1.\nUnlock Basic Humanoid Zombies.\nKill a human.",
-      "x": 480, "y": 60,
+      "description": "Human Limit \u002B1.\nUnlock Basic Humanoid Zombies.\nKill a human.",
+      "x": 480,
+      "y": 60,
       "parents": [],
       "costs": [
-        { "type": "event", "id": "human_kill", "amount": 1 }
+        {
+          "type": "event",
+          "id": "human_kill",
+          "amount": 1
+        }
       ],
       "effect": "cap_buff",
       "effectArg": "human:1"

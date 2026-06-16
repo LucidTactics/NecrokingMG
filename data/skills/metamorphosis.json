@@ -4,11 +4,16 @@
     {
       "id": "corpse_eating",
       "name": "Corpse Eating",
-      "description": "Consume a target corpse. Heal 10 HP and gain 1 Max HP (capped at +5 total).",
-      "x": 640, "y": 80,
+      "description": "Consume a target corpse. Heal 10 HP and gain 1 Max HP (capped at \u002B5 total).",
+      "x": 688,
+      "y": -701,
       "parents": [],
       "costs": [
-        { "type": "item", "id": "potion_death_evolution", "amount": 5 }
+        {
+          "type": "item",
+          "id": "potion_death_evolution",
+          "amount": 5
+        }
       ],
       "effect": "metamorph_action",
       "effectArg": "corpse_eating"
@@ -16,11 +21,18 @@
     {
       "id": "become_pale_acolyte",
       "name": "Become Pale Acolyte",
-      "description": "Evolve into Pale Acolyte — proficient in death magic.",
-      "x": 640, "y": 220,
-      "parents": ["corpse_eating"],
+      "description": "Evolve into Pale Acolyte \u2014 proficient in death magic.",
+      "x": 709,
+      "y": -432,
+      "parents": [
+        "corpse_eating"
+      ],
       "costs": [
-        { "type": "item", "id": "potion_death_evolution", "amount": 5 }
+        {
+          "type": "item",
+          "id": "potion_death_evolution",
+          "amount": 5
+        }
       ],
       "effect": "morph_necromancer",
       "effectArg": "pale_acolyte"
@@ -28,11 +40,18 @@
     {
       "id": "death_fog_consumption",
       "name": "Death Fog Consumption",
-      "description": "Gradually consume the death fog you stand in, turning it into mana (+2 mana regen while in fog).",
-      "x": 150, "y": 400,
-      "parents": ["become_pale_acolyte"],
+      "description": "Gradually consume the death fog you stand in, turning it into mana (\u002B2 mana regen while in fog).",
+      "x": 151,
+      "y": 421,
+      "parents": [
+        "become_pale_acolyte"
+      ],
       "costs": [
-        { "type": "item", "id": "potion_death_evolution", "amount": 5 }
+        {
+          "type": "item",
+          "id": "potion_death_evolution",
+          "amount": 5
+        }
       ],
       "effect": "passive_stat",
       "effectArg": "death_fog_consumption"
@@ -40,12 +59,21 @@
     {
       "id": "become_wight",
       "name": "Become Wight",
-      "description": "Evolve into Wight — much more proficient in combat. Gains power from eating corpses.",
-      "x": 440, "y": 400,
-      "parents": ["become_pale_acolyte"],
-      "exclusiveOf": ["become_necromancer"],
+      "description": "Evolve into Wight \u2014 much more proficient in combat. Gains power from eating corpses.",
+      "x": 179,
+      "y": -130,
+      "parents": [
+        "become_pale_acolyte"
+      ],
+      "exclusiveOf": [
+        "become_necromancer"
+      ],
       "costs": [
-        { "type": "item", "id": "potion_death_evolution", "amount": 5 }
+        {
+          "type": "item",
+          "id": "potion_death_evolution",
+          "amount": 5
+        }
       ],
       "effect": "morph_necromancer",
       "effectArg": "wight"
@@ -53,12 +81,21 @@
     {
       "id": "become_necromancer",
       "name": "Become Necromancer",
-      "description": "Evolve into Necromancer — proficient in death magic.",
-      "x": 730, "y": 400,
-      "parents": ["become_pale_acolyte"],
-      "exclusiveOf": ["become_wight"],
+      "description": "Evolve into Necromancer \u2014 proficient in death magic.",
+      "x": 1262,
+      "y": -153,
+      "parents": [
+        "become_pale_acolyte"
+      ],
+      "exclusiveOf": [
+        "become_wight"
+      ],
       "costs": [
-        { "type": "item", "id": "potion_death_evolution", "amount": 5 }
+        {
+          "type": "item",
+          "id": "potion_death_evolution",
+          "amount": 5
+        }
       ],
       "effect": "morph_necromancer",
       "effectArg": "necromancer"
@@ -66,11 +103,18 @@
     {
       "id": "unholy_movement",
       "name": "Unholy Movement",
-      "description": "+5 movement speed.",
-      "x": 1020, "y": 400,
-      "parents": ["become_pale_acolyte"],
+      "description": "\u002B5 movement speed.",
+      "x": 1263,
+      "y": 402,
+      "parents": [
+        "become_pale_acolyte"
+      ],
       "costs": [
-        { "type": "item", "id": "potion_death_evolution", "amount": 5 }
+        {
+          "type": "item",
+          "id": "potion_death_evolution",
+          "amount": 5
+        }
       ],
       "effect": "passive_stat",
       "effectArg": "unholy_movement"
@@ -78,11 +122,18 @@
     {
       "id": "unholy_strength",
       "name": "Unholy Strength",
-      "description": "+4 strength.",
-      "x": 1310, "y": 400,
-      "parents": ["become_pale_acolyte"],
+      "description": "\u002B4 strength.",
+      "x": 728,
+      "y": 135,
+      "parents": [
+        "become_pale_acolyte"
+      ],
       "costs": [
-        { "type": "item", "id": "potion_death_evolution", "amount": 5 }
+        {
+          "type": "item",
+          "id": "potion_death_evolution",
+          "amount": 5
+        }
       ],
       "effect": "passive_stat",
       "effectArg": "unholy_strength"
@@ -90,12 +141,20 @@
     {
       "id": "soul_consumption",
       "name": "Soul Consumption",
-      "description": "Consume a target human corpse. Heal 10 mana and gain 1 Max Mana (capped at +10 total).",
-      "x": 585, "y": 580,
+      "description": "Consume a target human corpse. Heal 10 mana and gain 1 Max Mana (capped at \u002B10 total).",
+      "x": 715,
+      "y": 669,
       "parents": [],
-      "parentsAny": ["become_wight", "become_necromancer"],
+      "parentsAny": [
+        "become_wight",
+        "become_necromancer"
+      ],
       "costs": [
-        { "type": "item", "id": "potion_death_evolution", "amount": 5 }
+        {
+          "type": "item",
+          "id": "potion_death_evolution",
+          "amount": 5
+        }
       ],
       "effect": "metamorph_action",
       "effectArg": "soul_consumption"
@@ -103,12 +162,21 @@
     {
       "id": "become_lich",
       "name": "Become Lich",
-      "description": "Evolve into Lich — much more immortal. Gains power from eating corpses.",
-      "x": 440, "y": 740,
-      "parents": ["soul_consumption"],
-      "exclusiveOf": ["become_grand_necromancer"],
+      "description": "Evolve into Lich \u2014 much more immortal. Gains power from eating corpses.",
+      "x": 262,
+      "y": 1012,
+      "parents": [
+        "soul_consumption"
+      ],
+      "exclusiveOf": [
+        "become_grand_necromancer"
+      ],
       "costs": [
-        { "type": "item", "id": "potion_death_evolution", "amount": 5 }
+        {
+          "type": "item",
+          "id": "potion_death_evolution",
+          "amount": 5
+        }
       ],
       "effect": "morph_necromancer",
       "effectArg": "lich"
@@ -116,12 +184,21 @@
     {
       "id": "become_grand_necromancer",
       "name": "Become Grand Necromancer",
-      "description": "Evolve into Grand Necromancer — proficient in death magic.",
-      "x": 730, "y": 740,
-      "parents": ["soul_consumption"],
-      "exclusiveOf": ["become_lich"],
+      "description": "Evolve into Grand Necromancer \u2014 proficient in death magic.",
+      "x": 1217,
+      "y": 990,
+      "parents": [
+        "soul_consumption"
+      ],
+      "exclusiveOf": [
+        "become_lich"
+      ],
       "costs": [
-        { "type": "item", "id": "potion_death_evolution", "amount": 5 }
+        {
+          "type": "item",
+          "id": "potion_death_evolution",
+          "amount": 5
+        }
       ],
       "effect": "morph_necromancer",
       "effectArg": "grand_necromancer"
