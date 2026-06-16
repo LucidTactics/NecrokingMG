@@ -117,6 +117,10 @@ public class UIEditorChildDef
     public string DefaultText { get; set; } = "";
     public UIEditorTints? Tints { get; set; }
     public bool IgnoreLayout { get; set; }
+    /// <summary>nineSlice-element children only: per-instance multiplier on the
+    /// element's border thickness (composes with the element's own NineSliceScale),
+    /// so one shared nine-slice element can render thinner/thicker per child.</summary>
+    public float NineSliceScale { get; set; } = 1f;
 
     // RI21: Text override per-child
     public bool HasTextOverride { get; set; }
@@ -517,6 +521,7 @@ public partial class UIEditorWindow : EditorBase
                             Height = ch.GetIntProp("height"),
                             Anchor = ch.GetIntProp("anchor"),
                             SizeMode = ch.GetStringProp("sizeMode"),
+                            NineSliceScale = ch.GetFloatProp("nineSliceScale", 1f),
                             Interactive = ch.GetBoolProp("interactive"),
                             DefaultText = ch.GetStringProp("defaultText"),
                             IgnoreLayout = ch.GetBoolProp("ignoreLayout"),
@@ -802,6 +807,8 @@ public partial class UIEditorWindow : EditorBase
                     writer.WriteNumber("anchor", ch.Anchor);
                     if (!string.IsNullOrEmpty(ch.SizeMode))
                         writer.WriteString("sizeMode", ch.SizeMode);
+                    if (System.Math.Abs(ch.NineSliceScale - 1f) > 0.001f)
+                        writer.WriteNumber("nineSliceScale", ch.NineSliceScale);
                     if (ch.Interactive)
                     {
                         writer.WriteBoolean("interactive", true);
@@ -2583,6 +2590,24 @@ public partial class UIEditorWindow : EditorBase
         EndClip();
     }
 
+    /// <summary>Navigate the editor to the element / sub-widget a child references —
+    /// switch to its tab and select it, clearing the current child selection.</summary>
+    private void GoToChildTarget(UIEditorChildDef child)
+    {
+        if (!string.IsNullOrEmpty(child.Element))
+        {
+            for (int i = 0; i < _elements.Count; i++)
+                if (_elements[i].Id == child.Element)
+                { ActiveTab = UIEditorTab.Elements; SelectedIndex = i; _selectedChildIdx = -1; _selectedChildPath.Clear(); return; }
+        }
+        else if (!string.IsNullOrEmpty(child.Widget))
+        {
+            for (int i = 0; i < _widgets.Count; i++)
+                if (_widgets[i].Id == child.Widget)
+                { ActiveTab = UIEditorTab.Widgets; SelectedIndex = i; _selectedChildIdx = -1; _selectedChildPath.Clear(); return; }
+        }
+    }
+
     private void DrawChildProperties(UIEditorChildDef child, int x, int y, int propW)
     {
         int curY = y;
@@ -2634,6 +2659,26 @@ public partial class UIEditorWindow : EditorBase
             }
         }
         curY += 22;
+
+        // Go to the referenced element / sub-widget in its own tab.
+        string goTarget = !string.IsNullOrEmpty(child.Element) ? child.Element
+                        : !string.IsNullOrEmpty(child.Widget) ? child.Widget : "";
+        if (!string.IsNullOrEmpty(goTarget))
+        {
+            if (DrawButton($"-> Go to {goTarget}", x, curY, propW, 20))
+                GoToChildTarget(child);
+            curY += 24;
+        }
+
+        // Per-child nine-slice border scale (composes with the element's own scale) —
+        // only shown when the child draws a nine-slice element.
+        var nsRefEl = !string.IsNullOrEmpty(child.Element) ? _elements.FirstOrDefault(e => e.Id == child.Element) : null;
+        if (nsRefEl != null && nsRefEl.Type == "nineSlice")
+        {
+            float chNs = DrawFloatField("ch_nsscale", "9-Slice Scale", child.NineSliceScale, x, curY, propW, 0.05f);
+            if (Math.Abs(chNs - child.NineSliceScale) > 0.001f) { child.NineSliceScale = Math.Max(0f, chNs); _unsavedChanges = true; }
+            curY += 22;
+        }
 
         // Position
         int newCX = DrawIntField("ch_x", "X", child.X, x, curY, propW);
@@ -3341,7 +3386,7 @@ public partial class UIEditorWindow : EditorBase
                 else if (!string.IsNullOrEmpty(elemDef.NineSlice))
                 {
                     var childNs = GetNineSlice(elemDef.NineSlice, "el:" + elemDef.Id);
-                    if (childNs != null) { childNs.Draw(_sb, rect, tint, elemDef.NineSliceScale); drawn = true; }
+                    if (childNs != null) { childNs.Draw(_sb, rect, tint, elemDef.NineSliceScale * child.NineSliceScale); drawn = true; }
                 }
 
                 // Stroke/outline
@@ -3724,6 +3769,7 @@ public partial class UIEditorWindow : EditorBase
             Height = ch.Height,
             Anchor = ch.Anchor,
             SizeMode = ch.SizeMode,
+            NineSliceScale = ch.NineSliceScale,
             Interactive = ch.Interactive,
             DefaultText = ch.DefaultText,
             IgnoreLayout = ch.IgnoreLayout,

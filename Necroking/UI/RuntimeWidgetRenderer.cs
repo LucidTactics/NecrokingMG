@@ -443,7 +443,7 @@ public class RuntimeWidgetRenderer
                 else if (!string.IsNullOrEmpty(elemDef.NineSlice))
                 {
                     var childNs = GetNineSlice(elemDef.NineSlice, "el:" + elemDef.Id);
-                    if (childNs != null) { childNs.Draw(_batch, rect, tint, elemDef.NineSliceScale); drawn = true; }
+                    if (childNs != null) { childNs.Draw(_batch, rect, tint, elemDef.NineSliceScale * child.NineSliceScale); drawn = true; }
                 }
 
                 // Stroke
@@ -910,6 +910,7 @@ public class RuntimeWidgetRenderer
                             Height = ch.TryGetProperty("height", out var chh) ? chh.GetInt32() : 0,
                             Anchor = ch.TryGetProperty("anchor", out var ca) ? ca.GetInt32() : 0,
                             SizeMode = ch.TryGetProperty("sizeMode", out var sm) ? sm.GetString() ?? "" : "",
+                            NineSliceScale = ch.TryGetProperty("nineSliceScale", out var cnss) ? cnss.GetSingle() : 1f,
                             Interactive = ch.TryGetProperty("interactive", out var ci) && ci.GetBoolean(),
                             DefaultText = ch.TryGetProperty("defaultText", out var cdt) ? cdt.GetString() ?? "" : "",
                             IgnoreLayout = ch.TryGetProperty("ignoreLayout", out var il) && il.GetBoolean(),
