@@ -56,25 +56,25 @@ public class UIGrimoireClickScenario : ScenarioBase
         int baseline = _grim.DebugShownCount;
         Check($"All shows 22 (got {baseline})", baseline == 22);
 
-        // Path filter: Shock = the first path tab (backing PathTab_Shock_Backing)
-        var shockPt = _grim.DebugChildCenter("PathTab_Shock_Backing");
+        // Path filter: Shock = path tab #1 (tab0 is "All") in the PathTabBar.
+        var shockPt = _grim.DebugTabCenter("PathTabBar", 1);
         _grim.HandleClickAt(shockPt.X, shockPt.Y);
         Check($"Shock filter -> 4 (got {_grim.DebugShownCount})", _grim.DebugShownCount == 4);
 
-        // Path All resets
-        var pAll = _grim.DebugChildCenter("PathTab_All_Backing");
+        // Path All (tab0) resets
+        var pAll = _grim.DebugTabCenter("PathTabBar", 0);
         _grim.HandleClickAt(pAll.X, pAll.Y);
         Check($"Path-All resets -> 22 (got {_grim.DebugShownCount})", _grim.DebugShownCount == 22);
 
-        // School filter: Conjuration (backing SchoolTab_Conjuration_Backing)
-        var conj = _grim.DebugChildCenter("SchoolTab_Conjuration_Backing");
+        // School filter: Conjuration = school tab #1 (tab0 is "All").
+        var conj = _grim.DebugTabCenter("SchoolTabBar", 1);
         _grim.HandleClickAt(conj.X, conj.Y);
         int conjCount = _grim.DebugShownCount;
         DebugLog.Log(ScenarioLog, $"Conjuration count = {conjCount}");
         Check("Conjuration filter < All", conjCount > 0 && conjCount < 22);
 
-        // School All resets (backing SchoolTab_All_Backing)
-        var sAll = _grim.DebugChildCenter("SchoolTab_All_Backing");
+        // School All (tab0) resets
+        var sAll = _grim.DebugTabCenter("SchoolTabBar", 0);
         _grim.HandleClickAt(sAll.X, sAll.Y);
         Check($"School-All resets -> 22 (got {_grim.DebugShownCount})", _grim.DebugShownCount == 22);
 

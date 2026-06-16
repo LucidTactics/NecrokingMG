@@ -1,6 +1,391 @@
 {
   "widgets": [
     {
+      "id": "SchoolTabBar",
+      "width": 636,
+      "height": 35,
+      "backgroundScale": 1,
+      "modal": false,
+      "layout": "horizontal",
+      "layoutPadding": 0,
+      "layoutSpacing": -1,
+      "layoutPadTop": 0,
+      "layoutPadBottom": 0,
+      "layoutPadLeft": 0,
+      "layoutPadRight": 0,
+      "layoutSpacingX": 0,
+      "layoutSpacingY": 0,
+      "children": [
+        {
+          "name": "tab0",
+          "widget": "GrimSchoolTab",
+          "x": 2,
+          "y": 1,
+          "width": 63,
+          "height": 35,
+          "anchor": 0,
+          "childOverrides": [
+            {
+              "childIndex": 2,
+              "overrideElement": "Grim_SchoolTab_All_Text"
+            }
+          ]
+        },
+        {
+          "name": "tab1",
+          "widget": "GrimSchoolTab",
+          "x": 0,
+          "y": 0,
+          "width": 144,
+          "height": 35,
+          "anchor": 0,
+          "childOverrides": [
+            {
+              "childIndex": 2,
+              "overrideElement": "Grim_SchoolTab_Conjuration_Text"
+            }
+          ]
+        },
+        {
+          "name": "tab2",
+          "widget": "GrimSchoolTab",
+          "x": 0,
+          "y": 0,
+          "width": 144,
+          "height": 35,
+          "anchor": 0,
+          "childOverrides": [
+            {
+              "childIndex": 2,
+              "overrideElement": "Grim_SchoolTab_Alteration_Text"
+            }
+          ]
+        },
+        {
+          "name": "tab3",
+          "widget": "GrimSchoolTab",
+          "x": 0,
+          "y": 0,
+          "width": 144,
+          "height": 35,
+          "anchor": 0,
+          "childOverrides": [
+            {
+              "childIndex": 2,
+              "overrideElement": "Grim_SchoolTab_Evocation_Text"
+            }
+          ]
+        },
+        {
+          "name": "tab4",
+          "widget": "GrimSchoolTab",
+          "x": 0,
+          "y": 0,
+          "width": 144,
+          "height": 35,
+          "anchor": 0,
+          "childOverrides": [
+            {
+              "childIndex": 2,
+              "overrideElement": "Grim_SchoolTab_Construction_Text"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "PathTabBar",
+      "width": 635,
+      "height": 45,
+      "backgroundScale": 1,
+      "modal": false,
+      "layout": "horizontal",
+      "layoutPadding": 0,
+      "layoutSpacing": -1,
+      "layoutPadTop": 0,
+      "layoutPadBottom": 0,
+      "layoutPadLeft": 0,
+      "layoutPadRight": 0,
+      "layoutSpacingX": 0,
+      "layoutSpacingY": 0,
+      "children": [
+        {
+          "name": "tab0",
+          "widget": "GrimPathTab",
+          "x": 0,
+          "y": 0,
+          "width": 58,
+          "height": 45,
+          "anchor": 0,
+          "childOverrides": [
+            {
+              "childIndex": 2,
+              "overrideElement": "Grim_PathTab_All_Text"
+            }
+          ]
+        },
+        {
+          "name": "tab1",
+          "widget": "GrimPathTab",
+          "x": 0,
+          "y": 0,
+          "width": 49,
+          "height": 45,
+          "anchor": 0,
+          "childOverrides": [
+            {
+              "childIndex": 2,
+              "overrideElement": "Grim_PathTab_Shock_Icon"
+            }
+          ]
+        },
+        {
+          "name": "tab2",
+          "widget": "GrimPathTab",
+          "x": 0,
+          "y": 0,
+          "width": 49,
+          "height": 45,
+          "anchor": 0,
+          "childOverrides": [
+            {
+              "childIndex": 2,
+              "overrideElement": "Grim_PathTab_Fire_Icon"
+            }
+          ]
+        },
+        {
+          "name": "tab3",
+          "widget": "GrimPathTab",
+          "x": 0,
+          "y": 0,
+          "width": 49,
+          "height": 45,
+          "anchor": 0,
+          "childOverrides": [
+            {
+              "childIndex": 2,
+              "overrideElement": "Grim_PathTab_Metal_Icon"
+            }
+          ]
+        },
+        {
+          "name": "tab4",
+          "widget": "GrimPathTab",
+          "x": 0,
+          "y": 0,
+          "width": 49,
+          "height": 45,
+          "anchor": 0,
+          "childOverrides": [
+            {
+              "childIndex": 2,
+              "overrideElement": "Grim_PathTab_Water_Icon"
+            }
+          ]
+        },
+        {
+          "name": "tab5",
+          "widget": "GrimPathTab",
+          "x": 0,
+          "y": 0,
+          "width": 49,
+          "height": 45,
+          "anchor": 0,
+          "childOverrides": [
+            {
+              "childIndex": 2,
+              "overrideElement": "Grim_PathTab_Heavens_Icon"
+            }
+          ]
+        },
+        {
+          "name": "tab6",
+          "widget": "GrimPathTab",
+          "x": 0,
+          "y": 0,
+          "width": 49,
+          "height": 45,
+          "anchor": 0,
+          "childOverrides": [
+            {
+              "childIndex": 2,
+              "overrideElement": "Grim_PathTab_Order_Icon"
+            }
+          ]
+        },
+        {
+          "name": "tab7",
+          "widget": "GrimPathTab",
+          "x": 0,
+          "y": 0,
+          "width": 49,
+          "height": 45,
+          "anchor": 0,
+          "childOverrides": [
+            {
+              "childIndex": 2,
+              "overrideElement": "Grim_PathTab_Earth_Icon"
+            }
+          ]
+        },
+        {
+          "name": "tab8",
+          "widget": "GrimPathTab",
+          "x": 0,
+          "y": 0,
+          "width": 49,
+          "height": 45,
+          "anchor": 0,
+          "childOverrides": [
+            {
+              "childIndex": 2,
+              "overrideElement": "Grim_PathTab_Chaos_Icon"
+            }
+          ]
+        },
+        {
+          "name": "tab9",
+          "widget": "GrimPathTab",
+          "x": 0,
+          "y": 0,
+          "width": 49,
+          "height": 45,
+          "anchor": 0,
+          "childOverrides": [
+            {
+              "childIndex": 2,
+              "overrideElement": "Grim_PathTab_Spirit_Icon"
+            }
+          ]
+        },
+        {
+          "name": "tab10",
+          "widget": "GrimPathTab",
+          "x": 0,
+          "y": 0,
+          "width": 49,
+          "height": 45,
+          "anchor": 0,
+          "childOverrides": [
+            {
+              "childIndex": 2,
+              "overrideElement": "Grim_PathTab_Nature_Icon"
+            }
+          ]
+        },
+        {
+          "name": "tab11",
+          "widget": "GrimPathTab",
+          "x": 0,
+          "y": 0,
+          "width": 49,
+          "height": 45,
+          "anchor": 0,
+          "childOverrides": [
+            {
+              "childIndex": 2,
+              "overrideElement": "Grim_PathTab_Body_Icon"
+            }
+          ]
+        },
+        {
+          "name": "tab12",
+          "widget": "GrimPathTab",
+          "x": 0,
+          "y": 0,
+          "width": 49,
+          "height": 45,
+          "anchor": 0,
+          "childOverrides": [
+            {
+              "childIndex": 2,
+              "overrideElement": "Grim_PathTab_Death_Icon"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "GrimSchoolTab",
+      "width": 144,
+      "height": 35,
+      "backgroundScale": 1,
+      "modal": false,
+      "children": [
+        {
+          "name": "Backing",
+          "element": "Grim_TabBacking",
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0,
+          "anchor": 0,
+          "sizeMode": "fill"
+        },
+        {
+          "name": "Frame",
+          "element": "SkillTab_Frame",
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0,
+          "anchor": 0,
+          "sizeMode": "fill",
+          "nineSliceScale": 0.8
+        },
+        {
+          "name": "Text",
+          "element": "Grim_SchoolTab_All_Text",
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0,
+          "anchor": 0,
+          "sizeMode": "fill"
+        }
+      ]
+    },
+    {
+      "id": "GrimPathTab",
+      "width": 51,
+      "height": 45,
+      "backgroundScale": 1,
+      "modal": false,
+      "children": [
+        {
+          "name": "Backing",
+          "element": "Grim_TabBacking",
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0,
+          "anchor": 0,
+          "sizeMode": "fill"
+        },
+        {
+          "name": "Frame",
+          "element": "SkillTab_Frame",
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0,
+          "anchor": 0,
+          "sizeMode": "fill",
+          "nineSliceScale": 0.8
+        },
+        {
+          "name": "Icon",
+          "element": "Grim_PathTab_Shock_Icon",
+          "x": -12,
+          "y": -12,
+          "width": 24,
+          "height": 24,
+          "anchor": 4
+        }
+      ]
+    },
+    {
       "id": "EquipmentWindow",
       "background": "LeatherBackground",
       "stencilImagePath": "assets/UI/Portraits/GhoulFather236.png",
@@ -7337,489 +7722,21 @@
           "anchor": 0
         },
         {
-          "name": "PathTab_All_Backing",
-          "element": "Grim_TabBacking",
-          "x": 26,
-          "y": 130,
-          "width": 54,
-          "height": 45,
-          "anchor": 0
-        },
-        {
-          "name": "PathTab_All_Text",
-          "element": "Grim_PathTab_All_Text",
-          "x": 26,
-          "y": 138,
-          "width": 54,
-          "height": 26,
-          "anchor": 0
-        },
-        {
-          "name": "PathTab_All_Frame",
-          "element": "SkillTab_Frame",
-          "x": 26,
-          "y": 130,
-          "width": 54,
-          "height": 45,
-          "anchor": 0
-        },
-        {
-          "name": "PathTab_Shock_Backing",
-          "element": "Grim_TabBacking",
-          "x": 78,
-          "y": 130,
-          "width": 51,
-          "height": 45,
-          "anchor": 0
-        },
-        {
-          "name": "PathTab_Shock_Frame",
-          "element": "SkillTab_Frame",
-          "x": 78,
-          "y": 130,
-          "width": 51,
-          "height": 45,
-          "anchor": 0
-        },
-        {
-          "name": "PathTab_Shock_Icon",
-          "element": "Grim_PathTab_Shock_Icon",
-          "x": 92,
-          "y": 141,
-          "width": 24,
-          "height": 24,
-          "anchor": 0
-        },
-        {
-          "name": "PathTab_Fire_Backing",
-          "element": "Grim_TabBacking",
-          "x": 128,
-          "y": 130,
-          "width": 51,
-          "height": 45,
-          "anchor": 0
-        },
-        {
-          "name": "PathTab_Fire_Frame",
-          "element": "SkillTab_Frame",
-          "x": 128,
-          "y": 130,
-          "width": 51,
-          "height": 45,
-          "anchor": 0
-        },
-        {
-          "name": "PathTab_Fire_Icon",
-          "element": "Grim_PathTab_Fire_Icon",
-          "x": 142,
-          "y": 141,
-          "width": 24,
-          "height": 24,
-          "anchor": 0
-        },
-        {
-          "name": "PathTab_Metal_Backing",
-          "element": "Grim_TabBacking",
-          "x": 178,
-          "y": 130,
-          "width": 51,
-          "height": 45,
-          "anchor": 0
-        },
-        {
-          "name": "PathTab_Metal_Frame",
-          "element": "SkillTab_Frame",
-          "x": 178,
-          "y": 130,
-          "width": 51,
-          "height": 45,
-          "anchor": 0
-        },
-        {
-          "name": "PathTab_Metal_Icon",
-          "element": "Grim_PathTab_Metal_Icon",
-          "x": 192,
-          "y": 141,
-          "width": 24,
-          "height": 24,
-          "anchor": 0
-        },
-        {
-          "name": "PathTab_Water_Backing",
-          "element": "Grim_TabBacking",
-          "x": 228,
-          "y": 130,
-          "width": 51,
-          "height": 45,
-          "anchor": 0
-        },
-        {
-          "name": "PathTab_Water_Frame",
-          "element": "SkillTab_Frame",
-          "x": 228,
-          "y": 130,
-          "width": 51,
-          "height": 45,
-          "anchor": 0
-        },
-        {
-          "name": "PathTab_Water_Icon",
-          "element": "Grim_PathTab_Water_Icon",
-          "x": 242,
-          "y": 141,
-          "width": 24,
-          "height": 24,
-          "anchor": 0
-        },
-        {
-          "name": "PathTab_Heavens_Backing",
-          "element": "Grim_TabBacking",
-          "x": 278,
-          "y": 130,
-          "width": 51,
-          "height": 45,
-          "anchor": 0
-        },
-        {
-          "name": "PathTab_Heavens_Frame",
-          "element": "SkillTab_Frame",
-          "x": 278,
-          "y": 130,
-          "width": 51,
-          "height": 45,
-          "anchor": 0
-        },
-        {
-          "name": "PathTab_Heavens_Icon",
-          "element": "Grim_PathTab_Heavens_Icon",
-          "x": 292,
-          "y": 141,
-          "width": 24,
-          "height": 24,
-          "anchor": 0
-        },
-        {
-          "name": "PathTab_Order_Backing",
-          "element": "Grim_TabBacking",
-          "x": 328,
-          "y": 130,
-          "width": 51,
-          "height": 45,
-          "anchor": 0
-        },
-        {
-          "name": "PathTab_Order_Frame",
-          "element": "SkillTab_Frame",
-          "x": 328,
-          "y": 130,
-          "width": 51,
-          "height": 45,
-          "anchor": 0
-        },
-        {
-          "name": "PathTab_Order_Icon",
-          "element": "Grim_PathTab_Order_Icon",
-          "x": 342,
-          "y": 141,
-          "width": 24,
-          "height": 24,
-          "anchor": 0
-        },
-        {
-          "name": "PathTab_Earth_Backing",
-          "element": "Grim_TabBacking",
-          "x": 378,
-          "y": 130,
-          "width": 51,
-          "height": 45,
-          "anchor": 0
-        },
-        {
-          "name": "PathTab_Earth_Frame",
-          "element": "SkillTab_Frame",
-          "x": 378,
-          "y": 130,
-          "width": 51,
-          "height": 45,
-          "anchor": 0
-        },
-        {
-          "name": "PathTab_Earth_Icon",
-          "element": "Grim_PathTab_Earth_Icon",
-          "x": 392,
-          "y": 141,
-          "width": 24,
-          "height": 24,
-          "anchor": 0
-        },
-        {
-          "name": "PathTab_Chaos_Backing",
-          "element": "Grim_TabBacking",
-          "x": 428,
-          "y": 130,
-          "width": 51,
-          "height": 45,
-          "anchor": 0
-        },
-        {
-          "name": "PathTab_Chaos_Frame",
-          "element": "SkillTab_Frame",
-          "x": 428,
-          "y": 130,
-          "width": 51,
-          "height": 45,
-          "anchor": 0
-        },
-        {
-          "name": "PathTab_Chaos_Icon",
-          "element": "Grim_PathTab_Chaos_Icon",
-          "x": 442,
-          "y": 141,
-          "width": 24,
-          "height": 24,
-          "anchor": 0
-        },
-        {
-          "name": "PathTab_Spirit_Backing",
-          "element": "Grim_TabBacking",
-          "x": 478,
-          "y": 130,
-          "width": 51,
-          "height": 45,
-          "anchor": 0
-        },
-        {
-          "name": "PathTab_Spirit_Frame",
-          "element": "SkillTab_Frame",
-          "x": 478,
-          "y": 130,
-          "width": 51,
-          "height": 45,
-          "anchor": 0
-        },
-        {
-          "name": "PathTab_Spirit_Icon",
-          "element": "Grim_PathTab_Spirit_Icon",
-          "x": 492,
-          "y": 141,
-          "width": 24,
-          "height": 24,
-          "anchor": 0
-        },
-        {
-          "name": "PathTab_Nature_Backing",
-          "element": "Grim_TabBacking",
-          "x": 528,
-          "y": 130,
-          "width": 51,
-          "height": 45,
-          "anchor": 0
-        },
-        {
-          "name": "PathTab_Nature_Frame",
-          "element": "SkillTab_Frame",
-          "x": 528,
-          "y": 130,
-          "width": 51,
-          "height": 45,
-          "anchor": 0
-        },
-        {
-          "name": "PathTab_Nature_Icon",
-          "element": "Grim_PathTab_Nature_Icon",
-          "x": 542,
-          "y": 141,
-          "width": 24,
-          "height": 24,
-          "anchor": 0
-        },
-        {
-          "name": "PathTab_Body_Backing",
-          "element": "Grim_TabBacking",
-          "x": 578,
-          "y": 130,
-          "width": 51,
-          "height": 45,
-          "anchor": 0
-        },
-        {
-          "name": "PathTab_Body_Frame",
-          "element": "SkillTab_Frame",
-          "x": 578,
-          "y": 130,
-          "width": 51,
-          "height": 45,
-          "anchor": 0
-        },
-        {
-          "name": "PathTab_Body_Icon",
-          "element": "Grim_PathTab_Body_Icon",
-          "x": 592,
-          "y": 141,
-          "width": 24,
-          "height": 24,
-          "anchor": 0
-        },
-        {
-          "name": "PathTab_Death_Backing",
-          "element": "Grim_TabBacking",
-          "x": 628,
-          "y": 130,
-          "width": 51,
-          "height": 45,
-          "anchor": 0
-        },
-        {
-          "name": "PathTab_Death_Frame",
-          "element": "SkillTab_Frame",
-          "x": 628,
-          "y": 130,
-          "width": 51,
-          "height": 45,
-          "anchor": 0
-        },
-        {
-          "name": "PathTab_Death_Icon",
-          "element": "Grim_PathTab_Death_Icon",
-          "x": 642,
-          "y": 141,
-          "width": 24,
-          "height": 24,
-          "anchor": 0
-        },
-        {
-          "name": "SchoolTab_All_Backing",
-          "element": "Grim_TabBacking",
-          "x": 24,
-          "y": 98,
-          "width": 86,
-          "height": 33,
-          "anchor": 0
-        },
-        {
-          "name": "SchoolTab_All_Text",
-          "element": "Grim_SchoolTab_All_Text",
-          "x": 27,
-          "y": 101,
-          "width": 80,
-          "height": 27,
-          "anchor": 0
-        },
-        {
-          "name": "SchoolTab_All_Frame",
-          "element": "SkillTab_Frame",
-          "x": 26,
+          "name": "SchoolTabBar",
+          "widget": "SchoolTabBar",
+          "x": 35,
           "y": 96,
-          "width": 82,
+          "width": 635,
           "height": 35,
           "anchor": 0
         },
         {
-          "name": "SchoolTab_Conjuration_Backing",
-          "element": "Grim_TabBacking",
-          "x": 104,
-          "y": 98,
-          "width": 148,
-          "height": 33,
-          "anchor": 0
-        },
-        {
-          "name": "SchoolTab_Conjuration_Text",
-          "element": "Grim_SchoolTab_Conjuration_Text",
-          "x": 101,
-          "y": 102,
-          "width": 159,
-          "height": 26,
-          "anchor": 0
-        },
-        {
-          "name": "SchoolTab_Conjuration_Frame",
-          "element": "SkillTab_Frame",
-          "x": 107,
-          "y": 96,
-          "width": 144,
-          "height": 35,
-          "anchor": 0
-        },
-        {
-          "name": "SchoolTab_Alteration_Backing",
-          "element": "Grim_TabBacking",
-          "x": 248,
-          "y": 98,
-          "width": 148,
-          "height": 33,
-          "anchor": 0
-        },
-        {
-          "name": "SchoolTab_Alteration_Text",
-          "element": "Grim_SchoolTab_Alteration_Text",
-          "x": 244,
-          "y": 102,
-          "width": 159,
-          "height": 26,
-          "anchor": 0
-        },
-        {
-          "name": "SchoolTab_Alteration_Frame",
-          "element": "SkillTab_Frame",
-          "x": 250,
-          "y": 96,
-          "width": 144,
-          "height": 35,
-          "anchor": 0
-        },
-        {
-          "name": "SchoolTab_Evocation_Backing",
-          "element": "Grim_TabBacking",
-          "x": 390,
-          "y": 98,
-          "width": 148,
-          "height": 33,
-          "anchor": 0
-        },
-        {
-          "name": "SchoolTab_Evocation_Text",
-          "element": "Grim_SchoolTab_Evocation_Text",
-          "x": 387,
-          "y": 102,
-          "width": 159,
-          "height": 26,
-          "anchor": 0
-        },
-        {
-          "name": "SchoolTab_Evocation_Frame",
-          "element": "SkillTab_Frame",
-          "x": 393,
-          "y": 96,
-          "width": 144,
-          "height": 35,
-          "anchor": 0
-        },
-        {
-          "name": "SchoolTab_Construction_Backing",
-          "element": "Grim_TabBacking",
-          "x": 534,
-          "y": 98,
-          "width": 148,
-          "height": 33,
-          "anchor": 0
-        },
-        {
-          "name": "SchoolTab_Construction_Text",
-          "element": "Grim_SchoolTab_Construction_Text",
-          "x": 530,
-          "y": 102,
-          "width": 159,
-          "height": 26,
-          "anchor": 0
-        },
-        {
-          "name": "SchoolTab_Construction_Frame",
-          "element": "SkillTab_Frame",
-          "x": 536,
-          "y": 96,
-          "width": 144,
-          "height": 35,
+          "name": "PathTabBar",
+          "widget": "PathTabBar",
+          "x": 35,
+          "y": 130,
+          "width": 635,
+          "height": 45,
           "anchor": 0
         },
         {
@@ -7828,8 +7745,9 @@
           "x": 10,
           "y": 12,
           "width": 689,
-          "height": 94,
-          "anchor": 0
+          "height": 102,
+          "anchor": 0,
+          "nineSliceScale": 0.25
         },
         {
           "name": "TitleText",
@@ -8209,7 +8127,7 @@
           "widget": "TabBar",
           "x": 30,
           "y": 95,
-          "width": 1027,
+          "width": 1020,
           "height": 35,
           "anchor": 0
         },
@@ -8247,49 +8165,53 @@
           "element": "SkillTab_Backing",
           "x": 0,
           "y": 0,
-          "width": 188,
-          "height": 35,
-          "anchor": 0
+          "width": 0,
+          "height": 0,
+          "anchor": 0,
+          "sizeMode": "fill"
         },
         {
           "name": "Name",
           "element": "SkillTab_Name",
           "x": 2,
           "y": 3,
-          "width": 188,
+          "width": 2,
           "height": 19,
-          "anchor": 0
+          "anchor": 0,
+          "sizeMode": "fillWidth"
         },
         {
           "name": "Frac",
           "element": "SkillTab_Frac",
           "x": 2,
           "y": 21,
-          "width": 188,
+          "width": 2,
           "height": 12,
-          "anchor": 0
+          "anchor": 0,
+          "sizeMode": "fillWidth"
         },
         {
           "name": "Frame",
           "element": "SkillTab_Frame",
           "x": 0,
           "y": 0,
-          "width": 188,
-          "height": 35,
+          "width": 0,
+          "height": 0,
           "anchor": 0,
+          "sizeMode": "fill",
           "nineSliceScale": 0.8
         }
       ]
     },
     {
       "id": "TabBar",
-      "width": 1000,
+      "width": 1020,
       "height": 35,
       "backgroundScale": 1,
       "modal": false,
       "layout": "horizontal",
       "layoutPadding": 0,
-      "layoutSpacing": 61,
+      "layoutSpacing": 0,
       "layoutPadTop": 0,
       "layoutPadBottom": 0,
       "layoutPadLeft": 0,
@@ -8302,7 +8224,7 @@
           "widget": "SkillBookTab",
           "x": 0,
           "y": 0,
-          "width": 128,
+          "width": 195,
           "height": 35,
           "anchor": 0,
           "childOverrides": [
@@ -8315,9 +8237,9 @@
         {
           "name": "tab1",
           "widget": "SkillBookTab",
-          "x": 0,
-          "y": 0,
-          "width": 128,
+          "x": 40,
+          "y": 6,
+          "width": 235,
           "height": 35,
           "anchor": 0,
           "childOverrides": [
@@ -8332,7 +8254,7 @@
           "widget": "SkillBookTab",
           "x": 0,
           "y": 0,
-          "width": 128,
+          "width": 235,
           "height": 35,
           "anchor": 0,
           "childOverrides": [
@@ -8347,7 +8269,7 @@
           "widget": "SkillBookTab",
           "x": 0,
           "y": 0,
-          "width": 128,
+          "width": 171,
           "height": 35,
           "anchor": 0,
           "childOverrides": [
@@ -8360,9 +8282,9 @@
         {
           "name": "tab4",
           "widget": "SkillBookTab",
-          "x": 0,
-          "y": 0,
-          "width": 128,
+          "x": 20,
+          "y": 1,
+          "width": 182,
           "height": 35,
           "anchor": 0,
           "childOverrides": [

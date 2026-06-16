@@ -309,18 +309,19 @@ public class RuntimeWidgetRenderer
     /// alignment, and don't advance the layout cursor) and sizes auto-height
     /// sub-widget children by their measured content. AutoSizeHeight widgets
     /// never column-wrap (their height IS the content).</summary>
-    private List<Rectangle> ComputeInstanceRects(UIEditorWidgetDef def, int wdX, int wdY, string instanceId)
+    private List<Rectangle> ComputeInstanceRects(UIEditorWidgetDef def, int wdX, int wdY, string instanceId,
+        int instW = -1, int instH = -1)
     {
         _hiddenChildren.TryGetValue(instanceId, out var hidden);
         bool isHoriz = def.Layout == "horizontal", isVert = def.Layout == "vertical";
         // Fast path with no per-instance state — straight through the shared pass.
         if (!isHoriz && !isVert && hidden == null)
-            return WidgetLayoutUtils.ComputeLayoutRects(def, wdX, wdY);
+            return WidgetLayoutUtils.ComputeLayoutRects(def, wdX, wdY, null, null, instW, instH);
         // Otherwise drive the same shared pass, supplying this instance's hidden set
         // (by child name) and override-aware heights.
         return WidgetLayoutUtils.ComputeLayoutRects(def, wdX, wdY,
             hidden == null ? null : i => hidden.Contains(def.Children[i].Name),
-            (child, i) => ChildHeightFor(child, instanceId, i));
+            (child, i) => ChildHeightFor(child, instanceId, i), instW, instH);
     }
 
     /// <summary>Draw a widget def at a specific rect.</summary>
@@ -373,7 +374,7 @@ public class RuntimeWidgetRenderer
     //  Internal rendering
     // ═══════════════════════════════════════
 
-    private void DrawChild(UIEditorChildDef child, Rectangle rect, string instanceId, int childIndex, string? overrideWidget, string? overrideText = null)
+    private void DrawChild(UIEditorChildDef child, Rectangle rect, string instanceId, int childIndex, string? overrideWidget, string? overrideText = null, string? overrideElement = null)
     {
         if (_hiddenChildren.TryGetValue(instanceId, out var hidden) && hidden.Contains(child.Name))
             return;
@@ -390,25 +391,29 @@ public class RuntimeWidgetRenderer
                 drawn = true;
                 DrawWidgetLayers(widgetDef, rect.X, rect.Y, rect.Width, rect.Height, drawFrame: false);
 
-                // Nested children — use a sub-instance ID for override scoping
+                // Nested children — use a sub-instance ID for override scoping.
+                // Pass the instance rect size so the nested widget's children fill /
+                // anchor to the size this instance is actually drawn at, not the def.
                 string subId = $"{instanceId}.{childIndex}";
-                var nestedRects = ComputeInstanceRects(widgetDef, rect.X, rect.Y, subId);
+                var nestedRects = ComputeInstanceRects(widgetDef, rect.X, rect.Y, subId, rect.Width, rect.Height);
                 for (int ci = 0; ci < widgetDef.Children.Count && ci < nestedRects.Count; ci++)
                 {
                     string? nestedOverride = null;
                     if (_childWidgetOverrides.TryGetValue(subId, out var cwMap))
                         cwMap.TryGetValue(ci, out nestedOverride);
-                    DrawChild(widgetDef.Children[ci], nestedRects[ci], subId, ci, nestedOverride, child.OverrideTextFor(ci));
+                    DrawChild(widgetDef.Children[ci], nestedRects[ci], subId, ci, nestedOverride, child.OverrideTextFor(ci), child.OverrideElementFor(ci));
                 }
 
                 DrawWidgetFrame(widgetDef, rect.X, rect.Y, rect.Width, rect.Height);
             }
         }
 
-        // Element child
-        if (!drawn && !string.IsNullOrEmpty(child.Element))
+        // Element child (overrideElement lets a nested instance swap which element
+        // it shows — e.g. each grimoire tab points its Icon/Text child at its own).
+        string elemId = !string.IsNullOrEmpty(overrideElement) ? overrideElement : child.Element;
+        if (!drawn && !string.IsNullOrEmpty(elemId))
         {
-            var elemDef = _elementDefs.FirstOrDefault(e => e.Id == child.Element);
+            var elemDef = _elementDefs.FirstOrDefault(e => e.Id == elemId);
             if (elemDef != null)
             {
                 byte[] tc = elemDef.TintColor ?? new byte[] { 255, 255, 255, 255 };
@@ -990,6 +995,7 @@ public class RuntimeWidgetRenderer
                                 {
                                     ChildIndex = co.TryGetProperty("childIndex", out var cci) ? cci.GetInt32() : 0,
                                     OverrideDefaultText = co.TryGetProperty("overrideDefaultText", out var codt) ? codt.GetString() : null,
+                                    OverrideElement = co.TryGetProperty("overrideElement", out var coel) ? coel.GetString() : null,
                                 });
                             }
                         }

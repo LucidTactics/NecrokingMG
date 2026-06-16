@@ -344,8 +344,11 @@ public partial class UIEditorWindow
     //  Layout Helpers (delegates to shared utility)
     // ═══════════════════════════════════════
 
-    private static System.Collections.Generic.List<Rectangle> ComputeLayoutRects(UIEditorWidgetDef def, int wdX, int wdY)
-        => Necroking.UI.WidgetLayoutUtils.ComputeLayoutRects(def, wdX, wdY);
+    private static System.Collections.Generic.List<Rectangle> ComputeLayoutRects(UIEditorWidgetDef def, int wdX, int wdY,
+        System.Func<int, bool>? isHidden = null,
+        System.Func<UIEditorChildDef, int, int>? childHeight = null,
+        int instW = -1, int instH = -1)
+        => Necroking.UI.WidgetLayoutUtils.ComputeLayoutRects(def, wdX, wdY, isHidden, childHeight, instW, instH);
 
     // ═══════════════════════════════════════
     //  Color Conversion Utilities

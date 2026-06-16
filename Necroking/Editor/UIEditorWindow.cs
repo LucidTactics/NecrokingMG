@@ -93,6 +93,10 @@ public class ChildOverrideEntry
     public int? OverrideW { get; set; }
     public int? OverrideH { get; set; }
     public string? OverrideDefaultText { get; set; }
+    /// <summary>Per-instance element swap for a nested child: one shared sub-widget
+    /// (e.g. a grimoire tab) can show a different icon/text element per instance
+    /// without a unique widget each. The child's geometry/SizeMode are unchanged.</summary>
+    public string? OverrideElement { get; set; }
     public bool? OverrideIgnoreLayout { get; set; }
 }
 
@@ -139,6 +143,18 @@ public class UIEditorChildDef
         foreach (var co in ChildOverrides)
             if (co.ChildIndex == childIndex && !string.IsNullOrEmpty(co.OverrideDefaultText))
                 return co.OverrideDefaultText;
+        return null;
+    }
+
+    /// <summary>Per-instance element swap for nested child <paramref name="childIndex"/>
+    /// (e.g. each grimoire tab instance points its Icon/Text child at its own element),
+    /// or null if none.</summary>
+    public string? OverrideElementFor(int childIndex)
+    {
+        if (ChildOverrides == null) return null;
+        foreach (var co in ChildOverrides)
+            if (co.ChildIndex == childIndex && !string.IsNullOrEmpty(co.OverrideElement))
+                return co.OverrideElement;
         return null;
     }
 }
@@ -582,6 +598,8 @@ public partial class UIEditorWindow : EditorBase
                                     entry.OverrideH = oh.GetInt32();
                                 if (co.TryGetProperty("overrideDefaultText", out var odt) && odt.ValueKind == JsonValueKind.String)
                                     entry.OverrideDefaultText = odt.GetString();
+                                if (co.TryGetProperty("overrideElement", out var oel) && oel.ValueKind == JsonValueKind.String)
+                                    entry.OverrideElement = oel.GetString();
                                 if (co.TryGetProperty("overrideIgnoreLayout", out var oil))
                                 {
                                     if (oil.ValueKind == JsonValueKind.True) entry.OverrideIgnoreLayout = true;
@@ -873,7 +891,8 @@ public partial class UIEditorWindow : EditorBase
                             // Only write entries that have at least one override set
                             bool hasAny = co.OverrideX.HasValue || co.OverrideY.HasValue ||
                                           co.OverrideW.HasValue || co.OverrideH.HasValue ||
-                                          co.OverrideDefaultText != null || co.OverrideIgnoreLayout.HasValue;
+                                          co.OverrideDefaultText != null || co.OverrideElement != null ||
+                                          co.OverrideIgnoreLayout.HasValue;
                             if (!hasAny) continue;
                             writer.WriteStartObject();
                             writer.WriteNumber("childIndex", co.ChildIndex);
@@ -882,6 +901,7 @@ public partial class UIEditorWindow : EditorBase
                             if (co.OverrideW.HasValue) writer.WriteNumber("overrideW", co.OverrideW.Value);
                             if (co.OverrideH.HasValue) writer.WriteNumber("overrideH", co.OverrideH.Value);
                             if (co.OverrideDefaultText != null) writer.WriteString("overrideDefaultText", co.OverrideDefaultText);
+                            if (co.OverrideElement != null) writer.WriteString("overrideElement", co.OverrideElement);
                             if (co.OverrideIgnoreLayout.HasValue) writer.WriteBoolean("overrideIgnoreLayout", co.OverrideIgnoreLayout.Value);
                             writer.WriteEndObject();
                         }
@@ -3285,7 +3305,7 @@ public partial class UIEditorWindow : EditorBase
     }
 
     /// <param name="editorChrome">Show selection boxes, outlines, handles. False for nested/runtime rendering.</param>
-    private void DrawWidgetChild(UIEditorChildDef child, Rectangle rect, bool selected, bool editorChrome = true, string? overrideText = null)
+    private void DrawWidgetChild(UIEditorChildDef child, Rectangle rect, bool selected, bool editorChrome = true, string? overrideText = null, string? overrideElement = null)
     {
         bool drawn = false;
 
@@ -3299,21 +3319,24 @@ public partial class UIEditorWindow : EditorBase
                 // Background + stencil (children render between stencil and frame)
                 DrawWidgetLayers(widgetDef, rect.X, rect.Y, rect.Width, rect.Height, drawFrame: false);
 
-                // Nested widget's own children (no editor chrome — pure visual)
-                var nestedRects = ComputeLayoutRects(widgetDef, rect.X, rect.Y);
+                // Nested widget's own children (no editor chrome — pure visual).
+                // Pass the instance rect size so SizeMode fill / anchor track the
+                // size this instance is drawn at (matches the runtime renderer).
+                var nestedRects = ComputeLayoutRects(widgetDef, rect.X, rect.Y, null, null, rect.Width, rect.Height);
                 for (int ci = 0; ci < widgetDef.Children.Count && ci < nestedRects.Count; ci++)
                     DrawWidgetChild(widgetDef.Children[ci], nestedRects[ci], false, editorChrome: false,
-                        overrideText: child.OverrideTextFor(ci));
+                        overrideText: child.OverrideTextFor(ci), overrideElement: child.OverrideElementFor(ci));
 
                 // Frame on top of children
                 DrawWidgetFrame(widgetDef, rect.X, rect.Y, rect.Width, rect.Height);
             }
         }
 
-        // If child references an element, render it
-        if (!drawn && !string.IsNullOrEmpty(child.Element))
+        // If child references an element, render it (overrideElement swaps which one)
+        if (!drawn && (!string.IsNullOrEmpty(overrideElement) || !string.IsNullOrEmpty(child.Element)))
         {
-            var elemDef = _elements.FirstOrDefault(e => e.Id == child.Element);
+            string elemId = !string.IsNullOrEmpty(overrideElement) ? overrideElement : child.Element;
+            var elemDef = _elements.FirstOrDefault(e => e.Id == elemId);
             if (elemDef != null)
             {
                 byte[] tc = elemDef.TintColor ?? new byte[] { 255, 255, 255, 255 };

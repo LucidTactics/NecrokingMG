@@ -120,9 +120,17 @@ public static class WidgetLayoutUtils
     /// aware callers. Null = use the child's authored Height (40 fallback).</param>
     public static List<Rectangle> ComputeLayoutRects(UIEditorWidgetDef def, int wdX, int wdY,
         System.Func<int, bool>? isHidden = null,
-        System.Func<UIEditorChildDef, int, int>? childHeight = null)
+        System.Func<UIEditorChildDef, int, int>? childHeight = null,
+        int instW = -1, int instH = -1)
     {
         var rects = new List<Rectangle>();
+        // A NESTED widget instance can be rendered at a size different from its
+        // authored def size (e.g. a SkillBookTab def is 188 wide but each tab is
+        // placed at 128). Lay the children out within the INSTANCE size so SizeMode
+        // fill/fillWidth and anchor positioning track the tab the player actually
+        // sees. Top-level callers pass -1 and get the def's own size.
+        int W = instW >= 0 ? instW : def.Width;
+        int H = instH >= 0 ? instH : def.Height;
         bool isHoriz = def.Layout == "horizontal";
         bool isVert = def.Layout == "vertical";
         bool useLayout = isHoriz || isVert;
@@ -151,8 +159,8 @@ public static class WidgetLayoutUtils
             {
                 // Cross-axis fill: stretch to the parent's content box on the axis the
                 // layout does NOT advance along (the common "full-width rows" case).
-                if (isHoriz && fillH) ch = def.Height - padT - padB;
-                if (isVert && fillW)  cw = def.Width - padL - padR;
+                if (isHoriz && fillH) ch = H - padT - padB;
+                if (isVert && fillW)  cw = W - padL - padR;
 
                 // Auto-size widgets honor the child's CROSS-AXIS offset and never
                 // column/row-wrap (their height IS the content). Legacy widgets ignore it.
@@ -160,7 +168,7 @@ public static class WidgetLayoutUtils
                 int crossY = def.AutoSizeHeight ? child.Y : 0;
                 if (isHoriz)
                 {
-                    if (!def.AutoSizeHeight && curX > padL && curX + cw > def.Width - padR)
+                    if (!def.AutoSizeHeight && curX > padL && curX + cw > W - padR)
                     {
                         curY += rowMaxH + spacY;
                         curX = padL;
@@ -172,7 +180,7 @@ public static class WidgetLayoutUtils
                 }
                 else
                 {
-                    if (!def.AutoSizeHeight && curY > padT && curY + ch > def.Height - padB)
+                    if (!def.AutoSizeHeight && curY > padT && curY + ch > H - padB)
                     {
                         curX += colMaxW + spacX;
                         curY = padT;
@@ -188,16 +196,16 @@ public static class WidgetLayoutUtils
                 // Non-layout: anchor pivot + offset, OR responsive fill (Width/Height
                 // become the far-side margins).
                 int x, w, y, h;
-                if (fillW) { x = wdX + child.X; w = System.Math.Max(0, def.Width - child.X - child.Width); }
+                if (fillW) { x = wdX + child.X; w = System.Math.Max(0, W - child.X - child.Width); }
                 else
                 {
-                    int anchorX = (child.Anchor % 3) switch { 1 => def.Width / 2, 2 => def.Width, _ => 0 };
+                    int anchorX = (child.Anchor % 3) switch { 1 => W / 2, 2 => W, _ => 0 };
                     x = wdX + anchorX + child.X; w = cw;
                 }
-                if (fillH) { y = wdY + child.Y; h = System.Math.Max(0, def.Height - child.Y - child.Height); }
+                if (fillH) { y = wdY + child.Y; h = System.Math.Max(0, H - child.Y - child.Height); }
                 else
                 {
-                    int anchorY = (child.Anchor / 3) switch { 1 => def.Height / 2, 2 => def.Height, _ => 0 };
+                    int anchorY = (child.Anchor / 3) switch { 1 => H / 2, 2 => H, _ => 0 };
                     y = wdY + anchorY + child.Y; h = ch;
                 }
                 rects.Add(new Rectangle(x, y, w, h));

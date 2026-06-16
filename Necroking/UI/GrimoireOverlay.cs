@@ -119,28 +119,49 @@ public class GrimoireOverlay : IModalLayer
         bool allSchools = schoolFilter == null;
         bool allPaths = pathFilter == MagicPath.None;
 
+        // Tabs are now nested sub-widget instances inside the SchoolTabBar /
+        // PathTabBar horizontal bars; address each tab's children through its
+        // sub-instance id "{grim}.{barIdx}.{tabIdx}".
+        int schoolBar = BarIndex(r, "SchoolTabBar");
+        int pathBar = BarIndex(r, "PathTabBar");
+
         // School tabs — text colour + backing tint.
-        foreach (var (name, school) in SchoolTabs)
+        for (int i = 0; i < SchoolTabs.Length; i++)
         {
+            var (_, school) = SchoolTabs[i];
             bool lit = allSchools || school == schoolFilter;
             var tc = lit ? TabActive : TabInactive;
-            r.SetTextColor(instanceId, $"SchoolTab_{name}_Text", tc.R, tc.G, tc.B);
-            r.SetElementTint(instanceId, $"SchoolTab_{name}_Backing",
-                lit ? ChromeActive : ChromeInactive);
+            string inst = TabInst(instanceId, schoolBar, i);
+            r.SetTextColor(inst, "Text", tc.R, tc.G, tc.B);
+            r.SetElementTint(inst, "Backing", lit ? ChromeActive : ChromeInactive);
         }
-        // Path "All" tab (no icon) — the active filter when no path is picked.
-        r.SetElementTint(instanceId, "PathTab_All_Backing",
+        // Path "All" tab (instance 0, text not icon) — backing tint only.
+        r.SetElementTint(TabInst(instanceId, pathBar, 0), "Backing",
             allPaths ? ChromeActive : ChromeInactive);
-        // Path icon tabs — backing + icon dim together so the whole tab reads
-        // as one unit. In all-paths mode every icon stays lit; once a path is
-        // picked only it stays lit and the others dim.
-        foreach (var path in PathTabOrder)
+        // Path icon tabs (instances 1..N) — backing + icon dim together so the
+        // whole tab reads as one unit; only the active path stays lit.
+        for (int i = 0; i < PathTabOrder.Length; i++)
         {
-            var chrome = (allPaths || path == pathFilter) ? ChromeActive : ChromeInactive;
-            r.SetElementTint(instanceId, $"PathTab_{path}_Backing", chrome);
-            r.SetElementTint(instanceId, $"PathTab_{path}_Icon", chrome);
+            var chrome = (allPaths || PathTabOrder[i] == pathFilter) ? ChromeActive : ChromeInactive;
+            string inst = TabInst(instanceId, pathBar, i + 1);
+            r.SetElementTint(inst, "Backing", chrome);
+            r.SetElementTint(inst, "Icon", chrome);
         }
     }
+
+    // The grimoire tabs live two levels deep: GrimoireDyn -> {School,Path}TabBar
+    // -> tab sub-widget. A tab's children are addressed by the sub-instance id
+    // "{grim}.{barChildIdx}.{tabIdx}" (the renderer's nested-instance scheme).
+    private static int BarIndex(RuntimeWidgetRenderer r, string barName)
+    {
+        var def = r.GetWidgetDef(GrimoirePanel.WidgetId);
+        if (def?.Children != null)
+            for (int i = 0; i < def.Children.Count; i++)
+                if (def.Children[i].Name == barName) return i;
+        return -1;
+    }
+    private static string TabInst(string instanceId, int barIdx, int tabIdx)
+        => $"{instanceId}.{barIdx}.{tabIdx}";
 
     // === IModalLayer ===
     public bool ContainsMouse(int mx, int my)
@@ -169,34 +190,23 @@ public class GrimoireOverlay : IModalLayer
     /// without an OS cursor (the panel layout must already be set via Draw).</summary>
     public bool HandleClickAt(int mx, int my)
     {
-        // School tabs (hit-test the backing — the text element is wider than
-        // its tab and would overlap neighbours).
-        foreach (var (name, school) in SchoolTabs)
-        {
-            if (HitChild($"SchoolTab_{name}_Backing", mx, my))
+        // School tabs (nested in SchoolTabBar; index 0 = "All" clears the filter).
+        for (int i = 0; i < SchoolTabs.Length; i++)
+            if (HitTab("SchoolTabBar", i, mx, my))
             {
-                _schoolFilter = school;
+                _schoolFilter = SchoolTabs[i].School;
                 Refresh();
                 return true;
             }
-        }
-        // Path "All" tab clears the path filter
-        if (HitChild("PathTab_All_Backing", mx, my))
-        {
-            _pathFilter = MagicPath.None;
-            Refresh();
-            return true;
-        }
-        // Path icon tabs (hit-test each path's backing)
-        foreach (var path in PathTabOrder)
-        {
-            if (HitChild($"PathTab_{path}_Backing", mx, my))
+        // Path tabs (nested in PathTabBar): instance 0 = All (clears), 1..N = paths.
+        for (int i = 0; i <= PathTabOrder.Length; i++)
+            if (HitTab("PathTabBar", i, mx, my))
             {
-                _pathFilter = _pathFilter == path ? MagicPath.None : path; // click again clears
+                if (i == 0) _pathFilter = MagicPath.None;
+                else { var p = PathTabOrder[i - 1]; _pathFilter = _pathFilter == p ? MagicPath.None : p; }
                 Refresh();
                 return true;
             }
-        }
         // Spell tiles
         for (int i = 0; i < _shown.Count; i++)
         {
@@ -213,10 +223,15 @@ public class GrimoireOverlay : IModalLayer
         return false;
     }
 
-    // Test seam: the centre point of a named chrome child (tab) or a tile.
+    // Test seam: the centre point of a named chrome child (tile) or a nested tab.
     public Point DebugChildCenter(string child)
     {
         var r = _renderer.GetChildRect(GrimoirePanel.WidgetId, child, _x, _y, InstanceId);
+        return r == Rectangle.Empty ? Point.Zero : r.Center;
+    }
+    public Point DebugTabCenter(string barName, int tabIdx)
+    {
+        var r = TabRect(barName, tabIdx);
         return r == Rectangle.Empty ? Point.Zero : r.Center;
     }
     public int DebugShownCount => _shown.Count;
@@ -238,6 +253,21 @@ public class GrimoireOverlay : IModalLayer
     private bool HitChild(string child, int mx, int my)
     {
         var r = _renderer.GetChildRect(GrimoirePanel.WidgetId, child, _x, _y, InstanceId);
+        return r != Rectangle.Empty && r.Contains(mx, my);
+    }
+
+    // Screen rect of nested tab #tabIdx in the named bar (bar -> tab), mirroring
+    // SkillBookOverlay's chained GetChildRect for two-level nested widgets.
+    private Rectangle TabRect(string barName, int tabIdx)
+    {
+        int barIdx = BarIndex(_renderer, barName);
+        if (barIdx < 0) return Rectangle.Empty;
+        var bar = _renderer.GetChildRect(GrimoirePanel.WidgetId, barName, _x, _y, InstanceId);
+        return _renderer.GetChildRect(barName, $"tab{tabIdx}", bar.X, bar.Y, $"{InstanceId}.{barIdx}");
+    }
+    private bool HitTab(string barName, int tabIdx, int mx, int my)
+    {
+        var r = TabRect(barName, tabIdx);
         return r != Rectangle.Empty && r.Contains(mx, my);
     }
 }
