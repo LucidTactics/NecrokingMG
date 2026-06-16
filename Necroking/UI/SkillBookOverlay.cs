@@ -52,6 +52,15 @@ public class SkillBookOverlay : IModalLayer
     private string? _toast;
     private double _toastUntil;
 
+    // --- Layout editor: drag tiles to reposition, connectors follow, save to JSON ---
+    /// <summary>Gates the on-screen "Edit Layout" toggle. Dev/authoring tool — set
+    /// false (or behind a dev setting) before shipping to players.</summary>
+    public static bool EnableLayoutEditor = true;
+    private bool _editLayout;
+    private string? _dragId;
+    private float _dragGrabX, _dragGrabY;
+    private bool _layoutDirty;
+
     // Cached index of the TabBar child within SkillBookWindow. The five tabs are
     // nested child-widgets of it, so they're addressed as "{Instance}.{tabBarIdx}.{i}".
     private int _tabBarIdx = -1;
@@ -97,6 +106,8 @@ public class SkillBookOverlay : IModalLayer
         TryLearn(id, timeSec);
         return _state?.IsLearned(id) ?? false;
     }
+    /// <summary>Test/host hook: toggle the layout-edit mode programmatically.</summary>
+    public void SetLayoutEditMode(bool on) { _editLayout = on; _dragId = null; }
 
     private void Layout(int sw, int sh)
     {
@@ -117,9 +128,26 @@ public class SkillBookOverlay : IModalLayer
         if (_toast != null && timeSec >= _toastUntil) _toast = null;
         Layout(sw, sh);
         int mx = (int)input.MousePos.X, my = (int)input.MousePos.Y;
+
+        // A drag in progress continues anywhere on screen until the button releases.
+        if (_dragId != null)
+        {
+            input.MouseOverUI = true;
+            if (input.LeftDown) DragTo(mx, my);
+            else _dragId = null;
+            return;
+        }
+
         if (!ContainsMouse(mx, my)) return;
         input.MouseOverUI = true;
         if (!input.LeftPressed) return;
+
+        // Layout-editor toolbar (drawn over the page bottom).
+        if (EnableLayoutEditor && EditBtnRect().Contains(mx, my))
+        {
+            _editLayout = !_editLayout; _dragId = null; return;
+        }
+        if (_editLayout && SaveBtnRect().Contains(mx, my)) { DoSaveLayout(timeSec); return; }
 
         // Tab clicks: tabs are nested child-widgets of the TabBar, so resolve the
         // TabBar's screen rect first, then each tab's laid-out rect within it.
@@ -134,9 +162,57 @@ public class SkillBookOverlay : IModalLayer
                 if (r != Rectangle.Empty && r.Contains(mx, my)) { _activeTab = i; return; }
             }
         }
-        // Tile clicks (the rects we stamped last Draw).
+        // Tile clicks: in edit mode start dragging the tile; otherwise try to learn it.
         foreach (var (id, rect) in _tileRects)
-            if (rect.Contains(mx, my)) { TryLearn(id, timeSec); return; }
+            if (rect.Contains(mx, my))
+            {
+                if (_editLayout)
+                {
+                    _dragId = id;
+                    _dragGrabX = mx - (rect.X + rect.Width / 2f);
+                    _dragGrabY = my - (rect.Y + rect.Height / 2f);
+                }
+                else TryLearn(id, timeSec);
+                return;
+            }
+    }
+
+    /// <summary>Move the dragged skill so its centre tracks the cursor (minus the grab
+    /// offset), converting screen position back to the tab's logical tree coords. The
+    /// connectors recompute from positions, so they follow automatically.</summary>
+    private void DragTo(int mx, int my)
+    {
+        if (_activeTab < 0 || _activeTab >= SkillBookDefs.Tabs.Count) return;
+        var tab = SkillBookDefs.Tabs[_activeTab];
+        int i = tab.IndexOf(_dragId!);
+        if (i < 0) return;
+        var p = TreePlacement(tab);
+        if (p.scale <= 0) return;
+        float cx = mx - _dragGrabX, cy = my - _dragGrabY;
+        tab.Skills[i].X = (int)MathF.Round((cx - p.ox) / p.scale);
+        tab.Skills[i].Y = (int)MathF.Round((cy - p.oy) / p.scale);
+        _layoutDirty = true;
+    }
+
+    private void DoSaveLayout(double timeSec)
+    {
+        bool ok = SkillBookDefs.SaveLayout();
+        if (ok) _layoutDirty = false;
+        Toast(ok ? "Layout saved." : "Save failed - see log.", timeSec);
+    }
+
+    // Toolbar button rects, anchored to the visible bottom-right of the window so
+    // they stay on-screen even when the window is taller than the display.
+    private Rectangle EditBtnRect()
+    {
+        const int bw = 104, bh = 26, pad = 12;
+        int by = Math.Min(_y + _h, _sh) - pad - bh;
+        return new Rectangle(_x + _w - pad - bw, by, bw, bh);
+    }
+    private Rectangle SaveBtnRect()
+    {
+        var e = EditBtnRect();
+        return new Rectangle(e.X - 8 - e.Width, e.Y, e.Width, e.Height);
     }
 
     public void Draw(int sw, int sh)
@@ -161,7 +237,46 @@ public class SkillBookOverlay : IModalLayer
             foreach (var s in tab.Skills) StampTile(s, place);
         }
 
+        if (_editLayout) DrawEditOverlay();
+        if (EnableLayoutEditor) DrawLayoutToolbar();
         if (_toast != null) DrawToast();
+    }
+
+    /// <summary>Edit-mode affordance: a draggable outline on each tile (brighter on the
+    /// one being dragged) plus a one-line instruction above the toolbar.</summary>
+    private void DrawEditOverlay()
+    {
+        foreach (var (id, rect) in _tileRects)
+            DrawOutline(rect, id == _dragId ? new Color(255, 232, 150, 230)
+                                            : new Color(180, 150, 90, 150));
+        const string hint = "Drag skills to reposition - connectors follow. Save when done.";
+        var sz = _renderer.MeasureText(hint, 15, "Roboto");
+        _renderer.DrawText(hint, (int)(_x + (_w - sz.X) / 2), EditBtnRect().Y - 22,
+            15, new Color(235, 215, 165), "Roboto");
+    }
+
+    private void DrawLayoutToolbar()
+    {
+        DrawButton(EditBtnRect(), _editLayout ? "Done" : "Edit Layout", _editLayout);
+        if (_editLayout)
+            DrawButton(SaveBtnRect(), _layoutDirty ? "Save *" : "Save", _layoutDirty);
+    }
+
+    private void DrawButton(Rectangle r, string label, bool active)
+    {
+        _batch.Draw(_pixel, r, new Color(40, 26, 14, 235));
+        DrawOutline(r, active ? new Color(214, 182, 112) : new Color(120, 100, 70));
+        var sz = _renderer.MeasureText(label, 15, "Roboto");
+        _renderer.DrawText(label, (int)(r.X + (r.Width - sz.X) / 2), (int)(r.Y + (r.Height - sz.Y) / 2),
+            15, active ? new Color(245, 230, 190) : new Color(200, 185, 150), "Roboto");
+    }
+
+    private void DrawOutline(Rectangle r, Color c)
+    {
+        _batch.Draw(_pixel, new Rectangle(r.X, r.Y, r.Width, 1), c);
+        _batch.Draw(_pixel, new Rectangle(r.X, r.Bottom - 1, r.Width, 1), c);
+        _batch.Draw(_pixel, new Rectangle(r.X, r.Y, 1, r.Height), c);
+        _batch.Draw(_pixel, new Rectangle(r.Right - 1, r.Y, 1, r.Height), c);
     }
 
     /// <summary>Index of the TabBar child inside SkillBookWindow (cached). The tab

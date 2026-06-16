@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Necroking.Core;
 
 namespace Necroking.Data;
@@ -44,6 +45,43 @@ public static class SkillBookDefs
         }
         // Resolve parent ids -> indices and build children list per tab.
         foreach (var tab in Tabs) tab.ResolveLinks();
+    }
+
+    /// <summary>Write the current per-skill x,y back into data/skills/&lt;tab&gt;.json,
+    /// preserving every other field (parsed as a JSON tree, only x/y touched). Used by
+    /// the in-book layout editor. Returns false if any tab failed to save.</summary>
+    public static bool SaveLayout()
+    {
+        bool ok = true;
+        foreach (var tab in Tabs)
+        {
+            string path = GamePaths.Resolve($"data/skills/{tab.Id}.json");
+            try
+            {
+                var root = JsonNode.Parse(File.ReadAllText(path));
+                var arr = root?["skills"]?.AsArray();
+                if (arr == null) continue;
+                var byId = new Dictionary<string, SkillDef>();
+                foreach (var s in tab.Skills) byId[s.Id] = s;
+                foreach (var sn in arr)
+                {
+                    var id = sn?["id"]?.GetValue<string>();
+                    if (id != null && byId.TryGetValue(id, out var def))
+                    {
+                        sn!["x"] = def.X;
+                        sn!["y"] = def.Y;
+                    }
+                }
+                File.WriteAllText(path, root!.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
+                DebugLog.Log("startup", $"SkillBook: saved layout -> {path}");
+            }
+            catch (Exception ex)
+            {
+                ok = false;
+                DebugLog.Log("error", $"SkillBook SaveLayout {path}: {ex.Message}");
+            }
+        }
+        return ok;
     }
 
     private static SkillTab LoadTab(string id, string path)
