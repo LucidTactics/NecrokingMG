@@ -3,6 +3,7 @@
     {
       "id": "SpellSlotBg",
       "type": "image",
+      "imagePath": "assets/UI/Imported/FancyFrame2_Inner.png",
       "width": 60,
       "height": 60,
       "tintColor": [
@@ -22,8 +23,7 @@
         "satStrength": 0.322,
         "valStrength": 0.86,
         "useHcl": false
-      },
-      "imagePath": "assets/UI/Imported/FancyFrame2_Inner.png"
+      }
     },
     {
       "id": "Quantity",
@@ -9488,8 +9488,7 @@
     },
     {
       "id": "Grim_TitleRibbon",
-      "type": "image",
-      "imagePath": "assets/UI/Imported/baked_Ribbon6_689x94.png",
+      "type": "nineSlice",
       "width": 689,
       "height": 94,
       "tintColor": [
@@ -9517,7 +9516,8 @@
         ],
         "outlineThickness": 0.6,
         "outlineOpacity": 1
-      }
+      },
+      "nineSlice": "ribbon6"
     },
     {
       "id": "Grim_TitleText",
@@ -10433,6 +10433,7 @@
       "id": "Grim_TabBacking",
       "type": "nineSlice",
       "nineSlice": "fancy_inner",
+      "nineSliceScale": 0.3,
       "width": 51,
       "height": 45,
       "tintColor": [
@@ -10441,7 +10442,6 @@
         255,
         255
       ],
-      "nineSliceScale": 0.3,
       "harmonize": {
         "targetColor": [
           60,

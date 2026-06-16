@@ -102,10 +102,10 @@
     {
       "id": "fancy_inner",
       "texture": "assets/UI/Imported/FancyFrame2_Inner.png",
-      "borderLeft": 14,
-      "borderRight": 14,
-      "borderTop": 14,
-      "borderBottom": 14,
+      "borderLeft": 83,
+      "borderRight": 87,
+      "borderTop": 83,
+      "borderBottom": 89,
       "tileEdges": false
     },
     {
@@ -124,6 +124,15 @@
       "borderRight": 8,
       "borderTop": 8,
       "borderBottom": 8,
+      "tileEdges": false
+    },
+    {
+      "id": "ribbon6",
+      "texture": "assets/UI/Imported/Ribbon6.png",
+      "borderLeft": 80,
+      "borderRight": 80,
+      "borderTop": 0,
+      "borderBottom": 0,
       "tileEdges": false
     }
   ]
