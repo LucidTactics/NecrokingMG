@@ -16411,6 +16411,213 @@
           150
         ]
       }
+    },
+    {
+      "id": "SkillTile_Bg",
+      "type": "image",
+      "imagePath": "assets/UI/Imported/baked_FancyFrame2_Inner_253x65.png",
+      "width": 253,
+      "height": 65,
+      "tintColor": [
+        255,
+        255,
+        255,
+        110
+      ],
+      "harmonize": {
+        "targetColor": [
+          144,
+          109,
+          47,
+          255
+        ],
+        "hueStrength": 1,
+        "satStrength": 0.322,
+        "valStrength": 0.86,
+        "useHcl": false
+      }
+    },
+    {
+      "id": "SkillTile_Frame",
+      "type": "image",
+      "imagePath": "assets/UI/Imported/baked_SpiderFrame84px_315x72.png",
+      "width": 315,
+      "height": 72,
+      "tintColor": [
+        255,
+        255,
+        255,
+        255
+      ],
+      "harmonize": {
+        "targetColor": [
+          55,
+          42,
+          11,
+          255
+        ],
+        "hueStrength": 1,
+        "satStrength": 0.133,
+        "valStrength": 0.255,
+        "useHcl": false
+      }
+    },
+    {
+      "id": "SkillTile_Underline",
+      "type": "image",
+      "imagePath": "assets/UI/Imported/baked_FadingBar_212x3.png",
+      "width": 212,
+      "height": 3,
+      "tintColor": [
+        255,
+        255,
+        255,
+        184
+      ],
+      "harmonize": {
+        "targetColor": [
+          48,
+          33,
+          12,
+          255
+        ],
+        "hueStrength": 1,
+        "satStrength": 1,
+        "valStrength": 1,
+        "useHcl": false
+      }
+    },
+    {
+      "id": "SkillTile_Icon",
+      "type": "image",
+      "imagePath": "assets/UI/Imported/SummonWolves.png",
+      "width": 63,
+      "height": 62,
+      "tintColor": [
+        255,
+        255,
+        255,
+        255
+      ],
+      "harmonize": {
+        "targetColor": [
+          255,
+          126,
+          0,
+          255
+        ],
+        "hueStrength": 0,
+        "satStrength": 0,
+        "valStrength": 0,
+        "useHcl": false,
+        "outlineColor": [
+          255,
+          255,
+          255,
+          255
+        ],
+        "outlineThickness": 0.7,
+        "outlineOpacity": 0.47
+      }
+    },
+    {
+      "id": "SkillTile_IconFrame",
+      "type": "image",
+      "imagePath": "assets/UI/Imported/SpiderFrame84px.png",
+      "width": 79,
+      "height": 79,
+      "tintColor": [
+        255,
+        255,
+        255,
+        255
+      ],
+      "harmonize": {
+        "targetColor": [
+          108,
+          82,
+          22,
+          255
+        ],
+        "hueStrength": 1,
+        "satStrength": 0.133,
+        "valStrength": 0.122,
+        "useHcl": false
+      }
+    },
+    {
+      "id": "SkillTile_Name",
+      "type": "text",
+      "width": 196,
+      "height": 42,
+      "tintColor": [
+        255,
+        255,
+        255,
+        0
+      ],
+      "defaultText": "Skill Name",
+      "textRegion": {
+        "x": 0,
+        "y": 0,
+        "w": 236,
+        "h": 42,
+        "align": "left",
+        "valign": "center",
+        "fontFamily": "Quintessential",
+        "fontSize": 30,
+        "fontColor": [
+          240,
+          218,
+          178,
+          255
+        ],
+        "bold": true,
+        "outlineWidth": 1,
+        "outlineColor": [
+          0,
+          0,
+          0,
+          150
+        ]
+      }
+    },
+    {
+      "id": "SkillTile_Cost",
+      "type": "text",
+      "width": 15,
+      "height": 26,
+      "tintColor": [
+        255,
+        255,
+        255,
+        0
+      ],
+      "defaultText": "Cost 5",
+      "textRegion": {
+        "x": 0,
+        "y": 0,
+        "w": 228,
+        "h": 26,
+        "align": "left",
+        "valign": "center",
+        "fontFamily": "Roboto",
+        "fontSize": 18,
+        "fontColor": [
+          236,
+          221,
+          179,
+          255
+        ],
+        "bold": true,
+        "outlineWidth": 1,
+        "outlineColor": [
+          0,
+          0,
+          0,
+          150
+        ]
+      }
     }
   ]
 }

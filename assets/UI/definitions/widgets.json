@@ -9884,30 +9884,20 @@
       "id": "SkillTile",
       "width": 322,
       "height": 80,
-      "backgroundScale": 1,
-      "modal": false,
+      "layout": "none",
       "children": [
         {
           "name": "bg",
-          "element": "GMT_0",
-          "x": 61,
-          "y": 1,
-          "width": 253,
-          "height": 65,
-          "anchor": 0
-        },
-        {
-          "name": "grad",
-          "element": "GMT_1",
-          "x": 61,
-          "y": 0,
-          "width": 251,
-          "height": 65,
+          "element": "SkillTile_Bg",
+          "x": 66,
+          "y": 2,
+          "width": 250,
+          "height": 64,
           "anchor": 0
         },
         {
           "name": "frame",
-          "element": "GMT_2",
+          "element": "SkillTile_Frame",
           "x": 0,
           "y": -3,
           "width": 315,
@@ -9916,16 +9906,16 @@
         },
         {
           "name": "underline",
-          "element": "GMT_3",
-          "x": 63,
-          "y": 35,
-          "width": 212,
+          "element": "SkillTile_Underline",
+          "x": 74,
+          "y": 36,
+          "width": 228,
           "height": 3,
           "anchor": 0
         },
         {
           "name": "icon",
-          "element": "GMT_4",
+          "element": "SkillTile_Icon",
           "x": 1,
           "y": 3,
           "width": 63,
@@ -9934,7 +9924,7 @@
         },
         {
           "name": "iconframe",
-          "element": "SpiderFrameBorder",
+          "element": "SkillTile_IconFrame",
           "x": -7,
           "y": -6,
           "width": 79,
@@ -9942,155 +9932,20 @@
           "anchor": 0
         },
         {
-          "name": "title",
-          "element": "GMT_6",
-          "x": 73,
-          "y": -2,
-          "width": 196,
-          "height": 42,
-          "anchor": 0
-        },
-        {
-          "name": "path_p",
-          "element": "GMT_7",
+          "name": "name",
+          "element": "SkillTile_Name",
           "x": 74,
-          "y": 44,
-          "width": 23,
-          "height": 15,
+          "y": 2,
+          "width": 236,
+          "height": 32,
           "anchor": 0
         },
         {
-          "name": "path_v",
-          "element": "GMT_8",
-          "x": 98,
-          "y": 38,
-          "width": 12,
-          "height": 25,
-          "anchor": 0
-        },
-        {
-          "name": "path_i",
-          "element": "GMT_9",
-          "x": 108,
-          "y": 38,
-          "width": 24,
-          "height": 24,
-          "anchor": 0
-        },
-        {
-          "name": "cost_p",
-          "element": "GMT_10",
-          "x": 166,
-          "y": 44,
-          "width": 23,
-          "height": 15,
-          "anchor": 0
-        },
-        {
-          "name": "cost_v",
-          "element": "GMT_11",
-          "x": 189,
-          "y": 38,
-          "width": 15,
-          "height": 26,
-          "anchor": 0
-        },
-        {
-          "name": "cost_i",
-          "element": "GMT_12",
-          "x": 204,
-          "y": 38,
-          "width": 24,
-          "height": 24,
-          "anchor": 0
-        },
-        {
-          "name": "target",
-          "element": "GMT_13",
-          "x": 259,
-          "y": 24,
-          "width": 48,
-          "height": 28,
-          "anchor": 0
-        },
-        {
-          "name": "dmg_v",
-          "element": "GMT_14",
-          "x": 256,
-          "y": 4,
-          "width": 34,
-          "height": 34,
-          "anchor": 0
-        },
-        {
-          "name": "dmg_m1",
-          "element": "GMT_15",
-          "x": 262,
-          "y": 33,
-          "width": 25,
-          "height": 11,
-          "anchor": 0
-        },
-        {
-          "name": "dmg_m2",
-          "element": "GMT_16",
-          "x": 290,
-          "y": 33,
-          "width": 25,
-          "height": 11,
-          "anchor": 0
-        },
-        {
-          "name": "path2_i",
-          "element": "GMT_17",
-          "x": 288,
-          "y": 8,
-          "width": 24,
-          "height": 24,
-          "anchor": 0
-        },
-        {
-          "name": "buff_p",
-          "element": "GMT_18",
-          "x": 248,
-          "y": 12,
-          "width": 28,
-          "height": 16,
-          "anchor": 0
-        },
-        {
-          "name": "buff_i",
-          "element": "GMT_19",
-          "x": 280,
-          "y": 8,
-          "width": 24,
-          "height": 24,
-          "anchor": 0
-        },
-        {
-          "name": "path2_v",
-          "element": "GMT_20",
-          "x": 130,
-          "y": 38,
-          "width": 12,
-          "height": 25,
-          "anchor": 0
-        },
-        {
-          "name": "cost2_v",
-          "element": "GMT_21",
-          "x": 226,
-          "y": 38,
-          "width": 15,
-          "height": 26,
-          "anchor": 0
-        },
-        {
-          "name": "cost2_i",
-          "element": "GMT_22",
-          "x": 240,
-          "y": 38,
-          "width": 24,
+          "name": "cost",
+          "element": "SkillTile_Cost",
+          "x": 74,
+          "y": 42,
+          "width": 228,
           "height": 24,
           "anchor": 0
         }
@@ -10183,7 +10038,7 @@
           "width": 648,
           "height": 62,
           "anchor": 0,
-          "defaultText": "TOME OF THE NECROKING"
+          "defaultText": "Ability Upgrades"
         },
         {
           "name": "WindowBorder",
@@ -10200,7 +10055,8 @@
       "id": "SkillBookTab",
       "width": 128,
       "height": 35,
-      "layout": "none",
+      "backgroundScale": 1,
+      "modal": false,
       "children": [
         {
           "name": "Backing",
@@ -10244,9 +10100,17 @@
       "id": "TabBar",
       "width": 656,
       "height": 35,
+      "backgroundScale": 1,
+      "modal": false,
       "layout": "horizontal",
-      "layoutSpacing": 4,
       "layoutPadding": 0,
+      "layoutSpacing": 4,
+      "layoutPadTop": 0,
+      "layoutPadBottom": 0,
+      "layoutPadLeft": 0,
+      "layoutPadRight": 0,
+      "layoutSpacingX": 0,
+      "layoutSpacingY": 0,
       "children": [
         {
           "name": "tab0",

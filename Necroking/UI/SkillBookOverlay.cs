@@ -239,20 +239,14 @@ public class SkillBookOverlay : IModalLayer
 
         string inst = $"{Instance}.tile.{def.Id}";
         _renderer.ClearOverridesRecursive(inst);
-        _renderer.SetText(inst, "title", def.Name);
+        _renderer.SetText(inst, "name", def.Name);
         if (Has(SkillIcon(def))) _renderer.SetImage(inst, "icon", SkillIcon(def));
 
         // Cost line: flat "Cost N" (or Free / Learned), coloured by state.
         string costText = learned ? "Learned"
                         : def.Costs.Count == 0 ? "Free"
                         : $"Cost {def.Costs[0].Amount}";
-        _renderer.SetText(inst, "cost_v", costText);
-
-        // Hide the grimoire-tile bits we don't use for skills.
-        foreach (var c in new[] { "path_p", "path_v", "path_i", "cost_p", "cost_i",
-                 "target", "dmg_v", "dmg_m1", "dmg_m2", "path2_i", "path2_v",
-                 "buff_p", "buff_i", "cost2_v", "cost2_i" })
-            _renderer.SetHidden(inst, c, true);
+        _renderer.SetText(inst, "cost", costText);
 
         // State wash via the frame tint (kept subtle; bright parchment otherwise).
         var tint = learned ? new Color(150, 170, 150)

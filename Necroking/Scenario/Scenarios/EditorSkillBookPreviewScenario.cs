@@ -29,9 +29,10 @@ public class EditorSkillBookPreviewScenario : UIScenarioBase
         if (_complete) return;
         if (_shotPending)
         {
-            if (DeferredScreenshot == null) { _complete = true; RequestedMenuState = "None"; }
+            if (DeferredScreenshot == null) { _shotPending = false; _ticks = 0; }
             return;
         }
+        if (_phase >= 5) { _complete = true; RequestedMenuState = "None"; return; }
         _ticks++;
         switch (_phase)
         {
@@ -46,11 +47,25 @@ public class EditorSkillBookPreviewScenario : UIScenarioBase
                 RequestSelectUIWidgetById = "SkillBookWindow";
                 _phase = 2; _ticks = 0;
                 break;
-            case 2: // let it settle, then screenshot
+            case 2: // let it settle, then screenshot the window
                 if (_ticks < 10) return;
                 DebugLog.Log(ScenarioLog, "Screenshot: ui_skillbook_editor_preview");
                 DeferredScreenshot = "ui_skillbook_editor_preview";
                 _shotPending = true;
+                _phase = 3; _ticks = 0;
+                break;
+            case 3: // select the SkillTile widget
+                if (_ticks < 4) return;
+                DebugLog.Log(ScenarioLog, "Selecting SkillTile");
+                RequestSelectUIWidgetById = "SkillTile";
+                _phase = 4; _ticks = 0;
+                break;
+            case 4: // screenshot the tile
+                if (_ticks < 10) return;
+                DebugLog.Log(ScenarioLog, "Screenshot: ui_skilltile_editor_preview");
+                DeferredScreenshot = "ui_skilltile_editor_preview";
+                _shotPending = true;
+                _phase = 5;
                 break;
         }
     }
