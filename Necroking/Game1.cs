@@ -3163,6 +3163,14 @@ public class Game1 : Microsoft.Xna.Framework.Game
                     _uiEditor.ActiveTab = uiTab;
             }
 
+            // Select a specific UI-editor widget by id from scenario (Widgets tab)
+            if (_activeScenario.RequestSelectUIWidgetById != null)
+            {
+                var wid = _activeScenario.RequestSelectUIWidgetById;
+                _activeScenario.RequestSelectUIWidgetById = null;
+                if (_menuState == MenuState.UIEditor) _uiEditor.SelectWidgetById(wid);
+            }
+
             // Inventory UI requests from scenario
             if (_activeScenario.RequestOpenInventory)
             {

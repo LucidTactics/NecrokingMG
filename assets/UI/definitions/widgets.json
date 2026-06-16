@@ -10182,7 +10182,8 @@
           "y": 28,
           "width": 648,
           "height": 62,
-          "anchor": 0
+          "anchor": 0,
+          "defaultText": "TOME OF THE NECROKING"
         },
         {
           "name": "WindowBorder",
@@ -10254,7 +10255,13 @@
           "y": 0,
           "width": 128,
           "height": 35,
-          "anchor": 0
+          "anchor": 0,
+          "childOverrides": [
+            {
+              "childIndex": 1,
+              "overrideDefaultText": "Potions"
+            }
+          ]
         },
         {
           "name": "tab1",
@@ -10263,7 +10270,13 @@
           "y": 0,
           "width": 128,
           "height": 35,
-          "anchor": 0
+          "anchor": 0,
+          "childOverrides": [
+            {
+              "childIndex": 1,
+              "overrideDefaultText": "Monstrology"
+            }
+          ]
         },
         {
           "name": "tab2",
@@ -10272,7 +10285,13 @@
           "y": 0,
           "width": 128,
           "height": 35,
-          "anchor": 0
+          "anchor": 0,
+          "childOverrides": [
+            {
+              "childIndex": 1,
+              "overrideDefaultText": "Necromancy"
+            }
+          ]
         },
         {
           "name": "tab3",
@@ -10281,7 +10300,13 @@
           "y": 0,
           "width": 128,
           "height": 35,
-          "anchor": 0
+          "anchor": 0,
+          "childOverrides": [
+            {
+              "childIndex": 1,
+              "overrideDefaultText": "Magic"
+            }
+          ]
         },
         {
           "name": "tab4",
@@ -10290,7 +10315,13 @@
           "y": 0,
           "width": 128,
           "height": 35,
-          "anchor": 0
+          "anchor": 0,
+          "childOverrides": [
+            {
+              "childIndex": 1,
+              "overrideDefaultText": "Metamorphosis"
+            }
+          ]
         }
       ]
     }

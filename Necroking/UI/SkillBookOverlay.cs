@@ -185,9 +185,9 @@ public class SkillBookOverlay : IModalLayer
             var tab = SkillBookDefs.Tabs[i];
             var (learned, total) = _state?.GetProgress(tab) ?? (0, tab.Skills.Count);
             string tabInst = $"{Instance}.{barIdx}.{i}";
-            // Name + fraction are bound per-tab (all five tabs share one SkillBookTab
-            // widget, so the per-tab text is data-driven, not a static element default).
-            _renderer.SetText(tabInst, "Name", TabSlots[i]);
+            // The tab name is a static per-tab label carried in the widget data
+            // (TabBar child override → SkillBookTab "Name"), so it renders in both the
+            // game and the editor without code. Only the dynamic bits are bound here.
             _renderer.SetText(tabInst, "Frac", $"{learned}/{total}");
             bool active = i == _activeTab;
             _renderer.SetElementTint(tabInst, "Backing",

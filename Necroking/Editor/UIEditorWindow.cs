@@ -118,6 +118,19 @@ public class UIEditorChildDef
 
     // RI22: Child overrides (nested override system)
     public List<ChildOverrideEntry>? ChildOverrides { get; set; }
+
+    /// <summary>For a child-widget instance, the per-instance default-text override
+    /// for nested child <paramref name="childIndex"/> (RI22 OverrideDefaultText), or
+    /// null if none. Lets one shared widget show different static labels per instance
+    /// (e.g. the skill-book school tabs) without code setting each one.</summary>
+    public string? OverrideTextFor(int childIndex)
+    {
+        if (ChildOverrides == null) return null;
+        foreach (var co in ChildOverrides)
+            if (co.ChildIndex == childIndex && !string.IsNullOrEmpty(co.OverrideDefaultText))
+                return co.OverrideDefaultText;
+        return null;
+    }
 }
 
 public class UIEditorTints
@@ -196,6 +209,18 @@ public partial class UIEditorWindow : EditorBase
     public UIEditorTab ActiveTab = UIEditorTab.NineSlices;
     public int SelectedIndex = -1;
     private int _selectedChildIdx = -1;
+
+    /// <summary>Test/scenario hook: switch to the Widgets tab and select the widget
+    /// with the given id. Returns false if no such widget. Lets editor scenarios
+    /// screenshot a specific widget's preview rather than just the first one.</summary>
+    public bool SelectWidgetById(string id)
+    {
+        ActiveTab = UIEditorTab.Widgets;
+        _selectedChildIdx = -1;
+        for (int i = 0; i < _widgets.Count; i++)
+            if (_widgets[i].Id == id) { SelectedIndex = i; return true; }
+        return false;
+    }
 
     // --- Undo/redo (memento: snapshot the three def lists as JSON, restore on Ctrl+Z) ---
     private sealed class EditorSnapshot
@@ -3202,7 +3227,7 @@ public partial class UIEditorWindow : EditorBase
     }
 
     /// <param name="editorChrome">Show selection boxes, outlines, handles. False for nested/runtime rendering.</param>
-    private void DrawWidgetChild(UIEditorChildDef child, Rectangle rect, bool selected, bool editorChrome = true)
+    private void DrawWidgetChild(UIEditorChildDef child, Rectangle rect, bool selected, bool editorChrome = true, string? overrideText = null)
     {
         bool drawn = false;
 
@@ -3219,7 +3244,8 @@ public partial class UIEditorWindow : EditorBase
                 // Nested widget's own children (no editor chrome — pure visual)
                 var nestedRects = ComputeLayoutRects(widgetDef, rect.X, rect.Y);
                 for (int ci = 0; ci < widgetDef.Children.Count && ci < nestedRects.Count; ci++)
-                    DrawWidgetChild(widgetDef.Children[ci], nestedRects[ci], false, editorChrome: false);
+                    DrawWidgetChild(widgetDef.Children[ci], nestedRects[ci], false, editorChrome: false,
+                        overrideText: child.OverrideTextFor(ci));
 
                 // Frame on top of children
                 DrawWidgetFrame(widgetDef, rect.X, rect.Y, rect.Width, rect.Height);
@@ -3239,7 +3265,8 @@ public partial class UIEditorWindow : EditorBase
                 {
                     // Text element — render with FontStashSharp for proper sizing
                     drawn = true;
-                    string text = !string.IsNullOrEmpty(child.DefaultText) ? child.DefaultText
+                    string text = !string.IsNullOrEmpty(overrideText) ? overrideText
+                        : !string.IsNullOrEmpty(child.DefaultText) ? child.DefaultText
                         : !string.IsNullOrEmpty(elemDef.DefaultText) ? elemDef.DefaultText : "";
                     if (!string.IsNullOrEmpty(text))
                     {

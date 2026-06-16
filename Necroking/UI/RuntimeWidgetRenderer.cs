@@ -416,7 +416,7 @@ public class RuntimeWidgetRenderer
     //  Internal rendering
     // ═══════════════════════════════════════
 
-    private void DrawChild(UIEditorChildDef child, Rectangle rect, string instanceId, int childIndex, string? overrideWidget)
+    private void DrawChild(UIEditorChildDef child, Rectangle rect, string instanceId, int childIndex, string? overrideWidget, string? overrideText = null)
     {
         if (_hiddenChildren.TryGetValue(instanceId, out var hidden) && hidden.Contains(child.Name))
             return;
@@ -441,7 +441,7 @@ public class RuntimeWidgetRenderer
                     string? nestedOverride = null;
                     if (_childWidgetOverrides.TryGetValue(subId, out var cwMap))
                         cwMap.TryGetValue(ci, out nestedOverride);
-                    DrawChild(widgetDef.Children[ci], nestedRects[ci], subId, ci, nestedOverride);
+                    DrawChild(widgetDef.Children[ci], nestedRects[ci], subId, ci, nestedOverride, child.OverrideTextFor(ci));
                 }
 
                 DrawWidgetFrame(widgetDef, rect.X, rect.Y, rect.Width, rect.Height);
@@ -469,6 +469,8 @@ public class RuntimeWidgetRenderer
                     string text = "";
                     if (_textOverrides.TryGetValue(instanceId, out var tMap) && tMap.TryGetValue(child.Name, out var ov))
                         text = ov;
+                    else if (!string.IsNullOrEmpty(overrideText))
+                        text = overrideText;
                     else if (!string.IsNullOrEmpty(child.DefaultText))
                         text = child.DefaultText;
                     else if (!string.IsNullOrEmpty(elemDef.DefaultText))
@@ -1004,6 +1006,21 @@ public class RuntimeWidgetRenderer
                                 if (oca.Length >= 4)
                                     child.TextOverride.TextOutlineColor = new byte[] { (byte)oca[0].GetInt32(),
                                         (byte)oca[1].GetInt32(), (byte)oca[2].GetInt32(), (byte)oca[3].GetInt32() };
+                            }
+                        }
+                        // RI22 child overrides — currently the runtime honors
+                        // overrideDefaultText (per-instance static label for a nested
+                        // child of a shared widget; see UIEditorChildDef.OverrideTextFor).
+                        if (ch.TryGetProperty("childOverrides", out var coArr) && coArr.ValueKind == JsonValueKind.Array)
+                        {
+                            child.ChildOverrides = new List<ChildOverrideEntry>();
+                            foreach (var co in coArr.EnumerateArray())
+                            {
+                                child.ChildOverrides.Add(new ChildOverrideEntry
+                                {
+                                    ChildIndex = co.TryGetProperty("childIndex", out var cci) ? cci.GetInt32() : 0,
+                                    OverrideDefaultText = co.TryGetProperty("overrideDefaultText", out var codt) ? codt.GetString() : null,
+                                });
                             }
                         }
                         wd.Children.Add(child);

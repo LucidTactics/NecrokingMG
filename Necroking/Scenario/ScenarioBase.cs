@@ -89,6 +89,11 @@ public abstract class ScenarioBase
     // Request tab switch on UIEditor (set to non-null; consumed by Game1)
     public string? RequestedUITab;
 
+    // Request selecting a specific widget by id in the UIEditor's Widgets tab
+    // (set to non-null; consumed by Game1). Lets editor scenarios screenshot a
+    // chosen widget's preview rather than just the first in the list.
+    public string? RequestSelectUIWidgetById;
+
     // Request opening a sub-editor popup on UnitEditor
     public bool RequestOpenWeaponSub;
 
