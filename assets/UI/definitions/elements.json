@@ -3,6 +3,7 @@
     {
       "id": "SpellSlotBg",
       "type": "nineSlice",
+      "nineSlice": "fancy_inner",
       "width": 60,
       "height": 60,
       "tintColor": [
@@ -22,8 +23,7 @@
         "satStrength": 0.322,
         "valStrength": 0.86,
         "useHcl": false
-      },
-      "nineSlice": "fancy_inner"
+      }
     },
     {
       "id": "Quantity",
@@ -2365,6 +2365,7 @@
     {
       "id": "CB_SlotTex",
       "type": "nineSlice",
+      "nineSlice": "cf2i_fill",
       "width": 75,
       "height": 75,
       "tintColor": [
@@ -2384,8 +2385,7 @@
         "satStrength": 1,
         "valStrength": 0.325,
         "useHcl": false
-      },
-      "nineSlice": "cf2i_fill"
+      }
     },
     {
       "id": "CB_SlotStencil",
@@ -2415,6 +2415,7 @@
     {
       "id": "CB_SlotBorder",
       "type": "nineSlice",
+      "nineSlice": "cloth_frame",
       "width": 75,
       "height": 75,
       "tintColor": [
@@ -2442,12 +2443,12 @@
         ],
         "outlineThickness": 1.56,
         "outlineOpacity": 0.257
-      },
-      "nineSlice": "cloth_frame"
+      }
     },
     {
       "id": "CB_SlotHighlight",
       "type": "nineSlice",
+      "nineSlice": "cloth_frame",
       "width": 66,
       "height": 64,
       "tintColor": [
@@ -2475,8 +2476,7 @@
         ],
         "outlineThickness": 1.87,
         "outlineOpacity": 0.456
-      },
-      "nineSlice": "cloth_frame"
+      }
     },
     {
       "id": "CB_Icon_Helmet4",
@@ -2743,6 +2743,7 @@
     {
       "id": "CB_BtnTex101",
       "type": "nineSlice",
+      "nineSlice": "cf2i_fill",
       "width": 101,
       "height": 60,
       "tintColor": [
@@ -2762,12 +2763,12 @@
         "satStrength": 1,
         "valStrength": 0.5,
         "useHcl": false
-      },
-      "nineSlice": "cf2i_fill"
+      }
     },
     {
       "id": "CB_BtnBorder101",
       "type": "nineSlice",
+      "nineSlice": "cloth_frame",
       "width": 101,
       "height": 60,
       "tintColor": [
@@ -2795,8 +2796,7 @@
         ],
         "outlineThickness": 1.56,
         "outlineOpacity": 0.133
-      },
-      "nineSlice": "cloth_frame"
+      }
     },
     {
       "id": "CB_BtnIcon_Stats",
@@ -8906,31 +8906,6 @@
       }
     },
     {
-      "id": "Grim_PathTab_Shock_Backing",
-      "type": "nineSlice",
-      "width": 51,
-      "height": 45,
-      "tintColor": [
-        255,
-        255,
-        255,
-        255
-      ],
-      "harmonize": {
-        "targetColor": [
-          92,
-          92,
-          7,
-          255
-        ],
-        "hueStrength": 1,
-        "satStrength": 0.133,
-        "valStrength": 0.534,
-        "useHcl": false
-      },
-      "nineSlice": "fancy_inner"
-    },
-    {
       "id": "Grim_PathTab_Shock_Icon",
       "type": "image",
       "imagePath": "assets/UI/Imported/Shock24.png",
@@ -8962,31 +8937,6 @@
         "outlineThickness": 0.75,
         "outlineOpacity": 0.634
       }
-    },
-    {
-      "id": "Grim_PathTab_Fire_Backing",
-      "type": "nineSlice",
-      "width": 51,
-      "height": 45,
-      "tintColor": [
-        255,
-        255,
-        255,
-        255
-      ],
-      "harmonize": {
-        "targetColor": [
-          60,
-          18,
-          13,
-          255
-        ],
-        "hueStrength": 1,
-        "satStrength": 0.133,
-        "valStrength": 0.534,
-        "useHcl": false
-      },
-      "nineSlice": "fancy_inner"
     },
     {
       "id": "Grim_PathTab_Fire_Icon",
@@ -9022,31 +8972,6 @@
       }
     },
     {
-      "id": "Grim_PathTab_Metal_Backing",
-      "type": "nineSlice",
-      "width": 51,
-      "height": 45,
-      "tintColor": [
-        255,
-        255,
-        255,
-        255
-      ],
-      "harmonize": {
-        "targetColor": [
-          43,
-          42,
-          38,
-          255
-        ],
-        "hueStrength": 1,
-        "satStrength": 0.432,
-        "valStrength": 0.534,
-        "useHcl": false
-      },
-      "nineSlice": "fancy_inner"
-    },
-    {
       "id": "Grim_PathTab_Metal_Icon",
       "type": "image",
       "imagePath": "assets/UI/Imported/Metal24.png",
@@ -9078,31 +9003,6 @@
         "outlineThickness": 0.75,
         "outlineOpacity": 0.634
       }
-    },
-    {
-      "id": "Grim_PathTab_Water_Backing",
-      "type": "nineSlice",
-      "width": 51,
-      "height": 45,
-      "tintColor": [
-        255,
-        255,
-        255,
-        255
-      ],
-      "harmonize": {
-        "targetColor": [
-          13,
-          16,
-          60,
-          255
-        ],
-        "hueStrength": 1,
-        "satStrength": 0.133,
-        "valStrength": 0.534,
-        "useHcl": false
-      },
-      "nineSlice": "fancy_inner"
     },
     {
       "id": "Grim_PathTab_Water_Icon",
@@ -9138,31 +9038,6 @@
       }
     },
     {
-      "id": "Grim_PathTab_Heavens_Backing",
-      "type": "nineSlice",
-      "width": 51,
-      "height": 45,
-      "tintColor": [
-        255,
-        255,
-        255,
-        255
-      ],
-      "harmonize": {
-        "targetColor": [
-          13,
-          60,
-          60,
-          255
-        ],
-        "hueStrength": 1,
-        "satStrength": 0.133,
-        "valStrength": 0.534,
-        "useHcl": false
-      },
-      "nineSlice": "fancy_inner"
-    },
-    {
       "id": "Grim_PathTab_Heavens_Icon",
       "type": "image",
       "imagePath": "assets/UI/Imported/Heavens.2.24.png",
@@ -9194,31 +9069,6 @@
         "outlineThickness": 0.75,
         "outlineOpacity": 0.634
       }
-    },
-    {
-      "id": "Grim_PathTab_Order_Backing",
-      "type": "nineSlice",
-      "width": 51,
-      "height": 45,
-      "tintColor": [
-        255,
-        255,
-        255,
-        255
-      ],
-      "harmonize": {
-        "targetColor": [
-          126,
-          115,
-          59,
-          255
-        ],
-        "hueStrength": 1,
-        "satStrength": 0.133,
-        "valStrength": 0.534,
-        "useHcl": false
-      },
-      "nineSlice": "fancy_inner"
     },
     {
       "id": "Grim_PathTab_Order_Icon",
@@ -9254,31 +9104,6 @@
       }
     },
     {
-      "id": "Grim_PathTab_Earth_Backing",
-      "type": "nineSlice",
-      "width": 51,
-      "height": 45,
-      "tintColor": [
-        255,
-        255,
-        255,
-        255
-      ],
-      "harmonize": {
-        "targetColor": [
-          60,
-          46,
-          13,
-          255
-        ],
-        "hueStrength": 1,
-        "satStrength": 0.626,
-        "valStrength": 0.534,
-        "useHcl": false
-      },
-      "nineSlice": "fancy_inner"
-    },
-    {
       "id": "Grim_PathTab_Earth_Icon",
       "type": "image",
       "imagePath": "assets/UI/Imported/Earth24.png",
@@ -9310,31 +9135,6 @@
         "outlineThickness": 0.75,
         "outlineOpacity": 0.634
       }
-    },
-    {
-      "id": "Grim_PathTab_Chaos_Backing",
-      "type": "nineSlice",
-      "width": 51,
-      "height": 45,
-      "tintColor": [
-        255,
-        255,
-        255,
-        255
-      ],
-      "harmonize": {
-        "targetColor": [
-          47,
-          35,
-          42,
-          255
-        ],
-        "hueStrength": 1,
-        "satStrength": 0.359,
-        "valStrength": 0.534,
-        "useHcl": false
-      },
-      "nineSlice": "fancy_inner"
     },
     {
       "id": "Grim_PathTab_Chaos_Icon",
@@ -9370,31 +9170,6 @@
       }
     },
     {
-      "id": "Grim_PathTab_Spirit_Backing",
-      "type": "nineSlice",
-      "width": 51,
-      "height": 45,
-      "tintColor": [
-        255,
-        255,
-        255,
-        255
-      ],
-      "harmonize": {
-        "targetColor": [
-          95,
-          106,
-          107,
-          255
-        ],
-        "hueStrength": 1,
-        "satStrength": 0.133,
-        "valStrength": 0.534,
-        "useHcl": false
-      },
-      "nineSlice": "fancy_inner"
-    },
-    {
       "id": "Grim_PathTab_Spirit_Icon",
       "type": "image",
       "imagePath": "assets/UI/Imported/Spirit24.png",
@@ -9426,31 +9201,6 @@
         "outlineThickness": 0.75,
         "outlineOpacity": 0.634
       }
-    },
-    {
-      "id": "Grim_PathTab_Nature_Backing",
-      "type": "nineSlice",
-      "width": 51,
-      "height": 45,
-      "tintColor": [
-        255,
-        255,
-        255,
-        255
-      ],
-      "harmonize": {
-        "targetColor": [
-          33,
-          60,
-          34,
-          255
-        ],
-        "hueStrength": 1,
-        "satStrength": 0.133,
-        "valStrength": 0.534,
-        "useHcl": false
-      },
-      "nineSlice": "fancy_inner"
     },
     {
       "id": "Grim_PathTab_Nature_Icon",
@@ -9486,31 +9236,6 @@
       }
     },
     {
-      "id": "Grim_PathTab_Body_Backing",
-      "type": "nineSlice",
-      "width": 51,
-      "height": 45,
-      "tintColor": [
-        255,
-        255,
-        255,
-        255
-      ],
-      "harmonize": {
-        "targetColor": [
-          92,
-          82,
-          78,
-          255
-        ],
-        "hueStrength": 1,
-        "satStrength": 0.133,
-        "valStrength": 0.534,
-        "useHcl": false
-      },
-      "nineSlice": "fancy_inner"
-    },
-    {
       "id": "Grim_PathTab_Body_Icon",
       "type": "image",
       "imagePath": "assets/UI/Imported/Body24.png",
@@ -9542,31 +9267,6 @@
         "outlineThickness": 0.75,
         "outlineOpacity": 0.634
       }
-    },
-    {
-      "id": "Grim_PathTab_Death_Backing",
-      "type": "nineSlice",
-      "width": 51,
-      "height": 45,
-      "tintColor": [
-        255,
-        255,
-        255,
-        255
-      ],
-      "harmonize": {
-        "targetColor": [
-          44,
-          40,
-          46,
-          255
-        ],
-        "hueStrength": 1,
-        "satStrength": 0.763,
-        "valStrength": 0.588,
-        "useHcl": false
-      },
-      "nineSlice": "fancy_inner"
     },
     {
       "id": "Grim_PathTab_Death_Icon",
@@ -9639,31 +9339,6 @@
       }
     },
     {
-      "id": "Grim_SchoolTab_Conjuration_Backing",
-      "type": "nineSlice",
-      "width": 148,
-      "height": 33,
-      "tintColor": [
-        255,
-        255,
-        255,
-        255
-      ],
-      "harmonize": {
-        "targetColor": [
-          73,
-          63,
-          79,
-          255
-        ],
-        "hueStrength": 1,
-        "satStrength": 0.764,
-        "valStrength": 0.665,
-        "useHcl": false
-      },
-      "nineSlice": "fancy_inner"
-    },
-    {
       "id": "Grim_SchoolTab_Conjuration_Text",
       "type": "text",
       "width": 159,
@@ -9699,31 +9374,6 @@
           150
         ]
       }
-    },
-    {
-      "id": "Grim_SchoolTab_Alteration_Backing",
-      "type": "nineSlice",
-      "width": 148,
-      "height": 33,
-      "tintColor": [
-        255,
-        255,
-        255,
-        255
-      ],
-      "harmonize": {
-        "targetColor": [
-          31,
-          35,
-          36,
-          255
-        ],
-        "hueStrength": 1,
-        "satStrength": 0.35,
-        "valStrength": 0.534,
-        "useHcl": false
-      },
-      "nineSlice": "fancy_inner"
     },
     {
       "id": "Grim_SchoolTab_Alteration_Text",
@@ -9763,31 +9413,6 @@
       }
     },
     {
-      "id": "Grim_SchoolTab_Evocation_Backing",
-      "type": "nineSlice",
-      "width": 148,
-      "height": 33,
-      "tintColor": [
-        255,
-        255,
-        255,
-        255
-      ],
-      "harmonize": {
-        "targetColor": [
-          53,
-          42,
-          42,
-          255
-        ],
-        "hueStrength": 1,
-        "satStrength": 0.252,
-        "valStrength": 0.534,
-        "useHcl": false
-      },
-      "nineSlice": "fancy_inner"
-    },
-    {
       "id": "Grim_SchoolTab_Evocation_Text",
       "type": "text",
       "width": 159,
@@ -9823,31 +9448,6 @@
           150
         ]
       }
-    },
-    {
-      "id": "Grim_SchoolTab_Construction_Backing",
-      "type": "nineSlice",
-      "width": 148,
-      "height": 33,
-      "tintColor": [
-        255,
-        255,
-        255,
-        255
-      ],
-      "harmonize": {
-        "targetColor": [
-          17,
-          16,
-          7,
-          255
-        ],
-        "hueStrength": 1,
-        "satStrength": 0.133,
-        "valStrength": 0.534,
-        "useHcl": false
-      },
-      "nineSlice": "fancy_inner"
     },
     {
       "id": "Grim_SchoolTab_Construction_Text",
@@ -9959,6 +9559,7 @@
     {
       "id": "GMT_0",
       "type": "nineSlice",
+      "nineSlice": "fancy_inner",
       "width": 253,
       "height": 65,
       "tintColor": [
@@ -9978,8 +9579,7 @@
         "satStrength": 0.322,
         "valStrength": 0.86,
         "useHcl": false
-      },
-      "nineSlice": "fancy_inner"
+      }
     },
     {
       "id": "GMT_1",
@@ -10009,6 +9609,7 @@
     {
       "id": "GMT_2",
       "type": "nineSlice",
+      "nineSlice": "spider_frame",
       "width": 315,
       "height": 72,
       "tintColor": [
@@ -10028,8 +9629,7 @@
         "satStrength": 0.133,
         "valStrength": 0.255,
         "useHcl": false
-      },
-      "nineSlice": "spider_frame"
+      }
     },
     {
       "id": "GMT_3",
@@ -10092,6 +9692,7 @@
     {
       "id": "SpiderFrameBorder",
       "type": "nineSlice",
+      "nineSlice": "spider_frame",
       "width": 79,
       "height": 79,
       "tintColor": [
@@ -10111,8 +9712,7 @@
         "satStrength": 0.133,
         "valStrength": 0.122,
         "useHcl": false
-      },
-      "nineSlice": "spider_frame"
+      }
     },
     {
       "id": "GMT_6",
@@ -10632,6 +10232,8 @@
     {
       "id": "SkillTab_Backing",
       "type": "nineSlice",
+      "nineSlice": "fancy_inner",
+      "nineSliceScale": 0.05,
       "width": 86,
       "height": 33,
       "tintColor": [
@@ -10651,12 +10253,13 @@
         "satStrength": 0.133,
         "valStrength": 0.534,
         "useHcl": false
-      },
-      "nineSlice": "fancy_inner"
+      }
     },
     {
       "id": "SkillTab_Frame",
       "type": "nineSlice",
+      "nineSlice": "inner_corners_button",
+      "nineSliceScale": 0.7,
       "width": 82,
       "height": 35,
       "tintColor": [
@@ -10676,8 +10279,7 @@
         "satStrength": 0.45,
         "valStrength": 0.175,
         "useHcl": false
-      },
-      "nineSlice": "inner_corners_button"
+      }
     },
     {
       "id": "SkillTab_Frac",
@@ -10825,6 +10427,32 @@
           0,
           150
         ]
+      }
+    },
+    {
+      "id": "Grim_TabBacking",
+      "type": "nineSlice",
+      "nineSlice": "fancy_inner",
+      "width": 51,
+      "height": 45,
+      "tintColor": [
+        255,
+        255,
+        255,
+        255
+      ],
+      "nineSliceScale": 0.3,
+      "harmonize": {
+        "targetColor": [
+          60,
+          46,
+          13,
+          255
+        ],
+        "hueStrength": 1,
+        "satStrength": 0.626,
+        "valStrength": 0.534,
+        "useHcl": false
       }
     }
   ]

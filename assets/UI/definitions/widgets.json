@@ -7052,7 +7052,8 @@
           "y": 1,
           "width": 253,
           "height": 65,
-          "anchor": 0
+          "anchor": 0,
+          "nineSliceScale": 0.1
         },
         {
           "name": "grad",
@@ -7257,14 +7258,22 @@
     {
       "id": "GrimoireDyn",
       "background": "LeatherBackground",
+      "frame": "grim_cloth_frame",
       "width": 706,
       "height": 1080,
       "backgroundScale": 0.136,
+      "frameScale": 0.7,
       "backgroundInset": -17,
       "backgroundTint": [
         199,
         215,
         229,
+        255
+      ],
+      "frameTint": [
+        156,
+        156,
+        156,
         255
       ],
       "bgHarmonize": {
@@ -7285,6 +7294,18 @@
           112
         ],
         "gradStrength": 0.992
+      },
+      "frameHarmonize": {
+        "targetColor": [
+          38,
+          31,
+          17,
+          255
+        ],
+        "hueStrength": 1,
+        "satStrength": 1,
+        "valStrength": 0.052,
+        "useHcl": false
       },
       "modal": false,
       "children": [
@@ -7317,7 +7338,7 @@
         },
         {
           "name": "PathTab_All_Backing",
-          "element": "SkillTab_Backing",
+          "element": "Grim_TabBacking",
           "x": 26,
           "y": 130,
           "width": 54,
@@ -7344,7 +7365,7 @@
         },
         {
           "name": "PathTab_Shock_Backing",
-          "element": "Grim_PathTab_Shock_Backing",
+          "element": "Grim_TabBacking",
           "x": 78,
           "y": 130,
           "width": 51,
@@ -7371,7 +7392,7 @@
         },
         {
           "name": "PathTab_Fire_Backing",
-          "element": "Grim_PathTab_Fire_Backing",
+          "element": "Grim_TabBacking",
           "x": 128,
           "y": 130,
           "width": 51,
@@ -7398,7 +7419,7 @@
         },
         {
           "name": "PathTab_Metal_Backing",
-          "element": "Grim_PathTab_Metal_Backing",
+          "element": "Grim_TabBacking",
           "x": 178,
           "y": 130,
           "width": 51,
@@ -7425,7 +7446,7 @@
         },
         {
           "name": "PathTab_Water_Backing",
-          "element": "Grim_PathTab_Water_Backing",
+          "element": "Grim_TabBacking",
           "x": 228,
           "y": 130,
           "width": 51,
@@ -7452,7 +7473,7 @@
         },
         {
           "name": "PathTab_Heavens_Backing",
-          "element": "Grim_PathTab_Heavens_Backing",
+          "element": "Grim_TabBacking",
           "x": 278,
           "y": 130,
           "width": 51,
@@ -7479,7 +7500,7 @@
         },
         {
           "name": "PathTab_Order_Backing",
-          "element": "Grim_PathTab_Order_Backing",
+          "element": "Grim_TabBacking",
           "x": 328,
           "y": 130,
           "width": 51,
@@ -7506,7 +7527,7 @@
         },
         {
           "name": "PathTab_Earth_Backing",
-          "element": "Grim_PathTab_Earth_Backing",
+          "element": "Grim_TabBacking",
           "x": 378,
           "y": 130,
           "width": 51,
@@ -7533,7 +7554,7 @@
         },
         {
           "name": "PathTab_Chaos_Backing",
-          "element": "Grim_PathTab_Chaos_Backing",
+          "element": "Grim_TabBacking",
           "x": 428,
           "y": 130,
           "width": 51,
@@ -7560,7 +7581,7 @@
         },
         {
           "name": "PathTab_Spirit_Backing",
-          "element": "Grim_PathTab_Spirit_Backing",
+          "element": "Grim_TabBacking",
           "x": 478,
           "y": 130,
           "width": 51,
@@ -7587,7 +7608,7 @@
         },
         {
           "name": "PathTab_Nature_Backing",
-          "element": "Grim_PathTab_Nature_Backing",
+          "element": "Grim_TabBacking",
           "x": 528,
           "y": 130,
           "width": 51,
@@ -7614,7 +7635,7 @@
         },
         {
           "name": "PathTab_Body_Backing",
-          "element": "Grim_PathTab_Body_Backing",
+          "element": "Grim_TabBacking",
           "x": 578,
           "y": 130,
           "width": 51,
@@ -7641,7 +7662,7 @@
         },
         {
           "name": "PathTab_Death_Backing",
-          "element": "Grim_PathTab_Death_Backing",
+          "element": "Grim_TabBacking",
           "x": 628,
           "y": 130,
           "width": 51,
@@ -7668,7 +7689,7 @@
         },
         {
           "name": "SchoolTab_All_Backing",
-          "element": "SkillTab_Backing",
+          "element": "Grim_TabBacking",
           "x": 24,
           "y": 98,
           "width": 86,
@@ -7695,7 +7716,7 @@
         },
         {
           "name": "SchoolTab_Conjuration_Backing",
-          "element": "Grim_SchoolTab_Conjuration_Backing",
+          "element": "Grim_TabBacking",
           "x": 104,
           "y": 98,
           "width": 148,
@@ -7722,7 +7743,7 @@
         },
         {
           "name": "SchoolTab_Alteration_Backing",
-          "element": "Grim_SchoolTab_Alteration_Backing",
+          "element": "Grim_TabBacking",
           "x": 248,
           "y": 98,
           "width": 148,
@@ -7749,7 +7770,7 @@
         },
         {
           "name": "SchoolTab_Evocation_Backing",
-          "element": "Grim_SchoolTab_Evocation_Backing",
+          "element": "Grim_TabBacking",
           "x": 390,
           "y": 98,
           "width": 148,
@@ -7776,7 +7797,7 @@
         },
         {
           "name": "SchoolTab_Construction_Backing",
-          "element": "Grim_SchoolTab_Construction_Backing",
+          "element": "Grim_TabBacking",
           "x": 534,
           "y": 98,
           "width": 148,
@@ -8017,27 +8038,7 @@
           "height": 80,
           "anchor": 0
         }
-      ],
-      "frame": "grim_cloth_frame",
-      "frameTint": [
-        156,
-        156,
-        156,
-        255
-      ],
-      "frameScale": 0.7,
-      "frameHarmonize": {
-        "targetColor": [
-          38,
-          31,
-          17,
-          255
-        ],
-        "hueStrength": 1,
-        "satStrength": 1,
-        "valStrength": 0.052,
-        "useHcl": false
-      }
+      ]
     },
     {
       "id": "SkillTile",
@@ -8049,18 +8050,19 @@
         {
           "name": "bg",
           "element": "GMT_0",
-          "x": 66,
-          "y": 2,
-          "width": 159,
-          "height": 64,
-          "anchor": 0
+          "x": 53,
+          "y": -2,
+          "width": 179,
+          "height": 71,
+          "anchor": 0,
+          "nineSliceScale": 0
         },
         {
           "name": "frame",
           "element": "GMT_2",
           "x": 0,
           "y": -3,
-          "width": 227,
+          "width": 232,
           "height": 72,
           "anchor": 0
         },
@@ -8096,8 +8098,8 @@
           "element": "SkillTile_Name",
           "x": 74,
           "y": 2,
-          "width": 236,
-          "height": 32,
+          "width": 144,
+          "height": 33,
           "anchor": 0
         },
         {
@@ -8107,7 +8109,8 @@
           "y": 40,
           "width": 112,
           "height": 24,
-          "anchor": 0
+          "anchor": 0,
+          "defaultText": "Cost:"
         },
         {
           "name": "cost_icon",
@@ -8123,14 +8126,22 @@
     {
       "id": "SkillBookWindow",
       "background": "LeatherBackground",
+      "frame": "grim_cloth_frame",
       "width": 706,
       "height": 1080,
       "backgroundScale": 0.136,
+      "frameScale": 0.7,
       "backgroundInset": -17,
       "backgroundTint": [
         199,
         215,
         229,
+        255
+      ],
+      "frameTint": [
+        156,
+        156,
+        156,
         255
       ],
       "bgHarmonize": {
@@ -8151,6 +8162,18 @@
           112
         ],
         "gradStrength": 0.992
+      },
+      "frameHarmonize": {
+        "targetColor": [
+          38,
+          31,
+          17,
+          255
+        ],
+        "hueStrength": 1,
+        "satStrength": 1,
+        "valStrength": 0.052,
+        "useHcl": false
       },
       "modal": false,
       "children": [
@@ -8188,8 +8211,7 @@
           "y": 96,
           "width": 656,
           "height": 35,
-          "anchor": 0,
-          "childOverrides": []
+          "anchor": 0
         },
         {
           "name": "TitleRibbon",
@@ -8210,27 +8232,7 @@
           "anchor": 0,
           "defaultText": "Ability Upgrades"
         }
-      ],
-      "frame": "grim_cloth_frame",
-      "frameTint": [
-        156,
-        156,
-        156,
-        255
-      ],
-      "frameScale": 0.7,
-      "frameHarmonize": {
-        "targetColor": [
-          38,
-          31,
-          17,
-          255
-        ],
-        "hueStrength": 1,
-        "satStrength": 1,
-        "valStrength": 0.052,
-        "useHcl": false
-      }
+      ]
     },
     {
       "id": "SkillBookTab",
@@ -8374,7 +8376,8 @@
       "id": "EquipSlot",
       "width": 75,
       "height": 75,
-      "layout": "none",
+      "backgroundScale": 1,
+      "modal": false,
       "children": [
         {
           "name": "tex",
