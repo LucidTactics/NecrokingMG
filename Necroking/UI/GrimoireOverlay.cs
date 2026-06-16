@@ -55,13 +55,16 @@ public class GrimoireOverlay : IModalLayer
     private List<SpellDef> _shown = new();
     private Action<string>? _onPick;   // non-null => assign mode
     private bool _justOpened;          // skip the click that opened us
+    private Func<SpellDef, bool>? _canShow; // null => show all; else path-req filter
 
     public bool IsVisible { get; private set; }
 
-    public void Init(RuntimeWidgetRenderer renderer, GameData gameData)
+    public void Init(RuntimeWidgetRenderer renderer, GameData gameData,
+        Func<SpellDef, bool>? canShow = null)
     {
         _renderer = renderer;
         _gameData = gameData;
+        _canShow = canShow;
     }
 
     /// <summary>'J' — open in browse mode (or close if open).</summary>
@@ -101,7 +104,7 @@ public class GrimoireOverlay : IModalLayer
     private void Refresh()
     {
         if (_gameData == null) return;
-        _shown = GrimoirePanel.Populate(_renderer, _gameData, InstanceId, _schoolFilter, _pathFilter);
+        _shown = GrimoirePanel.Populate(_renderer, _gameData, InstanceId, _schoolFilter, _pathFilter, _canShow);
         _renderer.SetText(InstanceId, TitleChild, _onPick != null ? "Choose a Spell" : "Spells");
         ApplyTabHighlights(_renderer, InstanceId, _schoolFilter, _pathFilter);
     }
