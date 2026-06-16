@@ -55,5 +55,12 @@ retarget_stderr.txt
 # zstd-cached pre-decoded atlas pixels (regenerated on edit)
 cache/
 
+# Python bytecode cache (tools/)
+__pycache__/
+*.pyc
+
+# Runtime debug logs (DebugLog writes here)
+log/
+
 # Defunct asset archive (local backup of removed old objects; not tracked)
 defunct assets/
