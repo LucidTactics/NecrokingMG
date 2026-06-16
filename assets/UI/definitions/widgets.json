@@ -1310,7 +1310,7 @@
         },
         {
           "name": "eq_r0s1",
-          "element": "EQ_Icon_AttackEq",
+          "element": "ST_Icon_Attack",
           "x": 313,
           "y": 386,
           "width": 24,
@@ -1386,7 +1386,7 @@
         },
         {
           "name": "eq_r1s0",
-          "element": "EQ_Icon_ProtEq",
+          "element": "ST_Icon_Prot",
           "x": 253,
           "y": 413,
           "width": 24,
@@ -1424,7 +1424,7 @@
         },
         {
           "name": "eq_r1s2",
-          "element": "EQ_Icon_EncEq",
+          "element": "ST_Icon_Enc",
           "x": 373,
           "y": 413,
           "width": 24,
@@ -1481,7 +1481,7 @@
         },
         {
           "name": "eq_r2s0",
-          "element": "EQ_Icon_ProtEq",
+          "element": "ST_Icon_Prot",
           "x": 253,
           "y": 440,
           "width": 24,
@@ -1543,7 +1543,7 @@
         },
         {
           "name": "eq_r2s2",
-          "element": "EQ_Icon_EncEq",
+          "element": "ST_Icon_Enc",
           "x": 373,
           "y": 440,
           "width": 24,
@@ -1600,7 +1600,7 @@
         },
         {
           "name": "eq_r3s0",
-          "element": "EQ_Icon_ProtEq",
+          "element": "ST_Icon_Prot",
           "x": 253,
           "y": 467,
           "width": 24,
@@ -1662,7 +1662,7 @@
         },
         {
           "name": "eq_r3s2",
-          "element": "EQ_Icon_EncEq",
+          "element": "ST_Icon_Enc",
           "x": 373,
           "y": 467,
           "width": 24,
@@ -1719,7 +1719,7 @@
         },
         {
           "name": "eq_r4s0",
-          "element": "EQ_Icon_ProtEq",
+          "element": "ST_Icon_Prot",
           "x": 253,
           "y": 494,
           "width": 24,
@@ -1781,7 +1781,7 @@
         },
         {
           "name": "eq_r4s2",
-          "element": "EQ_Icon_EncEq",
+          "element": "ST_Icon_Enc",
           "x": 373,
           "y": 494,
           "width": 24,
@@ -1857,7 +1857,7 @@
         },
         {
           "name": "eq_r5s1",
-          "element": "EQ_Icon_AttackEq",
+          "element": "ST_Icon_Attack",
           "x": 313,
           "y": 521,
           "width": 24,
@@ -2070,7 +2070,7 @@
         },
         {
           "name": "at_r0s1",
-          "element": "EQ_Icon_AttackEq",
+          "element": "ST_Icon_Attack",
           "x": 313,
           "y": 601,
           "width": 24,
@@ -2165,7 +2165,7 @@
         },
         {
           "name": "at_r1s1",
-          "element": "EQ_Icon_AttackEq",
+          "element": "ST_Icon_Attack",
           "x": 313,
           "y": 628,
           "width": 24,
@@ -2260,7 +2260,7 @@
         },
         {
           "name": "at_r2s1",
-          "element": "EQ_Icon_AttackEq",
+          "element": "ST_Icon_Attack",
           "x": 313,
           "y": 655,
           "width": 24,
@@ -2706,7 +2706,7 @@
         },
         {
           "name": "cb_b0_tex",
-          "element": "CB_BtnTex108",
+          "element": "CB_BtnTex101",
           "x": -5,
           "y": 350,
           "width": 108,
@@ -2715,7 +2715,7 @@
         },
         {
           "name": "cb_b0_border",
-          "element": "CB_BtnBorder108",
+          "element": "CB_BtnBorder101",
           "x": -5,
           "y": 350,
           "width": 108,
@@ -2780,7 +2780,7 @@
         },
         {
           "name": "cb_b2_tex",
-          "element": "CB_BtnTex114",
+          "element": "CB_BtnTex101",
           "x": 198,
           "y": 350,
           "width": 114,
@@ -2789,7 +2789,7 @@
         },
         {
           "name": "cb_b2_border",
-          "element": "CB_BtnBorder114",
+          "element": "CB_BtnBorder101",
           "x": 198,
           "y": 350,
           "width": 114,
@@ -4574,7 +4574,7 @@
         },
         {
           "name": "s1",
-          "element": "EQ_Icon_AttackEq",
+          "element": "ST_Icon_Attack",
           "x": 310,
           "y": 0,
           "width": 24,
@@ -4621,7 +4621,7 @@
         },
         {
           "name": "s2b",
-          "element": "EQ_Icon_EncEq",
+          "element": "ST_Icon_Enc",
           "x": 370,
           "y": 0,
           "width": 24,
@@ -5139,7 +5139,7 @@
         },
         {
           "name": "spt_2_BoxBackground",
-          "element": "SPT_1",
+          "element": "SBT_1",
           "x": 88,
           "y": 52,
           "width": 321,
@@ -5148,7 +5148,7 @@
         },
         {
           "name": "spt_3_BoxStencil",
-          "element": "SPT_2",
+          "element": "SBT_2",
           "x": 87,
           "y": 52,
           "width": 322,
@@ -5157,7 +5157,7 @@
         },
         {
           "name": "spt_4_BoxFrame",
-          "element": "SPT_3",
+          "element": "SBT_3",
           "x": 86,
           "y": 51,
           "width": 324,
@@ -5166,7 +5166,7 @@
         },
         {
           "name": "spt_5_Prompt",
-          "element": "SPT_4",
+          "element": "SBT_4",
           "x": 96,
           "y": 55,
           "width": 38,
@@ -5193,7 +5193,7 @@
         },
         {
           "name": "spt_8_Seperator",
-          "element": "SPT_7",
+          "element": "SBT_7",
           "x": 230,
           "y": 54,
           "width": 3,
@@ -5202,7 +5202,7 @@
         },
         {
           "name": "spt_9_Prompt",
-          "element": "SPT_8",
+          "element": "SBT_8",
           "x": 234,
           "y": 55,
           "width": 51,
@@ -5229,7 +5229,7 @@
         },
         {
           "name": "spt_12_PerkFrame",
-          "element": "SPT_11",
+          "element": "SBT_11",
           "x": 15,
           "y": 15,
           "width": 68,
@@ -5247,7 +5247,7 @@
         },
         {
           "name": "spt_14_BoxBackground",
-          "element": "SPT_13",
+          "element": "SBT_13",
           "x": 15,
           "y": 84,
           "width": 50,
@@ -5283,7 +5283,7 @@
         },
         {
           "name": "spt_18_BoxBackground",
-          "element": "SPT_17",
+          "element": "SBT_17",
           "x": 69,
           "y": 84,
           "width": 86,
@@ -5319,7 +5319,7 @@
         },
         {
           "name": "spt_22_BoxBackground",
-          "element": "SPT_21",
+          "element": "SBT_25",
           "x": 15,
           "y": 111,
           "width": 395,
@@ -5400,7 +5400,7 @@
         },
         {
           "name": "spt_31_Prompt",
-          "element": "SPT_30",
+          "element": "SBT_31",
           "x": 25,
           "y": 157,
           "width": 102,
@@ -5409,7 +5409,7 @@
         },
         {
           "name": "spt_32_Value",
-          "element": "SPT_31",
+          "element": "SBT_9",
           "x": 132,
           "y": 157,
           "width": 72,
@@ -5679,7 +5679,7 @@
         },
         {
           "name": "sbt_23_BoxStencil",
-          "element": "SBT_22",
+          "element": "SBT_18",
           "x": 141,
           "y": 84,
           "width": 55,
@@ -5688,7 +5688,7 @@
         },
         {
           "name": "sbt_24_BoxFrame",
-          "element": "SBT_23",
+          "element": "SBT_19",
           "x": 141,
           "y": 84,
           "width": 55,
@@ -5823,7 +5823,7 @@
         },
         {
           "name": "sbt_39_RowSwatch",
-          "element": "SBT_38",
+          "element": "SBT_33",
           "x": 15,
           "y": 177,
           "width": 390,
@@ -5886,7 +5886,7 @@
         },
         {
           "name": "sbt_46_RowSwatch",
-          "element": "SBT_45",
+          "element": "SBT_33",
           "x": 15,
           "y": 218,
           "width": 390,
@@ -5940,7 +5940,7 @@
         },
         {
           "name": "sbt_52_RowSwatch",
-          "element": "SBT_51",
+          "element": "SBT_33",
           "x": 15,
           "y": 258,
           "width": 390,
@@ -6003,7 +6003,7 @@
         },
         {
           "name": "swt_2_BoxBackground",
-          "element": "SWT_1",
+          "element": "SBT_1",
           "x": 88,
           "y": 52,
           "width": 321,
@@ -6012,7 +6012,7 @@
         },
         {
           "name": "swt_3_BoxStencil",
-          "element": "SWT_2",
+          "element": "SBT_2",
           "x": 87,
           "y": 52,
           "width": 322,
@@ -6021,7 +6021,7 @@
         },
         {
           "name": "swt_4_BoxFrame",
-          "element": "SWT_3",
+          "element": "SBT_3",
           "x": 86,
           "y": 51,
           "width": 324,
@@ -6030,7 +6030,7 @@
         },
         {
           "name": "swt_5_Prompt",
-          "element": "SWT_4",
+          "element": "SBT_4",
           "x": 96,
           "y": 55,
           "width": 38,
@@ -6039,7 +6039,7 @@
         },
         {
           "name": "swt_6_Value",
-          "element": "SWT_5",
+          "element": "SBT_5",
           "x": 134,
           "y": 55,
           "width": 22,
@@ -6057,7 +6057,7 @@
         },
         {
           "name": "swt_8_Seperator",
-          "element": "SWT_7",
+          "element": "SBT_7",
           "x": 230,
           "y": 54,
           "width": 3,
@@ -6102,7 +6102,7 @@
         },
         {
           "name": "swt_13_PerkFrame",
-          "element": "SWT_12",
+          "element": "SBT_11",
           "x": 15,
           "y": 15,
           "width": 68,
@@ -6120,7 +6120,7 @@
         },
         {
           "name": "swt_15_BoxBackground",
-          "element": "SWT_14",
+          "element": "SBT_13",
           "x": 15,
           "y": 84,
           "width": 79,
@@ -6156,7 +6156,7 @@
         },
         {
           "name": "swt_19_BoxBackground",
-          "element": "SWT_18",
+          "element": "SBT_17",
           "x": 98,
           "y": 84,
           "width": 57,
@@ -6228,7 +6228,7 @@
         },
         {
           "name": "swt_27_BoxBackground",
-          "element": "SWT_26",
+          "element": "SBT_25",
           "x": 15,
           "y": 111,
           "width": 395,
@@ -6417,7 +6417,7 @@
         },
         {
           "name": "swt_48_Value_String",
-          "element": "SWT_47",
+          "element": "SWT_41",
           "x": 104,
           "y": 199,
           "width": 26,
@@ -6471,7 +6471,7 @@
         },
         {
           "name": "swt_54_Value_String",
-          "element": "SWT_53",
+          "element": "SWT_41",
           "x": 377,
           "y": 199,
           "width": 26,
@@ -6489,7 +6489,7 @@
         },
         {
           "name": "swt_56_RowSwatch",
-          "element": "SWT_55",
+          "element": "SWT_36",
           "x": 16,
           "y": 223,
           "width": 394,
@@ -6642,7 +6642,7 @@
         },
         {
           "name": "swt_73_Value_String",
-          "element": "SWT_72",
+          "element": "SWT_57",
           "x": 378,
           "y": 253,
           "width": 26,
@@ -6660,7 +6660,7 @@
         },
         {
           "name": "swt_75_RowSwatch",
-          "element": "SWT_74",
+          "element": "SWT_36",
           "x": 16,
           "y": 277,
           "width": 394,
@@ -6732,7 +6732,7 @@
         },
         {
           "name": "swt_83_Value_String",
-          "element": "SWT_82",
+          "element": "SWT_41",
           "x": 378,
           "y": 280,
           "width": 26,
@@ -6759,7 +6759,7 @@
         },
         {
           "name": "swt_86_Column2",
-          "element": "SWT_85",
+          "element": "SWT_84",
           "x": 205,
           "y": 236,
           "width": 133,
@@ -6813,7 +6813,7 @@
         },
         {
           "name": "swt_92_Column2",
-          "element": "SWT_91",
+          "element": "SWT_90",
           "x": 194,
           "y": 356,
           "width": 57,
@@ -6822,7 +6822,7 @@
         },
         {
           "name": "swt_93_Column3",
-          "element": "SWT_92",
+          "element": "SWT_90",
           "x": 256,
           "y": 356,
           "width": 58,
@@ -6831,7 +6831,7 @@
         },
         {
           "name": "swt_94_Column4",
-          "element": "SWT_93",
+          "element": "SWT_90",
           "x": 317,
           "y": 356,
           "width": 58,
@@ -6930,7 +6930,7 @@
         },
         {
           "name": "swt_105_AttackIcon",
-          "element": "SWT_104",
+          "element": "SWT_67",
           "x": 248,
           "y": 415,
           "width": 24,
@@ -6975,7 +6975,7 @@
         },
         {
           "name": "swt_110_Column1",
-          "element": "SWT_109",
+          "element": "SWT_90",
           "x": 131,
           "y": 439,
           "width": 54,
@@ -6984,7 +6984,7 @@
         },
         {
           "name": "swt_111_Column2",
-          "element": "SWT_110",
+          "element": "SWT_90",
           "x": 196,
           "y": 439,
           "width": 55,
@@ -6993,7 +6993,7 @@
         },
         {
           "name": "swt_112_Column3",
-          "element": "SWT_111",
+          "element": "SWT_90",
           "x": 257,
           "y": 439,
           "width": 55,
@@ -7002,7 +7002,7 @@
         },
         {
           "name": "swt_113_Column4",
-          "element": "SWT_112",
+          "element": "SWT_90",
           "x": 318,
           "y": 439,
           "width": 56,
@@ -7236,7 +7236,7 @@
         },
         {
           "name": "cost2_v",
-          "element": "GMT_21",
+          "element": "GMT_11",
           "x": 226,
           "y": 38,
           "width": 15,
@@ -7245,7 +7245,7 @@
         },
         {
           "name": "cost2_i",
-          "element": "GMT_22",
+          "element": "GMT_17",
           "x": 240,
           "y": 38,
           "width": 24,
@@ -7317,7 +7317,7 @@
         },
         {
           "name": "PathTab_All_Backing",
-          "element": "Grim_PathTab_All_Backing",
+          "element": "SkillTab_Backing",
           "x": 26,
           "y": 130,
           "width": 54,
@@ -7335,7 +7335,7 @@
         },
         {
           "name": "PathTab_All_Frame",
-          "element": "Grim_PathTab_All_Frame",
+          "element": "SkillTab_Frame",
           "x": 26,
           "y": 130,
           "width": 54,
@@ -7353,7 +7353,7 @@
         },
         {
           "name": "PathTab_Shock_Frame",
-          "element": "Grim_PathTab_Shock_Frame",
+          "element": "SkillTab_Frame",
           "x": 78,
           "y": 130,
           "width": 51,
@@ -7380,7 +7380,7 @@
         },
         {
           "name": "PathTab_Fire_Frame",
-          "element": "Grim_PathTab_Fire_Frame",
+          "element": "SkillTab_Frame",
           "x": 128,
           "y": 130,
           "width": 51,
@@ -7407,7 +7407,7 @@
         },
         {
           "name": "PathTab_Metal_Frame",
-          "element": "Grim_PathTab_Metal_Frame",
+          "element": "SkillTab_Frame",
           "x": 178,
           "y": 130,
           "width": 51,
@@ -7434,7 +7434,7 @@
         },
         {
           "name": "PathTab_Water_Frame",
-          "element": "Grim_PathTab_Water_Frame",
+          "element": "SkillTab_Frame",
           "x": 228,
           "y": 130,
           "width": 51,
@@ -7461,7 +7461,7 @@
         },
         {
           "name": "PathTab_Heavens_Frame",
-          "element": "Grim_PathTab_Heavens_Frame",
+          "element": "SkillTab_Frame",
           "x": 278,
           "y": 130,
           "width": 51,
@@ -7488,7 +7488,7 @@
         },
         {
           "name": "PathTab_Order_Frame",
-          "element": "Grim_PathTab_Order_Frame",
+          "element": "SkillTab_Frame",
           "x": 328,
           "y": 130,
           "width": 51,
@@ -7515,7 +7515,7 @@
         },
         {
           "name": "PathTab_Earth_Frame",
-          "element": "Grim_PathTab_Earth_Frame",
+          "element": "SkillTab_Frame",
           "x": 378,
           "y": 130,
           "width": 51,
@@ -7542,7 +7542,7 @@
         },
         {
           "name": "PathTab_Chaos_Frame",
-          "element": "Grim_PathTab_Chaos_Frame",
+          "element": "SkillTab_Frame",
           "x": 428,
           "y": 130,
           "width": 51,
@@ -7569,7 +7569,7 @@
         },
         {
           "name": "PathTab_Spirit_Frame",
-          "element": "Grim_PathTab_Spirit_Frame",
+          "element": "SkillTab_Frame",
           "x": 478,
           "y": 130,
           "width": 51,
@@ -7596,7 +7596,7 @@
         },
         {
           "name": "PathTab_Nature_Frame",
-          "element": "Grim_PathTab_Nature_Frame",
+          "element": "SkillTab_Frame",
           "x": 528,
           "y": 130,
           "width": 51,
@@ -7623,7 +7623,7 @@
         },
         {
           "name": "PathTab_Body_Frame",
-          "element": "Grim_PathTab_Body_Frame",
+          "element": "SkillTab_Frame",
           "x": 578,
           "y": 130,
           "width": 51,
@@ -7650,7 +7650,7 @@
         },
         {
           "name": "PathTab_Death_Frame",
-          "element": "Grim_PathTab_Death_Frame",
+          "element": "SkillTab_Frame",
           "x": 628,
           "y": 130,
           "width": 51,
@@ -7668,7 +7668,7 @@
         },
         {
           "name": "SchoolTab_All_Backing",
-          "element": "Grim_SchoolTab_All_Backing",
+          "element": "SkillTab_Backing",
           "x": 24,
           "y": 98,
           "width": 86,
@@ -7686,7 +7686,7 @@
         },
         {
           "name": "SchoolTab_All_Frame",
-          "element": "Grim_SchoolTab_All_Frame",
+          "element": "SkillTab_Frame",
           "x": 26,
           "y": 96,
           "width": 82,
@@ -7713,7 +7713,7 @@
         },
         {
           "name": "SchoolTab_Conjuration_Frame",
-          "element": "Grim_SchoolTab_Conjuration_Frame",
+          "element": "SkillTab_Frame",
           "x": 107,
           "y": 96,
           "width": 144,
@@ -7740,7 +7740,7 @@
         },
         {
           "name": "SchoolTab_Alteration_Frame",
-          "element": "Grim_SchoolTab_Alteration_Frame",
+          "element": "SkillTab_Frame",
           "x": 250,
           "y": 96,
           "width": 144,
@@ -7767,7 +7767,7 @@
         },
         {
           "name": "SchoolTab_Evocation_Frame",
-          "element": "Grim_SchoolTab_Evocation_Frame",
+          "element": "SkillTab_Frame",
           "x": 393,
           "y": 96,
           "width": 144,
@@ -7794,7 +7794,7 @@
         },
         {
           "name": "SchoolTab_Construction_Frame",
-          "element": "Grim_SchoolTab_Construction_Frame",
+          "element": "SkillTab_Frame",
           "x": 536,
           "y": 96,
           "width": 144,
@@ -8037,7 +8037,7 @@
       "children": [
         {
           "name": "bg",
-          "element": "SkillTile_Bg",
+          "element": "GMT_0",
           "x": 66,
           "y": 2,
           "width": 159,
@@ -8046,7 +8046,7 @@
         },
         {
           "name": "frame",
-          "element": "SkillTile_Frame",
+          "element": "GMT_2",
           "x": 0,
           "y": -3,
           "width": 227,
@@ -8055,7 +8055,7 @@
         },
         {
           "name": "underline",
-          "element": "SkillTile_Underline",
+          "element": "GMT_3",
           "x": 74,
           "y": 36,
           "width": 149,
@@ -8064,7 +8064,7 @@
         },
         {
           "name": "icon",
-          "element": "SkillTile_Icon",
+          "element": "GMT_4",
           "x": 1,
           "y": 3,
           "width": 63,
@@ -8073,7 +8073,7 @@
         },
         {
           "name": "iconframe",
-          "element": "SkillTile_IconFrame",
+          "element": "SpiderFrameBorder",
           "x": -7,
           "y": -6,
           "width": 79,
@@ -8100,7 +8100,7 @@
         },
         {
           "name": "cost_icon",
-          "element": "SkillTile_CostIcon",
+          "element": "SBT_6",
           "x": 125,
           "y": 40,
           "width": 24,

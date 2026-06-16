@@ -98,6 +98,33 @@
       "borderTop": 14,
       "borderBottom": 14,
       "tileEdges": false
+    },
+    {
+      "id": "fancy_inner",
+      "texture": "assets/UI/Imported/FancyFrame2_Inner.png",
+      "borderLeft": 14,
+      "borderRight": 14,
+      "borderTop": 14,
+      "borderBottom": 14,
+      "tileEdges": false
+    },
+    {
+      "id": "cloth_frame",
+      "texture": "assets/UI/Frames/Cloth_75x75.png",
+      "borderLeft": 9,
+      "borderRight": 9,
+      "borderTop": 9,
+      "borderBottom": 9,
+      "tileEdges": false
+    },
+    {
+      "id": "cf2i_fill",
+      "texture": "assets/UI/Frames/CF2I_75x75.png",
+      "borderLeft": 8,
+      "borderRight": 8,
+      "borderTop": 8,
+      "borderBottom": 8,
+      "tileEdges": false
     }
   ]
 }
