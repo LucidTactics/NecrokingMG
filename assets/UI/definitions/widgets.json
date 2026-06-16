@@ -320,8 +320,7 @@
           "y": 0,
           "width": 218,
           "height": 68,
-          "anchor": 0,
-          "childOverrides": []
+          "anchor": 0
         }
       ]
     },
@@ -431,8 +430,7 @@
         255,
         255
       ],
-      "modal": false,
-      "children": []
+      "modal": false
     },
     {
       "id": "UnitTooltipWindow",
@@ -441,9 +439,8 @@
       "width": 468,
       "height": 745,
       "backgroundScale": 0.14,
-      "backgroundInset": -17,
       "frameScale": 0.25,
-      "frameInset": 0,
+      "backgroundInset": -17,
       "frameInsetR": 2,
       "backgroundTint": [
         255,
@@ -2507,8 +2504,8 @@
       "width": 312,
       "height": 366,
       "backgroundScale": 0.14,
-      "backgroundInset": -17,
       "frameScale": 0.49,
+      "backgroundInset": -17,
       "backgroundTint": [
         199,
         215,
@@ -3127,30 +3124,30 @@
     {
       "id": "StatTooltipWindow",
       "background": "LeatherBackground",
+      "stencilImagePath": "assets/UI/Background/dragonpattern_stattip_222x103.png",
       "frame": "RenaiThinBorder16",
       "width": 222,
       "height": 103,
       "backgroundScale": 0.019,
-      "backgroundInset": -2,
       "frameScale": 0.36,
+      "backgroundInset": -2,
       "backgroundTint": [
         255,
         255,
         255,
         255
       ],
-      "frameTint": [
-        255,
-        255,
-        255,
-        255
-      ],
-      "stencilImagePath": "assets/UI/Background/dragonpattern_stattip_222x103.png",
       "stencilTint": [
         255,
         255,
         255,
         36
+      ],
+      "frameTint": [
+        255,
+        255,
+        255,
+        255
       ],
       "bgHarmonize": {
         "targetColor": [
@@ -3290,10 +3287,10 @@
               186,
               255
             ],
-            "bold": true,
-            "boldStrength": 0.6,
             "wordWrap": true,
             "lineSpacing": -3,
+            "bold": true,
+            "boldStrength": 0.6,
             "outlineWidth": 1,
             "outlineColor": [
               0,
@@ -3308,30 +3305,30 @@
     {
       "id": "ResourceTooltipWindow",
       "background": "LeatherBackground",
+      "stencilImagePath": "assets/UI/Background/dragonpattern_rt_222x231.png",
       "frame": "RenaiThinBorder16",
       "width": 222,
       "height": 231,
       "backgroundScale": 0.019,
-      "backgroundInset": -2,
       "frameScale": 0.36,
+      "backgroundInset": -2,
       "backgroundTint": [
         255,
         255,
         255,
         255
       ],
-      "frameTint": [
-        255,
-        255,
-        255,
-        255
-      ],
-      "stencilImagePath": "assets/UI/Background/dragonpattern_rt_222x231.png",
       "stencilTint": [
         255,
         255,
         255,
         36
+      ],
+      "frameTint": [
+        255,
+        255,
+        255,
+        255
       ],
       "bgHarmonize": {
         "targetColor": [
@@ -3599,25 +3596,26 @@
       "id": "TooltipStatRow",
       "width": 207,
       "height": 24,
+      "backgroundScale": 1,
       "modal": false,
       "children": [
         {
           "name": "label",
+          "element": "TooltipStatRowLabel",
           "x": 4,
           "y": 0,
           "width": 143,
           "height": 24,
-          "anchor": 0,
-          "element": "TooltipStatRowLabel"
+          "anchor": 0
         },
         {
           "name": "value",
+          "element": "TooltipStatRowValue",
           "x": 148,
           "y": 1,
           "width": 56,
           "height": 24,
-          "anchor": 0,
-          "element": "TooltipStatRowValue"
+          "anchor": 0
         }
       ]
     },
@@ -3625,56 +3623,72 @@
       "id": "TooltipStatHeader",
       "width": 222,
       "height": 40,
+      "backgroundScale": 1,
       "modal": false,
       "children": [
         {
           "name": "icon",
+          "element": "RT_HumansIcon",
           "x": 5,
           "y": 5,
           "width": 36,
           "height": 36,
-          "anchor": 0,
-          "element": "RT_HumansIcon"
+          "anchor": 0
         },
         {
           "name": "underline",
+          "element": "TT_Underline",
           "x": 44,
           "y": 32,
           "width": 140,
           "height": 3,
-          "anchor": 0,
-          "element": "TT_Underline"
+          "anchor": 0
         },
         {
           "name": "title",
+          "element": "RT_Title",
           "x": 44,
           "y": 6,
           "width": 136,
           "height": 31,
-          "anchor": 0,
-          "element": "RT_Title"
+          "anchor": 0
         },
         {
           "name": "value",
+          "element": "RT_HeaderValue",
           "x": 182,
           "y": 11,
           "width": 32,
           "height": 24,
-          "anchor": 0,
-          "element": "RT_HeaderValue"
+          "anchor": 0
         }
       ]
     },
     {
       "id": "TooltipStatList",
+      "stencilImagePath": "assets/UI/Patterns/Thatch_203x284.png",
+      "backgroundImagePath": "assets/UI/Patterns/Parchment_203x284.png",
+      "autoSizeHeight": true,
+      "frame": "RenaiThinBorder16",
       "width": 207,
       "height": 288,
-      "autoSizeHeight": true,
-      "layout": "vertical",
+      "backgroundScale": 1,
+      "frameScale": 0.25,
       "backgroundInset": 2,
       "stencilInset": 2,
-      "backgroundImagePath": "assets/UI/Patterns/Parchment_203x284.png",
       "backgroundTint": [
+        255,
+        255,
+        255,
+        255
+      ],
+      "stencilTint": [
+        255,
+        255,
+        255,
+        10
+      ],
+      "frameTint": [
         255,
         255,
         255,
@@ -3692,21 +3706,6 @@
         "valStrength": 0.787,
         "useHcl": false
       },
-      "stencilImagePath": "assets/UI/Patterns/Thatch_203x284.png",
-      "stencilTint": [
-        255,
-        255,
-        255,
-        10
-      ],
-      "frame": "RenaiThinBorder16",
-      "frameScale": 0.25,
-      "frameTint": [
-        255,
-        255,
-        255,
-        255
-      ],
       "frameHarmonize": {
         "targetColor": [
           150,
@@ -3720,127 +3719,136 @@
         "useHcl": false
       },
       "modal": false,
+      "layout": "vertical",
+      "layoutPadding": 0,
+      "layoutSpacing": 0,
+      "layoutPadTop": 0,
+      "layoutPadBottom": 0,
+      "layoutPadLeft": 0,
+      "layoutPadRight": 0,
+      "layoutSpacingX": 0,
+      "layoutSpacingY": 0,
       "children": [
         {
           "name": "row0",
+          "widget": "TooltipStatRow",
           "x": 0,
           "y": 0,
           "width": 207,
           "height": 24,
-          "anchor": 0,
-          "widget": "TooltipStatRow"
+          "anchor": 0
         },
         {
           "name": "row1",
+          "widget": "TooltipStatRow",
           "x": 0,
           "y": 0,
           "width": 207,
           "height": 24,
-          "anchor": 0,
-          "widget": "TooltipStatRow"
+          "anchor": 0
         },
         {
           "name": "row2",
+          "widget": "TooltipStatRow",
           "x": 0,
           "y": 0,
           "width": 207,
           "height": 24,
-          "anchor": 0,
-          "widget": "TooltipStatRow"
+          "anchor": 0
         },
         {
           "name": "row3",
+          "widget": "TooltipStatRow",
           "x": 0,
           "y": 0,
           "width": 207,
           "height": 24,
-          "anchor": 0,
-          "widget": "TooltipStatRow"
+          "anchor": 0
         },
         {
           "name": "row4",
+          "widget": "TooltipStatRow",
           "x": 0,
           "y": 0,
           "width": 207,
           "height": 24,
-          "anchor": 0,
-          "widget": "TooltipStatRow"
+          "anchor": 0
         },
         {
           "name": "row5",
+          "widget": "TooltipStatRow",
           "x": 0,
           "y": 0,
           "width": 207,
           "height": 24,
-          "anchor": 0,
-          "widget": "TooltipStatRow"
+          "anchor": 0
         },
         {
           "name": "row6",
+          "widget": "TooltipStatRow",
           "x": 0,
           "y": 0,
           "width": 207,
           "height": 24,
-          "anchor": 0,
-          "widget": "TooltipStatRow"
+          "anchor": 0
         },
         {
           "name": "row7",
+          "widget": "TooltipStatRow",
           "x": 0,
           "y": 0,
           "width": 207,
           "height": 24,
-          "anchor": 0,
-          "widget": "TooltipStatRow"
+          "anchor": 0
         },
         {
           "name": "row8",
+          "widget": "TooltipStatRow",
           "x": 0,
           "y": 0,
           "width": 207,
           "height": 24,
-          "anchor": 0,
-          "widget": "TooltipStatRow"
+          "anchor": 0
         },
         {
           "name": "row9",
+          "widget": "TooltipStatRow",
           "x": 0,
           "y": 0,
           "width": 207,
           "height": 24,
-          "anchor": 0,
-          "widget": "TooltipStatRow"
+          "anchor": 0
         },
         {
           "name": "row10",
+          "widget": "TooltipStatRow",
           "x": 0,
           "y": 0,
           "width": 207,
           "height": 24,
-          "anchor": 0,
-          "widget": "TooltipStatRow"
+          "anchor": 0
         },
         {
           "name": "row11",
+          "widget": "TooltipStatRow",
           "x": 0,
           "y": 0,
           "width": 207,
           "height": 24,
-          "anchor": 0,
-          "widget": "TooltipStatRow"
+          "anchor": 0
         }
       ]
     },
     {
       "id": "ResourceTooltipDyn",
+      "background": "LeatherBackground",
+      "stencilImagePath": "assets/UI/Background/dragonpattern_rtd_222x396.png",
+      "autoSizeHeight": true,
+      "frame": "RenaiThinBorder16",
       "width": 222,
       "height": 396,
-      "autoSizeHeight": true,
-      "layout": "vertical",
-      "layoutSpacing": 4,
-      "layoutPadBottom": 4,
-      "background": "LeatherBackground",
       "backgroundScale": 0.019,
+      "frameScale": 0.36,
       "backgroundInset": -2,
       "backgroundTint": [
         255,
@@ -3848,15 +3856,12 @@
         255,
         255
       ],
-      "stencilImagePath": "assets/UI/Background/dragonpattern_rtd_222x396.png",
       "stencilTint": [
         255,
         255,
         255,
         36
       ],
-      "frame": "RenaiThinBorder16",
-      "frameScale": 0.36,
       "frameTint": [
         255,
         255,
@@ -3914,33 +3919,42 @@
         "useHcl": false
       },
       "modal": false,
+      "layout": "vertical",
+      "layoutPadding": 0,
+      "layoutSpacing": 4,
+      "layoutPadTop": 0,
+      "layoutPadBottom": 4,
+      "layoutPadLeft": 0,
+      "layoutPadRight": 0,
+      "layoutSpacingX": 0,
+      "layoutSpacingY": 0,
       "children": [
         {
           "name": "rtd_header",
+          "widget": "TooltipStatHeader",
           "x": 0,
           "y": 0,
           "width": 222,
           "height": 40,
-          "anchor": 0,
-          "widget": "TooltipStatHeader"
+          "anchor": 0
         },
         {
           "name": "rtd_box",
+          "widget": "TooltipStatList",
           "x": 7,
           "y": 0,
           "width": 207,
           "height": 288,
-          "anchor": 0,
-          "widget": "TooltipStatList"
+          "anchor": 0
         },
         {
           "name": "rtd_desc",
+          "element": "RT_Desc",
           "x": 13,
           "y": 0,
           "width": 196,
           "height": 56,
-          "anchor": 0,
-          "element": "RT_Desc"
+          "anchor": 0
         }
       ]
     },
@@ -3948,6 +3962,7 @@
       "id": "UnitDescSection",
       "width": 468,
       "height": 192,
+      "backgroundScale": 1,
       "modal": false,
       "children": [
         {
@@ -4091,6 +4106,7 @@
       "id": "UnitStatsGrid",
       "width": 468,
       "height": 165,
+      "backgroundScale": 1,
       "modal": false,
       "children": [
         {
@@ -4683,6 +4699,7 @@
       "id": "UnitAbilitiesSection",
       "width": 468,
       "height": 65,
+      "backgroundScale": 1,
       "modal": false,
       "children": [
         {
@@ -4718,6 +4735,7 @@
       "id": "UnitEquipmentTitle",
       "width": 463,
       "height": 28,
+      "backgroundScale": 1,
       "modal": false,
       "children": [
         {
@@ -4753,6 +4771,7 @@
       "id": "UnitStatRow",
       "width": 463,
       "height": 27,
+      "backgroundScale": 1,
       "modal": false,
       "children": [
         {
@@ -4908,18 +4927,24 @@
     },
     {
       "id": "UnitEquipmentBox",
+      "stencilImagePath": "assets/UI/Background/nations_eq_box.png",
+      "backgroundImagePath": "assets/UI/Ribbons/BlueSwath_eqbox_463x198.png",
+      "autoSizeHeight": true,
       "width": 463,
       "height": 190,
-      "autoSizeHeight": true,
-      "layout": "vertical",
-      "layoutPadTop": 1,
-      "layoutPadBottom": 0,
-      "backgroundImagePath": "assets/UI/Ribbons/BlueSwath_eqbox_463x198.png",
+      "backgroundScale": 1,
+      "stencilInset": 4,
       "backgroundTint": [
         255,
         255,
         255,
         116
+      ],
+      "stencilTint": [
+        178,
+        178,
+        178,
+        10
       ],
       "bgHarmonize": {
         "targetColor": [
@@ -4933,14 +4958,6 @@
         "valStrength": 0.368,
         "useHcl": false
       },
-      "stencilImagePath": "assets/UI/Background/nations_eq_box.png",
-      "stencilTint": [
-        178,
-        178,
-        178,
-        10
-      ],
-      "stencilInset": 4,
       "stencilHarmonize": {
         "targetColor": [
           231,
@@ -4954,6 +4971,15 @@
         "useHcl": false
       },
       "modal": false,
+      "layout": "vertical",
+      "layoutPadding": 0,
+      "layoutSpacing": 0,
+      "layoutPadTop": 1,
+      "layoutPadBottom": 0,
+      "layoutPadLeft": 0,
+      "layoutPadRight": 0,
+      "layoutSpacingX": 0,
+      "layoutSpacingY": 0,
       "children": [
         {
           "name": "row0",
@@ -5022,11 +5048,20 @@
     },
     {
       "id": "UnitEquipmentSection",
+      "autoSizeHeight": true,
       "width": 468,
       "height": 218,
-      "autoSizeHeight": true,
-      "layout": "vertical",
+      "backgroundScale": 1,
       "modal": false,
+      "layout": "vertical",
+      "layoutPadding": 0,
+      "layoutSpacing": 0,
+      "layoutPadTop": 0,
+      "layoutPadBottom": 0,
+      "layoutPadLeft": 0,
+      "layoutPadRight": 0,
+      "layoutSpacingX": 0,
+      "layoutSpacingY": 0,
       "children": [
         {
           "name": "title",
@@ -5052,6 +5087,7 @@
       "id": "UnitAttackTitle",
       "width": 463,
       "height": 27,
+      "backgroundScale": 1,
       "modal": false,
       "children": [
         {
@@ -5085,18 +5121,24 @@
     },
     {
       "id": "UnitAttackBox",
+      "stencilImagePath": "assets/UI/Background/nations_at_box.png",
+      "backgroundImagePath": "assets/UI/Ribbons/BlueSwath_atbox_463x83.png",
+      "autoSizeHeight": true,
       "width": 463,
       "height": 82,
-      "autoSizeHeight": true,
-      "layout": "vertical",
-      "layoutPadTop": 1,
-      "layoutPadBottom": 0,
-      "backgroundImagePath": "assets/UI/Ribbons/BlueSwath_atbox_463x83.png",
+      "backgroundScale": 1,
+      "stencilInset": 4,
       "backgroundTint": [
         255,
         255,
         255,
         115
+      ],
+      "stencilTint": [
+        178,
+        178,
+        178,
+        10
       ],
       "bgHarmonize": {
         "targetColor": [
@@ -5110,14 +5152,6 @@
         "valStrength": 0.269,
         "useHcl": false
       },
-      "stencilImagePath": "assets/UI/Background/nations_at_box.png",
-      "stencilTint": [
-        178,
-        178,
-        178,
-        10
-      ],
-      "stencilInset": 4,
       "stencilHarmonize": {
         "targetColor": [
           231,
@@ -5131,6 +5165,15 @@
         "useHcl": false
       },
       "modal": false,
+      "layout": "vertical",
+      "layoutPadding": 0,
+      "layoutSpacing": 0,
+      "layoutPadTop": 1,
+      "layoutPadBottom": 0,
+      "layoutPadLeft": 0,
+      "layoutPadRight": 0,
+      "layoutSpacingX": 0,
+      "layoutSpacingY": 0,
       "children": [
         {
           "name": "row0",
@@ -5163,11 +5206,20 @@
     },
     {
       "id": "UnitAttackSection",
+      "autoSizeHeight": true,
       "width": 468,
       "height": 109,
-      "autoSizeHeight": true,
-      "layout": "vertical",
+      "backgroundScale": 1,
       "modal": false,
+      "layout": "vertical",
+      "layoutPadding": 0,
+      "layoutSpacing": 0,
+      "layoutPadTop": 0,
+      "layoutPadBottom": 0,
+      "layoutPadLeft": 0,
+      "layoutPadRight": 0,
+      "layoutSpacingX": 0,
+      "layoutSpacingY": 0,
       "children": [
         {
           "name": "title",
@@ -5191,16 +5243,14 @@
     },
     {
       "id": "UnitSheetDyn",
+      "background": "LeatherBackground",
+      "autoSizeHeight": true,
+      "frame": "RenaiThinBorder16",
       "width": 468,
       "height": 745,
-      "autoSizeHeight": true,
-      "layout": "vertical",
-      "background": "LeatherBackground",
-      "frame": "RenaiThinBorder16",
       "backgroundScale": 0.14,
-      "backgroundInset": -17,
       "frameScale": 0.25,
-      "frameInset": 0,
+      "backgroundInset": -17,
       "frameInsetR": 2,
       "backgroundTint": [
         255,
@@ -5246,6 +5296,15 @@
         "useHcl": false
       },
       "modal": false,
+      "layout": "vertical",
+      "layoutPadding": 0,
+      "layoutSpacing": 0,
+      "layoutPadTop": 0,
+      "layoutPadBottom": 0,
+      "layoutPadLeft": 0,
+      "layoutPadRight": 0,
+      "layoutSpacingX": 0,
+      "layoutSpacingY": 0,
       "children": [
         {
           "name": "sec_desc",
@@ -5296,8 +5355,36 @@
     },
     {
       "id": "SpiritFormTip",
+      "background": "LeatherBackground",
       "width": 428,
       "height": 271,
+      "backgroundScale": 0.031,
+      "backgroundInset": -4,
+      "backgroundTint": [
+        255,
+        255,
+        255,
+        255
+      ],
+      "bgHarmonize": {
+        "targetColor": [
+          31,
+          24,
+          17,
+          255
+        ],
+        "hueStrength": 1,
+        "satStrength": 0.756,
+        "valStrength": 0.588,
+        "useHcl": false,
+        "gradColor": [
+          18,
+          15,
+          11,
+          71
+        ],
+        "gradStrength": 0.992
+      },
       "modal": false,
       "children": [
         {
@@ -5615,8 +5702,13 @@
           "height": 52,
           "anchor": 0
         }
-      ],
+      ]
+    },
+    {
+      "id": "ShadowBoltTip",
       "background": "LeatherBackground",
+      "width": 428,
+      "height": 344,
       "backgroundScale": 0.031,
       "backgroundInset": -4,
       "backgroundTint": [
@@ -5643,12 +5735,7 @@
           71
         ],
         "gradStrength": 0.992
-      }
-    },
-    {
-      "id": "ShadowBoltTip",
-      "width": 428,
-      "height": 344,
+      },
       "modal": false,
       "children": [
         {
@@ -6128,8 +6215,13 @@
           "height": 52,
           "anchor": 0
         }
-      ],
+      ]
+    },
+    {
+      "id": "SummonWolvesTip",
       "background": "LeatherBackground",
+      "width": 428,
+      "height": 572,
       "backgroundScale": 0.031,
       "backgroundInset": -4,
       "backgroundTint": [
@@ -6156,12 +6248,7 @@
           71
         ],
         "gradStrength": 0.992
-      }
-    },
-    {
-      "id": "SummonWolvesTip",
-      "width": 428,
-      "height": 572,
+      },
       "modal": false,
       "children": [
         {
@@ -7208,40 +7295,40 @@
           "height": 42,
           "anchor": 0
         }
-      ],
+      ]
+    },
+    {
+      "id": "GrimoireWindow",
       "background": "LeatherBackground",
-      "backgroundScale": 0.031,
-      "backgroundInset": -4,
+      "width": 706,
+      "height": 1080,
+      "backgroundScale": 0.136,
+      "backgroundInset": -17,
       "backgroundTint": [
-        255,
-        255,
-        255,
+        199,
+        215,
+        229,
         255
       ],
       "bgHarmonize": {
         "targetColor": [
-          31,
-          24,
-          17,
+          73,
+          58,
+          41,
           255
         ],
         "hueStrength": 1,
-        "satStrength": 0.756,
-        "valStrength": 0.588,
+        "satStrength": 1,
+        "valStrength": 0.48,
         "useHcl": false,
         "gradColor": [
           18,
           15,
           11,
-          71
+          112
         ],
         "gradStrength": 0.992
-      }
-    },
-    {
-      "id": "GrimoireWindow",
-      "width": 706,
-      "height": 1080,
+      },
       "modal": false,
       "children": [
         {
@@ -8801,40 +8888,13 @@
           "height": 62,
           "anchor": 0
         }
-      ],
-      "background": "LeatherBackground",
-      "backgroundScale": 0.136,
-      "backgroundInset": -17,
-      "backgroundTint": [
-        199,
-        215,
-        229,
-        255
-      ],
-      "bgHarmonize": {
-        "targetColor": [
-          73,
-          58,
-          41,
-          255
-        ],
-        "hueStrength": 1,
-        "satStrength": 1.0,
-        "valStrength": 0.48,
-        "useHcl": false,
-        "gradColor": [
-          18,
-          15,
-          11,
-          112
-        ],
-        "gradStrength": 0.992
-      }
+      ]
     },
     {
       "id": "GrimoireSpellTile",
       "width": 322,
       "height": 80,
+      "backgroundScale": 1,
       "modal": false,
       "children": [
         {
@@ -9048,8 +9108,36 @@
     },
     {
       "id": "GrimoireDyn",
+      "background": "LeatherBackground",
       "width": 706,
       "height": 1080,
+      "backgroundScale": 0.136,
+      "backgroundInset": -17,
+      "backgroundTint": [
+        199,
+        215,
+        229,
+        255
+      ],
+      "bgHarmonize": {
+        "targetColor": [
+          73,
+          58,
+          41,
+          255
+        ],
+        "hueStrength": 1,
+        "satStrength": 1,
+        "valStrength": 0.48,
+        "useHcl": false,
+        "gradColor": [
+          18,
+          15,
+          11,
+          112
+        ],
+        "gradStrength": 0.992
+      },
       "modal": false,
       "children": [
         {
@@ -9790,40 +9878,13 @@
           "height": 1080,
           "anchor": 0
         }
-      ],
-      "background": "LeatherBackground",
-      "backgroundScale": 0.136,
-      "backgroundInset": -17,
-      "backgroundTint": [
-        199,
-        215,
-        229,
-        255
-      ],
-      "bgHarmonize": {
-        "targetColor": [
-          73,
-          58,
-          41,
-          255
-        ],
-        "hueStrength": 1,
-        "satStrength": 1.0,
-        "valStrength": 0.48,
-        "useHcl": false,
-        "gradColor": [
-          18,
-          15,
-          11,
-          112
-        ],
-        "gradStrength": 0.992
-      }
+      ]
     },
     {
       "id": "SkillTile",
       "width": 322,
       "height": 80,
+      "backgroundScale": 1,
       "modal": false,
       "children": [
         {
@@ -10037,8 +10098,36 @@
     },
     {
       "id": "SkillBookWindow",
+      "background": "LeatherBackground",
       "width": 706,
       "height": 1080,
+      "backgroundScale": 0.136,
+      "backgroundInset": -17,
+      "backgroundTint": [
+        199,
+        215,
+        229,
+        255
+      ],
+      "bgHarmonize": {
+        "targetColor": [
+          73,
+          58,
+          41,
+          255
+        ],
+        "hueStrength": 1,
+        "satStrength": 1,
+        "valStrength": 0.48,
+        "useHcl": false,
+        "gradColor": [
+          18,
+          15,
+          11,
+          112
+        ],
+        "gradStrength": 0.992
+      },
       "modal": false,
       "children": [
         {
@@ -10054,7 +10143,7 @@
           "name": "HeaderDivider",
           "element": "Grim_HeaderDivider",
           "x": 24,
-          "y": 171,
+          "y": 131,
           "width": 658,
           "height": 21,
           "anchor": 0
@@ -10065,186 +10154,15 @@
           "x": 27,
           "y": 91,
           "width": 652,
-          "height": 83,
+          "height": 40,
           "anchor": 0
         },
         {
-          "name": "Tab_Potions_Backing",
-          "element": "SkillTab_Backing",
+          "name": "TabBar",
+          "widget": "TabBar",
           "x": 24,
-          "y": 98,
-          "width": 86,
-          "height": 33,
-          "anchor": 0
-        },
-        {
-          "name": "Tab_Potions_Name",
-          "element": "SkillTab_Potions_Name",
-          "x": 27,
-          "y": 98,
-          "width": 80,
-          "height": 18,
-          "anchor": 0
-        },
-        {
-          "name": "Tab_Potions_Frac",
-          "element": "SkillTab_Frac",
-          "x": 27,
-          "y": 114,
-          "width": 80,
-          "height": 12,
-          "anchor": 0
-        },
-        {
-          "name": "Tab_Potions_Frame",
-          "element": "SkillTab_Frame",
-          "x": 26,
           "y": 96,
-          "width": 82,
-          "height": 35,
-          "anchor": 0
-        },
-        {
-          "name": "Tab_Monstrology_Backing",
-          "element": "SkillTab_Backing",
-          "x": 104,
-          "y": 98,
-          "width": 148,
-          "height": 33,
-          "anchor": 0
-        },
-        {
-          "name": "Tab_Monstrology_Name",
-          "element": "SkillTab_Monstrology_Name",
-          "x": 101,
-          "y": 99,
-          "width": 159,
-          "height": 18,
-          "anchor": 0
-        },
-        {
-          "name": "Tab_Monstrology_Frac",
-          "element": "SkillTab_Frac",
-          "x": 101,
-          "y": 115,
-          "width": 159,
-          "height": 12,
-          "anchor": 0
-        },
-        {
-          "name": "Tab_Monstrology_Frame",
-          "element": "SkillTab_Frame",
-          "x": 107,
-          "y": 96,
-          "width": 144,
-          "height": 35,
-          "anchor": 0
-        },
-        {
-          "name": "Tab_Necromancy_Backing",
-          "element": "SkillTab_Backing",
-          "x": 248,
-          "y": 98,
-          "width": 148,
-          "height": 33,
-          "anchor": 0
-        },
-        {
-          "name": "Tab_Necromancy_Name",
-          "element": "SkillTab_Necromancy_Name",
-          "x": 244,
-          "y": 99,
-          "width": 159,
-          "height": 18,
-          "anchor": 0
-        },
-        {
-          "name": "Tab_Necromancy_Frac",
-          "element": "SkillTab_Frac",
-          "x": 244,
-          "y": 115,
-          "width": 159,
-          "height": 12,
-          "anchor": 0
-        },
-        {
-          "name": "Tab_Necromancy_Frame",
-          "element": "SkillTab_Frame",
-          "x": 250,
-          "y": 96,
-          "width": 144,
-          "height": 35,
-          "anchor": 0
-        },
-        {
-          "name": "Tab_Magic_Backing",
-          "element": "SkillTab_Backing",
-          "x": 390,
-          "y": 98,
-          "width": 148,
-          "height": 33,
-          "anchor": 0
-        },
-        {
-          "name": "Tab_Magic_Name",
-          "element": "SkillTab_Magic_Name",
-          "x": 387,
-          "y": 99,
-          "width": 159,
-          "height": 18,
-          "anchor": 0
-        },
-        {
-          "name": "Tab_Magic_Frac",
-          "element": "SkillTab_Frac",
-          "x": 387,
-          "y": 115,
-          "width": 159,
-          "height": 12,
-          "anchor": 0
-        },
-        {
-          "name": "Tab_Magic_Frame",
-          "element": "SkillTab_Frame",
-          "x": 393,
-          "y": 96,
-          "width": 144,
-          "height": 35,
-          "anchor": 0
-        },
-        {
-          "name": "Tab_Metamorphosis_Backing",
-          "element": "SkillTab_Backing",
-          "x": 534,
-          "y": 98,
-          "width": 148,
-          "height": 33,
-          "anchor": 0
-        },
-        {
-          "name": "Tab_Metamorphosis_Name",
-          "element": "SkillTab_Metamorphosis_Name",
-          "x": 530,
-          "y": 99,
-          "width": 159,
-          "height": 18,
-          "anchor": 0
-        },
-        {
-          "name": "Tab_Metamorphosis_Frac",
-          "element": "SkillTab_Frac",
-          "x": 530,
-          "y": 115,
-          "width": 159,
-          "height": 12,
-          "anchor": 0
-        },
-        {
-          "name": "Tab_Metamorphosis_Frame",
-          "element": "SkillTab_Frame",
-          "x": 536,
-          "y": 96,
-          "width": 144,
+          "width": 656,
           "height": 35,
           "anchor": 0
         },
@@ -10270,40 +10188,111 @@
           "name": "WindowBorder",
           "element": "Grim_WindowBorder",
           "x": 0,
-          "y": 0,
+          "y": -1,
           "width": 706,
           "height": 1080,
           "anchor": 0
         }
-      ],
-      "background": "LeatherBackground",
-      "backgroundScale": 0.136,
-      "backgroundInset": -17,
-      "backgroundTint": [
-        199,
-        215,
-        229,
-        255
-      ],
-      "bgHarmonize": {
-        "targetColor": [
-          73,
-          58,
-          41,
-          255
-        ],
-        "hueStrength": 1,
-        "satStrength": 1.0,
-        "valStrength": 0.48,
-        "useHcl": false,
-        "gradColor": [
-          18,
-          15,
-          11,
-          112
-        ],
-        "gradStrength": 0.992
-      }
+      ]
+    },
+    {
+      "id": "SkillBookTab",
+      "width": 128,
+      "height": 35,
+      "layout": "none",
+      "children": [
+        {
+          "name": "Backing",
+          "element": "SkillTab_Backing",
+          "x": 0,
+          "y": 0,
+          "width": 128,
+          "height": 35,
+          "anchor": 0
+        },
+        {
+          "name": "Name",
+          "element": "SkillTab_Name",
+          "x": 2,
+          "y": 3,
+          "width": 124,
+          "height": 19,
+          "anchor": 0
+        },
+        {
+          "name": "Frac",
+          "element": "SkillTab_Frac",
+          "x": 2,
+          "y": 21,
+          "width": 124,
+          "height": 12,
+          "anchor": 0
+        },
+        {
+          "name": "Frame",
+          "element": "SkillTab_Frame",
+          "x": 0,
+          "y": 0,
+          "width": 128,
+          "height": 35,
+          "anchor": 0
+        }
+      ]
+    },
+    {
+      "id": "TabBar",
+      "width": 656,
+      "height": 35,
+      "layout": "horizontal",
+      "layoutSpacing": 4,
+      "layoutPadding": 0,
+      "children": [
+        {
+          "name": "tab0",
+          "widget": "SkillBookTab",
+          "x": 0,
+          "y": 0,
+          "width": 128,
+          "height": 35,
+          "anchor": 0
+        },
+        {
+          "name": "tab1",
+          "widget": "SkillBookTab",
+          "x": 0,
+          "y": 0,
+          "width": 128,
+          "height": 35,
+          "anchor": 0
+        },
+        {
+          "name": "tab2",
+          "widget": "SkillBookTab",
+          "x": 0,
+          "y": 0,
+          "width": 128,
+          "height": 35,
+          "anchor": 0
+        },
+        {
+          "name": "tab3",
+          "widget": "SkillBookTab",
+          "x": 0,
+          "y": 0,
+          "width": 128,
+          "height": 35,
+          "anchor": 0
+        },
+        {
+          "name": "tab4",
+          "widget": "SkillBookTab",
+          "x": 0,
+          "y": 0,
+          "width": 128,
+          "height": 35,
+          "anchor": 0
+        }
+      ]
     }
   ]
 }

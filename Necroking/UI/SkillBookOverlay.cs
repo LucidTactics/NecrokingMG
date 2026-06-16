@@ -29,9 +29,10 @@ public class SkillBookOverlay : IModalLayer
     private const string TileId   = "SkillTile";
     private const string Instance = "skillbook";
 
-    // The window's five tab slots, in SkillBookDefs.Tabs order. Each is a group of
-    // SkillBookWindow children: Tab_<slot>_Backing / _Name (static, editable in the
-    // editor) / _Frac (the learned/total, filled here) / _Frame.
+    // The window's five tab slots, in SkillBookDefs.Tabs order. The tabs live in a
+    // horizontal-layout "TabBar" sub-widget; each tab is a "SkillBookTab" widget
+    // (Backing / Name / Frac / Frame) instanced as TabBar child "tab{i}". Their data
+    // is bound through the nested instance path "{Instance}.{tabBarIdx}.{i}".
     private static readonly string[] TabSlots =
         { "Potions", "Monstrology", "Necromancy", "Magic", "Metamorphosis" };
 
@@ -50,6 +51,10 @@ public class SkillBookOverlay : IModalLayer
     private int _activeTab;
     private string? _toast;
     private double _toastUntil;
+
+    // Cached index of the TabBar child within SkillBookWindow. The five tabs are
+    // nested child-widgets of it, so they're addressed as "{Instance}.{tabBarIdx}.{i}".
+    private int _tabBarIdx = -1;
 
     // Per-skill stamped tile rects this frame (for hit-testing clicks).
     private readonly List<(string id, Rectangle rect)> _tileRects = new();
@@ -115,11 +120,18 @@ public class SkillBookOverlay : IModalLayer
         input.MouseOverUI = true;
         if (!input.LeftPressed) return;
 
-        // Tab clicks (hit-test the tab backing rects).
-        for (int i = 0; i < SkillBookDefs.Tabs.Count && i < TabSlots.Length; i++)
+        // Tab clicks: tabs are nested child-widgets of the TabBar, so resolve the
+        // TabBar's screen rect first, then each tab's laid-out rect within it.
+        int barIdx = TabBarIndex();
+        if (barIdx >= 0)
         {
-            var r = _renderer.GetChildRect(WindowId, $"Tab_{TabSlots[i]}_Backing", _x, _y, Instance);
-            if (r != Rectangle.Empty && r.Contains(mx, my)) { _activeTab = i; return; }
+            var bar = _renderer.GetChildRect(WindowId, "TabBar", _x, _y, Instance);
+            string barInst = $"{Instance}.{barIdx}";
+            for (int i = 0; i < SkillBookDefs.Tabs.Count && i < TabSlots.Length; i++)
+            {
+                var r = _renderer.GetChildRect("TabBar", $"tab{i}", bar.X, bar.Y, barInst);
+                if (r != Rectangle.Empty && r.Contains(mx, my)) { _activeTab = i; return; }
+            }
         }
         // Tile clicks (the rects we stamped last Draw).
         foreach (var (id, rect) in _tileRects)
@@ -151,19 +163,34 @@ public class SkillBookOverlay : IModalLayer
         if (_toast != null) DrawToast();
     }
 
+    /// <summary>Index of the TabBar child inside SkillBookWindow (cached). The tab
+    /// widgets nest under it, addressed as "{Instance}.{tabBarIdx}.{i}".</summary>
+    private int TabBarIndex()
+    {
+        if (_tabBarIdx >= 0) return _tabBarIdx;
+        var def = _renderer.GetWidgetDef(WindowId);
+        if (def?.Children != null)
+            for (int i = 0; i < def.Children.Count; i++)
+                if (def.Children[i].Name == "TabBar") { _tabBarIdx = i; break; }
+        return _tabBarIdx;
+    }
+
     private void BindChrome()
     {
         _renderer.SetText(Instance, "TitleText", "TOME OF THE NECROKING");
+        int barIdx = TabBarIndex();
+        if (barIdx < 0) return;
         for (int i = 0; i < TabSlots.Length && i < SkillBookDefs.Tabs.Count; i++)
         {
-            string slot = TabSlots[i];
             var tab = SkillBookDefs.Tabs[i];
             var (learned, total) = _state?.GetProgress(tab) ?? (0, tab.Skills.Count);
-            // The tab name is static (the element's default text, edited in the UI
-            // editor); only the learned/total fraction is filled at runtime.
-            _renderer.SetText(Instance, $"Tab_{slot}_Frac", $"{learned}/{total}");
+            string tabInst = $"{Instance}.{barIdx}.{i}";
+            // Name + fraction are bound per-tab (all five tabs share one SkillBookTab
+            // widget, so the per-tab text is data-driven, not a static element default).
+            _renderer.SetText(tabInst, "Name", TabSlots[i]);
+            _renderer.SetText(tabInst, "Frac", $"{learned}/{total}");
             bool active = i == _activeTab;
-            _renderer.SetElementTint(Instance, $"Tab_{slot}_Backing",
+            _renderer.SetElementTint(tabInst, "Backing",
                 active ? Color.White : new Color(150, 140, 120));
         }
     }
