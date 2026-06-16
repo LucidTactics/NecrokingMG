@@ -29,7 +29,6 @@ public static class ScenarioRegistry
         Register("wall_trap", () => new Scenarios.WallTrapScenario());
         Register("wall_gate", () => new Scenarios.WallGateScenario());
         Register("UIEmpty", () => new Scenarios.UIEmptyScenario());
-        Register("UISkillTree", () => new Scenarios.UISkillTreeScenario());
         Register("UISkillBook", () => new Scenarios.UISkillBookScenario());
         Register("UIGradientTest", () => new Scenarios.UIGradientTestScenario());
         Register("UIRectShadowTest", () => new Scenarios.UIRectShadowTestScenario());
@@ -115,7 +114,6 @@ public static class ScenarioRegistry
         Register("stride_debug", () => new Scenarios.StrideDebugScenario());
         Register("intrinsic_buff", () => new Scenarios.IntrinsicBuffScenario());
         Register("corpse_eater", () => new Scenarios.CorpseEaterScenario());
-        Register("UITooltipPlacement", () => new Scenarios.TooltipPlacementScenario());
         Register("perf_water", () => new Scenarios.PerfWaterScenario());
         Register("deep_water_blocks", () => new Scenarios.DeepWaterBlocksScenario());
         Register("wake_color_check", () => new Scenarios.WakeColorCheckScenario());

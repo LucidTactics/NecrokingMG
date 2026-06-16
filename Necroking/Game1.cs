@@ -40,7 +40,6 @@ public class Game1 : Microsoft.Xna.Framework.Game
     private UI.UnitInfoPanel _unitInfoPanel = new();
     private UI.GrimoireOverlay _grimoireOverlay = new();
     private bool _pausedByInspect;
-    private SkillTreePanel _skillTreePanel = new();
     private UI.SkillBookOverlay _skillBookOverlay = new();
     private SkillBookState _skillBookState = new();
     private GameSystems.DeathFogSystem _deathFog = new();
@@ -1414,7 +1413,6 @@ public class Game1 : Microsoft.Xna.Framework.Game
         scenario.Inventory = _inventory;
         scenario.ItemRegistry = _gameData.Items;
         scenario.InventoryUI = _inventoryUI;
-        scenario.SkillTreePanel = _skillTreePanel;
         scenario.SkillBookOverlay = _skillBookOverlay;
         scenario.UIShaders = _uiShaders;
         scenario.Atlases = _atlases;
@@ -1967,7 +1965,6 @@ public class Game1 : Microsoft.Xna.Framework.Game
         _characterStatsUI.Init(_spriteBatch, _pixel, _font, _smallFont);
         // Note: _uiShaders is initialized later after Content.Load path -- we
         // set it on the panel below after Load completes.
-        _skillTreePanel.Init(_spriteBatch, _pixel, _font, _smallFont, _largeFont);
         _skillBookOverlay.Init(_widgetRenderer, _spriteBatch, _pixel);
         // Early bind so scenarios (which skip StartGame) still have state. The spell-
         // bar Slots may be null at this point — re-bind happens in StartGame once the
@@ -2000,7 +1997,6 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
         _uiShaders = new UIShaders(GraphicsDevice, _pixel, BlendState.AlphaBlend, SamplerState.PointClamp);
         _uiShaders.Load(Content);
-        _skillTreePanel.SetUIShaders(_uiShaders);
 
         try { _outlineFlatEffect = Content.Load<Microsoft.Xna.Framework.Graphics.Effect>("OutlineFlat"); }
         catch (Exception ex) { _outlineFlatEffect = null; DebugLog.Log("startup", $"OutlineFlat not loaded: {ex.Message}"); }
@@ -2344,15 +2340,9 @@ public class Game1 : Microsoft.Xna.Framework.Game
         if (!anyTextInputActive && _input.WasKeyPressed(Keys.Tab) && _menuState == MenuState.None)
             _characterStatsUI.Toggle();
 
-        // 'K' = new SkillBookPanel (tabs: Potions/Necromancy/Magic/Metamorphosis).
-        // 'Shift+K' = old SkillTreePanel (DEFUNCT proof-of-concept "Grimoire of the
-        // Unhallowed"; kept reachable for visual reference. Delete during cleanup.)
+        // 'K' = the Ability Upgrades skill book (tabbed school trees).
         if (!anyTextInputActive && _input.WasKeyPressed(Keys.K) && _menuState == MenuState.None)
-        {
-            bool shift = _input.IsKeyDown(Keys.LeftShift) || _input.IsKeyDown(Keys.RightShift);
-            if (shift) _skillTreePanel.Toggle();
-            else       _skillBookOverlay.Toggle();
-        }
+            _skillBookOverlay.Toggle();
 
         // 'J' = spell grimoire (phase 1: display only)
         if (!anyTextInputActive && _input.WasKeyPressed(Keys.J) && _menuState == MenuState.None)
@@ -2576,8 +2566,6 @@ public class Game1 : Microsoft.Xna.Framework.Game
             if (_craftingMenu.ContainsMouse(mx, my))
                 _input.MouseOverUI = true;
             if (_grimoireOverlay.ContainsMouse(mx, my))
-                _input.MouseOverUI = true;
-            if (_skillTreePanel.ContainsMouse(screenW, screenH, mx, my))
                 _input.MouseOverUI = true;
             if (_skillBookOverlay.ContainsMouse(mx, my))
                 _input.MouseOverUI = true;
@@ -3037,16 +3025,6 @@ public class Game1 : Microsoft.Xna.Framework.Game
                     _activeScenario.RequestCloseInventory = false;
                     _inventoryUI.Close();
                 }
-                if (_activeScenario.RequestOpenSkillTree)
-                {
-                    _activeScenario.RequestOpenSkillTree = false;
-                    _skillTreePanel.Open();
-                }
-                if (_activeScenario.RequestCloseSkillTree)
-                {
-                    _activeScenario.RequestCloseSkillTree = false;
-                    _skillTreePanel.Close();
-                }
                 if (_activeScenario.RequestOpenSkillBook)
                 {
                     _activeScenario.RequestOpenSkillBook = false;
@@ -3273,8 +3251,6 @@ public class Game1 : Microsoft.Xna.Framework.Game
                     _input.ConsumeMouse();
             }
         }
-        _skillTreePanel.SetMouse(_input.MousePos);
-        _skillTreePanel.Update(_input, screenW, screenH, gameTime.TotalGameTime.TotalSeconds);
         _skillBookOverlay.Update(_input, screenW, screenH, gameTime.TotalGameTime.TotalSeconds);
 
         // Cursor swap: hand when hovering interactive UI, arrow otherwise
@@ -5228,10 +5204,6 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // Spell grimoire (J)
         if (showUI)
             _grimoireOverlay.Draw(screenW, screenH);
-
-        // Skill tree panel (Shift+K) — DEFUNCT old grimoire, kept for visual reference.
-        if (showUI)
-            _skillTreePanel.Draw(screenW, screenH);
 
         // Skill book panel (K) — tabbed Potions/Necromancy/Magic/Metamorphosis trees.
         if (showUI)

@@ -133,18 +133,10 @@ public abstract class ScenarioBase
     public bool RequestCloseInventory;
     public Game.InventoryUI? InventoryUI;
 
-    // Skill tree panel control
-    public bool RequestOpenSkillTree;
-    public bool RequestCloseSkillTree;
-    public Render.SkillTreePanel? SkillTreePanel;
-
     // Skill book panel (new tabbed grimoire) control
     public bool RequestOpenSkillBook;
     public bool RequestCloseSkillBook;
     public UI.SkillBookOverlay? SkillBookOverlay;
-    // Old hand-drawn panel — retired from Game1; kept null so the tooltip-placement
-    // test (which null-guards) trivially passes until tooltips are ported.
-    public Render.SkillBookPanel? SkillBookPanel;
 
     // Shader-based UI primitives (used by shader test scenarios)
     public Render.UIShaders? UIShaders;

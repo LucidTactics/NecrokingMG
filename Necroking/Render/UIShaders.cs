@@ -6,8 +6,8 @@ using Microsoft.Xna.Framework.Graphics;
 namespace Necroking.Render;
 
 /// <summary>
-/// Shader-based UI rendering primitives. Replaces the stacked-SpriteBatch
-/// approach in <see cref="UIGfx"/> with real HLSL/GLSL pixel shaders.
+/// Shader-based UI rendering primitives. Replaces an earlier stacked-SpriteBatch
+/// approach (the since-removed UIGfx) with real HLSL/GLSL pixel shaders.
 ///
 /// Each method ends and re-begins the active SpriteBatch so the caller does
 /// not have to manage effect state. This is intentionally simple, not fast:
