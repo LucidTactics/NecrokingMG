@@ -10,24 +10,6 @@
       "tileEdges": false
     },
     {
-      "id": "button_rounded",
-      "texture": "assets/UI/Button/InnerCornersButtonRounded.png",
-      "borderLeft": 22,
-      "borderRight": 22,
-      "borderTop": 22,
-      "borderBottom": 22,
-      "tileEdges": false
-    },
-    {
-      "id": "FancyButton",
-      "texture": "assets/UI/Button/FrameButton3png.png",
-      "borderLeft": 18,
-      "borderRight": 17,
-      "borderTop": 14,
-      "borderBottom": 15,
-      "tileEdges": false
-    },
-    {
       "id": "Background",
       "texture": "assets/UI/Frames/FancyFrame2_Inner.png",
       "borderLeft": 86,
@@ -37,39 +19,12 @@
       "tileEdges": false
     },
     {
-      "id": "panel_outer",
-      "texture": "assets/UI/Frames/VeryFancyFrameOuter.png",
-      "borderLeft": 321,
-      "borderRight": 314,
-      "borderTop": 310,
-      "borderBottom": 336,
-      "tileEdges": false
-    },
-    {
       "id": "panel_inner",
       "texture": "assets/UI/Frames/SimpleSquareFilled1.png",
       "borderLeft": 21,
       "borderRight": 21,
       "borderTop": 21,
       "borderBottom": 21,
-      "tileEdges": false
-    },
-    {
-      "id": "ribbon_banner",
-      "texture": "assets/UI/Ribbons/Ribbon1.png",
-      "borderLeft": 218,
-      "borderRight": 169,
-      "borderTop": 5,
-      "borderBottom": 5,
-      "tileEdges": false
-    },
-    {
-      "id": "portrait_frame",
-      "texture": "assets/UI/Frames/SquarePortraitFrame.png",
-      "borderLeft": 63,
-      "borderRight": 60,
-      "borderTop": 39,
-      "borderBottom": 47,
       "tileEdges": false
     },
     {
@@ -115,15 +70,6 @@
       "borderRight": 129,
       "borderTop": 129,
       "borderBottom": 133,
-      "tileEdges": false
-    },
-    {
-      "id": "SwatchBanner",
-      "texture": "assets/UI/Ribbons/Swatch1.3.png",
-      "borderLeft": 10,
-      "borderRight": 7,
-      "borderTop": 9,
-      "borderBottom": 8,
       "tileEdges": false
     },
     {
