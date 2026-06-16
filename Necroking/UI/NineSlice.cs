@@ -61,6 +61,24 @@ public class NineSlice
         int bt = (int)(BorderTop * scale);
         int bb = (int)(BorderBottom * scale);
 
+        // Clamp opposing border pairs to the destination so they never overlap. Without
+        // this, an element smaller than (left+right) or (top+bottom) draws both corners
+        // at full size — they overlap and spill past the rect, making a wide-bordered
+        // nine-slice "blow up" into strange shapes at small sizes. Here the corners just
+        // meet (the corner art squishes) and the stretched mid sections collapse to 0.
+        if (bl + br > dest.Width)
+        {
+            int sum = bl + br;
+            bl = sum > 0 ? bl * dest.Width / sum : 0;
+            br = dest.Width - bl;
+        }
+        if (bt + bb > dest.Height)
+        {
+            int sum = bt + bb;
+            bt = sum > 0 ? bt * dest.Height / sum : 0;
+            bb = dest.Height - bt;
+        }
+
         // Source rectangles (9 regions)
         var srcTL = new Rectangle(0, 0, BorderLeft, BorderTop);
         var srcTR = new Rectangle(tw - BorderRight, 0, BorderRight, BorderTop);
