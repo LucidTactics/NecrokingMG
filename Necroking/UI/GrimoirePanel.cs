@@ -25,7 +25,8 @@ public static class GrimoirePanel
     /// spells shown (parallel to tile indices). school == null and
     /// path == None mean "no filter on that axis".</summary>
     public static List<SpellDef> Populate(RuntimeWidgetRenderer r, GameData gameData,
-        string instanceId, string? school = null, MagicPath path = MagicPath.None)
+        string instanceId, string? school = null, MagicPath path = MagicPath.None,
+        Func<SpellDef, bool>? canShow = null)
     {
         r.ClearOverridesRecursive(instanceId);
         var def = r.GetWidgetDef(WidgetId);
@@ -35,6 +36,7 @@ public static class GrimoirePanel
             .Where(s => !s.Hidden && !string.IsNullOrEmpty(s.DisplayName))
             .Where(s => school == null || s.School == school)
             .Where(s => path == MagicPath.None || MagicPathHelpers.FromJsonId(s.PrimaryPath) == path)
+            .Where(s => canShow == null || canShow(s))
             .ToList();
 
         int shown = Math.Min(spells.Count, MaxTiles);

@@ -421,6 +421,22 @@ public static class SpellCaster
         return CastResult.Success;
     }
 
+    /// <summary>True if the necromancer meets a spell's magic-path requirements
+    /// (primary + secondary path/level). PATH GATING ONLY — deliberately does
+    /// NOT check mana, cooldown, or targeting: "do I have this spell" is about
+    /// unlocked paths, not current resources (players don't expect a spell to
+    /// vanish from the book just because they're low on mana). Used to filter
+    /// the grimoire so spells whose paths the player hasn't unlocked don't show.
+    /// necroIdx &lt; 0 (no caster context, e.g. editor/tests) => true (show all).</summary>
+    public static bool HasSpellRequirements(SpellDef? spell, GameData? gameData,
+        UnitArrays units, int necroIdx)
+    {
+        if (spell == null) return false;
+        if (necroIdx < 0) return true;
+        var def = gameData?.Units.Get(units[necroIdx].UnitDefID);
+        return spell.MeetsPathRequirements(ResolveCasterLevel(def, units, necroIdx));
+    }
+
     /// <summary>Build the magic-path level lookup used for both requirement
     /// gating and mana-cost scaling. Native def levels are floored by buff
     /// "AllPaths" Set effects (e.g. god mode pinning every path to 9). Higher
