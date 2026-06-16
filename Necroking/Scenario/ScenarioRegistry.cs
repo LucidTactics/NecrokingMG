@@ -50,6 +50,7 @@ public static class ScenarioRegistry
         Register("ui_test", () => new Scenarios.EditorUITestScenario());
         Register("ui_skillbook_editor", () => new Scenarios.EditorSkillBookPreviewScenario());
         Register("UISkillLayout", () => new Scenarios.UISkillLayoutScenario());
+        Register("nineslice_tiling", () => new Scenarios.NineSliceTilingScenario());
         Register("anim_button_test", () => new Scenarios.AnimButtonTestScenario());
         Register("bloom_test", () => new Scenarios.BloomTestScenario());
         Register("bloom_debug", () => new Scenarios.BloomDebugScenario());
