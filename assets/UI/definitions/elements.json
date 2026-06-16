@@ -8803,31 +8803,6 @@
       }
     },
     {
-      "id": "Grim_WindowBorder",
-      "type": "image",
-      "imagePath": "assets/UI/Imported/baked_ClothUpgradeFrame2-DarkBorder1_706x1080.png",
-      "width": 706,
-      "height": 1080,
-      "tintColor": [
-        156,
-        156,
-        156,
-        255
-      ],
-      "harmonize": {
-        "targetColor": [
-          38,
-          31,
-          17,
-          255
-        ],
-        "hueStrength": 1,
-        "satStrength": 1,
-        "valStrength": 0.052,
-        "useHcl": false
-      }
-    },
-    {
       "id": "Grim_HeaderDivider",
       "type": "image",
       "imagePath": "assets/UI/Imported/baked_ClothUpgradedRowThinDarkEdge_658x21.png",

@@ -8016,17 +8016,28 @@
           "width": 322,
           "height": 80,
           "anchor": 0
-        },
-        {
-          "name": "WindowBorder",
-          "element": "Grim_WindowBorder",
-          "x": 0,
-          "y": 0,
-          "width": 706,
-          "height": 1080,
-          "anchor": 0
         }
-      ]
+      ],
+      "frame": "grim_cloth_frame",
+      "frameTint": [
+        156,
+        156,
+        156,
+        255
+      ],
+      "frameScale": 0.7,
+      "frameHarmonize": {
+        "targetColor": [
+          38,
+          31,
+          17,
+          255
+        ],
+        "hueStrength": 1,
+        "satStrength": 1,
+        "valStrength": 0.052,
+        "useHcl": false
+      }
     },
     {
       "id": "SkillTile",
