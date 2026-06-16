@@ -2561,39 +2561,12 @@
           "anchor": 0
         },
         {
-          "name": "cb_s0_tex",
-          "element": "CB_SlotTex",
+          "name": "cb_s0",
+          "widget": "EquipSlot",
           "x": 114,
           "y": 64,
           "width": 75,
           "height": 75,
-          "anchor": 0
-        },
-        {
-          "name": "cb_s0_stencil",
-          "element": "CB_SlotStencil",
-          "x": 114,
-          "y": 64,
-          "width": 75,
-          "height": 75,
-          "anchor": 0
-        },
-        {
-          "name": "cb_s0_border",
-          "element": "CB_SlotBorder",
-          "x": 114,
-          "y": 64,
-          "width": 75,
-          "height": 75,
-          "anchor": 0
-        },
-        {
-          "name": "cb_s0_highlight",
-          "element": "CB_SlotHighlight",
-          "x": 119,
-          "y": 69,
-          "width": 66,
-          "height": 64,
           "anchor": 0
         },
         {
@@ -2606,49 +2579,12 @@
           "anchor": 0
         },
         {
-          "name": "cb_s0_label",
-          "element": "CB_SlotLabel",
-          "x": 103,
-          "y": 132,
-          "width": 97,
-          "height": 26,
-          "anchor": 0,
-          "defaultText": "Helm"
-        },
-        {
-          "name": "cb_s1_tex",
-          "element": "CB_SlotTex",
+          "name": "cb_s1",
+          "widget": "EquipSlot",
           "x": 215,
           "y": 64,
           "width": 75,
           "height": 75,
-          "anchor": 0
-        },
-        {
-          "name": "cb_s1_stencil",
-          "element": "CB_SlotStencil",
-          "x": 215,
-          "y": 64,
-          "width": 75,
-          "height": 75,
-          "anchor": 0
-        },
-        {
-          "name": "cb_s1_border",
-          "element": "CB_SlotBorder",
-          "x": 215,
-          "y": 64,
-          "width": 75,
-          "height": 75,
-          "anchor": 0
-        },
-        {
-          "name": "cb_s1_highlight",
-          "element": "CB_SlotHighlight",
-          "x": 220,
-          "y": 69,
-          "width": 66,
-          "height": 64,
           "anchor": 0
         },
         {
@@ -2661,49 +2597,12 @@
           "anchor": 0
         },
         {
-          "name": "cb_s1_label",
-          "element": "CB_SlotLabel",
-          "x": 204,
-          "y": 132,
-          "width": 97,
-          "height": 26,
-          "anchor": 0,
-          "defaultText": "Armor"
-        },
-        {
-          "name": "cb_s2_tex",
-          "element": "CB_SlotTex",
+          "name": "cb_s2",
+          "widget": "EquipSlot",
           "x": 215,
           "y": 162,
           "width": 75,
           "height": 75,
-          "anchor": 0
-        },
-        {
-          "name": "cb_s2_stencil",
-          "element": "CB_SlotStencil",
-          "x": 215,
-          "y": 162,
-          "width": 75,
-          "height": 75,
-          "anchor": 0
-        },
-        {
-          "name": "cb_s2_border",
-          "element": "CB_SlotBorder",
-          "x": 215,
-          "y": 162,
-          "width": 75,
-          "height": 75,
-          "anchor": 0
-        },
-        {
-          "name": "cb_s2_highlight",
-          "element": "CB_SlotHighlight",
-          "x": 220,
-          "y": 167,
-          "width": 66,
-          "height": 64,
           "anchor": 0
         },
         {
@@ -2716,49 +2615,12 @@
           "anchor": 0
         },
         {
-          "name": "cb_s2_label",
-          "element": "CB_SlotLabel",
-          "x": 204,
-          "y": 230,
-          "width": 97,
-          "height": 26,
-          "anchor": 0,
-          "defaultText": "Off-Hand"
-        },
-        {
-          "name": "cb_s3_tex",
-          "element": "CB_SlotTex",
+          "name": "cb_s3",
+          "widget": "EquipSlot",
           "x": 215,
           "y": 261,
           "width": 75,
           "height": 75,
-          "anchor": 0
-        },
-        {
-          "name": "cb_s3_stencil",
-          "element": "CB_SlotStencil",
-          "x": 215,
-          "y": 261,
-          "width": 75,
-          "height": 75,
-          "anchor": 0
-        },
-        {
-          "name": "cb_s3_border",
-          "element": "CB_SlotBorder",
-          "x": 215,
-          "y": 261,
-          "width": 75,
-          "height": 75,
-          "anchor": 0
-        },
-        {
-          "name": "cb_s3_highlight",
-          "element": "CB_SlotHighlight",
-          "x": 220,
-          "y": 266,
-          "width": 66,
-          "height": 64,
           "anchor": 0
         },
         {
@@ -2771,49 +2633,12 @@
           "anchor": 0
         },
         {
-          "name": "cb_s3_label",
-          "element": "CB_SlotLabel",
-          "x": 204,
-          "y": 329,
-          "width": 97,
-          "height": 26,
-          "anchor": 0,
-          "defaultText": "Misc"
-        },
-        {
-          "name": "cb_s4_tex",
-          "element": "CB_SlotTex",
+          "name": "cb_s4",
+          "widget": "EquipSlot",
           "x": 114,
           "y": 261,
           "width": 75,
           "height": 75,
-          "anchor": 0
-        },
-        {
-          "name": "cb_s4_stencil",
-          "element": "CB_SlotStencil",
-          "x": 114,
-          "y": 261,
-          "width": 75,
-          "height": 75,
-          "anchor": 0
-        },
-        {
-          "name": "cb_s4_border",
-          "element": "CB_SlotBorder",
-          "x": 114,
-          "y": 261,
-          "width": 75,
-          "height": 75,
-          "anchor": 0
-        },
-        {
-          "name": "cb_s4_highlight",
-          "element": "CB_SlotHighlight",
-          "x": 119,
-          "y": 266,
-          "width": 66,
-          "height": 64,
           "anchor": 0
         },
         {
@@ -2826,49 +2651,12 @@
           "anchor": 0
         },
         {
-          "name": "cb_s4_label",
-          "element": "CB_SlotLabel",
-          "x": 103,
-          "y": 329,
-          "width": 97,
-          "height": 26,
-          "anchor": 0,
-          "defaultText": "Boots"
-        },
-        {
-          "name": "cb_s5_tex",
-          "element": "CB_SlotTex",
+          "name": "cb_s5",
+          "widget": "EquipSlot",
           "x": 19,
           "y": 261,
           "width": 75,
           "height": 75,
-          "anchor": 0
-        },
-        {
-          "name": "cb_s5_stencil",
-          "element": "CB_SlotStencil",
-          "x": 19,
-          "y": 261,
-          "width": 75,
-          "height": 75,
-          "anchor": 0
-        },
-        {
-          "name": "cb_s5_border",
-          "element": "CB_SlotBorder",
-          "x": 19,
-          "y": 261,
-          "width": 75,
-          "height": 75,
-          "anchor": 0
-        },
-        {
-          "name": "cb_s5_highlight",
-          "element": "CB_SlotHighlight",
-          "x": 24,
-          "y": 266,
-          "width": 66,
-          "height": 64,
           "anchor": 0
         },
         {
@@ -2881,49 +2669,12 @@
           "anchor": 0
         },
         {
-          "name": "cb_s5_label",
-          "element": "CB_SlotLabel",
-          "x": 8,
-          "y": 329,
-          "width": 97,
-          "height": 26,
-          "anchor": 0,
-          "defaultText": "Misc"
-        },
-        {
-          "name": "cb_s6_tex",
-          "element": "CB_SlotTex",
+          "name": "cb_s6",
+          "widget": "EquipSlot",
           "x": 19,
           "y": 162,
           "width": 75,
           "height": 75,
-          "anchor": 0
-        },
-        {
-          "name": "cb_s6_stencil",
-          "element": "CB_SlotStencil",
-          "x": 19,
-          "y": 162,
-          "width": 75,
-          "height": 75,
-          "anchor": 0
-        },
-        {
-          "name": "cb_s6_border",
-          "element": "CB_SlotBorder",
-          "x": 19,
-          "y": 162,
-          "width": 75,
-          "height": 75,
-          "anchor": 0
-        },
-        {
-          "name": "cb_s6_highlight",
-          "element": "CB_SlotHighlight",
-          "x": 24,
-          "y": 167,
-          "width": 66,
-          "height": 64,
           "anchor": 0
         },
         {
@@ -2934,16 +2685,6 @@
           "width": 48,
           "height": 48,
           "anchor": 0
-        },
-        {
-          "name": "cb_s6_label",
-          "element": "CB_SlotLabel",
-          "x": 8,
-          "y": 230,
-          "width": 97,
-          "height": 26,
-          "anchor": 0,
-          "defaultText": "Misc"
         },
         {
           "name": "cb_unitshadow",
@@ -8615,6 +8356,59 @@
               "overrideDefaultText": "Metamorphosis"
             }
           ]
+        }
+      ]
+    },
+    {
+      "id": "EquipSlot",
+      "width": 75,
+      "height": 75,
+      "layout": "none",
+      "children": [
+        {
+          "name": "tex",
+          "element": "CB_SlotTex",
+          "x": 0,
+          "y": 0,
+          "width": 75,
+          "height": 75,
+          "anchor": 0
+        },
+        {
+          "name": "stencil",
+          "element": "CB_SlotStencil",
+          "x": 0,
+          "y": 0,
+          "width": 75,
+          "height": 75,
+          "anchor": 0
+        },
+        {
+          "name": "border",
+          "element": "CB_SlotBorder",
+          "x": 0,
+          "y": 0,
+          "width": 75,
+          "height": 75,
+          "anchor": 0
+        },
+        {
+          "name": "highlight",
+          "element": "CB_SlotHighlight",
+          "x": 5,
+          "y": 5,
+          "width": 66,
+          "height": 64,
+          "anchor": 0
+        },
+        {
+          "name": "label",
+          "element": "CB_SlotLabel",
+          "x": -11,
+          "y": 68,
+          "width": 97,
+          "height": 26,
+          "anchor": 0
         }
       ]
     }
