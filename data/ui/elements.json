@@ -2178,7 +2178,7 @@
         255,
         0
       ],
-      "defaultText": "Abilities & Buffs",
+      "defaultText": "Abilities \u0026 Buffs",
       "textRegion": {
         "x": 0,
         "y": 0,
@@ -9489,6 +9489,7 @@
     {
       "id": "Grim_TitleRibbon",
       "type": "nineSlice",
+      "nineSlice": "ribbon6",
       "width": 689,
       "height": 94,
       "tintColor": [
@@ -9516,8 +9517,7 @@
         ],
         "outlineThickness": 0.6,
         "outlineOpacity": 1
-      },
-      "nineSlice": "ribbon6"
+      }
     },
     {
       "id": "Grim_TitleText",
@@ -9560,6 +9560,7 @@
       "id": "GMT_0",
       "type": "nineSlice",
       "nineSlice": "fancy_inner",
+      "nineSliceScale": 0.1,
       "width": 253,
       "height": 65,
       "tintColor": [
@@ -10433,7 +10434,7 @@
       "id": "Grim_TabBacking",
       "type": "nineSlice",
       "nineSlice": "fancy_inner",
-      "nineSliceScale": 0.3,
+      "nineSliceScale": 0.1,
       "width": 51,
       "height": 45,
       "tintColor": [

@@ -76,8 +76,8 @@ public static class GamePaths
     public const string EnvDefsJson = "data/env_defs.json";
 
     // --- Map files (now in data/maps/) ---
-    public const string DefaultMapJson = "data/maps/default.json";
-    public const string MapsDir = "data/maps";
+    public const string DefaultMapJson = "assets/maps/default.json";
+    public const string MapsDir = "assets/maps";
 
     // --- Asset directories ---
     public const string AssetsDir = "assets";
@@ -86,8 +86,8 @@ public static class GamePaths
     public const string GroundDir = "assets/Environment/Ground";
     public const string RoadsDir = "assets/Environment/Roads";
     public const string EffectsDir = "assets/Effects";
-    public const string FontsDir = "assets/fonts";
-    public const string UIDefsDir = "assets/UI/definitions";
+    public const string FontsDir = "resources/fonts";
+    public const string UIDefsDir = "data/ui";
 
     // --- Resources ---
     public const string ResourcesDir = "resources";

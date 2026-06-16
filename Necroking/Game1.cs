@@ -747,8 +747,8 @@ public class Game1 : Microsoft.Xna.Framework.Game
             // the same JsonDocument it already parsed, avoiding a redundant disk+parse pass.
             MapData.Load(mapPath, _groundSystem, _envSystem, _wallSystem, placedUnits,
                 out var grassInfo);
-            MapData.LoadTriggers(GamePaths.Resolve("data/maps/default_triggers.json"), _triggerSystem);
-            MapData.LoadRoads(GamePaths.Resolve("data/maps/default_roads.json"), _roadSystem);
+            MapData.LoadTriggers(GamePaths.Resolve("assets/maps/default_triggers.json"), _triggerSystem);
+            MapData.LoadRoads(GamePaths.Resolve("assets/maps/default_roads.json"), _roadSystem);
             LogTiming($"Map loaded: ground={_groundSystem.WorldW}x{_groundSystem.WorldH}, objects={_envSystem.ObjectCount}, defs={_envSystem.DefCount}");
 
             // Death fog: coarse grid sized to the map. Auto-tag tree assets as

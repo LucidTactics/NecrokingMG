@@ -3320,7 +3320,7 @@
           "width": 45,
           "height": 24,
           "anchor": 0,
-          "defaultText": "+10"
+          "defaultText": "\u002B10"
         },
         {
           "name": "rt_desc",
@@ -7331,9 +7331,9 @@
           "name": "TabStripRibbon",
           "element": "Grim_TabStripRibbon",
           "x": 27,
-          "y": 91,
+          "y": 24,
           "width": 652,
-          "height": 83,
+          "height": 148,
           "anchor": 0
         },
         {
@@ -8127,10 +8127,10 @@
       "id": "SkillBookWindow",
       "background": "LeatherBackground",
       "frame": "grim_cloth_frame",
-      "width": 706,
+      "width": 1080,
       "height": 1080,
       "backgroundScale": 0.136,
-      "frameScale": 0.7,
+      "frameScale": 0.6,
       "backgroundInset": -17,
       "backgroundTint": [
         199,
@@ -8182,7 +8182,7 @@
           "element": "Grim_SpellListOverlay",
           "x": 0,
           "y": 0,
-          "width": 706,
+          "width": 1068,
           "height": 1080,
           "anchor": 0
         },
@@ -8191,8 +8191,8 @@
           "element": "Grim_HeaderDivider",
           "x": 24,
           "y": 131,
-          "width": 658,
-          "height": 21,
+          "width": 1030,
+          "height": 17,
           "anchor": 0
         },
         {
@@ -8200,7 +8200,7 @@
           "element": "Grim_TabStripRibbon",
           "x": 27,
           "y": 91,
-          "width": 652,
+          "width": 1027,
           "height": 40,
           "anchor": 0
         },
@@ -8208,24 +8208,25 @@
           "name": "TabBar",
           "widget": "TabBar",
           "x": 24,
-          "y": 96,
-          "width": 656,
+          "y": 99,
+          "width": 1027,
           "height": 35,
           "anchor": 0
         },
         {
           "name": "TitleRibbon",
           "element": "Grim_TitleRibbon",
-          "x": 10,
-          "y": 12,
-          "width": 689,
-          "height": 94,
-          "anchor": 0
+          "x": 7,
+          "y": 16,
+          "width": 1064,
+          "height": 97,
+          "anchor": 0,
+          "nineSliceScale": 0.3
         },
         {
           "name": "TitleText",
           "element": "Grim_TitleText",
-          "x": 38,
+          "x": 247,
           "y": 28,
           "width": 648,
           "height": 62,
@@ -8281,13 +8282,13 @@
     },
     {
       "id": "TabBar",
-      "width": 656,
+      "width": 1003,
       "height": 35,
       "backgroundScale": 1,
       "modal": false,
       "layout": "horizontal",
       "layoutPadding": 0,
-      "layoutSpacing": 4,
+      "layoutSpacing": 1,
       "layoutPadTop": 0,
       "layoutPadBottom": 0,
       "layoutPadLeft": 0,
@@ -8428,12 +8429,18 @@
     },
     {
       "id": "SpellSlot",
+      "background": "fancy_inner",
+      "frame": "spider_frame",
       "width": 60,
       "height": 60,
-      "layout": "none",
-      "modal": false,
-      "background": "fancy_inner",
+      "backgroundScale": 0.1,
       "backgroundTint": [
+        255,
+        255,
+        255,
+        255
+      ],
+      "frameTint": [
         255,
         255,
         255,
@@ -8451,13 +8458,6 @@
         "valStrength": 0.86,
         "useHcl": false
       },
-      "frame": "spider_frame",
-      "frameTint": [
-        255,
-        255,
-        255,
-        255
-      ],
       "frameHarmonize": {
         "targetColor": [
           108,
@@ -8470,7 +8470,7 @@
         "valStrength": 0.122,
         "useHcl": false
       },
-      "children": []
+      "modal": false
     }
   ]
 }

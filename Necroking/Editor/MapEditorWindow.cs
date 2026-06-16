@@ -4664,7 +4664,7 @@ public class MapEditorWindow
     {
         try
         {
-            string mapsDir = GamePaths.Resolve("data/maps");
+            string mapsDir = GamePaths.Resolve("assets/maps");
             Directory.CreateDirectory(mapsDir);
             string path = Path.Combine(mapsDir, _mapFilename + ".json");
 
@@ -4840,7 +4840,7 @@ public class MapEditorWindow
     {
         try
         {
-            string mapsDir = GamePaths.Resolve("data/maps");
+            string mapsDir = GamePaths.Resolve("assets/maps");
             string mapPath = Path.Combine(mapsDir, _mapFilename + ".json");
             string triggerPath = Path.Combine(mapsDir, _mapFilename + "_triggers.json");
             string roadsPath = Path.Combine(mapsDir, _mapFilename + "_roads.json");

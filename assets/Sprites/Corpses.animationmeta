@@ -1,5 +1,0 @@
-{"unit":"BodyBag","category":"Icon","yaw":0.0,"sprites":["BodyBag.Icon.0.10.0"],"time_ms":[350],"effect_spawn_pos":{"x":0.0,"y":0.6000000238418579,"z":0.0},"effect_time_ms":0,"loop_start_index":0,"loop_end_index":0,"markers":[]}
-{"unit":"BodyBag","category":"Icon","yaw":270.0,"sprites":["BodyBag.Icon.0.10.270"],"time_ms":[350],"effect_spawn_pos":{"x":0.0,"y":0.6000000238418579,"z":0.0},"effect_time_ms":0,"loop_start_index":0,"loop_end_index":0,"markers":[]}
-{"unit":"BodyBag","category":"Icon","yaw":315.0,"sprites":["BodyBag.Icon.0.10.315"],"time_ms":[350],"effect_spawn_pos":{"x":0.0,"y":0.6000000238418579,"z":0.0},"effect_time_ms":0,"loop_start_index":0,"loop_end_index":0,"markers":[]}
-{"unit":"BodyBag","category":"Icon","yaw":45.0,"sprites":["BodyBag.Icon.0.10.45"],"time_ms":[350],"effect_spawn_pos":{"x":0.0,"y":0.6000000238418579,"z":0.0},"effect_time_ms":0,"loop_start_index":0,"loop_end_index":0,"markers":[]}
-{"unit":"BodyBag","category":"Icon","yaw":90.0,"sprites":["BodyBag.Icon.0.10.90"],"time_ms":[350],"effect_spawn_pos":{"x":0.0,"y":0.6000000238418579,"z":0.0},"effect_time_ms":0,"loop_start_index":0,"loop_end_index":0,"markers":[]}

@@ -1255,7 +1255,7 @@ public partial class UIEditorWindow : EditorBase
         {
             DrawText("No UI definitions loaded.",
                 new Vector2(panelX + 20, panelY + tabBarH + 20), TextDim);
-            DrawText("Place definitions in assets/UI/definitions/",
+            DrawText("Place definitions in data/ui/",
                 new Vector2(panelX + 20, panelY + tabBarH + 40), TextDim);
             return;
         }
