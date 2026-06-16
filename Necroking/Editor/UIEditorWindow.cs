@@ -1017,10 +1017,15 @@ public partial class UIEditorWindow : EditorBase
 
     public void Update(int screenW, int screenH)
     {
+        // Game1 already pumped input this frame via UpdateInput(...) (see the
+        // MenuState.UIEditor block in Game1.Update), which is what runs
+        // HandleTextInput, the dropdowns, the color picker and all click handling.
+        // Do NOT call UpdateInput again here — doing so processed every keystroke
+        // and click TWICE, so typing "Hey" produced "HHeeyy" and held keys repeated
+        // at double speed. The texture browser isn't part of UpdateInput, so it
+        // still needs a tick, using the input state UpdateInput already set.
         var mouse = _input.Mouse;
         var kb = _input.Kb;
-        var gt = _lastGameTime ?? new GameTime(TimeSpan.Zero, TimeSpan.FromSeconds(1.0 / 60));
-        UpdateInput(mouse, _prevMouseLocal, kb, _prevKb, screenW, screenH, gt);
         _textureBrowser.Update(this, mouse, _prevMouseLocal, kb, _prevKb);
         _prevMouseLocal = mouse;
         _prevKb = kb;
