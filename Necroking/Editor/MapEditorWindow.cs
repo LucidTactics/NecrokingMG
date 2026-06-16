@@ -119,6 +119,17 @@ public class MapEditorWindow
     private bool _objectPaintMode; // false = single, true = paint
     private float _envListScroll;
 
+    // Auto-ground: when placing objects, stamp a ground patch underneath (e.g.
+    // dirt under trees on grassland). Applies in both single and paint modes.
+    private bool _autoGround;
+    private int _autoGroundSize = 1;     // patch radius in ground tiles
+    private int _autoGroundType;         // index into _groundSystem types
+    private bool _autoGroundTypeInit;    // one-time default-to-"Dirt" resolved yet?
+    private int _autoGroundNoise = 3;    // # of ragged-edge tiles grown off the patch
+    // Accumulates old ground vertex values across a paint stroke so the auto-ground
+    // stamped under a whole drag undoes together with the placed objects.
+    private Dictionary<long, byte>? _autoGroundStrokeOld;
+
     // Walls tab
     public int SelectedWallType; // 0 = erase, 1+ = wall def index+1
     private bool _showWallDebug;
@@ -379,6 +390,18 @@ public class MapEditorWindow
         }
     }
 
+    // Groups several actions into one undo step (e.g. object placement + the
+    // auto-ground patch stamped under it). Undone in reverse order.
+    private class UndoComposite : UndoAction
+    {
+        public List<UndoAction> Actions = new();
+        public override void Undo()
+        {
+            for (int i = Actions.Count - 1; i >= 0; i--)
+                Actions[i].Undo();
+        }
+    }
+
     private void PushUndo(UndoAction action)
     {
         _undoStack.Add(action);
@@ -391,7 +414,19 @@ public class MapEditorWindow
         if (_undoStack.Count == 0) return;
         var action = _undoStack[^1];
         _undoStack.RemoveAt(_undoStack.Count - 1);
-        action.Undo();
+
+        // Suppress the per-object pathfinder rebuild that AddObject/RemoveObject
+        // fires during undo. The editor doesn't run AI and nothing reads the
+        // cost field between edits — the MapEditor→gameplay transition (Game1)
+        // rebuilds once for the whole session. Without this, undoing a paint
+        // stroke fired one full RebuildPathfinder PER object (~450 ms each on a
+        // 4097² map → multi-second freezes); a single-object undo cost a full
+        // rebuild too. Placement already relies on this same exit-rebuild
+        // guarantee and only stamps incrementally.
+        var prev = _envSystem.OnCollisionsDirty;
+        _envSystem.OnCollisionsDirty = null;
+        try { action.Undo(); }
+        finally { _envSystem.OnCollisionsDirty = prev; }
     }
 
     // Tab names and layout
@@ -1068,6 +1103,96 @@ public class MapEditorWindow
         if (changed) _onVertexMapChanged?.Invoke();
     }
 
+    /// <summary>
+    /// Vertex-map key matching <see cref="UndoGroundStroke"/>'s encoding
+    /// (vx = key % 100000, vy = key / 100000).
+    /// </summary>
+    private static long GroundVertexKey(int vx, int vy) => (long)vy * 100000 + vx;
+
+    /// <summary>
+    /// Set one ground vertex, recording its previous value into <paramref name="oldVals"/>
+    /// for undo. Returns true if the value actually changed. Does NOT fire the
+    /// texture-update callback (callers batch that).
+    /// </summary>
+    private bool SetGroundVertexRecorded(int vx, int vy, byte typeIdx, Dictionary<long, byte> oldVals)
+    {
+        if (vx < 0 || vx >= _groundSystem.VertexW || vy < 0 || vy >= _groundSystem.VertexH)
+            return false;
+        byte oldVal = _groundSystem.GetVertex(vx, vy);
+        if (oldVal == typeIdx) return false;
+        oldVals.TryAdd(GroundVertexKey(vx, vy), oldVal);
+        _groundSystem.SetVertex(vx, vy, typeIdx);
+        return true;
+    }
+
+    /// <summary>
+    /// Stamp the auto-ground patch under a placed object: a circle of radius
+    /// _autoGroundSize at world (worldX, worldY) of type _autoGroundType, plus
+    /// _autoGroundNoise extra tiles grown organically off the patch edge for a
+    /// ragged border. Old values are recorded into <paramref name="oldVals"/> for
+    /// undo. Returns true if anything changed. Does NOT fire the texture-update
+    /// callback — the caller invokes it once per placement / per stroke frame.
+    /// </summary>
+    private bool StampAutoGround(float worldX, float worldY, Dictionary<long, byte> oldVals)
+    {
+        if (!_autoGround || _autoGroundType < 0 || _autoGroundType >= _groundSystem.TypeCount)
+            return false;
+
+        int vx = (int)MathF.Round(worldX);
+        int vy = (int)MathF.Round(worldY);
+        byte typeIdx = (byte)_autoGroundType;
+        int r = Math.Max(0, _autoGroundSize);
+        bool changed = false;
+
+        // patch = every tile considered part of the blob (whether or not its value
+        // changed) so noise growth never re-picks an interior tile.
+        var patch = new HashSet<long>();
+
+        // Core circular patch.
+        for (int dy = -r; dy <= r; dy++)
+        {
+            for (int dx = -r; dx <= r; dx++)
+            {
+                if (dx * dx + dy * dy > r * r) continue;
+                int cx = vx + dx, cy = vy + dy;
+                if (cx < 0 || cx >= _groundSystem.VertexW || cy < 0 || cy >= _groundSystem.VertexH) continue;
+                patch.Add(GroundVertexKey(cx, cy));
+                if (SetGroundVertexRecorded(cx, cy, typeIdx, oldVals)) changed = true;
+            }
+        }
+
+        // Ragged edge: grow `_autoGroundNoise` tiles outward, each picked at random
+        // from the current set of tiles adjacent to (but outside) the patch.
+        if (_autoGroundNoise > 0 && patch.Count > 0)
+        {
+            var candidates = new HashSet<long>();
+            void Consider(int nx, int ny)
+            {
+                if (nx < 0 || nx >= _groundSystem.VertexW || ny < 0 || ny >= _groundSystem.VertexH) return;
+                long k = GroundVertexKey(nx, ny);
+                if (!patch.Contains(k)) candidates.Add(k);
+            }
+            void AddNeighbours(int x, int y) { Consider(x + 1, y); Consider(x - 1, y); Consider(x, y + 1); Consider(x, y - 1); }
+
+            foreach (long k in patch) AddNeighbours((int)(k % 100000), (int)(k / 100000));
+
+            var pickList = new List<long>();
+            for (int i = 0; i < _autoGroundNoise && candidates.Count > 0; i++)
+            {
+                pickList.Clear();
+                pickList.AddRange(candidates);
+                long pick = pickList[Random.Shared.Next(pickList.Count)];
+                candidates.Remove(pick);
+                patch.Add(pick);
+                int px = (int)(pick % 100000), py = (int)(pick / 100000);
+                if (SetGroundVertexRecorded(px, py, typeIdx, oldVals)) changed = true;
+                AddNeighbours(px, py);
+            }
+        }
+
+        return changed;
+    }
+
     private void DrawGroundTab(int panelX, int contentY, int contentH, int screenW, int screenH)
     {
         DrawSectionHeader(panelX, ref contentY, $"Ground Types ({_groundSystem.TypeCount})");
@@ -1645,6 +1770,24 @@ public class MapEditorWindow
     //  OBJECTS TAB
     // ====================================================================
 
+    /// <summary>
+    /// Vertical height of the Auto-Ground controls block drawn between the mode
+    /// toggle and the object/group list. Single source of truth so the Draw
+    /// layout and the Update hit-test stay in lockstep — the per-control
+    /// increments in DrawObjectsTab must sum to this.
+    /// </summary>
+    private int AutoGroundSectionHeight()
+    {
+        if (_eb == null) return 0;
+        int h = LineHeight + 2; // "Auto Ground" checkbox row
+        if (_autoGround)
+            h += (ButtonHeight + 2)  // Size stepper
+               + (FieldHeight + 2)   // Ground dropdown
+               + (FieldHeight + 2);  // Noise tiles
+        h += 4;                      // trailing gap before the separator
+        return h;
+    }
+
     private void UpdateObjectsTab(MouseState mouse, KeyboardState kb, bool leftClick, bool leftDown, bool leftUp,
         bool rightClick, bool overPanel, int panelX, int panelY, int screenW, int screenH)
     {
@@ -1687,8 +1830,9 @@ public class MapEditorWindow
                 else if (relX >= halfW && relX < halfW * 2) _objectPaintMode = true;
             }
 
-            // Def list (or group list for M17)
-            int listY = modeY + ButtonHeight + 4;
+            // Def list (or group list for M17). Account for the Auto-Ground
+            // controls block drawn between the mode toggle and the list.
+            int listY = modeY + ButtonHeight + 4 + AutoGroundSectionHeight();
             var filteredDefs = GetFilteredEnvDefs(categories);
             // M17: If category is "Groups", show group list instead
             bool isGroupMode = SelectedEnvCategory < categories.Count && categories[SelectedEnvCategory] == "Groups";
@@ -1760,7 +1904,26 @@ public class MapEditorWindow
                             {
                                 _envSystem.OnCollisionsDirty = prevHandler;
                             }
-                            PushUndo(new UndoObjectPlace { Env = _envSystem, ObjectIndex = newIdx });
+                            // Auto-ground: stamp a ground patch under the object.
+                            // Bundle it with the object placement so one undo
+                            // reverts both.
+                            var groundOld = new Dictionary<long, byte>();
+                            bool groundChanged = StampAutoGround(worldPos.X, worldPos.Y, groundOld);
+                            if (groundChanged) _onVertexMapChanged?.Invoke();
+                            UndoAction placeUndo = new UndoObjectPlace { Env = _envSystem, ObjectIndex = newIdx };
+                            if (groundChanged)
+                            {
+                                var comp = new UndoComposite();
+                                comp.Actions.Add(placeUndo);
+                                comp.Actions.Add(new UndoGroundStroke
+                                {
+                                    Ground = _groundSystem,
+                                    OldValues = groundOld,
+                                    OnChanged = _onVertexMapChanged
+                                });
+                                PushUndo(comp);
+                            }
+                            else PushUndo(placeUndo);
                             AutoCreateTriggerInstance(newIdx); // RM06
                             // RM04 incremental: stamp just this object's collision into
                             // the tier cost fields. No need to rebuild everything else.
@@ -1776,21 +1939,39 @@ public class MapEditorWindow
                 {
                     if (_batchPlacedObjects == null)
                         _batchPlacedObjects = new();
+                    if (_autoGroundStrokeOld == null)
+                        _autoGroundStrokeOld = new();
                     PaintObjectsBatch(mouse, screenW, screenH);
                 }
                 if (leftUp && _batchPlacedObjects != null)
                 {
                     if (_batchPlacedObjects.Count > 0)
                     {
-                        PushUndo(new UndoObjectBatchPlace
+                        var batchUndo = new UndoObjectBatchPlace
                         {
                             Env = _envSystem,
                             ObjectIndices = new List<int>(_batchPlacedObjects.Select(b => b.objIdx))
-                        });
+                        };
                         // Tier fields were kept current via StampObjectCollisionAt
                         // inside the stroke loop — no full rebake needed here.
+                        // Bundle any auto-ground stamped during the stroke so one
+                        // undo reverts both the objects and the ground under them.
+                        if (_autoGroundStrokeOld != null && _autoGroundStrokeOld.Count > 0)
+                        {
+                            var comp = new UndoComposite();
+                            comp.Actions.Add(batchUndo);
+                            comp.Actions.Add(new UndoGroundStroke
+                            {
+                                Ground = _groundSystem,
+                                OldValues = _autoGroundStrokeOld,
+                                OnChanged = _onVertexMapChanged
+                            });
+                            PushUndo(comp);
+                        }
+                        else PushUndo(batchUndo);
                     }
                     _batchPlacedObjects = null;
+                    _autoGroundStrokeOld = null;
                 }
             }
         }
@@ -1837,12 +2018,10 @@ public class MapEditorWindow
                         Env = _envSystem,
                         Removed = new(_batchRemovedObjects)
                     });
-                    // Remove invalidates the tier fields for the area the objects
-                    // covered; one full rebake on mouse-up is the cheapest correct
-                    // fix (incremental "unstamp" would need to re-stamp overlapping
-                    // neighbours). Editor-mode AI doesn't read these, so cost only
-                    // matters on very large maps.
-                    RebakeObjectCollisions(); // RM04
+                    // No rebake here: nothing in the editor reads the cost field
+                    // between edits, and the MapEditor→gameplay transition (Game1)
+                    // rebuilds pathfinding once on exit. A full rebake here was a
+                    // ~265 ms hitch at the end of every erase stroke on the big map.
                 }
                 _batchRemovedObjects = null;
             }
@@ -1872,8 +2051,8 @@ public class MapEditorWindow
                 for (int d = 0; d < defCount; d++) defInCategory[d] = IsInSelectedObjectType(d);
 
                 // (2) Suppress the per-remove OnCollisionsDirty callback (which
-                //     rebuilds the pathfinder). We'll fire one rebuild on mouse-up
-                //     via RebakeObjectCollisions() — same end state, tiny cost.
+                //     rebuilds the pathfinder per object). The MapEditor→gameplay
+                //     exit transition (Game1) rebuilds once for the whole session.
                 var prevHandler = _envSystem.OnCollisionsDirty;
                 _envSystem.OnCollisionsDirty = null;
 
@@ -1934,7 +2113,9 @@ public class MapEditorWindow
                         Env = _envSystem,
                         Removed = new(_batchRemovedObjects)
                     });
-                    RebakeObjectCollisions(); // RM04
+                    // No rebake here — the MapEditor→gameplay exit transition
+                    // rebuilds pathfinding once; nothing reads the cost field
+                    // mid-edit. Avoids a ~265 ms hitch per erase stroke.
                 }
                 _batchRemovedObjects = null;
             }
@@ -2013,7 +2194,8 @@ public class MapEditorWindow
     /// <summary>
     /// M28: Paint objects with batch accumulation for undo.
     /// PERF: suppresses OnCollisionsDirty inside the loop (fires a pathfinder rebuild
-    /// per tree otherwise). RebakeObjectCollisions is called once on mouse-up.
+    /// per tree otherwise) and stamps each object's collision incrementally; the
+    /// MapEditor→gameplay exit transition rebuilds pathfinding once for the session.
     /// Group painting: each candidate position independently weighted-random-picks a
     /// def from the selected group, so one stroke scatters a mix. Grid spacing uses
     /// the smallest collision radius in the group so smaller trees get their natural
@@ -2047,6 +2229,7 @@ public class MapEditorWindow
         var sw = System.Diagnostics.Stopwatch.StartNew();
         long tCandidates = 0, tCanPlace = 0, tAdd = 0, tTrigger = 0;
         int candidates = 0, placed = 0;
+        bool groundChanged = false;
 
         try
         {
@@ -2097,6 +2280,12 @@ public class MapEditorWindow
                     AutoCreateTriggerInstance(newIdx); // RM06
                     tTrigger += System.Diagnostics.Stopwatch.GetTimestamp() - t4;
 
+                    // Auto-ground patch under this object (accumulated for one
+                    // stroke-wide undo; texture is flushed once after the loop).
+                    if (_autoGround && _autoGroundStrokeOld != null
+                        && StampAutoGround(px, py, _autoGroundStrokeOld))
+                        groundChanged = true;
+
                     placed++;
                 }
             }
@@ -2105,6 +2294,8 @@ public class MapEditorWindow
         {
             _envSystem.OnCollisionsDirty = prevHandler;
         }
+
+        if (groundChanged) _onVertexMapChanged?.Invoke();
 
         sw.Stop();
         if (placed > 0)
@@ -2266,6 +2457,54 @@ public class MapEditorWindow
             DrawTextCentered("Paint", paintRect, TextColor);
         }
         contentY += ButtonHeight + 4;
+
+        // Auto-ground controls: stamp a ground patch under each placed object
+        // (e.g. dirt under trees on grassland). Applies in single and paint modes.
+        if (_eb != null)
+        {
+            _autoGround = _eb.DrawCheckbox("Auto Ground", _autoGround, panelX + Margin, contentY);
+            contentY += LineHeight + 2;
+            if (_autoGround)
+            {
+                // Size: patch radius in ground tiles (+/- stepper).
+                DrawAutoGroundSizeControl(panelX, contentY);
+                contentY += ButtonHeight + 2;
+
+                // Ground type dropdown.
+                int gtCount = _groundSystem.TypeCount;
+                var gtNames = new string[gtCount];
+                for (int i = 0; i < gtCount; i++) gtNames[i] = _groundSystem.GetTypeDef(i).Name;
+                // Default the auto-ground type to "Dirt" once ground types load
+                // (placing dirt under trees is the common case). Resolved once so
+                // it doesn't override the user's later choice.
+                if (!_autoGroundTypeInit && gtCount > 0)
+                {
+                    _autoGroundTypeInit = true;
+                    for (int i = 0; i < gtCount; i++)
+                    {
+                        var d = _groundSystem.GetTypeDef(i);
+                        if (string.Equals(d.Id, "dirt", StringComparison.OrdinalIgnoreCase)
+                            || string.Equals(d.Name, "Dirt", StringComparison.OrdinalIgnoreCase))
+                        { _autoGroundType = i; break; }
+                    }
+                }
+                if (_autoGroundType >= gtCount) _autoGroundType = Math.Max(0, gtCount - 1);
+                string curName = (_autoGroundType >= 0 && _autoGroundType < gtCount) ? gtNames[_autoGroundType] : "";
+                string picked = _eb.DrawCombo("auto_ground_type", "Ground", curName, gtNames,
+                    panelX + Margin, contentY, PanelWidth - Margin * 2);
+                if (picked != curName)
+                    for (int i = 0; i < gtCount; i++)
+                        if (gtNames[i] == picked) { _autoGroundType = i; break; }
+                contentY += FieldHeight + 2;
+
+                // Noise tiles: ragged-edge tiles grown off the patch.
+                _autoGroundNoise = _eb.DrawIntField("auto_ground_noise", "Noise Tiles", _autoGroundNoise,
+                    panelX + Margin, contentY, PanelWidth - Margin * 2);
+                _autoGroundNoise = Math.Clamp(_autoGroundNoise, 0, 500);
+                contentY += FieldHeight + 2;
+            }
+            contentY += 4;
+        }
 
         // Separator
         _spriteBatch.Draw(_pixel, new Rectangle(panelX, contentY - 2, PanelWidth, 1), SeparatorColor);
@@ -4942,6 +5181,27 @@ public class MapEditorWindow
         }
     }
 
+    private void DrawAutoGroundSizeControl(int panelX, int y)
+    {
+        var mouse = _eb._input.Mouse;
+
+        DrawSmallText($"Size: {_autoGroundSize}", panelX + Margin + 40, y + 3, TextColor);
+
+        var minusRect = new Rectangle(panelX + Margin, y, 30, ButtonHeight);
+        _spriteBatch.Draw(_pixel, minusRect, IsInRect(mouse, minusRect) ? ButtonHoverColor : ButtonBg);
+        DrawTextCentered("-", minusRect, TextColor);
+
+        var plusRect = new Rectangle(panelX + PanelWidth - Margin - 30, y, 30, ButtonHeight);
+        _spriteBatch.Draw(_pixel, plusRect, IsInRect(mouse, plusRect) ? ButtonHoverColor : ButtonBg);
+        DrawTextCentered("+", plusRect, TextColor);
+
+        if (_eb._input.LeftPressed)
+        {
+            if (IsInRect(mouse, minusRect)) _autoGroundSize = Math.Max(0, _autoGroundSize - 1);
+            if (IsInRect(mouse, plusRect)) _autoGroundSize = Math.Min(20, _autoGroundSize + 1);
+        }
+    }
+
     private void DrawBrushCursor(int screenW, int screenH)
     {
         var mouse = _eb._input.Mouse;
@@ -5156,15 +5416,6 @@ public class MapEditorWindow
         return groups;
     }
 
-    /// <summary>
-    /// RM04: Rebuild cost field and bake environment collisions.
-    /// Called after placing or removing objects so pathfinding data stays in sync.
-    /// </summary>
-    private void RebakeObjectCollisions()
-    {
-        _tileGrid.RebuildCostField();
-        _envSystem.BakeCollisions(_tileGrid);
-    }
 
     /// <summary>
     /// RM06: If the placed object's def has a BoundTriggerID, auto-create a TriggerInstance for it.

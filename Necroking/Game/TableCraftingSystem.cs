@@ -52,7 +52,10 @@ public static class TableCraftingSystem
             if (distSq > ChannelMaxRange * ChannelMaxRange) continue;
 
             ts.CraftTimer += dt;
-            if (ts.CraftTimer >= def.ProcessTime)
+            // Complete at the loop budget (set render-side so start+loop+finish fit
+            // ProcessTime). Falls back to ProcessTime before the budget is computed.
+            float budget = ts.LoopBudget > 0.01f ? ts.LoopBudget : def.ProcessTime;
+            if (ts.CraftTimer >= budget)
             {
                 CompleteCraft(sim, envSystem, gameData, oi);
             }
@@ -83,7 +86,11 @@ public static class TableCraftingSystem
         GameData gameData, int envIdx)
     {
         var ts = envSystem.GetTableState(envIdx);
-        var spawnPos = TableSystem.GetSpawnPos(envSystem, envIdx);
+        // Rise from where the corpse lay: spawn at the table itself (the table is
+        // unpathable, so the zombie walks out as its first action) rather than at
+        // an adjacent pathable tile.
+        var tableObjForSpawn = envSystem.GetObject(envIdx);
+        var spawnPos = new Vec2(tableObjForSpawn.X, tableObjForSpawn.Y);
 
         // Find the corpse to consume — use the first non-empty slot. (Slot index
         // doesn't matter since we only spawn one zombie per craft and the user's
@@ -123,6 +130,10 @@ public static class TableCraftingSystem
             return;
         }
         sim.UnitsMut[spawnedIdx].FacingAngle = corpseSlot.FacingAngle;
+        // Rise from the dead: start in the corpse's death pose and play the
+        // stand-up animation (same mechanism the raise-zombie spells use), then
+        // the unit walks out of the unpathable table on its own.
+        sim.UnitsMut[spawnedIdx].StandupTimer = 1.5f;
         // Keep the spawned zombie's own SpriteScale (from its def) — copying the
         // corpse's sprite scale would shrink/enlarge zombies oddly when the source
         // and zombie defs have different default scales.

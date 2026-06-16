@@ -390,8 +390,14 @@ public class ShadowRenderer
             {
                 // Sprite projection (default)
                 float shadowH = destH * shadow.Squash;
-                float leftOff = destW * def.PivotX;
-                float rightOff = destW * (1f - def.PivotX);
+                // Mirror the silhouette to match a flipped sprite, but keep the
+                // projection direction (sdx/sdy) unchanged so the shadow still
+                // falls the same way regardless of flip.
+                bool flipX = envSystem.ShouldFlipObject(i);
+                float leftOff = destW * (flipX ? (1f - def.PivotX) : def.PivotX);
+                float rightOff = destW * (flipX ? def.PivotX : (1f - def.PivotX));
+                float su0 = flipX ? u1 : u0;
+                float su1 = flipX ? u0 : u1;
 
                 float swLen = worldH * shadow.LengthScale * camera.Zoom;
                 float sdx = sdxDir * swLen;
@@ -399,7 +405,7 @@ public class ShadowRenderer
 
                 DrawShadowQuad(device, tex, feetSp.X, feetSp.Y,
                     leftOff, rightOff, shadowH, sdx, sdy,
-                    u0, v0, u1, v1, shadowColor);
+                    su0, v0, su1, v1, shadowColor);
             }
         }
 

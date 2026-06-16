@@ -70,6 +70,15 @@ public enum AnimState : byte
     Pickup,
     PutDown,
     Carry,
+    // Channeled reanimation casts (Start -> Loop -> Finish). Raise has no Finish.
+    ImbueGroundStart,
+    ImbueGroundLoop,
+    ImbueGroundFinish,
+    ImbueTableStart,
+    ImbueTableLoop,
+    ImbueTableFinish,
+    RaiseStart,
+    RaiseLoop,
     Count
 }
 
@@ -262,6 +271,9 @@ public class AnimController
 
     public AnimState CurrentState => _currentState;
     public bool IsAnimFinished => _finished;
+    /// <summary>Total duration (ms) of the currently-playing animation (one loop
+    /// cycle for looping anims). Used to enforce a minimum-one-cycle channel.</summary>
+    public int CurrentAnimDurationMs => GetEffectiveTotalDurationMs();
     public float AnimTime { get => _animTime; set => _animTime = value; }
     public float PlaybackSpeed { get => _playbackSpeed; set => _playbackSpeed = MathF.Max(0.1f, value); }
     public void SetReversePlayback(bool reverse) => _reversePlayback = reverse;
@@ -959,6 +971,21 @@ public class AnimController
         }
     }
 
+    /// <summary>Total duration (ms) of a specific anim state for this controller's
+    /// sprite, without changing the current state. Used to budget multi-phase
+    /// channels (Start/Loop/Finish) against a target total time.</summary>
+    public int AnimDurationMsFor(AnimState state)
+    {
+        string animName = StateToAnimName(state);
+        if (_timingOverrides != null && _timingOverrides.TryGetValue(animName, out var ov) && ov.FrameDurationsMs.Count > 0)
+        {
+            int total = 0;
+            foreach (int d in ov.FrameDurationsMs) total += d;
+            return total;
+        }
+        return ResolveMetaForState(state)?.TotalDurationMs() ?? 0;
+    }
+
     private int GetEffectiveTotalDurationMs()
     {
         string animName = StateToAnimName(_currentState);
@@ -1019,6 +1046,14 @@ public class AnimController
         AnimState.Pickup => "Pickup",
         AnimState.PutDown => "PutDown",
         AnimState.Carry => "Carry",
+        AnimState.ImbueGroundStart => "ImbueGroundStart",
+        AnimState.ImbueGroundLoop => "ImbueGroundLoop",
+        AnimState.ImbueGroundFinish => "ImbueGroundFInish", // NB: asset spells it "FInish"
+        AnimState.ImbueTableStart => "ImbueTableStart",
+        AnimState.ImbueTableLoop => "ImbueTableLoop",
+        AnimState.ImbueTableFinish => "ImbueTableFinish",
+        AnimState.RaiseStart => "RaiseStart",
+        AnimState.RaiseLoop => "RaiseLoop",
         _ => "Idle"
     };
 
@@ -1027,11 +1062,16 @@ public class AnimController
         AnimState.Idle or AnimState.Walk or AnimState.Jog or AnimState.Run
             or AnimState.Block or AnimState.Stunned or AnimState.JumpLoop
             or AnimState.Panic or AnimState.Feeding or AnimState.Hover
-            or AnimState.WorkLoop or AnimState.Carry => AnimPlayMode.Loop,
+            or AnimState.WorkLoop or AnimState.Carry
+            or AnimState.ImbueGroundLoop or AnimState.ImbueTableLoop
+            or AnimState.RaiseLoop => AnimPlayMode.Loop,
         AnimState.Death or AnimState.Knockdown or AnimState.Fall
             or AnimState.Sit or AnimState.Sleep
             or AnimState.WorkStart or AnimState.WorkEnd
-            or AnimState.Pickup or AnimState.PutDown => AnimPlayMode.PlayOnceHold,
+            or AnimState.Pickup or AnimState.PutDown
+            or AnimState.ImbueGroundStart or AnimState.ImbueGroundFinish
+            or AnimState.ImbueTableStart or AnimState.ImbueTableFinish
+            or AnimState.RaiseStart => AnimPlayMode.PlayOnceHold,
         _ => AnimPlayMode.PlayOnceTransition
     };
 
@@ -1044,7 +1084,10 @@ public class AnimController
             or AnimState.JumpAttackSetup or AnimState.JumpAttackHit
             or AnimState.Death
             or AnimState.WorkStart or AnimState.WorkLoop or AnimState.WorkEnd
-            or AnimState.Pickup or AnimState.PutDown => true,
+            or AnimState.Pickup or AnimState.PutDown
+            or AnimState.ImbueGroundStart or AnimState.ImbueGroundLoop or AnimState.ImbueGroundFinish
+            or AnimState.ImbueTableStart or AnimState.ImbueTableLoop or AnimState.ImbueTableFinish
+            or AnimState.RaiseStart or AnimState.RaiseLoop => true,
         _ => false
     };
 
@@ -1064,7 +1107,10 @@ public class AnimController
             or AnimState.Spell1 or AnimState.Special1 or AnimState.Standup
             or AnimState.Ranged1
             or AnimState.WorkStart or AnimState.WorkLoop or AnimState.WorkEnd
-            or AnimState.Pickup or AnimState.PutDown => 3,
+            or AnimState.Pickup or AnimState.PutDown
+            or AnimState.ImbueGroundStart or AnimState.ImbueGroundLoop or AnimState.ImbueGroundFinish
+            or AnimState.ImbueTableStart or AnimState.ImbueTableLoop or AnimState.ImbueTableFinish
+            or AnimState.RaiseStart or AnimState.RaiseLoop => 3,
         AnimState.Dodge or AnimState.BlockReact => 4,
         AnimState.JumpTakeoff or AnimState.JumpLoop or AnimState.JumpLand
             or AnimState.JumpAttackSetup or AnimState.JumpAttackHit => 5,

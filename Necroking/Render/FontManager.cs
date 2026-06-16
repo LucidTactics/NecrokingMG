@@ -18,6 +18,7 @@ public class FontManager
     private FontSystem? _defaultSystem;
     private string _defaultFamily = "";
 
+
     /// <summary>Available font family names.</summary>
     public IReadOnlyCollection<string> FontFamilies => _fontSystems.Keys;
 

@@ -12,6 +12,15 @@ public static class LaunchArgs
     public static int Speed = 1;
     public static bool Headless;
     public static bool NoVsync;
+    /// <summary>Diagnostic: auto-click "Start Game" on the first menu frame and
+    /// (headless) exit shortly after the world finishes loading. Used to capture
+    /// startup.log timing for the Start-Game path without manual clicking.</summary>
+    public static bool AutoStart;
+    /// <summary>Offline bake: load the world headless, compute + persist every corpse
+    /// death-frame centroid to data/frame_centroids.json, then exit. Run once after
+    /// changing unit art; the file ships with the build so carries never stall on a
+    /// GetData read-back. Implies --autostart --headless.</summary>
+    public static bool BakeCentroids;
     public static Color? BgColor;
     public static int ResolutionW;
     public static int ResolutionH;
@@ -35,6 +44,14 @@ public static class LaunchArgs
                     if (int.TryParse(args[++i], out int s)) Speed = s;
                     break;
                 case "--headless":
+                    Headless = true;
+                    break;
+                case "--autostart":
+                    AutoStart = true;
+                    break;
+                case "--bake-centroids":
+                    BakeCentroids = true;
+                    AutoStart = true;
                     Headless = true;
                     break;
                 case "--no-vsync":

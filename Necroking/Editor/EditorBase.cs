@@ -209,6 +209,12 @@ public class EditorBase
     // When a dropdown consumes a mouse press, keep input blocked through the release
     // so release-based click detection (DrawButton) doesn't fire on widgets beneath.
     private bool _dropdownHoldingMousePress;
+    // Tracks the color picker's consume state across frames so we can swallow the
+    // click that dismissed it (otherwise it falls through to a widget behind).
+    private bool _colorPickerWasConsuming;
+    // Slider drag capture: the slider grabbed on mouse-down owns the drag until
+    // the button is released, so vertical moves don't hijack a neighbour.
+    private string? _activeSliderId;
 
     // Color picker popup (shared instance)
     private readonly ColorPickerPopup _colorPicker = new();
@@ -258,13 +264,28 @@ public class EditorBase
         _pendingDropdown = null;
         _dropdownOverlayConsumedClick = false;
 
+        // Release ends any in-progress slider drag capture (robust even if the
+        // captured slider isn't drawn this frame).
+        if (mouse.LeftButton == ButtonState.Released)
+            _activeSliderId = null;
+
         // Update color picker popup input (with keyboard for value box editing)
         float dt = (float)gameTime.ElapsedGameTime.TotalSeconds;
         _colorPicker.UpdateInput(mouse, prevMouse, kb, prevKb, screenW, screenH, dt);
 
+        // When the color picker just closed (OK/ESC), swallow the dismissing
+        // click so it doesn't fall through to a widget behind — same mechanism
+        // the dropdowns use. The flag clears once the mouse is fully released.
+        bool pickerConsuming = _colorPicker.ConsumesInput;
+        if (_colorPickerWasConsuming && !pickerConsuming)
+            _dropdownHoldingMousePress = true;
+        _colorPickerWasConsuming = pickerConsuming;
+
         // Color picker is modal — block all editor input when it's open
-        if (_colorPicker.ConsumesInput && _inputLayer < 1)
+        if (pickerConsuming && _inputLayer < 1)
             _inputLayer = 1;
+        if (_dropdownHoldingMousePress && _inputLayer < 2)
+            _inputLayer = 2;
 
         // Handle key repeat for text input
         if (_activeFieldId != null)
@@ -479,6 +500,24 @@ public class EditorBase
     /// </summary>
     public delegate void ListItemRenderer(int itemIndex, Rectangle itemRect, bool isSelected);
 
+    // Row height used by DrawScrollableList (kept in one place so ScrollListToItem
+    // computes the same layout).
+    private const int ScrollableListItemH = 22;
+
+    /// <summary>
+    /// Scroll a <see cref="DrawScrollableList"/> (identified by panelId) so the
+    /// given visible item index is centred in the view. itemCount is the number
+    /// of visible (post-filter) rows, viewH the list height. Use to reveal an
+    /// item selected programmatically (e.g. jumping to a def from another editor).
+    /// </summary>
+    public void ScrollListToItem(string panelId, int itemIndex, int itemCount, int viewH)
+    {
+        if (itemIndex < 0) return;
+        float target = itemIndex * ScrollableListItemH - (viewH - ScrollableListItemH) / 2f;
+        float maxScroll = Math.Max(0, itemCount * ScrollableListItemH - viewH);
+        _scrollOffsets[panelId] = Math.Clamp(target, 0, maxScroll);
+    }
+
     /// <summary>
     /// Draws a scrollable list of items. Returns the index of the clicked item, or -1.
     /// </summary>
@@ -497,7 +536,7 @@ public class EditorBase
             _scrollOffsets[panelId] = 0;
 
         float scroll = _scrollOffsets[panelId];
-        int itemH = 22;
+        int itemH = ScrollableListItemH;
         int clicked = -1;
 
         // Handle scroll wheel when hovering
@@ -744,9 +783,8 @@ public class EditorBase
     /// <summary>
     /// Draw a float input field with drag behavior
     /// </summary>
-    public float DrawFloatField(string fieldId, string label, float value, int x, int y, int w, float step = 0.1f)
+    public float DrawFloatField(string fieldId, string label, float value, int x, int y, int w, float step = 0.1f, int labelW = 120)
     {
-        int labelW = 120;
         DrawText(label, new Vector2(x, y + 2), TextDim);
 
         int inputX = x + labelW;
@@ -811,11 +849,22 @@ public class EditorBase
     /// <summary>
     /// Draw a checkbox/boolean toggle
     /// </summary>
-    public bool DrawCheckbox(string label, bool value, int x, int y)
+    /// <summary>
+    /// Draw a checkbox. The clickable area covers both the box and its label, so
+    /// clicking the text toggles too. In tight multi-column layouts pass
+    /// <paramref name="hitWidth"/> (the column width) to clamp the clickable area
+    /// and avoid overlapping the next column's checkbox.
+    /// </summary>
+    public bool DrawCheckbox(string label, bool value, int x, int y, int hitWidth = 0)
     {
         int boxSize = 16;
         var boxRect = new Rectangle(x, y + 2, boxSize, boxSize);
-        bool hovered = IsHovered(boxRect);
+
+        int labelW = (int)MathF.Ceiling(MeasureText(label).X);
+        int fullW = boxSize + 6 + labelW;
+        int areaW = hitWidth > 0 ? Math.Min(hitWidth, fullW) : fullW;
+        var hitRect = new Rectangle(x, y + 2, areaW, boxSize);
+        bool hovered = IsHovered(hitRect);
         bool clicked = hovered && _mouse.LeftButton == ButtonState.Pressed && _prevMouse.LeftButton == ButtonState.Released;
 
         DrawRect(boxRect, InputBg);
@@ -829,6 +878,101 @@ public class EditorBase
         DrawText(label, new Vector2(x + boxSize + 6, y + 2), TextColor);
 
         return clicked ? !value : value;
+    }
+
+    /// <summary>
+    /// Draw the inline harmonizer controls (target swatch, HSV/HCL mode toggle and
+    /// the 3 strength sliders) bound directly to a persistent <see cref="HarmonizeSettings"/>.
+    /// Returns true if any value changed this frame (caller should re-bake the texture).
+    /// Canonical implementation shared by the UI editor and the env-object editor.
+    /// </summary>
+    public bool DrawHarmonizeSliders(string id, HarmonizeSettings settings, int x, ref int curY, int w)
+    {
+        bool changed = false;
+        int labelW = 80;
+        int fieldX = x + labelW;
+
+        // Target color (written live each frame so the preview updates while picking).
+        DrawText("Target:", new Vector2(x, curY + 2), TextDim);
+        byte ta = settings.TargetColor.Length > 3 ? settings.TargetColor[3] : (byte)255;
+        var targHdr = new HdrColor(settings.TargetColor[0], settings.TargetColor[1], settings.TargetColor[2], ta, 1f);
+        DrawColorSwatch(id + "_tgt", fieldX, curY, 40, 18, ref targHdr, hideIntensity: false);
+        if (targHdr.R != settings.TargetColor[0] || targHdr.G != settings.TargetColor[1]
+            || targHdr.B != settings.TargetColor[2] || targHdr.A != ta)
+        {
+            settings.TargetColor = new[] { targHdr.R, targHdr.G, targHdr.B, targHdr.A };
+            changed = true;
+        }
+        curY += 22;
+
+        // HSV / HCL mode toggle
+        DrawText("Mode:", new Vector2(x, curY + 2), TextDim);
+        if (DrawButton(settings.UseHcl ? "HCL" : "HSV", fieldX, curY, 48, 18))
+        {
+            settings.UseHcl = !settings.UseHcl;
+            changed = true;
+        }
+        curY += 22;
+
+        // Per-channel strength sliders
+        string[] labels = settings.UseHcl ? new[] { "Hue:", "Chroma:", "Lum:" } : new[] { "Hue:", "Sat:", "Value:" };
+        float[] vals = { settings.HueStrength, settings.SatStrength, settings.ValStrength };
+        for (int i = 0; i < 3; i++)
+        {
+            float newVal = DrawSliderFloat($"{id}_s{i}", labels[i], vals[i], 0f, 1f, x, curY, w);
+            if (MathF.Abs(newVal - vals[i]) > 0.001f) { vals[i] = newVal; changed = true; }
+            curY += 22;
+        }
+        settings.HueStrength = vals[0];
+        settings.SatStrength = vals[1];
+        settings.ValStrength = vals[2];
+
+        // Vertical gradient (top -> bottom blend toward GradColor; alpha = max blend)
+        DrawText("Grad:", new Vector2(x, curY + 2), TextDim);
+        var gradBytes = settings.GradColor ?? new byte[] { 0, 0, 0, 112 };
+        var gradHdr = new HdrColor(gradBytes[0], gradBytes[1], gradBytes[2], gradBytes.Length > 3 ? gradBytes[3] : (byte)255, 1f);
+        DrawColorSwatch(id + "_grad", fieldX, curY, 40, 18, ref gradHdr, hideIntensity: true);
+        if (gradHdr.R != gradBytes[0] || gradHdr.G != gradBytes[1] || gradHdr.B != gradBytes[2]
+            || gradHdr.A != (gradBytes.Length > 3 ? gradBytes[3] : (byte)255))
+        {
+            settings.GradColor = new[] { gradHdr.R, gradHdr.G, gradHdr.B, gradHdr.A };
+            changed = true;
+        }
+        curY += 22;
+        float newGradStr = DrawSliderFloat(id + "_gradstr", "Grad Str:", settings.GradStrength, 0f, 1f, x, curY, w);
+        if (MathF.Abs(newGradStr - settings.GradStrength) > 0.001f)
+        {
+            settings.GradStrength = newGradStr;
+            settings.GradColor ??= new byte[] { 0, 0, 0, 112 };
+            changed = true;
+        }
+        curY += 22;
+
+        // Silhouette outline (baked around the alpha edge, thickness in texture px)
+        DrawText("Outline:", new Vector2(x, curY + 2), TextDim);
+        var outBytes = settings.OutlineColor ?? new byte[] { 0, 0, 0, 255 };
+        var outHdr = new HdrColor(outBytes[0], outBytes[1], outBytes[2], outBytes.Length > 3 ? outBytes[3] : (byte)255, 1f);
+        DrawColorSwatch(id + "_outl", fieldX, curY, 40, 18, ref outHdr, hideIntensity: true);
+        if (outHdr.R != outBytes[0] || outHdr.G != outBytes[1] || outHdr.B != outBytes[2]
+            || outHdr.A != (outBytes.Length > 3 ? outBytes[3] : (byte)255))
+        {
+            settings.OutlineColor = new[] { outHdr.R, outHdr.G, outHdr.B, outHdr.A };
+            changed = true;
+        }
+        curY += 22;
+        float newOutTh = DrawSliderFloat(id + "_outth", "Thickness:", settings.OutlineThickness, 0f, 6f, x, curY, w);
+        if (MathF.Abs(newOutTh - settings.OutlineThickness) > 0.001f)
+        {
+            settings.OutlineThickness = newOutTh;
+            settings.OutlineColor ??= new byte[] { 0, 0, 0, 255 };
+            changed = true;
+        }
+        curY += 22;
+        float newOutOp = DrawSliderFloat(id + "_outop", "Opacity:", settings.OutlineOpacity, 0f, 1f, x, curY, w);
+        if (MathF.Abs(newOutOp - settings.OutlineOpacity) > 0.001f) { settings.OutlineOpacity = newOutOp; changed = true; }
+        curY += 22;
+
+        return changed;
     }
 
     /// <summary>
@@ -1394,20 +1538,25 @@ public class EditorBase
         int thumbX = sliderX + 2 + (int)(t * (sliderW - 4)) - 4;
         DrawRect(new Rectangle(thumbX, trackY, 8, sliderH), TextBright);
 
-        // Slider interaction (drag)
-        bool hovered = !IsInputBlocked(0) && trackRect.Contains(_mouse.X, _mouse.Y);
-        if (hovered || (_mouse.LeftButton == ButtonState.Pressed && _prevMouse.LeftButton == ButtonState.Pressed))
+        // Slider interaction with drag capture: the slider grabbed on mouse-down
+        // owns the drag until release. Without this, dragging vertically off the
+        // track onto a neighbouring slider's hit area would hijack that slider.
+        string sliderDragId = id + "_slider";
+        bool overTrack = !IsInputBlocked(0)
+            && _mouse.X >= sliderX - 4 && _mouse.X <= sliderX + sliderW + 4
+            && _mouse.Y >= trackY - 4 && _mouse.Y <= trackY + sliderH + 4;
+        if (_mouse.LeftButton == ButtonState.Pressed && _prevMouse.LeftButton == ButtonState.Released && overTrack)
+            _activeSliderId = sliderDragId;
+
+        if (_activeSliderId == sliderDragId && _mouse.LeftButton == ButtonState.Pressed)
         {
-            if (_mouse.LeftButton == ButtonState.Pressed && _mouse.Y >= trackY - 4 && _mouse.Y <= trackY + sliderH + 4
-                && _mouse.X >= sliderX - 4 && _mouse.X <= sliderX + sliderW + 4)
-            {
-                float newT = Math.Clamp((float)(_mouse.X - sliderX - 2) / (sliderW - 4), 0f, 1f);
-                value = min + newT * (max - min);
-                // Update input buffer if value box is active for this slider
-                string valueFieldId = id + "_val";
-                if (_activeFieldId == valueFieldId)
-                    _inputBuffer = value.ToString("F2");
-            }
+            // Follow only horizontal movement; ignore Y so leaving the track
+            // vertically keeps dragging this slider.
+            float newT = Math.Clamp((float)(_mouse.X - sliderX - 2) / (sliderW - 4), 0f, 1f);
+            value = min + newT * (max - min);
+            string valueFieldId = id + "_val";
+            if (_activeFieldId == valueFieldId)
+                _inputBuffer = value.ToString("F2");
         }
 
         // -- Value box (clickable text field) --

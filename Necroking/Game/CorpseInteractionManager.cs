@@ -41,6 +41,31 @@ public static class CorpseInteractionManager
         var np = nu.Position;
         float searchRange = 3f * 3f;
 
+        // Corpse-carry mode (body bag mothballed): pick up the nearest corpse
+        // directly — no bagging step. Goes straight to Pickup → Carry.
+        if (!GameConstants.UseBodyBag)
+        {
+            int bestIdx = -1;
+            float best = searchRange;
+            for (int ci = 0; ci < sim.Corpses.Count; ci++)
+            {
+                var c = sim.Corpses[ci];
+                if (c.Dissolving || c.ConsumedBySummon) continue;
+                if (c.DraggedByUnitID != GameConstants.InvalidUnit) continue;
+                float d = (c.Position - np).LengthSq();
+                if (d < best) { best = d; bestIdx = ci; }
+            }
+            if (bestIdx >= 0)
+            {
+                var c = sim.CorpsesMut[bestIdx];
+                c.LerpStartPos = c.Position;
+                sim.UnitsMut[necroIdx].CarryingCorpseID = c.CorpseID;
+                sim.UnitsMut[necroIdx].CorpseInteractPhase = 4; // Pickup
+                c.DraggedByUnitID = nu.Id;
+            }
+            return;
+        }
+
         // First: nearest bagged corpse to pickup
         int bestBaggedIdx = -1;
         float bestDist = searchRange;

@@ -398,7 +398,9 @@ public class ReflectionPropertyRenderer
             int colX = x + 4 + col * colW;
             string displayLabel = getDisplayName!(ids[i]) ?? ids[i];
             bool isChecked = list.Contains(ids[i]);
-            bool newChecked = _ui.DrawCheckbox(displayLabel, isChecked, colX, curY);
+            // Clamp the clickable area to the column so a long label doesn't
+            // overlap the next column's checkbox.
+            bool newChecked = _ui.DrawCheckbox(displayLabel, isChecked, colX, curY, colW - 4);
             if (newChecked != isChecked)
             {
                 if (newChecked) list.Add(ids[i]);

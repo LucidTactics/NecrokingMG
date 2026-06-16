@@ -453,8 +453,11 @@ public class TableCraftMenuUI : Necroking.UI.IModalLayer
         _batch.Draw(_pixel, prog, new Color(20, 20, 25, 220));
         DrawBorder(prog, new Color(160, 160, 160, 180), 1);
 
-        float progress = (def.ProcessTime > 0f && ts.Crafting)
-            ? Math.Clamp(ts.CraftTimer / def.ProcessTime, 0f, 1f)
+        // Progress fills over the loop budget (the timed portion that advances
+        // while channeling), falling back to ProcessTime before it's computed.
+        float progDenom = ts.LoopBudget > 0.01f ? ts.LoopBudget : def.ProcessTime;
+        float progress = (progDenom > 0f && ts.Crafting)
+            ? Math.Clamp(ts.CraftTimer / progDenom, 0f, 1f)
             : 0f;
         if (progress > 0f)
         {

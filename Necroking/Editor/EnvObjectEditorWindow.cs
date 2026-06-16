@@ -88,6 +88,9 @@ public class EnvObjectEditorWindow : Necroking.UI.IModalLayer
 
     // Scroll
     private float _propScrollY;
+    // Set when a def is selected programmatically (Open(defIndex)) so the def
+    // list scrolls to reveal it on the next draw.
+    private bool _pendingScrollToSelection;
 
     // Save status
     private string _statusMessage = "";
@@ -109,9 +112,6 @@ public class EnvObjectEditorWindow : Necroking.UI.IModalLayer
     private MouseState _prevMouseEnv;
     private KeyboardState _prevKbEnv;
 
-    // M04: Color harmonizer
-    private readonly ColorHarmonizer _harmonizer = new();
-    private bool _harmonizerOpen;
 
     // M05: Edge tweaker
     private bool _edgeTweakerOpen;
@@ -213,8 +213,6 @@ public class EnvObjectEditorWindow : Necroking.UI.IModalLayer
         _draggingPivot = false;
         _cachedEnvObjectNames = null;
         _cachedEnvObjectCount = -1;
-        _harmonizerOpen = false;
-        _harmonizer.Cancel();
         _edgeTweakerOpen = false;
         _edgeTweakerPreview = null;
         _edgeTweakerPixels = null;
@@ -244,6 +242,9 @@ public class EnvObjectEditorWindow : Necroking.UI.IModalLayer
             string defCat = _env.GetDef(defIndex).Category;
             int catIdx = cats.IndexOf(defCat);
             _categoryFilter = catIdx >= 0 ? catIdx : 0;
+            // Scroll the def list to reveal the selected item next draw — without
+            // this the list stays at the top and the selection is off-screen.
+            _pendingScrollToSelection = true;
             ReloadPreview();
         }
     }
@@ -526,17 +527,17 @@ public class EnvObjectEditorWindow : Necroking.UI.IModalLayer
             if (filtered[i] == _selectedDef) { selectedFiltered = i; break; }
         }
 
+        if (_pendingScrollToSelection)
+        {
+            _ui.ScrollListToItem("envdef_list", selectedFiltered, filtered.Count, listH);
+            _pendingScrollToSelection = false;
+        }
+
         int clicked = _ui.DrawScrollableList("envdef_list", labels, selectedFiltered,
             x + 2, curY, w - 4, listH);
 
         if (clicked >= 0 && clicked < filtered.Count && filtered[clicked] != _selectedDef)
         {
-            // RM21: Close harmonizer when switching defs so it doesn't carry stale state
-            if (_harmonizerOpen)
-            {
-                _harmonizerOpen = false;
-                _harmonizer.Cancel();
-            }
             _selectedDef = filtered[clicked];
             _propScrollY = 0;
             ReloadPreview();
@@ -1272,38 +1273,50 @@ public class EnvObjectEditorWindow : Necroking.UI.IModalLayer
         if (MathF.Abs(newPlaceRadius - def.PlacementRadius) > 0.001f) def.PlacementRadius = newPlaceRadius;
         curY += RowH;
 
-        // M04: Tint color + Harmonize button
+        // Random horizontal flip — per-instance mirror for natural variety.
+        def.RandomFlip = _ui.DrawCheckbox("Random Flip", def.RandomFlip, fx, curY);
+        curY += RowH;
+
+        // M04: Tint color — cheap multiply applied at draw (kept alongside the
+        // per-pixel harmonize below).
         _ui.DrawText("Tint:", new Vector2(fx, curY + 4), EditorBase.TextDim);
         var tint = def.TintColor;
         if (_ui.DrawColorSwatch("envdef_tint", fx + 90, curY + 2, 28, RowH - 4, ref tint))
             def.TintColor = tint;
-        int harmBtnX = fx + 130;
-        int harmBtnW = 80;
-        if (_ui.DrawButton("Harmonize", harmBtnX, curY + 1, harmBtnW, RowH - 2, EditorBase.AccentColor))
-        {
-            if (!_harmonizerOpen)
-            {
-                _harmonizerOpen = true;
-                var colors = new HdrColor[] { def.TintColor };
-                _harmonizer.Begin(colors);
-            }
-            else
-            {
-                _harmonizerOpen = false;
-                _harmonizer.Cancel();
-            }
-        }
         curY += RowH;
 
-        // M04: Harmonizer panel (inline, shown when open)
-        if (_harmonizerOpen && _harmonizer.Active)
+        // Per-pixel harmonize of the MAIN sprite. The recipe lives on the def and
+        // is baked into the texture at load (no duplicate files); null = disabled,
+        // so the sliders only take UI space when enabled. Re-bake on any change.
         {
-            if (_harmonizer.DrawPanel(_ui, fx, ref curY, fieldW))
+            bool on = def.Harmonize != null;
+            if (_ui.DrawButton(on ? "Harmonize: ON" : "Harmonize: OFF", fx, curY, 150, RowH - 2,
+                    on ? EditorBase.AccentColor : new Color(50, 55, 70)))
             {
-                // Apply harmonized result back to the tint
-                if (_harmonizer.NumColors > 0)
-                    def.TintColor = _harmonizer.Result[0];
+                def.Harmonize = on ? null : new HarmonizeSettings();
+                _env.ReloadDefTexture(_selectedDef); // bake or revert to raw
             }
+            curY += RowH;
+            if (def.Harmonize != null
+                && _ui.DrawHarmonizeSliders("envdef_harm", def.Harmonize, fx, ref curY, fieldW))
+                _env.ReloadDefTexture(_selectedDef);
+        }
+
+        // Per-pixel harmonize of the CORRUPTED variant — separate recipe, only
+        // shown when a corrupt sprite exists (rarely used).
+        if (!string.IsNullOrEmpty(def.CorruptedSprite))
+        {
+            bool on = def.HarmonizeCorrupt != null;
+            if (_ui.DrawButton(on ? "Harmonize Corrupt: ON" : "Harmonize Corrupt: OFF", fx, curY, 190, RowH - 2,
+                    on ? EditorBase.AccentColor : new Color(50, 55, 70)))
+            {
+                def.HarmonizeCorrupt = on ? null : new HarmonizeSettings();
+                _env.ReloadDefTexture(_selectedDef); // ReloadDefTexture invalidates the corrupt cache
+            }
+            curY += RowH;
+            if (def.HarmonizeCorrupt != null
+                && _ui.DrawHarmonizeSliders("envdef_harm_cor", def.HarmonizeCorrupt, fx, ref curY, fieldW))
+                _env.ReloadDefTexture(_selectedDef);
         }
 
         // M05: Edge Tweaker button
@@ -1355,15 +1368,19 @@ public class EnvObjectEditorWindow : Necroking.UI.IModalLayer
                 // Name label
                 _ui.DrawText(gLabel, new Vector2(fx + 4, curY + 3), isSelf ? EditorBase.TextBright : EditorBase.TextDim);
 
-                // Editable weight field
-                int weightFieldX = fx + fieldW - 120;
-                float gw = _ui.DrawFloatField($"grp_w_{gi}", "W:", gDef.GroupWeight, weightFieldX, curY, 120, 0.1f);
+                // Weight controls — shifted left (previously pinned to the far-right
+                // edge, where the value ran off-screen and left a big empty gap).
+                // Compact 24px "W:" label column so the input + +/- buttons stay tight.
+                int weightFieldX = fx + 170;
+                int weightFieldW = 160;
+                float gw = _ui.DrawFloatField($"grp_w_{gi}", "W:", gDef.GroupWeight, weightFieldX, curY, weightFieldW, 0.1f, labelW: 24);
                 if (MathF.Abs(gw - gDef.GroupWeight) > 0.001f) gDef.GroupWeight = gw;
 
-                // Remove from group button (not for self - use group dropdown instead)
+                // Remove-from-group button, just left of the weight field
+                // (not for self - use the group dropdown instead).
                 if (!isSelf)
                 {
-                    if (_ui.DrawButton("X", fx + fieldW - 140, curY, 18, 18, EditorBase.DangerColor))
+                    if (_ui.DrawButton("X", weightFieldX - 24, curY, 18, 18, EditorBase.DangerColor))
                     {
                         gDef.Group = "";
                     }
@@ -1821,11 +1838,13 @@ public class EnvObjectEditorWindow : Necroking.UI.IModalLayer
             id = $"env_obj_{idx}";
         }
 
+        string newCat = GetCurrentFilterCategory();
         var def = new EnvironmentObjectDef
         {
             Id = id,
             Name = $"New Object {idx}",
-            Category = GetCurrentFilterCategory(),
+            Category = newCat,
+            RandomFlip = EnvironmentObjectDef.DefaultRandomFlipForCategory(newCat),
         };
 
         int newIdx = _env.AddDef(def);
@@ -1905,6 +1924,7 @@ public class EnvObjectEditorWindow : Necroking.UI.IModalLayer
             ItemSlots = src.ItemSlots,
             EssenceCost = src.EssenceCost,
             TintColor = src.TintColor,
+            RandomFlip = src.RandomFlip,
             IsAnimated = src.IsAnimated,
             AnimFramesX = src.AnimFramesX,
             AnimFramesY = src.AnimFramesY,

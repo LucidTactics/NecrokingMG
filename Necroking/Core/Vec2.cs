@@ -57,6 +57,11 @@ public static class GameConstants
     public const int MaxUnits = 8192;
     public const float InfCost = 1e18f;
     public const uint InvalidUnit = uint.MaxValue;
+
+    // Corpse carry mode. false = pick up and carry the raw corpse sprite (current
+    // prototype). true = the legacy "body bag" flow (bag the corpse, then carry the
+    // bag). The body-bag code is fully preserved behind this flag — flip to re-enable.
+    public const bool UseBodyBag = false;
 }
 
 public static class MathUtil

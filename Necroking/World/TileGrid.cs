@@ -131,11 +131,18 @@ public class TileGrid
 
     public void RebuildCostField()
     {
-        for (int i = 0; i < Width * Height; i++)
+        // Per-tile independent (reads _terrain[i], writes _costField[i]); parallelize
+        // over rows. Runs at startup AND on every runtime collision-dirty rebuild.
+        System.Threading.Tasks.Parallel.For(0, Height, ty =>
         {
-            float c = TerrainCosts.GetCost(_terrain[i]);
-            _costField[i] = c >= 255f ? (byte)255 : (byte)Math.Min(254, Math.Max(1, (int)c));
-        }
+            int row = ty * Width;
+            for (int tx = 0; tx < Width; tx++)
+            {
+                int i = row + tx;
+                float c = TerrainCosts.GetCost(_terrain[i]);
+                _costField[i] = c >= 255f ? (byte)255 : (byte)Math.Min(254, Math.Max(1, (int)c));
+            }
+        });
     }
 
     public void StampImpassableCircle(float worldX, float worldY, float radius)

@@ -281,7 +281,10 @@ public class CraftTableScenario : ScenarioBase
                         // Only meaningful if a zombie + bonus actually got applied.
                         if (_zombieSpawned && _bonusEffectApplied)
                         {
-                            int targetIdx = sim.UnitsMut.AddUnit(new Vec2(CX + 4f, CY), UnitType.Soldier);
+                            // Place the target just off the table on the necromancer
+                            // side: the zombie now rises ON the table and walks toward
+                            // the necromancer, so it engages a target adjacent there.
+                            int targetIdx = sim.UnitsMut.AddUnit(new Vec2(CX - 1.5f, CY), UnitType.Soldier);
                             if (targetIdx >= 0)
                             {
                                 sim.UnitsMut[targetIdx].AI = AIBehavior.IdleAtPoint;

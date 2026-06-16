@@ -595,6 +595,16 @@ public static class MapData
             if (tc.TryGetProperty("intensity", out var tci)) ti = tci.GetSingle();
             def.TintColor = new Necroking.Core.HdrColor(tr, tg, tb, ta, ti);
         }
+        // Harmonization recipes (null when absent → harmonize disabled)
+        if (ed.TryGetProperty("harmonize", out var hm))
+            def.Harmonize = Necroking.Editor.HarmonizeSettings.Read(hm);
+        if (ed.TryGetProperty("harmonizeCorrupt", out var hmc))
+            def.HarmonizeCorrupt = Necroking.Editor.HarmonizeSettings.Read(hmc);
+        // Random horizontal flip — when the field is absent (older maps), default
+        // by category so organic props get variety and buildings/walls don't.
+        def.RandomFlip = ed.TryGetProperty("randomFlip", out var rf)
+            ? rf.GetBoolean()
+            : EnvironmentObjectDef.DefaultRandomFlipForCategory(def.Category);
         return def;
     }
 }
