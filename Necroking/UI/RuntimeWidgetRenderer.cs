@@ -644,7 +644,17 @@ public class RuntimeWidgetRenderer
     {
         if (_batch == null) return;
         var elemDef = _elementDefs.FirstOrDefault(e => e.Id == elementId);
-        if (elemDef == null || elemDef.Type != "image" || string.IsNullOrEmpty(elemDef.ImagePath)) return;
+        if (elemDef == null) return;
+        var elemTint = ByteColor(elemDef.TintColor ?? new byte[] { 255, 255, 255, 255 });
+        // Nine-slice element (e.g. a frame/backing converted from a baked image):
+        // draw the (possibly harmonized) nine-slice into the rect. srcInset doesn't
+        // apply — the nine-slice's own borders handle the corners.
+        if (elemDef.Type == "nineSlice" && !string.IsNullOrEmpty(elemDef.NineSlice))
+        {
+            GetNineSlice(elemDef.NineSlice, "el:" + elemDef.Id)?.Draw(_batch, rect, elemTint);
+            return;
+        }
+        if (elemDef.Type != "image" || string.IsNullOrEmpty(elemDef.ImagePath)) return;
         var tex = GetTexture(elemDef.ImagePath, "el:" + elemDef.Id);
         if (tex == null) return;
         var tint = ByteColor(elemDef.TintColor ?? new byte[] { 255, 255, 255, 255 });
