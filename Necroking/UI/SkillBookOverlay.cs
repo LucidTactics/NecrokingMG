@@ -47,7 +47,7 @@ public class SkillBookOverlay : IModalLayer
     private SpellBarState _secondaryBar;
     private Simulation? _sim;
 
-    private int _x, _y, _w, _h;
+    private int _x, _y, _w, _h, _sh;
     private int _activeTab;
     private string? _toast;
     private double _toastUntil;
@@ -108,6 +108,7 @@ public class SkillBookOverlay : IModalLayer
         // usable; otherwise centre vertically.
         _x = (sw - _w) / 2;
         _y = _h <= sh - 16 ? (sh - _h) / 2 : 8;
+        _sh = sh;
     }
 
     public void Update(InputState input, int sw, int sh, double timeSec)
@@ -177,7 +178,8 @@ public class SkillBookOverlay : IModalLayer
 
     private void BindChrome()
     {
-        _renderer.SetText(Instance, "TitleText", "TOME OF THE NECROKING");
+        // Title is a static label in the widget data (TitleText child default,
+        // "Ability Upgrades") — edited in the UI editor, no code needed.
         int barIdx = TabBarIndex();
         if (barIdx < 0) return;
         for (int i = 0; i < TabSlots.Length && i < SkillBookDefs.Tabs.Count; i++)
@@ -242,11 +244,28 @@ public class SkillBookOverlay : IModalLayer
         _renderer.SetText(inst, "name", def.Name);
         if (Has(SkillIcon(def))) _renderer.SetImage(inst, "icon", SkillIcon(def));
 
-        // Cost line: flat "Cost N" (or Free / Learned), coloured by state.
-        string costText = learned ? "Learned"
-                        : def.Costs.Count == 0 ? "Free"
-                        : $"Cost {def.Costs[0].Amount}";
+        // Cost line: the amount inline with the resource icon, coloured by whether
+        // it's affordable. Item costs carry the item's icon; skillpoints / event
+        // milestones have no art so they read "Cost N" with the icon hidden.
+        //   learned -> "Learned"   no costs -> "Free"
+        string costIcon = "";
+        string costText;
+        Color costCol;
+        if (learned) { costText = "Learned"; costCol = new Color(196, 180, 146); }
+        else if (def.Costs.Count == 0) { costText = "Free"; costCol = affordable ? CostGood : CostBad; }
+        else
+        {
+            var c = def.Costs[0];
+            string plus = def.Costs.Count > 1 ? "+" : "";
+            costIcon = CostIcon(c);
+            costText = Has(costIcon) ? $"{c.Amount}{plus}" : $"Cost {c.Amount}{plus}";
+            costCol = !prereqsMet ? new Color(130, 108, 70) : affordable ? CostGood : CostBad;
+        }
         _renderer.SetText(inst, "cost", costText);
+        _renderer.SetTextColor(inst, "cost", costCol.R, costCol.G, costCol.B, costCol.A);
+        bool showCostIcon = Has(costIcon);
+        _renderer.SetHidden(inst, "cost_icon", !showCostIcon);
+        if (showCostIcon) _renderer.SetImage(inst, "cost_icon", costIcon);
 
         // State wash via the frame tint (kept subtle; bright parchment otherwise).
         var tint = learned ? new Color(150, 170, 150)
@@ -307,7 +326,23 @@ public class SkillBookOverlay : IModalLayer
                 null, color, angle, Vector2.Zero, SpriteEffects.None, 0f);
     }
 
+    // Cost affordability colours (match the old grimoire panel).
+    private static readonly Color CostGood = new(60, 130, 56);
+    private static readonly Color CostBad  = new(168, 44, 44);
+
     private bool Has(string? s) => !string.IsNullOrEmpty(s);
+
+    /// <summary>Icon for a cost's resource. Item costs use the item's art; skillpoints
+    /// and event milestones have none (the amount reads "Cost N" on its own).</summary>
+    private string CostIcon(SkillCost c)
+    {
+        if (c.Type == "item")
+        {
+            var it = _gameData?.Items?.Get(c.Id);
+            if (it != null && Has(it.Icon)) return it.Icon;
+        }
+        return "";
+    }
 
     private string SkillIcon(SkillDef def)
     {
@@ -344,11 +379,15 @@ public class SkillBookOverlay : IModalLayer
 
     private void DrawToast()
     {
-        // Minimal toast band near the bottom of the window.
-        var c = new Color(26, 13, 8);
-        int w = Math.Min(_w - 40, 360), h = 28;
-        var r = new Rectangle(_x + (_w - w) / 2, _y + _h - 60, w, h);
-        _batch.Draw(_pixel, r, c);
-        // (text drawn by the widget-font path would go here; toast text is optional.)
+        if (_toast == null) return;
+        const int fontSize = 18;
+        var sz = _renderer.MeasureText(_toast, fontSize, "Roboto");
+        int w = Math.Min(_w - 40, (int)sz.X + 36), h = 32;
+        // Keep the band on-screen even when the window is taller than the display.
+        int bottom = Math.Min(_y + _h, _sh);
+        var r = new Rectangle(_x + (_w - w) / 2, bottom - 72, w, h);
+        _batch.Draw(_pixel, r, new Color(26, 13, 8, 235));
+        _renderer.DrawText(_toast, (int)(r.X + (w - sz.X) / 2), (int)(r.Y + (h - sz.Y) / 2),
+            fontSize, new Color(236, 221, 179), "Roboto");
     }
 }

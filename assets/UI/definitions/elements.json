@@ -16593,13 +16593,13 @@
         255,
         0
       ],
-      "defaultText": "Cost 5",
+      "defaultText": "5",
       "textRegion": {
         "x": 0,
         "y": 0,
         "w": 228,
         "h": 26,
-        "align": "left",
+        "align": "right",
         "valign": "center",
         "fontFamily": "Roboto",
         "fontSize": 18,
@@ -16617,6 +16617,39 @@
           0,
           150
         ]
+      }
+    },
+    {
+      "id": "SkillTile_CostIcon",
+      "type": "image",
+      "imagePath": "assets/UI/Imported/Death24.png",
+      "width": 24,
+      "height": 24,
+      "tintColor": [
+        212,
+        212,
+        212,
+        255
+      ],
+      "harmonize": {
+        "targetColor": [
+          255,
+          126,
+          0,
+          255
+        ],
+        "hueStrength": 0,
+        "satStrength": 0,
+        "valStrength": 0,
+        "useHcl": false,
+        "outlineColor": [
+          0,
+          0,
+          0,
+          255
+        ],
+        "outlineThickness": 0.5,
+        "outlineOpacity": 0.47
       }
     }
   ]

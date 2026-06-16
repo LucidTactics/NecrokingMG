@@ -133,19 +133,7 @@
       "borderRight": 51,
       "borderTop": 51,
       "borderBottom": 51,
-      "tileEdges": true,
-      "harmonize": {
-        "targetColor": [
-          38,
-          31,
-          17,
-          255
-        ],
-        "hueStrength": 1,
-        "satStrength": 1.0,
-        "valStrength": 0.052,
-        "useHcl": false
-      }
+      "tileEdges": true
     }
   ]
 }
