@@ -105,7 +105,22 @@ public static class WidgetLayoutUtils
         }
     }
 
-    public static List<Rectangle> ComputeLayoutRects(UIEditorWidgetDef def, int wdX, int wdY)
+    /// <summary>
+    /// The single layout pass shared by the runtime renderer and the editor preview
+    /// (they differ only in how a child's height is sourced and which children are
+    /// hidden, supplied via the optional callbacks). Handles horizontal/vertical
+    /// layout with wrapping, anchor-pivot placement for non-layout children, and the
+    /// responsive <c>SizeMode</c> (fillWidth/fillHeight/fill) where a child tracks the
+    /// parent's size — in fill mode the child's Width/Height are reinterpreted as the
+    /// far-side margins, so "X=10,Width=10 + fillWidth" means a 10px inset on each side.
+    /// </summary>
+    /// <param name="isHidden">child index → hidden? Hidden children get Rectangle.Empty
+    /// (index alignment preserved) and don't advance the layout cursor. Null = none.</param>
+    /// <param name="childHeight">(child, index) → measured height, for auto-size / override
+    /// aware callers. Null = use the child's authored Height (40 fallback).</param>
+    public static List<Rectangle> ComputeLayoutRects(UIEditorWidgetDef def, int wdX, int wdY,
+        System.Func<int, bool>? isHidden = null,
+        System.Func<UIEditorChildDef, int, int>? childHeight = null)
     {
         var rects = new List<Rectangle>();
         bool isHoriz = def.Layout == "horizontal";
@@ -125,14 +140,22 @@ public static class WidgetLayoutUtils
         for (int i = 0; i < def.Children.Count; i++)
         {
             var child = def.Children[i];
+            if (isHidden != null && isHidden(i)) { rects.Add(Rectangle.Empty); continue; }
+
             int cw = child.Width > 0 ? child.Width : 100;
-            int ch = child.Height > 0 ? child.Height : 40;
+            int ch = childHeight != null ? childHeight(child, i) : (child.Height > 0 ? child.Height : 40);
+            bool fillW = child.SizeMode == "fillWidth" || child.SizeMode == "fill";
+            bool fillH = child.SizeMode == "fillHeight" || child.SizeMode == "fill";
 
             if (useLayout && !child.IgnoreLayout)
             {
-                // Auto-size widgets honor the child's CROSS-AXIS offset and
-                // never column/row-wrap (mirrors RuntimeWidgetRenderer's
-                // instance-aware layout; legacy layout widgets are unchanged).
+                // Cross-axis fill: stretch to the parent's content box on the axis the
+                // layout does NOT advance along (the common "full-width rows" case).
+                if (isHoriz && fillH) ch = def.Height - padT - padB;
+                if (isVert && fillW)  cw = def.Width - padL - padR;
+
+                // Auto-size widgets honor the child's CROSS-AXIS offset and never
+                // column/row-wrap (their height IS the content). Legacy widgets ignore it.
                 int crossX = def.AutoSizeHeight ? child.X : 0;
                 int crossY = def.AutoSizeHeight ? child.Y : 0;
                 if (isHoriz)
@@ -162,10 +185,22 @@ public static class WidgetLayoutUtils
             }
             else
             {
-                int col = child.Anchor % 3, row = child.Anchor / 3;
-                int anchorX = col switch { 0 => 0, 1 => def.Width / 2, 2 => def.Width, _ => 0 };
-                int anchorY = row switch { 0 => 0, 1 => def.Height / 2, 2 => def.Height, _ => 0 };
-                rects.Add(new Rectangle(wdX + anchorX + child.X, wdY + anchorY + child.Y, cw, ch));
+                // Non-layout: anchor pivot + offset, OR responsive fill (Width/Height
+                // become the far-side margins).
+                int x, w, y, h;
+                if (fillW) { x = wdX + child.X; w = System.Math.Max(0, def.Width - child.X - child.Width); }
+                else
+                {
+                    int anchorX = (child.Anchor % 3) switch { 1 => def.Width / 2, 2 => def.Width, _ => 0 };
+                    x = wdX + anchorX + child.X; w = cw;
+                }
+                if (fillH) { y = wdY + child.Y; h = System.Math.Max(0, def.Height - child.Y - child.Height); }
+                else
+                {
+                    int anchorY = (child.Anchor / 3) switch { 1 => def.Height / 2, 2 => def.Height, _ => 0 };
+                    y = wdY + anchorY + child.Y; h = ch;
+                }
+                rects.Add(new Rectangle(x, y, w, h));
             }
         }
         return rects;

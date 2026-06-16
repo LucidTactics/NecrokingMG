@@ -295,75 +295,15 @@ public class RuntimeWidgetRenderer
     private List<Rectangle> ComputeInstanceRects(UIEditorWidgetDef def, int wdX, int wdY, string instanceId)
     {
         _hiddenChildren.TryGetValue(instanceId, out var hidden);
-        bool isHoriz = def.Layout == "horizontal";
-        bool isVert = def.Layout == "vertical";
+        bool isHoriz = def.Layout == "horizontal", isVert = def.Layout == "vertical";
+        // Fast path with no per-instance state — straight through the shared pass.
         if (!isHoriz && !isVert && hidden == null)
             return WidgetLayoutUtils.ComputeLayoutRects(def, wdX, wdY);
-
-        var rects = new List<Rectangle>();
-        bool useLayout = isHoriz || isVert;
-        int padL = def.LayoutPadLeft > 0 ? def.LayoutPadLeft : def.LayoutPadding;
-        int padR = def.LayoutPadRight > 0 ? def.LayoutPadRight : def.LayoutPadding;
-        int padT = def.LayoutPadTop > 0 ? def.LayoutPadTop : def.LayoutPadding;
-        int padB = def.LayoutPadBottom > 0 ? def.LayoutPadBottom : def.LayoutPadding;
-        int spacX = def.LayoutSpacingX > 0 ? def.LayoutSpacingX : def.LayoutSpacing;
-        int spacY = def.LayoutSpacingY > 0 ? def.LayoutSpacingY : def.LayoutSpacing;
-
-        int curX = padL, curY = padT;
-        int rowMaxH = 0, colMaxW = 0;
-
-        for (int i = 0; i < def.Children.Count; i++)
-        {
-            var child = def.Children[i];
-            if (hidden != null && hidden.Contains(child.Name))
-            {
-                rects.Add(Rectangle.Empty);
-                continue;
-            }
-            int cw = child.Width > 0 ? child.Width : 100;
-            int ch = ChildHeightFor(child, instanceId, i);
-
-            if (useLayout && !child.IgnoreLayout)
-            {
-                // Auto-size widgets honor the child's CROSS-AXIS offset (x for
-                // vertical stacks, y for horizontal) — the analog of a per-child
-                // margin. Legacy layout widgets keep ignoring offsets.
-                int crossX = def.AutoSizeHeight ? child.X : 0;
-                int crossY = def.AutoSizeHeight ? child.Y : 0;
-                if (isHoriz)
-                {
-                    if (!def.AutoSizeHeight && curX > padL && curX + cw > def.Width - padR)
-                    {
-                        curY += rowMaxH + spacY;
-                        curX = padL;
-                        rowMaxH = 0;
-                    }
-                    rects.Add(new Rectangle(wdX + curX, wdY + curY + crossY, cw, ch));
-                    curX += cw + spacX;
-                    if (ch > rowMaxH) rowMaxH = ch;
-                }
-                else
-                {
-                    if (!def.AutoSizeHeight && curY > padT && curY + ch > def.Height - padB)
-                    {
-                        curX += colMaxW + spacX;
-                        curY = padT;
-                        colMaxW = 0;
-                    }
-                    rects.Add(new Rectangle(wdX + curX + crossX, wdY + curY, cw, ch));
-                    curY += ch + spacY;
-                    if (cw > colMaxW) colMaxW = cw;
-                }
-            }
-            else
-            {
-                int col = child.Anchor % 3, row = child.Anchor / 3;
-                int anchorX = col switch { 0 => 0, 1 => def.Width / 2, 2 => def.Width, _ => 0 };
-                int anchorY = row switch { 0 => 0, 1 => def.Height / 2, 2 => def.Height, _ => 0 };
-                rects.Add(new Rectangle(wdX + anchorX + child.X, wdY + anchorY + child.Y, cw, ch));
-            }
-        }
-        return rects;
+        // Otherwise drive the same shared pass, supplying this instance's hidden set
+        // (by child name) and override-aware heights.
+        return WidgetLayoutUtils.ComputeLayoutRects(def, wdX, wdY,
+            hidden == null ? null : i => hidden.Contains(def.Children[i].Name),
+            (child, i) => ChildHeightFor(child, instanceId, i));
     }
 
     /// <summary>Draw a widget def at a specific rect.</summary>
@@ -958,6 +898,7 @@ public class RuntimeWidgetRenderer
                             Width = ch.TryGetProperty("width", out var cww) ? cww.GetInt32() : 0,
                             Height = ch.TryGetProperty("height", out var chh) ? chh.GetInt32() : 0,
                             Anchor = ch.TryGetProperty("anchor", out var ca) ? ca.GetInt32() : 0,
+                            SizeMode = ch.TryGetProperty("sizeMode", out var sm) ? sm.GetString() ?? "" : "",
                             Interactive = ch.TryGetProperty("interactive", out var ci) && ci.GetBoolean(),
                             DefaultText = ch.TryGetProperty("defaultText", out var cdt) ? cdt.GetString() ?? "" : "",
                             IgnoreLayout = ch.TryGetProperty("ignoreLayout", out var il) && il.GetBoolean(),

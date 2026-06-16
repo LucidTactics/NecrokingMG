@@ -137,47 +137,14 @@ public partial class UIEditorWindow
         return child.Height > 0 ? child.Height : 40;
     }
 
+    // Editor preview layout — the SAME shared pass the runtime uses (so preview ==
+    // game), supplying the preview's hidden set and auto-size-aware heights. Heights
+    // still come from PreviewChildHeight since the editor has no per-instance overrides.
     private System.Collections.Generic.List<Rectangle> ComputePreviewRects(
         UIEditorWidgetDef def, int wdX, int wdY, System.Collections.Generic.HashSet<int> hiddenIdx)
-    {
-        var rects = new System.Collections.Generic.List<Rectangle>();
-        int padL = def.LayoutPadLeft > 0 ? def.LayoutPadLeft : def.LayoutPadding;
-        int padT = def.LayoutPadTop > 0 ? def.LayoutPadTop : def.LayoutPadding;
-        int spacY = def.LayoutSpacingY > 0 ? def.LayoutSpacingY : def.LayoutSpacing;
-        int spacX = def.LayoutSpacingX > 0 ? def.LayoutSpacingX : def.LayoutSpacing;
-        bool isHoriz = def.Layout == "horizontal";
-        int curX = padL, curY = padT;
-        for (int i = 0; i < def.Children.Count; i++)
-        {
-            var child = def.Children[i];
-            if (hiddenIdx.Contains(i)) { rects.Add(Rectangle.Empty); continue; }
-            int cw = child.Width > 0 ? child.Width : 100;
-            int ch = PreviewChildHeight(child);
-            if ((def.Layout == "vertical" || isHoriz) && !child.IgnoreLayout)
-            {
-                int crossX = def.AutoSizeHeight ? child.X : 0;
-                int crossY = def.AutoSizeHeight ? child.Y : 0;
-                if (isHoriz)
-                {
-                    rects.Add(new Rectangle(wdX + curX, wdY + curY + crossY, cw, ch));
-                    curX += cw + spacX;
-                }
-                else
-                {
-                    rects.Add(new Rectangle(wdX + curX + crossX, wdY + curY, cw, ch));
-                    curY += ch + spacY;
-                }
-            }
-            else
-            {
-                int col = child.Anchor % 3, row = child.Anchor / 3;
-                int anchorX = col switch { 0 => 0, 1 => def.Width / 2, 2 => def.Width, _ => 0 };
-                int anchorY = row switch { 0 => 0, 1 => def.Height / 2, 2 => def.Height, _ => 0 };
-                rects.Add(new Rectangle(wdX + anchorX + child.X, wdY + anchorY + child.Y, cw, ch));
-            }
-        }
-        return rects;
-    }
+        => Necroking.UI.WidgetLayoutUtils.ComputeLayoutRects(def, wdX, wdY,
+            i => hiddenIdx.Contains(i),
+            (child, i) => PreviewChildHeight(child));
 
     /// <summary>Draw just the frame layer of a widget.</summary>
     private void DrawWidgetFrame(UIEditorWidgetDef def, int drawX, int drawY, int drawW, int drawH)

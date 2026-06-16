@@ -105,6 +105,10 @@ public class UIEditorChildDef
     public int Width { get; set; }
     public int Height { get; set; }
     public int Anchor { get; set; }
+    /// <summary>Responsive sizing: "" (absolute) | "fillWidth" | "fillHeight" | "fill".
+    /// In a fill mode the child tracks the parent's size, and Width/Height become the
+    /// far-side margins (so resizing the parent auto-adjusts the child).</summary>
+    public string SizeMode { get; set; } = "";
     public bool Interactive { get; set; }
     public string DefaultText { get; set; } = "";
     public UIEditorTints? Tints { get; set; }
@@ -507,6 +511,7 @@ public partial class UIEditorWindow : EditorBase
                             Width = ch.GetIntProp("width"),
                             Height = ch.GetIntProp("height"),
                             Anchor = ch.GetIntProp("anchor"),
+                            SizeMode = ch.GetStringProp("sizeMode"),
                             Interactive = ch.GetBoolProp("interactive"),
                             DefaultText = ch.GetStringProp("defaultText"),
                             IgnoreLayout = ch.GetBoolProp("ignoreLayout"),
@@ -788,6 +793,8 @@ public partial class UIEditorWindow : EditorBase
                     writer.WriteNumber("width", ch.Width);
                     writer.WriteNumber("height", ch.Height);
                     writer.WriteNumber("anchor", ch.Anchor);
+                    if (!string.IsNullOrEmpty(ch.SizeMode))
+                        writer.WriteString("sizeMode", ch.SizeMode);
                     if (ch.Interactive)
                     {
                         writer.WriteBoolean("interactive", true);
@@ -2637,6 +2644,14 @@ public partial class UIEditorWindow : EditorBase
         DrawAnchorGrid(child, x + 120, curY);
         curY += 62;
 
+        // Responsive sizing: child tracks the parent's size. In a fill mode Width/
+        // Height act as the far-side margins, so resizing the parent moves the child.
+        string[] sizeModes = { "", "fillWidth", "fillHeight", "fill" };
+        string curSize = child.SizeMode ?? "";
+        string newSize = DrawCombo("ch_sizemode", "Size Mode", curSize, sizeModes, x, curY, propW);
+        if (newSize != child.SizeMode) { child.SizeMode = newSize; _unsavedChanges = true; }
+        curY += 22;
+
         // IgnoreLayout checkbox
         bool newIgnore = DrawCheckbox("Ignore Layout", child.IgnoreLayout, x, curY);
         if (newIgnore != child.IgnoreLayout) { child.IgnoreLayout = newIgnore; _unsavedChanges = true; }
@@ -3697,6 +3712,7 @@ public partial class UIEditorWindow : EditorBase
             Width = ch.Width,
             Height = ch.Height,
             Anchor = ch.Anchor,
+            SizeMode = ch.SizeMode,
             Interactive = ch.Interactive,
             DefaultText = ch.DefaultText,
             IgnoreLayout = ch.IgnoreLayout,
