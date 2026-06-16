@@ -45,11 +45,10 @@ public partial class HUDRenderer
     private const int SlotSpacing = 6;
     private const int SlotBorderHeight = 2;
 
-    // Grimoire elements reused for slot chrome (harmonized via the widget renderer):
-    // SpiderFrameBorder = the spider-frame icon border, SpellSlotBg = the
-    // FancyFrame2_Inner parchment backing behind each slot's icon.
-    private const string SlotFrameElem = "SpiderFrameBorder";
-    private const string SlotBgElem = "SpellSlotBg";
+    // The slot chrome is the SpellSlot widget (Background = fancy_inner parchment,
+    // Frame = spider_frame border, both harmonized) — editable in the UI editor.
+    // The HUD draws its background + frame at each slot's size around the icon.
+    private const string SpellSlotWidget = "SpellSlot";
     private const float SlotIconRatio = 0.80f; // icon size as a fraction of the box
 
     private const int DropdownItemH = 20;
@@ -319,9 +318,10 @@ public partial class HUDRenderer
         return new Rectangle(slot.X + off, slot.Y + off, icon, icon);
     }
 
-    /// <summary>Draw a grimoire-style slot: parchment backing + interior content
-    /// (drawn by the callback) + the SpiderFrame on top. Falls back to a plain
-    /// box if the widget renderer isn't available.</summary>
+    /// <summary>Draw a slot using the SpellSlot widget chrome: its background
+    /// (parchment) at the slot size, the interior content (icon, drawn by the
+    /// callback) between, then its frame on top. Falls back to a plain box if the
+    /// widget renderer isn't available.</summary>
     private void DrawFramedSlot(Rectangle slot, Action<Rectangle> drawInterior)
     {
         var inner = SlotInterior(slot);
@@ -331,11 +331,9 @@ public partial class HUDRenderer
             drawInterior(inner);
             return;
         }
-        // Crop the parchment's transparent margin/notches so its solid body
-        // fills the frame interior at both box sizes.
-        _widgets.DrawElementImage(SlotBgElem, inner, 0.16f);
+        _widgets.DrawWidgetBackground(SpellSlotWidget, slot);
         drawInterior(inner);
-        _widgets.DrawElementImage(SlotFrameElem, slot);
+        _widgets.DrawWidgetFrameLayer(SpellSlotWidget, slot);
     }
 
     private void DrawSpellDropdown(int screenW, int barY, int slotW, int centerOffset,

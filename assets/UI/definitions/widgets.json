@@ -8425,6 +8425,52 @@
           "anchor": 0
         }
       ]
+    },
+    {
+      "id": "SpellSlot",
+      "width": 60,
+      "height": 60,
+      "layout": "none",
+      "modal": false,
+      "background": "fancy_inner",
+      "backgroundTint": [
+        255,
+        255,
+        255,
+        255
+      ],
+      "bgHarmonize": {
+        "targetColor": [
+          144,
+          109,
+          47,
+          255
+        ],
+        "hueStrength": 1,
+        "satStrength": 0.322,
+        "valStrength": 0.86,
+        "useHcl": false
+      },
+      "frame": "spider_frame",
+      "frameTint": [
+        255,
+        255,
+        255,
+        255
+      ],
+      "frameHarmonize": {
+        "targetColor": [
+          108,
+          82,
+          22,
+          255
+        ],
+        "hueStrength": 1,
+        "satStrength": 0.133,
+        "valStrength": 0.122,
+        "useHcl": false
+      },
+      "children": []
     }
   ]
 }

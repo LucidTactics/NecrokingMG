@@ -248,6 +248,23 @@ public class RuntimeWidgetRenderer
         DrawWidgetDef(def, x, y, def.Width, MeasureHeight(def, inst), inst);
     }
 
+    /// <summary>Draw only a widget's background (+ stencil) layer into a rect, scaled
+    /// to that rect. For code-driven panels (e.g. the HUD spell bar) that need to
+    /// interleave their own content (icons, overlays) between the background and the
+    /// frame — pair with <see cref="DrawWidgetFrameLayer"/>.</summary>
+    public void DrawWidgetBackground(string widgetId, Rectangle rect)
+    {
+        var def = _widgetDefs.FirstOrDefault(w => w.Id == widgetId);
+        if (def != null) DrawWidgetLayers(def, rect.X, rect.Y, rect.Width, rect.Height, drawFrame: false);
+    }
+
+    /// <summary>Draw only a widget's frame layer into a rect, scaled to it.</summary>
+    public void DrawWidgetFrameLayer(string widgetId, Rectangle rect)
+    {
+        var def = _widgetDefs.FirstOrDefault(w => w.Id == widgetId);
+        if (def != null) DrawWidgetFrame(def, rect.X, rect.Y, rect.Width, rect.Height);
+    }
+
     /// <summary>Measured height of a widget instance: AutoSizeHeight vertical-
     /// layout widgets report visible content height (recursively — nested
     /// auto-size sections propagate up); everything else reports def Height.</summary>

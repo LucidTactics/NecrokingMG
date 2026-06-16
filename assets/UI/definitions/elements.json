@@ -2,8 +2,7 @@
   "elements": [
     {
       "id": "SpellSlotBg",
-      "type": "nineSlice",
-      "nineSlice": "fancy_inner",
+      "type": "image",
       "width": 60,
       "height": 60,
       "tintColor": [
@@ -23,7 +22,8 @@
         "satStrength": 0.322,
         "valStrength": 0.86,
         "useHcl": false
-      }
+      },
+      "imagePath": "assets/UI/Imported/FancyFrame2_Inner.png"
     },
     {
       "id": "Quantity",
