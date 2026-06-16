@@ -108,9 +108,7 @@ public class UIEditorChildDef
     public bool Interactive { get; set; }
     public string DefaultText { get; set; } = "";
     public UIEditorTints? Tints { get; set; }
-    public string Stretch { get; set; } = "";
     public bool IgnoreLayout { get; set; }
-    public float NineSliceScale { get; set; } = 1f;
 
     // RI21: Text override per-child
     public bool HasTextOverride { get; set; }
@@ -259,7 +257,6 @@ public partial class UIEditorWindow : EditorBase
 
     // Color Harmonizer (CP04 / UI19)
     private readonly ColorHarmonizer _harmonizer = new();
-    private bool _harmonizerOpen;
     private float _harmonizeLiveTimer;          // throttle timer for live preview regeneration
     private const float HarmonizeLiveInterval = 0.2f; // regenerate every 200ms
     private enum HarmonizerTarget { ElementTint, WidgetChildTints, WidgetBgTint, WidgetStencilTint, WidgetFrameTint }
@@ -512,9 +509,7 @@ public partial class UIEditorWindow : EditorBase
                             Anchor = ch.GetIntProp("anchor"),
                             Interactive = ch.GetBoolProp("interactive"),
                             DefaultText = ch.GetStringProp("defaultText"),
-                            Stretch = ch.GetStringProp("stretch"),
                             IgnoreLayout = ch.GetBoolProp("ignoreLayout"),
-                            NineSliceScale = ch.GetFloatProp("nineSliceScale", 1f),
                         };
                         if (ch.TryGetProperty("tints", out var tints))
                         {
@@ -809,12 +804,8 @@ public partial class UIEditorWindow : EditorBase
                     }
                     if (!string.IsNullOrEmpty(ch.DefaultText))
                         writer.WriteString("defaultText", ch.DefaultText);
-                    if (!string.IsNullOrEmpty(ch.Stretch))
-                        writer.WriteString("stretch", ch.Stretch);
                     if (ch.IgnoreLayout)
                         writer.WriteBoolean("ignoreLayout", true);
-                    if (Math.Abs(ch.NineSliceScale - 1f) > 0.001f)
-                        writer.WriteNumber("nineSliceScale", ch.NineSliceScale);
                     // RI21: text override
                     if (ch.HasTextOverride && ch.TextOverride != null)
                     {
@@ -1028,7 +1019,11 @@ public partial class UIEditorWindow : EditorBase
         var kb = _input.Kb;
         _textureBrowser.Update(this, mouse, _prevMouseLocal, kb, _prevKb);
         _prevMouseLocal = mouse;
-        _prevKb = kb;
+        // Do NOT reassign _prevKb here. UpdateInput already set it to LAST frame's
+        // keyboard; leaving it lets the Draw-time shortcuts (Ctrl+S, Ctrl+C/V, arrow
+        // child-nav) edge-detect correctly. Reassigning it to the current frame made
+        // _prevKb == _kb during Draw, so every one of those shortcuts silently never
+        // fired (the undo system worked around it with its own _undoPrevKb).
     }
 
     // ═══════════════════════════════════════
@@ -2642,21 +2637,9 @@ public partial class UIEditorWindow : EditorBase
         DrawAnchorGrid(child, x + 120, curY);
         curY += 62;
 
-        // Stretch mode
-        string[] stretches = { "", "horizontal", "vertical", "both" };
-        string curStretch = child.Stretch ?? "";
-        string newStretch = DrawCombo("ch_stretch", "Stretch", curStretch, stretches, x, curY, propW);
-        if (newStretch != child.Stretch) { child.Stretch = newStretch; _unsavedChanges = true; }
-        curY += 22;
-
         // IgnoreLayout checkbox
         bool newIgnore = DrawCheckbox("Ignore Layout", child.IgnoreLayout, x, curY);
         if (newIgnore != child.IgnoreLayout) { child.IgnoreLayout = newIgnore; _unsavedChanges = true; }
-        curY += 22;
-
-        // NineSliceScale
-        float newNsScale = DrawFloatField("ch_nsscale", "9S Scale", child.NineSliceScale, x, curY, propW, 0.05f);
-        if (Math.Abs(newNsScale - child.NineSliceScale) > 0.001f) { child.NineSliceScale = newNsScale; _unsavedChanges = true; }
         curY += 22;
 
         // Interactive toggle
@@ -2687,7 +2670,6 @@ public partial class UIEditorWindow : EditorBase
                     BytesToHdr(child.Tints.Disabled),
                 };
                 _harmonizer.Begin(tintColors);
-                _harmonizerOpen = true;
                 _harmonizerTarget = HarmonizerTarget.WidgetChildTints;
             }
             curY += 18;
@@ -2698,7 +2680,7 @@ public partial class UIEditorWindow : EditorBase
             DrawEditableTintRow("ch_tint_d", "Disabled", child.Tints.Disabled, x, propW, ref curY);
 
             // Harmonizer panel for widget child tints (UI19)
-            if (_harmonizerOpen && _harmonizer.Active && ActiveTab == UIEditorTab.Widgets && _harmonizerTarget == HarmonizerTarget.WidgetChildTints)
+            if (_harmonizer.Active && ActiveTab == UIEditorTab.Widgets && _harmonizerTarget == HarmonizerTarget.WidgetChildTints)
             {
                 if (_harmonizer.DrawPanel(this, x, ref curY, propW))
                 {
@@ -3717,9 +3699,7 @@ public partial class UIEditorWindow : EditorBase
             Anchor = ch.Anchor,
             Interactive = ch.Interactive,
             DefaultText = ch.DefaultText,
-            Stretch = ch.Stretch,
             IgnoreLayout = ch.IgnoreLayout,
-            NineSliceScale = ch.NineSliceScale,
             Tints = ch.Tints != null ? new UIEditorTints
             {
                 Normal = (byte[])ch.Tints.Normal.Clone(),
