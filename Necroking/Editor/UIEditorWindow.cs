@@ -2392,8 +2392,10 @@ public partial class UIEditorWindow : EditorBase
             curY += 18;
         }
 
-        // Hierarchical child tree (UI11)
-        int treeAreaH = Math.Min(200, 40 + CountTreeNodes(def.Children, def.Id) * 20);
+        // Hierarchical child tree (UI11). Full height (not capped) so rows don't
+        // overflow the box into the fields below — the whole property panel scrolls
+        // via _widgetDetailScroll, so a long child list is reachable by scrolling.
+        int treeAreaH = 40 + CountTreeNodes(def.Children, def.Id) * 20;
         if (treeAreaH > 40)
         {
             var treeRect = new Rectangle(x + pad, curY, propW, treeAreaH);
