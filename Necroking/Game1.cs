@@ -412,7 +412,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         {
             System.IO.Directory.CreateDirectory(GamePaths.Resolve(GamePaths.UserSettingsDir));
             _gameData.Settings.Save(GamePaths.Resolve(GamePaths.UserSettingsJson));
-            _gameData.Weather.Save(GamePaths.Resolve(GamePaths.WeatherJson));
+            _gameData.Weather.Save(GamePaths.Resolve(GamePaths.UserWeatherJson));
             SaveSpellBars();
         };
 
@@ -888,7 +888,10 @@ public class Game1 : Microsoft.Xna.Framework.Game
         for (int si = 0; si < 6; si++) _secondaryBarState.Slots[si] = new SpellBarSlot { SpellID = "" };
         try
         {
-            string sbJson = File.ReadAllText(GamePaths.Resolve(GamePaths.SpellBarJson));
+            // Per-machine spell-bar loadout: gitignored 'user settings/', seeded from
+            // the shipped default data/spellbar.json on first run.
+            string sbJson = File.ReadAllText(GamePaths.SeededUserFile(
+                GamePaths.UserSpellBarJson, GamePaths.Resolve(GamePaths.SpellBarJson)));
             using var sbDoc = System.Text.Json.JsonDocument.Parse(sbJson);
             LoadSpellBarSlots(sbDoc.RootElement, "slots", _spellBarState);
             LoadSpellBarSlots(sbDoc.RootElement, "secondary", _secondaryBarState);
@@ -2093,7 +2096,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         _itemEditor.SetGameData(_gameData);
         _settingsWindow = new SettingsWindow(_editorUi);
         System.IO.Directory.CreateDirectory(GamePaths.Resolve(GamePaths.UserSettingsDir));
-        _settingsWindow.SetGameData(_gameData, GamePaths.Resolve(GamePaths.UserSettingsJson), GamePaths.Resolve(GamePaths.WeatherJson));
+        _settingsWindow.SetGameData(_gameData, GamePaths.Resolve(GamePaths.UserSettingsJson), GamePaths.Resolve(GamePaths.UserWeatherJson));
         _settingsWindow.SetDayNightSystem(_dayNightSystem);
         LogTiming("Editors initialized");
         DebugLog.Log("startup", $"=== LoadContent complete ===");
@@ -3343,7 +3346,8 @@ public class Game1 : Microsoft.Xna.Framework.Game
             };
             var options = new System.Text.Json.JsonSerializerOptions { WriteIndented = true };
             string json = System.Text.Json.JsonSerializer.Serialize(doc, options);
-            Core.AtomicFile.WriteAllText(GamePaths.Resolve(GamePaths.SpellBarJson), json);
+            System.IO.Directory.CreateDirectory(GamePaths.Resolve(GamePaths.UserSettingsDir));
+            Core.AtomicFile.WriteAllText(GamePaths.Resolve(GamePaths.UserSpellBarJson), json);
         }
         catch (Exception ex) { DebugLog.Log("error", $"SaveSpellBars failed: {ex.Message}"); }
     }

@@ -44,17 +44,19 @@ The assistant must actively manage git for the user, who may not be comfortable 
    someone pushed from the other machine), stop and tell the user rather than force-resolving.
 
 ### Per-machine user settings (do NOT commit them)
-As of 2026-06-16, ESC-menu **user settings live in `user settings/settings.json`** at the project
-root, which is **`.gitignore`d** — settings are per-machine and never shared via git. The game
-**seeds** that file from the shipped default `data/settings.json` on first run, then writes only to
-the user copy, so **`data/settings.json` no longer churns**. Resolved via `GamePaths.UserSettingsJson`.
+As of 2026-06-16, the **per-machine user files live in the `user settings/` folder** at the project
+root, which is **`.gitignore`d** — never shared via git. These are: `settings.json` (ESC-menu
+settings), `weather.json` (weather presets), and `spellbar.json` (spell-bar loadout). The game
+**seeds** each from its shipped `data/` default on first run (`GamePaths.SeededUserFile`), then writes
+only to the user copy — so **`data/settings.json` / `data/weather.json` / `data/spellbar.json` no
+longer churn**.
 
-**One-time migration when an older clone syncs (the other machine):** after pulling, if
-`git status` shows a modified **`data/settings.json`** (that's the machine's old local settings),
-run the game once — it copies those values into the new `user settings/` folder automatically — then
-`git checkout -- data/settings.json` to drop the now-redundant tracked change. The machine's settings
-are now local. (If `data/settings.json` is already clean, there's nothing to do; the seed handles it.)
-Never re-add `user settings/` to git or write settings back into `data/settings.json`.
+**One-time migration when an older clone syncs (the other machine):** after pulling, if `git status`
+shows any of those three **`data/*.json`** files modified (the machine's old local values), run the
+game once — it copies them into `user settings/` automatically — then
+`git checkout -- data/settings.json data/weather.json data/spellbar.json` to drop the now-redundant
+tracked changes. The machine's settings are now local. (If they're already clean, nothing to do.)
+Never re-add `user settings/` to git or write these back into `data/`.
 
 ## Build
 ```bash

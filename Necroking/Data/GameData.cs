@@ -30,21 +30,16 @@ public class GameData
         ok &= Flipbooks.Load(Path.Combine(dataDir, "flipbooks.json"));
         ok &= Buffs.Load(Path.Combine(dataDir, "buffs.json"));
         ok &= Spells.Load(Path.Combine(dataDir, "spells.json"));
-        ok &= Weather.Load(Path.Combine(dataDir, "weather.json"));
+        ok &= Weather.Load(Core.GamePaths.SeededUserFile(
+            Core.GamePaths.UserWeatherJson, Path.Combine(dataDir, "weather.json")));
         ok &= UnitGroups.Load(Path.Combine(dataDir, "unit_groups.json"));
 
-        // Settings: load the per-machine user copy ('user settings/', gitignored),
-        // seeding it from the shipped default (data/settings.json) on first run so a
-        // fresh clone still gets sensible defaults. Runtime writes go to the user copy
-        // only — data/settings.json is never written, so it stops churning in git.
-        string userSettings = Core.GamePaths.Resolve(Core.GamePaths.UserSettingsJson);
-        string defaultSettings = Path.Combine(dataDir, "settings.json");
-        if (!File.Exists(userSettings) && File.Exists(defaultSettings))
-        {
-            Directory.CreateDirectory(Core.GamePaths.Resolve(Core.GamePaths.UserSettingsDir));
-            File.Copy(defaultSettings, userSettings);
-        }
-        ok &= Settings.Load(File.Exists(userSettings) ? userSettings : defaultSettings);
+        // Settings: per-machine user copy (gitignored 'user settings/'), seeded from
+        // the shipped data/settings.json default on first run; runtime writes go to the
+        // user copy only, so data/settings.json stops churning in git. (Weather above
+        // and the spell bar do the same — all per-machine, never shared.)
+        ok &= Settings.Load(Core.GamePaths.SeededUserFile(
+            Core.GamePaths.UserSettingsJson, Path.Combine(dataDir, "settings.json")));
 
         Items.Load(Path.Combine(dataDir, "items.json")); // optional, don't fail if missing
         Potions.Load(Path.Combine(dataDir, "potions.json")); // optional, don't fail if missing
@@ -98,13 +93,14 @@ public class GameData
         ok &= Flipbooks.Save(Path.Combine(dataDir, "flipbooks.json"));
         ok &= Buffs.Save(Path.Combine(dataDir, "buffs.json"));
         ok &= Spells.Save(Path.Combine(dataDir, "spells.json"));
-        ok &= Weather.Save(Path.Combine(dataDir, "weather.json"));
         ok &= UnitGroups.Save(Path.Combine(dataDir, "unit_groups.json"));
 
-        // Settings: always save to the per-machine 'user settings/' (gitignored)
+        // Per-machine user files: settings + weather presets save to the gitignored
+        // 'user settings/' (never written back to data/).
         string userDir = Core.GamePaths.Resolve(Core.GamePaths.UserSettingsDir);
         Directory.CreateDirectory(userDir);
         ok &= Settings.Save(Path.Combine(userDir, "settings.json"));
+        ok &= Weather.Save(Path.Combine(userDir, "weather.json"));
 
         ok &= Items.Save(Path.Combine(dataDir, "items.json"));
         ok &= Potions.Save(Path.Combine(dataDir, "potions.json"));

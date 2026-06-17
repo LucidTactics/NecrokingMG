@@ -38,6 +38,22 @@ public static class GamePaths
     /// <summary>Resolve a project-relative path to an absolute path.</summary>
     public static string Resolve(string relativePath) => Path.Combine(Root, relativePath);
 
+    /// <summary>Resolve a per-machine user file under 'user settings/' (gitignored),
+    /// seeding it from a shipped default on first run so a fresh clone gets sensible
+    /// values. <paramref name="userRelPath"/> is project-relative (e.g.
+    /// UserWeatherJson); <paramref name="defaultAbsPath"/> is the absolute default
+    /// source. Returns the absolute user-copy path to load from / save to.</summary>
+    public static string SeededUserFile(string userRelPath, string defaultAbsPath)
+    {
+        string user = Resolve(userRelPath);
+        if (!File.Exists(user))
+        {
+            Directory.CreateDirectory(Resolve(UserSettingsDir));
+            if (File.Exists(defaultAbsPath)) File.Copy(defaultAbsPath, user);
+        }
+        return user;
+    }
+
     /// <summary>Convert an absolute path to a project-relative path (forward slashes).
     /// Returns the original path unchanged if it's not under Root.</summary>
     public static string MakeRelative(string absolutePath)
@@ -61,6 +77,8 @@ public static class GamePaths
     // run; all runtime writes go here, so data/settings.json stops churning.
     public const string UserSettingsDir = "user settings";
     public const string UserSettingsJson = "user settings/settings.json";
+    public const string UserWeatherJson = "user settings/weather.json";
+    public const string UserSpellBarJson = "user settings/spellbar.json";
 
     // --- Data files ---
     public const string DataDir = "data";
