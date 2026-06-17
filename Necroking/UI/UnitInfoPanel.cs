@@ -12,7 +12,8 @@ namespace Necroking.UI;
 /// and attack rows are bound sequentially and collapse when absent (min one
 /// row per section), with zebra striping re-applied by visible index.
 /// 'U' = player necromancer (current form), 'O' = inspect under cursor.
-/// The static UnitTooltipWindow widget remains as the import reference.
+/// (The original flat UnitTooltipWindow import was archived to defunct/ui once
+/// UnitSheetDyn superseded it — see todos/ui_best_practices_audit.md.)
 /// </summary>
 public class UnitInfoPanel : IModalLayer
 {

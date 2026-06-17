@@ -33,7 +33,6 @@ public static class ScenarioRegistry
         Register("UIGradientTest", () => new Scenarios.UIGradientTestScenario());
         Register("UIRectShadowTest", () => new Scenarios.UIRectShadowTestScenario());
         Register("UICircleTest", () => new Scenarios.UICircleTestScenario());
-        Register("UIBlankWindow", () => new Scenarios.UIBlankWindowScenario());
         Register("UIUnitInfo", () => new Scenarios.UIUnitInfoScenario());
         Register("UIResourceTipDyn", () => new Scenarios.UIResourceTipDynScenario());
         Register("UIGrimoire", () => new Scenarios.UIGrimoireScenario());

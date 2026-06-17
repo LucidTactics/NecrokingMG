@@ -1,15 +1,6 @@
 {
   "nineSlices": [
     {
-      "id": "frame_fancy",
-      "texture": "assets/UI/Frames/FancyFrame2.png",
-      "borderLeft": 111,
-      "borderRight": 113,
-      "borderTop": 109,
-      "borderBottom": 106,
-      "tileEdges": false
-    },
-    {
       "id": "Background",
       "texture": "assets/UI/Frames/FancyFrame2_Inner.png",
       "borderLeft": 86,
@@ -25,15 +16,6 @@
       "borderRight": 21,
       "borderTop": 21,
       "borderBottom": 21,
-      "tileEdges": false
-    },
-    {
-      "id": "Thinclothborder",
-      "texture": "assets/UI/Frames/ClothUpgradeThinFrame.png",
-      "borderLeft": 40,
-      "borderRight": 40,
-      "borderTop": 40,
-      "borderBottom": 40,
       "tileEdges": false
     },
     {

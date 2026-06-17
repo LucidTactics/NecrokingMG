@@ -62,5 +62,7 @@ __pycache__/
 # Runtime debug logs (DebugLog writes here)
 log/
 
-# Defunct asset archive (local backup of removed old objects; not tracked)
+# Defunct archives (local reference of removed objects; NOT tracked — git history
+# is the durable archive. defunct/ holds removed UI defs, defunct assets/ holds art).
 defunct assets/
+defunct/
