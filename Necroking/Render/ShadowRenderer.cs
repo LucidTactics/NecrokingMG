@@ -208,10 +208,21 @@ public class ShadowRenderer
         device.SamplerStates[0] = SamplerState.LinearClamp;
         device.RasterizerState = RasterizerState.CullNone;
 
+        // View-cull bounds (mirror DrawUnitsAndObjects) so off-screen units don't
+        // run the full shadow-quad computation. 20-unit margin covers sprite/sun
+        // overhang at the edges.
+        const float viewMargin = 20f;
+        float viewLeft = camera.Position.X - renderer.ScreenW / (2f * camera.Zoom) - viewMargin;
+        float viewRight = camera.Position.X + renderer.ScreenW / (2f * camera.Zoom) + viewMargin;
+        float viewTop = camera.Position.Y - renderer.ScreenH / (camera.Zoom * camera.YRatio) - viewMargin;
+        float viewBottom = camera.Position.Y + renderer.ScreenH / (camera.Zoom * camera.YRatio) + viewMargin;
+
         // Unit shadows
         for (int i = 0; i < sim.Units.Count; i++)
         {
             if (!sim.Units[i].Alive) continue;
+            var rp = sim.Units[i].RenderPos;
+            if (rp.X < viewLeft || rp.X > viewRight || rp.Y < viewTop || rp.Y > viewBottom) continue;
             if (IsUnitHiddenByFog(sim, i, fogOfWar)) continue;
             uint uid = sim.Units[i].Id;
             if (!unitAnims.TryGetValue(uid, out var animData)) continue;

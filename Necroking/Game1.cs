@@ -4875,6 +4875,12 @@ public class Game1 : Microsoft.Xna.Framework.Game
             bool editorOpen = _menuState != MenuState.None && _menuState != MenuState.MainMenu;
             if (fogActive && !editorOpen)
                 _fogOfWar.Update(_spriteBatch, _sim.Units, _gameData.Settings.FogOfWar, _rawDt);
+            else
+                // Update isn't running this frame, but IsVisible (which culls enemy
+                // sprites/shadows/projectiles) keys off the fog system's cached mode.
+                // Keep it in sync with the live setting so turning fog Off immediately
+                // reveals all enemies instead of leaving them culled against stale fog.
+                _fogOfWar.SyncMode(_gameData.Settings.FogOfWar);
         }
 
         // Begin bloom scene capture
@@ -5284,6 +5290,19 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // Draw color picker popup overlay (must be after all editor drawing, on top)
         if (_menuState == MenuState.UnitEditor || _menuState == MenuState.SpellEditor)
             _editorUi.DrawColorPickerPopup();
+
+        // Immediate-mode editor UI reads click edges during Draw, but Update can run
+        // several times per Draw under fixed-timestep catch-up (slow frames), which
+        // would collapse the one-frame press edge before Draw sees it and drop most
+        // clicks. Snapshot the mouse once per Draw so edges are measured against the
+        // previous Draw, not the previous Update. _editorUi backs Settings + the
+        // unit/spell/map/item editors; _uiEditor is its own EditorBase instance.
+        if (_menuState == MenuState.Settings || _menuState == MenuState.UnitEditor
+            || _menuState == MenuState.SpellEditor || _menuState == MenuState.MapEditor
+            || _menuState == MenuState.ItemEditor)
+            _editorUi.EndDrawFrame();
+        else if (_menuState == MenuState.UIEditor)
+            _uiEditor.EndDrawFrame();
 
         if (_font != null && showUI && _showPerfReadout)
         {
@@ -6657,12 +6676,22 @@ public class Game1 : Microsoft.Xna.Framework.Game
         _depthItems.Clear();
         var items = _depthItems;
 
-        // Add units. Use RenderPos.Y so a lunging unit re-sorts against its
-        // neighbors naturally — a forward-lunging sprite that crosses another
-        // unit's Y should draw in front of it during the lunge.
+        // Add units (view-culled, same bounds as env objects below). Use RenderPos
+        // so a lunging unit re-sorts against its neighbors naturally — a forward-
+        // lunging sprite that crosses another unit's Y draws in front during the
+        // lunge. The 20-unit margin covers sprite overhang (sprites are a few world
+        // units tall and shorter than the trees culled with the same bounds), so a
+        // unit just off-screen whose head still pokes in isn't clipped early.
+        // Without this, off-screen units each ran a full DrawSingleUnit every frame —
+        // the dominant Draw cost on a populated map, especially with fog off.
         for (int i = 0; i < _sim.Units.Count; i++)
-            if (_sim.Units[i].Alive)
-                items.Add(new DepthItem { Y = _sim.Units[i].RenderPos.Y, Type = DepthItemType.Unit, Index = i });
+        {
+            if (!_sim.Units[i].Alive) continue;
+            var rp = _sim.Units[i].RenderPos;
+            if (rp.X < viewLeft || rp.X > viewRight || rp.Y < viewTop || rp.Y > viewBottom)
+                continue;
+            items.Add(new DepthItem { Y = rp.Y, Type = DepthItemType.Unit, Index = i });
+        }
 
         // Add environment objects (with view culling, skip collected foragables, skip ground-layer objects)
         for (int i = 0; i < _envSystem.ObjectCount; i++)
