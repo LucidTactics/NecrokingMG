@@ -406,13 +406,12 @@ public class Game1 : Microsoft.Xna.Framework.Game
         Content.RootDirectory = "resources";
         IsMouseVisible = true;
 
-        // Save settings (to local bin/settings/), weather presets, and spell bar
-        // slot assignments when the game exits. All writes are atomic.
+        // Save settings (to the per-machine 'user settings/', gitignored), weather
+        // presets, and spell bar slot assignments when the game exits. Atomic writes.
         Exiting += (_, _) =>
         {
-            string localDir = GamePaths.Resolve(GamePaths.LocalSettingsDir);
-            System.IO.Directory.CreateDirectory(localDir);
-            _gameData.Settings.Save(GamePaths.Resolve(GamePaths.SettingsJson));
+            System.IO.Directory.CreateDirectory(GamePaths.Resolve(GamePaths.UserSettingsDir));
+            _gameData.Settings.Save(GamePaths.Resolve(GamePaths.UserSettingsJson));
             _gameData.Weather.Save(GamePaths.Resolve(GamePaths.WeatherJson));
             SaveSpellBars();
         };
@@ -2093,8 +2092,8 @@ public class Game1 : Microsoft.Xna.Framework.Game
         _itemEditor = new ItemEditorWindow(_editorUi);
         _itemEditor.SetGameData(_gameData);
         _settingsWindow = new SettingsWindow(_editorUi);
-        System.IO.Directory.CreateDirectory(GamePaths.Resolve(GamePaths.LocalSettingsDir));
-        _settingsWindow.SetGameData(_gameData, GamePaths.Resolve(GamePaths.SettingsJson), GamePaths.Resolve(GamePaths.WeatherJson));
+        System.IO.Directory.CreateDirectory(GamePaths.Resolve(GamePaths.UserSettingsDir));
+        _settingsWindow.SetGameData(_gameData, GamePaths.Resolve(GamePaths.UserSettingsJson), GamePaths.Resolve(GamePaths.WeatherJson));
         _settingsWindow.SetDayNightSystem(_dayNightSystem);
         LogTiming("Editors initialized");
         DebugLog.Log("startup", $"=== LoadContent complete ===");

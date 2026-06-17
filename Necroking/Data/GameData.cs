@@ -33,8 +33,18 @@ public class GameData
         ok &= Weather.Load(Path.Combine(dataDir, "weather.json"));
         ok &= UnitGroups.Load(Path.Combine(dataDir, "unit_groups.json"));
 
-        // Settings: load from data/settings.json
-        ok &= Settings.Load(Path.Combine(dataDir, "settings.json"));
+        // Settings: load the per-machine user copy ('user settings/', gitignored),
+        // seeding it from the shipped default (data/settings.json) on first run so a
+        // fresh clone still gets sensible defaults. Runtime writes go to the user copy
+        // only — data/settings.json is never written, so it stops churning in git.
+        string userSettings = Core.GamePaths.Resolve(Core.GamePaths.UserSettingsJson);
+        string defaultSettings = Path.Combine(dataDir, "settings.json");
+        if (!File.Exists(userSettings) && File.Exists(defaultSettings))
+        {
+            Directory.CreateDirectory(Core.GamePaths.Resolve(Core.GamePaths.UserSettingsDir));
+            File.Copy(defaultSettings, userSettings);
+        }
+        ok &= Settings.Load(File.Exists(userSettings) ? userSettings : defaultSettings);
 
         Items.Load(Path.Combine(dataDir, "items.json")); // optional, don't fail if missing
         Potions.Load(Path.Combine(dataDir, "potions.json")); // optional, don't fail if missing
@@ -91,10 +101,10 @@ public class GameData
         ok &= Weather.Save(Path.Combine(dataDir, "weather.json"));
         ok &= UnitGroups.Save(Path.Combine(dataDir, "unit_groups.json"));
 
-        // Settings: always save to local bin/settings/
-        string localDir = Core.GamePaths.Resolve(Core.GamePaths.LocalSettingsDir);
-        Directory.CreateDirectory(localDir);
-        ok &= Settings.Save(Path.Combine(localDir, "settings.json"));
+        // Settings: always save to the per-machine 'user settings/' (gitignored)
+        string userDir = Core.GamePaths.Resolve(Core.GamePaths.UserSettingsDir);
+        Directory.CreateDirectory(userDir);
+        ok &= Settings.Save(Path.Combine(userDir, "settings.json"));
 
         ok &= Items.Save(Path.Combine(dataDir, "items.json"));
         ok &= Potions.Save(Path.Combine(dataDir, "potions.json"));

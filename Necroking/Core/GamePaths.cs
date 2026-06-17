@@ -55,13 +55,16 @@ public static class GamePaths
         return absolutePath;
     }
 
-    // --- Local user settings (saved per-build, not in source data) ---
-    public const string LocalSettingsDir = "bin/settings";
-    public const string LocalSettingsJson = "bin/settings/settings.json";
+    // --- Per-machine user settings ---
+    // Live in 'user settings/' at the project root, which is .gitignored and NEVER
+    // shared via git. Seeded from the shipped default (data/settings.json) on first
+    // run; all runtime writes go here, so data/settings.json stops churning.
+    public const string UserSettingsDir = "user settings";
+    public const string UserSettingsJson = "user settings/settings.json";
 
     // --- Data files ---
     public const string DataDir = "data";
-    public const string SettingsJson = "data/settings.json";
+    public const string SettingsJson = "data/settings.json"; // shipped default / seed only — runtime never writes it
     public const string WeatherJson = "data/weather.json";
     public const string UnitsJson = "data/units.json";
     public const string WeaponsJson = "data/weapons.json";

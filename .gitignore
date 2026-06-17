@@ -52,6 +52,11 @@ assets/
 move_stderr.txt
 retarget_stderr.txt
 
+# Per-machine user settings (ESC-menu settings.json etc.) — never shared via git.
+# Seeded from the shipped default data/settings.json on first run. See CLAUDE.md
+# "Per-machine user settings" for the one-time migration when syncing an old clone.
+user settings/
+
 # zstd-cached pre-decoded atlas pixels (regenerated on edit)
 cache/
 

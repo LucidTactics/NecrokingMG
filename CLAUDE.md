@@ -43,6 +43,19 @@ The assistant must actively manage git for the user, who may not be comfortable 
 5. **Pull before starting fresh work.** If a pull won't fast-forward (histories diverged because
    someone pushed from the other machine), stop and tell the user rather than force-resolving.
 
+### Per-machine user settings (do NOT commit them)
+As of 2026-06-16, ESC-menu **user settings live in `user settings/settings.json`** at the project
+root, which is **`.gitignore`d** — settings are per-machine and never shared via git. The game
+**seeds** that file from the shipped default `data/settings.json` on first run, then writes only to
+the user copy, so **`data/settings.json` no longer churns**. Resolved via `GamePaths.UserSettingsJson`.
+
+**One-time migration when an older clone syncs (the other machine):** after pulling, if
+`git status` shows a modified **`data/settings.json`** (that's the machine's old local settings),
+run the game once — it copies those values into the new `user settings/` folder automatically — then
+`git checkout -- data/settings.json` to drop the now-redundant tracked change. The machine's settings
+are now local. (If `data/settings.json` is already clean, there's nothing to do; the seed handles it.)
+Never re-add `user settings/` to git or write settings back into `data/settings.json`.
+
 ## Build
 ```bash
 dotnet build Necroking/Necroking.csproj
