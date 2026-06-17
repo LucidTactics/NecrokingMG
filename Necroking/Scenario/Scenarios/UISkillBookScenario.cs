@@ -118,6 +118,31 @@ public class UISkillBookScenario : UIScenarioBase
             case 5:
                 if (_phaseT > 0.3f)
                 {
+                    DebugLog.Log(ScenarioLog, "Phase 5: tally 2 monster kills, hover monster_summoner -> met (2/1)");
+                    SkillBookOverlay!.SetActiveTab(1);
+                    SkillBookOverlay.TallyEventForTest("monster_kill", 2);
+                    SkillBookOverlay.SetHoverForTest("monster_summoner");
+                    DeferredScreenshot = "ui_skillbook_tooltip";
+                    _waitingForScreenshot = true;
+                    _phase = 6;
+                }
+                break;
+
+            case 6:
+                if (_phaseT > 0.3f)
+                {
+                    DebugLog.Log(ScenarioLog, "Phase 6: hover improved_monstrology -> skillpoints ticker cost");
+                    SkillBookOverlay!.SetHoverForTest("improved_monstrology");
+                    DeferredScreenshot = "ui_skillbook_tooltip_locked";
+                    _waitingForScreenshot = true;
+                    _phase = 7;
+                }
+                break;
+
+            case 7:
+                if (_phaseT > 0.3f)
+                {
+                    SkillBookOverlay!.SetHoverForTest(null);
                     DebugLog.Log(ScenarioLog, "All phases complete");
                     _complete = true;
                 }

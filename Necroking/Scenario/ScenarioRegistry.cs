@@ -119,6 +119,7 @@ public static class ScenarioRegistry
         Register("editor_undo_lag", () => new Scenarios.EditorUndoLagScenario());
         Register("harmonize_object", () => new Scenarios.HarmonizeObjectScenario());
         Register("object_flip", () => new Scenarios.ObjectFlipScenario());
+        Register("spell_kill_tally", () => new Scenarios.SpellKillTallyScenario());
     }
 
     public static void Register(string name, Func<ScenarioBase> creator)

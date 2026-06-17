@@ -189,7 +189,7 @@ public class SpellEffectSystem
                 // penetrates the target's MR.
                 if (SpellPenetration.Affects(gameData, units, casterIdx, enemy, spell))
                 {
-                    sim.DealDamage(enemy, spell.Damage);
+                    sim.DealDamage(enemy, spell.Damage, casterIdx);
                     damageNumbers.Add(new DamageNumber
                     {
                         WorldPos = targetPos, Damage = spell.Damage,
@@ -202,7 +202,8 @@ public class SpellEffectSystem
         {
             sim.Lightning.SpawnStrike(target, spell.TelegraphDuration,
                 spell.StrikeDuration, spell.AoeRadius, spell.Damage,
-                style, spell.Id, sVis, sGrp, sTF, spell.TelegraphVisible);
+                style, spell.Id, sVis, sGrp, sTF, spell.TelegraphVisible,
+                units[casterIdx].Id);
         }
     }
 

@@ -529,19 +529,23 @@ public class Simulation
 
             if (hit.UnitIdx >= 0 && hit.UnitIdx < _units.Count && _units[hit.UnitIdx].Alive)
             {
+                // Resolve the casting unit so the hit is attributed to them
+                // (LastAttackerID) — drives flee/aggro reactions and the skill-book
+                // kill tally (monster_kill / human_kill), exactly like a melee blow.
+                int casterIdx = UnitUtil.ResolveUnitIndex(_units, hit.OwnerID);
+
                 // Magic-resistance gate: an MR-checked spell projectile only damages
                 // a target whose MR its caster penetrates.
                 bool affects = true;
                 if (spellDef != null && spellDef.ChecksMagicResist)
                 {
-                    int casterIdx = UnitUtil.ResolveUnitIndex(_units, hit.OwnerID);
                     affects = GameSystems.SpellPenetration.Penetrates(_units, hit.UnitIdx,
                         GameSystems.SpellPenetration.Compute(_gameData, _units, casterIdx, spellDef));
                 }
                 if (affects)
                     DamageSystem.Apply(_units, hit.UnitIdx, hit.Damage,
                         GameSystems.DamageType.Physical, GameSystems.DamageFlags.ArmorNegating,
-                        _damageEvents);
+                        _damageEvents, casterIdx);
             }
         }
         PhaseEnd("projectiles");
@@ -554,7 +558,7 @@ public class Simulation
             if (ld.UnitIdx >= 0 && ld.UnitIdx < _units.Count)
                 DamageSystem.Apply(_units, ld.UnitIdx, ld.Damage,
                     GameSystems.DamageType.Physical, GameSystems.DamageFlags.ArmorNegating,
-                    _damageEvents);
+                    _damageEvents, UnitUtil.ResolveUnitIndex(_units, ld.OwnerID));
         PhaseEnd("lightning");
 
         // Poison clouds
@@ -1068,10 +1072,10 @@ public class Simulation
                                 _lightning.SpawnZap(casterPos, targetPos, spell.ZapDuration, style,
                                     casterHeight, targetH * 0.5f);
 
-                                // Apply direct damage to target
+                                // Apply direct damage to target, attributed to the caster.
                                 DamageSystem.Apply(_units, enemy, spell.Damage,
                                     GameSystems.DamageType.Physical, GameSystems.DamageFlags.ArmorNegating,
-                                    _damageEvents);
+                                    _damageEvents, i);
                             }
                             else
                             {
@@ -1079,7 +1083,7 @@ public class Simulation
                                 _lightning.SpawnStrike(_units[enemy].Position,
                                     spell.TelegraphDuration, spell.StrikeDuration,
                                     spell.AoeRadius, spell.Damage, style, spell.Id, visual, grp, tFilter,
-                                    spell.TelegraphVisible);
+                                    spell.TelegraphVisible, _units[i].Id);
                             }
 
                             _units[i].Mana -= effectiveCost;
@@ -3158,10 +3162,10 @@ public class Simulation
     /// go through DamageSystem.Apply directly so the caller controls the flags; this
     /// shortcut hard-codes ArmorNegating and should not be used for melee / ranged weapons.
     /// </summary>
-    public void DealDamage(int unitIdx, int damage) =>
+    public void DealDamage(int unitIdx, int damage, int attackerIdx = -1) =>
         DamageSystem.Apply(_units, unitIdx, damage,
             GameSystems.DamageType.Physical, GameSystems.DamageFlags.ArmorNegating,
-            _damageEvents);
+            _damageEvents, attackerIdx);
 
     // --- Helpers ---
     private void MoveTowardUnit(int i, int targetIdx, float speed)

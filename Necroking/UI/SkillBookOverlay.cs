@@ -52,6 +52,14 @@ public class SkillBookOverlay : IModalLayer
     private string? _toast;
     private double _toastUntil;
 
+    // Hover tooltip: the skill currently under the cursor (null = none) and the
+    // mouse position to anchor the panel to. Set in Update, drawn in Draw.
+    private string? _hoverId;
+    private Vector2 _hoverMouse;
+    // When set (test/host only), Update leaves the hover state alone so a forced
+    // tooltip survives across frames for screenshots.
+    private bool _hoverLock;
+
     // --- Layout editor: drag tiles to reposition, connectors follow, save to JSON ---
     /// <summary>Gates the on-screen "Edit Layout" toggle. Dev/authoring tool — set
     /// false (or behind a dev setting) before shipping to players.</summary>
@@ -109,6 +117,23 @@ public class SkillBookOverlay : IModalLayer
     /// <summary>Test/host hook: toggle the layout-edit mode programmatically.</summary>
     public void SetLayoutEditMode(bool on) { _editLayout = on; _dragId = null; }
 
+    /// <summary>Test/host hook: force the hover tooltip onto a skill by id, anchored at
+    /// its tile centre (falls back to screen-ish coords if the tile isn't laid out yet).
+    /// Pass null to clear. Only takes effect for the frame(s) before Update reruns.</summary>
+    public void SetHoverForTest(string? id)
+    {
+        _hoverId = id;
+        _hoverLock = id != null;
+        if (id == null) return;
+        foreach (var (tid, rect) in _tileRects)
+            if (tid == id) { _hoverMouse = new Vector2(rect.Center.X, rect.Center.Y); return; }
+        _hoverMouse = new Vector2(_x + _w / 2f, _y + _h / 2f);
+    }
+
+    /// <summary>Test/host hook: bump a milestone-event tally (e.g. "monster_kill") so the
+    /// tooltip's have/need progress can be exercised without staging a real kill.</summary>
+    public void TallyEventForTest(string eventKey, int n = 1) => _state?.Events.Tally(eventKey, n);
+
     private void Layout(int sw, int sh)
     {
         var def = _renderer.GetWidgetDef(WindowId);
@@ -128,6 +153,7 @@ public class SkillBookOverlay : IModalLayer
         if (_toast != null && timeSec >= _toastUntil) _toast = null;
         Layout(sw, sh);
         int mx = (int)input.MousePos.X, my = (int)input.MousePos.Y;
+        if (!_hoverLock) _hoverId = null;
 
         // A drag in progress continues anywhere on screen until the button releases.
         if (_dragId != null)
@@ -140,6 +166,14 @@ public class SkillBookOverlay : IModalLayer
 
         if (!ContainsMouse(mx, my)) return;
         input.MouseOverUI = true;
+
+        // Hover tooltip: track the tile under the cursor (skip while editing layout,
+        // where the cursor means "drag", not "inspect"). _tileRects is from last
+        // frame's Draw, which is fine for hover.
+        if (!_editLayout && !_hoverLock)
+            foreach (var (id, rect) in _tileRects)
+                if (rect.Contains(mx, my)) { _hoverId = id; _hoverMouse = new Vector2(mx, my); break; }
+
         if (!input.LeftPressed) return;
 
         // Layout-editor toolbar (drawn over the page bottom).
@@ -240,6 +274,7 @@ public class SkillBookOverlay : IModalLayer
         if (_editLayout) DrawEditOverlay();
         if (EnableLayoutEditor) DrawLayoutToolbar();
         if (_toast != null) DrawToast();
+        if (_hoverId != null) DrawHoverTooltip(sw, sh);
     }
 
     /// <summary>Edit-mode affordance: a draggable outline on each tile (brighter on the
@@ -491,6 +526,104 @@ public class SkillBookOverlay : IModalLayer
     }
 
     private void Toast(string msg, double timeSec) { _toast = msg; _toastUntil = timeSec + 2.2; }
+
+    /// <summary>Skill name + cost lines, anchored near the cursor. The cost reads as a
+    /// word ("5 Bone Dust") rather than a bare number; resources without a real
+    /// inventory item (event milestones, skill points, unknown ids) fall back to a
+    /// ticker-style code so they're still identifiable. Affordable costs are green,
+    /// unaffordable red.</summary>
+    private void DrawHoverTooltip(int sw, int sh)
+    {
+        var def = _state?.FindSkill(_hoverId!);
+        if (def == null) return;
+
+        const int titleSize = 18, lineSize = 15, padX = 12, padY = 10, gap = 6, lineGap = 3;
+        var lines = CostLines(def);
+
+        var titleSz = _renderer.MeasureText(def.Name, titleSize, "Roboto");
+        int innerW = (int)titleSz.X;
+        var lineSizes = new List<Vector2>(lines.Count);
+        foreach (var (text, _) in lines)
+        {
+            var s = _renderer.MeasureText(text, lineSize, "Roboto");
+            lineSizes.Add(s);
+            if ((int)s.X > innerW) innerW = (int)s.X;
+        }
+
+        int w = innerW + padX * 2;
+        int h = padY * 2 + (int)titleSz.Y + gap;
+        foreach (var s in lineSizes) h += (int)s.Y + lineGap;
+
+        // Anchor below-right of the cursor; flip / clamp to keep it on-screen.
+        int tx = (int)_hoverMouse.X + 18, ty = (int)_hoverMouse.Y + 18;
+        if (tx + w > sw) tx = (int)_hoverMouse.X - 18 - w;
+        if (ty + h > sh) ty = sh - h - 4;
+        if (tx < 4) tx = 4;
+        if (ty < 4) ty = 4;
+
+        var bg = new Rectangle(tx, ty, w, h);
+        _batch.Draw(_pixel, bg, new Color(26, 13, 8, 240));
+        DrawOutline(bg, new Color(120, 96, 56));
+
+        int cy = ty + padY;
+        _renderer.DrawText(def.Name, tx + padX, cy, titleSize, new Color(240, 226, 186), "Roboto");
+        cy += (int)titleSz.Y + gap;
+        for (int i = 0; i < lines.Count; i++)
+        {
+            _renderer.DrawText(lines[i].text, tx + padX, cy, lineSize, lines[i].col, "Roboto");
+            cy += (int)lineSizes[i].Y + lineGap;
+        }
+    }
+
+    /// <summary>One coloured line per cost (or a single "Learned" / "Free" line).</summary>
+    private List<(string text, Color col)> CostLines(SkillDef def)
+    {
+        var lines = new List<(string, Color)>();
+        if (_state?.IsLearned(def.Id) ?? false) { lines.Add(("Learned", new Color(150, 196, 150))); return lines; }
+        if (def.Costs.Count == 0) { lines.Add(("Free", CostGood)); return lines; }
+        foreach (var c in def.Costs)
+        {
+            int have = ResourceHave(c);
+            bool met = have >= c.Amount;
+            // "{resource} {have}/{need}" — shows current tally against the requirement,
+            // so milestone events (MONSTER KILL 3/1) and pools (MONSTROLOGY points 0/5)
+            // read as progress, not just a target number.
+            lines.Add(($"{CostResourceName(c)} {have}/{c.Amount}", met ? CostGood : CostBad));
+        }
+        return lines;
+    }
+
+    /// <summary>How much of a cost's resource the player currently has: item count
+    /// from the inventory, event tally from the milestone tracker, or skill-point pool.</summary>
+    private int ResourceHave(SkillCost c)
+    {
+        if (c.Type == "item")        return _inventory?.GetItemCount(c.Id) ?? 0;
+        if (c.Type == "event")       return _state?.Events.Get(c.Id) ?? 0;
+        if (c.Type == "skillpoints") return _state?.GetSkillPoints(c.Id) ?? 0;
+        return 0;
+    }
+
+    /// <summary>Human-readable name for a cost's resource. Item costs resolve to the
+    /// item's display name; anything without a real inventory item (event milestones,
+    /// skill-point pools, unknown ids) falls back to a ticker-style upper-case code.</summary>
+    private string CostResourceName(SkillCost c)
+    {
+        if (c.Type == "item")
+        {
+            var it = _gameData?.Items?.Get(c.Id);
+            if (it != null && Has(it.DisplayName)) return it.DisplayName;
+        }
+        else if (c.Type == "skillpoints")
+        {
+            return $"{Ticker(c.Id)} points";
+        }
+        return Ticker(c.Id);
+    }
+
+    /// <summary>Ticker form of a raw id: upper-case with separators spaced out, e.g.
+    /// "bone_dust" -> "BONE DUST". Used when no friendly display name exists.</summary>
+    private static string Ticker(string id)
+        => string.IsNullOrEmpty(id) ? "?" : id.Replace('_', ' ').Replace('-', ' ').ToUpperInvariant();
 
     private void DrawToast()
     {

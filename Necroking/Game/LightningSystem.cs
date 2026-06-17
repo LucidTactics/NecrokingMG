@@ -52,6 +52,9 @@ public class ActiveStrike
     public StrikeVisual Visual = StrikeVisual.Lightning;
     public GodRayParams GodRay = new();
     public SpellTargetFilter TargetFilter = SpellTargetFilter.AnyEnemy;
+    /// <summary>Casting unit, propagated to each LightningDamage so the strike's kills
+    /// attribute to the caster (LastAttackerID / kill tally). InvalidUnit = unattributed.</summary>
+    public uint OwnerID = GameConstants.InvalidUnit;
 }
 
 public class ActiveZap
@@ -119,6 +122,8 @@ public class LightningDamage
 {
     public int UnitIdx;
     public int Damage;
+    /// <summary>Casting unit (from the strike) for attacker attribution. InvalidUnit = none.</summary>
+    public uint OwnerID = GameConstants.InvalidUnit;
 }
 
 public class LightningSystem
@@ -137,7 +142,8 @@ public class LightningSystem
                             float aoeRadius, int damage, LightningStyle style, string spellID,
                             StrikeVisual visual = StrikeVisual.Lightning, GodRayParams? godRay = null,
                             SpellTargetFilter targetFilter = SpellTargetFilter.AnyEnemy,
-                            bool telegraphVisible = true)
+                            bool telegraphVisible = true,
+                            uint ownerID = GameConstants.InvalidUnit)
     {
         _strikes.Add(new ActiveStrike
         {
@@ -151,7 +157,8 @@ public class LightningSystem
             SpellID = spellID,
             Visual = visual,
             GodRay = godRay ?? new GodRayParams(),
-            TargetFilter = targetFilter
+            TargetFilter = targetFilter,
+            OwnerID = ownerID
         });
     }
 
@@ -229,7 +236,7 @@ public class LightningSystem
                         {
                             int j = UnitUtil.ResolveUnitIndex(units, nid);
                             if (j < 0 || !units[j].Alive) continue;
-                            outDamage.Add(new LightningDamage { UnitIdx = j, Damage = s.Damage });
+                            outDamage.Add(new LightningDamage { UnitIdx = j, Damage = s.Damage, OwnerID = s.OwnerID });
                         }
                     }
                 }
