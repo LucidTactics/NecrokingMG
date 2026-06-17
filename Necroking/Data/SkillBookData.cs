@@ -97,6 +97,15 @@ public static class SkillBookDefs
             Skills = new List<SkillDef>(),
         };
 
+        // Optional gate that hides the whole tab until a trigger is met. Absent =
+        // always visible. e.g. { "type": "seen_item", "id": "potion_death_evolution" }.
+        if (root.TryGetProperty("unlockRequirement", out var ur) && ur.ValueKind == JsonValueKind.Object)
+        {
+            tab.UnlockType   = Str(ur, "type", "");
+            tab.UnlockId     = Str(ur, "id", "");
+            tab.UnlockAmount = Int(ur, "amount", 0);
+        }
+
         if (root.TryGetProperty("skills", out var skills) && skills.ValueKind == JsonValueKind.Array)
         {
             foreach (var sj in skills.EnumerateArray())
@@ -157,6 +166,13 @@ public class SkillTab
     public string DisplayName = "";
     public List<SkillDef> Skills = new();
     private Dictionary<string, int> _idToIndex = new();
+
+    /// <summary>Visibility gate for the whole tab. Empty UnlockType = always
+    /// visible. Supported: "seen_item" (UnlockId = item id the player must have
+    /// seen). UnlockAmount is reserved for future count/event-based gates.</summary>
+    public string UnlockType = "";
+    public string UnlockId = "";
+    public int UnlockAmount;
 
     /// <summary>Bounds of node-center positions in JSON logical units.
     /// The panel uses these to scale the tree to fit the content rect.</summary>

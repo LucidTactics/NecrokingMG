@@ -156,11 +156,48 @@ public class UISkillBookScenario : UIScenarioBase
                 if (_phaseT > 0.3f)
                 {
                     SkillBookOverlay!.SetHoverForTest(null);
+                    SkillBookOverlay.SetActiveTab(0); // Potions
+                    _metaIdx = FindTabIndex("metamorphosis");
+                    bool lockedNow = !SkillBookOverlay.IsTabUnlockedForTest(_metaIdx);
+                    DebugLog.Log(ScenarioLog, $"Phase 8: metamorphosis(idx={_metaIdx}) hidden before seeing potion = {lockedNow}");
+                    if (!lockedNow) { DebugLog.Log(ScenarioLog, "FAIL: metamorphosis tab visible too early"); _failCode = 20; }
+                    DeferredScreenshot = "ui_skillbook_tabs_locked";
+                    _waitingForScreenshot = true;
+                    _phase = 9;
+                }
+                break;
+
+            case 9:
+                if (_phaseT > 0.3f)
+                {
+                    DebugLog.Log(ScenarioLog, "Phase 9: see potion_death_evolution -> metamorphosis tab unlocks");
+                    Inventory?.AddItem("potion_death_evolution", 1);
+                    bool unlockedNow = SkillBookOverlay!.IsTabUnlockedForTest(_metaIdx);
+                    DebugLog.Log(ScenarioLog, $"  metamorphosis unlocked after seeing potion = {unlockedNow}");
+                    if (!unlockedNow) { DebugLog.Log(ScenarioLog, "FAIL: metamorphosis tab still hidden after seeing potion"); _failCode = 21; }
+                    DeferredScreenshot = "ui_skillbook_tabs_unlocked";
+                    _waitingForScreenshot = true;
+                    _phase = 10;
+                }
+                break;
+
+            case 10:
+                if (_phaseT > 0.3f)
+                {
                     DebugLog.Log(ScenarioLog, "All phases complete");
                     _complete = true;
                 }
                 break;
         }
+    }
+
+    private int _metaIdx = -1;
+
+    private static int FindTabIndex(string id)
+    {
+        var tabs = Necroking.Data.SkillBookDefs.Tabs;
+        for (int i = 0; i < tabs.Count; i++) if (tabs[i].Id == id) return i;
+        return -1;
     }
 
     public override bool IsComplete => _complete;

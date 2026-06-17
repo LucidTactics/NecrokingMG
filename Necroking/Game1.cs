@@ -3747,7 +3747,9 @@ public class Game1 : Microsoft.Xna.Framework.Game
        foreach (var sp in SkillBookState.SKILL_POINT_TYPES) {
           _skillBookState.AddSkillPoints(sp, amount);
        }
-       
+
+       // Potions needed for metamorphosis.
+       _inventory.AddItem("potion_death_evolution", amount);
     }
 
     /// <summary>Floating "Horde Full" text above the necromancer when a summon

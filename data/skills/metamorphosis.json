@@ -1,5 +1,9 @@
 {
   "displayName": "Metamorphosis",
+  "unlockRequirement": {
+    "type": "seen_item",
+    "id": "potion_death_evolution"
+  },
   "skills": [
     {
       "id": "corpse_eating",

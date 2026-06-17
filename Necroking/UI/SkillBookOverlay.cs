@@ -109,6 +109,11 @@ public class SkillBookOverlay : IModalLayer
     {
         if (i >= 0 && i < SkillBookDefs.Tabs.Count) _activeTab = i;
     }
+
+    /// <summary>Test/host hook: is the tab at index <paramref name="i"/> currently
+    /// unlocked (visible)? Mirrors the visibility gate used to hide locked tabs.</summary>
+    public bool IsTabUnlockedForTest(int i)
+        => i >= 0 && i < SkillBookDefs.Tabs.Count && IsTabUnlocked(SkillBookDefs.Tabs[i]);
     public bool TryLearnById(string id, double timeSec = 0)
     {
         TryLearn(id, timeSec);
@@ -192,6 +197,7 @@ public class SkillBookOverlay : IModalLayer
             string barInst = $"{Instance}.{barIdx}";
             for (int i = 0; i < SkillBookDefs.Tabs.Count && i < TabSlots.Length; i++)
             {
+                if (!IsTabUnlocked(SkillBookDefs.Tabs[i])) continue; // locked tab isn't clickable
                 var r = _renderer.GetChildRect("TabBar", $"tab{i}", bar.X, bar.Y, barInst);
                 if (r != Rectangle.Empty && r.Contains(mx, my)) { _activeTab = i; return; }
             }
@@ -256,6 +262,9 @@ public class SkillBookOverlay : IModalLayer
 
         // Dim the world behind the modal.
         _batch.Draw(_pixel, new Rectangle(0, 0, sw, sh), new Color(0, 0, 0, 180));
+
+        // Never sit on a locked tab (e.g. it re-locked, or one was force-set).
+        EnsureActiveTabUnlocked();
 
         // Bind the chrome (title + tab labels/highlights) then draw the window.
         BindChrome();
@@ -332,11 +341,18 @@ public class SkillBookOverlay : IModalLayer
         // "Ability Upgrades") — edited in the UI editor, no code needed.
         int barIdx = TabBarIndex();
         if (barIdx < 0) return;
+        string barInst = $"{Instance}.{barIdx}";
         for (int i = 0; i < TabSlots.Length && i < SkillBookDefs.Tabs.Count; i++)
         {
             var tab = SkillBookDefs.Tabs[i];
+            // Locked tabs are hidden entirely; the horizontal TabBar collapses the
+            // gap so the remaining tabs reflow.
+            bool unlocked = IsTabUnlocked(tab);
+            _renderer.SetHidden(barInst, $"tab{i}", !unlocked);
+            if (!unlocked) continue;
+
             var (learned, total) = _state?.GetProgress(tab) ?? (0, tab.Skills.Count);
-            string tabInst = $"{Instance}.{barIdx}.{i}";
+            string tabInst = $"{barInst}.{i}";
             // The tab name is a static per-tab label carried in the widget data
             // (TabBar child override → SkillBookTab "Name"), so it renders in both the
             // game and the editor without code. Only the dynamic bits are bound here.
@@ -345,6 +361,29 @@ public class SkillBookOverlay : IModalLayer
             _renderer.SetElementTint(tabInst, "Backing",
                 active ? Color.White : new Color(150, 140, 120));
         }
+    }
+
+    /// <summary>A tab is visible only when its unlock requirement is met. Empty
+    /// requirement = always visible. "seen_item" checks the inventory's ever-seen
+    /// registry; unknown gate types fail open (stay visible).</summary>
+    private bool IsTabUnlocked(SkillTab tab)
+    {
+        if (string.IsNullOrEmpty(tab.UnlockType)) return true;
+        return tab.UnlockType switch
+        {
+            "seen_item" => _inventory?.HasEverSeen(tab.UnlockId) ?? false,
+            _ => true,
+        };
+    }
+
+    /// <summary>Snap the active tab to the first unlocked one if the current
+    /// selection is locked or out of range, so we never render a hidden tab.</summary>
+    private void EnsureActiveTabUnlocked()
+    {
+        var tabs = SkillBookDefs.Tabs;
+        if (_activeTab >= 0 && _activeTab < tabs.Count && IsTabUnlocked(tabs[_activeTab])) return;
+        for (int i = 0; i < tabs.Count; i++)
+            if (IsTabUnlocked(tabs[i])) { _activeTab = i; return; }
     }
 
     /// <summary>Map a tab's logical skill coords into the window's page area (below
