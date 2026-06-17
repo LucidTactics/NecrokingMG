@@ -63,6 +63,41 @@
       }
     },
     {
+      "id": "lich_empower_body",
+      "name": "Lich Empower Body",
+      "icon": "assets/UI/Icons/Buffs/iron_skin.png",
+      "duration": 0,
+      "effects": [
+        {
+          "type": "Set",
+          "stat": "NaturalProt",
+          "value": 15
+        }
+      ],
+      "maxStacks": 1,
+      "grantedWeapons": [],
+      "intrinsic": false,
+      "incapacitating": false,
+      "incapHoldAnim": "",
+      "incapRecoverAnim": "",
+      "incapRecoverTime": 0.8,
+      "incapHoldAtEnd": false,
+      "hasOrbital": false,
+      "orbital": null,
+      "hasGroundAura": false,
+      "groundAura": null,
+      "hasBehindEffect": false,
+      "behindEffect": null,
+      "hasFrontEffect": false,
+      "frontEffect": null,
+      "hasLightningAura": false,
+      "lightningAura": null,
+      "hasImageBehind": false,
+      "imageBehind": null,
+      "hasWeaponParticle": false,
+      "weaponParticle": null
+    },
+    {
       "id": "strength_buff",
       "name": "Strength",
       "icon": "assets/UI/Icons/Buffs/strength_buff.png",

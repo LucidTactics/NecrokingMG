@@ -20,7 +20,7 @@
         }
       ],
       "effect": "grant_intrinsic_buff",
-      "effectArg": "iron_skin"
+      "effectArg": "lich_empower_body"
     },
     {
       "id": "lich_empower_necromancy",
