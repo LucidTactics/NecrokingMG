@@ -122,6 +122,7 @@ public static class ScenarioRegistry
         Register("spell_kill_tally", () => new Scenarios.SpellKillTallyScenario());
         Register("path_buff", () => new Scenarios.PathBuffScenario());
         Register("seen_item", () => new Scenarios.SeenItemScenario());
+        Register("corpses_eaten", () => new Scenarios.CorpsesEatenScenario());
     }
 
     public static void Register(string name, Func<ScenarioBase> creator)

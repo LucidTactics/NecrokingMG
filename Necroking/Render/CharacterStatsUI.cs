@@ -471,6 +471,9 @@ public class CharacterStatsUI : Necroking.UI.IModalLayer
         }
 
         sim.ConsumeCorpse(bestIdx);
+        // Milestone tally for skill requirements (e.g. Wight transformation). Both
+        // Corpse Eating and Soul Consumption consume a corpse, so both count.
+        bookState.Events.Tally("corpses_eaten");
         if (humansOnly)
         {
             var necro = sim.NecroState;

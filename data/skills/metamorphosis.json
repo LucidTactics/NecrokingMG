@@ -74,8 +74,8 @@
       ],
       "costs": [
         {
-          "type": "item",
-          "id": "potion_death_evolution",
+          "type": "event",
+          "id": "corpses_eaten",
           "amount": 5
         }
       ],
