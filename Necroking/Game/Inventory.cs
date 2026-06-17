@@ -22,6 +22,14 @@ public class Inventory
     private readonly InventorySlot[] _slots;
     private readonly ItemRegistry? _items;
 
+    /// <summary>Every item id that has ever entered this inventory. Grows only
+    /// (an item stays "seen" after it's all used up), so features can gate on
+    /// "has the player ever held this?" — e.g. a potion's throw-spell only
+    /// appears in the grimoire once the potion has been seen. Per playthrough;
+    /// not persisted yet (mirrors SkillBookState).</summary>
+    private readonly HashSet<string> _everSeen = new();
+    public IReadOnlyCollection<string> EverSeen => _everSeen;
+
     public int SlotCount => _slots.Length;
 
     public Inventory(int slotCount = 20, ItemRegistry? items = null)
@@ -43,6 +51,7 @@ public class Inventory
     public int AddItem(string itemId, int quantity = 1)
     {
         if (string.IsNullOrEmpty(itemId) || quantity <= 0) return quantity;
+        _everSeen.Add(itemId); // record the type the moment it enters the inventory
         int maxStack = _items?.Get(itemId)?.MaxStack ?? 99;
         int remaining = quantity;
 
@@ -121,6 +130,12 @@ public class Inventory
         // Otherwise swap
         (_slots[from], _slots[to]) = (_slots[to], _slots[from]);
     }
+
+    /// <summary>True if this item has ever been in the inventory. Also returns
+    /// true for anything currently held, so the answer stays correct even if some
+    /// item arrived through a path that bypassed <see cref="AddItem"/>.</summary>
+    public bool HasEverSeen(string itemId)
+        => !string.IsNullOrEmpty(itemId) && (_everSeen.Contains(itemId) || GetItemCount(itemId) > 0);
 
     /// <summary>Total count of a specific item across all slots.</summary>
     public int GetItemCount(string itemId)
