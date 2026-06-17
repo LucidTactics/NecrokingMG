@@ -2820,6 +2820,15 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 ToggleGodMode(necroIdx);
             }
 
+            // --- Add Skillpoints ---
+            // Cheat / debug to test skill tree.
+            if (_input.WasKeyPressed(Keys.O) && necroIdx >= 0
+                                             && (_input.IsKeyDown(Keys.LeftShift) || _input.IsKeyDown(Keys.RightShift)))
+            {
+                CheatAddAllSkillcounters(necroIdx, 10);
+            }
+            
+
             // --- Secondary spell bar (keys 1-4) ---
             if (necroIdx >= 0)
             {
@@ -3725,6 +3734,20 @@ public class Game1 : Microsoft.Xna.Framework.Game
             IsPoison = false,
             PickupText = resourceType,
         });
+    }
+
+    private void CheatAddAllSkillcounters(int necroIdx, int amount) 
+    {
+       if (necroIdx < 0 || _gameData == null) return;
+
+       foreach (var et in SkillBookState.EVENT_TYPES) {
+          _skillBookState.Events.Tally(et, amount);
+       }
+
+       foreach (var sp in SkillBookState.SKILL_POINT_TYPES) {
+          _skillBookState.AddSkillPoints(sp, amount);
+       }
+       
     }
 
     /// <summary>Floating "Horde Full" text above the necromancer when a summon

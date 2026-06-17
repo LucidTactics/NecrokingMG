@@ -26,6 +26,17 @@ public class SkillBookState
     private readonly HashSet<string> _learned = new();
     public SkillEventTracker Events { get; } = new();
 
+    public static string[] EVENT_TYPES = {
+       "monster_kill",
+       "human_kill",
+       "cast_spell",
+    };
+
+    public static string[] SKILL_POINT_TYPES = {
+       "potions",
+       "monstrology",
+    };
+
     /// <summary>Per-tab hidden skill-point pools. Currently only "potions" is awarded
     /// (one per potion crafted) — other tabs default to 0 until their own earn paths
     /// are wired. Used by SkillCost.Type == "skillpoints" (cost.Id = tab name).</summary>
