@@ -289,6 +289,20 @@ public class FogOfWarSystem
     }
 
     /// <summary>
+    /// Refresh the cached mode from settings without running the full GPU/CPU
+    /// visibility pass. Call this every frame when <see cref="Update"/> is being
+    /// skipped (fog Off, or an editor is open) so <see cref="IsVisible"/> reflects
+    /// the *current* setting instead of a stale mode. Without this, turning fog Off
+    /// at runtime leaves _lastMode at its previous value and IsVisible keeps culling
+    /// enemy sprites against frozen visibility — i.e. enemies "disappear" when fog
+    /// is switched off.
+    /// </summary>
+    public void SyncMode(FogOfWarSettings settings)
+    {
+        _lastMode = (FogOfWarMode)settings.Mode;
+    }
+
+    /// <summary>
     /// Returns true if the given world position should be rendered in full:
     ///   - Mode.Off:      always yes (no fog gameplay).
     ///   - Mode.Explored: always yes (permanent reveal — explored tiles stay lit

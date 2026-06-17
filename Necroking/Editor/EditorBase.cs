@@ -61,6 +61,12 @@ public class EditorBase
     internal GraphicsDevice _gd = null!;
     internal MouseState _mouse;
     internal MouseState _prevMouse;
+    // Mouse state snapshotted at the END of the previous Draw (see EndDrawFrame).
+    // Immediate-mode widgets measure their press/release edge against this rather
+    // than the previous Update, so a click survives fixed-timestep catch-up (when
+    // several Updates run per Draw on a slow frame). Without it the one-frame edge
+    // is overwritten before the Draw pass reads it and ~6/7 of clicks are dropped.
+    private MouseState _drawSnapMouse;
     internal KeyboardState _kb;
     internal KeyboardState _prevKb;
     internal InputState _input = new();
@@ -234,7 +240,15 @@ public class EditorBase
         int screenW, int screenH, GameTime gameTime, InputState? input = null)
     {
         _mouse = mouse;
-        _prevMouse = prevMouse;
+        // Edge detection for widgets happens during Draw, but UpdateInput can run
+        // multiple times per Draw under fixed-timestep catch-up. Measuring against
+        // the previous Update (the passed prevMouse) would collapse a press edge
+        // before Draw sees it, dropping clicks on slow frames. Measure against the
+        // mouse state at the previous Draw instead; EndDrawFrame refreshes it once
+        // per frame. In the common 1-Update-per-Draw case the two are identical, so
+        // existing behavior is unchanged. (prevMouse is still used below for the
+        // dropdown-hold / color-picker dismiss logic, which is per-Update by design.)
+        _prevMouse = _drawSnapMouse;
         _kb = kb;
         _prevKb = prevKb;
         if (input != null) _input = input;
@@ -295,6 +309,19 @@ public class EditorBase
         // Single sync point means we don't have to chase every place that
         // assigns _activeFieldId to keep Push/Pop in lockstep.
         SyncDropdownModalState();
+    }
+
+    /// <summary>
+    /// Snapshot the current mouse state as the reference for next frame's edge
+    /// detection. Call exactly once per Draw, AFTER this editor's widgets have been
+    /// drawn. Pairs with <see cref="UpdateInput"/>'s use of <c>_drawSnapMouse</c> so
+    /// press/release edges are measured against the previous Draw — keeping clicks
+    /// responsive even when several Updates run per Draw (fixed-timestep catch-up on
+    /// a slow frame). See the field comment on <c>_drawSnapMouse</c>.
+    /// </summary>
+    public void EndDrawFrame()
+    {
+        _drawSnapMouse = _mouse;
     }
 
     /// <summary>Push or pop <see cref="_dropdownLayer"/> on <see cref="Game1.Popups"/>
