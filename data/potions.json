@@ -47,11 +47,11 @@
       "hitEffectFlipbook": null,
       "recipe": [
         {
-          "itemId": "Ghostcap",
+          "itemId": "Mushroom",
           "amount": 1
         },
         {
-          "itemId": "Rotgill",
+          "itemId": "",
           "amount": 1
         },
         {
