@@ -273,13 +273,15 @@ public class CharacterStatsUI : Necroking.UI.IModalLayer
 
         // Collect non-zero paths for the inline display row. We render only
         // paths the unit actually has — zero-paths are hidden per design.
-        // TODO: also hide on the per-unit selection panel when that's wired.
+        // Use the EFFECTIVE level (native + path buffs, e.g. arcane_apprentice's
+        // +1 Shock, then any AllPaths floor) so buff-granted paths show here too,
+        // not just inherent UnitDef ones.
         var nonZeroPaths = new List<(MagicPath path, int level)>();
         if (necroDef != null)
         {
             foreach (var p in MagicPathHelpers.AllInOrder)
             {
-                int lvl = necroDef.GetPathLevel(p);
+                int lvl = BuffSystem.EffectivePathLevel(sim.UnitsMut, necroIdx, necroDef, p);
                 if (lvl > 0) nonZeroPaths.Add((p, lvl));
             }
         }
