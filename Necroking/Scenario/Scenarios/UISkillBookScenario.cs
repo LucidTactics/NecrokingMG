@@ -142,6 +142,19 @@ public class UISkillBookScenario : UIScenarioBase
             case 7:
                 if (_phaseT > 0.3f)
                 {
+                    DebugLog.Log(ScenarioLog, "Phase 7: learn monster_summoner, hover it -> effects show on a LEARNED node");
+                    bool learned = SkillBookOverlay!.TryLearnById("monster_summoner");
+                    DebugLog.Log(ScenarioLog, $"  monster_summoner learned={learned}");
+                    SkillBookOverlay.SetHoverForTest("monster_summoner");
+                    DeferredScreenshot = "ui_skillbook_tooltip_learned";
+                    _waitingForScreenshot = true;
+                    _phase = 8;
+                }
+                break;
+
+            case 8:
+                if (_phaseT > 0.3f)
+                {
                     SkillBookOverlay!.SetHoverForTest(null);
                     DebugLog.Log(ScenarioLog, "All phases complete");
                     _complete = true;

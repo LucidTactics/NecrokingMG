@@ -537,17 +537,19 @@ public class SkillBookOverlay : IModalLayer
         var def = _state?.FindSkill(_hoverId!);
         if (def == null) return;
 
-        const int titleSize = 18, lineSize = 15, padX = 12, padY = 10, gap = 6, lineGap = 3;
+        const int titleSize = 18, lineSize = 15, padX = 12, padY = 10, gap = 6, lineGap = 3, indentPx = 14;
         var lines = CostLines(def);
+        AppendEffectLines(def, lines);
 
         var titleSz = _renderer.MeasureText(def.Name, titleSize, "Roboto");
         int innerW = (int)titleSz.X;
         var lineSizes = new List<Vector2>(lines.Count);
-        foreach (var (text, _) in lines)
+        foreach (var (text, _, indent) in lines)
         {
             var s = _renderer.MeasureText(text, lineSize, "Roboto");
             lineSizes.Add(s);
-            if ((int)s.X > innerW) innerW = (int)s.X;
+            int lineW = (int)s.X + indent * indentPx;
+            if (lineW > innerW) innerW = lineW;
         }
 
         int w = innerW + padX * 2;
@@ -570,17 +572,19 @@ public class SkillBookOverlay : IModalLayer
         cy += (int)titleSz.Y + gap;
         for (int i = 0; i < lines.Count; i++)
         {
-            _renderer.DrawText(lines[i].text, tx + padX, cy, lineSize, lines[i].col, "Roboto");
+            _renderer.DrawText(lines[i].text, tx + padX + lines[i].indent * indentPx, cy,
+                lineSize, lines[i].col, "Roboto");
             cy += (int)lineSizes[i].Y + lineGap;
         }
     }
 
-    /// <summary>One coloured line per cost (or a single "Learned" / "Free" line).</summary>
-    private List<(string text, Color col)> CostLines(SkillDef def)
+    /// <summary>One coloured line per cost (or a single "Learned" / "Free" line).
+    /// All cost lines sit at indent 0.</summary>
+    private List<(string text, Color col, int indent)> CostLines(SkillDef def)
     {
-        var lines = new List<(string, Color)>();
-        if (_state?.IsLearned(def.Id) ?? false) { lines.Add(("Learned", new Color(150, 196, 150))); return lines; }
-        if (def.Costs.Count == 0) { lines.Add(("Free", CostGood)); return lines; }
+        var lines = new List<(string, Color, int)>();
+        if (_state?.IsLearned(def.Id) ?? false) { lines.Add(("Learned", new Color(150, 196, 150), 0)); return lines; }
+        if (def.Costs.Count == 0) { lines.Add(("Free", CostGood, 0)); return lines; }
         foreach (var c in def.Costs)
         {
             int have = ResourceHave(c);
@@ -588,9 +592,123 @@ public class SkillBookOverlay : IModalLayer
             // "{resource} {have}/{need}" — shows current tally against the requirement,
             // so milestone events (MONSTER KILL 3/1) and pools (MONSTROLOGY points 0/5)
             // read as progress, not just a target number.
-            lines.Add(($"{CostResourceName(c)} {have}/{c.Amount}", met ? CostGood : CostBad));
+            lines.Add(($"{CostResourceName(c)} {have}/{c.Amount}", met ? CostGood : CostBad, 0));
         }
         return lines;
+    }
+
+    // Effect-line colours: a gold "Effect:" header, lavender body rows.
+    private static readonly Color EffectHeader = new(196, 180, 146);
+    private static readonly Color EffectBody   = new(176, 166, 204);
+
+    /// <summary>Append a human-readable description of the node's effect. A
+    /// <c>compound</c> effect ("a=x|b=y|…") becomes an "Effect:" header followed by
+    /// one indented row per sub-effect; a single effect is one "Effect: …" line.
+    /// The inert <c>noop</c> placeholder adds nothing.</summary>
+    private void AppendEffectLines(SkillDef def, List<(string text, Color col, int indent)> lines)
+    {
+        if (string.IsNullOrEmpty(def.Effect) || def.Effect == "noop") return;
+
+        if (def.Effect == "compound")
+        {
+            lines.Add(("Effect:", EffectHeader, 0));
+            foreach (var entry in (def.EffectArg ?? "").Split('|'))
+            {
+                var t = entry.Trim();
+                if (t.Length == 0) continue;
+                int eq = t.IndexOf('=');
+                string sub    = eq >= 0 ? t.Substring(0, eq).Trim() : t;
+                string subArg = eq >= 0 ? t.Substring(eq + 1)       : "";
+                lines.Add(("• " + DescribeEffect(sub, subArg), EffectBody, 1));
+            }
+        }
+        else
+        {
+            lines.Add(($"Effect: {DescribeEffect(def.Effect, def.EffectArg)}", EffectHeader, 0));
+        }
+    }
+
+    /// <summary>Render one effect+arg pair as a readable phrase, resolving ids to
+    /// display names where possible. Falls back to a humanized "effect: arg" for
+    /// unknown effects so nothing ever shows as a blank.</summary>
+    private string DescribeEffect(string effect, string? rawArg)
+    {
+        string arg = (rawArg ?? "").Trim();
+        switch (effect)
+        {
+            case "add_spell":            return $"Add spell: {SpellName(arg)}";
+            case "unlock_potion":        return $"Unlock potion: {ItemName(arg)}";
+            case "unlock_potion_slot":   { int n = ParseInt(arg, 1); return $"+{n} potion slot{(n == 1 ? "" : "s")}"; }
+            case "unlock_summon":        return $"Unlock summon: {NameList(arg, UnitName)}";
+            case "unlock_unit":          return $"Unlock unit: {UnitName(arg)}";
+            case "unlock_building":      return $"Unlock building: {Humanize(arg)}";
+            case "unlock_ai_behavior":   return DescribeAi(arg);
+            case "cap_buff":             return DescribeCap(arg);
+            case "grant_intrinsic_buff": return DescribeIntrinsic(arg);
+            case "passive_stat":         return $"Passive: {Humanize(arg)}";
+            case "morph_necromancer":    return $"Become {UnitName(arg)}";
+            case "metamorph_action":     return $"Unlock action: {Humanize(arg)}";
+            case "noop":                 return "—";
+            default:                     return string.IsNullOrEmpty(arg) ? Humanize(effect) : $"{Humanize(effect)}: {arg}";
+        }
+    }
+
+    // "behavior" or "behavior:N" -> "Unlock ability: Behavior (xN)".
+    private string DescribeAi(string arg)
+    {
+        int colon = arg.IndexOf(':');
+        string behavior = colon >= 0 ? arg.Substring(0, colon) : arg;
+        int n = colon >= 0 ? ParseInt(arg.Substring(colon + 1), 1) : 1;
+        string tail = n > 1 ? $" (x{n})" : "";
+        return $"Unlock ability: {Humanize(behavior)}{tail}";
+    }
+
+    // "monster:N" / "human:N" -> "+N monster cap".
+    private string DescribeCap(string arg)
+    {
+        int colon = arg.IndexOf(':');
+        string kind = colon >= 0 ? arg.Substring(0, colon).Trim() : arg.Trim();
+        int n = colon >= 0 ? ParseInt(arg.Substring(colon + 1), 1) : 1;
+        return $"+{n} {Humanize(kind)} cap";
+    }
+
+    // "buff_id:tag1,tag2" -> "Grant Buff Name to tag1, tag2".
+    private string DescribeIntrinsic(string arg)
+    {
+        int colon = arg.IndexOf(':');
+        string buff = colon >= 0 ? arg.Substring(0, colon).Trim() : arg.Trim();
+        string tags = colon >= 0 ? arg.Substring(colon + 1) : "";
+        string who  = string.IsNullOrWhiteSpace(tags) ? "all units" : string.Join(", ", SplitTrim(tags));
+        return $"Grant {BuffName(buff)} to {who}";
+    }
+
+    private string SpellName(string id) { var d = _gameData?.Spells?.Get(id); return d != null && Has(d.DisplayName) ? d.DisplayName : id; }
+    private string ItemName(string id)  { var d = _gameData?.Items?.Get(id);  return d != null && Has(d.DisplayName) ? d.DisplayName : id; }
+    private string UnitName(string id)  { var d = _gameData?.Units?.Get(id);  return d != null && Has(d.DisplayName) ? d.DisplayName : id; }
+    private string BuffName(string id)  { var d = _gameData?.Buffs?.Get(id);  return d != null && Has(d.DisplayName) ? d.DisplayName : Humanize(id); }
+
+    private string NameList(string csv, Func<string, string> map)
+        => string.Join(", ", System.Linq.Enumerable.Select(SplitTrim(csv), map));
+
+    private static IEnumerable<string> SplitTrim(string csv)
+    {
+        foreach (var p in csv.Split(','))
+        {
+            var t = p.Trim();
+            if (t.Length > 0) yield return t;
+        }
+    }
+
+    private static int ParseInt(string s, int dflt) => int.TryParse(s.Trim(), out var v) ? v : dflt;
+
+    /// <summary>Turn a raw id into title-case words: "unholy_strength" -> "Unholy Strength".</summary>
+    private static string Humanize(string id)
+    {
+        if (string.IsNullOrEmpty(id)) return "";
+        var words = id.Replace('_', ' ').Replace('-', ' ').Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        for (int i = 0; i < words.Length; i++)
+            words[i] = char.ToUpperInvariant(words[i][0]) + words[i].Substring(1);
+        return string.Join(' ', words);
     }
 
     /// <summary>How much of a cost's resource the player currently has: item count
