@@ -374,16 +374,39 @@ public static class BuffSystem
         return result;
     }
 
-    /// <summary>A unit's effective caster level in a magic path: the larger of
-    /// its native UnitDef level and any active "Set AllPaths" buff floor (god
-    /// mode). Single source of truth shared by spell casting (whether a unit
-    /// may cast a spell) and the unit-sheet path display.</summary>
+    /// <summary>The buff "stat" name that grants levels in a specific magic path.
+    /// A buff effect of {Type:"Add", Stat:PathStat(Shock), Value:1} raises the
+    /// bearer's Shock path by 1 (see <see cref="EffectivePathLevel"/>). Prefixed
+    /// with "Path" so it can't collide with ordinary stat names ("Order", "Body",
+    /// "Nature" are also magic-path enum names).</summary>
+    public static string PathStat(Data.Registries.MagicPath p) => "Path" + p;
+
+    /// <summary>Sum of additive path-level buffs on a unit for one path (honors
+    /// stack count). This is what lets buffs grant magic paths to the caster on
+    /// top of its native UnitDef levels.</summary>
+    public static int PathLevelBonus(UnitArrays units, int unitIdx, Data.Registries.MagicPath p)
+    {
+        if (unitIdx < 0 || unitIdx >= units.Count) return 0;
+        string stat = PathStat(p);
+        float sum = 0f;
+        foreach (var buff in units[unitIdx].ActiveBuffs)
+            foreach (var eff in buff.Effects)
+                if (eff.Type == "Add" && eff.Stat == stat)
+                    sum += eff.Value * buff.StackCount;
+        return (int)sum;
+    }
+
+    /// <summary>A unit's effective caster level in a magic path: its native
+    /// UnitDef level plus any additive path buffs (<see cref="PathLevelBonus"/>),
+    /// then floored by an active "Set AllPaths" buff (god mode). Single source of
+    /// truth shared by spell casting (whether a unit may cast a spell), mana-cost
+    /// scaling, and the unit-sheet path display.</summary>
     public static int EffectivePathLevel(UnitArrays units, int unitIdx,
         Data.Registries.UnitDef? def, Data.Registries.MagicPath p)
     {
-        int native = def?.GetPathLevel(p) ?? 0;
+        int total = (def?.GetPathLevel(p) ?? 0) + PathLevelBonus(units, unitIdx, p);
         float? floor = MaxSetExtra(units, unitIdx, "AllPaths");
-        return floor.HasValue && floor.Value > native ? (int)floor.Value : native;
+        return floor.HasValue && floor.Value > total ? (int)floor.Value : total;
     }
 
     public static float GetModifiedStat(UnitArrays units, int unitIdx, BuffStat stat, float baseValue)

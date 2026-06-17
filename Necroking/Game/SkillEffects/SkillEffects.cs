@@ -49,6 +49,7 @@ public static class SkillEffectRegistry
         Register("unlock_ai_behavior",   new UnlockAIBehaviorEffect());
         Register("unlock_potion_slot",   new UnlockPotionSlotEffect());
         Register("cap_buff",             new CapBuffEffect());
+        Register("grant_path",           new GrantPathEffect());
         Register("unlock_summon",        new UnlockSummonEffect());
         Register("compound",             new CompoundEffect());
         // Stubs — log only. Wire to real systems when the corresponding gameplay is in.
@@ -403,6 +404,67 @@ public sealed class CapBuffEffect : ISkillEffect
         for (int i = 0; i < n; i++)
             GameSystems.BuffSystem.ApplyBuff(ctx.Sim.UnitsMut, idx, buffDef, ctx.GameData);
         DebugLog.Log("skillbook", $"cap_buff: applied {n} stacks of {buffId} to necromancer");
+        return true;
+    }
+}
+
+/// <summary>Grant magic-path levels to the player necromancer via a permanent,
+/// code-built buff (no buffs.json entry needed). Arg: "shock:1" or "shock"
+/// (level defaults to 1). The buff carries one Add effect on
+/// <see cref="GameSystems.BuffSystem.PathStat"/>, so EffectivePathLevel — and
+/// therefore spell gating, mana-cost scaling, and the unit sheet — picks it up
+/// immediately. Soft-passes (the skill still learns) when there's no live sim /
+/// necromancer, mirroring cap_buff.</summary>
+public sealed class GrantPathEffect : ISkillEffect
+{
+    public bool Apply(SkillEffectContext ctx, string arg)
+    {
+        if (string.IsNullOrEmpty(arg)) return true;
+
+        int colon = arg.IndexOf(':');
+        string pathId = colon >= 0 ? arg.Substring(0, colon).Trim() : arg.Trim();
+        int level = 1;
+        if (colon >= 0) int.TryParse(arg.Substring(colon + 1), out level);
+        if (level < 1) level = 1;
+
+        var path = Data.Registries.MagicPathHelpers.FromJsonId(pathId);
+        if (path == Data.Registries.MagicPath.None)
+        {
+            DebugLog.Log("skillbook", $"grant_path: unknown path '{pathId}' in '{arg}'");
+            return false;
+        }
+
+        if (ctx.Sim == null)
+        {
+            DebugLog.Log("skillbook", $"grant_path: no sim, '{arg}' deferred (reapplied next game)");
+            return true; // soft-pass: skill learns, buff is reapplied next game
+        }
+        int idx = ctx.Sim.NecromancerIndex;
+        if (idx < 0)
+        {
+            DebugLog.Log("skillbook", "grant_path: no necromancer in sim");
+            return true;
+        }
+
+        var buff = new Data.Registries.BuffDef
+        {
+            Id = $"buff_path_{pathId}",
+            DisplayName = $"+{level} {path} Path",
+            Duration = 0f,    // permanent (Duration <= 0 => Permanent in ApplyBuff)
+            Intrinsic = true, // no buff-bar icon / combat-log spam
+            MaxStacks = 1,
+            Effects =
+            {
+                new Data.Registries.BuffEffect
+                {
+                    Type = "Add",
+                    Stat = GameSystems.BuffSystem.PathStat(path),
+                    Value = level,
+                },
+            },
+        };
+        GameSystems.BuffSystem.ApplyBuff(ctx.Sim.UnitsMut, idx, buff, ctx.GameData);
+        DebugLog.Log("skillbook", $"grant_path: +{level} {path} path to necromancer (idx={idx})");
         return true;
     }
 }

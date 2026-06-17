@@ -4,13 +4,14 @@
     {
       "id": "arcane_apprentice",
       "name": "Arcane Apprentice",
-      "description": "The first cantrips, learned by candlelight.",
+      "description": "Attune to the Shock path (+1) — the first sparks of lightning.",
       "x": 647,
       "y": -461,
       "parents": [],
       "costs": [],
-      "effect": "noop",
-      "startLearned": true
+      "effect": "grant_path",
+      "effectArg": "shock:1",
+      "startLearned": false
     },
     {
       "id": "nether_darts",

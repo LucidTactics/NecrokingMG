@@ -120,6 +120,7 @@ public static class ScenarioRegistry
         Register("harmonize_object", () => new Scenarios.HarmonizeObjectScenario());
         Register("object_flip", () => new Scenarios.ObjectFlipScenario());
         Register("spell_kill_tally", () => new Scenarios.SpellKillTallyScenario());
+        Register("path_buff", () => new Scenarios.PathBuffScenario());
     }
 
     public static void Register(string name, Func<ScenarioBase> creator)
