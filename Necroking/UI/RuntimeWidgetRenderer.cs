@@ -51,6 +51,7 @@ public class RuntimeWidgetRenderer
     // Lets runtime code grow a section (e.g. the unit sheet's Abilities & Buffs
     // row wrapping to multiple rows) so the auto-height panel + frame expand.
     private readonly Dictionary<string, Dictionary<string, int>> _childHeightOverrides = new();
+    private readonly Dictionary<string, Dictionary<string, int>> _childWidthOverrides = new();
 
     // Per-widget image overrides: widgetInstanceId -> (childName -> texturePath)
     private readonly Dictionary<string, Dictionary<string, string>> _imageOverrides = new();
@@ -178,6 +179,28 @@ public class RuntimeWidgetRenderer
         return ChildLayoutHeight(child, $"{instanceId}.{childIndex}");
     }
 
+    /// <summary>Override a child's layout width for one instance (e.g. sizing skill-book
+    /// tabs to evenly fill the bar for the current tab count). Pass &lt;=0 to clear.</summary>
+    public void SetChildWidth(string instanceId, string childName, int width)
+    {
+        if (!_childWidthOverrides.TryGetValue(instanceId, out var map))
+        {
+            if (width <= 0) return;
+            map = new Dictionary<string, int>();
+            _childWidthOverrides[instanceId] = map;
+        }
+        if (width > 0) map[childName] = width;
+        else map.Remove(childName);
+    }
+
+    /// <summary>A child's effective layout width: instance override if set, else def width.</summary>
+    private int ChildWidthFor(UIEditorChildDef child, string instanceId)
+    {
+        if (_childWidthOverrides.TryGetValue(instanceId, out var m) && m.TryGetValue(child.Name, out var w))
+            return w;
+        return child.Width > 0 ? child.Width : 100;
+    }
+
     /// <summary>Hide or show a named child within a widget instance (hidden
     /// children are skipped entirely, including nested widget content). On
     /// AutoSizeHeight vertical-layout widgets, hidden children also collapse
@@ -204,6 +227,7 @@ public class RuntimeWidgetRenderer
         _textColorOverrides.Remove(instanceId);
         _elementTintOverrides.Remove(instanceId);
         _childHeightOverrides.Remove(instanceId);
+        _childWidthOverrides.Remove(instanceId);
     }
 
     /// <summary>Clear overrides for an instance AND all its nested
@@ -213,7 +237,7 @@ public class RuntimeWidgetRenderer
         string prefix = instanceId + ".";
         foreach (var dict in new System.Collections.IDictionary[]
                  { _textOverrides, _imageOverrides, _childWidgetOverrides, _hiddenChildren,
-                   _textColorOverrides, _elementTintOverrides, _childHeightOverrides })
+                   _textColorOverrides, _elementTintOverrides, _childHeightOverrides, _childWidthOverrides })
         {
             var stale = new List<object>();
             foreach (var key in dict.Keys)
@@ -313,15 +337,17 @@ public class RuntimeWidgetRenderer
         int instW = -1, int instH = -1)
     {
         _hiddenChildren.TryGetValue(instanceId, out var hidden);
+        _childWidthOverrides.TryGetValue(instanceId, out var widths);
         bool isHoriz = def.Layout == "horizontal", isVert = def.Layout == "vertical";
         // Fast path with no per-instance state — straight through the shared pass.
-        if (!isHoriz && !isVert && hidden == null)
+        if (!isHoriz && !isVert && hidden == null && widths == null)
             return WidgetLayoutUtils.ComputeLayoutRects(def, wdX, wdY, null, null, instW, instH);
         // Otherwise drive the same shared pass, supplying this instance's hidden set
-        // (by child name) and override-aware heights.
+        // (by child name) and override-aware heights/widths.
         return WidgetLayoutUtils.ComputeLayoutRects(def, wdX, wdY,
             hidden == null ? null : i => hidden.Contains(def.Children[i].Name),
-            (child, i) => ChildHeightFor(child, instanceId, i), instW, instH);
+            (child, i) => ChildHeightFor(child, instanceId, i), instW, instH,
+            widths == null ? null : (child, i) => ChildWidthFor(child, instanceId));
     }
 
     /// <summary>Draw a widget def at a specific rect.</summary>

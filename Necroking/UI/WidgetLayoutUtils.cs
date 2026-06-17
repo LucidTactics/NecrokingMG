@@ -121,7 +121,8 @@ public static class WidgetLayoutUtils
     public static List<Rectangle> ComputeLayoutRects(UIEditorWidgetDef def, int wdX, int wdY,
         System.Func<int, bool>? isHidden = null,
         System.Func<UIEditorChildDef, int, int>? childHeight = null,
-        int instW = -1, int instH = -1)
+        int instW = -1, int instH = -1,
+        System.Func<UIEditorChildDef, int, int>? childWidth = null)
     {
         var rects = new List<Rectangle>();
         // A NESTED widget instance can be rendered at a size different from its
@@ -150,7 +151,7 @@ public static class WidgetLayoutUtils
             var child = def.Children[i];
             if (isHidden != null && isHidden(i)) { rects.Add(Rectangle.Empty); continue; }
 
-            int cw = child.Width > 0 ? child.Width : 100;
+            int cw = childWidth != null ? childWidth(child, i) : (child.Width > 0 ? child.Width : 100);
             int ch = childHeight != null ? childHeight(child, i) : (child.Height > 0 ? child.Height : 40);
             bool fillW = child.SizeMode == "fillWidth" || child.SizeMode == "fill";
             bool fillH = child.SizeMode == "fillHeight" || child.SizeMode == "fill";

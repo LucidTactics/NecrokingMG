@@ -184,6 +184,34 @@ public class UISkillBookScenario : UIScenarioBase
             case 10:
                 if (_phaseT > 0.3f)
                 {
+                    _lichIdx = FindTabIndex("lich");
+                    DebugLog.Log(ScenarioLog, $"Phase 10: lich tab dynamically loaded at idx={_lichIdx} (total tabs={Necroking.Data.SkillBookDefs.Tabs.Count})");
+                    if (_lichIdx < 0) { DebugLog.Log(ScenarioLog, "FAIL: lich.json not discovered dynamically"); _failCode = 22; }
+                    else if (SkillBookOverlay!.IsTabUnlockedForTest(_lichIdx))
+                    { DebugLog.Log(ScenarioLog, "FAIL: lich tab visible before morphing"); _failCode = 23; }
+                    DeferredScreenshot = "ui_skillbook_lich_locked";
+                    _waitingForScreenshot = true;
+                    _phase = 11;
+                }
+                break;
+
+            case 11:
+                if (_phaseT > 0.3f)
+                {
+                    DebugLog.Log(ScenarioLog, "Phase 11: morph into lich -> lich tab unlocks");
+                    SkillBookOverlay!.SetPassiveForTest("morphed:lich");
+                    bool unlocked = SkillBookOverlay.IsTabUnlockedForTest(_lichIdx);
+                    DebugLog.Log(ScenarioLog, $"  lich unlocked after morph = {unlocked}");
+                    if (!unlocked) { DebugLog.Log(ScenarioLog, "FAIL: lich tab still hidden after morph"); _failCode = 24; }
+                    DeferredScreenshot = "ui_skillbook_lich_unlocked";
+                    _waitingForScreenshot = true;
+                    _phase = 12;
+                }
+                break;
+
+            case 12:
+                if (_phaseT > 0.3f)
+                {
                     DebugLog.Log(ScenarioLog, "All phases complete");
                     _complete = true;
                 }
@@ -192,6 +220,7 @@ public class UISkillBookScenario : UIScenarioBase
     }
 
     private int _metaIdx = -1;
+    private int _lichIdx = -1;
 
     private static int FindTabIndex(string id)
     {

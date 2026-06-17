@@ -1,0 +1,38 @@
+{
+  "displayName": "Lich",
+  "unlockRequirement": {
+    "type": "morphed",
+    "id": "lich"
+  },
+  "skills": [
+    {
+      "id": "lich_empower_body",
+      "name": "Empower Body",
+      "description": "Strengthens Lich Body",
+      "x": 688,
+      "y": -701,
+      "parents": [],
+      "costs": [
+        {
+          "type": "item",
+          "id": "potion_death_evolution",
+          "amount": 5
+        }
+      ],
+      "effect": "grant_intrinsic_buff",
+      "effectArg": "iron_skin"
+    },
+    {
+      "id": "lich_empower_necromancy",
+      "name": "Empower Necromancy",
+      "description": "Learn to control death mana.",
+      "x": 300,
+      "y": -701,
+      "parents": [],
+      "costs": [],
+      "effect": "grant_path",
+      "effectArg": "death:1",
+      "startLearned": false
+    }
+  ]
+}

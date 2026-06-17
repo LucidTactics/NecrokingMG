@@ -14,7 +14,11 @@ namespace Necroking.Data;
 /// </summary>
 public static class SkillBookDefs
 {
-    /// <summary>Source order = tab order in the UI.</summary>
+    /// <summary>Canonical ordering hint for the built-in tabs. Tabs are discovered
+    /// dynamically from data/skills/*.json — this list only fixes the left-to-right
+    /// order of the known ones. Any extra tab file (e.g. lich.json) appends after
+    /// these, sorted by its optional "order" field then id, so new tabs can be
+    /// dropped in without code changes.</summary>
     public static readonly string[] TabIds = { "potions", "monstrology", "necromancy", "magic", "metamorphosis" };
 
     public static List<SkillTab> Tabs { get; private set; } = new();
@@ -30,9 +34,17 @@ public static class SkillBookDefs
     public static void Load()
     {
         Tabs = new List<SkillTab>();
-        foreach (var id in TabIds)
+
+        // Discover every tab file in data/skills/ — no fixed set, so dropping in a
+        // new <tab>.json adds a tab.
+        string dir = GamePaths.Resolve("data/skills");
+        var paths = new List<string>();
+        try { if (Directory.Exists(dir)) paths.AddRange(Directory.GetFiles(dir, "*.json")); }
+        catch (Exception ex) { DebugLog.Log("startup", $"SkillBook: listing {dir} failed: {ex.Message}"); }
+
+        foreach (var path in paths)
         {
-            string path = GamePaths.Resolve($"data/skills/{id}.json");
+            string id = Path.GetFileNameWithoutExtension(path);
             try
             {
                 Tabs.Add(LoadTab(id, path));
@@ -40,11 +52,26 @@ public static class SkillBookDefs
             catch (Exception ex)
             {
                 DebugLog.Log("startup", $"SkillBook: failed to load {path}: {ex.Message}");
-                Tabs.Add(new SkillTab { Id = id, DisplayName = id, Skills = new List<SkillDef>() });
             }
         }
+
+        // Order: explicit "order" wins, else the canonical TabIds index for known
+        // tabs, else after the known ones (alphabetical tiebreak).
+        Tabs.Sort((a, b) =>
+        {
+            int ka = SortKey(a), kb = SortKey(b);
+            return ka != kb ? ka.CompareTo(kb) : string.CompareOrdinal(a.Id, b.Id);
+        });
+
         // Resolve parent ids -> indices and build children list per tab.
         foreach (var tab in Tabs) tab.ResolveLinks();
+    }
+
+    private static int SortKey(SkillTab t)
+    {
+        if (t.Order >= 0) return t.Order;
+        int idx = Array.IndexOf(TabIds, t.Id);
+        return idx >= 0 ? idx : 1000;
     }
 
     /// <summary>Write the current per-skill x,y back into data/skills/&lt;tab&gt;.json,
@@ -94,6 +121,7 @@ public static class SkillBookDefs
         {
             Id = id,
             DisplayName = root.TryGetProperty("displayName", out var dn) ? dn.GetString() ?? id : id,
+            Order = root.TryGetProperty("order", out var ord) && ord.ValueKind == JsonValueKind.Number ? ord.GetInt32() : -1,
             Skills = new List<SkillDef>(),
         };
 
@@ -164,6 +192,9 @@ public class SkillTab
 {
     public string Id = "";
     public string DisplayName = "";
+    /// <summary>Explicit left-to-right order from JSON ("order"); -1 = unset, fall
+    /// back to the canonical TabIds order (then alphabetical). See SkillBookDefs.</summary>
+    public int Order = -1;
     public List<SkillDef> Skills = new();
     private Dictionary<string, int> _idToIndex = new();
 

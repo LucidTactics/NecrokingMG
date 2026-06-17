@@ -29,12 +29,12 @@ public class SkillBookOverlay : IModalLayer
     private const string TileId   = "SkillTile";
     private const string Instance = "skillbook";
 
-    // The window's five tab slots, in SkillBookDefs.Tabs order. The tabs live in a
-    // horizontal-layout "TabBar" sub-widget; each tab is a "SkillBookTab" widget
-    // (Backing / Name / Frac / Frame) instanced as TabBar child "tab{i}". Their data
-    // is bound through the nested instance path "{Instance}.{tabBarIdx}.{i}".
-    private static readonly string[] TabSlots =
-        { "Potions", "Monstrology", "Necromancy", "Magic", "Metamorphosis" };
+    // Tabs are driven dynamically from SkillBookDefs.Tabs (no fixed name list). The
+    // tabs live in a horizontal-layout "TabBar" sub-widget; each is a "SkillBookTab"
+    // widget (Backing / Name / Frac / Frame) instanced as TabBar child "tab{i}",
+    // bound through the nested instance path "{Instance}.{tabBarIdx}.{i}". The TabBar
+    // ships with a pool of slots (tab0..tabN); we bind/show the first Tabs.Count and
+    // hide the rest, sizing each visible tab to fill the bar.
 
     private RuntimeWidgetRenderer _renderer = null!;
     private SpriteBatch _batch = null!;
@@ -114,6 +114,10 @@ public class SkillBookOverlay : IModalLayer
     /// unlocked (visible)? Mirrors the visibility gate used to hide locked tabs.</summary>
     public bool IsTabUnlockedForTest(int i)
         => i >= 0 && i < SkillBookDefs.Tabs.Count && IsTabUnlocked(SkillBookDefs.Tabs[i]);
+
+    /// <summary>Test/host hook: set a passive flag on the book state (e.g.
+    /// "morphed:lich") to drive morph-gated tab visibility without a live morph.</summary>
+    public void SetPassiveForTest(string flag) => _state?.SetPassive(flag);
     public bool TryLearnById(string id, double timeSec = 0)
     {
         TryLearn(id, timeSec);
@@ -195,7 +199,7 @@ public class SkillBookOverlay : IModalLayer
         {
             var bar = _renderer.GetChildRect(WindowId, "TabBar", _x, _y, Instance);
             string barInst = $"{Instance}.{barIdx}";
-            for (int i = 0; i < SkillBookDefs.Tabs.Count && i < TabSlots.Length; i++)
+            for (int i = 0; i < SkillBookDefs.Tabs.Count && i < SlotCount(); i++)
             {
                 if (!IsTabUnlocked(SkillBookDefs.Tabs[i])) continue; // locked tab isn't clickable
                 var r = _renderer.GetChildRect("TabBar", $"tab{i}", bar.X, bar.Y, barInst);
@@ -342,26 +346,42 @@ public class SkillBookOverlay : IModalLayer
         int barIdx = TabBarIndex();
         if (barIdx < 0) return;
         string barInst = $"{Instance}.{barIdx}";
-        for (int i = 0; i < TabSlots.Length && i < SkillBookDefs.Tabs.Count; i++)
+        var tabs = SkillBookDefs.Tabs;
+        int slots = SlotCount();
+        var barDef = _renderer.GetWidgetDef("TabBar");
+        int barWidth = barDef?.Width ?? 1020;
+
+        // Visible = unlocked tabs that have a slot. Each gets an equal share of the
+        // bar so any number of tabs fills the width without overflow or gaps.
+        int visible = 0;
+        for (int i = 0; i < tabs.Count && i < slots; i++)
+            if (IsTabUnlocked(tabs[i])) visible++;
+        int tabW = visible > 0 ? barWidth / visible : barWidth;
+
+        for (int i = 0; i < slots; i++)
         {
-            var tab = SkillBookDefs.Tabs[i];
-            // Locked tabs are hidden entirely; the horizontal TabBar collapses the
-            // gap so the remaining tabs reflow.
-            bool unlocked = IsTabUnlocked(tab);
+            bool unlocked = i < tabs.Count && IsTabUnlocked(tabs[i]);
+            // Hide locked tabs and any unused slots; the horizontal TabBar collapses
+            // the gaps so the remaining tabs reflow flush.
             _renderer.SetHidden(barInst, $"tab{i}", !unlocked);
             if (!unlocked) continue;
 
-            var (learned, total) = _state?.GetProgress(tab) ?? (0, tab.Skills.Count);
+            var tab = tabs[i];
             string tabInst = $"{barInst}.{i}";
-            // The tab name is a static per-tab label carried in the widget data
-            // (TabBar child override → SkillBookTab "Name"), so it renders in both the
-            // game and the editor without code. Only the dynamic bits are bound here.
+            // Name is data-driven (DisplayName) so new tab files need no widget edits;
+            // width is sized to fill the bar for the current tab count.
+            _renderer.SetChildWidth(barInst, $"tab{i}", tabW);
+            _renderer.SetText(tabInst, "Name", tab.DisplayName);
+            var (learned, total) = _state?.GetProgress(tab) ?? (0, tab.Skills.Count);
             _renderer.SetText(tabInst, "Frac", $"{learned}/{total}");
             bool active = i == _activeTab;
             _renderer.SetElementTint(tabInst, "Backing",
                 active ? Color.White : new Color(150, 140, 120));
         }
     }
+
+    /// <summary>Number of tab slots the TabBar widget ships with (tab0..tabN).</summary>
+    private int SlotCount() => _renderer.GetWidgetDef("TabBar")?.Children?.Count ?? 0;
 
     /// <summary>A tab is visible only when its unlock requirement is met. Empty
     /// requirement = always visible. "seen_item" checks the inventory's ever-seen
@@ -372,6 +392,9 @@ public class SkillBookOverlay : IModalLayer
         return tab.UnlockType switch
         {
             "seen_item" => _inventory?.HasEverSeen(tab.UnlockId) ?? false,
+            // Set when the necromancer morphs into UnlockId (MorphNecromancerEffect
+            // records "morphed:<id>"); e.g. the Lich tab unlocks after becoming a lich.
+            "morphed" => _state?.HasPassive($"morphed:{tab.UnlockId}") ?? false,
             _ => true,
         };
     }
