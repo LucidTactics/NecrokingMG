@@ -2,6 +2,18 @@
   "displayName": "Necromancy",
   "skills": [
     {
+      "id": "inherent_necromancy",
+      "name": "Inherent Necromancy",
+      "description": "Learn to control death mana.",
+      "x": 647,
+      "y": -461,
+      "parents": [],
+      "costs": [],
+      "effect": "grant_path",
+      "effectArg": "death:1",
+      "startLearned": false
+    },
+    {
       "id": "brothers_keeper",
       "name": "Brothers Keeper",
       "description": "Human Limit \u002B1.\nUnlock Basic Humanoid Zombies.\nKill a human.",
