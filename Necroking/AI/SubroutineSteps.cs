@@ -445,6 +445,28 @@ public static class SubroutineSteps
         // needed.
     }
 
+    /// <summary>The velocity multiplier a given <see cref="MoveEffort"/> applies
+    /// to a unit's base CombatSpeed, from the unit def's jog/sprint multipliers
+    /// (falling back to the locomotion-profile defaults). Walk/Normal = 1×.
+    ///
+    /// Single source of truth for effort→speed, shared by
+    /// <see cref="ResolveEffortSpeed"/> (AI side) and Simulation's per-frame
+    /// MaxSpeed derivation — so the two can no longer disagree. (They used to:
+    /// Simulation reset MaxSpeed to plain CombatSpeed every frame while only the
+    /// AI applied effort, which silently clobbered amortized followers' speed.)</summary>
+    public static float EffortMultiplier(Necroking.Data.Registries.UnitDef? def, MoveEffort effort)
+    {
+        switch (effort)
+        {
+            case MoveEffort.Hurry:
+                return (def?.JogSpeedMultiplier > 0f) ? def.JogSpeedMultiplier : LocomotionProfile.DefaultJogMult;
+            case MoveEffort.Sprint:
+                return (def?.SprintSpeedMultiplier > 0f) ? def.SprintSpeedMultiplier : LocomotionProfile.DefaultSprintMult;
+            default:
+                return 1.0f; // Walk / Normal
+        }
+    }
+
     /// <summary>Compute the velocity cap for a given effort on this unit,
     /// without actually mutating MoveEffort/MaxSpeed. Useful when a routine
     /// needs the cap for clamping <c>PreferredVel</c> but isn't changing
@@ -452,20 +474,8 @@ public static class SubroutineSteps
     public static float ResolveEffortSpeed(ref AIContext ctx, MoveEffort effort,
         float? routineCapMult = null)
     {
-        float baseSpeed = ctx.Units[ctx.UnitIndex].Stats.CombatSpeed;
         var def = ctx.GameData?.Units.Get(ctx.Units[ctx.UnitIndex].UnitDefID);
-        float jogMult = (def?.JogSpeedMultiplier > 0f)
-            ? def.JogSpeedMultiplier : LocomotionProfile.DefaultJogMult;
-        float sprintMult = (def?.SprintSpeedMultiplier > 0f)
-            ? def.SprintSpeedMultiplier : LocomotionProfile.DefaultSprintMult;
-        float effortMult = effort switch
-        {
-            MoveEffort.Walk => 1.0f,
-            MoveEffort.Hurry => jogMult,
-            MoveEffort.Sprint => sprintMult,
-            _ => 1.0f,  // Normal — walk-effort cap
-        };
-        float speed = baseSpeed * effortMult;
+        float speed = ctx.Units[ctx.UnitIndex].Stats.CombatSpeed * EffortMultiplier(def, effort);
         if (routineCapMult.HasValue) speed *= routineCapMult.Value;
         return speed;
     }

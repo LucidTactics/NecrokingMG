@@ -122,12 +122,7 @@ public sealed class PassiveStatEffect : ISkillEffect
             int necroIdx = ctx.Sim.NecromancerIndex;
             if (necroIdx >= 0)
             {
-                string? buffId = arg switch
-                {
-                    "unholy_movement" => "buff_unholy_movement",
-                    "unholy_strength" => "buff_unholy_strength",
-                    _ => null,
-                };
+                string? buffId = PassiveBuffMap.BuffFor(arg);
                 if (buffId != null)
                 {
                     var def = ctx.GameData.Buffs.Get(buffId);
@@ -144,6 +139,26 @@ public sealed class PassiveStatEffect : ISkillEffect
             }
         }
         return true;
+    }
+}
+
+/// <summary>Single source of truth for which learned passive flag grants which
+/// buff. Both the initial apply (passive_stat) and the post-morph re-apply read
+/// this, so a new passive→buff pairing is added in ONE place instead of two code
+/// paths (a switch + explicit re-apply calls) that had to agree by hand.</summary>
+internal static class PassiveBuffMap
+{
+    public static readonly (string Flag, string BuffId)[] Entries =
+    {
+        ("unholy_movement", "buff_unholy_movement"),
+        ("unholy_strength", "buff_unholy_strength"),
+    };
+
+    public static string? BuffFor(string flag)
+    {
+        foreach (var (f, b) in Entries)
+            if (f == flag) return b;
+        return null;
     }
 }
 
@@ -194,8 +209,8 @@ public sealed class MorphNecromancerEffect : ISkillEffect
         // morph doesn't silently strip them (TransformUnit rebuilds Stats from
         // the new def and may clear the active buff list depending on impl;
         // safer to re-apply explicitly).
-        ReapplyPassiveBuff(ctx, idx, "unholy_movement", "buff_unholy_movement");
-        ReapplyPassiveBuff(ctx, idx, "unholy_strength", "buff_unholy_strength");
+        foreach (var (flag, buffId) in PassiveBuffMap.Entries)
+            ReapplyPassiveBuff(ctx, idx, flag, buffId);
 
         return true;
     }

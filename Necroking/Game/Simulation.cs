@@ -328,10 +328,21 @@ public class Simulation
         BuffSystem.TickBuffs(_units, dt, _gameData?.Buffs);
         for (int i = 0; i < _units.Count; i++)
         {
-            if (_units[i].ActiveBuffs.Count > 0)
-                _units[i].MaxSpeed = BuffSystem.GetModifiedStat(_units, i, BuffStat.CombatSpeed, _units[i].Stats.CombatSpeed);
-            else
-                _units[i].MaxSpeed = _units[i].Stats.CombatSpeed;
+            float baseSpeed = _units[i].ActiveBuffs.Count > 0
+                ? BuffSystem.GetModifiedStat(_units, i, BuffStat.CombatSpeed, _units[i].Stats.CombatSpeed)
+                : _units[i].Stats.CombatSpeed;
+            // Bake in the unit's persisted MoveEffort so the velocity cap stays
+            // correct even for AI that doesn't re-issue SetEffort every frame
+            // (amortized horde followers; early-return handler states). Without
+            // this, resetting MaxSpeed to base here clobbered a Jog/Sprint intent
+            // on skipped frames — the root cause of "minions follow too slowly".
+            // This makes effort→speed a single source of truth (shared with the
+            // AI's SetEffort via EffortMultiplier). Only Hurry/Sprint need the def
+            // lookup; Walk/Normal is 1× so the common case stays a field read.
+            var eff = _units[i].MoveEffort;
+            if (eff == Movement.MoveEffort.Hurry || eff == Movement.MoveEffort.Sprint)
+                baseSpeed *= AI.SubroutineSteps.EffortMultiplier(_gameData?.Units.Get(_units[i].UnitDefID), eff);
+            _units[i].MaxSpeed = baseSpeed;
         }
 
         // Standup/recovery timing now handled by IncapState inside BuffSystem.TickBuffs
@@ -3269,8 +3280,12 @@ public class Simulation
         Vec2 myPos = _units[i].Position;
         Vec2 targetPos = _units[targetIdx].Position;
         float dist = (targetPos - myPos).Length();
-        // Use same engage range as the combat system
-        float attackRange = MeleeRangeBase + _units[i].Stats.Length * 0.15f + _units[i].Radius + _units[targetIdx].Radius;
+        // Use the same engage range as the combat system. This was hardcoded to
+        // MeleeRangeBase, so it ignored a tuned Settings.Combat.MeleeRange and the
+        // wolf would engage/disengage at a different distance than it attacks the
+        // moment the setting diverges from the base (latent kiting bug).
+        float meleeBase = _gameData?.Settings.Combat.MeleeRange ?? MeleeRangeBase;
+        float attackRange = meleeBase + _units[i].Stats.Length * 0.15f + _units[i].Radius + _units[targetIdx].Radius;
         float disengageDist = attackRange + 2f; // back off 2 units beyond attack range
         float attackCooldown = _units[i].AttackCooldown;
 

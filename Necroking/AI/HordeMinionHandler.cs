@@ -91,20 +91,12 @@ public class HordeMinionHandler : IArchetypeHandler
         bool urgent = ctx.Units[ctx.UnitIndex].HitReacting
             || ctx.Units[ctx.UnitIndex].JustEnteredCombat
             || ctx.Units[ctx.UnitIndex].JustLeftCombat;
-        if (lowUrgency && !ctx.IsAmortizeTick && !urgent)
-        {
-            // Skipping the expensive follow/return update this frame — but we must
-            // still refresh the velocity cap. Simulation re-derives MaxSpeed from
-            // CombatSpeed EVERY frame (before the AI pass), so an amortized
-            // follower's Jog/Sprint effort gets clobbered back to base walk speed
-            // on the ~5-of-6 skipped frames — the real reason minions crawled when
-            // following. PreferredVel from the last full tick already points at the
-            // slot; re-applying the persisted MoveEffort keeps the cap high enough
-            // for the unit to actually travel at that effort between full updates.
-            ctx.Units[ctx.UnitIndex].MaxSpeed =
-                SubroutineSteps.ResolveEffortSpeed(ref ctx, ctx.Units[ctx.UnitIndex].MoveEffort);
-            return;
-        }
+        // Amortized skip: the velocity cap no longer needs re-applying here.
+        // Simulation's per-frame MaxSpeed derivation now bakes in the persisted
+        // MoveEffort (via SubroutineSteps.EffortMultiplier), so a skipped
+        // follower keeps its Jog/Sprint speed automatically. PreferredVel from
+        // the last full tick still points at the slot.
+        if (lowUrgency && !ctx.IsAmortizeTick && !urgent) return;
 
         // Execute current routine
         switch (ctx.Routine)
