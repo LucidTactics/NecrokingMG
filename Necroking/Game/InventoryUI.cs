@@ -39,6 +39,16 @@ public class InventoryUI : Necroking.UI.IModalLayer
     private int _screenX, _screenY;
     private int _widgetW, _widgetH;
 
+    // Tooltip styling (matches crafting menu / character stats tooltips)
+    private static readonly Color TipBg = new(20, 20, 32, 245);
+    private static readonly Color TipBorder = new(120, 120, 170, 240);
+    private static readonly Color TipTitle = new(255, 220, 140);
+    private static readonly Color TipDesc = new(200, 200, 215);
+    private static readonly Color TipDim = new(150, 150, 165);
+    private static readonly Color TipValue = new(230, 230, 240);
+    private const int TipTitleSize = 18;
+    private const int TipBodySize = 14;
+
     // Slot mapping: which widget child indices are inventory slots
     private int[] _slotChildIndices = Array.Empty<int>();
     private int _titleChildIndex = -1;
@@ -218,7 +228,7 @@ public class InventoryUI : Necroking.UI.IModalLayer
         }
     }
 
-    public void Draw()
+    public void Draw(int screenW = 0, int screenH = 0)
     {
         if (!_visible) return;
         _renderer.DrawWidget(WidgetId, _screenX, _screenY, InstanceId);
@@ -230,6 +240,7 @@ public class InventoryUI : Necroking.UI.IModalLayer
 
         var rects = Necroking.UI.WidgetLayoutUtils.ComputeLayoutRects(def, _screenX, _screenY);
         int mx = (int)_lastInput.MousePos.X, my = (int)_lastInput.MousePos.Y;
+        int hoveredSlot = -1;
         for (int i = 0; i < _slotChildIndices.Length; i++)
         {
             int ci = _slotChildIndices[i];
@@ -238,9 +249,123 @@ public class InventoryUI : Necroking.UI.IModalLayer
             if (r.Contains(mx, my))
             {
                 _batch.Draw(_pixel, r, Color.White * 0.1f);
+                hoveredSlot = i;
                 break;
             }
         }
+
+        // Tooltip for the hovered (non-empty) slot, drawn last so it sits on top.
+        if (hoveredSlot >= 0 && hoveredSlot < _inventory.SlotCount)
+        {
+            var slot = _inventory.GetSlot(hoveredSlot);
+            if (!slot.IsEmpty)
+            {
+                var itemDef = _items.Get(slot.ItemId);
+                if (itemDef != null)
+                    DrawItemTooltip(itemDef, slot.Quantity, mx, my, screenW, screenH);
+            }
+        }
+    }
+
+    private void DrawItemTooltip(ItemDef item, int quantity, int mx, int my, int screenW, int screenH)
+    {
+        if (_batch == null || _pixel == null) return;
+
+        const int TipW = 260;
+        const int Pad = 8;
+        int innerW = TipW - Pad * 2;
+
+        string category = string.IsNullOrEmpty(item.Category)
+            ? "" : char.ToUpper(item.Category[0]) + item.Category.Substring(1);
+        var descLines = WrapText(item.Description, TipBodySize, innerW);
+
+        var lines = new System.Collections.Generic.List<(string Label, string Value, Color Color)>
+        {
+            ("Quantity", quantity.ToString(), TipValue),
+            ("Max stack", item.MaxStack.ToString(), TipDim),
+        };
+
+        int lineH = (int)System.MathF.Ceiling(_renderer.MeasureText("Ay", TipBodySize).Y);
+        int titleH = (int)System.MathF.Ceiling(_renderer.MeasureText(item.DisplayName, TipTitleSize).Y);
+
+        int height = Pad + titleH + 2;
+        if (!string.IsNullOrEmpty(category)) height += lineH;
+        height += 4 + descLines.Count * lineH;
+        height += 8 + lines.Count * lineH; // divider gap + breakdown rows
+        height += Pad;
+
+        int sw = screenW > 0 ? screenW : _screenX + _widgetW;
+        int sh = screenH > 0 ? screenH : _screenY + _widgetH;
+        int tx = mx + 16, ty = my + 20;
+        if (tx + TipW > sw - 4) tx = mx - TipW - 8;
+        if (ty + height > sh - 4) ty = my - height - 8;
+        tx = System.Math.Max(4, tx);
+        ty = System.Math.Max(4, ty);
+
+        _batch.Draw(_pixel, new Rectangle(tx, ty, TipW, height), TipBg);
+        DrawTipBorder(tx, ty, TipW, height, TipBorder, 2);
+
+        int cy = ty + Pad;
+        _renderer.DrawText(item.DisplayName, tx + Pad, cy, TipTitleSize, TipTitle);
+        cy += titleH + 2;
+
+        if (!string.IsNullOrEmpty(category))
+        {
+            _renderer.DrawText(category, tx + Pad, cy, TipBodySize, TipDim);
+            cy += lineH;
+        }
+        cy += 4;
+
+        foreach (var ln in descLines)
+        {
+            _renderer.DrawText(ln, tx + Pad, cy, TipBodySize, TipDesc);
+            cy += lineH;
+        }
+
+        cy += 3;
+        _batch.Draw(_pixel, new Rectangle(tx + Pad, cy, innerW, 1), TipBorder);
+        cy += 5;
+        foreach (var (label, value, color) in lines)
+        {
+            _renderer.DrawText(label, tx + Pad, cy, TipBodySize, TipDim);
+            var vs = _renderer.MeasureText(value, TipBodySize);
+            _renderer.DrawText(value, (int)(tx + TipW - Pad - vs.X), cy, TipBodySize, color);
+            cy += lineH;
+        }
+    }
+
+    private void DrawTipBorder(int x, int y, int w, int h, Color c, int t)
+    {
+        if (_batch == null || _pixel == null) return;
+        _batch.Draw(_pixel, new Rectangle(x, y, w, t), c);
+        _batch.Draw(_pixel, new Rectangle(x, y + h - t, w, t), c);
+        _batch.Draw(_pixel, new Rectangle(x, y + t, t, h - t * 2), c);
+        _batch.Draw(_pixel, new Rectangle(x + w - t, y + t, t, h - t * 2), c);
+    }
+
+    /// <summary>Greedy word-wrap to a pixel width using the widget font.</summary>
+    private System.Collections.Generic.List<string> WrapText(string text, int fontSize, float maxW)
+    {
+        var result = new System.Collections.Generic.List<string>();
+        if (string.IsNullOrEmpty(text)) return result;
+        var sb = new System.Text.StringBuilder();
+        foreach (var word in text.Split(' '))
+        {
+            string trial = sb.Length == 0 ? word : sb + " " + word;
+            if (sb.Length > 0 && _renderer.MeasureText(trial, fontSize).X > maxW)
+            {
+                result.Add(sb.ToString());
+                sb.Clear();
+                sb.Append(word);
+            }
+            else
+            {
+                if (sb.Length > 0) sb.Append(' ');
+                sb.Append(word);
+            }
+        }
+        if (sb.Length > 0) result.Add(sb.ToString());
+        return result;
     }
 
     /// <summary>Check if mouse is over the inventory window (for blocking game input).</summary>

@@ -4,8 +4,6 @@ using System.IO;
 
 namespace Necroking.Core;
 
-public enum AtlasID { Vampire = 0, Navarre = 1, Simple = 2, Zombies = 3, Count = 4 }
-
 public static class AtlasDefs
 {
     // Default hardcoded names (fallback)
@@ -97,13 +95,15 @@ public static class AtlasDefs
         }
     }
 
-    public static AtlasID ResolveAtlasName(string name)
+    /// <summary>Resolve an atlas name to its index into <see cref="Names"/>.
+    /// Returns 0 (the first atlas) if the name is not found.</summary>
+    public static int ResolveAtlasName(string name)
     {
         for (int i = 0; i < _dynamicNames.Length; i++)
-            if (_dynamicNames[i] == name) return (AtlasID)i;
-        return AtlasID.Vampire;
+            if (_dynamicNames[i] == name) return i;
+        return 0;
     }
 
-    /// <summary>Total number of atlases (may exceed AtlasID.Count if new ones were found).</summary>
+    /// <summary>Total number of atlases currently known (grows as new sheets are found on disk).</summary>
     public static int TotalCount => _dynamicNames.Length;
 }

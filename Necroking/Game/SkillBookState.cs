@@ -24,12 +24,28 @@ public class IntrinsicBuffEntry
 public class SkillBookState
 {
     private readonly HashSet<string> _learned = new();
-    public SkillEventTracker Events { get; } = new();
+
+    /// <summary>Player-event tallies used for "event"-type skill costs (e.g.
+    /// "raise 5 corpses"). Points at the central <c>Simulation.PlayerEvents</c>
+    /// in real play — wired by <c>Simulation.SetSkillBook</c> via
+    /// <see cref="UseEventTracker"/> — so the skill book reads the same counts
+    /// every gameplay system writes. A standalone book (editor preview, pure
+    /// data scenarios) keeps its own isolated instance until wired.</summary>
+    private PlayerEventTracker _events = new();
+    public PlayerEventTracker Events => _events;
+
+    /// <summary>Re-point this book at a shared event tracker (the sim's central
+    /// one). No-op for null. Counts already recorded on the previous instance are
+    /// not migrated — call before any tallies, which is how the wiring is ordered.</summary>
+    public void UseEventTracker(PlayerEventTracker tracker)
+    {
+        if (tracker != null) _events = tracker;
+    }
 
     public static string[] EVENT_TYPES = {
-       "monster_kill",
-       "human_kill",
-       "cast_spell",
+       PlayerEventTracker.Keys.MonsterKill,
+       PlayerEventTracker.Keys.HumanKill,
+       PlayerEventTracker.Keys.CastSpell,
     };
 
     public static string[] SKILL_POINT_TYPES = {

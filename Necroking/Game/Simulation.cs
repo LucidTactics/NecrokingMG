@@ -233,7 +233,20 @@ public class Simulation
     /// Null in scenario / test paths that don't run the full skill system.</summary>
     private SkillBookState? _skillBookState;
     public SkillBookState? SkillBook => _skillBookState;
-    public void SetSkillBook(SkillBookState state) { _skillBookState = state; }
+    public void SetSkillBook(SkillBookState state)
+    {
+        _skillBookState = state;
+        // Make the skill book share the central player-event tracker so its
+        // "event"-cost checks read the same counts every system tallies into.
+        state?.UseEventTracker(PlayerEvents);
+    }
+
+    /// <summary>Central per-game tally of things that happen to the player
+    /// (kills, casts, corpses eaten, ...). The canonical home for "record a
+    /// player event" — call <c>PlayerEvents.Tally(PlayerEventTracker.Keys.X)</c>
+    /// from anywhere with a sim. Always non-null (unlike <see cref="SkillBook"/>),
+    /// so it's safe to tally in scenario/test paths too.</summary>
+    public PlayerEventTracker PlayerEvents { get; } = new();
 
     /// <summary>Wall-clock milliseconds the most recent Tick() took. Written every
     /// Tick; readable from scenarios/tests to chart per-tick cost. Not intended to
@@ -3530,8 +3543,8 @@ public class Simulation
                             || _units[i].Faction == Faction.Animal;
                         bool isHuman = killedDef != null && killedDef.Tags.Contains("humanoid")
                             || _units[i].Faction == Faction.Human;
-                        if (isMonster) _skillBookState.Events.Tally("monster_kill");
-                        if (isHuman)   _skillBookState.Events.Tally("human_kill");
+                        if (isMonster) PlayerEvents.Tally(PlayerEventTracker.Keys.MonsterKill);
+                        if (isHuman)   PlayerEvents.Tally(PlayerEventTracker.Keys.HumanKill);
                     }
                 }
 

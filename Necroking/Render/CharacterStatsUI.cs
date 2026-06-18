@@ -181,16 +181,72 @@ public class CharacterStatsUI : Necroking.UI.IModalLayer
         public readonly Color Color;
         public readonly string? BaseSuffix;
         public readonly bool IsSection;
+        // Optional breakdown for the hover tooltip (e.g. base + buff contributions).
+        public readonly List<TipLine>? TipLines;
 
-        public Row(string label, string value, Color color, string? baseSuffix = null, bool isSection = false)
+        public Row(string label, string value, Color color, string? baseSuffix = null,
+            bool isSection = false, List<TipLine>? tipLines = null)
         {
-            Label = label; Value = value; Color = color; BaseSuffix = baseSuffix; IsSection = isSection;
+            Label = label; Value = value; Color = color; BaseSuffix = baseSuffix;
+            IsSection = isSection; TipLines = tipLines;
         }
 
         public static Row Section(string label) => new(label, "", SectionColor_, null, true);
         public static readonly Row Blank = new("", "", default, null, false);
         private static readonly Color SectionColor_ = new(160, 200, 240);
     }
+
+    /// <summary>One row in a stat tooltip's "where the number comes from" breakdown.</summary>
+    public readonly struct TipLine
+    {
+        public readonly string Label;
+        public readonly string Value;
+        public readonly Color Color;
+        public TipLine(string label, string value, Color color)
+        { Label = label; Value = value; Color = color; }
+    }
+
+    /// <summary>A hovered stat row recorded during Draw, used to place the tooltip.</summary>
+    private readonly struct StatHover
+    {
+        public readonly Rectangle Rect;
+        public readonly string Label;
+        public readonly string Value;
+        public readonly List<TipLine>? Lines;
+        public StatHover(Rectangle rect, string label, string value, List<TipLine>? lines)
+        { Rect = rect; Label = label; Value = value; Lines = lines; }
+    }
+
+    // Hover regions for stat rows, rebuilt each Draw.
+    private readonly List<StatHover> _statHover = new();
+
+    private static readonly Color TipBg = new(20, 20, 32, 245);
+
+    // What each stat does. Wording is shared with the unit-sheet tooltips
+    // (Necroking.UI.StatTooltips) so descriptions stay in one place; rows the
+    // unit sheet doesn't cover (mana, per-slot armor) get their own text here.
+    private static string Desc(string key) => Necroking.UI.StatTooltips.Info[key].Desc;
+    private static readonly Dictionary<string, string> StatDesc = new()
+    {
+        ["HP"] = Desc("hp"),
+        ["Mana"] = "Mana fuels your spells. Every cast drains it, and it slowly regenerates over time. At zero mana you cannot cast.",
+        ["Mana Regen"] = "How much mana you recover each second.",
+        ["Strength"] = Desc("strength"),
+        ["Attack"] = Desc("attack"),
+        ["Defense"] = Desc("defense"),
+        ["Magic Resist"] = Desc("magicres"),
+        ["Morale"] = Desc("morale"),
+        ["Combat Speed"] = Desc("speed"),
+        ["Damage"] = "Base damage of the weapon, before strength is added and the target's protection is subtracted.",
+        ["Weapon Length"] = "Reach of the weapon. Longer weapons strike first when closing in and can hit over shorter ones.",
+        ["Body Prot"] = "Armor over the torso. Subtracted from incoming damage that lands on the body.",
+        ["Head Prot"] = "Armor over the head. Subtracted from incoming damage that lands on the head.",
+        ["Natural Prot"] = Desc("protection"),
+        ["Shield Prot"] = Desc("shield"),
+        ["Shield Parry"] = Desc("parry"),
+        ["Shield Defense"] = "Extra defense granted while a shield is raised, improving the chance to avoid blows entirely.",
+        ["Encumbrance"] = Desc("encumbrance"),
+    };
 
     public void Draw(int screenW, int screenH, Simulation sim, BuffRegistry buffs,
         ref SpellBarState primaryBar, InputState input, GameData? gameData = null,
@@ -233,32 +289,54 @@ public class CharacterStatsUI : Necroking.UI.IModalLayer
         string hpValue = $"{s.HP} / {buffedMaxHpI}";
         string? hpSuffix = maxHpDiffers ? $"(base {s.MaxHP})" : null;
 
+        var hpLines = new List<TipLine> { new("Current", s.HP.ToString(), ValueColor) };
+        if (maxHpDiffers)
+        {
+            hpLines.Add(new("Max (base)", s.MaxHP.ToString(), BaseDimColor));
+            AddBuffLines(hpLines, unit.ActiveBuffs, buffs, BuffStat.MaxHP, false);
+            hpLines.Add(new("Max total", buffedMaxHpI.ToString(), hpColor));
+        }
+        else
+        {
+            hpLines.Add(new("Max", s.MaxHP.ToString(), ValueColor));
+        }
+
+        var manaLines = new List<TipLine>
+        {
+            new("Current", ((int)necro.Mana).ToString(), ValueColor),
+            new("Max", ((int)necro.MaxMana).ToString(), ValueColor),
+            new("Regen", $"{necro.ManaRegen:F1}/s", ValueColor),
+        };
+        var regenLines = new List<TipLine> { new("Per second", $"{necro.ManaRegen:F1}", ValueColor) };
+
         var rows = new List<Row>
         {
             Row.Section("-- Vitals --"),
-            new("HP", hpValue, hpColor, hpSuffix),
-            new("Mana", $"{(int)necro.Mana} / {(int)necro.MaxMana}", ValueColor),
-            new("Mana Regen", $"{necro.ManaRegen:F1}/s", ValueColor),
+            new("HP", hpValue, hpColor, hpSuffix, tipLines: hpLines),
+            new("Mana", $"{(int)necro.Mana} / {(int)necro.MaxMana}", ValueColor, tipLines: manaLines),
+            new("Mana Regen", $"{necro.ManaRegen:F1}/s", ValueColor, tipLines: regenLines),
             Row.Blank,
             Row.Section("-- Combat --"),
-            MakeBuffedRow("Strength", s.Strength, sim, necroIdx, BuffStat.Strength),
-            MakeBuffedRow("Attack", s.Attack, sim, necroIdx, BuffStat.Attack),
-            MakeBuffedRow("Defense", s.Defense, sim, necroIdx, BuffStat.Defense),
-            MakeBuffedRow("Magic Resist", s.MagicResist, sim, necroIdx, BuffStat.MagicResist),
+            MakeBuffedRow("Strength", s.Strength, sim, necroIdx, BuffStat.Strength, buffs),
+            MakeBuffedRow("Attack", s.Attack, sim, necroIdx, BuffStat.Attack, buffs),
+            MakeBuffedRow("Defense", s.Defense, sim, necroIdx, BuffStat.Defense, buffs),
+            MakeBuffedRow("Magic Resist", s.MagicResist, sim, necroIdx, BuffStat.MagicResist, buffs),
             new("Morale", s.Morale.ToString(), ValueColor),
-            MakeBuffedRowF("Combat Speed", s.CombatSpeed, sim, necroIdx, BuffStat.CombatSpeed),
+            MakeBuffedRowF("Combat Speed", s.CombatSpeed, sim, necroIdx, BuffStat.CombatSpeed, buffs),
             new("Damage", s.Damage.ToString(), ValueColor),
             new("Weapon Length", s.Length.ToString(), ValueColor),
             Row.Blank,
             Row.Section("-- Defense --"),
             new("Body Prot", s.Armor.BodyProtection.ToString(), ValueColor),
             new("Head Prot", s.Armor.HeadProtection.ToString(), ValueColor),
-            MakeBuffedRow("Natural Prot", s.NaturalProt, sim, necroIdx, BuffStat.NaturalProt),
+            MakeBuffedRow("Natural Prot", s.NaturalProt, sim, necroIdx, BuffStat.NaturalProt, buffs),
             new("Shield Prot", s.ShieldProtection.ToString(), ValueColor),
             new("Shield Parry", s.ShieldParry.ToString(), ValueColor),
             new("Shield Defense", s.ShieldDefense.ToString(), ValueColor),
-            MakeBuffedRow("Encumbrance", s.Encumbrance, sim, necroIdx, BuffStat.Encumbrance),
+            MakeBuffedRow("Encumbrance", s.Encumbrance, sim, necroIdx, BuffStat.Encumbrance, buffs),
         };
+
+        _statHover.Clear();
 
         // Metamorphosis active abilities — buttons render inline when the
         // matching skill is learned. Height calc up front so the panel sizes
@@ -322,6 +400,10 @@ public class CharacterStatsUI : Necroking.UI.IModalLayer
                     _batch.DrawString(rowFont, r.BaseSuffix,
                         new Vector2(valX - (int)suffSize.X - 6, y), BaseDimColor);
                 }
+
+                // Record the full-width row rect so we can show a tooltip on hover.
+                _statHover.Add(new StatHover(
+                    new Rectangle(panelX, y, PanelW, RowH), r.Label, r.Value, r.TipLines));
             }
             y += RowH;
         }
@@ -435,6 +517,146 @@ public class CharacterStatsUI : Necroking.UI.IModalLayer
 
         int activeX = learnX + SkillsPanelW + SkillsGap;
         DrawActivePanel(activeX, panelY, rowFont, input, ref primaryBar);
+
+        // Stat hover tooltip, drawn last so it sits on top of every panel.
+        int tipMx = (int)input.MousePos.X;
+        int tipMy = (int)input.MousePos.Y;
+        foreach (var hreg in _statHover)
+        {
+            if (hreg.Rect.Contains(tipMx, tipMy))
+            {
+                DrawStatTooltip(hreg, tipMx, tipMy, screenW, screenH, rowFont);
+                break;
+            }
+        }
+    }
+
+    /// <summary>Append one breakdown line per active buff that modifies
+    /// <paramref name="stat"/>, summarizing its net Add / Multiply / Set
+    /// contribution. Mirrors the combination logic in BuffSystem.GetModifiedStat.</summary>
+    private void AddBuffLines(List<TipLine> lines,
+        IReadOnlyList<Necroking.Movement.ActiveBuff> activeBuffs, BuffRegistry buffs,
+        BuffStat stat, bool isFloat)
+    {
+        string sn = stat.ToString();
+        foreach (var ab in activeBuffs)
+        {
+            float add = 0f, mult = 1f;
+            float? set = null;
+            if (ab.Effects != null)
+            {
+                foreach (var eff in ab.Effects)
+                {
+                    if (eff.Stat != sn) continue;
+                    switch (eff.Type)
+                    {
+                        case "Add": add += eff.Value * ab.StackCount; break;
+                        case "Multiply": mult *= System.MathF.Pow(eff.Value, ab.StackCount); break;
+                        case "Set": set = eff.Value; break;
+                    }
+                }
+            }
+            if (add == 0f && mult == 1f && set == null) continue;
+
+            string name = buffs.Get(ab.BuffDefID)?.DisplayName ?? ab.BuffDefID;
+            string Fmt(float v) => isFloat ? v.ToString("F1") : ((int)System.MathF.Round(v)).ToString();
+            string val;
+            Color col;
+            if (set != null)        { val = "=" + Fmt(set.Value); col = ValueColor; }
+            else if (mult != 1f)    { val = "x" + mult.ToString("0.##"); col = mult > 1f ? BuffedUpColor : BuffedDownColor; }
+            else                    { val = (add > 0 ? "+" : "") + Fmt(add); col = add > 0 ? BuffedUpColor : BuffedDownColor; }
+            lines.Add(new TipLine(name, val, col));
+        }
+    }
+
+    private void DrawStatTooltip(StatHover h, int mx, int my, int screenW, int screenH, SpriteFont rowFont)
+    {
+        if (_font == null) return;
+
+        const int TipW = 280;
+        const int Pad = 8;
+        int innerW = TipW - Pad * 2;
+
+        string desc = StatDesc.TryGetValue(h.Label, out var d) ? d : "";
+        var descLines = WrapText(rowFont, desc, innerW);
+
+        // Breakdown: explicit lines if provided, else a single "Base" line so
+        // every stat still shows its number.
+        var bdLines = h.Lines ?? (string.IsNullOrEmpty(h.Value)
+            ? new List<TipLine>()
+            : new List<TipLine> { new("Base", h.Value, ValueColor) });
+
+        int lineH = rowFont.LineSpacing;
+        int titleH = (int)_font.MeasureString(h.Label).Y;
+
+        int height = Pad + titleH + 4;
+        height += descLines.Count * lineH;
+        if (bdLines.Count > 0) height += 8 + bdLines.Count * lineH; // divider gap + rows
+        height += Pad;
+
+        var (tx, ty) = PlaceTip(mx, my, TipW, height, screenW, screenH);
+
+        _batch.Draw(_pixel, new Rectangle(tx, ty, TipW, height), TipBg);
+        DrawBorder(tx, ty, TipW, height, PanelBorder);
+
+        int cy = ty + Pad;
+        _batch.DrawString(_font, h.Label, new Vector2(tx + Pad, cy), TitleColor);
+        cy += titleH + 4;
+
+        foreach (var ln in descLines)
+        {
+            _batch.DrawString(rowFont, ln, new Vector2(tx + Pad, cy), LabelColor);
+            cy += lineH;
+        }
+
+        if (bdLines.Count > 0)
+        {
+            cy += 3;
+            _batch.Draw(_pixel, new Rectangle(tx + Pad, cy, innerW, 1), PanelBorder);
+            cy += 5;
+            foreach (var ln in bdLines)
+            {
+                _batch.DrawString(rowFont, ln.Label, new Vector2(tx + Pad, cy), LabelColor);
+                var vs = rowFont.MeasureString(ln.Value);
+                _batch.DrawString(rowFont, ln.Value,
+                    new Vector2((int)(tx + TipW - Pad - vs.X), cy), ln.Color);
+                cy += lineH;
+            }
+        }
+    }
+
+    /// <summary>Greedy word-wrap to a pixel width.</summary>
+    private static List<string> WrapText(SpriteFont font, string text, float maxW)
+    {
+        var result = new List<string>();
+        if (string.IsNullOrEmpty(text)) return result;
+        var sb = new System.Text.StringBuilder();
+        foreach (var word in text.Split(' '))
+        {
+            string trial = sb.Length == 0 ? word : sb + " " + word;
+            if (sb.Length > 0 && font.MeasureString(trial).X > maxW)
+            {
+                result.Add(sb.ToString());
+                sb.Clear();
+                sb.Append(word);
+            }
+            else
+            {
+                if (sb.Length > 0) sb.Append(' ');
+                sb.Append(word);
+            }
+        }
+        if (sb.Length > 0) result.Add(sb.ToString());
+        return result;
+    }
+
+    /// <summary>Cursor offset +16/+20, flipped when it would clip a screen edge.</summary>
+    private static (int, int) PlaceTip(int mx, int my, int w, int h, int sw, int sh)
+    {
+        int x = mx + 16, y = my + 20;
+        if (x + w > sw - 4) x = mx - w - 8;
+        if (y + h > sh - 4) y = my - h - 8;
+        return (System.Math.Max(4, x), System.Math.Max(4, y));
     }
 
     /// <summary>Find the closest non-dissolving corpse within range and consume
@@ -698,7 +920,7 @@ public class CharacterStatsUI : Necroking.UI.IModalLayer
         }
     }
 
-    private Row MakeBuffedRow(string label, int baseVal, Simulation sim, int unitIdx, BuffStat stat)
+    private Row MakeBuffedRow(string label, int baseVal, Simulation sim, int unitIdx, BuffStat stat, BuffRegistry buffs)
     {
         float buffed = BuffSystem.GetModifiedStat(sim.UnitsMut, unitIdx, stat, baseVal);
         int buffedI = (int)System.MathF.Round(buffed);
@@ -707,10 +929,14 @@ public class CharacterStatsUI : Necroking.UI.IModalLayer
             : (buffedI > baseVal ? BuffedUpColor : BuffedDownColor);
         string value = buffedI.ToString();
         string? baseSuffix = differs ? $"(base {baseVal})" : null;
-        return new Row(label, value, color, baseSuffix);
+
+        var lines = new List<TipLine> { new("Base", baseVal.ToString(), BaseDimColor) };
+        AddBuffLines(lines, sim.Units[unitIdx].ActiveBuffs, buffs, stat, false);
+        if (lines.Count > 1) lines.Add(new TipLine("Total", buffedI.ToString(), color));
+        return new Row(label, value, color, baseSuffix, tipLines: lines);
     }
 
-    private Row MakeBuffedRowF(string label, float baseVal, Simulation sim, int unitIdx, BuffStat stat)
+    private Row MakeBuffedRowF(string label, float baseVal, Simulation sim, int unitIdx, BuffStat stat, BuffRegistry buffs)
     {
         float buffed = BuffSystem.GetModifiedStat(sim.UnitsMut, unitIdx, stat, baseVal);
         bool differs = System.MathF.Abs(buffed - baseVal) > 0.01f;
@@ -718,6 +944,10 @@ public class CharacterStatsUI : Necroking.UI.IModalLayer
             : (buffed > baseVal ? BuffedUpColor : BuffedDownColor);
         string value = buffed.ToString("F1");
         string? baseSuffix = differs ? $"(base {baseVal:F1})" : null;
-        return new Row(label, value, color, baseSuffix);
+
+        var lines = new List<TipLine> { new("Base", baseVal.ToString("F1"), BaseDimColor) };
+        AddBuffLines(lines, sim.Units[unitIdx].ActiveBuffs, buffs, stat, true);
+        if (lines.Count > 1) lines.Add(new TipLine("Total", buffed.ToString("F1"), color));
+        return new Row(label, value, color, baseSuffix, tipLines: lines);
     }
 }
