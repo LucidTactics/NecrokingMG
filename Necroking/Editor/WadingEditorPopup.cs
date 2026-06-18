@@ -265,8 +265,8 @@ public class WadingEditorPopup
         if (_targetUnit?.Sprite == null) { DrawNoSpriteMsg(x, y, size); return; }
 
         var atlasId = AtlasDefs.ResolveAtlasName(_targetUnit.Sprite.AtlasName);
-        if ((int)atlasId >= _atlases.Length) { DrawNoSpriteMsg(x, y, size); return; }
-        var atlas = _atlases[(int)atlasId];
+        if (atlasId >= _atlases.Length) { DrawNoSpriteMsg(x, y, size); return; }
+        var atlas = _atlases[atlasId];
         if (!atlas.IsLoaded) { DrawNoSpriteMsg(x, y, size); return; }
         var spriteData = atlas.GetUnit(_targetUnit.Sprite.SpriteName);
         if (spriteData == null) { DrawNoSpriteMsg(x, y, size); return; }

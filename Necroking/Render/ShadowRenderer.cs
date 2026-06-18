@@ -230,7 +230,7 @@ public class ShadowRenderer
             var unitDef = gameData.Units.Get(sim.Units[i].UnitDefID);
             if (unitDef == null) continue;
 
-            var atlas = atlases[(int)animData.AtlasID];
+            var atlas = atlases[animData.AtlasID];
             if (!atlas.IsLoaded) continue;
 
             var fr = animData.Ctrl.GetCurrentFrame(sim.Units[i].FacingAngle);

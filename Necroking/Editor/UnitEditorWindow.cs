@@ -1074,8 +1074,8 @@ public class UnitEditorWindow
             return;
 
         var atlasId = AtlasDefs.ResolveAtlasName(def.Sprite.AtlasName);
-        if ((int)atlasId >= _atlases.Length) return;
-        var atlas = _atlases[(int)atlasId];
+        if (atlasId >= _atlases.Length) return;
+        var atlas = _atlases[atlasId];
         if (!atlas.IsLoaded) return;
 
         var spriteData = atlas.GetUnit(def.Sprite.SpriteName);
@@ -1268,8 +1268,8 @@ public class UnitEditorWindow
     {
         if (def.Sprite == null) return 128f;
         var atlasId = AtlasDefs.ResolveAtlasName(def.Sprite.AtlasName);
-        if ((int)atlasId >= _atlases.Length) return 128f;
-        var atlas = _atlases[(int)atlasId];
+        if (atlasId >= _atlases.Length) return 128f;
+        var atlas = _atlases[atlasId];
         if (!atlas.IsLoaded) return 128f;
         var spriteData = atlas.GetUnit(def.Sprite.SpriteName);
         if (spriteData == null) return 128f;
@@ -1637,8 +1637,8 @@ public class UnitEditorWindow
             return 0;
 
         var atlasId = AtlasDefs.ResolveAtlasName(def.Sprite.AtlasName);
-        if ((int)atlasId >= _atlases.Length) return 0;
-        var atlas = _atlases[(int)atlasId];
+        if (atlasId >= _atlases.Length) return 0;
+        var atlas = _atlases[atlasId];
         if (!atlas.IsLoaded) return 0;
 
         var spriteData = atlas.GetUnit(def.Sprite.SpriteName);
@@ -1678,8 +1678,8 @@ public class UnitEditorWindow
         if (def?.Sprite == null) return;
 
         var atlasId = AtlasDefs.ResolveAtlasName(def.Sprite.AtlasName);
-        if ((int)atlasId >= _atlases.Length) return;
-        var atlas = _atlases[(int)atlasId];
+        if (atlasId >= _atlases.Length) return;
+        var atlas = _atlases[atlasId];
         if (!atlas.IsLoaded) return;
 
         var spriteData = atlas.GetUnit(def.Sprite.SpriteName);
@@ -3514,9 +3514,9 @@ public class UnitEditorWindow
 
         // Re-init animation controller
         var atlasId = AtlasDefs.ResolveAtlasName(_previewAtlas);
-        if ((int)atlasId < _atlases.Length && _atlases[(int)atlasId].IsLoaded)
+        if (atlasId < _atlases.Length && _atlases[atlasId].IsLoaded)
         {
-            var spriteData = _atlases[(int)atlasId].GetUnit(_previewSprite);
+            var spriteData = _atlases[atlasId].GetUnit(_previewSprite);
             _previewAnim.Init(spriteData);
             _lastPreviewSpriteData = spriteData;
         }
@@ -3526,10 +3526,10 @@ public class UnitEditorWindow
     {
         if (string.IsNullOrEmpty(atlasName)) return new[] { "" };
         var atlasId = AtlasDefs.ResolveAtlasName(atlasName);
-        if ((int)atlasId >= _atlases.Length || !_atlases[(int)atlasId].IsLoaded)
+        if (atlasId >= _atlases.Length || !_atlases[atlasId].IsLoaded)
             return new[] { "" };
         var names = new List<string> { "" };
-        names.AddRange(_atlases[(int)atlasId].Units.Keys);
+        names.AddRange(_atlases[atlasId].Units.Keys);
         return names.ToArray();
     }
 
@@ -3538,9 +3538,9 @@ public class UnitEditorWindow
         if (string.IsNullOrEmpty(atlasName) || string.IsNullOrEmpty(spriteName))
             return new[] { "Idle" };
         var atlasId = AtlasDefs.ResolveAtlasName(atlasName);
-        if ((int)atlasId >= _atlases.Length || !_atlases[(int)atlasId].IsLoaded)
+        if (atlasId >= _atlases.Length || !_atlases[atlasId].IsLoaded)
             return new[] { "Idle" };
-        var spriteData = _atlases[(int)atlasId].GetUnit(spriteName);
+        var spriteData = _atlases[atlasId].GetUnit(spriteName);
         if (spriteData == null) return new[] { "Idle" };
         var names = new List<string>(spriteData.Animations.Keys);
         if (names.Count == 0) names.Add("Idle");

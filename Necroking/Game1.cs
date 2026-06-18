@@ -169,7 +169,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
     // Rendering
     private Renderer _renderer = new();
     private Camera25D _camera = new();
-    private SpriteAtlas[] _atlases = new SpriteAtlas[(int)AtlasID.Count];
+    private SpriteAtlas[] _atlases = new SpriteAtlas[0]; // rebuilt in LoadContent from AtlasDefs.TotalCount
     private Dictionary<uint, UnitAnimData> _unitAnims = new(); // keyed by stable unit ID
     private Dictionary<int, UnitAnimData> _corpseAnims = new(); // keyed by corpse ID
 
@@ -350,7 +350,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
     internal struct UnitAnimData
     {
         public AnimController Ctrl;
-        public AtlasID AtlasID;
+        public int AtlasID; // index into AtlasDefs.Names
         public float RefFrameHeight;
         public string CachedDefID;
     }
@@ -669,7 +669,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         foreach (var def in _gameData.Units.All())
         {
             if (def.Sprite == null || string.IsNullOrEmpty(def.Sprite.AtlasName)) continue;
-            int aIdx = (int)AtlasDefs.ResolveAtlasName(def.Sprite.AtlasName);
+            int aIdx = AtlasDefs.ResolveAtlasName(def.Sprite.AtlasName);
             if (aIdx < 0 || aIdx >= _atlases.Length) continue;
             def.SpriteData = _atlases[aIdx].GetUnit(def.Sprite.SpriteName);
             if (def.SpriteData != null) spriteWireCount++;
@@ -680,7 +680,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // that the Corpses atlas exists. Spritemeta provides the defaults; this
         // step lets the editor tune per-angle hand-attach points without re-export.
         {
-            int corpsesIdx = (int)AtlasDefs.ResolveAtlasName("Corpses");
+            int corpsesIdx = AtlasDefs.ResolveAtlasName("Corpses");
             if (corpsesIdx >= 0 && corpsesIdx < _atlases.Length)
                 _gameData.Corpse.ApplyToAtlas(_atlases[corpsesIdx]);
         }
@@ -939,7 +939,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         _mapEditor.SetSpellRegistry(_gameData.Spells);
         _mapEditor.SetGameData(_gameData);
         {
-            int corpsesIdx = (int)AtlasDefs.ResolveAtlasName("Corpses");
+            int corpsesIdx = AtlasDefs.ResolveAtlasName("Corpses");
             var corpsesAtlas = (corpsesIdx >= 0 && corpsesIdx < _atlases.Length) ? _atlases[corpsesIdx] : null;
             _mapEditor.SetCorpseSettings(_gameData.Corpse, corpsesAtlas);
         }
@@ -1609,7 +1609,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         if (unitDef.Sprite != null)
         {
             var atlasId = AtlasDefs.ResolveAtlasName(unitDef.Sprite.AtlasName);
-            var spriteData = _atlases[(int)atlasId].GetUnit(unitDef.Sprite.SpriteName);
+            var spriteData = _atlases[atlasId].GetUnit(unitDef.Sprite.SpriteName);
             if (spriteData != null)
             {
                 var ctrl = new AnimController();
@@ -1895,7 +1895,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         if (unitDef?.Sprite == null) return;
 
         var atlasId = AtlasDefs.ResolveAtlasName(unitDef.Sprite.AtlasName);
-        var spriteData = _atlases[(int)atlasId].GetUnit(unitDef.Sprite.SpriteName);
+        var spriteData = _atlases[atlasId].GetUnit(unitDef.Sprite.SpriteName);
         if (spriteData == null) return;
 
         var ctrl = new AnimController();
@@ -4215,7 +4215,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 var unitDef = _gameData.Units.Get(defID);
                 if (unitDef?.Sprite == null) continue;
                 var atlasId = AtlasDefs.ResolveAtlasName(unitDef.Sprite.AtlasName);
-                var spriteData = _atlases[(int)atlasId].GetUnit(unitDef.Sprite.SpriteName);
+                var spriteData = _atlases[atlasId].GetUnit(unitDef.Sprite.SpriteName);
                 if (spriteData == null) continue;
 
                 var ctrl = new AnimController();
@@ -5795,7 +5795,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
             var unitDef = _gameData.Units.Get(corpse.UnitDefID);
             if (unitDef?.Sprite == null) continue;
             var atlasId = AtlasDefs.ResolveAtlasName(unitDef.Sprite.AtlasName);
-            var atlas = _atlases[(int)atlasId];
+            var atlas = _atlases[atlasId];
             if (!atlas.IsLoaded) continue;
 
             // Get or create corpse anim controller
@@ -5869,7 +5869,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
     private FrameResult GetBodyBagFrame(float facingAngle)
     {
         var corpsesAtlasId = AtlasDefs.ResolveAtlasName("Corpses");
-        int atlasIdx = (int)corpsesAtlasId;
+        int atlasIdx = corpsesAtlasId;
         if (atlasIdx >= _atlases.Length || !_atlases[atlasIdx].IsLoaded) return default;
         var corpsesAtlas = _atlases[atlasIdx];
         var bodyBagSprite = corpsesAtlas.GetUnit("BodyBag");
@@ -5913,7 +5913,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
     private float GetBodyBagRefHeight()
     {
         var corpsesAtlasId = AtlasDefs.ResolveAtlasName("Corpses");
-        int atlasIdx = (int)corpsesAtlasId;
+        int atlasIdx = corpsesAtlasId;
         if (atlasIdx >= _atlases.Length || !_atlases[atlasIdx].IsLoaded) return 128f;
         var bodyBagSprite = _atlases[atlasIdx].GetUnit("BodyBag");
         if (bodyBagSprite == null) return 128f;
@@ -5928,7 +5928,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         if (fr.Frame == null) return;
 
         var corpsesAtlasId = AtlasDefs.ResolveAtlasName("Corpses");
-        var corpsesAtlas = _atlases[(int)corpsesAtlasId];
+        var corpsesAtlas = _atlases[corpsesAtlasId];
 
         // Bag size is the SAME everywhere it appears (carry / ground / table) —
         // CarryBagScale is the canonical world-height. Doesn't multiply by
@@ -5949,7 +5949,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         if (fr.Frame == null) return;
 
         var corpsesAtlasId = AtlasDefs.ResolveAtlasName("Corpses");
-        int atlasIdx = (int)corpsesAtlasId;
+        int atlasIdx = corpsesAtlasId;
         if (atlasIdx >= _atlases.Length || !_atlases[atlasIdx].IsLoaded) return;
         var corpsesAtlas = _atlases[atlasIdx];
 
@@ -6017,7 +6017,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         if (fr.Frame == null) return;
 
         var corpsesAtlasId = AtlasDefs.ResolveAtlasName("Corpses");
-        int atlasIdx = (int)corpsesAtlasId;
+        int atlasIdx = corpsesAtlasId;
         if (atlasIdx >= _atlases.Length || !_atlases[atlasIdx].IsLoaded) return;
         var corpsesAtlas = _atlases[atlasIdx];
 
@@ -6084,7 +6084,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         var unitDef = _gameData.Units.Get(unitDefID);
         if (unitDef?.Sprite == null) return false;
         var atlasId = AtlasDefs.ResolveAtlasName(unitDef.Sprite.AtlasName);
-        int ai = (int)atlasId;
+        int ai = atlasId;
         if (ai < 0 || ai >= _atlases.Length || !_atlases[ai].IsLoaded) return false;
         atlas = _atlases[ai];
         var spriteData = atlas.GetUnit(unitDef.Sprite.SpriteName);
@@ -6249,7 +6249,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         foreach (var def in _gameData.Units.All())
         {
             if (def?.Sprite == null) continue;
-            int ai = (int)Core.AtlasDefs.ResolveAtlasName(def.Sprite.AtlasName);
+            int ai = Core.AtlasDefs.ResolveAtlasName(def.Sprite.AtlasName);
             if (ai < 0 || ai >= _atlases.Length || !_atlases[ai].IsLoaded) continue;
             var death = _atlases[ai].GetUnit(def.Sprite.SpriteName)?.GetAnim("Death");
             if (death == null) continue;
@@ -6281,7 +6281,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         var corpseDef = _gameData.Units.Get(cc.UnitDefID);
         if (corpseDef?.Sprite == null) return;
         var atlasId = AtlasDefs.ResolveAtlasName(corpseDef.Sprite.AtlasName);
-        int ai = (int)atlasId;
+        int ai = atlasId;
         if (ai < 0 || ai >= _atlases.Length || !_atlases[ai].IsLoaded) return;
         var death = _atlases[ai].GetUnit(corpseDef.Sprite.SpriteName)?.GetAnim("Death");
         if (death == null) return;
@@ -6322,7 +6322,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         var corpseDef = _gameData.Units.Get(cc.UnitDefID);
         if (corpseDef?.Sprite == null) return;
         var atlasId = AtlasDefs.ResolveAtlasName(corpseDef.Sprite.AtlasName);
-        int ai = (int)atlasId;
+        int ai = atlasId;
         if (ai < 0 || ai >= _atlases.Length || !_atlases[ai].IsLoaded) return;
         var atlas = _atlases[ai];
         var spriteData = atlas.GetUnit(corpseDef.Sprite.SpriteName);
@@ -6839,7 +6839,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         var unitDef = _gameData.Units.Get(_sim.Units[i].UnitDefID);
         if (unitDef == null) return;
 
-        var atlas = _atlases[(int)animData.AtlasID];
+        var atlas = _atlases[animData.AtlasID];
         if (!atlas.IsLoaded) return;
 
         var fr = animData.Ctrl.GetCurrentFrame(_sim.Units[i].FacingAngle);
@@ -7370,12 +7370,12 @@ public class Game1 : Microsoft.Xna.Framework.Game
             return;
         }
         var atlasId = AtlasDefs.ResolveAtlasName(unitDef.Sprite.AtlasName);
-        if ((int)atlasId >= _atlases.Length)
+        if (atlasId >= _atlases.Length)
         {
-            DebugLog.Log("table", $"[DrawUnitIdleSprite] '{unitDefId}': atlasId={(int)atlasId} out of range (atlases={_atlases.Length})");
+            DebugLog.Log("table", $"[DrawUnitIdleSprite] '{unitDefId}': atlasId={atlasId} out of range (atlases={_atlases.Length})");
             return;
         }
-        var atlas = _atlases[(int)atlasId];
+        var atlas = _atlases[atlasId];
         if (!atlas.IsLoaded)
         {
             DebugLog.Log("table", $"[DrawUnitIdleSprite] '{unitDefId}': atlas '{unitDef.Sprite.AtlasName}' not loaded");
