@@ -3545,7 +3545,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // monster_kill / human_kill counters). Magic-tree skills cost "cast_spell"
         // events, so each successful real-spell cast advances them. Built-in
         // abilities and potion-throws short-circuit above and don't count.
-        _sim.SkillBook?.Events.Tally("cast_spell");
+        _sim.PlayerEvents.Tally(PlayerEventTracker.Keys.CastSpell);
 
         var spell = _gameData.Spells.Get(spellId);
         if (spell == null) return result;
