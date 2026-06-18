@@ -5268,8 +5268,10 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
         // Inventory UI (widget-based, drawn over HUD)
         if (showUI)
+        {
             _inventoryUI.Draw(screenW, screenH);
             _tableMenuUI.Draw();
+        }
 
         // Character stats panel (Tab)
         if (showUI)
