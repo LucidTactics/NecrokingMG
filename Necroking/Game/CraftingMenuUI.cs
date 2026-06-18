@@ -36,6 +36,18 @@ public class CraftingMenuUI : Necroking.UI.IModalLayer
     private InputState? _lastInput;
     private int _screenX, _screenY;
     private int _widgetW, _widgetH;
+    private int _lastScreenW, _lastScreenH;
+
+    // Tooltip styling
+    private static readonly Color TipBg = new(20, 20, 32, 245);
+    private static readonly Color TipBorder = new(120, 120, 170, 240);
+    private static readonly Color TipTitle = new(255, 220, 140);
+    private static readonly Color TipDesc = new(200, 200, 215);
+    private static readonly Color TipDim = new(150, 150, 165);
+    private static readonly Color TipGreen = new(120, 230, 120);
+    private static readonly Color TipRed = new(230, 110, 110);
+    private const int TipTitleSize = 18;
+    private const int TipBodySize = 14;
 
     // Cached potion IDs
     private readonly List<string> _potionIds = new();
@@ -274,6 +286,8 @@ public class CraftingMenuUI : Necroking.UI.IModalLayer
     public void Update(InputState input, int screenW, int screenH, float dt)
     {
         _lastInput = input;
+        _lastScreenW = screenW;
+        _lastScreenH = screenH;
         if (!_visible) return;
 
         SyncItems();
@@ -342,6 +356,7 @@ public class CraftingMenuUI : Necroking.UI.IModalLayer
         if (def == null) return;
 
         var rects = ComputeItemRects(def);
+        int hoveredIdx = -1;
         for (int i = 0; i < rects.Count && i < _potionIds.Count; i++)
         {
             var potion = _gameData.Potions.Get(_potionIds[i]);
@@ -354,8 +369,12 @@ public class CraftingMenuUI : Necroking.UI.IModalLayer
             if (_lastInput != null)
             {
                 int hmx = (int)_lastInput.MousePos.X, hmy = (int)_lastInput.MousePos.Y;
-                if (rects[i].Contains(hmx, hmy) && canAfford)
-                    _batch.Draw(_pixel, rects[i], Color.White * 0.1f);
+                if (rects[i].Contains(hmx, hmy))
+                {
+                    hoveredIdx = i;
+                    if (canAfford)
+                        _batch.Draw(_pixel, rects[i], Color.White * 0.1f);
+                }
             }
 
             if (isSelected)
@@ -375,6 +394,108 @@ public class CraftingMenuUI : Necroking.UI.IModalLayer
                 _batch.Draw(_pixel, new Rectangle(r.X + 2, barY, (int)(barW * _craftProgress), barH), new Color(80, 160, 80, 220));
             }
         }
+
+        // Tooltip for the hovered recipe, drawn last so it sits on top.
+        if (hoveredIdx >= 0 && _lastInput != null)
+        {
+            var potion = _gameData.Potions.Get(_potionIds[hoveredIdx]);
+            if (potion != null)
+                DrawPotionTooltip(potion, (int)_lastInput.MousePos.X, (int)_lastInput.MousePos.Y);
+        }
+    }
+
+    private void DrawPotionTooltip(PotionDef potion, int mx, int my)
+    {
+        const int TipW = 270;
+        const int Pad = 8;
+        int innerW = TipW - Pad * 2;
+
+        var descLines = WrapText(potion.Description, TipBodySize, innerW);
+
+        // Breakdown: ingredients (with have/need + affordability color), then meta.
+        var lines = new List<(string Label, string Value, Color Color)>();
+        bool anyIngredient = false;
+        foreach (var ing in potion.Recipe)
+        {
+            if (string.IsNullOrEmpty(ing.ItemId)) continue;
+            anyIngredient = true;
+            int have = _inventory.GetItemCount(ing.ItemId);
+            string name = _items.Get(ing.ItemId)?.DisplayName ?? ing.ItemId;
+            lines.Add((name, $"{have}/{ing.Amount}", have >= ing.Amount ? TipGreen : TipRed));
+        }
+        if (!anyIngredient)
+            lines.Add(("Cost", "Free", TipGreen));
+
+        lines.Add(("Target", potion.TargetType, TipDim));
+        if (potion.ThrowRange > 0)
+            lines.Add(("Throw range", potion.ThrowRange.ToString("0.#"), TipDim));
+        lines.Add(("Craft time", $"{potion.CraftTime:0.#}s", TipDim));
+
+        // Measure.
+        int lineH = (int)System.MathF.Ceiling(_renderer.MeasureText("Ay", TipBodySize).Y);
+        int titleH = (int)System.MathF.Ceiling(_renderer.MeasureText(potion.DisplayName, TipTitleSize).Y);
+
+        int height = Pad + titleH + 4;
+        height += descLines.Count * lineH;
+        height += 8 + lines.Count * lineH; // divider gap + breakdown rows
+        height += Pad;
+
+        int sw = _lastScreenW > 0 ? _lastScreenW : (_screenX + _widgetW + TipW + 16);
+        int sh = _lastScreenH > 0 ? _lastScreenH : _widgetH;
+        int tx = mx + 16, ty = my + 20;
+        if (tx + TipW > sw - 4) tx = mx - TipW - 8;
+        if (ty + height > sh - 4) ty = my - height - 8;
+        tx = System.Math.Max(4, tx);
+        ty = System.Math.Max(4, ty);
+
+        _batch.Draw(_pixel, new Rectangle(tx, ty, TipW, height), TipBg);
+        DrawBorder(new Rectangle(tx, ty, TipW, height), TipBorder, 2);
+
+        int cy = ty + Pad;
+        _renderer.DrawText(potion.DisplayName, tx + Pad, cy, TipTitleSize, TipTitle);
+        cy += titleH + 4;
+
+        foreach (var ln in descLines)
+        {
+            _renderer.DrawText(ln, tx + Pad, cy, TipBodySize, TipDesc);
+            cy += lineH;
+        }
+
+        cy += 3;
+        _batch.Draw(_pixel, new Rectangle(tx + Pad, cy, innerW, 1), TipBorder);
+        cy += 5;
+        foreach (var (label, value, color) in lines)
+        {
+            _renderer.DrawText(label, tx + Pad, cy, TipBodySize, TipDim);
+            var vs = _renderer.MeasureText(value, TipBodySize);
+            _renderer.DrawText(value, (int)(tx + TipW - Pad - vs.X), cy, TipBodySize, color);
+            cy += lineH;
+        }
+    }
+
+    /// <summary>Greedy word-wrap to a pixel width using the widget font.</summary>
+    private List<string> WrapText(string text, int fontSize, float maxW)
+    {
+        var result = new List<string>();
+        if (string.IsNullOrEmpty(text)) return result;
+        var sb = new System.Text.StringBuilder();
+        foreach (var word in text.Split(' '))
+        {
+            string trial = sb.Length == 0 ? word : sb + " " + word;
+            if (sb.Length > 0 && _renderer.MeasureText(trial, fontSize).X > maxW)
+            {
+                result.Add(sb.ToString());
+                sb.Clear();
+                sb.Append(word);
+            }
+            else
+            {
+                if (sb.Length > 0) sb.Append(' ');
+                sb.Append(word);
+            }
+        }
+        if (sb.Length > 0) result.Add(sb.ToString());
+        return result;
     }
 
     public bool ContainsMouse(int mouseX, int mouseY)
