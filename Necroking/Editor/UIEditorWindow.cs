@@ -1473,7 +1473,7 @@ public partial class UIEditorWindow : EditorBase
                 def.Texture = path;
                 _unsavedChanges = true;
                 InvalidateNineSlice(def.Id);
-            });
+            }, defaultDir: "assets/UI");
         }
         curY += 24;
 
@@ -1781,7 +1781,7 @@ public partial class UIEditorWindow : EditorBase
             if (DrawButton("Browse", x + pad + propW - browseBtnW, curY, browseBtnW, 20))
             {
                 _textureBrowser.Open("assets", def.ImagePath,
-                    path => { def.ImagePath = path; _unsavedChanges = true; });
+                    path => { def.ImagePath = path; _unsavedChanges = true; }, defaultDir: "assets/UI");
             }
             curY += 24;
         }
@@ -2284,7 +2284,7 @@ public partial class UIEditorWindow : EditorBase
             if (DrawButton("Browse", x + pad + propW - browseBtnW, curY, browseBtnW, 20))
             {
                 _textureBrowser.Open("assets", def.BackgroundImagePath,
-                    path => { def.BackgroundImagePath = path; _unsavedChanges = true; });
+                    path => { def.BackgroundImagePath = path; _unsavedChanges = true; }, defaultDir: "assets/UI");
             }
             curY += 24;
         }
@@ -2313,7 +2313,7 @@ public partial class UIEditorWindow : EditorBase
             if (DrawButton("Browse", x + pad + propW - browseBtnW, curY, browseBtnW, 20))
             {
                 _textureBrowser.Open("assets", def.StencilImagePath,
-                    path => { def.StencilImagePath = path; _unsavedChanges = true; });
+                    path => { def.StencilImagePath = path; _unsavedChanges = true; }, defaultDir: "assets/UI");
             }
             curY += 24;
         }

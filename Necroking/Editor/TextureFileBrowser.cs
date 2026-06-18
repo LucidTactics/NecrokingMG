@@ -63,7 +63,7 @@ public class TextureFileBrowser : Necroking.UI.IModalLayer
     /// <summary>
     /// Open the file browser popup.
     /// </summary>
-    public void Open(string rootDir, string currentPath, Action<string> onSelect)
+    public void Open(string rootDir, string currentPath, Action<string> onSelect, string? defaultDir = null)
     {
         _isOpen = true;
         _onSelect = onSelect;
@@ -74,34 +74,45 @@ public class TextureFileBrowser : Necroking.UI.IModalLayer
 
         Necroking.Game1.Popups.Push(this);
 
-        // Normalize root dir
-        _rootDir = string.IsNullOrEmpty(rootDir) ? "assets" : rootDir.TrimEnd('/', '\\');
+        // Resolve the root to an ABSOLUTE path. Callers pass project-relative roots
+        // like "assets", but the process working directory is the exe folder (e.g.
+        // bin/Publish) where "assets" doesn't exist — so the old relative path fell
+        // through to "." and the browser opened in the exe folder (the "unfamiliar
+        // directory"). The root also bounds how far ".." can climb up.
+        _rootDir = ResolveDir(string.IsNullOrEmpty(rootDir) ? Necroking.Core.GamePaths.AssetsDir : rootDir);
 
-        // If currentPath has a directory portion, start there
+        // Start directory preference: the folder of the current value if it has
+        // one, else the caller's default dir (e.g. assets/UI for UI images), else
+        // the root. All resolved to absolute so they're valid regardless of CWD.
+        string startDir = "";
         if (!string.IsNullOrEmpty(currentPath))
         {
             string dir = Path.GetDirectoryName(currentPath)?.Replace('\\', '/') ?? "";
-            if (!string.IsNullOrEmpty(dir) && Directory.Exists(dir))
-                _currentDir = dir;
-            else
-                _currentDir = _rootDir;
+            if (!string.IsNullOrEmpty(dir)) startDir = ResolveDir(dir);
         }
-        else
-        {
-            _currentDir = _rootDir;
-        }
+        if (string.IsNullOrEmpty(startDir) && !string.IsNullOrEmpty(defaultDir))
+            startDir = ResolveDir(defaultDir);
 
-        // Ensure the directory exists; fall back to root
+        _currentDir = (!string.IsNullOrEmpty(startDir) && Directory.Exists(startDir)) ? startDir : _rootDir;
+
+        // Last-resort fallbacks if neither the start dir nor the root exists.
         if (!Directory.Exists(_currentDir))
         {
-            _currentDir = _rootDir;
-            if (!Directory.Exists(_currentDir))
-                _currentDir = "assets";
-            if (!Directory.Exists(_currentDir))
-                _currentDir = ".";
+            _currentDir = Directory.Exists(_rootDir) ? _rootDir : ResolveDir(Necroking.Core.GamePaths.AssetsDir);
+            if (!Directory.Exists(_currentDir)) _currentDir = ".";
         }
 
         RefreshListing();
+    }
+
+    /// <summary>Resolve a possibly project-relative path to an absolute, forward-
+    /// slashed, trailing-slash-trimmed directory. Already-absolute paths pass
+    /// through. Keeps the browser correct no matter the process working dir.</summary>
+    private static string ResolveDir(string p)
+    {
+        if (string.IsNullOrEmpty(p)) return p;
+        string resolved = Path.IsPathRooted(p) ? p : Necroking.Core.GamePaths.Resolve(p);
+        return resolved.Replace('\\', '/').TrimEnd('/');
     }
 
     public void Close()
