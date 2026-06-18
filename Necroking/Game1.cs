@@ -8067,8 +8067,8 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // centered on the active level's node.
         int level = Math.Clamp(_sim.Horde.AggressionLevel, 0, _aggressionNodeX.Length - 1);
         var center = new Vector2(x + _aggressionNodeX[level] + 12.5f, y + 5 + 12.5f);
-        var fill = new Color(236, 196, 96); // warm gold accent
-        _uiShaders.DrawCircle(_spriteBatch, center, 7f, 12f, fill, fill, new Color(236, 196, 96, 80));
+        var fill = new Color(255, 196, 64); // vivid gold accent (more saturated for visibility)
+        _uiShaders.DrawCircle(_spriteBatch, center, 7f, 12f, fill, fill, new Color(255, 196, 64, 120));
     }
 
     private void DrawPauseMenu(int screenW, int screenH)

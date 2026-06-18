@@ -1698,7 +1698,7 @@
         255,
         0
       ],
-      "defaultText": "Abilities & Buffs",
+      "defaultText": "Abilities \u0026 Buffs",
       "textRegion": {
         "x": 0,
         "y": 0,
@@ -4555,6 +4555,56 @@
         "hueStrength": 1,
         "satStrength": 0.626,
         "valStrength": 0.534,
+        "useHcl": false
+      }
+    },
+    {
+      "id": "CircularFrame",
+      "type": "image",
+      "imagePath": "assets/UI/Frames/CircleFrameOuter.png",
+      "width": 100,
+      "height": 100,
+      "tintColor": [
+        255,
+        255,
+        255,
+        255
+      ],
+      "harmonize": {
+        "targetColor": [
+          139,
+          108,
+          46,
+          255
+        ],
+        "hueStrength": 1,
+        "satStrength": 0.4716981,
+        "valStrength": 0.18867925,
+        "useHcl": false
+      }
+    },
+    {
+      "id": "CicularInner",
+      "type": "image",
+      "imagePath": "assets/UI/Frames/CircleFrameInner.png",
+      "width": 100,
+      "height": 100,
+      "tintColor": [
+        255,
+        255,
+        255,
+        255
+      ],
+      "harmonize": {
+        "targetColor": [
+          173,
+          148,
+          97,
+          255
+        ],
+        "hueStrength": 1,
+        "satStrength": 0.5283019,
+        "valStrength": 0.6226415,
         "useHcl": false
       }
     }

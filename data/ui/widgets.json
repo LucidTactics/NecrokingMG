@@ -4214,6 +4214,101 @@
         "useHcl": false
       },
       "modal": false
+    },
+    {
+      "id": "CircularToggle",
+      "width": 25,
+      "height": 25,
+      "backgroundScale": 1,
+      "modal": false,
+      "children": [
+        {
+          "name": "child_1",
+          "element": "CicularInner",
+          "x": 0,
+          "y": 0,
+          "width": 25,
+          "height": 25,
+          "anchor": 0
+        },
+        {
+          "name": "child_0",
+          "element": "CircularFrame",
+          "x": 0,
+          "y": 0,
+          "width": 25,
+          "height": 25,
+          "anchor": 0
+        }
+      ]
+    },
+    {
+      "id": "AggressionBar",
+      "width": 534,
+      "height": 33,
+      "backgroundScale": 1,
+      "modal": false,
+      "children": [
+        {
+          "name": "child_1",
+          "element": "Grim_HeaderDivider",
+          "x": 22,
+          "y": 11,
+          "width": 492,
+          "height": 15,
+          "anchor": 0
+        },
+        {
+          "name": "child_0",
+          "widget": "CircularToggle",
+          "x": 5,
+          "y": 5,
+          "width": 25,
+          "height": 25,
+          "anchor": 0,
+          "childOverrides": []
+        },
+        {
+          "name": "child_2",
+          "widget": "CircularToggle",
+          "x": 499,
+          "y": 5,
+          "width": 25,
+          "height": 25,
+          "anchor": 0,
+          "childOverrides": []
+        },
+        {
+          "name": "child_2_copy",
+          "widget": "CircularToggle",
+          "x": 257,
+          "y": 5,
+          "width": 25,
+          "height": 25,
+          "anchor": 0,
+          "childOverrides": []
+        },
+        {
+          "name": "child_2_copy",
+          "widget": "CircularToggle",
+          "x": 388,
+          "y": 5,
+          "width": 25,
+          "height": 25,
+          "anchor": 0,
+          "childOverrides": []
+        },
+        {
+          "name": "child_2_copy",
+          "widget": "CircularToggle",
+          "x": 124,
+          "y": 5,
+          "width": 25,
+          "height": 25,
+          "anchor": 0,
+          "childOverrides": []
+        }
+      ]
     }
   ]
 }
