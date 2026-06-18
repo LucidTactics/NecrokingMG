@@ -17,6 +17,7 @@ namespace Necroking.Scenario.Scenarios;
 ///   - Age gate (10s minimum).
 ///   - Per-unit stack cap (1 for Corpse Eater).
 ///   - Buff actually lands on the unit (verified via active-buff list).
+///   - +MaxHP buff is a REAL HP gain (current HP and effective max both rise).
 ///
 /// Out of scope (deferred):
 ///   - Active pathfinding to far corpses. Today's behaviour is passive: the
@@ -35,6 +36,8 @@ public class CorpseEaterScenario : ScenarioBase
     private bool _setupOk;
     private bool _result;
     private SkillBookState _bookState = new();
+    private int _wolfHpBefore;
+    private int _wolfBaseMaxHpBefore;
 
     public override void OnInit(Simulation sim)
     {
@@ -55,6 +58,8 @@ public class CorpseEaterScenario : ScenarioBase
 
         _wolfIdx = sim.SpawnUnitByID("ZombieWolf", new Vec2(10, 10));
         if (_wolfIdx < 0) { DebugLog.Log(ScenarioLog, "FAIL: ZombieWolf spawn failed"); return; }
+        _wolfHpBefore = sim.UnitsMut[_wolfIdx].Stats.HP;
+        _wolfBaseMaxHpBefore = sim.UnitsMut[_wolfIdx].Stats.MaxHP;
 
         // Place two corpses near the wolf — one with Age = 0 (fresh) that
         // should NOT be eaten, and one we pre-age by mutating its Age field
@@ -102,12 +107,26 @@ public class CorpseEaterScenario : ScenarioBase
         bool buffLanded = BuffSystem.HasBuff(sim.UnitsMut, _wolfIdx, "buff_corpse_meal");
         byte eaten = sim.UnitsMut[_wolfIdx].CorpsesEaten;
 
+        // The +MaxHP buff must be a REAL HP gain: current HP rises by the buff's
+        // MaxHP value, and EffectiveMaxHP rises by the same (base MaxHP unchanged).
+        int expectGain = 0;
+        var mealDef = sim.GameData?.Buffs.Get("buff_corpse_meal");
+        if (mealDef != null)
+            foreach (var e in mealDef.Effects)
+                if (e.Stat == "MaxHP") expectGain += (int)e.Value;
+        int hpAfter = sim.UnitsMut[_wolfIdx].Stats.HP;
+        int effMaxAfter = BuffSystem.EffectiveMaxHP(sim.UnitsMut, _wolfIdx);
+        bool hpGranted = buffLanded
+            && hpAfter == _wolfHpBefore + expectGain
+            && effMaxAfter == _wolfBaseMaxHpBefore + expectGain;
+
         DebugLog.Log(ScenarioLog, $"Aged corpse consumed: {agedEaten} (expect True)");
         DebugLog.Log(ScenarioLog, $"Fresh corpse survived: {freshSurvived} (expect True — age < 10s)");
         DebugLog.Log(ScenarioLog, $"buff_corpse_meal on wolf: {buffLanded} (expect True)");
         DebugLog.Log(ScenarioLog, $"Wolf CorpsesEaten counter: {eaten} (expect 1)");
+        DebugLog.Log(ScenarioLog, $"Wolf HP {_wolfHpBefore}->{hpAfter}, effMaxHP {_wolfBaseMaxHpBefore}->{effMaxAfter} (expect +{expectGain} each) -> realHpBuff={hpGranted}");
 
-        _result = agedEaten && freshSurvived && buffLanded && eaten == 1;
+        _result = agedEaten && freshSurvived && buffLanded && eaten == 1 && hpGranted;
         DebugLog.Log(ScenarioLog, $"result: {(_result ? "PASS" : "FAIL")}");
         return _result ? 0 : 1;
     }

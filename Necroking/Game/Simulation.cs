@@ -2704,7 +2704,7 @@ public class Simulation
         // Limb cap (manual p.62): an arm/leg hit can't deal more than half max HP —
         // the limb is maimed instead of the whole body destroyed.
         if (hitLoc == HitLocation.Arms || hitLoc == HitLocation.Legs)
-            netDmg = Math.Min(netDmg, Math.Max(1, defStats.MaxHP / 2));
+            netDmg = Math.Min(netDmg, Math.Max(1, BuffSystem.EffectiveMaxHP(_units, defenderIdx) / 2));
         // Dominions allows a glancing blow to deal zero damage when protection wins.
         if (netDmg < 0) netDmg = 0;
 
@@ -2935,7 +2935,7 @@ public class Simulation
     {
         if (wType != WeaponDamageType.Slashing) return;
         if (!_units[defenderIdx].Alive) return; // already killed by the HP loss
-        int threshold = Math.Max(1, (int)(_units[defenderIdx].Stats.MaxHP * LimbChopHpFraction));
+        int threshold = Math.Max(1, (int)(BuffSystem.EffectiveMaxHP(_units, defenderIdx) * LimbChopHpFraction));
         if (netDmg < threshold) return;
 
         switch (loc)
@@ -3027,7 +3027,8 @@ public class Simulation
             // Army-wide collapse: once the side is below the rout HP fraction, break.
             if (lossFraction >= 1f - ArmyRoutHpFraction) { StartRouting(i); continue; }
 
-            float ownHpFrac = _units[i].Stats.MaxHP > 0 ? (float)_units[i].Stats.HP / _units[i].Stats.MaxHP : 1f;
+            int effMaxHp = BuffSystem.EffectiveMaxHP(_units, i);
+            float ownHpFrac = effMaxHp > 0 ? (float)_units[i].Stats.HP / effMaxHp : 1f;
 
             // Fresh, whole units hold the line — morale is driven by CASUALTIES, not
             // by being outnumbered at the outset. Only check once the side is taking

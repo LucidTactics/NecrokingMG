@@ -7719,9 +7719,10 @@ public class Game1 : Microsoft.Xna.Framework.Game
     private void DrawHPBar(int unitIdx, Vector2 screenPos)
     {
         var stats = _sim.Units[unitIdx].Stats;
-        if (stats.MaxHP <= 0) return;
+        int maxHp = BuffSystem.EffectiveMaxHP(_sim.Units, unitIdx);
+        if (maxHp <= 0) return;
 
-        float hpRatio = (float)stats.HP / stats.MaxHP;
+        float hpRatio = (float)stats.HP / maxHp;
         if (hpRatio >= 1f) return; // don't show full HP bars
 
         // Position HP bar above the unit based on its sprite height

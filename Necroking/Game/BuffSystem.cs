@@ -30,7 +30,10 @@ public static class BuffSystem
             {
                 var b = buffs[i];
                 if (b.StackCount < def.MaxStacks)
+                {
                     b.StackCount++;
+                    GrantMaxHpDelta(units, unitIdx, def); // one more stack of +MaxHP → real HP
+                }
                 b.RemainingDuration = durationSeconds;
                 buffs[i] = b;
                 return;
@@ -56,6 +59,12 @@ public static class BuffSystem
             StackCount = 1,
             Permanent = durationSeconds <= 0f,
         });
+
+        // A +MaxHP buff is a REAL, larger health pool: grant the added MaxHP as
+        // current HP on first apply so the unit actually gets tougher. It used to
+        // be cosmetic — the max read bigger in the HUD but HP and combat used the
+        // base. EffectiveMaxHP keeps every consumer consistent with the grant.
+        GrantMaxHpDelta(units, unitIdx, def);
 
         // If this buff is incapacitating, set up the incap state
         if (def.Incapacitating)
@@ -97,6 +106,28 @@ public static class BuffSystem
             // call SetOverride(Forced(RecoverAnim)) when it's time to exit.
             AnimResolver.SetOverride(units[unitIdx], AnimRequest.Hold(holdAnim, priority: 3));
         }
+    }
+
+    /// <summary>The unit's TRUE maximum HP including +MaxHP buff effects. Combat
+    /// (limb damage cap, limb-sever threshold, morale) and HP-bar rendering read
+    /// through this so a +MaxHP buff is a real, larger pool, not a cosmetic HUD
+    /// number. Single source of truth shared by all consumers.</summary>
+    public static int EffectiveMaxHP(UnitArrays units, int unitIdx)
+        => (int)GetModifiedStat(units, unitIdx, BuffStat.MaxHP, units[unitIdx].Stats.MaxHP);
+
+    /// <summary>Raise current HP by the MaxHP a buff (one stack) adds, so applying
+    /// a +MaxHP buff grants that HP for real. Only "Add MaxHP" effects count (the
+    /// only kind in use); no-op otherwise. HP stays ≤ the new effective max
+    /// because it was already ≤ the old max before this stack was added.</summary>
+    private static void GrantMaxHpDelta(UnitArrays units, int unitIdx, BuffDef def)
+    {
+        int add = 0;
+        foreach (var eff in def.Effects)
+            if (eff.Type == "Add" && eff.Stat == nameof(BuffStat.MaxHP)) add += (int)eff.Value;
+        if (add <= 0) return;
+        var s = units[unitIdx].Stats;
+        s.HP += add;
+        units[unitIdx].Stats = s;
     }
 
     public static void TickBuffs(UnitArrays units, float dt, BuffRegistry? buffRegistry = null)
