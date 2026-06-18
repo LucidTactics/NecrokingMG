@@ -34,6 +34,28 @@ public class HordeMinionHandler : IArchetypeHandler
     private const float FollowDeadzone = 1.5f;  // don't issue new move until slot is this far away
     private const float FollowArriveThreshold = 0.5f; // close enough to count as "arrived"
 
+    // Follow-effort matrix distance bands (distance from formation slot).
+    private const float FollowNearBand = 5f;   // < this  → "in slot"   (row 0)
+    private const float FollowFarBand  = 15f;  // ≥ this  → "straggler" (row 2); between → "trailing" (row 1)
+
+    // Effort a following minion targets, indexed [distanceRow, necroColumn].
+    //   rows: 0 = in slot (<5u), 1 = trailing (5–15u), 2 = straggler (>15u)
+    //   cols: 0 = necro stopped, 1 = necro moving (normal), 2 = necro sprinting
+    // Hand-tuned on purpose — NOT max(distanceBand, necroEffort): a plain max
+    // would put Sprint in the in-slot×sprinting corner, making a minion glued to
+    // its slot sprint-in-place the instant the necro sprints. The matrix keeps
+    // the whole top row off Sprint, so a minion only ramps to Sprint once it has
+    // actually fallen into the trailing/straggler bands. Net feel: tight when you
+    // stroll, a streaming trail when you sprint, and stragglers always sprint back
+    // regardless of what the necro is doing. Hurry == Jog gait.
+    private static readonly MoveEffort[,] FollowEffortMatrix =
+    {
+        //   stopped             moving              sprinting
+        { MoveEffort.Walk,  MoveEffort.Walk,   MoveEffort.Hurry  },  // in slot   (<5u)
+        { MoveEffort.Walk,  MoveEffort.Hurry,  MoveEffort.Sprint },  // trailing  (5–15u)
+        { MoveEffort.Hurry, MoveEffort.Sprint, MoveEffort.Sprint },  // straggler (>15u)
+    };
+
     private const float CommandTimeout = 45f;
     private const float CommandClearRadius = 10f;
 
@@ -69,7 +91,20 @@ public class HordeMinionHandler : IArchetypeHandler
         bool urgent = ctx.Units[ctx.UnitIndex].HitReacting
             || ctx.Units[ctx.UnitIndex].JustEnteredCombat
             || ctx.Units[ctx.UnitIndex].JustLeftCombat;
-        if (lowUrgency && !ctx.IsAmortizeTick && !urgent) return;
+        if (lowUrgency && !ctx.IsAmortizeTick && !urgent)
+        {
+            // Skipping the expensive follow/return update this frame — but we must
+            // still refresh the velocity cap. Simulation re-derives MaxSpeed from
+            // CombatSpeed EVERY frame (before the AI pass), so an amortized
+            // follower's Jog/Sprint effort gets clobbered back to base walk speed
+            // on the ~5-of-6 skipped frames — the real reason minions crawled when
+            // following. PreferredVel from the last full tick already points at the
+            // slot; re-applying the persisted MoveEffort keeps the cap high enough
+            // for the unit to actually travel at that effort between full updates.
+            ctx.Units[ctx.UnitIndex].MaxSpeed =
+                SubroutineSteps.ResolveEffortSpeed(ref ctx, ctx.Units[ctx.UnitIndex].MoveEffort);
+            return;
+        }
 
         // Execute current routine
         switch (ctx.Routine)
@@ -179,31 +214,34 @@ public class HordeMinionHandler : IArchetypeHandler
             }
             else
             {
-                // Actively moving toward slot. Effort is distance-banded, with
-                // bands compressing as the necromancer's sprint ramp goes up:
-                //   necro walking (t=0):  <3 Walk, 3-8 Hurry, >8 Sprint
-                //   necro sprinting (t=1): <1 Walk, 1-3 Hurry, >3 Sprint
-                // The linear lerp keeps the bands smooth between those points.
-                // Intent: minions don't try to sprint when close to slot, but
-                // escalate effort faster when necro is moving fast so they
-                // don't lag behind.
-                float t = MathHelper.Clamp(ctx.NecroSprintT, 0f, 1f);
-                float walkHurry  = MathHelper.Lerp(3f, 1f, t);
-                float hurrySprint = MathHelper.Lerp(8f, 3f, t);
-                MoveEffort effort = dist < walkHurry  ? MoveEffort.Walk
-                                  : dist < hurrySprint ? MoveEffort.Hurry
-                                  : MoveEffort.Sprint;
-                SubroutineSteps.SetEffort(ref ctx, effort);
+                // Actively moving toward slot. Effort comes from a 2-axis matrix:
+                // distance-from-slot × how hard the necromancer is moving. See
+                // FollowEffortMatrix for why it's hand-tuned rather than a simple
+                // max() of the two axes. Pick the necro column once (sprint wins
+                // over moving wins over stopped — sprinting implies moving).
+                bool necroSprinting = ctx.NecroSprintT > 0.5f;
+                bool necroMoving = ctx.Horde!.IsNecroMoving;
+                int col = necroSprinting ? 2 : necroMoving ? 1 : 0;
+                int row = dist < FollowNearBand ? 0
+                        : dist < FollowFarBand   ? 1
+                        : 2;
+                SubroutineSteps.SetEffort(ref ctx, FollowEffortMatrix[row, col]);
 
-                if (dist > FollowArriveThreshold)
+                // Only allow the "arrived → idle" flip while the necro is parked.
+                // If the necro is moving, a minion that momentarily touches its
+                // (also-moving) slot must NOT drop to FollowIdle/Idle anim — the
+                // slot slides away again next frame and the unit would foot-stutter
+                // between Idle and a gait. Keep driving toward the slot so it holds
+                // a smooth locomotion gait; settle to Idle only once movement stops.
+                if (dist > FollowArriveThreshold || necroMoving || necroSprinting)
                 {
                     SubroutineSteps.MoveToward(ref ctx, slotPos, ctx.MySpeed);
                 }
                 else
                 {
-                    // Arrived — flip the routine anim to Idle right away (critical,
-                    // otherwise the last Walk/Jog/Run request sticks and the unit
-                    // walks-in-place until the next chase).
+                    // Arrived AND necro is stopped — flip the routine anim to Idle
+                    // right away (critical, otherwise the last Walk/Jog/Run request
+                    // sticks and the unit walks-in-place until the next chase).
                     SubroutineSteps.SetIdle(ref ctx);
                     ctx.Subroutine = FollowIdle;
                 }

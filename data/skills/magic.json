@@ -4,7 +4,7 @@
     {
       "id": "arcane_apprentice",
       "name": "Arcane Apprentice",
-      "description": "Attune to the Shock path (+1) — the first sparks of lightning.",
+      "description": "Attune to the Shock path (\u002B1) \u2014 the first sparks of lightning.",
       "x": 647,
       "y": -461,
       "parents": [],
@@ -117,8 +117,8 @@
       "id": "pyre_of_judgement",
       "name": "Pyre of Judgement",
       "description": "Sustained brilliance. Pious and final.",
-      "x": 1043,
-      "y": 145,
+      "x": 1040,
+      "y": 153,
       "parents": [
         "god_ray"
       ],

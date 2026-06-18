@@ -41,6 +41,37 @@ public enum DamageFlags : byte
 /// </summary>
 public static class DamageSystem
 {
+    // --- Hit-reaction (flinch) animation tuning ---
+    /// <summary>How long the BlockReact flinch shows on the legacy render path.</summary>
+    public const float HitReactShowSeconds = 0.35f;
+    /// <summary>A unit can't start another flinch within this window. Prevents focus
+    /// fire from perpetually staggering a unit so it can never swing back.</summary>
+    public const float FlinchRefractorySeconds = 0.6f;
+
+    /// <summary>
+    /// Apply the on-hit flinch (BlockReact) to a unit, honoring all suppression rules
+    /// in ONE place — always call this instead of poking AnimResolver.SetOverride
+    /// directly for a hit reaction. The flinch is skipped when the unit is:
+    ///   - knocked down / mid-jump (a flinch would pop the hold/jump anim),
+    ///   - already fleeing or routing (it should keep running, not flinch — the
+    ///     player asked that a fleeing unit keep its run even when hit),
+    ///   - still inside its flinch refractory window (focus-fire stun-lock guard).
+    /// Poison/fatigue never call this (they're DoT/meters, not impacts), so they no
+    /// longer flinch. Sets HitReactTimer (legacy render) + the BlockReact override
+    /// (archetype render) only when the flinch is actually allowed.
+    /// </summary>
+    public static void ApplyHitReactAnim(UnitArrays units, int idx)
+    {
+        if (idx < 0 || idx >= units.Count) return;
+        if (units[idx].Incap.Active || units[idx].JumpPhase != 0) return;
+        if (units[idx].Fleeing || units[idx].Routing || units[idx].FleeTimer > 0f) return;
+        if (units[idx].FlinchRefractoryTimer > 0f) return;
+
+        units[idx].HitReactTimer = HitReactShowSeconds;
+        units[idx].FlinchRefractoryTimer = FlinchRefractorySeconds;
+        Render.AnimResolver.SetOverride(units[idx], Render.AnimRequest.Combat(Render.AnimState.BlockReact));
+    }
+
     /// <summary>
     /// Apply damage through the full formula: armor reduction → type-specific application.
     /// Use for spell damage, trap damage, cloud ticks, etc.
@@ -76,12 +107,10 @@ public static class DamageSystem
             case DamageType.Physical:
                 units[targetIdx].Stats.HP -= finalDamage;
                 units[targetIdx].HitReacting = true;
-                // BlockReact would pop a knocked-down unit up into a standing pose —
-                // keep the knockdown hold anim in place if they're currently incap'd.
-                // Also skip while mid-jump so the hit doesn't visually pop the unit
-                // out of JumpLoop/JumpLand; the jump finishes, then combat resumes.
-                if (!units[targetIdx].Incap.Active && units[targetIdx].JumpPhase == 0)
-                    Render.AnimResolver.SetOverride(units[targetIdx], Render.AnimRequest.Combat(Render.AnimState.BlockReact));
+                // Flinch (BlockReact) — gated by ApplyHitReactAnim (skips fleeing /
+                // knocked-down / mid-jump / refractory units). HitReacting stays set
+                // unconditionally so AI flee/retarget reactions still fire.
+                ApplyHitReactAnim(units, targetIdx);
                 if (units[targetIdx].Stats.HP <= 0)
                 {
                     units[targetIdx].Stats.HP = 0;

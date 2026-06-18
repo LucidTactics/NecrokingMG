@@ -9,8 +9,8 @@
       "id": "corpse_eating",
       "name": "Corpse Eating",
       "description": "Consume a target corpse. Heal 10 HP and gain 1 Max HP (capped at \u002B5 total).",
-      "x": 688,
-      "y": -701,
+      "x": 687,
+      "y": -700,
       "parents": [],
       "costs": [
         {
@@ -86,8 +86,8 @@
       "id": "become_necromancer",
       "name": "Become Necromancer",
       "description": "Evolve into Necromancer \u2014 proficient in death magic.",
-      "x": 1262,
-      "y": -153,
+      "x": 1270,
+      "y": -151,
       "parents": [
         "become_pale_acolyte"
       ],

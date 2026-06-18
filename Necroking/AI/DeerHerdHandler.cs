@@ -104,6 +104,11 @@ public class DeerHerdHandler : IArchetypeHandler
         AcceleratePoisonedSatiation(ref ctx);
         EvaluateRoutine(ref ctx);
 
+        // Mirror the flee state onto a unit-level flag so the combat code can suppress
+        // the hit-react flinch while the deer is running (keep the gallop, don't flinch)
+        // without needing to know DeerHerd's routine numbering.
+        ctx.Units[ctx.UnitIndex].Fleeing = ctx.Routine == RoutineFleeing;
+
         // Reset flee-elapsed counter whenever the deer isn't currently fleeing,
         // so the next fresh flee starts with the 2-second Hurry ramp from zero.
         if (ctx.Routine != RoutineFleeing)

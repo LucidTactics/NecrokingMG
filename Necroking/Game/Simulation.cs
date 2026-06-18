@@ -277,11 +277,17 @@ public class Simulation
         _gameTime += dt;
         _damageEvents.Clear();
 
-        // Clear per-frame flags (HitReacting cleared after AI, see below)
+        // Clear per-frame flags (HitReacting cleared after AI, see below) and tick
+        // the flinch timers (set later this frame in UpdateCombat / projectiles;
+        // ticking here means they show for at least the frame after the hit).
         for (int i = 0; i < _units.Count; i++)
         {
             _units[i].Dodging = false;
             _units[i].BlockReacting = false;
+            if (_units[i].HitReactTimer > 0f)
+                _units[i].HitReactTimer = MathF.Max(0f, _units[i].HitReactTimer - dt);
+            if (_units[i].FlinchRefractoryTimer > 0f)
+                _units[i].FlinchRefractoryTimer = MathF.Max(0f, _units[i].FlinchRefractoryTimer - dt);
         }
 
         // Update mana and cooldowns. BonusManaRegen is the dynamic add (e.g.
@@ -462,17 +468,14 @@ public class Simulation
                         spawnId = _gameData.UnitGroups.PickRandom(unitDef.ZombieTypeID) ?? "skeleton";
                 }
             }
-            int idx = SpawnUnitByID(spawnId, pos);
+            // Canonical raise-into-horde path: wires the HordeMinion archetype so
+            // the zombie respects the leash (see SpawnZombieMinion).
+            int idx = SpawnZombieMinion(spawnId, pos);
             if (idx >= 0)
             {
-                _units[idx].Faction = Faction.Undead;
                 _units[idx].FacingAngle = facing;
                 _units[idx].StandupTimer = 1.5f;
                 _units[idx].SpawnPosition = pos;
-                // Set as horde minion and add to horde
-                _units[idx].Archetype = AI.ArchetypeRegistry.HordeMinion;
-                _units[idx].Routine = 0; // Following
-                _horde.AddUnit(_units[idx].Id);
             }
         });
 
@@ -1172,7 +1175,10 @@ public class Simulation
 
                 case AIBehavior.FleeWhenHit:
                 {
-                    // Deer-like behavior: idle normally, flee when hit at effect time
+                    // Deer-like behavior: idle normally, flee when hit at effect time.
+                    // Mirror the flee state so the hit-react flinch is suppressed while
+                    // running (a fleeing unit keeps its run anim when hit again).
+                    _units[i].Fleeing = _units[i].FleeTimer > 0f;
                     if (_units[i].FleeTimer > 0)
                     {
                         // Currently fleeing — force disengage
@@ -1460,9 +1466,17 @@ public class Simulation
                 _units[i].PreferredVel = Vec2.Zero;
                 continue;
             }
-            // Movement blocked by: jumping, knockdown (buff), standup, pending attack, or post-attack lockout
+            // Movement blocked by: jumping, knockdown (buff), standup, pending attack,
+            // post-attack lockout, or being engaged in melee. The InCombat clause
+            // plants a unit for the WHOLE attack cycle (incl. the pre-roll windup that
+            // starts the swing anim before PendingAttack is set, and the cooldown
+            // between swings) so melee units "stop to fight" instead of sliding while
+            // the attack animation plays. PlayerControlled is exempt — the player is
+            // never frozen by their own combat. Ranged units never set EngagedTarget
+            // so they're not InCombat and keep their kite.
             if (_units[i].Jumping || _units[i].Incap.IsLocked
-                || !_units[i].PendingAttack.IsNone || _units[i].PostAttackTimer > 0f)
+                || !_units[i].PendingAttack.IsNone || _units[i].PostAttackTimer > 0f
+                || (_units[i].InCombat && _units[i].AI != AIBehavior.PlayerControlled))
             {
                 _units[i].Velocity = Vec2.Zero;
                 _units[i].MoveTime = 0f;
@@ -2684,17 +2698,15 @@ public class Simulation
         {
             _units[defenderIdx].HitReacting = true;
             _units[defenderIdx].LastHitTime = _gameTime;
-            // Don't pop a prone unit up into a BlockReact pose — the (priority-3) Knockdown
-            // hold should stay put while they're being hit on the ground. Same for mid-jump.
-            if (!_units[defenderIdx].Incap.Active && _units[defenderIdx].JumpPhase == 0)
-                Render.AnimResolver.SetOverride(_units[defenderIdx], Render.AnimRequest.Combat(Render.AnimState.BlockReact));
+            // Flinch gated by ApplyHitReactAnim (skips fleeing / prone / mid-jump /
+            // refractory). HitReacting/LastHitTime stay set for AI reactions.
+            DamageSystem.ApplyHitReactAnim(_units, defenderIdx);
         }
         else
         {
             _units[defenderIdx].BlockReacting = true;
             _units[defenderIdx].LastHitTime = _gameTime;
-            if (!_units[defenderIdx].Incap.Active && _units[defenderIdx].JumpPhase == 0)
-                Render.AnimResolver.SetOverride(_units[defenderIdx], Render.AnimRequest.Combat(Render.AnimState.BlockReact));
+            DamageSystem.ApplyHitReactAnim(_units, defenderIdx);
         }
 
         // Diagnostic: log every melee hit on a wolf-archetype unit so we can verify
@@ -3713,6 +3725,44 @@ public class Simulation
                 }
             }
         }
+        return idx;
+    }
+
+    /// <summary>
+    /// Canonical "raise a corpse into the necromancer's horde" spawn. Use this
+    /// for every reanimation that should join the horde (potion raise, table
+    /// crafting, future paths) — NOT bare <see cref="SpawnUnitByID"/>.
+    ///
+    /// Why this exists: SpawnUnitByID only applies the def's *legacy* AI enum
+    /// (e.g. ZombieFemaleDeer's "AttackClosest"); it does not wire the def's
+    /// Archetype. A zombie spawned with bare SpawnUnitByID therefore runs the
+    /// leash-less legacy AttackClosest AI, which — when chasing a fleeing enemy
+    /// that outruns the horde's AggroRadius — pursues forever instead of
+    /// returning at the leash. This helper applies the def's archetype
+    /// (HordeMinion for the animal zombies) so the unit runs HordeMinionHandler
+    /// with its proper leash, and enrolls it in the horde. Returns the unit
+    /// index, or -1 on failure. Callers set facing / standup / bonuses after.
+    /// </summary>
+    public int SpawnZombieMinion(string unitID, Vec2 pos)
+    {
+        int idx = SpawnUnitByID(unitID, pos);
+        if (idx < 0) return idx;
+
+        _units[idx].Faction = Faction.Undead;
+
+        // Resolve the def's archetype (HordeMinion for deer/wolf/bear zombies),
+        // falling back to HordeMinion for any undead def that didn't specify one.
+        byte arch = AI.ArchetypeRegistry.HordeMinion;
+        var def = _gameData?.Units.Get(unitID);
+        if (def != null && !string.IsNullOrEmpty(def.Archetype))
+        {
+            byte resolved = AI.ArchetypeRegistry.FromName(def.Archetype);
+            if (resolved != AI.ArchetypeRegistry.None) arch = resolved;
+        }
+        _units[idx].Archetype = arch;
+        _units[idx].Routine = 0; // Following
+
+        _horde.AddUnit(_units[idx].Id);
         return idx;
     }
 

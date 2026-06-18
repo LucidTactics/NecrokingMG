@@ -13,6 +13,7 @@ public static class ScenarioRegistry
         Register("horde_engaged_kiting", () => new Scenarios.HordeEngagedKitingScenario());
         Register("horde_chase_leash", () => new Scenarios.HordeChaseLeashScenario());
         Register("horde_target_teleport", () => new Scenarios.HordeTargetTeleportScenario());
+        Register("zombie_deer_follow_speed", () => new Scenarios.ZombieDeerFollowSpeedScenario());
         Register("combat_test", () => new Scenarios.CombatTestScenario());
         Register("skirmish", () => new Scenarios.SkirmishScenario());
         Register("empty_map", () => new Scenarios.EmptyMapScenario());
@@ -109,6 +110,9 @@ public static class ScenarioRegistry
         Register("UIStatusBars", () => new Scenarios.UIStatusBarsScenario());
         Register("corpse_carry_depth", () => new Scenarios.CorpseCarryDepthScenario());
         Register("zombie_deer_leash", () => new Scenarios.ZombieDeerLeashScenario());
+        Register("zombie_deer_craft_leash", () => new Scenarios.ZombieDeerCraftLeashScenario());
+        Register("combat_anim_review", () => new Scenarios.CombatAnimReviewScenario());
+        Register("chase_attack_anim", () => new Scenarios.ChaseAttackAnimScenario());
         Register("log_shadow", () => new Scenarios.LogShadowScenario());
         Register("stride_debug", () => new Scenarios.StrideDebugScenario());
         Register("intrinsic_buff", () => new Scenarios.IntrinsicBuffScenario());

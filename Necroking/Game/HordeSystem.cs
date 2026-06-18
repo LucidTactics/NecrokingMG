@@ -316,8 +316,18 @@ public class HordeSystem
                         hu.ChasingTarget = GameConstants.InvalidUnit;
                         break;
                     }
+                    // Give up only when the target crosses the LEASH (red ring),
+                    // not the engagement band (orange ring). Aggro is *acquired*
+                    // at AggroRadius, but once a chase is committed it persists
+                    // out to the return radius — otherwise a minion abandoned the
+                    // pursuit the instant the target stepped a hair past the orange
+                    // ring, then re-aggroed when it drifted back, producing a
+                    // visible start/stop "chase → snap back to follow → chase"
+                    // flicker. The chaser's own leash break (StandardChasingExits)
+                    // fires at the same LeashRadius, so the chase still stays
+                    // bounded to the red circle — it just no longer quits early.
                     float targetDistToCircle = (units[targetIdx].Position - _circleCenter).Length();
-                    if (targetDistToCircle > AggroRadius)
+                    if (targetDistToCircle > LeashRadius)
                     {
                         hu.State = HordeUnitState.Following;
                         hu.ChasingTarget = GameConstants.InvalidUnit;

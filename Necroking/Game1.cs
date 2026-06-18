@@ -1555,20 +1555,9 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // AI — use new archetype system if specified, otherwise legacy AI enum
         if (!string.IsNullOrEmpty(unitDef.Archetype))
         {
-            // Resolve archetype name to ID
-            byte archetypeId = unitDef.Archetype switch
-            {
-                "WolfPack" => AI.ArchetypeRegistry.WolfPack,
-                "DeerHerd" => AI.ArchetypeRegistry.DeerHerd,
-                "PatrolSoldier" => AI.ArchetypeRegistry.PatrolSoldier,
-                "GuardStationary" => AI.ArchetypeRegistry.GuardStationary,
-                "ArmyUnit" => AI.ArchetypeRegistry.ArmyUnit,
-                "CasterUnit" => AI.ArchetypeRegistry.CasterUnit,
-                "ArcherUnit" => AI.ArchetypeRegistry.ArcherUnit,
-                "Civilian" => AI.ArchetypeRegistry.Civilian,
-                "HordeMinion" => AI.ArchetypeRegistry.HordeMinion,
-                _ => AI.ArchetypeRegistry.None
-            };
+            // Resolve archetype name to ID (single source of truth — see
+            // ArchetypeRegistry.FromName, shared with Simulation.SpawnZombieMinion).
+            byte archetypeId = AI.ArchetypeRegistry.FromName(unitDef.Archetype);
             _sim.UnitsMut[idx].Archetype = archetypeId;
 
             // Call OnSpawn for the archetype handler
@@ -4438,6 +4427,23 @@ public class Game1 : Microsoft.Xna.Framework.Game
                         AnimResolver.SetOverride(_sim.UnitsMut[i], AnimRequest.Combat(preRollState, spd));
                 }
 
+                // Cancel a stale attack swing that would otherwise "bleed" into a chase:
+                // once the unit is actually moving and no longer attacking (no pending
+                // swing, post-attack lockout elapsed, not in melee), drop the one-shot
+                // attack override so locomotion shows instead of the swing sliding along.
+                // The swing still plays fully while the unit is planted (PostAttackTimer
+                // / InCombat keep Velocity at 0); this only fires once it starts moving.
+                {
+                    var ovNow = _sim.Units[i].OverrideAnim;
+                    bool ovIsAttack = ovNow.IsActive &&
+                        (ovNow.State == AnimState.Attack1 || ovNow.State == AnimState.Attack2 || ovNow.State == AnimState.Attack3);
+                    bool notAttacking = _sim.Units[i].PendingAttack.IsNone
+                        && _sim.Units[i].PostAttackTimer <= 0f
+                        && !_sim.Units[i].InCombat;
+                    if (ovIsAttack && notAttacking && _sim.Units[i].Velocity.LengthSq() > 1.0f)
+                        AnimResolver.ClearOverride(_sim.UnitsMut[i]);
+                }
+
                 // Reverse walk playback
                 float facingRad2 = _sim.Units[i].FacingAngle * MathF.PI / 180f;
                 var facingDir2 = new Vec2(MathF.Cos(facingRad2), MathF.Sin(facingRad2));
@@ -4504,9 +4510,11 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 targetState = ResolvePendingAttackAnim(_sim.Units[i].Stats,
                     _sim.Units[i].PendingWeaponIdx, _sim.Units[i].PendingWeaponIsRanged,
                     _sim.Units[i].Archetype);
-            else if (_sim.Units[i].HitReacting)
-                targetState = AnimState.BlockReact;
-            else if (_sim.Units[i].BlockReacting)
+            // Flinch driven by HitReactTimer (set by DamageSystem.ApplyHitReactAnim,
+            // which already skipped fleeing / prone / refractory units, and is never
+            // set for poison) — not the raw HitReacting/BlockReacting flags. Keeps the
+            // legacy render in lockstep with the archetype OverrideAnim path.
+            else if (_sim.Units[i].HitReactTimer > 0f)
                 targetState = AnimState.BlockReact;
             else if (_sim.Units[i].PostAttackTimer > 0f)
                 targetState = AnimState.Block;
@@ -6437,6 +6445,20 @@ public class Game1 : Microsoft.Xna.Framework.Game
         _spriteBatch.Draw(_pixel, a, null, color, angle, Vector2.Zero, new Vector2(len, 1f), SpriteEffects.None, 0f);
     }
 
+    /// <summary>Draw one F7 horde ring (a circle outline) plus a label at its north
+    /// edge showing the ring's name + world radius. Concentric rings stack their
+    /// labels at different heights so all three stay readable.</summary>
+    private void DrawHordeRing(Vec2 center, float radius, Color color, string label, int screenW, int screenH)
+    {
+        _debugDraw.DrawCircle(_spriteBatch, _renderer, _camera, center, radius, color, 48);
+        if (_smallFont == null || radius < 0.5f) return;
+        var top = _camera.WorldToScreen(center + new Vec2(0f, -radius), 0f, screenW, screenH);
+        var sz = _smallFont.MeasureString(label);
+        var labelColor = new Color(color.R, color.G, color.B, (byte)255);
+        _spriteBatch.DrawString(_smallFont, label,
+            new Vector2((int)(top.X - sz.X / 2f), (int)(top.Y - sz.Y - 1)), labelColor);
+    }
+
     private void DrawHordeDebug()
     {
         _debugDraw.EnsurePixel(GraphicsDevice);
@@ -6444,18 +6466,18 @@ public class Game1 : Microsoft.Xna.Framework.Game
         var horde = _sim.Horde;
         var settings = horde.Settings;
 
-        // Formation circle — draw the *effective* radius so the overlay matches
-        // the actual horde extent (scales with population, not the static setting).
-        _debugDraw.DrawCircle(_spriteBatch, _renderer, _camera,
-            horde.CircleCenter, horde.EffectiveRadius, new Color(100, 200, 100, 120));
-
-        // Engagement range (orange) — dynamic: green + EngagementOffset
-        _debugDraw.DrawCircle(_spriteBatch, _renderer, _camera,
-            horde.CircleCenter, horde.EngagementRange, new Color(255, 200, 80, 80));
-
-        // Leash radius (red) — dynamic: orange + LeashOffset
-        _debugDraw.DrawCircle(_spriteBatch, _renderer, _camera,
-            horde.CircleCenter, horde.LeashRadius, new Color(255, 80, 80, 60));
+        // Three horde rings, each labeled with its world radius so they're easy to
+        // tell apart (they're concentric, so the labels stack by radius up the north
+        // edge). Alpha kept high enough that all three read clearly over the ground.
+        //   formation (green) = EffectiveRadius           — where units stand (√N)
+        //   engage    (orange)= formation + EngagementOffset — horde grabs enemies here
+        //   leash     (red)   = engage + LeashOffset         — chaser force-returned here
+        DrawHordeRing(horde.CircleCenter, horde.EffectiveRadius, new Color(110, 230, 110, 200),
+            $"formation {horde.EffectiveRadius:F0}", screenW, screenH);
+        DrawHordeRing(horde.CircleCenter, horde.EngagementRange, new Color(255, 185, 60, 210),
+            $"engage {horde.EngagementRange:F0}", screenW, screenH);
+        DrawHordeRing(horde.CircleCenter, horde.LeashRadius, new Color(255, 70, 70, 210),
+            $"leash {horde.LeashRadius:F0}", screenW, screenH);
 
         // Formation facing arrow
         var facingDir = new Vec2(MathF.Cos(horde.CircleFacing), MathF.Sin(horde.CircleFacing));

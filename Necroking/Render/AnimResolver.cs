@@ -174,6 +174,22 @@ public static class AnimResolver
         return true;
     }
 
+    /// <summary>
+    /// Unconditionally drop the unit's current override so the next Resolve falls
+    /// back to RoutineAnim (locomotion). Used to cancel a stale one-shot that would
+    /// otherwise bleed past its purpose — e.g. an attack swing still on screen after
+    /// the unit has left combat and started chasing. Safe to call when no override
+    /// is active (no-op).
+    /// </summary>
+    public static void ClearOverride(Unit unit)
+    {
+        if (!unit.OverrideAnim.IsActive) return;
+        unit.OverrideAnim = AnimRequest.None;
+        unit.OverrideTimer = 0f;
+        unit.OverrideStarted = false;
+        unit.CurrentOverrideHandleId = 0;
+    }
+
     // Handle ID counter. 0 is reserved for OverrideHandle.None, so we start at 1
     // and wrap (~4B overrides before collision, effectively never in gameplay).
     private static uint _handleCounter;

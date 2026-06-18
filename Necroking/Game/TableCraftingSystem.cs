@@ -121,10 +121,15 @@ public static class TableCraftingSystem
             return;
         }
 
-        int spawnedIdx = sim.SpawnUnitByID(zombieID, spawnPos);
+        // Raise into the horde via the canonical helper. This wires the
+        // HordeMinion archetype (bare SpawnUnitByID does NOT — it only applies
+        // the def's legacy AI enum, which for the animal zombies is the
+        // leash-less "AttackClosest"; a deer crafted that way chased fleeing
+        // enemies off the map forever).
+        int spawnedIdx = sim.SpawnZombieMinion(zombieID, spawnPos);
         if (spawnedIdx < 0)
         {
-            DebugLog.Log("table", $"[Table {envIdx}] CompleteCraft aborted: SpawnUnitByID('{zombieID}') failed");
+            DebugLog.Log("table", $"[Table {envIdx}] CompleteCraft aborted: SpawnZombieMinion('{zombieID}') failed");
             ts.CorpseSlots[corpseSlotIdx] = default;
             ts.CancelChannel();
             return;
@@ -140,13 +145,6 @@ public static class TableCraftingSystem
 
         // Apply potion-derived bonus effects to the spawned zombie.
         ApplyItemBonusEffects(gameData, ts, sim.UnitsMut, spawnedIdx);
-
-        // Enroll in the necromancer's horde — same pattern used by raise_zombie
-        // spells and other summon paths. HordeSystem reads the unit by ID and
-        // takes over formation slot assignment + follow behavior; the unit's
-        // archetype (HordeMinion for the deer/wolf/bear zombies in units.json)
-        // already wires its handler to consume those assignments.
-        sim.Horde.AddUnit(sim.Units[spawnedIdx].Id);
 
         DebugLog.Log("table",
             $"[Table {envIdx}] Crafted zombie '{zombieID}' at ({spawnPos.X:F1},{spawnPos.Y:F1}) " +

@@ -6279,7 +6279,7 @@
     "worldHeight": 0,
     "pivotX": 0.48387095,
     "pivotY": 0.9144737,
-    "collisionRadius": 0,
+    "collisionRadius": 0.10000002,
     "collisionOffsetX": 0,
     "collisionOffsetY": 0,
     "scale": 0.5,

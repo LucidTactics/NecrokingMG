@@ -351,8 +351,25 @@ public class Unit
 
     // Dodge / React (set on combat events, cleared each tick)
     public bool Dodging;
+    /// <summary>One-tick edge flag: this unit took damage this frame. Consumed by AI
+    /// (flee/retarget reactions). The flinch ANIMATION is driven separately by
+    /// <see cref="HitReactTimer"/> so it can be suppressed (fleeing) / gated
+    /// (refractory) without affecting the AI's read of "was I just hit".</summary>
     public bool HitReacting;
     public bool BlockReacting;
+    /// <summary>True while this unit is actively fleeing/running away (morale rout is
+    /// tracked by <see cref="Routing"/>; prey flee — DeerHerd RoutineFleeing,
+    /// FleeWhenHit — set this). A fleeing unit does NOT play the hit-react flinch
+    /// (it keeps running). Owned by the AI handlers / flee paths.</summary>
+    public bool Fleeing;
+    /// <summary>Seconds remaining to display the BlockReact flinch. Drives the legacy
+    /// render path; set by DamageSystem.ApplyHitReactAnim (which also sets the
+    /// archetype OverrideAnim). 0 = not flinching.</summary>
+    public float HitReactTimer;
+    /// <summary>Refractory countdown: while > 0 the unit can't START a new flinch, so
+    /// sustained/focus-fire damage can't stun-lock it out of acting. Set whenever a
+    /// flinch is applied; ticked down each frame.</summary>
+    public float FlinchRefractoryTimer;
 
     // Stuck detection for ORCA nudge
     public int StuckFrames;

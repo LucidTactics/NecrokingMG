@@ -94,8 +94,11 @@
       "lightningAura": null,
       "hasImageBehind": false,
       "imageBehind": null,
+      "hasPulsingOutline": false,
+      "pulsingOutline": null,
       "hasWeaponParticle": false,
-      "weaponParticle": null
+      "weaponParticle": null,
+      "unitTint": null
     },
     {
       "id": "strength_buff",
@@ -270,6 +273,7 @@
     {
       "id": "buff_4",
       "name": "CastingEffect",
+      "icon": "",
       "duration": 4,
       "effects": [],
       "maxStacks": 1,
@@ -322,6 +326,7 @@
     {
       "id": "buff_4_copy",
       "name": "CastingEffect Green",
+      "icon": "",
       "duration": 4,
       "effects": [],
       "maxStacks": 1,
@@ -374,6 +379,7 @@
     {
       "id": "buff_4_copy_copy",
       "name": "CastingEffect Lightning",
+      "icon": "",
       "duration": 4,
       "effects": [],
       "maxStacks": 1,
@@ -992,6 +998,7 @@
     {
       "id": "buff_wolf_pounce",
       "name": "Pounce",
+      "icon": "",
       "duration": 0,
       "effects": [],
       "maxStacks": 1,
@@ -1025,6 +1032,7 @@
     {
       "id": "buff_boar_charge",
       "name": "Boar Charge",
+      "icon": "",
       "duration": 0,
       "effects": [],
       "maxStacks": 1,
@@ -1058,6 +1066,7 @@
     {
       "id": "buff_bear_sweep",
       "name": "Bear Sweep",
+      "icon": "",
       "duration": 0,
       "effects": [],
       "maxStacks": 1,
@@ -1091,6 +1100,7 @@
     {
       "id": "buff_corpse_meal",
       "name": "Corpse Meal",
+      "icon": "",
       "duration": 0,
       "effects": [
         {
@@ -1128,6 +1138,7 @@
     {
       "id": "buff_corpse_meal_improved",
       "name": "Corpse Meal (Improved)",
+      "icon": "",
       "duration": 0,
       "effects": [
         {
@@ -1170,6 +1181,7 @@
     {
       "id": "buff_monster_cap",
       "name": "Monster Limit",
+      "icon": "",
       "duration": 0,
       "effects": [
         {
@@ -1207,6 +1219,7 @@
     {
       "id": "buff_human_cap",
       "name": "Human Limit",
+      "icon": "",
       "duration": 0,
       "effects": [
         {

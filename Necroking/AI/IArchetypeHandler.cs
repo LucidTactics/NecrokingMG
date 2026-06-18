@@ -50,6 +50,28 @@ public static class ArchetypeRegistry
     public static string GetName(byte id) =>
         id < _names.Length ? _names[id] ?? "Unknown" : "Unknown";
 
+    /// <summary>
+    /// Resolve a unit-def archetype name (e.g. "HordeMinion") to its byte id.
+    /// Single source of truth for the name→id mapping — used by every spawn
+    /// path (Game1.SpawnUnit, Simulation.SpawnZombieMinion) so a def's archetype
+    /// is applied consistently no matter which path creates the unit. Returns
+    /// <see cref="None"/> for null/empty/unknown names.
+    /// </summary>
+    public static byte FromName(string? name) => name switch
+    {
+        "PlayerControlled" => PlayerControlled,
+        "HordeMinion" => HordeMinion,
+        "WolfPack" => WolfPack,
+        "DeerHerd" => DeerHerd,
+        "PatrolSoldier" => PatrolSoldier,
+        "GuardStationary" => GuardStationary,
+        "ArmyUnit" => ArmyUnit,
+        "CasterUnit" => CasterUnit,
+        "ArcherUnit" => ArcherUnit,
+        "Civilian" => Civilian,
+        _ => None,
+    };
+
     // Well-known archetype IDs (constants, not enum, to allow future extension)
     public const byte None = 0;
     public const byte PlayerControlled = 1;
