@@ -507,6 +507,15 @@
       "modal": false,
       "children": [
         {
+          "name": "child_1",
+          "element": "Icon",
+          "x": 19,
+          "y": 16,
+          "width": 73,
+          "height": 74,
+          "anchor": 0
+        },
+        {
           "name": "child_0",
           "element": "Quantity",
           "x": 51,
@@ -515,15 +524,6 @@
           "height": 44,
           "anchor": 0,
           "defaultText": "1"
-        },
-        {
-          "name": "child_1",
-          "element": "Icon",
-          "x": 19,
-          "y": 16,
-          "width": 73,
-          "height": 74,
-          "anchor": 0
         }
       ]
     },
