@@ -541,6 +541,12 @@ public class MapEditorWindow
         _textureBrowser.IsOpen
         || (_eb != null && (_eb.IsColorPickerOpen || _eb.IsDropdownOpen));
 
+    /// <summary>Set by the host each frame: true only when the bare map editor (no
+    /// sub-editor popup focused) owns WASD for camera panning. When a sub-editor
+    /// like the object editor is focused, this is false so WASD navigates that
+    /// editor's list instead of moving the map camera.</summary>
+    public bool CameraInputEnabled = true;
+
     // ========================================================================
     //  Update
     // ========================================================================
@@ -676,16 +682,19 @@ public class MapEditorWindow
                     BrushRadius = Math.Min(20, BrushRadius + 1);
             }
 
-            // M16: Smooth WASD camera with acceleration/friction
-            // RM37: Arrow keys in addition to WASD
-
-            float cam_accel = CamAcceleration;
-            if (kb.IsKeyDown(Keys.LeftShift) || kb.IsKeyDown(Keys.RightShift)) cam_accel *= 5;
-            
-            if (kb.IsKeyDown(Keys.W) || kb.IsKeyDown(Keys.Up)) _camVelY -= cam_accel * dt;
-            if ((kb.IsKeyDown(Keys.S) && !kb.IsKeyDown(Keys.LeftControl)) || kb.IsKeyDown(Keys.Down)) _camVelY += cam_accel * dt;
-            if (kb.IsKeyDown(Keys.A) || kb.IsKeyDown(Keys.Left)) _camVelX -= cam_accel * dt;
-            if (kb.IsKeyDown(Keys.D) || kb.IsKeyDown(Keys.Right)) _camVelX += cam_accel * dt;
+            // M16: Smooth WASD camera. Arrow keys are NO LONGER camera keys (RM37
+            // reverted) — they're free for editor list navigation. Gated on
+            // CameraInputEnabled so only the bare map editor pans; when a sub-editor
+            // (object editor) is focused, WASD navigates its list instead.
+            if (CameraInputEnabled)
+            {
+                float cam_accel = CamAcceleration;
+                if (kb.IsKeyDown(Keys.LeftShift) || kb.IsKeyDown(Keys.RightShift)) cam_accel *= 5;
+                if (kb.IsKeyDown(Keys.W)) _camVelY -= cam_accel * dt;
+                if (kb.IsKeyDown(Keys.S) && !kb.IsKeyDown(Keys.LeftControl)) _camVelY += cam_accel * dt;
+                if (kb.IsKeyDown(Keys.A)) _camVelX -= cam_accel * dt;
+                if (kb.IsKeyDown(Keys.D)) _camVelX += cam_accel * dt;
+            }
 
             // RM10: 'B' hotkey to toggle Single/Paint mode in Objects tab
             if (ActiveTab == MapEditorTab.Objects && kb.IsKeyDown(Keys.B) && _prevKb.IsKeyUp(Keys.B))

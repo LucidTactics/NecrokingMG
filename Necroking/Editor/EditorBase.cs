@@ -545,8 +545,16 @@ public class EditorBase
         _scrollOffsets[panelId] = Math.Clamp(target, 0, maxScroll);
     }
 
+    // Keyboard list navigation. _focusedListId is the list that last received a
+    // click (focus-follows-click); only it responds to arrow/WASD nav. The host
+    // sets AllowWasdListNav=false while the bare map editor owns WASD for camera
+    // panning — arrows still navigate lists there.
+    private string? _focusedListId;
+    public bool AllowWasdListNav = true;
+
     /// <summary>
     /// Draws a scrollable list of items. Returns the index of the clicked item, or -1.
+    /// Also handles keyboard navigation (arrows / WASD) when the list is focused.
     /// </summary>
     /// <param name="customRenderer">Optional callback for custom per-item rendering (e.g. category dots, icons).</param>
     public int DrawScrollableList(string panelId, IReadOnlyList<string> items, int selectedIdx,
@@ -558,6 +566,12 @@ public class EditorBase
         // Clip region
         var clipRect = new Rectangle(x, y, w, h);
         DrawRect(clipRect, new Color(20, 20, 35, 200));
+
+        // Focus-follows-click: clicking anywhere in this list makes it the keyboard
+        // nav target (until another list or a text field takes focus).
+        if (!inputBlocked && clipRect.Contains(_mouse.X, _mouse.Y)
+            && _mouse.LeftButton == ButtonState.Pressed && _prevMouse.LeftButton == ButtonState.Released)
+            _focusedListId = panelId;
 
         if (!_scrollOffsets.ContainsKey(panelId))
             _scrollOffsets[panelId] = 0;
@@ -585,6 +599,37 @@ public class EditorBase
                 scroll = Math.Clamp(scroll, 0, maxScroll);
                 _scrollOffsets[panelId] = scroll;
                 ConsumeScroll();
+            }
+        }
+
+        // Keyboard navigation when this list has focus (focus-follows-click) and
+        // input isn't blocked / being typed into a text field. Up/Down always
+        // navigate; W/S navigate too unless the host gave WASD to the map camera
+        // (AllowWasdListNav=false). The moved selection is returned exactly like a
+        // click, and we scroll to keep it visible.
+        if (_focusedListId == panelId && !inputBlocked && !IsTextInputActive)
+        {
+            bool navUp = (_kb.IsKeyDown(Keys.Up) && _prevKb.IsKeyUp(Keys.Up))
+                || (AllowWasdListNav && _kb.IsKeyDown(Keys.W) && _prevKb.IsKeyUp(Keys.W));
+            bool navDown = (_kb.IsKeyDown(Keys.Down) && _prevKb.IsKeyUp(Keys.Down))
+                || (AllowWasdListNav && _kb.IsKeyDown(Keys.S) && _prevKb.IsKeyUp(Keys.S));
+            if (navUp ^ navDown)
+            {
+                int target = NextVisibleListIndex(items, searchFilter, selectedIdx, navDown ? 1 : -1);
+                if (target >= 0 && target != selectedIdx)
+                {
+                    clicked = target;
+                    // Scroll to keep the new selection visible (by its visible row).
+                    int visPos = 0;
+                    for (int i = 0; i < target; i++)
+                        if (searchFilter == null || items[i].Contains(searchFilter, StringComparison.OrdinalIgnoreCase))
+                            visPos++;
+                    int itemTop = visPos * itemH;
+                    if (itemTop < scroll) scroll = itemTop;
+                    else if (itemTop + itemH > scroll + h) scroll = itemTop + itemH - h;
+                    scroll = Math.Max(0, scroll);
+                    _scrollOffsets[panelId] = scroll;
+                }
             }
         }
 
@@ -645,6 +690,23 @@ public class EditorBase
         }
 
         return clicked;
+    }
+
+    /// <summary>Index of the next visible (filter-passing) item from <paramref name="from"/>
+    /// in direction <paramref name="dir"/> (+1 down / -1 up), or -1 if none. When
+    /// nothing is selected (from &lt; 0), returns the first/last visible item.</summary>
+    private static int NextVisibleListIndex(IReadOnlyList<string> items, string? filter, int from, int dir)
+    {
+        bool Vis(int i) => filter == null || items[i].Contains(filter, StringComparison.OrdinalIgnoreCase);
+        if (from < 0)
+        {
+            if (dir > 0) { for (int i = 0; i < items.Count; i++) if (Vis(i)) return i; }
+            else { for (int i = items.Count - 1; i >= 0; i--) if (Vis(i)) return i; }
+            return -1;
+        }
+        if (dir > 0) { for (int i = from + 1; i < items.Count; i++) if (Vis(i)) return i; }
+        else { for (int i = from - 1; i >= 0; i--) if (Vis(i)) return i; }
+        return -1;
     }
 
     // === Text Input Field ===

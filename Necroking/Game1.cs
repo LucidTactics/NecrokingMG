@@ -280,7 +280,6 @@ public class Game1 : Microsoft.Xna.Framework.Game
     private readonly Necroking.UI.ActionModalLayer _itemEditorLayer  = new() { LightDismiss = false, IsBlocking = true };
     private readonly Necroking.UI.ActionModalLayer _settingsLayer    = new() { LightDismiss = false, IsBlocking = true };
     private readonly Necroking.UI.ActionModalLayer _pauseMenuLayer   = new() { LightDismiss = false, IsBlocking = true };
-    private float _editorPanTime; // ramp-up timer for editor camera panning
 
     // Pending spell cast with animation delay (Spell1 animation → action moment → execute)
     private struct PendingCastAnim
@@ -2466,6 +2465,14 @@ public class Game1 : Microsoft.Xna.Framework.Game
         int screenW = GraphicsDevice.Viewport.Width;
         int screenH = GraphicsDevice.Viewport.Height;
         // Update EditorBase input first so _eb has current mouse/keyboard state for all editors
+        // WASD/arrow ownership: only the BARE map editor (map editor on top, no
+        // sub-editor popup focused) keeps WASD for camera panning; everywhere else
+        // WASD navigates the focused editor list. Arrows always navigate lists.
+        bool bareMapEditor = _menuState == MenuState.MapEditor && _popups.Top == _mapEditorLayer;
+        _editorUi.AllowWasdListNav = !bareMapEditor;
+        if (_uiEditor != null) _uiEditor.AllowWasdListNav = true;
+        if (_mapEditor != null) _mapEditor.CameraInputEnabled = bareMapEditor;
+
         if (_menuState == MenuState.UnitEditor || _menuState == MenuState.SpellEditor || _menuState == MenuState.MapEditor || _menuState == MenuState.Settings || _menuState == MenuState.ItemEditor)
             _editorUi.UpdateInput(mouse, _prevMouse, kb, _prevKb, screenW, screenH, gameTime, _input);
         if (_menuState == MenuState.MapEditor && _gameWorldLoaded)
@@ -2491,30 +2498,15 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // Camera follows necromancer, or free pan in editors/scenarios
         int necroIdx = FindNecromancer();
         bool editorOpen = _menuState == MenuState.UnitEditor || _menuState == MenuState.SpellEditor
-            || _menuState == MenuState.MapEditor || _menuState == MenuState.UIEditor;
+            || _menuState == MenuState.MapEditor || _menuState == MenuState.UIEditor
+            || _menuState == MenuState.ItemEditor;
         if (editorOpen)
         {
-            // Editors: free camera — map editor handles its own WASD via smooth camera in MapEditorWindow.Update
-            // Other editors: allow arrow key panning (suppressed when a text field is active)
-            if (_menuState != MenuState.MapEditor && !anyTextInputActive)
-            {
-                Vec2 camMove = Vec2.Zero;
-                if (_input.IsKeyDown(Keys.Up) || _input.IsKeyDown(Keys.W)) camMove.Y -= 1f;
-                if (_input.IsKeyDown(Keys.Down) || _input.IsKeyDown(Keys.S)) camMove.Y += 1f;
-                if (_input.IsKeyDown(Keys.Left) || _input.IsKeyDown(Keys.A)) camMove.X -= 1f;
-                if (_input.IsKeyDown(Keys.Right) || _input.IsKeyDown(Keys.D)) camMove.X += 1f;
-                if (camMove.LengthSq() > 0.01f)
-                {
-                    _editorPanTime += rawDt;
-                    float ramp = 1f + 2f * MathF.Min(_editorPanTime / 2f, 1f); // 1x → 3x over 2 seconds
-                    float camSpeed = 400f / MathF.Max(1f, _camera.Zoom) * ramp;
-                    _camera.Position += camMove.Normalized() * camSpeed * rawDt;
-                }
-                else
-                {
-                    _editorPanTime = 0f; // reset when not panning
-                }
-            }
+            // Editors no longer free-pan with WASD/arrows — those keys belong to
+            // editor list navigation now (handled in EditorBase.DrawScrollableList).
+            // The map editor still pans with WASD via MapEditorWindow.Update, gated
+            // on CameraInputEnabled (true only for the bare map editor); arrows
+            // there are free for list nav.
         }
         else if (necroIdx >= 0)
         {
@@ -2598,7 +2590,8 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
         // Editors pause the game
         bool editorActive = _menuState == MenuState.UnitEditor || _menuState == MenuState.SpellEditor
-            || _menuState == MenuState.MapEditor || _menuState == MenuState.UIEditor;
+            || _menuState == MenuState.MapEditor || _menuState == MenuState.UIEditor
+            || _menuState == MenuState.ItemEditor;
 
         if (!_paused && !editorActive)
         {
