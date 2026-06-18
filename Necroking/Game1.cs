@@ -111,6 +111,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 // Potion throw-spells (ConsumesItem) stay hidden until the player has
                 // actually seen that potion in their inventory at least once.
                 && (string.IsNullOrEmpty(spell.ConsumesItem) || _inventory.HasEverSeen(spell.ConsumesItem)));
+        ValidatePotionAbilities();
         _unitInfoPanel.DrawUnitIconCallback = (defId, rect) => DrawUnitIdleSprite(defId, rect);
         _unitInfoPanel.OnClosed = () =>
         {
@@ -3615,19 +3616,52 @@ public class Game1 : Microsoft.Xna.Framework.Game
     /// through to normal spell dispatch.</summary>
     private bool TryDispatchBuiltinAbility(string spellId, int necroIdx, Vec2 mouseWorld)
     {
-        switch (spellId)
+        if (spellId == "melee_gather")
         {
-            case "melee_gather":
-                TryMeleeOrGather(necroIdx, mouseWorld);
-                return true;
-            case "poison_berries_poison":
-                TryStartPoisonBerries(necroIdx, mouseWorld, "buff_poison_dot", "potion_poison");
-                return true;
-            case "poison_berries_paralysis":
-                TryStartPoisonBerries(necroIdx, mouseWorld, "buff_paralysis_slow", "potion_paralysis");
-                return true;
-            default:
-                return false;
+            TryMeleeOrGather(necroIdx, mouseWorld);
+            return true;
+        }
+        if (PoisonBerryAbilities.TryGetValue(spellId, out var pb))
+        {
+            TryStartPoisonBerries(necroIdx, mouseWorld, pb.buffID, pb.itemID);
+            return true;
+        }
+        return false;
+    }
+
+    /// <summary>Built-in poison-berries abilities: spell id → (buff applied to the
+    /// eater, potion item consumed). Single source of truth for both casting
+    /// (<see cref="TryDispatchBuiltinAbility"/>) and the grimoire "seen materials"
+    /// gate: each spell def MUST declare consumesItem == itemID so the ability
+    /// stays hidden until the player has seen the potion. <see
+    /// cref="ValidatePotionAbilities"/> enforces that at load.</summary>
+    private static readonly Dictionary<string, (string buffID, string itemID)> PoisonBerryAbilities = new()
+    {
+        ["poison_berries_poison"]    = ("buff_poison_dot",     "potion_poison"),
+        ["poison_berries_paralysis"] = ("buff_paralysis_slow", "potion_paralysis"),
+    };
+
+    /// <summary>Guard against the "skill visible before its material is seen"
+    /// regression: every built-in potion ability must declare consumesItem ==
+    /// the potion it actually consumes, and that item must exist. The grimoire
+    /// gate keys off consumesItem, so a missing/mismatched value silently leaks
+    /// the ability into the menu before the player has seen the potion. Logs a
+    /// loud warning (rather than throwing) so a data slip is caught in the log
+    /// without bricking the game.</summary>
+    private void ValidatePotionAbilities()
+    {
+        foreach (var (spellId, pb) in PoisonBerryAbilities)
+        {
+            var def = _gameData.Spells.Get(spellId);
+            if (def == null)
+            {
+                DebugLog.Log("startup", $"[ValidatePotionAbilities] WARNING: built-in ability '{spellId}' has no spell def in spells.json");
+                continue;
+            }
+            if (def.ConsumesItem != pb.itemID)
+                DebugLog.Log("startup", $"[ValidatePotionAbilities] WARNING: '{spellId}' consumesItem='{def.ConsumesItem}' but ability consumes '{pb.itemID}' — the 'seen materials' gate will not hide it correctly. Set consumesItem to '{pb.itemID}' in spells.json.");
+            if (_gameData.Items.Get(pb.itemID) == null)
+                DebugLog.Log("startup", $"[ValidatePotionAbilities] WARNING: '{spellId}' consumes item '{pb.itemID}' which is not in the item registry.");
         }
     }
 
