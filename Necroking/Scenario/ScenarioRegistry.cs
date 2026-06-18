@@ -14,6 +14,7 @@ public static class ScenarioRegistry
         Register("horde_chase_leash", () => new Scenarios.HordeChaseLeashScenario());
         Register("horde_target_teleport", () => new Scenarios.HordeTargetTeleportScenario());
         Register("zombie_deer_follow_speed", () => new Scenarios.ZombieDeerFollowSpeedScenario());
+        Register("aggression_radius", () => new Scenarios.AggressionRadiusScenario());
         Register("combat_test", () => new Scenarios.CombatTestScenario());
         Register("skirmish", () => new Scenarios.SkirmishScenario());
         Register("empty_map", () => new Scenarios.EmptyMapScenario());

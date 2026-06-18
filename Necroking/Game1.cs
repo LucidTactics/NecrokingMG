@@ -2753,6 +2753,12 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 }
             }
 
+            // --- Aggression bar: Shift+E raises, Shift+Q lowers. The shift guard
+            // below stops Q/E from also casting slots 0/1 while adjusting. ---
+            bool aggrShift = _input.IsKeyDown(Keys.LeftShift) || _input.IsKeyDown(Keys.RightShift);
+            if (aggrShift && _input.WasKeyPressed(Keys.E)) _sim.Horde.AggressionLevel++;
+            if (aggrShift && _input.WasKeyPressed(Keys.Q)) _sim.Horde.AggressionLevel--;
+
             // --- Spell casting ---
             // Primary bar: Q = slot 0, E = slot 1, LClick = slot 2, RClick = slot 3
             // Secondary bar: D1-D4 = slots 0-3
@@ -2762,8 +2768,8 @@ public class Game1 : Microsoft.Xna.Framework.Game
             {
                 bool pressed = slot switch
                 {
-                    0 => _input.WasKeyPressed(Keys.Q),
-                    1 => _input.WasKeyPressed(Keys.E),
+                    0 => !aggrShift && _input.WasKeyPressed(Keys.Q),
+                    1 => !aggrShift && _input.WasKeyPressed(Keys.E),
                     2 => !_input.MouseOverUI && _input.LeftPressed,
                     3 => !_input.MouseOverUI && _input.RightPressed,
                     _ => false
@@ -5266,6 +5272,8 @@ public class Game1 : Microsoft.Xna.Framework.Game
         bool showUI = _activeScenario == null || _activeScenario.WantsUI;
         if (showUI)
             DrawHUD(screenW, screenH);
+        if (showUI)
+            DrawAggressionBar(screenW, screenH);
 
         // Inventory UI (widget-based, drawn over HUD)
         if (showUI)
@@ -8033,6 +8041,34 @@ public class Game1 : Microsoft.Xna.Framework.Game
             _spellDropdownSlot, _secondaryDropdownSlot,
             _timeScale, _hoveredObjectIdx, _envSystem,
             DrawSpellCategoryIcon, _paused);
+    }
+
+    // AggressionBar widget node x-positions (left→right) from data/ui/widgets.json.
+    // Level 0 = leftmost (min aggression) … 4 = rightmost (max), 2 = center.
+    private static readonly int[] _aggressionNodeX = { 5, 124, 257, 388, 499 };
+
+    /// <summary>Draw the aggression bar (Shift+Q/Shift+E controlled) centered just
+    /// above the secondary spell bar, with a warm token on the active level's node.
+    /// Both DrawWidget and DrawCircle manage their own SpriteBatch, so this is
+    /// called outside any active batch (right after DrawHUD).</summary>
+    private void DrawAggressionBar(int screenW, int screenH)
+    {
+        if (_menuState != MenuState.None) return;
+
+        const int BarW = 534, BarH = 33;
+        var sec = _hudRenderer.GetSecondaryBarLayout(screenH);
+        int x = (screenW - BarW) / 2;
+        int y = sec.barY - BarH - 6; // sit just above the secondary (1-6) bar
+
+        _widgetRenderer.DrawWidget("AggressionBar", x, y);
+
+        // DrawWidget leaves the SpriteBatch closed; DrawCircle manages its own
+        // Begin/End, so call it directly (no manual batch juggling) — a warm token
+        // centered on the active level's node.
+        int level = Math.Clamp(_sim.Horde.AggressionLevel, 0, _aggressionNodeX.Length - 1);
+        var center = new Vector2(x + _aggressionNodeX[level] + 12.5f, y + 5 + 12.5f);
+        var fill = new Color(236, 196, 96); // warm gold accent
+        _uiShaders.DrawCircle(_spriteBatch, center, 7f, 12f, fill, fill, new Color(236, 196, 96, 80));
     }
 
     private void DrawPauseMenu(int screenW, int screenH)

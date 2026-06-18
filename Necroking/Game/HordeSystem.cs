@@ -39,6 +39,7 @@ public class HordeSystem
     private bool _necroMoving;
     private float _globalTime;
     private float _aggroScanTimer;
+    private int _aggression = AggressionCenter; // 0..4, 2 = center / default
     private readonly List<HordeUnitData> _hordeUnits = new();
     // O(1) Id -> _hordeUnits index, mirrored on Add/Remove. FindUnit was the hot
     // path for every HordeMinion's per-tick GetUnitState/GetTargetPosition calls
@@ -76,27 +77,61 @@ public class HordeSystem
         ? SlotSpacing * MathF.Sqrt(_nextSlot - 1 + 0.5f)
         : 0f;
 
+    /// <summary>Player aggression level, 0..4 (2 = center / default). Scales the
+    /// engagement + leash radii (Shift+E raises, Shift+Q lowers):
+    ///   center (2) → the configured offsets (current behavior),
+    ///   max (4)    → engagement and leash both DOUBLE,
+    ///   min (0)    → engagement collapses to the formation edge (EffectiveRadius)
+    ///                and the leash to formation + LeashOffset.
+    /// Levels 1 / 3 linearly interpolate between those.</summary>
+    public int AggressionLevel
+    {
+        get => _aggression;
+        set => _aggression = value < 0 ? 0 : value > AggressionMax ? AggressionMax : value;
+    }
+    public const int AggressionMax = 4;
+    public const int AggressionCenter = 2;
+
+    /// <summary>Aggression as 0..1 (0.5 = center).</summary>
+    private float AggressionT => _aggression / (float)AggressionMax;
+
+    private static float Lerp(float a, float b, float t) => a + (b - a) * t;
+
     /// <summary>
-    /// Radius used for the horde-level aggro scan and the "target left the
-    /// zone, stop chasing" check. Equal to <see cref="EngagementRange"/> so the
-    /// scan matches the orange F7 debug circle exactly — previously the scan
-    /// queried max(EffectiveRadius, MinAggroRadius), which is strictly smaller
-    /// and left a "ghost band" where an enemy visually inside the orange ring
-    /// wasn't actually seen by the scan. The 10-unit floor that
-    /// <see cref="HordeSettings.MinAggroRadius"/> used to provide is now baked
-    /// into the same EngagementOffset that draws the ring.
+    /// Radius used for the horde-level aggro scan and the "target left the zone,
+    /// stop chasing" check. Equal to <see cref="EngagementRange"/> so the scan
+    /// matches the orange F7 debug circle exactly.
     /// </summary>
     public float AggroRadius => EngagementRange;
 
-    /// <summary>Engagement band: how close an enemy has to be before the horde
-    /// engages it. Stacked on top of <see cref="EffectiveRadius"/> so the band
-    /// scales with horde size. Drawn as the orange F7 debug circle.</summary>
-    public float EngagementRange => EffectiveRadius + _settings.EngagementOffset;
+    /// <summary>Engagement band (orange F7 ring), aggression-scaled. Center =
+    /// EffectiveRadius + EngagementOffset (the configured band); max doubles that;
+    /// min collapses to the formation edge (EffectiveRadius).</summary>
+    public float EngagementRange
+    {
+        get
+        {
+            float eff = EffectiveRadius;
+            float mid = eff + _settings.EngagementOffset;
+            float t = AggressionT;
+            return t <= 0.5f ? Lerp(eff, mid, t / 0.5f)
+                             : Lerp(mid, 2f * mid, (t - 0.5f) / 0.5f);
+        }
+    }
 
-    /// <summary>Leash boundary: a chaser crossing this is force-returned to
-    /// its formation slot. Stacked on top of <see cref="EngagementRange"/>,
-    /// not configured directly. Drawn as the red F7 debug circle.</summary>
-    public float LeashRadius => EngagementRange + _settings.LeashOffset;
+    /// <summary>Leash boundary (red F7 ring), aggression-scaled. Center = engage +
+    /// LeashOffset; max doubles it; min = formation edge + LeashOffset.</summary>
+    public float LeashRadius
+    {
+        get
+        {
+            float eff = EffectiveRadius;
+            float midLeash = eff + _settings.EngagementOffset + _settings.LeashOffset;
+            float t = AggressionT;
+            return t <= 0.5f ? Lerp(eff + _settings.LeashOffset, midLeash, t / 0.5f)
+                             : Lerp(midLeash, 2f * midLeash, (t - 0.5f) / 0.5f);
+        }
+    }
 
     public void Init(HordeSettings settings) { _settings = settings; }
 
