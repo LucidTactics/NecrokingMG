@@ -149,6 +149,11 @@
       "a": 255
     }
   },
+  "tooltips": {
+    "autoShowUnitStats": false,
+    "hoverPickRadius": 1.5,
+    "pauseOnManualInspect": true
+  },
   "startingInventory": [
     {
       "itemId": "Mushroom",

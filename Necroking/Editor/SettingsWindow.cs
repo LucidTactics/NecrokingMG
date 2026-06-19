@@ -18,12 +18,12 @@ public class SettingsWindow
     private GameSystems.DayNightSystem? _dayNightSystem;
 
     // Tab state
-    private enum Tab { Bloom, Shadow, Environment, Weather, General, Horde, FogOfWar, Corruption }
+    private enum Tab { Bloom, Shadow, Environment, Weather, General, Horde, FogOfWar, Corruption, Tooltips }
     private Tab _activeTab = Tab.Bloom;
-    private static readonly string[] TabNames = { "Bloom", "Shadow", "Environ", "Weather", "General", "Horde", "Fog", "Corrupt" };
+    private static readonly string[] TabNames = { "Bloom", "Shadow", "Environ", "Weather", "General", "Horde", "Fog", "Corrupt", "Tooltips" };
 
     // Scroll state per tab (keyed by tab name)
-    private readonly float[] _tabScroll = new float[8];
+    private readonly float[] _tabScroll = new float[9];
 
     // Track whether we need to save after a frame (dirty flag)
     private bool _dirty;
@@ -175,6 +175,9 @@ public class SettingsWindow
                 break;
             case Tab.Corruption:
                 totalContentHeight = DrawCorruptionTab(contentX, y, contentW);
+                break;
+            case Tab.Tooltips:
+                totalContentHeight = DrawTooltipsTab(contentX, y, contentW);
                 break;
             default:
                 totalContentHeight = 0;
@@ -486,6 +489,60 @@ public class SettingsWindow
             MarkDirty();
         }
         y += rowH;
+
+        return y - startY;
+    }
+
+    // ----------------------------------------------------------------
+    //  Tooltips tab — how the unit stat sheet is surfaced. Intentionally
+    //  exposes the raw tuning knobs (pick radius, pause) so we can iterate
+    //  on the hover/inspect feel aggressively without touching code.
+    // ----------------------------------------------------------------
+    private int DrawTooltipsTab(int x, int y, int w)
+    {
+        int startY = y;
+        int rowH = 26;
+        var t = _gameData.Settings.Tooltips;
+
+        DrawSectionHeader("Unit Stat Sheet", x, ref y);
+
+        // Main toggle: hover-to-show vs press-O-to-inspect.
+        bool autoShow = _ui.DrawCheckbox("Auto-show on hover (Factorio-style)", t.AutoShowUnitStats, x, y);
+        if (autoShow != t.AutoShowUnitStats) { t.AutoShowUnitStats = autoShow; MarkDirty(); }
+        y += rowH;
+
+        // Pick radius — how close the cursor must be to grab a unit.
+        float pick = _ui.DrawSliderFloat("set_tip_pickradius", "Cursor Pick Radius", t.HoverPickRadius, 0.25f, 5f, x, y, w);
+        if (MathF.Abs(pick - t.HoverPickRadius) > 0.0001f) { t.HoverPickRadius = pick; MarkDirty(); }
+        y += rowH;
+
+        // Pause-on-inspect only matters in press-O mode (auto-show never pauses).
+        if (!t.AutoShowUnitStats)
+        {
+            bool pause = _ui.DrawCheckbox("Pause game when inspecting (O)", t.PauseOnManualInspect, x, y);
+            if (pause != t.PauseOnManualInspect) { t.PauseOnManualInspect = pause; MarkDirty(); }
+            y += rowH;
+        }
+
+        y += 10;
+
+        // Info text explaining the two modes.
+        if (t.AutoShowUnitStats)
+        {
+            _ui.DrawText("Hover any unit to show its stat sheet.", new Vector2(x, y), EditorBase.TextDim);
+            y += 16;
+            _ui.DrawText("Move off the unit to dismiss. No pause.", new Vector2(x, y), EditorBase.TextDim);
+            y += 16;
+        }
+        else
+        {
+            _ui.DrawText("Press 'O' over a unit to pin its stat sheet.", new Vector2(x, y), EditorBase.TextDim);
+            y += 16;
+            _ui.DrawText("Press 'O' again to close.", new Vector2(x, y), EditorBase.TextDim);
+            y += 16;
+        }
+        _ui.DrawText("'U' always opens the necromancer's sheet.", new Vector2(x, y), EditorBase.TextDim);
+        y += 20;
 
         return y - startY;
     }

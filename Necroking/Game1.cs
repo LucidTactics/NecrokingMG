@@ -2356,9 +2356,13 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 _unitInfoPanel.ShowForUnit(_sim.NecromancerIndex);
         }
 
-        // 'O' = inspect the unit under the cursor (auto-pauses while open;
-        // closing restores only the pause WE set, not a user pause)
-        if (!anyTextInputActive && _input.WasKeyPressed(Keys.O) && _menuState == MenuState.None)
+        // 'O' = inspect the unit under the cursor (press-to-inspect mode; may
+        // auto-pause while open, closing restores only the pause WE set).
+        // Disabled when auto-show-on-hover is on — the hover logic below owns
+        // the panel in that mode. Both modes share the configurable pick radius.
+        var tipCfg = _gameData.Settings.Tooltips;
+        if (!tipCfg.AutoShowUnitStats
+            && !anyTextInputActive && _input.WasKeyPressed(Keys.O) && _menuState == MenuState.None)
         {
             EnsureInventoryUIsInitialized();
             if (_unitInfoPanel.IsVisible)
@@ -2370,7 +2374,8 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 int sw = GraphicsDevice.Viewport.Width, sh = GraphicsDevice.Viewport.Height;
                 Vec2 cursorWorld = _camera.ScreenToWorld(new Vector2(mouse.X, mouse.Y), sw, sh);
                 int best = -1;
-                float bestD2 = 1.5f * 1.5f; // pick radius in world units
+                float pr = tipCfg.HoverPickRadius;
+                float bestD2 = pr * pr; // pick radius in world units
                 for (int i = 0; i < _sim.Units.Count; i++)
                 {
                     var u = _sim.Units[i];
@@ -2381,7 +2386,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 if (best >= 0)
                 {
                     _unitInfoPanel.ShowForUnit(best);
-                    if (!_paused) { _paused = true; _pausedByInspect = true; }
+                    if (tipCfg.PauseOnManualInspect && !_paused) { _paused = true; _pausedByInspect = true; }
                 }
             }
         }
@@ -2923,6 +2928,51 @@ public class Game1 : Microsoft.Xna.Framework.Game
                     float hdx = obj.X - mouseWorld.X, hdy = obj.Y - mouseWorld.Y;
                     float hd = hdx * hdx + hdy * hdy;
                     if (hd < bhd) { bhd = hd; _hoveredObjectIdx = oi; }
+                }
+            }
+
+            // --- Unit auto-hover stat sheet (Factorio-style; opt-in via Tooltips) ---
+            // The cursor "carries" the stat sheet: hover a unit to show it, move off
+            // to dismiss. Never pauses. The auto-shown panel is transient (not a
+            // popup) so MouseOverUI stays clean — letting us re-pick and hide as the
+            // cursor moves. We only ever touch the panel when it's our transient view
+            // (or nothing's shown), so a pinned 'U'/'O' sheet is left alone.
+            if (_gameData.Settings.Tooltips.AutoShowUnitStats)
+            {
+                EnsureInventoryUIsInitialized();
+                bool ownsPanel = !_unitInfoPanel.IsVisible || _unitInfoPanel.IsTransient;
+                // Suppress over real UI (other popups, HUD bars) or while parked on
+                // the panel itself (so the user can hover stat cells for breakdowns).
+                bool overUI = _input.MouseOverUI
+                              || (_unitInfoPanel.IsVisible && _unitInfoPanel.ContainsMouse(mouse.X, mouse.Y));
+                int hoveredUnit = -1;
+                if (ownsPanel && !overUI)
+                {
+                    float pr = _gameData.Settings.Tooltips.HoverPickRadius;
+                    float bestD2 = pr * pr;
+                    for (int i = 0; i < _sim.Units.Count; i++)
+                    {
+                        var u = _sim.Units[i];
+                        if (!u.Alive) continue;
+                        float udx = u.Position.X - mouseWorld.X, udy = u.Position.Y - mouseWorld.Y;
+                        float d2 = udx * udx + udy * udy;
+                        if (d2 < bestD2) { bestD2 = d2; hoveredUnit = i; }
+                    }
+                }
+
+                if (!ownsPanel)
+                {
+                    // A pinned sheet is up — leave it be.
+                }
+                else if (hoveredUnit >= 0)
+                {
+                    if (_unitInfoPanel.UnitIndex != hoveredUnit)
+                        _unitInfoPanel.ShowForUnitTransient(hoveredUnit);
+                }
+                else if (_unitInfoPanel.IsVisible && !overUI)
+                {
+                    // Cursor left all units (and isn't parked on the panel) — dismiss.
+                    _unitInfoPanel.Hide();
                 }
             }
 
