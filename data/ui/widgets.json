@@ -3517,8 +3517,7 @@
           "y": 96,
           "width": 635,
           "height": 35,
-          "anchor": 0,
-          "childOverrides": []
+          "anchor": 0
         },
         {
           "name": "PathTabBar",
@@ -3527,8 +3526,7 @@
           "y": 130,
           "width": 635,
           "height": 45,
-          "anchor": 0,
-          "childOverrides": []
+          "anchor": 0
         },
         {
           "name": "TitleRibbon",
@@ -3556,8 +3554,7 @@
           "y": 193,
           "width": 322,
           "height": 80,
-          "anchor": 0,
-          "childOverrides": []
+          "anchor": 0
         },
         {
           "name": "tile1",
@@ -3593,8 +3590,7 @@
           "y": 347,
           "width": 322,
           "height": 80,
-          "anchor": 0,
-          "childOverrides": []
+          "anchor": 0
         },
         {
           "name": "tile5",
@@ -3657,8 +3653,7 @@
           "y": 578,
           "width": 322,
           "height": 80,
-          "anchor": 0,
-          "childOverrides": []
+          "anchor": 0
         },
         {
           "name": "tile12",
@@ -3685,8 +3680,7 @@
           "y": 732,
           "width": 322,
           "height": 80,
-          "anchor": 0,
-          "childOverrides": []
+          "anchor": 0
         },
         {
           "name": "tile15",
@@ -3704,8 +3698,7 @@
           "y": 809,
           "width": 322,
           "height": 80,
-          "anchor": 0,
-          "childOverrides": []
+          "anchor": 0
         },
         {
           "name": "tile17",
@@ -3732,8 +3725,7 @@
           "y": 886,
           "width": 322,
           "height": 80,
-          "anchor": 0,
-          "childOverrides": []
+          "anchor": 0
         },
         {
           "name": "tile20",
@@ -4098,8 +4090,7 @@
           "y": 0,
           "width": 170,
           "height": 35,
-          "anchor": 0,
-          "childOverrides": []
+          "anchor": 0
         },
         {
           "name": "tab7",
@@ -4232,8 +4223,8 @@
     },
     {
       "id": "CircularToggle",
-      "width": 25,
-      "height": 25,
+      "width": 50,
+      "height": 50,
       "backgroundScale": 1,
       "modal": false,
       "children": [
@@ -4242,25 +4233,27 @@
           "element": "CicularInner",
           "x": 0,
           "y": 0,
-          "width": 25,
-          "height": 25,
-          "anchor": 0
+          "width": 0,
+          "height": 0,
+          "anchor": 0,
+          "sizeMode": "fill"
         },
         {
           "name": "child_0",
           "element": "CircularFrame",
           "x": 0,
           "y": 0,
-          "width": 25,
-          "height": 25,
-          "anchor": 0
+          "width": 0,
+          "height": 0,
+          "anchor": 0,
+          "sizeMode": "fill"
         }
       ]
     },
     {
       "id": "AggressionBar",
-      "width": 534,
-      "height": 33,
+      "width": 336,
+      "height": 23,
       "backgroundScale": 1,
       "modal": false,
       "children": [
@@ -4268,55 +4261,60 @@
           "name": "child_1",
           "element": "Grim_HeaderDivider",
           "x": 22,
-          "y": 11,
-          "width": 492,
-          "height": 15,
+          "y": 7,
+          "width": 301,
+          "height": 10,
           "anchor": 0
         },
         {
-          "name": "child_0",
+          "name": "node0",
           "widget": "CircularToggle",
           "x": 5,
-          "y": 5,
-          "width": 25,
-          "height": 25,
-          "anchor": 0
+          "y": 2,
+          "width": 20,
+          "height": 20,
+          "anchor": 0,
+          "childOverrides": []
         },
         {
-          "name": "child_2",
+          "name": "node1",
           "widget": "CircularToggle",
-          "x": 499,
-          "y": 5,
-          "width": 25,
-          "height": 25,
-          "anchor": 0
+          "x": 82,
+          "y": 2,
+          "width": 20,
+          "height": 20,
+          "anchor": 0,
+          "childOverrides": []
         },
         {
-          "name": "child_2_copy",
+          "name": "node2",
           "widget": "CircularToggle",
-          "x": 257,
-          "y": 5,
-          "width": 25,
-          "height": 25,
-          "anchor": 0
+          "x": 158,
+          "y": 2,
+          "width": 20,
+          "height": 20,
+          "anchor": 0,
+          "childOverrides": []
         },
         {
-          "name": "child_2_copy",
+          "name": "node3",
           "widget": "CircularToggle",
-          "x": 388,
-          "y": 5,
-          "width": 25,
-          "height": 25,
-          "anchor": 0
+          "x": 234,
+          "y": 2,
+          "width": 20,
+          "height": 20,
+          "anchor": 0,
+          "childOverrides": []
         },
         {
-          "name": "child_2_copy",
+          "name": "node4",
           "widget": "CircularToggle",
-          "x": 124,
-          "y": 5,
-          "width": 25,
-          "height": 25,
-          "anchor": 0
+          "x": 311,
+          "y": 2,
+          "width": 20,
+          "height": 20,
+          "anchor": 0,
+          "childOverrides": []
         }
       ]
     }

@@ -8043,32 +8043,39 @@ public class Game1 : Microsoft.Xna.Framework.Game
             DrawSpellCategoryIcon, _paused);
     }
 
-    // AggressionBar widget node x-positions (left→right) from data/ui/widgets.json.
-    // Level 0 = leftmost (min aggression) … 4 = rightmost (max), 2 = center.
-    private static readonly int[] _aggressionNodeX = { 5, 124, 257, 388, 499 };
-
     /// <summary>Draw the aggression bar (Shift+Q/Shift+E controlled) centered just
     /// above the secondary spell bar, with a warm token on the active level's node.
-    /// Both DrawWidget and DrawCircle manage their own SpriteBatch, so this is
-    /// called outside any active batch (right after DrawHUD).</summary>
+    /// The bar size AND the node positions are read live from the widget def, so the
+    /// token tracks any resize / re-spacing of the bar in the UI editor. Both
+    /// DrawWidget and DrawCircle manage their own SpriteBatch, so this runs outside
+    /// any active batch (right after DrawHUD).</summary>
     private void DrawAggressionBar(int screenW, int screenH)
     {
         if (_menuState != MenuState.None) return;
 
-        const int BarW = 534, BarH = 33;
+        var barDef = _widgetRenderer.GetWidgetDef("AggressionBar");
+        if (barDef == null) return;
+
         var sec = _hudRenderer.GetSecondaryBarLayout(screenH);
-        int x = (screenW - BarW) / 2;
-        int y = sec.barY - BarH - 6; // sit just above the secondary (1-6) bar
+        int x = (screenW - barDef.Width) / 2;
+        int y = sec.barY - barDef.Height - 6; // sit just above the secondary (1-6) bar
 
         _widgetRenderer.DrawWidget("AggressionBar", x, y);
 
-        // DrawWidget leaves the SpriteBatch closed; DrawCircle manages its own
-        // Begin/End, so call it directly (no manual batch juggling) — a warm token
-        // centered on the active level's node.
-        int level = Math.Clamp(_sim.Horde.AggressionLevel, 0, _aggressionNodeX.Length - 1);
-        var center = new Vector2(x + _aggressionNodeX[level] + 12.5f, y + 5 + 12.5f);
-        var fill = new Color(255, 196, 64); // vivid gold accent (more saturated for visibility)
-        _uiShaders.DrawCircle(_spriteBatch, center, 7f, 12f, fill, fill, new Color(255, 196, 64, 120));
+        // Token: read the toggle nodes from the live widget layout, sorted left→
+        // right, so the dot lands on the active node no matter how the bar is sized
+        // or spaced. DrawWidget left the batch closed; DrawCircle does its own Begin/End.
+        var nodes = barDef.Children
+            .Where(c => c.Widget == "CircularToggle")
+            .OrderBy(c => c.X)
+            .ToList();
+        if (nodes.Count == 0) return;
+        int level = Math.Clamp(_sim.Horde.AggressionLevel, 0, nodes.Count - 1);
+        var n = nodes[level];
+        var center = new Vector2(x + n.X + n.Width / 2f, y + n.Y + n.Height / 2f);
+        float radius = MathF.Max(4f, n.Width * 0.32f); // token scales with the node
+        var fill = new Color(255, 196, 64); // vivid gold accent
+        _uiShaders.DrawCircle(_spriteBatch, center, radius, radius * 1.7f, fill, fill, new Color(255, 196, 64, 120));
     }
 
     private void DrawPauseMenu(int screenW, int screenH)
