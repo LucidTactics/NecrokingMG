@@ -2565,6 +2565,23 @@ public class Game1 : Microsoft.Xna.Framework.Game
             if (_gameData.Settings.General.ShowTimeControls
                 && _hudRenderer.HitTestTimeControls(screenW, screenH, mx, my) != -1)
                 _input.MouseOverUI = true;
+
+            // Aggression bar — hovering blocks world clicks; a left click snaps the
+            // level to the nearest node (same control as Shift+Q / Shift+E).
+            if (GetAggressionBarLayout(screenW, screenH, out var aggroBar, out var aggroNodes))
+            {
+                var aggroHover = aggroBar;
+                aggroHover.Inflate(0, 8);
+                if (aggroHover.Contains(mx, my))
+                {
+                    _input.MouseOverUI = true;
+                    if (_input.LeftPressed)
+                    {
+                        _sim.Horde.AggressionLevel = NearestAggroNode(aggroNodes, mx);
+                        _input.ConsumeMouse();
+                    }
+                }
+            }
         }
 
         // Scroll zoom.
@@ -8051,31 +8068,112 @@ public class Game1 : Microsoft.Xna.Framework.Game
     /// any active batch (right after DrawHUD).</summary>
     private void DrawAggressionBar(int screenW, int screenH)
     {
-        if (_menuState != MenuState.None) return;
+        if (!GetAggressionBarLayout(screenW, screenH, out var bar, out var nodes)) return;
+
+        _widgetRenderer.DrawWidget("AggressionBar", bar.X, bar.Y);
+
+        // Token: the dot lands on the active node no matter how the bar is sized or
+        // spaced (layout read live, see GetAggressionBarLayout). DrawWidget left the
+        // batch closed; DrawCircle does its own Begin/End.
+        int level = Math.Clamp(_sim.Horde.AggressionLevel, 0, nodes.Count - 1);
+        var nr = nodes[level];
+        var center = new Vector2(nr.X + nr.Width / 2f, nr.Y + nr.Height / 2f);
+        float radius = MathF.Max(4f, nr.Width * 0.32f); // token scales with the node
+        var fill = new Color(255, 196, 64); // vivid gold accent
+        _uiShaders.DrawCircle(_spriteBatch, center, radius, radius * 1.7f, fill, fill, new Color(255, 196, 64, 120));
+
+        DrawAggressionTooltip(screenW, screenH, bar, nodes);
+    }
+
+    // Aggression level names + one-line descriptions, indexed 0 (least) .. 4 (most).
+    private static readonly string[] AggroNames =
+        { "Defensive", "Cautious", "Balanced", "Aggressive", "Bloodthirsty" };
+    private static readonly string[] AggroDescs =
+    {
+        "Hold tight - strike only enemies at the formation's edge.",
+        "Engage threats just beyond the formation.",
+        "Balanced engagement and leash (default).",
+        "Press forward - wider engagement, longer leash.",
+        "Engagement and leash doubled - chase enemies far.",
+    };
+
+    /// <summary>Screen-space layout of the aggression bar: the bar rect and each
+    /// level node's rect (index 0 = leftmost = least aggressive), read live from the
+    /// widget def so input hit-testing and drawing share one source of truth.
+    /// Returns false when the bar is hidden (a menu is open) or the def is missing.</summary>
+    private bool GetAggressionBarLayout(int screenW, int screenH,
+        out Rectangle bar, out System.Collections.Generic.List<Rectangle> nodes)
+    {
+        bar = default;
+        nodes = null!;
+        if (_menuState != MenuState.None) return false;
 
         var barDef = _widgetRenderer.GetWidgetDef("AggressionBar");
-        if (barDef == null) return;
+        if (barDef == null) return false;
 
         var sec = _hudRenderer.GetSecondaryBarLayout(screenH);
         int x = (screenW - barDef.Width) / 2;
         int y = sec.barY - barDef.Height - 6; // sit just above the secondary (1-6) bar
+        bar = new Rectangle(x, y, barDef.Width, barDef.Height);
 
-        _widgetRenderer.DrawWidget("AggressionBar", x, y);
+        nodes = new System.Collections.Generic.List<Rectangle>();
+        foreach (var c in barDef.Children.Where(c => c.Widget == "CircularToggle").OrderBy(c => c.X))
+            nodes.Add(new Rectangle(x + c.X, y + c.Y, c.Width, c.Height));
+        return nodes.Count > 0;
+    }
 
-        // Token: read the toggle nodes from the live widget layout, sorted left→
-        // right, so the dot lands on the active node no matter how the bar is sized
-        // or spaced. DrawWidget left the batch closed; DrawCircle does its own Begin/End.
-        var nodes = barDef.Children
-            .Where(c => c.Widget == "CircularToggle")
-            .OrderBy(c => c.X)
-            .ToList();
-        if (nodes.Count == 0) return;
-        int level = Math.Clamp(_sim.Horde.AggressionLevel, 0, nodes.Count - 1);
-        var n = nodes[level];
-        var center = new Vector2(x + n.X + n.Width / 2f, y + n.Y + n.Height / 2f);
-        float radius = MathF.Max(4f, n.Width * 0.32f); // token scales with the node
-        var fill = new Color(255, 196, 64); // vivid gold accent
-        _uiShaders.DrawCircle(_spriteBatch, center, radius, radius * 1.7f, fill, fill, new Color(255, 196, 64, 120));
+    /// <summary>Index of the node whose center is closest (by X) to the cursor —
+    /// lets a click anywhere along the bar snap to the nearest level.</summary>
+    private static int NearestAggroNode(System.Collections.Generic.List<Rectangle> nodes, int mx)
+    {
+        int best = 0, bestD = int.MaxValue;
+        for (int i = 0; i < nodes.Count; i++)
+        {
+            int d = Math.Abs(nodes[i].Center.X - mx);
+            if (d < bestD) { bestD = d; best = i; }
+        }
+        return best;
+    }
+
+    /// <summary>Hover tooltip for the aggression bar: names the level the cursor is
+    /// over (the one a click would select) and what it does. Called right after the
+    /// token's DrawCircle, which leaves a SpriteBatch open — so we draw into that
+    /// active batch rather than starting our own (a nested Begin would throw).</summary>
+    private void DrawAggressionTooltip(int screenW, int screenH,
+        Rectangle bar, System.Collections.Generic.List<Rectangle> nodes)
+    {
+        if (_smallFont == null) return;
+
+        var hover = bar;
+        hover.Inflate(0, 8); // a little vertical slack makes the thin bar easier to hit
+        int mx = (int)_input.MousePos.X, my = (int)_input.MousePos.Y;
+        if (!hover.Contains(mx, my)) return;
+
+        int idx = Math.Clamp(NearestAggroNode(nodes, mx), 0, AggroNames.Length - 1);
+        string title = $"Aggression: {AggroNames[idx]}";
+        string desc = AggroDescs[idx];
+        string hint = "Click to set  -  Shift+Q / Shift+E";
+
+        int lineH = _smallFont.LineSpacing;
+        int pad = 8;
+        int innerW = (int)MathF.Ceiling(MathF.Max(_smallFont.MeasureString(title).X,
+            MathF.Max(_smallFont.MeasureString(desc).X, _smallFont.MeasureString(hint).X)));
+        int w = innerW + pad * 2;
+        int h = pad * 2 + lineH * 3 + 4;
+
+        int tx = bar.X + (bar.Width - w) / 2;
+        int ty = bar.Y - h - 6;
+        tx = Math.Clamp(tx, 4, Math.Max(4, screenW - w - 4));
+        if (ty < 4) ty = bar.Bottom + 6; // flip below if it would clip off the top
+
+        _spriteBatch.Draw(_pixel, new Rectangle(tx, ty, w, h), new Color(20, 16, 12, 235));
+        _spriteBatch.Draw(_pixel, new Rectangle(tx, ty, w, 2), new Color(120, 95, 60));
+        int cy = ty + pad;
+        DrawText(_smallFont, title, new Vector2(tx + pad, cy), new Color(255, 210, 130));
+        cy += lineH;
+        DrawText(_smallFont, desc, new Vector2(tx + pad, cy), new Color(210, 200, 185));
+        cy += lineH + 4;
+        DrawText(_smallFont, hint, new Vector2(tx + pad, cy), new Color(140, 130, 115));
     }
 
     private void DrawPauseMenu(int screenW, int screenH)

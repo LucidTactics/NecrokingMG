@@ -118,7 +118,22 @@ public static class Program
 
         LaunchArgs.Parse(args);
         Necroking.Core.GamePaths.DetectRoot();
-        using var game = new Game1();
-        game.Run();
+        try
+        {
+            using var game = new Game1();
+            game.Run();
+        }
+        catch (Exception ex)
+        {
+            try
+            {
+                var dir = Path.Combine(AppContext.BaseDirectory, "log");
+                Directory.CreateDirectory(dir);
+                File.WriteAllText(Path.Combine(dir, "crash.log"),
+                    $"{DateTime.Now:O}\n{ex}\n");
+            }
+            catch { /* last-ditch; nothing more we can do */ }
+            throw;
+        }
     }
 }
