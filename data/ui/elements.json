@@ -3589,6 +3589,43 @@
       }
     },
     {
+      "id": "Grim_SchoolTab_Skill_Text",
+      "type": "text",
+      "width": 159,
+      "height": 26,
+      "tintColor": [
+        255,
+        255,
+        255,
+        0
+      ],
+      "defaultText": "Skill",
+      "textRegion": {
+        "x": 0,
+        "y": 0,
+        "w": 159,
+        "h": 26,
+        "align": "center",
+        "valign": "center",
+        "fontFamily": "Roboto",
+        "fontSize": 24,
+        "fontColor": [
+          236,
+          221,
+          179,
+          255
+        ],
+        "bold": true,
+        "outlineWidth": 1,
+        "outlineColor": [
+          0,
+          0,
+          0,
+          150
+        ]
+      }
+    },
+    {
       "id": "Grim_TitleRibbon",
       "type": "nineSlice",
       "nineSlice": "ribbon6",

@@ -78,6 +78,25 @@ public class UIGrimoireClickScenario : ScenarioBase
         _grim.HandleClickAt(sAll.X, sAll.Y);
         Check($"School-All resets -> 22 (got {_grim.DebugShownCount})", _grim.DebugShownCount == 22);
 
+        // New Skill tab (#4): filters to school "Skill" -> the Command skill.
+        var skill = _grim.DebugTabCenter("SchoolTabBar", 4);
+        _grim.HandleClickAt(skill.X, skill.Y);
+        string skill0 = _grim.DebugShownId(0);
+        DebugLog.Log(ScenarioLog, $"Skill tab: count={_grim.DebugShownCount} first='{skill0}'");
+        Check($"Skill tab shows order_attack (count={_grim.DebugShownCount}, id='{skill0}')",
+            _grim.DebugShownCount >= 1 && skill0 == "order_attack");
+
+        // Construction tab (#5) still works after the Skill insertion / tab renumber.
+        var constr = _grim.DebugTabCenter("SchoolTabBar", 5);
+        _grim.HandleClickAt(constr.X, constr.Y);
+        int constrCount = _grim.DebugShownCount;
+        DebugLog.Log(ScenarioLog, $"Construction tab count={constrCount}");
+        Check($"Construction filter > 0 and < All (got {constrCount})", constrCount > 0 && constrCount < 22);
+
+        // Reset to All for the tile-click assign check below.
+        var sAll2 = _grim.DebugTabCenter("SchoolTabBar", 0);
+        _grim.HandleClickAt(sAll2.X, sAll2.Y);
+
         // Tile click assigns: tile0 -> pick callback fires with shown[0]
         string expect = _grim.DebugShownId(0);
         var t0 = _grim.DebugChildCenter("tile0");

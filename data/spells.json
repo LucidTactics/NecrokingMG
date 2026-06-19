@@ -4715,13 +4715,13 @@
       "toggleEffect": ""
     },
     {
-      "name": "",
+      "name": "Command",
       "id": "order_attack",
       "category": "Command",
-      "school": "Evocation",
+      "school": "Skill",
       "tileTemplate": "debuff",
       "icon": "",
-      "hidden": true,
+      "hidden": false,
       "consumesItem": "",
       "range": 999,
       "manaCost": 0,

@@ -36,7 +36,7 @@ public class GrimoireOverlay : IModalLayer
     {
         ("All", null), ("Conjuration", "Conjuration"),
         ("Alteration", "Alteration"), ("Evocation", "Evocation"),
-        ("Construction", "Construction"),
+        ("Skill", "Skill"), ("Construction", "Construction"),
     };
     private static readonly Color TabActive = new(245, 223, 182);
     private static readonly Color TabInactive = new(150, 138, 116);
