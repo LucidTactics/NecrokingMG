@@ -60,11 +60,17 @@ public static class GrimoirePanel
     private static void BindTile(RuntimeWidgetRenderer r, string inst, SpellDef s)
     {
         r.SetText(inst, "title", s.DisplayName);
-        r.SetText(inst, "path_v", Math.Max(1, s.PrimaryLevel).ToString());
+        // Path icon + level — hidden for PATHLESS skills (PrimaryPath None), e.g.
+        // the non-magical Skill-tab abilities, so they don't show a bogus path req.
         var primPath = MagicPathHelpers.FromJsonId(s.PrimaryPath);
-        string pathIcon = MagicPathHelpers.IconPath(
-            primPath == MagicPath.None ? MagicPath.Death : primPath, 24);
-        r.SetImage(inst, "path_i", pathIcon);
+        bool pathless = primPath == MagicPath.None;
+        r.SetHidden(inst, "path_v", pathless);
+        r.SetHidden(inst, "path_i", pathless);
+        if (!pathless)
+        {
+            r.SetText(inst, "path_v", Math.Max(1, s.PrimaryLevel).ToString());
+            r.SetImage(inst, "path_i", MagicPathHelpers.IconPath(primPath, 24));
+        }
         // Cost = the spell's casting cost (mana — the fatigue-analog), shown
         // with the fatigue icon. The green gem icon is reserved for future
         // gem-cost spells (none authored yet); without the override the
