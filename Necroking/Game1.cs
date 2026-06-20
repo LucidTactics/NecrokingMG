@@ -2934,7 +2934,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
                         var obj = _envSystem.GetObject(oi);
                         var d = _envSystem.Defs[obj.DefIndex];
                         bool hoverable = (d.IsBuilding && tcfg.ShowBuildingInfo)
-                                       || (d.IsForagable && tcfg.ShowGroundItemInfo);
+                                       || ((d.IsForagable || d.IsBerryBush) && tcfg.ShowGroundItemInfo);
                         if (!hoverable) continue;
                         // Collected foragables are invisible while respawning — don't
                         // surface a tooltip for something that isn't drawn.

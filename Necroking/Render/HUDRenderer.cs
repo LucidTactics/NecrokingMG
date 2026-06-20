@@ -495,6 +495,20 @@ public partial class HUDRenderer
                 procStr
             };
         }
+        else if (def.IsBerryBush)
+        {
+            var rt = envSystem.GetObjectRuntime(hoveredIdx);
+            string stateStr = rt.BerryState switch
+            {
+                BerryState.Berries  => "Has berries",
+                BerryState.Poisoned => "Poisoned",
+                _                   => "Picked (no berries)",
+            };
+            lines = new[] {
+                def.Name.Length > 0 ? def.Name : def.Id,
+                stateStr
+            };
+        }
         else if (def.IsForagable)
         {
             var itemDef = !string.IsNullOrEmpty(def.ForagableType) ? gameData.Items.Get(def.ForagableType) : null;
