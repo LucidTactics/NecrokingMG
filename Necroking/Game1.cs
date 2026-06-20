@@ -2571,6 +2571,10 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 && _hudRenderer.HitTestTimeControls(screenW, screenH, mx, my) != -1)
                 _input.MouseOverUI = true;
 
+            // Core-menu buttons (top-right)
+            if (_hudRenderer.HitTestMenuButtons(screenW, mx, my) != -1)
+                _input.MouseOverUI = true;
+
             // Aggression bar — hovering blocks world clicks; a left click snaps the
             // level to the nearest node (same control as Shift+Q / Shift+E).
             if (GetAggressionBarLayout(screenW, screenH, out var aggroBar, out var aggroNodes))
@@ -3060,6 +3064,17 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 {
                     _timeScale = HUDRenderer.TimeControlSpeeds[tcHit];
                     _paused = false;
+                }
+            }
+
+            // --- Core-menu buttons (top-right) click ---
+            if (_input.LeftPressed && !_input.IsMouseConsumed)
+            {
+                int mbHit = _hudRenderer.HitTestMenuButtons(screenW, mouse.X, mouse.Y);
+                if (mbHit >= 0)
+                {
+                    ToggleCoreMenu(mbHit, screenW, screenH);
+                    _input.ConsumeMouse();
                 }
             }
 
@@ -8122,7 +8137,52 @@ public class Game1 : Microsoft.Xna.Framework.Game
             _spellBarState, _secondaryBarState,
             _spellDropdownSlot, _secondaryDropdownSlot,
             _timeScale, _hoveredObjectIdx, _envSystem,
-            DrawSpellCategoryIcon, _paused);
+            DrawSpellCategoryIcon, BuildMenuOpenMask(), _paused);
+    }
+
+    /// <summary>Bitmask of which core menus are open, by HUDRenderer.Menu* index,
+    /// for highlighting the top-right menu buttons.</summary>
+    private int BuildMenuOpenMask()
+    {
+        int m = 0;
+        if (_inventoryUI.IsVisible)     m |= 1 << HUDRenderer.MenuInventory;
+        if (_craftingMenu.IsVisible)    m |= 1 << HUDRenderer.MenuCrafting;
+        if (_buildingMenuUI.IsVisible)  m |= 1 << HUDRenderer.MenuBuilding;
+        if (_grimoireOverlay.IsVisible) m |= 1 << HUDRenderer.MenuGrimoire;
+        if (_skillBookOverlay.IsVisible) m |= 1 << HUDRenderer.MenuSkills;
+        if (_characterStatsUI.IsVisible) m |= 1 << HUDRenderer.MenuCharacter;
+        return m;
+    }
+
+    /// <summary>Toggle a core menu by its HUDRenderer.Menu* index — the click-side
+    /// mirror of the keyboard shortcuts (I/C/B/J/K/Tab), including the
+    /// building↔crafting mutual-close.</summary>
+    private void ToggleCoreMenu(int idx, int screenW, int screenH)
+    {
+        EnsureInventoryUIsInitialized();
+        switch (idx)
+        {
+            case HUDRenderer.MenuInventory:
+                _inventoryUI.Toggle(screenW, screenH);
+                break;
+            case HUDRenderer.MenuCrafting:
+                if (_buildingMenuUI.IsVisible) _buildingMenuUI.Close();
+                _craftingMenu.Toggle(screenW, screenH);
+                break;
+            case HUDRenderer.MenuBuilding:
+                if (_craftingMenu.IsVisible) _craftingMenu.Close();
+                _buildingMenuUI.Toggle(screenW, screenH);
+                break;
+            case HUDRenderer.MenuGrimoire:
+                _grimoireOverlay.Toggle();
+                break;
+            case HUDRenderer.MenuSkills:
+                _skillBookOverlay.Toggle();
+                break;
+            case HUDRenderer.MenuCharacter:
+                _characterStatsUI.Toggle();
+                break;
+        }
     }
 
     /// <summary>Draw the aggression bar (Shift+Q/Shift+E controlled) centered just

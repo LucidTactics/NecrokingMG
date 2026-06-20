@@ -61,6 +61,22 @@ public partial class HUDRenderer
     private const int TcSpeedTextReserve = 56; // room on the right for the "Paused"/"1.5x" readout
     private const int TcRightMargin = 8;
 
+    // ── Top-right core-menu buttons ──
+    // Button index contract, shared with Game1 (mask bit i = menu i open, and
+    // HitTestMenuButtons returns these indices). Keep order in sync with
+    // MenuButtonLabels and Game1.ToggleCoreMenu.
+    public const int MenuInventory = 0, MenuCrafting = 1, MenuBuilding = 2,
+                     MenuGrimoire = 3, MenuSkills = 4, MenuCharacter = 5;
+    public const int MenuBtnCount = 6;
+    public static readonly string[] MenuButtonLabels =
+        { "Inventory (I)", "Crafting (C)", "Building (B)", "Grimoire (J)", "Skills (K)", "Character (Tab)" };
+    private const int MenuBtnH = 24;
+    private const int MenuBtnTop = 8;
+    private const int MenuBtnPadX = 8;   // text padding per side
+    private const int MenuBtnGap = 3;
+    private const int MenuBtnRightMargin = 8;
+    private readonly Rectangle[] _menuBtnRects = new Rectangle[MenuBtnCount];
+
     /// <summary>Time-control button block layout, shared by DrawTimeControls and
     /// HitTestTimeControls so they never desync. The block is right-aligned with
     /// room reserved for the speed-text readout (so it can't crop off-screen), and
@@ -131,7 +147,7 @@ public partial class HUDRenderer
         SpellBarState primaryBar, SpellBarState secondaryBar,
         int spellDropdownSlot, int secondaryDropdownSlot,
         float timeScale, int hoveredObjectIdx, EnvironmentSystem envSystem,
-        Action<string, int, int> drawSpellCategoryIcon, bool paused = false)
+        Action<string, int, int> drawSpellCategoryIcon, int menuOpenMask = 0, bool paused = false)
     {
         int necroIdx = FindNecromancer(sim);
 
@@ -155,6 +171,7 @@ public partial class HUDRenderer
         // Controls hint intentionally omitted — overlapped the FPS/zoom bottom-
         // left readout. Re-enable if we add a menu page for it.
         DrawTimeControls(screenW, screenH, timeScale, gameData, paused);
+        DrawMenuButtons(screenW, menuOpenMask, (int)_input.MousePos.X, (int)_input.MousePos.Y);
         DrawHordeCaps(screenW, sim, gameData);
         DrawCombatLog(screenW, screenH, sim, gameData);
     }
@@ -178,7 +195,7 @@ public partial class HUDRenderer
         if (monsterCap <= 0 && humanCap <= 0) return;
 
         int x = screenW - 110;
-        int y = 10;
+        int y = MenuBtnTop + MenuBtnH + 6; // sit below the core-menu button row
         const int lineH = 16;
 
         if (humanCap > 0)
@@ -197,6 +214,66 @@ public partial class HUDRenderer
                 ? new Color(255, 90, 90)
                 : new Color(200, 220, 180);
             Text(_smallFont, $"Monsters {used}/{monsterCap}", new Vector2(x, y), col);
+        }
+    }
+
+    // ═══════════════════════════════════════
+    //  Core-menu buttons (top-right)
+    // ═══════════════════════════════════════
+
+    /// <summary>Right-aligned, auto-sized rects for the top-right menu buttons,
+    /// computed into _menuBtnRects. Shared by draw + hit-test so they never
+    /// desync. Returns false when no font is available (can't measure labels).</summary>
+    private bool LayoutMenuButtons(int screenW)
+    {
+        if (_smallFont == null) return false;
+        Span<int> ws = stackalloc int[MenuBtnCount];
+        int totalW = MenuBtnGap * (MenuBtnCount - 1);
+        for (int i = 0; i < MenuBtnCount; i++)
+        {
+            ws[i] = (int)_smallFont.MeasureString(MenuButtonLabels[i]).X + MenuBtnPadX * 2;
+            totalW += ws[i];
+        }
+        int x = screenW - MenuBtnRightMargin - totalW;
+        for (int i = 0; i < MenuBtnCount; i++)
+        {
+            _menuBtnRects[i] = new Rectangle(x, MenuBtnTop, ws[i], MenuBtnH);
+            x += ws[i] + MenuBtnGap;
+        }
+        return true;
+    }
+
+    /// <summary>Returns the menu-button index under the cursor, or -1.</summary>
+    public int HitTestMenuButtons(int screenW, int mouseX, int mouseY)
+    {
+        if (!LayoutMenuButtons(screenW)) return -1;
+        for (int i = 0; i < MenuBtnCount; i++)
+            if (_menuBtnRects[i].Contains(mouseX, mouseY)) return i;
+        return -1;
+    }
+
+    /// <summary>Draw the row of core-menu buttons. <paramref name="menuOpenMask"/>
+    /// has bit i set when menu i is currently open (highlighted).</summary>
+    private void DrawMenuButtons(int screenW, int menuOpenMask, int mx, int my)
+    {
+        if (!LayoutMenuButtons(screenW)) return;
+        for (int i = 0; i < MenuBtnCount; i++)
+        {
+            var r = _menuBtnRects[i];
+            bool open = (menuOpenMask & (1 << i)) != 0;
+            bool hover = r.Contains(mx, my);
+            Color bg = open  ? new Color(70, 100, 160, 220)
+                     : hover ? new Color(50, 60, 80, 200)
+                             : new Color(20, 20, 30, 160);
+            _batch.Draw(_pixel, r, bg);
+            // Top accent line — brighter when open.
+            _batch.Draw(_pixel, new Rectangle(r.X, r.Y, r.Width, 2),
+                open ? new Color(140, 180, 255) : new Color(90, 90, 120, 180));
+            string label = MenuButtonLabels[i];
+            var ls = _smallFont!.MeasureString(label);
+            Text(_smallFont, label,
+                new Vector2(r.X + r.Width / 2f - ls.X / 2f, r.Y + r.Height / 2f - ls.Y / 2f),
+                open ? Color.White : new Color(210, 210, 230));
         }
     }
 
