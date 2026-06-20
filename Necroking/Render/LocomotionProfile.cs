@@ -34,9 +34,13 @@ public readonly struct LocomotionProfile
 {
     // Idle → Walk boundary. Fixed, small — the threshold itself is the "is moving"
     // test rather than a tier. Downward exit uses a slightly tighter value so a
-    // unit that's clearly stopping flips back to Idle quickly.
-    public const float IdleWalkEnter = 0.25f;
-    public const float IdleWalkExit = 0.10f;
+    // unit that's clearly stopping flips back to Idle quickly. Kept well below the
+    // slowest intentional locomotion (deer graze/feed at ~0.1–0.18 wu/s) so slow
+    // movers actually play their walk cycle instead of sliding in Idle. Zero-intent
+    // residual momentum is filtered upstream by the PreferredVel gate in
+    // SubroutineSteps, so a low Enter here can't make standing-still units walk.
+    public const float IdleWalkEnter = 0.06f;
+    public const float IdleWalkExit = 0.03f;
 
     // Clamps on the playback-rate scaling. Below the floor, the cycle looks frozen;
     // above the ceiling, it looks cartoonishly sped up. Shared between modes.

@@ -130,7 +130,7 @@ public class RangedUnitHandler : IArchetypeHandler
             // Out of range — close in with Hurry effort (jog up to firing line,
             // not a full Sprint commit since they want to stop and shoot).
             SubroutineSteps.SetEffort(ref ctx, MoveEffort.Hurry);
-            SubroutineSteps.MoveToward(ref ctx, ctx.Units[targetIdx].Position, ctx.MySpeed);
+            SubroutineSteps.MoveToward(ref ctx, ctx.Units[targetIdx].Position, ctx.MyMaxSpeed);
             return;
         }
 
@@ -192,7 +192,7 @@ public class RangedUnitHandler : IArchetypeHandler
             // Walk if all clear.
             bool stillThreatened = ctx.AlertState >= (byte)UnitAlertState.Alert;
             SubroutineSteps.SetEffort(ref ctx, stillThreatened ? MoveEffort.Sprint : MoveEffort.Walk);
-            SubroutineSteps.MoveToward(ref ctx, returnPos, ctx.MySpeed);
+            SubroutineSteps.MoveToward(ref ctx, returnPos, ctx.MyMaxSpeed);
         }
         else
         {

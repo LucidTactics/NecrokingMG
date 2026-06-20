@@ -150,7 +150,7 @@ public class CombatUnitHandler : IArchetypeHandler
         if (ctx.Subroutine == PatrolWalking)
         {
             SubroutineSteps.SetEffort(ref ctx, MoveEffort.Walk);
-            SubroutineSteps.MoveToward(ref ctx, ctx.Units[ctx.UnitIndex].MoveTarget, ctx.MySpeed);
+            SubroutineSteps.MoveToward(ref ctx, ctx.Units[ctx.UnitIndex].MoveTarget, ctx.MyMaxSpeed);
             if ((ctx.Units[ctx.UnitIndex].MoveTarget - ctx.MyPos).LengthSq() < 2f)
             {
                 ctx.Subroutine = PatrolWaiting;
@@ -190,7 +190,7 @@ public class CombatUnitHandler : IArchetypeHandler
         if (dist > 1f)
         {
             SubroutineSteps.SetEffort(ref ctx, MoveEffort.Walk, 0.5f);
-            SubroutineSteps.MoveToward(ref ctx, ctx.Units[ctx.UnitIndex].SpawnPosition, ctx.MySpeed);
+            SubroutineSteps.MoveToward(ref ctx, ctx.Units[ctx.UnitIndex].SpawnPosition, ctx.MyMaxSpeed);
         }
         else
             ctx.Units[ctx.UnitIndex].PreferredVel = Vec2.Zero;
@@ -199,7 +199,7 @@ public class CombatUnitHandler : IArchetypeHandler
     private static void UpdateIdleRoam(ref AIContext ctx)
     {
         // Roaming/wandering: Walk effort, half walk speed so it reads as a
-        // casual stroll. IdleRoam itself uses ctx.MySpeed as the cap.
+        // casual stroll. IdleRoam itself uses ctx.MyMaxSpeed as the cap.
         SubroutineSteps.SetEffort(ref ctx, MoveEffort.Walk, 0.5f);
         SubroutineSteps.IdleRoam(ref ctx, 8f);
     }
@@ -266,7 +266,7 @@ public class CombatUnitHandler : IArchetypeHandler
                 SubroutineSteps.SetEffort(ref ctx, MoveEffort.Sprint);
             else
                 SubroutineSteps.SetEffort(ref ctx, MoveEffort.Walk);
-            SubroutineSteps.MoveToward(ref ctx, returnPos, ctx.MySpeed);
+            SubroutineSteps.MoveToward(ref ctx, returnPos, ctx.MyMaxSpeed);
         }
         else
         {

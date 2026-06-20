@@ -585,7 +585,7 @@ public class DeerHerdHandler : IArchetypeHandler
             else awayDir = new Vec2(1, 0);
 
             Vec2 fleeDest = ctx.MyPos + awayDir * FleeDistance;
-            SubroutineSteps.MoveToward(ref ctx, fleeDest, ctx.MySpeed);
+            SubroutineSteps.MoveToward(ref ctx, fleeDest, ctx.MyMaxSpeed);
         }
         else if (ctx.SubroutineTimer > 0f)
         {
@@ -594,7 +594,7 @@ public class DeerHerdHandler : IArchetypeHandler
             float fRad = ctx.Units[ctx.UnitIndex].FacingAngle * MathF.PI / 180f;
             Vec2 fleeDir = new Vec2(MathF.Cos(fRad), MathF.Sin(fRad));
             Vec2 fleeDest = ctx.MyPos + fleeDir * FleeDistance;
-            SubroutineSteps.MoveToward(ref ctx, fleeDest, ctx.MySpeed);
+            SubroutineSteps.MoveToward(ref ctx, fleeDest, ctx.MyMaxSpeed);
         }
         else
         {
@@ -685,7 +685,7 @@ public class DeerHerdHandler : IArchetypeHandler
                     {
                         // Still closing distance — full commit charge.
                         SubroutineSteps.SetEffort(ref ctx, Movement.MoveEffort.Sprint);
-                        SubroutineSteps.MoveToward(ref ctx, ctx.Units[targetIdx].Position, ctx.MySpeed);
+                        SubroutineSteps.MoveToward(ref ctx, ctx.Units[targetIdx].Position, ctx.MyMaxSpeed);
                     }
                 }
                 break;
@@ -790,7 +790,7 @@ public class DeerHerdHandler : IArchetypeHandler
                 float dist = (ctx.MyPos - target).Length();
                 if (dist > 1.5f)
                 {
-                    SubroutineSteps.MoveToward(ref ctx, target, ctx.MySpeed);
+                    SubroutineSteps.MoveToward(ref ctx, target, ctx.MyMaxSpeed);
                 }
                 else
                 {

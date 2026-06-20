@@ -36,7 +36,7 @@ public static class SubroutineSteps
     {
         int targetIdx = ResolveTarget(ref ctx);
         if (targetIdx < 0) { ctx.Units[ctx.UnitIndex].PreferredVel = Vec2.Zero; return; }
-        MoveToward(ref ctx, ctx.Units[targetIdx].Position, ctx.MySpeed);
+        MoveToward(ref ctx, ctx.Units[targetIdx].Position, ctx.MyMaxSpeed);
     }
 
     public static bool MoveToTarget_InRange(ref AIContext ctx, float range)
@@ -65,7 +65,7 @@ public static class SubroutineSteps
         {
             var awayDir = (ctx.MyPos - threatPos) * (1f / dist);
             Vec2 fleeDest = ctx.MyPos + awayDir * (desiredDist - dist + 3f);
-            MoveToward(ref ctx, fleeDest, ctx.MySpeed);
+            MoveToward(ref ctx, fleeDest, ctx.MyMaxSpeed);
         }
         else
             ctx.Units[ctx.UnitIndex].PreferredVel = Vec2.Zero;
@@ -74,7 +74,7 @@ public static class SubroutineSteps
     /// <summary>Walk-then-idle roaming pattern. Walk to random point at walkSpeed,
     /// idle for random duration, repeat. Uses Subroutine 0=walking, 1=idle.
     /// All movement goes through pathfinding.</summary>
-    public static void IdleRoam(ref AIContext ctx, float roamRadius, float walkSpeedFraction = 0.3f)
+    public static void IdleRoam(ref AIContext ctx, float roamRadius)
     {
         int i = ctx.UnitIndex;
         Vec2 center = ctx.Units[i].SpawnPosition;
@@ -82,7 +82,11 @@ public static class SubroutineSteps
         if (ctx.Subroutine == 0) // walking to point
         {
             Vec2 target = ctx.Units[i].MoveTarget;
-            MoveToward(ref ctx, target, ctx.MySpeed * walkSpeedFraction);
+            // Move at the unit's resolved cap — the stroll speed is owned entirely by
+            // the effort the caller set (e.g. SetEffort(Walk, 0.5) → half walk speed).
+            // Previously this also multiplied by a separate walkSpeedFraction, which
+            // double-penalised the effort system (deer "0.6" cap actually moved 0.18).
+            MoveToward(ref ctx, target, ctx.MyMaxSpeed);
             if ((target - ctx.MyPos).LengthSq() < 1.5f)
             {
                 ctx.Subroutine = 1;
@@ -186,7 +190,7 @@ public static class SubroutineSteps
 
         if (dist > attackRange * 1.5f)
         {
-            MoveToward(ref ctx, ctx.Units[targetIdx].Position, ctx.MySpeed);
+            MoveToward(ref ctx, ctx.Units[targetIdx].Position, ctx.MyMaxSpeed);
         }
         else
         {
@@ -224,7 +228,7 @@ public static class SubroutineSteps
                 var awayDir = dist > 0.01f
                     ? (ctx.MyPos - ctx.Units[targetIdx].Position) * (1f / dist)
                     : new Vec2(1, 0);
-                ctx.Units[i].PreferredVel = awayDir * ctx.MySpeed;
+                ctx.Units[i].PreferredVel = awayDir * ctx.MyMaxSpeed;
             }
             else
                 ctx.Units[i].PreferredVel = Vec2.Zero;
@@ -268,7 +272,7 @@ public static class SubroutineSteps
                 var awayDir = dist > 0.01f
                     ? (ctx.MyPos - ctx.Units[targetIdx].Position) * (1f / dist)
                     : new Vec2(1, 0);
-                ctx.Units[ctx.UnitIndex].PreferredVel = awayDir * ctx.MySpeed * 0.5f;
+                ctx.Units[ctx.UnitIndex].PreferredVel = awayDir * ctx.MyMaxSpeed * 0.5f;
             }
             else
                 ctx.Units[ctx.UnitIndex].PreferredVel = Vec2.Zero;
@@ -278,12 +282,19 @@ public static class SubroutineSteps
         SetLocomotionAnim(ref ctx, PickTierSpeed(ctx.Units[ctx.UnitIndex]));
     }
 
+    // Below this much movement *intent* (PreferredVel magnitude, wu/s) a unit is
+    // treated as standing still — filters residual-momentum slide so a stopped or
+    // can't-pathfind unit shows Idle, not walk-in-place. Must stay well under the
+    // slowest deliberate locomotion (deer feed at ~0.1 wu/s) or slow movers get
+    // wrongly pinned to Idle while visibly sliding across the ground.
+    private const float MoveIntentEpsilon = 0.05f;
+
     // Tier-speed helper: use actual Velocity for state tier, but gate Idle on
     // PreferredVel so zero-intent units don't walk-in-place from residual momentum.
     private static float PickTierSpeed(Movement.Unit u)
     {
         float preferred = u.PreferredVel.Length();
-        if (preferred <= 0.25f) return 0f;
+        if (preferred <= MoveIntentEpsilon) return 0f;
         return u.Velocity.Length();
     }
 
@@ -384,13 +395,10 @@ public static class SubroutineSteps
 
         // Pick locomotion state from actual Velocity (post-accel curve) so units
         // ramp Idle → Walk → Jog → Run as they accelerate, instead of snapping to
-        // the final tier on tick 1 based on requested MaxSpeed.
-        // Still gate Idle on PreferredVel so a unit that can't pathfind (zero dir)
-        // shows Idle instead of walk-in-place despite momentum.
-        float preferredSpeed = ctx.Units[i].PreferredVel.Length();
-        float actualSpeed = ctx.Units[i].Velocity.Length();
-        float tierSpeed = preferredSpeed <= 0.25f ? 0f : actualSpeed;
-        SetLocomotionAnim(ref ctx, tierSpeed);
+        // the final tier on tick 1 based on requested MaxSpeed. PickTierSpeed still
+        // gates Idle on PreferredVel so a unit that can't pathfind (zero dir) shows
+        // Idle instead of walk-in-place despite momentum.
+        SetLocomotionAnim(ref ctx, PickTierSpeed(ctx.Units[i]));
     }
 
     /// <summary>

@@ -6725,7 +6725,10 @@ public class Game1 : Microsoft.Xna.Framework.Game
             // lost PendingAttack, etc.) obvious at a glance.
             var sb = new System.Text.StringBuilder();
             sb.Append(aiLabel).Append('\n');
-            sb.Append($"v:{speed:F1} {animLabel} ms:{maxSpeed:F1}");
+            // eff + ms are the two values SetEffort writes (MoveEffort + the derived
+            // MaxSpeed cap) — show both so slow-stroll routines (e.g. Walk×0.5) are
+            // legible at a glance.
+            sb.Append($"v:{speed:F1} {animLabel} eff:{_sim.Units[i].MoveEffort} ms:{maxSpeed:F1}");
 
             var ov = _sim.Units[i].OverrideAnim;
             if (ov.IsActive)

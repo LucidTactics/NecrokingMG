@@ -56,7 +56,11 @@ public ref struct AIContext
 
     // Convenience accessors
     public readonly Vec2 MyPos => Units[UnitIndex].Position;
-    public readonly float MySpeed => Units[UnitIndex].MaxSpeed;
+    /// <summary>The unit's resolved max-speed cap (CombatSpeed × effort multiplier ×
+    /// any routine cap), as set by <see cref="SubroutineSteps.SetEffort"/>. This is the
+    /// speed a routine should move at — NOT a base/current speed. Pass it straight to
+    /// MoveToward; don't scale it again or you double-penalise the effort system.</summary>
+    public readonly float MyMaxSpeed => Units[UnitIndex].MaxSpeed;
     public readonly Faction MyFaction => Units[UnitIndex].Faction;
     public readonly uint MyId => Units[UnitIndex].Id;
     public readonly byte Routine { get => Units[UnitIndex].Routine; set => Units[UnitIndex].Routine = value; }

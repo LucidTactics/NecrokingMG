@@ -10,6 +10,7 @@ public static class ScenarioRegistry
     static ScenarioRegistry()
     {
         Register("anim_transitions", () => new Scenarios.AnimTransitionScenario());
+        Register("slow_walk_anim", () => new Scenarios.SlowWalkAnimScenario());
         Register("horde_engaged_kiting", () => new Scenarios.HordeEngagedKitingScenario());
         Register("horde_chase_leash", () => new Scenarios.HordeChaseLeashScenario());
         Register("horde_target_teleport", () => new Scenarios.HordeTargetTeleportScenario());

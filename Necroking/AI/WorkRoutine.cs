@@ -42,7 +42,7 @@ public static class WorkRoutine
         {
             case WalkToSite:
                 ctx.Units[i].MoveTarget = targetPos;
-                SubroutineSteps.MoveToPosition(ref ctx, ctx.MySpeed);
+                SubroutineSteps.MoveToPosition(ref ctx, ctx.MyMaxSpeed);
                 FaceTowards(ref ctx, targetPos);
                 if (SubroutineSteps.MoveToPosition_Arrived(ref ctx, interactRange))
                 {

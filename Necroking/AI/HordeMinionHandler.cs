@@ -227,7 +227,7 @@ public class HordeMinionHandler : IArchetypeHandler
                 // a smooth locomotion gait; settle to Idle only once movement stops.
                 if (dist > FollowArriveThreshold || necroMoving || necroSprinting)
                 {
-                    SubroutineSteps.MoveToward(ref ctx, slotPos, ctx.MySpeed);
+                    SubroutineSteps.MoveToward(ref ctx, slotPos, ctx.MyMaxSpeed);
                 }
                 else
                 {
@@ -258,7 +258,7 @@ public class HordeMinionHandler : IArchetypeHandler
         {
             // Full Sprint commit when chasing an enemy.
             SubroutineSteps.SetEffort(ref ctx, MoveEffort.Sprint);
-            SubroutineSteps.MoveToward(ref ctx, ctx.Units[targetIdx].Position, ctx.MySpeed);
+            SubroutineSteps.MoveToward(ref ctx, ctx.Units[targetIdx].Position, ctx.MyMaxSpeed);
 
             // Auto-engage when in melee range
             float dist = (ctx.Units[targetIdx].Position - ctx.MyPos).Length();
@@ -305,7 +305,7 @@ public class HordeMinionHandler : IArchetypeHandler
                 // Sprint home — Returning is triggered by leash break (out of
                 // place after combat). Definitionally urgent.
                 SubroutineSteps.SetEffort(ref ctx, MoveEffort.Sprint);
-                SubroutineSteps.MoveToward(ref ctx, slotPos, ctx.MySpeed);
+                SubroutineSteps.MoveToward(ref ctx, slotPos, ctx.MyMaxSpeed);
             }
             else
             {
@@ -351,7 +351,7 @@ public class HordeMinionHandler : IArchetypeHandler
                 {
                     // Commanded chase = Sprint (player issued attack-move).
                     SubroutineSteps.SetEffort(ref ctx, MoveEffort.Sprint);
-                    SubroutineSteps.MoveToward(ref ctx, ctx.Units[targetIdx].Position, ctx.MySpeed);
+                    SubroutineSteps.MoveToward(ref ctx, ctx.Units[targetIdx].Position, ctx.MyMaxSpeed);
                 }
             }
             return;
@@ -365,7 +365,7 @@ public class HordeMinionHandler : IArchetypeHandler
             ctx.Units[ctx.UnitIndex].Target = CombatTarget.None;
             ctx.Units[ctx.UnitIndex].EngagedTarget = CombatTarget.None;
             SubroutineSteps.SetEffort(ref ctx, MoveEffort.Hurry);
-            SubroutineSteps.MoveToward(ref ctx, commandTarget, ctx.MySpeed);
+            SubroutineSteps.MoveToward(ref ctx, commandTarget, ctx.MyMaxSpeed);
         }
         else
         {
