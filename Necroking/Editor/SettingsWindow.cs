@@ -25,6 +25,16 @@ public class SettingsWindow
     // Scroll state per tab (keyed by tab name)
     private readonly float[] _tabScroll = new float[9];
 
+    // Scrollbar drag state: which tab's thumb is being dragged (-1 = none) and
+    // the pixel offset between the cursor and the thumb top captured at grab time.
+    private int _scrollbarDragTab = -1;
+    private float _scrollbarDragGrabOffset;
+
+    // Total content height measured last frame, per tab. Lets us clamp the wheel
+    // scroll BEFORE drawing (content height is only known after) so a notch at the
+    // bottom can't overshoot the end for a frame and snap back.
+    private readonly float[] _tabContentHeight = new float[9];
+
     // Track whether we need to save after a frame (dirty flag)
     private bool _dirty;
     private bool _weatherDirty;
@@ -132,15 +142,20 @@ public class SettingsWindow
         var clipRect = new Rectangle(contentX - 5, contentY - 2, contentW + 10, contentH + 4);
         _ui.BeginClip(clipRect);
 
-        // Handle scroll
+        // Handle scroll wheel. Must go through EditorBase.HandlePanelScroll (raw
+        // mouse delta + EditorBase's own _scrollConsumed flag) — NOT
+        // _input.ScrollDelta/IsScrollConsumed. PopupManager.RouteInput already
+        // consumed the InputState scroll earlier this frame because the settings
+        // modal layer covers the full screen (top.ContainsMouse is always true),
+        // so _input.IsScrollConsumed is permanently true here and wheel scrolling
+        // would never fire. maxScroll is clamped after the content is measured.
         int tabIdx = (int)_activeTab;
-        int mx = (int)_ui._input.MousePos.X, my = (int)_ui._input.MousePos.Y;
-        if (clipRect.Contains(mx, my) && !_ui._input.IsScrollConsumed && _ui._input.ScrollDelta != 0)
-        {
-            _tabScroll[tabIdx] -= _ui._input.ScrollDelta * 0.3f;
-            if (_tabScroll[tabIdx] < 0) _tabScroll[tabIdx] = 0;
-            _ui._input.ConsumeScroll();
-        }
+        _ui.HandlePanelScroll(clipRect, ref _tabScroll[tabIdx]);
+
+        // Clamp to last frame's measured extent so a wheel notch at the bottom
+        // stops at the edge instead of overshooting and snapping back this frame.
+        float maxScrollPrev = Math.Max(0, _tabContentHeight[tabIdx] - contentH);
+        if (_tabScroll[tabIdx] > maxScrollPrev) _tabScroll[tabIdx] = maxScrollPrev;
 
         int scrollOffset = (int)_tabScroll[tabIdx];
         int y = contentY - scrollOffset;
@@ -184,25 +199,65 @@ public class SettingsWindow
                 break;
         }
 
+        // Remember this frame's extent so next frame's wheel clamp is accurate.
+        _tabContentHeight[tabIdx] = totalContentHeight;
+
         // Clamp scroll so we don't scroll past the content
         float maxScroll = Math.Max(0, totalContentHeight - contentH);
         if (_tabScroll[tabIdx] > maxScroll) _tabScroll[tabIdx] = maxScroll;
 
         _ui.EndClip();
 
-        // Draw scrollbar if content overflows
+        // Draggable scrollbar when content overflows. A mouse-up anywhere ends an
+        // in-progress drag (covers releasing off the bar, or after a tab switch).
+        var sbMouse = _ui.GetMouseState();
+        if (sbMouse.LeftButton != ButtonState.Pressed) _scrollbarDragTab = -1;
+
         if (totalContentHeight > contentH)
         {
             int sbX = panelX + PanelW - 18;
             int sbY = contentY;
             int sbH = contentH;
-            _ui.DrawRect(new Rectangle(sbX, sbY, 8, sbH), new Color(30, 30, 50));
 
-            float scrollFraction = maxScroll > 0 ? _tabScroll[tabIdx] / maxScroll : 0f;
             float thumbFraction = (float)contentH / totalContentHeight;
             int thumbH = Math.Max(20, (int)(sbH * thumbFraction));
-            int thumbY = sbY + (int)(scrollFraction * (sbH - thumbH));
-            _ui.DrawRect(new Rectangle(sbX, thumbY, 8, thumbH), EditorBase.AccentColor);
+            int travel = sbH - thumbH;
+
+            // Current thumb rect (before any drag this frame) for hit-testing.
+            float curFraction = maxScroll > 0 ? _tabScroll[tabIdx] / maxScroll : 0f;
+            int thumbY = sbY + (int)(curFraction * travel);
+            var thumbRect = new Rectangle(sbX, thumbY, 8, thumbH);
+            var trackHit = new Rectangle(sbX - 2, sbY, 12, sbH); // slightly generous hit area
+
+            var prevMouse = _ui.GetPrevMouseState();
+            bool justPressed = sbMouse.LeftButton == ButtonState.Pressed
+                            && prevMouse.LeftButton == ButtonState.Released;
+
+            // Grab the thumb, or click the track to jump (thumb centres on cursor).
+            if (justPressed && trackHit.Contains(sbMouse.X, sbMouse.Y))
+            {
+                _scrollbarDragTab = tabIdx;
+                _scrollbarDragGrabOffset = thumbRect.Contains(sbMouse.X, sbMouse.Y)
+                    ? sbMouse.Y - thumbY
+                    : thumbH / 2f;
+                _ui.SetMouseOverUI();
+            }
+
+            // Apply drag: map the thumb-top position back to a scroll offset.
+            if (_scrollbarDragTab == tabIdx)
+            {
+                float newThumbTop = sbMouse.Y - _scrollbarDragGrabOffset - sbY;
+                float frac = travel > 0 ? Math.Clamp(newThumbTop / travel, 0f, 1f) : 0f;
+                _tabScroll[tabIdx] = frac * maxScroll;
+                _ui.SetMouseOverUI();
+            }
+
+            // Draw track + thumb (recompute position after a possible drag).
+            float drawFraction = maxScroll > 0 ? _tabScroll[tabIdx] / maxScroll : 0f;
+            thumbY = sbY + (int)(drawFraction * travel);
+            bool hot = _scrollbarDragTab == tabIdx || thumbRect.Contains(sbMouse.X, sbMouse.Y);
+            _ui.DrawRect(new Rectangle(sbX, sbY, 8, sbH), new Color(30, 30, 50));
+            _ui.DrawRect(new Rectangle(sbX, thumbY, 8, thumbH), hot ? EditorBase.TextBright : EditorBase.AccentColor);
         }
 
         // Back button at bottom
