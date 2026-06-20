@@ -2917,17 +2917,32 @@ public class Game1 : Microsoft.Xna.Framework.Game
                     Game.CorpseInteractionManager.TryInteract(_sim, necroIdx);
             }
 
-            // --- Building hover detection ---
+            // --- Ground-object hover detection (buildings + foragable items) ---
+            // Picks the nearest hoverable env object under the cursor for the HUD
+            // info tooltip. Each kind is gated by its own Tooltips toggle, and the
+            // whole thing is suppressed when the cursor is over UI (a popup, HUD
+            // bar, etc.) so tooltips don't show through panels.
             _hoveredObjectIdx = -1;
             {
-                float bhd = 2f * 2f;
-                for (int oi = 0; oi < _envSystem.ObjectCount; oi++)
+                var tcfg = _gameData.Settings.Tooltips;
+                if ((tcfg.ShowBuildingInfo || tcfg.ShowGroundItemInfo) && !_input.MouseOverUI)
                 {
-                    var obj = _envSystem.GetObject(oi);
-                    if (!_envSystem.Defs[obj.DefIndex].IsBuilding) continue;
-                    float hdx = obj.X - mouseWorld.X, hdy = obj.Y - mouseWorld.Y;
-                    float hd = hdx * hdx + hdy * hdy;
-                    if (hd < bhd) { bhd = hd; _hoveredObjectIdx = oi; }
+                    float pr = tcfg.GroundPickRadius;
+                    float bhd = pr * pr;
+                    for (int oi = 0; oi < _envSystem.ObjectCount; oi++)
+                    {
+                        var obj = _envSystem.GetObject(oi);
+                        var d = _envSystem.Defs[obj.DefIndex];
+                        bool hoverable = (d.IsBuilding && tcfg.ShowBuildingInfo)
+                                       || (d.IsForagable && tcfg.ShowGroundItemInfo);
+                        if (!hoverable) continue;
+                        // Collected foragables are invisible while respawning — don't
+                        // surface a tooltip for something that isn't drawn.
+                        if (d.IsForagable && _envSystem.GetObjectRuntime(oi).Collected) continue;
+                        float hdx = obj.X - mouseWorld.X, hdy = obj.Y - mouseWorld.Y;
+                        float hd = hdx * hdx + hdy * hdy;
+                        if (hd < bhd) { bhd = hd; _hoveredObjectIdx = oi; }
+                    }
                 }
             }
 

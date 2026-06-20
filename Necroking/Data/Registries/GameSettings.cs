@@ -253,6 +253,19 @@ public class TooltipsSettings
     /// <summary>Only affects press-to-inspect mode: whether pressing 'O' to open
     /// a unit sheet also pauses the game. Auto-show-on-hover never pauses.</summary>
     [JsonPropertyName("pauseOnManualInspect")] public bool PauseOnManualInspect { get; set; } = true;
+
+    /// <summary>Show a floating info tooltip (name, HP, owner, processing state)
+    /// when hovering a building/structure.</summary>
+    [JsonPropertyName("showBuildingInfo")] public bool ShowBuildingInfo { get; set; } = true;
+
+    /// <summary>Show a floating info tooltip (name, category, description) when
+    /// hovering a foragable item lying on the ground.</summary>
+    [JsonPropertyName("showGroundItemInfo")] public bool ShowGroundItemInfo { get; set; } = true;
+
+    /// <summary>Cursor pick radius (world units) for hovering ground objects —
+    /// buildings and foragable items. Buildings are large so this is a bit
+    /// wider than the unit pick radius by default.</summary>
+    [JsonPropertyName("groundPickRadius")] public float GroundPickRadius { get; set; } = 2.0f;
 }
 
 public class GameSettingsData

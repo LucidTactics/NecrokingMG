@@ -152,7 +152,10 @@
   "tooltips": {
     "autoShowUnitStats": false,
     "hoverPickRadius": 1.5,
-    "pauseOnManualInspect": true
+    "pauseOnManualInspect": true,
+    "showBuildingInfo": true,
+    "showGroundItemInfo": true,
+    "groundPickRadius": 2.0
   },
   "startingInventory": [
     {

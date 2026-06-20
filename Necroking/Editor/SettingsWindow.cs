@@ -524,6 +524,24 @@ public class SettingsWindow
             y += rowH;
         }
 
+        y += 6;
+        DrawSectionHeader("Ground Objects", x, ref y);
+
+        // Buildings / structures hover tooltip.
+        bool bInfo = _ui.DrawCheckbox("Show building info on hover", t.ShowBuildingInfo, x, y);
+        if (bInfo != t.ShowBuildingInfo) { t.ShowBuildingInfo = bInfo; MarkDirty(); }
+        y += rowH;
+
+        // Foragable ground-item hover tooltip.
+        bool iInfo = _ui.DrawCheckbox("Show ground item info on hover", t.ShowGroundItemInfo, x, y);
+        if (iInfo != t.ShowGroundItemInfo) { t.ShowGroundItemInfo = iInfo; MarkDirty(); }
+        y += rowH;
+
+        // Pick radius for ground objects (buildings + items).
+        float gpick = _ui.DrawSliderFloat("set_tip_groundpick", "Ground Pick Radius", t.GroundPickRadius, 0.5f, 6f, x, y, w);
+        if (MathF.Abs(gpick - t.GroundPickRadius) > 0.0001f) { t.GroundPickRadius = gpick; MarkDirty(); }
+        y += rowH;
+
         y += 10;
 
         // Info text explaining the two modes.

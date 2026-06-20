@@ -151,7 +151,7 @@ public partial class HUDRenderer
         DrawSpellDropdown(screenW, secondaryY, SecondarySlotW, SecondaryBarOffsetX,
             secondaryDropdownSlot, secondaryBar, gameData);
 
-        DrawBuildingTooltip(hoveredObjectIdx, envSystem, sim);
+        DrawObjectTooltip(hoveredObjectIdx, envSystem, sim, gameData, screenW, screenH);
         // Controls hint intentionally omitted — overlapped the FPS/zoom bottom-
         // left readout. Re-enable if we add a menu page for it.
         DrawTimeControls(screenW, screenH, timeScale, gameData, paused);
@@ -468,29 +468,74 @@ public partial class HUDRenderer
     //  Tooltips & Info
     // ═══════════════════════════════════════
 
-    private void DrawBuildingTooltip(int hoveredIdx, EnvironmentSystem envSystem, Simulation sim)
+    /// <summary>Floating cursor tooltip for the hovered ground object. Branches
+    /// on the object kind: buildings show name/HP/owner/processing, foragable
+    /// items show name/category/description. Which kinds are hoverable at all is
+    /// gated upstream in Game1 (Tooltips settings) — this just renders whatever
+    /// index it's handed.</summary>
+    private void DrawObjectTooltip(int hoveredIdx, EnvironmentSystem envSystem, Simulation sim,
+        GameData gameData, int screenW, int screenH)
     {
         if (hoveredIdx < 0 || hoveredIdx >= envSystem.ObjectCount || _smallFont == null) return;
 
         var obj = envSystem.GetObject(hoveredIdx);
         var def = envSystem.Defs[obj.DefIndex];
-        var rt = envSystem.GetObjectRuntime(hoveredIdx);
-        var proc = envSystem.GetProcessState(hoveredIdx);
-        string ownerStr = rt.Owner switch { 0 => "Undead", 1 => "Neutral", _ => "Human" };
-        string procStr = proc.Processing ? $"Processing ({proc.ProcessTimer:F1}s)" : "Idle";
-        string[] lines = {
-            def.Name.Length > 0 ? def.Name : def.Id,
-            $"HP: {rt.HP}/{def.BuildingMaxHP}",
-            $"Owner: {ownerStr}",
-            procStr
-        };
 
-        int ttX = (int)_input.MousePos.X + 16, ttY = (int)_input.MousePos.Y - 70;
-        int ttW = 160, ttH = lines.Length * 16 + 8;
+        string[] lines;
+        if (def.IsBuilding)
+        {
+            var rt = envSystem.GetObjectRuntime(hoveredIdx);
+            var proc = envSystem.GetProcessState(hoveredIdx);
+            string ownerStr = rt.Owner switch { 0 => "Undead", 1 => "Neutral", _ => "Human" };
+            string procStr = proc.Processing ? $"Processing ({proc.ProcessTimer:F1}s)" : "Idle";
+            lines = new[] {
+                def.Name.Length > 0 ? def.Name : def.Id,
+                $"HP: {rt.HP}/{def.BuildingMaxHP}",
+                $"Owner: {ownerStr}",
+                procStr
+            };
+        }
+        else if (def.IsForagable)
+        {
+            var itemDef = !string.IsNullOrEmpty(def.ForagableType) ? gameData.Items.Get(def.ForagableType) : null;
+            string title = itemDef != null && itemDef.DisplayName.Length > 0 ? itemDef.DisplayName
+                         : def.Name.Length > 0 ? def.Name : def.ForagableType;
+            var ls = new List<string> { title };
+            if (itemDef != null && !string.IsNullOrEmpty(itemDef.Category))
+                ls.Add(itemDef.Category);
+            if (itemDef != null && !string.IsNullOrEmpty(itemDef.Description))
+                ls.Add(itemDef.Description);
+            lines = ls.ToArray();
+        }
+        else return;
+
+        DrawCursorTooltip(lines, screenW, screenH);
+    }
+
+    /// <summary>Draw a small text-box tooltip anchored to the cursor, auto-sized to
+    /// the widest line and flipped/clamped to stay on screen.</summary>
+    private void DrawCursorTooltip(string[] lines, int screenW, int screenH)
+    {
+        if (_smallFont == null || lines.Length == 0) return;
+        const int lineH = 16;
+        float maxW = 0f;
+        foreach (var l in lines)
+        {
+            float w = _smallFont.MeasureString(l).X;
+            if (w > maxW) maxW = w;
+        }
+        int ttW = (int)maxW, ttH = lines.Length * lineH;
+        int mx = (int)_input.MousePos.X, my = (int)_input.MousePos.Y;
+        // Default: above-right of the cursor; flip when it would clip the edge.
+        int ttX = mx + 16, ttY = my - ttH - 12;
+        if (ttX + ttW + 4 > screenW) ttX = mx - ttW - 12;
+        if (ttX < 4) ttX = 4;
+        if (ttY < 4) ttY = my + 20;
+
         _batch.Draw(_pixel, new Rectangle(ttX - 4, ttY - 4, ttW + 8, ttH + 8), TooltipBg);
         _batch.Draw(_pixel, new Rectangle(ttX - 4, ttY - 4, ttW + 8, 2), TooltipBorder);
         for (int i = 0; i < lines.Length; i++)
-            Text(_smallFont, lines[i], new Vector2(ttX, ttY + i * 16), TooltipText);
+            Text(_smallFont, lines[i], new Vector2(ttX, ttY + i * lineH), TooltipText);
     }
 
     private void DrawControlsHint(int screenH)
