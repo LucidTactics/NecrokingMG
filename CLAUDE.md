@@ -373,6 +373,12 @@ missing).
 
 Try to avoid using multi bash commands like cs XXX && git info, they force unnecesary user confirmations!
 
+**Always prefer the dedicated `Grep` and `Glob` tools over `grep`/`find`/`rg` run
+through the Bash tool, and prefer the `Read` tool over `cat`/`head`/`tail`.** The
+dedicated tools integrate with the permission UI (no per-command confirmation
+prompts), return clickable file links, and are faster. Only drop to a Bash search
+script when a dedicated tool genuinely can't do the job.
+
 ## Todos Directory (`todos/`)
 Temporary research notes and task summaries for future sessions. Each file covers one topic with context, what's done, what's left, and how to debug. Check this directory at the start of relevant work — complete items get deleted. Not for permanent knowledge (use memory for that) or code TODOs (use comments).
 
