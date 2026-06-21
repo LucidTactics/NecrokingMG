@@ -394,7 +394,11 @@ Try to avoid using multi bash commands like cs XXX && git info, they force unnec
 through the Bash tool, and prefer the `Read` tool over `cat`/`head`/`tail`.** The
 dedicated tools integrate with the permission UI (no per-command confirmation
 prompts), return clickable file links, and are faster. Only drop to a Bash search
-script when a dedicated tool genuinely can't do the job.
+script when a dedicated tool genuinely can't do the job. A `PreToolUse` hook now
+**enforces** this (leading `grep`/`find`/`cat`/… is denied with a reminder) — see
+[docs/avoid-prompting-user.md](docs/avoid-prompting-user.md) - How to avoid prompting
+the user (whitelisted methods + reminder hooks; the pattern for killing needless
+approval prompts).
 
 ## Todos Directory (`todos/`)
 Temporary research notes and task summaries for future sessions. Each file covers one topic with context, what's done, what's left, and how to debug. Check this directory at the start of relevant work — complete items get deleted. Not for permanent knowledge (use memory for that) or code TODOs (use comments).
@@ -408,7 +412,10 @@ keep but no longer a primary driver, move it here and leave a one-line pointer i
 CLAUDE.md. Current contents: [docs/testing-scenarios.md](docs/testing-scenarios.md)
 (the coded `--scenario` test harness); [docs/devpreview.md](docs/devpreview.md)
 (driving the live game via the `necroking` MCP server / `tools/devctl.py` fallback
-when the `Claude_Preview` tools are absent, e.g. in VS Code).
+when the `Claude_Preview` tools are absent, e.g. in VS Code);
+[docs/avoid-prompting-user.md](docs/avoid-prompting-user.md) - How to avoid prompting
+the user (whitelisted methods + a reminder hook for commands that shouldn't need
+approval, like searching or validating a script).
 
 ## C++ Migration
 

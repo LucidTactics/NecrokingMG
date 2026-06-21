@@ -9,7 +9,10 @@
       "mcp__necroking__necro_stop",
       "Bash(python tools/devctl.py:*)",
       "Bash(py tools/devctl.py:*)",
-      "Bash(python3 tools/devctl.py:*)"
+      "Bash(python3 tools/devctl.py:*)",
+      "Bash(python -m py_compile:*)",
+      "Bash(py -m py_compile:*)",
+      "Bash(python3 -m py_compile:*)"
     ]
   },
   "hooks": {
@@ -19,7 +22,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python \"$CLAUDE_PROJECT_DIR/tools/hooks/deny_bash_search.py\"",
+            "command": "python \"$CLAUDE_PROJECT_DIR/tools/hooks/bash_prompt_guard.py\"",
             "shell": "bash",
             "timeout": 10
           }
