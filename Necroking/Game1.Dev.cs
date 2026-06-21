@@ -357,6 +357,39 @@ public partial class Game1 {
                break;
             }
 
+            // Mark matching units with a persistent white outline box (independent
+            // of mouse hover / the ShowHoverHighlight setting) — for screenshots
+            // that point at a specific unit. `mark clear` removes all marks.
+            case "mark": {
+               if (c.Args.Length >= 1 && c.Args[0].Equals("clear", StringComparison.OrdinalIgnoreCase)) {
+                  _devMarkedUnitIds.Clear();
+                  c.Complete(Necroking.Dev.DevServer.Ok("cleared all marks"));
+                  break;
+               }
+               if (c.Args.Length < 1) {
+                  c.Complete(Necroking.Dev.DevServer.Error("mark needs: <selector> | clear"));
+                  break;
+               }
+               var idxs = DevResolveUnits(string.Join(" ", c.Args));
+               foreach (int i in idxs) _devMarkedUnitIds.Add(_sim.Units[i].Id);
+               c.Complete(Necroking.Dev.DevServer.Ok($"marked {idxs.Count} unit(s); {_devMarkedUnitIds.Count} total"));
+               break;
+            }
+
+            // Remove marks: all (no args) or just those matching a selector.
+            case "unmark": {
+               if (c.Args.Length < 1) {
+                  _devMarkedUnitIds.Clear();
+                  c.Complete(Necroking.Dev.DevServer.Ok("cleared all marks"));
+                  break;
+               }
+               var idxs = DevResolveUnits(string.Join(" ", c.Args));
+               int removed = 0;
+               foreach (int i in idxs) if (_devMarkedUnitIds.Remove(_sim.Units[i].Id)) removed++;
+               c.Complete(Necroking.Dev.DevServer.Ok($"unmarked {removed}; {_devMarkedUnitIds.Count} remain"));
+               break;
+            }
+
             // Set the AI behaviour on every unit matching a selector.
             case "set_ai": {
                if (c.Args.Length < 2) {
@@ -542,6 +575,7 @@ public partial class Game1 {
                   "units [selector]", "unit <selector>", "combat_log [n]",
                   "damage <selector> <amount>", "kill <selector>", "remove <selector>",
                   "set_ai <selector> <AIBehavior>", "move <selector> <x> <y>",
+                  "mark <selector|clear>", "unmark [selector]",
                   "set_hp <selector> <hp> [maxHp]", "set_mana <selector|necro> <mana> [maxMana]",
                   "cast <spellID> <x> <y>", "fireball <x> <y> [dmg] [radius] [name]",
                   "camera <x> <y> [zoom]", "speed <n>", "pause", "resume",

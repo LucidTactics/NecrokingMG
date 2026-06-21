@@ -251,6 +251,9 @@ it for you. The supervisor itself can stay up (cheap; holds the pinned A/B frame
   - `damage <selector> <amount>` · `kill <selector>` · `remove <selector>` (delete).
   - `set_ai <selector> <AIBehavior>` · `move <selector> <x> <y>` (AI=MoveToPoint).
   - `set_hp <selector> <hp> [maxHp]` · `set_mana <selector|necro> <mana> [maxMana]`.
+  - `mark <selector|clear>` · `unmark [selector]` — draw a persistent white outline
+    box around matching units (independent of mouse hover) so a screenshot can point
+    at a specific unit. `mark clear` / argless `unmark` removes all marks.
   - `cast <spellID> <x> <y>` — necromancer casts via the full player pipeline (may
     fail on mana/cooldown/range — `set_mana necro 9999` first if needed).
   - `fireball <x> <y> [dmg] [radius] [name]` — spawn a projectile directly

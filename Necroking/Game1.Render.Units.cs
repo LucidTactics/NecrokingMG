@@ -224,6 +224,13 @@ public partial class Game1
         // For drawing above unit.
         var sp_upper = _renderer.WorldToScreen(renderPos, heightOffset + _sim.Units[i].CollisionHeight, _camera);
 
+        // Hover-highlight: capture this unit's exact on-screen sprite box.
+        if (i == _hoveredUnitIdx && _gameData.Settings.Tooltips.ShowHoverHighlight)
+            _hoverBoxUnit = SpriteFrameAABB(sp, fr.Frame.Value, scale, fr.FlipX);
+        // Dev-mark: persistent white box (via the 'mark' dev command).
+        if (_devMarkedUnitIds.Count > 0 && _devMarkedUnitIds.Contains(_sim.Units[i].Id))
+            _devMarkBoxes.Add(SpriteFrameAABB(sp, fr.Frame.Value, scale, fr.FlipX));
+
         // Compute weapon attachment for weapon particle buff visuals
         var weaponAttach = ComputeWeaponAttach(i, unitDef, animData);
 
@@ -567,6 +574,17 @@ public partial class Game1
         _spriteBatch.Draw(tex, screenPos, sourceRect, tint, rotation, origin, scale,
             flipX ? SpriteEffects.FlipHorizontally : SpriteEffects.None, 0f);
 
+        // Hover-highlight: capture this object's exact on-screen sprite box. Env
+        // origin already folds in the flip + raw pivot (Y not inverted, unlike unit
+        // spritemeta), so build the box straight from origin.
+        if (i == _hoveredObjectIdx && _gameData.Settings.Tooltips.ShowHoverHighlight)
+        {
+            float bw = frameW * scale, bh = frameH * scale;
+            _hoverBoxObject = new Rectangle(
+                (int)(screenPos.X - origin.X * scale), (int)(screenPos.Y - origin.Y * scale),
+                (int)bw, (int)bh);
+        }
+
         // Build progress bar for unbuilt objects — visible from the moment of placement
         // (empty bar at 0%) so players can see "placed, awaiting construction".
         if (rt.BuildProgress < 1f)
@@ -869,6 +887,40 @@ public partial class Game1
         _spriteBatch.Draw(_pixel, new Rectangle(r.X, r.Y + r.Height - 1, r.Width, 1), c);
         _spriteBatch.Draw(_pixel, new Rectangle(r.X, r.Y, 1, r.Height), c);
         _spriteBatch.Draw(_pixel, new Rectangle(r.X + r.Width - 1, r.Y, 1, r.Height), c);
+    }
+
+    /// <summary>Screen-space AABB of a sprite frame drawn at <paramref name="sp"/>
+    /// with the given uniform scale + horizontal flip. Mirrors DrawSpriteFrame's
+    /// pivot math (spritemeta pivots are bottom-left origin → Y flipped) so the box
+    /// matches the rendered sprite exactly.</summary>
+    private static Rectangle SpriteFrameAABB(Vector2 sp, in SpriteFrame frame, float scale, bool flipX)
+    {
+        float pivotX = flipX ? (1f - frame.PivotX) : frame.PivotX;
+        float pivotY = 1f - frame.PivotY;
+        float w = frame.Rect.Width * scale, h = frame.Rect.Height * scale;
+        return new Rectangle((int)(sp.X - pivotX * w), (int)(sp.Y - pivotY * h), (int)w, (int)h);
+    }
+
+    /// <summary>Draw the outline box around whichever world object is under the
+    /// cursor (unit / corpse / building / ground item). Boxes are captured during
+    /// the sprite pass with the exact sprite bounds; here we just stroke them,
+    /// slightly inflated so the line sits just outside the art. World objects only
+    /// — never UI. Gated by the ShowHoverHighlight tooltip setting.</summary>
+    private void DrawHoverHighlights()
+    {
+        // Dev-marked units (via the 'mark' dev command) — always drawn, white, and
+        // not gated by the ShowHoverHighlight setting (it's a tooling/debug aid).
+        if (_devMarkBoxes.Count > 0)
+        {
+            var white = new Color(255, 255, 255, 235);
+            foreach (var b in _devMarkBoxes) { var r = b; r.Inflate(2, 2); DrawRectOutline(r, white); }
+        }
+
+        if (!_gameData.Settings.Tooltips.ShowHoverHighlight) return;
+        var c = new Color(255, 230, 120, 210);
+        if (_hoverBoxObject is { } o) { o.Inflate(2, 2); DrawRectOutline(o, c); }
+        if (_hoverBoxCorpse is { } cp) { cp.Inflate(2, 2); DrawRectOutline(cp, c); }
+        if (_hoverBoxUnit is { } u) { u.Inflate(2, 2); DrawRectOutline(u, c); }
     }
 
     /// <summary>Draw a 2D line by rotating the _pixel sprite. Cheap, AA-free.</summary>

@@ -260,6 +260,16 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     private readonly Dictionary<string, Texture2D?> _itemTextureCache = new();
     private int _hoveredObjectIdx = -1;
     private int _hoveredCorpseIdx = -1;
+    private int _hoveredUnitIdx = -1;
+    // Screen-space outline boxes for the hovered world object, captured during the
+    // sprite draw pass (exact sprite bounds) and drawn in the HUD overlay pass.
+    // Reset to null each frame at the top of Draw. See ShowHoverHighlight setting.
+    private Rectangle? _hoverBoxObject, _hoverBoxCorpse, _hoverBoxUnit;
+    // Dev-marked units (via the 'mark' dev command): persistent white boxes,
+    // independent of mouse hover and the ShowHoverHighlight setting. Keyed by
+    // stable unit Id; their on-screen boxes are recaptured each frame in Draw.
+    private readonly HashSet<uint> _devMarkedUnitIds = new();
+    private readonly List<Rectangle> _devMarkBoxes = new();
     private KeyboardState _prevKb;
     private MouseState _prevMouse;
     private float _rawDt;
@@ -2802,6 +2812,24 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
                         float cd = cdx * cdx + cdy * cdy;
                         if (cd < bcd) { bcd = cd; _hoveredCorpseIdx = ci; }
                     }
+                }
+            }
+
+            // --- Hovered unit (for the outline-box highlight) ---
+            // Independent of the auto-stat sheet so the box works even when that's
+            // off. Same gating: opt-in toggle + suppressed over UI.
+            _hoveredUnitIdx = -1;
+            if (_gameData.Settings.Tooltips.ShowHoverHighlight && !_input.MouseOverUI)
+            {
+                float pr = _gameData.Settings.Tooltips.HoverPickRadius;
+                float bud = pr * pr;
+                for (int i = 0; i < _sim.Units.Count; i++)
+                {
+                    var u = _sim.Units[i];
+                    if (!u.Alive) continue;
+                    float udx = u.Position.X - mouseWorld.X, udy = u.Position.Y - mouseWorld.Y;
+                    float d2 = udx * udx + udy * udy;
+                    if (d2 < bud) { bud = d2; _hoveredUnitIdx = i; }
                 }
             }
 

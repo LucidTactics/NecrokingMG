@@ -616,6 +616,11 @@ public class SettingsWindow
         if (MathF.Abs(gpick - t.GroundPickRadius) > 0.0001f) { t.GroundPickRadius = gpick; MarkDirty(); }
         y += rowH;
 
+        // Outline box around the hovered world object.
+        bool hlBox = _ui.DrawCheckbox("Outline box around hovered object", t.ShowHoverHighlight, x, y);
+        if (hlBox != t.ShowHoverHighlight) { t.ShowHoverHighlight = hlBox; MarkDirty(); }
+        y += rowH;
+
         y += 10;
 
         // Info text explaining the two modes.

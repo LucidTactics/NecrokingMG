@@ -25,6 +25,11 @@ public partial class Game1
 {
     private void DrawCorpses()
     {
+        // Hover-highlight target (captured below as its sprite is drawn).
+        Corpse? hoveredCorpse = (_gameData.Settings.Tooltips.ShowHoverHighlight
+            && _hoveredCorpseIdx >= 0 && _hoveredCorpseIdx < _sim.Corpses.Count)
+            ? _sim.Corpses[_hoveredCorpseIdx] : null;
+
         foreach (var corpse in _sim.Corpses)
         {
             // Don't render corpses attached to a unit — drawn on unit in DrawSingleUnit
@@ -121,6 +126,8 @@ public partial class Game1
                 var sp = _renderer.WorldToScreen(corpse.Position, corpse.Z, _camera);
                 Color corpseTint = MultiplyColor(new Color(alpha, alpha, alpha, alpha), _ambientColor);
                 DrawSpriteFrame(atlas, fr.Frame.Value, sp, scale, fr.FlipX, corpseTint);
+                if (corpse == hoveredCorpse)
+                    _hoverBoxCorpse = SpriteFrameAABB(sp, fr.Frame.Value, scale, fr.FlipX);
             }
 
             // Draw bagging progress bar
@@ -614,6 +621,18 @@ public partial class Game1
         var origin = new Vector2(originX, centroid.Y);
         var effects = flipX ? SpriteEffects.FlipHorizontally : SpriteEffects.None;
         _spriteBatch.Draw(tex, screenPos, frame.Rect, tint, 0f, origin, scale, effects, 0f);
+
+        // Hover-highlight: this draw uses a centroid origin (not the pivot), so
+        // build the box from that rather than SpriteFrameAABB.
+        if (_gameData.Settings.Tooltips.ShowHoverHighlight
+            && _hoveredCorpseIdx >= 0 && _hoveredCorpseIdx < _sim.Corpses.Count
+            && ReferenceEquals(_sim.Corpses[_hoveredCorpseIdx], cc))
+        {
+            float bw = frame.Rect.Width * scale, bh = frame.Rect.Height * scale;
+            _hoverBoxCorpse = new Rectangle(
+                (int)(screenPos.X - origin.X * scale), (int)(screenPos.Y - origin.Y * scale),
+                (int)bw, (int)bh);
+        }
     }
 
     /// <summary>Carried visual anchored on the carrier — bag or raw corpse per

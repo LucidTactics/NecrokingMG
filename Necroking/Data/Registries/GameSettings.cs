@@ -274,6 +274,11 @@ public class TooltipsSettings
     /// buildings and foragable items. Buildings are large so this is a bit
     /// wider than the unit pick radius by default.</summary>
     [JsonPropertyName("groundPickRadius")] public float GroundPickRadius { get; set; } = 2.0f;
+
+    /// <summary>Draw an outline box around the world object currently under the
+    /// cursor (unit / corpse / building / ground item) so it's clear which object
+    /// the hover tooltip belongs to. World objects only — never UI.</summary>
+    [JsonPropertyName("showHoverHighlight")] public bool ShowHoverHighlight { get; set; } = true;
 }
 
 public class GameSettingsData

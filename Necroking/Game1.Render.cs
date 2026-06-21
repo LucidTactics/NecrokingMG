@@ -29,6 +29,10 @@ public partial class Game1
         int screenW = GraphicsDevice.Viewport.Width;
         int screenH = GraphicsDevice.Viewport.Height;
 
+        // Hover-highlight + dev-mark boxes are recaptured each frame during the sprite pass.
+        _hoverBoxObject = _hoverBoxCorpse = _hoverBoxUnit = null;
+        _devMarkBoxes.Clear();
+
         // --- Main menu ---
         if (_menuState == MenuState.MainMenu)
         {
@@ -414,6 +418,8 @@ public partial class Game1
         _weatherRenderer.DrawFog(screenW, screenH);
 
         bool showUI = (_activeScenario == null || _activeScenario.WantsUI) && !_devShotNoUi;
+        if (showUI)
+            DrawHoverHighlights();
         if (showUI)
             DrawHUD(screenW, screenH);
         if (showUI)
