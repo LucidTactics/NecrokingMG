@@ -36,8 +36,16 @@ desktop.ini
 ## NuGet
 *.nupkg
 
-## Claude
-.claude/
+## Claude — machine-local by default, EXCEPT shared project config and curated skills.
+## The friend's Claude tends to create skills by accident; keeping .claude/skills
+## ignored by default keeps that litter out of git. To version-control (curate) a
+## specific skill, add an explicit `!.claude/skills/<name>/` line below.
+.claude/*
+!.claude/settings.json
+!.claude/skills/
+.claude/skills/*
+# Curated skills (un-ignore each one you want tracked):
+# !.claude/skills/example-skill/
 CLAUDE.local.md
 
 ## The ENTIRE assets/ folder is distributed out-of-band (Google Drive), never git:

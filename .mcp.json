@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "necroking": {
+      "command": "python",
+      "args": ["tools/necro_mcp.py"]
+    }
+  }
+}

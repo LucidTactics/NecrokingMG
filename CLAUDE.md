@@ -182,6 +182,20 @@ so they run **without per-command permission prompts**; raw `curl`/Bash to the
 server prompts on every call and is slower. Reach for curl only if the preview
 tools are genuinely unavailable.
 
+**Surface without the `Claude_Preview` tools (e.g. the VS Code extension):** those
+`mcp__Claude_Preview__*` tools are wired up **only in the desktop Claude Code app**.
+For every other surface this repo ships its own project MCP server, **`necroking`**
+(`.mcp.json` → `tools/necro_mcp.py`, dependency-free / stdlib-only). It exposes typed,
+no-shell tools — `necro_status`, `necro_start`, `necro_cmd` (the main driver — same
+`{cmd,args,opts}` commands as `ExecuteDevCommand`), `necro_screenshot` (returns the
+frame inline as an image), `necro_restart`, `necro_stop` — that drive the *same*
+supervisor. **Prefer these** when `Claude_Preview` is absent; they're the safe
+equivalent (no bash to compose, allowlisted by name). If for some reason the
+`necroking` server isn't loaded, fall back to `tools/devctl.py` (one allowlisted bash
+command: `python tools/devctl.py shot fight` → `Read` the printed PNG). Full reference:
+[docs/devpreview.md](docs/devpreview.md). New `.mcp.json` servers need a one-time trust
+approval and a Claude Code reload to appear.
+
 **Topology:** preview MCP tool → Python supervisor (`tools/devserver.py`, port
 8777, persistent) → game's in-process HTTP listener (`Necroking/Dev/DevServer.cs`,
 port 8778, enabled by `--devserver`). The supervisor owns the game process, so the
@@ -389,7 +403,9 @@ deep how-to guides, subsystem references. Unlike `todos/`, these don't get delet
 when "done"; they're looked up when relevant. When something in CLAUDE.md is good to
 keep but no longer a primary driver, move it here and leave a one-line pointer in
 CLAUDE.md. Current contents: [docs/testing-scenarios.md](docs/testing-scenarios.md)
-(the coded `--scenario` test harness).
+(the coded `--scenario` test harness); [docs/devpreview.md](docs/devpreview.md)
+(driving the live game via the `necroking` MCP server / `tools/devctl.py` fallback
+when the `Claude_Preview` tools are absent, e.g. in VS Code).
 
 ## C++ Migration
 
