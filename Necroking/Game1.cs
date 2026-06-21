@@ -1477,18 +1477,19 @@ public class Game1 : Microsoft.Xna.Framework.Game
     private static float DevFloat(string s) =>
         float.Parse(s, System.Globalization.CultureInfo.InvariantCulture);
 
-    /// <summary>Parse a screenshot downsample_to option. Absent → default 320x240
-    /// (small, readable return even when the game renders at high res). "full" /
-    /// "none" / "0" → no downsample (native render size). "WxH" → that size.</summary>
+    /// <summary>Parse a screenshot downsample_to option. Absent → default 640x360
+    /// (half of the 1280x720 default render — small, readable, and a consistent
+    /// fraction of the frame). "full" / "none" / "0" → no downsample (native render
+    /// size). "WxH" → that size.</summary>
     private static (int w, int h) ParseDownsample(string? s)
     {
-        if (string.IsNullOrEmpty(s)) return (320, 240);
+        if (string.IsNullOrEmpty(s)) return (640, 360);
         s = s.ToLowerInvariant();
         if (s == "full" || s == "none" || s == "0") return (0, 0);
         var p = s.Split('x');
         if (p.Length == 2 && int.TryParse(p[0], out int w) && int.TryParse(p[1], out int h))
             return (w, h);
-        return (320, 240);
+        return (640, 360);
     }
 
     /// <summary>Snapshot of live game state as a JSON object (the result payload).</summary>
