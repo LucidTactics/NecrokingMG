@@ -486,6 +486,19 @@ public class MapEditorWindow
     }
 
     /// <summary>
+    /// Set the map filename the editor saves to (without the ".json" extension).
+    /// Called when a map is loaded so Save Map defaults to the currently-loaded
+    /// map (e.g. "testmap") instead of always overwriting "default". Also keeps
+    /// the wall editor's filename in sync.
+    /// </summary>
+    public void SetMapFilename(string name)
+    {
+        if (string.IsNullOrEmpty(name)) return;
+        _mapFilename = name;
+        _wallEditor?.SetMapFilename(name);
+    }
+
+    /// <summary>
     /// Set the grass data arrays for the editor to manipulate.
     /// </summary>
     public void SetGrassData(byte[] grassMap, int grassW, int grassH, MapData.GrassTypeInfo[] types, float cellSize = 0.8f)

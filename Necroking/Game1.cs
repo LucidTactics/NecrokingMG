@@ -687,7 +687,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         base.Initialize();
     }
 
-    private void StartGame()
+    private void StartGame(string mapName = "default")
     {
         _gameWorldLoaded = false;
         _gameOver = false;
@@ -738,20 +738,22 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
         // weapon_points.json is now loaded by GameData.Load() into each UnitDef.WeaponPoints
 
-        // Load map
+        // Load map. mapName selects which map under assets/maps/ to load
+        // ("default", "testmap", ...); the trigger/road companions follow the
+        // same "<mapName>_triggers.json" / "<mapName>_roads.json" convention.
         var placedUnits = new List<Data.PlacedUnit>();
-        string mapPath = GamePaths.Resolve(GamePaths.DefaultMapJson);
+        string mapPath = GamePaths.Resolve($"assets/maps/{mapName}.json");
         if (File.Exists(mapPath))
         {
-            DebugLog.Log("startup", "Loading map from file...");
+            DebugLog.Log("startup", $"Loading map '{mapName}' from file...");
             // Load env defs from canonical location (before map, so placed objects can resolve IDs)
             MapData.LoadEnvDefs(GamePaths.Resolve(GamePaths.EnvDefsJson), _envSystem);
             // Parse the 55MB map JSON exactly once — Load returns the grass info from
             // the same JsonDocument it already parsed, avoiding a redundant disk+parse pass.
             MapData.Load(mapPath, _groundSystem, _envSystem, _wallSystem, placedUnits,
                 out var grassInfo);
-            MapData.LoadTriggers(GamePaths.Resolve("assets/maps/default_triggers.json"), _triggerSystem);
-            MapData.LoadRoads(GamePaths.Resolve("assets/maps/default_roads.json"), _roadSystem);
+            MapData.LoadTriggers(GamePaths.Resolve($"assets/maps/{mapName}_triggers.json"), _triggerSystem);
+            MapData.LoadRoads(GamePaths.Resolve($"assets/maps/{mapName}_roads.json"), _roadSystem);
             LogTiming($"Map loaded: ground={_groundSystem.WorldW}x{_groundSystem.WorldH}, objects={_envSystem.ObjectCount}, defs={_envSystem.DefCount}");
 
             // Death fog: coarse grid sized to the map. Auto-tag tree assets as
@@ -939,6 +941,9 @@ public class Game1 : Microsoft.Xna.Framework.Game
         _mapEditor.SetItemRegistry(_gameData.Items);
         _mapEditor.SetSpellRegistry(_gameData.Spells);
         _mapEditor.SetGameData(_gameData);
+        // Default the editor's Save target to whichever map was just loaded, so
+        // editing after "Play Test Map" saves to testmap.json — not default.json.
+        _mapEditor.SetMapFilename(mapName);
         {
             int corpsesIdx = AtlasDefs.ResolveAtlasName("Corpses");
             var corpsesAtlas = (corpsesIdx >= 0 && corpsesIdx < _atlases.Length) ? _atlases[corpsesIdx] : null;
@@ -2193,6 +2198,17 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 if (mouse.X >= menuX && mouse.X < menuX + btnW && mouse.Y >= menuY && mouse.Y < menuY + btnH)
                 {
                     StartGame();
+                    _prevKb = kb;
+                    _prevMouse = mouse;
+                    base.Update(gameTime);
+                    return;
+                }
+                menuY += btnH + btnGap;
+
+                // Play Test Map button — loads assets/maps/testmap.json
+                if (mouse.X >= menuX && mouse.X < menuX + btnW && mouse.Y >= menuY && mouse.Y < menuY + btnH)
+                {
+                    StartGame("testmap");
                     _prevKb = kb;
                     _prevMouse = mouse;
                     base.Update(gameTime);
@@ -8410,6 +8426,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         int menuY = screenH / 2 + 20;
 
         DrawMenuButton("Play", menuX, ref menuY, btnW, btnH, btnGap);
+        DrawMenuButton("Play Test Map", menuX, ref menuY, btnW, btnH, btnGap);
         DrawMenuButton("Scenarios", menuX, ref menuY, btnW, btnH, btnGap);
         DrawMenuButton("Quit", menuX, ref menuY, btnW, btnH, btnGap);
 
