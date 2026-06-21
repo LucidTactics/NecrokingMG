@@ -12,7 +12,18 @@
       "Bash(python3 tools/devctl.py:*)",
       "Bash(python -m py_compile:*)",
       "Bash(py -m py_compile:*)",
-      "Bash(python3 -m py_compile:*)"
+      "Bash(python3 -m py_compile:*)",
+      "Bash(ls:*)",
+      "Bash(cat:*)",
+      "Bash(grep:*)",
+      "Bash(find:*)",
+      "Bash(awk:*)",
+      "Bash(tail:*)",
+      "Bash(head:*)",
+      "Bash(cut:*)",
+      "Bash(wc:*)",
+      "Bash(sort:*)",
+      "Bash(xargs grep:*)"
     ]
   },
   "hooks": {
