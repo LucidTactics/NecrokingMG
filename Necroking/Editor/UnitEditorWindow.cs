@@ -2685,9 +2685,10 @@ public class UnitEditorWindow
 
     private void DrawGroupDetail(UnitGroupDef g, int x, int y, int ww, int h)
     {
-        // Handle scroll
+        // Handle scroll. Id-keyed overload clamps to the end using last frame's
+        // content height (recorded below) so the wheel stops at the edge (was unbounded).
         var area = new Rectangle(x, y, ww, h);
-        _ui.HandlePanelScroll(area, ref _groupPropScroll);
+        _ui.HandlePanelScroll(area, ref _groupPropScroll, "unit_groupdetail", h);
 
         int curY = y + 4 - (int)_groupPropScroll;
 
@@ -2744,6 +2745,11 @@ public class UnitEditorWindow
             g.Entries.Add(new UnitGroupEntry());
             _unsavedChanges = true;
         }
+
+        // Record content extent + clamp so the wheel stops at the end.
+        int groupContentH = curY + (int)_groupPropScroll - y;
+        _groupPropScroll = Math.Min(_groupPropScroll, Math.Max(0, groupContentH - h));
+        _ui.SetPanelContentHeight("unit_groupdetail", groupContentH);
     }
 
     private string[] BuildUnitDropdownList()
@@ -2874,9 +2880,10 @@ public class UnitEditorWindow
 
     private void DrawWeaponDetail(WeaponDef w, int x, int y, int ww, int h)
     {
-        // Handle scroll
+        // Handle scroll. Id-keyed overload clamps to the end using last frame's
+        // content height (recorded below) so the wheel stops at the edge (was unbounded).
         var area = new Rectangle(x, y, ww, h);
-        _ui.HandlePanelScroll(area, ref _subPropScroll);
+        _ui.HandlePanelScroll(area, ref _subPropScroll, "unit_weapondetail", h);
 
         int curY = y + 4 - (int)_subPropScroll;
 
@@ -3082,6 +3089,11 @@ public class UnitEditorWindow
             w.Bonuses.Add(bonusOptions.Length > 0 ? bonusOptions[0] : "");
             _unsavedChanges = true;
         }
+
+        // Record content extent + clamp so the wheel stops at the end.
+        int weaponContentH = curY + (int)_subPropScroll - y;
+        _subPropScroll = Math.Min(_subPropScroll, Math.Max(0, weaponContentH - h));
+        _ui.SetPanelContentHeight("unit_weapondetail", weaponContentH);
     }
 
     // ---- ARMOR SUB-EDITOR ----
@@ -3133,8 +3145,10 @@ public class UnitEditorWindow
 
     private void DrawArmorDetail(ArmorDef a, int x, int y, int ww, int h)
     {
+        // Id-keyed overload clamps to the end using last frame's content height
+        // (recorded below) so the wheel stops at the edge (was unbounded).
         var area = new Rectangle(x, y, ww, h);
-        _ui.HandlePanelScroll(area, ref _subPropScroll);
+        _ui.HandlePanelScroll(area, ref _subPropScroll, "unit_armordetail", h);
 
         int curY = y + 4 - (int)_subPropScroll;
 
@@ -3179,6 +3193,11 @@ public class UnitEditorWindow
             a.Bonuses.Add(bonusOptions.Length > 0 ? bonusOptions[0] : "");
             _unsavedChanges = true;
         }
+
+        // Record content extent + clamp so the wheel stops at the end.
+        int armorContentH = curY + (int)_subPropScroll - y;
+        _subPropScroll = Math.Min(_subPropScroll, Math.Max(0, armorContentH - h));
+        _ui.SetPanelContentHeight("unit_armordetail", armorContentH);
     }
 
     // ---- SHIELD SUB-EDITOR ----
@@ -3230,8 +3249,10 @@ public class UnitEditorWindow
 
     private void DrawShieldDetail(ShieldDef s, int x, int y, int ww, int h)
     {
+        // Id-keyed overload clamps to the end using last frame's content height
+        // (recorded below) so the wheel stops at the edge (was unbounded).
         var area = new Rectangle(x, y, ww, h);
-        _ui.HandlePanelScroll(area, ref _subPropScroll);
+        _ui.HandlePanelScroll(area, ref _subPropScroll, "unit_shielddetail", h);
 
         int curY = y + 4 - (int)_subPropScroll;
 
@@ -3255,6 +3276,11 @@ public class UnitEditorWindow
         int newDef = _ui.DrawIntField("s_def", "Defense", s.Defense, x, curY, ww);
         if (newDef != s.Defense) { s.Defense = newDef; _unsavedChanges = true; }
         curY += RowH;
+
+        // Record content extent + clamp so the wheel stops at the end.
+        int shieldContentH = curY + (int)_subPropScroll - y;
+        _subPropScroll = Math.Min(_subPropScroll, Math.Max(0, shieldContentH - h));
+        _ui.SetPanelContentHeight("unit_shielddetail", shieldContentH);
     }
 
     // ---- SUB-EDITOR CRUD ----

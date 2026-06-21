@@ -1178,9 +1178,10 @@ public class EnvObjectEditorWindow : Necroking.UI.IModalLayer
         int fieldW = w - Padding * 2;
         int fx = x + Padding;
 
-        // Scroll handling
+        // Scroll handling. Id-keyed overload clamps to the end using last frame's
+        // content height (recorded below) so the wheel can't overshoot and snap back.
         var propRect = new Rectangle(x, y, w, h);
-        _ui.HandlePanelScroll(propRect, ref _propScrollY);
+        _ui.HandlePanelScroll(propRect, ref _propScrollY, "env_props", h);
 
         // Begin scissor clip for properties
         _ui.BeginClip(propRect);
@@ -1790,6 +1791,7 @@ public class EnvObjectEditorWindow : Necroking.UI.IModalLayer
         int totalContentH = curY + (int)_propScrollY - y;
         float maxScroll = MathF.Max(0, totalContentH - h);
         _propScrollY = MathF.Min(_propScrollY, maxScroll);
+        _ui.SetPanelContentHeight("env_props", totalContentH);
     }
 
     private int DrawSectionLabel(int x, int curY, int w, string label)

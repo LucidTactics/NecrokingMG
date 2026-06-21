@@ -347,9 +347,10 @@ public class ItemEditorWindow
         var def = _gameData.Items.Get(allIds[_selectedIdx]);
         if (def == null) return;
 
-        // Scroll handling
+        // Scroll handling. Id-keyed overload clamps to the end using last frame's
+        // content height (recorded below) so the wheel can't overshoot and snap back.
         var panelRect = new Rectangle(x, y, w, h);
-        _ui.HandlePanelScroll(panelRect, ref _detailScroll, sensitivity: 0.4f);
+        _ui.HandlePanelScroll(panelRect, ref _detailScroll, "item_detail", h - 20, sensitivity: 0.4f);
 
         // Clipping background
         _ui.DrawRect(panelRect, new Color(28, 28, 42, 200));
@@ -408,6 +409,7 @@ public class ItemEditorWindow
         float totalContentH = (curY + _detailScroll) - y;
         float maxDetailScroll = Math.Max(0, totalContentH - h + 20);
         _detailScroll = Math.Min(_detailScroll, maxDetailScroll);
+        _ui.SetPanelContentHeight("item_detail", totalContentH);
     }
 
     // ===========================

@@ -1441,9 +1441,10 @@ public partial class UIEditorWindow : EditorBase
             return;
         }
 
-        // Handle scroll wheel
+        // Handle scroll wheel. Id-keyed overload clamps to the end using last
+        // frame's content height (recorded below) so the wheel stops at the edge.
         var clipRect = new Rectangle(x, y, w, h);
-        HandlePanelScroll(clipRect, ref _nsDetailScroll);
+        HandlePanelScroll(clipRect, ref _nsDetailScroll, "ui_nsdetail", h);
 
         BeginClip(clipRect);
 
@@ -1527,6 +1528,11 @@ public partial class UIEditorWindow : EditorBase
             curY += 20;
             DrawNineSlicePreview(def, x + pad, curY, w - pad * 2);
         }
+
+        // Record content extent + clamp so the wheel stops at the end (was unbounded).
+        int nsContentH = curY + (int)_nsDetailScroll - y;
+        _nsDetailScroll = Math.Min(_nsDetailScroll, Math.Max(0, nsContentH - h));
+        SetPanelContentHeight("ui_nsdetail", nsContentH);
 
         EndClip();
     }
@@ -1731,7 +1737,7 @@ public partial class UIEditorWindow : EditorBase
 
         // Handle scroll wheel
         var clipRect = new Rectangle(x, y, w, h);
-        HandlePanelScroll(clipRect, ref _elemDetailScroll);
+        HandlePanelScroll(clipRect, ref _elemDetailScroll, "ui_elemdetail", h);
 
         BeginClip(clipRect);
 
@@ -1935,6 +1941,7 @@ public partial class UIEditorWindow : EditorBase
         // Track content height for scroll clamping
         int contentBottom = curY + (int)_elemDetailScroll - y;
         _elemDetailScroll = Math.Min(_elemDetailScroll, Math.Max(0, contentBottom - h));
+        SetPanelContentHeight("ui_elemdetail", contentBottom);
 
         EndClip();
     }
@@ -2229,7 +2236,7 @@ public partial class UIEditorWindow : EditorBase
 
         // Handle scroll wheel
         var clipRect = new Rectangle(x, y, w, h);
-        HandlePanelScroll(clipRect, ref _widgetDetailScroll);
+        HandlePanelScroll(clipRect, ref _widgetDetailScroll, "ui_widgetdetail", h);
 
         BeginClip(clipRect);
 
@@ -2606,6 +2613,7 @@ public partial class UIEditorWindow : EditorBase
         // Track content height for scroll clamping (generous for child props + harmonizers + overrides)
         int contentBottom = curY + (int)_widgetDetailScroll - y + 800;
         _widgetDetailScroll = Math.Min(_widgetDetailScroll, Math.Max(0, contentBottom - h));
+        SetPanelContentHeight("ui_widgetdetail", contentBottom);
 
         EndClip();
     }

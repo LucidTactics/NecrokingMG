@@ -478,9 +478,10 @@ public class SpellEditorWindow : EditorWindow
         var def = _gameData.Spells.Get(allIds[_selectedIdx]);
         if (def == null) return;
 
-        // Scroll handling
+        // Scroll handling. Id-keyed overload clamps to the end using last frame's
+        // content height (recorded below) so the wheel can't overshoot and snap back.
         var panelRect = new Rectangle(x, y, w, h);
-        _ui.HandlePanelScroll(panelRect, ref _detailScroll, sensitivity: 0.4f);
+        _ui.HandlePanelScroll(panelRect, ref _detailScroll, "sp_detail", h - 20, sensitivity: 0.4f);
 
         // Clipping background
         _ui.DrawRect(panelRect, new Color(28, 28, 42, 200));
@@ -522,6 +523,7 @@ public class SpellEditorWindow : EditorWindow
         float totalContentH = (curY + _detailScroll) - y;
         float maxDetailScroll = Math.Max(0, totalContentH - h + 20);
         _detailScroll = Math.Min(_detailScroll, maxDetailScroll);
+        _ui.SetPanelContentHeight("sp_detail", totalContentH);
     }
 
     // Draw*Fields methods removed — all fields now rendered via reflection attributes on SpellDef.
@@ -1001,9 +1003,10 @@ public class SpellEditorWindow : EditorWindow
         int fieldW = contentW - 10;
         int rowH = 26;
 
-        // Scroll handling for buff detail area
+        // Scroll handling for buff detail area. Id-keyed overload clamps to the
+        // end using last frame's content height (recorded below) — no overshoot.
         var detailRect = new Rectangle(contentX, detailY, contentW, detailH);
-        _ui.HandlePanelScroll(detailRect, ref _buffDetailScroll, sensitivity: 0.4f, layer: 1);
+        _ui.HandlePanelScroll(detailRect, ref _buffDetailScroll, "sp_buffdetail", detailH - 20, sensitivity: 0.4f, layer: 1);
 
         _ui.DrawRect(detailRect, new Color(28, 28, 42, 200));
 
@@ -1303,6 +1306,7 @@ public class SpellEditorWindow : EditorWindow
         float totalBuffContentH = (cy + _buffDetailScroll) - detailY;
         float maxBDS = Math.Max(0, totalBuffContentH - detailH + 20);
         _buffDetailScroll = Math.Min(_buffDetailScroll, maxBDS);
+        _ui.SetPanelContentHeight("sp_buffdetail", totalBuffContentH);
     }
 
     // ======================================

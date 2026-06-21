@@ -105,6 +105,35 @@ public class EditorBase
         return true;
     }
 
+    // Per-panel content height measured last frame, keyed by panelId. Feeds the
+    // id-keyed HandlePanelScroll overload so it can clamp to the end BEFORE the
+    // content is laid out — without this, maxScroll is only known after drawing
+    // and a wheel notch at the bottom overshoots for one frame, then snaps back
+    // (the jarring effect this avoids).
+    private readonly Dictionary<string, float> _panelContentHeights = new();
+
+    /// <summary>
+    /// Mouse-wheel scroll handler that clamps to the end using the content height
+    /// recorded on the previous frame (keyed by <paramref name="panelId"/>), so a
+    /// wheel notch at the bottom stops at the edge instead of overshooting and
+    /// snapping back. Pair with <see cref="SetPanelContentHeight"/> — call it once
+    /// the panel's content height is known (after layout) to feed next frame's
+    /// clamp. <paramref name="viewH"/> is the visible panel height.
+    /// </summary>
+    public bool HandlePanelScroll(Rectangle rect, ref float scroll, string panelId, int viewH,
+        float sensitivity = 0.3f, int layer = 0)
+    {
+        float cached = _panelContentHeights.TryGetValue(panelId, out float h) ? h : 0f;
+        float maxScroll = Math.Max(0f, cached - viewH);
+        return HandlePanelScroll(rect, ref scroll, maxScroll, sensitivity, layer);
+    }
+
+    /// <summary>Record a panel's laid-out content height for next frame's id-keyed
+    /// <see cref="HandlePanelScroll(Rectangle, ref float, string, int, float, int)"/>
+    /// clamp. Call once per frame after the content height is measured.</summary>
+    public void SetPanelContentHeight(string panelId, float contentHeight)
+        => _panelContentHeights[panelId] = contentHeight;
+
     // INF03: Global mouse-over-UI flag
     private bool _mouseOverEditorUI;
     public bool IsMouseOverUI => _mouseOverEditorUI;

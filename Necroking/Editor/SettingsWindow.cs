@@ -30,10 +30,10 @@ public class SettingsWindow
     private int _scrollbarDragTab = -1;
     private float _scrollbarDragGrabOffset;
 
-    // Total content height measured last frame, per tab. Lets us clamp the wheel
-    // scroll BEFORE drawing (content height is only known after) so a notch at the
-    // bottom can't overshoot the end for a frame and snap back.
-    private readonly float[] _tabContentHeight = new float[9];
+    // Stable per-tab scroll ids for EditorBase.HandlePanelScroll's content-height
+    // cache (which clamps to the end before drawing, avoiding overshoot snap-back).
+    private static readonly string[] TabScrollIds =
+        { "set_tab0", "set_tab1", "set_tab2", "set_tab3", "set_tab4", "set_tab5", "set_tab6", "set_tab7", "set_tab8" };
 
     // Track whether we need to save after a frame (dirty flag)
     private bool _dirty;
@@ -148,14 +148,10 @@ public class SettingsWindow
         // consumed the InputState scroll earlier this frame because the settings
         // modal layer covers the full screen (top.ContainsMouse is always true),
         // so _input.IsScrollConsumed is permanently true here and wheel scrolling
-        // would never fire. maxScroll is clamped after the content is measured.
+        // would never fire. The id-keyed overload clamps to the end using last
+        // frame's content height (recorded below), so the wheel stops at the edge.
         int tabIdx = (int)_activeTab;
-        _ui.HandlePanelScroll(clipRect, ref _tabScroll[tabIdx]);
-
-        // Clamp to last frame's measured extent so a wheel notch at the bottom
-        // stops at the edge instead of overshooting and snapping back this frame.
-        float maxScrollPrev = Math.Max(0, _tabContentHeight[tabIdx] - contentH);
-        if (_tabScroll[tabIdx] > maxScrollPrev) _tabScroll[tabIdx] = maxScrollPrev;
+        _ui.HandlePanelScroll(clipRect, ref _tabScroll[tabIdx], TabScrollIds[tabIdx], contentH);
 
         int scrollOffset = (int)_tabScroll[tabIdx];
         int y = contentY - scrollOffset;
@@ -200,7 +196,7 @@ public class SettingsWindow
         }
 
         // Remember this frame's extent so next frame's wheel clamp is accurate.
-        _tabContentHeight[tabIdx] = totalContentHeight;
+        _ui.SetPanelContentHeight(TabScrollIds[tabIdx], totalContentHeight);
 
         // Clamp scroll so we don't scroll past the content
         float maxScroll = Math.Max(0, totalContentHeight - contentH);
