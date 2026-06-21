@@ -342,38 +342,65 @@ public partial class Game1
             }
         }
 
-        // --- Alt shows object names (+ animation debug for animated objects) ---
+        // --- Alt shows object names (+ animation debug for animated objects),
+        //     plus corpse names and unit names ---
         if ((_menuState == MenuState.MapEditor || _menuState == MenuState.None) && _input.IsKeyDown(Keys.LeftAlt))
         {
             _spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.PointClamp);
+
+            // Draws a centered name label at a world position, boxed for legibility.
+            // Returns silently if the position is off-screen or the label is empty.
+            void DrawWorldLabel(Vec2 world, string label, Color color)
+            {
+                if (string.IsNullOrEmpty(label)) return;
+                var sp = _renderer.WorldToScreen(world, 0f, _camera);
+                if (sp.X <= -100 || sp.X >= screenW + 100 || sp.Y <= -100 || sp.Y >= screenH + 100) return;
+                var textSize = _smallFont != null ? _smallFont.MeasureString(label) : new Vector2(label.Length * 6, 12);
+                var textPos = new Vector2((int)(sp.X - textSize.X * 0.5f), (int)(sp.Y + 4));
+                _spriteBatch.Draw(_pixel, new Rectangle((int)textPos.X - 2, (int)textPos.Y - 1, (int)textSize.X + 4, (int)textSize.Y + 2), new Color(0, 0, 0, 160));
+                if (_smallFont != null)
+                    _spriteBatch.DrawString(_smallFont, label, textPos, color);
+            }
+
             for (int oi = 0; oi < _envSystem.ObjectCount; oi++)
             {
                 if (!_envSystem.IsObjectVisible(oi)) continue;
                 var obj = _envSystem.GetObject(oi);
                 var def = _envSystem.GetDef(obj.DefIndex);
-                var sp = _renderer.WorldToScreen(new Vec2(obj.X, obj.Y), 0f, _camera);
-                // Only draw if on screen
-                if (sp.X > -100 && sp.X < screenW + 100 && sp.Y > -100 && sp.Y < screenH + 100)
+                string label = !string.IsNullOrEmpty(def.Name) ? def.Name : def.Id;
+                // Animated objects: append frame info after the name
+                if (def.IsAnimated && def.AnimTotalFrames > 1)
                 {
-                    string label = !string.IsNullOrEmpty(def.Name) ? def.Name : def.Id;
-                    // Animated objects: append frame info after the name
-                    if (def.IsAnimated && def.AnimTotalFrames > 1)
-                    {
-                        var rt = _envSystem.GetObjectRuntime(oi);
-                        int frame = Math.Clamp((int)rt.AnimTime, 0, def.AnimTotalFrames - 1);
-                        string dir = rt.AnimReversed ? "<" : ">";
-                        label = $"{label}  F{frame}/{def.AnimTotalFrames - 1} {dir}";
-                    }
-                    if (!string.IsNullOrEmpty(label))
-                    {
-                        var textSize = _smallFont != null ? _smallFont.MeasureString(label) : new Vector2(label.Length * 6, 12);
-                        var textPos = new Vector2((int)(sp.X - textSize.X * 0.5f), (int)(sp.Y + 4));
-                        _spriteBatch.Draw(_pixel, new Rectangle((int)textPos.X - 2, (int)textPos.Y - 1, (int)textSize.X + 4, (int)textSize.Y + 2), new Color(0, 0, 0, 160));
-                        if (_smallFont != null)
-                            _spriteBatch.DrawString(_smallFont, label, textPos, new Color(220, 220, 255));
-                    }
+                    var rt = _envSystem.GetObjectRuntime(oi);
+                    int frame = Math.Clamp((int)rt.AnimTime, 0, def.AnimTotalFrames - 1);
+                    string dir = rt.AnimReversed ? "<" : ">";
+                    label = $"{label}  F{frame}/{def.AnimTotalFrames - 1} {dir}";
                 }
+                DrawWorldLabel(new Vec2(obj.X, obj.Y), label, new Color(220, 220, 255));
             }
+
+            // Corpse names — what's lying around to reanimate.
+            var corpses = _sim.Corpses;
+            for (int ci = 0; ci < corpses.Count; ci++)
+            {
+                var cp = corpses[ci];
+                if (cp.ConsumedBySummon) continue;
+                var cdef = !string.IsNullOrEmpty(cp.UnitDefID) ? _gameData.Units.Get(cp.UnitDefID) : null;
+                string cname = cdef != null && cdef.DisplayName.Length > 0 ? cdef.DisplayName : cp.UnitType.ToString();
+                DrawWorldLabel(cp.Position, $"{cname} corpse", new Color(255, 220, 200));
+            }
+
+            // Unit names — living units on the field.
+            for (int ui = 0; ui < _sim.Units.Count; ui++)
+            {
+                var u = _sim.Units[ui];
+                if (!u.Alive) continue;
+                var udef = !string.IsNullOrEmpty(u.UnitDefID) ? _gameData.Units.Get(u.UnitDefID) : null;
+                string uname = udef != null && udef.DisplayName.Length > 0 ? udef.DisplayName
+                             : !string.IsNullOrEmpty(u.UnitDefID) ? u.UnitDefID : u.Type.ToString();
+                DrawWorldLabel(u.Position, uname, new Color(200, 255, 210));
+            }
+
             _spriteBatch.End();
         }
 
