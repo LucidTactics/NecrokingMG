@@ -40,6 +40,31 @@ and is wired as a `PreToolUse` / `Bash` hook in
 [.claude/settings.json](../.claude/settings.json). It holds one rule per case; adding a
 case = adding a rule there plus (usually) an `allow` entry, then a section below.
 
+## Err on denying — the escape hatch makes it safe
+
+Rules should **lean toward denying**. A too-eager deny normally risks blocking a
+command Claude genuinely needs (some shell incantation a dedicated tool can't express),
+which would be worse than the prompt we're trying to avoid. So the hook builds in an
+escape hatch, and every deny message ends with it:
+
+> *If you really cannot use another method, send the exact same command again and it
+> will prompt the user.*
+
+Mechanically: the hook stores the **last denied command** (per session, in the OS temp
+dir). When a command would be denied:
+
+- If it is **byte-identical to the just-denied command**, the hook emits `ask` instead —
+  the user gets the normal approval prompt — and clears the store.
+- Otherwise it's a first denial: store the command and deny with the hatch line.
+
+And crucially, the store is **always cleared/overwritten by any other command** — an
+allowed command clears it, a different denied command overwrites it. So the bypass only
+fires on an *immediate, deliberate* re-send; an accidental repeat later (after anything
+else has run) is treated as a fresh denial and does **not** slip through. Net effect:
+Claude is nudged hard toward the right method, but a real need is never more than one
+re-send (and one honest user prompt) away. That safety net is what lets the rules be
+broad.
+
 ## Cases handled so far
 
 ### Filesystem search & inspection — `grep` / `rg` / `find` / `cat` / `head` / `tail`
