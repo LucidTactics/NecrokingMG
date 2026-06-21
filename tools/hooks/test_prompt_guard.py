@@ -8,12 +8,17 @@ import sys
 sys.path.insert(0, os.path.dirname(__file__))
 import bash_prompt_guard as g
 
-# Use the real project allow-list so the test reflects live behavior.
+# Use the real project allow/deny lists so the test reflects live behavior.
 RULES = g._load_allow_rules()
+DENY = g._load_rules("deny")
 
 
 def ev(tool, inp, mode=""):
-    return g.evaluate(tool, inp, mode, RULES)[0]
+    return g.evaluate(tool, inp, mode, RULES, DENY)[0]
+
+
+def evb(cmd, mode=""):
+    return ev("Bash", {"command": cmd}, mode)
 
 
 def check(label, got, want):
@@ -25,24 +30,38 @@ def check(label, got, want):
 fails = 0
 
 # --- Layer 1: bash redirects (fire even though cat/grep are allow-listed) ---------
-fails += not check("bash cat -> deny", ev("Bash", {"command": "cat foo.txt"}), "deny")
-fails += not check("bash grep -> deny", ev("Bash", {"command": "grep -r x ."}), "deny")
-fails += not check("cd&&grep -> deny", ev("Bash", {"command": "cd sub && grep x f"}), "deny")
-fails += not check("grep in pipe -> not layer1 (allow-listed)",
-                   ev("Bash", {"command": "dotnet build | grep error"}), "defer")
-fails += not check("py_compile -> allow-listed defer",
-                   ev("Bash", {"command": "python -m py_compile x.py"}), "defer")
+fails += not check("bash cat -> deny", evb("cat foo.txt"), "deny")
+fails += not check("bash grep -> deny", evb("grep -r x ."), "deny")
+fails += not check("cd&&grep -> deny", evb("cd sub && grep x f"), "deny")
+fails += not check("grep in pipe -> allow (all parts allow-listed)",
+                   evb("dotnet build | grep error"), "allow")
+fails += not check("py_compile -> allow", evb("python -m py_compile x.py"), "allow")
 fails += not check("ast.parse -> deny",
-                   ev("Bash", {"command": "python -c 'import ast; ast.parse(open(1).read())'"}), "deny")
+                   evb("python -c 'import ast; ast.parse(open(1).read())'"), "deny")
 
-# --- Layer 2: bash deny-by-default vs allow-list ----------------------------------
-fails += not check("git status -> allow-listed defer", ev("Bash", {"command": "git status"}), "defer")
-fails += not check("dotnet build -> allow-listed defer",
-                   ev("Bash", {"command": "dotnet build Necroking/Necroking.csproj"}), "defer")
-fails += not check("ls -> allow-listed defer", ev("Bash", {"command": "ls -la"}), "defer")
-fails += not check("taskkill -> deny (not allow-listed)", ev("Bash", {"command": "taskkill /F /IM x.exe"}), "deny")
-fails += not check("curl random -> deny", ev("Bash", {"command": "curl https://evil.example"}), "deny")
-fails += not check("devctl -> allow-listed defer", ev("Bash", {"command": "python tools/devctl.py shot fight"}), "defer")
+# --- Layer 2: allow-listed -> force-allow; otherwise deny -------------------------
+fails += not check("git status -> allow", evb("git status"), "allow")
+fails += not check("dotnet build -> allow", evb("dotnet build Necroking/Necroking.csproj"), "allow")
+fails += not check("ls -> allow", evb("ls -la"), "allow")
+fails += not check("taskkill -> deny (not allow-listed)", evb("taskkill /F /IM x.exe"), "deny")
+fails += not check("curl random -> deny", evb("curl https://evil.example"), "deny")
+fails += not check("devctl -> allow", evb("python tools/devctl.py shot fight"), "allow")
+
+# --- Compound commands: allow only when EVERY segment is allow-listed -------------
+fails += not check("the compound that prompted -> allow",
+                   evb('cd "$CLAUDE_PROJECT_DIR"; git status -s; echo "---"; '
+                       'python -m py_compile tools/hooks/bash_prompt_guard.py && echo "COMPILE_OK"'),
+                   "allow")
+fails += not check("compound with one bad segment -> deny",
+                   evb("git status; taskkill /F /IM x.exe"), "deny")
+fails += not check("git add && commit -> allow", evb('git add -A && git commit -m "x"'), "allow")
+fails += not check("quoted semicolon stays one segment -> allow",
+                   evb('echo "a; rm -rf b"'), "allow")
+
+# --- Substitution / heredoc -> defer (not force-allowed, not denied) --------------
+fails += not check("command substitution -> defer", evb("echo $(rm -rf /)"), "defer")
+fails += not check("backtick substitution -> defer", evb("echo `whoami`"), "defer")
+fails += not check("heredoc commit -> defer", evb("git commit -F - <<'EOF'\nmsg\nEOF"), "defer")
 
 # --- Every non-Bash tool is left alone (defer), no matter what --------------------
 for tool, inp in [

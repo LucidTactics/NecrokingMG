@@ -54,15 +54,21 @@ instead. The same escape hatch applies (re-send the identical command → it pro
 nothing is ever permanently blocked. A Bash command is let through **without** a prompt
 only if it is:
 
-- already on the **permission allow-list** (`.claude/settings.json` /
-  `settings.local.json`) — the hook re-checks the allow-list so approved commands
-  (`git …`, `dotnet build …`, `ls …`, `python tools/devctl.py …`, …) pass silently and
-  run without a prompt anyway;
+- **fully allow-listed** — every sub-command of the (possibly compound) command matches
+  a permission allow rule (`.claude/settings.json` / `settings.local.json`). The hook
+  splits the command on `&&`/`||`/`;`/`|`/newlines (quote-aware) and, if *all* parts are
+  allowed, **force-allows** the whole thing so the user isn't prompted. This matters
+  because Claude's own permission system prompts on `;`-chained compounds even when each
+  part is individually allowed — e.g. `cd x; git status; echo done; python -m py_compile
+  f.py`. A command containing a substitution or heredoc (`$(…)`, `` `…` ``, `<(…)`,
+  `<<`) is **not** force-allowed — the hook can't safely tokenise it, so it defers to the
+  normal permission flow instead. Likewise, if any segment matches a `deny` rule the hook
+  won't force-allow (it respects the deny-list);
 - explicitly **whitelisted as "OK to prompt the user"** via `rule_intended_prompt(…)` —
   these are prompted *immediately* instead of bounced.
 
-Everything else (a non-allow-listed command like `taskkill …`, a raw `curl …`, …) is
-denied with the hatch.
+Everything else (a non-allow-listed command like `taskkill …`, a raw `curl …`, or a
+compound where even one segment isn't allowed) is denied with the hatch.
 
 **Aggressive by design.** This layer would rather bounce a harmless command — one
 re-send away from running — than let a needless prompt slip through. That's the point.

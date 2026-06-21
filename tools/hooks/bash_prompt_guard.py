@@ -22,8 +22,13 @@ Two layers:
      commands (e.g. `cat`), because the dedicated tool is strictly better.
 
   2. Deny-by-default — any other Bash command is thrown back UNLESS it is:
-       * already on the permission allow-list (.claude/settings*.json) — those run
-         without a prompt anyway, so they pass silently (git, dotnet build, ls, …);
+       * fully allow-listed: every sub-command of the (possibly compound) command matches
+         a permission allow rule (.claude/settings*.json). The hook splits on && || ; |
+         and newlines and force-ALLOWS the whole thing, so the user isn't prompted —
+         Claude's own permission system otherwise prompts on `;`-chained compounds even
+         when each part is individually allowed (e.g. `cd x; git status; echo done`).
+         Commands containing substitutions/heredocs ($(), ``, <(), <<) are NOT
+         force-allowed — they defer to the normal permission flow instead;
        * explicitly whitelisted as "OK to prompt the user" (rule_intended_prompt) -> the
          user is prompted immediately instead of the command being thrown back.
      Everything else -> deny with the escape hatch.
@@ -140,16 +145,17 @@ def _project_dir() -> str:
     return os.environ.get("CLAUDE_PROJECT_DIR") or os.getcwd()
 
 
-def _load_allow_rules():
-    """Merge permissions.allow from the project's settings.json + settings.local.json.
-    Returns a list of (tool, spec) where spec is None for a whole-tool allow."""
+def _load_rules(section: str):
+    """Merge permissions.<section> (allow/deny) from the project's settings.json +
+    settings.local.json. Returns a list of (tool, spec); spec is None for a whole-tool
+    rule."""
     rules = []
     base = os.path.join(_project_dir(), ".claude")
     for name in ("settings.json", "settings.local.json"):
         try:
             with open(os.path.join(base, name), encoding="utf-8") as f:
                 data = json.load(f)
-            for entry in (data.get("permissions") or {}).get("allow") or []:
+            for entry in (data.get("permissions") or {}).get(section) or []:
                 if not isinstance(entry, str):
                     continue
                 m = re.match(r"^([A-Za-z_][A-Za-z0-9_]*)\((.*)\)$", entry, re.DOTALL)
@@ -160,6 +166,56 @@ def _load_allow_rules():
         except Exception:
             pass
     return rules
+
+
+def _load_allow_rules():
+    return _load_rules("allow")
+
+
+# Shell constructs we can't safely tokenise into independent sub-commands. If a command
+# contains any of these, the hook won't force-allow it — it defers to Claude's own
+# permission system (which handles them conservatively) instead of risking a bad allow.
+#   $( ) / ` `  -> command substitution     <( ) / >( ) -> process substitution
+#   <<          -> heredoc (body would be mis-split on newlines)
+_UNSAFE = ("$(", "`", "<(", ">(", "<<")
+
+
+def _has_unsafe(cmd: str) -> bool:
+    return any(tok in cmd for tok in _UNSAFE)
+
+
+def _split_segments(cmd: str):
+    """Split a Bash command into independent sub-commands on the shell operators
+    && || ; | and newlines, respecting single/double quotes. Used only after _has_unsafe
+    has ruled out substitutions/heredocs, so a naive quote-aware scan is sufficient."""
+    segs, buf, quote, i, n = [], "", None, 0, len(cmd)
+    while i < n:
+        c = cmd[i]
+        if quote:
+            buf += c
+            if c == quote:
+                quote = None
+            i += 1
+            continue
+        if c in ('"', "'"):
+            quote = c
+            buf += c
+            i += 1
+            continue
+        if cmd[i:i + 2] in ("&&", "||"):
+            segs.append(buf)
+            buf = ""
+            i += 2
+            continue
+        if c in (";", "|", "\n"):
+            segs.append(buf)
+            buf = ""
+            i += 1
+            continue
+        buf += c
+        i += 1
+    segs.append(buf)
+    return [s.strip() for s in segs if s.strip()]
 
 
 def _spec_matches(spec: str, subject: str) -> bool:
@@ -190,8 +246,9 @@ GENERIC_DENY = (
 # Decision core (pure, unit-testable).
 # ---------------------------------------------------------------------------------
 
-def evaluate(tool_name: str, tool_input: dict, mode: str, rules):
+def evaluate(tool_name: str, tool_input: dict, mode: str, allow_rules, deny_rules=()):
     """Pre-resend verdict. Returns (kind, reason):
+       kind 'allow' -> force-allow; suppress the prompt (every sub-command is allow-listed)
        kind 'defer' -> emit nothing; let the normal permission flow decide
        kind 'ask'   -> prompt the user now (intended prompt)
        kind 'deny'  -> throw back (reason set)
@@ -208,9 +265,18 @@ def evaluate(tool_name: str, tool_input: dict, mode: str, rules):
         if reason:
             return ("deny", reason)
 
-    # Layer 2: allow-listed -> runs without a prompt anyway.
-    if _allow_listed("Bash", cmd, rules):
+    # Constructs we can't safely tokenise -> hand off to the normal permission flow.
+    if _has_unsafe(cmd):
         return ("defer", None)
+
+    # Layer 2: if EVERY sub-command of the (possibly compound) command is allow-listed,
+    # force-allow so the user isn't prompted — Claude's own permission system otherwise
+    # prompts on `;`-chained compounds even when each part is individually allowed. Never
+    # force-allow if any segment hits a `deny` rule (respect the user's deny-list).
+    segments = _split_segments(cmd)
+    if segments and not any(_allow_listed("Bash", s, deny_rules) for s in segments):
+        if all(_allow_listed("Bash", s, allow_rules) for s in segments):
+            return ("allow", None)
 
     # Agreed to be worth the user's approval -> prompt now instead of bouncing.
     intended = rule_intended_prompt(cmd)
@@ -257,7 +323,7 @@ def _clear(path: str) -> None:
 def _emit(decision: str, reason):
     out = {"hookSpecificOutput": {
         "hookEventName": "PreToolUse",
-        "permissionDecision": decision,          # 'deny' | 'ask'
+        "permissionDecision": decision,          # 'allow' | 'deny' | 'ask'
     }}
     if reason is not None:
         out["hookSpecificOutput"]["permissionDecisionReason"] = reason
@@ -280,8 +346,8 @@ def main() -> None:
         tool_input = {}
     mode = data.get("permission_mode") or ""
 
-    rules = _load_allow_rules()
-    kind, reason = evaluate(tool_name, tool_input, mode, rules)
+    kind, reason = evaluate(tool_name, tool_input, mode,
+                            _load_allow_rules(), _load_rules("deny"))
 
     state = _state_path(str(data.get("session_id") or ""))
 
@@ -299,7 +365,9 @@ def main() -> None:
 
     # Any non-deny verdict clears the store (so a later accidental repeat is fresh).
     _clear(state)
-    if kind == "ask":
+    if kind == "allow":
+        _emit("allow", None)
+    elif kind == "ask":
         _emit("ask", reason)
     # kind == "defer": print nothing, defer to the normal permission flow.
     sys.exit(0)
