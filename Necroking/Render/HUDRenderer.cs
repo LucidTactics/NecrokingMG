@@ -147,7 +147,8 @@ public partial class HUDRenderer
         SpellBarState primaryBar, SpellBarState secondaryBar,
         int spellDropdownSlot, int secondaryDropdownSlot,
         float timeScale, int hoveredObjectIdx, EnvironmentSystem envSystem,
-        Action<string, int, int> drawSpellCategoryIcon, int menuOpenMask = 0, bool paused = false)
+        Action<string, int, int> drawSpellCategoryIcon, int menuOpenMask = 0, bool paused = false,
+        int hoveredCorpseIdx = -1)
     {
         int necroIdx = FindNecromancer(sim);
 
@@ -168,6 +169,7 @@ public partial class HUDRenderer
             secondaryDropdownSlot, secondaryBar, gameData);
 
         DrawObjectTooltip(hoveredObjectIdx, envSystem, sim, gameData, screenW, screenH);
+        DrawCorpseTooltip(hoveredCorpseIdx, sim, gameData, screenW, screenH);
         // Controls hint intentionally omitted — overlapped the FPS/zoom bottom-
         // left readout. Re-enable if we add a menu page for it.
         DrawTimeControls(screenW, screenH, timeScale, gameData, paused);
@@ -601,6 +603,21 @@ public partial class HUDRenderer
         else return;
 
         DrawCursorTooltip(lines, screenW, screenH);
+    }
+
+    /// <summary>Floating cursor tooltip for the hovered corpse: unit name plus its
+    /// reanimation-relevant state (decaying / part-eaten). Gated upstream in Game1
+    /// by the ShowCorpseInfo toggle.</summary>
+    private void DrawCorpseTooltip(int hoveredCorpseIdx, Simulation sim, GameData gameData,
+        int screenW, int screenH)
+    {
+        if (hoveredCorpseIdx < 0 || hoveredCorpseIdx >= sim.Corpses.Count || _smallFont == null) return;
+
+        var cp = sim.Corpses[hoveredCorpseIdx];
+        var def = !string.IsNullOrEmpty(cp.UnitDefID) ? gameData.Units.Get(cp.UnitDefID) : null;
+        string name = def != null && def.DisplayName.Length > 0 ? def.DisplayName : cp.UnitType.ToString();
+
+        DrawCursorTooltip(new[] { $"{name} corpse" }, screenW, screenH);
     }
 
     /// <summary>Draw a small text-box tooltip anchored to the cursor, auto-sized to

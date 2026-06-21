@@ -606,6 +606,11 @@ public class SettingsWindow
         if (iInfo != t.ShowGroundItemInfo) { t.ShowGroundItemInfo = iInfo; MarkDirty(); }
         y += rowH;
 
+        // Corpse hover tooltip.
+        bool cInfo = _ui.DrawCheckbox("Show corpse info on hover", t.ShowCorpseInfo, x, y);
+        if (cInfo != t.ShowCorpseInfo) { t.ShowCorpseInfo = cInfo; MarkDirty(); }
+        y += rowH;
+
         // Pick radius for ground objects (buildings + items).
         float gpick = _ui.DrawSliderFloat("set_tip_groundpick", "Ground Pick Radius", t.GroundPickRadius, 0.5f, 6f, x, y, w);
         if (MathF.Abs(gpick - t.GroundPickRadius) > 0.0001f) { t.GroundPickRadius = gpick; MarkDirty(); }

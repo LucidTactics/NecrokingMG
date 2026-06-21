@@ -266,6 +266,10 @@ public class TooltipsSettings
     /// hovering a foragable item lying on the ground.</summary>
     [JsonPropertyName("showGroundItemInfo")] public bool ShowGroundItemInfo { get; set; } = true;
 
+    /// <summary>Show a floating info tooltip (unit name, state) when hovering a
+    /// corpse lying on the ground — useful for spotting what's reanimatable.</summary>
+    [JsonPropertyName("showCorpseInfo")] public bool ShowCorpseInfo { get; set; } = true;
+
     /// <summary>Cursor pick radius (world units) for hovering ground objects —
     /// buildings and foragable items. Buildings are large so this is a bit
     /// wider than the unit pick radius by default.</summary>

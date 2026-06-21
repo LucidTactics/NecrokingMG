@@ -532,7 +532,7 @@ public partial class Game1
             _spellBarState, _secondaryBarState,
             _spellDropdownSlot, _secondaryDropdownSlot,
             _timeScale, _hoveredObjectIdx, _envSystem,
-            DrawSpellCategoryIcon, BuildMenuOpenMask(), _paused);
+            DrawSpellCategoryIcon, BuildMenuOpenMask(), _paused, _hoveredCorpseIdx);
     }
 
     /// <summary>Bitmask of which core menus are open, by HUDRenderer.Menu* index,

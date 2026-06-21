@@ -251,6 +251,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     private int _channelingSlot = -1;
     private readonly Dictionary<string, Texture2D?> _itemTextureCache = new();
     private int _hoveredObjectIdx = -1;
+    private int _hoveredCorpseIdx = -1;
     private KeyboardState _prevKb;
     private MouseState _prevMouse;
     private float _rawDt;
@@ -2680,6 +2681,30 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
                         float hdx = obj.X - mouseWorld.X, hdy = obj.Y - mouseWorld.Y;
                         float hd = hdx * hdx + hdy * hdy;
                         if (hd < bhd) { bhd = hd; _hoveredObjectIdx = oi; }
+                    }
+                }
+            }
+
+            // --- Corpse hover detection (for the reanimation info tooltip) ---
+            // Picks the nearest corpse under the cursor. Same gating as ground
+            // objects: opt-in toggle + suppressed over UI. Skips bodies that are
+            // mid-dissolve, consumed, bagged, or being carried (not pickable).
+            _hoveredCorpseIdx = -1;
+            {
+                var tcfg = _gameData.Settings.Tooltips;
+                if (tcfg.ShowCorpseInfo && !_input.MouseOverUI)
+                {
+                    float pr = tcfg.GroundPickRadius;
+                    float bcd = pr * pr;
+                    var corpses = _sim.Corpses;
+                    for (int ci = 0; ci < corpses.Count; ci++)
+                    {
+                        var cp = corpses[ci];
+                        if (cp.ConsumedBySummon || cp.Dissolving || cp.Bagged
+                            || cp.DraggedByUnitID != GameConstants.InvalidUnit) continue;
+                        float cdx = cp.Position.X - mouseWorld.X, cdy = cp.Position.Y - mouseWorld.Y;
+                        float cd = cdx * cdx + cdy * cdy;
+                        if (cd < bcd) { bcd = cd; _hoveredCorpseIdx = ci; }
                     }
                 }
             }
