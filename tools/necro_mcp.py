@@ -153,14 +153,21 @@ def call_tool(name, args):
         opts = {}
         if args.get("no_ui"):
             opts["no_ui"] = True
-        if args.get("no_ground"):
+        no_ground = bool(args.get("no_ground"))
+        if no_ground:
             opts["no_ground"] = True
         opts["downsample_to"] = "full" if args.get("full") else (args.get("size") or "640x360")
         shot_name = args.get("name") or "mcp_shot"
         path = dev.screenshot(shot_name, opts)
         with open(path, "rb") as f:
             b64 = base64.b64encode(f.read()).decode()
-        return _result(text=f"screenshot saved: {path}", image_b64=b64)
+        text = f"screenshot saved: {path}"
+        # The terrain helps a human read the scene but is visual noise for a model.
+        # When it's still on, nudge toward dropping it if the subject is hard to see.
+        if not no_ground:
+            text += ("\nhint: if the thing you're checking is hard to see against the "
+                     "terrain, re-shoot with no_ground=true to drop ground+grass.")
+        return _result(text=text, image_b64=b64)
 
     if name == "necro_restart":
         dev.ensure_supervisor()

@@ -4729,7 +4729,7 @@
       "primaryLevel": 0,
       "secondaryPath": "",
       "secondaryLevel": 0,
-      "cooldown": 5,
+      "cooldown": 0,
       "castTime": 0,
       "castingBuffID": "",
       "castAnim": "Spell1",

@@ -254,6 +254,13 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     private PendingCastAnim? _pendingCastAnim;
     private SpellBarState _spellBarState = new();
     private SpellBarState _secondaryBarState = new();
+
+    // Per-slot "just activated" flash timers (seconds remaining), decayed in real
+    // time. Set when a slot successfully fires a spell; the HUD draws a fading
+    // highlight so a keypress visibly lights up its hotbar slot. Duration is owned
+    // by HUDRenderer.SlotFlashDuration (single source of truth for the fade math).
+    private readonly float[] _primarySlotFlash = new float[4];
+    private readonly float[] _secondarySlotFlash = new float[6];
     private int _spellDropdownSlot = -1;
     private int _secondaryDropdownSlot = -1;
     private int _channelingSlot = -1;
@@ -1962,6 +1969,13 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         float dt = _paused ? 0f : MathF.Min(rawDt, 1f / 20f) * _timeScale;
         _gameTime += dt;
         _frameDt = dt;
+
+        // Decay spell-bar activation flashes in REAL time (rawDt) so the press
+        // feedback fades consistently regardless of game pause/speed.
+        for (int i = 0; i < _primarySlotFlash.Length; i++)
+            if (_primarySlotFlash[i] > 0f) _primarySlotFlash[i] = MathF.Max(0f, _primarySlotFlash[i] - rawDt);
+        for (int i = 0; i < _secondarySlotFlash.Length; i++)
+            if (_secondarySlotFlash[i] > 0f) _secondarySlotFlash[i] = MathF.Max(0f, _secondarySlotFlash[i] - rawDt);
 
         // Step the active dev batch script (if any) over the same sim/real clock a
         // scenario's OnTick uses, so scripted waits + screenshots land deterministically.

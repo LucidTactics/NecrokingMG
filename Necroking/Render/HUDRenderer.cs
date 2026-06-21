@@ -117,6 +117,13 @@ public partial class HUDRenderer
     private static readonly Color MaterialColor = new(200, 160, 255);
     private static readonly Color PotionQtyColor = new(255, 255, 200);
     private static readonly Color PotionEmptyColor = new(100, 100, 100, 120);
+    // Spell-slot activation flash (warm gold) — interior wash + bright frame edges,
+    // scaled by the remaining flash fraction so it fades out smoothly. Public so the
+    // cast dispatch sets the timer with the SAME duration the draw normalizes by —
+    // one source of truth, otherwise the fade math drifts and it reads "stuck on".
+    public const float SlotFlashDuration = 0.35f;
+    private static readonly Color SlotFlashColor = new(255, 225, 130, 150);
+    private static readonly Color SlotFlashEdge = new(255, 240, 180, 230);
 
     // Dependencies (set via Init)
     private SpriteBatch _batch = null!;
@@ -148,7 +155,7 @@ public partial class HUDRenderer
         int spellDropdownSlot, int secondaryDropdownSlot,
         float timeScale, int hoveredObjectIdx, EnvironmentSystem envSystem,
         Action<string, int, int> drawSpellCategoryIcon, int menuOpenMask = 0, bool paused = false,
-        int hoveredCorpseIdx = -1)
+        int hoveredCorpseIdx = -1, float[]? primaryFlash = null, float[]? secondaryFlash = null)
     {
         int necroIdx = FindNecromancer(sim);
 
@@ -156,11 +163,11 @@ public partial class HUDRenderer
 
         int primaryY = screenH - PrimaryBarBottomOffset;
         DrawSpellBar(screenW, primaryY, PrimarySlotW, PrimarySlotH, PrimaryBarOffsetX,
-            new[] { "Q", "E", "LC", "RC" }, primaryBar, sim, gameData, inventory, drawSpellCategoryIcon);
+            new[] { "Q", "E", "LC", "RC" }, primaryBar, sim, gameData, inventory, drawSpellCategoryIcon, primaryFlash);
 
         int secondaryY = primaryY - SecondarySlotH - SecondaryBarGap;
         DrawSpellBar(screenW, secondaryY, SecondarySlotW, SecondarySlotH, SecondaryBarOffsetX,
-            new[] { "1", "2", "3", "4", "5", "6" }, secondaryBar, sim, gameData, inventory, drawSpellCategoryIcon);
+            new[] { "1", "2", "3", "4", "5", "6" }, secondaryBar, sim, gameData, inventory, drawSpellCategoryIcon, secondaryFlash);
 
         // Draw all dropdowns after all bars so they render on top
         DrawSpellDropdown(screenW, primaryY, PrimarySlotW, PrimaryBarOffsetX,
@@ -319,7 +326,7 @@ public partial class HUDRenderer
 
     private void DrawSpellBar(int screenW, int barY, int slotW, int slotH, int centerOffset,
         string[] keys, SpellBarState bar, Simulation sim, GameData gameData,
-        Inventory inventory, Action<string, int, int> drawCategoryIcon)
+        Inventory inventory, Action<string, int, int> drawCategoryIcon, float[]? flash = null)
     {
         bool isSecondary = slotW < PrimarySlotW;
 
@@ -348,6 +355,21 @@ public partial class HUDRenderer
 
             if (hovered)
                 _batch.Draw(_pixel, inner, Color.White * 0.12f);
+
+            // Activation flash: a slot that just fired lights up and fades out, so a
+            // keypress (or click) gives immediate visual confirmation. Drawn over the
+            // icon but under the cooldown sweep so the sweep still reads on top.
+            if (flash != null && s < flash.Length && flash[s] > 0f)
+            {
+                float t = MathF.Min(flash[s] / SlotFlashDuration, 1f); // 1 → 0 as it fades
+                _batch.Draw(_pixel, inner, SlotFlashColor * t);
+                // Bright frame edges so it pops even on a busy icon.
+                var edge = SlotFlashEdge * t;
+                _batch.Draw(_pixel, new Rectangle(slot.X, slot.Y, slot.Width, 2), edge);
+                _batch.Draw(_pixel, new Rectangle(slot.X, slot.Bottom - 2, slot.Width, 2), edge);
+                _batch.Draw(_pixel, new Rectangle(slot.X, slot.Y, 2, slot.Height), edge);
+                _batch.Draw(_pixel, new Rectangle(slot.Right - 2, slot.Y, 2, slot.Height), edge);
+            }
 
             // Cooldown sweep (over the icon interior).
             if (spell != null)

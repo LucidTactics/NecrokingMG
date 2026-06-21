@@ -243,19 +243,29 @@ public partial class Game1 {
    /// ability intercepts (melee_gather, poison_berries_*) before falling
    /// through to the normal SpellCaster + casting-buff + pending-anim pipeline.
    /// Returns the cast result so callers can react (e.g. LMB melee fallback).</summary>
+   /// <summary>Light up a hotbar slot for SlotFlashDuration so a fired spell gives
+   /// immediate visual feedback. Decayed in real time in Update; drawn by the HUD.</summary>
+   void FlashSpellSlot(int slot, bool isSecondary) {
+      var arr = isSecondary ? _secondarySlotFlash : _primarySlotFlash;
+      if (slot >= 0 && slot < arr.Length) arr[slot] = HUDRenderer.SlotFlashDuration;
+   }
+
    CastResult DispatchSpellCast(string spellId, int necroIdx, int slot,
       Vec2 mouseWorld, bool isSecondary) {
       if (string.IsNullOrEmpty(spellId) || necroIdx < 0) return CastResult.NoValidTarget;
 
       // Built-in abilities short-circuit the normal spell pipeline.
-      if (TryDispatchBuiltinAbility(spellId, necroIdx, mouseWorld))
+      if (TryDispatchBuiltinAbility(spellId, necroIdx, mouseWorld)) {
+         FlashSpellSlot(slot, isSecondary);
          return CastResult.Success;
+      }
 
       // Potion-spells (ConsumesItem set) run through the existing PotionSystem
       // throw/drink path + inventory consume, not the normal spell pipeline.
       var spellDef = _gameData.Spells.Get(spellId);
       if (spellDef != null && !string.IsNullOrEmpty(spellDef.ConsumesItem)) {
          CastPotionSpell(spellId, spellDef.ConsumesItem, necroIdx, mouseWorld);
+         FlashSpellSlot(slot, isSecondary);
          return CastResult.Success;
       }
 
@@ -267,6 +277,9 @@ public partial class Game1 {
       if (result == CastResult.HordeCapFull)
          SpawnHordeCapText(necroIdx);
       if (result != CastResult.Success) return result;
+
+      // Successful real-spell cast → light up its hotbar slot.
+      FlashSpellSlot(slot, isSecondary);
 
       // Tally a player spell cast for the skill-book milestone (mirrors the
       // monster_kill / human_kill counters). Magic-tree skills cost "cast_spell"
