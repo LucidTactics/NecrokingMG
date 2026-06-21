@@ -1,23 +1,49 @@
 #!/usr/bin/env python3
-"""PreToolUse hook (Bash): redirect commands to whitelisted, no-prompt alternatives so
-the user isn't asked to approve things that shouldn't need it.
+"""PreToolUse hook: keep Bash calls from needlessly prompting the user.
 
-Posture: ERR ON DENYING. Every deny ends with an escape hatch — re-sending the EXACT
-same command immediately lets it through to a normal user prompt. Because that hatch
-always exists, a rule can be broad/aggressive without ever permanently blocking a
+Scope: this hook governs **Bash only** (see DENY_DEFAULT_TOOLS). Every other tool —
+file edits, MCP tools, WebFetch, Skill, the dev-preview tools, … — is left completely
+alone and follows the normal permission flow. Bash is where the needless prompts come
+from, so it's the only culprit gated for now. If another tool turns out to be a similar
+culprit later, add its name to DENY_DEFAULT_TOOLS (and widen the `matcher` in
+.claude/settings.json if it isn't already `*`) — that's the one place to extend.
+
+Posture for Bash: DENY BY DEFAULT, and AGGRESSIVE BY DESIGN. Any Bash command that
+would pop a user-approval prompt is thrown back to Claude instead — with an escape
+hatch: re-sending the EXACT same command lets it through to a normal prompt. Because the
+hatch always exists, the default can be broad without ever permanently blocking a
 genuinely-needed command. See docs/avoid-prompting-user.md.
+
+Two layers:
+
+  1. Bash special-cases — targeted redirects that point Claude at a no-prompt
+     alternative for a specific job: filesystem search -> Grep/Glob/Read; hand-rolled
+     syntax check -> `python -m py_compile`. These fire even on otherwise allow-listed
+     commands (e.g. `cat`), because the dedicated tool is strictly better.
+
+  2. Deny-by-default — any other Bash command is thrown back UNLESS it is:
+       * already on the permission allow-list (.claude/settings*.json) — those run
+         without a prompt anyway, so they pass silently (git, dotnet build, ls, …);
+       * explicitly whitelisted as "OK to prompt the user" (rule_intended_prompt) -> the
+         user is prompted immediately instead of the command being thrown back.
+     Everything else -> deny with the escape hatch.
+
+It would rather bounce a harmless command (one re-send away from running) than let a
+needless prompt through. When that gets in the way, the fix is to add an `allow` rule,
+a special-case redirect, or a `rule_intended_prompt` branch — don't be shy; that's the
+intended way to tune it.
 
 Re-send bypass (state machine):
   * The last denied command is stored (per session, in the OS temp dir).
-  * If the very next Bash command is byte-identical to it, the hook emits `ask` so the
-    user is prompted, and clears the stored command.
-  * ANY other command — one that's allowed, OR a different command that's denied —
-    clears/overwrites the stored command. So an accidental later repeat of a denied
-    command does NOT silently slip through; only an *immediate* deliberate re-send does.
+  * If the very next Bash command is byte-identical to it, the hook emits `ask` (normal
+    prompt) and clears the store.
+  * ANY other Bash command clears/overwrites the store, so only an *immediate*
+    deliberate re-send slips through; a later accidental repeat is a fresh denial.
 
-Output: print a deny/ask JSON to act; print nothing to allow. Any error -> allow (never
-wedge the Bash tool on a hook bug).
+Output: print a deny/ask JSON to act; print nothing (exit 0) to defer to the normal
+permission flow. Any error -> exit 0 (never wedge the tool on a hook bug).
 """
+import fnmatch
 import hashlib
 import json
 import os
@@ -25,9 +51,16 @@ import re
 import sys
 import tempfile
 
+# Tools subject to deny-by-default. Add a tool here (and ensure the settings.json
+# `matcher` covers it) if it becomes a culprit like Bash.
+DENY_DEFAULT_TOOLS = {"Bash"}
+
 RESEND_HINT = ("\n\nIf you really cannot use another method, send the exact same command "
                "again and it will prompt the user.")
 
+# ---------------------------------------------------------------------------------
+# Layer 1: Bash special-case redirects.
+# ---------------------------------------------------------------------------------
 
 def leading_command(cmd: str) -> str:
     """The first bare command token, after peeling any `cd <path> &&` prefixes and a
@@ -83,40 +116,117 @@ def rule_python_validate(cmd: str):
     return None
 
 
-RULES = (rule_search, rule_python_validate)
+BASH_RULES = (rule_search, rule_python_validate)
 
 
-def decide(cmd: str, last: str):
-    """Pure decision core (no IO, so it's unit-testable).
+def rule_intended_prompt(cmd: str):
+    """Layer-2 whitelist: Bash commands we've AGREED should reach the user as a normal
+    prompt rather than be thrown back. Return a short reason string to prompt, or None.
 
-    Returns (action, new_last, reason):
-      action   : 'allow' | 'deny' | 'ask'
-      new_last : the command to remember as "last denied" ("" = clear the store)
-      reason   : message for deny/ask (None for allow)
+    Starts empty on purpose — "for now it blocks everything that would go to the user".
+    Add a branch as cases come up that genuinely warrant the user's approval, e.g.:
+
+        if leading_command(cmd) == "git" and " push" in cmd:
+            return "git push needs your sign-off."
     """
-    reason = None
-    for rule in RULES:
+    return None
+
+
+# ---------------------------------------------------------------------------------
+# Layer 2: permission allow-list matching (so already-approved commands pass silently).
+# ---------------------------------------------------------------------------------
+
+def _project_dir() -> str:
+    return os.environ.get("CLAUDE_PROJECT_DIR") or os.getcwd()
+
+
+def _load_allow_rules():
+    """Merge permissions.allow from the project's settings.json + settings.local.json.
+    Returns a list of (tool, spec) where spec is None for a whole-tool allow."""
+    rules = []
+    base = os.path.join(_project_dir(), ".claude")
+    for name in ("settings.json", "settings.local.json"):
+        try:
+            with open(os.path.join(base, name), encoding="utf-8") as f:
+                data = json.load(f)
+            for entry in (data.get("permissions") or {}).get("allow") or []:
+                if not isinstance(entry, str):
+                    continue
+                m = re.match(r"^([A-Za-z_][A-Za-z0-9_]*)\((.*)\)$", entry, re.DOTALL)
+                if m:
+                    rules.append((m.group(1), m.group(2)))
+                else:
+                    rules.append((entry, None))
+        except Exception:
+            pass
+    return rules
+
+
+def _spec_matches(spec: str, subject: str) -> bool:
+    glob = spec[:-2] + "*" if spec.endswith(":*") else spec   # `git:*` -> `git*`
+    if fnmatch.fnmatch(subject, glob):
+        return True
+    prefix = spec[:-2] if spec.endswith(":*") else spec.rstrip("*")
+    return bool(prefix) and subject.strip().startswith(prefix.strip())
+
+
+def _allow_listed(tool_name: str, subject: str, rules) -> bool:
+    for rt, spec in rules:
+        if rt != tool_name:
+            continue
+        if spec is None or _spec_matches(spec, subject):
+            return True
+    return False
+
+
+GENERIC_DENY = (
+    "This Bash command isn't on the no-prompt allow-list, so it would ask the user to "
+    "approve it. The hook blocks Bash prompts by default (deny-by-default; see "
+    "docs/avoid-prompting-user.md). Prefer a dedicated tool or an allow-listed command "
+    "for this job."
+)
+
+# ---------------------------------------------------------------------------------
+# Decision core (pure, unit-testable).
+# ---------------------------------------------------------------------------------
+
+def evaluate(tool_name: str, tool_input: dict, mode: str, rules):
+    """Pre-resend verdict. Returns (kind, reason):
+       kind 'defer' -> emit nothing; let the normal permission flow decide
+       kind 'ask'   -> prompt the user now (intended prompt)
+       kind 'deny'  -> throw back (reason set)
+    """
+    # Explicit modes own their own gating; only Bash is governed.
+    if mode in ("bypassPermissions", "plan") or tool_name not in DENY_DEFAULT_TOOLS:
+        return ("defer", None)
+
+    cmd = str(tool_input.get("command", ""))
+
+    # Layer 1: special-case redirects (fire even when allow-listed).
+    for rule in BASH_RULES:
         reason = rule(cmd)
         if reason:
-            break
+            return ("deny", reason)
 
-    if reason is None:
-        # Allowed → forget any pending denied command (a stale match must never slip a
-        # later accidental repeat through).
-        return ("allow", "", None)
+    # Layer 2: allow-listed -> runs without a prompt anyway.
+    if _allow_listed("Bash", cmd, rules):
+        return ("defer", None)
 
-    if last.strip() and cmd.strip() == last.strip():
-        # Immediate, deliberate re-send of the just-denied command → let the user
-        # approve it, and clear the store.
-        return ("ask", "", "Re-sent unchanged after a redirect — asking you to approve.")
+    # Agreed to be worth the user's approval -> prompt now instead of bouncing.
+    intended = rule_intended_prompt(cmd)
+    if intended:
+        return ("ask", intended)
 
-    # First time we've seen this denied command → remember it and deny with the hatch.
-    return ("deny", cmd.strip(), reason + RESEND_HINT)
+    # Default: throw it back.
+    return ("deny", GENERIC_DENY)
 
+
+# ---------------------------------------------------------------------------------
+# State store (per session) for the immediate-resend bypass.
+# ---------------------------------------------------------------------------------
 
 def _state_path(session_id: str) -> str:
-    key = session_id or hashlib.sha1(
-        (os.environ.get("CLAUDE_PROJECT_DIR") or os.getcwd()).encode()).hexdigest()[:12]
+    key = session_id or hashlib.sha1(_project_dir().encode()).hexdigest()[:12]
     safe = re.sub(r"[^A-Za-z0-9_.-]", "_", key)[:64]
     return os.path.join(tempfile.gettempdir(), f"bash_guard_last_denied_{safe}.txt")
 
@@ -144,36 +254,54 @@ def _clear(path: str) -> None:
         pass
 
 
+def _emit(decision: str, reason):
+    out = {"hookSpecificOutput": {
+        "hookEventName": "PreToolUse",
+        "permissionDecision": decision,          # 'deny' | 'ask'
+    }}
+    if reason is not None:
+        out["hookSpecificOutput"]["permissionDecisionReason"] = reason
+    print(json.dumps(out))
+
+
 def main() -> None:
     try:
         data = json.load(sys.stdin)
     except Exception:
         sys.exit(0)  # unparseable input -> don't block
 
-    cmd = (data.get("tool_input") or {}).get("command", "")
-    if not isinstance(cmd, str) or not cmd.strip():
+    tool_name = data.get("tool_name") or ""
+    # Fast path: tools this hook doesn't govern are left entirely alone.
+    if tool_name not in DENY_DEFAULT_TOOLS:
         sys.exit(0)
+
+    tool_input = data.get("tool_input")
+    if not isinstance(tool_input, dict):
+        tool_input = {}
+    mode = data.get("permission_mode") or ""
+
+    rules = _load_allow_rules()
+    kind, reason = evaluate(tool_name, tool_input, mode, rules)
 
     state = _state_path(str(data.get("session_id") or ""))
-    action, new_last, reason = decide(cmd, _read(state))
 
-    # Persist the decision's view of the store FIRST, so it's correct even if the
-    # command is later denied at the prompt.
-    if new_last:
-        _write(state, new_last)
-    else:
-        _clear(state)
-
-    if action == "allow":
+    if kind == "deny":
+        last = _read(state)
+        ident = str(tool_input.get("command", "")).strip()
+        if last.strip() and ident == last.strip():
+            # Immediate, deliberate re-send -> let the user approve, clear the store.
+            _clear(state)
+            _emit("ask", "Re-sent unchanged after a redirect — asking you to approve.")
+        else:
+            _write(state, ident)
+            _emit("deny", reason + RESEND_HINT)
         sys.exit(0)
 
-    print(json.dumps({
-        "hookSpecificOutput": {
-            "hookEventName": "PreToolUse",
-            "permissionDecision": action,  # 'deny' or 'ask'
-            "permissionDecisionReason": reason,
-        }
-    }))
+    # Any non-deny verdict clears the store (so a later accidental repeat is fresh).
+    _clear(state)
+    if kind == "ask":
+        _emit("ask", reason)
+    # kind == "defer": print nothing, defer to the normal permission flow.
     sys.exit(0)
 
 

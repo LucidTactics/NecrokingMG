@@ -37,8 +37,52 @@ Reminding Claude only works if there's somewhere better to send it. So every cas
 
 The hook lives at [tools/hooks/bash_prompt_guard.py](../tools/hooks/bash_prompt_guard.py)
 and is wired as a `PreToolUse` / `Bash` hook in
-[.claude/settings.json](../.claude/settings.json). It holds one rule per case; adding a
-case = adding a rule there plus (usually) an `allow` entry, then a section below.
+[.claude/settings.json](../.claude/settings.json). It governs **Bash only** — Bash is
+where the needless prompts come from; every other tool (file edits, MCP, WebFetch,
+Skill, the dev-preview tools, …) is left completely alone and follows the normal
+permission flow. The hook has two layers: the targeted redirects below (Layer 1) and a
+deny-by-default for Bash (Layer 2, see next section). Adding a Layer-1 case = adding a
+rule there plus (usually) an `allow` entry, then a section below. Behavior is covered by
+[tools/hooks/test_prompt_guard.py](../tools/hooks/test_prompt_guard.py)
+(`python3 tools/hooks/test_prompt_guard.py`) — run it after touching the hook.
+
+## Layer 2: deny Bash by default — block any Bash command that would prompt
+
+On top of the targeted redirects, the hook **denies Bash by default**: any Bash command
+that would otherwise reach the user as an approval prompt is thrown back to Claude
+instead. The same escape hatch applies (re-send the identical command → it prompts), so
+nothing is ever permanently blocked. A Bash command is let through **without** a prompt
+only if it is:
+
+- already on the **permission allow-list** (`.claude/settings.json` /
+  `settings.local.json`) — the hook re-checks the allow-list so approved commands
+  (`git …`, `dotnet build …`, `ls …`, `python tools/devctl.py …`, …) pass silently and
+  run without a prompt anyway;
+- explicitly **whitelisted as "OK to prompt the user"** via `rule_intended_prompt(…)` —
+  these are prompted *immediately* instead of bounced.
+
+Everything else (a non-allow-listed command like `taskkill …`, a raw `curl …`, …) is
+denied with the hatch.
+
+**Aggressive by design.** This layer would rather bounce a harmless command — one
+re-send away from running — than let a needless prompt slip through. That's the point.
+The cost is that it *will* occasionally get in the way. **When it does, fix the hook.**
+The usual fix is an `allow` rule in `.claude/settings.json` (so the command passes
+silently) or a `rule_intended_prompt` branch (so it prompts immediately instead of being
+bounced). Don't be shy about adding these — it's the intended tuning mechanism, not a
+sign something's broken.
+
+**Other culprits later.** Only Bash is gated for now. If another tool turns out to be a
+similar culprit, add its name to `DENY_DEFAULT_TOOLS` in the hook (and widen the
+`matcher` in `.claude/settings.json` to include it) — that's the single extension point.
+File edits are the canonical example of a tool you should *never* gate this way: a file
+edit has no no-prompt alternative, so bouncing one is pointless friction.
+
+**Growing the whitelist.** `rule_intended_prompt` starts empty on purpose — *for now it
+blocks everything that would go to the user*. As cases come up that we agree genuinely
+warrant the user's approval, add a branch there so they prompt immediately. When
+`bypassPermissions` or `plan` mode is active the hook defers entirely — those modes own
+their own gating.
 
 ## Err on denying — the escape hatch makes it safe
 

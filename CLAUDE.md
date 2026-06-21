@@ -394,8 +394,14 @@ Try to avoid using multi bash commands like cs XXX && git info, they force unnec
 through the Bash tool, and prefer the `Read` tool over `cat`/`head`/`tail`.** The
 dedicated tools integrate with the permission UI (no per-command confirmation
 prompts), return clickable file links, and are faster. Only drop to a Bash search
-script when a dedicated tool genuinely can't do the job. A `PreToolUse` hook now
-**enforces** this (leading `grep`/`find`/`cat`/… is denied with a reminder) — see
+script when a dedicated tool genuinely can't do the job. A `PreToolUse` / `Bash` hook now
+**enforces** this (leading `grep`/`find`/`cat`/… is denied with a reminder). That same
+hook also runs **deny-by-default on Bash** (aggressive by design): any Bash command that
+would otherwise prompt the user for approval is thrown back (re-send the identical
+command to actually prompt). Allow-listed commands pass through silently. The hook
+governs **Bash only** — all other tools (edits, MCP, WebFetch, …) follow the normal
+permission flow untouched. When the aggression gets in the way, the fix is to add an
+`allow` rule or a `rule_intended_prompt` branch (don't be shy). See
 [docs/avoid-prompting-user.md](docs/avoid-prompting-user.md) - How to avoid prompting
 the user (whitelisted methods + reminder hooks; the pattern for killing needless
 approval prompts).
