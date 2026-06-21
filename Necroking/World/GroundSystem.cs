@@ -80,7 +80,7 @@ public class GroundSystem
     }
 
     public float TypeWarpStrength = 1.8f;
-    public float UvWarpAmp = 0.4f;
+    public float UvWarpAmp = 0.1f;
     public float UvWarpFreq = 0.15f;
     public int DebugMode = 0;
 
