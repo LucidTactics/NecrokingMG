@@ -214,6 +214,14 @@ public class MapEditorWindow
     private int _unitListItemH = 22;
     private int _unitListVisibleCount;
 
+    // When the editor is entered via a mouse click (e.g. the pause-menu "Map
+    // Editor" button), that same click would otherwise bubble straight into the
+    // world and place/paint at the cursor — the editor tracks its own _prevMouse,
+    // which is stale (released) while the menu is up, so it reads the held button
+    // as a fresh press. Set by SuppressClicksUntilRelease(); cleared once both
+    // buttons are up so the entry click is ignored entirely.
+    private bool _suppressClicksUntilRelease;
+
     // Save/Load
     private string _mapFilename = "default";
     private string _statusMessage = "";
@@ -499,6 +507,11 @@ public class MapEditorWindow
         _wallEditor?.SetMapFilename(name);
     }
 
+    /// <summary>Ignore world interaction until the mouse buttons are released. Call
+    /// when the editor is opened via a click so that click doesn't bubble into the
+    /// world (place a unit, paint ground, etc.) on the entry frame.</summary>
+    public void SuppressClicksUntilRelease() => _suppressClicksUntilRelease = true;
+
     /// <summary>
     /// Set the grass data arrays for the editor to manipulate.
     /// </summary>
@@ -611,6 +624,18 @@ public class MapEditorWindow
         var mouse = _eb._input.Mouse;
         var kb = _eb._input.Kb;
         float dt = 1f / 60f; // fixed timestep assumption
+
+        // Swallow the click that opened the editor: until both buttons release,
+        // skip all world interaction so the entry click can't place/paint.
+        if (_suppressClicksUntilRelease)
+        {
+            if (mouse.LeftButton == ButtonState.Released && mouse.RightButton == ButtonState.Released)
+                _suppressClicksUntilRelease = false;
+            _prevMouse = mouse;
+            _prevKb = kb;
+            _prevScrollValue = mouse.ScrollWheelValue;
+            return;
+        }
 
         // If wall editor overlay is open, skip normal input processing
         if (_wallEditor != null && _wallEditor.IsOpen)
