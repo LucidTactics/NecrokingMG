@@ -17,6 +17,15 @@ in-process dev listener (Necroking/Dev/DevServer.cs, enabled with --devserver).
 
     Claude  --curl-->  this supervisor (:8777)  --proxy-->  game (:8778)
 
+OWNERSHIP / NO ORPHANS: this supervisor fully owns every game process it starts.
+On Windows the game is put in a Job Object with KILL_ON_JOB_CLOSE (_assign_to_job),
+so when the supervisor exits — clean shutdown, Ctrl-C, OR a hard kill (e.g.
+preview_stop) — the OS kills the game with it. Stop the server and the game is
+gone too; there is never an orphaned game to hunt for. Because of this guarantee
+the game runs hidden: headless launches drop the (off-screen) window's taskbar
+button (Necroking/Core/WindowChrome.cs), so a supervisor-owned game doesn't show
+in the Windows taskbar. To watch it run, start it windowed ({"windowed":true}).
+
 Run it (typically in the background):
 
     python tools/devserver.py            # serves on :8777, game on :8778
@@ -40,6 +49,7 @@ Game commands currently understood (see ExecuteDevCommand in Game1.cs):
     camera <x> <y> [zoom] | speed <n> | pause | resume | screenshot [name]
 """
 
+import ctypes
 import json
 import os
 import subprocess
@@ -48,6 +58,9 @@ import time
 import urllib.parse
 import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+if os.name == "nt":
+    from ctypes import wintypes
 
 SUPERVISOR_PORT = 8777
 GAME_PORT = 8778
@@ -161,6 +174,66 @@ _game_proc = None          # subprocess.Popen | None
 _last_build = None         # dict | None
 _pinned_frame = None       # bytes | None — frozen A/B snapshot (survives restart)
 _pinned_label = ""         # str — caption shown above the pinned view
+_job = None                # Windows Job handle (kill-on-close) — see _assign_to_job
+
+
+def _assign_to_job(proc):
+    """Put the game process in a Windows Job Object with KILL_ON_JOB_CLOSE. The
+    job handle is held by THIS supervisor; when the supervisor dies — even on a
+    hard TerminateProcess where no finally/atexit runs — the OS closes the handle
+    and kills the game with it. That's what makes 'kill the server -> the game
+    dies too, no orphans' hold unconditionally, so the off-screen game window can
+    safely be hidden from the taskbar. Best-effort: any failure (or non-Windows)
+    just leaves the existing stop_game()/finally path as the cleanup."""
+    global _job
+    if os.name != "nt":
+        return
+    try:
+        k32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        if _job is None:
+            k32.CreateJobObjectW.restype = wintypes.HANDLE
+            k32.CreateJobObjectW.argtypes = [wintypes.LPVOID, wintypes.LPCWSTR]
+            job = k32.CreateJobObjectW(None, None)
+            if not job:
+                return
+
+            class BASIC(ctypes.Structure):
+                _fields_ = [
+                    ("PerProcessUserTimeLimit", ctypes.c_int64),
+                    ("PerJobUserTimeLimit", ctypes.c_int64),
+                    ("LimitFlags", wintypes.DWORD),
+                    ("MinimumWorkingSetSize", ctypes.c_size_t),
+                    ("MaximumWorkingSetSize", ctypes.c_size_t),
+                    ("ActiveProcessLimit", wintypes.DWORD),
+                    ("Affinity", ctypes.c_size_t),
+                    ("PriorityClass", wintypes.DWORD),
+                    ("SchedulingClass", wintypes.DWORD),
+                ]
+
+            class EXT(ctypes.Structure):
+                _fields_ = [
+                    ("BasicLimitInformation", BASIC),
+                    ("IoInfo", ctypes.c_uint64 * 6),
+                    ("ProcessMemoryLimit", ctypes.c_size_t),
+                    ("JobMemoryLimit", ctypes.c_size_t),
+                    ("PeakProcessMemoryUsed", ctypes.c_size_t),
+                    ("PeakJobMemoryUsed", ctypes.c_size_t),
+                ]
+
+            JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE = 0x2000
+            ext = EXT()
+            ext.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE
+            k32.SetInformationJobObject.argtypes = [
+                wintypes.HANDLE, ctypes.c_int, ctypes.c_void_p, wintypes.DWORD]
+            # 9 = JobObjectExtendedLimitInformation
+            if not k32.SetInformationJobObject(job, 9, ctypes.byref(ext), ctypes.sizeof(ext)):
+                return
+            _job = job
+
+        k32.AssignProcessToJobObject.argtypes = [wintypes.HANDLE, wintypes.HANDLE]
+        k32.AssignProcessToJobObject(_job, int(proc._handle))
+    except Exception as e:
+        print(f"[devserver] job-object setup skipped: {e}", flush=True)
 
 
 def _game_running():
@@ -215,6 +288,7 @@ def start_game(windowed=False, map_name=None, resolution=DEFAULT_RESOLUTION):
     if resolution:
         args += ["--resolution", resolution]
     _game_proc = subprocess.Popen(args, cwd=os.path.dirname(EXE))
+    _assign_to_job(_game_proc)  # OS kills the game if this supervisor dies
 
     ok, msg = _wait_until_ready()
     if not ok:

@@ -361,6 +361,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
     // launched with --devserver <port>. Commands are queued on its listener
     // thread and executed here on the main thread via ExecuteDevCommand.
     private Necroking.Dev.DevServer? _devServer;
+    private bool _taskbarHidden;                   // headless: off-screen window's taskbar button dropped once
     private string? _pendingDevScreenshot;        // set by a screenshot cmd, consumed in Draw
     private Necroking.Dev.DevCommand? _pendingDevScreenshotCmd; // completed once the PNG is written
     private int _devShotW, _devShotH;             // downsample target for the pending shot (0 = native)
@@ -2358,6 +2359,13 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // Drain dev-server commands first so they run even if the window is
         // unfocused (we bail out below in that case) and regardless of menu state.
         _devServer?.Drain(ExecuteDevCommand);
+
+        // Headless (dev-server / scenario) runs keep an off-screen window; drop its
+        // taskbar button so the supervisor-owned game doesn't clutter the taskbar.
+        // MainWindowHandle isn't valid the instant the window is created, so retry
+        // each frame until it applies (HideFromTaskbar returns true once done).
+        if (LaunchArgs.Headless && !_taskbarHidden)
+            _taskbarHidden = Core.WindowChrome.HideFromTaskbar();
 
         var kb = Keyboard.GetState();
         var mouse = Mouse.GetState();
