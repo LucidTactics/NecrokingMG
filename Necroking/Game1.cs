@@ -1961,6 +1961,13 @@ public class Game1 : Microsoft.Xna.Framework.Game
         _font = Content.Load<SpriteFont>("DefaultFont");
         _smallFont = Content.Load<SpriteFont>("SmallFont");
         _largeFont = Content.Load<SpriteFont>("LargeFont");
+        // Glyphs missing from the bitmap font (em-dashes, curly quotes, accents in
+        // data/item text, etc.) otherwise make MeasureString/DrawString THROW,
+        // crashing the whole game on a hover tooltip. A DefaultCharacter degrades
+        // unsupported glyphs to '?' instead of throwing.
+        _font.DefaultCharacter = '?';
+        _smallFont.DefaultCharacter = '?';
+        _largeFont.DefaultCharacter = '?';
         _debugDraw.SetFont(_smallFont);
         _hudRenderer.Init(_spriteBatch, _pixel, _font, _smallFont, _widgetRenderer);
         _hudRenderer.SetInput(_input);
