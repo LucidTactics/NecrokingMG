@@ -161,20 +161,161 @@ The consolidation list is reviewed periodically. Items are either consolidated o
 ### Standard Patterns Reference
 Canonical implementations of common patterns are tracked in `memory/standard_patterns.md`. Consult this when starting work that might overlap with an existing solution. Update it when a new standard is established.
 
+## Dev Control Server (drive the running game via the preview interface)
+
+For interactive, one-off checks — spawn units, set up a situation, move the
+camera, open a UI panel, screenshot, read state — **drive the *running* game
+through the preview interface.** This is far faster than the
+write-scenario→rebuild→run loop and the preferred way to verify almost anything
+visual.
+
+**ALWAYS use the Claude preview MCP tools — not Bash/curl.** The preview tools
+(`preview_start`, `preview_eval`, `preview_screenshot`, ...) are approved by name,
+so they run **without per-command permission prompts**; raw `curl`/Bash to the
+server prompts on every call and is slower. Reach for curl only if the preview
+tools are genuinely unavailable.
+
+**Topology:** preview MCP tool → Python supervisor (`tools/devserver.py`, port
+8777, persistent) → game's in-process HTTP listener (`Necroking/Dev/DevServer.cs`,
+port 8778, enabled by `--devserver`). The supervisor owns the game process, so the
+exe can be rebuilt + relaunched **without restarting the supervisor**.
+
+**Workflow:**
+1. `preview_start("necroking-dev")` → `serverId` (launches the supervisor; the page
+   auto-starts the game headless at 1280x720). **Do not run `python tools/devserver.py`
+   from Bash yourself** — `preview_start` owns the supervisor. The launch config lives
+   in gitignored `.claude/launch.json`; on a fresh clone it won't exist, so create it
+   first with exactly this (then call `preview_start`):
+   ```json
+   {"version":"0.0.1","configurations":[{"name":"necroking-dev","runtimeExecutable":"python","runtimeArgs":["tools/devserver.py"],"port":8777}]}
+   ```
+   (use `python3` or `py` as `runtimeExecutable` if `python` isn't on PATH).
+2. `preview_eval(id, "window.dev('panel',['spell_editor'])")` — `window.dev(cmd,
+   args, opts)` POSTs to `/cmd`, awaits the game, and returns the JSON result. Chain
+   steps in an async IIFE.
+3. `preview_screenshot(id)` — captures the live view (the dashboard frame refreshes
+   ~1 Hz via `/frame`). Use this to confirm what a panel/entry looks like.
+4. **After a C# change**, rebuild + relaunch through the supervisor:
+   `preview_eval(id, "fetch('/game/restart',{method:'POST',body:'{\"build\":true}'}).then(r=>r.json())")`
+   — build errors come back in the JSON (`build.errors`).
+
+**Stopping the game (do NOT taskkill):** when the exe is locked for a build, or
+when you're done driving it, **stop the game through the server, never kill the
+process** — `preview_eval(id, "fetch('/game/stop',{method:'POST',body:'{}'})")`.
+The supervisor owns the process (Windows Job Object) and the headless game is
+hidden from the taskbar, so a force-killed PID orphans the supervisor's bookkeeping
+and a forgotten game idles invisibly. `/game/restart {"build":true}` already stops
+it for you. The supervisor itself can stay up (cheap; holds the pinned A/B frame).
+
+**Game commands** (see `ExecuteDevCommand` in `Game1.cs`):
+- `ping` · `state` — liveness / JSON snapshot of game state
+- `start_game [map]` — load a map into gameplay
+- `spawn <type> <x> <y>` · `camera <x> <y> [zoom]` · `speed <n>` · `pause` · `resume`
+- `screenshot [name]` with `opts`: `no_ui`, `no_ground`, `downsample_to` (`"WxH"` |
+  `"full"`; default 640x360)
+- `menu <new_game|test_map|scenarios|main_menu|quit>` — press a main-menu button
+- **UI panels** (added 2026-06-21):
+  - `panels` — list every previewable panel, its tabs, the overlays, and the
+    current state. **Run this first** to discover valid names.
+  - `panel <name> [tab]` — switch to a UI panel; auto-starts a default game for
+    panels that need a world. Names: `main_menu`, `scenarios`, `game`, `pause`,
+    `settings`, `unit_editor`, `spell_editor`, `map_editor`, `ui_editor`,
+    `item_editor`. Optional 2nd arg sets a tab on it.
+  - `tab <name>` — set the active tab on the open panel (Settings: Bloom/Shadow/…;
+    Map editor: Ground/Grass/Objects/Walls/…; UI editor: NineSlices/Elements/Widgets).
+  - `overlay <name> [open|close|toggle]` — in-game overlays: `inventory`,
+    `character_stats`, `skill_book`, `grimoire`, `character_sheet`.
+  - `select <name|id|index>` — select an entry in the open editor (unit/spell/item/ui)
+    so its preview/detail renders. Accepts a numeric index, a def id, or a display
+    name. e.g. `panel spell_editor` then `select Fireball`.
+
+**Screenshots — two ways:**
+- `preview_screenshot(id)` captures the whole **dashboard page** (live game frame +
+  command log). Best for a quick glance or to watch progress.
+- To **analyze just the game frame**, run `window.dev('screenshot',['name'], opts)`
+  via `preview_eval` — it returns the path and the PNG lands at
+  `bin/Debug/log/screenshots/<name>.png`. Then **`Read` that file** (the Read tool is
+  approved → no prompt). You get the clean frame at the downsample size, no dashboard
+  chrome — this is the right way to actually inspect a result.
+- `opts`: `{no_ui:true}` hides the HUD; `{no_ground:true}` drops ground+grass (the
+  scenario black look); `{downsample_to:"WxH"}` or `"full"` picks the returned size
+  (default 640x360 = half the 1280x720 render — small but readable).
+
+**Add a new command when a test needs one — do this freely; it's the point.** If a
+check needs a verb the server doesn't have, ADD IT instead of working around it. One
+`case` in `ExecuteDevCommand` (`Game1.cs`) + a rebuild; the `/cmd` channel forwards
+`{cmd,args,opts}` verbatim so **no `tools/devserver.py` change is needed** (and you
+must not edit it — that forces a supervisor restart; ask the user first if you think
+it truly must change). Pattern:
+
+```csharp
+// in ExecuteDevCommand(Necroking.Dev.DevCommand c), Game1.cs:
+case "kill_faction":                       // window.dev('kill_faction',['Human'])
+{
+    if (c.Args.Length < 1) { c.Complete(Necroking.Dev.DevServer.Error("need <faction>")); break; }
+    var fac = Enum.Parse<Data.Faction>(c.Args[0], true);
+    int n = 0;
+    for (int i = _sim.Units.Count - 1; i >= 0; i--)   // backwards: RemoveUnit shifts indices
+        if (_sim.Units[i].Faction == fac) { _sim.UnitsMut.RemoveUnit(i); n++; }
+    c.Complete(Necroking.Dev.DevServer.Ok($"removed {n}"));
+    break;
+}
+```
+- Runs on the **game main thread** (drained in `Update`), so touching `_sim`,
+  `_camera`, `_gameData`, UI panels, etc. directly is safe — the HTTP thread only
+  queues.
+- Args: `c.Args[i]` (positional strings); `DevFloat(s)` parses a float;
+  `c.Opt("k")` / `c.OptBool("k")` read named opts from the `opts` object.
+- Reply: `c.Complete(DevServer.Ok("msg"))`, `DevServer.Error("msg")`, or
+  `DevServer.OkRaw("<json>")` to return a structured object (see how `state` builds
+  its JSON).
+- **Deferred results** (need a rendered frame, like a screenshot): stash a pending
+  field and call `c.Complete(...)` later from `Draw` instead of blocking — follow the
+  `_pendingDevScreenshot` path.
+- After adding: rebuild via `/game/restart {"build":true}`, then call it with
+  `window.dev('your_verb',[...],{...})` (or `window.devRaw({cmd,args,opts})`).
+
+**Gotchas:**
+- **Spawn faction is implied by `UnitType`**: Skeleton/Abomination → Undead; the rest
+  (Soldier/Knight/Militia/Archer) → Human. A human spawned next to the necromancer
+  will attack and can kill it — spawn at a distance, or spawn undead for a friendly
+  scene. Types: Necromancer, Skeleton, Abomination, Militia, Soldier, Knight, Archer,
+  Dynamic.
+- **World coordinates** (Vec2). Read `state` for the necromancer's `x,y` and anchor
+  spawns/camera off it (default map necromancer ≈ 2096,1882).
+- A screenshot is captured one frame later in `Draw`; `window.dev` awaits until the
+  PNG is written, so the returned path is ready to `Read` immediately.
+- `preview_eval` awaits the returned promise and serialises it to JSON; wrap
+  multi-step sequences in an `async`-IIFE and `return` the final value.
+
+**Recipe — set up a fight, speed it up, analyze it:**
+```js
+// preview_eval(id, "<this>")
+(async()=>{
+  await window.dev('menu',['new_game']);
+  const s = await window.dev('state'); const x=s.result.necromancer.x, y=s.result.necromancer.y;
+  await window.dev('spawn',['Skeleton',x-3,y]);
+  await window.dev('spawn',['Soldier',x+3,y]);
+  await window.dev('camera',[x,y,48]);
+  await window.dev('speed',[4]);
+  return await window.dev('screenshot',['fight']);   // then Read bin/Debug/log/screenshots/fight.png
+})()
+```
+**Recipe — inspect an editor entry:** `window.dev('panel',['spell_editor'])` then
+`window.dev('select',['Fireball'])`, then `preview_screenshot(id)`.
+
 ## Test Scenarios (CLI)
 
 Automated test scenarios let you verify game behavior by running the game, executing a scenario, and checking log output.
 
-> **Prefer the dev control server over writing a new scenario in most cases.**
-> For interactive/one-off checks — spawn units, set up a situation, move the
-> camera, screenshot, read state — drive the *running* game through the dev server
-> (`tools/devserver.py` + `--devserver`; see `Necroking/Dev/DevServer.cs`). It's
-> far faster than the write-scenario→rebuild→run loop and runs prompt-free via the
-> preview tools. **If something a scenario could do isn't possible through the dev
-> server yet, add the missing command** to `ExecuteDevCommand` (`Game1.cs`) and
-> rebuild — the `/cmd` channel forwards `{cmd,args,opts}` verbatim, so no
-> python-server edit is needed (per the server-edit policy). Reserve *new
-> scenarios* for checks that must run repeatably/headless as regression tests.
+> **Prefer the dev control server (above) over writing a new scenario in most
+> cases.** Drive the running game through the preview interface for interactive /
+> one-off checks; it's far faster than the write-scenario→rebuild→run loop. **If
+> something a scenario could do isn't possible through the dev server yet, add the
+> missing command** to `ExecuteDevCommand` (`Game1.cs`) and rebuild — the `/cmd`
+> channel forwards `{cmd,args,opts}` verbatim, so no python-server edit is needed.
+> Reserve *new scenarios* for checks that must run repeatably/headless as
+> regression tests.
 
 ### Running a scenario
 ```bash
