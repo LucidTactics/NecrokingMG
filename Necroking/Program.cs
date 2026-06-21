@@ -24,6 +24,11 @@ public static class LaunchArgs
     public static Color? BgColor;
     public static int ResolutionW;
     public static int ResolutionH;
+    /// <summary>When &gt; 0, start the lean dev control server (Necroking/Dev/DevServer.cs)
+    /// listening on this localhost port. Lets an external supervisor drive the
+    /// running game (spawn, camera, screenshot, state) without rebuilding. Off
+    /// in normal play.</summary>
+    public static int DevServerPort;
     /// <summary>Optional unit id selector. Used by debug scenarios like
     /// <c>stride_debug</c> to pick which unit's calibration to visualize.</summary>
     public static string? Unit;
@@ -56,6 +61,9 @@ public static class LaunchArgs
                     break;
                 case "--no-vsync":
                     NoVsync = true;
+                    break;
+                case "--devserver" when i + 1 < args.Length:
+                    if (int.TryParse(args[++i], out int dp)) DevServerPort = dp;
                     break;
                 case "--unit" when i + 1 < args.Length:
                     Unit = args[++i];

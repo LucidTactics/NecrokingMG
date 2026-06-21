@@ -356,6 +356,13 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
     // Scenario state
     private ScenarioBase? _activeScenario;
+
+    // Lean dev control server (Necroking/Dev/DevServer.cs). Non-null only when
+    // launched with --devserver <port>. Commands are queued on its listener
+    // thread and executed here on the main thread via ExecuteDevCommand.
+    private Necroking.Dev.DevServer? _devServer;
+    private string? _pendingDevScreenshot;        // set by a screenshot cmd, consumed in Draw
+    private Necroking.Dev.DevCommand? _pendingDevScreenshotCmd; // completed once the PNG is written
     private int _scenarioScrollOffset;
 
     // Per-unit animation data
@@ -1336,6 +1343,168 @@ public class Game1 : Microsoft.Xna.Framework.Game
         _grassRenderer.SetGrassTypes(list);
     }
 
+    // --- Dev server command execution (main thread) ---------------------------
+    // Each case rides Game1's existing APIs / the same Simulation primitives that
+    // scenarios use, so there's a single source of truth for world manipulation.
+
+    private void ExecuteDevCommand(Necroking.Dev.DevCommand c)
+    {
+        try
+        {
+            switch (c.Cmd)
+            {
+                case "ping":
+                    c.Complete(Necroking.Dev.DevServer.Ok("pong"));
+                    break;
+
+                case "state":
+                    c.Complete(Necroking.Dev.DevServer.OkRaw(BuildDevStateJson()));
+                    break;
+
+                case "spawn":
+                {
+                    if (c.Args.Length < 3) { c.Complete(Necroking.Dev.DevServer.Error("spawn needs: <type> <x> <y>")); break; }
+                    if (!Enum.TryParse<UnitType>(c.Args[0], true, out var type))
+                    { c.Complete(Necroking.Dev.DevServer.Error($"unknown unit type: {c.Args[0]}")); break; }
+                    float sx = DevFloat(c.Args[1]), sy = DevFloat(c.Args[2]);
+                    int idx = _sim.UnitsMut.AddUnit(new Vec2(sx, sy), type);
+                    c.Complete(Necroking.Dev.DevServer.Ok($"spawned {type} at ({sx},{sy}) idx={idx}"));
+                    break;
+                }
+
+                case "camera":
+                {
+                    if (c.Args.Length < 2) { c.Complete(Necroking.Dev.DevServer.Error("camera needs: <x> <y> [zoom]")); break; }
+                    _camera.Position = new Vec2(DevFloat(c.Args[0]), DevFloat(c.Args[1]));
+                    if (c.Args.Length >= 3) _camera.Zoom = DevFloat(c.Args[2]);
+                    c.Complete(Necroking.Dev.DevServer.Ok($"camera ({_camera.Position.X},{_camera.Position.Y}) zoom={_camera.Zoom}"));
+                    break;
+                }
+
+                case "speed":
+                    if (c.Args.Length < 1) { c.Complete(Necroking.Dev.DevServer.Error("speed needs: <n>")); break; }
+                    _timeScale = DevFloat(c.Args[0]);
+                    _paused = false;
+                    c.Complete(Necroking.Dev.DevServer.Ok($"speed={_timeScale}"));
+                    break;
+
+                case "pause":
+                    _paused = true;
+                    c.Complete(Necroking.Dev.DevServer.Ok("paused"));
+                    break;
+
+                case "resume":
+                    _paused = false;
+                    c.Complete(Necroking.Dev.DevServer.Ok("resumed"));
+                    break;
+
+                case "start_game":
+                {
+                    string map = c.Args.Length > 0 ? c.Args[0] : "default";
+                    StartGame(map);
+                    _menuState = MenuState.None;
+                    c.Complete(Necroking.Dev.DevServer.Ok($"started map={map} units={_sim.Units.Count}"));
+                    break;
+                }
+
+                // Press a main-menu button. Mirrors the click handlers in Update so
+                // there's one definition of what each button does.
+                case "menu":
+                {
+                    if (c.Args.Length < 1)
+                    { c.Complete(Necroking.Dev.DevServer.Error("menu needs: <new_game|test_map|scenarios|main_menu|quit>")); break; }
+                    switch (c.Args[0].ToLowerInvariant())
+                    {
+                        case "new_game":
+                        case "play":
+                            StartGame();
+                            c.Complete(Necroking.Dev.DevServer.Ok($"new game, menuState={_menuState}, units={_sim.Units.Count}"));
+                            break;
+                        case "test_map":
+                            StartGame("testmap");
+                            c.Complete(Necroking.Dev.DevServer.Ok($"test map, units={_sim.Units.Count}"));
+                            break;
+                        case "scenarios":
+                            _menuState = MenuState.ScenarioList;
+                            _scenarioScrollOffset = 0;
+                            c.Complete(Necroking.Dev.DevServer.Ok("opened scenario list"));
+                            break;
+                        case "main_menu":
+                        case "back":
+                            _menuState = MenuState.MainMenu;
+                            _paused = false;
+                            _gameWorldLoaded = false;
+                            c.Complete(Necroking.Dev.DevServer.Ok("returned to main menu"));
+                            break;
+                        case "quit":
+                            c.Complete(Necroking.Dev.DevServer.Ok("quitting"));
+                            Exit();
+                            break;
+                        default:
+                            c.Complete(Necroking.Dev.DevServer.Error($"unknown menu button: {c.Args[0]}"));
+                            break;
+                    }
+                    break;
+                }
+
+                case "screenshot":
+                {
+                    string name = c.Args.Length > 0 ? c.Args[0] : "devshot";
+                    // Completed in Draw once the PNG is actually written.
+                    _pendingDevScreenshotCmd?.Complete(Necroking.Dev.DevServer.Error("superseded by newer screenshot"));
+                    _pendingDevScreenshot = name;
+                    _pendingDevScreenshotCmd = c;
+                    break;
+                }
+
+                default:
+                    c.Complete(Necroking.Dev.DevServer.Error($"unknown cmd: {c.Cmd}"));
+                    break;
+            }
+        }
+        catch (Exception ex)
+        {
+            c.Complete(Necroking.Dev.DevServer.Error(ex.Message));
+        }
+    }
+
+    private static float DevFloat(string s) =>
+        float.Parse(s, System.Globalization.CultureInfo.InvariantCulture);
+
+    /// <summary>Snapshot of live game state as a JSON object (the result payload).</summary>
+    private string BuildDevStateJson()
+    {
+        int undead = 0, human = 0, animal = 0;
+        for (int i = 0; i < _sim.Units.Count; i++)
+        {
+            switch (_sim.Units[i].Faction)
+            {
+                case Faction.Undead: undead++; break;
+                case Faction.Human: human++; break;
+                case Faction.Animal: animal++; break;
+            }
+        }
+
+        int ni = _sim.NecromancerIndex;
+        string necro = ni >= 0
+            ? $"{{\"index\":{ni},\"x\":{_sim.Units[ni].Position.X:F2},\"y\":{_sim.Units[ni].Position.Y:F2}," +
+              $"\"mana\":{_sim.NecroState.Mana:F1},\"maxMana\":{_sim.NecroState.MaxMana:F1}}}"
+            : "null";
+
+        var ci = System.Globalization.CultureInfo.InvariantCulture;
+        return "{" +
+            $"\"worldLoaded\":{(_gameWorldLoaded ? "true" : "false")}," +
+            $"\"menuState\":\"{_menuState}\"," +
+            $"\"paused\":{(_paused ? "true" : "false")}," +
+            $"\"timeScale\":{_timeScale.ToString("F2", ci)}," +
+            $"\"gameTime\":{_gameTime.ToString("F2", ci)}," +
+            $"\"units\":{_sim.Units.Count}," +
+            $"\"undead\":{undead},\"human\":{human},\"animal\":{animal}," +
+            $"\"camera\":{{\"x\":{_camera.Position.X.ToString("F2", ci)},\"y\":{_camera.Position.Y.ToString("F2", ci)},\"zoom\":{_camera.Zoom.ToString("F2", ci)}}}," +
+            $"\"necromancer\":{necro}" +
+            "}";
+    }
+
     private void StartScenario(string scenarioName)
     {
         var scenario = ScenarioRegistry.Create(scenarioName);
@@ -2131,6 +2300,14 @@ public class Game1 : Microsoft.Xna.Framework.Game
             onPickup: OnForagablePickedUp,
             onLearnTrigger: OnForagableLearnTrigger);
 
+        // Lean dev control server: only when launched with --devserver <port>.
+        if (LaunchArgs.DevServerPort > 0)
+        {
+            _devServer = new Necroking.Dev.DevServer(LaunchArgs.DevServerPort);
+            _devServer.Start();
+            Exiting += (_, _) => _devServer?.Stop();
+        }
+
         // Init property editor infrastructure
         _editorUi.SetContext(_spriteBatch, _pixel, _font, _smallFont, _largeFont);
         _unitEditor = new UnitEditorWindow(_editorUi);
@@ -2157,13 +2334,17 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
     protected override void Update(GameTime gameTime)
     {
+        // Drain dev-server commands first so they run even if the window is
+        // unfocused (we bail out below in that case) and regardless of menu state.
+        _devServer?.Drain(ExecuteDevCommand);
+
         var kb = Keyboard.GetState();
         var mouse = Mouse.GetState();
 
         // Window unfocused or minimized. IsActive is MonoGame's canonical
         // window-focus flag. Exempt scenario / headless runs — automated runs often
         // lack window focus, and freezing them would break the scenario test harness.
-        bool unfocused = !IsActive && _activeScenario == null && LaunchArgs.Scenario == null && !LaunchArgs.Headless;
+        bool unfocused = !IsActive && _activeScenario == null && LaunchArgs.Scenario == null && !LaunchArgs.Headless && _devServer == null;
 
         // Default behaviour: freeze entirely while unfocused — skip all input so
         // background clicks (taskbar, other apps) read by the global Mouse.GetState()
@@ -5094,6 +5275,21 @@ public class Game1 : Microsoft.Xna.Framework.Game
                     _spriteBatch.Draw(_pixel, new Rectangle((int)pos.X + dx, (int)pos.Y + dy, 1, 1), color);
     }
 
+    /// <summary>Dev-server screenshot: take it from the just-rendered backbuffer
+    /// (before Present) and complete the pending HTTP command with the file path.
+    /// Called from every Draw branch so menu screenshots work too.</summary>
+    private void CompletePendingDevScreenshot()
+    {
+        if (_pendingDevScreenshot == null) return;
+        bool okShot = ScenarioScreenshot.TakeScreenshot(GraphicsDevice, _pendingDevScreenshot);
+        string shotPath = $"log/screenshots/{_pendingDevScreenshot}.png";
+        _pendingDevScreenshotCmd?.Complete(okShot
+            ? Necroking.Dev.DevServer.Ok(shotPath)
+            : Necroking.Dev.DevServer.Error($"screenshot failed: {shotPath}"));
+        _pendingDevScreenshot = null;
+        _pendingDevScreenshotCmd = null;
+    }
+
     protected override void Draw(GameTime gameTime)
     {
         _drawStopwatch.Restart();
@@ -5107,6 +5303,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
             _spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.PointClamp);
             DrawMainMenu(screenW, screenH);
             _spriteBatch.End();
+            CompletePendingDevScreenshot();
             base.Draw(gameTime);
             return;
         }
@@ -5117,6 +5314,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
             _spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.PointClamp);
             DrawScenarioList(screenW, screenH);
             _spriteBatch.End();
+            CompletePendingDevScreenshot();
             base.Draw(gameTime);
             return;
         }
@@ -5619,6 +5817,10 @@ public class Game1 : Microsoft.Xna.Framework.Game
             ScenarioScreenshot.TakeScreenshot(GraphicsDevice, _activeScenario.DeferredScreenshot);
             _activeScenario.DeferredScreenshot = null;
         }
+
+        // Dev-server screenshot (in-game path; menu paths call this too before
+        // their own Present).
+        CompletePendingDevScreenshot();
 
         // Time the Present()/blit done by base.Draw — anything that doesn't
         // overlap with CPU work shows up here. Present blocks until the GPU

@@ -1,0 +1,224 @@
+#!/usr/bin/env python3
+"""
+Lean dev supervisor for Necroking.
+
+A *persistent* HTTP server that owns the game process lifecycle so the game can
+be rebuilt and relaunched without ever restarting this server. Claude (or you)
+talks only to this server; it forwards gameplay commands to the running game's
+in-process dev listener (Necroking/Dev/DevServer.cs, enabled with --devserver).
+
+    Claude  --curl-->  this supervisor (:8777)  --proxy-->  game (:8778)
+
+Run it (typically in the background):
+
+    python tools/devserver.py            # serves on :8777, game on :8778
+
+Endpoints (all POST unless noted), responses are JSON:
+
+    GET  /status                      is the game running? pid? last build?
+    POST /game/start  {"windowed":bool,"map":str}   launch + wait until ready
+    POST /game/stop                   kill the game process
+    POST /game/restart {"build":bool} stop -> (optional build) -> start
+    POST /build                       stop game, dotnet build, return errors
+    POST /cmd  {"cmd":..,"args":[..]} forward to the running game, return reply
+
+Game commands currently understood (see ExecuteDevCommand in Game1.cs):
+    ping | state | start_game [map] | spawn <type> <x> <y> |
+    camera <x> <y> [zoom] | speed <n> | pause | resume | screenshot [name]
+"""
+
+import json
+import os
+import subprocess
+import sys
+import time
+import urllib.request
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+SUPERVISOR_PORT = 8777
+GAME_PORT = 8778
+
+REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+PROJECT = os.path.join(REPO_ROOT, "Necroking", "Necroking.csproj")
+EXE = os.path.join(REPO_ROOT, "bin", "Debug", "Necroking.exe")
+
+# --- shared state -----------------------------------------------------------
+_game_proc = None          # subprocess.Popen | None
+_last_build = None         # dict | None
+
+
+def _game_running():
+    return _game_proc is not None and _game_proc.poll() is None
+
+
+def _post_to_game(payload, timeout=16):
+    """POST a command dict to the running game's dev listener."""
+    data = json.dumps(payload).encode()
+    req = urllib.request.Request(
+        f"http://localhost:{GAME_PORT}/", data=data,
+        headers={"Content-Type": "application/json"})
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        return json.loads(r.read().decode())
+
+
+def _wait_until_ready(timeout=40):
+    """Poll the game's ping until it answers or we give up."""
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        if not _game_running():
+            return False, "game process exited during startup"
+        try:
+            resp = _post_to_game({"cmd": "ping"}, timeout=3)
+            if resp.get("ok"):
+                return True, "ready"
+        except Exception:
+            pass
+        time.sleep(0.4)
+    return False, "timed out waiting for game to become ready"
+
+
+def start_game(windowed=False, map_name=None):
+    global _game_proc
+    if _game_running():
+        return {"ok": True, "result": "already running", "pid": _game_proc.pid}
+    if not os.path.exists(EXE):
+        return {"ok": False, "error": f"exe not found: {EXE} (build first)"}
+
+    args = [EXE, "--devserver", str(GAME_PORT)]
+    if not windowed:
+        args.append("--headless")
+    _game_proc = subprocess.Popen(args, cwd=os.path.dirname(EXE))
+
+    ok, msg = _wait_until_ready()
+    if not ok:
+        return {"ok": False, "error": msg}
+
+    result = {"ok": True, "result": "started", "pid": _game_proc.pid,
+              "windowed": windowed}
+    if map_name:
+        try:
+            result["start_game"] = _post_to_game({"cmd": "start_game", "args": [map_name]})
+        except Exception as e:
+            result["start_game_error"] = str(e)
+    return result
+
+
+def stop_game():
+    global _game_proc
+    if not _game_running():
+        _game_proc = None
+        return {"ok": True, "result": "not running"}
+    pid = _game_proc.pid
+    _game_proc.terminate()
+    try:
+        _game_proc.wait(timeout=8)
+    except subprocess.TimeoutExpired:
+        _game_proc.kill()
+        _game_proc.wait(timeout=8)
+    _game_proc = None
+    return {"ok": True, "result": "stopped", "pid": pid}
+
+
+def build():
+    """Game must be stopped first — it locks the exe."""
+    global _last_build
+    was_running = _game_running()
+    if was_running:
+        stop_game()
+    proc = subprocess.run(
+        ["dotnet", "build", PROJECT, "-v", "q", "-nologo"],
+        cwd=REPO_ROOT, capture_output=True, text=True)
+    lines = (proc.stdout or "").splitlines()
+    errors = [l for l in lines if ": error " in l]
+    _last_build = {
+        "ok": proc.returncode == 0,
+        "returncode": proc.returncode,
+        "errors": errors[:50],
+        "tail": lines[-8:],
+        "was_running": was_running,
+    }
+    return _last_build
+
+
+class Handler(BaseHTTPRequestHandler):
+    def log_message(self, *a):  # silence per-request stderr spam
+        pass
+
+    def _send(self, obj, status=200):
+        body = json.dumps(obj).encode()
+        self.send_response(status)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _read_json(self):
+        n = int(self.headers.get("Content-Length", 0) or 0)
+        if n == 0:
+            return {}
+        try:
+            return json.loads(self.rfile.read(n).decode())
+        except Exception:
+            return {}
+
+    def do_GET(self):
+        if self.path.rstrip("/") == "/status":
+            self._send({
+                "ok": True,
+                "game_running": _game_running(),
+                "pid": _game_proc.pid if _game_running() else None,
+                "supervisor_port": SUPERVISOR_PORT,
+                "game_port": GAME_PORT,
+                "exe_exists": os.path.exists(EXE),
+                "last_build": _last_build,
+            })
+        else:
+            self._send({"ok": False, "error": f"unknown GET {self.path}"}, 404)
+
+    def do_POST(self):
+        path = self.path.rstrip("/") or "/"
+        body = self._read_json()
+        try:
+            if path == "/game/start":
+                self._send(start_game(body.get("windowed", False), body.get("map")))
+            elif path == "/game/stop":
+                self._send(stop_game())
+            elif path == "/game/restart":
+                stop_game()
+                b = build() if body.get("build") else None
+                if b and not b["ok"]:
+                    self._send({"ok": False, "error": "build failed", "build": b})
+                    return
+                res = start_game(body.get("windowed", False), body.get("map"))
+                if b:
+                    res["build"] = b
+                self._send(res)
+            elif path == "/build":
+                self._send(build())
+            elif path == "/cmd":
+                if not _game_running():
+                    self._send({"ok": False, "error": "game not running"}, 409)
+                    return
+                self._send(_post_to_game(body))
+            else:
+                self._send({"ok": False, "error": f"unknown POST {path}"}, 404)
+        except Exception as e:
+            self._send({"ok": False, "error": str(e)}, 500)
+
+
+def main():
+    srv = ThreadingHTTPServer(("localhost", SUPERVISOR_PORT), Handler)
+    print(f"[devserver] supervisor on http://localhost:{SUPERVISOR_PORT}/  "
+          f"(game port {GAME_PORT})", flush=True)
+    print(f"[devserver] repo root: {REPO_ROOT}", flush=True)
+    try:
+        srv.serve_forever()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        if _game_running():
+            stop_game()
+
+
+if __name__ == "__main__":
+    main()
