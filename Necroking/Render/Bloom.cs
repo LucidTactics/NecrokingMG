@@ -42,6 +42,55 @@ public class BloomRenderer
         _screenW = screenW;
         _screenH = screenH;
 
+        CreateTargets(device);
+
+        try
+        {
+            _extractEffect = content.Load<XnaEffect>("BloomExtract");
+            _combineEffect = content.Load<XnaEffect>("BloomCombine");
+            _blurEffect = content.Load<XnaEffect>("GaussianBlur");
+            try
+            {
+                _bicubicUpsampleEffect = content.Load<XnaEffect>("BloomUpsampleBicubic");
+                Console.Error.WriteLine("[Bloom] Bicubic upsample shader loaded");
+            }
+            catch (Exception bex)
+            {
+                _bicubicUpsampleEffect = null;
+                Console.Error.WriteLine($"[Bloom] Bicubic upsample not loaded: {bex.Message}");
+            }
+            _initialized = true;
+            Console.Error.WriteLine("[Bloom] Shaders loaded successfully");
+        }
+        catch (Exception ex)
+        {
+            _initialized = false;
+            Console.Error.WriteLine($"[Bloom] Shader load failed: {ex.Message}");
+        }
+    }
+
+    /// <summary>Recreate the scene + mip render targets at a new size, keeping the
+    /// already-loaded shaders. Called on window resize so the bloom buffers match
+    /// the new back-buffer dimensions. No-op if size is unchanged or invalid.</summary>
+    public void Resize(GraphicsDevice device, int screenW, int screenH)
+    {
+        if (!_initialized || screenW <= 0 || screenH <= 0) return;
+        if (screenW == _screenW && screenH == _screenH) return;
+        _sceneRT?.Dispose(); _sceneRT = null;
+        for (int i = 0; i < _mipCount; i++) { _mips[i]?.Dispose(); _mips[i] = null; }
+        _tempBlurRT?.Dispose(); _tempBlurRT = null;
+        _mipCount = 0;
+        _screenW = screenW;
+        _screenH = screenH;
+        CreateTargets(device);
+    }
+
+    /// <summary>(Re)create the scene capture target and the bloom mip chain at the
+    /// current _screenW/_screenH. Shaders are loaded separately in Init.</summary>
+    private void CreateTargets(GraphicsDevice device)
+    {
+        int screenW = _screenW, screenH = _screenH;
+
         // Scene RT: HDR format so additive effects can exceed 1.0
         _hdrScene = false;
         try
@@ -95,30 +144,6 @@ public class BloomRenderer
         for (int i = 0; i < _mipCount; i++)
             Console.Error.WriteLine($"[Bloom]   mip[{i}]: {_mips[i]!.Format} ({_mips[i]!.Width}x{_mips[i]!.Height})");
         Console.Error.WriteLine($"[Bloom] Mip chain: {_mipCount} levels, HDR={_hdrScene}");
-
-        try
-        {
-            _extractEffect = content.Load<XnaEffect>("BloomExtract");
-            _combineEffect = content.Load<XnaEffect>("BloomCombine");
-            _blurEffect = content.Load<XnaEffect>("GaussianBlur");
-            try
-            {
-                _bicubicUpsampleEffect = content.Load<XnaEffect>("BloomUpsampleBicubic");
-                Console.Error.WriteLine("[Bloom] Bicubic upsample shader loaded");
-            }
-            catch (Exception bex)
-            {
-                _bicubicUpsampleEffect = null;
-                Console.Error.WriteLine($"[Bloom] Bicubic upsample not loaded: {bex.Message}");
-            }
-            _initialized = true;
-            Console.Error.WriteLine("[Bloom] Shaders loaded successfully");
-        }
-        catch (Exception ex)
-        {
-            _initialized = false;
-            Console.Error.WriteLine($"[Bloom] Shader load failed: {ex.Message}");
-        }
     }
 
     public void BeginScene(GraphicsDevice device)

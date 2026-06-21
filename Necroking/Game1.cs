@@ -217,6 +217,14 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     private BloomRenderer _bloom = new();
     private WeatherRenderer _weatherRenderer = new();
     private FogOfWarSystem _fogOfWar = new();
+
+    // Window mode (Alt+Enter toggles). Default false = the borderless windowed
+    // "fullscreen" set up in the constructor (with the +1 height trick that keeps
+    // the OS from treating it as exclusive fullscreen, which breaks screenshots).
+    // true = a normal resizable bordered window.
+    private bool _windowedMode;
+    private int _windowedW = 1280, _windowedH = 720;
+    private bool _handlingResize;
     private Color _ambientColor = Color.White; // weather ambient tint, applied to lit sprites before bloom
     private DayNightSystem _dayNightSystem = new();
     private LightningRenderer _lightningRenderer = new();
@@ -435,6 +443,11 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         Content.RootDirectory = "resources";
         IsMouseVisible = true;
 
+        // Recreate screen-sized render targets when the window resizes (e.g. the
+        // user drags the edge in windowed mode). Fog-of-war targets are world-sized
+        // so they're untouched; only bloom + weather follow the back buffer.
+        Window.ClientSizeChanged += OnClientSizeChanged;
+
         // Save settings (to the per-machine 'user settings/', gitignored), weather
         // presets, and spell bar slot assignments when the game exits. Atomic writes.
         Exiting += (_, _) =>
@@ -462,6 +475,83 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             _graphics.SynchronizeWithVerticalRetrace = false;
             IsFixedTimeStep = false;
         }
+    }
+
+    /// <summary>Alt+Enter: flip between the borderless windowed "fullscreen" and a
+    /// normal resizable window.</summary>
+    private void ToggleWindowMode() => ApplyWindowMode(!_windowedMode);
+
+    /// <summary>Apply windowed (bordered, resizable) or borderless-fullscreen mode.
+    /// Borderless keeps the +1 height trick so the OS doesn't switch to exclusive
+    /// fullscreen (which breaks screenshots and the dev-server frame capture).</summary>
+    private void ApplyWindowMode(bool windowed)
+    {
+        if (LaunchArgs.Headless) return; // headless owns its own tiny hidden window
+        _windowedMode = windowed;
+        var dm = GraphicsAdapter.DefaultAdapter.CurrentDisplayMode;
+        if (windowed)
+        {
+            Window.IsBorderless = false;
+            Window.AllowUserResizing = true;
+            _graphics.IsFullScreen = false;
+            _graphics.PreferredBackBufferWidth = _windowedW;
+            _graphics.PreferredBackBufferHeight = _windowedH;
+            _graphics.ApplyChanges();
+            // Center on the primary display.
+            Window.Position = new Point(
+                Math.Max(0, (dm.Width - _windowedW) / 2),
+                Math.Max(0, (dm.Height - _windowedH) / 2));
+        }
+        else
+        {
+            // Borderless windowed "fullscreen" with the +1 height trick.
+            Window.AllowUserResizing = false;
+            Window.IsBorderless = true;
+            _graphics.IsFullScreen = false;
+            _graphics.PreferredBackBufferWidth = dm.Width;
+            _graphics.PreferredBackBufferHeight = dm.Height + 1;
+            _graphics.ApplyChanges();
+            Window.Position = Point.Zero;
+        }
+        RefreshScreenSizedTargets();
+    }
+
+    /// <summary>Resize the back-buffer-sized render targets (bloom, weather) and the
+    /// renderer's screen dims to the current viewport. Cheap no-ops before those
+    /// systems are initialized, so it's safe to call early.</summary>
+    private void RefreshScreenSizedTargets()
+    {
+        if (GraphicsDevice == null) return;
+        int w = GraphicsDevice.Viewport.Width, h = GraphicsDevice.Viewport.Height;
+        if (w <= 0 || h <= 0) return;
+        _renderer.SetScreenSize(w, h);
+        _bloom.Resize(GraphicsDevice, w, h);
+        _weatherRenderer.Resize(w, h);
+    }
+
+    private void OnClientSizeChanged(object? sender, EventArgs e)
+    {
+        if (_handlingResize || GraphicsDevice == null) return;
+        _handlingResize = true;
+        try
+        {
+            int w = Window.ClientBounds.Width, h = Window.ClientBounds.Height;
+            if (w <= 0 || h <= 0) return;
+            // In windowed mode, follow the user's drag and remember the new size so
+            // toggling back to windowed later restores it.
+            if (_windowedMode)
+            {
+                _windowedW = w; _windowedH = h;
+                if (_graphics.PreferredBackBufferWidth != w || _graphics.PreferredBackBufferHeight != h)
+                {
+                    _graphics.PreferredBackBufferWidth = w;
+                    _graphics.PreferredBackBufferHeight = h;
+                    _graphics.ApplyChanges();
+                }
+            }
+            RefreshScreenSizedTargets();
+        }
+        finally { _handlingResize = false; }
     }
 
     protected override void Initialize()
@@ -2059,6 +2149,12 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             if (_menuState == MenuState.UIEditor) _menuState = MenuState.None;
             else { EnsureUIEditorInitialized(); _menuState = MenuState.UIEditor; }
         }
+
+        // Alt+Enter: toggle between borderless "fullscreen" and a resizable window.
+        if (!anyTextInputActive
+            && (_input.IsKeyDown(Keys.LeftAlt) || _input.IsKeyDown(Keys.RightAlt))
+            && _input.WasKeyPressed(Keys.Enter))
+            ToggleWindowMode();
 
         // 'I' key toggles inventory (lazy-inits the UI family on first open)
         if (!anyTextInputActive && _input.WasKeyPressed(Keys.I) && _menuState == MenuState.None)
