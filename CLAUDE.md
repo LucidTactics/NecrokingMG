@@ -165,6 +165,17 @@ Canonical implementations of common patterns are tracked in `memory/standard_pat
 
 Automated test scenarios let you verify game behavior by running the game, executing a scenario, and checking log output.
 
+> **Prefer the dev control server over writing a new scenario in most cases.**
+> For interactive/one-off checks — spawn units, set up a situation, move the
+> camera, screenshot, read state — drive the *running* game through the dev server
+> (`tools/devserver.py` + `--devserver`; see `Necroking/Dev/DevServer.cs`). It's
+> far faster than the write-scenario→rebuild→run loop and runs prompt-free via the
+> preview tools. **If something a scenario could do isn't possible through the dev
+> server yet, add the missing command** to `ExecuteDevCommand` (`Game1.cs`) and
+> rebuild — the `/cmd` channel forwards `{cmd,args,opts}` verbatim, so no
+> python-server edit is needed (per the server-edit policy). Reserve *new
+> scenarios* for checks that must run repeatably/headless as regression tests.
+
 ### Running a scenario
 ```bash
 dotnet run --project Necroking/Necroking.csproj -- --scenario <name> --timeout <seconds>
@@ -239,7 +250,7 @@ bin/Debug/Necroking.exe --scenario <name> --timeout <seconds>
 - **Zoom guidance for render tests**: always include at least one tightly-zoomed shot of the smallest testable element (a single unit, a single wall tile, etc.) so rendering issues are easy to spot. Use zoom 100-128 for close-ups, 40-80 for medium shots, 20-40 for overviews
 
 ### Testing preference
-When asked to write an automated test, **always prefer creating a scenario first** (in-engine test with real rendering/systems/screenshots). Only fall back to external scripting (Python tools, etc.) if the scenario system can't handle what's needed — e.g., pure data validation, offline analysis, or things that don't require the game running.
+Order of preference: **(1) dev control server** for interactive and one-off checks (drive the running game live — see the note at the top of this section; add missing commands to `ExecuteDevCommand` rather than working around them); **(2) a new scenario** when you need a *repeatable, headless regression test* with real rendering/systems/screenshots; **(3) external scripting** (Python tools, etc.) only when neither fits — e.g. pure data validation or offline analysis that doesn't require the game running.
 
 ### Scenario logging
 When creating a new scenario, **spend real effort designing what to log**. The scenario log is your primary debugging tool — if a scenario fails or behaves unexpectedly, the log is how you figure out why without re-running.
