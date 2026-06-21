@@ -209,11 +209,50 @@ it for you. The supervisor itself can stay up (cheap; holds the pinned A/B frame
 
 **Game commands** (see `ExecuteDevCommand` in `Game1.cs`):
 - `ping` · `state` — liveness / JSON snapshot of game state
+- `help` (alias `commands`) — list every dev command + the selector syntax. Run
+  this to discover what's available without reading the source.
 - `start_game [map]` — load a map into gameplay
 - `spawn <type> <x> <y>` · `camera <x> <y> [zoom]` · `speed <n>` · `pause` · `resume`
 - `screenshot [name]` with `opts`: `no_ui`, `no_ground`, `downsample_to` (`"WxH"` |
   `"full"`; default 640x360)
 - `menu <new_game|test_map|scenarios|main_menu|quit>` — press a main-menu button
+- **Units & combat** (the same primitives scenarios use, exposed live — added 2026-06-21):
+  - **Selectors** — most commands below take a `<selector>` resolving to one or more
+    units: `all`/`*`, `necro`, a faction (`undead`/`human`/`animal`), a bare index
+    (`9`), `id:<n>` (unit Id), or a UnitDef id (`skeleton`) / UnitType name
+    (`Soldier`), case-insensitive. Faction/def/type/`all` match ALIVE units only.
+  - `spawn_def <unitID> <x> <y> [count]` — spawn by **UnitDef id** (full def
+    stats/faction/AI), unlike `spawn` which takes a bare `UnitType`. `count` spawns
+    a small line. Def ids are lowercase (`skeleton`, `soldier`, `zombiewolf`).
+  - `units [selector]` — list matched units as JSON (idx, id, type, def, faction,
+    ai, x/y, hp/maxHp, mana, alive, inCombat). `unit <selector>` dumps the first match.
+  - `combat_log [n]` — last N combat-log entries (attacker/defender/outcome/damage).
+  - `damage <selector> <amount>` · `kill <selector>` · `remove <selector>` (delete).
+  - `set_ai <selector> <AIBehavior>` · `move <selector> <x> <y>` (AI=MoveToPoint).
+  - `set_hp <selector> <hp> [maxHp]` · `set_mana <selector|necro> <mana> [maxMana]`.
+  - `cast <spellID> <x> <y>` — necromancer casts via the full player pipeline (may
+    fail on mana/cooldown/range — `set_mana necro 9999` first if needed).
+  - `fireball <x> <y> [dmg] [radius] [name]` — spawn a projectile directly
+    (deterministic, no mana/anim gating).
+- **Batch scripts with waits** (`batch` / `job`) — run a sequence of commands with
+  timed waits between them so screenshots land at exact moments. The game steps the
+  script over its own update loop (sim clock, exactly like a scenario's `OnTick`), so
+  `batch` returns a `jobId` immediately and you **poll `job`** for progress/results
+  (never blocks past the HTTP timeout). `opts.script` is an array of steps:
+  `{cmd,args,opts}` (any game command) · `{wait:<simSecs>}` (frozen while paused) ·
+  `{wait_real:<secs>}` · `{wait_frames:<n>}` · `{shot:"name", ...screenshotOpts}`
+  (sugar for a screenshot step). `job` returns `{done,step,total,results:[...]}`
+  where `results[i]` is the raw response of command step i (screenshot steps yield
+  their PNG path); `job cancel` aborts. Example:
+  ```js
+  const {result:{jobId}} = await window.dev('batch',[],{script:[
+    {cmd:'camera',args:[x,y,48]}, {cmd:'speed',args:[4]},
+    {shot:'t0'}, {wait:2.0}, {shot:'t2'}, {wait:2.0}, {shot:'t4'},
+    {cmd:'units',args:['all']},
+  ]});
+  let st; do { await new Promise(r=>setTimeout(r,300)); st=(await window.dev('job',[jobId])).result; } while(!st.done);
+  // st.results holds each step's reply; PNGs are at bin/Debug/log/screenshots/<name>.png
+  ```
 - **UI panels** (added 2026-06-21):
   - `panels` — list every previewable panel, its tabs, the overlays, and the
     current state. **Run this first** to discover valid names.

@@ -35,6 +35,42 @@ public sealed class DevCommand
 
     /// <summary>Complete with a raw JSON response body. Safe to call once.</summary>
     public void Complete(string json) => _tcs.TrySetResult(json);
+
+    /// <summary>Build a command from a JSON object that may carry "cmd", "args"
+    /// (array of strings/numbers) and "opts" (object). Shared by the HTTP parser
+    /// and the batch-script runner so a step in a batch behaves identically to a
+    /// stand-alone command. <paramref name="fallbackCmd"/> is used when the object
+    /// has no "cmd" field (e.g. the URL path shortcut).</summary>
+    public static DevCommand FromElement(JsonElement root, string fallbackCmd = "")
+    {
+        string cmd = root.TryGetProperty("cmd", out var c) ? (c.GetString() ?? fallbackCmd) : fallbackCmd;
+        var result = new DevCommand { Cmd = cmd };
+
+        if (root.TryGetProperty("args", out var a) && a.ValueKind == JsonValueKind.Array)
+        {
+            int n = a.GetArrayLength();
+            var args = new string[n];
+            int i = 0;
+            foreach (var el in a.EnumerateArray())
+                args[i++] = el.ValueKind == JsonValueKind.String
+                    ? (el.GetString() ?? "")
+                    : el.GetRawText();
+            result.Args = args;
+        }
+
+        if (root.TryGetProperty("opts", out var o) && o.ValueKind == JsonValueKind.Object)
+        {
+            foreach (var p in o.EnumerateObject())
+                result.Opts[p.Name] = p.Value.ValueKind switch
+                {
+                    JsonValueKind.String => p.Value.GetString() ?? "",
+                    JsonValueKind.True => "true",
+                    JsonValueKind.False => "false",
+                    _ => p.Value.GetRawText(),
+                };
+        }
+        return result;
+    }
 }
 
 /// <summary>
@@ -155,35 +191,8 @@ public sealed class DevServer
         try
         {
             using var doc = JsonDocument.Parse(body);
-            var root = doc.RootElement;
-            string cmd = root.TryGetProperty("cmd", out var c) ? (c.GetString() ?? "") : trimmedPath;
-            if (string.IsNullOrEmpty(cmd)) return null;
-
-            string[] args = Array.Empty<string>();
-            if (root.TryGetProperty("args", out var a) && a.ValueKind == JsonValueKind.Array)
-            {
-                int n = a.GetArrayLength();
-                args = new string[n];
-                int i = 0;
-                foreach (var el in a.EnumerateArray())
-                    args[i++] = el.ValueKind == JsonValueKind.String
-                        ? (el.GetString() ?? "")
-                        : el.GetRawText();
-            }
-
-            var result = new DevCommand { Cmd = cmd, Args = args };
-            if (root.TryGetProperty("opts", out var o) && o.ValueKind == JsonValueKind.Object)
-            {
-                foreach (var p in o.EnumerateObject())
-                    result.Opts[p.Name] = p.Value.ValueKind switch
-                    {
-                        JsonValueKind.String => p.Value.GetString() ?? "",
-                        JsonValueKind.True => "true",
-                        JsonValueKind.False => "false",
-                        _ => p.Value.GetRawText(),
-                    };
-            }
-            return result;
+            var cmd = DevCommand.FromElement(doc.RootElement, trimmedPath);
+            return string.IsNullOrEmpty(cmd.Cmd) ? null : cmd;
         }
         catch
         {

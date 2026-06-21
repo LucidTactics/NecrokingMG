@@ -366,6 +366,8 @@ public class Game1 : Microsoft.Xna.Framework.Game
     private Necroking.Dev.DevCommand? _pendingDevScreenshotCmd; // completed once the PNG is written
     private int _devShotW, _devShotH;             // downsample target for the pending shot (0 = native)
     private bool _devShotNoUi, _devShotNoGround;  // suppress UI / ground for the pending shot's frame
+    private Necroking.Dev.DevJob? _devJob;        // active batch script (stepped each frame in Update)
+    private int _devJobSeq;                        // id counter for batch jobs
     private int _scenarioScrollOffset;
 
     // Per-unit animation data
@@ -1538,6 +1540,266 @@ public class Game1 : Microsoft.Xna.Framework.Game
                     break;
                 }
 
+                // Spawn a unit by its UnitDef id (full def stats/faction/AI), unlike
+                // `spawn` which takes a bare UnitType. Optional 4th arg spawns a
+                // small cluster (a line offset by 1 world unit on +x).
+                case "spawn_def":
+                {
+                    if (c.Args.Length < 3) { c.Complete(Necroking.Dev.DevServer.Error("spawn_def needs: <unitID> <x> <y> [count]")); break; }
+                    if (_gameData.Units.Get(c.Args[0]) == null)
+                    { c.Complete(Necroking.Dev.DevServer.Error($"unknown unit def: {c.Args[0]}")); break; }
+                    float bx = DevFloat(c.Args[1]), by = DevFloat(c.Args[2]);
+                    int count = c.Args.Length >= 4 ? (int)DevFloat(c.Args[3]) : 1;
+                    if (count < 1) count = 1;
+                    var idxs = new List<int>(count);
+                    for (int i = 0; i < count; i++)
+                        idxs.Add(_sim.SpawnUnitByID(c.Args[0], new Vec2(bx + i, by)));
+                    c.Complete(Necroking.Dev.DevServer.OkRaw(
+                        $"{{\"def\":{System.Text.Json.JsonSerializer.Serialize(c.Args[0])},\"count\":{count},\"indices\":[{string.Join(",", idxs)}]}}"));
+                    break;
+                }
+
+                // List units matching a selector (default "all") as a JSON array.
+                case "units":
+                {
+                    string sel = c.Args.Length > 0 ? string.Join(" ", c.Args) : "all";
+                    var idxs = DevResolveUnits(sel);
+                    var sb = new System.Text.StringBuilder("[");
+                    for (int i = 0; i < idxs.Count; i++)
+                    { if (i > 0) sb.Append(','); sb.Append(DevUnitJson(idxs[i])); }
+                    sb.Append(']');
+                    c.Complete(Necroking.Dev.DevServer.OkRaw(
+                        $"{{\"count\":{idxs.Count},\"units\":{sb}}}"));
+                    break;
+                }
+
+                // Detailed dump of the first unit matching a selector.
+                case "unit":
+                {
+                    if (c.Args.Length < 1) { c.Complete(Necroking.Dev.DevServer.Error("unit needs: <selector>")); break; }
+                    var idxs = DevResolveUnits(string.Join(" ", c.Args));
+                    if (idxs.Count == 0) { c.Complete(Necroking.Dev.DevServer.Error($"no unit matched '{string.Join(" ", c.Args)}'")); break; }
+                    c.Complete(Necroking.Dev.DevServer.OkRaw(DevUnitJson(idxs[0])));
+                    break;
+                }
+
+                // Recent combat-log entries (default last 20).
+                case "combat_log":
+                {
+                    int n = c.Args.Length > 0 ? (int)DevFloat(c.Args[0]) : 20;
+                    var e = _sim.CombatLog.Entries;
+                    int start = Math.Max(0, e.Count - n);
+                    var sb = new System.Text.StringBuilder("[");
+                    for (int i = start; i < e.Count; i++)
+                    {
+                        if (i > start) sb.Append(',');
+                        var en = e[i];
+                        sb.Append('{')
+                          .Append($"\"t\":{en.Timestamp.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)},")
+                          .Append($"\"attacker\":{System.Text.Json.JsonSerializer.Serialize(en.AttackerName)},")
+                          .Append($"\"defender\":{System.Text.Json.JsonSerializer.Serialize(en.DefenderName)},")
+                          .Append($"\"outcome\":\"{en.Outcome}\",")
+                          .Append($"\"weapon\":{System.Text.Json.JsonSerializer.Serialize(en.WeaponName)},")
+                          .Append($"\"damage\":{en.NetDamage},")
+                          .Append($"\"hitLoc\":\"{en.HitLocationName}\"")
+                          .Append('}');
+                    }
+                    sb.Append(']');
+                    c.Complete(Necroking.Dev.DevServer.OkRaw(
+                        $"{{\"total\":{e.Count},\"entries\":{sb}}}"));
+                    break;
+                }
+
+                // Deal armor-negating damage to every unit matching a selector.
+                case "damage":
+                {
+                    if (c.Args.Length < 2) { c.Complete(Necroking.Dev.DevServer.Error("damage needs: <selector> <amount>")); break; }
+                    int amount = (int)DevFloat(c.Args[c.Args.Length - 1]);
+                    var idxs = DevResolveUnits(string.Join(" ", c.Args, 0, c.Args.Length - 1));
+                    foreach (int i in idxs) _sim.DealDamage(i, amount);
+                    c.Complete(Necroking.Dev.DevServer.Ok($"dealt {amount} to {idxs.Count} unit(s)"));
+                    break;
+                }
+
+                // Kill every unit matching a selector (massive armor-negating hit).
+                case "kill":
+                {
+                    if (c.Args.Length < 1) { c.Complete(Necroking.Dev.DevServer.Error("kill needs: <selector>")); break; }
+                    var idxs = DevResolveUnits(string.Join(" ", c.Args));
+                    foreach (int i in idxs) _sim.DealDamage(i, 999999);
+                    c.Complete(Necroking.Dev.DevServer.Ok($"killed {idxs.Count} unit(s)"));
+                    break;
+                }
+
+                // Remove every unit matching a selector outright (no corpse).
+                case "remove":
+                {
+                    if (c.Args.Length < 1) { c.Complete(Necroking.Dev.DevServer.Error("remove needs: <selector>")); break; }
+                    var idxs = DevResolveUnits(string.Join(" ", c.Args));
+                    idxs.Sort(); // remove high indices first (swap-and-pop shifts the tail)
+                    for (int k = idxs.Count - 1; k >= 0; k--) _sim.UnitsMut.RemoveUnit(idxs[k]);
+                    c.Complete(Necroking.Dev.DevServer.Ok($"removed {idxs.Count} unit(s)"));
+                    break;
+                }
+
+                // Set the AI behaviour on every unit matching a selector.
+                case "set_ai":
+                {
+                    if (c.Args.Length < 2) { c.Complete(Necroking.Dev.DevServer.Error("set_ai needs: <selector> <AIBehavior>")); break; }
+                    if (!Enum.TryParse<AIBehavior>(c.Args[c.Args.Length - 1], true, out var ai))
+                    { c.Complete(Necroking.Dev.DevServer.Error($"unknown AIBehavior: {c.Args[c.Args.Length - 1]} (e.g. {string.Join(", ", Enum.GetNames(typeof(AIBehavior)))})")); break; }
+                    var idxs = DevResolveUnits(string.Join(" ", c.Args, 0, c.Args.Length - 1));
+                    foreach (int i in idxs) _sim.UnitsMut[i].AI = ai;
+                    c.Complete(Necroking.Dev.DevServer.Ok($"set AI={ai} on {idxs.Count} unit(s)"));
+                    break;
+                }
+
+                // Order matching units to move to a world point (AI = MoveToPoint).
+                case "move":
+                {
+                    if (c.Args.Length < 3) { c.Complete(Necroking.Dev.DevServer.Error("move needs: <selector> <x> <y>")); break; }
+                    float mx = DevFloat(c.Args[c.Args.Length - 2]), my = DevFloat(c.Args[c.Args.Length - 1]);
+                    var idxs = DevResolveUnits(string.Join(" ", c.Args, 0, c.Args.Length - 2));
+                    foreach (int i in idxs)
+                    {
+                        _sim.UnitsMut[i].MoveTarget = new Vec2(mx, my);
+                        _sim.UnitsMut[i].AI = AIBehavior.MoveToPoint;
+                        _sim.UnitsMut[i].Target = CombatTarget.None;
+                    }
+                    c.Complete(Necroking.Dev.DevServer.Ok($"moved {idxs.Count} unit(s) to ({mx},{my})"));
+                    break;
+                }
+
+                // Set HP (and optionally MaxHP) on matching units.
+                case "set_hp":
+                {
+                    if (c.Args.Length < 2) { c.Complete(Necroking.Dev.DevServer.Error("set_hp needs: <selector> <hp> [maxHp]")); break; }
+                    bool hasMax = c.Args.Length >= 3;
+                    int hp = (int)DevFloat(c.Args[c.Args.Length - (hasMax ? 2 : 1)]);
+                    int maxHp = hasMax ? (int)DevFloat(c.Args[c.Args.Length - 1]) : 0;
+                    var idxs = DevResolveUnits(string.Join(" ", c.Args, 0, c.Args.Length - (hasMax ? 2 : 1)));
+                    foreach (int i in idxs)
+                    {
+                        if (hasMax) _sim.UnitsMut[i].Stats.MaxHP = maxHp;
+                        _sim.UnitsMut[i].Stats.HP = hp;
+                    }
+                    c.Complete(Necroking.Dev.DevServer.Ok($"set HP={hp}{(hasMax ? $" MaxHP={maxHp}" : "")} on {idxs.Count} unit(s)"));
+                    break;
+                }
+
+                // Set mana on matching units, or on the necromancer's NecroState
+                // (selector "necro"). Used to enable spell-cast tests.
+                case "set_mana":
+                {
+                    if (c.Args.Length < 2) { c.Complete(Necroking.Dev.DevServer.Error("set_mana needs: <selector|necro> <mana> [maxMana]")); break; }
+                    bool hasMax = c.Args.Length >= 3;
+                    float mana = DevFloat(c.Args[c.Args.Length - (hasMax ? 2 : 1)]);
+                    float maxMana = hasMax ? DevFloat(c.Args[c.Args.Length - 1]) : 0f;
+                    string sel = string.Join(" ", c.Args, 0, c.Args.Length - (hasMax ? 2 : 1));
+                    if (sel.Equals("necro", StringComparison.OrdinalIgnoreCase) ||
+                        sel.Equals("necromancer", StringComparison.OrdinalIgnoreCase))
+                    {
+                        if (hasMax) _sim.NecroState.MaxMana = maxMana;
+                        _sim.NecroState.Mana = mana;
+                        c.Complete(Necroking.Dev.DevServer.Ok($"necro mana={mana}{(hasMax ? $" max={maxMana}" : "")}"));
+                        break;
+                    }
+                    var idxs = DevResolveUnits(sel);
+                    foreach (int i in idxs)
+                    {
+                        if (hasMax) _sim.UnitsMut[i].MaxMana = maxMana;
+                        _sim.UnitsMut[i].Mana = mana;
+                    }
+                    c.Complete(Necroking.Dev.DevServer.Ok($"set mana={mana} on {idxs.Count} unit(s)"));
+                    break;
+                }
+
+                // Necromancer casts a spell at a world point (full player pipeline).
+                // Cast may fail on mana/cooldown/range — set_mana necro first if needed.
+                case "cast":
+                {
+                    if (c.Args.Length < 3) { c.Complete(Necroking.Dev.DevServer.Error("cast needs: <spellID> <x> <y>")); break; }
+                    int necroIdx = _sim.NecromancerIndex;
+                    if (necroIdx < 0) { c.Complete(Necroking.Dev.DevServer.Error("no necromancer in world")); break; }
+                    if (_gameData.Spells.Get(c.Args[0]) == null)
+                    { c.Complete(Necroking.Dev.DevServer.Error($"unknown spell: {c.Args[0]}")); break; }
+                    var target = new Vec2(DevFloat(c.Args[1]), DevFloat(c.Args[2]));
+                    var res = DispatchSpellCast(c.Args[0], necroIdx, 0, target, false);
+                    c.Complete(Necroking.Dev.DevServer.Ok($"cast {c.Args[0]} -> {res}"));
+                    break;
+                }
+
+                // Spawn a fireball projectile directly (deterministic, no mana/anim
+                // gating). From the necromancer if present, else from offset of target.
+                case "fireball":
+                {
+                    if (c.Args.Length < 2) { c.Complete(Necroking.Dev.DevServer.Error("fireball needs: <x> <y> [damage] [radius] [name]")); break; }
+                    var target = new Vec2(DevFloat(c.Args[0]), DevFloat(c.Args[1]));
+                    int dmg = c.Args.Length >= 3 ? (int)DevFloat(c.Args[2]) : 25;
+                    float radius = c.Args.Length >= 4 ? DevFloat(c.Args[3]) : 1.5f;
+                    string name = c.Args.Length >= 5 ? c.Args[4] : "Fireball";
+                    int ni = _sim.NecromancerIndex;
+                    Vec2 from = ni >= 0 ? _sim.Units[ni].Position : target + new Vec2(-6f, 0f);
+                    uint owner = ni >= 0 ? _sim.Units[ni].Id : 0u;
+                    _sim.Projectiles.SpawnFireball(from, target, Faction.Undead, owner, dmg, radius, name);
+                    c.Complete(Necroking.Dev.DevServer.Ok($"fireball from ({from.X:F1},{from.Y:F1}) -> ({target.X:F1},{target.Y:F1}) dmg={dmg} r={radius}"));
+                    break;
+                }
+
+                // Queue a batch script: a list of commands with waits between them,
+                // stepped over the game's update loop. Returns a job id immediately;
+                // poll progress + results with `job`. opts.script = [ {cmd,args,opts}
+                // | {wait:<simSecs>} | {wait_real:<secs>} | {wait_frames:<n>}
+                // | {shot:"name", ...screenshotOpts} ].
+                case "batch":
+                {
+                    string? raw = c.Opt("script");
+                    if (string.IsNullOrEmpty(raw))
+                    { c.Complete(Necroking.Dev.DevServer.Error("batch needs opts.script = [ {cmd,args,opts} | {wait:n} | {wait_real:n} | {wait_frames:n} | {shot:\"name\"} ]")); break; }
+                    var steps = ParseDevScript(raw, out string perr);
+                    if (steps == null) { c.Complete(Necroking.Dev.DevServer.Error($"bad script: {perr}")); break; }
+                    string jobId = $"job{++_devJobSeq}";
+                    _devJob = new Necroking.Dev.DevJob { Id = jobId, Steps = steps };
+                    c.Complete(Necroking.Dev.DevServer.OkRaw($"{{\"jobId\":\"{jobId}\",\"steps\":{steps.Count}}}"));
+                    break;
+                }
+
+                // Poll the active batch job. `job cancel` aborts it.
+                case "job":
+                {
+                    if (_devJob == null) { c.Complete(Necroking.Dev.DevServer.Error("no batch job (run 'batch' first)")); break; }
+                    if (c.Args.Length > 0 && c.Args[0].Equals("cancel", StringComparison.OrdinalIgnoreCase))
+                    { _devJob.Done = true; _devJob.Canceled = true; }
+                    c.Complete(Necroking.Dev.DevServer.OkRaw(DevJobStatusJson(_devJob)));
+                    break;
+                }
+
+                // Discovery: list every dev command with a one-line signature.
+                case "help":
+                case "commands":
+                {
+                    var cmds = new[]
+                    {
+                        "ping", "state", "help",
+                        "spawn <type> <x> <y>", "spawn_def <unitID> <x> <y> [count]",
+                        "units [selector]", "unit <selector>", "combat_log [n]",
+                        "damage <selector> <amount>", "kill <selector>", "remove <selector>",
+                        "set_ai <selector> <AIBehavior>", "move <selector> <x> <y>",
+                        "set_hp <selector> <hp> [maxHp]", "set_mana <selector|necro> <mana> [maxMana]",
+                        "cast <spellID> <x> <y>", "fireball <x> <y> [dmg] [radius] [name]",
+                        "camera <x> <y> [zoom]", "speed <n>", "pause", "resume",
+                        "start_game [map]", "menu <new_game|test_map|scenarios|main_menu|quit>",
+                        "screenshot [name]  opts:{no_ui,no_ground,downsample_to}",
+                        "panels", "panel <name> [tab]", "tab <name>",
+                        "overlay <name> [open|close|toggle]", "select <name|id|index>",
+                        "batch  opts:{script:[{cmd,args,opts}|{wait:n}|{wait_real:n}|{wait_frames:n}|{shot:\"name\"}]}",
+                        "job [cancel]",
+                    };
+                    c.Complete(Necroking.Dev.DevServer.OkRaw(
+                        $"{{\"selectors\":\"all|necro|undead|human|animal|<index>|id:<n>|<unitDefId>|<UnitType>\",\"commands\":{System.Text.Json.JsonSerializer.Serialize(cmds)}}}"));
+                    break;
+                }
+
                 default:
                     c.Complete(Necroking.Dev.DevServer.Error($"unknown cmd: {c.Cmd}"));
                     break;
@@ -1748,6 +2010,181 @@ public class Game1 : Microsoft.Xna.Framework.Game
             $"\"camera\":{{\"x\":{_camera.Position.X.ToString("F2", ci)},\"y\":{_camera.Position.Y.ToString("F2", ci)},\"zoom\":{_camera.Zoom.ToString("F2", ci)}}}," +
             $"\"necromancer\":{necro}" +
             "}";
+    }
+
+    /// <summary>Resolve a dev unit selector to a list of indices into _sim.Units.
+    /// Accepts: "all"/"*"; "necro"/"necromancer"; a faction ("undead"/"human"/
+    /// "animal"); a bare integer index; "id:&lt;n&gt;" for a unit Id; otherwise a
+    /// UnitDef id or UnitType name (case-insensitive). Faction / def / type / "all"
+    /// selectors return only ALIVE units; explicit index / id return the unit
+    /// regardless so it can still be inspected.</summary>
+    private List<int> DevResolveUnits(string token)
+    {
+        var result = new List<int>();
+        token = (token ?? "").Trim();
+        string lower = token.ToLowerInvariant();
+        int count = _sim.Units.Count;
+
+        switch (lower)
+        {
+            case "all":
+            case "*":
+                for (int i = 0; i < count; i++) if (_sim.Units[i].Alive) result.Add(i);
+                return result;
+            case "necro":
+            case "necromancer":
+                if (_sim.NecromancerIndex >= 0) result.Add(_sim.NecromancerIndex);
+                return result;
+            case "undead":
+                for (int i = 0; i < count; i++) if (_sim.Units[i].Alive && _sim.Units[i].Faction == Faction.Undead) result.Add(i);
+                return result;
+            case "human":
+                for (int i = 0; i < count; i++) if (_sim.Units[i].Alive && _sim.Units[i].Faction == Faction.Human) result.Add(i);
+                return result;
+            case "animal":
+                for (int i = 0; i < count; i++) if (_sim.Units[i].Alive && _sim.Units[i].Faction == Faction.Animal) result.Add(i);
+                return result;
+        }
+
+        if (lower.StartsWith("id:") && uint.TryParse(lower.Substring(3), out uint uid))
+        {
+            for (int i = 0; i < count; i++) if (_sim.Units[i].Id == uid) { result.Add(i); break; }
+            return result;
+        }
+
+        if (int.TryParse(token, out int idx))
+        {
+            if (idx >= 0 && idx < count) result.Add(idx);
+            return result;
+        }
+
+        // Match by UnitDef id or UnitType name (alive only).
+        for (int i = 0; i < count; i++)
+        {
+            if (!_sim.Units[i].Alive) continue;
+            if (_sim.Units[i].UnitDefID.Equals(token, StringComparison.OrdinalIgnoreCase) ||
+                _sim.Units[i].Type.ToString().Equals(token, StringComparison.OrdinalIgnoreCase))
+                result.Add(i);
+        }
+        return result;
+    }
+
+    /// <summary>One unit serialized as a compact JSON object (the shape returned by
+    /// the `units` / `unit` dev commands).</summary>
+    private string DevUnitJson(int i)
+    {
+        var ci = System.Globalization.CultureInfo.InvariantCulture;
+        var u = _sim.Units[i];
+        return "{" +
+            $"\"idx\":{i}," +
+            $"\"id\":{u.Id}," +
+            $"\"type\":\"{u.Type}\"," +
+            $"\"def\":{System.Text.Json.JsonSerializer.Serialize(u.UnitDefID ?? "")}," +
+            $"\"faction\":\"{u.Faction}\"," +
+            $"\"ai\":\"{u.AI}\"," +
+            $"\"x\":{u.Position.X.ToString("F2", ci)},\"y\":{u.Position.Y.ToString("F2", ci)}," +
+            $"\"hp\":{u.Stats.HP},\"maxHp\":{u.Stats.MaxHP}," +
+            $"\"mana\":{u.Mana.ToString("F1", ci)},\"maxMana\":{u.MaxMana.ToString("F1", ci)}," +
+            $"\"alive\":{(u.Alive ? "true" : "false")}," +
+            $"\"inCombat\":{(u.InCombat ? "true" : "false")}" +
+            "}";
+    }
+
+    /// <summary>Parse a batch script (JSON array of step objects) into DevScriptSteps.
+    /// Returns null + an error message on malformed input.</summary>
+    private List<Necroking.Dev.DevScriptStep>? ParseDevScript(string rawJson, out string err)
+    {
+        err = "";
+        try
+        {
+            using var doc = System.Text.Json.JsonDocument.Parse(rawJson);
+            if (doc.RootElement.ValueKind != System.Text.Json.JsonValueKind.Array)
+            { err = "script must be a JSON array"; return null; }
+
+            var steps = new List<Necroking.Dev.DevScriptStep>();
+            foreach (var el in doc.RootElement.EnumerateArray())
+            {
+                if (el.ValueKind != System.Text.Json.JsonValueKind.Object)
+                { err = "each step must be an object"; return null; }
+
+                if (el.TryGetProperty("wait", out var w))
+                { steps.Add(new Necroking.Dev.DevScriptStep { WaitSimSecs = (float)w.GetDouble() }); continue; }
+                if (el.TryGetProperty("wait_real", out var wr))
+                { steps.Add(new Necroking.Dev.DevScriptStep { WaitRealSecs = (float)wr.GetDouble() }); continue; }
+                if (el.TryGetProperty("wait_frames", out var wf))
+                { steps.Add(new Necroking.Dev.DevScriptStep { WaitFrames = wf.GetInt32() }); continue; }
+
+                // "shot" sugar → a screenshot command carrying the same opts.
+                if (el.TryGetProperty("shot", out var shot))
+                {
+                    var cmd = Necroking.Dev.DevCommand.FromElement(el, "screenshot");
+                    cmd.Cmd = "screenshot";
+                    cmd.Args = new[] { shot.GetString() ?? "shot" };
+                    steps.Add(new Necroking.Dev.DevScriptStep { Cmd = cmd });
+                    continue;
+                }
+
+                var dc = Necroking.Dev.DevCommand.FromElement(el);
+                if (string.IsNullOrEmpty(dc.Cmd))
+                { err = "step has no cmd/wait"; return null; }
+                if (dc.Cmd == "batch")
+                { err = "nested batch is not allowed"; return null; }
+                steps.Add(new Necroking.Dev.DevScriptStep { Cmd = dc });
+            }
+            return steps;
+        }
+        catch (Exception ex) { err = ex.Message; return null; }
+    }
+
+    /// <summary>Status of a batch job as JSON (the `job` command's payload).</summary>
+    private static string DevJobStatusJson(Necroking.Dev.DevJob job)
+    {
+        return "{" +
+            $"\"id\":\"{job.Id}\"," +
+            $"\"done\":{(job.Done ? "true" : "false")}," +
+            $"\"canceled\":{(job.Canceled ? "true" : "false")}," +
+            $"\"step\":{job.Cursor},\"total\":{job.Steps.Count}," +
+            $"\"results\":[{string.Join(",", job.Results)}]" +
+            "}";
+    }
+
+    /// <summary>Advance the active batch script. Mirrors a scenario's OnTick: it
+    /// burns down the current wait (sim seconds, real seconds, or frames), then
+    /// runs as many command steps as it can until the next wait or an async command
+    /// (a screenshot, which only finishes once Draw writes the PNG).</summary>
+    private void UpdateDevScript(float simDt, float realDt)
+    {
+        var job = _devJob;
+        if (job == null || job.Done) return;
+
+        // Drain an in-flight async command (screenshot) before doing anything else.
+        if (job.InFlight != null)
+        {
+            if (!job.InFlight.Result.IsCompleted) return;       // PNG not written yet
+            job.Results.Add(job.InFlight.Result.Result);
+            job.InFlight = null;
+        }
+
+        // Burn down the active wait, if any. A frame/sim/real wait blocks until spent.
+        if (job.WaitFrames > 0) { job.WaitFrames--; return; }
+        if (job.WaitSim > 0f)  { job.WaitSim  -= simDt;  if (job.WaitSim  > 0f) return; job.WaitSim  = 0f; }
+        if (job.WaitReal > 0f) { job.WaitReal -= realDt; if (job.WaitReal > 0f) return; job.WaitReal = 0f; }
+
+        // Run forward until we hit a wait or launch an async command.
+        while (job.Cursor < job.Steps.Count)
+        {
+            var step = job.Steps[job.Cursor++];
+            if (step.WaitFrames > 0)   { job.WaitFrames = step.WaitFrames; return; }
+            if (step.WaitSimSecs > 0f) { job.WaitSim   = step.WaitSimSecs; return; }
+            if (step.WaitRealSecs > 0f){ job.WaitReal  = step.WaitRealSecs; return; }
+            if (step.Cmd != null)
+            {
+                ExecuteDevCommand(step.Cmd);
+                if (!step.Cmd.Result.IsCompleted) { job.InFlight = step.Cmd; return; } // e.g. screenshot
+                job.Results.Add(step.Cmd.Result.Result);
+            }
+        }
+        job.Done = true;
     }
 
     private void StartScenario(string scenarioName)
@@ -2664,6 +3101,10 @@ public class Game1 : Microsoft.Xna.Framework.Game
         float dt = _paused ? 0f : MathF.Min(rawDt, 1f / 20f) * _timeScale;
         _gameTime += dt;
         _frameDt = dt;
+
+        // Step the active dev batch script (if any) over the same sim/real clock a
+        // scenario's OnTick uses, so scripted waits + screenshots land deterministically.
+        if (_devJob != null) UpdateDevScript(dt, rawDt);
 
         // --- Diagnostic: auto-click Start Game from command line (--autostart) ---
         if (_menuState == MenuState.MainMenu && LaunchArgs.AutoStart)
