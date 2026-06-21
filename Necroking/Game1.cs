@@ -397,6 +397,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     private bool _devShotNoUi, _devShotNoGround;  // suppress UI / ground for the pending shot's frame
     private Necroking.Dev.DevJob? _devJob;        // active batch script (stepped each frame in Update)
     private int _devJobSeq;                        // id counter for batch jobs
+    private Vec2? _devWalkTarget;                  // dev "walk_necro" goal; drives WASD-equivalent input, cancelled by any WASD press
     private int _scenarioScrollOffset;
 
     // Per-unit animation data
@@ -2497,7 +2498,27 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
                 if (_input.IsKeyDown(Keys.S)) moveDir.Y += 1f;
                 if (_input.IsKeyDown(Keys.A)) moveDir.X -= 1f;
                 if (_input.IsKeyDown(Keys.D)) moveDir.X += 1f;
-                if (moveDir.LengthSq() > 0.01f) moveDir = moveDir.Normalized();
+                bool wasdHeld = moveDir.LengthSq() > 0.01f;
+                if (wasdHeld) moveDir = moveDir.Normalized();
+
+                // Dev "walk_necro" auto-walk: drives the same movement input toward
+                // a goal point. Any WASD press cancels it so manual control always
+                // wins (avoids the player fighting an invisible auto-walk).
+                if (_devWalkTarget.HasValue)
+                {
+                    if (wasdHeld)
+                    {
+                        _devWalkTarget = null;
+                    }
+                    else
+                    {
+                        var toGoal = _devWalkTarget.Value - _sim.Units[necroIdx].Position;
+                        if (toGoal.LengthSq() <= 0.25f) // ~0.5 world units = arrived
+                            _devWalkTarget = null;
+                        else
+                            moveDir = toGoal.Normalized();
+                    }
+                }
 
                 bool running = _input.IsKeyDown(Keys.LeftShift) || _input.IsKeyDown(Keys.RightShift);
                 _sim.SetNecromancerInput(moveDir, running);

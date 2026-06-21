@@ -452,6 +452,33 @@ public partial class Game1 {
                break;
             }
 
+            // Walk the (player-controlled) necromancer to a world point using the
+            // same movement input WASD drives. Auto-cancels the instant any WASD
+            // key is pressed (see the player-input block in Update), so manual
+            // control always overrides it. 'clear'/'cancel'/'stop' aborts the walk.
+            case "walk_necro": {
+               if (_sim.NecromancerIndex < 0) {
+                  c.Complete(Necroking.Dev.DevServer.Error("no necromancer in the sim"));
+                  break;
+               }
+               if (c.Args.Length == 1 &&
+                   (c.Args[0].Equals("clear", StringComparison.OrdinalIgnoreCase) ||
+                    c.Args[0].Equals("cancel", StringComparison.OrdinalIgnoreCase) ||
+                    c.Args[0].Equals("stop", StringComparison.OrdinalIgnoreCase))) {
+                  _devWalkTarget = null;
+                  c.Complete(Necroking.Dev.DevServer.Ok("walk_necro cancelled"));
+                  break;
+               }
+               if (c.Args.Length < 2) {
+                  c.Complete(Necroking.Dev.DevServer.Error("walk_necro needs: <x> <y>  (or 'clear')"));
+                  break;
+               }
+               float wx = DevFloat(c.Args[0]), wy = DevFloat(c.Args[1]);
+               _devWalkTarget = new Vec2(wx, wy);
+               c.Complete(Necroking.Dev.DevServer.Ok($"necromancer walking to ({wx},{wy})"));
+               break;
+            }
+
             // Set HP (and optionally MaxHP) on matching units.
             case "set_hp": {
                if (c.Args.Length < 2) {
@@ -624,6 +651,7 @@ public partial class Game1 {
                   "units [selector]", "unit <selector>", "combat_log [n]",
                   "damage <selector> <amount>", "kill <selector>", "remove <selector>",
                   "set_ai <selector> <AIBehavior>", "move <selector> <x> <y>",
+                  "walk_necro <x> <y>  (or 'clear'; cancelled by any WASD press)",
                   "mark <selector|clear>", "unmark [selector]",
                   "set_hp <selector> <hp> [maxHp]", "set_mana <selector|necro> <mana> [maxMana]",
                   "cast <spellID> <x> <y>", "fireball <x> <y> [dmg] [radius] [name]",
