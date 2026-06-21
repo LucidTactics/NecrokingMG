@@ -23,7 +23,8 @@
       "Bash(cut:*)",
       "Bash(wc:*)",
       "Bash(sort:*)",
-      "Bash(xargs grep:*)"
+      "Bash(xargs grep:*)",
+      "Bash(python tools/json_data.py:*)"
     ]
   },
   "hooks": {
