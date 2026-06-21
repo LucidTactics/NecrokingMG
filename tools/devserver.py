@@ -26,6 +26,11 @@ the game runs hidden: headless launches drop the (off-screen) window's taskbar
 button (Necroking/Core/WindowChrome.cs), so a supervisor-owned game doesn't show
 in the Windows taskbar. To watch it run, start it windowed ({"windowed":true}).
 
+WHEN DONE: stop the game (POST /game/stop) before handing back to the user — a
+headless game is now invisible (no taskbar button), so a forgotten one idles in
+the background burning CPU/GPU. Leave the supervisor up if you like (it's cheap
+and holds the pinned A/B frame); just don't leave the game running.
+
 Run it (typically in the background):
 
     python tools/devserver.py            # serves on :8777, game on :8778
