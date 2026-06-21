@@ -118,4 +118,9 @@ public static class GamePaths
     public const string CombatLog = "log/combat.log";
     public const string ScenarioLog = "log/scenario.log";
     public const string ScreenshotDir = "log/screenshots";
+    
+    // --- Placeholder Icons ---
+    
+    public const string PlaceholderIcon = "assets/UI/Icons/PlaceholderIcons/Effect36.png";
+    public const string PlaceholderSpellIcon = "assets/UI/Icons/PlaceholderIcons/Spell48.png";
 }

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Necroking.Core;
 using Necroking.Data;
 using Necroking.Data.Registries;
 
@@ -79,6 +80,8 @@ public static class GrimoirePanel
         r.SetImage(inst, "cost_i", IcoFatigue);
         if (!string.IsNullOrEmpty(s.Icon))
             r.SetImage(inst, "icon", s.Icon);
+        else
+           r.SetImage(inst, "icon", GamePaths.PlaceholderSpellIcon);
 
         // Second path/cost slots: only when authored (none of ours yet)
         bool path2 = !string.IsNullOrEmpty(s.SecondaryPath) && s.SecondaryLevel > 0;

@@ -7902,7 +7902,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
                     }
                 break;
             default:
-                _spriteBatch.Draw(_pixel, new Rectangle(cx - 2, cy - 2, 4, 4), new Color(180, 180, 180, 150));
+                _spriteBatch.Draw(_pixel, new Rectangle(cx - 6, cy - 6, 12, 12), new Color(180, 180, 180, 150));
                 break;
         }
     }

@@ -340,8 +340,8 @@ public partial class HUDRenderer
             {
                 if (spell != null && !string.IsNullOrEmpty(spell.Icon))
                     _widgets?.DrawIcon(spell.Icon, innerRect.X, innerRect.Y, innerRect.Width, innerRect.Height);
-                else if (spell != null && !isSecondary)
-                    drawCategoryIcon(spell.Category, innerRect.Center.X, innerRect.Center.Y);
+                else if (spell != null)
+                   _widgets?.DrawIcon(GamePaths.PlaceholderSpellIcon, innerRect.X, innerRect.Y, innerRect.Width, innerRect.Height);
             });
 
             if (hovered)
