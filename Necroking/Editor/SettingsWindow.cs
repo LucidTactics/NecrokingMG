@@ -621,6 +621,14 @@ public class SettingsWindow
         if (hlBox != t.ShowHoverHighlight) { t.ShowHoverHighlight = hlBox; MarkDirty(); }
         y += rowH;
 
+        y += 6;
+        DrawSectionHeader("World Position Debug", x, ref y);
+
+        // Bottom-left readout of the exact world position under the cursor.
+        bool worldDbg = _ui.DrawCheckbox("Show world position info (bottom-left)", t.ShowWorldHoverDebug, x, y);
+        if (worldDbg != t.ShowWorldHoverDebug) { t.ShowWorldHoverDebug = worldDbg; MarkDirty(); }
+        y += rowH;
+
         y += 10;
 
         // Info text explaining the two modes.

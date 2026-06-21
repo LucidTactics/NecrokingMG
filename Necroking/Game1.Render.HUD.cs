@@ -543,6 +543,72 @@ public partial class Game1
         _ => sub switch { 0 => "Walk", 1 => "Idle", _ => $"S{sub}" },
     };
 
+    /// <summary>Debug readout (Settings → Tooltips → "Show world position info"):
+    /// when the cursor is over the world (not UI, no menu open), dump a block of
+    /// text about the exact world position under the cursor in the bottom-left
+    /// corner, anchored bottom-left (the block grows upward from the bottom).
+    /// First/foremost line is the death-fog density at that position. Add more
+    /// lines here as more per-position data becomes worth surfacing. Drawn into
+    /// the HUD's already-open SpriteBatch (no Begin/End of its own).</summary>
+    private void DrawWorldHoverInfo(int screenW, int screenH)
+    {
+        if (!_gameData.Settings.Tooltips.ShowWorldHoverDebug) return;
+        if (_smallFont == null) return;
+        // Only when actually hovering the world: no UI element under the cursor and
+        // no full-screen menu/editor open.
+        if (_input.MouseOverUI) return;
+        if (_menuState != MenuState.None) return;
+
+        Vec2 mw = _camera.ScreenToWorld(_input.MousePos, screenW, screenH);
+
+        // Off the map → nothing to report (cursor is over empty void around the world).
+        if (_groundSystem != null &&
+            (mw.X < 0f || mw.Y < 0f || mw.X >= _groundSystem.WorldW || mw.Y >= _groundSystem.WorldH))
+            return;
+
+        _deathFog.WorldToCell(mw.X, mw.Y, out int fcx, out int fcy);
+        float fog = _deathFog.Sample(mw.X, mw.Y);
+
+        // Build the readout. The first data line is the death-fog level; everything
+        // below is supporting context. Keep lines short — they're bottom-left and
+        // shouldn't crowd the spell bar.
+        var lines = new List<(string text, Color color)>
+        {
+            ("WORLD HOVER",                                       new Color(180, 220, 255)),
+            ($"death fog: {fog:F4}",                              new Color(170, 255, 180)),
+            ($"pos: ({mw.X:F1}, {mw.Y:F1})",                      new Color(220, 220, 220)),
+            ($"fog cell: ({fcx}, {fcy})  cs={_deathFog.CellSize}",new Color(180, 180, 185)),
+        };
+
+        var f = _smallFont!;
+        int lineH = f.LineSpacing;
+        int pad = 8;
+        int gap = 2;
+
+        float maxW = 0f;
+        foreach (var (text, _) in lines)
+            maxW = MathF.Max(maxW, f.MeasureString(SanitizeAscii(text)).X);
+
+        int blockH = lines.Count * lineH + (lines.Count - 1) * gap;
+        int boxW = (int)MathF.Ceiling(maxW) + pad * 2;
+        int boxH = blockH + pad * 2;
+
+        int boxX = 8;                       // bottom-left, small margin from the edge
+        int boxY = screenH - 8 - boxH;      // bottom-adjusted: anchor to the bottom edge
+
+        // Translucent backing so the text reads over any terrain.
+        _spriteBatch.Draw(_pixel, new Rectangle(boxX, boxY, boxW, boxH), new Color(12, 14, 18, 205));
+        _spriteBatch.Draw(_pixel, new Rectangle(boxX, boxY, boxW, 2), new Color(70, 110, 150));
+
+        int ty = boxY + pad;
+        foreach (var (text, color) in lines)
+        {
+            _spriteBatch.DrawString(f, SanitizeAscii(text),
+                new Vector2(boxX + pad, ty), color);
+            ty += lineH + gap;
+        }
+    }
+
     private void DrawHUD(int screenW, int screenH)
     {
         _hudRenderer.Draw(screenW, screenH, _sim, _gameData,

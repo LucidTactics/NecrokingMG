@@ -186,13 +186,25 @@ public partial class Game1 {
       var result = _spellEffects.Execute(spell, _sim, _gameData, necroIdx, target, slot,
          _damageNumbers,
          SpawnSpellProjectile,
-         (sp, cIdx) => ExecuteSummonSpell(sp, _pendingSpell, _sim.Units[cIdx].Position, cIdx));
+         (sp, cIdx) => ExecuteSummonSpell(sp, _pendingSpell, _sim.Units[cIdx].Position, cIdx),
+         ApplyBlightSpell);
 
       // Apply side effects that SpellEffectSystem can't own (Game1 state)
       if (result.ChannelingSlot >= 0)
          _channelingSlot = result.ChannelingSlot;
       if (result.PendingProjectile.HasValue)
          _pendingProjectiles.Add(result.PendingProjectile.Value);
+   }
+
+   /// <summary>Apply a Blight-category spell to the death-fog field at the target.
+   /// Add mode dumps BlightAmount blight into the target cell (blight bomb); Purify
+   /// mode cleanses a 5×5 cell kernel centered on the target (purifying bomb), with
+   /// BlightAmount as the center cleanse strength. See DeathFogSystem.</summary>
+   void ApplyBlightSpell(SpellDef spell, Vec2 target) {
+      if (string.Equals(spell.BlightMode, "Purify", StringComparison.OrdinalIgnoreCase))
+         _deathFog.PurifyArea(target.X, target.Y, spell.BlightAmount);
+      else
+         _deathFog.AddDensity(target.X, target.Y, spell.BlightAmount);
    }
 
    /// <summary>Remove all casting effect buffs from a unit (buff_4 variants).</summary>
@@ -276,6 +288,10 @@ public partial class Game1 {
          _sim.Units, necroIdx, mouseWorld, _sim.Corpses, _pendingSpell, _gameData);
       if (result == CastResult.HordeCapFull)
          SpawnHordeCapText(necroIdx);
+      // Path-locked: name the path the necromancer still needs so the failure
+      // never reads as (or is silently mistaken for) a mana shortfall.
+      if (result == CastResult.MissingPath)
+         SpawnMissingPathText(necroIdx, spellId);
       if (result != CastResult.Success) return result;
 
       // Successful real-spell cast → light up its hotbar slot.

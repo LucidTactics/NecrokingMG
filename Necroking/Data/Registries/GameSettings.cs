@@ -279,6 +279,12 @@ public class TooltipsSettings
     /// cursor (unit / corpse / building / ground item) so it's clear which object
     /// the hover tooltip belongs to. World objects only — never UI.</summary>
     [JsonPropertyName("showHoverHighlight")] public bool ShowHoverHighlight { get; set; } = true;
+
+    /// <summary>Debug readout: when the cursor is over the world (not UI), dump a
+    /// block of text about the exact world position under the cursor in the
+    /// bottom-left corner — fog level, cell coords, etc. Off by default; a
+    /// developer/inspection aid rather than a player-facing tooltip.</summary>
+    [JsonPropertyName("showWorldHoverDebug")] public bool ShowWorldHoverDebug { get; set; }
 }
 
 public class GameSettingsData

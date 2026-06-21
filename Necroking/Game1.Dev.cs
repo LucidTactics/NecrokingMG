@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Reflection;
 using Necroking.Core;
 using Necroking.Data;
 using Necroking.Scenario;
@@ -17,6 +18,56 @@ public partial class Game1 {
             case "state":
                c.Complete(Necroking.Dev.DevServer.OkRaw(BuildDevStateJson()));
                break;
+
+            // Live-edit a settings value by dotted path, no restart needed — for
+            // dynamic settings the draw/sim reads every frame (e.g. tooltip toggles).
+            //   window.dev('setting',['tooltips.showWorldHoverDebug','true'])  → set
+            //   window.dev('setting',['tooltips.showWorldHoverDebug'])         → get
+            // Path segments match either the JSON name or the C# property name
+            // (case-insensitive). Persists to settings.json so it survives a restart.
+            case "setting":
+            case "set_setting": {
+               if (c.Args.Length < 1) {
+                  c.Complete(Necroking.Dev.DevServer.Error("setting needs: <dotted.path> [value]"));
+                  break;
+               }
+               if (_gameData == null) {
+                  c.Complete(Necroking.Dev.DevServer.Error("no game data loaded"));
+                  break;
+               }
+               string path = c.Args[0];
+               if (c.Args.Length < 2) {
+                  // Getter.
+                  if (TryGetSettingByPath(path, out object? cur, out string getErr))
+                     c.Complete(Necroking.Dev.DevServer.Ok($"{path} = {cur ?? "null"}"));
+                  else
+                     c.Complete(Necroking.Dev.DevServer.Error(getErr));
+                  break;
+               }
+               if (TrySetSettingByPath(path, c.Args[1], out string newVal, out string setErr)) {
+                  // Persist so the change survives a restart, mirroring the Settings UI.
+                  _gameData.Settings.Save(GamePaths.Resolve(GamePaths.UserSettingsJson));
+                  c.Complete(Necroking.Dev.DevServer.Ok($"{path} = {newVal}"));
+               } else {
+                  c.Complete(Necroking.Dev.DevServer.Error(setErr));
+               }
+               break;
+            }
+
+            // Report the death-fog ("blight") density at a world point, plus its
+            // fog-cell coords. window.dev('fog',[x,y])
+            case "fog": {
+               if (c.Args.Length < 2) {
+                  c.Complete(Necroking.Dev.DevServer.Error("fog needs: <x> <y>"));
+                  break;
+               }
+               float fx = DevFloat(c.Args[0]), fy = DevFloat(c.Args[1]);
+               _deathFog.WorldToCell(fx, fy, out int fcx, out int fcy);
+               float density = _deathFog.Sample(fx, fy);
+               c.Complete(Necroking.Dev.DevServer.OkRaw(
+                  $"{{\"x\":{fx},\"y\":{fy},\"cell\":[{fcx},{fcy}],\"density\":{density}}}"));
+               break;
+            }
 
             case "spawn": {
                if (c.Args.Length < 3) {
@@ -576,7 +627,15 @@ public partial class Game1 {
 
                var target = new Vec2(DevFloat(c.Args[1]), DevFloat(c.Args[2]));
                var res = DispatchSpellCast(c.Args[0], necroIdx, 0, target, false);
-               c.Complete(Necroking.Dev.DevServer.Ok($"cast {c.Args[0]} -> {res}"));
+               string detail = $"cast {c.Args[0]} -> {res}";
+               // Path failure must NOT read as a mana failure — name the path(s) the
+               // necromancer still needs so the reason is unambiguous.
+               if (res == Necroking.GameSystems.CastResult.MissingPath) {
+                  string need = Necroking.GameSystems.SpellCaster.DescribeMissingPath(
+                     _gameData.Spells.Get(c.Args[0]), _gameData, _sim.Units, necroIdx);
+                  detail = $"cast {c.Args[0]} -> MissingPath (needs {need})";
+               }
+               c.Complete(Necroking.Dev.DevServer.Ok(detail));
                break;
             }
 
@@ -851,6 +910,75 @@ public partial class Game1 {
 
    static float DevFloat(string s) =>
       float.Parse(s, System.Globalization.CultureInfo.InvariantCulture);
+
+   /// <summary>Walk a dotted settings path (matching either the JSON name or the C#
+   /// property name, case-insensitive) down from <c>_gameData.Settings</c>, returning
+   /// the owner object + final PropertyInfo of the leaf. Used by the `setting` dev
+   /// command so live edits don't need a restart.</summary>
+   bool ResolveSettingPath(string path, out object? owner, out PropertyInfo? leaf, out string err) {
+      owner = null; leaf = null; err = "";
+      object cur = _gameData.Settings;
+      var segs = path.Split('.', StringSplitOptions.RemoveEmptyEntries);
+      if (segs.Length == 0) { err = "empty path"; return false; }
+      for (int i = 0; i < segs.Length; i++) {
+         var prop = FindSettingProp(cur.GetType(), segs[i]);
+         if (prop == null) { err = $"no setting '{segs[i]}' on {cur.GetType().Name}"; return false; }
+         if (i == segs.Length - 1) { owner = cur; leaf = prop; return true; }
+         var next = prop.GetValue(cur);
+         if (next == null) { err = $"'{segs[i]}' is null"; return false; }
+         cur = next;
+      }
+      err = "unreachable"; return false;
+   }
+
+   /// <summary>Match a settings property by its [JsonPropertyName] or its C# name,
+   /// case-insensitively.</summary>
+   static PropertyInfo? FindSettingProp(Type t, string name) {
+      foreach (var p in t.GetProperties(BindingFlags.Public | BindingFlags.Instance)) {
+         var jn = p.GetCustomAttribute<System.Text.Json.Serialization.JsonPropertyNameAttribute>()?.Name;
+         if ((jn != null && string.Equals(jn, name, StringComparison.OrdinalIgnoreCase)) ||
+             string.Equals(p.Name, name, StringComparison.OrdinalIgnoreCase))
+            return p;
+      }
+      return null;
+   }
+
+   bool TryGetSettingByPath(string path, out object? value, out string err) {
+      value = null;
+      if (!ResolveSettingPath(path, out var owner, out var leaf, out err)) return false;
+      value = leaf!.GetValue(owner);
+      return true;
+   }
+
+   /// <summary>Set a leaf settings value from a string, coercing to the property's
+   /// type (bool / int / float / string / enum). Returns the stringified new value.</summary>
+   bool TrySetSettingByPath(string path, string raw, out string newVal, out string err) {
+      newVal = "";
+      if (!ResolveSettingPath(path, out var owner, out var leaf, out err)) return false;
+      var pt = leaf!.PropertyType;
+      try {
+         object converted;
+         if (pt == typeof(bool)) {
+            string r = raw.Trim().ToLowerInvariant();
+            converted = r is "1" or "true" or "on" or "yes";
+         } else if (pt == typeof(int)) {
+            converted = (int)DevFloat(raw);
+         } else if (pt == typeof(float)) {
+            converted = DevFloat(raw);
+         } else if (pt == typeof(string)) {
+            converted = raw;
+         } else if (pt.IsEnum) {
+            converted = Enum.Parse(pt, raw, true);
+         } else {
+            err = $"unsupported setting type {pt.Name} for '{path}'"; return false;
+         }
+         leaf.SetValue(owner, converted);
+         newVal = converted.ToString() ?? "";
+         return true;
+      } catch (Exception ex) {
+         err = $"failed to set '{path}': {ex.Message}"; return false;
+      }
+   }
 
    /// <summary>Parse a screenshot downsample_to option. Absent → default 640x360
    /// (half of the 1280x720 default render — small, readable, and a consistent

@@ -3526,6 +3526,26 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         });
     }
 
+    /// <summary>Floating feedback when a cast fails because the necromancer lacks the
+    /// spell's magic-path requirement — names the path(s) it needs (e.g.
+    /// "Need Death 1") so it's never mistaken for a mana shortfall.</summary>
+    private void SpawnMissingPathText(int necroIdx, string spellId)
+    {
+        if (necroIdx < 0 || necroIdx >= _sim.Units.Count) return;
+        string need = GameSystems.SpellCaster.DescribeMissingPath(
+            _gameData.Spells.Get(spellId), _gameData, _sim.Units, necroIdx);
+        _damageNumbers.Add(new DamageNumber
+        {
+            WorldPos = _sim.Units[necroIdx].Position,
+            Damage = 0,
+            Timer = 0f,
+            Height = 2f,
+            IsPoison = false,
+            PickupText = string.IsNullOrEmpty(need) ? "Path Locked" : $"Need {need}",
+            IsAlert = true,
+        });
+    }
+
     private Texture2D? GetItemTextureByPath(string path)
     {
         if (string.IsNullOrEmpty(path)) return null;

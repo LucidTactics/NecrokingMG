@@ -8,7 +8,7 @@ using Necroking.Movement;
 
 namespace Necroking.GameSystems;
 
-public enum CastResult { Success, NotEnoughMana, OnCooldown, NoValidTarget, OutOfRange, NoNecromancer, HordeCapFull }
+public enum CastResult { Success, NotEnoughMana, OnCooldown, NoValidTarget, OutOfRange, NoNecromancer, HordeCapFull, MissingPath }
 
 public class PendingSpellCast
 {
@@ -58,7 +58,9 @@ public static class SpellCaster
         // higher native levels.
         var casterDef = gameData?.Units.Get(units[necroIdx].UnitDefID);
         Func<MagicPath, int> casterLevel = ResolveCasterLevel(casterDef, units, necroIdx);
-        if (!spell.MeetsPathRequirements(casterLevel)) return CastResult.NotEnoughMana;
+        // Path gate is a DISTINCT failure from mana — don't conflate them, or the
+        // feedback lies ("not enough mana" when the caster simply lacks the path).
+        if (!spell.MeetsPathRequirements(casterLevel)) return CastResult.MissingPath;
         float effectiveCost = spell.EffectiveManaCost(casterLevel);
         if (necro.Mana < effectiveCost) return CastResult.NotEnoughMana;
 
@@ -459,6 +461,29 @@ public static class SpellCaster
         if (necroIdx < 0) return true;
         var def = gameData?.Units.Get(units[necroIdx].UnitDefID);
         return spell.MeetsPathRequirements(ResolveCasterLevel(def, units, necroIdx));
+    }
+
+    /// <summary>Human-readable description of which path requirement(s) the caster
+    /// fails for a spell — e.g. "Death 1 (have 0)" or "Death 1 (have 0), Body 2
+    /// (have 1)". Returns "" when the caster meets the requirements (or there are
+    /// none). Powers the cast-failure feedback so a <see cref="CastResult.MissingPath"/>
+    /// names the path the player still needs, instead of misreporting it as a mana
+    /// shortfall.</summary>
+    public static string DescribeMissingPath(SpellDef? spell, GameData? gameData,
+        UnitArrays units, int necroIdx)
+    {
+        if (spell == null || necroIdx < 0) return "";
+        var def = gameData?.Units.Get(units[necroIdx].UnitDefID);
+        var casterLevel = ResolveCasterLevel(def, units, necroIdx);
+
+        var parts = new List<string>();
+        var pri = spell.GetPrimary();
+        if (pri.HasRequirement && casterLevel(pri.Path) < pri.Level)
+            parts.Add($"{pri.Path} {pri.Level} (have {casterLevel(pri.Path)})");
+        var sec = spell.GetSecondary();
+        if (sec.HasRequirement && casterLevel(sec.Path) < sec.Level)
+            parts.Add($"{sec.Path} {sec.Level} (have {casterLevel(sec.Path)})");
+        return string.Join(", ", parts);
     }
 
     /// <summary>Build the magic-path level lookup used for both requirement

@@ -103,6 +103,65 @@ public class DeathFogSystem
         return _read[cy * Width + cx];
     }
 
+    /// <summary>Add <paramref name="amount"/> blight (death-fog density) to the single
+    /// cell containing the world point — the "blight bomb". Negative amounts subtract
+    /// (clamped at 0). The cell (and its neighbors) are marked active so diffusion
+    /// picks the change up next tick. No-op off-grid.</summary>
+    public void AddDensity(float worldX, float worldY, float amount)
+    {
+        if (_read.Length == 0 || amount == 0f) return;
+        WorldToCell(worldX, worldY, out int cx, out int cy);
+        int idx = cy * Width + cx;
+        _read[idx] = MathF.Max(0f, _read[idx] + amount);
+        MarkActive(cx, cy);
+    }
+
+    /// <summary>Purifying-bomb cleanse: a 5×5 cell kernel centered on the world point
+    /// removes blight, strongest at the center. <paramref name="centerReduction"/> is
+    /// the amount removed from the center cell; the four orthogonal neighbors lose
+    /// half, the four inner diagonals a quarter, and the outer ring (minus the 4 far
+    /// corners) an eighth — so centerReduction=4 yields the 4 / 2 / 1 / 0.5 pattern.
+    /// The 4 far corners are untouched, so 21 of the 25 cells are affected.
+    /// <para>Low-blight scaling: a cell holding &lt; 1 blight only loses
+    /// <c>reduction × (blight × 0.15 + 0.1)</c>, so faint blight is cleared gently
+    /// rather than nuked disproportionately. Never drops below 0.</para></summary>
+    public void PurifyArea(float worldX, float worldY, float centerReduction)
+    {
+        if (_read.Length == 0 || centerReduction <= 0f) return;
+        WorldToCell(worldX, worldY, out int ccx, out int ccy);
+
+        for (int dy = -2; dy <= 2; dy++)
+        for (int dx = -2; dx <= 2; dx++)
+        {
+            float w = PurifyWeight(dx, dy);
+            if (w <= 0f) continue; // far corner — untouched
+            int cx = ccx + dx, cy = ccy + dy;
+            if (cx < 0 || cy < 0 || cx >= Width || cy >= Height) continue;
+            int idx = cy * Width + cx;
+            float blight = _read[idx];
+            if (blight <= 0f) continue;
+
+            float reduction = centerReduction * w;
+            // Scale the cleanse down where there's barely any blight to clear.
+            if (blight < 2) reduction *= (blight * 0.4f + 0.2f);
+            _read[idx] = MathF.Max(0f, blight - reduction);
+            MarkActive(cx, cy);
+        }
+    }
+
+    /// <summary>Kernel weight (fraction of centerReduction) for a cell offset in the
+    /// 5×5 purify area. center=1, orthogonal=½, inner-diagonal=¼, outer-ring=⅛, far
+    /// corners (±2,±2)=0 (excluded).</summary>
+    private static float PurifyWeight(int dx, int dy)
+    {
+        int ax = Math.Abs(dx), ay = Math.Abs(dy);
+        int cheb = Math.Max(ax, ay);
+        if (cheb == 0) return 1f;                          // center
+        if (cheb == 1) return (ax + ay == 1) ? 0.5f : 0.25f; // ortho vs inner-diagonal
+        if (ax == 2 && ay == 2) return 0f;                 // far corner — excluded
+        return 0.125f;                                     // outer ring minus corners
+    }
+
     /// <summary>One simulation step. Reads sources/sinks from <paramref name="env"/>.
     /// Caller passes raw frame dt in seconds. Pass <paramref name="ground"/> to
     /// also tick ground-vertex corruption (once per second based on density).</summary>

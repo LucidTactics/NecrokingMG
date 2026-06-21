@@ -423,6 +423,8 @@ public partial class Game1
         if (showUI)
             DrawHUD(screenW, screenH);
         if (showUI)
+            DrawWorldHoverInfo(screenW, screenH);
+        if (showUI)
             DrawAggressionBar(screenW, screenH);
 
         // Inventory UI (widget-based, drawn over HUD)

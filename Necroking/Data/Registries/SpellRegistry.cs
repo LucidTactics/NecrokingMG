@@ -48,7 +48,7 @@ public class SpellDef : IHasId
     [JsonPropertyName("id")] public string Id { get; set; } = "";
 
     [EditorField(Label = "Category", Order = 2)]
-    [EditorCombo("Projectile", "Buff", "Debuff", "Summon", "Strike", "Beam", "Drain", "Cloud", "Sacrifice")]
+    [EditorCombo("Projectile", "Buff", "Debuff", "Summon", "Strike", "Beam", "Drain", "Cloud", "Sacrifice", "Blight")]
     [JsonPropertyName("category")] public string Category { get; set; } = "Projectile";
 
     // ===== Grimoire presentation (tab school + tile template + icon) =====
@@ -673,6 +673,24 @@ public class SpellDef : IHasId
     [EditorVisible("Category", "Sacrifice")]
     [EditorField(Label = "Heal % MaxHP", Group = "SACRIFICE", Order = 901, Step = 0.05f, Decimals = 2)]
     [JsonPropertyName("sacrificeHealPercent")] public float SacrificeHealPercent { get; set; }
+
+    // ============ BLIGHT ============
+    // Manipulate the death-fog ("blight") density field at the target cell.
+    //  • Add    — dump BlightAmount blight into the single target cell (a blight bomb).
+    //  • Purify — remove blight across a 5×5 cell kernel centered on the target (a
+    //    purifying bomb). BlightAmount is the center cleanse; the four orthogonal
+    //    neighbors lose ½, the four inner diagonals ¼, and the outer ring (minus the
+    //    4 far corners) ⅛ — so BlightAmount=4 gives the 4 / 2 / 1 / 0.5 pattern over
+    //    the 21 affected cells (5×5 − 4 corners). Faint cells (< 1 blight) are
+    //    cleansed gently — see DeathFogSystem.PurifyArea.
+    [EditorVisible("Category", "Blight")]
+    [EditorField(Label = "Blight Mode", Group = "BLIGHT", Order = 920, GroupColorR = 120, GroupColorG = 200, GroupColorB = 110)]
+    [EditorCombo("Add", "Purify")]
+    [JsonPropertyName("blightMode")] public string BlightMode { get; set; } = "Add";
+
+    [EditorVisible("Category", "Blight")]
+    [EditorField(Label = "Blight Amount", Group = "BLIGHT", Order = 921, Decimals = 2)]
+    [JsonPropertyName("blightAmount")] public float BlightAmount { get; set; } = 100f;
 
     // Toggle (hidden from editor — internal)
     [EditorHide]

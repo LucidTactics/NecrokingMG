@@ -87,6 +87,8 @@ spell_editor` via the dev server). Fields are documented inline in `SpellRegistr
 The key field is **`category`**, one of:
 
 `Projectile` · `Buff` · `Debuff` · `Summon` · `Strike` · `Beam` · `Drain` · `Cloud` ·
+`Sacrifice` · `Blight` (mutate the death-fog field — Add dumps blight, Purify cleanses
+a 5×5 kernel; effect wired via the `applyBlight` callback into `DeathFogSystem`) ·
 `Toggle` (internal)
 
 Each category reads a different subset of fields (the editor's `[EditorVisible]` attrs

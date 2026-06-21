@@ -68,12 +68,15 @@ public class SpellEffectSystem
     /// <param name="spawnProjectile">Callback to spawn a projectile (needs Game1 rendering state).
     /// Signature: (spell, origin, target, ownerUid, spawnHeight).</param>
     /// <param name="executeSummon">Callback for summon spells (deeply coupled to Game1)</param>
+    /// <param name="applyBlight">Callback for Blight spells — mutates the death-fog
+    /// field, which is Game1 state. Signature: (spell, target).</param>
     public SpellEffectResult Execute(
         SpellDef spell, Simulation sim, GameData gameData,
         int casterIdx, Vec2 target, int slot,
         List<DamageNumber> damageNumbers,
         Action<SpellDef, Vec2, Vec2, uint, float> spawnProjectile,
-        Action<SpellDef, int> executeSummon)
+        Action<SpellDef, int> executeSummon,
+        Action<SpellDef, Vec2> applyBlight)
     {
         var result = SpellEffectResult.None;
         var units = sim.UnitsMut;
@@ -154,6 +157,12 @@ public class SpellEffectSystem
 
             case "Cloud":
                 ExecuteCloud(spell, sim, target);
+                break;
+
+            case "Blight":
+                // Mutate the death-fog ("blight") field — Add dumps blight at the
+                // target cell, Purify cleanses a 5×5 kernel. The field lives in Game1.
+                applyBlight(spell, target);
                 break;
 
             case "Toggle":
