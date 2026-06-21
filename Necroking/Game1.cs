@@ -94,6 +94,19 @@ public class Game1 : Microsoft.Xna.Framework.Game
         if (_widgetRendererUiDefPath != null && Directory.Exists(_widgetRendererUiDefPath))
             _widgetRenderer.LoadDefinitions(_widgetRendererUiDefPath);
         _inventoryUI.Init(_widgetRenderer, _inventory, _gameData.Items, _spriteBatch, _pixel);
+        // Slot click: deposit into an open crafting table, else use a consumable
+        // (e.g. Skillpoint Potion). Handled via the layer callback because the
+        // inventory is a modal layer — PopupManager consumes inside-panel clicks
+        // before Game1.Update's own handlers run.
+        _inventoryUI.OnSlotClicked = slotIdx =>
+        {
+            var s = _inventory.GetSlot(slotIdx);
+            if (s.IsEmpty) return;
+            if (_tableMenuUI.IsVisible)
+                _tableMenuUI.TryDepositItem(s.ItemId);
+            else if (TryConsumeInventoryItem(s.ItemId))
+                _inventory.RemoveItem(s.ItemId, 1);
+        };
         _buildingMenuUI.Init(_widgetRenderer, _envSystem, _inventory, _gameData.Items,
             _graphics.PreferredBackBufferHeight, _spriteBatch, _pixel,
             _sim.MagicGlyphs, _gameData.Spells, _sim);
@@ -1020,6 +1033,36 @@ public class Game1 : Microsoft.Xna.Framework.Game
             Timer = 0f,
             Duration = 5f,
         });
+    }
+
+    /// <summary>Use a consumable inventory item by id. Currently supports skill-point
+    /// potions (grant SkillPointAmount to the SkillPointPool). Returns true if the
+    /// item was consumed, in which case the caller decrements the stack by one.</summary>
+    private bool TryConsumeInventoryItem(string itemId)
+    {
+        var def = _gameData.Items.Get(itemId);
+        if (def == null) return false;
+
+        if (def.SkillPointAmount > 0 && !string.IsNullOrEmpty(def.SkillPointPool))
+        {
+            _skillBookState.AddSkillPoints(def.SkillPointPool, def.SkillPointAmount);
+            DebugLog.Log("items",
+                $"Consumed '{itemId}': +{def.SkillPointAmount} '{def.SkillPointPool}' skill points " +
+                $"(now {_skillBookState.GetSkillPoints(def.SkillPointPool)})");
+            // Reuse the skill-learn toast for feedback; empty SkillId just opens the
+            // skill book (where the new points are visible) if clicked.
+            _skillLearnToasts.Add(new SkillLearnToast
+            {
+                Header = "Skill Points",
+                SkillName = $"+{def.SkillPointAmount} {def.SkillPointPool}",
+                SkillId = "",
+                Timer = 0f,
+                Duration = 5f,
+            });
+            return true;
+        }
+
+        return false;
     }
 
     /// <summary>Geometry helper — same layout numbers used in DrawSkillLearnToasts.
@@ -3394,22 +3437,10 @@ public class Game1 : Microsoft.Xna.Framework.Game
         _craftingMenu.Update(_input, screenW, screenH, dt);
         _grimoireOverlay.Update(_input, screenW, screenH);
         _tableMenuUI.Update(_input);
-
-        // Inventory→table item transfer: while the table menu is open, clicking a
-        // filled inventory slot deposits the item into the table's first empty
-        // item slot (and decrements the inventory by 1). Inventory must be visible
-        // for slot rects to be valid.
-        if (_tableMenuUI.IsVisible && _inventoryUI.IsVisible
-            && _input.LeftPressed && !_input.IsMouseConsumed)
-        {
-            int mx = (int)_input.MousePos.X, my = (int)_input.MousePos.Y;
-            if (_inventoryUI.TryGetSlotIndexAt(mx, my, out int slotIdx))
-            {
-                var s = _inventory.GetSlot(slotIdx);
-                if (!s.IsEmpty && _tableMenuUI.TryDepositItem(s.ItemId))
-                    _input.ConsumeMouse();
-            }
-        }
+        // Inventory slot clicks (table deposit / consumable use) are dispatched via
+        // _inventoryUI.OnSlotClicked, set in EnsureInventoryUIsInitialized — the
+        // inventory is a modal layer whose inside-panel clicks PopupManager consumes
+        // before this point, so they can't be handled inline here.
         _skillBookOverlay.Update(_input, screenW, screenH, gameTime.TotalGameTime.TotalSeconds);
 
         // Cursor swap: hand when hovering interactive UI, arrow otherwise

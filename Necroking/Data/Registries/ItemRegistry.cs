@@ -22,6 +22,16 @@ public class ItemDef : IHasId
 
     [EditorField(Label = "Description", Order = 5)]
     public string Description { get; set; } = "";
+
+    // --- Consumable: grant skill points when clicked in the inventory ---
+    // Empty pool or zero amount = not a skill-point consumable. Pool matches a
+    // SkillBookState skill-point pool (e.g. "potions", "monstrology").
+    [EditorField(Label = "Skill Point Pool", Order = 6)]
+    [EditorCombo("", "potions", "monstrology")]
+    public string SkillPointPool { get; set; } = "";
+
+    [EditorField(Label = "Skill Point Amount", Order = 7)]
+    public int SkillPointAmount { get; set; }
 }
 
 public class ItemRegistry : RegistryBase<ItemDef>

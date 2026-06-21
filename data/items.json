@@ -87,6 +87,16 @@
       "maxStack": 10,
       "category": "potion",
       "description": "Coats in deadly poison."
+    },
+    {
+      "id": "potion_skillpoint",
+      "displayName": "Skillpoint Potion",
+      "icon": "assets/Items/Potions/EvolutionPotion.png",
+      "maxStack": 10,
+      "category": "consumable",
+      "description": "Click to drink. Grants 10 potion skill points.",
+      "skillPointPool": "potions",
+      "skillPointAmount": 10
     }
   ]
 }

@@ -619,6 +619,8 @@ public class EnvironmentSystem
         for (int i = 0; i < _objectRuntime.Count; i++)
         {
             if (!_objectRuntime[i].Collected) continue;
+            // RespawnTime <= 0 means single-use: once collected it stays gone.
+            if (_defs[_objects[i].DefIndex].RespawnTime <= 0f) continue;
             var rt = _objectRuntime[i];
             rt.RespawnTimer -= dt;
             if (rt.RespawnTimer <= 0f)

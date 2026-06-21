@@ -57,6 +57,13 @@ public class InventoryUI : Necroking.UI.IModalLayer
     private bool _dragging;
     private int _dragOffsetX, _dragOffsetY;
 
+    /// <summary>Invoked with the slot index when a filled slot is left-clicked.
+    /// The owner decides what the click does (deposit into an open table, use a
+    /// consumable, etc.). Handled here because the inventory is a modal layer —
+    /// PopupManager consumes inside-panel clicks before they reach Game1's Update,
+    /// so the layer itself must dispatch them.</summary>
+    public Action<int>? OnSlotClicked;
+
     public bool IsVisible => _visible;
     public int Width => _widgetW;
     public int Height => _widgetH;
@@ -196,6 +203,15 @@ public class InventoryUI : Necroking.UI.IModalLayer
         else
         {
             _dragging = false;
+        }
+
+        // Slot click: dispatch a fresh left-press over a filled slot to the owner.
+        // (Slots sit below the 90px title bar, so this never collides with a drag.)
+        if (input.LeftPressed && !_dragging
+            && TryGetSlotIndexAt(mx, my, out int clickedSlot)
+            && !_inventory.GetSlot(clickedSlot).IsEmpty)
+        {
+            OnSlotClicked?.Invoke(clickedSlot);
         }
 
         SyncSlots();
