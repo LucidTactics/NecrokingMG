@@ -41,6 +41,58 @@ GAME_PORT = 8778
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PROJECT = os.path.join(REPO_ROOT, "Necroking", "Necroking.csproj")
 EXE = os.path.join(REPO_ROOT, "bin", "Debug", "Necroking.exe")
+SCREENSHOT_DIR = os.path.join(os.path.dirname(EXE), "log", "screenshots")
+LIVE_FRAME = "live"  # screenshot name reused for the dashboard's live view
+
+# Dashboard served at GET / — preview_start renders this; preview_eval runs JS
+# here (window.dev) to drive the game, preview_screenshot captures the frame.
+DASHBOARD_HTML = """<!doctype html><html><head><meta charset=utf-8>
+<title>Necroking Dev</title><style>
+  body{margin:0;background:#15101e;color:#cbb;font:13px ui-monospace,monospace}
+  header{padding:6px 10px;background:#1f1830;color:#caa;display:flex;gap:12px;align-items:center}
+  #status{color:#8c8}
+  #frame{display:block;max-width:100%;image-rendering:pixelated;background:#000;margin:0 auto}
+  #bar{padding:6px 10px;display:flex;gap:6px}
+  #cmd{flex:1;background:#0e0a16;color:#dcd;border:1px solid #443;padding:4px 6px}
+  button{background:#2a2140;color:#dcd;border:1px solid #554;padding:4px 10px;cursor:pointer}
+  #log{height:120px;overflow:auto;padding:6px 10px;white-space:pre-wrap;color:#9a9;border-top:1px solid #332}
+</style></head><body>
+<header><b>Necroking Dev</b><span id=status>connecting…</span></header>
+<img id=frame>
+<div id=bar>
+  <input id=cmd placeholder='spawn Skeleton 2094 1880'>
+  <button onclick=runInput()>Send</button>
+</div>
+<div id=log></div>
+<script>
+const logEl=document.getElementById('log'), statusEl=document.getElementById('status');
+function log(m){logEl.textContent+=m+"\\n";logEl.scrollTop=logEl.scrollHeight;}
+// window.dev(cmd, args) -> Promise<result JSON>. Driven by preview_eval.
+window.dev=async(cmd,args=[])=>{
+  const r=await fetch('/cmd',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({cmd,args})});
+  const j=await r.json(); window.__last=j; log('> '+cmd+' '+args.join(' ')+' => '+JSON.stringify(j)); return j;
+};
+function runInput(){const v=document.getElementById('cmd').value.trim();if(!v)return;
+  const p=v.split(/\\s+/);window.dev(p[0],p.slice(1));document.getElementById('cmd').value='';}
+document.getElementById('cmd').addEventListener('keydown',e=>{if(e.key==='Enter')runInput();});
+// Refresh the live frame ~1/s (skips if a request is in flight).
+let busy=false;
+async function tick(){
+  if(!busy){busy=true;
+    try{const img=document.getElementById('frame');
+      await fetch('/frame?t='+Date.now()).then(r=>r.ok?r.blob():null).then(b=>{if(b)img.src=URL.createObjectURL(b);});
+    }catch(e){} busy=false;}
+}
+// On load: bring the game up if it isn't, then start refreshing.
+(async()=>{
+  try{const s=await fetch('/status').then(r=>r.json());
+    if(!s.game_running){statusEl.textContent='starting game…';await fetch('/game/start',{method:'POST',body:'{}'});}
+    statusEl.textContent='ready';
+  }catch(e){statusEl.textContent='supervisor error';}
+  setInterval(tick,1000); tick();
+})();
+</script></body></html>"""
 
 # --- shared state -----------------------------------------------------------
 _game_proc = None          # subprocess.Popen | None
@@ -161,8 +213,31 @@ class Handler(BaseHTTPRequestHandler):
         except Exception:
             return {}
 
+    def _send_bytes(self, data, content_type, status=200):
+        self.send_response(status)
+        self.send_header("Content-Type", content_type)
+        self.send_header("Content-Length", str(len(data)))
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        self.wfile.write(data)
+
     def do_GET(self):
-        if self.path.rstrip("/") == "/status":
+        path = self.path.split("?", 1)[0].rstrip("/") or "/"
+        if path == "/":
+            self._send_bytes(DASHBOARD_HTML.encode(), "text/html; charset=utf-8")
+        elif path == "/frame":
+            # Trigger a fresh screenshot (blocks until the PNG is written), then
+            # return the bytes. Lets the dashboard show a near-live game view.
+            if not _game_running():
+                self._send({"ok": False, "error": "game not running"}, 503)
+                return
+            try:
+                _post_to_game({"cmd": "screenshot", "args": [LIVE_FRAME]})
+                with open(os.path.join(SCREENSHOT_DIR, LIVE_FRAME + ".png"), "rb") as f:
+                    self._send_bytes(f.read(), "image/png")
+            except Exception as e:
+                self._send({"ok": False, "error": str(e)}, 500)
+        elif path == "/status":
             self._send({
                 "ok": True,
                 "game_running": _game_running(),
