@@ -343,6 +343,11 @@ public partial class Game1 {
          return true;
       }
 
+      if (spellId == "regroup") {
+         TryRegroupHorde(necroIdx);
+         return true;
+      }
+
       if (PoisonBerryAbilities.TryGetValue(spellId, out var pb)) {
          TryStartPoisonBerries(necroIdx, mouseWorld, pb.buffID, pb.itemID);
          return true;
@@ -379,6 +384,31 @@ public partial class Game1 {
 
       float cd = _gameData.Spells.Get("order_attack")?.Cooldown ?? 0f;
       if (cd > 0f) necro.SpellCooldowns["order_attack"] = cd;
+   }
+
+   /// <summary>Built-in "Regroup" ability: cancel any command in effect and snap
+   /// every commanded undead horde minion straight back to standard horde behavior.
+   /// They break off, drop their attack-move, and head for formation (Routine 3 =
+   /// RoutineReturning, which the horde state machine resolves to Following at the
+   /// slot) — the exact reset HordeMinionHandler.ReturnFromCommand does when a
+   /// command finishes on its own. Instant, no target; only touches minions that are
+   /// actually under a command (Routine 4), so it's a no-op if nothing is commanded.</summary>
+   void TryRegroupHorde(int necroIdx) {
+      if (necroIdx < 0) return;
+      var units = _sim.UnitsMut;
+      for (int ci = 0; ci < units.Count; ci++) {
+         if (!units[ci].Alive) continue;
+         if (units[ci].Faction != Faction.Undead) continue;
+         if (units[ci].Archetype != AI.ArchetypeRegistry.HordeMinion) continue;
+         if (units[ci].Routine != 4) continue;   // only those under a command (RoutineCommanded)
+
+         units[ci].Routine = 3;            // RoutineReturning → back to formation
+         units[ci].Subroutine = 0;
+         units[ci].SubroutineTimer = 0f;
+         units[ci].Target = CombatTarget.None;
+         units[ci].EngagedTarget = CombatTarget.None;
+         units[ci].InCombat = false;
+      }
    }
 
    /// <summary>Built-in poison-berries abilities: spell id → (buff applied to the
