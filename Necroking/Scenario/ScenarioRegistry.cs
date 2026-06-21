@@ -17,6 +17,7 @@ public static class ScenarioRegistry
         Register("zombie_deer_follow_speed", () => new Scenarios.ZombieDeerFollowSpeedScenario());
         Register("aggression_radius", () => new Scenarios.AggressionRadiusScenario());
         Register("combat_test", () => new Scenarios.CombatTestScenario());
+        Register("placed_corpse", () => new Scenarios.PlacedCorpseScenario());
         Register("skirmish", () => new Scenarios.SkirmishScenario());
         Register("empty_map", () => new Scenarios.EmptyMapScenario());
         Register("spell_test", () => new Scenarios.SpellTestScenario());

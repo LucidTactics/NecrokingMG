@@ -23,6 +23,11 @@ public class Corpse
     public float SpriteScale = 1f;
     public uint DraggedByUnitID = GameConstants.InvalidUnit;
 
+    // Editor-placed corpses (and other pre-existing-at-load bodies) should appear
+    // already collapsed on the final death frame, NOT replay the death animation
+    // when the map starts. The renderer snaps these straight to the end of Death.
+    public bool PreSettled;
+
     // Bagging state
     public bool Bagged;
     public float BaggingProgress;
@@ -158,6 +163,31 @@ public class Simulation
     {
         int idx = FindCorpseIndexByID(corpseID);
         return idx >= 0 ? _corpses[idx] : null;
+    }
+
+    /// <summary>Convert a living unit into a corpse in place and remove it from the
+    /// unit array. Mirrors the corpse-creation in the death path (see UpdateCombat)
+    /// minus the combat/physics/zombie state — used for editor-placed corpses so a
+    /// dead body appears exactly as one that died naturally. Returns the new corpse.</summary>
+    public Corpse? SpawnCorpseFromUnit(int unitIdx)
+    {
+        if (unitIdx < 0 || unitIdx >= _units.Count) return null;
+        var corpse = new Corpse
+        {
+            Position = _units[unitIdx].Position,
+            UnitType = _units[unitIdx].Type,
+            UnitDefID = _units[unitIdx].UnitDefID,
+            FacingAngle = _units[unitIdx].FacingAngle,
+            SpriteScale = _units[unitIdx].SpriteScale,
+            CorpseID = _nextCorpseID++,
+            PreSettled = true, // appear already-dead, don't replay the death anim
+        };
+        _corpses.Add(corpse);
+        _units.RemoveUnit(unitIdx);
+        // Keep the necromancer index valid across the swap-and-pop remove.
+        if (_necromancerIdx == unitIdx) _necromancerIdx = -1;
+        else if (_necromancerIdx == _units.Count) _necromancerIdx = unitIdx;
+        return corpse;
     }
     public IReadOnlyList<DamageEvent> DamageEvents => _damageEvents;
     public List<DamageEvent> DamageEventsMut => _damageEvents;

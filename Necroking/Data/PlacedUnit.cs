@@ -11,4 +11,5 @@ public class PlacedUnit
     public float Y { get; set; }
     public string Faction { get; set; } = ""; // empty = use def default
     public string PatrolRouteId { get; set; } = ""; // empty = no patrol
+    public bool IsCorpse { get; set; } = false; // placed as a dead body, not a living unit
 }

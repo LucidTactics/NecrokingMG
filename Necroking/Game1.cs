@@ -863,6 +863,10 @@ public class Game1 : Microsoft.Xna.Framework.Game
                     { _sim.UnitsMut[lastIdx].PatrolRouteIdx = pri; break; }
                 }
             }
+            // Editor-placed corpse: spawn the unit (so it resolves its def/sprite/scale),
+            // then immediately convert it to a corpse and drop it from the unit array.
+            if (pu.IsCorpse)
+                _sim.SpawnCorpseFromUnit(lastIdx);
         }
         if (placedUnits.Count > 0)
             LogTiming($"Spawned {placedUnits.Count} placed units");
@@ -5957,7 +5961,15 @@ public class Game1 : Microsoft.Xna.Framework.Game
                         };
                     ctrl.SetAnimTimings(overrides);
                 }
-                ctrl.RequestState(corpse.InPhysics ? AnimState.Fall : AnimState.Death);
+                // Pre-settled corpses (editor-placed / present at map load) snap to
+                // the END of the death anim so they appear already collapsed instead
+                // of replaying the death fall on the first frame they're seen.
+                // ForceStateAtEnd no-ops if already in Death, so call it from the
+                // fresh controller's default (Idle) state rather than RequestState first.
+                if (corpse.PreSettled)
+                    ctrl.ForceStateAtEnd(AnimState.Death);
+                else
+                    ctrl.RequestState(corpse.InPhysics ? AnimState.Fall : AnimState.Death);
 
                 float refH = 128f;
                 var idle = spriteData.GetAnim("Idle");

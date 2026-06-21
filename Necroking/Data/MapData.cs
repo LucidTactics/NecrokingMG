@@ -143,6 +143,7 @@ public static class MapData
                         Y = pu.TryGetProperty("y", out var py) ? py.GetSingle() : 0,
                         Faction = pu.TryGetProperty("faction", out var pf) ? pf.GetString() ?? "" : "",
                         PatrolRouteId = pu.TryGetProperty("patrolRouteId", out var pr) ? pr.GetString() ?? "" : "",
+                        IsCorpse = pu.TryGetProperty("isCorpse", out var ic) && ic.GetBoolean(),
                     });
                 }
                 DebugLog.Log("startup", $"  Placed units: {placedUnits.Count}");

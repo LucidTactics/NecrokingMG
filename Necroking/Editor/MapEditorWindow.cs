@@ -208,6 +208,7 @@ public class MapEditorWindow
     private int _unitFactionFilter; // 0=All, 1=Undead, 2=Human, 3=Animal
     private float _unitListScroll;
     private string _unitPatrolRoute = "";
+    private bool _placeAsCorpse; // when set, the Units tool places dead bodies
     // Cached from Draw for hit-testing in Update
     private int _unitListDrawY;
     private int _unitListItemH = 22;
@@ -4522,6 +4523,7 @@ public class MapEditorWindow
                     Y = worldPos.Y,
                     Faction = unitDef?.Faction ?? "Undead",
                     PatrolRouteId = _unitPatrolRoute,
+                    IsCorpse = _placeAsCorpse,
                 });
                 PushUndo(new UndoUnitPlace { Units = _placedUnits });
             }
@@ -4588,6 +4590,11 @@ public class MapEditorWindow
             }
             curY += 24;
         }
+
+        // Place-as-corpse toggle: when set, clicking the world drops a dead body
+        // of the selected unit instead of a living one.
+        _placeAsCorpse = _eb.DrawCheckbox("Place as corpse", _placeAsCorpse, x, curY, w);
+        curY += 24;
 
         // Unit def list
         var unitIds = GetFilteredUnitIds();
@@ -4665,15 +4672,32 @@ public class MapEditorWindow
                 _ => new Color(200, 100, 255, 200) // Undead = purple
             };
 
-            // Diamond marker
-            _spriteBatch.Draw(_pixel, new Rectangle((int)(sp.X - r), (int)(sp.Y - r / 2), (int)(r * 2), (int)r), markerColor);
+            // Text stays readable (the marker shape, not the text, carries the
+            // faction/corpse coding). Dimming the label made corpse names unreadable.
+            Color labelColor = markerColor;
+            if (pu.IsCorpse)
+            {
+                // Corpses: a bone-grey cross instead of a faction diamond so dead
+                // bodies read differently from living placements at a glance.
+                markerColor = new Color(170, 165, 150, 220);
+                labelColor = markerColor;
+                _spriteBatch.Draw(_pixel, new Rectangle((int)(sp.X - r), (int)(sp.Y - 1), (int)(r * 2), 2), markerColor);
+                _spriteBatch.Draw(_pixel, new Rectangle((int)(sp.X - 1), (int)(sp.Y - r), 2, (int)(r * 2)), markerColor);
+            }
+            else
+            {
+                // Diamond marker
+                _spriteBatch.Draw(_pixel, new Rectangle((int)(sp.X - r), (int)(sp.Y - r / 2), (int)(r * 2), (int)r), markerColor);
+            }
             // Label
             if (_smallFont != null)
             {
                 var def = _gameData?.Units.Get(pu.UnitDefId);
                 string label = def?.DisplayName ?? pu.UnitDefId;
                 if (label.Length > 10) label = label[..10];
-                _spriteBatch.DrawString(_smallFont, label, new Vector2(sp.X + 8, sp.Y - 6), markerColor);
+                // Explicitly tag corpses so they're identifiable like living units are.
+                if (pu.IsCorpse) label += " (corpse)";
+                _spriteBatch.DrawString(_smallFont, label, new Vector2((int)(sp.X + 8), (int)(sp.Y - 6)), labelColor);
             }
         }
     }
@@ -4831,6 +4855,8 @@ public class MapEditorWindow
                     writer.WriteString("faction", pu.Faction);
                 if (!string.IsNullOrEmpty(pu.PatrolRouteId))
                     writer.WriteString("patrolRouteId", pu.PatrolRouteId);
+                if (pu.IsCorpse)
+                    writer.WriteBoolean("isCorpse", true);
                 writer.WriteEndObject();
             }
             writer.WriteEndArray();
