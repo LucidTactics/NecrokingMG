@@ -380,6 +380,36 @@ public static class SpellCaster
                 break;
             }
 
+            case "Sacrifice":
+            {
+                // Target the friendly undead nearest the cursor within range (never
+                // the caster). A non-empty AcceptableTargets list restricts it to
+                // specific UnitDef ids (e.g. skeletons only).
+                float bestDist = float.MaxValue;
+                int bestUnit = -1;
+                bool restrict = spell.AcceptableTargets != null && spell.AcceptableTargets.Count > 0;
+                for (int i = 0; i < units.Count; i++)
+                {
+                    if (!units[i].Alive) continue;
+                    if (i == necroIdx) continue;
+                    if (units[i].Faction != Faction.Undead) continue;
+                    if (restrict && !spell.AcceptableTargets!.Contains(units[i].UnitDefID)) continue;
+                    float distToNecro = (units[i].Position - necroPos).Length();
+                    if (distToNecro > spell.Range) continue;
+                    float distToCursor = (units[i].Position - mouseWorld).Length();
+                    if (distToCursor < bestDist)
+                    {
+                        bestDist = distToCursor;
+                        bestUnit = i;
+                    }
+                }
+                if (bestUnit < 0) return CastResult.NoValidTarget;
+                outPending.TargetUnitIdx = bestUnit;
+                outPending.TargetUnitID = units[bestUnit].Id;
+                outPending.TargetPos = units[bestUnit].Position;
+                break;
+            }
+
             case "Cloud":
             {
                 float dist = (mouseWorld - necroPos).Length();

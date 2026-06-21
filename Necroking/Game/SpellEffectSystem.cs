@@ -148,6 +148,10 @@ public class SpellEffectSystem
             // "Command" is no longer a spell category — the order_attack ability is a
             // built-in (Game1.TryCommandHorde) so the category can host more uses.
 
+            case "Sacrifice":
+                ExecuteSacrifice(spell, sim, casterIdx, target, damageNumbers);
+                break;
+
             case "Cloud":
                 ExecuteCloud(spell, sim, target);
                 break;
@@ -234,6 +238,58 @@ public class SpellEffectSystem
         if (spell.ArmorNegating) flags |= DamageFlags.ArmorNegating;
         if (spell.DefenseNegating) flags |= DamageFlags.DefenseNegating;
         return flags;
+    }
+
+    /// <summary>Sacrifice the friendly undead nearest the target point: it dies
+    /// (crumbles into a corpse, attributed to the caster) and the caster is healed
+    /// by HealFlat + HealPercent × the victim's effective max HP, clamped to the
+    /// caster's own effective max HP. A floating "+N" reports the gain.</summary>
+    private void ExecuteSacrifice(SpellDef spell, Simulation sim, int casterIdx,
+        Vec2 target, List<DamageNumber> damageNumbers)
+    {
+        var units = sim.UnitsMut;
+        int victim = FindClosestAlly(sim, target, 5f, units[casterIdx].Faction, casterIdx);
+        if (victim < 0) return;
+
+        int victimMaxHp = BuffSystem.EffectiveMaxHP(units, victim);
+        int heal = spell.SacrificeHealFlat + (int)MathF.Round(spell.SacrificeHealPercent * victimMaxHp);
+        if (heal < 0) heal = 0;
+
+        int casterMax = BuffSystem.EffectiveMaxHP(units, casterIdx);
+        int before = units[casterIdx].Stats.HP;
+        units[casterIdx].Stats.HP = Math.Min(casterMax, before + heal);
+        int gained = units[casterIdx].Stats.HP - before;
+
+        if (gained > 0)
+        {
+            damageNumbers.Add(new DamageNumber
+            {
+                WorldPos = units[casterIdx].Position,
+                PickupText = gained.ToString(),
+                Timer = 0f,
+                Height = units[casterIdx].EffectSpawnHeight,
+            });
+        }
+
+        // The victim crumbles into a corpse — the visible "sacrifice".
+        sim.DealDamage(victim, 999999, casterIdx);
+    }
+
+    /// <summary>Find the closest same-faction unit to a point within range,
+    /// excluding one index (the caster).</summary>
+    private static int FindClosestAlly(Simulation sim, Vec2 point, float range,
+        Faction faction, int excludeIdx)
+    {
+        int best = -1;
+        float bestDist = range * range;
+        for (int i = 0; i < sim.Units.Count; i++)
+        {
+            if (i == excludeIdx) continue;
+            if (!sim.Units[i].Alive || sim.Units[i].Faction != faction) continue;
+            float d = (point - sim.Units[i].Position).LengthSq();
+            if (d < bestDist) { bestDist = d; best = i; }
+        }
+        return best;
     }
 
     /// <summary>Find closest enemy unit to a point within range.</summary>

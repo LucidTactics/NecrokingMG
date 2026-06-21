@@ -48,7 +48,7 @@ public class SpellDef : IHasId
     [JsonPropertyName("id")] public string Id { get; set; } = "";
 
     [EditorField(Label = "Category", Order = 2)]
-    [EditorCombo("Projectile", "Buff", "Debuff", "Summon", "Strike", "Beam", "Drain", "Cloud")]
+    [EditorCombo("Projectile", "Buff", "Debuff", "Summon", "Strike", "Beam", "Drain", "Cloud", "Sacrifice")]
     [JsonPropertyName("category")] public string Category { get; set; } = "Projectile";
 
     // ===== Grimoire presentation (tab school + tile template + icon) =====
@@ -658,6 +658,21 @@ public class SpellDef : IHasId
     [JsonPropertyName("cloudGlowColor")]
     [JsonConverter(typeof(HdrColorJsonConverter))]
     public HdrColor CloudGlowColor { get; set; } = new(80, 255, 40, 255, 1.0f);
+
+    // ============ SACRIFICE ============
+    // Sacrifice the friendly undead nearest the cursor: it dies (crumbles into a
+    // corpse) and the caster is healed by HealFlat + HealPercent × the victim's
+    // effective max HP. The resource spent is the unit, not (necessarily) mana.
+    // Power-user: a non-empty `acceptableTargets` list in the JSON restricts which
+    // UnitDef ids can be sacrificed (e.g. skeletons only); empty = any friendly
+    // undead except the caster. It isn't surfaced in the editor for this category.
+    [EditorVisible("Category", "Sacrifice")]
+    [EditorField(Label = "Heal Flat", Group = "SACRIFICE", Order = 900, GroupColorR = 255, GroupColorG = 90, GroupColorB = 90)]
+    [JsonPropertyName("sacrificeHealFlat")] public int SacrificeHealFlat { get; set; } = 20;
+
+    [EditorVisible("Category", "Sacrifice")]
+    [EditorField(Label = "Heal % MaxHP", Group = "SACRIFICE", Order = 901, Step = 0.05f, Decimals = 2)]
+    [JsonPropertyName("sacrificeHealPercent")] public float SacrificeHealPercent { get; set; }
 
     // Toggle (hidden from editor — internal)
     [EditorHide]
