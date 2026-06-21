@@ -174,6 +174,11 @@ async function tick(){
 })();
 </script></body></html>"""
 
+# Windows: suppress the brief console window that pops up when we spawn child
+# processes (the `dotnet build` console app, and the game exe). CREATE_NO_WINDOW
+# (0x08000000); 0 elsewhere so it's a no-op cross-platform.
+_NO_WINDOW = 0x08000000 if os.name == "nt" else 0
+
 # --- shared state -----------------------------------------------------------
 _game_proc = None          # subprocess.Popen | None
 _last_build = None         # dict | None
@@ -292,7 +297,7 @@ def start_game(windowed=False, map_name=None, resolution=DEFAULT_RESOLUTION):
         args.append("--headless")
     if resolution:
         args += ["--resolution", resolution]
-    _game_proc = subprocess.Popen(args, cwd=os.path.dirname(EXE))
+    _game_proc = subprocess.Popen(args, cwd=os.path.dirname(EXE), creationflags=_NO_WINDOW)
     _assign_to_job(_game_proc)  # OS kills the game if this supervisor dies
 
     ok, msg = _wait_until_ready()
@@ -333,7 +338,7 @@ def build():
         stop_game()
     proc = subprocess.run(
         ["dotnet", "build", PROJECT, "-v", "q", "-nologo"],
-        cwd=REPO_ROOT, capture_output=True, text=True)
+        cwd=REPO_ROOT, capture_output=True, text=True, creationflags=_NO_WINDOW)
     lines = (proc.stdout or "").splitlines()
     errors = [l for l in lines if ": error " in l]
     _last_build = {
