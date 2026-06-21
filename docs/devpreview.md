@@ -46,6 +46,13 @@ command is added** — add it in C# and `necro_restart` with build.
 reload before its tools appear. After that the tools are allowlisted (`mcp__necroking__*`
 in `.claude/settings.json`) and never prompt.
 
+**Lifecycle (no orphans):** the MCP server *owns* the supervisor it starts, via a Windows
+Job Object (`KILL_ON_JOB_CLOSE`) — just like the desktop app owns its supervisor. When the
+editor/Claude Code session closes, the MCP process dies, the OS kills the supervisor, and
+the supervisor's own job kills the game. So closing the editor leaves nothing running.
+(The `devctl.py` CLI, by contrast, intentionally *detaches* the supervisor so it persists
+between separate command invocations; stop it with `python tools/devctl.py kill-server`.)
+
 > Why an MCP server instead of a skill or raw bash: a skill is just instructions (and
 > `.claude/` is machine-local, so skills don't propagate reliably); raw bash gets composed
 > into `&& curl … | parse …` pipelines that can't be safely whitelisted. A typed MCP tool

@@ -23,6 +23,12 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import necro_devlib as dev  # noqa: E402
 
+# This server is long-lived (lives as long as the editor/Claude Code session), so
+# it OWNS the supervisor: when this process dies, the supervisor (and the game it
+# owns) die with it — no orphan left running after the editor closes. The CLI
+# (devctl.py) leaves OWN_BY_DEFAULT False so its short-lived calls detach instead.
+dev.OWN_BY_DEFAULT = True
+
 PROTO_DEFAULT = "2024-11-05"
 SERVER_INFO = {"name": "necroking", "version": "1.0.0"}
 
