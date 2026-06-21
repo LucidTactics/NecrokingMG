@@ -1,0 +1,1109 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using Microsoft.Xna.Framework;
+using Microsoft.Xna.Framework.Audio;
+using Microsoft.Xna.Framework.Graphics;
+using Microsoft.Xna.Framework.Input;
+using Necroking.Data;
+using Necroking.Data.Registries;
+using Necroking.Core;
+using Necroking.Render;
+using Necroking.Movement;
+using Necroking.Game;
+using Necroking.GameSystems;
+using Necroking.World;
+using Necroking.Scenario;
+using Necroking.Editor;
+using Necroking.UI;
+
+namespace Necroking;
+
+// Game1 partial: Unit, env-object and sprite rendering.
+public partial class Game1
+{
+    /// <summary>
+    /// Compute weapon hilt/tip world positions for buff weapon particle spawning.
+    /// </summary>
+    private WeaponAttachRuntime ComputeWeaponAttach(int unitIdx, UnitDef unitDef, UnitAnimData animData)
+    {
+        var result = new WeaponAttachRuntime();
+        if (unitDef.Sprite == null || animData.RefFrameHeight <= 0f) return result;
+
+        string animName = AnimController.StateToAnimName(animData.Ctrl.CurrentState);
+        int spriteAngle = animData.Ctrl.ResolveAngle(_sim.Units[unitIdx].FacingAngle, out bool flipX);
+        int frameIdx = animData.Ctrl.GetCurrentFrameIndex(_sim.Units[unitIdx].FacingAngle);
+
+        AnimationMeta? meta = null;
+        _animMeta.TryGetValue(AnimMetaLoader.MetaKey(unitDef.Sprite.SpriteName, animName), out meta);
+
+        if (!WeaponPointResolver.TryResolve(unitDef, meta, animName, spriteAngle, frameIdx,
+                animData.RefFrameHeight, out var wpf, out _)) return result;
+
+        bool hiltSet = wpf.Hilt.X != 0f || wpf.Hilt.Y != 0f;
+        bool tipSet = wpf.Tip.X != 0f || wpf.Tip.Y != 0f;
+        if (!hiltSet && !tipSet) return result;
+
+        float flipMul = flipX ? -1f : 1f;
+        float worldH = (unitDef.SpriteWorldHeight > 0 ? unitDef.SpriteWorldHeight : 1.8f)
+                       * _sim.Units[unitIdx].SpriteScale;
+        float worldScale = worldH / animData.RefFrameHeight;
+        float unitHeight = _sim.Units[unitIdx].Z;
+
+        // Weapon attach points follow the sprite's cosmetic offset — so the weapon
+        // lunges with the unit on attack. Gameplay never reads these.
+        var unitRender = _sim.Units[unitIdx].RenderPos;
+        result.HiltWorld = new Vec2(
+            unitRender.X + wpf.Hilt.X * worldScale * flipMul,
+            unitRender.Y);
+        result.HiltHeight = unitHeight - wpf.Hilt.Y * worldScale;
+        result.HiltBehind = wpf.Hilt.Behind;
+
+        result.TipWorld = new Vec2(
+            unitRender.X + wpf.Tip.X * worldScale * flipMul,
+            unitRender.Y);
+        result.TipHeight = unitHeight - wpf.Tip.Y * worldScale;
+        result.TipBehind = wpf.Tip.Behind;
+
+        result.Valid = true;
+        return result;
+    }
+
+    private void DrawUnitsAndObjects()
+    {
+        // View culling bounds
+        float viewMargin = 20f;
+        float viewLeft = _camera.Position.X - _renderer.ScreenW / (2f * _camera.Zoom) - viewMargin;
+        float viewRight = _camera.Position.X + _renderer.ScreenW / (2f * _camera.Zoom) + viewMargin;
+        float viewTop = _camera.Position.Y - _renderer.ScreenH / (_camera.Zoom * _camera.YRatio) - viewMargin;
+        float viewBottom = _camera.Position.Y + _renderer.ScreenH / (_camera.Zoom * _camera.YRatio) + viewMargin;
+
+        // Build merged sort list (reuse cached list to avoid per-frame allocation)
+        _depthItems.Clear();
+        var items = _depthItems;
+
+        // Add units (view-culled, same bounds as env objects below). Use RenderPos
+        // so a lunging unit re-sorts against its neighbors naturally — a forward-
+        // lunging sprite that crosses another unit's Y draws in front during the
+        // lunge. The 20-unit margin covers sprite overhang (sprites are a few world
+        // units tall and shorter than the trees culled with the same bounds), so a
+        // unit just off-screen whose head still pokes in isn't clipped early.
+        // Without this, off-screen units each ran a full DrawSingleUnit every frame —
+        // the dominant Draw cost on a populated map, especially with fog off.
+        for (int i = 0; i < _sim.Units.Count; i++)
+        {
+            if (!_sim.Units[i].Alive) continue;
+            var rp = _sim.Units[i].RenderPos;
+            if (rp.X < viewLeft || rp.X > viewRight || rp.Y < viewTop || rp.Y > viewBottom)
+                continue;
+            items.Add(new DepthItem { Y = rp.Y, Type = DepthItemType.Unit, Index = i });
+        }
+
+        // Add environment objects (with view culling, skip collected foragables, skip ground-layer objects)
+        for (int i = 0; i < _envSystem.ObjectCount; i++)
+        {
+            if (!_envSystem.IsObjectVisible(i)) continue;
+            var obj = _envSystem.Objects[i];
+            var def = _envSystem.Defs[obj.DefIndex];
+            if (def.Category == "Traps") continue; // drawn in ground layer pass
+            if (obj.X < viewLeft || obj.X > viewRight || obj.Y < viewTop || obj.Y > viewBottom)
+                continue;
+            // Note: defs whose sprites failed to load get a placeholder texture in EnvironmentSystem,
+            // so GetDefTexture is non-null and the object still appears.
+            items.Add(new DepthItem { Y = obj.Y, Type = DepthItemType.EnvObject, Index = i });
+        }
+
+        // Add poison cloud puffs
+        _poisonCloudRenderer.SetContext(_spriteBatch, _glowTex, _camera, _renderer, _flipbooks, _gameTime);
+        _poisonCloudRenderer.AddPuffsToDepthList(_sim.PoisonClouds, items);
+
+        // Add grass tufts — Y-sorted with units so a tuft "in front" (higher Y)
+        // correctly renders over a unit's feet, and one "behind" (lower Y) is
+        // drawn first and hidden by the unit.
+        _grassRenderer.AddTuftsToDepthList(
+            _camera, _renderer.ScreenW, _renderer.ScreenH,
+            _grassMap, _grassW, _grassH,
+            _gameData.Settings.Grass, _ambientColor, items);
+
+        // Add death-fog puffs — Y-sorted with units so puffs visually drift in
+        // front of / behind characters depending on their relative ground Y.
+        // Mirrors PoisonCloudRenderer's depth-list integration.
+        if (_flipbooks != null && _flipbooks.TryGetValue("cloud03", out var deathFogFb))
+        {
+            _deathFogRenderer.SetContext(_spriteBatch, _camera, _renderer, deathFogFb, _gameTime);
+            _deathFogRenderer.AddPuffsToDepthList(_deathFog, _renderer.ScreenW, _renderer.ScreenH, items);
+        }
+
+        items.Sort();
+
+        foreach (var item in items)
+        {
+            switch (item.Type)
+            {
+                case DepthItemType.Unit:
+                    DrawSingleUnit(item.Index);
+                    break;
+                case DepthItemType.EnvObject:
+                    DrawSingleEnvObject(item.Index);
+                    break;
+                case DepthItemType.CloudPuff:
+                    _poisonCloudRenderer.DrawSinglePuff(item.Index, item.SubIndex);
+                    break;
+                case DepthItemType.GrassTuft:
+                    // no_ground dev screenshots suppress grass too, for the clean
+                    // black-background look scenarios produce.
+                    if (!_devShotNoGround)
+                        _grassRenderer.DrawSingleTuft(_spriteBatch, item.Index);
+                    break;
+                case DepthItemType.DeathFogPuff:
+                    _deathFogRenderer.DrawSinglePuff(item.Index);
+                    break;
+            }
+        }
+    }
+
+    private void DrawSingleUnit(int i)
+    {
+        // Fog of war: hide non-undead units (and their buffs, which draw inside
+        // this method) when they're not currently in any undead's detection range.
+        if (_sim.Units[i].Faction != Faction.Undead && !_fogOfWar.IsVisible(_sim.Units[i].Position))
+            return;
+
+        uint uid = _sim.Units[i].Id;
+        if (!_unitAnims.TryGetValue(uid, out var animData)) return;
+
+        var unitDef = _gameData.Units.Get(_sim.Units[i].UnitDefID);
+        if (unitDef == null) return;
+
+        var atlas = _atlases[animData.AtlasID];
+        if (!atlas.IsLoaded) return;
+
+        var fr = animData.Ctrl.GetCurrentFrame(_sim.Units[i].FacingAngle);
+        if (fr.Frame == null) return;
+
+        float worldH = (unitDef.SpriteWorldHeight > 0 ? unitDef.SpriteWorldHeight : 1.8f) * _sim.Units[i].SpriteScale;
+        float pixelH = worldH * _camera.Zoom;
+        float scale = pixelH / animData.RefFrameHeight;
+
+        Color tint = _sim.Units[i].Faction == Faction.Undead
+            ? new Color(190, 210, 190)
+            : new Color(210, 195, 185);
+
+        // Apply buff tinting
+        foreach (var buff in _sim.Units[i].ActiveBuffs)
+        {
+            var buffDef = _gameData.Buffs.Get(buff.BuffDefID);
+            if (buffDef?.UnitTint != null && buffDef.UnitTint.A > 0)
+            {
+                var bt = buffDef.UnitTint;
+                float blend = bt.A / 255f;
+                tint = new Color(
+                    (byte)(tint.R * (1f - blend) + bt.R * blend),
+                    (byte)(tint.G * (1f - blend) + bt.G * blend),
+                    (byte)(tint.B * (1f - blend) + bt.B * blend));
+            }
+        }
+
+        // Ghost mode: semi-transparent blue-shifted sprite
+        if (_sim.Units[i].GhostMode)
+            tint = Color.FromNonPremultiplied(
+                Math.Min(255, (int)(tint.R * 0.7f + 80)),
+                Math.Min(255, (int)(tint.G * 0.7f + 100)),
+                Math.Min(255, (int)(tint.B * 0.7f + 120)), 100);
+
+        // Apply weather ambient light
+        tint = MultiplyColor(tint, _ambientColor);
+
+        float heightOffset = _sim.Units[i].Z;
+        // Use RenderPos (Position + RenderOffset) so lunge and any future cosmetic
+        // offsets propagate to every visual attached to this unit: sprite, weapon,
+        // shield, status symbols, health bar, buff visuals, damage numbers, etc.
+        var renderPos = _sim.Units[i].RenderPos;
+        var sp = _renderer.WorldToScreen(renderPos, heightOffset, _camera);
+        // For drawing above unit.
+        var sp_upper = _renderer.WorldToScreen(renderPos, heightOffset + _sim.Units[i].CollisionHeight, _camera);
+
+        // Compute weapon attachment for weapon particle buff visuals
+        var weaponAttach = ComputeWeaponAttach(i, unitDef, animData);
+
+        // Update weapon particle emitters (like C++, phase 0 only)
+        {
+            _wpDefsCache.Clear();
+            foreach (var ab in _sim.Units[i].ActiveBuffs)
+            {
+                var bd = _gameData.Buffs.Get(ab.BuffDefID);
+                if (bd != null && bd.HasWeaponParticle && bd.WeaponParticle != null)
+                    _wpDefsCache.Add(bd);
+            }
+            if (_wpDefsCache.Count > 0 || _buffVisuals.HasEmitters(i))
+                _buffVisuals.UpdateWeaponParticles(i, _rawDt * _timeScale, _gameTime, _wpDefsCache, weaponAttach, _gameData.Buffs);
+        }
+
+        // Buff visuals: phase 0 (behind sprite)
+        _buffVisuals.DrawUnit(i, renderPos, 0, _gameTime,
+            _spriteBatch, _camera, _renderer, _flipbooks, _gameData.Buffs, _sim.Units,
+            atlas, fr.Frame.Value, scale, fr.FlipX,
+            _sim.Units[i].EffectSpawnPos2D, _sim.Units[i].EffectSpawnHeight);
+
+        // Pulsing outline: draw sprite 8 times at directional offsets behind the unit
+        DrawUnitPulsingOutline(i, atlas, fr.Frame.Value, sp, scale, fr.FlipX);
+
+        // Ghost mode: subtle blue pulsing outline
+        if (_sim.Units[i].GhostMode)
+            DrawGhostOutline(atlas, fr.Frame.Value, sp, scale, fr.FlipX);
+
+        // Carried body bag rendering (phase-aware: respects effect_ms action moment)
+        byte cPhase = _sim.Units[i].CorpseInteractPhase;
+        int putdownTableIdx = _sim.Units[i].PutDownTableIdx;
+        bool tableBoundPutdown = cPhase == 5 && putdownTableIdx >= 0
+            && _envSystem != null && putdownTableIdx < _envSystem.ObjectCount;
+        bool hasCorpse = _sim.Units[i].CarryingCorpseID >= 0
+            && (cPhase == 0 || cPhase == 4 || cPhase == 5);
+        // facingAway = the unit's back is toward the camera, so the carried corpse
+        // renders *behind* the sprite. Keyed off the RESOLVED sprite angle (not the
+        // raw mouse angle) so the render order flips exactly when the sprite flips —
+        // with the same buckets + hysteresis — instead of jittering on tiny mouse
+        // moves. Back angles: new scheme N=270 / NE-NW=315, old scheme up=300.
+        // Everything else (E/W=0, S=90, SE/SW=45, old 30/60) is front → on top.
+        int sprAngle = animData.Ctrl.ResolveAngle(_sim.Units[i].FacingAngle, out _);
+        bool facingAway = sprAngle == 270 || sprAngle == 315 || sprAngle == 300;
+        bool drawBagAtHilt = false; // whether to draw on unit (vs at ground)
+
+        if (hasCorpse && !tableBoundPutdown)
+        {
+            if (cPhase == 0)
+                drawBagAtHilt = true; // fully carried
+            else if (cPhase == 4) // Pickup: ground until action moment, then hilt
+                drawBagAtHilt = animData.Ctrl.HasReachedActionMoment();
+            else if (cPhase == 5) // PutDown: hilt until action moment, then ground
+                drawBagAtHilt = !animData.Ctrl.HasReachedActionMoment();
+        }
+
+        // Pre-compute table-bound PutDown lerp target so we can draw it on the
+        // correct side of the unit (back vs front) by Y-sort convention.
+        Vector2? tableLerpScreen = null;
+        float tableLerpRotation = 0f;
+        if (tableBoundPutdown && hasCorpse)
+        {
+            // t = anim progress: 0 at PutDown start (bag at hand), 1 at completion
+            // (bag on table). MathHelper.Lerp handles position and rotation.
+            float t = animData.Ctrl.TimeFraction;
+
+            // Source pose: hilt + carry offsets (mirrors DrawCarriedBodyBag).
+            Vector2 sourcePos = sp; // fallback to unit screen pos if attach invalid
+            var attach = ComputeWeaponAttach(i, unitDef, animData);
+            if (attach.Valid)
+                sourcePos = _renderer.WorldToScreenPx(attach.HiltWorld, attach.HiltHeight * _camera.Zoom, _camera);
+            var bagFr = GetBodyBagFrame(_sim.Units[i].FacingAngle);
+            float ofsX = bagFr.FlipX ? -CarryOffsetX : CarryOffsetX;
+            sourcePos.X += ofsX;
+            sourcePos.Y += CarryOffsetY;
+
+            // Destination pose: table-overlay anchor (mirrors DrawSingleEnvObject's
+            // table body-bag block). Same lift formula keeps position consistent
+            // when the lerp finishes and the env overlay takes over.
+            var tableObj = _envSystem.GetObject(putdownTableIdx);
+            var tableDef = _envSystem.Defs[tableObj.DefIndex];
+            float tableWorldH = tableDef.SpriteWorldHeight * tableObj.Scale * tableDef.Scale;
+            float bagLift = tableWorldH * tableDef.PivotY * 1.22f;
+            Vector2 destPos = _renderer.WorldToScreen(new Vec2(tableObj.X, tableObj.Y), bagLift, _camera);
+
+            tableLerpScreen = Vector2.Lerp(sourcePos, destPos, t);
+            tableLerpRotation = MathHelper.Lerp(0f, -MathF.PI / 12f, t);
+        }
+
+        if (hasCorpse && drawBagAtHilt && facingAway)
+            DrawCarriedVisual(i, sp, scale);
+        // Table-bound PutDown: draw the lerped corpse BEHIND the unit when facing away.
+        if (tableBoundPutdown && tableLerpScreen.HasValue && facingAway)
+            DrawCarriedVisualAt(i, tableLerpScreen.Value, _sim.Units[i].FacingAngle, tableLerpRotation);
+        if (hasCorpse && !drawBagAtHilt && !tableBoundPutdown)
+        {
+            // Ground PutDown: draw at the corpse's drop point. In corpse mode use
+            // the frozen carry frame (centroid-pegged) so it's identical to the
+            // settled corpse that takes over at anim-finish — no hand-off jump.
+            var cc = _sim.FindCorpseByID(_sim.Units[i].CarryingCorpseID);
+            if (cc != null)
+            {
+                var groundSp = _renderer.WorldToScreen(cc.LerpStartPos, 0f, _camera);
+                if (!GameConstants.UseBodyBag && cc.CarryDisplayAngle >= 0)
+                    DrawCorpseCarriedFrame(cc, groundSp);
+                else
+                    DrawCarriedVisualAt(i, groundSp, cc.FacingAngle);
+            }
+        }
+
+        // Wading visual: see Render/WadingState.cs for the math + constants.
+        // All per-unit wading parameters (waterness, waterline V, top cut V,
+        // diagonal slope, sprite angle) are computed in one place; the same
+        // struct is used by the shadow renderer for consistency.
+        WadingState wading = WadingState.Compute(
+            _sim.Units[i].Position, _sim.Units[i].FacingAngle,
+            fr.Frame.Value, unitDef, animData.Ctrl, _groundSystem, _camera.YRatio);
+        if (wading.Active)
+        {
+            // World height that puts a particle drawn at the unit's foot
+            // position level with the visual waterline cut on the sprite.
+            // pivotFlippedV - waterlineV is the V distance from the cut up
+            // to the pivot in sprite-V; multiplying by worldH gives the
+            // equivalent world height, and dividing by YRatio undoes the
+            // isometric squish that WorldToScreen applies to world Y.
+            float pivotFlippedV = 1f - fr.Frame.Value.PivotY;
+            float wakeLiftWorldH = (pivotFlippedV - wading.WaterlineV) * worldH / _camera.YRatio;
+
+            // BACK pass — trail particles render behind the sprite so the
+            // body covers anything drifting into its silhouette. Also runs
+            // the per-frame update + edge-detect for entry splash spawning.
+            float bodyLen = unitDef.BodyLengthWorld > 0f
+                ? unitDef.BodyLengthWorld
+                : (unitDef.IsQuadruped ? Render.WadingWakeSystem.QuadrupedDefaultBodyLength : 0f);
+            // Use RenderPos (Position + sink offset) so wake particles
+            // spawn at the body's *visual* footprint — when the unit sinks
+            // into deep water, the trail and bow wave follow the sunken
+            // body instead of floating above it at the sim Y.
+            _wakeSystem.UpdateAndDrawBack(
+                i, _frameDt,
+                _sim.Units[i].RenderPos, _sim.Units[i].Velocity,
+                _sim.Units[i].FacingAngle, bodyLen,
+                wakeLiftWorldH, true,
+                _spriteBatch, _pixel, _renderer, _camera);
+
+            // Sprite with waterline fade. Top cut V = -1 sentinel disables the
+            // top cut in the shader (used for 3/4 facings where the back-cut
+            // line never read cleanly). Top slope always 0 — top cut only ever
+            // applies on cardinal facings, which have no body-axis tilt.
+            DrawWadingSpriteFrame(atlas, fr.Frame.Value, sp, scale, fr.FlipX, tint,
+                                  wading.WaterlineV, wading.TopWaterlineV,
+                                  wading.Slope, 0f);
+
+            // FRONT pass — bow wave + entry splash render in front of the
+            // sprite. Needed because for N-facing motion the "ahead of
+            // unit" position projects to the same screen Y range as the
+            // visible body; drawing front-class particles after the sprite
+            // keeps the front foam crescent visible.
+            _wakeSystem.DrawFront(i, _spriteBatch, _renderer, _camera);
+        }
+        else
+        {
+            // Out of water but live particles may still be fading. The back
+            // pass advances + dims the remaining tail and catches the
+            // exit-splash edge; fast-exits if no state.
+            float bodyLen = unitDef.BodyLengthWorld > 0f
+                ? unitDef.BodyLengthWorld
+                : (unitDef.IsQuadruped ? Render.WadingWakeSystem.QuadrupedDefaultBodyLength : 0f);
+            _wakeSystem.UpdateAndDrawBack(
+                i, _frameDt,
+                _sim.Units[i].RenderPos, _sim.Units[i].Velocity,
+                _sim.Units[i].FacingAngle, bodyLen,
+                0f, false,
+                _spriteBatch, _pixel, _renderer, _camera);
+
+            DrawSpriteFrame(atlas, fr.Frame.Value, sp, scale, fr.FlipX, tint);
+
+            // Any lingering front-class particles (a bow wave fading out
+            // as the unit steps onto land) also need the after-sprite pass.
+            _wakeSystem.DrawFront(i, _spriteBatch, _renderer, _camera);
+        }
+
+        // F2 water debug overlay — render after the sprite so it's not occluded.
+        if (_waterDebug && _smallFont != null)
+            DrawWaterDebugOverlay(i, fr.Frame.Value, sp, pixelH, wading);
+
+        // Carried visual: draw IN FRONT if facing toward camera
+        if (hasCorpse && drawBagAtHilt && !facingAway)
+            DrawCarriedVisual(i, sp, scale);
+        // Table-bound PutDown: draw the lerped corpse IN FRONT when facing toward camera.
+        if (tableBoundPutdown && tableLerpScreen.HasValue && !facingAway)
+            DrawCarriedVisualAt(i, tableLerpScreen.Value, _sim.Units[i].FacingAngle, tableLerpRotation);
+
+        // Buff visuals: phase 1 (in front of sprite)
+        _buffVisuals.DrawUnit(i, renderPos, 1, _gameTime,
+            _spriteBatch, _camera, _renderer, _flipbooks, _gameData.Buffs, _sim.Units,
+            atlas, fr.Frame.Value, scale, fr.FlipX,
+            _sim.Units[i].EffectSpawnPos2D, _sim.Units[i].EffectSpawnHeight);
+
+        DrawHPBar(i, sp);
+
+        // --- Status symbol (? / !) above head during notice/react events ---
+        if (_sim.Units[i].StatusSymbol != 0 && _largeFont != null)
+        {
+            const float SymScale = 0.7f;   // ~30% smaller than _largeFont default
+            const byte SymAlpha = 128;      // ~0.5 alpha
+            string sym = _sim.Units[i].StatusSymbol == (byte)UnitStatusSymbol.Notice ? "?" : "!";
+            Color symColor = _sim.Units[i].StatusSymbol == (byte)UnitStatusSymbol.Notice
+                ? Color.FromNonPremultiplied(255, 240, 80, SymAlpha)   // yellow ?
+                : Color.FromNonPremultiplied(255, 80, 60, SymAlpha);   // red !
+            Color outline = Color.FromNonPremultiplied(0, 0, 0, SymAlpha);
+            var textSize = _largeFont.MeasureString(sym);
+            int symX = (int)(sp_upper.X - textSize.X * 0.5f);
+            int symY = (int)(sp_upper.Y - textSize.Y - 0.25f * _camera.Zoom * _camera.YRatio);
+            var symPos = new Vector2(symX, symY);
+
+            // Black outline (8-way offset) for contrast and bolder look
+            for (int ox = -2; ox <= 2; ox++)
+                for (int oy = -2; oy <= 2; oy++)
+                    if ((ox != 0 || oy != 0) && ox * ox + oy * oy <= 4)
+                        _spriteBatch.DrawString(_largeFont, sym,
+                            symPos + new Vector2(ox, oy), outline,
+                            0f, Vector2.Zero, SymScale, SpriteEffects.None, 0f);
+
+            // Faux-bold: draw colored fill twice with 1px horizontal offset
+            _spriteBatch.DrawString(_largeFont, sym, symPos, symColor,
+                0f, Vector2.Zero, SymScale, SpriteEffects.None, 0f);
+            _spriteBatch.DrawString(_largeFont, sym, symPos + new Vector2(1, 0), symColor,
+                0f, Vector2.Zero, SymScale, SpriteEffects.None, 0f);
+        }
+
+        // --- Feature 1: Action label above head during a committed attack/spell ---
+        // Read from the generic ActionLabel field. Every archetype commit point
+        // (standard melee, sweep, pounce, trample BeginCharge, ranged, spell cast)
+        // writes this field — the renderer doesn't need to know about each path.
+        if (_sim.Units[i].ActionLabelTimer > 0f
+            && !string.IsNullOrEmpty(_sim.Units[i].ActionLabel)
+            && _smallFont != null)
+        {
+            var weaponPos = new Vector2(sp.X + 10, sp.Y - 55);
+            DrawText(_smallFont, _sim.Units[i].ActionLabel, weaponPos, Color.FromNonPremultiplied(255, 220, 140, 220));
+        }
+
+    }
+
+    private void DrawSingleEnvObject(int i)
+    {
+        var obj = _envSystem.Objects[i];
+        var def = _envSystem.Defs[obj.DefIndex];
+
+        // Dissolve transition: between threshold-cross and full corruption, render
+        // through the dissolve shader instead of the regular path. Shader needs
+        // both textures bound; existing path can't carry a second sampler. Falls
+        // through to the regular draw if either texture / the shader is missing.
+        var rtCheck = _envSystem.GetObjectRuntime(i);
+        if (rtCheck.CorruptionTime > 0f && !rtCheck.Corrupted && _dissolveTreeEffect != null)
+        {
+            if (DrawDissolvingTree(i, rtCheck)) return;
+        }
+
+        var tex = _envSystem.GetObjectTexture(i, out float alpha, out bool isOverride);
+        if (tex == null) return;
+
+        // Always compute scale from the main def texture so trap sprites render at same size.
+        // For corrupted/override sprites we scale relative to the override texture itself
+        // (it's a single frame, not a spritesheet, so refHeight should be its full height).
+        var mainTex = _envSystem.GetDefTexture(obj.DefIndex);
+        float refHeight = isOverride ? tex.Height : (mainTex != null ? mainTex.Height : tex.Height);
+
+        // Animated spritesheet: use per-frame dimensions.
+        // Skip slicing for the placeholder texture (single 32x32 swatch) and for
+        // single-frame override textures (corrupted/trap sprites).
+        bool usingPlaceholder = _envSystem.IsUsingPlaceholder(obj.DefIndex);
+        Rectangle? sourceRect = null;
+        float frameW = tex.Width;
+        float frameH = tex.Height;
+        if (def.IsAnimated && def.AnimTotalFrames > 1 && !usingPlaceholder && !isOverride)
+        {
+            int totalFrames = def.AnimTotalFrames;
+            float animTime = _envSystem.GetObjectRuntime(i).AnimTime;
+            int frame = Math.Clamp((int)animTime, 0, totalFrames - 1);
+            sourceRect = def.GetAnimFrameRect(tex.Width, tex.Height, frame);
+            frameW = sourceRect.Value.Width;
+            frameH = sourceRect.Value.Height;
+            refHeight = frameH; // scale relative to frame height, not full sheet
+        }
+
+        float worldH = def.SpriteWorldHeight * obj.Scale * def.Scale;
+        float pixelH = worldH * _camera.Zoom;
+        float scale = pixelH / refHeight;
+
+        var screenPos = _renderer.WorldToScreen(new Vec2(obj.X, obj.Y), 0f, _camera);
+        // Random per-instance horizontal flip (deterministic from seed). Mirror
+        // the pivot's X so the sprite's base stays anchored at the same world point.
+        bool flipX = _envSystem.ShouldFlipObject(i);
+        var origin = new Vector2((flipX ? (1f - def.PivotX) : def.PivotX) * frameW, def.PivotY * frameH);
+
+        float rotation = 0f;
+        Color tint = alpha >= 1f ? Color.White : new Color(alpha, alpha, alpha, alpha);
+
+        // Foragable proximity effects
+        if (def.IsForagable && _sim.NecromancerIndex >= 0)
+        {
+            Vec2 objPos = new Vec2(obj.X, obj.Y);
+            Vec2 necroPos = _sim.Units[_sim.NecromancerIndex].Position;
+            float dist = (objPos - necroPos).Length();
+
+            if (dist < ForagableWiggleRange)
+            {
+                // Wiggle: sinusoidal rotation, intensifies with proximity
+                float proximity = 1f - (dist / ForagableWiggleRange); // 0 at edge, 1 at necro
+                float wiggleAngle = MathF.Sin(_gameTime * 8f + obj.Seed * 10f) * 0.08f * proximity;
+                rotation = wiggleAngle;
+
+                // Scale pulse: subtle breathe effect
+                float pulse = 1f + MathF.Sin(_gameTime * 4f + obj.Seed * 5f) * 0.03f * proximity;
+                scale *= pulse;
+            }
+
+            // Mouse hover highlight: brighten + enlarge when cursor is over the object
+            var mouseWorld = _renderer.ScreenToWorld(_input.MousePos, _camera);
+            float mouseDist = (objPos - new Vec2(mouseWorld.X, mouseWorld.Y)).Length();
+            if (mouseDist < 1.2f && dist < ForagableWiggleRange)
+            {
+                scale *= 1.1f;
+                tint = new Color(1.3f, 1.3f, 1.3f, 1f); // brighten
+            }
+        }
+
+        // Blueprint visual: semi-transparent with blue tint
+        var rt = _envSystem.GetObjectRuntime(i);
+        if (rt.BuildProgress < 1f)
+        {
+            float bpAlpha = 0.35f + 0.15f * rt.BuildProgress; // 0.35 → 0.5 as progress increases
+            tint = new Color(0.5f * bpAlpha, 0.7f * bpAlpha, 1f * bpAlpha, bpAlpha);
+        }
+
+        // Apply weather ambient light
+        tint = MultiplyColor(tint, _ambientColor);
+
+        _spriteBatch.Draw(tex, screenPos, sourceRect, tint, rotation, origin, scale,
+            flipX ? SpriteEffects.FlipHorizontally : SpriteEffects.None, 0f);
+
+        // Build progress bar for unbuilt objects — visible from the moment of placement
+        // (empty bar at 0%) so players can see "placed, awaiting construction".
+        if (rt.BuildProgress < 1f)
+            DrawBuildProgressBar(screenPos, rt.BuildProgress);
+
+        // Body bag overlay for craft-tables with a corpse loaded. Drawn immediately
+        // after the table sprite (deferred SpriteBatch = call order = render order),
+        // so the bag is always layered on top of the table within this object's
+        // depth slot. Other Y-sorted objects still occlude correctly via the outer
+        // depth-list pass.
+        //
+        // Lift parametrization: tableWorldH × pivotY locates the visual TOP of the
+        // sprite in world-elevation (artists use pivotY=0.93 to anchor near the
+        // base, so 0.93×height is the height above pivot to reach the sprite's
+        // top edge). The 0.92 trim pulls the bag down a hair so it overlaps the
+        // tabletop instead of floating above the rim. No magic constants — every
+        // factor is sourced from def fields the artist already tuned.
+        if (Game.TableSystem.IsTable(def))
+        {
+            var ts = _envSystem.GetTableState(i);
+            if (ts.HasAnyCorpse())
+            {
+                for (int s = 0; s < ts.CorpseSlots.Length; s++)
+                {
+                    if (ts.CorpseSlots[s].IsEmpty) continue;
+                    float tableWorldH = def.SpriteWorldHeight * obj.Scale * def.Scale;
+                    // Lift = pivotY × 1.22 (slightly higher on the tabletop).
+                    // Rotation = -π/12 (CCW ~15°) — small bump back from -π/15
+                    // to align with the table's true long-axis angle.
+                    float bagLift = tableWorldH * def.PivotY * 1.22f;
+                    var bagScreen = _renderer.WorldToScreen(new Vec2(obj.X, obj.Y), bagLift, _camera);
+                    var slot = ts.CorpseSlots[s];
+                    // Same lift + rotation as the body bag, but render the actual
+                    // corpse sprite when the bag is mothballed.
+                    if (GameConstants.UseBodyBag)
+                        DrawBaggedCorpseAt(bagScreen, slot.FacingAngle, -MathF.PI / 12f);
+                    else
+                        DrawCorpseSpriteAt(slot.SourceUnitDefID, bagScreen, slot.FacingAngle, slot.SpriteScale, -MathF.PI / 12f);
+                    break;
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Render a corruption-transitioning tree via the dissolve shader. Returns
+    /// true if drawn; false if the caller should fall back to the regular path
+    /// (e.g. live or dead texture missing).
+    /// </summary>
+    private bool DrawDissolvingTree(int i, in PlacedObjectRuntime rt)
+    {
+        var obj = _envSystem.Objects[i];
+        var def = _envSystem.Defs[obj.DefIndex];
+
+        var liveTex = _envSystem.GetDefTexture(obj.DefIndex);
+        var deadTex = _envSystem.GetCorruptedTexture(i);
+        if (liveTex == null || deadTex == null) return false;
+        if (_envSystem.IsUsingPlaceholder(obj.DefIndex)) return false;
+
+        // Frame 0 of the live spritesheet — we lock to frame 0 throughout the
+        // dissolve so the live half doesn't keep animating as it fades.
+        Rectangle frame0 = def.IsAnimated && def.AnimTotalFrames > 1
+            ? def.GetAnimFrameRect(liveTex.Width, liveTex.Height, 0)
+            : new Rectangle(0, 0, liveTex.Width, liveTex.Height);
+
+        // Dest rect is sized to the dead texture (which should match per-frame
+        // dimensions of the live sheet — see env_defs.json oak entries).
+        float worldH = def.SpriteWorldHeight * obj.Scale * def.Scale;
+        float pixelH = worldH * _camera.Zoom;
+        float scale = pixelH / deadTex.Height;
+        var screenPos = _renderer.WorldToScreen(new Vec2(obj.X, obj.Y), 0f, _camera);
+        var origin = new Vector2(def.PivotX * deadTex.Width, def.PivotY * deadTex.Height);
+
+        Color tint = MultiplyColor(Color.White, _ambientColor);
+
+        // Set shader params. LiveFrameUV = frame 0 in normalized UV space.
+        float u0 = frame0.X / (float)liveTex.Width;
+        float v0 = frame0.Y / (float)liveTex.Height;
+        float u1 = (frame0.X + frame0.Width)  / (float)liveTex.Width;
+        float v1 = (frame0.Y + frame0.Height) / (float)liveTex.Height;
+        float threshold = MathHelper.Clamp(rt.CorruptionTime / MathF.Max(_deathFog.CorruptionTransitionDuration, 0.01f), 0f, 1f);
+
+        // Set effect parameters before Begin (they upload at Apply time).
+        // Bind LiveSampler texture via the parameter system AND directly on the
+        // GraphicsDevice slot — DesktopGL is finicky about which path actually
+        // takes effect; doing both is harmless and one of them should win.
+        _dissolveTreeEffect!.Parameters["LiveSampler"]?.SetValue(liveTex);
+        _dissolveTreeEffect.Parameters["LiveTexture"]?.SetValue(liveTex);
+        _dissolveTreeEffect.Parameters["LiveFrameUV"]?.SetValue(new Vector4(u0, v0, u1, v1));
+        _dissolveTreeEffect.Parameters["Threshold"]?.SetValue(threshold);
+        _dissolveTreeEffect.Parameters["Seed"]?.SetValue(obj.Seed);
+        _dissolveTreeEffect.Parameters["DebugMode"]?.SetValue(_deathFog.DebugVisible ? 1f : 0f);
+
+        // Throttled per-instance log so we can confirm threshold animates over time.
+        if (!_dissolveLoggedSeeds.TryGetValue(i, out var lastLogged) ||
+            MathF.Abs(threshold - lastLogged) >= 0.1f || (threshold >= 0.99f && lastLogged < 0.99f))
+        {
+            _dissolveLoggedSeeds[i] = threshold;
+            DebugLog.Log("startup", $"Dissolve frame: obj {i} ({def.Id}) t={threshold:F3} CorruptionTime={rt.CorruptionTime:F3} liveTex={liveTex.Width}x{liveTex.Height} deadTex={deadTex.Width}x{deadTex.Height}");
+        }
+
+        // Flush the env-objects batch and start an Immediate batch with our effect.
+        _spriteBatch.End();
+        _spriteBatch.Begin(SpriteSortMode.Immediate, BlendState.AlphaBlend, SamplerState.LinearClamp,
+            null, null, _dissolveTreeEffect);
+
+        // Belt-and-suspenders: also bind directly to GraphicsDevice slot 1.
+        GraphicsDevice.Textures[1] = liveTex;
+        GraphicsDevice.SamplerStates[1] = SamplerState.LinearClamp;
+
+        _spriteBatch.Draw(deadTex, screenPos, null, tint, 0f, origin, scale, SpriteEffects.None, 0f);
+        _spriteBatch.End();
+        // Restore the wrapping batch — the scene-pass Begin (Game1.cs ~line 4220)
+        // uses LinearClamp, NOT PointClamp. Restoring with PointClamp would alter
+        // the rest of the scene's sampler state.
+        _spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.LinearClamp);
+        return true;
+    }
+
+    /// <summary>
+    /// Draw a unit's Idle (or fallback) first-frame sprite scaled to fit inside
+    /// `dest`. Used by the table craft menu to show what's loaded in each corpse
+    /// slot. Returns silently if the def is missing or its atlas isn't loaded —
+    /// caller can render its own placeholder when nothing was drawn.
+    /// </summary>
+    private void DrawUnitIdleSprite(string unitDefId, Rectangle dest)
+    {
+        if (string.IsNullOrEmpty(unitDefId) || _gameData == null)
+        {
+            DebugLog.Log("table", $"[DrawUnitIdleSprite] aborted: defId='{unitDefId}' gameData={_gameData != null}");
+            return;
+        }
+        var unitDef = _gameData.Units.Get(unitDefId);
+        if (unitDef?.Sprite == null)
+        {
+            DebugLog.Log("table", $"[DrawUnitIdleSprite] '{unitDefId}': unitDef={unitDef != null} sprite={unitDef?.Sprite != null}");
+            return;
+        }
+        var atlasId = AtlasDefs.ResolveAtlasName(unitDef.Sprite.AtlasName);
+        if (atlasId >= _atlases.Length)
+        {
+            DebugLog.Log("table", $"[DrawUnitIdleSprite] '{unitDefId}': atlasId={atlasId} out of range (atlases={_atlases.Length})");
+            return;
+        }
+        var atlas = _atlases[atlasId];
+        if (!atlas.IsLoaded)
+        {
+            DebugLog.Log("table", $"[DrawUnitIdleSprite] '{unitDefId}': atlas '{unitDef.Sprite.AtlasName}' not loaded");
+            return;
+        }
+
+        var spriteData = atlas.GetUnit(unitDef.Sprite.SpriteName);
+        if (spriteData == null)
+        {
+            DebugLog.Log("table", $"[DrawUnitIdleSprite] '{unitDefId}': spriteName '{unitDef.Sprite.SpriteName}' not in atlas");
+            return;
+        }
+
+        // Prefer the dedicated "Icon" pose — a single camera-facing frame
+        // (yaw 45 faces the viewer; verified visually against the atlas).
+        // Units without an Icon pose fall back to Idle with the angle
+        // preference list (different units author different angle keys —
+        // old scheme: 30/60/300; new scheme: 0/45/90/270/315), then to ANY
+        // authored angle (mirrors AnimController.ResolveFallbackAngle).
+        var anim = spriteData.GetAnim("Icon");
+        int[] anglePrefs = anim != null
+            ? new[] { 45, 0, 315, 90, 270 }
+            : new[] { 30, 0, 45, 60, 315, 90, 270, 300 };
+        anim ??= spriteData.GetAnim("Idle");
+        if (anim == null)
+        {
+            DebugLog.Log("table", $"[DrawUnitIdleSprite] '{unitDefId}': no Icon/Idle anim in spriteData");
+            return;
+        }
+        System.Collections.Generic.List<Render.Keyframe>? kfs = null;
+        foreach (int pref in anglePrefs)
+        {
+            kfs = anim.GetAngle(pref);
+            if (kfs != null && kfs.Count > 0) break;
+        }
+        if (kfs == null || kfs.Count == 0)
+        {
+            // Last resort: take whatever is in the dictionary first.
+            foreach (var (_, frames) in anim.AngleFrames)
+            {
+                if (frames.Count > 0) { kfs = frames; break; }
+            }
+        }
+        if (kfs == null || kfs.Count == 0)
+        {
+            DebugLog.Log("table", $"[DrawUnitIdleSprite] '{unitDefId}': no usable angle keyframes (authored angles: {string.Join(",", anim.AngleFrames.Keys)})");
+            return;
+        }
+
+        var frame = kfs[0].Frame;
+        var tex = atlas.GetTextureForFrame(frame);
+        if (tex == null)
+        {
+            DebugLog.Log("table", $"[DrawUnitIdleSprite] '{unitDefId}': frame texture null");
+            return;
+        }
+
+        // Fit-inside scale: clamp to the smaller axis so the sprite preserves
+        // aspect ratio and never crops out of the slot rect.
+        float fitW = (float)(dest.Width - 4) / frame.Rect.Width;
+        float fitH = (float)(dest.Height - 4) / frame.Rect.Height;
+        float scale = MathF.Min(fitW, fitH);
+
+        // Centered draw — origin at sprite center so we can position by box center.
+        var origin = new Vector2(frame.Rect.Width / 2f, frame.Rect.Height / 2f);
+        var center = new Vector2(dest.X + dest.Width / 2f, dest.Y + dest.Height / 2f);
+        _spriteBatch.Draw(tex, center, frame.Rect, Color.White, 0f, origin, scale,
+            SpriteEffects.None, 0f);
+    }
+
+    private void DrawSpriteFrame(SpriteAtlas atlas, SpriteFrame frame, Vector2 screenPos,
+                                  float scale, bool flipX, Color tint)
+    {
+        var tex = atlas.GetTextureForFrame(frame);
+        if (tex == null) return;
+
+        float pivotX = flipX ? (1f - frame.PivotX) : frame.PivotX;
+        // Spritemeta pivots use bottom-left origin — Y needs to be flipped for top-left rendering
+        float pivotY = 1f - frame.PivotY;
+
+        var origin = new Vector2(pivotX * frame.Rect.Width, pivotY * frame.Rect.Height);
+        var effects = flipX ? SpriteEffects.FlipHorizontally : SpriteEffects.None;
+        _spriteBatch.Draw(tex, screenPos, frame.Rect, tint, 0f, origin, scale, effects, 0f);
+    }
+
+    /// <summary>Draw a unit sprite with the wading shader applied — fades alpha
+    /// below <paramref name="waterlineV"/> (V coord, 0=top, 1=bottom) and adds a
+    /// foam smear at the line. Wraps the call in End()/Begin(effect)/End()/
+    /// Begin() so other sprites this frame keep using the default batch. Caller
+    /// should only invoke when the unit is actually in shallow water — every
+    /// invocation pays the cost of two batch transitions.</summary>
+    /// <summary>F2 overlay: draws the body bbox and the computed waterline
+    /// cut directly on top of the rendered unit, plus a small text label
+    /// with the raw + remapped waterness, slope, and fractions in play. Used
+    /// for tuning per-unit WadingFractionByDirection values without bouncing
+    /// between game and JSON editor.</summary>
+    private void DrawWaterDebugOverlay(int unitIdx, SpriteFrame frame, Vector2 sp,
+                                        float pixelH, in WadingState wading)
+    {
+        var unit = _sim.Units[unitIdx];
+        // Body bbox bounds in screen Y.
+        float pivotFlippedV = 1f - frame.PivotY;
+        float bodyTopY = sp.Y + (frame.BodyTopV - pivotFlippedV) * pixelH;
+        float bodyBotY = sp.Y + (frame.BodyBottomV - pivotFlippedV) * pixelH;
+
+        // Estimate body width in screen px (no real frame X bounds — use the
+        // sprite frame's PixelW. Approximation: assume body roughly spans the
+        // frame minus 20% padding on each side; close enough for an overlay).
+        float pixelW = frame.Rect.Width * (pixelH / frame.Rect.Height);
+        float bodyHalfW = pixelW * 0.4f;
+        var bboxCol = new Color(80, 200, 255, 110);
+        DrawRectOutline(new Rectangle(
+            (int)(sp.X - bodyHalfW), (int)bodyTopY,
+            (int)(bodyHalfW * 2),    (int)(bodyBotY - bodyTopY)),
+            bboxCol);
+
+        // Bottom waterline (with slope) as a short line across the body.
+        if (wading.Active)
+        {
+            float waterY = sp.Y + (wading.WaterlineV - pivotFlippedV) * pixelH;
+            // Slope is dV/dU in local frame UV; convert: dY/dX in screen.
+            float slopeYpx = wading.Slope * pixelH / pixelW;
+            float lineHalfW = bodyHalfW;
+            var lineCol = new Color(255, 100, 100, 200);
+            DrawLine(new Vector2(sp.X - lineHalfW, waterY - lineHalfW * slopeYpx),
+                     new Vector2(sp.X + lineHalfW, waterY + lineHalfW * slopeYpx),
+                     lineCol, 2);
+
+            // Top waterline (if active).
+            if (wading.TopWaterlineV >= 0f)
+            {
+                float topY = sp.Y + (wading.TopWaterlineV - pivotFlippedV) * pixelH;
+                var topCol = new Color(255, 180, 100, 200);
+                DrawLine(new Vector2(sp.X - lineHalfW, topY - lineHalfW * slopeYpx),
+                         new Vector2(sp.X + lineHalfW, topY + lineHalfW * slopeYpx),
+                         topCol, 2);
+            }
+        }
+
+        // Text label above the sprite.
+        var unitDef = _gameData.Units.Get(unit.UnitDefID);
+        string topStr = wading.TopWaterlineV >= 0f ? $"topV={wading.TopWaterlineV:F2}" : "topV=-";
+        string label = wading.Active
+            ? $"w={wading.Waterness:F2} V={wading.WaterlineV:F2} {topStr} s={wading.Slope:F2} ang={wading.SpriteAngle}"
+            : $"w=0  (dry)  ang={wading.SpriteAngle}";
+        DrawText(_smallFont, label,
+            new Vector2((int)(sp.X - 60), (int)(bodyTopY - 14)),
+            new Color(255, 255, 255, 220));
+    }
+
+    /// <summary>Draw a 1px outline rectangle.</summary>
+    private void DrawRectOutline(Rectangle r, Color c)
+    {
+        _spriteBatch.Draw(_pixel, new Rectangle(r.X, r.Y, r.Width, 1), c);
+        _spriteBatch.Draw(_pixel, new Rectangle(r.X, r.Y + r.Height - 1, r.Width, 1), c);
+        _spriteBatch.Draw(_pixel, new Rectangle(r.X, r.Y, 1, r.Height), c);
+        _spriteBatch.Draw(_pixel, new Rectangle(r.X + r.Width - 1, r.Y, 1, r.Height), c);
+    }
+
+    /// <summary>Draw a 2D line by rotating the _pixel sprite. Cheap, AA-free.</summary>
+    private void DrawLine(Vector2 a, Vector2 b, Color c, int thickness)
+    {
+        var d = b - a;
+        float len = d.Length();
+        if (len < 0.5f) return;
+        float angle = MathF.Atan2(d.Y, d.X);
+        _spriteBatch.Draw(_pixel, a, null, c, angle, Vector2.Zero,
+            new Vector2(len, thickness), SpriteEffects.None, 0f);
+    }
+
+    private void DrawWadingSpriteFrame(SpriteAtlas atlas, SpriteFrame frame, Vector2 screenPos,
+                                        float scale, bool flipX, Color tint,
+                                        float waterlineCenterV, float topWaterlineCenterV,
+                                        float waterlineSlope, float topWaterlineSlope)
+    {
+        var tex = atlas.GetTextureForFrame(frame);
+        if (tex == null) return;
+        if (_wadingEffect == null)
+        {
+            // Fall back to normal draw if shader missing — at least the unit is
+            // still visible; just no waterline effect.
+            DrawSpriteFrame(atlas, frame, screenPos, scale, flipX, tint);
+            return;
+        }
+
+        // Atlas U/V range of this frame — shader uses them to normalize the
+        // incoming atlas texCoord into local 0..1 frame UV.
+        float atlasW = (float)tex.Width;
+        float atlasH = (float)tex.Height;
+        float frameLeftU = frame.Rect.X / atlasW;
+        float frameRightU = (frame.Rect.X + frame.Rect.Width) / atlasW;
+        float frameTopV = frame.Rect.Y / atlasH;
+        float frameBotV = (frame.Rect.Y + frame.Rect.Height) / atlasH;
+        _wadingEffect.Parameters["FrameLeftU"]?.SetValue(frameLeftU);
+        _wadingEffect.Parameters["FrameRightU"]?.SetValue(frameRightU);
+        _wadingEffect.Parameters["FrameTopV"]?.SetValue(frameTopV);
+        _wadingEffect.Parameters["FrameBottomV"]?.SetValue(frameBotV);
+
+        // No flipX correction on the slope: SpriteBatch flipping reverses
+        // texCoord.x sweep through the atlas frame, which gives the shader a
+        // naturally-reversed localU. Passing slope as-is and letting the
+        // reversed localU flip it produces the right output diagonal for
+        // mirrored sprites. (Earlier code negated here, which double-flipped
+        // and caused NW to show the same diagonal direction as NE.)
+        _wadingEffect.Parameters["WaterlineCenterV"]?.SetValue(waterlineCenterV);
+        _wadingEffect.Parameters["WaterlineSlope"]?.SetValue(waterlineSlope);
+        _wadingEffect.Parameters["TopWaterlineCenterV"]?.SetValue(topWaterlineCenterV);
+        _wadingEffect.Parameters["TopWaterlineSlope"]?.SetValue(topWaterlineSlope);
+        _wadingEffect.Parameters["FoamHalfWidth"]?.SetValue(0.05f);
+        _wadingEffect.Parameters["TopFoamHalfWidth"]?.SetValue(0.05f);
+        _wadingEffect.Parameters["UnderwaterAlpha"]?.SetValue(0.0f);
+        _wadingEffect.Parameters["FoamColor"]?.SetValue(new Vector3(0.88f, 0.94f, 0.96f));
+
+        _spriteBatch.End();
+        _spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.LinearClamp,
+            null, null, _wadingEffect);
+
+        float pivotX = flipX ? (1f - frame.PivotX) : frame.PivotX;
+        float pivotY = 1f - frame.PivotY;
+        var origin = new Vector2(pivotX * frame.Rect.Width, pivotY * frame.Rect.Height);
+        var effects = flipX ? SpriteEffects.FlipHorizontally : SpriteEffects.None;
+        _spriteBatch.Draw(tex, screenPos, frame.Rect, tint, 0f, origin, scale, effects, 0f);
+
+        _spriteBatch.End();
+        _spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.LinearClamp);
+    }
+
+    /// <summary>Multiply two colors component-wise (for ambient tinting).</summary>
+    private static Color MultiplyColor(Color a, Color b)
+    {
+        return new Color(
+            (byte)(a.R * b.R / 255),
+            (byte)(a.G * b.G / 255),
+            (byte)(a.B * b.B / 255),
+            (byte)(a.A * b.A / 255));
+    }
+
+    /// <summary>
+    /// Draw a pulsing outline around a sprite using the OutlineFlat shader.
+    /// Renders the sprite 8 times at directional offsets with a flat color.
+    /// </summary>
+    private void DrawSpriteOutline(SpriteAtlas atlas, SpriteFrame frame, Vector2 screenPos,
+                                    float scale, bool flipX, HdrColor color1, HdrColor color2,
+                                    float outlineWidth, float pulseWidth, float pulseSpeed,
+                                    int blendMode)
+    {
+        var tex = atlas.GetTextureForFrame(frame);
+        if (tex == null || _outlineFlatEffect == null) return;
+
+        float t = 0.5f + 0.5f * MathF.Sin(_gameTime * pulseSpeed * 2f * MathF.PI);
+
+        float offset = outlineWidth + (pulseWidth - outlineWidth) * t;
+        if (offset < 0.5f) return;
+
+        float colR = MathHelper.Lerp(color1.R / 255f, color2.R / 255f, t);
+        float colG = MathHelper.Lerp(color1.G / 255f, color2.G / 255f, t);
+        float colB = MathHelper.Lerp(color1.B / 255f, color2.B / 255f, t);
+        float colA = MathHelper.Lerp(color1.A / 255f, color2.A / 255f, t);
+        float intensity = MathHelper.Lerp(color1.Intensity, color2.Intensity, t);
+
+        _outlineFlatEffect.Parameters["OutlineColor"]?.SetValue(
+            new Vector4(colR * intensity, colG * intensity, colB * intensity, colA));
+
+        _spriteBatch.End();
+        var blend = blendMode == 1 ? BlendState.Additive : BlendState.NonPremultiplied;
+        _spriteBatch.Begin(SpriteSortMode.Deferred, blend, SamplerState.LinearClamp, effect: _outlineFlatEffect);
+
+        float pivotX = flipX ? (1f - frame.PivotX) : frame.PivotX;
+        float pivotY = 1f - frame.PivotY;
+        var origin = new Vector2(pivotX * frame.Rect.Width, pivotY * frame.Rect.Height);
+        var effects = flipX ? SpriteEffects.FlipHorizontally : SpriteEffects.None;
+
+        for (int d = 0; d < 8; d++)
+        {
+            float dx = _outlineDirs[d][0] * offset;
+            float dy = _outlineDirs[d][1] * offset;
+            _spriteBatch.Draw(tex, new Vector2(screenPos.X + dx, screenPos.Y + dy),
+                frame.Rect, Color.White, 0f, origin, scale, effects, 0f);
+        }
+
+        _spriteBatch.End();
+        _spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.LinearClamp);
+    }
+
+    private void DrawUnitPulsingOutline(int unitIdx, SpriteAtlas atlas, SpriteFrame frame,
+                                         Vector2 screenPos, float scale, bool flipX)
+    {
+        foreach (var buff in _sim.Units[unitIdx].ActiveBuffs)
+        {
+            var buffDef = _gameData.Buffs.Get(buff.BuffDefID);
+            if (buffDef != null && buffDef.HasPulsingOutline && buffDef.PulsingOutline != null)
+            {
+                var po = buffDef.PulsingOutline;
+                DrawSpriteOutline(atlas, frame, screenPos, scale, flipX,
+                    po.Color, po.PulseColor, po.OutlineWidth, po.PulseWidth, po.PulseSpeed, po.BlendMode);
+                return;
+            }
+        }
+    }
+
+    private void DrawGhostOutline(SpriteAtlas atlas, SpriteFrame frame,
+                                    Vector2 screenPos, float scale, bool flipX)
+    {
+        DrawSpriteOutline(atlas, frame, screenPos, scale, flipX,
+            _ghostColor1, _ghostColor2, 1.0f, 1.5f, 0.8f, 0);
+    }
+
+    private void DrawHPBar(int unitIdx, Vector2 screenPos)
+    {
+        var stats = _sim.Units[unitIdx].Stats;
+        int maxHp = BuffSystem.EffectiveMaxHP(_sim.Units, unitIdx);
+        if (maxHp <= 0) return;
+
+        float hpRatio = (float)stats.HP / maxHp;
+        if (hpRatio >= 1f) return; // don't show full HP bars
+
+        // Position HP bar above the unit based on its sprite height
+        var unitDef = _gameData.Units.Get(_sim.Units[unitIdx].UnitDefID);
+        float spriteWorldH = (unitDef != null && unitDef.SpriteWorldHeight > 0)
+            ? unitDef.SpriteWorldHeight : 1.8f;
+        float spriteScale = _sim.Units[unitIdx].SpriteScale;
+        float barOffset = spriteWorldH * spriteScale * _camera.Zoom * 0.9f + 5f;
+
+        float barW = 30f;
+        float barH = 3f;
+        float barX = screenPos.X - barW / 2f;
+        float barY = screenPos.Y - barOffset;
+
+        _spriteBatch.Draw(_pixel, new Rectangle((int)barX - 1, (int)barY - 1, (int)barW + 2, (int)barH + 2), new Color(0, 0, 0, 160));
+
+        Color hpColor = hpRatio > 0.5f ? new Color(60, 180, 60) : (hpRatio > 0.25f ? new Color(200, 180, 40) : new Color(200, 40, 40));
+        _spriteBatch.Draw(_pixel, new Rectangle((int)barX, (int)barY, (int)(barW * hpRatio), (int)barH), hpColor);
+    }
+
+    private void DrawSpellCategoryIcon(string category, int cx, int cy)
+    {
+        switch (category)
+        {
+            case "Projectile":
+                for (int dy2 = -6; dy2 <= 6; dy2++)
+                    for (int dx2 = -6; dx2 <= 6; dx2++)
+                        if (dx2 * dx2 + dy2 * dy2 <= 36)
+                            _spriteBatch.Draw(_pixel, new Rectangle(cx + dx2, cy + dy2, 1, 1), new Color(255, 140, 30, 200));
+                break;
+            case "Buff":
+                for (int dy2 = -6; dy2 <= 6; dy2++)
+                    for (int dx2 = -6; dx2 <= 6; dx2++)
+                        if (dx2 * dx2 + dy2 * dy2 <= 36)
+                            _spriteBatch.Draw(_pixel, new Rectangle(cx + dx2, cy + dy2, 1, 1), new Color(60, 200, 60, 200));
+                break;
+            case "Strike":
+            {
+                var lc = new Color(255, 230, 50, 220);
+                _spriteBatch.Draw(_pixel, new Rectangle(cx + 2, cy - 8, 3, 5), lc);
+                _spriteBatch.Draw(_pixel, new Rectangle(cx - 2, cy - 3, 6, 2), lc);
+                _spriteBatch.Draw(_pixel, new Rectangle(cx - 3, cy - 1, 3, 5), lc);
+                _spriteBatch.Draw(_pixel, new Rectangle(cx - 4, cy + 4, 4, 2), lc);
+                break;
+            }
+            case "Summon":
+                for (int dy2 = -6; dy2 <= 6; dy2++)
+                    for (int dx2 = -6; dx2 <= 6; dx2++)
+                        if (dx2 * dx2 + dy2 * dy2 <= 36)
+                            _spriteBatch.Draw(_pixel, new Rectangle(cx + dx2, cy + dy2, 1, 1), new Color(160, 60, 200, 200));
+                break;
+            case "Beam":
+                _spriteBatch.Draw(_pixel, new Rectangle(cx - 8, cy - 1, 16, 3), new Color(60, 120, 255, 220));
+                _spriteBatch.Draw(_pixel, new Rectangle(cx - 6, cy - 2, 12, 1), new Color(100, 160, 255, 150));
+                _spriteBatch.Draw(_pixel, new Rectangle(cx - 6, cy + 2, 12, 1), new Color(100, 160, 255, 150));
+                break;
+            case "Drain":
+                _spriteBatch.Draw(_pixel, new Rectangle(cx - 8, cy - 1, 16, 3), new Color(220, 40, 40, 220));
+                _spriteBatch.Draw(_pixel, new Rectangle(cx - 6, cy - 2, 12, 1), new Color(255, 80, 80, 150));
+                _spriteBatch.Draw(_pixel, new Rectangle(cx - 6, cy + 2, 12, 1), new Color(255, 80, 80, 150));
+                break;
+            case "Cloud":
+                // Poison cloud icon: hazy green circle
+                for (int dy2 = -7; dy2 <= 7; dy2++)
+                    for (int dx2 = -7; dx2 <= 7; dx2++)
+                    {
+                        int dsq = dx2 * dx2 + dy2 * dy2;
+                        if (dsq <= 49)
+                        {
+                            int alpha = dsq < 16 ? 200 : (dsq < 36 ? 140 : 80);
+                            _spriteBatch.Draw(_pixel, new Rectangle(cx + dx2, cy + dy2, 1, 1),
+                                new Color(80, 200, 60, alpha));
+                        }
+                    }
+                break;
+            default:
+                _spriteBatch.Draw(_pixel, new Rectangle(cx - 6, cy - 6, 12, 12), new Color(180, 180, 180, 150));
+                break;
+        }
+    }
+}

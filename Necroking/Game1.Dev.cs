@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using Necroking.Core;
 using Necroking.Data;
+using Necroking.Scenario;
 
 namespace Necroking;
 
@@ -1016,4 +1017,22 @@ public partial class Game1 {
 
       job.Done = true;
    }
+
+    /// <summary>Dev-server screenshot: take it from the just-rendered backbuffer
+    /// (before Present) and complete the pending HTTP command with the file path.
+    /// Called from every Draw branch so menu screenshots work too.</summary>
+    private void CompletePendingDevScreenshot()
+    {
+        if (_pendingDevScreenshot == null) return;
+        bool okShot = ScenarioScreenshot.TakeScreenshot(GraphicsDevice, _pendingDevScreenshot, _devShotW, _devShotH);
+        string shotPath = $"log/screenshots/{_pendingDevScreenshot}.png";
+        _pendingDevScreenshotCmd?.Complete(okShot
+            ? Necroking.Dev.DevServer.Ok(shotPath)
+            : Necroking.Dev.DevServer.Error($"screenshot failed: {shotPath}"));
+        _pendingDevScreenshot = null;
+        _pendingDevScreenshotCmd = null;
+        // Suppression only applies to the one captured frame.
+        _devShotNoUi = false;
+        _devShotNoGround = false;
+    }
 }
