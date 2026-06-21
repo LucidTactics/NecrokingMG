@@ -336,8 +336,25 @@ public partial class Game1
             var unitPos = _sim.Units[unitIdx].Position;
             var unitSp = _camera.WorldToScreen(unitPos, 0f, screenW, screenH);
 
-            // Line to slot target
-            if (horde.GetTargetPosition(unit.UnitID, out Vec2 slotPos))
+            // A commanded minion (Routine 4 = RoutineCommanded) is attack-moving to a
+            // player-issued point, not its formation slot. Draw the line to where it was
+            // actually commanded to go (Unit.MoveTarget) in a distinct magenta, with an
+            // arrowhead pointing at the order point — this is the order, not the slot it
+            // happens to own. (HordeUnitState has no Commanded value; the formation slot
+            // it would otherwise occupy is stale while under orders, so don't draw it.)
+            bool commanded = _sim.Units[unitIdx].Routine == 4; // RoutineCommanded
+            if (commanded)
+            {
+                var cmdTarget = _sim.Units[unitIdx].MoveTarget;
+                var cmdSp = _camera.WorldToScreen(cmdTarget, 0f, screenW, screenH);
+                var cmdCol = new Color(255, 90, 235, 210);
+                // Command-point marker (larger cross to distinguish from slot crosses)
+                _spriteBatch.Draw(_pixel, new Rectangle((int)cmdSp.X - 4, (int)cmdSp.Y, 9, 1), cmdCol);
+                _spriteBatch.Draw(_pixel, new Rectangle((int)cmdSp.X, (int)cmdSp.Y - 4, 1, 9), cmdCol);
+                _debugDraw.DrawArrow(_spriteBatch, unitSp, cmdSp, cmdCol);
+            }
+            // Line to slot target (formation followers only)
+            else if (horde.GetTargetPosition(unit.UnitID, out Vec2 slotPos))
             {
                 var slotSp = _camera.WorldToScreen(slotPos, 0f, screenW, screenH);
                 // Slot marker (small cross)
@@ -355,10 +372,11 @@ public partial class Game1
                 _debugDraw.DrawLine(_spriteBatch, unitSp, slotSp, lineCol);
             }
 
-            // State label
+            // State label — show "Commanded" for units under orders (HordeUnitState is
+            // stale for them, since the command path sets Unit.Routine directly).
             if (_smallFont != null)
             {
-                string stateLabel = unit.State.ToString();
+                string stateLabel = commanded ? "Commanded" : unit.State.ToString();
                 _spriteBatch.DrawString(_smallFont, stateLabel,
                     new Vector2(unitSp.X + 8, unitSp.Y - 16), new Color(200, 200, 200, 200));
             }

@@ -388,12 +388,6 @@ public static class SpellCaster
                 break;
             }
 
-            case "Command":
-            {
-                outPending.TargetPos = mouseWorld;
-                break;
-            }
-
             case "Toggle":
             {
                 outPending.TargetPos = necroPos;

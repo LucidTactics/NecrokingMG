@@ -145,9 +145,8 @@ public class SpellEffectSystem
                 break;
             }
 
-            case "Command":
-                ExecuteCommand(sim, target);
-                break;
+            // "Command" is no longer a spell category — the order_attack ability is a
+            // built-in (Game1.TryCommandHorde) so the category can host more uses.
 
             case "Cloud":
                 ExecuteCloud(spell, sim, target);
@@ -204,24 +203,6 @@ public class SpellEffectSystem
                 spell.StrikeDuration, spell.AoeRadius, spell.Damage,
                 style, spell.Id, sVis, sGrp, sTF, spell.TelegraphVisible,
                 units[casterIdx].Id);
-        }
-    }
-
-    private void ExecuteCommand(Simulation sim, Vec2 target)
-    {
-        var units = sim.UnitsMut;
-        for (int ci = 0; ci < units.Count; ci++)
-        {
-            if (!units[ci].Alive) continue;
-            if (units[ci].Faction != Faction.Undead) continue;
-            if (units[ci].Archetype != AI.ArchetypeRegistry.HordeMinion) continue;
-
-            units[ci].Routine = 4;
-            units[ci].Subroutine = 0;
-            units[ci].SubroutineTimer = 0f;
-            units[ci].MoveTarget = target;
-            units[ci].Target = CombatTarget.None;
-            units[ci].EngagedTarget = CombatTarget.None;
         }
     }
 

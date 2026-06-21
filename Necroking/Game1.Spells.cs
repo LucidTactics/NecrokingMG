@@ -338,12 +338,47 @@ public partial class Game1 {
          return true;
       }
 
+      if (spellId == "order_attack") {
+         TryCommandHorde(necroIdx, mouseWorld);
+         return true;
+      }
+
       if (PoisonBerryAbilities.TryGetValue(spellId, out var pb)) {
          TryStartPoisonBerries(necroIdx, mouseWorld, pb.buffID, pb.itemID);
          return true;
       }
 
       return false;
+   }
+
+   /// <summary>Built-in "Command" ability (formerly the one-off SpellCategory.Command):
+   /// order every living undead horde minion to attack-move to the cursor — Routine 4
+   /// (RoutineCommanded) makes them fight enemies there and auto-return when clear.
+   /// Like the other built-ins it bypasses the SpellCaster pipeline, but still honors
+   /// the spell def's cooldown (stored on NecroState, read by the HUD sweep) so it
+   /// can't be spammed. Living here as a built-in frees the Command spell *category*
+   /// so we can add more command kinds without burning a whole category each.</summary>
+   void TryCommandHorde(int necroIdx, Vec2 target) {
+      if (necroIdx < 0) return;
+      var necro = _sim.NecroState;
+      if (necro.GetCooldown("order_attack") > 0f) return;   // still recharging
+
+      var units = _sim.UnitsMut;
+      for (int ci = 0; ci < units.Count; ci++) {
+         if (!units[ci].Alive) continue;
+         if (units[ci].Faction != Faction.Undead) continue;
+         if (units[ci].Archetype != AI.ArchetypeRegistry.HordeMinion) continue;
+
+         units[ci].Routine = 4;            // RoutineCommanded
+         units[ci].Subroutine = 0;
+         units[ci].SubroutineTimer = 0f;
+         units[ci].MoveTarget = target;
+         units[ci].Target = CombatTarget.None;
+         units[ci].EngagedTarget = CombatTarget.None;
+      }
+
+      float cd = _gameData.Spells.Get("order_attack")?.Cooldown ?? 0f;
+      if (cd > 0f) necro.SpellCooldowns["order_attack"] = cd;
    }
 
    /// <summary>Built-in poison-berries abilities: spell id → (buff applied to the

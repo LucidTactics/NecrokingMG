@@ -257,6 +257,30 @@ public partial class Game1 {
                break;
             }
 
+            // Spawn undead units enrolled in the necromancer's horde (HordeMinion
+            // archetype + horde membership), unlike spawn_def which leaves them as
+            // free AttackClosest units. Useful for exercising horde/command behavior.
+            // window.dev('spawn_horde',['skeleton','2090','1878','12'])
+            case "spawn_horde": {
+               if (c.Args.Length < 3) {
+                  c.Complete(Necroking.Dev.DevServer.Error("spawn_horde needs: <unitID> <x> <y> [count]"));
+                  break;
+               }
+               if (_gameData.Units.Get(c.Args[0]) == null) {
+                  c.Complete(Necroking.Dev.DevServer.Error($"unknown unit def: {c.Args[0]}"));
+                  break;
+               }
+               float hx = DevFloat(c.Args[1]), hy = DevFloat(c.Args[2]);
+               int hcount = c.Args.Length >= 4 ? (int)DevFloat(c.Args[3]) : 1;
+               if (hcount < 1) hcount = 1;
+               var hidxs = new List<int>(hcount);
+               for (int i = 0; i < hcount; i++)
+                  hidxs.Add(_sim.SpawnZombieMinion(c.Args[0], new Vec2(hx + (i % 4) * 1.2f, hy + (i / 4) * 1.2f)));
+               c.Complete(Necroking.Dev.DevServer.OkRaw(
+                  $"{{\"def\":{System.Text.Json.JsonSerializer.Serialize(c.Args[0])},\"count\":{hcount},\"indices\":[{string.Join(",", hidxs)}]}}"));
+               break;
+            }
+
             // List units matching a selector (default "all") as a JSON array.
             case "units": {
                string sel = c.Args.Length > 0 ? string.Join(" ", c.Args) : "all";
@@ -476,6 +500,14 @@ public partial class Game1 {
                }
 
                c.Complete(Necroking.Dev.DevServer.Ok($"set mana={mana} on {idxs.Count} unit(s)"));
+               break;
+            }
+
+            // Set the F7 gameplay-debug overlay: 0=Off, 1=Horde, 2=Unit Info.
+            // window.dev('gpdebug',['1'])  (no arg → Horde)
+            case "gpdebug": {
+               _gameplayDebugMode = c.Args.Length >= 1 ? (int)DevFloat(c.Args[0]) % 3 : 1;
+               c.Complete(Necroking.Dev.DevServer.Ok($"gameplayDebugMode={_gameplayDebugMode}"));
                break;
             }
 
