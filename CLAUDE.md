@@ -19,12 +19,18 @@ This is the lens for designing and refining **every** system — combat, spells,
 - **Commits**: OK to commit freely when a feature is known to be working. Good initiative.
 - **Push**: Always ask the user for permission before pushing. Never push without explicit approval.
 
-### Multi-machine / Drive-sync git discipline (IMPORTANT)
-This repo is worked on from more than one machine, and at least one of them mirrors its whole
-workspace to a shared **Google Drive** folder instead of relying on git. **Drive sync is NOT a
-substitute for git** — it has already produced a broken `origin/master` where committed code
-referenced symbols whose defining files were never committed/pushed, so the remote did not compile.
-The assistant must actively manage git for the user, who may not be comfortable with git:
+### Collaborator / Drive-sync git discipline (IMPORTANT)
+This repo is shared with a **collaborator (a friend)**, and that friend's machine mirrors its whole
+workspace to a shared **Google Drive** folder instead of relying on git. So "the other machine"
+below means **the friend's Drive-synced clone**, not a second machine of the user's own.
+(Separately, the user sometimes runs **multiple Claude sessions against this same working
+directory** — that's the same tree, no git/Drive sync between them; the risk there is concurrent
+edits/builds colliding, not stale commits. The rules below are about the Drive-synced friend.)
+
+**Drive sync is NOT a substitute for git** — it has already produced a broken `origin/master` where
+committed code referenced symbols whose defining files were never committed/pushed, so the remote
+did not compile. The assistant must actively manage git for the user, who may not be comfortable
+with git:
 
 1. **Build before every push.** Run `dotnet build Necroking/Necroking.csproj` and confirm it
    succeeds. **Never push code that does not build.** If a relevant scenario exists, run it too
