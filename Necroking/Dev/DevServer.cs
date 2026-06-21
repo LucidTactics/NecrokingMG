@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.IO;
 using System.Net;
 using System.Text;
@@ -19,6 +20,13 @@ public sealed class DevCommand
 {
     public string Cmd = "";
     public string[] Args = Array.Empty<string>();
+
+    /// <summary>Named options from the request's "opts" object (extensible — e.g.
+    /// screenshot's no_ui / no_ground / downsample_to). Values normalised to strings.</summary>
+    public Dictionary<string, string> Opts = new(StringComparer.OrdinalIgnoreCase);
+
+    public bool OptBool(string key) => Opts.TryGetValue(key, out var v) && (v == "true" || v == "1");
+    public string? Opt(string key) => Opts.TryGetValue(key, out var v) ? v : null;
 
     private readonly TaskCompletionSource<string> _tcs =
         new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -162,7 +170,20 @@ public sealed class DevServer
                         ? (el.GetString() ?? "")
                         : el.GetRawText();
             }
-            return new DevCommand { Cmd = cmd, Args = args };
+
+            var result = new DevCommand { Cmd = cmd, Args = args };
+            if (root.TryGetProperty("opts", out var o) && o.ValueKind == JsonValueKind.Object)
+            {
+                foreach (var p in o.EnumerateObject())
+                    result.Opts[p.Name] = p.Value.ValueKind switch
+                    {
+                        JsonValueKind.String => p.Value.GetString() ?? "",
+                        JsonValueKind.True => "true",
+                        JsonValueKind.False => "false",
+                        _ => p.Value.GetRawText(),
+                    };
+            }
+            return result;
         }
         catch
         {

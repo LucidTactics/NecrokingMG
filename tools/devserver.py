@@ -37,6 +37,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 SUPERVISOR_PORT = 8777
 GAME_PORT = 8778
+DEFAULT_RESOLUTION = "1280x720"  # game renders at this; screenshots downsample on return
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PROJECT = os.path.join(REPO_ROOT, "Necroking", "Necroking.csproj")
@@ -67,14 +68,25 @@ DASHBOARD_HTML = """<!doctype html><html><head><meta charset=utf-8>
 <script>
 const logEl=document.getElementById('log'), statusEl=document.getElementById('status');
 function log(m){logEl.textContent+=m+"\\n";logEl.scrollTop=logEl.scrollHeight;}
-// window.dev(cmd, args) -> Promise<result JSON>. Driven by preview_eval.
-window.dev=async(cmd,args=[])=>{
+// Transparent pass-through: send any {cmd,args,opts} struct. Neither this helper
+// nor the supervisor needs to know the command set — add commands in C# only.
+window.devRaw=async(payload)=>{
   const r=await fetch('/cmd',{method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({cmd,args})});
-  const j=await r.json(); window.__last=j; log('> '+cmd+' '+args.join(' ')+' => '+JSON.stringify(j)); return j;
+    body:JSON.stringify(payload)});
+  const j=await r.json(); window.__last=j;
+  log('> '+JSON.stringify(payload)+' => '+JSON.stringify(j)); return j;
 };
+// window.dev(cmd, args, opts) -> Promise<result JSON>. Driven by preview_eval.
+window.dev=(cmd,args=[],opts={})=>{
+  const p={cmd,args}; if(opts&&Object.keys(opts).length)p.opts=opts; return window.devRaw(p);
+};
+// Manual box: tokens with '=' become opts, the rest positional args. e.g.
+//   screenshot name=foo no_ui=true downsample_to=full
 function runInput(){const v=document.getElementById('cmd').value.trim();if(!v)return;
-  const p=v.split(/\\s+/);window.dev(p[0],p.slice(1));document.getElementById('cmd').value='';}
+  const t=v.split(/\\s+/),cmd=t[0],args=[],opts={};
+  for(const x of t.slice(1)){const i=x.indexOf('=');
+    if(i>0)opts[x.slice(0,i)]=x.slice(i+1);else args.push(x);}
+  window.dev(cmd,args,opts);document.getElementById('cmd').value='';}
 document.getElementById('cmd').addEventListener('keydown',e=>{if(e.key==='Enter')runInput();});
 // Refresh the live frame ~1/s (skips if a request is in flight).
 let busy=false;
@@ -129,7 +141,7 @@ def _wait_until_ready(timeout=40):
     return False, "timed out waiting for game to become ready"
 
 
-def start_game(windowed=False, map_name=None):
+def start_game(windowed=False, map_name=None, resolution=DEFAULT_RESOLUTION):
     global _game_proc
     if _game_running():
         return {"ok": True, "result": "already running", "pid": _game_proc.pid}
@@ -139,6 +151,8 @@ def start_game(windowed=False, map_name=None):
     args = [EXE, "--devserver", str(GAME_PORT)]
     if not windowed:
         args.append("--headless")
+    if resolution:
+        args += ["--resolution", resolution]
     _game_proc = subprocess.Popen(args, cwd=os.path.dirname(EXE))
 
     ok, msg = _wait_until_ready()
@@ -146,7 +160,7 @@ def start_game(windowed=False, map_name=None):
         return {"ok": False, "error": msg}
 
     result = {"ok": True, "result": "started", "pid": _game_proc.pid,
-              "windowed": windowed}
+              "windowed": windowed, "resolution": resolution}
     if map_name:
         try:
             result["start_game"] = _post_to_game({"cmd": "start_game", "args": [map_name]})
@@ -232,7 +246,9 @@ class Handler(BaseHTTPRequestHandler):
                 self._send({"ok": False, "error": "game not running"}, 503)
                 return
             try:
-                _post_to_game({"cmd": "screenshot", "args": [LIVE_FRAME]})
+                # Full-res for the dashboard's live view (the browser scales to fit).
+                _post_to_game({"cmd": "screenshot", "args": [LIVE_FRAME],
+                               "opts": {"downsample_to": "full"}})
                 with open(os.path.join(SCREENSHOT_DIR, LIVE_FRAME + ".png"), "rb") as f:
                     self._send_bytes(f.read(), "image/png")
             except Exception as e:
@@ -255,7 +271,8 @@ class Handler(BaseHTTPRequestHandler):
         body = self._read_json()
         try:
             if path == "/game/start":
-                self._send(start_game(body.get("windowed", False), body.get("map")))
+                self._send(start_game(body.get("windowed", False), body.get("map"),
+                                      body.get("resolution", DEFAULT_RESOLUTION)))
             elif path == "/game/stop":
                 self._send(stop_game())
             elif path == "/game/restart":
@@ -264,7 +281,8 @@ class Handler(BaseHTTPRequestHandler):
                 if b and not b["ok"]:
                     self._send({"ok": False, "error": "build failed", "build": b})
                     return
-                res = start_game(body.get("windowed", False), body.get("map"))
+                res = start_game(body.get("windowed", False), body.get("map"),
+                                 body.get("resolution", DEFAULT_RESOLUTION))
                 if b:
                     res["build"] = b
                 self._send(res)

@@ -363,6 +363,8 @@ public class Game1 : Microsoft.Xna.Framework.Game
     private Necroking.Dev.DevServer? _devServer;
     private string? _pendingDevScreenshot;        // set by a screenshot cmd, consumed in Draw
     private Necroking.Dev.DevCommand? _pendingDevScreenshotCmd; // completed once the PNG is written
+    private int _devShotW, _devShotH;             // downsample target for the pending shot (0 = native)
+    private bool _devShotNoUi, _devShotNoGround;  // suppress UI / ground for the pending shot's frame
     private int _scenarioScrollOffset;
 
     // Per-unit animation data
@@ -1449,11 +1451,15 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
                 case "screenshot":
                 {
-                    string name = c.Args.Length > 0 ? c.Args[0] : "devshot";
+                    string name = c.Opt("name") ?? (c.Args.Length > 0 ? c.Args[0] : "devshot");
+                    var (dw, dh) = ParseDownsample(c.Opt("downsample_to"));
                     // Completed in Draw once the PNG is actually written.
                     _pendingDevScreenshotCmd?.Complete(Necroking.Dev.DevServer.Error("superseded by newer screenshot"));
                     _pendingDevScreenshot = name;
                     _pendingDevScreenshotCmd = c;
+                    _devShotW = dw; _devShotH = dh;
+                    _devShotNoUi = c.OptBool("no_ui");
+                    _devShotNoGround = c.OptBool("no_ground");
                     break;
                 }
 
@@ -1470,6 +1476,20 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
     private static float DevFloat(string s) =>
         float.Parse(s, System.Globalization.CultureInfo.InvariantCulture);
+
+    /// <summary>Parse a screenshot downsample_to option. Absent → default 320x240
+    /// (small, readable return even when the game renders at high res). "full" /
+    /// "none" / "0" → no downsample (native render size). "WxH" → that size.</summary>
+    private static (int w, int h) ParseDownsample(string? s)
+    {
+        if (string.IsNullOrEmpty(s)) return (320, 240);
+        s = s.ToLowerInvariant();
+        if (s == "full" || s == "none" || s == "0") return (0, 0);
+        var p = s.Split('x');
+        if (p.Length == 2 && int.TryParse(p[0], out int w) && int.TryParse(p[1], out int h))
+            return (w, h);
+        return (320, 240);
+    }
 
     /// <summary>Snapshot of live game state as a JSON object (the result payload).</summary>
     private string BuildDevStateJson()
@@ -5281,13 +5301,16 @@ public class Game1 : Microsoft.Xna.Framework.Game
     private void CompletePendingDevScreenshot()
     {
         if (_pendingDevScreenshot == null) return;
-        bool okShot = ScenarioScreenshot.TakeScreenshot(GraphicsDevice, _pendingDevScreenshot);
+        bool okShot = ScenarioScreenshot.TakeScreenshot(GraphicsDevice, _pendingDevScreenshot, _devShotW, _devShotH);
         string shotPath = $"log/screenshots/{_pendingDevScreenshot}.png";
         _pendingDevScreenshotCmd?.Complete(okShot
             ? Necroking.Dev.DevServer.Ok(shotPath)
             : Necroking.Dev.DevServer.Error($"screenshot failed: {shotPath}"));
         _pendingDevScreenshot = null;
         _pendingDevScreenshotCmd = null;
+        // Suppression only applies to the one captured frame.
+        _devShotNoUi = false;
+        _devShotNoGround = false;
     }
 
     protected override void Draw(GameTime gameTime)
@@ -5366,7 +5389,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
             GraphicsDevice.Clear(clearColor);
 
         // --- Ground ---
-        if (_activeScenario == null || _activeScenario.WantsGround)
+        if ((_activeScenario == null || _activeScenario.WantsGround) && !_devShotNoGround)
         {
             DrawGround();
             // Perf scenarios can ask Game1 to redraw the ground N extra times to
@@ -5653,7 +5676,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // --- Weather effects (fog/haze/brightness — rain draws in scene pass) ---
         _weatherRenderer.DrawFog(screenW, screenH);
 
-        bool showUI = _activeScenario == null || _activeScenario.WantsUI;
+        bool showUI = (_activeScenario == null || _activeScenario.WantsUI) && !_devShotNoUi;
         if (showUI)
             DrawHUD(screenW, screenH);
         if (showUI)
@@ -7239,7 +7262,10 @@ public class Game1 : Microsoft.Xna.Framework.Game
                     _poisonCloudRenderer.DrawSinglePuff(item.Index, item.SubIndex);
                     break;
                 case DepthItemType.GrassTuft:
-                    _grassRenderer.DrawSingleTuft(_spriteBatch, item.Index);
+                    // no_ground dev screenshots suppress grass too, for the clean
+                    // black-background look scenarios produce.
+                    if (!_devShotNoGround)
+                        _grassRenderer.DrawSingleTuft(_spriteBatch, item.Index);
                     break;
                 case DepthItemType.DeathFogPuff:
                     _deathFogRenderer.DrawSinglePuff(item.Index);
