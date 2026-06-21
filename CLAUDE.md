@@ -63,6 +63,15 @@ NecrokingMG/
 - All paths resolved via `GamePaths.Resolve()` — no DualSave, no file copying to build output
 - **Asset paths must be relative** (e.g. `assets/Environment/Trees/Oak1.png`), never absolute (e.g. `E:/Nightfall/NecrokingMG/assets/...`). This applies to JSON data files (`env_defs.json`, etc.), C# code, and editor-saved paths. `GamePaths.Resolve()` converts relative paths to absolute at runtime.
 
+### Editing data JSON (id-keyed registries)
+Most `data/*.json` files (`spells.json`, `units.json`, `items.json`, `potions.json`,
+`buffs.json`, `weapons.json`, `armor.json`, …) are a single list of structs each with
+a unique `id`. **Don't hand-edit these large files for routine changes** — use the
+**`edit-game-data` skill** (`tools/json_data.py`: read / duplicate / delete / create /
+update a struct by id, preserving the game's exact formatting). Invoke `/edit-game-data`
+or just run the tool; the skill (`.claude/skills/edit-game-data/SKILL.md`) has the full
+syntax. Bulk/derived changes across many entries → a one-off `tools/` script instead.
+
 ## Code Style
 - Use `Vec2` (custom type in `Core/`) for world positions, `Vector2` (MonoGame/XNA) for screen positions
 - Debug logging via `Core/DebugLog.cs` — file-based to `log/` directory, never console
