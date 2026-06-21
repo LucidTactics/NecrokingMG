@@ -28,6 +28,38 @@ public class UnitEditorWindow
     /// <summary>Select the first item in the list (for screenshot scenarios).</summary>
     public void SelectFirst() { _selectedIdx = 0; }
 
+    /// <summary>Dev-server select by numeric index, def id, or display name
+    /// (case-insensitive). Resets the faction tab + search so the pick is visible
+    /// in the list, and syncs the sprite preview. Returns the selected unit's
+    /// display name, or null if nothing matched.</summary>
+    public string? DevSelect(string token)
+    {
+        if (_gameData == null) return null;
+        var ids = _gameData.Units.GetIDs();
+        _factionTab = 0;
+        _searchFilter = "";
+        if (int.TryParse(token, out int idx))
+        {
+            if (idx < 0 || idx >= ids.Count) return null;
+            _selectedIdx = idx;
+        }
+        else
+        {
+            _selectedIdx = -1;
+            for (int i = 0; i < ids.Count; i++)
+            {
+                var def = _gameData.Units.Get(ids[i]);
+                if (ids[i].Equals(token, StringComparison.OrdinalIgnoreCase)
+                    || (def?.DisplayName != null && def.DisplayName.Equals(token, StringComparison.OrdinalIgnoreCase)))
+                { _selectedIdx = i; break; }
+            }
+            if (_selectedIdx < 0) return null;
+        }
+        _propScrollOffset = 0;
+        SyncPreviewToSelected();
+        return _gameData.Units.Get(ids[_selectedIdx])?.DisplayName ?? ids[_selectedIdx];
+    }
+
     // --- Public accessors for scenario testing ---
     /// <summary>Open the weapon sub-editor popup (for UI test scenarios).</summary>
     public void OpenWeaponSubEditor() { _activeSubEditor = SubEditor.Weapon; _subSelectedIdx = 0; }

@@ -51,6 +51,30 @@ public class SpellEditorWindow : EditorWindow
         }
     }
 
+    /// <summary>Dev-server select by numeric index, def id, or display name
+    /// (case-insensitive). Clears the search filter so the pick is visible in the
+    /// list. Returns the selected spell's display name, or null if nothing matched.</summary>
+    public string? DevSelect(string token)
+    {
+        if (_gameData == null) return null;
+        var ids = _gameData.Spells.GetIDs();
+        _searchFilter = "";
+        if (int.TryParse(token, out int idx))
+        {
+            if (idx < 0 || idx >= ids.Count) return null;
+            _selectedIdx = idx;
+            return _gameData.Spells.Get(ids[idx])?.DisplayName ?? ids[idx];
+        }
+        for (int i = 0; i < ids.Count; i++)
+        {
+            var def = _gameData.Spells.Get(ids[i]);
+            if (ids[i].Equals(token, StringComparison.OrdinalIgnoreCase)
+                || (def?.DisplayName != null && def.DisplayName.Equals(token, StringComparison.OrdinalIgnoreCase)))
+            { _selectedIdx = i; return def?.DisplayName ?? ids[i]; }
+        }
+        return null;
+    }
+
     /// <summary>Open the buff manager popup (for UI test scenarios).</summary>
     public void OpenBuffManager() { _buffManagerOpen = true; _buffSelectedIdx = 0; }
     private string _searchFilter = "";

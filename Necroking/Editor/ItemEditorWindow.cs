@@ -23,6 +23,30 @@ public class ItemEditorWindow
     private int _selectedIdx = -1;
     /// <summary>Select the first item in the list (for screenshot scenarios).</summary>
     public void SelectFirst() { _selectedIdx = 0; }
+
+    /// <summary>Dev-server select by numeric index, def id, or display name
+    /// (case-insensitive). Clears the search filter so the pick is visible in the
+    /// list. Returns the selected item's display name, or null if nothing matched.</summary>
+    public string? DevSelect(string token)
+    {
+        if (_gameData == null) return null;
+        var ids = _gameData.Items.GetIDs();
+        _searchFilter = "";
+        if (int.TryParse(token, out int idx))
+        {
+            if (idx < 0 || idx >= ids.Count) return null;
+            _selectedIdx = idx;
+            return _gameData.Items.Get(ids[idx])?.DisplayName ?? ids[idx];
+        }
+        for (int i = 0; i < ids.Count; i++)
+        {
+            var def = _gameData.Items.Get(ids[i]);
+            if (ids[i].Equals(token, StringComparison.OrdinalIgnoreCase)
+                || (def?.DisplayName != null && def.DisplayName.Equals(token, StringComparison.OrdinalIgnoreCase)))
+            { _selectedIdx = i; return def?.DisplayName ?? ids[i]; }
+        }
+        return null;
+    }
     private string _searchFilter = "";
     private float _detailScroll;
     private List<string> _filteredIds = new();

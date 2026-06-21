@@ -42,6 +42,24 @@ public class SettingsWindow
     /// <summary>Set to true when the user clicks Back or presses ESC.</summary>
     public bool WantsClose { get; set; }
 
+    /// <summary>The tab identifiers selectable via <see cref="SetActiveTab"/>
+    /// (the enum names — "Bloom", "Shadow", "Environment", ...). Exposed so the
+    /// dev control channel can list and switch settings tabs.</summary>
+    public static string[] TabIds => Enum.GetNames(typeof(Tab));
+
+    /// <summary>Switch the active settings tab by name (case-insensitive,
+    /// matches the <see cref="Tab"/> enum). Returns false for an unknown name.
+    /// Used by the dev server to preview each options tab.</summary>
+    public bool SetActiveTab(string name)
+    {
+        if (Enum.TryParse<Tab>(name, true, out var tab))
+        {
+            _activeTab = tab;
+            return true;
+        }
+        return false;
+    }
+
     // Panel dimensions
     private const int PanelW = 600;
     private const int PanelH = 500;

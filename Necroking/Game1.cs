@@ -1464,6 +1464,80 @@ public class Game1 : Microsoft.Xna.Framework.Game
                     break;
                 }
 
+                // List every previewable UI panel, its tabs, and the in-game
+                // overlays — discovery for the dev/preview workflow.
+                case "panels":
+                {
+                    var js = System.Text.Json.JsonSerializer.Serialize(new
+                    {
+                        panels = new[] { "main_menu", "scenarios", "game", "pause", "settings",
+                            "unit_editor", "spell_editor", "map_editor", "ui_editor", "item_editor" },
+                        tabs = new
+                        {
+                            settings = Necroking.Editor.SettingsWindow.TabIds,
+                            map_editor = Enum.GetNames(typeof(Necroking.Editor.MapEditorTab)),
+                            ui_editor = Enum.GetNames(typeof(Necroking.Editor.UIEditorTab)),
+                        },
+                        overlays = new[] { "inventory", "character_stats", "skill_book", "grimoire", "character_sheet" },
+                        current = _menuState.ToString(),
+                    });
+                    c.Complete(Necroking.Dev.DevServer.OkRaw(js));
+                    break;
+                }
+
+                // Switch to a named UI panel; optional 2nd arg sets a tab on it.
+                case "panel":
+                {
+                    if (c.Args.Length < 1)
+                    { c.Complete(Necroking.Dev.DevServer.Error("panel needs: <name> [tab] — run 'panels' for the list")); break; }
+                    if (!SetUiPanel(c.Args[0]))
+                    { c.Complete(Necroking.Dev.DevServer.Error($"unknown panel: {c.Args[0]} — run 'panels' for the list")); break; }
+                    string tabNote = "";
+                    if (c.Args.Length >= 2)
+                        tabNote = ApplyPanelTab(c.Args[1])
+                            ? $", tab={c.Args[1]}"
+                            : $", tab '{c.Args[1]}' not valid for {_menuState}";
+                    c.Complete(Necroking.Dev.DevServer.Ok($"panel={_menuState}{tabNote}"));
+                    break;
+                }
+
+                // Set the active tab on whatever panel is currently open.
+                case "tab":
+                {
+                    if (c.Args.Length < 1)
+                    { c.Complete(Necroking.Dev.DevServer.Error("tab needs: <name> — run 'panels' for valid tabs")); break; }
+                    if (!ApplyPanelTab(c.Args[0]))
+                    { c.Complete(Necroking.Dev.DevServer.Error($"tab '{c.Args[0]}' not valid for {_menuState} (run 'panels')")); break; }
+                    c.Complete(Necroking.Dev.DevServer.Ok($"panel={_menuState} tab={c.Args[0]}"));
+                    break;
+                }
+
+                // Show/hide an in-game overlay (inventory, stats, skill book, ...).
+                case "overlay":
+                {
+                    if (c.Args.Length < 1)
+                    { c.Complete(Necroking.Dev.DevServer.Error("overlay needs: <name> [open|close|toggle] — run 'panels' for the list")); break; }
+                    string action = c.Args.Length >= 2 ? c.Args[1].ToLowerInvariant() : "toggle";
+                    string? r = SetOverlay(c.Args[0], action);
+                    if (r == null)
+                    { c.Complete(Necroking.Dev.DevServer.Error($"unknown overlay: {c.Args[0]} — run 'panels' for the list")); break; }
+                    c.Complete(Necroking.Dev.DevServer.Ok(r));
+                    break;
+                }
+
+                // Select an entry in the currently open editor (by index, def id,
+                // or display name) so its preview/detail renders for a screenshot.
+                case "select":
+                {
+                    if (c.Args.Length < 1)
+                    { c.Complete(Necroking.Dev.DevServer.Error("select needs: <name|id|index> — open an editor panel first")); break; }
+                    string? sel = SelectEditorEntry(string.Join(" ", c.Args));
+                    if (sel == null)
+                    { c.Complete(Necroking.Dev.DevServer.Error($"nothing matched '{string.Join(" ", c.Args)}' in {_menuState} (open a unit/spell/item/ui editor first)")); break; }
+                    c.Complete(Necroking.Dev.DevServer.Ok($"{_menuState} selected: {sel}"));
+                    break;
+                }
+
                 default:
                     c.Complete(Necroking.Dev.DevServer.Error($"unknown cmd: {c.Cmd}"));
                     break;
@@ -1472,6 +1546,155 @@ public class Game1 : Microsoft.Xna.Framework.Game
         catch (Exception ex)
         {
             c.Complete(Necroking.Dev.DevServer.Error(ex.Message));
+        }
+    }
+
+    /// <summary>Switch <see cref="_menuState"/> to a named UI panel for the dev
+    /// control channel. Panels other than the main menu / scenario list assume an
+    /// in-game world, so a default game is started first when none is loaded.
+    /// Returns false for an unknown name.</summary>
+    private bool SetUiPanel(string name)
+    {
+        switch (name.ToLowerInvariant())
+        {
+            case "main_menu":
+            case "mainmenu":
+                _menuState = MenuState.MainMenu; _paused = false; _gameWorldLoaded = false;
+                return true;
+            case "scenarios":
+            case "scenario_list":
+                _menuState = MenuState.ScenarioList; _scenarioScrollOffset = 0;
+                return true;
+        }
+
+        // Everything below renders over a live world — load one if needed.
+        if (!_gameWorldLoaded) StartGame();
+
+        switch (name.ToLowerInvariant())
+        {
+            case "game":
+            case "gameplay":
+            case "none":
+                _menuState = MenuState.None; _paused = false; return true;
+            case "pause":
+            case "pause_menu":
+            case "esc":
+                _menuState = MenuState.PauseMenu; _paused = true; return true;
+            case "settings":
+            case "options":
+                _menuState = MenuState.Settings; return true;
+            case "unit_editor":
+            case "uniteditor":
+                _menuState = MenuState.UnitEditor; _paused = false; return true;
+            case "spell_editor":
+            case "spelleditor":
+                _menuState = MenuState.SpellEditor; _paused = false; return true;
+            case "map_editor":
+            case "mapeditor":
+                _menuState = MenuState.MapEditor; _paused = false; _mapEditor.SuppressClicksUntilRelease();
+                return true;
+            case "ui_editor":
+            case "uieditor":
+                EnsureUIEditorInitialized(); _menuState = MenuState.UIEditor; _paused = false; return true;
+            case "item_editor":
+            case "itemeditor":
+                _menuState = MenuState.ItemEditor; _paused = false; return true;
+            default:
+                return false;
+        }
+    }
+
+    /// <summary>Set the active tab on the currently open panel (map editor, UI
+    /// editor, or settings). Returns false if the name doesn't match a tab of the
+    /// open panel, or no tabbed panel is open. Mirrors the scenario tab-switch
+    /// hooks so there's one definition of what each tab name means.</summary>
+    private bool ApplyPanelTab(string tab)
+    {
+        switch (_menuState)
+        {
+            case MenuState.MapEditor:
+                if (Enum.TryParse<Necroking.Editor.MapEditorTab>(tab, true, out var mt))
+                { _mapEditor.ActiveTab = mt; return true; }
+                return false;
+            case MenuState.UIEditor:
+                if (Enum.TryParse<Necroking.Editor.UIEditorTab>(tab, true, out var ut))
+                { _uiEditor.ActiveTab = ut; return true; }
+                return false;
+            case MenuState.Settings:
+                return _settingsWindow.SetActiveTab(tab);
+            default:
+                return false;
+        }
+    }
+
+    /// <summary>Open/close/toggle an in-game overlay for the dev channel. All
+    /// overlays render over a live world, so a default game is started if none is
+    /// loaded. Returns a status string, or null for an unknown overlay name.</summary>
+    private string? SetOverlay(string name, string action)
+    {
+        if (!_gameWorldLoaded) StartGame();
+        EnsureInventoryUIsInitialized();
+        int sw = GraphicsDevice.Viewport.Width, sh = GraphicsDevice.Viewport.Height;
+
+        switch (name.ToLowerInvariant())
+        {
+            case "inventory":
+                if (action == "close") _inventoryUI.Close();
+                else if (action == "open") _inventoryUI.Open(sw, sh);
+                else _inventoryUI.Toggle(sw, sh);
+                return $"inventory visible={_inventoryUI.IsVisible}";
+
+            case "character_stats":
+            case "stats":
+                // Only a Toggle() exists — derive open/close from current state.
+                if (action == "toggle"
+                    || (action == "open") != _characterStatsUI.IsVisible)
+                    _characterStatsUI.Toggle();
+                return $"character_stats visible={_characterStatsUI.IsVisible}";
+
+            case "skill_book":
+            case "skillbook":
+                if (action == "close") _skillBookOverlay.Close();
+                else if (action == "open") _skillBookOverlay.Open();
+                else _skillBookOverlay.Toggle();
+                return $"skill_book visible={_skillBookOverlay.IsVisible}";
+
+            case "grimoire":
+                // No public Open(); Toggle() opens, Hide() closes.
+                if (action == "close") _grimoireOverlay.Hide();
+                else if (action == "open") { if (!_grimoireOverlay.IsVisible) _grimoireOverlay.Toggle(); }
+                else _grimoireOverlay.Toggle();
+                return $"grimoire visible={_grimoireOverlay.IsVisible}";
+
+            case "character_sheet":
+            case "unit_info":
+                if (action == "close") _unitInfoPanel.Hide();
+                else if (_unitInfoPanel.IsVisible && action == "toggle") _unitInfoPanel.Hide();
+                else if (_sim.NecromancerIndex >= 0) _unitInfoPanel.ShowForUnit(_sim.NecromancerIndex);
+                else return "character_sheet: no necromancer to show";
+                return $"character_sheet visible={_unitInfoPanel.IsVisible}";
+
+            default:
+                return null;
+        }
+    }
+
+    /// <summary>Select an entry in whichever editor panel is open so its preview
+    /// or detail view renders (for dev/preview screenshots). Accepts a numeric
+    /// index, a def id, or a display name. Returns the selected entry's label, or
+    /// null if no editor is open or nothing matched.</summary>
+    private string? SelectEditorEntry(string token)
+    {
+        switch (_menuState)
+        {
+            case MenuState.UnitEditor:  return _unitEditor.DevSelect(token);
+            case MenuState.SpellEditor: return _spellEditor.DevSelect(token);
+            case MenuState.ItemEditor:  return _itemEditor.DevSelect(token);
+            case MenuState.UIEditor:
+                if (int.TryParse(token, out int idx)) { _uiEditor.SelectedIndex = idx; return $"index {idx}"; }
+                return _uiEditor.SelectWidgetById(token) ? token : null;
+            default:
+                return null;
         }
     }
 
