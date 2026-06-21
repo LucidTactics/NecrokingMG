@@ -2117,14 +2117,18 @@ public class Game1 : Microsoft.Xna.Framework.Game
         var kb = Keyboard.GetState();
         var mouse = Mouse.GetState();
 
-        // Window unfocused or minimized: skip all input handling so background
-        // clicks (taskbar, other apps) read by the global Mouse.GetState() aren't
-        // consumed by the game. We still advance _prevMouse/_prevKb to the real
-        // states so the click that refocuses the window isn't seen as an in-game
-        // press. IsActive is MonoGame's canonical window-focus flag.
-        // Exempt scenario / headless runs — automated runs often lack window
-        // focus, and freezing them would break the scenario test harness.
-        if (!IsActive && _activeScenario == null && LaunchArgs.Scenario == null && !LaunchArgs.Headless)
+        // Window unfocused or minimized. IsActive is MonoGame's canonical
+        // window-focus flag. Exempt scenario / headless runs — automated runs often
+        // lack window focus, and freezing them would break the scenario test harness.
+        bool unfocused = !IsActive && _activeScenario == null && LaunchArgs.Scenario == null && !LaunchArgs.Headless;
+
+        // Default behaviour: freeze entirely while unfocused — skip all input so
+        // background clicks (taskbar, other apps) read by the global Mouse.GetState()
+        // aren't consumed by the game, and skip the simulation tick. We still advance
+        // _prevMouse/_prevKb to the real states so the click that refocuses the
+        // window isn't seen as an in-game press.
+        bool runWhenUnfocused = _gameData?.Settings.General.RunWhenUnfocused ?? false;
+        if (unfocused && !runWhenUnfocused)
         {
             _prevKb = kb;
             _prevMouse = mouse;
@@ -2132,7 +2136,24 @@ public class Game1 : Microsoft.Xna.Framework.Game
             return;
         }
 
-        _input.Capture(mouse, _prevMouse, kb, _prevKb);
+        if (unfocused)
+        {
+            // "Run when unfocused" is on: keep simulating, but feed NEUTRAL input
+            // (no buttons, no keys, cursor parked at screen centre) to the rest of
+            // Update so background clicks/keys aren't consumed and the camera doesn't
+            // edge-drift. The real states still flow into _prevMouse/_prevKb at the
+            // normal exit points, preserving the refocus-click protection above.
+            var neutral = new MouseState(
+                GraphicsDevice.Viewport.Width / 2, GraphicsDevice.Viewport.Height / 2,
+                mouse.ScrollWheelValue,
+                ButtonState.Released, ButtonState.Released, ButtonState.Released,
+                ButtonState.Released, ButtonState.Released);
+            _input.Capture(neutral, neutral, new KeyboardState(), new KeyboardState());
+        }
+        else
+        {
+            _input.Capture(mouse, _prevMouse, kb, _prevKb);
+        }
 
         // Modal stack input routing. Runs *before* anything else reads input so:
         //   - ESC is dispatched to the topmost popup, never two layers at once.
