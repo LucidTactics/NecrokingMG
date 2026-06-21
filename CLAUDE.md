@@ -119,6 +119,13 @@ NecrokingMG/
 - **Exception — true fallbacks:** the necromancer fallback at the start of `LoadGame` ("if no necromancer in placed units, spawn Wretched at map center") is fine because it only fires when the map provides nothing. Distinguish "fill in what's missing" from "always add on top of what's there."
 - **Past offenders (now removed):** `SpawnStarterMushroom` and `SpawnStarterBlightAltar` in `Game1.cs` unconditionally inserted a Deathcap and a Blight Altar near the necromancer every launch, making them un-deletable via the map editor. Both removed 2026-05-13.
 
+## Spells
+Spell casting is orchestrated in `Necroking/Game1.Spells.cs`, with targeting in
+`Game/SpellCasting.cs`, effects in `Game/SpellEffectSystem.cs`, and the data model in
+`Data/Registries/SpellRegistry.cs`. **Before adding or changing a spell, read
+[docs/spells.md](docs/spells.md)** — it explains the three-layer split, the cast
+pipeline, what lives where, and how to add a spell (most are data-only).
+
 ## UI Text Rendering
 - SpriteBatch uses `SamplerState.PointClamp` — text drawn at sub-pixel positions gets aliasing artifacts
 - **Always round text positions to integer pixels**: `new Vector2((int)x, (int)y)`
@@ -421,7 +428,8 @@ CLAUDE.md. Current contents: [docs/testing-scenarios.md](docs/testing-scenarios.
 when the `Claude_Preview` tools are absent, e.g. in VS Code);
 [docs/avoid-prompting-user.md](docs/avoid-prompting-user.md) - How to avoid prompting
 the user (whitelisted methods + a reminder hook for commands that shouldn't need
-approval, like searching or validating a script).
+approval, like searching or validating a script); [docs/spells.md](docs/spells.md)
+(how `Game1.Spells.cs` + the spell systems work — read before adding/changing a spell).
 
 ## C++ Migration
 
