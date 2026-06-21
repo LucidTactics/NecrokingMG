@@ -24,11 +24,16 @@ Run it (typically in the background):
 Endpoints (all POST unless noted), responses are JSON:
 
     GET  /status                      is the game running? pid? last build?
+    GET  /frame                       fresh full-res PNG of the live game view
+    GET  /pinned                      the pinned PNG (404 if none pinned)
     POST /game/start  {"windowed":bool,"map":str}   launch + wait until ready
     POST /game/stop                   kill the game process
     POST /game/restart {"build":bool} stop -> (optional build) -> start
     POST /build                       stop game, dotnet build, return errors
     POST /cmd  {"cmd":..,"args":[..]} forward to the running game, return reply
+    POST /pin  {"label":str}|{"clear":true}   snapshot the live frame to the
+                                      side (survives game rebuild/restart) for
+                                      A/B comparison; clear:true drops it
 
 Game commands currently understood (see ExecuteDevCommand in Game1.cs):
     ping | state | start_game [map] | spawn <type> <x> <y> |
@@ -40,6 +45,7 @@ import os
 import subprocess
 import sys
 import time
+import urllib.parse
 import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
@@ -55,22 +61,35 @@ LIVE_FRAME = "live"  # screenshot name reused for the dashboard's live view
 
 # Dashboard served at GET / — preview_start renders this; preview_eval runs JS
 # here (window.dev) to drive the game, preview_screenshot captures the frame.
+# The PINNED view (left) is a frozen snapshot held by the supervisor; it
+# survives game rebuild/restart, so it's the A/B reference while the LIVE view
+# (right) keeps refreshing. Pin via the button or window.pin('label').
 DASHBOARD_HTML = """<!doctype html><html><head><meta charset=utf-8>
 <title>Necroking Dev</title><style>
   body{margin:0;background:#15101e;color:#cbb;font:13px ui-monospace,monospace}
   header{padding:6px 10px;background:#1f1830;color:#caa;display:flex;gap:12px;align-items:center}
   #status{color:#8c8}
-  #frame{display:block;max-width:100%;image-rendering:pixelated;background:#000;margin:0 auto}
+  #views{display:flex;gap:8px;justify-content:center;align-items:flex-start;padding:6px}
+  figure{margin:0;flex:1;min-width:0;text-align:center}
+  #pinnedFig{display:none}
+  figcaption{color:#9a8;padding:2px 0;font-size:12px}
+  #pinnedCap{color:#dca}
+  img.view{display:block;max-width:100%;image-rendering:pixelated;background:#000;margin:0 auto}
   #bar{padding:6px 10px;display:flex;gap:6px}
   #cmd{flex:1;background:#0e0a16;color:#dcd;border:1px solid #443;padding:4px 6px}
   button{background:#2a2140;color:#dcd;border:1px solid #554;padding:4px 10px;cursor:pointer}
-  #log{height:120px;overflow:auto;padding:6px 10px;white-space:pre-wrap;color:#9a9;border-top:1px solid #332}
+  #log{height:110px;overflow:auto;padding:6px 10px;white-space:pre-wrap;color:#9a9;border-top:1px solid #332}
 </style></head><body>
 <header><b>Necroking Dev</b><span id=status>connecting…</span></header>
-<img id=frame>
+<div id=views>
+  <figure id=pinnedFig><figcaption id=pinnedCap>PINNED</figcaption><img id=pinned class=view></figure>
+  <figure><figcaption>LIVE</figcaption><img id=frame class=view></figure>
+</div>
 <div id=bar>
   <input id=cmd placeholder='spawn Skeleton 2094 1880'>
   <button onclick=runInput()>Send</button>
+  <button onclick=pinNow()>Pin current</button>
+  <button onclick=clearPin()>Clear pin</button>
 </div>
 <div id=log></div>
 <script>
@@ -88,6 +107,27 @@ window.devRaw=async(payload)=>{
 window.dev=(cmd,args=[],opts={})=>{
   const p={cmd,args}; if(opts&&Object.keys(opts).length)p.opts=opts; return window.devRaw(p);
 };
+// --- Pinned snapshot (A/B reference held by the supervisor) ---
+function showPinned(cap){
+  // Concrete 'block', not '' — clearing the inline style would fall back to the
+  // stylesheet's #pinnedFig{display:none} and the panel would stay hidden.
+  document.getElementById('pinnedFig').style.display='block';
+  document.getElementById('pinnedCap').textContent=cap||'PINNED';
+  document.getElementById('pinned').src='/pinned?t='+Date.now();
+}
+// window.pin('label') -> snapshots the current live frame into the left view.
+// Driveable from preview_eval for scripted before/after captures.
+window.pin=async(label='')=>{
+  const j=await(await fetch('/pin',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({label})})).json();
+  if(j.ok)showPinned(j.label||'PINNED'); log('pin => '+JSON.stringify(j)); return j;
+};
+window.clearPin=async()=>{
+  const j=await(await fetch('/pin',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({clear:true})})).json();
+  document.getElementById('pinnedFig').style.display='none'; log('pin cleared'); return j;
+};
+function pinNow(){window.pin(prompt('Pin label?','')||'');}
 // Manual box: tokens with '=' become opts, the rest positional args. e.g.
 //   screenshot name=foo no_ui=true downsample_to=full
 function runInput(){const v=document.getElementById('cmd').value.trim();if(!v)return;
@@ -104,12 +144,14 @@ async function tick(){
       await fetch('/frame?t='+Date.now()).then(r=>r.ok?r.blob():null).then(b=>{if(b)img.src=URL.createObjectURL(b);});
     }catch(e){} busy=false;}
 }
-// On load: bring the game up if it isn't, then start refreshing.
+// On load: bring the game up if it isn't, restore any pinned frame, then refresh.
 (async()=>{
   try{const s=await fetch('/status').then(r=>r.json());
     if(!s.game_running){statusEl.textContent='starting game…';await fetch('/game/start',{method:'POST',body:'{}'});}
     statusEl.textContent='ready';
   }catch(e){statusEl.textContent='supervisor error';}
+  try{const r=await fetch('/pinned?t='+Date.now());
+    if(r.ok)showPinned(decodeURIComponent(r.headers.get('X-Pin-Label')||'')||'PINNED');}catch(e){}
   setInterval(tick,1000); tick();
 })();
 </script></body></html>"""
@@ -117,10 +159,21 @@ async function tick(){
 # --- shared state -----------------------------------------------------------
 _game_proc = None          # subprocess.Popen | None
 _last_build = None         # dict | None
+_pinned_frame = None       # bytes | None — frozen A/B snapshot (survives restart)
+_pinned_label = ""         # str — caption shown above the pinned view
 
 
 def _game_running():
     return _game_proc is not None and _game_proc.poll() is None
+
+
+def _capture_frame_bytes():
+    """Trigger a fresh full-res screenshot in the game and return the PNG bytes.
+    Shared by the /frame live view and /pin snapshot."""
+    _post_to_game({"cmd": "screenshot", "args": [LIVE_FRAME],
+                   "opts": {"downsample_to": "full"}})
+    with open(os.path.join(SCREENSHOT_DIR, LIVE_FRAME + ".png"), "rb") as f:
+        return f.read()
 
 
 def _post_to_game(payload, timeout=16):
@@ -254,13 +307,24 @@ class Handler(BaseHTTPRequestHandler):
                 self._send({"ok": False, "error": "game not running"}, 503)
                 return
             try:
-                # Full-res for the dashboard's live view (the browser scales to fit).
-                _post_to_game({"cmd": "screenshot", "args": [LIVE_FRAME],
-                               "opts": {"downsample_to": "full"}})
-                with open(os.path.join(SCREENSHOT_DIR, LIVE_FRAME + ".png"), "rb") as f:
-                    self._send_bytes(f.read(), "image/png")
+                self._send_bytes(_capture_frame_bytes(), "image/png")
             except Exception as e:
                 self._send({"ok": False, "error": str(e)}, 500)
+        elif path == "/pinned":
+            # The frozen A/B snapshot. Held in supervisor memory, so it outlives
+            # game rebuilds/restarts (the whole point of pinning).
+            if _pinned_frame is None:
+                self._send({"ok": False, "error": "no pinned frame"}, 404)
+                return
+            self.send_response(200)
+            self.send_header("Content-Type", "image/png")
+            self.send_header("Content-Length", str(len(_pinned_frame)))
+            self.send_header("Cache-Control", "no-store")
+            # Percent-encode: HTTP headers are latin-1, but labels can carry
+            # unicode (em dashes etc.). JS decodeURIComponent restores it.
+            self.send_header("X-Pin-Label", urllib.parse.quote(_pinned_label or "PINNED"))
+            self.end_headers()
+            self.wfile.write(_pinned_frame)
         elif path == "/status":
             self._send({
                 "ok": True,
@@ -296,6 +360,20 @@ class Handler(BaseHTTPRequestHandler):
                 self._send(res)
             elif path == "/build":
                 self._send(build())
+            elif path == "/pin":
+                global _pinned_frame, _pinned_label
+                if body.get("clear"):
+                    _pinned_frame = None
+                    _pinned_label = ""
+                    self._send({"ok": True, "result": "cleared"})
+                    return
+                if not _game_running():
+                    self._send({"ok": False, "error": "game not running"}, 409)
+                    return
+                _pinned_frame = _capture_frame_bytes()
+                _pinned_label = str(body.get("label", "") or "PINNED")
+                self._send({"ok": True, "result": "pinned",
+                            "label": _pinned_label, "bytes": len(_pinned_frame)})
             elif path == "/cmd":
                 if not _game_running():
                     self._send({"ok": False, "error": "game not running"}, 409)

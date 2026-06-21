@@ -134,12 +134,64 @@ public static class TextureUtil
 
     /// <summary>
     /// Create a Texture2D from pre-decoded pixel data. Must be called on the main/GPU thread.
+    /// When <paramref name="mipMap"/> is true, a full mip chain is generated CPU-side
+    /// (box-downsample) and uploaded per level — MonoGame 3.8 DesktopGL has no reliable
+    /// public GenerateMipmaps(), so allocating with mipMap:true alone leaves the lower
+    /// levels empty. Trilinear-filtered minification (e.g. zoomed-out tiling ground)
+    /// then samples the pre-averaged levels instead of aliasing the base texels.
     /// </summary>
-    public static Texture2D CreateTextureFromPixels(GraphicsDevice device, Color[] pixels, int width, int height)
+    public static Texture2D CreateTextureFromPixels(GraphicsDevice device, Color[] pixels, int width, int height, bool mipMap = false)
     {
-        var tex = new Texture2D(device, width, height);
-        tex.SetData(pixels);
+        if (!mipMap)
+        {
+            var tex0 = new Texture2D(device, width, height);
+            tex0.SetData(pixels);
+            return tex0;
+        }
+
+        var tex = new Texture2D(device, width, height, true, SurfaceFormat.Color);
+        tex.SetData(0, null, pixels, 0, pixels.Length);
+
+        // Box-downsample successively until the 1x1 level. Level count is
+        // floor(log2(max(w,h)))+1; we stop when both dims have reached 1.
+        Color[] cur = pixels;
+        int cw = width, ch = height, level = 1;
+        while (cw > 1 || ch > 1)
+        {
+            (cur, cw, ch) = BoxDownsample(cur, cw, ch);
+            tex.SetData(level, null, cur, 0, cur.Length);
+            level++;
+        }
         return tex;
+    }
+
+    /// <summary>
+    /// Halve a Color[] image to the next mip level by averaging each 2x2 block.
+    /// Floor-division dimensions (min 1) so non-power-of-two textures still chain;
+    /// odd edges clamp by sampling the last valid column/row. Averages straight in
+    /// 8-bit RGBA — fine for the opaque ground textures this is used for.
+    /// </summary>
+    private static (Color[] pixels, int w, int h) BoxDownsample(Color[] src, int w, int h)
+    {
+        int nw = System.Math.Max(1, w / 2);
+        int nh = System.Math.Max(1, h / 2);
+        var dst = new Color[nw * nh];
+        for (int y = 0; y < nh; y++)
+        {
+            int y0 = y * 2, y1 = System.Math.Min(y0 + 1, h - 1);
+            for (int x = 0; x < nw; x++)
+            {
+                int x0 = x * 2, x1 = System.Math.Min(x0 + 1, w - 1);
+                Color a = src[y0 * w + x0], b = src[y0 * w + x1];
+                Color c = src[y1 * w + x0], d = src[y1 * w + x1];
+                dst[y * nw + x] = new Color(
+                    (a.R + b.R + c.R + d.R + 2) / 4,
+                    (a.G + b.G + c.G + d.G + 2) / 4,
+                    (a.B + b.B + c.B + d.B + 2) / 4,
+                    (a.A + b.A + c.A + d.A + 2) / 4);
+            }
+        }
+        return (dst, nw, nh);
     }
 
     /// <summary>

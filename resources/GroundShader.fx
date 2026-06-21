@@ -53,6 +53,7 @@ sampler2D GroundTex0 = sampler_state
     Texture = <GroundTexture0>;
     MinFilter = Linear;
     MagFilter = Linear;
+    MipFilter = Linear;
     AddressU = Wrap;
     AddressV = Wrap;
 };
@@ -63,6 +64,7 @@ sampler2D GroundTex1 = sampler_state
     Texture = <GroundTexture1>;
     MinFilter = Linear;
     MagFilter = Linear;
+    MipFilter = Linear;
     AddressU = Wrap;
     AddressV = Wrap;
 };
@@ -73,6 +75,7 @@ sampler2D GroundTex2 = sampler_state
     Texture = <GroundTexture2>;
     MinFilter = Linear;
     MagFilter = Linear;
+    MipFilter = Linear;
     AddressU = Wrap;
     AddressV = Wrap;
 };
@@ -83,6 +86,7 @@ sampler2D GroundTex3 = sampler_state
     Texture = <GroundTexture3>;
     MinFilter = Linear;
     MagFilter = Linear;
+    MipFilter = Linear;
     AddressU = Wrap;
     AddressV = Wrap;
 };
@@ -93,6 +97,7 @@ sampler2D GroundTex4 = sampler_state
     Texture = <GroundTexture4>;
     MinFilter = Linear;
     MagFilter = Linear;
+    MipFilter = Linear;
     AddressU = Wrap;
     AddressV = Wrap;
 };
@@ -103,6 +108,7 @@ sampler2D GroundTex5 = sampler_state
     Texture = <GroundTexture5>;
     MinFilter = Linear;
     MagFilter = Linear;
+    MipFilter = Linear;
     AddressU = Wrap;
     AddressV = Wrap;
 };
@@ -113,6 +119,7 @@ sampler2D GroundTex6 = sampler_state
     Texture = <GroundTexture6>;
     MinFilter = Linear;
     MagFilter = Linear;
+    MipFilter = Linear;
     AddressU = Wrap;
     AddressV = Wrap;
 };
@@ -123,6 +130,7 @@ sampler2D GroundTex7 = sampler_state
     Texture = <GroundTexture7>;
     MinFilter = Linear;
     MagFilter = Linear;
+    MipFilter = Linear;
     AddressU = Wrap;
     AddressV = Wrap;
 };
@@ -133,6 +141,7 @@ sampler2D GroundTex8 = sampler_state
     Texture = <GroundTexture8>;
     MinFilter = Linear;
     MagFilter = Linear;
+    MipFilter = Linear;
     AddressU = Wrap;
     AddressV = Wrap;
 };

@@ -367,7 +367,10 @@ public class GroundSystem
         {
             var d = decoded[k];
             if (d.pixels != null)
-                byPath[uniquePaths[k]] = Necroking.Render.TextureUtil.CreateTextureFromPixels(device, d.pixels, d.w, d.h);
+                // mipMap: true — ground tiles minify hard when zoomed out; without a mip
+                // chain the repeating cobblestone/grass aliases into moiré. Static textures
+                // loaded once, so the CPU mip-gen cost is paid only here, never per frame.
+                byPath[uniquePaths[k]] = Necroking.Render.TextureUtil.CreateTextureFromPixels(device, d.pixels, d.w, d.h, mipMap: true);
             else if (d.err != null)
                 DebugLog.Log("error", d.err);
         }
