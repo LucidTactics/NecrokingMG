@@ -503,6 +503,23 @@ public partial class Game1 {
                break;
             }
 
+            // Override the cursor position for headless hover testing (tooltips,
+            // hover highlights). window.dev('mousepos',['541','685']) ; 'clear' removes it.
+            case "mousepos": {
+               if (c.Args.Length >= 1 && c.Args[0].Equals("clear", StringComparison.OrdinalIgnoreCase)) {
+                  _devMouseOverride = null;
+                  c.Complete(Necroking.Dev.DevServer.Ok("mouse override cleared"));
+                  break;
+               }
+               if (c.Args.Length < 2) {
+                  c.Complete(Necroking.Dev.DevServer.Error("mousepos needs: <x> <y>  (or 'clear')"));
+                  break;
+               }
+               _devMouseOverride = new Microsoft.Xna.Framework.Vector2(DevFloat(c.Args[0]), DevFloat(c.Args[1]));
+               c.Complete(Necroking.Dev.DevServer.Ok($"mouse override = ({c.Args[0]},{c.Args[1]})"));
+               break;
+            }
+
             // Set the F7 gameplay-debug overlay: 0=Off, 1=Horde, 2=Unit Info.
             // window.dev('gpdebug',['1'])  (no arg → Horde)
             case "gpdebug": {

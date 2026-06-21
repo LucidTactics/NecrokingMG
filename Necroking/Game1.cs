@@ -261,6 +261,9 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     // by HUDRenderer.SlotFlashDuration (single source of truth for the fade math).
     private readonly float[] _primarySlotFlash = new float[4];
     private readonly float[] _secondarySlotFlash = new float[6];
+
+    // Dev cursor override for headless hover testing (set via the `mousepos` dev command).
+    private Microsoft.Xna.Framework.Vector2? _devMouseOverride;
     private int _spellDropdownSlot = -1;
     private int _secondaryDropdownSlot = -1;
     private int _channelingSlot = -1;
@@ -1935,6 +1938,12 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         {
             _input.Capture(mouse, _prevMouse, kb, _prevKb);
         }
+
+        // Dev-only cursor override (the `mousepos` dev command): headless runs have no
+        // real mouse, so force MousePos to a fixed screen point to exercise hover UI
+        // (tooltips, hover highlights) from the dev server. No-op when unset.
+        if (_devMouseOverride.HasValue)
+            _input.MousePos = _devMouseOverride.Value;
 
         // Modal stack input routing. Runs *before* anything else reads input so:
         //   - ESC is dispatched to the topmost popup, never two layers at once.

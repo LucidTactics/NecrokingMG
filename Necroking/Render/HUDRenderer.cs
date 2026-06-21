@@ -121,7 +121,7 @@ public partial class HUDRenderer
     // scaled by the remaining flash fraction so it fades out smoothly. Public so the
     // cast dispatch sets the timer with the SAME duration the draw normalizes by —
     // one source of truth, otherwise the fade math drifts and it reads "stuck on".
-    public const float SlotFlashDuration = 0.35f;
+    public const float SlotFlashDuration = 0.20f;
     private static readonly Color SlotFlashColor = new(255, 225, 130, 150);
     private static readonly Color SlotFlashEdge = new(255, 240, 180, 230);
 
@@ -134,6 +134,13 @@ public partial class HUDRenderer
     // pass. Used to reuse the grimoire's frame + parchment backing for slots.
     private UI.RuntimeWidgetRenderer? _widgets;
     private InputState _input = new();
+
+    // Spell-bar hover tooltip: the slot under the cursor this frame, captured during
+    // DrawSpellBar and rendered after the bars so it layers on top. _hoverSlotSpell
+    // is the hovered ability (null = none); _hoverSlotMelee flags the icon-less
+    // melee_gather slot (which has no SpellDef).
+    private SpellDef? _hoverSlotSpell;
+    private bool _hoverSlotMelee;
 
     public void Init(SpriteBatch batch, Texture2D pixel, SpriteFont? font, SpriteFont? smallFont,
         UI.RuntimeWidgetRenderer? widgets = null)
@@ -161,6 +168,10 @@ public partial class HUDRenderer
 
         DrawStatusBars(necroIdx, sim);
 
+        // Reset hover-tooltip capture; the spell bars set it if a filled slot is hovered.
+        _hoverSlotSpell = null;
+        _hoverSlotMelee = false;
+
         int primaryY = screenH - PrimaryBarBottomOffset;
         DrawSpellBar(screenW, primaryY, PrimarySlotW, PrimarySlotH, PrimaryBarOffsetX,
             new[] { "Q", "E", "LC", "RC" }, primaryBar, sim, gameData, inventory, drawSpellCategoryIcon, primaryFlash);
@@ -174,6 +185,11 @@ public partial class HUDRenderer
             spellDropdownSlot, primaryBar, gameData);
         DrawSpellDropdown(screenW, secondaryY, SecondarySlotW, SecondaryBarOffsetX,
             secondaryDropdownSlot, secondaryBar, gameData);
+
+        // Hover tooltip for the spell-bar slot under the cursor — suppressed while a
+        // slot-assign dropdown is open (the dropdown owns that interaction).
+        if (spellDropdownSlot < 0 && secondaryDropdownSlot < 0)
+            DrawSpellSlotTooltip(gameData, inventory, screenW, screenH);
 
         DrawObjectTooltip(hoveredObjectIdx, envSystem, sim, gameData, screenW, screenH);
         DrawCorpseTooltip(hoveredCorpseIdx, sim, gameData, screenW, screenH);
@@ -354,7 +370,12 @@ public partial class HUDRenderer
             });
 
             if (hovered)
+            {
                 _batch.Draw(_pixel, inner, Color.White * 0.12f);
+                // Remember what's here so the tooltip can render on top after the bars.
+                if (spell != null) _hoverSlotSpell = spell;
+                else if (slotSpellId == "melee_gather") _hoverSlotMelee = true;
+            }
 
             // Activation flash: a slot that just fired lights up and fades out, so a
             // keypress (or click) gives immediate visual confirmation. Drawn over the
@@ -640,6 +661,47 @@ public partial class HUDRenderer
         string name = def != null && def.DisplayName.Length > 0 ? def.DisplayName : cp.UnitType.ToString();
 
         DrawCursorTooltip(new[] { $"{name} corpse" }, screenW, screenH);
+    }
+
+    /// <summary>Floating cursor tooltip for the hovered spell-bar slot: ability name
+    /// plus school and any mana/cooldown/charge info. Populated by DrawSpellBar via
+    /// _hoverSlotSpell / _hoverSlotMelee; a no-op when nothing is hovered.</summary>
+    private void DrawSpellSlotTooltip(GameData gameData, Inventory inventory, int screenW, int screenH)
+    {
+        if (_smallFont == null) return;
+
+        var lines = new List<string>();
+        if (_hoverSlotMelee)
+        {
+            lines.Add("Melee / Gather");
+            lines.Add("Strike the nearest enemy, or gather at the cursor.");
+        }
+        else if (_hoverSlotSpell != null)
+        {
+            var sp = _hoverSlotSpell;
+            lines.Add(!string.IsNullOrEmpty(sp.DisplayName) ? sp.DisplayName : sp.Id);
+
+            string kind = !string.IsNullOrEmpty(sp.School) ? sp.School
+                        : !string.IsNullOrEmpty(sp.Category) ? sp.Category : "";
+            if (kind.Length > 0) lines.Add(kind);
+
+            // Cost / cooldown — only the parts that apply (orders like Command have neither).
+            var stats = new List<string>();
+            if (sp.ManaCost > 0f) stats.Add($"{sp.ManaCost:0.#} mana");
+            if (sp.Cooldown > 0f) stats.Add($"{sp.Cooldown:0.#}s cooldown");
+            if (stats.Count > 0) lines.Add(string.Join("   ", stats));
+
+            // Consumable charges (potion-spells): show how many the player holds.
+            if (!string.IsNullOrEmpty(sp.ConsumesItem))
+            {
+                var item = gameData.Items.Get(sp.ConsumesItem);
+                string itemName = item != null && item.DisplayName.Length > 0 ? item.DisplayName : sp.ConsumesItem;
+                lines.Add($"Held: {inventory.GetItemCount(sp.ConsumesItem)} {itemName}");
+            }
+        }
+        else return;
+
+        DrawCursorTooltip(lines.ToArray(), screenW, screenH);
     }
 
     /// <summary>Draw a small text-box tooltip anchored to the cursor, auto-sized to
