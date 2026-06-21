@@ -2235,26 +2235,32 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 return;
             }
 
-            // Scroll
-            if (_input.ScrollDelta > 0) _scenarioScrollOffset = Math.Max(0, _scenarioScrollOffset - 1);
-            if (_input.ScrollDelta < 0) _scenarioScrollOffset++;
+            // Scroll (one grid row at a time)
+            {
+                int screenW2 = GraphicsDevice.Viewport.Width;
+                int screenH2 = GraphicsDevice.Viewport.Height;
+                GetScenarioGridLayout(screenW2, screenH2, out int cols, out _, out _, out _, out _, out _, out _);
+                if (_input.ScrollDelta > 0) _scenarioScrollOffset = Math.Max(0, _scenarioScrollOffset - cols);
+                if (_input.ScrollDelta < 0) _scenarioScrollOffset += cols;
+            }
 
             if (_input.LeftPressed)
             {
                 int screenW2 = GraphicsDevice.Viewport.Width;
                 int screenH2 = GraphicsDevice.Viewport.Height;
-                int btnW = 320, btnH = 45, btnGap = 12;
-                int menuX = screenW2 / 2 - btnW / 2;
-                int menuY = screenH2 / 4 + 60;
+                GetScenarioGridLayout(screenW2, screenH2, out int cols, out int btnW, out int btnH, out int btnGap, out int gridX, out int menuY, out int rowsVisible);
 
                 var names = new List<string>(ScenarioRegistry.GetNames());
                 names.Reverse(); // Newest first (must match draw order)
-                int visibleCount = Math.Min(names.Count - _scenarioScrollOffset, (screenH2 - menuY - 80) / (btnH + btnGap));
+                int visibleCount = Math.Min(names.Count - _scenarioScrollOffset, rowsVisible * cols);
                 for (int i = 0; i < visibleCount; i++)
                 {
                     int nameIdx = i + _scenarioScrollOffset;
                     if (nameIdx >= names.Count) break;
-                    if (mouse.X >= menuX && mouse.X < menuX + btnW && mouse.Y >= menuY && mouse.Y < menuY + btnH)
+                    int col = i % cols, row = i / cols;
+                    int bx = gridX + col * (btnW + btnGap);
+                    int by = menuY + row * (btnH + btnGap);
+                    if (mouse.X >= bx && mouse.X < bx + btnW && mouse.Y >= by && mouse.Y < by + btnH)
                     {
                         StartScenario(names[nameIdx]);
                         _prevKb = kb;
@@ -2262,12 +2268,14 @@ public class Game1 : Microsoft.Xna.Framework.Game
                         base.Update(gameTime);
                         return;
                     }
-                    menuY += btnH + btnGap;
                 }
 
-                // Back button
-                menuY += 10;
-                if (mouse.X >= menuX && mouse.X < menuX + btnW && mouse.Y >= menuY && mouse.Y < menuY + btnH)
+                // Back button (centered below the grid)
+                int usedRows = (visibleCount + cols - 1) / cols;
+                int backY = menuY + usedRows * (btnH + btnGap) + 10;
+                int backW = 320;
+                int backX = screenW2 / 2 - backW / 2;
+                if (mouse.X >= backX && mouse.X < backX + backW && mouse.Y >= backY && mouse.Y < backY + btnH)
                     _menuState = MenuState.MainMenu;
             }
             _prevKb = kb;
@@ -8447,28 +8455,67 @@ public class Game1 : Microsoft.Xna.Framework.Game
             DrawText(_font, subtitle, new Vector2(screenW / 2f - subSize.X / 2f, screenH / 6 + 35), new Color(140, 140, 160));
         }
 
-        // Scenario buttons
-        int btnW = 320, btnH = 45, btnGap = 12;
-        int menuX = screenW / 2 - btnW / 2;
-        int menuY = screenH / 4 + 60;
+        // Scenario buttons (5-wide grid)
+        GetScenarioGridLayout(screenW, screenH, out int cols, out int btnW, out int btnH, out int btnGap, out int gridX, out int menuY, out int rowsVisible);
 
         var names = new List<string>(ScenarioRegistry.GetNames());
         names.Reverse(); // Newest first
-        int visibleCount = Math.Min(names.Count - _scenarioScrollOffset, (screenH - menuY - 80) / (btnH + btnGap));
+        int visibleCount = Math.Min(names.Count - _scenarioScrollOffset, rowsVisible * cols);
         for (int i = 0; i < visibleCount; i++)
         {
             int nameIdx = i + _scenarioScrollOffset;
             if (nameIdx >= names.Count) break;
-            DrawMenuButton(names[nameIdx], menuX, ref menuY, btnW, btnH, btnGap);
+            int col = i % cols, row = i / cols;
+            int bx = gridX + col * (btnW + btnGap);
+            int by = menuY + row * (btnH + btnGap);
+            DrawMenuButtonAt(names[nameIdx], bx, by, btnW, btnH);
         }
 
-        // Back button
-        menuY += 10;
-        DrawMenuButton("< Back", menuX, ref menuY, btnW, btnH, btnGap);
+        // Back button (centered below the grid)
+        int usedRows = (visibleCount + cols - 1) / cols;
+        int backY = menuY + usedRows * (btnH + btnGap) + 10;
+        int backW = 320;
+        DrawMenuButtonAt("< Back", screenW / 2 - backW / 2, backY, backW, btnH);
 
         // Scroll hint
         if (names.Count > visibleCount + _scenarioScrollOffset)
             DrawText(_smallFont, "Scroll for more...", new Vector2(screenW / 2f - 50, screenH - 40), new Color(100, 100, 120));
+    }
+
+    // Shared layout for the scenario grid so click-handling and drawing stay in sync.
+    private void GetScenarioGridLayout(int screenW, int screenH, out int cols, out int btnW, out int btnH, out int btnGap, out int gridX, out int menuY, out int rowsVisible)
+    {
+        cols = 5;
+        btnGap = 12;
+        btnH = 45;
+        menuY = screenH / 4 + 60;
+        int maxGridW = Math.Min(screenW - 80, 1400);
+        btnW = (maxGridW - (cols - 1) * btnGap) / cols;
+        int gridW = cols * btnW + (cols - 1) * btnGap;
+        gridX = screenW / 2 - gridW / 2;
+        // Leave room at the bottom for the back button + scroll hint.
+        rowsVisible = Math.Max(1, (screenH - menuY - 110) / (btnH + btnGap));
+    }
+
+    // Draws a menu button at an absolute position (grid-friendly; no advancing cursor).
+    private void DrawMenuButtonAt(string text, int x, int y, int w, int h)
+    {
+        int mx = (int)_input.MousePos.X, my = (int)_input.MousePos.Y;
+        bool hover = mx >= x && mx < x + w && my >= y && my < y + h;
+        Color bg = hover ? new Color(90, 60, 120, 240) : new Color(60, 40, 80, 220);
+        _spriteBatch.Draw(_pixel, new Rectangle(x, y, w, h), bg);
+        _spriteBatch.Draw(_pixel, new Rectangle(x, y, w, 2), new Color(220, 180, 100, hover ? 255 : 120));
+        _spriteBatch.Draw(_pixel, new Rectangle(x, y + h - 2, w, 2), new Color(220, 180, 100, hover ? 255 : 60));
+
+        if (_font != null)
+        {
+            // Shrink overly long scenario names to fit inside the narrower grid cell.
+            var textSize = _font.MeasureString(text);
+            float scale = textSize.X > w - 12 ? (w - 12) / textSize.X : 1f;
+            DrawText(_font, text,
+                new Vector2((int)(x + w / 2f - textSize.X * scale / 2f), (int)(y + (h - textSize.Y * scale) / 2f)),
+                new Color(255, 245, 220), scale);
+        }
     }
 
     private void DrawMenuButton(string text, int x, ref int y, int w, int h, int gap)
@@ -8510,6 +8557,12 @@ public class Game1 : Microsoft.Xna.Framework.Game
     {
         if (font != null)
             _spriteBatch.DrawString(font, text, pos, color);
+    }
+
+    private void DrawText(SpriteFont? font, string text, Vector2 pos, Color color, float scale)
+    {
+        if (font != null)
+            _spriteBatch.DrawString(font, text, pos, color, 0f, Vector2.Zero, scale, SpriteEffects.None, 0f);
     }
 
     protected override void UnloadContent()
