@@ -38,6 +38,7 @@ if not it errors without writing.
 
 | op | form | what it does |
 |----|------|--------------|
+| `list` | `list` | Print every struct's id, one per line. No write. Use to discover ids. |
 | `read` | `read <id>` | Print that struct as JSON. No write. Use to inspect before editing. |
 | `duplicate` | `duplicate <id> <new_id> [k=v ...]` | Deep-copy the struct, give the copy `<new_id>`, apply overrides, append. Errors if `<new_id>` exists. |
 | `delete` | `delete <id>` | Remove the struct. |
@@ -60,6 +61,9 @@ shell, quote values with spaces or JSON braces (`name="Ice Bolt"`,
 ## Examples
 
 ```bash
+# List every id in the file
+python tools/json_data.py data/spells.json list
+
 # Inspect an entry before changing it
 python tools/json_data.py data/spells.json read fireball
 

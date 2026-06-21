@@ -12,6 +12,9 @@ non-ASCII escaped the way the game writes it).
 
 Operations
 ----------
+  list      (no extra args)
+        Print every struct's id, one per line. (No write.)
+
   read      <id>
         Print the struct with that id as JSON. (No write.)
 
@@ -48,6 +51,7 @@ Usage
   python tools/json_data.py <file.json> <op> [target_id] [args...]
 
 Examples
+  python tools/json_data.py data/spells.json list
   python tools/json_data.py data/spells.json read fireball
   python tools/json_data.py data/spells.json duplicate fireball icebolt name="Ice Bolt" damage=12 primaryPath=water
   python tools/json_data.py data/spells.json update fireball manaCost=3 hidden=true
@@ -170,6 +174,11 @@ def main(argv):
     root = _load(path)
     lst, container, _key = _find_list(root, path)
 
+    if op == "list":
+        for el in lst:
+            print(el["id"])
+        return
+
     if op == "read":
         if not rest:
             _die("read needs <target_id>")
@@ -238,7 +247,7 @@ def main(argv):
         print(f"OK: updated '{target_id}' ({len(overrides)} keys)")
         return
 
-    _die(f"unknown operation '{op}' (read|duplicate|delete|create|update)")
+    _die(f"unknown operation '{op}' (list|read|duplicate|delete|create|update)")
 
 
 if __name__ == "__main__":
