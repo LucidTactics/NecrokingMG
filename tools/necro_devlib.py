@@ -114,25 +114,14 @@ def _ensure_job():
         return None
 
 
-def _supervisor_pid():
-    """PID of whatever is listening on the supervisor port (Windows)."""
-    if os.name != "nt":
-        return None
-    try:
-        out = subprocess.run(
-            ["powershell", "-NoProfile", "-Command",
-             "(Get-NetTCPConnection -LocalPort %d -State Listen "
-             "-ErrorAction SilentlyContinue | Select-Object -First 1)"
-             ".OwningProcess" % SUP_PORT],
-            capture_output=True, text=True, timeout=10).stdout.strip()
-        return int(out) if out else None
-    except Exception:
-        return None
+def _own_supervisor(handle):
+    """Put the supervisor (a Popen process handle) into our kill-on-close job so it
+    dies when THIS process exits. Best-effort, Windows only.
 
-
-def _own_process(handle=None, pid=None):
-    """Put a process (by Popen handle or PID) into our kill-on-close job, so it
-    dies when THIS process exits. Best-effort, Windows only."""
+    We only ever own a supervisor we START ourselves — never one we merely find
+    already running. The supervisor is shared (one per machine, port 8777) across
+    however many editor sessions are open; if a session adopted a supervisor it
+    didn't start, closing that session would kill it out from under the others."""
     job = _ensure_job()
     if not job:
         return
@@ -140,19 +129,8 @@ def _own_process(handle=None, pid=None):
         import ctypes
         from ctypes import wintypes
         k32 = ctypes.WinDLL("kernel32", use_last_error=True)
-        opened = None
-        if handle is None:
-            k32.OpenProcess.restype = wintypes.HANDLE
-            k32.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
-            # PROCESS_SET_QUOTA | PROCESS_TERMINATE
-            opened = k32.OpenProcess(0x0100 | 0x0001, False, pid)
-            handle = opened
-            if not handle:
-                return
         k32.AssignProcessToJobObject.argtypes = [wintypes.HANDLE, wintypes.HANDLE]
         k32.AssignProcessToJobObject(job, wintypes.HANDLE(handle))
-        if opened:
-            k32.CloseHandle(opened)
     except Exception:
         pass
 
@@ -167,12 +145,9 @@ def ensure_supervisor(own=None):
     if own is None:
         own = OWN_BY_DEFAULT
     if supervisor_up():
-        # Already running (maybe started detached by the CLI, or by a prior run).
-        # If we want ownership, adopt it by PID so it still dies with us.
-        if own:
-            pid = _supervisor_pid()
-            if pid:
-                _own_process(pid=pid)
+        # Already running (started by another editor session, the CLI, or a prior
+        # run). Do NOT take ownership of a supervisor we didn't start — see
+        # _own_supervisor. We just use it; whoever started it owns its lifetime.
         return
     os.makedirs(LOG_DIR, exist_ok=True)
     # Distinct from the game's own DebugLog file (log/devserver.log) — sharing the
@@ -191,7 +166,7 @@ def ensure_supervisor(own=None):
         kwargs["start_new_session"] = not own
     proc = subprocess.Popen([sys.executable, DEVSERVER], **kwargs)
     if own and os.name == "nt":
-        _own_process(handle=int(proc._handle))
+        _own_supervisor(int(proc._handle))
     deadline = time.time() + 20
     while time.time() < deadline:
         if supervisor_up():
