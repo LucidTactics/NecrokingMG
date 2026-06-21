@@ -878,6 +878,8 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
         _camera.Position = _sim.NecromancerIndex >= 0
             ? _sim.Units[_sim.NecromancerIndex].Position : new Vec2(center, center);
+        _sim.Horde.CircleCenter = _sim.NecromancerIndex >= 0
+           ? _sim.Units[_sim.NecromancerIndex].Position : new Vec2(center, center);
         _camera.Zoom = 24f;
 
         // Pass placed units to map editor so markers are visible

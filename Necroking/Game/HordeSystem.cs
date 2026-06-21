@@ -60,7 +60,10 @@ public class HordeSystem
     // formation scales automatically while per-slot positions stay put.
     private const int BaselineUnits = 40;
 
-    public Vec2 CircleCenter => _circleCenter;
+    public Vec2 CircleCenter {
+       get => _circleCenter;
+       set => _circleCenter = value;
+    }
     public float CircleFacing => _circleFacing;
     public bool IsNecroMoving => _necroMoving;
     public IReadOnlyList<HordeUnitData> HordeUnits => _hordeUnits;
