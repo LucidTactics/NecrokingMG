@@ -1048,7 +1048,11 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             ? _sim.Units[_sim.NecromancerIndex].Position : new Vec2(center, center);
         _sim.Horde.CircleCenter = _sim.NecromancerIndex >= 0
            ? _sim.Units[_sim.NecromancerIndex].Position : new Vec2(center, center);
-        _camera.Zoom = 24f;
+        // Empty test map is for Claude's behavior tests — closer zoom so floating
+        // text (cast-failure alerts, damage numbers, ActionLabels) is legible in
+        // the downsampled screenshots that get sent back to the model. Regular
+        // maps keep the 24f default tuned for human play.
+        _camera.Zoom = mapName == "empty_test" ? 48f : 24f;
 
         // Pass placed units to map editor so markers are visible
         _mapEditor.SetPlacedUnits(placedUnits);
