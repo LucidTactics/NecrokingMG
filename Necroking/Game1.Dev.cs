@@ -69,6 +69,39 @@ public partial class Game1 {
                break;
             }
 
+            // Toggle / set the god-mode cheat buff on the necromancer (same as
+            // Shift+P). window.dev('godmode',['on'|'off'|'toggle'])  (default toggle)
+            case "godmode": {
+               int ni = _sim.NecromancerIndex;
+               if (ni < 0) { c.Complete(Necroking.Dev.DevServer.Error("no necromancer in world")); break; }
+               bool has = Necroking.GameSystems.BuffSystem.HasBuff(_sim.Units, ni, "buff_god_mode");
+               string mode = c.Args.Length >= 1 ? c.Args[0].ToLowerInvariant() : "toggle";
+               bool want = mode switch { "on" => true, "off" => false, _ => !has };
+               if (want != has) ToggleGodMode(ni);
+               c.Complete(Necroking.Dev.DevServer.Ok($"godmode {(want ? "on" : "off")}"));
+               break;
+            }
+
+            // Report the necromancer's spell cooldowns + the effective cooldown rate
+            // (base × buff modifiers, e.g. ×10 under god mode). window.dev('cooldowns')
+            case "cooldowns": {
+               int ni = _sim.NecromancerIndex;
+               if (ni < 0) { c.Complete(Necroking.Dev.DevServer.Error("no necromancer in world")); break; }
+               float rate = Necroking.GameSystems.BuffSystem.GetModifiedExtra(_sim.Units, ni, "CooldownRate", _sim.NecroState.CooldownRate);
+               var sb = new System.Text.StringBuilder();
+               sb.Append($"{{\"rate\":{rate},\"base\":{_sim.NecroState.CooldownRate},\"cooldowns\":{{");
+               bool first = true;
+               foreach (var kv in _sim.NecroState.SpellCooldowns) {
+                  if (kv.Value <= 0f) continue;
+                  if (!first) sb.Append(',');
+                  sb.Append($"\"{kv.Key}\":{kv.Value:F3}");
+                  first = false;
+               }
+               sb.Append("}}");
+               c.Complete(Necroking.Dev.DevServer.OkRaw(sb.ToString()));
+               break;
+            }
+
             case "spawn": {
                if (c.Args.Length < 3) {
                   c.Complete(Necroking.Dev.DevServer.Error("spawn needs: <type> <x> <y>"));

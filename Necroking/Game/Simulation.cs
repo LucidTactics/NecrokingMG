@@ -344,7 +344,13 @@ public class Simulation
         float regenEff = _necroState.ManaRegen + _necroState.BonusManaRegen
             + (_necromancerIdx >= 0 ? BuffSystem.SumExtraAdd(_units, _necromancerIdx, "ManaRegen") : 0f);
         _necroState.Mana = MathF.Min(maxManaEff, _necroState.Mana + regenEff * dt);
-        _necroState.TickCooldowns(dt);
+        // Effective cooldown rate = base × buff modifiers (god mode multiplies it by
+        // 10). Looked up live so applying/removing the buff speeds up / restores the
+        // recharge without touching the base CooldownRate.
+        float cooldownRate = _necromancerIdx >= 0
+            ? BuffSystem.GetModifiedExtra(_units, _necromancerIdx, "CooldownRate", _necroState.CooldownRate)
+            : _necroState.CooldownRate;
+        _necroState.TickCooldowns(dt, cooldownRate);
 
         // Knockdown recovery rolls — runs BEFORE BuffSystem.TickBuffs so a successful
         // recovery roll can zero the buff's duration in the same tick it gets decremented.

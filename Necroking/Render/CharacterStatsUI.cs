@@ -309,12 +309,25 @@ public class CharacterStatsUI : Necroking.UI.IModalLayer
         };
         var regenLines = new List<TipLine> { new("Per second", $"{necro.ManaRegen:F1}", ValueColor) };
 
+        // Cooldown rate (1.0x = real time). God mode multiplies it ×10 → spells
+        // recharge 10× faster; show the effective rate, tinted when buffed.
+        float cdRate = BuffSystem.GetModifiedExtra(sim.UnitsMut, necroIdx, "CooldownRate", necro.CooldownRate);
+        bool cdBuffed = System.MathF.Abs(cdRate - necro.CooldownRate) > 0.001f;
+        Color cdColor = !cdBuffed ? ValueColor
+            : (cdRate > necro.CooldownRate ? BuffedUpColor : BuffedDownColor);
+        var cdLines = new List<TipLine>
+        {
+            new("Base", $"{necro.CooldownRate:F1}x", cdBuffed ? BaseDimColor : ValueColor),
+        };
+        if (cdBuffed) cdLines.Add(new("Effective", $"{cdRate:F1}x", cdColor));
+
         var rows = new List<Row>
         {
             Row.Section("-- Vitals --"),
             new("HP", hpValue, hpColor, hpSuffix, tipLines: hpLines),
             new("Mana", $"{(int)necro.Mana} / {(int)necro.MaxMana}", ValueColor, tipLines: manaLines),
             new("Mana Regen", $"{necro.ManaRegen:F1}/s", ValueColor, tipLines: regenLines),
+            new("Cooldown Rate", $"{cdRate:F1}x", cdColor, tipLines: cdLines),
             Row.Blank,
             Row.Section("-- Combat --"),
             MakeBuffedRow("Strength", s.Strength, sim, necroIdx, BuffStat.Strength, buffs),

@@ -943,6 +943,11 @@
           "type": "Set",
           "stat": "AllPaths",
           "value": 9
+        },
+        {
+          "type": "Multiply",
+          "stat": "CooldownRate",
+          "value": 10
         }
       ],
       "maxStacks": 1,

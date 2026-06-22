@@ -390,6 +390,32 @@ public static class BuffSystem
         return sum;
     }
 
+    /// <summary>Apply Add/Multiply/Set buff effects with a raw string stat name to a
+    /// base value — the string-keyed sibling of <see cref="GetModifiedStat"/>, for
+    /// NecromancerState stats (MaxMana, CooldownRate, …) that live outside the
+    /// <see cref="BuffStat"/> enum. Combination: (base + ΣAdd) × ∏Multiply, unless a
+    /// Set effect is present (last Set wins, overriding everything). Returns the base
+    /// unchanged when there are no matching effects.</summary>
+    public static float GetModifiedExtra(UnitArrays units, int unitIdx, string stat, float baseValue)
+    {
+        if (unitIdx < 0 || unitIdx >= units.Count) return baseValue;
+        float additive = 0f;
+        float multiplicative = 1f;
+        float? setValue = null;
+        foreach (var buff in units[unitIdx].ActiveBuffs)
+            foreach (var eff in buff.Effects)
+            {
+                if (eff.Stat != stat) continue;
+                switch (eff.Type)
+                {
+                    case "Add": additive += eff.Value * buff.StackCount; break;
+                    case "Multiply": multiplicative *= MathF.Pow(eff.Value, buff.StackCount); break;
+                    case "Set": setValue = eff.Value; break;
+                }
+            }
+        return setValue ?? (baseValue + additive) * multiplicative;
+    }
+
     /// <summary>Largest "Set" buff effect value on this unit with the named
     /// stat, or null when no such effect is active. Used for floor-style
     /// overrides (e.g. god-mode "AllPaths = 9" raises every magic path level

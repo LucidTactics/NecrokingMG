@@ -579,6 +579,12 @@ public class NecromancerState
     public Dictionary<string, float> SpellCooldowns { get; set; } = new();
     public Dictionary<string, int> Inventory { get; set; } = new();
 
+    /// <summary>Base spell-cooldown recharge rate (1.0 = real time). Effective rate
+    /// is this scaled by buff modifiers on the necromancer (e.g. god mode multiplies
+    /// it by 10 → spells cool down 10× faster). Cooldowns tick down by dt × rate;
+    /// see <see cref="TickCooldowns"/>. Higher = faster recharge.</summary>
+    public float CooldownRate { get; set; } = 1f;
+
     /// <summary>Max permanent undead minions of UndeadCategory.Monster the
     /// player can field at once (zombie animals/monsters). Skill-tree nodes
     /// raise this. Starts at 1 so the player can summon one starter pet
@@ -591,11 +597,17 @@ public class NecromancerState
     /// human raising is gated behind an early skill-tree node.</summary>
     public int HumanCap { get; set; } = 0;
 
-    public void TickCooldowns(float dt)
+    /// <summary>Tick all spell cooldowns down. <paramref name="rate"/> is the
+    /// effective cooldown rate (base <see cref="CooldownRate"/> after buff modifiers)
+    /// — cooldowns drop by dt × rate, so rate=10 recharges 10× faster. A rate ≤ 0
+    /// freezes cooldowns.</summary>
+    public void TickCooldowns(float dt, float rate = 1f)
     {
+        if (rate <= 0f) return;
+        float step = dt * rate;
         var keys = new List<string>(SpellCooldowns.Keys);
         foreach (var key in keys)
-            SpellCooldowns[key] = MathF.Max(0f, SpellCooldowns[key] - dt);
+            SpellCooldowns[key] = MathF.Max(0f, SpellCooldowns[key] - step);
     }
 
     public float GetCooldown(string id) =>
