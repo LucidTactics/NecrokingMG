@@ -304,12 +304,28 @@ public partial class Game1 {
 
       var result = SpellCaster.TryStartSpellCast(spellId, _gameData.Spells, _sim.NecroState,
          _sim.Units, necroIdx, mouseWorld, _sim.Corpses, _pendingSpell, _gameData);
-      if (result == CastResult.HordeCapFull)
-         SpawnHordeCapText(necroIdx);
-      // Path-locked: name the path the necromancer still needs so the failure
-      // never reads as (or is silently mistaken for) a mana shortfall.
-      if (result == CastResult.MissingPath)
-         SpawnMissingPathText(necroIdx, spellId);
+      switch (result) {
+         case CastResult.HordeCapFull:
+            SpawnHordeCapText(necroIdx);
+            break;
+         // Path-locked: name the path the necromancer still needs so the failure
+         // never reads as (or is silently mistaken for) a mana shortfall.
+         case CastResult.MissingPath:
+            SpawnMissingPathText(necroIdx, spellId);
+            break;
+         case CastResult.OutOfRange:
+            SpawnCastFailText(necroIdx, "Out of Range");
+            break;
+         case CastResult.NotEnoughMana:
+            SpawnCastFailText(necroIdx, "Not Enough Mana");
+            break;
+         case CastResult.OnCooldown:
+            SpawnCastFailText(necroIdx, "Cooling Down");
+            break;
+         case CastResult.NoValidTarget:
+            SpawnCastFailText(necroIdx, "No Target");
+            break;
+      }
       if (result != CastResult.Success) return result;
 
       // Successful real-spell cast → light up its hotbar slot.

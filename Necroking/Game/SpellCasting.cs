@@ -79,11 +79,6 @@ public static class SpellCaster
         outPending.CastingBuffID = spell.CastingBuffID;
         outPending.Active = true;
 
-        // Floating spell-name label above the necromancer for the cast duration.
-        // Generic-action label written by every commit point — see UnitData.ActionLabel.
-        units[necroIdx].ActionLabel = string.IsNullOrEmpty(spell.DisplayName) ? spell.Id : spell.DisplayName;
-        units[necroIdx].ActionLabelTimer = 1.5f;
-
         switch (spell.Category)
         {
             case "Projectile":
@@ -443,6 +438,12 @@ public static class SpellCaster
         necro.Mana -= spell.EffectiveManaCost(castingLevel);
         if (spell.Cooldown > 0f)
             necro.SpellCooldowns[spellID] = spell.Cooldown;
+
+        // Floating spell-name label above the necromancer — only on confirmed
+        // cast, never on a failed validation, or the label lies (says "Fireball"
+        // when nothing fired). See UnitData.ActionLabel.
+        units[necroIdx].ActionLabel = string.IsNullOrEmpty(spell.DisplayName) ? spell.Id : spell.DisplayName;
+        units[necroIdx].ActionLabelTimer = 1.5f;
 
         return CastResult.Success;
     }

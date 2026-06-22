@@ -1055,6 +1055,16 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             };
         }
 
+        // Test map: override the spellbar with no-path-required test spells so
+        // a fresh necromancer can immediately cast and exercise failure modes
+        // (OutOfRange / NotEnoughMana / OnCooldown) without granting paths or
+        // editing the player's saved spellbar.json. Regular maps are
+        // deliberately left alone — they ship with an empty default spellbar.
+        if (mapName == "testmap")
+        {
+            _spellBarState.Slots[0] = new SpellBarSlot { SpellID = "test_projectile" };
+        }
+
         // Init map editor with live systems
         _mapEditor.Init(
             _groundSystem, _envSystem, _triggerSystem, _camera,
@@ -3512,9 +3522,13 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         _sim.NecroState.Mana = maxManaEff;
     }
 
-    private void SpawnHordeCapText(int necroIdx)
+    /// <summary>Floating alert text above the necromancer — the shared channel for
+    /// every cast-failure reason ("Horde Full", "Out of Range", "Not Enough Mana",
+    /// "Need Death 1", …). Renders red via the DamageNumber alert path.</summary>
+    private void SpawnCastFailText(int necroIdx, string message)
     {
         if (necroIdx < 0 || necroIdx >= _sim.Units.Count) return;
+        if (string.IsNullOrEmpty(message)) return;
         _damageNumbers.Add(new DamageNumber
         {
             WorldPos = _sim.Units[necroIdx].Position,
@@ -3522,29 +3536,21 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             Timer = 0f,
             Height = 2f,
             IsPoison = false,
-            PickupText = "Horde Full",
+            PickupText = message,
             IsAlert = true,
         });
     }
+
+    private void SpawnHordeCapText(int necroIdx) => SpawnCastFailText(necroIdx, "Horde Full");
 
     /// <summary>Floating feedback when a cast fails because the necromancer lacks the
     /// spell's magic-path requirement — names the path(s) it needs (e.g.
     /// "Need Death 1") so it's never mistaken for a mana shortfall.</summary>
     private void SpawnMissingPathText(int necroIdx, string spellId)
     {
-        if (necroIdx < 0 || necroIdx >= _sim.Units.Count) return;
         string need = GameSystems.SpellCaster.DescribeMissingPath(
             _gameData.Spells.Get(spellId), _gameData, _sim.Units, necroIdx);
-        _damageNumbers.Add(new DamageNumber
-        {
-            WorldPos = _sim.Units[necroIdx].Position,
-            Damage = 0,
-            Timer = 0f,
-            Height = 2f,
-            IsPoison = false,
-            PickupText = string.IsNullOrEmpty(need) ? "Path Locked" : $"Need {need}",
-            IsAlert = true,
-        });
+        SpawnCastFailText(necroIdx, string.IsNullOrEmpty(need) ? "Path Locked" : $"Need {need}");
     }
 
     private Texture2D? GetItemTextureByPath(string path)

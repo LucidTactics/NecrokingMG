@@ -93,6 +93,16 @@ Spell casting is orchestrated in `Necroking/Game1.Spells.cs`, with targeting in
 [docs/spells.md](docs/spells.md)** — it explains the three-layer split, the cast
 pipeline, what lives where, and how to add a spell (most are data-only).
 
+**When testing spells (or anything that needs to cast), launch the test map, not
+the regular map.** `window.dev('menu',['test_map'])` loads `assets/maps/testmap.json`,
+which overrides the spellbar with no-path-required `test_projectile` (in slot 1) so
+the starter necromancer can immediately cast — no path-grant or god-mode dance
+needed. The regular map ships with an empty spellbar by design (the player picks
+their loadout); pre-seeding spells there breaks the intended new-game experience.
+If a test needs more variety, add another hidden no-path spell to `spells.json` and
+slot it in the same `if (mapName == "testmap")` block in `StartGame` — don't touch
+`data/spellbar.json` (it's per-machine, gitignored).
+
 ## UI Text Rendering
 - SpriteBatch uses `SamplerState.PointClamp` — text drawn at sub-pixel positions gets aliasing artifacts
 - **Always round text positions to integer pixels**: `new Vector2((int)x, (int)y)`
