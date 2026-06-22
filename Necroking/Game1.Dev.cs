@@ -165,7 +165,7 @@ public partial class Game1 {
             // there's one definition of what each button does.
             case "menu": {
                if (c.Args.Length < 1) {
-                  c.Complete(Necroking.Dev.DevServer.Error("menu needs: <new_game|test_map|scenarios|main_menu|quit>"));
+                  c.Complete(Necroking.Dev.DevServer.Error("menu needs: <new_game|test_map|empty_test_map|scenarios|main_menu|quit>"));
                   break;
                }
 
@@ -179,6 +179,15 @@ public partial class Game1 {
                   case "test_map":
                      StartGame("testmap");
                      c.Complete(Necroking.Dev.DevServer.Ok($"test map, units={_sim.Units.Count}"));
+                     break;
+                  // Empty, grass-only map with a debug necromancer (all paths
+                  // unlocked, +999 MaxMana). The right starting point for
+                  // testing technical behavior — no map content to fight, all
+                  // spells castable. See StartGame's "empty_test" branch.
+                  case "empty_test_map":
+                  case "empty_map":
+                     StartGame("empty_test");
+                     c.Complete(Necroking.Dev.DevServer.Ok($"empty test map, units={_sim.Units.Count}"));
                      break;
                   case "scenarios":
                      _menuState = MenuState.ScenarioList;
@@ -614,6 +623,31 @@ public partial class Game1 {
                break;
             }
 
+            // Swap the necromancer's UnitDef in-place (same path the
+            // Metamorphosis tree uses on Become Pale Acolyte / Wight / etc.).
+            // For testing different player chassis without restarting the map.
+            // window.dev('set_necro_type',['wight'])
+            case "set_necro_type": {
+               if (c.Args.Length < 1) {
+                  c.Complete(Necroking.Dev.DevServer.Error("set_necro_type needs: <unitDefId>"));
+                  break;
+               }
+               string newDefId = c.Args[0];
+               if (_gameData.Units.Get(newDefId) == null) {
+                  c.Complete(Necroking.Dev.DevServer.Error($"unknown unit def: {newDefId}"));
+                  break;
+               }
+               int necroIdx = FindNecromancer();
+               if (necroIdx < 0) {
+                  c.Complete(Necroking.Dev.DevServer.Error("no necromancer in the world"));
+                  break;
+               }
+               _sim.TransformUnit(necroIdx, newDefId);
+               RebuildUnitAnim(necroIdx, newDefId);
+               c.Complete(Necroking.Dev.DevServer.Ok($"necromancer -> {newDefId}"));
+               break;
+            }
+
             // Override the cursor position for headless hover testing (tooltips,
             // hover highlights). window.dev('mousepos',['541','685']) ; 'clear' removes it.
             case "mousepos": {
@@ -746,9 +780,10 @@ public partial class Game1 {
                   "walk_necro <x> <y>  (or 'clear'; cancelled by any WASD press)",
                   "mark <selector|clear>", "unmark [selector]",
                   "set_hp <selector> <hp> [maxHp]", "set_mana <selector|necro> <mana> [maxMana]",
+                  "set_necro_type <unitDefId>",
                   "cast <spellID> <x> <y>", "fireball <x> <y> [dmg] [radius] [name]",
                   "camera <x> <y> [zoom]", "speed <n>", "pause", "resume",
-                  "start_game [map]", "menu <new_game|test_map|scenarios|main_menu|quit>",
+                  "start_game [map]", "menu <new_game|test_map|empty_test_map|scenarios|main_menu|quit>",
                   "screenshot [name]  opts:{no_ui,no_ground,downsample_to}",
                   "panels", "panel <name> [tab]", "tab <name>",
                   "overlay <name> [open|close|toggle]", "select <name|id|index>",

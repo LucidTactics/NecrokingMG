@@ -93,15 +93,23 @@ Spell casting is orchestrated in `Necroking/Game1.Spells.cs`, with targeting in
 [docs/spells.md](docs/spells.md)** — it explains the three-layer split, the cast
 pipeline, what lives where, and how to add a spell (most are data-only).
 
-**When testing spells (or anything that needs to cast), launch the test map, not
-the regular map.** `window.dev('menu',['test_map'])` loads `assets/maps/testmap.json`,
-which overrides the spellbar with no-path-required `test_projectile` (in slot 1) so
-the starter necromancer can immediately cast — no path-grant or god-mode dance
-needed. The regular map ships with an empty spellbar by design (the player picks
-their loadout); pre-seeding spells there breaks the intended new-game experience.
-If a test needs more variety, add another hidden no-path spell to `spells.json` and
-slot it in the same `if (mapName == "testmap")` block in `StartGame` — don't touch
-`data/spellbar.json` (it's per-machine, gitignored).
+**When testing technical behavior, launch the EMPTY test map, not the regular map
+or `testmap`.** `window.dev('menu',['empty_test_map'])` synthesizes a grass-only
+64×64 grid in code (no JSON file) and spawns a **`necromancer_debug`** chassis
+that has every magic path at level 9 and `maxMana=999` — so any spell is castable
+and no map content gets in the way. The primary spellbar is pre-seeded with the
+hidden no-path `test_projectile` (range 15, 5 mana, 0.5s CD) for exercising
+OutOfRange / NotEnoughMana / OnCooldown feedback. Use `set_necro_type <unitDefId>`
+to swap to a different chassis (e.g. `wretched`, `wight`) for chassis-specific
+checks. Regular maps ship with an empty spellbar by design — pre-seeding spells
+there would break the intended new-game experience.
+
+If a test needs more starter spells, add another hidden no-path spell to
+`spells.json` and slot it in the same `if (mapName == "testmap" || mapName == "empty_test")`
+block in `StartGame` — don't touch `data/spellbar.json` (it's per-machine, gitignored).
+The older `test_map` (a populated map with the normal `necromancer`) is still
+useful when you need realistic terrain/enemies; pick `empty_test_map` when you
+need isolation, `test_map` when you need context.
 
 ## UI Text Rendering
 - SpriteBatch uses `SamplerState.PointClamp` — text drawn at sub-pixel positions gets aliasing artifacts

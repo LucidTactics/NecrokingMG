@@ -878,9 +878,34 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         // Load map. mapName selects which map under assets/maps/ to load
         // ("default", "testmap", ...); the trigger/road companions follow the
         // same "<mapName>_triggers.json" / "<mapName>_roads.json" convention.
+        // Special name "empty_test" synthesizes a tiny grass-only map in code
+        // (no JSON file) so technical-behavior tests don't fight the regular
+        // map's content. See the "empty_test_map" menu dev command.
         var placedUnits = new List<Data.PlacedUnit>();
         string mapPath = GamePaths.Resolve($"assets/maps/{mapName}.json");
-        if (File.Exists(mapPath))
+        if (mapName == "empty_test")
+        {
+            DebugLog.Log("startup", "Empty test map: synthesizing grass-only grid + debug necromancer");
+            _groundSystem.Init(WorldSize, WorldSize);
+            // One grass ground type at index 0 — the vertex map defaults to 0,
+            // so the whole map renders as grass with no further work.
+            _groundSystem.AddGroundType(new World.GroundTypeDef
+            {
+                Id = "grass",
+                Name = "Grass",
+                TexturePath = "assets/Environment/Ground/GroundGrass1.png",
+            });
+            // Pathfinder needs a non-zero map; the fog grid sizes off the
+            // ground dims (mirrors the regular load path).
+            _deathFog.Init(_groundSystem.WorldW, _groundSystem.WorldH, cellSize: 4);
+            placedUnits.Add(new Data.PlacedUnit
+            {
+                UnitDefId = "necromancer_debug",
+                X = WorldSize * 0.5f,
+                Y = WorldSize * 0.5f,
+            });
+        }
+        else if (File.Exists(mapPath))
         {
             DebugLog.Log("startup", $"Loading map '{mapName}' from file...");
             // Load env defs from canonical location (before map, so placed objects can resolve IDs)
@@ -1055,14 +1080,26 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             };
         }
 
-        // Test map: override the spellbar with no-path-required test spells so
-        // a fresh necromancer can immediately cast and exercise failure modes
-        // (OutOfRange / NotEnoughMana / OnCooldown) without granting paths or
-        // editing the player's saved spellbar.json. Regular maps are
-        // deliberately left alone — they ship with an empty default spellbar.
-        if (mapName == "testmap")
+        // Test maps: pre-load no-path test spells so the necromancer can
+        // immediately cast and exercise failure modes (OutOfRange /
+        // NotEnoughMana / OnCooldown) without granting paths or touching
+        // the player's saved spellbar.json. Regular maps are deliberately
+        // left alone — they ship with an empty default spellbar.
+        if (mapName == "testmap" || mapName == "empty_test")
         {
             _spellBarState.Slots[0] = new SpellBarSlot { SpellID = "test_projectile" };
+        }
+
+        // Empty test map: top up the necromancer's mana pool so high-cost
+        // spells are castable out of the gate. NecroState.MaxMana is separate
+        // from the UnitDef's maxMana field (which only affects non-necro mana
+        // users like priests), so the debug def's 999 doesn't reach here on
+        // its own.
+        if (mapName == "empty_test")
+        {
+            _sim.NecroState.MaxMana = 999f;
+            _sim.NecroState.Mana = 999f;
+            _sim.NecroState.ManaRegen = 20f;
         }
 
         // Init map editor with live systems
