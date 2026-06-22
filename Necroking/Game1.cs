@@ -3010,6 +3010,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
 
             // --- Simulate ---
             _sim.Tick(dt);
+            ApplyBlightBombImpacts();
             FinalizeBushWorkIfPending();
             _dayNightSystem.Update(dt, _gameData);
             _sim.MagicGlyphs.Update(dt, _sim.UnitsMut, _sim.Quadtree, _sim.PoisonClouds, _gameData.Spells);

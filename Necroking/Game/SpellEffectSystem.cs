@@ -160,10 +160,46 @@ public class SpellEffectSystem
                 break;
 
             case "Blight":
+            {
                 // Mutate the death-fog ("blight") field — Add dumps blight at the
                 // target cell, Purify cleanses a 5×5 kernel. The field lives in Game1.
-                applyBlight(spell, target);
+                //
+                // Visual: reuse the Strike / Projectile renderers so a Blight spell can
+                // present as a god-ray (StrikeVisual=GodRay) or a thrown bomb
+                // (ProjectileFlipbook set), driven entirely by the def. Damage stays 0
+                // — the fog change is the real effect.
+                bool hasBomb = spell.StrikeVisualType != "GodRay"
+                    && spell.ProjectileFlipbook != null
+                    && !string.IsNullOrEmpty(spell.ProjectileFlipbook.FlipbookID);
+
+                // With a thrown bomb, the fog is applied where/when the bomb explodes
+                // (Game1 reads the projectile impact by spell id). Without one, apply it
+                // now at the target point.
+                if (!hasBomb)
+                    applyBlight(spell, target);
+
+                if (spell.StrikeVisualType == "GodRay")
+                {
+                    ExecuteStrike(spell, sim, gameData, casterIdx, target, effectOrigin, damageNumbers);
+                }
+                else if (hasBomb)
+                {
+                    spawnProjectile(spell, effectOrigin, target, casterUid, effectOriginH);
+                    if (spell.Quantity > 1)
+                    {
+                        result.PendingProjectile = new PendingProjectileGroup
+                        {
+                            SpellID = spell.Id,
+                            Origin = effectOrigin,
+                            Target = target,
+                            Remaining = spell.Quantity - 1,
+                            Timer = 0f,
+                            Interval = spell.ProjectileDelay > 0f ? spell.ProjectileDelay : 0.1f
+                        };
+                    }
+                }
                 break;
+            }
 
             case "Toggle":
                 if (spell.ToggleEffect == "ghost_mode")

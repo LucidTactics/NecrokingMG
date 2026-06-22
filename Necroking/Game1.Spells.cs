@@ -207,6 +207,24 @@ public partial class Game1 {
          _deathFog.AddDensity(target.X, target.Y, spell.BlightAmount);
    }
 
+   /// <summary>Drop the blight where a thrown Blight bomb actually exploded. A Blight
+   /// spell that throws a projectile (a ProjectileFlipbook def) defers its fog change
+   /// to impact — the projectile carries the spell id, so this reads the just-resolved
+   /// projectile impacts (from <see cref="_sim"/>.Tick) and applies the fog at each
+   /// explosion point. Called once per tick right after the sim, before the impacts
+   /// are cleared by the next tick's projectile update.</summary>
+   void ApplyBlightBombImpacts() {
+      var impacts = _sim.Projectiles.Impacts;
+      if (impacts.Count == 0) return;
+      for (int i = 0; i < impacts.Count; i++) {
+         string id = impacts[i].SpellID;
+         if (string.IsNullOrEmpty(id)) continue;
+         var spell = _gameData.Spells.Get(id);
+         if (spell == null || spell.Category != "Blight") continue;
+         ApplyBlightSpell(spell, impacts[i].Position);
+      }
+   }
+
    /// <summary>Remove all casting effect buffs from a unit (buff_4 variants).</summary>
    void RemoveCastingBuffAll(int unitIdx) {
       var buffs = _sim.UnitsMut[unitIdx].ActiveBuffs;
@@ -526,6 +544,14 @@ public partial class Game1 {
 
          // Tag projectile with spell ID for physics knockback lookup on impact
          lastProj.SpellID = spell.Id;
+
+         // Blight bombs must burst exactly where the player clicked, not wherever
+         // the ballistic arc happens to land. Forward the aimed point and flag the
+         // projectile so it detonates on overshoot.
+         if (spell.Category == "Blight") {
+            lastProj.TargetPos = target;
+            lastProj.DetonateAtTarget = true;
+         }
 
          // Apply trajectory type
          var traj = Enum.TryParse<Trajectory>(spell.Trajectory, true, out var t) ? t : Trajectory.Lob;

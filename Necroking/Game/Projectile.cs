@@ -23,6 +23,11 @@ public class Projectile
     public bool NoFriendlyFire = true;
     public bool IsLob;
     public bool Alive = true;
+    /// <summary>Detonate exactly at <see cref="TargetPos"/> (the aimed point) the
+    /// moment the projectile arcs over it, instead of overshooting to wherever its
+    /// ballistic arc reaches the ground. Used by thrown "bomb" spells that must burst
+    /// where you clicked (e.g. the Blight bomb).</summary>
+    public bool DetonateAtTarget;
     public float Age;
     public string SpellID = "";
     public string FlipbookID = "";
@@ -50,6 +55,10 @@ public class ImpactEvent
     public Vec2 Position;
     public ProjectileType Type;
     public float AoeRadius;
+    /// <summary>Spell that fired this projectile, if any (empty for arrows/potions).
+    /// Lets ground-targeted spell effects (e.g. a Blight bomb dropping death-fog)
+    /// fire at the exact spot the projectile exploded, not at cast time.</summary>
+    public string SpellID = "";
     public string HitEffectFlipbookID = "";
     public HdrColor HitEffectColor = new();
     public float HitEffectScale = 1f;
@@ -248,6 +257,23 @@ public class ProjectileManager
                 proj.Position += perp * (currSwirl - prevSwirl);
             }
 
+            // Detonate-at-target: burst exactly at the aimed point once the bomb
+            // crosses its target's horizontal position, rather than overshooting to
+            // wherever the ballistic arc meets the ground (short lobs launched from
+            // staff height otherwise sail well past where you clicked).
+            if (proj.Alive && proj.DetonateAtTarget && proj.Age > FireballArmTime)
+            {
+                var toTarget = proj.TargetPos - proj.Position;
+                if (proj.Velocity.LengthSq() > 1e-4f && toTarget.Dot(proj.Velocity) <= 0f)
+                {
+                    proj.Position = proj.TargetPos;
+                    proj.Height = 0f;
+                    _impacts.Add(new ImpactEvent { Position = proj.Position, Type = proj.Type, AoeRadius = proj.AoeRadius, SpellID = proj.SpellID, HitEffectFlipbookID = proj.HitEffectFlipbookID, HitEffectColor = proj.HitEffectColor, HitEffectScale = proj.HitEffectScale, HitEffectBlendMode = proj.HitEffectBlendMode, HitEffectAlignment = proj.HitEffectAlignment });
+                    proj.Alive = false;
+                    continue;
+                }
+            }
+
             // Fireball in-flight collision
             if (proj.Alive && proj.Type == ProjectileType.Fireball &&
                 proj.Age > FireballArmTime && proj.Height < FireballHitHeight)
@@ -279,7 +305,7 @@ public class ProjectileManager
                         if (hitIdx < 0) continue;
                         _hits.Add(new ProjectileHit { UnitIdx = hitIdx, Damage = proj.Damage, OwnerID = proj.OwnerID, OwnerFaction = proj.OwnerFaction, WeaponName = proj.WeaponName, ProjectileType = proj.Type, SpellID = proj.SpellID, AoeRadius = proj.AoeRadius, ImpactPos = proj.Position });
                     }
-                    _impacts.Add(new ImpactEvent { Position = proj.Position, Type = proj.Type, AoeRadius = proj.AoeRadius, HitEffectFlipbookID = proj.HitEffectFlipbookID, HitEffectColor = proj.HitEffectColor, HitEffectScale = proj.HitEffectScale, HitEffectBlendMode = proj.HitEffectBlendMode, HitEffectAlignment = proj.HitEffectAlignment });
+                    _impacts.Add(new ImpactEvent { Position = proj.Position, Type = proj.Type, AoeRadius = proj.AoeRadius, SpellID = proj.SpellID, HitEffectFlipbookID = proj.HitEffectFlipbookID, HitEffectColor = proj.HitEffectColor, HitEffectScale = proj.HitEffectScale, HitEffectBlendMode = proj.HitEffectBlendMode, HitEffectAlignment = proj.HitEffectAlignment });
                     proj.Alive = false;
                 }
             }
@@ -421,7 +447,7 @@ public class ProjectileManager
                     if (bestIdx >= 0)
                         _hits.Add(new ProjectileHit { UnitIdx = bestIdx, Damage = proj.Damage, OwnerID = proj.OwnerID, OwnerFaction = proj.OwnerFaction, Precision = proj.Precision, WeaponName = proj.WeaponName, ProjectileType = proj.Type, SpellID = proj.SpellID, ImpactPos = proj.Position });
                 }
-                _impacts.Add(new ImpactEvent { Position = proj.Position, Type = proj.Type, AoeRadius = proj.AoeRadius, HitEffectFlipbookID = proj.HitEffectFlipbookID, HitEffectColor = proj.HitEffectColor, HitEffectScale = proj.HitEffectScale, HitEffectBlendMode = proj.HitEffectBlendMode, HitEffectAlignment = proj.HitEffectAlignment });
+                _impacts.Add(new ImpactEvent { Position = proj.Position, Type = proj.Type, AoeRadius = proj.AoeRadius, SpellID = proj.SpellID, HitEffectFlipbookID = proj.HitEffectFlipbookID, HitEffectColor = proj.HitEffectColor, HitEffectScale = proj.HitEffectScale, HitEffectBlendMode = proj.HitEffectBlendMode, HitEffectAlignment = proj.HitEffectAlignment });
                 proj.Alive = false;
             }
 

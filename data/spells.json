@@ -8166,14 +8166,44 @@
       "knockbackRadius": 0,
       "aoeType": "Single",
       "damage": 0,
-      "aoeRadius": 0,
-      "hitEffectFlipbook": null,
+      "aoeRadius": 4,
+      "hitEffectFlipbook": {
+        "flipbookID": "cloud03",
+        "fps": 0,
+        "scale": 1.2,
+        "color": {
+          "r": 179,
+          "g": 79,
+          "b": 255,
+          "a": 255,
+          "intensity": 5.019231
+        },
+        "rotation": 0,
+        "blendMode": "Alpha",
+        "alignment": "Ground",
+        "duration": -1
+      },
       "quantity": 1,
       "trajectory": "Lob",
-      "projectileSpeed": 28.29,
+      "projectileSpeed": 28.3,
       "precisionBonus": 0,
       "projectileDelay": 0,
-      "projectileFlipbook": null,
+      "projectileFlipbook": {
+        "flipbookID": "fire_loop",
+        "fps": 0,
+        "scale": 1.5,
+        "color": {
+          "r": 179,
+          "g": 79,
+          "b": 255,
+          "a": 255,
+          "intensity": 1.4
+        },
+        "rotation": 0,
+        "blendMode": "Alpha",
+        "alignment": "Ground",
+        "duration": -1
+      },
       "buffID": "",
       "friendlyOnly": false,
       "chainQuantity": 1,
@@ -8318,7 +8348,7 @@
       "sacrificeHealPercent": 0,
       "toggleEffect": "",
       "blightMode": "Add",
-      "blightAmount": 100
+      "blightAmount": 25
     },
     {
       "name": "Purifying Bomb",
@@ -8350,7 +8380,7 @@
       "knockbackRadius": 0,
       "aoeType": "Single",
       "damage": 0,
-      "aoeRadius": 0,
+      "aoeRadius": 2,
       "hitEffectFlipbook": null,
       "quantity": 1,
       "trajectory": "Lob",
@@ -8372,40 +8402,40 @@
       "spawnLocation": "AdjacentToCaster",
       "summonFlipbook": null,
       "strikeTargetUnit": false,
-      "strikeVisual": "Lightning",
-      "telegraphDuration": 0.2,
+      "strikeVisual": "GodRay",
+      "telegraphDuration": 0.4,
       "telegraphVisible": true,
-      "strikeDuration": 0.2,
+      "strikeDuration": 1.0,
       "zapDuration": 0.12,
       "strikeChainBranches": 0,
       "strikeChainDepth": 0,
       "strikeChainRange": 8,
       "strikeChainWidthDecay": 0.8,
-      "strikeDisplacement": 0.35,
-      "strikeBranches": 3,
-      "strikeCoreWidth": 2,
-      "strikeGlowWidth": 8,
+      "strikeDisplacement": 0.1,
+      "strikeBranches": 0,
+      "strikeCoreWidth": 1.2,
+      "strikeGlowWidth": 4.5,
       "strikeFlickerMin": 1,
-      "strikeFlickerMax": 1,
-      "strikeFlickerHz": 0,
+      "strikeFlickerMax": 1.2,
+      "strikeFlickerHz": 1,
       "strikeJitterHz": 0,
       "strikeCoreColor": {
         "r": 255,
-        "g": 255,
-        "b": 255,
+        "g": 247,
+        "b": 200,
         "a": 255,
-        "intensity": 4
+        "intensity": 2.590909
       },
       "strikeGlowColor": {
-        "r": 140,
-        "g": 180,
-        "b": 255,
-        "a": 200,
-        "intensity": 2.5
+        "r": 254,
+        "g": 192,
+        "b": 82,
+        "a": 180,
+        "intensity": 2.4545453
       },
-      "godRayEdgeSoftness": 0.4,
-      "godRayNoiseStrength": 0.35,
-      "godRayNoiseSpeed": 1.5,
+      "godRayEdgeSoftness": 0.8,
+      "godRayNoiseStrength": 0.3,
+      "godRayNoiseSpeed": 5,
       "godRayNoiseScale": 3,
       "beamTickRate": 0.25,
       "beamMaxDuration": 0,
@@ -8502,7 +8532,7 @@
       "sacrificeHealPercent": 0,
       "toggleEffect": "",
       "blightMode": "Purify",
-      "blightAmount": 4
+      "blightAmount": 6
     }
   ]
 }
