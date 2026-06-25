@@ -1315,8 +1315,7 @@ public class Simulation
                                 MoveTowardUnit(i, targetIdx, _units[i].MaxSpeed);
                                 // Engage when in range
                                 float dist = (_units[targetIdx].Position - _units[i].Position).Length();
-                                float engageRange = (_gameData?.Settings.Combat.MeleeRange ?? MeleeRangeBase)
-                                    + _units[i].Stats.Length * 0.15f + _units[i].Radius + _units[targetIdx].Radius;
+                                float engageRange = Combat.MeleeRangeUtil.Compute(_units, i, targetIdx, _gameData);
                                 if (dist <= engageRange && _units[i].EngagedTarget.IsNone)
                                     _units[i].EngagedTarget = _units[i].Target;
                             }
@@ -1397,8 +1396,7 @@ public class Simulation
                             MoveTowardUnit(i, targetIdx, _units[i].MaxSpeed);
                             // Auto-engage when in melee range
                             float dist = (_units[targetIdx].Position - _units[i].Position).Length();
-                            float engageRange = (_gameData?.Settings.Combat.MeleeRange ?? MeleeRangeBase)
-                                + _units[i].Stats.Length * 0.15f + _units[i].Radius + _units[targetIdx].Radius;
+                            float engageRange = Combat.MeleeRangeUtil.Compute(_units, i, targetIdx, _gameData);
                             if (dist <= engageRange && _units[i].EngagedTarget.IsNone)
                                 _units[i].EngagedTarget = _units[i].Target;
                         }
@@ -3380,12 +3378,8 @@ public class Simulation
         Vec2 myPos = _units[i].Position;
         Vec2 targetPos = _units[targetIdx].Position;
         float dist = (targetPos - myPos).Length();
-        // Use the same engage range as the combat system. This was hardcoded to
-        // MeleeRangeBase, so it ignored a tuned Settings.Combat.MeleeRange and the
-        // wolf would engage/disengage at a different distance than it attacks the
-        // moment the setting diverges from the base (latent kiting bug).
-        float meleeBase = _gameData?.Settings.Combat.MeleeRange ?? MeleeRangeBase;
-        float attackRange = meleeBase + _units[i].Stats.Length * 0.15f + _units[i].Radius + _units[targetIdx].Radius;
+        // Same engage range as the combat system (Settings-tunable; see MeleeRangeUtil).
+        float attackRange = Combat.MeleeRangeUtil.Compute(_units, i, targetIdx, _gameData);
         float disengageDist = attackRange + 2f; // back off 2 units beyond attack range
         float attackCooldown = _units[i].AttackCooldown;
 

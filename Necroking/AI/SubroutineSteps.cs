@@ -548,10 +548,9 @@ public static class SubroutineSteps
         return ResolveTarget(ref ctx) >= 0;
     }
 
+    // Forwards to the shared MeleeRangeUtil so AI and the combat sim use one formula
+    // and one fallback. NOTE: the null-GameData fallback was 1.5f here vs 0.8f in the
+    // sim — now unified to 0.8f (only affects null-GameData tests; live play is unchanged).
     public static float GetMeleeRange(ref AIContext ctx, int targetIdx)
-    {
-        float baseRange = ctx.GameData?.Settings.Combat.MeleeRange ?? 1.5f;
-        return baseRange + ctx.Units[ctx.UnitIndex].Stats.Length * 0.15f
-            + ctx.Units[ctx.UnitIndex].Radius + ctx.Units[targetIdx].Radius;
-    }
+        => Necroking.GameSystems.Combat.MeleeRangeUtil.Compute(ctx.Units, ctx.UnitIndex, targetIdx, ctx.GameData);
 }
