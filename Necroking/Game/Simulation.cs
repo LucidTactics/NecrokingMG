@@ -613,9 +613,7 @@ public class Simulation
                         GameSystems.SpellPenetration.Compute(_gameData, _units, casterIdx, spellDef));
                 }
                 if (affects)
-                    DamageSystem.Apply(_units, hit.UnitIdx, hit.Damage,
-                        GameSystems.DamageType.Physical, GameSystems.DamageFlags.ArmorNegating,
-                        _damageEvents, casterIdx);
+                    DealDamage(hit.UnitIdx, hit.Damage, casterIdx);
             }
         }
         PhaseEnd("projectiles");
@@ -626,9 +624,7 @@ public class Simulation
         _lightning.Update(dt, lightningDmg, _quadtree, _units);
         foreach (var ld in lightningDmg)
             if (ld.UnitIdx >= 0 && ld.UnitIdx < _units.Count)
-                DamageSystem.Apply(_units, ld.UnitIdx, ld.Damage,
-                    GameSystems.DamageType.Physical, GameSystems.DamageFlags.ArmorNegating,
-                    _damageEvents, UnitUtil.ResolveUnitIndex(_units, ld.OwnerID));
+                DealDamage(ld.UnitIdx, ld.Damage, UnitUtil.ResolveUnitIndex(_units, ld.OwnerID));
         PhaseEnd("lightning");
 
         // Poison clouds
@@ -1143,9 +1139,7 @@ public class Simulation
                                     casterHeight, targetH * 0.5f);
 
                                 // Apply direct damage to target, attributed to the caster.
-                                DamageSystem.Apply(_units, enemy, spell.Damage,
-                                    GameSystems.DamageType.Physical, GameSystems.DamageFlags.ArmorNegating,
-                                    _damageEvents, i);
+                                DealDamage(enemy, spell.Damage, i);
                             }
                             else
                             {
