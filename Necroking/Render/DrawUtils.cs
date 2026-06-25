@@ -36,13 +36,22 @@ public static class DrawUtils
             null, color, angle, Vector2.Zero, SpriteEffects.None, 0);
     }
 
-    /// <summary>Draw a rectangle outline (4 edges, overlapping corners). The single
-    /// canonical rect-stroke — replaces ~13 per-file DrawBorder/DrawRectOutline copies.</summary>
+    /// <summary>Draw a rectangle outline. The single canonical rect-stroke — replaces
+    /// ~13 per-file DrawBorder/DrawRectOutline copies. Corners are non-overlapping (drawn
+    /// once each) so the stroke is correct under a translucent color as well as solid.</summary>
     public static void DrawRectBorder(SpriteBatch batch, Texture2D pixel, Rectangle r, Color color, int thickness = 1)
     {
-        batch.Draw(pixel, new Rectangle(r.X, r.Y, r.Width, thickness), color);                  // top
-        batch.Draw(pixel, new Rectangle(r.X, r.Bottom - thickness, r.Width, thickness), color); // bottom
-        batch.Draw(pixel, new Rectangle(r.X, r.Y, thickness, r.Height), color);                 // left
-        batch.Draw(pixel, new Rectangle(r.Right - thickness, r.Y, thickness, r.Height), color); // right
+        // Top/bottom span the full width; left/right fill only the gap between them, so
+        // each corner pixel is drawn exactly once. (A full-height left/right would
+        // double-draw the corners — invisible at solid alpha, but it darkens them under a
+        // translucent color, e.g. the crafting/building menu borders.)
+        batch.Draw(pixel, new Rectangle(r.X, r.Y, r.Width, thickness), color);                          // top
+        batch.Draw(pixel, new Rectangle(r.X, r.Bottom - thickness, r.Width, thickness), color);         // bottom
+        int midH = r.Height - thickness * 2;
+        if (midH > 0)
+        {
+            batch.Draw(pixel, new Rectangle(r.X, r.Y + thickness, thickness, midH), color);             // left
+            batch.Draw(pixel, new Rectangle(r.Right - thickness, r.Y + thickness, thickness, midH), color); // right
+        }
     }
 }
