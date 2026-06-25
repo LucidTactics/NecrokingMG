@@ -335,7 +335,7 @@ public class GameSettingsData
     {
         try
         {
-            var options = new JsonSerializerOptions { WriteIndented = true };
+            var options = Necroking.Core.JsonDefaults.Indented;
             // Atomic tmp+rename so a crash mid-write can't corrupt settings.json.
             return Core.AtomicFile.WriteAllText(path, JsonSerializer.Serialize(this, options));
         }

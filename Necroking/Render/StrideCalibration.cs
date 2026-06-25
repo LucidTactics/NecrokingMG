@@ -571,7 +571,7 @@ public static class StrideCalibration
                     Run = ToCache(cal.Run),
                 };
             }
-            string json = JsonSerializer.Serialize(file, new JsonSerializerOptions { WriteIndented = true });
+            string json = JsonSerializer.Serialize(file, Necroking.Core.JsonDefaults.Indented);
             string tmp = path + ".tmp";
             File.WriteAllText(tmp, json);
             if (File.Exists(path)) File.Delete(path);

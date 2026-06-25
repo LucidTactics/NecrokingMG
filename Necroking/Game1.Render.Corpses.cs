@@ -494,7 +494,7 @@ public partial class Game1
             foreach (var kv in _persistedCentroids)
                 map[kv.Key] = kv.Value.X.ToString(ci) + "," + kv.Value.Y.ToString(ci);
             var json = System.Text.Json.JsonSerializer.Serialize(map,
-                new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+                Necroking.Core.JsonDefaults.Indented);
             File.WriteAllText(CentroidCachePath, json);
             _centroidsDirty = false;
         }

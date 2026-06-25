@@ -828,7 +828,7 @@ public class UnitRegistry : RegistryBase<UnitDef>
             }
 
             var doc = new Dictionary<string, object> { ["units"] = unitArr };
-            var options = new JsonSerializerOptions { WriteIndented = true };
+            var options = Necroking.Core.JsonDefaults.Indented;
             string json = JsonSerializer.Serialize(doc, options);
             // Atomic tmp+rename — protects against crash mid-write corruption.
             return Core.AtomicFile.WriteAllText(path, json);

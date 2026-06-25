@@ -3429,7 +3429,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
                     ["spellID"] = s.SpellID ?? ""
                 }).Cast<object>().ToList(),
             };
-            var options = new System.Text.Json.JsonSerializerOptions { WriteIndented = true };
+            var options = Necroking.Core.JsonDefaults.Indented;
             string json = System.Text.Json.JsonSerializer.Serialize(doc, options);
             System.IO.Directory.CreateDirectory(GamePaths.Resolve(GamePaths.UserSettingsDir));
             Core.AtomicFile.WriteAllText(GamePaths.Resolve(GamePaths.UserSpellBarJson), json);

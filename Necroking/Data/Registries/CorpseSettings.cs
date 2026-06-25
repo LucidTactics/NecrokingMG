@@ -91,7 +91,7 @@ public class CorpseSettings
     {
         try
         {
-            var options = new JsonSerializerOptions { WriteIndented = true };
+            var options = Necroking.Core.JsonDefaults.Indented;
             return Core.AtomicFile.WriteAllText(path, JsonSerializer.Serialize(this, options));
         }
         catch (Exception ex)
