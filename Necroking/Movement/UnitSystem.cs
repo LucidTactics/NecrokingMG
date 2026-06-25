@@ -383,8 +383,8 @@ public class Unit
     /// flinch is applied; ticked down each frame.</summary>
     public float FlinchRefractoryTimer;
 
-    // Stuck detection for ORCA nudge
-    public int StuckFrames;
+    // Stuck detection for ORCA nudge — seconds spent stuck (dt-accumulated, speed/FPS-invariant)
+    public float StuckTime;
 
     // AI behavior framework (replaces WolfPhase/FleeTimer for new archetypes)
     public byte Archetype;

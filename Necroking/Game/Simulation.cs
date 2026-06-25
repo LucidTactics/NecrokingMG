@@ -1692,8 +1692,8 @@ public class Simulation
             float prefSpeed = _units[i].PreferredVel.Length();
             if (prefSpeed > 0.1f && speed < 0.1f * _units[i].MaxSpeed)
             {
-                _units[i].StuckFrames++;
-                if (_units[i].StuckFrames > 20)
+                _units[i].StuckTime += dt;
+                if (_units[i].StuckTime > 0.33f)
                 {
                     // Compute perpendicular to preferred velocity
                     Vec2 prefDir = _units[i].PreferredVel * (1f / prefSpeed);
@@ -1701,8 +1701,10 @@ public class Simulation
                         ? new Vec2(-prefDir.Y, prefDir.X)
                         : new Vec2(prefDir.Y, -prefDir.X);
 
-                    // Blend ramps from 30% at 1s (frame 60) to 80% at 2s (frame 120)
-                    float t = MathUtil.Clamp((_units[i].StuckFrames - 20) / 100f, 0f, 1f);
+                    // Blend ramps from 30% at ~0.33s stuck to 80% at ~1.9s — timed in seconds
+                    // so it is invariant to game speed / framerate (was a raw per-Tick frame
+                    // count baked at 60fps/x1: ">20 frames" ≈ 0.33s, "100-frame ramp" ≈ 1.6s).
+                    float t = MathUtil.Clamp((_units[i].StuckTime - 0.33f) / 1.6f, 0f, 1f);
                     float blend = 0.3f + t * 0.5f;
 
                     newVel = _units[i].PreferredVel * (1f - blend) + perp * (prefSpeed * blend);
@@ -1711,7 +1713,7 @@ public class Simulation
             }
             else
             {
-                _units[i].StuckFrames = 0;
+                _units[i].StuckTime = 0f;
             }
 
             // --- Newtonian acceleration model ---
@@ -1752,11 +1754,15 @@ public class Simulation
             float fwdComp = deltaVel.X * fwdDir.X + deltaVel.Y * fwdDir.Y;
             float latComp = deltaVel.X * latDir.X + deltaVel.Y * latDir.Y;
 
-            float fwdCap = (fwdComp > 0f ? maxAccel : maxDecel) * dt;
+            // Bound the per-step dt for the accel/turn caps. With the speed-scaled sim dt
+            // (up to ~0.4s at x8) an uncapped cap*dt budget can exceed the unit's entire
+            // velocity in one step → instant 180° snap-turns/reversals. Clamp to one frame.
+            float capDt = MathF.Min(dt, 1f / 20f);
+            float fwdCap = (fwdComp > 0f ? maxAccel : maxDecel) * capDt;
             if (fwdComp > 0f) fwdComp = MathF.Min(fwdComp, fwdCap);
             else fwdComp = MathF.Max(fwdComp, -fwdCap);
 
-            float latCap = maxLateral * dt;
+            float latCap = maxLateral * capDt;
             if (latComp > latCap) latComp = latCap;
             else if (latComp < -latCap) latComp = -latCap;
 
@@ -1857,7 +1863,10 @@ public class Simulation
                 {
                     float dist = MathF.Sqrt(bestDist2);
                     float pushSpeed = _units[i].MaxSpeed * 3f;
-                    float step = pushSpeed * dt;
+                    // Cap the escape shove at ~1 tile/frame: with the speed-scaled dt the
+                    // raw MaxSpeed*3*dt push can reach ~9.6 tiles at x8, teleporting the unit
+                    // through thin walls to the "nearest free tile" on the far side.
+                    float step = MathF.Min(pushSpeed * dt, 1f);
                     if (dist <= step || dist < 0.1f)
                     {
                         oldPos = bestPos;
@@ -1900,7 +1909,7 @@ public class Simulation
                 if (bestPenDist2 > 0f)
                 {
                     float pushSpeed = _units[i].MaxSpeed * 3f;
-                    float step = pushSpeed * dt;
+                    float step = MathF.Min(pushSpeed * dt, 1f); // cap at ~1 tile/frame (see grid escape)
                     oldPos = new Vec2(oldPos.X + pushDir.X * step, oldPos.Y + pushDir.Y * step);
                     _units[i].Position = oldPos;
                 }
@@ -2006,7 +2015,15 @@ public class Simulation
                 }
             }
 
-            _units[i].Position = newPos;
+            // Clamp to world bounds: knockback / ORCA / stuck-escape / dev-move can push a
+            // unit off the map, and off-map positions corrupt the quadtree (corner-leaf
+            // pruning drops them from queries) and WorldToGrid (negative indices). IsBlocked
+            // treats out-of-bounds tiles as walkable, so nothing else stops it.
+            float wMax = _grid.Width * GameConstants.TileSize - 1e-3f;
+            float hMax = _grid.Height * GameConstants.TileSize - 1e-3f;
+            _units[i].Position = new Vec2(
+                MathUtil.Clamp(newPos.X, 0f, wMax),
+                MathUtil.Clamp(newPos.Y, 0f, hMax));
         }
     }
 

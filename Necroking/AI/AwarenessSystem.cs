@@ -57,13 +57,19 @@ public static class AwarenessSystem
             {
                 case (byte)UnitAlertState.Unaware:
                 {
-                    // Amortize the Unaware scan when enabled — that scan is the
-                    // expensive part (per-unit QueryRadius + filter). An enemy
-                    // entering detection range gets noticed within `interval`
-                    // frames instead of instantly; at 60 FPS with interval=6
-                    // that's 100ms of latency, fine for ambient detection.
-                    if (amortInterval > 1 && ((frameNumber + i) % amortInterval) != 0)
-                        break;
+                    // Amortize the Unaware scan when enabled — that scan is the expensive
+                    // part (per-unit QueryRadius + filter). Gate on dt-accumulated WALL TIME
+                    // (reusing the idle AlertTimer), NOT a sim-frame modulo: frame count is
+                    // decoupled from dt, so at high timeScale a frame spans more seconds and
+                    // detection latency balloons (~800ms at x8). interval/60 keeps the
+                    // documented ~100ms-at-interval-6 latency invariant to game speed / FPS.
+                    if (amortInterval > 1)
+                    {
+                        units[i].AlertTimer += dt;
+                        if (units[i].AlertTimer < amortInterval / 60f)
+                            break;
+                        units[i].AlertTimer = 0f;
+                    }
 
                     // Scan for threats via quadtree — only cross-faction units
                     // come back thanks to faction-aware filtering, so the inner
