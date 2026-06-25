@@ -653,10 +653,7 @@ public class StrideDebugScenario : ScenarioBase
 
     private void DrawBorder(SpriteBatch batch, Rectangle r, Color c, int thickness)
     {
-        FillRect(batch, new Rectangle(r.X, r.Y, r.Width, thickness), c);
-        FillRect(batch, new Rectangle(r.X, r.Y + r.Height - thickness, r.Width, thickness), c);
-        FillRect(batch, new Rectangle(r.X, r.Y, thickness, r.Height), c);
-        FillRect(batch, new Rectangle(r.X + r.Width - thickness, r.Y, thickness, r.Height), c);
+        Necroking.Render.DrawUtils.DrawRectBorder(batch, PixelTexture, r, c, thickness);
     }
 
     private void DrawVLine(SpriteBatch batch, int x, int yTop, int yBot, Color c, int thickness)

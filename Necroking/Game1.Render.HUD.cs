@@ -137,10 +137,7 @@ public partial class Game1
 
     private void DrawToastBorder(Rectangle r, Color c)
     {
-        _spriteBatch.Draw(_pixel, new Rectangle(r.X, r.Y, r.Width, 1), c);
-        _spriteBatch.Draw(_pixel, new Rectangle(r.X, r.Bottom - 1, r.Width, 1), c);
-        _spriteBatch.Draw(_pixel, new Rectangle(r.X, r.Y, 1, r.Height), c);
-        _spriteBatch.Draw(_pixel, new Rectangle(r.Right - 1, r.Y, 1, r.Height), c);
+        Necroking.Render.DrawUtils.DrawRectBorder(_spriteBatch, _pixel, r, c);
     }
 
     private void DrawTextRounded(SpriteFont f, string text, Vector2 pos, Color color)

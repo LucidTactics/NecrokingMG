@@ -35,4 +35,14 @@ public static class DrawUtils
         batch.Draw(pixel, new Rectangle((int)a.X, (int)a.Y, (int)len, 1),
             null, color, angle, Vector2.Zero, SpriteEffects.None, 0);
     }
+
+    /// <summary>Draw a rectangle outline (4 edges, overlapping corners). The single
+    /// canonical rect-stroke — replaces ~13 per-file DrawBorder/DrawRectOutline copies.</summary>
+    public static void DrawRectBorder(SpriteBatch batch, Texture2D pixel, Rectangle r, Color color, int thickness = 1)
+    {
+        batch.Draw(pixel, new Rectangle(r.X, r.Y, r.Width, thickness), color);                  // top
+        batch.Draw(pixel, new Rectangle(r.X, r.Bottom - thickness, r.Width, thickness), color); // bottom
+        batch.Draw(pixel, new Rectangle(r.X, r.Y, thickness, r.Height), color);                 // left
+        batch.Draw(pixel, new Rectangle(r.Right - thickness, r.Y, thickness, r.Height), color); // right
+    }
 }

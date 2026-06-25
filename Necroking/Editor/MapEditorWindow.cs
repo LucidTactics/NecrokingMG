@@ -5357,10 +5357,7 @@ public class MapEditorWindow
 
     private void DrawRectBorder(int x, int y, int w, int h, Color color)
     {
-        _spriteBatch.Draw(_pixel, new Rectangle(x, y, w, 1), color);
-        _spriteBatch.Draw(_pixel, new Rectangle(x, y + h - 1, w, 1), color);
-        _spriteBatch.Draw(_pixel, new Rectangle(x, y, 1, h), color);
-        _spriteBatch.Draw(_pixel, new Rectangle(x + w - 1, y, 1, h), color);
+        Necroking.Render.DrawUtils.DrawRectBorder(_spriteBatch, _pixel, new Rectangle(x, y, w, h), color);
     }
 
     private void DrawLine(Vector2 a, Vector2 b, Color color)

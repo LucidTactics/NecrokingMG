@@ -576,10 +576,7 @@ public class TableCraftMenuUI : Necroking.UI.IModalLayer
 
     private void DrawBorder(Rectangle r, Color c, int t = 1)
     {
-        _batch.Draw(_pixel, new Rectangle(r.X, r.Y, r.Width, t), c);
-        _batch.Draw(_pixel, new Rectangle(r.X, r.Y + r.Height - t, r.Width, t), c);
-        _batch.Draw(_pixel, new Rectangle(r.X, r.Y + t, t, r.Height - t * 2), c);
-        _batch.Draw(_pixel, new Rectangle(r.X + r.Width - t, r.Y + t, t, r.Height - t * 2), c);
+        Necroking.Render.DrawUtils.DrawRectBorder(_batch, _pixel, r, c, t);
     }
 
     /// <summary>Mouse-over-menu test (callers use to suppress world clicks).</summary>

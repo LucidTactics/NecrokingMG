@@ -735,10 +735,7 @@ public class CharacterStatsUI : Necroking.UI.IModalLayer
 
     private void DrawBorder(int x, int y, int w, int h, Color c)
     {
-        _batch.Draw(_pixel, new Rectangle(x, y, w, 2), c);
-        _batch.Draw(_pixel, new Rectangle(x, y + h - 2, w, 2), c);
-        _batch.Draw(_pixel, new Rectangle(x, y, 2, h), c);
-        _batch.Draw(_pixel, new Rectangle(x + w - 2, y, 2, h), c);
+        Necroking.Render.DrawUtils.DrawRectBorder(_batch, _pixel, new Rectangle(x, y, w, h), c, 2);
     }
 
     private void DrawLearnPanel(int px, int py, SpriteFont rowFont, InputState input,

@@ -883,10 +883,7 @@ public partial class Game1
     /// <summary>Draw a 1px outline rectangle.</summary>
     private void DrawRectOutline(Rectangle r, Color c)
     {
-        _spriteBatch.Draw(_pixel, new Rectangle(r.X, r.Y, r.Width, 1), c);
-        _spriteBatch.Draw(_pixel, new Rectangle(r.X, r.Y + r.Height - 1, r.Width, 1), c);
-        _spriteBatch.Draw(_pixel, new Rectangle(r.X, r.Y, 1, r.Height), c);
-        _spriteBatch.Draw(_pixel, new Rectangle(r.X + r.Width - 1, r.Y, 1, r.Height), c);
+        Necroking.Render.DrawUtils.DrawRectBorder(_spriteBatch, _pixel, r, c);
     }
 
     /// <summary>Screen-space AABB of a sprite frame drawn at <paramref name="sp"/>

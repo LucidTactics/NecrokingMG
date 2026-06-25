@@ -1117,10 +1117,7 @@ public class ColorPickerPopup : Necroking.UI.IModalLayer
 
     private void DrawBorder(Rectangle rect, Color color, int thickness = 1)
     {
-        DrawRect(new Rectangle(rect.X, rect.Y, rect.Width, thickness), color);
-        DrawRect(new Rectangle(rect.X, rect.Y + rect.Height - thickness, rect.Width, thickness), color);
-        DrawRect(new Rectangle(rect.X, rect.Y, thickness, rect.Height), color);
-        DrawRect(new Rectangle(rect.X + rect.Width - thickness, rect.Y, thickness, rect.Height), color);
+        Necroking.Render.DrawUtils.DrawRectBorder(_sb, _pixel, rect, color, thickness);
     }
 
     private void DrawText(string text, Vector2 pos, Color color, SpriteFont? font = null)
