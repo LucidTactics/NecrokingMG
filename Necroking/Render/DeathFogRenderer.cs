@@ -126,12 +126,7 @@ internal class DeathFogRenderer
 
             var screenPos = _renderer.WorldToScreen(new Vec2(wx, wy), 0f, _camera);
 
-            float a = MathHelper.Clamp(alpha, 0f, 1f);
-            var color = new Color(
-                (byte)(FogTint.R * a),
-                (byte)(FogTint.G * a),
-                (byte)(FogTint.B * a),
-                (byte)(255 * a));
+            var color = ColorUtils.Premultiply(FogTint.R, FogTint.G, FogTint.B, alpha);
 
             int puffIdx = _visiblePuffs.Count;
             _visiblePuffs.Add(new PuffData

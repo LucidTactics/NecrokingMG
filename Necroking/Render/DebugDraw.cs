@@ -341,8 +341,7 @@ public class DebugDraw
     {
         if (_pixel == null)
         {
-            _pixel = new Texture2D(device, 1, 1);
-            _pixel.SetData(new[] { Color.White });
+            _pixel = TextureUtil.GetWhitePixel(device);
         }
     }
 

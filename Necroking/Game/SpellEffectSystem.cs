@@ -105,12 +105,7 @@ public class SpellEffectSystem
 
             case "Buff":
             case "Debuff":
-                if (!string.IsNullOrEmpty(spell.BuffID))
-                {
-                    var buffDef = gameData.Buffs.Get(spell.BuffID);
-                    if (buffDef != null)
-                        BuffSystem.ApplyBuff(units, casterIdx, buffDef);
-                }
+                BuffSystem.ApplyBuffById(units, casterIdx, gameData.Buffs, spell.BuffID);
                 break;
 
             case "Strike":

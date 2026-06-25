@@ -173,9 +173,12 @@ public partial class Game1 {
    /// Spawn the visual summon flipbook effect at a given position.
    /// </summary>
    void SpawnCastEffect(SpellDef spell, Vec2 pos) {
-      if (spell.CastFlipbook == null || string.IsNullOrEmpty(spell.CastFlipbook.FlipbookID)) return;
+      SpawnFlipbookEffect(spell.CastFlipbook, pos);
+   }
 
-      var fb = spell.CastFlipbook;
+   private void SpawnFlipbookEffect(FlipbookRef? fb, Vec2 pos) {
+      if (fb == null || string.IsNullOrEmpty(fb.FlipbookID)) return;
+
       var tint = fb.Color.ToColor();
       int blendMode = fb.BlendMode == "Additive" ? 1 : 0;
       int alignment = fb.Alignment == "Upright" ? 1 : 0;
@@ -249,16 +252,7 @@ public partial class Game1 {
    }
 
    void SpawnSummonEffect(SpellDef spell, Vec2 pos) {
-      if (spell.SummonFlipbook == null || string.IsNullOrEmpty(spell.SummonFlipbook.FlipbookID)) return;
-
-      var fb = spell.SummonFlipbook;
-      var tint = fb.Color.ToColor();
-      int blendMode = fb.BlendMode == "Additive" ? 1 : 0;
-      int alignment = fb.Alignment == "Upright" ? 1 : 0;
-      float duration = fb.Duration >= 0f ? fb.Duration : 0.4f;
-
-      _effectManager.SpawnSpellImpact(pos, fb.Scale, tint, fb.FlipbookID,
-         fb.Color.Intensity, blendMode, alignment, duration);
+      SpawnFlipbookEffect(spell.SummonFlipbook, pos);
    }
 
    /// <summary>Cast a potion-spell: drink it (self, cursor near the necromancer)

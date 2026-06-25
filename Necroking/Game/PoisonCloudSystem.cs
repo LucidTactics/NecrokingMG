@@ -209,7 +209,7 @@ public class PoisonCloudSystem
         {
             if (corpses[i].Dissolving || corpses[i].ConsumedBySummon) continue;
             if (corpses[i].DraggedByUnitID != GameConstants.InvalidUnit) continue;
-            float d = (corpses[i].Position - cloud.Position).LengthSq();
+            float d = Vec2.DistSq(corpses[i].Position, cloud.Position);
             if (d < bestDist) { bestDist = d; bestIdx = i; }
         }
 
@@ -276,23 +276,15 @@ public class PoisonCloudSystem
             }
 
             // Apply slow debuff
-            if (buffs != null && !string.IsNullOrEmpty(cloud.SlowBuffID))
-            {
-                var slowDef = buffs.Get(cloud.SlowBuffID);
-                if (slowDef != null)
-                    BuffSystem.ApplyBuff(units, idx, slowDef);
-            }
+            if (buffs != null)
+                BuffSystem.ApplyBuffById(units, idx, buffs, cloud.SlowBuffID);
 
             // Track cloud exposure for plague
             units[idx].CloudExposureTime += cloud.TickInterval;
             if (units[idx].CloudExposureTime >= cloud.PlagueThreshold)
             {
-                if (buffs != null && !string.IsNullOrEmpty(cloud.PlaguedBuffID))
-                {
-                    var plagueDef = buffs.Get(cloud.PlaguedBuffID);
-                    if (plagueDef != null)
-                        BuffSystem.ApplyBuff(units, idx, plagueDef);
-                }
+                if (buffs != null)
+                    BuffSystem.ApplyBuffById(units, idx, buffs, cloud.PlaguedBuffID);
             }
         }
     }

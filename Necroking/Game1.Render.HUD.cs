@@ -325,9 +325,7 @@ public partial class Game1
         // Unit slots and connections
         foreach (var unit in horde.HordeUnits)
         {
-            int unitIdx = -1;
-            for (int j = 0; j < _sim.Units.Count; j++)
-                if (_sim.Units[j].Id == unit.UnitID) { unitIdx = j; break; }
+            int unitIdx = _sim.ResolveUnitID(unit.UnitID);
             if (unitIdx < 0 || !_sim.Units[unitIdx].Alive) continue;
 
             var unitPos = _sim.Units[unitIdx].Position;
@@ -403,9 +401,7 @@ public partial class Game1
             var target = _sim.Units[i].Target;
             if (target.IsUnit)
             {
-                int tIdx = -1;
-                for (int j = 0; j < _sim.Units.Count; j++)
-                    if (_sim.Units[j].Id == target.UnitID) { tIdx = j; break; }
+                int tIdx = _sim.ResolveUnitID(target.UnitID);
                 if (tIdx >= 0 && _sim.Units[tIdx].Alive)
                 {
                     var tSp = _camera.WorldToScreen(_sim.Units[tIdx].Position, 0f, screenW, screenH);
@@ -594,8 +590,7 @@ public partial class Game1
         int boxY = screenH - 8 - boxH;      // bottom-adjusted: anchor to the bottom edge
 
         // Translucent backing so the text reads over any terrain.
-        _spriteBatch.Draw(_pixel, new Rectangle(boxX, boxY, boxW, boxH), new Color(12, 14, 18, 205));
-        _spriteBatch.Draw(_pixel, new Rectangle(boxX, boxY, boxW, 2), new Color(70, 110, 150));
+        DrawPanel(new Rectangle(boxX, boxY, boxW, boxH), new Color(12, 14, 18, 205), new Color(70, 110, 150));
 
         int ty = boxY + pad;
         foreach (var (text, color) in lines)
@@ -756,8 +751,7 @@ public partial class Game1
         tx = Math.Clamp(tx, 4, Math.Max(4, screenW - w - 4));
         if (ty < 4) ty = bar.Bottom + 6; // flip below if it would clip off the top
 
-        _spriteBatch.Draw(_pixel, new Rectangle(tx, ty, w, h), new Color(20, 16, 12, 235));
-        _spriteBatch.Draw(_pixel, new Rectangle(tx, ty, w, 2), new Color(120, 95, 60));
+        DrawPanel(new Rectangle(tx, ty, w, h), new Color(20, 16, 12, 235), new Color(120, 95, 60));
         int cy = ty + pad;
         DrawText(_smallFont, title, new Vector2(tx + pad, cy), new Color(255, 210, 130));
         cy += lineH;
@@ -778,8 +772,7 @@ public partial class Game1
         int boxH = 60 + btnCount * (btnH2 + btnGap2) + 10 + controlLines * 16 + 20;
         int boxX = (screenW - boxW) / 2;
         int boxY = (screenH - boxH) / 2;
-        _spriteBatch.Draw(_pixel, new Rectangle(boxX, boxY, boxW, boxH), new Color(30, 30, 50, 235));
-        _spriteBatch.Draw(_pixel, new Rectangle(boxX, boxY, boxW, 3), new Color(100, 100, 180));
+        DrawPanel(new Rectangle(boxX, boxY, boxW, boxH), new Color(30, 30, 50, 235), new Color(100, 100, 180), 3);
 
         if (_largeFont != null)
         {
@@ -821,24 +814,7 @@ public partial class Game1
 
     private void DrawMainMenu(int screenW, int screenH)
     {
-        // Background image (scaled to fill, centered)
-        if (_mainMenuBg != null)
-        {
-            float bgScale = MathF.Max((float)screenW / _mainMenuBg.Width,
-                                      (float)screenH / _mainMenuBg.Height);
-            float bgW = _mainMenuBg.Width * bgScale;
-            float bgH = _mainMenuBg.Height * bgScale;
-            _spriteBatch.Draw(_mainMenuBg,
-                new Rectangle((int)((screenW - bgW) * 0.5f), (int)((screenH - bgH) * 0.5f),
-                              (int)bgW, (int)bgH),
-                Color.White);
-        }
-        else
-        {
-            _spriteBatch.Draw(_pixel, new Rectangle(0, 0, screenW, screenH), new Color(20, 15, 30));
-        }
-        // Dark overlay for contrast
-        _spriteBatch.Draw(_pixel, new Rectangle(0, 0, screenW, screenH), new Color(0, 0, 0, 120));
+        DrawMenuBackdrop(screenW, screenH);
 
         // Title
         if (_largeFont != null)
@@ -871,24 +847,7 @@ public partial class Game1
 
     private void DrawScenarioList(int screenW, int screenH)
     {
-        // Same background as main menu
-        if (_mainMenuBg != null)
-        {
-            float bgScale = MathF.Max((float)screenW / _mainMenuBg.Width,
-                                      (float)screenH / _mainMenuBg.Height);
-            float bgW = _mainMenuBg.Width * bgScale;
-            float bgH = _mainMenuBg.Height * bgScale;
-            _spriteBatch.Draw(_mainMenuBg,
-                new Rectangle((int)((screenW - bgW) * 0.5f), (int)((screenH - bgH) * 0.5f),
-                              (int)bgW, (int)bgH),
-                Color.White);
-        }
-        else
-        {
-            _spriteBatch.Draw(_pixel, new Rectangle(0, 0, screenW, screenH), new Color(20, 15, 30));
-        }
-        // Dark overlay for contrast
-        _spriteBatch.Draw(_pixel, new Rectangle(0, 0, screenW, screenH), new Color(0, 0, 0, 120));
+        DrawMenuBackdrop(screenW, screenH);
 
         // Title
         if (_largeFont != null)
@@ -1015,5 +974,41 @@ public partial class Game1
     {
         if (font != null)
             _spriteBatch.DrawString(font, text, pos, color, 0f, Vector2.Zero, scale, SpriteEffects.None, 0f);
+    }
+
+    /// <summary>Draw a filled panel (rectangle) with an optional accent bar at the top (or bottom).
+    /// Used for HUD tooltips, pause menu box, and menu buttons.
+    /// The accent bar is drawn on top of the fill at the specified height (default 2px).</summary>
+    private void DrawPanel(Rectangle r, Color fill, Color accent, int accentH = 2, bool bottomAccent = false)
+    {
+        _spriteBatch.Draw(_pixel, r, fill);
+        if (bottomAccent)
+            _spriteBatch.Draw(_pixel, new Rectangle(r.X, r.Bottom - accentH, r.Width, accentH), accent);
+        else
+            _spriteBatch.Draw(_pixel, new Rectangle(r.X, r.Y, r.Width, accentH), accent);
+    }
+
+    /// <summary>Draw the menu background: cover-scale bg image (or fallback fill) + dark overlay for contrast.
+    /// Called by DrawMainMenu and DrawScenarioList as their first statement.</summary>
+    private void DrawMenuBackdrop(int screenW, int screenH)
+    {
+        // Background image (scaled to fill, centered)
+        if (_mainMenuBg != null)
+        {
+            float bgScale = MathF.Max((float)screenW / _mainMenuBg.Width,
+                                      (float)screenH / _mainMenuBg.Height);
+            float bgW = _mainMenuBg.Width * bgScale;
+            float bgH = _mainMenuBg.Height * bgScale;
+            _spriteBatch.Draw(_mainMenuBg,
+                new Rectangle((int)((screenW - bgW) * 0.5f), (int)((screenH - bgH) * 0.5f),
+                              (int)bgW, (int)bgH),
+                Color.White);
+        }
+        else
+        {
+            _spriteBatch.Draw(_pixel, new Rectangle(0, 0, screenW, screenH), new Color(20, 15, 30));
+        }
+        // Dark overlay for contrast
+        _spriteBatch.Draw(_pixel, new Rectangle(0, 0, screenW, screenH), new Color(0, 0, 0, 120));
     }
 }

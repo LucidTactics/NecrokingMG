@@ -1753,8 +1753,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     protected override void LoadContent()
     {
         _spriteBatch = new SpriteBatch(GraphicsDevice);
-        _pixel = new Texture2D(GraphicsDevice, 1, 1);
-        _pixel.SetData(new[] { Color.White });
+        _pixel = TextureUtil.GetWhitePixel(GraphicsDevice);
         _buffVisuals.SetPixel(_pixel);
 
         // Create radial glow texture (64x64 with smooth quadratic falloff)
@@ -2609,8 +2608,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
                     && !mu[necroIdx].Incap.IsLocked && !_pendingSpell.Active;
                 if (canJump)
                 {
-                    float facingRad = mu[necroIdx].FacingAngle * MathF.PI / 180f;
-                    var facingDir = new Vec2(MathF.Cos(facingRad), MathF.Sin(facingRad));
+                    var facingDir = Movement.FacingUtil.ForwardDir(mu[necroIdx]);
                     JumpSystem.BeginJumpAttack(mu, necroIdx, mu[necroIdx].Position + facingDir * 4f);
                 }
             }

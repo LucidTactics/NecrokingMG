@@ -71,33 +71,14 @@ public class CorpseSettings
 
     public bool Load(string path)
     {
-        if (!File.Exists(path)) return false;
-        try
-        {
-            string json = File.ReadAllText(path);
-            var loaded = JsonSerializer.Deserialize<CorpseSettings>(json);
-            if (loaded == null) return false;
-            Pivots = loaded.Pivots ?? new List<CorpseAnglePivot>();
-            return true;
-        }
-        catch (Exception ex)
-        {
-            Core.DebugLog.Log("error", $"Failed to load corpse settings {path}: {ex.Message}");
-            return false;
-        }
+        if (!Core.JsonFile.Load<CorpseSettings>(path, null, out var loaded)) return false;
+        if (loaded == null) return false;
+        Pivots = loaded.Pivots ?? new List<CorpseAnglePivot>();
+        return true;
     }
 
     public bool Save(string path)
     {
-        try
-        {
-            var options = Necroking.Core.JsonDefaults.Indented;
-            return Core.AtomicFile.WriteAllText(path, JsonSerializer.Serialize(this, options));
-        }
-        catch (Exception ex)
-        {
-            Core.DebugLog.Log("error", $"Failed to save corpse settings {path}: {ex.Message}");
-            return false;
-        }
+        return Core.JsonFile.Save(path, this, Core.JsonDefaults.Indented);
     }
 }

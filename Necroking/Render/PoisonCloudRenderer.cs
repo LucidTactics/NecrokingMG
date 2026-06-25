@@ -70,8 +70,7 @@ internal class PoisonCloudRenderer
     /// </summary>
     private static Color PremultipliedColor(int r, int g, int b, float alpha)
     {
-        alpha = MathHelper.Clamp(alpha, 0f, 1f);
-        return new Color(r, g, b) * alpha;
+        return ColorUtils.Premultiply(r, g, b, alpha);
     }
 
     /// <summary>

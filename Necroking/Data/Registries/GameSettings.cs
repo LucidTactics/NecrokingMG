@@ -305,40 +305,28 @@ public class GameSettingsData
 
     public bool Load(string path)
     {
-        if (!File.Exists(path)) return false;
-        try
-        {
-            string json = File.ReadAllText(path);
-            var loaded = JsonSerializer.Deserialize<GameSettingsData>(json);
-            if (loaded == null) return false;
-            Bloom = loaded.Bloom;
-            Grass = loaded.Grass;
-            Weather = loaded.Weather;
-            DayNight = loaded.DayNight;
-            General = loaded.General;
-            Shadow = loaded.Shadow;
-            Horde = loaded.Horde;
-            Combat = loaded.Combat;
-            FogOfWar = loaded.FogOfWar;
-            Performance = loaded.Performance;
-            // Corruption defaults if missing from older settings.json files.
-            Corruption = loaded.Corruption ?? new CorruptionSettings();
-            // Tooltips defaults if missing from older settings.json files.
-            Tooltips = loaded.Tooltips ?? new TooltipsSettings();
-            StartingInventory = loaded.StartingInventory;
-            return true;
-        }
-        catch (Exception ex) { Core.DebugLog.Log("error", $"Failed to load settings {path}: {ex.Message}"); return false; }
+        if (!Core.JsonFile.Load<GameSettingsData>(path, null, out var loaded)) return false;
+        if (loaded == null) return false;
+        Bloom = loaded.Bloom;
+        Grass = loaded.Grass;
+        Weather = loaded.Weather;
+        DayNight = loaded.DayNight;
+        General = loaded.General;
+        Shadow = loaded.Shadow;
+        Horde = loaded.Horde;
+        Combat = loaded.Combat;
+        FogOfWar = loaded.FogOfWar;
+        Performance = loaded.Performance;
+        // Corruption defaults if missing from older settings.json files.
+        Corruption = loaded.Corruption ?? new CorruptionSettings();
+        // Tooltips defaults if missing from older settings.json files.
+        Tooltips = loaded.Tooltips ?? new TooltipsSettings();
+        StartingInventory = loaded.StartingInventory;
+        return true;
     }
 
     public bool Save(string path)
     {
-        try
-        {
-            var options = Necroking.Core.JsonDefaults.Indented;
-            // Atomic tmp+rename so a crash mid-write can't corrupt settings.json.
-            return Core.AtomicFile.WriteAllText(path, JsonSerializer.Serialize(this, options));
-        }
-        catch (Exception ex) { Core.DebugLog.Log("error", $"Failed to save settings {path}: {ex.Message}"); return false; }
+        return Core.JsonFile.Save(path, this, Core.JsonDefaults.Indented);
     }
 }

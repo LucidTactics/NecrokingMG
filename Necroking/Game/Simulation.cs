@@ -88,7 +88,6 @@ public struct SoulOrb
 
 public class Simulation
 {
-    private const float MeleeRangeBase = 0.8f;
     private const float CombatTickInterval = 2.0f;
     private const float Rad2Deg = 57.29577951f;
 
@@ -172,17 +171,8 @@ public class Simulation
     public Corpse? SpawnCorpseFromUnit(int unitIdx)
     {
         if (unitIdx < 0 || unitIdx >= _units.Count) return null;
-        var corpse = new Corpse
-        {
-            Position = _units[unitIdx].Position,
-            UnitType = _units[unitIdx].Type,
-            UnitDefID = _units[unitIdx].UnitDefID,
-            FacingAngle = _units[unitIdx].FacingAngle,
-            SpriteScale = _units[unitIdx].SpriteScale,
-            CorpseID = _nextCorpseID++,
-            PreSettled = true, // appear already-dead, don't replay the death anim
-        };
-        _corpses.Add(corpse);
+        var corpse = MakeCorpseFromUnit(unitIdx);
+        corpse.PreSettled = true; // appear already-dead, don't replay the death anim
         RemoveUnitTracked(unitIdx); // remove + repair _necromancerIdx across the swap-pop
         return corpse;
     }
@@ -195,6 +185,26 @@ public class Simulation
         _units.RemoveUnit(idx);
         if (_necromancerIdx == idx) _necromancerIdx = -1;
         else if (_necromancerIdx == _units.Count) _necromancerIdx = idx;
+    }
+
+    /// <summary>Create a corpse from a live unit at index idx, copying identity/transform fields
+    /// and assigning a CorpseID. The corpse is added to _corpses and returned; callers may
+    /// apply additional fields (PreSettled, InPhysics, physics state, etc.) before the unit
+    /// is removed. This helper is shared between SpawnCorpseFromUnit (editor) and
+    /// RemoveDeadUnits (death) paths.</summary>
+    private Corpse MakeCorpseFromUnit(int idx)
+    {
+        var corpse = new Corpse
+        {
+            Position = _units[idx].Position,
+            UnitType = _units[idx].Type,
+            UnitDefID = _units[idx].UnitDefID,
+            FacingAngle = _units[idx].FacingAngle,
+            SpriteScale = _units[idx].SpriteScale,
+            CorpseID = _nextCorpseID++,
+        };
+        _corpses.Add(corpse);
+        return corpse;
     }
     public IReadOnlyList<DamageEvent> DamageEvents => _damageEvents;
     public List<DamageEvent> DamageEventsMut => _damageEvents;
@@ -2165,7 +2175,6 @@ public class Simulation
     // --- Combat ---
     private void UpdateCombat(float dt)
     {
-        float meleeRange = _gameData?.Settings.Combat.MeleeRange ?? MeleeRangeBase;
         float roundDuration = _gameData?.Settings.Combat.RoundDuration ?? 3.0f;
 
         // Tick down post-attack timers
@@ -2216,7 +2225,7 @@ public class Simulation
                 continue;
             }
             float dist = (_units[ti].Position - _units[i].Position).Length();
-            float range = meleeRange + _units[i].Stats.Length * 0.15f + _units[i].Radius + _units[ti].Radius;
+            float range = Combat.MeleeRangeUtil.Compute(_units, i, ti, _gameData);
             if (dist <= range)
                 _units[i].InCombat = true;
 
@@ -3499,8 +3508,7 @@ public class Simulation
     /// <summary>Check if the target is facing away from us by more than angleDeg degrees.</summary>
     private bool IsTargetFacingAway(int unitIdx, int targetIdx, float angleDeg)
     {
-        float targetFacing = _units[targetIdx].FacingAngle * MathF.PI / 180f;
-        Vec2 targetFacingDir = new Vec2(MathF.Cos(targetFacing), MathF.Sin(targetFacing));
+        Vec2 targetFacingDir = Movement.FacingUtil.ForwardDir(_units[targetIdx]);
         Vec2 toUs = _units[unitIdx].Position - _units[targetIdx].Position;
         if (toUs.LengthSq() < 0.01f) return false;
         toUs = toUs.Normalized();
@@ -3674,29 +3682,21 @@ public class Simulation
                     _physics.TryGetBodyTuning(i, out corpseGravityMul, out corpseDragMul);
                 }
 
-                _corpses.Add(new Corpse
-                {
-                    Position = _units[i].Position,
-                    UnitType = _units[i].Type,
-                    UnitDefID = _units[i].UnitDefID,
-                    FacingAngle = _units[i].FacingAngle,
-                    // The dead-body sprite inherits the unit's scale (so a big bear
-                    // dies as a big bear visual). The body BAG renders at a uniform
-                    // size in DrawBaggedCorpse* paths (independent of corpse.SpriteScale)
-                    // — that's where the "all bags same size" invariant lives.
-                    SpriteScale = _units[i].SpriteScale,
-                    CorpseID = _nextCorpseID++,
-                    // Mark corpse as consumed so it dissolves while the zombie rises
-                    Dissolving = zombieRaise,
-                    ConsumedBySummon = zombieRaise,
-                    // Continue physics arc if unit was mid-flight
-                    InPhysics = wasInPhysics,
-                    Z = _units[i].Z,
-                    VelocityXY = corpseVelXY,
-                    VelocityZ = corpseVelZ,
-                    GravityMul = corpseGravityMul,
-                    DragMul = corpseDragMul,
-                });
+                var corpse = MakeCorpseFromUnit(i);
+                // The dead-body sprite inherits the unit's scale (so a big bear
+                // dies as a big bear visual). The body BAG renders at a uniform
+                // size in DrawBaggedCorpse* paths (independent of corpse.SpriteScale)
+                // — that's where the "all bags same size" invariant lives.
+                // Mark corpse as consumed so it dissolves while the zombie rises
+                corpse.Dissolving = zombieRaise;
+                corpse.ConsumedBySummon = zombieRaise;
+                // Continue physics arc if unit was mid-flight
+                corpse.InPhysics = wasInPhysics;
+                corpse.Z = _units[i].Z;
+                corpse.VelocityXY = corpseVelXY;
+                corpse.VelocityZ = corpseVelZ;
+                corpse.GravityMul = corpseGravityMul;
+                corpse.DragMul = corpseDragMul;
                 // Clean up the physics body now that the corpse has captured its
                 // velocity — physics tick keeps bodies alive on death so the
                 // velocity can be read here, but we must remove it before the

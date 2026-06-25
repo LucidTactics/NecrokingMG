@@ -21,7 +21,7 @@ public class TriggerRegion
     public bool ContainsPoint(Vec2 p) => Shape switch
     {
         RegionShape.Rectangle => p.X >= X - HalfW && p.X <= X + HalfW && p.Y >= Y - HalfH && p.Y <= Y + HalfH,
-        RegionShape.Circle => (p - new Vec2(X, Y)).LengthSq() <= Radius * Radius,
+        RegionShape.Circle => Vec2.WithinRange(p, new Vec2(X, Y), Radius),
         _ => false
     };
 }

@@ -66,8 +66,7 @@ public static class LungeSystem
             curve = 1f - Smoothstep(u);
         }
 
-        float facingRad = unit.FacingAngle * MathF.PI / 180f;
-        var dir = new Vec2(MathF.Cos(facingRad), MathF.Sin(facingRad));
+        var dir = Movement.FacingUtil.ForwardDir(unit);
         unit.RenderOffset = dir * (curve * unit.CurrentAttackLungeDist);
     }
 

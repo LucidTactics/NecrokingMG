@@ -68,8 +68,7 @@ public class RuntimeWidgetRenderer
         _batch = batch;
         _fontMgr = fontMgr;
 
-        _pixel = new Texture2D(device, 1, 1);
-        _pixel.SetData(new[] { Color.White });
+        _pixel = TextureUtil.GetWhitePixel(device);
     }
 
     /// <summary>Load UI definitions from the same JSON files the editor uses.</summary>

@@ -330,20 +330,12 @@ public class GrassTuftRenderer
 
     private static Color TintWithAmbient(Color amb, float brightness)
     {
-        return new Color(
-            (byte)Math.Clamp((int)(amb.R * brightness), 0, 255),
-            (byte)Math.Clamp((int)(amb.G * brightness), 0, 255),
-            (byte)Math.Clamp((int)(amb.B * brightness), 0, 255),
-            (byte)255);
+        return ColorUtils.Scale(amb, brightness, 255);
     }
 
     private static Color MultiplyColors(Color a, Color b)
     {
-        return new Color(
-            (byte)((a.R * b.R) / 255),
-            (byte)((a.G * b.G) / 255),
-            (byte)((a.B * b.B) / 255),
-            (byte)((a.A * b.A) / 255));
+        return ColorUtils.Multiply(a, b);
     }
 
     // Same hash as the old GrassRenderer — keeps tuft placement stable if we

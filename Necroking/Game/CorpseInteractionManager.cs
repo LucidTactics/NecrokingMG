@@ -25,8 +25,7 @@ public static class CorpseInteractionManager
             var cc = sim.FindCorpseByID(nu.CarryingCorpseID);
             if (cc != null)
             {
-                float fRad = nu.FacingAngle * MathF.PI / 180f;
-                cc.LerpStartPos = nu.Position + new Vec2(MathF.Cos(fRad), MathF.Sin(fRad)) * 0.8f;
+                cc.LerpStartPos = nu.Position + Movement.FacingUtil.ForwardDir(nu) * 0.8f;
             }
             sim.UnitsMut[necroIdx].CorpseInteractPhase = 5; // PutDown
             return;

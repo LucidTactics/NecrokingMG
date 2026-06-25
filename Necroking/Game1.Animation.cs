@@ -519,8 +519,7 @@ public partial class Game1
                 }
 
                 // Reverse walk playback
-                float facingRad2 = _sim.Units[i].FacingAngle * MathF.PI / 180f;
-                var facingDir2 = new Vec2(MathF.Cos(facingRad2), MathF.Sin(facingRad2));
+                var facingDir2 = Movement.FacingUtil.ForwardDir(_sim.Units[i]);
                 var vel2 = _sim.Units[i].Velocity;
                 bool backward2 = vel2.LengthSq() > 0.1f && vel2.Normalized().Dot(facingDir2) < -0.3f;
                 animData.Ctrl.SetReversePlayback(backward2);
@@ -637,8 +636,7 @@ public partial class Game1
             }
 
             // Reverse walk playback
-            float facingRad = _sim.Units[i].FacingAngle * MathF.PI / 180f;
-            var facingDir = new Vec2(MathF.Cos(facingRad), MathF.Sin(facingRad));
+            var facingDir = Movement.FacingUtil.ForwardDir(_sim.Units[i]);
             var vel = _sim.Units[i].Velocity;
             bool movingBackward = vel.LengthSq() > 0.1f && vel.Normalized().Dot(facingDir) < -0.3f;
             animData.Ctrl.SetReversePlayback(movingBackward);
@@ -864,10 +862,9 @@ public partial class Game1
             if (!foundWeaponTip)
             {
                 // Fallback: offset in facing direction. Use RenderPos so spawn follows lunge.
-                float facingRad = _sim.Units[i].FacingAngle * MathF.PI / 180f;
                 float radius = _sim.Units[i].Radius;
                 mu[i].EffectSpawnPos2D = _sim.Units[i].RenderPos
-                    + new Vec2(MathF.Cos(facingRad), MathF.Sin(facingRad)) * radius * 1.5f;
+                    + Movement.FacingUtil.ForwardDir(_sim.Units[i]) * radius * 1.5f;
                 mu[i].EffectSpawnHeight = 0.6f;
             }
         }

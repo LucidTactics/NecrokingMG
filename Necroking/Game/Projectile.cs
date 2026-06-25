@@ -357,7 +357,7 @@ public class ProjectileManager
                     if (nid == proj.OwnerID) continue;
                     int hitIdx = UnitUtil.ResolveUnitIndex(units, nid);
                     if (hitIdx < 0) continue;
-                    float d = (units[hitIdx].Position - proj.Position).LengthSq();
+                    float d = Vec2.DistSq(units[hitIdx].Position, proj.Position);
                     if (d < bestUnitDist) { bestUnitDist = d; bestUnitIdx = hitIdx; }
                 }
 
@@ -441,7 +441,7 @@ public class ProjectileManager
                         if (nid == proj.OwnerID) continue;
                         int idx = UnitUtil.ResolveUnitIndex(units, nid);
                         if (idx < 0) continue;
-                        float d = (units[idx].Position - proj.Position).LengthSq();
+                        float d = Vec2.DistSq(units[idx].Position, proj.Position);
                         if (d < bestDist) { bestDist = d; bestIdx = idx; }
                     }
                     if (bestIdx >= 0)

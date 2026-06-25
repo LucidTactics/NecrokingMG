@@ -401,7 +401,7 @@ public class DeerHerdHandler : IArchetypeHandler
         for (int j = 0; j < ctx.Units.Count; j++)
         {
             if (!ctx.Units[j].Alive || ctx.Units[j].Faction == myFaction) continue;
-            if ((ctx.Units[j].Position - ctx.MyPos).LengthSq() < 15f * 15f)
+            if (Vec2.WithinRange(ctx.Units[j].Position, ctx.MyPos, 15f))
                 threatCount++;
         }
         return threatCount <= 1;
@@ -591,8 +591,7 @@ public class DeerHerdHandler : IArchetypeHandler
         {
             // No visible threat but still in minimum flee time (e.g. poison damage) —
             // keep running in current facing direction
-            float fRad = ctx.Units[ctx.UnitIndex].FacingAngle * MathF.PI / 180f;
-            Vec2 fleeDir = new Vec2(MathF.Cos(fRad), MathF.Sin(fRad));
+            Vec2 fleeDir = Movement.FacingUtil.ForwardDir(ctx.Units[ctx.UnitIndex]);
             Vec2 fleeDest = ctx.MyPos + fleeDir * FleeDistance;
             SubroutineSteps.MoveToward(ref ctx, fleeDest, ctx.MyMaxSpeed);
         }

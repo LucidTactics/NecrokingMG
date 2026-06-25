@@ -43,7 +43,7 @@ public static class SubroutineSteps
     {
         int targetIdx = ResolveTarget(ref ctx);
         if (targetIdx < 0) return false;
-        return (ctx.Units[targetIdx].Position - ctx.MyPos).LengthSq() <= range * range;
+        return Vec2.WithinRange(ctx.Units[targetIdx].Position, ctx.MyPos, range);
     }
 
     /// <summary>Pathfind toward MoveTarget position.</summary>
@@ -54,7 +54,7 @@ public static class SubroutineSteps
 
     public static bool MoveToPosition_Arrived(ref AIContext ctx, float threshold = 1f)
     {
-        return (ctx.Units[ctx.UnitIndex].MoveTarget - ctx.MyPos).LengthSq() <= threshold * threshold;
+        return Vec2.WithinRange(ctx.Units[ctx.UnitIndex].MoveTarget, ctx.MyPos, threshold);
     }
 
     /// <summary>Back away from alert target to maintain distance.</summary>

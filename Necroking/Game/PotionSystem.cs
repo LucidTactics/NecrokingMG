@@ -133,12 +133,7 @@ public static class PotionSystem
                 break;
             default:
                 // Generic buff application
-                if (!string.IsNullOrEmpty(potion.BuffID) && hitUnitIdx >= 0)
-                {
-                    var buffDef = buffs.Get(potion.BuffID);
-                    if (buffDef != null)
-                        BuffSystem.ApplyBuff(units, hitUnitIdx, buffDef);
-                }
+                BuffSystem.ApplyBuffById(units, hitUnitIdx, buffs, potion.BuffID);
                 break;
         }
     }
@@ -148,23 +143,19 @@ public static class PotionSystem
         if (unitIdx < 0 || unitIdx >= units.Count) return;
 
         // Apply frenzy buff (permanent)
-        if (!string.IsNullOrEmpty(potion.BuffID))
+        var buffDef = BuffSystem.ApplyBuffById(units, unitIdx, buffs, potion.BuffID);
+        if (buffDef != null)
         {
-            var buffDef = buffs.Get(potion.BuffID);
-            if (buffDef != null)
+            // Mark the buff as permanent
+            var activeBuffs = units[unitIdx].ActiveBuffs;
+            for (int i = 0; i < activeBuffs.Count; i++)
             {
-                BuffSystem.ApplyBuff(units, unitIdx, buffDef);
-                // Mark the buff as permanent
-                var activeBuffs = units[unitIdx].ActiveBuffs;
-                for (int i = 0; i < activeBuffs.Count; i++)
+                if (activeBuffs[i].BuffDefID == buffDef.Id)
                 {
-                    if (activeBuffs[i].BuffDefID == buffDef.Id)
-                    {
-                        var b = activeBuffs[i];
-                        b.Permanent = true;
-                        activeBuffs[i] = b;
-                        break;
-                    }
+                    var b = activeBuffs[i];
+                    b.Permanent = true;
+                    activeBuffs[i] = b;
+                    break;
                 }
             }
         }
@@ -176,12 +167,7 @@ public static class PotionSystem
     private static void ApplyParalysis(PotionDef potion, BuffRegistry buffs, int unitIdx, UnitArrays units)
     {
         ApplyParalysis(unitIdx, units);
-        if (!string.IsNullOrEmpty(potion.BuffID))
-        {
-            var buffDef = buffs.Get(potion.BuffID);
-            if (buffDef != null)
-                BuffSystem.ApplyBuff(units, unitIdx, buffDef);
-        }
+        BuffSystem.ApplyBuffById(units, unitIdx, buffs, potion.BuffID);
     }
 
     /// <summary>
@@ -255,13 +241,7 @@ public static class PotionSystem
             // Friendly: coat weapons with poison
             units[unitIdx].WeaponPoisonCoatTimer = 300f; // 5 minutes
             units[unitIdx].WeaponPoisonAmount = 5;
-
-            if (!string.IsNullOrEmpty(potion.BuffID))
-            {
-                var buffDef = buffs.Get(potion.BuffID);
-                if (buffDef != null)
-                    BuffSystem.ApplyBuff(units, unitIdx, buffDef);
-            }
+            BuffSystem.ApplyBuffById(units, unitIdx, buffs, potion.BuffID);
         }
         else
         {
@@ -269,13 +249,7 @@ public static class PotionSystem
             var dmgEvents = damageEvents ?? new List<DamageEvent>();
             DamageSystem.Apply(units, unitIdx, 10,
                 DamageType.Poison, DamageFlags.ArmorNegating, dmgEvents);
-
-            if (!string.IsNullOrEmpty(potion.BuffID))
-            {
-                var buffDef = buffs.Get(potion.BuffID);
-                if (buffDef != null)
-                    BuffSystem.ApplyBuff(units, unitIdx, buffDef);
-            }
+            BuffSystem.ApplyBuffById(units, unitIdx, buffs, potion.BuffID);
         }
     }
 

@@ -4,6 +4,7 @@ using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Graphics.PackedVector;
 using Necroking.Core;
 using Necroking.GameSystems;
+using Necroking.Render;
 
 namespace Necroking.Scenario.Scenarios;
 
@@ -55,8 +56,7 @@ public class BlendTestScenario : ScenarioBase
             0, RenderTargetUsage.PreserveContents);
 
         // 1x1 white texture
-        var white = new Texture2D(Device!, 1, 1);
-        white.SetData(new[] { Color.White });
+        var white = TextureUtil.GetWhitePixel(Device!);
         var fullRect = new Rectangle(0, 0, sz, sz);
 
         DebugLog.Log(ScenarioLog, "");
@@ -255,7 +255,7 @@ public class BlendTestScenario : ScenarioBase
         Device.SetRenderTarget(rt);
         // rt still has (0.6, 0.6, 0.6, 1.0) — draw white additively to bump alpha
         Batch!.Begin(SpriteSortMode.Immediate, BlendState.Additive, SamplerState.PointClamp);
-        Batch.Draw(new Texture2D(Device, 1, 1) { }, rect, new Color(0, 0, 0, 255));
+        Batch.Draw(TextureUtil.GetWhitePixel(Device), rect, new Color(0, 0, 0, 255));
         Batch.End();
 
         // Hmm, that won't work cleanly. Let me just read what alpha ended up in rt2
@@ -355,8 +355,7 @@ public class BlendTestScenario : ScenarioBase
         // This is the exact bloom upsample operation with HDR source textures.
         Device!.SetRenderTarget(rt);
         Device.Clear(new Color(0, 0, 0, 0));
-        var white = new Texture2D(Device, 1, 1);
-        white.SetData(new[] { Color.White });
+        var white = TextureUtil.GetWhitePixel(Device);
         // Build up R=2.0 (4 * 0.502 ≈ 2.008)
         for (int i = 0; i < 4; i++)
         {
@@ -418,8 +417,7 @@ public class BlendTestScenario : ScenarioBase
             SurfaceFormat.HalfVector4, DepthFormat.None, 0, RenderTargetUsage.PreserveContents);
 
         // Create a 1x1 bright pixel texture (HDR white)
-        var brightPixel = new Texture2D(Device!, 1, 1);
-        brightPixel.SetData(new[] { Color.White });
+        var brightPixel = TextureUtil.GetWhitePixel(Device!);
 
         // Step 1: Clear mip0 to black, draw a single bright pixel at center
         Device!.SetRenderTarget(mip0);

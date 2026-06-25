@@ -494,7 +494,7 @@ public class HordeSystem
                     float bestDist2 = float.MaxValue;
                     foreach (int e in enemiesInCircle)
                     {
-                        float d2 = (units[e].Position - units[unitIdx].Position).LengthSq();
+                        float d2 = Vec2.DistSq(units[e].Position, units[unitIdx].Position);
                         if (d2 < bestDist2) { bestDist2 = d2; bestEnemy = e; }
                     }
 

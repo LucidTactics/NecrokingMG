@@ -220,4 +220,24 @@ public static class TextureUtil
 
         texture.SetData(data);
     }
+
+    /// <summary>
+    /// Get or create a cached 1x1 white texture. Subsequent calls with the same
+    /// GraphicsDevice return the cached instance (lazy, device-keyed). If the device
+    /// is disposed, the cache is invalidated.
+    /// </summary>
+    private static readonly System.Collections.Generic.Dictionary<GraphicsDevice, Texture2D> _whitePixelCache = new();
+
+    public static Texture2D GetWhitePixel(GraphicsDevice device)
+    {
+        if (_whitePixelCache.TryGetValue(device, out var cached))
+        {
+            if (!cached.IsDisposed) return cached;
+            _whitePixelCache.Remove(device);
+        }
+        var white = new Texture2D(device, 1, 1);
+        white.SetData(new[] { Color.White });
+        _whitePixelCache[device] = white;
+        return white;
+    }
 }

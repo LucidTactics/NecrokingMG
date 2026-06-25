@@ -14,6 +14,20 @@ public static class BuffSystem
         => ApplyBuffWithDuration(units, unitIdx, def, def.Duration, gameData);
 
     /// <summary>
+    /// Apply a buff by ID with null-guard and registry lookup. Returns the resolved BuffDef
+    /// if successfully applied, or null if the buffId is empty or not found. Returns null
+    /// for invalid unit indices. The returned def is useful for callers that need to examine
+    /// buff properties (e.g., ApplyFrenzy needs to mark the buff as Permanent).
+    /// </summary>
+    public static BuffDef? ApplyBuffById(UnitArrays units, int unitIdx, BuffRegistry buffs, string? buffId)
+    {
+        if (string.IsNullOrEmpty(buffId)) return null;
+        var def = buffs.Get(buffId);
+        if (def != null) ApplyBuff(units, unitIdx, def);
+        return def;
+    }
+
+    /// <summary>
     /// Apply a buff with an override duration (instead of the def's default).
     /// Used where duration is computed at runtime — e.g. knockdown-on-hit, where
     /// duration comes from the STR/Size/DRN roll difference.
