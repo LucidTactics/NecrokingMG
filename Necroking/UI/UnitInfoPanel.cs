@@ -41,11 +41,15 @@ public class UnitInfoPanel : IModalLayer
 
     private RuntimeWidgetRenderer _renderer = null!;
     private GameData? _gameData;
-    private int _unitIndex = -1;
+    private int _unitIndex = -1;        // resolved from _unitId each Draw — transient
+    private uint _unitId = Core.GameConstants.InvalidUnit; // stable identity of the pinned unit
     private int _panelX, _panelY, _panelH;
 
     public bool IsVisible { get; private set; }
     public int UnitIndex => _unitIndex;
+    /// <summary>Stable id of the pinned unit (InvalidUnit when none) — survives the
+    /// swap-and-pop reindexing that a raw array index would not.</summary>
+    public uint UnitId => _unitId;
     /// <summary>True when the panel is a cursor-driven auto-hover view (not pinned
     /// via 'U'/'O'). Transient views are NOT pushed onto the popup stack, so they
     /// don't claim MouseOverUI — otherwise the hover logic that owns them could
@@ -63,10 +67,10 @@ public class UnitInfoPanel : IModalLayer
 
     /// <summary>Pin a unit's sheet (manual 'U'/'O' inspect). Registered as a popup
     /// so ESC/click routing and MouseOverUI behave like other panels.</summary>
-    public void ShowForUnit(int unitIndex)
+    public void ShowForUnit(uint unitId)
     {
-        if (IsVisible && _unitIndex == unitIndex) { Hide(); return; }
-        _unitIndex = unitIndex;
+        if (IsVisible && _unitId == unitId) { Hide(); return; }
+        _unitId = unitId;
         IsTransient = false;
         IsVisible = true;
         if (!_pushed) { Game1.Popups.Push(this); _pushed = true; }
@@ -74,9 +78,9 @@ public class UnitInfoPanel : IModalLayer
 
     /// <summary>Show a unit's sheet as a transient cursor-driven view (auto-hover).
     /// Deliberately not pushed to the popup stack — see <see cref="IsTransient"/>.</summary>
-    public void ShowForUnitTransient(int unitIndex)
+    public void ShowForUnitTransient(uint unitId)
     {
-        _unitIndex = unitIndex;
+        _unitId = unitId;
         IsVisible = true;
         IsTransient = true;
     }
@@ -86,6 +90,7 @@ public class UnitInfoPanel : IModalLayer
         if (!IsVisible) return;
         IsVisible = false;
         IsTransient = false;
+        _unitId = Core.GameConstants.InvalidUnit;
         _unitIndex = -1;
         if (_pushed) { Game1.Popups.Pop(this); _pushed = false; }
         OnClosed?.Invoke();
@@ -101,7 +106,11 @@ public class UnitInfoPanel : IModalLayer
     public void Draw(int screenW, int screenH, Simulation sim)
     {
         if (!IsVisible) return;
-        if (_unitIndex < 0 || _unitIndex >= sim.Units.Count || !sim.Units[_unitIndex].Alive)
+        // Resolve the stable unit id to a CURRENT array index every frame. sim.Units is
+        // swap-and-pop compacted on death, so a stored index would silently rebind to a
+        // different unit; ResolveUnitID returns -1 once the pinned unit is gone.
+        _unitIndex = sim.ResolveUnitID(_unitId);
+        if (_unitIndex < 0 || !sim.Units[_unitIndex].Alive)
         {
             Hide();
             return;

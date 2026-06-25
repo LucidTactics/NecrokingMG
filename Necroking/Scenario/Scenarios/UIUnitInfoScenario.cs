@@ -87,7 +87,7 @@ public class UIUnitInfoScenario : ScenarioBase
                 _panel.Init(WidgetRenderer, sim.GameData);
                 _panel.DrawUnitIconCallback = DrawUnitSprite == null ? null
                     : (defId, rect) => DrawUnitSprite(defId, rect);
-                _panel.ShowForUnit(_soldierIdx);
+                _panel.ShowForUnit(sim.Units[_soldierIdx].Id);
                 DebugLog.Log(ScenarioLog, "panel created, showing soldier");
             }
             _panel.Draw(screenW, screenH, sim);
@@ -105,7 +105,7 @@ public class UIUnitInfoScenario : ScenarioBase
         else if (_phase == 1 && DeferredScreenshot == null)
         {
             DebugLog.Log(ScenarioLog, "soldier shot taken, switching to skeleton");
-            _panel!.ShowForUnit(_skeletonIdx);
+            _panel!.ShowForUnit(sim.Units[_skeletonIdx].Id);
             DeferredScreenshot = "ui_unitinfo_skeleton";
             _phase = 2;
         }
@@ -113,7 +113,7 @@ public class UIUnitInfoScenario : ScenarioBase
         {
             // Back to soldier; settle one beat so its panel lays out before we
             // probe cell rects (DebugCellCenter reads the last drawn layout).
-            _panel!.ShowForUnit(_soldierIdx);
+            _panel!.ShowForUnit(sim.Units[_soldierIdx].Id);
             _elapsed = 0f;
             _phase = 3;
         }
@@ -157,7 +157,7 @@ public class UIUnitInfoScenario : ScenarioBase
         else if (_phase == 9 && DeferredScreenshot == null)
         {
             // Switch to the necromancer to show magic paths; settle a beat.
-            _panel!.ShowForUnit(_necroIdx);
+            _panel!.ShowForUnit(sim.Units[_necroIdx].Id);
             _panel!.DebugMouseOverride = null;
             _elapsed = 0f;
             _phase = 10;

@@ -189,7 +189,7 @@ public partial class Game1 {
    /// Execute a spell's effect (projectile, buff, strike, etc.). Called either immediately
    /// (no casting buff) or at the Spell1 animation action moment (deferred cast).
    /// </summary>
-   void ExecuteSpellEffect(SpellDef spell, int necroIdx, Vec2 target, int slot) {
+   void ExecuteSpellEffect(SpellDef spell, int necroIdx, Vec2 target, int slot, bool isSecondary = false) {
       // Cast flipbook effect at caster position
       SpawnCastEffect(spell, _sim.Units[necroIdx].EffectSpawnPos2D);
 
@@ -201,8 +201,10 @@ public partial class Game1 {
          ApplyBlightSpell);
 
       // Apply side effects that SpellEffectSystem can't own (Game1 state)
-      if (result.ChannelingSlot >= 0)
+      if (result.ChannelingSlot >= 0) {
          _channelingSlot = result.ChannelingSlot;
+         _channelingIsSecondary = isSecondary;
+      }
       if (result.PendingProjectile.HasValue)
          _pendingProjectiles.Add(result.PendingProjectile.Value);
    }
@@ -396,7 +398,7 @@ public partial class Game1 {
          }
       } else {
          // No casting buff → execute immediately (legacy behavior).
-         ExecuteSpellEffect(spell, necroIdx, mouseWorld, slot);
+         ExecuteSpellEffect(spell, necroIdx, mouseWorld, slot, isSecondary);
       }
 
       return CastResult.Success;

@@ -267,6 +267,9 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     private int _spellDropdownSlot = -1;
     private int _secondaryDropdownSlot = -1;
     private int _channelingSlot = -1;
+    // Which bar the channeling slot belongs to. The hold key differs by bar (primary
+    // Q/E/LMB/RMB vs secondary D1..D6), so the slot index alone can't identify the input.
+    private bool _channelingIsSecondary;
     private readonly Dictionary<string, Texture2D?> _itemTextureCache = new();
     private int _hoveredObjectIdx = -1;
     private int _hoveredCorpseIdx = -1;
@@ -2275,7 +2278,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             if (_unitInfoPanel.IsVisible)
                 _unitInfoPanel.Hide();
             else if (_sim.NecromancerIndex >= 0)
-                _unitInfoPanel.ShowForUnit(_sim.NecromancerIndex);
+                _unitInfoPanel.ShowForUnit(_sim.Units[_sim.NecromancerIndex].Id);
         }
 
         // 'O' = inspect the unit under the cursor (press-to-inspect mode; may
@@ -2307,7 +2310,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
                 }
                 if (best >= 0)
                 {
-                    _unitInfoPanel.ShowForUnit(best);
+                    _unitInfoPanel.ShowForUnit(_sim.Units[best].Id);
                     if (tipCfg.PauseOnManualInspect && !_paused) { _paused = true; _pausedByInspect = true; }
                 }
             }
@@ -2615,14 +2618,24 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             // --- Beam/drain channel-hold ---
             if (_channelingSlot >= 0)
             {
-                bool stillHeld = _channelingSlot switch
+                bool stillHeld;
+                if (_channelingIsSecondary)
                 {
-                    0 => _input.IsKeyDown(Keys.Q),
-                    1 => _input.IsKeyDown(Keys.E),
-                    2 => _input.LeftDown,
-                    3 => _input.RightDown,
-                    _ => false
-                };
+                    // Secondary bar slots 0..5 are held with number keys D1..D6.
+                    stillHeld = _channelingSlot >= 0 && _channelingSlot <= 5
+                        && _input.IsKeyDown((Keys)((int)Keys.D1 + _channelingSlot));
+                }
+                else
+                {
+                    stillHeld = _channelingSlot switch
+                    {
+                        0 => _input.IsKeyDown(Keys.Q),
+                        1 => _input.IsKeyDown(Keys.E),
+                        2 => _input.LeftDown,
+                        3 => _input.RightDown,
+                        _ => false
+                    };
+                }
                 if (!stillHeld)
                 {
                     if (necroIdx >= 0)
@@ -2968,8 +2981,9 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
                 }
                 else if (hoveredUnit >= 0)
                 {
-                    if (_unitInfoPanel.UnitIndex != hoveredUnit)
-                        _unitInfoPanel.ShowForUnitTransient(hoveredUnit);
+                    uint hoveredId = _sim.Units[hoveredUnit].Id;
+                    if (_unitInfoPanel.UnitId != hoveredId)
+                        _unitInfoPanel.ShowForUnitTransient(hoveredId);
                 }
                 else if (_unitInfoPanel.IsVisible && !overUI)
                 {

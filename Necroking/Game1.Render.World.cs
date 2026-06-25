@@ -346,7 +346,7 @@ public partial class Game1
                 _spriteBatch.Draw(_pixel, sp, null, new Color(160, 140, 100),
                     angle, new Vector2(-2f, 1.5f), new Vector2(4f, 3f), SpriteEffects.None, 0f);
             }
-            else if (proj.Type == ProjectileType.Potion && !string.IsNullOrEmpty(proj.IconTexturePath))
+            else if (proj.Type == ProjectileType.Potion)
             {
                 // Potion bottle tumbling through the air
                 var tex = GetItemTextureByPath(proj.IconTexturePath);
@@ -370,8 +370,9 @@ public partial class Game1
             }
             else
             {
-                // Clean out later.
-                throw new Exception($"Missing ProjectileType: {proj.Type}");
+                // Unknown projectile type — never throw from the draw loop (that would take
+                // down all rendering); log and skip drawing this one.
+                Necroking.Core.DebugLog.Log("render", $"DrawProjectiles: unhandled ProjectileType {proj.Type} — skipped");
             }
         }
     }

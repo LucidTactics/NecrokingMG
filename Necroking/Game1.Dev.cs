@@ -1039,7 +1039,7 @@ public partial class Game1 {
          case "unit_info":
             if (action == "close") _unitInfoPanel.Hide();
             else if (_unitInfoPanel.IsVisible && action == "toggle") _unitInfoPanel.Hide();
-            else if (_sim.NecromancerIndex >= 0) _unitInfoPanel.ShowForUnit(_sim.NecromancerIndex);
+            else if (_sim.NecromancerIndex >= 0) _unitInfoPanel.ShowForUnit(_sim.Units[_sim.NecromancerIndex].Id);
             else return "character_sheet: no necromancer to show";
             return $"character_sheet visible={_unitInfoPanel.IsVisible}";
 
