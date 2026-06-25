@@ -72,4 +72,16 @@ public static class FacingUtil
         if (def?.TurnSpeed.HasValue == true) return def.TurnSpeed.Value;
         return global;
     }
+
+    /// <summary>Unit direction vector for a FacingAngle in DEGREES (the engine's facing
+    /// convention). Replaces scattered open-coded `new Vec2(Cos(a*PI/180), Sin(a*PI/180))`
+    /// — and the one site that forgot the deg-&gt;rad multiply entirely.</summary>
+    public static Vec2 AngleToDir(float deg)
+    {
+        float rad = deg * (System.MathF.PI / 180f);
+        return new Vec2(System.MathF.Cos(rad), System.MathF.Sin(rad));
+    }
+
+    /// <summary>The direction the unit is currently facing (FacingAngle is in degrees).</summary>
+    public static Vec2 ForwardDir(Unit unit) => AngleToDir(unit.FacingAngle);
 }

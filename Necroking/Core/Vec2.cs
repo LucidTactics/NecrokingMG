@@ -34,6 +34,14 @@ public struct Vec2
     public static Vec2 Lerp(Vec2 a, Vec2 b, float t) =>
         new(a.X + (b.X - a.X) * t, a.Y + (b.Y - a.Y) * t);
 
+    /// <summary>Squared distance between two points (no sqrt). Use in nearest-tracking loops.</summary>
+    public static float DistSq(Vec2 a, Vec2 b) => (a - b).LengthSq();
+    /// <summary>Distance between two points.</summary>
+    public static float Dist(Vec2 a, Vec2 b) => MathF.Sqrt(DistSq(a, b));
+    /// <summary>True if a and b are within `range` of each other — centralizes the
+    /// error-prone "remember to square the range" idiom (DistSq &lt;= range*range).</summary>
+    public static bool WithinRange(Vec2 a, Vec2 b, float range) => DistSq(a, b) <= range * range;
+
     public override string ToString() => $"({X:F2}, {Y:F2})";
 }
 

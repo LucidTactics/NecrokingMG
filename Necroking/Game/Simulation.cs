@@ -980,7 +980,7 @@ public class Simulation
                     {
                         if (j == i || !_units[j].Alive || _units[j].Faction != _units[i].Faction) continue;
                         if (_units[j].AI != AIBehavior.AttackNecromancer) continue;
-                        float d = (_units[j].Position - _units[i].Position).LengthSq();
+                        float d = Vec2.DistSq(_units[j].Position, _units[i].Position);
                         if (d < bestGuardDist) { bestGuardDist = d; guardTarget = j; }
                     }
                     if (guardTarget >= 0 && MathF.Sqrt(bestGuardDist) > 3f)
@@ -1267,9 +1267,10 @@ public class Simulation
                         }
                         else
                         {
-                            // No attacker found (e.g. poison damage) — flee using current facing
-                            float angle = _units[i].FacingAngle;
-                            Vec2 fleeDest = _units[i].Position + new Vec2(MathF.Cos(angle), MathF.Sin(angle)) * 15f;
+                            // No attacker found (e.g. poison damage) — flee along current facing.
+                            // FacingAngle is DEGREES; AngleToDir applies the deg->rad conversion the
+                            // old inline `new Vec2(Cos(angle), Sin(angle))` was missing (flee-dir bug).
+                            Vec2 fleeDest = _units[i].Position + Movement.FacingUtil.AngleToDir(_units[i].FacingAngle) * 15f;
                             MoveTowardPosition(i, fleeDest, _units[i].MaxSpeed);
                         }
                     }
