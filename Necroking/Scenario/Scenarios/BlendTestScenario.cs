@@ -97,7 +97,7 @@ public class BlendTestScenario : ScenarioBase
 
         rt.Dispose();
         rt2.Dispose();
-        white.Dispose();
+        // white is the shared TextureUtil.GetWhitePixel cache — not disposed.
 
         DebugLog.Log(ScenarioLog, "");
         DebugLog.Log(ScenarioLog, "--- Test 10: Pixel bleed (downsample + upsample) ---");
@@ -399,8 +399,7 @@ public class BlendTestScenario : ScenarioBase
             LogCheck(false, $"HDR alpha CLAMPED to 1.0! (R={dstPx.X:F4} ≈ {expectedIfClamped:F4})");
         else
             LogCheck(false, $"Unexpected R={dstPx.X:F4}");
-
-        white.Dispose();
+        // white is the shared TextureUtil.GetWhitePixel cache — not disposed.
     }
 
     private void TestPixelBleed()
@@ -486,7 +485,7 @@ public class BlendTestScenario : ScenarioBase
         mip0.Dispose();
         mip1.Dispose();
         mip2.Dispose();
-        brightPixel.Dispose();
+        // brightPixel is the shared TextureUtil.GetWhitePixel cache — not disposed.
     }
 
     private void DumpRT(RenderTarget2D rt, string label)

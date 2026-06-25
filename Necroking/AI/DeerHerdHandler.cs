@@ -401,7 +401,7 @@ public class DeerHerdHandler : IArchetypeHandler
         for (int j = 0; j < ctx.Units.Count; j++)
         {
             if (!ctx.Units[j].Alive || ctx.Units[j].Faction == myFaction) continue;
-            if (Vec2.WithinRange(ctx.Units[j].Position, ctx.MyPos, 15f))
+            if (Vec2.DistSq(ctx.Units[j].Position, ctx.MyPos) < 15f * 15f) // strict < (WithinRange is <=)
                 threatCount++;
         }
         return threatCount <= 1;

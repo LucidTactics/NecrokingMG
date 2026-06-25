@@ -3758,7 +3758,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     protected override void UnloadContent()
     {
         _widgetRenderer.Shutdown();
-        _pixel?.Dispose();
+        // _pixel is the shared TextureUtil.GetWhitePixel cache — do NOT dispose it here.
         _glowTex?.Dispose();
         _mainMenuBg?.Dispose();
         _groundVertexMapTex?.Dispose();

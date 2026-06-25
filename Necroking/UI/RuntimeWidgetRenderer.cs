@@ -1260,6 +1260,6 @@ public class RuntimeWidgetRenderer
         _textures.Clear();
         foreach (var tex in _harmonizedTextures.Values) tex.Dispose();
         _harmonizedTextures.Clear();
-        _pixel?.Dispose();
+        // _pixel is the shared TextureUtil.GetWhitePixel cache — do NOT dispose it here.
     }
 }
