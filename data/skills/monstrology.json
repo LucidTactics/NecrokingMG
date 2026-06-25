@@ -4,7 +4,7 @@
     {
       "id": "monster_summoner",
       "name": "Monster Summoner",
-      "description": "Monster Limit \u002B1.\nUnlock Deer Zombie and Juvenile Wolf zombie.\nKill a Monster.",
+      "description": "Monster Limit \u002B1.\nUnlock Deer Zombie and Juvenile Wolf zombie.\nLearn Reanimate Corpse.\nKill a Monster.",
       "x": 579,
       "y": -438,
       "parents": [],
@@ -16,7 +16,7 @@
         }
       ],
       "effect": "compound",
-      "effectArg": "cap_buff=monster:1|unlock_summon=ZombieFemaleDeer,ZombieMaleDeer,ZombieWolf"
+      "effectArg": "cap_buff=monster:1|unlock_summon=ZombieFemaleDeer,ZombieMaleDeer,ZombieWolf|add_spell=reanimate_corpse"
     },
     {
       "id": "improved_monstrology",

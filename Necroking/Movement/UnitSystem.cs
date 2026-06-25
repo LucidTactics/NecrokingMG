@@ -30,6 +30,9 @@ public struct IncapState
     public float RecoverTimer;         // Countdown for recovery phase
     public bool Recovering;            // True during recovery animation (after incap ends)
     public bool HoldAtEnd;             // Snap to last frame of HoldAnim on entry
+    /// <summary>Recovery-anim playback rate (1=normal). &lt;1 slows the rise; used by
+    /// reanimation's half-speed standup. 0 is treated as 1 (default-init structs).</summary>
+    public float RecoverPlaybackSpeed;
 
     /// <summary>Is the unit currently incapacitated or recovering?</summary>
     public readonly bool IsLocked => Active || Recovering;
@@ -276,6 +279,9 @@ public class Unit
     // AI-driven sleep→standup timer (DeerHerd / WolfPack). Separate from Incap,
     // which is combat/debuff driven; the two don't overlap in practice.
     public float StandupTimer;
+    // RatPack fear: seconds of "panic" remaining (set when a nearby packmate dies).
+    // While >0 the rat's reflexive skitter retreats farther. Decays in the handler.
+    public float PanicTimer;
     public int Harassment;
 
     // Rendering

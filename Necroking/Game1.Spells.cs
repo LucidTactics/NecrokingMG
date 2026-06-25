@@ -45,15 +45,13 @@ public partial class Game1 {
             float corpseFacing = corpse.FacingAngle;
             _sim.ConsumeCorpse(i);
 
-            SpawnUnit(resolvedID, spawnPos);
-            int idx = _sim.Units.Count - 1;
+            // Canonical horde-raise: wires the HordeMinion archetype (leash + the
+            // jog/run gait system) and enrolls in the horde. Bare SpawnUnit left animal
+            // zombies on the legacy AttackClosest AI + never-jogging legacy anim path.
+            int idx = _sim.SpawnZombieMinion(resolvedID, spawnPos);
             if (idx >= 0) {
                _sim.UnitsMut[idx].FacingAngle = corpseFacing;
-               _sim.UnitsMut[idx].StandupTimer = 1.5f;
-               // Add to horde if undead
-               if (_sim.Units[idx].Faction == Faction.Undead &&
-                   _sim.Units[idx].AI != AIBehavior.PlayerControlled)
-                  _sim.Horde.AddUnit(_sim.Units[idx].Id);
+               BuffSystem.BeginReanimationRise(_sim.UnitsMut, idx);
                raised++;
             }
 
@@ -62,7 +60,11 @@ public partial class Game1 {
          }
       } else {
          // Single corpse consume (Corpse targeting)
-         float corpseFacing = -1f; // -1 = no corpse consumed
+         float corpseFacing = 0f;
+         bool fromCorpse = false; // set when a corpse is consumed; drives the horde-minion
+                                  // raise. Do NOT use corpseFacing's sign for this — FacingAngle
+                                  // can legitimately be negative, which mis-routed negative-facing
+                                  // corpses to the plain-spawn path (archetype 0 → no follow).
          string summonUnitID = pending.SummonUnitID;
 
          if (spell.SummonTargetReq == "Corpse" && pending.TargetCorpseIdx >= 0) {
@@ -75,6 +77,7 @@ public partial class Game1 {
 
             if (pending.TargetCorpseIdx < _sim.Corpses.Count) {
                corpseFacing = _sim.Corpses[pending.TargetCorpseIdx].FacingAngle;
+               fromCorpse = true;
                _sim.ConsumeCorpse(pending.TargetCorpseIdx);
             }
          }
@@ -136,17 +139,20 @@ public partial class Game1 {
                   unitSpawnPos = spawnPos + new Vec2(MathF.Cos(angle) * 1f, MathF.Sin(angle) * 1f);
                }
 
-               SpawnUnit(summonUnitID, unitSpawnPos);
-               int idx = _sim.Units.Count - 1;
-               if (idx >= 0) {
-                  // Inherit corpse rotation for reanimated units
-                  if (corpseFacing >= 0f) {
+               int idx;
+               if (fromCorpse) {
+                  // Corpse reanimation → canonical horde minion (HordeMinion archetype:
+                  // leash + jog/run gait), same path as table crafting.
+                  idx = _sim.SpawnZombieMinion(summonUnitID, unitSpawnPos);
+                  if (idx >= 0) {
                      _sim.UnitsMut[idx].FacingAngle = corpseFacing;
-                     _sim.UnitsMut[idx].StandupTimer = 1.5f;
+                     BuffSystem.BeginReanimationRise(_sim.UnitsMut, idx);
                   }
-
-                  // Add to horde if undead
-                  if (_sim.Units[idx].Faction == Faction.Undead &&
+               } else {
+                  // Non-corpse summon (e.g. summon-from-def): plain spawn + horde enroll.
+                  SpawnUnit(summonUnitID, unitSpawnPos);
+                  idx = _sim.Units.Count - 1;
+                  if (idx >= 0 && _sim.Units[idx].Faction == Faction.Undead &&
                       _sim.Units[idx].AI != AIBehavior.PlayerControlled)
                      _sim.Horde.AddUnit(_sim.Units[idx].Id);
                }

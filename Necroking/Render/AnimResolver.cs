@@ -37,7 +37,10 @@ public static class AnimResolver
         {
             float realDuration = ctrl.GetTotalDurationSeconds(unit.Incap.RecoverAnim);
             if (realDuration <= 0f) realDuration = unit.Incap.RecoverTime; // fallback
-            unit.Incap.RecoverTimer = realDuration;
+            // Slowed recoveries (reanimation's half-speed rise) take longer in
+            // wall-time than the clip's 1x length, so stretch the lock to match.
+            float spd = unit.Incap.RecoverPlaybackSpeed > 0f ? unit.Incap.RecoverPlaybackSpeed : 1f;
+            unit.Incap.RecoverTimer = realDuration / spd;
         }
 
         // Tick override timer (TimedHold Duration > 0)

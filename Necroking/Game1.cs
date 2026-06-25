@@ -344,7 +344,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     }
 
     private static bool IsChanneledCast(string? castAnim)
-        => castAnim == "ImbueGround" || castAnim == "Raise";
+        => castAnim == "ImbueGround" || castAnim == "Raise" || castAnim == "ImbueTable";
 
     /// <summary>Resolve the Start/Loop/Finish anim states for a channeled cast.
     /// Raise has no Finish (finish == null → go straight to Idle after the loop).</summary>
@@ -354,6 +354,10 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         {
             case "Raise":
                 start = AnimState.RaiseStart; loop = AnimState.RaiseLoop; finish = null; break;
+            case "ImbueTable":
+                // The over-the-corpse "working at a table" animation, but cast on a
+                // loose ground corpse (no table). Start→Loop→Finish like ImbueGround.
+                start = AnimState.ImbueTableStart; loop = AnimState.ImbueTableLoop; finish = AnimState.ImbueTableFinish; break;
             default: // "ImbueGround"
                 start = AnimState.ImbueGroundStart; loop = AnimState.ImbueGroundLoop; finish = AnimState.ImbueGroundFinish; break;
         }
@@ -583,6 +587,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         // Register AI archetypes
         AI.ArchetypeRegistry.Register(AI.ArchetypeRegistry.PlayerControlled, "PlayerControlled", new AI.PlayerControlledHandler());
         AI.ArchetypeRegistry.Register(AI.ArchetypeRegistry.WolfPack, "WolfPack", new AI.WolfPackHandler());
+        AI.ArchetypeRegistry.Register(AI.ArchetypeRegistry.RatPack, "RatPack", new AI.RatPackHandler());
         AI.ArchetypeRegistry.Register(AI.ArchetypeRegistry.DeerHerd, "DeerHerd", new AI.DeerHerdHandler());
         AI.ArchetypeRegistry.Register(AI.ArchetypeRegistry.HordeMinion, "HordeMinion", new AI.HordeMinionHandler());
         AI.ArchetypeRegistry.Register(AI.ArchetypeRegistry.PatrolSoldier, "PatrolSoldier",

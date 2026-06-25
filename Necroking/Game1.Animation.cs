@@ -231,10 +231,14 @@ public partial class Game1
                 // Try to init from defID
                 string defID = _sim.Units[i].UnitDefID;
                 var unitDef = _gameData.Units.Get(defID);
-                if (unitDef?.Sprite == null) continue;
+                // Defensive: a reanimated unit whose sprite can't resolve would never
+                // get an AnimController, so neither recovery path could ever tick its
+                // recover-timer down — leaving it Incap-locked forever. Release the
+                // lock here so a missing/broken sprite degrades to "no rise", not "stuck".
+                if (unitDef?.Sprite == null) { if (_sim.Units[i].Incap.Recovering) _sim.UnitsMut[i].Incap = default; continue; }
                 var atlasId = AtlasDefs.ResolveAtlasName(unitDef.Sprite.AtlasName);
                 var spriteData = _atlases[atlasId].GetUnit(unitDef.Sprite.SpriteName);
-                if (spriteData == null) continue;
+                if (spriteData == null) { if (_sim.Units[i].Incap.Recovering) _sim.UnitsMut[i].Incap = default; continue; }
 
                 var ctrl = new AnimController();
                 ctrl.Init(spriteData);
@@ -264,8 +268,15 @@ public partial class Game1
                 }
             }
 
-            // Force out of work anims if interaction was cancelled (WASD override)
-            if (_sim.Units[i].CorpseInteractPhase == 0)
+            // Force out of work anims if interaction was cancelled (WASD override).
+            // Exception: the reanimate_corpse spell channels through the ImbueTable
+            // states via _pendingCastAnim (no CorpseInteractPhase), so don't yank the
+            // necromancer back to Idle mid-channel — that would kill the channel before
+            // its summon effect fires at the end of the loop.
+            bool channelingImbueTable = _pendingCastAnim.HasValue
+                && _pendingCastAnim.Value.CastAnim == "ImbueTable"
+                && i == _sim.NecromancerIndex;
+            if (_sim.Units[i].CorpseInteractPhase == 0 && !channelingImbueTable)
             {
                 var cur = animData.Ctrl.CurrentState;
                 if (cur == AnimState.WorkStart || cur == AnimState.WorkLoop || cur == AnimState.WorkEnd
@@ -562,8 +573,11 @@ public partial class Game1
                 {
                     float realDuration = animData.Ctrl.GetTotalDurationSeconds(targetState);
                     if (realDuration <= 0f) realDuration = _sim.Units[i].Incap.RecoverTime; // fallback
+                    // Slow rises (reanimation's 0.5x standup) play longer than the 1x clip;
+                    // stretch the lock to match (mirrors AnimResolver for archetype units).
+                    float rspd = _sim.Units[i].Incap.RecoverPlaybackSpeed > 0f ? _sim.Units[i].Incap.RecoverPlaybackSpeed : 1f;
                     var incap = _sim.Units[i].Incap;
-                    incap.RecoverTimer = realDuration;
+                    incap.RecoverTimer = realDuration / rspd;
                     _sim.UnitsMut[i].Incap = incap;
                 }
             }
@@ -599,7 +613,12 @@ public partial class Game1
                 targetState = AnimState.Hover;
             else
             {
-                float speed = _sim.Units[i].Velocity.Length();
+                // Gait selection uses the MAX of actual and intended (PreferredVel)
+                // speed so a unit accelerating from a standstill — e.g. a wolf bolting
+                // out of an attack into its retreat — shows Walk immediately instead of
+                // sliding in Idle while real velocity ramps up. Playback scaling below
+                // still uses actual Velocity, so feet stay locked to ground motion.
+                float speed = MathF.Max(_sim.Units[i].Velocity.Length(), _sim.Units[i].PreferredVel.Length());
                 float baseSpeed = _sim.Units[i].Stats.CombatSpeed;
                 float jogThreshold = 4f + baseSpeed / 3f;
                 float runThreshold = 6f + 2f * baseSpeed / 3f;
@@ -663,6 +682,10 @@ public partial class Game1
                 animData.Ctrl.ForceState(targetState);
             else
                 animData.Ctrl.RequestState(targetState);
+            // Recovery (incap / reanimation rise) plays at its own rate. The loco block
+            // above only scales Walk/Jog/Run, so set the slow-standup speed explicitly.
+            if (_sim.Units[i].Incap.Recovering && _sim.Units[i].Incap.RecoverPlaybackSpeed > 0f)
+                animData.Ctrl.PlaybackSpeed = _sim.Units[i].Incap.RecoverPlaybackSpeed;
             animData.Ctrl.Update(dt);
             } // end legacy path
 

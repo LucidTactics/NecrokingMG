@@ -343,8 +343,13 @@ public partial class Game1 {
                int count = c.Args.Length >= 4 ? (int)DevFloat(c.Args[3]) : 1;
                if (count < 1) count = 1;
                var idxs = new List<int>(count);
-               for (int i = 0; i < count; i++)
-                  idxs.Add(_sim.SpawnUnitByID(c.Args[0], new Vec2(bx + i, by)));
+               for (int i = 0; i < count; i++) {
+                  // Use the Game1 wrapper (not bare SpawnUnitByID) so the def's
+                  // Archetype + handler OnSpawn are applied — dev spawns then match
+                  // real map/game spawns (e.g. an animal's WolfPack/DeerHerd AI).
+                  SpawnUnit(c.Args[0], new Vec2(bx + i, by));
+                  idxs.Add(_sim.Units.Count - 1);
+               }
                c.Complete(Necroking.Dev.DevServer.OkRaw(
                   $"{{\"def\":{System.Text.Json.JsonSerializer.Serialize(c.Args[0])},\"count\":{count},\"indices\":[{string.Join(",", idxs)}]}}"));
                break;
@@ -390,6 +395,63 @@ public partial class Game1 {
                break;
             }
 
+            // Dump the corpse list with the fields spell targeting filters on,
+            // so a NoValidTarget can be diagnosed (range / consumed / zombie-type).
+            case "corpses": {
+               var ci = System.Globalization.CultureInfo.InvariantCulture;
+               int nIdx = _sim.NecromancerIndex;
+               Vec2 nPos = nIdx >= 0 ? _sim.Units[nIdx].Position : default;
+               var sb = new System.Text.StringBuilder("[");
+               for (int i = 0; i < _sim.Corpses.Count; i++) {
+                  if (i > 0) sb.Append(',');
+                  var cp = _sim.Corpses[i];
+                  float d = nIdx >= 0 ? (cp.Position - nPos).Length() : -1f;
+                  string zt = Necroking.Game.TableCraftingSystem.ResolveZombieUnitID(_gameData, cp.UnitDefID);
+                  sb.Append('{')
+                    .Append($"\"i\":{i},")
+                    .Append($"\"def\":{System.Text.Json.JsonSerializer.Serialize(cp.UnitDefID)},")
+                    .Append($"\"x\":{cp.Position.X.ToString("F1", ci)},")
+                    .Append($"\"y\":{cp.Position.Y.ToString("F1", ci)},")
+                    .Append($"\"dist\":{d.ToString("F1", ci)},")
+                    .Append($"\"dissolving\":{(cp.Dissolving ? "true" : "false")},")
+                    .Append($"\"consumed\":{(cp.ConsumedBySummon ? "true" : "false")},")
+                    .Append($"\"dragged\":{(cp.DraggedByUnitID != GameConstants.InvalidUnit ? "true" : "false")},")
+                    .Append($"\"bagged\":{(cp.BaggedByUnitID != GameConstants.InvalidUnit ? "true" : "false")},")
+                    .Append($"\"zombieType\":{System.Text.Json.JsonSerializer.Serialize(zt)}")
+                    .Append('}');
+               }
+               sb.Append(']');
+               c.Complete(Necroking.Dev.DevServer.OkRaw(
+                  $"{{\"count\":{_sim.Corpses.Count},\"necroX\":{nPos.X.ToString("F1", ci)},\"necroY\":{nPos.Y.ToString("F1", ci)},\"corpses\":{sb}}}"));
+               break;
+            }
+
+            // Learn a skill via the free-learn path (runs its effect) and dump the
+            // resulting primary spell bar — lets a test confirm e.g. that learning
+            // monster_summoner grants reanimate_corpse onto the bar.
+            case "learn_skill": {
+               if (c.Args.Length < 1) {
+                  c.Complete(Necroking.Dev.DevServer.Error("learn_skill needs: <skillId>"));
+                  break;
+               }
+               string sid = c.Args[0];
+               bool already = _skillBookState.IsLearned(sid);
+               TryAutoLearn(sid, "Dev Learn");
+               bool now = _skillBookState.IsLearned(sid);
+               var sb = new System.Text.StringBuilder("[");
+               var slots = _spellBarState.Slots;
+               if (slots != null) {
+                  for (int i = 0; i < slots.Length; i++) {
+                     if (i > 0) sb.Append(',');
+                     sb.Append(System.Text.Json.JsonSerializer.Serialize(slots[i].SpellID ?? ""));
+                  }
+               }
+               sb.Append(']');
+               c.Complete(Necroking.Dev.DevServer.OkRaw(
+                  $"{{\"skill\":{System.Text.Json.JsonSerializer.Serialize(sid)},\"wasLearned\":{(already ? "true" : "false")},\"nowLearned\":{(now ? "true" : "false")},\"primaryBar\":{sb}}}"));
+               break;
+            }
+
             // Detailed dump of the first unit matching a selector.
             case "unit": {
                if (c.Args.Length < 1) {
@@ -404,6 +466,37 @@ public partial class Game1 {
                }
 
                c.Complete(Necroking.Dev.DevServer.OkRaw(DevUnitJson(idxs[0])));
+               break;
+            }
+
+            // Resolved locomotion profile (feet-lock vels, gait thresholds, legacy
+            // vs new mode) + the def's overrides — for diagnosing gait/playback.
+            case "locomotion": case "loco": {
+               var lidxs = DevResolveUnits(c.Args.Length > 0 ? string.Join(" ", c.Args) : "necro");
+               if (lidxs.Count == 0) { c.Complete(Necroking.Dev.DevServer.Error("no unit matched")); break; }
+               var ldef = _gameData?.Units.Get(_sim.Units[lidxs[0]].UnitDefID);
+               if (ldef == null) { c.Complete(Necroking.Dev.DevServer.Error("no def")); break; }
+               var prof = Render.LocomotionProfile.FromUnit(ldef);
+               var ci2 = System.Globalization.CultureInfo.InvariantCulture;
+               bool hasCal = ldef.SpriteData?.Calibration != null;
+               string ov(float? v) => v.HasValue ? v.Value.ToString("F2", ci2) : "null";
+               c.Complete(Necroking.Dev.DevServer.OkRaw("{" +
+                  $"\"def\":{System.Text.Json.JsonSerializer.Serialize(ldef.Id)}," +
+                  $"\"isLegacyProfile\":{(prof.IsLegacy ? "true" : "false")}," +
+                  $"\"hasCalibration\":{(hasCal ? "true" : "false")}," +
+                  $"\"isQuadruped\":{(ldef.IsQuadruped ? "true" : "false")}," +
+                  $"\"combatSpeed\":{(ldef.Stats?.CombatSpeed ?? 0f).ToString("F2", ci2)}," +
+                  $"\"animWalkVel\":{prof.AnimWalkVel.ToString("F2", ci2)}," +
+                  $"\"animJogVel\":{prof.AnimJogVel.ToString("F2", ci2)}," +
+                  $"\"animRunVel\":{prof.AnimRunVel.ToString("F2", ci2)}," +
+                  $"\"jogThreshold\":{prof.JogThreshold.ToString("F2", ci2)}," +
+                  $"\"runThreshold\":{prof.RunThreshold.ToString("F2", ci2)}," +
+                  $"\"walkOverride\":{ov(ldef.AnimWalkVelOverride)}," +
+                  $"\"jogOverride\":{ov(ldef.AnimJogVelOverride)}," +
+                  $"\"runOverride\":{ov(ldef.AnimRunVelOverride)}," +
+                  $"\"jogSpeedMult\":{ldef.JogSpeedMultiplier.ToString("F2", ci2)}," +
+                  $"\"sprintSpeedMult\":{ldef.SprintSpeedMultiplier.ToString("F2", ci2)}" +
+                  "}"));
                break;
             }
 
@@ -1181,7 +1274,23 @@ public partial class Game1 {
              $"\"hp\":{u.Stats.HP},\"maxHp\":{u.Stats.MaxHP}," +
              $"\"mana\":{u.Mana.ToString("F1", ci)},\"maxMana\":{u.MaxMana.ToString("F1", ci)}," +
              $"\"alive\":{(u.Alive ? "true" : "false")}," +
-             $"\"inCombat\":{(u.InCombat ? "true" : "false")}" +
+             $"\"inCombat\":{(u.InCombat ? "true" : "false")}," +
+             $"\"incapActive\":{(u.Incap.Active ? "true" : "false")}," +
+             $"\"recovering\":{(u.Incap.Recovering ? "true" : "false")}," +
+             $"\"recoverTimer\":{u.Incap.RecoverTimer.ToString("F2", ci)}," +
+             $"\"recoverAnim\":\"{u.Incap.RecoverAnim}\"," +
+             $"\"archetype\":{u.Archetype}," +
+             $"\"routine\":{u.Routine},\"sub\":{u.Subroutine}," +
+             $"\"panic\":{u.PanicTimer.ToString("F2", ci)}," +
+             $"\"vel\":{u.Velocity.Length().ToString("F2", ci)}," +
+             $"\"prefVel\":{u.PreferredVel.Length().ToString("F2", ci)}," +
+             $"\"wolfPhase\":{u.WolfPhase}," +
+             $"\"anim\":\"{(_unitAnims.TryGetValue(u.Id, out var _adbg) ? _adbg.Ctrl.CurrentState.ToString() : "?")}\"," +
+             $"\"facing\":{u.FacingAngle.ToString("F0", ci)}," +
+             $"\"velAngle\":{(u.Velocity.LengthSq() > 0.01f ? (MathF.Atan2(u.Velocity.Y, u.Velocity.X) * 180f / MathF.PI) : 0f).ToString("F0", ci)}," +
+             $"\"engaged\":{(u.EngagedTarget.IsUnit ? "true" : "false")}," +
+             $"\"target\":{(u.Target.IsUnit ? "true" : "false")}," +
+             $"\"combatSpeed\":{u.Stats.CombatSpeed.ToString("F2", ci)}" +
              "}";
    }
 

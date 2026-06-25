@@ -163,9 +163,9 @@ public struct AnimRequest
     /// <summary>Priority-3 one-shot override. Plays once and auto-clears. Use for
     /// state exits like Standup, Death (where the anim has PlayOnceHold mode the
     /// controller will pin the final frame anyway).</summary>
-    public static AnimRequest Forced(AnimState state) => new()
+    public static AnimRequest Forced(AnimState state, float playbackSpeed = 1f) => new()
         { State = state, Priority = 3, Interrupt = true, Kind = OverrideKind.OneShot,
-          Duration = 0, PlaybackSpeed = 1f };
+          Duration = 0, PlaybackSpeed = playbackSpeed };
 
     /// <summary>Priority-3 permanent hold. Stays until a caller explicitly
     /// replaces it. Use for incap holds (Knockdown, Stunned, Paralyzed, Sleep)

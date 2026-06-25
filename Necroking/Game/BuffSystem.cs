@@ -108,6 +108,31 @@ public static class BuffSystem
         }
     }
 
+    /// <summary>Begin a reanimated unit's slow "rise from the dead" standup. Reuses the
+    /// Incap recovery lock (while IsLocked the unit can't move, turn, run AI, or attack —
+    /// see the Incap.IsLocked gates in Simulation) and plays the Standup anim at
+    /// <paramref name="playbackSpeed"/> (0.5 = half speed). Entered directly in the
+    /// recovery phase — there is no preceding hold/incap. The recover timer is filled by
+    /// AnimResolver from the real Standup clip length ÷ speed, so the lock lasts exactly
+    /// as long as the slowed animation. Falls back gracefully (Standup→Idle) for any unit
+    /// whose sprite lacks a Standup clip.</summary>
+    public static void BeginReanimationRise(UnitArrays units, int idx, float playbackSpeed = 0.5f)
+    {
+        if (idx < 0 || idx >= units.Count) return;
+        units[idx].Incap = new IncapState
+        {
+            Active = false,
+            Recovering = true,
+            HoldAnim = AnimState.Standup,
+            RecoverAnim = AnimState.Standup,
+            RecoverPlaybackSpeed = playbackSpeed,
+            RecoverTime = 1.5f,    // fallback only if the Standup clip duration is unavailable
+            RecoverTimer = -1f,    // AnimResolver fills the real (clip ÷ speed) duration
+            HoldAtEnd = false,
+        };
+        AnimResolver.SetOverride(units[idx], AnimRequest.Forced(AnimState.Standup, playbackSpeed));
+    }
+
     /// <summary>The unit's TRUE maximum HP including +MaxHP buff effects. Combat
     /// (limb damage cap, limb-sever threshold, morale) and HP-bar rendering read
     /// through this so a +MaxHP buff is a real, larger pool, not a cosmetic HUD

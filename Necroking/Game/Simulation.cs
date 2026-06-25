@@ -534,7 +534,7 @@ public class Simulation
             if (idx >= 0)
             {
                 _units[idx].FacingAngle = facing;
-                _units[idx].StandupTimer = 1.5f;
+                BuffSystem.BeginReanimationRise(_units, idx);
                 _units[idx].SpawnPosition = pos;
             }
         });
@@ -2082,14 +2082,27 @@ public class Simulation
                 continue;
             }
 
-            // Priority 1: Always turn toward engaged target when one is set
+            // Priority 1: turn toward the engaged target — UNLESS we're actively
+            // fleeing it. A unit retreating from its engaged target (e.g. a deer
+            // bolting from an attacker) should face where it's GOING, not look back
+            // over its shoulder; otherwise it runs away while facing the threat,
+            // which reads as a backwards run under a forward-run animation. When the
+            // velocity points away from the target we fall through to Priority 2
+            // (face movement direction). Stationary-but-engaged units (a wolf waiting
+            // out its cooldown) keep facing the target since velocity ~ 0.
             if (!_units[i].EngagedTarget.IsNone && _units[i].EngagedTarget.IsUnit)
             {
                 int ti = ResolveUnitTarget(_units[i].EngagedTarget);
                 if (ti >= 0)
                 {
-                    Movement.FacingUtil.TurnTowardPosition(_units[i], _units[ti].Position, dt, _gameData);
-                    continue;
+                    Vec2 toTarget = _units[ti].Position - _units[i].Position;
+                    Vec2 vel = _units[i].Velocity;
+                    bool fleeingTarget = vel.LengthSq() > 0.25f && vel.Dot(toTarget) < 0f;
+                    if (!fleeingTarget)
+                    {
+                        Movement.FacingUtil.TurnTowardPosition(_units[i], _units[ti].Position, dt, _gameData);
+                        continue;
+                    }
                 }
             }
 
@@ -3658,10 +3671,37 @@ public class Simulation
                 // unit array shifts (otherwise UnitIdx points to wrong unit).
                 if (wasInPhysics) _physics.RemoveBody(i);
 
+                // RatPack fear: a dying rat spooks its nearby packmates (longer skitter
+                // retreats for a moment). Done before the swap-and-pop remove so the
+                // dead unit's position/faction are still valid.
+                BroadcastRatPanicOnDeath(i);
+
                 _units.RemoveUnit(i);
                 if (_necromancerIdx == i) _necromancerIdx = -1;
                 else if (_necromancerIdx == _units.Count) _necromancerIdx = i;
             }
+        }
+    }
+
+    /// <summary>When a <see cref="AI.ArchetypeRegistry.RatPack"/> unit dies, pulse a
+    /// short panic onto same-faction rats nearby so they recoil (their reflexive
+    /// skitter retreats farther while PanicTimer is active). Linear scan — deaths are
+    /// infrequent and rat counts are small.</summary>
+    private void BroadcastRatPanicOnDeath(int deadIdx)
+    {
+        if (_units[deadIdx].Archetype != AI.ArchetypeRegistry.RatPack) return;
+        const float PanicRadius = 8f;
+        const float PanicDuration = 1.5f;
+        float r2 = PanicRadius * PanicRadius;
+        var pos = _units[deadIdx].Position;
+        var fac = _units[deadIdx].Faction;
+        for (int j = 0; j < _units.Count; j++)
+        {
+            if (j == deadIdx || !_units[j].Alive) continue;
+            if (_units[j].Archetype != AI.ArchetypeRegistry.RatPack) continue;
+            if (_units[j].Faction != fac) continue;
+            if ((_units[j].Position - pos).LengthSq() > r2) continue;
+            _units[j].PanicTimer = PanicDuration;
         }
     }
 
@@ -3826,6 +3866,19 @@ public class Simulation
         }
         _units[idx].Archetype = arch;
         _units[idx].Routine = 0; // Following
+
+        // Cap-count safeguard. The horde count isn't an incremented counter — it's
+        // derived live by HordeCapTracker, which counts undead units whose def
+        // UndeadCategory is Monster/Human. So a minion only shows in the count (and
+        // obeys the cap) if its def carries a category. A None category means it's
+        // invisible to the count AND bypasses the cap — almost always a forgotten
+        // undeadCategory on a new zombie def (this is exactly why reanimated rats
+        // didn't count). Flag it loudly at the single raise-into-horde choke point so
+        // it's caught at author time instead of discovered in-game.
+        if (def != null && def.UndeadCategory == Data.Registries.UndeadCategory.None)
+            DebugLog.Log("horde",
+                $"[SpawnZombieMinion] '{unitID}' raised into the horde with undeadCategory=None — " +
+                "it will NOT count toward any cap. Set undeadCategory (Monster/Human) on its def.");
 
         _horde.AddUnit(_units[idx].Id);
         return idx;

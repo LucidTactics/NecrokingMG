@@ -62,6 +62,7 @@ public static class ArchetypeRegistry
         "PlayerControlled" => PlayerControlled,
         "HordeMinion" => HordeMinion,
         "WolfPack" => WolfPack,
+        "RatPack" => RatPack,
         "DeerHerd" => DeerHerd,
         "PatrolSoldier" => PatrolSoldier,
         "GuardStationary" => GuardStationary,
@@ -84,4 +85,5 @@ public static class ArchetypeRegistry
     public const byte CasterUnit = 8;
     public const byte ArcherUnit = 9;
     public const byte Civilian = 10;
+    public const byte RatPack = 11;
 }

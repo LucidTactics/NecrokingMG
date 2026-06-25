@@ -4252,7 +4252,7 @@
     },
     {
       "id": "AggressionBar",
-      "width": 336,
+      "width": 289,
       "height": 23,
       "backgroundScale": 1,
       "modal": false,
@@ -4260,16 +4260,16 @@
         {
           "name": "child_1",
           "element": "Grim_HeaderDivider",
-          "x": 22,
+          "x": 11,
           "y": 7,
-          "width": 301,
-          "height": 10,
+          "width": 268,
+          "height": 9,
           "anchor": 0
         },
         {
           "name": "node0",
           "widget": "CircularToggle",
-          "x": 5,
+          "x": 1,
           "y": 2,
           "width": 20,
           "height": 20,
@@ -4279,7 +4279,7 @@
         {
           "name": "node1",
           "widget": "CircularToggle",
-          "x": 82,
+          "x": 68,
           "y": 2,
           "width": 20,
           "height": 20,
@@ -4289,7 +4289,7 @@
         {
           "name": "node2",
           "widget": "CircularToggle",
-          "x": 158,
+          "x": 135,
           "y": 2,
           "width": 20,
           "height": 20,
@@ -4299,7 +4299,7 @@
         {
           "name": "node3",
           "widget": "CircularToggle",
-          "x": 234,
+          "x": 202,
           "y": 2,
           "width": 20,
           "height": 20,
@@ -4309,7 +4309,7 @@
         {
           "name": "node4",
           "widget": "CircularToggle",
-          "x": 311,
+          "x": 269,
           "y": 2,
           "width": 20,
           "height": 20,
