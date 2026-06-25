@@ -2939,35 +2939,50 @@ public class Simulation
                 _units[i].PreferredVel = Vec2.Zero;
                 _units[i].PendingAttack = CombatTarget.None;
                 _units[i].EngagedTarget = CombatTarget.None;
-                // Collapse: drive the prone hold via the Incap mechanism (same as
-                // knockdown). Don't stomp an existing buff-driven incap if one's active.
-                if (!_units[i].Incap.Active)
-                {
-                    var incap = _units[i].Incap;
-                    incap.Active = true;
-                    incap.Recovering = false;
-                    incap.HoldAtEnd = false;
-                    incap.HoldAnim = Render.AnimState.Knockdown;
-                    incap.RecoverAnim = Render.AnimState.Standup;
-                    _units[i].Incap = incap;
-                }
+                InstallCollapseHold(i);
                 DebugLog.Log("combat", $"[Unconscious] unit#{i} ({_units[i].UnitDefID}) collapsed at fatigue={_units[i].Fatigue:F0}");
             }
         }
         else if (_units[i].Fatigue < UnconsciousWakeThreshold)
         {
             _units[i].Unconscious = false;
-            // Release the collapse hold (only the one we set — a concurrent buff
-            // incap will manage its own lifecycle).
-            if (_units[i].Incap.Active && _units[i].Incap.HoldAnim == Render.AnimState.Knockdown)
+            // Release ONLY the hold the collapse owns — a coincident buff knockdown
+            // (which also uses HoldAnim=Knockdown) must manage its own lifecycle.
+            if (_units[i].Incap.Active && _units[i].Incap.CollapseOwned)
             {
                 var incap = _units[i].Incap;
                 incap.Active = false;
                 incap.Recovering = false;
+                incap.CollapseOwned = false;
                 _units[i].Incap = incap;
             }
             DebugLog.Log("combat", $"[Unconscious] unit#{i} ({_units[i].UnitDefID}) recovered at fatigue={_units[i].Fatigue:F0}");
         }
+        else if (!_units[i].Incap.IsLocked)
+        {
+            // Still unconscious and above the wake threshold, but nothing is holding us
+            // prone — e.g. a buff knockdown active at collapse time has since expired.
+            // Reinstall the collapse hold so the exhausted unit stays down for the rest of
+            // the collapse instead of walking (the original install only ran on the
+            // !Unconscious→Unconscious edge and never re-fired).
+            InstallCollapseHold(i);
+        }
+    }
+
+    /// <summary>Install the fatigue-collapse prone hold (Knockdown→Standup), tagged
+    /// CollapseOwned so the wake path releases exactly this hold. No-op if a hold (buff or
+    /// our own) is already active — that one owns its lifecycle.</summary>
+    private void InstallCollapseHold(int i)
+    {
+        if (_units[i].Incap.Active) return;
+        var incap = _units[i].Incap;
+        incap.Active = true;
+        incap.Recovering = false;
+        incap.HoldAtEnd = false;
+        incap.HoldAnim = Render.AnimState.Knockdown;
+        incap.RecoverAnim = Render.AnimState.Standup;
+        incap.CollapseOwned = true;
+        _units[i].Incap = incap;
     }
 
     /// <summary>Fraction of max HP a single slashing limb/head hit must cost to

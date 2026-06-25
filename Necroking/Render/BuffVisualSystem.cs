@@ -471,8 +471,10 @@ public class BuffVisualSystem
         if (!flipbooks.TryGetValue(ue.FlipbookID, out var fb) || !fb.IsLoaded || fb.Texture == null) return;
 
         float pixelSize = ue.Scale * cam.Zoom;
-        var drawPos = (ue.PinToEffectSpawn && (effectSpawnPos.X != 0f || effectSpawnPos.Y != 0f))
-            ? effectSpawnPos : unitPos;
+        // EffectSpawnPos2D is recomputed for every alive unit each frame, so it's always
+        // valid when PinToEffectSpawn is set — don't gate on a magic (0,0) "unset" check,
+        // which would mis-treat a unit legitimately at the world origin as unset.
+        var drawPos = ue.PinToEffectSpawn ? effectSpawnPos : unitPos;
         float drawHeight = ue.PinToEffectSpawn ? effectSpawnHeight : 0f;
         var sp = renderer.WorldToScreen(drawPos, drawHeight, cam);
         sp.Y += ue.YOffset * cam.Zoom;

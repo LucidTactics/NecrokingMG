@@ -34,6 +34,12 @@ public struct IncapState
     /// reanimation's half-speed standup. 0 is treated as 1 (default-init structs).</summary>
     public float RecoverPlaybackSpeed;
 
+    /// <summary>True only for the hold the fatigue-collapse system installs
+    /// (Simulation.UpdateUnconsciousState). Lets the wake path release ITS hold without
+    /// clearing a coincident buff-driven knockdown that also uses HoldAnim=Knockdown —
+    /// the anim alone can't distinguish the two owners.</summary>
+    public bool CollapseOwned;
+
     /// <summary>Is the unit currently incapacitated or recovering?</summary>
     public readonly bool IsLocked => Active || Recovering;
 }

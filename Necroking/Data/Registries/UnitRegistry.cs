@@ -402,13 +402,19 @@ public class UnitDef : IHasId
 public class DirectionalFractions
 {
     [JsonPropertyName("n")]  public float N  { get; set; }
-    [JsonPropertyName("ne")] public float NE { get; set; }
     [JsonPropertyName("e")]  public float E  { get; set; }
-    [JsonPropertyName("se")] public float SE { get; set; }
     [JsonPropertyName("s")]  public float S  { get; set; }
-    [JsonPropertyName("sw")] public float SW { get; set; }
     [JsonPropertyName("w")]  public float W  { get; set; }
-    [JsonPropertyName("nw")] public float NW { get; set; }
+
+    // Intercardinals track whether they were explicitly authored (the setter fires on
+    // deserialize/assign) vs absent. The 4->8 backfill lerps only UN-authored slots — so a
+    // legitimately authored 0 is no longer mistaken for "absent" and overwritten each load.
+    private float _ne, _se, _sw, _nw;
+    private bool _neSet, _seSet, _swSet, _nwSet;
+    [JsonPropertyName("ne")] public float NE { get => _ne; set { _ne = value; _neSet = true; } }
+    [JsonPropertyName("se")] public float SE { get => _se; set { _se = value; _seSet = true; } }
+    [JsonPropertyName("sw")] public float SW { get => _sw; set { _sw = value; _swSet = true; } }
+    [JsonPropertyName("nw")] public float NW { get => _nw; set { _nw = value; _nwSet = true; } }
 
     /// <summary>True once the 4→8 backfill has run (or the values were
     /// explicitly set programmatically/in JSON with intercardinals). Not
@@ -424,10 +430,10 @@ public class DirectionalFractions
     {
         if (_diagonalsBackfilled) return;
         _diagonalsBackfilled = true;
-        if (NE == 0f) NE = (N + E) * 0.5f;
-        if (SE == 0f) SE = (S + E) * 0.5f;
-        if (SW == 0f) SW = (S + W) * 0.5f;
-        if (NW == 0f) NW = (N + W) * 0.5f;
+        if (!_neSet) NE = (N + E) * 0.5f;
+        if (!_seSet) SE = (S + E) * 0.5f;
+        if (!_swSet) SW = (S + W) * 0.5f;
+        if (!_nwSet) NW = (N + W) * 0.5f;
     }
 
     /// <summary>Get the value for a specific sector index (0=E, 1=SE,
