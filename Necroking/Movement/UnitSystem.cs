@@ -490,6 +490,17 @@ public class UnitArrays
 
     public Unit this[int index] => _units[index];
 
+    /// <summary>Index of the live player-controlled necromancer, or -1 if none. This is
+    /// the "is an alive necromancer present" liveness scan (game-over / live check),
+    /// distinct from Simulation.NecromancerIndex which is a cached slot used by the HUD.</summary>
+    public int FindAliveNecromancerIndex()
+    {
+        for (int i = 0; i < _units.Count; i++)
+            if (_units[i].Alive && _units[i].AI == AIBehavior.PlayerControlled)
+                return i;
+        return -1;
+    }
+
     public bool TryGetIndex(uint id, out int index) => _idToIndex.TryGetValue(id, out index);
 
     public int AddUnit(Vec2 pos, UnitType type)

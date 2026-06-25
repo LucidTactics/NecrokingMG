@@ -73,13 +73,7 @@ public static class HordeCapTracker
     }
 
     /// <summary>Find the player-controlled necromancer unit, or -1.</summary>
-    private static int FindNecromancer(UnitArrays units)
-    {
-        for (int i = 0; i < units.Count; i++)
-            if (units[i].Alive && units[i].AI == AIBehavior.PlayerControlled)
-                return i;
-        return -1;
-    }
+    private static int FindNecromancer(UnitArrays units) => units.FindAliveNecromancerIndex();
 
     /// <summary>Resolve the UndeadCategory that <paramref name="summonUnitDefID"/>
     /// would consume. Returns None when the def is missing or the unit doesn't

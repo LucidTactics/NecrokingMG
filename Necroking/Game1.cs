@@ -3657,13 +3657,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         return bestIdx;
     }
 
-    private int FindNecromancer()
-    {
-        for (int i = 0; i < _sim.Units.Count; i++)
-            if (_sim.Units[i].Alive && _sim.Units[i].AI == AIBehavior.PlayerControlled)
-                return i;
-        return -1;
-    }
+    private int FindNecromancer() => _sim.Units.FindAliveNecromancerIndex();
 
     // "CastingEffect Green" buff — visual glow shown on the necromancer while it
     // channels a reanimation at the necro table.
