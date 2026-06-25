@@ -3840,6 +3840,31 @@ public class Simulation
         }
     }
 
+    /// <summary>Parse a UnitDef faction string ("Human"/"Animal"/anything-else -> Undead).</summary>
+    private static Faction ParseFaction(string? faction) =>
+        faction == "Human" ? Faction.Human
+        : faction == "Animal" ? Faction.Animal
+        : Faction.Undead;
+
+    /// <summary>Apply the def-derived runtime fields shared by SpawnUnitByID and
+    /// TransformUnit (sprite/size/collision/faction/AI/stats). Centralizing this fixed
+    /// TransformUnit's weaker copy that dropped the Animal faction and hand-rolled a
+    /// partial 6-case AI switch — so transforming into an Animal-faction or other-AI def
+    /// silently downgraded it.</summary>
+    private void ApplyDefRuntimeFields(int idx, Data.Registries.UnitDef def, UnitStats stats)
+    {
+        _units[idx].SpriteScale = def.SpriteScale;
+        _units[idx].Radius = def.Radius;
+        _units[idx].Size = def.Size;
+        _units[idx].OrcaPriority = def.OrcaPriority;
+        if (!string.IsNullOrEmpty(def.Faction))
+            _units[idx].Faction = ParseFaction(def.Faction);
+        if (Enum.TryParse<AIBehavior>(def.AI, out var ai))
+            _units[idx].AI = ai;
+        _units[idx].Stats = stats;
+        _units[idx].MaxSpeed = stats.CombatSpeed;
+    }
+
     public int SpawnUnitByID(string unitID, Vec2 pos)
     {
         int idx = _units.AddUnit(pos, UnitType.Dynamic);
@@ -3851,21 +3876,8 @@ public class Simulation
             var def = _gameData.Units.Get(unitID);
             if (def != null)
             {
-                _units[idx].SpriteScale = def.SpriteScale;
-                _units[idx].Radius = def.Radius;
-                _units[idx].Size = def.Size;
-                _units[idx].OrcaPriority = def.OrcaPriority;
-
-                if (!string.IsNullOrEmpty(def.Faction))
-                    _units[idx].Faction = def.Faction == "Human" ? Faction.Human
-                        : def.Faction == "Animal" ? Faction.Animal : Faction.Undead;
-
-                if (Enum.TryParse<AIBehavior>(def.AI, out var ai))
-                    _units[idx].AI = ai;
-
                 var stats = _gameData.Units.BuildStats(unitID, _gameData.Weapons, _gameData.Armors, _gameData.Shields);
-                _units[idx].Stats = stats;
-                _units[idx].MaxSpeed = stats.CombatSpeed;
+                ApplyDefRuntimeFields(idx, def, stats);
 
                 // Apply any skill-tree intrinsic buffs whose tag filter matches
                 // this unit's def. Skipped when SkillBook isn't wired (scenarios,
@@ -3961,28 +3973,12 @@ public class Simulation
 
         // Rebuild stats from the new unit definition
         var newStats = _gameData.Units.BuildStats(newUnitID, _gameData.Weapons, _gameData.Armors, _gameData.Shields);
-        _units[unitIdx].Stats = newStats;
         _units[unitIdx].UnitDefID = newUnitID;
-        _units[unitIdx].Size = def.Size;
-        _units[unitIdx].Radius = def.Radius;
-        _units[unitIdx].MaxSpeed = newStats.CombatSpeed;
-        _units[unitIdx].OrcaPriority = def.OrcaPriority;
-        _units[unitIdx].Faction = def.Faction == "Human" ? Faction.Human : Faction.Undead;
-        _units[unitIdx].SpriteScale = def.SpriteScale;
-        // Reset HP to new max
-        _units[unitIdx].Stats.HP = newStats.MaxHP;
-
-        // Reset AI behavior from the new definition
-        _units[unitIdx].AI = def.AI switch
-        {
-            "PlayerControlled" => AIBehavior.PlayerControlled,
-            "AttackClosest" => AIBehavior.AttackClosest,
-            "AttackNecromancer" => AIBehavior.AttackNecromancer,
-            "GuardKnight" => AIBehavior.GuardKnight,
-            "ArcherAttack" => AIBehavior.ArcherAttack,
-            "CorpseWorker" => AIBehavior.CorpseWorker,
-            _ => AIBehavior.AttackClosest
-        };
+        // Shared def-apply (sprite/size/collision/faction/AI/stats) — replaces the old
+        // hand-rolled copy here that dropped the Animal faction and only switched 6 AI
+        // values, silently downgrading Animal-faction / other-AI transform targets.
+        ApplyDefRuntimeFields(unitIdx, def, newStats);
+        _units[unitIdx].Stats.HP = newStats.MaxHP; // reset HP to new max
     }
 
     /// <summary>
