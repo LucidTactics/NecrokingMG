@@ -17,6 +17,14 @@ public struct PendingZombieRaise
     public float FacingAngle;
     public float SpriteScale;
     public float Timer;
+
+    /// <summary>Default delay (seconds) before a queued raise actually rises.</summary>
+    public const float DefaultRiseDelay = 1.0f;
+
+    /// <summary>Build a pending raise from a position/identity (corpse or dying unit),
+    /// using the standard rise delay — centralizes the 1.0s magic number.</summary>
+    public static PendingZombieRaise At(Vec2 pos, string defId, float facing, float scale, float timer = DefaultRiseDelay)
+        => new() { Position = pos, UnitDefID = defId, FacingAngle = facing, SpriteScale = scale, Timer = timer };
 }
 
 public static class PotionSystem

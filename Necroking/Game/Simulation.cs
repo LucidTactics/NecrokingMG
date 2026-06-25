@@ -563,14 +563,8 @@ public class Simulation
                         if (potion != null)
                         {
                             var corpse = _corpses[hit.CorpseHitIdx];
-                            _pendingZombieRaises.Add(new PendingZombieRaise
-                            {
-                                Position = corpse.Position,
-                                UnitDefID = corpse.UnitDefID,
-                                FacingAngle = corpse.FacingAngle,
-                                SpriteScale = corpse.SpriteScale,
-                                Timer = 1.0f
-                            });
+                            _pendingZombieRaises.Add(PendingZombieRaise.At(
+                                corpse.Position, corpse.UnitDefID, corpse.FacingAngle, corpse.SpriteScale));
                             corpse.Dissolving = true;
                             corpse.ConsumedBySummon = true;
                         }
@@ -3661,14 +3655,8 @@ public class Simulation
                 bool zombieRaise = _units[i].ZombieOnDeath;
                 if (zombieRaise)
                 {
-                    _pendingZombieRaises.Add(new PendingZombieRaise
-                    {
-                        Position = _units[i].Position,
-                        UnitDefID = _units[i].UnitDefID,
-                        FacingAngle = _units[i].FacingAngle,
-                        SpriteScale = _units[i].SpriteScale,
-                        Timer = 1.0f
-                    });
+                    _pendingZombieRaises.Add(PendingZombieRaise.At(
+                        _units[i].Position, _units[i].UnitDefID, _units[i].FacingAngle, _units[i].SpriteScale));
                 }
 
                 // If unit died mid-knockback, transfer physics state to corpse —
