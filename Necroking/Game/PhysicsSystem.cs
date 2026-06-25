@@ -163,7 +163,7 @@ public class PhysicsSystem
     /// Update all active physics bodies. Call from Simulation.Tick between
     /// UpdateMovement and UpdateCombat.
     /// </summary>
-    public void Update(float dt, UnitArrays units)
+    public void Update(float dt, UnitArrays units, float worldMaxX, float worldMaxY)
     {
         if (_bodies.Count > 0 && dt > 0.05f)
             DebugLog.Log("physics", $"[FRAME] dt={dt * 1000:F0}ms bodies={_bodies.Count} — SLOW FRAME");
@@ -217,10 +217,19 @@ public class PhysicsSystem
                 CheckUnitCollisions(ref body, units, dt);
             }
 
-            // --- Wall collision ---
-            // TODO: Check wall grid walkability at next position
-            // If blocked: body.VelocityXY = Vec2.Zero, unit drops straight down
-            // TODO: Apply wall impact damage
+            // --- Map-bounds clamp (the load-bearing half of the wall TODO) ---
+            // Keep the airborne body on the map: an off-map Land() position corrupts the
+            // quadtree (corner-leaf pruning drops it from queries) and WorldToGrid (negative
+            // tile indices). (Per-tile wall walkability + impact damage remain a TODO.)
+            {
+                float r = units[idx].Radius;
+                var p = units[idx].Position;
+                float maxX = MathF.Max(r, worldMaxX - r);
+                float maxY = MathF.Max(r, worldMaxY - r);
+                units[idx].Position = new Vec2(
+                    MathF.Min(MathF.Max(p.X, r), maxX),
+                    MathF.Min(MathF.Max(p.Y, r), maxY));
+            }
 
             // --- Landing ---
             if (units[idx].Z <= 0f)

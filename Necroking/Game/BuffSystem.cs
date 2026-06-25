@@ -363,8 +363,22 @@ public static class BuffSystem
             stats.MeleeWeapons = System.Linq.Enumerable.ToList(
                 System.Linq.Enumerable.OrderByDescending(stats.MeleeWeapons, w => w.Priority));
         if (anyRanged && stats.RangedWeapons.Count > 1)
-            stats.RangedWeapons = System.Linq.Enumerable.ToList(
-                System.Linq.Enumerable.OrderByDescending(stats.RangedWeapons, w => w.Priority));
+        {
+            // Same desync fix as UnitRegistry.BuildStats: permute all five parallel ranged
+            // lists by one shared Priority order (sorting only RangedWeapons would misalign
+            // the RangedRange/Dmg/Cooldown side-lists that StripGrantedWeapons relies on).
+            var order = System.Linq.Enumerable.ToList(
+                System.Linq.Enumerable.OrderByDescending(
+                    System.Linq.Enumerable.Range(0, stats.RangedWeapons.Count),
+                    idx => stats.RangedWeapons[idx].Priority));
+            var rw = stats.RangedWeapons; var rr = stats.RangedRange; var rdr = stats.RangedDirectRange;
+            var rct = stats.RangedCooldownTime; var rd = stats.RangedDmg;
+            stats.RangedWeapons      = order.ConvertAll(o => rw[o]);
+            stats.RangedRange        = order.ConvertAll(o => rr[o]);
+            stats.RangedDirectRange  = order.ConvertAll(o => rdr[o]);
+            stats.RangedCooldownTime = order.ConvertAll(o => rct[o]);
+            stats.RangedDmg          = order.ConvertAll(o => rd[o]);
+        }
     }
 
     /// <summary>Inverse of ApplyGrantedWeapons — drop any WeaponStats tagged with

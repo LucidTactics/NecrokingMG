@@ -506,7 +506,7 @@ public class Simulation
         // SetEffort/potion mults so ORCA's velocity cap sees the final value.
         ApplyTerrainSpeedModulation();
         PhaseStart(); UpdateMovement(dt); PhaseEnd("movement");
-        PhaseStart(); _physics.Update(dt, _units); PhaseEnd("physics");
+        PhaseStart(); _physics.Update(dt, _units, _grid.Width * GameConstants.TileSize, _grid.Height * GameConstants.TileSize); PhaseEnd("physics");
         PhaseStart(); _horde.UpdateStates(_units, _quadtree, _necromancerIdx, dt); PhaseEnd("horde_states");
         PhaseStart(); UpdateFacingAngles(dt); PhaseEnd("facing");
         PhaseStart(); UpdateCombat(dt); PhaseEnd("combat");
