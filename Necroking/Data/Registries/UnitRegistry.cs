@@ -600,6 +600,8 @@ public class UnitRegistry : RegistryBase<UnitDef>
                 DefenseBonus = w.DefenseBonus,
                 Length = w.Length,
                 Name = w.DisplayName,
+                DamageTypeOverride = WeaponClassifier.ParseDamageType(w.DamageType),
+                TwoHandedOverride = w.TwoHanded,
                 IsRanged = w.IsRanged,
                 AnimName = resolvedAnim,
                 CooldownRounds = w.CooldownRounds,

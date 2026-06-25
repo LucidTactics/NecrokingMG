@@ -77,17 +77,25 @@ public class WeaponStats
     public bool HasArmorNegating { get; set; }
     public bool HasKnockdown { get; set; }
 
-    /// <summary>Dominions damage type (Slashing/Piercing/Blunt), inferred from the
-    /// weapon's <see cref="Name"/> at access time — existing weapons carry no
-    /// explicit type field. Drives the per-type damage modifiers in melee
-    /// resolution (piercing armor-reduction, blunt head bonus, slashing post-prot
-    /// bonus + limb-chopping). See <see cref="WeaponClassifier"/>.</summary>
-    public WeaponDamageType DamageType => WeaponClassifier.Classify(Name);
+    /// <summary>Dominions damage type (Slashing/Piercing/Blunt). Drives the per-type
+    /// damage modifiers in melee resolution (piercing armor-reduction, blunt head bonus,
+    /// slashing post-prot bonus + limb-chopping). An explicit <see cref="DamageTypeOverride"/>
+    /// (from data/weapons.json "damageType") WINS; otherwise it is inferred from
+    /// <see cref="Name"/> via <see cref="WeaponClassifier"/>. The override exists so a
+    /// cosmetic rename can never silently change a weapon's combat mechanics.</summary>
+    public WeaponDamageType DamageType => DamageTypeOverride ?? WeaponClassifier.Classify(Name);
+
+    /// <summary>Explicit damage type from weapon data ("damageType"); null = infer from Name.</summary>
+    public WeaponDamageType? DamageTypeOverride { get; set; }
 
     /// <summary>True for unambiguously two-handed weapons (greatsword, maul, pike,
     /// halberd, …). Two-handed weapons add 125% of Strength to damage instead of
-    /// 100% (manual p.61). Inferred from <see cref="Name"/>.</summary>
-    public bool TwoHanded => WeaponClassifier.IsTwoHanded(Name);
+    /// 100% (manual p.61). Explicit <see cref="TwoHandedOverride"/> wins; else inferred
+    /// from <see cref="Name"/>.</summary>
+    public bool TwoHanded => TwoHandedOverride ?? WeaponClassifier.IsTwoHanded(Name);
+
+    /// <summary>Explicit two-handed flag from weapon data ("twoHanded"); null = infer from Name.</summary>
+    public bool? TwoHandedOverride { get; set; }
 
     /// <summary>ID of the buff that contributed this weapon to the unit's effective
     /// list, or empty for weapons that come from the UnitDef. Lets the buff-removal

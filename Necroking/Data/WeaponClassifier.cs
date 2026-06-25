@@ -81,6 +81,15 @@ public static class WeaponClassifier
         return ContainsAny(name.ToLowerInvariant(), TwoHandedKeywords);
     }
 
+    /// <summary>Parse an explicit damage-type string from weapon data ("damageType").
+    /// Null/empty/unrecognized → null, so the caller falls back to <see cref="Classify"/>
+    /// name inference.</summary>
+    public static WeaponDamageType? ParseDamageType(string? s)
+    {
+        if (string.IsNullOrWhiteSpace(s)) return null;
+        return System.Enum.TryParse<WeaponDamageType>(s, true, out var t) ? t : null;
+    }
+
     private static bool ContainsAny(string haystack, string[] needles)
     {
         for (int i = 0; i < needles.Length; i++)

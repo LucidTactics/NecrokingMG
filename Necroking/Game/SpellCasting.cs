@@ -16,6 +16,9 @@ public class PendingSpellCast
     public string Category = "Projectile";
     public Vec2 TargetPos;
     public int TargetCorpseIdx = -1;
+    // Stable CorpseID of the targeted corpse (-1 = none). Re-resolved to an index at
+    // execution so a channel-time _corpses compaction can't rebind a stale index.
+    public int TargetCorpseID = -1;
     public int TargetUnitIdx = -1;
     public uint TargetUnitID = GameConstants.InvalidUnit;
     public string SummonUnitID = "";
@@ -71,6 +74,7 @@ public static class SpellCaster
         outPending.Category = spell.Category;
         outPending.TargetPos = mouseWorld;
         outPending.TargetCorpseIdx = -1;
+        outPending.TargetCorpseID = -1;
         outPending.TargetUnitIdx = -1;
         outPending.TargetUnitID = GameConstants.InvalidUnit;
         outPending.SummonUnitID = "";
@@ -149,6 +153,7 @@ public static class SpellCaster
                     }
                     if (bestCorpse < 0) return CastResult.NoValidTarget;
                     outPending.TargetCorpseIdx = bestCorpse;
+                    outPending.TargetCorpseID = corpses[bestCorpse].CorpseID;
                     outPending.TargetPos = corpses[bestCorpse].Position;
                     outPending.SummonUnitID = spell.SummonUnitID;
                 }
@@ -367,6 +372,7 @@ public static class SpellCaster
                     }
                     if (bestCorpse < 0) return CastResult.NoValidTarget;
                     outPending.TargetCorpseIdx = bestCorpse;
+                    outPending.TargetCorpseID = corpses[bestCorpse].CorpseID;
                     outPending.TargetPos = corpses[bestCorpse].Position;
                     outPending.TargetUnitID = GameConstants.InvalidUnit;
                 }

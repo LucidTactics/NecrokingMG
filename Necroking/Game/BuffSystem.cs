@@ -308,6 +308,8 @@ public static class BuffSystem
                 DefenseBonus = w.DefenseBonus,
                 Length = w.Length,
                 Name = w.DisplayName,
+                DamageTypeOverride = WeaponClassifier.ParseDamageType(w.DamageType),
+                TwoHandedOverride = w.TwoHanded,
                 IsRanged = w.IsRanged,
                 AnimName = w.AnimName,
                 CooldownRounds = w.CooldownRounds,

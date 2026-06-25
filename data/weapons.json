@@ -33,7 +33,9 @@
       "trampleSpeedBonus": 0.15,
       "trampleRadius": 1.5,
       "trampleKnockbackForce": 6,
-      "trampleImpactForce": 10
+      "trampleImpactForce": 10,
+      "damageType": "Blunt",
+      "twoHanded": false
     },
     {
       "id": "spear",
@@ -68,7 +70,9 @@
       "trampleSpeedBonus": 0.15,
       "trampleRadius": 1.5,
       "trampleKnockbackForce": 6,
-      "trampleImpactForce": 10
+      "trampleImpactForce": 10,
+      "damageType": "Piercing",
+      "twoHanded": false
     },
     {
       "id": "spear_copy",
@@ -103,7 +107,9 @@
       "trampleSpeedBonus": 0.15,
       "trampleRadius": 1.5,
       "trampleKnockbackForce": 6,
-      "trampleImpactForce": 10
+      "trampleImpactForce": 10,
+      "damageType": "Piercing",
+      "twoHanded": true
     },
     {
       "id": "hook",
@@ -138,7 +144,9 @@
       "trampleSpeedBonus": 0.15,
       "trampleRadius": 1.5,
       "trampleKnockbackForce": 6,
-      "trampleImpactForce": 10
+      "trampleImpactForce": 10,
+      "damageType": "Slashing",
+      "twoHanded": false
     },
     {
       "id": "club",
@@ -173,7 +181,9 @@
       "trampleSpeedBonus": 0.15,
       "trampleRadius": 1.5,
       "trampleKnockbackForce": 6,
-      "trampleImpactForce": 10
+      "trampleImpactForce": 10,
+      "damageType": "Blunt",
+      "twoHanded": false
     },
     {
       "id": "shortsword",
@@ -208,7 +218,9 @@
       "trampleSpeedBonus": 0.15,
       "trampleRadius": 1.5,
       "trampleKnockbackForce": 6,
-      "trampleImpactForce": 10
+      "trampleImpactForce": 10,
+      "damageType": "Slashing",
+      "twoHanded": false
     },
     {
       "id": "lance",
@@ -243,7 +255,9 @@
       "trampleSpeedBonus": 0.15,
       "trampleRadius": 1.5,
       "trampleKnockbackForce": 6,
-      "trampleImpactForce": 10
+      "trampleImpactForce": 10,
+      "damageType": "Piercing",
+      "twoHanded": false
     },
     {
       "id": "dagger",
@@ -278,7 +292,9 @@
       "trampleSpeedBonus": 0.15,
       "trampleRadius": 1.5,
       "trampleKnockbackForce": 6,
-      "trampleImpactForce": 10
+      "trampleImpactForce": 10,
+      "damageType": "Piercing",
+      "twoHanded": false
     },
     {
       "id": "longbow",
@@ -313,7 +329,9 @@
       "trampleSpeedBonus": 0.15,
       "trampleRadius": 1.5,
       "trampleKnockbackForce": 6,
-      "trampleImpactForce": 10
+      "trampleImpactForce": 10,
+      "damageType": "Slashing",
+      "twoHanded": false
     },
     {
       "id": "weapon_8",
@@ -348,7 +366,9 @@
       "trampleSpeedBonus": 0.15,
       "trampleRadius": 1.5,
       "trampleKnockbackForce": 6,
-      "trampleImpactForce": 10
+      "trampleImpactForce": 10,
+      "damageType": "Slashing",
+      "twoHanded": false
     },
     {
       "id": "weapon_10",
@@ -383,7 +403,9 @@
       "trampleSpeedBonus": 0.15,
       "trampleRadius": 1.5,
       "trampleKnockbackForce": 6,
-      "trampleImpactForce": 10
+      "trampleImpactForce": 10,
+      "damageType": "Piercing",
+      "twoHanded": false
     },
     {
       "id": "weapon_11",
@@ -418,7 +440,9 @@
       "trampleSpeedBonus": 0.15,
       "trampleRadius": 1.5,
       "trampleKnockbackForce": 6,
-      "trampleImpactForce": 10
+      "trampleImpactForce": 10,
+      "damageType": "Slashing",
+      "twoHanded": false
     },
     {
       "id": "weapon_174944",
@@ -453,7 +477,9 @@
       "trampleSpeedBonus": 0.15,
       "trampleRadius": 1.5,
       "trampleKnockbackForce": 6,
-      "trampleImpactForce": 10
+      "trampleImpactForce": 10,
+      "damageType": "Blunt",
+      "twoHanded": false
     },
     {
       "id": "wolf_pounce",
@@ -488,7 +514,9 @@
       "trampleSpeedBonus": 0.15,
       "trampleRadius": 1.5,
       "trampleKnockbackForce": 6,
-      "trampleImpactForce": 10
+      "trampleImpactForce": 10,
+      "damageType": "Piercing",
+      "twoHanded": false
     },
     {
       "id": "weapon_181921",
@@ -523,7 +551,9 @@
       "trampleSpeedBonus": 0.15,
       "trampleRadius": 1.5,
       "trampleKnockbackForce": 6,
-      "trampleImpactForce": 10
+      "trampleImpactForce": 10,
+      "damageType": "Piercing",
+      "twoHanded": false
     },
     {
       "id": "weapon_223651",
@@ -558,7 +588,9 @@
       "trampleSpeedBonus": 0.15,
       "trampleRadius": 1.5,
       "trampleKnockbackForce": 6,
-      "trampleImpactForce": 10
+      "trampleImpactForce": 10,
+      "damageType": "Piercing",
+      "twoHanded": false
     },
     {
       "id": "weapon_223651_copy",
@@ -595,7 +627,9 @@
       "trampleSpeedBonus": 0.15,
       "trampleRadius": 1.5,
       "trampleKnockbackForce": 6,
-      "trampleImpactForce": 10
+      "trampleImpactForce": 10,
+      "damageType": "Slashing",
+      "twoHanded": false
     },
     {
       "id": "weapon_011352",
@@ -630,7 +664,9 @@
       "trampleSpeedBonus": 0.15,
       "trampleRadius": 1.5,
       "trampleKnockbackForce": 6,
-      "trampleImpactForce": 10
+      "trampleImpactForce": 10,
+      "damageType": "Slashing",
+      "twoHanded": false
     },
     {
       "id": "weapon_bear_sweep",
@@ -665,7 +701,9 @@
       "trampleSpeedBonus": 0.15,
       "trampleRadius": 1.5,
       "trampleKnockbackForce": 6,
-      "trampleImpactForce": 10
+      "trampleImpactForce": 10,
+      "damageType": "Slashing",
+      "twoHanded": false
     },
     {
       "id": "weapon_boar_tusk",
@@ -700,7 +738,9 @@
       "trampleSpeedBonus": 0.15,
       "trampleRadius": 1.5,
       "trampleKnockbackForce": 6,
-      "trampleImpactForce": 10
+      "trampleImpactForce": 10,
+      "damageType": "Piercing",
+      "twoHanded": false
     },
     {
       "id": "weapon_boar_charge",
@@ -737,7 +777,9 @@
       "trampleSpeedBonus": 0.15,
       "trampleRadius": 1.5,
       "trampleKnockbackForce": 120,
-      "trampleImpactForce": 100
+      "trampleImpactForce": 100,
+      "damageType": "Blunt",
+      "twoHanded": false
     }
   ]
 }

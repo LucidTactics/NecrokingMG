@@ -67,18 +67,23 @@ public partial class Game1 {
                                   // corpses to the plain-spawn path (archetype 0 → no follow).
          string summonUnitID = pending.SummonUnitID;
 
-         if (spell.SummonTargetReq == "Corpse" && pending.TargetCorpseIdx >= 0) {
-            // Resolve zombie type from corpse if summonUnitID is empty.
-            // Shared helper: see comment on the AOE branch above.
-            if (string.IsNullOrEmpty(summonUnitID) && pending.TargetCorpseIdx < _sim.Corpses.Count) {
-               var corpse = _sim.Corpses[pending.TargetCorpseIdx];
-               summonUnitID = Game.TableCraftingSystem.ResolveZombieUnitID(_gameData, corpse.UnitDefID);
-            }
+         if (spell.SummonTargetReq == "Corpse" && pending.TargetCorpseID >= 0) {
+            // Re-resolve the corpse by STABLE id, not the captured list index: a channeled
+            // reanimate executes after a multi-second channel, during which _corpses can be
+            // compacted (dissolve cleanup / carry-to-table) — the captured index would then
+            // silently rebind to a different body. FindCorpseIndexByID returns -1 if the
+            // aimed-at corpse is gone, in which case the raise simply no-ops.
+            int corpseIdx = _sim.FindCorpseIndexByID(pending.TargetCorpseID);
+            if (corpseIdx >= 0) {
+               var corpse = _sim.Corpses[corpseIdx];
+               // Resolve zombie type from the corpse if summonUnitID is empty (shared
+               // helper; see the AOE branch above).
+               if (string.IsNullOrEmpty(summonUnitID))
+                  summonUnitID = Game.TableCraftingSystem.ResolveZombieUnitID(_gameData, corpse.UnitDefID);
 
-            if (pending.TargetCorpseIdx < _sim.Corpses.Count) {
-               corpseFacing = _sim.Corpses[pending.TargetCorpseIdx].FacingAngle;
+               corpseFacing = corpse.FacingAngle;
                fromCorpse = true;
-               _sim.ConsumeCorpse(pending.TargetCorpseIdx);
+               _sim.ConsumeCorpse(corpseIdx);
             }
          }
 

@@ -38,6 +38,15 @@ public class WeaponDef : IHasId
     /// Ties break by weapon-list order. Default 0.</summary>
     [JsonPropertyName("priority")] public int Priority { get; set; } = 0;
 
+    /// <summary>Explicit Dominions damage type ("Slashing"/"Piercing"/"Blunt"). Omitted
+    /// (null) = inferred from the weapon name (legacy, fragile to renames). Set this so a
+    /// cosmetic rename can't silently change combat mechanics. Baked for all current
+    /// weapons by tools/bake_weapon_damage_types.py.</summary>
+    [JsonPropertyName("damageType")] public string? DamageType { get; set; }
+
+    /// <summary>Explicit two-handed flag (+125% Strength). Omitted = inferred from name.</summary>
+    [JsonPropertyName("twoHanded")] public bool? TwoHanded { get; set; }
+
     // --- Pounce archetype parameters (used only when Archetype == "Pounce") ---
     [JsonPropertyName("pounceMinRange")] public float PounceMinRange { get; set; } = 3f;
     [JsonPropertyName("pounceMaxRange")] public float PounceMaxRange { get; set; } = 8f;
