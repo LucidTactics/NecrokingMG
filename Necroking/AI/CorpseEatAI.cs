@@ -78,7 +78,8 @@ public static class CorpseEatAI
                 units[u].CorpseEatTimer -= dt;
                 if (units[u].CorpseEatTimer > 0f) continue;
 
-                int corpseIdx = sim.FindCorpseIndexByID(units[u].CorpseEatTargetID);
+                int eatenId = units[u].CorpseEatTargetID;
+                int corpseIdx = sim.FindCorpseIndexByID(eatenId);
                 units[u].CorpseEatTargetID = -1;
                 if (corpseIdx < 0) continue;
                 if (corpses[corpseIdx].Dissolving || corpses[corpseIdx].ConsumedBySummon) continue;
@@ -86,7 +87,7 @@ public static class CorpseEatAI
                 sim.ConsumeCorpse(corpseIdx);
                 BuffSystem.ApplyBuff(units, u, buffDef, gameData);
                 units[u].CorpsesEaten = (byte)System.Math.Min(byte.MaxValue, units[u].CorpsesEaten + 1);
-                DebugLog.Log("scenario", $"[CorpseEat] {units[u].UnitDefID}#{u} ate corpse#{units[u].CorpseEatTargetID} (count={units[u].CorpsesEaten}/{maxStacks})");
+                DebugLog.Log("scenario", $"[CorpseEat] {units[u].UnitDefID}#{u} ate corpse#{eatenId} (count={units[u].CorpsesEaten}/{maxStacks})");
                 continue;
             }
 

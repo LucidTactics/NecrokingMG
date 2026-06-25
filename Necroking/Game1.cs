@@ -2761,7 +2761,8 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
 
                 // LMB on empty/failed primary slot = melee swing at nearest enemy.
                 if (slot == 2 && result == CastResult.NoValidTarget && necroIdx >= 0
-                    && !_sim.Units[necroIdx].PendingAttack.IsNone == false)
+                    && _pendingCastAnim == null  // NoValidTarget also means "busy mid-cast" — don't stamp a stray melee then
+                    && _sim.Units[necroIdx].PendingAttack.IsNone)
                 {
                     int meleeTarget = FindClosestEnemyToPoint(_sim.Units[necroIdx].Position, 2f);
                     if (meleeTarget >= 0)

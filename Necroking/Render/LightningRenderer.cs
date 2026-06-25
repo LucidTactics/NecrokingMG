@@ -128,8 +128,11 @@ public class LightningRenderer
             int casterIdx = UnitUtil.ResolveUnitIndex(_sim.Units, drain.CasterID);
             if (casterIdx < 0) continue;
 
-            Vec2 targetPos = drain.TargetCorpseIdx >= 0 ? drain.CorpsePos : Vec2.Zero;
             int targetIdx = UnitUtil.ResolveUnitIndex(_sim.Units, drain.TargetID);
+            // Target died mid-channel (no live unit, no corpse anchor): skip drawing rather
+            // than falling back to Vec2.Zero, which would draw tendrils to world origin.
+            if (targetIdx < 0 && drain.TargetCorpseIdx < 0) continue;
+            Vec2 targetPos = drain.TargetCorpseIdx >= 0 ? drain.CorpsePos : Vec2.Zero;
             if (targetIdx >= 0) targetPos = _sim.Units[targetIdx].Position;
 
             // Same casting-anchor convention as the beam above (sprite height, no

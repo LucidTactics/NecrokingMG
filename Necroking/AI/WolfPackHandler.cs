@@ -400,8 +400,12 @@ public class WolfPackHandler : IArchetypeHandler
                 {
                     float dist = (ctx.Units[targetIdx].Position - ctx.MyPos).Length();
                     float attackRange = SubroutineSteps.GetMeleeRange(ref ctx, targetIdx);
-                    if (dist <= attackRange)
+                    if (dist <= attackRange && ctx.Units[ctx.UnitIndex].AttackCooldown <= 0f)
                     {
+                        // Only commit to the bite when it's actually ready: entering
+                        // ExecuteAttack with leftover cooldown from the previous swing makes
+                        // the exit gate (AttackCooldown > 0) fire immediately → a phantom
+                        // no-damage retreat. (Mirrors RatPack FightRushIn's ready-gate.)
                         ctx.Subroutine = FightExecuteAttack;
                         ctx.SubroutineTimer = 0f;
                     }
