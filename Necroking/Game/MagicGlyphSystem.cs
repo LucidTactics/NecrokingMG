@@ -12,6 +12,9 @@ public enum GlyphState : byte { Blueprint, Dormant, Triggering, Active, Fading }
 
 public class MagicGlyph
 {
+    /// <summary>Stable monotonic id (assigned at spawn). Lets a handle held across frames
+    /// survive the index-shifting _glyphs.RemoveAt compaction — resolve via GetById.</summary>
+    public int Id;
     public Vec2 Position;
     public float Radius = 1f;           // World-space radius
     public float Age;
@@ -73,6 +76,7 @@ public class MagicGlyph
 public class MagicGlyphSystem
 {
     private readonly List<MagicGlyph> _glyphs = new();
+    private int _nextGlyphId = 1; // 0/-1 reserved for "no glyph"
 
     public IReadOnlyList<MagicGlyph> Glyphs => _glyphs;
 
@@ -80,6 +84,7 @@ public class MagicGlyphSystem
     {
         var glyph = new MagicGlyph
         {
+            Id = _nextGlyphId++,
             Position = position,
             Radius = radius,
             OwnerFaction = owner,
@@ -92,6 +97,7 @@ public class MagicGlyphSystem
     {
         var glyph = new MagicGlyph
         {
+            Id = _nextGlyphId++,
             Position = position,
             Radius = radius,
             OwnerFaction = owner,
@@ -112,6 +118,16 @@ public class MagicGlyphSystem
 
     public MagicGlyph? GetGlyph(int index) =>
         index >= 0 && index < _glyphs.Count ? _glyphs[index] : null;
+
+    /// <summary>Resolve a glyph by its stable Id (-1 / not found → null). Use this for any
+    /// handle held across frames — a raw list index breaks on index-shifting RemoveAt.</summary>
+    public MagicGlyph? GetById(int id)
+    {
+        if (id < 0) return null;
+        for (int i = 0; i < _glyphs.Count; i++)
+            if (_glyphs[i].Id == id) return _glyphs[i];
+        return null;
+    }
 
     /// <summary>Check if a glyph can be placed (no overlap with existing glyphs).</summary>
     public bool CanPlace(Vec2 position, float radius)

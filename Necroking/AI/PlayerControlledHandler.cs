@@ -92,7 +92,7 @@ public class PlayerControlledHandler : IArchetypeHandler
     {
         int i = ctx.UnitIndex;
         bool inWorkEnd = ctx.Subroutine == WorkRoutine.WorkEnd;
-        var glyph = ctx.MagicGlyphs?.GetGlyph(ctx.Units[i].BuildGlyphIdx);
+        var glyph = ctx.MagicGlyphs?.GetById(ctx.Units[i].BuildGlyphId);
 
         // Validate only during approach/work — once we're in standup the glyph
         // is intentionally no longer Blueprint (we activated it on WorkComplete).
@@ -117,7 +117,7 @@ public class PlayerControlledHandler : IArchetypeHandler
         }
         else if (phase == WorkRoutine.Phase.Done)
         {
-            ctx.Units[i].BuildGlyphIdx = -1;
+            ctx.Units[i].BuildGlyphId = -1;
             ctx.Routine = RoutineIdle;
             ctx.Subroutine = 0;
         }
@@ -324,7 +324,7 @@ public class PlayerControlledHandler : IArchetypeHandler
     public static void CancelBuild(ref AIContext ctx)
     {
         ctx.Units[ctx.UnitIndex].BuildTargetIdx = -1;
-        ctx.Units[ctx.UnitIndex].BuildGlyphIdx = -1;
+        ctx.Units[ctx.UnitIndex].BuildGlyphId = -1;
         ctx.Units[ctx.UnitIndex].CorpseInteractPhase = 0;
         ctx.Units[ctx.UnitIndex].BuildTimer = 0f;
         ctx.Routine = RoutineIdle;

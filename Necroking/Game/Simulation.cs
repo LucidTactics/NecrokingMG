@@ -906,7 +906,7 @@ public class Simulation
                             _units[i].Subroutine = 0;
                             _units[i].CorpseInteractPhase = 0;
                             _units[i].BuildTargetIdx = -1;
-                            _units[i].BuildGlyphIdx = -1;
+                            _units[i].BuildGlyphId = -1;
                             _units[i].BuildTimer = 0f;
                             _units[i].CraftTableIdx = -1;
                             _units[i].BushWorkObjIdx = -1;

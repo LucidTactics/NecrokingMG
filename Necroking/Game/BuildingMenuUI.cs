@@ -350,9 +350,8 @@ public class BuildingMenuUI : Necroking.UI.IModalLayer
             // Assign the player's necromancer to walk over and build the glyph.
             if (_sim != null && _sim.NecromancerIndex >= 0)
             {
-                int glyphIdx = _glyphs.IndexOf(glyph);
                 int necroIdx = _sim.NecromancerIndex;
-                _sim.UnitsMut[necroIdx].BuildGlyphIdx = glyphIdx;
+                _sim.UnitsMut[necroIdx].BuildGlyphId = glyph.Id;
                 _sim.UnitsMut[necroIdx].BuildTimer = 0f;
                 _sim.UnitsMut[necroIdx].Routine = AI.PlayerControlledHandler.RoutineBuildGlyph;
                 _sim.UnitsMut[necroIdx].Subroutine = AI.PlayerControlledHandler.BuildSub_WalkToSite;

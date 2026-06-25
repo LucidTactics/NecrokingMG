@@ -329,7 +329,7 @@ public class Unit
 
     // Building interaction
     public int BuildTargetIdx = -1;         // env object index being built (-1 = none)
-    public int BuildGlyphIdx = -1;          // glyph index being built (-1 = none)
+    public int BuildGlyphId = -1;           // stable glyph Id being built (-1 = none)
     public float BuildTimer;                // elapsed time during building
     public int CraftTableIdx = -1;          // env object index of the craft-table currently being channeled (-1 = none)
 
