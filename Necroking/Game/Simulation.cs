@@ -183,11 +183,18 @@ public class Simulation
             PreSettled = true, // appear already-dead, don't replay the death anim
         };
         _corpses.Add(corpse);
-        _units.RemoveUnit(unitIdx);
-        // Keep the necromancer index valid across the swap-and-pop remove.
-        if (_necromancerIdx == unitIdx) _necromancerIdx = -1;
-        else if (_necromancerIdx == _units.Count) _necromancerIdx = unitIdx;
+        RemoveUnitTracked(unitIdx); // remove + repair _necromancerIdx across the swap-pop
         return corpse;
+    }
+
+    /// <summary>Remove a unit AND repair the cached necromancer index across the
+    /// swap-and-pop, so the two can never drift. Use this instead of UnitsMut.RemoveUnit
+    /// directly — the Dev 'remove' loop bypassing it left _necromancerIdx stale.</summary>
+    public void RemoveUnitTracked(int idx)
+    {
+        _units.RemoveUnit(idx);
+        if (_necromancerIdx == idx) _necromancerIdx = -1;
+        else if (_necromancerIdx == _units.Count) _necromancerIdx = idx;
     }
     public IReadOnlyList<DamageEvent> DamageEvents => _damageEvents;
     public List<DamageEvent> DamageEventsMut => _damageEvents;
@@ -3729,9 +3736,7 @@ public class Simulation
                 // dead unit's position/faction are still valid.
                 BroadcastRatPanicOnDeath(i);
 
-                _units.RemoveUnit(i);
-                if (_necromancerIdx == i) _necromancerIdx = -1;
-                else if (_necromancerIdx == _units.Count) _necromancerIdx = i;
+                RemoveUnitTracked(i); // remove + repair _necromancerIdx (BroadcastRatPanic ran above)
             }
         }
     }

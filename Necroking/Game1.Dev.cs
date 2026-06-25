@@ -562,7 +562,7 @@ public partial class Game1 {
 
                var idxs = DevResolveUnits(string.Join(" ", c.Args));
                idxs.Sort(); // remove high indices first (swap-and-pop shifts the tail)
-               for (int k = idxs.Count - 1; k >= 0; k--) _sim.UnitsMut.RemoveUnit(idxs[k]);
+               for (int k = idxs.Count - 1; k >= 0; k--) _sim.RemoveUnitTracked(idxs[k]);
                c.Complete(Necroking.Dev.DevServer.Ok($"removed {idxs.Count} unit(s)"));
                break;
             }
