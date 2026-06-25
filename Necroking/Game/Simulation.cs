@@ -800,18 +800,7 @@ public class Simulation
                 var handler = AI.ArchetypeRegistry.Get(_units[i].Archetype);
                 if (handler != null)
                 {
-                    var ctx = new AI.AIContext
-                    {
-                        UnitIndex = i, Units = _units, Dt = dt, FrameNumber = (int)_frameNumber,
-                        GameData = _gameData, Pathfinder = _pathfinder, Quadtree = _quadtree,
-                        Horde = _horde, TriggerSystem = _triggerSystem, EnvSystem = _envSystem,
-                        Projectiles = _projectiles, MagicGlyphs = _magicGlyphs,
-                        GameTime = _gameTime, DayTime = dayFraction, IsNight = isNight,
-                        AmortizedAI = _amortizedAI, AmortizationInterval = _aiUpdateInterval,
-                        AnimMeta = _animMeta,
-                        DamageEvents = _damageEvents,
-                        NecroSprintT = _sprintRampValue,
-                    };
+                    var ctx = BuildAIContext(i, dt, dayFraction, isNight);
                     handler.Update(ref ctx);
                 }
                 subSw.Stop();
@@ -883,17 +872,8 @@ public class Simulation
                         var handler = AI.ArchetypeRegistry.Get(AI.ArchetypeRegistry.PlayerControlled);
                         if (handler != null)
                         {
-                            var ctx = new AI.AIContext
-                            {
-                                UnitIndex = i, Units = _units, Dt = dt, FrameNumber = (int)_frameNumber,
-                                GameData = _gameData, Pathfinder = _pathfinder, Quadtree = _quadtree,
-                                Horde = _horde, TriggerSystem = _triggerSystem, EnvSystem = _envSystem,
-                                Projectiles = _projectiles, MagicGlyphs = _magicGlyphs,
-                                GameTime = _gameTime, DayTime = dayFraction, IsNight = isNight,
-                                // Player is always every-frame anyway, but pass for consistency.
-                                AmortizedAI = _amortizedAI, AmortizationInterval = _aiUpdateInterval,
-                                NecroSprintT = _sprintRampValue,
-                            };
+                            // Player is always every-frame; same full context as the archetype path.
+                            var ctx = BuildAIContext(i, dt, dayFraction, isNight);
                             handler.Update(ref ctx);
                         }
 
@@ -3306,6 +3286,22 @@ public class Simulation
         DamageSystem.Apply(_units, unitIdx, damage,
             GameSystems.DamageType.Physical, GameSystems.DamageFlags.ArmorNegating,
             _damageEvents, attackerIdx);
+
+    /// <summary>Build the per-unit AIContext shared by the archetype and PlayerControlled
+    /// dispatch sites, so the field set can't drift — the PlayerControlled path previously
+    /// omitted AnimMeta + DamageEvents.</summary>
+    private AI.AIContext BuildAIContext(int i, float dt, float dayFraction, bool isNight) => new AI.AIContext
+    {
+        UnitIndex = i, Units = _units, Dt = dt, FrameNumber = (int)_frameNumber,
+        GameData = _gameData, Pathfinder = _pathfinder, Quadtree = _quadtree,
+        Horde = _horde, TriggerSystem = _triggerSystem, EnvSystem = _envSystem,
+        Projectiles = _projectiles, MagicGlyphs = _magicGlyphs,
+        GameTime = _gameTime, DayTime = dayFraction, IsNight = isNight,
+        AmortizedAI = _amortizedAI, AmortizationInterval = _aiUpdateInterval,
+        AnimMeta = _animMeta,
+        DamageEvents = _damageEvents,
+        NecroSprintT = _sprintRampValue,
+    };
 
     // --- Helpers ---
     private void MoveTowardUnit(int i, int targetIdx, float speed)
