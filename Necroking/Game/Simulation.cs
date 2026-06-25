@@ -1915,6 +1915,19 @@ public class Simulation
                 }
             }
 
+            // Sub-step the displacement so each collision probe is <= half a tile apart: at
+            // high game speed dt can be large enough that one Euler step skips a 1-tile wall
+            // (start clear, end clear, the wall between never sampled -> tunneling). At normal
+            // speed delta is small so moveSubs==1 and this is identical to a single move.
+            int moveSubs = System.Math.Max(1, (int)MathF.Ceiling(delta.Length() / (0.5f * GameConstants.TileSize)));
+            Vec2 fullDelta = delta;
+            Vec2 subStart = oldPos;
+            Vec2 movedPos = oldPos;
+            for (int ms = 0; ms < moveSubs; ms++)
+            {
+            oldPos = subStart;
+            delta = fullDelta * (1f / moveSubs);
+
             // --- Axis-independent movement with gap probing ---
             Vec2 newPos = oldPos;
 
@@ -2015,6 +2028,13 @@ public class Simulation
                 }
             }
 
+            subStart = newPos;
+            movedPos = newPos;
+            // Fully blocked this sub-step (neither axis advanced, no slide) — further
+            // sub-steps can't help, so stop early.
+            if (newPos.X == oldPos.X && newPos.Y == oldPos.Y) break;
+            } // end displacement sub-step loop
+
             // Clamp to world bounds: knockback / ORCA / stuck-escape / dev-move can push a
             // unit off the map, and off-map positions corrupt the quadtree (corner-leaf
             // pruning drops them from queries) and WorldToGrid (negative indices). IsBlocked
@@ -2022,8 +2042,8 @@ public class Simulation
             float wMax = _grid.Width * GameConstants.TileSize - 1e-3f;
             float hMax = _grid.Height * GameConstants.TileSize - 1e-3f;
             _units[i].Position = new Vec2(
-                MathUtil.Clamp(newPos.X, 0f, wMax),
-                MathUtil.Clamp(newPos.Y, 0f, hMax));
+                MathUtil.Clamp(movedPos.X, 0f, wMax),
+                MathUtil.Clamp(movedPos.Y, 0f, hMax));
         }
     }
 
