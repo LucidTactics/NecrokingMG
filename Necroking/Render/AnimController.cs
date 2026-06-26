@@ -489,16 +489,6 @@ public class AnimController
         _finished = true;
     }
 
-    /// <summary>Force a state pinned to its FIRST frame, overriding even the sticky Death state
-    /// (which RequestState/ForceState bail out of). Used to pre-pose a reanimating corpse into
-    /// the Standup start so the rise hands off to the risen unit with no Death->Standup pop.
-    /// Hold the frame by simply not calling Update().</summary>
-    public void ForceStateAtStart(AnimState newState)
-    {
-        if (_currentState == newState) return;   // already posed — leave the held frame alone
-        SwitchState(newState);                   // resets _animTime=0 / _finished=false; ignores the Death guard
-    }
-
     private static bool IsLocomotionState(AnimState s) =>
         s == AnimState.Walk || s == AnimState.Jog || s == AnimState.Run;
 
@@ -655,6 +645,25 @@ public class AnimController
     }
 
     // --- Frame lookup ---
+
+    /// <summary>True if the sprite has its OWN clip for this state (not just a fallback).</summary>
+    public bool HasAnim(AnimState state) => _spriteData?.GetAnim(StateToAnimName(state)) != null;
+
+    /// <summary>Frame 0 of <paramref name="state"/> at a facing, WITHOUT touching the controller's
+    /// live state — lets a corpse crossfade between its held Death frame and the Standup start
+    /// frame. Empty result if the sprite lacks that anim.</summary>
+    public FrameResult GetFrameForStateStart(AnimState state, float facingAngleDeg)
+    {
+        var result = new FrameResult();
+        var anim = ResolveAnimForState(state);
+        if (anim == null) return result;
+        int spriteAngle = ResolveAngle(facingAngleDeg, out bool flipX);
+        result.FlipX = flipX;
+        var kfs = anim.GetAngle(spriteAngle);
+        if (kfs == null || kfs.Count == 0) kfs = anim.GetAngle(_resolvedFallbackAngle);
+        if (kfs != null && kfs.Count > 0) result.Frame = kfs[0].Frame;
+        return result;
+    }
 
     public FrameResult GetCurrentFrame(float facingAngleDeg)
     {

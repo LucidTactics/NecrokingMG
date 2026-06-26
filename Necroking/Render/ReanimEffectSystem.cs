@@ -223,9 +223,9 @@ internal class ReanimEffectSystem
     /// keyed by effect instance id, with the outline alpha fading IN (0->1 over the spawn delay).
     /// Returns false once the unit has attached — the outline moves to the unit (fade out) then.</summary>
     public bool TryGetCorpseOutline(int instanceId, out HdrColor c1, out HdrColor c2,
-        out float width, out float pulseWidth, out float pulseSpeed)
+        out float width, out float pulseWidth, out float pulseSpeed, out float morphT)
     {
-        c1 = default; c2 = default; width = 0; pulseWidth = 0; pulseSpeed = 0;
+        c1 = default; c2 = default; width = 0; pulseWidth = 0; pulseSpeed = 0; morphT = 0f;
         if (instanceId <= 0) return false;
         for (int i = 0; i < _active.Count; i++)
         {
@@ -233,6 +233,7 @@ internal class ReanimEffectSystem
             if (inst.InstanceId != instanceId || inst.HasUnit) continue;
             float fadeIn = inst.OutlineFadeIn > 0f
                 ? MathHelper.Clamp(inst.Age / inst.OutlineFadeIn, 0f, 1f) : 1f;
+            morphT = fadeIn;   // build-up progress 0->1; drives the death->standup pose crossfade
             c1 = ScaleAlpha(inst.Cfg.OutlineColor, fadeIn);
             c2 = ScaleAlpha(inst.Cfg.OutlinePulseColor, fadeIn);
             width = inst.Cfg.OutlineWidth;

@@ -434,7 +434,9 @@ public partial class Game1 {
                   var cp = _sim.Corpses[i];
                   float d = nIdx >= 0 ? (cp.Position - nPos).Length() : -1f;
                   string zt = Necroking.Game.TableCraftingSystem.ResolveZombieUnitID(_gameData, cp.UnitDefID);
-                  string canim = _corpseAnims.TryGetValue(cp.CorpseID, out var cadDbg) ? cadDbg.Ctrl.CurrentState.ToString() : "none";
+                  bool hasCad = _corpseAnims.TryGetValue(cp.CorpseID, out var cadDbg);
+                  string canim = hasCad ? cadDbg.Ctrl.CurrentState.ToString() : "none";
+                  bool hasStandup = hasCad && cadDbg.Ctrl.HasAnim(Necroking.Render.AnimState.Standup);
                   sb.Append('{')
                     .Append($"\"i\":{i},")
                     .Append($"\"def\":{System.Text.Json.JsonSerializer.Serialize(cp.UnitDefID)},")
@@ -445,6 +447,7 @@ public partial class Game1 {
                     .Append($"\"consumed\":{(cp.ConsumedBySummon ? "true" : "false")},")
                     .Append($"\"reanim\":{cp.ReanimInstanceId},")
                     .Append($"\"anim\":{System.Text.Json.JsonSerializer.Serialize(canim)},")
+                    .Append($"\"hasStandup\":{(hasStandup ? "true" : "false")},")
                     .Append($"\"dragged\":{(cp.DraggedByUnitID != GameConstants.InvalidUnit ? "true" : "false")},")
                     .Append($"\"bagged\":{(cp.BaggedByUnitID != GameConstants.InvalidUnit ? "true" : "false")},")
                     .Append($"\"zombieType\":{System.Text.Json.JsonSerializer.Serialize(zt)}")

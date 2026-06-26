@@ -23,6 +23,10 @@ namespace Necroking;
 // Game1 partial: Corpses, body-bags, carried visuals, centroid cache.
 public partial class Game1
 {
+    // Scale only the alpha of an HdrColor — crossfades the reanim outline between the death
+    // and standup poses without touching its color/intensity.
+    private static HdrColor ScaleHdrA(HdrColor c, float w) => new(c.R, c.G, c.B, (byte)(c.A * w), c.Intensity);
+
     private void DrawCorpses()
     {
         // Hover-highlight target (captured below as its sprite is drawn).
@@ -103,14 +107,8 @@ public partial class Game1
             if (!corpse.InPhysics && cad.Ctrl.CurrentState == AnimState.Fall)
                 cad.Ctrl.ForceStateAtEnd(AnimState.Death);
 
-            // A reanimating corpse pre-poses into the rise: hold the Standup FIRST frame so the
-            // hand-off to the risen unit (which begins Standup at frame 0) is seamless — no
-            // Death->Standup pop. The green rise outline appearing masks this initial snap.
             bool reanimating = corpse.ReanimInstanceId > 0;
-            if (reanimating)
-                cad.Ctrl.ForceStateAtStart(AnimState.Standup);
-
-            if (!reanimating && !cad.Ctrl.IsAnimFinished && !_paused)
+            if (!cad.Ctrl.IsAnimFinished && !_paused)
                 cad.Ctrl.Update(MathF.Min(_rawDt, 1f / 20f) * _timeScale);
 
             int alphaInt = 255;
@@ -132,16 +130,35 @@ public partial class Game1
 
                 var sp = _renderer.WorldToScreen(corpse.Position, corpse.Z, _camera);
                 Color corpseTint = MultiplyColor(new Color(alpha, alpha, alpha, alpha), _ambientColor);
-                DrawSpriteFrame(atlas, fr.Frame.Value, sp, scale, fr.FlipX, corpseTint);
+
+                // While reanimating, MORPH the body from its death pose to the Standup START pose
+                // over the build-up (crossfade), so it visibly gathers before rising and hands off
+                // seamlessly to the risen unit. Both poses carry the same fading-in green outline,
+                // weighted to the crossfade so the pulse/curve stays continuous into the unit.
+                if (reanimating &&
+                    _reanimFx.TryGetCorpseOutline(corpse.ReanimInstanceId, out var co1, out var co2,
+                        out var cow, out var cpw, out var cps, out float morphT))
+                {
+                    var frUp = cad.Ctrl.GetFrameForStateStart(AnimState.Standup, corpse.FacingAngle);
+                    float wD = 1f - morphT, wU = morphT;
+
+                    DrawSpriteFrame(atlas, fr.Frame.Value, sp, scale, fr.FlipX, corpseTint * wD);
+                    if (frUp.Frame != null)
+                        DrawSpriteFrame(atlas, frUp.Frame.Value, sp, scale, frUp.FlipX, corpseTint * wU);
+
+                    DrawSpriteOutline(atlas, fr.Frame.Value, sp, scale, fr.FlipX,
+                        ScaleHdrA(co1, wD), ScaleHdrA(co2, wD), cow, cpw, cps, 1);
+                    if (frUp.Frame != null)
+                        DrawSpriteOutline(atlas, frUp.Frame.Value, sp, scale, frUp.FlipX,
+                            ScaleHdrA(co1, wU), ScaleHdrA(co2, wU), cow, cpw, cps, 1);
+                }
+                else
+                {
+                    DrawSpriteFrame(atlas, fr.Frame.Value, sp, scale, fr.FlipX, corpseTint);
+                }
+
                 if (corpse == hoveredCorpse)
                     _hoverBoxCorpse = SpriteFrameAABB(sp, fr.Frame.Value, scale, fr.FlipX);
-
-                // Reanimation: green undead outline fades IN on the corpse while the rise effect
-                // builds, before the unit spawns (the unit's own outline takes over on the rise).
-                if (corpse.ReanimInstanceId > 0 &&
-                    _reanimFx.TryGetCorpseOutline(corpse.ReanimInstanceId, out var co1, out var co2,
-                        out var cow, out var cpw, out var cps))
-                    DrawSpriteOutline(atlas, fr.Frame.Value, sp, scale, fr.FlipX, co1, co2, cow, cpw, cps, 1);
             }
 
             // Draw bagging progress bar
