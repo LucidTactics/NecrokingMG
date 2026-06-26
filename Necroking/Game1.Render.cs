@@ -436,6 +436,8 @@ public partial class Game1
         {
             _inventoryUI.Draw(screenW, screenH);
             _tableMenuUI.Draw();
+            _graveRosterUI.Draw();
+            _jobBoardUI.Draw();
         }
 
         // Character stats panel (Tab)

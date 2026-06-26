@@ -77,6 +77,91 @@ public class WorkerSystem
     }
 
     // ─────────────────────────────────────────────────────────────
+    //  UI support
+    // ─────────────────────────────────────────────────────────────
+
+    public struct WorkerCandidate { public uint Id; public string Name; }
+
+    /// <summary>Eligible (alive, undead, non-worker, non-necromancer) humanoid
+    /// undead not yet housed in a grave — the Grave Roster's assignable list.</summary>
+    public List<WorkerCandidate> UnassignedWorkers()
+    {
+        var list = new List<WorkerCandidate>();
+        for (int i = 0; i < _sim.Units.Count; i++)
+        {
+            if (!IsEligibleWorker(i)) continue;
+            var u = _sim.Units[i];
+            var def = _gameData.Units.Get(u.UnitDefID);
+            if (def != null && def.UndeadCategory == Data.Registries.UndeadCategory.Monster) continue; // humanoids only
+            string name = def != null && !string.IsNullOrEmpty(def.DisplayName) ? def.DisplayName
+                        : (string.IsNullOrEmpty(u.UnitDefID) ? u.Type.ToString() : u.UnitDefID);
+            list.Add(new WorkerCandidate { Id = u.Id, Name = $"{name} #{u.Id}" });
+        }
+        return list;
+    }
+
+    public WorkerCandidate? HousedWorker(int graveObjIdx)
+    {
+        for (int i = 0; i < _sim.Units.Count; i++)
+        {
+            var u = _sim.Units[i];
+            if (u.Alive && u.Archetype == WorkerArchetype && u.WorkerHomeObjIdx == graveObjIdx)
+            {
+                var def = _gameData.Units.Get(u.UnitDefID);
+                string name = def != null && !string.IsNullOrEmpty(def.DisplayName) ? def.DisplayName
+                            : (string.IsNullOrEmpty(u.UnitDefID) ? u.Type.ToString() : u.UnitDefID);
+                return new WorkerCandidate { Id = u.Id, Name = $"{name} #{u.Id}" };
+            }
+        }
+        return null;
+    }
+
+    public bool IsWorkerHomeDef(int objIdx)
+        => objIdx >= 0 && objIdx < _env.ObjectCount && _env.GetDef(_env.GetObject(objIdx).DefIndex).IsWorkerHome;
+
+    /// <summary>Player-effective cap = min(requested cap, building-derived max).</summary>
+    public int EffectiveCap(JobState js) => Math.Min(js.WorkerCap, DerivedMax(js.Def));
+
+    /// <summary>Storage shown on a job tile: (current, max). Spawn-unit jobs show
+    /// the undead population vs the soft cap; others sum the host buildings.</summary>
+    public (int cur, int max) JobStorage(JobDef def)
+    {
+        if (def.SpawnsUnit) return (CountUndead(), MaxUndead);
+        int defIdx = _env.FindDef(def.BuildingDefId);
+        if (defIdx < 0) return (0, 0);
+        int cur = 0, max = 0;
+        for (int i = 0; i < _env.ObjectCount; i++)
+        {
+            if (_env.GetObject(i).DefIndex != defIdx || !_env.GetObjectRuntime(i).Alive) continue;
+            cur += TotalStored(i);
+            var d = _env.GetDef(defIdx);
+            max += d.StorageCap > 0 ? d.StorageCap : 0;
+        }
+        return (cur, max);
+    }
+
+    /// <summary>True when the job's storage is full (tile shows paused/red).</summary>
+    public bool IsStorageFull(JobDef def)
+    {
+        var (cur, max) = JobStorage(def);
+        return max > 0 && cur >= max;
+    }
+
+    /// <summary>Reorder the job list (drag/▲▼) and renumber priorities.</summary>
+    public void MoveJob(int fromIndex, int toIndex)
+    {
+        if (fromIndex < 0 || fromIndex >= _jobStates.Count) return;
+        toIndex = Math.Clamp(toIndex, 0, _jobStates.Count - 1);
+        if (toIndex == fromIndex) return;
+        var js = _jobStates[fromIndex];
+        _jobStates.RemoveAt(fromIndex);
+        _jobStates.Insert(toIndex, js);
+        for (int i = 0; i < _jobStates.Count; i++) _jobStates[i].Priority = i;
+    }
+
+    public void SetCap(JobState js, int cap) => js.WorkerCap = Math.Max(0, cap);
+
+    // ─────────────────────────────────────────────────────────────
     //  Grave assignment
     // ─────────────────────────────────────────────────────────────
 

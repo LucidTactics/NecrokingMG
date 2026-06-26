@@ -83,6 +83,22 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     /// <summary>Deferred init for Inventory/Building/Crafting/Table menu UIs.
     /// Called lazily on the first frame any of those UIs needs to be drawn or
     /// updated. Idempotent — second call is a no-op via the flag.</summary>
+    /// <summary>Nearest Empty Grave (IsWorkerHome def) under the cursor, or -1.</summary>
+    private int FindGraveUnderCursor(Vec2 mouseWorld, float clickRange = 1.6f)
+    {
+        if (_envSystem == null) return -1;
+        int best = -1; float bestSq = clickRange * clickRange;
+        for (int i = 0; i < _envSystem.ObjectCount; i++)
+        {
+            var def = _envSystem.GetDef(_envSystem.GetObject(i).DefIndex);
+            if (!def.IsWorkerHome || !_envSystem.GetObjectRuntime(i).Alive) continue;
+            var o = _envSystem.GetObject(i);
+            float sq = (new Vec2(o.X, o.Y) - mouseWorld).LengthSq();
+            if (sq < bestSq) { bestSq = sq; best = i; }
+        }
+        return best;
+    }
+
     private void EnsureInventoryUIsInitialized()
     {
         if (_inventoryUIsInitialized) return;
@@ -118,6 +134,8 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         _tableMenuUI.SetSkillBook(_skillBookState);
         _tableMenuUI.StartCraftCallback = (envIdx) => StartTableCraft(envIdx);
         _tableMenuUI.DrawUnitIconCallback = (defId, rect) => DrawUnitIdleSprite(defId, rect);
+        _graveRosterUI.Init(_spriteBatch, _pixel, _font, _workerSystem);
+        _jobBoardUI.Init(_spriteBatch, _pixel, _font, _workerSystem);
         _unitInfoPanel.Init(_widgetRenderer, _gameData);
         _grimoireOverlay.Init(_widgetRenderer, _gameData,
             spell => SpellCaster.HasSpellRequirements(spell, _gameData, _sim.UnitsMut, FindNecromancer())
@@ -437,6 +455,8 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     private SoundEffect? _pickupSound;
     private readonly Game.ForagableSystem _foragables = new();
     private readonly Game.Jobs.WorkerSystem _workerSystem = new();
+    private readonly UI.GraveRosterUI _graveRosterUI = new();
+    private readonly UI.JobBoardUI _jobBoardUI = new();
     /// <summary>Wiggle/hover proximity for *idle* on-map foragables (not the
     /// in-flight arc visuals — those live in ForagableSystem). Stays in Game1
     /// because it's read by the on-map render pass, not by the pickup system.</summary>
@@ -2289,6 +2309,13 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             _inventoryUI.Toggle(GraphicsDevice.Viewport.Width, GraphicsDevice.Viewport.Height);
         }
 
+        // 'O' key toggles the job board (wOrk/jObs)
+        if (!anyTextInputActive && _input.WasKeyPressed(Keys.O) && _menuState == MenuState.None)
+        {
+            EnsureInventoryUIsInitialized();
+            _jobBoardUI.Toggle(GraphicsDevice.Viewport.Width, GraphicsDevice.Viewport.Height);
+        }
+
         // 'Tab' key toggles character stats
         if (!anyTextInputActive && _input.WasKeyPressed(Keys.Tab) && _menuState == MenuState.None)
             _characterStatsUI.Toggle();
@@ -3086,6 +3113,17 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
                     _tableMenuUI.OpenForTable(clickedTable, screenW, screenH, _camera, _renderer);
                     _input.ConsumeMouse();
                 }
+                else
+                {
+                    // Left-click an Empty Grave → open its worker-assignment roster.
+                    int clickedGrave = FindGraveUnderCursor(mouseWorld);
+                    if (clickedGrave >= 0)
+                    {
+                        EnsureInventoryUIsInitialized();
+                        _graveRosterUI.OpenForGrave(clickedGrave, screenW, screenH);
+                        _input.ConsumeMouse();
+                    }
+                }
             }
 
             // --- Foragable collection (right-click within 2 units of necromancer) ---
@@ -3392,6 +3430,8 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         _craftingMenu.Update(_input, screenW, screenH, dt);
         _grimoireOverlay.Update(_input, screenW, screenH);
         _tableMenuUI.Update(_input);
+        _graveRosterUI.Update(_input);
+        _jobBoardUI.Update(_input);
         // Inventory slot clicks (table deposit / consumable use) are dispatched via
         // _inventoryUI.OnSlotClicked, set in EnsureInventoryUIsInitialized — the
         // inventory is a modal layer whose inside-panel clicks PopupManager consumes

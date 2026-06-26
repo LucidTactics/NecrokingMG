@@ -512,6 +512,31 @@ public partial class Game1 {
                break;
             }
 
+            // Open the job board UI; optional arg expands a job's detail:
+            // window.dev('ui_job_board',['make_potions'])
+            case "ui_job_board": {
+               EnsureInventoryUIsInitialized();
+               if (!_jobBoardUI.IsVisible)
+                  _jobBoardUI.Toggle(GraphicsDevice.Viewport.Width, GraphicsDevice.Viewport.Height);
+               if (c.Args.Length >= 1) _jobBoardUI.Expand(c.Args[0]);
+               c.Complete(Necroking.Dev.DevServer.Ok($"job board visible={_jobBoardUI.IsVisible}"));
+               break;
+            }
+            // Open the grave roster UI for a grave (nearest if omitted): window.dev('ui_grave_roster',[graveObjIdx])
+            case "ui_grave_roster": {
+               int gi = c.Args.Length >= 1 ? (int)DevFloat(c.Args[0]) : -1;
+               if (gi < 0) {
+                  int gdef = _envSystem.FindDef("empty_grave");
+                  for (int i = 0; i < _envSystem.ObjectCount; i++)
+                     if (_envSystem.GetObject(i).DefIndex == gdef && _envSystem.GetObjectRuntime(i).Alive) { gi = i; break; }
+               }
+               if (gi < 0) { c.Complete(Necroking.Dev.DevServer.Error("no empty_grave found")); break; }
+               EnsureInventoryUIsInitialized();
+               _graveRosterUI.OpenForGrave(gi, GraphicsDevice.Viewport.Width, GraphicsDevice.Viewport.Height);
+               c.Complete(Necroking.Dev.DevServer.Ok($"grave roster opened for obj {gi}"));
+               break;
+            }
+
             // Spawn undead units enrolled in the necromancer's horde (HordeMinion
             // archetype + horde membership), unlike spawn_def which leaves them as
             // free AttackClosest units. Useful for exercising horde/command behavior.
