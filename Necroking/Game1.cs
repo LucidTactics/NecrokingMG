@@ -1104,14 +1104,13 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         // left alone — they ship with an empty default spellbar.
         if (mapName == "testmap" || mapName == "empty_test")
         {
-            // Reanimation-effect variant comparison: the 5 reanimate variants in the first
-            // slots so each can be cast on a corpse and compared; the OutOfRange/mana test
-            // projectile keeps the last slot.
+            // OutOfRange/NotEnoughMana/OnCooldown test projectile stays on the primary bar (Q).
+            _spellBarState.Slots[0] = new SpellBarSlot { SpellID = "test_projectile" };
+            // 5 reanimation-effect variants on number-key slots 1-5 (the SECONDARY bar, which
+            // is what keys D1-D5 cast) so each can be cast on a corpse and compared.
             string[] reanimVariants = { "reanimate_v1", "reanimate_v2", "reanimate_v3", "reanimate_v4", "reanimate_v5" };
-            for (int s = 0; s < reanimVariants.Length && s < _spellBarState.Slots.Length; s++)
-                _spellBarState.Slots[s] = new SpellBarSlot { SpellID = reanimVariants[s] };
-            if (_spellBarState.Slots.Length > reanimVariants.Length)
-                _spellBarState.Slots[_spellBarState.Slots.Length - 1] = new SpellBarSlot { SpellID = "test_projectile" };
+            for (int s = 0; s < reanimVariants.Length && s < _secondaryBarState.Slots.Length; s++)
+                _secondaryBarState.Slots[s] = new SpellBarSlot { SpellID = reanimVariants[s] };
         }
 
         // Empty test map: top up the necromancer's mana pool so high-cost
