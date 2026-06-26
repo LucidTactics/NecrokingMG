@@ -518,7 +518,6 @@ public partial class Game1 {
                EnsureInventoryUIsInitialized();
                if (!_jobBoardUI.IsVisible)
                   _jobBoardUI.Toggle(GraphicsDevice.Viewport.Width, GraphicsDevice.Viewport.Height);
-               if (c.Args.Length >= 1) _jobBoardUI.Expand(c.Args[0]);
                c.Complete(Necroking.Dev.DevServer.Ok($"job board visible={_jobBoardUI.IsVisible}"));
                break;
             }
