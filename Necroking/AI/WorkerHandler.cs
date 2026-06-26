@@ -26,6 +26,7 @@ public class WorkerHandler : IArchetypeHandler
     public const byte PhaseIdleAtHome = 4;
     public const byte PhaseProcGoToInput = 5;
     public const byte PhaseProcWork = 6;
+    public const byte PhaseCollectFetchInput = 7; // fetch a stock input (e.g. potion) before acting on the world source
 
     private const float SourceRange = 1.0f;
     private const float BuildingRange = 1.6f;
@@ -50,6 +51,7 @@ public class WorkerHandler : IArchetypeHandler
             case PhaseIdleAtHome:      IdleAtHome(ref ctx, ws); break;
             case PhaseProcGoToInput:   ProcGoToInput(ref ctx, ws); break;
             case PhaseProcWork:        ProcWork(ref ctx, ws); break;
+            case PhaseCollectFetchInput: CollectFetchInput(ref ctx, ws); break;
         }
     }
 
@@ -65,15 +67,28 @@ public class WorkerHandler : IArchetypeHandler
         int i = ctx.UnitIndex;
         ctx.Units[i].PreferredVel = Vec2.Zero;
 
-        // Holding collected goods? Go deliver them.
-        if (!string.IsNullOrEmpty(ctx.Units[i].WorkerCarryType))
-        { ctx.Units[i].WorkerPhase = PhaseGoToStorage; return; }
-
         var def = Job(ws, ref ctx);
         if (def == null) { ctx.Units[i].WorkerPhase = PhaseIdleAtHome; return; }
 
+        string carry = ctx.Units[i].WorkerCarryType;
+        bool carrying = !string.IsNullOrEmpty(carry);
+        // Holding the finished output? Go deliver it. (A carried *input* — e.g. a
+        // potion en route to a bush — is NOT the store resource, so it falls through.)
+        if (carrying && !string.IsNullOrEmpty(def.StoreResource) && carry == def.StoreResource)
+        { ctx.Units[i].WorkerPhase = PhaseGoToStorage; return; }
+
         if (def.Archetype == Game.Jobs.JobArchetype.Collect)
         {
+            // Stock inputs (e.g. Poison Berries needs a potion) — fetch one first.
+            if (def.Inputs.Count > 0 && !carrying)
+            {
+                var inp0 = def.Inputs[0];
+                int ib = ws.FindWithdrawBuilding(inp0.Resource, ctx.MyPos, inp0.Amount);
+                if (ib < 0) { ctx.Units[i].WorkerPhase = PhaseIdleAtHome; return; }
+                ctx.Units[i].WorkerTargetObjIdx = ib;
+                ctx.Units[i].WorkerPhase = PhaseCollectFetchInput;
+                return;
+            }
             int src = ws.FindNearestSource(def, ctx.MyPos);
             if (src < 0) { ctx.Units[i].WorkerPhase = PhaseIdleAtHome; return; }
             ctx.Units[i].WorkerTargetObjIdx = src;
@@ -165,14 +180,58 @@ public class WorkerHandler : IArchetypeHandler
         if (phase == WorkRoutine.Phase.WorkComplete)
         {
             env.PoisonBerryBush(target, DefaultBerryBuff);
-            ctx.Units[i].WorkerCarryType = string.IsNullOrEmpty(def!.StoreResource) ? "Poison" : def.StoreResource;
-            ctx.Units[i].WorkerCarryAmount = 1;
+            // The carried input (e.g. the potion) is spent on the bush.
+            ctx.Units[i].WorkerCarryType = "";
+            ctx.Units[i].WorkerCarryAmount = 0;
+            // If the job also stockpiles an output, pick it up to deliver; else done.
+            if (def != null && !string.IsNullOrEmpty(def.StoreResource))
+            {
+                ctx.Units[i].WorkerCarryType = def.StoreResource;
+                ctx.Units[i].WorkerCarryAmount = 1;
+            }
             ctx.Units[i].WorkerTargetObjIdx = -1;
         }
         else if (phase == WorkRoutine.Phase.Done)
         {
-            ctx.Units[i].WorkerPhase = PhaseGoToStorage;
+            ctx.Units[i].WorkerPhase = string.IsNullOrEmpty(ctx.Units[i].WorkerCarryType)
+                ? PhaseDecide : PhaseGoToStorage;
         }
+    }
+
+    /// <summary>Walk to the building holding this collect job's stock input, withdraw
+    /// it (e.g. a potion_poison), then head to the world source carrying it.</summary>
+    private void CollectFetchInput(ref AIContext ctx, Game.Jobs.WorkerSystem ws)
+    {
+        int i = ctx.UnitIndex;
+        var env = ctx.EnvSystem!;
+        var def = Job(ws, ref ctx);
+        if (def == null || def.Inputs.Count == 0) { ctx.Units[i].WorkerPhase = PhaseDecide; return; }
+        var inp = def.Inputs[0];
+        int bldg = ctx.Units[i].WorkerTargetObjIdx;
+
+        if (bldg < 0 || bldg >= env.ObjectCount || !env.GetObjectRuntime(bldg).Alive
+            || ws.StoredOf(bldg, inp.Resource) < inp.Amount)
+        { ctx.Units[i].WorkerPhase = PhaseDecide; return; }
+
+        var obj = env.GetObject(bldg);
+        MoveTo(ref ctx, new Vec2(obj.X, obj.Y));
+        if (!SubroutineSteps.MoveToPosition_Arrived(ref ctx, BuildingRange)) return;
+
+        int took = ws.Withdraw(bldg, inp.Resource, inp.Amount);
+        if (took < inp.Amount) { ctx.Units[i].WorkerPhase = PhaseDecide; return; }
+
+        int src = ws.FindNearestSource(def, ctx.MyPos);
+        if (src < 0)
+        {
+            // No source now — return the input so it isn't lost, then idle.
+            ws.Deposit(bldg, inp.Resource, took);
+            ctx.Units[i].WorkerPhase = PhaseIdleAtHome;
+            return;
+        }
+        ctx.Units[i].WorkerCarryType = inp.Resource;
+        ctx.Units[i].WorkerCarryAmount = took;
+        ctx.Units[i].WorkerTargetObjIdx = src;
+        ctx.Units[i].WorkerPhase = PhaseGoToSource;
     }
 
     private void GoToStorage(ref AIContext ctx, Game.Jobs.WorkerSystem ws)

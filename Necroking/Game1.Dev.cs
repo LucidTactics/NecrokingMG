@@ -431,6 +431,20 @@ public partial class Game1 {
                break;
             }
 
+            // Seed a building's stockpile: window.dev('stock_add',['alchemist_table','potion_poison','3'])
+            case "stock_add": {
+               if (c.Args.Length < 3) { c.Complete(Necroking.Dev.DevServer.Error("stock_add needs: <buildingDefId> <resource> <amount>")); break; }
+               int di = _envSystem.FindDef(c.Args[0]);
+               if (di < 0) { c.Complete(Necroking.Dev.DevServer.Error($"unknown def: {c.Args[0]}")); break; }
+               int amt = (int)DevFloat(c.Args[2]); int added = 0, obj = -1;
+               for (int i = 0; i < _envSystem.ObjectCount; i++)
+                  if (_envSystem.GetObject(i).DefIndex == di && _envSystem.GetObjectRuntime(i).Alive)
+                  { added = _workerSystem.Deposit(i, c.Args[1], amt); obj = i; break; }
+               c.Complete(obj >= 0 ? Necroking.Dev.DevServer.Ok($"added {added} {c.Args[1]} to {c.Args[0]} obj{obj}")
+                                   : Necroking.Dev.DevServer.Error($"no {c.Args[0]} placed"));
+               break;
+            }
+
             // Dump job + worker state: window.dev('jobs')
             case "jobs": {
                var sb = new System.Text.StringBuilder();

@@ -583,8 +583,14 @@ public class WorkerSystem
 
         if (def.Archetype == JobArchetype.Collect)
         {
-            if (FindDepositBuilding(def.StoreResource, anchor) < 0) return false; // storage full / none
-            return FindNearestSource(def, anchor) >= 0;                            // something to gather
+            // If the job stores an output, it needs somewhere with room to put it.
+            if (!string.IsNullOrEmpty(def.StoreResource) && FindDepositBuilding(def.StoreResource, anchor) < 0)
+                return false;
+            // Stock inputs (e.g. Poison Berries needs a potion_poison) must be obtainable.
+            foreach (var inp in def.Inputs)
+                if (FindWithdrawBuilding(inp.Resource, anchor, inp.Amount) < 0) return false;
+            // And there must be a world source to act on (a foragable / corpse / bush).
+            return FindNearestSource(def, anchor) >= 0;
         }
 
         // Process

@@ -81,8 +81,8 @@
     "isWorkerHome": false,
     "workerSlots": 1,
     "hostsJob": "poison_berries",
-    "storedResource": "Poison",
-    "storageCap": 20,
+    "storedResource": "",
+    "storageCap": 0,
     "randomFlip": false
   },
   {

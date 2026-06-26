@@ -28,7 +28,7 @@
     "buildingDefId": "poison_vat",
     "workerSlotsPerBuilding": 1,
     "collectKind": "berry",
-    "storeResource": "Poison"
+    "inputs": [ { "resource": "potion_poison", "amount": 1 } ]
   },
   {
     "id": "breakdown_corpses",
