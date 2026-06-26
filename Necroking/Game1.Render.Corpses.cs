@@ -128,6 +128,13 @@ public partial class Game1
                 DrawSpriteFrame(atlas, fr.Frame.Value, sp, scale, fr.FlipX, corpseTint);
                 if (corpse == hoveredCorpse)
                     _hoverBoxCorpse = SpriteFrameAABB(sp, fr.Frame.Value, scale, fr.FlipX);
+
+                // Reanimation: green undead outline fades IN on the corpse while the rise effect
+                // builds, before the unit spawns (the unit's own outline takes over on the rise).
+                if (corpse.ReanimInstanceId > 0 &&
+                    _reanimFx.TryGetCorpseOutline(corpse.ReanimInstanceId, out var co1, out var co2,
+                        out var cow, out var cpw, out var cps))
+                    DrawSpriteOutline(atlas, fr.Frame.Value, sp, scale, fr.FlipX, co1, co2, cow, cpw, cps, 1);
             }
 
             // Draw bagging progress bar

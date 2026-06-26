@@ -442,6 +442,7 @@ public partial class Game1 {
                     .Append($"\"dist\":{d.ToString("F1", ci)},")
                     .Append($"\"dissolving\":{(cp.Dissolving ? "true" : "false")},")
                     .Append($"\"consumed\":{(cp.ConsumedBySummon ? "true" : "false")},")
+                    .Append($"\"reanim\":{cp.ReanimInstanceId},")
                     .Append($"\"dragged\":{(cp.DraggedByUnitID != GameConstants.InvalidUnit ? "true" : "false")},")
                     .Append($"\"bagged\":{(cp.BaggedByUnitID != GameConstants.InvalidUnit ? "true" : "false")},")
                     .Append($"\"zombieType\":{System.Text.Json.JsonSerializer.Serialize(zt)}")

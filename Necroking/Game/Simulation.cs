@@ -15,6 +15,11 @@ public class Corpse
     public float DissolveTimer;
     public bool Dissolving;
     public bool ConsumedBySummon;
+    /// <summary>Non-zero while this corpse is mid-reanimation: the composite rise effect's
+    /// instance id (ReanimEffectSystem). The corpse stays fully visible (NO dissolve/blink) and
+    /// the renderer draws the green undead outline fading in on it; the unit rises + the corpse
+    /// is removed cleanly when the delay elapses.</summary>
+    public int ReanimInstanceId;
     public float Age;
     public int CorpseID;
     public UnitType UnitType = UnitType.Skeleton;
@@ -3936,6 +3941,22 @@ public class Simulation
             _corpses[corpseIdx].Dissolving = true;
             _corpses[corpseIdx].ConsumedBySummon = true;
         }
+    }
+
+    /// <summary>Remove a corpse immediately with NO dissolve/blink — used when a reanimation
+    /// replaces the body with a risen unit, so the corpse never plays its fade-out flicker.
+    /// Mirrors the carry/bag release in UpdateCorpses' dissolve-complete removal.</summary>
+    public void RemoveCorpseClean(int corpseID)
+    {
+        int idx = FindCorpseIndexByID(corpseID);
+        if (idx < 0) return;
+        int cid = _corpses[idx].CorpseID;
+        for (int u = 0; u < _units.Count; u++)
+        {
+            if (_units[u].CarryingCorpseID == cid) { _units[u].CarryingCorpseID = -1; _units[u].CorpseInteractPhase = 0; }
+            if (_units[u].BaggingCorpseID == cid) { _units[u].BaggingCorpseID = -1; _units[u].CorpseInteractPhase = 0; }
+        }
+        _corpses.RemoveAt(idx);
     }
 
     /// <summary>

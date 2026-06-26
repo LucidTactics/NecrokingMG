@@ -80,7 +80,9 @@ internal class ReanimEffectSystem
         public Vec2 Ground;
         public float Scale;
         public float Age;
-        public float OutlineStartAge;   // outline fade clock starts here (set when the unit attaches)
+        public float OutlineStartAge;   // outline FADE-OUT clock starts here (set when the unit attaches)
+        public float OutlineFadeIn;     // corpse-phase outline FADE-IN window (0->1 over this); 0 = none
+        public bool HasUnit;            // false while only the corpse is present (outline fades in on it)
         public float Life;   // removed when Age >= Life (the longest layer)
         public ReanimConfig Cfg;
         public readonly List<Puff> Clouds = new();
@@ -114,7 +116,7 @@ internal class ReanimEffectSystem
     /// falls back to "reanim_classic" if unknown/empty. Returns a stable instance id; pass
     /// <see cref="GameConstants.InvalidUnit"/> for unitId when the unit hasn't spawned yet
     /// and call <see cref="SetUnitId"/> once it does, so the outline attaches on the rise.</summary>
-    public int Begin(uint unitId, Vec2 ground, float scale, string? configId)
+    public int Begin(uint unitId, Vec2 ground, float scale, string? configId, float outlineFadeIn = 0f)
     {
         if (!_configs.TryGetValue(configId ?? "", out var cfg))
             cfg = _configs.TryGetValue("reanim_classic", out var def) ? def : default;
@@ -125,7 +127,8 @@ internal class ReanimEffectSystem
         if (life <= 0f) return 0;
 
         int id = _nextInstanceId++;
-        var inst = new Instance { InstanceId = id, UnitId = unitId, Ground = ground, Scale = scale, Cfg = cfg, Life = life };
+        var inst = new Instance { InstanceId = id, UnitId = unitId, Ground = ground, Scale = scale,
+            Cfg = cfg, Life = life, OutlineFadeIn = outlineFadeIn, HasUnit = unitId != uint.MaxValue };
 
         // Pre-schedule the cloud + dust puffs across the spawn window so new puffs keep
         // appearing as the unit rises, then linger + fade over their own lifetimes.
@@ -151,6 +154,7 @@ internal class ReanimEffectSystem
             if (_active[i].InstanceId != instanceId) continue;
             var inst = _active[i];
             inst.UnitId = unitId;
+            inst.HasUnit = true;
             inst.OutlineStartAge = inst.Age;   // outline fades over its full duration from NOW
             inst.Life = MathF.Max(inst.Life, inst.OutlineStartAge + inst.Cfg.OutlineDuration);
             return;
@@ -207,6 +211,30 @@ internal class ReanimEffectSystem
             float fade = MathF.Max(0f, 1f - (inst.Age - inst.OutlineStartAge) / inst.Cfg.OutlineDuration);
             c1 = ScaleAlpha(inst.Cfg.OutlineColor, fade);
             c2 = ScaleAlpha(inst.Cfg.OutlinePulseColor, fade);
+            width = inst.Cfg.OutlineWidth;
+            pulseWidth = inst.Cfg.OutlinePulseWidth;
+            pulseSpeed = inst.Cfg.OutlinePulseSpeed;
+            return true;
+        }
+        return false;
+    }
+
+    /// <summary>Outline params for a corpse that's reanimating (the unit hasn't spawned yet),
+    /// keyed by effect instance id, with the outline alpha fading IN (0->1 over the spawn delay).
+    /// Returns false once the unit has attached — the outline moves to the unit (fade out) then.</summary>
+    public bool TryGetCorpseOutline(int instanceId, out HdrColor c1, out HdrColor c2,
+        out float width, out float pulseWidth, out float pulseSpeed)
+    {
+        c1 = default; c2 = default; width = 0; pulseWidth = 0; pulseSpeed = 0;
+        if (instanceId <= 0) return false;
+        for (int i = 0; i < _active.Count; i++)
+        {
+            var inst = _active[i];
+            if (inst.InstanceId != instanceId || inst.HasUnit) continue;
+            float fadeIn = inst.OutlineFadeIn > 0f
+                ? MathHelper.Clamp(inst.Age / inst.OutlineFadeIn, 0f, 1f) : 1f;
+            c1 = ScaleAlpha(inst.Cfg.OutlineColor, fadeIn);
+            c2 = ScaleAlpha(inst.Cfg.OutlinePulseColor, fadeIn);
             width = inst.Cfg.OutlineWidth;
             pulseWidth = inst.Cfg.OutlinePulseWidth;
             pulseSpeed = inst.Cfg.OutlinePulseSpeed;

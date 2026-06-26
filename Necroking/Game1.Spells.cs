@@ -42,13 +42,11 @@ public partial class Game1 {
                continue;
 
             var spawnPos = corpse.Position;
-            float corpseFacing = corpse.FacingAngle;
-            _sim.ConsumeCorpse(i);
 
-            // Canonical horde-raise (HordeMinion archetype: leash + jog/run gait). The rise
-            // effect plays NOW at the grave; the unit spawns + does its slow standup after a
-            // short delay (QueueReanimRise) so the smoke/clouds build before the body gets up.
-            QueueReanimRise(resolvedID, spawnPos, corpseFacing, spell.ReanimationEffectID);
+            // Keep the corpse visible; QueueReanimRise claims it + plays the rise effect (green
+            // outline fading in on the body), then spawns the unit + removes the corpse cleanly
+            // after a short delay so the smoke/clouds build first. (Legacy spells dissolve + spawn now.)
+            QueueReanimRise(resolvedID, corpse.CorpseID, spell.ReanimationEffectID);
             raised++;
 
             // Spawn summon effect at each corpse location
@@ -56,7 +54,6 @@ public partial class Game1 {
          }
       } else {
          // Single corpse consume (Corpse targeting)
-         float corpseFacing = 0f;
          bool fromCorpse = false; // set when a corpse is consumed; drives the horde-minion
                                   // raise. Do NOT use corpseFacing's sign for this — FacingAngle
                                   // can legitimately be negative, which mis-routed negative-facing
@@ -77,9 +74,9 @@ public partial class Game1 {
                if (string.IsNullOrEmpty(summonUnitID))
                   summonUnitID = Game.TableCraftingSystem.ResolveZombieUnitID(_gameData, corpse.UnitDefID);
 
-               corpseFacing = corpse.FacingAngle;
                fromCorpse = true;
-               _sim.ConsumeCorpse(corpseIdx);
+               // corpse is NOT consumed here — QueueReanimRise (below) claims it and either plays
+               // the rise effect (keeping it visible) or legacy-dissolves it.
             }
          }
 
@@ -141,11 +138,10 @@ public partial class Game1 {
                }
 
                if (fromCorpse) {
-                  // Corpse reanimation → canonical horde minion (HordeMinion archetype:
-                  // leash + jog/run gait), same path as table crafting. The rise effect plays
-                  // NOW at the grave; the unit spawns + stands up after a short delay
-                  // (QueueReanimRise) so the smoke builds before the body gets up.
-                  QueueReanimRise(summonUnitID, unitSpawnPos, corpseFacing, spell.ReanimationEffectID);
+                  // Corpse reanimation → canonical horde minion (HordeMinion archetype). The rise
+                  // effect plays NOW at the grave (corpse stays visible, green outline fading in);
+                  // the unit spawns + stands up + the corpse is removed after a short delay.
+                  QueueReanimRise(summonUnitID, pending.TargetCorpseID, spell.ReanimationEffectID);
                } else {
                   // Non-corpse summon (e.g. summon-from-def): plain spawn + horde enroll.
                   SpawnUnit(summonUnitID, unitSpawnPos);
@@ -172,18 +168,28 @@ public partial class Game1 {
       public float Facing;
       public string DefId;
       public int FxInstanceId;   // ReanimEffectSystem handle, so the outline attaches on spawn
+      public int CorpseId;       // source corpse — removed cleanly (no blink/fade) when the unit rises
       public float Timer;
    }
    private readonly List<PendingReanimRise> _pendingReanimRises = new();
 
-   /// <summary>Start the rise effect at <paramref name="pos"/> now and queue the unit's
-   /// spawn + slow standup for <paramref name="delay"/>s later (effect builds first).</summary>
-   void QueueReanimRise(string defId, Vec2 pos, float facing, string? configId, float delay = 1.5f)
+   /// <summary>Raise the corpse with stable id <paramref name="corpseId"/>. With a composite rise
+   /// effect: keep the corpse fully VISIBLE (no dissolve/blink), play the effect with a green undead
+   /// outline fading IN on the corpse, then after <paramref name="delay"/>s spawn the unit + its slow
+   /// standup and remove the corpse cleanly. Without one (stock reanimate_corpse): the unchanged
+   /// legacy path — dissolve the corpse + spawn immediately.</summary>
+   void QueueReanimRise(string defId, int corpseId, string? configId, float delay = 1.5f)
    {
-      // No composite rise effect configured (e.g. the stock reanimate_corpse, which plays its
-      // own summon flipbook) → spawn + stand up immediately: the unchanged legacy behavior.
+      int idx = _sim.FindCorpseIndexByID(corpseId);
+      if (idx < 0) return;                       // corpse already gone — nothing to raise
+      var corpse = _sim.Corpses[idx];
+      Vec2 pos = corpse.Position;
+      float facing = corpse.FacingAngle;
+
       if (string.IsNullOrEmpty(configId) || !_reanimFx.HasConfig(configId))
       {
+         // Legacy: dissolve the corpse (its own blink/fade) and spawn + stand up immediately.
+         _sim.ConsumeCorpse(idx);
          int now = _sim.SpawnZombieMinion(defId, pos);
          if (now >= 0)
          {
@@ -192,12 +198,15 @@ public partial class Game1 {
          }
          return;
       }
-      // Composite effect: play it at the grave now, defer the unit spawn + slow standup so the
-      // smoke/clouds build first; the outline attaches to the unit when it appears.
-      float scale = _gameData.Units.Get(defId)?.SpriteScale ?? 1f;
-      int fxId = _reanimFx.Begin(GameConstants.InvalidUnit, pos, scale, configId);
+
+      // Composite effect: claim the corpse (other systems skip ConsumedBySummon) but leave
+      // Dissolving=false so it stays fully visible; the renderer draws the green outline fading in
+      // on it. The unit spawns + the corpse is removed cleanly after the delay (TickPendingReanimRises).
+      corpse.ConsumedBySummon = true;
+      int fxId = _reanimFx.Begin(GameConstants.InvalidUnit, pos, corpse.SpriteScale, configId, outlineFadeIn: delay);
+      corpse.ReanimInstanceId = fxId;
       _pendingReanimRises.Add(new PendingReanimRise
-         { Pos = pos, Facing = facing, DefId = defId, FxInstanceId = fxId, Timer = delay });
+         { Pos = pos, Facing = facing, DefId = defId, FxInstanceId = fxId, CorpseId = corpseId, Timer = delay });
    }
 
    /// <summary>Tick queued rises (called each sim step alongside the effect update). When a
@@ -212,6 +221,7 @@ public partial class Game1 {
          if (pr.Timer > 0f) { _pendingReanimRises[i] = pr; continue; }
          _pendingReanimRises.RemoveAt(i);
 
+         _sim.RemoveCorpseClean(pr.CorpseId);   // body vanishes cleanly as the unit takes its place
          int idx = _sim.SpawnZombieMinion(pr.DefId, pr.Pos);
          if (idx >= 0)
          {
