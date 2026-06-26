@@ -45,16 +45,11 @@ public partial class Game1 {
             float corpseFacing = corpse.FacingAngle;
             _sim.ConsumeCorpse(i);
 
-            // Canonical horde-raise: wires the HordeMinion archetype (leash + the
-            // jog/run gait system) and enrolls in the horde. Bare SpawnUnit left animal
-            // zombies on the legacy AttackClosest AI + never-jogging legacy anim path.
-            int idx = _sim.SpawnZombieMinion(resolvedID, spawnPos);
-            if (idx >= 0) {
-               _sim.UnitsMut[idx].FacingAngle = corpseFacing;
-               BuffSystem.BeginReanimationRise(_sim.UnitsMut, idx, holdDelay: 1.5f);
-               _reanimFx.Begin(_sim.Units[idx].Id, _sim.Units[idx].Position, _sim.Units[idx].SpriteScale, spell.ReanimationEffectID);
-               raised++;
-            }
+            // Canonical horde-raise (HordeMinion archetype: leash + jog/run gait). The rise
+            // effect plays NOW at the grave; the unit spawns + does its slow standup after a
+            // short delay (QueueReanimRise) so the smoke/clouds build before the body gets up.
+            QueueReanimRise(resolvedID, spawnPos, corpseFacing, spell.ReanimationEffectID);
+            raised++;
 
             // Spawn summon effect at each corpse location
             SpawnSummonEffect(spell, spawnPos);
@@ -145,20 +140,16 @@ public partial class Game1 {
                   unitSpawnPos = spawnPos + new Vec2(MathF.Cos(angle) * 1f, MathF.Sin(angle) * 1f);
                }
 
-               int idx;
                if (fromCorpse) {
                   // Corpse reanimation → canonical horde minion (HordeMinion archetype:
-                  // leash + jog/run gait), same path as table crafting.
-                  idx = _sim.SpawnZombieMinion(summonUnitID, unitSpawnPos);
-                  if (idx >= 0) {
-                     _sim.UnitsMut[idx].FacingAngle = corpseFacing;
-                     BuffSystem.BeginReanimationRise(_sim.UnitsMut, idx, holdDelay: 1.5f);
-                     _reanimFx.Begin(_sim.Units[idx].Id, _sim.Units[idx].Position, _sim.Units[idx].SpriteScale, spell.ReanimationEffectID);
-                  }
+                  // leash + jog/run gait), same path as table crafting. The rise effect plays
+                  // NOW at the grave; the unit spawns + stands up after a short delay
+                  // (QueueReanimRise) so the smoke builds before the body gets up.
+                  QueueReanimRise(summonUnitID, unitSpawnPos, corpseFacing, spell.ReanimationEffectID);
                } else {
                   // Non-corpse summon (e.g. summon-from-def): plain spawn + horde enroll.
                   SpawnUnit(summonUnitID, unitSpawnPos);
-                  idx = _sim.Units.Count - 1;
+                  int idx = _sim.Units.Count - 1;
                   if (idx >= 0 && _sim.Units[idx].Faction == Faction.Undead &&
                       _sim.Units[idx].AI != AIBehavior.PlayerControlled)
                      _sim.Horde.AddUnit(_sim.Units[idx].Id);
@@ -167,6 +158,66 @@ public partial class Game1 {
 
             // Spawn summon effect at the primary spawn location
             SpawnSummonEffect(spell, spawnPos);
+         }
+      }
+   }
+
+   // --- Deferred reanimation rise ------------------------------------------------
+   // The composite rise effect (ReanimEffectSystem) plays at the grave the instant the
+   // spell resolves, but the reanimated unit only spawns + plays its slow standup a short
+   // delay later, so the smoke/clouds build up before the body actually gets up.
+   private struct PendingReanimRise
+   {
+      public Vec2 Pos;
+      public float Facing;
+      public string DefId;
+      public int FxInstanceId;   // ReanimEffectSystem handle, so the outline attaches on spawn
+      public float Timer;
+   }
+   private readonly List<PendingReanimRise> _pendingReanimRises = new();
+
+   /// <summary>Start the rise effect at <paramref name="pos"/> now and queue the unit's
+   /// spawn + slow standup for <paramref name="delay"/>s later (effect builds first).</summary>
+   void QueueReanimRise(string defId, Vec2 pos, float facing, string? configId, float delay = 1.5f)
+   {
+      // No composite rise effect configured (e.g. the stock reanimate_corpse, which plays its
+      // own summon flipbook) → spawn + stand up immediately: the unchanged legacy behavior.
+      if (string.IsNullOrEmpty(configId) || !_reanimFx.HasConfig(configId))
+      {
+         int now = _sim.SpawnZombieMinion(defId, pos);
+         if (now >= 0)
+         {
+            _sim.UnitsMut[now].FacingAngle = facing;
+            BuffSystem.BeginReanimationRise(_sim.UnitsMut, now);
+         }
+         return;
+      }
+      // Composite effect: play it at the grave now, defer the unit spawn + slow standup so the
+      // smoke/clouds build first; the outline attaches to the unit when it appears.
+      float scale = _gameData.Units.Get(defId)?.SpriteScale ?? 1f;
+      int fxId = _reanimFx.Begin(GameConstants.InvalidUnit, pos, scale, configId);
+      _pendingReanimRises.Add(new PendingReanimRise
+         { Pos = pos, Facing = facing, DefId = defId, FxInstanceId = fxId, Timer = delay });
+   }
+
+   /// <summary>Tick queued rises (called each sim step alongside the effect update). When a
+   /// delay elapses, spawn the horde minion, start its slow standup, and attach its outline
+   /// to the already-running effect.</summary>
+   void TickPendingReanimRises(float dt)
+   {
+      for (int i = _pendingReanimRises.Count - 1; i >= 0; i--)
+      {
+         var pr = _pendingReanimRises[i];
+         pr.Timer -= dt;
+         if (pr.Timer > 0f) { _pendingReanimRises[i] = pr; continue; }
+         _pendingReanimRises.RemoveAt(i);
+
+         int idx = _sim.SpawnZombieMinion(pr.DefId, pr.Pos);
+         if (idx >= 0)
+         {
+            _sim.UnitsMut[idx].FacingAngle = pr.Facing;
+            BuffSystem.BeginReanimationRise(_sim.UnitsMut, idx);
+            _reanimFx.SetUnitId(pr.FxInstanceId, _sim.Units[idx].Id);
          }
       }
    }

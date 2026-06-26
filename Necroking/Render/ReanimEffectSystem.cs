@@ -75,10 +75,12 @@ internal class ReanimEffectSystem
 
     private class Instance
     {
+        public int InstanceId;          // stable handle so a deferred unit spawn can attach its outline
         public uint UnitId;
         public Vec2 Ground;
         public float Scale;
         public float Age;
+        public float OutlineStartAge;   // outline fade clock starts here (set when the unit attaches)
         public float Life;   // removed when Age >= Life (the longest layer)
         public ReanimConfig Cfg;
         public readonly List<Puff> Clouds = new();
@@ -89,6 +91,7 @@ internal class ReanimEffectSystem
     private static readonly BezierCurve PuffAlpha = new(0f, 1f, 0.9f, 0f);
 
     private readonly List<Instance> _active = new();
+    private int _nextInstanceId = 1;   // monotonic; 0 is reserved as "no handle"
     private readonly Dictionary<string, ReanimConfig> _configs = new();
     private readonly Random _rng = new(1234);
 
@@ -107,9 +110,11 @@ internal class ReanimEffectSystem
 
     public bool HasConfig(string id) => _configs.ContainsKey(id);
 
-    /// <summary>Begin a reanimation effect for a rising unit. configId selects the
-    /// variant; falls back to "reanim_classic" if unknown/empty.</summary>
-    public void Begin(uint unitId, Vec2 ground, float scale, string? configId)
+    /// <summary>Begin a reanimation effect at a ground spot. configId selects the variant;
+    /// falls back to "reanim_classic" if unknown/empty. Returns a stable instance id; pass
+    /// <see cref="GameConstants.InvalidUnit"/> for unitId when the unit hasn't spawned yet
+    /// and call <see cref="SetUnitId"/> once it does, so the outline attaches on the rise.</summary>
+    public int Begin(uint unitId, Vec2 ground, float scale, string? configId)
     {
         if (!_configs.TryGetValue(configId ?? "", out var cfg))
             cfg = _configs.TryGetValue("reanim_classic", out var def) ? def : default;
@@ -117,9 +122,10 @@ internal class ReanimEffectSystem
         // last puff (spawn window + the puff's own lifetime).
         float life = MathF.Max(cfg.OutlineDuration, MathF.Max(cfg.LightDuration,
             cfg.SpawnWindow + MathF.Max(cfg.CloudLifetime, cfg.DustLifetime)));
-        if (life <= 0f) return;
+        if (life <= 0f) return 0;
 
-        var inst = new Instance { UnitId = unitId, Ground = ground, Scale = scale, Cfg = cfg, Life = life };
+        int id = _nextInstanceId++;
+        var inst = new Instance { InstanceId = id, UnitId = unitId, Ground = ground, Scale = scale, Cfg = cfg, Life = life };
 
         // Pre-schedule the cloud + dust puffs across the spawn window so new puffs keep
         // appearing as the unit rises, then linger + fade over their own lifetimes.
@@ -131,6 +137,24 @@ internal class ReanimEffectSystem
                 cfg.DustRise, cfg.SpawnWindow, scale, scatter: 0.8f));
 
         _active.Add(inst);
+        return id;
+    }
+
+    /// <summary>Attach a now-spawned unit to a running effect that was begun with a
+    /// placeholder unit id, so its outline starts on the rise. Restarts the outline fade
+    /// from now and extends the instance life to fit the outline if needed.</summary>
+    public void SetUnitId(int instanceId, uint unitId)
+    {
+        if (instanceId <= 0) return;
+        for (int i = 0; i < _active.Count; i++)
+        {
+            if (_active[i].InstanceId != instanceId) continue;
+            var inst = _active[i];
+            inst.UnitId = unitId;
+            inst.OutlineStartAge = inst.Age;   // outline fades over its full duration from NOW
+            inst.Life = MathF.Max(inst.Life, inst.OutlineStartAge + inst.Cfg.OutlineDuration);
+            return;
+        }
     }
 
     private Puff MakePuff(HdrColor color, float worldSize, float lifetime, float rise,
@@ -178,8 +202,9 @@ internal class ReanimEffectSystem
         {
             var inst = _active[i];
             if (inst.UnitId != unitId) continue;
-            // Linear fade of the outline alpha across its own (longer) duration.
-            float fade = MathF.Max(0f, 1f - inst.Age / inst.Cfg.OutlineDuration);
+            // Linear fade of the outline alpha across its own (longer) duration, measured
+            // from when the unit attached (so a deferred rise gets the full-strength outline).
+            float fade = MathF.Max(0f, 1f - (inst.Age - inst.OutlineStartAge) / inst.Cfg.OutlineDuration);
             c1 = ScaleAlpha(inst.Cfg.OutlineColor, fade);
             c2 = ScaleAlpha(inst.Cfg.OutlinePulseColor, fade);
             width = inst.Cfg.OutlineWidth;

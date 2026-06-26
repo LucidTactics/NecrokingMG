@@ -764,6 +764,7 @@ public partial class Game1
 
         _effectManager.Update(dt);
         _reanimFx.Update(dt);
+        TickPendingReanimRises(dt);   // spawn deferred rises in lockstep with their effect clock
         _buffVisuals.Update(dt, _sim.Units, _gameData.Buffs, _gameTime);
         _foragables.Update(dt);
         UpdateSkillLearnToasts(dt);
