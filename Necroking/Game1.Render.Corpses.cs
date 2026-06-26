@@ -103,7 +103,14 @@ public partial class Game1
             if (!corpse.InPhysics && cad.Ctrl.CurrentState == AnimState.Fall)
                 cad.Ctrl.ForceStateAtEnd(AnimState.Death);
 
-            if (!cad.Ctrl.IsAnimFinished && !_paused)
+            // A reanimating corpse pre-poses into the rise: hold the Standup FIRST frame so the
+            // hand-off to the risen unit (which begins Standup at frame 0) is seamless — no
+            // Death->Standup pop. The green rise outline appearing masks this initial snap.
+            bool reanimating = corpse.ReanimInstanceId > 0;
+            if (reanimating)
+                cad.Ctrl.ForceStateAtStart(AnimState.Standup);
+
+            if (!reanimating && !cad.Ctrl.IsAnimFinished && !_paused)
                 cad.Ctrl.Update(MathF.Min(_rawDt, 1f / 20f) * _timeScale);
 
             int alphaInt = 255;

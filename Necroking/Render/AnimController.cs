@@ -489,6 +489,16 @@ public class AnimController
         _finished = true;
     }
 
+    /// <summary>Force a state pinned to its FIRST frame, overriding even the sticky Death state
+    /// (which RequestState/ForceState bail out of). Used to pre-pose a reanimating corpse into
+    /// the Standup start so the rise hands off to the risen unit with no Death->Standup pop.
+    /// Hold the frame by simply not calling Update().</summary>
+    public void ForceStateAtStart(AnimState newState)
+    {
+        if (_currentState == newState) return;   // already posed — leave the held frame alone
+        SwitchState(newState);                   // resets _animTime=0 / _finished=false; ignores the Death guard
+    }
+
     private static bool IsLocomotionState(AnimState s) =>
         s == AnimState.Walk || s == AnimState.Jog || s == AnimState.Run;
 

@@ -434,6 +434,7 @@ public partial class Game1 {
                   var cp = _sim.Corpses[i];
                   float d = nIdx >= 0 ? (cp.Position - nPos).Length() : -1f;
                   string zt = Necroking.Game.TableCraftingSystem.ResolveZombieUnitID(_gameData, cp.UnitDefID);
+                  string canim = _corpseAnims.TryGetValue(cp.CorpseID, out var cadDbg) ? cadDbg.Ctrl.CurrentState.ToString() : "none";
                   sb.Append('{')
                     .Append($"\"i\":{i},")
                     .Append($"\"def\":{System.Text.Json.JsonSerializer.Serialize(cp.UnitDefID)},")
@@ -443,6 +444,7 @@ public partial class Game1 {
                     .Append($"\"dissolving\":{(cp.Dissolving ? "true" : "false")},")
                     .Append($"\"consumed\":{(cp.ConsumedBySummon ? "true" : "false")},")
                     .Append($"\"reanim\":{cp.ReanimInstanceId},")
+                    .Append($"\"anim\":{System.Text.Json.JsonSerializer.Serialize(canim)},")
                     .Append($"\"dragged\":{(cp.DraggedByUnitID != GameConstants.InvalidUnit ? "true" : "false")},")
                     .Append($"\"bagged\":{(cp.BaggedByUnitID != GameConstants.InvalidUnit ? "true" : "false")},")
                     .Append($"\"zombieType\":{System.Text.Json.JsonSerializer.Serialize(zt)}")
