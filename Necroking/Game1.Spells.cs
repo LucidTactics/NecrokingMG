@@ -41,16 +41,13 @@ public partial class Game1 {
                 && HordeCapTracker.Available(_sim.Units, _gameData, _sim.NecroState, aoeCat) <= 0)
                continue;
 
-            var spawnPos = corpse.Position;
-
             // Keep the corpse visible; QueueReanimRise claims it + plays the rise effect (green
             // outline fading in on the body), then spawns the unit + removes the corpse cleanly
             // after a short delay so the smoke/clouds build first. (Legacy spells dissolve + spawn now.)
+            // The reanim_smoke composite is the ONLY raise VFX now — the old green fire_loop summon
+            // flame is no longer layered on top of an AOE raise.
             QueueReanimRise(resolvedID, corpse.CorpseID, spell.ReanimationEffectID);
             raised++;
-
-            // Spawn summon effect at each corpse location
-            SpawnSummonEffect(spell, spawnPos);
          }
       } else {
          // Single corpse consume (Corpse targeting)
@@ -152,8 +149,10 @@ public partial class Game1 {
                }
             }
 
-            // Spawn summon effect at the primary spawn location
-            SpawnSummonEffect(spell, spawnPos);
+            // Spawn summon effect at the primary spawn location — only for a from-nothing summon.
+            // A corpse reanimation already gets the reanim_smoke composite at the grave; the legacy
+            // green fire_loop flame used to double up on raises, so suppress it here when fromCorpse.
+            if (!fromCorpse) SpawnSummonEffect(spell, spawnPos);
          }
       }
    }
