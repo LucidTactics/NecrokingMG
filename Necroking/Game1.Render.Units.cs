@@ -994,7 +994,7 @@ public partial class Game1
     private static void HoverStyle(int style, out int thickness, out byte alpha)
     {
         thickness = (style == 0 || style == 2) ? 3 : 1;
-        alpha     = (style == 0 || style == 1) ? (byte)235 : (byte)80;
+        alpha     = (style == 0 || style == 1) ? (byte)235 : (byte)115;   // Faint ≈ 45% opacity
     }
 
     private void FillRect(int x, int y, int w, int h, Color c)
