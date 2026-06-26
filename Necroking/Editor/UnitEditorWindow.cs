@@ -133,6 +133,9 @@ public class UnitEditorWindow
 
     // --- Equipment sub-editor popup state ---
     private enum SubEditor { None, Weapon, Armor, Shield }
+    /// <summary>InputLayer raised while a sub-editor popup is open so the main editor
+    /// panels behind it stop hit-testing (they draw first). See Draw + DrawSubEditor.</summary>
+    private const int SubEditorInputLayer = 1;
     private SubEditor _activeSubEditor = SubEditor.None;
     private int _subSelectedIdx = -1;
     private string _subSearchFilter = "";
@@ -303,6 +306,14 @@ public class UnitEditorWindow
         if (_statusTimer > 0) _statusTimer -= dt;
 
         SyncSubPopupsModalState(screenW, screenH);
+
+        // A sub-editor popup (weapon/armor/shield) draws on top of the main panels and
+        // owns input while open. The main panels draw first (below), so raise the input
+        // layer here to block their widgets from also consuming the click — DrawSubEditor
+        // drops it back to 0 for its own widgets. (The ActionModalLayer it registers only
+        // blocks world/ESC routing via PopupManager, not the immediate-mode widget layer.)
+        if (_activeSubEditor != SubEditor.None && _ui.InputLayer < SubEditorInputLayer)
+            _ui.InputLayer = SubEditorInputLayer;
 
         // --- Dark overlay behind panel ---
         _ui.DrawRect(new Rectangle(0, 0, screenW, screenH), new Color(0, 0, 0, 160));
@@ -2814,6 +2825,12 @@ public class UnitEditorWindow
 
     private void DrawSubEditor(int screenW, int screenH)
     {
+        // We were drawn with InputLayer raised (see Draw) so the panels behind us are
+        // input-blocked. Drop it to 0 so our own widgets respond — but only if WE raised
+        // it; an open dropdown sets a higher layer (2) that must stay to block siblings.
+        int savedLayer = _ui.InputLayer;
+        if (savedLayer == SubEditorInputLayer) _ui.InputLayer = 0;
+
         // Modal overlay
         _ui.DrawRect(new Rectangle(0, 0, screenW, screenH), new Color(0, 0, 0, 120));
 
@@ -2837,6 +2854,7 @@ public class UnitEditorWindow
         {
             _activeSubEditor = SubEditor.None;
             _subSelectedIdx = -1;
+            _ui.InputLayer = savedLayer;
             return;
         }
 
@@ -2860,6 +2878,8 @@ public class UnitEditorWindow
         // --- Bottom CRUD buttons ---
         int bottomY = popY + popH - 34;
         DrawSubEditorCrudButtons(popX, bottomY, popW);
+
+        _ui.InputLayer = savedLayer;
     }
 
     // ---- WEAPON SUB-EDITOR ----
