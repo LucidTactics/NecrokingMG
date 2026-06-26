@@ -179,10 +179,6 @@ public partial class Game1
 
         _spriteBatch.End();
 
-        // Snapshot the hover boxes for next frame's behind-the-sprite Circle decal (the live
-        // boxes are only captured mid-sprite-pass, so the scene-pass ring lags by one frame).
-        _prevHoverBoxObject = _hoverBoxObject; _prevHoverBoxCorpse = _hoverBoxCorpse; _prevHoverBoxUnit = _hoverBoxUnit;
-
         // Spawn new effects from impacts (once per frame, before drawing)
         SpawnImpactEffects();
 

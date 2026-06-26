@@ -948,8 +948,9 @@ public partial class Game1
     }
 
     /// <summary>Hover-highlight Circle variant: a faint ground ellipse rendered BEHIND the
-    /// sprites (RTS selection-circle look). Called in the scene pass before corpses/units; uses
-    /// the previous frame's captured boxes (the live ones aren't known until mid-sprite-pass).</summary>
+    /// sprites (RTS selection-circle look). Anchored to the object's CURRENT world position and a
+    /// STABLE world-space radius (its collision footprint), projected fresh each frame — so the ring
+    /// doesn't pulse as the sprite animates, and stays locked under the object as the camera moves.</summary>
     private void DrawHoverGroundCircles()
     {
         if (!_gameData.Settings.Tooltips.ShowHoverHighlight || _hoverHighlightVariant >= 12) return;
@@ -958,15 +959,34 @@ public partial class Game1
         // FromNonPremultiplied: the hover passes use premultiplied AlphaBlend, so scale RGB by
         // alpha — otherwise a low alpha washes the colour out (lighter hue) instead of fading it.
         var c = Color.FromNonPremultiplied(255, 230, 120, alpha);
-        void Ring(Rectangle? box)
+
+        const float RadiusMul = 1.5f;   // visual ring radius over the collision footprint
+        const float Flatten   = 0.42f;  // vertical squash for the ground-plane (RTS) look
+        void Ring(Vec2 worldPos, float worldRadius)
         {
-            if (box is { } b)
-            {
-                float rx = b.Width * 0.60f;
-                DrawEllipseOutline(b.Center.X, b.Bottom, rx, rx * 0.42f, c, thick);
-            }
+            if (worldRadius <= 0f) return;
+            // Project the centre + a world-radius offset; the screen delta is the on-screen radius,
+            // so the ring scales correctly with camera zoom without depending on the sprite box.
+            var cen  = _renderer.WorldToScreen(worldPos, 0f, _camera);
+            var edge = _renderer.WorldToScreen(worldPos + new Vec2(worldRadius, 0f), 0f, _camera);
+            float rx = MathF.Abs(edge.X - cen.X);
+            DrawEllipseOutline(cen.X, cen.Y, rx, rx * Flatten, c, thick);
         }
-        Ring(_prevHoverBoxUnit); Ring(_prevHoverBoxObject); Ring(_prevHoverBoxCorpse);
+
+        if (_hoveredUnitIdx >= 0 && _hoveredUnitIdx < _sim.Units.Count)
+            Ring(_sim.Units[_hoveredUnitIdx].Position, _sim.Units[_hoveredUnitIdx].Radius * RadiusMul);
+        if (_hoveredObjectIdx >= 0 && _hoveredObjectIdx < _envSystem.ObjectCount)
+        {
+            var obj = _envSystem.GetObject(_hoveredObjectIdx);
+            float baseR = _envSystem.Defs[obj.DefIndex].CollisionRadius * obj.Scale;
+            Ring(new Vec2(obj.X, obj.Y), MathF.Max(baseR, 0.45f * obj.Scale) * RadiusMul);
+        }
+        if (_hoveredCorpseIdx >= 0 && _hoveredCorpseIdx < _sim.Corpses.Count)
+        {
+            var cp = _sim.Corpses[_hoveredCorpseIdx];
+            float cr = _gameData.Units.Get(cp.UnitDefID)?.Radius ?? 0.5f;
+            Ring(cp.Position, cr * RadiusMul);
+        }
     }
 
     // Map a line style (variant % 4) to a thickness + alpha. 0=Thick-Solid 1=Thin-Solid

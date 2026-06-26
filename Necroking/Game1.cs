@@ -287,9 +287,6 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     // shape = variant / 4, style = variant % 4. Default 11 ≈ the original look (Rect, thin, faint).
     private int _hoverHighlightVariant = 11;
     private float _hoverVariantLabelTimer;     // seconds left to show the "which variant" toast
-    // 1-frame-lagged copies of the live hover boxes so the Circle variant can draw as a
-    // ground ellipse BEHIND the sprites (the live boxes are only known mid-sprite-pass).
-    private Rectangle? _prevHoverBoxObject, _prevHoverBoxCorpse, _prevHoverBoxUnit;
     // Dev: pin the hovered unit (headless testing has no real mouse). uint.MaxValue = off.
     private uint _devForceHoverUnitId = uint.MaxValue;
     // Dev-marked units (via the 'mark' dev command): persistent white boxes,
