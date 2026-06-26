@@ -91,7 +91,8 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         for (int i = 0; i < _envSystem.ObjectCount; i++)
         {
             var def = _envSystem.GetDef(_envSystem.GetObject(i).DefIndex);
-            if (!def.IsWorkerHome || !_envSystem.GetObjectRuntime(i).Alive) continue;
+            var rt = _envSystem.GetObjectRuntime(i);
+            if (!def.IsWorkerHome || !rt.Alive || rt.BuildProgress < 1f) continue;
             var o = _envSystem.GetObject(i);
             float sq = (new Vec2(o.X, o.Y) - mouseWorld).LengthSq();
             if (sq < bestSq) { bestSq = sq; best = i; }
@@ -888,6 +889,9 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         _envSystem.ClearObjects();
         _envSystem.ClearDefs();
         _groundSystem.ClearTypes();
+        // Reset the worker job system: reload jobs.json, wipe stockpiles + assignments
+        // so a fresh game doesn't inherit the previous session's piles or priorities.
+        _workerSystem.Reset();
         // Wipe per-cell grass corruption fades — the renderer instance persists
         // across new-games, so without this stale fade values from the previous
         // session would render the grass already-corrupted on map load.

@@ -132,7 +132,7 @@ public class WorkerSystem
         int cur = 0, max = 0;
         for (int i = 0; i < _env.ObjectCount; i++)
         {
-            if (_env.GetObject(i).DefIndex != defIdx || !_env.GetObjectRuntime(i).Alive) continue;
+            if (_env.GetObject(i).DefIndex != defIdx || !Built(i)) continue;
             cur += TotalStored(i);
             var d = _env.GetDef(defIdx);
             max += d.StorageCap > 0 ? d.StorageCap : 0;
@@ -299,13 +299,21 @@ public class WorkerSystem
     //  Building queries
     // ─────────────────────────────────────────────────────────────
 
+    /// <summary>A building only hosts a job / stockpile once fully constructed
+    /// (placed blueprints from the build menu start at BuildProgress 0).</summary>
+    private bool Built(int objIdx)
+    {
+        var rt = _env.GetObjectRuntime(objIdx);
+        return rt.Alive && rt.BuildProgress >= 1f;
+    }
+
     public int CountBuildings(string defId)
     {
         int defIdx = _env.FindDef(defId);
         if (defIdx < 0) return 0;
         int n = 0;
         for (int i = 0; i < _env.ObjectCount; i++)
-            if (_env.GetObject(i).DefIndex == defIdx && _env.GetObjectRuntime(i).Alive) n++;
+            if (_env.GetObject(i).DefIndex == defIdx && Built(i)) n++;
         return n;
     }
 
@@ -319,7 +327,7 @@ public class WorkerSystem
         int best = -1; float bestSq = float.MaxValue;
         for (int i = 0; i < _env.ObjectCount; i++)
         {
-            if (!_env.GetObjectRuntime(i).Alive) continue;
+            if (!Built(i)) continue;
             var bdef = _env.GetDef(_env.GetObject(i).DefIndex);
             if (!string.Equals(bdef.StoredResource, resource, StringComparison.OrdinalIgnoreCase)) continue;
             if (TotalStored(i) >= BuildingCap(i)) continue;
@@ -338,7 +346,7 @@ public class WorkerSystem
         int best = -1; float bestSq = float.MaxValue;
         for (int i = 0; i < _env.ObjectCount; i++)
         {
-            if (!_env.GetObjectRuntime(i).Alive) continue;
+            if (!Built(i)) continue;
             if (StoredOf(i, resource) < minAmount) continue;
             var obj = _env.GetObject(i);
             float sq = (new Vec2(obj.X, obj.Y) - from).LengthSq();
@@ -357,7 +365,7 @@ public class WorkerSystem
         for (int i = 0; i < _env.ObjectCount; i++)
         {
             if (_env.GetObject(i).DefIndex != defIdx) continue;
-            if (!_env.GetObjectRuntime(i).Alive) continue;
+            if (!Built(i)) continue;
             // Output room: spawn-unit jobs need no storage; others need building space.
             if (!def.SpawnsUnit && HostOutputResource(def) != JobResources.Essence
                 && TotalStored(i) >= BuildingCap(i)) continue;

@@ -1,8 +1,49 @@
-# Worker Job System — Design Spec (rough)
+# Worker Job System — Design Spec + Build Record
 
-Status: **DESIGN / pre-implementation.** Brainstormed 2026-06-26. This is the agreed
-shape before any code. Steps: (1) survey ✅ (2) clarify ✅ (3) rough design ← *this doc*
-(4) implement (5) iterate/polish.
+Status: **IMPLEMENTED (P0–P5) 2026-06-26.** All six jobs + UI work end-to-end.
+Steps: (1) survey ✅ (2) clarify ✅ (3) rough design ✅ (4) implement ✅ (5) polish ✅.
+
+## What shipped
+- **Data spine** — `data/jobs.json` + `Necroking/Game/Jobs/{JobDef,JobState,JobRegistry,WorkerSystem}.cs`.
+  Building defs gained `HostsJob/StoredResource/StorageCap/IsWorkerHome/WorkerSlots`;
+  `PlacedObjectRuntime.StoredAmount` mirrors the per-building stockpile.
+- **Buildings** (placeholder sprites) — empty_grave, mushroom_pile, corpse_pile,
+  poison_vat, harvesting_table, necro_table, alchemist_table. All `PlayerBuildable`.
+- **Workers** — any humanoid undead (UndeadCategory.Human) assigned to an Empty
+  Grave becomes a worker (Archetype=Worker, id 12). `WorkerHandler` (AI) drives the
+  Collect + Process FSMs. `WorkerSystem` is the dispatcher + stockpile owner.
+- **Jobs** — Forage Mushrooms / Collect Corpses / Poison Berries (collect kinds:
+  foragable/corpse/berry); Break Down (Corpse→Essence+Reagent co-products),
+  Reanimate (Corpse→unit via QueueReanimRise), Make Potions (Mushroom→one potion
+  per craft by maintain-stock target, `outputChoice`).
+- **UI** — `Necroking/UI/JobBoardUI.cs` ('O' hotkey): priority tiles (hidden until
+  building exists), workers/cap badge, storage/population bar, ^/v + drag reorder,
+  expand→cap stepper + maintain-stock target steppers. `GraveRosterUI.cs` (click a
+  grave): housed worker + Unassign, assignable humanoid list + Assign.
+- **Dev verbs** — `worker_scene` (full economy), `worker_demo`, `jobs` (+StockReport),
+  `assign_worker`/`unassign_worker`, `place_obj`, `ui_job_board [jobId]`, `ui_grave_roster`.
+
+## Placeholder economy (flesh out later — user flagged as TBD)
+- Break Down yields Essence (global pool, clamped at MaxEssence) + a Reagent that
+  nothing yet consumes. Poison goes to a poison_vat that nothing yet consumes.
+- Reanimate spawns a fixed `skeleton` (spawnUnitDefId) and is gated by a soft
+  `MaxUndead=150`, NOT the real HumanCap/MonsterCap horde caps. Wire HordeCapTracker
+  later if reanimation should respect the necromancer's actual cap.
+- Corpses are carried PHYSICALLY during Collect, then abstracted to a "Corpse"
+  count in the pile; Process jobs withdraw the abstract count.
+- Capability gating (`requiredCapability` / unit-type tags) is a hook only — unused.
+
+## Remaining polish (non-blocking)
+- Sprites: `tools/gen_building_sprites.py` is ready; needs the PixelLab secret at
+  `E:\Nightfall\Corpobot\art_prototype\.env.secrets` (absent here). After generating,
+  repoint each def's texturePath + recheck pivot/scale.
+- Worker carrying a corpse overlaps the body (no carry animation) — cosmetic.
+- Dedicated Hauling job + per-output drag (only ^/v + target steppers today).
+- The reusable ordered-tile widget is currently inline in JobBoardUI, not extracted.
+
+---
+## Original design (for reference)
+
 
 ## 1. Pillars
 A colony-management work layer for the necromancer's undead. The player **sets intent**
