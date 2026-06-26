@@ -168,48 +168,73 @@ public partial class Game1 {
       public float Facing;
       public string DefId;
       public int FxInstanceId;   // ReanimEffectSystem handle, so the outline attaches on spawn
-      public int CorpseId;       // source corpse — removed cleanly (no blink/fade) when the unit rises
+      public int CorpseId;       // source corpse (-1 = none, e.g. table-craft) — removed cleanly when the unit rises
       public float Timer;
+      public Action<int>? OnSpawned;  // runs on the freshly-spawned unit (e.g. apply crafted item bonuses)
    }
    private readonly List<PendingReanimRise> _pendingReanimRises = new();
 
-   /// <summary>Raise the corpse with stable id <paramref name="corpseId"/>. With a composite rise
-   /// effect: keep the corpse fully VISIBLE (no dissolve/blink), play the effect with a green undead
-   /// outline fading IN on the corpse, then after <paramref name="delay"/>s spawn the unit + its slow
-   /// standup and remove the corpse cleanly. Without one (stock reanimate_corpse): the unchanged
-   /// legacy path — dissolve the corpse + spawn immediately.</summary>
-   void QueueReanimRise(string defId, int corpseId, string? configId, float delay = 3.5f)
+   /// <summary>Bridge for sim-layer raises (potion / on-death / table-craft): resolve the zombie
+   /// type and route through the SAME composite reanimation pipeline as spells. Wired to
+   /// Simulation.ReanimHandler in LoadContent. corpseId &lt; 0 (no world corpse) no-ops cleanly.</summary>
+   private void OnSimReanimReady(PendingZombieRaise r)
    {
-      int idx = _sim.FindCorpseIndexByID(corpseId);
-      if (idx < 0) return;                       // corpse already gone — nothing to raise
-      var corpse = _sim.Corpses[idx];
-      Vec2 pos = corpse.Position;
-      float facing = corpse.FacingAngle;
+      string zombieDef = Game.TableCraftingSystem.ResolveZombieUnitID(_gameData, r.UnitDefID);
+      if (string.IsNullOrEmpty(zombieDef)) zombieDef = "skeleton";
+      // Corpse-based raises ignore the overrides (read the corpse); corpse-less ones (table-craft,
+      // CorpseId < 0) use them to place the effect + rise.
+      QueueReanimRise(zombieDef, r.CorpseId, "reanim_smoke",
+         posOverride: r.Position, facingOverride: r.FacingAngle, scaleOverride: r.SpriteScale,
+         onSpawned: r.OnSpawned);
+   }
+
+   /// <summary>Raise a unit through the one composite reanim pipeline. With a world corpse
+   /// (<paramref name="corpseId"/> &gt;= 0): claim it (stays fully VISIBLE — the renderer fades in the
+   /// green undead outline and morphs the body), play the effect, then after <paramref name="delay"/>s
+   /// spawn the unit + its slow standup and remove the corpse cleanly. Without one (corpseId &lt; 0,
+   /// e.g. table crafting): play the effect at <paramref name="posOverride"/> and rise from it (no body
+   /// to morph). <paramref name="onSpawned"/> runs on the freshly-spawned unit (e.g. apply crafted item
+   /// bonuses). If the effect asset is missing, falls back to an immediate spawn.</summary>
+   void QueueReanimRise(string defId, int corpseId, string? configId, float delay = 3.5f,
+                        Vec2 posOverride = default, float facingOverride = 0f, float scaleOverride = 1f,
+                        Action<int>? onSpawned = null)
+   {
+      int corpseIdx = -1;
+      Vec2 pos; float facing; float scale;
+      if (corpseId >= 0)
+      {
+         corpseIdx = _sim.FindCorpseIndexByID(corpseId);
+         if (corpseIdx < 0) return;              // corpse already gone — nothing to raise
+         var c = _sim.Corpses[corpseIdx];
+         pos = c.Position; facing = c.FacingAngle; scale = c.SpriteScale;
+      }
+      else { pos = posOverride; facing = facingOverride; scale = scaleOverride; }
 
       // Reanimation always runs the one composite effect; an empty id maps to the default preset.
       if (string.IsNullOrEmpty(configId)) configId = "reanim_smoke";
 
       if (!_reanimFx.HasConfig(configId))
       {
-         // Safety fallback only (effect asset missing): dissolve the corpse + spawn immediately.
-         _sim.ConsumeCorpse(idx);
+         // Safety fallback only (effect asset missing): consume the corpse + spawn immediately.
+         if (corpseIdx >= 0) _sim.ConsumeCorpse(corpseIdx);
          int now = _sim.SpawnZombieMinion(defId, pos);
          if (now >= 0)
          {
             _sim.UnitsMut[now].FacingAngle = facing;
             BuffSystem.BeginReanimationRise(_sim.UnitsMut, now);
+            onSpawned?.Invoke(now);
          }
          return;
       }
 
       // Composite effect: claim the corpse (other systems skip ConsumedBySummon) but leave
-      // Dissolving=false so it stays fully visible; the renderer draws the green outline fading in
-      // on it. The unit spawns + the corpse is removed cleanly after the delay (TickPendingReanimRises).
-      corpse.ConsumedBySummon = true;
-      int fxId = _reanimFx.Begin(GameConstants.InvalidUnit, pos, corpse.SpriteScale, configId, outlineFadeIn: delay, morphHold: delay - 1.5f);
-      corpse.ReanimInstanceId = fxId;
+      // Dissolving=false so it stays fully visible; the renderer draws the green outline + morph on it.
+      // The unit spawns + the corpse is removed cleanly after the delay (TickPendingReanimRises).
+      if (corpseIdx >= 0) _sim.Corpses[corpseIdx].ConsumedBySummon = true;
+      int fxId = _reanimFx.Begin(GameConstants.InvalidUnit, pos, scale, configId, outlineFadeIn: delay, morphHold: delay - 1.5f);
+      if (corpseIdx >= 0) _sim.Corpses[corpseIdx].ReanimInstanceId = fxId;
       _pendingReanimRises.Add(new PendingReanimRise
-         { Pos = pos, Facing = facing, DefId = defId, FxInstanceId = fxId, CorpseId = corpseId, Timer = delay });
+         { Pos = pos, Facing = facing, DefId = defId, FxInstanceId = fxId, CorpseId = corpseId, Timer = delay, OnSpawned = onSpawned });
    }
 
    /// <summary>Tick queued rises (called each sim step alongside the effect update). When a
@@ -224,13 +249,15 @@ public partial class Game1 {
          if (pr.Timer > 0f) { _pendingReanimRises[i] = pr; continue; }
          _pendingReanimRises.RemoveAt(i);
 
-         _sim.RemoveCorpseClean(pr.CorpseId);   // body vanishes cleanly as the unit takes its place
+         if (pr.CorpseId >= 0)
+            _sim.RemoveCorpseClean(pr.CorpseId);   // body vanishes cleanly as the unit takes its place
          int idx = _sim.SpawnZombieMinion(pr.DefId, pr.Pos);
          if (idx >= 0)
          {
             _sim.UnitsMut[idx].FacingAngle = pr.Facing;
             BuffSystem.BeginReanimationRise(_sim.UnitsMut, idx);
             _reanimFx.SetUnitId(pr.FxInstanceId, _sim.Units[idx].Id);
+            pr.OnSpawned?.Invoke(idx);
          }
       }
    }

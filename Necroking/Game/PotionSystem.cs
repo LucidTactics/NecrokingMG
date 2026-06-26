@@ -16,6 +16,8 @@ public struct PendingZombieRaise
     public string UnitDefID;
     public float FacingAngle;
     public float SpriteScale;
+    public int CorpseId;       // source corpse (-1 = none) so the composite reanim morph can target it
+    public System.Action<int>? OnSpawned;  // runs on the spawned unit when it rises (e.g. crafted item bonuses)
     public float Timer;
 
     /// <summary>Default delay (seconds) before a queued raise actually rises.</summary>
@@ -23,8 +25,8 @@ public struct PendingZombieRaise
 
     /// <summary>Build a pending raise from a position/identity (corpse or dying unit),
     /// using the standard rise delay — centralizes the 1.0s magic number.</summary>
-    public static PendingZombieRaise At(Vec2 pos, string defId, float facing, float scale, float timer = DefaultRiseDelay)
-        => new() { Position = pos, UnitDefID = defId, FacingAngle = facing, SpriteScale = scale, Timer = timer };
+    public static PendingZombieRaise At(Vec2 pos, string defId, float facing, float scale, int corpseId = -1, float timer = DefaultRiseDelay)
+        => new() { Position = pos, UnitDefID = defId, FacingAngle = facing, SpriteScale = scale, CorpseId = corpseId, Timer = timer };
 }
 
 public static class PotionSystem
@@ -378,7 +380,7 @@ public static class PotionSystem
     /// Uses Simulation.SpawnUnitByID for proper unit setup.
     /// </summary>
     public static void TickZombieRaises(List<PendingZombieRaise> raises, float dt,
-        Action<string, Vec2, float, float> spawnZombie)
+        Action<PendingZombieRaise> onReady)
     {
         for (int i = raises.Count - 1; i >= 0; i--)
         {
@@ -388,7 +390,7 @@ public static class PotionSystem
 
             if (r.Timer <= 0f)
             {
-                spawnZombie(r.UnitDefID, r.Position, r.FacingAngle, r.SpriteScale);
+                onReady(r);
                 raises.RemoveAt(i);
             }
         }

@@ -1850,6 +1850,9 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         catch (Exception ex) { _outlineFlatEffect = null; DebugLog.Log("startup", $"OutlineFlat not loaded: {ex.Message}"); }
         try { _morphSdfEffect = Content.Load<Microsoft.Xna.Framework.Graphics.Effect>("MorphSDF"); }
         catch (Exception ex) { _morphSdfEffect = null; DebugLog.Log("startup", $"MorphSDF not loaded: {ex.Message}"); }
+        // Route sim-layer reanimations (potion / on-death / table-craft) through the composite
+        // reanimation pipeline, the same one spells use (headless sims fall back to a direct spawn).
+        _sim.ReanimHandler = OnSimReanimReady;
         try {
             _wadingEffect = Content.Load<Microsoft.Xna.Framework.Graphics.Effect>("Wading");
             var pnames = string.Join(",", _wadingEffect.Parameters.Select(p => p.Name));

@@ -586,6 +586,25 @@ public partial class Game1 {
                break;
             }
 
+            // Flag units so dying reanimates them — exercises the on-death composite reanim path.
+            case "zombify": {   // window.dev('zombify',['human']) then kill -> full reanim effect
+               var zidxs = DevResolveUnits(c.Args.Length > 0 ? string.Join(" ", c.Args) : "all");
+               foreach (int i in zidxs) _sim.UnitsMut[i].ZombieOnDeath = true;
+               c.Complete(Necroking.Dev.DevServer.Ok($"zombified {zidxs.Count} unit(s)"));
+               break;
+            }
+
+            // Corpse-less composite reanim (the table-craft path): a green cloud builds at (x,y) and a
+            // zombie rises from it — no world body to morph.
+            case "reanim_at": {   // window.dev('reanim_at',[x,y,'skeleton'])
+               if (c.Args.Length < 2) { c.Complete(Necroking.Dev.DevServer.Error("reanim_at needs: <x> <y> [defId]")); break; }
+               string rdef = c.Args.Length > 2 ? c.Args[2] : "skeleton";
+               QueueReanimRise(rdef, -1, "reanim_smoke",
+                  posOverride: new Vec2(DevFloat(c.Args[0]), DevFloat(c.Args[1])), facingOverride: 90f, scaleOverride: 1f);
+               c.Complete(Necroking.Dev.DevServer.Ok($"queued corpse-less reanim of '{rdef}'"));
+               break;
+            }
+
             // Remove every unit matching a selector outright (no corpse).
             case "remove": {
                if (c.Args.Length < 1) {

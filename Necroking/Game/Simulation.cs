@@ -230,6 +230,10 @@ public class Simulation
     public EnvironmentSystem? EnvironmentSystem => _envSystem;
     public WallSystem? WallSystem => _wallSystem;
     public List<PendingZombieRaise> PendingZombieRaises => _pendingZombieRaises;
+    /// <summary>Game1 sets this to route a ready zombie-raise through the composite reanimation
+    /// pipeline (effect + body morph + deferred slow rise). When unset (headless sims) the tick
+    /// falls back to spawning the zombie directly with the slow standup.</summary>
+    public Action<PendingZombieRaise>? ReanimHandler;
     public PlayerResources PlayerResources => _playerResources;
 
     // Anim metadata. Populated by Game1 once the atlases load so AI can look up
@@ -533,31 +537,30 @@ public class Simulation
         PhaseStart(); UpdateFacingAngles(dt); PhaseEnd("facing");
         PhaseStart(); UpdateCombat(dt); PhaseEnd("combat");
 
-        // Tick pending zombie raises
-        PotionSystem.TickZombieRaises(_pendingZombieRaises, dt, (defId, pos, facing, scale) =>
+        // Tick pending zombie raises. Game1 routes them through the composite reanimation effect
+        // (ReanimHandler -> the corpse stays visible, morphs, and the zombie rises after the full
+        // build-up); a headless sim falls back to spawning the zombie directly with the slow standup.
+        PotionSystem.TickZombieRaises(_pendingZombieRaises, dt, (PendingZombieRaise r) =>
         {
-            // Resolve zombie type from the dead unit's def
-            string spawnId = "skeleton"; // fallback
+            if (ReanimHandler != null) { ReanimHandler(r); return; }
+
+            // Headless fallback: resolve the zombie type from the source def + spawn directly.
+            string spawnId = "skeleton";
             if (_gameData != null)
             {
-                var unitDef = _gameData.Units.Get(defId);
+                var unitDef = _gameData.Units.Get(r.UnitDefID);
                 if (unitDef != null && !string.IsNullOrEmpty(unitDef.ZombieTypeID))
-                {
-                    // ZombieTypeID can be a direct unit def or a unit group — resolve it
-                    if (_gameData.Units.Get(unitDef.ZombieTypeID) != null)
-                        spawnId = unitDef.ZombieTypeID;
-                    else
-                        spawnId = _gameData.UnitGroups.PickRandom(unitDef.ZombieTypeID) ?? "skeleton";
-                }
+                    spawnId = _gameData.Units.Get(unitDef.ZombieTypeID) != null
+                        ? unitDef.ZombieTypeID
+                        : _gameData.UnitGroups.PickRandom(unitDef.ZombieTypeID) ?? "skeleton";
             }
-            // Canonical raise-into-horde path: wires the HordeMinion archetype so
-            // the zombie respects the leash (see SpawnZombieMinion).
-            int idx = SpawnZombieMinion(spawnId, pos);
+            int idx = SpawnZombieMinion(spawnId, r.Position);
             if (idx >= 0)
             {
-                _units[idx].FacingAngle = facing;
+                _units[idx].FacingAngle = r.FacingAngle;
                 BuffSystem.BeginReanimationRise(_units, idx);
-                _units[idx].SpawnPosition = pos;
+                _units[idx].SpawnPosition = r.Position;
+                r.OnSpawned?.Invoke(idx);
             }
         });
 
@@ -578,10 +581,12 @@ public class Simulation
                         if (potion != null)
                         {
                             var corpse = _corpses[hit.CorpseHitIdx];
-                            _pendingZombieRaises.Add(PendingZombieRaise.At(
-                                corpse.Position, corpse.UnitDefID, corpse.FacingAngle, corpse.SpriteScale));
-                            corpse.Dissolving = true;
+                            // Claim it (keep visible for the composite reanim morph); the tick routes
+                            // it through Game1's ReanimHandler into the full reanimation pipeline.
                             corpse.ConsumedBySummon = true;
+                            _pendingZombieRaises.Add(PendingZombieRaise.At(
+                                corpse.Position, corpse.UnitDefID, corpse.FacingAngle, corpse.SpriteScale,
+                                corpse.CorpseID, timer: 0f));
                         }
                     }
                     else
@@ -3664,13 +3669,9 @@ public class Simulation
                     }
                 }
 
-                // Queue zombie raise if unit had ZombieOnDeath
+                // Reanimation-on-death (zombie-coated weapon / bonus effect) is queued BELOW, after
+                // the corpse exists, so the composite reanim effect can target + morph the corpse.
                 bool zombieRaise = _units[i].ZombieOnDeath;
-                if (zombieRaise)
-                {
-                    _pendingZombieRaises.Add(PendingZombieRaise.At(
-                        _units[i].Position, _units[i].UnitDefID, _units[i].FacingAngle, _units[i].SpriteScale));
-                }
 
                 // If unit died mid-knockback, transfer physics state to corpse —
                 // including the per-body gravity/drag scales so e.g. a trample-
@@ -3692,9 +3693,16 @@ public class Simulation
                 // dies as a big bear visual). The body BAG renders at a uniform
                 // size in DrawBaggedCorpse* paths (independent of corpse.SpriteScale)
                 // — that's where the "all bags same size" invariant lives.
-                // Mark corpse as consumed so it dissolves while the zombie rises
-                corpse.Dissolving = zombieRaise;
-                corpse.ConsumedBySummon = zombieRaise;
+                // Reanimate-on-death: claim the corpse (keep it VISIBLE so the composite effect
+                // morphs it) and queue the raise on it; the tick above routes it through Game1's
+                // ReanimHandler this frame (timer 0) into the full reanimation pipeline.
+                if (zombieRaise)
+                {
+                    corpse.ConsumedBySummon = true;
+                    _pendingZombieRaises.Add(PendingZombieRaise.At(
+                        corpse.Position, corpse.UnitDefID, corpse.FacingAngle, corpse.SpriteScale,
+                        corpse.CorpseID, timer: 0f));
+                }
                 // Continue physics arc if unit was mid-flight
                 corpse.InPhysics = wasInPhysics;
                 corpse.Z = _units[i].Z;

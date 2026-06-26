@@ -126,30 +126,36 @@ public static class TableCraftingSystem
         // the def's legacy AI enum, which for the animal zombies is the
         // leash-less "AttackClosest"; a deer crafted that way chased fleeing
         // enemies off the map forever).
-        int spawnedIdx = sim.SpawnZombieMinion(zombieID, spawnPos);
-        if (spawnedIdx < 0)
+        // Route the rise through the one composite reanimation effect — the same suite spells and
+        // on-death raises use. The corpse was consumed into the table slot (no world body to morph),
+        // so this is a corpse-less raise: a green cloud builds at the spawn point and the zombie rises
+        // from it after the build-up. Game1 drains PendingZombieRaises -> QueueReanimRise; a headless
+        // sim falls back to spawning immediately. Capture the item bonuses NOW (slots clear below) and
+        // apply them to the zombie when it actually spawns. (zombieID was validated above; the real
+        // pick happens at spawn so the source — not a maybe-random group pick — is what we record.)
+        var bonuses = BuildItemBonusList(gameData, ts);
+        System.Action<int>? onSpawned = null;
+        if (bonuses.Count > 0)
+            onSpawned = idx =>
+            {
+                var u = sim.UnitsMut[idx];
+                u.BonusEffects ??= new List<WeaponBonusEffect>();
+                u.BonusEffects.AddRange(bonuses);
+            };
+        sim.PendingZombieRaises.Add(new PendingZombieRaise
         {
-            DebugLog.Log("table", $"[Table {envIdx}] CompleteCraft aborted: SpawnZombieMinion('{zombieID}') failed");
-            ts.CorpseSlots[corpseSlotIdx] = default;
-            ts.CancelChannel();
-            return;
-        }
-        sim.UnitsMut[spawnedIdx].FacingAngle = corpseSlot.FacingAngle;
-        // Rise from the dead: start in the corpse's death pose and play the
-        // stand-up animation (same mechanism the raise-zombie spells use), then
-        // the unit walks out of the unpathable table on its own.
-        BuffSystem.BeginReanimationRise(sim.UnitsMut, spawnedIdx);
-        // Keep the spawned zombie's own SpriteScale (from its def) — copying the
-        // corpse's sprite scale would shrink/enlarge zombies oddly when the source
-        // and zombie defs have different default scales.
-
-        // Apply potion-derived bonus effects to the spawned zombie.
-        ApplyItemBonusEffects(gameData, ts, sim.UnitsMut, spawnedIdx);
+            Position = spawnPos,
+            UnitDefID = corpseSlot.SourceUnitDefID,
+            FacingAngle = corpseSlot.FacingAngle,
+            SpriteScale = 1f,
+            CorpseId = -1,        // corpse-less: no world body, just the effect + rise
+            Timer = 0f,
+            OnSpawned = onSpawned,
+        });
 
         DebugLog.Log("table",
-            $"[Table {envIdx}] Crafted zombie '{zombieID}' at ({spawnPos.X:F1},{spawnPos.Y:F1}) " +
-            $"from corpse '{corpseSlot.SourceUnitDefID}' with {CountFilledItemSlots(ts)} item bonus(es), " +
-            $"added to horde");
+            $"[Table {envIdx}] Queued reanim at ({spawnPos.X:F1},{spawnPos.Y:F1}) " +
+            $"from corpse '{corpseSlot.SourceUnitDefID}' with {bonuses.Count} item bonus(es)");
 
         // Clear all slots (corpse consumed, items consumed).
         ts.CorpseSlots[corpseSlotIdx] = default;
@@ -193,12 +199,12 @@ public static class TableCraftingSystem
     /// PotionDef shares that ItemID and switch on its OnHitEffect. Items that
     /// don't match a potion are ignored (no bonus, no error — they're just dropped).
     /// </summary>
-    private static void ApplyItemBonusEffects(GameData gameData, TableCraftState ts,
-        UnitArrays units, int spawnedUnitIdx)
+    /// <summary>Build the weapon-bonus list a crafted zombie inherits from the table's item slots.
+    /// Captured at craft time (the slots clear immediately after) and applied to the zombie when it
+    /// rises through the deferred composite reanimation.</summary>
+    private static List<WeaponBonusEffect> BuildItemBonusList(GameData gameData, TableCraftState ts)
     {
-        units[spawnedUnitIdx].BonusEffects ??= new List<WeaponBonusEffect>();
-        var list = units[spawnedUnitIdx].BonusEffects!;
-
+        var list = new List<WeaponBonusEffect>();
         for (int i = 0; i < ts.ItemSlots.Length; i++)
         {
             if (ts.ItemSlots[i].IsEmpty) continue;
@@ -224,6 +230,7 @@ public static class TableCraftingSystem
                     break;
             }
         }
+        return list;
     }
 
     private static PotionDef? FindPotionByItemId(GameData gameData, string itemId)
