@@ -522,6 +522,15 @@ public partial class Game1 {
                c.Complete(Necroking.Dev.DevServer.Ok($"job board visible={_jobBoardUI.IsVisible}"));
                break;
             }
+            // Force the board into a drag state for a screenshot: window.dev('ui_job_drag',['poison_berries', 320])
+            case "ui_job_drag": {
+               if (c.Args.Length < 2) { c.Complete(Necroking.Dev.DevServer.Error("ui_job_drag needs: <jobId> <mouseY>")); break; }
+               EnsureInventoryUIsInitialized();
+               if (!_jobBoardUI.IsVisible) _jobBoardUI.Toggle(GraphicsDevice.Viewport.Width, GraphicsDevice.Viewport.Height);
+               _jobBoardUI.DebugDrag(c.Args[0], (int)DevFloat(c.Args[1]));
+               c.Complete(Necroking.Dev.DevServer.Ok($"dragging {c.Args[0]} at y={c.Args[1]}"));
+               break;
+            }
             // Open the grave roster UI for a grave (nearest if omitted): window.dev('ui_grave_roster',[graveObjIdx])
             case "ui_grave_roster": {
                int gi = c.Args.Length >= 1 ? (int)DevFloat(c.Args[0]) : -1;

@@ -8,16 +8,18 @@ namespace Necroking.UI;
 
 /// <summary>
 /// The job board: priority-ordered tiles (hidden until their building exists),
-/// each showing workers/cap + a storage fill bar. Drag a tile (or use ▲▼) to
-/// reorder priority; click the badge to expand a detail panel with the worker-cap
-/// stepper and, for multi-output jobs, the maintain-stock target steppers.
-/// Primitive-drawn modal layer (TableCraftMenuUI pattern). Toggle with the 'B'... 'J' key.
+/// each showing workers/cap + a storage fill bar. Drag a tile to reorder (the
+/// tile lifts to follow the cursor and the list opens a gap where it will drop),
+/// or use the ▲▼ buttons. Click the badge to expand a detail panel with the
+/// worker-cap stepper and, for multi-output jobs, the maintain-stock targets.
+/// Text is rendered through the widget renderer (FontStashSharp) so it stays
+/// crisp at any size. Toggle with the 'O' key.
 /// </summary>
 public class JobBoardUI : IModalLayer
 {
     private SpriteBatch _batch = null!;
     private Texture2D _pixel = null!;
-    private SpriteFont? _font;
+    private RuntimeWidgetRenderer _r = null!;
     private WorkerSystem _ws = null!;
 
     private bool _visible;
@@ -26,99 +28,97 @@ public class JobBoardUI : IModalLayer
 
     // drag state
     private bool _dragging;
-    private int _dragVisibleIdx = -1;
+    private string _dragJobId = "";
+    private int _dragGrabDy;
     private int _dragMouseY;
+    private bool _debugDragHold; // screenshot hook: keep the drag rendered (no auto-drop)
 
-    private const int Pad = 12;
-    private const int TitleH = 28;
-    private const int TileH = 50;
-    private const int Gap = 6;
-    private const int BtnW = 22;
-    private const int BarH = 6;
+    private const int Pad = 14;
+    private const int TitleH = 30;
+    private const int TileH = 52;
+    private const int Gap = 8;
+    private const int SlotH = TileH + Gap;
+
+    // font sizes
+    private const int FsTitle = 18, FsName = 15, FsSmall = 12, FsBtn = 13;
 
     public bool IsVisible => _visible;
 
-    public void Init(SpriteBatch batch, Texture2D pixel, SpriteFont? font, WorkerSystem ws)
-    { _batch = batch; _pixel = pixel; _font = font; _ws = ws; }
+    public void Init(SpriteBatch batch, Texture2D pixel, RuntimeWidgetRenderer renderer, WorkerSystem ws)
+    { _batch = batch; _pixel = pixel; _r = renderer; _ws = ws; }
 
     public void Toggle(int screenW, int screenH)
     {
         if (_visible) { Close(); return; }
-        _visible = true;
-        _w = 380;
-        _x = 40;
-        _y = 70;
-        _h = screenH - 140;
+        _visible = true; _w = 410; _x = 40; _y = 70;
         Game1.Popups.Push(this);
     }
 
-    public void Close() { _visible = false; _dragging = false; Game1.Popups.Pop(this); }
-
-    /// <summary>Expand a job's detail panel (also used by dev tooling for screenshots).</summary>
+    public void Close() { _visible = false; _dragging = false; _debugDragHold = false; _dragJobId = ""; Game1.Popups.Pop(this); }
     public void Expand(string jobId) => _expanded = jobId;
 
-    private struct OutRow { public string Id; public Rectangle Row, Minus, Plus, Up, Down; }
-    private struct Tile
+    /// <summary>Dev/screenshot hook: force the board into a dragging state.</summary>
+    public void DebugDrag(string jobId, int mouseY)
+    { _dragging = true; _debugDragHold = true; _dragJobId = jobId; _dragGrabDy = TileH / 2; _dragMouseY = mouseY; _expanded = ""; }
+
+    private int ListTop => _y + TitleH + Pad;
+
+    /// <summary>Visible jobs in priority order (those whose building exists).</summary>
+    private List<JobState> Visible()
     {
-        public JobState Js; public int VisibleIdx;
-        public Rectangle Box, Drag, Badge, Up, Down, Bar;
-        public bool Expanded; public Rectangle Detail, CapMinus, CapPlus;
-        public List<OutRow> Outs;
+        var list = new List<JobState>();
+        foreach (var js in _ws.Jobs) if (_ws.DerivedMax(js.Def) > 0) list.Add(js);
+        return list;
     }
 
-    private List<Tile> BuildLayout()
+    // ── per-tile geometry (collapsed top row) ──
+    private struct Geo { public Rectangle Box, Up, Down, Badge, Bar; }
+    private Geo TileGeo(int boxX, int boxY, int innerW)
     {
-        var tiles = new List<Tile>();
-        int y = _y + TitleH + Pad;
-        int vi = 0;
-        foreach (var js in _ws.Jobs)
+        var g = new Geo();
+        g.Box = new Rectangle(boxX, boxY, innerW, TileH);
+        int badgeW = 62;
+        g.Badge = new Rectangle(boxX + innerW - 10 - badgeW, boxY + 8, badgeW, 22);
+        g.Down = new Rectangle(g.Badge.X - 6 - 18, boxY + 8, 18, 22);
+        g.Up = new Rectangle(g.Down.X - 4 - 18, boxY + 8, 18, 22);
+        g.Bar = new Rectangle(boxX + 24, boxY + TileH - 16, innerW - 24 - 110, 7);
+        return g;
+    }
+
+    // ── detail geometry ──
+    private struct OutGeo { public string Id; public Rectangle Minus, Plus, Up, Down; }
+    private struct Detail
+    {
+        public Rectangle Box, CapMinus, CapPlus;
+        public List<OutGeo> Outs;
+        public int Height;
+    }
+    private Detail DetailGeo(JobState js, int boxX, int boxY, int innerW)
+    {
+        var d = new Detail { Outs = new List<OutGeo>() };
+        bool choice = js.Def.OutputChoice;
+        d.Height = 36 + (choice ? 22 + js.Def.Outputs.Count * 26 : 0) + 10;
+        d.Box = new Rectangle(boxX, boxY, innerW, d.Height);
+        d.CapMinus = new Rectangle(boxX + 110, boxY + 8, 22, 22);
+        d.CapPlus = new Rectangle(boxX + 166, boxY + 8, 22, 22);
+        if (choice)
         {
-            if (_ws.DerivedMax(js.Def) <= 0) continue; // hidden: no building
-            var t = new Tile { Js = js, VisibleIdx = vi, Outs = new List<OutRow>() };
-            int innerX = _x + Pad, innerW = _w - 2 * Pad;
-            t.Box = new Rectangle(innerX, y, innerW, TileH);
-            t.Drag = new Rectangle(innerX, y, 16, TileH);
-            t.Badge = new Rectangle(innerX + innerW - 86, y + 6, 86, 22);
-            t.Up = new Rectangle(innerX + innerW - 86 - 2 - BtnW, y + 6, BtnW, 16);
-            t.Down = new Rectangle(innerX + innerW - 86 - 2 - BtnW, y + 24, BtnW, 16);
-            t.Bar = new Rectangle(innerX + 22, y + TileH - 14, innerW - 120, BarH);
-            t.Expanded = js.Def.Id == _expanded;
-            y += TileH;
-
-            if (t.Expanded)
+            int oy = boxY + 36 + 22;
+            foreach (var oid in OrderedOutputs(js))
             {
-                int dh = 30 + (js.Def.OutputChoice ? 20 + js.Def.Outputs.Count * 24 : 0) + 8;
-                t.Detail = new Rectangle(innerX, y, innerW, dh);
-                t.CapMinus = new Rectangle(innerX + 120, y + 5, 22, 20);
-                t.CapPlus = new Rectangle(innerX + 178, y + 5, 22, 20);
-                if (js.Def.OutputChoice)
+                d.Outs.Add(new OutGeo
                 {
-                    int oy = y + 30 + 18;
-                    var ordered = OrderedOutputs(js);
-                    foreach (var oid in ordered)
-                    {
-                        var row = new Rectangle(innerX + 6, oy, innerW - 12, 22);
-                        tiles_AddOut(ref t, oid,
-                            row,
-                            new Rectangle(innerX + innerW - 150, oy + 1, 20, 18),
-                            new Rectangle(innerX + innerW - 98, oy + 1, 20, 18),
-                            new Rectangle(innerX + innerW - 64, oy + 1, 18, 18),
-                            new Rectangle(innerX + innerW - 42, oy + 1, 18, 18));
-                        oy += 24;
-                    }
-                }
-                y += dh;
+                    Id = oid,
+                    Minus = new Rectangle(boxX + innerW - 168, oy, 20, 20),
+                    Plus = new Rectangle(boxX + innerW - 116, oy, 20, 20),
+                    Up = new Rectangle(boxX + innerW - 80, oy, 18, 20),
+                    Down = new Rectangle(boxX + innerW - 58, oy, 18, 20),
+                });
+                oy += 26;
             }
-            y += Gap;
-            tiles.Add(t);
-            vi++;
         }
-        _h = (y - _y) + Pad;
-        return tiles;
+        return d;
     }
-
-    private static void tiles_AddOut(ref Tile t, string id, Rectangle row, Rectangle minus, Rectangle plus, Rectangle up, Rectangle down)
-        => t.Outs.Add(new OutRow { Id = id, Row = row, Minus = minus, Plus = plus, Up = up, Down = down });
 
     private List<string> OrderedOutputs(JobState js)
     {
@@ -133,86 +133,87 @@ public class JobBoardUI : IModalLayer
         return list;
     }
 
+    // ───────────────────────────────────────── update
     public void Update(InputState input)
     {
         if (!_visible) return;
         int mx = (int)input.MousePos.X, my = (int)input.MousePos.Y;
-        var tiles = BuildLayout();
+        var vis = Visible();
+
+        if (_dragging) { UpdateDrag(input, my, vis); return; }
 
         // Close button.
-        if (input.LeftPressed && new Rectangle(_x + _w - 24, _y + 5, 18, 18).Contains(mx, my)) { Close(); return; }
+        if (input.LeftPressed && new Rectangle(_x + _w - 26, _y + 7, 18, 18).Contains(mx, my)) { Close(); return; }
+        if (!input.LeftPressed) return;
 
-        // Drag handling.
-        if (_dragging)
+        int innerX = _x + Pad, innerW = _w - 2 * Pad;
+        int y = ListTop;
+        for (int i = 0; i < vis.Count; i++)
         {
-            if (!input.LeftDown)
+            var js = vis[i];
+            var g = TileGeo(innerX, y, innerW);
+            bool expanded = js.Def.Id == _expanded;
+
+            if (g.Up.Contains(mx, my)) { _ws.MoveJobBefore(js, i > 0 ? vis[i - 1] : js); return; }
+            if (g.Down.Contains(mx, my)) { _ws.MoveJobBefore(js, i + 2 < vis.Count ? vis[i + 2] : null); return; }
+            if (g.Badge.Contains(mx, my)) { _expanded = expanded ? "" : js.Def.Id; return; }
+
+            y += TileH;
+            if (expanded)
             {
-                // Drop: find target visible index by Y.
-                int target = tiles.Count - 1;
-                for (int i = 0; i < tiles.Count; i++)
-                    if (my < tiles[i].Box.Y + tiles[i].Box.Height / 2) { target = i; break; }
-                ReorderVisible(tiles, _dragVisibleIdx, target);
-                _dragging = false; _dragVisibleIdx = -1;
-            }
-            return;
-        }
-
-        if (!input.LeftPressed)
-        {
-            // scroll not needed (panel fits); start drag on press handled below
-            return;
-        }
-
-        foreach (var t in tiles)
-        {
-            // Reorder buttons.
-            if (t.Up.Contains(mx, my)) { ReorderVisible(tiles, t.VisibleIdx, t.VisibleIdx - 1); return; }
-            if (t.Down.Contains(mx, my)) { ReorderVisible(tiles, t.VisibleIdx, t.VisibleIdx + 1); return; }
-            // Expand toggle.
-            if (t.Badge.Contains(mx, my)) { _expanded = t.Expanded ? "" : t.Js.Def.Id; return; }
-            // Cap steppers (expanded).
-            if (t.Expanded)
-            {
-                int eff = _ws.EffectiveCap(t.Js), dmax = _ws.DerivedMax(t.Js.Def);
-                if (t.CapMinus.Contains(mx, my)) { _ws.SetCap(t.Js, System.Math.Max(0, eff - 1)); return; }
-                if (t.CapPlus.Contains(mx, my)) { _ws.SetCap(t.Js, System.Math.Min(dmax, eff + 1)); return; }
-                foreach (var o in t.Outs)
+                var d = DetailGeo(js, innerX, y, innerW);
+                int eff = _ws.EffectiveCap(js), dmax = _ws.DerivedMax(js.Def);
+                if (d.CapMinus.Contains(mx, my)) { _ws.SetCap(js, System.Math.Max(0, eff - 1)); return; }
+                if (d.CapPlus.Contains(mx, my)) { _ws.SetCap(js, System.Math.Min(dmax, eff + 1)); return; }
+                foreach (var o in d.Outs)
                 {
-                    var cur = t.Js.OutputTargets.TryGetValue(o.Id, out var ot) ? ot : new OutputTarget();
-                    if (o.Minus.Contains(mx, my)) { ot.TargetStock = System.Math.Max(0, cur.TargetStock - 1); t.Js.OutputTargets[o.Id] = ot; return; }
-                    if (o.Plus.Contains(mx, my)) { ot.TargetStock = System.Math.Min(99, cur.TargetStock + 1); t.Js.OutputTargets[o.Id] = ot; return; }
-                    if (o.Up.Contains(mx, my)) { SwapOutputPriority(t.Js, o.Id, -1); return; }
-                    if (o.Down.Contains(mx, my)) { SwapOutputPriority(t.Js, o.Id, +1); return; }
+                    var cur = js.OutputTargets.TryGetValue(o.Id, out var ot) ? ot : new OutputTarget();
+                    if (o.Minus.Contains(mx, my)) { ot.TargetStock = System.Math.Max(0, cur.TargetStock - 1); js.OutputTargets[o.Id] = ot; return; }
+                    if (o.Plus.Contains(mx, my)) { ot.TargetStock = System.Math.Min(99, cur.TargetStock + 1); js.OutputTargets[o.Id] = ot; return; }
+                    if (o.Up.Contains(mx, my)) { SwapOutputPriority(js, o.Id, -1); return; }
+                    if (o.Down.Contains(mx, my)) { SwapOutputPriority(js, o.Id, +1); return; }
                 }
+                y += d.Height;
             }
-            // Begin drag on the tile body / handle.
-            if (t.Drag.Contains(mx, my) || (t.Box.Contains(mx, my) && my < t.Box.Y + 28))
-            { _dragging = true; _dragVisibleIdx = t.VisibleIdx; _dragMouseY = my; return; }
+
+            // Start drag on the tile body (top row, not over a control).
+            if (g.Box.Contains(mx, my) && my < g.Box.Y + 32
+                && !g.Up.Contains(mx, my) && !g.Down.Contains(mx, my) && !g.Badge.Contains(mx, my))
+            {
+                _dragging = true; _dragJobId = js.Def.Id; _dragGrabDy = my - g.Box.Y; _dragMouseY = my;
+                _expanded = ""; // collapse while dragging
+                return;
+            }
+            y += Gap;
         }
     }
 
-    private void ReorderVisible(List<Tile> tiles, int fromVisible, int toVisible)
+    private void UpdateDrag(InputState input, int my, List<JobState> vis)
     {
-        if (fromVisible < 0 || fromVisible >= tiles.Count) return;
-        toVisible = System.Math.Clamp(toVisible, 0, tiles.Count - 1);
-        if (toVisible == fromVisible) return;
-        // Map visible indices to absolute job-list indices.
-        int fromAbs = AbsIndex(tiles[fromVisible].Js);
-        int toAbs = AbsIndex(tiles[toVisible].Js);
-        _ws.MoveJob(fromAbs, toAbs);
+        if (_debugDragHold) return;
+        _dragMouseY = my;
+        if (input.LeftDown) return;
+        // Drop: compute insertion among the non-dragged visible jobs.
+        var others = new List<JobState>();
+        JobState? dragged = null;
+        foreach (var js in vis) { if (js.Def.Id == _dragJobId) dragged = js; else others.Add(js); }
+        int insertIdx = InsertIndex(my, others.Count);
+        if (dragged != null)
+            _ws.MoveJobBefore(dragged, insertIdx < others.Count ? others[insertIdx] : null);
+        _dragging = false; _dragJobId = "";
     }
 
-    private int AbsIndex(JobState js)
+    private int InsertIndex(int my, int otherCount)
     {
-        for (int i = 0; i < _ws.Jobs.Count; i++) if (_ws.Jobs[i] == js) return i;
-        return 0;
+        int rel = my - _dragGrabDy - ListTop;
+        int idx = (int)System.Math.Round(rel / (float)SlotH);
+        return System.Math.Clamp(idx, 0, otherCount);
     }
 
     private void SwapOutputPriority(JobState js, string id, int dir)
     {
         var ordered = OrderedOutputs(js);
-        int p = ordered.IndexOf(id);
-        int q = p + dir;
+        int p = ordered.IndexOf(id), q = p + dir;
         if (q < 0 || q >= ordered.Count) return;
         string other = ordered[q];
         var a = js.OutputTargets.TryGetValue(id, out var ta) ? ta : new OutputTarget();
@@ -221,95 +222,155 @@ public class JobBoardUI : IModalLayer
         js.OutputTargets[id] = a; js.OutputTargets[other] = b;
     }
 
+    // ───────────────────────────────────────── draw
     public void Draw()
     {
         if (!_visible) return;
-        var tiles = BuildLayout();
-        var panel = new Rectangle(_x, _y, _w, _h);
-        _batch.Draw(_pixel, panel, new Color(20, 18, 24, 235));
-        Border(panel, new Color(150, 140, 160, 220), 2);
-        DrawText("Jobs", _x + Pad, _y + 7, new Color(228, 222, 232), 1.05f);
-        DrawText("top = highest priority", _x + _w - 168, _y + 11, new Color(140, 135, 148), 0.7f);
-        DrawButton(new Rectangle(_x + _w - 24, _y + 5, 18, 18), "x", new Color(80, 50, 50, 230));
+        var vis = Visible();
+        int innerX = _x + Pad, innerW = _w - 2 * Pad;
 
-        if (tiles.Count == 0)
-            DrawText("No job buildings yet. Build a pile or table.", _x + Pad, _y + TitleH + Pad, new Color(150, 145, 155), 0.8f);
-
-        foreach (var t in tiles)
+        // measure panel height
+        int contentH;
+        if (_dragging) contentH = (vis.Count) * SlotH; // all collapsed + one floating gap accounted by count
+        else
         {
-            var js = t.Js; var def = js.Def;
-            bool full = _ws.IsStorageFull(def);
-            int assigned = js.AssignedWorkers.Count;
-            int eff = _ws.EffectiveCap(js);
-
-            _batch.Draw(_pixel, t.Box, t.Expanded ? new Color(44, 40, 52, 235) : new Color(34, 32, 40, 230));
-            Border(t.Box, new Color(90, 85, 100, 200), 1);
-            // drag handle dots
-            DrawText(":::", t.Box.X + 3, t.Box.Y + TileH / 2 - 7, new Color(120, 115, 130), 0.7f);
-            DrawText($"{t.VisibleIdx + 1}. {def.DisplayName}", t.Box.X + 22, t.Box.Y + 6, new Color(225, 222, 230), 0.9f);
-
-            // storage / population bar
-            var (cur, max) = _ws.JobStorage(def);
-            _batch.Draw(_pixel, t.Bar, new Color(15, 14, 18, 230));
-            if (max > 0)
+            int h = 0;
+            foreach (var js in vis)
             {
-                float f = System.Math.Clamp(cur / (float)max, 0f, 1f);
-                var fillCol = full ? new Color(200, 80, 70) : (def.SpawnsUnit ? new Color(150, 110, 200) : new Color(90, 170, 120));
-                _batch.Draw(_pixel, new Rectangle(t.Bar.X, t.Bar.Y, (int)(t.Bar.Width * f), t.Bar.Height), fillCol);
+                h += SlotH;
+                if (js.Def.Id == _expanded) h += DetailGeo(js, innerX, 0, innerW).Height;
             }
-            DrawText($"{cur}/{(max > 0 ? max.ToString() : "-")}{(full ? "  FULL" : "")}",
-                t.Bar.X + t.Bar.Width + 6, t.Bar.Y - 4, full ? new Color(220, 120, 110) : new Color(160, 156, 168), 0.7f);
+            contentH = h;
+        }
+        _h = TitleH + Pad + System.Math.Max(SlotH, contentH) + Pad - Gap;
 
-            // reorder buttons
-            DrawButton(t.Up, "^", new Color(50, 48, 60, 230));
-            DrawButton(t.Down, "v", new Color(50, 48, 60, 230));
-            // badge: assigned / cap
-            var badgeCol = assigned > 0 ? new Color(56, 78, 60, 235) : new Color(48, 46, 56, 230);
-            DrawButton(t.Badge, $"{assigned} / {eff}", badgeCol);
+        var panel = new Rectangle(_x, _y, _w, _h);
+        _batch.Draw(_pixel, panel, new Color(24, 22, 28, 240));
+        Border(panel, new Color(150, 140, 162, 220), 2);
+        Text("Jobs", _x + Pad, _y + 7, FsTitle, new Color(230, 224, 234));
+        Text("top = highest priority", _x + _w - 180, _y + 12, FsSmall, new Color(150, 144, 158));
+        DrawButton(new Rectangle(_x + _w - 26, _y + 7, 18, 18), "x", new Color(86, 54, 54, 235));
 
-            if (t.Expanded) DrawDetail(t);
+        if (vis.Count == 0)
+        {
+            Text("No job buildings yet — build a pile or table.", innerX, ListTop, FsName, new Color(155, 150, 162));
+            return;
         }
 
-        // dragged ghost
-        if (_dragging && _dragVisibleIdx >= 0 && _dragVisibleIdx < tiles.Count)
+        if (_dragging) { DrawDragging(vis, innerX, innerW); return; }
+
+        int y = ListTop;
+        foreach (var js in vis)
         {
-            var ghost = new Rectangle(_x + Pad, _dragMouseY - 12, _w - 2 * Pad, 24);
-            _batch.Draw(_pixel, ghost, new Color(80, 110, 160, 120));
+            int vi = js.Priority; // displayed number derived below from visible order
+            DrawTile(js, innerX, y, innerW, IndexInVisible(vis, js) + 1, false);
+            y += TileH;
+            if (js.Def.Id == _expanded) { var d = DetailGeo(js, innerX, y, innerW); DrawDetail(js, d, innerX, innerW); y += d.Height; }
+            y += Gap;
         }
     }
 
-    private void DrawDetail(Tile t)
+    private void DrawDragging(List<JobState> vis, int innerX, int innerW)
     {
-        var js = t.Js; var def = js.Def;
-        _batch.Draw(_pixel, t.Detail, new Color(28, 26, 34, 235));
-        Border(t.Detail, new Color(80, 76, 92, 180), 1);
-        int dmax = _ws.DerivedMax(def);
-        DrawText("Workers", t.Detail.X + 8, t.Detail.Y + 8, new Color(180, 176, 188), 0.8f);
-        DrawButton(t.CapMinus, "-", new Color(60, 50, 50, 230));
-        DrawText($"{_ws.EffectiveCap(js)}", t.CapMinus.Right + 14, t.Detail.Y + 7, new Color(225, 225, 230), 0.95f);
-        DrawButton(t.CapPlus, "+", new Color(50, 60, 50, 230));
-        DrawText($"max {dmax}", t.CapPlus.Right + 10, t.Detail.Y + 9, new Color(150, 146, 158), 0.72f);
+        var others = new List<JobState>();
+        JobState? dragged = null;
+        foreach (var js in vis) { if (js.Def.Id == _dragJobId) dragged = js; else others.Add(js); }
+        int insertIdx = InsertIndex(_dragMouseY, others.Count);
 
-        if (!string.IsNullOrEmpty(def.RequiredCapability))
-            DrawText($"requires: {def.RequiredCapability}", t.Detail.X + 8, t.Detail.Y + 30, new Color(170, 150, 120), 0.72f);
+        // gap slot
+        int gapY = ListTop + insertIdx * SlotH;
+        var gapRect = new Rectangle(innerX, gapY, innerW, TileH);
+        _batch.Draw(_pixel, gapRect, new Color(60, 70, 96, 90));
+        Border(gapRect, new Color(120, 140, 190, 160), 1);
+
+        // other tiles, skipping the gap slot
+        int slot = 0;
+        for (int k = 0; k < others.Count; k++)
+        {
+            if (slot == insertIdx) slot++;
+            int ty = ListTop + slot * SlotH;
+            DrawTile(others[k], innerX, ty, innerW, slot + 1, false);
+            slot++;
+        }
+
+        // floating dragged tile (on top, lifted)
+        if (dragged != null)
+        {
+            int fy = System.Math.Clamp(_dragMouseY - _dragGrabDy, ListTop, _y + _h - TileH - Pad);
+            // soft shadow
+            _batch.Draw(_pixel, new Rectangle(innerX + 4, fy + 5, innerW, TileH), new Color(0, 0, 0, 70));
+            DrawTile(dragged, innerX, fy, innerW, insertIdx + 1, true);
+        }
+    }
+
+    private int IndexInVisible(List<JobState> vis, JobState js)
+    { for (int i = 0; i < vis.Count; i++) if (vis[i] == js) return i; return 0; }
+
+    private void DrawTile(JobState js, int x, int y, int innerW, int number, bool lifted)
+    {
+        var def = js.Def;
+        var g = TileGeo(x, y, innerW);
+        bool full = _ws.IsStorageFull(def);
+        int assigned = js.AssignedWorkers.Count;
+        int eff = _ws.EffectiveCap(js);
+
+        _batch.Draw(_pixel, g.Box, lifted ? new Color(58, 56, 72, 245)
+            : (def.Id == _expanded ? new Color(46, 42, 56, 240) : new Color(36, 34, 42, 235)));
+        Border(g.Box, lifted ? new Color(170, 180, 220, 240) : new Color(92, 86, 104, 205), lifted ? 2 : 1);
+
+        // grip
+        Text(":::", g.Box.X + 5, g.Box.Y + 9, FsName, new Color(120, 114, 132));
+        Text($"{number}.", g.Box.X + 22, g.Box.Y + 8, FsName, new Color(150, 146, 160));
+        Text(def.DisplayName, g.Box.X + 44, g.Box.Y + 8, FsName, new Color(228, 224, 234));
+
+        // storage / population bar (bottom row)
+        var (cur, max) = _ws.JobStorage(def);
+        _batch.Draw(_pixel, g.Bar, new Color(15, 14, 18, 235));
+        if (max > 0)
+        {
+            float f = System.Math.Clamp(cur / (float)max, 0f, 1f);
+            var fillCol = full ? new Color(200, 84, 72) : (def.SpawnsUnit ? new Color(150, 112, 200) : new Color(92, 172, 122));
+            if (f > 0f) _batch.Draw(_pixel, new Rectangle(g.Bar.X, g.Bar.Y, (int)(g.Bar.Width * f), g.Bar.Height), fillCol);
+        }
+        string cap = max > 0 ? max.ToString() : "-";
+        Text($"{cur}/{cap}{(full ? "  full" : "")}", g.Bar.Right + 8, g.Bar.Y - 4, FsSmall,
+            full ? new Color(222, 124, 112) : new Color(160, 156, 170));
+
+        DrawButton(g.Up, "^", new Color(52, 50, 62, 235));
+        DrawButton(g.Down, "v", new Color(52, 50, 62, 235));
+        DrawButton(g.Badge, $"{assigned} / {eff}", assigned > 0 ? new Color(58, 82, 64, 240) : new Color(50, 48, 60, 235));
+    }
+
+    private void DrawDetail(JobState js, Detail d, int innerX, int innerW)
+    {
+        var def = js.Def;
+        _batch.Draw(_pixel, d.Box, new Color(30, 28, 36, 240));
+        Border(d.Box, new Color(82, 78, 96, 190), 1);
+
+        Text("Workers", d.Box.X + 10, d.Box.Y + 11, FsSmall, new Color(182, 178, 190));
+        DrawButton(d.CapMinus, "-", new Color(64, 52, 52, 235));
+        Text($"{_ws.EffectiveCap(js)}", d.CapMinus.Right + 16, d.Box.Y + 9, FsName, new Color(228, 228, 232));
+        DrawButton(d.CapPlus, "+", new Color(52, 64, 52, 235));
+        Text($"max {_ws.DerivedMax(def)}", d.CapPlus.Right + 12, d.Box.Y + 11, FsSmall, new Color(150, 146, 160));
 
         if (def.OutputChoice)
         {
-            DrawText("Keep in stock:", t.Detail.X + 8, t.Detail.Y + 32, new Color(170, 166, 178), 0.75f);
+            Text("Keep in stock:", d.Box.X + 10, d.Box.Y + 38, FsSmall, new Color(172, 168, 182));
             int host = _ws.FindHostBuilding(def, default);
-            foreach (var o in t.Outs)
+            foreach (var o in d.Outs)
             {
-                var outDef = def.Outputs.Find(x => x.Id == o.Id);
+                var outDef = def.Outputs.Find(z => z.Id == o.Id);
                 string name = string.IsNullOrEmpty(outDef.DisplayName) ? o.Id : outDef.DisplayName;
                 int have = host >= 0 ? _ws.StoredOf(host, o.Id) : 0;
                 int tgt = js.OutputTargets.TryGetValue(o.Id, out var ot) ? ot.TargetStock : 0;
-                DrawText(name, o.Row.X + 4, o.Row.Y + 3, new Color(218, 216, 224), 0.78f);
-                DrawText($"have {have}", o.Row.X + 150, o.Row.Y + 4, new Color(150, 146, 158), 0.7f);
-                DrawButton(o.Minus, "-", new Color(60, 50, 50, 230));
-                DrawText($"{tgt}", o.Minus.Right + 6, o.Row.Y + 3, new Color(225, 225, 230), 0.8f);
-                DrawButton(o.Plus, "+", new Color(50, 60, 50, 230));
-                DrawButton(o.Up, "^", new Color(50, 48, 60, 230));
-                DrawButton(o.Down, "v", new Color(50, 48, 60, 230));
+                int rowY = o.Minus.Y;
+                Text(name, d.Box.X + 14, rowY + 1, FsSmall, new Color(220, 218, 226));
+                Text($"have {have}", d.Box.X + 150, rowY + 2, FsSmall, new Color(150, 146, 160));
+                DrawButton(o.Minus, "-", new Color(64, 52, 52, 235));
+                Text($"{tgt}", o.Minus.Right + 6, rowY + 1, FsSmall, new Color(228, 228, 232));
+                DrawButton(o.Plus, "+", new Color(52, 64, 52, 235));
+                DrawButton(o.Up, "^", new Color(52, 50, 62, 235));
+                DrawButton(o.Down, "v", new Color(52, 50, 62, 235));
             }
         }
     }
@@ -321,21 +382,13 @@ public class JobBoardUI : IModalLayer
     public bool IsBlocking => false;
 
     private void Border(Rectangle r, Color c, int t) => Render.DrawUtils.DrawRectBorder(_batch, _pixel, r, c, t);
+    private void Text(string s, int x, int y, int size, Color c) => _r.DrawText(s, x, y, size, c);
 
     private void DrawButton(Rectangle r, string label, Color fill)
     {
         _batch.Draw(_pixel, r, fill);
-        Border(r, new Color(200, 200, 200, 190), 1);
-        if (_font == null) return;
-        var size = _font.MeasureString(label);
-        float s = System.Math.Min(0.8f, (r.Width - 4) / System.Math.Max(1f, size.X));
-        var pos = new Vector2((int)(r.X + (r.Width - size.X * s) / 2f), (int)(r.Y + (r.Height - size.Y * s) / 2f));
-        _batch.DrawString(_font, label, pos, new Color(230, 230, 230), 0f, Vector2.Zero, s, SpriteEffects.None, 0f);
-    }
-
-    private void DrawText(string text, int x, int y, Color c, float scale)
-    {
-        if (_font == null) return;
-        _batch.DrawString(_font, text, new Vector2((int)x, (int)y), c, 0f, Vector2.Zero, scale, SpriteEffects.None, 0f);
+        Border(r, new Color(198, 198, 206, 195), 1);
+        var sz = _r.MeasureText(label, FsBtn);
+        _r.DrawText(label, (int)(r.X + (r.Width - sz.X) / 2f), (int)(r.Y + (r.Height - sz.Y) / 2f), FsBtn, new Color(232, 232, 236));
     }
 }

@@ -15,8 +15,9 @@ public class GraveRosterUI : IModalLayer
 {
     private SpriteBatch _batch = null!;
     private Texture2D _pixel = null!;
-    private SpriteFont? _font;
+    private RuntimeWidgetRenderer _r = null!;
     private WorkerSystem _ws = null!;
+    private const int FsTitle = 18, FsBody = 14, FsSmall = 12, FsBtn = 13;
 
     private bool _visible;
     private int _graveObjIdx = -1;
@@ -30,9 +31,9 @@ public class GraveRosterUI : IModalLayer
 
     public bool IsVisible => _visible;
 
-    public void Init(SpriteBatch batch, Texture2D pixel, SpriteFont? font, WorkerSystem ws)
+    public void Init(SpriteBatch batch, Texture2D pixel, RuntimeWidgetRenderer renderer, WorkerSystem ws)
     {
-        _batch = batch; _pixel = pixel; _font = font; _ws = ws;
+        _batch = batch; _pixel = pixel; _r = renderer; _ws = ws;
     }
 
     public void OpenForGrave(int graveObjIdx, int screenW, int screenH)
@@ -104,24 +105,24 @@ public class GraveRosterUI : IModalLayer
         _batch.Draw(_pixel, panel, new Color(22, 20, 26, 235));
         Border(panel, new Color(150, 140, 160, 220), 2);
 
-        DrawText("Empty Grave", _x + Pad, _y + 6, new Color(225, 220, 230), 1f);
+        Text("Empty Grave", _x + Pad, _y + 6, FsTitle, new Color(228, 222, 232));
         DrawButton(CloseRect, "x", new Color(80, 50, 50, 230));
 
         // Housed worker row.
         var housed = _ws.HousedWorker(_graveObjIdx);
         int hy = _y + TitleH + Pad;
-        DrawText("Housed:", _x + Pad, hy + 4, new Color(170, 165, 180), 0.85f);
+        Text("Housed:", _x + Pad, hy + 5, FsBody, new Color(172, 167, 182));
         if (housed != null)
         {
-            DrawText(housed.Value.Name, _x + Pad + 64, hy + 4, new Color(220, 220, 225), 0.85f);
-            DrawButton(HousedActionRect, "Unassign", new Color(90, 55, 55, 230));
+            Text(housed.Value.Name, _x + Pad + 66, hy + 5, FsBody, new Color(222, 222, 227));
+            DrawButton(HousedActionRect, "Unassign", new Color(96, 58, 58, 235));
         }
-        else DrawText("(empty)", _x + Pad + 64, hy + 4, new Color(140, 135, 145), 0.85f);
+        else Text("(empty)", _x + Pad + 66, hy + 5, FsBody, new Color(142, 137, 147));
 
         // Divider + label.
         int dy = hy + RowH + 6;
         _batch.Draw(_pixel, new Rectangle(_x + Pad, dy, _w - 2 * Pad, 1), new Color(90, 85, 95, 200));
-        DrawText("Assign humanoid undead:", _x + Pad, dy + 6, new Color(170, 165, 180), 0.8f);
+        Text("Assign humanoid undead:", _x + Pad, dy + 7, FsSmall, new Color(172, 167, 182));
 
         // Candidate list.
         var candidates = _ws.UnassignedWorkers();
@@ -132,11 +133,12 @@ public class GraveRosterUI : IModalLayer
             int rowY = ListTop + r * RowH;
             var rowRect = new Rectangle(_x + Pad, rowY, _w - 2 * Pad, RowH - 4);
             _batch.Draw(_pixel, rowRect, new Color(38, 36, 44, 220));
-            DrawText(candidates[idx].Name, _x + Pad + 6, rowY + 4, new Color(215, 215, 220), 0.8f);
-            DrawButton(RowActionRect(rowY), "Assign", new Color(55, 80, 60, 230));
+            Border(rowRect, new Color(70, 66, 80, 160), 1);
+            Text(candidates[idx].Name, _x + Pad + 8, rowY + 5, FsBody, new Color(218, 218, 223));
+            DrawButton(RowActionRect(rowY), "Assign", new Color(58, 84, 64, 235));
         }
         if (candidates.Count == 0)
-            DrawText("(none available)", _x + Pad + 6, ListTop + 4, new Color(140, 135, 145), 0.8f);
+            Text("(none available)", _x + Pad + 8, ListTop + 5, FsBody, new Color(142, 137, 147));
     }
 
     // IModalLayer
@@ -151,17 +153,10 @@ public class GraveRosterUI : IModalLayer
     private void DrawButton(Rectangle r, string label, Color fill)
     {
         _batch.Draw(_pixel, r, fill);
-        Border(r, new Color(210, 210, 210, 200), 1);
-        if (_font == null) return;
-        var size = _font.MeasureString(label);
-        float s = System.Math.Min(0.8f, (r.Width - 6) / System.Math.Max(1f, size.X));
-        var pos = new Vector2((int)(r.X + (r.Width - size.X * s) / 2f), (int)(r.Y + (r.Height - size.Y * s) / 2f));
-        _batch.DrawString(_font, label, pos, new Color(230, 230, 230), 0f, Vector2.Zero, s, SpriteEffects.None, 0f);
+        Border(r, new Color(206, 206, 214, 200), 1);
+        var sz = _r.MeasureText(label, FsBtn);
+        _r.DrawText(label, (int)(r.X + (r.Width - sz.X) / 2f), (int)(r.Y + (r.Height - sz.Y) / 2f), FsBtn, new Color(232, 232, 236));
     }
 
-    private void DrawText(string text, int x, int y, Color c, float scale)
-    {
-        if (_font == null) return;
-        _batch.DrawString(_font, text, new Vector2((int)x, (int)y), c, 0f, Vector2.Zero, scale, SpriteEffects.None, 0f);
-    }
+    private void Text(string s, int x, int y, int size, Color c) => _r.DrawText(s, x, y, size, c);
 }

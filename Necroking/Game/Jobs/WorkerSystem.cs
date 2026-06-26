@@ -147,15 +147,15 @@ public class WorkerSystem
         return max > 0 && cur >= max;
     }
 
-    /// <summary>Reorder the job list (drag/▲▼) and renumber priorities.</summary>
-    public void MoveJob(int fromIndex, int toIndex)
+    /// <summary>Reorder: remove <paramref name="dragged"/> and re-insert it directly
+    /// before <paramref name="before"/> (or at the end when null), then renumber
+    /// priorities. Unambiguous insertion semantics for drag-reorder and ▲▼.</summary>
+    public void MoveJobBefore(JobState dragged, JobState? before)
     {
-        if (fromIndex < 0 || fromIndex >= _jobStates.Count) return;
-        toIndex = Math.Clamp(toIndex, 0, _jobStates.Count - 1);
-        if (toIndex == fromIndex) return;
-        var js = _jobStates[fromIndex];
-        _jobStates.RemoveAt(fromIndex);
-        _jobStates.Insert(toIndex, js);
+        if (dragged == null || !_jobStates.Remove(dragged)) return;
+        int idx = before != null ? _jobStates.IndexOf(before) : _jobStates.Count;
+        if (idx < 0) idx = _jobStates.Count;
+        _jobStates.Insert(idx, dragged);
         for (int i = 0; i < _jobStates.Count; i++) _jobStates[i].Priority = i;
     }
 

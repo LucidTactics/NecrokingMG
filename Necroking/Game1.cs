@@ -135,8 +135,8 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         _tableMenuUI.SetSkillBook(_skillBookState);
         _tableMenuUI.StartCraftCallback = (envIdx) => StartTableCraft(envIdx);
         _tableMenuUI.DrawUnitIconCallback = (defId, rect) => DrawUnitIdleSprite(defId, rect);
-        _graveRosterUI.Init(_spriteBatch, _pixel, _font, _workerSystem);
-        _jobBoardUI.Init(_spriteBatch, _pixel, _font, _workerSystem);
+        _graveRosterUI.Init(_spriteBatch, _pixel, _widgetRenderer, _workerSystem);
+        _jobBoardUI.Init(_spriteBatch, _pixel, _widgetRenderer, _workerSystem);
         _unitInfoPanel.Init(_widgetRenderer, _gameData);
         _grimoireOverlay.Init(_widgetRenderer, _gameData,
             spell => SpellCaster.HasSpellRequirements(spell, _gameData, _sim.UnitsMut, FindNecromancer())
