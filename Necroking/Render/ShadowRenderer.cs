@@ -40,7 +40,9 @@ public class ShadowRenderer
         EnvironmentSystem envSystem,
         FogOfWarSystem fogOfWar,
         GroundSystem? groundSystem = null,
-        DeathFogSystem? deathFog = null)
+        DeathFogSystem? deathFog = null,
+        Dictionary<int, Game1.UnitAnimData>? corpseAnims = null,
+        ReanimEffectSystem? reanimFx = null)
     {
         var shadow = gameData.Settings.Shadow;
         if (!shadow.Enabled) return;
@@ -48,7 +50,7 @@ public class ShadowRenderer
         bool useShader = (UnitShadowMode)shadow.UnitShadowMode == UnitShadowMode.Shader;
 
         if (useShader)
-            DrawShaderShadows(device, spriteBatch, glowTex, camera, renderer, sim, gameData, unitAnims, atlases, envSystem, shadow, fogOfWar, groundSystem, deathFog);
+            DrawShaderShadows(device, spriteBatch, glowTex, camera, renderer, sim, gameData, unitAnims, atlases, envSystem, shadow, fogOfWar, groundSystem, deathFog, corpseAnims, reanimFx);
         else
             DrawEllipseShadows(spriteBatch, glowTex, camera, renderer, sim, gameData, envSystem, shadow, fogOfWar);
     }
@@ -184,7 +186,9 @@ public class ShadowRenderer
         ShadowSettings shadow,
         FogOfWarSystem fogOfWar,
         GroundSystem? groundSystem,
-        DeathFogSystem? deathFog)
+        DeathFogSystem? deathFog,
+        Dictionary<int, Game1.UnitAnimData>? corpseAnims,
+        ReanimEffectSystem? reanimFx)
     {
         // Projected shadows as skewed parallelogram quads (matching C++ implementation).
         // Bottom edge sits at feet, top edge shifted by sun direction vector.
@@ -304,6 +308,32 @@ public class ShadowRenderer
             DrawShadowQuad(device, frameTex, feetSp.X, anchorY,
                 leftOff, rightOff, shadowHCropped, sdx, sdy,
                 u0, v0, u1, v1, shadowColorEff);
+        }
+
+        // Reanimating corpses cast a MORPHING shadow during the rise (crossfade the death- and
+        // standup-frame shadows by the build-up progress) so the risen unit's shadow doesn't pop
+        // in at the hand-off — shader-shadow mode otherwise skips corpses entirely.
+        if (corpseAnims != null && reanimFx != null)
+        {
+            for (int ci = 0; ci < sim.Corpses.Count; ci++)
+            {
+                var corpse = sim.Corpses[ci];
+                if (corpse.ReanimInstanceId <= 0) continue;
+                if (!reanimFx.TryGetCorpseOutline(corpse.ReanimInstanceId, out _, out _, out _, out _, out _, out float morphT)) continue;
+                if (!corpseAnims.TryGetValue(corpse.CorpseID, out var cad)) continue;
+                var cDef = gameData.Units.Get(corpse.UnitDefID);
+                if (cDef == null) continue;
+                var cAtlas = atlases[cad.AtlasID];
+                if (!cAtlas.IsLoaded) continue;
+
+                var cFeet = renderer.WorldToScreen(corpse.Position, corpse.Z, camera);
+                float cWorldH = (cDef.SpriteWorldHeight > 0 ? cDef.SpriteWorldHeight : 1.8f) * corpse.SpriteScale;
+                float cScale = (cWorldH * camera.Zoom) / cad.RefFrameHeight;
+                var frD = cad.Ctrl.GetCurrentFrame(corpse.FacingAngle);
+                var frU = cad.Ctrl.GetFrameForStateStart(AnimState.Standup, corpse.FacingAngle);
+                DrawFrameShadow(device, cAtlas, frD, cScale, cWorldH, cFeet, sdxDir, sdyDir, shadow, camera, shadowColor * (1f - morphT));
+                DrawFrameShadow(device, cAtlas, frU, cScale, cWorldH, cFeet, sdxDir, sdyDir, shadow, camera, shadowColor * morphT);
+            }
         }
 
         // Environment object shadows (skip collected foragables)
@@ -428,6 +458,32 @@ public class ShadowRenderer
     /// Draw a shadow as a textured parallelogram: bottom edge at feet, top edge skewed by sun offset.
     /// Matches the C++ rlBegin(RL_QUADS) shadow rendering.
     /// </summary>
+    // Project + draw a single sprite frame's shadow (mirrors the per-unit projection above, no
+    // wading crop). Used to crossfade a reanimating corpse's death/standup shadows.
+    private void DrawFrameShadow(GraphicsDevice device, SpriteAtlas atlas, FrameResult fr,
+        float scale, float worldH, Vector2 feetSp, float sdxDir, float sdyDir,
+        ShadowSettings shadow, Camera25D camera, Color color)
+    {
+        if (fr.Frame == null || color.A == 0) return;
+        var frameTex = atlas.GetTextureForFrame(fr.Frame.Value);
+        if (frameTex == null) return;
+        var srcRect = fr.Frame.Value.Rect;
+        float destW = srcRect.Width * scale;
+        float destH = srcRect.Height * scale;
+        float anchorX = fr.FlipX ? (1f - fr.Frame.Value.PivotX) : fr.Frame.Value.PivotX;
+        float leftOff = destW * anchorX;
+        float rightOff = destW * (1f - anchorX);
+        float texW = frameTex.Width, texH = frameTex.Height;
+        float u0 = srcRect.X / texW, v0 = srcRect.Y / texH;
+        float u1 = (srcRect.X + srcRect.Width) / texW, v1 = (srcRect.Y + srcRect.Height) / texH;
+        if (fr.FlipX) (u0, u1) = (u1, u0);
+        float swLen = worldH * shadow.LengthScale * camera.Zoom;
+        float sdx = sdxDir * swLen;
+        float sdy = sdyDir * swLen * camera.YRatio;
+        float shadowH = destH * shadow.Squash;
+        DrawShadowQuad(device, frameTex, feetSp.X, feetSp.Y, leftOff, rightOff, shadowH, sdx, sdy, u0, v0, u1, v1, color);
+    }
+
     private void DrawShadowQuad(GraphicsDevice device, Texture2D texture, float feetX, float feetY,
         float leftOff, float rightOff, float shadowH, float sdx, float sdy,
         float u0, float v0, float u1, float v1, Color color)

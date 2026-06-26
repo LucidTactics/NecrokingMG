@@ -156,7 +156,7 @@ public partial class Game1
         // Grass is no longer drawn here — tufts are merged into the unit Y-sort
         // inside DrawUnitsAndObjects so they can render in front of / behind
         // units based on world Y.
-        _shadowRenderer.Draw(GraphicsDevice, _spriteBatch, _glowTex, _camera, _renderer, _sim, _gameData, _unitAnims, _atlases, _envSystem, _fogOfWar, _groundSystem, _deathFog);
+        _shadowRenderer.Draw(GraphicsDevice, _spriteBatch, _glowTex, _camera, _renderer, _sim, _gameData, _unitAnims, _atlases, _envSystem, _fogOfWar, _groundSystem, _deathFog, _corpseAnims, _reanimFx);
 
         // --- Corpses ---
         DrawCorpses();
