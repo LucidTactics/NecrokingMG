@@ -26,7 +26,10 @@ internal class ReanimEffectSystem
     public struct ReanimConfig
     {
         public string Id;
-        public float Duration;          // total effect seconds (~3)
+        // Per-layer timings, decoupled so each layer can linger independently.
+        public float OutlineDuration;   // outline blinks then fades 1->0 over this
+        public float LightDuration;     // light alpha curve plays over this
+        public float SpawnWindow;       // how long new cloud/dust puffs keep appearing
 
         // Outline (blinks via pulse, fades out over Duration)
         public HdrColor OutlineColor;
@@ -75,6 +78,7 @@ internal class ReanimEffectSystem
         public Vec2 Ground;
         public float Scale;
         public float Age;
+        public float Life;   // removed when Age >= Life (the longest layer)
         public ReanimConfig Cfg;
         public readonly List<Puff> Clouds = new();
         public readonly List<Puff> Dust = new();
@@ -108,19 +112,22 @@ internal class ReanimEffectSystem
     {
         if (!_configs.TryGetValue(configId ?? "", out var cfg))
             cfg = _configs.TryGetValue("reanim_classic", out var def) ? def : default;
-        if (cfg.Duration <= 0f) return;
+        // Instance lives until the longest layer finishes: outline fade, light ramp, or the
+        // last puff (spawn window + the puff's own lifetime).
+        float life = MathF.Max(cfg.OutlineDuration, MathF.Max(cfg.LightDuration,
+            cfg.SpawnWindow + MathF.Max(cfg.CloudLifetime, cfg.DustLifetime)));
+        if (life <= 0f) return;
 
-        var inst = new Instance { UnitId = unitId, Ground = ground, Scale = scale, Cfg = cfg };
+        var inst = new Instance { UnitId = unitId, Ground = ground, Scale = scale, Cfg = cfg, Life = life };
 
-        // Pre-schedule the cloud + dust puffs across the first ~70% of the rise so
-        // new puffs keep appearing as the unit stands up.
-        float spawnWindow = cfg.Duration * 0.7f;
+        // Pre-schedule the cloud + dust puffs across the spawn window so new puffs keep
+        // appearing as the unit rises, then linger + fade over their own lifetimes.
         for (int i = 0; i < cfg.CloudCount; i++)
             inst.Clouds.Add(MakePuff(cfg.CloudColor, cfg.CloudWorldSize, cfg.CloudLifetime,
-                cfg.CloudRise, spawnWindow, scale, scatter: 0.6f));
+                cfg.CloudRise, cfg.SpawnWindow, scale, scatter: 0.6f));
         for (int i = 0; i < cfg.DustCount; i++)
             inst.Dust.Add(MakePuff(cfg.DustColor, cfg.DustWorldSize, cfg.DustLifetime,
-                cfg.DustRise, spawnWindow, scale, scatter: 0.8f));
+                cfg.DustRise, cfg.SpawnWindow, scale, scatter: 0.8f));
 
         _active.Add(inst);
     }
@@ -153,7 +160,7 @@ internal class ReanimEffectSystem
             inst.Age += dt;
             for (int p = 0; p < inst.Clouds.Count; p++) { var q = inst.Clouds[p]; if (inst.Age >= q.Delay) q.Age += dt; inst.Clouds[p] = q; }
             for (int p = 0; p < inst.Dust.Count; p++) { var q = inst.Dust[p]; if (inst.Age >= q.Delay) q.Age += dt; inst.Dust[p] = q; }
-            if (inst.Age >= inst.Cfg.Duration)
+            if (inst.Age >= inst.Life)
                 _active.RemoveAt(i);
         }
     }
@@ -170,8 +177,8 @@ internal class ReanimEffectSystem
         {
             var inst = _active[i];
             if (inst.UnitId != unitId) continue;
-            // Linear fade of the outline alpha across the whole effect.
-            float fade = MathF.Max(0f, 1f - inst.Age / inst.Cfg.Duration);
+            // Linear fade of the outline alpha across its own (longer) duration.
+            float fade = MathF.Max(0f, 1f - inst.Age / inst.Cfg.OutlineDuration);
             c1 = ScaleAlpha(inst.Cfg.OutlineColor, fade);
             c2 = ScaleAlpha(inst.Cfg.OutlinePulseColor, fade);
             width = inst.Cfg.OutlineWidth;
@@ -248,12 +255,11 @@ internal class ReanimEffectSystem
 
         foreach (var inst in _active)
         {
-            float life = inst.Age / inst.Cfg.Duration;
-
             // (2) diffuse light glow, behind/around the unit's feet
             if (_glow != null && inst.Cfg.LightWorldSize > 0f)
             {
-                float la = inst.Cfg.LightAlpha.Evaluate(MathHelper.Clamp(life, 0f, 1f));
+                float lightT = inst.Cfg.LightDuration > 0f ? inst.Age / inst.Cfg.LightDuration : 1f;
+                float la = inst.Cfg.LightAlpha.Evaluate(MathHelper.Clamp(lightT, 0f, 1f));
                 if (la > 0.003f)
                 {
                     var sp = _renderer.WorldToScreen(inst.Ground, 0.5f, _camera);
@@ -302,7 +308,7 @@ internal class ReanimEffectSystem
         // 1. Classic — balanced reference
         list.Add(new ReanimConfig
         {
-            Id = "reanim_classic", Duration = 3.0f,
+            Id = "reanim_classic", OutlineDuration = 3.0f, LightDuration = 3.0f, SpawnWindow = 2.1f,
             OutlineColor = Green(60, 255, 130, 255, 1.6f), OutlinePulseColor = Green(20, 160, 80, 200, 1.0f),
             OutlineWidth = 1.5f, OutlinePulseWidth = 3.0f, OutlinePulseSpeed = 2.0f,
             LightColor = Green(40, 230, 120, 255, 2.0f), LightWorldSize = 3.0f, LightAlpha = new BezierCurve(0f, 1f, 1f, 0f),
@@ -313,7 +319,7 @@ internal class ReanimEffectSystem
         // 2. Burst — intense / fast, max bloom, dense bright clouds
         list.Add(new ReanimConfig
         {
-            Id = "reanim_burst", Duration = 2.4f,
+            Id = "reanim_burst", OutlineDuration = 2.4f, LightDuration = 2.4f, SpawnWindow = 1.7f,
             OutlineColor = Green(120, 255, 140, 255, 2.6f), OutlinePulseColor = Green(60, 255, 120, 220, 1.6f),
             OutlineWidth = 2.0f, OutlinePulseWidth = 4.0f, OutlinePulseSpeed = 4.0f,
             LightColor = Green(90, 255, 140, 255, 3.6f), LightWorldSize = 4.0f, LightAlpha = new BezierCurve(0f, 1f, 0.6f, 0f),
@@ -324,18 +330,18 @@ internal class ReanimEffectSystem
         // 3. Grave Smoke — heavy dust, dim glow, slow ominous outline
         list.Add(new ReanimConfig
         {
-            Id = "reanim_smoke", Duration = 3.2f,
+            Id = "reanim_smoke", OutlineDuration = 6.2f, LightDuration = 3.2f, SpawnWindow = 2.6f,
             OutlineColor = Green(50, 200, 100, 230, 1.2f), OutlinePulseColor = Green(20, 110, 60, 160, 0.8f),
             OutlineWidth = 2.0f, OutlinePulseWidth = 4.5f, OutlinePulseSpeed = 0.9f,
             LightColor = Green(30, 170, 90, 230, 1.3f), LightWorldSize = 2.6f, LightAlpha = new BezierCurve(0f, 0.8f, 0.8f, 0f),
-            CloudColor = Green(55, 170, 85, 230, 1.2f), CloudWorldSize = 1.3f, CloudCount = 5, CloudRise = 1.0f, CloudLifetime = 2.0f,
-            DustColor = Green(55, 50, 45, 245, 1.0f), DustWorldSize = 1.6f, DustCount = 11, DustRise = 0.9f, DustLifetime = 2.2f,
+            CloudColor = Green(55, 170, 85, 230, 1.2f), CloudWorldSize = 1.3f, CloudCount = 5, CloudRise = 1.0f, CloudLifetime = 6.0f,
+            DustColor = Green(55, 50, 45, 245, 1.0f), DustWorldSize = 1.6f, DustCount = 11, DustRise = 0.9f, DustLifetime = 6.0f,
         });
 
         // 4. Soul Wisps — many small additive wisps, thin bright fast-blink outline, minimal dust
         list.Add(new ReanimConfig
         {
-            Id = "reanim_wisps", Duration = 3.0f,
+            Id = "reanim_wisps", OutlineDuration = 3.0f, LightDuration = 3.0f, SpawnWindow = 2.1f,
             OutlineColor = Green(150, 255, 180, 255, 2.4f), OutlinePulseColor = Green(40, 220, 130, 120, 1.4f),
             OutlineWidth = 1.0f, OutlinePulseWidth = 2.0f, OutlinePulseSpeed = 5.0f,
             LightColor = Green(60, 240, 150, 255, 2.2f), LightWorldSize = 2.8f, LightAlpha = new BezierCurve(0f, 1f, 0.9f, 0f),
@@ -346,7 +352,7 @@ internal class ReanimEffectSystem
         // 5. Slow Ritual — 4s, slowly swelling light, sparse slow-rising clouds, wide slow outline
         list.Add(new ReanimConfig
         {
-            Id = "reanim_ritual", Duration = 4.0f,
+            Id = "reanim_ritual", OutlineDuration = 4.0f, LightDuration = 4.0f, SpawnWindow = 2.8f,
             OutlineColor = Green(50, 210, 110, 230, 1.3f), OutlinePulseColor = Green(20, 140, 70, 180, 0.9f),
             OutlineWidth = 2.0f, OutlinePulseWidth = 5.0f, OutlinePulseSpeed = 0.6f,
             LightColor = Green(40, 200, 110, 240, 1.8f), LightWorldSize = 3.4f, LightAlpha = new BezierCurve(0f, 0.7f, 1f, 0f),
