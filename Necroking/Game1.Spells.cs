@@ -178,7 +178,7 @@ public partial class Game1 {
    /// outline fading IN on the corpse, then after <paramref name="delay"/>s spawn the unit + its slow
    /// standup and remove the corpse cleanly. Without one (stock reanimate_corpse): the unchanged
    /// legacy path — dissolve the corpse + spawn immediately.</summary>
-   void QueueReanimRise(string defId, int corpseId, string? configId, float delay = 1.5f)
+   void QueueReanimRise(string defId, int corpseId, string? configId, float delay = 3.5f)
    {
       int idx = _sim.FindCorpseIndexByID(corpseId);
       if (idx < 0) return;                       // corpse already gone — nothing to raise
@@ -203,7 +203,7 @@ public partial class Game1 {
       // Dissolving=false so it stays fully visible; the renderer draws the green outline fading in
       // on it. The unit spawns + the corpse is removed cleanly after the delay (TickPendingReanimRises).
       corpse.ConsumedBySummon = true;
-      int fxId = _reanimFx.Begin(GameConstants.InvalidUnit, pos, corpse.SpriteScale, configId, outlineFadeIn: delay);
+      int fxId = _reanimFx.Begin(GameConstants.InvalidUnit, pos, corpse.SpriteScale, configId, outlineFadeIn: delay, morphHold: delay - 1.5f);
       corpse.ReanimInstanceId = fxId;
       _pendingReanimRises.Add(new PendingReanimRise
          { Pos = pos, Facing = facing, DefId = defId, FxInstanceId = fxId, CorpseId = corpseId, Timer = delay });

@@ -82,6 +82,7 @@ internal class ReanimEffectSystem
         public float Age;
         public float OutlineStartAge;   // outline FADE-OUT clock starts here (set when the unit attaches)
         public float OutlineFadeIn;     // corpse-phase outline FADE-IN window (0->1 over this); 0 = none
+        public float MorphHold;         // hold the death pose this long (clouds build) before the morph
         public bool HasUnit;            // false while only the corpse is present (outline fades in on it)
         public float Life;   // removed when Age >= Life (the longest layer)
         public ReanimConfig Cfg;
@@ -116,7 +117,7 @@ internal class ReanimEffectSystem
     /// falls back to "reanim_classic" if unknown/empty. Returns a stable instance id; pass
     /// <see cref="GameConstants.InvalidUnit"/> for unitId when the unit hasn't spawned yet
     /// and call <see cref="SetUnitId"/> once it does, so the outline attaches on the rise.</summary>
-    public int Begin(uint unitId, Vec2 ground, float scale, string? configId, float outlineFadeIn = 0f)
+    public int Begin(uint unitId, Vec2 ground, float scale, string? configId, float outlineFadeIn = 0f, float morphHold = 0f)
     {
         if (!_configs.TryGetValue(configId ?? "", out var cfg))
             cfg = _configs.TryGetValue("reanim_classic", out var def) ? def : default;
@@ -128,16 +129,16 @@ internal class ReanimEffectSystem
 
         int id = _nextInstanceId++;
         var inst = new Instance { InstanceId = id, UnitId = unitId, Ground = ground, Scale = scale,
-            Cfg = cfg, Life = life, OutlineFadeIn = outlineFadeIn, HasUnit = unitId != uint.MaxValue };
+            Cfg = cfg, Life = life, OutlineFadeIn = outlineFadeIn, MorphHold = morphHold, HasUnit = unitId != uint.MaxValue };
 
         // Pre-schedule the cloud + dust puffs across the spawn window so new puffs keep
         // appearing as the unit rises, then linger + fade over their own lifetimes.
         for (int i = 0; i < cfg.CloudCount; i++)
             inst.Clouds.Add(MakePuff(cfg.CloudColor, cfg.CloudWorldSize, cfg.CloudLifetime,
-                cfg.CloudRise, cfg.SpawnWindow, scale, scatter: 0.6f));
+                cfg.CloudRise, cfg.SpawnWindow, scale, scatter: 0.85f));
         for (int i = 0; i < cfg.DustCount; i++)
             inst.Dust.Add(MakePuff(cfg.DustColor, cfg.DustWorldSize, cfg.DustLifetime,
-                cfg.DustRise, cfg.SpawnWindow, scale, scatter: 0.8f));
+                cfg.DustRise, cfg.SpawnWindow, scale, scatter: 1.05f));
 
         _active.Add(inst);
         return id;
@@ -233,7 +234,12 @@ internal class ReanimEffectSystem
             if (inst.InstanceId != instanceId || inst.HasUnit) continue;
             float fadeIn = inst.OutlineFadeIn > 0f
                 ? MathHelper.Clamp(inst.Age / inst.OutlineFadeIn, 0f, 1f) : 1f;
-            morphT = fadeIn;   // build-up progress 0->1; drives the death->standup pose crossfade
+            // Pose morph is delayed: hold the death frame for MorphHold seconds (clouds build up),
+            // then morph over the remaining build-up window. The outline keeps fading in over the
+            // full window (fadeIn), so the green energy builds while the body still lies in death.
+            float morphWin = inst.OutlineFadeIn - inst.MorphHold;
+            morphT = (inst.MorphHold > 0f && morphWin > 0f)
+                ? MathHelper.Clamp((inst.Age - inst.MorphHold) / morphWin, 0f, 1f) : fadeIn;
             c1 = ScaleAlpha(inst.Cfg.OutlineColor, fadeIn);
             c2 = ScaleAlpha(inst.Cfg.OutlinePulseColor, fadeIn);
             width = inst.Cfg.OutlineWidth;
@@ -387,12 +393,12 @@ internal class ReanimEffectSystem
         // 3. Grave Smoke — heavy dust, dim glow, slow ominous outline
         list.Add(new ReanimConfig
         {
-            Id = "reanim_smoke", OutlineDuration = 6.2f, LightDuration = 3.2f, SpawnWindow = 2.6f, PuffAnimCycles = 1.4f,
+            Id = "reanim_smoke", OutlineDuration = 6.2f, LightDuration = 5.0f, SpawnWindow = 2.0f, PuffAnimCycles = 1.4f,
             OutlineColor = Green(50, 200, 100, 230, 1.2f), OutlinePulseColor = Green(20, 110, 60, 160, 0.8f),
             OutlineWidth = 2.0f, OutlinePulseWidth = 4.5f, OutlinePulseSpeed = 0.9f,
-            LightColor = Green(30, 170, 90, 230, 1.3f), LightWorldSize = 2.6f, LightAlpha = new BezierCurve(0f, 0.32f, 0.32f, 0f),
-            CloudColor = Green(55, 170, 85, 200, 1.1f), CloudWorldSize = 1.3f, CloudCount = 3, CloudRise = 1.0f, CloudLifetime = 6.0f,
-            DustColor = Green(55, 50, 45, 220, 1.0f), DustWorldSize = 1.5f, DustCount = 5, DustRise = 0.9f, DustLifetime = 6.0f,
+            LightColor = Green(30, 170, 90, 230, 1.3f), LightWorldSize = 3.2f, LightAlpha = new BezierCurve(0f, 0.5f, 0.5f, 0f),
+            CloudColor = Green(55, 170, 85, 220, 1.1f), CloudWorldSize = 1.7f, CloudCount = 8, CloudRise = 1.0f, CloudLifetime = 6.0f,
+            DustColor = Green(55, 50, 45, 220, 1.0f), DustWorldSize = 1.95f, DustCount = 9, DustRise = 0.9f, DustLifetime = 6.0f,
         });
 
         // 4. Soul Wisps — many small additive wisps, thin bright fast-blink outline, minimal dust
