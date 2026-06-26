@@ -960,8 +960,14 @@ public partial class Game1
         // alpha — otherwise a low alpha washes the colour out (lighter hue) instead of fading it.
         var c = Color.FromNonPremultiplied(255, 230, 120, alpha);
 
-        const float RadiusMul = 1.5f;   // visual ring radius over the collision footprint
-        const float Flatten   = 0.42f;  // vertical squash for the ground-plane (RTS) look
+        const float RadiusMul     = 1.5f;    // visual ring radius over the collision footprint
+        const float Flatten       = 0.42f;   // vertical squash for the ground-plane (RTS) look
+        const float RingThickFrac = 0.075f;  // thick ring line = 7.5% of the ring radius
+        const float RingThinFrac  = 0.030f;  // thin  ring line = 3.0% of the ring radius
+        // The line thickness scales WITH the ring (a fixed fraction of its radius) instead of being a
+        // constant pixel width, so a "thick" ring stays equally thick relative to the circle at any
+        // zoom / unit size — clamped to >= 1px so it never vanishes when the ring is small.
+        float frac = thick >= 3 ? RingThickFrac : RingThinFrac;
         void Ring(Vec2 worldPos, float worldRadius)
         {
             if (worldRadius <= 0f) return;
@@ -970,7 +976,7 @@ public partial class Game1
             var cen  = _renderer.WorldToScreen(worldPos, 0f, _camera);
             var edge = _renderer.WorldToScreen(worldPos + new Vec2(worldRadius, 0f), 0f, _camera);
             float rx = MathF.Abs(edge.X - cen.X);
-            DrawEllipseOutline(cen.X, cen.Y, rx, rx * Flatten, c, thick);
+            DrawEllipseOutline(cen.X, cen.Y, rx, rx * Flatten, c, MathF.Max(1f, rx * frac));
         }
 
         if (_hoveredUnitIdx >= 0 && _hoveredUnitIdx < _sim.Units.Count)
@@ -1020,7 +1026,7 @@ public partial class Game1
     }
 
     /// <summary>Ellipse outline approximated by line segments (used by the ground-ring variant).</summary>
-    private void DrawEllipseOutline(float cx, float cy, float rx, float ry, Color c, int thickness)
+    private void DrawEllipseOutline(float cx, float cy, float rx, float ry, Color c, float thickness)
     {
         const int N = 30;
         var prev = new Vector2(cx + rx, cy);
@@ -1028,9 +1034,20 @@ public partial class Game1
         {
             float a = (i / (float)N) * (MathF.PI * 2f);
             var cur = new Vector2(cx + rx * MathF.Cos(a), cy + ry * MathF.Sin(a));
-            DrawLine(prev, cur, c, thickness);
+            DrawThickLine(prev, cur, c, thickness);
             prev = cur;
         }
+    }
+
+    /// <summary>Like DrawLine but with a float line width, for smooth zoom-scaled ring thickness.</summary>
+    private void DrawThickLine(Vector2 a, Vector2 b, Color c, float thickness)
+    {
+        var d = b - a;
+        float len = d.Length();
+        if (len < 0.5f) return;
+        float angle = MathF.Atan2(d.Y, d.X);
+        _spriteBatch.Draw(_pixel, a, null, c, angle, Vector2.Zero,
+            new Vector2(len, thickness), SpriteEffects.None, 0f);
     }
 
     private static readonly string[] _hoverShapeNames = { "Circle", "Corners", "Rectangle" };
