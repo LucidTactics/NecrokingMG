@@ -605,6 +605,31 @@ public partial class Game1 {
                break;
             }
 
+            // Pin the hover-highlight onto a unit (headless test has no real mouse) + force it on.
+            case "hover": {   // window.dev('hover',['necro'])  |  window.dev('hover',['clear'])
+               if (c.Args.Length >= 1 && c.Args[0].Equals("clear", System.StringComparison.OrdinalIgnoreCase))
+               {
+                  _devForceHoverUnitId = uint.MaxValue;
+                  c.Complete(Necroking.Dev.DevServer.Ok("hover cleared"));
+                  break;
+               }
+               var hvidx = DevResolveUnits(c.Args.Length > 0 ? string.Join(" ", c.Args) : "necro");
+               if (hvidx.Count == 0) { c.Complete(Necroking.Dev.DevServer.Error("hover: no unit matched")); break; }
+               _devForceHoverUnitId = _sim.Units[hvidx[0]].Id;
+               _gameData.Settings.Tooltips.ShowHoverHighlight = true;
+               c.Complete(Necroking.Dev.DevServer.Ok($"hovering unit id={_devForceHoverUnitId} (variant {_hoverHighlightVariant})"));
+               break;
+            }
+
+            // Set the hover-highlight style variant directly (0-11 = variants, 12 = off).
+            case "hover_variant": {   // window.dev('hover_variant',[5])
+               if (c.Args.Length < 1) { c.Complete(Necroking.Dev.DevServer.Error("hover_variant needs <0-12>")); break; }
+               _hoverHighlightVariant = System.Math.Clamp((int)DevFloat(c.Args[0]), 0, 12);
+               _hoverVariantLabelTimer = 2.75f;
+               c.Complete(Necroking.Dev.DevServer.Ok($"hover_variant={_hoverHighlightVariant}"));
+               break;
+            }
+
             // Remove every unit matching a selector outright (no corpse).
             case "remove": {
                if (c.Args.Length < 1) {

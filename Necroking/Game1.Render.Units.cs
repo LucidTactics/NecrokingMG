@@ -921,14 +921,106 @@ public partial class Game1
         if (_devMarkBoxes.Count > 0)
         {
             var white = new Color(255, 255, 255, 235);
-            foreach (var b in _devMarkBoxes) { var r = b; r.Inflate(2, 2); DrawRectOutline(r, white); }
+            foreach (var b in _devMarkBoxes) { var r = b; r.Inflate(2, 2); DrawRectVariant(r, white, 1); }
         }
 
-        if (!_gameData.Settings.Tooltips.ShowHoverHighlight) return;
-        var c = new Color(255, 230, 120, 210);
-        if (_hoverBoxObject is { } o) { o.Inflate(2, 2); DrawRectOutline(o, c); }
-        if (_hoverBoxCorpse is { } cp) { cp.Inflate(2, 2); DrawRectOutline(cp, c); }
-        if (_hoverBoxUnit is { } u) { u.Inflate(2, 2); DrawRectOutline(u, c); }
+        // Toast naming the active variant after a cycle press (drawn even when Off).
+        DrawHoverVariantLabel();
+
+        if (!_gameData.Settings.Tooltips.ShowHoverHighlight || _hoverHighlightVariant >= 12) return;
+        int shape = _hoverHighlightVariant / 4;
+        if (shape == 0) return;   // Circle renders BEHIND the sprites (DrawHoverGroundCircles).
+
+        HoverStyle(_hoverHighlightVariant % 4, out int thick, out byte alpha);
+        var c = new Color((byte)255, (byte)230, (byte)120, alpha);
+        void Stroke(Rectangle? box)
+        {
+            if (box is { } b)
+            {
+                b.Inflate(2, 2);
+                if (shape == 1) DrawCornersVariant(b, c, thick);
+                else            DrawRectVariant(b, c, thick);
+            }
+        }
+        Stroke(_hoverBoxObject); Stroke(_hoverBoxCorpse); Stroke(_hoverBoxUnit);
+    }
+
+    /// <summary>Hover-highlight Circle variant: a faint ground ellipse rendered BEHIND the
+    /// sprites (RTS selection-circle look). Called in the scene pass before corpses/units; uses
+    /// the previous frame's captured boxes (the live ones aren't known until mid-sprite-pass).</summary>
+    private void DrawHoverGroundCircles()
+    {
+        if (!_gameData.Settings.Tooltips.ShowHoverHighlight || _hoverHighlightVariant >= 12) return;
+        if (_hoverHighlightVariant / 4 != 0) return;   // Circle shape only
+        HoverStyle(_hoverHighlightVariant % 4, out int thick, out byte alpha);
+        var c = new Color((byte)255, (byte)230, (byte)120, alpha);
+        void Ring(Rectangle? box)
+        {
+            if (box is { } b)
+            {
+                float rx = b.Width * 0.60f;
+                DrawEllipseOutline(b.Center.X, b.Bottom, rx, rx * 0.42f, c, thick);
+            }
+        }
+        Ring(_prevHoverBoxUnit); Ring(_prevHoverBoxObject); Ring(_prevHoverBoxCorpse);
+    }
+
+    // Map a line style (variant % 4) to a thickness + alpha. 0=Thick-Solid 1=Thin-Solid
+    // 2=Thick-Faint 3=Thin-Faint.
+    private static void HoverStyle(int style, out int thickness, out byte alpha)
+    {
+        thickness = (style == 0 || style == 2) ? 3 : 1;
+        alpha     = (style == 0 || style == 1) ? (byte)235 : (byte)80;
+    }
+
+    private void FillRect(int x, int y, int w, int h, Color c)
+        => _spriteBatch.Draw(_pixel, new Rectangle(x, y, w, h), c);
+
+    /// <summary>Full rectangle outline of thickness t (drawn as four filled bars).</summary>
+    private void DrawRectVariant(Rectangle r, Color c, int t)
+    {
+        FillRect(r.X, r.Y, r.Width, t, c);            // top
+        FillRect(r.X, r.Bottom - t, r.Width, t, c);   // bottom
+        FillRect(r.X, r.Y, t, r.Height, c);           // left
+        FillRect(r.Right - t, r.Y, t, r.Height, c);   // right
+    }
+
+    /// <summary>Just the four L-shaped corners of the box (Factorio-style).</summary>
+    private void DrawCornersVariant(Rectangle r, Color c, int t)
+    {
+        int L = Math.Clamp(Math.Min(r.Width, r.Height) / 4, 6, 22);   // corner arm length
+        FillRect(r.X, r.Y, L, t, c);                     FillRect(r.X, r.Y, t, L, c);                     // TL
+        FillRect(r.Right - L, r.Y, L, t, c);             FillRect(r.Right - t, r.Y, t, L, c);             // TR
+        FillRect(r.X, r.Bottom - t, L, t, c);            FillRect(r.X, r.Bottom - L, t, L, c);            // BL
+        FillRect(r.Right - L, r.Bottom - t, L, t, c);    FillRect(r.Right - t, r.Bottom - L, t, L, c);    // BR
+    }
+
+    /// <summary>Ellipse outline approximated by line segments (used by the ground-ring variant).</summary>
+    private void DrawEllipseOutline(float cx, float cy, float rx, float ry, Color c, int thickness)
+    {
+        const int N = 30;
+        var prev = new Vector2(cx + rx, cy);
+        for (int i = 1; i <= N; i++)
+        {
+            float a = (i / (float)N) * (MathF.PI * 2f);
+            var cur = new Vector2(cx + rx * MathF.Cos(a), cy + ry * MathF.Sin(a));
+            DrawLine(prev, cur, c, thickness);
+            prev = cur;
+        }
+    }
+
+    private static readonly string[] _hoverShapeNames = { "Circle", "Corners", "Rectangle" };
+    private static readonly string[] _hoverStyleNames = { "Thick Solid", "Thin Solid", "Thick Faint", "Thin Faint" };
+
+    private void DrawHoverVariantLabel()
+    {
+        if (_hoverVariantLabelTimer <= 0f || _font == null) return;
+        string label = _hoverHighlightVariant >= 12
+            ? "Hover highlight: OFF  (H to cycle)"
+            : $"Hover {_hoverHighlightVariant + 1}/12: {_hoverShapeNames[_hoverHighlightVariant / 4]} - {_hoverStyleNames[_hoverHighlightVariant % 4]}  (H)";
+        var pos = new Vector2((int)18, (int)112);
+        _spriteBatch.DrawString(_font, label, pos + new Vector2(1, 1), new Color(0, 0, 0, 190));
+        _spriteBatch.DrawString(_font, label, pos, new Color(255, 235, 150));
     }
 
     /// <summary>Draw a 2D line by rotating the _pixel sprite. Cheap, AA-free.</summary>

@@ -281,6 +281,17 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     // sprite draw pass (exact sprite bounds) and drawn in the HUD overlay pass.
     // Reset to null each frame at the top of Draw. See ShowHoverHighlight setting.
     private Rectangle? _hoverBoxObject, _hoverBoxCorpse, _hoverBoxUnit;
+    // --- Hover-highlight style variant cycling (design test harness; cycle with 'H') ----
+    // 13 states: 0-11 = 3 shapes (Circle / Corners / Rectangle) × 4 line styles
+    // (Thick-Solid / Thin-Solid / Thick-Faint / Thin-Faint); 12 = Off.
+    // shape = variant / 4, style = variant % 4. Default 11 ≈ the original look (Rect, thin, faint).
+    private int _hoverHighlightVariant = 11;
+    private float _hoverVariantLabelTimer;     // seconds left to show the "which variant" toast
+    // 1-frame-lagged copies of the live hover boxes so the Circle variant can draw as a
+    // ground ellipse BEHIND the sprites (the live boxes are only known mid-sprite-pass).
+    private Rectangle? _prevHoverBoxObject, _prevHoverBoxCorpse, _prevHoverBoxUnit;
+    // Dev: pin the hovered unit (headless testing has no real mouse). uint.MaxValue = off.
+    private uint _devForceHoverUnitId = uint.MaxValue;
     // Dev-marked units (via the 'mark' dev command): persistent white boxes,
     // independent of mouse hover and the ShowHoverHighlight setting. Keyed by
     // stable unit Id; their on-screen boxes are recaptured each frame in Draw.
@@ -2296,6 +2307,15 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
                 _unitInfoPanel.ShowForUnit(_sim.Units[_sim.NecromancerIndex].Id);
         }
 
+        // 'H' = cycle the hover-highlight style variant (design test harness:
+        // 12 shape×line-style variants + an Off state; a toast names the active one).
+        if (!anyTextInputActive && _input.WasKeyPressed(Keys.H) && _menuState == MenuState.None)
+        {
+            _hoverHighlightVariant = (_hoverHighlightVariant + 1) % 13;
+            _hoverVariantLabelTimer = 2.75f;
+        }
+        if (_hoverVariantLabelTimer > 0f) _hoverVariantLabelTimer -= _rawDt;
+
         // 'O' = inspect the unit under the cursor (press-to-inspect mode; may
         // auto-pause while open, closing restores only the pause WE set).
         // Disabled when auto-show-on-hover is on — the hover logic below owns
@@ -2966,6 +2986,14 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
                     float d2 = udx * udx + udy * udy;
                     if (d2 < bud) { bud = d2; _hoveredUnitIdx = i; }
                 }
+            }
+
+            // Dev force-hover: pin the highlight to a chosen unit for headless variant testing.
+            if (_devForceHoverUnitId != uint.MaxValue)
+            {
+                _hoveredUnitIdx = -1;
+                for (int i = 0; i < _sim.Units.Count; i++)
+                    if (_sim.Units[i].Alive && _sim.Units[i].Id == _devForceHoverUnitId) { _hoveredUnitIdx = i; break; }
             }
 
             // --- Unit auto-hover stat sheet (Factorio-style; opt-in via Tooltips) ---
