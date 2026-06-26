@@ -211,6 +211,19 @@ public class Simulation
         _corpses.Add(corpse);
         return corpse;
     }
+
+    /// <summary>Spawn a loose, settled corpse at a position (dev/testing helper for
+    /// the Collect Corpses + Reanimate jobs). Returns the new CorpseID.</summary>
+    public int SpawnLooseCorpse(Vec2 pos, string unitDefId = "")
+    {
+        var corpse = new Corpse
+        {
+            Position = pos, UnitDefID = unitDefId, FacingAngle = 90f, SpriteScale = 1f,
+            CorpseID = _nextCorpseID++, PreSettled = true,
+        };
+        _corpses.Add(corpse);
+        return corpse.CorpseID;
+    }
     public IReadOnlyList<DamageEvent> DamageEvents => _damageEvents;
     public List<DamageEvent> DamageEventsMut => _damageEvents;
     public void AddDamageEvent(DamageEvent evt) => _damageEvents.Add(evt);

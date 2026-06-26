@@ -6,6 +6,7 @@
     "archetype": "Collect",
     "buildingDefId": "mushroom_pile",
     "workerSlotsPerBuilding": 1,
+    "collectKind": "foragable",
     "sourceForagableType": "",
     "storeResource": "Mushroom"
   },
@@ -16,7 +17,7 @@
     "archetype": "Collect",
     "buildingDefId": "corpse_pile",
     "workerSlotsPerBuilding": 1,
-    "sourceForagableType": "corpse",
+    "collectKind": "corpse",
     "storeResource": "Corpse"
   },
   {
@@ -26,7 +27,7 @@
     "archetype": "Collect",
     "buildingDefId": "poison_vat",
     "workerSlotsPerBuilding": 1,
-    "sourceForagableType": "berry",
+    "collectKind": "berry",
     "storeResource": "Poison"
   },
   {
@@ -52,6 +53,7 @@
     "workerSlotsPerBuilding": 1,
     "processTime": 8,
     "spawnsUnit": true,
+    "spawnUnitDefId": "skeleton",
     "inputs": [ { "resource": "Corpse", "amount": 1 } ]
   },
   {
@@ -62,6 +64,7 @@
     "buildingDefId": "alchemist_table",
     "workerSlotsPerBuilding": 1,
     "processTime": 6,
+    "outputChoice": true,
     "inputs": [ { "resource": "Mushroom", "amount": 2 } ],
     "outputs": [
       { "id": "potion_frenzy", "displayName": "Frenzy Potion", "amount": 1 },

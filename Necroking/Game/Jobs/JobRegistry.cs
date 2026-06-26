@@ -61,10 +61,13 @@ public class JobRegistry
         if (e.TryGetProperty("buildingDefId", out v)) d.BuildingDefId = v.GetString() ?? "";
         if (e.TryGetProperty("workerSlotsPerBuilding", out v)) d.WorkerSlotsPerBuilding = v.GetInt32();
         if (e.TryGetProperty("requiredCapability", out v)) d.RequiredCapability = v.GetString() ?? "";
+        if (e.TryGetProperty("collectKind", out v)) d.CollectKind = v.GetString() ?? "foragable";
         if (e.TryGetProperty("sourceForagableType", out v)) d.SourceForagableType = v.GetString() ?? "";
         if (e.TryGetProperty("storeResource", out v)) d.StoreResource = v.GetString() ?? "";
+        if (e.TryGetProperty("outputChoice", out v)) d.OutputChoice = v.GetBoolean();
         if (e.TryGetProperty("processTime", out v)) d.ProcessTime = v.GetSingle();
         if (e.TryGetProperty("spawnsUnit", out v)) d.SpawnsUnit = v.GetBoolean();
+        if (e.TryGetProperty("spawnUnitDefId", out v)) d.SpawnUnitDefId = v.GetString() ?? "skeleton";
 
         if (e.TryGetProperty("inputs", out var inputs) && inputs.ValueKind == JsonValueKind.Array)
             foreach (var ie in inputs.EnumerateArray())

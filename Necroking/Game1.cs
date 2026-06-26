@@ -1938,10 +1938,13 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             onPickup: OnForagablePickedUp,
             onLearnTrigger: OnForagableLearnTrigger);
 
-        // Worker job system (P0/P1): brain that assigns grave workers to jobs.
+        // Worker job system: brain that assigns grave workers to jobs.
         _workerSystem.Bind(_sim, _envSystem, _gameData);
         _workerSystem.Reset();
         _sim.Workers = _workerSystem;
+        // Reanimate job spawns through the canonical reanim pipeline (green rise effect).
+        _workerSystem.SpawnWorkerUnit = (defId, pos) =>
+            QueueReanimRise(defId, -1, "reanim_smoke", posOverride: pos);
 
         // Lean dev control server: only when launched with --devserver <port>.
         if (LaunchArgs.DevServerPort > 0)

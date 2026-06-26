@@ -445,13 +445,8 @@ public partial class Game1 {
                   if (u.Archetype != AI.ArchetypeRegistry.Worker) continue;
                   sb.Append($"  unit {u.Id} home={u.WorkerHomeObjIdx} job='{u.WorkerJobId}' phase={u.WorkerPhase} carry='{u.WorkerCarryType}'x{u.WorkerCarryAmount} pos=({u.Position.X:F1},{u.Position.Y:F1})\n");
                }
-               // Stockpile contents of mushroom piles.
-               int mpDef = _envSystem.FindDef("mushroom_pile");
-               for (int i = 0; i < _envSystem.ObjectCount; i++) {
-                  if (_envSystem.GetObject(i).DefIndex != mpDef) continue;
-                  var rt = _envSystem.GetObjectRuntime(i);
-                  sb.Append($"  mushroom_pile obj {i}: stored={rt.StoredAmount}/{_envSystem.GetDef(mpDef).StorageCap}\n");
-               }
+               sb.Append("stock:\n");
+               sb.Append(_workerSystem.StockReport());
                c.Complete(Necroking.Dev.DevServer.Ok(sb.ToString()));
                break;
             }
@@ -472,6 +467,48 @@ public partial class Game1 {
                uint sid = _sim.Units[_sim.Units.Count - 1].Id;
                bool ok = _workerSystem.AssignWorker(sid, graveObj);
                c.Complete(Necroking.Dev.DevServer.OkRaw($"{{\"graveObj\":{graveObj},\"workerUnit\":{sid},\"assigned\":{(ok ? "true" : "false")}}}"));
+               break;
+            }
+
+            // Full economy scene: every building + sources + corpses + 6 assigned
+            // workers. window.dev('worker_scene')
+            case "worker_scene": {
+               Vec2 nb = _sim.NecromancerIndex >= 0 ? _sim.Units[_sim.NecromancerIndex].Position : new Vec2(2096, 1882);
+               int Def(string id) => _envSystem.FindDef(id);
+               string[] req = { "empty_grave", "mushroom_pile", "corpse_pile", "poison_vat",
+                  "harvesting_table", "necro_table", "alchemist_table", "deathcap", "BerryBush1Ber" };
+               string missing = "";
+               foreach (var r in req) if (Def(r) < 0) { missing = r; break; }
+               if (missing != "") { c.Complete(Necroking.Dev.DevServer.Error($"missing env def: {missing}")); break; }
+               int Place(string id, float x, float y, float s = 1f) => _envSystem.AddObject((ushort)Def(id), x, y, s);
+
+               // Buildings
+               var graves = new List<int>();
+               for (int g = 0; g < 6; g++)
+                  graves.Add(Place("empty_grave", nb.X - 5 + (g % 3) * 1.6f, nb.Y - 3 + (g / 3) * 1.6f));
+               Place("mushroom_pile", nb.X + 6, nb.Y - 5);
+               Place("corpse_pile", nb.X + 6, nb.Y);
+               Place("poison_vat", nb.X + 6, nb.Y + 5);
+               Place("harvesting_table", nb.X + 11, nb.Y - 3);
+               Place("necro_table", nb.X + 11, nb.Y + 3);
+               Place("alchemist_table", nb.X + 15, nb.Y);
+               // Sources
+               for (int m = 0; m < 10; m++)
+                  Place("deathcap", nb.X + 19 + (m % 5) * 1.4f, nb.Y - 4 + (m / 5) * 2.5f);
+               Place("BerryBush1Ber", nb.X + 1, nb.Y + 7);
+               Place("BerryBush1Ber", nb.X + 3, nb.Y + 7);
+               // Corpses
+               for (int k = 0; k < 8; k++)
+                  _sim.SpawnLooseCorpse(new Vec2(nb.X - 8 + (k % 4) * 1.5f, nb.Y + 4 + (k / 4) * 1.5f), "skeleton");
+               // Workers
+               int assigned = 0;
+               for (int w = 0; w < graves.Count; w++)
+               {
+                  SpawnUnit("skeleton", new Vec2(nb.X - 5 + w, nb.Y));
+                  uint wid = _sim.Units[_sim.Units.Count - 1].Id;
+                  if (_workerSystem.AssignWorker(wid, graves[w])) assigned++;
+               }
+               c.Complete(Necroking.Dev.DevServer.Ok($"scene built: {graves.Count} graves, 7 buildings, sources + 8 corpses, {assigned} workers assigned"));
                break;
             }
 

@@ -38,8 +38,13 @@ public class JobDef
     public string RequiredCapability = "";
 
     // ── Collect archetype ──
-    /// <summary>ForagableType the worker gathers ("" = any foragable; "corpse"
-    /// for the corpse collector). Matched against EnvironmentObjectDef.ForagableType.</summary>
+    /// <summary>What the worker gathers from the world:
+    ///   "foragable" — a foragable env object (mushroom); instant pickup.
+    ///   "corpse"    — a loose Corpse; physically carried to the pile.
+    ///   "berry"     — a Berries-state bush; channel-poison it at the source.</summary>
+    public string CollectKind = "foragable";
+    /// <summary>ForagableType filter for CollectKind=="foragable" ("" = any).
+    /// Matched against EnvironmentObjectDef.ForagableType.</summary>
     public string SourceForagableType = "";
     /// <summary>Resource id deposited into the host building's stockpile on a
     /// successful collect. Must match the building def's StoredResource.</summary>
@@ -48,10 +53,25 @@ public class JobDef
     // ── Process archetype (P3 — present so jobs.json is complete; unused in P1) ──
     public List<JobResourceAmount> Inputs = new();
     public List<JobOutput> Outputs = new();
+    /// <summary>How multiple outputs are interpreted:
+    ///   false (co-products) — every output is emitted each craft (Breakdown:
+    ///          Essence + Reagent).
+    ///   true  (alternatives) — exactly one output is produced per craft, chosen
+    ///          by the maintain-stock targets in JobState (Potions: Frenzy vs Poison).</summary>
+    public bool OutputChoice = false;
     public float ProcessTime = 5f;
     /// <summary>True when the output is a spawned unit (Reanimate) rather than a
     /// stockpiled good — capped by the unit limit, not building storage.</summary>
     public bool SpawnsUnit = false;
+    /// <summary>UnitDef id spawned per craft when SpawnsUnit (Reanimate).</summary>
+    public string SpawnUnitDefId = "skeleton";
+}
+
+/// <summary>Output resource id that routes to the global PlayerResources.Essence
+/// pool instead of a building stockpile. Placeholder economy hook.</summary>
+public static class JobResources
+{
+    public const string Essence = "Essence";
 }
 
 public struct JobResourceAmount
