@@ -390,9 +390,9 @@ internal class ReanimEffectSystem
             Id = "reanim_smoke", OutlineDuration = 6.2f, LightDuration = 3.2f, SpawnWindow = 2.6f, PuffAnimCycles = 1.4f,
             OutlineColor = Green(50, 200, 100, 230, 1.2f), OutlinePulseColor = Green(20, 110, 60, 160, 0.8f),
             OutlineWidth = 2.0f, OutlinePulseWidth = 4.5f, OutlinePulseSpeed = 0.9f,
-            LightColor = Green(30, 170, 90, 230, 1.3f), LightWorldSize = 2.6f, LightAlpha = new BezierCurve(0f, 0.8f, 0.8f, 0f),
-            CloudColor = Green(55, 170, 85, 230, 1.2f), CloudWorldSize = 1.3f, CloudCount = 5, CloudRise = 1.0f, CloudLifetime = 6.0f,
-            DustColor = Green(55, 50, 45, 245, 1.0f), DustWorldSize = 1.6f, DustCount = 11, DustRise = 0.9f, DustLifetime = 6.0f,
+            LightColor = Green(30, 170, 90, 230, 1.3f), LightWorldSize = 2.6f, LightAlpha = new BezierCurve(0f, 0.32f, 0.32f, 0f),
+            CloudColor = Green(55, 170, 85, 200, 1.1f), CloudWorldSize = 1.3f, CloudCount = 3, CloudRise = 1.0f, CloudLifetime = 6.0f,
+            DustColor = Green(55, 50, 45, 220, 1.0f), DustWorldSize = 1.5f, DustCount = 5, DustRise = 0.9f, DustLifetime = 6.0f,
         });
 
         // 4. Soul Wisps — many small additive wisps, thin bright fast-blink outline, minimal dust

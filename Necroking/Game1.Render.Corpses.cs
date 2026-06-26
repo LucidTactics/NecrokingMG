@@ -23,9 +23,47 @@ namespace Necroking;
 // Game1 partial: Corpses, body-bags, carried visuals, centroid cache.
 public partial class Game1
 {
-    // Scale only the alpha of an HdrColor — crossfades the reanim outline between the death
-    // and standup poses without touching its color/intensity.
-    private static HdrColor ScaleHdrA(HdrColor c, float w) => new(c.R, c.G, c.B, (byte)(c.A * w), c.Intensity);
+    // Draw the reanimating body morphing death-pose -> standup-start via the SDF morph shader
+    // (the amoeba gain/shed-pixels morph): interpolates the two poses' distance fields, fills with
+    // the crossfaded body color + green energy in the bulge gaps, and traces a pulsing green outline
+    // on the morphed edge. Returns false if the shader / morph data is unavailable (caller falls
+    // back to an alpha crossfade). Draws in its own batch (like DrawSpriteOutline), then restores.
+    private bool DrawReanimMorph(SpriteAtlas atlas, SpriteFrame death, bool deathFlip,
+        SpriteFrame standup, bool standupFlip, Vector2 sp, float scale, Color tint, float morphT,
+        HdrColor outline, float outlineWidth, float pulseWidth, float pulseSpeed)
+    {
+        if (_morphSdfEffect == null) return false;
+        var md = _reanimMorph.GetOrBuild(GraphicsDevice, atlas, death, deathFlip, standup, standupFlip);
+        if (!md.Valid || md.ColorA == null || md.ColorB == null || md.Sdf == null) return false;
+
+        float pulse = 0.5f + 0.5f * MathF.Sin(_gameTime * pulseSpeed * 2f * MathF.PI);
+        var greenHue = new Vector3(outline.R / 255f, outline.G / 255f, outline.B / 255f);
+        float outlineStrength = (outline.A / 255f) * (0.3f + 0.3f * pulse); // fade-in (alpha) + pulse
+
+        var fx = _morphSdfEffect;
+        fx.Parameters["MorphT"]?.SetValue(morphT);
+        fx.Parameters["MaxDist"]?.SetValue(md.MaxDist);
+        fx.Parameters["EdgeSoftness"]?.SetValue(1.5f);
+        fx.Parameters["Bulge"]?.SetValue(4f);
+        fx.Parameters["GreenFill"]?.SetValue(greenHue);
+        fx.Parameters["OutlineColor"]?.SetValue(greenHue);
+        fx.Parameters["OutlineWidth"]?.SetValue(1.2f);
+        fx.Parameters["OutlinePulse"]?.SetValue(outlineStrength);
+
+        var pB = fx.Parameters["ColorB"];
+        if (pB != null) pB.SetValue(md.ColorB);
+        else { GraphicsDevice.Textures[1] = md.ColorB; GraphicsDevice.SamplerStates[1] = SamplerState.LinearClamp; }
+        var pS = fx.Parameters["SdfMap"];
+        if (pS != null) pS.SetValue(md.Sdf);
+        else { GraphicsDevice.Textures[2] = md.Sdf; GraphicsDevice.SamplerStates[2] = SamplerState.LinearClamp; }
+
+        _spriteBatch.End();
+        _spriteBatch.Begin(SpriteSortMode.Immediate, BlendState.AlphaBlend, SamplerState.LinearClamp, null, null, fx);
+        _spriteBatch.Draw(md.ColorA, sp, null, tint, 0f, new Vector2(md.PivotX, md.PivotY), scale, SpriteEffects.None, 0f);
+        _spriteBatch.End();
+        _spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.LinearClamp);
+        return true;
+    }
 
     private void DrawCorpses()
     {
@@ -132,25 +170,24 @@ public partial class Game1
                 Color corpseTint = MultiplyColor(new Color(alpha, alpha, alpha, alpha), _ambientColor);
 
                 // While reanimating, MORPH the body from its death pose to the Standup START pose
-                // over the build-up (crossfade), so it visibly gathers before rising and hands off
-                // seamlessly to the risen unit. Both poses carry the same fading-in green outline,
-                // weighted to the crossfade so the pulse/curve stays continuous into the unit.
+                // over the build-up — a true SDF "amoeba" morph (silhouette gains/sheds pixels), so
+                // it visibly gathers before rising and hands off seamlessly to the risen unit, with
+                // a pulsing green outline tracing the morphed edge. Falls back to an alpha crossfade.
                 if (reanimating &&
                     _reanimFx.TryGetCorpseOutline(corpse.ReanimInstanceId, out var co1, out var co2,
                         out var cow, out var cpw, out var cps, out float morphT))
                 {
                     var frUp = cad.Ctrl.GetFrameForStateStart(AnimState.Standup, corpse.FacingAngle);
-                    float wD = 1f - morphT, wU = morphT;
-
-                    DrawSpriteFrame(atlas, fr.Frame.Value, sp, scale, fr.FlipX, corpseTint * wD);
-                    if (frUp.Frame != null)
-                        DrawSpriteFrame(atlas, frUp.Frame.Value, sp, scale, frUp.FlipX, corpseTint * wU);
-
-                    DrawSpriteOutline(atlas, fr.Frame.Value, sp, scale, fr.FlipX,
-                        ScaleHdrA(co1, wD), ScaleHdrA(co2, wD), cow, cpw, cps, 1);
-                    if (frUp.Frame != null)
-                        DrawSpriteOutline(atlas, frUp.Frame.Value, sp, scale, frUp.FlipX,
-                            ScaleHdrA(co1, wU), ScaleHdrA(co2, wU), cow, cpw, cps, 1);
+                    bool morphed = frUp.Frame != null
+                        && DrawReanimMorph(atlas, fr.Frame.Value, fr.FlipX, frUp.Frame.Value, frUp.FlipX,
+                                           sp, scale, corpseTint, morphT, co1, cow, cpw, cps);
+                    if (!morphed)
+                    {
+                        float wD = 1f - morphT, wU = morphT;
+                        DrawSpriteFrame(atlas, fr.Frame.Value, sp, scale, fr.FlipX, corpseTint * wD);
+                        if (frUp.Frame != null)
+                            DrawSpriteFrame(atlas, frUp.Frame.Value, sp, scale, frUp.FlipX, corpseTint * wU);
+                    }
                 }
                 else
                 {

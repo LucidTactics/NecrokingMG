@@ -202,6 +202,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     private Microsoft.Xna.Framework.Graphics.Effect? _groundEffect;
     private Microsoft.Xna.Framework.Graphics.Effect? _dissolveTreeEffect;
     private Microsoft.Xna.Framework.Graphics.Effect? _outlineFlatEffect;
+    private Microsoft.Xna.Framework.Graphics.Effect? _morphSdfEffect; // reanimation SDF body morph
     private Microsoft.Xna.Framework.Graphics.Effect? _wadingEffect;
     private Microsoft.Xna.Framework.Graphics.Effect? _hdrIntensityEffect;
     private readonly Render.WadingWakeSystem _wakeSystem = new();
@@ -231,6 +232,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     private PoisonCloudRenderer _poisonCloudRenderer = new();
     private DeathFogRenderer _deathFogRenderer = new();
     private ReanimEffectSystem _reanimFx = new();
+    private Render.ReanimMorph _reanimMorph = new();   // SDF body-morph data cache for the reanimation rise
     private MagicGlyphRenderer _glyphRenderer = new();
     private DebugDraw _debugDraw = new();
     private GameSystems.SpellEffectSystem _spellEffects = new();
@@ -1848,6 +1850,8 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
 
         try { _outlineFlatEffect = Content.Load<Microsoft.Xna.Framework.Graphics.Effect>("OutlineFlat"); }
         catch (Exception ex) { _outlineFlatEffect = null; DebugLog.Log("startup", $"OutlineFlat not loaded: {ex.Message}"); }
+        try { _morphSdfEffect = Content.Load<Microsoft.Xna.Framework.Graphics.Effect>("MorphSDF"); }
+        catch (Exception ex) { _morphSdfEffect = null; DebugLog.Log("startup", $"MorphSDF not loaded: {ex.Message}"); }
         try {
             _wadingEffect = Content.Load<Microsoft.Xna.Framework.Graphics.Effect>("Wading");
             var pnames = string.Join(",", _wadingEffect.Parameters.Select(p => p.Name));
