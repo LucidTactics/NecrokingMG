@@ -186,9 +186,12 @@ public partial class Game1 {
       Vec2 pos = corpse.Position;
       float facing = corpse.FacingAngle;
 
-      if (string.IsNullOrEmpty(configId) || !_reanimFx.HasConfig(configId))
+      // Reanimation always runs the one composite effect; an empty id maps to the default preset.
+      if (string.IsNullOrEmpty(configId)) configId = "reanim_smoke";
+
+      if (!_reanimFx.HasConfig(configId))
       {
-         // Legacy: dissolve the corpse (its own blink/fade) and spawn + stand up immediately.
+         // Safety fallback only (effect asset missing): dissolve the corpse + spawn immediately.
          _sim.ConsumeCorpse(idx);
          int now = _sim.SpawnZombieMinion(defId, pos);
          if (now >= 0)

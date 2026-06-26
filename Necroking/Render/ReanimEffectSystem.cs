@@ -120,7 +120,7 @@ internal class ReanimEffectSystem
     public int Begin(uint unitId, Vec2 ground, float scale, string? configId, float outlineFadeIn = 0f, float morphHold = 0f)
     {
         if (!_configs.TryGetValue(configId ?? "", out var cfg))
-            cfg = _configs.TryGetValue("reanim_classic", out var def) ? def : default;
+            cfg = _configs.TryGetValue("reanim_smoke", out var def) ? def : default;
         // Instance lives until the longest layer finishes: outline fade, light ramp, or the
         // last puff (spawn window + the puff's own lifetime).
         float life = MathF.Max(cfg.OutlineDuration, MathF.Max(cfg.LightDuration,
@@ -359,7 +359,7 @@ internal class ReanimEffectSystem
 
     private static float EaseOut(float t) => 1f - (1f - t) * (1f - t);
 
-    // ---- 5 preset variants (all undead-green, varying execution) ----
+    // ---- The single canonical reanimation effect ("Grave Smoke") ----
 
     private static List<ReanimConfig> BuildPresets()
     {
@@ -368,29 +368,8 @@ internal class ReanimEffectSystem
 
         var list = new List<ReanimConfig>();
 
-        // 1. Classic — balanced reference
-        list.Add(new ReanimConfig
-        {
-            Id = "reanim_classic", OutlineDuration = 3.0f, LightDuration = 3.0f, SpawnWindow = 2.1f,
-            OutlineColor = Green(60, 255, 130, 255, 1.6f), OutlinePulseColor = Green(20, 160, 80, 200, 1.0f),
-            OutlineWidth = 1.5f, OutlinePulseWidth = 3.0f, OutlinePulseSpeed = 2.0f,
-            LightColor = Green(40, 230, 120, 255, 2.0f), LightWorldSize = 3.0f, LightAlpha = new BezierCurve(0f, 1f, 1f, 0f),
-            CloudColor = Green(70, 230, 110, 255, 1.6f), CloudWorldSize = 1.4f, CloudCount = 6, CloudRise = 1.4f, CloudLifetime = 1.8f,
-            DustColor = Green(70, 60, 50, 220, 1.0f), DustWorldSize = 1.1f, DustCount = 5, DustRise = 0.8f, DustLifetime = 1.6f,
-        });
-
-        // 2. Burst — intense / fast, max bloom, dense bright clouds
-        list.Add(new ReanimConfig
-        {
-            Id = "reanim_burst", OutlineDuration = 2.4f, LightDuration = 2.4f, SpawnWindow = 1.7f,
-            OutlineColor = Green(120, 255, 140, 255, 2.6f), OutlinePulseColor = Green(60, 255, 120, 220, 1.6f),
-            OutlineWidth = 2.0f, OutlinePulseWidth = 4.0f, OutlinePulseSpeed = 4.0f,
-            LightColor = Green(90, 255, 140, 255, 3.6f), LightWorldSize = 4.0f, LightAlpha = new BezierCurve(0f, 1f, 0.6f, 0f),
-            CloudColor = Green(140, 255, 110, 255, 2.6f), CloudWorldSize = 1.7f, CloudCount = 11, CloudRise = 2.0f, CloudLifetime = 1.6f,
-            DustColor = Green(80, 70, 55, 180, 1.0f), DustWorldSize = 1.0f, DustCount = 4, DustRise = 1.0f, DustLifetime = 1.3f,
-        });
-
-        // 3. Grave Smoke — heavy dust, dim glow, slow ominous outline
+        // The one reanimation effect — heavy dust, dim glow, slow ominous outline. Every
+        // reanimation path (spell / potion / on-death / table-craft) uses this single preset.
         list.Add(new ReanimConfig
         {
             Id = "reanim_smoke", OutlineDuration = 6.2f, LightDuration = 5.0f, SpawnWindow = 2.0f, PuffAnimCycles = 1.4f,
@@ -399,28 +378,6 @@ internal class ReanimEffectSystem
             LightColor = Green(30, 170, 90, 230, 1.3f), LightWorldSize = 3.2f, LightAlpha = new BezierCurve(0f, 0.5f, 0.5f, 0f),
             CloudColor = Green(55, 170, 85, 220, 1.1f), CloudWorldSize = 1.7f, CloudCount = 8, CloudRise = 1.0f, CloudLifetime = 6.0f,
             DustColor = Green(55, 50, 45, 220, 1.0f), DustWorldSize = 1.95f, DustCount = 9, DustRise = 0.9f, DustLifetime = 6.0f,
-        });
-
-        // 4. Soul Wisps — many small additive wisps, thin bright fast-blink outline, minimal dust
-        list.Add(new ReanimConfig
-        {
-            Id = "reanim_wisps", OutlineDuration = 3.0f, LightDuration = 3.0f, SpawnWindow = 2.1f,
-            OutlineColor = Green(150, 255, 180, 255, 2.4f), OutlinePulseColor = Green(40, 220, 130, 120, 1.4f),
-            OutlineWidth = 1.0f, OutlinePulseWidth = 2.0f, OutlinePulseSpeed = 5.0f,
-            LightColor = Green(60, 240, 150, 255, 2.2f), LightWorldSize = 2.8f, LightAlpha = new BezierCurve(0f, 1f, 0.9f, 0f),
-            CloudColor = Green(110, 255, 160, 255, 2.2f), CloudWorldSize = 0.8f, CloudCount = 16, CloudRise = 2.2f, CloudLifetime = 1.7f,
-            DustColor = Green(60, 60, 55, 150, 1.0f), DustWorldSize = 0.8f, DustCount = 3, DustRise = 1.0f, DustLifetime = 1.4f,
-        });
-
-        // 5. Slow Ritual — 4s, slowly swelling light, sparse slow-rising clouds, wide slow outline
-        list.Add(new ReanimConfig
-        {
-            Id = "reanim_ritual", OutlineDuration = 4.0f, LightDuration = 4.0f, SpawnWindow = 2.8f,
-            OutlineColor = Green(50, 210, 110, 230, 1.3f), OutlinePulseColor = Green(20, 140, 70, 180, 0.9f),
-            OutlineWidth = 2.0f, OutlinePulseWidth = 5.0f, OutlinePulseSpeed = 0.6f,
-            LightColor = Green(40, 200, 110, 240, 1.8f), LightWorldSize = 3.4f, LightAlpha = new BezierCurve(0f, 0.7f, 1f, 0f),
-            CloudColor = Green(60, 200, 100, 240, 1.5f), CloudWorldSize = 1.3f, CloudCount = 7, CloudRise = 1.6f, CloudLifetime = 2.6f,
-            DustColor = Green(60, 55, 50, 220, 1.0f), DustWorldSize = 1.2f, DustCount = 7, DustRise = 1.0f, DustLifetime = 2.4f,
         });
 
         return list;
