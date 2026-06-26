@@ -30,6 +30,7 @@ internal class ReanimEffectSystem
         public float OutlineDuration;   // outline blinks then fades 1->0 over this
         public float LightDuration;     // light alpha curve plays over this
         public float SpawnWindow;       // how long new cloud/dust puffs keep appearing
+        public float PuffAnimCycles;    // flipbook loops over a puff's lifetime (1=default speed, >1=faster billow)
 
         // Outline (blinks via pulse, fades out over Duration)
         public HdrColor OutlineColor;
@@ -215,6 +216,7 @@ internal class ReanimEffectSystem
 
         foreach (var inst in _active)
         {
+            float cyc = inst.Cfg.PuffAnimCycles > 0f ? inst.Cfg.PuffAnimCycles : 1f;
             for (int p = 0; p < inst.Dust.Count; p++)
             {
                 var q = inst.Dust[p];
@@ -225,7 +227,7 @@ internal class ReanimEffectSystem
                 float height = q.Rise * EaseOut(t);
                 var world = inst.Ground + q.Ground;
                 var screenPos = _renderer.WorldToScreen(world, height, _camera);
-                int frame = _cloud.GetFrameAtNormalizedTime((t + q.FramePhase) % 1f);
+                int frame = _cloud.GetFrameAtNormalizedTime((t * cyc + q.FramePhase) % 1f);
                 float scale = (q.WorldSize * zoom) / frameW;
                 var color = ColorUtils.Premultiply(q.Color.R, q.Color.G, q.Color.B, a);
 
@@ -255,6 +257,7 @@ internal class ReanimEffectSystem
 
         foreach (var inst in _active)
         {
+            float cyc = inst.Cfg.PuffAnimCycles > 0f ? inst.Cfg.PuffAnimCycles : 1f;
             // (2) diffuse light glow, behind/around the unit's feet
             if (_glow != null && inst.Cfg.LightWorldSize > 0f)
             {
@@ -284,7 +287,7 @@ internal class ReanimEffectSystem
                     float height = q.Rise * EaseOut(t);
                     var world = inst.Ground + q.Ground;
                     var sp = _renderer.WorldToScreen(world, height, _camera);
-                    int frame = _cloud.GetFrameAtNormalizedTime((t + q.FramePhase) % 1f);
+                    int frame = _cloud.GetFrameAtNormalizedTime((t * cyc + q.FramePhase) % 1f);
                     var src = _cloud.GetFrameRect(frame);
                     float scale = (q.WorldSize * zoom) / frameW;
                     var origin = new Vector2(src.Width * 0.5f, src.Height * 0.5f);
@@ -330,7 +333,7 @@ internal class ReanimEffectSystem
         // 3. Grave Smoke — heavy dust, dim glow, slow ominous outline
         list.Add(new ReanimConfig
         {
-            Id = "reanim_smoke", OutlineDuration = 6.2f, LightDuration = 3.2f, SpawnWindow = 2.6f,
+            Id = "reanim_smoke", OutlineDuration = 6.2f, LightDuration = 3.2f, SpawnWindow = 2.6f, PuffAnimCycles = 1.4f,
             OutlineColor = Green(50, 200, 100, 230, 1.2f), OutlinePulseColor = Green(20, 110, 60, 160, 0.8f),
             OutlineWidth = 2.0f, OutlinePulseWidth = 4.5f, OutlinePulseSpeed = 0.9f,
             LightColor = Green(30, 170, 90, 230, 1.3f), LightWorldSize = 2.6f, LightAlpha = new BezierCurve(0f, 0.8f, 0.8f, 0f),
