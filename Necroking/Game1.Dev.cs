@@ -305,6 +305,33 @@ public partial class Game1 {
                break;
             }
 
+            // --- Editor click-leak test harness (weapon/armor/shield sub-editor) ---
+            case "ed_weapon_sub":
+                _menuState = MenuState.UnitEditor;
+                _paused = false;
+                _unitEditor.DevEnsureSelection();
+                _unitEditor.OpenWeaponSubEditor();
+                _unitEditor.DevUnsavedChanges = false;
+                c.Complete(Necroking.Dev.DevServer.Ok(_unitEditor.DevSubState()));
+                break;
+            case "ed_state":
+                c.Complete(Necroking.Dev.DevServer.Ok(_unitEditor.DevSubState()));
+                break;
+            case "ed_mouse": {
+                // ed_mouse <x> <y> <down|up> — persistent synthetic editor mouse (held until next ed_mouse/ed_mouse_off)
+                if (c.Args.Length < 3 || !int.TryParse(c.Args[0], out int cx) || !int.TryParse(c.Args[1], out int cy)) {
+                    c.Complete(Necroking.Dev.DevServer.Error("ed_mouse <x> <y> <down|up>"));
+                    break;
+                }
+                _devMouseActive = true; _devMouseX = cx; _devMouseY = cy; _devMouseDown = c.Args[2] == "down";
+                c.Complete(Necroking.Dev.DevServer.Ok($"editor mouse {(_devMouseDown ? "DOWN" : "UP")} @ {cx},{cy}"));
+                break;
+            }
+            case "ed_mouse_off":
+                _devMouseActive = false;
+                c.Complete(Necroking.Dev.DevServer.Ok("editor mouse override off"));
+                break;
+
             // Select an entry in the currently open editor (by index, def id,
             // or display name) so its preview/detail renders for a screenshot.
             case "select": {

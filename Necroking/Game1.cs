@@ -374,6 +374,10 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     private UIEditorWindow _uiEditor = new();
     private EditorBase _editorUi = new();
     private UnitEditorWindow _unitEditor = null!;
+    // Dev/test: persistent synthetic editor mouse (ed_mouse down/up, ed_mouse_off) for click-leak tests.
+    // Held across frames so press/release edges survive multiple Updates-per-Draw.
+    private bool _devMouseActive, _devMouseDown;
+    private int _devMouseX, _devMouseY;
     private SpellEditorWindow _spellEditor = null!;
     private ItemEditorWindow _itemEditor = null!;
     private SettingsWindow _settingsWindow = null!;
@@ -2403,7 +2407,14 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         if (_mapEditor != null) _mapEditor.CameraInputEnabled = bareMapEditor;
 
         if (_menuState == MenuState.UnitEditor || _menuState == MenuState.SpellEditor || _menuState == MenuState.MapEditor || _menuState == MenuState.Settings || _menuState == MenuState.ItemEditor)
-            _editorUi.UpdateInput(mouse, _prevMouse, kb, _prevKb, screenW, screenH, gameTime, _input);
+        {
+            var editMouse = mouse;
+            if (_devMouseActive) // ed_mouse: persistent synthetic editor mouse for click-leak tests
+                editMouse = new MouseState(_devMouseX, _devMouseY, mouse.ScrollWheelValue,
+                    _devMouseDown ? ButtonState.Pressed : ButtonState.Released,
+                    ButtonState.Released, ButtonState.Released, ButtonState.Released, ButtonState.Released);
+            _editorUi.UpdateInput(editMouse, _prevMouse, kb, _prevKb, screenW, screenH, gameTime, _input);
+        }
         if (_menuState == MenuState.MapEditor && _gameWorldLoaded)
             _mapEditor.Update(screenW, screenH);
         if (_menuState == MenuState.Settings)

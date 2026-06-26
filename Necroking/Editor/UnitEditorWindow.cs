@@ -137,6 +137,15 @@ public class UnitEditorWindow
     /// panels behind it stop hit-testing (they draw first). See Draw + DrawSubEditor.</summary>
     private const int SubEditorInputLayer = 1;
     private SubEditor _activeSubEditor = SubEditor.None;
+
+    // --- Dev/test hooks (click-injection harness; see Game1.Dev.cs ed_* commands) ---
+    private bool _dbgMainBlockedWhileSubOpen;
+    /// <summary>True if, last time DrawRightPanel drew a unit with a sub-editor open, the
+    /// main panels were input-blocked (IsInputBlocked(0)) — i.e. the click-leak fix is live.</summary>
+    public bool DevMainPanelBlockedWhileSubOpen => _dbgMainBlockedWhileSubOpen;
+    public bool DevUnsavedChanges { get => _unsavedChanges; set => _unsavedChanges = value; }
+    public string DevSubState() => $"sub={_activeSubEditor} subSel={_subSelectedIdx} selUnit={_selectedIdx} unsaved={_unsavedChanges} mainBlocked={_dbgMainBlockedWhileSubOpen}";
+    public void DevEnsureSelection() { if (_selectedIdx < 0 && _gameData != null && _gameData.Units.GetIDs().Count > 0) _selectedIdx = 0; }
     private int _subSelectedIdx = -1;
     private string _subSearchFilter = "";
     private float _subPropScroll;
@@ -846,6 +855,8 @@ public class UnitEditorWindow
 
         var def = _gameData.Units.Get(allIds[_selectedIdx]);
         if (def == null) return;
+        // Dev/test capture: while a sub-editor is open, are these main panels input-blocked?
+        if (_activeSubEditor != SubEditor.None) _dbgMainBlockedWhileSubOpen = _ui.IsInputBlocked(0);
 
         // --- Scroll handling ---
         var propArea = new Rectangle(x, y, w, h);
