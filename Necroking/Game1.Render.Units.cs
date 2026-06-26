@@ -932,7 +932,9 @@ public partial class Game1
         if (shape == 0) return;   // Circle renders BEHIND the sprites (DrawHoverGroundCircles).
 
         HoverStyle(_hoverHighlightVariant % 4, out int thick, out byte alpha);
-        var c = new Color((byte)255, (byte)230, (byte)120, alpha);
+        // FromNonPremultiplied: the hover passes use premultiplied AlphaBlend, so scale RGB by
+        // alpha — otherwise a low alpha washes the colour out (lighter hue) instead of fading it.
+        var c = Color.FromNonPremultiplied(255, 230, 120, alpha);
         void Stroke(Rectangle? box)
         {
             if (box is { } b)
@@ -953,7 +955,9 @@ public partial class Game1
         if (!_gameData.Settings.Tooltips.ShowHoverHighlight || _hoverHighlightVariant >= 12) return;
         if (_hoverHighlightVariant / 4 != 0) return;   // Circle shape only
         HoverStyle(_hoverHighlightVariant % 4, out int thick, out byte alpha);
-        var c = new Color((byte)255, (byte)230, (byte)120, alpha);
+        // FromNonPremultiplied: the hover passes use premultiplied AlphaBlend, so scale RGB by
+        // alpha — otherwise a low alpha washes the colour out (lighter hue) instead of fading it.
+        var c = Color.FromNonPremultiplied(255, 230, 120, alpha);
         void Ring(Rectangle? box)
         {
             if (box is { } b)
