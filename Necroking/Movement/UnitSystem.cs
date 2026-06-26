@@ -30,6 +30,10 @@ public struct IncapState
     public float RecoverTimer;         // Countdown for recovery phase
     public bool Recovering;            // True during recovery animation (after incap ends)
     public bool HoldAtEnd;             // Snap to last frame of HoldAnim on entry
+    /// <summary>Reanimation pre-rise hold: while Active and HoldTimer &gt; 0 the unit stays
+    /// prone (locked); TickBuffs counts it down, then starts the Standup recovery so a rise
+    /// effect can build up before the unit gets up.</summary>
+    public float HoldTimer;
     /// <summary>Recovery-anim playback rate (1=normal). &lt;1 slows the rise; used by
     /// reanimation's half-speed standup. 0 is treated as 1 (default-init structs).</summary>
     public float RecoverPlaybackSpeed;

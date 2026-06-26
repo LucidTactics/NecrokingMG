@@ -51,7 +51,7 @@ public partial class Game1 {
             int idx = _sim.SpawnZombieMinion(resolvedID, spawnPos);
             if (idx >= 0) {
                _sim.UnitsMut[idx].FacingAngle = corpseFacing;
-               BuffSystem.BeginReanimationRise(_sim.UnitsMut, idx);
+               BuffSystem.BeginReanimationRise(_sim.UnitsMut, idx, holdDelay: 1.5f);
                _reanimFx.Begin(_sim.Units[idx].Id, _sim.Units[idx].Position, _sim.Units[idx].SpriteScale, spell.ReanimationEffectID);
                raised++;
             }
@@ -152,7 +152,7 @@ public partial class Game1 {
                   idx = _sim.SpawnZombieMinion(summonUnitID, unitSpawnPos);
                   if (idx >= 0) {
                      _sim.UnitsMut[idx].FacingAngle = corpseFacing;
-                     BuffSystem.BeginReanimationRise(_sim.UnitsMut, idx);
+                     BuffSystem.BeginReanimationRise(_sim.UnitsMut, idx, holdDelay: 1.5f);
                      _reanimFx.Begin(_sim.Units[idx].Id, _sim.Units[idx].Position, _sim.Units[idx].SpriteScale, spell.ReanimationEffectID);
                   }
                } else {

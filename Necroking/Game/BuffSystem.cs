@@ -130,9 +130,28 @@ public static class BuffSystem
     /// AnimResolver from the real Standup clip length ÷ speed, so the lock lasts exactly
     /// as long as the slowed animation. Falls back gracefully (Standup→Idle) for any unit
     /// whose sprite lacks a Standup clip.</summary>
-    public static void BeginReanimationRise(UnitArrays units, int idx, float playbackSpeed = 0.5f)
+    public static void BeginReanimationRise(UnitArrays units, int idx, float playbackSpeed = 0.5f, float holdDelay = 0f)
     {
         if (idx < 0 || idx >= units.Count) return;
+        if (holdDelay > 0f)
+        {
+            // Stay prone (locked) for holdDelay seconds so a rise effect can build up first,
+            // THEN play the standup. The hold -> recovery transition is in TickBuffs.
+            units[idx].Incap = new IncapState
+            {
+                Active = true,
+                Recovering = false,
+                HoldTimer = holdDelay,
+                HoldAnim = AnimState.Standup,
+                RecoverAnim = AnimState.Standup,
+                RecoverPlaybackSpeed = playbackSpeed,
+                RecoverTime = 1.5f,
+                RecoverTimer = -1f,
+                HoldAtEnd = false,
+            };
+            AnimResolver.SetOverride(units[idx], AnimRequest.Hold(AnimState.Standup));
+            return;
+        }
         units[idx].Incap = new IncapState
         {
             Active = false,
@@ -174,6 +193,23 @@ public static class BuffSystem
         for (int i = 0; i < units.Count; i++)
         {
             if (!units[i].Alive) continue;
+
+            // Reanimation pre-rise hold: stay prone for HoldTimer seconds (rise effect builds),
+            // then start the standup. Only reanimation sets HoldTimer, so other Active holds
+            // (knockdown, fatigue collapse) are unaffected.
+            if (units[i].Incap.Active && !units[i].Incap.Recovering && units[i].Incap.HoldTimer > 0f)
+            {
+                var hincap = units[i].Incap;
+                hincap.HoldTimer -= dt;
+                if (hincap.HoldTimer <= 0f)
+                {
+                    hincap.Active = false;
+                    hincap.Recovering = true;
+                    float spd = hincap.RecoverPlaybackSpeed > 0f ? hincap.RecoverPlaybackSpeed : 1f;
+                    AnimResolver.SetOverride(units[i], AnimRequest.Forced(hincap.RecoverAnim, spd));
+                }
+                units[i].Incap = hincap;
+            }
 
             // Tick recovery phase (after incap buff expires)
             if (units[i].Incap.Recovering && units[i].Incap.RecoverTimer > 0f)
