@@ -70,6 +70,7 @@ public static class ArchetypeRegistry
         "CasterUnit" => CasterUnit,
         "ArcherUnit" => ArcherUnit,
         "Civilian" => Civilian,
+        "Worker" => Worker,
         _ => None,
     };
 
@@ -86,4 +87,5 @@ public static class ArchetypeRegistry
     public const byte ArcherUnit = 9;
     public const byte Civilian = 10;
     public const byte RatPack = 11;
+    public const byte Worker = 12;
 }

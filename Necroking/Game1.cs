@@ -436,6 +436,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     // pickup-sound asset; everything else lives in the system.
     private SoundEffect? _pickupSound;
     private readonly Game.ForagableSystem _foragables = new();
+    private readonly Game.Jobs.WorkerSystem _workerSystem = new();
     /// <summary>Wiggle/hover proximity for *idle* on-map foragables (not the
     /// in-flight arc visuals — those live in ForagableSystem). Stays in Game1
     /// because it's read by the on-map render pass, not by the pickup system.</summary>
@@ -618,6 +619,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             new AI.RangedUnitHandler(AI.ArchetypeRegistry.ArcherUnit));
         AI.ArchetypeRegistry.Register(AI.ArchetypeRegistry.CasterUnit, "CasterUnit",
             new AI.RangedUnitHandler(AI.ArchetypeRegistry.CasterUnit));
+        AI.ArchetypeRegistry.Register(AI.ArchetypeRegistry.Worker, "Worker", new AI.WorkerHandler());
         _startupTimer = System.Diagnostics.Stopwatch.StartNew();
         _startupLastMs = 0;
         // The pre-LoadContent gap = OS process spawn + .NET runtime init +
@@ -1936,6 +1938,11 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             onPickup: OnForagablePickedUp,
             onLearnTrigger: OnForagableLearnTrigger);
 
+        // Worker job system (P0/P1): brain that assigns grave workers to jobs.
+        _workerSystem.Bind(_sim, _envSystem, _gameData);
+        _workerSystem.Reset();
+        _sim.Workers = _workerSystem;
+
         // Lean dev control server: only when launched with --devserver <port>.
         if (LaunchArgs.DevServerPort > 0)
         {
@@ -3127,6 +3134,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
 
             // --- Simulate ---
             _sim.Tick(dt);
+            _workerSystem.Update(dt);
             ApplyBlightBombImpacts();
             FinalizeBushWorkIfPending();
             _dayNightSystem.Update(dt, _gameData);

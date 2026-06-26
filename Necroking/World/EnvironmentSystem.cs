@@ -180,6 +180,20 @@ public class EnvironmentObjectDef
     /// <summary>Essence cost per craft. Consumed from PlayerResources.Essence on craft start.</summary>
     public int EssenceCost { get; set; }
 
+    // ─────────────────────────────────────────────
+    //  Worker job system (P0)
+    // ─────────────────────────────────────────────
+    /// <summary>JobDef.id this building enables ("" = none). See data/jobs.json.</summary>
+    public string HostsJob { get; set; } = "";
+    /// <summary>Resource id this building stockpiles ("" = none).</summary>
+    public string StoredResource { get; set; } = "";
+    /// <summary>Max units of StoredResource this building can hold (0 = unlimited).</summary>
+    public int StorageCap { get; set; }
+    /// <summary>Empty Grave: houses worker(s). The worker pool = filled grave slots.</summary>
+    public bool IsWorkerHome { get; set; }
+    /// <summary>Worker capacity contributed per instance (home slots, or job slots).</summary>
+    public int WorkerSlots { get; set; } = 1;
+
     // Building costs (legacy)
     public int CostWood { get; set; }
     public int CostStone { get; set; }
@@ -382,6 +396,12 @@ public class EnvironmentObjectDef
         writer.WriteNumber("corpseSlots", CorpseSlots);
         writer.WriteNumber("itemSlots", ItemSlots);
         writer.WriteNumber("essenceCost", EssenceCost);
+        // Worker job system
+        writer.WriteString("hostsJob", HostsJob);
+        writer.WriteString("storedResource", StoredResource);
+        writer.WriteNumber("storageCap", StorageCap);
+        writer.WriteBoolean("isWorkerHome", IsWorkerHome);
+        writer.WriteNumber("workerSlots", WorkerSlots);
         // Animation
         writer.WriteBoolean("isAnimated", IsAnimated);
         writer.WriteNumber("animFramesX", AnimFramesX);
@@ -462,6 +482,9 @@ public struct PlacedObjectRuntime
     public BerryState BerryState;
     public float BerryStateTimer;  // counts up in NoBerry; when >= def.BerryRespawnTime → Berries
     public string AppliedBuffID;   // buff to apply to the eater when bush is Poisoned (empty for vanilla Berries)
+
+    // Worker job system (P0): how much of the def's StoredResource is stockpiled here.
+    public int StoredAmount;
 
     public PlacedObjectRuntime() { HP = 0; Owner = 1; Alive = true; Collected = false; RespawnTimer = 0f; BuildProgress = 1f; AppliedBuffID = ""; }
 }

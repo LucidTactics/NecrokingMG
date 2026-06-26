@@ -1,0 +1,71 @@
+[
+  {
+    "id": "forage_mushrooms",
+    "displayName": "Forage Mushrooms",
+    "icon": "",
+    "archetype": "Collect",
+    "buildingDefId": "mushroom_pile",
+    "workerSlotsPerBuilding": 1,
+    "sourceForagableType": "",
+    "storeResource": "Mushroom"
+  },
+  {
+    "id": "collect_corpses",
+    "displayName": "Collect Corpses",
+    "icon": "",
+    "archetype": "Collect",
+    "buildingDefId": "corpse_pile",
+    "workerSlotsPerBuilding": 1,
+    "sourceForagableType": "corpse",
+    "storeResource": "Corpse"
+  },
+  {
+    "id": "poison_berries",
+    "displayName": "Poison Berries",
+    "icon": "",
+    "archetype": "Collect",
+    "buildingDefId": "poison_vat",
+    "workerSlotsPerBuilding": 1,
+    "sourceForagableType": "berry",
+    "storeResource": "Poison"
+  },
+  {
+    "id": "breakdown_corpses",
+    "displayName": "Break Down Corpses",
+    "icon": "",
+    "archetype": "Process",
+    "buildingDefId": "harvesting_table",
+    "workerSlotsPerBuilding": 1,
+    "processTime": 6,
+    "inputs": [ { "resource": "Corpse", "amount": 1 } ],
+    "outputs": [
+      { "id": "Essence", "displayName": "Essence", "amount": 2 },
+      { "id": "Reagent", "displayName": "Reagent", "amount": 1 }
+    ]
+  },
+  {
+    "id": "reanimate_corpses",
+    "displayName": "Reanimate Corpses",
+    "icon": "",
+    "archetype": "Process",
+    "buildingDefId": "necro_table",
+    "workerSlotsPerBuilding": 1,
+    "processTime": 8,
+    "spawnsUnit": true,
+    "inputs": [ { "resource": "Corpse", "amount": 1 } ]
+  },
+  {
+    "id": "make_potions",
+    "displayName": "Make Potions",
+    "icon": "",
+    "archetype": "Process",
+    "buildingDefId": "alchemist_table",
+    "workerSlotsPerBuilding": 1,
+    "processTime": 6,
+    "inputs": [ { "resource": "Mushroom", "amount": 2 } ],
+    "outputs": [
+      { "id": "potion_frenzy", "displayName": "Frenzy Potion", "amount": 1 },
+      { "id": "potion_poison", "displayName": "Poison Potion", "amount": 1 }
+    ]
+  }
+]

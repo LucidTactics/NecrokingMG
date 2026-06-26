@@ -345,6 +345,17 @@ public class Unit
     public int PatrolRouteIdx = -1;
     public int PatrolWaypointIdx;
 
+    // Worker job system (P0/P1). A unit is a "worker" while
+    // Archetype == ArchetypeRegistry.Worker — housed in an Empty Grave and
+    // driven by WorkerHandler. See Necroking/Game/Jobs/WorkerSystem.cs.
+    public int WorkerHomeObjIdx = -1;     // env object index of the housing Empty Grave (-1 = not a worker)
+    public byte WorkerPrevArchetype;      // archetype to restore on unassign
+    public string WorkerJobId = "";       // JobDef.id assigned by the dispatcher ("" = idle)
+    public byte WorkerPhase;              // WorkerHandler FSM phase
+    public int WorkerTargetObjIdx = -1;   // env object the worker is moving to (source / storage)
+    public string WorkerCarryType = "";   // resource currently carried ("" = empty-handed)
+    public int WorkerCarryAmount;         // amount carried
+
     // Caster
     public float Mana;
     public float MaxMana;

@@ -382,6 +382,99 @@ public partial class Game1 {
                break;
             }
 
+            // ── Worker job system (P0/P1) dev verbs ──
+
+            // Place an env object by def id: window.dev('place_obj',['mushroom_pile', x, y, scale])
+            case "place_obj": {
+               if (c.Args.Length < 3) { c.Complete(Necroking.Dev.DevServer.Error("place_obj needs: <defId> <x> <y> [scale]")); break; }
+               int defIdx = _envSystem.FindDef(c.Args[0]);
+               if (defIdx < 0) { c.Complete(Necroking.Dev.DevServer.Error($"unknown env def: {c.Args[0]}")); break; }
+               float ox = DevFloat(c.Args[1]), oy = DevFloat(c.Args[2]);
+               float oscale = c.Args.Length >= 4 ? DevFloat(c.Args[3]) : 1f;
+               int oi = _envSystem.AddObject((ushort)defIdx, ox, oy, oscale);
+               c.Complete(Necroking.Dev.DevServer.OkRaw($"{{\"objIdx\":{oi},\"def\":{System.Text.Json.JsonSerializer.Serialize(c.Args[0])}}}"));
+               break;
+            }
+
+            // Assign a unit to a grave (nearest unoccupied empty_grave if idx omitted):
+            // window.dev('assign_worker',[unitId]) or window.dev('assign_worker',[unitId, graveObjIdx])
+            case "assign_worker": {
+               if (c.Args.Length < 1) { c.Complete(Necroking.Dev.DevServer.Error("assign_worker needs: <unitId> [graveObjIdx]")); break; }
+               uint uid = (uint)DevFloat(c.Args[0]);
+               int graveIdx;
+               if (c.Args.Length >= 2) graveIdx = (int)DevFloat(c.Args[1]);
+               else {
+                  graveIdx = -1;
+                  int gdef = _envSystem.FindDef("empty_grave");
+                  float bestSq = float.MaxValue;
+                  Vec2 from = _sim.Units.TryGetIndex(uid, out int ui) ? _sim.Units[ui].Position : Vec2.Zero;
+                  for (int i = 0; i < _envSystem.ObjectCount; i++) {
+                     if (_envSystem.GetObject(i).DefIndex != gdef) continue;
+                     if (!_envSystem.GetObjectRuntime(i).Alive) continue;
+                     if (_workerSystem.IsGraveOccupied(i)) continue;
+                     var o = _envSystem.GetObject(i);
+                     float sq = (new Vec2(o.X, o.Y) - from).LengthSq();
+                     if (sq < bestSq) { bestSq = sq; graveIdx = i; }
+                  }
+               }
+               if (graveIdx < 0) { c.Complete(Necroking.Dev.DevServer.Error("no free empty_grave found")); break; }
+               bool ok = _workerSystem.AssignWorker(uid, graveIdx);
+               c.Complete(ok ? Necroking.Dev.DevServer.Ok($"assigned unit {uid} to grave {graveIdx}")
+                              : Necroking.Dev.DevServer.Error($"could not assign unit {uid} (ineligible or grave taken)"));
+               break;
+            }
+
+            case "unassign_worker": {
+               if (c.Args.Length < 1) { c.Complete(Necroking.Dev.DevServer.Error("unassign_worker needs: <unitId>")); break; }
+               bool ok = _workerSystem.UnassignWorker((uint)DevFloat(c.Args[0]));
+               c.Complete(ok ? Necroking.Dev.DevServer.Ok("unassigned") : Necroking.Dev.DevServer.Error("not a worker"));
+               break;
+            }
+
+            // Dump job + worker state: window.dev('jobs')
+            case "jobs": {
+               var sb = new System.Text.StringBuilder();
+               foreach (var js in _workerSystem.Jobs) {
+                  int derived = _workerSystem.DerivedMax(js.Def);
+                  bool active = _workerSystem.IsJobActive(js);
+                  sb.Append($"[{js.Priority}] {js.Def.Id} ({js.Def.Archetype}) bldg={js.Def.BuildingDefId} derivedMax={derived} cap={js.WorkerCap} active={active} assigned={js.AssignedWorkers.Count}\n");
+               }
+               sb.Append("workers:\n");
+               for (int i = 0; i < _sim.Units.Count; i++) {
+                  var u = _sim.Units[i];
+                  if (u.Archetype != AI.ArchetypeRegistry.Worker) continue;
+                  sb.Append($"  unit {u.Id} home={u.WorkerHomeObjIdx} job='{u.WorkerJobId}' phase={u.WorkerPhase} carry='{u.WorkerCarryType}'x{u.WorkerCarryAmount} pos=({u.Position.X:F1},{u.Position.Y:F1})\n");
+               }
+               // Stockpile contents of mushroom piles.
+               int mpDef = _envSystem.FindDef("mushroom_pile");
+               for (int i = 0; i < _envSystem.ObjectCount; i++) {
+                  if (_envSystem.GetObject(i).DefIndex != mpDef) continue;
+                  var rt = _envSystem.GetObjectRuntime(i);
+                  sb.Append($"  mushroom_pile obj {i}: stored={rt.StoredAmount}/{_envSystem.GetDef(mpDef).StorageCap}\n");
+               }
+               c.Complete(Necroking.Dev.DevServer.Ok(sb.ToString()));
+               break;
+            }
+
+            // One-shot demo scene: grave + pile + mushrooms + a skeleton worker assigned.
+            // window.dev('worker_demo')
+            case "worker_demo": {
+               Vec2 nb = _sim.NecromancerIndex >= 0 ? _sim.Units[_sim.NecromancerIndex].Position : new Vec2(2096, 1882);
+               int graveDef = _envSystem.FindDef("empty_grave");
+               int pileDef = _envSystem.FindDef("mushroom_pile");
+               int mushDef = _envSystem.FindDef("deathcap");
+               if (graveDef < 0 || pileDef < 0 || mushDef < 0) { c.Complete(Necroking.Dev.DevServer.Error("missing env defs (empty_grave/mushroom_pile/deathcap)")); break; }
+               int graveObj = _envSystem.AddObject((ushort)graveDef, nb.X + 2, nb.Y);
+               _envSystem.AddObject((ushort)pileDef, nb.X + 6, nb.Y);
+               for (int m = 0; m < 8; m++)
+                  _envSystem.AddObject((ushort)mushDef, nb.X + 9 + (m % 4) * 1.5f, nb.Y - 3 + (m / 4) * 2f);
+               SpawnUnit("skeleton", new Vec2(nb.X + 2, nb.Y + 1));
+               uint sid = _sim.Units[_sim.Units.Count - 1].Id;
+               bool ok = _workerSystem.AssignWorker(sid, graveObj);
+               c.Complete(Necroking.Dev.DevServer.OkRaw($"{{\"graveObj\":{graveObj},\"workerUnit\":{sid},\"assigned\":{(ok ? "true" : "false")}}}"));
+               break;
+            }
+
             // Spawn undead units enrolled in the necromancer's horde (HordeMinion
             // archetype + horde membership), unlike spawn_def which leaves them as
             // free AttackClosest units. Useful for exercising horde/command behavior.

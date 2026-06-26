@@ -550,6 +550,12 @@ public static class MapData
         if (ed.TryGetProperty("corpseSlots", out var cps)) def.CorpseSlots = cps.GetInt32();
         if (ed.TryGetProperty("itemSlots", out var its)) def.ItemSlots = its.GetInt32();
         if (ed.TryGetProperty("essenceCost", out var ec)) def.EssenceCost = ec.GetInt32();
+        // Worker job system
+        if (ed.TryGetProperty("hostsJob", out var hj)) def.HostsJob = hj.GetString() ?? "";
+        if (ed.TryGetProperty("storedResource", out var sr)) def.StoredResource = sr.GetString() ?? "";
+        if (ed.TryGetProperty("storageCap", out var scap)) def.StorageCap = scap.GetInt32();
+        if (ed.TryGetProperty("isWorkerHome", out var iwh)) def.IsWorkerHome = iwh.GetBoolean();
+        if (ed.TryGetProperty("workerSlots", out var wsl)) def.WorkerSlots = wsl.GetInt32();
         if (ed.TryGetProperty("isAnimated", out var ianim)) def.IsAnimated = ianim.GetBoolean();
         if (ed.TryGetProperty("animFramesX", out var afx)) def.AnimFramesX = afx.GetInt32();
         if (ed.TryGetProperty("animFramesY", out var afy)) def.AnimFramesY = afy.GetInt32();

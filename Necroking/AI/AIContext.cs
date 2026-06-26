@@ -25,6 +25,7 @@ public ref struct AIContext
     public GameSystems.HordeSystem? Horde;
     public GameSystems.TriggerSystem? TriggerSystem;
     public World.EnvironmentSystem? EnvSystem;
+    public Game.Jobs.WorkerSystem? Workers;
     public GameSystems.ProjectileManager? Projectiles;
     public GameSystems.MagicGlyphSystem? MagicGlyphs;
     public List<GameSystems.DamageEvent>? DamageEvents;

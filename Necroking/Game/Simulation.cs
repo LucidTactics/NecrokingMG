@@ -278,6 +278,10 @@ public class Simulation
     }
 
     public void SetEnvironmentSystem(EnvironmentSystem? es) { _envSystem = es; }
+
+    /// <summary>Worker job-system brain, owned by Game1 and set after construction.
+    /// Exposed to AI handlers through AIContext.Workers.</summary>
+    public Game.Jobs.WorkerSystem? Workers;
     public void SetWallSystem(WallSystem? ws) { _wallSystem = ws; }
     public void SetTriggerSystem(TriggerSystem? ts) { _triggerSystem = ts; }
     private TriggerSystem? _triggerSystem;
@@ -3306,6 +3310,7 @@ public class Simulation
         UnitIndex = i, Units = _units, Dt = dt, FrameNumber = (int)_frameNumber,
         GameData = _gameData, Pathfinder = _pathfinder, Quadtree = _quadtree,
         Horde = _horde, TriggerSystem = _triggerSystem, EnvSystem = _envSystem,
+        Workers = Workers,
         Projectiles = _projectiles, MagicGlyphs = _magicGlyphs,
         GameTime = _gameTime, DayTime = dayFraction, IsNight = isNight,
         AmortizedAI = _amortizedAI, AmortizationInterval = _aiUpdateInterval,
