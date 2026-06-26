@@ -230,6 +230,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     private LightningRenderer _lightningRenderer = new();
     private PoisonCloudRenderer _poisonCloudRenderer = new();
     private DeathFogRenderer _deathFogRenderer = new();
+    private ReanimEffectSystem _reanimFx = new();
     private MagicGlyphRenderer _glyphRenderer = new();
     private DebugDraw _debugDraw = new();
     private GameSystems.SpellEffectSystem _spellEffects = new();
@@ -1103,7 +1104,14 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         // left alone — they ship with an empty default spellbar.
         if (mapName == "testmap" || mapName == "empty_test")
         {
-            _spellBarState.Slots[0] = new SpellBarSlot { SpellID = "test_projectile" };
+            // Reanimation-effect variant comparison: the 5 reanimate variants in the first
+            // slots so each can be cast on a corpse and compared; the OutOfRange/mana test
+            // projectile keeps the last slot.
+            string[] reanimVariants = { "reanimate_v1", "reanimate_v2", "reanimate_v3", "reanimate_v4", "reanimate_v5" };
+            for (int s = 0; s < reanimVariants.Length && s < _spellBarState.Slots.Length; s++)
+                _spellBarState.Slots[s] = new SpellBarSlot { SpellID = reanimVariants[s] };
+            if (_spellBarState.Slots.Length > reanimVariants.Length)
+                _spellBarState.Slots[_spellBarState.Slots.Length - 1] = new SpellBarSlot { SpellID = "test_projectile" };
         }
 
         // Empty test map: top up the necromancer's mana pool so high-cost
@@ -3717,7 +3725,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     // Sortable item for merged unit+object depth sorting
     private readonly List<DepthItem> _depthItems = new(256); // reused each frame
 
-    internal enum DepthItemType : byte { Unit, EnvObject, CloudPuff, GrassTuft, DeathFogPuff }
+    internal enum DepthItemType : byte { Unit, EnvObject, CloudPuff, GrassTuft, DeathFogPuff, ReanimDust }
 
     internal struct DepthItem : IComparable<DepthItem>
     {

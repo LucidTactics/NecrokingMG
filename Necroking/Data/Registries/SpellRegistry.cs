@@ -309,6 +309,12 @@ public class SpellDef : IHasId
     [EditorField(Label = "Summon Effect", Group = "SUMMON", Order = 406)]
     [JsonPropertyName("summonFlipbook")] public FlipbookRef? SummonFlipbook { get; set; }
 
+    /// <summary>Which composite reanimation effect variant plays as a raised corpse rises
+    /// (ReanimEffectSystem preset id, e.g. "reanim_classic"). Empty = default/none.</summary>
+    [EditorVisible("Category", "Summon")]
+    [EditorField(Label = "Reanim Effect ID", Group = "SUMMON", Order = 407)]
+    [JsonPropertyName("reanimationEffectID")] public string ReanimationEffectID { get; set; } = "";
+
     // ============ STRIKE ============
     [EditorVisible("Category", "Strike")]
     [EditorField(Label = "Target: Unit (Zap)", Group = "STRIKE", Order = 500, GroupColorR = 255, GroupColorG = 255, GroupColorB = 100)]

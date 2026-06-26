@@ -52,6 +52,7 @@ public partial class Game1 {
             if (idx >= 0) {
                _sim.UnitsMut[idx].FacingAngle = corpseFacing;
                BuffSystem.BeginReanimationRise(_sim.UnitsMut, idx);
+               _reanimFx.Begin(_sim.Units[idx].Id, _sim.Units[idx].Position, _sim.Units[idx].SpriteScale, spell.ReanimationEffectID);
                raised++;
             }
 
@@ -152,6 +153,7 @@ public partial class Game1 {
                   if (idx >= 0) {
                      _sim.UnitsMut[idx].FacingAngle = corpseFacing;
                      BuffSystem.BeginReanimationRise(_sim.UnitsMut, idx);
+                     _reanimFx.Begin(_sim.Units[idx].Id, _sim.Units[idx].Position, _sim.Units[idx].SpriteScale, spell.ReanimationEffectID);
                   }
                } else {
                   // Non-corpse summon (e.g. summon-from-def): plain spawn + horde enroll.

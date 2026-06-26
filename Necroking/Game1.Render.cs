@@ -192,6 +192,7 @@ public partial class Game1
             effect: _hdrSpriteEffect);
         DrawProjectilesHdr();
         DrawEffectsFiltered(1);
+        _reanimFx.DrawAdditive(); // reanimation light + green cloud puffs (additive HDR)
         // Lightning bolts and drains use HDR vertex encoding — draw in this HDR batch
         _lightningRenderer.SetGameTime(_gameTime);
         _lightningRenderer.Draw();

@@ -133,6 +133,10 @@ public partial class Game1
         {
             _deathFogRenderer.SetContext(_spriteBatch, _camera, _renderer, deathFogFb, _gameTime);
             _deathFogRenderer.AddPuffsToDepthList(_deathFog, _renderer.ScreenW, _renderer.ScreenH, items);
+            // Reanimation dust puffs — Y-sorted with units (reuses the cloud03 sheet).
+            // SetContext here also primes the additive light/cloud pass (DrawReanimAdditive).
+            _reanimFx.SetContext(_spriteBatch, _camera, _renderer, deathFogFb, _glowTex);
+            _reanimFx.AddDustToDepthList(items);
         }
 
         items.Sort();
@@ -158,6 +162,9 @@ public partial class Game1
                     break;
                 case DepthItemType.DeathFogPuff:
                     _deathFogRenderer.DrawSinglePuff(item.Index);
+                    break;
+                case DepthItemType.ReanimDust:
+                    _reanimFx.DrawSingleDust(item.Index);
                     break;
             }
         }
@@ -255,6 +262,10 @@ public partial class Game1
 
         // Pulsing outline: draw sprite 8 times at directional offsets behind the unit
         DrawUnitPulsingOutline(i, atlas, fr.Frame.Value, sp, scale, fr.FlipX);
+
+        // Reanimation rise outline — blinks undead-green and fades out over the effect.
+        if (_reanimFx.TryGetOutline(_sim.Units[i].Id, out var ro1, out var ro2, out var rOw, out var rPw, out var rPs))
+            DrawSpriteOutline(atlas, fr.Frame.Value, sp, scale, fr.FlipX, ro1, ro2, rOw, rPw, rPs, 1);
 
         // Ghost mode: subtle blue pulsing outline
         if (_sim.Units[i].GhostMode)

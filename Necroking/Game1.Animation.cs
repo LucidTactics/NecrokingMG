@@ -763,6 +763,7 @@ public partial class Game1
         UpdateEffectSpawnPositions();
 
         _effectManager.Update(dt);
+        _reanimFx.Update(dt);
         _buffVisuals.Update(dt, _sim.Units, _gameData.Buffs, _gameTime);
         _foragables.Update(dt);
         UpdateSkillLearnToasts(dt);
