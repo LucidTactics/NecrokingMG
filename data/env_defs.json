@@ -132,7 +132,7 @@
     "name": "Alchemist Table",
     "category": "Building",
     "texturePath": "assets/Environment/Buildings/AlchemistTable.png",
-    "spriteWorldHeight": 1.8,
+    "spriteWorldHeight": 1.4,
     "pivotX": 0.5,
     "pivotY": 1,
     "collisionRadius": 0.7,
