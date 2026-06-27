@@ -203,7 +203,7 @@
     "id": "corpse_pile",
     "name": "Corpse Pile",
     "category": "Building",
-    "texturePath": "assets/Environment/Rocks/RockPile4.png",
+    "texturePath": "assets/Environment/Buildings/CorpsePile.png",
     "heightMapPath": "",
     "spriteWorldHeight": 1.2,
     "worldHeight": 0,
