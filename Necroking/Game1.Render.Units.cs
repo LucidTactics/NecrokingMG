@@ -982,8 +982,6 @@ public partial class Game1
 
         const float RadiusMul     = 1.5f;    // visual marker radius over the collision footprint
         const float Flatten       = 0.42f;   // vertical squash for the ground-plane (RTS) look
-        const float LineThickFrac = 0.075f;  // thick line = 7.5% of the marker radius
-        const float LineThinFrac  = 0.030f;  // thin  line = 3.0% of the marker radius
         void Mark(Vec2 worldPos, float worldRadius, int variant)
         {
             if (variant < 0 || worldRadius <= 0f) return;
@@ -993,16 +991,15 @@ public partial class Game1
             // FromNonPremultiplied: the hover passes use premultiplied AlphaBlend, so scale RGB by
             // alpha — otherwise a low alpha washes the colour out (lighter hue) instead of fading it.
             var c = Color.FromNonPremultiplied(255, 230, 120, alpha);
-            // The line thickness scales WITH the marker (a fixed fraction of its radius) instead of a
-            // constant pixel width, so a "thick" line stays equally thick relative to the shape at any
-            // zoom / unit size — clamped to >= 1px so it never vanishes when the marker is small.
-            float frac = thick >= 3 ? LineThickFrac : LineThinFrac;
+            // Constant pixel thickness (the style's thick/thin px) — does NOT scale with the marker
+            // size, so a big building's outline is the same weight as a small unit's. Matches the
+            // screen-space Corners/Rectangle variants.
+            float lineW = thick;
             // Project the centre + a world-radius offset; the screen delta is the on-screen radius,
             // so the marker scales correctly with camera zoom without depending on the sprite box.
             var cen  = _renderer.WorldToScreen(worldPos, 0f, _camera);
             var edge = _renderer.WorldToScreen(worldPos + new Vec2(worldRadius, 0f), 0f, _camera);
             float rx = MathF.Abs(edge.X - cen.X);
-            float lineW = MathF.Max(1f, rx * frac);
             float hh = rx * Flatten;
             if (shape == 4)
             {
