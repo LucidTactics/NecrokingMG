@@ -127,8 +127,20 @@ public partial class Game1 {
 
                _camera.Position = new Vec2(DevFloat(c.Args[0]), DevFloat(c.Args[1]));
                if (c.Args.Length >= 3) _camera.Zoom = DevFloat(c.Args[2]);
+               // Detach from the necromancer so the set position actually sticks (otherwise the
+               // follow snaps back next frame). Re-attach with 'free_camera off'. This is why dev
+               // testing no longer needs to remove the necromancer (which triggered game-over).
+               _devFreeCamera = true;
                c.Complete(Necroking.Dev.DevServer.Ok(
-                  $"camera ({_camera.Position.X},{_camera.Position.Y}) zoom={_camera.Zoom}"));
+                  $"camera ({_camera.Position.X},{_camera.Position.Y}) zoom={_camera.Zoom} (free)"));
+               break;
+            }
+
+            // Toggle camera-follow detachment without killing the necromancer.
+            case "free_camera": {   // window.dev('free_camera',['off'])  | ['on'] | ['toggle'] | []
+               string mode = c.Args.Length >= 1 ? c.Args[0].ToLowerInvariant() : "toggle";
+               _devFreeCamera = mode switch { "on" or "true" or "1" => true, "off" or "false" or "0" => false, _ => !_devFreeCamera };
+               c.Complete(Necroking.Dev.DevServer.Ok($"free_camera={_devFreeCamera}" + (_devFreeCamera ? "" : " (following necromancer)")));
                break;
             }
 

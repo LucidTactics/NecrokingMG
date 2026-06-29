@@ -310,6 +310,9 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     private uint _devForceHoverUnitId = uint.MaxValue;
     // Dev: pin the hovered env object by index (headless variant testing). -1 = off.
     private int _devForceHoverObjectIdx = -1;
+    // Dev: detach the camera from the necromancer so dev 'camera' commands stick
+    // (lets headless testing pan freely WITHOUT killing the necromancer / triggering game-over).
+    private bool _devFreeCamera;
     // Dev-marked units (via the 'mark' dev command): persistent white boxes,
     // independent of mouse hover and the ShowHoverHighlight setting. Keyed by
     // stable unit Id; their on-screen boxes are recaptured each frame in Draw.
@@ -2520,7 +2523,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             // on CameraInputEnabled (true only for the bare map editor); arrows
             // there are free for list nav.
         }
-        else if (necroIdx >= 0)
+        else if (necroIdx >= 0 && !_devFreeCamera)
         {
             var necroPos = _sim.Units[necroIdx].Position;
             var diff = necroPos - _camera.Position;
