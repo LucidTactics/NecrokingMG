@@ -1090,14 +1090,17 @@ public partial class Game1
         }
     }
 
-    /// <summary>Like DrawLine but with a float line width, for smooth zoom-scaled ring thickness.</summary>
+    /// <summary>Like DrawLine but with a float line width, for smooth zoom-scaled ring thickness.
+    /// Thickness is CENTRED on the a→b axis (origin Y = 0.5 of the 1px source), so segments meeting
+    /// at a shared endpoint (e.g. diamond corner brackets) connect cleanly instead of each being
+    /// offset to one perpendicular side.</summary>
     private void DrawThickLine(Vector2 a, Vector2 b, Color c, float thickness)
     {
         var d = b - a;
         float len = d.Length();
         if (len < 0.5f) return;
         float angle = MathF.Atan2(d.Y, d.X);
-        _spriteBatch.Draw(_pixel, a, null, c, angle, Vector2.Zero,
+        _spriteBatch.Draw(_pixel, a, null, c, angle, new Vector2(0f, 0.5f),
             new Vector2(len, thickness), SpriteEffects.None, 0f);
     }
 
