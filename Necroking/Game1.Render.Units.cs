@@ -1132,10 +1132,10 @@ public partial class Game1
     {
         if (_hoverVariantLabelTimer <= 0f || _font == null) return;
         string label = _hoverHighlightVariant < 0
-            ? "Hover override OFF — using Tooltips settings  (H to cycle)"
+            ? "Hover override OFF — using Tooltips settings"
             : _hoverHighlightVariant >= 20
-                ? "Hover override: highlight OFF  (H to cycle)"
-                : $"Hover override {_hoverHighlightVariant + 1}/20: {_hoverShapeNames[_hoverHighlightVariant / 4]} - {_hoverStyleNames[_hoverHighlightVariant % 4]}  (H)";
+                ? "Hover override: highlight OFF"
+                : $"Hover override {_hoverHighlightVariant + 1}/20: {_hoverShapeNames[_hoverHighlightVariant / 4]} - {_hoverStyleNames[_hoverHighlightVariant % 4]}";
         var pos = new Vector2((int)18, (int)112);
         _spriteBatch.DrawString(_font, label, pos + new Vector2(1, 1), new Color(0, 0, 0, 190));
         _spriteBatch.DrawString(_font, label, pos, new Color(255, 235, 150));

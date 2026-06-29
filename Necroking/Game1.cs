@@ -2352,15 +2352,9 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
                 _unitInfoPanel.ShowForUnit(_sim.Units[_sim.NecromancerIndex].Id);
         }
 
-        // 'H' = cycle the hover-highlight DEV OVERRIDE (design test harness): -1 (use Tooltips
-        // settings) then the 20 shape×line-style variants then 20 (highlight off), wrapping back to
-        // -1. The normal player-facing config lives in Settings ▸ Tooltips; this just forces a single
-        // variant on everything for quick previewing. A toast names the active one.
-        if (!anyTextInputActive && _input.WasKeyPressed(Keys.H) && _menuState == MenuState.None)
-        {
-            _hoverHighlightVariant = _hoverHighlightVariant >= 20 ? -1 : _hoverHighlightVariant + 1;
-            _hoverVariantLabelTimer = 2.75f;
-        }
+        // Hover-highlight is configured in Settings ▸ Tooltips (per-category shape/style). A dev
+        // OVERRIDE still exists via the 'hover_variant' dev command for quick previewing; its toast
+        // timer ticks down here. (No keyboard hotkey — it was removed to free 'H'.)
         if (_hoverVariantLabelTimer > 0f) _hoverVariantLabelTimer -= _rawDt;
 
         // 'O' = inspect the unit under the cursor (press-to-inspect mode; may
