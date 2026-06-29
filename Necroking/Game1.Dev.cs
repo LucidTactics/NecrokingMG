@@ -798,10 +798,28 @@ public partial class Game1 {
                break;
             }
 
-            // Set the hover-highlight style variant directly (0-11 = variants, 12 = off).
+            // Force-hover an env object by index (headless variant testing — no real mouse).
+            case "hover_obj": {   // window.dev('hover_obj',[3])  |  window.dev('hover_obj',['clear'])
+               if (c.Args.Length >= 1 && c.Args[0].Equals("clear", System.StringComparison.OrdinalIgnoreCase))
+               {
+                  _devForceHoverObjectIdx = -1;
+                  c.Complete(Necroking.Dev.DevServer.Ok("hover_obj cleared"));
+                  break;
+               }
+               if (c.Args.Length < 1) { c.Complete(Necroking.Dev.DevServer.Error("hover_obj needs <index|clear>")); break; }
+               int oidx = (int)DevFloat(c.Args[0]);
+               if (oidx < 0 || oidx >= _envSystem.ObjectCount) { c.Complete(Necroking.Dev.DevServer.Error($"hover_obj: index {oidx} out of range (0..{_envSystem.ObjectCount - 1})")); break; }
+               _devForceHoverObjectIdx = oidx;
+               _gameData.Settings.Tooltips.ShowHoverHighlight = true;
+               var hod = _envSystem.Defs[_envSystem.GetObject(oidx).DefIndex];
+               c.Complete(Necroking.Dev.DevServer.Ok($"hovering object idx={oidx} ({hod.Id}) (variant {_hoverHighlightVariant})"));
+               break;
+            }
+
+            // Set the hover-highlight style variant directly (0-19 = variants, 20 = off).
             case "hover_variant": {   // window.dev('hover_variant',[5])
-               if (c.Args.Length < 1) { c.Complete(Necroking.Dev.DevServer.Error("hover_variant needs <0-12>")); break; }
-               _hoverHighlightVariant = System.Math.Clamp((int)DevFloat(c.Args[0]), 0, 12);
+               if (c.Args.Length < 1) { c.Complete(Necroking.Dev.DevServer.Error("hover_variant needs <0-20>")); break; }
+               _hoverHighlightVariant = System.Math.Clamp((int)DevFloat(c.Args[0]), 0, 20);
                _hoverVariantLabelTimer = 2.75f;
                c.Complete(Necroking.Dev.DevServer.Ok($"hover_variant={_hoverHighlightVariant}"));
                break;

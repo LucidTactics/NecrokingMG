@@ -927,9 +927,9 @@ public partial class Game1
         // Toast naming the active variant after a cycle press (drawn even when Off).
         DrawHoverVariantLabel();
 
-        if (!_gameData.Settings.Tooltips.ShowHoverHighlight || _hoverHighlightVariant >= 12) return;
+        if (!_gameData.Settings.Tooltips.ShowHoverHighlight || _hoverHighlightVariant >= 20) return;
         int shape = _hoverHighlightVariant / 4;
-        if (shape == 0) return;   // Circle renders BEHIND the sprites (DrawHoverGroundCircles).
+        if (shape == 0 || shape == 3 || shape == 4) return;   // ground shapes render BEHIND the sprites (DrawHoverGroundMarkers).
 
         HoverStyle(_hoverHighlightVariant % 4, out int thick, out byte alpha);
         // FromNonPremultiplied: the hover passes use premultiplied AlphaBlend, so scale RGB by
@@ -947,52 +947,103 @@ public partial class Game1
         Stroke(_hoverBoxObject); Stroke(_hoverBoxCorpse); Stroke(_hoverBoxUnit);
     }
 
-    /// <summary>Hover-highlight Circle variant: a faint ground ellipse rendered BEHIND the
-    /// sprites (RTS selection-circle look). Anchored to the object's CURRENT world position and a
-    /// STABLE world-space radius (its collision footprint), projected fresh each frame — so the ring
-    /// doesn't pulse as the sprite animates, and stays locked under the object as the camera moves.</summary>
-    private void DrawHoverGroundCircles()
+    /// <summary>Hover-highlight ground variants, rendered BEHIND the sprites (RTS look). Two shapes
+    /// share this path because both live on the ground plane: the <b>Circle</b> (a faint flattened
+    /// ellipse) and the <b>Ground Box</b> (Factorio-style corner brackets on a flattened rectangle).
+    /// Both are anchored to the object's CURRENT world position and a STABLE world-space radius (its
+    /// collision footprint), projected fresh each frame — so they don't pulse as the sprite animates,
+    /// and stay locked under the object as the camera moves.</summary>
+    private void DrawHoverGroundMarkers()
     {
-        if (!_gameData.Settings.Tooltips.ShowHoverHighlight || _hoverHighlightVariant >= 12) return;
-        if (_hoverHighlightVariant / 4 != 0) return;   // Circle shape only
+        if (!_gameData.Settings.Tooltips.ShowHoverHighlight || _hoverHighlightVariant >= 20) return;
+        int shape = _hoverHighlightVariant / 4;
+        if (shape != 0 && shape != 3 && shape != 4) return;   // ground shapes (Circle / Ground Box / Diamond Box)
+        bool box = shape == 3;
+        bool diamond = shape == 4;
         HoverStyle(_hoverHighlightVariant % 4, out int thick, out byte alpha);
         // FromNonPremultiplied: the hover passes use premultiplied AlphaBlend, so scale RGB by
         // alpha — otherwise a low alpha washes the colour out (lighter hue) instead of fading it.
         var c = Color.FromNonPremultiplied(255, 230, 120, alpha);
 
-        const float RadiusMul     = 1.5f;    // visual ring radius over the collision footprint
+        const float RadiusMul     = 1.5f;    // visual marker radius over the collision footprint
         const float Flatten       = 0.42f;   // vertical squash for the ground-plane (RTS) look
-        const float RingThickFrac = 0.075f;  // thick ring line = 7.5% of the ring radius
-        const float RingThinFrac  = 0.030f;  // thin  ring line = 3.0% of the ring radius
-        // The line thickness scales WITH the ring (a fixed fraction of its radius) instead of being a
-        // constant pixel width, so a "thick" ring stays equally thick relative to the circle at any
-        // zoom / unit size — clamped to >= 1px so it never vanishes when the ring is small.
-        float frac = thick >= 3 ? RingThickFrac : RingThinFrac;
-        void Ring(Vec2 worldPos, float worldRadius)
+        const float LineThickFrac = 0.075f;  // thick line = 7.5% of the marker radius
+        const float LineThinFrac  = 0.030f;  // thin  line = 3.0% of the marker radius
+        // The line thickness scales WITH the marker (a fixed fraction of its radius) instead of being
+        // a constant pixel width, so a "thick" line stays equally thick relative to the shape at any
+        // zoom / unit size — clamped to >= 1px so it never vanishes when the marker is small.
+        float frac = thick >= 3 ? LineThickFrac : LineThinFrac;
+        void Mark(Vec2 worldPos, float worldRadius)
         {
             if (worldRadius <= 0f) return;
             // Project the centre + a world-radius offset; the screen delta is the on-screen radius,
-            // so the ring scales correctly with camera zoom without depending on the sprite box.
+            // so the marker scales correctly with camera zoom without depending on the sprite box.
             var cen  = _renderer.WorldToScreen(worldPos, 0f, _camera);
             var edge = _renderer.WorldToScreen(worldPos + new Vec2(worldRadius, 0f), 0f, _camera);
             float rx = MathF.Abs(edge.X - cen.X);
-            DrawEllipseOutline(cen.X, cen.Y, rx, rx * Flatten, c, MathF.Max(1f, rx * frac));
+            float lineW = MathF.Max(1f, rx * frac);
+            float hh = rx * Flatten;
+            if (diamond)
+            {
+                // Iso diamond aligned to the world grid (AoE2-style footprint): vertices at
+                // N/S/E/W of the flattened ellipse, with corner brackets along the diamond edges.
+                DrawGroundDiamondCorners(cen.X, cen.Y, rx, hh, c, lineW);
+            }
+            else if (box)
+            {
+                // Axis-aligned in screen space → reuse the clean filled-bar corner brackets
+                // (DrawCornersVariant) so the L arms share each corner exactly. The box is the
+                // flattened ground footprint: full width 2*rx, height squashed by Flatten.
+                var r = new Rectangle((int)(cen.X - rx), (int)(cen.Y - hh), (int)(2f * rx), (int)(2f * hh));
+                DrawCornersVariant(r, c, Math.Max(1, (int)MathF.Round(lineW)));
+            }
+            else DrawEllipseOutline(cen.X, cen.Y, rx, hh, c, lineW);
         }
 
         if (_hoveredUnitIdx >= 0 && _hoveredUnitIdx < _sim.Units.Count)
-            Ring(_sim.Units[_hoveredUnitIdx].Position, _sim.Units[_hoveredUnitIdx].Radius * RadiusMul);
+            Mark(_sim.Units[_hoveredUnitIdx].Position, _sim.Units[_hoveredUnitIdx].Radius * RadiusMul);
         if (_hoveredObjectIdx >= 0 && _hoveredObjectIdx < _envSystem.ObjectCount)
         {
             var obj = _envSystem.GetObject(_hoveredObjectIdx);
-            float baseR = _envSystem.Defs[obj.DefIndex].CollisionRadius * obj.Scale;
-            Ring(new Vec2(obj.X, obj.Y), MathF.Max(baseR, 0.45f * obj.Scale) * RadiusMul);
+            var def = _envSystem.Defs[obj.DefIndex];
+            // Match the baked collision footprint exactly (StampObjectCollisionInto): effective scale
+            // folds in BOTH the def scale AND the placed scale, and the footprint is offset from the
+            // object origin — buildings have large offsets/def-scales, so using obj.Scale + obj.X/Y
+            // alone left the marker mis-sized and shifted off the actual collision area.
+            float es = def.Scale * obj.Scale;
+            var ccen = new Vec2(obj.X + def.CollisionOffsetX * es, obj.Y + def.CollisionOffsetY * es);
+            float cr = MathF.Max(def.CollisionRadius * es, 0.45f * es);
+            Mark(ccen, cr * RadiusMul);
         }
         if (_hoveredCorpseIdx >= 0 && _hoveredCorpseIdx < _sim.Corpses.Count)
         {
             var cp = _sim.Corpses[_hoveredCorpseIdx];
             float cr = _gameData.Units.Get(cp.UnitDefID)?.Radius ?? 0.5f;
-            Ring(cp.Position, cr * RadiusMul);
+            Mark(cp.Position, cr * RadiusMul);
         }
+    }
+
+    /// <summary>AoE2-style iso diamond selection: a rhombus whose vertices sit at N/S/E/W of the
+    /// flattened footprint (so it aligns to the world grid the way the buildings do), drawn as four
+    /// corner brackets running a short way along each of the diamond's edges.</summary>
+    private void DrawGroundDiamondCorners(float cx, float cy, float rx, float ry, Color c, float thickness)
+    {
+        var top    = new Vector2(cx, cy - ry);
+        var right  = new Vector2(cx + rx, cy);
+        var bottom = new Vector2(cx, cy + ry);
+        var left   = new Vector2(cx - rx, cy);
+        const float ArmFrac = 0.34f;   // bracket arm = fraction of each diamond edge
+        // Both arms at a vertex start exactly at that vertex, so they meet cleanly (DrawThickLine
+        // extends from its first point) — no need for the axis-aligned filled-bar trick here.
+        void Bracket(Vector2 v, Vector2 a, Vector2 b)
+        {
+            DrawThickLine(v, v + (a - v) * ArmFrac, c, thickness);
+            DrawThickLine(v, v + (b - v) * ArmFrac, c, thickness);
+        }
+        Bracket(top,    right, left);
+        Bracket(right,  top,   bottom);
+        Bracket(bottom, right, left);
+        Bracket(left,   top,   bottom);
     }
 
     // Map a line style (variant % 4) to a thickness + alpha. 0=Thick-Solid 1=Thin-Solid
@@ -1050,15 +1101,15 @@ public partial class Game1
             new Vector2(len, thickness), SpriteEffects.None, 0f);
     }
 
-    private static readonly string[] _hoverShapeNames = { "Circle", "Corners", "Rectangle" };
+    private static readonly string[] _hoverShapeNames = { "Circle", "Corners", "Rectangle", "Ground Box", "Diamond Box" };
     private static readonly string[] _hoverStyleNames = { "Thick Solid", "Thin Solid", "Thick Faint", "Thin Faint" };
 
     private void DrawHoverVariantLabel()
     {
         if (_hoverVariantLabelTimer <= 0f || _font == null) return;
-        string label = _hoverHighlightVariant >= 12
+        string label = _hoverHighlightVariant >= 20
             ? "Hover highlight: OFF  (H to cycle)"
-            : $"Hover {_hoverHighlightVariant + 1}/12: {_hoverShapeNames[_hoverHighlightVariant / 4]} - {_hoverStyleNames[_hoverHighlightVariant % 4]}  (H)";
+            : $"Hover {_hoverHighlightVariant + 1}/20: {_hoverShapeNames[_hoverHighlightVariant / 4]} - {_hoverStyleNames[_hoverHighlightVariant % 4]}  (H)";
         var pos = new Vector2((int)18, (int)112);
         _spriteBatch.DrawString(_font, label, pos + new Vector2(1, 1), new Color(0, 0, 0, 190));
         _spriteBatch.DrawString(_font, label, pos, new Color(255, 235, 150));

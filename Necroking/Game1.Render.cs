@@ -158,8 +158,8 @@ public partial class Game1
         // units based on world Y.
         _shadowRenderer.Draw(GraphicsDevice, _spriteBatch, _glowTex, _camera, _renderer, _sim, _gameData, _unitAnims, _atlases, _envSystem, _fogOfWar, _groundSystem, _deathFog, _corpseAnims, _reanimFx);
 
-        // Hover highlight — Circle variant: a faint ground ring BEHIND corpses/units (RTS-style).
-        DrawHoverGroundCircles();
+        // Hover highlight — ground variants (Circle / Ground Box) BEHIND corpses/units (RTS-style).
+        DrawHoverGroundMarkers();
 
         // --- Corpses ---
         DrawCorpses();
