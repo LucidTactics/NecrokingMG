@@ -304,7 +304,9 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     // 13 states: 0-11 = 3 shapes (Circle / Corners / Rectangle) × 4 line styles
     // (Thick-Solid / Thin-Solid / Thick-Faint / Thin-Faint); 12 = Off.
     // shape = variant / 4, style = variant % 4. Default 11 ≈ the original look (Rect, thin, faint).
-    private int _hoverHighlightVariant = 11;
+    // Dev override for the hover-highlight variant (shape*4 + style). -1 = OFF (use the per-category
+    // Tooltips settings — the normal path); 0..19 forces one variant on everything; 20 = highlight off.
+    private int _hoverHighlightVariant = -1;
     private float _hoverVariantLabelTimer;     // seconds left to show the "which variant" toast
     // Dev: pin the hovered unit (headless testing has no real mouse). uint.MaxValue = off.
     private uint _devForceHoverUnitId = uint.MaxValue;
@@ -2350,11 +2352,13 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
                 _unitInfoPanel.ShowForUnit(_sim.Units[_sim.NecromancerIndex].Id);
         }
 
-        // 'H' = cycle the hover-highlight style variant (design test harness:
-        // 20 shape×line-style variants + an Off state; a toast names the active one).
+        // 'H' = cycle the hover-highlight DEV OVERRIDE (design test harness): -1 (use Tooltips
+        // settings) then the 20 shape×line-style variants then 20 (highlight off), wrapping back to
+        // -1. The normal player-facing config lives in Settings ▸ Tooltips; this just forces a single
+        // variant on everything for quick previewing. A toast names the active one.
         if (!anyTextInputActive && _input.WasKeyPressed(Keys.H) && _menuState == MenuState.None)
         {
-            _hoverHighlightVariant = (_hoverHighlightVariant + 1) % 21;
+            _hoverHighlightVariant = _hoverHighlightVariant >= 20 ? -1 : _hoverHighlightVariant + 1;
             _hoverVariantLabelTimer = 2.75f;
         }
         if (_hoverVariantLabelTimer > 0f) _hoverVariantLabelTimer -= _rawDt;

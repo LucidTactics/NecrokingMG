@@ -828,10 +828,11 @@ public partial class Game1 {
                break;
             }
 
-            // Set the hover-highlight style variant directly (0-19 = variants, 20 = off).
+            // Set the hover-highlight dev override (-1 = use Tooltips settings, 0-19 = force a
+            // variant on everything, 20 = highlight off).
             case "hover_variant": {   // window.dev('hover_variant',[5])
-               if (c.Args.Length < 1) { c.Complete(Necroking.Dev.DevServer.Error("hover_variant needs <0-20>")); break; }
-               _hoverHighlightVariant = System.Math.Clamp((int)DevFloat(c.Args[0]), 0, 20);
+               if (c.Args.Length < 1) { c.Complete(Necroking.Dev.DevServer.Error("hover_variant needs <-1..20>")); break; }
+               _hoverHighlightVariant = System.Math.Clamp((int)DevFloat(c.Args[0]), -1, 20);
                _hoverVariantLabelTimer = 2.75f;
                c.Complete(Necroking.Dev.DevServer.Ok($"hover_variant={_hoverHighlightVariant}"));
                break;

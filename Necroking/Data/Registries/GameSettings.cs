@@ -280,6 +280,17 @@ public class TooltipsSettings
     /// the hover tooltip belongs to. World objects only — never UI.</summary>
     [JsonPropertyName("showHoverHighlight")] public bool ShowHoverHighlight { get; set; } = true;
 
+    /// <summary>Hover-highlight marker style for buildings, encoded as shape*4 + lineStyle.
+    /// Shapes: 0 Circle, 1 Corners, 2 Rectangle, 3 Ground Box, 4 Diamond Box.
+    /// Line styles: 0 Thick-Solid, 1 Thin-Solid, 2 Thick-Faint, 3 Thin-Faint.
+    /// Default 17 = Diamond Box / Thin-Solid (matches the iso building footprints).</summary>
+    [JsonPropertyName("hoverHighlightBuilding")] public int HoverHighlightBuilding { get; set; } = 17;
+
+    /// <summary>Hover-highlight marker style for everything else (units, corpses,
+    /// foragable ground items), same encoding as <see cref="HoverHighlightBuilding"/>.
+    /// Default 1 = Circle / Thin-Solid (RTS selection-ring look).</summary>
+    [JsonPropertyName("hoverHighlightRest")] public int HoverHighlightRest { get; set; } = 1;
+
     /// <summary>Debug readout: when the cursor is over the world (not UI), dump a
     /// block of text about the exact world position under the cursor in the
     /// bottom-left corner — fog level, cell coords, etc. Off by default; a

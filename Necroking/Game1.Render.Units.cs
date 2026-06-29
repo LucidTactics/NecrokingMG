@@ -927,55 +927,76 @@ public partial class Game1
         // Toast naming the active variant after a cycle press (drawn even when Off).
         DrawHoverVariantLabel();
 
-        if (!_gameData.Settings.Tooltips.ShowHoverHighlight || _hoverHighlightVariant >= 20) return;
-        int shape = _hoverHighlightVariant / 4;
-        if (shape == 0 || shape == 3 || shape == 4) return;   // ground shapes render BEHIND the sprites (DrawHoverGroundMarkers).
+        if (!_gameData.Settings.Tooltips.ShowHoverHighlight) return;
 
-        HoverStyle(_hoverHighlightVariant % 4, out int thick, out byte alpha);
-        // FromNonPremultiplied: the hover passes use premultiplied AlphaBlend, so scale RGB by
-        // alpha — otherwise a low alpha washes the colour out (lighter hue) instead of fading it.
-        var c = Color.FromNonPremultiplied(255, 230, 120, alpha);
-        void Stroke(Rectangle? box)
+        // Stroke a captured sprite box ONLY for the screen-space shapes (Corners / Rectangle).
+        // Ground shapes (Circle / Ground Box / Diamond Box) draw behind the sprites in
+        // DrawHoverGroundMarkers. Variant is resolved per-category (building vs the rest).
+        void Stroke(Rectangle? box, int variant)
         {
-            if (box is { } b)
-            {
-                b.Inflate(2, 2);
-                if (shape == 1) DrawCornersVariant(b, c, thick);
-                else            DrawRectVariant(b, c, thick);
-            }
+            if (variant < 0 || box is not { } b) return;
+            int shape = variant / 4;
+            if (shape != 1 && shape != 2) return;
+            HoverStyle(variant % 4, out int thick, out byte alpha);
+            // FromNonPremultiplied: the hover passes use premultiplied AlphaBlend, so scale RGB by
+            // alpha — otherwise a low alpha washes the colour out (lighter hue) instead of fading it.
+            var c = Color.FromNonPremultiplied(255, 230, 120, alpha);
+            b.Inflate(2, 2);
+            if (shape == 1) DrawCornersVariant(b, c, thick);
+            else            DrawRectVariant(b, c, thick);
         }
-        Stroke(_hoverBoxObject); Stroke(_hoverBoxCorpse); Stroke(_hoverBoxUnit);
+        Stroke(_hoverBoxObject, HoverVariantFor(HoveredObjectIsBuilding()));
+        Stroke(_hoverBoxCorpse, HoverVariantFor(false));
+        Stroke(_hoverBoxUnit,   HoverVariantFor(false));
     }
 
-    /// <summary>Hover-highlight ground variants, rendered BEHIND the sprites (RTS look). Two shapes
-    /// share this path because both live on the ground plane: the <b>Circle</b> (a faint flattened
-    /// ellipse) and the <b>Ground Box</b> (Factorio-style corner brackets on a flattened rectangle).
-    /// Both are anchored to the object's CURRENT world position and a STABLE world-space radius (its
-    /// collision footprint), projected fresh each frame — so they don't pulse as the sprite animates,
-    /// and stay locked under the object as the camera moves.</summary>
+    /// <summary>Is the env object currently under the cursor a building (vs a foragable / ground
+    /// item)? Drives which hover-highlight category applies (buildings get their own marker style).</summary>
+    private bool HoveredObjectIsBuilding()
+        => _hoveredObjectIdx >= 0 && _hoveredObjectIdx < _envSystem.ObjectCount
+           && _envSystem.Defs[_envSystem.GetObject(_hoveredObjectIdx).DefIndex].IsBuilding;
+
+    /// <summary>Resolve the hover-highlight variant (shape*4 + lineStyle) for a category. The dev
+    /// override (_hoverHighlightVariant >= 0, set via 'H' / hover_variant) forces a single variant on
+    /// everything for design testing; otherwise the per-category Tooltips setting applies. -1 = draw
+    /// nothing.</summary>
+    private int HoverVariantFor(bool isBuilding)
+    {
+        if (_hoverHighlightVariant >= 0)
+            return _hoverHighlightVariant >= 20 ? -1 : _hoverHighlightVariant;
+        var t = _gameData.Settings.Tooltips;
+        int v = isBuilding ? t.HoverHighlightBuilding : t.HoverHighlightRest;
+        return (v >= 0 && v < 20) ? v : -1;
+    }
+
+    /// <summary>Hover-highlight ground variants, rendered BEHIND the sprites (RTS look). Three shapes
+    /// share this path because all live on the ground plane: the <b>Circle</b> (flattened ellipse), the
+    /// <b>Ground Box</b> (axis-aligned corner brackets on a flattened rectangle), and the
+    /// <b>Diamond Box</b> (iso rhombus aligned to the world grid). Each hovered thing resolves its own
+    /// variant per-category (building vs the rest), anchored to the object's CURRENT world position and
+    /// a STABLE world-space radius (its collision footprint), projected fresh each frame — so they
+    /// don't pulse as the sprite animates and stay locked under the object as the camera moves.</summary>
     private void DrawHoverGroundMarkers()
     {
-        if (!_gameData.Settings.Tooltips.ShowHoverHighlight || _hoverHighlightVariant >= 20) return;
-        int shape = _hoverHighlightVariant / 4;
-        if (shape != 0 && shape != 3 && shape != 4) return;   // ground shapes (Circle / Ground Box / Diamond Box)
-        bool box = shape == 3;
-        bool diamond = shape == 4;
-        HoverStyle(_hoverHighlightVariant % 4, out int thick, out byte alpha);
-        // FromNonPremultiplied: the hover passes use premultiplied AlphaBlend, so scale RGB by
-        // alpha — otherwise a low alpha washes the colour out (lighter hue) instead of fading it.
-        var c = Color.FromNonPremultiplied(255, 230, 120, alpha);
+        if (!_gameData.Settings.Tooltips.ShowHoverHighlight) return;
 
         const float RadiusMul     = 1.5f;    // visual marker radius over the collision footprint
         const float Flatten       = 0.42f;   // vertical squash for the ground-plane (RTS) look
         const float LineThickFrac = 0.075f;  // thick line = 7.5% of the marker radius
         const float LineThinFrac  = 0.030f;  // thin  line = 3.0% of the marker radius
-        // The line thickness scales WITH the marker (a fixed fraction of its radius) instead of being
-        // a constant pixel width, so a "thick" line stays equally thick relative to the shape at any
-        // zoom / unit size — clamped to >= 1px so it never vanishes when the marker is small.
-        float frac = thick >= 3 ? LineThickFrac : LineThinFrac;
-        void Mark(Vec2 worldPos, float worldRadius)
+        void Mark(Vec2 worldPos, float worldRadius, int variant)
         {
-            if (worldRadius <= 0f) return;
+            if (variant < 0 || worldRadius <= 0f) return;
+            int shape = variant / 4;
+            if (shape != 0 && shape != 3 && shape != 4) return;   // ground shapes only
+            HoverStyle(variant % 4, out int thick, out byte alpha);
+            // FromNonPremultiplied: the hover passes use premultiplied AlphaBlend, so scale RGB by
+            // alpha — otherwise a low alpha washes the colour out (lighter hue) instead of fading it.
+            var c = Color.FromNonPremultiplied(255, 230, 120, alpha);
+            // The line thickness scales WITH the marker (a fixed fraction of its radius) instead of a
+            // constant pixel width, so a "thick" line stays equally thick relative to the shape at any
+            // zoom / unit size — clamped to >= 1px so it never vanishes when the marker is small.
+            float frac = thick >= 3 ? LineThickFrac : LineThinFrac;
             // Project the centre + a world-radius offset; the screen delta is the on-screen radius,
             // so the marker scales correctly with camera zoom without depending on the sprite box.
             var cen  = _renderer.WorldToScreen(worldPos, 0f, _camera);
@@ -983,13 +1004,13 @@ public partial class Game1
             float rx = MathF.Abs(edge.X - cen.X);
             float lineW = MathF.Max(1f, rx * frac);
             float hh = rx * Flatten;
-            if (diamond)
+            if (shape == 4)
             {
                 // Iso diamond aligned to the world grid (AoE2-style footprint): vertices at
                 // N/S/E/W of the flattened ellipse, with corner brackets along the diamond edges.
                 DrawGroundDiamondCorners(cen.X, cen.Y, rx, hh, c, lineW);
             }
-            else if (box)
+            else if (shape == 3)
             {
                 // Axis-aligned in screen space → reuse the clean filled-bar corner brackets
                 // (DrawCornersVariant) so the L arms share each corner exactly. The box is the
@@ -1001,7 +1022,7 @@ public partial class Game1
         }
 
         if (_hoveredUnitIdx >= 0 && _hoveredUnitIdx < _sim.Units.Count)
-            Mark(_sim.Units[_hoveredUnitIdx].Position, _sim.Units[_hoveredUnitIdx].Radius * RadiusMul);
+            Mark(_sim.Units[_hoveredUnitIdx].Position, _sim.Units[_hoveredUnitIdx].Radius * RadiusMul, HoverVariantFor(false));
         if (_hoveredObjectIdx >= 0 && _hoveredObjectIdx < _envSystem.ObjectCount)
         {
             var obj = _envSystem.GetObject(_hoveredObjectIdx);
@@ -1013,13 +1034,13 @@ public partial class Game1
             float es = def.Scale * obj.Scale;
             var ccen = new Vec2(obj.X + def.CollisionOffsetX * es, obj.Y + def.CollisionOffsetY * es);
             float cr = MathF.Max(def.CollisionRadius * es, 0.45f * es);
-            Mark(ccen, cr * RadiusMul);
+            Mark(ccen, cr * RadiusMul, HoverVariantFor(def.IsBuilding));
         }
         if (_hoveredCorpseIdx >= 0 && _hoveredCorpseIdx < _sim.Corpses.Count)
         {
             var cp = _sim.Corpses[_hoveredCorpseIdx];
             float cr = _gameData.Units.Get(cp.UnitDefID)?.Radius ?? 0.5f;
-            Mark(cp.Position, cr * RadiusMul);
+            Mark(cp.Position, cr * RadiusMul, HoverVariantFor(false));
         }
     }
 
@@ -1110,9 +1131,11 @@ public partial class Game1
     private void DrawHoverVariantLabel()
     {
         if (_hoverVariantLabelTimer <= 0f || _font == null) return;
-        string label = _hoverHighlightVariant >= 20
-            ? "Hover highlight: OFF  (H to cycle)"
-            : $"Hover {_hoverHighlightVariant + 1}/20: {_hoverShapeNames[_hoverHighlightVariant / 4]} - {_hoverStyleNames[_hoverHighlightVariant % 4]}  (H)";
+        string label = _hoverHighlightVariant < 0
+            ? "Hover override OFF — using Tooltips settings  (H to cycle)"
+            : _hoverHighlightVariant >= 20
+                ? "Hover override: highlight OFF  (H to cycle)"
+                : $"Hover override {_hoverHighlightVariant + 1}/20: {_hoverShapeNames[_hoverHighlightVariant / 4]} - {_hoverStyleNames[_hoverHighlightVariant % 4]}  (H)";
         var pos = new Vector2((int)18, (int)112);
         _spriteBatch.DrawString(_font, label, pos + new Vector2(1, 1), new Color(0, 0, 0, 190));
         _spriteBatch.DrawString(_font, label, pos, new Color(255, 235, 150));

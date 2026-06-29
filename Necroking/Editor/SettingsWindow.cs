@@ -616,10 +616,38 @@ public class SettingsWindow
         if (MathF.Abs(gpick - t.GroundPickRadius) > 0.0001f) { t.GroundPickRadius = gpick; MarkDirty(); }
         y += rowH;
 
-        // Outline box around the hovered world object.
-        bool hlBox = _ui.DrawCheckbox("Outline box around hovered object", t.ShowHoverHighlight, x, y);
+        // Highlight the world object under the cursor.
+        bool hlBox = _ui.DrawCheckbox("Highlight object under cursor", t.ShowHoverHighlight, x, y);
         if (hlBox != t.ShowHoverHighlight) { t.ShowHoverHighlight = hlBox; MarkDirty(); }
         y += rowH;
+
+        // Per-category marker style: separate shape + line style for buildings vs everything else,
+        // each encoded as shape*4 + lineStyle. Defaults: buildings = Diamond (iso footprint), the
+        // rest = Circle (RTS ring).
+        if (t.ShowHoverHighlight)
+        {
+            string[] shapeNames = { "Circle", "Corners", "Rectangle", "Ground Box", "Diamond Box" };
+            string[] styleNames = { "Thick Solid", "Thin Solid", "Thick Faint", "Thin Faint" };
+
+            void MarkerRows(string id, Func<int> get, Action<int> set)
+            {
+                int v = System.Math.Clamp(get(), 0, 19);
+                int shape = v / 4, style = v % 4;
+                string ns = _ui.DrawCombo(id + "_shape", "Shape", shapeNames[shape], shapeNames, x + 12, y, w - 12);
+                int nsi = System.Array.IndexOf(shapeNames, ns); if (nsi < 0) nsi = shape;
+                y += rowH;
+                string nst = _ui.DrawCombo(id + "_style", "Line style", styleNames[style], styleNames, x + 12, y, w - 12);
+                int nsti = System.Array.IndexOf(styleNames, nst); if (nsti < 0) nsti = style;
+                y += rowH;
+                int nv = nsi * 4 + nsti;
+                if (nv != v) { set(nv); MarkDirty(); }
+            }
+
+            _ui.DrawText("Buildings", new Vector2(x, y), EditorBase.TextColor); y += 18;
+            MarkerRows("hl_bld", () => t.HoverHighlightBuilding, vv => t.HoverHighlightBuilding = vv);
+            _ui.DrawText("Other objects (units, corpses, items)", new Vector2(x, y), EditorBase.TextColor); y += 18;
+            MarkerRows("hl_rest", () => t.HoverHighlightRest, vv => t.HoverHighlightRest = vv);
+        }
 
         y += 6;
         DrawSectionHeader("World Position Debug", x, ref y);
