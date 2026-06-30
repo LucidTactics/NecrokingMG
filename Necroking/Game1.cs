@@ -441,6 +441,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     // thread and executed here on the main thread via ExecuteDevCommand.
     private Necroking.Dev.DevServer? _devServer;
     private bool _taskbarHidden;                   // headless: off-screen window's taskbar button dropped once
+    private bool _devWindowShown;                  // dev `window show`: headless window surfaced on-screen for the user
     private string? _pendingDevScreenshot;        // set by a screenshot cmd, consumed in Draw
     private Necroking.Dev.DevCommand? _pendingDevScreenshotCmd; // completed once the PNG is written
     private int _devShotW, _devShotH;             // downsample target for the pending shot (0 = native)

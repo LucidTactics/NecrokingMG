@@ -538,6 +538,36 @@ public partial class Game1 {
                break;
             }
 
+            // Surface / re-hide the headless game window at runtime (NO restart). The
+            // headless window renders normally; it's just parked off-screen, borderless,
+            // and stripped of its taskbar button. 'show' moves it on-screen, gives it a
+            // border + taskbar button, and focuses it so the user can play; 'hide' parks
+            // it again. window.dev('window',['show'|'hide'|'toggle'])
+            case "window": {
+               string mode = c.Args.Length >= 1 ? c.Args[0].ToLowerInvariant() : "toggle";
+               if (mode == "toggle") mode = _devWindowShown ? "hide" : "show";
+               if (mode == "show")
+               {
+                  Window.IsBorderless = false;            // give it a draggable title bar
+                  Window.Position = new Microsoft.Xna.Framework.Point(80, 80); // on-screen, top-left-ish
+                  Core.WindowChrome.RestoreToTaskbarAndFocus();
+                  _devWindowShown = true;
+                  _taskbarHidden = true;                  // keep the Update-loop auto-hide latched off
+                  c.Complete(Necroking.Dev.DevServer.Ok("window shown on-screen at 80,80 (bordered + focused)"));
+               }
+               else if (mode == "hide")
+               {
+                  Window.IsBorderless = true;
+                  Window.Position = new Microsoft.Xna.Framework.Point(-10000, -10000);
+                  Core.WindowChrome.HideFromTaskbar();
+                  _devWindowShown = false;
+                  _taskbarHidden = true;
+                  c.Complete(Necroking.Dev.DevServer.Ok("window hidden off-screen (headless look restored)"));
+               }
+               else c.Complete(Necroking.Dev.DevServer.Error("window needs: show | hide | toggle"));
+               break;
+            }
+
             // Open the job board UI; optional arg expands a job's detail:
             // window.dev('ui_job_board',['make_potions'])
             case "ui_job_board": {
