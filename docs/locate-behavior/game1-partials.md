@@ -200,7 +200,7 @@ See also: `Game1.cs` (`Initialize`/`LoadContent` consume `LaunchArgs`), `Core/Ga
 
 The `Game1.*` partials are glue; the heavy logic lives in sibling subsystem folders, most of which are
 **not yet documented in this map** (see [overview.md](overview.md) — research and add a
-`reference/<area>.md` when you route into one):
+`<area>.md` when you route into one):
 
 - **`Necroking/Game/`** — gameplay systems: spell targeting (`SpellCasting.cs`), spell effect
   resolution (`SpellEffectSystem.cs`, `SpellPenetration.cs`), crafting/table-craft, inventory, horde

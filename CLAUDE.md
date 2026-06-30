@@ -202,6 +202,7 @@ CLAUDE.md. Current contents:
 - [docs/spells.md](docs/spells.md) — deep reference behind the `add-spell` skill.
 - [docs/devpreview.md](docs/devpreview.md) — deep reference behind the `drive-game` skill (the three interface tiers in detail).
 - [docs/testing-scenarios.md](docs/testing-scenarios.md) — deep reference behind the `test-scenario` skill.
+- [docs/locate-behavior/](docs/locate-behavior/) — the architecture map + finder operating guide behind the `locate-behavior` skill (moved out of `.claude/` so the finder can self-update it without write prompts).
 
 ## C++ Migration
 

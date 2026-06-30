@@ -1,13 +1,12 @@
 # Overview — behavior routing map
 
 Entry point for the **locate-behavior** skill. Match the request to an area below, then
-open the listed `reference/<area>.md`. Areas marked **(not yet documented)** have no doc
-yet — **research them and add the doc** per SKILL.md → "Self-healing", then update this
-file.
+open the listed `<area>.md`. Areas marked **(not yet documented)** have no doc yet —
+**research them and add the doc** per README.md → "Self-healing", then update this file.
 
 > Hints for undocumented areas are **tentative** (inferred from folder/namespace names,
 > not yet verified). Don't trust them as fact — confirm by reading the code, and capture
-> what you learn in a new `reference/<area>.md`.
+> what you learn in a new `<area>.md`.
 
 ## Documented areas
 
@@ -59,7 +58,7 @@ Use this to pick a starting area. When the routed area isn't documented yet, doc
 
 ## When you extend the map
 
-1. Pick the area, glob its folder, read/LSP the files, write `reference/<area>.md` in the
+1. Pick the area, glob its folder, read/LSP the files, write `<area>.md` in the
    [game1-partials.md](game1-partials.md) format.
 2. Move its row to "Documented areas", mark the doc ✅ here, and tighten its behavior→area
    entries above with the real file names you found.
