@@ -1,40 +1,60 @@
 #!/usr/bin/env python3
-"""PreToolUse hook: auto-approve Write/Edit/MultiEdit to curated, git-tracked .claude config.
+"""Pre/PostToolUse hook governing Write/Edit/MultiEdit to curated config + the permission machinery.
 
-Covers two folders of shared, version-controlled config that we edit routinely:
-  - `.claude/skills/` — all skill files, incl. the locate-behavior self-healing
-    architecture map (overview.md + reference/<area>.md) the finder subagent writes.
-  - `.claude/agents/` — curated subagent definitions (e.g. locate-behavior-finder.md).
+Three tiers, by target path:
 
-These writes are meant to be promptless, but relative forward-slash path globs in
-settings.json don't match the absolute backslash paths Claude resolves on Windows, so the
-allow rule never fires and every write prompts. This hook normalizes the path and approves
-the write when it lands inside one of those folders — portable across machines/OSes (no
-hard-coded home dir), unlike an absolute glob.
+  ALLOW (promptless) — curated, version-controlled config we edit routinely:
+    - `.claude/skills/`  (incl. the locate-behavior self-healing map the finder writes)
+    - `.claude/agents/`  (curated subagent definitions)
+  These are auto-approved. acceptEdits won't cover them (Claude carves `.claude/` config out
+  of acceptEdits), and relative globs in settings.json don't match Windows absolute paths, so
+  an explicit hook "allow" is the only clean way to make them frictionless.
 
-Always FORCES A PROMPT (permissionDecision "ask", which overrides acceptEdits) for the
-permission-granting machinery, so it can never be edited on autopilot:
-  - any `settings*.json` (matched by basename, even nested like `.claude/skills/x/settings.json`),
-  - anything under `tools/hooks/` (the hook scripts themselves — including THIS file).
-We use "ask" rather than just staying silent because hook scripts live outside `.claude/`,
-so acceptEdits would otherwise auto-accept them. Editing permission/hook config is an
-escalation, not a self-heal. Everything else outside the curated folders is left to the
-user (we stay silent / defer to normal flow).
+  ASK-ONCE-PER-SESSION — the permission machinery itself:
+    - any `settings*.json` (matched by basename, even nested under a curated folder)
+    - anything under `tools/hooks/` (the hook scripts, incl. THIS file)
+  Editing these is an escalation, not a self-heal, so they must be reviewed. But re-prompting
+  on every edit is tedious, so we grant per SESSION: the first such edit prompts ("ask",
+  which overrides acceptEdits); once the user approves it, a PostToolUse flag is written and
+  the rest of that session is auto-allowed for that category. `settings` and `hooks` are
+  tracked separately, so approving one does NOT silently open the other.
+
+  DEFER — everything else: no decision, normal flow (acceptEdits handles source files).
+
+Hook decisions run before stored allow rules, so a user-clicked "Always allow" can't suppress
+our "ask" — the per-session flag (keyed off the payload's session_id) is what remembers consent.
+Register this script under BOTH PreToolUse and PostToolUse for matcher Write|Edit|MultiEdit.
 """
 import json
+import os
 import sys
+import tempfile
 
 # Tools whose target file we gate on. MultiEdit/Edit/Write all carry file_path.
 _FILE_TOOLS = {"Write", "Edit", "MultiEdit"}
-# Forward-slash, lowercased markers; the resolved path must contain one to be auto-approved.
+# Forward-slash, lowercased markers; path contains one -> auto-approve (unless it's a gated category).
 _ALLOWED_MARKERS = (
     "/.claude/skills/",
     "/.claude/agents/",
 )
-# Path fragments that must ALWAYS prompt, even under acceptEdits / inside a curated folder.
-_ALWAYS_ASK_MARKERS = (
+# Path fragments for the "hooks" gated category (always reviewed, ask-once-per-session).
+_HOOKS_MARKERS = (
     "/tools/hooks/",
 )
+
+
+def _gated_category(norm: str, base: str):
+    """Return the ask-once-per-session category for this path, or None."""
+    if base.startswith("settings") and base.endswith(".json"):
+        return "settings"
+    if any(marker in norm for marker in _HOOKS_MARKERS):
+        return "hooks"
+    return None
+
+
+def _grant_path(session_id: str, category: str) -> str:
+    safe = "".join(c for c in session_id if c.isalnum() or c in "-_")
+    return os.path.join(tempfile.gettempdir(), "claude_perm_grants", f"{safe}.{category}.flag")
 
 
 def _emit(decision: str, reason: str) -> int:
@@ -63,18 +83,35 @@ def main() -> int:
 
     norm = path.replace("\\", "/").lower()
     base = norm.rsplit("/", 1)[-1]
+    event = payload.get("hook_event_name")
+    session_id = payload.get("session_id") or ""
+    category = _gated_category(norm, base)
 
-    # Guardrail first: permission/hook config always prompts (overrides acceptEdits).
-    if base.startswith("settings") and base.endswith(".json"):
-        return _emit("ask", "settings file — permission config must be reviewed")
-    if any(marker in norm for marker in _ALWAYS_ASK_MARKERS):
-        return _emit("ask", "hook script — permission machinery must be reviewed")
+    # PostToolUse: the edit already succeeded (so the user approved it). Record the
+    # per-session grant for this gated category; nothing to decide.
+    if event == "PostToolUse":
+        if category and session_id:
+            try:
+                fp = _grant_path(session_id, category)
+                os.makedirs(os.path.dirname(fp), exist_ok=True)
+                with open(fp, "w") as f:
+                    f.write("granted")
+            except Exception:
+                pass
+        return 0
 
-    # Otherwise auto-approve curated, version-controlled skill/agent config.
+    # PreToolUse below.
+    if category:
+        # Already approved this category earlier this session? Allow silently.
+        if session_id and os.path.exists(_grant_path(session_id, category)):
+            return _emit("allow", f"{category}: approved earlier this session")
+        # First time this session -> review it (overrides acceptEdits).
+        return _emit("ask", f"{category} file - permission machinery, review once per session")
+
     if any(marker in norm for marker in _ALLOWED_MARKERS):
         return _emit("allow", "curated .claude config (skills/agents, non-settings)")
 
-    return 0  # outside the curated folders -> let the user decide
+    return 0  # outside the gated/curated set -> let the user decide (normal flow)
 
 
 if __name__ == "__main__":
