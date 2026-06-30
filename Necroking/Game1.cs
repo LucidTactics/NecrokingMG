@@ -588,6 +588,13 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             Window.Position = Point.Zero;
         }
         RefreshScreenSizedTargets();
+
+        // Remember the chosen mode + windowed size so a restart reopens the same
+        // window (persisted to settings.json by the Exiting handler).
+        var disp = _gameData.Settings.Display;
+        disp.Windowed = windowed;
+        disp.WindowedWidth = _windowedW;
+        disp.WindowedHeight = _windowedH;
     }
 
     /// <summary>Resize the back-buffer-sized render targets (bloom, weather) and the
@@ -616,6 +623,9 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             if (_windowedMode)
             {
                 _windowedW = w; _windowedH = h;
+                // Remember the dragged size so a restart reopens at it.
+                _gameData.Settings.Display.WindowedWidth = w;
+                _gameData.Settings.Display.WindowedHeight = h;
                 if (_graphics.PreferredBackBufferWidth != w || _graphics.PreferredBackBufferHeight != h)
                 {
                     _graphics.PreferredBackBufferWidth = w;
@@ -669,6 +679,18 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
 
         // Load game data
         _gameData.Load();
+
+        // Restore the persisted window mode/size unless a launch override
+        // (--resolution) or headless mode owns the window (the constructor set the
+        // borderless-fullscreen default, which is also the Display default).
+        if (!LaunchArgs.Headless && LaunchArgs.ResolutionW <= 0 && LaunchArgs.ResolutionH <= 0)
+        {
+            var disp = _gameData.Settings.Display;
+            if (disp.WindowedWidth > 0) _windowedW = disp.WindowedWidth;
+            if (disp.WindowedHeight > 0) _windowedH = disp.WindowedHeight;
+            if (disp.Windowed) ApplyWindowMode(true);
+        }
+
         _inventory = new Inventory(20, _gameData.Items);
         SkillBookDefs.Load();
         _skillBookState.InitFromDefs();
@@ -2071,6 +2093,18 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         if (_devMouseOverride.HasValue)
             _input.MousePos = _devMouseOverride.Value;
 
+        // Alt+Enter: toggle between borderless "fullscreen" and a resizable window.
+        // Handled here, before the menu-state early-returns below, so it works on the
+        // main menu and scenario list too — not just in active gameplay.
+        {
+            bool textActive = (_editorUi != null && _editorUi.IsTextInputActive)
+                || (_menuState == MenuState.UIEditor && _uiEditor.IsTextInputActive);
+            if (!textActive
+                && (_input.IsKeyDown(Keys.LeftAlt) || _input.IsKeyDown(Keys.RightAlt))
+                && _input.WasKeyPressed(Keys.Enter))
+                ToggleWindowMode();
+        }
+
         // Modal stack input routing. Runs *before* anything else reads input so:
         //   - ESC is dispatched to the topmost popup, never two layers at once.
         //   - Outside-clicks on light-dismiss popups (dropdowns / popovers)
@@ -2308,12 +2342,6 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             if (_menuState == MenuState.UIEditor) _menuState = MenuState.None;
             else { EnsureUIEditorInitialized(); _menuState = MenuState.UIEditor; }
         }
-
-        // Alt+Enter: toggle between borderless "fullscreen" and a resizable window.
-        if (!anyTextInputActive
-            && (_input.IsKeyDown(Keys.LeftAlt) || _input.IsKeyDown(Keys.RightAlt))
-            && _input.WasKeyPressed(Keys.Enter))
-            ToggleWindowMode();
 
         // 'I' key toggles inventory (lazy-inits the UI family on first open)
         if (!anyTextInputActive && _input.WasKeyPressed(Keys.I) && _menuState == MenuState.None)

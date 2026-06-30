@@ -51,6 +51,19 @@ public class DayNightSettings
     [JsonPropertyName("nightPreset")] public string NightPreset { get; set; } = "night";
 }
 
+/// <summary>Persisted window/display state so the game reopens the way the
+/// player left it. Default (<see cref="Windowed"/> = false) is the borderless
+/// full-screen "fullscreen" the game has always launched in. Toggling to a
+/// resizable window (Alt+Enter) records the mode here, and the last windowed
+/// size is remembered so a restart restores the same window. Ignored when a
+/// launch override (<c>--resolution</c>) or headless mode owns the window.</summary>
+public class DisplaySettings
+{
+    [JsonPropertyName("windowed")] public bool Windowed { get; set; }
+    [JsonPropertyName("windowedWidth")] public int WindowedWidth { get; set; } = 1280;
+    [JsonPropertyName("windowedHeight")] public int WindowedHeight { get; set; } = 720;
+}
+
 public class GeneralSettings
 {
     [JsonPropertyName("showTimeControls")] public bool ShowTimeControls { get; set; } = true;
@@ -304,6 +317,7 @@ public class GameSettingsData
     [JsonPropertyName("grass")] public GrassSettings Grass { get; set; } = new();
     [JsonPropertyName("weather")] public WeatherSettings Weather { get; set; } = new();
     [JsonPropertyName("dayNight")] public DayNightSettings DayNight { get; set; } = new();
+    [JsonPropertyName("display")] public DisplaySettings Display { get; set; } = new();
     [JsonPropertyName("general")] public GeneralSettings General { get; set; } = new();
     [JsonPropertyName("shadow")] public ShadowSettings Shadow { get; set; } = new();
     [JsonPropertyName("horde")] public HordeSettings Horde { get; set; } = new();
@@ -322,6 +336,8 @@ public class GameSettingsData
         Grass = loaded.Grass;
         Weather = loaded.Weather;
         DayNight = loaded.DayNight;
+        // Display defaults (borderless fullscreen) if missing from older settings.json files.
+        Display = loaded.Display ?? new DisplaySettings();
         General = loaded.General;
         Shadow = loaded.Shadow;
         Horde = loaded.Horde;
