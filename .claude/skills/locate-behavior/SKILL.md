@@ -32,9 +32,10 @@ map docs it created/fixed.
 
 - **Relay** the located files/answer to the user (or just use them to proceed with the
   task — that's the point of locating).
-- **If the finder reports it created or corrected `reference/*.md`**, those are real
-  working-tree changes: include them when you commit, so collaborators get the improved
-  map. The skill, the agent, and the map are all git-tracked and shared.
+- **The finder commits its own map changes** (a `docs(locate-behavior): …` commit scoped
+  to just the `reference/*.md` it touched) before returning, so you don't have to — it
+  reports the hash in its answer. It does NOT push; surface that to the user per git
+  policy. The skill, the agent, and the map are all git-tracked and shared.
 
 ## Why a subagent (background)
 
