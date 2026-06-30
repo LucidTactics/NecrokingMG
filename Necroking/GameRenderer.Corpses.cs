@@ -458,7 +458,7 @@ partial class GameRenderer
 
     /// <summary>Opaque-pixel centroid of a frame, in frame-local top-left pixels.
     /// Used to balance a carried corpse on the carrier's hands. Cached two ways:
-    /// in-memory by (texture, rect), and on disk in <c>data/frame_centroids.json</c>
+    /// in-memory by (texture, rect), and on disk in <c>cache/frame_centroids.json</c>
     /// keyed by (atlas name, page, rect) — so the ~85ms GetData read-back on the
     /// huge unit atlases is paid at most once per frame, ever, across all runs.</summary>
     private Vector2 GetFrameCentroid(Microsoft.Xna.Framework.Graphics.Texture2D tex, SpriteFrame frame)
@@ -498,7 +498,7 @@ partial class GameRenderer
         return result;
     }
 
-    private static string CentroidCachePath => Core.GamePaths.Resolve("data/frame_centroids.json");
+    private static string CentroidCachePath => Core.GamePaths.Resolve(Core.GamePaths.FrameCentroidsJson);
 
     /// <summary>Stable disk key for a frame: atlas name + page index + rect. Independent
     /// of the runtime Texture2D identity so it survives across runs. Null if the
@@ -563,6 +563,7 @@ partial class GameRenderer
                 map[kv.Key] = kv.Value.X.ToString(ci) + "," + kv.Value.Y.ToString(ci);
             var json = System.Text.Json.JsonSerializer.Serialize(map,
                 Necroking.Core.JsonDefaults.Indented);
+            Directory.CreateDirectory(Core.GamePaths.Resolve(Core.GamePaths.CacheDir));
             File.WriteAllText(CentroidCachePath, json);
             _g._centroidsDirty = false;
         }

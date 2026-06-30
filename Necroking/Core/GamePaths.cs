@@ -113,6 +113,13 @@ public static class GamePaths
     // --- Resources ---
     public const string ResourcesDir = "resources";
 
+    // --- Caches ---
+    // Regenerable, derived artifacts (NOT hand-authored data). Pre-baked and shipped
+    // so a fresh clone is fast, but everything here can be rebuilt from assets/data.
+    // Kept apart from data/ so it's obvious which files are real data vs. caches.
+    public const string CacheDir = "cache";
+    public const string FrameCentroidsJson = "cache/frame_centroids.json"; // baked via --bake-centroids
+
     // --- Log files (relative to exe, not project root) ---
     public const string LogDir = "log";
     public const string CombatLog = "log/combat.log";

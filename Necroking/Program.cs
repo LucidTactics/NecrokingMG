@@ -17,7 +17,7 @@ public static class LaunchArgs
     /// startup.log timing for the Start-Game path without manual clicking.</summary>
     public static bool AutoStart;
     /// <summary>Offline bake: load the world headless, compute + persist every corpse
-    /// death-frame centroid to data/frame_centroids.json, then exit. Run once after
+    /// death-frame centroid to cache/frame_centroids.json, then exit. Run once after
     /// changing unit art; the file ships with the build so carries never stall on a
     /// GetData read-back. Implies --autostart --headless.</summary>
     public static bool BakeCentroids;

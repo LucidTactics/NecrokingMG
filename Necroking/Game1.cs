@@ -3809,7 +3809,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
 
     // ── Raw-corpse carry (body bag mothballed; see GameConstants.UseBodyBag) ──
 
-    // --- Persistent frame-centroid cache (data/frame_centroids.json) ---
+    // --- Persistent frame-centroid cache (cache/frame_centroids.json) ---
     internal Dictionary<string, Vector2>? _persistedCentroids;
     internal bool _centroidsDirty;
     internal bool _bulkCentroidBake;
