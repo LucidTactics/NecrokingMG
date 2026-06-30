@@ -14,6 +14,7 @@ file.
 | Area | Doc | Covers |
 |------|-----|--------|
 | Game1.* root partials | [game1-partials.md](game1-partials.md) ✅ | Frame loop, input, menu state, orchestration of every system; player spell-cast pipeline, crafting, animation tick, all rendering entry points, map load/save, dev-command dispatch |
+| Render/ (effects only) | [render.md](render.md) ◐ | **Partial** — the visual-effect/flipbook systems (`EffectManager`, `Flipbook`, `ReanimEffectSystem`, particle systems). Atlases, ground shader, bloom, shadows, fonts, HUD widgets still TODO |
 
 ## Subsystems (under `Necroking/`) — most not yet documented
 
@@ -23,7 +24,7 @@ file.
 | `Core/` | Foundational types & sim core — `Vec2`, `Simulation`, units/corpses state, `DebugLog`, constants | (not yet documented) |
 | `Data/` | Game-data model + JSON registries (spells, units, items, potions, buffs, weapons, armor) under `Data/Registries/` | (not yet documented) |
 | `Game/` | Gameplay systems — spell targeting (`SpellCasting`), spell effects (`SpellEffectSystem`), crafting/table-craft, inventory, building menus, horde caps | (not yet documented) |
-| `Render/` | Rendering subsystems — atlases, shadows, bloom, font manager, widget renderer, HUD renderer | (not yet documented) |
+| `Render/` | Rendering subsystems — atlases, shadows, bloom, font manager, widget renderer, HUD renderer | [render.md](render.md) ◐ (effects only) |
 | `UI/` | Overlays & panels — inventory, grimoire, skill book, character stats/sheet, unit info | (not yet documented) |
 | `World/` | World/environment systems — env objects, foragables, walls, roads | (not yet documented) |
 | `Movement/` | Pathfinding / steering / movement routines | (not yet documented) |
