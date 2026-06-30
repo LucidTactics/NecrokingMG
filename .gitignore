@@ -49,6 +49,10 @@ desktop.ini
 !.claude/skills/edit-game-data/
 !.claude/skills/sync-assets/
 !.claude/skills/locate-behavior/
+## Curated subagents (same default-ignore + explicit un-ignore as skills):
+!.claude/agents/
+.claude/agents/*
+!.claude/agents/locate-behavior-finder.md
 CLAUDE.local.md
 
 ## The ENTIRE assets/ folder is distributed out-of-band (Google Drive), never git:
