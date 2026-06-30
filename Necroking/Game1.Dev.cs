@@ -1235,6 +1235,15 @@ public partial class Game1 {
             }
 
             // Discovery: list every dev command with a one-line signature.
+            // Inject a registry entry (spell/unit/item/buff/…) into the LIVE game
+            // from JSON, like a row in data/<file>.json — runtime only, never saved.
+            // If the matching editor is open, the new entry is selected. (DevAddData
+            // lives in Game1.DevData.cs.)
+            case "add_data":
+            case "add_json":
+               DevAddData(c);
+               break;
+
             case "help":
             case "commands": {
                var cmds = new[] {
@@ -1255,6 +1264,7 @@ public partial class Game1 {
                   "overlay <name> [open|close|toggle]", "select <name|id|index>",
                   "batch  opts:{script:[{cmd,args,opts}|{wait:n}|{wait_real:n}|{wait_frames:n}|{shot:\"name\"}]}",
                   "job [cancel]",
+                  "add_data [spell|unit|item|buff|weapon|armor|shield|potion|flipbook]  opts:{json:<entry|array|datafile>,open}",
                };
                c.Complete(Necroking.Dev.DevServer.OkRaw(
                   $"{{\"selectors\":\"all|necro|undead|human|animal|<index>|id:<n>|<unitDefId>|<UnitType>\",\"commands\":{System.Text.Json.JsonSerializer.Serialize(cmds)}}}"));

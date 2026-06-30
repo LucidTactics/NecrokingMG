@@ -163,7 +163,25 @@ Look/edit here when: you need to find which dev command does what, or understand
 verb is handled. To *add* a dev command, the normal flow is one new `case` here (see CLAUDE.md → Dev
 Control Server), but coordinate first since this file is being edited concurrently.
 See also: `Necroking/Dev/DevServer.cs` + `DevCommand` (HTTP listener feeding this), `tools/devserver.py`
-(supervisor), `docs/devpreview.md`, CLAUDE.md → "Dev Control Server".
+(supervisor), `docs/devpreview.md`, CLAUDE.md → "Dev Control Server". `Necroking/Game1.DevData.cs`
+holds the `add_data` command's body (`DevAddData`).
+
+### `Necroking/Game1.DevData.cs` — `add_data` dev command: inject registry entries from JSON at runtime
+What lives here: `DevAddData(DevCommand c)` — the body of the `add_data`/`add_json` dev verb. Takes JSON
+via `opts.json` (a single entry object, an array of entries, or a whole `{"<key>":[...]}` data-file
+object) plus an optional `arg[0]` registry kind (spell/unit/item/buff/weapon/armor/shield/potion/
+flipbook), deserializes each entry through the matching `_gameData` registry's `RegistryBase.AddFromJson`
+(honoring per-registry converters/overrides), and adds it to the LIVE registry — **runtime only, never
+written to disk**. If the matching editor panel is open it selects the freshest entry (via
+`SelectEditorEntry`); `opts.open=true` switches to that editor first. The editors are immediate-mode so
+their lists pick up the new entry with no extra refresh.
+Key members: `DevAddData`.
+Look/edit here when: you want to add a new data kind to `add_data`, change how injected entries are
+surfaced in an editor, or debug why a runtime-injected spell/unit isn't appearing. The reusable
+"deserialize one entry + add" primitive is `RegistryBase<TDef>.AddFromJson` in
+`Data/Registries/RegistryBase.cs`.
+See also: `Game1.Dev.cs` (the `case "add_data"` dispatch), `Data/Registries/RegistryBase.cs`
+(`AddFromJson`), `Data/GameData.cs` (the registry container), `Editor/` (`DevSelect` on the editors).
 
 ### `Necroking/Program.cs` — entry point & launch-arg parsing
 What lives here: `static void Main` (sets CWD to the exe dir, parses launch args, detects the data

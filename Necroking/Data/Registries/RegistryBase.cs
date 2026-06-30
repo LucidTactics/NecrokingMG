@@ -37,6 +37,26 @@ public abstract class RegistryBase<TDef> where TDef : class, IHasId, new()
             _orderedIDs.Add(def.Id);
     }
 
+    /// <summary>Deserialize one entry from a JSON element — using this registry's
+    /// own options and any per-registry <see cref="DeserializeItem"/> override, so a
+    /// runtime add matches what <see cref="Load"/> would have produced — and add it
+    /// (upsert by id). Returns the new def, or null on failure (with <paramref
+    /// name="error"/> set). Used by the dev `add_data` command to inject a
+    /// spell/unit/item/etc. into the live game without touching the JSON file.</summary>
+    public TDef? AddFromJson(JsonElement elem, out string error)
+    {
+        error = "";
+        try
+        {
+            var def = DeserializeItem(elem, CreateJsonOptions());
+            if (def == null) { error = "deserialize returned null"; return null; }
+            if (string.IsNullOrEmpty(def.Id)) { error = "entry has no \"id\""; return null; }
+            Add(def);
+            return def;
+        }
+        catch (Exception ex) { error = ex.Message; return null; }
+    }
+
     public void AddAfter(TDef def, string afterId)
     {
         _defs[def.Id] = def;
