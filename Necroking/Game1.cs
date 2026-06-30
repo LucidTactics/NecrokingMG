@@ -1332,6 +1332,14 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         // bakes every harmonized texture (~seconds of CPU work) — paying it
         // lazily froze the game on the FIRST UI keypress (I/C/U/O) instead.
         EnsureInventoryUIsInitialized();
+        // Optional reanimation pose-morph prewarm — only when BOTH the morph effect and
+        // the prewarm are enabled (both OFF by default; the morph is an opt-in prototype
+        // and warming it is hundreds of heavy builds that chew CPU after load). When on,
+        // ENQUEUE the descriptors now and drain a few builds per frame over the first
+        // seconds of play (QueueReanimMorphPrewarm / TickReanimMorphPrewarm) so the first
+        // raise of a type never stalls; otherwise morphs build lazily on first use.
+        if (_gameData.Settings.Performance.ReanimMorph && _gameData.Settings.Performance.PrewarmReanimMorphs)
+            _gameRenderer.QueueReanimMorphPrewarm();
         LogTiming("Game world loaded");
         DebugLog.Log("startup", $"=== Total startup: {_startupTimer?.ElapsedMilliseconds ?? 0}ms ===");
         _gameWorldLoaded = true;
@@ -2223,6 +2231,11 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             if (_primarySlotFlash[i] > 0f) _primarySlotFlash[i] = MathF.Max(0f, _primarySlotFlash[i] - rawDt);
         for (int i = 0; i < _secondarySlotFlash.Length; i++)
             if (_secondarySlotFlash[i] > 0f) _secondarySlotFlash[i] = MathF.Max(0f, _secondarySlotFlash[i] - rawDt);
+
+        // Drain a slice of the reanim-morph prewarm queue (one heavy SDF build per frame)
+        // so the builds spread over the first seconds of play instead of one big stall.
+        // No-op once the queue is empty.
+        _gameRenderer.TickReanimMorphPrewarm();
 
         // Step the active dev batch script (if any) over the same sim/real clock a
         // scenario's OnTick uses, so scripted waits + screenshots land deterministically.

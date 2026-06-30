@@ -178,7 +178,11 @@ partial class GameRenderer
                         out var cow, out var cpw, out var cps, out float morphT))
                 {
                     var frUp = cad.Ctrl.GetFrameForStateStart(AnimState.Standup, corpse.FacingAngle);
-                    bool morphed = frUp.Frame != null
+                    // The SDF morph is an opt-in prototype (off by default — its build is
+                    // heavy and gets in the way of testing). When off, fall through to the
+                    // cheap alpha crossfade below, which builds nothing.
+                    bool morphed = _g._gameData.Settings.Performance.ReanimMorph
+                        && frUp.Frame != null
                         && DrawReanimMorph(atlas, fr.Frame.Value, fr.FlipX, frUp.Frame.Value, frUp.FlipX,
                                            sp, scale, corpseTint, morphT, co1, cow, cpw, cps);
                     if (!morphed)
@@ -599,6 +603,91 @@ partial class GameRenderer
         _g._bulkCentroidBake = false;
         SavePersistedCentroids();
         DebugLog.Log("startup", $"[bake] corpse centroids: {total} frames -> {CentroidCachePath}");
+    }
+
+    private readonly struct MorphPrewarmJob
+    {
+        public readonly SpriteAtlas Atlas;
+        public readonly SpriteFrame Death;
+        public readonly bool DeathFlip;
+        public readonly SpriteFrame Standup;
+        public readonly bool StandupFlip;
+        public MorphPrewarmJob(SpriteAtlas a, SpriteFrame d, bool df, SpriteFrame s, bool sf)
+        { Atlas = a; Death = d; DeathFlip = df; Standup = s; StandupFlip = sf; }
+    }
+
+    private readonly Queue<MorphPrewarmJob> _morphPrewarmQueue = new();
+
+    /// <summary>Collect (but don't yet build) every reanimation pose-morph the game can
+    /// hit — death pose → standup-start SDF morph, one per unit type/facing. The actual
+    /// build (<see cref="ReanimMorph.GetOrBuild"/>) is heavy — two GetData GPU read-backs
+    /// + two distance transforms + three texture uploads — and was paid lazily on the
+    /// morph's first draw frame, hitching the summon. We can't do them all at world-load
+    /// (that froze startup), and the morph textures are live GPU resources (can't be
+    /// serialized like the centroid cache), so instead we enqueue cheap descriptors here
+    /// (frame lookups only) and drain them one heavy build per frame in
+    /// <see cref="TickReanimMorphPrewarm"/>. Covers every def with both a Death and a
+    /// Standup anim (any such corpse can be raised).</summary>
+    internal void QueueReanimMorphPrewarm()
+    {
+        _morphPrewarmQueue.Clear();
+        if (_g._morphSdfEffect == null || _g._gameData?.Units == null) return;
+        var seen = new HashSet<string>();
+        foreach (var def in _g._gameData.Units.All())
+        {
+            if (def?.Sprite == null) continue;
+            int ai = Core.AtlasDefs.ResolveAtlasName(def.Sprite.AtlasName);
+            if (ai < 0 || ai >= _g._atlases.Length || !_g._atlases[ai].IsLoaded) continue;
+            var atlas = _g._atlases[ai];
+            var spriteData = atlas.GetUnit(def.Sprite.SpriteName);
+            if (spriteData == null) continue;
+            // Both anims are required to morph; skip units that can't reanimate-morph.
+            if (spriteData.GetAnim("Death") == null || spriteData.GetAnim("Standup") == null) continue;
+
+            var ctrl = new AnimController();
+            ctrl.Init(spriteData);
+            if (_g._animMeta.Count > 0) ctrl.SetAnimMeta(_g._animMeta, def.Sprite.SpriteName);
+            ctrl.ForceStateAtEnd(AnimState.Death);
+
+            // Sample a 30° facing ring — covers every authored Death/Standup angle+flip
+            // pair the runtime resolver can pick. Duplicate descriptors are harmless:
+            // GetOrBuild dedupes by key (a repeat is a ~free cache hit at drain time).
+            for (int deg = 0; deg < 360; deg += 30)
+            {
+                var fr = ctrl.GetCurrentFrame(deg);
+                var frUp = ctrl.GetFrameForStateStart(AnimState.Standup, deg);
+                if (fr.Frame == null || frUp.Frame == null) continue;
+                // Dedupe to distinct morphs so the queue holds only real builds (no
+                // cache-hit jobs clogging the drain). Key matches ReanimMorph's cache key.
+                var d = fr.Frame.Value; var s = frUp.Frame.Value;
+                string key = $"{d.TextureIndex}:{d.Rect.X},{d.Rect.Y},{d.Rect.Width},{d.Rect.Height},{fr.FlipX}|"
+                           + $"{s.TextureIndex}:{s.Rect.X},{s.Rect.Y},{s.Rect.Width},{s.Rect.Height},{frUp.FlipX}";
+                if (!seen.Add(key)) continue;
+                _morphPrewarmQueue.Enqueue(new MorphPrewarmJob(atlas, d, fr.FlipX, s, frUp.FlipX));
+            }
+        }
+        DebugLog.Log("startup", $"[prewarm] reanim morph jobs queued: {_morphPrewarmQueue.Count}");
+    }
+
+    /// <summary>Drain the reanim-morph prewarm queue with a per-frame time budget so the
+    /// builds spread over a few seconds of gameplay instead of freezing one frame. The
+    /// budget is checked before each job, so at most one heavy build runs per frame (a
+    /// single build ≈ the cost of one lazy raise); duplicate cache-hit jobs are ~free and
+    /// many drain at once. Cheap no-op once empty. Call once per frame from Update.</summary>
+    internal void TickReanimMorphPrewarm()
+    {
+        if (_morphPrewarmQueue.Count == 0) return;
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        // ~4ms/frame budget — a few builds per frame, invisible against a 16ms frame,
+        // so the (now deduped) queue warms in a couple seconds. Checked before each job,
+        // so at least one always runs even if a single build overruns the budget.
+        while (_morphPrewarmQueue.Count > 0 && sw.Elapsed.TotalMilliseconds < 4.0)
+        {
+            var j = _morphPrewarmQueue.Dequeue();
+            _g._reanimMorph.GetOrBuild(_g.GraphicsDevice, j.Atlas, j.Death, j.DeathFlip, j.Standup, j.StandupFlip);
+        }
+        if (_morphPrewarmQueue.Count == 0)
+            DebugLog.Log("startup", $"[prewarm] reanim morphs done: {_g._reanimMorph.Count} cached");
     }
 
     /// <summary>Draw the carried corpse balanced on the carrier's hands. Resolves

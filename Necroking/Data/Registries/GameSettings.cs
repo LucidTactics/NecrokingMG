@@ -204,6 +204,19 @@ public class PerformanceSettings
     // states (Chasing/Engaged, Alert/Aggressive) always run every frame.
     [JsonPropertyName("amortizedAI")] public bool AmortizedAI { get; set; }
     [JsonPropertyName("aiUpdateInterval")] public int AIUpdateInterval { get; set; } = 6;
+
+    // The SDF "amoeba" reanimation pose-morph (death→standup silhouette morph). OFF by
+    // default — building each morph is heavy (GetData read-back + distance transform) and
+    // chews CPU, getting in the way of iterating/testing. When off, raises use the cheap
+    // alpha crossfade fallback (death frame → standup frame) with no per-morph build at
+    // all. Turn on for the nicer effect.
+    [JsonPropertyName("reanimMorph")] public bool ReanimMorph { get; set; }
+
+    // Only relevant when ReanimMorph is on. Pre-builds every morphable unit's pose-morph
+    // in the background after a world loads, so the first raise of a type never stalls on
+    // its build. OFF by default: it's hundreds of builds that chew CPU for a while after
+    // load. When off, morphs build lazily on first use (an occasional one-frame hitch).
+    [JsonPropertyName("prewarmReanimMorphs")] public bool PrewarmReanimMorphs { get; set; }
 }
 
 public class FogOfWarSettings

@@ -1,7 +1,10 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
+using System.Runtime.CompilerServices;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
+using Necroking.Core;
 
 namespace Necroking.Render;
 
@@ -30,6 +33,9 @@ internal class ReanimMorph
     private const float MaxDistPx = 40f; // SDF encode/decode range (px)
 
     private readonly Dictionary<string, MorphData> _cache = new();
+
+    /// <summary>Number of distinct (death,standup,flip) morphs currently built/cached.</summary>
+    public int Count => _cache.Count;
 
     public MorphData GetOrBuild(GraphicsDevice gd, SpriteAtlas atlas,
         in SpriteFrame death, bool deathFlip, in SpriteFrame standup, bool standupFlip)
