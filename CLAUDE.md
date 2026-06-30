@@ -69,14 +69,7 @@ Most `data/*.json` files (`spells.json`, `units.json`, `items.json`, `potions.js
 a unique `id`. **Don't hand-edit these large files for routine changes** — use the
 **`edit-game-data` skill** (`tools/json_data.py`: read / duplicate / delete / create /
 update a struct by id, preserving the game's exact formatting). Invoke `/edit-game-data`
-or just run the tool; the skill (`.claude/skills/edit-game-data/SKILL.md`) has the full
-syntax. Bulk/derived changes across many entries → a one-off `tools/` script instead.
-
-## Code Style
-- Use `Vec2` (custom type in `Core/`) for world positions, `Vector2` (MonoGame/XNA) for screen positions
-- Debug logging via `Core/DebugLog.cs` — file-based to `log/` directory, never console
-- Editors use immediate mode UI in `Editor/`
-- Shaders in `Necroking/assets/shaders/`, GLSL/HLSL
+or just run the tool. Bulk/derived changes across many entries → a one-off `tools/` script instead.
 
 ## Map Content Lives In The Map, Not In Code
 **If the user asks for something to be placed in the world — a building, foragable, prop, decoration, unit — add it to the map JSON, not to a code path that spawns it at startup.** Hardcoded startup spawns step on the player's map edits: they save the map without the object, restart, and the code re-spawns it. The save *worked*; the load just stomps it.
@@ -87,29 +80,11 @@ syntax. Bulk/derived changes across many entries → a one-off `tools/` script i
 - **Past offenders (now removed):** `SpawnStarterMushroom` and `SpawnStarterBlightAltar` in `Game1.cs` unconditionally inserted a Deathcap and a Blight Altar near the necromancer every launch, making them un-deletable via the map editor. Both removed 2026-05-13.
 
 ## Spells
-Spell casting is orchestrated in `Necroking/Game1.Spells.cs`, with targeting in
-`Game/SpellCasting.cs`, effects in `Game/SpellEffectSystem.cs`, and the data model in
-`Data/Registries/SpellRegistry.cs`. **Before adding or changing a spell, read
-[docs/spells.md](docs/spells.md)** — it explains the three-layer split, the cast
-pipeline, what lives where, and how to add a spell (most are data-only).
-
-**When testing technical behavior, launch the EMPTY test map, not the regular map
-or `testmap`.** `window.dev('menu',['empty_test_map'])` synthesizes a grass-only
-64×64 grid in code (no JSON file) and spawns a **`necromancer_debug`** chassis
-that has every magic path at level 9 and `maxMana=999` — so any spell is castable
-and no map content gets in the way. The primary spellbar is pre-seeded with the
-hidden no-path `test_projectile` (range 15, 5 mana, 0.5s CD) for exercising
-OutOfRange / NotEnoughMana / OnCooldown feedback. Use `set_necro_type <unitDefId>`
-to swap to a different chassis (e.g. `wretched`, `wight`) for chassis-specific
-checks. Regular maps ship with an empty spellbar by design — pre-seeding spells
-there would break the intended new-game experience.
-
-If a test needs more starter spells, add another hidden no-path spell to
-`spells.json` and slot it in the same `if (mapName == "testmap" || mapName == "empty_test")`
-block in `StartGame` — don't touch `data/spellbar.json` (it's per-machine, gitignored).
-The older `test_map` (a populated map with the normal `necromancer`) is still
-useful when you need realistic terrain/enemies; pick `empty_test_map` when you
-need isolation, `test_map` when you need context.
+Adding or changing a spell? **Use the `add-spell` skill** (`/add-spell`) — it covers the
+three-layer split (`SpellRegistry` / `SpellCasting` / `SpellEffectSystem` + the
+`Game1.Spells.cs` glue), the cast pipeline, the data-only vs. new-category procedures,
+and how to test a cast on the empty test map. Most spells are pure data (a `SpellDef` in
+`data/spells.json`) and need no code.
 
 ## UI Text Rendering
 - SpriteBatch uses `SamplerState.PointClamp` — text drawn at sub-pixel positions gets aliasing artifacts
@@ -118,7 +93,10 @@ need isolation, `test_map` when you need context.
 - When centering text with `MeasureString`, the division produces floats — cast to `int` before passing to draw
 
 ## Importing UI Designs (CSS / HTML / JSX mocks)
-Before reproducing any HTML/CSS/JSX design (Claude Design or otherwise) in MonoGame, read [todos/css_rendering.md](todos/css_rendering.md). It covers what translates cleanly, what doesn't, and why `Necroking/Render/UIGfx.cs` is a flagged failed-attempt reference rather than a reusable utility.
+Reproducing an HTML/CSS/JSX design (Claude Design or otherwise) in MonoGame? **Use the
+`import-ui-design` skill** (`/import-ui-design`) — it covers what translates cleanly vs.
+what needs a real shader, why `Necroking/Render/UIGfx.cs` is a flagged failed-attempt
+reference (not a reusable utility), and the read→flat-fill→ask→shader workflow.
 
 ## Large File Safety
 - **NEVER** attempt to read or upload files larger than 15 MB directly — this causes context overflow loops
@@ -168,213 +146,18 @@ The consolidation list is reviewed periodically. Items are either consolidated o
 ### Standard Patterns Reference
 Canonical implementations of common patterns are tracked in `memory/standard_patterns.md`. Consult this when starting work that might overlap with an existing solution. Update it when a new standard is established.
 
-## Dev Control Server (drive the running game via the preview interface)
-
-For interactive, one-off checks — spawn units, set up a situation, move the
-camera, open a UI panel, screenshot, read state — **drive the *running* game
-through the preview interface.** This is far faster than the
-write-scenario→rebuild→run loop and the preferred way to verify almost anything
-visual.
-
-**ALWAYS use the Claude preview MCP tools — not Bash/curl.** The preview tools
-(`preview_start`, `preview_eval`, `preview_screenshot`, ...) are approved by name,
-so they run **without per-command permission prompts**; raw `curl`/Bash to the
-server prompts on every call and is slower. Reach for curl only if the preview
-tools are genuinely unavailable.
-
-**Surface without the `Claude_Preview` tools (e.g. the VS Code extension):** those
-`mcp__Claude_Preview__*` tools are wired up **only in the desktop Claude Code app**.
-For every other surface this repo ships its own project MCP server, **`necroking`**
-(`.mcp.json` → `tools/necro_mcp.py`, dependency-free / stdlib-only). It exposes typed,
-no-shell tools — `necro_status`, `necro_start`, `necro_cmd` (the main driver — same
-`{cmd,args,opts}` commands as `ExecuteDevCommand`), `necro_screenshot` (returns the
-frame inline as an image), `necro_restart`, `necro_stop` — that drive the *same*
-supervisor. **Prefer these** when `Claude_Preview` is absent; they're the safe
-equivalent (no bash to compose, allowlisted by name). If for some reason the
-`necroking` server isn't loaded, fall back to `tools/devctl.py` (one allowlisted bash
-command: `python tools/devctl.py shot fight` → `Read` the printed PNG). Full reference:
-[docs/devpreview.md](docs/devpreview.md). New `.mcp.json` servers need a one-time trust
-approval and a Claude Code reload to appear.
-
-**Topology:** preview MCP tool → Python supervisor (`tools/devserver.py`, port
-8777, persistent) → game's in-process HTTP listener (`Necroking/Dev/DevServer.cs`,
-port 8778, enabled by `--devserver`). The supervisor owns the game process, so the
-exe can be rebuilt + relaunched **without restarting the supervisor**.
-
-**Workflow:**
-1. `preview_start("necroking-dev")` → `serverId` (launches the supervisor; the page
-   auto-starts the game headless at 1280x720). **Do not run `python tools/devserver.py`
-   from Bash yourself** — `preview_start` owns the supervisor. The launch config lives
-   in gitignored `.claude/launch.json`; on a fresh clone it won't exist, so create it
-   first with exactly this (then call `preview_start`):
-   ```json
-   {"version":"0.0.1","configurations":[{"name":"necroking-dev","runtimeExecutable":"python","runtimeArgs":["tools/devserver.py"],"port":8777}]}
-   ```
-   (use `python3` or `py` as `runtimeExecutable` if `python` isn't on PATH).
-2. `preview_eval(id, "window.dev('panel',['spell_editor'])")` — `window.dev(cmd,
-   args, opts)` POSTs to `/cmd`, awaits the game, and returns the JSON result. Chain
-   steps in an async IIFE.
-3. `preview_screenshot(id)` — captures the live view (the dashboard frame refreshes
-   ~1 Hz via `/frame`). Use this to confirm what a panel/entry looks like.
-4. **After a C# change**, rebuild + relaunch through the supervisor:
-   `preview_eval(id, "fetch('/game/restart',{method:'POST',body:'{\"build\":true}'}).then(r=>r.json())")`
-   — build errors come back in the JSON (`build.errors`).
-
-**Stopping the game (do NOT taskkill):** when the exe is locked for a build, or
-when you're done driving it, **stop the game through the server, never kill the
-process** — `preview_eval(id, "fetch('/game/stop',{method:'POST',body:'{}'})")`.
-The supervisor owns the process (Windows Job Object) and the headless game is
-hidden from the taskbar, so a force-killed PID orphans the supervisor's bookkeeping
-and a forgotten game idles invisibly. `/game/restart {"build":true}` already stops
-it for you. The supervisor itself can stay up (cheap; holds the pinned A/B frame).
-
-**Game commands** (see `ExecuteDevCommand` in `Game1.cs`):
-- `ping` · `state` — liveness / JSON snapshot of game state
-- `help` (alias `commands`) — list every dev command + the selector syntax. Run
-  this to discover what's available without reading the source.
-- `start_game [map]` — load a map into gameplay
-- `spawn <type> <x> <y>` · `camera <x> <y> [zoom]` · `speed <n>` · `pause` · `resume`
-- `screenshot [name]` with `opts`: `no_ui`, `no_ground`, `downsample_to` (`"WxH"` |
-  `"full"`; default 640x360)
-- `menu <new_game|test_map|scenarios|main_menu|quit>` — press a main-menu button
-- **Units & combat** (the same primitives scenarios use, exposed live — added 2026-06-21):
-  - **Selectors** — most commands below take a `<selector>` resolving to one or more
-    units: `all`/`*`, `necro`, a faction (`undead`/`human`/`animal`), a bare index
-    (`9`), `id:<n>` (unit Id), or a UnitDef id (`skeleton`) / UnitType name
-    (`Soldier`), case-insensitive. Faction/def/type/`all` match ALIVE units only.
-  - `spawn_def <unitID> <x> <y> [count]` — spawn by **UnitDef id** (full def
-    stats/faction/AI), unlike `spawn` which takes a bare `UnitType`. `count` spawns
-    a small line. Def ids are lowercase (`skeleton`, `soldier`, `zombiewolf`).
-  - `units [selector]` — list matched units as JSON (idx, id, type, def, faction,
-    ai, x/y, hp/maxHp, mana, alive, inCombat). `unit <selector>` dumps the first match.
-  - `combat_log [n]` — last N combat-log entries (attacker/defender/outcome/damage).
-  - `damage <selector> <amount>` · `kill <selector>` · `remove <selector>` (delete).
-  - `set_ai <selector> <AIBehavior>` · `move <selector> <x> <y>` (AI=MoveToPoint).
-  - `set_hp <selector> <hp> [maxHp]` · `set_mana <selector|necro> <mana> [maxMana]`.
-  - `mark <selector|clear>` · `unmark [selector]` — draw a persistent white outline
-    box around matching units (independent of mouse hover) so a screenshot can point
-    at a specific unit. `mark clear` / argless `unmark` removes all marks.
-  - `cast <spellID> <x> <y>` — necromancer casts via the full player pipeline (may
-    fail on mana/cooldown/range — `set_mana necro 9999` first if needed).
-  - `fireball <x> <y> [dmg] [radius] [name]` — spawn a projectile directly
-    (deterministic, no mana/anim gating).
-- **Batch scripts with waits** (`batch` / `job`) — run a sequence of commands with
-  timed waits between them so screenshots land at exact moments. The game steps the
-  script over its own update loop (sim clock, exactly like a scenario's `OnTick`), so
-  `batch` returns a `jobId` immediately and you **poll `job`** for progress/results
-  (never blocks past the HTTP timeout). `opts.script` is an array of steps:
-  `{cmd,args,opts}` (any game command) · `{wait:<simSecs>}` (frozen while paused) ·
-  `{wait_real:<secs>}` · `{wait_frames:<n>}` · `{shot:"name", ...screenshotOpts}`
-  (sugar for a screenshot step). `job` returns `{done,step,total,results:[...]}`
-  where `results[i]` is the raw response of command step i (screenshot steps yield
-  their PNG path); `job cancel` aborts. Example:
-  ```js
-  const {result:{jobId}} = await window.dev('batch',[],{script:[
-    {cmd:'camera',args:[x,y,48]}, {cmd:'speed',args:[4]},
-    {shot:'t0'}, {wait:2.0}, {shot:'t2'}, {wait:2.0}, {shot:'t4'},
-    {cmd:'units',args:['all']},
-  ]});
-  let st; do { await new Promise(r=>setTimeout(r,300)); st=(await window.dev('job',[jobId])).result; } while(!st.done);
-  // st.results holds each step's reply; PNGs are at bin/Debug/log/screenshots/<name>.png
-  ```
-- **UI panels** (added 2026-06-21):
-  - `panels` — list every previewable panel, its tabs, the overlays, and the
-    current state. **Run this first** to discover valid names.
-  - `panel <name> [tab]` — switch to a UI panel; auto-starts a default game for
-    panels that need a world. Names: `main_menu`, `scenarios`, `game`, `pause`,
-    `settings`, `unit_editor`, `spell_editor`, `map_editor`, `ui_editor`,
-    `item_editor`. Optional 2nd arg sets a tab on it.
-  - `tab <name>` — set the active tab on the open panel (Settings: Bloom/Shadow/…;
-    Map editor: Ground/Grass/Objects/Walls/…; UI editor: NineSlices/Elements/Widgets).
-  - `overlay <name> [open|close|toggle]` — in-game overlays: `inventory`,
-    `character_stats`, `skill_book`, `grimoire`, `character_sheet`.
-  - `select <name|id|index>` — select an entry in the open editor (unit/spell/item/ui)
-    so its preview/detail renders. Accepts a numeric index, a def id, or a display
-    name. e.g. `panel spell_editor` then `select Fireball`.
-
-**Screenshots — two ways:**
-- `preview_screenshot(id)` captures the whole **dashboard page** (live game frame +
-  command log). Best for a quick glance or to watch progress.
-- To **analyze just the game frame**, run `window.dev('screenshot',['name'], opts)`
-  via `preview_eval` — it returns the path and the PNG lands at
-  `bin/Debug/log/screenshots/<name>.png`. Then **`Read` that file** (the Read tool is
-  approved → no prompt). You get the clean frame at the downsample size, no dashboard
-  chrome — this is the right way to actually inspect a result.
-- `opts`: `{no_ui:true}` hides the HUD; `{no_ground:true}` drops ground+grass (the
-  scenario black look); `{downsample_to:"WxH"}` or `"full"` picks the returned size
-  (default 640x360 = half the 1280x720 render — small but readable).
-
-**Add a new command when a test needs one — do this freely; it's the point.** If a
-check needs a verb the server doesn't have, ADD IT instead of working around it. One
-`case` in `ExecuteDevCommand` (`Game1.cs`) + a rebuild; the `/cmd` channel forwards
-`{cmd,args,opts}` verbatim so **no `tools/devserver.py` change is needed** (and you
-must not edit it — that forces a supervisor restart; ask the user first if you think
-it truly must change). Pattern:
-
-```csharp
-// in ExecuteDevCommand(Necroking.Dev.DevCommand c), Game1.cs:
-case "kill_faction":                       // window.dev('kill_faction',['Human'])
-{
-    if (c.Args.Length < 1) { c.Complete(Necroking.Dev.DevServer.Error("need <faction>")); break; }
-    var fac = Enum.Parse<Data.Faction>(c.Args[0], true);
-    int n = 0;
-    for (int i = _sim.Units.Count - 1; i >= 0; i--)   // backwards: RemoveUnit shifts indices
-        if (_sim.Units[i].Faction == fac) { _sim.UnitsMut.RemoveUnit(i); n++; }
-    c.Complete(Necroking.Dev.DevServer.Ok($"removed {n}"));
-    break;
-}
-```
-- Runs on the **game main thread** (drained in `Update`), so touching `_sim`,
-  `_camera`, `_gameData`, UI panels, etc. directly is safe — the HTTP thread only
-  queues.
-- Args: `c.Args[i]` (positional strings); `DevFloat(s)` parses a float;
-  `c.Opt("k")` / `c.OptBool("k")` read named opts from the `opts` object.
-- Reply: `c.Complete(DevServer.Ok("msg"))`, `DevServer.Error("msg")`, or
-  `DevServer.OkRaw("<json>")` to return a structured object (see how `state` builds
-  its JSON).
-- **Deferred results** (need a rendered frame, like a screenshot): stash a pending
-  field and call `c.Complete(...)` later from `Draw` instead of blocking — follow the
-  `_pendingDevScreenshot` path.
-- After adding: rebuild via `/game/restart {"build":true}`, then call it with
-  `window.dev('your_verb',[...],{...})` (or `window.devRaw({cmd,args,opts})`).
-
-**Gotchas:**
-- **Spawn faction is implied by `UnitType`**: Skeleton/Abomination → Undead; the rest
-  (Soldier/Knight/Militia/Archer) → Human. A human spawned next to the necromancer
-  will attack and can kill it — spawn at a distance, or spawn undead for a friendly
-  scene. Types: Necromancer, Skeleton, Abomination, Militia, Soldier, Knight, Archer,
-  Dynamic.
-- **World coordinates** (Vec2). Read `state` for the necromancer's `x,y` and anchor
-  spawns/camera off it (default map necromancer ≈ 2096,1882).
-- A screenshot is captured one frame later in `Draw`; `window.dev` awaits until the
-  PNG is written, so the returned path is ready to `Read` immediately.
-- `preview_eval` awaits the returned promise and serialises it to JSON; wrap
-  multi-step sequences in an `async`-IIFE and `return` the final value.
-
-**Recipe — set up a fight, speed it up, analyze it:**
-```js
-// preview_eval(id, "<this>")
-(async()=>{
-  await window.dev('menu',['new_game']);
-  const s = await window.dev('state'); const x=s.result.necromancer.x, y=s.result.necromancer.y;
-  await window.dev('spawn',['Skeleton',x-3,y]);
-  await window.dev('spawn',['Soldier',x+3,y]);
-  await window.dev('camera',[x,y,48]);
-  await window.dev('speed',[4]);
-  return await window.dev('screenshot',['fight']);   // then Read bin/Debug/log/screenshots/fight.png
-})()
-```
-**Recipe — inspect an editor entry:** `window.dev('panel',['spell_editor'])` then
-`window.dev('select',['Fireball'])`, then `preview_screenshot(id)`.
-
-## Test Scenarios (CLI) — archived to `docs/testing-scenarios.md`
-Coded, headless regression scenarios (`--scenario <name>`) are now a **secondary**
-workflow — the Dev Control Server above is the primary driver. Full reference (how
-to run, the scenario list, how to write one, logging + visual-testing guidance)
-lives in **[docs/testing-scenarios.md](docs/testing-scenarios.md)**. Reach for it
-when you need a *repeatable regression test* rather than a live one-off check; for
-anything interactive, prefer the dev server (and add a `/cmd` command if one is
-missing).
+## Driving / Testing the Game
+- **Interactive, one-off checks** (spawn units, set up a situation, move the camera, open
+  a UI panel, screenshot, read state) — **use the `drive-game` skill** (`/drive-game`).
+  Driving the *running* game through the preview interface is far faster than the
+  write-scenario→rebuild→run loop and is the preferred way to verify almost anything visual.
+  The skill covers the three interface tiers (`Claude_Preview` MCP / `necroking` MCP server /
+  `tools/devctl.py`), the full game-command set, panels, batch jobs, screenshots, and how to
+  add a new dev command in `ExecuteDevCommand` (`Game1.cs`).
+- **Repeatable, headless regression tests** with real rendering/systems/screenshots — **use
+  the `test-scenario` skill** (`/test-scenario`) to run or write a coded `--scenario`. Prefer
+  adding a missing `drive-game` command over a new scenario unless you specifically need a
+  checked-in, re-runnable test.
 
 ## Auto-accept Patterns
 - Reading any file in the project
@@ -387,42 +170,39 @@ missing).
 - Running scenario tests via `Necroking.exe --scenario`
 
 ## Bash
+A `PreToolUse` / `Bash` hook (`tools/hooks/bash_prompt_guard.py`) governs Bash, so the old
+"avoid `&&`-chained commands, they force confirmations" worry is gone: the hook
+**force-allows** a compound command when *every* segment is individually allow-listed (it
+splits on `&&`/`||`/`;`/`|`/newlines), so `cd x && git status && dotnet build` passes
+silently. Two things to know:
 
-Try to avoid using multi bash commands like cs XXX && git info, they force unnecesary user confirmations!
-
-**Always prefer the dedicated `Grep` and `Glob` tools over `grep`/`find`/`rg` run
-through the Bash tool, and prefer the `Read` tool over `cat`/`head`/`tail`.** The
-dedicated tools integrate with the permission UI (no per-command confirmation
-prompts), return clickable file links, and are faster. Only drop to a Bash search
-script when a dedicated tool genuinely can't do the job. A `PreToolUse` / `Bash` hook now
-**enforces** this (leading `grep`/`find`/`cat`/… is denied with a reminder). That same
-hook also runs **deny-by-default on Bash** (aggressive by design): any Bash command that
-would otherwise prompt the user for approval is thrown back (re-send the identical
-command to actually prompt). Allow-listed commands pass through silently. The hook
-governs **Bash only** — all other tools (edits, MCP, WebFetch, …) follow the normal
-permission flow untouched. When the aggression gets in the way, the fix is to add an
-`allow` rule or a `rule_intended_prompt` branch (don't be shy). See
-[docs/avoid-prompting-user.md](docs/avoid-prompting-user.md) - How to avoid prompting
-the user (whitelisted methods + reminder hooks; the pattern for killing needless
-approval prompts).
+- **Use the dedicated tools, not Bash, for search/inspection.** Prefer `Grep`/`Glob` over
+  `grep`/`find`/`rg`, and `Read` over `cat`/`head`/`tail` — they integrate with the
+  permission UI (no prompts), return clickable links, and are faster. The hook **denies** a
+  Bash command whose leading token is one of those (re-send the identical command to force a
+  prompt if you genuinely need the shell form).
+- **Deny-by-default (aggressive by design).** Any Bash command that would otherwise prompt
+  the user is bounced back instead; allow-listed commands pass silently. When it gets in the
+  way, the fix is an `allow` rule or a `rule_intended_prompt` branch — don't be shy. Full
+  detail: [docs/avoid-prompting-user.md](docs/avoid-prompting-user.md).
 
 ## Todos Directory (`todos/`)
 Temporary research notes and task summaries for future sessions. Each file covers one topic with context, what's done, what's left, and how to debug. Check this directory at the start of relevant work — complete items get deleted. Not for permanent knowledge (use memory for that) or code TODOs (use comments).
 
 ## Docs Directory (`docs/`)
 On-demand **reference** material: stable, still-useful info that doesn't need to be
-in CLAUDE.md (and thus in context) every session — workflows that are now secondary,
-deep how-to guides, subsystem references. Unlike `todos/`, these don't get deleted
-when "done"; they're looked up when relevant. When something in CLAUDE.md is good to
-keep but no longer a primary driver, move it here and leave a one-line pointer in
-CLAUDE.md. Current contents: [docs/testing-scenarios.md](docs/testing-scenarios.md)
-(the coded `--scenario` test harness); [docs/devpreview.md](docs/devpreview.md)
-(driving the live game via the `necroking` MCP server / `tools/devctl.py` fallback
-when the `Claude_Preview` tools are absent, e.g. in VS Code);
-[docs/avoid-prompting-user.md](docs/avoid-prompting-user.md) - How to avoid prompting
-the user (whitelisted methods + a reminder hook for commands that shouldn't need
-approval, like searching or validating a script); [docs/spells.md](docs/spells.md)
-(how `Game1.Spells.cs` + the spell systems work — read before adding/changing a spell).
+in CLAUDE.md (and thus in context) every session — deep how-to guides and subsystem
+references. Unlike `todos/`, these don't get deleted when "done"; they're looked up when
+relevant. When something in CLAUDE.md is good to keep but no longer a primary driver, move
+it here (or make it a skill if it's an invokable procedure) and leave a one-line pointer in
+CLAUDE.md. Current contents:
+- [docs/north-star.md](docs/north-star.md) — the design philosophy ("does this satisfy?").
+- [docs/git-discipline.md](docs/git-discipline.md) — the *why* behind the Drive-sync git reflexes + the `user settings/` migration.
+- [docs/avoid-prompting-user.md](docs/avoid-prompting-user.md) — how the Bash prompt-guard hook works and how to tune it (whitelist methods + reminder hooks).
+- [docs/spells.md](docs/spells.md) — deep reference behind the `add-spell` skill.
+- [docs/devpreview.md](docs/devpreview.md) — deep reference behind the `drive-game` skill (the three interface tiers in detail).
+- [docs/testing-scenarios.md](docs/testing-scenarios.md) — deep reference behind the `test-scenario` skill.
+- [docs/locate-behavior/](docs/locate-behavior/) — the architecture map + finder operating guide behind the `locate-behavior` skill (moved out of `.claude/` so the finder can self-update it without write prompts).
 
 ## C++ Migration
 

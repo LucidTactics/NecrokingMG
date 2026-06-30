@@ -95,10 +95,21 @@ changing when a new game command is added. Run `python tools/devctl.py cmd help`
 
 ## Screenshots — capture then read
 
-`shot` writes the PNG to `bin/Debug/log/screenshots/<name>.png` and prints `SHOT: <abspath>`.
+`shot` writes the PNG under `log/screenshots/<name>.png` **inside the running build's
+output folder** and returns the **absolute path** in its reply — Read exactly that path,
+don't reconstruct it. The preview runs the **Release** build (`BUILD_CONFIG=Release`), so
+it's normally `bin/Release/log/screenshots/<name>.png`. The supervisor is the source of
+truth for this location: it reports `build_config` + `screenshot_dir` in `/status` (and in
+the start/build/restart results), and `necro_devlib.screenshot()` reads from there rather
+than guessing Debug-vs-Release. So `necro_status` / `necro_start` tell you where shots land.
 **Read that path with the Read tool** to see/analyze the frame. Useful opts:
 `no_ui=true` (hide HUD), `no_ground=true` (scenario black look), `downsample_to=full`
 (full 1280x720; default is the game's downsample).
+
+> Historical gotcha (now fixed): the client used to hardcode `bin/Debug/...` while the
+> game wrote to `bin/Release/...`, so screenshot reads 404'd. Paths are now sourced from
+> the supervisor. If you hit a stale `bin/Debug` path, the MCP server is running pre-fix
+> code — reconnect the session so `necro_mcp.py`/`necro_devlib.py` reload.
 
 ## Typical loop — set up a fight and look at it
 
@@ -110,7 +121,7 @@ python tools/devctl.py cmd spawn Soldier  <x+6> <y>   # Soldier is Human -> will
 python tools/devctl.py cmd camera <x> <y> 48
 python tools/devctl.py cmd speed 4
 python tools/devctl.py shot fight
-# then: Read bin/Debug/log/screenshots/fight.png
+# then: Read bin/Release/log/screenshots/fight.png   (preview runs the Release build)
 ```
 
 ## After a C# change

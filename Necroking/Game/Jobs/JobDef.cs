@@ -72,6 +72,7 @@ public class JobDef
 public static class JobResources
 {
     public const string Essence = "Essence";
+    public const string Corpse = "Corpse"; // abstract corpse count stored in a Corpse Pile (storeResource in jobs.json)
 }
 
 public struct JobResourceAmount

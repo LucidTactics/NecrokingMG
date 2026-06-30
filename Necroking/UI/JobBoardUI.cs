@@ -62,6 +62,9 @@ public class JobBoardUI : IModalLayer
 
     private int ListTop => _y + TitleH + Pad;
 
+    // "Re-run auto-assignment" button in the title bar.
+    private Rectangle ReassignRect => new Rectangle(_x + 64, _y + 8, 112, 18);
+
     private List<JobState> Visible()
     {
         var list = new List<JobState>();
@@ -140,6 +143,7 @@ public class JobBoardUI : IModalLayer
 
         if (input.LeftPressed && new Rectangle(_x + _w - 26, _y + 7, 18, 18).Contains(mx, my)) { Close(); return; }
         if (!input.LeftPressed) return;
+        if (ReassignRect.Contains(mx, my)) { _ws.AutoAssignWorkers(); return; }
 
         int innerX = _x + Pad, innerW = _w - 2 * Pad;
         int y = ListTop;
@@ -223,7 +227,8 @@ public class JobBoardUI : IModalLayer
         _batch.Draw(_pixel, panel, new Color(24, 22, 28, 240));
         Border(panel, new Color(150, 140, 162, 220), 2);
         Text("Jobs", _x + Pad, _y + 7, FsTitle, new Color(230, 224, 234));
-        Text("top = highest priority", _x + _w - 180, _y + 12, FsSmall, new Color(150, 144, 158));
+        DrawButton(ReassignRect, "Auto-assign", new Color(54, 74, 92, 235));
+        Text("top = highest priority", _x + _w - 158, _y + 12, FsSmall, new Color(150, 144, 158));
         DrawButton(new Rectangle(_x + _w - 26, _y + 7, 18, 18), "x", new Color(86, 54, 54, 235));
 
         if (vis.Count == 0)

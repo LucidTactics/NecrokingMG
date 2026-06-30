@@ -49,7 +49,7 @@ public partial class Game1
         var idleAnim = spriteData.GetAnim("Idle");
         if (idleAnim != null)
         {
-            var kfs = PickIdleFrames(idleAnim);
+            var kfs = GameRenderer.PickIdleFrames(idleAnim);
             if (kfs != null && kfs.Count > 0)
                 refH = kfs[0].Frame.Rect.Height;
         }
@@ -251,7 +251,7 @@ public partial class Game1
                 var idleAnim = spriteData.GetAnim("Idle");
                 if (idleAnim != null)
                 {
-                    var kfs = PickIdleFrames(idleAnim);
+                    var kfs = GameRenderer.PickIdleFrames(idleAnim);
                     if (kfs != null && kfs.Count > 0)
                         animData.RefFrameHeight = kfs[0].Frame.Rect.Height;
                 }
@@ -623,7 +623,15 @@ public partial class Game1
                 float runThreshold = 6f + 2f * baseSpeed / 3f;
 
                 bool carrying = _sim.Units[i].CarryingCorpseID >= 0;
-                if (carrying)
+                // While the necromancer is mid-cast (_pendingCastAnim), let the cast
+                // animation drive instead of pinning the Carry pose. Forcing Carry every
+                // frame fights the channeled cast's Start state (UpdateChanneledCast),
+                // so it never finishes — the channel hangs in phase 0 and the
+                // necromancer freezes. Repro: carry a corpse, then cast Reanimate. The
+                // corpse stays carried; Carry resumes once the cast ends. (A non-carrying
+                // cast already works because it falls through to Idle here.)
+                bool midCast = _pendingCastAnim.HasValue && i == _sim.NecromancerIndex;
+                if (carrying && !midCast)
                     targetState = AnimState.Carry;
                 else if (speed <= 0.25f)
                     targetState = AnimState.Idle;
@@ -767,7 +775,7 @@ public partial class Game1
         TickPendingReanimRises(dt);   // spawn deferred rises in lockstep with their effect clock
         _buffVisuals.Update(dt, _sim.Units, _gameData.Buffs, _gameTime);
         _foragables.Update(dt);
-        UpdateSkillLearnToasts(dt);
+        _gameRenderer.UpdateSkillLearnToasts(dt);
         SyncCorruptionSettings();
 
         // Death Fog Consumption passive: while the necromancer stands in any
@@ -877,7 +885,7 @@ public partial class Game1
     /// sink magnitude. Runs before shadow / sprite / buff passes so they
     /// all see the consistent sunken RenderPos. Cheap: per-unit it's a
     /// single waterness sample + scale.</summary>
-    private void UpdateWadingSinkOffsets()
+    internal void UpdateWadingSinkOffsets()
     {
         if (_groundSystem == null) return;
         for (int i = 0; i < _sim.Units.Count; i++)

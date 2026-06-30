@@ -77,8 +77,11 @@ TOOLS = [
     },
     {
         "name": "necro_screenshot",
-        "description": "Capture the live game frame and return it inline as an image "
-                       "(also saved to bin/Debug/log/screenshots/<name>.png). "
+        "description": "Capture the live game frame and return it inline as an image. "
+                       "Also saved to disk under the running build's "
+                       "log/screenshots/<name>.png (Release by default — the preview "
+                       "runs the Release build); the returned text gives the exact "
+                       "absolute path, and necro_status reports screenshot_dir. "
                        "Auto-starts everything.",
         "inputSchema": {
             "type": "object",

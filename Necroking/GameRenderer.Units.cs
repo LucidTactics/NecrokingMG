@@ -21,22 +21,22 @@ using Necroking.UI;
 namespace Necroking;
 
 // Game1 partial: Unit, env-object and sprite rendering.
-public partial class Game1
+partial class GameRenderer
 {
     /// <summary>
     /// Compute weapon hilt/tip world positions for buff weapon particle spawning.
     /// </summary>
-    private WeaponAttachRuntime ComputeWeaponAttach(int unitIdx, UnitDef unitDef, UnitAnimData animData)
+    private WeaponAttachRuntime ComputeWeaponAttach(int unitIdx, UnitDef unitDef, Game1.UnitAnimData animData)
     {
         var result = new WeaponAttachRuntime();
         if (unitDef.Sprite == null || animData.RefFrameHeight <= 0f) return result;
 
         string animName = AnimController.StateToAnimName(animData.Ctrl.CurrentState);
-        int spriteAngle = animData.Ctrl.ResolveAngle(_sim.Units[unitIdx].FacingAngle, out bool flipX);
-        int frameIdx = animData.Ctrl.GetCurrentFrameIndex(_sim.Units[unitIdx].FacingAngle);
+        int spriteAngle = animData.Ctrl.ResolveAngle(_g._sim.Units[unitIdx].FacingAngle, out bool flipX);
+        int frameIdx = animData.Ctrl.GetCurrentFrameIndex(_g._sim.Units[unitIdx].FacingAngle);
 
         AnimationMeta? meta = null;
-        _animMeta.TryGetValue(AnimMetaLoader.MetaKey(unitDef.Sprite.SpriteName, animName), out meta);
+        _g._animMeta.TryGetValue(AnimMetaLoader.MetaKey(unitDef.Sprite.SpriteName, animName), out meta);
 
         if (!WeaponPointResolver.TryResolve(unitDef, meta, animName, spriteAngle, frameIdx,
                 animData.RefFrameHeight, out var wpf, out _)) return result;
@@ -47,13 +47,13 @@ public partial class Game1
 
         float flipMul = flipX ? -1f : 1f;
         float worldH = (unitDef.SpriteWorldHeight > 0 ? unitDef.SpriteWorldHeight : 1.8f)
-                       * _sim.Units[unitIdx].SpriteScale;
+                       * _g._sim.Units[unitIdx].SpriteScale;
         float worldScale = worldH / animData.RefFrameHeight;
-        float unitHeight = _sim.Units[unitIdx].Z;
+        float unitHeight = _g._sim.Units[unitIdx].Z;
 
         // Weapon attach points follow the sprite's cosmetic offset — so the weapon
         // lunges with the unit on attack. Gameplay never reads these.
-        var unitRender = _sim.Units[unitIdx].RenderPos;
+        var unitRender = _g._sim.Units[unitIdx].RenderPos;
         result.HiltWorld = new Vec2(
             unitRender.X + wpf.Hilt.X * worldScale * flipMul,
             unitRender.Y);
@@ -74,14 +74,14 @@ public partial class Game1
     {
         // View culling bounds
         float viewMargin = 20f;
-        float viewLeft = _camera.Position.X - _renderer.ScreenW / (2f * _camera.Zoom) - viewMargin;
-        float viewRight = _camera.Position.X + _renderer.ScreenW / (2f * _camera.Zoom) + viewMargin;
-        float viewTop = _camera.Position.Y - _renderer.ScreenH / (_camera.Zoom * _camera.YRatio) - viewMargin;
-        float viewBottom = _camera.Position.Y + _renderer.ScreenH / (_camera.Zoom * _camera.YRatio) + viewMargin;
+        float viewLeft = _g._camera.Position.X - _g._renderer.ScreenW / (2f * _g._camera.Zoom) - viewMargin;
+        float viewRight = _g._camera.Position.X + _g._renderer.ScreenW / (2f * _g._camera.Zoom) + viewMargin;
+        float viewTop = _g._camera.Position.Y - _g._renderer.ScreenH / (_g._camera.Zoom * _g._camera.YRatio) - viewMargin;
+        float viewBottom = _g._camera.Position.Y + _g._renderer.ScreenH / (_g._camera.Zoom * _g._camera.YRatio) + viewMargin;
 
         // Build merged sort list (reuse cached list to avoid per-frame allocation)
-        _depthItems.Clear();
-        var items = _depthItems;
+        _g._depthItems.Clear();
+        var items = _g._depthItems;
 
         // Add units (view-culled, same bounds as env objects below). Use RenderPos
         // so a lunging unit re-sorts against its neighbors naturally — a forward-
@@ -91,52 +91,52 @@ public partial class Game1
         // unit just off-screen whose head still pokes in isn't clipped early.
         // Without this, off-screen units each ran a full DrawSingleUnit every frame —
         // the dominant Draw cost on a populated map, especially with fog off.
-        for (int i = 0; i < _sim.Units.Count; i++)
+        for (int i = 0; i < _g._sim.Units.Count; i++)
         {
-            if (!_sim.Units[i].Alive) continue;
-            var rp = _sim.Units[i].RenderPos;
+            if (!_g._sim.Units[i].Alive) continue;
+            var rp = _g._sim.Units[i].RenderPos;
             if (rp.X < viewLeft || rp.X > viewRight || rp.Y < viewTop || rp.Y > viewBottom)
                 continue;
-            items.Add(new DepthItem { Y = rp.Y, Type = DepthItemType.Unit, Index = i });
+            items.Add(new Game1.DepthItem { Y = rp.Y, Type = Game1.DepthItemType.Unit, Index = i });
         }
 
         // Add environment objects (with view culling, skip collected foragables, skip ground-layer objects)
-        for (int i = 0; i < _envSystem.ObjectCount; i++)
+        for (int i = 0; i < _g._envSystem.ObjectCount; i++)
         {
-            if (!_envSystem.IsObjectVisible(i)) continue;
-            var obj = _envSystem.Objects[i];
-            var def = _envSystem.Defs[obj.DefIndex];
+            if (!_g._envSystem.IsObjectVisible(i)) continue;
+            var obj = _g._envSystem.Objects[i];
+            var def = _g._envSystem.Defs[obj.DefIndex];
             if (def.Category == "Traps") continue; // drawn in ground layer pass
             if (obj.X < viewLeft || obj.X > viewRight || obj.Y < viewTop || obj.Y > viewBottom)
                 continue;
             // Note: defs whose sprites failed to load get a placeholder texture in EnvironmentSystem,
             // so GetDefTexture is non-null and the object still appears.
-            items.Add(new DepthItem { Y = obj.Y, Type = DepthItemType.EnvObject, Index = i });
+            items.Add(new Game1.DepthItem { Y = obj.Y, Type = Game1.DepthItemType.EnvObject, Index = i });
         }
 
         // Add poison cloud puffs
-        _poisonCloudRenderer.SetContext(_spriteBatch, _glowTex, _camera, _renderer, _flipbooks, _gameTime);
-        _poisonCloudRenderer.AddPuffsToDepthList(_sim.PoisonClouds, items);
+        _g._poisonCloudRenderer.SetContext(_g._spriteBatch, _g._glowTex, _g._camera, _g._renderer, _g._flipbooks, _g._gameTime);
+        _g._poisonCloudRenderer.AddPuffsToDepthList(_g._sim.PoisonClouds, items);
 
         // Add grass tufts — Y-sorted with units so a tuft "in front" (higher Y)
         // correctly renders over a unit's feet, and one "behind" (lower Y) is
         // drawn first and hidden by the unit.
-        _grassRenderer.AddTuftsToDepthList(
-            _camera, _renderer.ScreenW, _renderer.ScreenH,
-            _grassMap, _grassW, _grassH,
-            _gameData.Settings.Grass, _ambientColor, items);
+        _g._grassRenderer.AddTuftsToDepthList(
+            _g._camera, _g._renderer.ScreenW, _g._renderer.ScreenH,
+            _g._grassMap, _g._grassW, _g._grassH,
+            _g._gameData.Settings.Grass, _g._ambientColor, items);
 
         // Add death-fog puffs — Y-sorted with units so puffs visually drift in
         // front of / behind characters depending on their relative ground Y.
         // Mirrors PoisonCloudRenderer's depth-list integration.
-        if (_flipbooks != null && _flipbooks.TryGetValue("cloud03", out var deathFogFb))
+        if (_g._flipbooks != null && _g._flipbooks.TryGetValue("cloud03", out var deathFogFb))
         {
-            _deathFogRenderer.SetContext(_spriteBatch, _camera, _renderer, deathFogFb, _gameTime);
-            _deathFogRenderer.AddPuffsToDepthList(_deathFog, _renderer.ScreenW, _renderer.ScreenH, items);
+            _g._deathFogRenderer.SetContext(_g._spriteBatch, _g._camera, _g._renderer, deathFogFb, _g._gameTime);
+            _g._deathFogRenderer.AddPuffsToDepthList(_g._deathFog, _g._renderer.ScreenW, _g._renderer.ScreenH, items);
             // Reanimation dust puffs — Y-sorted with units (reuses the cloud03 sheet).
             // SetContext here also primes the additive light/cloud pass (DrawReanimAdditive).
-            _reanimFx.SetContext(_spriteBatch, _camera, _renderer, deathFogFb, _glowTex);
-            _reanimFx.AddDustToDepthList(items);
+            _g._reanimFx.SetContext(_g._spriteBatch, _g._camera, _g._renderer, deathFogFb, _g._glowTex);
+            _g._reanimFx.AddDustToDepthList(items);
         }
 
         items.Sort();
@@ -145,26 +145,26 @@ public partial class Game1
         {
             switch (item.Type)
             {
-                case DepthItemType.Unit:
+                case Game1.DepthItemType.Unit:
                     DrawSingleUnit(item.Index);
                     break;
-                case DepthItemType.EnvObject:
+                case Game1.DepthItemType.EnvObject:
                     DrawSingleEnvObject(item.Index);
                     break;
-                case DepthItemType.CloudPuff:
-                    _poisonCloudRenderer.DrawSinglePuff(item.Index, item.SubIndex);
+                case Game1.DepthItemType.CloudPuff:
+                    _g._poisonCloudRenderer.DrawSinglePuff(item.Index, item.SubIndex);
                     break;
-                case DepthItemType.GrassTuft:
+                case Game1.DepthItemType.GrassTuft:
                     // no_ground dev screenshots suppress grass too, for the clean
                     // black-background look scenarios produce.
-                    if (!_devShotNoGround)
-                        _grassRenderer.DrawSingleTuft(_spriteBatch, item.Index);
+                    if (!_g._devShotNoGround)
+                        _g._grassRenderer.DrawSingleTuft(_g._spriteBatch, item.Index);
                     break;
-                case DepthItemType.DeathFogPuff:
-                    _deathFogRenderer.DrawSinglePuff(item.Index);
+                case Game1.DepthItemType.DeathFogPuff:
+                    _g._deathFogRenderer.DrawSinglePuff(item.Index);
                     break;
-                case DepthItemType.ReanimDust:
-                    _reanimFx.DrawSingleDust(item.Index);
+                case Game1.DepthItemType.ReanimDust:
+                    _g._reanimFx.DrawSingleDust(item.Index);
                     break;
             }
         }
@@ -174,33 +174,33 @@ public partial class Game1
     {
         // Fog of war: hide non-undead units (and their buffs, which draw inside
         // this method) when they're not currently in any undead's detection range.
-        if (_sim.Units[i].Faction != Faction.Undead && !_fogOfWar.IsVisible(_sim.Units[i].Position))
+        if (_g._sim.Units[i].Faction != Faction.Undead && !_g._fogOfWar.IsVisible(_g._sim.Units[i].Position))
             return;
 
-        uint uid = _sim.Units[i].Id;
-        if (!_unitAnims.TryGetValue(uid, out var animData)) return;
+        uint uid = _g._sim.Units[i].Id;
+        if (!_g._unitAnims.TryGetValue(uid, out var animData)) return;
 
-        var unitDef = _gameData.Units.Get(_sim.Units[i].UnitDefID);
+        var unitDef = _g._gameData.Units.Get(_g._sim.Units[i].UnitDefID);
         if (unitDef == null) return;
 
-        var atlas = _atlases[animData.AtlasID];
+        var atlas = _g._atlases[animData.AtlasID];
         if (!atlas.IsLoaded) return;
 
-        var fr = animData.Ctrl.GetCurrentFrame(_sim.Units[i].FacingAngle);
+        var fr = animData.Ctrl.GetCurrentFrame(_g._sim.Units[i].FacingAngle);
         if (fr.Frame == null) return;
 
-        float worldH = (unitDef.SpriteWorldHeight > 0 ? unitDef.SpriteWorldHeight : 1.8f) * _sim.Units[i].SpriteScale;
-        float pixelH = worldH * _camera.Zoom;
+        float worldH = (unitDef.SpriteWorldHeight > 0 ? unitDef.SpriteWorldHeight : 1.8f) * _g._sim.Units[i].SpriteScale;
+        float pixelH = worldH * _g._camera.Zoom;
         float scale = pixelH / animData.RefFrameHeight;
 
-        Color tint = _sim.Units[i].Faction == Faction.Undead
+        Color tint = _g._sim.Units[i].Faction == Faction.Undead
             ? new Color(190, 210, 190)
             : new Color(210, 195, 185);
 
         // Apply buff tinting
-        foreach (var buff in _sim.Units[i].ActiveBuffs)
+        foreach (var buff in _g._sim.Units[i].ActiveBuffs)
         {
-            var buffDef = _gameData.Buffs.Get(buff.BuffDefID);
+            var buffDef = _g._gameData.Buffs.Get(buff.BuffDefID);
             if (buffDef?.UnitTint != null && buffDef.UnitTint.A > 0)
             {
                 var bt = buffDef.UnitTint;
@@ -213,70 +213,70 @@ public partial class Game1
         }
 
         // Ghost mode: semi-transparent blue-shifted sprite
-        if (_sim.Units[i].GhostMode)
+        if (_g._sim.Units[i].GhostMode)
             tint = Color.FromNonPremultiplied(
                 Math.Min(255, (int)(tint.R * 0.7f + 80)),
                 Math.Min(255, (int)(tint.G * 0.7f + 100)),
                 Math.Min(255, (int)(tint.B * 0.7f + 120)), 100);
 
         // Apply weather ambient light
-        tint = MultiplyColor(tint, _ambientColor);
+        tint = MultiplyColor(tint, _g._ambientColor);
 
-        float heightOffset = _sim.Units[i].Z;
+        float heightOffset = _g._sim.Units[i].Z;
         // Use RenderPos (Position + RenderOffset) so lunge and any future cosmetic
         // offsets propagate to every visual attached to this unit: sprite, weapon,
         // shield, status symbols, health bar, buff visuals, damage numbers, etc.
-        var renderPos = _sim.Units[i].RenderPos;
-        var sp = _renderer.WorldToScreen(renderPos, heightOffset, _camera);
+        var renderPos = _g._sim.Units[i].RenderPos;
+        var sp = _g._renderer.WorldToScreen(renderPos, heightOffset, _g._camera);
         // For drawing above unit.
-        var sp_upper = _renderer.WorldToScreen(renderPos, heightOffset + _sim.Units[i].CollisionHeight, _camera);
+        var sp_upper = _g._renderer.WorldToScreen(renderPos, heightOffset + _g._sim.Units[i].CollisionHeight, _g._camera);
 
         // Hover-highlight: capture this unit's exact on-screen sprite box.
-        if (i == _hoveredUnitIdx && _gameData.Settings.Tooltips.ShowHoverHighlight)
-            _hoverBoxUnit = SpriteFrameAABB(sp, fr.Frame.Value, scale, fr.FlipX);
+        if (i == _g._hoveredUnitIdx && _g._gameData.Settings.Tooltips.ShowHoverHighlight)
+            _g._hoverBoxUnit = SpriteFrameAABB(sp, fr.Frame.Value, scale, fr.FlipX);
         // Dev-mark: persistent white box (via the 'mark' dev command).
-        if (_devMarkedUnitIds.Count > 0 && _devMarkedUnitIds.Contains(_sim.Units[i].Id))
-            _devMarkBoxes.Add(SpriteFrameAABB(sp, fr.Frame.Value, scale, fr.FlipX));
+        if (_g._devMarkedUnitIds.Count > 0 && _g._devMarkedUnitIds.Contains(_g._sim.Units[i].Id))
+            _g._devMarkBoxes.Add(SpriteFrameAABB(sp, fr.Frame.Value, scale, fr.FlipX));
 
         // Compute weapon attachment for weapon particle buff visuals
         var weaponAttach = ComputeWeaponAttach(i, unitDef, animData);
 
         // Update weapon particle emitters (like C++, phase 0 only)
         {
-            _wpDefsCache.Clear();
-            foreach (var ab in _sim.Units[i].ActiveBuffs)
+            _g._wpDefsCache.Clear();
+            foreach (var ab in _g._sim.Units[i].ActiveBuffs)
             {
-                var bd = _gameData.Buffs.Get(ab.BuffDefID);
+                var bd = _g._gameData.Buffs.Get(ab.BuffDefID);
                 if (bd != null && bd.HasWeaponParticle && bd.WeaponParticle != null)
-                    _wpDefsCache.Add(bd);
+                    _g._wpDefsCache.Add(bd);
             }
-            if (_wpDefsCache.Count > 0 || _buffVisuals.HasEmitters(i))
-                _buffVisuals.UpdateWeaponParticles(i, _rawDt * _timeScale, _gameTime, _wpDefsCache, weaponAttach, _gameData.Buffs);
+            if (_g._wpDefsCache.Count > 0 || _g._buffVisuals.HasEmitters(i))
+                _g._buffVisuals.UpdateWeaponParticles(i, _g._rawDt * _g._timeScale, _g._gameTime, _g._wpDefsCache, weaponAttach, _g._gameData.Buffs);
         }
 
         // Buff visuals: phase 0 (behind sprite)
-        _buffVisuals.DrawUnit(i, renderPos, 0, _gameTime,
-            _spriteBatch, _camera, _renderer, _flipbooks, _gameData.Buffs, _sim.Units,
+        _g._buffVisuals.DrawUnit(i, renderPos, 0, _g._gameTime,
+            _g._spriteBatch, _g._camera, _g._renderer, _g._flipbooks, _g._gameData.Buffs, _g._sim.Units,
             atlas, fr.Frame.Value, scale, fr.FlipX,
-            _sim.Units[i].EffectSpawnPos2D, _sim.Units[i].EffectSpawnHeight);
+            _g._sim.Units[i].EffectSpawnPos2D, _g._sim.Units[i].EffectSpawnHeight);
 
         // Pulsing outline: draw sprite 8 times at directional offsets behind the unit
         DrawUnitPulsingOutline(i, atlas, fr.Frame.Value, sp, scale, fr.FlipX);
 
         // Reanimation rise outline — blinks undead-green and fades out over the effect.
-        if (_reanimFx.TryGetOutline(_sim.Units[i].Id, out var ro1, out var ro2, out var rOw, out var rPw, out var rPs))
+        if (_g._reanimFx.TryGetOutline(_g._sim.Units[i].Id, out var ro1, out var ro2, out var rOw, out var rPw, out var rPs))
             DrawSpriteOutline(atlas, fr.Frame.Value, sp, scale, fr.FlipX, ro1, ro2, rOw, rPw, rPs, 1);
 
         // Ghost mode: subtle blue pulsing outline
-        if (_sim.Units[i].GhostMode)
+        if (_g._sim.Units[i].GhostMode)
             DrawGhostOutline(atlas, fr.Frame.Value, sp, scale, fr.FlipX);
 
         // Carried body bag rendering (phase-aware: respects effect_ms action moment)
-        byte cPhase = _sim.Units[i].CorpseInteractPhase;
-        int putdownTableIdx = _sim.Units[i].PutDownTableIdx;
+        byte cPhase = _g._sim.Units[i].CorpseInteractPhase;
+        int putdownTableIdx = _g._sim.Units[i].PutDownTableIdx;
         bool tableBoundPutdown = cPhase == 5 && putdownTableIdx >= 0
-            && _envSystem != null && putdownTableIdx < _envSystem.ObjectCount;
-        bool hasCorpse = _sim.Units[i].CarryingCorpseID >= 0
+            && _g._envSystem != null && putdownTableIdx < _g._envSystem.ObjectCount;
+        bool hasCorpse = _g._sim.Units[i].CarryingCorpseID >= 0
             && (cPhase == 0 || cPhase == 4 || cPhase == 5);
         // facingAway = the unit's back is toward the camera, so the carried corpse
         // renders *behind* the sprite. Keyed off the RESOLVED sprite angle (not the
@@ -284,7 +284,7 @@ public partial class Game1
         // with the same buckets + hysteresis — instead of jittering on tiny mouse
         // moves. Back angles: new scheme N=270 / NE-NW=315, old scheme up=300.
         // Everything else (E/W=0, S=90, SE/SW=45, old 30/60) is front → on top.
-        int sprAngle = animData.Ctrl.ResolveAngle(_sim.Units[i].FacingAngle, out _);
+        int sprAngle = animData.Ctrl.ResolveAngle(_g._sim.Units[i].FacingAngle, out _);
         bool facingAway = sprAngle == 270 || sprAngle == 315 || sprAngle == 300;
         bool drawBagAtHilt = false; // whether to draw on unit (vs at ground)
 
@@ -312,8 +312,8 @@ public partial class Game1
             Vector2 sourcePos = sp; // fallback to unit screen pos if attach invalid
             var attach = ComputeWeaponAttach(i, unitDef, animData);
             if (attach.Valid)
-                sourcePos = _renderer.WorldToScreenPx(attach.HiltWorld, attach.HiltHeight * _camera.Zoom, _camera);
-            var bagFr = GetBodyBagFrame(_sim.Units[i].FacingAngle);
+                sourcePos = _g._renderer.WorldToScreenPx(attach.HiltWorld, attach.HiltHeight * _g._camera.Zoom, _g._camera);
+            var bagFr = GetBodyBagFrame(_g._sim.Units[i].FacingAngle);
             float ofsX = bagFr.FlipX ? -CarryOffsetX : CarryOffsetX;
             sourcePos.X += ofsX;
             sourcePos.Y += CarryOffsetY;
@@ -321,11 +321,11 @@ public partial class Game1
             // Destination pose: table-overlay anchor (mirrors DrawSingleEnvObject's
             // table body-bag block). Same lift formula keeps position consistent
             // when the lerp finishes and the env overlay takes over.
-            var tableObj = _envSystem.GetObject(putdownTableIdx);
-            var tableDef = _envSystem.Defs[tableObj.DefIndex];
+            var tableObj = _g._envSystem.GetObject(putdownTableIdx);
+            var tableDef = _g._envSystem.Defs[tableObj.DefIndex];
             float tableWorldH = tableDef.SpriteWorldHeight * tableObj.Scale * tableDef.Scale;
             float bagLift = tableWorldH * tableDef.PivotY * 1.22f;
-            Vector2 destPos = _renderer.WorldToScreen(new Vec2(tableObj.X, tableObj.Y), bagLift, _camera);
+            Vector2 destPos = _g._renderer.WorldToScreen(new Vec2(tableObj.X, tableObj.Y), bagLift, _g._camera);
 
             tableLerpScreen = Vector2.Lerp(sourcePos, destPos, t);
             tableLerpRotation = MathHelper.Lerp(0f, -MathF.PI / 12f, t);
@@ -335,16 +335,16 @@ public partial class Game1
             DrawCarriedVisual(i, sp, scale);
         // Table-bound PutDown: draw the lerped corpse BEHIND the unit when facing away.
         if (tableBoundPutdown && tableLerpScreen.HasValue && facingAway)
-            DrawCarriedVisualAt(i, tableLerpScreen.Value, _sim.Units[i].FacingAngle, tableLerpRotation);
+            DrawCarriedVisualAt(i, tableLerpScreen.Value, _g._sim.Units[i].FacingAngle, tableLerpRotation);
         if (hasCorpse && !drawBagAtHilt && !tableBoundPutdown)
         {
             // Ground PutDown: draw at the corpse's drop point. In corpse mode use
             // the frozen carry frame (centroid-pegged) so it's identical to the
             // settled corpse that takes over at anim-finish — no hand-off jump.
-            var cc = _sim.FindCorpseByID(_sim.Units[i].CarryingCorpseID);
+            var cc = _g._sim.FindCorpseByID(_g._sim.Units[i].CarryingCorpseID);
             if (cc != null)
             {
-                var groundSp = _renderer.WorldToScreen(cc.LerpStartPos, 0f, _camera);
+                var groundSp = _g._renderer.WorldToScreen(cc.LerpStartPos, 0f, _g._camera);
                 if (!GameConstants.UseBodyBag && cc.CarryDisplayAngle >= 0)
                     DrawCorpseCarriedFrame(cc, groundSp);
                 else
@@ -357,8 +357,8 @@ public partial class Game1
         // diagonal slope, sprite angle) are computed in one place; the same
         // struct is used by the shadow renderer for consistency.
         WadingState wading = WadingState.Compute(
-            _sim.Units[i].Position, _sim.Units[i].FacingAngle,
-            fr.Frame.Value, unitDef, animData.Ctrl, _groundSystem, _camera.YRatio);
+            _g._sim.Units[i].Position, _g._sim.Units[i].FacingAngle,
+            fr.Frame.Value, unitDef, animData.Ctrl, _g._groundSystem, _g._camera.YRatio);
         if (wading.Active)
         {
             // World height that puts a particle drawn at the unit's foot
@@ -368,7 +368,7 @@ public partial class Game1
             // equivalent world height, and dividing by YRatio undoes the
             // isometric squish that WorldToScreen applies to world Y.
             float pivotFlippedV = 1f - fr.Frame.Value.PivotY;
-            float wakeLiftWorldH = (pivotFlippedV - wading.WaterlineV) * worldH / _camera.YRatio;
+            float wakeLiftWorldH = (pivotFlippedV - wading.WaterlineV) * worldH / _g._camera.YRatio;
 
             // BACK pass — trail particles render behind the sprite so the
             // body covers anything drifting into its silhouette. Also runs
@@ -380,12 +380,12 @@ public partial class Game1
             // spawn at the body's *visual* footprint — when the unit sinks
             // into deep water, the trail and bow wave follow the sunken
             // body instead of floating above it at the sim Y.
-            _wakeSystem.UpdateAndDrawBack(
-                i, _frameDt,
-                _sim.Units[i].RenderPos, _sim.Units[i].Velocity,
-                _sim.Units[i].FacingAngle, bodyLen,
+            _g._wakeSystem.UpdateAndDrawBack(
+                i, _g._frameDt,
+                _g._sim.Units[i].RenderPos, _g._sim.Units[i].Velocity,
+                _g._sim.Units[i].FacingAngle, bodyLen,
                 wakeLiftWorldH, true,
-                _spriteBatch, _pixel, _renderer, _camera);
+                _g._spriteBatch, _g._pixel, _g._renderer, _g._camera);
 
             // Sprite with waterline fade. Top cut V = -1 sentinel disables the
             // top cut in the shader (used for 3/4 facings where the back-cut
@@ -400,7 +400,7 @@ public partial class Game1
             // unit" position projects to the same screen Y range as the
             // visible body; drawing front-class particles after the sprite
             // keeps the front foam crescent visible.
-            _wakeSystem.DrawFront(i, _spriteBatch, _renderer, _camera);
+            _g._wakeSystem.DrawFront(i, _g._spriteBatch, _g._renderer, _g._camera);
         }
         else
         {
@@ -410,22 +410,22 @@ public partial class Game1
             float bodyLen = unitDef.BodyLengthWorld > 0f
                 ? unitDef.BodyLengthWorld
                 : (unitDef.IsQuadruped ? Render.WadingWakeSystem.QuadrupedDefaultBodyLength : 0f);
-            _wakeSystem.UpdateAndDrawBack(
-                i, _frameDt,
-                _sim.Units[i].RenderPos, _sim.Units[i].Velocity,
-                _sim.Units[i].FacingAngle, bodyLen,
+            _g._wakeSystem.UpdateAndDrawBack(
+                i, _g._frameDt,
+                _g._sim.Units[i].RenderPos, _g._sim.Units[i].Velocity,
+                _g._sim.Units[i].FacingAngle, bodyLen,
                 0f, false,
-                _spriteBatch, _pixel, _renderer, _camera);
+                _g._spriteBatch, _g._pixel, _g._renderer, _g._camera);
 
             DrawSpriteFrame(atlas, fr.Frame.Value, sp, scale, fr.FlipX, tint);
 
             // Any lingering front-class particles (a bow wave fading out
             // as the unit steps onto land) also need the after-sprite pass.
-            _wakeSystem.DrawFront(i, _spriteBatch, _renderer, _camera);
+            _g._wakeSystem.DrawFront(i, _g._spriteBatch, _g._renderer, _g._camera);
         }
 
         // F2 water debug overlay — render after the sprite so it's not occluded.
-        if (_waterDebug && _smallFont != null)
+        if (_g._waterDebug && _g._smallFont != null)
             DrawWaterDebugOverlay(i, fr.Frame.Value, sp, pixelH, wading);
 
         // Carried visual: draw IN FRONT if facing toward camera
@@ -433,43 +433,43 @@ public partial class Game1
             DrawCarriedVisual(i, sp, scale);
         // Table-bound PutDown: draw the lerped corpse IN FRONT when facing toward camera.
         if (tableBoundPutdown && tableLerpScreen.HasValue && !facingAway)
-            DrawCarriedVisualAt(i, tableLerpScreen.Value, _sim.Units[i].FacingAngle, tableLerpRotation);
+            DrawCarriedVisualAt(i, tableLerpScreen.Value, _g._sim.Units[i].FacingAngle, tableLerpRotation);
 
         // Buff visuals: phase 1 (in front of sprite)
-        _buffVisuals.DrawUnit(i, renderPos, 1, _gameTime,
-            _spriteBatch, _camera, _renderer, _flipbooks, _gameData.Buffs, _sim.Units,
+        _g._buffVisuals.DrawUnit(i, renderPos, 1, _g._gameTime,
+            _g._spriteBatch, _g._camera, _g._renderer, _g._flipbooks, _g._gameData.Buffs, _g._sim.Units,
             atlas, fr.Frame.Value, scale, fr.FlipX,
-            _sim.Units[i].EffectSpawnPos2D, _sim.Units[i].EffectSpawnHeight);
+            _g._sim.Units[i].EffectSpawnPos2D, _g._sim.Units[i].EffectSpawnHeight);
 
         DrawHPBar(i, sp);
 
         // --- Status symbol (? / !) above head during notice/react events ---
-        if (_sim.Units[i].StatusSymbol != 0 && _largeFont != null)
+        if (_g._sim.Units[i].StatusSymbol != 0 && _g._largeFont != null)
         {
-            const float SymScale = 0.7f;   // ~30% smaller than _largeFont default
+            const float SymScale = 0.7f;   // ~30% smaller than _g._largeFont default
             const byte SymAlpha = 128;      // ~0.5 alpha
-            string sym = _sim.Units[i].StatusSymbol == (byte)UnitStatusSymbol.Notice ? "?" : "!";
-            Color symColor = _sim.Units[i].StatusSymbol == (byte)UnitStatusSymbol.Notice
+            string sym = _g._sim.Units[i].StatusSymbol == (byte)UnitStatusSymbol.Notice ? "?" : "!";
+            Color symColor = _g._sim.Units[i].StatusSymbol == (byte)UnitStatusSymbol.Notice
                 ? Color.FromNonPremultiplied(255, 240, 80, SymAlpha)   // yellow ?
                 : Color.FromNonPremultiplied(255, 80, 60, SymAlpha);   // red !
             Color outline = Color.FromNonPremultiplied(0, 0, 0, SymAlpha);
-            var textSize = _largeFont.MeasureString(sym);
+            var textSize = _g._largeFont.MeasureString(sym);
             int symX = (int)(sp_upper.X - textSize.X * 0.5f);
-            int symY = (int)(sp_upper.Y - textSize.Y - 0.25f * _camera.Zoom * _camera.YRatio);
+            int symY = (int)(sp_upper.Y - textSize.Y - 0.25f * _g._camera.Zoom * _g._camera.YRatio);
             var symPos = new Vector2(symX, symY);
 
             // Black outline (8-way offset) for contrast and bolder look
             for (int ox = -2; ox <= 2; ox++)
                 for (int oy = -2; oy <= 2; oy++)
                     if ((ox != 0 || oy != 0) && ox * ox + oy * oy <= 4)
-                        _spriteBatch.DrawString(_largeFont, sym,
+                        _g._spriteBatch.DrawString(_g._largeFont, sym,
                             symPos + new Vector2(ox, oy), outline,
                             0f, Vector2.Zero, SymScale, SpriteEffects.None, 0f);
 
             // Faux-bold: draw colored fill twice with 1px horizontal offset
-            _spriteBatch.DrawString(_largeFont, sym, symPos, symColor,
+            _g._spriteBatch.DrawString(_g._largeFont, sym, symPos, symColor,
                 0f, Vector2.Zero, SymScale, SpriteEffects.None, 0f);
-            _spriteBatch.DrawString(_largeFont, sym, symPos + new Vector2(1, 0), symColor,
+            _g._spriteBatch.DrawString(_g._largeFont, sym, symPos + new Vector2(1, 0), symColor,
                 0f, Vector2.Zero, SymScale, SpriteEffects.None, 0f);
         }
 
@@ -477,51 +477,51 @@ public partial class Game1
         // Read from the generic ActionLabel field. Every archetype commit point
         // (standard melee, sweep, pounce, trample BeginCharge, ranged, spell cast)
         // writes this field — the renderer doesn't need to know about each path.
-        if (_sim.Units[i].ActionLabelTimer > 0f
-            && !string.IsNullOrEmpty(_sim.Units[i].ActionLabel)
-            && _smallFont != null)
+        if (_g._sim.Units[i].ActionLabelTimer > 0f
+            && !string.IsNullOrEmpty(_g._sim.Units[i].ActionLabel)
+            && _g._smallFont != null)
         {
             var weaponPos = new Vector2(sp.X + 10, sp.Y - 55);
-            DrawText(_smallFont, _sim.Units[i].ActionLabel, weaponPos, Color.FromNonPremultiplied(255, 220, 140, 220));
+            DrawText(_g._smallFont, _g._sim.Units[i].ActionLabel, weaponPos, Color.FromNonPremultiplied(255, 220, 140, 220));
         }
 
     }
 
     private void DrawSingleEnvObject(int i)
     {
-        var obj = _envSystem.Objects[i];
-        var def = _envSystem.Defs[obj.DefIndex];
+        var obj = _g._envSystem.Objects[i];
+        var def = _g._envSystem.Defs[obj.DefIndex];
 
         // Dissolve transition: between threshold-cross and full corruption, render
         // through the dissolve shader instead of the regular path. Shader needs
         // both textures bound; existing path can't carry a second sampler. Falls
         // through to the regular draw if either texture / the shader is missing.
-        var rtCheck = _envSystem.GetObjectRuntime(i);
-        if (rtCheck.CorruptionTime > 0f && !rtCheck.Corrupted && _dissolveTreeEffect != null)
+        var rtCheck = _g._envSystem.GetObjectRuntime(i);
+        if (rtCheck.CorruptionTime > 0f && !rtCheck.Corrupted && _g._dissolveTreeEffect != null)
         {
             if (DrawDissolvingTree(i, rtCheck)) return;
         }
 
-        var tex = _envSystem.GetObjectTexture(i, out float alpha, out bool isOverride);
+        var tex = _g._envSystem.GetObjectTexture(i, out float alpha, out bool isOverride);
         if (tex == null) return;
 
         // Always compute scale from the main def texture so trap sprites render at same size.
         // For corrupted/override sprites we scale relative to the override texture itself
         // (it's a single frame, not a spritesheet, so refHeight should be its full height).
-        var mainTex = _envSystem.GetDefTexture(obj.DefIndex);
+        var mainTex = _g._envSystem.GetDefTexture(obj.DefIndex);
         float refHeight = isOverride ? tex.Height : (mainTex != null ? mainTex.Height : tex.Height);
 
         // Animated spritesheet: use per-frame dimensions.
         // Skip slicing for the placeholder texture (single 32x32 swatch) and for
         // single-frame override textures (corrupted/trap sprites).
-        bool usingPlaceholder = _envSystem.IsUsingPlaceholder(obj.DefIndex);
+        bool usingPlaceholder = _g._envSystem.IsUsingPlaceholder(obj.DefIndex);
         Rectangle? sourceRect = null;
         float frameW = tex.Width;
         float frameH = tex.Height;
         if (def.IsAnimated && def.AnimTotalFrames > 1 && !usingPlaceholder && !isOverride)
         {
             int totalFrames = def.AnimTotalFrames;
-            float animTime = _envSystem.GetObjectRuntime(i).AnimTime;
+            float animTime = _g._envSystem.GetObjectRuntime(i).AnimTime;
             int frame = Math.Clamp((int)animTime, 0, totalFrames - 1);
             sourceRect = def.GetAnimFrameRect(tex.Width, tex.Height, frame);
             frameW = sourceRect.Value.Width;
@@ -530,39 +530,39 @@ public partial class Game1
         }
 
         float worldH = def.SpriteWorldHeight * obj.Scale * def.Scale;
-        float pixelH = worldH * _camera.Zoom;
+        float pixelH = worldH * _g._camera.Zoom;
         float scale = pixelH / refHeight;
 
-        var screenPos = _renderer.WorldToScreen(new Vec2(obj.X, obj.Y), 0f, _camera);
+        var screenPos = _g._renderer.WorldToScreen(new Vec2(obj.X, obj.Y), 0f, _g._camera);
         // Random per-instance horizontal flip (deterministic from seed). Mirror
         // the pivot's X so the sprite's base stays anchored at the same world point.
-        bool flipX = _envSystem.ShouldFlipObject(i);
+        bool flipX = _g._envSystem.ShouldFlipObject(i);
         var origin = new Vector2((flipX ? (1f - def.PivotX) : def.PivotX) * frameW, def.PivotY * frameH);
 
         float rotation = 0f;
         Color tint = alpha >= 1f ? Color.White : new Color(alpha, alpha, alpha, alpha);
 
         // Foragable proximity effects
-        if (def.IsForagable && _sim.NecromancerIndex >= 0)
+        if (def.IsForagable && _g._sim.NecromancerIndex >= 0)
         {
             Vec2 objPos = new Vec2(obj.X, obj.Y);
-            Vec2 necroPos = _sim.Units[_sim.NecromancerIndex].Position;
+            Vec2 necroPos = _g._sim.Units[_g._sim.NecromancerIndex].Position;
             float dist = (objPos - necroPos).Length();
 
             if (dist < ForagableWiggleRange)
             {
                 // Wiggle: sinusoidal rotation, intensifies with proximity
                 float proximity = 1f - (dist / ForagableWiggleRange); // 0 at edge, 1 at necro
-                float wiggleAngle = MathF.Sin(_gameTime * 8f + obj.Seed * 10f) * 0.08f * proximity;
+                float wiggleAngle = MathF.Sin(_g._gameTime * 8f + obj.Seed * 10f) * 0.08f * proximity;
                 rotation = wiggleAngle;
 
                 // Scale pulse: subtle breathe effect
-                float pulse = 1f + MathF.Sin(_gameTime * 4f + obj.Seed * 5f) * 0.03f * proximity;
+                float pulse = 1f + MathF.Sin(_g._gameTime * 4f + obj.Seed * 5f) * 0.03f * proximity;
                 scale *= pulse;
             }
 
             // Mouse hover highlight: brighten + enlarge when cursor is over the object
-            var mouseWorld = _renderer.ScreenToWorld(_input.MousePos, _camera);
+            var mouseWorld = _g._renderer.ScreenToWorld(_g._input.MousePos, _g._camera);
             float mouseDist = (objPos - new Vec2(mouseWorld.X, mouseWorld.Y)).Length();
             if (mouseDist < 1.2f && dist < ForagableWiggleRange)
             {
@@ -572,7 +572,7 @@ public partial class Game1
         }
 
         // Blueprint visual: semi-transparent with blue tint
-        var rt = _envSystem.GetObjectRuntime(i);
+        var rt = _g._envSystem.GetObjectRuntime(i);
         if (rt.BuildProgress < 1f)
         {
             float bpAlpha = 0.35f + 0.15f * rt.BuildProgress; // 0.35 → 0.5 as progress increases
@@ -580,18 +580,18 @@ public partial class Game1
         }
 
         // Apply weather ambient light
-        tint = MultiplyColor(tint, _ambientColor);
+        tint = MultiplyColor(tint, _g._ambientColor);
 
-        _spriteBatch.Draw(tex, screenPos, sourceRect, tint, rotation, origin, scale,
+        _g._spriteBatch.Draw(tex, screenPos, sourceRect, tint, rotation, origin, scale,
             flipX ? SpriteEffects.FlipHorizontally : SpriteEffects.None, 0f);
 
         // Hover-highlight: capture this object's exact on-screen sprite box. Env
         // origin already folds in the flip + raw pivot (Y not inverted, unlike unit
         // spritemeta), so build the box straight from origin.
-        if (i == _hoveredObjectIdx && _gameData.Settings.Tooltips.ShowHoverHighlight)
+        if (i == _g._hoveredObjectIdx && _g._gameData.Settings.Tooltips.ShowHoverHighlight)
         {
             float bw = frameW * scale, bh = frameH * scale;
-            _hoverBoxObject = new Rectangle(
+            _g._hoverBoxObject = new Rectangle(
                 (int)(screenPos.X - origin.X * scale), (int)(screenPos.Y - origin.Y * scale),
                 (int)bw, (int)bh);
         }
@@ -615,7 +615,7 @@ public partial class Game1
         // factor is sourced from def fields the artist already tuned.
         if (Game.TableSystem.IsTable(def))
         {
-            var ts = _envSystem.GetTableState(i);
+            var ts = _g._envSystem.GetTableState(i);
             if (ts.HasAnyCorpse())
             {
                 for (int s = 0; s < ts.CorpseSlots.Length; s++)
@@ -626,7 +626,7 @@ public partial class Game1
                     // Rotation = -π/12 (CCW ~15°) — small bump back from -π/15
                     // to align with the table's true long-axis angle.
                     float bagLift = tableWorldH * def.PivotY * 1.22f;
-                    var bagScreen = _renderer.WorldToScreen(new Vec2(obj.X, obj.Y), bagLift, _camera);
+                    var bagScreen = _g._renderer.WorldToScreen(new Vec2(obj.X, obj.Y), bagLift, _g._camera);
                     var slot = ts.CorpseSlots[s];
                     // Same lift + rotation as the body bag, but render the actual
                     // corpse sprite when the bag is mothballed.
@@ -647,13 +647,13 @@ public partial class Game1
     /// </summary>
     private bool DrawDissolvingTree(int i, in PlacedObjectRuntime rt)
     {
-        var obj = _envSystem.Objects[i];
-        var def = _envSystem.Defs[obj.DefIndex];
+        var obj = _g._envSystem.Objects[i];
+        var def = _g._envSystem.Defs[obj.DefIndex];
 
-        var liveTex = _envSystem.GetDefTexture(obj.DefIndex);
-        var deadTex = _envSystem.GetCorruptedTexture(i);
+        var liveTex = _g._envSystem.GetDefTexture(obj.DefIndex);
+        var deadTex = _g._envSystem.GetCorruptedTexture(i);
         if (liveTex == null || deadTex == null) return false;
-        if (_envSystem.IsUsingPlaceholder(obj.DefIndex)) return false;
+        if (_g._envSystem.IsUsingPlaceholder(obj.DefIndex)) return false;
 
         // Frame 0 of the live spritesheet — we lock to frame 0 throughout the
         // dissolve so the live half doesn't keep animating as it fades.
@@ -664,54 +664,54 @@ public partial class Game1
         // Dest rect is sized to the dead texture (which should match per-frame
         // dimensions of the live sheet — see env_defs.json oak entries).
         float worldH = def.SpriteWorldHeight * obj.Scale * def.Scale;
-        float pixelH = worldH * _camera.Zoom;
+        float pixelH = worldH * _g._camera.Zoom;
         float scale = pixelH / deadTex.Height;
-        var screenPos = _renderer.WorldToScreen(new Vec2(obj.X, obj.Y), 0f, _camera);
+        var screenPos = _g._renderer.WorldToScreen(new Vec2(obj.X, obj.Y), 0f, _g._camera);
         var origin = new Vector2(def.PivotX * deadTex.Width, def.PivotY * deadTex.Height);
 
-        Color tint = MultiplyColor(Color.White, _ambientColor);
+        Color tint = MultiplyColor(Color.White, _g._ambientColor);
 
         // Set shader params. LiveFrameUV = frame 0 in normalized UV space.
         float u0 = frame0.X / (float)liveTex.Width;
         float v0 = frame0.Y / (float)liveTex.Height;
         float u1 = (frame0.X + frame0.Width)  / (float)liveTex.Width;
         float v1 = (frame0.Y + frame0.Height) / (float)liveTex.Height;
-        float threshold = MathHelper.Clamp(rt.CorruptionTime / MathF.Max(_deathFog.CorruptionTransitionDuration, 0.01f), 0f, 1f);
+        float threshold = MathHelper.Clamp(rt.CorruptionTime / MathF.Max(_g._deathFog.CorruptionTransitionDuration, 0.01f), 0f, 1f);
 
         // Set effect parameters before Begin (they upload at Apply time).
         // Bind LiveSampler texture via the parameter system AND directly on the
-        // GraphicsDevice slot — DesktopGL is finicky about which path actually
+        // _g.GraphicsDevice slot — DesktopGL is finicky about which path actually
         // takes effect; doing both is harmless and one of them should win.
-        _dissolveTreeEffect!.Parameters["LiveSampler"]?.SetValue(liveTex);
-        _dissolveTreeEffect.Parameters["LiveTexture"]?.SetValue(liveTex);
-        _dissolveTreeEffect.Parameters["LiveFrameUV"]?.SetValue(new Vector4(u0, v0, u1, v1));
-        _dissolveTreeEffect.Parameters["Threshold"]?.SetValue(threshold);
-        _dissolveTreeEffect.Parameters["Seed"]?.SetValue(obj.Seed);
-        _dissolveTreeEffect.Parameters["DebugMode"]?.SetValue(_deathFog.DebugVisible ? 1f : 0f);
+        _g._dissolveTreeEffect!.Parameters["LiveSampler"]?.SetValue(liveTex);
+        _g._dissolveTreeEffect.Parameters["LiveTexture"]?.SetValue(liveTex);
+        _g._dissolveTreeEffect.Parameters["LiveFrameUV"]?.SetValue(new Vector4(u0, v0, u1, v1));
+        _g._dissolveTreeEffect.Parameters["Threshold"]?.SetValue(threshold);
+        _g._dissolveTreeEffect.Parameters["Seed"]?.SetValue(obj.Seed);
+        _g._dissolveTreeEffect.Parameters["DebugMode"]?.SetValue(_g._deathFog.DebugVisible ? 1f : 0f);
 
         // Throttled per-instance log so we can confirm threshold animates over time.
-        if (!_dissolveLoggedSeeds.TryGetValue(i, out var lastLogged) ||
+        if (!_g._dissolveLoggedSeeds.TryGetValue(i, out var lastLogged) ||
             MathF.Abs(threshold - lastLogged) >= 0.1f || (threshold >= 0.99f && lastLogged < 0.99f))
         {
-            _dissolveLoggedSeeds[i] = threshold;
+            _g._dissolveLoggedSeeds[i] = threshold;
             DebugLog.Log("startup", $"Dissolve frame: obj {i} ({def.Id}) t={threshold:F3} CorruptionTime={rt.CorruptionTime:F3} liveTex={liveTex.Width}x{liveTex.Height} deadTex={deadTex.Width}x{deadTex.Height}");
         }
 
         // Flush the env-objects batch and start an Immediate batch with our effect.
-        _spriteBatch.End();
-        _spriteBatch.Begin(SpriteSortMode.Immediate, BlendState.AlphaBlend, SamplerState.LinearClamp,
-            null, null, _dissolveTreeEffect);
+        _g._spriteBatch.End();
+        _g._spriteBatch.Begin(SpriteSortMode.Immediate, BlendState.AlphaBlend, SamplerState.LinearClamp,
+            null, null, _g._dissolveTreeEffect);
 
-        // Belt-and-suspenders: also bind directly to GraphicsDevice slot 1.
-        GraphicsDevice.Textures[1] = liveTex;
-        GraphicsDevice.SamplerStates[1] = SamplerState.LinearClamp;
+        // Belt-and-suspenders: also bind directly to _g.GraphicsDevice slot 1.
+        _g.GraphicsDevice.Textures[1] = liveTex;
+        _g.GraphicsDevice.SamplerStates[1] = SamplerState.LinearClamp;
 
-        _spriteBatch.Draw(deadTex, screenPos, null, tint, 0f, origin, scale, SpriteEffects.None, 0f);
-        _spriteBatch.End();
+        _g._spriteBatch.Draw(deadTex, screenPos, null, tint, 0f, origin, scale, SpriteEffects.None, 0f);
+        _g._spriteBatch.End();
         // Restore the wrapping batch — the scene-pass Begin (Game1.cs ~line 4220)
         // uses LinearClamp, NOT PointClamp. Restoring with PointClamp would alter
         // the rest of the scene's sampler state.
-        _spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.LinearClamp);
+        _g._spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.LinearClamp);
         return true;
     }
 
@@ -721,26 +721,26 @@ public partial class Game1
     /// slot. Returns silently if the def is missing or its atlas isn't loaded —
     /// caller can render its own placeholder when nothing was drawn.
     /// </summary>
-    private void DrawUnitIdleSprite(string unitDefId, Rectangle dest)
+    internal void DrawUnitIdleSprite(string unitDefId, Rectangle dest)
     {
-        if (string.IsNullOrEmpty(unitDefId) || _gameData == null)
+        if (string.IsNullOrEmpty(unitDefId) || _g._gameData == null)
         {
-            DebugLog.Log("table", $"[DrawUnitIdleSprite] aborted: defId='{unitDefId}' gameData={_gameData != null}");
+            DebugLog.Log("table", $"[DrawUnitIdleSprite] aborted: defId='{unitDefId}' gameData={_g._gameData != null}");
             return;
         }
-        var unitDef = _gameData.Units.Get(unitDefId);
+        var unitDef = _g._gameData.Units.Get(unitDefId);
         if (unitDef?.Sprite == null)
         {
             DebugLog.Log("table", $"[DrawUnitIdleSprite] '{unitDefId}': unitDef={unitDef != null} sprite={unitDef?.Sprite != null}");
             return;
         }
         var atlasId = AtlasDefs.ResolveAtlasName(unitDef.Sprite.AtlasName);
-        if (atlasId >= _atlases.Length)
+        if (atlasId >= _g._atlases.Length)
         {
-            DebugLog.Log("table", $"[DrawUnitIdleSprite] '{unitDefId}': atlasId={atlasId} out of range (atlases={_atlases.Length})");
+            DebugLog.Log("table", $"[DrawUnitIdleSprite] '{unitDefId}': atlasId={atlasId} out of range (atlases={_g._atlases.Length})");
             return;
         }
-        var atlas = _atlases[atlasId];
+        var atlas = _g._atlases[atlasId];
         if (!atlas.IsLoaded)
         {
             DebugLog.Log("table", $"[DrawUnitIdleSprite] '{unitDefId}': atlas '{unitDef.Sprite.AtlasName}' not loaded");
@@ -807,7 +807,7 @@ public partial class Game1
         // Centered draw — origin at sprite center so we can position by box center.
         var origin = new Vector2(frame.Rect.Width / 2f, frame.Rect.Height / 2f);
         var center = new Vector2(dest.X + dest.Width / 2f, dest.Y + dest.Height / 2f);
-        _spriteBatch.Draw(tex, center, frame.Rect, Color.White, 0f, origin, scale,
+        _g._spriteBatch.Draw(tex, center, frame.Rect, Color.White, 0f, origin, scale,
             SpriteEffects.None, 0f);
     }
 
@@ -823,7 +823,7 @@ public partial class Game1
 
         var origin = new Vector2(pivotX * frame.Rect.Width, pivotY * frame.Rect.Height);
         var effects = flipX ? SpriteEffects.FlipHorizontally : SpriteEffects.None;
-        _spriteBatch.Draw(tex, screenPos, frame.Rect, tint, 0f, origin, scale, effects, 0f);
+        _g._spriteBatch.Draw(tex, screenPos, frame.Rect, tint, 0f, origin, scale, effects, 0f);
     }
 
     /// <summary>Draw a unit sprite with the wading shader applied — fades alpha
@@ -840,7 +840,7 @@ public partial class Game1
     private void DrawWaterDebugOverlay(int unitIdx, SpriteFrame frame, Vector2 sp,
                                         float pixelH, in WadingState wading)
     {
-        var unit = _sim.Units[unitIdx];
+        var unit = _g._sim.Units[unitIdx];
         // Body bbox bounds in screen Y.
         float pivotFlippedV = 1f - frame.PivotY;
         float bodyTopY = sp.Y + (frame.BodyTopV - pivotFlippedV) * pixelH;
@@ -881,12 +881,12 @@ public partial class Game1
         }
 
         // Text label above the sprite.
-        var unitDef = _gameData.Units.Get(unit.UnitDefID);
+        var unitDef = _g._gameData.Units.Get(unit.UnitDefID);
         string topStr = wading.TopWaterlineV >= 0f ? $"topV={wading.TopWaterlineV:F2}" : "topV=-";
         string label = wading.Active
             ? $"w={wading.Waterness:F2} V={wading.WaterlineV:F2} {topStr} s={wading.Slope:F2} ang={wading.SpriteAngle}"
             : $"w=0  (dry)  ang={wading.SpriteAngle}";
-        DrawText(_smallFont, label,
+        DrawText(_g._smallFont, label,
             new Vector2((int)(sp.X - 60), (int)(bodyTopY - 14)),
             new Color(255, 255, 255, 220));
     }
@@ -894,7 +894,7 @@ public partial class Game1
     /// <summary>Draw a 1px outline rectangle.</summary>
     private void DrawRectOutline(Rectangle r, Color c)
     {
-        Necroking.Render.DrawUtils.DrawRectBorder(_spriteBatch, _pixel, r, c);
+        Necroking.Render.DrawUtils.DrawRectBorder(_g._spriteBatch, _g._pixel, r, c);
     }
 
     /// <summary>Screen-space AABB of a sprite frame drawn at <paramref name="sp"/>
@@ -918,16 +918,16 @@ public partial class Game1
     {
         // Dev-marked units (via the 'mark' dev command) — always drawn, white, and
         // not gated by the ShowHoverHighlight setting (it's a tooling/debug aid).
-        if (_devMarkBoxes.Count > 0)
+        if (_g._devMarkBoxes.Count > 0)
         {
             var white = new Color(255, 255, 255, 235);
-            foreach (var b in _devMarkBoxes) { var r = b; r.Inflate(2, 2); DrawRectVariant(r, white, 1); }
+            foreach (var b in _g._devMarkBoxes) { var r = b; r.Inflate(2, 2); DrawRectVariant(r, white, 1); }
         }
 
         // Toast naming the active variant after a cycle press (drawn even when Off).
         DrawHoverVariantLabel();
 
-        if (!_gameData.Settings.Tooltips.ShowHoverHighlight) return;
+        if (!_g._gameData.Settings.Tooltips.ShowHoverHighlight) return;
 
         // Stroke a captured sprite box ONLY for the screen-space shapes (Corners / Rectangle).
         // Ground shapes (Circle / Ground Box / Diamond Box) draw behind the sprites in
@@ -945,26 +945,26 @@ public partial class Game1
             if (shape == 1) DrawCornersVariant(b, c, thick);
             else            DrawRectVariant(b, c, thick);
         }
-        Stroke(_hoverBoxObject, HoverVariantFor(HoveredObjectIsBuilding()));
-        Stroke(_hoverBoxCorpse, HoverVariantFor(false));
-        Stroke(_hoverBoxUnit,   HoverVariantFor(false));
+        Stroke(_g._hoverBoxObject, HoverVariantFor(HoveredObjectIsBuilding()));
+        Stroke(_g._hoverBoxCorpse, HoverVariantFor(false));
+        Stroke(_g._hoverBoxUnit,   HoverVariantFor(false));
     }
 
     /// <summary>Is the env object currently under the cursor a building (vs a foragable / ground
     /// item)? Drives which hover-highlight category applies (buildings get their own marker style).</summary>
     private bool HoveredObjectIsBuilding()
-        => _hoveredObjectIdx >= 0 && _hoveredObjectIdx < _envSystem.ObjectCount
-           && _envSystem.Defs[_envSystem.GetObject(_hoveredObjectIdx).DefIndex].IsBuilding;
+        => _g._hoveredObjectIdx >= 0 && _g._hoveredObjectIdx < _g._envSystem.ObjectCount
+           && _g._envSystem.Defs[_g._envSystem.GetObject(_g._hoveredObjectIdx).DefIndex].IsBuilding;
 
     /// <summary>Resolve the hover-highlight variant (shape*4 + lineStyle) for a category. The dev
-    /// override (_hoverHighlightVariant >= 0, set via 'H' / hover_variant) forces a single variant on
+    /// override (_g._hoverHighlightVariant >= 0, set via 'H' / hover_variant) forces a single variant on
     /// everything for design testing; otherwise the per-category Tooltips setting applies. -1 = draw
     /// nothing.</summary>
     private int HoverVariantFor(bool isBuilding)
     {
-        if (_hoverHighlightVariant >= 0)
-            return _hoverHighlightVariant >= 20 ? -1 : _hoverHighlightVariant;
-        var t = _gameData.Settings.Tooltips;
+        if (_g._hoverHighlightVariant >= 0)
+            return _g._hoverHighlightVariant >= 20 ? -1 : _g._hoverHighlightVariant;
+        var t = _g._gameData.Settings.Tooltips;
         int v = isBuilding ? t.HoverHighlightBuilding : t.HoverHighlightRest;
         return (v >= 0 && v < 20) ? v : -1;
     }
@@ -973,23 +973,23 @@ public partial class Game1
     /// Buildings use the drawn marker footprint (diamond/box/circle) as the hit area so the whole
     /// visible shape is pickable; foragables/ground items use a simple radius around their origin.
     /// Returns the object index or -1. Per-kind gating still honours the Tooltips toggles.</summary>
-    private int PickHoveredObject(Vector2 cursorScreen, Vec2 cursorWorld)
+    internal int PickHoveredObject(Vector2 cursorScreen, Vec2 cursorWorld)
     {
-        var tcfg = _gameData.Settings.Tooltips;
+        var tcfg = _g._gameData.Settings.Tooltips;
         int buildingShape = System.Math.Clamp(tcfg.HoverHighlightBuilding, 0, 19) / 4;
         float pr = tcfg.GroundPickRadius;
         float bestScore = float.MaxValue;
         int picked = -1;
-        for (int oi = 0; oi < _envSystem.ObjectCount; oi++)
+        for (int oi = 0; oi < _g._envSystem.ObjectCount; oi++)
         {
-            var obj = _envSystem.GetObject(oi);
-            var d = _envSystem.Defs[obj.DefIndex];
+            var obj = _g._envSystem.GetObject(oi);
+            var d = _g._envSystem.Defs[obj.DefIndex];
             bool hoverable = (d.IsBuilding && tcfg.ShowBuildingInfo)
                            || ((d.IsForagable || d.IsBerryBush) && tcfg.ShowGroundItemInfo);
             if (!hoverable) continue;
             // Collected foragables are invisible while respawning — don't surface a tooltip for
             // something that isn't drawn.
-            if (d.IsForagable && _envSystem.GetObjectRuntime(oi).Collected) continue;
+            if (d.IsForagable && _g._envSystem.GetObjectRuntime(oi).Collected) continue;
 
             float score;
             if (d.IsBuilding)
@@ -1023,13 +1023,13 @@ public partial class Game1
     /// be hovered anywhere within its diamond, not just near its origin point.</summary>
     private bool CursorInObjectMarker(int oi, int shape, Vector2 cursorScreen)
     {
-        var obj = _envSystem.GetObject(oi);
-        var def = _envSystem.Defs[obj.DefIndex];
+        var obj = _g._envSystem.GetObject(oi);
+        var def = _g._envSystem.Defs[obj.DefIndex];
         float es = def.Scale * obj.Scale;
         var ccen = new Vec2(obj.X + def.CollisionOffsetX * es, obj.Y + def.CollisionOffsetY * es);
         float worldR = MathF.Max(def.CollisionRadius * es, 0.45f * es) * HoverMarkerRadiusMul;
-        var cenS  = _renderer.WorldToScreen(ccen, 0f, _camera);
-        var edgeS = _renderer.WorldToScreen(ccen + new Vec2(worldR, 0f), 0f, _camera);
+        var cenS  = _g._renderer.WorldToScreen(ccen, 0f, _g._camera);
+        var edgeS = _g._renderer.WorldToScreen(ccen + new Vec2(worldR, 0f), 0f, _g._camera);
         float rx = MathF.Abs(edgeS.X - cenS.X);
         if (rx <= 0.001f) return false;
         float hh = rx * HoverMarkerFlatten;
@@ -1052,7 +1052,7 @@ public partial class Game1
     /// don't pulse as the sprite animates and stay locked under the object as the camera moves.</summary>
     private void DrawHoverGroundMarkers()
     {
-        if (!_gameData.Settings.Tooltips.ShowHoverHighlight) return;
+        if (!_g._gameData.Settings.Tooltips.ShowHoverHighlight) return;
 
         const float RadiusMul = HoverMarkerRadiusMul;   // shared with the building hit-test
         const float Flatten   = HoverMarkerFlatten;
@@ -1071,8 +1071,8 @@ public partial class Game1
             float lineW = thick;
             // Project the centre + a world-radius offset; the screen delta is the on-screen radius,
             // so the marker scales correctly with camera zoom without depending on the sprite box.
-            var cen  = _renderer.WorldToScreen(worldPos, 0f, _camera);
-            var edge = _renderer.WorldToScreen(worldPos + new Vec2(worldRadius, 0f), 0f, _camera);
+            var cen  = _g._renderer.WorldToScreen(worldPos, 0f, _g._camera);
+            var edge = _g._renderer.WorldToScreen(worldPos + new Vec2(worldRadius, 0f), 0f, _g._camera);
             float rx = MathF.Abs(edge.X - cen.X);
             float hh = rx * Flatten;
             if (shape == 4)
@@ -1092,12 +1092,12 @@ public partial class Game1
             else DrawEllipseOutline(cen.X, cen.Y, rx, hh, c, lineW);
         }
 
-        if (_hoveredUnitIdx >= 0 && _hoveredUnitIdx < _sim.Units.Count)
-            Mark(_sim.Units[_hoveredUnitIdx].Position, _sim.Units[_hoveredUnitIdx].Radius * RadiusMul, HoverVariantFor(false));
-        if (_hoveredObjectIdx >= 0 && _hoveredObjectIdx < _envSystem.ObjectCount)
+        if (_g._hoveredUnitIdx >= 0 && _g._hoveredUnitIdx < _g._sim.Units.Count)
+            Mark(_g._sim.Units[_g._hoveredUnitIdx].Position, _g._sim.Units[_g._hoveredUnitIdx].Radius * RadiusMul, HoverVariantFor(false));
+        if (_g._hoveredObjectIdx >= 0 && _g._hoveredObjectIdx < _g._envSystem.ObjectCount)
         {
-            var obj = _envSystem.GetObject(_hoveredObjectIdx);
-            var def = _envSystem.Defs[obj.DefIndex];
+            var obj = _g._envSystem.GetObject(_g._hoveredObjectIdx);
+            var def = _g._envSystem.Defs[obj.DefIndex];
             // Match the baked collision footprint exactly (StampObjectCollisionInto): effective scale
             // folds in BOTH the def scale AND the placed scale, and the footprint is offset from the
             // object origin — buildings have large offsets/def-scales, so using obj.Scale + obj.X/Y
@@ -1107,10 +1107,10 @@ public partial class Game1
             float cr = MathF.Max(def.CollisionRadius * es, 0.45f * es);
             Mark(ccen, cr * RadiusMul, HoverVariantFor(def.IsBuilding));
         }
-        if (_hoveredCorpseIdx >= 0 && _hoveredCorpseIdx < _sim.Corpses.Count)
+        if (_g._hoveredCorpseIdx >= 0 && _g._hoveredCorpseIdx < _g._sim.Corpses.Count)
         {
-            var cp = _sim.Corpses[_hoveredCorpseIdx];
-            float cr = _gameData.Units.Get(cp.UnitDefID)?.Radius ?? 0.5f;
+            var cp = _g._sim.Corpses[_g._hoveredCorpseIdx];
+            float cr = _g._gameData.Units.Get(cp.UnitDefID)?.Radius ?? 0.5f;
             Mark(cp.Position, cr * RadiusMul, HoverVariantFor(false));
         }
     }
@@ -1147,7 +1147,7 @@ public partial class Game1
     }
 
     private void FillRect(int x, int y, int w, int h, Color c)
-        => _spriteBatch.Draw(_pixel, new Rectangle(x, y, w, h), c);
+        => _g._spriteBatch.Draw(_g._pixel, new Rectangle(x, y, w, h), c);
 
     /// <summary>Full rectangle outline of thickness t (drawn as four filled bars).</summary>
     private void DrawRectVariant(Rectangle r, Color c, int t)
@@ -1192,7 +1192,7 @@ public partial class Game1
         float len = d.Length();
         if (len < 0.5f) return;
         float angle = MathF.Atan2(d.Y, d.X);
-        _spriteBatch.Draw(_pixel, a, null, c, angle, new Vector2(0f, 0.5f),
+        _g._spriteBatch.Draw(_g._pixel, a, null, c, angle, new Vector2(0f, 0.5f),
             new Vector2(len, thickness), SpriteEffects.None, 0f);
     }
 
@@ -1201,25 +1201,25 @@ public partial class Game1
 
     private void DrawHoverVariantLabel()
     {
-        if (_hoverVariantLabelTimer <= 0f || _font == null) return;
-        string label = _hoverHighlightVariant < 0
+        if (_g._hoverVariantLabelTimer <= 0f || _g._font == null) return;
+        string label = _g._hoverHighlightVariant < 0
             ? "Hover override OFF — using Tooltips settings"
-            : _hoverHighlightVariant >= 20
+            : _g._hoverHighlightVariant >= 20
                 ? "Hover override: highlight OFF"
-                : $"Hover override {_hoverHighlightVariant + 1}/20: {_hoverShapeNames[_hoverHighlightVariant / 4]} - {_hoverStyleNames[_hoverHighlightVariant % 4]}";
+                : $"Hover override {_g._hoverHighlightVariant + 1}/20: {_hoverShapeNames[_g._hoverHighlightVariant / 4]} - {_hoverStyleNames[_g._hoverHighlightVariant % 4]}";
         var pos = new Vector2((int)18, (int)112);
-        _spriteBatch.DrawString(_font, label, pos + new Vector2(1, 1), new Color(0, 0, 0, 190));
-        _spriteBatch.DrawString(_font, label, pos, new Color(255, 235, 150));
+        _g._spriteBatch.DrawString(_g._font, label, pos + new Vector2(1, 1), new Color(0, 0, 0, 190));
+        _g._spriteBatch.DrawString(_g._font, label, pos, new Color(255, 235, 150));
     }
 
-    /// <summary>Draw a 2D line by rotating the _pixel sprite. Cheap, AA-free.</summary>
+    /// <summary>Draw a 2D line by rotating the _g._pixel sprite. Cheap, AA-free.</summary>
     private void DrawLine(Vector2 a, Vector2 b, Color c, int thickness)
     {
         var d = b - a;
         float len = d.Length();
         if (len < 0.5f) return;
         float angle = MathF.Atan2(d.Y, d.X);
-        _spriteBatch.Draw(_pixel, a, null, c, angle, Vector2.Zero,
+        _g._spriteBatch.Draw(_g._pixel, a, null, c, angle, Vector2.Zero,
             new Vector2(len, thickness), SpriteEffects.None, 0f);
     }
 
@@ -1230,7 +1230,7 @@ public partial class Game1
     {
         var tex = atlas.GetTextureForFrame(frame);
         if (tex == null) return;
-        if (_wadingEffect == null)
+        if (_g._wadingEffect == null)
         {
             // Fall back to normal draw if shader missing — at least the unit is
             // still visible; just no waterline effect.
@@ -1246,10 +1246,10 @@ public partial class Game1
         float frameRightU = (frame.Rect.X + frame.Rect.Width) / atlasW;
         float frameTopV = frame.Rect.Y / atlasH;
         float frameBotV = (frame.Rect.Y + frame.Rect.Height) / atlasH;
-        _wadingEffect.Parameters["FrameLeftU"]?.SetValue(frameLeftU);
-        _wadingEffect.Parameters["FrameRightU"]?.SetValue(frameRightU);
-        _wadingEffect.Parameters["FrameTopV"]?.SetValue(frameTopV);
-        _wadingEffect.Parameters["FrameBottomV"]?.SetValue(frameBotV);
+        _g._wadingEffect.Parameters["FrameLeftU"]?.SetValue(frameLeftU);
+        _g._wadingEffect.Parameters["FrameRightU"]?.SetValue(frameRightU);
+        _g._wadingEffect.Parameters["FrameTopV"]?.SetValue(frameTopV);
+        _g._wadingEffect.Parameters["FrameBottomV"]?.SetValue(frameBotV);
 
         // No flipX correction on the slope: SpriteBatch flipping reverses
         // texCoord.x sweep through the atlas frame, which gives the shader a
@@ -1257,27 +1257,27 @@ public partial class Game1
         // reversed localU flip it produces the right output diagonal for
         // mirrored sprites. (Earlier code negated here, which double-flipped
         // and caused NW to show the same diagonal direction as NE.)
-        _wadingEffect.Parameters["WaterlineCenterV"]?.SetValue(waterlineCenterV);
-        _wadingEffect.Parameters["WaterlineSlope"]?.SetValue(waterlineSlope);
-        _wadingEffect.Parameters["TopWaterlineCenterV"]?.SetValue(topWaterlineCenterV);
-        _wadingEffect.Parameters["TopWaterlineSlope"]?.SetValue(topWaterlineSlope);
-        _wadingEffect.Parameters["FoamHalfWidth"]?.SetValue(0.05f);
-        _wadingEffect.Parameters["TopFoamHalfWidth"]?.SetValue(0.05f);
-        _wadingEffect.Parameters["UnderwaterAlpha"]?.SetValue(0.0f);
-        _wadingEffect.Parameters["FoamColor"]?.SetValue(new Vector3(0.88f, 0.94f, 0.96f));
+        _g._wadingEffect.Parameters["WaterlineCenterV"]?.SetValue(waterlineCenterV);
+        _g._wadingEffect.Parameters["WaterlineSlope"]?.SetValue(waterlineSlope);
+        _g._wadingEffect.Parameters["TopWaterlineCenterV"]?.SetValue(topWaterlineCenterV);
+        _g._wadingEffect.Parameters["TopWaterlineSlope"]?.SetValue(topWaterlineSlope);
+        _g._wadingEffect.Parameters["FoamHalfWidth"]?.SetValue(0.05f);
+        _g._wadingEffect.Parameters["TopFoamHalfWidth"]?.SetValue(0.05f);
+        _g._wadingEffect.Parameters["UnderwaterAlpha"]?.SetValue(0.0f);
+        _g._wadingEffect.Parameters["FoamColor"]?.SetValue(new Vector3(0.88f, 0.94f, 0.96f));
 
-        _spriteBatch.End();
-        _spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.LinearClamp,
-            null, null, _wadingEffect);
+        _g._spriteBatch.End();
+        _g._spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.LinearClamp,
+            null, null, _g._wadingEffect);
 
         float pivotX = flipX ? (1f - frame.PivotX) : frame.PivotX;
         float pivotY = 1f - frame.PivotY;
         var origin = new Vector2(pivotX * frame.Rect.Width, pivotY * frame.Rect.Height);
         var effects = flipX ? SpriteEffects.FlipHorizontally : SpriteEffects.None;
-        _spriteBatch.Draw(tex, screenPos, frame.Rect, tint, 0f, origin, scale, effects, 0f);
+        _g._spriteBatch.Draw(tex, screenPos, frame.Rect, tint, 0f, origin, scale, effects, 0f);
 
-        _spriteBatch.End();
-        _spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.LinearClamp);
+        _g._spriteBatch.End();
+        _g._spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.LinearClamp);
     }
 
     /// <summary>Multiply two colors component-wise (for ambient tinting).</summary>
@@ -1296,9 +1296,9 @@ public partial class Game1
                                     int blendMode)
     {
         var tex = atlas.GetTextureForFrame(frame);
-        if (tex == null || _outlineFlatEffect == null) return;
+        if (tex == null || _g._outlineFlatEffect == null) return;
 
-        float t = 0.5f + 0.5f * MathF.Sin(_gameTime * pulseSpeed * 2f * MathF.PI);
+        float t = 0.5f + 0.5f * MathF.Sin(_g._gameTime * pulseSpeed * 2f * MathF.PI);
 
         float offset = outlineWidth + (pulseWidth - outlineWidth) * t;
         if (offset < 0.5f) return;
@@ -1309,12 +1309,12 @@ public partial class Game1
         float colA = MathHelper.Lerp(color1.A / 255f, color2.A / 255f, t);
         float intensity = MathHelper.Lerp(color1.Intensity, color2.Intensity, t);
 
-        _outlineFlatEffect.Parameters["OutlineColor"]?.SetValue(
+        _g._outlineFlatEffect.Parameters["OutlineColor"]?.SetValue(
             new Vector4(colR * intensity, colG * intensity, colB * intensity, colA));
 
-        _spriteBatch.End();
+        _g._spriteBatch.End();
         var blend = blendMode == 1 ? BlendState.Additive : BlendState.NonPremultiplied;
-        _spriteBatch.Begin(SpriteSortMode.Deferred, blend, SamplerState.LinearClamp, effect: _outlineFlatEffect);
+        _g._spriteBatch.Begin(SpriteSortMode.Deferred, blend, SamplerState.LinearClamp, effect: _g._outlineFlatEffect);
 
         float pivotX = flipX ? (1f - frame.PivotX) : frame.PivotX;
         float pivotY = 1f - frame.PivotY;
@@ -1325,20 +1325,20 @@ public partial class Game1
         {
             float dx = _outlineDirs[d][0] * offset;
             float dy = _outlineDirs[d][1] * offset;
-            _spriteBatch.Draw(tex, new Vector2(screenPos.X + dx, screenPos.Y + dy),
+            _g._spriteBatch.Draw(tex, new Vector2(screenPos.X + dx, screenPos.Y + dy),
                 frame.Rect, Color.White, 0f, origin, scale, effects, 0f);
         }
 
-        _spriteBatch.End();
-        _spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.LinearClamp);
+        _g._spriteBatch.End();
+        _g._spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.LinearClamp);
     }
 
     private void DrawUnitPulsingOutline(int unitIdx, SpriteAtlas atlas, SpriteFrame frame,
                                          Vector2 screenPos, float scale, bool flipX)
     {
-        foreach (var buff in _sim.Units[unitIdx].ActiveBuffs)
+        foreach (var buff in _g._sim.Units[unitIdx].ActiveBuffs)
         {
-            var buffDef = _gameData.Buffs.Get(buff.BuffDefID);
+            var buffDef = _g._gameData.Buffs.Get(buff.BuffDefID);
             if (buffDef != null && buffDef.HasPulsingOutline && buffDef.PulsingOutline != null)
             {
                 var po = buffDef.PulsingOutline;
@@ -1358,29 +1358,29 @@ public partial class Game1
 
     private void DrawHPBar(int unitIdx, Vector2 screenPos)
     {
-        var stats = _sim.Units[unitIdx].Stats;
-        int maxHp = BuffSystem.EffectiveMaxHP(_sim.Units, unitIdx);
+        var stats = _g._sim.Units[unitIdx].Stats;
+        int maxHp = BuffSystem.EffectiveMaxHP(_g._sim.Units, unitIdx);
         if (maxHp <= 0) return;
 
         float hpRatio = (float)stats.HP / maxHp;
         if (hpRatio >= 1f) return; // don't show full HP bars
 
         // Position HP bar above the unit based on its sprite height
-        var unitDef = _gameData.Units.Get(_sim.Units[unitIdx].UnitDefID);
+        var unitDef = _g._gameData.Units.Get(_g._sim.Units[unitIdx].UnitDefID);
         float spriteWorldH = (unitDef != null && unitDef.SpriteWorldHeight > 0)
             ? unitDef.SpriteWorldHeight : 1.8f;
-        float spriteScale = _sim.Units[unitIdx].SpriteScale;
-        float barOffset = spriteWorldH * spriteScale * _camera.Zoom * 0.9f + 5f;
+        float spriteScale = _g._sim.Units[unitIdx].SpriteScale;
+        float barOffset = spriteWorldH * spriteScale * _g._camera.Zoom * 0.9f + 5f;
 
         float barW = 30f;
         float barH = 3f;
         float barX = screenPos.X - barW / 2f;
         float barY = screenPos.Y - barOffset;
 
-        _spriteBatch.Draw(_pixel, new Rectangle((int)barX - 1, (int)barY - 1, (int)barW + 2, (int)barH + 2), new Color(0, 0, 0, 160));
+        _g._spriteBatch.Draw(_g._pixel, new Rectangle((int)barX - 1, (int)barY - 1, (int)barW + 2, (int)barH + 2), new Color(0, 0, 0, 160));
 
         Color hpColor = hpRatio > 0.5f ? new Color(60, 180, 60) : (hpRatio > 0.25f ? new Color(200, 180, 40) : new Color(200, 40, 40));
-        _spriteBatch.Draw(_pixel, new Rectangle((int)barX, (int)barY, (int)(barW * hpRatio), (int)barH), hpColor);
+        _g._spriteBatch.Draw(_g._pixel, new Rectangle((int)barX, (int)barY, (int)(barW * hpRatio), (int)barH), hpColor);
     }
 
     private void DrawSpellCategoryIcon(string category, int cx, int cy)
@@ -1391,38 +1391,38 @@ public partial class Game1
                 for (int dy2 = -6; dy2 <= 6; dy2++)
                     for (int dx2 = -6; dx2 <= 6; dx2++)
                         if (dx2 * dx2 + dy2 * dy2 <= 36)
-                            _spriteBatch.Draw(_pixel, new Rectangle(cx + dx2, cy + dy2, 1, 1), new Color(255, 140, 30, 200));
+                            _g._spriteBatch.Draw(_g._pixel, new Rectangle(cx + dx2, cy + dy2, 1, 1), new Color(255, 140, 30, 200));
                 break;
             case "Buff":
                 for (int dy2 = -6; dy2 <= 6; dy2++)
                     for (int dx2 = -6; dx2 <= 6; dx2++)
                         if (dx2 * dx2 + dy2 * dy2 <= 36)
-                            _spriteBatch.Draw(_pixel, new Rectangle(cx + dx2, cy + dy2, 1, 1), new Color(60, 200, 60, 200));
+                            _g._spriteBatch.Draw(_g._pixel, new Rectangle(cx + dx2, cy + dy2, 1, 1), new Color(60, 200, 60, 200));
                 break;
             case "Strike":
             {
                 var lc = new Color(255, 230, 50, 220);
-                _spriteBatch.Draw(_pixel, new Rectangle(cx + 2, cy - 8, 3, 5), lc);
-                _spriteBatch.Draw(_pixel, new Rectangle(cx - 2, cy - 3, 6, 2), lc);
-                _spriteBatch.Draw(_pixel, new Rectangle(cx - 3, cy - 1, 3, 5), lc);
-                _spriteBatch.Draw(_pixel, new Rectangle(cx - 4, cy + 4, 4, 2), lc);
+                _g._spriteBatch.Draw(_g._pixel, new Rectangle(cx + 2, cy - 8, 3, 5), lc);
+                _g._spriteBatch.Draw(_g._pixel, new Rectangle(cx - 2, cy - 3, 6, 2), lc);
+                _g._spriteBatch.Draw(_g._pixel, new Rectangle(cx - 3, cy - 1, 3, 5), lc);
+                _g._spriteBatch.Draw(_g._pixel, new Rectangle(cx - 4, cy + 4, 4, 2), lc);
                 break;
             }
             case "Summon":
                 for (int dy2 = -6; dy2 <= 6; dy2++)
                     for (int dx2 = -6; dx2 <= 6; dx2++)
                         if (dx2 * dx2 + dy2 * dy2 <= 36)
-                            _spriteBatch.Draw(_pixel, new Rectangle(cx + dx2, cy + dy2, 1, 1), new Color(160, 60, 200, 200));
+                            _g._spriteBatch.Draw(_g._pixel, new Rectangle(cx + dx2, cy + dy2, 1, 1), new Color(160, 60, 200, 200));
                 break;
             case "Beam":
-                _spriteBatch.Draw(_pixel, new Rectangle(cx - 8, cy - 1, 16, 3), new Color(60, 120, 255, 220));
-                _spriteBatch.Draw(_pixel, new Rectangle(cx - 6, cy - 2, 12, 1), new Color(100, 160, 255, 150));
-                _spriteBatch.Draw(_pixel, new Rectangle(cx - 6, cy + 2, 12, 1), new Color(100, 160, 255, 150));
+                _g._spriteBatch.Draw(_g._pixel, new Rectangle(cx - 8, cy - 1, 16, 3), new Color(60, 120, 255, 220));
+                _g._spriteBatch.Draw(_g._pixel, new Rectangle(cx - 6, cy - 2, 12, 1), new Color(100, 160, 255, 150));
+                _g._spriteBatch.Draw(_g._pixel, new Rectangle(cx - 6, cy + 2, 12, 1), new Color(100, 160, 255, 150));
                 break;
             case "Drain":
-                _spriteBatch.Draw(_pixel, new Rectangle(cx - 8, cy - 1, 16, 3), new Color(220, 40, 40, 220));
-                _spriteBatch.Draw(_pixel, new Rectangle(cx - 6, cy - 2, 12, 1), new Color(255, 80, 80, 150));
-                _spriteBatch.Draw(_pixel, new Rectangle(cx - 6, cy + 2, 12, 1), new Color(255, 80, 80, 150));
+                _g._spriteBatch.Draw(_g._pixel, new Rectangle(cx - 8, cy - 1, 16, 3), new Color(220, 40, 40, 220));
+                _g._spriteBatch.Draw(_g._pixel, new Rectangle(cx - 6, cy - 2, 12, 1), new Color(255, 80, 80, 150));
+                _g._spriteBatch.Draw(_g._pixel, new Rectangle(cx - 6, cy + 2, 12, 1), new Color(255, 80, 80, 150));
                 break;
             case "Cloud":
                 // Poison cloud icon: hazy green circle
@@ -1433,13 +1433,13 @@ public partial class Game1
                         if (dsq <= 49)
                         {
                             int alpha = dsq < 16 ? 200 : (dsq < 36 ? 140 : 80);
-                            _spriteBatch.Draw(_pixel, new Rectangle(cx + dx2, cy + dy2, 1, 1),
+                            _g._spriteBatch.Draw(_g._pixel, new Rectangle(cx + dx2, cy + dy2, 1, 1),
                                 new Color(80, 200, 60, alpha));
                         }
                     }
                 break;
             default:
-                _spriteBatch.Draw(_pixel, new Rectangle(cx - 6, cy - 6, 12, 12), new Color(180, 180, 180, 150));
+                _g._spriteBatch.Draw(_g._pixel, new Rectangle(cx - 6, cy - 6, 12, 12), new Color(180, 180, 180, 150));
                 break;
         }
     }

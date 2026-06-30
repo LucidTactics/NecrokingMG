@@ -504,6 +504,13 @@ public partial class Game1 {
                break;
             }
 
+            // Fire the Job Board's Auto-assign button logic directly: window.dev('auto_assign')
+            case "auto_assign": {
+               int n = _workerSystem.AutoAssignWorkers();
+               c.Complete(Necroking.Dev.DevServer.Ok($"auto-assign: re-housed {n} undead, caps restored, dispatched"));
+               break;
+            }
+
             // Full economy scene: every building + sources + corpses + 6 assigned
             // workers. window.dev('worker_scene')
             case "worker_scene": {
@@ -910,7 +917,7 @@ public partial class Game1 {
                var pt = new Microsoft.Xna.Framework.Vector2(DevFloat(c.Args[0]), DevFloat(c.Args[1]));
                int sw = GraphicsDevice.Viewport.Width, sh = GraphicsDevice.Viewport.Height;
                var cw = _camera.ScreenToWorld(pt, sw, sh);
-               int idx = PickHoveredObject(pt, cw);
+               int idx = _gameRenderer.PickHoveredObject(pt, cw);
                string did = idx >= 0 ? _envSystem.Defs[_envSystem.GetObject(idx).DefIndex].Id : "(none)";
                c.Complete(Necroking.Dev.DevServer.OkRaw($"{{\"objIdx\":{idx},\"def\":{System.Text.Json.JsonSerializer.Serialize(did)},\"worldX\":{cw.X:F2},\"worldY\":{cw.Y:F2}}}"));
                break;
@@ -1035,6 +1042,40 @@ public partial class Game1 {
                float wx = DevFloat(c.Args[0]), wy = DevFloat(c.Args[1]);
                _devWalkTarget = new Vec2(wx, wy);
                c.Complete(Necroking.Dev.DevServer.Ok($"necromancer walking to ({wx},{wy})"));
+               break;
+            }
+
+            // Simulate a left-click on the world at (x,y) for the corpse-pile
+            // gather flow (headless has no real mouse). Mirrors the Game1.Update
+            // click handler: pick up now if in range, else walk over and grab.
+            case "pile_click": {
+               if (_sim.NecromancerIndex < 0) {
+                  c.Complete(Necroking.Dev.DevServer.Error("no necromancer in the sim"));
+                  break;
+               }
+               if (c.Args.Length < 2) {
+                  c.Complete(Necroking.Dev.DevServer.Error("pile_click needs: <x> <y>"));
+                  break;
+               }
+               int ni = _sim.NecromancerIndex;
+               var mw = new Vec2(DevFloat(c.Args[0]), DevFloat(c.Args[1]));
+               int pile = FindCorpsePileUnderCursor(mw);
+               if (pile < 0) {
+                  c.Complete(Necroking.Dev.DevServer.Error($"no corpse pile under ({mw.X},{mw.Y})"));
+                  break;
+               }
+               if (TryTakeCorpseFromPile(ni, pile))
+                  c.Complete(Necroking.Dev.DevServer.Ok($"picked up a corpse from pile obj{pile}"));
+               else
+                  c.Complete(Necroking.Dev.DevServer.Error($"too far / busy / empty — no pickup from pile obj{pile}"));
+               break;
+            }
+
+            // Run the one-shot "loose corpses on a pile → stock" absorb pass (normally
+            // fires on map load). Lets headless tests trigger it after placing corpses.
+            case "absorb_piles": {
+               _workerSystem.AbsorbCorpsesOnPiles();
+               c.Complete(Necroking.Dev.DevServer.Ok("absorbed loose corpses sitting on piles"));
                break;
             }
 
@@ -1673,7 +1714,9 @@ public partial class Game1 {
              $"\"velAngle\":{(u.Velocity.LengthSq() > 0.01f ? (MathF.Atan2(u.Velocity.Y, u.Velocity.X) * 180f / MathF.PI) : 0f).ToString("F0", ci)}," +
              $"\"engaged\":{(u.EngagedTarget.IsUnit ? "true" : "false")}," +
              $"\"target\":{(u.Target.IsUnit ? "true" : "false")}," +
-             $"\"combatSpeed\":{u.Stats.CombatSpeed.ToString("F2", ci)}" +
+             $"\"combatSpeed\":{u.Stats.CombatSpeed.ToString("F2", ci)}," +
+             $"\"carryingCorpse\":{u.CarryingCorpseID}," +
+             $"\"corpsePhase\":{u.CorpseInteractPhase}" +
              "}";
    }
 
@@ -1820,7 +1863,7 @@ public partial class Game1 {
     /// <summary>Dev-server screenshot: take it from the just-rendered backbuffer
     /// (before Present) and complete the pending HTTP command with the file path.
     /// Called from every Draw branch so menu screenshots work too.</summary>
-    private void CompletePendingDevScreenshot()
+    internal void CompletePendingDevScreenshot()
     {
         if (_pendingDevScreenshot == null) return;
         bool okShot = ScenarioScreenshot.TakeScreenshot(GraphicsDevice, _pendingDevScreenshot, _devShotW, _devShotH);

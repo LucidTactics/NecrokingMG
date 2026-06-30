@@ -51,6 +51,16 @@ public interface IModalLayer
     /// dropdown that doesn't swallow the outside click would let through the
     /// click that's meant to close it.</summary>
     bool IsBlocking { get; }
+
+    /// <summary>For non-blocking side panels that should close when the user
+    /// clicks the world outside them, but WITHOUT swallowing that click — so the
+    /// same click still hovers / hits world objects. The difference from
+    /// <see cref="LightDismiss"/>: light-dismiss closes AND consumes (the click
+    /// only dismisses); this closes and lets the click through (click-away that
+    /// also acts on whatever you clicked). Only meaningful for a non-blocking,
+    /// non-light-dismiss layer. Default false. Opt-in via a default-interface
+    /// member so existing layers need no change.</summary>
+    bool CloseOnOutsideClick => false;
 }
 
 /// <summary>
@@ -184,6 +194,12 @@ public sealed class PopupManager
             {
                 input.ConsumeMouse();
             }
+            else if (top.CloseOnOutsideClick)
+            {
+                // Close-on-click-away, but DON'T consume — the click still reaches
+                // the world (hover/select/act on whatever was clicked).
+                top.OnCancel();
+            }
             // else: non-blocking + not-light-dismiss — let it through.
         }
 
@@ -207,9 +223,22 @@ public sealed class PopupManager
             input.ConsumeKey(Keys.Escape);
         }
 
-        // Flag MouseOverUI so any game-side "is the cursor over UI?" check
-        // (spell cast targeting, world hover) sees the popup as covering it.
-        input.MouseOverUI = true;
+        // Flag MouseOverUI for any game-side "is the cursor over UI?" check (spell
+        // cast targeting, world hover). A BLOCKING modal covers the whole screen;
+        // a non-blocking side panel only covers its OWN rect, so the rest of the
+        // screen stays interactive (the IsBlocking=false contract — e.g. cast
+        // spells / hover-click the world with the inventory or bench open). Scan
+        // the whole stack, not just the top, so a panel under another open panel
+        // still blocks its own footprint. (Note OnCancel above may have already
+        // popped a close-on-click-away layer this frame — it won't be counted.)
+        foreach (var layer in _stack)
+        {
+            if (layer.IsBlocking || layer.ContainsMouse(mx, my))
+            {
+                input.MouseOverUI = true;
+                break;
+            }
+        }
     }
 }
 

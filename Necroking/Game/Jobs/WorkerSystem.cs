@@ -36,6 +36,13 @@ public class WorkerSystem
     // objectId → (resource → count). Keyed by stable ObjectID string.
     private readonly Dictionary<string, Dictionary<string, int>> _stock = new();
 
+    // objectId → stack of corpse unit-def ids piled there, so a corpse withdrawn
+    // from a pile (worker reanimate, or the player gathering by hand) comes back as
+    // a real body of the right type rather than a generic/invisible one. Best-effort:
+    // the abstract "Corpse" count is the source of truth; this just preserves identity
+    // when it's available (drift → callers fall back to a default visible corpse).
+    private readonly Dictionary<string, List<string>> _corpseTypes = new();
+
     // Coarse dispatch cadence (seconds). Worker assignment doesn't need per-frame.
     private const float DispatchInterval = 0.5f;
     private float _dispatchTimer;
@@ -57,6 +64,7 @@ public class WorkerSystem
         _jobs.Load();
         _jobStates.Clear();
         _stock.Clear();
+        _corpseTypes.Clear();
         int pri = 0;
         foreach (var def in _jobs.Defs)
         {
@@ -152,8 +160,8 @@ public class WorkerSystem
     /// priorities. Unambiguous insertion semantics for drag-reorder and ▲▼.</summary>
     public void MoveJobBefore(JobState dragged, JobState? before)
     {
-        if (dragged == null || !_jobStates.Remove(dragged)) return;
         int idx = before != null ? _jobStates.IndexOf(before) : _jobStates.Count;
+        if (dragged == null || !_jobStates.Remove(dragged)) return;
         if (idx < 0) idx = _jobStates.Count;
         _jobStates.Insert(idx, dragged);
         for (int i = 0; i < _jobStates.Count; i++) _jobStates[i].Priority = i;
@@ -168,6 +176,7 @@ public class WorkerSystem
     public bool IsEligibleWorker(int unitIdx)
     {
         if (unitIdx < 0 || unitIdx >= _sim.Units.Count) return false;
+        if (unitIdx == _sim.NecromancerIndex) return false; // never conscript the player's necromancer
         var u = _sim.Units[unitIdx];
         if (!u.Alive) return false;
         if (u.Faction != Faction.Undead) return false;
@@ -471,6 +480,37 @@ public class WorkerSystem
         _sim.Units[unitIdx].CorpseInteractPhase = 0;
     }
 
+    /// <summary>Remember the unit-type of a corpse piled into a building, so it can be
+    /// withdrawn later as the same body. Pushes onto the pile's type stack.</summary>
+    public void RecordPiledCorpse(int objIdx, string unitDefId)
+    {
+        if (objIdx < 0 || objIdx >= _env.ObjectCount) return;
+        string key = ObjId(objIdx);
+        if (!_corpseTypes.TryGetValue(key, out var list)) { list = new(); _corpseTypes[key] = list; }
+        list.Add(unitDefId ?? "");
+    }
+
+    /// <summary>Record the worker's currently-carried corpse onto a pile's type stack
+    /// (call right before <see cref="ConsumeCarriedCorpse"/> in the deposit step).</summary>
+    public void RecordPiledCorpseFromUnit(int unitIdx, int objIdx)
+    {
+        int cid = _sim.Units[unitIdx].CarryingCorpseID;
+        if (cid < 0) return;
+        var c = _sim.FindCorpseByID(cid);
+        RecordPiledCorpse(objIdx, c?.UnitDefID ?? "");
+    }
+
+    /// <summary>Pop the top piled corpse's unit-type from a pile, or "" if none recorded
+    /// (e.g. count seeded without identity). The abstract count is decremented separately.</summary>
+    public string TakePiledCorpse(int objIdx)
+    {
+        if (objIdx < 0 || objIdx >= _env.ObjectCount) return "";
+        if (!_corpseTypes.TryGetValue(ObjId(objIdx), out var list) || list.Count == 0) return "";
+        string id = list[list.Count - 1];
+        list.RemoveAt(list.Count - 1);
+        return id;
+    }
+
     // ─────────────────────────────────────────────────────────────
     //  Process output emission
     // ─────────────────────────────────────────────────────────────
@@ -557,7 +597,8 @@ public class WorkerSystem
             var parts = new List<string>();
             if (hasStock) foreach (var kv in d) if (kv.Value > 0) parts.Add($"{kv.Key}={kv.Value}");
             string cap = def.StorageCap > 0 ? def.StorageCap.ToString() : "∞";
-            sb.Append($"  {def.Id} obj{i}: {(parts.Count > 0 ? string.Join(",", parts) : "empty")} ({TotalStored(i)}/{cap})\n");
+            var oo = _env.GetObject(i);
+            sb.Append($"  {def.Id} obj{i} @({oo.X:F1},{oo.Y:F1}): {(parts.Count > 0 ? string.Join(",", parts) : "empty")} ({TotalStored(i)}/{cap})\n");
         }
         sb.Append($"  Essence={_sim.PlayerResources.Essence}  Undead={CountUndead()}\n");
         return sb.ToString();
@@ -620,6 +661,70 @@ public class WorkerSystem
         if (_dispatchTimer > 0f) return;
         _dispatchTimer = DispatchInterval;
         Dispatch();
+    }
+
+    /// <summary>Authoring convenience: any loose corpse sitting inside a Corpse Pile's
+    /// footprint (collision radius) is absorbed into the pile's stockpile and removed
+    /// from the world. Lets you drop a heap of corpses onto a pile in the map editor and
+    /// have them counted (and pullable back out) without running the worker collect job.
+    /// Honors the pile's storage cap and preserves each body's type. Run ONCE on
+    /// map/game load — it's an O(piles × corpses) scan, too costly to tick every frame,
+    /// and the use case (editor-placed corpses) only needs it at load.</summary>
+    public void AbsorbCorpsesOnPiles()
+    {
+        if (_env == null || _sim == null) return; // not bound yet (called before LoadContent)
+        int pileDef = _env.FindDef("corpse_pile");
+        if (pileDef < 0) return;
+        var corpses = _sim.CorpsesMut;
+        for (int oi = 0; oi < _env.ObjectCount; oi++)
+        {
+            if (_env.GetObject(oi).DefIndex != pileDef || !Built(oi)) continue;
+            if (TotalStored(oi) >= BuildingCap(oi)) continue;
+            var obj = _env.GetObject(oi);
+            var def = _env.GetDef(obj.DefIndex);
+            float r = def.CollisionRadius > 0 ? def.CollisionRadius : 0.5f;
+            float r2 = r * r;
+            var center = new Vec2(obj.X + def.CollisionOffsetX, obj.Y + def.CollisionOffsetY);
+            for (int ci = corpses.Count - 1; ci >= 0; ci--)
+            {
+                if (TotalStored(oi) >= BuildingCap(oi)) break; // pile filled up
+                var c = corpses[ci];
+                if (c.Dissolving || c.ConsumedBySummon || c.Bagged) continue;
+                if (c.DraggedByUnitID != GameConstants.InvalidUnit) continue;
+                if (c.ReanimInstanceId != 0) continue;
+                if ((c.Position - center).LengthSq() > r2) continue;
+                RecordPiledCorpse(oi, c.UnitDefID);
+                Deposit(oi, JobResources.Corpse, 1);
+                corpses.RemoveAt(ci);
+            }
+        }
+    }
+
+    /// <summary>
+    /// One-click "put everyone back to work" for the Job Board's Auto-assign button.
+    /// Undoes the ways a worker becomes unassigned:
+    ///   1. restores every job's cap to full, so jobs the player had emptied via the
+    ///      [-] stepper (cap 0 → no demand) can take workers again,
+    ///   2. re-houses any idle eligible humanoid undead into empty worker-home graves,
+    ///   3. re-runs the dispatcher to distribute all workers across active jobs.
+    /// Returns the number of undead newly housed as workers.
+    /// </summary>
+    public int AutoAssignWorkers()
+    {
+        foreach (var js in _jobStates) js.WorkerCap = 99; // "full" sentinel (clamped to DerivedMax when dispatched)
+
+        int housed = 0;
+        var candidates = UnassignedWorkers();
+        int next = 0;
+        for (int i = 0; i < _env.ObjectCount && next < candidates.Count; i++)
+        {
+            if (!IsWorkerHomeDef(i)) continue;
+            if (!_env.GetObjectRuntime(i).Alive) continue;
+            if (IsGraveOccupied(i)) continue;
+            if (AssignWorker(candidates[next].Id, i)) { next++; housed++; }
+        }
+        Dispatch();
+        return housed;
     }
 
     private readonly List<uint> _pool = new();

@@ -31,6 +31,12 @@ headless game is now invisible (no taskbar button), so a forgotten one idles in
 the background burning CPU/GPU. Leave the supervisor up if you like (it's cheap
 and holds the pinned A/B frame); just don't leave the game running.
 
+IDLE WATCHDOG: as a backstop for a forgotten headless game, a background thread
+stops the game after NECRO_IDLE_SHUTDOWN seconds (default 900 = 15 min) with no
+explicit /cmd activity — but ONLY while it's headless. A windowed game (someone
+is watching/playing it) is never auto-stopped. The dashboard's passive ~1 Hz
+/frame polling does NOT count as activity, so an idle tab still lets it shut down.
+
 Run it (typically in the background):
 
     python tools/devserver.py            # serves on :8777, game on :8778
@@ -59,6 +65,7 @@ import json
 import os
 import subprocess
 import sys
+import threading
 import time
 import urllib.parse
 import urllib.request
@@ -70,6 +77,11 @@ if os.name == "nt":
 SUPERVISOR_PORT = 8777
 GAME_PORT = 8778
 DEFAULT_RESOLUTION = "1280x720"  # game renders at this; screenshots downsample on return
+
+# Idle watchdog: stop a forgotten *headless* game after this many seconds without
+# an explicit /cmd. 0 disables. A windowed game is never auto-stopped.
+IDLE_SHUTDOWN_SECONDS = int(os.environ.get("NECRO_IDLE_SHUTDOWN", "900"))
+IDLE_CHECK_INTERVAL = 30  # how often the watchdog thread wakes to check
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PROJECT = os.path.join(REPO_ROOT, "Necroking", "Necroking.csproj")
@@ -188,6 +200,27 @@ _last_build = None         # dict | None
 _pinned_frame = None       # bytes | None — frozen A/B snapshot (survives restart)
 _pinned_label = ""         # str — caption shown above the pinned view
 _job = None                # Windows Job handle (kill-on-close) — see _assign_to_job
+_last_activity = time.monotonic()  # monotonic time of the last explicit /cmd
+_game_windowed = False     # current effective window state (launch flag, kept in
+                           # sync by 'window show/hide/toggle' commands via /cmd)
+
+
+def _note_activity(cmd_body):
+    """Record an explicit game command as activity (resets the idle timer). Also
+    tracks headless<->windowed: 'window show/hide/toggle' is the only way the live
+    window state changes, and it always rides /cmd, so watching it here keeps our
+    _game_windowed view correct without querying the game."""
+    global _last_activity, _game_windowed
+    _last_activity = time.monotonic()
+    if isinstance(cmd_body, dict) and str(cmd_body.get("cmd", "")).lower() == "window":
+        args = cmd_body.get("args") or []
+        mode = str(args[0]).lower() if args else "toggle"
+        if mode == "show":
+            _game_windowed = True
+        elif mode == "hide":
+            _game_windowed = False
+        elif mode == "toggle":
+            _game_windowed = not _game_windowed
 
 
 def _assign_to_job(proc):
@@ -249,6 +282,21 @@ def _assign_to_job(proc):
         print(f"[devserver] job-object setup skipped: {e}", flush=True)
 
 
+def _env_info():
+    """The build config + output paths this supervisor actually launches from, so
+    callers (necro_devlib, the MCP tools) never have to guess Debug-vs-Release. The
+    preview runs Release by default; this is the single source of truth for where
+    the running game writes screenshots/logs. Surfaced in /status and in the
+    start/build/restart results so a rebuild communicates its location back."""
+    return {
+        "build_config": BUILD_CONFIG,
+        "exe": EXE,
+        "exe_exists": os.path.exists(EXE),
+        "screenshot_dir": SCREENSHOT_DIR,
+        "log_dir": os.path.join(os.path.dirname(EXE), "log"),
+    }
+
+
 def _game_running():
     return _game_proc is not None and _game_proc.poll() is None
 
@@ -289,7 +337,7 @@ def _wait_until_ready(timeout=40):
 
 
 def start_game(windowed=False, map_name=None, resolution=DEFAULT_RESOLUTION):
-    global _game_proc
+    global _game_proc, _game_windowed, _last_activity
     if _game_running():
         return {"ok": True, "result": "already running", "pid": _game_proc.pid}
     if not os.path.exists(EXE):
@@ -302,13 +350,16 @@ def start_game(windowed=False, map_name=None, resolution=DEFAULT_RESOLUTION):
         args += ["--resolution", resolution]
     _game_proc = subprocess.Popen(args, cwd=os.path.dirname(EXE), creationflags=_NO_WINDOW)
     _assign_to_job(_game_proc)  # OS kills the game if this supervisor dies
+    _game_windowed = windowed   # seed the watchdog's headless/windowed view
+    _last_activity = time.monotonic()
 
     ok, msg = _wait_until_ready()
     if not ok:
         return {"ok": False, "error": msg}
 
     result = {"ok": True, "result": "started", "pid": _game_proc.pid,
-              "windowed": windowed, "resolution": resolution}
+              "windowed": windowed, "resolution": resolution,
+              "build_config": BUILD_CONFIG, "screenshot_dir": SCREENSHOT_DIR}
     if map_name:
         try:
             result["start_game"] = _post_to_game({"cmd": "start_game", "args": [map_name]})
@@ -350,6 +401,7 @@ def build():
         "errors": errors[:50],
         "tail": lines[-8:],
         "was_running": was_running,
+        "build_config": BUILD_CONFIG,  # which config was built (= where the exe/screenshots land)
     }
     return _last_build
 
@@ -419,8 +471,8 @@ class Handler(BaseHTTPRequestHandler):
                 "pid": _game_proc.pid if _game_running() else None,
                 "supervisor_port": SUPERVISOR_PORT,
                 "game_port": GAME_PORT,
-                "exe_exists": os.path.exists(EXE),
                 "last_build": _last_build,
+                **_env_info(),  # build_config + exe/screenshot_dir/log_dir (incl. exe_exists)
             })
         else:
             self._send({"ok": False, "error": f"unknown GET {self.path}"}, 404)
@@ -465,6 +517,7 @@ class Handler(BaseHTTPRequestHandler):
                 if not _game_running():
                     self._send({"ok": False, "error": "game not running"}, 409)
                     return
+                _note_activity(body)  # explicit command -> resets idle timer
                 self._send(_post_to_game(body))
             else:
                 self._send({"ok": False, "error": f"unknown POST {path}"}, 404)
@@ -472,11 +525,36 @@ class Handler(BaseHTTPRequestHandler):
             self._send({"ok": False, "error": str(e)}, 500)
 
 
+def _idle_watchdog():
+    """Backstop for a forgotten headless game: stop it after IDLE_SHUTDOWN_SECONDS
+    with no explicit /cmd. A windowed game (someone's watching it) is left alone;
+    the dashboard's passive /frame polling doesn't reset the timer, so an idle tab
+    still lets it shut down. Self-contained in the supervisor — it owns the
+    process lifecycle and already knows the windowed flag."""
+    while True:
+        time.sleep(IDLE_CHECK_INTERVAL)
+        try:
+            if not _game_running() or _game_windowed:
+                continue
+            idle = time.monotonic() - _last_activity
+            if idle >= IDLE_SHUTDOWN_SECONDS:
+                print(f"[devserver] headless game idle {idle:.0f}s "
+                      f"(>= {IDLE_SHUTDOWN_SECONDS}s) -> stopping", flush=True)
+                stop_game()
+        except Exception as e:
+            print(f"[devserver] idle watchdog error: {e}", flush=True)
+
+
 def main():
     srv = ThreadingHTTPServer(("localhost", SUPERVISOR_PORT), Handler)
     print(f"[devserver] supervisor on http://localhost:{SUPERVISOR_PORT}/  "
           f"(game port {GAME_PORT})", flush=True)
     print(f"[devserver] repo root: {REPO_ROOT}", flush=True)
+    if IDLE_SHUTDOWN_SECONDS > 0:
+        threading.Thread(target=_idle_watchdog, daemon=True,
+                         name="idle-watchdog").start()
+        print(f"[devserver] idle watchdog: stop headless game after "
+              f"{IDLE_SHUTDOWN_SECONDS}s", flush=True)
     try:
         srv.serve_forever()
     except KeyboardInterrupt:

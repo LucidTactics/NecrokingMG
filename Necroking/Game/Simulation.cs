@@ -216,9 +216,15 @@ public class Simulation
     /// the Collect Corpses + Reanimate jobs). Returns the new CorpseID.</summary>
     public int SpawnLooseCorpse(Vec2 pos, string unitDefId = "")
     {
+        // Match the body's natural size — a unit copies SpriteScale from its def
+        // (ApplyDefRuntimeFields), so a corpse must too, else a scaled body (e.g. a
+        // deer) renders at 1.0 and looks wrong.
+        float scale = 1f;
+        if (!string.IsNullOrEmpty(unitDefId) && _gameData?.Units.Get(unitDefId) is { } def)
+            scale = def.SpriteScale;
         var corpse = new Corpse
         {
-            Position = pos, UnitDefID = unitDefId, FacingAngle = 90f, SpriteScale = 1f,
+            Position = pos, UnitDefID = unitDefId, FacingAngle = 90f, SpriteScale = scale,
             CorpseID = _nextCorpseID++, PreSettled = true,
         };
         _corpses.Add(corpse);

@@ -1,61 +1,47 @@
 ---
 name: locate-behavior
-description: Find where a behavior or feature lives in the Necroking codebase — which files and functions are responsible, and where new code should go (incl. files to create). USE THIS (don't freestyle grep) whenever you're about to locate where code lives or where to add a feature — invoke it FIRST, before Grep/Glob, at the start of any change. Triggers — "where is X handled", "which file does Y", "where should I add Z", "what code is responsible for W", or any task that begins with finding the right files (e.g. adding a command, system, editor hook, or data path). Backed by an on-demand, self-extending per-subsystem architecture map under reference/.
+description: Find where a behavior or feature lives in the Necroking codebase — which files and functions are responsible, and where new code should go (incl. files to create). USE THIS (don't freestyle grep) whenever you're about to locate where code lives or where to add a feature — invoke it FIRST, before Grep/Glob, at the start of any change. Triggers — "where is X handled", "which file does Y", "where should I add Z", "what code is responsible for W", or any task that begins with finding the right files (e.g. adding a command, system, editor hook, or data path). Backed by an on-demand, self-extending per-subsystem architecture map under docs/locate-behavior/.
 ---
 
 # Locate behavior in the Necroking codebase
 
-Given a description of some behavior/feature, find the **existing files & functions
-responsible** for it, and **where new code should go** — without loading the whole
-architecture into context every session (that's why this is a skill and not in
-CLAUDE.md).
+This skill **delegates to the `locate-behavior-finder` subagent** so the architecture
+map gets crunched in an isolated context — only the answer returns to this session, not
+the doc text. Don't read `docs/locate-behavior/` yourself; that would defeat the purpose.
 
-## Workflow (progressive disclosure — read only what you need)
+## How to run it
 
-1. **Read `reference/overview.md`** — the routing map. It lists the subsystems, a
-   behavior→area index, and which `reference/<area>.md` doc to open. It also marks
-   which areas are **documented** vs **not yet documented**.
-2. **Open only the 1–3 `reference/<area>.md` docs** the query points to. Do **not**
-   read the whole `reference/` folder — defeats the purpose.
-3. **Verify against live code.** The docs name files and symbols but can lag the code.
-   Use Grep / Glob / the LSP tool (`workspaceSymbol`, `documentSymbol`) to confirm a
-   symbol still exists and to get its **current** location — the docs deliberately omit
-   line numbers because they rot.
-4. **Answer** with:
-   - the relevant **existing** files (path + what each is responsible for + the
-     specific functions involved),
-   - for new work: **where it should go** — which file(s) to edit or **create**, and
-     what each new piece should contain (key functions / where the code belongs).
+Spawn the finder via the **Agent tool** with `subagent_type: "locate-behavior-finder"`,
+passing the user's goal/behavior **verbatim** as the prompt (add any working context
+that narrows it — the file you're editing, the feature you're adding). One agent only —
+_the finder does not spawn further agents._
 
-## Self-healing — keep the map correct (IMPORTANT)
+```
+Agent(
+  subagent_type: "locate-behavior-finder",
+  description: "locate <behavior>",
+  prompt: "<what the user wants to find/achieve, plus any relevant context>"
+)
+```
 
-The map is **intentionally incomplete and grows on demand.** Whenever you use this
-skill and the docs are **lacking, wrong, or missing the area you need:**
+It returns: the responsible **existing files** (path + responsibility + functions),
+**where new code should go** (files to edit or create), **pitfalls**, and a note of any
+map docs it created/fixed.
 
-- **Missing area** — if `overview.md` routes you to an area with **no
-  `reference/<area>.md`** (or marked "not yet documented"), do the research now:
-  explore those files with Glob/Grep/LSP/Read, then **write `reference/<area>.md`**
-  following the format of the existing docs. Use
-  [`reference/game1-partials.md`](reference/game1-partials.md) as the worked template.
-- **Wrong/stale doc** — if an existing doc names symbols that were renamed, moved, or
-  removed, or describes a responsibility that has shifted, **fix the doc** as part of
-  your task.
-- After adding or correcting a doc, **update `overview.md`** — its subsystem table,
-  the behavior→area index, and the documented-vs-not list.
+## After it returns
 
-Leave the skill better than you found it. Over time it comes to document the whole
-project — each session pays only for the area it touches.
+- **Relay** the located files/answer to the user (or just use them to proceed with the
+  task — that's the point of locating).
+- **The finder commits its own map changes** (a `docs(locate-behavior): …` commit scoped
+  to just the `docs/locate-behavior/*.md` it touched) before returning, so you don't have
+  to — it reports the hash in its answer. It does NOT push; surface that to the user per
+  git policy. The skill, the agent, and the map are all git-tracked and shared.
 
-## Reference-doc format
+## Why a subagent (background)
 
-Each `reference/<area>.md` documents one subsystem/folder. For each file: its path, a
-short "what lives here", the key types/functions **by name (no line numbers)**, and a
-"**look/edit here when…**" line that maps concrete behaviors to that file (this line is
-what makes a behavior description findable). Cross-link related areas at the end. Match
-[`reference/game1-partials.md`](reference/game1-partials.md).
-
-## Maintenance
-
-This skill is **git-tracked and shared** (whitelisted in `.gitignore`). Extending the
-map is a normal code change — commit the new/edited `reference/*.md` with your work so
-collaborators get the improved map.
+The map is intentionally incomplete and self-extends on demand. The finder owns that
+workflow (read overview → open 1–3 area docs → verify with LSP/Grep → self-heal missing
+or stale docs → answer). Running it in a subagent keeps all that reading out of the main
+context; you pay only for the conclusion. Full behavior lives in
+`docs/locate-behavior/README.md` (the finder's operating manual), with the agent shim at
+`.claude/agents/locate-behavior-finder.md`.

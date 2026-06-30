@@ -28,8 +28,13 @@
       "Bash(sort:*)",
       "Bash(xargs grep:*)",
       "Bash(python tools/json_data.py:*)",
-      "Edit(.claude/skills/locate-behavior/**)",
-      "Write(.claude/skills/locate-behavior/**)"
+      "Bash(echo:*)",
+      "Bash(sleep:*)"
+    ],
+    "ask": [
+      "Edit(.claude/settings*.json)",
+      "Write(.claude/settings*.json)",
+      "MultiEdit(.claude/settings*.json)"
     ]
   },
   "hooks": {
