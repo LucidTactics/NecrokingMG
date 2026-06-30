@@ -30,9 +30,9 @@
       "Bash(python tools/json_data.py:*)"
     ],
     "ask": [
-      "Edit(tools/hooks/**)",
-      "Write(tools/hooks/**)",
-      "MultiEdit(tools/hooks/**)"
+      "Edit(.claude/settings*.json)",
+      "Write(.claude/settings*.json)",
+      "MultiEdit(.claude/settings*.json)"
     ]
   },
   "hooks": {
@@ -48,6 +48,19 @@
           }
         ]
       },
+      {
+        "matcher": "Write|Edit|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python \"$CLAUDE_PROJECT_DIR/tools/hooks/allow_locate_behavior_writes.py\"",
+            "shell": "bash",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
       {
         "matcher": "Write|Edit|MultiEdit",
         "hooks": [

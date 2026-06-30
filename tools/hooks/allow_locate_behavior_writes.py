@@ -1,31 +1,52 @@
 #!/usr/bin/env python3
-"""PreToolUse hook: auto-approve Write/Edit/MultiEdit to curated, git-tracked .claude config.
+"""Pre/PostToolUse hook governing Write/Edit/MultiEdit to curated .claude config + hook scripts.
 
-Force-ALLOWS (promptless) edits to config we touch routinely:
-  - `.claude/skills/`  (incl. the locate-behavior self-healing map the finder writes)
-  - `.claude/agents/`  (curated subagent definitions)
-acceptEdits carves `.claude/` config out (so it would otherwise prompt), and relative globs
-in settings.json don't match the absolute backslash paths Claude resolves on Windows, so an
-explicit hook "allow" is the only reliable way to make these frictionless.
+  ALLOW (promptless): `.claude/skills/` and `.claude/agents/` (non-settings) — curated config.
 
-EXCEPTION — a `settings*.json` nested anywhere under those folders is NOT force-allowed; it
-defers to the normal flow so it prompts. Permission config must be reviewed, never auto-edited.
+  ASK-ONCE-PER-SESSION: `tools/hooks/` (the hook scripts, incl. THIS file). The first edit
+  each session prompts ("Allow once"); after approval a PostToolUse flag keyed on session_id
+  is written, and the rest of that session is silent for hook scripts.
 
-Everything else defers (no decision). The "must review" paths that live OUTSIDE `.claude/`
-(notably `tools/hooks/`) are gated by `ask` RULES in settings.json, not here — `ask` rules,
-unlike a hook "ask", present (and honor) the dialog's "Always allow (this session)" button,
-which a hook-forced prompt cannot. So we deliberately leave that to the permission system.
+  DEFER (normal flow): everything else. In particular `settings*.json` is intentionally NOT
+  handled here — it must prompt EVERY time, enforced by the `.claude/` acceptEdits carve-out
+  plus an explicit `ask` rule in settings.json.
+
+Why a flag and not the dialog's session button: a forced prompt (hook "ask" OR an ask rule)
+only ever offers "Allow once" — the "Always allow (this session)" button appears solely on
+the unforced default dialog, which acceptEdits skips. So per-session convenience for hook
+scripts is implemented with the flag below. Register this script under BOTH PreToolUse and
+PostToolUse for matcher Write|Edit|MultiEdit.
 """
 import json
+import os
 import sys
+import tempfile
 
 # Tools whose target file we gate on. MultiEdit/Edit/Write all carry file_path.
 _FILE_TOOLS = {"Write", "Edit", "MultiEdit"}
-# Forward-slash, lowercased markers; path contains one -> auto-approve (unless it's a settings file).
+# Force-allowed curated config (unless the target is a settings file).
 _ALLOWED_MARKERS = (
     "/.claude/skills/",
     "/.claude/agents/",
 )
+# The hook-scripts folder: ask-once-per-session.
+_HOOKS_MARKER = "/tools/hooks/"
+
+
+def _grant_path(session_id: str) -> str:
+    safe = "".join(c for c in session_id if c.isalnum() or c in "-_")
+    return os.path.join(tempfile.gettempdir(), "claude_perm_grants", f"{safe}.hooks.flag")
+
+
+def _emit(decision: str, reason: str) -> int:
+    print(json.dumps({
+        "hookSpecificOutput": {
+            "hookEventName": "PreToolUse",
+            "permissionDecision": decision,
+            "permissionDecisionReason": reason,
+        }
+    }))
+    return 0
 
 
 def main() -> int:
@@ -42,22 +63,35 @@ def main() -> int:
         return 0
 
     norm = path.replace("\\", "/").lower()
-    if not any(marker in norm for marker in _ALLOWED_MARKERS):
-        return 0  # outside curated folders -> normal flow (acceptEdits / ask rules / dialog)
-
-    # Never auto-approve a settings file, even nested in a curated folder -> let it prompt.
     base = norm.rsplit("/", 1)[-1]
-    if base.startswith("settings") and base.endswith(".json"):
+    event = payload.get("hook_event_name")
+    session_id = payload.get("session_id") or ""
+    is_hook_script = _HOOKS_MARKER in norm
+
+    # PostToolUse: the edit succeeded (user approved). Record the per-session grant for hooks.
+    if event == "PostToolUse":
+        if is_hook_script and session_id:
+            try:
+                fp = _grant_path(session_id)
+                os.makedirs(os.path.dirname(fp), exist_ok=True)
+                with open(fp, "w") as f:
+                    f.write("granted")
+            except Exception:
+                pass
         return 0
 
-    print(json.dumps({
-        "hookSpecificOutput": {
-            "hookEventName": "PreToolUse",
-            "permissionDecision": "allow",
-            "permissionDecisionReason": "curated .claude config (skills/agents, non-settings)",
-        }
-    }))
-    return 0
+    # PreToolUse below.
+    if is_hook_script:
+        if session_id and os.path.exists(_grant_path(session_id)):
+            return _emit("allow", "hook scripts: approved earlier this session")
+        return _emit("ask", "hook script - review once per session")
+
+    if any(marker in norm for marker in _ALLOWED_MARKERS):
+        if base.startswith("settings") and base.endswith(".json"):
+            return 0  # settings always prompts (carve-out + ask rule) -> defer
+        return _emit("allow", "curated .claude config (skills/agents, non-settings)")
+
+    return 0  # everything else -> normal flow
 
 
 if __name__ == "__main__":
