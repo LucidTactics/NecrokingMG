@@ -12,9 +12,11 @@ allow rule never fires and every write prompts. This hook normalizes the path an
 the write when it lands inside one of those folders — portable across machines/OSes (no
 hard-coded home dir), unlike an absolute glob.
 
-Deliberately NOT covered: `.claude/settings*.json` and other `.claude/` files — those
-govern permissions/hooks themselves, so they stay on the normal permission flow. Anything
-outside the listed folders is left to the user (we stay silent).
+Deliberately NOT covered: any `settings*.json` (matched by basename, so even one nested
+inside a curated folder like `.claude/skills/x/settings.json`) and any `.claude/` file
+outside the two folders above. Permission/hook config must always prompt — editing it is
+an escalation, not a self-heal. Anything outside the listed folders is left to the user
+(we stay silent).
 """
 import json
 import sys
@@ -45,11 +47,17 @@ def main() -> int:
     if not any(marker in norm for marker in _ALLOWED_MARKERS):
         return 0  # outside the curated folders -> let the user decide
 
+    # NEVER auto-approve a settings file, even nested inside a curated folder. Permission/
+    # hook config must always prompt — a self-edit there is an escalation, not a self-heal.
+    base = norm.rsplit("/", 1)[-1]
+    if base.startswith("settings") and base.endswith(".json"):
+        return 0  # e.g. .../skills/x/settings.json -> defer to normal (prompting) flow
+
     print(json.dumps({
         "hookSpecificOutput": {
             "hookEventName": "PreToolUse",
             "permissionDecision": "allow",
-            "permissionDecisionReason": "curated .claude config (skills/locate-behavior or agents)",
+            "permissionDecisionReason": "curated .claude config (skills/agents, non-settings)",
         }
     }))
     return 0
