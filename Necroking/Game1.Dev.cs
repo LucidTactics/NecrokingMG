@@ -227,6 +227,14 @@ public partial class Game1 {
 
             case "screenshot": {
                string name = c.Opt("name") ?? (c.Args.Length > 0 ? c.Args[0] : "devshot");
+               // The dashboard polls a "live" frame ~1/s. When the window is shown
+               // on-screen the user is already watching the real game, so that
+               // constant capture is wasted work (and a per-frame hitch) — skip it.
+               // Explicit named shots (verification) still capture normally.
+               if (_devWindowShown && name == "live") {
+                  c.Complete(Necroking.Dev.DevServer.Ok("live frame suppressed (window shown)"));
+                  break;
+               }
                var (dw, dh) = ParseDownsample(c.Opt("downsample_to"));
                // Completed in Draw once the PNG is actually written.
                _pendingDevScreenshotCmd?.Complete(Necroking.Dev.DevServer.Error("superseded by newer screenshot"));
@@ -510,8 +518,8 @@ public partial class Game1 {
 
                // Buildings
                var graves = new List<int>();
-               for (int g = 0; g < 6; g++)
-                  graves.Add(Place("empty_grave", nb.X - 5 + (g % 3) * 1.6f, nb.Y - 3 + (g / 3) * 1.6f));
+               for (int g = 0; g < 6; g++)   // 3x2 grid, spaced wide enough that workers don't snag pathing between them
+                  graves.Add(Place("empty_grave", nb.X - 8 + (g % 3) * 4.5f, nb.Y - 3 + (g / 3) * 4.5f));
                Place("mushroom_pile", nb.X + 6, nb.Y - 5);
                Place("corpse_pile", nb.X + 6, nb.Y);
                Place("poison_vat", nb.X + 6, nb.Y + 5);
@@ -530,11 +538,48 @@ public partial class Game1 {
                int assigned = 0;
                for (int w = 0; w < graves.Count; w++)
                {
-                  SpawnUnit("skeleton", new Vec2(nb.X - 5 + w, nb.Y));
+                  SpawnUnit("skeleton", new Vec2(nb.X - 8 + w * 1.5f, nb.Y + 4));   // spread out below the graves
                   uint wid = _sim.Units[_sim.Units.Count - 1].Id;
                   if (_workerSystem.AssignWorker(wid, graves[w])) assigned++;
                }
                c.Complete(Necroking.Dev.DevServer.Ok($"scene built: {graves.Count} graves, 7 buildings, sources + 8 corpses, {assigned} workers assigned"));
+               break;
+            }
+
+            // Live re-space the empty graves (no rebuild): remove the existing graves and
+            // re-place them in a 3-wide grid at the given spacing, preserving which worker
+            // lives where. Lets you tune until skeletons stop snagging between graves.
+            // window.dev('respace_graves',[3.5])
+            case "respace_graves": {
+               float spacing = c.Args.Length >= 1 ? DevFloat(c.Args[0]) : 4.5f;
+               int graveDef = _envSystem.FindDef("empty_grave");
+               if (graveDef < 0) { c.Complete(Necroking.Dev.DevServer.Error("no empty_grave def")); break; }
+               Vec2 nb = _sim.NecromancerIndex >= 0 ? _sim.Units[_sim.NecromancerIndex].Position : new Vec2(2096, 1882);
+
+               // 1. Collect current grave indices + the worker housed in each (by stable unit id).
+               var graveIdxs = new List<int>();
+               for (int i = 0; i < _envSystem.ObjectCount; i++)
+                  if (_envSystem.GetObject(i).DefIndex == graveDef) graveIdxs.Add(i);
+               var workerIds = new List<uint>();
+               foreach (var gi in graveIdxs) {
+                  var hw = _workerSystem.HousedWorker(gi);
+                  if (hw.HasValue) workerIds.Add(hw.Value.Id);
+               }
+               // 2. Unassign first — clears each worker's WorkerHomeObjIdx so the index
+               //    shuffle from removing graves below can't strand them on a stale index.
+               foreach (var id in workerIds) _workerSystem.UnassignWorker(id);
+               // 3. Remove old graves backwards (RemoveObject shifts indices).
+               for (int i = graveIdxs.Count - 1; i >= 0; i--) _envSystem.RemoveObject(graveIdxs[i]);
+               // 4. Re-place the same number of graves at the new spacing.
+               int count = graveIdxs.Count > 0 ? graveIdxs.Count : 6;
+               var newGraves = new List<int>();
+               for (int g = 0; g < count; g++)
+                  newGraves.Add(_envSystem.AddObject((ushort)graveDef, nb.X - 8 + (g % 3) * spacing, nb.Y - 3 + (g / 3) * spacing, 1f));
+               // 5. Move the workers back into the fresh graves.
+               int re = 0;
+               for (int w = 0; w < workerIds.Count && w < newGraves.Count; w++)
+                  if (_workerSystem.AssignWorker(workerIds[w], newGraves[w])) re++;
+               c.Complete(Necroking.Dev.DevServer.Ok($"respaced {newGraves.Count} graves @ {spacing}u, reassigned {re}/{workerIds.Count} workers"));
                break;
             }
 

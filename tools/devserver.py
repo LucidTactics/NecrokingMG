@@ -73,7 +73,10 @@ DEFAULT_RESOLUTION = "1280x720"  # game renders at this; screenshots downsample 
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PROJECT = os.path.join(REPO_ROOT, "Necroking", "Necroking.csproj")
-EXE = os.path.join(REPO_ROOT, "bin", "Debug", "Necroking.exe")
+# Run the preview from the Release build — it's much faster at runtime than Debug.
+# Override with NECRO_DEV_CONFIG=Debug if you need a debug run.
+BUILD_CONFIG = os.environ.get("NECRO_DEV_CONFIG", "Release")
+EXE = os.path.join(REPO_ROOT, "bin", BUILD_CONFIG, "Necroking.exe")
 SCREENSHOT_DIR = os.path.join(os.path.dirname(EXE), "log", "screenshots")
 LIVE_FRAME = "live"  # screenshot name reused for the dashboard's live view
 
@@ -337,7 +340,7 @@ def build():
     if was_running:
         stop_game()
     proc = subprocess.run(
-        ["dotnet", "build", PROJECT, "-v", "q", "-nologo"],
+        ["dotnet", "build", PROJECT, "-c", BUILD_CONFIG, "-v", "q", "-nologo"],
         cwd=REPO_ROOT, capture_output=True, text=True, creationflags=_NO_WINDOW)
     lines = (proc.stdout or "").splitlines()
     errors = [l for l in lines if ": error " in l]
