@@ -21,7 +21,7 @@ using Necroking.UI;
 namespace Necroking;
 
 // Game1 partial: HUD, menus, skill toasts and debug overlays.
-public partial class Game1
+partial class GameRenderer
 {
     /// <summary>Geometry helper — same layout numbers used in DrawSkillLearnToasts.
     /// Called from the input pass so clicks land on what was just rendered.</summary>
@@ -34,44 +34,44 @@ public partial class Game1
 
     /// <summary>Hit-test corner toasts and route a left-click to opening the skill
     /// book on the relevant tab. Called from the UI input pass.</summary>
-    private void UpdateSkillLearnToastInput(int sw, int sh)
+    internal void UpdateSkillLearnToastInput(int sw, int sh)
     {
-        if (_skillLearnToasts.Count == 0) return;
-        int mx = (int)_input.MousePos.X;
-        int my = (int)_input.MousePos.Y;
+        if (_g._skillLearnToasts.Count == 0) return;
+        int mx = (int)_g._input.MousePos.X;
+        int my = (int)_g._input.MousePos.Y;
         // Iterate top of stack downward to mirror draw order — most recent toast
         // is the bottom slot (stackIndex 0).
-        for (int i = 0; i < _skillLearnToasts.Count; i++)
+        for (int i = 0; i < _g._skillLearnToasts.Count; i++)
         {
             // Toasts are drawn from the most recent (last-added) up the stack.
             // Slot 0 = newest = bottom rect.
-            int stackSlot = _skillLearnToasts.Count - 1 - i;
+            int stackSlot = _g._skillLearnToasts.Count - 1 - i;
             var rect = GetSkillLearnToastRect(sw, sh, stackSlot);
             if (rect.Contains(mx, my))
             {
-                _input.MouseOverUI = true;
-                if (_input.LeftPressed && !_input.IsMouseConsumed)
+                _g._input.MouseOverUI = true;
+                if (_g._input.LeftPressed && !_g._input.IsMouseConsumed)
                 {
-                    var t = _skillLearnToasts[i];
+                    var t = _g._skillLearnToasts[i];
                     int tabIdx = SkillBookDefs.FindTabIndexFor(t.SkillId);
-                    _skillBookOverlay.Open();
-                    if (tabIdx >= 0) _skillBookOverlay.SetActiveTab(tabIdx);
-                    _skillLearnToasts.RemoveAt(i);
-                    _input.ConsumeMouse();
+                    _g._skillBookOverlay.Open();
+                    if (tabIdx >= 0) _g._skillBookOverlay.SetActiveTab(tabIdx);
+                    _g._skillLearnToasts.RemoveAt(i);
+                    _g._input.ConsumeMouse();
                 }
                 return;
             }
         }
     }
 
-    private void UpdateSkillLearnToasts(float dt)
+    internal void UpdateSkillLearnToasts(float dt)
     {
-        for (int i = _skillLearnToasts.Count - 1; i >= 0; i--)
+        for (int i = _g._skillLearnToasts.Count - 1; i >= 0; i--)
         {
-            var t = _skillLearnToasts[i];
+            var t = _g._skillLearnToasts[i];
             t.Timer += dt;
-            if (t.Timer >= t.Duration) _skillLearnToasts.RemoveAt(i);
-            else _skillLearnToasts[i] = t;
+            if (t.Timer >= t.Duration) _g._skillLearnToasts.RemoveAt(i);
+            else _g._skillLearnToasts[i] = t;
         }
     }
 
@@ -79,9 +79,9 @@ public partial class Game1
     /// Each toast slides in (first 0.25s), holds, then fades out (last 0.6s).</summary>
     private void DrawSkillLearnToasts(int sw, int sh)
     {
-        if (_skillLearnToasts.Count == 0 || _font == null) return;
-        var f = _font!;
-        var sf = _smallFont ?? f;
+        if (_g._skillLearnToasts.Count == 0 || _g._font == null) return;
+        var f = _g._font!;
+        var sf = _g._smallFont ?? f;
 
         const int toastW = 280, toastH = 56, padR = 16, padB = 16, gap = 6;
         int yCursor = sh - padB - toastH;
@@ -93,9 +93,9 @@ public partial class Game1
         var goldDim     = new Color(108,  84,  40);
         var parchment   = new Color(196, 174, 128);
 
-        for (int i = _skillLearnToasts.Count - 1; i >= 0; i--)
+        for (int i = _g._skillLearnToasts.Count - 1; i >= 0; i--)
         {
-            var t = _skillLearnToasts[i];
+            var t = _g._skillLearnToasts[i];
             float life = t.Timer / t.Duration;
             float alpha = 1f;
             if (life < 0.1f) alpha = life / 0.1f;          // slide in
@@ -109,11 +109,11 @@ public partial class Game1
 
             var rect = new Rectangle(x, y, toastW, toastH);
             // Drop shadow
-            _spriteBatch.Draw(_pixel, new Rectangle(rect.X + 3, rect.Y + 3, rect.Width, rect.Height),
+            _g._spriteBatch.Draw(_g._pixel, new Rectangle(rect.X + 3, rect.Y + 3, rect.Width, rect.Height),
                 new Color((byte)0, (byte)0, (byte)0, (byte)(160 * alpha)));
-            _spriteBatch.Draw(_pixel, rect, new Color(leatherMid, alpha));
+            _g._spriteBatch.Draw(_g._pixel, rect, new Color(leatherMid, alpha));
             // Top gold accent band
-            _spriteBatch.Draw(_pixel, new Rectangle(rect.X, rect.Y, rect.Width, 2),
+            _g._spriteBatch.Draw(_g._pixel, new Rectangle(rect.X, rect.Y, rect.Width, 2),
                 new Color(gold, alpha));
             // Border
             DrawToastBorder(rect, new Color(goldDim, alpha));
@@ -137,11 +137,11 @@ public partial class Game1
 
     private void DrawToastBorder(Rectangle r, Color c)
     {
-        Necroking.Render.DrawUtils.DrawRectBorder(_spriteBatch, _pixel, r, c);
+        Necroking.Render.DrawUtils.DrawRectBorder(_g._spriteBatch, _g._pixel, r, c);
     }
 
     private void DrawTextRounded(SpriteFont f, string text, Vector2 pos, Color color)
-        => _spriteBatch.DrawString(f, text, new Vector2((int)pos.X, (int)pos.Y), color);
+        => _g._spriteBatch.DrawString(f, text, new Vector2((int)pos.X, (int)pos.Y), color);
 
     private static string SanitizeAscii(string text)
     {
@@ -163,25 +163,25 @@ public partial class Game1
     /// </summary>
     private void DrawWeaponAttachDebug()
     {
-        _debugDraw.EnsurePixel(GraphicsDevice);
-        for (int i = 0; i < _sim.Units.Count; i++)
+        _g._debugDraw.EnsurePixel(_g.GraphicsDevice);
+        for (int i = 0; i < _g._sim.Units.Count; i++)
         {
-            if (!_sim.Units[i].Alive) continue;
-            uint uid = _sim.Units[i].Id;
-            if (!_unitAnims.TryGetValue(uid, out var animData)) continue;
-            var unitDef = _gameData.Units.Get(_sim.Units[i].UnitDefID);
+            if (!_g._sim.Units[i].Alive) continue;
+            uint uid = _g._sim.Units[i].Id;
+            if (!_g._unitAnims.TryGetValue(uid, out var animData)) continue;
+            var unitDef = _g._gameData.Units.Get(_g._sim.Units[i].UnitDefID);
             if (unitDef == null) continue;
 
             var attach = ComputeWeaponAttach(i, unitDef, animData);
             if (!attach.Valid) continue;
 
-            var hiltSp = _renderer.WorldToScreenPx(attach.HiltWorld, attach.HiltHeight * _camera.Zoom, _camera);
-            var tipSp  = _renderer.WorldToScreenPx(attach.TipWorld,  attach.TipHeight  * _camera.Zoom, _camera);
+            var hiltSp = _g._renderer.WorldToScreenPx(attach.HiltWorld, attach.HiltHeight * _g._camera.Zoom, _g._camera);
+            var tipSp  = _g._renderer.WorldToScreenPx(attach.TipWorld,  attach.TipHeight  * _g._camera.Zoom, _g._camera);
 
             // Magenta line / lime hilt / red tip — saturated channels that
             // don't collide with the sprite's natural palette so the dots
             // stay visible against any pose.
-            _debugDraw.DrawLine(_spriteBatch, hiltSp, tipSp, new Color(255, 0, 255, 220));
+            _g._debugDraw.DrawLine(_g._spriteBatch, hiltSp, tipSp, new Color(255, 0, 255, 220));
             DrawDebugDot(hiltSp, new Color(60, 255, 60));
             DrawDebugDot(tipSp,  new Color(255, 40, 40));
         }
@@ -193,20 +193,20 @@ public partial class Game1
         for (int dy = -r; dy <= r; dy++)
             for (int dx = -r; dx <= r; dx++)
                 if (dx * dx + dy * dy <= r * r)
-                    _spriteBatch.Draw(_pixel, new Rectangle((int)pos.X + dx, (int)pos.Y + dy, 1, 1), color);
+                    _g._spriteBatch.Draw(_g._pixel, new Rectangle((int)pos.X + dx, (int)pos.Y + dy, 1, 1), color);
     }
 
     private void DrawWindDebug(int screenW, int screenH)
     {
-        if (_pixel == null || _renderer == null) return;
+        if (_g._pixel == null || _g._renderer == null) return;
 
         // Sample wind at a grid of world positions and draw colored quads
         // Scale cell size with zoom so we never have too many cells on screen
-        float cellSize = MathF.Max(2f, 40f / MathF.Max(_camera.Zoom, 1f));
+        float cellSize = MathF.Max(2f, 40f / MathF.Max(_g._camera.Zoom, 1f));
 
         // Get view bounds in world space
-        var topLeft = _renderer.ScreenToWorld(Vector2.Zero, _camera);
-        var bottomRight = _renderer.ScreenToWorld(new Vector2(screenW, screenH), _camera);
+        var topLeft = _g._renderer.ScreenToWorld(Vector2.Zero, _g._camera);
+        var bottomRight = _g._renderer.ScreenToWorld(new Vector2(screenW, screenH), _g._camera);
         float minX = MathF.Floor(topLeft.X / cellSize) * cellSize;
         float minY = MathF.Floor(topLeft.Y / cellSize) * cellSize;
         float maxX = MathF.Ceiling(bottomRight.X / cellSize) * cellSize;
@@ -222,22 +222,22 @@ public partial class Game1
         {
             for (float wx = minX; wx < maxX; wx += cellSize)
             {
-                float gust = EnvironmentSystem.SampleWind(wx, wy, _gameTime, out windAngle);
+                float gust = EnvironmentSystem.SampleWind(wx, wy, _g._gameTime, out windAngle);
                 if (gust < 0.01f) continue; // skip fully still cells
 
-                var sp = _renderer.WorldToScreen(new Vec2(wx, wy), 0f, _camera);
-                float halfPx = cellSize * _camera.Zoom * 0.5f;
+                var sp = _g._renderer.WorldToScreen(new Vec2(wx, wy), 0f, _g._camera);
+                float halfPx = cellSize * _g._camera.Zoom * 0.5f;
                 int px = (int)(sp.X - halfPx);
-                int py = (int)(sp.Y - halfPx * _camera.YRatio);
-                int pw = (int)(cellSize * _camera.Zoom);
-                int ph = (int)(cellSize * _camera.Zoom * _camera.YRatio);
+                int py = (int)(sp.Y - halfPx * _g._camera.YRatio);
+                int pw = (int)(cellSize * _g._camera.Zoom);
+                int ph = (int)(cellSize * _g._camera.Zoom * _g._camera.YRatio);
 
                 // Color: blue(still) → yellow → white(peak)
                 byte r = (byte)(55 + (int)(200 * gust));
                 byte g = (byte)(55 + (int)(200 * gust));
                 byte b = (byte)(55 + (int)(80 * (1f - gust)));
                 byte a = (byte)(40 + (int)(80 * gust));
-                _spriteBatch.Draw(_pixel, new Rectangle(px, py, pw, ph), new Color(r, g, b, a));
+                _g._spriteBatch.Draw(_g._pixel, new Rectangle(px, py, pw, ph), new Color(r, g, b, a));
             }
         }
 
@@ -260,15 +260,15 @@ public partial class Game1
         DrawDebugLine(tip, tip + new Vector2(MathF.Cos(headAngle2) * headLen, MathF.Sin(headAngle2) * headLen), Color.White);
 
         // Background circle for arrow
-        _spriteBatch.Draw(_pixel, new Rectangle((int)arrowX - 45, (int)arrowY - 45, 90, 90), new Color(0, 0, 0, 120));
+        _g._spriteBatch.Draw(_g._pixel, new Rectangle((int)arrowX - 45, (int)arrowY - 45, 90, 90), new Color(0, 0, 0, 120));
 
         // Label
-        if (_smallFont != null)
+        if (_g._smallFont != null)
         {
             float angleDeg = windAngle * 180f / MathF.PI;
-            _spriteBatch.DrawString(_smallFont, $"Wind {angleDeg:F0} deg",
+            _g._spriteBatch.DrawString(_g._smallFont, $"Wind {angleDeg:F0} deg",
                 new Vector2(16, 108), Color.White);
-            _spriteBatch.DrawString(_smallFont, "F6: Wind Debug",
+            _g._spriteBatch.DrawString(_g._smallFont, "F6: Wind Debug",
                 new Vector2(16, 122), new Color(180, 180, 180));
         }
     }
@@ -279,7 +279,7 @@ public partial class Game1
         float len = MathF.Sqrt(dx * dx + dy * dy);
         if (len < 0.5f) return;
         float angle = MathF.Atan2(dy, dx);
-        _spriteBatch.Draw(_pixel, a, null, color, angle, Vector2.Zero, new Vector2(len, 1f), SpriteEffects.None, 0f);
+        _g._spriteBatch.Draw(_g._pixel, a, null, color, angle, Vector2.Zero, new Vector2(len, 1f), SpriteEffects.None, 0f);
     }
 
     /// <summary>Draw one F7 horde ring (a circle outline) plus a label at its north
@@ -287,20 +287,20 @@ public partial class Game1
     /// labels at different heights so all three stay readable.</summary>
     private void DrawHordeRing(Vec2 center, float radius, Color color, string label, int screenW, int screenH)
     {
-        _debugDraw.DrawCircle(_spriteBatch, _renderer, _camera, center, radius, color, 48);
-        if (_smallFont == null || radius < 0.5f) return;
-        var top = _camera.WorldToScreen(center + new Vec2(0f, -radius), 0f, screenW, screenH);
-        var sz = _smallFont.MeasureString(label);
+        _g._debugDraw.DrawCircle(_g._spriteBatch, _g._renderer, _g._camera, center, radius, color, 48);
+        if (_g._smallFont == null || radius < 0.5f) return;
+        var top = _g._camera.WorldToScreen(center + new Vec2(0f, -radius), 0f, screenW, screenH);
+        var sz = _g._smallFont.MeasureString(label);
         var labelColor = new Color(color.R, color.G, color.B, (byte)255);
-        _spriteBatch.DrawString(_smallFont, label,
+        _g._spriteBatch.DrawString(_g._smallFont, label,
             new Vector2((int)(top.X - sz.X / 2f), (int)(top.Y - sz.Y - 1)), labelColor);
     }
 
     private void DrawHordeDebug()
     {
-        _debugDraw.EnsurePixel(GraphicsDevice);
-        int screenW = GraphicsDevice.Viewport.Width, screenH = GraphicsDevice.Viewport.Height;
-        var horde = _sim.Horde;
+        _g._debugDraw.EnsurePixel(_g.GraphicsDevice);
+        int screenW = _g.GraphicsDevice.Viewport.Width, screenH = _g.GraphicsDevice.Viewport.Height;
+        var horde = _g._sim.Horde;
         var settings = horde.Settings;
 
         // Three horde rings, each labeled with its world radius so they're easy to
@@ -318,18 +318,18 @@ public partial class Game1
 
         // Formation facing arrow
         var facingDir = new Vec2(MathF.Cos(horde.CircleFacing), MathF.Sin(horde.CircleFacing));
-        var centerSp = _camera.WorldToScreen(horde.CircleCenter, 0f, screenW, screenH);
-        var facingEnd = _camera.WorldToScreen(horde.CircleCenter + facingDir * 3f, 0f, screenW, screenH);
-        _debugDraw.DrawArrow(_spriteBatch, centerSp, facingEnd, new Color(100, 255, 100, 200));
+        var centerSp = _g._camera.WorldToScreen(horde.CircleCenter, 0f, screenW, screenH);
+        var facingEnd = _g._camera.WorldToScreen(horde.CircleCenter + facingDir * 3f, 0f, screenW, screenH);
+        _g._debugDraw.DrawArrow(_g._spriteBatch, centerSp, facingEnd, new Color(100, 255, 100, 200));
 
         // Unit slots and connections
         foreach (var unit in horde.HordeUnits)
         {
-            int unitIdx = _sim.ResolveUnitID(unit.UnitID);
-            if (unitIdx < 0 || !_sim.Units[unitIdx].Alive) continue;
+            int unitIdx = _g._sim.ResolveUnitID(unit.UnitID);
+            if (unitIdx < 0 || !_g._sim.Units[unitIdx].Alive) continue;
 
-            var unitPos = _sim.Units[unitIdx].Position;
-            var unitSp = _camera.WorldToScreen(unitPos, 0f, screenW, screenH);
+            var unitPos = _g._sim.Units[unitIdx].Position;
+            var unitSp = _g._camera.WorldToScreen(unitPos, 0f, screenW, screenH);
 
             // A commanded minion (Routine 4 = RoutineCommanded) is attack-moving to a
             // player-issued point, not its formation slot. Draw the line to where it was
@@ -337,24 +337,24 @@ public partial class Game1
             // arrowhead pointing at the order point — this is the order, not the slot it
             // happens to own. (HordeUnitState has no Commanded value; the formation slot
             // it would otherwise occupy is stale while under orders, so don't draw it.)
-            bool commanded = _sim.Units[unitIdx].Routine == 4; // RoutineCommanded
+            bool commanded = _g._sim.Units[unitIdx].Routine == 4; // RoutineCommanded
             if (commanded)
             {
-                var cmdTarget = _sim.Units[unitIdx].MoveTarget;
-                var cmdSp = _camera.WorldToScreen(cmdTarget, 0f, screenW, screenH);
+                var cmdTarget = _g._sim.Units[unitIdx].MoveTarget;
+                var cmdSp = _g._camera.WorldToScreen(cmdTarget, 0f, screenW, screenH);
                 var cmdCol = new Color(255, 90, 235, 210);
                 // Command-point marker (larger cross to distinguish from slot crosses)
-                _spriteBatch.Draw(_pixel, new Rectangle((int)cmdSp.X - 4, (int)cmdSp.Y, 9, 1), cmdCol);
-                _spriteBatch.Draw(_pixel, new Rectangle((int)cmdSp.X, (int)cmdSp.Y - 4, 1, 9), cmdCol);
-                _debugDraw.DrawArrow(_spriteBatch, unitSp, cmdSp, cmdCol);
+                _g._spriteBatch.Draw(_g._pixel, new Rectangle((int)cmdSp.X - 4, (int)cmdSp.Y, 9, 1), cmdCol);
+                _g._spriteBatch.Draw(_g._pixel, new Rectangle((int)cmdSp.X, (int)cmdSp.Y - 4, 1, 9), cmdCol);
+                _g._debugDraw.DrawArrow(_g._spriteBatch, unitSp, cmdSp, cmdCol);
             }
             // Line to slot target (formation followers only)
             else if (horde.GetTargetPosition(unit.UnitID, out Vec2 slotPos))
             {
-                var slotSp = _camera.WorldToScreen(slotPos, 0f, screenW, screenH);
+                var slotSp = _g._camera.WorldToScreen(slotPos, 0f, screenW, screenH);
                 // Slot marker (small cross)
-                _spriteBatch.Draw(_pixel, new Rectangle((int)slotSp.X - 3, (int)slotSp.Y, 7, 1), new Color(100, 200, 100, 150));
-                _spriteBatch.Draw(_pixel, new Rectangle((int)slotSp.X, (int)slotSp.Y - 3, 1, 7), new Color(100, 200, 100, 150));
+                _g._spriteBatch.Draw(_g._pixel, new Rectangle((int)slotSp.X - 3, (int)slotSp.Y, 7, 1), new Color(100, 200, 100, 150));
+                _g._spriteBatch.Draw(_g._pixel, new Rectangle((int)slotSp.X, (int)slotSp.Y - 3, 1, 7), new Color(100, 200, 100, 150));
                 // Line from unit to slot
                 Color lineCol = unit.State switch
                 {
@@ -364,74 +364,74 @@ public partial class Game1
                     HordeUnitState.Returning => new Color(80, 150, 255, 150),
                     _ => new Color(150, 150, 150, 100)
                 };
-                _debugDraw.DrawLine(_spriteBatch, unitSp, slotSp, lineCol);
+                _g._debugDraw.DrawLine(_g._spriteBatch, unitSp, slotSp, lineCol);
             }
 
             // State label — show "Commanded" for units under orders (HordeUnitState is
             // stale for them, since the command path sets Unit.Routine directly).
-            if (_smallFont != null)
+            if (_g._smallFont != null)
             {
                 string stateLabel = commanded ? "Commanded" : unit.State.ToString();
-                _spriteBatch.DrawString(_smallFont, stateLabel,
+                _g._spriteBatch.DrawString(_g._smallFont, stateLabel,
                     new Vector2(unitSp.X + 8, unitSp.Y - 16), new Color(200, 200, 200, 200));
             }
         }
 
         // Mode label
-        if (_smallFont != null)
-            _spriteBatch.DrawString(_smallFont, "[F7] Debug: Horde",
+        if (_g._smallFont != null)
+            _g._spriteBatch.DrawString(_g._smallFont, "[F7] Debug: Horde",
                 new Vector2(10, 26), new Color(100, 255, 100, 200));
     }
 
     private void DrawUnitInfoDebug()
     {
-        _debugDraw.EnsurePixel(GraphicsDevice);
-        int screenW = GraphicsDevice.Viewport.Width, screenH = GraphicsDevice.Viewport.Height;
+        _g._debugDraw.EnsurePixel(_g.GraphicsDevice);
+        int screenW = _g.GraphicsDevice.Viewport.Width, screenH = _g.GraphicsDevice.Viewport.Height;
 
-        for (int i = 0; i < _sim.Units.Count; i++)
+        for (int i = 0; i < _g._sim.Units.Count; i++)
         {
-            if (!_sim.Units[i].Alive) continue;
+            if (!_g._sim.Units[i].Alive) continue;
 
-            var pos = _sim.Units[i].Position;
-            var sp = _camera.WorldToScreen(pos, 0f, screenW, screenH);
-            float speed = _sim.Units[i].Velocity.Length();
-            float maxSpeed = _sim.Units[i].MaxSpeed;
+            var pos = _g._sim.Units[i].Position;
+            var sp = _g._camera.WorldToScreen(pos, 0f, screenW, screenH);
+            float speed = _g._sim.Units[i].Velocity.Length();
+            float maxSpeed = _g._sim.Units[i].MaxSpeed;
 
             // Line to target
-            var target = _sim.Units[i].Target;
+            var target = _g._sim.Units[i].Target;
             if (target.IsUnit)
             {
-                int tIdx = _sim.ResolveUnitID(target.UnitID);
-                if (tIdx >= 0 && _sim.Units[tIdx].Alive)
+                int tIdx = _g._sim.ResolveUnitID(target.UnitID);
+                if (tIdx >= 0 && _g._sim.Units[tIdx].Alive)
                 {
-                    var tSp = _camera.WorldToScreen(_sim.Units[tIdx].Position, 0f, screenW, screenH);
-                    _debugDraw.DrawLine(_spriteBatch, sp, tSp, new Color(255, 100, 100, 100));
+                    var tSp = _g._camera.WorldToScreen(_g._sim.Units[tIdx].Position, 0f, screenW, screenH);
+                    _g._debugDraw.DrawLine(_g._spriteBatch, sp, tSp, new Color(255, 100, 100, 100));
                 }
             }
 
             // Velocity vector
             if (speed > 0.1f)
             {
-                var velEnd = _camera.WorldToScreen(pos + _sim.Units[i].Velocity.Normalized() * 1.5f, 0f, screenW, screenH);
-                _debugDraw.DrawArrow(_spriteBatch, sp, velEnd, new Color(80, 200, 255, 150));
+                var velEnd = _g._camera.WorldToScreen(pos + _g._sim.Units[i].Velocity.Normalized() * 1.5f, 0f, screenW, screenH);
+                _g._debugDraw.DrawArrow(_g._spriteBatch, sp, velEnd, new Color(80, 200, 255, 150));
             }
 
-            if (_smallFont == null) continue;
+            if (_g._smallFont == null) continue;
 
             // Get animation state
             string animLabel = "?";
-            uint uid = _sim.Units[i].Id;
-            if (_unitAnims.TryGetValue(uid, out var animData))
+            uint uid = _g._sim.Units[i].Id;
+            if (_g._unitAnims.TryGetValue(uid, out var animData))
                 animLabel = animData.Ctrl.CurrentState.ToString();
 
             string aiLabel = "?";
-            var aiArchetypeId = _sim.Units[i].Archetype;
+            var aiArchetypeId = _g._sim.Units[i].Archetype;
             aiLabel = AI.ArchetypeRegistry.GetName(aiArchetypeId);
             var aiArchetype = AI.ArchetypeRegistry.Get(aiArchetypeId);
 
             if (aiArchetype != null)
             {
-                string routineLabel = aiArchetype.GetRoutineName(_sim.Units[i].Routine);
+                string routineLabel = aiArchetype.GetRoutineName(_g._sim.Units[i].Routine);
                 aiLabel = $"{aiLabel} - {routineLabel}";
             }
 
@@ -445,17 +445,17 @@ public partial class Game1
             // eff + ms are the two values SetEffort writes (MoveEffort + the derived
             // MaxSpeed cap) — show both so slow-stroll routines (e.g. Walk×0.5) are
             // legible at a glance.
-            sb.Append($"v:{speed:F1} {animLabel} eff:{_sim.Units[i].MoveEffort} ms:{maxSpeed:F1}");
+            sb.Append($"v:{speed:F1} {animLabel} eff:{_g._sim.Units[i].MoveEffort} ms:{maxSpeed:F1}");
 
-            var ov = _sim.Units[i].OverrideAnim;
+            var ov = _g._sim.Units[i].OverrideAnim;
             if (ov.IsActive)
             {
                 string dur = ov.Duration < 0 ? "loop" : (ov.Duration == 0 ? "once" : $"{ov.Duration:F1}s");
                 sb.Append($"\nov:{ov.State} p{ov.Priority} {dur}");
-                if (_sim.Units[i].OverrideStarted) sb.Append(" *");
+                if (_g._sim.Units[i].OverrideStarted) sb.Append(" *");
             }
 
-            var inc = _sim.Units[i].Incap;
+            var inc = _g._sim.Units[i].Incap;
             if (inc.Active || inc.Recovering)
             {
                 sb.Append($"\nincap:{(inc.Active ? "A" : "")}{(inc.Recovering ? "R" : "")}");
@@ -464,51 +464,51 @@ public partial class Game1
                 if (inc.HoldAtEnd) sb.Append(" @end");
             }
 
-            if (!_sim.Units[i].PendingAttack.IsNone)
+            if (!_g._sim.Units[i].PendingAttack.IsNone)
             {
-                uint tgtId = _sim.Units[i].PendingAttack.IsUnit ? _sim.Units[i].PendingAttack.UnitID : 0;
+                uint tgtId = _g._sim.Units[i].PendingAttack.IsUnit ? _g._sim.Units[i].PendingAttack.UnitID : 0;
                 // ASCII-only: the small SpriteFont is authored with a limited glyph
                 // range; any char outside that range throws ArgumentException on
                 // DrawString and crashes the game (non-ASCII arrow was the bug).
-                sb.Append($"\npend:>{tgtId} w{_sim.Units[i].PendingWeaponIdx}");
-                if (_sim.Units[i].PendingWeaponIsRanged) sb.Append(" R");
-                if (_sim.Units[i].CurrentAttackLungeDist > 0f)
-                    sb.Append($" lunge={_sim.Units[i].CurrentAttackLungeDist:F2}");
+                sb.Append($"\npend:>{tgtId} w{_g._sim.Units[i].PendingWeaponIdx}");
+                if (_g._sim.Units[i].PendingWeaponIsRanged) sb.Append(" R");
+                if (_g._sim.Units[i].CurrentAttackLungeDist > 0f)
+                    sb.Append($" lunge={_g._sim.Units[i].CurrentAttackLungeDist:F2}");
             }
 
-            if (_sim.Units[i].JumpPhase != 0)
+            if (_g._sim.Units[i].JumpPhase != 0)
             {
-                string phaseName = _sim.Units[i].JumpPhase switch
+                string phaseName = _g._sim.Units[i].JumpPhase switch
                 {
                     1 => "Takeoff", 2 => "Airborne", 3 => "Landing", 4 => "Recovery",
-                    _ => $"P{_sim.Units[i].JumpPhase}"
+                    _ => $"P{_g._sim.Units[i].JumpPhase}"
                 };
-                sb.Append($"\njump:{phaseName} Z={_sim.Units[i].Z:F2}");
+                sb.Append($"\njump:{phaseName} Z={_g._sim.Units[i].Z:F2}");
             }
 
-            float rox = _sim.Units[i].RenderOffset.X, roy = _sim.Units[i].RenderOffset.Y;
+            float rox = _g._sim.Units[i].RenderOffset.X, roy = _g._sim.Units[i].RenderOffset.Y;
             if (rox * rox + roy * roy > 0.0001f)
                 sb.Append($"\nrenderOff:({rox:F2},{roy:F2})");
 
-            if (_sim.Units[i].InCombat || _sim.Units[i].AttackCooldown > 0f
-                || _sim.Units[i].PostAttackTimer > 0f)
+            if (_g._sim.Units[i].InCombat || _g._sim.Units[i].AttackCooldown > 0f
+                || _g._sim.Units[i].PostAttackTimer > 0f)
             {
                 sb.Append("\ncd:");
-                if (_sim.Units[i].InCombat) sb.Append("InCombat ");
-                if (_sim.Units[i].AttackCooldown > 0f) sb.Append($"a{_sim.Units[i].AttackCooldown:F1} ");
-                if (_sim.Units[i].PostAttackTimer > 0f) sb.Append($"p{_sim.Units[i].PostAttackTimer:F1}");
+                if (_g._sim.Units[i].InCombat) sb.Append("InCombat ");
+                if (_g._sim.Units[i].AttackCooldown > 0f) sb.Append($"a{_g._sim.Units[i].AttackCooldown:F1} ");
+                if (_g._sim.Units[i].PostAttackTimer > 0f) sb.Append($"p{_g._sim.Units[i].PostAttackTimer:F1}");
             }
 
             string info = sb.ToString();
             // Approximate width for anchoring — SpriteFont.MeasureString is accurate
             // but per-unit MeasureString every frame is hot-path waste.
             var textPos = new Vector2(sp.X - info.Length, sp.Y - 28);
-            _spriteBatch.DrawString(_smallFont, info, textPos, new Color(255, 255, 200, 220));
+            _g._spriteBatch.DrawString(_g._smallFont, info, textPos, new Color(255, 255, 200, 220));
         }
 
         // Mode label
-        if (_smallFont != null)
-            _spriteBatch.DrawString(_smallFont, "[F7] Debug: Unit Info",
+        if (_g._smallFont != null)
+            _g._spriteBatch.DrawString(_g._smallFont, "[F7] Debug: Unit Info",
                 new Vector2(10, 26), new Color(80, 200, 255, 200));
     }
 
@@ -545,22 +545,22 @@ public partial class Game1
     /// the HUD's already-open SpriteBatch (no Begin/End of its own).</summary>
     private void DrawWorldHoverInfo(int screenW, int screenH)
     {
-        if (!_gameData.Settings.Tooltips.ShowWorldHoverDebug) return;
-        if (_smallFont == null) return;
+        if (!_g._gameData.Settings.Tooltips.ShowWorldHoverDebug) return;
+        if (_g._smallFont == null) return;
         // Only when actually hovering the world: no UI element under the cursor and
         // no full-screen menu/editor open.
-        if (_input.MouseOverUI) return;
-        if (_menuState != MenuState.None) return;
+        if (_g._input.MouseOverUI) return;
+        if (_g._menuState != MenuState.None) return;
 
-        Vec2 mw = _camera.ScreenToWorld(_input.MousePos, screenW, screenH);
+        Vec2 mw = _g._camera.ScreenToWorld(_g._input.MousePos, screenW, screenH);
 
         // Off the map → nothing to report (cursor is over empty void around the world).
-        if (_groundSystem != null &&
-            (mw.X < 0f || mw.Y < 0f || mw.X >= _groundSystem.WorldW || mw.Y >= _groundSystem.WorldH))
+        if (_g._groundSystem != null &&
+            (mw.X < 0f || mw.Y < 0f || mw.X >= _g._groundSystem.WorldW || mw.Y >= _g._groundSystem.WorldH))
             return;
 
-        _deathFog.WorldToCell(mw.X, mw.Y, out int fcx, out int fcy);
-        float fog = _deathFog.Sample(mw.X, mw.Y);
+        _g._deathFog.WorldToCell(mw.X, mw.Y, out int fcx, out int fcy);
+        float fog = _g._deathFog.Sample(mw.X, mw.Y);
 
         // Build the readout. The first data line is the death-fog level; everything
         // below is supporting context. Keep lines short — they're bottom-left and
@@ -570,10 +570,10 @@ public partial class Game1
             ("WORLD HOVER",                                       new Color(180, 220, 255)),
             ($"death fog: {fog:F4}",                              new Color(170, 255, 180)),
             ($"pos: ({mw.X:F1}, {mw.Y:F1})",                      new Color(220, 220, 220)),
-            ($"fog cell: ({fcx}, {fcy})  cs={_deathFog.CellSize}",new Color(180, 180, 185)),
+            ($"fog cell: ({fcx}, {fcy})  cs={_g._deathFog.CellSize}",new Color(180, 180, 185)),
         };
 
-        var f = _smallFont!;
+        var f = _g._smallFont!;
         int lineH = f.LineSpacing;
         int pad = 8;
         int gap = 2;
@@ -595,7 +595,7 @@ public partial class Game1
         int ty = boxY + pad;
         foreach (var (text, color) in lines)
         {
-            _spriteBatch.DrawString(f, SanitizeAscii(text),
+            _g._spriteBatch.DrawString(f, SanitizeAscii(text),
                 new Vector2(boxX + pad, ty), color);
             ty += lineH + gap;
         }
@@ -603,13 +603,13 @@ public partial class Game1
 
     private void DrawHUD(int screenW, int screenH)
     {
-        _hudRenderer.Draw(screenW, screenH, _sim, _gameData,
-            _inventory, _inventoryUI.IsVisible,
-            _spellBarState, _secondaryBarState,
-            _spellDropdownSlot, _secondaryDropdownSlot,
-            _timeScale, _hoveredObjectIdx, _envSystem,
-            DrawSpellCategoryIcon, BuildMenuOpenMask(), _paused, _hoveredCorpseIdx,
-            _primarySlotFlash, _secondarySlotFlash);
+        _g._hudRenderer.Draw(screenW, screenH, _g._sim, _g._gameData,
+            _g._inventory, _g._inventoryUI.IsVisible,
+            _g._spellBarState, _g._secondaryBarState,
+            _g._spellDropdownSlot, _g._secondaryDropdownSlot,
+            _g._timeScale, _g._hoveredObjectIdx, _g._envSystem,
+            DrawSpellCategoryIcon, BuildMenuOpenMask(), _g._paused, _g._hoveredCorpseIdx,
+            _g._primarySlotFlash, _g._secondarySlotFlash);
     }
 
     /// <summary>Bitmask of which core menus are open, by HUDRenderer.Menu* index,
@@ -617,42 +617,42 @@ public partial class Game1
     private int BuildMenuOpenMask()
     {
         int m = 0;
-        if (_inventoryUI.IsVisible)     m |= 1 << HUDRenderer.MenuInventory;
-        if (_craftingMenu.IsVisible)    m |= 1 << HUDRenderer.MenuCrafting;
-        if (_buildingMenuUI.IsVisible)  m |= 1 << HUDRenderer.MenuBuilding;
-        if (_grimoireOverlay.IsVisible) m |= 1 << HUDRenderer.MenuGrimoire;
-        if (_skillBookOverlay.IsVisible) m |= 1 << HUDRenderer.MenuSkills;
-        if (_characterStatsUI.IsVisible) m |= 1 << HUDRenderer.MenuCharacter;
+        if (_g._inventoryUI.IsVisible)     m |= 1 << HUDRenderer.MenuInventory;
+        if (_g._craftingMenu.IsVisible)    m |= 1 << HUDRenderer.MenuCrafting;
+        if (_g._buildingMenuUI.IsVisible)  m |= 1 << HUDRenderer.MenuBuilding;
+        if (_g._grimoireOverlay.IsVisible) m |= 1 << HUDRenderer.MenuGrimoire;
+        if (_g._skillBookOverlay.IsVisible) m |= 1 << HUDRenderer.MenuSkills;
+        if (_g._characterStatsUI.IsVisible) m |= 1 << HUDRenderer.MenuCharacter;
         return m;
     }
 
     /// <summary>Toggle a core menu by its HUDRenderer.Menu* index — the click-side
     /// mirror of the keyboard shortcuts (I/C/B/J/K/Tab), including the
     /// building↔crafting mutual-close.</summary>
-    private void ToggleCoreMenu(int idx, int screenW, int screenH)
+    internal void ToggleCoreMenu(int idx, int screenW, int screenH)
     {
-        EnsureInventoryUIsInitialized();
+        _g.EnsureInventoryUIsInitialized();
         switch (idx)
         {
             case HUDRenderer.MenuInventory:
-                _inventoryUI.Toggle(screenW, screenH);
+                _g._inventoryUI.Toggle(screenW, screenH);
                 break;
             case HUDRenderer.MenuCrafting:
-                if (_buildingMenuUI.IsVisible) _buildingMenuUI.Close();
-                _craftingMenu.Toggle(screenW, screenH);
+                if (_g._buildingMenuUI.IsVisible) _g._buildingMenuUI.Close();
+                _g._craftingMenu.Toggle(screenW, screenH);
                 break;
             case HUDRenderer.MenuBuilding:
-                if (_craftingMenu.IsVisible) _craftingMenu.Close();
-                _buildingMenuUI.Toggle(screenW, screenH);
+                if (_g._craftingMenu.IsVisible) _g._craftingMenu.Close();
+                _g._buildingMenuUI.Toggle(screenW, screenH);
                 break;
             case HUDRenderer.MenuGrimoire:
-                _grimoireOverlay.Toggle();
+                _g._grimoireOverlay.Toggle();
                 break;
             case HUDRenderer.MenuSkills:
-                _skillBookOverlay.Toggle();
+                _g._skillBookOverlay.Toggle();
                 break;
             case HUDRenderer.MenuCharacter:
-                _characterStatsUI.Toggle();
+                _g._characterStatsUI.Toggle();
                 break;
         }
     }
@@ -667,17 +667,17 @@ public partial class Game1
     {
         if (!GetAggressionBarLayout(screenW, screenH, out var bar, out var nodes)) return;
 
-        _widgetRenderer.DrawWidget("AggressionBar", bar.X, bar.Y);
+        _g._widgetRenderer.DrawWidget("AggressionBar", bar.X, bar.Y);
 
         // Token: the dot lands on the active node no matter how the bar is sized or
         // spaced (layout read live, see GetAggressionBarLayout). DrawWidget left the
         // batch closed; DrawCircle does its own Begin/End.
-        int level = Math.Clamp(_sim.Horde.AggressionLevel, 0, nodes.Count - 1);
+        int level = Math.Clamp(_g._sim.Horde.AggressionLevel, 0, nodes.Count - 1);
         var nr = nodes[level];
         var center = new Vector2(nr.X + nr.Width / 2f, nr.Y + nr.Height / 2f);
         float radius = MathF.Max(4f, nr.Width * 0.32f); // token scales with the node
         var fill = new Color(255, 196, 64); // vivid gold accent
-        _uiShaders.DrawCircle(_spriteBatch, center, radius, radius * 1.7f, fill, fill, new Color(255, 196, 64, 120));
+        _g._uiShaders.DrawCircle(_g._spriteBatch, center, radius, radius * 1.7f, fill, fill, new Color(255, 196, 64, 120));
 
         DrawAggressionTooltip(screenW, screenH, bar, nodes);
     }
@@ -686,17 +686,17 @@ public partial class Game1
     /// level node's rect (index 0 = leftmost = least aggressive), read live from the
     /// widget def so input hit-testing and drawing share one source of truth.
     /// Returns false when the bar is hidden (a menu is open) or the def is missing.</summary>
-    private bool GetAggressionBarLayout(int screenW, int screenH,
+    internal bool GetAggressionBarLayout(int screenW, int screenH,
         out Rectangle bar, out System.Collections.Generic.List<Rectangle> nodes)
     {
         bar = default;
         nodes = null!;
-        if (_menuState != MenuState.None) return false;
+        if (_g._menuState != MenuState.None) return false;
 
-        var barDef = _widgetRenderer.GetWidgetDef("AggressionBar");
+        var barDef = _g._widgetRenderer.GetWidgetDef("AggressionBar");
         if (barDef == null) return false;
 
-        var sec = _hudRenderer.GetSecondaryBarLayout(screenH);
+        var sec = _g._hudRenderer.GetSecondaryBarLayout(screenH);
         int x = (screenW - barDef.Width) / 2;
         int y = sec.barY - barDef.Height - 6; // sit just above the secondary (1-6) bar
         bar = new Rectangle(x, y, barDef.Width, barDef.Height);
@@ -709,7 +709,7 @@ public partial class Game1
 
     /// <summary>Index of the node whose center is closest (by X) to the cursor —
     /// lets a click anywhere along the bar snap to the nearest level.</summary>
-    private static int NearestAggroNode(System.Collections.Generic.List<Rectangle> nodes, int mx)
+    internal static int NearestAggroNode(System.Collections.Generic.List<Rectangle> nodes, int mx)
     {
         int best = 0, bestD = int.MaxValue;
         for (int i = 0; i < nodes.Count; i++)
@@ -727,11 +727,11 @@ public partial class Game1
     private void DrawAggressionTooltip(int screenW, int screenH,
         Rectangle bar, System.Collections.Generic.List<Rectangle> nodes)
     {
-        if (_smallFont == null) return;
+        if (_g._smallFont == null) return;
 
         var hover = bar;
         hover.Inflate(0, 8); // a little vertical slack makes the thin bar easier to hit
-        int mx = (int)_input.MousePos.X, my = (int)_input.MousePos.Y;
+        int mx = (int)_g._input.MousePos.X, my = (int)_g._input.MousePos.Y;
         if (!hover.Contains(mx, my)) return;
 
         int idx = Math.Clamp(NearestAggroNode(nodes, mx), 0, AggroNames.Length - 1);
@@ -739,10 +739,10 @@ public partial class Game1
         string desc = AggroDescs[idx];
         string hint = "Click to set  -  Shift+Q / Shift+E";
 
-        int lineH = _smallFont.LineSpacing;
+        int lineH = _g._smallFont.LineSpacing;
         int pad = 8;
-        int innerW = (int)MathF.Ceiling(MathF.Max(_smallFont.MeasureString(title).X,
-            MathF.Max(_smallFont.MeasureString(desc).X, _smallFont.MeasureString(hint).X)));
+        int innerW = (int)MathF.Ceiling(MathF.Max(_g._smallFont.MeasureString(title).X,
+            MathF.Max(_g._smallFont.MeasureString(desc).X, _g._smallFont.MeasureString(hint).X)));
         int w = innerW + pad * 2;
         int h = pad * 2 + lineH * 3 + 4;
 
@@ -753,17 +753,17 @@ public partial class Game1
 
         DrawPanel(new Rectangle(tx, ty, w, h), new Color(20, 16, 12, 235), new Color(120, 95, 60));
         int cy = ty + pad;
-        DrawText(_smallFont, title, new Vector2(tx + pad, cy), new Color(255, 210, 130));
+        DrawText(_g._smallFont, title, new Vector2(tx + pad, cy), new Color(255, 210, 130));
         cy += lineH;
-        DrawText(_smallFont, desc, new Vector2(tx + pad, cy), new Color(210, 200, 185));
+        DrawText(_g._smallFont, desc, new Vector2(tx + pad, cy), new Color(210, 200, 185));
         cy += lineH + 4;
-        DrawText(_smallFont, hint, new Vector2(tx + pad, cy), new Color(140, 130, 115));
+        DrawText(_g._smallFont, hint, new Vector2(tx + pad, cy), new Color(140, 130, 115));
     }
 
     private void DrawPauseMenu(int screenW, int screenH)
     {
-        if (_gameData.Settings.General.PauseDimBackground)
-            _spriteBatch.Draw(_pixel, new Rectangle(0, 0, screenW, screenH), new Color(0, 0, 0, 150));
+        if (_g._gameData.Settings.General.PauseDimBackground)
+            _g._spriteBatch.Draw(_g._pixel, new Rectangle(0, 0, screenW, screenH), new Color(0, 0, 0, 150));
 
         int boxW = 350;
         int btnCount = 9; // Resume + 6 editors + Main Menu + Quit
@@ -774,11 +774,11 @@ public partial class Game1
         int boxY = (screenH - boxH) / 2;
         DrawPanel(new Rectangle(boxX, boxY, boxW, boxH), new Color(30, 30, 50, 235), new Color(100, 100, 180), 3);
 
-        if (_largeFont != null)
+        if (_g._largeFont != null)
         {
             string title = "PAUSED";
-            var titleSize = _largeFont.MeasureString(title);
-            DrawText(_largeFont, title, new Vector2(boxX + boxW / 2f - titleSize.X / 2f, boxY + 15), Color.White);
+            var titleSize = _g._largeFont.MeasureString(title);
+            DrawText(_g._largeFont, title, new Vector2(boxX + boxW / 2f - titleSize.X / 2f, boxY + 15), Color.White);
         }
 
         // Menu items
@@ -799,7 +799,7 @@ public partial class Game1
         DrawMenuButton("Quit", menuX, ref menuY, btnW, btnH, btnGap);
 
         // Controls reference
-        if (_smallFont != null)
+        if (_g._smallFont != null)
         {
             string[] controls = {
                 "WASD - Move     Space - Jump",
@@ -808,7 +808,7 @@ public partial class Game1
                 "+/- - Speed   Scroll - Zoom"
             };
             for (int i = 0; i < controls.Length; i++)
-                DrawText(_smallFont, controls[i], new Vector2(boxX + 20, menuY + 10 + i * 16), new Color(140, 140, 160));
+                DrawText(_g._smallFont, controls[i], new Vector2(boxX + 20, menuY + 10 + i * 16), new Color(140, 140, 160));
         }
     }
 
@@ -817,18 +817,18 @@ public partial class Game1
         DrawMenuBackdrop(screenW, screenH);
 
         // Title
-        if (_largeFont != null)
+        if (_g._largeFont != null)
         {
             string title = "NECROKING";
-            var titleSize = _largeFont.MeasureString(title);
+            var titleSize = _g._largeFont.MeasureString(title);
             int titleY = screenH / 5;
             // Shadow
-            DrawText(_largeFont, title, new Vector2(screenW / 2f - titleSize.X / 2f + 3, titleY + 3), new Color(0, 0, 0, 180));
-            DrawText(_largeFont, title, new Vector2(screenW / 2f - titleSize.X / 2f, titleY), new Color(220, 180, 100));
+            DrawText(_g._largeFont, title, new Vector2(screenW / 2f - titleSize.X / 2f + 3, titleY + 3), new Color(0, 0, 0, 180));
+            DrawText(_g._largeFont, title, new Vector2(screenW / 2f - titleSize.X / 2f, titleY), new Color(220, 180, 100));
 
             string subtitle = "Rise of the Undead";
-            var subSize = _font?.MeasureString(subtitle) ?? Vector2.Zero;
-            DrawText(_font, subtitle, new Vector2(screenW / 2f - subSize.X / 2f, titleY + 30), new Color(180, 160, 120, 200));
+            var subSize = _g._font?.MeasureString(subtitle) ?? Vector2.Zero;
+            DrawText(_g._font, subtitle, new Vector2(screenW / 2f - subSize.X / 2f, titleY + 30), new Color(180, 160, 120, 200));
         }
 
         // Menu buttons
@@ -842,7 +842,7 @@ public partial class Game1
         DrawMenuButton("Quit", menuX, ref menuY, btnW, btnH, btnGap);
 
         // Version info
-        DrawText(_smallFont, "MonoGame Port v0.1", new Vector2(10, screenH - 20), new Color(80, 80, 100));
+        DrawText(_g._smallFont, "MonoGame Port v0.1", new Vector2(10, screenH - 20), new Color(80, 80, 100));
     }
 
     private void DrawScenarioList(int screenW, int screenH)
@@ -850,20 +850,20 @@ public partial class Game1
         DrawMenuBackdrop(screenW, screenH);
 
         // Title
-        if (_largeFont != null)
+        if (_g._largeFont != null)
         {
             string title = "SCENARIOS";
-            var titleSize = _largeFont.MeasureString(title);
+            var titleSize = _g._largeFont.MeasureString(title);
             int titleY = screenH / 6;
-            DrawText(_largeFont, title, new Vector2(screenW / 2f - titleSize.X / 2f + 3, titleY + 3), new Color(0, 0, 0, 180));
-            DrawText(_largeFont, title, new Vector2(screenW / 2f - titleSize.X / 2f, titleY), new Color(180, 220, 100));
+            DrawText(_g._largeFont, title, new Vector2(screenW / 2f - titleSize.X / 2f + 3, titleY + 3), new Color(0, 0, 0, 180));
+            DrawText(_g._largeFont, title, new Vector2(screenW / 2f - titleSize.X / 2f, titleY), new Color(180, 220, 100));
         }
 
-        if (_font != null)
+        if (_g._font != null)
         {
             string subtitle = "Select a scenario to run";
-            var subSize = _font.MeasureString(subtitle);
-            DrawText(_font, subtitle, new Vector2(screenW / 2f - subSize.X / 2f, screenH / 6 + 35), new Color(140, 140, 160));
+            var subSize = _g._font.MeasureString(subtitle);
+            DrawText(_g._font, subtitle, new Vector2(screenW / 2f - subSize.X / 2f, screenH / 6 + 35), new Color(140, 140, 160));
         }
 
         // Scenario buttons (5-wide grid)
@@ -871,10 +871,10 @@ public partial class Game1
 
         var names = new List<string>(ScenarioRegistry.GetNames());
         names.Reverse(); // Newest first
-        int visibleCount = Math.Min(names.Count - _scenarioScrollOffset, rowsVisible * cols);
+        int visibleCount = Math.Min(names.Count - _g._scenarioScrollOffset, rowsVisible * cols);
         for (int i = 0; i < visibleCount; i++)
         {
-            int nameIdx = i + _scenarioScrollOffset;
+            int nameIdx = i + _g._scenarioScrollOffset;
             if (nameIdx >= names.Count) break;
             int col = i % cols, row = i / cols;
             int bx = gridX + col * (btnW + btnGap);
@@ -889,12 +889,12 @@ public partial class Game1
         DrawMenuButtonAt("< Back", screenW / 2 - backW / 2, backY, backW, btnH);
 
         // Scroll hint
-        if (names.Count > visibleCount + _scenarioScrollOffset)
-            DrawText(_smallFont, "Scroll for more...", new Vector2(screenW / 2f - 50, screenH - 40), new Color(100, 100, 120));
+        if (names.Count > visibleCount + _g._scenarioScrollOffset)
+            DrawText(_g._smallFont, "Scroll for more...", new Vector2(screenW / 2f - 50, screenH - 40), new Color(100, 100, 120));
     }
 
     // Shared layout for the scenario grid so click-handling and drawing stay in sync.
-    private void GetScenarioGridLayout(int screenW, int screenH, out int cols, out int btnW, out int btnH, out int btnGap, out int gridX, out int menuY, out int rowsVisible)
+    internal void GetScenarioGridLayout(int screenW, int screenH, out int cols, out int btnW, out int btnH, out int btnGap, out int gridX, out int menuY, out int rowsVisible)
     {
         cols = 5;
         btnGap = 12;
@@ -911,19 +911,19 @@ public partial class Game1
     // Draws a menu button at an absolute position (grid-friendly; no advancing cursor).
     private void DrawMenuButtonAt(string text, int x, int y, int w, int h)
     {
-        int mx = (int)_input.MousePos.X, my = (int)_input.MousePos.Y;
+        int mx = (int)_g._input.MousePos.X, my = (int)_g._input.MousePos.Y;
         bool hover = mx >= x && mx < x + w && my >= y && my < y + h;
         Color bg = hover ? new Color(90, 60, 120, 240) : new Color(60, 40, 80, 220);
-        _spriteBatch.Draw(_pixel, new Rectangle(x, y, w, h), bg);
-        _spriteBatch.Draw(_pixel, new Rectangle(x, y, w, 2), new Color(220, 180, 100, hover ? 255 : 120));
-        _spriteBatch.Draw(_pixel, new Rectangle(x, y + h - 2, w, 2), new Color(220, 180, 100, hover ? 255 : 60));
+        _g._spriteBatch.Draw(_g._pixel, new Rectangle(x, y, w, h), bg);
+        _g._spriteBatch.Draw(_g._pixel, new Rectangle(x, y, w, 2), new Color(220, 180, 100, hover ? 255 : 120));
+        _g._spriteBatch.Draw(_g._pixel, new Rectangle(x, y + h - 2, w, 2), new Color(220, 180, 100, hover ? 255 : 60));
 
-        if (_font != null)
+        if (_g._font != null)
         {
             // Shrink overly long scenario names to fit inside the narrower grid cell.
-            var textSize = _font.MeasureString(text);
+            var textSize = _g._font.MeasureString(text);
             float scale = textSize.X > w - 12 ? (w - 12) / textSize.X : 1f;
-            DrawText(_font, text,
+            DrawText(_g._font, text,
                 new Vector2((int)(x + w / 2f - textSize.X * scale / 2f), (int)(y + (h - textSize.Y * scale) / 2f)),
                 new Color(255, 245, 220), scale);
         }
@@ -931,17 +931,17 @@ public partial class Game1
 
     private void DrawMenuButton(string text, int x, ref int y, int w, int h, int gap)
     {
-        int mx = (int)_input.MousePos.X, my = (int)_input.MousePos.Y;
+        int mx = (int)_g._input.MousePos.X, my = (int)_g._input.MousePos.Y;
         bool hover = mx >= x && mx < x + w && my >= y && my < y + h;
         Color bg = hover ? new Color(90, 60, 120, 240) : new Color(60, 40, 80, 220);
-        _spriteBatch.Draw(_pixel, new Rectangle(x, y, w, h), bg);
-        _spriteBatch.Draw(_pixel, new Rectangle(x, y, w, 2), new Color(220, 180, 100, hover ? 255 : 120));
-        _spriteBatch.Draw(_pixel, new Rectangle(x, y + h - 2, w, 2), new Color(220, 180, 100, hover ? 255 : 60));
+        _g._spriteBatch.Draw(_g._pixel, new Rectangle(x, y, w, h), bg);
+        _g._spriteBatch.Draw(_g._pixel, new Rectangle(x, y, w, 2), new Color(220, 180, 100, hover ? 255 : 120));
+        _g._spriteBatch.Draw(_g._pixel, new Rectangle(x, y + h - 2, w, 2), new Color(220, 180, 100, hover ? 255 : 60));
 
-        if (_font != null)
+        if (_g._font != null)
         {
-            var textSize = _font.MeasureString(text);
-            DrawText(_font, text, new Vector2((int)(x + w / 2f - textSize.X / 2f), (int)(y + (h - textSize.Y) / 2f)),
+            var textSize = _g._font.MeasureString(text);
+            DrawText(_g._font, text, new Vector2((int)(x + w / 2f - textSize.X / 2f), (int)(y + (h - textSize.Y) / 2f)),
                 new Color(255, 245, 220));
         }
         y += h + gap;
@@ -949,31 +949,31 @@ public partial class Game1
 
     private void DrawGameOver(int screenW, int screenH)
     {
-        _spriteBatch.Draw(_pixel, new Rectangle(0, 0, screenW, screenH), new Color(0, 0, 0, 160));
-        if (_largeFont != null)
+        _g._spriteBatch.Draw(_g._pixel, new Rectangle(0, 0, screenW, screenH), new Color(0, 0, 0, 160));
+        if (_g._largeFont != null)
         {
             string title = "NECROMANCER FALLEN";
-            var size = _largeFont.MeasureString(title);
-            DrawText(_largeFont, title, new Vector2(screenW / 2f - size.X / 2f, screenH / 2f - 30), new Color(200, 50, 50));
+            var size = _g._largeFont.MeasureString(title);
+            DrawText(_g._largeFont, title, new Vector2(screenW / 2f - size.X / 2f, screenH / 2f - 30), new Color(200, 50, 50));
         }
-        if (_font != null)
+        if (_g._font != null)
         {
             string sub = "Press R to restart";
-            var size = _font.MeasureString(sub);
-            DrawText(_font, sub, new Vector2(screenW / 2f - size.X / 2f, screenH / 2f + 10), new Color(180, 180, 200));
+            var size = _g._font.MeasureString(sub);
+            DrawText(_g._font, sub, new Vector2(screenW / 2f - size.X / 2f, screenH / 2f + 10), new Color(180, 180, 200));
         }
     }
 
     private void DrawText(SpriteFont? font, string text, Vector2 pos, Color color)
     {
         if (font != null)
-            _spriteBatch.DrawString(font, text, pos, color);
+            _g._spriteBatch.DrawString(font, text, pos, color);
     }
 
     private void DrawText(SpriteFont? font, string text, Vector2 pos, Color color, float scale)
     {
         if (font != null)
-            _spriteBatch.DrawString(font, text, pos, color, 0f, Vector2.Zero, scale, SpriteEffects.None, 0f);
+            _g._spriteBatch.DrawString(font, text, pos, color, 0f, Vector2.Zero, scale, SpriteEffects.None, 0f);
     }
 
     /// <summary>Draw a filled panel (rectangle) with an optional accent bar at the top (or bottom).
@@ -981,11 +981,11 @@ public partial class Game1
     /// The accent bar is drawn on top of the fill at the specified height (default 2px).</summary>
     private void DrawPanel(Rectangle r, Color fill, Color accent, int accentH = 2, bool bottomAccent = false)
     {
-        _spriteBatch.Draw(_pixel, r, fill);
+        _g._spriteBatch.Draw(_g._pixel, r, fill);
         if (bottomAccent)
-            _spriteBatch.Draw(_pixel, new Rectangle(r.X, r.Bottom - accentH, r.Width, accentH), accent);
+            _g._spriteBatch.Draw(_g._pixel, new Rectangle(r.X, r.Bottom - accentH, r.Width, accentH), accent);
         else
-            _spriteBatch.Draw(_pixel, new Rectangle(r.X, r.Y, r.Width, accentH), accent);
+            _g._spriteBatch.Draw(_g._pixel, new Rectangle(r.X, r.Y, r.Width, accentH), accent);
     }
 
     /// <summary>Draw the menu background: cover-scale bg image (or fallback fill) + dark overlay for contrast.
@@ -993,22 +993,22 @@ public partial class Game1
     private void DrawMenuBackdrop(int screenW, int screenH)
     {
         // Background image (scaled to fill, centered)
-        if (_mainMenuBg != null)
+        if (_g._mainMenuBg != null)
         {
-            float bgScale = MathF.Max((float)screenW / _mainMenuBg.Width,
-                                      (float)screenH / _mainMenuBg.Height);
-            float bgW = _mainMenuBg.Width * bgScale;
-            float bgH = _mainMenuBg.Height * bgScale;
-            _spriteBatch.Draw(_mainMenuBg,
+            float bgScale = MathF.Max((float)screenW / _g._mainMenuBg.Width,
+                                      (float)screenH / _g._mainMenuBg.Height);
+            float bgW = _g._mainMenuBg.Width * bgScale;
+            float bgH = _g._mainMenuBg.Height * bgScale;
+            _g._spriteBatch.Draw(_g._mainMenuBg,
                 new Rectangle((int)((screenW - bgW) * 0.5f), (int)((screenH - bgH) * 0.5f),
                               (int)bgW, (int)bgH),
                 Color.White);
         }
         else
         {
-            _spriteBatch.Draw(_pixel, new Rectangle(0, 0, screenW, screenH), new Color(20, 15, 30));
+            _g._spriteBatch.Draw(_g._pixel, new Rectangle(0, 0, screenW, screenH), new Color(20, 15, 30));
         }
         // Dark overlay for contrast
-        _spriteBatch.Draw(_pixel, new Rectangle(0, 0, screenW, screenH), new Color(0, 0, 0, 120));
+        _g._spriteBatch.Draw(_g._pixel, new Rectangle(0, 0, screenW, screenH), new Color(0, 0, 0, 120));
     }
 }

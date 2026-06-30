@@ -49,7 +49,7 @@ public partial class Game1
         var idleAnim = spriteData.GetAnim("Idle");
         if (idleAnim != null)
         {
-            var kfs = PickIdleFrames(idleAnim);
+            var kfs = GameRenderer.PickIdleFrames(idleAnim);
             if (kfs != null && kfs.Count > 0)
                 refH = kfs[0].Frame.Rect.Height;
         }
@@ -251,7 +251,7 @@ public partial class Game1
                 var idleAnim = spriteData.GetAnim("Idle");
                 if (idleAnim != null)
                 {
-                    var kfs = PickIdleFrames(idleAnim);
+                    var kfs = GameRenderer.PickIdleFrames(idleAnim);
                     if (kfs != null && kfs.Count > 0)
                         animData.RefFrameHeight = kfs[0].Frame.Rect.Height;
                 }
@@ -767,7 +767,7 @@ public partial class Game1
         TickPendingReanimRises(dt);   // spawn deferred rises in lockstep with their effect clock
         _buffVisuals.Update(dt, _sim.Units, _gameData.Buffs, _gameTime);
         _foragables.Update(dt);
-        UpdateSkillLearnToasts(dt);
+        _gameRenderer.UpdateSkillLearnToasts(dt);
         SyncCorruptionSettings();
 
         // Death Fog Consumption passive: while the necromancer stands in any
@@ -877,7 +877,7 @@ public partial class Game1
     /// sink magnitude. Runs before shadow / sprite / buff passes so they
     /// all see the consistent sunken RenderPos. Cheap: per-unit it's a
     /// single waterness sample + scale.</summary>
-    private void UpdateWadingSinkOffsets()
+    internal void UpdateWadingSinkOffsets()
     {
         if (_groundSystem == null) return;
         for (int i = 0; i < _sim.Units.Count; i++)

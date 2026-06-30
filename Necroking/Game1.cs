@@ -24,27 +24,27 @@ public enum MenuState { MainMenu, None, PauseMenu, Settings, UnitEditor, SpellEd
 
 public partial class Game1 : Microsoft.Xna.Framework.Game
 {
-    private const int WorldSize = 64; // start small, load map for real size
+    internal const int WorldSize = 64; // start small, load map for real size
 
     private GraphicsDeviceManager _graphics;
-    private SpriteBatch _spriteBatch = null!;
-    private Texture2D _pixel = null!;
-    private Texture2D _glowTex = null!;
-    private Texture2D? _mainMenuBg;
-    private SpriteFont? _font;
-    private SpriteFont? _smallFont;
-    private SpriteFont? _largeFont;
-    private ShadowRenderer _shadowRenderer = new();
-    private HUDRenderer _hudRenderer = new();
-    private CharacterStatsUI _characterStatsUI = new();
-    private UI.UnitInfoPanel _unitInfoPanel = new();
-    private UI.GrimoireOverlay _grimoireOverlay = new();
+    internal SpriteBatch _spriteBatch = null!;
+    internal Texture2D _pixel = null!;
+    internal Texture2D _glowTex = null!;
+    internal Texture2D? _mainMenuBg;
+    internal SpriteFont? _font;
+    internal SpriteFont? _smallFont;
+    internal SpriteFont? _largeFont;
+    internal ShadowRenderer _shadowRenderer = new();
+    internal HUDRenderer _hudRenderer = new();
+    internal CharacterStatsUI _characterStatsUI = new();
+    internal UI.UnitInfoPanel _unitInfoPanel = new();
+    internal UI.GrimoireOverlay _grimoireOverlay = new();
     private bool _pausedByInspect;
-    private UI.SkillBookOverlay _skillBookOverlay = new();
-    private SkillBookState _skillBookState = new();
-    private GameSystems.DeathFogSystem _deathFog = new();
+    internal UI.SkillBookOverlay _skillBookOverlay = new();
+    internal SkillBookState _skillBookState = new();
+    internal GameSystems.DeathFogSystem _deathFog = new();
 
-    private struct SkillLearnToast
+    internal struct SkillLearnToast
     {
         public string Header;   // e.g. "Recipe Learned"
         public string SkillName;
@@ -52,21 +52,21 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         public float Timer;     // seconds shown so far
         public float Duration;  // seconds total
     }
-    private readonly List<SkillLearnToast> _skillLearnToasts = new();
-    private UIShaders _uiShaders = null!;
+    internal readonly List<SkillLearnToast> _skillLearnToasts = new();
+    internal UIShaders _uiShaders = null!;
 
     // Data
-    private GameData _gameData = new();
+    internal GameData _gameData = new();
 
     // Simulation
-    private Simulation _sim = new();
-    private Inventory _inventory = null!;
+    internal Simulation _sim = new();
+    internal Inventory _inventory = null!;
     private Render.FontManager _fontManager = new();
-    private RuntimeWidgetRenderer _widgetRenderer = new();
-    private Game.InventoryUI _inventoryUI = new();
-    private Game.BuildingMenuUI _buildingMenuUI = new();
-    private CraftingMenuUI _craftingMenu = new();
-    private Game.TableCraftMenuUI _tableMenuUI = new();
+    internal RuntimeWidgetRenderer _widgetRenderer = new();
+    internal Game.InventoryUI _inventoryUI = new();
+    internal Game.BuildingMenuUI _buildingMenuUI = new();
+    internal CraftingMenuUI _craftingMenu = new();
+    internal Game.TableCraftMenuUI _tableMenuUI = new();
     /// <summary>True after Inventory/Building/Crafting/Table menu UIs have been
     /// fully initialized. Initialization is deferred from LoadContent to first-use
     /// (see EnsureInventoryUIsInitialized) — these four UIs collectively cost
@@ -100,7 +100,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         return best;
     }
 
-    private void EnsureInventoryUIsInitialized()
+    internal void EnsureInventoryUIsInitialized()
     {
         if (_inventoryUIsInitialized) return;
         _inventoryUIsInitialized = true;
@@ -134,7 +134,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             _sim.PlayerResources, _spriteBatch, _pixel, _font);
         _tableMenuUI.SetSkillBook(_skillBookState);
         _tableMenuUI.StartCraftCallback = (envIdx) => StartTableCraft(envIdx);
-        _tableMenuUI.DrawUnitIconCallback = (defId, rect) => DrawUnitIdleSprite(defId, rect);
+        _tableMenuUI.DrawUnitIconCallback = (defId, rect) => _gameRenderer.DrawUnitIdleSprite(defId, rect);
         _graveRosterUI.Init(_spriteBatch, _pixel, _widgetRenderer, _workerSystem);
         _jobBoardUI.Init(_spriteBatch, _pixel, _widgetRenderer, _workerSystem);
         _unitInfoPanel.Init(_widgetRenderer, _gameData);
@@ -144,7 +144,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
                 // actually seen that potion in their inventory at least once.
                 && (string.IsNullOrEmpty(spell.ConsumesItem) || _inventory.HasEverSeen(spell.ConsumesItem)));
         ValidatePotionAbilities();
-        _unitInfoPanel.DrawUnitIconCallback = (defId, rect) => DrawUnitIdleSprite(defId, rect);
+        _unitInfoPanel.DrawUnitIconCallback = (defId, rect) => _gameRenderer.DrawUnitIdleSprite(defId, rect);
         _unitInfoPanel.OnClosed = () =>
         {
             if (_pausedByInspect) { _paused = false; _pausedByInspect = false; }
@@ -176,15 +176,15 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         DebugLog.Log("startup", $"  [{now}ms +{now - _startupLastMs}ms] {step}");
         _startupLastMs = now;
     }
-    private GroundSystem _groundSystem = new();
-    private EnvironmentSystem _envSystem = new();
-    private WallSystem _wallSystem = new();
-    private RoadSystem _roadSystem = new();
+    internal GroundSystem _groundSystem = new();
+    internal EnvironmentSystem _envSystem = new();
+    internal WallSystem _wallSystem = new();
+    internal RoadSystem _roadSystem = new();
     private TriggerSystem _triggerSystem = new();
 
     // Grass
-    private byte[] _grassMap = Array.Empty<byte>();
-    private int _grassW, _grassH;
+    internal byte[] _grassMap = Array.Empty<byte>();
+    internal int _grassW, _grassH;
     private string[] _grassTypeIds = Array.Empty<string>();
     private string[] _grassTypeNames = Array.Empty<string>();
     private Color[] _grassDefaultTints = Array.Empty<Color>();
@@ -196,47 +196,41 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     private string[][] _grassTypeSpritePaths = Array.Empty<string[]>();
     private float[] _grassTypeScales = Array.Empty<float>();
     private float[] _grassTypeDensities = Array.Empty<float>();
-    private GrassTuftRenderer _grassRenderer = new();
+    internal GrassTuftRenderer _grassRenderer = new();
 
     // Rendering
-    private Renderer _renderer = new();
-    private Camera25D _camera = new();
-    private SpriteAtlas[] _atlases = new SpriteAtlas[0]; // rebuilt in LoadContent from AtlasDefs.TotalCount
-    private Dictionary<uint, UnitAnimData> _unitAnims = new(); // keyed by stable unit ID
-    private Dictionary<int, UnitAnimData> _corpseAnims = new(); // keyed by corpse ID
+    internal Renderer _renderer = new();
+    internal Camera25D _camera = new();
+    internal SpriteAtlas[] _atlases = new SpriteAtlas[0]; // rebuilt in LoadContent from AtlasDefs.TotalCount
+    internal Dictionary<uint, UnitAnimData> _unitAnims = new(); // keyed by stable unit ID
+    internal Dictionary<int, UnitAnimData> _corpseAnims = new(); // keyed by corpse ID
 
-    // Carried body bag offset and scale (pixel offsets on top of hilt position)
-    private const float CarryOffsetX = 4.5f;
-    private const float CarryOffsetY = 8.5f;
-    private const float CarryBagScale = 3.4f;
-    // Raw-corpse carry: nudge the centroid-pegged corpse vertically off the hands
-    // (negative = up, so the body rests slightly on top of the hands). Tunable.
-    private const float CarriedCorpseHandOffsetY = -2f;
+    // (Carried body-bag offsets/scale moved to GameRenderer.)
     // Cache of opaque-pixel centroids per (atlas texture, frame rect), in frame-local
     // top-left pixels. Computed once via GetData; used to balance carried corpses.
-    private readonly Dictionary<(Microsoft.Xna.Framework.Graphics.Texture2D, Rectangle), Vector2> _frameCentroidCache = new();
+    internal readonly Dictionary<(Microsoft.Xna.Framework.Graphics.Texture2D, Rectangle), Vector2> _frameCentroidCache = new();
     private bool _autostartExitPending; // --autostart headless: exit once world is loaded
-    private Dictionary<string, Flipbook> _flipbooks = new(); // keyed by flipbook ID
-    private Dictionary<string, AnimationMeta> _animMeta = new(); // animation metadata
-    private Microsoft.Xna.Framework.Graphics.Effect? _groundEffect;
-    private Microsoft.Xna.Framework.Graphics.Effect? _dissolveTreeEffect;
-    private Microsoft.Xna.Framework.Graphics.Effect? _outlineFlatEffect;
-    private Microsoft.Xna.Framework.Graphics.Effect? _morphSdfEffect; // reanimation SDF body morph
-    private Microsoft.Xna.Framework.Graphics.Effect? _wadingEffect;
+    internal Dictionary<string, Flipbook> _flipbooks = new(); // keyed by flipbook ID
+    internal Dictionary<string, AnimationMeta> _animMeta = new(); // animation metadata
+    internal Microsoft.Xna.Framework.Graphics.Effect? _groundEffect;
+    internal Microsoft.Xna.Framework.Graphics.Effect? _dissolveTreeEffect;
+    internal Microsoft.Xna.Framework.Graphics.Effect? _outlineFlatEffect;
+    internal Microsoft.Xna.Framework.Graphics.Effect? _morphSdfEffect; // reanimation SDF body morph
+    internal Microsoft.Xna.Framework.Graphics.Effect? _wadingEffect;
     private Microsoft.Xna.Framework.Graphics.Effect? _hdrIntensityEffect;
-    private readonly Render.WadingWakeSystem _wakeSystem = new();
+    internal readonly Render.WadingWakeSystem _wakeSystem = new();
     /// <summary>Cached gameplay delta from the last Update tick. Drives
     /// frame-rate-independent systems that need dt during the Draw pass
     /// (e.g. wading wake particles). Respects pause and time scale.</summary>
-    private float _frameDt;
-    private Microsoft.Xna.Framework.Graphics.Effect? _hdrSpriteEffect;
-    private Texture2D? _groundVertexMapTex;
-    private EffectManager _effectManager = new();
-    private BuffVisualSystem _buffVisuals = new();
-    private readonly List<Data.Registries.BuffDef> _wpDefsCache = new(); // reused per-unit in DrawSingleUnit
-    private BloomRenderer _bloom = new();
-    private WeatherRenderer _weatherRenderer = new();
-    private FogOfWarSystem _fogOfWar = new();
+    internal float _frameDt;
+    internal Microsoft.Xna.Framework.Graphics.Effect? _hdrSpriteEffect;
+    internal Texture2D? _groundVertexMapTex;
+    internal EffectManager _effectManager = new();
+    internal BuffVisualSystem _buffVisuals = new();
+    internal readonly List<Data.Registries.BuffDef> _wpDefsCache = new(); // reused per-unit in DrawSingleUnit
+    internal BloomRenderer _bloom = new();
+    internal WeatherRenderer _weatherRenderer = new();
+    internal FogOfWarSystem _fogOfWar = new();
 
     // Window mode (Alt+Enter toggles). Default false = the borderless windowed
     // "fullscreen" set up in the constructor (with the +1 height trick that keeps
@@ -245,20 +239,20 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     private bool _windowedMode;
     private int _windowedW = 1280, _windowedH = 720;
     private bool _handlingResize;
-    private Color _ambientColor = Color.White; // weather ambient tint, applied to lit sprites before bloom
+    internal Color _ambientColor = Color.White; // weather ambient tint, applied to lit sprites before bloom
     private DayNightSystem _dayNightSystem = new();
-    private LightningRenderer _lightningRenderer = new();
-    private PoisonCloudRenderer _poisonCloudRenderer = new();
-    private DeathFogRenderer _deathFogRenderer = new();
-    private ReanimEffectSystem _reanimFx = new();
-    private Render.ReanimMorph _reanimMorph = new();   // SDF body-morph data cache for the reanimation rise
-    private MagicGlyphRenderer _glyphRenderer = new();
-    private DebugDraw _debugDraw = new();
+    internal LightningRenderer _lightningRenderer = new();
+    internal PoisonCloudRenderer _poisonCloudRenderer = new();
+    internal DeathFogRenderer _deathFogRenderer = new();
+    internal ReanimEffectSystem _reanimFx = new();
+    internal Render.ReanimMorph _reanimMorph = new();   // SDF body-morph data cache for the reanimation rise
+    internal MagicGlyphRenderer _glyphRenderer = new();
+    internal DebugDraw _debugDraw = new();
     private GameSystems.SpellEffectSystem _spellEffects = new();
-    private List<GameSystems.DamageNumber> _damageNumbers = new();
+    internal List<GameSystems.DamageNumber> _damageNumbers = new();
 
     // Game state
-    private MenuState _menuState = MenuState.MainMenu;
+    internal MenuState _menuState = MenuState.MainMenu;
     /// <summary>Last frame's <see cref="_menuState"/>, snapshotted at end of
     /// Update. Used to detect transitions — specifically MapEditor → anything
     /// else, where the suppressed per-click pathfinder rebuilds during the
@@ -266,50 +260,47 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     /// collision data.</summary>
     private MenuState _prevMenuState = MenuState.MainMenu;
     private bool _gameWorldLoaded;
-    private bool _paused;
-    private bool _gameOver;
-    private float _gameTime;
-    private float _timeScale = 1f;
+    internal bool _paused;
+    internal bool _gameOver;
+    internal float _gameTime;
+    internal float _timeScale = 1f;
 
     // Glyph trap placement mode
     private PendingSpellCast _pendingSpell = new();
     private PendingCastAnim? _pendingCastAnim;
-    private SpellBarState _spellBarState = new();
-    private SpellBarState _secondaryBarState = new();
+    internal SpellBarState _spellBarState = new();
+    internal SpellBarState _secondaryBarState = new();
 
     // Per-slot "just activated" flash timers (seconds remaining), decayed in real
     // time. Set when a slot successfully fires a spell; the HUD draws a fading
     // highlight so a keypress visibly lights up its hotbar slot. Duration is owned
     // by HUDRenderer.SlotFlashDuration (single source of truth for the fade math).
-    private readonly float[] _primarySlotFlash = new float[4];
-    private readonly float[] _secondarySlotFlash = new float[6];
+    internal readonly float[] _primarySlotFlash = new float[4];
+    internal readonly float[] _secondarySlotFlash = new float[6];
 
     // Dev cursor override for headless hover testing (set via the `mousepos` dev command).
     private Microsoft.Xna.Framework.Vector2? _devMouseOverride;
-    private int _spellDropdownSlot = -1;
-    private int _secondaryDropdownSlot = -1;
+    internal int _spellDropdownSlot = -1;
+    internal int _secondaryDropdownSlot = -1;
     private int _channelingSlot = -1;
     // Which bar the channeling slot belongs to. The hold key differs by bar (primary
     // Q/E/LMB/RMB vs secondary D1..D6), so the slot index alone can't identify the input.
     private bool _channelingIsSecondary;
     private readonly Dictionary<string, Texture2D?> _itemTextureCache = new();
-    private int _hoveredObjectIdx = -1;
-    private int _hoveredCorpseIdx = -1;
-    private int _hoveredUnitIdx = -1;
+    internal int _hoveredObjectIdx = -1;
+    internal int _hoveredCorpseIdx = -1;
+    internal int _hoveredUnitIdx = -1;
     // Screen-space outline boxes for the hovered world object, captured during the
     // sprite draw pass (exact sprite bounds) and drawn in the HUD overlay pass.
     // Reset to null each frame at the top of Draw. See ShowHoverHighlight setting.
-    private Rectangle? _hoverBoxObject, _hoverBoxCorpse, _hoverBoxUnit;
+    internal Rectangle? _hoverBoxObject, _hoverBoxCorpse, _hoverBoxUnit;
     // --- Hover-highlight style variant cycling (design test harness; cycle with 'H') ----
     // 13 states: 0-11 = 3 shapes (Circle / Corners / Rectangle) × 4 line styles
-    // Hover-marker ground geometry, shared by the renderer (DrawHoverGroundMarkers) and the building
-    // hit-test (CursorInObjectMarker) so the pickable area matches the drawn shape exactly.
-    private const float HoverMarkerRadiusMul = 1.5f;   // visual marker radius over the collision footprint
-    private const float HoverMarkerFlatten   = 0.42f;  // vertical squash for the ground-plane (RTS) look
+    // (Hover-marker ground geometry constants moved to GameRenderer.)
     // Dev override for the hover-highlight variant (shape*4 + style). -1 = OFF (use the per-category
     // Tooltips settings — the normal path); 0..19 forces one variant on everything; 20 = highlight off.
-    private int _hoverHighlightVariant = -1;
-    private float _hoverVariantLabelTimer;     // seconds left to show the "which variant" toast
+    internal int _hoverHighlightVariant = -1;
+    internal float _hoverVariantLabelTimer;     // seconds left to show the "which variant" toast
     // Dev: pin the hovered unit (headless testing has no real mouse). uint.MaxValue = off.
     private uint _devForceHoverUnitId = uint.MaxValue;
     // Dev: pin the hovered env object by index (headless variant testing). -1 = off.
@@ -320,29 +311,29 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     // Dev-marked units (via the 'mark' dev command): persistent white boxes,
     // independent of mouse hover and the ShowHoverHighlight setting. Keyed by
     // stable unit Id; their on-screen boxes are recaptured each frame in Draw.
-    private readonly HashSet<uint> _devMarkedUnitIds = new();
-    private readonly List<Rectangle> _devMarkBoxes = new();
+    internal readonly HashSet<uint> _devMarkedUnitIds = new();
+    internal readonly List<Rectangle> _devMarkBoxes = new();
     private KeyboardState _prevKb;
     private MouseState _prevMouse;
-    private float _rawDt;
+    internal float _rawDt;
 
     /// <summary>F2 — overlay raw waterness, computed waterline V, slope, and
     /// the body-bbox bounds on each wading unit. Tuning helper for the per-
     /// direction WadingFractionByDirection values.</summary>
-    private bool _waterDebug;
+    internal bool _waterDebug;
     // Bottom-left perf/zoom readout (frame/sim/draw/present ms). Off by default —
     // toggle with F3 when debugging; it otherwise just clutters the screen.
-    private bool _showPerfReadout;
+    internal bool _showPerfReadout;
 
     // Per-frame perf timers — populated each Draw, smoothed via EMA for the
     // HUD readout so the numbers don't jitter. Stale frames keep the EMA
     // value so a paused game shows the last working number.
-    private readonly System.Diagnostics.Stopwatch _drawStopwatch = new();
-    private readonly System.Diagnostics.Stopwatch _groundDrawStopwatch = new();
-    private double _drawMsAvg;
-    private double _groundMsAvg;
-    private double _gpuPresentMsAvg;
-    private readonly InputState _input = new();
+    internal readonly System.Diagnostics.Stopwatch _drawStopwatch = new();
+    internal readonly System.Diagnostics.Stopwatch _groundDrawStopwatch = new();
+    internal double _drawMsAvg;
+    internal double _groundMsAvg;
+    internal double _gpuPresentMsAvg;
+    internal readonly InputState _input = new();
     private readonly Necroking.UI.PopupManager _popups = new();
     /// <summary>Process-wide accessor — popups call <c>Game1.Popups.Push(this)</c>
     /// on open and <c>Pop</c> on close. Static because the alternative is
@@ -409,32 +400,32 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     private readonly List<GameSystems.PendingProjectileGroup> _pendingProjectiles = new();
 
     // Editors
-    private MapEditorWindow _mapEditor = new();
-    private UIEditorWindow _uiEditor = new();
-    private EditorBase _editorUi = new();
-    private UnitEditorWindow _unitEditor = null!;
+    internal MapEditorWindow _mapEditor = new();
+    internal UIEditorWindow _uiEditor = new();
+    internal EditorBase _editorUi = new();
+    internal UnitEditorWindow _unitEditor = null!;
     // Dev/test: persistent synthetic editor mouse (ed_mouse down/up, ed_mouse_off) for click-leak tests.
     // Held across frames so press/release edges survive multiple Updates-per-Draw.
     private bool _devMouseActive, _devMouseDown;
     private int _devMouseX, _devMouseY;
-    private SpellEditorWindow _spellEditor = null!;
-    private ItemEditorWindow _itemEditor = null!;
-    private SettingsWindow _settingsWindow = null!;
+    internal SpellEditorWindow _spellEditor = null!;
+    internal ItemEditorWindow _itemEditor = null!;
+    internal SettingsWindow _settingsWindow = null!;
 
     // Random
     private readonly Random _rng = new();
 
     // Collision debug
-    private CollisionDebugMode _collisionDebugMode = CollisionDebugMode.Off;
+    internal CollisionDebugMode _collisionDebugMode = CollisionDebugMode.Off;
 
     // Gameplay debug (F7): 0=Off, 1=Horde, 2=Unit Info
-    private int _gameplayDebugMode;
+    internal int _gameplayDebugMode;
 
     // Wind debug (F6): shows gust heatmap + direction arrow
-    private bool _windDebug;
+    internal bool _windDebug;
 
     // Scenario state
-    private ScenarioBase? _activeScenario;
+    internal ScenarioBase? _activeScenario;
 
     // Lean dev control server (Necroking/Dev/DevServer.cs). Non-null only when
     // launched with --devserver <port>. Commands are queued on its listener
@@ -445,11 +436,11 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     private string? _pendingDevScreenshot;        // set by a screenshot cmd, consumed in Draw
     private Necroking.Dev.DevCommand? _pendingDevScreenshotCmd; // completed once the PNG is written
     private int _devShotW, _devShotH;             // downsample target for the pending shot (0 = native)
-    private bool _devShotNoUi, _devShotNoGround;  // suppress UI / ground for the pending shot's frame
+    internal bool _devShotNoUi, _devShotNoGround;  // suppress UI / ground for the pending shot's frame
     private Necroking.Dev.DevJob? _devJob;        // active batch script (stepped each frame in Update)
     private int _devJobSeq;                        // id counter for batch jobs
     private Vec2? _devWalkTarget;                  // dev "walk_necro" goal; drives WASD-equivalent input, cancelled by any WASD press
-    private int _scenarioScrollOffset;
+    internal int _scenarioScrollOffset;
 
     // Per-unit animation data
     internal struct UnitAnimData
@@ -464,20 +455,22 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     // Game1 subsystem split, 2026-05-13). Game1 owns the instance and the
     // pickup-sound asset; everything else lives in the system.
     private SoundEffect? _pickupSound;
-    private readonly Game.ForagableSystem _foragables = new();
+    internal readonly Game.ForagableSystem _foragables = new();
     private readonly Game.Jobs.WorkerSystem _workerSystem = new();
-    private readonly UI.GraveRosterUI _graveRosterUI = new();
-    private readonly UI.JobBoardUI _jobBoardUI = new();
-    /// <summary>Wiggle/hover proximity for *idle* on-map foragables (not the
-    /// in-flight arc visuals — those live in ForagableSystem). Stays in Game1
-    /// because it's read by the on-map render pass, not by the pickup system.</summary>
-    private const float ForagableWiggleRange = 3f;
+    internal readonly UI.GraveRosterUI _graveRosterUI = new();
+    internal readonly UI.JobBoardUI _jobBoardUI = new();
+    // (ForagableWiggleRange moved to GameRenderer.)
 
     // DamageNumber and PendingProjectileGroup moved to GameSystems.SpellEffectSystem
+
+    /// <summary>The draw pipeline, split out of Game1 into its own class (the former
+    /// Game1.Render*.cs partials). Reaches back into Game1 state via a reference to this.</summary>
+    internal readonly GameRenderer _gameRenderer;
 
     public Game1()
     {
         Popups = _popups;
+        _gameRenderer = new GameRenderer(this);
 
         // Wire the top-level editor modal layers. Each layer's OnCancel
         // transitions _menuState back; ReconcileTopLevelEditorLayers (run
@@ -1612,7 +1605,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         {
             EnsureInventoryUIsInitialized();
             scenario.WidgetRenderer = _widgetRenderer;
-            scenario.DrawUnitSprite = (defId, rect) => DrawUnitIdleSprite(defId, rect);
+            scenario.DrawUnitSprite = (defId, rect) => _gameRenderer.DrawUnitIdleSprite(defId, rect);
         }
 
         // Init map editor with scenario systems (needed for editor screenshot scenarios)
@@ -1811,7 +1804,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
                 var idleAnim = spriteData.GetAnim("Idle");
                 if (idleAnim != null)
                 {
-                    var kfs = PickIdleFrames(idleAnim);
+                    var kfs = GameRenderer.PickIdleFrames(idleAnim);
                     if (kfs != null && kfs.Count > 0)
                         refH = kfs[0].Frame.Rect.Height;
                 }
@@ -2157,7 +2150,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             LaunchArgs.AutoStart = false; // once
             StartGame();
             DebugLog.Log("startup", "[autostart] StartGame() returned — world loaded");
-            if (LaunchArgs.BakeCentroids) BakeAllCorpseCentroids();
+            if (LaunchArgs.BakeCentroids) _gameRenderer.BakeAllCorpseCentroids();
             if (LaunchArgs.Headless) _autostartExitPending = true; // exit on next frame
             _prevKb = kb;
             _prevMouse = mouse;
@@ -2249,7 +2242,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             {
                 int screenW2 = GraphicsDevice.Viewport.Width;
                 int screenH2 = GraphicsDevice.Viewport.Height;
-                GetScenarioGridLayout(screenW2, screenH2, out int cols, out _, out _, out _, out _, out _, out _);
+                _gameRenderer.GetScenarioGridLayout(screenW2, screenH2, out int cols, out _, out _, out _, out _, out _, out _);
                 if (_input.ScrollDelta > 0) _scenarioScrollOffset = Math.Max(0, _scenarioScrollOffset - cols);
                 if (_input.ScrollDelta < 0) _scenarioScrollOffset += cols;
             }
@@ -2258,7 +2251,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             {
                 int screenW2 = GraphicsDevice.Viewport.Width;
                 int screenH2 = GraphicsDevice.Viewport.Height;
-                GetScenarioGridLayout(screenW2, screenH2, out int cols, out int btnW, out int btnH, out int btnGap, out int gridX, out int menuY, out int rowsVisible);
+                _gameRenderer.GetScenarioGridLayout(screenW2, screenH2, out int cols, out int btnW, out int btnH, out int btnGap, out int gridX, out int menuY, out int rowsVisible);
 
                 var names = new List<string>(ScenarioRegistry.GetNames());
                 names.Reverse(); // Newest first (must match draw order)
@@ -2603,7 +2596,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
                 _input.MouseOverUI = true;
 
             // Skill-learn corner toasts (clickable to jump to the relevant tab)
-            UpdateSkillLearnToastInput(screenW, screenH);
+            _gameRenderer.UpdateSkillLearnToastInput(screenW, screenH);
 
             // Time controls
             if (_gameData.Settings.General.ShowTimeControls
@@ -2616,7 +2609,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
 
             // Aggression bar — hovering blocks world clicks; a left click snaps the
             // level to the nearest node (same control as Shift+Q / Shift+E).
-            if (GetAggressionBarLayout(screenW, screenH, out var aggroBar, out var aggroNodes))
+            if (_gameRenderer.GetAggressionBarLayout(screenW, screenH, out var aggroBar, out var aggroNodes))
             {
                 var aggroHover = aggroBar;
                 aggroHover.Inflate(0, 8);
@@ -2625,7 +2618,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
                     _input.MouseOverUI = true;
                     if (_input.LeftPressed)
                     {
-                        _sim.Horde.AggressionLevel = NearestAggroNode(aggroNodes, mx);
+                        _sim.Horde.AggressionLevel = GameRenderer.NearestAggroNode(aggroNodes, mx);
                         _input.ConsumeMouse();
                     }
                 }
@@ -2998,7 +2991,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             {
                 var tcfg = _gameData.Settings.Tooltips;
                 if ((tcfg.ShowBuildingInfo || tcfg.ShowGroundItemInfo) && !_input.MouseOverUI)
-                    _hoveredObjectIdx = PickHoveredObject(new Vector2(mouse.X, mouse.Y), mouseWorld);
+                    _hoveredObjectIdx = _gameRenderer.PickHoveredObject(new Vector2(mouse.X, mouse.Y), mouseWorld);
             }
 
             // --- Corpse hover detection (for the reanimation info tooltip) ---
@@ -3189,7 +3182,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
                 int mbHit = _hudRenderer.HitTestMenuButtons(screenW, mouse.X, mouse.Y);
                 if (mbHit >= 0)
                 {
-                    ToggleCoreMenu(mbHit, screenW, screenH);
+                    _gameRenderer.ToggleCoreMenu(mbHit, screenW, screenH);
                     _input.ConsumeMouse();
                 }
             }
@@ -3735,7 +3728,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         SpawnCastFailText(necroIdx, string.IsNullOrEmpty(need) ? "Path Locked" : $"Need {need}");
     }
 
-    private Texture2D? GetItemTextureByPath(string path)
+    internal Texture2D? GetItemTextureByPath(string path)
     {
         if (string.IsNullOrEmpty(path)) return null;
         if (_itemTextureCache.TryGetValue(path, out var cached)) return cached;
@@ -3817,17 +3810,17 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     // ── Raw-corpse carry (body bag mothballed; see GameConstants.UseBodyBag) ──
 
     // --- Persistent frame-centroid cache (data/frame_centroids.json) ---
-    private Dictionary<string, Vector2>? _persistedCentroids;
-    private bool _centroidsDirty;
-    private bool _bulkCentroidBake;
-    private Dictionary<Microsoft.Xna.Framework.Graphics.Texture2D, int>? _texToAtlasIdx;
+    internal Dictionary<string, Vector2>? _persistedCentroids;
+    internal bool _centroidsDirty;
+    internal bool _bulkCentroidBake;
+    internal Dictionary<Microsoft.Xna.Framework.Graphics.Texture2D, int>? _texToAtlasIdx;
 
     // ═══════════════════════════════════════
     //  Gameplay Debug Visualizations (F7)
     // ═══════════════════════════════════════
 
     // Sortable item for merged unit+object depth sorting
-    private readonly List<DepthItem> _depthItems = new(256); // reused each frame
+    internal readonly List<DepthItem> _depthItems = new(256); // reused each frame
 
     internal enum DepthItemType : byte { Unit, EnvObject, CloudPuff, GrassTuft, DeathFogPuff, ReanimDust }
 
@@ -3853,30 +3846,18 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         }
     }
 
-    private readonly Dictionary<int, float> _dissolveLoggedSeeds = new();
+    internal readonly Dictionary<int, float> _dissolveLoggedSeeds = new();
 
-    // 8-direction offsets: N, NE, E, SE, S, SW, W, NW
-    private static readonly float[][] _outlineDirs =
-    {
-        new[] { 0f, -1f }, new[] { 1f, -1f }, new[] { 1f, 0f }, new[] { 1f, 1f },
-        new[] { 0f,  1f }, new[] {-1f,  1f }, new[] {-1f, 0f }, new[] {-1f,-1f }
-    };
+    // (_outlineDirs, _ghostColor1/2, AggroNames/AggroDescs moved to GameRenderer.)
 
-    // Hardcoded ghost outline params matching C++
-    private static readonly HdrColor _ghostColor1 = new(140, 200, 255, 45, 1.0f);
-    private static readonly HdrColor _ghostColor2 = new(170, 215, 255, 60, 1.1f);
+    /// <summary>The entire draw pipeline lives in <see cref="GameRenderer"/> (the
+    /// former Game1.Render*.cs partials). MonoGame invokes this override, which
+    /// forwards into it. Keep this thin — no draw logic here.</summary>
+    protected override void Draw(GameTime gameTime) => _gameRenderer.Draw(gameTime);
 
-    // Aggression level names + one-line descriptions, indexed 0 (least) .. 4 (most).
-    private static readonly string[] AggroNames =
-        { "Defensive", "Cautious", "Balanced", "Aggressive", "Bloodthirsty" };
-    private static readonly string[] AggroDescs =
-    {
-        "Hold tight - strike only enemies at the formation's edge.",
-        "Engage threats just beyond the formation.",
-        "Balanced engagement and leash (default).",
-        "Press forward - wider engagement, longer leash.",
-        "Engagement and leash doubled - chase enemies far.",
-    };
+    /// <summary>Lets <see cref="GameRenderer"/> invoke the MonoGame base Game.Draw
+    /// (component drawing) it used to reach via <c>base.Draw</c> when it lived on Game1.</summary>
+    internal void BaseDraw(GameTime gameTime) => base.Draw(gameTime);
 
     protected override void UnloadContent()
     {

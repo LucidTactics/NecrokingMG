@@ -917,7 +917,7 @@ public partial class Game1 {
                var pt = new Microsoft.Xna.Framework.Vector2(DevFloat(c.Args[0]), DevFloat(c.Args[1]));
                int sw = GraphicsDevice.Viewport.Width, sh = GraphicsDevice.Viewport.Height;
                var cw = _camera.ScreenToWorld(pt, sw, sh);
-               int idx = PickHoveredObject(pt, cw);
+               int idx = _gameRenderer.PickHoveredObject(pt, cw);
                string did = idx >= 0 ? _envSystem.Defs[_envSystem.GetObject(idx).DefIndex].Id : "(none)";
                c.Complete(Necroking.Dev.DevServer.OkRaw($"{{\"objIdx\":{idx},\"def\":{System.Text.Json.JsonSerializer.Serialize(did)},\"worldX\":{cw.X:F2},\"worldY\":{cw.Y:F2}}}"));
                break;
@@ -1827,7 +1827,7 @@ public partial class Game1 {
     /// <summary>Dev-server screenshot: take it from the just-rendered backbuffer
     /// (before Present) and complete the pending HTTP command with the file path.
     /// Called from every Draw branch so menu screenshots work too.</summary>
-    private void CompletePendingDevScreenshot()
+    internal void CompletePendingDevScreenshot()
     {
         if (_pendingDevScreenshot == null) return;
         bool okShot = ScenarioScreenshot.TakeScreenshot(GraphicsDevice, _pendingDevScreenshot, _devShotW, _devShotH);
