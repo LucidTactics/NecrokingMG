@@ -29,10 +29,10 @@ def check(label, got, want):
 
 fails = 0
 
-# --- Layer 1: bash redirects (fire even though cat/grep are allow-listed) ---------
-fails += not check("bash cat -> deny", evb("cat foo.txt"), "deny")
-fails += not check("bash grep -> deny", evb("grep -r x ."), "deny")
-fails += not check("cd&&grep -> deny", evb("cd sub && grep x f"), "deny")
+# --- Read-only search now falls through to the fast-allow (no longer redirected) -----
+fails += not check("bash cat -> allow (read-only)", evb("cat foo.txt"), "allow")
+fails += not check("bash grep -> allow (read-only)", evb("grep -r x ."), "allow")
+fails += not check("cd&&grep -> allow (read-only)", evb("cd sub && grep x f"), "allow")
 fails += not check("grep in pipe -> allow (all parts allow-listed)",
                    evb("dotnet build | grep error"), "allow")
 fails += not check("py_compile -> allow", evb("python -m py_compile x.py"), "allow")
@@ -46,6 +46,26 @@ fails += not check("ls -> allow", evb("ls -la"), "allow")
 fails += not check("taskkill -> deny (not allow-listed)", evb("taskkill /F /IM x.exe"), "deny")
 fails += not check("curl random -> deny", evb("curl https://evil.example"), "deny")
 fails += not check("devctl -> allow", evb("python tools/devctl.py shot fight"), "allow")
+
+# --- Read-only fast-allow: side-effect-free commands wave through even if not on the
+#     allow-list; anything that writes a file or controls processes/power does not ------
+fails += not check("wc -> allow (read-only, not allow-listed)", evb("wc -l foo.txt"), "allow")
+fails += not check("sort | uniq -> allow (read-only)", evb("sort a.txt | uniq -c"), "allow")
+fails += not check("date -> allow (read-only)", evb("date +%s"), "allow")
+fails += not check("truncate -> deny (file write, not allow-listed)",
+                   evb("truncate -s0 foo.txt"), "deny")
+fails += not check("tee -> deny (file write)", evb("echo hi | tee out.txt"), "deny")
+fails += not check("rm -> deny (file write)", evb("rm -rf build"), "deny")
+fails += not check("taskkill -> deny (process control)", evb("taskkill /F /IM x.exe"), "deny")
+fails += not check("kill -> deny (process control)", evb("kill -9 1234"), "deny")
+fails += not check("robocopy outside -> deny (file write, not via fast-allow)",
+                   evb(r'robocopy "G:\src" "C:\Windows\System32" x.dll'), "deny")
+fails += not check("find search -> allow (read-only, no mutating flag)",
+                   evb('find . -name "*.cs" -type f'), "allow")
+fails += not check("find -delete -> ask (mutating flag surfaces despite find:* allow)",
+                   evb("find . -name '*.tmp' -delete"), "ask")
+fails += not check("find -exec -> ask (mutating flag surfaces despite find:* allow)",
+                   evb("find . -name '*.cs' -exec sed -i s/a/b/ {} +"), "ask")
 
 # --- Compound commands: allow only when EVERY segment is allow-listed -------------
 fails += not check("the compound that prompted -> allow",

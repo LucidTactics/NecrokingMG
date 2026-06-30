@@ -17,9 +17,10 @@ genuinely-needed command. See docs/avoid-prompting-user.md.
 Two layers:
 
   1. Bash special-cases — targeted redirects that point Claude at a no-prompt
-     alternative for a specific job: filesystem search -> Grep/Glob/Read; hand-rolled
-     syntax check -> `python -m py_compile`. These fire even on otherwise allow-listed
-     commands (e.g. `cat`), because the dedicated tool is strictly better.
+     alternative for a specific job: hand-rolled syntax check -> `python -m py_compile`.
+     These fire even on otherwise allow-listed commands, because the dedicated tool is
+     strictly better. (Read-only search like `grep`/`cat` is no longer special-cased — it
+     falls through to the read-only fast-allow in evaluate() and just runs.)
 
   2. Deny-by-default — any other Bash command is thrown back UNLESS it is:
        * fully allow-listed: every sub-command of the (possibly compound) command matches
@@ -56,6 +57,8 @@ import re
 import sys
 import tempfile
 
+import file_write_detect
+
 # Tools subject to deny-by-default. Add a tool here (and ensure the settings.json
 # `matcher` covers it) if it becomes a culprit like Bash.
 DENY_DEFAULT_TOOLS = {"Bash"}
@@ -83,23 +86,6 @@ def leading_command(cmd: str) -> str:
     return m.group(0).rsplit("/", 1)[-1].rsplit("\\", 1)[-1]
 
 
-# --- Rule: filesystem search / inspection -> Grep / Glob / Read tools -------------
-_SEARCH_CMDS = {"grep", "rg", "find", "cat", "head", "tail"}
-
-
-def rule_search(cmd: str):
-    lead = leading_command(cmd)
-    if lead in _SEARCH_CMDS:
-        return (
-            f"Use the dedicated Grep (content search), Glob (file patterns), or Read "
-            f"(cat/head/tail) tools instead of running '{lead}' via Bash — they integrate "
-            f"with the permission UI, return clickable file links, and are faster. If you "
-            f"genuinely need a shell pipeline, re-run with the search command piped (not "
-            f"leading), e.g. `<cmd> | {lead} ...`."
-        )
-    return None
-
-
 # --- Rule: hand-rolled python syntax check -> `python -m py_compile` --------------
 _PY_LEAD = {"python", "python3", "py"}
 
@@ -121,7 +107,7 @@ def rule_python_validate(cmd: str):
     return None
 
 
-BASH_RULES = (rule_search, rule_python_validate)
+BASH_RULES = (rule_python_validate,)
 
 
 # git subcommands that publish commits to a remote. These must PROMPT even though
@@ -142,6 +128,15 @@ def rule_intended_prompt(cmd: str):
         return ("A push to a remote publishes your commits and needs your explicit "
                 "approval — every other git command is auto-accepted, just this one "
                 "prompts. Approve to proceed.")
+    # An otherwise read-only tool used in its mutating mode (`find … -delete`/`-exec`)
+    # must prompt even though the bare tool (`find:*`) is allow-listed — the mutating
+    # flag is the rare, dangerous case we want surfaced rather than silently allowed.
+    trig = file_write_detect.conditional_write_triggers(cmd)
+    if trig:
+        base, flag = trig[0]
+        return (f"`{base} … {flag}` modifies the filesystem — `{base}` is auto-accepted "
+                f"for read-only searches, but the `{flag}` action mutates files and needs "
+                f"your approval. Approve to proceed.")
     return None
 
 
@@ -451,7 +446,9 @@ def evaluate(tool_name: str, tool_input: dict, mode: str, allow_rules, deny_rule
 
     cmd = str(tool_input.get("command", ""))
 
-    # Layer 1: special-case redirects (fire even when allow-listed).
+    # Layer 1: special-case redirects (fire even when allow-listed) — e.g. a hand-rolled
+    # python syntax check is steered to `python -m py_compile`. Kept ahead of the
+    # read-only fast-allow below so these redirects win over a plain allow.
     for rule in BASH_RULES:
         reason = rule(cmd)
         if reason:
@@ -468,9 +465,22 @@ def evaluate(tool_name: str, tool_input: dict, mode: str, allow_rules, deny_rule
         if intended:
             return ("ask", intended)
 
+    unsafe = _has_unsafe(cmd)
+    file_redirection = has_output_redirection(cmd)
+
+    # Read-only fast-allow: a command with no side effects (no file-writing utility or
+    # redirection, no process/power-control command per file_write_detect) and no
+    # unparseable substitution/heredoc can't do the damage a prompt guards against —
+    # accept it as is. This is the positive-safety inverse of the allow-list: instead of
+    # enumerating safe commands, file_write_detect enumerates the ways to change state and
+    # we allow the rest. Conservative by construction (interpreters/wrappers/network tools
+    # all count), so a False there is a strong read-only signal.
+    if not unsafe and not file_redirection and not file_write_detect.has_side_effects(cmd):
+        return ("allow", None)
+
     # Never force-allow a command that redirects output to a file (`>`/`>>`/`2>`/…).
     # An allow rule like `echo *` would otherwise silently sanction a file write.
-    if _has_unsafe(cmd) or has_output_redirection(cmd):
+    if unsafe or file_redirection:
         return ("defer", None)
 
     # Layer 2: if EVERY sub-command of the (possibly compound) command is allow-listed,

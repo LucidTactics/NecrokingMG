@@ -29,6 +29,7 @@
       "Bash(xargs grep:*)",
       "Bash(python tools/json_data.py:*)",
       "Bash(echo:*)",
+      "Bash(python tools/hooks/test_prompt_guard.py)",
       "Bash(sleep:*)"
     ],
     "ask": [

@@ -174,17 +174,24 @@ A `PreToolUse` / `Bash` hook (`tools/hooks/bash_prompt_guard.py`) governs Bash, 
 "avoid `&&`-chained commands, they force confirmations" worry is gone: the hook
 **force-allows** a compound command when *every* segment is individually allow-listed (it
 splits on `&&`/`||`/`;`/`|`/newlines), so `cd x && git status && dotnet build` passes
-silently. Two things to know:
+silently. Three things to know:
 
-- **Use the dedicated tools, not Bash, for search/inspection.** Prefer `Grep`/`Glob` over
-  `grep`/`find`/`rg`, and `Read` over `cat`/`head`/`tail` — they integrate with the
-  permission UI (no prompts), return clickable links, and are faster. The hook **denies** a
-  Bash command whose leading token is one of those (re-send the identical command to force a
-  prompt if you genuinely need the shell form).
-- **Deny-by-default (aggressive by design).** Any Bash command that would otherwise prompt
-  the user is bounced back instead; allow-listed commands pass silently. When it gets in the
-  way, the fix is an `allow` rule or a `rule_intended_prompt` branch — don't be shy. Full
-  detail: [docs/avoid-prompting-user.md](docs/avoid-prompting-user.md).
+- **Read-only commands just run.** A command that can't change state — no file-writing
+  utility, no `>`/`>>` redirection, no process/power-control command, no `$()`/heredoc — is
+  auto-allowed even if it isn't on the allow-list. The "can it write/mutate" catalogue lives
+  in [`tools/hooks/file_write_detect.py`](tools/hooks/file_write_detect.py) (≈365 file-writing
+  command names + process/power control); it's the inverse of the allow-list, so a *miss*
+  there = a command wrongly waved through — **err toward adding** when you touch it. Plain
+  `grep`/`cat`/`head`/`tail`/`sort`/`wc` now pass straight through; `find` is read-only until
+  a mutating flag (`-delete`/`-exec`/…) makes it **prompt**.
+- **Deny-by-default for the rest (aggressive by design).** Any Bash command that *can* mutate
+  and isn't allow-listed is bounced back; allow-listed commands pass silently. Sensitive forms
+  of allow-listed commands still prompt (`git push`, `find … -delete`). When the gate gets in
+  the way, the fix is an `allow` rule, a `rule_intended_prompt` branch, or a catalogue entry —
+  don't be shy. Full detail: [docs/avoid-prompting-user.md](docs/avoid-prompting-user.md).
+- **Still prefer the dedicated tools for search.** `Grep`/`Glob`/`Read` return clickable links
+  and are faster than `grep`/`find`/`cat` via Bash — use them even though the shell forms now
+  pass the hook.
 
 ## Todos Directory (`todos/`)
 Temporary research notes and task summaries for future sessions. Each file covers one topic with context, what's done, what's left, and how to debug. Check this directory at the start of relevant work — complete items get deleted. Not for permanent knowledge (use memory for that) or code TODOs (use comments).
