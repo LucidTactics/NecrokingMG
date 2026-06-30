@@ -27,9 +27,7 @@
       "Bash(wc:*)",
       "Bash(sort:*)",
       "Bash(xargs grep:*)",
-      "Bash(python tools/json_data.py:*)",
-      "Edit(.claude/skills/locate-behavior/**)",
-      "Write(.claude/skills/locate-behavior/**)"
+      "Bash(python tools/json_data.py:*)"
     ]
   },
   "hooks": {
@@ -40,6 +38,17 @@
           {
             "type": "command",
             "command": "python \"$CLAUDE_PROJECT_DIR/tools/hooks/bash_prompt_guard.py\"",
+            "shell": "bash",
+            "timeout": 10
+          }
+        ]
+      },
+      {
+        "matcher": "Write|Edit|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python \"$CLAUDE_PROJECT_DIR/tools/hooks/allow_locate_behavior_writes.py\"",
             "shell": "bash",
             "timeout": 10
           }

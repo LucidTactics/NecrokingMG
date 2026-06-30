@@ -15,6 +15,8 @@ file.
 |------|-----|--------|
 | Game1.* root partials | [game1-partials.md](game1-partials.md) ✅ | Frame loop, input, menu state, orchestration of every system; player spell-cast pipeline, crafting, animation tick, all rendering entry points, map load/save, dev-command dispatch |
 | Render/ (effects only) | [render.md](render.md) ◐ | **Partial** — the visual-effect/flipbook systems (`EffectManager`, `Flipbook`, `ReanimEffectSystem`, particle systems). Atlases, ground shader, bloom, shadows, fonts, HUD widgets still TODO |
+| Jobs & workers | [jobs-workers.md](jobs-workers.md) ✅ | Worker economy — Job Board UI (`JobBoardUI`) + Grave Roster UI (`GraveRosterUI`), `WorkerSystem` (grave assignment, stockpiles, the pool→jobs `Dispatch` auto-assigner), `JobDef/JobState/JobRegistry`, `AI/WorkerHandler` FSM |
+| Dev control server | [dev.md](dev.md) ✅ | The `--devserver` HTTP control channel: transport (`Dev/DevServer.cs` `DevServer`/`DevCommand`, `Dev/DevScript.cs` batch jobs) + every command verb in `Game1.Dev.cs` (`ExecuteDevCommand` switch), `Game1.DevData.cs` (`DevAddData`/state). **Where to add a new dev verb.** |
 
 ## Subsystems (under `Necroking/`) — most not yet documented
 
@@ -42,6 +44,7 @@ Use this to pick a starting area. When the routed area isn't documented yet, doc
 
 - **A spell does the wrong thing / adding a spell** → game1-partials.md (`Game1.Spells.cs`) + `Game/` (SpellCasting, SpellEffectSystem) + `Data/Registries/` (SpellRegistry). See also `docs/spells.md`.
 - **Crafting / gathering / table craft** → game1-partials.md (`Game1.Crafting.cs`) + `Game/` (table-craft system).
+- **Workers / jobs — assigning workers, job board, grave roster, auto-dispatch** → [jobs-workers.md](jobs-workers.md) (`UI/JobBoardUI.cs`, `UI/GraveRosterUI.cs`, `Game/Jobs/WorkerSystem.cs`, `AI/WorkerHandler.cs`).
 - **Animation / cast-phase timing / attack anims** → game1-partials.md (`Game1.Animation.cs`) + `Render/` (anim controller/atlases).
 - **Rendering looks wrong (world / units / corpses / HUD / spellbar)** → game1-partials.md (`Game1.Render.*`) + `Render/`.
 - **HUD / spellbar / on-screen overlays** → game1-partials.md (`Game1.Render.HUD.cs`) + `UI/`.
