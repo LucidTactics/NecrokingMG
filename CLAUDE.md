@@ -237,6 +237,14 @@ it for you. The supervisor itself can stay up (cheap; holds the pinned A/B frame
 - `screenshot [name]` with `opts`: `no_ui`, `no_ground`, `downsample_to` (`"WxH"` |
   `"full"`; default 640x360)
 - `menu <new_game|test_map|scenarios|main_menu|quit>` — press a main-menu button
+- `window <show|hide|toggle>` — **flip the running game between headless and a visible,
+  interactive window WITHOUT restarting.** The headless game always runs and renders;
+  it's just parked off-screen and stripped of its taskbar button. `show` moves it
+  on-screen (bordered + focused) so the user can play; `hide` parks it again. **When
+  the user asks to "see"/"access"/"interact with" the game, use `window show` — do NOT
+  stop+restart with `necro_start --windowed`.** A windowed *restart* is only needed
+  when the game is fully stopped (`game_running:false`); if it's already running, just
+  `window show`.
 - **Units & combat** (the same primitives scenarios use, exposed live — added 2026-06-21):
   - **Selectors** — most commands below take a `<selector>` resolving to one or more
     units: `all`/`*`, `necro`, a faction (`undead`/`human`/`animal`), a bare index

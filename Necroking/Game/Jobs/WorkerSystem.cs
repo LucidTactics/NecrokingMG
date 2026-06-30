@@ -168,6 +168,7 @@ public class WorkerSystem
     public bool IsEligibleWorker(int unitIdx)
     {
         if (unitIdx < 0 || unitIdx >= _sim.Units.Count) return false;
+        if (unitIdx == _sim.NecromancerIndex) return false; // never conscript the player's necromancer
         var u = _sim.Units[unitIdx];
         if (!u.Alive) return false;
         if (u.Faction != Faction.Undead) return false;
@@ -620,6 +621,33 @@ public class WorkerSystem
         if (_dispatchTimer > 0f) return;
         _dispatchTimer = DispatchInterval;
         Dispatch();
+    }
+
+    /// <summary>
+    /// One-click "put everyone back to work" for the Job Board's Auto-assign button.
+    /// Undoes the ways a worker becomes unassigned:
+    ///   1. restores every job's cap to full, so jobs the player had emptied via the
+    ///      [-] stepper (cap 0 → no demand) can take workers again,
+    ///   2. re-houses any idle eligible humanoid undead into empty worker-home graves,
+    ///   3. re-runs the dispatcher to distribute all workers across active jobs.
+    /// Returns the number of undead newly housed as workers.
+    /// </summary>
+    public int AutoAssignWorkers()
+    {
+        foreach (var js in _jobStates) js.WorkerCap = 99; // "full" sentinel (clamped to DerivedMax when dispatched)
+
+        int housed = 0;
+        var candidates = UnassignedWorkers();
+        int next = 0;
+        for (int i = 0; i < _env.ObjectCount && next < candidates.Count; i++)
+        {
+            if (!IsWorkerHomeDef(i)) continue;
+            if (!_env.GetObjectRuntime(i).Alive) continue;
+            if (IsGraveOccupied(i)) continue;
+            if (AssignWorker(candidates[next].Id, i)) { next++; housed++; }
+        }
+        Dispatch();
+        return housed;
     }
 
     private readonly List<uint> _pool = new();

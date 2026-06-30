@@ -504,6 +504,13 @@ public partial class Game1 {
                break;
             }
 
+            // Fire the Job Board's Auto-assign button logic directly: window.dev('auto_assign')
+            case "auto_assign": {
+               int n = _workerSystem.AutoAssignWorkers();
+               c.Complete(Necroking.Dev.DevServer.Ok($"auto-assign: re-housed {n} undead, caps restored, dispatched"));
+               break;
+            }
+
             // Full economy scene: every building + sources + corpses + 6 assigned
             // workers. window.dev('worker_scene')
             case "worker_scene": {
