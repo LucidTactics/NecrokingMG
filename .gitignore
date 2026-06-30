@@ -47,6 +47,7 @@ desktop.ini
 # Curated skills (un-ignore each one you want tracked):
 # !.claude/skills/example-skill/
 !.claude/skills/edit-game-data/
+!.claude/skills/sync-assets/
 CLAUDE.local.md
 
 ## The ENTIRE assets/ folder is distributed out-of-band (Google Drive), never git:
