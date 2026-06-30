@@ -169,6 +169,12 @@ public class TableCraftMenuUI : Necroking.UI.IModalLayer
     // interaction), but is non-blocking so gameplay continues underneath.
     public bool LightDismiss => false;
     public bool IsBlocking => false;
+    // Click the world outside the bench to close it — but the click still passes
+    // through to the world (hover/select/act), so it doesn't trap interaction.
+    // Not LightDismiss: a click on another panel (e.g. inventory, to deposit an
+    // item) must NOT close the bench — and that case is safe because the other
+    // panel is the top layer then, so RouteInput evaluates it, not the bench.
+    public bool CloseOnOutsideClick => true;
     // ContainsMouse is the existing public method on this class.
     public void OnCancel() => Close();
 

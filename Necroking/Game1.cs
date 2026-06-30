@@ -2929,6 +2929,18 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             if (aggrShift && _input.WasKeyPressed(Keys.E)) _sim.Horde.AggressionLevel++;
             if (aggrShift && _input.WasKeyPressed(Keys.Q)) _sim.Horde.AggressionLevel--;
 
+            // A left-click on a world object that has its own click action — a Corpse
+            // Pile (gather), a craft table (open its menu), an Empty Grave (open the
+            // worker roster) — is that interaction, NOT a spell cast. Suppress the LMB
+            // spell slot so the same click doesn't also fire its spell (e.g. Reanimate
+            // Corpse) on top, which at best double-acts and at worst deadlocks the
+            // necromancer. The actual handlers run in the world-click block below.
+            bool lmbOnWorldObject = _input.LeftPressed && !_input.MouseOverUI
+                && _envSystem != null
+                && (FindCorpsePileUnderCursor(mouseWorld) >= 0
+                    || Game.TableSystem.FindTableUnderCursor(_envSystem, mouseWorld) >= 0
+                    || FindGraveUnderCursor(mouseWorld) >= 0);
+
             // --- Spell casting ---
             // Primary bar: Q = slot 0, E = slot 1, LClick = slot 2, RClick = slot 3
             // Secondary bar: D1-D4 = slots 0-3
@@ -2940,7 +2952,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
                 {
                     0 => !aggrShift && _input.WasKeyPressed(Keys.Q),
                     1 => !aggrShift && _input.WasKeyPressed(Keys.E),
-                    2 => !_input.MouseOverUI && _input.LeftPressed,
+                    2 => !_input.MouseOverUI && _input.LeftPressed && !lmbOnWorldObject,
                     3 => !_input.MouseOverUI && _input.RightPressed,
                     _ => false
                 };

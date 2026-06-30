@@ -623,7 +623,15 @@ public partial class Game1
                 float runThreshold = 6f + 2f * baseSpeed / 3f;
 
                 bool carrying = _sim.Units[i].CarryingCorpseID >= 0;
-                if (carrying)
+                // While the necromancer is mid-cast (_pendingCastAnim), let the cast
+                // animation drive instead of pinning the Carry pose. Forcing Carry every
+                // frame fights the channeled cast's Start state (UpdateChanneledCast),
+                // so it never finishes — the channel hangs in phase 0 and the
+                // necromancer freezes. Repro: carry a corpse, then cast Reanimate. The
+                // corpse stays carried; Carry resumes once the cast ends. (A non-carrying
+                // cast already works because it falls through to Idle here.)
+                bool midCast = _pendingCastAnim.HasValue && i == _sim.NecromancerIndex;
+                if (carrying && !midCast)
                     targetState = AnimState.Carry;
                 else if (speed <= 0.25f)
                     targetState = AnimState.Idle;
