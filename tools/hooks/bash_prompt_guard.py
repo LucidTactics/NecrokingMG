@@ -218,6 +218,64 @@ def _split_segments(cmd: str):
     return [s.strip() for s in segs if s.strip()]
 
 
+def _tokenize(cmd: str):
+    """Quote-aware split of a single command into argv-style tokens, with surrounding
+    quotes stripped. `robocopy "G:\\a b" "C:\\c" /E` -> ['robocopy', 'G:\\a b', 'C:\\c',
+    '/E']. Good enough for inspecting a robocopy invocation's positionals."""
+    toks, buf, quote, started = [], "", None, False
+    for c in cmd:
+        if quote:
+            if c == quote:
+                quote = None
+            else:
+                buf += c
+            continue
+        if c in ('"', "'"):
+            quote, started = c, True
+            continue
+        if c.isspace():
+            if started:
+                toks.append(buf)
+                buf, started = "", False
+            continue
+        buf += c
+        started = True
+    if started:
+        toks.append(buf)
+    return toks
+
+
+def rule_robocopy_into_project(cmd: str, project_dir=None) -> bool:
+    """True if `cmd` is a `robocopy SOURCE DEST [files…] [/opts]` whose DEST resolves
+    inside the project directory. Source may be anywhere. A destructive mirror/purge
+    (/MIR, /PURGE) is excluded so it still prompts. Used as an extra per-segment allow
+    predicate, so the user isn't prompted to copy files into their own project."""
+    toks = _tokenize(cmd)
+    # Skip any leading `VAR=value` env-assignment prefixes (e.g. the
+    # `MSYS_NO_PATHCONV=1 robocopy …` needed so Git Bash doesn't mangle /-flags).
+    idx = 0
+    while idx < len(toks) and re.match(r"^[A-Za-z_][A-Za-z0-9_]*=", toks[idx]):
+        idx += 1
+    if idx >= len(toks):
+        return False
+    base = toks[idx].rsplit("/", 1)[-1].rsplit("\\", 1)[-1].lower()
+    if base not in ("robocopy", "robocopy.exe"):
+        return False
+    args = toks[idx + 1:]
+    if any(a.lower() in ("/mir", "/purge") for a in args):
+        return False
+    positionals = [a for a in args if not a.startswith("/")]
+    if len(positionals) < 2:
+        return False
+    dest = positionals[1]
+    pd = project_dir or _project_dir()
+    if not os.path.isabs(dest):
+        dest = os.path.join(pd, dest)
+    dest_abs = os.path.normcase(os.path.abspath(dest))
+    proj_abs = os.path.normcase(os.path.abspath(pd))
+    return dest_abs == proj_abs or dest_abs.startswith(proj_abs + os.sep)
+
+
 def _spec_matches(spec: str, subject: str) -> bool:
     glob = spec[:-2] + "*" if spec.endswith(":*") else spec   # `git:*` -> `git*`
     if fnmatch.fnmatch(subject, glob):
@@ -246,7 +304,8 @@ GENERIC_DENY = (
 # Decision core (pure, unit-testable).
 # ---------------------------------------------------------------------------------
 
-def evaluate(tool_name: str, tool_input: dict, mode: str, allow_rules, deny_rules=()):
+def evaluate(tool_name: str, tool_input: dict, mode: str, allow_rules, deny_rules=(),
+             project_dir=None):
     """Pre-resend verdict. Returns (kind, reason):
        kind 'allow' -> force-allow; suppress the prompt (every sub-command is allow-listed)
        kind 'defer' -> emit nothing; let the normal permission flow decide
@@ -273,9 +332,15 @@ def evaluate(tool_name: str, tool_input: dict, mode: str, allow_rules, deny_rule
     # force-allow so the user isn't prompted — Claude's own permission system otherwise
     # prompts on `;`-chained compounds even when each part is individually allowed. Never
     # force-allow if any segment hits a `deny` rule (respect the user's deny-list).
+    pd = project_dir or _project_dir()
+
+    def _seg_ok(s):
+        return (_allow_listed("Bash", s, allow_rules)
+                or rule_robocopy_into_project(s, pd))
+
     segments = _split_segments(cmd)
     if segments and not any(_allow_listed("Bash", s, deny_rules) for s in segments):
-        if all(_allow_listed("Bash", s, allow_rules) for s in segments):
+        if all(_seg_ok(s) for s in segments):
             return ("allow", None)
 
     # Agreed to be worth the user's approval -> prompt now instead of bouncing.

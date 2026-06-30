@@ -58,6 +58,37 @@ fails += not check("git add && commit -> allow", evb('git add -A && git commit -
 fails += not check("quoted semicolon stays one segment -> allow",
                    evb('echo "a; rm -rf b"'), "allow")
 
+# --- robocopy: allow when DEST is inside the project, else prompt/deny -------------
+PROJ = r"C:\Users\Johan\source\repos\Lucid\NecrokingMG"
+
+
+def evb_proj(cmd, proj=PROJ):
+    return g.evaluate("Bash", {"command": cmd}, "", RULES, DENY, project_dir=proj)[0]
+
+
+fails += not check("robocopy into project -> allow",
+                   evb_proj(r'robocopy "G:\drive\assets\Sprites" '
+                            r'"C:\Users\Johan\source\repos\Lucid\NecrokingMG\assets\Sprites" '
+                            r'Animals.png /NJH /FP'), "allow")
+fails += not check("robocopy relative dest into project -> allow",
+                   evb_proj(r'robocopy "G:\src" assets\maps default.json'), "allow")
+fails += not check("MSYS_NO_PATHCONV prefix + robocopy into project -> allow",
+                   evb_proj(r'MSYS_NO_PATHCONV=1 robocopy "G:\src" '
+                            r'"C:\Users\Johan\source\repos\Lucid\NecrokingMG\assets\Sprites" '
+                            r'a.png /NJH'), "allow")
+fails += not check("robocopy dest outside project -> deny",
+                   evb_proj(r'robocopy "G:\src" "C:\Windows\System32" x.dll'), "deny")
+fails += not check("robocopy /MIR into project -> deny (destructive)",
+                   evb_proj(r'robocopy "G:\src" '
+                            r'"C:\Users\Johan\source\repos\Lucid\NecrokingMG\assets" /MIR'), "deny")
+fails += not check("robocopy sibling-prefix dir -> deny (not real containment)",
+                   evb_proj(r'robocopy "G:\src" '
+                            r'"C:\Users\Johan\source\repos\Lucid\NecrokingMG-evil" x'), "deny")
+fails += not check("robocopy && taskkill -> deny (bad second segment)",
+                   evb_proj(r'robocopy "G:\src" '
+                            r'"C:\Users\Johan\source\repos\Lucid\NecrokingMG\assets" x && taskkill /F /IM y'),
+                   "deny")
+
 # --- Substitution / heredoc -> defer (not force-allowed, not denied) --------------
 fails += not check("command substitution -> defer", evb("echo $(rm -rf /)"), "defer")
 fails += not check("backtick substitution -> defer", evb("echo `whoami`"), "defer")
