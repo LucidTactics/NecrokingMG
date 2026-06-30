@@ -282,6 +282,21 @@ def _assign_to_job(proc):
         print(f"[devserver] job-object setup skipped: {e}", flush=True)
 
 
+def _env_info():
+    """The build config + output paths this supervisor actually launches from, so
+    callers (necro_devlib, the MCP tools) never have to guess Debug-vs-Release. The
+    preview runs Release by default; this is the single source of truth for where
+    the running game writes screenshots/logs. Surfaced in /status and in the
+    start/build/restart results so a rebuild communicates its location back."""
+    return {
+        "build_config": BUILD_CONFIG,
+        "exe": EXE,
+        "exe_exists": os.path.exists(EXE),
+        "screenshot_dir": SCREENSHOT_DIR,
+        "log_dir": os.path.join(os.path.dirname(EXE), "log"),
+    }
+
+
 def _game_running():
     return _game_proc is not None and _game_proc.poll() is None
 
@@ -343,7 +358,8 @@ def start_game(windowed=False, map_name=None, resolution=DEFAULT_RESOLUTION):
         return {"ok": False, "error": msg}
 
     result = {"ok": True, "result": "started", "pid": _game_proc.pid,
-              "windowed": windowed, "resolution": resolution}
+              "windowed": windowed, "resolution": resolution,
+              "build_config": BUILD_CONFIG, "screenshot_dir": SCREENSHOT_DIR}
     if map_name:
         try:
             result["start_game"] = _post_to_game({"cmd": "start_game", "args": [map_name]})
@@ -385,6 +401,7 @@ def build():
         "errors": errors[:50],
         "tail": lines[-8:],
         "was_running": was_running,
+        "build_config": BUILD_CONFIG,  # which config was built (= where the exe/screenshots land)
     }
     return _last_build
 
@@ -454,8 +471,8 @@ class Handler(BaseHTTPRequestHandler):
                 "pid": _game_proc.pid if _game_running() else None,
                 "supervisor_port": SUPERVISOR_PORT,
                 "game_port": GAME_PORT,
-                "exe_exists": os.path.exists(EXE),
                 "last_build": _last_build,
+                **_env_info(),  # build_config + exe/screenshot_dir/log_dir (incl. exe_exists)
             })
         else:
             self._send({"ok": False, "error": f"unknown GET {self.path}"}, 404)

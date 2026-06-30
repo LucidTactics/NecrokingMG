@@ -23,8 +23,29 @@ BASE = f"http://{HOST}:{SUP_PORT}"
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DEVSERVER = os.path.join(REPO_ROOT, "tools", "devserver.py")
-SCREENSHOT_DIR = os.path.join(REPO_ROOT, "bin", "Debug", "log", "screenshots")
-LOG_DIR = os.path.join(REPO_ROOT, "bin", "Debug", "log")
+
+# The supervisor (tools/devserver.py) decides Debug vs Release and is the SOURCE OF
+# TRUTH for where the running game writes screenshots/logs — screenshot() asks it via
+# /status. These locals are only the pre-supervisor default (the bootstrap log) and a
+# fallback if /status is unreachable; mirror the supervisor's choice (NECRO_DEV_CONFIG,
+# default Release) so the two never disagree on the path. (Was hardcoded to Debug,
+# which broke screenshot reads once the preview moved to the Release build.)
+BUILD_CONFIG = os.environ.get("NECRO_DEV_CONFIG", "Release")
+SCREENSHOT_DIR = os.path.join(REPO_ROOT, "bin", BUILD_CONFIG, "log", "screenshots")
+LOG_DIR = os.path.join(REPO_ROOT, "bin", BUILD_CONFIG, "log")
+
+
+def screenshot_dir():
+    """Absolute dir the running game writes screenshots to. Authoritative value comes
+    from the supervisor's /status (it reports the config it actually launched); falls
+    back to the local default if the supervisor can't be reached."""
+    try:
+        d = req("GET", "/status", timeout=5).get("screenshot_dir")
+        if d:
+            return d
+    except Exception:
+        pass
+    return SCREENSHOT_DIR
 
 
 def req(method, path, payload=None, timeout=60, raw_bytes=False):
@@ -189,7 +210,7 @@ def ensure_game(windowed=False, map_name=None):
     body = {"windowed": windowed}
     if map_name:
         body["map"] = map_name
-    return req("POST", "/game/start", body, timeout=90)
+    return req("POST", "/gmea/start", body, timeout=90)
 
 
 def send_cmd(cmd, args=None, opts=None):
@@ -210,4 +231,4 @@ def screenshot(name="shot", opts=None):
     if opts:
         payload["opts"] = opts
     req("POST", "/cmd", payload, timeout=60)
-    return os.path.join(SCREENSHOT_DIR, name + ".png")
+    return os.path.join(screenshot_dir(), name + ".png")
