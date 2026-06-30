@@ -160,8 +160,8 @@ public class WorkerSystem
     /// priorities. Unambiguous insertion semantics for drag-reorder and ▲▼.</summary>
     public void MoveJobBefore(JobState dragged, JobState? before)
     {
-        if (dragged == null || !_jobStates.Remove(dragged)) return;
         int idx = before != null ? _jobStates.IndexOf(before) : _jobStates.Count;
+        if (dragged == null || !_jobStates.Remove(dragged)) return;
         if (idx < 0) idx = _jobStates.Count;
         _jobStates.Insert(idx, dragged);
         for (int i = 0; i < _jobStates.Count; i++) _jobStates[i].Priority = i;
