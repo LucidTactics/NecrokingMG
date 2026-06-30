@@ -109,9 +109,9 @@
     "worldHeight": 0,
     "pivotX": 0.5,
     "pivotY": 1,
-    "collisionRadius": 0.4,
-    "collisionOffsetX": 0,
-    "collisionOffsetY": 0,
+    "collisionRadius": 0.6,
+    "collisionOffsetX": 0.014130434,
+    "collisionOffsetY": -0.5899457,
     "scale": 1,
     "placementScale": 1,
     "group": "",
@@ -196,6 +196,18 @@
       "b": 255,
       "a": 255,
       "intensity": 1
+    },
+    "harmonize": {
+      "targetColor": [
+        85,
+        80,
+        69,
+        255
+      ],
+      "hueStrength": 0,
+      "satStrength": 0.45664206,
+      "valStrength": 0.15867159,
+      "useHcl": false
     },
     "randomFlip": false
   },
@@ -397,6 +409,18 @@
       "a": 255,
       "intensity": 1
     },
+    "harmonize": {
+      "targetColor": [
+        63,
+        66,
+        58,
+        255
+      ],
+      "hueStrength": 0,
+      "satStrength": 0.7223247,
+      "valStrength": 0.13745387,
+      "useHcl": false
+    },
     "randomFlip": false
   },
   {
@@ -596,6 +620,18 @@
       "b": 255,
       "a": 255,
       "intensity": 1
+    },
+    "harmonize": {
+      "targetColor": [
+        127,
+        111,
+        129,
+        255
+      ],
+      "hueStrength": 0,
+      "satStrength": 0.6900369,
+      "valStrength": 0.12915128,
+      "useHcl": false
     },
     "randomFlip": false
   },
