@@ -55,6 +55,20 @@ fails += not check("the compound that prompted -> allow",
 fails += not check("compound with one bad segment -> deny",
                    evb("git status; taskkill /F /IM x.exe"), "deny")
 fails += not check("git add && commit -> allow", evb('git add -A && git commit -m "x"'), "allow")
+
+# --- git push (and other remote-push vectors) must prompt; all other git auto-allows --
+fails += not check("git push -> ask", evb("git push"), "ask")
+fails += not check("git push origin master -> ask", evb("git push origin master"), "ask")
+fails += not check("git -c k=v push -> ask (skips global opts)",
+                   evb("git -c http.sslVerify=false push --force"), "ask")
+fails += not check("git push in compound -> ask",
+                   evb("git status && git push origin master"), "ask")
+fails += not check("git send-pack -> ask", evb("git send-pack origin HEAD"), "ask")
+fails += not check("git status -> still allow", evb("git status"), "allow")
+fails += not check("git log --grep=push -> allow (not a push)",
+                   evb('git log --grep=push'), "allow")
+fails += not check("git commit pushy message -> allow (subcommand is commit)",
+                   evb('git commit -m "push later"'), "allow")
 fails += not check("quoted semicolon stays one segment -> allow",
                    evb('echo "a; rm -rf b"'), "allow")
 

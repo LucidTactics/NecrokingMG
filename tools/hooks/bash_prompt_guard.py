@@ -124,16 +124,24 @@ def rule_python_validate(cmd: str):
 BASH_RULES = (rule_search, rule_python_validate)
 
 
+# git subcommands that publish commits to a remote. These must PROMPT even though
+# `Bash(git:*)` is allow-listed (every other git command is auto-accepted).
+_REMOTE_PUSH_SUBCMDS = {"push", "send-pack"}
+
+
 def rule_intended_prompt(cmd: str):
-    """Layer-2 whitelist: Bash commands we've AGREED should reach the user as a normal
-    prompt rather than be thrown back. Return a short reason string to prompt, or None.
+    """Layer-2 whitelist: a single-command segment we've AGREED should reach the user as
+    a normal prompt rather than be force-allowed or thrown back. Return a short reason
+    string to prompt, or None. Checked PER SEGMENT in evaluate(), before the force-allow
+    pass, so an allow-listed-but-sensitive command (a remote push under `git:*`) still
+    prompts.
 
-    Starts empty on purpose — "for now it blocks everything that would go to the user".
-    Add a branch as cases come up that genuinely warrant the user's approval, e.g.:
-
-        if leading_command(cmd) == "git" and " push" in cmd:
-            return "git push needs your sign-off."
+    Add a branch as cases come up that genuinely warrant the user's approval.
     """
+    if _git_subcommand(cmd) in _REMOTE_PUSH_SUBCMDS:
+        return ("A push to a remote publishes your commits and needs your explicit "
+                "approval — every other git command is auto-accepted, just this one "
+                "prompts. Approve to proceed.")
     return None
 
 
@@ -245,6 +253,35 @@ def _tokenize(cmd: str):
     return toks
 
 
+# git global options that consume the FOLLOWING token as their value, so the
+# subcommand parser knows to skip two tokens, not one (e.g. `git -C path push`).
+_GIT_VALUE_OPTS = {"-C", "-c", "--git-dir", "--work-tree", "--namespace",
+                   "--exec-path", "--config-env"}
+
+
+def _git_subcommand(cmd: str):
+    """Return the git subcommand of a single command segment (lowercased), or None if
+    the segment isn't a git invocation. Skips leading `VAR=val` env prefixes and git
+    global options so `git -c k=v push` -> 'push' and `git log --grep=push` -> 'log'."""
+    toks = _tokenize(cmd)
+    i = 0
+    while i < len(toks) and re.match(r"^[A-Za-z_][A-Za-z0-9_]*=", toks[i]):
+        i += 1
+    if i >= len(toks):
+        return None
+    base = toks[i].rsplit("/", 1)[-1].rsplit("\\", 1)[-1].lower()
+    if base not in ("git", "git.exe"):
+        return None
+    i += 1
+    while i < len(toks):
+        t = toks[i]
+        if t.startswith("-"):
+            i += 2 if t in _GIT_VALUE_OPTS else 1
+            continue
+        return t.lower()
+    return None
+
+
 def rule_robocopy_into_project(cmd: str, project_dir=None) -> bool:
     """True if `cmd` is a `robocopy SOURCE DEST [files…] [/opts]` whose DEST resolves
     inside the project directory. Source may be anywhere. A destructive mirror/purge
@@ -324,6 +361,17 @@ def evaluate(tool_name: str, tool_input: dict, mode: str, allow_rules, deny_rule
         if reason:
             return ("deny", reason)
 
+    pd = project_dir or _project_dir()
+    segments = _split_segments(cmd)
+
+    # Sensitive-but-allow-listed commands (a remote push under `git:*`) must PROMPT even
+    # though they'd otherwise be force-allowed. Check per segment BEFORE force-allow — and
+    # before _has_unsafe, so `git push $(…)` can't slip through on a defer to git:*.
+    for seg in (segments or [cmd]):
+        intended = rule_intended_prompt(seg)
+        if intended:
+            return ("ask", intended)
+
     # Constructs we can't safely tokenise -> hand off to the normal permission flow.
     if _has_unsafe(cmd):
         return ("defer", None)
@@ -332,21 +380,13 @@ def evaluate(tool_name: str, tool_input: dict, mode: str, allow_rules, deny_rule
     # force-allow so the user isn't prompted — Claude's own permission system otherwise
     # prompts on `;`-chained compounds even when each part is individually allowed. Never
     # force-allow if any segment hits a `deny` rule (respect the user's deny-list).
-    pd = project_dir or _project_dir()
-
     def _seg_ok(s):
         return (_allow_listed("Bash", s, allow_rules)
                 or rule_robocopy_into_project(s, pd))
 
-    segments = _split_segments(cmd)
     if segments and not any(_allow_listed("Bash", s, deny_rules) for s in segments):
         if all(_seg_ok(s) for s in segments):
             return ("allow", None)
-
-    # Agreed to be worth the user's approval -> prompt now instead of bouncing.
-    intended = rule_intended_prompt(cmd)
-    if intended:
-        return ("ask", intended)
 
     # Default: throw it back.
     return ("deny", GENERIC_DENY)

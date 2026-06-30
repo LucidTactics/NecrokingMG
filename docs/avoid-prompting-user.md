@@ -84,11 +84,22 @@ similar culprit, add its name to `DENY_DEFAULT_TOOLS` in the hook (and widen the
 File edits are the canonical example of a tool you should *never* gate this way: a file
 edit has no no-prompt alternative, so bouncing one is pointless friction.
 
-**Growing the whitelist.** `rule_intended_prompt` starts empty on purpose — *for now it
-blocks everything that would go to the user*. As cases come up that we agree genuinely
-warrant the user's approval, add a branch there so they prompt immediately. When
-`bypassPermissions` or `plan` mode is active the hook defers entirely — those modes own
-their own gating.
+**Growing the whitelist.** `rule_intended_prompt` is checked **per segment, before the
+force-allow pass**, so it can force a prompt even for a command that `allow`-rules would
+otherwise auto-accept (see the git-push case below). Add a branch as cases come up that
+genuinely warrant the user's approval. When `bypassPermissions` or `plan` mode is active
+the hook defers entirely — those modes own their own gating.
+
+### Remote pushes (`git push`) prompt; every other git command auto-accepts
+
+- **Goal:** `Bash(git:*)` is allow-listed (all git auto-accepts), but publishing commits
+  to a remote should still need a human OK.
+- **Mechanism:** `rule_intended_prompt` returns a reason when `_git_subcommand(seg)` is a
+  remote-push subcommand (`push`, `send-pack`) — parsed properly, skipping `VAR=val`
+  prefixes and git global options (`-c k=v`, `-C path`), so `git log --grep=push` and
+  `git commit -m "push later"` are **not** caught. Checked per segment before force-allow,
+  so `git status && git push` prompts too. `gh`/`git svn dcommit`/`git p4 submit` aren't
+  covered by `git:*`, so they already hit deny-by-default and prompt.
 
 ## Err on denying — the escape hatch makes it safe
 
