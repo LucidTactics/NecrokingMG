@@ -2,8 +2,8 @@
 """PreToolUse hook: auto-approve Write/Edit/MultiEdit to curated, git-tracked .claude config.
 
 Covers two folders of shared, version-controlled config that we edit routinely:
-  - `.claude/skills/locate-behavior/` — the self-healing architecture map the
-    locate-behavior-finder subagent writes (overview.md + reference/<area>.md).
+  - `.claude/skills/` — all skill files, incl. the locate-behavior self-healing
+    architecture map (overview.md + reference/<area>.md) the finder subagent writes.
   - `.claude/agents/` — curated subagent definitions (e.g. locate-behavior-finder.md).
 
 These writes are meant to be promptless, but relative forward-slash path globs in
@@ -23,7 +23,7 @@ import sys
 _FILE_TOOLS = {"Write", "Edit", "MultiEdit"}
 # Forward-slash, lowercased markers; the resolved path must contain one to be auto-approved.
 _ALLOWED_MARKERS = (
-    "/.claude/skills/locate-behavior/",
+    "/.claude/skills/",
     "/.claude/agents/",
 )
 
