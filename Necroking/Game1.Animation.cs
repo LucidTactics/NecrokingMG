@@ -115,10 +115,41 @@ public partial class Game1
         };
     }
 
+    /// <summary>Playback-speed multiplier (and Loop-phase wall-clock budget, via out) that
+    /// fits a channeled cast's Start+Loop+Finish into its CastTime:
+    ///  - CastTime ≥ one natural cycle → spd 1, loopBudget &gt; one cycle (the loop repeats
+    ///    to fill: a longer cast plays MORE loops, not a slowed animation).
+    ///  - CastTime too short for one cycle → spd &gt; 1 (frame-rate accelerated), loopBudget =
+    ///    one scaled cycle (lC/spd), so a short CastTime genuinely shortens the cast.
+    /// Apply the returned speed to the controller right before the per-frame ctrl.Update
+    /// that advances the anim — the legacy locomotion block resets PlaybackSpeed every
+    /// frame and UpdateChanneledCast runs after that Update, so anywhere else is too late.</summary>
+    private static float ChannelPlaybackSpeed(AnimController ctrl, in PendingCastAnim pca, out float loopBudget)
+    {
+        GetChannelStates(pca.CastAnim, out var startS, out var loopS, out var finishS);
+        float sD = ctrl.AnimDurationMsFor(startS) / 1000f;
+        float lC = MathF.Max(0.05f, ctrl.AnimDurationMsFor(loopS) / 1000f);
+        float fD = finishS.HasValue ? ctrl.AnimDurationMsFor(finishS.Value) / 1000f : 0f;
+        float baseTotal = sD + lC + fD;
+        bool tooShort = pca.CastTime > 0.01f && baseTotal > pca.CastTime;
+        float spd = tooShort ? baseTotal / pca.CastTime : 1f;
+        loopBudget = tooShort ? lC / spd : MathF.Max(lC, pca.CastTime - sD - fD);
+        return spd;
+    }
+
     /// <summary>Drive a channeled reanimation cast: Start → Loop → (Finish). The
-    /// spell effect fires at the END of the loop; total loop time = CastTime minus
-    /// the Start duration, with a minimum of one full loop cycle. The necromancer
-    /// faces the target throughout. Raise has no Finish → straight to Idle.</summary>
+    /// spell effect fires at the END of the loop; the necromancer faces the target
+    /// throughout. Raise has no Finish → straight to Idle.
+    ///
+    /// Fitting Start+Loop+Finish to CastTime mirrors the table-reanimation path
+    /// (<see cref="UpdateAnimations"/> ImbueTable block):
+    ///  - CastTime LONGER than one natural cycle: play at natural speed (spd = 1) and
+    ///    let the LOOP repeat to fill the extra time — a longer cast plays *more loops*,
+    ///    not a slowed-down animation. That's the point of a channel.
+    ///  - CastTime TOO SHORT for even one Start+cycle+Finish: time-stretch the whole
+    ///    channel (PlaybackSpeed > 1, frame-rate accelerated) so it still fits, keeping
+    ///    exactly one (scaled) loop cycle. The min-one-cycle cull uses the SCALED cycle
+    ///    (lC / spd), so a short CastTime genuinely shortens the cast.</summary>
     private void UpdateChanneledCast(float dt)
     {
         if (_pendingCastAnim == null) return;
@@ -136,11 +167,18 @@ public partial class Game1
         if (dir.LengthSq() > 0.0001f)
             _sim.UnitsMut[necroIdx].FacingAngle = MathF.Atan2(dir.Y, dir.X) * 180f / MathF.PI;
 
+        // PlaybackSpeed (the Start/Loop/Finish time-stretch) is applied in the per-unit
+        // anim loop right before ctrl.Update — see the necromancer channel override there.
+        // Setting it here is too late: UpdateChanneledCast runs AFTER that Update each
+        // frame, so the locomotion block would already have advanced the anim at speed 1.
+        // Here we only need the Loop-phase wall-clock budget.
+        ChannelPlaybackSpeed(ctrl, pca, out float loopBudget);
+
         pca.ChannelElapsed += dt;
 
         switch (pca.ChannelPhase)
         {
-            case 0: // Start (play once, hold at end)
+            case 0: // Start (play once, hold at end — finishes in sD/spd wall-clock)
                 if (ctrl.CurrentState != startS) ctrl.ForceState(startS);
                 if (ctrl.IsAnimFinished)
                 {
@@ -150,13 +188,10 @@ public partial class Game1
                 }
                 break;
 
-            case 1: // Loop — fire the effect at the end of the loop
+            case 1: // Loop — fire the effect once the loop budget is spent
                 if (ctrl.CurrentState != loopS) ctrl.ForceState(loopS);
                 pca.LoopElapsed += dt;
-                float startDur = pca.ChannelElapsed - pca.LoopElapsed;
-                float oneCycle = MathF.Max(0.05f, ctrl.CurrentAnimDurationMs / 1000f);
-                float loopTarget = MathF.Max(pca.CastTime - startDur, oneCycle);
-                if (pca.LoopElapsed >= loopTarget)
+                if (pca.LoopElapsed >= loopBudget)
                 {
                     var spell = _gameData.Spells.Get(pca.SpellID);
                     if (spell != null) ExecuteSpellEffect(spell, necroIdx, pca.Target, pca.Slot, pca.IsSecondary);
@@ -168,6 +203,7 @@ public partial class Game1
                     else
                     {
                         ctrl.ForceState(AnimState.Idle);
+                        ctrl.PlaybackSpeed = 1f; // clear the channel time-stretch
                         RemoveCastingBuffAll(necroIdx);
                         _pendingCastAnim = null;
                         return;
@@ -175,11 +211,12 @@ public partial class Game1
                 }
                 break;
 
-            case 2: // Finish (play once)
+            case 2: // Finish (play once — finishes in fD/spd wall-clock)
                 if (finishS.HasValue && ctrl.CurrentState != finishS.Value) ctrl.ForceState(finishS.Value);
                 if (ctrl.IsAnimFinished)
                 {
                     ctrl.ForceState(AnimState.Idle);
+                    ctrl.PlaybackSpeed = 1f; // clear the channel time-stretch
                     RemoveCastingBuffAll(necroIdx);
                     _pendingCastAnim = null;
                     return;
@@ -692,6 +729,14 @@ public partial class Game1
             // above only scales Walk/Jog/Run, so set the slow-standup speed explicitly.
             if (_sim.Units[i].Incap.Recovering && _sim.Units[i].Incap.RecoverPlaybackSpeed > 0f)
                 animData.Ctrl.PlaybackSpeed = _sim.Units[i].Incap.RecoverPlaybackSpeed;
+            // A channeled spell cast owns the necromancer's playback so a short CastTime
+            // time-stretches Start/Loop/Finish (driven by UpdateChanneledCast). The
+            // locomotion block above resets PlaybackSpeed every frame, so re-apply it here,
+            // immediately before Update, or the stretch is clobbered and CastTime has no
+            // effect (the cast just stays slow).
+            if (_pendingCastAnim.HasValue && i == _sim.NecromancerIndex
+                && IsChanneledCast(_pendingCastAnim.Value.CastAnim))
+                animData.Ctrl.PlaybackSpeed = ChannelPlaybackSpeed(animData.Ctrl, _pendingCastAnim.Value, out _);
             animData.Ctrl.Update(dt);
             } // end legacy path
 
