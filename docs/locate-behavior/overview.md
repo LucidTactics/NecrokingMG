@@ -16,6 +16,7 @@ open the listed `<area>.md`. Areas marked **(not yet documented)** have no doc y
 | Render/ (effects only) | [render.md](render.md) ◐ | **Partial** — the visual-effect/flipbook systems (`EffectManager`, `Flipbook`, `ReanimEffectSystem`, particle systems). Atlases, ground shader, bloom, shadows, fonts, HUD widgets still TODO |
 | Jobs & workers | [jobs-workers.md](jobs-workers.md) ✅ | Worker economy — Job Board UI (`JobBoardUI`) + Grave Roster UI (`GraveRosterUI`), `WorkerSystem` (grave assignment, stockpiles, the pool→jobs `Dispatch` auto-assigner), `JobDef/JobState/JobRegistry`, `AI/WorkerHandler` FSM |
 | Corpses & pickup/carry | [corpses.md](corpses.md) ✅ | `Corpse` data model in `Simulation`, player pickup/carry (`CorpseInteractionManager`, F-key + corpse-hover hit-test in `Game1.cs`), foragable-style proximity gather, where "click corpse → walk → pick up" goes |
+| Unit AI archetypes & routines | [ai.md](ai.md) ✅ | `IArchetypeHandler`/`ArchetypeRegistry` (name→id→handler), per-tick dispatch in `Simulation`, archetype assignment at spawn (`Game1.SpawnUnit`), `SubroutineSteps` move primitives, `WorkerHandler` FSM template, **where to add a new per-unit behavior** |
 | Dev control server | [dev.md](dev.md) ✅ | The `--devserver` HTTP control channel: transport (`Dev/DevServer.cs` `DevServer`/`DevCommand`, `Dev/DevScript.cs` batch jobs) + every command verb in `Game1.Dev.cs` (`ExecuteDevCommand` switch), `Game1.DevData.cs` (`DevAddData`/state). **Where to add a new dev verb.** |
 
 ## Subsystems (under `Necroking/`) — most not yet documented
@@ -30,7 +31,7 @@ open the listed `<area>.md`. Areas marked **(not yet documented)** have no doc y
 | `UI/` | Overlays & panels — inventory, grimoire, skill book, character stats/sheet, unit info | (not yet documented) |
 | `World/` | World/environment systems — env objects, foragables, walls, roads | (not yet documented) |
 | `Movement/` | Pathfinding / steering / movement routines | (not yet documented) |
-| `AI/` | Unit AI behaviors & routines (combat, routines like craft-at-table) | (not yet documented) |
+| `AI/` | Unit AI behaviors & routines (combat, routines like craft-at-table) | [ai.md](ai.md) ✅ |
 | `GameSystems/` | Discrete systems — `DeathFogSystem`, etc. | (not yet documented) |
 | `Spatial/` | Spatial partitioning / grid queries | (not yet documented) |
 | `Algorithm/` | Standalone algorithms | (not yet documented) |
@@ -52,7 +53,7 @@ Use this to pick a starting area. When the routed area isn't documented yet, doc
 - **Inventory / grimoire / skill book / character sheet panels** → `UI/`.
 - **Unit stats / spell / item / map / UI editors** → `Editor/`.
 - **Game data values (units, items, spells JSON)** → `Data/` + `data/*.json` (use the `edit-game-data` skill to edit those).
-- **Unit AI / routines / combat decisions** → `AI/`.
+- **Unit AI / routines / combat decisions / adding a per-unit behavior or archetype** → [ai.md](ai.md) (`AI/IArchetypeHandler.cs` registry, `AI/SubroutineSteps.cs` move primitives, `AI/WorkerHandler.cs` FSM template; register in `Game1.cs`).
 - **Pathfinding / movement** → `Movement/`.
 - **Environment objects / foragables / walls / world content** → `World/` (and map content lives in `data/maps/`, not code).
 - **Dev/test commands driving the running game** → game1-partials.md (`Game1.Dev.cs` → `ExecuteDevCommand`) + `Dev/`.

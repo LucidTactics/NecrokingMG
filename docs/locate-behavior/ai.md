@@ -1,0 +1,152 @@
+# AI — unit behavior archetypes & routines
+
+How every non-player unit decides what to do each tick. The pattern is a
+**handler-per-archetype** registry: one stateless singleton `IArchetypeHandler`
+per archetype, dispatched by a `byte` archetype id on the unit. All per-unit state
+lives in `UnitArrays` (the SoA), passed in via the `ref struct AIContext`.
+
+```
+Archetype (IArchetypeHandler singleton) — drives behavior
+  → Routine (byte index)    — high-level mode (Following, Chasing, …)
+    → Subroutine (byte index) — step within a routine
+```
+
+## Dispatch chain (read this first)
+
+1. **`Necroking/AI/IArchetypeHandler.cs`** — the interface (`Update`, `OnSpawn`,
+   `GetRoutineName`, `GetSubroutineName`) **and** `ArchetypeRegistry` (the
+   name→id→handler table). Archetype ids are `const byte` (None=0, PlayerControlled=1,
+   HordeMinion=2 … Worker=12). `ArchetypeRegistry.FromName(string)` is the **single
+   source of truth** mapping a `UnitDef.Archetype` string → byte id; `Get(byte)` returns
+   the handler.
+2. **Registration** — `Necroking/Game1.cs` `~line 718` ("Register AI archetypes"):
+   `ArchetypeRegistry.Register(id, "Name", new XHandler())` for every archetype. **Add
+   your handler registration here.**
+3. **Per-tick dispatch** — `Necroking/Game/Simulation.cs` `~line 837`: the unit loop does
+   `ArchetypeRegistry.Get(_units[i].Archetype)?.Update(ref ctx)`. The `AIContext` is built
+   by `Simulation.BuildAIContext(i, dt, …)` (`~line 3327`) — this is the **full** context
+   (includes `Workers`, `EnvSystem`, `Pathfinder`, `Quadtree`). A separate
+   `PlayerControlled` re-dispatch lives at `~line 909`.
+4. **Archetype assignment at spawn** — two spawn paths, both resolve the same way:
+   - `Game1.SpawnUnit(unitDefID, pos)` — `Necroking/Game1.cs` `~line 1815`: reads
+     `unitDef.Archetype`, `FromName` → `UnitsMut[idx].Archetype = id`, then calls
+     `handler.OnSpawn(ref ctx)`. **NOTE: the OnSpawn `AIContext` here is *partial*** — it
+     does **not** set `Workers` or `EnvSystem`. Don't depend on those in `OnSpawn`; only
+     set routine/phase scalars there (mirror `WorkerHandler.OnSpawn`).
+   - `Simulation.SpawnZombieMinion` / convert path — `Necroking/Game/Simulation.cs`
+     `~line 3941`: `FromName(def.Archetype)` overrides the default archetype.
+
+   **Archetype is keyed by the `UnitDef.Archetype` string in `data/units.json`** — NOT by
+   UnitDefID and NOT by a separate AIBehavior enum. (Legacy units with no `Archetype` fall
+   back to the `AIBehavior` enum in `unitDef.AI`; new behavior should use Archetype.)
+
+## Files
+
+### `Necroking/AI/IArchetypeHandler.cs`
+The interface + `ArchetypeRegistry` (id constants, `Register`/`Get`/`GetName`/`FromName`).
+**Edit here** to add a new archetype id constant and its `FromName` case.
+
+### `Necroking/AI/AIContext.cs`
+`ref struct AIContext` — everything a handler reads each frame: `UnitIndex`, `Units`
+(UnitArrays), `Dt`, `Pathfinder`, `Quadtree`, `EnvSystem`, `Workers`, `Horde`, `GameData`,
+plus convenience accessors `MyPos`, `MyMaxSpeed`, `MyId`, `Routine`/`Subroutine`/timers.
+Also `UnitAlertState` enum.
+
+### `Necroking/AI/SubroutineSteps.cs`
+The **reusable atomic step library** every handler composes from (static, zero-alloc).
+The move-to-target primitives live here:
+- **`MoveToward(ref ctx, Vec2 target, float speed)`** — the core pathfinding+anim step.
+  Uses `ctx.Pathfinder.GetDirection` when >3u away, else straight-line; sets
+  `PreferredVel` + locomotion anim. **This is the MoveTo primitive for a custom handler.**
+- **`MoveToPosition(ref ctx, speed)`** drives toward `Units[i].MoveTarget`;
+  **`MoveToPosition_Arrived(ref ctx, threshold)`** is the arrival test. (`WorkerHandler.MoveTo`
+  is a tiny wrapper: set `MoveTarget`, call `MoveToPosition`, `FaceTowards`.)
+- `SetEffort` (walk/jog/sprint cap), `SetIdle`, `FacePosition`, `FindClosestEnemy`,
+  combat steps (`AttackTarget`, `Disengage`), wander/roam.
+
+### `Necroking/AI/WorkerHandler.cs`  ← **the template to copy for corpse_puppet**
+The grave-worker FSM. Phase-based (`WorkerPhase` byte on the unit). The
+**Collect→corpse→deposit** flow is exactly the corpse_puppet's behavior minus the player
+ownership:
+- `GoToSource` → `MoveTo` + `MoveToPosition_Arrived(SourceRange)`.
+- `GoToStorage` (`~line 237`) → `ws.FindDepositBuilding(carry, MyPos)`, `MoveTo`, on arrival:
+  `ws.RecordPiledCorpseFromUnit(i, building)` then `ws.ConsumeCarriedCorpse(i)` then
+  `ws.Deposit(building, "Corpse", 1)`. This is the precise deposit-into-pile sequence.
+- Private `MoveTo(ref ctx, target)` wrapper (`~line 348`).
+
+### Other handlers (reference)
+- `HordeMinionHandler.cs` — routine-switch template (Following/Chasing/Engaged/…),
+  good model for `GetRoutineName`/`GetSubroutineName` and `OnSpawn`.
+- `CombatUnitHandler.cs` / `RangedUnitHandler.cs` — constructed with an archetype id arg
+  (one class, several registered ids). `PlayerControlledHandler.cs`, `WolfPackHandler.cs`,
+  `RatPackHandler.cs`, `DeerHerdHandler.cs`, `CorpseEatAI.cs`.
+- `AwarenessSystem.cs` (enemy detection), `CombatTransitions.cs` (shared chase/engage exit
+  checks), `WorkRoutine.cs` (channel/work-timer step), `AIContext.cs`.
+
+## Where corpse-pile deposit & self-removal live (cross-area)
+
+- **`Necroking/Game/Jobs/WorkerSystem.cs`** (ctx.Workers) — already has everything:
+  `FindDepositBuilding("Corpse", pos)` (matches env defs with `storedResource:"Corpse"`,
+  i.e. `corpse_pile`), `Deposit(objIdx, "Corpse", 1)`, `RecordPiledCorpse(objIdx, unitDefId)`
+  / `RecordPiledCorpseFromUnit`, and `FindNearestCorpseObj`. `corpse_pile` itself: `data/env_defs.json`
+  id `corpse_pile`, `storedResource:"Corpse"`, `storageCap:20`. To find the nearest pile,
+  call `FindDepositBuilding("Corpse", ctx.MyPos)` (it already returns nearest-with-room).
+- **Self-removal from the world** — `Necroking/Game/Simulation.cs`
+  **`RemoveUnitTracked(int idx)`** (`~line 188`) — the canonical remove (swap-pop +
+  repairs `_necromancerIdx`). A per-tick handler can't call `Simulation` directly from
+  `AIContext` (no Sim handle exposed); see Pitfalls for the deposit-then-remove approach.
+
+## How to add the corpse_puppet behavior (concrete)
+
+1. **Data** — add unit `corpse_puppet` to `data/units.json` (zombie stats) with
+   `"archetype": "CorpsePuppet"` (use the `edit-game-data` skill). Faction Undead.
+2. **`IArchetypeHandler.cs`** — add `public const byte CorpsePuppet = 13;` and a
+   `"CorpsePuppet" => CorpsePuppet,` case in `FromName`.
+3. **New file `Necroking/AI/CorpsePuppetHandler.cs`** — `class CorpsePuppetHandler :
+   IArchetypeHandler`. Two phases (mirror WorkerHandler):
+   - `OnSpawn`: set a phase byte (reuse e.g. `WorkerPhase`) to "GoToPile".
+   - `Update` GoToPile: `int pile = ctx.Workers.FindDepositBuilding("Corpse", ctx.MyPos);`
+     if `<0` idle/wander; else `var o = ctx.EnvSystem.GetObject(pile); MoveTo(ref ctx, new Vec2(o.X,o.Y));`
+     `if (!SubroutineSteps.MoveToPosition_Arrived(ref ctx, ~1.6f)) return;` then deposit:
+     `ctx.Workers.RecordPiledCorpse(pile, ctx.Units[i].UnitDefID);`
+     `ctx.Workers.Deposit(pile, "Corpse", 1);` and remove self (see Pitfalls).
+4. **`Game1.cs` `~line 734`** — register:
+   `AI.ArchetypeRegistry.Register(AI.ArchetypeRegistry.CorpsePuppet, "CorpsePuppet", new AI.CorpsePuppetHandler());`
+5. **Summon assignment** — nothing special needed: `Game1.SpawnUnit` and
+   `ExecuteSummonSpell` (`Game1.Spells.cs` `~line 144`, which calls `SpawnUnit`) already
+   apply `unitDef.Archetype` via `FromName`. As long as the def's `archetype` is
+   `CorpsePuppet`, the summon path wires the handler automatically.
+
+## Pitfalls / gotchas
+
+- **Archetype = string in the def, resolved by `FromName`.** Forgetting the `FromName`
+  case means the unit silently gets `None` (no handler, stands still). Add the case + the
+  `const byte`.
+- **`OnSpawn`'s AIContext is partial** (no `Workers`/`EnvSystem`) — only the `Update` path
+  (`BuildAIContext`) has them. Do world queries in `Update`, not `OnSpawn`.
+- **Self-removal can't go through `AIContext`** — there's no `Simulation` reference on the
+  context. Cleanest options: (a) **reuse `ConsumeCarriedCorpse`-style flow** by giving the
+  puppet a carried-corpse id so `WorkerSystem` removes it — but the puppet *is* the body, it
+  isn't carrying one; or (b) **add a small removal hook**: set a flag/marker on the unit (e.g.
+  a new `DespawnRequested` bool on `UnitArrays`) that `Simulation`'s post-AI sweep honors with
+  `RemoveUnitTracked`. Don't `RemoveAt` the units list mid-AI-loop (it's iterating by index
+  and uses swap-pop) — defer removal to after the loop. Mirror how dissolving/dead units are
+  reaped. Check `Simulation` for an existing per-frame "remove dead/marked units" pass before
+  adding a new flag.
+- **`FindDepositBuilding` returns nearest-with-room only** — if every `corpse_pile` is full
+  (`storageCap:20`) it returns -1; handle the no-pile case (idle/wander) instead of NRE.
+- **`Deposit` clamps to room and returns the accepted amount** — if it returns 0 the pile was
+  full; don't remove the puppet in that case (it didn't get stored).
+- **Record before deposit** — call `RecordPiledCorpse(pile, UnitDefID)` so the body can be
+  withdrawn later as the same type (matches `WorkerHandler.GoToStorage` ordering).
+- **Build-gated buildings** — `FindDepositBuilding` skips piles with `BuildProgress < 1`
+  (the `Built` check). A blueprint pile won't be a valid target.
+
+## Related areas
+- [jobs-workers.md](jobs-workers.md) — `WorkerSystem` (the deposit/pile/stockpile brain) and
+  `WorkerHandler` (the FSM template).
+- [corpses.md](corpses.md) — `Corpse` data model; note a "pile" of loose corpses ≠ the
+  `corpse_pile` *building* stockpile (the puppet deposits into the building's abstract
+  "Corpse" count, not as a loose body).
+- game1-partials.md — `Game1.cs` archetype registration + `SpawnUnit`; `Game1.Spells.cs`
+  `ExecuteSummonSpell`.
