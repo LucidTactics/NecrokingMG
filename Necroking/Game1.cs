@@ -302,8 +302,10 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     private Rectangle? _hoverBoxObject, _hoverBoxCorpse, _hoverBoxUnit;
     // --- Hover-highlight style variant cycling (design test harness; cycle with 'H') ----
     // 13 states: 0-11 = 3 shapes (Circle / Corners / Rectangle) × 4 line styles
-    // (Thick-Solid / Thin-Solid / Thick-Faint / Thin-Faint); 12 = Off.
-    // shape = variant / 4, style = variant % 4. Default 11 ≈ the original look (Rect, thin, faint).
+    // Hover-marker ground geometry, shared by the renderer (DrawHoverGroundMarkers) and the building
+    // hit-test (CursorInObjectMarker) so the pickable area matches the drawn shape exactly.
+    private const float HoverMarkerRadiusMul = 1.5f;   // visual marker radius over the collision footprint
+    private const float HoverMarkerFlatten   = 0.42f;  // vertical squash for the ground-plane (RTS) look
     // Dev override for the hover-highlight variant (shape*4 + style). -1 = OFF (use the per-category
     // Tooltips settings — the normal path); 0..19 forces one variant on everything; 20 = highlight off.
     private int _hoverHighlightVariant = -1;
@@ -2967,24 +2969,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             {
                 var tcfg = _gameData.Settings.Tooltips;
                 if ((tcfg.ShowBuildingInfo || tcfg.ShowGroundItemInfo) && !_input.MouseOverUI)
-                {
-                    float pr = tcfg.GroundPickRadius;
-                    float bhd = pr * pr;
-                    for (int oi = 0; oi < _envSystem.ObjectCount; oi++)
-                    {
-                        var obj = _envSystem.GetObject(oi);
-                        var d = _envSystem.Defs[obj.DefIndex];
-                        bool hoverable = (d.IsBuilding && tcfg.ShowBuildingInfo)
-                                       || ((d.IsForagable || d.IsBerryBush) && tcfg.ShowGroundItemInfo);
-                        if (!hoverable) continue;
-                        // Collected foragables are invisible while respawning — don't
-                        // surface a tooltip for something that isn't drawn.
-                        if (d.IsForagable && _envSystem.GetObjectRuntime(oi).Collected) continue;
-                        float hdx = obj.X - mouseWorld.X, hdy = obj.Y - mouseWorld.Y;
-                        float hd = hdx * hdx + hdy * hdy;
-                        if (hd < bhd) { bhd = hd; _hoveredObjectIdx = oi; }
-                    }
-                }
+                    _hoveredObjectIdx = PickHoveredObject(new Vector2(mouse.X, mouse.Y), mouseWorld);
             }
 
             // --- Corpse hover detection (for the reanimation info tooltip) ---

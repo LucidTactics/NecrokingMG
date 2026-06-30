@@ -828,6 +828,19 @@ public partial class Game1 {
                break;
             }
 
+            // Run the real object-pick hit-test at a SCREEN point (headless has no live mouse) —
+            // verifies the building diamond/footprint hover area. Returns the picked object + def id.
+            case "hover_at": {   // window.dev('hover_at',[640,360])
+               if (c.Args.Length < 2) { c.Complete(Necroking.Dev.DevServer.Error("hover_at needs <screenX> <screenY>")); break; }
+               var pt = new Microsoft.Xna.Framework.Vector2(DevFloat(c.Args[0]), DevFloat(c.Args[1]));
+               int sw = GraphicsDevice.Viewport.Width, sh = GraphicsDevice.Viewport.Height;
+               var cw = _camera.ScreenToWorld(pt, sw, sh);
+               int idx = PickHoveredObject(pt, cw);
+               string did = idx >= 0 ? _envSystem.Defs[_envSystem.GetObject(idx).DefIndex].Id : "(none)";
+               c.Complete(Necroking.Dev.DevServer.OkRaw($"{{\"objIdx\":{idx},\"def\":{System.Text.Json.JsonSerializer.Serialize(did)},\"worldX\":{cw.X:F2},\"worldY\":{cw.Y:F2}}}"));
+               break;
+            }
+
             // Set the hover-highlight dev override (-1 = use Tooltips settings, 0-19 = force a
             // variant on everything, 20 = highlight off).
             case "hover_variant": {   // window.dev('hover_variant',[5])

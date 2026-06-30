@@ -969,6 +969,76 @@ public partial class Game1
         return (v >= 0 && v < 20) ? v : -1;
     }
 
+    /// <summary>Pick the hoverable env object under the cursor for the HUD info tooltip + highlight.
+    /// Buildings use the drawn marker footprint (diamond/box/circle) as the hit area so the whole
+    /// visible shape is pickable; foragables/ground items use a simple radius around their origin.
+    /// Returns the object index or -1. Per-kind gating still honours the Tooltips toggles.</summary>
+    private int PickHoveredObject(Vector2 cursorScreen, Vec2 cursorWorld)
+    {
+        var tcfg = _gameData.Settings.Tooltips;
+        int buildingShape = System.Math.Clamp(tcfg.HoverHighlightBuilding, 0, 19) / 4;
+        float pr = tcfg.GroundPickRadius;
+        float bestScore = float.MaxValue;
+        int picked = -1;
+        for (int oi = 0; oi < _envSystem.ObjectCount; oi++)
+        {
+            var obj = _envSystem.GetObject(oi);
+            var d = _envSystem.Defs[obj.DefIndex];
+            bool hoverable = (d.IsBuilding && tcfg.ShowBuildingInfo)
+                           || ((d.IsForagable || d.IsBerryBush) && tcfg.ShowGroundItemInfo);
+            if (!hoverable) continue;
+            // Collected foragables are invisible while respawning — don't surface a tooltip for
+            // something that isn't drawn.
+            if (d.IsForagable && _envSystem.GetObjectRuntime(oi).Collected) continue;
+
+            float score;
+            if (d.IsBuilding)
+            {
+                // Hover area = the drawn marker footprint; score by distance to the collision centre.
+                if (!CursorInObjectMarker(oi, buildingShape, cursorScreen)) continue;
+                float es = d.Scale * obj.Scale;
+                float cx = (obj.X + d.CollisionOffsetX * es) - cursorWorld.X;
+                float cy = (obj.Y + d.CollisionOffsetY * es) - cursorWorld.Y;
+                score = cx * cx + cy * cy;
+            }
+            else
+            {
+                float hdx = obj.X - cursorWorld.X, hdy = obj.Y - cursorWorld.Y;
+                score = hdx * hdx + hdy * hdy;
+                if (score >= pr * pr) continue;
+            }
+            if (score < bestScore) { bestScore = score; picked = oi; }
+        }
+        return picked;
+    }
+
+    /// <summary>Is the screen cursor inside the ground hover-marker AREA of env object
+    /// <paramref name="oi"/>, for the given marker <paramref name="shape"/> (0 Circle, 3 Ground Box,
+    /// 4 Diamond Box; screen-space shapes fall back to the circle)? Mirrors DrawHoverGroundMarkers'
+    /// projection exactly so the pickable area matches the drawn footprint — letting a big building
+    /// be hovered anywhere within its diamond, not just near its origin point.</summary>
+    private bool CursorInObjectMarker(int oi, int shape, Vector2 cursorScreen)
+    {
+        var obj = _envSystem.GetObject(oi);
+        var def = _envSystem.Defs[obj.DefIndex];
+        float es = def.Scale * obj.Scale;
+        var ccen = new Vec2(obj.X + def.CollisionOffsetX * es, obj.Y + def.CollisionOffsetY * es);
+        float worldR = MathF.Max(def.CollisionRadius * es, 0.45f * es) * HoverMarkerRadiusMul;
+        var cenS  = _renderer.WorldToScreen(ccen, 0f, _camera);
+        var edgeS = _renderer.WorldToScreen(ccen + new Vec2(worldR, 0f), 0f, _camera);
+        float rx = MathF.Abs(edgeS.X - cenS.X);
+        if (rx <= 0.001f) return false;
+        float hh = rx * HoverMarkerFlatten;
+        float nx = MathF.Abs(cursorScreen.X - cenS.X) / rx;
+        float ny = MathF.Abs(cursorScreen.Y - cenS.Y) / hh;
+        return shape switch
+        {
+            4 => nx + ny <= 1f,            // diamond (rhombus)
+            3 => nx <= 1f && ny <= 1f,     // axis-aligned box
+            _ => nx * nx + ny * ny <= 1f,  // circle / ellipse (and fallback)
+        };
+    }
+
     /// <summary>Hover-highlight ground variants, rendered BEHIND the sprites (RTS look). Three shapes
     /// share this path because all live on the ground plane: the <b>Circle</b> (flattened ellipse), the
     /// <b>Ground Box</b> (axis-aligned corner brackets on a flattened rectangle), and the
@@ -980,8 +1050,8 @@ public partial class Game1
     {
         if (!_gameData.Settings.Tooltips.ShowHoverHighlight) return;
 
-        const float RadiusMul     = 1.5f;    // visual marker radius over the collision footprint
-        const float Flatten       = 0.42f;   // vertical squash for the ground-plane (RTS) look
+        const float RadiusMul = HoverMarkerRadiusMul;   // shared with the building hit-test
+        const float Flatten   = HoverMarkerFlatten;
         void Mark(Vec2 worldPos, float worldRadius, int variant)
         {
             if (variant < 0 || worldRadius <= 0f) return;
