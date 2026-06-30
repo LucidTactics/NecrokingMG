@@ -192,12 +192,27 @@ def _has_unsafe(cmd: str) -> bool:
     return any(tok in cmd for tok in _UNSAFE)
 
 
+# Redirections that discard output to the null device are harmless (they write
+# nothing) — strip them before the scan so `cmd 2>/dev/null` isn't treated as a file
+# write. Covers an optional fd or `&` prefix, `>`/`>>`, optional spaces, and /dev/null
+# or Windows nul. Kept deliberately simple per the "basics with regex" intent.
+_NULL_REDIRECT = re.compile(
+    r"(?:\d*|&)>>?\s*(?:/dev/null|nul)\b"   # discard to null device: 2>/dev/null, &>nul
+    r"|\d*>>?&\d+",                          # fd duplication: 2>&1, >&2 (not a file write)
+    re.IGNORECASE)
+
+
 def has_output_redirection(command: str) -> bool:
     """Checks if a bash command string redirects output to a file using '>' or
     '>>'. Safely ignores redirection symbols inside single quotes, double quotes,
     and escaped characters. Catches '>', '>>', '2>', '&>', etc. by simply looking
     for an unquoted '>'. (Note: also returns True for unquoted bash arithmetic
-    like `$(( 5 > 3 ))`, but those are already caught by _has_unsafe's '$('.)"""
+    like `$(( 5 > 3 ))`, but those are already caught by _has_unsafe's '$('.)
+
+    Redirections to the null device (`2>/dev/null`, `>/dev/null`, `&>nul`, …) are
+    stripped first: they discard output rather than write a file, so they shouldn't
+    force a prompt."""
+    command = _NULL_REDIRECT.sub("", command)
     in_single_quote = False
     in_double_quote = False
     escape_next = False
