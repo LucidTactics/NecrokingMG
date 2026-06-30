@@ -458,6 +458,10 @@ public class Unit
     public float WeaponPoisonCoatTimer;
     public int WeaponPoisonAmount;
     public bool ZombieOnDeath;
+    // Set by AI (e.g. CorpsePuppetHandler) to vanish the unit with NO corpse — reaped
+    // by Simulation.RemoveDeadUnits' pre-pass via RemoveUnitTracked. Distinct from death
+    // (Alive=false), which spawns a corpse.
+    public bool PendingDespawn;
     public float WeaponZombieCoatTimer;
     public float ParalysisSlowTimer;
     public float ParalysisStunTimer;

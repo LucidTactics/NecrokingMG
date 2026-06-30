@@ -732,6 +732,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         AI.ArchetypeRegistry.Register(AI.ArchetypeRegistry.CasterUnit, "CasterUnit",
             new AI.RangedUnitHandler(AI.ArchetypeRegistry.CasterUnit));
         AI.ArchetypeRegistry.Register(AI.ArchetypeRegistry.Worker, "Worker", new AI.WorkerHandler());
+        AI.ArchetypeRegistry.Register(AI.ArchetypeRegistry.CorpsePuppet, "CorpsePuppet", new AI.CorpsePuppetHandler());
         _startupTimer = System.Diagnostics.Stopwatch.StartNew();
         _startupLastMs = 0;
         // The pre-LoadContent gap = OS process spawn + .NET runtime init +

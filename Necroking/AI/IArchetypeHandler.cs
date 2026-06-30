@@ -71,6 +71,7 @@ public static class ArchetypeRegistry
         "ArcherUnit" => ArcherUnit,
         "Civilian" => Civilian,
         "Worker" => Worker,
+        "CorpsePuppet" => CorpsePuppet,
         _ => None,
     };
 
@@ -88,4 +89,5 @@ public static class ArchetypeRegistry
     public const byte Civilian = 10;
     public const byte RatPack = 11;
     public const byte Worker = 12;
+    public const byte CorpsePuppet = 13;
 }

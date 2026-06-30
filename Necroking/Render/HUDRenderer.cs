@@ -610,12 +610,26 @@ public partial class HUDRenderer
             var proc = envSystem.GetProcessState(hoveredIdx);
             string ownerStr = rt.Owner switch { 0 => "Undead", 1 => "Neutral", _ => "Human" };
             string procStr = proc.Processing ? $"Processing ({proc.ProcessTimer:F1}s)" : "Idle";
-            lines = new[] {
+            var bls = new List<string> {
                 def.Name.Length > 0 ? def.Name : def.Id,
                 $"HP: {rt.HP}/{def.BuildingMaxHP}",
                 $"Owner: {ownerStr}",
                 procStr
             };
+            // Corpse Pile: list the bodies stored here so the player can see what's
+            // available to gather/reanimate without opening anything.
+            if (string.Equals(def.StoredResource, "Corpse", System.StringComparison.OrdinalIgnoreCase)
+                && sim.Workers != null)
+            {
+                var corpseLines = sim.Workers.PiledCorpseLines(hoveredIdx);
+                if (corpseLines.Count > 0)
+                {
+                    bls.Add("Corpses:");
+                    bls.AddRange(corpseLines);
+                }
+                else bls.Add("Empty");
+            }
+            lines = bls.ToArray();
         }
         else if (def.IsBerryBush)
         {

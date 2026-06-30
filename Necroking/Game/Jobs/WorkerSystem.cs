@@ -500,6 +500,49 @@ public class WorkerSystem
         RecordPiledCorpse(objIdx, c?.UnitDefID ?? "");
     }
 
+    private string CorpseLabel(string unitDefId)
+    {
+        if (string.IsNullOrEmpty(unitDefId)) return "Corpse";
+        var def = _gameData?.Units.Get(unitDefId);
+        return def != null && !string.IsNullOrEmpty(def.DisplayName) ? def.DisplayName : unitDefId;
+    }
+
+    /// <summary>UI: human-readable lines listing the corpses piled at a building,
+    /// grouped by body type with counts (e.g. "Skeleton ×3"). The abstract Corpse
+    /// count is authoritative; the recorded types are best-effort, so a generic
+    /// "Corpse" line fills any shortfall (dev-seeded / drift). Empty → no lines.</summary>
+    public List<string> PiledCorpseLines(int objIdx)
+    {
+        var lines = new List<string>();
+        int total = StoredOf(objIdx, JobResources.Corpse);
+        if (total <= 0) return lines;
+
+        var counts = new Dictionary<string, int>();
+        var order = new List<string>(); // preserve first-seen order for stable display
+        int typed = 0;
+        if (_corpseTypes.TryGetValue(ObjId(objIdx), out var list))
+        {
+            // Take the top `total` recorded types (most recent = next withdrawn).
+            for (int i = list.Count - 1; i >= 0 && typed < total; i--)
+            {
+                string label = CorpseLabel(list[i]);
+                if (!counts.ContainsKey(label)) { counts[label] = 0; order.Add(label); }
+                counts[label]++;
+                typed++;
+            }
+        }
+        int generic = total - typed;
+        if (generic > 0)
+        {
+            if (!counts.ContainsKey("Corpse")) { counts["Corpse"] = 0; order.Add("Corpse"); }
+            counts["Corpse"] += generic;
+        }
+
+        foreach (var label in order)
+            lines.Add(counts[label] > 1 ? $"{label} x{counts[label]}" : label);
+        return lines;
+    }
+
     /// <summary>Pop the top piled corpse's unit-type from a pile, or "" if none recorded
     /// (e.g. count seeded without identity). The abstract count is decremented separately.</summary>
     public string TakePiledCorpse(int objIdx)

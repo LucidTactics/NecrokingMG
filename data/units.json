@@ -8688,6 +8688,301 @@
       "animWalkVelOverride": null,
       "animJogVelOverride": null,
       "animRunVelOverride": null
+    },
+    {
+      "id": "corpse_puppet",
+      "name": "Corpse Puppet",
+      "type": "Skeleton",
+      "faction": "Undead",
+      "ai": "AttackClosest",
+      "orcaPriority": 0,
+      "size": 2,
+      "radius": 0.495,
+      "spriteScale": 0.9,
+      "spriteWorldHeight": 1.8,
+      "bodyLengthWorld": 0,
+      "wadingSinkWorld": 0,
+      "wadingWaterlineFraction": 0.35,
+      "wadingFractionByDirection": null,
+      "wadingTopFractionByDirection": null,
+      "color": {
+        "r": 160,
+        "g": 160,
+        "b": 160,
+        "a": 255
+      },
+      "sprite": {
+        "atlas": "VampireFaction",
+        "name": "Skeleton"
+      },
+      "stats": {
+        "maxHP": 6,
+        "strength": 8,
+        "attack": 8,
+        "defense": 10,
+        "magicResist": 6,
+        "morale": 10,
+        "encumbrance": 0,
+        "naturalProt": 0,
+        "combatSpeed": 1.41
+      },
+      "zombieTypeID": "",
+      "spellID": "",
+      "undeadCategory": "None",
+      "maxMana": 0,
+      "manaRegen": 0,
+      "playerForm": false,
+      "paths": {},
+      "weapons": [
+        "spear"
+      ],
+      "armors": [],
+      "shields": [],
+      "tags": [],
+      "attackAnim": null,
+      "attackCooldown": null,
+      "postAttackLockout": null,
+      "turnSpeed": null,
+      "accelHalfTime": null,
+      "accel80Time": null,
+      "accelFullTime": null,
+      "maxAcceleration": null,
+      "maxDeceleration": null,
+      "maxLateralAccel": null,
+      "weaponPoints": {
+        "Attack1": {
+          "60": [
+            {
+              "hilt": {
+                "x": -10.994864,
+                "y": -30.992033,
+                "behind": false
+              },
+              "tip": {
+                "x": 5.278641,
+                "y": -31.57323,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": -2.8581119,
+                "y": -12.393742,
+                "behind": false
+              },
+              "tip": {
+                "x": 32.013687,
+                "y": -9.487759,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": 12.834197,
+                "y": -15.880921,
+                "behind": false
+              },
+              "tip": {
+                "x": 38.40685,
+                "y": -25.761265,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": -2.276915,
+                "y": -12.393742,
+                "behind": false
+              },
+              "tip": {
+                "x": 31.43249,
+                "y": -11.812545,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": -6.3452916,
+                "y": -21.11169,
+                "behind": false
+              },
+              "tip": {
+                "x": 20.97095,
+                "y": -44.359554,
+                "behind": false
+              }
+            }
+          ]
+        },
+        "Idle": {
+          "30": [
+            {
+              "hilt": {
+                "x": -6.290296,
+                "y": -21.69114,
+                "behind": false
+              },
+              "tip": {
+                "x": 25.857265,
+                "y": -46.045353,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": -6.290296,
+                "y": -22.178225,
+                "behind": false
+              },
+              "tip": {
+                "x": 24.883097,
+                "y": -43.609932,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": -7.2644644,
+                "y": -24.126562,
+                "behind": false
+              },
+              "tip": {
+                "x": 28.292686,
+                "y": -45.071186,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": -7.2644644,
+                "y": -22.178225,
+                "behind": false
+              },
+              "tip": {
+                "x": 29.266855,
+                "y": -45.55827,
+                "behind": false
+              }
+            }
+          ],
+          "300": [
+            {
+              "hilt": {
+                "x": 6.0624614,
+                "y": -25.534824,
+                "behind": false
+              },
+              "tip": {
+                "x": 21.42698,
+                "y": -53.614803,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": 6.5922723,
+                "y": -23.41558,
+                "behind": false
+              },
+              "tip": {
+                "x": 25.665466,
+                "y": -49.906128,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": 6.0624614,
+                "y": -25.534824,
+                "behind": false
+              },
+              "tip": {
+                "x": 25.665466,
+                "y": -53.614803,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": 6.0624614,
+                "y": -24.475203,
+                "behind": false
+              },
+              "tip": {
+                "x": 19.837545,
+                "y": -54.674427,
+                "behind": false
+              }
+            }
+          ],
+          "60": [
+            {
+              "hilt": {
+                "x": -8.301332,
+                "y": -23.639477,
+                "behind": false
+              },
+              "tip": {
+                "x": 12.156207,
+                "y": -46.045353,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": -8.788416,
+                "y": -22.665308,
+                "behind": false
+              },
+              "tip": {
+                "x": 14.591628,
+                "y": -43.12285,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": -8.301332,
+                "y": -24.126562,
+                "behind": false
+              },
+              "tip": {
+                "x": 15.565797,
+                "y": -44.5841,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": -12.198007,
+                "y": -21.69114,
+                "behind": false
+              },
+              "tip": {
+                "x": 14.104544,
+                "y": -45.071186,
+                "behind": false
+              }
+            }
+          ]
+        }
+      },
+      "animTimings": {},
+      "archetype": "CorpsePuppet",
+      "detectionRange": 10,
+      "detectionBreakRange": 20,
+      "alertDuration": 0.5,
+      "alertEscalateRange": 8,
+      "groupAlertRadius": 0,
+      "legacyGaitMode": false,
+      "isQuadruped": false,
+      "dutyCycle": 0,
+      "targetWalkCycle": 1.2,
+      "jogSpeedMultiplier": 0,
+      "sprintSpeedMultiplier": 0,
+      "animWalkVelOverride": null,
+      "animJogVelOverride": null,
+      "animRunVelOverride": null
     }
   ]
 }

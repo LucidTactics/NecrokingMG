@@ -3660,6 +3660,12 @@ public class Simulation
 
     private void RemoveDeadUnits()
     {
+        // Pre-pass: vanish PendingDespawn units (e.g. a corpse puppet that delivered
+        // itself into a pile) with NO corpse — they're not "dead", just gone. Reverse
+        // loop so RemoveUnitTracked's swap-pop doesn't skip entries.
+        for (int i = _units.Count - 1; i >= 0; i--)
+            if (_units[i].PendingDespawn) RemoveUnitTracked(i);
+
         for (int i = _units.Count - 1; i >= 0; i--)
         {
             if (!_units[i].Alive)
