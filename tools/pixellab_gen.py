@@ -54,7 +54,8 @@ def style_b64_resized(path: str, w: int, h: int, flatten=(46, 44, 52)) -> str:
     return base64.b64encode(buf.getvalue()).decode("ascii")
 
 
-def gen_one(secret, endpoint, style_b64, color_b64, prompt, w, h, strength, guidance, no_bg, seed):
+def gen_one(secret, endpoint, style_b64, color_b64, init_b64, init_strength,
+            prompt, w, h, strength, guidance, no_bg, seed, struct=None):
     body = {
         "description": prompt,
         "image_size": {"width": w, "height": h},
@@ -63,8 +64,18 @@ def gen_one(secret, endpoint, style_b64, color_b64, prompt, w, h, strength, guid
     }
     if seed is not None:
         body["seed"] = int(seed)
+    # Structured style controls (outline/shading/detail/view/isometric). On pixflux
+    # they weakly guide; on bitforge they're stronger and seem REQUIRED for it to
+    # converge (style_image alone returned noise).
+    if struct:
+        for k, v in struct.items():
+            if v is not None and v != "":
+                body[k] = v
     if color_b64:  # forced color palette (both endpoints support color_image)
         body["color_image"] = {"base64": color_b64}
+    if init_b64:   # structural reference (img2img); strength 1-999, higher = closer
+        body["init_image"] = {"base64": init_b64}
+        body["init_image_strength"] = int(init_strength)
     if endpoint == "bitforge":
         body["style_image"] = {"base64": style_b64}
         body["style_strength"] = float(strength)
@@ -83,6 +94,14 @@ def main():
     ap.add_argument("--endpoint", default="bitforge", choices=["bitforge", "pixflux"])
     ap.add_argument("--style", default="", help="reference image path (bitforge: defines art style)")
     ap.add_argument("--color", default="", help="palette reference image (pixflux/bitforge color_image)")
+    ap.add_argument("--init", default="", help="structural reference image (img2img init_image)")
+    ap.add_argument("--init-strength", type=int, default=300, help="init_image strength 1-999 (higher = closer)")
+    # Structured style controls (real API params, not prose).
+    ap.add_argument("--outline", default="", help="lineless | 'single color black outline' | 'selective outline' | ''")
+    ap.add_argument("--shading", default="", help="'flat shading' .. 'highly detailed shading'")
+    ap.add_argument("--detail", default="", help="'low detail' | 'medium detail' | 'highly detailed'")
+    ap.add_argument("--view", default="", help="side | 'low top-down' | 'high top-down'")
+    ap.add_argument("--isometric", action="store_true", help="set isometric=true")
     ap.add_argument("--prompt", required=True)
     ap.add_argument("--name", required=True, help="output base name")
     ap.add_argument("--out", default="log/pixellab", help="output dir")
@@ -99,6 +118,7 @@ def main():
     secret = load_secret()
     style_b64 = style_b64_resized(args.style, w, h) if args.style else ""
     color_b64 = style_b64_resized(args.color, w, h, flatten=None) if args.color else ""
+    init_b64 = style_b64_resized(args.init, w, h, flatten=None) if args.init else ""
     no_bg = not args.background
 
     print(f"endpoint={args.endpoint}  style={args.style or '-'}  size={w}x{h}  strength={args.strength}  guidance={args.guidance}  no_bg={no_bg}")
@@ -107,7 +127,12 @@ def main():
     for i in range(args.n):
         seed = args.seed + i
         try:
-            img = gen_one(secret, args.endpoint, style_b64, color_b64, args.prompt, w, h, args.strength, args.guidance, no_bg, seed)
+            struct = {"outline": args.outline, "shading": args.shading, "detail": args.detail,
+                      "view": args.view}
+            if args.isometric:
+                struct["isometric"] = True
+            img = gen_one(secret, args.endpoint, style_b64, color_b64, init_b64, args.init_strength,
+                          args.prompt, w, h, args.strength, args.guidance, no_bg, seed, struct)
         except Exception as e:
             print(f"  [{i}] ERROR: {e}")
             continue
