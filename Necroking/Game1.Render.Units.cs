@@ -1003,7 +1003,11 @@ public partial class Game1
             }
             else
             {
-                float hdx = obj.X - cursorWorld.X, hdy = obj.Y - cursorWorld.Y;
+                // Anchor the forgiving radius pick at the collision centre (where the marker is
+                // drawn), not the sprite origin — robust if a ground item ever gets a collision offset.
+                float es = d.Scale * obj.Scale;
+                float hdx = (obj.X + d.CollisionOffsetX * es) - cursorWorld.X;
+                float hdy = (obj.Y + d.CollisionOffsetY * es) - cursorWorld.Y;
                 score = hdx * hdx + hdy * hdy;
                 if (score >= pr * pr) continue;
             }
