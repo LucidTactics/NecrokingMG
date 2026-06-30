@@ -122,7 +122,7 @@ partial class GameRenderer
         _g._groundEffect.Parameters["Zoom"]?.SetValue(_g._camera.Zoom);
         _g._groundEffect.Parameters["YRatio"]?.SetValue(_g._camera.YRatio);
         _g._groundEffect.Parameters["ScreenSize"]?.SetValue(new Vector2(_g._renderer.ScreenW, _g._renderer.ScreenH));
-        _g._groundEffect.Parameters["Game1.WorldSize"]?.SetValue(new Vector2(_g._groundSystem.VertexW, _g._groundSystem.VertexH));
+        _g._groundEffect.Parameters["WorldSize"]?.SetValue(new Vector2(_g._groundSystem.VertexW, _g._groundSystem.VertexH));
         _g._groundEffect.Parameters["TypeWarpStrength"]?.SetValue(_g._groundSystem.TypeWarpStrength);
         _g._groundEffect.Parameters["UvWarpAmp"]?.SetValue(_g._groundSystem.UvWarpAmp);
         _g._groundEffect.Parameters["UvWarpFreq"]?.SetValue(_g._groundSystem.UvWarpFreq);
