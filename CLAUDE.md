@@ -133,9 +133,17 @@ Before reproducing any HTML/CSS/JSX design (Claude Design or otherwise) in MonoG
 Every distinct behavior or pattern should have one canonical implementation. Before writing new code, check whether an existing system, utility, or pattern already solves the problem. The goal is fewer pieces of code doing the same function — when a bug is fixed, it's fixed in one place.
 
 ### Before Writing New Code
-1. **Search first** — grep/glob for existing implementations that solve the same or a similar problem
-2. **Reuse or extend** — prefer calling existing code (with different parameters or small improvements) over writing a parallel solution
-3. **If nothing exists** — build it in a way that could become the standard approach for that category of problem
+1. **Locate first — use the `locate-behavior` skill, don't freestyle grep.** Any time you
+   need to find *where* a behavior lives or *where new code should go* (which file/function
+   is responsible, where to add a feature, what file to create), invoke `/locate-behavior`
+   **before** reaching for Grep/Glob. It routes through a self-extending architecture map
+   and you leave the map better than you found it — ad-hoc grepping skips that and is the
+   thing to avoid. Grep/Glob/LSP are for *verifying* a symbol the skill pointed you at, not
+   for the initial "where is this" search.
+2. **Search for reuse** — once located, check whether an existing system, utility, or
+   pattern already solves the problem (the skill's docs often say so directly)
+3. **Reuse or extend** — prefer calling existing code (with different parameters or small improvements) over writing a parallel solution
+4. **If nothing exists** — build it in a way that could become the standard approach for that category of problem
 
 ### When to Check with the User
 - **User-facing features** (UI, graphics, game systems): If a relevant standard exists but Claude thinks a one-off solution is better, check with the user first — they may prefer consistency. If Claude thinks the standard is the right call (possibly with tweaks or improvements), proceed with own judgement.

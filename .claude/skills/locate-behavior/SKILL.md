@@ -1,6 +1,6 @@
 ---
 name: locate-behavior
-description: Find where a behavior or feature lives in the Necroking codebase — which files and functions are responsible, and where new code should go (incl. files to create). Use when asked "where is X handled", "which file does Y", "where should I add Z", "what code is responsible for W", or when starting a change and you need to find the right files fast. Backed by an on-demand, self-extending per-subsystem architecture map under reference/.
+description: Find where a behavior or feature lives in the Necroking codebase — which files and functions are responsible, and where new code should go (incl. files to create). USE THIS (don't freestyle grep) whenever you're about to locate where code lives or where to add a feature — invoke it FIRST, before Grep/Glob, at the start of any change. Triggers — "where is X handled", "which file does Y", "where should I add Z", "what code is responsible for W", or any task that begins with finding the right files (e.g. adding a command, system, editor hook, or data path). Backed by an on-demand, self-extending per-subsystem architecture map under reference/.
 ---
 
 # Locate behavior in the Necroking codebase
