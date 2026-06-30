@@ -12,11 +12,14 @@ allow rule never fires and every write prompts. This hook normalizes the path an
 the write when it lands inside one of those folders — portable across machines/OSes (no
 hard-coded home dir), unlike an absolute glob.
 
-Deliberately NOT covered: any `settings*.json` (matched by basename, so even one nested
-inside a curated folder like `.claude/skills/x/settings.json`) and any `.claude/` file
-outside the two folders above. Permission/hook config must always prompt — editing it is
-an escalation, not a self-heal. Anything outside the listed folders is left to the user
-(we stay silent).
+Always FORCES A PROMPT (permissionDecision "ask", which overrides acceptEdits) for the
+permission-granting machinery, so it can never be edited on autopilot:
+  - any `settings*.json` (matched by basename, even nested like `.claude/skills/x/settings.json`),
+  - anything under `tools/hooks/` (the hook scripts themselves — including THIS file).
+We use "ask" rather than just staying silent because hook scripts live outside `.claude/`,
+so acceptEdits would otherwise auto-accept them. Editing permission/hook config is an
+escalation, not a self-heal. Everything else outside the curated folders is left to the
+user (we stay silent / defer to normal flow).
 """
 import json
 import sys
@@ -28,6 +31,21 @@ _ALLOWED_MARKERS = (
     "/.claude/skills/",
     "/.claude/agents/",
 )
+# Path fragments that must ALWAYS prompt, even under acceptEdits / inside a curated folder.
+_ALWAYS_ASK_MARKERS = (
+    "/tools/hooks/",
+)
+
+
+def _emit(decision: str, reason: str) -> int:
+    print(json.dumps({
+        "hookSpecificOutput": {
+            "hookEventName": "PreToolUse",
+            "permissionDecision": decision,
+            "permissionDecisionReason": reason,
+        }
+    }))
+    return 0
 
 
 def main() -> int:
@@ -44,23 +62,19 @@ def main() -> int:
         return 0
 
     norm = path.replace("\\", "/").lower()
-    if not any(marker in norm for marker in _ALLOWED_MARKERS):
-        return 0  # outside the curated folders -> let the user decide
-
-    # NEVER auto-approve a settings file, even nested inside a curated folder. Permission/
-    # hook config must always prompt — a self-edit there is an escalation, not a self-heal.
     base = norm.rsplit("/", 1)[-1]
-    if base.startswith("settings") and base.endswith(".json"):
-        return 0  # e.g. .../skills/x/settings.json -> defer to normal (prompting) flow
 
-    print(json.dumps({
-        "hookSpecificOutput": {
-            "hookEventName": "PreToolUse",
-            "permissionDecision": "allow",
-            "permissionDecisionReason": "curated .claude config (skills/agents, non-settings)",
-        }
-    }))
-    return 0
+    # Guardrail first: permission/hook config always prompts (overrides acceptEdits).
+    if base.startswith("settings") and base.endswith(".json"):
+        return _emit("ask", "settings file — permission config must be reviewed")
+    if any(marker in norm for marker in _ALWAYS_ASK_MARKERS):
+        return _emit("ask", "hook script — permission machinery must be reviewed")
+
+    # Otherwise auto-approve curated, version-controlled skill/agent config.
+    if any(marker in norm for marker in _ALLOWED_MARKERS):
+        return _emit("allow", "curated .claude config (skills/agents, non-settings)")
+
+    return 0  # outside the curated folders -> let the user decide
 
 
 if __name__ == "__main__":
