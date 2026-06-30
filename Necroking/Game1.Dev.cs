@@ -1071,6 +1071,14 @@ public partial class Game1 {
                break;
             }
 
+            // Run the one-shot "loose corpses on a pile → stock" absorb pass (normally
+            // fires on map load). Lets headless tests trigger it after placing corpses.
+            case "absorb_piles": {
+               _workerSystem.AbsorbCorpsesOnPiles();
+               c.Complete(Necroking.Dev.DevServer.Ok("absorbed loose corpses sitting on piles"));
+               break;
+            }
+
             // Set HP (and optionally MaxHP) on matching units.
             case "set_hp": {
                if (c.Args.Length < 2) {

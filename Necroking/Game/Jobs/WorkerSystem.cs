@@ -660,7 +660,6 @@ public class WorkerSystem
         _dispatchTimer -= dt;
         if (_dispatchTimer > 0f) return;
         _dispatchTimer = DispatchInterval;
-        AbsorbCorpsesOnPiles();
         Dispatch();
     }
 
@@ -668,9 +667,12 @@ public class WorkerSystem
     /// footprint (collision radius) is absorbed into the pile's stockpile and removed
     /// from the world. Lets you drop a heap of corpses onto a pile in the map editor and
     /// have them counted (and pullable back out) without running the worker collect job.
-    /// Honors the pile's storage cap and preserves each body's type.</summary>
+    /// Honors the pile's storage cap and preserves each body's type. Run ONCE on
+    /// map/game load — it's an O(piles × corpses) scan, too costly to tick every frame,
+    /// and the use case (editor-placed corpses) only needs it at load.</summary>
     public void AbsorbCorpsesOnPiles()
     {
+        if (_env == null || _sim == null) return; // not bound yet (called before LoadContent)
         int pileDef = _env.FindDef("corpse_pile");
         if (pileDef < 0) return;
         var corpses = _sim.CorpsesMut;

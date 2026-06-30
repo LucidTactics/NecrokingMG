@@ -1185,6 +1185,11 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         if (placedUnits.Count > 0)
             LogTiming($"Spawned {placedUnits.Count} placed units");
 
+        // One-shot: pull any editor-placed corpses sitting on a Corpse Pile into its
+        // stock so they can be gathered back out. Done once here on map load (not per
+        // frame) — AbsorbCorpsesOnPiles is an O(piles × corpses) scan, too costly to tick.
+        _workerSystem.AbsorbCorpsesOnPiles();
+
         // Always ensure the player unit exists. The player starts as the
         // Wretched form — every other "necromancer-type" UnitDef is reached
         // via the Metamorphosis skill tree (Become Pale Acolyte, Become Wight,
