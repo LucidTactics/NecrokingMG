@@ -192,6 +192,42 @@ def _has_unsafe(cmd: str) -> bool:
     return any(tok in cmd for tok in _UNSAFE)
 
 
+def has_output_redirection(command: str) -> bool:
+    """Checks if a bash command string redirects output to a file using '>' or
+    '>>'. Safely ignores redirection symbols inside single quotes, double quotes,
+    and escaped characters. Catches '>', '>>', '2>', '&>', etc. by simply looking
+    for an unquoted '>'. (Note: also returns True for unquoted bash arithmetic
+    like `$(( 5 > 3 ))`, but those are already caught by _has_unsafe's '$('.)"""
+    in_single_quote = False
+    in_double_quote = False
+    escape_next = False
+
+    for char in command:
+        if escape_next:
+            escape_next = False
+            continue
+
+        if char == '\\':
+            # Backslash is literal inside single quotes; an escape otherwise.
+            if not in_single_quote:
+                escape_next = True
+            continue
+
+        if char == "'" and not in_double_quote:
+            in_single_quote = not in_single_quote
+            continue
+
+        if char == '"' and not in_single_quote:
+            in_double_quote = not in_double_quote
+            continue
+
+        if not in_single_quote and not in_double_quote:
+            if char == '>':
+                return True
+
+    return False
+
+
 def _split_segments(cmd: str):
     """Split a Bash command into independent sub-commands on the shell operators
     && || ; | and newlines, respecting single/double quotes. Used only after _has_unsafe
@@ -417,8 +453,9 @@ def evaluate(tool_name: str, tool_input: dict, mode: str, allow_rules, deny_rule
         if intended:
             return ("ask", intended)
 
-    # Constructs we can't safely tokenise -> hand off to the normal permission flow.
-    if _has_unsafe(cmd):
+    # Never force-allow a command that redirects output to a file (`>`/`>>`/`2>`/…).
+    # An allow rule like `echo *` would otherwise silently sanction a file write.
+    if _has_unsafe(cmd) or has_output_redirection(cmd):
         return ("defer", None)
 
     # Layer 2: if EVERY sub-command of the (possibly compound) command is allow-listed,
