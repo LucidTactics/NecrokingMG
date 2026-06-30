@@ -27,7 +27,9 @@
       "Bash(wc:*)",
       "Bash(sort:*)",
       "Bash(xargs grep:*)",
-      "Bash(python tools/json_data.py:*)"
+      "Bash(python tools/json_data.py:*)",
+      "Edit(.claude/skills/locate-behavior/**)",
+      "Write(.claude/skills/locate-behavior/**)"
     ]
   },
   "hooks": {
