@@ -1045,6 +1045,32 @@ public partial class Game1 {
                break;
             }
 
+            // Simulate a left-click on the world at (x,y) for the corpse-pile
+            // gather flow (headless has no real mouse). Mirrors the Game1.Update
+            // click handler: pick up now if in range, else walk over and grab.
+            case "pile_click": {
+               if (_sim.NecromancerIndex < 0) {
+                  c.Complete(Necroking.Dev.DevServer.Error("no necromancer in the sim"));
+                  break;
+               }
+               if (c.Args.Length < 2) {
+                  c.Complete(Necroking.Dev.DevServer.Error("pile_click needs: <x> <y>"));
+                  break;
+               }
+               int ni = _sim.NecromancerIndex;
+               var mw = new Vec2(DevFloat(c.Args[0]), DevFloat(c.Args[1]));
+               int pile = FindCorpsePileUnderCursor(mw);
+               if (pile < 0) {
+                  c.Complete(Necroking.Dev.DevServer.Error($"no corpse pile under ({mw.X},{mw.Y})"));
+                  break;
+               }
+               if (TryTakeCorpseFromPile(ni, pile))
+                  c.Complete(Necroking.Dev.DevServer.Ok($"picked up a corpse from pile obj{pile}"));
+               else
+                  c.Complete(Necroking.Dev.DevServer.Error($"too far / busy / empty — no pickup from pile obj{pile}"));
+               break;
+            }
+
             // Set HP (and optionally MaxHP) on matching units.
             case "set_hp": {
                if (c.Args.Length < 2) {
@@ -1680,7 +1706,9 @@ public partial class Game1 {
              $"\"velAngle\":{(u.Velocity.LengthSq() > 0.01f ? (MathF.Atan2(u.Velocity.Y, u.Velocity.X) * 180f / MathF.PI) : 0f).ToString("F0", ci)}," +
              $"\"engaged\":{(u.EngagedTarget.IsUnit ? "true" : "false")}," +
              $"\"target\":{(u.Target.IsUnit ? "true" : "false")}," +
-             $"\"combatSpeed\":{u.Stats.CombatSpeed.ToString("F2", ci)}" +
+             $"\"combatSpeed\":{u.Stats.CombatSpeed.ToString("F2", ci)}," +
+             $"\"carryingCorpse\":{u.CarryingCorpseID}," +
+             $"\"corpsePhase\":{u.CorpseInteractPhase}" +
              "}";
    }
 

@@ -248,7 +248,13 @@ public class WorkerHandler : IArchetypeHandler
         MoveTo(ref ctx, new Vec2(obj.X, obj.Y));
         if (!SubroutineSteps.MoveToPosition_Arrived(ref ctx, BuildingRange)) return;
 
-        if (ctx.Units[i].CarryingCorpseID >= 0) ws.ConsumeCarriedCorpse(i);
+        if (ctx.Units[i].CarryingCorpseID >= 0)
+        {
+            // Preserve the body's identity in the pile so it can be pulled back out
+            // as the same corpse (worker reanimate, or the player gathering by hand).
+            ws.RecordPiledCorpseFromUnit(i, building);
+            ws.ConsumeCarriedCorpse(i);
+        }
         ws.Deposit(building, carry, ctx.Units[i].WorkerCarryAmount);
         ctx.Units[i].WorkerCarryType = "";
         ctx.Units[i].WorkerCarryAmount = 0;

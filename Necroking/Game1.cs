@@ -100,6 +100,84 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         return best;
     }
 
+    // Nearest built Corpse Pile under the cursor (click-to-gather target), or -1.
+    private int FindCorpsePileUnderCursor(Vec2 mouseWorld, float clickRange = 1.6f)
+    {
+        if (_envSystem == null) return -1;
+        int pileDef = _envSystem.FindDef("corpse_pile");
+        if (pileDef < 0) return -1;
+        int best = -1; float bestSq = clickRange * clickRange;
+        for (int i = 0; i < _envSystem.ObjectCount; i++)
+        {
+            if (_envSystem.GetObject(i).DefIndex != pileDef) continue;
+            var rt = _envSystem.GetObjectRuntime(i);
+            if (!rt.Alive || rt.BuildProgress < 1f) continue;
+            var o = _envSystem.GetObject(i);
+            float sq = (new Vec2(o.X, o.Y) - mouseWorld).LengthSq();
+            if (sq < bestSq) { bestSq = sq; best = i; }
+        }
+        return best;
+    }
+
+    // Nearest built Corpse Pile that actually holds a corpse, within range of a point
+    // (used by the F-key pickup so it grabs from a pile the same way as a loose body).
+    private int FindNearestCorpsePileInRange(Vec2 from, float range)
+    {
+        if (_envSystem == null) return -1;
+        int pileDef = _envSystem.FindDef("corpse_pile");
+        if (pileDef < 0) return -1;
+        int best = -1; float bestSq = range * range;
+        for (int i = 0; i < _envSystem.ObjectCount; i++)
+        {
+            if (_envSystem.GetObject(i).DefIndex != pileDef) continue;
+            var rt = _envSystem.GetObjectRuntime(i);
+            if (!rt.Alive || rt.BuildProgress < 1f) continue;
+            if (_workerSystem.StoredOf(i, Game.Jobs.JobResources.Corpse) <= 0) continue;
+            var o = _envSystem.GetObject(i);
+            float sq = (new Vec2(o.X, o.Y) - from).LengthSq();
+            if (sq < bestSq) { bestSq = sq; best = i; }
+        }
+        return best;
+    }
+
+    // Withdraw one corpse from a pile and hand it to the necromancer to carry.
+    // Gated on proximity + the necromancer being free + the pile holding a corpse.
+    // Returns true if the pickup started.
+    private bool TryTakeCorpseFromPile(int necroIdx, int pileObjIdx)
+    {
+        if (necroIdx < 0 || pileObjIdx < 0 || _envSystem == null) return false;
+        var nu = _sim.Units[necroIdx];
+        // Busy carrying / mid-action → can't start a fresh pickup.
+        if (nu.CarryingCorpseID >= 0 || nu.CorpseInteractPhase != 0) return false;
+        if (nu.BaggingCorpseID >= 0) return false;
+        if (_workerSystem.StoredOf(pileObjIdx, Game.Jobs.JobResources.Corpse) <= 0) return false;
+
+        var o = _envSystem.GetObject(pileObjIdx);
+        var pilePos = new Vec2(o.X, o.Y);
+        // Same reach as the F-key corpse pickup, so "close enough" feels identical.
+        const float pickRange = 3f;
+        if ((pilePos - nu.Position).LengthSq() > pickRange * pickRange) return false;
+
+        if (_workerSystem.Withdraw(pileObjIdx, Game.Jobs.JobResources.Corpse, 1) <= 0) return false;
+
+        // Materialise a physical corpse at the pile and have the necromancer carry it,
+        // exactly like an F-key pickup (Pickup phase → the anim lerps it to the hand).
+        // Pull the real body type the pile remembers; fall back to a visible default
+        // so a count-only pile (e.g. dev-seeded) never yields an invisible corpse.
+        // Fall back to a body type known to render (a carried corpse needs a "Death"
+        // anim — see DrawCarriedCorpse; "skeleton" has one, so a count-only pile never
+        // yields an invisible corpse).
+        string defId = _workerSystem.TakePiledCorpse(pileObjIdx);
+        if (string.IsNullOrEmpty(defId)) defId = "skeleton";
+        int cid = _sim.SpawnLooseCorpse(pilePos, defId);
+        var c = _sim.FindCorpseByID(cid);
+        if (c != null) c.LerpStartPos = pilePos;
+        _sim.UnitsMut[necroIdx].CarryingCorpseID = cid;
+        _sim.UnitsMut[necroIdx].CorpseInteractPhase = 4; // Pickup
+        if (c != null) c.DraggedByUnitID = nu.Id;
+        return true;
+    }
+
     internal void EnsureInventoryUIsInitialized()
     {
         if (_inventoryUIsInitialized) return;
@@ -2979,7 +3057,19 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
                     }
                 }
                 if (!tableHandled)
+                {
+                    bool wasCarrying = necroIdx >= 0 && _sim.Units[necroIdx].CarryingCorpseID >= 0;
                     Game.CorpseInteractionManager.TryInteract(_sim, necroIdx);
+                    // Nothing loose to grab? If a Corpse Pile is in reach, pull one from
+                    // it — same pickup as a loose corpse — so F is consistent near piles.
+                    if (necroIdx >= 0 && !wasCarrying
+                        && _sim.Units[necroIdx].CarryingCorpseID < 0
+                        && _sim.Units[necroIdx].CorpseInteractPhase == 0)
+                    {
+                        int pile = FindNearestCorpsePileInRange(_sim.Units[necroIdx].Position, 3f);
+                        if (pile >= 0) TryTakeCorpseFromPile(necroIdx, pile);
+                    }
+                }
             }
 
             // --- Ground-object hover detection (buildings + foragable items) ---
@@ -3139,6 +3229,27 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
                         EnsureInventoryUIsInitialized();
                         _graveRosterUI.OpenForGrave(clickedGrave, screenW, screenH);
                         _input.ConsumeMouse();
+                    }
+                    else
+                    {
+                        // Left-click a Corpse Pile → gather a corpse by hand, exactly like
+                        // the F-key pickup: grab one if close enough, otherwise nothing
+                        // happens (no auto-walk).
+                        int clickedPile = FindCorpsePileUnderCursor(mouseWorld);
+                        if (clickedPile >= 0 && necroIdx >= 0
+                            && _sim.Units[necroIdx].CarryingCorpseID < 0
+                            && _sim.Units[necroIdx].CorpseInteractPhase == 0)
+                        {
+                            if (!TryTakeCorpseFromPile(necroIdx, clickedPile))
+                            {
+                                // Don't fail silently — say why (the pile art looks full
+                                // even when its corpse count is 0).
+                                bool empty = _workerSystem.StoredOf(
+                                    clickedPile, Game.Jobs.JobResources.Corpse) <= 0;
+                                SpawnCastFailText(necroIdx, empty ? "Pile Empty" : "Too Far");
+                            }
+                            _input.ConsumeMouse();
+                        }
                     }
                 }
             }
