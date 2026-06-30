@@ -210,7 +210,7 @@ def ensure_game(windowed=False, map_name=None):
     body = {"windowed": windowed}
     if map_name:
         body["map"] = map_name
-    return req("POST", "/gmea/start", body, timeout=90)
+    return req("POST", "/game/start", body, timeout=90)
 
 
 def send_cmd(cmd, args=None, opts=None):
