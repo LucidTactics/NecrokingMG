@@ -380,6 +380,20 @@ internal class ReanimEffectSystem
             DustColor = Green(55, 50, 45, 220, 1.0f), DustWorldSize = 1.95f, DustCount = 9, DustRise = 0.9f, DustLifetime = 6.0f,
         });
 
+        // Cloudless variant — identical green outline + light + pose-morph rise as
+        // reanim_smoke, but no cloud/dust puffs (the dense smoke plume). For raises that
+        // shouldn't kick up smoke (e.g. the corpse puppet). A spell opts in by setting its
+        // reanimationEffectID to "reanim_nosmoke"; everything else keeps the full smoke.
+        list.Add(new ReanimConfig
+        {
+            Id = "reanim_nosmoke", OutlineDuration = 6.2f, LightDuration = 5.0f, SpawnWindow = 2.0f, PuffAnimCycles = 1.4f,
+            OutlineColor = Green(50, 200, 100, 230, 1.2f), OutlinePulseColor = Green(20, 110, 60, 160, 0.8f),
+            OutlineWidth = 2.0f, OutlinePulseWidth = 4.5f, OutlinePulseSpeed = 0.9f,
+            LightColor = Green(30, 170, 90, 230, 1.3f), LightWorldSize = 3.2f, LightAlpha = new BezierCurve(0f, 0.5f, 0.5f, 0f),
+            CloudColor = Green(55, 170, 85, 220, 1.1f), CloudWorldSize = 1.7f, CloudCount = 0, CloudRise = 1.0f, CloudLifetime = 6.0f,
+            DustColor = Green(55, 50, 45, 220, 1.0f), DustWorldSize = 1.95f, DustCount = 0, DustRise = 0.9f, DustLifetime = 6.0f,
+        });
+
         return list;
     }
 }

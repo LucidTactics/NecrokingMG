@@ -213,6 +213,12 @@ public class UnitDef : IHasId
     [JsonPropertyName("zombieTypeID")] public string ZombieTypeID { get; set; } = "";
     [JsonPropertyName("spellID")] public string SpellID { get; set; } = "";
 
+    /// <summary>Reanimation spawn effect (ReanimEffectSystem preset id) played when THIS
+    /// unit is raised from a corpse — a skeleton, zombie, or frog each wants its own.
+    /// Empty → the default "reanim_smoke" plume. A spell's own ReanimationEffectID, if
+    /// set, overrides this (spell-specific beats unit-default beats global default).</summary>
+    [JsonPropertyName("reanimationEffectID")] public string ReanimationEffectID { get; set; } = "";
+
     /// <summary>Which horde-cap pool this unit consumes if spawned as a
     /// permanent undead minion. Stored as the enum's string name in JSON
     /// ("None" | "Human" | "Monster"). Living units, the player necromancer,

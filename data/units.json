@@ -8982,7 +8982,8 @@
       "sprintSpeedMultiplier": 0,
       "animWalkVelOverride": null,
       "animJogVelOverride": null,
-      "animRunVelOverride": null
+      "animRunVelOverride": null,
+      "reanimationEffectID": "reanim_nosmoke"
     }
   ]
 }

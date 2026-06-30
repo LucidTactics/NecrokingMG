@@ -2077,7 +2077,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         _sim.Workers = _workerSystem;
         // Reanimate job spawns through the canonical reanim pipeline (green rise effect).
         _workerSystem.SpawnWorkerUnit = (defId, pos) =>
-            QueueReanimRise(defId, -1, "reanim_smoke", posOverride: pos);
+            QueueReanimRise(defId, -1, "", posOverride: pos);  // "" → the unit's own effect (else reanim_smoke)
 
         // Lean dev control server: only when launched with --devserver <port>.
         if (LaunchArgs.DevServerPort > 0)

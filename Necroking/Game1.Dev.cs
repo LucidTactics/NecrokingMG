@@ -870,7 +870,7 @@ public partial class Game1 {
             case "reanim_at": {   // window.dev('reanim_at',[x,y,'skeleton'])
                if (c.Args.Length < 2) { c.Complete(Necroking.Dev.DevServer.Error("reanim_at needs: <x> <y> [defId]")); break; }
                string rdef = c.Args.Length > 2 ? c.Args[2] : "skeleton";
-               QueueReanimRise(rdef, -1, "reanim_smoke",
+               QueueReanimRise(rdef, -1, "",   // "" → the raised unit's own effect (else reanim_smoke)
                   posOverride: new Vec2(DevFloat(c.Args[0]), DevFloat(c.Args[1])), facingOverride: 90f, scaleOverride: 1f);
                c.Complete(Necroking.Dev.DevServer.Ok($"queued corpse-less reanim of '{rdef}'"));
                break;

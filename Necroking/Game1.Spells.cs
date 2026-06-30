@@ -182,7 +182,7 @@ public partial class Game1 {
       if (string.IsNullOrEmpty(zombieDef)) zombieDef = "skeleton";
       // Corpse-based raises ignore the overrides (read the corpse); corpse-less ones (table-craft,
       // CorpseId < 0) use them to place the effect + rise.
-      QueueReanimRise(zombieDef, r.CorpseId, "reanim_smoke",
+      QueueReanimRise(zombieDef, r.CorpseId, "",   // "" → the raised unit's own effect (else reanim_smoke)
          posOverride: r.Position, facingOverride: r.FacingAngle, scaleOverride: r.SpriteScale,
          onSpawned: r.OnSpawned);
    }
@@ -209,7 +209,11 @@ public partial class Game1 {
       }
       else { pos = posOverride; facing = facingOverride; scale = scaleOverride; }
 
-      // Reanimation always runs the one composite effect; an empty id maps to the default preset.
+      // Reanimation effect precedence: spell-specific id (passed in) beats the raised
+      // unit's own ReanimationEffectID, which beats the global "reanim_smoke" default —
+      // a skeleton/zombie/frog each picks its own plume without per-spell wiring.
+      if (string.IsNullOrEmpty(configId))
+         configId = _gameData.Units.Get(defId)?.ReanimationEffectID;
       if (string.IsNullOrEmpty(configId)) configId = "reanim_smoke";
 
       if (!_reanimFx.HasConfig(configId))
