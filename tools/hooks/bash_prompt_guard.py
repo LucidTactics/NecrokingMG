@@ -313,6 +313,51 @@ def rule_robocopy_into_project(cmd: str, project_dir=None) -> bool:
     return dest_abs == proj_abs or dest_abs.startswith(proj_abs + os.sep)
 
 
+# mkdir options that consume the FOLLOWING token as their value (the mode).
+_MKDIR_VALUE_OPTS = {"-m", "--mode"}
+
+
+def rule_mkdir_into_project(cmd: str, project_dir=None) -> bool:
+    """True if `cmd` is a `mkdir [-p] [-m MODE] DIR…` whose EVERY target directory
+    resolves inside the project directory. Used as an extra per-segment allow predicate
+    (alongside rule_robocopy_into_project) so the user isn't prompted to create
+    directories inside their own project. A mkdir whose target is outside the project —
+    or any unparseable form — returns False and falls through to the normal flow, so
+    other directories pass through as usual."""
+    toks = _tokenize(cmd)
+    # Skip any leading `VAR=value` env-assignment prefixes.
+    idx = 0
+    while idx < len(toks) and re.match(r"^[A-Za-z_][A-Za-z0-9_]*=", toks[idx]):
+        idx += 1
+    if idx >= len(toks):
+        return False
+    base = toks[idx].rsplit("/", 1)[-1].rsplit("\\", 1)[-1].lower()
+    if base not in ("mkdir", "mkdir.exe"):
+        return False
+    args = toks[idx + 1:]
+    targets, i = [], 0
+    while i < len(args):
+        a = args[i]
+        if a in _MKDIR_VALUE_OPTS:   # `-m 755` — the mode is a separate token, skip both
+            i += 2
+            continue
+        if a.startswith("-"):        # `-p`, `-v`, `-m755`, `--mode=755` — no separate token
+            i += 1
+            continue
+        targets.append(a)
+        i += 1
+    if not targets:
+        return False
+    pd = project_dir or _project_dir()
+    proj_abs = os.path.normcase(os.path.abspath(pd))
+    for dest in targets:
+        d = dest if os.path.isabs(dest) else os.path.join(pd, dest)
+        d_abs = os.path.normcase(os.path.abspath(d))
+        if not (d_abs == proj_abs or d_abs.startswith(proj_abs + os.sep)):
+            return False
+    return True
+
+
 def _spec_matches(spec: str, subject: str) -> bool:
     glob = spec[:-2] + "*" if spec.endswith(":*") else spec   # `git:*` -> `git*`
     if fnmatch.fnmatch(subject, glob):
@@ -382,7 +427,8 @@ def evaluate(tool_name: str, tool_input: dict, mode: str, allow_rules, deny_rule
     # force-allow if any segment hits a `deny` rule (respect the user's deny-list).
     def _seg_ok(s):
         return (_allow_listed("Bash", s, allow_rules)
-                or rule_robocopy_into_project(s, pd))
+                or rule_robocopy_into_project(s, pd)
+                or rule_mkdir_into_project(s, pd))
 
     if segments and not any(_allow_listed("Bash", s, deny_rules) for s in segments):
         if all(_seg_ok(s) for s in segments):
