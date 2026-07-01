@@ -2939,7 +2939,12 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             // clicks, etc. all go nowhere. Mirrors the pattern used for
             // _editorUi above; the trailing _input arg shares Game1's
             // captured InputState so the UI editor sees real mouse data.
-            _uiEditor.UpdateInput(mouse, _prevMouse, kb, _prevKb, screenW, screenH, gameTime, _input);
+            var uiEditMouse = mouse;
+            if (_devMouseActive) // ed_mouse: synthetic editor mouse for click-leak tests (UIEditor too)
+                uiEditMouse = new MouseState(_devMouseX, _devMouseY, mouse.ScrollWheelValue,
+                    _devMouseDown ? ButtonState.Pressed : ButtonState.Released,
+                    ButtonState.Released, ButtonState.Released, ButtonState.Released, ButtonState.Released);
+            _uiEditor.UpdateInput(uiEditMouse, _prevMouse, kb, _prevKb, screenW, screenH, gameTime, _input);
             _uiEditor.Update(screenW, screenH);
         }
 

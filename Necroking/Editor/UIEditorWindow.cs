@@ -1035,7 +1035,16 @@ public partial class UIEditorWindow : EditorBase
     //  Mouse helpers
     // ═══════════════════════════════════════
 
-    private bool LeftJustPressed => _mouse.LeftButton == ButtonState.Pressed &&
+    // A fresh left-press, but ONLY when no modal overlay owns input. The preview
+    // canvas / child-tree / border-drag handlers gate on this instead of checking
+    // IsInputBlocked themselves (unlike the shared EditorBase widgets, which do).
+    // Without the guard, clicking a colour on the open colour-picker grid — or the
+    // click that dismisses it, or a click while a combo dropdown is open — also
+    // fell through to the canvas beneath and selected the element/child under the
+    // cursor. IsInputBlocked(0) is already raised to layer 1 while the picker
+    // consumes input and layer 2 while the dismiss click is being swallowed.
+    private bool LeftJustPressed => !IsInputBlocked(0) &&
+                                    _mouse.LeftButton == ButtonState.Pressed &&
                                     _prevMouse.LeftButton == ButtonState.Released;
     private bool LeftHeld => _mouse.LeftButton == ButtonState.Pressed;
     private bool LeftReleased => _mouse.LeftButton == ButtonState.Released;
@@ -2814,7 +2823,21 @@ public partial class UIEditorWindow : EditorBase
         {
             child.HasTextOverride = newHasTxo;
             if (newHasTxo && child.TextOverride == null)
-                child.TextOverride = new UIEditorTextRegion { W = child.Width, H = child.Height };
+            {
+                // Seed the override from the underlying text element's own TextRegion
+                // so it starts IDENTICAL to how the text already renders (font, size,
+                // color, align, wrap, outline, …). The user then tweaks just the one
+                // field they want. Without this, a blank override snaps the text to
+                // defaults (white / size 14 / left-top) because the render path lets
+                // the override win over the element per-field — forcing the user to
+                // re-enter every value. Falls back to a child-sized blank region if
+                // the element has no text region.
+                var srcEl = !string.IsNullOrEmpty(child.Element)
+                    ? _elements.FirstOrDefault(e => e.Id == child.Element) : null;
+                child.TextOverride = srcEl?.TextRegion != null
+                    ? DeepClone(srcEl.TextRegion)
+                    : new UIEditorTextRegion { W = child.Width, H = child.Height };
+            }
             _unsavedChanges = true;
         }
         curY += 22;
