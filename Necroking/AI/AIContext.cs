@@ -38,6 +38,11 @@ public ref struct AIContext
     /// they're falling behind a sprinting master.</summary>
     public float NecroSprintT;
 
+    /// <summary>True while a Wolf Hunt spell is directing the player's wolves onto a herd. Gates
+    /// <see cref="WolfPackHuntAI.WantsToFlank"/> so wolves only stalk (suppress their normal charge)
+    /// during a commanded hunt; with no command they aggro deer like any other horde minion.</summary>
+    public bool WolfHuntCommandActive;
+
     // Game clock
     public float GameTime;          // total elapsed seconds
     public float DayTime;           // 0..1 fraction of current day cycle

@@ -253,6 +253,17 @@ public class Simulation
     public GameData? GameData => _gameData;
     public int NecromancerIndex => _necromancerIdx;
     public bool NecroRunning => _necroRunning;
+
+    // --- Wolf pack-hunt command (set by the "Wolf Hunt" spell; read by AI.WolfPackHuntAI) ---
+    private Vec2 _wolfHuntCmdPos;
+    private float _wolfHuntCmdTimer;
+    /// <summary>True while a Wolf Hunt spell is directing the player's wolves onto a herd.</summary>
+    public bool WolfHuntCommandActive => _wolfHuntCmdTimer > 0f;
+    /// <summary>World point the active Wolf Hunt was cast at — the pack targets the herd nearest it.</summary>
+    public Vec2 WolfHuntCommandPos => _wolfHuntCmdPos;
+    /// <summary>Spell hook: point the player's wolves at the herd near <paramref name="pos"/> for
+    /// <paramref name="duration"/> seconds (they flank to the far side and drive it toward the necromancer).</summary>
+    public void CommandWolfHunt(Vec2 pos, float duration) { _wolfHuntCmdPos = pos; _wolfHuntCmdTimer = duration; }
     public Pathfinder Pathfinder => _pathfinder;
     public EnvironmentSystem? EnvironmentSystem => _envSystem;
     public WallSystem? WallSystem => _wallSystem;
@@ -525,7 +536,8 @@ public class Simulation
         // Player's zombie wolves hunt as a pack: flank to the far side of a deer
         // (staying outside its vision) and drive it back toward the necromancer.
         // Same placement rationale as BoarForage — overrides follow velocity, runs
-        // before UpdateMovement.
+        // before UpdateMovement. Gated on an active Wolf Hunt spell command.
+        if (_wolfHuntCmdTimer > 0f) _wolfHuntCmdTimer -= dt;
         PhaseStart(); AI.WolfPackHuntAI.Update(this, dt); PhaseEnd("wolf_hunt");
 
         // Clear HitReacting AFTER AI has read it — this ensures flags set between frames
@@ -3372,6 +3384,7 @@ public class Simulation
         AnimMeta = _animMeta,
         DamageEvents = _damageEvents,
         NecroSprintT = _sprintRampValue,
+        WolfHuntCommandActive = _wolfHuntCmdTimer > 0f,
     };
 
     // --- Boar foraging (AI.BoarForageAI) ---

@@ -36,12 +36,14 @@ namespace Necroking.AI;
 /// </summary>
 public static class WolfPackHuntAI
 {
-    private const float HuntRange = 28f;      // pack notices a deer within this of the pack centroid
-    private const float GiveUpRange = 42f;    // drop the locked prey once it's beyond this from the pack
-    private const float LeashFromNecro = 40f; // a wolf this far from the necromancer stops hunting and follows home
-    private const float DetectMargin = 7f;    // flank standoff = deer DetectionRange + this. Generous so the
-                                              // circling pack (and its path chords) stays clear of the deer's
-                                              // vision until the drive — a spooked-early deer flees the wrong way.
+    private const float HuntRange = 28f;      // acquire the deer nearest the cast point within this
+    private const float LeashFromNecro = 60f; // a wolf this far from the necromancer drops the hunt — generous
+                                              // because a commanded pack ranges out to a herd up to a spell's
+                                              // cast range away, then flanks a standoff beyond it
+    private const float DetectMargin = 4f;    // flank standoff = deer DetectionRange + this. Keeps the circling
+                                              // pack clear of the deer's vision, but small enough that the flank
+                                              // ring still fits in tight spaces; the herded cheat covers an early
+                                              // spook, so this no longer has to be large.
     private const float CircleStepAngle = 0.7f;     // rad of arc a wolf aims ahead each frame while circling
     private const float ArcSpacing = 0.55f;   // rad between adjacent wolves' slots on the far arc (~31°)
     private const float ReadyFraction = 0.7f; // fraction of the pack that must reach the far side to commit the drive
@@ -64,13 +66,14 @@ public static class WolfPackHuntAI
         var gameData = sim.GameData;
         if (gameData == null) return;
         if (sim.NecromancerIndex < 0) return;   // no "you" to drive the prey toward — sit this out
+        if (!sim.WolfHuntCommandActive) return; // spell-activated: only hunt on the player's command
 
         var units = sim.UnitsMut;
         Vec2 necroPos = units[sim.NecromancerIndex].Position;
+        Vec2 cmdPos = sim.WolfHuntCommandPos;   // where the Wolf Hunt spell was cast — the targeted herd
 
-        // 1. Gather eligible hunter wolves and their centroid; clear hunt state on the rest.
+        // 1. Gather eligible hunter wolves; clear hunt state on the rest.
         _hunters.Clear();
-        Vec2 centroid = Vec2.Zero;
         for (int u = 0; u < units.Count; u++)
         {
             if (!IsEligible(units, u, gameData, necroPos))
@@ -79,14 +82,12 @@ public static class WolfPackHuntAI
                 continue;
             }
             _hunters.Add(u);
-            centroid += units[u].Position;
         }
         if (_hunters.Count == 0) return;
-        centroid *= 1f / _hunters.Count;
 
-        // 2. Pick ONE shared prey for the whole pack: keep the currently-locked deer if it's
-        //    still alive and near, otherwise the nearest deer to the pack centroid.
-        int targetIdx = ChooseTarget(units, centroid);
+        // 2. Pick ONE shared prey for the whole pack: keep the currently-locked deer while it lives,
+        //    otherwise acquire the deer nearest the cast point.
+        int targetIdx = ChooseTarget(units, cmdPos);
         if (targetIdx < 0)
         {
             for (int s = 0; s < _hunters.Count; s++) ClearHunt(units, _hunters[s]);
@@ -200,6 +201,7 @@ public static class WolfPackHuntAI
     /// and the wolf would never enter the hunt.</summary>
     public static bool WantsToFlank(ref AIContext ctx)
     {
+        if (!ctx.WolfHuntCommandActive) return false;    // spell-activated: no command → normal aggro
         var u = ctx.Units[ctx.UnitIndex];
         if (u.Archetype != ArchetypeRegistry.HordeMinion) return false;
         if (u.Faction != Faction.Undead) return false;
@@ -247,10 +249,11 @@ public static class WolfPackHuntAI
         units[u].WolfHuntTimer = 0f;
     }
 
-    /// <summary>Keep the pack's locked prey if it's still a live deer within GiveUpRange of the
-    /// centroid; otherwise acquire the nearest deer within HuntRange. Returns the unit index of the
-    /// prey or -1. The lock is read from whichever hunter already carries a WolfHuntTargetId.</summary>
-    private static int ChooseTarget(UnitArrays units, Vec2 centroid)
+    /// <summary>Keep the pack's locked prey while it's still a live deer (a commanded hunt sticks
+    /// with its quarry even as it's driven away from the cast point); otherwise acquire the deer
+    /// nearest <paramref name="refPos"/> (the cast point) within HuntRange. Returns the prey's unit
+    /// index or -1. The lock is read from whichever hunter already carries a WolfHuntTargetId.</summary>
+    private static int ChooseTarget(UnitArrays units, Vec2 refPos)
     {
         // Existing lock (shared across the pack — first hunter with one wins).
         uint lockedId = 0;
@@ -262,20 +265,18 @@ public static class WolfPackHuntAI
         if (lockedId != 0)
         {
             int idx = UnitUtil.ResolveUnitIndex(units, lockedId);
-            if (idx >= 0 && units[idx].Alive
-                && units[idx].Archetype == ArchetypeRegistry.DeerHerd
-                && (units[idx].Position - centroid).LengthSq() <= GiveUpRange * GiveUpRange)
+            if (idx >= 0 && units[idx].Alive && units[idx].Archetype == ArchetypeRegistry.DeerHerd)
                 return idx;
         }
 
-        // Acquire the nearest deer to the pack centroid within HuntRange.
+        // Acquire the nearest deer to the cast point within HuntRange.
         float bestSq = HuntRange * HuntRange;
         int best = -1;
         for (int j = 0; j < units.Count; j++)
         {
             if (!units[j].Alive) continue;
             if (units[j].Archetype != ArchetypeRegistry.DeerHerd) continue;
-            float d2 = (units[j].Position - centroid).LengthSq();
+            float d2 = (units[j].Position - refPos).LengthSq();
             if (d2 < bestSq) { bestSq = d2; best = j; }
         }
         return best;
