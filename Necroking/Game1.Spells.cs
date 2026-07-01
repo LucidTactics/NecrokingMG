@@ -199,7 +199,7 @@ public partial class Game1 {
    /// bonuses). If the effect asset is missing, falls back to an immediate spawn.</summary>
    void QueueReanimRise(string defId, int corpseId, string? configId, float delay = 3.5f,
                         Vec2 posOverride = default, float facingOverride = 0f, float scaleOverride = 1f,
-                        Action<int>? onSpawned = null, float riseSpeed = 1f, float fogSpeed = 1f)
+                        Action<int>? onSpawned = null, float riseSpeed = 2f, float fogSpeed = 1f)
    {
       // Two independent speeds (both default 1):
       //  • riseSpeed scales the BODY rising — the standup anim, the spawn delay, and the
