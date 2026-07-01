@@ -130,25 +130,35 @@ public static class WolfPackHuntAI
         int needReady = Math.Max(1, (int)MathF.Ceiling(n * ReadyFraction));
         bool drive = anyDriving || positioned >= needReady || maxTimer >= FlankTimeout;
 
-        // 4. Apply movement.
+        // 4. Apply movement. Once the pack commits to the drive, only the wolves already on the
+        //    FAR side press the attack — they're the initiators, and charging from behind the prey
+        //    they herd it toward the necromancer (and the rest of your animals). The wolves on the
+        //    necromancer's side keep holding the ring at standoff: staying farther from the prey than
+        //    the initiators, they never become the nearest threat, so they never turn the prey the
+        //    wrong way or cut off the lane it flees down toward you.
         for (int s = 0; s < n; s++)
         {
             int u = _hunters[s];
             units[u].WolfHuntTargetId = targetId;
 
-            if (drive)
+            float slotAngle = SlotAngle(baseAngle, s, n);
+            float standoff = deerDet + DetectMargin + units[u].Radius;
+            var rel = units[u].Position - deerPos;
+            bool onFarSide = rel.Dot(farDir) >= 0f;
+
+            if (drive && onFarSide)
             {
                 units[u].WolfHuntPhase = 1;
                 units[u].WolfHuntTimer = 0f;
-                // Full-commit chase straight at the prey — pushes it toward the necromancer.
+                // Initiator: full-commit sprint into the prey from behind.
                 sim.AIWolfHuntMove(u, deerPos, sprint: true, dt);
             }
             else
             {
+                // Still flanking: either the pack hasn't committed yet, or this wolf is on the
+                // necromancer's side and must hold the ring so the prey keeps fleeing toward you.
                 units[u].WolfHuntPhase = 0;
                 units[u].WolfHuntTimer += dt;
-                float slotAngle = SlotAngle(baseAngle, s, n);
-                float standoff = deerDet + DetectMargin + units[u].Radius;
                 Vec2 ringTarget = CircleTarget(units[u].Position, deerPos, slotAngle, standoff);
                 // Cautious jog while flanking — a sneak-up, not a charge.
                 sim.AIWolfHuntMove(u, ringTarget, sprint: false, dt);
