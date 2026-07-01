@@ -84,10 +84,12 @@ public static class BoarForageAI
                 int eatIdx = FindNearestMushroom(env, myPos, EatRadius);
                 if (eatIdx >= 0)
                 {
-                    ushort defIdx = env.Objects[eatIdx].DefIndex;
+                    var eObj = env.Objects[eatIdx];
+                    ushort defIdx = eObj.DefIndex;
                     env.DestroyObject(eatIdx);             // gone from the world; now in the belly
                     sim.AddBoarBelly(units[u].Id, defIdx);
                     units[u].BellyMushrooms = (byte)System.Math.Min(byte.MaxValue, units[u].BellyMushrooms + 1);
+                    sim.OnForagerAte?.Invoke(new Vec2(eObj.X, eObj.Y));   // pickup pop
                     DebugLog.Log("scenario", $"[BoarForage] boar#{units[u].Id} ate mushroom (belly={units[u].BellyMushrooms})");
                 }
                 continue;

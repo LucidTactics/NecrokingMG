@@ -467,6 +467,10 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     internal int _hoveredObjectIdx = -1;
     internal int _hoveredCorpseIdx = -1;
     internal int _hoveredUnitIdx = -1;
+    // Unit id of a hovered forager (zombie boar). Foragers suppress the normal
+    // right-side unit stat sheet and instead show a corpse-pile-style belly tooltip
+    // listing the mushrooms they've eaten. uint.MaxValue when none is hovered.
+    internal uint _hoveredBellyUnitId = uint.MaxValue;
     // Screen-space outline boxes for the hovered world object, captured during the
     // sprite draw pass (exact sprite bounds) and drawn in the HUD overlay pass.
     // Reset to null each frame at the top of Draw. See ShowHoverHighlight setting.
@@ -642,6 +646,10 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     // Game1 subsystem split, 2026-05-13). Game1 owns the instance and the
     // pickup-sound asset; everything else lives in the system.
     private SoundEffect? _pickupSound;
+    // Throttle + pitch-rotation for the boar-eat pickup pop, so several boars
+    // grazing at once don't machine-gun the same sample.
+    private float _foragerEatSoundCd;
+    private int _foragerEatSoundStep;
     internal readonly Game.ForagableSystem _foragables = new();
     private readonly Game.Jobs.WorkerSystem _workerSystem = new();
     internal readonly UI.GraveRosterUI _graveRosterUI = new();
@@ -2188,6 +2196,9 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             onPickup: OnForagablePickedUp,
             onLearnTrigger: OnForagableLearnTrigger);
 
+        // Foraging boars reuse the same pickup pop when they swallow a mushroom.
+        _sim.OnForagerAte = OnForagerAte;
+
         // Worker job system: brain that assigns grave workers to jobs.
         _workerSystem.Bind(_sim, _envSystem, _gameData);
         _workerSystem.Reset();
@@ -2604,6 +2615,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         // OVERRIDE still exists via the 'hover_variant' dev command for quick previewing; its toast
         // timer ticks down here. (No keyboard hotkey — it was removed to free 'H'.)
         if (_hoverVariantLabelTimer > 0f) _hoverVariantLabelTimer -= _rawDt;
+        if (_foragerEatSoundCd > 0f) _foragerEatSoundCd -= _rawDt;
 
         // 'O' = inspect the unit under the cursor (press-to-inspect mode; may
         // auto-pause while open, closing restores only the pause WE set).
@@ -2629,6 +2641,8 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
                 {
                     var u = _sim.Units[i];
                     if (!u.Alive) continue;
+                    // Foragers (zombie boars) never show the unit sheet — they use the belly tooltip.
+                    if (_gameData.Units.Get(u.UnitDefID)?.Tags.Contains("forager") == true) continue;
                     float d2 = (u.Position - cursorWorld).LengthSq();
                     if (d2 < bestD2) { bestD2 = d2; best = i; }
                 }
@@ -3309,6 +3323,14 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             if (_devForceHoverObjectIdx >= 0 && _devForceHoverObjectIdx < _envSystem.ObjectCount)
                 _hoveredObjectIdx = _devForceHoverObjectIdx;
 
+            // Forager (zombie boar) under the cursor? It suppresses the normal unit stat
+            // sheet and instead shows a corpse-pile-style belly tooltip (mushrooms eaten).
+            // Reuses the same hovered-unit pick that drives the outline highlight.
+            _hoveredBellyUnitId = uint.MaxValue;
+            if (_hoveredUnitIdx >= 0
+                && _gameData.Units.Get(_sim.Units[_hoveredUnitIdx].UnitDefID)?.Tags.Contains("forager") == true)
+                _hoveredBellyUnitId = _sim.Units[_hoveredUnitIdx].Id;
+
             // --- Unit auto-hover stat sheet (Factorio-style; opt-in via Tooltips) ---
             // The cursor "carries" the stat sheet: hover a unit to show it, move off
             // to dismiss. Never pauses. The auto-shown panel is transient (not a
@@ -3332,6 +3354,8 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
                     {
                         var u = _sim.Units[i];
                         if (!u.Alive) continue;
+                        // Foragers (zombie boars) get the belly tooltip, not the stat sheet.
+                        if (_gameData.Units.Get(u.UnitDefID)?.Tags.Contains("forager") == true) continue;
                         float udx = u.Position.X - mouseWorld.X, udy = u.Position.Y - mouseWorld.Y;
                         float d2 = udx * udx + udy * udy;
                         if (d2 < bestD2) { bestD2 = d2; hoveredUnit = i; }

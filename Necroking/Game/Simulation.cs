@@ -261,6 +261,9 @@ public class Simulation
     /// pipeline (effect + body morph + deferred slow rise). When unset (headless sims) the tick
     /// falls back to spawning the zombie directly with the slow standup.</summary>
     public Action<PendingZombieRaise>? ReanimHandler;
+    /// <summary>Fired when a forager (zombie boar) swallows a mushroom, at the mushroom's
+    /// world position. Game1 hooks this to play the pickup sound. Null in headless sims.</summary>
+    public Action<Vec2>? OnForagerAte;
     public PlayerResources PlayerResources => _playerResources;
 
     // Anim metadata. Populated by Game1 once the atlases load so AI can look up
@@ -3398,6 +3401,30 @@ public class Simulation
         list.Add(defIndex);
     }
 
+    /// <summary>Grouped, human-readable lines of a forager's mushroom belly
+    /// ("Deathcap x3"), in first-eaten order — mirrors WorkerSystem.PiledCorpseLines
+    /// for the corpse-pile display. Empty list when the unit has eaten nothing.
+    /// Keyed by <see cref="Movement.Unit.Id"/>.</summary>
+    public List<string> BoarBellyLines(uint unitId)
+    {
+        var lines = new List<string>();
+        if (_envSystem == null || !_boarBellies.TryGetValue(unitId, out var belly) || belly.Count == 0)
+            return lines;
+
+        var order = new List<string>();
+        var counts = new Dictionary<string, int>();
+        foreach (var defIdx in belly)
+        {
+            var def = _envSystem.Defs[defIdx];
+            string name = !string.IsNullOrEmpty(def.Name) ? def.Name : def.Id;
+            if (!counts.ContainsKey(name)) { counts[name] = 0; order.Add(name); }
+            counts[name]++;
+        }
+        foreach (var name in order)
+            lines.Add(counts[name] > 1 ? $"{name} x{counts[name]}" : name);
+        return lines;
+    }
+
     /// <summary>When a boar with a full belly dies, burst its stored mushrooms back onto
     /// the ground around the corpse — hex-packed with random jitter so they spread out
     /// instead of stacking on one tile. Called from RemoveDeadUnits while the dead unit's
@@ -3415,7 +3442,7 @@ public class Simulation
         // seed off position + belly size so each death scatters consistently).
         int seed = (int)(center.X * 131f) ^ ((int)(center.Y * 977f) << 8) ^ (belly.Count * 2654435761u).GetHashCode();
         var rng = new Random(seed);
-        var spots = Necroking.Algorithm.ScatterPacking.HexPack(center, belly.Count, spacing: 0.9f, jitter: 0.28f, rng);
+        var spots = Necroking.Algorithm.ScatterPacking.HexPack(center, belly.Count, spacing: 0.45f, jitter: 0.14f, rng);
 
         for (int k = 0; k < belly.Count; k++)
         {
