@@ -132,6 +132,19 @@ them. There is **no separate "pile of corpses" object** — a pile is just many
 - **Consume the click** — call `_input.ConsumeMouse()` so the same left-click doesn't
   also trigger table/grave/menu handlers downstream.
 
+## Necromancer movement & speed (where to slow the player)
+
+- **Input → sim**: WASD builds a `moveDir` in `Game1.cs` `Update` (~line 2777) and calls
+  `_sim.SetNecromancerInput(moveDir, running)`; mouse-facing via `SetNecromancerFacing`.
+  `_devWalkTarget` (a `Vec2?`, ~line 520) is the walk-to-point primitive.
+- **Speed computed in `Game/Simulation.cs` `UpdateAI`**, `case AIBehavior.PlayerControlled:`
+  (~line 871). It reads `_necroMoveInput`/`_necroRunning`, integrates a sprint ramp
+  (`_sprintRampValue`), computes `speed = Stats.CombatSpeed * sprintMultiplier`, sets
+  `_units[i].MaxSpeed = speed`, and finally `PreferredVel = _necroMoveInput * speed`.
+  **This is the one place to apply a drag slowdown** — multiply `speed`/`PreferredVel` by a
+  factor when the rope is taut. Note carrying a corpse already disables sprint here
+  (`CarryingCorpseID < 0` gate), so a "dragging" state can hook in the same block.
+
 ## Related areas
 - `game1-partials.md` — `Game1.Animation.cs` (phase advance), `Game1.Crafting.cs`
   (foragable glue), `Game1.cs` Update input block.
