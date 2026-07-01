@@ -126,9 +126,33 @@ Belly contents are stored per unit id in **`Necroking/Game/Simulation.cs`**:
    right-side sheet, add a small widget-backed panel in `UI/` next to `UnitInfoPanel` (or a
    variant mode of it) — heavier.
 
+## The Grimoire (spell list / spells menu panel)
+
+`Necroking/UI/GrimoireOverlay.cs` — **the spell-list panel** ('J' to browse; also opened in
+assign mode when a spell-bar slot is clicked). `class GrimoireOverlay : IModalLayer`, a
+`RuntimeWidgetRenderer` widget (`GrimoirePanel.WidgetId == "GrimoireDyn"`, fixed `PanelW=706`,
+`PanelH=1080`).
+- **Screen position is computed in `Layout(int screenH)`** — sets the panel's top-left
+  `_x`/`_y`: currently `_x = 16` (already left-anchored, 16px inset) and
+  `_y = Math.Min(0, (screenH - PanelH) / 2)` (vertically centered, clamped so a taller-than-
+  screen panel starts at y=0 rather than going negative-past-center). To flush-left it, set
+  `_x = 0` here.
+- **`_x`/`_y` are the single source of truth for placement AND hit-testing** — `Layout` is
+  called at the top of both `Draw` (`DrawWidget(WidgetId, _x, _y, InstanceId)`) and `Update`,
+  and every hit-test derives from the same `_x`/`_y`: `ContainsMouse` (the `IModalLayer`
+  bounds `_x.._x+PanelW`), `HitChild`/`HitTab`/`TabRect` (via `_renderer.GetChildRect(..., _x,
+  _y, ...)`), and `DebugChildCenter`. So changing the formula in `Layout` moves draw and
+  clicks together — **edit in one place, no separate hit-rect to sync.**
+- `GrimoirePanel.cs` (`static class GrimoirePanel`) is only the tile *binder* (filter list +
+  bind the 22-tile scroll window); it holds no position. `SkillBookOverlay.cs` is a sibling
+  with the same nested-tab pattern.
+
+**Look/edit here when:** repositioning/anchoring the spell list panel, changing its size, or
+its scroll/tab/tile hit-testing.
+
 ## Other panels in UI/ (brief)
 - `UI/JobBoardUI.cs`, `UI/GraveRosterUI.cs` — worker economy (see [jobs-workers.md](jobs-workers.md)).
-- `UI/GrimoireOverlay.cs` / `GrimoirePanel.cs`, `UI/SkillBookOverlay.cs` — spellbook / skills.
+- `UI/GrimoireOverlay.cs` / `GrimoirePanel.cs`, `UI/SkillBookOverlay.cs` — spellbook / skills (Grimoire positioning above).
 - `UI/RuntimeWidgetRenderer.cs` — JSON-widget layout/draw engine every panel uses.
 - `UI/PopupManager.cs` — modal-layer stack (`Game1.Popups`), ESC/click routing, MouseOverUI.
 - `UI/StatTooltips.cs`, `UI/ResourceTooltip.cs`, `UI/NineSlice.cs`, `UI/WidgetLayoutUtils.cs`,

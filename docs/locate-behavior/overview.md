@@ -52,6 +52,7 @@ Use this to pick a starting area. When the routed area isn't documented yet, doc
 - **Animation / cast-phase timing / attack anims** → game1-partials.md (`Game1.Animation.cs`) + `Render/` (anim controller/atlases).
 - **Rendering looks wrong (world / units / corpses / HUD / spellbar)** → game1-partials.md (`Game1.Render.*`) + `Render/`.
 - **HUD / spellbar / on-screen overlays** → game1-partials.md (`Game1.Render.HUD.cs`) + `UI/`.
+- **Spell list / spells menu panel position, anchoring, or its tab/tile hit-testing (the Grimoire)** → [ui.md](ui.md) (`UI/GrimoireOverlay.cs` → `Layout(screenH)` sets `_x`/`_y`, shared by draw + hit-test).
 - **Selected/inspected unit right-side sheet, grimoire, skill book, character sheet panels; which panel shows for a selected entity; corpse-pile contents display; boar belly panel** → [ui.md](ui.md) (`UI/UnitInfoPanel.cs`, decision in `Game1.cs` 'U'/'O'/auto-hover, `HUDRenderer.DrawObjectTooltip` + `WorkerSystem.PiledCorpseLines` for pile contents, `Simulation._boarBellies` for belly data).
 - **Unit stats / spell / item / map / UI editors** → `Editor/`.
 - **Game data values (units, items, spells JSON)** → `Data/` + `data/*.json` (use the `edit-game-data` skill to edit those).
