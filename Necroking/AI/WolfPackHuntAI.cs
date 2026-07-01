@@ -40,14 +40,14 @@ public static class WolfPackHuntAI
     private const float LeashFromNecro = 60f; // a wolf this far from the necromancer drops the hunt — generous
                                               // because a commanded pack ranges out to a herd up to a spell's
                                               // cast range away, then flanks a standoff beyond it
-    private const float DetectMargin = 4f;    // flank standoff = deer DetectionRange + this. Keeps the circling
+    private const float DetectMargin = 6f;    // flank standoff = deer DetectionRange + this. Keeps the circling
                                               // pack clear of the deer's vision, but small enough that the flank
                                               // ring still fits in tight spaces; the herded cheat covers an early
                                               // spook, so this no longer has to be large.
-    private const float CircleStepAngle = 0.7f;     // rad of arc a wolf aims ahead each frame while circling
+    private const float CircleStepAngle = 0.4f;     // rad of arc a wolf aims ahead each frame while circling
     private const float ArcSpacing = 0.55f;   // rad between adjacent wolves' slots on the far arc (~31°)
-    private const float ReadyFraction = 0.7f; // fraction of the pack that must reach the far side to commit the drive
-    private const float FarSideDepthFrac = 0.25f; // a wolf counts as "behind" (positioned to drive, and cleared to
+    private const float ReadyFraction = 0.35f; // fraction of the pack that must reach the far side to commit the drive
+    private const float FarSideDepthFrac = 0.75f; // a wolf counts as "behind" (positioned to drive, and cleared to
                                                   // charge) once it's this fraction of the standoff distance past the
                                                   // deer, away from the necromancer. Kept modest so the fanned pack
                                                   // actually reaches the threshold and commits; the herded cheat (not
