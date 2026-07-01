@@ -143,7 +143,7 @@ const {result:{jobId}} = await window.dev('batch',[],{script:[
   {cmd:'units',args:['all']},
 ]});
 let st; do { await new Promise(r=>setTimeout(r,300)); st=(await window.dev('job',[jobId])).result; } while(!st.done);
-// st.results holds each step's reply; PNGs at bin/Debug/log/screenshots/<name>.png
+// st.results holds each step's reply; PNGs at bin/Devbuild/log/screenshots/<name>.png
 ```
 
 ### UI panels & overlays
@@ -167,9 +167,11 @@ let st; do { await new Promise(r=>setTimeout(r,300)); st=(await window.dev('job'
   (live frame + command log). Best for a quick glance / watching progress.
 - To **analyze just the game frame**, run `window.dev('screenshot',['name'], opts)` via
   `preview_eval` — it returns the path and the PNG lands at
-  `bin/Debug/log/screenshots/<name>.png`. Then **`Read` that file** (Read is approved → no
-  prompt). Clean frame at the downsample size, no dashboard chrome — the right way to
-  actually inspect a result.
+  `bin/Devbuild/log/screenshots/<name>.png` (the preview builds into its own bin/Devbuild
+  folder; the reply/`necro_status` are the source of truth for the exact path — Read that,
+  don't reconstruct it). Then **`Read` that file** (Read is approved → no prompt). Clean
+  frame at the downsample size, no dashboard chrome — the right way to actually inspect a
+  result.
 - `opts`: `{no_ui:true}` hides the HUD; `{no_ground:true}` drops ground+grass (scenario
   black look — good for verification, terrain is noise for the model); `{downsample_to:"WxH"}`
   or `"full"` picks the returned size (default 640x360 = half the 1280x720 render).
@@ -237,7 +239,7 @@ Set up a fight, speed it up, analyze it (`preview_eval(id, "<this>")`):
   await window.dev('spawn',['Soldier',x+3,y]);
   await window.dev('camera',[x,y,48]);
   await window.dev('speed',[4]);
-  return await window.dev('screenshot',['fight']);   // then Read bin/Debug/log/screenshots/fight.png
+  return await window.dev('screenshot',['fight']);   // then Read bin/Devbuild/log/screenshots/fight.png
 })()
 ```
 
