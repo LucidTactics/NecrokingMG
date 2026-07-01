@@ -2204,12 +2204,17 @@ public partial class UIEditorWindow : EditorBase
             {
                 var orig = _widgets[SelectedIndex];
                 var copy = CloneWidget(orig);
-                copy.Id = orig.Id + "_copy";
+                copy.Id = UniqueWidgetId(orig.Id + "_copy");
                 _widgets.Add(copy);
                 SelectedIndex = _widgets.Count - 1;
                 _selectedChildIdx = -1;
                 _selectedChildPath.Clear();
                 _unsavedChanges = true;
+                // Harmonized layer textures are cached per widget id (e.g. "fr:<id>").
+                // The new copy has its own id with no baked texture yet, so bake its
+                // bg/stencil/frame layers now (it's the selected widget) — otherwise
+                // the preview falls back to the raw, unharmonized texture.
+                RegenerateAllHarmonized();
             }
         }
         if (DrawButton("Delete", x + 12 + btnW3 * 2, btnY, btnW3, btnH, DangerColor))
@@ -3787,65 +3792,22 @@ public partial class UIEditorWindow : EditorBase
         }
     }
 
-    private static UIEditorChildDef CloneChild(UIEditorChildDef ch)
+    /// <summary>
+    /// Deep-clone an editor working-copy model by JSON round-trip using the same
+    /// serializer the undo system uses (<see cref="_undoJson"/>, IncludeFields).
+    /// This copies EVERY member — nested children, tints, harmonize recolors,
+    /// stencil/frame nine-slice refs, insets, text overrides, child-overrides,
+    /// byte[] color arrays (fresh instances, no aliasing) — so a copied widget or
+    /// child is a faithful duplicate. Unlike a hand-written field-by-field clone,
+    /// it can't silently drop a field when the model grows a new one.
+    /// </summary>
+    private static T DeepClone<T>(T src)
     {
-        var clone = new UIEditorChildDef
-        {
-            Name = ch.Name,
-            Element = ch.Element,
-            Widget = ch.Widget,
-            X = ch.X,
-            Y = ch.Y,
-            Width = ch.Width,
-            Height = ch.Height,
-            Anchor = ch.Anchor,
-            SizeMode = ch.SizeMode,
-            NineSliceScale = ch.NineSliceScale,
-            Interactive = ch.Interactive,
-            DefaultText = ch.DefaultText,
-            IgnoreLayout = ch.IgnoreLayout,
-            Tints = ch.Tints != null ? new UIEditorTints
-            {
-                Normal = (byte[])ch.Tints.Normal.Clone(),
-                Hovered = (byte[])ch.Tints.Hovered.Clone(),
-                Pressed = (byte[])ch.Tints.Pressed.Clone(),
-                Disabled = (byte[])ch.Tints.Disabled.Clone(),
-            } : null,
-            // RI21: text override
-            HasTextOverride = ch.HasTextOverride,
-            TextOverride = ch.TextOverride != null ? new UIEditorTextRegion
-            {
-                X = ch.TextOverride.X,
-                Y = ch.TextOverride.Y,
-                W = ch.TextOverride.W,
-                H = ch.TextOverride.H,
-                Align = ch.TextOverride.Align,
-                VAlign = ch.TextOverride.VAlign,
-                FontSize = ch.TextOverride.FontSize,
-                FontColor = (byte[])ch.TextOverride.FontColor.Clone(),
-                WordWrap = ch.TextOverride.WordWrap,
-            } : null,
-        };
-        // RI22: child overrides
-        if (ch.ChildOverrides != null)
-        {
-            clone.ChildOverrides = new List<ChildOverrideEntry>();
-            foreach (var co in ch.ChildOverrides)
-            {
-                clone.ChildOverrides.Add(new ChildOverrideEntry
-                {
-                    ChildIndex = co.ChildIndex,
-                    OverrideX = co.OverrideX,
-                    OverrideY = co.OverrideY,
-                    OverrideW = co.OverrideW,
-                    OverrideH = co.OverrideH,
-                    OverrideDefaultText = co.OverrideDefaultText,
-                    OverrideIgnoreLayout = co.OverrideIgnoreLayout,
-                });
-            }
-        }
-        return clone;
+        var json = JsonSerializer.Serialize(src, _undoJson);
+        return JsonSerializer.Deserialize<T>(json, _undoJson)!;
     }
+
+    private static UIEditorChildDef CloneChild(UIEditorChildDef ch) => DeepClone(ch);
 
     // ═══════════════════════════════════════
     //  Circular reference guard (UI15)
@@ -3890,36 +3852,21 @@ public partial class UIEditorWindow : EditorBase
 
     // ═══════════════════════════════════════
 
-    private static UIEditorWidgetDef CloneWidget(UIEditorWidgetDef orig)
+    // Full deep copy (children, all three layers, tints, harmonize, insets, scroll,
+    // layout) via JSON round-trip — see DeepClone. Caller re-assigns a unique Id.
+    private static UIEditorWidgetDef CloneWidget(UIEditorWidgetDef orig) => DeepClone(orig);
+
+    /// <summary>Return <paramref name="baseId"/>, or the first free "baseId_2",
+    /// "baseId_3"… if it (or the base) already names a widget — so copying a widget
+    /// twice yields distinct ids instead of two colliding "_copy" entries.</summary>
+    private string UniqueWidgetId(string baseId)
     {
-        var clone = new UIEditorWidgetDef
+        if (_widgets.All(w => w.Id != baseId)) return baseId;
+        for (int n = 2; ; n++)
         {
-            Id = orig.Id,
-            Background = orig.Background,
-            Width = orig.Width,
-            Height = orig.Height,
-            BackgroundScale = orig.BackgroundScale,
-            BackgroundTint = orig.BackgroundTint != null ? (byte[])orig.BackgroundTint.Clone() : null,  // RI23
-            Modal = orig.Modal,
-            Layout = orig.Layout,
-            LayoutPadding = orig.LayoutPadding,
-            LayoutSpacing = orig.LayoutSpacing,
-            LayoutPadTop = orig.LayoutPadTop,
-            LayoutPadBottom = orig.LayoutPadBottom,
-            LayoutPadLeft = orig.LayoutPadLeft,
-            LayoutPadRight = orig.LayoutPadRight,
-            LayoutSpacingX = orig.LayoutSpacingX,
-            LayoutSpacingY = orig.LayoutSpacingY,
-            Scroll = orig.Scroll,
-            ScrollContentW = orig.ScrollContentW,
-            ScrollContentH = orig.ScrollContentH,
-            ScrollStep = orig.ScrollStep,
-            IsScrollbar = orig.IsScrollbar,                    // RI20
-            ScrollbarProportional = orig.ScrollbarProportional, // RI20
-        };
-        foreach (var ch in orig.Children)
-            clone.Children.Add(CloneChild(ch));
-        return clone;
+            var candidate = $"{baseId}_{n}";
+            if (_widgets.All(w => w.Id != candidate)) return candidate;
+        }
     }
 }
 
