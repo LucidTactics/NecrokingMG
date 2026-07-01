@@ -163,7 +163,7 @@ public partial class HUDRenderer
         float timeScale, int hoveredObjectIdx, EnvironmentSystem envSystem,
         Action<string, int, int> drawSpellCategoryIcon, int menuOpenMask = 0, bool paused = false,
         int hoveredCorpseIdx = -1, float[]? primaryFlash = null, float[]? secondaryFlash = null,
-        uint hoveredBellyUnitId = uint.MaxValue)
+        uint hoveredBellyUnitId = uint.MaxValue, int hoveredUnitIdx = -1)
     {
         int necroIdx = FindNecromancer(sim);
 
@@ -195,6 +195,7 @@ public partial class HUDRenderer
         DrawObjectTooltip(hoveredObjectIdx, envSystem, sim, gameData, screenW, screenH);
         DrawBellyTooltip(hoveredBellyUnitId, sim, gameData, screenW, screenH);
         DrawCorpseTooltip(hoveredCorpseIdx, sim, gameData, screenW, screenH);
+        DrawUnitTooltip(hoveredUnitIdx, sim, gameData, screenW, screenH);
         // Controls hint intentionally omitted — overlapped the FPS/zoom bottom-
         // left readout. Re-enable if we add a menu page for it.
         DrawTimeControls(screenW, screenH, timeScale, gameData, paused);
@@ -699,6 +700,49 @@ public partial class HUDRenderer
         string name = def != null && def.DisplayName.Length > 0 ? def.DisplayName : cp.UnitType.ToString();
 
         DrawCursorTooltip(new[] { $"{name} corpse" }, screenW, screenH);
+    }
+
+    /// <summary>Floating cursor tooltip for the hovered unit — the lightweight
+    /// "what is this" readout matching buildings/foragables/corpses: display name,
+    /// HP, and a membership line (in the player horde, in a named village, or its
+    /// faction). Deliberately NOT the full stat sheet (that's UnitInfoPanel).
+    /// Suppressed for foragers (belly tooltip owns them) and while the auto stat
+    /// sheet is enabled (it already shows everything).</summary>
+    private void DrawUnitTooltip(int hoveredIdx, Simulation sim, GameData gameData,
+        int screenW, int screenH)
+    {
+        if (hoveredIdx < 0 || hoveredIdx >= sim.Units.Count || _smallFont == null) return;
+        if (!gameData.Settings.Tooltips.ShowUnitInfo) return;
+        if (gameData.Settings.Tooltips.AutoShowUnitStats) return; // stat sheet supersedes
+
+        var u = sim.Units[hoveredIdx];
+        if (!u.Alive) return;
+
+        var def = gameData.Units.Get(u.UnitDefID);
+        if (def?.Tags.Contains("forager") == true) return; // belly tooltip owns foragers
+
+        string name = def != null && def.DisplayName.Length > 0 ? def.DisplayName : u.UnitDefID;
+
+        // What does it belong to? Horde > named village > bare faction.
+        string membership;
+        if (u.Faction == Faction.Undead && sim.Horde.IsInHorde(u.Id))
+            membership = "in player horde";
+        else if (u.VillageId >= 0 && sim.Villages?.Get(u.VillageId) is { } vil)
+            membership = vil.Name.Length > 0 ? $"in {vil.Name}" : "in a village";
+        else
+            membership = u.Faction switch
+            {
+                Faction.Undead => "Undead",
+                Faction.Human  => "Human",
+                _              => "Wildlife",
+            };
+
+        DrawCursorTooltip(new[]
+        {
+            name,
+            $"HP: {u.Stats.HP}/{u.Stats.MaxHP}",
+            membership,
+        }, screenW, screenH);
     }
 
     /// <summary>Floating cursor tooltip for the hovered spell-bar slot: ability name
