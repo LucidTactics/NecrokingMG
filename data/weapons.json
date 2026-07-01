@@ -19,6 +19,8 @@
       "archetype": "None",
       "cooldownRounds": 1,
       "priority": 0,
+      "damageType": "Blunt",
+      "twoHanded": false,
       "pounceMinRange": 3,
       "pounceMaxRange": 8,
       "pounceArcPeak": 2,
@@ -33,9 +35,7 @@
       "trampleSpeedBonus": 0.15,
       "trampleRadius": 1.5,
       "trampleKnockbackForce": 6,
-      "trampleImpactForce": 10,
-      "damageType": "Blunt",
-      "twoHanded": false
+      "trampleImpactForce": 10
     },
     {
       "id": "spear",
@@ -56,6 +56,8 @@
       "archetype": "None",
       "cooldownRounds": 1,
       "priority": 0,
+      "damageType": "Piercing",
+      "twoHanded": false,
       "pounceMinRange": 3,
       "pounceMaxRange": 8,
       "pounceArcPeak": 2,
@@ -70,9 +72,7 @@
       "trampleSpeedBonus": 0.15,
       "trampleRadius": 1.5,
       "trampleKnockbackForce": 6,
-      "trampleImpactForce": 10,
-      "damageType": "Piercing",
-      "twoHanded": false
+      "trampleImpactForce": 10
     },
     {
       "id": "spear_copy",
@@ -93,6 +93,8 @@
       "archetype": "None",
       "cooldownRounds": 1,
       "priority": 0,
+      "damageType": "Piercing",
+      "twoHanded": true,
       "pounceMinRange": 3,
       "pounceMaxRange": 8,
       "pounceArcPeak": 2,
@@ -107,9 +109,7 @@
       "trampleSpeedBonus": 0.15,
       "trampleRadius": 1.5,
       "trampleKnockbackForce": 6,
-      "trampleImpactForce": 10,
-      "damageType": "Piercing",
-      "twoHanded": true
+      "trampleImpactForce": 10
     },
     {
       "id": "hook",
@@ -130,6 +130,8 @@
       "archetype": "None",
       "cooldownRounds": 1,
       "priority": 0,
+      "damageType": "Slashing",
+      "twoHanded": false,
       "pounceMinRange": 3,
       "pounceMaxRange": 8,
       "pounceArcPeak": 2,
@@ -144,9 +146,7 @@
       "trampleSpeedBonus": 0.15,
       "trampleRadius": 1.5,
       "trampleKnockbackForce": 6,
-      "trampleImpactForce": 10,
-      "damageType": "Slashing",
-      "twoHanded": false
+      "trampleImpactForce": 10
     },
     {
       "id": "club",
@@ -167,6 +167,8 @@
       "archetype": "None",
       "cooldownRounds": 1,
       "priority": 0,
+      "damageType": "Blunt",
+      "twoHanded": false,
       "pounceMinRange": 3,
       "pounceMaxRange": 8,
       "pounceArcPeak": 2,
@@ -181,9 +183,7 @@
       "trampleSpeedBonus": 0.15,
       "trampleRadius": 1.5,
       "trampleKnockbackForce": 6,
-      "trampleImpactForce": 10,
-      "damageType": "Blunt",
-      "twoHanded": false
+      "trampleImpactForce": 10
     },
     {
       "id": "shortsword",
@@ -204,6 +204,8 @@
       "archetype": "None",
       "cooldownRounds": 1,
       "priority": 0,
+      "damageType": "Slashing",
+      "twoHanded": false,
       "pounceMinRange": 3,
       "pounceMaxRange": 8,
       "pounceArcPeak": 2,
@@ -218,9 +220,7 @@
       "trampleSpeedBonus": 0.15,
       "trampleRadius": 1.5,
       "trampleKnockbackForce": 6,
-      "trampleImpactForce": 10,
-      "damageType": "Slashing",
-      "twoHanded": false
+      "trampleImpactForce": 10
     },
     {
       "id": "lance",
@@ -241,6 +241,8 @@
       "archetype": "None",
       "cooldownRounds": 1,
       "priority": 0,
+      "damageType": "Piercing",
+      "twoHanded": false,
       "pounceMinRange": 3,
       "pounceMaxRange": 8,
       "pounceArcPeak": 2,
@@ -255,9 +257,7 @@
       "trampleSpeedBonus": 0.15,
       "trampleRadius": 1.5,
       "trampleKnockbackForce": 6,
-      "trampleImpactForce": 10,
-      "damageType": "Piercing",
-      "twoHanded": false
+      "trampleImpactForce": 10
     },
     {
       "id": "dagger",
@@ -278,6 +278,8 @@
       "archetype": "None",
       "cooldownRounds": 1,
       "priority": 0,
+      "damageType": "Piercing",
+      "twoHanded": false,
       "pounceMinRange": 3,
       "pounceMaxRange": 8,
       "pounceArcPeak": 2,
@@ -292,9 +294,7 @@
       "trampleSpeedBonus": 0.15,
       "trampleRadius": 1.5,
       "trampleKnockbackForce": 6,
-      "trampleImpactForce": 10,
-      "damageType": "Piercing",
-      "twoHanded": false
+      "trampleImpactForce": 10
     },
     {
       "id": "longbow",
@@ -315,6 +315,8 @@
       "archetype": "None",
       "cooldownRounds": 1,
       "priority": 0,
+      "damageType": "Slashing",
+      "twoHanded": false,
       "pounceMinRange": 3,
       "pounceMaxRange": 8,
       "pounceArcPeak": 2,
@@ -329,9 +331,7 @@
       "trampleSpeedBonus": 0.15,
       "trampleRadius": 1.5,
       "trampleKnockbackForce": 6,
-      "trampleImpactForce": 10,
-      "damageType": "Slashing",
-      "twoHanded": false
+      "trampleImpactForce": 10
     },
     {
       "id": "weapon_8",
@@ -352,6 +352,8 @@
       "archetype": "None",
       "cooldownRounds": 1,
       "priority": 0,
+      "damageType": "Slashing",
+      "twoHanded": false,
       "pounceMinRange": 3,
       "pounceMaxRange": 8,
       "pounceArcPeak": 2,
@@ -366,9 +368,7 @@
       "trampleSpeedBonus": 0.15,
       "trampleRadius": 1.5,
       "trampleKnockbackForce": 6,
-      "trampleImpactForce": 10,
-      "damageType": "Slashing",
-      "twoHanded": false
+      "trampleImpactForce": 10
     },
     {
       "id": "weapon_10",
@@ -389,6 +389,8 @@
       "archetype": "None",
       "cooldownRounds": 1,
       "priority": 0,
+      "damageType": "Piercing",
+      "twoHanded": false,
       "pounceMinRange": 3,
       "pounceMaxRange": 8,
       "pounceArcPeak": 2,
@@ -403,9 +405,7 @@
       "trampleSpeedBonus": 0.15,
       "trampleRadius": 1.5,
       "trampleKnockbackForce": 6,
-      "trampleImpactForce": 10,
-      "damageType": "Piercing",
-      "twoHanded": false
+      "trampleImpactForce": 10
     },
     {
       "id": "weapon_11",
@@ -426,6 +426,8 @@
       "archetype": "None",
       "cooldownRounds": 1,
       "priority": 0,
+      "damageType": "Slashing",
+      "twoHanded": false,
       "pounceMinRange": 3,
       "pounceMaxRange": 8,
       "pounceArcPeak": 2,
@@ -440,14 +442,12 @@
       "trampleSpeedBonus": 0.15,
       "trampleRadius": 1.5,
       "trampleKnockbackForce": 6,
-      "trampleImpactForce": 10,
-      "damageType": "Slashing",
-      "twoHanded": false
+      "trampleImpactForce": 10
     },
     {
       "id": "weapon_174944",
       "name": "Kick",
-      "damage": 0,
+      "damage": -4,
       "attackBonus": -2,
       "defenseBonus": 0,
       "length": 0,
@@ -463,6 +463,8 @@
       "archetype": "None",
       "cooldownRounds": 1,
       "priority": 0,
+      "damageType": "Blunt",
+      "twoHanded": false,
       "pounceMinRange": 3,
       "pounceMaxRange": 8,
       "pounceArcPeak": 2,
@@ -477,9 +479,7 @@
       "trampleSpeedBonus": 0.15,
       "trampleRadius": 1.5,
       "trampleKnockbackForce": 6,
-      "trampleImpactForce": 10,
-      "damageType": "Blunt",
-      "twoHanded": false
+      "trampleImpactForce": 10
     },
     {
       "id": "wolf_pounce",
@@ -500,6 +500,8 @@
       "archetype": "Pounce",
       "cooldownRounds": 1,
       "priority": 0,
+      "damageType": "Piercing",
+      "twoHanded": false,
       "pounceMinRange": 3,
       "pounceMaxRange": 8,
       "pounceArcPeak": 2,
@@ -514,14 +516,12 @@
       "trampleSpeedBonus": 0.15,
       "trampleRadius": 1.5,
       "trampleKnockbackForce": 6,
-      "trampleImpactForce": 10,
-      "damageType": "Piercing",
-      "twoHanded": false
+      "trampleImpactForce": 10
     },
     {
       "id": "weapon_181921",
       "name": "Antlers",
-      "damage": 3,
+      "damage": -2,
       "attackBonus": 1,
       "defenseBonus": -1,
       "length": 1,
@@ -537,6 +537,8 @@
       "archetype": "None",
       "cooldownRounds": 1,
       "priority": 0,
+      "damageType": "Piercing",
+      "twoHanded": false,
       "pounceMinRange": 3,
       "pounceMaxRange": 8,
       "pounceArcPeak": 2,
@@ -551,14 +553,12 @@
       "trampleSpeedBonus": 0.15,
       "trampleRadius": 1.5,
       "trampleKnockbackForce": 6,
-      "trampleImpactForce": 10,
-      "damageType": "Piercing",
-      "twoHanded": false
+      "trampleImpactForce": 10
     },
     {
       "id": "weapon_223651",
       "name": "Bite",
-      "damage": 3,
+      "damage": -1,
       "attackBonus": 2,
       "defenseBonus": -1,
       "length": 1,
@@ -574,6 +574,8 @@
       "archetype": "None",
       "cooldownRounds": 1,
       "priority": 0,
+      "damageType": "Piercing",
+      "twoHanded": false,
       "pounceMinRange": 3,
       "pounceMaxRange": 8,
       "pounceArcPeak": 2,
@@ -588,9 +590,7 @@
       "trampleSpeedBonus": 0.15,
       "trampleRadius": 1.5,
       "trampleKnockbackForce": 6,
-      "trampleImpactForce": 10,
-      "damageType": "Piercing",
-      "twoHanded": false
+      "trampleImpactForce": 10
     },
     {
       "id": "weapon_223651_copy",
@@ -613,6 +613,8 @@
       "archetype": "Pounce",
       "cooldownRounds": 3,
       "priority": 0,
+      "damageType": "Slashing",
+      "twoHanded": false,
       "pounceMinRange": 3,
       "pounceMaxRange": 8,
       "pounceArcPeak": 3,
@@ -627,9 +629,7 @@
       "trampleSpeedBonus": 0.15,
       "trampleRadius": 1.5,
       "trampleKnockbackForce": 6,
-      "trampleImpactForce": 10,
-      "damageType": "Slashing",
-      "twoHanded": false
+      "trampleImpactForce": 10
     },
     {
       "id": "weapon_011352",
@@ -650,6 +650,8 @@
       "archetype": "None",
       "cooldownRounds": 1,
       "priority": 0,
+      "damageType": "Slashing",
+      "twoHanded": false,
       "pounceMinRange": 3,
       "pounceMaxRange": 8,
       "pounceArcPeak": 2,
@@ -664,9 +666,7 @@
       "trampleSpeedBonus": 0.15,
       "trampleRadius": 1.5,
       "trampleKnockbackForce": 6,
-      "trampleImpactForce": 10,
-      "damageType": "Slashing",
-      "twoHanded": false
+      "trampleImpactForce": 10
     },
     {
       "id": "weapon_bear_sweep",
@@ -687,6 +687,8 @@
       "archetype": "Sweep",
       "cooldownRounds": 4,
       "priority": 1,
+      "damageType": "Slashing",
+      "twoHanded": false,
       "pounceMinRange": 3,
       "pounceMaxRange": 8,
       "pounceArcPeak": 2,
@@ -701,9 +703,7 @@
       "trampleSpeedBonus": 0.15,
       "trampleRadius": 1.5,
       "trampleKnockbackForce": 6,
-      "trampleImpactForce": 10,
-      "damageType": "Slashing",
-      "twoHanded": false
+      "trampleImpactForce": 10
     },
     {
       "id": "weapon_boar_tusk",
@@ -724,6 +724,8 @@
       "archetype": "None",
       "cooldownRounds": 1,
       "priority": 0,
+      "damageType": "Piercing",
+      "twoHanded": false,
       "pounceMinRange": 3,
       "pounceMaxRange": 8,
       "pounceArcPeak": 2,
@@ -738,9 +740,7 @@
       "trampleSpeedBonus": 0.15,
       "trampleRadius": 1.5,
       "trampleKnockbackForce": 6,
-      "trampleImpactForce": 10,
-      "damageType": "Piercing",
-      "twoHanded": false
+      "trampleImpactForce": 10
     },
     {
       "id": "weapon_boar_charge",
@@ -763,6 +763,8 @@
       "archetype": "Trample",
       "cooldownRounds": 3,
       "priority": 2,
+      "damageType": "Blunt",
+      "twoHanded": false,
       "pounceMinRange": 3,
       "pounceMaxRange": 8,
       "pounceArcPeak": 2,
@@ -777,9 +779,7 @@
       "trampleSpeedBonus": 0.15,
       "trampleRadius": 1.5,
       "trampleKnockbackForce": 120,
-      "trampleImpactForce": 100,
-      "damageType": "Blunt",
-      "twoHanded": false
+      "trampleImpactForce": 100
     }
   ]
 }
