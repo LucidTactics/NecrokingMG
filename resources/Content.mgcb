@@ -74,6 +74,11 @@
 /processor:EffectProcessor
 /build:MorphSDF.fx
 
+#begin DepthCutout.fx
+/importer:EffectImporter
+/processor:EffectProcessor
+/build:DepthCutout.fx
+
 #begin Wading.fx
 /importer:EffectImporter
 /processor:EffectProcessor

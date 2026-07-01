@@ -43,11 +43,16 @@ partial class GameRenderer
         float outlineStrength = (outline.A / 255f) * (0.3f + 0.3f * pulse); // fade-in (alpha) + pulse
 
         var fx = _g._morphSdfEffect;
+        // Morph "loudness" knobs. The amoeba swell (Bulge) opens bridge gaps that get filled with
+        // green energy (GreenFill). Kept subtle so the reshape reads as a quiet dark-green wisp, not
+        // a bright glowing blob — the outline bloom (after the morph) is what announces the zombie.
+        const float morphBulge = 2.0f;      // was 4.0 — gentler swell => smaller green gaps
+        const float morphGreenDim = 0.35f;  // dim the bridge-gap energy so it doesn't glow/bloom
         fx.Parameters["MorphT"]?.SetValue(morphT);
         fx.Parameters["MaxDist"]?.SetValue(md.MaxDist);
         fx.Parameters["EdgeSoftness"]?.SetValue(1.5f);
-        fx.Parameters["Bulge"]?.SetValue(4f);
-        fx.Parameters["GreenFill"]?.SetValue(greenHue);
+        fx.Parameters["Bulge"]?.SetValue(morphBulge);
+        fx.Parameters["GreenFill"]?.SetValue(greenHue * morphGreenDim);
         fx.Parameters["OutlineColor"]?.SetValue(greenHue);
         fx.Parameters["OutlineWidth"]?.SetValue(1.2f);
         fx.Parameters["OutlinePulse"]?.SetValue(outlineStrength);

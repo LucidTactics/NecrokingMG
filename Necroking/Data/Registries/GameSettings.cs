@@ -217,6 +217,12 @@ public class PerformanceSettings
     // its build. OFF by default: it's hundreds of builds that chew CPU for a while after
     // load. When off, morphs build lazily on first use (an occasional one-frame hitch).
     [JsonPropertyName("prewarmReanimMorphs")] public bool PrewarmReanimMorphs { get; set; }
+
+    // Depth-buffered occlusion for the reanimation fog. OFF by default = today's painter's-algorithm
+    // path (additive smoke always drawn on top). When ON, occluders (units/corpses) write a depth
+    // silhouette and the additive fog depth-TESTS against it, so a risen unit can walk in front of
+    // its own lingering smoke instead of the smoke always covering it. A/B dev toggle.
+    [JsonPropertyName("depthSortedFog")] public bool DepthSortedFog { get; set; }
 }
 
 public class FogOfWarSettings

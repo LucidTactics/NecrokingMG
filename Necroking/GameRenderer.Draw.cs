@@ -181,6 +181,11 @@ partial class GameRenderer
 
         _g._spriteBatch.End();
 
+        // Depth-sorted fog: stamp units' depth silhouettes into the scene RT's (already-bound, already-
+        // cleared) depth buffer so the additive reanimation fog can depth-test against them below.
+        if (_g._gameData.Settings.Performance.DepthSortedFog)
+            DrawFogDepthOccluders();
+
         // Spawn new effects from impacts (once per frame, before drawing)
         SpawnImpactEffects();
 
@@ -197,7 +202,21 @@ partial class GameRenderer
             effect: _g._hdrSpriteEffect);
         DrawProjectilesHdr();
         DrawEffectsFiltered(1);
-        _g._reanimFx.DrawAdditive(); // reanimation light + green cloud puffs (additive HDR)
+        if (_g._gameData.Settings.Performance.DepthSortedFog && _g._depthCutoutEffect != null)
+        {
+            // Depth-sorted fog: draw ALL reanim particles (light + clouds + dust) in ONE Y-sorted pass,
+            // so bright and dark puffs interleave by spawn position (not clouds-always-over-dust), and
+            // depth-test the units' stamps so a risen unit occludes them. It manages its own batches, so
+            // end the shared additive batch and re-open it for the lightning below.
+            _g._spriteBatch.End();
+            _g._reanimFx.DrawSortedParticles(_g._hdrSpriteEffect);
+            _g._spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.Additive, SamplerState.LinearClamp,
+                effect: _g._hdrSpriteEffect);
+        }
+        else
+        {
+            _g._reanimFx.DrawAdditive(); // reanimation light + green cloud puffs (additive HDR)
+        }
         // Lightning bolts and drains use HDR vertex encoding — draw in this HDR batch
         _g._lightningRenderer.SetGameTime(_g._gameTime);
         _g._lightningRenderer.Draw();

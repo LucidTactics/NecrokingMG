@@ -136,7 +136,10 @@ partial class GameRenderer
             // Reanimation dust puffs — Y-sorted with units (reuses the cloud03 sheet).
             // SetContext here also primes the additive light/cloud pass (DrawReanimAdditive).
             _g._reanimFx.SetContext(_g._spriteBatch, _g._camera, _g._renderer, deathFogFb, _g._glowTex);
-            _g._reanimFx.AddDustToDepthList(items);
+            // When depth-sorted fog is ON the dust is drawn interleaved with the clouds in the combined
+            // sorted pass (DrawSortedParticles) instead — so keep it out of the unit Y-sort list here.
+            if (!_g._gameData.Settings.Performance.DepthSortedFog)
+                _g._reanimFx.AddDustToDepthList(items);
         }
 
         items.Sort();
@@ -826,6 +829,58 @@ partial class GameRenderer
         _g._spriteBatch.Draw(tex, screenPos, frame.Rect, tint, 0f, origin, scale, effects, 0f);
     }
 
+    // Write depth only, no color — for the depth-sorted-fog occluder stamp.
+    private static readonly BlendState _depthOnlyBlend = new() { ColorWriteChannels = ColorWriteChannels.None };
+
+    /// <summary>Ground-Y → SpriteBatch layerDepth. Larger world Y (drawn in front / nearer the camera
+    /// in the painter's sort) → SMALLER depth (occludes). Units (the occluder stamp) and the fog puffs
+    /// (ReanimEffectSystem.DrawAdditive) MUST use this same mapping so they compare.</summary>
+    internal static float FogDepthForY(float worldY) => MathHelper.Clamp(1f - worldY * 0.005f, 0f, 1f);
+
+    /// <summary>Stamp each UNIT's sprite silhouette into the depth buffer (color-write off, depth-write
+    /// on, cutout shader) so the additive reanimation fog can depth-test against them. UNITS ONLY, not
+    /// corpses — during a morph there's no risen unit yet, so the fog still fully covers the morph;
+    /// once the unit rises it can occlude its own lingering smoke. Gated by Performance.DepthSortedFog;
+    /// runs after the color scene while the scene RT + its depth buffer are still bound.</summary>
+    internal void DrawFogDepthOccluders()
+    {
+        var effect = _g._depthCutoutEffect;
+        if (effect == null) return;
+
+        _g._spriteBatch.Begin(SpriteSortMode.Deferred, _depthOnlyBlend, SamplerState.LinearClamp,
+            DepthStencilState.Default, RasterizerState.CullNone, effect);
+
+        for (int i = 0; i < _g._sim.Units.Count; i++)
+        {
+            var u = _g._sim.Units[i];
+            if (!u.Alive) continue;
+            // Match DrawSingleUnit's visibility so fog-hidden enemies don't stamp invisible occluders.
+            if (u.Faction != Faction.Undead && !_g._fogOfWar.IsVisible(u.Position)) continue;
+            if (!_g._unitAnims.TryGetValue(u.Id, out var animData)) continue;
+            var unitDef = _g._gameData.Units.Get(u.UnitDefID);
+            if (unitDef == null) continue;
+            var atlas = _g._atlases[animData.AtlasID];
+            if (!atlas.IsLoaded) continue;
+            var fr = animData.Ctrl.GetCurrentFrame(u.FacingAngle);
+            if (fr.Frame == null) continue;
+            var frame = fr.Frame.Value;
+            var tex = atlas.GetTextureForFrame(frame);
+            if (tex == null) continue;
+
+            float worldH = (unitDef.SpriteWorldHeight > 0 ? unitDef.SpriteWorldHeight : 1.8f) * u.SpriteScale;
+            float scale = (worldH * _g._camera.Zoom) / animData.RefFrameHeight;
+            var sp = _g._renderer.WorldToScreen(u.RenderPos, u.Z, _g._camera);
+
+            float pivotX = fr.FlipX ? (1f - frame.PivotX) : frame.PivotX;
+            float pivotY = 1f - frame.PivotY;
+            var origin = new Vector2(pivotX * frame.Rect.Width, pivotY * frame.Rect.Height);
+            var effects = fr.FlipX ? SpriteEffects.FlipHorizontally : SpriteEffects.None;
+            _g._spriteBatch.Draw(tex, sp, frame.Rect, Color.White, 0f, origin, scale, effects, FogDepthForY(u.Position.Y));
+        }
+
+        _g._spriteBatch.End();
+    }
+
     /// <summary>Draw a unit sprite with the wading shader applied — fades alpha
     /// below <paramref name="waterlineV"/> (V coord, 0=top, 1=bottom) and adds a
     /// foam smear at the line. Wraps the call in End()/Begin(effect)/End()/
@@ -926,6 +981,7 @@ partial class GameRenderer
 
         // Toast naming the active variant after a cycle press (drawn even when Off).
         DrawHoverVariantLabel();
+        DrawDepthFogToast();   // 'H' depth-sorted-fog ON/OFF flash
 
         if (!_g._gameData.Settings.Tooltips.ShowHoverHighlight) return;
 
@@ -1210,6 +1266,18 @@ partial class GameRenderer
         var pos = new Vector2((int)18, (int)112);
         _g._spriteBatch.DrawString(_g._font, label, pos + new Vector2(1, 1), new Color(0, 0, 0, 190));
         _g._spriteBatch.DrawString(_g._font, label, pos, new Color(255, 235, 150));
+    }
+
+    // Flash the depth-sorted-fog state (ON/OFF) for a couple seconds after the 'H' toggle.
+    private void DrawDepthFogToast()
+    {
+        if (_g._depthFogToastTimer <= 0f || _g._font == null) return;
+        bool on = _g._gameData.Settings.Performance.DepthSortedFog;
+        string label = on ? "Depth-sorted fog: ON  (unit occludes smoke)"
+                          : "Depth-sorted fog: OFF  (smoke on top)";
+        var pos = new Vector2((int)18, (int)134);
+        _g._spriteBatch.DrawString(_g._font, label, pos + new Vector2(1, 1), new Color(0, 0, 0, 190));
+        _g._spriteBatch.DrawString(_g._font, label, pos, on ? new Color(150, 235, 180) : new Color(230, 200, 170));
     }
 
     /// <summary>Draw a 2D line by rotating the _g._pixel sprite. Cheap, AA-free.</summary>

@@ -32,12 +32,14 @@ internal class ReanimEffectSystem
         public float SpawnWindow;       // how long new cloud/dust puffs keep appearing
         public float PuffAnimCycles;    // flipbook loops over a puff's lifetime (1=default speed, >1=faster billow)
 
-        // Outline (blinks via pulse, fades out over Duration)
+        // Outline (blinks via pulse). Suppressed during the corpse morph, then on the risen unit
+        // it fades IN over OutlineFadeInDur and fades OUT over the rest of OutlineDuration.
         public HdrColor OutlineColor;
         public HdrColor OutlinePulseColor;
         public float OutlineWidth;
         public float OutlinePulseWidth;
         public float OutlinePulseSpeed;
+        public float OutlineFadeInDur;  // effect-time to bloom the outline in on the risen unit (0 = instant/full)
 
         // Additive diffuse light behind the unit
         public HdrColor LightColor;
@@ -57,6 +59,13 @@ internal class ReanimEffectSystem
         public int DustCount;
         public float DustRise;
         public float DustLifetime;
+        public float DustMaxAlpha;      // opacity ceiling for the dust layer (0 or unset = uncapped)
+
+        // Global plume fade-out envelope (fog-clock time). On top of each puff's own curve, the whole
+        // cloud+dust plume holds, then fades from FogFadeStart to 0 at FogFadeEnd — so it starts
+        // clearing ~halfway through the standup yet ends at the same time. Unset (End<=Start) = off.
+        public float FogFadeStart;
+        public float FogFadeEnd;
     }
 
     private struct Puff
@@ -71,6 +80,7 @@ internal class ReanimEffectSystem
         public float FramePhase;
         public float RotSpeed;
         public BezierCurve Alpha;
+        public float MaxAlpha;  // opacity ceiling; the evaluated alpha never exceeds this (1 = uncapped)
     }
 
     private class Instance
@@ -151,7 +161,7 @@ internal class ReanimEffectSystem
                 cfg.CloudRise, cfg.SpawnWindow, scale, scatter: 0.85f));
         for (int i = 0; i < cfg.DustCount; i++)
             inst.Dust.Add(MakePuff(cfg.DustColor, cfg.DustWorldSize, cfg.DustLifetime,
-                cfg.DustRise, cfg.SpawnWindow, scale, scatter: 1.05f));
+                cfg.DustRise, cfg.SpawnWindow, scale, scatter: 1.05f, maxAlpha: cfg.DustMaxAlpha));
 
         _active.Add(inst);
         return id;
@@ -176,7 +186,7 @@ internal class ReanimEffectSystem
     }
 
     private Puff MakePuff(HdrColor color, float worldSize, float lifetime, float rise,
-        float spawnWindow, float scale, float scatter)
+        float spawnWindow, float scale, float scatter, float maxAlpha = 1f)
     {
         float ox = ((float)_rng.NextDouble() * 2f - 1f) * scatter * scale;
         float oy = ((float)_rng.NextDouble() * 2f - 1f) * scatter * 0.5f * scale;
@@ -192,6 +202,7 @@ internal class ReanimEffectSystem
             FramePhase = (float)_rng.NextDouble(),
             RotSpeed = ((float)_rng.NextDouble() * 0.5f + 0.1f) * (_rng.Next(2) == 0 ? 1f : -1f),
             Alpha = PuffAlpha,
+            MaxAlpha = maxAlpha > 0f ? maxAlpha : 1f,
         };
     }
 
@@ -224,9 +235,14 @@ internal class ReanimEffectSystem
         {
             var inst = _active[i];
             if (inst.UnitId != unitId) continue;
-            // Linear fade of the outline alpha across its own (longer) duration, measured
-            // from when the unit attached (so a deferred rise gets the full-strength outline).
-            float fade = MathF.Max(0f, 1f - (inst.Age - inst.OutlineStartAge) / inst.Cfg.OutlineDuration);
+            // The outline only appears AFTER the morph finishes — which is when the unit attaches.
+            // From that moment it blooms IN over OutlineFadeInDur, then fades OUT over the rest of
+            // OutlineDuration. All in effect-time (measured from attach) so it stays synced to the rise.
+            float since = inst.Age - inst.OutlineStartAge;
+            float fadeIn = MathF.Min(inst.Cfg.OutlineFadeInDur, inst.Cfg.OutlineDuration);
+            float fade = (fadeIn > 0f && since < fadeIn)
+                ? since / fadeIn
+                : MathF.Max(0f, 1f - (since - fadeIn) / MathF.Max(0.01f, inst.Cfg.OutlineDuration - fadeIn));
             c1 = ScaleAlpha(inst.Cfg.OutlineColor, fade);
             c2 = ScaleAlpha(inst.Cfg.OutlinePulseColor, fade);
             width = inst.Cfg.OutlineWidth;
@@ -257,8 +273,11 @@ internal class ReanimEffectSystem
             float morphWin = inst.OutlineFadeIn - inst.MorphHold;
             morphT = (inst.MorphHold > 0f && morphWin > 0f)
                 ? MathHelper.Clamp((inst.Age - inst.MorphHold) / morphWin, 0f, 1f) : fadeIn;
-            c1 = ScaleAlpha(inst.Cfg.OutlineColor, fadeIn);
-            c2 = ScaleAlpha(inst.Cfg.OutlinePulseColor, fadeIn);
+            // No outline while the body morphs — the silhouette reshapes "quietly", then the green
+            // glow blooms in on the finished zombie (see TryGetOutline). Alpha 0 kills the shader's
+            // traced outline but leaves the morph's own fill/green-gap energy intact.
+            c1 = ScaleAlpha(inst.Cfg.OutlineColor, 0f);
+            c2 = ScaleAlpha(inst.Cfg.OutlinePulseColor, 0f);
             width = inst.Cfg.OutlineWidth;
             pulseWidth = inst.Cfg.OutlinePulseWidth;
             pulseSpeed = inst.Cfg.OutlinePulseSpeed;
@@ -294,12 +313,13 @@ internal class ReanimEffectSystem
         foreach (var inst in _active)
         {
             float cyc = inst.Cfg.PuffAnimCycles > 0f ? inst.Cfg.PuffAnimCycles : 1f;
+            float fogFade = FogFadeMul(inst);
             for (int p = 0; p < inst.Dust.Count; p++)
             {
                 var q = inst.Dust[p];
                 if (q.Age <= 0f || q.Age >= q.Lifetime) continue;
                 float t = q.Age / q.Lifetime;
-                float a = q.Alpha.Evaluate(t) * (q.Color.A / 255f);
+                float a = PuffOpacity(q, t, additive: false, fogFade);
                 if (a <= 0.003f) continue;
                 float height = q.Rise * EaseOut(t);
                 var world = inst.Ground + q.Ground;
@@ -354,12 +374,13 @@ internal class ReanimEffectSystem
             {
                 var tex = _cloud.Texture!;
                 int frameW = tex.Width / Math.Max(_cloud.Cols, 1);
+                float fogFade = FogFadeMul(inst);
                 for (int p = 0; p < inst.Clouds.Count; p++)
                 {
                     var q = inst.Clouds[p];
                     if (q.Age <= 0f || q.Age >= q.Lifetime) continue;
                     float t = q.Age / q.Lifetime;
-                    float a = q.Alpha.Evaluate(t);
+                    float a = PuffOpacity(q, t, additive: true, fogFade);
                     if (a <= 0.003f) continue;
                     float height = q.Rise * EaseOut(t);
                     var world = inst.Ground + q.Ground;
@@ -368,13 +389,129 @@ internal class ReanimEffectSystem
                     var src = _cloud.GetFrameRect(frame);
                     float scale = (q.WorldSize * zoom) / frameW;
                     var origin = new Vector2(src.Width * 0.5f, src.Height * 0.5f);
-                    _batch.Draw(tex, sp, src, q.Color.ToHdrVertex(a), q.RotSpeed * inst.FogAge, origin, scale, SpriteEffects.None, 0f);
+                    // layerDepth from the puff's ground Y — only used when the depth-sorted-fog batch is
+                    // active (DepthStencilState.DepthRead); ignored otherwise. MUST match the occluder
+                    // stamp's mapping (GameRenderer.FogDepthForY): larger Y -> smaller depth.
+                    float ld = MathHelper.Clamp(1f - world.Y * 0.005f, 0f, 1f);
+                    _batch.Draw(tex, sp, src, q.Color.ToHdrVertex(a), q.RotSpeed * inst.FogAge, origin, scale, SpriteEffects.None, ld);
                 }
             }
         }
     }
 
+    // ---- Depth-sorted particle pass (Performance.DepthSortedFog): clouds + dust interleaved ----
+
+    private struct ParticleDraw
+    {
+        public Texture2D Tex; public Vector2 ScreenPos, Origin; public Rectangle Src;
+        public float Scale, Rot; public Color Color; public bool Additive; public float SortY, LayerDepth;
+    }
+    private readonly List<ParticleDraw> _sortScratch = new();
+    private static float FogDepth(float y) => MathHelper.Clamp(1f - y * 0.005f, 0f, 1f);
+
+    /// <summary>Draw ALL active reanim particles — the diffuse light + green cloud puffs (additive) and
+    /// the dark dust puffs (alpha) — in ONE Y-sorted sequence, flipping blend per puff, so bright and
+    /// dark puffs interleave by spawn position instead of the clouds always drawing over the dust.
+    /// DepthStencilState.DepthRead, so units already stamped into the depth buffer occlude them. Manages
+    /// its own batches (ends on exit); the caller re-Begins its own batch afterward. Used only on the
+    /// DepthSortedFog path — the OFF path still uses DrawAdditive + the Y-sorted dust depth list.</summary>
+    public void DrawSortedParticles(Microsoft.Xna.Framework.Graphics.Effect? hdrEffect)
+    {
+        if (_batch == null || _camera == null || _renderer == null || _cloud?.Texture == null) return;
+        float zoom = _camera.Zoom;
+        var tex = _cloud.Texture!;
+        int frameW = tex.Width / Math.Max(_cloud.Cols, 1);
+        _sortScratch.Clear();
+
+        foreach (var inst in _active)
+        {
+            float cyc = inst.Cfg.PuffAnimCycles > 0f ? inst.Cfg.PuffAnimCycles : 1f;
+
+            // Diffuse light glow (additive) — sorted at the grave position.
+            if (_glow != null && inst.Cfg.LightWorldSize > 0f)
+            {
+                float lightT = inst.Cfg.LightDuration > 0f ? inst.Age / inst.Cfg.LightDuration : 1f;
+                float la = inst.Cfg.LightAlpha.Evaluate(MathHelper.Clamp(lightT, 0f, 1f));
+                if (la > 0.003f)
+                {
+                    var lp = _renderer.WorldToScreen(inst.Ground, 0.5f, _camera);
+                    float lscale = (inst.Cfg.LightWorldSize * zoom) / _glow.Width;
+                    _sortScratch.Add(new ParticleDraw {
+                        Tex = _glow, ScreenPos = lp, Src = new Rectangle(0, 0, _glow.Width, _glow.Height),
+                        Origin = new Vector2(_glow.Width * 0.5f, _glow.Height * 0.5f), Scale = lscale, Rot = 0f,
+                        Color = inst.Cfg.LightColor.ToHdrVertex(la), Additive = true,
+                        SortY = inst.Ground.Y, LayerDepth = FogDepth(inst.Ground.Y) });
+                }
+            }
+
+            for (int p = 0; p < inst.Clouds.Count; p++) AddPuff(inst.Clouds[p], inst, cyc, tex, frameW, zoom, additive: true);
+            for (int p = 0; p < inst.Dust.Count; p++)   AddPuff(inst.Dust[p], inst, cyc, tex, frameW, zoom, additive: false);
+        }
+
+        if (_sortScratch.Count == 0) return;
+        _sortScratch.Sort(static (a, b) => a.SortY.CompareTo(b.SortY));   // back (small Y) -> front (large Y)
+
+        bool? curAdd = null;
+        for (int i = 0; i < _sortScratch.Count; i++)
+        {
+            var d = _sortScratch[i];
+            if (curAdd != d.Additive)
+            {
+                if (curAdd != null) _batch.End();
+                _batch.Begin(SpriteSortMode.Deferred, d.Additive ? BlendState.Additive : BlendState.AlphaBlend,
+                    SamplerState.LinearClamp, DepthStencilState.DepthRead, RasterizerState.CullNone,
+                    d.Additive ? hdrEffect : null);
+                curAdd = d.Additive;
+            }
+            _batch.Draw(d.Tex, d.ScreenPos, d.Src, d.Color, d.Rot, d.Origin, d.Scale, SpriteEffects.None, d.LayerDepth);
+        }
+        if (curAdd != null) _batch.End();
+    }
+
+    // One puff -> a draw descriptor in _sortScratch. Mirrors DrawAdditive's cloud math (additive, HDR
+    // colour) and AddDustToDepthList's dust math (alpha, premultiplied colour, sorted a half-size
+    // forward). Same cloud03 sheet either way; only blend + colour differ.
+    private void AddPuff(in Puff q, Instance inst, float cyc, Texture2D tex, int frameW, float zoom, bool additive)
+    {
+        if (q.Age <= 0f || q.Age >= q.Lifetime) return;
+        float t = q.Age / q.Lifetime;
+        float a = PuffOpacity(q, t, additive, FogFadeMul(inst));
+        if (a <= 0.003f) return;
+        float height = q.Rise * EaseOut(t);
+        var world = inst.Ground + q.Ground;
+        var sp = _renderer!.WorldToScreen(world, height, _camera!);
+        int frame = _cloud!.GetFrameAtNormalizedTime((t * cyc + q.FramePhase) % 1f);
+        var src = _cloud.GetFrameRect(frame);
+        float scale = (q.WorldSize * zoom) / frameW;
+        float sortY = additive ? world.Y : world.Y + q.WorldSize * 0.5f;
+        _sortScratch.Add(new ParticleDraw {
+            Tex = tex, ScreenPos = sp, Src = src, Origin = new Vector2(src.Width * 0.5f, src.Height * 0.5f),
+            Scale = scale, Rot = q.RotSpeed * inst.FogAge, Additive = additive,
+            Color = additive ? q.Color.ToHdrVertex(a) : ColorUtils.Premultiply(q.Color.R, q.Color.G, q.Color.B, a),
+            SortY = sortY, LayerDepth = FogDepth(sortY) });
+    }
+
     private static float EaseOut(float t) => 1f - (1f - t) * (1f - t);
+
+    // Canonical puff opacity. Additive layers keep the raw curve alpha (brightness lives in the HDR
+    // intensity); alpha layers fold in Color.A. Both are then clamped to the puff's MaxAlpha ceiling —
+    // the per-layer "cap out at N% opacity" knob (MaxAlpha 1 = uncapped) — and scaled by the plume's
+    // global fade-out envelope (fogFade). Single source of truth for every draw path.
+    private static float PuffOpacity(in Puff q, float t, bool additive, float fogFade)
+    {
+        float a = additive ? q.Alpha.Evaluate(t) : q.Alpha.Evaluate(t) * (q.Color.A / 255f);
+        return MathF.Min(a, q.MaxAlpha) * fogFade;
+    }
+
+    // Global plume fade-out envelope on the fog clock: 1 until FogFadeStart, then linearly to 0 at
+    // FogFadeEnd, so the whole plume starts clearing ~halfway through the standup but ends at the same
+    // time regardless of each puff's own curve. Off (returns 1) when the config leaves it unset.
+    private static float FogFadeMul(Instance inst)
+    {
+        float s = inst.Cfg.FogFadeStart, e = inst.Cfg.FogFadeEnd;
+        if (e <= s) return 1f;
+        return MathHelper.Clamp((e - inst.FogAge) / (e - s), 0f, 1f);
+    }
 
     // ---- The single canonical reanimation effect ("Grave Smoke") ----
 
@@ -389,12 +526,13 @@ internal class ReanimEffectSystem
         // reanimation path (spell / potion / on-death / table-craft) uses this single preset.
         list.Add(new ReanimConfig
         {
-            Id = "reanim_smoke", OutlineDuration = 6.2f, LightDuration = 5.0f, SpawnWindow = 2.0f, PuffAnimCycles = 1.4f,
+            Id = "reanim_smoke", OutlineDuration = 6.2f, LightDuration = 5.0f, SpawnWindow = 0.5f, PuffAnimCycles = 1.4f,
             OutlineColor = Green(50, 200, 100, 230, 1.2f), OutlinePulseColor = Green(20, 110, 60, 160, 0.8f),
-            OutlineWidth = 2.0f, OutlinePulseWidth = 4.5f, OutlinePulseSpeed = 0.9f,
+            OutlineWidth = 2.0f, OutlinePulseWidth = 4.5f, OutlinePulseSpeed = 0.9f, OutlineFadeInDur = 1.0f,
             LightColor = Green(30, 170, 90, 230, 1.3f), LightWorldSize = 3.2f, LightAlpha = new BezierCurve(0f, 0.5f, 0.5f, 0f),
-            CloudColor = Green(55, 170, 85, 220, 1.1f), CloudWorldSize = 1.7f, CloudCount = 8, CloudRise = 1.0f, CloudLifetime = 6.5f,
-            DustColor = Green(55, 50, 45, 220, 1.0f), DustWorldSize = 1.95f, DustCount = 9, DustRise = 0.9f, DustLifetime = 6.5f,
+            CloudColor = Green(55, 170, 85, 220, 1.1f), CloudWorldSize = 2.04f, CloudCount = 14, CloudRise = 1.0f, CloudLifetime = 6.5f,
+            DustColor = Green(55, 50, 45, 220, 1.0f), DustWorldSize = 1.95f, DustCount = 16, DustRise = 0.9f, DustLifetime = 6.5f, DustMaxAlpha = 0.5f,
+            FogFadeStart = 2.5f, FogFadeEnd = 7.0f,
         });
 
         // Cloudless variant — identical green outline + light + pose-morph rise as
@@ -405,7 +543,7 @@ internal class ReanimEffectSystem
         {
             Id = "reanim_nosmoke", OutlineDuration = 6.2f, LightDuration = 5.0f, SpawnWindow = 2.0f, PuffAnimCycles = 1.4f,
             OutlineColor = Green(50, 200, 100, 230, 1.2f), OutlinePulseColor = Green(20, 110, 60, 160, 0.8f),
-            OutlineWidth = 2.0f, OutlinePulseWidth = 4.5f, OutlinePulseSpeed = 0.9f,
+            OutlineWidth = 2.0f, OutlinePulseWidth = 4.5f, OutlinePulseSpeed = 0.9f, OutlineFadeInDur = 1.0f,
             LightColor = Green(30, 170, 90, 230, 1.3f), LightWorldSize = 3.2f, LightAlpha = new BezierCurve(0f, 0.5f, 0.5f, 0f),
             CloudColor = Green(55, 170, 85, 220, 1.1f), CloudWorldSize = 1.7f, CloudCount = 0, CloudRise = 1.0f, CloudLifetime = 6.0f,
             DustColor = Green(55, 50, 45, 220, 1.0f), DustWorldSize = 1.95f, DustCount = 0, DustRise = 0.9f, DustLifetime = 6.0f,
