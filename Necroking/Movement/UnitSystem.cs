@@ -486,6 +486,12 @@ public class Unit
     /// -1 when not eating. Used to validate the corpse still exists when the
     /// timer expires.</summary>
     public int CorpseEatTargetID = -1;
+
+    /// <summary>For a corpse-puppet raise: the def id of the ORIGINAL corpse this puppet
+    /// was raised from (e.g. "militia"), so when it deposits itself into a Corpse Pile it
+    /// piles as that original body — not as the zombie variant it currently wears. Empty
+    /// for a normal unit; CorpsePuppetHandler falls back to <see cref="UnitDefID"/> when unset.</summary>
+    public string PuppetSourceDefID;
 }
 
 /// <summary>

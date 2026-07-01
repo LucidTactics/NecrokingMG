@@ -57,6 +57,8 @@ public partial class Game1 {
                                   // can legitimately be negative, which mis-routed negative-facing
                                   // corpses to the plain-spawn path (archetype 0 → no follow).
          string summonUnitID = pending.SummonUnitID;
+         string puppetSourceDef = "";  // corpse-puppet raise: the ORIGINAL corpse's def, so the
+                                       // puppet piles as that body rather than the zombie it wears.
 
          if (spell.SummonTargetReq == "Corpse" && pending.TargetCorpseID >= 0) {
             // Re-resolve the corpse by STABLE id, not the captured list index: a channeled
@@ -72,10 +74,26 @@ public partial class Game1 {
                if (string.IsNullOrEmpty(summonUnitID))
                   summonUnitID = Game.TableCraftingSystem.ResolveZombieUnitID(_gameData, corpse.UnitDefID);
 
+               // Corpse-puppet raise: remember the original body so the puppet deposits as that
+               // type at a Corpse Pile (the OnSpawned callback below stamps it onto the unit).
+               if (spell.SummonAsPuppet) puppetSourceDef = corpse.UnitDefID;
+
                fromCorpse = true;
                // corpse is NOT consumed here — QueueReanimRise (below) claims it and either plays
                // the rise effect (keeping it visible) or legacy-dissolves it.
             }
+         }
+
+         // Corpse-puppet override: once the zombie stands up, swap its AI to the CorpsePuppet
+         // archetype (walk to nearest Corpse Pile + deposit self) and record the original corpse
+         // type so it piles as that body. Runs on the freshly-spawned unit (deferred rise spawn).
+         Action<int>? onPuppetSpawned = null;
+         if (spell.SummonAsPuppet) {
+            string srcDef = puppetSourceDef;
+            onPuppetSpawned = idx => {
+               _sim.UnitsMut[idx].Archetype = AI.ArchetypeRegistry.FromName("CorpsePuppet");
+               _sim.UnitsMut[idx].PuppetSourceDefID = srcDef;
+            };
          }
 
          if (spell.SummonMode == "Transform" && pending.TargetUnitID != GameConstants.InvalidUnit) {
@@ -140,7 +158,8 @@ public partial class Game1 {
                   // effect plays NOW at the grave (corpse stays visible, green outline fading in);
                   // the unit spawns + stands up + the corpse is removed after a short delay.
                   QueueReanimRise(summonUnitID, pending.TargetCorpseID, spell.ReanimationEffectID,
-                     riseSpeed: spell.TestRiseSpeed, fogSpeed: spell.TestFogSpeed);
+                     riseSpeed: spell.TestRiseSpeed, fogSpeed: spell.TestFogSpeed,
+                     onSpawned: onPuppetSpawned);
                } else {
                   // Non-corpse summon (e.g. summon-from-def): plain spawn + horde enroll.
                   SpawnUnit(summonUnitID, unitSpawnPos);

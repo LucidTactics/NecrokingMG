@@ -9164,7 +9164,7 @@
       "castFlipbook": null,
       "summonTargetReq": "Corpse",
       "summonMode": "Spawn",
-      "summonUnitID": "corpse_puppet",
+      "summonUnitID": "",
       "summonQuantity": 1,
       "spawnLocation": "NearestTargetToMouse",
       "summonFlipbook": {
@@ -9314,7 +9314,9 @@
       "sacrificeHealPercent": 0,
       "blightMode": "Add",
       "blightAmount": 100,
-      "toggleEffect": ""
+      "toggleEffect": "",
+      "summonAsPuppet": true,
+      "reanimationEffectID": "reanim_nosmoke"
     },
     {
       "name": "Swift Corpse Puppet",
@@ -9363,7 +9365,7 @@
       "castFlipbook": null,
       "summonTargetReq": "Corpse",
       "summonMode": "Spawn",
-      "summonUnitID": "corpse_puppet",
+      "summonUnitID": "",
       "summonQuantity": 1,
       "spawnLocation": "NearestTargetToMouse",
       "summonFlipbook": {
@@ -9513,7 +9515,11 @@
       "sacrificeHealPercent": 0,
       "blightMode": "Add",
       "blightAmount": 100,
-      "toggleEffect": ""
+      "toggleEffect": "",
+      "summonAsPuppet": true,
+      "_test_riseSpeed": 4,
+      "_test_fogSpeed": 1.5,
+      "reanimationEffectID": "reanim_nosmoke"
     },
     {
       "name": "Fast Raise Zombie",

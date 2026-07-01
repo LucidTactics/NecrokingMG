@@ -296,6 +296,14 @@ public class SpellDef : IHasId
     [EditorRegistryDropdown("Units")]
     [JsonPropertyName("summonUnitID")] public string SummonUnitID { get; set; } = "";
 
+    /// <summary>Corpse-puppet raise: raise the ZOMBIE variant of the target corpse (leave
+    /// <see cref="SummonUnitID"/> empty so the type resolves per-corpse), but override its AI
+    /// with the CorpsePuppet archetype (walk to the nearest Corpse Pile and deposit itself),
+    /// and pile as the ORIGINAL corpse type — not the zombie it wears.</summary>
+    [EditorVisible("Category", "Summon")]
+    [EditorField(Label = "As Corpse Puppet", Group = "SUMMON", Order = 403)]
+    [JsonPropertyName("summonAsPuppet")] public bool SummonAsPuppet { get; set; } = false;
+
     [EditorVisible("Category", "Summon")]
     [EditorField(Label = "Quantity", Group = "SUMMON", Order = 403)]
     [JsonPropertyName("summonQuantity")] public int SummonQuantity { get; set; } = 1;
