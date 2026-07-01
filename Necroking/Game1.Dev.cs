@@ -1073,14 +1073,28 @@ public partial class Game1 {
                break;
             }
 
-            // Toggle the drag-rope on the nearest free corpse (same as the Shift+R
-            // hotkey). Headless has no keyboard, so this drives the same ToggleRope path.
-            case "rope": {
-               if (_sim.NecromancerIndex < 0) {
-                  c.Complete(Necroking.Dev.DevServer.Error("no necromancer in the sim"));
+            // Set the tether anchor to the unit/corpse nearest (x,y) — same as Shift+T.
+            // Headless has no cursor, so the coords stand in for the mouse world position.
+            case "tether": {
+               if (c.Args.Length < 2) {
+                  c.Complete(Necroking.Dev.DevServer.Error("tether needs: <x> <y>"));
                   break;
                }
-               string msg = ToggleRope(_sim.NecromancerIndex);
+               var tp = new Vec2(DevFloat(c.Args[0]), DevFloat(c.Args[1]));
+               _tetherAnchor = TryPickTetherEnd(tp, out var anchor) ? anchor : (TetherEnd?)null;
+               c.Complete(Necroking.Dev.DevServer.Ok(_tetherAnchor.HasValue
+                  ? $"tether anchor set ({_tetherAnchor.Value.Kind})"
+                  : "no unit/corpse near point"));
+               break;
+            }
+
+            // Attach/detach a rope — same as Shift+R. With coords, (x,y) stands in for the
+            // cursor; with no args the necromancer quick-drags the nearest free corpse.
+            case "rope": {
+               Vec2 rp = c.Args.Length >= 2
+                  ? new Vec2(DevFloat(c.Args[0]), DevFloat(c.Args[1]))
+                  : (_sim.NecromancerIndex >= 0 ? _sim.Units[_sim.NecromancerIndex].Position : Vec2.Zero);
+               string msg = HandleRopeKey(rp, _sim.NecromancerIndex);
                c.Complete(Necroking.Dev.DevServer.Ok(msg));
                break;
             }

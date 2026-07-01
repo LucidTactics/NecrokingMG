@@ -140,103 +140,237 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         return best;
     }
 
-    // Attach the rope to the nearest free corpse, or detach if already roped. Returns a
-    // short status string (for the dev command). Shared by the Shift+R hotkey and the
-    // 'rope' dev command.
-    private string ToggleRope(int necroIdx)
+    // True if this corpse is an endpoint of any tether (so the renderer still draws it on
+    // the ground even though its DraggedByUnitID claim would otherwise hide it as "carried").
+    internal bool IsCorpseTethered(int corpseId)
     {
-        if (necroIdx < 0) return "no necromancer";
-        if (_ropedCorpseID >= 0) { DetachRope(); return "rope detached"; }
+        foreach (var t in _tethers)
+        {
+            if (t.A.Kind == TetherEndKind.Corpse && t.A.CorpseId == corpseId) return true;
+            if (t.B.Kind == TetherEndKind.Corpse && t.B.CorpseId == corpseId) return true;
+        }
+        return false;
+    }
 
-        var necroPos = _sim.Units[necroIdx].Position;
-        uint necroId = _sim.Units[necroIdx].Id;
-        int bestIdx = -1;
+    private static bool SameEnd(TetherEnd a, TetherEnd b)
+        => a.Kind == b.Kind &&
+           (a.Kind == TetherEndKind.Unit ? a.UnitId == b.UnitId : a.CorpseId == b.CorpseId);
+
+    // Resolve an endpoint to a live world position. Returns false (drop the tether) when the
+    // unit is gone/dead or the corpse was consumed/dissolved/bagged/removed.
+    private bool TryEndState(TetherEnd e, out Vec2 pos, out int unitIdx, out int corpseIdx)
+    {
+        pos = default; unitIdx = -1; corpseIdx = -1;
+        if (e.Kind == TetherEndKind.Unit)
+        {
+            int ui = Necroking.Movement.UnitUtil.ResolveUnitIndex(_sim.Units, e.UnitId);
+            if (ui < 0) return false;
+            unitIdx = ui; pos = _sim.Units[ui].Position; return true;
+        }
+        int ci = _sim.FindCorpseIndexByID(e.CorpseId);
+        if (ci < 0) return false;
+        var cp = _sim.Corpses[ci];
+        if (cp.ConsumedBySummon || cp.Dissolving || cp.Bagged) return false;
+        corpseIdx = ci; pos = cp.Position; return true;
+    }
+
+    // Pick the nearest unit or corpse to a world point, within RopeAttachRadius. Claimed
+    // corpses (already tethered/carried) are skipped unless includeClaimedCorpses is set.
+    private bool TryPickTetherEnd(Vec2 worldPos, out TetherEnd end, bool includeClaimedCorpses = false)
+    {
+        end = default;
+        bool found = false;
         float best = RopeAttachRadius * RopeAttachRadius;
+        var corpses = _sim.Corpses;
+        for (int ci = 0; ci < corpses.Count; ci++)
+        {
+            var cp = corpses[ci];
+            if (cp.ConsumedBySummon || cp.Dissolving || cp.Bagged) continue;
+            if (!includeClaimedCorpses && cp.DraggedByUnitID != GameConstants.InvalidUnit) continue;
+            float dx = cp.Position.X - worldPos.X, dy = cp.Position.Y - worldPos.Y;
+            float d2 = dx * dx + dy * dy;
+            if (d2 < best) { best = d2; end = TetherEnd.ForCorpse(cp.CorpseID); found = true; }
+        }
+        for (int ui = 0; ui < _sim.Units.Count; ui++)
+        {
+            var u = _sim.Units[ui];
+            if (!u.Alive) continue;
+            float dx = u.Position.X - worldPos.X, dy = u.Position.Y - worldPos.Y;
+            float d2 = dx * dx + dy * dy;
+            if (d2 < best) { best = d2; end = TetherEnd.ForUnit(u.Id); found = true; }
+        }
+        return found;
+    }
+
+    // Create a tether between two endpoints. If exactly one end is a corpse and the other a
+    // unit, claim the corpse (DraggedByUnitID) so pickup/hover/workers leave it alone, and
+    // drop its frozen carry pose so the drag update can rotate it via FacingAngle.
+    private void CreateTether(TetherEnd a, TetherEnd b)
+    {
+        _tethers.Add(new Tether { A = a, B = b });
+        ClaimCorpseEnd(a, b);
+        ClaimCorpseEnd(b, a);
+    }
+
+    private void ClaimCorpseEnd(TetherEnd corpseEnd, TetherEnd otherEnd)
+    {
+        if (corpseEnd.Kind != TetherEndKind.Corpse || otherEnd.Kind != TetherEndKind.Unit) return;
+        int idx = _sim.FindCorpseIndexByID(corpseEnd.CorpseId);
+        if (idx < 0) return;
+        var cm = _sim.CorpsesMut;
+        cm[idx].DraggedByUnitID = otherEnd.UnitId;
+        cm[idx].CarryDisplayAngle = -1;
+    }
+
+    // Remove a tether, releasing any corpse claim it held.
+    private void RemoveTetherAt(int ti)
+    {
+        var t = _tethers[ti];
+        ReleaseCorpseEnd(t.A);
+        ReleaseCorpseEnd(t.B);
+        _tethers.RemoveAt(ti);
+    }
+
+    private void ReleaseCorpseEnd(TetherEnd e)
+    {
+        if (e.Kind != TetherEndKind.Corpse) return;
+        int idx = _sim.FindCorpseIndexByID(e.CorpseId);
+        if (idx >= 0) _sim.CorpsesMut[idx].DraggedByUnitID = GameConstants.InvalidUnit;
+        _tetherDustAccum.Remove(e.CorpseId);
+    }
+
+    // Remove the tether nearest to a world point (either endpoint within RopeAttachRadius).
+    private bool DetachNearestTether(Vec2 worldPos)
+    {
+        int bestTi = -1;
+        float best = RopeAttachRadius * RopeAttachRadius;
+        for (int ti = 0; ti < _tethers.Count; ti++)
+        {
+            var t = _tethers[ti];
+            if (TryEndState(t.A, out var pa, out _, out _))
+            {
+                float d = (pa - worldPos).LengthSq();
+                if (d < best) { best = d; bestTi = ti; }
+            }
+            if (TryEndState(t.B, out var pb, out _, out _))
+            {
+                float d = (pb - worldPos).LengthSq();
+                if (d < best) { best = d; bestTi = ti; }
+            }
+        }
+        if (bestTi < 0) return false;
+        RemoveTetherAt(bestTi);
+        return true;
+    }
+
+    // Shift+R press. Priority: (1) if a Shift+T anchor is set, connect it to whatever's under
+    // the cursor; (2) else if something tethered is under the cursor, detach it; (3) else the
+    // necromancer quick-drags the nearest free corpse (the original one-key behavior).
+    // Returns a short status string for the dev command.
+    private string HandleRopeKey(Vec2 worldPos, int necroIdx)
+    {
+        if (_tetherAnchor.HasValue)
+        {
+            if (TryPickTetherEnd(worldPos, out var b) && !SameEnd(_tetherAnchor.Value, b))
+            {
+                CreateTether(_tetherAnchor.Value, b);
+                _tetherAnchor = null;
+                return "tether attached";
+            }
+            _tetherAnchor = null;
+            return "no target under cursor";
+        }
+
+        if (DetachNearestTether(worldPos)) return "tether detached";
+
+        if (necroIdx >= 0)
+        {
+            var necroEnd = TetherEnd.ForUnit(_sim.Units[necroIdx].Id);
+            if (TryNearestFreeCorpse(_sim.Units[necroIdx].Position, out var corpseEnd))
+            {
+                CreateTether(necroEnd, corpseEnd);
+                return "roped nearest corpse";
+            }
+        }
+        return "nothing to rope";
+    }
+
+    private bool TryNearestFreeCorpse(Vec2 from, out TetherEnd end)
+    {
+        end = default;
+        int best = -1;
+        float bestSq = RopeAttachRadius * RopeAttachRadius;
         var corpses = _sim.Corpses;
         for (int ci = 0; ci < corpses.Count; ci++)
         {
             var cp = corpses[ci];
             if (cp.ConsumedBySummon || cp.Dissolving || cp.Bagged
                 || cp.DraggedByUnitID != GameConstants.InvalidUnit) continue;
-            float ddx = cp.Position.X - necroPos.X, ddy = cp.Position.Y - necroPos.Y;
-            float d2 = ddx * ddx + ddy * ddy;
-            if (d2 < best) { best = d2; bestIdx = ci; }
+            float dx = cp.Position.X - from.X, dy = cp.Position.Y - from.Y;
+            float d2 = dx * dx + dy * dy;
+            if (d2 < bestSq) { bestSq = d2; best = ci; }
         }
-        if (bestIdx < 0) return "no free corpse in range";
-
-        var cm = _sim.CorpsesMut;
-        cm[bestIdx].DraggedByUnitID = necroId;
-        // Drop any frozen carry pose so the corpse renders via FacingAngle (which the
-        // drag update rotates) instead of the pegged carried-frame path.
-        cm[bestIdx].CarryDisplayAngle = -1;
-        _ropedCorpseID = cm[bestIdx].CorpseID;
-        _ropeLastDustPos = cm[bestIdx].Position;
-        return $"roped corpse {_ropedCorpseID}";
+        if (best < 0) return false;
+        end = TetherEnd.ForCorpse(corpses[best].CorpseID);
+        return true;
     }
 
-    // Release the roped corpse (clears the drag claim + slowdown). Safe to call when
-    // nothing is roped.
-    private void DetachRope()
+    // Per-frame tether physics: for every tether with a unit end and a corpse end, once they
+    // stretch past RopeMaxLength the unit hauls the corpse in behind it (turning the body to
+    // face the pull + kicking up dust). The necromancer is slowed while any of its ropes is
+    // taut. Invalid tethers (dead unit / gone corpse) are dropped.
+    private void UpdateTethers(float dt)
     {
-        if (_ropedCorpseID >= 0)
+        bool necroTaut = false;
+        for (int ti = _tethers.Count - 1; ti >= 0; ti--)
         {
-            int idx = _sim.FindCorpseIndexByID(_ropedCorpseID);
-            if (idx >= 0) _sim.CorpsesMut[idx].DraggedByUnitID = GameConstants.InvalidUnit;
-        }
-        _ropedCorpseID = -1;
-        _sim.SetNecromancerDragSlow(1f, false);
-    }
+            var t = _tethers[ti];
+            if (!TryEndState(t.A, out var pa, out int ua, out int ca)
+             || !TryEndState(t.B, out var pb, out int ub, out int cb))
+            {
+                RemoveTetherAt(ti);
+                continue;
+            }
 
-    // Per-frame rope hauling. While a corpse is roped: once it hangs farther than
-    // RopeMaxLength from the necromancer, pull it in to the rope's length (dragging it
-    // behind), slow the necromancer down, and kick up dust as the body scrapes along.
-    private void UpdateRopeDrag(int necroIdx, float dt)
-    {
-        if (_ropedCorpseID < 0) return;
-        if (necroIdx < 0) { DetachRope(); return; }
+            // Identify a single unit-mover / corpse-follower pair. Unit↔unit and
+            // corpse↔corpse tethers are rope-only (no dragging).
+            int corpseIdx, moverUnitIdx;
+            Vec2 corpsePos, moverPos;
+            if (ca >= 0 && ub >= 0) { corpseIdx = ca; moverUnitIdx = ub; corpsePos = pa; moverPos = pb; }
+            else if (cb >= 0 && ua >= 0) { corpseIdx = cb; moverUnitIdx = ua; corpsePos = pb; moverPos = pa; }
+            else continue;
 
-        int idx = _sim.FindCorpseIndexByID(_ropedCorpseID);
-        if (idx < 0) { DetachRope(); return; }
-        var cm = _sim.CorpsesMut;
-        var c = cm[idx];
-        // Corpse got consumed / dissolved / bagged out from under us → drop the rope.
-        if (c.ConsumedBySummon || c.Dissolving || c.Bagged) { DetachRope(); return; }
+            var toCorpse = corpsePos - moverPos;
+            float dist = toCorpse.Length();
+            if (dist <= RopeMaxLength || dist <= 0.0001f) continue;
 
-        var necroPos = _sim.Units[necroIdx].Position;
-        var toCorpse = c.Position - necroPos;
-        float dist = toCorpse.Length();
-
-        if (dist > RopeMaxLength && dist > 0.0001f)
-        {
-            // Rope is taut: reel the corpse in to sit exactly at rope's length behind us.
+            // Taut: reel the corpse to rope's length behind the mover and face it that way.
             var dir = toCorpse.Normalized();
-            var newPos = necroPos + dir * RopeMaxLength;
-            cm[idx].Position = newPos;
-            // Turn the body to face the way it's being hauled (toward the necromancer,
-            // i.e. -dir). FacingAngle is degrees from atan2(y,x), matching unit facing.
-            cm[idx].FacingAngle = MathF.Atan2(-dir.Y, -dir.X) * 180f / MathF.PI;
+            var newPos = moverPos + dir * RopeMaxLength;
+            var cm = _sim.CorpsesMut;
+            float moved = (newPos - cm[corpseIdx].Position).Length();
+            cm[corpseIdx].Position = newPos;
+            cm[corpseIdx].FacingAngle = MathF.Atan2(-dir.Y, -dir.X) * 180f / MathF.PI;
 
-            // Slow the necromancer while hauling — heavier pull the deeper past max we are.
-            // Overshoot is small (we clamp every frame) so scale by a fixed haul penalty.
-            _sim.SetNecromancerDragSlow(0.5f, true);
+            if (moverUnitIdx == _sim.NecromancerIndex) necroTaut = true;
 
-            // Kick up dust as the body scrapes the ground — tied to actual travel so a
-            // stationary taut rope doesn't smoke. One puff per ~0.4 world-units dragged.
-            if ((newPos - _ropeLastDustPos).LengthSq() > 0.4f * 0.4f && _effectManager != null)
+            // Dust as the body scrapes — tied to actual travel, throttled per corpse.
+            int cid = cm[corpseIdx].CorpseID;
+            _tetherDustAccum.TryGetValue(cid, out float acc);
+            acc += moved;
+            if (acc > 0.4f && _effectManager != null)
             {
                 _ropeDustAngle = (_ropeDustAngle + 137) % 360;
-                float a = _ropeDustAngle * MathF.PI / 180f;
-                var off = new Vec2(MathF.Cos(a), MathF.Sin(a)) * 0.35f;
-                _effectManager.SpawnDustPuff(newPos + off);
-                _ropeLastDustPos = newPos;
+                float ang = _ropeDustAngle * MathF.PI / 180f;
+                _effectManager.SpawnDustPuff(newPos + new Vec2(MathF.Cos(ang), MathF.Sin(ang)) * 0.35f);
+                acc = 0f;
             }
+            _tetherDustAccum[cid] = acc;
         }
-        else
-        {
-            // Slack rope: no drag penalty, corpse stays put.
-            _sim.SetNecromancerDragSlow(1f, false);
-            _ropeLastDustPos = c.Position;
-        }
+
+        // The necromancer's haul penalty (0.5× + no sprint) is on only while one of its
+        // ropes is taut this frame.
+        _sim.SetNecromancerDragSlow(necroTaut ? 0.5f : 1f, necroTaut);
     }
 
     // Withdraw one corpse from a pile and hand it to the necromancer to carry.
@@ -623,15 +757,29 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     private Vec2? _devWalkTarget;                  // dev "walk_necro" goal; drives WASD-equivalent input, cancelled by any WASD press
     internal int _scenarioScrollOffset;
 
-    // --- Rope drag (Shift+R) ---
-    // CorpseID of the corpse currently roped to the necromancer, or -1. The rope is a
-    // bezier drawn from necromancer to corpse (GameRenderer.DrawRope); once the corpse
-    // is farther than RopeMaxLength the necromancer hauls it along and is slowed.
-    internal int _ropedCorpseID = -1;
-    internal const float RopeMaxLength = 4.0f;      // world units; beyond this the corpse gets dragged
-    private const float RopeAttachRadius = 5.0f;    // how close to stand to a corpse to rope it
-    private Vec2 _ropeLastDustPos;                  // last corpse pos we kicked up dust at
+    // --- Tethers / drag ropes (Shift+T target, Shift+R attach) ---
+    // A tether connects two endpoints, each a live unit or a corpse. When a unit end is
+    // farther than RopeMaxLength from a corpse end, the unit hauls the corpse in behind
+    // it (dust + corpse turns to face the pull; the necromancer is also slowed). Ropes
+    // are drawn as bezier curves in GameRenderer.DrawRope.
+    internal enum TetherEndKind { Unit, Corpse }
+    internal struct TetherEnd
+    {
+        public TetherEndKind Kind;
+        public uint UnitId;   // valid when Kind == Unit
+        public int CorpseId;  // valid when Kind == Corpse
+        public static TetherEnd ForUnit(uint id) => new TetherEnd { Kind = TetherEndKind.Unit, UnitId = id, CorpseId = -1 };
+        public static TetherEnd ForCorpse(int id) => new TetherEnd { Kind = TetherEndKind.Corpse, CorpseId = id, UnitId = GameConstants.InvalidUnit };
+    }
+    internal struct Tether { public TetherEnd A; public TetherEnd B; }
+
+    internal readonly System.Collections.Generic.List<Tether> _tethers = new();
+    private TetherEnd? _tetherAnchor;               // endpoint picked by Shift+T, consumed by Shift+R
+    internal const float RopeMaxLength = 4.0f;      // world units; beyond this a corpse gets dragged
+    private const float RopeAttachRadius = 5.0f;    // pick radius for tether endpoints under the cursor
     private int _ropeDustAngle;                     // rotating offset so dust puffs spread around the corpse
+    // Per-corpse accumulated drag distance since its last dust puff (keyed by CorpseID).
+    private readonly System.Collections.Generic.Dictionary<int, float> _tetherDustAccum = new();
 
     // Per-unit animation data
     internal struct UnitAnimData
@@ -1099,6 +1247,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         _unitAnims.Clear();
         _corpseAnims.Clear();
         _effectManager.Clear();
+        _tethers.Clear(); _tetherAnchor = null; _tetherDustAccum.Clear();
         _pendingProjectiles.Clear();
         // Reset per-game skill book progress (learned set + event tally) so
         // returning to the main menu and starting a new game wipes prior unlocks.
@@ -1692,6 +1841,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         _unitAnims.Clear();
         _corpseAnims.Clear();
         _effectManager.Clear();
+        _tethers.Clear(); _tetherAnchor = null; _tetherDustAccum.Clear();
 
         // Load flipbooks (needed for cloud effects, hit effects, etc.)
         if (_flipbooks.Count == 0)
@@ -3244,19 +3394,23 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
                 }
             }
 
-            // --- Rope attach/detach (Shift+R) ---
-            // Toggle a rope between the necromancer and the nearest free corpse. While
-            // roped, the necromancer hauls the corpse (see UpdateRopeDrag) — kicking up
-            // dust and slowing when the rope goes taut.
-            if (_input.WasKeyPressed(Keys.R)
-                && (_input.IsKeyDown(Keys.LeftShift) || _input.IsKeyDown(Keys.RightShift))
-                && necroIdx >= 0)
+            // --- Tethers (Shift+T target, Shift+R attach/detach) ---
+            // Shift+T marks the unit/corpse under the cursor as the tether anchor; Shift+R
+            // then connects it to whatever's under the cursor (any unit↔corpse combo). With
+            // no anchor set, Shift+R detaches a tethered thing under the cursor, or quick-
+            // drags the nearest free corpse with the necromancer.
+            bool tetherShift = _input.IsKeyDown(Keys.LeftShift) || _input.IsKeyDown(Keys.RightShift);
+            if (_input.WasKeyPressed(Keys.T) && tetherShift)
             {
-                ToggleRope(necroIdx);
+                _tetherAnchor = TryPickTetherEnd(mouseWorld, out var anchor) ? anchor : (TetherEnd?)null;
+            }
+            if (_input.WasKeyPressed(Keys.R) && tetherShift)
+            {
+                HandleRopeKey(mouseWorld, necroIdx);
             }
 
-            // Per-frame rope hauling (pull the corpse, slow the necromancer, kick up dust).
-            UpdateRopeDrag(necroIdx, dt);
+            // Per-frame tether physics (haul corpses, slow the necromancer, kick up dust).
+            UpdateTethers(dt);
 
             // --- Ground-object hover detection (buildings + foragable items) ---
             // Picks the nearest hoverable env object under the cursor for the HUD
