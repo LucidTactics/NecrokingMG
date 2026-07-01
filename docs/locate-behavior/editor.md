@@ -5,8 +5,84 @@ env-object, settings, and the **UI/widget editor**). All extend `EditorBase` (im
 DrawButton/DrawText/DrawCombo helpers, text rounding). Each `*EditorWindow.cs` owns its own
 working-copy data model, undo stack, and JSON load/save.
 
-This doc currently covers the **UI/widget editor** in depth (the data-driven
+This doc covers (a) the **shared editable-text-field / focus mechanism** in `EditorBase`
+(reused by every editor), and (b) the **UI/widget editor** in depth (the data-driven
 `data/ui/widgets.json` editor). Other editors are stubs here — expand when needed.
+
+## Shared editable-text-field & focus mechanism (`Editor/EditorBase.cs`)
+
+All editors share ONE focused-input mechanism on the `EditorBase` instance. This is an
+**immediate-mode, return-the-value** design (no per-field model binding), which is the
+source of the "typed text bleeds into the next selected object" bug class.
+
+### Focus / buffer state (single-valued, on the EditorBase instance)
+- `protected string? _activeFieldId` — the *only* focus token. A **per-panel-slot string
+  id** (e.g. `"unit_id"`, `"envdef_name"`, `"ns_id"`), NOT tied to the selected object's
+  identity. Suffix conventions: `_combo` = dropdown, `_textarea` = multi-line.
+- `private string _inputBuffer` — the single edit buffer for whichever field is active.
+- Cursor/selection: `_cursorPos`, `_selectionStart`, `_selectAll`, `_draggingSelection`,
+  `_activeFieldInputX/W`; text-area: `_textAreaCursorPos`, `_textAreaScrollOffset`.
+- Helpers: `IsFieldActive(fieldId)`, `IsTextInputActive`, `ClearActiveField()` (just
+  `_activeFieldId = null`), `IsDropdownOpen`.
+
+### The field widget: `DrawTextField(fieldId, label, value, x, y, w) -> string`
+(Siblings: `DrawIntField`, `DrawFloatField`, `DrawTextArea`, `DrawSearchField`, `DrawCombo`,
+the vec2/area variants — all follow the identical activate/return pattern.)
+- **Activate** (first click while `!isActive`): sets `_activeFieldId = fieldId`,
+  **captures `_inputBuffer = value` once**, select-all. `value` is read into the buffer
+  ONLY on this transition.
+- **While active**: draws and returns `_inputBuffer` — it **never re-reads `value`**.
+  `return isActive ? _inputBuffer : value;`
+- **Commit is implicit / caller-driven**: the function returns `_inputBuffer` every frame
+  it's active; the *caller* writes it back (`if (newId != def.Id) def.Id = newId;`). There
+  is no explicit "commit to model" step inside `DrawTextField`.
+- **Deactivation paths that end editing:** Enter/Tab/Escape in `HandleTextInput` (sets
+  `_activeFieldId = null`, returns), or a click **outside** the field's rect
+  (`... && !hovered` branch sets `_activeFieldId = null`). Escape does NOT restore the old
+  value — the buffer was already being returned each frame, so the last returned value
+  stuck unless the caller only commits on blur.
+
+### Keyboard: `HandleTextInput(gameTime)`
+Called from the update tick only when `_activeFieldId != null` (see the `_activeFieldId !=
+null → HandleTextInput` line in the main update). Edits `_inputBuffer` in place; Enter/Tab
+close single-line fields, Escape closes, key-repeat via `_keyRepeatTimer`/`_lastRepeatingKey`.
+
+### Selection change — the bug site (per-editor, e.g. `UnitEditorWindow.cs`)
+Each editor owns its own selection index and list; `EditorBase.DrawScrollableList(panelId,
+items, selectedIdx, …)` just **returns the clicked index**. The editor reacts by swapping
+which `def` it passes to the property panel — e.g. `UnitEditorWindow` sets
+`_selectedIdx = IndexOf(...)` in its `DrawScrollableList` handler. **Nothing clears
+`_activeFieldId` or `_inputBuffer` on this change.**
+
+**Root cause of the clobber:** field ids are static per-slot strings, so after a selection
+change the property panel next frame calls e.g. `DrawTextField("unit_id", …, newDef.Id, …)`.
+`_activeFieldId` is still `"unit_id"` (still "active") and `_inputBuffer` still holds the
+text typed for the OLD object — so `DrawTextField` returns the stale buffer and the caller
+(`if (newId != newDef.Id) newDef.Id = newId;`) writes it into the NEW object. The buffer is
+bound to the *slot id*, not the *object*, and no flush happens on selection change.
+
+### Single-point-of-fix candidates
+- **Flush-on-selection-change:** call `ClearActiveField()` (and ideally reset `_inputBuffer`)
+  wherever an editor changes its selection index — but that's N call sites (every editor's
+  list handler), so it's fragile as a shared fix.
+- **Bind buffer to field identity (preferred, one place):** in `DrawTextField` (and the
+  sibling field widgets), when active, detect that the incoming `value` no longer matches the
+  value the buffer was captured from — i.e. the underlying model changed under an active
+  field — and **abandon** the buffer (re-capture from the new `value` or deactivate) rather
+  than returning the stale buffer. Requires storing the "captured-from" value (or an owner
+  token) alongside `_inputBuffer`. This fixes every editor at once in `EditorBase`.
+- **Owner token:** make `_activeFieldId` include the selected object's identity (or store a
+  parallel `_activeFieldOwner`), so a selection change makes `IsFieldActive` false for the
+  new object and the field falls back to returning `value`.
+
+### Look / edit here when…
+- **"typed text in a field applies to the next selected object / bleeds across selection"**
+  → `EditorBase.DrawTextField` (activate/return + the `_inputBuffer`/`_activeFieldId` state)
+  and the per-editor selection handler (e.g. `UnitEditorWindow.DrawScrollableList` block).
+- **"a field won't commit / commits on wrong event"** → `HandleTextInput` (Enter/Tab/Esc)
+  and the caller's `if (new != old) model = new;` write-back pattern.
+- **Adding a new editable field type** → add a `DrawXField(fieldId, label, value, …)` in
+  `EditorBase` following the activate-once / return-`_inputBuffer`-while-active contract.
 
 ## UI / widget editor
 
