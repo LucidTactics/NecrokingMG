@@ -97,11 +97,13 @@ changing when a new game command is added. Run `python tools/devctl.py cmd help`
 
 `shot` writes the PNG under `log/screenshots/<name>.png` **inside the running build's
 output folder** and returns the **absolute path** in its reply — Read exactly that path,
-don't reconstruct it. The preview runs the **Release** build (`BUILD_CONFIG=Release`), so
-it's normally `bin/Release/log/screenshots/<name>.png`. The supervisor is the source of
-truth for this location: it reports `build_config` + `screenshot_dir` in `/status` (and in
+don't reconstruct it. The preview builds the **Release** config into a **dedicated
+`bin/Devbuild`** folder (separate from your own `bin/Debug`/`bin/Release` manual test
+builds so the two never clobber each other), so it's normally
+`bin/Devbuild/log/screenshots/<name>.png`. The supervisor is the source of truth for this
+location: it reports `build_config` + `build_dir` + `screenshot_dir` in `/status` (and in
 the start/build/restart results), and `necro_devlib.screenshot()` reads from there rather
-than guessing Debug-vs-Release. So `necro_status` / `necro_start` tell you where shots land.
+than guessing the path. So `necro_status` / `necro_start` tell you where shots land.
 **Read that path with the Read tool** to see/analyze the frame. Useful opts:
 `no_ui=true` (hide HUD), `no_ground=true` (scenario black look), `downsample_to=full`
 (full 1280x720; default is the game's downsample).
@@ -121,7 +123,7 @@ python tools/devctl.py cmd spawn Soldier  <x+6> <y>   # Soldier is Human -> will
 python tools/devctl.py cmd camera <x> <y> 48
 python tools/devctl.py cmd speed 4
 python tools/devctl.py shot fight
-# then: Read bin/Release/log/screenshots/fight.png   (preview runs the Release build)
+# then: Read bin/Devbuild/log/screenshots/fight.png   (preview builds into bin/Devbuild)
 ```
 
 ## After a C# change

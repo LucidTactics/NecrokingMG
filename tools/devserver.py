@@ -85,10 +85,18 @@ IDLE_CHECK_INTERVAL = 30  # how often the watchdog thread wakes to check
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PROJECT = os.path.join(REPO_ROOT, "Necroking", "Necroking.csproj")
-# Run the preview from the Release build — it's much faster at runtime than Debug.
+# Run the preview from the Release CONFIGURATION — it's much faster at runtime than Debug.
 # Override with NECRO_DEV_CONFIG=Debug if you need a debug run.
 BUILD_CONFIG = os.environ.get("NECRO_DEV_CONFIG", "Release")
-EXE = os.path.join(REPO_ROOT, "bin", BUILD_CONFIG, "Necroking.exe")
+# ...but build into a DEDICATED output folder (bin/Devbuild), not bin/Release. The dev
+# preview and the user's own manual test builds (bin/Debug, bin/Release) would otherwise
+# fight over the same exe/screenshot/log files — a rebuild here would clobber a build the
+# user is hand-testing, and vice versa. `-o bin/Devbuild` gives the supervisor its own
+# sandbox. Two levels up from bin/Devbuild is still REPO_ROOT, so the exe's relative
+# assets/ + data/ paths (GamePaths.Resolve) resolve exactly as from bin/Release.
+# Override the folder with NECRO_DEV_BUILDDIR if needed.
+BUILD_DIR = os.environ.get("NECRO_DEV_BUILDDIR", os.path.join(REPO_ROOT, "bin", "Devbuild"))
+EXE = os.path.join(BUILD_DIR, "Necroking.exe")
 SCREENSHOT_DIR = os.path.join(os.path.dirname(EXE), "log", "screenshots")
 LIVE_FRAME = "live"  # screenshot name reused for the dashboard's live view
 
@@ -284,10 +292,12 @@ def _assign_to_job(proc):
 
 def _env_info():
     """The build config + output paths this supervisor actually launches from, so
-    callers (necro_devlib, the MCP tools) never have to guess Debug-vs-Release. The
-    preview runs Release by default; this is the single source of truth for where
-    the running game writes screenshots/logs. Surfaced in /status and in the
-    start/build/restart results so a rebuild communicates its location back."""
+    callers (necro_devlib, the MCP tools) never have to guess where the exe/screenshots
+    land. The preview builds the Release config into a DEDICATED bin/Devbuild folder (so
+    it never collides with the user's own bin/Debug|bin/Release manual test builds); this
+    is the single source of truth for where the running game writes screenshots/logs.
+    Surfaced in /status and in the start/build/restart results so a rebuild communicates
+    its location back."""
     return {
         # WHICH project directory this supervisor serves. Surfaced first because the
         # supervisor is one-per-machine (port 8777): if two clones (e.g. NecrokingMG
@@ -296,6 +306,7 @@ def _env_info():
         # a wrong-clone mismatch obvious instead of a silent "my changes did nothing".
         "repo_root": REPO_ROOT,
         "build_config": BUILD_CONFIG,
+        "build_dir": BUILD_DIR,
         "exe": EXE,
         "exe_exists": os.path.exists(EXE),
         "screenshot_dir": SCREENSHOT_DIR,
@@ -398,7 +409,8 @@ def build():
     if was_running:
         stop_game()
     proc = subprocess.run(
-        ["dotnet", "build", PROJECT, "-c", BUILD_CONFIG, "-v", "q", "-nologo"],
+        ["dotnet", "build", PROJECT, "-c", BUILD_CONFIG, "-o", BUILD_DIR,
+         "-v", "q", "-nologo"],
         cwd=REPO_ROOT, capture_output=True, text=True, creationflags=_NO_WINDOW)
     lines = (proc.stdout or "").splitlines()
     errors = [l for l in lines if ": error " in l]

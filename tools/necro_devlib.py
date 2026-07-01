@@ -24,15 +24,16 @@ BASE = f"http://{HOST}:{SUP_PORT}"
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DEVSERVER = os.path.join(REPO_ROOT, "tools", "devserver.py")
 
-# The supervisor (tools/devserver.py) decides Debug vs Release and is the SOURCE OF
-# TRUTH for where the running game writes screenshots/logs — screenshot() asks it via
-# /status. These locals are only the pre-supervisor default (the bootstrap log) and a
-# fallback if /status is unreachable; mirror the supervisor's choice (NECRO_DEV_CONFIG,
-# default Release) so the two never disagree on the path. (Was hardcoded to Debug,
-# which broke screenshot reads once the preview moved to the Release build.)
-BUILD_CONFIG = os.environ.get("NECRO_DEV_CONFIG", "Release")
-SCREENSHOT_DIR = os.path.join(REPO_ROOT, "bin", BUILD_CONFIG, "log", "screenshots")
-LOG_DIR = os.path.join(REPO_ROOT, "bin", BUILD_CONFIG, "log")
+# The supervisor (tools/devserver.py) owns where the running game writes screenshots/logs
+# and is the SOURCE OF TRUTH — screenshot() asks it via /status. These locals are only the
+# pre-supervisor default (the bootstrap log) and a fallback if /status is unreachable; they
+# must mirror the supervisor's dedicated output folder (bin/Devbuild, overridable with
+# NECRO_DEV_BUILDDIR) so the two never disagree on the path. The preview builds into its
+# own folder — separate from the user's bin/Debug|bin/Release manual test builds — so a dev
+# rebuild never clobbers a build the user is hand-testing.
+BUILD_DIR = os.environ.get("NECRO_DEV_BUILDDIR", os.path.join(REPO_ROOT, "bin", "Devbuild"))
+SCREENSHOT_DIR = os.path.join(BUILD_DIR, "log", "screenshots")
+LOG_DIR = os.path.join(BUILD_DIR, "log")
 
 
 def screenshot_dir():
