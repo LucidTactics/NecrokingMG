@@ -179,7 +179,8 @@ public class HordeMinionHandler : IArchetypeHandler
         // acquisition until the pack commits to the drive (then the wolf engages normally).
         if (!WolfPackHuntAI.WantsToFlank(ref ctx))
         {
-            float engageRange = ctx.Horde?.EngagementRange ?? 10f;
+            // Per-unit aggro scale — "timid" units (e.g. zombie deer) engage at a shorter range.
+            float engageRange = (ctx.Horde?.EngagementRange ?? 10f) * ctx.Units[ctx.UnitIndex].AggroRangeScale;
             int enemy = SubroutineSteps.FindClosestEnemy(ref ctx, engageRange);
             if (enemy >= 0)
             {

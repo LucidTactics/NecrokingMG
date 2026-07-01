@@ -505,6 +505,20 @@ public class HordeSystem
                         if (d2 < bestDist2) { bestDist2 = d2; bestEnemy = e; }
                     }
 
+                    // Timid units (aggroRangeScale < 1, e.g. zombie deer) only get sicced on an
+                    // enemy that's within their reduced range OF THEM — the horde scan otherwise
+                    // hands each unit the horde's nearest enemy regardless of its own distance.
+                    // Skipped when scale >= 1 so normal minions keep their exact prior behavior.
+                    if (bestEnemy >= 0)
+                    {
+                        float aggroScale = units[unitIdx].AggroRangeScale;
+                        if (aggroScale < 1f)
+                        {
+                            float aggroRange = AggroRadius * aggroScale;
+                            if (bestDist2 > aggroRange * aggroRange) continue;
+                        }
+                    }
+
                     if (bestEnemy >= 0)
                     {
                         hu.State = HordeUnitState.Chasing;

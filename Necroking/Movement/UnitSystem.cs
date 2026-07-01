@@ -445,6 +445,11 @@ public class Unit
     public float DetectionBreakRange;
     public float AlertDuration = 2f;
     public float AlertEscalateRange;
+
+    /// <summary>Multiplier on this unit's horde aggro/engagement range (see
+    /// <see cref="Data.UnitDef.AggroRangeScale"/>). 1 = normal; &lt;1 = timid. Defaults to 1 so units
+    /// created without a spawn-copy (scenarios, etc.) keep full range.</summary>
+    public float AggroRangeScale = 1f;
     public float GroupAlertRadius;
 
     // Status symbol above head (? for notice, ! for react). Ticked down by Simulation.

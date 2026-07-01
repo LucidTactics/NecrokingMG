@@ -2915,7 +2915,8 @@
       "sprintSpeedMultiplier": 9,
       "animWalkVelOverride": null,
       "animJogVelOverride": null,
-      "animRunVelOverride": null
+      "animRunVelOverride": null,
+      "aggroRangeScale": 0.5
     },
     {
       "id": "MaleDeer",
@@ -3737,7 +3738,8 @@
       "sprintSpeedMultiplier": 9,
       "animWalkVelOverride": null,
       "animJogVelOverride": null,
-      "animRunVelOverride": null
+      "animRunVelOverride": null,
+      "aggroRangeScale": 0.5
     },
     {
       "id": "abomination",
