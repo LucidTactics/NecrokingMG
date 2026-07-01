@@ -48,7 +48,7 @@ public class SpellDef : IHasId
     [JsonPropertyName("id")] public string Id { get; set; } = "";
 
     [EditorField(Label = "Category", Order = 2)]
-    [EditorCombo("Projectile", "Buff", "Debuff", "Summon", "Strike", "Beam", "Drain", "Cloud", "Sacrifice", "Blight")]
+    [EditorCombo("Projectile", "Buff", "Debuff", "Summon", "Strike", "Beam", "Drain", "Cloud", "Sacrifice", "Blight", "WolfHunt")]
     [JsonPropertyName("category")] public string Category { get; set; } = "Projectile";
 
     // ===== Grimoire presentation (tab school + tile template + icon) =====
@@ -215,6 +215,11 @@ public class SpellDef : IHasId
     // AoeRadius — compound conditions per category, handled manually
     [EditorHide]
     [JsonPropertyName("aoeRadius")] public float AoeRadius { get; set; }
+
+    // WolfHunt — how long the commanded pack-hunt stays active after the cast.
+    [EditorField(Label = "Hunt Duration", Order = 250, Step = 0.5f, Decimals = 1)]
+    [EditorVisible("Category", "WolfHunt")]
+    [JsonPropertyName("wolfHuntDuration")] public float WolfHuntDuration { get; set; } = 18f;
 
     // HitEffectFlipbook — shown in Projectile and Strike(!target), handled manually for Strike
     [EditorHide]

@@ -83,8 +83,62 @@ ownership:
 - `CombatUnitHandler.cs` / `RangedUnitHandler.cs` — constructed with an archetype id arg
   (one class, several registered ids). `PlayerControlledHandler.cs`, `WolfPackHandler.cs`,
   `RatPackHandler.cs`, `DeerHerdHandler.cs`, `CorpseEatAI.cs`.
-- `AwarenessSystem.cs` (enemy detection), `CombatTransitions.cs` (shared chase/engage exit
-  checks), `WorkRoutine.cs` (channel/work-timer step), `AIContext.cs`.
+- `AwarenessSystem.cs` (enemy detection → sets prey `AlertState`/`AlertTarget`),
+  `CombatTransitions.cs` (shared chase/engage exit checks), `WorkRoutine.cs`
+  (channel/work-timer step), `AIContext.cs`.
+
+### `Necroking/AI/BoarForageAI.cs`, `Necroking/AI/CorpseEatAI.cs`  ← the sweep-override style
+Static `Update(Simulation sim, float dt)` layers that run after the archetype pass and override
+`PreferredVel`. See "Second AI style" below — this is the pattern to copy for a player-wolf
+pack-hunt behavior (it can reach `sim.NecromancerIndex` / `sim.EnvironmentSystem`, which
+`AIContext` cannot).
+
+## Second AI style — post-archetype "sweep" overrides (BoarForageAI / CorpseEatAI)
+
+Not every behavior is an `IArchetypeHandler`. There's a **second pattern** for behaviors
+that layer on top of the horde-follow archetype rather than replacing it: a **static class
+with `Update(Simulation sim, float dt)`**, iterating all units itself, called from
+`Simulation.Update` **after** `UpdateAI` (the archetype pass) and **before** `UpdateMovement`.
+By overriding `PreferredVel` that frame it steers the unit; by leaving it alone it defers to
+the archetype's follow velocity.
+
+- **`Necroking/AI/BoarForageAI.cs`** — `public static void Update(Simulation sim, float dt)`.
+  The template: iterates `sim.UnitsMut`, filters to `Faction.Undead` + `Archetype ==
+  ArchetypeRegistry.HordeMinion` + `Routine == 0` (Following) + not `InCombat` + no `Target`,
+  reads `sim.NecromancerIndex`/`sim.EnvironmentSystem`, leashes to the necromancer, and
+  overrides movement toward a foragable. **This is the closest existing analog to a
+  player-wolf pack-hunt behavior.**
+- **`Necroking/AI/CorpseEatAI.cs`** — same shape (`Update(Simulation, dt)`), called at
+  `Simulation.cs ~line 694`.
+- **Wiring** — `Necroking/Game/Simulation.cs`: `PhaseStart(); AI.BoarForageAI.Update(this, dt);
+  PhaseEnd("boar_forage");` at `~line 523` (inside `Update`, right after `UpdateAI(dt)` at
+  `~line 518`). **Add a new sweep's call here** the same way.
+- **Why this style for the wolf pack-hunt**: it needs the **necromancer position**
+  (`sim.NecromancerIndex` → `sim.Units[idx].Position` — only reachable via a `Simulation`
+  handle, NOT `AIContext`) to compute the "far side of the deer, opposite the necro," and it
+  should only kick in for **player-owned** (Undead) horde wolves while they're Following/idle,
+  yielding to combat and explicit horde commands. Filter by a wolf tag/def (`def.Tags.Contains
+  ("wolf")` — ZombieWolf has tag `"wolf"`) exactly as BoarForage filters `"forager"`.
+
+### Player zombie wolves run as HordeMinion, not WolfPack
+`WolfPackHandler` (archetype `WolfPack`, id 3) is for **wild** wolves (`data/units.json` `Wolf`
+`archetype:"WolfPack"`). The player's raised **`ZombieWolf`** def has **no `archetype` field**,
+so it takes the horde-follow default (`HordeMinion`, like zombie boars) via the reanimate spawn
+path (`Simulation.SpawnZombieMinion`). So "add a new pack-hunting AI for the player's wolves"
+does NOT mean editing `WolfPackHandler` — that governs wild predators. Two implementation routes:
+1. **Sweep override (recommended, matches BoarForageAI)** — new static `WolfPackHuntAI.Update
+   (sim, dt)` layered on HordeMinion wolves; no new archetype, no `units.json` change.
+2. **New archetype** — give ZombieWolf `"archetype":"PackHunter"`, add the id + `FromName` case
+   in `AI/IArchetypeHandler.cs`, register in `Game1.cs ~line 984`, write a
+   `PackHunterHandler : IArchetypeHandler`. But this loses free horde-follow/formation and can't
+   see the necromancer position without a Sim handle — heavier for this feature.
+
+Prey detection / vision reference (from `DeerHerdHandler`): the **deer's** vision is its
+`Units[i].DetectionRange` (from `UnitDef.DetectionRange`); the deer flee when a hostile is within
+`DetectionRange * AlertThresholdFraction` (0.9). To "spread out beyond the deer's vision so they
+don't detect the wolves," the wolves must stay outside the **target deer's** `DetectionRange`
+until positioned — read the deer's `DetectionRange`, not the wolf's. `AwarenessSystem.cs` is the
+shared enemy-detection pass that sets each prey's `AlertState`/`AlertTarget`.
 
 ## Where corpse-pile deposit & self-removal live (cross-area)
 

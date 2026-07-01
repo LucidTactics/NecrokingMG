@@ -2099,6 +2099,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         _sim.UnitsMut[idx].DetectionBreakRange = unitDef.DetectionBreakRange;
         _sim.UnitsMut[idx].AlertDuration = unitDef.AlertDuration;
         _sim.UnitsMut[idx].AlertEscalateRange = unitDef.AlertEscalateRange;
+        _sim.UnitsMut[idx].AggroRangeScale = unitDef.AggroRangeScale;
         _sim.UnitsMut[idx].GroupAlertRadius = unitDef.GroupAlertRadius;
 
         // AI — use new archetype system if specified, otherwise legacy AI enum

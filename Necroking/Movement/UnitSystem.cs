@@ -451,7 +451,21 @@ public class Unit
     public float DetectionBreakRange;
     public float AlertDuration = 2f;
     public float AlertEscalateRange;
+
+    /// <summary>Multiplier on this unit's horde aggro/engagement range (see
+    /// <see cref="Data.UnitDef.AggroRangeScale"/>). 1 = normal; &lt;1 = timid. Defaults to 1 so units
+    /// created without a spawn-copy (scenarios, etc.) keep full range.</summary>
+    public float AggroRangeScale = 1f;
     public float GroupAlertRadius;
+
+    /// <summary>Pack-hunt "herded" cheat (see <see cref="AI.WolfPackHuntAI"/>): when a hunting wolf
+    /// first engages this prey it stamps a fixed flee direction (toward the necromancer) and a short
+    /// timer here. While <see cref="HerdedTimer"/> &gt; 0 the deer flee AI runs <see cref="HerdedDir"/>
+    /// instead of "directly away from the nearest wolf", so the pack can steer the first bolt toward
+    /// your horde. Applied once per prey (<see cref="HerdedApplied"/>) — a kick, not a leash.</summary>
+    public Vec2 HerdedDir;
+    public float HerdedTimer;
+    public bool HerdedApplied;
 
     // Status symbol above head (? for notice, ! for react). Ticked down by Simulation.
     public byte StatusSymbol;        // 0=none, 1=Notice (?), 2=React (!)
@@ -502,6 +516,16 @@ public class Unit
     /// mushroom. > 0 means the boar is holding still mid-eat; when it ticks to 0 the
     /// mushroom is consumed into the belly.</summary>
     public float BoarEatTimer;
+
+    /// <summary>Pack-hunt AI (see <see cref="AI.WolfPackHuntAI"/>): id of the deer this
+    /// player-controlled zombie wolf is currently stalking, or 0 when not hunting.</summary>
+    public uint WolfHuntTargetId;
+    /// <summary>Pack-hunt phase: 0 = flanking (circling to the far side of the prey,
+    /// staying outside its vision), 1 = driving (chasing the prey toward the necromancer).</summary>
+    public byte WolfHuntPhase;
+    /// <summary>Seconds spent flanking on the current prey — a safety timeout so a pack
+    /// that can't reach its slots (blocked path, wandering prey) eventually commits to the chase.</summary>
+    public float WolfHuntTimer;
 
     /// <summary>For a corpse-puppet raise: the def id of the ORIGINAL corpse this puppet
     /// was raised from (e.g. "militia"), so when it deposits itself into a Corpse Pile it

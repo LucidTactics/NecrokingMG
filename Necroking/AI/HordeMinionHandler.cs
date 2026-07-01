@@ -173,9 +173,14 @@ public class HordeMinionHandler : IArchetypeHandler
             return;
         }
 
-        // No target — scan for enemies within engagement range.
+        // No target — scan for enemies within engagement range. Pack-hunting wolves
+        // in the flank phase are the exception: they must stalk around to the far side
+        // of a deer rather than charge it, so WolfPackHuntAI suppresses this proactive
+        // acquisition until the pack commits to the drive (then the wolf engages normally).
+        if (!WolfPackHuntAI.WantsToFlank(ref ctx))
         {
-            float engageRange = ctx.Horde?.EngagementRange ?? 10f;
+            // Per-unit aggro scale — "timid" units (e.g. zombie deer) engage at a shorter range.
+            float engageRange = (ctx.Horde?.EngagementRange ?? 10f) * ctx.Units[ctx.UnitIndex].AggroRangeScale;
             int enemy = SubroutineSteps.FindClosestEnemy(ref ctx, engageRange);
             if (enemy >= 0)
             {

@@ -489,6 +489,13 @@ public class HordeSystem
                     int unitIdx = UnitUtil.ResolveUnitIndex(units, hu.UnitID);
                     if (unitIdx < 0) continue;
 
+                    // Pack-hunting wolves stalk their prey via WolfPackHuntAI (flank to the far
+                    // side, then drive) — don't let the horde aggro-scan reassign them to a naive
+                    // charge mid-stalk. WolfPackHuntAI.Update runs earlier this same frame, so a
+                    // hunting wolf already carries its prey id here. Cleared the moment the wolf
+                    // commits to combat, so it re-enters normal horde aggro afterwards.
+                    if (units[unitIdx].WolfHuntTargetId != 0) continue;
+
                     // Pick closest enemy
                     int bestEnemy = -1;
                     float bestDist2 = float.MaxValue;
@@ -496,6 +503,20 @@ public class HordeSystem
                     {
                         float d2 = Vec2.DistSq(units[e].Position, units[unitIdx].Position);
                         if (d2 < bestDist2) { bestDist2 = d2; bestEnemy = e; }
+                    }
+
+                    // Timid units (aggroRangeScale < 1, e.g. zombie deer) only get sicced on an
+                    // enemy that's within their reduced range OF THEM — the horde scan otherwise
+                    // hands each unit the horde's nearest enemy regardless of its own distance.
+                    // Skipped when scale >= 1 so normal minions keep their exact prior behavior.
+                    if (bestEnemy >= 0)
+                    {
+                        float aggroScale = units[unitIdx].AggroRangeScale;
+                        if (aggroScale < 1f)
+                        {
+                            float aggroRange = AggroRadius * aggroScale;
+                            if (bestDist2 > aggroRange * aggroRange) continue;
+                        }
                     }
 
                     if (bestEnemy >= 0)

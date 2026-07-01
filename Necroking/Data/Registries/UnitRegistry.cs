@@ -316,6 +316,12 @@ public class UnitDef : IHasId
     [JsonPropertyName("alertEscalateRange")] public float AlertEscalateRange { get; set; }
     [JsonPropertyName("groupAlertRadius")] public float GroupAlertRadius { get; set; }
 
+    /// <summary>Multiplier on this unit's aggro/engagement range as a horde minion (both its own
+    /// self-aggro scan and how close an enemy must be for the horde aggro-scan to sic it on one).
+    /// 1 = normal; &lt;1 = "timid" (engages only when threats get closer, e.g. 0.5 for zombie deer).
+    /// Defaults to 1 so every other unit is unchanged.</summary>
+    [JsonPropertyName("aggroRangeScale")] public float AggroRangeScale { get; set; } = 1f;
+
     // Locomotion animation tuning (new pixel-stride system, default ON).
     /// <summary>When true, this unit reverts to the original CombatSpeed-derived
     /// gait thresholds and clamped-Lerp playback scaling. Default false = use the

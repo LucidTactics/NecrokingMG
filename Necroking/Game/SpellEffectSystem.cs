@@ -154,6 +154,13 @@ public class SpellEffectSystem
                 ExecuteCloud(spell, sim, target);
                 break;
 
+            case "WolfHunt":
+                // Point the player's zombie wolves at the herd near the cast point: they flank to the
+                // far side and drive it toward the necromancer. The behavior lives in AI.WolfPackHuntAI;
+                // this just arms the sim-level command for the spell's duration.
+                sim.CommandWolfHunt(target, spell.WolfHuntDuration > 0f ? spell.WolfHuntDuration : 18f);
+                break;
+
             case "Blight":
             {
                 // Mutate the death-fog ("blight") field — Add dumps blight at the

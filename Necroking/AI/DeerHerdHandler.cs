@@ -101,6 +101,27 @@ public class DeerHerdHandler : IArchetypeHandler
 
     public void Update(ref AIContext ctx)
     {
+        // "Herded" cheat (set by AI.WolfPackHuntAI when a wolf pack commits its drive): for a short
+        // window force a flat-out flee in the pack's chosen direction (toward the necromancer),
+        // bypassing normal routine evaluation entirely. This is what makes the pack able to steer
+        // the prey's first bolt toward your horde before it can react on its own.
+        if (ctx.Units[ctx.UnitIndex].HerdedTimer > 0f)
+        {
+            ctx.Units[ctx.UnitIndex].HerdedTimer -= ctx.Dt;
+            Vec2 herdDir = ctx.Units[ctx.UnitIndex].HerdedDir;
+            if (herdDir.LengthSq() > 1e-4f)
+            {
+                ctx.Routine = RoutineFleeing;
+                ctx.Subroutine = 0;
+                ctx.Units[ctx.UnitIndex].Fleeing = true;
+                ctx.Units[ctx.UnitIndex].FleeElapsed += ctx.Dt;
+                SubroutineSteps.SetEffort(ref ctx, Movement.MoveEffort.Sprint);
+                Vec2 dest = ctx.MyPos + herdDir * FleeDistance;
+                SubroutineSteps.MoveToward(ref ctx, dest, ctx.MyMaxSpeed);
+                return;
+            }
+        }
+
         AcceleratePoisonedSatiation(ref ctx);
         EvaluateRoutine(ref ctx);
 
