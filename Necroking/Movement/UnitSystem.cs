@@ -497,6 +497,16 @@ public class Unit
     /// mushroom is consumed into the belly.</summary>
     public float BoarEatTimer;
 
+    /// <summary>Pack-hunt AI (see <see cref="AI.WolfPackHuntAI"/>): id of the deer this
+    /// player-controlled zombie wolf is currently stalking, or 0 when not hunting.</summary>
+    public uint WolfHuntTargetId;
+    /// <summary>Pack-hunt phase: 0 = flanking (circling to the far side of the prey,
+    /// staying outside its vision), 1 = driving (chasing the prey toward the necromancer).</summary>
+    public byte WolfHuntPhase;
+    /// <summary>Seconds spent flanking on the current prey — a safety timeout so a pack
+    /// that can't reach its slots (blocked path, wandering prey) eventually commits to the chase.</summary>
+    public float WolfHuntTimer;
+
     /// <summary>For a corpse-puppet raise: the def id of the ORIGINAL corpse this puppet
     /// was raised from (e.g. "militia"), so when it deposits itself into a Corpse Pile it
     /// piles as that original body — not as the zombie variant it currently wears. Empty

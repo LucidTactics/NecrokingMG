@@ -489,6 +489,13 @@ public class HordeSystem
                     int unitIdx = UnitUtil.ResolveUnitIndex(units, hu.UnitID);
                     if (unitIdx < 0) continue;
 
+                    // Pack-hunting wolves stalk their prey via WolfPackHuntAI (flank to the far
+                    // side, then drive) — don't let the horde aggro-scan reassign them to a naive
+                    // charge mid-stalk. WolfPackHuntAI.Update runs earlier this same frame, so a
+                    // hunting wolf already carries its prey id here. Cleared the moment the wolf
+                    // commits to combat, so it re-enters normal horde aggro afterwards.
+                    if (units[unitIdx].WolfHuntTargetId != 0) continue;
+
                     // Pick closest enemy
                     int bestEnemy = -1;
                     float bestDist2 = float.MaxValue;

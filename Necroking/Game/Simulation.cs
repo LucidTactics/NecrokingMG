@@ -522,6 +522,12 @@ public class Simulation
         // UpdateMovement (so the override steers the boar this frame).
         PhaseStart(); AI.BoarForageAI.Update(this, dt); PhaseEnd("boar_forage");
 
+        // Player's zombie wolves hunt as a pack: flank to the far side of a deer
+        // (staying outside its vision) and drive it back toward the necromancer.
+        // Same placement rationale as BoarForage — overrides follow velocity, runs
+        // before UpdateMovement.
+        PhaseStart(); AI.WolfPackHuntAI.Update(this, dt); PhaseEnd("wolf_hunt");
+
         // Clear HitReacting AFTER AI has read it — this ensures flags set between frames
         // (e.g. spell AoE from Game1.Update) persist until the next AI tick sees them
         // Decay floating action labels in the same pass.
@@ -3377,6 +3383,17 @@ public class Simulation
     {
         var ctx = BuildAIContext(i, dt, 0f, false);
         AI.SubroutineSteps.SetEffort(ref ctx, Movement.MoveEffort.Hurry);
+        AI.SubroutineSteps.MoveToward(ref ctx, target, ctx.MyMaxSpeed);
+    }
+
+    /// <summary>Steer a pack-hunting wolf toward a point, reusing the shared movement
+    /// step (pathfinding, effort, locomotion anim) so it matches normal AI. <paramref name="sprint"/>
+    /// picks the gait: a cautious Hurry jog while flanking to the far side, a Sprint chase
+    /// while driving the prey. See <see cref="AI.WolfPackHuntAI"/>.</summary>
+    internal void AIWolfHuntMove(int i, Vec2 target, bool sprint, float dt)
+    {
+        var ctx = BuildAIContext(i, dt, 0f, false);
+        AI.SubroutineSteps.SetEffort(ref ctx, sprint ? Movement.MoveEffort.Sprint : Movement.MoveEffort.Hurry);
         AI.SubroutineSteps.MoveToward(ref ctx, target, ctx.MyMaxSpeed);
     }
 

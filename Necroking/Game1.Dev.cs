@@ -1768,6 +1768,7 @@ public partial class Game1 {
              $"\"vel\":{u.Velocity.Length().ToString("F2", ci)}," +
              $"\"prefVel\":{u.PreferredVel.Length().ToString("F2", ci)}," +
              $"\"wolfPhase\":{u.WolfPhase}," +
+             $"\"huntTgt\":{u.WolfHuntTargetId},\"huntPhase\":{u.WolfHuntPhase},\"huntTimer\":{u.WolfHuntTimer.ToString("F1", ci)}," +
              $"\"anim\":\"{(_unitAnims.TryGetValue(u.Id, out var _adbg) ? _adbg.Ctrl.CurrentState.ToString() : "?")}\"," +
              $"\"facing\":{u.FacingAngle.ToString("F0", ci)}," +
              $"\"velAngle\":{(u.Velocity.LengthSq() > 0.01f ? (MathF.Atan2(u.Velocity.Y, u.Velocity.X) * 180f / MathF.PI) : 0f).ToString("F0", ci)}," +
