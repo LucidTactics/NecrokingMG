@@ -315,6 +315,22 @@ public class SpellDef : IHasId
     [EditorField(Label = "Reanim Effect ID", Group = "SUMMON", Order = 407)]
     [JsonPropertyName("reanimationEffectID")] public string ReanimationEffectID { get; set; } = "";
 
+    /// <summary>TEMPORARY/debug tuning knob. How fast the body rises after this spell
+    /// raises it: scales the standup animation (gets up quicker) and the spawn delay /
+    /// outline-morph build-up so the corpse-morph stays synced to the rise. 1 = default.
+    /// Decoupled from the smoke (see <see cref="TestFogSpeed"/>). Clamped to a floor.</summary>
+    [EditorVisible("Category", "Summon")]
+    [EditorField(Label = "Rise Speed (test)", Group = "SUMMON", Order = 408)]
+    [JsonPropertyName("_test_riseSpeed")] public float TestRiseSpeed { get; set; } = 1f;
+
+    /// <summary>TEMPORARY/debug tuning knob. How fast the reanimation SMOKE (the green
+    /// cloud + dust puffs) builds and dissipates, independent of <see cref="TestRiseSpeed"/>
+    /// — so the body can pop up fast while the fog lingers, or vice versa. 1 = default.
+    /// Clamped to a floor.</summary>
+    [EditorVisible("Category", "Summon")]
+    [EditorField(Label = "Fog Speed (test)", Group = "SUMMON", Order = 409)]
+    [JsonPropertyName("_test_fogSpeed")] public float TestFogSpeed { get; set; } = 1f;
+
     // ============ STRIKE ============
     [EditorVisible("Category", "Strike")]
     [EditorField(Label = "Target: Unit (Zap)", Group = "STRIKE", Order = 500, GroupColorR = 255, GroupColorG = 255, GroupColorB = 100)]

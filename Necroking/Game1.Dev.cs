@@ -314,7 +314,8 @@ public partial class Game1 {
                }
 
                string action = c.Args.Length >= 2 ? c.Args[1].ToLowerInvariant() : "toggle";
-               string? r = SetOverlay(c.Args[0], action);
+               string[] extra = c.Args.Length > 2 ? c.Args[2..] : System.Array.Empty<string>();
+               string? r = SetOverlay(c.Args[0], action, extra);
                if (r == null) {
                   c.Complete(Necroking.Dev.DevServer.Error(
                      $"unknown overlay: {c.Args[0]} — run 'panels' for the list"));
@@ -867,12 +868,15 @@ public partial class Game1 {
 
             // Corpse-less composite reanim (the table-craft path): a green cloud builds at (x,y) and a
             // zombie rises from it — no world body to morph.
-            case "reanim_at": {   // window.dev('reanim_at',[x,y,'skeleton'])
-               if (c.Args.Length < 2) { c.Complete(Necroking.Dev.DevServer.Error("reanim_at needs: <x> <y> [defId]")); break; }
+            case "reanim_at": {   // window.dev('reanim_at',[x,y,'skeleton',riseSpeed,fogSpeed])
+               if (c.Args.Length < 2) { c.Complete(Necroking.Dev.DevServer.Error("reanim_at needs: <x> <y> [defId] [riseSpeed] [fogSpeed]")); break; }
                string rdef = c.Args.Length > 2 ? c.Args[2] : "skeleton";
+               float rspeed = c.Args.Length > 3 ? DevFloat(c.Args[3]) : 1f;
+               float fspeed = c.Args.Length > 4 ? DevFloat(c.Args[4]) : 1f;
                QueueReanimRise(rdef, -1, "",   // "" → the raised unit's own effect (else reanim_smoke)
-                  posOverride: new Vec2(DevFloat(c.Args[0]), DevFloat(c.Args[1])), facingOverride: 90f, scaleOverride: 1f);
-               c.Complete(Necroking.Dev.DevServer.Ok($"queued corpse-less reanim of '{rdef}'"));
+                  posOverride: new Vec2(DevFloat(c.Args[0]), DevFloat(c.Args[1])), facingOverride: 90f, scaleOverride: 1f,
+                  riseSpeed: rspeed, fogSpeed: fspeed);
+               c.Complete(Necroking.Dev.DevServer.Ok($"queued corpse-less reanim of '{rdef}' riseSpeed={rspeed} fogSpeed={fspeed}"));
                break;
             }
 
@@ -1423,7 +1427,8 @@ public partial class Game1 {
    /// <summary>Open/close/toggle an in-game overlay for the dev channel. All
    /// overlays render over a live world, so a default game is started if none is
    /// loaded. Returns a status string, or null for an unknown overlay name.</summary>
-   string? SetOverlay(string name, string action) {
+   string? SetOverlay(string name, string action, string[]? extra = null) {
+      extra ??= System.Array.Empty<string>();
       if (!_gameWorldLoaded) StartGame();
       EnsureInventoryUIsInitialized();
       int sw = GraphicsDevice.Viewport.Width, sh = GraphicsDevice.Viewport.Height;
@@ -1451,10 +1456,14 @@ public partial class Game1 {
             return $"skill_book visible={_skillBookOverlay.IsVisible}";
 
          case "grimoire":
-            // No public Open(); Toggle() opens, Hide() closes.
+            // No public Open(); Toggle() opens, Hide() closes. "scroll <rows>" drives
+            // the viewport for verifying spell-list scrolling without a wheel event.
             if (action == "close") _grimoireOverlay.Hide();
             else if (action == "open") {
                if (!_grimoireOverlay.IsVisible) _grimoireOverlay.Toggle();
+            } else if (action == "scroll") {
+               int rows = (extra.Length > 0 && int.TryParse(extra[0], out int rr)) ? rr : 1;
+               return _grimoireOverlay.DebugScroll(rows);
             } else _grimoireOverlay.Toggle();
 
             return $"grimoire visible={_grimoireOverlay.IsVisible}";

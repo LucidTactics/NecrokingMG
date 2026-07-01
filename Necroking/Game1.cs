@@ -2135,18 +2135,24 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         var kb = Keyboard.GetState();
         var mouse = Mouse.GetState();
 
-        // Window unfocused or minimized. IsActive is MonoGame's canonical
-        // window-focus flag. Exempt scenario / headless runs — automated runs often
-        // lack window focus, and freezing them would break the scenario test harness.
-        bool unfocused = !IsActive && _activeScenario == null && LaunchArgs.Scenario == null && !LaunchArgs.Headless && _devServer == null;
+        // Window unfocused or minimized. IsActive is MonoGame's canonical window-focus
+        // flag. Exempt scenario / headless runs — automated runs often lack window focus,
+        // and freezing them would break the test harness.
+        bool unfocused = !IsActive && _activeScenario == null && LaunchArgs.Scenario == null && !LaunchArgs.Headless;
+
+        // A dev server drives the game while the OS window is unfocused, so it must keep
+        // ticking (like "run when unfocused"). But the dev server injects input directly
+        // (DispatchSpellCast / editor mouse), so we still NEUTRALISE the real mouse below
+        // when unfocused — otherwise a stray click on the unfocused window casts a spell.
+        bool runWhenUnfocused = _gameData?.Settings.General.RunWhenUnfocused ?? false;
+        bool keepRunningUnfocused = runWhenUnfocused || _devServer != null;
 
         // Default behaviour: freeze entirely while unfocused — skip all input so
         // background clicks (taskbar, other apps) read by the global Mouse.GetState()
         // aren't consumed by the game, and skip the simulation tick. We still advance
         // _prevMouse/_prevKb to the real states so the click that refocuses the
         // window isn't seen as an in-game press.
-        bool runWhenUnfocused = _gameData?.Settings.General.RunWhenUnfocused ?? false;
-        if (unfocused && !runWhenUnfocused)
+        if (unfocused && !keepRunningUnfocused)
         {
             _prevKb = kb;
             _prevMouse = mouse;
@@ -2154,19 +2160,31 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             return;
         }
 
+        int vpW = GraphicsDevice.Viewport.Width, vpH = GraphicsDevice.Viewport.Height;
+        // Even while focused, the OS reports clicks whose cursor sits OUTSIDE the window
+        // (drag-out, multi-monitor). Those must not cast/command either.
+        bool cursorOutside = mouse.X < 0 || mouse.Y < 0 || mouse.X >= vpW || mouse.Y >= vpH;
+
         if (unfocused)
         {
-            // "Run when unfocused" is on: keep simulating, but feed NEUTRAL input
-            // (no buttons, no keys, cursor parked at screen centre) to the rest of
-            // Update so background clicks/keys aren't consumed and the camera doesn't
-            // edge-drift. The real states still flow into _prevMouse/_prevKb at the
-            // normal exit points, preserving the refocus-click protection above.
-            var neutral = new MouseState(
-                GraphicsDevice.Viewport.Width / 2, GraphicsDevice.Viewport.Height / 2,
-                mouse.ScrollWheelValue,
+            // Kept running (dev server or "run when unfocused"): feed NEUTRAL input — no
+            // buttons, no keys, cursor parked at centre — so background/real clicks + keys
+            // aren't consumed and the camera doesn't edge-drift. Dev-injected input is
+            // unaffected (it doesn't flow through here). Real states still reach
+            // _prevMouse/_prevKb at the exit points, preserving refocus-click protection.
+            var neutral = new MouseState(vpW / 2, vpH / 2, mouse.ScrollWheelValue,
                 ButtonState.Released, ButtonState.Released, ButtonState.Released,
                 ButtonState.Released, ButtonState.Released);
             _input.Capture(neutral, neutral, new KeyboardState(), new KeyboardState());
+        }
+        else if (cursorOutside)
+        {
+            // Focused but the cursor is outside the window: keep keyboard live, but strip
+            // the mouse buttons so an out-of-bounds click can't trigger a world action.
+            var noButtons = new MouseState(mouse.X, mouse.Y, mouse.ScrollWheelValue,
+                ButtonState.Released, ButtonState.Released, ButtonState.Released,
+                ButtonState.Released, ButtonState.Released);
+            _input.Capture(noButtons, noButtons, kb, _prevKb);
         }
         else
         {

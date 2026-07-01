@@ -50,12 +50,23 @@ public class GrimoireOverlay : IModalLayer
     private GameData? _gameData;
     private int _x, _y;
 
+    // The tile grid is 2 wide; 22 tiles => 11 visible rows. Scrolling moves the
+    // 22-tile viewport over the full filtered list a row (2 spells) at a time.
+    private const int Cols = 2;
+    private const int VisibleRows = GrimoirePanel.MaxTiles / Cols;
+
     private string? _schoolFilter;
     private MagicPath _pathFilter = MagicPath.None;
-    private List<SpellDef> _shown = new();
+    private List<SpellDef> _all = new();    // full filtered list (drives scroll bounds)
+    private List<SpellDef> _shown = new();  // spells bound to the visible tiles (index = tile index)
+    private int _scrollRow;                 // first visible row into _all
     private Action<string>? _onPick;   // non-null => assign mode
     private bool _justOpened;          // skip the click that opened us
     private Func<SpellDef, bool>? _canShow; // null => show all; else path-req filter
+
+    // Furthest the viewport can scroll so the last row still lands at the bottom.
+    private int MaxScrollRow
+        => Math.Max(0, (int)Math.Ceiling(_all.Count / (double)Cols) - VisibleRows);
 
     public bool IsVisible { get; private set; }
 
@@ -89,6 +100,7 @@ public class GrimoireOverlay : IModalLayer
         _justOpened = true;
         _schoolFilter = null;
         _pathFilter = MagicPath.None;
+        _scrollRow = 0;
         Refresh();
         Game1.Popups.Push(this);
     }
@@ -104,7 +116,11 @@ public class GrimoireOverlay : IModalLayer
     private void Refresh()
     {
         if (_gameData == null) return;
-        _shown = GrimoirePanel.Populate(_renderer, _gameData, InstanceId, _schoolFilter, _pathFilter, _canShow);
+        _all = GrimoirePanel.Filter(_gameData, _schoolFilter, _pathFilter, _canShow);
+        // Clamp (not reset) so a wheel scroll survives the rebind; a filter change
+        // resets _scrollRow to 0 at the call site before refreshing.
+        _scrollRow = Math.Clamp(_scrollRow, 0, MaxScrollRow);
+        _shown = GrimoirePanel.BindWindow(_renderer, InstanceId, _all, _scrollRow * Cols);
         _renderer.SetText(InstanceId, TitleChild, _onPick != null ? "Choose a Spell" : "Spells");
         ApplyTabHighlights(_renderer, InstanceId, _schoolFilter, _pathFilter);
     }
@@ -182,8 +198,19 @@ public class GrimoireOverlay : IModalLayer
         // the very click that OPENED us this frame (a bar-slot click lands
         // where a tile now is) — one-frame guard.
         if (_justOpened) { _justOpened = false; return; }
-        if (!input.LeftPressed) return;
         int mx = (int)input.MousePos.X, my = (int)input.MousePos.Y;
+
+        // Mouse-wheel scroll over the panel: move the viewport one row per notch.
+        // Wheel up (positive delta) scrolls toward the top of the list. Camera zoom
+        // is already suppressed while the cursor is over us (Game1 sets MouseOverUI),
+        // so consuming the wheel here doesn't fight the world.
+        if (input.ScrollDelta != 0 && ContainsMouse(mx, my))
+        {
+            int newRow = Math.Clamp(_scrollRow + (input.ScrollDelta > 0 ? -1 : 1), 0, MaxScrollRow);
+            if (newRow != _scrollRow) { _scrollRow = newRow; Refresh(); }
+        }
+
+        if (!input.LeftPressed) return;
         if (!ContainsMouse(mx, my)) return;
         HandleClickAt(mx, my);
     }
@@ -198,6 +225,7 @@ public class GrimoireOverlay : IModalLayer
             if (HitTab("SchoolTabBar", i, mx, my))
             {
                 _schoolFilter = SchoolTabs[i].School;
+                _scrollRow = 0;            // new filter → jump back to the top
                 Refresh();
                 return true;
             }
@@ -207,6 +235,7 @@ public class GrimoireOverlay : IModalLayer
             {
                 if (i == 0) _pathFilter = MagicPath.None;
                 else { var p = PathTabOrder[i - 1]; _pathFilter = _pathFilter == p ? MagicPath.None : p; }
+                _scrollRow = 0;            // new filter → jump back to the top
                 Refresh();
                 return true;
             }
@@ -239,6 +268,19 @@ public class GrimoireOverlay : IModalLayer
     }
     public int DebugShownCount => _shown.Count;
     public string DebugShownId(int i) => i < _shown.Count ? _shown[i].Id : "";
+
+    /// <summary>Test/dev seam: scroll the viewport by <paramref name="rows"/> rows
+    /// (mirrors a wheel notch each), clamp, rebind, and report the new window — so
+    /// the dev server can drive + screenshot scroll without injecting a wheel event.</summary>
+    public string DebugScroll(int rows)
+    {
+        if (!IsVisible) return "grimoire not open";
+        _scrollRow = Math.Clamp(_scrollRow + rows, 0, MaxScrollRow);
+        Refresh();
+        return $"scrollRow={_scrollRow}/{MaxScrollRow} total={_all.Count} "
+             + $"first='{(_shown.Count > 0 ? _shown[0].Id : "")}' "
+             + $"last='{(_shown.Count > 0 ? _shown[_shown.Count - 1].Id : "")}'";
+    }
 
     public void Draw(int screenW, int screenH)
     {

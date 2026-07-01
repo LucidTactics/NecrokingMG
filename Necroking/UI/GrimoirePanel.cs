@@ -22,40 +22,57 @@ public static class GrimoirePanel
 
     private const string IcoFatigue = "assets/UI/Imported/exhausted.2.24.png";
 
-    /// <summary>Write all overrides for the grimoire instance and return the
-    /// spells shown (parallel to tile indices). school == null and
-    /// path == None mean "no filter on that axis".</summary>
-    public static List<SpellDef> Populate(RuntimeWidgetRenderer r, GameData gameData,
-        string instanceId, string? school = null, MagicPath path = MagicPath.None,
-        Func<SpellDef, bool>? canShow = null)
-    {
-        r.ClearOverridesRecursive(instanceId);
-        var def = r.GetWidgetDef(WidgetId);
-        if (def == null) return new List<SpellDef>();
-
-        var spells = gameData.Spells.All()
+    /// <summary>The full filtered spell list (no tile cap), in display order.
+    /// school == null and path == None mean "no filter on that axis". Pulled out
+    /// of <see cref="Populate"/> so the overlay can size its scroll window off the
+    /// real count without binding tiles.</summary>
+    public static List<SpellDef> Filter(GameData gameData,
+        string? school = null, MagicPath path = MagicPath.None, Func<SpellDef, bool>? canShow = null)
+        => gameData.Spells.All()
             .Where(s => !s.Hidden && !string.IsNullOrEmpty(s.DisplayName))
             .Where(s => school == null || s.School == school)
             .Where(s => path == MagicPath.None || MagicPathHelpers.FromJsonId(s.PrimaryPath) == path)
             .Where(s => canShow == null || canShow(s))
             .ToList();
 
-        int shown = Math.Min(spells.Count, MaxTiles);
-        if (spells.Count > MaxTiles)
-            Core.DebugLog.Log("grimoire", $"Populate: {spells.Count} spells, only {MaxTiles} tiles (scroll is Phase 2)");
+    /// <summary>Write all overrides for the grimoire instance and return the
+    /// spells shown (parallel to tile indices). school == null and path == None
+    /// mean "no filter on that axis". <paramref name="firstTile"/> scrolls the
+    /// 22-tile viewport: tiles bind to the window [firstTile, firstTile+MaxTiles)
+    /// of the filtered list.</summary>
+    public static List<SpellDef> Populate(RuntimeWidgetRenderer r, GameData gameData,
+        string instanceId, string? school = null, MagicPath path = MagicPath.None,
+        Func<SpellDef, bool>? canShow = null, int firstTile = 0)
+        => BindWindow(r, instanceId, Filter(gameData, school, path, canShow), firstTile);
 
+    /// <summary>Bind the 22 physical tiles to the window of <paramref name="spells"/>
+    /// starting at <paramref name="firstTile"/>, hiding any past the list end, and
+    /// return the spells actually shown (index = visible tile index, so a tile click
+    /// maps straight to the returned list). The viewport into a longer list is how the
+    /// grimoire scrolls without per-tile widget repositioning.</summary>
+    public static List<SpellDef> BindWindow(RuntimeWidgetRenderer r, string instanceId,
+        List<SpellDef> spells, int firstTile)
+    {
+        r.ClearOverridesRecursive(instanceId);
+        var def = r.GetWidgetDef(WidgetId);
+        if (def == null) return new List<SpellDef>();
+        if (firstTile < 0) firstTile = 0;
+
+        var visible = new List<SpellDef>(MaxTiles);
         for (int i = 0; i < MaxTiles; i++)
         {
             int childIdx = def.Children.FindIndex(c => c.Name == $"tile{i}");
             if (childIdx < 0) continue;
-            if (i >= shown)
+            int sIdx = firstTile + i;
+            if (sIdx >= spells.Count)
             {
                 r.SetHidden(instanceId, $"tile{i}", true);
                 continue;
             }
-            BindTile(r, $"{instanceId}.{childIdx}", spells[i]);
+            BindTile(r, $"{instanceId}.{childIdx}", spells[sIdx]);
+            visible.Add(spells[sIdx]);
         }
-        return spells.Take(shown).ToList();
+        return visible;
     }
 
     private static void BindTile(RuntimeWidgetRenderer r, string inst, SpellDef s)

@@ -79,12 +79,19 @@ internal class ReanimEffectSystem
         public uint UnitId;
         public Vec2 Ground;
         public float Scale;
+        // Two decoupled clocks: Age drives the RISE layers (outline + pose-morph build-up +
+        // light) at RiseSpeed so they stay in step with the body getting up; FogAge drives
+        // the SMOKE puffs at FogSpeed so the cloud can linger (or rush) independently.
         public float Age;
+        public float FogAge;
         public float OutlineStartAge;   // outline FADE-OUT clock starts here (set when the unit attaches)
         public float OutlineFadeIn;     // corpse-phase outline FADE-IN window (0->1 over this); 0 = none
         public float MorphHold;         // hold the death pose this long (clouds build) before the morph
         public bool HasUnit;            // false while only the corpse is present (outline fades in on it)
-        public float Life;   // removed when Age >= Life (the longest layer)
+        public float RiseLife;          // removed once Age >= RiseLife (outline/light/build-up done)...
+        public float FogLife;           // ...AND FogAge >= FogLife (last puff faded)
+        public float RiseSpeed = 1f;    // rise-clock multiplier (standup/outline/morph)
+        public float FogSpeed = 1f;     // fog-clock multiplier (cloud + dust puffs)
         public ReanimConfig Cfg;
         public readonly List<Puff> Clouds = new();
         public readonly List<Puff> Dust = new();
@@ -117,19 +124,25 @@ internal class ReanimEffectSystem
     /// falls back to "reanim_classic" if unknown/empty. Returns a stable instance id; pass
     /// <see cref="GameConstants.InvalidUnit"/> for unitId when the unit hasn't spawned yet
     /// and call <see cref="SetUnitId"/> once it does, so the outline attaches on the rise.</summary>
-    public int Begin(uint unitId, Vec2 ground, float scale, string? configId, float outlineFadeIn = 0f, float morphHold = 0f)
+    public int Begin(uint unitId, Vec2 ground, float scale, string? configId,
+        float outlineFadeIn = 0f, float morphHold = 0f, float riseSpeed = 1f, float fogSpeed = 1f)
     {
         if (!_configs.TryGetValue(configId ?? "", out var cfg))
             cfg = _configs.TryGetValue("reanim_smoke", out var def) ? def : default;
-        // Instance lives until the longest layer finishes: outline fade, light ramp, or the
-        // last puff (spawn window + the puff's own lifetime).
-        float life = MathF.Max(cfg.OutlineDuration, MathF.Max(cfg.LightDuration,
-            cfg.SpawnWindow + MathF.Max(cfg.CloudLifetime, cfg.DustLifetime)));
-        if (life <= 0f) return 0;
+        // Rise layers (outline build-up/fade, light) live on the Age clock; the smoke puffs
+        // live on the FogAge clock. The instance is removed only once BOTH have finished. All
+        // durations are in effect-time; each clock advances at its own speed, so riseSpeed and
+        // fogSpeed shorten their halves of the effect independently.
+        float riseLife = MathF.Max(outlineFadeIn, MathF.Max(cfg.OutlineDuration, cfg.LightDuration));
+        bool hasPuffs = cfg.CloudCount > 0 || cfg.DustCount > 0;
+        float fogLife = hasPuffs ? cfg.SpawnWindow + MathF.Max(cfg.CloudLifetime, cfg.DustLifetime) : 0f;
+        if (riseLife <= 0f && fogLife <= 0f) return 0;
 
         int id = _nextInstanceId++;
         var inst = new Instance { InstanceId = id, UnitId = unitId, Ground = ground, Scale = scale,
-            Cfg = cfg, Life = life, OutlineFadeIn = outlineFadeIn, MorphHold = morphHold, HasUnit = unitId != uint.MaxValue };
+            Cfg = cfg, RiseLife = riseLife, FogLife = fogLife,
+            RiseSpeed = MathF.Max(0.05f, riseSpeed), FogSpeed = MathF.Max(0.05f, fogSpeed),
+            OutlineFadeIn = outlineFadeIn, MorphHold = morphHold, HasUnit = unitId != uint.MaxValue };
 
         // Pre-schedule the cloud + dust puffs across the spawn window so new puffs keep
         // appearing as the unit rises, then linger + fade over their own lifetimes.
@@ -157,7 +170,7 @@ internal class ReanimEffectSystem
             inst.UnitId = unitId;
             inst.HasUnit = true;
             inst.OutlineStartAge = inst.Age;   // outline fades over its full duration from NOW
-            inst.Life = MathF.Max(inst.Life, inst.OutlineStartAge + inst.Cfg.OutlineDuration);
+            inst.RiseLife = MathF.Max(inst.RiseLife, inst.OutlineStartAge + inst.Cfg.OutlineDuration);
             return;
         }
     }
@@ -187,10 +200,14 @@ internal class ReanimEffectSystem
         for (int i = _active.Count - 1; i >= 0; i--)
         {
             var inst = _active[i];
-            inst.Age += dt;
-            for (int p = 0; p < inst.Clouds.Count; p++) { var q = inst.Clouds[p]; if (inst.Age >= q.Delay) q.Age += dt; inst.Clouds[p] = q; }
-            for (int p = 0; p < inst.Dust.Count; p++) { var q = inst.Dust[p]; if (inst.Age >= q.Delay) q.Age += dt; inst.Dust[p] = q; }
-            if (inst.Age >= inst.Life)
+            inst.Age += dt * inst.RiseSpeed;       // rise clock: outline + morph + light
+            float fdt = dt * inst.FogSpeed;        // fog clock: cloud + dust puffs
+            inst.FogAge += fdt;
+            // Puffs gate + age on the fog clock, so their whole appear→rise→fade timeline
+            // scales with FogSpeed (a higher FogSpeed makes the smoke billow + clear sooner).
+            for (int p = 0; p < inst.Clouds.Count; p++) { var q = inst.Clouds[p]; if (inst.FogAge >= q.Delay) q.Age += fdt; inst.Clouds[p] = q; }
+            for (int p = 0; p < inst.Dust.Count; p++) { var q = inst.Dust[p]; if (inst.FogAge >= q.Delay) q.Age += fdt; inst.Dust[p] = q; }
+            if (inst.Age >= inst.RiseLife && inst.FogAge >= inst.FogLife)
                 _active.RemoveAt(i);
         }
     }
@@ -292,7 +309,7 @@ internal class ReanimEffectSystem
                 var color = ColorUtils.Premultiply(q.Color.R, q.Color.G, q.Color.B, a);
 
                 int idx = _visibleDust.Count;
-                _visibleDust.Add(new DustDraw { ScreenPos = screenPos, Src = _cloud.GetFrameRect(frame), Scale = scale, Rot = q.RotSpeed * inst.Age, Color = color });
+                _visibleDust.Add(new DustDraw { ScreenPos = screenPos, Src = _cloud.GetFrameRect(frame), Scale = scale, Rot = q.RotSpeed * inst.FogAge, Color = color });
                 items.Add(new Game1.DepthItem { Y = world.Y + q.WorldSize * 0.5f, Type = Game1.DepthItemType.ReanimDust, Index = idx });
             }
         }
@@ -351,7 +368,7 @@ internal class ReanimEffectSystem
                     var src = _cloud.GetFrameRect(frame);
                     float scale = (q.WorldSize * zoom) / frameW;
                     var origin = new Vector2(src.Width * 0.5f, src.Height * 0.5f);
-                    _batch.Draw(tex, sp, src, q.Color.ToHdrVertex(a), q.RotSpeed * inst.Age, origin, scale, SpriteEffects.None, 0f);
+                    _batch.Draw(tex, sp, src, q.Color.ToHdrVertex(a), q.RotSpeed * inst.FogAge, origin, scale, SpriteEffects.None, 0f);
                 }
             }
         }

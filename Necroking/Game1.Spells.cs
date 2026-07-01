@@ -46,7 +46,8 @@ public partial class Game1 {
             // after a short delay so the smoke/clouds build first. (Legacy spells dissolve + spawn now.)
             // The reanim_smoke composite is the ONLY raise VFX now — the old green fire_loop summon
             // flame is no longer layered on top of an AOE raise.
-            QueueReanimRise(resolvedID, corpse.CorpseID, spell.ReanimationEffectID);
+            QueueReanimRise(resolvedID, corpse.CorpseID, spell.ReanimationEffectID,
+               riseSpeed: spell.TestRiseSpeed, fogSpeed: spell.TestFogSpeed);
             raised++;
          }
       } else {
@@ -138,7 +139,8 @@ public partial class Game1 {
                   // Corpse reanimation → canonical horde minion (HordeMinion archetype). The rise
                   // effect plays NOW at the grave (corpse stays visible, green outline fading in);
                   // the unit spawns + stands up + the corpse is removed after a short delay.
-                  QueueReanimRise(summonUnitID, pending.TargetCorpseID, spell.ReanimationEffectID);
+                  QueueReanimRise(summonUnitID, pending.TargetCorpseID, spell.ReanimationEffectID,
+                     riseSpeed: spell.TestRiseSpeed, fogSpeed: spell.TestFogSpeed);
                } else {
                   // Non-corpse summon (e.g. summon-from-def): plain spawn + horde enroll.
                   SpawnUnit(summonUnitID, unitSpawnPos);
@@ -169,6 +171,7 @@ public partial class Game1 {
       public int FxInstanceId;   // ReanimEffectSystem handle, so the outline attaches on spawn
       public int CorpseId;       // source corpse (-1 = none, e.g. table-craft) — removed cleanly when the unit rises
       public float Timer;
+      public float StandupSpeed; // Standup anim playback speed (0.5 = the default slow rise)
       public Action<int>? OnSpawned;  // runs on the freshly-spawned unit (e.g. apply crafted item bonuses)
    }
    private readonly List<PendingReanimRise> _pendingReanimRises = new();
@@ -196,8 +199,20 @@ public partial class Game1 {
    /// bonuses). If the effect asset is missing, falls back to an immediate spawn.</summary>
    void QueueReanimRise(string defId, int corpseId, string? configId, float delay = 3.5f,
                         Vec2 posOverride = default, float facingOverride = 0f, float scaleOverride = 1f,
-                        Action<int>? onSpawned = null)
+                        Action<int>? onSpawned = null, float riseSpeed = 1f, float fogSpeed = 1f)
    {
+      // Two independent speeds (both default 1):
+      //  • riseSpeed scales the BODY rising — the standup anim, the spawn delay, and the
+      //    effect's rise clock (outline + pose-morph build-up), so the morph stays synced
+      //    to the unit getting up. `delay` is the build-up in rise-effect-time; the instance
+      //    runs at riseSpeed, so the body stands up after delay/riseSpeed wall seconds.
+      //  • fogSpeed scales the SMOKE — the green cloud + dust puffs — on the effect's own
+      //    fog clock, so the smoke can linger while the body pops up fast (or the reverse).
+      // Clamp to a floor so a zero/negative value can't divide-by-zero or stall the rise.
+      riseSpeed = MathF.Max(0.1f, riseSpeed);
+      fogSpeed = MathF.Max(0.1f, fogSpeed);
+      float standupSpeed = 0.5f * riseSpeed;   // 0.5 = the default slow rise
+      float spawnDelay = delay / riseSpeed;    // wall-clock time until the unit spawns
       int corpseIdx = -1;
       Vec2 pos; float facing; float scale;
       if (corpseId >= 0)
@@ -224,7 +239,7 @@ public partial class Game1 {
          if (now >= 0)
          {
             _sim.UnitsMut[now].FacingAngle = facing;
-            BuffSystem.BeginReanimationRise(_sim.UnitsMut, now);
+            BuffSystem.BeginReanimationRise(_sim.UnitsMut, now, standupSpeed);
             onSpawned?.Invoke(now);
          }
          return;
@@ -234,10 +249,13 @@ public partial class Game1 {
       // Dissolving=false so it stays fully visible; the renderer draws the green outline + morph on it.
       // The unit spawns + the corpse is removed cleanly after the delay (TickPendingReanimRises).
       if (corpseIdx >= 0) _sim.Corpses[corpseIdx].ConsumedBySummon = true;
-      int fxId = _reanimFx.Begin(GameConstants.InvalidUnit, pos, scale, configId, outlineFadeIn: delay, morphHold: delay - 1.5f);
+      int fxId = _reanimFx.Begin(GameConstants.InvalidUnit, pos, scale, configId,
+                                 outlineFadeIn: delay, morphHold: MathF.Max(0f, delay - 1.5f),
+                                 riseSpeed: riseSpeed, fogSpeed: fogSpeed);
       if (corpseIdx >= 0) _sim.Corpses[corpseIdx].ReanimInstanceId = fxId;
       _pendingReanimRises.Add(new PendingReanimRise
-         { Pos = pos, Facing = facing, DefId = defId, FxInstanceId = fxId, CorpseId = corpseId, Timer = delay, OnSpawned = onSpawned });
+         { Pos = pos, Facing = facing, DefId = defId, FxInstanceId = fxId, CorpseId = corpseId,
+           Timer = spawnDelay, StandupSpeed = standupSpeed, OnSpawned = onSpawned });
    }
 
    /// <summary>Tick queued rises (called each sim step alongside the effect update). When a
@@ -258,7 +276,7 @@ public partial class Game1 {
          if (idx >= 0)
          {
             _sim.UnitsMut[idx].FacingAngle = pr.Facing;
-            BuffSystem.BeginReanimationRise(_sim.UnitsMut, idx);
+            BuffSystem.BeginReanimationRise(_sim.UnitsMut, idx, pr.StandupSpeed);
             _reanimFx.SetUnitId(pr.FxInstanceId, _sim.Units[idx].Id);
             pr.OnSpawned?.Invoke(idx);
          }
