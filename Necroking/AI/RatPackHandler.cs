@@ -246,22 +246,43 @@ public class RatPackHandler : IArchetypeHandler
     /// when (re)acquiring a target, not per frame.</summary>
     private static int PickGangUpTarget(ref AIContext ctx)
     {
-        float gangR = ctx.Units[ctx.UnitIndex].GroupAlertRadius;
-        if (gangR <= 0f) gangR = ctx.Units[ctx.UnitIndex].DetectionRange;
-        float gangR2 = gangR * gangR;
         var myFaction = ctx.MyFaction;
-        var myPos = ctx.MyPos;
 
-        for (int j = 0; j < ctx.Units.Count; j++)
+        // Squad-driven pile-on: join whatever enemy a packmate is already biting. Exact membership
+        // via the squad, so the whole pack converges on one victim instead of scattering — no
+        // per-frame radius scan. Falls back to a proximity scan only when the rat has no squad.
+        var squad = ctx.MySquad;
+        if (squad != null)
         {
-            if (j == ctx.UnitIndex || !ctx.Units[j].Alive) continue;
-            if (ctx.Units[j].Archetype != ArchetypeRegistry.RatPack) continue;
-            if (ctx.Units[j].Faction != myFaction) continue;
-            if ((ctx.Units[j].Position - myPos).LengthSq() > gangR2) continue;
-            if (!ctx.Units[j].Target.IsUnit) continue;
-            int ti = UnitUtil.ResolveUnitIndex(ctx.Units, ctx.Units[j].Target.UnitID);
-            if (ti >= 0 && ctx.Units[ti].Alive && ctx.Units[ti].Faction != myFaction)
-                return ti; // join the pile
+            var members = squad.Members;
+            for (int m = 0; m < members.Count; m++)
+            {
+                if (!ctx.Units.TryGetIndex(members[m], out int j)) continue;
+                if (j == ctx.UnitIndex || !ctx.Units[j].Alive) continue;
+                if (!ctx.Units[j].Target.IsUnit) continue;
+                int ti = UnitUtil.ResolveUnitIndex(ctx.Units, ctx.Units[j].Target.UnitID);
+                if (ti >= 0 && ctx.Units[ti].Alive && ctx.Units[ti].Faction != myFaction)
+                    return ti; // join the pile
+            }
+        }
+        else
+        {
+            float gangR = ctx.Units[ctx.UnitIndex].GroupAlertRadius;
+            if (gangR <= 0f) gangR = ctx.Units[ctx.UnitIndex].DetectionRange;
+            float gangR2 = gangR * gangR;
+            var myPos = ctx.MyPos;
+
+            for (int j = 0; j < ctx.Units.Count; j++)
+            {
+                if (j == ctx.UnitIndex || !ctx.Units[j].Alive) continue;
+                if (ctx.Units[j].Archetype != ArchetypeRegistry.RatPack) continue;
+                if (ctx.Units[j].Faction != myFaction) continue;
+                if ((ctx.Units[j].Position - myPos).LengthSq() > gangR2) continue;
+                if (!ctx.Units[j].Target.IsUnit) continue;
+                int ti = UnitUtil.ResolveUnitIndex(ctx.Units, ctx.Units[j].Target.UnitID);
+                if (ti >= 0 && ctx.Units[ti].Alive && ctx.Units[ti].Faction != myFaction)
+                    return ti; // join the pile
+            }
         }
 
         int alertIdx = SubroutineSteps.ResolveAlertTarget(ref ctx);

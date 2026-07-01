@@ -103,6 +103,11 @@ public class Simulation
     private FlowFieldManager _flowFields = new();
     private Pathfinder _pathfinder = new();
     private Quadtree _quadtree = new();
+
+    /// <summary>Persistent herd/pack/patrol groups. Recomputed once per frame before the AI pass;
+    /// read by the deer/rat/wolf AIs so groups behave as one object. See <see cref="AI.SquadSystem"/>.</summary>
+    private readonly AI.SquadSystem _squads = new();
+    public AI.SquadSystem Squads => _squads;
     // Spatial index over env objects (trees, rocks, etc.) — rebuilt only on
     // OnCollisionsDirty, so ORCA static-obstacle queries are free per-frame.
     private readonly EnvSpatialIndex _envIndex = new();
@@ -262,8 +267,40 @@ public class Simulation
     /// <summary>World point the active Wolf Hunt was cast at — the pack targets the herd nearest it.</summary>
     public Vec2 WolfHuntCommandPos => _wolfHuntCmdPos;
     /// <summary>Spell hook: point the player's wolves at the herd near <paramref name="pos"/> for
-    /// <paramref name="duration"/> seconds (they flank to the far side and drive it toward the necromancer).</summary>
-    public void CommandWolfHunt(Vec2 pos, float duration) { _wolfHuntCmdPos = pos; _wolfHuntCmdTimer = duration; }
+    /// <paramref name="duration"/> seconds (they flank to the far side and drive it toward the necromancer).
+    ///
+    /// A fresh cast RE-TARGETS the whole pack: it wipes each hunting wolf's lock and pulls it off any deer
+    /// it had already committed to, so WolfPackHuntAI re-acquires the herd nearest THIS cast point. Without
+    /// this, the pack's target lock is sticky — re-casting on a new herd is ignored and the wolves keep
+    /// chasing the old herd (which, driven or fled, may be clear across the map).</summary>
+    public void CommandWolfHunt(Vec2 pos, float duration)
+    {
+        _wolfHuntCmdPos = pos;
+        _wolfHuntCmdTimer = duration;
+
+        for (int u = 0; u < _units.Count; u++)
+        {
+            if (!_units[u].Alive) continue;
+            if (_units[u].Faction != Faction.Undead) continue;
+            if (_units[u].Archetype != AI.ArchetypeRegistry.HordeMinion) continue;
+            var def = _gameData?.Units.Get(_units[u].UnitDefID);
+            if (def == null || !def.Tags.Contains("wolf")) continue;
+
+            _units[u].WolfHuntTargetId = 0;
+            _units[u].WolfHuntPhase = 0;
+            _units[u].WolfHuntTimer = 0f;
+            // Recall a wolf that had committed to a deer from the previous cast so it re-flanks the
+            // new herd instead of finishing its old chase. Reset to Following so it's immediately
+            // eligible for re-acquisition in WolfPackHuntAI's next sweep.
+            if (_units[u].Target.IsUnit || _units[u].EngagedTarget.IsUnit)
+            {
+                _units[u].Target = CombatTarget.None;
+                _units[u].EngagedTarget = CombatTarget.None;
+                _units[u].Routine = 0;      // HordeMinion Following
+                _units[u].Subroutine = 0;
+            }
+        }
+    }
     public Pathfinder Pathfinder => _pathfinder;
     public EnvironmentSystem? EnvironmentSystem => _envSystem;
     public WallSystem? WallSystem => _wallSystem;
@@ -299,6 +336,7 @@ public class Simulation
         _flowFields.Init(_grid);
         _pathfinder.Init(_grid);
         _units.Clear();
+        _squads.Clear();
         _corpses.Clear();
         _boarBellies.Clear();
         _damageEvents.Clear();
@@ -526,6 +564,12 @@ public class Simulation
         _pathfinder.BeginTick(_frameNumber);
 
         // Core subsystems
+
+        // Squad pre-pass: assign newly-spawned units to herds/packs/patrols and recompute each
+        // group's centroid / spread / alert BEFORE the AI runs, so handlers read fresh group state
+        // (cohesion, shared flee, hunt-the-whole-pack) this same frame. See AI.SquadSystem.
+        PhaseStart(); _squads.Update(_units); PhaseEnd("squads");
+
         PhaseStart(); UpdateAI(dt); PhaseEnd("ai");
 
         // Zombie boars peel off the horde to eat nearby mushrooms. Runs after the
@@ -3385,6 +3429,7 @@ public class Simulation
         DamageEvents = _damageEvents,
         NecroSprintT = _sprintRampValue,
         WolfHuntCommandActive = _wolfHuntCmdTimer > 0f,
+        Squads = _squads,
     };
 
     // --- Boar foraging (AI.BoarForageAI) ---

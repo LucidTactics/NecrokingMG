@@ -408,6 +408,15 @@ public class Unit
     public Vec2 SpawnPosition;
     public bool IsSneaking;
 
+    /// <summary>Persistent squad membership (see <see cref="AI.SquadSystem"/>): the id of the
+    /// herd/pack/patrol this unit belongs to, or 0 for "no squad". Assigned once, shortly after
+    /// spawn, by <see cref="AI.SquadSystem"/>'s proximity clustering of same-faction, same-archetype
+    /// units — so deer that spawn near each other share a herd, wolves a pack, soldiers a patrol.
+    /// Stable across unit swap-and-pop because it's an id, not an index. The squad's live centroid,
+    /// spread, alert and membership are recomputed each frame and read by the AI to keep the group
+    /// together, flee as one, and let hunters flank the whole pack rather than a single animal.</summary>
+    public uint SquadId;
+
     /// <summary>Time spent in the current flee since entering Fleeing routine.
     /// Used by DeerHerdHandler to ramp effort (Hurry for first 2s, then Sprint).
     /// Reset to 0 whenever Routine becomes Fleeing OR is not Fleeing — so a deer
@@ -511,8 +520,10 @@ public class Unit
     /// mushroom is consumed into the belly.</summary>
     public float BoarEatTimer;
 
-    /// <summary>Pack-hunt AI (see <see cref="AI.WolfPackHuntAI"/>): id of the deer this
-    /// player-controlled zombie wolf is currently stalking, or 0 when not hunting.</summary>
+    /// <summary>Pack-hunt AI (see <see cref="AI.WolfPackHuntAI"/>): the SQUAD id of the deer HERD
+    /// this player-controlled zombie wolf is currently hunting, or 0 when not hunting. (The pack
+    /// hunts the whole herd — its centroid + extent — not one animal, so this is a squad id, not a
+    /// unit id.)</summary>
     public uint WolfHuntTargetId;
     /// <summary>Pack-hunt phase: 0 = flanking (circling to the far side of the prey,
     /// staying outside its vision), 1 = driving (chasing the prey toward the necromancer).</summary>

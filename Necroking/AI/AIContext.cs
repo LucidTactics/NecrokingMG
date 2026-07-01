@@ -23,6 +23,9 @@ public ref struct AIContext
     public World.Pathfinder? Pathfinder;
     public Spatial.Quadtree? Quadtree;
     public GameSystems.HordeSystem? Horde;
+    /// <summary>Live squad registry (herds / packs / patrols). Handlers read their own group via
+    /// <see cref="MySquad"/> for cohesion + shared-alert; recomputed before the AI pass each frame.</summary>
+    public SquadSystem? Squads;
     public GameSystems.TriggerSystem? TriggerSystem;
     public World.EnvironmentSystem? EnvSystem;
     public Game.Jobs.WorkerSystem? Workers;
@@ -75,6 +78,18 @@ public ref struct AIContext
     public readonly byte AlertState { get => Units[UnitIndex].AlertState; set => Units[UnitIndex].AlertState = value; }
     public readonly float AlertTimer { get => Units[UnitIndex].AlertTimer; set => Units[UnitIndex].AlertTimer = value; }
     public readonly uint AlertTarget { get => Units[UnitIndex].AlertTarget; set => Units[UnitIndex].AlertTarget = value; }
+
+    /// <summary>This unit's squad this frame, or null if it has none / squads aren't wired
+    /// (some scenarios). Read-only view — the squad's fields are recomputed by SquadSystem.</summary>
+    public readonly Squad? MySquad
+    {
+        get
+        {
+            var sid = Units[UnitIndex].SquadId;
+            if (sid == 0 || Squads == null) return null;
+            return Squads.Get(sid);
+        }
+    }
 }
 
 /// <summary>Alert states shared by all archetypes.</summary>

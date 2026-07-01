@@ -61,6 +61,7 @@ public class DeerHerdHandler : IArchetypeHandler
     private const float StandupDuration = 1.0f;      // Standup animation time
 
     private const float RoamRadius = 10f;
+    private const float HerdCohesionRadius = 12f; // straggler leash from the herd centroid (see TryHerdCohesion)
     private const float FleeDistance = 20f;
     private const float CalmDuration = 8f;
     private const float CalmHoldTime = 3f; // Don't let calm tick below this while threat is in wary buffer
@@ -434,6 +435,12 @@ public class DeerHerdHandler : IArchetypeHandler
 
     private static void UpdateIdleRoaming(ref AIContext ctx)
     {
+        // Squad cohesion: if this deer has drifted well past the edge of its herd, amble back
+        // toward the group instead of roaming further out. This is what makes deer "remember
+        // their pack and stay together" — and, after a flee scatters them, regroup. Uses the
+        // live herd centroid (not the fixed spawn point) so a herd that migrates stays cohesive.
+        if (TryHerdCohesion(ref ctx)) return;
+
         // Casual grazing-area wander.
         SubroutineSteps.SetEffort(ref ctx, Movement.MoveEffort.Walk, 0.5f);
         byte prevSub = ctx.Subroutine;
@@ -447,6 +454,31 @@ public class DeerHerdHandler : IArchetypeHandler
             if (roll < (int)(FeedingChance * 100))
                 TryStartFeeding(ref ctx);
         }
+    }
+
+    /// <summary>Herd cohesion step: when the deer has strayed beyond the herd's edge, walk it
+    /// back toward the live centroid and return true (the caller should skip its normal roam this
+    /// frame). Returns false — no override — when the deer is solo, squad-less, or already close
+    /// enough to the group. The leash is the herd's own spread plus a margin, so a naturally
+    /// spread-out grazing herd isn't constantly yanked inward; only genuine stragglers regroup.</summary>
+    private static bool TryHerdCohesion(ref AIContext ctx)
+    {
+        var squad = ctx.MySquad;
+        if (squad == null || squad.AliveCount <= 1) return false;
+
+        Vec2 toCentroid = squad.Centroid - ctx.MyPos;
+        float dist = toCentroid.Length();
+        float leash = MathF.Max(HerdCohesionRadius, squad.Spread + HerdCohesionRadius * 0.5f);
+        if (dist <= leash) return false;
+
+        SubroutineSteps.SetEffort(ref ctx, Movement.MoveEffort.Walk, 0.6f);
+        // Aim for a point just inside the leash on our side of the centroid, so stragglers gather
+        // loosely around the herd rather than all piling onto the exact centroid.
+        Vec2 dir = toCentroid * (1f / MathF.Max(dist, 1e-3f));
+        Vec2 dest = squad.Centroid - dir * (leash * 0.5f);
+        SubroutineSteps.MoveToward(ref ctx, dest, ctx.MyMaxSpeed);
+        ctx.Subroutine = 0; // walking sub-state (not idling)
+        return true;
     }
 
     // ═══════════════════════════════════════
@@ -552,6 +584,22 @@ public class DeerHerdHandler : IArchetypeHandler
 
     private static void PropagateFleeToHerd(ref AIContext ctx)
     {
+        // Squad-driven: the whole herd bolts with the spooked deer — exact membership, no
+        // per-frame radius scan. This is the "remember your pack, flee as one" path. Falls
+        // back to a proximity scan only when the deer has no squad (scenarios / unclustered).
+        var squad = ctx.MySquad;
+        if (squad != null)
+        {
+            var members = squad.Members;
+            for (int m = 0; m < members.Count; m++)
+            {
+                if (!ctx.Units.TryGetIndex(members[m], out int j)) continue;
+                if (j == ctx.UnitIndex || !ctx.Units[j].Alive) continue;
+                EscalateHerdmateToFlee(ref ctx, j);
+            }
+            return;
+        }
+
         float herdRadius = ctx.Units[ctx.UnitIndex].GroupAlertRadius;
         if (herdRadius <= 0f) herdRadius = 15f;
         float herdRadiusSq = herdRadius * herdRadius;
@@ -562,18 +610,23 @@ public class DeerHerdHandler : IArchetypeHandler
             if (ctx.Units[j].Faction != ctx.MyFaction) continue;
             if (ctx.Units[j].Archetype != ArchetypeRegistry.DeerHerd) continue;
             if ((ctx.Units[j].Position - ctx.MyPos).LengthSq() > herdRadiusSq) continue;
-
-            // Only escalate deer that aren't already fleeing/fighting
-            byte r = ctx.Units[j].Routine;
-            if (r == RoutineFleeing || r == RoutineFightBack) continue;
-
-            ctx.Units[j].Routine = RoutineFleeing;
-            ctx.Units[j].Subroutine = 0;
-            ctx.Units[j].SubroutineTimer = 0f;
-            ctx.Units[j].AlertTarget = ctx.AlertTarget;
-            ctx.Units[j].AlertState = (byte)UnitAlertState.Aggressive;
-            ctx.Units[j].ShowStatusSymbol(UnitStatusSymbol.React, 1.5f);
+            EscalateHerdmateToFlee(ref ctx, j);
         }
+    }
+
+    /// <summary>Kick a single herdmate into the flee routine, sharing the spooked deer's alert
+    /// target. Skips deer already fleeing / fighting so we don't reset their run.</summary>
+    private static void EscalateHerdmateToFlee(ref AIContext ctx, int j)
+    {
+        byte r = ctx.Units[j].Routine;
+        if (r == RoutineFleeing || r == RoutineFightBack) return;
+
+        ctx.Units[j].Routine = RoutineFleeing;
+        ctx.Units[j].Subroutine = 0;
+        ctx.Units[j].SubroutineTimer = 0f;
+        ctx.Units[j].AlertTarget = ctx.AlertTarget;
+        ctx.Units[j].AlertState = (byte)UnitAlertState.Aggressive;
+        ctx.Units[j].ShowStatusSymbol(UnitStatusSymbol.React, 1.5f);
     }
 
     // ═══════════════════════════════════════

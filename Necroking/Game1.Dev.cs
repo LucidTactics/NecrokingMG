@@ -1779,6 +1779,7 @@ public partial class Game1 {
              $"\"prefVel\":{u.PreferredVel.Length().ToString("F2", ci)}," +
              $"\"wolfPhase\":{u.WolfPhase}," +
              $"\"huntTgt\":{u.WolfHuntTargetId},\"huntPhase\":{u.WolfHuntPhase},\"huntTimer\":{u.WolfHuntTimer.ToString("F1", ci)}," +
+             $"\"squadId\":{u.SquadId}," +
              $"\"aggroScale\":{u.AggroRangeScale.ToString("F2", ci)},\"herdT\":{u.HerdedTimer.ToString("F1", ci)}," +
              $"\"anim\":\"{(_unitAnims.TryGetValue(u.Id, out var _adbg) ? _adbg.Ctrl.CurrentState.ToString() : "?")}\"," +
              $"\"facing\":{u.FacingAngle.ToString("F0", ci)}," +

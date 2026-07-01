@@ -85,39 +85,42 @@ public static class WolfPackHuntAI
         }
         if (_hunters.Count == 0) return;
 
-        // 2. Pick ONE shared prey for the whole pack: keep the currently-locked deer while it lives,
-        //    otherwise acquire the deer nearest the cast point.
-        int targetIdx = ChooseTarget(units, cmdPos);
-        if (targetIdx < 0)
+        // 2. Pick ONE shared prey HERD for the whole pack: keep the currently-locked squad while it
+        //    lives, otherwise acquire the herd of the deer nearest the cast point. Hunting the whole
+        //    herd (its centroid + extent) — not one animal embedded in a moving cluster — is the
+        //    core of getting the flank right: "the far side, outside its vision" only means anything
+        //    when it's the far side of the whole pack.
+        var squad = ChooseTargetSquad(sim, units, cmdPos);
+        if (squad == null || squad.AliveCount == 0)
         {
             for (int s = 0; s < _hunters.Count; s++) ClearHunt(units, _hunters[s]);
             return;
         }
-        uint targetId = units[targetIdx].Id;
-        Vec2 deerPos = units[targetIdx].Position;
-        float deerDet = units[targetIdx].DetectionRange;
-        if (deerDet <= 0f) deerDet = 10f;
+        uint targetSquadId = squad.Id;
+        Vec2 herdPos = squad.Centroid;            // flank/drive reference = where the pack is
+        float herdSpread = squad.Spread;          // the pack's extent
+        float herdDet = HerdDetectionRange(units, squad); // widest vision in the herd
 
         // Stable slot assignment: order hunters by unit id so a given wolf keeps its slot
         // frame to frame (no swapping / oscillation as the list order shifts).
         _hunters.Sort((a, b) => units[a].Id.CompareTo(units[b].Id));
         int n = _hunters.Count;
 
-        // Far side of the deer, opposite the necromancer: the base direction the pack fans around.
-        Vec2 nd = deerPos - necroPos;
+        // Far side of the HERD, opposite the necromancer: the base direction the pack fans around.
+        Vec2 nd = herdPos - necroPos;
         float baseAngle = (nd.LengthSq() > 1e-4f) ? MathF.Atan2(nd.Y, nd.X) : 0f;
 
-        // Unit vector from the necromancer toward the deer — "the far side" is anything
-        // beyond the deer along this direction.
+        // Unit vector from the necromancer toward the herd — "the far side" is anything
+        // beyond the herd along this direction.
         Vec2 farDir = nd;
         float ndLen = farDir.Length();
         farDir = ndLen > 1e-3f ? farDir * (1f / ndLen) : new Vec2(0f, 1f);
 
         // 3. Decide the pack phase collectively. The drive commits only once enough of the pack
-        //    has crossed to the FAR side of the deer (beyond it, away from the necromancer) — a
+        //    has crossed to the FAR side of the herd (beyond it, away from the necromancer) — a
         //    robust geometric test, not fragile slot-matching. Positioned that way, driving inward
-        //    makes the deer flee away from the wolves, i.e. straight toward the necromancer. Once
-        //    committed it latches (anyDriving) so a deer that bolts can't reset the pack to flanking,
+        //    makes the herd flee away from the wolves, i.e. straight toward the necromancer. Once
+        //    committed it latches (anyDriving) so a herd that bolts can't reset the pack to flanking,
         //    and a flank timeout is the safety valve for a pack that can never get around.
         bool anyDriving = false;
         int positioned = 0;
@@ -128,42 +131,37 @@ public static class WolfPackHuntAI
             if (units[u].WolfHuntPhase == 1) anyDriving = true;
             if (units[u].WolfHuntTimer > maxTimer) maxTimer = units[u].WolfHuntTimer;
 
-            float standoff = deerDet + DetectMargin + units[u].Radius;
-            var rel = units[u].Position - deerPos;
+            float standoff = herdSpread + herdDet + DetectMargin + units[u].Radius;
+            var rel = units[u].Position - herdPos;
             if (rel.Dot(farDir) >= standoff * FarSideDepthFrac) positioned++;
         }
         int needReady = Math.Max(1, (int)MathF.Ceiling(n * ReadyFraction));
         bool drive = anyDriving || positioned >= needReady || maxTimer >= FlankTimeout;
 
-        // The instant the pack commits, stamp the "herded" cheat on the prey (once): it bolts toward
-        // the necromancer for HerdDuration. Done at commit — while the charging wolves are still ~a
-        // standoff away — so the deer gets a head start and actually runs there, rather than being
-        // pounced and pinned in place before it can move. DeerHerdHandler forces the flee direction.
-        if (drive && !units[targetIdx].HerdedApplied)
-        {
-            var toNecro = necroPos - deerPos;
-            float tl = toNecro.Length();
-            units[targetIdx].HerdedDir = tl > 1e-3f ? toNecro * (1f / tl) : farDir * -1f;
-            units[targetIdx].HerdedTimer = HerdDuration;
-            units[targetIdx].HerdedApplied = true;
-        }
+        // The instant the pack commits, stamp the "herded" cheat on the WHOLE herd (each deer once):
+        // every member bolts toward the necromancer for HerdDuration. Done at commit — while the
+        // charging wolves are still ~a standoff away — so the herd gets a head start and actually
+        // runs there, rather than being pounced and pinned before it can move. DeerHerdHandler forces
+        // the flee direction. Stamping the whole squad is what makes the herd move as one toward you.
+        if (drive)
+            ApplyHerdedToSquad(units, squad, necroPos, farDir);
 
         // 4. Apply movement. Once the pack commits to the drive, only the wolves already on the
-        //    FAR side press the attack — they're the initiators, and charging from behind the prey
-        //    they herd it toward the necromancer (and the rest of your animals). The wolves on the
-        //    necromancer's side keep holding the ring at standoff: staying farther from the prey than
+        //    FAR side press the attack — they're the initiators, and charging from behind the herd
+        //    they drive it toward the necromancer (and the rest of your animals). The wolves on the
+        //    necromancer's side keep holding the ring at standoff: staying farther from the herd than
         //    the initiators, they never become the nearest threat, so they never turn the prey the
         //    wrong way or cut off the lane it flees down toward you.
         for (int s = 0; s < n; s++)
         {
             int u = _hunters[s];
-            units[u].WolfHuntTargetId = targetId;
+            units[u].WolfHuntTargetId = targetSquadId;
 
             float slotAngle = SlotAngle(baseAngle, s, n);
-            float standoff = deerDet + DetectMargin + units[u].Radius;
-            var rel = units[u].Position - deerPos;
-            // Only wolves genuinely BEHIND the deer (same depth test that gates the drive) charge in.
-            // Wolves merely at the deer's sides (dot ≈ 0) would, if they charged, become the nearest
+            float standoff = herdSpread + herdDet + DetectMargin + units[u].Radius;
+            var rel = units[u].Position - herdPos;
+            // Only wolves genuinely BEHIND the herd (same depth test that gates the drive) charge in.
+            // Wolves merely at the herd's sides (dot ≈ 0) would, if they charged, become the nearest
             // threat off to one side and make the prey bolt sideways instead of toward the necromancer —
             // so they keep circling until they've actually gotten behind it.
             bool behind = rel.Dot(farDir) >= standoff * FarSideDepthFrac;
@@ -172,19 +170,48 @@ public static class WolfPackHuntAI
             {
                 units[u].WolfHuntPhase = 1;
                 units[u].WolfHuntTimer = 0f;
-                // Initiator: full-commit sprint into the prey from behind.
-                sim.AIWolfHuntMove(u, deerPos, sprint: true, dt);
+                // Initiator: full-commit sprint into the herd from behind.
+                sim.AIWolfHuntMove(u, herdPos, sprint: true, dt);
             }
             else
             {
-                // Still flanking: the pack hasn't committed, or this wolf is at the deer's side / the
+                // Still flanking: the pack hasn't committed, or this wolf is at the herd's side / the
                 // necromancer's side and must hold the ring so the prey keeps fleeing toward you.
                 units[u].WolfHuntPhase = 0;
                 units[u].WolfHuntTimer += dt;
-                Vec2 ringTarget = CircleTarget(units[u].Position, deerPos, slotAngle, standoff);
+                Vec2 ringTarget = CircleTarget(units[u].Position, herdPos, slotAngle, standoff);
                 // Cautious jog while flanking — a sneak-up, not a charge.
                 sim.AIWolfHuntMove(u, ringTarget, sprint: false, dt);
             }
+        }
+    }
+
+    /// <summary>Widest detection range among the herd's live members (fallback 10). The flank
+    /// standoff clears the most alert deer's vision, so no member spots the circling pack early.</summary>
+    private static float HerdDetectionRange(UnitArrays units, Squad squad)
+    {
+        float det = 0f;
+        for (int m = 0; m < squad.Members.Count; m++)
+            if (units.TryGetIndex(squad.Members[m], out int j) && units[j].Alive
+                && units[j].DetectionRange > det)
+                det = units[j].DetectionRange;
+        return det > 0f ? det : 10f;
+    }
+
+    /// <summary>Stamp the "herded" flee cheat on every not-yet-kicked member of the target herd,
+    /// each fleeing toward the necromancer from its own position. A one-time kick per deer (see
+    /// <see cref="Unit.HerdedApplied"/>), mirroring the single-prey path but for the whole squad.</summary>
+    private static void ApplyHerdedToSquad(UnitArrays units, Squad squad, Vec2 necroPos, Vec2 farDir)
+    {
+        for (int m = 0; m < squad.Members.Count; m++)
+        {
+            if (!units.TryGetIndex(squad.Members[m], out int j) || !units[j].Alive) continue;
+            if (units[j].HerdedApplied) continue;
+            var toNecro = necroPos - units[j].Position;
+            float tl = toNecro.Length();
+            units[j].HerdedDir = tl > 1e-3f ? toNecro * (1f / tl) : farDir * -1f;
+            units[j].HerdedTimer = HerdDuration;
+            units[j].HerdedApplied = true;
         }
     }
 
@@ -249,27 +276,28 @@ public static class WolfPackHuntAI
         units[u].WolfHuntTimer = 0f;
     }
 
-    /// <summary>Keep the pack's locked prey while it's still a live deer (a commanded hunt sticks
-    /// with its quarry even as it's driven away from the cast point); otherwise acquire the deer
-    /// nearest <paramref name="refPos"/> (the cast point) within HuntRange. Returns the prey's unit
-    /// index or -1. The lock is read from whichever hunter already carries a WolfHuntTargetId.</summary>
-    private static int ChooseTarget(UnitArrays units, Vec2 refPos)
+    /// <summary>Keep the pack's locked prey HERD while it still has live members (a commanded hunt
+    /// sticks with its quarry even as it's driven away from the cast point); otherwise acquire the
+    /// herd of the deer nearest <paramref name="refPos"/> (the cast point) within HuntRange. Returns
+    /// the target <see cref="Squad"/> or null. The lock is a squad id read from whichever hunter
+    /// already carries a WolfHuntTargetId.</summary>
+    private static Squad? ChooseTargetSquad(Simulation sim, UnitArrays units, Vec2 refPos)
     {
-        // Existing lock (shared across the pack — first hunter with one wins).
+        var squads = sim.Squads;
+
+        // Existing lock (shared across the pack — first hunter with one wins). WolfHuntTargetId
+        // holds the SQUAD id here, not a unit id.
         uint lockedId = 0;
         for (int s = 0; s < _hunters.Count; s++)
         {
             uint id = units[_hunters[s]].WolfHuntTargetId;
             if (id != 0) { lockedId = id; break; }
         }
-        if (lockedId != 0)
-        {
-            int idx = UnitUtil.ResolveUnitIndex(units, lockedId);
-            if (idx >= 0 && units[idx].Alive && units[idx].Archetype == ArchetypeRegistry.DeerHerd)
-                return idx;
-        }
+        if (lockedId != 0 && squads.TryGet(lockedId, out var locked)
+            && locked.Archetype == ArchetypeRegistry.DeerHerd && locked.AliveCount > 0)
+            return locked;
 
-        // Acquire the nearest deer to the cast point within HuntRange.
+        // Acquire the herd of the nearest deer to the cast point within HuntRange.
         float bestSq = HuntRange * HuntRange;
         int best = -1;
         for (int j = 0; j < units.Count; j++)
@@ -279,7 +307,8 @@ public static class WolfPackHuntAI
             float d2 = (units[j].Position - refPos).LengthSq();
             if (d2 < bestSq) { bestSq = d2; best = j; }
         }
-        return best;
+        if (best < 0) return null;
+        return squads.Get(units[best].SquadId);
     }
 
     /// <summary>Angle (world radians) of slot <paramref name="s"/> of <paramref name="n"/> on the
