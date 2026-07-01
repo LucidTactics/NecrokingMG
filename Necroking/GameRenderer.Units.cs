@@ -826,6 +826,58 @@ partial class GameRenderer
         _g._spriteBatch.Draw(tex, screenPos, frame.Rect, tint, 0f, origin, scale, effects, 0f);
     }
 
+    // Write depth only, no color — for the depth-sorted-fog occluder stamp.
+    private static readonly BlendState _depthOnlyBlend = new() { ColorWriteChannels = ColorWriteChannels.None };
+
+    /// <summary>Ground-Y → SpriteBatch layerDepth. Larger world Y (drawn in front / nearer the camera
+    /// in the painter's sort) → SMALLER depth (occludes). Units (the occluder stamp) and the fog puffs
+    /// (ReanimEffectSystem.DrawAdditive) MUST use this same mapping so they compare.</summary>
+    internal static float FogDepthForY(float worldY) => MathHelper.Clamp(1f - worldY * 0.005f, 0f, 1f);
+
+    /// <summary>Stamp each UNIT's sprite silhouette into the depth buffer (color-write off, depth-write
+    /// on, cutout shader) so the additive reanimation fog can depth-test against them. UNITS ONLY, not
+    /// corpses — during a morph there's no risen unit yet, so the fog still fully covers the morph;
+    /// once the unit rises it can occlude its own lingering smoke. Gated by Performance.DepthSortedFog;
+    /// runs after the color scene while the scene RT + its depth buffer are still bound.</summary>
+    internal void DrawFogDepthOccluders()
+    {
+        var effect = _g._depthCutoutEffect;
+        if (effect == null) return;
+
+        _g._spriteBatch.Begin(SpriteSortMode.Deferred, _depthOnlyBlend, SamplerState.LinearClamp,
+            DepthStencilState.Default, RasterizerState.CullNone, effect);
+
+        for (int i = 0; i < _g._sim.Units.Count; i++)
+        {
+            var u = _g._sim.Units[i];
+            if (!u.Alive) continue;
+            // Match DrawSingleUnit's visibility so fog-hidden enemies don't stamp invisible occluders.
+            if (u.Faction != Faction.Undead && !_g._fogOfWar.IsVisible(u.Position)) continue;
+            if (!_g._unitAnims.TryGetValue(u.Id, out var animData)) continue;
+            var unitDef = _g._gameData.Units.Get(u.UnitDefID);
+            if (unitDef == null) continue;
+            var atlas = _g._atlases[animData.AtlasID];
+            if (!atlas.IsLoaded) continue;
+            var fr = animData.Ctrl.GetCurrentFrame(u.FacingAngle);
+            if (fr.Frame == null) continue;
+            var frame = fr.Frame.Value;
+            var tex = atlas.GetTextureForFrame(frame);
+            if (tex == null) continue;
+
+            float worldH = (unitDef.SpriteWorldHeight > 0 ? unitDef.SpriteWorldHeight : 1.8f) * u.SpriteScale;
+            float scale = (worldH * _g._camera.Zoom) / animData.RefFrameHeight;
+            var sp = _g._renderer.WorldToScreen(u.RenderPos, u.Z, _g._camera);
+
+            float pivotX = fr.FlipX ? (1f - frame.PivotX) : frame.PivotX;
+            float pivotY = 1f - frame.PivotY;
+            var origin = new Vector2(pivotX * frame.Rect.Width, pivotY * frame.Rect.Height);
+            var effects = fr.FlipX ? SpriteEffects.FlipHorizontally : SpriteEffects.None;
+            _g._spriteBatch.Draw(tex, sp, frame.Rect, Color.White, 0f, origin, scale, effects, FogDepthForY(u.Position.Y));
+        }
+
+        _g._spriteBatch.End();
+    }
+
     /// <summary>Draw a unit sprite with the wading shader applied — fades alpha
     /// below <paramref name="waterlineV"/> (V coord, 0=top, 1=bottom) and adds a
     /// foam smear at the line. Wraps the call in End()/Begin(effect)/End()/

@@ -368,7 +368,11 @@ internal class ReanimEffectSystem
                     var src = _cloud.GetFrameRect(frame);
                     float scale = (q.WorldSize * zoom) / frameW;
                     var origin = new Vector2(src.Width * 0.5f, src.Height * 0.5f);
-                    _batch.Draw(tex, sp, src, q.Color.ToHdrVertex(a), q.RotSpeed * inst.FogAge, origin, scale, SpriteEffects.None, 0f);
+                    // layerDepth from the puff's ground Y — only used when the depth-sorted-fog batch is
+                    // active (DepthStencilState.DepthRead); ignored otherwise. MUST match the occluder
+                    // stamp's mapping (GameRenderer.FogDepthForY): larger Y -> smaller depth.
+                    float ld = MathHelper.Clamp(1f - world.Y * 0.005f, 0f, 1f);
+                    _batch.Draw(tex, sp, src, q.Color.ToHdrVertex(a), q.RotSpeed * inst.FogAge, origin, scale, SpriteEffects.None, ld);
                 }
             }
         }

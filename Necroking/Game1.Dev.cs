@@ -882,6 +882,15 @@ public partial class Game1 {
 
             // Reanimate the nearest eligible corpse into a SPECIFIED zombie type (exercises the
             // cross-type standup morph). window.dev('reanim_into',['ZombieWolf'])  or  [...,x,y].
+            // A/B the depth-sorted reanimation fog (same as the in-game 'H' key).
+            case "depthfog": {   // window.dev('depthfog',['on'|'off'|'toggle'])
+               var perf = _gameData.Settings.Performance;
+               string dfArg = c.Args.Length > 0 ? c.Args[0].ToLowerInvariant() : "toggle";
+               perf.DepthSortedFog = dfArg == "on" ? true : dfArg == "off" ? false : !perf.DepthSortedFog;
+               c.Complete(Necroking.Dev.DevServer.Ok($"depthSortedFog={perf.DepthSortedFog}"));
+               break;
+            }
+
             case "reanim_into": {
                if (c.Args.Length < 1) { c.Complete(Necroking.Dev.DevServer.Error("reanim_into needs <zombieDefId> [x] [y]")); break; }
                string zinto = c.Args[0];
