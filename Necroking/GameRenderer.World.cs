@@ -406,16 +406,19 @@ partial class GameRenderer
 
         var mid = (a + b) * 0.5f + new Vector2(0f, sag);
 
-        // Sample the quadratic bezier a→mid→b and chain thick segments.
+        // Sample the quadratic bezier a→mid→b and chain thick segments. Alternate
+        // segments render slightly darker for a braided/twisted-fibre read.
         const int segments = 14;
         var prev = a;
-        var ropeColor = new Color(90, 66, 40); // dark hemp
+        var ropeBright = new Color(214, 184, 122); // bright hemp
+        var ropeDim = new Color(176, 148, 94);     // every-other segment, ~0.8× brightness
         for (int s = 1; s <= segments; s++)
         {
             float t = s / (float)segments;
             float u = 1f - t;
             var p = u * u * a + 2f * u * t * mid + t * t * b;
-            DrawUtils.DrawLine(_g._spriteBatch, _g._pixel, prev, p, ropeColor, 2f);
+            DrawUtils.DrawLine(_g._spriteBatch, _g._pixel, prev, p,
+                (s % 2 == 0) ? ropeBright : ropeDim, 2f);
             prev = p;
         }
     }
