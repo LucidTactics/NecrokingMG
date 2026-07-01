@@ -37,22 +37,27 @@ internal class ReanimMorph
     /// <summary>Number of distinct (death,standup,flip) morphs currently built/cached.</summary>
     public int Count => _cache.Count;
 
-    public MorphData GetOrBuild(GraphicsDevice gd, SpriteAtlas atlas,
-        in SpriteFrame death, bool deathFlip, in SpriteFrame standup, bool standupFlip)
+    public MorphData GetOrBuild(GraphicsDevice gd,
+        SpriteAtlas atlasDeath, int deathAtlasId, in SpriteFrame death, bool deathFlip,
+        SpriteAtlas atlasStandup, int standupAtlasId, in SpriteFrame standup, bool standupFlip)
     {
-        string key = $"{death.TextureIndex}:{death.Rect.X},{death.Rect.Y},{death.Rect.Width},{death.Rect.Height},{deathFlip}|"
-                   + $"{standup.TextureIndex}:{standup.Rect.X},{standup.Rect.Y},{standup.Rect.Width},{standup.Rect.Height},{standupFlip}";
+        // Atlas id is part of the key: death + standup can now come from DIFFERENT atlases (the
+        // corpse's body vs the risen zombie's), so two frames with the same TextureIndex/Rect in
+        // different atlases must not collide.
+        string key = $"{deathAtlasId}#{death.TextureIndex}:{death.Rect.X},{death.Rect.Y},{death.Rect.Width},{death.Rect.Height},{deathFlip}|"
+                   + $"{standupAtlasId}#{standup.TextureIndex}:{standup.Rect.X},{standup.Rect.Y},{standup.Rect.Width},{standup.Rect.Height},{standupFlip}";
         if (_cache.TryGetValue(key, out var cached)) return cached;
-        var data = Build(gd, atlas, death, deathFlip, standup, standupFlip);
+        var data = Build(gd, atlasDeath, death, deathFlip, atlasStandup, standup, standupFlip);
         _cache[key] = data;
         return data;
     }
 
-    private MorphData Build(GraphicsDevice gd, SpriteAtlas atlas,
-        in SpriteFrame death, bool deathFlip, in SpriteFrame standup, bool standupFlip)
+    private MorphData Build(GraphicsDevice gd,
+        SpriteAtlas atlasDeath, in SpriteFrame death, bool deathFlip,
+        SpriteAtlas atlasStandup, in SpriteFrame standup, bool standupFlip)
     {
-        var texD = atlas.GetTextureForFrame(death);
-        var texU = atlas.GetTextureForFrame(standup);
+        var texD = atlasDeath.GetTextureForFrame(death);
+        var texU = atlasStandup.GetTextureForFrame(standup);
         if (texD == null || texU == null) return default;
 
         int wD = death.Rect.Width, hD = death.Rect.Height;

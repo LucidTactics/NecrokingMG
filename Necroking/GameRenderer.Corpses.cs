@@ -28,12 +28,14 @@ partial class GameRenderer
     // the crossfaded body color + green energy in the bulge gaps, and traces a pulsing green outline
     // on the morphed edge. Returns false if the shader / morph data is unavailable (caller falls
     // back to an alpha crossfade). Draws in its own batch (like DrawSpriteOutline), then restores.
-    private bool DrawReanimMorph(SpriteAtlas atlas, SpriteFrame death, bool deathFlip,
-        SpriteFrame standup, bool standupFlip, Vector2 sp, float scale, Color tint, float morphT,
+    private bool DrawReanimMorph(SpriteAtlas atlasDeath, int deathAtlasId, SpriteFrame death, bool deathFlip,
+        SpriteAtlas atlasStandup, int standupAtlasId, SpriteFrame standup, bool standupFlip,
+        Vector2 sp, float scale, Color tint, float morphT,
         HdrColor outline, float outlineWidth, float pulseWidth, float pulseSpeed)
     {
         if (_g._morphSdfEffect == null) return false;
-        var md = _g._reanimMorph.GetOrBuild(_g.GraphicsDevice, atlas, death, deathFlip, standup, standupFlip);
+        var md = _g._reanimMorph.GetOrBuild(_g.GraphicsDevice, atlasDeath, deathAtlasId, death, deathFlip,
+                                            atlasStandup, standupAtlasId, standup, standupFlip);
         if (!md.Valid || md.ColorA == null || md.ColorB == null || md.Sdf == null) return false;
 
         float pulse = 0.5f + 0.5f * MathF.Sin(_g._gameTime * pulseSpeed * 2f * MathF.PI);
@@ -63,6 +65,40 @@ partial class GameRenderer
         _g._spriteBatch.End();
         _g._spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.LinearClamp);
         return true;
+    }
+
+    // Cache of anim controllers for reanimation TARGET types (the zombie a corpse rises into), so the
+    // morph can read the target's standup-start frame + atlas without rebuilding each frame. Keyed by
+    // unit def id; null is cached for unknown/sprite-less defs. Static-pose lookups only (never ticked).
+    private readonly Dictionary<string, Game1.UnitAnimData?> _reanimTargetAnims = new();
+
+    private Game1.UnitAnimData? GetReanimTargetAnim(string defId)
+    {
+        if (string.IsNullOrEmpty(defId)) return null;
+        if (_reanimTargetAnims.TryGetValue(defId, out var cached)) return cached;
+        Game1.UnitAnimData? result = null;
+        var def = _g._gameData.Units.Get(defId);
+        if (def?.Sprite != null)
+        {
+            int atlasId = AtlasDefs.ResolveAtlasName(def.Sprite.AtlasName);
+            if (atlasId >= 0 && atlasId < _g._atlases.Length && _g._atlases[atlasId].IsLoaded)
+            {
+                var spriteData = _g._atlases[atlasId].GetUnit(def.Sprite.SpriteName);
+                if (spriteData != null)
+                {
+                    var ctrl = new AnimController();
+                    ctrl.Init(spriteData);
+                    if (_g._animMeta.Count > 0)
+                        ctrl.SetAnimMeta(_g._animMeta, def.Sprite.SpriteName);
+                    float refH = 128f;
+                    var idle = spriteData.GetAnim("Idle");
+                    if (idle != null) { var kfs = PickIdleFrames(idle); if (kfs != null && kfs.Count > 0) refH = kfs[0].Frame.Rect.Height; }
+                    result = new Game1.UnitAnimData { Ctrl = ctrl, AtlasID = atlasId, RefFrameHeight = refH, CachedDefID = defId };
+                }
+            }
+        }
+        _reanimTargetAnims[defId] = result;
+        return result;
     }
 
     private void DrawCorpses()
@@ -177,20 +213,39 @@ partial class GameRenderer
                     _g._reanimFx.TryGetCorpseOutline(corpse.ReanimInstanceId, out var co1, out var co2,
                         out var cow, out var cpw, out var cps, out float morphT))
                 {
-                    var frUp = cad.Ctrl.GetFrameForStateStart(AnimState.Standup, corpse.FacingAngle);
-                    // The SDF morph is an opt-in prototype (off by default — its build is
-                    // heavy and gets in the way of testing). When off, fall through to the
-                    // cheap alpha crossfade below, which builds nothing.
+                    // Target the RISEN ZOMBIE's standup-start pose + sprite/atlas (not the corpse's own
+                    // type), so the morph ends on — and hands off seamlessly to — whatever actually rises,
+                    // including cross-type raises. Falls back to the corpse's own standup if the target
+                    // zombie type/sprite is unavailable.
+                    SpriteAtlas upAtlas = atlas; int upAtlasId = atlasId;
+                    AnimController upCtrl = cad.Ctrl; float upScale = scale;
+                    var ztarget = GetReanimTargetAnim(corpse.ReanimZombieDefId);
+                    if (ztarget != null && ztarget.Value.AtlasID >= 0 && ztarget.Value.AtlasID < _g._atlases.Length
+                        && _g._atlases[ztarget.Value.AtlasID].IsLoaded)
+                    {
+                        var zt = ztarget.Value;
+                        var zdef = _g._gameData.Units.Get(corpse.ReanimZombieDefId);
+                        upAtlas = _g._atlases[zt.AtlasID]; upAtlasId = zt.AtlasID; upCtrl = zt.Ctrl;
+                        float zWorldH = (zdef != null && zdef.SpriteWorldHeight > 0 ? zdef.SpriteWorldHeight : 1.8f)
+                                        * (zdef?.SpriteScale ?? 1f);
+                        upScale = (zWorldH * _g._camera.Zoom) / zt.RefFrameHeight;
+                    }
+                    var frUp = upCtrl.GetFrameForStateStart(AnimState.Standup, corpse.FacingAngle);
+                    // Lerp the body's display scale corpse->zombie so it ends at the zombie's real size
+                    // (no size pop at the hand-off); a no-op when the two share a scale.
+                    float morphScale = scale + (upScale - scale) * morphT;
+                    // The SDF morph is opt-in (Performance.ReanimMorph, off by default) — its build is
+                    // heavy; when off, fall through to the cheap alpha crossfade below.
                     bool morphed = _g._gameData.Settings.Performance.ReanimMorph
                         && frUp.Frame != null
-                        && DrawReanimMorph(atlas, fr.Frame.Value, fr.FlipX, frUp.Frame.Value, frUp.FlipX,
-                                           sp, scale, corpseTint, morphT, co1, cow, cpw, cps);
+                        && DrawReanimMorph(atlas, atlasId, fr.Frame.Value, fr.FlipX,
+                                           upAtlas, upAtlasId, frUp.Frame.Value, frUp.FlipX,
+                                           sp, morphScale, corpseTint, morphT, co1, cow, cpw, cps);
                     if (!morphed)
                     {
-                        float wD = 1f - morphT, wU = morphT;
-                        DrawSpriteFrame(atlas, fr.Frame.Value, sp, scale, fr.FlipX, corpseTint * wD);
+                        DrawSpriteFrame(atlas, fr.Frame.Value, sp, scale, fr.FlipX, corpseTint * (1f - morphT));
                         if (frUp.Frame != null)
-                            DrawSpriteFrame(atlas, frUp.Frame.Value, sp, scale, frUp.FlipX, corpseTint * wU);
+                            DrawSpriteFrame(upAtlas, frUp.Frame.Value, sp, upScale, frUp.FlipX, corpseTint * morphT);
                     }
                 }
                 else
@@ -607,13 +662,14 @@ partial class GameRenderer
 
     private readonly struct MorphPrewarmJob
     {
-        public readonly SpriteAtlas Atlas;
-        public readonly SpriteFrame Death;
-        public readonly bool DeathFlip;
-        public readonly SpriteFrame Standup;
-        public readonly bool StandupFlip;
-        public MorphPrewarmJob(SpriteAtlas a, SpriteFrame d, bool df, SpriteFrame s, bool sf)
-        { Atlas = a; Death = d; DeathFlip = df; Standup = s; StandupFlip = sf; }
+        public readonly SpriteAtlas DeathAtlas; public readonly int DeathAtlasId;
+        public readonly SpriteFrame Death; public readonly bool DeathFlip;
+        public readonly SpriteAtlas StandupAtlas; public readonly int StandupAtlasId;
+        public readonly SpriteFrame Standup; public readonly bool StandupFlip;
+        public MorphPrewarmJob(SpriteAtlas da, int dai, SpriteFrame d, bool df,
+                               SpriteAtlas sa, int sai, SpriteFrame s, bool sf)
+        { DeathAtlas = da; DeathAtlasId = dai; Death = d; DeathFlip = df;
+          StandupAtlas = sa; StandupAtlasId = sai; Standup = s; StandupFlip = sf; }
     }
 
     private readonly Queue<MorphPrewarmJob> _morphPrewarmQueue = new();
@@ -636,16 +692,24 @@ partial class GameRenderer
         foreach (var def in _g._gameData.Units.All())
         {
             if (def?.Sprite == null) continue;
-            int ai = Core.AtlasDefs.ResolveAtlasName(def.Sprite.AtlasName);
-            if (ai < 0 || ai >= _g._atlases.Length || !_g._atlases[ai].IsLoaded) continue;
-            var atlas = _g._atlases[ai];
-            var spriteData = atlas.GetUnit(def.Sprite.SpriteName);
-            if (spriteData == null) continue;
-            // Both anims are required to morph; skip units that can't reanimate-morph.
-            if (spriteData.GetAnim("Death") == null || spriteData.GetAnim("Standup") == null) continue;
+            int cai = Core.AtlasDefs.ResolveAtlasName(def.Sprite.AtlasName);
+            if (cai < 0 || cai >= _g._atlases.Length || !_g._atlases[cai].IsLoaded) continue;
+            var cAtlas = _g._atlases[cai];
+            var cSprite = cAtlas.GetUnit(def.Sprite.SpriteName);
+            if (cSprite?.GetAnim("Death") == null) continue;   // must have a death pose to morph FROM
+
+            // The morph now targets the RISEN ZOMBIE's standup, so prewarm corpse-death -> zombie-standup
+            // (across atlases). Group-based zombie types resolve randomly at runtime; we prewarm one
+            // representative and let any other member build lazily on first raise.
+            string zid = Necroking.Game.TableCraftingSystem.ResolveZombieUnitID(_g._gameData, def.Id);
+            var ztarget = GetReanimTargetAnim(zid);
+            if (ztarget == null) continue;                     // no resolvable zombie -> can't reanimate
+            var zt = ztarget.Value;
+            if (zt.AtlasID < 0 || zt.AtlasID >= _g._atlases.Length || !_g._atlases[zt.AtlasID].IsLoaded) continue;
+            var zAtlas = _g._atlases[zt.AtlasID];
 
             var ctrl = new AnimController();
-            ctrl.Init(spriteData);
+            ctrl.Init(cSprite);
             if (_g._animMeta.Count > 0) ctrl.SetAnimMeta(_g._animMeta, def.Sprite.SpriteName);
             ctrl.ForceStateAtEnd(AnimState.Death);
 
@@ -654,16 +718,15 @@ partial class GameRenderer
             // GetOrBuild dedupes by key (a repeat is a ~free cache hit at drain time).
             for (int deg = 0; deg < 360; deg += 30)
             {
-                var fr = ctrl.GetCurrentFrame(deg);
-                var frUp = ctrl.GetFrameForStateStart(AnimState.Standup, deg);
+                var fr = ctrl.GetCurrentFrame(deg);                                // corpse death
+                var frUp = zt.Ctrl.GetFrameForStateStart(AnimState.Standup, deg);   // zombie standup
                 if (fr.Frame == null || frUp.Frame == null) continue;
-                // Dedupe to distinct morphs so the queue holds only real builds (no
-                // cache-hit jobs clogging the drain). Key matches ReanimMorph's cache key.
                 var d = fr.Frame.Value; var s = frUp.Frame.Value;
-                string key = $"{d.TextureIndex}:{d.Rect.X},{d.Rect.Y},{d.Rect.Width},{d.Rect.Height},{fr.FlipX}|"
-                           + $"{s.TextureIndex}:{s.Rect.X},{s.Rect.Y},{s.Rect.Width},{s.Rect.Height},{frUp.FlipX}";
+                // Key must match ReanimMorph's cache key (incl. the two atlas ids).
+                string key = $"{cai}#{d.TextureIndex}:{d.Rect.X},{d.Rect.Y},{d.Rect.Width},{d.Rect.Height},{fr.FlipX}|"
+                           + $"{zt.AtlasID}#{s.TextureIndex}:{s.Rect.X},{s.Rect.Y},{s.Rect.Width},{s.Rect.Height},{frUp.FlipX}";
                 if (!seen.Add(key)) continue;
-                _morphPrewarmQueue.Enqueue(new MorphPrewarmJob(atlas, d, fr.FlipX, s, frUp.FlipX));
+                _morphPrewarmQueue.Enqueue(new MorphPrewarmJob(cAtlas, cai, d, fr.FlipX, zAtlas, zt.AtlasID, s, frUp.FlipX));
             }
         }
         DebugLog.Log("startup", $"[prewarm] reanim morph jobs queued: {_morphPrewarmQueue.Count}");
@@ -684,7 +747,8 @@ partial class GameRenderer
         while (_morphPrewarmQueue.Count > 0 && sw.Elapsed.TotalMilliseconds < 4.0)
         {
             var j = _morphPrewarmQueue.Dequeue();
-            _g._reanimMorph.GetOrBuild(_g.GraphicsDevice, j.Atlas, j.Death, j.DeathFlip, j.Standup, j.StandupFlip);
+            _g._reanimMorph.GetOrBuild(_g.GraphicsDevice, j.DeathAtlas, j.DeathAtlasId, j.Death, j.DeathFlip,
+                                       j.StandupAtlas, j.StandupAtlasId, j.Standup, j.StandupFlip);
         }
         if (_morphPrewarmQueue.Count == 0)
             DebugLog.Log("startup", $"[prewarm] reanim morphs done: {_g._reanimMorph.Count} cached");

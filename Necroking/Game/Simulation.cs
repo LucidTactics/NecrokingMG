@@ -20,6 +20,9 @@ public class Corpse
     /// the renderer draws the green undead outline fading in on it; the unit rises + the corpse
     /// is removed cleanly when the delay elapses.</summary>
     public int ReanimInstanceId;
+    /// <summary>Resolved target zombie def this corpse rises into — so the reanim morph targets the
+    /// ZOMBIE's standup-start pose/atlas for a seamless hand-off, not the corpse's own type.</summary>
+    public string ReanimZombieDefId = "";
     public float Age;
     public int CorpseID;
     public UnitType UnitType = UnitType.Skeleton;

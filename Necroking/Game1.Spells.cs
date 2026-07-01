@@ -252,7 +252,11 @@ public partial class Game1 {
       int fxId = _reanimFx.Begin(GameConstants.InvalidUnit, pos, scale, configId,
                                  outlineFadeIn: delay, morphHold: MathF.Max(0f, delay - 1.5f),
                                  riseSpeed: riseSpeed, fogSpeed: fogSpeed);
-      if (corpseIdx >= 0) _sim.Corpses[corpseIdx].ReanimInstanceId = fxId;
+      if (corpseIdx >= 0)
+      {
+         _sim.Corpses[corpseIdx].ReanimInstanceId = fxId;
+         _sim.Corpses[corpseIdx].ReanimZombieDefId = defId;   // morph targets the zombie's standup pose
+      }
       _pendingReanimRises.Add(new PendingReanimRise
          { Pos = pos, Facing = facing, DefId = defId, FxInstanceId = fxId, CorpseId = corpseId,
            Timer = spawnDelay, StandupSpeed = standupSpeed, OnSpawned = onSpawned });

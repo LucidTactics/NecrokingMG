@@ -880,6 +880,30 @@ public partial class Game1 {
                break;
             }
 
+            // Reanimate the nearest eligible corpse into a SPECIFIED zombie type (exercises the
+            // cross-type standup morph). window.dev('reanim_into',['ZombieWolf'])  or  [...,x,y].
+            case "reanim_into": {
+               if (c.Args.Length < 1) { c.Complete(Necroking.Dev.DevServer.Error("reanim_into needs <zombieDefId> [x] [y]")); break; }
+               string zinto = c.Args[0];
+               float rix, riy;
+               if (c.Args.Length >= 3) { rix = DevFloat(c.Args[1]); riy = DevFloat(c.Args[2]); }
+               else { int ni = _sim.NecromancerIndex; var np = ni >= 0 ? _sim.Units[ni].Position : new Vec2(32f, 32f); rix = np.X; riy = np.Y; }
+               int rbest = -1; float rbestD = float.MaxValue;
+               for (int i = 0; i < _sim.Corpses.Count; i++)
+               {
+                  var cp = _sim.Corpses[i];
+                  if (cp.Dissolving || cp.ConsumedBySummon) continue;
+                  if (cp.DraggedByUnitID != GameConstants.InvalidUnit || cp.BaggedByUnitID != GameConstants.InvalidUnit) continue;
+                  float dx = cp.Position.X - rix, dy = cp.Position.Y - riy; float d = dx * dx + dy * dy;
+                  if (d < rbestD) { rbestD = d; rbest = i; }
+               }
+               if (rbest < 0) { c.Complete(Necroking.Dev.DevServer.Error("reanim_into: no eligible corpse")); break; }
+               var rc = _sim.Corpses[rbest];
+               QueueReanimRise(zinto, rc.CorpseID, "reanim_smoke");
+               c.Complete(Necroking.Dev.DevServer.Ok($"reanimating corpse '{rc.UnitDefID}' (#{rc.CorpseID}) into '{zinto}'"));
+               break;
+            }
+
             // Pin the hover-highlight onto a unit (headless test has no real mouse) + force it on.
             case "hover": {   // window.dev('hover',['necro'])  |  window.dev('hover',['clear'])
                if (c.Args.Length >= 1 && c.Args[0].Equals("clear", System.StringComparison.OrdinalIgnoreCase))
