@@ -166,6 +166,9 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
 
         var cm = _sim.CorpsesMut;
         cm[bestIdx].DraggedByUnitID = necroId;
+        // Drop any frozen carry pose so the corpse renders via FacingAngle (which the
+        // drag update rotates) instead of the pegged carried-frame path.
+        cm[bestIdx].CarryDisplayAngle = -1;
         _ropedCorpseID = cm[bestIdx].CorpseID;
         _ropeLastDustPos = cm[bestIdx].Position;
         return $"roped corpse {_ropedCorpseID}";
@@ -208,8 +211,10 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             // Rope is taut: reel the corpse in to sit exactly at rope's length behind us.
             var dir = toCorpse.Normalized();
             var newPos = necroPos + dir * RopeMaxLength;
-            float moved = (newPos - c.Position).Length();
             cm[idx].Position = newPos;
+            // Turn the body to face the way it's being hauled (toward the necromancer,
+            // i.e. -dir). FacingAngle is degrees from atan2(y,x), matching unit facing.
+            cm[idx].FacingAngle = MathF.Atan2(-dir.Y, -dir.X) * 180f / MathF.PI;
 
             // Slow the necromancer while hauling — heavier pull the deeper past max we are.
             // Overshoot is small (we clamp every frame) so scale by a fixed haul penalty.
