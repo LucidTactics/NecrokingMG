@@ -57,6 +57,7 @@ internal class ReanimEffectSystem
         public int DustCount;
         public float DustRise;
         public float DustLifetime;
+        public float DustMaxAlpha;      // opacity ceiling for the dust layer (0 or unset = uncapped)
     }
 
     private struct Puff
@@ -71,6 +72,7 @@ internal class ReanimEffectSystem
         public float FramePhase;
         public float RotSpeed;
         public BezierCurve Alpha;
+        public float MaxAlpha;  // opacity ceiling; the evaluated alpha never exceeds this (1 = uncapped)
     }
 
     private class Instance
@@ -151,7 +153,7 @@ internal class ReanimEffectSystem
                 cfg.CloudRise, cfg.SpawnWindow, scale, scatter: 0.85f));
         for (int i = 0; i < cfg.DustCount; i++)
             inst.Dust.Add(MakePuff(cfg.DustColor, cfg.DustWorldSize, cfg.DustLifetime,
-                cfg.DustRise, cfg.SpawnWindow, scale, scatter: 1.05f));
+                cfg.DustRise, cfg.SpawnWindow, scale, scatter: 1.05f, maxAlpha: cfg.DustMaxAlpha));
 
         _active.Add(inst);
         return id;
@@ -176,7 +178,7 @@ internal class ReanimEffectSystem
     }
 
     private Puff MakePuff(HdrColor color, float worldSize, float lifetime, float rise,
-        float spawnWindow, float scale, float scatter)
+        float spawnWindow, float scale, float scatter, float maxAlpha = 1f)
     {
         float ox = ((float)_rng.NextDouble() * 2f - 1f) * scatter * scale;
         float oy = ((float)_rng.NextDouble() * 2f - 1f) * scatter * 0.5f * scale;
@@ -192,6 +194,7 @@ internal class ReanimEffectSystem
             FramePhase = (float)_rng.NextDouble(),
             RotSpeed = ((float)_rng.NextDouble() * 0.5f + 0.1f) * (_rng.Next(2) == 0 ? 1f : -1f),
             Alpha = PuffAlpha,
+            MaxAlpha = maxAlpha > 0f ? maxAlpha : 1f,
         };
     }
 
@@ -299,7 +302,7 @@ internal class ReanimEffectSystem
                 var q = inst.Dust[p];
                 if (q.Age <= 0f || q.Age >= q.Lifetime) continue;
                 float t = q.Age / q.Lifetime;
-                float a = q.Alpha.Evaluate(t) * (q.Color.A / 255f);
+                float a = PuffOpacity(q, t, additive: false);
                 if (a <= 0.003f) continue;
                 float height = q.Rise * EaseOut(t);
                 var world = inst.Ground + q.Ground;
@@ -359,7 +362,7 @@ internal class ReanimEffectSystem
                     var q = inst.Clouds[p];
                     if (q.Age <= 0f || q.Age >= q.Lifetime) continue;
                     float t = q.Age / q.Lifetime;
-                    float a = q.Alpha.Evaluate(t);
+                    float a = PuffOpacity(q, t, additive: true);
                     if (a <= 0.003f) continue;
                     float height = q.Rise * EaseOut(t);
                     var world = inst.Ground + q.Ground;
@@ -454,7 +457,7 @@ internal class ReanimEffectSystem
     {
         if (q.Age <= 0f || q.Age >= q.Lifetime) return;
         float t = q.Age / q.Lifetime;
-        float a = additive ? q.Alpha.Evaluate(t) : q.Alpha.Evaluate(t) * (q.Color.A / 255f);
+        float a = PuffOpacity(q, t, additive);
         if (a <= 0.003f) return;
         float height = q.Rise * EaseOut(t);
         var world = inst.Ground + q.Ground;
@@ -471,6 +474,16 @@ internal class ReanimEffectSystem
     }
 
     private static float EaseOut(float t) => 1f - (1f - t) * (1f - t);
+
+    // Canonical puff opacity. Additive layers keep the raw curve alpha (brightness lives in the HDR
+    // intensity); alpha layers fold in Color.A. Both are then clamped to the puff's MaxAlpha ceiling —
+    // the per-layer "cap out at N% opacity" knob (MaxAlpha 1 = uncapped). Single source of truth for
+    // every draw path (sorted pass, additive clouds, Y-sorted dust).
+    private static float PuffOpacity(in Puff q, float t, bool additive)
+    {
+        float a = additive ? q.Alpha.Evaluate(t) : q.Alpha.Evaluate(t) * (q.Color.A / 255f);
+        return MathF.Min(a, q.MaxAlpha);
+    }
 
     // ---- The single canonical reanimation effect ("Grave Smoke") ----
 
@@ -490,7 +503,7 @@ internal class ReanimEffectSystem
             OutlineWidth = 2.0f, OutlinePulseWidth = 4.5f, OutlinePulseSpeed = 0.9f,
             LightColor = Green(30, 170, 90, 230, 1.3f), LightWorldSize = 3.2f, LightAlpha = new BezierCurve(0f, 0.5f, 0.5f, 0f),
             CloudColor = Green(55, 170, 85, 220, 1.1f), CloudWorldSize = 1.7f, CloudCount = 8, CloudRise = 1.0f, CloudLifetime = 6.5f,
-            DustColor = Green(55, 50, 45, 220, 1.0f), DustWorldSize = 1.95f, DustCount = 9, DustRise = 0.9f, DustLifetime = 6.5f,
+            DustColor = Green(55, 50, 45, 220, 1.0f), DustWorldSize = 1.95f, DustCount = 9, DustRise = 0.9f, DustLifetime = 6.5f, DustMaxAlpha = 0.5f,
         });
 
         // Cloudless variant — identical green outline + light + pose-morph rise as
