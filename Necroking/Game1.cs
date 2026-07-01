@@ -1000,6 +1000,8 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             new AI.RangedUnitHandler(AI.ArchetypeRegistry.CasterUnit));
         AI.ArchetypeRegistry.Register(AI.ArchetypeRegistry.Worker, "Worker", new AI.WorkerHandler());
         AI.ArchetypeRegistry.Register(AI.ArchetypeRegistry.CorpsePuppet, "CorpsePuppet", new AI.CorpsePuppetHandler());
+        AI.ArchetypeRegistry.Register(AI.ArchetypeRegistry.Civilian, "Civilian", new AI.VillagerHandler());
+        AI.ArchetypeRegistry.Register(AI.ArchetypeRegistry.Watchdog, "Watchdog", new AI.WatchdogHandler());
         _startupTimer = System.Diagnostics.Stopwatch.StartNew();
         _startupLastMs = 0;
         // The pre-LoadContent gap = OS process spawn + .NET runtime init +
@@ -1337,6 +1339,9 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
                 out var grassInfo);
             MapData.LoadTriggers(GamePaths.Resolve($"assets/maps/{mapName}_triggers.json"), _triggerSystem);
             MapData.LoadRoads(GamePaths.Resolve($"assets/maps/{mapName}_roads.json"), _roadSystem);
+            // Village structures are placed here (before the collision bake below) so their
+            // buildings are stamped into the pathfinding grid alongside the map's own objects.
+            LoadVillageStructures(mapName);
             LogTiming($"Map loaded: ground={_groundSystem.WorldW}x{_groundSystem.WorldH}, objects={_envSystem.ObjectCount}, defs={_envSystem.DefCount}");
 
             // Death fog: coarse grid sized to the map. Auto-tag tree assets as
@@ -1401,6 +1406,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         _sim.SetEnvironmentSystem(_envSystem);
         _sim.SetWallSystem(_wallSystem);
         _sim.SetTriggerSystem(_triggerSystem);
+        _sim.SetVillageSystem(_villageSystem);
         _sim.SetSkillBook(_skillBookState);
 
         // Wire collision change callback so pathfinding rebuilds when objects change state
@@ -1453,6 +1459,11 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         }
         if (placedUnits.Count > 0)
             LogTiming($"Spawned {placedUnits.Count} placed units");
+
+        // Populate villages: spawn people (peasants, hunters, militia, watchdogs), buried
+        // corpses, and the inter-village militia patrols. Structures were already placed
+        // pre-bake in LoadVillageStructures.
+        LoadVillagePopulation(mapName);
 
         // One-shot: pull any editor-placed corpses sitting on a Corpse Pile into its
         // stock so they can be gathered back out. Done once here on map load (not per
@@ -1876,6 +1887,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         _sim.SetEnvironmentSystem(_envSystem);
         _sim.SetWallSystem(_wallSystem);
         _sim.SetTriggerSystem(_triggerSystem);
+        _sim.SetVillageSystem(_villageSystem);
         _sim.SetSkillBook(_skillBookState);
         _fogOfWar.Init(gridSize, gridSize, GraphicsDevice, Content);
 

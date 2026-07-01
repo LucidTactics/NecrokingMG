@@ -24,6 +24,7 @@ public ref struct AIContext
     public Spatial.Quadtree? Quadtree;
     public GameSystems.HordeSystem? Horde;
     public GameSystems.TriggerSystem? TriggerSystem;
+    public GameSystems.VillageSystem? Villages;
     public World.EnvironmentSystem? EnvSystem;
     public Game.Jobs.WorkerSystem? Workers;
     public GameSystems.ProjectileManager? Projectiles;

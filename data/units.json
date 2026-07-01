@@ -4509,7 +4509,7 @@
     },
     {
       "id": "militia_copy",
-      "name": "Light Infantry Sword \u0026 Shield",
+      "name": "Light Infantry Sword & Shield",
       "type": "Dynamic",
       "faction": "Human",
       "ai": "AttackClosest",
@@ -4531,7 +4531,7 @@
       },
       "sprite": {
         "atlas": "Navarre_Units",
-        "name": "NavarreLightInfantry_Sword\u0026Shield"
+        "name": "NavarreLightInfantry_Sword&Shield"
       },
       "stats": {
         "maxHP": 10,
@@ -4992,7 +4992,7 @@
       },
       "sprite": {
         "atlas": "Navarre_Units",
-        "name": "NavarreTemplar_Sword\u0026Shield"
+        "name": "NavarreTemplar_Sword&Shield"
       },
       "stats": {
         "maxHP": 10,
@@ -9027,6 +9027,292 @@
       "targetWalkCycle": 1.2,
       "jogSpeedMultiplier": 0,
       "sprintSpeedMultiplier": 0,
+      "animWalkVelOverride": null,
+      "animJogVelOverride": null,
+      "animRunVelOverride": null
+    },
+    {
+      "id": "peasant",
+      "name": "Peasant",
+      "type": "Civilian",
+      "faction": "Human",
+      "ai": "AttackClosest",
+      "orcaPriority": 0,
+      "size": 2,
+      "radius": 0.495,
+      "spriteScale": 1,
+      "spriteWorldHeight": 1.8,
+      "bodyLengthWorld": 0,
+      "wadingSinkWorld": 0,
+      "wadingWaterlineFraction": 0.35,
+      "wadingFractionByDirection": null,
+      "wadingTopFractionByDirection": null,
+      "sprite": {
+        "atlas": "simple_sprites",
+        "name": "Villager"
+      },
+      "stats": {
+        "maxHP": 5,
+        "strength": 5,
+        "attack": 5,
+        "defense": 6,
+        "magicResist": 3,
+        "morale": 8,
+        "encumbrance": 2,
+        "naturalProt": 0,
+        "combatSpeed": 1.5
+      },
+      "zombieTypeID": "group_0",
+      "spellID": "",
+      "reanimationEffectID": "",
+      "undeadCategory": "None",
+      "maxMana": 0,
+      "manaRegen": 0,
+      "playerForm": false,
+      "paths": {},
+      "weapons": [
+        "dagger"
+      ],
+      "armors": [],
+      "shields": [],
+      "tags": [],
+      "attackAnim": null,
+      "attackCooldown": null,
+      "postAttackLockout": null,
+      "turnSpeed": null,
+      "accelHalfTime": null,
+      "accel80Time": null,
+      "accelFullTime": null,
+      "maxAcceleration": null,
+      "maxDeceleration": null,
+      "maxLateralAccel": null,
+      "weaponPoints": {},
+      "animTimings": {},
+      "archetype": "Civilian",
+      "detectionRange": 13,
+      "detectionBreakRange": 22,
+      "alertDuration": 1,
+      "alertEscalateRange": 6,
+      "groupAlertRadius": 16,
+      "legacyGaitMode": false,
+      "isQuadruped": false,
+      "dutyCycle": 0,
+      "targetWalkCycle": 1.2,
+      "jogSpeedMultiplier": 0,
+      "sprintSpeedMultiplier": 0,
+      "animWalkVelOverride": null,
+      "animJogVelOverride": null,
+      "animRunVelOverride": null
+    },
+    {
+      "id": "hunter",
+      "name": "Huntsman",
+      "type": "Hunter",
+      "faction": "Human",
+      "ai": "ArcherAttack",
+      "orcaPriority": 0,
+      "size": 2,
+      "radius": 0.495,
+      "spriteScale": 1,
+      "spriteWorldHeight": 1.85,
+      "bodyLengthWorld": 0,
+      "wadingSinkWorld": 0,
+      "wadingWaterlineFraction": 0.35,
+      "wadingFractionByDirection": null,
+      "wadingTopFractionByDirection": null,
+      "sprite": {
+        "atlas": "simple_sprites",
+        "name": "Skirmisher"
+      },
+      "stats": {
+        "maxHP": 8,
+        "strength": 8,
+        "attack": 8,
+        "defense": 8,
+        "magicResist": 10,
+        "morale": 10,
+        "encumbrance": 2,
+        "naturalProt": 0,
+        "combatSpeed": 1.72
+      },
+      "zombieTypeID": "group_0",
+      "spellID": "",
+      "reanimationEffectID": "",
+      "undeadCategory": "None",
+      "maxMana": 0,
+      "manaRegen": 0,
+      "playerForm": false,
+      "paths": {},
+      "weapons": [
+        "dagger",
+        "longbow"
+      ],
+      "armors": [
+        "armor_11",
+        "armor_8"
+      ],
+      "shields": [],
+      "tags": [],
+      "attackAnim": null,
+      "attackCooldown": null,
+      "postAttackLockout": null,
+      "turnSpeed": null,
+      "accelHalfTime": null,
+      "accel80Time": null,
+      "accelFullTime": null,
+      "maxAcceleration": null,
+      "maxDeceleration": null,
+      "maxLateralAccel": null,
+      "weaponPoints": {},
+      "animTimings": {},
+      "archetype": "ArcherUnit",
+      "detectionRange": 19,
+      "detectionBreakRange": 28,
+      "alertDuration": 1,
+      "alertEscalateRange": 7,
+      "groupAlertRadius": 16,
+      "legacyGaitMode": false,
+      "isQuadruped": false,
+      "dutyCycle": 0,
+      "targetWalkCycle": 1.2,
+      "jogSpeedMultiplier": 0,
+      "sprintSpeedMultiplier": 0,
+      "animWalkVelOverride": null,
+      "animJogVelOverride": null,
+      "animRunVelOverride": null
+    },
+    {
+      "id": "watchdog",
+      "name": "Watchdog",
+      "type": "Watchdog",
+      "faction": "Human",
+      "ai": "AttackClosest",
+      "orcaPriority": 0,
+      "size": 2,
+      "radius": 0.5,
+      "spriteScale": 0.55,
+      "spriteWorldHeight": 1.8,
+      "bodyLengthWorld": 0,
+      "wadingSinkWorld": 0,
+      "wadingWaterlineFraction": 0.35,
+      "wadingFractionByDirection": null,
+      "wadingTopFractionByDirection": null,
+      "color": {
+        "r": 150,
+        "g": 110,
+        "b": 70,
+        "a": 255
+      },
+      "sprite": {
+        "atlas": "Animals",
+        "name": "Wolf"
+      },
+      "stats": {
+        "maxHP": 6,
+        "strength": 4,
+        "attack": 8,
+        "defense": 11,
+        "magicResist": 3,
+        "morale": 10,
+        "encumbrance": 2,
+        "naturalProt": 2,
+        "combatSpeed": 2.2
+      },
+      "zombieTypeID": "ZombieWolf",
+      "spellID": "",
+      "reanimationEffectID": "",
+      "undeadCategory": "None",
+      "maxMana": 0,
+      "manaRegen": 0,
+      "playerForm": false,
+      "paths": {},
+      "weapons": [
+        {
+          "id": "weapon_223651",
+          "anim": "AttackBite"
+        },
+        "weapon_223651_copy"
+      ],
+      "armors": [],
+      "shields": [],
+      "tags": [],
+      "attackAnim": "AttackBite",
+      "attackCooldown": null,
+      "postAttackLockout": null,
+      "turnSpeed": null,
+      "accelHalfTime": null,
+      "accel80Time": null,
+      "accelFullTime": null,
+      "maxAcceleration": 10,
+      "maxDeceleration": 50,
+      "maxLateralAccel": 30,
+      "weaponPoints": {
+        "Idle": {
+          "60": [
+            {
+              "hilt": {
+                "x": 0,
+                "y": 0,
+                "behind": false
+              },
+              "tip": {
+                "x": 0,
+                "y": 0,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": 0,
+                "y": 0,
+                "behind": false
+              },
+              "tip": {
+                "x": 0,
+                "y": 0,
+                "behind": false
+              }
+            },
+            {
+              "hilt": {
+                "x": 0,
+                "y": 0,
+                "behind": false
+              },
+              "tip": {
+                "x": 0,
+                "y": 1,
+                "behind": false
+              }
+            }
+          ]
+        }
+      },
+      "animTimings": {
+        "Jog": {
+          "frameDurationsMs": [
+            75,
+            75,
+            75,
+            75,
+            75,
+            75
+          ],
+          "effectTimeMs": -1
+        }
+      },
+      "archetype": "Watchdog",
+      "detectionRange": 25,
+      "detectionBreakRange": 32,
+      "alertDuration": 0.5,
+      "alertEscalateRange": 6,
+      "groupAlertRadius": 22,
+      "legacyGaitMode": false,
+      "isQuadruped": true,
+      "dutyCycle": 0.5,
+      "targetWalkCycle": 0.8,
+      "jogSpeedMultiplier": 3,
+      "sprintSpeedMultiplier": 5,
       "animWalkVelOverride": null,
       "animJogVelOverride": null,
       "animRunVelOverride": null
