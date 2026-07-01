@@ -452,6 +452,15 @@ public class Unit
     public float AggroRangeScale = 1f;
     public float GroupAlertRadius;
 
+    /// <summary>Pack-hunt "herded" cheat (see <see cref="AI.WolfPackHuntAI"/>): when a hunting wolf
+    /// first engages this prey it stamps a fixed flee direction (toward the necromancer) and a short
+    /// timer here. While <see cref="HerdedTimer"/> &gt; 0 the deer flee AI runs <see cref="HerdedDir"/>
+    /// instead of "directly away from the nearest wolf", so the pack can steer the first bolt toward
+    /// your horde. Applied once per prey (<see cref="HerdedApplied"/>) — a kick, not a leash.</summary>
+    public Vec2 HerdedDir;
+    public float HerdedTimer;
+    public bool HerdedApplied;
+
     // Status symbol above head (? for notice, ! for react). Ticked down by Simulation.
     public byte StatusSymbol;        // 0=none, 1=Notice (?), 2=React (!)
     public float StatusSymbolTimer;  // Seconds remaining before symbol clears

@@ -45,12 +45,16 @@ public static class WolfPackHuntAI
     private const float CircleStepAngle = 0.7f;     // rad of arc a wolf aims ahead each frame while circling
     private const float ArcSpacing = 0.55f;   // rad between adjacent wolves' slots on the far arc (~31°)
     private const float ReadyFraction = 0.7f; // fraction of the pack that must reach the far side to commit the drive
-    private const float FarSideDepthFrac = 0.35f; // a wolf counts as "on the far side" once it's this fraction of
-                                                  // the standoff distance beyond the deer, away from the necromancer
+    private const float FarSideDepthFrac = 0.25f; // a wolf counts as "behind" (positioned to drive, and cleared to
+                                                  // charge) once it's this fraction of the standoff distance past the
+                                                  // deer, away from the necromancer. Kept modest so the fanned pack
+                                                  // actually reaches the threshold and commits; the herded cheat (not
+                                                  // this alone) is what guarantees the prey bolts toward you.
     private const float FlankTimeout = 25f;   // safety: force the drive after this long flanking, for a pack that
                                               // can't get around (blocked path, roaming prey). Generous on purpose —
                                               // enough wolves reaching the far side should be what commits the drive;
                                               // circling a half-arc at a jog already takes ~10-12s.
+    private const float HerdDuration = 2f;       // seconds the "herded" cheat pins the prey's flee direction
 
     // Scratch reused across frames to avoid per-tick allocation (single-threaded sim).
     private static readonly List<int> _hunters = new();
@@ -130,6 +134,19 @@ public static class WolfPackHuntAI
         int needReady = Math.Max(1, (int)MathF.Ceiling(n * ReadyFraction));
         bool drive = anyDriving || positioned >= needReady || maxTimer >= FlankTimeout;
 
+        // The instant the pack commits, stamp the "herded" cheat on the prey (once): it bolts toward
+        // the necromancer for HerdDuration. Done at commit — while the charging wolves are still ~a
+        // standoff away — so the deer gets a head start and actually runs there, rather than being
+        // pounced and pinned in place before it can move. DeerHerdHandler forces the flee direction.
+        if (drive && !units[targetIdx].HerdedApplied)
+        {
+            var toNecro = necroPos - deerPos;
+            float tl = toNecro.Length();
+            units[targetIdx].HerdedDir = tl > 1e-3f ? toNecro * (1f / tl) : farDir * -1f;
+            units[targetIdx].HerdedTimer = HerdDuration;
+            units[targetIdx].HerdedApplied = true;
+        }
+
         // 4. Apply movement. Once the pack commits to the drive, only the wolves already on the
         //    FAR side press the attack — they're the initiators, and charging from behind the prey
         //    they herd it toward the necromancer (and the rest of your animals). The wolves on the
@@ -144,9 +161,13 @@ public static class WolfPackHuntAI
             float slotAngle = SlotAngle(baseAngle, s, n);
             float standoff = deerDet + DetectMargin + units[u].Radius;
             var rel = units[u].Position - deerPos;
-            bool onFarSide = rel.Dot(farDir) >= 0f;
+            // Only wolves genuinely BEHIND the deer (same depth test that gates the drive) charge in.
+            // Wolves merely at the deer's sides (dot ≈ 0) would, if they charged, become the nearest
+            // threat off to one side and make the prey bolt sideways instead of toward the necromancer —
+            // so they keep circling until they've actually gotten behind it.
+            bool behind = rel.Dot(farDir) >= standoff * FarSideDepthFrac;
 
-            if (drive && onFarSide)
+            if (drive && behind)
             {
                 units[u].WolfHuntPhase = 1;
                 units[u].WolfHuntTimer = 0f;
@@ -155,7 +176,7 @@ public static class WolfPackHuntAI
             }
             else
             {
-                // Still flanking: either the pack hasn't committed yet, or this wolf is on the
+                // Still flanking: the pack hasn't committed, or this wolf is at the deer's side / the
                 // necromancer's side and must hold the ring so the prey keeps fleeing toward you.
                 units[u].WolfHuntPhase = 0;
                 units[u].WolfHuntTimer += dt;
