@@ -140,6 +140,100 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         return best;
     }
 
+    // Attach the rope to the nearest free corpse, or detach if already roped. Returns a
+    // short status string (for the dev command). Shared by the Shift+R hotkey and the
+    // 'rope' dev command.
+    private string ToggleRope(int necroIdx)
+    {
+        if (necroIdx < 0) return "no necromancer";
+        if (_ropedCorpseID >= 0) { DetachRope(); return "rope detached"; }
+
+        var necroPos = _sim.Units[necroIdx].Position;
+        uint necroId = _sim.Units[necroIdx].Id;
+        int bestIdx = -1;
+        float best = RopeAttachRadius * RopeAttachRadius;
+        var corpses = _sim.Corpses;
+        for (int ci = 0; ci < corpses.Count; ci++)
+        {
+            var cp = corpses[ci];
+            if (cp.ConsumedBySummon || cp.Dissolving || cp.Bagged
+                || cp.DraggedByUnitID != GameConstants.InvalidUnit) continue;
+            float ddx = cp.Position.X - necroPos.X, ddy = cp.Position.Y - necroPos.Y;
+            float d2 = ddx * ddx + ddy * ddy;
+            if (d2 < best) { best = d2; bestIdx = ci; }
+        }
+        if (bestIdx < 0) return "no free corpse in range";
+
+        var cm = _sim.CorpsesMut;
+        cm[bestIdx].DraggedByUnitID = necroId;
+        _ropedCorpseID = cm[bestIdx].CorpseID;
+        _ropeLastDustPos = cm[bestIdx].Position;
+        return $"roped corpse {_ropedCorpseID}";
+    }
+
+    // Release the roped corpse (clears the drag claim + slowdown). Safe to call when
+    // nothing is roped.
+    private void DetachRope()
+    {
+        if (_ropedCorpseID >= 0)
+        {
+            int idx = _sim.FindCorpseIndexByID(_ropedCorpseID);
+            if (idx >= 0) _sim.CorpsesMut[idx].DraggedByUnitID = GameConstants.InvalidUnit;
+        }
+        _ropedCorpseID = -1;
+        _sim.SetNecromancerDragSlow(1f, false);
+    }
+
+    // Per-frame rope hauling. While a corpse is roped: once it hangs farther than
+    // RopeMaxLength from the necromancer, pull it in to the rope's length (dragging it
+    // behind), slow the necromancer down, and kick up dust as the body scrapes along.
+    private void UpdateRopeDrag(int necroIdx, float dt)
+    {
+        if (_ropedCorpseID < 0) return;
+        if (necroIdx < 0) { DetachRope(); return; }
+
+        int idx = _sim.FindCorpseIndexByID(_ropedCorpseID);
+        if (idx < 0) { DetachRope(); return; }
+        var cm = _sim.CorpsesMut;
+        var c = cm[idx];
+        // Corpse got consumed / dissolved / bagged out from under us → drop the rope.
+        if (c.ConsumedBySummon || c.Dissolving || c.Bagged) { DetachRope(); return; }
+
+        var necroPos = _sim.Units[necroIdx].Position;
+        var toCorpse = c.Position - necroPos;
+        float dist = toCorpse.Length();
+
+        if (dist > RopeMaxLength && dist > 0.0001f)
+        {
+            // Rope is taut: reel the corpse in to sit exactly at rope's length behind us.
+            var dir = toCorpse.Normalized();
+            var newPos = necroPos + dir * RopeMaxLength;
+            float moved = (newPos - c.Position).Length();
+            cm[idx].Position = newPos;
+
+            // Slow the necromancer while hauling — heavier pull the deeper past max we are.
+            // Overshoot is small (we clamp every frame) so scale by a fixed haul penalty.
+            _sim.SetNecromancerDragSlow(0.5f, true);
+
+            // Kick up dust as the body scrapes the ground — tied to actual travel so a
+            // stationary taut rope doesn't smoke. One puff per ~0.4 world-units dragged.
+            if ((newPos - _ropeLastDustPos).LengthSq() > 0.4f * 0.4f && _effectManager != null)
+            {
+                _ropeDustAngle = (_ropeDustAngle + 137) % 360;
+                float a = _ropeDustAngle * MathF.PI / 180f;
+                var off = new Vec2(MathF.Cos(a), MathF.Sin(a)) * 0.35f;
+                _effectManager.SpawnDustPuff(newPos + off);
+                _ropeLastDustPos = newPos;
+            }
+        }
+        else
+        {
+            // Slack rope: no drag penalty, corpse stays put.
+            _sim.SetNecromancerDragSlow(1f, false);
+            _ropeLastDustPos = c.Position;
+        }
+    }
+
     // Withdraw one corpse from a pile and hand it to the necromancer to carry.
     // Gated on proximity + the necromancer being free + the pile holding a corpse.
     // Returns true if the pickup started.
@@ -519,6 +613,16 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     private int _devJobSeq;                        // id counter for batch jobs
     private Vec2? _devWalkTarget;                  // dev "walk_necro" goal; drives WASD-equivalent input, cancelled by any WASD press
     internal int _scenarioScrollOffset;
+
+    // --- Rope drag (Shift+R) ---
+    // CorpseID of the corpse currently roped to the necromancer, or -1. The rope is a
+    // bezier drawn from necromancer to corpse (GameRenderer.DrawRope); once the corpse
+    // is farther than RopeMaxLength the necromancer hauls it along and is slowed.
+    internal int _ropedCorpseID = -1;
+    internal const float RopeMaxLength = 4.0f;      // world units; beyond this the corpse gets dragged
+    private const float RopeAttachRadius = 5.0f;    // how close to stand to a corpse to rope it
+    private Vec2 _ropeLastDustPos;                  // last corpse pos we kicked up dust at
+    private int _ropeDustAngle;                     // rotating offset so dust puffs spread around the corpse
 
     // Per-unit animation data
     internal struct UnitAnimData
@@ -3120,6 +3224,20 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
                     }
                 }
             }
+
+            // --- Rope attach/detach (Shift+R) ---
+            // Toggle a rope between the necromancer and the nearest free corpse. While
+            // roped, the necromancer hauls the corpse (see UpdateRopeDrag) — kicking up
+            // dust and slowing when the rope goes taut.
+            if (_input.WasKeyPressed(Keys.R)
+                && (_input.IsKeyDown(Keys.LeftShift) || _input.IsKeyDown(Keys.RightShift))
+                && necroIdx >= 0)
+            {
+                ToggleRope(necroIdx);
+            }
+
+            // Per-frame rope hauling (pull the corpse, slow the necromancer, kick up dust).
+            UpdateRopeDrag(necroIdx, dt);
 
             // --- Ground-object hover detection (buildings + foragable items) ---
             // Picks the nearest hoverable env object under the cursor for the HUD

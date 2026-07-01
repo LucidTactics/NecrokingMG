@@ -377,6 +377,49 @@ partial class GameRenderer
         }
     }
 
+    /// <summary>Draw the drag rope: a sagging bezier from the necromancer to the roped
+    /// corpse. Slack (short) when close so it hangs; pulls straight + taut as it stretches
+    /// to full length and the corpse starts dragging.</summary>
+    private void DrawRope()
+    {
+        if (_g._ropedCorpseID < 0) return;
+        int necroIdx = _g._sim.NecromancerIndex;
+        if (necroIdx < 0) return;
+        int ci = _g._sim.FindCorpseIndexByID(_g._ropedCorpseID);
+        if (ci < 0) return;
+
+        var necroWorld = _g._sim.Units[necroIdx].Position;
+        var corpseWorld = _g._sim.Corpses[ci].Position;
+
+        // Anchor near the necromancer's hand and the corpse's body.
+        var a = _g._renderer.WorldToScreen(necroWorld, 1.2f, _g._camera);
+        var b = _g._renderer.WorldToScreen(corpseWorld, 0.25f, _g._camera);
+
+        float dist = (corpseWorld - necroWorld).Length();
+        // Slack fraction: 1 when standing on the corpse, 0 when the rope is fully taut.
+        float slack = Necroking.Core.MathUtil.Clamp(
+            (Game1.RopeMaxLength - dist) / Game1.RopeMaxLength, 0f, 1f);
+        // Downward sag (screen +Y). Scales with camera zoom so it reads at any zoom, and
+        // with the on-screen rope length so a long slack rope droops more than a short one.
+        float ropeLenPx = (b - a).Length();
+        float sag = slack * ropeLenPx * 0.25f;
+
+        var mid = (a + b) * 0.5f + new Vector2(0f, sag);
+
+        // Sample the quadratic bezier a→mid→b and chain thick segments.
+        const int segments = 14;
+        var prev = a;
+        var ropeColor = new Color(90, 66, 40); // dark hemp
+        for (int s = 1; s <= segments; s++)
+        {
+            float t = s / (float)segments;
+            float u = 1f - t;
+            var p = u * u * a + 2f * u * t * mid + t * t * b;
+            DrawUtils.DrawLine(_g._spriteBatch, _g._pixel, prev, p, ropeColor, 2f);
+            prev = p;
+        }
+    }
+
     /// <summary>Draw fireball projectiles with HDR intensity (called in additive HdrSprite pass).</summary>
     private void DrawProjectilesHdr()
     {

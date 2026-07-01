@@ -782,6 +782,18 @@ public class Simulation
         _necroRunning = running;
     }
 
+    // Movement penalty applied to the necromancer while dragging a roped corpse at
+    // full tension (1 = no penalty). Set each frame by the rope-drag update in Game1;
+    // consumed in the PlayerControlled speed calc below. Sprint is separately gated by
+    // the rope-drag flag too (a taut rope shouldn't let you sprint).
+    private float _necroDragSlow = 1f;
+    private bool _necroRopeTaut;
+    public void SetNecromancerDragSlow(float mult, bool ropeTaut)
+    {
+        _necroDragSlow = Necroking.Core.MathUtil.Clamp(mult, 0.05f, 1f);
+        _necroRopeTaut = ropeTaut;
+    }
+
     /// <summary>Sets the mouse-driven target facing angle for the necromancer.
     /// The actual rotation is applied by <see cref="UpdateFacingAngles"/> at the
     /// unit's turn rate. While jogging or running the player branch picks the
@@ -874,7 +886,7 @@ public class Simulation
                     // is held + the unit is allowed to sprint, otherwise toward 0.
                     // Carrying a corpse disqualifies sprinting (preserves the prior
                     // behavior where carrying suppressed the run bonus).
-                    bool canSprint = _necroRunning && _units[i].CarryingCorpseID < 0 && !_units[i].GhostMode;
+                    bool canSprint = _necroRunning && _units[i].CarryingCorpseID < 0 && !_units[i].GhostMode && !_necroRopeTaut;
                     float rampRate = canSprint
                         ? dt / SprintRampUpSeconds
                         : -dt / SprintRampDownSeconds;
@@ -895,6 +907,7 @@ public class Simulation
                         speed = 20.0f;
                     else
                         speed *= sprintMultiplier;
+                    speed *= _necroDragSlow; // rope-drag penalty (taut rope hauling a corpse)
                     _units[i].MaxSpeed = speed; // update so ORCA + accel cap respect current speed
 
                     // Bias the gait picker toward Sprint while ramping so the player

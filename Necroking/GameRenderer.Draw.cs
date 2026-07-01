@@ -170,6 +170,8 @@ partial class GameRenderer
         // --- Projectiles ---
         DrawProjectiles();
         DrawSoulOrbs();
+        // --- Drag rope (necromancer → roped corpse) ---
+        DrawRope();
         // (Death-fog puffs render inside DrawUnitsAndObjects' merged Y-sort
         // pass so they correctly occlude / are occluded by units & env objects
         // based on relative ground Y — see DepthItemType.DeathFogPuff.)

@@ -1073,6 +1073,18 @@ public partial class Game1 {
                break;
             }
 
+            // Toggle the drag-rope on the nearest free corpse (same as the Shift+R
+            // hotkey). Headless has no keyboard, so this drives the same ToggleRope path.
+            case "rope": {
+               if (_sim.NecromancerIndex < 0) {
+                  c.Complete(Necroking.Dev.DevServer.Error("no necromancer in the sim"));
+                  break;
+               }
+               string msg = ToggleRope(_sim.NecromancerIndex);
+               c.Complete(Necroking.Dev.DevServer.Ok(msg));
+               break;
+            }
+
             // Simulate a left-click on the world at (x,y) for the corpse-pile
             // gather flow (headless has no real mouse). Mirrors the Game1.Update
             // click handler: pick up now if in range, else walk over and grab.
