@@ -715,6 +715,18 @@ public class EditorBase
             DrawRect(new Rectangle(x + w - 6, barY, 5, barH), new Color(100, 100, 140, 180));
         }
 
+        // Selecting a different object abandons any in-progress text-field edit.
+        // The edit buffer (_inputBuffer) is keyed by a static field id ("wd_id",
+        // "unit_id", …) reused for every object, NOT by the object's identity — so
+        // without this, a field left active when selection changes would, on the
+        // same click, run its deactivate-on-outside-click path and write the old
+        // object's buffered text into the NEWLY selected object, clobbering it.
+        // Clearing here (the shared choke point for object-list selection) fixes it
+        // for every editor at once. The previously selected object already received
+        // the edit — the caller commits the buffer every frame while it's active.
+        if (clicked >= 0 && clicked != selectedIdx)
+            ClearActiveField();
+
         return clicked;
     }
 
