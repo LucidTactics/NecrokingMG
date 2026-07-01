@@ -417,6 +417,12 @@ public class Unit
     /// together, flee as one, and let hunters flank the whole pack rather than a single animal.</summary>
     public uint SquadId;
 
+    /// <summary>Index into VillageSystem's village list (-1 = not a village member).
+    /// Set at spawn for peasants, hunters, militia and watchdogs that belong to a
+    /// village. Village AI (VillagerHandler / WatchdogHandler) and VillageSystem read
+    /// this to coordinate warning, mustering, and fleeing.</summary>
+    public short VillageId = -1;
+
     /// <summary>Time spent in the current flee since entering Fleeing routine.
     /// Used by DeerHerdHandler to ramp effort (Hurry for first 2s, then Sprint).
     /// Reset to 0 whenever Routine becomes Fleeing OR is not Fleeing — so a deer

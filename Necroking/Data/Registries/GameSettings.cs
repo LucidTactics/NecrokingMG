@@ -302,6 +302,13 @@ public class TooltipsSettings
     /// corpse lying on the ground — useful for spotting what's reanimatable.</summary>
     [JsonPropertyName("showCorpseInfo")] public bool ShowCorpseInfo { get; set; } = true;
 
+    /// <summary>Show a floating info tooltip (name, HP, and what it belongs to —
+    /// player horde / village / faction) when hovering a unit. The lightweight
+    /// "what is this" readout matching buildings/foragables/corpses; NOT the full
+    /// stat sheet. Suppressed while <see cref="AutoShowUnitStats"/> is on (that
+    /// panel already shows everything) and for foragers (belly tooltip owns them).</summary>
+    [JsonPropertyName("showUnitInfo")] public bool ShowUnitInfo { get; set; } = true;
+
     /// <summary>Cursor pick radius (world units) for hovering ground objects —
     /// buildings and foragable items. Buildings are large so this is a bit
     /// wider than the unit pick radius by default.</summary>

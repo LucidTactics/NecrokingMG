@@ -611,6 +611,12 @@ public class SettingsWindow
         if (cInfo != t.ShowCorpseInfo) { t.ShowCorpseInfo = cInfo; MarkDirty(); }
         y += rowH;
 
+        // Lightweight unit hover tooltip (name, HP, membership). Suppressed while
+        // the auto stat sheet is on — that panel already shows everything.
+        bool uInfo = _ui.DrawCheckbox("Show unit info on hover", t.ShowUnitInfo, x, y);
+        if (uInfo != t.ShowUnitInfo) { t.ShowUnitInfo = uInfo; MarkDirty(); }
+        y += rowH;
+
         // Pick radius for ground objects (buildings + items).
         float gpick = _ui.DrawSliderFloat("set_tip_groundpick", "Ground Pick Radius", t.GroundPickRadius, 0.5f, 6f, x, y, w);
         if (MathF.Abs(gpick - t.GroundPickRadius) > 0.0001f) { t.GroundPickRadius = gpick; MarkDirty(); }

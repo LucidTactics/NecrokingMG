@@ -365,6 +365,10 @@ public class Simulation
     public void SetWallSystem(WallSystem? ws) { _wallSystem = ws; }
     public void SetTriggerSystem(TriggerSystem? ts) { _triggerSystem = ts; }
     private TriggerSystem? _triggerSystem;
+
+    public void SetVillageSystem(VillageSystem? vs) { _villages = vs; }
+    public VillageSystem? Villages => _villages;
+    private VillageSystem? _villages;
     public void SetNecromancerIndex(int idx) { _necromancerIdx = idx; }
 
     /// <summary>Reference to the per-game skill-book state. When non-null,
@@ -905,6 +909,10 @@ public class Simulation
         PhaseStart();
         AI.AwarenessSystem.Update(_units, _quadtree, dt, (int)_frameNumber, _amortizedAI, _aiUpdateInterval);
         PhaseEnd("ai_awareness");
+
+        // Village coordination: recompute alert/posture from watchdog warnings & engaged
+        // guards, so the villager/militia handlers below act on fresh per-village state.
+        _villages?.Update(_units, dt, isNight);
 
         double archetypeMs = 0, legacyMs = 0;
         var subSw = new System.Diagnostics.Stopwatch();
@@ -3420,7 +3428,7 @@ public class Simulation
     {
         UnitIndex = i, Units = _units, Dt = dt, FrameNumber = (int)_frameNumber,
         GameData = _gameData, Pathfinder = _pathfinder, Quadtree = _quadtree,
-        Horde = _horde, TriggerSystem = _triggerSystem, EnvSystem = _envSystem,
+        Horde = _horde, TriggerSystem = _triggerSystem, Villages = _villages, EnvSystem = _envSystem,
         Workers = Workers,
         Projectiles = _projectiles, MagicGlyphs = _magicGlyphs,
         GameTime = _gameTime, DayTime = dayFraction, IsNight = isNight,

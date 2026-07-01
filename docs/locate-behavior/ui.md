@@ -64,6 +64,43 @@ cursor tooltip**:
 **Look/edit here when:** changing what the corpse-pile tooltip lists, or building a new
 belly/inventory list panel modeled on `PiledCorpseLines` + `DrawCursorTooltip`.
 
+## Unit hover picking + a "programmer/debug" cursor tooltip for units
+
+There is **no reflection-based "programmer tooltip"** anywhere — the term is descriptive.
+The nearest existing pattern is the **cursor-tooltip family in `Necroking/Render/HUDRenderer.cs`**
+that already surfaces raw-ish data fields for non-unit things on hover:
+- `DrawObjectTooltip` (env objects/buildings: name/id, `HP:`, `Owner:`, process state, pile contents),
+  `DrawBellyTooltip` (forager unit belly), `DrawCorpseTooltip` (corpse name). All build a
+  `string[]`/`List<string>` and call the shared `DrawCursorTooltip(lines, screenW, screenH)`.
+- **Dispatch:** all three are called from `HUDRenderer.Draw` (~line 195-197). To add a
+  **unit** cursor tooltip, add a `DrawUnitTooltip(hoveredUnitIdx/Id, sim, gameData, …)` here
+  and call it in that same block; thread the hovered id through `GameRenderer.Hud.cs`
+  `DrawHUD` (~line 604) just like `_hoveredBellyUnitId` already is.
+
+**Hovered-unit index is already computed** in `Necroking/Game1.cs` (~line 3479):
+`_hoveredUnitIdx` (nearest live unit within `Tooltips.HoverPickRadius`, gated on
+`Settings.Tooltips.ShowHoverHighlight`). `_hoveredBellyUnitId` (~3508) is derived from it.
+Reuse `_hoveredUnitIdx` / add a `_hoveredUnitId` field the same way rather than re-scanning.
+
+**Membership data for "in player horde / village / faction" (per unit):**
+- Faction: `Unit.Faction` (`Necroking/Movement/UnitSystem.cs`, enum `Faction { Undead, Human, Animal }`
+  in `Data/Enums.cs`). "Player horde" = `Faction.Undead` **and** in the horde (below).
+- Horde: `sim.Horde` (`Game/HordeSystem.cs`) → `IsInHorde(uint id)`; `GetUnitState(id)` for
+  Following/Chasing/Returning if wanted. Only meaningful for `Faction.Undead`.
+- Village: `Unit.VillageId` (short, -1 = none, `UnitSystem.cs`) → `sim.Villages?.Get(villageId)?.Name`
+  (`Game/VillageSystem.cs`). Village membership is a **per-unit tag**, set at spawn in
+  `Game1.Villages.cs` (`_sim.UnitsMut[idx].VillageId = …`); the `VillageSystem` recomputes only
+  aggregate counts/posture, not membership.
+- There is **no separate "group" concept** beyond faction/village/horde. Basic data to show
+  (per the ask): unit def display name + `Unit.Stats.Health`/max (HP) — **not** the full stat
+  grid (that's the right-side `UnitInfoPanel`).
+
+**Pitfall:** the boar-belly path already claims foragers on hover (`_hoveredBellyUnitId`,
+suppressed from the stat sheet) — a new unit tooltip should skip forager units (or it'll
+double up with the belly tooltip). Also gate it so it doesn't fight the auto-hover
+`UnitInfoPanel` (`AutoShowUnitStats`): the stat sheet is a right-side panel, a programmer
+tooltip is a cursor tooltip, so they can coexist, but decide whether both show at once.
+
 ## Data source for a boar's belly (mushrooms eaten)
 
 Belly contents are stored per unit id in **`Necroking/Game/Simulation.cs`**:

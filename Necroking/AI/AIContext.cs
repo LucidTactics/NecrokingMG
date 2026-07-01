@@ -27,6 +27,7 @@ public ref struct AIContext
     /// <see cref="MySquad"/> for cohesion + shared-alert; recomputed before the AI pass each frame.</summary>
     public SquadSystem? Squads;
     public GameSystems.TriggerSystem? TriggerSystem;
+    public GameSystems.VillageSystem? Villages;
     public World.EnvironmentSystem? EnvSystem;
     public Game.Jobs.WorkerSystem? Workers;
     public GameSystems.ProjectileManager? Projectiles;
