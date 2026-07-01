@@ -378,6 +378,98 @@ internal class ReanimEffectSystem
         }
     }
 
+    // ---- Depth-sorted particle pass (Performance.DepthSortedFog): clouds + dust interleaved ----
+
+    private struct ParticleDraw
+    {
+        public Texture2D Tex; public Vector2 ScreenPos, Origin; public Rectangle Src;
+        public float Scale, Rot; public Color Color; public bool Additive; public float SortY, LayerDepth;
+    }
+    private readonly List<ParticleDraw> _sortScratch = new();
+    private static float FogDepth(float y) => MathHelper.Clamp(1f - y * 0.005f, 0f, 1f);
+
+    /// <summary>Draw ALL active reanim particles — the diffuse light + green cloud puffs (additive) and
+    /// the dark dust puffs (alpha) — in ONE Y-sorted sequence, flipping blend per puff, so bright and
+    /// dark puffs interleave by spawn position instead of the clouds always drawing over the dust.
+    /// DepthStencilState.DepthRead, so units already stamped into the depth buffer occlude them. Manages
+    /// its own batches (ends on exit); the caller re-Begins its own batch afterward. Used only on the
+    /// DepthSortedFog path — the OFF path still uses DrawAdditive + the Y-sorted dust depth list.</summary>
+    public void DrawSortedParticles(Microsoft.Xna.Framework.Graphics.Effect? hdrEffect)
+    {
+        if (_batch == null || _camera == null || _renderer == null || _cloud?.Texture == null) return;
+        float zoom = _camera.Zoom;
+        var tex = _cloud.Texture!;
+        int frameW = tex.Width / Math.Max(_cloud.Cols, 1);
+        _sortScratch.Clear();
+
+        foreach (var inst in _active)
+        {
+            float cyc = inst.Cfg.PuffAnimCycles > 0f ? inst.Cfg.PuffAnimCycles : 1f;
+
+            // Diffuse light glow (additive) — sorted at the grave position.
+            if (_glow != null && inst.Cfg.LightWorldSize > 0f)
+            {
+                float lightT = inst.Cfg.LightDuration > 0f ? inst.Age / inst.Cfg.LightDuration : 1f;
+                float la = inst.Cfg.LightAlpha.Evaluate(MathHelper.Clamp(lightT, 0f, 1f));
+                if (la > 0.003f)
+                {
+                    var lp = _renderer.WorldToScreen(inst.Ground, 0.5f, _camera);
+                    float lscale = (inst.Cfg.LightWorldSize * zoom) / _glow.Width;
+                    _sortScratch.Add(new ParticleDraw {
+                        Tex = _glow, ScreenPos = lp, Src = new Rectangle(0, 0, _glow.Width, _glow.Height),
+                        Origin = new Vector2(_glow.Width * 0.5f, _glow.Height * 0.5f), Scale = lscale, Rot = 0f,
+                        Color = inst.Cfg.LightColor.ToHdrVertex(la), Additive = true,
+                        SortY = inst.Ground.Y, LayerDepth = FogDepth(inst.Ground.Y) });
+                }
+            }
+
+            for (int p = 0; p < inst.Clouds.Count; p++) AddPuff(inst.Clouds[p], inst, cyc, tex, frameW, zoom, additive: true);
+            for (int p = 0; p < inst.Dust.Count; p++)   AddPuff(inst.Dust[p], inst, cyc, tex, frameW, zoom, additive: false);
+        }
+
+        if (_sortScratch.Count == 0) return;
+        _sortScratch.Sort(static (a, b) => a.SortY.CompareTo(b.SortY));   // back (small Y) -> front (large Y)
+
+        bool? curAdd = null;
+        for (int i = 0; i < _sortScratch.Count; i++)
+        {
+            var d = _sortScratch[i];
+            if (curAdd != d.Additive)
+            {
+                if (curAdd != null) _batch.End();
+                _batch.Begin(SpriteSortMode.Deferred, d.Additive ? BlendState.Additive : BlendState.AlphaBlend,
+                    SamplerState.LinearClamp, DepthStencilState.DepthRead, RasterizerState.CullNone,
+                    d.Additive ? hdrEffect : null);
+                curAdd = d.Additive;
+            }
+            _batch.Draw(d.Tex, d.ScreenPos, d.Src, d.Color, d.Rot, d.Origin, d.Scale, SpriteEffects.None, d.LayerDepth);
+        }
+        if (curAdd != null) _batch.End();
+    }
+
+    // One puff -> a draw descriptor in _sortScratch. Mirrors DrawAdditive's cloud math (additive, HDR
+    // colour) and AddDustToDepthList's dust math (alpha, premultiplied colour, sorted a half-size
+    // forward). Same cloud03 sheet either way; only blend + colour differ.
+    private void AddPuff(in Puff q, Instance inst, float cyc, Texture2D tex, int frameW, float zoom, bool additive)
+    {
+        if (q.Age <= 0f || q.Age >= q.Lifetime) return;
+        float t = q.Age / q.Lifetime;
+        float a = additive ? q.Alpha.Evaluate(t) : q.Alpha.Evaluate(t) * (q.Color.A / 255f);
+        if (a <= 0.003f) return;
+        float height = q.Rise * EaseOut(t);
+        var world = inst.Ground + q.Ground;
+        var sp = _renderer!.WorldToScreen(world, height, _camera!);
+        int frame = _cloud!.GetFrameAtNormalizedTime((t * cyc + q.FramePhase) % 1f);
+        var src = _cloud.GetFrameRect(frame);
+        float scale = (q.WorldSize * zoom) / frameW;
+        float sortY = additive ? world.Y : world.Y + q.WorldSize * 0.5f;
+        _sortScratch.Add(new ParticleDraw {
+            Tex = tex, ScreenPos = sp, Src = src, Origin = new Vector2(src.Width * 0.5f, src.Height * 0.5f),
+            Scale = scale, Rot = q.RotSpeed * inst.FogAge, Additive = additive,
+            Color = additive ? q.Color.ToHdrVertex(a) : ColorUtils.Premultiply(q.Color.R, q.Color.G, q.Color.B, a),
+            SortY = sortY, LayerDepth = FogDepth(sortY) });
+    }
+
     private static float EaseOut(float t) => 1f - (1f - t) * (1f - t);
 
     // ---- The single canonical reanimation effect ("Grave Smoke") ----

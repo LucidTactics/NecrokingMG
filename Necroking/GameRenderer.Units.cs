@@ -136,7 +136,10 @@ partial class GameRenderer
             // Reanimation dust puffs — Y-sorted with units (reuses the cloud03 sheet).
             // SetContext here also primes the additive light/cloud pass (DrawReanimAdditive).
             _g._reanimFx.SetContext(_g._spriteBatch, _g._camera, _g._renderer, deathFogFb, _g._glowTex);
-            _g._reanimFx.AddDustToDepthList(items);
+            // When depth-sorted fog is ON the dust is drawn interleaved with the clouds in the combined
+            // sorted pass (DrawSortedParticles) instead — so keep it out of the unit Y-sort list here.
+            if (!_g._gameData.Settings.Performance.DepthSortedFog)
+                _g._reanimFx.AddDustToDepthList(items);
         }
 
         items.Sort();

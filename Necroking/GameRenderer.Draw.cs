@@ -202,13 +202,12 @@ partial class GameRenderer
         DrawEffectsFiltered(1);
         if (_g._gameData.Settings.Performance.DepthSortedFog && _g._depthCutoutEffect != null)
         {
-            // Reanim fog in its OWN depth-testing additive batch so the units' depth stamps occlude it;
-            // the rest of the additive pass keeps drawing on top (DepthStencilState.None).
+            // Depth-sorted fog: draw ALL reanim particles (light + clouds + dust) in ONE Y-sorted pass,
+            // so bright and dark puffs interleave by spawn position (not clouds-always-over-dust), and
+            // depth-test the units' stamps so a risen unit occludes them. It manages its own batches, so
+            // end the shared additive batch and re-open it for the lightning below.
             _g._spriteBatch.End();
-            _g._spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.Additive, SamplerState.LinearClamp,
-                DepthStencilState.DepthRead, RasterizerState.CullNone, _g._hdrSpriteEffect);
-            _g._reanimFx.DrawAdditive();
-            _g._spriteBatch.End();
+            _g._reanimFx.DrawSortedParticles(_g._hdrSpriteEffect);
             _g._spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.Additive, SamplerState.LinearClamp,
                 effect: _g._hdrSpriteEffect);
         }
