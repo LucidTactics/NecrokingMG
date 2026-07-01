@@ -60,6 +60,12 @@ internal class ReanimEffectSystem
         public float DustRise;
         public float DustLifetime;
         public float DustMaxAlpha;      // opacity ceiling for the dust layer (0 or unset = uncapped)
+
+        // Global plume fade-out envelope (fog-clock time). On top of each puff's own curve, the whole
+        // cloud+dust plume holds, then fades from FogFadeStart to 0 at FogFadeEnd — so it starts
+        // clearing ~halfway through the standup yet ends at the same time. Unset (End<=Start) = off.
+        public float FogFadeStart;
+        public float FogFadeEnd;
     }
 
     private struct Puff
@@ -307,12 +313,13 @@ internal class ReanimEffectSystem
         foreach (var inst in _active)
         {
             float cyc = inst.Cfg.PuffAnimCycles > 0f ? inst.Cfg.PuffAnimCycles : 1f;
+            float fogFade = FogFadeMul(inst);
             for (int p = 0; p < inst.Dust.Count; p++)
             {
                 var q = inst.Dust[p];
                 if (q.Age <= 0f || q.Age >= q.Lifetime) continue;
                 float t = q.Age / q.Lifetime;
-                float a = PuffOpacity(q, t, additive: false);
+                float a = PuffOpacity(q, t, additive: false, fogFade);
                 if (a <= 0.003f) continue;
                 float height = q.Rise * EaseOut(t);
                 var world = inst.Ground + q.Ground;
@@ -367,12 +374,13 @@ internal class ReanimEffectSystem
             {
                 var tex = _cloud.Texture!;
                 int frameW = tex.Width / Math.Max(_cloud.Cols, 1);
+                float fogFade = FogFadeMul(inst);
                 for (int p = 0; p < inst.Clouds.Count; p++)
                 {
                     var q = inst.Clouds[p];
                     if (q.Age <= 0f || q.Age >= q.Lifetime) continue;
                     float t = q.Age / q.Lifetime;
-                    float a = PuffOpacity(q, t, additive: true);
+                    float a = PuffOpacity(q, t, additive: true, fogFade);
                     if (a <= 0.003f) continue;
                     float height = q.Rise * EaseOut(t);
                     var world = inst.Ground + q.Ground;
@@ -467,7 +475,7 @@ internal class ReanimEffectSystem
     {
         if (q.Age <= 0f || q.Age >= q.Lifetime) return;
         float t = q.Age / q.Lifetime;
-        float a = PuffOpacity(q, t, additive);
+        float a = PuffOpacity(q, t, additive, FogFadeMul(inst));
         if (a <= 0.003f) return;
         float height = q.Rise * EaseOut(t);
         var world = inst.Ground + q.Ground;
@@ -487,12 +495,22 @@ internal class ReanimEffectSystem
 
     // Canonical puff opacity. Additive layers keep the raw curve alpha (brightness lives in the HDR
     // intensity); alpha layers fold in Color.A. Both are then clamped to the puff's MaxAlpha ceiling —
-    // the per-layer "cap out at N% opacity" knob (MaxAlpha 1 = uncapped). Single source of truth for
-    // every draw path (sorted pass, additive clouds, Y-sorted dust).
-    private static float PuffOpacity(in Puff q, float t, bool additive)
+    // the per-layer "cap out at N% opacity" knob (MaxAlpha 1 = uncapped) — and scaled by the plume's
+    // global fade-out envelope (fogFade). Single source of truth for every draw path.
+    private static float PuffOpacity(in Puff q, float t, bool additive, float fogFade)
     {
         float a = additive ? q.Alpha.Evaluate(t) : q.Alpha.Evaluate(t) * (q.Color.A / 255f);
-        return MathF.Min(a, q.MaxAlpha);
+        return MathF.Min(a, q.MaxAlpha) * fogFade;
+    }
+
+    // Global plume fade-out envelope on the fog clock: 1 until FogFadeStart, then linearly to 0 at
+    // FogFadeEnd, so the whole plume starts clearing ~halfway through the standup but ends at the same
+    // time regardless of each puff's own curve. Off (returns 1) when the config leaves it unset.
+    private static float FogFadeMul(Instance inst)
+    {
+        float s = inst.Cfg.FogFadeStart, e = inst.Cfg.FogFadeEnd;
+        if (e <= s) return 1f;
+        return MathHelper.Clamp((e - inst.FogAge) / (e - s), 0f, 1f);
     }
 
     // ---- The single canonical reanimation effect ("Grave Smoke") ----
@@ -514,6 +532,7 @@ internal class ReanimEffectSystem
             LightColor = Green(30, 170, 90, 230, 1.3f), LightWorldSize = 3.2f, LightAlpha = new BezierCurve(0f, 0.5f, 0.5f, 0f),
             CloudColor = Green(55, 170, 85, 220, 1.1f), CloudWorldSize = 2.04f, CloudCount = 14, CloudRise = 1.0f, CloudLifetime = 6.5f,
             DustColor = Green(55, 50, 45, 220, 1.0f), DustWorldSize = 1.95f, DustCount = 16, DustRise = 0.9f, DustLifetime = 6.5f, DustMaxAlpha = 0.5f,
+            FogFadeStart = 2.5f, FogFadeEnd = 7.0f,
         });
 
         // Cloudless variant — identical green outline + light + pose-morph rise as
