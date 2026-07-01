@@ -134,10 +134,39 @@ def _json(obj):
     return json.dumps(obj, indent=2)
 
 
+def _annotate_repo(status):
+    """Flag when the supervisor on :8777 serves a DIFFERENT clone than the one this
+    MCP server lives in. The supervisor is one-per-machine (shared port), so an
+    already-running supervisor started from another checkout (e.g. NecrokingMG2)
+    will silently serve ITS repo — making a rebuild here look like it 'did nothing'.
+    Surfacing both dirs (and a loud warning on mismatch) turns that into an obvious
+    signal instead of a debugging rabbit hole."""
+    if not isinstance(status, dict):
+        return
+    status["mcp_repo_root"] = dev.REPO_ROOT
+    served = status.get("repo_root")
+    # Fallback for supervisors predating the repo_root field: derive it from the exe
+    # path (<repo>/bin/<config>/Necroking.exe). Keeps the mismatch check working even
+    # against an older supervisor still running from another clone.
+    if not served and status.get("exe"):
+        served = os.path.dirname(os.path.dirname(os.path.dirname(status["exe"])))
+    if served and os.path.normcase(os.path.abspath(served)) \
+            != os.path.normcase(os.path.abspath(dev.REPO_ROOT)):
+        status["repo_mismatch_warning"] = (
+            f"WARNING: the dev supervisor (port {dev.SUP_PORT}) is serving a DIFFERENT "
+            f"project dir than this MCP server. supervisor repo_root={served!r}; this "
+            f"MCP's repo_root={dev.REPO_ROOT!r}. Rebuilds/edits in this clone will NOT "
+            f"affect the running preview until the supervisor is restarted from this "
+            f"clone (necro_stop, kill the supervisor, then re-run from this dir)."
+        )
+
+
 def call_tool(name, args):
     if name == "necro_status":
         dev.ensure_supervisor()
-        return _result(_json(dev.req("GET", "/status")))
+        st = dev.req("GET", "/status")
+        _annotate_repo(st)
+        return _result(_json(st))
 
     if name == "necro_start":
         dev.ensure_supervisor()

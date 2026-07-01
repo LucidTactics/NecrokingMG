@@ -289,6 +289,12 @@ def _env_info():
     the running game writes screenshots/logs. Surfaced in /status and in the
     start/build/restart results so a rebuild communicates its location back."""
     return {
+        # WHICH project directory this supervisor serves. Surfaced first because the
+        # supervisor is one-per-machine (port 8777): if two clones (e.g. NecrokingMG
+        # and NecrokingMG2) are open, whichever started the supervisor owns it, and
+        # every other clone's tooling silently drives THIS repo. Announcing it makes
+        # a wrong-clone mismatch obvious instead of a silent "my changes did nothing".
+        "repo_root": REPO_ROOT,
         "build_config": BUILD_CONFIG,
         "exe": EXE,
         "exe_exists": os.path.exists(EXE),
@@ -359,6 +365,7 @@ def start_game(windowed=False, map_name=None, resolution=DEFAULT_RESOLUTION):
 
     result = {"ok": True, "result": "started", "pid": _game_proc.pid,
               "windowed": windowed, "resolution": resolution,
+              "repo_root": REPO_ROOT,
               "build_config": BUILD_CONFIG, "screenshot_dir": SCREENSHOT_DIR}
     if map_name:
         try:
