@@ -19,6 +19,7 @@ open the listed `<area>.md`. Areas marked **(not yet documented)** have no doc y
 | Unit AI archetypes & routines | [ai.md](ai.md) ✅ | `IArchetypeHandler`/`ArchetypeRegistry` (name→id→handler), per-tick dispatch in `Simulation`, archetype assignment at spawn (`Game1.SpawnUnit`), `SubroutineSteps` move primitives, `WorkerHandler` FSM template, **where to add a new per-unit behavior** |
 | World — env objects & foragables | [world.md](world.md) ✅ | `EnvironmentSystem` (env-def + placed-object store, `AddObject`/`FindDef`/`CollectForagable`/respawn), `ForagableSystem` (player pickup arc), death→corpse hook in `RemoveDeadUnits`, and the Vogel-spiral anti-stack packing precedent (`HordeSystem`). Where runtime world-object spawning + foragable-eat goes |
 | Dev control server | [dev.md](dev.md) ✅ | The `--devserver` HTTP control channel: transport (`Dev/DevServer.cs` `DevServer`/`DevCommand`, `Dev/DevScript.cs` batch jobs) + every command verb in `Game1.Dev.cs` (`ExecuteDevCommand` switch), `Game1.DevData.cs` (`DevAddData`/state). **Where to add a new dev verb.** |
+| Editor/ (UI/widget editor) | [editor.md](editor.md) ◐ | In-game immediate-mode editors; **UI/widget editor** covered in depth — `UIEditorWindow.cs` data models (`UIEditor{NineSlice,Element,Child,Widget}Def`, `UIEditorTints`, `ChildOverrideEntry`) + copy/paste/duplicate clone logic (`CloneWidget`/`CloneChild`, which omit fields). Other editors stubbed. |
 | UI/ — overlays & panels | [ui.md](ui.md) ✅ | The right-side selected-unit sheet (`UI/UnitInfoPanel.cs`) + where the show-panel decision lives (`Game1.cs` 'U'/'O'/auto-hover, units only), the corpse-pile "inventory" cursor tooltip (`HUDRenderer.DrawObjectTooltip` + `WorkerSystem.PiledCorpseLines`), boar belly store (`Simulation._boarBellies`). Widget renderer + popup stack. |
 
 ## Subsystems (under `Necroking/`) — most not yet documented
@@ -37,7 +38,7 @@ open the listed `<area>.md`. Areas marked **(not yet documented)** have no doc y
 | `GameSystems/` | Discrete systems — `DeathFogSystem`, etc. | (not yet documented) |
 | `Spatial/` | Spatial partitioning / grid queries | (not yet documented) |
 | `Algorithm/` | Standalone algorithms | (not yet documented) |
-| `Editor/` | In-game immediate-mode editors (unit / spell / map / UI / item) | (not yet documented) |
+| `Editor/` | In-game immediate-mode editors (unit / spell / map / UI / item) | [editor.md](editor.md) ◐ (UI/widget editor only) |
 | `Dev/` | Dev control server — `DevServer`, `DevCommand` (HTTP → `ExecuteDevCommand`) | (not yet documented) |
 | `Scenario/` | Coded headless test scenarios (~125 files, `--scenario <name>`) | (not yet documented) |
 
@@ -54,7 +55,8 @@ Use this to pick a starting area. When the routed area isn't documented yet, doc
 - **HUD / spellbar / on-screen overlays** → game1-partials.md (`Game1.Render.HUD.cs`) + `UI/`.
 - **Spell list / spells menu panel position, anchoring, or its tab/tile hit-testing (the Grimoire)** → [ui.md](ui.md) (`UI/GrimoireOverlay.cs` → `Layout(screenH)` sets `_x`/`_y`, shared by draw + hit-test).
 - **Selected/inspected unit right-side sheet, grimoire, skill book, character sheet panels; which panel shows for a selected entity; corpse-pile contents display; boar belly panel** → [ui.md](ui.md) (`UI/UnitInfoPanel.cs`, decision in `Game1.cs` 'U'/'O'/auto-hover, `HUDRenderer.DrawObjectTooltip` + `WorkerSystem.PiledCorpseLines` for pile contents, `Simulation._boarBellies` for belly data).
-- **Unit stats / spell / item / map / UI editors** → `Editor/`.
+- **Unit stats / spell / item / map editors** → `Editor/`.
+- **UI/widget editor — data models, copy/paste/duplicate a widget or child, widget/element field list** → [editor.md](editor.md) (`Editor/UIEditorWindow.cs`: `CloneWidget`/`CloneChild` do the copy but omit fields; model classes `UIEditor{NineSlice,Element,Child,Widget}Def` at the top of the file; runtime consumers `UI/RuntimeWidgetRenderer.cs`/`UI/WidgetLayoutUtils.cs`).
 - **Game data values (units, items, spells JSON)** → `Data/` + `data/*.json` (use the `edit-game-data` skill to edit those).
 - **Unit AI / routines / combat decisions / adding a per-unit behavior or archetype** → [ai.md](ai.md) (`AI/IArchetypeHandler.cs` registry, `AI/SubroutineSteps.cs` move primitives, `AI/WorkerHandler.cs` FSM template; register in `Game1.cs`).
 - **Pathfinding / movement** → `Movement/`.
