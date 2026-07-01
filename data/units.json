@@ -3033,10 +3033,10 @@
       "paths": {},
       "weapons": [
         {
-          "id": "weapon_223651",
+          "id": "canine_bite",
           "anim": "AttackBite"
         },
-        "weapon_223651_copy"
+        "wolf_pounce_tackle"
       ],
       "armors": [],
       "shields": [],
@@ -3167,7 +3167,7 @@
           "anim": "Attack3"
         },
         {
-          "id": "weapon_223651",
+          "id": "canine_bite",
           "anim": "Attack1"
         },
         {
@@ -3263,7 +3263,7 @@
           "anim": "Attack3"
         },
         {
-          "id": "weapon_223651",
+          "id": "canine_bite",
           "anim": "Attack1"
         },
         {
@@ -3355,10 +3355,10 @@
       "paths": {},
       "weapons": [
         {
-          "id": "weapon_223651",
+          "id": "canine_bite",
           "anim": "AttackBite"
         },
-        "weapon_223651_copy"
+        "wolf_pounce_tackle"
       ],
       "armors": [],
       "shields": [],
@@ -3444,10 +3444,10 @@
       "paths": {},
       "weapons": [
         {
-          "id": "weapon_223651",
+          "id": "canine_bite",
           "anim": "AttackBite"
         },
-        "weapon_223651_copy"
+        "wolf_pounce_tackle"
       ],
       "armors": [],
       "shields": [],
@@ -3550,8 +3550,8 @@
       "playerForm": false,
       "paths": {},
       "weapons": [
-        "weapon_223651",
-        "weapon_223651_copy"
+        "canine_bite",
+        "wolf_pounce_tackle"
       ],
       "armors": [],
       "shields": [],
@@ -3628,8 +3628,8 @@
       "playerForm": false,
       "paths": {},
       "weapons": [
-        "weapon_223651",
-        "weapon_223651_copy"
+        "canine_bite",
+        "wolf_pounce_tackle"
       ],
       "armors": [],
       "shields": [],
@@ -5640,7 +5640,7 @@
       "paths": {},
       "weapons": [
         {
-          "id": "weapon_223651",
+          "id": "canine_bite",
           "anim": "Attack1"
         },
         {
@@ -5724,7 +5724,7 @@
       "paths": {},
       "weapons": [
         {
-          "id": "weapon_223651",
+          "id": "canine_bite",
           "anim": "Attack1"
         },
         {

@@ -556,7 +556,7 @@
       "twoHanded": false
     },
     {
-      "id": "weapon_223651",
+      "id": "canine_bite",
       "name": "Bite",
       "damage": 3,
       "attackBonus": 2,
@@ -593,7 +593,7 @@
       "twoHanded": false
     },
     {
-      "id": "weapon_223651_copy",
+      "id": "wolf_pounce_tackle",
       "name": "Pounce",
       "damage": -10,
       "attackBonus": 4,
