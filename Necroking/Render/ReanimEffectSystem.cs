@@ -32,12 +32,14 @@ internal class ReanimEffectSystem
         public float SpawnWindow;       // how long new cloud/dust puffs keep appearing
         public float PuffAnimCycles;    // flipbook loops over a puff's lifetime (1=default speed, >1=faster billow)
 
-        // Outline (blinks via pulse, fades out over Duration)
+        // Outline (blinks via pulse). Suppressed during the corpse morph, then on the risen unit
+        // it fades IN over OutlineFadeInDur and fades OUT over the rest of OutlineDuration.
         public HdrColor OutlineColor;
         public HdrColor OutlinePulseColor;
         public float OutlineWidth;
         public float OutlinePulseWidth;
         public float OutlinePulseSpeed;
+        public float OutlineFadeInDur;  // effect-time to bloom the outline in on the risen unit (0 = instant/full)
 
         // Additive diffuse light behind the unit
         public HdrColor LightColor;
@@ -227,9 +229,14 @@ internal class ReanimEffectSystem
         {
             var inst = _active[i];
             if (inst.UnitId != unitId) continue;
-            // Linear fade of the outline alpha across its own (longer) duration, measured
-            // from when the unit attached (so a deferred rise gets the full-strength outline).
-            float fade = MathF.Max(0f, 1f - (inst.Age - inst.OutlineStartAge) / inst.Cfg.OutlineDuration);
+            // The outline only appears AFTER the morph finishes — which is when the unit attaches.
+            // From that moment it blooms IN over OutlineFadeInDur, then fades OUT over the rest of
+            // OutlineDuration. All in effect-time (measured from attach) so it stays synced to the rise.
+            float since = inst.Age - inst.OutlineStartAge;
+            float fadeIn = MathF.Min(inst.Cfg.OutlineFadeInDur, inst.Cfg.OutlineDuration);
+            float fade = (fadeIn > 0f && since < fadeIn)
+                ? since / fadeIn
+                : MathF.Max(0f, 1f - (since - fadeIn) / MathF.Max(0.01f, inst.Cfg.OutlineDuration - fadeIn));
             c1 = ScaleAlpha(inst.Cfg.OutlineColor, fade);
             c2 = ScaleAlpha(inst.Cfg.OutlinePulseColor, fade);
             width = inst.Cfg.OutlineWidth;
@@ -260,8 +267,11 @@ internal class ReanimEffectSystem
             float morphWin = inst.OutlineFadeIn - inst.MorphHold;
             morphT = (inst.MorphHold > 0f && morphWin > 0f)
                 ? MathHelper.Clamp((inst.Age - inst.MorphHold) / morphWin, 0f, 1f) : fadeIn;
-            c1 = ScaleAlpha(inst.Cfg.OutlineColor, fadeIn);
-            c2 = ScaleAlpha(inst.Cfg.OutlinePulseColor, fadeIn);
+            // No outline while the body morphs — the silhouette reshapes "quietly", then the green
+            // glow blooms in on the finished zombie (see TryGetOutline). Alpha 0 kills the shader's
+            // traced outline but leaves the morph's own fill/green-gap energy intact.
+            c1 = ScaleAlpha(inst.Cfg.OutlineColor, 0f);
+            c2 = ScaleAlpha(inst.Cfg.OutlinePulseColor, 0f);
             width = inst.Cfg.OutlineWidth;
             pulseWidth = inst.Cfg.OutlinePulseWidth;
             pulseSpeed = inst.Cfg.OutlinePulseSpeed;
@@ -500,7 +510,7 @@ internal class ReanimEffectSystem
         {
             Id = "reanim_smoke", OutlineDuration = 6.2f, LightDuration = 5.0f, SpawnWindow = 2.0f, PuffAnimCycles = 1.4f,
             OutlineColor = Green(50, 200, 100, 230, 1.2f), OutlinePulseColor = Green(20, 110, 60, 160, 0.8f),
-            OutlineWidth = 2.0f, OutlinePulseWidth = 4.5f, OutlinePulseSpeed = 0.9f,
+            OutlineWidth = 2.0f, OutlinePulseWidth = 4.5f, OutlinePulseSpeed = 0.9f, OutlineFadeInDur = 1.0f,
             LightColor = Green(30, 170, 90, 230, 1.3f), LightWorldSize = 3.2f, LightAlpha = new BezierCurve(0f, 0.5f, 0.5f, 0f),
             CloudColor = Green(55, 170, 85, 220, 1.1f), CloudWorldSize = 1.7f, CloudCount = 8, CloudRise = 1.0f, CloudLifetime = 6.5f,
             DustColor = Green(55, 50, 45, 220, 1.0f), DustWorldSize = 1.95f, DustCount = 9, DustRise = 0.9f, DustLifetime = 6.5f, DustMaxAlpha = 0.5f,
@@ -514,7 +524,7 @@ internal class ReanimEffectSystem
         {
             Id = "reanim_nosmoke", OutlineDuration = 6.2f, LightDuration = 5.0f, SpawnWindow = 2.0f, PuffAnimCycles = 1.4f,
             OutlineColor = Green(50, 200, 100, 230, 1.2f), OutlinePulseColor = Green(20, 110, 60, 160, 0.8f),
-            OutlineWidth = 2.0f, OutlinePulseWidth = 4.5f, OutlinePulseSpeed = 0.9f,
+            OutlineWidth = 2.0f, OutlinePulseWidth = 4.5f, OutlinePulseSpeed = 0.9f, OutlineFadeInDur = 1.0f,
             LightColor = Green(30, 170, 90, 230, 1.3f), LightWorldSize = 3.2f, LightAlpha = new BezierCurve(0f, 0.5f, 0.5f, 0f),
             CloudColor = Green(55, 170, 85, 220, 1.1f), CloudWorldSize = 1.7f, CloudCount = 0, CloudRise = 1.0f, CloudLifetime = 6.0f,
             DustColor = Green(55, 50, 45, 220, 1.0f), DustWorldSize = 1.95f, DustCount = 0, DustRise = 0.9f, DustLifetime = 6.0f,
