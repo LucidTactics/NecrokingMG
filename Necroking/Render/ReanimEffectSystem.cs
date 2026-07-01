@@ -512,7 +512,7 @@ internal class ReanimEffectSystem
             OutlineColor = Green(50, 200, 100, 230, 1.2f), OutlinePulseColor = Green(20, 110, 60, 160, 0.8f),
             OutlineWidth = 2.0f, OutlinePulseWidth = 4.5f, OutlinePulseSpeed = 0.9f, OutlineFadeInDur = 1.0f,
             LightColor = Green(30, 170, 90, 230, 1.3f), LightWorldSize = 3.2f, LightAlpha = new BezierCurve(0f, 0.5f, 0.5f, 0f),
-            CloudColor = Green(55, 170, 85, 220, 1.1f), CloudWorldSize = 1.7f, CloudCount = 8, CloudRise = 1.0f, CloudLifetime = 6.5f,
+            CloudColor = Green(55, 170, 85, 220, 1.1f), CloudWorldSize = 2.04f, CloudCount = 8, CloudRise = 1.0f, CloudLifetime = 6.5f,
             DustColor = Green(55, 50, 45, 220, 1.0f), DustWorldSize = 1.95f, DustCount = 9, DustRise = 0.9f, DustLifetime = 6.5f, DustMaxAlpha = 0.5f,
         });
 
