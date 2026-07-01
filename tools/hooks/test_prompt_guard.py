@@ -67,6 +67,34 @@ fails += not check("find -delete -> ask (mutating flag surfaces despite find:* a
 fails += not check("find -exec -> ask (mutating flag surfaces despite find:* allow)",
                    evb("find . -name '*.cs' -exec sed -i s/a/b/ {} +"), "ask")
 
+# --- Per-invocation precision: a write-named token in ARGUMENT position is not the
+#     command, so it no longer forces a deny (AST knows the real leader) --------------
+fails += not check("echo rm -rf x -> allow (rm is an argument, echo is read-only)",
+                   evb("echo rm -rf x"), "allow")
+fails += not check("grep -n kill . -> allow (kill is a search pattern, not the command)",
+                   evb("grep -n kill ."), "allow")
+fails += not check("cat f | grep rm -> allow (rm is grep's pattern)",
+                   evb("cat f | grep rm"), "allow")
+fails += not check("printf with tee-looking arg -> allow (tee is text, printf read-only)",
+                   evb("printf 'tee sponge dd'"), "allow")
+# The find-mutating check reads THIS find's args: -delete as another echo's text is inert.
+fails += not check("echo -delete then find search -> allow (-delete belongs to echo)",
+                   evb("echo -delete && find . -name '*.cs'"), "allow")
+# But an actual writer as the leader still denies — precision cuts only the false positives.
+# (sed itself is intentionally allow-listed via `Bash(sed *)`, so pick a non-listed writer.)
+fails += not check("truncate as leader -> deny (real file write, not the false-positive kind)",
+                   evb("truncate -s0 f.txt"), "deny")
+fails += not check("xargs rm -> deny (wrapper launches a writer)",
+                   evb("echo f | xargs rm"), "deny")
+# Shell command-modifiers / launchers run the inner writer, which is only THEIR argument —
+# the leader-only check must flag the launcher itself (WRAPPERS) or these become false allows.
+fails += not check("command rm -> deny (shell modifier launches a writer)",
+                   evb("command rm -rf build"), "deny")
+fails += not check("exec truncate -> deny (exec launches a writer)",
+                   evb("exec truncate -s0 f.txt"), "deny")
+fails += not check("chrt powershell -> deny (scheduling launcher runs a writer)",
+                   evb('chrt -f 99 powershell -c "Remove-Item x"'), "deny")
+
 # --- Compound commands: allow only when EVERY segment is allow-listed -------------
 fails += not check("the compound that prompted -> allow",
                    evb('cd "$CLAUDE_PROJECT_DIR"; git status -s; echo "---"; '

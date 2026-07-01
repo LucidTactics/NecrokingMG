@@ -33,6 +33,12 @@ Design notes / limits (read before trusting a False):
 Public API:
     can_write_files(cmd) -> bool      # True if cmd could create/modify any file
     write_indicators(cmd) -> list     # the specific reasons (for messaging/tests)
+    has_side_effects(cmd) -> bool     # whole-string fallback: writes a file OR kills/powers
+
+  Per-invocation (preferred when a real parse is available; operate on a leader basename +
+  its own dequoted arg words rather than scanning the raw string):
+    command_side_effect(leader, args) -> str|None          # reason this one command mutates
+    command_conditional_trigger(leader, args) -> tuple|None # (leader, flag) for find -delete/…
 """
 import re
 
@@ -138,7 +144,14 @@ INTERPRETERS = {
 
 # --- Wrappers that launch an inner command we don't statically resolve ------------
 WRAPPERS = {
+    # Shell command-modifiers: run the FOLLOWING command, which may be a writer. With the
+    # per-invocation (leader-only) analysis these must be flagged here — the inner writer is
+    # this command's ARGUMENT, not a command node of its own, so the leader is all we see.
+    # (`source`/`.` execute an arbitrary script; `eval` runs a constructed string.)
+    "command", "exec", "builtin", "eval", "source",
     "xargs", "env", "nohup", "setsid", "timeout", "nice", "ionice", "stdbuf",
+    "chrt", "taskset", "setarch", "catchsegv",        # scheduling/arch launchers -> run an inner cmd
+    "firejail", "bwrap", "proxychains", "proxychains4",  # sandbox/proxy launchers -> run an inner cmd
     "time", "watch", "flock", "chroot", "unshare", "nsenter", "parallel", "rush",
     "sudo", "doas", "su", "runuser", "gosu", "pkexec",
     "make", "gmake", "ninja", "cmake", "meson", "scons", "bazel", "buck",
@@ -362,6 +375,48 @@ def can_write_files(cmd: str) -> bool:
     limits. Interpreters and wrappers always return True because their writes can't be
     statically excluded."""
     return bool(write_indicators(cmd))
+
+
+def _conditional_trigger(leader: str, args):
+    """The mutating flag (e.g. `-delete`) present in a single parsed invocation's args if
+    `leader` is a conditional writer used in its mutating mode, else None."""
+    flags = CONDITIONAL_WRITERS.get(leader)
+    if flags:
+        hit = flags & set(args)
+        if hit:
+            return sorted(hit)[0]
+    return None
+
+
+def command_conditional_trigger(leader: str, args):
+    """Per-invocation analog of conditional_write_triggers: `(leader, flag)` if this parsed
+    command (basename + its own dequoted arg words) is a conditional writer in its mutating
+    mode, else None. Precise — a `-delete` belonging to a different command, or sitting in
+    a quoted string, can't leak in the way the whole-string token scan allows."""
+    trig = _conditional_trigger(leader, args)
+    return (leader, trig) if trig else None
+
+
+def command_side_effect(leader: str, args):
+    """Reason a single PARSED invocation (leader basename + its own dequoted arg words)
+    could change state, or None. The precise, per-invocation analog of
+    side_effect_indicators: only the real command name is judged a command, so write-named
+    tokens sitting in ARGUMENTS (`echo rm`, `grep -n kill .`) are correctly ignored — the
+    thing the whole-string scan can't distinguish. Output redirection is NOT checked here:
+    it's a property of the command as a whole and is detected structurally by
+    bash_ast.writes_file, so the AST-backed caller combines the two."""
+    if leader in SIDE_EFFECT_NAMES:
+        verb = "process/power-control" if leader in PROCESS_POWER else "file-writing"
+        return f"{verb} command: {leader}"
+    trig = _conditional_trigger(leader, args)
+    if trig:
+        return f"file-writing command: {leader} ({trig})"
+    for a in args:
+        if a in WRITE_FLAGS or a.startswith("-i.") or re.match(r"^--in-?place", a):
+            return f"in-place/write flag: {a}"
+        if re.match(r"^(of|output|out)=", a, re.IGNORECASE):
+            return f"output-file argument: {a}"
+    return None
 
 
 def conditional_write_triggers(cmd: str):

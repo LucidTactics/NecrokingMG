@@ -35,12 +35,24 @@ Two layers:
          user is prompted immediately instead of the command being thrown back.
      Everything else -> deny with the escape hatch.
 
-Structural parsing: the segment split, substitution/heredoc detection, and real-file-write
-detection are done by bashlex (a real Bash parser) via bash_ast.analyze() — so a `$(…)`
-inside single quotes is correctly a literal (not a substitution) and `$(( 5 > 3 ))` is not
-mistaken for a `>` redirect. bashlex can't parse a few forms (arithmetic expansion, syntax
-errors); on those, evaluate() falls back to the quote-aware regex heuristics in this file
-(_split_segments / _has_unsafe / has_output_redirection), which stay as the fallback path.
+Structural parsing (AST-first): bashlex (a real Bash parser) via bash_ast.analyze() does
+the heavy lifting — it splits the command into its individual PROGRAM INVOCATIONS and, for
+each, hands back the leader (the program actually run) plus that invocation's own dequoted
+args. Every structural question the guard asks rides on that:
+  * "does this mutate?" — checked per invocation (file_write_detect.command_side_effect on
+    each leader+args), so a write-named token riding in another command's arguments
+    (`echo rm`, `grep -n kill .`) is NOT mistaken for the command itself;
+  * "is this a find in its mutating mode?" — the `-delete`/`-exec` check reads THAT find's
+    args, not a stray match anywhere in the string;
+  * substitution/heredoc/real-file-write — `$(…)` inside single quotes is a literal (not a
+    substitution) and `$(( 5 > 3 ))` is arithmetic (not a `>` redirect).
+bashlex can't parse a few forms (arithmetic expansion, syntax errors). ONLY on those does
+evaluate() fall back to the quote-aware whole-string heuristics in this file / in
+file_write_detect (_split_segments / _has_unsafe / has_output_redirection /
+has_side_effects). They're strictly the parse-failure safety net — coarser (a write-named
+token anywhere reads as a writer), but deny-by-default means a failed parse degrades to the
+old conservative behaviour, never to a wrong allow. That's the only reason _split_segments
+et al. still exist; the primary path never touches them.
 
 It would rather bounce a harmless command (one re-send away from running) than let a
 needless prompt through. When that gets in the way, the fix is to add an `allow` rule,
@@ -124,25 +136,34 @@ BASH_RULES = (rule_python_validate,)
 _REMOTE_PUSH_SUBCMDS = {"push", "send-pack"}
 
 
-def rule_intended_prompt(cmd: str):
+def rule_intended_prompt(seg: str, command=None):
     """Layer-2 whitelist: a single-command segment we've AGREED should reach the user as
     a normal prompt rather than be force-allowed or thrown back. Return a short reason
     string to prompt, or None. Checked PER SEGMENT in evaluate(), before the force-allow
     pass, so an allow-listed-but-sensitive command (a remote push under `git:*`) still
     prompts.
 
+    `command` is the bash_ast.Command (leader + own args) for this segment when a real
+    parse was available; the find-mutating check then inspects THIS invocation's args
+    (precise). When it's None (parse failed), that check falls back to the whole-string
+    token scan on `seg`.
+
     Add a branch as cases come up that genuinely warrant the user's approval.
     """
-    if _git_subcommand(cmd) in _REMOTE_PUSH_SUBCMDS:
+    if _git_subcommand(seg) in _REMOTE_PUSH_SUBCMDS:
         return ("A push to a remote publishes your commits and needs your explicit "
                 "approval — every other git command is auto-accepted, just this one "
                 "prompts. Approve to proceed.")
     # An otherwise read-only tool used in its mutating mode (`find … -delete`/`-exec`)
     # must prompt even though the bare tool (`find:*`) is allow-listed — the mutating
     # flag is the rare, dangerous case we want surfaced rather than silently allowed.
-    trig = file_write_detect.conditional_write_triggers(cmd)
+    if command is not None:
+        trig = file_write_detect.command_conditional_trigger(command.leader, command.args)
+    else:
+        hits = file_write_detect.conditional_write_triggers(seg)
+        trig = hits[0] if hits else None
     if trig:
-        base, flag = trig[0]
+        base, flag = trig
         return (f"`{base} … {flag}` modifies the filesystem — `{base}` is auto-accepted "
                 f"for read-only searches, but the `{flag}` action mutates files and needs "
                 f"your approval. Approve to proceed.")
@@ -480,31 +501,46 @@ def evaluate(tool_name: str, tool_input: dict, mode: str, allow_rules, deny_rule
     # a wrong allow. See bash_ast.py.
     ast = bash_ast.analyze(cmd)
 
-    segments = ast.segments if ast.ok else _split_segments(cmd)
+    # Primary path is the AST: segments/commands are index-aligned, so command[i] is the
+    # parsed (leader, args) view of segment[i]. When bashlex can't parse (arithmetic
+    # expansion, syntax errors), commands is None and every downstream check falls back to
+    # the whole-string heuristics — deny-by-default means that degrades safely.
+    if ast.ok:
+        segments, commands = ast.segments, ast.commands
+    else:
+        segments, commands = _split_segments(cmd), None
 
-    # Sensitive-but-allow-listed commands (a remote push under `git:*`) must PROMPT even
-    # though they'd otherwise be force-allowed. Check per segment BEFORE force-allow — and
-    # before the unsafe check, so `git push $(…)` can't slip through on a defer to git:*.
-    for seg in (segments or [cmd]):
-        intended = rule_intended_prompt(seg)
+    # Sensitive-but-allow-listed commands (a remote push under `git:*`, `find … -delete`)
+    # must PROMPT even though they'd otherwise be force-allowed. Check per segment BEFORE
+    # force-allow — and before the unsafe check, so `git push $(…)` can't slip through on a
+    # defer to git:*. Pass the aligned parsed command so the find-mutating check inspects
+    # this invocation's own args rather than the whole string.
+    for i, seg in enumerate(segments or [cmd]):
+        command = commands[i] if commands is not None and i < len(commands) else None
+        intended = rule_intended_prompt(seg, command)
         if intended:
             return ("ask", intended)
 
     if ast.ok:
         unsafe = ast.has_substitution or ast.has_heredoc
         file_redirection = ast.writes_file
+        # Per-invocation mutation check: a write-named token is a mutator only when it's the
+        # LEADER of a command, not when it rides in another command's args (`echo rm`,
+        # `grep -n kill .`). Redirection is covered separately by ast.writes_file above.
+        side_effect = any(file_write_detect.command_side_effect(c.leader, c.args)
+                          for c in commands)
     else:
         unsafe = _has_unsafe(cmd)
         file_redirection = has_output_redirection(cmd)
+        side_effect = file_write_detect.has_side_effects(cmd)
 
-    # Read-only fast-allow: a command with no side effects (no file-writing utility or
-    # redirection, no process/power-control command per file_write_detect) and no
-    # unparseable substitution/heredoc can't do the damage a prompt guards against —
-    # accept it as is. This is the positive-safety inverse of the allow-list: instead of
-    # enumerating safe commands, file_write_detect enumerates the ways to change state and
-    # we allow the rest. Conservative by construction (interpreters/wrappers/network tools
-    # all count), so a False there is a strong read-only signal.
-    if not unsafe and not file_redirection and not file_write_detect.has_side_effects(cmd):
+    # Read-only fast-allow: a command with no side effects (no file-writing/process/power
+    # command, no redirection) and no unparseable substitution/heredoc can't do the damage
+    # a prompt guards against — accept it as is. This is the positive-safety inverse of the
+    # allow-list: instead of enumerating safe commands, file_write_detect enumerates the
+    # ways to change state and we allow the rest. Conservative by construction
+    # (interpreters/wrappers/network tools all count), so a False is a strong read-only signal.
+    if not unsafe and not file_redirection and not side_effect:
         return ("allow", None)
 
     # Never force-allow a command that redirects output to a file (`>`/`>>`/`2>`/…).

@@ -20,8 +20,16 @@ caller then falls back to its old heuristic. Because the hook is deny-by-default
 failed parse degrades to the previous (conservative) behaviour, never to a wrong allow.
 
 Public API:
-    analyze(cmd) -> Analysis    # .ok, .segments, .leaders, .has_substitution,
-                                #   .has_heredoc, .writes_file
+    analyze(cmd) -> Analysis    # .ok, .segments, .commands, .leaders,
+                                #   .has_substitution, .has_heredoc, .writes_file
+
+The workhorse the prompt guard leans on is `.commands`: one Command(leader, args) per
+simple-command node, where `leader` is the basename of the program actually invoked and
+`args` are its OWN dequoted argument words. That's what makes "does this invocation
+mutate?" precise — a write-named token sitting in another command's ARGUMENTS (`echo rm`,
+`grep -n kill .`, `find . '-delete'` where -delete is the search root) is no longer
+mistaken for the command itself, and a find's `-delete`/`-exec` is checked against that
+find's args, not the whole command string.
 """
 from collections import namedtuple
 
@@ -32,14 +40,21 @@ except Exception:                       # library missing / import error -> alwa
     _HAVE_BASHLEX = False
 
 
+# One parsed simple-command invocation. `leader` is the basename of the first word
+# (path/.exe-stripped, lowercased; '' for an assignment-only command like `FOO=bar`).
+# `args` are the remaining words with shell quoting already removed by bashlex, so
+# `find . '-delete'` yields args ['.', '-delete'] — a quoted flag still reads as a flag,
+# exactly as the shell would treat it.
+Command = namedtuple("Command", "leader args")
+
 Analysis = namedtuple(
     "Analysis",
-    "ok segments leaders has_substitution has_heredoc writes_file",
+    "ok segments commands leaders has_substitution has_heredoc writes_file",
 )
 
 # The empty result handed back whenever bashlex can't parse. ok=False tells the caller
 # "trust nothing here; use your fallback".
-_FAILED = Analysis(False, [], [], False, False, False)
+_FAILED = Analysis(False, [], [], [], False, False, False)
 
 
 def _kids(n):
@@ -86,14 +101,13 @@ def _basename(word: str) -> str:
     return base
 
 
-def _leader(cmd_node, src: str) -> str:
-    """Basename of a command's first WORD, skipping leading `VAR=val` assignments so
-    `MSYS_NO_PATHCONV=1 robocopy …` -> 'robocopy'. bashlex tags assignments as their own
-    node kind, so we just take the first `word` part."""
-    for part in getattr(cmd_node, "parts", None) or []:
-        if part.kind == "word":
-            return _basename(src[part.pos[0]:part.pos[1]])
-    return ""
+def _words(cmd_node):
+    """Dequoted word values of a command node, in order — the leading `VAR=val`
+    assignments are skipped automatically because bashlex tags them as their own node
+    kind (not `word`). bashlex's `.word` has already stripped shell quoting, so
+    `find . '-delete'` -> ['find', '.', '-delete'] and a quoted flag still reads as a
+    flag. Redirect targets are separate `redirect` nodes, so they never leak in here."""
+    return [p.word for p in (getattr(cmd_node, "parts", None) or []) if p.kind == "word"]
 
 
 def _is_real_file_write(redir) -> bool:
@@ -118,7 +132,11 @@ def analyze(cmd: str) -> Analysis:
 
     segments: source text of each simple command (`git push origin master`), for
               per-segment allow-list / intended-prompt checks.
-    leaders:  basename of each command's first word (`git`, `robocopy`).
+    commands: a Command(leader, args) per simple command, index-aligned with `segments`
+              (segments[i] is the source text of commands[i]). This is the structured view
+              callers should prefer — it says WHICH program each invocation runs and with
+              WHICH args, so mutation checks don't fire on write-named argument tokens.
+    leaders:  the non-empty leaders of `commands`, kept as a flat convenience list.
     has_substitution / has_heredoc: genuine `$( )` `` ` ` `` `<( )` / heredoc present.
     writes_file: any redirect writes a real (non-null) file.
     """
@@ -130,7 +148,7 @@ def analyze(cmd: str) -> Analysis:
         # arithmetic expansion (unimplemented), syntax errors, etc. -> let caller fall back
         return _FAILED
 
-    segments, leaders = [], []
+    segments, commands, leaders = [], [], []
     has_sub = has_heredoc = writes_file = False
     for tree in trees:
         for n in _walk(tree):
@@ -143,9 +161,13 @@ def analyze(cmd: str) -> Analysis:
                     writes_file = True
         for cn in _command_nodes(tree):
             seg = cmd[cn.pos[0]:cn.pos[1]].strip()
-            if seg:
-                segments.append(seg)
-            lead = _leader(cn, cmd)
-            if lead:
-                leaders.append(lead)
-    return Analysis(True, segments, leaders, has_sub, has_heredoc, writes_file)
+            if not seg:
+                continue
+            words = _words(cn)
+            leader = _basename(words[0]) if words else ""
+            # Append segment + Command together so the two lists stay index-aligned.
+            segments.append(seg)
+            commands.append(Command(leader, words[1:]))
+            if leader:
+                leaders.append(leader)
+    return Analysis(True, segments, commands, leaders, has_sub, has_heredoc, writes_file)
