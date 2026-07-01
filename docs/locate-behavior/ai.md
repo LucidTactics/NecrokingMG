@@ -64,7 +64,10 @@ The move-to-target primitives live here:
 - `SetEffort` (walk/jog/sprint cap), `SetIdle`, `FacePosition`, `FindClosestEnemy`,
   combat steps (`AttackTarget`, `Disengage`), wander/roam.
 
-### `Necroking/AI/WorkerHandler.cs`  ← **the template to copy for corpse_puppet**
+### `Necroking/AI/CorpsePuppetHandler.cs`  ← **implemented (archetype `CorpsePuppet`, id 13)**
+The raised puppet FSM. Registered in `Game1.cs` (`~line 735`). Each `Update`: `ws.FindDepositBuilding(JobResources.Corpse, MyPos)`; if `<0` idle; else `MoveToPosition_Arrived(1.6f)`, then on arrival `ws.Deposit(pile, JobResources.Corpse, 1)` and — only if it returned >0 — `ws.RecordPiledCorpse(pile, Units[i].UnitDefID)` + set `Units[i].PendingDespawn = true` (reaped with NO loose corpse by `Simulation.RemoveDeadUnits`, pre-pass `Simulation.cs ~line 3663`). **The corpse-type it deposits is `Units[i].UnitDefID`** (the puppet's own def) — to deposit as the ORIGINAL unit type, pass a different id to `RecordPiledCorpse` (needs the source unit-def stored on the unit at raise time).
+
+### `Necroking/AI/WorkerHandler.cs`  ← the deposit/collect FSM template
 The grave-worker FSM. Phase-based (`WorkerPhase` byte on the unit). The
 **Collect→corpse→deposit** flow is exactly the corpse_puppet's behavior minus the player
 ownership:
@@ -96,26 +99,38 @@ ownership:
   repairs `_necromancerIdx`). A per-tick handler can't call `Simulation` directly from
   `AIContext` (no Sim handle exposed); see Pitfalls for the deposit-then-remove approach.
 
-## How to add the corpse_puppet behavior (concrete)
+## Corpse Puppet spell — type selection (implemented, cross-area)
 
-1. **Data** — add unit `corpse_puppet` to `data/units.json` (zombie stats) with
-   `"archetype": "CorpsePuppet"` (use the `edit-game-data` skill). Faction Undead.
-2. **`IArchetypeHandler.cs`** — add `public const byte CorpsePuppet = 13;` and a
-   `"CorpsePuppet" => CorpsePuppet,` case in `FromName`.
-3. **New file `Necroking/AI/CorpsePuppetHandler.cs`** — `class CorpsePuppetHandler :
-   IArchetypeHandler`. Two phases (mirror WorkerHandler):
-   - `OnSpawn`: set a phase byte (reuse e.g. `WorkerPhase`) to "GoToPile".
-   - `Update` GoToPile: `int pile = ctx.Workers.FindDepositBuilding("Corpse", ctx.MyPos);`
-     if `<0` idle/wander; else `var o = ctx.EnvSystem.GetObject(pile); MoveTo(ref ctx, new Vec2(o.X,o.Y));`
-     `if (!SubroutineSteps.MoveToPosition_Arrived(ref ctx, ~1.6f)) return;` then deposit:
-     `ctx.Workers.RecordPiledCorpse(pile, ctx.Units[i].UnitDefID);`
-     `ctx.Workers.Deposit(pile, "Corpse", 1);` and remove self (see Pitfalls).
-4. **`Game1.cs` `~line 734`** — register:
-   `AI.ArchetypeRegistry.Register(AI.ArchetypeRegistry.CorpsePuppet, "CorpsePuppet", new AI.CorpsePuppetHandler());`
-5. **Summon assignment** — nothing special needed: `Game1.SpawnUnit` and
-   `ExecuteSummonSpell` (`Game1.Spells.cs` `~line 144`, which calls `SpawnUnit`) already
-   apply `unitDef.Archetype` via `FromName`. As long as the def's `archetype` is
-   `CorpsePuppet`, the summon path wires the handler automatically.
+The **Corpse Puppet** spell (`data/spells.json`, `summonUnitID: "corpse_puppet"`,
+`summonTargetReq: "Corpse"`) currently raises a **dedicated `corpse_puppet` unit def**
+(archetype `CorpsePuppet`), NOT a zombie variant of the target:
+- In `Game1.Spells.cs` `ExecuteSummonSpell` single-corpse branch, `summonUnitID` comes from
+  `pending.SummonUnitID`. Zombie-type-from-corpse resolution only happens when
+  `string.IsNullOrEmpty(summonUnitID)` (`~line 72`), calling
+  `Game.TableCraftingSystem.ResolveZombieUnitID(gameData, corpse.UnitDefID)`. Because the
+  spell sets a non-empty `corpse_puppet`, that resolution is **skipped** — the raise uses the
+  fixed puppet def via `QueueReanimRise(summonUnitID, …)` → `SpawnZombieMinion`.
+- **To raise the ZOMBIE variant of the target** instead: leave `summonUnitID` empty on the
+  spell (so `ResolveZombieUnitID` picks the zombie type), then **override the raised unit's
+  archetype to `CorpsePuppet`** after spawn. Options: add a `SpellDef` flag (e.g.
+  `overrideArchetype`) honored in `QueueReanimRise`/its spawn callback, or key off the spell
+  id; either way call `ArchetypeRegistry.FromName("CorpsePuppet")` → set
+  `UnitsMut[idx].Archetype` on the freshly-spawned unit (the `PendingReanimRise.OnSpawned`
+  hook, `Game1.Spells.cs`, is the clean injection point).
+- **`ResolveZombieUnitID`** (`Game/TableCraftingSystem.cs`) reads `sourceDef.ZombieTypeID`
+  (a unit id or a unit-group id → `UnitGroups.PickRandom`). This is the single source of
+  truth for "what does a corpse of type X raise into."
+
+## Corpse-deposit type — where the puppet becomes a corpse (cross-area)
+
+`CorpsePuppetHandler.Update` deposits with `ws.RecordPiledCorpse(pile, ctx.Units[i].UnitDefID)`
+— so it piles as its **own** def (`corpse_puppet`, i.e. effectively a zombie/generic corpse).
+`RecordPiledCorpse(objIdx, unitDefId)` (`Game/Jobs/WorkerSystem.cs`) pushes that def onto the
+pile's type stack; `TakePiledCorpse`/`PiledCorpseLines` read it back for withdraw/UI.
+**To deposit as the ORIGINAL unit type**: store the source corpse's `UnitDefID` on the unit at
+raise time (a new field on `UnitArrays`, set in the reanim spawn callback) and pass THAT id to
+`RecordPiledCorpse` instead of `Units[i].UnitDefID`. The abstract `Deposit(pile,"Corpse",1)`
+count stays the same; only the recorded identity changes.
 
 ## Pitfalls / gotchas
 

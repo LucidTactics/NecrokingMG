@@ -121,6 +121,11 @@ public class Simulation
     private GameData? _gameData;
     private EnvironmentSystem? _envSystem;
     private WallSystem? _wallSystem;
+    // Per-boar mushroom belly: unit id → env def indices of eaten mushrooms, in eat
+    // order. Filled by AI.BoarForageAI; emptied (scattered on the ground) when the
+    // boar dies in SpitBoarBellyOnDeath. Kept off the SoA Unit struct because it's a
+    // variable-length list only a handful of units ever carry.
+    private readonly Dictionary<uint, List<ushort>> _boarBellies = new();
     private float _gameTime;
     private uint _frameNumber;
     private int _necromancerIdx = -1;
@@ -256,6 +261,9 @@ public class Simulation
     /// pipeline (effect + body morph + deferred slow rise). When unset (headless sims) the tick
     /// falls back to spawning the zombie directly with the slow standup.</summary>
     public Action<PendingZombieRaise>? ReanimHandler;
+    /// <summary>Fired when a forager (zombie boar) swallows a mushroom, at the mushroom's
+    /// world position. Game1 hooks this to play the pickup sound. Null in headless sims.</summary>
+    public Action<Vec2>? OnForagerAte;
     public PlayerResources PlayerResources => _playerResources;
 
     // Anim metadata. Populated by Game1 once the atlases load so AI can look up
@@ -281,6 +289,7 @@ public class Simulation
         _pathfinder.Init(_grid);
         _units.Clear();
         _corpses.Clear();
+        _boarBellies.Clear();
         _damageEvents.Clear();
         _projectiles.Clear();
         _lightning.Clear();
@@ -507,6 +516,11 @@ public class Simulation
 
         // Core subsystems
         PhaseStart(); UpdateAI(dt); PhaseEnd("ai");
+
+        // Zombie boars peel off the horde to eat nearby mushrooms. Runs after the
+        // archetype AI pass (so it can override the follow velocity) and before
+        // UpdateMovement (so the override steers the boar this frame).
+        PhaseStart(); AI.BoarForageAI.Update(this, dt); PhaseEnd("boar_forage");
 
         // Clear HitReacting AFTER AI has read it — this ensures flags set between frames
         // (e.g. spell AoE from Game1.Update) persist until the next AI tick sees them
@@ -782,6 +796,18 @@ public class Simulation
         _necroRunning = running;
     }
 
+    // Movement penalty applied to the necromancer while dragging a roped corpse at
+    // full tension (1 = no penalty). Set each frame by the rope-drag update in Game1;
+    // consumed in the PlayerControlled speed calc below. Sprint is separately gated by
+    // the rope-drag flag too (a taut rope shouldn't let you sprint).
+    private float _necroDragSlow = 1f;
+    private bool _necroRopeTaut;
+    public void SetNecromancerDragSlow(float mult, bool ropeTaut)
+    {
+        _necroDragSlow = Necroking.Core.MathUtil.Clamp(mult, 0.05f, 1f);
+        _necroRopeTaut = ropeTaut;
+    }
+
     /// <summary>Sets the mouse-driven target facing angle for the necromancer.
     /// The actual rotation is applied by <see cref="UpdateFacingAngles"/> at the
     /// unit's turn rate. While jogging or running the player branch picks the
@@ -874,7 +900,7 @@ public class Simulation
                     // is held + the unit is allowed to sprint, otherwise toward 0.
                     // Carrying a corpse disqualifies sprinting (preserves the prior
                     // behavior where carrying suppressed the run bonus).
-                    bool canSprint = _necroRunning && _units[i].CarryingCorpseID < 0 && !_units[i].GhostMode;
+                    bool canSprint = _necroRunning && _units[i].CarryingCorpseID < 0 && !_units[i].GhostMode && !_necroRopeTaut;
                     float rampRate = canSprint
                         ? dt / SprintRampUpSeconds
                         : -dt / SprintRampDownSeconds;
@@ -895,6 +921,7 @@ public class Simulation
                         speed = 20.0f;
                     else
                         speed *= sprintMultiplier;
+                    speed *= _necroDragSlow; // rope-drag penalty (taut rope hauling a corpse)
                     _units[i].MaxSpeed = speed; // update so ORCA + accel cap respect current speed
 
                     // Bias the gait picker toward Sprint while ramping so the player
@@ -3341,6 +3368,94 @@ public class Simulation
         NecroSprintT = _sprintRampValue,
     };
 
+    // --- Boar foraging (AI.BoarForageAI) ---
+
+    /// <summary>Trot a foraging boar toward a mushroom, reusing the shared movement
+    /// step so pathfinding, effort, and locomotion anim all match normal AI. Hurry
+    /// effort gives a purposeful jog.</summary>
+    internal void AIForageMove(int i, Vec2 target, float dt)
+    {
+        var ctx = BuildAIContext(i, dt, 0f, false);
+        AI.SubroutineSteps.SetEffort(ref ctx, Movement.MoveEffort.Hurry);
+        AI.SubroutineSteps.MoveToward(ref ctx, target, ctx.MyMaxSpeed);
+    }
+
+    /// <summary>Hold a forager still and play a grazing animation (head-down Feeding),
+    /// facing its mushroom (stored in MoveTarget). Mirrors the deer's bush-feed anim.</summary>
+    internal void AIForageGraze(int i, float dt)
+    {
+        var ctx = BuildAIContext(i, dt, 0f, false);
+        _units[i].PreferredVel = Vec2.Zero;
+        _units[i].RoutineAnim = Necroking.Render.AnimRequest.Action(Necroking.Render.AnimState.Feeding);
+        AI.SubroutineSteps.FacePosition(ref ctx, _units[i].MoveTarget);
+    }
+
+    /// <summary>Record one eaten mushroom (its env def index) into a boar's belly.</summary>
+    internal void AddBoarBelly(uint unitId, ushort defIndex)
+    {
+        if (!_boarBellies.TryGetValue(unitId, out var list))
+        {
+            list = new List<ushort>();
+            _boarBellies[unitId] = list;
+        }
+        list.Add(defIndex);
+    }
+
+    /// <summary>Grouped, human-readable lines of a forager's mushroom belly
+    /// ("Deathcap x3"), in first-eaten order — mirrors WorkerSystem.PiledCorpseLines
+    /// for the corpse-pile display. Empty list when the unit has eaten nothing.
+    /// Keyed by <see cref="Movement.Unit.Id"/>.</summary>
+    public List<string> BoarBellyLines(uint unitId)
+    {
+        var lines = new List<string>();
+        if (_envSystem == null || !_boarBellies.TryGetValue(unitId, out var belly) || belly.Count == 0)
+            return lines;
+
+        var order = new List<string>();
+        var counts = new Dictionary<string, int>();
+        foreach (var defIdx in belly)
+        {
+            var def = _envSystem.Defs[defIdx];
+            string name = !string.IsNullOrEmpty(def.Name) ? def.Name : def.Id;
+            if (!counts.ContainsKey(name)) { counts[name] = 0; order.Add(name); }
+            counts[name]++;
+        }
+        foreach (var name in order)
+            lines.Add(counts[name] > 1 ? $"{name} x{counts[name]}" : name);
+        return lines;
+    }
+
+    /// <summary>When a boar with a full belly dies, burst its stored mushrooms back onto
+    /// the ground around the corpse — hex-packed with random jitter so they spread out
+    /// instead of stacking on one tile. Called from RemoveDeadUnits while the dead unit's
+    /// position is still valid. No-op for units that never foraged.</summary>
+    private void SpitBoarBellyOnDeath(int deadIdx)
+    {
+        uint id = _units[deadIdx].Id;
+        if (!_boarBellies.TryGetValue(id, out var belly))
+            return;
+        _boarBellies.Remove(id);
+        if (_envSystem == null || belly.Count == 0) return;
+
+        var center = _units[deadIdx].Position;
+        // Deterministic per-death RNG (Random.Shared is banned in headless/replay paths;
+        // seed off position + belly size so each death scatters consistently).
+        int seed = (int)(center.X * 131f) ^ ((int)(center.Y * 977f) << 8) ^ (belly.Count * 2654435761u).GetHashCode();
+        var rng = new Random(seed);
+        var spots = Necroking.Algorithm.ScatterPacking.HexPack(center, belly.Count, spacing: 0.45f, jitter: 0.14f, rng);
+
+        for (int k = 0; k < belly.Count; k++)
+        {
+            var pos = k < spots.Count ? spots[k] : center;
+            var def = _envSystem.Defs[belly[k]];
+            float scale = def.ScaleMin < def.ScaleMax
+                ? def.ScaleMin + (float)rng.NextDouble() * (def.ScaleMax - def.ScaleMin)
+                : 1f;
+            _envSystem.AddObject(belly[k], pos.X, pos.Y, scale);
+        }
+        DebugLog.Log("scenario", $"[BoarForage] boar#{id} died — spat out {belly.Count} mushroom(s)");
+    }
+
     // --- Helpers ---
     private void MoveTowardUnit(int i, int targetIdx, float speed)
     {
@@ -3753,6 +3868,9 @@ public class Simulation
                 // retreats for a moment). Done before the swap-and-pop remove so the
                 // dead unit's position/faction are still valid.
                 BroadcastRatPanicOnDeath(i);
+
+                // Zombie boar with mushrooms in its belly → burst them onto the ground.
+                SpitBoarBellyOnDeath(i);
 
                 RemoveUnitTracked(i); // remove + repair _necromancerIdx (BroadcastRatPanic ran above)
             }

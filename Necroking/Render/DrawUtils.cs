@@ -36,6 +36,18 @@ public static class DrawUtils
             null, color, angle, Vector2.Zero, SpriteEffects.None, 0);
     }
 
+    /// <summary>Draw a line with an arbitrary pixel thickness (centered on the a→b axis).</summary>
+    public static void DrawLine(SpriteBatch batch, Texture2D pixel, Vector2 a, Vector2 b, Color color, float thickness)
+    {
+        float dx = b.X - a.X, dy = b.Y - a.Y;
+        float len = MathF.Sqrt(dx * dx + dy * dy);
+        if (len < 0.5f) return;
+        float angle = MathF.Atan2(dy, dx);
+        // Origin (0, 0.5) centers the 1-px-tall pixel strip vertically before scaling to thickness.
+        batch.Draw(pixel, a, null, color, angle, new Vector2(0f, 0.5f),
+            new Vector2(len, thickness), SpriteEffects.None, 0f);
+    }
+
     /// <summary>Draw a rectangle outline. The single canonical rect-stroke — replaces
     /// ~13 per-file DrawBorder/DrawRectOutline copies. Corners are non-overlapping (drawn
     /// once each) so the stroke is correct under a translucent color as well as solid.</summary>

@@ -609,7 +609,7 @@ partial class GameRenderer
             _g._spellDropdownSlot, _g._secondaryDropdownSlot,
             _g._timeScale, _g._hoveredObjectIdx, _g._envSystem,
             DrawSpellCategoryIcon, BuildMenuOpenMask(), _g._paused, _g._hoveredCorpseIdx,
-            _g._primarySlotFlash, _g._secondarySlotFlash);
+            _g._primarySlotFlash, _g._secondarySlotFlash, _g._hoveredBellyUnitId);
     }
 
     /// <summary>Bitmask of which core menus are open, by HUDRenderer.Menu* index,

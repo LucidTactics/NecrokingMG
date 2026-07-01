@@ -80,6 +80,14 @@ See also: **`docs/spells.md`** (read before adding/changing a spell — explains
 split), `Game/SpellCasting.cs`, `Game/SpellEffectSystem.cs`, `Game/SpellPenetration.cs`,
 `Data/Registries/SpellRegistry.cs`, `Game1.Spells.cs` is paired with the main loop in `Game1.cs`.
 
+> **STALE NAMING:** the `Game1.Render.*` render partials described below were **extracted
+> into a separate `GameRenderer` class** (`Necroking/GameRenderer.{cs,Draw,World,Units,Corpses,Hud}.cs`)
+> that holds a back-reference `_g` to `Game1`. The responsibilities map roughly:
+> `Game1.Render.cs`→`GameRenderer.Draw.cs`, `Game1.Render.World.cs`→`GameRenderer.World.cs`,
+> `Game1.Render.Units.cs`→`GameRenderer.Units.cs`, `Game1.Render.Corpses.cs`→`GameRenderer.Corpses.cs`,
+> `Game1.Render.HUD.cs`→`GameRenderer.Hud.cs`. When editing rendering, edit the `GameRenderer.*`
+> files. (Descriptions below still hold for *what* each pass does.)
+
 ### `Necroking/Game1.Render.cs` — top-level Draw flow / render orchestration
 What lives here: `Draw(GameTime)` — the master render orchestration that sequences every pass
 (ground → world → corpses → units → effects → HUD → menus) into render targets and composites them.

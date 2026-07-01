@@ -162,7 +162,8 @@ public partial class HUDRenderer
         int spellDropdownSlot, int secondaryDropdownSlot,
         float timeScale, int hoveredObjectIdx, EnvironmentSystem envSystem,
         Action<string, int, int> drawSpellCategoryIcon, int menuOpenMask = 0, bool paused = false,
-        int hoveredCorpseIdx = -1, float[]? primaryFlash = null, float[]? secondaryFlash = null)
+        int hoveredCorpseIdx = -1, float[]? primaryFlash = null, float[]? secondaryFlash = null,
+        uint hoveredBellyUnitId = uint.MaxValue)
     {
         int necroIdx = FindNecromancer(sim);
 
@@ -192,6 +193,7 @@ public partial class HUDRenderer
             DrawSpellSlotTooltip(gameData, inventory, screenW, screenH);
 
         DrawObjectTooltip(hoveredObjectIdx, envSystem, sim, gameData, screenW, screenH);
+        DrawBellyTooltip(hoveredBellyUnitId, sim, gameData, screenW, screenH);
         DrawCorpseTooltip(hoveredCorpseIdx, sim, gameData, screenW, screenH);
         // Controls hint intentionally omitted — overlapped the FPS/zoom bottom-
         // left readout. Re-enable if we add a menu page for it.
@@ -660,6 +662,28 @@ public partial class HUDRenderer
         else return;
 
         DrawCursorTooltip(lines, screenW, screenH);
+    }
+
+    /// <summary>Floating cursor tooltip for a hovered forager (zombie boar): its name
+    /// plus a corpse-pile-style list of the mushrooms in its belly. Replaces the normal
+    /// right-side unit stat sheet (suppressed for foragers in Game1's hover/'O' paths).</summary>
+    private void DrawBellyTooltip(uint unitId, Simulation sim, GameData gameData,
+        int screenW, int screenH)
+    {
+        if (unitId == uint.MaxValue || _smallFont == null) return;
+        int idx = sim.ResolveUnitID(unitId);
+        if (idx < 0) return;
+
+        var def = gameData.Units.Get(sim.Units[idx].UnitDefID);
+        string name = def != null && def.DisplayName.Length > 0 ? def.DisplayName
+                    : sim.Units[idx].UnitDefID;
+
+        var lines = new List<string> { name, "Belly:" };
+        var belly = sim.BoarBellyLines(unitId);
+        if (belly.Count > 0) lines.AddRange(belly);
+        else lines.Add("Empty");
+
+        DrawCursorTooltip(lines.ToArray(), screenW, screenH);
     }
 
     /// <summary>Floating cursor tooltip for the hovered corpse: unit name plus its

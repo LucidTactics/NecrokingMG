@@ -118,7 +118,10 @@ partial class GameRenderer
             // Don't render corpses attached to a unit — drawn on unit in DrawSingleUnit
             // (covers carried phase 0, pickup phase 4, putdown phase 5). Applies to
             // both the bagged-bag flow and the raw-corpse carry flow.
-            if (corpse.DraggedByUnitID != GameConstants.InvalidUnit)
+            // Exception: a rope-tethered corpse also claims DraggedByUnitID but lies on
+            // the ground (not held), so it must still render here at its dragged position.
+            if (corpse.DraggedByUnitID != GameConstants.InvalidUnit
+                && !_g.IsCorpseTethered(corpse.CorpseID))
                 continue;
 
             // Bagged corpses render as BodyBag from Corpses atlas

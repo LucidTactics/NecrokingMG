@@ -113,6 +113,18 @@ public partial class Game1
         });
     }
 
+    /// <summary>Simulation hook fired when a foraging boar swallows a mushroom.
+    /// Plays the same pickup pop the player hears, throttled + pitch-rotated so a
+    /// pack of grazing boars doesn't machine-gun the sample.</summary>
+    private void OnForagerAte(Vec2 worldPos)
+    {
+        if (_pickupSound == null || _foragerEatSoundCd > 0f) return;
+        _foragerEatSoundCd = 0.06f;
+        _foragerEatSoundStep = (_foragerEatSoundStep + 1) % 5;
+        float pitch = -0.15f + 0.075f * _foragerEatSoundStep;   // -0.15 .. +0.15
+        _pickupSound.Play(0.3f, pitch, 0f);
+    }
+
     /// <summary>Game1 hook fired by ForagableSystem on every pickup. First
     /// mushroom of any kind teaches the root Paralysis potion recipe.</summary>
     private void OnForagableLearnTrigger(string resourceType)

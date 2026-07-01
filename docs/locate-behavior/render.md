@@ -20,9 +20,29 @@ blendMode, alignment, duration)` — the general "flipbook at a world point" spa
 `Clear`, `Effects` (read-only list); the `Effect` fields above.
 Look/edit here when: adding a **new kind** of generic visual effect, adding a new `SpawnX`
 preset, or changing how effects fade/scale/age. **New effect-spawn methods go here.**
-See also: spawned via `Game1.Spells.cs` helpers; drawn by `Game1.Render.World.cs`
-(`DrawEffectsFiltered` iterates `_effectManager.Effects`); the `_effectManager` field +
-its per-frame `Update` live in `Game1` (see [game1-partials.md](game1-partials.md)).
+`SpawnDustPuff(Vec2 pos)` is the ready-made dust preset (0.5s life, brown tint, no
+flipbook) — call `_effectManager.SpawnDustPuff(pos)` to kick up dust at a world point
+(prior art: `Game/ForagableSystem.cs` calls it on pickup).
+See also: spawned via `Game1.Spells.cs` helpers; drawn by **`GameRenderer.World.cs`**
+(`DrawEffectsFiltered` iterates `_effectManager.Effects`) — NOTE: the render passes were
+extracted from the old `Game1.Render.*` partials into a `GameRenderer` class
+(`GameRenderer.{Draw,World,Units,Corpses,Hud}.cs`) that reaches back into `Game1` via a
+`_g` field; the `_effectManager` field + its per-frame `Update` live in `Game1`
+(see [game1-partials.md](game1-partials.md)).
+
+## World-space overlay drawing (lines / bezier over the world)
+- **`Necroking/Render/DrawUtils.cs`** — `DrawLine(SpriteBatch, Texture2D pixel, Vector2 a,
+  Vector2 b, Color)` (a rotated-pixel segment) and `DrawCircleOutline(...)`. These take
+  **screen-space** points. To draw a rope/bezier in the world, sample the curve in world
+  coords, convert each point with `_g._renderer.WorldToScreen(worldPos, height, _g._camera)`
+  (see `GameRenderer.World.cs`), and chain `DrawUtils.DrawLine` between consecutive screen
+  points using the 1×1 white texture `_g._pixel`. `struct BezierCurve` in
+  `Render/Flipbook.cs` is a 1-D 4-control-point curve (used for effect alpha/scale), not a
+  2-D spatial curve — for a positional rope compute the bezier point yourself.
+- **Where a new world overlay pass goes**: add a `DrawX` method in `GameRenderer.World.cs`
+  (it already batches world-space primitives like `DrawProjectiles`/`DrawEffectsFiltered`
+  inside the world `_g._spriteBatch.Begin(...)` block) and call it from the world section of
+  `GameRenderer.Draw.cs`. Use `WorldToScreen` for every endpoint; do not draw in world units.
 
 ### `Necroking/Render/Flipbook.cs` — flipbook (sprite-sheet frame sequence)
 What lives here: `class Flipbook` — loads a sprite-sheet texture (cols×rows, FPS) and
