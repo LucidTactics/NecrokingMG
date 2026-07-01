@@ -978,6 +978,7 @@ partial class GameRenderer
 
         // Toast naming the active variant after a cycle press (drawn even when Off).
         DrawHoverVariantLabel();
+        DrawDepthFogToast();   // 'H' depth-sorted-fog ON/OFF flash
 
         if (!_g._gameData.Settings.Tooltips.ShowHoverHighlight) return;
 
@@ -1262,6 +1263,18 @@ partial class GameRenderer
         var pos = new Vector2((int)18, (int)112);
         _g._spriteBatch.DrawString(_g._font, label, pos + new Vector2(1, 1), new Color(0, 0, 0, 190));
         _g._spriteBatch.DrawString(_g._font, label, pos, new Color(255, 235, 150));
+    }
+
+    // Flash the depth-sorted-fog state (ON/OFF) for a couple seconds after the 'H' toggle.
+    private void DrawDepthFogToast()
+    {
+        if (_g._depthFogToastTimer <= 0f || _g._font == null) return;
+        bool on = _g._gameData.Settings.Performance.DepthSortedFog;
+        string label = on ? "Depth-sorted fog: ON  (unit occludes smoke)"
+                          : "Depth-sorted fog: OFF  (smoke on top)";
+        var pos = new Vector2((int)18, (int)134);
+        _g._spriteBatch.DrawString(_g._font, label, pos + new Vector2(1, 1), new Color(0, 0, 0, 190));
+        _g._spriteBatch.DrawString(_g._font, label, pos, on ? new Color(150, 235, 180) : new Color(230, 200, 170));
     }
 
     /// <summary>Draw a 2D line by rotating the _g._pixel sprite. Cheap, AA-free.</summary>

@@ -380,6 +380,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     // Tooltips settings — the normal path); 0..19 forces one variant on everything; 20 = highlight off.
     internal int _hoverHighlightVariant = -1;
     internal float _hoverVariantLabelTimer;     // seconds left to show the "which variant" toast
+    internal float _depthFogToastTimer;         // seconds left to show the depth-fog ON/OFF toast ('H' key)
     // Dev: pin the hovered unit (headless testing has no real mouse). uint.MaxValue = off.
     private uint _devForceHoverUnitId = uint.MaxValue;
     // Dev: pin the hovered env object by index (headless variant testing). -1 = off.
@@ -2498,11 +2499,15 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         // OVERRIDE still exists via the 'hover_variant' dev command for quick previewing; its toast
         // timer ticks down here. (No keyboard hotkey — it was removed to free 'H'.)
         if (_hoverVariantLabelTimer > 0f) _hoverVariantLabelTimer -= _rawDt;
+        if (_depthFogToastTimer > 0f) _depthFogToastTimer -= _rawDt;
 
         // 'H' = toggle depth-sorted reanimation fog (A/B dev switch; Performance.DepthSortedFog).
         // ON = a risen unit can occlude its own lingering smoke; OFF = the fog always draws on top.
         if (!anyTextInputActive && _input.WasKeyPressed(Keys.H) && _menuState == MenuState.None)
+        {
             _gameData.Settings.Performance.DepthSortedFog = !_gameData.Settings.Performance.DepthSortedFog;
+            _depthFogToastTimer = 2.25f;   // flash the new state on screen
+        }
 
         // 'O' = inspect the unit under the cursor (press-to-inspect mode; may
         // auto-pause while open, closing restores only the pause WE set).

@@ -887,6 +887,7 @@ public partial class Game1 {
                var perf = _gameData.Settings.Performance;
                string dfArg = c.Args.Length > 0 ? c.Args[0].ToLowerInvariant() : "toggle";
                perf.DepthSortedFog = dfArg == "on" ? true : dfArg == "off" ? false : !perf.DepthSortedFog;
+               _depthFogToastTimer = 2.25f;   // flash the on-screen state (same as the 'H' key)
                c.Complete(Necroking.Dev.DevServer.Ok($"depthSortedFog={perf.DepthSortedFog}"));
                break;
             }
