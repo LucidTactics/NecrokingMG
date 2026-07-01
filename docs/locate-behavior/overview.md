@@ -19,6 +19,7 @@ open the listed `<area>.md`. Areas marked **(not yet documented)** have no doc y
 | Unit AI archetypes & routines | [ai.md](ai.md) ✅ | `IArchetypeHandler`/`ArchetypeRegistry` (name→id→handler), per-tick dispatch in `Simulation`, archetype assignment at spawn (`Game1.SpawnUnit`), `SubroutineSteps` move primitives, `WorkerHandler` FSM template, **where to add a new per-unit behavior** |
 | World — env objects & foragables | [world.md](world.md) ✅ | `EnvironmentSystem` (env-def + placed-object store, `AddObject`/`FindDef`/`CollectForagable`/respawn), `ForagableSystem` (player pickup arc), death→corpse hook in `RemoveDeadUnits`, and the Vogel-spiral anti-stack packing precedent (`HordeSystem`). Where runtime world-object spawning + foragable-eat goes |
 | Dev control server | [dev.md](dev.md) ✅ | The `--devserver` HTTP control channel: transport (`Dev/DevServer.cs` `DevServer`/`DevCommand`, `Dev/DevScript.cs` batch jobs) + every command verb in `Game1.Dev.cs` (`ExecuteDevCommand` switch), `Game1.DevData.cs` (`DevAddData`/state). **Where to add a new dev verb.** |
+| UI/ — overlays & panels | [ui.md](ui.md) ✅ | The right-side selected-unit sheet (`UI/UnitInfoPanel.cs`) + where the show-panel decision lives (`Game1.cs` 'U'/'O'/auto-hover, units only), the corpse-pile "inventory" cursor tooltip (`HUDRenderer.DrawObjectTooltip` + `WorkerSystem.PiledCorpseLines`), boar belly store (`Simulation._boarBellies`). Widget renderer + popup stack. |
 
 ## Subsystems (under `Necroking/`) — most not yet documented
 
@@ -29,7 +30,7 @@ open the listed `<area>.md`. Areas marked **(not yet documented)** have no doc y
 | `Data/` | Game-data model + JSON registries (spells, units, items, potions, buffs, weapons, armor) under `Data/Registries/` | (not yet documented) |
 | `Game/` | Gameplay systems — spell targeting (`SpellCasting`), spell effects (`SpellEffectSystem`), crafting/table-craft, inventory, building menus, horde caps | (not yet documented) |
 | `Render/` | Rendering subsystems — atlases, shadows, bloom, font manager, widget renderer, HUD renderer | [render.md](render.md) ◐ (effects only) |
-| `UI/` | Overlays & panels — inventory, grimoire, skill book, character stats/sheet, unit info | (not yet documented) |
+| `UI/` | Overlays & panels — grimoire, skill book, character stats/sheet, unit info | [ui.md](ui.md) ✅ |
 | `World/` | World/environment systems — env objects, foragables, walls, roads | [world.md](world.md) ✅ |
 | `Movement/` | Pathfinding / steering / movement routines | (not yet documented) |
 | `AI/` | Unit AI behaviors & routines (combat, routines like craft-at-table) | [ai.md](ai.md) ✅ |
@@ -51,7 +52,7 @@ Use this to pick a starting area. When the routed area isn't documented yet, doc
 - **Animation / cast-phase timing / attack anims** → game1-partials.md (`Game1.Animation.cs`) + `Render/` (anim controller/atlases).
 - **Rendering looks wrong (world / units / corpses / HUD / spellbar)** → game1-partials.md (`Game1.Render.*`) + `Render/`.
 - **HUD / spellbar / on-screen overlays** → game1-partials.md (`Game1.Render.HUD.cs`) + `UI/`.
-- **Inventory / grimoire / skill book / character sheet panels** → `UI/`.
+- **Selected/inspected unit right-side sheet, grimoire, skill book, character sheet panels; which panel shows for a selected entity; corpse-pile contents display; boar belly panel** → [ui.md](ui.md) (`UI/UnitInfoPanel.cs`, decision in `Game1.cs` 'U'/'O'/auto-hover, `HUDRenderer.DrawObjectTooltip` + `WorkerSystem.PiledCorpseLines` for pile contents, `Simulation._boarBellies` for belly data).
 - **Unit stats / spell / item / map / UI editors** → `Editor/`.
 - **Game data values (units, items, spells JSON)** → `Data/` + `data/*.json` (use the `edit-game-data` skill to edit those).
 - **Unit AI / routines / combat decisions / adding a per-unit behavior or archetype** → [ai.md](ai.md) (`AI/IArchetypeHandler.cs` registry, `AI/SubroutineSteps.cs` move primitives, `AI/WorkerHandler.cs` FSM template; register in `Game1.cs`).
