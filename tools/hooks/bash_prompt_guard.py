@@ -24,15 +24,23 @@ Two layers:
 
   2. Deny-by-default — any other Bash command is thrown back UNLESS it is:
        * fully allow-listed: every sub-command of the (possibly compound) command matches
-         a permission allow rule (.claude/settings*.json). The hook splits on && || ; |
-         and newlines and force-ALLOWS the whole thing, so the user isn't prompted —
-         Claude's own permission system otherwise prompts on `;`-chained compounds even
-         when each part is individually allowed (e.g. `cd x; git status; echo done`).
-         Commands containing substitutions/heredocs ($(), ``, <(), <<) are NOT
-         force-allowed — they defer to the normal permission flow instead;
+         a permission allow rule (.claude/settings*.json). The hook splits the command
+         into its sub-commands and force-ALLOWS the whole thing, so the user isn't
+         prompted — Claude's own permission system otherwise prompts on `;`-chained
+         compounds even when each part is individually allowed (e.g.
+         `cd x; git status; echo done`). Commands containing genuine
+         substitutions/heredocs ($(), ``, <(), <<) are NOT force-allowed — they defer to
+         the normal permission flow instead;
        * explicitly whitelisted as "OK to prompt the user" (rule_intended_prompt) -> the
          user is prompted immediately instead of the command being thrown back.
      Everything else -> deny with the escape hatch.
+
+Structural parsing: the segment split, substitution/heredoc detection, and real-file-write
+detection are done by bashlex (a real Bash parser) via bash_ast.analyze() — so a `$(…)`
+inside single quotes is correctly a literal (not a substitution) and `$(( 5 > 3 ))` is not
+mistaken for a `>` redirect. bashlex can't parse a few forms (arithmetic expansion, syntax
+errors); on those, evaluate() falls back to the quote-aware regex heuristics in this file
+(_split_segments / _has_unsafe / has_output_redirection), which stay as the fallback path.
 
 It would rather bounce a harmless command (one re-send away from running) than let a
 needless prompt through. When that gets in the way, the fix is to add an `allow` rule,
@@ -57,6 +65,7 @@ import re
 import sys
 import tempfile
 
+import bash_ast
 import file_write_detect
 
 # Tools subject to deny-by-default. Add a tool here (and ensure the settings.json
@@ -184,6 +193,9 @@ _UNSAFE = ("$(", "`", "<(", ">(", "<<")
 
 
 def _has_unsafe(cmd: str) -> bool:
+    """FALLBACK substring scan for when bashlex can't parse (evaluate prefers
+    bash_ast.analyze()'s has_substitution/has_heredoc). Coarser: it flags a `$(` even
+    inside single quotes, where bashlex correctly sees a literal string."""
     return any(tok in cmd for tok in _UNSAFE)
 
 
@@ -198,7 +210,9 @@ _NULL_REDIRECT = re.compile(
 
 
 def has_output_redirection(command: str) -> bool:
-    """Checks if a bash command string redirects output to a file using '>' or
+    """FALLBACK for when bashlex can't parse (evaluate prefers bash_ast.analyze().writes_file).
+
+    Checks if a bash command string redirects output to a file using '>' or
     '>>'. Safely ignores redirection symbols inside single quotes, double quotes,
     and escaped characters. Catches '>', '>>', '2>', '&>', etc. by simply looking
     for an unquoted '>'. (Note: also returns True for unquoted bash arithmetic
@@ -239,7 +253,9 @@ def has_output_redirection(command: str) -> bool:
 
 
 def _split_segments(cmd: str):
-    """Split a Bash command into independent sub-commands on the shell operators
+    """FALLBACK for when bashlex can't parse (evaluate prefers bash_ast.analyze().segments).
+
+    Split a Bash command into independent sub-commands on the shell operators
     && || ; | and newlines, respecting single/double quotes. Used only after _has_unsafe
     has ruled out substitutions/heredocs, so a naive quote-aware scan is sufficient."""
     segs, buf, quote, i, n = [], "", None, 0, len(cmd)
@@ -455,18 +471,31 @@ def evaluate(tool_name: str, tool_input: dict, mode: str, allow_rules, deny_rule
             return ("deny", reason)
 
     pd = project_dir or _project_dir()
-    segments = _split_segments(cmd)
+
+    # bashlex-backed structural read of the command. When it parses (.ok), its segment
+    # split, substitution/heredoc detection, and real-file-write detection are exact and
+    # supersede the quote-aware regex heuristics below. When it can't parse (arithmetic
+    # expansion, syntax errors), .ok is False and we fall back to those heuristics — the
+    # deny-by-default posture means a failed parse degrades to the old behaviour, never to
+    # a wrong allow. See bash_ast.py.
+    ast = bash_ast.analyze(cmd)
+
+    segments = ast.segments if ast.ok else _split_segments(cmd)
 
     # Sensitive-but-allow-listed commands (a remote push under `git:*`) must PROMPT even
     # though they'd otherwise be force-allowed. Check per segment BEFORE force-allow — and
-    # before _has_unsafe, so `git push $(…)` can't slip through on a defer to git:*.
+    # before the unsafe check, so `git push $(…)` can't slip through on a defer to git:*.
     for seg in (segments or [cmd]):
         intended = rule_intended_prompt(seg)
         if intended:
             return ("ask", intended)
 
-    unsafe = _has_unsafe(cmd)
-    file_redirection = has_output_redirection(cmd)
+    if ast.ok:
+        unsafe = ast.has_substitution or ast.has_heredoc
+        file_redirection = ast.writes_file
+    else:
+        unsafe = _has_unsafe(cmd)
+        file_redirection = has_output_redirection(cmd)
 
     # Read-only fast-allow: a command with no side effects (no file-writing utility or
     # redirection, no process/power-control command per file_write_detect) and no

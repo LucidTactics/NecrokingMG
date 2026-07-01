@@ -56,14 +56,14 @@ only if it is:
 
 - **fully allow-listed** — every sub-command of the (possibly compound) command matches
   a permission allow rule (`.claude/settings.json` / `settings.local.json`). The hook
-  splits the command on `&&`/`||`/`;`/`|`/newlines (quote-aware) and, if *all* parts are
-  allowed, **force-allows** the whole thing so the user isn't prompted. This matters
-  because Claude's own permission system prompts on `;`-chained compounds even when each
-  part is individually allowed — e.g. `cd x; git status; echo done; python -m py_compile
-  f.py`. A command containing a substitution or heredoc (`$(…)`, `` `…` ``, `<(…)`,
-  `<<`) is **not** force-allowed — the hook can't safely tokenise it, so it defers to the
-  normal permission flow instead. Likewise, if any segment matches a `deny` rule the hook
-  won't force-allow (it respects the deny-list);
+  splits the command into its sub-commands and, if *all* parts are allowed,
+  **force-allows** the whole thing so the user isn't prompted. This matters because
+  Claude's own permission system prompts on `;`-chained compounds even when each part is
+  individually allowed — e.g. `cd x; git status; echo done; python -m py_compile f.py`. A
+  command containing a genuine substitution or heredoc (`$(…)`, `` `…` ``, `<(…)`, `<<`)
+  is **not** force-allowed — it defers to the normal permission flow instead. Likewise,
+  if any segment matches a `deny` rule the hook won't force-allow (it respects the
+  deny-list);
 - explicitly **whitelisted as "OK to prompt the user"** via `rule_intended_prompt(…)` —
   these are prompted *immediately* instead of bounced.
 
@@ -83,6 +83,22 @@ similar culprit, add its name to `DENY_DEFAULT_TOOLS` in the hook (and widen the
 `matcher` in `.claude/settings.json` to include it) — that's the single extension point.
 File edits are the canonical example of a tool you should *never* gate this way: a file
 edit has no no-prompt alternative, so bouncing one is pointless friction.
+
+**Structural parsing (bashlex).** The segment split, substitution/heredoc detection, and
+real-file-write detection are handled by a vendored copy of **bashlex** (a real Bash
+parser) in `tools/hooks/bashlex/`, wrapped by `tools/hooks/bash_ast.py::analyze()`.
+Parsing the command into an AST is exact where the old quote-aware char scanners were
+approximate: a `$(…)` inside *single* quotes is correctly a literal (no substitution, so
+`echo '$(rm -rf x)'` fast-allows), `$(( 5 > 3 ))` is arithmetic and not a `>` file
+redirect, and `2>/dev/null` / `2>&1` are recognised as a null-device write / fd-dup rather
+than a file write. bashlex can't parse a handful of forms (arithmetic expansion is
+unimplemented, plus genuine syntax errors); on a parse failure `analyze()` reports
+`ok=False` and `evaluate()` falls back to the original regex heuristics in
+`bash_prompt_guard.py` (`_split_segments` / `_has_unsafe` / `has_output_redirection`),
+which are kept as the fallback path. Because the hook is deny-by-default, a failed parse
+degrades to the old conservative behaviour, never to a wrong allow. (The file-write *name*
+catalogue in `file_write_detect.py` is unchanged — it's a deliberately conservative
+by-name scan, orthogonal to this structural layer.)
 
 **Growing the whitelist.** `rule_intended_prompt` is checked **per segment, before the
 force-allow pass**, so it can force a prompt even for a command that `allow`-rules would

@@ -128,6 +128,27 @@ fails += not check("command substitution -> defer", evb("echo $(rm -rf /)"), "de
 fails += not check("backtick substitution -> defer", evb("echo `whoami`"), "defer")
 fails += not check("heredoc commit -> defer", evb("git commit -F - <<'EOF'\nmsg\nEOF"), "defer")
 
+# --- bashlex AST wins over the regex heuristics (accuracy the char-scans couldn't reach) --
+# A `$( )` inside SINGLE quotes is a literal string, not a substitution — the old
+# substring check flagged it unsafe (defer); bashlex sees the literal and it fast-allows.
+fails += not check("single-quoted $() -> allow (literal, not a real substitution)",
+                   evb("echo '$(rm -rf x)'"), "allow")
+# Double quotes DO expand it -> real substitution -> defer.
+fails += not check("double-quoted $() -> defer (real substitution)",
+                   evb('echo "$(rm -rf x)"'), "defer")
+# `$(( ))` is arithmetic, not a `>` file redirection. bashlex can't parse arithmetic, so
+# this exercises the fallback path — which still (correctly) declines to force-allow.
+fails += not check("arithmetic $(( )) -> defer (fallback, not a file write)",
+                   evb("echo $(( 5 > 3 ))"), "defer")
+# A redirect to the null device is not a file write -> read-only fast-allow.
+fails += not check("redirect to /dev/null -> allow (not a file write)",
+                   evb("wc -l foo.txt 2>/dev/null"), "allow")
+# `2>&1` is an fd duplication, not a file target.
+fails += not check("fd-dup 2>&1 -> allow (not a file write)",
+                   evb("sort a.txt 2>&1 | uniq"), "allow")
+# A real file redirect still defers (an allow rule mustn't silently sanction a write).
+fails += not check("real file redirect -> defer", evb("wc -l foo.txt > out.txt"), "defer")
+
 # --- Every non-Bash tool is left alone (defer), no matter what --------------------
 for tool, inp in [
     ("Edit", {"file_path": "Necroking/Game1.cs"}),
