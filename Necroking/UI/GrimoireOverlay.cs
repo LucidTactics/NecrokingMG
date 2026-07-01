@@ -291,7 +291,7 @@ public class GrimoireOverlay : IModalLayer
 
     private void Layout(int screenH)
     {
-        _x = 16;
+        _x = 0;
         _y = Math.Min(0, (screenH - PanelH) / 2);
     }
 
