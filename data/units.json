@@ -5815,7 +5815,8 @@
       "tags": [
         "boar",
         "zombie",
-        "monster"
+        "monster",
+        "forager"
       ],
       "attackAnim": null,
       "attackCooldown": null,
@@ -5824,9 +5825,9 @@
       "accelHalfTime": null,
       "accel80Time": null,
       "accelFullTime": null,
-      "maxAcceleration": 4,
+      "maxAcceleration": 14,
       "maxDeceleration": 12,
-      "maxLateralAccel": 6,
+      "maxLateralAccel": 14,
       "weaponPoints": {},
       "animTimings": {},
       "archetype": "HordeMinion",
@@ -5895,7 +5896,8 @@
       "tags": [
         "boar",
         "zombie",
-        "monster"
+        "monster",
+        "forager"
       ],
       "attackAnim": null,
       "attackCooldown": null,
@@ -5904,9 +5906,9 @@
       "accelHalfTime": null,
       "accel80Time": null,
       "accelFullTime": null,
-      "maxAcceleration": 3,
+      "maxAcceleration": 12,
       "maxDeceleration": 10,
-      "maxLateralAccel": 5,
+      "maxLateralAccel": 12,
       "weaponPoints": {},
       "animTimings": {},
       "archetype": "HordeMinion",

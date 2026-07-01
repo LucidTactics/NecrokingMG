@@ -487,6 +487,16 @@ public class Unit
     /// timer expires.</summary>
     public int CorpseEatTargetID = -1;
 
+    /// <summary>Number of mushrooms this (zombie boar) unit has eaten and stored in its
+    /// belly. Purely a display/quick-check counter — the actual eaten mushroom def
+    /// indices live in Simulation's per-unit belly store so the exact species pop back
+    /// out on death. See <see cref="AI.BoarForageAI"/>.</summary>
+    public byte BellyMushrooms;
+    /// <summary>Eat-cycle timer (seconds left) while a foraging boar is chewing a
+    /// mushroom. > 0 means the boar is holding still mid-eat; when it ticks to 0 the
+    /// mushroom is consumed into the belly.</summary>
+    public float BoarEatTimer;
+
     /// <summary>For a corpse-puppet raise: the def id of the ORIGINAL corpse this puppet
     /// was raised from (e.g. "militia"), so when it deposits itself into a Corpse Pile it
     /// piles as that original body — not as the zombie variant it currently wears. Empty

@@ -121,6 +121,11 @@ public class Simulation
     private GameData? _gameData;
     private EnvironmentSystem? _envSystem;
     private WallSystem? _wallSystem;
+    // Per-boar mushroom belly: unit id → env def indices of eaten mushrooms, in eat
+    // order. Filled by AI.BoarForageAI; emptied (scattered on the ground) when the
+    // boar dies in SpitBoarBellyOnDeath. Kept off the SoA Unit struct because it's a
+    // variable-length list only a handful of units ever carry.
+    private readonly Dictionary<uint, List<ushort>> _boarBellies = new();
     private float _gameTime;
     private uint _frameNumber;
     private int _necromancerIdx = -1;
@@ -281,6 +286,7 @@ public class Simulation
         _pathfinder.Init(_grid);
         _units.Clear();
         _corpses.Clear();
+        _boarBellies.Clear();
         _damageEvents.Clear();
         _projectiles.Clear();
         _lightning.Clear();
@@ -507,6 +513,11 @@ public class Simulation
 
         // Core subsystems
         PhaseStart(); UpdateAI(dt); PhaseEnd("ai");
+
+        // Zombie boars peel off the horde to eat nearby mushrooms. Runs after the
+        // archetype AI pass (so it can override the follow velocity) and before
+        // UpdateMovement (so the override steers the boar this frame).
+        PhaseStart(); AI.BoarForageAI.Update(this, dt); PhaseEnd("boar_forage");
 
         // Clear HitReacting AFTER AI has read it — this ensures flags set between frames
         // (e.g. spell AoE from Game1.Update) persist until the next AI tick sees them
@@ -3354,6 +3365,70 @@ public class Simulation
         NecroSprintT = _sprintRampValue,
     };
 
+    // --- Boar foraging (AI.BoarForageAI) ---
+
+    /// <summary>Trot a foraging boar toward a mushroom, reusing the shared movement
+    /// step so pathfinding, effort, and locomotion anim all match normal AI. Hurry
+    /// effort gives a purposeful jog.</summary>
+    internal void AIForageMove(int i, Vec2 target, float dt)
+    {
+        var ctx = BuildAIContext(i, dt, 0f, false);
+        AI.SubroutineSteps.SetEffort(ref ctx, Movement.MoveEffort.Hurry);
+        AI.SubroutineSteps.MoveToward(ref ctx, target, ctx.MyMaxSpeed);
+    }
+
+    /// <summary>Hold a forager still and play a grazing animation (head-down Feeding),
+    /// facing its mushroom (stored in MoveTarget). Mirrors the deer's bush-feed anim.</summary>
+    internal void AIForageGraze(int i, float dt)
+    {
+        var ctx = BuildAIContext(i, dt, 0f, false);
+        _units[i].PreferredVel = Vec2.Zero;
+        _units[i].RoutineAnim = Necroking.Render.AnimRequest.Action(Necroking.Render.AnimState.Feeding);
+        AI.SubroutineSteps.FacePosition(ref ctx, _units[i].MoveTarget);
+    }
+
+    /// <summary>Record one eaten mushroom (its env def index) into a boar's belly.</summary>
+    internal void AddBoarBelly(uint unitId, ushort defIndex)
+    {
+        if (!_boarBellies.TryGetValue(unitId, out var list))
+        {
+            list = new List<ushort>();
+            _boarBellies[unitId] = list;
+        }
+        list.Add(defIndex);
+    }
+
+    /// <summary>When a boar with a full belly dies, burst its stored mushrooms back onto
+    /// the ground around the corpse — hex-packed with random jitter so they spread out
+    /// instead of stacking on one tile. Called from RemoveDeadUnits while the dead unit's
+    /// position is still valid. No-op for units that never foraged.</summary>
+    private void SpitBoarBellyOnDeath(int deadIdx)
+    {
+        uint id = _units[deadIdx].Id;
+        if (!_boarBellies.TryGetValue(id, out var belly))
+            return;
+        _boarBellies.Remove(id);
+        if (_envSystem == null || belly.Count == 0) return;
+
+        var center = _units[deadIdx].Position;
+        // Deterministic per-death RNG (Random.Shared is banned in headless/replay paths;
+        // seed off position + belly size so each death scatters consistently).
+        int seed = (int)(center.X * 131f) ^ ((int)(center.Y * 977f) << 8) ^ (belly.Count * 2654435761u).GetHashCode();
+        var rng = new Random(seed);
+        var spots = Necroking.Algorithm.ScatterPacking.HexPack(center, belly.Count, spacing: 0.9f, jitter: 0.28f, rng);
+
+        for (int k = 0; k < belly.Count; k++)
+        {
+            var pos = k < spots.Count ? spots[k] : center;
+            var def = _envSystem.Defs[belly[k]];
+            float scale = def.ScaleMin < def.ScaleMax
+                ? def.ScaleMin + (float)rng.NextDouble() * (def.ScaleMax - def.ScaleMin)
+                : 1f;
+            _envSystem.AddObject(belly[k], pos.X, pos.Y, scale);
+        }
+        DebugLog.Log("scenario", $"[BoarForage] boar#{id} died — spat out {belly.Count} mushroom(s)");
+    }
+
     // --- Helpers ---
     private void MoveTowardUnit(int i, int targetIdx, float speed)
     {
@@ -3766,6 +3841,9 @@ public class Simulation
                 // retreats for a moment). Done before the swap-and-pop remove so the
                 // dead unit's position/faction are still valid.
                 BroadcastRatPanicOnDeath(i);
+
+                // Zombie boar with mushrooms in its belly → burst them onto the ground.
+                SpitBoarBellyOnDeath(i);
 
                 RemoveUnitTracked(i); // remove + repair _necromancerIdx (BroadcastRatPanic ran above)
             }
