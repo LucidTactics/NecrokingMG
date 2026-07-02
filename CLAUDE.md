@@ -210,6 +210,7 @@ CLAUDE.md. Current contents:
 - [docs/devpreview.md](docs/devpreview.md) — deep reference behind the `drive-game` skill (the three interface tiers in detail).
 - [docs/testing-scenarios.md](docs/testing-scenarios.md) — deep reference behind the `test-scenario` skill.
 - [docs/locate-behavior/](docs/locate-behavior/) — the architecture map + finder operating guide behind the `locate-behavior` skill (moved out of `.claude/` so the finder can self-update it without write prompts).
+- [docs/big-refactors.md](docs/big-refactors.md) — how to run large multi-agent (ultracode/Workflow) refactors safely: what goes wrong (a stray `git stash` in the shared working tree corrupted a run), the forbid-git / verify-on-disk discipline, and a pre-flight checklist.
 
 ## C++ Migration
 
