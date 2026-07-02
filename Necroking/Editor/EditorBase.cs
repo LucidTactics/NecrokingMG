@@ -1543,8 +1543,10 @@ public class EditorBase
     public bool DrawColorSwatch(string id, int x, int y, int w, int h, ref HdrColor color, bool hideIntensity = false)
     {
         // If the color picker is open for this id, pass hideIntensity on open (already handled)
-        // The ColorSwatch method handles drawing, click detection, and popup open/sync
-        return _colorPicker.ColorSwatch(id, x, y, w, h, ref color);
+        // The ColorSwatch method handles drawing, click detection, and popup open/sync.
+        // Pass the input-block state so a click on an open dropdown overlapping this
+        // swatch doesn't fall through and spuriously pop the picker.
+        return _colorPicker.ColorSwatch(id, x, y, w, h, ref color, IsInputBlocked(0));
     }
 
     /// <summary>

@@ -294,6 +294,12 @@ public class WallEditorWindow : Necroking.UI.IModalLayer
         if (_selectedDef < 0 || _selectedDef >= _walls.DefCount) return;
         var def = _walls.Defs[_selectedDef];
 
+        // This window forces InputLayer=1 (it's itself a popup), so IsInputBlocked(0)
+        // is always true here and can't flag an overlay. Check the overlays explicitly
+        // so the hand-rolled preview handlers (segment drag/resize, 3x3 selector) stay
+        // inert when the texture browser / color picker / a dropdown is open over them.
+        bool overlayBlocking = _textureBrowser.IsOpen || _ui.IsColorPickerOpen || _ui.IsDropdownOpen;
+
         int pad = 8;
         int previewH = h - 130; // Reserve space for neighbor sim controls
 
@@ -450,7 +456,7 @@ public class WallEditorWindow : Necroking.UI.IModalLayer
             _ui.DrawRect(handleL, handleColor); _ui.DrawRect(handleR, handleColor);
 
             // Mouse press: determine drag mode
-            bool mouseDown = mouse.LeftButton == ButtonState.Pressed && prevMouse.LeftButton == ButtonState.Released;
+            bool mouseDown = !overlayBlocking && mouse.LeftButton == ButtonState.Pressed && prevMouse.LeftButton == ButtonState.Released;
             if (mouseDown && _dragMode == DragMode.None && previewRect.Contains(mouse.X, mouse.Y))
             {
                 DragMode mode = DragMode.None;
@@ -661,8 +667,9 @@ public class WallEditorWindow : Necroking.UI.IModalLayer
                 Color textCol = enabled ? Color.White : new Color(100, 100, 115);
                 _ui.DrawText(lbl, new Vector2(bx + 4, by + (btnSize - 14) / 2), textCol);
 
-                // Click to select
-                if (hovered && mouse.LeftButton == ButtonState.Pressed &&
+                // Click to select (inert while an overlay owns input, so a click on
+                // a picker/browser drawn over the grid doesn't also re-select a cell).
+                if (!overlayBlocking && hovered && mouse.LeftButton == ButtonState.Pressed &&
                     _ui._prevMouse.LeftButton == ButtonState.Released)
                 {
                     _selectedSegment = idx;

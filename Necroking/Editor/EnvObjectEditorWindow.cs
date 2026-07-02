@@ -548,6 +548,15 @@ public class EnvObjectEditorWindow : Necroking.UI.IModalLayer
     //  CENTER PANEL - Preview
     // ========================================================================
 
+    /// <summary>Any overlay/dialog under which the hand-rolled preview handlers
+    /// (pivot drag, collision drag, collision-radius scroll) must be inert. Includes
+    /// the custom dialogs — their input layer is only raised inside their own Draw,
+    /// which runs AFTER the preview draws, so IsInputBlocked is still 0 when the
+    /// preview handlers run; an explicit flag check is required.</summary>
+    private bool PreviewInteractionBlocked() =>
+        _textureBrowser.IsOpen || _ui.IsColorPickerOpen || _ui.IsDropdownOpen
+        || _confirmDeleteOpen || _newCategoryDialogOpen || _deleteCategoryDialogOpen || _edgeTweakerOpen;
+
     private void DrawPreviewPanel(int x, int y, int w, int h)
     {
         _ui.DrawRect(new Rectangle(x, y, w, h), PreviewBg);
@@ -663,8 +672,8 @@ public class EnvObjectEditorWindow : Necroking.UI.IModalLayer
                 int dotSize = (_hoveringCollisionCenter || _draggingCollisionCenter) ? 4 : 2;
                 _ui.DrawRect(new Rectangle((int)cx - dotSize, (int)cy - dotSize, dotSize * 2 + 1, dotSize * 2 + 1), centerCol);
 
-                // Interactive dragging (blocked when popup open)
-                if (!_textureBrowser.IsOpen && !_ui.IsColorPickerOpen && !_ui.IsDropdownOpen)
+                // Interactive dragging (blocked when any popup/dialog is open)
+                if (!PreviewInteractionBlocked())
                     HandleCollisionDrag(def, cx, cy, radiusPx, pixPerWorld);
             }
             else
@@ -687,7 +696,7 @@ public class EnvObjectEditorWindow : Necroking.UI.IModalLayer
             }
 
             // --- Scroll wheel adjusts collision radius when hovering preview ---
-            if (!_textureBrowser.IsOpen && !_ui.IsColorPickerOpen && !_ui.IsDropdownOpen)
+            if (!PreviewInteractionBlocked() && !_ui.IsScrollConsumed)
             {
                 var ms = _ui._input.Mouse;
                 if (ms.X >= x && ms.X < x + w && ms.Y >= y && ms.Y < y + mainH)
@@ -700,12 +709,13 @@ public class EnvObjectEditorWindow : Necroking.UI.IModalLayer
                             def.CollisionRadius = MathF.Max(0f, def.CollisionRadius + step);
                         else
                             def.CollisionRadius = MathF.Max(0f, def.CollisionRadius - step);
+                        _ui.ConsumeScroll(); // mark handled so no later consumer double-applies the notch
                     }
                 }
             }
 
-            // Handle pivot click-to-set (blocked when popup open)
-            if (!_textureBrowser.IsOpen && !_ui.IsColorPickerOpen && !_ui.IsDropdownOpen)
+            // Handle pivot click-to-set (blocked when any popup/dialog is open)
+            if (!PreviewInteractionBlocked())
                 HandlePivotDrag(def, drawX, drawY, drawW, drawH);
 
             // Draw reference images at same scale

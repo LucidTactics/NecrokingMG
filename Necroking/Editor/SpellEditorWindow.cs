@@ -941,7 +941,11 @@ public class SpellEditorWindow : EditorWindow
 
             var iRect = new Rectangle(px + 4, (int)buffDrawY, listW - 8, itemH);
             bool sel = (i == _buffSelectedIdx);
-            bool hov = iRect.Contains(_ui._mouse.X, _ui._mouse.Y) && buffListRect.Contains(_ui._mouse.X, _ui._mouse.Y);
+            // Inert while the color picker owns input (IsInputBlocked(0) is true via
+            // _colorPicker.ConsumesInput even though this popup forces InputLayer=0),
+            // so a click on the picker grid over a row doesn't also re-select the buff.
+            bool hov = !_ui.IsInputBlocked(0) && iRect.Contains(_ui._mouse.X, _ui._mouse.Y) && buffListRect.Contains(_ui._mouse.X, _ui._mouse.Y);
+            if (hov) _ui.SetMouseOverUI();
 
             Color bg = sel ? new Color(60, 60, 90) : (hov ? new Color(45, 45, 60) : Color.Transparent);
             _ui.DrawRect(iRect, bg);

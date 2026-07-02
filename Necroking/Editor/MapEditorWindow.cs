@@ -1450,7 +1450,9 @@ public class MapEditorWindow
         // Right-drag to erase grass regardless of the selected type (mirrors the
         // walls tab's right-drag erase). Lets you wipe grass without first
         // selecting the eraser tool.
-        bool rightDown = mouse.RightButton == ButtonState.Pressed;
+        // Gate the right-drag erase on the popup state (mirrors Update's rightDown)
+        // so grass isn't wiped while a color picker / dropdown / texture browser is open.
+        bool rightDown = !IsAnyPopupBlocking() && mouse.RightButton == ButtonState.Pressed;
         bool rightUp = mouse.RightButton == ButtonState.Released && _prevMouse.RightButton == ButtonState.Pressed;
         if (rightDown && !overPanel && _grassMap.Length > 0)
         {
@@ -1839,8 +1841,12 @@ public class MapEditorWindow
     private void UpdateObjectsTab(MouseState mouse, KeyboardState kb, bool leftClick, bool leftDown, bool leftUp,
         bool rightClick, bool overPanel, int panelX, int panelY, int screenW, int screenH)
     {
-        // Access rightDown/rightUp from mouse state
-        bool rightDown = mouse.RightButton == ButtonState.Pressed;
+        // Access rightDown/rightUp from mouse state. Gate rightDown on the popup
+        // state like the Update-level leftClick/rightClick (an open dropdown/picker/
+        // texture browser must make the world-removal paths inert too — otherwise a
+        // right-drag deletes objects while an overlay is up). rightUp only ends a
+        // gesture, so it stays ungated.
+        bool rightDown = !IsAnyPopupBlocking() && mouse.RightButton == ButtonState.Pressed;
         bool rightUp = mouse.RightButton == ButtonState.Released && _prevMouse.RightButton == ButtonState.Pressed;
 
         if (leftClick && overPanel)
@@ -4175,7 +4181,11 @@ public class MapEditorWindow
                     // Click to select effect
                     var effRect = new Rectangle(panelX + Margin, y, PanelWidth - Margin * 2 - 26, LineHeight);
                     var effMouse = _eb._input.Mouse;
-                    if (IsInRect(effMouse, effRect) && effMouse.LeftButton == ButtonState.Pressed && _prevMouse.LeftButton == ButtonState.Released)
+                    // Gate on the popup state: an effect's Faction/PostBehavior combo
+                    // dropdown expands downward over the effect rows below it, so
+                    // without this a click on a dropdown item also re-selects the
+                    // effect underneath.
+                    if (!IsAnyPopupBlocking() && IsInRect(effMouse, effRect) && effMouse.LeftButton == ButtonState.Pressed && _prevMouse.LeftButton == ButtonState.Released)
                         SelectedEffectIndex = ei;
 
                     DrawSmallText($"  {(selEffect ? "> " : "")}{effectLabel}", panelX + Margin, y,
@@ -4556,8 +4566,9 @@ public class MapEditorWindow
 
         // Right-drag to delete placed units: while held, continuously remove the
         // nearest unit under the cursor so you can sweep over several. Previously
-        // this was a single right-click per unit.
-        bool rightDown = mouse.RightButton == ButtonState.Pressed;
+        // this was a single right-click per unit. Gated on the popup state so the
+        // sweep doesn't delete units while a Faction/Patrol dropdown is open.
+        bool rightDown = !IsAnyPopupBlocking() && mouse.RightButton == ButtonState.Pressed;
         if (rightDown && !overPanel && _placedUnits.Count > 0)
         {
             Vec2 worldPos = _camera.ScreenToWorld(new Vector2(mouse.X, mouse.Y), screenW, screenH);
@@ -5246,8 +5257,9 @@ public class MapEditorWindow
         _spriteBatch.Draw(_pixel, plusRect, IsInRect(mouse, plusRect) ? ButtonHoverColor : ButtonBg);
         DrawTextCentered("+", plusRect, TextColor);
 
-        // Handle clicks
-        if (_eb._input.LeftPressed)
+        // Handle clicks (inert while an overlay owns input, so a click on a
+        // dropdown/picker drawn over these steppers doesn't also nudge the brush).
+        if (!IsAnyPopupBlocking() && _eb._input.LeftPressed)
         {
             if (IsInRect(mouse, minusRect)) BrushRadius = Math.Max(0, BrushRadius - 1);
             if (IsInRect(mouse, plusRect)) BrushRadius = Math.Min(20, BrushRadius + 1);
@@ -5268,7 +5280,7 @@ public class MapEditorWindow
         _spriteBatch.Draw(_pixel, plusRect, IsInRect(mouse, plusRect) ? ButtonHoverColor : ButtonBg);
         DrawTextCentered("+", plusRect, TextColor);
 
-        if (_eb._input.LeftPressed)
+        if (!IsAnyPopupBlocking() && _eb._input.LeftPressed)
         {
             if (IsInRect(mouse, minusRect)) _autoGroundSize = Math.Max(0, _autoGroundSize - 1);
             if (IsInRect(mouse, plusRect)) _autoGroundSize = Math.Min(20, _autoGroundSize + 1);

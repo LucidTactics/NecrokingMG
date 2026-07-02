@@ -1500,9 +1500,13 @@ public class UnitEditorWindow
     {
         if (_pickMode == PickTarget.None) return;
         if (!_lastPreviewValid) return;
+        // Inert while an overlay owns input (a color picker can be opened while pick
+        // mode is on, and it/its dismiss click can land over the preview box).
+        if (_ui.IsInputBlocked(0)) return;
 
         var boxRect = new Rectangle(boxX, boxY, boxSize, boxSize);
         if (!boxRect.Contains(_ui._mouse.X, _ui._mouse.Y)) return;
+        _ui.SetMouseOverUI();
 
         if (_ui._mouse.LeftButton == ButtonState.Pressed && _ui._prevMouse.LeftButton == ButtonState.Released)
         {
@@ -2352,10 +2356,14 @@ public class UnitEditorWindow
                 level > 0 ? EditorBase.TextBright : EditorBase.TextDim);
 
             // Click handling: either cell (icon or value) bumps the level.
+            // Inert while an overlay (color picker / dropdown) owns input so a
+            // click on the picker grid over a path cell doesn't also mutate the
+            // unit; mark mouse-over-UI so the click doesn't leak to the world.
             var hitRect = new Rectangle(cx, iconY, cellW, cellH + valueRowH);
-            bool hovered = hitRect.Contains(mouse.X, mouse.Y);
+            bool hovered = !_ui.IsInputBlocked(0) && hitRect.Contains(mouse.X, mouse.Y);
             if (hovered)
             {
+                _ui.SetMouseOverUI();
                 int newLevel = level;
                 if (leftClick)  newLevel = level + 1;
                 if (rightClick) newLevel = level - 1;

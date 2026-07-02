@@ -248,7 +248,10 @@ public class SettingsWindow
                             && prevMouse.LeftButton == ButtonState.Released;
 
             // Grab the thumb, or click the track to jump (thumb centres on cursor).
-            if (justPressed && trackHit.Contains(sbMouse.X, sbMouse.Y))
+            // Inert while an overlay owns input (e.g. an open combo dropdown whose
+            // list overlaps this scrollbar column) so its click doesn't also grab
+            // and jump the scroll underneath.
+            if (justPressed && !_ui.IsInputBlocked(0) && trackHit.Contains(sbMouse.X, sbMouse.Y))
             {
                 _scrollbarDragTab = tabIdx;
                 _scrollbarDragGrabOffset = thumbRect.Contains(sbMouse.X, sbMouse.Y)

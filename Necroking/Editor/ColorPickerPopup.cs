@@ -251,7 +251,7 @@ public class ColorPickerPopup : Necroking.UI.IModalLayer
     /// When clicked, opens the popup for that color.
     /// Returns true when OK is pressed (color was changed).
     /// </summary>
-    public bool ColorSwatch(string id, int x, int y, int w, int h, ref HdrColor color)
+    public bool ColorSwatch(string id, int x, int y, int w, int h, ref HdrColor color, bool blocked = false)
     {
         // Draw swatch background (checkerboard for alpha)
         DrawRect(new Rectangle(x, y, w, h), new Color(40, 40, 40));
@@ -267,7 +267,11 @@ public class ColorPickerPopup : Necroking.UI.IModalLayer
         bool clicked = hovered && _mouse.LeftButton == ButtonState.Released &&
                        _prevMouse.LeftButton == ButtonState.Pressed;
 
-        if (clicked && !_isOpen)
+        // 'blocked' = the host's input is owned by an overlay (open dropdown/other
+        // modal). Suppress OPENING the picker so a click on a dropdown item that
+        // overlaps this swatch doesn't also pop the picker. Sync of an already-open
+        // picker (below) is unaffected.
+        if (clicked && !_isOpen && !blocked)
         {
             Open(id, color);
         }
