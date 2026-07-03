@@ -1,0 +1,27 @@
+# Line endings: keep LF in the working tree on every machine (you + the
+# Drive-syncing collaborator). Overrides each machine's core.autocrlf so
+# Git never rewrites LF -> CRLF. text=auto still auto-detects binaries, but
+# the explicit rules below make the binary set unambiguous.
+* text=auto eol=lf
+
+# --- Binary assets: never touched by line-ending or diff normalization ---
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gif   binary
+*.bmp   binary
+*.ico   binary
+*.tga   binary
+*.psd   binary
+*.wav   binary
+*.ogg   binary
+*.mp3   binary
+*.ttf   binary
+*.otf   binary
+*.xnb   binary
+*.dll   binary
+*.exe   binary
+*.pdb   binary
+*.zip   binary
+*.7z    binary
+*.gz    binary
