@@ -117,7 +117,7 @@ Drive the running game via the dev server (see the **drive-game skill**).
 `testmap`:
 
 ```js
-window.dev('menu', ['empty_test_map'])
+window.dev('start_game')   // no arg → the empty_test map
 ```
 
 This synthesizes a grass-only 64×64 grid in code (no JSON file) and spawns a
@@ -129,9 +129,9 @@ exercising OutOfRange / NotEnoughMana / OnCooldown feedback. Use
 chassis-specific checks.
 
 Regular maps ship with an empty spellbar by design (pre-seeding would break the
-intended new-game experience). The older `test_map` (populated, normal `necromancer`)
-is useful when you need realistic terrain/enemies — pick `empty_test_map` for
-isolation, `test_map` for context.
+intended new-game experience). The older `testmap` (populated, normal `necromancer`,
+loaded via `start_game testmap`) is useful when you need realistic terrain/enemies —
+pick the empty test map for isolation, `testmap` for context.
 
 **If a test needs more starter spells**, add another hidden no-path spell to
 `spells.json` and slot it in the same

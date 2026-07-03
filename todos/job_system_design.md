@@ -20,8 +20,8 @@ Steps: (1) survey ✅ (2) clarify ✅ (3) rough design ✅ (4) implement ✅ (5)
   building exists), workers/cap badge, storage/population bar, ^/v + drag reorder,
   expand→cap stepper + maintain-stock target steppers. `GraveRosterUI.cs` (click a
   grave): housed worker + Unassign, assignable humanoid list + Assign.
-- **Dev verbs** — `worker_scene` (full economy), `worker_demo`, `jobs` (+StockReport),
-  `assign_worker`/`unassign_worker`, `place_obj`, `ui_job_board [jobId]`, `ui_grave_roster`.
+- **Dev verbs** — `worker_scene` (full economy), `jobs` (+StockReport),
+  `assign_worker`/`unassign_worker`, `place_obj`, `ui_job_board`, `ui_grave_roster`.
 
 ## Placeholder economy (flesh out later — user flagged as TBD)
 - Break Down yields Essence (global pool, clamped at MaxEssence) + a Reagent that

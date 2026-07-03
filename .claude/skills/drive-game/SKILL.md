@@ -39,11 +39,14 @@ command is added** — add it in C# and `necro_restart` with build.
 - `ping` · `state` — liveness / JSON snapshot of game state
 - `help` (alias `commands`) — list every dev command + selector syntax. Run this to
   discover what's available without reading the source.
-- `start_game [map]` — load a map into gameplay, use empty_test_map for most tests
+- `start_game [map]` — load a map into gameplay. No arg defaults to `empty_test` (empty
+  grass map, debug necromancer with all paths + big mana — right for most tests);
+  others: `default`, `testmap`
 - `spawn <type> <x> <y>` · `camera <x> <y> [zoom]` · `speed <n>` · `pause` · `resume`
 - `screenshot [name]` with `opts`: `no_ui`, `no_ground`, `downsample_to` (`"WxH"` | `"full"`;
   default 640x360)
-- `menu <new_game|test_map|scenarios|main_menu|quit>` — press a main-menu button
+- `menu <new_game|scenarios|main_menu|quit>` — press a main-menu button (maps load via
+  `start_game`, not `menu`)
 - `window <show|hide|toggle>` — **flip the running game between headless and a visible,
   interactive window WITHOUT restarting.** The headless game always runs and renders; it's
   parked off-screen with no taskbar button. `show` moves it on-screen (bordered + focused)

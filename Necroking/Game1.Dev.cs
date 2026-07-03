@@ -103,8 +103,7 @@ public partial class Game1 {
                int ni = _sim.NecromancerIndex;
                if (ni < 0) { c.Complete(Necroking.Dev.DevServer.Error("no necromancer in world")); break; }
                bool has = Necroking.GameSystems.BuffSystem.HasBuff(_sim.Units, ni, "buff_god_mode");
-               string mode = c.Args.Length >= 1 ? c.Args[0].ToLowerInvariant() : "toggle";
-               bool want = mode switch { "on" => true, "off" => false, _ => !has };
+               bool want = DevToggle(c.Args, has);
                if (want != has) ToggleGodMode(ni);
                c.Complete(Necroking.Dev.DevServer.Ok($"godmode {(want ? "on" : "off")}"));
                break;
@@ -166,8 +165,7 @@ public partial class Game1 {
 
             // Toggle camera-follow detachment without killing the necromancer.
             case "free_camera": {   // window.dev('free_camera',['off'])  | ['on'] | ['toggle'] | []
-               string mode = c.Args.Length >= 1 ? c.Args[0].ToLowerInvariant() : "toggle";
-               _devFreeCamera = mode switch { "on" or "true" or "1" => true, "off" or "false" or "0" => false, _ => !_devFreeCamera };
+               _devFreeCamera = DevToggle(c.Args, _devFreeCamera);
                c.Complete(Necroking.Dev.DevServer.Ok($"free_camera={_devFreeCamera}" + (_devFreeCamera ? "" : " (following necromancer)")));
                break;
             }
@@ -193,6 +191,12 @@ public partial class Game1 {
                c.Complete(Necroking.Dev.DevServer.Ok("resumed"));
                break;
 
+            // Load a map straight into gameplay. No arg → "empty_test": an empty,
+            // grass-only map with a debug necromancer (all paths unlocked, +999
+            // MaxMana) — the right starting point for testing technical behavior;
+            // no map content to fight, all spells castable. See StartGame's
+            // "empty_test" branch. Other maps: "default" (the real game map),
+            // "testmap" (populated, normal necromancer).
             case "start_game": {
                string map = c.Args.Length > 0 ? c.Args[0] : "empty_test";
                StartGame(map);
@@ -202,10 +206,11 @@ public partial class Game1 {
             }
 
             // Press a main-menu button. Mirrors the click handlers in Update so
-            // there's one definition of what each button does.
+            // there's one definition of what each button does. Map loads go
+            // through `start_game <map>` instead.
             case "menu": {
                if (c.Args.Length < 1) {
-                  c.Complete(Necroking.Dev.DevServer.Error("menu needs: <new_game|test_map|empty_test_map|scenarios|main_menu|quit>"));
+                  c.Complete(Necroking.Dev.DevServer.Error("menu needs: <new_game|scenarios|main_menu|quit>"));
                   break;
                }
 
@@ -215,19 +220,6 @@ public partial class Game1 {
                      StartGame();
                      c.Complete(Necroking.Dev.DevServer.Ok(
                         $"new game, menuState={_menuState}, units={_sim.Units.Count}"));
-                     break;
-                  case "test_map":
-                     StartGame("testmap");
-                     c.Complete(Necroking.Dev.DevServer.Ok($"test map, units={_sim.Units.Count}"));
-                     break;
-                  // Empty, grass-only map with a debug necromancer (all paths
-                  // unlocked, +999 MaxMana). The right starting point for
-                  // testing technical behavior — no map content to fight, all
-                  // spells castable. See StartGame's "empty_test" branch.
-                  case "empty_test_map":
-                  case "empty_map":
-                     StartGame("empty_test");
-                     c.Complete(Necroking.Dev.DevServer.Ok($"empty test map, units={_sim.Units.Count}"));
                      break;
                   case "scenarios":
                      _menuState = MenuState.ScenarioList;
@@ -285,18 +277,18 @@ public partial class Game1 {
                   c.Complete(Necroking.Dev.DevServer.Ok("ground fog cleared"));
                   break;
                }
-               if (sub == "add" && c.Args.Length >= 3
-                   && float.TryParse(c.Args[1], out float gx) && float.TryParse(c.Args[2], out float gy)) {
-                  float radius = c.Args.Length > 3 && float.TryParse(c.Args[3], out float gr) ? gr : 12f;
-                  float density = c.Args.Length > 4 && float.TryParse(c.Args[4], out float gd) ? gd : 0.7f;
-                  float ttl = c.Args.Length > 5 && float.TryParse(c.Args[5], out float gt) ? gt : -1f;
+               if (sub == "add" && c.Args.Length >= 3) {
+                  float gx = DevFloat(c.Args[1]), gy = DevFloat(c.Args[2]);
+                  float radius = c.Args.Length > 3 ? DevFloat(c.Args[3]) : 12f;
+                  float density = c.Args.Length > 4 ? DevFloat(c.Args[4]) : 0.7f;
+                  float ttl = c.Args.Length > 5 ? DevFloat(c.Args[5]) : -1f;
                   _groundFog.SpawnBank(new Vec2(gx, gy), radius, density, ttl);
                   c.Complete(Necroking.Dev.DevServer.Ok($"fog bank at ({gx},{gy}) r={radius} d={density} banks={_groundFog.BankCount}"));
                   break;
                }
                if (sub == "at_camera") {
-                  float radius = c.Args.Length > 1 && float.TryParse(c.Args[1], out float gr2) ? gr2 : 12f;
-                  float density = c.Args.Length > 2 && float.TryParse(c.Args[2], out float gd2) ? gd2 : 0.7f;
+                  float radius = c.Args.Length > 1 ? DevFloat(c.Args[1]) : 12f;
+                  float density = c.Args.Length > 2 ? DevFloat(c.Args[2]) : 0.7f;
                   _groundFog.SpawnBank(_camera.Position, radius, density);
                   c.Complete(Necroking.Dev.DevServer.Ok($"fog bank at camera ({_camera.Position.X:F0},{_camera.Position.Y:F0}) r={radius} d={density}"));
                   break;
@@ -405,33 +397,6 @@ public partial class Game1 {
                c.Complete(Necroking.Dev.DevServer.Ok(r));
                break;
             }
-
-            // --- Editor click-leak test harness (weapon/armor/shield sub-editor) ---
-            case "ed_weapon_sub":
-                _menuState = MenuState.UnitEditor;
-                _paused = false;
-                _unitEditor.DevEnsureSelection();
-                _unitEditor.OpenWeaponSubEditor();
-                _unitEditor.DevUnsavedChanges = false;
-                c.Complete(Necroking.Dev.DevServer.Ok(_unitEditor.DevSubState()));
-                break;
-            case "ed_state":
-                c.Complete(Necroking.Dev.DevServer.Ok(_unitEditor.DevSubState()));
-                break;
-            case "ed_mouse": {
-                // ed_mouse <x> <y> <down|up> — persistent synthetic editor mouse (held until next ed_mouse/ed_mouse_off)
-                if (c.Args.Length < 3 || !int.TryParse(c.Args[0], out int cx) || !int.TryParse(c.Args[1], out int cy)) {
-                    c.Complete(Necroking.Dev.DevServer.Error("ed_mouse <x> <y> <down|up>"));
-                    break;
-                }
-                _devMouseActive = true; _devMouseX = cx; _devMouseY = cy; _devMouseDown = c.Args[2] == "down";
-                c.Complete(Necroking.Dev.DevServer.Ok($"editor mouse {(_devMouseDown ? "DOWN" : "UP")} @ {cx},{cy}"));
-                break;
-            }
-            case "ed_mouse_off":
-                _devMouseActive = false;
-                c.Complete(Necroking.Dev.DevServer.Ok("editor mouse override off"));
-                break;
 
             // Select an entry in the currently open editor (by index, def id,
             // or display name) so its preview/detail renders for a screenshot.
@@ -566,25 +531,6 @@ public partial class Game1 {
                break;
             }
 
-            // One-shot demo scene: grave + pile + mushrooms + a skeleton worker assigned.
-            // window.dev('worker_demo')
-            case "worker_demo": {
-               Vec2 nb = _sim.NecromancerIndex >= 0 ? _sim.Units[_sim.NecromancerIndex].Position : new Vec2(2096, 1882);
-               int graveDef = _envSystem.FindDef("empty_grave");
-               int pileDef = _envSystem.FindDef("mushroom_pile");
-               int mushDef = _envSystem.FindDef("deathcap");
-               if (graveDef < 0 || pileDef < 0 || mushDef < 0) { c.Complete(Necroking.Dev.DevServer.Error("missing env defs (empty_grave/mushroom_pile/deathcap)")); break; }
-               int graveObj = _envSystem.AddObject((ushort)graveDef, nb.X + 2, nb.Y);
-               _envSystem.AddObject((ushort)pileDef, nb.X + 6, nb.Y);
-               for (int m = 0; m < 8; m++)
-                  _envSystem.AddObject((ushort)mushDef, nb.X + 9 + (m % 4) * 1.5f, nb.Y - 3 + (m / 4) * 2f);
-               SpawnUnit("skeleton", new Vec2(nb.X + 2, nb.Y + 1));
-               uint sid = _sim.Units[_sim.Units.Count - 1].Id;
-               bool ok = _workerSystem.AssignWorker(sid, graveObj);
-               c.Complete(Necroking.Dev.DevServer.OkRaw($"{{\"graveObj\":{graveObj},\"workerUnit\":{sid},\"assigned\":{(ok ? "true" : "false")}}}"));
-               break;
-            }
-
             // Fire the Job Board's Auto-assign button logic directly: window.dev('auto_assign')
             case "auto_assign": {
                int n = _workerSystem.AutoAssignWorkers();
@@ -634,43 +580,6 @@ public partial class Game1 {
                break;
             }
 
-            // Live re-space the empty graves (no rebuild): remove the existing graves and
-            // re-place them in a 3-wide grid at the given spacing, preserving which worker
-            // lives where. Lets you tune until skeletons stop snagging between graves.
-            // window.dev('respace_graves',[3.5])
-            case "respace_graves": {
-               float spacing = c.Args.Length >= 1 ? DevFloat(c.Args[0]) : 4.5f;
-               int graveDef = _envSystem.FindDef("empty_grave");
-               if (graveDef < 0) { c.Complete(Necroking.Dev.DevServer.Error("no empty_grave def")); break; }
-               Vec2 nb = _sim.NecromancerIndex >= 0 ? _sim.Units[_sim.NecromancerIndex].Position : new Vec2(2096, 1882);
-
-               // 1. Collect current grave indices + the worker housed in each (by stable unit id).
-               var graveIdxs = new List<int>();
-               for (int i = 0; i < _envSystem.ObjectCount; i++)
-                  if (_envSystem.GetObject(i).DefIndex == graveDef) graveIdxs.Add(i);
-               var workerIds = new List<uint>();
-               foreach (var gi in graveIdxs) {
-                  var hw = _workerSystem.HousedWorker(gi);
-                  if (hw.HasValue) workerIds.Add(hw.Value.Id);
-               }
-               // 2. Unassign first — clears each worker's WorkerHomeObjIdx so the index
-               //    shuffle from removing graves below can't strand them on a stale index.
-               foreach (var id in workerIds) _workerSystem.UnassignWorker(id);
-               // 3. Remove old graves backwards (RemoveObject shifts indices).
-               for (int i = graveIdxs.Count - 1; i >= 0; i--) _envSystem.RemoveObject(graveIdxs[i]);
-               // 4. Re-place the same number of graves at the new spacing.
-               int count = graveIdxs.Count > 0 ? graveIdxs.Count : 6;
-               var newGraves = new List<int>();
-               for (int g = 0; g < count; g++)
-                  newGraves.Add(_envSystem.AddObject((ushort)graveDef, nb.X - 8 + (g % 3) * spacing, nb.Y - 3 + (g / 3) * spacing, 1f));
-               // 5. Move the workers back into the fresh graves.
-               int re = 0;
-               for (int w = 0; w < workerIds.Count && w < newGraves.Count; w++)
-                  if (_workerSystem.AssignWorker(workerIds[w], newGraves[w])) re++;
-               c.Complete(Necroking.Dev.DevServer.Ok($"respaced {newGraves.Count} graves @ {spacing}u, reassigned {re}/{workerIds.Count} workers"));
-               break;
-            }
-
             // Surface / re-hide the headless game window at runtime (NO restart). The
             // headless window renders normally; it's just parked off-screen, borderless,
             // and stripped of its taskbar button. 'show' moves it on-screen, gives it a
@@ -701,22 +610,12 @@ public partial class Game1 {
                break;
             }
 
-            // Open the job board UI; optional arg expands a job's detail:
-            // window.dev('ui_job_board',['make_potions'])
+            // Open the job board UI. window.dev('ui_job_board')
             case "ui_job_board": {
                EnsureInventoryUIsInitialized();
                if (!_jobBoardUI.IsVisible)
                   _jobBoardUI.Toggle(GraphicsDevice.Viewport.Width, GraphicsDevice.Viewport.Height);
                c.Complete(Necroking.Dev.DevServer.Ok($"job board visible={_jobBoardUI.IsVisible}"));
-               break;
-            }
-            // Force the board into a drag state for a screenshot: window.dev('ui_job_drag',['poison_berries', 320])
-            case "ui_job_drag": {
-               if (c.Args.Length < 2) { c.Complete(Necroking.Dev.DevServer.Error("ui_job_drag needs: <jobId> <mouseY>")); break; }
-               EnsureInventoryUIsInitialized();
-               if (!_jobBoardUI.IsVisible) _jobBoardUI.Toggle(GraphicsDevice.Viewport.Width, GraphicsDevice.Viewport.Height);
-               _jobBoardUI.DebugDrag(c.Args[0], (int)DevFloat(c.Args[1]));
-               c.Complete(Necroking.Dev.DevServer.Ok($"dragging {c.Args[0]} at y={c.Args[1]}"));
                break;
             }
             // Open the grave roster UI for a grave (nearest if omitted): window.dev('ui_grave_roster',[graveObjIdx])
@@ -960,18 +859,17 @@ public partial class Game1 {
                break;
             }
 
-            // Reanimate the nearest eligible corpse into a SPECIFIED zombie type (exercises the
-            // cross-type standup morph). window.dev('reanim_into',['ZombieWolf'])  or  [...,x,y].
             // A/B the depth-sorted reanimation fog (same as the in-game 'H' key).
             case "depthfog": {   // window.dev('depthfog',['on'|'off'|'toggle'])
                var perf = _gameData.Settings.Performance;
-               string dfArg = c.Args.Length > 0 ? c.Args[0].ToLowerInvariant() : "toggle";
-               perf.DepthSortedFog = dfArg == "on" ? true : dfArg == "off" ? false : !perf.DepthSortedFog;
+               perf.DepthSortedFog = DevToggle(c.Args, perf.DepthSortedFog);
                _depthFogToastTimer = 2.25f;   // flash the on-screen state (same as the 'H' key)
                c.Complete(Necroking.Dev.DevServer.Ok($"depthSortedFog={perf.DepthSortedFog}"));
                break;
             }
 
+            // Reanimate the nearest eligible corpse into a SPECIFIED zombie type (exercises the
+            // cross-type standup morph). window.dev('reanim_into',['ZombieWolf'])  or  [...,x,y].
             case "reanim_into": {
                if (c.Args.Length < 1) { c.Complete(Necroking.Dev.DevServer.Error("reanim_into needs <zombieDefId> [x] [y]")); break; }
                string zinto = c.Args[0];
@@ -1413,6 +1311,12 @@ public partial class Game1 {
             // | {wait:<simSecs>} | {wait_real:<secs>} | {wait_frames:<n>}
             // | {shot:"name", ...screenshotOpts} ].
             case "batch": {
+               // One job at a time — silently replacing a running job abandons it mid-script.
+               if (_devJob != null && !_devJob.Done) {
+                  c.Complete(Necroking.Dev.DevServer.Error(
+                     $"job '{_devJob.Id}' still running (step {_devJob.Cursor}/{_devJob.Steps.Count}) — poll 'job' until done or 'job cancel' first"));
+                  break;
+               }
                string? raw = c.Opt("script");
                if (string.IsNullOrEmpty(raw)) {
                   c.Complete(Necroking.Dev.DevServer.Error(
@@ -1432,7 +1336,7 @@ public partial class Game1 {
                break;
             }
 
-            // Poll the active batch job. `job cancel` aborts it.
+            // Poll the active batch job: `job [jobId]`. `job cancel` aborts it.
             case "job": {
                if (_devJob == null) {
                   c.Complete(Necroking.Dev.DevServer.Error("no batch job (run 'batch' first)"));
@@ -1442,13 +1346,16 @@ public partial class Game1 {
                if (c.Args.Length > 0 && c.Args[0].Equals("cancel", StringComparison.OrdinalIgnoreCase)) {
                   _devJob.Done = true;
                   _devJob.Canceled = true;
+               } else if (c.Args.Length > 0 && !c.Args[0].Equals(_devJob.Id, StringComparison.OrdinalIgnoreCase)) {
+                  // Stale id from an earlier batch — say so instead of returning the wrong job's status.
+                  c.Complete(Necroking.Dev.DevServer.Error($"no job '{c.Args[0]}' (current is '{_devJob.Id}')"));
+                  break;
                }
 
                c.Complete(Necroking.Dev.DevServer.OkRaw(DevJobStatusJson(_devJob)));
                break;
             }
 
-            // Discovery: list every dev command with a one-line signature.
             // Inject a registry entry (spell/unit/item/buff/…) into the LIVE game
             // from JSON, like a row in data/<file>.json — runtime only, never saved.
             // If the matching editor is open, the new entry is selected. (DevAddData
@@ -1458,28 +1365,58 @@ public partial class Game1 {
                DevAddData(c);
                break;
 
+            // Discovery: list every dev command with a one-line signature.
             case "help":
             case "commands": {
+               // MAINTENANCE: this array must list EVERY case in the switch above —
+               // the drive-game skill promises `help` is complete discovery, so a
+               // new command that isn't added here is invisible. Keep the groups.
                var cmds = new[] {
+                  // liveness / state dumps
                   "ping", "state", "help", "mem", "census",
+                  "units [selector]", "unit <selector>", "corpses", "combat_log [n]",
+                  "jobs", "cooldowns", "locomotion [selector]  (alias loco)",
+                  "fog <x> <y>", "setting <dotted.path> [value]  (alias set_setting)",
+                  // spawning & world objects
                   "spawn <type> <x> <y>", "spawn_def <unitID> <x> <y> [count]",
-                  "units [selector]", "unit <selector>", "combat_log [n]",
+                  "spawn_horde <unitID> <x> <y> [count]",
+                  "place_obj <defId> <x> <y> [scale]",
+                  // unit manipulation
                   "damage <selector> <amount>", "kill <selector>", "remove <selector>",
-                  "set_ai <selector> <AIBehavior>", "move <selector> <x> <y>",
+                  "zombify [selector]", "set_ai <selector> <AIBehavior>", "move <selector> <x> <y>",
+                  "set_hp <selector> <hp> [maxHp]", "set_mana <selector|necro> <mana> [maxMana]",
+                  "set_necro_type <unitDefId>", "godmode [on|off]",
                   "walk_necro <x> <y>  (or 'clear'; cancelled by any WASD press)",
                   "mark <selector|clear>", "unmark [selector]",
-                  "set_hp <selector> <hp> [maxHp]", "set_mana <selector|necro> <mana> [maxMana]",
-                  "set_necro_type <unitDefId>",
-                  "cast <spellID> <x> <y>", "click <x> <y> [right]",
-                  "fireball <x> <y> [dmg] [radius] [name]",
-                  "camera <x> <y> [zoom]", "speed <n>", "pause", "resume",
-                  "start_game [map]", "menu <new_game|test_map|empty_test_map|scenarios|main_menu|quit>",
+                  // spells & reanimation
+                  "cast <spellID> <x> <y>", "fireball <x> <y> [dmg] [radius] [name]",
+                  "reanim_at <x> <y> [defId] [riseSpeed] [fogSpeed]",
+                  "reanim_into <zombieDefId> [x] [y]", "learn_skill <skillId>",
+                  // headless input (clicks / mouse / hover)
+                  "click <x> <y> [right]", "mousepos <x> <y>|clear", "pile_click <x> <y>",
+                  "hover <selector>|clear", "hover_obj <index>|clear",
+                  "hover_at <screenX> <screenY>", "hover_variant <-1..20>",
+                  "tether <x> <y>", "rope [x y]",
+                  // worker economy
+                  "assign_worker <unitId> [graveObjIdx]", "unassign_worker <unitId>",
+                  "stock_add <buildingDefId> <resource> <amount>", "auto_assign", "absorb_piles",
+                  "worker_scene", "ui_job_board", "ui_grave_roster [graveObjIdx]",
+                  // camera / time / game flow
+                  "camera <x> <y> [zoom]", "free_camera [on|off]", "speed <n>", "pause", "resume",
+                  "start_game [map]  (default empty_test)", "menu <new_game|scenarios|main_menu|quit>",
+                  "window <show|hide|toggle>",
+                  // rendering & fx
                   "screenshot [name]  opts:{no_ui,no_ground,downsample_to}",
+                  "pass list|on <name>|off <name>",
+                  "groundfog add <x> <y> [radius] [density] [ttl] | at_camera [radius] [density] | clear",
+                  "depthfog [on|off]", "gpdebug [0|1|2]",
+                  // UI panels
                   "panels", "panel <name> [tab]", "tab <name>",
                   "overlay <name> [open|close|toggle]", "select <name|id|index>",
+                  // batching & data injection
                   "batch  opts:{script:[{cmd,args,opts}|{wait:n}|{wait_real:n}|{wait_frames:n}|{shot:\"name\"}]}",
-                  "job [cancel]",
-                  "add_data [spell|unit|item|buff|weapon|armor|shield|potion|flipbook]  opts:{json:<entry|array|datafile>,open}",
+                  "job [jobId|cancel]",
+                  "add_data [spell|unit|item|buff|weapon|armor|shield|potion|flipbook]  opts:{json:<entry|array|datafile>,open}  (alias add_json)",
                };
                c.Complete(Necroking.Dev.DevServer.OkRaw(
                   $"{{\"selectors\":\"all|necro|undead|human|animal|<index>|id:<n>|<unitDefId>|<UnitType>\",\"commands\":{System.Text.Json.JsonSerializer.Serialize(cmds)}}}"));
@@ -1678,6 +1615,18 @@ public partial class Game1 {
 
    static float DevFloat(string s) =>
       float.Parse(s, System.Globalization.CultureInfo.InvariantCulture);
+
+   /// <summary>Parse an on/off/toggle dev argument: args[0] of on/true/1 → true,
+   /// off/false/0 → false, anything else (including no args) toggles
+   /// <paramref name="current"/>. Shared by godmode / free_camera / depthfog.</summary>
+   static bool DevToggle(string[] args, bool current) {
+      string mode = args.Length >= 1 ? args[0].ToLowerInvariant() : "toggle";
+      return mode switch {
+         "on" or "true" or "1" => true,
+         "off" or "false" or "0" => false,
+         _ => !current,
+      };
+   }
 
    /// <summary>Walk a dotted settings path (matching either the JSON name or the C#
    /// property name, case-insensitive) down from <c>_gameData.Settings</c>, returning

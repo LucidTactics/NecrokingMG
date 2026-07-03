@@ -708,10 +708,6 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     internal UIEditorWindow _uiEditor = new();
     internal EditorBase _editorUi = new();
     internal UnitEditorWindow _unitEditor = null!;
-    // Dev/test: persistent synthetic editor mouse (ed_mouse down/up, ed_mouse_off) for click-leak tests.
-    // Held across frames so press/release edges survive multiple Updates-per-Draw.
-    private bool _devMouseActive, _devMouseDown;
-    private int _devMouseX, _devMouseY;
     internal SpellEditorWindow _spellEditor = null!;
     internal ItemEditorWindow _itemEditor = null!;
     internal SettingsWindow _settingsWindow = null!;
@@ -1320,7 +1316,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         // same "<mapName>_triggers.json" / "<mapName>_roads.json" convention.
         // Special name "empty_test" synthesizes a tiny grass-only map in code
         // (no JSON file) so technical-behavior tests don't fight the regular
-        // map's content. See the "empty_test_map" menu dev command.
+        // map's content. See the "start_game" dev command (its no-arg default).
         var placedUnits = new List<Data.PlacedUnit>();
         // Zones are reloaded per map below; clear here so maps without a zones file
         // (empty_test, missing map) don't inherit the previous map's zones.
@@ -3063,12 +3059,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
 
         if (_menuState == MenuState.UnitEditor || _menuState == MenuState.SpellEditor || _menuState == MenuState.MapEditor || _menuState == MenuState.Settings || _menuState == MenuState.ItemEditor)
         {
-            var editMouse = mouse;
-            if (_devMouseActive) // ed_mouse: persistent synthetic editor mouse for click-leak tests
-                editMouse = new MouseState(_devMouseX, _devMouseY, mouse.ScrollWheelValue,
-                    _devMouseDown ? ButtonState.Pressed : ButtonState.Released,
-                    ButtonState.Released, ButtonState.Released, ButtonState.Released, ButtonState.Released);
-            _editorUi.UpdateInput(editMouse, _prevMouse, kb, _prevKb, screenW, screenH, gameTime, _input);
+            _editorUi.UpdateInput(mouse, _prevMouse, kb, _prevKb, screenW, screenH, gameTime, _input);
         }
         if (_menuState == MenuState.MapEditor && _gameWorldLoaded)
             _mapEditor.Update(screenW, screenH);
@@ -3083,12 +3074,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             // clicks, etc. all go nowhere. Mirrors the pattern used for
             // _editorUi above; the trailing _input arg shares Game1's
             // captured InputState so the UI editor sees real mouse data.
-            var uiEditMouse = mouse;
-            if (_devMouseActive) // ed_mouse: synthetic editor mouse for click-leak tests (UIEditor too)
-                uiEditMouse = new MouseState(_devMouseX, _devMouseY, mouse.ScrollWheelValue,
-                    _devMouseDown ? ButtonState.Pressed : ButtonState.Released,
-                    ButtonState.Released, ButtonState.Released, ButtonState.Released, ButtonState.Released);
-            _uiEditor.UpdateInput(uiEditMouse, _prevMouse, kb, _prevKb, screenW, screenH, gameTime, _input);
+            _uiEditor.UpdateInput(mouse, _prevMouse, kb, _prevKb, screenW, screenH, gameTime, _input);
             _uiEditor.Update(screenW, screenH);
         }
 

@@ -33,7 +33,6 @@ public class JobBoardUI : IModalLayer
     private string _dragJobId = "";
     private int _dragGrabDy;
     private int _dragMouseY;
-    private bool _debugDragHold;
 
     private const int Pad = 14;
     private const int TitleH = 30;
@@ -55,10 +54,7 @@ public class JobBoardUI : IModalLayer
         Game1.Popups.Push(this);
     }
 
-    public void Close() { _visible = false; _dragging = false; _debugDragHold = false; _dragJobId = ""; Game1.Popups.Pop(this); }
-
-    public void DebugDrag(string jobId, int mouseY)
-    { _dragging = true; _debugDragHold = true; _dragJobId = jobId; _dragGrabDy = TileBaseH / 2; _dragMouseY = mouseY; }
+    public void Close() { _visible = false; _dragging = false; _dragJobId = ""; Game1.Popups.Pop(this); }
 
     private int ListTop => _y + TitleH + Pad;
 
@@ -180,7 +176,6 @@ public class JobBoardUI : IModalLayer
 
     private void UpdateDrag(InputState input, int my, List<JobState> vis)
     {
-        if (_debugDragHold) return;
         _dragMouseY = my;
         if (input.LeftDown) return;
         var others = new List<JobState>();

@@ -60,14 +60,17 @@ spawning (`spawn`, `spawn_def`, `spawn_horde`, `place_obj`, `reanim_at`), units 
 `set_mana`, `set_necro_type`, `zombify`, `cast`, `fireball`, `combat_log`, `mark`/`unmark`,
 `hover*`), camera/time (`camera`, `free_camera`, `speed`, `pause`, `resume`), flow
 (`start_game`, `menu`, `window`), UI/editor preview (`panels`, `panel`, `tab`, `overlay`,
-`select`, `ui_job_board`, `ui_grave_roster`, `ed_*`), worker economy (`assign_worker`,
-`unassign_worker`, `stock_add`, `jobs`, `worker_demo`, `worker_scene`, `respace_graves`),
+`select`, `ui_job_board`, `ui_grave_roster`), worker economy (`assign_worker`,
+`unassign_worker`, `stock_add`, `jobs`, `worker_scene`),
 batch (`batch`, `job`), data injection (`add_data`/`add_json` → `DevAddData`),
 discovery (`help`/`commands`), and `screenshot`. Unknown verb → `default:` returns
 `Error($"unknown cmd: ...")`.
 
 **Helpers in this file** (reuse them rather than re-parsing):
-- `static float DevFloat(string)` — invariant-culture float parse for args.
+- `static float DevFloat(string)` — invariant-culture float parse for args. Never use
+  bare `float.TryParse` on args (current-culture; breaks on comma-decimal locales).
+- `static bool DevToggle(string[] args, bool current)` — on/off/toggle arg parsing
+  (used by `godmode`, `free_camera`, `depthfog`).
 - `List<int> DevResolveUnits(string token)` — the selector resolver
   (`all`/`*`/`necro`/faction/index/`id:<n>`/UnitDef id/UnitType). Use for any
   `<selector>` arg; `string.Join(" ", c.Args, …)` to assemble multi-token selectors.
@@ -120,7 +123,7 @@ registry type for live injection, or changing the `state` JSON snapshot fields.
   don't assume types.
 - **Reuse `DevResolveUnits`** for `<selector>` args — don't re-implement selector parsing.
 - **Index-shifting:** removing units/objects shifts indices. Iterate backwards or sort
-  descending (see `remove`, `respace_graves`).
+  descending (see `remove`).
 - **Do NOT edit `tools/devserver.py`** to add a command — it's a transparent forwarder; a
   new verb is pure C# in `ExecuteDevCommand`. Editing the supervisor forces a restart
   (memory: "Don't edit the dev python server"). Rebuild+relaunch via
