@@ -1295,6 +1295,12 @@ public class EditorBase
             else
             {
                 _activeFieldId = comboId;
+                // Mark the combo as drawn this frame right as it opens. Otherwise
+                // EndDrawFrame sees IsDropdownOpen==true but _openComboDrawnThisFrame
+                // still false (it's only set at the top of DrawCombo, and only when
+                // isOpen was ALREADY true) and immediately closes the just-opened
+                // dropdown — the list would never appear, only the hover highlight.
+                _openComboDrawnThisFrame = true;
                 _comboFilterText[comboId] = "";
                 _comboHighlightIdx = -1;
 
