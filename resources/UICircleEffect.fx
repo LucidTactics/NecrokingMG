@@ -27,6 +27,8 @@ float4 FillTopColor;
 float4 FillBottomColor;
 float4 GlowColor;
 
+// s0 is reserved by SpriteBatch for the drawn texture; this shader is purely
+// procedural and intentionally never samples it.
 sampler2D TextureSampler : register(s0);
 
 float4 PixelShaderFunction(float2 texCoord : TEXCOORD0) : COLOR0
@@ -48,8 +50,9 @@ float4 PixelShaderFunction(float2 texCoord : TEXCOORD0) : COLOR0
     // Glow only where fill is not present:
     glowMask *= (1.0 - fillMask);
 
-    // Fill color (vertical gradient based on y within the circle bounding box)
-    float yt = saturate((px.y - (Center.y - Radius)) / (2.0 * Radius));
+    // Fill color (vertical gradient based on y within the circle bounding box).
+    // max() guards Radius = 0 — the one otherwise-unguarded division here.
+    float yt = saturate((px.y - (Center.y - Radius)) / max(2.0 * Radius, 0.001));
     float4 fill = lerp(FillTopColor, FillBottomColor, yt);
     fill.a *= fillMask;
 

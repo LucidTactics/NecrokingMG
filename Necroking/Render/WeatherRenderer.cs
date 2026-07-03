@@ -95,9 +95,6 @@ public class WeatherRenderer
         {
             if (_fogEffect != null)
             {
-                // End current SpriteBatch to switch to shader mode
-                _spriteBatch.End();
-
                 // Compute world-space mapping for fog anchoring
                 float halfWorldW = screenW * 0.5f / _camera.Zoom;
                 float halfWorldH = screenH * 0.5f / (_camera.Zoom * _camera.YRatio);
@@ -109,7 +106,10 @@ public class WeatherRenderer
                 _fogEffect.Parameters["FogColor"]?.SetValue(new Vector3(fx.FogR, fx.FogG, fx.FogB));
                 _fogEffect.Parameters["FogSpeed"]?.SetValue(fx.FogSpeed);
                 _fogEffect.Parameters["FogScaleU"]?.SetValue(fx.FogScale);
-                _fogEffect.Parameters["Time"]?.SetValue(_gameTime);
+                // Wrap Time so the fog scroll coordinate stays in fp32-precise
+                // range on long sessions (unbounded Time makes the noise drift
+                // steppy after an hour+). Cost: one fog-pattern jump per hour.
+                _fogEffect.Parameters["Time"]?.SetValue(_gameTime % 3600f);
                 _fogEffect.Parameters["FogWorldOrigin"]?.SetValue(fogOrigin);
                 _fogEffect.Parameters["FogWorldScale"]?.SetValue(fogWorldScale);
                 _fogEffect.Parameters["HazeStrength"]?.SetValue(fx.HazeStrength);
@@ -124,19 +124,16 @@ public class WeatherRenderer
                 _fogEffect.Parameters["VignetteStrength"]?.SetValue(fx.VignetteStrength);
                 _fogEffect.Parameters["VignetteRadius"]?.SetValue(fx.VignetteRadius);
                 _fogEffect.Parameters["VignetteSoftness"]?.SetValue(fx.VignetteSoftness);
-                _fogEffect.Parameters["Resolution"]?.SetValue(new Vector2(screenW, screenH));
+                _fogEffect.Parameters["ScreenSize"]?.SetValue(new Vector2(screenW, screenH));
 
                 // Lightning flash
                 _fogEffect.Parameters["FlashIntensity"]?.SetValue(_flashIntensity);
 
-                // Draw fullscreen quad with fog shader (premultiplied alpha output)
-                _spriteBatch.Begin(SpriteSortMode.Immediate, BlendState.AlphaBlend, SamplerState.PointClamp,
-                    null, null, _fogEffect);
+                // Draw fullscreen quad with fog shader (premultiplied alpha output),
+                // suspending the HUD batch this is called inside of.
+                EffectBatch.BeginEffect(_spriteBatch, _fogEffect, BlendState.AlphaBlend, SamplerState.PointClamp);
                 _spriteBatch.Draw(_pixel, new Rectangle(0, 0, screenW, screenH), Color.White);
-                _spriteBatch.End();
-
-                // Resume normal SpriteBatch for remaining HUD drawing
-                _spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.PointClamp);
+                EffectBatch.EndEffectResumeHud(_spriteBatch);
             }
             else
             {

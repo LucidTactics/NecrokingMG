@@ -662,9 +662,10 @@ partial class GameRenderer
     /// <summary>Draw the aggression bar (Shift+Q/Shift+E controlled) centered just
     /// above the spell bar, with a warm token on the active level's node.
     /// The bar size AND the node positions are read live from the widget def, so the
-    /// token tracks any resize / re-spacing of the bar in the UI editor. Both
-    /// DrawWidget and DrawCircle manage their own SpriteBatch, so this runs outside
-    /// any active batch (right after DrawHUD).</summary>
+    /// token tracks any resize / re-spacing of the bar in the UI editor. Runs INSIDE
+    /// the open HUD batch: DrawWidget draws into it, and UIShaders.DrawCircle End()s
+    /// it, draws its own Immediate quad, then re-Begin()s it — so the batch MUST be
+    /// open when this is called (DrawCircle throws on a closed batch).</summary>
     private void DrawAggressionBar(int screenW, int screenH)
     {
         if (!GetAggressionBarLayout(screenW, screenH, out var bar, out var nodes)) return;
@@ -672,8 +673,8 @@ partial class GameRenderer
         _g._widgetRenderer.DrawWidget("AggressionBar", bar.X, bar.Y);
 
         // Token: the dot lands on the active node no matter how the bar is sized or
-        // spaced (layout read live, see GetAggressionBarLayout). DrawWidget left the
-        // batch closed; DrawCircle does its own Begin/End.
+        // spaced (layout read live, see GetAggressionBarLayout). DrawCircle briefly
+        // suspends the open HUD batch (End → Immediate quad → Begin).
         int level = Math.Clamp(_g._sim.Horde.AggressionLevel, 0, nodes.Count - 1);
         var nr = nodes[level];
         var center = new Vector2(nr.X + nr.Width / 2f, nr.Y + nr.Height / 2f);

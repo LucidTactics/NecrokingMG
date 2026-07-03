@@ -40,6 +40,8 @@ float4 PixelShaderFunction(float2 texCoord : TEXCOORD0) : COLOR0
     float baseAlpha = lerp(UnexploredAlpha, FoggedAlpha, expAA);
     float fogAlpha = lerp(baseAlpha, 0.0, visAA);
 
+    // Straight-alpha output, but RGB is 0 so it's identical premultiplied —
+    // safe under the AlphaBlend (premultiplied) batch this is drawn in.
     return float4(0.0, 0.0, 0.0, fogAlpha);
 }
 

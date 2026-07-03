@@ -40,24 +40,27 @@ public struct HdrColor
     /// <param name="alpha">Fade multiplier in 0-1 range (e.g. 1.0 = full brightness, 0.5 = half).</param>
     public Color ToHdrVertex(float alpha)
     {
+        // Clamp instead of raw byte cast: alpha comes from config-driven curves
+        // and a value > 1 would wrap modulo 256 (flickering near-black frames).
         float fade = alpha * (A / 255f); // combine external fade with base alpha
         return new Color(
-            (byte)(R * fade),
-            (byte)(G * fade),
-            (byte)(B * fade),
-            (byte)(Math.Clamp(Intensity / MaxHdrIntensity, 0f, 1f) * 255f)
+            (byte)Math.Clamp(R * fade, 0f, 255f),
+            (byte)Math.Clamp(G * fade, 0f, 255f),
+            (byte)Math.Clamp(B * fade, 0f, 255f),
+            (byte)MathF.Round(Math.Clamp(Intensity / MaxHdrIntensity, 0f, 1f) * 255f)
         );
     }
 
     /// Overload for when base color and intensity are separate (Effect.Tint + Effect.HdrIntensity).
+    /// tint.A participates in the fade, matching the instance overload above.
     public static Color ToHdrVertex(Color tint, float alpha, float hdrIntensity)
     {
-        float fade = alpha;
+        float fade = alpha * (tint.A / 255f);
         return new Color(
-            (byte)(tint.R * fade),
-            (byte)(tint.G * fade),
-            (byte)(tint.B * fade),
-            (byte)(Math.Clamp(hdrIntensity / MaxHdrIntensity, 0f, 1f) * 255f)
+            (byte)Math.Clamp(tint.R * fade, 0f, 255f),
+            (byte)Math.Clamp(tint.G * fade, 0f, 255f),
+            (byte)Math.Clamp(tint.B * fade, 0f, 255f),
+            (byte)MathF.Round(Math.Clamp(hdrIntensity / MaxHdrIntensity, 0f, 1f) * 255f)
         );
     }
 
@@ -65,15 +68,18 @@ public struct HdrColor
     /// Encode for HdrAlpha technique: intensity baked into RGB, alpha carries real fade.
     /// Shader decodes: output.rgb = tex.rgb * color.rgb * MaxIntensity, output.a = tex.a * color.a.
     /// High-intensity channels may clip — acceptable since bloom smooths the result.
+    /// RGB is rounded, not truncated: at the default intensity (scale 0.25) truncation
+    /// dimmed every alpha-mode effect ~1.2% and quantized tints to 64 levels.
+    /// tint.A participates in the fade, matching ToHdrVertex.
     /// </summary>
     public static Color ToHdrVertexAlpha(Color tint, float alpha, float hdrIntensity)
     {
         float scale = hdrIntensity / MaxHdrIntensity;
         return new Color(
-            (byte)Math.Min(255f, tint.R * scale),
-            (byte)Math.Min(255f, tint.G * scale),
-            (byte)Math.Min(255f, tint.B * scale),
-            (byte)(alpha * 255f)
+            (byte)Math.Clamp(MathF.Round(tint.R * scale), 0f, 255f),
+            (byte)Math.Clamp(MathF.Round(tint.G * scale), 0f, 255f),
+            (byte)Math.Clamp(MathF.Round(tint.B * scale), 0f, 255f),
+            (byte)Math.Clamp(alpha * tint.A, 0f, 255f)
         );
     }
 }

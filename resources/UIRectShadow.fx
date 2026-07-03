@@ -27,6 +27,8 @@ float Softness;      // shadow distance, px
 float4 FillColor;    // inside fill (RGBA, non-premultiplied). Can be transparent.
 float4 ShadowColor;  // shadow color (RGBA, non-premultiplied)
 
+// s0 is reserved by SpriteBatch for the drawn texture; this shader is purely
+// procedural and intentionally never samples it.
 sampler2D TextureSampler : register(s0);
 
 float4 PixelShaderFunction(float2 texCoord : TEXCOORD0) : COLOR0
@@ -41,19 +43,25 @@ float4 PixelShaderFunction(float2 texCoord : TEXCOORD0) : COLOR0
 
     float soft = max(Softness, 0.001);
 
+    // Premultiply the inputs up front. Scaling/lerping premultiplied colors is
+    // blend-correct even when one endpoint is transparent (straight-alpha lerp
+    // toward a transparent color drags RGB toward black — dark inset shadows
+    // hid that; a colored one wouldn't).
+    float4 fillPM   = float4(FillColor.rgb * FillColor.a, FillColor.a);
+    float4 shadowPM = float4(ShadowColor.rgb * ShadowColor.a, ShadowColor.a);
+
     float4 c;
     if (Mode < 0.5)
     {
         // Drop shadow: fill inside, shadow fades outside.
         if (sdf <= 0)
         {
-            c = FillColor;
+            c = fillPM;
         }
         else
         {
             float t = 1.0 - saturate(sdf / soft);
-            c = ShadowColor;
-            c.a *= t * t;
+            c = shadowPM * (t * t);
         }
     }
     else
@@ -69,11 +77,10 @@ float4 PixelShaderFunction(float2 texCoord : TEXCOORD0) : COLOR0
             float innerDist = -sdf;
             float t = saturate(innerDist / soft); // 0 at edge, 1 deep inside
             t = t * t;
-            c = lerp(ShadowColor, FillColor, t);
+            c = lerp(shadowPM, fillPM, t);
         }
     }
-    // MonoGame SpriteBatch expects premultiplied alpha
-    c.rgb *= c.a;
+    // Already premultiplied (inputs converted above).
     return c;
 }
 

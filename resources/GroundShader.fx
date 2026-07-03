@@ -16,7 +16,9 @@ float2 WorldSize;   // vertex grid size (worldW+1, worldH+1)
 float TypeWarpStrength;
 float UvWarpAmp;
 float UvWarpFreq;
-float3 AmbientColor = float3(1, 1, 1);
+// Set every frame from C# (DrawGroundShader) — MGFX on OpenGL does not honor
+// default uniform initializers, so no defaults are declared here.
+float3 AmbientColor;
 
 // Time in seconds since startup. Drives water scroll animation and the
 // shore-foam pulse. Set every frame from C# (DrawGroundShader).
@@ -36,11 +38,21 @@ float Time;
 float4 TintColors[16];
 float IsWaterType[16];
 
-// Hardcoded water-scroll velocities in world-UV units per second. Two layers
-// in different directions so they interfere and hide tiling. Tuned for slow
-// "pond" motion; bump up for streams/rivers later.
-static const float2 WaterScrollA = float2( 0.045,  0.028);
-static const float2 WaterScrollB = float2(-0.032,  0.054);
+// ─── Shore-foam tuning ───
+// The foam band peaks just inside the water side of the shoreline (waterness ≈
+// 0.75-0.95) and pulses gently; see the foam pass in main for the full why.
+static const float  FoamBandInLo      = 0.02;  // band rises as nonWaterness passes this...
+static const float  FoamBandInHi      = 0.18;  // ...peaking here (just inside the water)
+static const float  FoamBandOutLo     = 0.30;  // band falls off toward land from here...
+static const float  FoamBandOutHi     = 0.55;  // ...gone by here
+static const float  FoamWaterGateLo   = 0.45;  // only paint over mostly-water pixels
+static const float  FoamWaterGateHi   = 0.70;
+static const float  FoamPulseNoiseScale = 0.6; // world-space scale of the phase noise
+static const float  FoamPulseSpeed    = 0.6;   // pulse rate, rad/s
+static const float  FoamPulseBase     = 0.78;  // brightness pulses Base ± Amp (surf, not flicker)
+static const float  FoamPulseAmp      = 0.22;
+static const float  FoamStrength      = 0.55;  // overall foam blend into the ground color
+static const float3 FoamBaseColor     = float3(0.86, 0.92, 0.95); // near-white cyan, tinted per water type
 
 // Textures as named parameters (bound via Effect.Parameters in C#)
 // s0 is used by SpriteBatch for the drawn texture (tilemap/vertex map)
@@ -135,19 +147,8 @@ sampler2D GroundTex7 = sampler_state
     AddressV = Wrap;
 };
 
-texture GroundTexture8;
-sampler2D GroundTex8 = sampler_state
-{
-    Texture = <GroundTexture8>;
-    MinFilter = Linear;
-    MagFilter = Linear;
-    MipFilter = Linear;
-    AddressU = Wrap;
-    AddressV = Wrap;
-};
-
-
 // --- Noise functions ---
+// Duplicated in DissolveTree.fx — keep in sync (no #include; each .fx builds standalone).
 float hash21(float2 p)
 {
     p = frac(p * float2(123.34, 456.21));
@@ -262,10 +263,17 @@ float4 PixelShaderFunction(float2 texCoord : TEXCOORD0) : COLOR0
     int  packOrig10 = (int)(m10.g * 255.0 + 0.5);
     int  packOrig01 = (int)(m01.g * 255.0 + 0.5);
     int  packOrig11 = (int)(m11.g * 255.0 + 0.5);
-    int  type00  = packCur00 - (packCur00 / 32) * 32;
-    int  type10  = packCur10 - (packCur10 / 32) * 32;
-    int  type01  = packCur01 - (packCur01 / 32) * 32;
-    int  type11  = packCur11 - (packCur11 / 32) * 32;
+    // The packed byte carries a 5-bit type field (0..31) but TintColors /
+    // IsWaterType are sized 16 (matching MaxGroundTypes on the C# side) —
+    // clamp so a future 17th+ ground type can't index past the arrays.
+    int  type00  = min(packCur00 - (packCur00 / 32) * 32, 15);
+    int  type10  = min(packCur10 - (packCur10 / 32) * 32, 15);
+    int  type01  = min(packCur01 - (packCur01 / 32) * 32, 15);
+    int  type11  = min(packCur11 - (packCur11 / 32) * 32, 15);
+    int  typeO00 = min(packOrig00 - (packOrig00 / 32) * 32, 15);
+    int  typeO10 = min(packOrig10 - (packOrig10 / 32) * 32, 15);
+    int  typeO01 = min(packOrig01 - (packOrig01 / 32) * 32, 15);
+    int  typeO11 = min(packOrig11 - (packOrig11 / 32) * 32, 15);
     float fade00 = m00.b;
     float fade10 = m10.b;
     float fade01 = m01.b;
@@ -303,10 +311,14 @@ float4 PixelShaderFunction(float2 texCoord : TEXCOORD0) : COLOR0
     // means the inlined cascade doesn't carry a dynamic-indexed uniform
     // read — which is what keeps PS_3_0 temp-register pressure inside its
     // 32-register budget when sampleGroundType is inlined 4..8x per pixel.
-    float3 tint00 = TintColors[type00].rgb;
-    float3 tint10 = TintColors[type10].rgb;
-    float3 tint01 = TintColors[type01].rgb;
-    float3 tint11 = TintColors[type11].rgb;
+    // Each corner's tint is also lerped original→current by its fade — for
+    // type pairs that share a texture slot and differ only by tint, the
+    // texture lerp is identity, so without this the tint (the whole visible
+    // difference) would pop instead of fade.
+    float3 tint00 = lerp(TintColors[typeO00].rgb, TintColors[type00].rgb, fade00);
+    float3 tint10 = lerp(TintColors[typeO10].rgb, TintColors[type10].rgb, fade10);
+    float3 tint01 = lerp(TintColors[typeO01].rgb, TintColors[type01].rgb, fade01);
+    float3 tint11 = lerp(TintColors[typeO11].rgb, TintColors[type11].rgb, fade11);
     float3 tintTop = lerp(tint00, tint10, s.x);
     float3 tintBot = lerp(tint01, tint11, s.x);
     result.rgb *= lerp(tintTop, tintBot, s.y);
@@ -315,10 +327,13 @@ float4 PixelShaderFunction(float2 texCoord : TEXCOORD0) : COLOR0
     // Gate the whole block on "any corner is water" so warps that are entirely
     // grass/dirt/etc skip the smoothsteps + sin. The branch is uniform across
     // large screen regions, so most non-shoreline pixels pay nothing here.
-    float iw00 = IsWaterType[type00];
-    float iw10 = IsWaterType[type10];
-    float iw01 = IsWaterType[type01];
-    float iw11 = IsWaterType[type11];
+    // Water flags fade original→current alongside the tint so shore foam
+    // ramps out during a water→land corruption fade instead of vanishing
+    // the instant the vertex's current type flips.
+    float iw00 = lerp(IsWaterType[typeO00], IsWaterType[type00], fade00);
+    float iw10 = lerp(IsWaterType[typeO10], IsWaterType[type10], fade10);
+    float iw01 = lerp(IsWaterType[typeO01], IsWaterType[type01], fade01);
+    float iw11 = lerp(IsWaterType[typeO11], IsWaterType[type11], fade11);
     float anyWater = max(max(iw00, iw10), max(iw01, iw11));
     if (anyWater > 0.0)
     {
@@ -333,9 +348,9 @@ float4 PixelShaderFunction(float2 texCoord : TEXCOORD0) : COLOR0
 
         // Peak around nonWaterness ~ 0.10–0.25 — i.e. just inside the water side.
         // Gate by waterness so the band only paints over water samples.
-        float foamBand = smoothstep(0.02, 0.18, nonWaterness)
-                       * (1.0 - smoothstep(0.30, 0.55, nonWaterness));
-        foamBand *= smoothstep(0.45, 0.70, waterness);
+        float foamBand = smoothstep(FoamBandInLo, FoamBandInHi, nonWaterness)
+                       * (1.0 - smoothstep(FoamBandOutLo, FoamBandOutHi, nonWaterness));
+        foamBand *= smoothstep(FoamWaterGateLo, FoamWaterGateHi, waterness);
 
         // Gentle pulse along the shoreline. Earlier version used a single
         // sin(time + worldPos.x + worldPos.y) which moves as one diagonal
@@ -345,9 +360,9 @@ float4 PixelShaderFunction(float2 texCoord : TEXCOORD0) : COLOR0
         // there's no coherent sweep direction. Amplitude is halved from
         // the previous (0.55 ± 0.45 → 0.78 ± 0.22) so bright/dim contrast
         // reads as surf rather than flickering.
-        float pulsePhase = valueNoise(worldPos * 0.6) * 6.28318;
-        float foamPulse = 0.78 + 0.22 * sin(Time * 0.6 + pulsePhase);
-        float foam = foamBand * foamPulse * 0.55;
+        float pulsePhase = valueNoise(worldPos * FoamPulseNoiseScale) * 6.28318;
+        float foamPulse = FoamPulseBase + FoamPulseAmp * sin(Time * FoamPulseSpeed + pulsePhase);
+        float foam = foamBand * foamPulse * FoamStrength;
 
         // Modulate foam color by the water vertices' tint so tinted water
         // variants (e.g. swamp_shallow_water with a green tint) get a foam
@@ -360,7 +375,7 @@ float4 PixelShaderFunction(float2 texCoord : TEXCOORD0) : COLOR0
                           + tint10 * (iw10 * w10)
                           + tint01 * (iw01 * w01)
                           + tint11 * (iw11 * w11)) / max(waterness, 0.001);
-        float3 foamColor = float3(0.86, 0.92, 0.95) * waterTint;
+        float3 foamColor = FoamBaseColor * waterTint;
         result.rgb = lerp(result.rgb, foamColor, foam);
     }
 

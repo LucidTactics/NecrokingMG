@@ -24,13 +24,16 @@ sampler2D LiveSampler : register(s1);
 
 // xy = uv top-left of frame 0 in the live spritesheet
 // zw = uv bottom-right of frame 0
+// All uniforms are set from C# every draw (GameRenderer.Units.cs) — MGFX on
+// OpenGL does not honor default uniform initializers, so none are declared.
 float4 LiveFrameUV;
-float Threshold;       // 0 = fully live, 1 = fully dissolved
-float Seed;            // 0..1 per-instance offset
-float NoiseScale = 6;  // higher = smaller blotches
-float EdgeSoftness = 0.06;
-float DebugMode = 0;   // when > 0.5: output diagnostic colors instead of dissolve
+float Threshold;     // 0 = fully live, 1 = fully dissolved
+float Seed;          // 0..1 per-instance offset
+float NoiseScale;    // higher = smaller blotches
+float EdgeSoftness;  // half-width of the soft dissolve edge in noise units
+float DebugMode;     // when > 0.5: output diagnostic colors instead of dissolve
 
+// Duplicated in GroundShader.fx — keep in sync (no #include; each .fx builds standalone).
 float hash21(float2 p)
 {
     p = frac(p * float2(123.34, 456.21));
@@ -64,10 +67,17 @@ float4 PixelShaderFunction(float4 color : COLOR0, float2 texCoord : TEXCOORD0) :
         return float4(deadCol.a, liveCol.a, Threshold, 1.0);
     }
 
-    // SIMPLE CROSSFADE (debug build): linear lerp(live -> dead) by Threshold.
-    // If this fades smoothly across 5s, the noise math is the issue.
-    // If it still flips suddenly, the live texture isn't sampling correctly.
-    float4 result = lerp(liveCol, deadCol, Threshold);
+    // Noise-threshold dissolve: sample low-frequency noise (offset per-instance
+    // by Seed so neighboring trees don't dissolve in identical patterns); where
+    // noise < Threshold the pixel has dissolved to the dead sprite, with a
+    // smoothstep band of EdgeSoftness giving a soft edge. Threshold is remapped
+    // so 0/1 reach a pure live/dead state even with the soft band.
+    float n = valueNoise(texCoord * NoiseScale + Seed * 100.0);
+    float th = Threshold * (1.0 + 2.0 * EdgeSoftness) - EdgeSoftness;
+    float deadMix = 1.0 - smoothstep(th - EdgeSoftness, th + EdgeSoftness, n);
+
+    // Both textures are premultiplied, so the lerp is blend-correct as-is.
+    float4 result = lerp(liveCol, deadCol, deadMix);
     return result * color;
 }
 

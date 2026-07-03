@@ -2259,7 +2259,18 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
 
         try { _outlineFlatEffect = Content.Load<Microsoft.Xna.Framework.Graphics.Effect>("OutlineFlat"); }
         catch (Exception ex) { _outlineFlatEffect = null; DebugLog.Log("startup", $"OutlineFlat not loaded: {ex.Message}"); }
-        try { _morphSdfEffect = Content.Load<Microsoft.Xna.Framework.Graphics.Effect>("MorphSDF"); }
+        try
+        {
+            _morphSdfEffect = Content.Load<Microsoft.Xna.Framework.Graphics.Effect>("MorphSDF");
+            // Constant look parameters, set once (MGFX on GL ignores .fx initializers;
+            // dynamic params — MorphT, GreenFill, OutlineColor, OutlinePulse, textures —
+            // are set per draw in DrawReanimMorph). Bulge is the amoeba swell that opens
+            // bridge gaps (was 4.0 — gentler swell reads as a quiet wisp, and the green
+            // gap-fill is dimmed at the call site so it doesn't glow).
+            _morphSdfEffect.Parameters["Bulge"]?.SetValue(2.0f);
+            _morphSdfEffect.Parameters["EdgeSoftness"]?.SetValue(1.5f); // AA band, px
+            _morphSdfEffect.Parameters["OutlineWidth"]?.SetValue(1.2f); // px
+        }
         catch (Exception ex) { _morphSdfEffect = null; DebugLog.Log("startup", $"MorphSDF not loaded: {ex.Message}"); }
         try { _depthCutoutEffect = Content.Load<Microsoft.Xna.Framework.Graphics.Effect>("DepthCutout"); }
         catch (Exception ex) { _depthCutoutEffect = null; DebugLog.Log("startup", $"DepthCutout not loaded: {ex.Message}"); }
@@ -2270,6 +2281,13 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             _wadingEffect = Content.Load<Microsoft.Xna.Framework.Graphics.Effect>("Wading");
             var pnames = string.Join(",", _wadingEffect.Parameters.Select(p => p.Name));
             DebugLog.Log("startup", $"Wading loaded. params=[{pnames}]");
+            // Constant look parameters, set once (MGFX on GL ignores .fx initializers).
+            // The per-frame waterline/frame-UV params are set in DrawWadingSpriteFrame
+            // and the WadingEditorPopup preview — both share this Effect instance.
+            _wadingEffect.Parameters["FoamHalfWidth"]?.SetValue(0.05f);    // half-width of the foam band, local V
+            _wadingEffect.Parameters["TopFoamHalfWidth"]?.SetValue(0.05f);
+            _wadingEffect.Parameters["UnderwaterAlpha"]?.SetValue(0.0f);   // submerged pixels fully hidden
+            _wadingEffect.Parameters["FoamColor"]?.SetValue(new Vector3(0.88f, 0.94f, 0.96f));
         }
         catch (Exception ex) { _wadingEffect = null; DebugLog.Log("startup", $"Wading NOT loaded: {ex.Message}"); }
         try { _hdrIntensityEffect = Content.Load<Microsoft.Xna.Framework.Graphics.Effect>("HdrIntensity"); }

@@ -1,7 +1,9 @@
 #if OPENGL
 #define SV_POSITION POSITION
+#define VS_SHADERMODEL vs_3_0
 #define PS_SHADERMODEL ps_3_0
 #else
+#define VS_SHADERMODEL vs_4_0
 #define PS_SHADERMODEL ps_4_0
 #endif
 
@@ -13,12 +15,12 @@
 // — otherwise a sprite's transparent margins would write a rectangular depth "halo" that wrongly
 // occludes the fog. Drawn with ColorWriteChannels.None, so nothing is written to color; only depth.
 
-sampler2D SpriteTex : register(s0);
+sampler2D TextureSampler : register(s0);
 
-float4 PS(float4 color : COLOR0, float2 uv : TEXCOORD0) : COLOR0
+float4 PixelShaderFunction(float2 texCoord : TEXCOORD0) : COLOR0
 {
     // Textures are premultiplied; .a is the sprite coverage. Cut at 0.5 = the solid body only.
-    float a = tex2D(SpriteTex, uv).a;
+    float a = tex2D(TextureSampler, texCoord).a;
     clip(a - 0.5);
     return float4(0, 0, 0, 0);   // color discarded (ColorWriteChannels.None) — depth is the output
 }
@@ -27,6 +29,6 @@ technique DepthCutout
 {
     pass Pass1
     {
-        PixelShader = compile PS_SHADERMODEL PS();
+        PixelShader = compile PS_SHADERMODEL PixelShaderFunction();
     }
 }

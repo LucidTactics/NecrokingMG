@@ -43,32 +43,32 @@ partial class GameRenderer
         float outlineStrength = (outline.A / 255f) * (0.3f + 0.3f * pulse); // fade-in (alpha) + pulse
 
         var fx = _g._morphSdfEffect;
-        // Morph "loudness" knobs. The amoeba swell (Bulge) opens bridge gaps that get filled with
-        // green energy (GreenFill). Kept subtle so the reshape reads as a quiet dark-green wisp, not
-        // a bright glowing blob — the outline bloom (after the morph) is what announces the zombie.
-        const float morphBulge = 2.0f;      // was 4.0 — gentler swell => smaller green gaps
+        // The bridge-gap green energy is dimmed so the reshape reads as a quiet
+        // dark-green wisp, not a bright glowing blob — the outline bloom (after
+        // the morph) is what announces the zombie. Bulge/EdgeSoftness/OutlineWidth
+        // are constants, set once at load (Game1 LoadContent, MorphSDF block).
         const float morphGreenDim = 0.35f;  // dim the bridge-gap energy so it doesn't glow/bloom
         fx.Parameters["MorphT"]?.SetValue(morphT);
         fx.Parameters["MaxDist"]?.SetValue(md.MaxDist);
-        fx.Parameters["EdgeSoftness"]?.SetValue(1.5f);
-        fx.Parameters["Bulge"]?.SetValue(morphBulge);
         fx.Parameters["GreenFill"]?.SetValue(greenHue * morphGreenDim);
         fx.Parameters["OutlineColor"]?.SetValue(greenHue);
-        fx.Parameters["OutlineWidth"]?.SetValue(1.2f);
         fx.Parameters["OutlinePulse"]?.SetValue(outlineStrength);
 
         var pB = fx.Parameters["ColorB"];
         if (pB != null) pB.SetValue(md.ColorB);
-        else { _g.GraphicsDevice.Textures[1] = md.ColorB; _g.GraphicsDevice.SamplerStates[1] = SamplerState.LinearClamp; }
+        else _g.GraphicsDevice.Textures[1] = md.ColorB;
         var pS = fx.Parameters["SdfMap"];
         if (pS != null) pS.SetValue(md.Sdf);
-        else { _g.GraphicsDevice.Textures[2] = md.Sdf; _g.GraphicsDevice.SamplerStates[2] = SamplerState.LinearClamp; }
+        else _g.GraphicsDevice.Textures[2] = md.Sdf;
+        // Sampler states for s1/s2 must be set on BOTH binding paths — the .fx
+        // declares no sampler state, so these slots otherwise inherit whatever
+        // a previous pass left in the device (Point would turn the SDF blocky).
+        _g.GraphicsDevice.SamplerStates[1] = SamplerState.LinearClamp;
+        _g.GraphicsDevice.SamplerStates[2] = SamplerState.LinearClamp;
 
-        _g._spriteBatch.End();
-        _g._spriteBatch.Begin(SpriteSortMode.Immediate, BlendState.AlphaBlend, SamplerState.LinearClamp, null, null, fx);
+        Render.EffectBatch.BeginEffect(_g._spriteBatch, fx, BlendState.AlphaBlend, SamplerState.LinearClamp);
         _g._spriteBatch.Draw(md.ColorA, sp, null, tint, 0f, new Vector2(md.PivotX, md.PivotY), scale, SpriteEffects.None, 0f);
-        _g._spriteBatch.End();
-        _g._spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.LinearClamp);
+        Render.EffectBatch.EndEffectResumeScene(_g._spriteBatch);
         return true;
     }
 

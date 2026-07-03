@@ -96,8 +96,10 @@ partial class GameRenderer
         // Compute ambient color from weather (brightness + tint) for lit sprite tinting
         _g._ambientColor = _g._weatherRenderer.GetAmbientColor();
 
-        // AlphaBlend with premultiplied-alpha textures (loaded via TextureUtil.LoadPremultiplied)
-        _g._spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.LinearClamp);
+        // AlphaBlend with premultiplied-alpha textures (loaded via TextureUtil.LoadPremultiplied).
+        // The pass state is defined in EffectBatch (SceneBlend/SceneSampler) so effect draws
+        // that suspend this batch restore the exact same state.
+        Render.EffectBatch.BeginScenePass(_g._spriteBatch);
 
         if (!useBloom)
             _g.GraphicsDevice.Clear(clearColor);
@@ -437,7 +439,8 @@ partial class GameRenderer
         _g._camera.Position = realCameraPos;
 
         // --- HUD (drawn after bloom so it's not affected) ---
-        _g._spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.PointClamp);
+        // Pass state defined in EffectBatch (HudBlend/HudSampler) — see BeginScenePass note above.
+        Render.EffectBatch.BeginHudPass(_g._spriteBatch);
 
         // --- Weather effects (fog/haze/brightness — rain draws in scene pass) ---
         _g._weatherRenderer.DrawFog(screenW, screenH);

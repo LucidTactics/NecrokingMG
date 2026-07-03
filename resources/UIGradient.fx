@@ -29,20 +29,30 @@ float MidStop;
 float2 Center;
 float Radius;
 
+// s0 is reserved by SpriteBatch for the drawn texture; this shader is purely
+// procedural and intentionally never samples it.
 sampler2D TextureSampler : register(s0);
 
 float4 PixelShaderFunction(float2 texCoord : TEXCOORD0) : COLOR0
 {
+    // Premultiply the stops BEFORE interpolating: lerping straight-alpha colors
+    // toward a transparent stop drags RGB toward that stop's (invisible) RGB,
+    // producing dark fringes mid-fade. Lerping premultiplied colors is
+    // fringe-free, and for fully opaque stops the result is identical.
+    float4 pa = float4(ColorA.rgb * ColorA.a, ColorA.a);
+    float4 pb = float4(ColorB.rgb * ColorB.a, ColorB.a);
+    float4 pc = float4(ColorC.rgb * ColorC.a, ColorC.a);
+
     float4 c;
     if (Mode < 0.5)
     {
         // vertical linear: top -> bottom
-        c = lerp(ColorA, ColorB, saturate(texCoord.y));
+        c = lerp(pa, pb, saturate(texCoord.y));
     }
     else if (Mode < 1.5)
     {
         // horizontal linear: left -> right
-        c = lerp(ColorA, ColorB, saturate(texCoord.x));
+        c = lerp(pa, pb, saturate(texCoord.x));
     }
     else if (Mode < 2.5)
     {
@@ -50,15 +60,15 @@ float4 PixelShaderFunction(float2 texCoord : TEXCOORD0) : COLOR0
         float t = saturate(texCoord.y);
         float mid = clamp(MidStop, 0.001, 0.999);
         if (t < mid)
-            c = lerp(ColorA, ColorB, t / mid);
+            c = lerp(pa, pb, t / mid);
         else
-            c = lerp(ColorB, ColorC, (t - mid) / (1.0 - mid));
+            c = lerp(pb, pc, (t - mid) / (1.0 - mid));
     }
     else if (Mode < 3.5)
     {
         // radial 2-stop: A at center, B at Radius
         float d = length(texCoord - Center) / max(Radius, 0.001);
-        c = lerp(ColorA, ColorB, saturate(d));
+        c = lerp(pa, pb, saturate(d));
     }
     else
     {
@@ -67,12 +77,11 @@ float4 PixelShaderFunction(float2 texCoord : TEXCOORD0) : COLOR0
         float t = saturate(d);
         float mid = clamp(MidStop, 0.001, 0.999);
         if (t < mid)
-            c = lerp(ColorA, ColorB, t / mid);
+            c = lerp(pa, pb, t / mid);
         else
-            c = lerp(ColorB, ColorC, (t - mid) / (1.0 - mid));
+            c = lerp(pb, pc, (t - mid) / (1.0 - mid));
     }
-    // MonoGame SpriteBatch expects premultiplied alpha
-    c.rgb *= c.a;
+    // Already premultiplied (stops converted above).
     return c;
 }
 

@@ -415,10 +415,8 @@ public class WadingEditorPopup
         _wadingEffect.Parameters["WaterlineSlope"]?.SetValue(waterlineSlope);
         _wadingEffect.Parameters["TopWaterlineCenterV"]?.SetValue(topWaterlineCenterV);
         _wadingEffect.Parameters["TopWaterlineSlope"]?.SetValue(0f);
-        _wadingEffect.Parameters["FoamHalfWidth"]?.SetValue(0.05f);
-        _wadingEffect.Parameters["TopFoamHalfWidth"]?.SetValue(0.05f);
-        _wadingEffect.Parameters["UnderwaterAlpha"]?.SetValue(0f);
-        _wadingEffect.Parameters["FoamColor"]?.SetValue(new Vector3(0.88f, 0.94f, 0.96f));
+        // FoamHalfWidth/TopFoamHalfWidth/UnderwaterAlpha/FoamColor are constants,
+        // set once at load (Game1 LoadContent, Wading block) on this shared instance.
 
         // Switch batch state to the wading effect.
         sb.End();
