@@ -25,7 +25,12 @@ namespace Necroking.Game.Jobs;
 /// </summary>
 public class WorkerSystem
 {
-    private Simulation _sim = null!;
+    // Live-read the Simulation off Game1 instead of caching it: Game1._sim follows the
+    // per-game GameSession, recreated on every map load, so a cached ref would go stale after
+    // the first reload. Holding Game1 (a program-lifetime singleton) keeps this system following
+    // the live session. The Sim.Workers back-ref is re-installed on each new session (Game1.WireSimCallbacks).
+    private Game1 _game = null!;
+    private Simulation _sim => _game._sim;
     private EnvironmentSystem _env = null!;
     private GameData _gameData = null!;
     private readonly JobRegistry _jobs = new();
@@ -52,9 +57,9 @@ public class WorkerSystem
 
     public byte WorkerArchetype => Necroking.AI.ArchetypeRegistry.Worker;
 
-    public void Bind(Simulation sim, EnvironmentSystem env, GameData gameData)
+    public void Bind(Game1 game, EnvironmentSystem env, GameData gameData)
     {
-        _sim = sim; _env = env; _gameData = gameData;
+        _game = game; _env = env; _gameData = gameData;
     }
 
     /// <summary>(Re)load jobs.json and rebuild the runtime job list. Call on

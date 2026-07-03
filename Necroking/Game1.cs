@@ -1241,6 +1241,26 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         base.Initialize();
     }
 
+    /// <summary>
+    /// Install the Game1→Simulation back-references (delegates + the worker back-ref) onto
+    /// the CURRENT session's Sim. Must run after every session recreation, because <c>_sim</c>
+    /// forwards to <c>_session.Sim</c> and StartGame does <c>_session = new GameSession()</c> —
+    /// a fresh Simulation has these fields null, so reanimation / forager sounds / worker
+    /// dispatch would silently break on map load otherwise. Unlike a cached Simulation
+    /// reference (see LightningRenderer/ForagableSystem/WorkerSystem), these are one-way
+    /// writes onto the live Sim, so they must be re-applied rather than read live.
+    /// </summary>
+    private void WireSimCallbacks()
+    {
+        // Route sim-layer reanimations (potion / on-death / table-craft) through the composite
+        // reanimation pipeline, the same one spells use (headless sims fall back to a direct spawn).
+        _sim.ReanimHandler = OnSimReanimReady;
+        // Foraging boars reuse the same pickup pop when they swallow a mushroom.
+        _sim.OnForagerAte = OnForagerAte;
+        // Worker job system back-ref so the sim can reach the job brain.
+        _sim.Workers = _workerSystem;
+    }
+
     private void StartGame(string mapName = "default")
     {
         _gameWorldLoaded = false;
@@ -1264,6 +1284,10 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         // full copy (unbounded growth that OOM'd on maps with a large walls array).
         _session.Dispose();
         _session = new GameSession();
+        // The new session has a fresh Simulation — re-install the Game1→Sim back-references
+        // (reanim / forager / worker) that would otherwise be null on it. Live-reading
+        // consumers (lightning/foragable/worker systems) follow _sim automatically.
+        WireSimCallbacks();
         _envSystem.OnCollisionsDirty = null;
         // Reset the worker job system: reload jobs.json, wipe stockpiles + assignments
         // so a fresh game doesn't inherit the previous session's piles or priorities.
@@ -2304,9 +2328,6 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         catch (Exception ex) { _morphSdfEffect = null; DebugLog.Log("startup", $"MorphSDF not loaded: {ex.Message}"); }
         try { _depthCutoutEffect = Content.Load<Microsoft.Xna.Framework.Graphics.Effect>("DepthCutout"); }
         catch (Exception ex) { _depthCutoutEffect = null; DebugLog.Log("startup", $"DepthCutout not loaded: {ex.Message}"); }
-        // Route sim-layer reanimations (potion / on-death / table-craft) through the composite
-        // reanimation pipeline, the same one spells use (headless sims fall back to a direct spawn).
-        _sim.ReanimHandler = OnSimReanimReady;
         try {
             _wadingEffect = Content.Load<Microsoft.Xna.Framework.Graphics.Effect>("Wading");
             var pnames = string.Join(",", _wadingEffect.Parameters.Select(p => p.Name));
@@ -2357,7 +2378,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
 
         _grassRenderer.Init(GraphicsDevice);
         Necroking.Render.MagicPathIcons.SetDevice(GraphicsDevice);
-        _lightningRenderer.Init(_spriteBatch, _pixel, _glowTex, _sim, _camera, _renderer, GraphicsDevice, _hdrIntensityEffect);
+        _lightningRenderer.Init(_spriteBatch, _pixel, _glowTex, this, _camera, _renderer, GraphicsDevice, _hdrIntensityEffect);
         // When a ground vertex newly corrupts, fade nearby grass tufts toward
         // their CorruptedTint over GrassTuftRenderer.CorruptionFadeDuration.
         _groundSystem.OnVertexCorrupted = OnGroundVertexCorruptedForGrass;
@@ -2390,18 +2411,18 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
 
         // Wire the foragable subsystem now that all its dependencies exist.
         // Callbacks bridge back to Game1-private state (damage numbers, skill book).
-        _foragables.Bind(_envSystem, _sim, _camera, _renderer, _spriteBatch,
+        _foragables.Bind(_envSystem, this, _camera, _renderer, _spriteBatch,
             _inventory, _effectManager, _pickupSound,
             onPickup: OnForagablePickedUp,
             onLearnTrigger: OnForagableLearnTrigger);
 
-        // Foraging boars reuse the same pickup pop when they swallow a mushroom.
-        _sim.OnForagerAte = OnForagerAte;
-
         // Worker job system: brain that assigns grave workers to jobs.
-        _workerSystem.Bind(_sim, _envSystem, _gameData);
+        _workerSystem.Bind(this, _envSystem, _gameData);
         _workerSystem.Reset();
-        _sim.Workers = _workerSystem;
+
+        // Install the Game1→Simulation back-references onto the current Sim. Also called
+        // from StartGame after every session recreation (see WireSimCallbacks).
+        WireSimCallbacks();
         // Reanimate job spawns through the canonical reanim pipeline (green rise effect).
         _workerSystem.SpawnWorkerUnit = (defId, pos) =>
             QueueReanimRise(defId, -1, "", posOverride: pos);  // "" → the unit's own effect (else reanim_smoke)
