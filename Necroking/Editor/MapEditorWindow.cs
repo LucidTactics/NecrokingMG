@@ -552,7 +552,10 @@ public class MapEditorWindow
 
     public bool IsMouseOverPanel(int screenW, int screenH)
     {
-        var mouse = _eb._input.Mouse;
+        // MousePos, not the raw Mouse state — it's the canonical per-frame cursor
+        // (and the `mousepos` dev override patches only MousePos, so headless
+        // hover tests see the same panel gating a real mouse would).
+        var mouse = _eb._input.MousePos;
         int panelX = screenW - PanelWidth - 10;
         int panelY = 10;
         int panelH = screenH - 20;

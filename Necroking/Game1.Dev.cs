@@ -983,7 +983,8 @@ public partial class Game1 {
                var pt = new Microsoft.Xna.Framework.Vector2(DevFloat(c.Args[0]), DevFloat(c.Args[1]));
                int sw = GraphicsDevice.Viewport.Width, sh = GraphicsDevice.Viewport.Height;
                var cw = _camera.ScreenToWorld(pt, sw, sh);
-               int idx = _gameRenderer.PickHoveredObject(pt, cw);
+               // Mirror the live pick's gating: the map editor inspects every env object.
+               int idx = _gameRenderer.PickHoveredObject(pt, cw, _menuState == MenuState.MapEditor);
                string did = idx >= 0 ? _envSystem.Defs[_envSystem.GetObject(idx).DefIndex].Id : "(none)";
                c.Complete(Necroking.Dev.DevServer.OkRaw($"{{\"objIdx\":{idx},\"def\":{System.Text.Json.JsonSerializer.Serialize(did)},\"worldX\":{cw.X:F2},\"worldY\":{cw.Y:F2}}}"));
                break;

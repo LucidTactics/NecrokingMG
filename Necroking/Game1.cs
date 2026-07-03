@@ -2430,6 +2430,96 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         DebugLog.Log("startup", $"=== LoadContent complete ===");
     }
 
+    /// <summary>Read-only "what is under the cursor" picking that drives the debug
+    /// info tooltips (object/corpse/unit/belly). Sets the <c>_hovered*Idx</c> /
+    /// <c>_hoveredBellyUnitId</c> fields; renders nothing. Called from gameplay
+    /// Update and from the map editor (hover-inspect) — never runs gameplay input.
+    /// Uses <c>_input.MousePos</c> (not the raw MouseState) so picks stay anchored
+    /// to the same cursor the tooltips draw at, and the `mousepos` dev override
+    /// exercises the real pick path in headless runs.
+    /// Gameplay: each pick kind honours its Tooltips toggle. Map editor: all kinds
+    /// always pick (it's an inspection mode), including env objects that have no
+    /// gameplay tooltip (trees, rocks, props). Both suppress over UI — see
+    /// <see cref="HoverBlockedByUI"/> for what "over UI" means per mode.</summary>
+    private void UpdateHoverPicks(int screenW, int screenH)
+    {
+        bool inspectAll = _menuState == MenuState.MapEditor;
+        bool overUI = HoverBlockedByUI(screenW, screenH);
+        Vec2 mouseWorld = _camera.ScreenToWorld(_input.MousePos, screenW, screenH);
+        var tcfg = _gameData.Settings.Tooltips;
+
+        // --- Ground-object hover detection (buildings + foragable items;
+        //     every env object in the map editor) ---
+        _hoveredObjectIdx = -1;
+        if ((inspectAll || tcfg.ShowBuildingInfo || tcfg.ShowGroundItemInfo) && !overUI)
+            _hoveredObjectIdx = _gameRenderer.PickHoveredObject(_input.MousePos, mouseWorld, inspectAll);
+
+        // --- Corpse hover detection (for the reanimation info tooltip) ---
+        // Skips bodies that are mid-dissolve, consumed, bagged, or being carried.
+        _hoveredCorpseIdx = -1;
+        if ((inspectAll || tcfg.ShowCorpseInfo) && !overUI)
+        {
+            float pr = tcfg.GroundPickRadius;
+            float bcd = pr * pr;
+            var corpses = _sim.Corpses;
+            for (int ci = 0; ci < corpses.Count; ci++)
+            {
+                var cp = corpses[ci];
+                if (cp.ConsumedBySummon || cp.Dissolving || cp.Bagged
+                    || cp.DraggedByUnitID != GameConstants.InvalidUnit) continue;
+                float cdx = cp.Position.X - mouseWorld.X, cdy = cp.Position.Y - mouseWorld.Y;
+                float cd = cdx * cdx + cdy * cdy;
+                if (cd < bcd) { bcd = cd; _hoveredCorpseIdx = ci; }
+            }
+        }
+
+        // --- Hovered unit (for the outline-box highlight + info tooltip) ---
+        _hoveredUnitIdx = -1;
+        if ((inspectAll || tcfg.ShowHoverHighlight) && !overUI)
+        {
+            float pr = tcfg.HoverPickRadius;
+            float bud = pr * pr;
+            for (int i = 0; i < _sim.Units.Count; i++)
+            {
+                var u = _sim.Units[i];
+                if (!u.Alive) continue;
+                float udx = u.Position.X - mouseWorld.X, udy = u.Position.Y - mouseWorld.Y;
+                float d2 = udx * udx + udy * udy;
+                if (d2 < bud) { bud = d2; _hoveredUnitIdx = i; }
+            }
+        }
+
+        // Dev force-hover: pin the highlight to a chosen unit for headless variant testing.
+        if (_devForceHoverUnitId != uint.MaxValue)
+        {
+            _hoveredUnitIdx = -1;
+            for (int i = 0; i < _sim.Units.Count; i++)
+                if (_sim.Units[i].Alive && _sim.Units[i].Id == _devForceHoverUnitId) { _hoveredUnitIdx = i; break; }
+        }
+        // Dev force-hover an env object by index (headless variant testing has no real mouse).
+        if (_devForceHoverObjectIdx >= 0 && _devForceHoverObjectIdx < _envSystem.ObjectCount)
+            _hoveredObjectIdx = _devForceHoverObjectIdx;
+
+        // Forager (zombie boar) under the cursor? It suppresses the normal unit stat
+        // sheet and instead shows a corpse-pile-style belly tooltip (mushrooms eaten).
+        // Reuses the same hovered-unit pick that drives the outline highlight.
+        _hoveredBellyUnitId = uint.MaxValue;
+        if (_hoveredUnitIdx >= 0
+            && _gameData.Units.Get(_sim.Units[_hoveredUnitIdx].UnitDefID)?.Tags.Contains("forager") == true)
+            _hoveredBellyUnitId = _sim.Units[_hoveredUnitIdx].Id;
+    }
+
+    /// <summary>"Is the cursor over UI?" as the hover-inspect picks and the world-
+    /// hover readout should see it. Gameplay: the per-frame MouseOverUI flag.
+    /// Map editor: PopupManager keeps MouseOverUI true across the whole screen
+    /// (the editor layer is a full-screen popup — same trap the scroll-zoom gate
+    /// works around), so instead hover is blocked only while the cursor is on the
+    /// editor's side panel, or while a sub-popup (texture browser, env editor, …)
+    /// sits above the editor on the popup stack.</summary>
+    internal bool HoverBlockedByUI(int screenW, int screenH) => _menuState == MenuState.MapEditor
+        ? _popups.Top != _mapEditorLayer || _mapEditor.IsMouseOverPanel(screenW, screenH)
+        : _input.MouseOverUI;
+
     protected override void Update(GameTime gameTime)
     {
         // Drain dev-server commands first so they run even if the window is
@@ -3094,6 +3184,13 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             || _menuState == MenuState.MapEditor || _menuState == MenuState.UIEditor
             || _menuState == MenuState.ItemEditor;
 
+        // Map-editor hover-inspect: run ONLY the read-only debug-tooltip picks while
+        // editing the map so you can hover things to see what they are. None of the
+        // gameplay input below runs in editors. The HUD pass renders the resulting
+        // tooltips; UpdateHoverPicks handles the editor-specific "over UI" rules.
+        if (_menuState == MenuState.MapEditor)
+            UpdateHoverPicks(screenW, screenH);
+
         if (!_paused && !editorActive)
         {
             // --- Player input ---
@@ -3467,78 +3564,10 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             // Per-frame tether physics (haul corpses, slow the necromancer, kick up dust).
             UpdateTethers(dt);
 
-            // --- Ground-object hover detection (buildings + foragable items) ---
-            // Picks the nearest hoverable env object under the cursor for the HUD
-            // info tooltip. Each kind is gated by its own Tooltips toggle, and the
-            // whole thing is suppressed when the cursor is over UI (a popup, HUD
-            // bar, etc.) so tooltips don't show through panels.
-            _hoveredObjectIdx = -1;
-            {
-                var tcfg = _gameData.Settings.Tooltips;
-                if ((tcfg.ShowBuildingInfo || tcfg.ShowGroundItemInfo) && !_input.MouseOverUI)
-                    _hoveredObjectIdx = _gameRenderer.PickHoveredObject(new Vector2(mouse.X, mouse.Y), mouseWorld);
-            }
-
-            // --- Corpse hover detection (for the reanimation info tooltip) ---
-            // Picks the nearest corpse under the cursor. Same gating as ground
-            // objects: opt-in toggle + suppressed over UI. Skips bodies that are
-            // mid-dissolve, consumed, bagged, or being carried (not pickable).
-            _hoveredCorpseIdx = -1;
-            {
-                var tcfg = _gameData.Settings.Tooltips;
-                if (tcfg.ShowCorpseInfo && !_input.MouseOverUI)
-                {
-                    float pr = tcfg.GroundPickRadius;
-                    float bcd = pr * pr;
-                    var corpses = _sim.Corpses;
-                    for (int ci = 0; ci < corpses.Count; ci++)
-                    {
-                        var cp = corpses[ci];
-                        if (cp.ConsumedBySummon || cp.Dissolving || cp.Bagged
-                            || cp.DraggedByUnitID != GameConstants.InvalidUnit) continue;
-                        float cdx = cp.Position.X - mouseWorld.X, cdy = cp.Position.Y - mouseWorld.Y;
-                        float cd = cdx * cdx + cdy * cdy;
-                        if (cd < bcd) { bcd = cd; _hoveredCorpseIdx = ci; }
-                    }
-                }
-            }
-
-            // --- Hovered unit (for the outline-box highlight) ---
-            // Independent of the auto-stat sheet so the box works even when that's
-            // off. Same gating: opt-in toggle + suppressed over UI.
-            _hoveredUnitIdx = -1;
-            if (_gameData.Settings.Tooltips.ShowHoverHighlight && !_input.MouseOverUI)
-            {
-                float pr = _gameData.Settings.Tooltips.HoverPickRadius;
-                float bud = pr * pr;
-                for (int i = 0; i < _sim.Units.Count; i++)
-                {
-                    var u = _sim.Units[i];
-                    if (!u.Alive) continue;
-                    float udx = u.Position.X - mouseWorld.X, udy = u.Position.Y - mouseWorld.Y;
-                    float d2 = udx * udx + udy * udy;
-                    if (d2 < bud) { bud = d2; _hoveredUnitIdx = i; }
-                }
-            }
-
-            // Dev force-hover: pin the highlight to a chosen unit for headless variant testing.
-            if (_devForceHoverUnitId != uint.MaxValue)
-            {
-                _hoveredUnitIdx = -1;
-                for (int i = 0; i < _sim.Units.Count; i++)
-                    if (_sim.Units[i].Alive && _sim.Units[i].Id == _devForceHoverUnitId) { _hoveredUnitIdx = i; break; }
-            }
-            // Dev force-hover an env object by index (headless variant testing has no real mouse).
-            if (_devForceHoverObjectIdx >= 0 && _devForceHoverObjectIdx < _envSystem.ObjectCount)
-                _hoveredObjectIdx = _devForceHoverObjectIdx;
-
-            // Forager (zombie boar) under the cursor? It suppresses the normal unit stat
-            // sheet and instead shows a corpse-pile-style belly tooltip (mushrooms eaten).
-            // Reuses the same hovered-unit pick that drives the outline highlight.
-            _hoveredBellyUnitId = uint.MaxValue;
-            if (_hoveredUnitIdx >= 0
-                && _gameData.Units.Get(_sim.Units[_hoveredUnitIdx].UnitDefID)?.Tags.Contains("forager") == true)
-                _hoveredBellyUnitId = _sim.Units[_hoveredUnitIdx].Id;
+            // --- Read-only hover picks (drive the debug info tooltips) ---
+            // Object/corpse/unit/belly picks under the cursor. Shared with the
+            // map editor's hover-inspect (the MenuState.MapEditor branch above).
+            UpdateHoverPicks(screenW, screenH);
 
             // --- Unit auto-hover stat sheet (Factorio-style; opt-in via Tooltips) ---
             // The cursor "carries" the stat sheet: hover a unit to show it, move off

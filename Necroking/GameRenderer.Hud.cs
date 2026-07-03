@@ -548,9 +548,10 @@ partial class GameRenderer
         if (!_g._gameData.Settings.Tooltips.ShowWorldHoverDebug) return;
         if (_g._smallFont == null) return;
         // Only when actually hovering the world: no UI element under the cursor and
-        // no full-screen menu/editor open.
-        if (_g._input.MouseOverUI) return;
-        if (_g._menuState != MenuState.None) return;
+        // no full-screen menu open. The map editor is allowed — hover-inspect works
+        // there, and HoverBlockedByUI knows its panel/popup rules.
+        if (_g._menuState != MenuState.None && _g._menuState != MenuState.MapEditor) return;
+        if (_g.HoverBlockedByUI(screenW, screenH)) return;
 
         Vec2 mw = _g._camera.ScreenToWorld(_g._input.MousePos, screenW, screenH);
 
@@ -610,7 +611,7 @@ partial class GameRenderer
             _g._timeScale, _g._hoveredObjectIdx, _g._envSystem,
             DrawSpellCategoryIcon, BuildMenuOpenMask(), _g._paused, _g._hoveredCorpseIdx,
             _g._primarySlotFlash, _g._secondarySlotFlash, _g._hoveredBellyUnitId,
-            _g._hoveredUnitIdx);
+            _g._hoveredUnitIdx, _g._menuState == MenuState.MapEditor);
     }
 
     /// <summary>Bitmask of which core menus are open, by HUDRenderer.Menu* index,

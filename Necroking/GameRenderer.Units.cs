@@ -1028,8 +1028,10 @@ partial class GameRenderer
     /// <summary>Pick the hoverable env object under the cursor for the HUD info tooltip + highlight.
     /// Buildings use the drawn marker footprint (diamond/box/circle) as the hit area so the whole
     /// visible shape is pickable; foragables/ground items use a simple radius around their origin.
-    /// Returns the object index or -1. Per-kind gating still honours the Tooltips toggles.</summary>
-    internal int PickHoveredObject(Vector2 cursorScreen, Vec2 cursorWorld)
+    /// Returns the object index or -1. Per-kind gating honours the Tooltips toggles — unless
+    /// <paramref name="anyObject"/> is set (map-editor hover-inspect), which makes EVERY visible
+    /// env object pickable (trees, rocks, props included, via the radius pick).</summary>
+    internal int PickHoveredObject(Vector2 cursorScreen, Vec2 cursorWorld, bool anyObject = false)
     {
         var tcfg = _g._gameData.Settings.Tooltips;
         int buildingShape = System.Math.Clamp(tcfg.HoverHighlightBuilding, 0, 19) / 4;
@@ -1040,12 +1042,13 @@ partial class GameRenderer
         {
             var obj = _g._envSystem.GetObject(oi);
             var d = _g._envSystem.Defs[obj.DefIndex];
-            bool hoverable = (d.IsBuilding && tcfg.ShowBuildingInfo)
+            bool hoverable = anyObject
+                           || (d.IsBuilding && tcfg.ShowBuildingInfo)
                            || ((d.IsForagable || d.IsBerryBush) && tcfg.ShowGroundItemInfo);
             if (!hoverable) continue;
-            // Collected foragables are invisible while respawning — don't surface a tooltip for
-            // something that isn't drawn.
-            if (d.IsForagable && _g._envSystem.GetObjectRuntime(oi).Collected) continue;
+            // Collected foragables (respawning) and destroyed objects are invisible — don't
+            // surface a tooltip for something that isn't drawn.
+            if (!_g._envSystem.IsObjectVisible(oi)) continue;
 
             float score;
             if (d.IsBuilding)
