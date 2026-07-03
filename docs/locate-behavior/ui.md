@@ -64,23 +64,40 @@ cursor tooltip**:
 **Look/edit here when:** changing what the corpse-pile tooltip lists, or building a new
 belly/inventory list panel modeled on `PiledCorpseLines` + `DrawCursorTooltip`.
 
-## Unit hover picking + a "programmer/debug" cursor tooltip for units
+## Programmer/debug hover cursor tooltips (name / type / state on hover)
 
-There is **no reflection-based "programmer tooltip"** anywhere — the term is descriptive.
-The nearest existing pattern is the **cursor-tooltip family in `Necroking/Render/HUDRenderer.cs`**
-that already surfaces raw-ish data fields for non-unit things on hover:
+There is **no reflection-based "programmer tooltip"** — the term is descriptive. The actual
+"what is this object" hover readouts are the **cursor-tooltip family in
+`Necroking/Render/HUDRenderer.cs`** (each builds a `string[]`/`List<string>` and calls the
+shared `DrawCursorTooltip(lines, screenW, screenH)`):
 - `DrawObjectTooltip` (env objects/buildings: name/id, `HP:`, `Owner:`, process state, pile contents),
-  `DrawBellyTooltip` (forager unit belly), `DrawCorpseTooltip` (corpse name). All build a
-  `string[]`/`List<string>` and call the shared `DrawCursorTooltip(lines, screenW, screenH)`.
-- **Dispatch:** all three are called from `HUDRenderer.Draw` (~line 195-197). To add a
-  **unit** cursor tooltip, add a `DrawUnitTooltip(hoveredUnitIdx/Id, sim, gameData, …)` here
-  and call it in that same block; thread the hovered id through `GameRenderer.Hud.cs`
-  `DrawHUD` (~line 604) just like `_hoveredBellyUnitId` already is.
+  `DrawCorpseTooltip` (corpse name), `DrawBellyTooltip` (forager unit belly), and
+  **`DrawUnitTooltip`** (units — this now exists).
+- **Dispatch:** all four are called from `HUDRenderer.Draw` (the DrawHUD signature ~line 160-166,
+  calls ~line 195-198). Hovered ids are threaded through `GameRenderer.Hud.cs` `DrawHUD`
+  (~line 604) from the `_g._hovered*Idx` fields.
 
-**Hovered-unit index is already computed** in `Necroking/Game1.cs` (~line 3479):
-`_hoveredUnitIdx` (nearest live unit within `Tooltips.HoverPickRadius`, gated on
-`Settings.Tooltips.ShowHoverHighlight`). `_hoveredBellyUnitId` (~3508) is derived from it.
-Reuse `_hoveredUnitIdx` / add a `_hoveredUnitId` field the same way rather than re-scanning.
+**Hovered indices are computed in `Necroking/Game1.cs` Update (~lines 3470-3541):**
+`_hoveredObjectIdx`, `_hoveredCorpseIdx`, `_hoveredUnitIdx` (+ `_hoveredBellyUnitId` derived).
+Each pick is individually gated on its `Settings.Tooltips.*` toggle and `!_input.MouseOverUI`.
+
+**Editor-mode suppression (this is the gate to lift for map-editor hover-inspect):** the whole
+hover-picking block lives inside `if (!_paused && !editorActive)` at **`Game1.cs` ~line 3097**,
+where `editorActive` (~3093) is true for `MenuState.MapEditor` (and the other editors). So in
+the map editor every `_hovered*Idx` stays `-1` and no cursor tooltip is ever built. To inspect
+in the map editor you must run the hover-pick block when `_menuState == MenuState.MapEditor`
+(e.g. move the pick block out of the `!editorActive` guard, or add a MapEditor-specific pick).
+Second concern: the HUD (`DrawHUD`, `GameRenderer.Draw.cs` ~line 449) draws while
+`showUI`, but the **map editor draws on top afterward** (`GameRenderer.Draw.cs` ~line 534,
+`_mapEditor.Draw`), so tooltips would render *behind* the editor panel — draw them after the
+editor, or only over the non-panel world area. `_input.MouseOverUI` is also set by the editor
+panel, so a raw `!MouseOverUI` gate may already exclude the panel region (good) but you still
+need z-order over the world.
+
+**A separate "WORLD HOVER" debug readout** exists too: `GameRenderer.Hud.cs`
+`DrawWorldHoverInfo` (bottom-left box: death-fog level, world pos, fog cell). Gated on
+`Settings.Tooltips.ShowWorldHoverDebug` **and explicitly `if (_g._menuState != MenuState.None)
+return;`** (~line 553) — its own editor suppression, independent of the pick-block gate above.
 
 **Membership data for "in player horde / village / faction" (per unit):**
 - Faction: `Unit.Faction` (`Necroking/Movement/UnitSystem.cs`, enum `Faction { Undead, Human, Animal }`
