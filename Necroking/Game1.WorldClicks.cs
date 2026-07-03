@@ -193,6 +193,22 @@ public partial class Game1
         int enemyIdx = FindClosestEnemyToPoint(
             mouseWorld, _gameData.Settings.Tooltips.HoverPickRadius);
         if (enemyIdx < 0) return false;
+        // Reach gate: only swing when the enemy is actually within melee range
+        // of the necromancer (same SSOT formula the AI and sim use). The cursor
+        // pick above only checks proximity to the mouse, not to the caster —
+        // without this you could melee an enemy anywhere on screen. Out of reach
+        // still counts as hitting the enemy under the cursor, so consume the
+        // click and report "Too Far" (mirrors the pile-gather feedback) rather
+        // than swinging at empty air or falling through to something else.
+        float meleeRange = GameSystems.Combat.MeleeRangeUtil.Compute(
+            _sim.Units, necroIdx, enemyIdx, _gameData);
+        float dist = (_sim.Units[enemyIdx].Position - _sim.Units[necroIdx].Position).Length();
+        if (dist > meleeRange)
+        {
+            SpawnCastFailText(necroIdx, "Too Far");
+            _input.ConsumeMouse();
+            return true;
+        }
         // Busy mid-cast or mid-swing — the click still "hit" the enemy, so
         // consume it rather than let it fall through to anything else.
         if (_pendingCastAnim == null && _sim.Units[necroIdx].PendingAttack.IsNone)
