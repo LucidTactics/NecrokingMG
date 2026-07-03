@@ -110,8 +110,101 @@ def leading_command(cmd: str) -> str:
 # --- Rule: hand-rolled python syntax check -> `python -m py_compile` --------------
 _PY_LEAD = {"python", "python3", "py"}
 
+_PY_VALIDATE_MSG = (
+    "Validate Python syntax with `python -m py_compile <file>` — it's pre-approved "
+    "in .claude/settings.json, so it runs without prompting the user. Re-run as "
+    "`python -m py_compile <file>` instead of a hand-rolled ast.parse / py_compile "
+    "check."
+)
 
-def rule_python_validate(cmd: str):
+# python interpreter options that consume the FOLLOWING token as their value (so the
+# payload scan doesn't mistake the value for a script path).
+_PY_VALUE_OPTS = {"-W", "-X", "--check-hash-based-pycs"}
+
+
+def _py_payload(args):
+    """What a python invocation actually runs, from its own parsed args:
+    ('code', <-c payload>), ('module', <-m name>), ('script', path), or None
+    (REPL / stdin / unparseable). Attached forms (`-cCODE`, `-mmod`) included;
+    the scan stops at the first script path because later args belong to the script."""
+    i, n = 0, len(args)
+    while i < n:
+        a = args[i]
+        if a in _PY_VALUE_OPTS:
+            i += 2
+            continue
+        if a == "-c" or a == "-m":
+            kind = "code" if a == "-c" else "module"
+            return (kind, args[i + 1]) if i + 1 < n else None
+        if len(a) > 2 and not a.startswith("--") and a[1] in ("c", "m"):
+            return ("code" if a[1] == "c" else "module", a[2:])
+        if a == "-" or not a.startswith("-"):
+            return ("script", a)
+        i += 1                          # value-less flag (-u, -B, py's -3, …)
+    return None
+
+
+def _code_is_syntax_check(code: str) -> bool:
+    """True if `code` (a `python -c` payload) is a hand-rolled syntax/parse check.
+    Detected by parsing the code with Python's own ast module and looking for CALLS to
+    ast.parse / py_compile.compile (under any import alias) or the compile() builtin —
+    so `from ast import parse as p; p(src)` is caught, while a string literal that
+    merely CONTAINS "ast.parse(" is not. Unparseable code falls back to the old
+    substring heuristics (it can't run anyway, but stay conservative)."""
+    import ast as _ast
+    try:
+        tree = _ast.parse(code)
+    except SyntaxError:
+        return bool(re.search(r"\bast\.parse\(|\bpy_compile\b|(?<![\w.])compile\(", code))
+    # Names that resolve to the checking callables. Bare module names are pre-seeded so
+    # `py_compile.compile(x)` flags even when the import is elsewhere/implicit.
+    modules = {"ast": "ast", "py_compile": "py_compile"}   # alias -> module
+    checkers = set()                                       # from-imported callables
+    for node in _ast.walk(tree):
+        if isinstance(node, _ast.Import):
+            for a in node.names:
+                if a.name in ("ast", "py_compile"):
+                    modules[a.asname or a.name] = a.name
+        elif isinstance(node, _ast.ImportFrom):
+            if node.module in ("ast", "py_compile"):
+                for a in node.names:
+                    if (node.module, a.name) in (("ast", "parse"), ("py_compile", "compile")):
+                        checkers.add(a.asname or a.name)
+    for node in _ast.walk(tree):
+        if not isinstance(node, _ast.Call):
+            continue
+        f = node.func
+        if isinstance(f, _ast.Name) and (f.id in checkers or f.id == "compile"):
+            return True
+        if isinstance(f, _ast.Attribute) and isinstance(f.value, _ast.Name):
+            mod = modules.get(f.value.id)
+            if (mod == "ast" and f.attr == "parse") or (mod == "py_compile" and f.attr == "compile"):
+                return True
+    return False
+
+
+def rule_python_validate(cmd: str, commands=None):
+    """Steer hand-rolled Python syntax checks to the pre-approved `python -m py_compile`.
+
+    `commands` is the bash_ast per-invocation view when a real parse was available; the
+    check then inspects each python invocation's OWN `-c` payload / `-m` module, so text
+    in unrelated arguments can't trigger it. Heredoc bodies aren't argument words, so a
+    `python - <<EOF` check still goes through the whole-string fallback below."""
+    if commands is not None:
+        for c in commands:
+            if c.leader not in _PY_LEAD:
+                continue
+            payload = _py_payload(c.args)
+            if not payload:
+                continue
+            kind, val = payload
+            if kind == "code" and val and _code_is_syntax_check(val):
+                return _PY_VALIDATE_MSG
+            if kind == "module" and val == "ast":      # `python -m ast f.py` = parse check
+                return _PY_VALIDATE_MSG
+        if "<<" not in cmd:
+            return None
+        # fall through: heredoc body may hold the check
     if leading_command(cmd) not in _PY_LEAD:
         return None
     if re.search(r"-m\s+py_compile\b", cmd):
@@ -119,12 +212,7 @@ def rule_python_validate(cmd: str):
     if (re.search(r"\bast\.parse\(", cmd)
             or re.search(r"\bimport\s+py_compile\b", cmd)
             or re.search(r"\bpy_compile\.compile\(", cmd)):
-        return (
-            "Validate Python syntax with `python -m py_compile <file>` — it's pre-approved "
-            "in .claude/settings.json, so it runs without prompting the user. Re-run as "
-            "`python -m py_compile <file>` instead of a hand-rolled ast.parse / py_compile "
-            "check."
-        )
+        return _PY_VALIDATE_MSG
     return None
 
 
@@ -484,14 +572,6 @@ def evaluate(tool_name: str, tool_input: dict, mode: str, allow_rules, deny_rule
 
     cmd = str(tool_input.get("command", ""))
 
-    # Layer 1: special-case redirects (fire even when allow-listed) — e.g. a hand-rolled
-    # python syntax check is steered to `python -m py_compile`. Kept ahead of the
-    # read-only fast-allow below so these redirects win over a plain allow.
-    for rule in BASH_RULES:
-        reason = rule(cmd)
-        if reason:
-            return ("deny", reason)
-
     pd = project_dir or _project_dir()
 
     # bashlex-backed structural read of the command. When it parses (.ok), its segment
@@ -501,6 +581,16 @@ def evaluate(tool_name: str, tool_input: dict, mode: str, allow_rules, deny_rule
     # deny-by-default posture means a failed parse degrades to the old behaviour, never to
     # a wrong allow. See bash_ast.py.
     ast = bash_ast.analyze(cmd)
+
+    # Layer 1: special-case redirects (fire even when allow-listed) — e.g. a hand-rolled
+    # python syntax check is steered to `python -m py_compile`. Kept ahead of the
+    # read-only fast-allow below so these redirects win over a plain allow. Rules get the
+    # parsed per-invocation view when available (None on parse failure -> they fall back
+    # to their whole-string heuristics).
+    for rule in BASH_RULES:
+        reason = rule(cmd, ast.commands if ast.ok else None)
+        if reason:
+            return ("deny", reason)
 
     # Primary path is the AST: segments/commands are index-aligned, so command[i] is the
     # parsed (leader, args) view of segment[i]. When bashlex can't parse (arithmetic

@@ -39,6 +39,37 @@ fails += not check("py_compile -> allow", evb("python -m py_compile x.py"), "all
 fails += not check("ast.parse -> deny",
                    evb("python -c 'import ast; ast.parse(open(1).read())'"), "deny")
 
+
+# --- Python-validate rule: AST-of-the-code precision -------------------------------
+def evr(cmd, mode=""):
+    """(kind, reason) — for asserting WHICH deny fired."""
+    return g.evaluate("Bash", {"command": cmd}, mode, RULES, DENY)
+
+
+def is_redirect(res):
+    return res[0] == "deny" and "py_compile <file>" in (res[1] or "")
+
+
+fails += not check("aliased from-import parse -> redirect (regex missed this)",
+                   is_redirect(evr('python -c "from ast import parse as p; p(open(1).read())"')),
+                   True)
+fails += not check("aliased module import -> redirect",
+                   is_redirect(evr('python -c "import ast as a; a.parse(x)"')), True)
+fails += not check("compile() builtin -> redirect",
+                   is_redirect(evr("python -c \"compile(open('f').read(), 'f', 'exec')\"")),
+                   True)
+fails += not check("python -m ast -> redirect (module-level parse check)",
+                   is_redirect(evr("python -m ast tools/devctl.py")), True)
+fails += not check("heredoc syntax check -> redirect (body scanned via fallback)",
+                   is_redirect(evr("python - <<'EOF'\nimport ast\nast.parse(open('f').read())\nEOF")),
+                   True)
+fails += not check("ast.parse as a string literal -> generic deny, NOT the redirect",
+                   is_redirect(evr("python -c \"print('ast.parse(')\"")), False)
+fails += not check("ast.parse text in a script arg -> not the redirect (payload is the script)",
+                   is_redirect(evr("python tools/devctl.py 'ast.parse(x)'")), False)
+fails += not check("re.compile is not the compile builtin -> not the redirect",
+                   is_redirect(evr("python -c \"import re; re.compile('x')\"")), False)
+
 # --- Layer 2: allow-listed -> force-allow; otherwise deny -------------------------
 fails += not check("git status -> allow", evb("git status"), "allow")
 fails += not check("dotnet build -> allow", evb("dotnet build Necroking/Necroking.csproj"), "allow")
