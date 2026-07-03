@@ -630,12 +630,19 @@ partial class GameRenderer
         // Read from the generic ActionLabel field. Every archetype commit point
         // (standard melee, sweep, pounce, trample BeginCharge, ranged, spell cast)
         // writes this field — the renderer doesn't need to know about each path.
+        // Anchored at the unit's HEAD, centered — same placement convention as
+        // the cast-fail floating text (SpawnCastFailText). pixelH is the sprite's
+        // drawn height, so sp.Y - pixelH IS the head in screen space (the old
+        // fixed -55px offset landed mid-sprite and shifted with zoom).
         if (_g._sim.Units[i].ActionLabelTimer > 0f
             && !string.IsNullOrEmpty(_g._sim.Units[i].ActionLabel)
             && _g._smallFont != null)
         {
-            var weaponPos = new Vector2(sp.X + 10, sp.Y - 55);
-            DrawText(_g._smallFont, _g._sim.Units[i].ActionLabel, weaponPos, Color.FromNonPremultiplied(255, 220, 140, 220));
+            string label = _g._sim.Units[i].ActionLabel;
+            var size = _g._smallFont.MeasureString(label);
+            var labelPos = new Vector2((int)(sp.X - size.X * 0.5f),
+                                       (int)(sp.Y - pixelH - size.Y * 0.5f));
+            DrawText(_g._smallFont, label, labelPos, Color.FromNonPremultiplied(255, 220, 140, 220));
         }
 
     }

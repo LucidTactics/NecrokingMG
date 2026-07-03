@@ -43,13 +43,16 @@ public class ForagableSystem
     private float _autoPickupCooldown;
 
     // Long-lived references — set once via Bind().
-    private EnvironmentSystem _env = null!;
-    // Live-read the Simulation off Game1 instead of caching it: Game1._sim follows the
-    // per-game GameSession, recreated on every map load, so a cached ref would go stale after
-    // the first reload. Holding Game1 (a program-lifetime singleton) keeps this system following
-    // the live session. (_env is a persistent Game1 field, not session-owned, so it's a direct ref.)
+    // Live-read the Simulation AND EnvironmentSystem off Game1 instead of caching them:
+    // BOTH follow the per-game GameSession (Game1._sim / Game1._envSystem are forwarding
+    // properties), recreated on every map load, so a cached ref goes stale after the first
+    // reload. Holding Game1 (a program-lifetime singleton) keeps this system on the live
+    // session. The cached-_env variant of this bug shipped once: FindNearest scanned
+    // session #0's disposed env → mushroom/log pickup silently dead while the (live-env)
+    // renderer kept wiggling them.
     private Game1 _game = null!;
     private Simulation _sim => _game._sim;
+    private EnvironmentSystem _env => _game._envSystem;
     private Render.Camera25D _camera = null!;
     private Render.Renderer _renderer = null!;
     private SpriteBatch _spriteBatch = null!;
@@ -64,12 +67,12 @@ public class ForagableSystem
     private Action<string>? _onLearnTrigger;       // (resourceType) — Game1 runs skill-book triggers
 
     public void Bind(
-        EnvironmentSystem env, Game1 game,
+        Game1 game,
         Render.Camera25D camera, Render.Renderer renderer, SpriteBatch spriteBatch,
         Inventory inventory, EffectManager effects, SoundEffect? pickupSound,
         Action<Vec2, string>? onPickup, Action<string>? onLearnTrigger)
     {
-        _env = env; _game = game;
+        _game = game;
         _camera = camera; _renderer = renderer; _spriteBatch = spriteBatch;
         _inventory = inventory; _effects = effects; _pickupSound = pickupSound;
         _onPickup = onPickup;

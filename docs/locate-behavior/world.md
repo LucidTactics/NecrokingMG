@@ -36,10 +36,22 @@ Key API:
 ### `Necroking/Game/ForagableSystem.cs`  ← the PLAYER's foragable pickup mechanic
 Right-click / auto-pickup arc-flight that pulls a nearby foragable into the
 necromancer's inventory. `FindNearest(pos, maxDist)` (scans visible `IsForagable`
-objects), `StartCollection(objIdx)` (calls `_env.CollectForagable`, adds an in-flight
-arc), `Update`/`Draw`/`TickAutoPickup`. **This is the player path only** — a boar eating
+objects), `StartCollection(objIdx)` (calls `_env.CollectForagable`, caches the def
+texture, adds an in-flight arc), `Update` (arc tick → `Inventory.AddItem` + dust puff +
+pickup sound + learn-trigger on landing), `Draw` (renders the flying sprites),
+`TickAutoPickup`. Wired via `Bind(...)` from `Game1.LoadContent` — triggers:
+right-click (`Game1.WorldClicks.cs` `HandleWorldRightClick` step 1), auto-pickup
+(`Game1.cs` update loop via `TickAutoPickup`), crafting forwarding
+(`Game1.Crafting.cs`). **This is the player path only** — a boar eating
 a mushroom does NOT go through here; it calls `env.CollectForagable` directly. But
 `FindNearest`'s scan loop is the exact template for "find nearest mushroom near me."
+**Rendering split**: the *in-flight arc* is drawn by `ForagableSystem.Draw()` inside the
+`ForagablesDamageNumbers` CustomPass (`GameRenderer.Pipeline.cs`, top-of-scene alpha
+pass); the *mushroom/log sitting in the world* (plus proximity wiggle, scale pulse, and
+mouse-hover brighten) is drawn by `GameRenderer.Units.cs` `DrawSingleEnvObject` in the
+World SpriteQueuePass, gated by `IsObjectVisible`. The wiggle/hover effects are
+visual-only — pickup selection is proximity-based (`FindNearest` from the necromancer),
+not mouse-based.
 
 ### Other World/ files (context, not needed for this task)
 `Pathfinder.cs` (A*/steering used via `AIContext.Pathfinder`), `FlowField.cs`,
@@ -121,6 +133,16 @@ hold a `List<>` cheaply) — a count + a single def id covers the common case.
   scatter, drops) so make it the standard, not a one-off inside Simulation.
 
 ## Pitfalls / gotchas
+- **`EnvironmentSystem` is SESSION-OWNED — never cache it across map loads.**
+  `Game1._envSystem` is a forwarding property to `_session.Env` (`Game1.cs`), and
+  `StartGame` does `_session.Dispose(); _session = new GameSession()` — Dispose clears
+  the env's defs/objects AND disposes its textures. Any system that copies the
+  `EnvironmentSystem` reference at Bind/Init time (rather than live-reading
+  `_game._envSystem` each use, the pattern `_sim => _game._sim` established in commit
+  978ce27) ends up scanning a disposed, empty env after the first `StartGame`.
+  Historical trap: 978ce27 fixed the stale-`Simulation` half of this in
+  `ForagableSystem`/`WorkerSystem` but its comment wrongly claimed `_env` was
+  "a persistent Game1 field" — it is not.
 - **Don't `RemoveObject` a foragable to "eat" it** — use `CollectForagable(objIdx)`: it sets
   `Collected` + `RespawnTimer` and fires collision-dirty. `RemoveObject` shifts every later
   index and skips the respawn machinery.

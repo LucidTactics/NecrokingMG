@@ -1267,6 +1267,9 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         _effectManager.Clear();
         _tethers.Clear(); _tetherAnchor = null; _tetherDustAccum.Clear();
         _pendingProjectiles.Clear();
+        // Kill mid-flight pickup arcs — they hold textures from the session being
+        // disposed below and would deposit the old map's item into the new game.
+        _foragables.Clear();
         // Reset per-game skill book progress (learned set + event tally) so
         // returning to the main menu and starting a new game wipes prior unlocks.
         _skillBookState.InitFromDefs();
@@ -2407,13 +2410,13 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
 
         // Wire the foragable subsystem now that all its dependencies exist.
         // Callbacks bridge back to Game1-private state (damage numbers, skill book).
-        _foragables.Bind(_envSystem, this, _camera, _renderer, _spriteBatch,
+        _foragables.Bind(this, _camera, _renderer, _spriteBatch,
             _inventory, _effectManager, _pickupSound,
             onPickup: OnForagablePickedUp,
             onLearnTrigger: OnForagableLearnTrigger);
 
         // Worker job system: brain that assigns grave workers to jobs.
-        _workerSystem.Bind(this, _envSystem, _gameData);
+        _workerSystem.Bind(this, _gameData);
         _workerSystem.Reset();
 
         // Install the Game1→Simulation back-references onto the current Sim. Also called
@@ -4051,18 +4054,30 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     }
 
     /// <summary>Floating alert text above the necromancer — the shared channel for
-    /// every cast-failure reason ("Horde Full", "Out of Range", "Not Enough Mana",
-    /// "Need Death 1", …). Renders red via the DamageNumber alert path.</summary>
+    /// every cast-failure reason ("Too Far", "Horde Full", "Out of Range", "Not
+    /// Enough Mana", "Need Death 1", …). Renders red via the DamageNumber alert
+    /// path, starting at the unit's HEAD.</summary>
     private void SpawnCastFailText(int necroIdx, string message)
     {
         if (necroIdx < 0 || necroIdx >= _sim.Units.Count) return;
         if (string.IsNullOrEmpty(message)) return;
+
+        // Head height in DamageNumber.Height units: WorldToScreen lifts by
+        // Height*Zoom*YRatio, but sprites draw SpriteWorldHeight*SpriteScale*Zoom
+        // pixels tall (no YRatio) — so dividing by YRatio converts sprite height
+        // into lift units. The old constant 2f landed mid-sprite for this reason.
+        var unit = _sim.Units[necroIdx];
+        var udef = _gameData.Units.Get(unit.UnitDefID);
+        float spriteWorldH = (udef != null && udef.SpriteWorldHeight > 0 ? udef.SpriteWorldHeight : 1.8f)
+                             * unit.SpriteScale;
+        float headHeight = unit.Z + spriteWorldH / _camera.YRatio;
+
         _damageNumbers.Add(new DamageNumber
         {
-            WorldPos = _sim.Units[necroIdx].Position,
+            WorldPos = unit.Position,
             Damage = 0,
             Timer = 0f,
-            Height = 2f,
+            Height = headHeight,
             IsPoison = false,
             PickupText = message,
             IsAlert = true,
