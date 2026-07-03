@@ -15,6 +15,27 @@ public partial class Game1 {
                c.Complete(Necroking.Dev.DevServer.Ok("pong"));
                break;
 
+            // Memory diagnostic: managed heap before/after a forced compacting GC, plus
+            // process private/working set. If managedAfter stays high across map reloads it's
+            // a managed retained-reference leak; if managed stays flat but priv climbs it's a
+            // GPU/unmanaged (texture) leak.
+            case "mem": {
+               long managedBefore = GC.GetTotalMemory(false);
+               System.Runtime.GCSettings.LargeObjectHeapCompactionMode =
+                   System.Runtime.GCLargeObjectHeapCompactionMode.CompactOnce;
+               GC.Collect(2, GCCollectionMode.Forced, blocking: true, compacting: true);
+               GC.WaitForPendingFinalizers();
+               GC.Collect(2, GCCollectionMode.Forced, blocking: true, compacting: true);
+               long managedAfter = GC.GetTotalMemory(true);
+               using var proc = System.Diagnostics.Process.GetCurrentProcess();
+               c.Complete(Necroking.Dev.DevServer.Ok(
+                   $"managedBefore={managedBefore / (1024 * 1024)}MB " +
+                   $"managedAfter={managedAfter / (1024 * 1024)}MB " +
+                   $"priv={proc.PrivateMemorySize64 / (1024 * 1024)}MB " +
+                   $"ws={proc.WorkingSet64 / (1024 * 1024)}MB"));
+               break;
+            }
+
             case "state":
                c.Complete(Necroking.Dev.DevServer.OkRaw(BuildDevStateJson()));
                break;

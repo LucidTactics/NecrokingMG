@@ -593,7 +593,24 @@ public class EnvironmentSystem
     }
 
     public void ClearObjects() { _objects.Clear(); _objectRuntime.Clear(); _processState.Clear(); _tableState.Clear(); }
-    public void ClearDefs() { _defs.Clear(); _textures.Clear(); }
+    public void ClearDefs()
+    {
+        // Dispose owned GPU textures before dropping the lists — ClearDefs runs on every map
+        // load (StartGame), so a bare Clear() orphaned the entire env-texture set on the GPU
+        // each reload. Skip the shared _placeholderTexture (created once, reused across loads)
+        // and dedupe in case two defs alias the same Texture2D.
+        var disposed = new HashSet<Texture2D>();
+        foreach (var tex in _textures)
+            if (tex != null && tex != _placeholderTexture && disposed.Add(tex)) tex.Dispose();
+        _defs.Clear(); _textures.Clear();
+        // Corruption-harmonized variants are owned, per-def, and keyed by (now-invalid) def
+        // index — dispose the ones we created and drop the maps so they don't leak or mis-key.
+        foreach (var kv in _corruptHarmonized)
+            if (kv.Value != null && _corruptHarmonizedOwned.Contains(kv.Key) && disposed.Add(kv.Value))
+                kv.Value.Dispose();
+        _corruptHarmonized.Clear();
+        _corruptHarmonizedOwned.Clear();
+    }
     public int ObjectCount => _objects.Count;
     public PlacedObject GetObject(int idx) => _objects[idx];
     public PlacedObjectRuntime GetObjectRuntime(int idx) => _objectRuntime[idx];

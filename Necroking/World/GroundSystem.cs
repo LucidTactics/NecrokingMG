@@ -326,7 +326,17 @@ public class GroundSystem
         }
     }
 
-    public void ClearTypes() { _types.Clear(); _textures.Clear(); RebuildIsWaterCache(); RebuildTextureSlotCache(); }
+    public void ClearTypes()
+    {
+        // Dispose owned GPU textures before dropping the list — ClearTypes runs on every map
+        // load (StartGame), so a bare _textures.Clear() orphaned the whole ground-texture set
+        // on the GPU each reload. Multiple slots may reference the same Texture2D (types sharing
+        // a path), so dedupe to avoid a double-dispose.
+        var disposed = new HashSet<Texture2D>();
+        foreach (var tex in _textures)
+            if (tex != null && disposed.Add(tex)) tex.Dispose();
+        _types.Clear(); _textures.Clear(); RebuildIsWaterCache(); RebuildTextureSlotCache();
+    }
 
     public void LoadTextures(GraphicsDevice device)
     {

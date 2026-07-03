@@ -175,7 +175,16 @@ public static class AnimMetaLoader
             catch (Exception ex) { Core.DebugLog.Log("error", $"Failed to parse animation meta line in {path}: {ex.Message}"); }
         }
 
-        // Post-load validation: warn about categories where effect_time is critical but missing.
+        return true;
+    }
+
+    /// <summary>Warn about categories where effect_time is critical but missing. Call ONCE
+    /// after all meta files are loaded — never per-file inside Load(). Load() is invoked in a
+    /// loop (one call per sprite meta file), and scanning the whole accumulated dict on every
+    /// call is O(files × keys): it re-logged every missing key for every subsequent file,
+    /// dumping tens of thousands of duplicate lines into asset.log each launch.</summary>
+    public static void ValidateEffectTimes(Dictionary<string, AnimationMeta> output)
+    {
         foreach (var (key, meta) in output)
         {
             int dotIdx = key.IndexOf('.');
@@ -189,7 +198,5 @@ public static class AnimMetaLoader
                     $"will fall back to 50%-of-duration heuristic. Author should add effect_time_ms.");
             }
         }
-
-        return true;
     }
 }

@@ -47,6 +47,11 @@ public class WallSystem
     public List<WallVisualDef> Defs => _defs;
     public int DefCount => _defs.Count;
 
+    /// <summary>Drop all wall visual defs. Call before reloading a map — MapData.Load
+    /// appends the map's wall defs, and without clearing they accumulate across every
+    /// StartGame (a per-load leak that OOMs on maps with a large walls array).</summary>
+    public void ClearDefs() => _defs.Clear();
+
     public void Init(int w, int h, float worldMaxY)
     {
         _width = w;

@@ -1163,6 +1163,10 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             DebugLog.Log("startup",
                 $"  [BENCH] {b.label,-22} {b.sizeMb,3}MB tid={b.threadId,2} read={b.readMs,4}ms decode={b.decodeMs,5}ms pma={b.pmaMs,5}ms total={b.totalMs,5}ms {(b.cacheHit ? "CACHE-HIT" : b.skia ? "skia" : "stb")}{(b.wroteCache && !b.cacheHit ? " (wrote cache)" : "")}");
 
+        // Fresh asset log per process so it doesn't grow unbounded across runs (mirrors the
+        // perf-log Clear in Simulation.Init). Prior runs' AnimMeta/buff warnings are discarded.
+        DebugLog.Clear("asset");
+
         // Load animation metadata BEFORE GPU upload so the stride calibration pass
         // (which runs in the upload loop, while decoded pixels are still live) can
         // read per-gait cycle durations from animationmeta. Animationmeta is CPU-
@@ -1175,6 +1179,9 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             foreach (string extMeta in AtlasDefs.FindExtensionAnimMeta(name))
                 AnimMetaLoader.Load(extMeta, _animMeta);
         }
+        // Validate effect_time ONCE over the fully-loaded dict (not per-file inside Load — that
+        // was O(files × keys) and dumped tens of thousands of duplicate warnings into asset.log).
+        AnimMetaLoader.ValidateEffectTimes(_animMeta);
         LogTiming($"Animation metadata: {_animMeta.Count} entries");
         _sim.SetAnimMeta(_animMeta);
 
@@ -1263,6 +1270,10 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         _envSystem.ClearObjects();
         _envSystem.ClearDefs();
         _groundSystem.ClearTypes();
+        // Wall defs are appended by MapData.Load and were NEVER cleared, so every reload
+        // stacked another full copy on top of the previous map's — unbounded growth that
+        // OOMs on maps carrying a bloated walls array (the test map had 5.8M junk defs).
+        _wallSystem.ClearDefs();
         // Reset the worker job system: reload jobs.json, wipe stockpiles + assignments
         // so a fresh game doesn't inherit the previous session's piles or priorities.
         _workerSystem.Reset();
@@ -1273,7 +1284,11 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         _roadSystem.Init();
         _dayNightSystem.Init(_gameData.Settings.DayNight);
 
-        // Load flipbooks
+        // Load flipbooks. Dispose the previous load's flipbook textures first — StartGame runs
+        // on every map load and overwrote _flipbooks[fbId] without freeing the old Flipbook,
+        // leaking its Texture2D each reload.
+        foreach (var oldFb in _flipbooks.Values) oldFb.Unload();
+        _flipbooks.Clear();
         foreach (var fbId in _gameData.Flipbooks.GetIDs())
         {
             var fbDef = _gameData.Flipbooks.Get(fbId);
@@ -1388,6 +1403,10 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
 
         // Load textures
         _groundSystem.LoadTextures(GraphicsDevice);
+        // Dispose the previous map's vertex texture before replacing it — StartGame runs on
+        // every "load map", so without this each reload orphans a full map-sized texture on
+        // the GPU (every other CreateVertexMapTexture call site disposes first).
+        _groundVertexMapTex?.Dispose();
         _groundVertexMapTex = _groundSystem.CreateVertexMapTexture(GraphicsDevice);
         // Now that the ground types are populated, bake a wake-particle
         // gradient variant per unique water tint so swamp shallow water
