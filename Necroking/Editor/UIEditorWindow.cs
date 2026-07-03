@@ -283,11 +283,14 @@ public partial class UIEditorWindow : EditorBase
     private string _circularRefWarning = "";
     private float _circularRefWarningTimer;
 
-    // Color Harmonizer (CP04 / UI19)
+    // Color Harmonizer (CP04 / UI19). Live preview while picking comes from
+    // the per-change ApplyHarmonize calls in DrawLayerHarmonizeSection — the
+    // old 200ms regen throttle here was dead code (its timer was zeroed every
+    // frame before it could fire).
     private readonly ColorHarmonizer _harmonizer = new();
-    private float _harmonizeLiveTimer;          // throttle timer for live preview regeneration
-    private const float HarmonizeLiveInterval = 0.2f; // regenerate every 200ms
-    private enum HarmonizerTarget { ElementTint, WidgetChildTints, WidgetBgTint, WidgetStencilTint, WidgetFrameTint }
+    // Only WidgetChildTints is currently used; kept as an enum for when other
+    // harmonizer panels get wired up.
+    private enum HarmonizerTarget { WidgetChildTints }
     private HarmonizerTarget _harmonizerTarget;
 
     // Texture file browser (UI01)
@@ -1262,16 +1265,10 @@ public partial class UIEditorWindow : EditorBase
             }
         }
 
-        // Reset live harmonize timer when color picker is closed
-        if (!IsColorPickerOpen)
-            _harmonizeLiveTimer = 0;
-        else
-        {
-            _harmonizeLiveTimer = 0;
-        }
-
-        // Ctrl+S save (RI31: check IsTextInputActive to avoid triggering while typing)
-        if (!IsTextInputActive && _kb.IsKeyDown(Keys.LeftControl) && _kb.IsKeyDown(Keys.S) && _prevKb.IsKeyUp(Keys.S))
+        // Ctrl+S save (RI31: check IsKeyboardCaptured to avoid triggering while typing)
+        if (!IsKeyboardCaptured
+            && (_kb.IsKeyDown(Keys.LeftControl) || _kb.IsKeyDown(Keys.RightControl))
+            && _kb.IsKeyDown(Keys.S) && _prevKb.IsKeyUp(Keys.S))
         {
             SaveAll();
         }
@@ -1282,11 +1279,10 @@ public partial class UIEditorWindow : EditorBase
         CommitUndoState();
         HandleUndoRedo();
 
-        // Deferred rename rebake: id edits re-key the harmonized caches
-        // ("el:{id}" etc.), so the bakes must be regenerated — but ids commit
-        // per keystroke, so wait until the id field loses focus and rebake once.
-        if (_idRenameRebakePending
-            && !IsFieldActive("ns_id") && !IsFieldActive("el_id") && !IsFieldActive("wd_id"))
+        // Deferred rebake: id/path edits re-key or re-source the harmonized
+        // caches, but those fields commit per keystroke — wait until no text
+        // field is being typed, then rebake everything once.
+        if (_idRenameRebakePending && !IsTextInputActive)
         {
             _idRenameRebakePending = false;
             InvalidateAllDerivedCaches();
@@ -1397,25 +1393,14 @@ public partial class UIEditorWindow : EditorBase
                 break;
         }
 
-        // Draw color picker popup on top of everything
-        DrawColorPickerPopup();
-
-        // Live harmonize regen (after color picker has updated swatch values)
-        if (IsColorPickerOpen && _device != null)
-        {
-            _harmonizeLiveTimer += (float)gameTime.ElapsedGameTime.TotalSeconds;
-            if (_harmonizeLiveTimer >= HarmonizeLiveInterval)
-            {
-                _harmonizeLiveTimer = 0;
-                RegenerateAllHarmonized();
-            }
-        }
-
         // Draw texture file browser popup on top of everything
         _textureBrowser.Draw(this, screenW, screenH);
 
-        // Dropdown overlays (drawn last, on top of everything)
+        // Dropdown overlays, then the color picker — modal overlays render at
+        // the very top of the z-order (the picker previously drew UNDER the
+        // browser and dropdowns, inverted relative to every other editor).
         DrawDropdownOverlays();
+        DrawColorPickerPopup();
     }
 
     private void SaveAll()
@@ -1892,8 +1877,13 @@ public partial class UIEditorWindow : EditorBase
         if (def.Type == "image")
         {
             int browseBtnW = 60;
-            string displayPath = string.IsNullOrEmpty(def.ImagePath) ? "(none)" : def.ImagePath;
-            DrawTextField("el_img", "Image", displayPath, x + pad, curY, propW - browseBtnW - 4);
+            string newImg = DrawTextField("el_img", "Image", def.ImagePath ?? "", x + pad, curY, propW - browseBtnW - 4);
+            if (newImg != (def.ImagePath ?? ""))
+            {
+                def.ImagePath = newImg;
+                _unsavedChanges = true;
+                _idRenameRebakePending = true; // rebake harmonized caches once typing settles
+            }
             if (DrawButton("Browse", x + pad + propW - browseBtnW, curY, browseBtnW, 20))
             {
                 _textureBrowser.Open("assets", def.ImagePath,
@@ -2401,8 +2391,13 @@ public partial class UIEditorWindow : EditorBase
         // when an auto-size widget draws below its max height)
         {
             int browseBtnW = 60;
-            string bgDisplay = string.IsNullOrEmpty(def.BackgroundImagePath) ? "(none)" : def.BackgroundImagePath;
-            DrawTextField("wd_bgimg", "BG Img", bgDisplay, x + pad, curY, propW - browseBtnW - 4);
+            string newBgImg = DrawTextField("wd_bgimg", "BG Img", def.BackgroundImagePath ?? "", x + pad, curY, propW - browseBtnW - 4);
+            if (newBgImg != (def.BackgroundImagePath ?? ""))
+            {
+                def.BackgroundImagePath = newBgImg;
+                _unsavedChanges = true;
+                _idRenameRebakePending = true;
+            }
             if (DrawButton("Browse", x + pad + propW - browseBtnW, curY, browseBtnW, 20))
             {
                 _textureBrowser.Open("assets", def.BackgroundImagePath,
@@ -2430,8 +2425,13 @@ public partial class UIEditorWindow : EditorBase
         // Stencil image browse (alternative to nine-slice)
         {
             int browseBtnW = 60;
-            string stDisplay = string.IsNullOrEmpty(def.StencilImagePath) ? "(none)" : def.StencilImagePath;
-            DrawTextField("wd_stimg", "Stencil Img", stDisplay, x + pad, curY, propW - browseBtnW - 4);
+            string newStImg = DrawTextField("wd_stimg", "Stencil Img", def.StencilImagePath ?? "", x + pad, curY, propW - browseBtnW - 4);
+            if (newStImg != (def.StencilImagePath ?? ""))
+            {
+                def.StencilImagePath = newStImg;
+                _unsavedChanges = true;
+                _idRenameRebakePending = true;
+            }
             if (DrawButton("Browse", x + pad + propW - browseBtnW, curY, browseBtnW, 20))
             {
                 _textureBrowser.Open("assets", def.StencilImagePath,
@@ -2716,7 +2716,7 @@ public partial class UIEditorWindow : EditorBase
         {
             try
             {
-                DrawChildProperties(def.Children[_selectedChildIdx], x + pad, curY, propW);
+                curY += DrawChildProperties(def.Children[_selectedChildIdx], x + pad, curY, propW);
             }
             catch (Exception ex)
             {
@@ -2725,8 +2725,11 @@ public partial class UIEditorWindow : EditorBase
             }
         }
 
-        // Track content height for scroll clamping (generous for child props + harmonizers + overrides)
-        int contentBottom = curY + (int)_widgetDetailScroll - y + 800;
+        // Track content height for scroll clamping. DrawChildProperties now
+        // reports its real height (the old hardcoded +800 guess made long
+        // child-property blocks unreachable and short ones over-scrollable);
+        // the small pad covers trailing separators.
+        int contentBottom = curY + (int)_widgetDetailScroll - y + 24;
         _widgetDetailScroll = Math.Min(_widgetDetailScroll, Math.Max(0, contentBottom - h));
         SetPanelContentHeight("ui_widgetdetail", contentBottom);
 
@@ -2751,7 +2754,9 @@ public partial class UIEditorWindow : EditorBase
         }
     }
 
-    private void DrawChildProperties(UIEditorChildDef child, int x, int y, int propW)
+    /// <summary>Draws the selected child's property block. Returns the pixel
+    /// height consumed so the caller can compute the real scroll extent.</summary>
+    private int DrawChildProperties(UIEditorChildDef child, int x, int y, int propW)
     {
         int curY = y;
 
@@ -3117,6 +3122,8 @@ public partial class UIEditorWindow : EditorBase
                 }
             }
         }
+
+        return curY - y;
     }
 
     /// <summary>Draw a nullable int override field. Shows inherited value dimmed when null, green when overridden.</summary>

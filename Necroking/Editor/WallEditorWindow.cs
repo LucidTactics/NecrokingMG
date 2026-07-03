@@ -891,7 +891,7 @@ public class WallEditorWindow : Necroking.UI.IModalLayer
     {
         try
         {
-            string mapsDir = GamePaths.Resolve("assets/maps");
+            string mapsDir = GamePaths.Resolve(GamePaths.MapsDir);
             Directory.CreateDirectory(mapsDir);
             string path = Path.Combine(mapsDir, _mapFilename + "_walldefs.json");
 

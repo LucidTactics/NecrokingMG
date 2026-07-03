@@ -1356,7 +1356,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         // Zones are reloaded per map below; clear here so maps without a zones file
         // (empty_test, missing map) don't inherit the previous map's zones.
         _zoneSystem.Clear();
-        string mapPath = GamePaths.Resolve($"assets/maps/{mapName}.json");
+        string mapPath = GamePaths.Resolve($"{GamePaths.MapsDir}/{mapName}.json");
         if (mapName == "empty_test")
         {
             DebugLog.Log("startup", "Empty test map: synthesizing grass-only grid + debug necromancer");
@@ -1388,9 +1388,9 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             // the same JsonDocument it already parsed, avoiding a redundant disk+parse pass.
             MapData.Load(mapPath, _groundSystem, _envSystem, _wallSystem, placedUnits,
                 out var grassInfo);
-            MapData.LoadTriggers(GamePaths.Resolve($"assets/maps/{mapName}_triggers.json"), _triggerSystem);
-            MapData.LoadRoads(GamePaths.Resolve($"assets/maps/{mapName}_roads.json"), _roadSystem);
-            MapData.LoadZones(GamePaths.Resolve($"assets/maps/{mapName}_zones.json"), _zoneSystem);
+            MapData.LoadTriggers(GamePaths.Resolve($"{GamePaths.MapsDir}/{mapName}_triggers.json"), _triggerSystem);
+            MapData.LoadRoads(GamePaths.Resolve($"{GamePaths.MapsDir}/{mapName}_roads.json"), _roadSystem);
+            MapData.LoadZones(GamePaths.Resolve($"{GamePaths.MapsDir}/{mapName}_zones.json"), _zoneSystem);
             // Village structures are placed here (before the collision bake below) so their
             // buildings are stamped into the pathfinding grid alongside the map's own objects.
             LoadVillageStructures(mapName);

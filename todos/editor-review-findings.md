@@ -5,8 +5,33 @@ input consumption, dropdown/scroll display bugs, field focus consistency, previe
 architecture/helpers, misc bugs. All findings below were verified against actual code
 (file:line evidence was checked; four highest-impact claims re-verified by hand).
 
-Status: **findings only — no fixes applied yet.** Work top-down; the systemic fixes
-(S1–S4) each kill an entire class of window-level bugs.
+Status (2026-07-03, second pass): **most findings FIXED** — see the two commits
+"fix(editor): editor-wide review fixes". Implemented: S1 (overlay contract:
+BeginOverlay/EndOverlay in EditorBase, all popups migrated), S2 (clip-aware
+IsHovered/HitTest + map editor bar-region guards), S3 (reflection prefixes carry
+object identity; ClearActiveField on all selection paths incl. a map-editor
+selection-hash check), S4 (press-origin capture in DrawButton), S5
+(RegistryBase.CloneDef JSON round-trip + JsonClone.Deep; all clone fns replaced),
+SET1/SET2/SET3, U1–U10 (except U11 preview-hide hitboxes / U12 OverrideElement UI),
+SP1–SP4, UN1(partial: UN2 fixed; meta-shadowing UI not yet disabled), UN3, UN4,
+E1, E3, E5, W1, W3, W4, M1–M4, M7, M8 (junction drag no longer gated on road
+deselection), M9 (routed through GamePaths.MapsDir; location decision still open),
+M11, P1–P11, F1–F8, I1–I3. Framework fixes: color picker now blocks all layers,
+ESC scoping in picker, stale-dropdown auto-close, if-changed JSON saves.
+
+**Still open (lower priority):**
+- S6 adoption/consolidation: EditorWindow/EditorListState adoption, unit editor
+  sub-editor triplication (~800 lines), settings tabs → ReflectionPropertyRenderer,
+  SpellPreview/BuffPreview shared base, ColorPickerPopup → EditorBase widgets.
+- W2: wall-segment feature is still unloaded/unrendered — decide finish vs delete.
+- M5/M6: undo stack index staleness; full Update/Draw layout unification
+  (bar-region guard mitigates the worst hitbox drift, 1px drifts remain).
+- U11 (preview-hide hitbox divergence), U12 (OverrideElement invisible to UI),
+  SaveNineSlices strips runtime `harmonize` (latent).
+- UN1a: weapon-point fields still editable when animationmeta shadows them;
+  runtime yaw-key mismatch for new-scheme sprites unaddressed.
+- F9 clipboard support; SET4 scrollbar cosmetics; misc perf nits (per-frame
+  timing dict alloc, keystroke rebake churn).
 
 ---
 

@@ -1627,12 +1627,17 @@ public class UnitEditorWindow
         _ui.DrawText($"Frames: {frameCount}", new Vector2(x + 220, curY + 2), EditorBase.TextDim);
         curY += RowH;
 
-        // U08: Effect time field with override indicator
+        // U08: Effect time field with override indicator. The field is narrowed
+        // so the clear button doesn't sit ON TOP of the int field's "+" spinner
+        // (they both fired on one click). Decrementing below 0 with no override
+        // must not CREATE a 0ms override, so gate on newEffectTime >= 0 too.
         int effectTime = timing?.EffectTimeMs ?? -1;
         bool hasEffectOverride = effectTime >= 0;
         string effectLabel = hasEffectOverride ? "Effect ms *" : "Effect ms";
-        int newEffectTime = _ui.DrawIntField("at_effecttime", effectLabel, hasEffectOverride ? effectTime : 0, x, curY, w);
-        if (newEffectTime != (hasEffectOverride ? effectTime : 0))
+        int effFieldW = hasEffectOverride ? w - 28 : w;
+        int newEffectTime = _ui.DrawIntField("at_effecttime", effectLabel, hasEffectOverride ? effectTime : 0, x, curY, effFieldW);
+        if (newEffectTime != (hasEffectOverride ? effectTime : 0)
+            && (hasEffectOverride || newEffectTime > 0))
         {
             if (timing == null)
             {
@@ -1704,8 +1709,19 @@ public class UnitEditorWindow
         var anim = spriteData.GetAnim(_previewAnimName);
         if (anim == null) return 0;
 
-        int spriteAngle = (int)_previewAngle; // _previewAngle is already a sprite angle (30/60/300)
-        var kfs = anim.GetAngle(spriteAngle);
+        // Resolve through the controller like GetCurrentFrameIndex/StepAnim do:
+        // the raw editor angle (30/60/300) returns null on new-scheme atlases
+        // whose authored angles are 0/45/90/270/315 — which made this return 0
+        // and "Set All Frames" write a single-entry duration list.
+        float worldAngle = (int)_previewAngle switch
+        {
+            30  => 0f,
+            60  => 45f,
+            300 => 270f,
+            _   => _previewAngle
+        };
+        int resolvedAngle = Render.AnimController.ResolveAngleFor(anim, worldAngle, out _);
+        var kfs = anim.GetAngle(resolvedAngle);
         if (kfs == null || kfs.Count == 0)
             kfs = anim.GetAngle(30);
         return kfs?.Count ?? 0;

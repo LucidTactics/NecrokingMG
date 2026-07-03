@@ -96,7 +96,11 @@ public static class GamePaths
     public const string WeaponPointsJson = "data/weapon_points.json";
     public const string EnvDefsJson = "data/env_defs.json";
 
-    // --- Map files (now in data/maps/) ---
+    // --- Map files ---
+    // NOTE: maps live in assets/maps (gitignored, synced via the collaborator's
+    // Drive flow). A migration to data/maps was planned but never executed —
+    // if it happens, change ONLY these two constants; all load/save sites
+    // route through them.
     public const string DefaultMapJson = "assets/maps/default.json";
     public const string MapsDir = "assets/maps";
 

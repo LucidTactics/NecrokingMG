@@ -1704,9 +1704,16 @@ public class EditorBase
         if (_colorPickerDrawnThisFrame) return;
         _colorPickerDrawnThisFrame = true;
 
-        // Capture back buffer for eyedropper if dropper is active
+        // Capture back buffer for eyedropper if dropper is active. Flush the
+        // in-flight HUD batch first — GetBackBufferData only sees what has been
+        // RENDERED, and with the batch un-flushed the dropper sampled the bare
+        // world behind the editor panels instead of what's on screen.
         if (_colorPicker.IsDropperActive)
+        {
+            _sb.End();
             _colorPicker.CaptureBackBuffer(_gd);
+            _sb.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.PointClamp);
+        }
         _colorPicker.Draw();
     }
 

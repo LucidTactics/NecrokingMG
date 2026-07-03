@@ -102,11 +102,17 @@ public static class SettingsWeatherTab
         weather.TransitionSpeed = Math.Max(0f, weather.TransitionSpeed);
         curY += RowH;
 
-        // Get the active preset's effects for editing
+        // Get the active preset's effects for editing. If ActivePreset points
+        // at a preset that no longer exists, fall back to preset 0 — and FIX
+        // the stale id so the header shows the preset actually being edited
+        // (previously the header showed the stale id while every field below
+        // silently mutated preset 0).
         var presetDef = !string.IsNullOrEmpty(weather.ActivePreset) ? gameData.Weather.Get(weather.ActivePreset) : null;
         if (presetDef == null && presetIds.Count > 0)
         {
             presetDef = gameData.Weather.Get(presetIds[0]);
+            if (presetDef != null)
+                weather.ActivePreset = presetDef.Id;
         }
 
         if (presetDef == null)

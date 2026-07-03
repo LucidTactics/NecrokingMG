@@ -115,7 +115,15 @@ public class MapEditorWindow
     private bool _grassGridDebugEnabled;
 
     // Objects tab
-    public int SelectedEnvDefIndex = -1;
+    // "Nothing selected" sentinel for the Objects tab. Must NOT be -1: negative
+    // values encode group selection as -(groupIndex+1), so -1 IS "group 0" —
+    // the old -1 initial value made a fresh Objects tab place a random group-0
+    // object on the first world click.
+    public const int EnvNoSelection = int.MinValue;
+    public int SelectedEnvDefIndex = EnvNoSelection;
+    /// <summary>True when the Objects tab has a GROUP selected (encoded as
+    /// -(groupIndex+1)) as opposed to a specific def or nothing.</summary>
+    private bool IsEnvGroupSelected => SelectedEnvDefIndex < 0 && SelectedEnvDefIndex != EnvNoSelection;
     public int SelectedEnvCategory;
     private bool _objectPaintMode; // false = single, true = paint
     private float _envListScroll;
@@ -148,6 +156,8 @@ public class MapEditorWindow
     public int SelectedRoadIndex = -1;
     public int SelectedRoadPoint = -1;
     public int SelectedJunctionIndex = -1;
+    // Width applied to newly placed road control points (editable in-panel).
+    private float _roadNewPointWidth = 2f;
     private bool _roadPlaceMode;
     private bool _junctionPlaceMode; // RM15: click-to-place junction in viewport
     private int _draggingPoint = -1;
@@ -220,7 +230,6 @@ public class MapEditorWindow
     private readonly List<PlacedUnit> _placedUnits = new();
     private int _selectedUnitDefIdx = -1;
     private int _unitFactionFilter; // 0=All, 1=Undead, 2=Human, 3=Animal
-    private float _unitListScroll;
     private string _unitPatrolRoute = "";
     private bool _placeAsCorpse; // when set, the Units tool places dead bodies
     // Cached from Draw for hit-testing in Update
@@ -410,6 +419,18 @@ public class MapEditorWindow
         public override void Undo()
         {
             Units.Insert(RemovedIndex, Removed);
+        }
+    }
+
+    // "Clear All Units": restores the full pre-clear list contents.
+    private class UndoUnitClearAll : UndoAction
+    {
+        public List<PlacedUnit> Units = null!;
+        public List<PlacedUnit> Cleared = null!;
+        public override void Undo()
+        {
+            Units.Clear();
+            Units.AddRange(Cleared);
         }
     }
 
@@ -697,8 +718,11 @@ public class MapEditorWindow
         // Status timer
         if (_statusTimer > 0) _statusTimer -= dt;
 
-        // M31: Check if text field is being edited to suppress hotkeys
-        bool textEditing = _eb != null && _eb.IsTextInputActive;
+        // M31: Suppress hotkeys while the keyboard is captured by a UI element —
+        // an active text field, an open combo's filter box (typing a digit there
+        // used to switch tabs and strand an invisible open dropdown), or the
+        // color picker's value boxes.
+        bool textEditing = _eb != null && _eb.IsKeyboardCaptured;
 
         if (!textEditing)
         {
@@ -802,20 +826,43 @@ public class MapEditorWindow
             _tabScroll[tabIdx] = MathF.Max(0, _tabScroll[tabIdx] - scrollDelta * 0.2f);
         }
 
+        bool ctrlDown = kb.IsKeyDown(Keys.LeftControl) || kb.IsKeyDown(Keys.RightControl);
+
         // --- Save (Ctrl+S) — suppress when text field is active ---
-        if (!textEditing && kb.IsKeyDown(Keys.LeftControl) && kb.IsKeyDown(Keys.S) && _prevKb.IsKeyUp(Keys.S))
+        if (!textEditing && ctrlDown && kb.IsKeyDown(Keys.S) && _prevKb.IsKeyUp(Keys.S))
             SaveMap();
 
         // --- Load (Ctrl+L) — suppress when text field is active ---
-        if (!textEditing && kb.IsKeyDown(Keys.LeftControl) && kb.IsKeyDown(Keys.L) && _prevKb.IsKeyUp(Keys.L))
+        if (!textEditing && ctrlDown && kb.IsKeyDown(Keys.L) && _prevKb.IsKeyUp(Keys.L))
             LoadMap();
 
         // --- Undo (Ctrl+Z) — suppress when text field is active ---
-        if (!textEditing && kb.IsKeyDown(Keys.LeftControl) && kb.IsKeyDown(Keys.Z) && _prevKb.IsKeyUp(Keys.Z))
+        if (!textEditing && ctrlDown && kb.IsKeyDown(Keys.Z) && _prevKb.IsKeyUp(Keys.Z))
         {
             PerformUndo();
             _statusMessage = $"Undo ({_undoStack.Count} remaining)";
             _statusTimer = 1.5f;
+        }
+
+        // Snapshot selection state — if any per-tab updater changes it below,
+        // abandon the active text-field edit. The tabs reuse static field ids
+        // ("trig_name", "region_x", …) across objects, so an in-progress buffer
+        // would otherwise be committed into the NEWLY selected object during
+        // this same frame's Draw.
+        int selectionHashBefore = SelectionStateHash();
+
+        // Clicks on the tab rows or the bottom bar belong to those bars — never
+        // to tab content that happens to be SCROLLED underneath them. The
+        // hand-rolled per-tab hit-tests compute item Y from scroll offsets with
+        // no bounds check, so without this a click on "Save" could also add or
+        // delete an invisible list item, and the click that switches tabs was
+        // re-processed by the NEW tab's updater at a scrolled position.
+        bool rawLeftClick = leftClick;
+        {
+            int contentTopY = panelY + TabRowHeight * 2 + 2;
+            int bottomBarTop = panelY + (screenH - 20) - 92;
+            if (overPanel && (mouse.Y < contentTopY || mouse.Y >= bottomBarTop))
+                leftClick = false;
         }
 
         // --- Tab-specific update ---
@@ -850,15 +897,51 @@ public class MapEditorWindow
                 break;
         }
 
+        // Selection changed (list click, world click, tab hotkey…) → drop any
+        // in-progress text-field edit so it can't commit into the new object.
+        if (_eb != null && SelectionStateHash() != selectionHashBefore)
+            _eb.ClearActiveField();
+
         // Update texture file browser input
         _textureBrowser.Update(_eb, mouse, _prevMouse, kb, _prevKb);
 
         // Save / Load / Undo button clicks (mirrors the Draw-time button layout).
-        UpdateBottomBarClicks(leftClick, mouse, panelX, panelY, screenH);
+        // Uses the RAW click — the bar-region suppression above only applies to
+        // tab-content hit-tests.
+        UpdateBottomBarClicks(rawLeftClick, mouse, panelX, panelY, screenH);
 
         _prevMouse = mouse;
         _prevKb = kb;
         _prevScrollValue = mouse.ScrollWheelValue;
+    }
+
+    /// <summary>Combined hash of every per-tab selection index (plus the active
+    /// tab). Compared before/after the per-tab updaters: any change abandons the
+    /// active text-field edit, because the tabs reuse static field ids across
+    /// objects and a live buffer would commit into the newly selected object.</summary>
+    private int SelectionStateHash()
+    {
+        var h = new HashCode();
+        h.Add((int)ActiveTab);
+        h.Add(SelectedGroundType);
+        h.Add(SelectedGrassType);
+        h.Add(SelectedEnvDefIndex);
+        h.Add(SelectedWallType);
+        h.Add(SelectedRoadTexDef);
+        h.Add(SelectedRoadIndex);
+        h.Add(SelectedRoadPoint);
+        h.Add(SelectedJunctionIndex);
+        h.Add(SelectedRegionIndex);
+        h.Add(SelectedPatrolRoute);
+        h.Add(SelectedWaypointIndex);
+        h.Add(SelectedZoneIndex);
+        h.Add(SelectedTriggerDefIndex);
+        h.Add(SelectedTriggerInstanceIndex);
+        h.Add(SelectedConditionIndex);
+        h.Add(SelectedEffectIndex);
+        h.Add(_triggerSubSection);
+        h.Add(_selectedUnitDefIdx);
+        return h.ToHashCode();
     }
 
     /// <summary>
@@ -900,17 +983,51 @@ public class MapEditorWindow
     //  Draw
     // ========================================================================
 
+    /// <summary>World-space overlays for the active tab (brush cursor, debug
+    /// grids, road/region handles, zone shapes). MUST be called outside the tab
+    /// content scissor clip — the GPU discards anything drawn outside it.</summary>
+    private void DrawWorldOverlaysForActiveTab(int screenW, int screenH)
+    {
+        bool overPanel = IsMouseOverPanel(screenW, screenH);
+        switch (ActiveTab)
+        {
+            case MapEditorTab.Ground:
+            case MapEditorTab.Walls:
+                if (!overPanel) DrawBrushCursor(screenW, screenH);
+                break;
+            case MapEditorTab.Grass:
+                if (_grassGridDebugEnabled && _grassMap.Length > 0)
+                    DrawGrassGridOverlay(screenW, screenH);
+                if (!overPanel) DrawBrushCursor(screenW, screenH);
+                break;
+            case MapEditorTab.Objects:
+                if (_objectPaintMode && !overPanel) DrawBrushCursor(screenW, screenH);
+                if (_showCollisions) DrawCollisionOverlay(screenW, screenH);
+                break;
+            case MapEditorTab.Roads:
+                DrawRoadOverlays(screenW, screenH);
+                break;
+            case MapEditorTab.Regions:
+                DrawRegionOverlays(screenW, screenH);
+                break;
+            case MapEditorTab.Zones:
+                DrawZoneOverlays(screenW, screenH);
+                break;
+        }
+    }
+
     public void Draw(int screenW, int screenH)
     {
         int panelX = screenW - PanelWidth - 10;
         int panelY = 10;
         int panelH = screenH - 20;
 
-        // Zone world overlays draw first — under the panels — so a zone that scrolls
-        // behind the right panel doesn't paint over the editor UI. (They can't live in
-        // DrawZonesTab: the tab body is scissor-clipped to the panel rect.)
-        if (ActiveTab == MapEditorTab.Zones)
-            DrawZoneOverlays(screenW, screenH);
+        // World overlays draw first — under the panels and OUTSIDE the tab
+        // scissor clip. (They can't live in the tab draw methods: the tab body
+        // is scissor-clipped to the panel rect, which silently discarded the
+        // brush cursor / grass grid / collision ellipses / road & region
+        // overlays everywhere except inside the panel itself.)
+        DrawWorldOverlaysForActiveTab(screenW, screenH);
 
         // Panel background
         _spriteBatch.Draw(_pixel, new Rectangle(panelX, panelY, PanelWidth, panelH), BgColor);
@@ -1035,6 +1152,22 @@ public class MapEditorWindow
         if (_eb != null)
         {
             _textureBrowser.Draw(_eb, screenW, screenH);
+        }
+
+        // "Clear All Units" confirmation
+        if (_eb != null && _confirmClearUnits)
+        {
+            if (_eb.DrawConfirmDialog("Clear All Units",
+                $"Remove all {_placedUnits.Count} placed units? (Undoable with Ctrl+Z)",
+                ref _confirmClearUnits))
+            {
+                PushUndo(new UndoUnitClearAll
+                {
+                    Units = _placedUnits,
+                    Cleared = new List<PlacedUnit>(_placedUnits),
+                });
+                _placedUnits.Clear();
+            }
         }
 
         // Dropdown overlays (drawn last, on top of everything)
@@ -1379,10 +1512,7 @@ public class MapEditorWindow
         DrawSmallText($"Vertices: {_groundSystem.VertexW}x{_groundSystem.VertexH}", panelX + Margin, addY, TextDim);
         addY += LineHeight;
         DrawSmallText("Left-drag to paint | Q/E brush size", panelX + Margin, addY, TextDim);
-
-        // Brush cursor
-        if (!IsMouseOverPanel(screenW, screenH))
-            DrawBrushCursor(screenW, screenH);
+        // (Brush cursor drawn by DrawWorldOverlaysForActiveTab, outside the clip.)
     }
 
     // ====================================================================
@@ -1770,14 +1900,7 @@ public class MapEditorWindow
         DrawBrushSizeControl(panelX, y);
         y += ButtonHeight + 4;
         DrawSmallText($"Grass map: {_grassW}x{_grassH}", panelX + Margin, y, TextDim);
-
-        // Grass cell grid overlay (debug toggle in-panel)
-        if (_grassGridDebugEnabled && _grassMap.Length > 0)
-            DrawGrassGridOverlay(screenW, screenH);
-
-        // Brush cursor
-        if (!IsMouseOverPanel(screenW, screenH))
-            DrawBrushCursor(screenW, screenH);
+        // (Grid overlay + brush cursor drawn by DrawWorldOverlaysForActiveTab, outside the clip.)
     }
 
     /// <summary>
@@ -1970,8 +2093,9 @@ public class MapEditorWindow
         // M17: Resolve def index (may be a group selection using weighted random)
         int resolvedDefIndex = ResolveObjectDefIndex();
 
-        // Place/paint on world
-        if (resolvedDefIndex >= 0 || SelectedEnvDefIndex < -0) // allow group mode too
+        // Place/paint on world (specific def or group mode; never the
+        // no-selection sentinel)
+        if (resolvedDefIndex >= 0 || IsEnvGroupSelected)
         {
             if (!_objectPaintMode)
             {
@@ -2249,6 +2373,8 @@ public class MapEditorWindow
     /// </summary>
     private int ResolveObjectDefIndex()
     {
+        if (SelectedEnvDefIndex == EnvNoSelection)
+            return -1;
         if (SelectedEnvDefIndex >= 0)
             return SelectedEnvDefIndex;
 
@@ -2420,6 +2546,9 @@ public class MapEditorWindow
     private List<(int defIdx, float weight)> GetSelectedGroupMembers()
     {
         var result = new List<(int, float)>();
+
+        if (SelectedEnvDefIndex == EnvNoSelection)
+            return result;
 
         if (SelectedEnvDefIndex >= 0)
         {
@@ -2636,7 +2765,7 @@ public class MapEditorWindow
             }
 
             // Selected group info
-            if (SelectedEnvDefIndex < 0)
+            if (IsEnvGroupSelected)
             {
                 int groupIdx = -(SelectedEnvDefIndex + 1);
                 if (groupIdx >= 0 && groupIdx < groups.Count)
@@ -2707,13 +2836,8 @@ public class MapEditorWindow
             DrawBrushSizeControl(panelX, brushY);
         }
 
-        // Brush cursor for paint mode
-        if (_objectPaintMode && !IsMouseOverPanel(screenW, screenH))
-            DrawBrushCursor(screenW, screenH);
-
-        // RM08: Draw collision overlay with isometric ellipses
-        if (_showCollisions)
-            DrawCollisionOverlay(screenW, screenH);
+        // (Brush cursor + collision overlay drawn by DrawWorldOverlaysForActiveTab,
+        // outside the clip.)
     }
 
     /// <summary>Whether the "Show Collisions" checkbox is active on the Objects tab.</summary>
@@ -2984,10 +3108,7 @@ public class MapEditorWindow
         DrawSmallText($"Grid: {_wallSystem.Width}x{_wallSystem.Height} step={WallSystem.WallStep}", panelX + Margin, y, TextDim);
         y += LineHeight;
         DrawSmallText("Left-drag to paint, Right-drag to erase", panelX + Margin, y, TextDim);
-
-        // Brush cursor
-        if (!IsMouseOverPanel(screenW, screenH))
-            DrawBrushCursor(screenW, screenH);
+        // (Brush cursor drawn by DrawWorldOverlaysForActiveTab, outside the clip.)
     }
 
     /// <summary>Whether the "Show Debug" checkbox is active on the Walls tab.</summary>
@@ -3091,7 +3212,7 @@ public class MapEditorWindow
             if (_roadPlaceMode && leftClick && SelectedRoadIndex >= 0)
             {
                 var road = _roadSystem.GetRoad(SelectedRoadIndex);
-                road.Points.Add(new RoadControlPoint { Position = worldPos, Width = 2f });
+                road.Points.Add(new RoadControlPoint { Position = worldPos, Width = _roadNewPointWidth });
                 // TODO RM13: Call road system mesh rebuild once a cached mesh pipeline exists
             }
 
@@ -3119,8 +3240,11 @@ public class MapEditorWindow
             }
             if (leftUp) _draggingPoint = -1;
 
-            // Drag junctions
-            if (leftClick && !_roadPlaceMode && SelectedRoadIndex < 0)
+            // Drag junctions — regardless of road selection, as long as the
+            // click didn't grab a control point. (Requiring SelectedRoadIndex
+            // < 0 made junctions permanently un-draggable once a road had ever
+            // been selected, since nothing resets the road selection to -1.)
+            if (leftClick && !_roadPlaceMode && _draggingPoint < 0)
             {
                 float bestDist = 3f;
                 _draggingJunction = -1;
@@ -3254,8 +3378,11 @@ public class MapEditorWindow
                 if (MathF.Abs(newRimEdge - road.RimEdgeSoftness) > 0.001f) road.RimEdgeSoftness = newRimEdge;
                 y += FieldHeight + 2;
 
-                // New Point Width
-                float newPtW = _eb.DrawFloatField("road_newPtW", "New Pt Width", 2f, panelX + Margin, y, fw, 0.1f);
+                // New Point Width — persisted and actually used when placing
+                // points (the field previously passed a constant and discarded
+                // the return; new points were hardcoded to width 2).
+                float newPtW = _eb.DrawFloatField("road_newPtW", "New Pt Width", _roadNewPointWidth, panelX + Margin, y, fw, 0.1f);
+                _roadNewPointWidth = MathF.Max(0.1f, newPtW);
                 y += FieldHeight + 2;
 
                 DrawSmallText($"Points: {road.Points.Count}", panelX + Margin, y, TextDim); y += LineHeight;
@@ -3349,8 +3476,8 @@ public class MapEditorWindow
             y += FieldHeight + 2;
         }
 
-        // Draw road control points and junctions on world
-        DrawRoadOverlays(screenW, screenH);
+        // (Road control points/junction overlays drawn by
+        // DrawWorldOverlaysForActiveTab, outside the clip.)
     }
 
     private void DrawRoadOverlays(int screenW, int screenH)
@@ -3809,8 +3936,7 @@ public class MapEditorWindow
                 _regionPlaceWaypoint ? AccentColor : ButtonBg);
         }
 
-        // Draw region overlays on world
-        DrawRegionOverlays(screenW, screenH);
+        // (Region overlays drawn by DrawWorldOverlaysForActiveTab, outside the clip.)
     }
 
     private void DrawRegionOverlays(int screenW, int screenH)
@@ -4897,7 +5023,7 @@ public class MapEditorWindow
             if (relY >= 0 && relY < _unitListVisibleCount * _unitListItemH)
             {
                 int clickedVisIdx = relY / _unitListItemH;
-                int scrolledIdx = clickedVisIdx + (int)(_unitListScroll / _unitListItemH);
+                int scrolledIdx = clickedVisIdx + (int)(_tabScroll[(int)MapEditorTab.Units] / _unitListItemH);
                 if (scrolledIdx >= 0 && scrolledIdx < unitIds.Count)
                     _selectedUnitDefIdx = scrolledIdx;
             }
@@ -4956,12 +5082,20 @@ public class MapEditorWindow
         int w = PanelWidth - Margin * 2;
         int curY = contentY + 4;
 
-        // Faction filter
+        // Faction filter. Changing it re-filters the list, so the selection
+        // index (which points into the FILTERED list) must reset — otherwise it
+        // silently re-points at a different unit.
         string[] factionLabels = { "All", "Undead", "Human", "Animal" };
         string curFaction = factionLabels[_unitFactionFilter];
         string newFaction = _eb.DrawCombo("unit_faction", "Faction", curFaction, factionLabels, x, curY, w);
         for (int fi = 0; fi < factionLabels.Length; fi++)
-            if (factionLabels[fi] == newFaction) _unitFactionFilter = fi;
+        {
+            if (factionLabels[fi] == newFaction && fi != _unitFactionFilter)
+            {
+                _unitFactionFilter = fi;
+                _selectedUnitDefIdx = -1;
+            }
+        }
         curY += 24;
 
         // Patrol route selector
@@ -5001,6 +5135,11 @@ public class MapEditorWindow
         int itemH = 22;
         int visibleItems = listH / itemH;
 
+        // Clamp the wheel-driven scroll to the end of the list (the generic
+        // wheel handler in Update only clamps at 0).
+        float maxUnitScroll = Math.Max(0, (unitIds.Count - visibleItems) * itemH);
+        _tabScroll[(int)MapEditorTab.Units] = Math.Clamp(_tabScroll[(int)MapEditorTab.Units], 0, maxUnitScroll);
+
         // Cache for Update hit-testing
         _unitListDrawY = curY;
         _unitListItemH = itemH;
@@ -5009,7 +5148,7 @@ public class MapEditorWindow
         var mouse = _eb._input.Mouse;
         for (int i = 0; i < unitIds.Count && i < visibleItems; i++)
         {
-            int scrolledIdx = i + (int)(_unitListScroll / itemH);
+            int scrolledIdx = i + (int)(_tabScroll[(int)MapEditorTab.Units] / itemH);
             if (scrolledIdx >= unitIds.Count) break;
 
             var def = _gameData.Units.Get(unitIds[scrolledIdx]);
@@ -5033,10 +5172,15 @@ public class MapEditorWindow
         _eb.DrawText($"Placed: {_placedUnits.Count} units", new Vector2(x, curY + 4), EditorBase.TextBright);
         curY += 20;
 
-        // Clear all button
-        if (_eb.DrawButton("Clear All Units", x, curY, 120, 20, EditorBase.DangerColor))
-            _placedUnits.Clear();
+        // Clear all button — confirmed (one mis-click otherwise destroyed every
+        // placed unit on the map) and undoable.
+        if (_eb.DrawButton("Clear All Units", x, curY, 120, 20, EditorBase.DangerColor)
+            && _placedUnits.Count > 0)
+            _confirmClearUnits = true;
     }
+
+    // Confirm flag for "Clear All Units" (dialog drawn at end of Draw).
+    private bool _confirmClearUnits;
 
     private List<string> GetFilteredUnitIds()
     {
@@ -5106,7 +5250,7 @@ public class MapEditorWindow
     {
         try
         {
-            string mapsDir = GamePaths.Resolve("assets/maps");
+            string mapsDir = GamePaths.Resolve(GamePaths.MapsDir);
             Directory.CreateDirectory(mapsDir);
             string path = Path.Combine(mapsDir, _mapFilename + ".json");
 
@@ -5287,7 +5431,7 @@ public class MapEditorWindow
     {
         try
         {
-            string mapsDir = GamePaths.Resolve("assets/maps");
+            string mapsDir = GamePaths.Resolve(GamePaths.MapsDir);
             string mapPath = Path.Combine(mapsDir, _mapFilename + ".json");
             string triggerPath = Path.Combine(mapsDir, _mapFilename + "_triggers.json");
             string roadsPath = Path.Combine(mapsDir, _mapFilename + "_roads.json");

@@ -78,7 +78,7 @@ public partial class Game1
         _villageSystem.Clear();
         _pendingVillages = null;
 
-        string path = GamePaths.Resolve($"assets/maps/{mapName}_villages.json");
+        string path = GamePaths.Resolve($"{GamePaths.MapsDir}/{mapName}_villages.json");
         if (!File.Exists(path)) return;
 
         VillageFileDto? file;

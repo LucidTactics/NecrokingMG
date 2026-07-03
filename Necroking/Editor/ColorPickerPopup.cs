@@ -69,6 +69,7 @@ public class ColorPickerPopup : Necroking.UI.IModalLayer
     private int _editingField = -1;
     private string _editBuffer = "";
     private float _editCursorBlink;
+    private bool _editSelectAll; // select-all on focus; typing replaces
 
     public bool IsOpen => _isOpen || _dropperActive;
     public bool IsDropperActive => _dropperActive;
@@ -210,6 +211,20 @@ public class ColorPickerPopup : Necroking.UI.IModalLayer
     }
     public void OnCancel()
     {
+        // ESC scoping: cancel the innermost active mode first, not the whole
+        // popup — ESC during the eyedropper only cancels the dropper (matching
+        // the on-screen hint), and ESC while typing in a value box only exits
+        // the field. Only a bare ESC reverts and closes the popup.
+        if (_dropperActive)
+        {
+            _dropperActive = false;
+            return;
+        }
+        if (_editingField >= 0)
+        {
+            _editingField = -1;
+            return;
+        }
         // Matches the in-Draw ESC path: revert to the color the popup opened
         // with, flag cancelled so the caller's pollSelected loop sees it.
         if (!_isOpen) return;
@@ -358,11 +373,20 @@ public class ColorPickerPopup : Necroking.UI.IModalLayer
 
         if (isEditing)
         {
+            // Select-all highlight (matches EditorBase fields: first click
+            // selects everything, so typing replaces instead of appending)
+            if (_editSelectAll && _editBuffer.Length > 0)
+            {
+                float selW = MeasureText(_editBuffer).X;
+                DrawRect(new Rectangle(bounds.X + 3, bounds.Y + 2, (int)selW, bounds.Height - 4),
+                    new Color(80, 120, 200, 140));
+            }
+
             // Draw editable text
             DrawText(_editBuffer, new Vector2(bounds.X + 3, bounds.Y + 2), EditorBase.TextBright);
 
             // Blinking cursor
-            if ((int)(_editCursorBlink * 3) % 2 == 0)
+            if (!_editSelectAll && (int)(_editCursorBlink * 3) % 2 == 0)
             {
                 float cursorXPos = bounds.X + 3 + MeasureText(_editBuffer).X;
                 DrawRect(new Rectangle((int)cursorXPos, bounds.Y + 2, 1, bounds.Height - 4), Color.White);
@@ -375,7 +399,8 @@ public class ColorPickerPopup : Necroking.UI.IModalLayer
                 {
                     if (key == Keys.Back && _editBuffer.Length > 0)
                     {
-                        _editBuffer = _editBuffer[..^1];
+                        _editBuffer = _editSelectAll ? "" : _editBuffer[..^1];
+                        _editSelectAll = false;
                         _editCursorBlink = 0;
                     }
                     else if (key == Keys.Enter || key == Keys.Tab)
@@ -392,7 +417,8 @@ public class ColorPickerPopup : Necroking.UI.IModalLayer
                         char? c = KeyToNumericChar(key);
                         if (c.HasValue && _editBuffer.Length < 14)
                         {
-                            _editBuffer += c.Value;
+                            if (_editSelectAll) { _editBuffer = c.Value.ToString(); _editSelectAll = false; }
+                            else _editBuffer += c.Value;
                             _editCursorBlink = 0;
                         }
                     }
@@ -411,16 +437,33 @@ public class ColorPickerPopup : Necroking.UI.IModalLayer
             // Draw static value
             DrawText(displayText, new Vector2(bounds.X + 3, bounds.Y + 2), EditorBase.TextColor);
 
-            // Click to start editing
-            if (leftJustPressed && bounds.Contains(_mouse.X, _mouse.Y))
+            // Click to start editing — but never STEAL focus from another box
+            // that's mid-edit: boxes are processed in draw order, so a box
+            // drawn before the active one would grab the click before the
+            // active box's outside-click commit ran, silently discarding the
+            // typed value. The active box commits on this click; a second
+            // click then focuses this box.
+            if (leftJustPressed && bounds.Contains(_mouse.X, _mouse.Y) && _editingField < 0)
             {
                 _editingField = fieldId;
                 _editBuffer = displayText;
+                _editSelectAll = true;
                 _editCursorBlink = 0;
             }
         }
 
         return confirmed;
+    }
+
+    /// <summary>Clamp a popup origin so the popup stays on screen; when the
+    /// popup is LARGER than the screen, pin its far edge (bottom/right) so the
+    /// action buttons stay reachable. Never produces min &gt; max (Math.Clamp
+    /// throws on that, which crashed dragging on windows shorter than the popup).</summary>
+    private static int ClampPopupCoord(int value, int screenSize, int popupSize)
+    {
+        int max = screenSize - popupSize;
+        if (max < 0) return max; // popup larger than screen: pin far edge on-screen
+        return Math.Clamp(value, 0, max);
     }
 
     private static char? KeyToHexChar(Keys key)
@@ -481,9 +524,11 @@ public class ColorPickerPopup : Necroking.UI.IModalLayer
             {
                 _popupX = _mouse.X - _dragOffX;
                 _popupY = _mouse.Y - _dragOffY;
-                // Clamp to screen
-                _popupX = Math.Clamp(_popupX, 0, _screenW - PopupW);
-                _popupY = Math.Clamp(_popupY, 0, _screenH - popupH);
+                // Clamp to screen. On a window SHORTER than the popup, pin the
+                // bottom (OK/Cancel) on-screen — and never let min > max, which
+                // makes Math.Clamp throw.
+                _popupX = ClampPopupCoord(_popupX, _screenW, PopupW);
+                _popupY = ClampPopupCoord(_popupY, _screenH, popupH);
             }
             else
             {
@@ -656,9 +701,10 @@ public class ColorPickerPopup : Necroking.UI.IModalLayer
 
         int popupH = _hideIntensity ? PopupBaseH - 24 : PopupBaseH;
 
-        // Clamp popup position to screen bounds
-        _popupX = Math.Clamp(_popupX, 0, Math.Max(0, _screenW - PopupW));
-        _popupY = Math.Clamp(_popupY, 0, Math.Max(0, _screenH - popupH));
+        // Clamp popup position to screen bounds (bottom-pinned when the popup
+        // is taller than the window, so the OK/Cancel row stays reachable)
+        _popupX = ClampPopupCoord(_popupX, _screenW, PopupW);
+        _popupY = ClampPopupCoord(_popupY, _screenH, popupH);
 
         // Dark overlay behind popup
         DrawRect(new Rectangle(0, 0, _screenW, _screenH), new Color(0, 0, 0, 160));
