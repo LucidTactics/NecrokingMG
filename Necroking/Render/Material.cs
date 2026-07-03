@@ -24,6 +24,7 @@ public sealed class Material
     public readonly BlendState Blend;
     public readonly SamplerState Sampler;
     public readonly DepthStencilState DepthStencil;
+    public readonly RasterizerState? Rasterizer; // null → SpriteBatch default (CullCounterClockwise)
 
     /// <summary>Sampler states for texture slots >= 1, applied at every batch
     /// open. Slots >= 1 otherwise inherit whatever the last pass left in the
@@ -37,7 +38,7 @@ public sealed class Material
     public readonly bool RequiresPerDrawParams;
 
     internal Material(string name, ushort id, XnaEffect? effect, BlendState blend,
-        SamplerState sampler, DepthStencilState depthStencil,
+        SamplerState sampler, DepthStencilState depthStencil, RasterizerState? rasterizer,
         (int, SamplerState)[]? extraSamplerSlots, bool requiresPerDrawParams)
     {
         Name = name;
@@ -46,6 +47,7 @@ public sealed class Material
         Blend = blend;
         Sampler = sampler;
         DepthStencil = depthStencil;
+        Rasterizer = rasterizer;
         ExtraSamplerSlots = extraSamplerSlots ?? Array.Empty<(int, SamplerState)>();
         RequiresPerDrawParams = requiresPerDrawParams;
     }
@@ -55,7 +57,7 @@ public sealed class Material
     public void Begin(SpriteBatch batch)
     {
         batch.Begin(SpriteSortMode.Deferred, Blend, Sampler, DepthStencil,
-            RasterizerState.CullNone, Effect);
+            Rasterizer, Effect);
         foreach (var (slot, sampler) in ExtraSamplerSlots)
             batch.GraphicsDevice.SamplerStates[slot] = sampler;
     }
@@ -75,10 +77,11 @@ public static class Materials
 
     public static Material Register(string name, XnaEffect? effect, BlendState blend,
         SamplerState sampler, DepthStencilState? depthStencil = null,
+        RasterizerState? rasterizer = null,
         (int, SamplerState)[]? extraSamplerSlots = null, bool perDrawParams = false)
     {
         var m = new Material(name, (ushort)All.Count, effect, blend, sampler,
-            depthStencil ?? DepthStencilState.None, extraSamplerSlots, perDrawParams);
+            depthStencil ?? DepthStencilState.None, rasterizer, extraSamplerSlots, perDrawParams);
         All.Add(m);
         return m;
     }
@@ -159,6 +162,6 @@ public static class Materials
 
         if (depthCutout != null)
             DepthStamp = Register("DepthStamp", depthCutout, DepthOnlyBlend,
-                SamplerState.LinearClamp, DepthStencilState.Default);
+                SamplerState.LinearClamp, DepthStencilState.Default, RasterizerState.CullNone);
     }
 }

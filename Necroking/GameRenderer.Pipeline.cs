@@ -15,6 +15,7 @@ partial class GameRenderer
 {
     private RenderPipeline? _pipeline;
     private readonly RenderContext _ctx = new();
+    private SpriteQueuePass? _worldYSort;
 
     // Per-frame values shared between Scene OnBegin and OnEnd (computed once
     // per frame in Scene.OnBegin).
@@ -146,8 +147,17 @@ partial class GameRenderer
 
         scene.Add(new CustomPass("Corpses", ctx => DrawCorpses()));
 
-        // Units + Environment objects + Poison cloud puffs (merged Y-sort for correct depth)
-        scene.Add(new CustomPass("UnitsAndObjects", ctx => DrawUnitsAndObjects()));
+        // Units + Environment objects + particles (merged Y-sort for correct
+        // depth) — the first real SpriteQueuePass. Self-contained batches, so
+        // the shared world batch closes before it and resumes after.
+        scene.Add(new CustomPass("EndWorldBatchA", ctx => _g._spriteBatch.End()));
+        _worldYSort = new SpriteQueuePass("WorldYSort", Materials.Scene,
+            () => _g._camera.Position.Y, capacity: 1024)
+        {
+            Collect = CollectYSortItems,
+        };
+        scene.Add(_worldYSort);
+        scene.Add(new CustomPass("ResumeWorldBatch", ctx => Render.EffectBatch.BeginScenePass(_g._spriteBatch)));
 
         scene.Add(new CustomPass("ProjectilesRope", ctx =>
         {

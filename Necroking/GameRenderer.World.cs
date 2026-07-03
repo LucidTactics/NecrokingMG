@@ -310,16 +310,19 @@ partial class GameRenderer
         }
     }
 
-    /// <summary>Draw ground-layer objects (traps) — above dirt, below grass/units.</summary>
+    /// <summary>Draw ground-layer objects (traps) — above dirt, below grass/units.
+    /// Runs inside the shared scene batch, so the scope resumes Materials.Scene
+    /// if a trap ever routes through a Push/Pop material (e.g. dissolve).</summary>
     private void DrawGroundLayerObjects()
     {
+        var scope = new SpriteScope(_g._spriteBatch, Materials.Scene);
         for (int i = 0; i < _g._envSystem.ObjectCount; i++)
         {
             if (!_g._envSystem.IsObjectVisible(i)) continue;
             var obj = _g._envSystem.Objects[i];
             var def = _g._envSystem.Defs[obj.DefIndex];
             if (def.Category != "Traps") continue;
-            DrawSingleEnvObject(i);
+            DrawSingleEnvObject(scope, i);
         }
     }
 

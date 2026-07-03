@@ -70,18 +70,39 @@ partial class GameRenderer
         return result;
     }
 
-    private void DrawUnitsAndObjects()
+    // Cached submit callbacks for the Y-sort queue — one delegate instance per
+    // item kind, created lazily; per-item payload rides in the item's CbA/CbB
+    // ints so submission never allocates.
+    private SpriteDrawCallback? _cbUnit, _cbEnvObject, _cbCloudPuff, _cbGrassTuft,
+        _cbDeathFogPuff, _cbReanimDust;
+
+    /// <summary>Collect the depth-sorted world into the WorldYSort sprite queue —
+    /// units, env objects, and the particle types that interleave with them.
+    /// This is the old DrawUnitsAndObjects minus sorting and dispatch: the
+    /// queue's sort key (layer=YSort, depth=worldY, seq=submission order)
+    /// reproduces the DepthItem sort including its determinism tiebreaker.</summary>
+    private void CollectYSortItems(RenderContext ctx)
     {
+        _cbUnit ??= (in SpriteScope s, int a, int _) => DrawSingleUnit(s, a);
+        _cbEnvObject ??= (in SpriteScope s, int a, int _) => DrawSingleEnvObject(s, a);
+        _cbCloudPuff ??= (in SpriteScope _, int a, int b) => _g._poisonCloudRenderer.DrawSinglePuff(a, b);
+        // no_ground dev screenshots suppress grass too, for the clean
+        // black-background look scenarios produce.
+        _cbGrassTuft ??= (in SpriteScope _, int a, int _) =>
+        {
+            if (!_g._devShotNoGround) _g._grassRenderer.DrawSingleTuft(_g._spriteBatch, a);
+        };
+        _cbDeathFogPuff ??= (in SpriteScope _, int a, int _) => _g._deathFogRenderer.DrawSinglePuff(a);
+        _cbReanimDust ??= (in SpriteScope _, int a, int _) => _g._reanimFx.DrawSingleDust(a);
+
+        var queue = _worldYSort!;
+
         // View culling bounds
         float viewMargin = 20f;
         float viewLeft = _g._camera.Position.X - _g._renderer.ScreenW / (2f * _g._camera.Zoom) - viewMargin;
         float viewRight = _g._camera.Position.X + _g._renderer.ScreenW / (2f * _g._camera.Zoom) + viewMargin;
         float viewTop = _g._camera.Position.Y - _g._renderer.ScreenH / (_g._camera.Zoom * _g._camera.YRatio) - viewMargin;
         float viewBottom = _g._camera.Position.Y + _g._renderer.ScreenH / (_g._camera.Zoom * _g._camera.YRatio) + viewMargin;
-
-        // Build merged sort list (reuse cached list to avoid per-frame allocation)
-        _g._depthItems.Clear();
-        var items = _g._depthItems;
 
         // Add units (view-culled, same bounds as env objects below). Use RenderPos
         // so a lunging unit re-sorts against its neighbors naturally — a forward-
@@ -97,7 +118,7 @@ partial class GameRenderer
             var rp = _g._sim.Units[i].RenderPos;
             if (rp.X < viewLeft || rp.X > viewRight || rp.Y < viewTop || rp.Y > viewBottom)
                 continue;
-            items.Add(new Game1.DepthItem { Y = rp.Y, Type = Game1.DepthItemType.Unit, Index = i });
+            queue.SubmitCallback(WorldLayer.YSort, rp.Y, _cbUnit, i, 0);
         }
 
         // Add environment objects (with view culling, skip collected foragables, skip ground-layer objects)
@@ -111,8 +132,14 @@ partial class GameRenderer
                 continue;
             // Note: defs whose sprites failed to load get a placeholder texture in EnvironmentSystem,
             // so GetDefTexture is non-null and the object still appears.
-            items.Add(new Game1.DepthItem { Y = obj.Y, Type = Game1.DepthItemType.EnvObject, Index = i });
+            queue.SubmitCallback(WorldLayer.YSort, obj.Y, _cbEnvObject, i, 0);
         }
+
+        // Particle item kinds still assemble via the legacy DepthItem list —
+        // their renderers' internal culling/context logic stays untouched; the
+        // list is just a transfer vehicle into the queue now.
+        _g._depthItems.Clear();
+        var items = _g._depthItems;
 
         // Add poison cloud puffs
         _g._poisonCloudRenderer.SetContext(_g._spriteBatch, _g._glowTex, _g._camera, _g._renderer, _g._flipbooks, _g._gameTime);
@@ -142,38 +169,23 @@ partial class GameRenderer
                 _g._reanimFx.AddDustToDepthList(items);
         }
 
-        items.Sort();
-
-        foreach (var item in items)
+        for (int i = 0; i < items.Count; i++)
         {
-            switch (item.Type)
+            var item = items[i];
+            var cb = item.Type switch
             {
-                case Game1.DepthItemType.Unit:
-                    DrawSingleUnit(item.Index);
-                    break;
-                case Game1.DepthItemType.EnvObject:
-                    DrawSingleEnvObject(item.Index);
-                    break;
-                case Game1.DepthItemType.CloudPuff:
-                    _g._poisonCloudRenderer.DrawSinglePuff(item.Index, item.SubIndex);
-                    break;
-                case Game1.DepthItemType.GrassTuft:
-                    // no_ground dev screenshots suppress grass too, for the clean
-                    // black-background look scenarios produce.
-                    if (!_g._devShotNoGround)
-                        _g._grassRenderer.DrawSingleTuft(_g._spriteBatch, item.Index);
-                    break;
-                case Game1.DepthItemType.DeathFogPuff:
-                    _g._deathFogRenderer.DrawSinglePuff(item.Index);
-                    break;
-                case Game1.DepthItemType.ReanimDust:
-                    _g._reanimFx.DrawSingleDust(item.Index);
-                    break;
-            }
+                Game1.DepthItemType.CloudPuff => _cbCloudPuff,
+                Game1.DepthItemType.GrassTuft => _cbGrassTuft,
+                Game1.DepthItemType.DeathFogPuff => _cbDeathFogPuff,
+                Game1.DepthItemType.ReanimDust => _cbReanimDust,
+                _ => null,
+            };
+            if (cb != null)
+                queue.SubmitCallback(WorldLayer.YSort, item.Y, cb, item.Index, item.SubIndex);
         }
     }
 
-    private void DrawSingleUnit(int i)
+    private void DrawSingleUnit(in SpriteScope scope, int i)
     {
         // Fog of war: hide non-undead units (and their buffs, which draw inside
         // this method) when they're not currently in any undead's detection range.
@@ -397,7 +409,7 @@ partial class GameRenderer
             // top cut in the shader (used for 3/4 facings where the back-cut
             // line never read cleanly). Top slope always 0 — top cut only ever
             // applies on cardinal facings, which have no body-axis tilt.
-            DrawWadingSpriteFrame(atlas, fr.Frame.Value, sp, scale, fr.FlipX, tint,
+            DrawWadingSpriteFrame(scope, atlas, fr.Frame.Value, sp, scale, fr.FlipX, tint,
                                   wading.WaterlineV, wading.TopWaterlineV,
                                   wading.Slope, 0f);
 
@@ -493,7 +505,7 @@ partial class GameRenderer
 
     }
 
-    private void DrawSingleEnvObject(int i)
+    private void DrawSingleEnvObject(in SpriteScope scope, int i)
     {
         var obj = _g._envSystem.Objects[i];
         var def = _g._envSystem.Defs[obj.DefIndex];
@@ -503,9 +515,9 @@ partial class GameRenderer
         // both textures bound; existing path can't carry a second sampler. Falls
         // through to the regular draw if either texture / the shader is missing.
         var rtCheck = _g._envSystem.GetObjectRuntime(i);
-        if (rtCheck.CorruptionTime > 0f && !rtCheck.Corrupted && _g._dissolveTreeEffect != null)
+        if (rtCheck.CorruptionTime > 0f && !rtCheck.Corrupted && Materials.DissolveTree != null)
         {
-            if (DrawDissolvingTree(i, rtCheck)) return;
+            if (DrawDissolvingTree(scope, i, rtCheck)) return;
         }
 
         var tex = _g._envSystem.GetObjectTexture(i, out float alpha, out bool isOverride);
@@ -651,7 +663,7 @@ partial class GameRenderer
     /// true if drawn; false if the caller should fall back to the regular path
     /// (e.g. live or dead texture missing).
     /// </summary>
-    private bool DrawDissolvingTree(int i, in PlacedObjectRuntime rt)
+    private bool DrawDissolvingTree(in SpriteScope scope, int i, in PlacedObjectRuntime rt)
     {
         var obj = _g._envSystem.Objects[i];
         var def = _g._envSystem.Defs[obj.DefIndex];
@@ -689,14 +701,12 @@ partial class GameRenderer
         float v1 = (frame0.Y + frame0.Height) / (float)liveTex.Height;
         float threshold = MathHelper.Clamp(rt.CorruptionTime / MathF.Max(_g._deathFog.CorruptionTransitionDuration, 0.01f), 0f, 1f);
 
-        // Set effect parameters before Begin (they upload at Apply time).
+        // Set effect parameters before PushMaterial (they upload at Apply time).
+        // The s1 sampler state is declared on Materials.DissolveTree
+        // (ExtraSamplerSlots), applied at every batch open — no hand-set needed.
         var liveParam = _g._dissolveTreeEffect!.Parameters["LiveSampler"];
         if (liveParam != null) liveParam.SetValue(liveTex);
         else _g.GraphicsDevice.Textures[1] = liveTex;
-        // Sampler state for s1 must be set on BOTH binding paths — the .fx
-        // declares no sampler state, so the slot otherwise inherits whatever a
-        // previous pass left in the device (same rule as DrawReanimMorph).
-        _g.GraphicsDevice.SamplerStates[1] = SamplerState.LinearClamp;
         _g._dissolveTreeEffect.Parameters["LiveFrameUV"]?.SetValue(new Vector4(u0, v0, u1, v1));
         _g._dissolveTreeEffect.Parameters["Threshold"]?.SetValue(threshold);
         _g._dissolveTreeEffect.Parameters["Seed"]?.SetValue(obj.Seed);
@@ -712,12 +722,12 @@ partial class GameRenderer
             DebugLog.Log("startup", $"Dissolve frame: obj {i} ({def.Id}) t={threshold:F3} CorruptionTime={rt.CorruptionTime:F3} liveTex={liveTex.Width}x{liveTex.Height} deadTex={deadTex.Width}x{deadTex.Height}");
         }
 
-        // Flush the env-objects batch and run an Immediate batch with our effect.
-        Render.EffectBatch.BeginEffect(_g._spriteBatch, _g._dissolveTreeEffect,
-            BlendState.AlphaBlend, SamplerState.LinearClamp);
-        _g._spriteBatch.Draw(deadTex, screenPos, null, tint, 0f, origin, scale,
+        // Flush the open batch, draw through the dissolve material, resume —
+        // the scope computes the resume state (no more guessed restores).
+        scope.PushMaterial(Materials.DissolveTree!);
+        scope.Batch.Draw(deadTex, screenPos, null, tint, 0f, origin, scale,
             flipX ? SpriteEffects.FlipHorizontally : SpriteEffects.None, 0f);
-        Render.EffectBatch.EndEffectResumeScene(_g._spriteBatch);
+        scope.PopMaterial();
         return true;
     }
 
@@ -1304,14 +1314,15 @@ partial class GameRenderer
             new Vector2(len, thickness), SpriteEffects.None, 0f);
     }
 
-    private void DrawWadingSpriteFrame(SpriteAtlas atlas, SpriteFrame frame, Vector2 screenPos,
+    private void DrawWadingSpriteFrame(in SpriteScope scope, SpriteAtlas atlas, SpriteFrame frame,
+                                        Vector2 screenPos,
                                         float scale, bool flipX, Color tint,
                                         float waterlineCenterV, float topWaterlineCenterV,
                                         float waterlineSlope, float topWaterlineSlope)
     {
         var tex = atlas.GetTextureForFrame(frame);
         if (tex == null) return;
-        if (_g._wadingEffect == null)
+        if (_g._wadingEffect == null || Materials.Wading == null)
         {
             // Fall back to normal draw if shader missing — at least the unit is
             // still visible; just no waterline effect.
@@ -1345,16 +1356,15 @@ partial class GameRenderer
         // FoamHalfWidth/TopFoamHalfWidth/UnderwaterAlpha/FoamColor are constants,
         // set once at load (Game1 LoadContent, Wading block).
 
-        Render.EffectBatch.BeginEffect(_g._spriteBatch, _g._wadingEffect,
-            BlendState.AlphaBlend, SamplerState.LinearClamp, SpriteSortMode.Deferred);
+        scope.PushMaterial(Materials.Wading);
 
         float pivotX = flipX ? (1f - frame.PivotX) : frame.PivotX;
         float pivotY = 1f - frame.PivotY;
         var origin = new Vector2(pivotX * frame.Rect.Width, pivotY * frame.Rect.Height);
         var effects = flipX ? SpriteEffects.FlipHorizontally : SpriteEffects.None;
-        _g._spriteBatch.Draw(tex, screenPos, frame.Rect, tint, 0f, origin, scale, effects, 0f);
+        scope.Batch.Draw(tex, screenPos, frame.Rect, tint, 0f, origin, scale, effects, 0f);
 
-        Render.EffectBatch.EndEffectResumeScene(_g._spriteBatch);
+        scope.PopMaterial();
     }
 
     /// <summary>Multiply two colors component-wise (for ambient tinting).</summary>
