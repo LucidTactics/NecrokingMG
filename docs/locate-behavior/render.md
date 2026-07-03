@@ -7,119 +7,78 @@
 > sprite atlases & frames internals, `FontManager`, `HUDRenderer`, the spellbar widget,
 > `RuntimeWidgetRenderer`. Extend this file when you touch those.
 
-## The draw-dispatch pipeline (how a frame is rendered)
+## The render pipeline (REDESIGNED 2026-07-03 — submit → sort → batch)
 
-**There is no retained scene graph and no general draw queue.** Rendering is **imperative
-immediate-mode**: a fixed sequence of `SpriteBatch.Begin(...) / …Draw… / End()` blocks, run
-top-to-bottom once per frame. "Layering / passes" = the *order* of those blocks. The only
-queue-like structure is a per-frame **Y-sort depth list** used inside one pass (units + env
-objects + particles), not a global command buffer.
+**The frame is data.** Rendering is a `RenderPipeline` — an ordered `List<RenderPhase>`
+of named `RenderPass`es built once in `GameRenderer.Pipeline.cs::BuildPipeline()` and
+executed by `GameRenderer.Draw.cs::Draw()`. Full design + rationale:
+`todos/render-pipeline-design.md`. Core types (all in `Necroking/Render/`):
 
-### `Necroking/GameRenderer.cs` (+ `.Draw/.World/.Units/.Corpses/.Hud.cs`) — the whole pipeline
-`internal sealed partial class GameRenderer` was extracted from the old `Game1.Render.*`
-partials (2026-06-30). It holds a back-reference `_g` to `Game1` and reaches all state
-through it (`_g._spriteBatch`, `_g._camera`, `_g._sim`, `_g._bloom`, shader effects, etc.).
-`Game1.Draw(GameTime)` (MonoGame override) forwards to `GameRenderer.Draw`.
+- **`RenderPipeline.cs`** — `RenderContext` (per-frame device/batch/screen/GameTime),
+  `RenderPass` (name, `Enabled`, `LastMs`), `CustomPass` (imperative escape hatch),
+  `RenderPhase` (RT scope: `OnBegin`/`OnEnd` own target binds), `RenderPipeline`
+  (execute + `FindPass`). Dev command **`pass list|on <name>|off <name>`** toggles passes live.
+- **`Material.cs`** — `Material` = immutable effect+blend+sampler+depthstencil+rasterizer+
+  sortmode bundle, compared **by reference**; `ExtraSamplerSlots` declaratively fixes the
+  s1/s2 stale-sampler bug class. `Materials` is the canonical registry: `Scene` (AlphaBlend/
+  LinearClamp), `Hud` (PointClamp), `AdditiveShapes`, `FogWisp` (DepthRead), and effect-backed
+  `Wading`, `DissolveTree`, `HdrAlpha`/`HdrAdditive` (HdrSprite.fx **clones** with AlphaMode
+  baked at load — the per-frame flip is gone), `DepthStamp`, `MorphSdf`, `OutlineAlpha`/
+  `OutlineAdditive`; `MagicGlyph` (Immediate sort mode — per-glyph uniforms in one batch) and
+  `WeatherFog` register themselves in their renderers.
+- **`SpriteQueue.cs`** — `WorldLayer` enum (the layer bands: Roads…Corpses, FogBack, YSort,
+  Projectiles, Rain, FogWisps, EffectsHdrAlpha/Additive, AdditiveShapes…), packed ulong
+  `SortKey` (`[layer 8|depth24|materialId 16|seq 16]`, camera-relative quantized worldY),
+  `RenderItem` (sprite args or cached-delegate callback with int payloads + optional
+  `SetParams` + `LayerDepth`), `SpriteScope` (**`PushMaterial`/`PopMaterial`/`Suspend`/
+  `Resume`** — the ONLY sanctioned way to deviate from the pass material; restore state is
+  computed, never guessed — this replaced `EffectBatch.BeginEffect`, now deleted), and
+  `SpriteQueuePass` (Collect → sort → walk, `End/Begin` only on material change;
+  `LastItemCount`/`LastBatchCount` feed the perf readout).
 
-- **`GameRenderer.Draw.cs` → `Draw(GameTime)`** is the **top-level conductor / master pass
-  sequence**. Read this file first for the redesign — it *is* the pass list. Order:
-  main-menu/scenario-list early-outs → camera pixel-snap → fog-of-war RT update → **bloom
-  scene capture begin** (`_g._bloom.BeginScene`) → **scene pass begin** (`EffectBatch.BeginScenePass`)
-  → ground → roads → ground-layer objects (traps) → magic glyphs → walls → shadows → hover
-  ground markers → corpses → **units+objects+particles (Y-sorted)** → projectiles → soul orbs
-  → rope → rain → `End()` → HDR alpha-effect pass → HDR additive pass (effects, lightning,
-  reanim particles) → additive pass (energy columns) → god rays → alpha pass (foragables,
-  damage numbers) → **bloom composite** (`_g._bloom.EndScene`) → fog-of-war overlay → debug
-  overlays (each its own Begin/End) → **HUD pass** (`EffectBatch.BeginHudPass`) → weather fog
-  → HUD/spellbar → inventory/panels/editors/menus → perf readout → `End()` → screenshots →
-  `_g.BaseDraw` (Present). Each `--- Foo ---` comment block is effectively a pass.
-- **`GameRenderer.World.cs`** — ground (`DrawGround`/`DrawGroundShader`), `DrawRoads`,
-  `DrawWalls`, `DrawGroundLayerObjects`, `DrawProjectiles`/`DrawProjectilesHdr`,
-  `DrawEffectsFiltered(blendMode)` (iterates `_g._effectManager.Effects`), `DrawDamageNumbers`,
-  `DrawSoulOrbs`, `SpawnImpactEffects`.
-- **`GameRenderer.Units.cs`** — `DrawUnitsAndObjects` (builds + sorts the depth list, below),
-  `DrawSingleUnit`/`DrawSingleEnvObject`, low-level blits `DrawSpriteFrame`/`DrawWadingSpriteFrame`/
-  `DrawSpriteOutline`, hover-highlight/pick system.
-- **`GameRenderer.Corpses.cs`** — corpses, reanim morph, body-bags, carried visuals.
-- **`GameRenderer.Hud.cs`** — `DrawHUD`, menus, toasts, aggression bar, debug overlays.
+### The frame (phases/passes, in `GameRenderer.Pipeline.cs`)
+`Prep` (weather context, fog-of-war RT update) → `Scene` (OnBegin: bloom BeginScene/clear +
+ambient; passes: **Ground** CustomPass (self-contained batch, ground shader) →
+WadingSinkOffsets → **World** SpriteQueuePass (roads→traps→glyphs→walls→shadows→hover→
+corpses→**YSort**→projectiles/rope→rain as layer bands; collected in
+`GameRenderer.Units.cs::CollectWorldItems`) → FogDepthOccluders (unit silhouettes →
+depth buffer via `Materials.DepthStamp`; runs for DepthSortedFog OR active ground fog) →
+SpawnImpactEffects → **HdrEffects** SpriteQueuePass (fog wisps, HDR alpha/additive,
+additive shapes; `CollectFxItems`) → GodRays → ForagablesDamageNumbers; OnEnd: bloom
+EndScene composite) → `Post` (fog-of-war overlay, debug overlays) → `Hud` (camera
+restore, weather fog, HUD/editors).
 
-### Draw submission — immediate-mode, plus one Y-sort depth list
-- **Every visible thing is drawn by an immediate `_g._spriteBatch.Draw(...)` call** inside
-  whichever Begin/End block owns that layer. Sprite blits are centralized in
-  `Render/Renderer.cs` (`Renderer.DrawSprite(batch, atlas, frame, …)`,
-  `DrawFlipbookFrame`, and `WorldToScreen`/`WorldToScreenPx` for coordinate conversion) —
-  callers pass an already-`Begin`-ed batch; `Renderer` never manages batch state.
-- **The one queue:** `GameRenderer.Units.cs` `DrawUnitsAndObjects()` builds
-  `_g._depthItems` (`List<DepthItem>`, reused each frame; `DepthItem`/`DepthItemType` defined
-  in `Game1.cs` ~line 4130) from units, env objects, poison-cloud puffs, grass tufts,
-  death-fog puffs, reanim dust — each tagged with a world `Y` and a type — then
-  `items.Sort()` (Y-ascending painter's order) and a `switch` dispatches each back to its
-  `DrawSingleX`. This is the **only** place draw order is data-driven rather than hardcoded;
-  it exists so particles/grass interleave with units by depth. A redesign's "transparent /
-  sorted pass" is the natural generalization of this list.
+### Submission — the Y-sort queue
+Units/env objects submit as **cached-delegate callback items** (`_cbUnit` etc. — a unit is
+~5–30 ordered sub-draws sharing one depth slot); puffs/tufts/dust renderers still fill the
+legacy `_depthItems` list which transfers into the queue (their internals untouched).
+Equal-depth determinism = the key's sequence bits (submission order). Composite draws that
+need another shader use `scope.PushMaterial(Materials.X)` / `PopMaterial()` (wading,
+dissolve, morph, outlines, glyphs) or `scope.Suspend()/Resume()` for raw-device work
+(shadow quads, reanim sorted particles). Sprite blits still go through
+`Renderer.DrawSprite`; `Renderer` never manages batch state.
 
-### Shader / blend / sampler selection — `Necroking/Render/EffectBatch.cs` (the canonical state hub)
-This is the **"batch-state centralization"** (commit `d626422`) and the closest thing to a
-"render-pass state" abstraction today.
-- `EffectBatch` holds the **canonical pass states as static fields** — `SceneBlend`/`SceneSampler`
-  (AlphaBlend + LinearClamp, premultiplied-alpha) and `HudBlend`/`HudSampler` (AlphaBlend +
-  PointClamp). `BeginScenePass(batch)` / `BeginHudPass(batch)` are the *definition* of those
-  passes, not copies — `Draw.cs` opens both through them.
-- **The flush-with-shader pattern lives here:** `BeginEffect(batch, effect, blend, sampler,
-  sortMode)` does `batch.End(); batch.Begin(sortMode, blend, sampler, null, null, effect)` —
-  i.e. "flush everything queued so far, then start a new batch bound to this `.fx` Effect and
-  these states." Paired restores are `EndEffectResumeScene(batch)` / `EndEffectResumeHud(batch)`
-  (`End()` then re-`Begin` the canonical pass). The ground shader uses exactly this:
-  `DrawGroundShader` calls `EffectBatch.BeginEffect(_g._spriteBatch, _g._groundEffect,
-  BlendState.Opaque, SamplerState.PointClamp)` → one `Draw` of the vertex-map texture →
-  `EndEffectResumeScene`. **Why it's centralized:** effect sites used to hand-roll
-  End/Begin/restore and two shipped bugs came from guessing the restore state wrong (a
-  PointClamp restore leaking into the LinearClamp scene pass). Change a pass's blend/sampler
-  here and every suspend site follows.
-- **Direct Begin with an effect** (bypassing `EffectBatch`) is still used where the pass owns
-  its own batch: the HDR effect passes in `Draw.cs` do `_g._spriteBatch.Begin(Deferred,
-  BlendState.Additive|AlphaBlend, LinearClamp, effect: _g._hdrSpriteEffect)` and set
-  `_hdrSpriteEffect.Parameters["AlphaMode"]` per pass; `BloomRenderer.EndScene` runs its whole
-  mip chain as `Begin(Immediate, …, effect)` blocks.
-- **`Necroking/Render/UIShaders.cs`** — a *parallel, deliberately-separate* suspend/restore
-  mechanism for UI shaders (gradients, rect-shadow, circle). It End/Begins the batch around
-  each effect using **constructor-injected** `_defaultBlend`/`_defaultSampler` restore state.
-  `EffectBatch`'s docstring explicitly says *don't* fold UIShaders into it — it already solved
-  the restore problem its own way.
+### Ground fog & occlusion fade (new capabilities, built on the pipeline)
+- **`Render/GroundFogSystem.cs`** — fog banks spawn ground-hugging wisps drawn through
+  `Materials.FogWisp` (AlphaBlend + **DepthRead**): per-pixel depth test against the unit
+  occluder stamps → wisps swallow legs, torsos occlude wisps behind. Back blanket at
+  `WorldLayer.FogBack`. Spawn via `groundfog add/at_camera/clear` dev command or
+  `GroundFogSystem.SpawnBank` (weather/map hookups TBD). Look knobs = constants at top of
+  the file. Scenario: `ground_fog`.
+- **Occlusion fade** — `GameRenderer.Units.cs::UpdateOcclusionFade` (submit-time): tall env
+  objects in front of the necromancer whose screen box overlaps his fade to 40% alpha
+  (exp lerp, per-object state in `_occlusionFade`). Scenario: `occlusion_fade`.
 
-### Shader uniforms per draw
-Shaders are `Microsoft.Xna.Framework.Graphics.Effect` (aliased `XnaEffect`), loaded via
-`content.Load<Effect>("Name")` from compiled `.fx` (see `resources/`). Uniforms are pushed
-imperatively right before the batch: e.g. `DrawGroundShader` sets ~15
-`_g._groundEffect.Parameters["…"]?.SetValue(...)` (camera, zoom, ambient, tint/water arrays,
-ground textures bound to sampler slots) then does the single batched draw. `BloomRenderer`
-sets `BloomThreshold`/`SoftKnee`/`BloomIntensity`/blur kernels the same way.
-
-### Render targets / bloom / compositing — `Necroking/Render/Bloom.cs`
-`BloomRenderer` owns the HDR scene RT (`SurfaceFormat.HalfVector4`, so additive effects exceed
-1.0) + a mip chain. `BeginScene(device)` binds the scene RT and clears; the whole scene draws
-into it; `EndScene(device, batch, settings, outputTarget)` runs prefilter→downsample→upsample→
-blur→composite (each an `Immediate` batch with an `.fx`) and blits the result to `outputTarget`
-(null = back buffer). When bloom is off, `Draw.cs` clears the back buffer directly and skips
-Begin/EndScene. **This is the only multi-render-target work in the pipeline** — everything else
-targets the current RT (scene RT or back buffer).
-
-### Where a new pass-based dispatcher would slot in (for the redesign)
-- The **pass list to formalize** is the top-to-bottom body of `GameRenderer.Draw.cs` `Draw()`.
-  A Unity-like `RenderPass` abstraction (name, blend, sampler, sort mode, optional `.fx`,
-  target RT, enabled predicate) would replace each `--- Foo ---` Begin/End block; `Draw()`
-  becomes "iterate an ordered `List<RenderPass>`."
-- **Extend `EffectBatch`, don't replace it** — it already encapsulates pass-state as data
-  (`SceneBlend`/`HudBlend` + Begin helpers). A `RenderPass` struct is the natural home for
-  those fields; the `BeginEffect`/`EndEffectResume*` suspend/resume becomes push/pop of a pass
-  stack.
-- **Generalize the depth list** (`_g._depthItems` in `DrawUnitsAndObjects`) into the redesign's
-  transparent/sorted pass — it's the existing sort-by-depth submission model.
-- **Bloom's RT swap** (`Bloom.BeginScene`/`EndScene`) is the template for pass-scoped render
-  targets; fog-of-war (`FogOfWarSystem`) also swaps RTs before the scene pass.
-- Keep sprite blits going through `Renderer.DrawSprite` so a pass system only owns
-  batch/state/order, not per-sprite geometry (matches CLAUDE.md "shared component owns
-  mechanics, caller owns data").
+### Batch-state rules (post-redesign)
+- `EffectBatch` is now a thin shim (`BeginScenePass`/`BeginHudPass` delegate to
+  `Materials.Scene/Hud`); its suspend/resume helpers are **deleted**. Never hand-roll
+  `End/Begin` restores — take a `SpriteScope`.
+- `UIShaders` keeps its own injected-restore mechanism (deliberately separate, HUD-side).
+- `BloomRenderer` internals (mip chain, `Immediate` fullscreen blits) stay a black box
+  bracketed by the Scene phase; fog-of-war RT work runs in the Prep phase.
+- Per-draw shader params, cheapest first: derive in shader from position+uniforms →
+  vertex channels (HdrColor) → material variant (Effect.Clone) → item `SetParams`/
+  `PushMaterial` (batch break) → Immediate-sort material for runs (glyphs).
 
 ## Rendering feature inventory — everything we've tried, and its status
 
@@ -135,7 +94,8 @@ of 2026-07-03; the deferred-issue list behind several of them is
   corruption). Render: `Render/DeathFogRenderer.cs` — **no shader**, one cloud-flipbook
   puff per active cell (density→alpha/scale, `MaxAlpha=0.20`), appended into the shared
   Y-sort depth list (`DepthItemType.DeathFogPuff`) so units occlude/are occluded by fog
-  by ground Y. **No "unit rises out of the fog" clipping exists** — see target #1.
+  by ground Y. For the true "unit rises out of the fog" volume, see
+  **`Render/GroundFogSystem.cs`** (2026-07-03, depth-stamped wisps — pipeline section above).
 - **Fog of war** — WORKING (GPU, RT-based). `Render/FogOfWarSystem.cs`: visibility RT
   (vision circles) → temporal smooth via `FogSmooth.fx` → cumulative explored RT →
   packed combine; composited post-bloom by `FogComposite.fx`. CPU tile mirror for
