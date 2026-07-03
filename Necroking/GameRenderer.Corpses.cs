@@ -28,12 +28,13 @@ partial class GameRenderer
     // the crossfaded body color + green energy in the bulge gaps, and traces a pulsing green outline
     // on the morphed edge. Returns false if the shader / morph data is unavailable (caller falls
     // back to an alpha crossfade). Draws in its own batch (like DrawSpriteOutline), then restores.
-    private bool DrawReanimMorph(SpriteAtlas atlasDeath, int deathAtlasId, SpriteFrame death, bool deathFlip,
+    private bool DrawReanimMorph(in SpriteScope scope,
+        SpriteAtlas atlasDeath, int deathAtlasId, SpriteFrame death, bool deathFlip,
         SpriteAtlas atlasStandup, int standupAtlasId, SpriteFrame standup, bool standupFlip,
         Vector2 sp, float scale, Color tint, float morphT,
         HdrColor outline, float outlineWidth, float pulseWidth, float pulseSpeed)
     {
-        if (_g._morphSdfEffect == null) return false;
+        if (_g._morphSdfEffect == null || Materials.MorphSdf == null) return false;
         var md = _g._reanimMorph.GetOrBuild(_g.GraphicsDevice, atlasDeath, deathAtlasId, death, deathFlip,
                                             atlasStandup, standupAtlasId, standup, standupFlip);
         if (!md.Valid || md.ColorA == null || md.ColorB == null || md.Sdf == null) return false;
@@ -60,15 +61,13 @@ partial class GameRenderer
         var pS = fx.Parameters["SdfMap"];
         if (pS != null) pS.SetValue(md.Sdf);
         else _g.GraphicsDevice.Textures[2] = md.Sdf;
-        // Sampler states for s1/s2 must be set on BOTH binding paths — the .fx
-        // declares no sampler state, so these slots otherwise inherit whatever
-        // a previous pass left in the device (Point would turn the SDF blocky).
-        _g.GraphicsDevice.SamplerStates[1] = SamplerState.LinearClamp;
-        _g.GraphicsDevice.SamplerStates[2] = SamplerState.LinearClamp;
+        // s1/s2 sampler states are declared on Materials.MorphSdf
+        // (ExtraSamplerSlots) and applied at batch open — no hand-set needed
+        // (Point would turn the SDF blocky).
 
-        Render.EffectBatch.BeginEffect(_g._spriteBatch, fx, BlendState.AlphaBlend, SamplerState.LinearClamp);
-        _g._spriteBatch.Draw(md.ColorA, sp, null, tint, 0f, new Vector2(md.PivotX, md.PivotY), scale, SpriteEffects.None, 0f);
-        Render.EffectBatch.EndEffectResumeScene(_g._spriteBatch);
+        scope.PushMaterial(Materials.MorphSdf);
+        scope.Batch.Draw(md.ColorA, sp, null, tint, 0f, new Vector2(md.PivotX, md.PivotY), scale, SpriteEffects.None, 0f);
+        scope.PopMaterial();
         return true;
     }
 
@@ -106,7 +105,7 @@ partial class GameRenderer
         return result;
     }
 
-    private void DrawCorpses()
+    private void DrawCorpses(in SpriteScope scope)
     {
         // Hover-highlight target (captured below as its sprite is drawn).
         Corpse? hoveredCorpse = (_g._gameData.Settings.Tooltips.ShowHoverHighlight
@@ -246,7 +245,7 @@ partial class GameRenderer
                     // heavy; when off, fall through to the cheap alpha crossfade below.
                     bool morphed = _g._gameData.Settings.Performance.ReanimMorph
                         && frUp.Frame != null
-                        && DrawReanimMorph(atlas, atlasId, fr.Frame.Value, fr.FlipX,
+                        && DrawReanimMorph(scope, atlas, atlasId, fr.Frame.Value, fr.FlipX,
                                            upAtlas, upAtlasId, frUp.Frame.Value, frUp.FlipX,
                                            sp, morphScale, corpseTint, morphT, co1, cow, cpw, cps);
                     if (!morphed)

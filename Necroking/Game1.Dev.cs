@@ -253,6 +253,58 @@ public partial class Game1 {
                break;
             }
 
+            // Render-pipeline pass control: `pass list`, `pass on <name>`,
+            // `pass off <name>`. Free capability of the pass-list-as-data
+            // renderer — bisect visual bugs by toggling passes live.
+            case "pass": {
+               string sub = c.Args.Length > 0 ? c.Args[0].ToLowerInvariant() : "list";
+               if (sub == "list") {
+                  c.Complete(Necroking.Dev.DevServer.Ok(_gameRenderer.DescribePipeline()));
+                  break;
+               }
+               if ((sub == "on" || sub == "off") && c.Args.Length >= 2) {
+                  string pname = c.Args[1];
+                  if (_gameRenderer.TrySetPassEnabled(pname, sub == "on"))
+                     c.Complete(Necroking.Dev.DevServer.Ok($"pass '{pname}' -> {sub}"));
+                  else
+                     c.Complete(Necroking.Dev.DevServer.Error($"no pass named '{pname}' (try: pass list)"));
+                  break;
+               }
+               c.Complete(Necroking.Dev.DevServer.Error("pass needs: list | on <name> | off <name>"));
+               break;
+            }
+
+            // Ground fog banks (depth-stamped wisp volume):
+            //   groundfog add <x> <y> [radius] [density] [ttl]
+            //   groundfog at_camera [radius] [density]
+            //   groundfog clear
+            case "groundfog": {
+               string sub = c.Args.Length > 0 ? c.Args[0].ToLowerInvariant() : "";
+               if (sub == "clear") {
+                  _groundFog.Clear();
+                  c.Complete(Necroking.Dev.DevServer.Ok("ground fog cleared"));
+                  break;
+               }
+               if (sub == "add" && c.Args.Length >= 3
+                   && float.TryParse(c.Args[1], out float gx) && float.TryParse(c.Args[2], out float gy)) {
+                  float radius = c.Args.Length > 3 && float.TryParse(c.Args[3], out float gr) ? gr : 12f;
+                  float density = c.Args.Length > 4 && float.TryParse(c.Args[4], out float gd) ? gd : 0.7f;
+                  float ttl = c.Args.Length > 5 && float.TryParse(c.Args[5], out float gt) ? gt : -1f;
+                  _groundFog.SpawnBank(new Vec2(gx, gy), radius, density, ttl);
+                  c.Complete(Necroking.Dev.DevServer.Ok($"fog bank at ({gx},{gy}) r={radius} d={density} banks={_groundFog.BankCount}"));
+                  break;
+               }
+               if (sub == "at_camera") {
+                  float radius = c.Args.Length > 1 && float.TryParse(c.Args[1], out float gr2) ? gr2 : 12f;
+                  float density = c.Args.Length > 2 && float.TryParse(c.Args[2], out float gd2) ? gd2 : 0.7f;
+                  _groundFog.SpawnBank(_camera.Position, radius, density);
+                  c.Complete(Necroking.Dev.DevServer.Ok($"fog bank at camera ({_camera.Position.X:F0},{_camera.Position.Y:F0}) r={radius} d={density}"));
+                  break;
+               }
+               c.Complete(Necroking.Dev.DevServer.Error("groundfog needs: add <x> <y> [radius] [density] [ttl] | at_camera [radius] [density] | clear"));
+               break;
+            }
+
             case "screenshot": {
                string name = c.Opt("name") ?? (c.Args.Length > 0 ? c.Args[0] : "devshot");
                // The dashboard polls a "live" frame ~1/s. When the window is shown

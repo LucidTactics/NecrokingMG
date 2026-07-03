@@ -70,18 +70,103 @@ partial class GameRenderer
         return result;
     }
 
-    private void DrawUnitsAndObjects()
+    // Cached submit callbacks for the world queue — one delegate instance per
+    // item kind, created lazily; per-item payload rides in the item's CbA/CbB
+    // ints so submission never allocates.
+    private SpriteDrawCallback? _cbUnit, _cbEnvObject, _cbCloudPuff, _cbGrassTuft,
+        _cbDeathFogPuff, _cbReanimDust;
+    private SpriteDrawCallback? _cbRoads, _cbTraps, _cbGlyphs, _cbWalls, _cbShadows,
+        _cbHoverMarkers, _cbCorpses, _cbProjectilesRope, _cbRain;
+
+    /// <summary>Collect the whole world sprite pass: the fixed layer blocks
+    /// (roads → corpses, projectiles → rain) as whole-layer callback slots, plus
+    /// the depth-sorted YSort layer (units, env objects, and the particle types
+    /// that interleave with them). Layer bands reproduce the old block order;
+    /// within YSort the key (depth=worldY, seq=submission order) reproduces the
+    /// DepthItem sort including its determinism tiebreaker.</summary>
+    private void CollectWorldItems(RenderContext ctx)
     {
+        _cbRoads ??= (in SpriteScope _, int _, int _) => DrawRoads();
+        _cbTraps ??= (in SpriteScope s, int _, int _) => DrawGroundLayerObjects(s);
+        _cbGlyphs ??= (in SpriteScope s, int _, int _) =>
+        {
+            _g._glyphRenderer.DrawGround(s, _g._sim.MagicGlyphs);
+            // Build progress bars for blueprint glyphs — shown from the moment
+            // the glyph is placed (even at 0%) so players can see "trap placed,
+            // awaiting build".
+            foreach (var g in _g._sim.MagicGlyphs.Glyphs)
+            {
+                if (g.State == GameSystems.GlyphState.Blueprint && g.BuildProgress < 1f && g.Alive)
+                {
+                    var gsp = _g._renderer.WorldToScreen(g.Position, 0f, _g._camera);
+                    DrawBuildProgressBar(gsp, g.BuildProgress, g.Radius);
+                }
+            }
+        };
+        _cbWalls ??= (in SpriteScope _, int _, int _) => DrawWalls();
+        // ShadowRenderer suspends the batch to draw raw quads; the scope owns
+        // the resume state.
+        _cbShadows ??= (in SpriteScope s, int _, int _) =>
+            _g._shadowRenderer.Draw(s, _g.GraphicsDevice, _g._spriteBatch, _g._glowTex, _g._camera, _g._renderer, _g._sim, _g._gameData, _g._unitAnims, _g._atlases, _g._envSystem, _g._fogOfWar, _g._groundSystem, _g._deathFog, _g._corpseAnims, _g._reanimFx);
+        _cbHoverMarkers ??= (in SpriteScope _, int _, int _) => DrawHoverGroundMarkers();
+        _cbCorpses ??= (in SpriteScope s, int _, int _) => DrawCorpses(s);
+        _cbProjectilesRope ??= (in SpriteScope _, int _, int _) =>
+        {
+            DrawProjectiles();
+            DrawSoulOrbs();
+            // Drag rope (necromancer → roped corpse)
+            DrawRope();
+        };
+        _cbRain ??= (in SpriteScope _, int _, int _) => _g._weatherRenderer.DrawRain(_ctx.ScreenW, _ctx.ScreenH);
+
+        var q = _worldPass!;
+        // Ordering safety: block layers use whole-layer callback slots today;
+        // granular per-sprite submission inside these layers can come later
+        // without changing the frame order (the layer bands pin it).
+        q.SubmitCallback(WorldLayer.Roads, _cbRoads, 0, 0);
+        q.SubmitCallback(WorldLayer.Traps, _cbTraps, 0, 0);
+        // Glyph renderer context is primed at collect time; its draw runs when
+        // the queue executes this frame.
+        _g._glyphRenderer.SetContext(_g._spriteBatch, _g._pixel, _g._glowTex, _g._camera, _g._renderer, _g._flipbooks, _g._gameTime);
+        q.SubmitCallback(WorldLayer.Glyphs, _cbGlyphs, 0, 0);
+        q.SubmitCallback(WorldLayer.Walls, _cbWalls, 0, 0);
+        q.SubmitCallback(WorldLayer.Shadows, _cbShadows, 0, 0);
+        // Hover highlight — ground variants (Circle / Ground Box) BEHIND
+        // corpses/units (RTS-style).
+        q.SubmitCallback(WorldLayer.HoverMarkers, _cbHoverMarkers, 0, 0);
+        q.SubmitCallback(WorldLayer.Corpses, _cbCorpses, 0, 0);
+        q.SubmitCallback(WorldLayer.Projectiles, _cbProjectilesRope, 0, 0);
+        // Rain (world-space, drawn over the sorted scene like the old block order)
+        q.SubmitCallback(WorldLayer.Rain, _cbRain, 0, 0);
+
+        CollectYSortItems(ctx);
+    }
+
+    /// <summary>Collect the depth-sorted YSort layer — units, env objects, and
+    /// the particle types that interleave with them. This is the old
+    /// DrawUnitsAndObjects minus sorting and dispatch.</summary>
+    private void CollectYSortItems(RenderContext ctx)
+    {
+        _cbUnit ??= (in SpriteScope s, int a, int _) => DrawSingleUnit(s, a);
+        _cbEnvObject ??= (in SpriteScope s, int a, int _) => DrawSingleEnvObject(s, a);
+        _cbCloudPuff ??= (in SpriteScope _, int a, int b) => _g._poisonCloudRenderer.DrawSinglePuff(a, b);
+        // no_ground dev screenshots suppress grass too, for the clean
+        // black-background look scenarios produce.
+        _cbGrassTuft ??= (in SpriteScope _, int a, int _) =>
+        {
+            if (!_g._devShotNoGround) _g._grassRenderer.DrawSingleTuft(_g._spriteBatch, a);
+        };
+        _cbDeathFogPuff ??= (in SpriteScope _, int a, int _) => _g._deathFogRenderer.DrawSinglePuff(a);
+        _cbReanimDust ??= (in SpriteScope _, int a, int _) => _g._reanimFx.DrawSingleDust(a);
+
+        var queue = _worldPass!;
+
         // View culling bounds
         float viewMargin = 20f;
         float viewLeft = _g._camera.Position.X - _g._renderer.ScreenW / (2f * _g._camera.Zoom) - viewMargin;
         float viewRight = _g._camera.Position.X + _g._renderer.ScreenW / (2f * _g._camera.Zoom) + viewMargin;
         float viewTop = _g._camera.Position.Y - _g._renderer.ScreenH / (_g._camera.Zoom * _g._camera.YRatio) - viewMargin;
         float viewBottom = _g._camera.Position.Y + _g._renderer.ScreenH / (_g._camera.Zoom * _g._camera.YRatio) + viewMargin;
-
-        // Build merged sort list (reuse cached list to avoid per-frame allocation)
-        _g._depthItems.Clear();
-        var items = _g._depthItems;
 
         // Add units (view-culled, same bounds as env objects below). Use RenderPos
         // so a lunging unit re-sorts against its neighbors naturally — a forward-
@@ -97,7 +182,28 @@ partial class GameRenderer
             var rp = _g._sim.Units[i].RenderPos;
             if (rp.X < viewLeft || rp.X > viewRight || rp.Y < viewTop || rp.Y > viewBottom)
                 continue;
-            items.Add(new Game1.DepthItem { Y = rp.Y, Type = Game1.DepthItemType.Unit, Index = i });
+            queue.SubmitCallback(WorldLayer.YSort, rp.Y, _cbUnit, i, 0);
+        }
+
+        // Occlusion fade: precompute the player's screen box once so the env
+        // loop below can test each tall object against it. Possible precisely
+        // because submissions are inspectable data before drawing.
+        bool occlusionActive = false;
+        float plLeft = 0, plRight = 0, plTop = 0, plBottom = 0, plY = 0;
+        int necroIdx = _g._sim.NecromancerIndex;
+        if (necroIdx >= 0 && necroIdx < _g._sim.Units.Count && _g._sim.Units[necroIdx].Alive)
+        {
+            var nu = _g._sim.Units[necroIdx];
+            var ndef = _g._gameData.Units.Get(nu.UnitDefID);
+            float nWorldH = (ndef != null && ndef.SpriteWorldHeight > 0 ? ndef.SpriteWorldHeight : 1.8f) * nu.SpriteScale;
+            var nsp = _g._renderer.WorldToScreen(nu.RenderPos, nu.Z, _g._camera);
+            float npxH = nWorldH * _g._camera.Zoom;
+            plLeft = nsp.X - npxH * 0.30f;
+            plRight = nsp.X + npxH * 0.30f;
+            plTop = nsp.Y - npxH;
+            plBottom = nsp.Y;
+            plY = nu.RenderPos.Y;
+            occlusionActive = true;
         }
 
         // Add environment objects (with view culling, skip collected foragables, skip ground-layer objects)
@@ -109,10 +215,19 @@ partial class GameRenderer
             if (def.Category == "Traps") continue; // drawn in ground layer pass
             if (obj.X < viewLeft || obj.X > viewRight || obj.Y < viewTop || obj.Y > viewBottom)
                 continue;
+
+            UpdateOcclusionFade(i, obj, def, occlusionActive, plLeft, plRight, plTop, plBottom, plY);
+
             // Note: defs whose sprites failed to load get a placeholder texture in EnvironmentSystem,
             // so GetDefTexture is non-null and the object still appears.
-            items.Add(new Game1.DepthItem { Y = obj.Y, Type = Game1.DepthItemType.EnvObject, Index = i });
+            queue.SubmitCallback(WorldLayer.YSort, obj.Y, _cbEnvObject, i, 0);
         }
+
+        // Particle item kinds still assemble via the legacy DepthItem list —
+        // their renderers' internal culling/context logic stays untouched; the
+        // list is just a transfer vehicle into the queue now.
+        _g._depthItems.Clear();
+        var items = _g._depthItems;
 
         // Add poison cloud puffs
         _g._poisonCloudRenderer.SetContext(_g._spriteBatch, _g._glowTex, _g._camera, _g._renderer, _g._flipbooks, _g._gameTime);
@@ -131,6 +246,12 @@ partial class GameRenderer
         // Mirrors PoisonCloudRenderer's depth-list integration.
         if (_g._flipbooks != null && _g._flipbooks.TryGetValue("cloud03", out var deathFogFb))
         {
+            // Ground fog: update banks/wisps and submit the back blankets
+            // (behind YSort); the depth-tested wisps submit in CollectFxItems.
+            _g._groundFog.SetContext(_g._spriteBatch, _g._camera, _g._renderer, deathFogFb, _g._glowTex, _g._gameTime);
+            _g._groundFog.Update(_g._frameDt);
+            _g._groundFog.CollectBack(queue, _g._ambientColor);
+
             _g._deathFogRenderer.SetContext(_g._spriteBatch, _g._camera, _g._renderer, deathFogFb, _g._gameTime);
             _g._deathFogRenderer.AddPuffsToDepthList(_g._deathFog, _g._renderer.ScreenW, _g._renderer.ScreenH, items);
             // Reanimation dust puffs — Y-sorted with units (reuses the cloud03 sheet).
@@ -142,38 +263,64 @@ partial class GameRenderer
                 _g._reanimFx.AddDustToDepthList(items);
         }
 
-        items.Sort();
-
-        foreach (var item in items)
+        for (int i = 0; i < items.Count; i++)
         {
-            switch (item.Type)
+            var item = items[i];
+            var cb = item.Type switch
             {
-                case Game1.DepthItemType.Unit:
-                    DrawSingleUnit(item.Index);
-                    break;
-                case Game1.DepthItemType.EnvObject:
-                    DrawSingleEnvObject(item.Index);
-                    break;
-                case Game1.DepthItemType.CloudPuff:
-                    _g._poisonCloudRenderer.DrawSinglePuff(item.Index, item.SubIndex);
-                    break;
-                case Game1.DepthItemType.GrassTuft:
-                    // no_ground dev screenshots suppress grass too, for the clean
-                    // black-background look scenarios produce.
-                    if (!_g._devShotNoGround)
-                        _g._grassRenderer.DrawSingleTuft(_g._spriteBatch, item.Index);
-                    break;
-                case Game1.DepthItemType.DeathFogPuff:
-                    _g._deathFogRenderer.DrawSinglePuff(item.Index);
-                    break;
-                case Game1.DepthItemType.ReanimDust:
-                    _g._reanimFx.DrawSingleDust(item.Index);
-                    break;
-            }
+                Game1.DepthItemType.CloudPuff => _cbCloudPuff,
+                Game1.DepthItemType.GrassTuft => _cbGrassTuft,
+                Game1.DepthItemType.DeathFogPuff => _cbDeathFogPuff,
+                Game1.DepthItemType.ReanimDust => _cbReanimDust,
+                _ => null,
+            };
+            if (cb != null)
+                queue.SubmitCallback(WorldLayer.YSort, item.Y, cb, item.Index, item.SubIndex);
         }
     }
 
-    private void DrawSingleUnit(int i)
+    // --- Occlusion fade: a tall env object between the camera and the player
+    // goes semi-transparent so the necromancer stays visible. Per-object fade
+    // state persists across frames for a smooth lerp; entries at full opacity
+    // are dropped. Enabled by the retained model: items are data before draws,
+    // so the collect loop can inspect "what draws in front of the player."
+    private readonly Dictionary<int, float> _occlusionFade = new();
+    private const float OccludedAlpha = 0.40f;      // fade floor while occluding
+    private const float OcclusionMinWorldH = 2.5f;  // only tall things fade (trees, buildings)
+    private const float OcclusionFadeRate = 8f;     // exp-lerp speed, 1/s
+
+    private void UpdateOcclusionFade(int i, in PlacedObject obj, EnvironmentObjectDef def,
+        bool active, float plLeft, float plRight, float plTop, float plBottom, float plY)
+    {
+        float target = 1f;
+        float worldH = def.SpriteWorldHeight * obj.Scale * def.Scale;
+        if (active && worldH >= OcclusionMinWorldH && obj.Y > plY)
+        {
+            // Approximate the object's screen box (aspect from its texture when
+            // static; a 0.7 width ratio for animated sheets — close enough for
+            // an overlap test that feeds a soft fade).
+            var sp = _g._renderer.WorldToScreen(new Vec2(obj.X, obj.Y), 0f, _g._camera);
+            float pxH = worldH * _g._camera.Zoom;
+            var tex = _g._envSystem.GetDefTexture(obj.DefIndex);
+            float halfW = (tex != null && !def.IsAnimated)
+                ? pxH * (tex.Width / (float)tex.Height) * 0.5f
+                : pxH * 0.35f;
+            bool overlaps = sp.X - halfW < plRight && sp.X + halfW > plLeft
+                         && sp.Y - pxH < plBottom && sp.Y > plTop;
+            if (overlaps) target = OccludedAlpha;
+        }
+
+        if (!_occlusionFade.TryGetValue(i, out float fade))
+        {
+            if (target >= 1f) return;   // fully opaque and staying there — no entry
+            fade = 1f;
+        }
+        fade = MathHelper.Lerp(fade, target, 1f - MathF.Exp(-OcclusionFadeRate * _g._frameDt));
+        if (fade > 0.995f) _occlusionFade.Remove(i);
+        else _occlusionFade[i] = fade;
+    }
+
+    private void DrawSingleUnit(in SpriteScope scope, int i)
     {
         // Fog of war: hide non-undead units (and their buffs, which draw inside
         // this method) when they're not currently in any undead's detection range.
@@ -264,15 +411,15 @@ partial class GameRenderer
             _g._sim.Units[i].EffectSpawnPos2D, _g._sim.Units[i].EffectSpawnHeight);
 
         // Pulsing outline: draw sprite 8 times at directional offsets behind the unit
-        DrawUnitPulsingOutline(i, atlas, fr.Frame.Value, sp, scale, fr.FlipX);
+        DrawUnitPulsingOutline(scope, i, atlas, fr.Frame.Value, sp, scale, fr.FlipX);
 
         // Reanimation rise outline — blinks undead-green and fades out over the effect.
         if (_g._reanimFx.TryGetOutline(_g._sim.Units[i].Id, out var ro1, out var ro2, out var rOw, out var rPw, out var rPs))
-            DrawSpriteOutline(atlas, fr.Frame.Value, sp, scale, fr.FlipX, ro1, ro2, rOw, rPw, rPs, 1);
+            DrawSpriteOutline(scope, atlas, fr.Frame.Value, sp, scale, fr.FlipX, ro1, ro2, rOw, rPw, rPs, 1);
 
         // Ghost mode: subtle blue pulsing outline
         if (_g._sim.Units[i].GhostMode)
-            DrawGhostOutline(atlas, fr.Frame.Value, sp, scale, fr.FlipX);
+            DrawGhostOutline(scope, atlas, fr.Frame.Value, sp, scale, fr.FlipX);
 
         // Carried body bag rendering (phase-aware: respects effect_ms action moment)
         byte cPhase = _g._sim.Units[i].CorpseInteractPhase;
@@ -397,7 +544,7 @@ partial class GameRenderer
             // top cut in the shader (used for 3/4 facings where the back-cut
             // line never read cleanly). Top slope always 0 — top cut only ever
             // applies on cardinal facings, which have no body-axis tilt.
-            DrawWadingSpriteFrame(atlas, fr.Frame.Value, sp, scale, fr.FlipX, tint,
+            DrawWadingSpriteFrame(scope, atlas, fr.Frame.Value, sp, scale, fr.FlipX, tint,
                                   wading.WaterlineV, wading.TopWaterlineV,
                                   wading.Slope, 0f);
 
@@ -493,7 +640,7 @@ partial class GameRenderer
 
     }
 
-    private void DrawSingleEnvObject(int i)
+    private void DrawSingleEnvObject(in SpriteScope scope, int i)
     {
         var obj = _g._envSystem.Objects[i];
         var def = _g._envSystem.Defs[obj.DefIndex];
@@ -503,9 +650,9 @@ partial class GameRenderer
         // both textures bound; existing path can't carry a second sampler. Falls
         // through to the regular draw if either texture / the shader is missing.
         var rtCheck = _g._envSystem.GetObjectRuntime(i);
-        if (rtCheck.CorruptionTime > 0f && !rtCheck.Corrupted && _g._dissolveTreeEffect != null)
+        if (rtCheck.CorruptionTime > 0f && !rtCheck.Corrupted && Materials.DissolveTree != null)
         {
-            if (DrawDissolvingTree(i, rtCheck)) return;
+            if (DrawDissolvingTree(scope, i, rtCheck)) return;
         }
 
         var tex = _g._envSystem.GetObjectTexture(i, out float alpha, out bool isOverride);
@@ -588,6 +735,11 @@ partial class GameRenderer
         // Apply weather ambient light
         tint = MultiplyColor(tint, _g._ambientColor);
 
+        // Occlusion fade — semi-transparent while this object hides the player
+        // (uniform RGBA scale = correct fade for premultiplied textures).
+        if (_occlusionFade.TryGetValue(i, out float occFade))
+            tint *= occFade;
+
         _g._spriteBatch.Draw(tex, screenPos, sourceRect, tint, rotation, origin, scale,
             flipX ? SpriteEffects.FlipHorizontally : SpriteEffects.None, 0f);
 
@@ -651,7 +803,7 @@ partial class GameRenderer
     /// true if drawn; false if the caller should fall back to the regular path
     /// (e.g. live or dead texture missing).
     /// </summary>
-    private bool DrawDissolvingTree(int i, in PlacedObjectRuntime rt)
+    private bool DrawDissolvingTree(in SpriteScope scope, int i, in PlacedObjectRuntime rt)
     {
         var obj = _g._envSystem.Objects[i];
         var def = _g._envSystem.Defs[obj.DefIndex];
@@ -689,14 +841,12 @@ partial class GameRenderer
         float v1 = (frame0.Y + frame0.Height) / (float)liveTex.Height;
         float threshold = MathHelper.Clamp(rt.CorruptionTime / MathF.Max(_g._deathFog.CorruptionTransitionDuration, 0.01f), 0f, 1f);
 
-        // Set effect parameters before Begin (they upload at Apply time).
+        // Set effect parameters before PushMaterial (they upload at Apply time).
+        // The s1 sampler state is declared on Materials.DissolveTree
+        // (ExtraSamplerSlots), applied at every batch open — no hand-set needed.
         var liveParam = _g._dissolveTreeEffect!.Parameters["LiveSampler"];
         if (liveParam != null) liveParam.SetValue(liveTex);
         else _g.GraphicsDevice.Textures[1] = liveTex;
-        // Sampler state for s1 must be set on BOTH binding paths — the .fx
-        // declares no sampler state, so the slot otherwise inherits whatever a
-        // previous pass left in the device (same rule as DrawReanimMorph).
-        _g.GraphicsDevice.SamplerStates[1] = SamplerState.LinearClamp;
         _g._dissolveTreeEffect.Parameters["LiveFrameUV"]?.SetValue(new Vector4(u0, v0, u1, v1));
         _g._dissolveTreeEffect.Parameters["Threshold"]?.SetValue(threshold);
         _g._dissolveTreeEffect.Parameters["Seed"]?.SetValue(obj.Seed);
@@ -712,12 +862,12 @@ partial class GameRenderer
             DebugLog.Log("startup", $"Dissolve frame: obj {i} ({def.Id}) t={threshold:F3} CorruptionTime={rt.CorruptionTime:F3} liveTex={liveTex.Width}x{liveTex.Height} deadTex={deadTex.Width}x{deadTex.Height}");
         }
 
-        // Flush the env-objects batch and run an Immediate batch with our effect.
-        Render.EffectBatch.BeginEffect(_g._spriteBatch, _g._dissolveTreeEffect,
-            BlendState.AlphaBlend, SamplerState.LinearClamp);
-        _g._spriteBatch.Draw(deadTex, screenPos, null, tint, 0f, origin, scale,
+        // Flush the open batch, draw through the dissolve material, resume —
+        // the scope computes the resume state (no more guessed restores).
+        scope.PushMaterial(Materials.DissolveTree!);
+        scope.Batch.Draw(deadTex, screenPos, null, tint, 0f, origin, scale,
             flipX ? SpriteEffects.FlipHorizontally : SpriteEffects.None, 0f);
-        Render.EffectBatch.EndEffectResumeScene(_g._spriteBatch);
+        scope.PopMaterial();
         return true;
     }
 
@@ -832,9 +982,6 @@ partial class GameRenderer
         _g._spriteBatch.Draw(tex, screenPos, frame.Rect, tint, 0f, origin, scale, effects, 0f);
     }
 
-    // Write depth only, no color — for the depth-sorted-fog occluder stamp.
-    private static readonly BlendState _depthOnlyBlend = new() { ColorWriteChannels = ColorWriteChannels.None };
-
     /// <summary>Ground-Y → SpriteBatch layerDepth, CAMERA-RELATIVE. Larger world Y (drawn in front /
     /// nearer the camera in the painter's sort) → SMALLER depth (occludes). Camera-relative because the
     /// old absolute mapping (1 - y*0.005) saturated to 0 at worldY ≥ 200 — a silent no-op across ~95%
@@ -851,11 +998,9 @@ partial class GameRenderer
     /// runs after the color scene while the scene RT + its depth buffer are still bound.</summary>
     internal void DrawFogDepthOccluders()
     {
-        var effect = _g._depthCutoutEffect;
-        if (effect == null) return;
+        if (Materials.DepthStamp == null) return;
 
-        _g._spriteBatch.Begin(SpriteSortMode.Deferred, _depthOnlyBlend, SamplerState.LinearClamp,
-            DepthStencilState.Default, RasterizerState.CullNone, effect);
+        Materials.DepthStamp.Begin(_g._spriteBatch);
 
         for (int i = 0; i < _g._sim.Units.Count; i++)
         {
@@ -1304,14 +1449,15 @@ partial class GameRenderer
             new Vector2(len, thickness), SpriteEffects.None, 0f);
     }
 
-    private void DrawWadingSpriteFrame(SpriteAtlas atlas, SpriteFrame frame, Vector2 screenPos,
+    private void DrawWadingSpriteFrame(in SpriteScope scope, SpriteAtlas atlas, SpriteFrame frame,
+                                        Vector2 screenPos,
                                         float scale, bool flipX, Color tint,
                                         float waterlineCenterV, float topWaterlineCenterV,
                                         float waterlineSlope, float topWaterlineSlope)
     {
         var tex = atlas.GetTextureForFrame(frame);
         if (tex == null) return;
-        if (_g._wadingEffect == null)
+        if (_g._wadingEffect == null || Materials.Wading == null)
         {
             // Fall back to normal draw if shader missing — at least the unit is
             // still visible; just no waterline effect.
@@ -1345,16 +1491,15 @@ partial class GameRenderer
         // FoamHalfWidth/TopFoamHalfWidth/UnderwaterAlpha/FoamColor are constants,
         // set once at load (Game1 LoadContent, Wading block).
 
-        Render.EffectBatch.BeginEffect(_g._spriteBatch, _g._wadingEffect,
-            BlendState.AlphaBlend, SamplerState.LinearClamp, SpriteSortMode.Deferred);
+        scope.PushMaterial(Materials.Wading);
 
         float pivotX = flipX ? (1f - frame.PivotX) : frame.PivotX;
         float pivotY = 1f - frame.PivotY;
         var origin = new Vector2(pivotX * frame.Rect.Width, pivotY * frame.Rect.Height);
         var effects = flipX ? SpriteEffects.FlipHorizontally : SpriteEffects.None;
-        _g._spriteBatch.Draw(tex, screenPos, frame.Rect, tint, 0f, origin, scale, effects, 0f);
+        scope.Batch.Draw(tex, screenPos, frame.Rect, tint, 0f, origin, scale, effects, 0f);
 
-        Render.EffectBatch.EndEffectResumeScene(_g._spriteBatch);
+        scope.PopMaterial();
     }
 
     /// <summary>Multiply two colors component-wise (for ambient tinting).</summary>
@@ -1367,13 +1512,16 @@ partial class GameRenderer
     /// Draw a pulsing outline around a sprite using the OutlineFlat shader.
     /// Renders the sprite 8 times at directional offsets with a flat color.
     /// </summary>
-    private void DrawSpriteOutline(SpriteAtlas atlas, SpriteFrame frame, Vector2 screenPos,
+    private void DrawSpriteOutline(in SpriteScope scope, SpriteAtlas atlas, SpriteFrame frame,
+                                    Vector2 screenPos,
                                     float scale, bool flipX, HdrColor color1, HdrColor color2,
                                     float outlineWidth, float pulseWidth, float pulseSpeed,
                                     int blendMode)
     {
         var tex = atlas.GetTextureForFrame(frame);
         if (tex == null || _g._outlineFlatEffect == null) return;
+        var material = blendMode == 1 ? Materials.OutlineAdditive : Materials.OutlineAlpha;
+        if (material == null) return;
 
         float t = 0.5f + 0.5f * MathF.Sin(_g._gameTime * pulseSpeed * 2f * MathF.PI);
 
@@ -1389,10 +1537,9 @@ partial class GameRenderer
         _g._outlineFlatEffect.Parameters["OutlineColor"]?.SetValue(
             new Vector4(colR * intensity, colG * intensity, colB * intensity, colA));
 
-        // OutlineFlat outputs STRAIGHT alpha — NonPremultiplied/Additive only (see the .fx header).
-        var blend = blendMode == 1 ? BlendState.Additive : BlendState.NonPremultiplied;
-        Render.EffectBatch.BeginEffect(_g._spriteBatch, _g._outlineFlatEffect,
-            blend, SamplerState.LinearClamp, SpriteSortMode.Deferred);
+        // OutlineFlat outputs STRAIGHT alpha — the material picks the
+        // NonPremultiplied/Additive blend variant (see the .fx header).
+        scope.PushMaterial(material);
 
         float pivotX = flipX ? (1f - frame.PivotX) : frame.PivotX;
         float pivotY = 1f - frame.PivotY;
@@ -1403,14 +1550,15 @@ partial class GameRenderer
         {
             float dx = _outlineDirs[d][0] * offset;
             float dy = _outlineDirs[d][1] * offset;
-            _g._spriteBatch.Draw(tex, new Vector2(screenPos.X + dx, screenPos.Y + dy),
+            scope.Batch.Draw(tex, new Vector2(screenPos.X + dx, screenPos.Y + dy),
                 frame.Rect, Color.White, 0f, origin, scale, effects, 0f);
         }
 
-        Render.EffectBatch.EndEffectResumeScene(_g._spriteBatch);
+        scope.PopMaterial();
     }
 
-    private void DrawUnitPulsingOutline(int unitIdx, SpriteAtlas atlas, SpriteFrame frame,
+    private void DrawUnitPulsingOutline(in SpriteScope scope, int unitIdx, SpriteAtlas atlas,
+                                         SpriteFrame frame,
                                          Vector2 screenPos, float scale, bool flipX)
     {
         foreach (var buff in _g._sim.Units[unitIdx].ActiveBuffs)
@@ -1419,17 +1567,17 @@ partial class GameRenderer
             if (buffDef != null && buffDef.HasPulsingOutline && buffDef.PulsingOutline != null)
             {
                 var po = buffDef.PulsingOutline;
-                DrawSpriteOutline(atlas, frame, screenPos, scale, flipX,
+                DrawSpriteOutline(scope, atlas, frame, screenPos, scale, flipX,
                     po.Color, po.PulseColor, po.OutlineWidth, po.PulseWidth, po.PulseSpeed, po.BlendMode);
                 return;
             }
         }
     }
 
-    private void DrawGhostOutline(SpriteAtlas atlas, SpriteFrame frame,
+    private void DrawGhostOutline(in SpriteScope scope, SpriteAtlas atlas, SpriteFrame frame,
                                     Vector2 screenPos, float scale, bool flipX)
     {
-        DrawSpriteOutline(atlas, frame, screenPos, scale, flipX,
+        DrawSpriteOutline(scope, atlas, frame, screenPos, scale, flipX,
             _ghostColor1, _ghostColor2, 1.0f, 1.5f, 0.8f, 0);
     }
 

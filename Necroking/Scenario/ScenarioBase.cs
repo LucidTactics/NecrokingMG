@@ -153,6 +153,10 @@ public abstract class ScenarioBase
     // frames — e.g. stride calibration visualizer). Plumbed from Game1 before OnInit.
     public Render.SpriteAtlas[]? Atlases;
 
+    // Ground-fog system (depth-stamped wisp volume) — plumbed from Game1 before
+    // OnInit so fog scenarios can spawn banks.
+    public Render.GroundFogSystem? GroundFog;
+
     // Font + pixel texture for debug scenarios that draw text and outlines.
     // Plumbed from Game1 before OnInit (same path as Atlases).
     public Microsoft.Xna.Framework.Graphics.SpriteFont? Font;

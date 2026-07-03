@@ -19,9 +19,16 @@ public class MagicGlyphRenderer
     private Dictionary<string, Flipbook>? _flipbooks;
     private float _gameTime;
 
+    private Material? _material;
+
     public void LoadEffect(GfxEffect? effect)
     {
         _effect = effect;
+        // Immediate sort mode: params set per glyph inside the batch apply on
+        // every Draw — one batch for all glyphs instead of a Begin/End each.
+        if (effect != null)
+            _material = Materials.Register("MagicGlyph", effect, BlendState.AlphaBlend,
+                SamplerState.PointClamp, sortMode: SpriteSortMode.Immediate, perDrawParams: true);
     }
 
     public void SetContext(SpriteBatch spriteBatch, Texture2D pixel, Texture2D glowTex,
@@ -40,16 +47,16 @@ public class MagicGlyphRenderer
     /// <summary>
     /// Draw glyph circles on the ground. Call during ground layer pass.
     /// </summary>
-    public void DrawGround(MagicGlyphSystem glyphSystem)
+    public void DrawGround(in SpriteScope scope, MagicGlyphSystem glyphSystem)
     {
-        if (glyphSystem.Glyphs.Count == 0 || _effect == null) return;
+        if (glyphSystem.Glyphs.Count == 0 || _effect == null || _material == null) return;
 
-        // Suspend the scene batch ONCE for all glyphs: Immediate mode applies the
-        // effect (with each glyph's freshly-set parameters) on every Draw call, so
-        // a single batch replaces the old per-glyph Begin/End pair. EffectBatch
-        // owns the restore state — a wrong restore here once switched the whole
-        // rest of the scene pass to point filtering.
-        EffectBatch.BeginEffect(_spriteBatch, _effect, BlendState.AlphaBlend, SamplerState.PointClamp);
+        // Push the glyph material ONCE for all glyphs: its Immediate sort mode
+        // applies the effect (with each glyph's freshly-set parameters) on every
+        // Draw call, so a single batch covers all glyphs. The scope owns the
+        // restore state — a wrong hand-rolled restore here once switched the
+        // whole rest of the scene pass to point filtering.
+        scope.PushMaterial(_material);
 
         foreach (var glyph in glyphSystem.Glyphs)
         {
@@ -57,7 +64,7 @@ public class MagicGlyphRenderer
             DrawGlyphShader(glyph);
         }
 
-        EffectBatch.EndEffectResumeScene(_spriteBatch);
+        scope.PopMaterial();
     }
 
     /// <summary>
@@ -228,6 +235,4 @@ public class MagicGlyphRenderer
         return t * t * (3f - 2f * t);
     }
 
-    // Legacy single-draw entry point
-    public void Draw(MagicGlyphSystem glyphSystem) => DrawGround(glyphSystem);
 }

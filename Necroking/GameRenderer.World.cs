@@ -45,6 +45,8 @@ partial class GameRenderer
         }
     }
 
+    /// <summary>Ground pass body — runs OUTSIDE any open batch (its own pass in
+    /// the pipeline); both paths open and close their own batch.</summary>
     private void DrawGround()
     {
         int worldW = _g._groundSystem.WorldW > 0 ? _g._groundSystem.WorldW : Game1.WorldSize;
@@ -58,6 +60,7 @@ partial class GameRenderer
         }
 
         // Fallback: per-tile texture rendering
+        Render.EffectBatch.BeginScenePass(_g._spriteBatch);
         float viewLeft = _g._camera.Position.X - _g._renderer.ScreenW / (2f * _g._camera.Zoom) - 1;
         float viewRight = _g._camera.Position.X + _g._renderer.ScreenW / (2f * _g._camera.Zoom) + 1;
         float viewTop = _g._camera.Position.Y - _g._renderer.ScreenH / (_g._camera.Zoom * _g._camera.YRatio) - 1;
@@ -108,6 +111,8 @@ partial class GameRenderer
                 }
             }
         }
+
+        _g._spriteBatch.End();
     }
 
     // Matches the shader's array length (16 in GroundShader.fx).
@@ -122,7 +127,7 @@ partial class GameRenderer
         _g._groundDrawStopwatch.Restart();
 
         // Set shader parameters (independent of SpriteBatch state — they upload
-        // at Apply time inside EffectBatch.BeginEffect's Begin below)
+        // at Apply time inside the Begin below)
         _g._groundEffect!.Parameters["AmbientColor"]?.SetValue(new Vector3(_g._ambientColor.R / 255f, _g._ambientColor.G / 255f, _g._ambientColor.B / 255f));
         _g._groundEffect.Parameters["CameraPos"]?.SetValue(new Vector2(_g._camera.Position.X, _g._camera.Position.Y));
         _g._groundEffect.Parameters["Zoom"]?.SetValue(_g._camera.Zoom);
@@ -168,12 +173,15 @@ partial class GameRenderer
                 _g._groundEffect.Parameters[texParamNames[i]]?.SetValue(tex);
         }
 
-        Render.EffectBatch.BeginEffect(_g._spriteBatch, _g._groundEffect, BlendState.Opaque, SamplerState.PointClamp);
+        // Self-contained batch (the ground pass runs outside any open batch):
+        // one fullscreen quad through the ground shader, Opaque + PointClamp.
+        _g._spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.Opaque, SamplerState.PointClamp,
+            null, null, _g._groundEffect);
 
         // SpriteBatch.Draw binds _g._groundVertexMapTex to slot 0 (= TilemapSampler)
         _g._spriteBatch.Draw(_g._groundVertexMapTex!, new Rectangle(0, 0, _g._renderer.ScreenW, _g._renderer.ScreenH), Color.White);
 
-        Render.EffectBatch.EndEffectResumeScene(_g._spriteBatch);
+        _g._spriteBatch.End();
 
         _g._groundDrawStopwatch.Stop();
         double groundDrawMs = _g._groundDrawStopwatch.Elapsed.TotalMilliseconds;
@@ -310,8 +318,10 @@ partial class GameRenderer
         }
     }
 
-    /// <summary>Draw ground-layer objects (traps) — above dirt, below grass/units.</summary>
-    private void DrawGroundLayerObjects()
+    /// <summary>Draw ground-layer objects (traps) — above dirt, below grass/units.
+    /// Runs as the Traps layer item inside the world queue; the scope carries the
+    /// resume material for any Push/Pop draw (e.g. a dissolving trap).</summary>
+    private void DrawGroundLayerObjects(in SpriteScope scope)
     {
         for (int i = 0; i < _g._envSystem.ObjectCount; i++)
         {
@@ -319,7 +329,7 @@ partial class GameRenderer
             var obj = _g._envSystem.Objects[i];
             var def = _g._envSystem.Defs[obj.DefIndex];
             if (def.Category != "Traps") continue;
-            DrawSingleEnvObject(i);
+            DrawSingleEnvObject(scope, i);
         }
     }
 

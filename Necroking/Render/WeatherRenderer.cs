@@ -24,6 +24,7 @@ public class WeatherRenderer
     private float _gameTime;
     private GameData _gameData = null!;
     private Microsoft.Xna.Framework.Graphics.Effect? _fogEffect;
+    private Material? _fogMaterial;   // registered lazily on first fog draw
     private GraphicsDevice _graphicsDevice = null!;
     private DayNightSystem? _dayNight;
 
@@ -80,7 +81,7 @@ public class WeatherRenderer
     /// Draw fog/haze/brightness overlay. Called in the HUD pass after bloom.
     /// Manages its own SpriteBatch state (ends and restarts the current batch for shader use).
     /// </summary>
-    public void DrawFog(int screenW, int screenH)
+    public void DrawFog(in SpriteScope scope, int screenW, int screenH)
     {
         var fx = GetEffectiveEffects();
         if (fx == null) return;
@@ -130,10 +131,13 @@ public class WeatherRenderer
                 _fogEffect.Parameters["FlashIntensity"]?.SetValue(_flashIntensity);
 
                 // Draw fullscreen quad with fog shader (premultiplied alpha output),
-                // suspending the HUD batch this is called inside of.
-                EffectBatch.BeginEffect(_spriteBatch, _fogEffect, BlendState.AlphaBlend, SamplerState.PointClamp);
+                // suspending the HUD batch this is called inside of. The scope
+                // owns the restore state.
+                _fogMaterial ??= Materials.Register("WeatherFog", _fogEffect,
+                    BlendState.AlphaBlend, SamplerState.PointClamp, perDrawParams: true);
+                scope.PushMaterial(_fogMaterial);
                 _spriteBatch.Draw(_pixel, new Rectangle(0, 0, screenW, screenH), Color.White);
-                EffectBatch.EndEffectResumeHud(_spriteBatch);
+                scope.PopMaterial();
             }
             else
             {
