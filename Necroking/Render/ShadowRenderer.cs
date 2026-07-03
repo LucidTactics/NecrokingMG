@@ -28,6 +28,7 @@ public class ShadowRenderer
     }
 
     internal void Draw(
+        in SpriteScope scope,
         GraphicsDevice device,
         SpriteBatch spriteBatch,
         Texture2D glowTex,
@@ -50,7 +51,7 @@ public class ShadowRenderer
         bool useShader = (UnitShadowMode)shadow.UnitShadowMode == UnitShadowMode.Shader;
 
         if (useShader)
-            DrawShaderShadows(device, spriteBatch, glowTex, camera, renderer, sim, gameData, unitAnims, atlases, envSystem, shadow, fogOfWar, groundSystem, deathFog, corpseAnims, reanimFx);
+            DrawShaderShadows(scope, device, spriteBatch, glowTex, camera, renderer, sim, gameData, unitAnims, atlases, envSystem, shadow, fogOfWar, groundSystem, deathFog, corpseAnims, reanimFx);
         else
             DrawEllipseShadows(spriteBatch, glowTex, camera, renderer, sim, gameData, envSystem, shadow, fogOfWar);
     }
@@ -173,6 +174,7 @@ public class ShadowRenderer
     }
 
     private void DrawShaderShadows(
+        in SpriteScope scope,
         GraphicsDevice device,
         SpriteBatch spriteBatch,
         Texture2D glowTex,
@@ -198,8 +200,9 @@ public class ShadowRenderer
         byte shAlpha = (byte)Math.Clamp(shadow.Opacity * 255f, 0, 255);
         var shadowColor = new Color((byte)0, (byte)0, (byte)0, shAlpha);
 
-        // End SpriteBatch, draw quads with BasicEffect, then resume SpriteBatch
-        spriteBatch.End();
+        // Suspend the pass batch, draw quads with BasicEffect, then resume via
+        // the scope (which owns the correct restore state).
+        scope.Suspend();
 
         // Set up BasicEffect for shadow quads
         _shadowEffect!.Projection = Matrix.CreateOrthographicOffCenter(
@@ -450,8 +453,8 @@ public class ShadowRenderer
             }
         }
 
-        // Resume SpriteBatch
-        spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.LinearClamp);
+        // Resume the pass batch (state computed by the scope, not guessed here)
+        scope.Resume();
     }
 
     /// <summary>

@@ -2335,7 +2335,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         // (Materials is the canonical pass-state registry for the render
         // pipeline — see todos/render-pipeline-design.md).
         Render.Materials.InitEffectMaterials(_wadingEffect, _dissolveTreeEffect,
-            _hdrSpriteEffect, _depthCutoutEffect);
+            _hdrSpriteEffect, _depthCutoutEffect, _morphSdfEffect, _outlineFlatEffect);
 
         {
             Microsoft.Xna.Framework.Graphics.Effect? glyphEffect = null;

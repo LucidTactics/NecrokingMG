@@ -253,6 +253,27 @@ public partial class Game1 {
                break;
             }
 
+            // Render-pipeline pass control: `pass list`, `pass on <name>`,
+            // `pass off <name>`. Free capability of the pass-list-as-data
+            // renderer — bisect visual bugs by toggling passes live.
+            case "pass": {
+               string sub = c.Args.Length > 0 ? c.Args[0].ToLowerInvariant() : "list";
+               if (sub == "list") {
+                  c.Complete(Necroking.Dev.DevServer.Ok(_gameRenderer.DescribePipeline()));
+                  break;
+               }
+               if ((sub == "on" || sub == "off") && c.Args.Length >= 2) {
+                  string pname = c.Args[1];
+                  if (_gameRenderer.TrySetPassEnabled(pname, sub == "on"))
+                     c.Complete(Necroking.Dev.DevServer.Ok($"pass '{pname}' -> {sub}"));
+                  else
+                     c.Complete(Necroking.Dev.DevServer.Error($"no pass named '{pname}' (try: pass list)"));
+                  break;
+               }
+               c.Complete(Necroking.Dev.DevServer.Error("pass needs: list | on <name> | off <name>"));
+               break;
+            }
+
             case "screenshot": {
                string name = c.Opt("name") ?? (c.Args.Length > 0 ? c.Args[0] : "devshot");
                // The dashboard polls a "live" frame ~1/s. When the window is shown

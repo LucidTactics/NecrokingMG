@@ -371,7 +371,8 @@ partial class GameRenderer
             // gpuish: total frame minus CPU portions ≈ what the GPU + vsync is
             // costing us. Useful as a quick "are we GPU bound?" gauge.
             double gpuish = System.Math.Max(0, frameMs - _g._drawMsAvg - simMs);
-            string dbg = $"Zoom:{_g._camera.Zoom:F0} Pos:({_g._camera.Position.X:F0},{_g._camera.Position.Y:F0}) Speed:{_g._timeScale:F1}x FPS:{(_g._rawDt > 0 ? 1f / _g._rawDt : 0):F0} | frame:{frameMs:F1}ms sim:{simMs:F2} draw:{_g._drawMsAvg:F2} ground:{_g._groundMsAvg:F2} present:{_g._gpuPresentMsAvg:F2} gpuish:{gpuish:F2}";
+            string dbg = $"Zoom:{_g._camera.Zoom:F0} Pos:({_g._camera.Position.X:F0},{_g._camera.Position.Y:F0}) Speed:{_g._timeScale:F1}x FPS:{(_g._rawDt > 0 ? 1f / _g._rawDt : 0):F0} | frame:{frameMs:F1}ms sim:{simMs:F2} draw:{_g._drawMsAvg:F2} ground:{_g._groundMsAvg:F2} present:{_g._gpuPresentMsAvg:F2} gpuish:{gpuish:F2}"
+                + $" | world:{_worldPass?.LastItemCount ?? 0}i/{_worldPass?.LastBatchCount ?? 0}b fx:{_fxPass?.LastItemCount ?? 0}i/{_fxPass?.LastBatchCount ?? 0}b";
             DrawText(_g._smallFont, dbg, new Vector2(10, screenH - 18), new Color(120, 120, 120));
         }
 

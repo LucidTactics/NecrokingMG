@@ -88,9 +88,9 @@ partial class GameRenderer
     {
         _cbRoads ??= (in SpriteScope _, int _, int _) => DrawRoads();
         _cbTraps ??= (in SpriteScope s, int _, int _) => DrawGroundLayerObjects(s);
-        _cbGlyphs ??= (in SpriteScope _, int _, int _) =>
+        _cbGlyphs ??= (in SpriteScope s, int _, int _) =>
         {
-            _g._glyphRenderer.DrawGround(_g._sim.MagicGlyphs);
+            _g._glyphRenderer.DrawGround(s, _g._sim.MagicGlyphs);
             // Build progress bars for blueprint glyphs — shown from the moment
             // the glyph is placed (even at 0%) so players can see "trap placed,
             // awaiting build".
@@ -104,12 +104,12 @@ partial class GameRenderer
             }
         };
         _cbWalls ??= (in SpriteScope _, int _, int _) => DrawWalls();
-        // ShadowRenderer suspends the batch internally to draw raw quads and
-        // resumes scene state — compatible with this pass's Scene material.
-        _cbShadows ??= (in SpriteScope _, int _, int _) =>
-            _g._shadowRenderer.Draw(_g.GraphicsDevice, _g._spriteBatch, _g._glowTex, _g._camera, _g._renderer, _g._sim, _g._gameData, _g._unitAnims, _g._atlases, _g._envSystem, _g._fogOfWar, _g._groundSystem, _g._deathFog, _g._corpseAnims, _g._reanimFx);
+        // ShadowRenderer suspends the batch to draw raw quads; the scope owns
+        // the resume state.
+        _cbShadows ??= (in SpriteScope s, int _, int _) =>
+            _g._shadowRenderer.Draw(s, _g.GraphicsDevice, _g._spriteBatch, _g._glowTex, _g._camera, _g._renderer, _g._sim, _g._gameData, _g._unitAnims, _g._atlases, _g._envSystem, _g._fogOfWar, _g._groundSystem, _g._deathFog, _g._corpseAnims, _g._reanimFx);
         _cbHoverMarkers ??= (in SpriteScope _, int _, int _) => DrawHoverGroundMarkers();
-        _cbCorpses ??= (in SpriteScope _, int _, int _) => DrawCorpses();
+        _cbCorpses ??= (in SpriteScope s, int _, int _) => DrawCorpses(s);
         _cbProjectilesRope ??= (in SpriteScope _, int _, int _) =>
         {
             DrawProjectiles();
@@ -340,15 +340,15 @@ partial class GameRenderer
             _g._sim.Units[i].EffectSpawnPos2D, _g._sim.Units[i].EffectSpawnHeight);
 
         // Pulsing outline: draw sprite 8 times at directional offsets behind the unit
-        DrawUnitPulsingOutline(i, atlas, fr.Frame.Value, sp, scale, fr.FlipX);
+        DrawUnitPulsingOutline(scope, i, atlas, fr.Frame.Value, sp, scale, fr.FlipX);
 
         // Reanimation rise outline — blinks undead-green and fades out over the effect.
         if (_g._reanimFx.TryGetOutline(_g._sim.Units[i].Id, out var ro1, out var ro2, out var rOw, out var rPw, out var rPs))
-            DrawSpriteOutline(atlas, fr.Frame.Value, sp, scale, fr.FlipX, ro1, ro2, rOw, rPw, rPs, 1);
+            DrawSpriteOutline(scope, atlas, fr.Frame.Value, sp, scale, fr.FlipX, ro1, ro2, rOw, rPw, rPs, 1);
 
         // Ghost mode: subtle blue pulsing outline
         if (_g._sim.Units[i].GhostMode)
-            DrawGhostOutline(atlas, fr.Frame.Value, sp, scale, fr.FlipX);
+            DrawGhostOutline(scope, atlas, fr.Frame.Value, sp, scale, fr.FlipX);
 
         // Carried body bag rendering (phase-aware: respects effect_ms action moment)
         byte cPhase = _g._sim.Units[i].CorpseInteractPhase;
@@ -906,9 +906,6 @@ partial class GameRenderer
         _g._spriteBatch.Draw(tex, screenPos, frame.Rect, tint, 0f, origin, scale, effects, 0f);
     }
 
-    // Write depth only, no color — for the depth-sorted-fog occluder stamp.
-    private static readonly BlendState _depthOnlyBlend = new() { ColorWriteChannels = ColorWriteChannels.None };
-
     /// <summary>Ground-Y → SpriteBatch layerDepth, CAMERA-RELATIVE. Larger world Y (drawn in front /
     /// nearer the camera in the painter's sort) → SMALLER depth (occludes). Camera-relative because the
     /// old absolute mapping (1 - y*0.005) saturated to 0 at worldY ≥ 200 — a silent no-op across ~95%
@@ -925,11 +922,9 @@ partial class GameRenderer
     /// runs after the color scene while the scene RT + its depth buffer are still bound.</summary>
     internal void DrawFogDepthOccluders()
     {
-        var effect = _g._depthCutoutEffect;
-        if (effect == null) return;
+        if (Materials.DepthStamp == null) return;
 
-        _g._spriteBatch.Begin(SpriteSortMode.Deferred, _depthOnlyBlend, SamplerState.LinearClamp,
-            DepthStencilState.Default, RasterizerState.CullNone, effect);
+        Materials.DepthStamp.Begin(_g._spriteBatch);
 
         for (int i = 0; i < _g._sim.Units.Count; i++)
         {
@@ -1441,13 +1436,16 @@ partial class GameRenderer
     /// Draw a pulsing outline around a sprite using the OutlineFlat shader.
     /// Renders the sprite 8 times at directional offsets with a flat color.
     /// </summary>
-    private void DrawSpriteOutline(SpriteAtlas atlas, SpriteFrame frame, Vector2 screenPos,
+    private void DrawSpriteOutline(in SpriteScope scope, SpriteAtlas atlas, SpriteFrame frame,
+                                    Vector2 screenPos,
                                     float scale, bool flipX, HdrColor color1, HdrColor color2,
                                     float outlineWidth, float pulseWidth, float pulseSpeed,
                                     int blendMode)
     {
         var tex = atlas.GetTextureForFrame(frame);
         if (tex == null || _g._outlineFlatEffect == null) return;
+        var material = blendMode == 1 ? Materials.OutlineAdditive : Materials.OutlineAlpha;
+        if (material == null) return;
 
         float t = 0.5f + 0.5f * MathF.Sin(_g._gameTime * pulseSpeed * 2f * MathF.PI);
 
@@ -1463,10 +1461,9 @@ partial class GameRenderer
         _g._outlineFlatEffect.Parameters["OutlineColor"]?.SetValue(
             new Vector4(colR * intensity, colG * intensity, colB * intensity, colA));
 
-        // OutlineFlat outputs STRAIGHT alpha — NonPremultiplied/Additive only (see the .fx header).
-        var blend = blendMode == 1 ? BlendState.Additive : BlendState.NonPremultiplied;
-        Render.EffectBatch.BeginEffect(_g._spriteBatch, _g._outlineFlatEffect,
-            blend, SamplerState.LinearClamp, SpriteSortMode.Deferred);
+        // OutlineFlat outputs STRAIGHT alpha — the material picks the
+        // NonPremultiplied/Additive blend variant (see the .fx header).
+        scope.PushMaterial(material);
 
         float pivotX = flipX ? (1f - frame.PivotX) : frame.PivotX;
         float pivotY = 1f - frame.PivotY;
@@ -1477,14 +1474,15 @@ partial class GameRenderer
         {
             float dx = _outlineDirs[d][0] * offset;
             float dy = _outlineDirs[d][1] * offset;
-            _g._spriteBatch.Draw(tex, new Vector2(screenPos.X + dx, screenPos.Y + dy),
+            scope.Batch.Draw(tex, new Vector2(screenPos.X + dx, screenPos.Y + dy),
                 frame.Rect, Color.White, 0f, origin, scale, effects, 0f);
         }
 
-        Render.EffectBatch.EndEffectResumeScene(_g._spriteBatch);
+        scope.PopMaterial();
     }
 
-    private void DrawUnitPulsingOutline(int unitIdx, SpriteAtlas atlas, SpriteFrame frame,
+    private void DrawUnitPulsingOutline(in SpriteScope scope, int unitIdx, SpriteAtlas atlas,
+                                         SpriteFrame frame,
                                          Vector2 screenPos, float scale, bool flipX)
     {
         foreach (var buff in _g._sim.Units[unitIdx].ActiveBuffs)
@@ -1493,17 +1491,17 @@ partial class GameRenderer
             if (buffDef != null && buffDef.HasPulsingOutline && buffDef.PulsingOutline != null)
             {
                 var po = buffDef.PulsingOutline;
-                DrawSpriteOutline(atlas, frame, screenPos, scale, flipX,
+                DrawSpriteOutline(scope, atlas, frame, screenPos, scale, flipX,
                     po.Color, po.PulseColor, po.OutlineWidth, po.PulseWidth, po.PulseSpeed, po.BlendMode);
                 return;
             }
         }
     }
 
-    private void DrawGhostOutline(SpriteAtlas atlas, SpriteFrame frame,
+    private void DrawGhostOutline(in SpriteScope scope, SpriteAtlas atlas, SpriteFrame frame,
                                     Vector2 screenPos, float scale, bool flipX)
     {
-        DrawSpriteOutline(atlas, frame, screenPos, scale, flipX,
+        DrawSpriteOutline(scope, atlas, frame, screenPos, scale, flipX,
             _ghostColor1, _ghostColor2, 1.0f, 1.5f, 0.8f, 0);
     }
 

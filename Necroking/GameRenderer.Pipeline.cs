@@ -94,6 +94,38 @@ partial class GameRenderer
         q.SubmitCallback(WorldLayer.AdditiveShapes, _cbFxShapes, 0, 0, Materials.AdditiveShapes);
     }
 
+    /// <summary>Dev-command surface: list all phases/passes with enabled state,
+    /// last-frame timing, and queue stats (items/batches).</summary>
+    internal string DescribePipeline()
+    {
+        if (_pipeline == null) return "pipeline not built yet (draw one frame first)";
+        var sb = new System.Text.StringBuilder();
+        foreach (var phase in _pipeline.Phases)
+        {
+            sb.Append('[').Append(phase.Name).Append("]\n");
+            foreach (var pass in phase.Passes)
+            {
+                sb.Append(pass.Enabled ? "  on  " : "  OFF ").Append(pass.Name)
+                  .Append(' ').Append(pass.LastMs.ToString("F2")).Append("ms");
+                if (pass is SpriteQueuePass q)
+                    sb.Append(" items=").Append(q.LastItemCount)
+                      .Append(" batches=").Append(q.LastBatchCount);
+                sb.Append('\n');
+            }
+        }
+        return sb.ToString();
+    }
+
+    /// <summary>Dev-command surface: toggle a pass by name. Returns false if no
+    /// pass matches.</summary>
+    internal bool TrySetPassEnabled(string name, bool enabled)
+    {
+        var pass = _pipeline?.FindPass(name);
+        if (pass == null) return false;
+        pass.Enabled = enabled;
+        return true;
+    }
+
     private RenderPipeline BuildPipeline()
     {
         var p = new RenderPipeline();
@@ -215,11 +247,11 @@ partial class GameRenderer
 
         scene.Add(new CustomPass("ForagablesDamageNumbers", ctx =>
         {
-            // Alpha blend pass (collecting foragables + damage numbers on top)
-            _g._spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.LinearClamp);
+            // Top-of-world alpha pass (collecting foragables + damage numbers)
+            Materials.Scene.Begin(ctx.Batch);
             _g._foragables.Draw();
             DrawDamageNumbers();
-            _g._spriteBatch.End();
+            ctx.Batch.End();
         }));
 
         // End bloom and composite back to the backbuffer
@@ -325,8 +357,11 @@ partial class GameRenderer
             Render.EffectBatch.BeginHudPass(_g._spriteBatch);
         };
 
-        // Weather effects (fog/haze/brightness — rain draws in scene pass)
-        hud.Add(new CustomPass("WeatherFog", ctx => _g._weatherRenderer.DrawFog(ctx.ScreenW, ctx.ScreenH)));
+        // Weather effects (fog/haze/brightness — rain draws in scene pass).
+        // Runs inside the HUD batch; the scope resumes Materials.Hud after the
+        // fog shader's fullscreen quad.
+        hud.Add(new CustomPass("WeatherFog", ctx =>
+            _g._weatherRenderer.DrawFog(new SpriteScope(ctx.Batch, Materials.Hud), ctx.ScreenW, ctx.ScreenH)));
 
         hud.Add(new CustomPass("Hud", ctx => DrawHudBlock(ctx.ScreenW, ctx.ScreenH, ctx.GameTime)));
 

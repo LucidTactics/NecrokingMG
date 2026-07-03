@@ -26,6 +26,12 @@ public sealed class Material
     public readonly DepthStencilState DepthStencil;
     public readonly RasterizerState? Rasterizer; // null → SpriteBatch default (CullCounterClockwise)
 
+    /// <summary>Usually Deferred (ordering is the sort key's job). Immediate is
+    /// the sanctioned exception for a RUN of same-effect draws with per-draw
+    /// uniforms (magic glyphs): params set between Draw calls apply per draw,
+    /// one batch instead of a Begin/End pair per element.</summary>
+    public readonly SpriteSortMode SortMode;
+
     /// <summary>Sampler states for texture slots >= 1, applied at every batch
     /// open. Slots >= 1 otherwise inherit whatever the last pass left in the
     /// device — the recurring bug class that dissolve/bloom hand-fixed with
@@ -39,7 +45,8 @@ public sealed class Material
 
     internal Material(string name, ushort id, XnaEffect? effect, BlendState blend,
         SamplerState sampler, DepthStencilState depthStencil, RasterizerState? rasterizer,
-        (int, SamplerState)[]? extraSamplerSlots, bool requiresPerDrawParams)
+        SpriteSortMode sortMode, (int, SamplerState)[]? extraSamplerSlots,
+        bool requiresPerDrawParams)
     {
         Name = name;
         Id = id;
@@ -48,16 +55,15 @@ public sealed class Material
         Sampler = sampler;
         DepthStencil = depthStencil;
         Rasterizer = rasterizer;
+        SortMode = sortMode;
         ExtraSamplerSlots = extraSamplerSlots ?? Array.Empty<(int, SamplerState)>();
         RequiresPerDrawParams = requiresPerDrawParams;
     }
 
-    /// <summary>Open a SpriteBatch with this material's full state (always
-    /// Deferred — ordering is the sort key's job, not SpriteBatch's).</summary>
+    /// <summary>Open a SpriteBatch with this material's full state.</summary>
     public void Begin(SpriteBatch batch)
     {
-        batch.Begin(SpriteSortMode.Deferred, Blend, Sampler, DepthStencil,
-            Rasterizer, Effect);
+        batch.Begin(SortMode, Blend, Sampler, DepthStencil, Rasterizer, Effect);
         foreach (var (slot, sampler) in ExtraSamplerSlots)
             batch.GraphicsDevice.SamplerStates[slot] = sampler;
     }
@@ -77,11 +83,12 @@ public static class Materials
 
     public static Material Register(string name, XnaEffect? effect, BlendState blend,
         SamplerState sampler, DepthStencilState? depthStencil = null,
-        RasterizerState? rasterizer = null,
+        RasterizerState? rasterizer = null, SpriteSortMode sortMode = SpriteSortMode.Deferred,
         (int, SamplerState)[]? extraSamplerSlots = null, bool perDrawParams = false)
     {
         var m = new Material(name, (ushort)All.Count, effect, blend, sampler,
-            depthStencil ?? DepthStencilState.None, rasterizer, extraSamplerSlots, perDrawParams);
+            depthStencil ?? DepthStencilState.None, rasterizer, sortMode,
+            extraSamplerSlots, perDrawParams);
         All.Add(m);
         return m;
     }
@@ -123,6 +130,17 @@ public static class Materials
     /// off, depth write on — the occluder pass for depth-tested fog.</summary>
     public static Material? DepthStamp { get; private set; }
 
+    /// <summary>SDF reanimation morph (MorphSDF.fx). Per-draw uniforms + pose
+    /// texture on slot 1, SDF map on slot 2.</summary>
+    public static Material? MorphSdf { get; private set; }
+
+    /// <summary>Flat-color sprite outline (OutlineFlat.fx) — straight-alpha
+    /// output, NonPremultiplied blend variant. Per-draw color uniform.</summary>
+    public static Material? OutlineAlpha { get; private set; }
+
+    /// <summary>Flat-color sprite outline, additive blend variant.</summary>
+    public static Material? OutlineAdditive { get; private set; }
+
     // Write depth only, no color — for the depth-sorted-fog occluder stamp.
     private static readonly BlendState DepthOnlyBlend = new()
     {
@@ -132,8 +150,25 @@ public static class Materials
     /// <summary>Create the effect-backed materials. Call once from LoadContent
     /// after shader loading; any null effect leaves its material null.</summary>
     public static void InitEffectMaterials(XnaEffect? wading, XnaEffect? dissolveTree,
-        XnaEffect? hdrSprite, XnaEffect? depthCutout)
+        XnaEffect? hdrSprite, XnaEffect? depthCutout, XnaEffect? morphSdf,
+        XnaEffect? outlineFlat)
     {
+        if (morphSdf != null)
+            MorphSdf = Register("MorphSdf", morphSdf, BlendState.AlphaBlend,
+                SamplerState.LinearClamp,
+                extraSamplerSlots: new[] { (1, SamplerState.LinearClamp), (2, SamplerState.LinearClamp) },
+                perDrawParams: true);
+
+        if (outlineFlat != null)
+        {
+            // OutlineFlat outputs STRAIGHT alpha — NonPremultiplied/Additive only
+            // (see the .fx header). One shared effect instance, two blend variants;
+            // the per-call OutlineColor uniform makes both per-draw materials.
+            OutlineAlpha = Register("OutlineAlpha", outlineFlat, BlendState.NonPremultiplied,
+                SamplerState.LinearClamp, perDrawParams: true);
+            OutlineAdditive = Register("OutlineAdditive", outlineFlat, BlendState.Additive,
+                SamplerState.LinearClamp, perDrawParams: true);
+        }
         if (wading != null)
             Wading = Register("Wading", wading, BlendState.AlphaBlend,
                 SamplerState.LinearClamp, perDrawParams: true);
