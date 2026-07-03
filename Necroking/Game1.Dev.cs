@@ -1586,6 +1586,10 @@ public partial class Game1 {
             }
 
             return _uiEditor.SelectWidgetById(token) ? token : null;
+         case MenuState.MapEditor:
+            // Zones tab: select a zone by index/id/name so headless drives can
+            // exercise the selected-state UI (handles, left village panel).
+            return _mapEditor.DevSelectZone(token);
          default:
             return null;
       }
@@ -1809,6 +1813,7 @@ public partial class Game1 {
              $"\"wolfPhase\":{u.WolfPhase}," +
              $"\"huntTgt\":{u.WolfHuntTargetId},\"huntPhase\":{u.WolfHuntPhase},\"huntTimer\":{u.WolfHuntTimer.ToString("F1", ci)}," +
              $"\"squadId\":{u.SquadId}," +
+             $"\"villageId\":{u.VillageId}," +
              $"\"aggroScale\":{u.AggroRangeScale.ToString("F2", ci)},\"herdT\":{u.HerdedTimer.ToString("F1", ci)}," +
              $"\"anim\":\"{(_unitAnims.TryGetValue(u.Id, out var _adbg) ? _adbg.Ctrl.CurrentState.ToString() : "?")}\"," +
              $"\"facing\":{u.FacingAngle.ToString("F0", ci)}," +

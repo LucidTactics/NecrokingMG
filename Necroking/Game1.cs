@@ -1325,6 +1325,9 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         // (no JSON file) so technical-behavior tests don't fight the regular
         // map's content. See the "empty_test_map" menu dev command.
         var placedUnits = new List<Data.PlacedUnit>();
+        // Zones are reloaded per map below; clear here so maps without a zones file
+        // (empty_test, missing map) don't inherit the previous map's zones.
+        _zoneSystem.Clear();
         string mapPath = GamePaths.Resolve($"assets/maps/{mapName}.json");
         if (mapName == "empty_test")
         {
@@ -1359,6 +1362,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
                 out var grassInfo);
             MapData.LoadTriggers(GamePaths.Resolve($"assets/maps/{mapName}_triggers.json"), _triggerSystem);
             MapData.LoadRoads(GamePaths.Resolve($"assets/maps/{mapName}_roads.json"), _roadSystem);
+            MapData.LoadZones(GamePaths.Resolve($"assets/maps/{mapName}_zones.json"), _zoneSystem);
             // Village structures are placed here (before the collision bake below) so their
             // buildings are stamped into the pathfinding grid alongside the map's own objects.
             LoadVillageStructures(mapName);
@@ -1489,6 +1493,10 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         // pre-bake in LoadVillageStructures.
         LoadVillagePopulation(mapName);
 
+        // Apply authored zones (village creation / animal squad grouping) now that every
+        // unit — map-placed and legacy villagers alike — exists with its final position.
+        ApplyZones();
+
         // One-shot: pull any editor-placed corpses sitting on a Corpse Pile into its
         // stock so they can be gathered back out. Done once here on map load (not per
         // frame) — AbsorbCorpsesOnPiles is an O(piles × corpses) scan, too costly to tick.
@@ -1594,7 +1602,8 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             tileGrid: _sim.Grid,
             onGrassMapChanged: SyncGrassMapReference,
             editorBase: _editorUi,
-            onGrassTypesChanged: SyncGrassFromEditor);
+            onGrassTypesChanged: SyncGrassFromEditor,
+            zoneSystem: _zoneSystem);
         _mapEditor.SetItemRegistry(_gameData.Items);
         _mapEditor.SetSpellRegistry(_gameData.Spells);
         _mapEditor.SetGameData(_gameData);
@@ -2028,7 +2037,8 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             tileGrid: _sim.Grid,
             onGrassMapChanged: SyncGrassMapReference,
             editorBase: _editorUi,
-            onGrassTypesChanged: SyncGrassFromEditor);
+            onGrassTypesChanged: SyncGrassFromEditor,
+            zoneSystem: _zoneSystem);
         _mapEditor.SetItemRegistry(_gameData.Items);
 
         // Initialize the scenario

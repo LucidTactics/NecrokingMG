@@ -15,7 +15,7 @@ using Necroking.GameSystems;
 
 namespace Necroking.Editor;
 
-public enum MapEditorTab { Ground, Grass, Objects, Walls, Roads, Regions, Triggers, Units }
+public enum MapEditorTab { Ground, Grass, Objects, Walls, Roads, Regions, Triggers, Units, Zones }
 
 // ============================================================================
 //  Grass type definition (editor-side, no dedicated GrassSystem yet)
@@ -68,6 +68,7 @@ public class MapEditorWindow
     private GroundSystem _groundSystem = null!;
     private EnvironmentSystem _envSystem = null!;
     private TriggerSystem _triggerSystem = null!;
+    private ZoneSystem _zoneSystem = null!;
     private Data.Registries.ItemRegistry? _itemRegistry;
     private Data.GameData? _gameData;
     private WallSystem _wallSystem = null!;
@@ -103,7 +104,7 @@ public class MapEditorWindow
     public int BrushRadius = 2;
 
     // Per-tab scroll offsets
-    private readonly float[] _tabScroll = new float[8];
+    private readonly float[] _tabScroll = new float[9];
 
     // Ground tab
     public int SelectedGroundType;
@@ -171,9 +172,22 @@ public class MapEditorWindow
     private RegionHandle _activeHandle = RegionHandle.None;
     private Vec2 _regionDragOffset; // offset from region center to click point for body drag
 
+    // Zones tab
+    public int SelectedZoneIndex = -1;
+    private int _zoneCreateKindIdx;              // index into ZoneKind values for "+ Draw Zone"
+    private bool _zoneDrawMode;                  // "+ Draw Zone" armed, next world drag creates
+    private bool _zoneRubberBanding;             // drag-out in progress
+    private Vec2 _zoneDragStartWorld;            // rubber-band anchor corner
+    private int _draggingZone = -1;
+    private RegionHandle _zoneHandle = RegionHandle.None; // rect subset only (no CircleRadius)
+    private Vec2 _zoneDragOffset;                // zone center - click point, for body drag
+    // Reused per-frame accumulator for the village panel's contents summary
+    private readonly Dictionary<string, int> _zoneContentCounts = new();
+
     // Cached enum name arrays (avoid per-frame allocation)
     private static readonly string[] CachedFactionNames = Enum.GetNames<Faction>();
     private static readonly string[] CachedPostSpawnBehaviorNames = Enum.GetNames<PostSpawnBehavior>();
+    private static readonly string[] CachedZoneKindNames = Enum.GetNames<ZoneKind>();
 
     // Triggers tab
     public int SelectedTriggerDefIndex = -1;
@@ -440,7 +454,7 @@ public class MapEditorWindow
 
     // Tab names and layout
     private static readonly string[] TabRow1 = { "Ground", "Grass", "Objects", "Walls" };
-    private static readonly string[] TabRow2 = { "Roads", "Regions", "Triggers", "Units" };
+    private static readonly string[] TabRow2 = { "Roads", "Regions", "Triggers", "Units", "Zones" };
 
     // ========================================================================
     //  Init
@@ -462,7 +476,8 @@ public class MapEditorWindow
         TileGrid? tileGrid = null,
         Action? onGrassMapChanged = null,
         EditorBase? editorBase = null,
-        Action? onGrassTypesChanged = null)
+        Action? onGrassTypesChanged = null,
+        ZoneSystem? zoneSystem = null)
     {
         _groundSystem = groundSystem;
         _envSystem = envSystem;
@@ -477,6 +492,7 @@ public class MapEditorWindow
         _wallSystem = wallSystem ?? new WallSystem();
         _roadSystem = roadSystem ?? new RoadSystem();
         _tileGrid = tileGrid ?? new TileGrid();
+        _zoneSystem = zoneSystem ?? new ZoneSystem();
         _onGrassMapChanged = onGrassMapChanged;
         _onGrassTypesChanged = onGrassTypesChanged;
         _eb = editorBase;
@@ -559,8 +575,16 @@ public class MapEditorWindow
         int panelX = screenW - PanelWidth - 10;
         int panelY = 10;
         int panelH = screenH - 20;
-        return mouse.X >= panelX && mouse.X < panelX + PanelWidth &&
-               mouse.Y >= panelY && mouse.Y < panelY + panelH;
+        if (mouse.X >= panelX && mouse.X < panelX + PanelWidth &&
+            mouse.Y >= panelY && mouse.Y < panelY + panelH)
+            return true;
+
+        // The Zones tab's left village panel is UI too — without this, clicks on it
+        // would bleed into the world (drag zones, place objects) underneath it.
+        var leftPanel = ZoneLeftPanelRect(screenH);
+        return leftPanel.HasValue &&
+               mouse.X >= leftPanel.Value.X && mouse.X < leftPanel.Value.Right &&
+               mouse.Y >= leftPanel.Value.Y && mouse.Y < leftPanel.Value.Bottom;
     }
 
     /// <summary>True if any sub-popup is open over the map editor and should
@@ -678,8 +702,8 @@ public class MapEditorWindow
 
         if (!textEditing)
         {
-            // --- Tab switching via keyboard (1-8) ---
-            for (int i = 0; i < 8; i++)
+            // --- Tab switching via keyboard (1-9) ---
+            for (int i = 0; i < 9; i++)
             {
                 Keys key = Keys.D1 + i;
                 if (kb.IsKeyDown(key) && _prevKb.IsKeyUp(key))
@@ -692,20 +716,20 @@ public class MapEditorWindow
         {
             int tabY1 = panelY;
             int tabY2 = panelY + TabRowHeight;
-            int tabW1 = PanelWidth / 4;
-            int tabW2 = PanelWidth / 4; // Row 2 now has 4 tabs too
+            int tabW1 = PanelWidth / TabRow1.Length;
+            int tabW2 = PanelWidth / TabRow2.Length;
 
             if (mouse.Y >= tabY1 && mouse.Y < tabY1 + TabRowHeight)
             {
                 int relX = mouse.X - panelX;
                 int idx = relX / tabW1;
-                if (idx >= 0 && idx < 4) ActiveTab = (MapEditorTab)idx;
+                if (idx >= 0 && idx < TabRow1.Length) ActiveTab = (MapEditorTab)idx;
             }
             else if (mouse.Y >= tabY2 && mouse.Y < tabY2 + TabRowHeight)
             {
                 int relX = mouse.X - panelX;
                 int idx = relX / tabW2;
-                if (idx >= 0 && idx < 4) ActiveTab = (MapEditorTab)(idx + 4);
+                if (idx >= 0 && idx < TabRow2.Length) ActiveTab = (MapEditorTab)(idx + TabRow1.Length);
             }
         }
 
@@ -821,6 +845,9 @@ public class MapEditorWindow
             case MapEditorTab.Units:
                 UpdateUnitsTab(mouse, kb, leftClick, overPanel, panelX, panelY, screenW, screenH);
                 break;
+            case MapEditorTab.Zones:
+                UpdateZonesTab(mouse, leftClick, leftDown, leftUp, overPanel, screenW, screenH);
+                break;
         }
 
         // Update texture file browser input
@@ -879,6 +906,12 @@ public class MapEditorWindow
         int panelY = 10;
         int panelH = screenH - 20;
 
+        // Zone world overlays draw first — under the panels — so a zone that scrolls
+        // behind the right panel doesn't paint over the editor UI. (They can't live in
+        // DrawZonesTab: the tab body is scissor-clipped to the panel rect.)
+        if (ActiveTab == MapEditorTab.Zones)
+            DrawZoneOverlays(screenW, screenH);
+
         // Panel background
         _spriteBatch.Draw(_pixel, new Rectangle(panelX, panelY, PanelWidth, panelH), BgColor);
 
@@ -929,9 +962,17 @@ public class MapEditorWindow
             case MapEditorTab.Units:
                 DrawUnitsTab(panelX, contentY, contentH, screenW, screenH);
                 break;
+            case MapEditorTab.Zones:
+                DrawZonesTab(panelX, contentY, contentH);
+                break;
         }
 
         _eb.EndClip();
+
+        // The left village panel draws after EndClip (the right-panel scissor would hide
+        // it) and above the zone overlays drawn at the top of this method.
+        if (ActiveTab == MapEditorTab.Zones)
+            DrawZoneLeftPanel(screenW, screenH);
 
         // Always draw placed unit markers (visible on all tabs)
         DrawPlacedUnitMarkers(screenW, screenH);
@@ -1015,8 +1056,8 @@ public class MapEditorWindow
         var mouse = _eb._input.Mouse;
 
         // Row 1: Ground, Grass, Objects, Walls
-        int tabW1 = PanelWidth / 4;
-        for (int i = 0; i < 4; i++)
+        int tabW1 = PanelWidth / TabRow1.Length;
+        for (int i = 0; i < TabRow1.Length; i++)
         {
             var tab = (MapEditorTab)i;
             bool active = ActiveTab == tab;
@@ -1033,12 +1074,12 @@ public class MapEditorWindow
             DrawTextCentered(TabRow1[i], rect, TextColor);
         }
 
-        // Row 2: Roads, Regions, Triggers, Units
-        int tabW2 = PanelWidth / 4;
+        // Row 2: Roads, Regions, Triggers, Units, Zones
+        int tabW2 = PanelWidth / TabRow2.Length;
         int row2Y = panelY + TabRowHeight;
-        for (int i = 0; i < 4; i++)
+        for (int i = 0; i < TabRow2.Length; i++)
         {
-            var tab = (MapEditorTab)(i + 4);
+            var tab = (MapEditorTab)(i + TabRow1.Length);
             bool active = ActiveTab == tab;
             var bg = active ? TabActiveColor : TabInactiveColor;
             var rect = new Rectangle(panelX + i * tabW2, row2Y, tabW2, TabRowHeight);
@@ -3543,117 +3584,17 @@ public class MapEditorWindow
                         region.Y = worldPos.Y + _regionDragOffset.Y;
                         break;
 
-                    // Edge midpoints - resize from one side only
-                    case RegionHandle.N:
-                    {
-                        float oldBottom = region.Y + region.HalfH;
-                        float newTop = worldPos.Y;
-                        if (newTop < oldBottom - 1f)
-                        {
-                            region.Y = (newTop + oldBottom) / 2f;
-                            region.HalfH = (oldBottom - newTop) / 2f;
-                        }
-                        break;
-                    }
-                    case RegionHandle.S:
-                    {
-                        float oldTop = region.Y - region.HalfH;
-                        float newBottom = worldPos.Y;
-                        if (newBottom > oldTop + 1f)
-                        {
-                            region.Y = (oldTop + newBottom) / 2f;
-                            region.HalfH = (newBottom - oldTop) / 2f;
-                        }
-                        break;
-                    }
-                    case RegionHandle.W:
-                    {
-                        float oldRight = region.X + region.HalfW;
-                        float newLeft = worldPos.X;
-                        if (newLeft < oldRight - 1f)
-                        {
-                            region.X = (newLeft + oldRight) / 2f;
-                            region.HalfW = (oldRight - newLeft) / 2f;
-                        }
-                        break;
-                    }
-                    case RegionHandle.E:
-                    {
-                        float oldLeft = region.X - region.HalfW;
-                        float newRight = worldPos.X;
-                        if (newRight > oldLeft + 1f)
-                        {
-                            region.X = (oldLeft + newRight) / 2f;
-                            region.HalfW = (newRight - oldLeft) / 2f;
-                        }
-                        break;
-                    }
-
-                    // Corners - resize from corner
-                    case RegionHandle.NW:
-                    {
-                        float oldRight = region.X + region.HalfW;
-                        float oldBottom = region.Y + region.HalfH;
-                        float newLeft = worldPos.X;
-                        float newTop = worldPos.Y;
-                        if (newLeft < oldRight - 1f && newTop < oldBottom - 1f)
-                        {
-                            region.X = (newLeft + oldRight) / 2f;
-                            region.HalfW = (oldRight - newLeft) / 2f;
-                            region.Y = (newTop + oldBottom) / 2f;
-                            region.HalfH = (oldBottom - newTop) / 2f;
-                        }
-                        break;
-                    }
-                    case RegionHandle.NE:
-                    {
-                        float oldLeft = region.X - region.HalfW;
-                        float oldBottom = region.Y + region.HalfH;
-                        float newRight = worldPos.X;
-                        float newTop = worldPos.Y;
-                        if (newRight > oldLeft + 1f && newTop < oldBottom - 1f)
-                        {
-                            region.X = (oldLeft + newRight) / 2f;
-                            region.HalfW = (newRight - oldLeft) / 2f;
-                            region.Y = (newTop + oldBottom) / 2f;
-                            region.HalfH = (oldBottom - newTop) / 2f;
-                        }
-                        break;
-                    }
-                    case RegionHandle.SE:
-                    {
-                        float oldLeft = region.X - region.HalfW;
-                        float oldTop = region.Y - region.HalfH;
-                        float newRight = worldPos.X;
-                        float newBottom = worldPos.Y;
-                        if (newRight > oldLeft + 1f && newBottom > oldTop + 1f)
-                        {
-                            region.X = (oldLeft + newRight) / 2f;
-                            region.HalfW = (newRight - oldLeft) / 2f;
-                            region.Y = (oldTop + newBottom) / 2f;
-                            region.HalfH = (newBottom - oldTop) / 2f;
-                        }
-                        break;
-                    }
-                    case RegionHandle.SW:
-                    {
-                        float oldRight = region.X + region.HalfW;
-                        float oldTop = region.Y - region.HalfH;
-                        float newLeft = worldPos.X;
-                        float newBottom = worldPos.Y;
-                        if (newLeft < oldRight - 1f && newBottom > oldTop + 1f)
-                        {
-                            region.X = (newLeft + oldRight) / 2f;
-                            region.HalfW = (oldRight - newLeft) / 2f;
-                            region.Y = (oldTop + newBottom) / 2f;
-                            region.HalfH = (newBottom - oldTop) / 2f;
-                        }
-                        break;
-                    }
-
                     case RegionHandle.CircleRadius:
                         region.Radius = MathF.Max(1f, (worldPos - new Vec2(region.X, region.Y)).Length());
                         break;
+
+                    default: // Edge/corner resize — rect math shared with the Zones tab
+                    {
+                        float x = region.X, y = region.Y, hw = region.HalfW, hh = region.HalfH;
+                        ApplyRectHandleDrag(_activeHandle, worldPos, ref x, ref y, ref hw, ref hh);
+                        region.X = x; region.Y = y; region.HalfW = hw; region.HalfH = hh;
+                        break;
+                    }
                 }
             }
             if (leftUp) { _draggingRegion = -1; _activeHandle = RegionHandle.None; }
@@ -3974,6 +3915,422 @@ public class MapEditorWindow
         _spriteBatch.Draw(_pixel, new Rectangle(cx - halfSz, cy - halfSz, halfSz * 2, halfSz * 2), color);
         // Border
         DrawRectBorder(cx - halfSz, cy - halfSz, halfSz * 2, halfSz * 2, new Color(0, 0, 0, 180));
+    }
+
+    // ====================================================================
+    //  ZONES TAB
+    // ====================================================================
+
+    /// <summary>World interaction for the Zones tab: rubber-band creation while "+ Draw
+    /// Zone" is armed, otherwise click-to-select + region-style body/handle dragging.
+    /// Panel widgets (right panel and left village panel) handle their own clicks in
+    /// Draw via EditorBase, so this only owns the world.</summary>
+    private void UpdateZonesTab(MouseState mouse, bool leftClick, bool leftDown, bool leftUp,
+        bool overPanel, int screenW, int screenH)
+    {
+        var leftPanel = ZoneLeftPanelRect(screenH);
+        bool overLeftPanel = leftPanel.HasValue && IsInRect(mouse, leftPanel.Value);
+
+        if (!overPanel && !overLeftPanel && !IsAnyPopupBlocking())
+        {
+            Vec2 worldPos = _camera.ScreenToWorld(new Vector2(mouse.X, mouse.Y), screenW, screenH);
+            float handleTol = 8f / _camera.Zoom;
+
+            if (_zoneDrawMode)
+            {
+                // Rubber-band creation: press anchors a corner, release creates the zone.
+                if (leftClick)
+                {
+                    _zoneRubberBanding = true;
+                    _zoneDragStartWorld = worldPos;
+                }
+                if (_zoneRubberBanding && leftUp)
+                {
+                    _zoneRubberBanding = false;
+                    float x0 = MathF.Min(_zoneDragStartWorld.X, worldPos.X);
+                    float x1 = MathF.Max(_zoneDragStartWorld.X, worldPos.X);
+                    float y0 = MathF.Min(_zoneDragStartWorld.Y, worldPos.Y);
+                    float y1 = MathF.Max(_zoneDragStartWorld.Y, worldPos.Y);
+                    if (x1 - x0 >= 2f && y1 - y0 >= 2f)
+                    {
+                        var kind = (ZoneKind)_zoneCreateKindIdx;
+                        SelectedZoneIndex = _zoneSystem.Add(new MapZone
+                        {
+                            Id = NextZoneId(),
+                            Name = $"{kind} {_zoneSystem.Count + 1}",
+                            Kind = kind,
+                            X = (x0 + x1) / 2f,
+                            Y = (y0 + y1) / 2f,
+                            HalfW = (x1 - x0) / 2f,
+                            HalfH = (y1 - y0) / 2f,
+                        });
+                        _zoneDrawMode = false;
+                    }
+                    // Too small = accidental click; stay armed for another try.
+                }
+            }
+            else
+            {
+                if (leftClick)
+                {
+                    _zoneHandle = RegionHandle.None;
+                    _draggingZone = -1;
+                    var zones = _zoneSystem.Zones;
+
+                    // First: handles on the currently-selected zone (highest priority)
+                    if (SelectedZoneIndex >= 0 && SelectedZoneIndex < zones.Count)
+                    {
+                        var z = zones[SelectedZoneIndex];
+                        _zoneHandle = HitTestRectHandles(z.X, z.Y, z.HalfW, z.HalfH, worldPos, handleTol);
+                        if (_zoneHandle != RegionHandle.None)
+                        {
+                            _draggingZone = SelectedZoneIndex;
+                            if (_zoneHandle == RegionHandle.Body)
+                                _zoneDragOffset = new Vec2(z.X - worldPos.X, z.Y - worldPos.Y);
+                        }
+                    }
+
+                    // Second: click any other zone body to select + start a body drag
+                    if (_zoneHandle == RegionHandle.None)
+                    {
+                        for (int i = 0; i < zones.Count; i++)
+                        {
+                            if (i == SelectedZoneIndex) continue;
+                            if (!zones[i].ContainsPoint(worldPos)) continue;
+                            SelectedZoneIndex = i;
+                            _zoneHandle = RegionHandle.Body;
+                            _draggingZone = i;
+                            _zoneDragOffset = new Vec2(zones[i].X - worldPos.X, zones[i].Y - worldPos.Y);
+                            break;
+                        }
+                    }
+                }
+
+                if (leftDown && _draggingZone >= 0 && _draggingZone < _zoneSystem.Count)
+                {
+                    var z = _zoneSystem.ZonesMut[_draggingZone];
+                    if (_zoneHandle == RegionHandle.Body)
+                    {
+                        z.X = worldPos.X + _zoneDragOffset.X;
+                        z.Y = worldPos.Y + _zoneDragOffset.Y;
+                    }
+                    else
+                    {
+                        float x = z.X, y = z.Y, hw = z.HalfW, hh = z.HalfH;
+                        ApplyRectHandleDrag(_zoneHandle, worldPos, ref x, ref y, ref hw, ref hh);
+                        z.X = x; z.Y = y; z.HalfW = hw; z.HalfH = hh;
+                    }
+                }
+            }
+        }
+
+        // Always clear drag state on release, even when the cursor ends over a panel
+        // (a rubber-band released there is a cancel).
+        if (leftUp)
+        {
+            _draggingZone = -1;
+            _zoneHandle = RegionHandle.None;
+            _zoneRubberBanding = false;
+        }
+    }
+
+    private void DrawZonesTab(int panelX, int contentY, int contentH)
+    {
+        DrawSectionHeader(panelX, ref contentY, $"Zones ({_zoneSystem.Count})");
+        if (_eb == null) return;
+
+        int y = contentY;
+        int fw = PanelWidth - Margin * 2;
+
+        // New-zone controls
+        string newKind = _eb.DrawCombo("zone_new_kind", "Zone Kind", CachedZoneKindNames[_zoneCreateKindIdx],
+            CachedZoneKindNames, panelX + Margin, y, fw);
+        int nk = Array.IndexOf(CachedZoneKindNames, newKind);
+        if (nk >= 0) _zoneCreateKindIdx = nk;
+        y += FieldHeight + 4;
+
+        if (_eb.DrawButton(_zoneDrawMode ? "[Drag out the zone in the world...]" : "+ Draw Zone",
+            panelX + Margin, y, fw, ButtonHeight, _zoneDrawMode ? AccentColor : (Color?)null))
+            _zoneDrawMode = !_zoneDrawMode;
+        y += ButtonHeight + 8;
+
+        _spriteBatch.Draw(_pixel, new Rectangle(panelX, y, PanelWidth, 1), SeparatorColor);
+        y += 4;
+
+        // Zone list — rows are invisible buttons (EditorBase edge-detects the click)
+        // with a kind-colored chip + left-aligned label drawn on top.
+        var zones = _zoneSystem.Zones;
+        for (int i = 0; i < zones.Count; i++)
+        {
+            if (y > contentY + contentH - 260)
+            {
+                DrawSmallText($"... {zones.Count - i} more", panelX + Margin, y, TextDim);
+                y += LineHeight;
+                break;
+            }
+            bool selected = i == SelectedZoneIndex;
+            if (_eb.DrawButton("", panelX + Margin, y, fw, ButtonHeight,
+                selected ? HighlightColor : Color.Transparent))
+                SelectedZoneIndex = i;
+            _spriteBatch.Draw(_pixel, new Rectangle(panelX + Margin + 3, y + 4, 12, ButtonHeight - 8),
+                ZoneColors.Base(zones[i].Kind));
+            DrawSmallText($"{zones[i].Name} ({zones[i].Kind})", panelX + Margin + 20, y + 3,
+                selected ? TextBright : TextColor);
+            y += ButtonHeight + 2;
+        }
+        y += 4;
+
+        // Selected zone properties. Field ids embed the index so switching selection
+        // changes the id and drops text-field focus (avoids input bleeding between zones).
+        if (SelectedZoneIndex >= 0 && SelectedZoneIndex < _zoneSystem.Count)
+        {
+            if (_eb.DrawButton("Delete Zone", panelX + Margin, y, 110, ButtonHeight, DangerColor))
+            {
+                _zoneSystem.Remove(SelectedZoneIndex);
+                SelectedZoneIndex = Math.Min(SelectedZoneIndex, _zoneSystem.Count - 1);
+                return; // list changed — re-layout next frame
+            }
+            y += ButtonHeight + 8;
+
+            _spriteBatch.Draw(_pixel, new Rectangle(panelX, y, PanelWidth, 1), SeparatorColor);
+            y += 4;
+            var z = _zoneSystem.ZonesMut[SelectedZoneIndex];
+            int idx = SelectedZoneIndex;
+
+            z.Name = _eb.DrawTextField($"zone_name_{idx}", "Name", z.Name, panelX + Margin, y, fw);
+            y += FieldHeight + 2;
+
+            string kindStr = _eb.DrawCombo($"zone_kind_{idx}", "Kind", z.Kind.ToString(),
+                CachedZoneKindNames, panelX + Margin, y, fw);
+            if (Enum.TryParse<ZoneKind>(kindStr, out var parsedKind)) z.Kind = parsedKind;
+            y += FieldHeight + 2;
+
+            z.X = _eb.DrawFloatField($"zone_x_{idx}", "Center X", z.X, panelX + Margin, y, fw, 1f);
+            y += FieldHeight + 2;
+            z.Y = _eb.DrawFloatField($"zone_y_{idx}", "Center Y", z.Y, panelX + Margin, y, fw, 1f);
+            y += FieldHeight + 2;
+            z.HalfW = MathF.Max(1f, _eb.DrawFloatField($"zone_hw_{idx}", "Half W", z.HalfW, panelX + Margin, y, fw, 1f));
+            y += FieldHeight + 2;
+            z.HalfH = MathF.Max(1f, _eb.DrawFloatField($"zone_hh_{idx}", "Half H", z.HalfH, panelX + Margin, y, fw, 1f));
+            y += FieldHeight + 4;
+
+            if (z.Kind == ZoneKind.Village)
+                DrawSmallText("Village config: see left panel", panelX + Margin, y, TextDim);
+        }
+        else
+        {
+            DrawSmallText("Pick a kind, click + Draw Zone,", panelX + Margin, y, TextDim);
+            y += LineHeight;
+            DrawSmallText("then drag a rectangle in the world.", panelX + Margin, y, TextDim);
+        }
+    }
+
+    /// <summary>Rect of the left-side village panel, or null when it isn't showing
+    /// (Zones tab with a Village zone selected only). Single source for Draw,
+    /// UpdateZonesTab world-input gating and IsMouseOverPanel.</summary>
+    private Rectangle? ZoneLeftPanelRect(int screenH)
+    {
+        if (ActiveTab != MapEditorTab.Zones) return null;
+        if (SelectedZoneIndex < 0 || SelectedZoneIndex >= _zoneSystem.Count) return null;
+        if (_zoneSystem.Zones[SelectedZoneIndex].Kind != ZoneKind.Village) return null;
+        return new Rectangle(10, 10, 300, Math.Min(screenH - 20, 560));
+    }
+
+    /// <summary>The village config panel on the LEFT side of the screen: name, population
+    /// spawn config, and a live summary of what's authored inside the zone rect. Drawn
+    /// post-clip (the right-panel scissor would hide it entirely).</summary>
+    private void DrawZoneLeftPanel(int screenW, int screenH)
+    {
+        var rectOpt = ZoneLeftPanelRect(screenH);
+        if (rectOpt == null || _eb == null) return;
+        var rect = rectOpt.Value;
+        var z = _zoneSystem.ZonesMut[SelectedZoneIndex];
+        int idx = SelectedZoneIndex;
+
+        _spriteBatch.Draw(_pixel, rect, BgColor);
+        DrawRectBorder(rect.X, rect.Y, rect.Width, rect.Height, SeparatorColor);
+        _spriteBatch.Draw(_pixel, new Rectangle(rect.X, rect.Y, rect.Width, HeaderHeight), HeaderBg);
+        DrawSmallText($"Village: {z.Name}", rect.X + Margin, rect.Y + 6, TextBright);
+
+        int x = rect.X + Margin;
+        int fw = rect.Width - Margin * 2;
+        int y = rect.Y + HeaderHeight + 6;
+
+        z.Name = _eb.DrawTextField($"zone_vname_{idx}", "Name", z.Name, x, y, fw);
+        y += FieldHeight + 6;
+
+        DrawSmallText("Population (spawned at load)", x, y, AccentColor);
+        y += LineHeight;
+        z.Population.Peasant = Math.Max(0, _eb.DrawIntField($"zone_pop_peasant_{idx}", "Peasants", z.Population.Peasant, x, y, fw));
+        y += FieldHeight + 2;
+        z.Population.Hunter = Math.Max(0, _eb.DrawIntField($"zone_pop_hunter_{idx}", "Hunters", z.Population.Hunter, x, y, fw));
+        y += FieldHeight + 2;
+        z.Population.Militia = Math.Max(0, _eb.DrawIntField($"zone_pop_militia_{idx}", "Militia", z.Population.Militia, x, y, fw));
+        y += FieldHeight + 2;
+        z.Population.Watchdog = Math.Max(0, _eb.DrawIntField($"zone_pop_watchdog_{idx}", "Watchdogs", z.Population.Watchdog, x, y, fw));
+        y += FieldHeight + 6;
+
+        _spriteBatch.Draw(_pixel, new Rectangle(rect.X, y, rect.Width, 1), SeparatorColor);
+        y += 4;
+
+        // Live contents summary — what's authored inside the rect right now. Shows
+        // load-time contents (placed objects/units), which is what's being edited.
+        DrawSmallText("Inside the zone:", x, y, AccentColor);
+        y += LineHeight;
+
+        _zoneContentCounts.Clear();
+        for (int oi = 0; oi < _envSystem.ObjectCount; oi++)
+        {
+            var obj = _envSystem.GetObject(oi);
+            var def = _envSystem.GetDef(obj.DefIndex);
+            if (!def.IsBuilding) continue;
+            if (!z.ContainsPoint(new Vec2(obj.X, obj.Y))) continue;
+            string key = string.IsNullOrEmpty(def.Name) ? def.Id : def.Name;
+            _zoneContentCounts.TryGetValue(key, out int c);
+            _zoneContentCounts[key] = c + 1;
+        }
+        y = DrawZoneContentCounts("Buildings", rect, x, y);
+
+        _zoneContentCounts.Clear();
+        foreach (var pu in _placedUnits)
+        {
+            if (!z.ContainsPoint(new Vec2(pu.X, pu.Y))) continue;
+            string key = pu.IsCorpse ? $"{pu.UnitDefId} (corpse)" : pu.UnitDefId;
+            _zoneContentCounts.TryGetValue(key, out int c);
+            _zoneContentCounts[key] = c + 1;
+        }
+        y = DrawZoneContentCounts("Units", rect, x, y);
+    }
+
+    /// <summary>Render the accumulated _zoneContentCounts as an indented "Nx name" list,
+    /// truncating at the panel bottom. Returns the new layout y.</summary>
+    private int DrawZoneContentCounts(string label, Rectangle panelRect, int x, int y)
+    {
+        int total = 0;
+        foreach (var kv in _zoneContentCounts) total += kv.Value;
+        DrawSmallText($"{label} ({total}):", x, y, TextColor);
+        y += LineHeight;
+        foreach (var kv in _zoneContentCounts)
+        {
+            if (y > panelRect.Bottom - LineHeight * 2)
+            {
+                DrawSmallText("  ...", x, y, TextDim);
+                return y + LineHeight;
+            }
+            DrawSmallText($"  {kv.Value}x {kv.Key}", x, y, TextDim);
+            y += LineHeight;
+        }
+        return y + 2;
+    }
+
+    /// <summary>World overlays for the Zones tab: every zone as a transparent kind-colored
+    /// fill with a darker opaque border (selected = brighter fill + near-white border +
+    /// drag handles), plus the rubber-band preview while drawing a new zone.</summary>
+    private void DrawZoneOverlays(int screenW, int screenH)
+    {
+        var handleColor = new Color(255, 255, 100, 220);
+        var handleActiveColor = new Color(255, 120, 60, 255);
+        const int handleSz = 6;
+
+        var zones = _zoneSystem.Zones;
+        for (int i = 0; i < zones.Count; i++)
+        {
+            var z = zones[i];
+            bool selected = i == SelectedZoneIndex;
+
+            var tl = _camera.WorldToScreen(new Vec2(z.X - z.HalfW, z.Y - z.HalfH), 0, screenW, screenH);
+            var br = _camera.WorldToScreen(new Vec2(z.X + z.HalfW, z.Y + z.HalfH), 0, screenW, screenH);
+            int rx = (int)tl.X, ry = (int)tl.Y;
+            int rw = (int)(br.X - tl.X), rh = (int)(br.Y - tl.Y);
+            if (rw <= 0 || rh <= 0) continue;
+
+            _spriteBatch.Draw(_pixel, new Rectangle(rx, ry, rw, rh), ZoneColors.Fill(z.Kind, selected));
+            // 2px opaque border: outer + 1px inset
+            var border = ZoneColors.Border(z.Kind, selected);
+            DrawRectBorder(rx, ry, rw, rh, border);
+            if (rw > 2 && rh > 2)
+                DrawRectBorder(rx + 1, ry + 1, rw - 2, rh - 2, border);
+
+            if (selected)
+            {
+                int cx = rx + rw / 2;
+                int cy = ry + rh / 2;
+
+                // 4 corners
+                DrawRegionHandleSquare(rx, ry, handleSz, _zoneHandle == RegionHandle.NW ? handleActiveColor : handleColor);
+                DrawRegionHandleSquare(rx + rw, ry, handleSz, _zoneHandle == RegionHandle.NE ? handleActiveColor : handleColor);
+                DrawRegionHandleSquare(rx + rw, ry + rh, handleSz, _zoneHandle == RegionHandle.SE ? handleActiveColor : handleColor);
+                DrawRegionHandleSquare(rx, ry + rh, handleSz, _zoneHandle == RegionHandle.SW ? handleActiveColor : handleColor);
+
+                // 4 edge midpoints
+                DrawRegionHandleSquare(cx, ry, handleSz, _zoneHandle == RegionHandle.N ? handleActiveColor : handleColor);
+                DrawRegionHandleSquare(rx + rw, cy, handleSz, _zoneHandle == RegionHandle.E ? handleActiveColor : handleColor);
+                DrawRegionHandleSquare(cx, ry + rh, handleSz, _zoneHandle == RegionHandle.S ? handleActiveColor : handleColor);
+                DrawRegionHandleSquare(rx, cy, handleSz, _zoneHandle == RegionHandle.W ? handleActiveColor : handleColor);
+
+                // Body center indicator
+                DrawRegionHandleSquare(cx, cy, handleSz - 1, _zoneHandle == RegionHandle.Body ? handleActiveColor : new Color(100, 255, 100, 180));
+            }
+
+            // Label at center
+            var labelPos = _camera.WorldToScreen(new Vec2(z.X, z.Y), 0, screenW, screenH);
+            DrawSmallText($"{z.Name}", (int)(labelPos.X - 20), (int)(labelPos.Y - 10), TextBright);
+        }
+
+        // Rubber-band preview while dragging out a new zone
+        if (_zoneRubberBanding && _eb != null)
+        {
+            var mouse = _eb._input.Mouse;
+            Vec2 cur = _camera.ScreenToWorld(new Vector2(mouse.X, mouse.Y), screenW, screenH);
+            float x0 = MathF.Min(_zoneDragStartWorld.X, cur.X);
+            float x1 = MathF.Max(_zoneDragStartWorld.X, cur.X);
+            float y0 = MathF.Min(_zoneDragStartWorld.Y, cur.Y);
+            float y1 = MathF.Max(_zoneDragStartWorld.Y, cur.Y);
+            var kind = (ZoneKind)_zoneCreateKindIdx;
+
+            var tl = _camera.WorldToScreen(new Vec2(x0, y0), 0, screenW, screenH);
+            var br = _camera.WorldToScreen(new Vec2(x1, y1), 0, screenW, screenH);
+            int rx = (int)tl.X, ry = (int)tl.Y;
+            int rw = (int)(br.X - tl.X), rh = (int)(br.Y - tl.Y);
+            if (rw > 0 && rh > 0)
+            {
+                _spriteBatch.Draw(_pixel, new Rectangle(rx, ry, rw, rh), ZoneColors.Fill(kind, selected: true));
+                DrawRectBorder(rx, ry, rw, rh, ZoneColors.Border(kind, selected: true));
+            }
+        }
+    }
+
+    /// <summary>Dev-command hook (`select` while the map editor is open): select a zone
+    /// by index, id, or name and switch to the Zones tab, so headless drives can
+    /// exercise the selected-state UI. Returns a description of the match, or null.</summary>
+    public string? DevSelectZone(string token)
+    {
+        var zones = _zoneSystem.Zones;
+        int found = -1;
+        if (int.TryParse(token, out int idx) && idx >= 0 && idx < zones.Count)
+            found = idx;
+        else
+            for (int i = 0; i < zones.Count; i++)
+                if (string.Equals(zones[i].Id, token, StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(zones[i].Name, token, StringComparison.OrdinalIgnoreCase))
+                { found = i; break; }
+        if (found < 0) return null;
+        ActiveTab = MapEditorTab.Zones;
+        SelectedZoneIndex = found;
+        return $"zone {zones[found].Id} ({zones[found].Name})";
+    }
+
+    /// <summary>First free "zone_N" id (ids stay unique even after deletions).</summary>
+    private string NextZoneId()
+    {
+        for (int n = 0; ; n++)
+        {
+            string id = $"zone_{n}";
+            bool taken = false;
+            for (int i = 0; i < _zoneSystem.Count; i++)
+                if (_zoneSystem.Zones[i].Id == id) { taken = true; break; }
+            if (!taken) return id;
+        }
     }
 
     // ====================================================================
@@ -4909,6 +5266,9 @@ public class MapEditorWindow
             // Save roads separately
             SaveRoads(mapsDir);
 
+            // Save zones separately
+            SaveZones(mapsDir);
+
             _statusMessage = $"Saved: {path}";
             _statusTimer = 3f;
             DebugLog.Log("editor", $"Map saved to {path}");
@@ -4931,6 +5291,7 @@ public class MapEditorWindow
             string mapPath = Path.Combine(mapsDir, _mapFilename + ".json");
             string triggerPath = Path.Combine(mapsDir, _mapFilename + "_triggers.json");
             string roadsPath = Path.Combine(mapsDir, _mapFilename + "_roads.json");
+            string zonesPath = Path.Combine(mapsDir, _mapFilename + "_zones.json");
 
             if (!File.Exists(mapPath))
             {
@@ -4987,6 +5348,12 @@ public class MapEditorWindow
             // Load roads
             MapData.LoadRoads(roadsPath, _roadSystem);
 
+            // Load zones. Explicit Clear first: LoadZones no-ops on a missing file,
+            // and stale zones must not survive a map switch.
+            _zoneSystem.Clear();
+            SelectedZoneIndex = -1;
+            MapData.LoadZones(zonesPath, _zoneSystem);
+
             // Reload env textures
             _envSystem.LoadTextures(_device);
 
@@ -5005,6 +5372,43 @@ public class MapEditorWindow
             _statusTimer = 5f;
             DebugLog.Log("editor", $"Map load error: {ex.Message}");
         }
+    }
+
+    /// <summary>Write the authored zones to the <c>&lt;map&gt;_zones.json</c> sidecar
+    /// (same pattern as SaveTriggers/SaveRoads). Population is only written for
+    /// Village zones — it's meaningless on the animal kinds.</summary>
+    private void SaveZones(string mapsDir)
+    {
+        string path = Path.Combine(mapsDir, _mapFilename + "_zones.json");
+        using var stream = File.Create(path);
+        using var writer = new Utf8JsonWriter(stream, new JsonWriterOptions { Indented = true });
+
+        writer.WriteStartObject();
+        writer.WriteStartArray("zones");
+        foreach (var z in _zoneSystem.Zones)
+        {
+            writer.WriteStartObject();
+            writer.WriteString("id", z.Id);
+            writer.WriteString("name", z.Name);
+            writer.WriteString("kind", z.Kind.ToString());
+            writer.WriteNumber("x", z.X);
+            writer.WriteNumber("y", z.Y);
+            writer.WriteNumber("halfW", z.HalfW);
+            writer.WriteNumber("halfH", z.HalfH);
+            if (z.Kind == ZoneKind.Village)
+            {
+                writer.WriteStartObject("population");
+                writer.WriteNumber("peasant", z.Population.Peasant);
+                writer.WriteNumber("hunter", z.Population.Hunter);
+                writer.WriteNumber("militia", z.Population.Militia);
+                writer.WriteNumber("watchdog", z.Population.Watchdog);
+                writer.WriteEndObject();
+            }
+            writer.WriteEndObject();
+        }
+        writer.WriteEndArray();
+        writer.WriteEndObject();
+        writer.Flush();
     }
 
     private void SaveTriggers(string mapsDir)
@@ -5411,35 +5815,94 @@ public class MapEditorWindow
     private static RegionHandle HitTestRegionHandles(TriggerRegion region, Vec2 worldPos, float handleTol)
     {
         if (region.Shape == RegionShape.Rectangle)
-        {
-            float l = region.X - region.HalfW;
-            float r = region.X + region.HalfW;
-            float t = region.Y - region.HalfH;
-            float b = region.Y + region.HalfH;
-            float mx = region.X;
-            float my = region.Y;
+            return HitTestRectHandles(region.X, region.Y, region.HalfW, region.HalfH, worldPos, handleTol);
 
-            // Test corners first (smallest targets)
-            if (Vec2Near(worldPos, new Vec2(l, t), handleTol)) return RegionHandle.NW;
-            if (Vec2Near(worldPos, new Vec2(r, t), handleTol)) return RegionHandle.NE;
-            if (Vec2Near(worldPos, new Vec2(r, b), handleTol)) return RegionHandle.SE;
-            if (Vec2Near(worldPos, new Vec2(l, b), handleTol)) return RegionHandle.SW;
-            // Edge midpoints
-            if (Vec2Near(worldPos, new Vec2(mx, t), handleTol)) return RegionHandle.N;
-            if (Vec2Near(worldPos, new Vec2(r, my), handleTol)) return RegionHandle.E;
-            if (Vec2Near(worldPos, new Vec2(mx, b), handleTol)) return RegionHandle.S;
-            if (Vec2Near(worldPos, new Vec2(l, my), handleTol)) return RegionHandle.W;
-            // Body (inside rect)
-            if (worldPos.X >= l && worldPos.X <= r && worldPos.Y >= t && worldPos.Y <= b)
-                return RegionHandle.Body;
-        }
-        else // Circle
-        {
-            float dist = (worldPos - new Vec2(region.X, region.Y)).Length();
-            if (MathF.Abs(dist - region.Radius) < handleTol) return RegionHandle.CircleRadius;
-            if (dist <= region.Radius) return RegionHandle.Body;
-        }
+        // Circle
+        float dist = (worldPos - new Vec2(region.X, region.Y)).Length();
+        if (MathF.Abs(dist - region.Radius) < handleTol) return RegionHandle.CircleRadius;
+        if (dist <= region.Radius) return RegionHandle.Body;
         return RegionHandle.None;
+    }
+
+    /// <summary>Hit-test the 8 resize handles + body of a center/half-extent rectangle.
+    /// Shared by trigger regions and zones.</summary>
+    private static RegionHandle HitTestRectHandles(float cx, float cy, float halfW, float halfH,
+        Vec2 worldPos, float handleTol)
+    {
+        float l = cx - halfW;
+        float r = cx + halfW;
+        float t = cy - halfH;
+        float b = cy + halfH;
+
+        // Test corners first (smallest targets)
+        if (Vec2Near(worldPos, new Vec2(l, t), handleTol)) return RegionHandle.NW;
+        if (Vec2Near(worldPos, new Vec2(r, t), handleTol)) return RegionHandle.NE;
+        if (Vec2Near(worldPos, new Vec2(r, b), handleTol)) return RegionHandle.SE;
+        if (Vec2Near(worldPos, new Vec2(l, b), handleTol)) return RegionHandle.SW;
+        // Edge midpoints
+        if (Vec2Near(worldPos, new Vec2(cx, t), handleTol)) return RegionHandle.N;
+        if (Vec2Near(worldPos, new Vec2(r, cy), handleTol)) return RegionHandle.E;
+        if (Vec2Near(worldPos, new Vec2(cx, b), handleTol)) return RegionHandle.S;
+        if (Vec2Near(worldPos, new Vec2(l, cy), handleTol)) return RegionHandle.W;
+        // Body (inside rect)
+        if (worldPos.X >= l && worldPos.X <= r && worldPos.Y >= t && worldPos.Y <= b)
+            return RegionHandle.Body;
+        return RegionHandle.None;
+    }
+
+    /// <summary>Apply an edge/corner resize drag to a center/half-extent rectangle. The
+    /// dragged side follows the cursor while the opposite side stays put; each axis is
+    /// clamped to a 1-unit minimum extent. Shared by trigger regions and zones (Body and
+    /// CircleRadius are the callers' business).</summary>
+    private static void ApplyRectHandleDrag(RegionHandle handle, Vec2 worldPos,
+        ref float x, ref float y, ref float halfW, ref float halfH)
+    {
+        bool north = handle is RegionHandle.N or RegionHandle.NW or RegionHandle.NE;
+        bool south = handle is RegionHandle.S or RegionHandle.SW or RegionHandle.SE;
+        bool west = handle is RegionHandle.W or RegionHandle.NW or RegionHandle.SW;
+        bool east = handle is RegionHandle.E or RegionHandle.NE or RegionHandle.SE;
+
+        if (north)
+        {
+            float oldBottom = y + halfH;
+            float newTop = worldPos.Y;
+            if (newTop < oldBottom - 1f)
+            {
+                y = (newTop + oldBottom) / 2f;
+                halfH = (oldBottom - newTop) / 2f;
+            }
+        }
+        else if (south)
+        {
+            float oldTop = y - halfH;
+            float newBottom = worldPos.Y;
+            if (newBottom > oldTop + 1f)
+            {
+                y = (oldTop + newBottom) / 2f;
+                halfH = (newBottom - oldTop) / 2f;
+            }
+        }
+
+        if (west)
+        {
+            float oldRight = x + halfW;
+            float newLeft = worldPos.X;
+            if (newLeft < oldRight - 1f)
+            {
+                x = (newLeft + oldRight) / 2f;
+                halfW = (oldRight - newLeft) / 2f;
+            }
+        }
+        else if (east)
+        {
+            float oldLeft = x - halfW;
+            float newRight = worldPos.X;
+            if (newRight > oldLeft + 1f)
+            {
+                x = (oldLeft + newRight) / 2f;
+                halfW = (newRight - oldLeft) / 2f;
+            }
+        }
     }
 
     // ---- Environment helpers ----
