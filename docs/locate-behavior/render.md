@@ -1,9 +1,11 @@
 # Render/ — rendering subsystems
 
 > **Coverage: PARTIAL.** Documented: the **draw-dispatch pipeline** (top-level `Draw`,
-> batch/shader/state model — see next section) and the **visual-effect / flipbook**
-> systems. Still undocumented: sprite atlases & frames internals, shadows, `FontManager`,
-> `HUDRenderer`, the spellbar widget, `RuntimeWidgetRenderer`. Extend this file when you touch those.
+> batch/shader/state model — see next section), the **rendering feature inventory**
+> (every technique tried, with status), the **target feature set** (what we want the
+> renderer to do), and the **visual-effect / flipbook** systems. Still undocumented:
+> sprite atlases & frames internals, `FontManager`, `HUDRenderer`, the spellbar widget,
+> `RuntimeWidgetRenderer`. Extend this file when you touch those.
 
 ## The draw-dispatch pipeline (how a frame is rendered)
 
@@ -118,6 +120,190 @@ targets the current RT (scene RT or back buffer).
 - Keep sprite blits going through `Renderer.DrawSprite` so a pass system only owns
   batch/state/order, not per-sprite geometry (matches CLAUDE.md "shared component owns
   mechanics, caller owns data").
+
+## Rendering feature inventory — everything we've tried, and its status
+
+One entry per feature: where it lives, how it works in a sentence, status
+(**working / partial / known-weak / failed-reference / absent**), gotchas. Statuses as
+of 2026-07-03; the deferred-issue list behind several of them is
+`todos/shader-review-followups.md`.
+
+### Fog & visibility
+- **Death fog (ground blight fog)** — WORKING. Sim: `GameSystems/DeathFogSystem.cs`
+  (coarse 4-unit grid, heat-equation diffusion, sources/sinks from env-def
+  `FogEmitRate`/`FogAbsorbRate`; also drives tree corruption and ground-vertex
+  corruption). Render: `Render/DeathFogRenderer.cs` — **no shader**, one cloud-flipbook
+  puff per active cell (density→alpha/scale, `MaxAlpha=0.20`), appended into the shared
+  Y-sort depth list (`DepthItemType.DeathFogPuff`) so units occlude/are occluded by fog
+  by ground Y. **No "unit rises out of the fog" clipping exists** — see target #1.
+- **Fog of war** — WORKING (GPU, RT-based). `Render/FogOfWarSystem.cs`: visibility RT
+  (vision circles) → temporal smooth via `FogSmooth.fx` → cumulative explored RT →
+  packed combine; composited post-bloom by `FogComposite.fx`. CPU tile mirror for
+  gameplay culling. Gotchas: full 2048² passes every frame even when vision is static;
+  `FogSmooth` 8-bit RT stalls at uncapped FPS (grey veil).
+- **Weather fog / haze / vignette** — WORKING. `Render/WeatherRenderer.cs` `DrawFog`
+  via `WeatherFog.fx` in the HUD pass: world-anchored scrolling noise fog, haze,
+  vignette, lightning screen-flash. Brightness/tint blocks in the shader are pinned
+  neutral — scene darkening moved pre-bloom to ambient (see day/night) to avoid
+  double-darkening.
+
+### Weather & time of day
+- **Weather presets** — PARTIAL. Data-driven `WeatherEffects` presets in
+  `user settings/weather.json` (dreary_rain, thunderstorm, dawn, night, evil_night, …):
+  brightness/contrast/saturation, tint, ambient, vignette, fog, haze, lightning
+  intervals, rain params, **windStrength/windAngle (in data, consumed by nothing)**.
+- **Rain** — WORKING. `WeatherRenderer.DrawRainParticles`: procedural hash-grid drop
+  field, screen-space streaks + splash ellipses, zoom-scaled, wind-drifted, drawn in
+  the scene pass. Cap `MAX_RAIN=6000`. **Snow: ABSENT. Wind (visual): ABSENT.**
+- **Day/night cycle** — WORKING, but color-grading only. `Game/DayNightSystem.cs`:
+  Dawn/Day/Dusk/Night phases each map to a weather preset, eased lerp between them,
+  writes `RuntimeEffects` that `WeatherRenderer.GetEffectiveEffects` serves. Night =
+  a global ambient multiply (GroundShader `AmbientColor` + sprite tints via
+  `WeatherRenderer.GetAmbientColor()`), applied pre-bloom so HDR effects still glow
+  against the darkened scene. **No local lighting of any kind** — see target #5.
+
+### Partial submersion & transparency
+- **Wading (units part-submerged in water)** — WORKING; the closest precedent for
+  "units sticking up out of fog". `resources/Wading.fx` cuts the sprite along a
+  waterline expressed in frame-local UV (center + slope, optional second cut for the
+  submerged back of quadrupeds), fades below-line pixels to `UnderwaterAlpha`, draws a
+  foam band on the line; fully premultiplied. Per-unit line resolution in
+  `Render/WadingState.cs` (waterness sampling + per-facing profiles from
+  `data/wading_defaults.json`); draw in `GameRenderer.Units.cs` `DrawWadingSpriteFrame`;
+  `ShadowRenderer` reuses the same state so shadow and sprite share one waterline.
+  Gotcha: wading units still stamp their full silhouette as fog depth-occluders.
+- **Tree dissolve (corruption morph)** — WORKING. `DissolveTree.fx` noise-threshold
+  dissolves the live sprite into the corrupted sprite per instance (Seed, EdgeSoftness).
+  It is the death-fog corruption transition, **not** an occlusion fade — there is no
+  "tree fades when it hides a unit" feature (target #3).
+- **Depth cutout** — WORKING (narrow). `DepthCutout.fx` writes depth-only unit
+  silhouettes (`DrawFogDepthOccluders`, behind the `DepthSortedFog` perf setting) so
+  additive reanim smoke depth-tests against units. The only real depth-buffer use in
+  the pipeline; C++ had a general depth-sprite pass (`building_depth`/`wall_depth`/
+  `depth_sprite.fs`), C# does not.
+- **General transparency sorting** — the Y-sort depth list (`_depthItems`) is the only
+  mechanism; grass tufts, poison/fog puffs, reanim dust, ghost units (premultiplied
+  tint + `DrawGhostOutline`), fading corpses all ride it.
+
+### Emissive / additive / HDR
+- **HDR sprites + additive passes** — WORKING. `HdrSprite.fx` (AlphaMode 0=additive
+  /1=alpha, intensity encoded in vertex color via `Core/HdrColor.cs` `ToHdrVertex`/
+  `ToHdrVertexAlpha`) and `HdrIntensity.fx` (god-ray trapezoid geometry). Scene RT is
+  `HalfVector4` so additive exceeds 1.0 and bloom picks it up. **Never use
+  `HdrColor.ToScaledColor()` outside the color picker** — it bleaches HDR
+  (`todos/bloom_parity.md`).
+- **Premultiplied-alpha convention** (commit `d626422`): scene pass = AlphaBlend +
+  LinearClamp over premultiplied textures; every scene shader outputs premultiplied
+  (Wading, DissolveTree, MorphSDF, MagicCircle, HdrSprite). Exception: `OutlineFlat.fx`
+  outputs straight alpha (NonPremultiplied/Additive only — header warns).
+- **God rays** — WORKING, known-weak parity. `Render/GodRayRenderer.cs`: layered
+  trapezoid strips + edge sublayers + ground aura, per-sublayer HDR intensity. Renders
+  brighter/whiter with less spread than C++ (see bloom).
+- **Lightning** — WORKING. `Render/LightningRenderer.cs` + `Game/LightningSystem.cs`:
+  telegraph circle, radial flash, HDR bolts and drains.
+- **Bloom** — WORKING, KNOWN-WEAK vs C++. `Render/Bloom.cs` mip chain
+  (`BloomExtract`/`BloomCombine`/`BloomUpsampleBicubic`). Full parity investigation in
+  `todos/bloom_parity.md`; suspects: HLSL-vs-GLSL bicubic, a disabled Gaussian soften
+  pass (`if (false &&` in Bloom.cs), mip sizing, `ToScaledColor` overuse. Related
+  memory: C++ raylib ignored per-sublayer HDR intensities (batching bug), so C++-tuned
+  intensity values in spells.json are inflated — retune down when porting
+  (`todos/rendering_pitfalls.md`).
+
+### Surfaces & world
+- **Ground shader** — WORKING, feature-rich. `GroundShader.fx` (one opaque quad over
+  the vertex-map texture): 8 texture slots + bit-packed type map, per-type
+  `TintColors[16]` after 4-corner bilerp, animated shore foam for water types, noise UV
+  warp, **corruption crossfade** (R=current/G=original/B=progress per vertex, fading
+  texture AND tint AND water flag), global `AmbientColor`.
+- **Shadows** — WORKING, two techniques. `Render/ShadowRenderer.cs`: ellipse mode (two
+  soft glow ovals) or shader mode (sun-angle-skewed parallelogram quads sampling the
+  current animation frame as silhouette); per-env-def `ShadowType`/scales, crops to
+  wading waterline, crossfades reanimating corpses and corrupting trees. Wall shadows
+  live in `WallSystem.DrawWalls`, not here.
+- **Outlines** — WORKING. `OutlineFlat.fx` + `DrawSpriteOutline` (8 offset redraws):
+  buff pulsing outlines, ghost outlines, reanim-rise attachment.
+- **Magic glyphs** — WORKING, known-weak AA. `MagicCircle.fx` — fully procedural rings
+  /runes/pentagram/energy; edge widths in normalized UV so it blurs large and aliases
+  small; activation flare LDR-capped. Highest-payoff deferred shader rework.
+- **Reanim morph** — WORKING. `MorphSDF.fx` interpolates death-pose/standup-pose SDFs
+  with a mid-morph bulge + green energy fill (`Render/ReanimMorph.cs`). Gotcha: t=0
+  re-threshold pop on soft-edged art.
+- **Soul orbs** — WORKING but crude: two stacked non-premultiplied `_pixel` quads
+  (`DrawSoulOrbs`).
+
+### UI effects
+- **`Render/UIShaders.cs`** — WORKING, the sanctioned path: `UIGradient.fx`
+  (vertical/horizontal/3-stop/radial), `UIRectShadow.fx` (drop + inset), and
+  `UICircleEffect.fx` (AA circle + glow ring), each with no-shader fallbacks. Policy:
+  isolated test scenario per shader before real use (`todos/css_rendering.md`).
+  Gotcha: the hardcoded resume `Begin` discards caller scissor/transform.
+- **`Render/UIGfx.cs`** — FAILED-REFERENCE, since **removed**. The earlier
+  stacked-SpriteBatch attempt at CSS effects (gradients/glows/emboss) produced
+  banding/halos and was rejected; `UIShaders` replaced it. `Render/SkillTreePanel.cs`
+  still carries placeholder visuals from that era.
+
+### Absent entirely
+- **Local lighting** — no point lights, no torch/lantern glow, no light-around-unit.
+  "Lighting" today = global ambient multiply + emissive HDR/bloom. (Target #5.)
+- **Custom vertex shaders** — C# is pixel-shader-only on SpriteBatch's built-in VS
+  (see `memory/mgfx_shader_gotchas.md`); C++ had `grass.vs`/`road.vs`. Grass/roads are
+  CPU-transformed sprites here.
+- **Snow, visible wind** — data fields exist (`weather.json`), nothing renders them.
+
+### Read-before-touching notes
+- `todos/rendering_pitfalls.md` — C++ raylib → MonoGame porting gotchas (batched
+  SetShaderValue, RT DiscardContents, Additive=SRC_ALPHA, HDR alpha accumulation).
+- `memory/mgfx_shader_gotchas.md` — MGFX/OpenGL defaults all uniforms to 0: C# must
+  set every uniform every draw.
+- Rendering test scenarios: `blend_test`, `godray_render_test`, `BloomDebugScenario`
+  (identical-parameter twins exist in C++ for pixel-readback comparison).
+
+## Target feature set — what we want the renderer to do
+
+The wishlist that the pass-based redesign (previous section) should be designed
+against. Each item names the existing ingredient tech so a design can build on it
+instead of starting fresh.
+
+1. **Ground fog that units rise out of.** Fog should read as a volume: a unit standing
+   in it shows torso/head above the fog with legs swallowed, not just "puff sprite in
+   front of / behind the unit" (today's death fog is Y-sorted opaque puffs, item 1 of
+   the inventory). Ingredients already built: **`Wading.fx`** proves per-sprite
+   partial-height cutting with a soft band at the line (swap waterline → fog line,
+   foam → fog wisp), and **`DepthCutout.fx`** proves depth-only unit silhouettes
+   against a translucent layer. Likely shape: a fog layer pass whose alpha per pixel
+   knows "how deep into the fog is this sprite pixel" — either the wading-style
+   per-sprite cut driven by local fog density, or a screen-space fog quad
+   depth-tested against sprite silhouettes.
+2. **Proper transparent objects.** Anything translucent (ghosts, fog puffs, grass,
+   smoke, glass-like effects) should sort correctly against units and each other. The
+   Y-sort depth list is the seed; the redesign's transparent pass should generalize it
+   rather than each feature hand-inserting item types.
+3. **Occlusion fade.** A tree/building that hides a unit (especially the player)
+   should go semi-transparent. Absent today — `DissolveTree.fx` is the corruption
+   morph, not this. Needs a "what does this object occlude" test + per-object alpha,
+   which the depth-list pass already has the data for.
+4. **Additive/emissive objects as first-class citizens.** HDR + additive passes and
+   bloom exist and work; keep them correct through any redesign (premultiplied
+   convention, HalfVector4 scene RT, ambient applied pre-bloom so emissives still glow
+   at night). Reach bloom parity with C++ (`todos/bloom_parity.md`) — softer, wider
+   glow rather than bright-white cores.
+5. **Local lighting.** Torches, lanterns, spell glows, windows at night — pools of
+   light that punch through the night-time ambient darkening. Nothing exists.
+   A cheap 2.5D take: a light-accumulation RT (additive glow sprites per light source)
+   multiplied/screened over the darkened scene before bloom; full per-pixel normals
+   are NOT the goal.
+6. **Weather as a system, not one effect.** Rain works; want snow, drifting wind
+   (bend grass/trees — the data fields already exist in `weather.json`), and storms
+   that compose rain + wind + lightning flash + bolt strikes. Presets + day/night
+   already interpolate; new effects should slot into `WeatherEffects` the same way.
+7. **Day/night that changes more than color.** Keep the ambient grade, add the things
+   ambient can't do: local lights mattering at night (#5), longer/softer shadows by
+   sun angle (ShadowRenderer already has `SunAngle`/`LengthScale` — drive them from
+   `DayNightSystem`), fog that thickens at dawn/dusk (fog density is currently
+   deliberately not interpolated).
+8. **Fog-of-war that scales.** Keep the RT approach but stop redrawing 2048² every
+   static frame; fix the 8-bit smoothing stall (both flagged in
+   `todos/shader-review-followups.md`).
 
 ## Visual effects (the "play a one-shot visual at a point" system)
 
