@@ -179,6 +179,22 @@ public sealed class SpriteQueuePass : RenderPass
         });
     }
 
+    /// <summary>Layer-ordered callback slot (no depth sort within the layer —
+    /// submission order rules via the sequence bits). For whole-block items.</summary>
+    public void SubmitCallback(WorldLayer layer, SpriteDrawCallback cb, int a, int b,
+        Material? material = null)
+    {
+        var mat = material ?? _defaultMaterial;
+        _items.Add(new RenderItem
+        {
+            Key = SortKey.Pack((byte)layer, 0, mat.Id, NextSeq()),
+            Material = mat,
+            Callback = cb,
+            CbA = a,
+            CbB = b,
+        });
+    }
+
     public void SubmitSprite(WorldLayer layer, float worldY, Texture2D texture, Vector2 position,
         Rectangle? source, Color color, float rotation, Vector2 origin, float scale,
         SpriteEffects flip = SpriteEffects.None, Material? material = null,

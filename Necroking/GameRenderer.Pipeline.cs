@@ -15,7 +15,7 @@ partial class GameRenderer
 {
     private RenderPipeline? _pipeline;
     private readonly RenderContext _ctx = new();
-    private SpriteQueuePass? _worldYSort;
+    private SpriteQueuePass? _worldPass;
 
     // Per-frame values shared between Scene OnBegin and OnEnd (computed once
     // per frame in Scene.OnBegin).
@@ -72,11 +72,6 @@ partial class GameRenderer
             // Compute ambient color from weather (brightness + tint) for lit sprite tinting
             _g._ambientColor = _g._weatherRenderer.GetAmbientColor();
 
-            // AlphaBlend with premultiplied-alpha textures (loaded via TextureUtil.LoadPremultiplied).
-            // The pass state is defined in EffectBatch (SceneBlend/SceneSampler) so effect draws
-            // that suspend this batch restore the exact same state.
-            Render.EffectBatch.BeginScenePass(_g._spriteBatch);
-
             if (!_frameUseBloom)
                 _g.GraphicsDevice.Clear(_frameClearColor);
         };
@@ -101,79 +96,25 @@ partial class GameRenderer
             }
         }));
 
-        scene.Add(new CustomPass("Roads", ctx => DrawRoads()));
-
-        scene.Add(new CustomPass("GroundLayerObjects", ctx => DrawGroundLayerObjects()));
-
-        scene.Add(new CustomPass("MagicGlyphs", ctx =>
-        {
-            _g._glyphRenderer.SetContext(_g._spriteBatch, _g._pixel, _g._glowTex, _g._camera, _g._renderer, _g._flipbooks, _g._gameTime);
-            _g._glyphRenderer.DrawGround(_g._sim.MagicGlyphs);
-
-            // Build progress bars for blueprint glyphs
-            foreach (var g in _g._sim.MagicGlyphs.Glyphs)
-            {
-                // Show progress bar from the moment the glyph is placed (even at 0%), not only
-                // once construction has begun — so players can see "trap placed, awaiting build".
-                if (g.State == GameSystems.GlyphState.Blueprint && g.BuildProgress < 1f && g.Alive)
-                {
-                    var gsp = _g._renderer.WorldToScreen(g.Position, 0f, _g._camera);
-                    DrawBuildProgressBar(gsp, g.BuildProgress, g.Radius);
-                }
-            }
-        }));
-
-        scene.Add(new CustomPass("Walls", ctx => DrawWalls()));
-
         scene.Add(new CustomPass("WadingSinkOffsets", ctx =>
         {
             // Compute Unit.WadingSinkOffsetY for every unit before any visual
-            // pass reads it. Must run before the Shadows pass (which reads
-            // RenderPos to position shadows) and before UnitsAndObjects
-            // (which reads RenderPos for sprites, buffs, damage numbers, etc.).
+            // pass reads it. Must run before the world pass draws (shadows and
+            // unit sprites both read RenderPos).
             _g.UpdateWadingSinkOffsets();
         }));
 
-        scene.Add(new CustomPass("Shadows", ctx =>
-        {
-            // Grass is no longer drawn here — tufts are merged into the unit Y-sort
-            // inside DrawUnitsAndObjects so they can render in front of / behind
-            // units based on world Y.
-            _g._shadowRenderer.Draw(_g.GraphicsDevice, _g._spriteBatch, _g._glowTex, _g._camera, _g._renderer, _g._sim, _g._gameData, _g._unitAnims, _g._atlases, _g._envSystem, _g._fogOfWar, _g._groundSystem, _g._deathFog, _g._corpseAnims, _g._reanimFx);
-        }));
-
-        // Hover highlight — ground variants (Circle / Ground Box) BEHIND corpses/units (RTS-style).
-        scene.Add(new CustomPass("HoverGroundMarkers", ctx => DrawHoverGroundMarkers()));
-
-        scene.Add(new CustomPass("Corpses", ctx => DrawCorpses()));
-
-        // Units + Environment objects + particles (merged Y-sort for correct
-        // depth) — the first real SpriteQueuePass. Self-contained batches, so
-        // the shared world batch closes before it and resumes after.
-        scene.Add(new CustomPass("EndWorldBatchA", ctx => _g._spriteBatch.End()));
-        _worldYSort = new SpriteQueuePass("WorldYSort", Materials.Scene,
+        // The world sprite pass: roads → traps → glyphs → walls → shadows →
+        // hover markers → corpses → Y-sorted units/objects/particles →
+        // projectiles/rope → rain, as layer bands in one sorted queue.
+        // Collection order (and thus determinism ties) matches the old block
+        // order; consecutive same-material layers merge into single batches.
+        _worldPass = new SpriteQueuePass("World", Materials.Scene,
             () => _g._camera.Position.Y, capacity: 1024)
         {
-            Collect = CollectYSortItems,
+            Collect = CollectWorldItems,
         };
-        scene.Add(_worldYSort);
-        scene.Add(new CustomPass("ResumeWorldBatch", ctx => Render.EffectBatch.BeginScenePass(_g._spriteBatch)));
-
-        scene.Add(new CustomPass("ProjectilesRope", ctx =>
-        {
-            DrawProjectiles();
-            DrawSoulOrbs();
-            // Drag rope (necromancer → roped corpse)
-            DrawRope();
-            // (Death-fog puffs render inside DrawUnitsAndObjects' merged Y-sort
-            // pass so they correctly occlude / are occluded by units & env objects
-            // based on relative ground Y — see DepthItemType.DeathFogPuff.)
-        }));
-
-        // Rain (world-space, depth-sorted with scene objects)
-        scene.Add(new CustomPass("Rain", ctx => _g._weatherRenderer.DrawRain(ctx.ScreenW, ctx.ScreenH)));
-
-        scene.Add(new CustomPass("EndWorldBatch", ctx => _g._spriteBatch.End()));
+        scene.Add(_worldPass);
 
         scene.Add(new CustomPass("FogDepthOccluders", ctx =>
         {

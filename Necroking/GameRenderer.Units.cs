@@ -70,17 +70,81 @@ partial class GameRenderer
         return result;
     }
 
-    // Cached submit callbacks for the Y-sort queue — one delegate instance per
+    // Cached submit callbacks for the world queue — one delegate instance per
     // item kind, created lazily; per-item payload rides in the item's CbA/CbB
     // ints so submission never allocates.
     private SpriteDrawCallback? _cbUnit, _cbEnvObject, _cbCloudPuff, _cbGrassTuft,
         _cbDeathFogPuff, _cbReanimDust;
+    private SpriteDrawCallback? _cbRoads, _cbTraps, _cbGlyphs, _cbWalls, _cbShadows,
+        _cbHoverMarkers, _cbCorpses, _cbProjectilesRope, _cbRain;
 
-    /// <summary>Collect the depth-sorted world into the WorldYSort sprite queue —
-    /// units, env objects, and the particle types that interleave with them.
-    /// This is the old DrawUnitsAndObjects minus sorting and dispatch: the
-    /// queue's sort key (layer=YSort, depth=worldY, seq=submission order)
-    /// reproduces the DepthItem sort including its determinism tiebreaker.</summary>
+    /// <summary>Collect the whole world sprite pass: the fixed layer blocks
+    /// (roads → corpses, projectiles → rain) as whole-layer callback slots, plus
+    /// the depth-sorted YSort layer (units, env objects, and the particle types
+    /// that interleave with them). Layer bands reproduce the old block order;
+    /// within YSort the key (depth=worldY, seq=submission order) reproduces the
+    /// DepthItem sort including its determinism tiebreaker.</summary>
+    private void CollectWorldItems(RenderContext ctx)
+    {
+        _cbRoads ??= (in SpriteScope _, int _, int _) => DrawRoads();
+        _cbTraps ??= (in SpriteScope s, int _, int _) => DrawGroundLayerObjects(s);
+        _cbGlyphs ??= (in SpriteScope _, int _, int _) =>
+        {
+            _g._glyphRenderer.DrawGround(_g._sim.MagicGlyphs);
+            // Build progress bars for blueprint glyphs — shown from the moment
+            // the glyph is placed (even at 0%) so players can see "trap placed,
+            // awaiting build".
+            foreach (var g in _g._sim.MagicGlyphs.Glyphs)
+            {
+                if (g.State == GameSystems.GlyphState.Blueprint && g.BuildProgress < 1f && g.Alive)
+                {
+                    var gsp = _g._renderer.WorldToScreen(g.Position, 0f, _g._camera);
+                    DrawBuildProgressBar(gsp, g.BuildProgress, g.Radius);
+                }
+            }
+        };
+        _cbWalls ??= (in SpriteScope _, int _, int _) => DrawWalls();
+        // ShadowRenderer suspends the batch internally to draw raw quads and
+        // resumes scene state — compatible with this pass's Scene material.
+        _cbShadows ??= (in SpriteScope _, int _, int _) =>
+            _g._shadowRenderer.Draw(_g.GraphicsDevice, _g._spriteBatch, _g._glowTex, _g._camera, _g._renderer, _g._sim, _g._gameData, _g._unitAnims, _g._atlases, _g._envSystem, _g._fogOfWar, _g._groundSystem, _g._deathFog, _g._corpseAnims, _g._reanimFx);
+        _cbHoverMarkers ??= (in SpriteScope _, int _, int _) => DrawHoverGroundMarkers();
+        _cbCorpses ??= (in SpriteScope _, int _, int _) => DrawCorpses();
+        _cbProjectilesRope ??= (in SpriteScope _, int _, int _) =>
+        {
+            DrawProjectiles();
+            DrawSoulOrbs();
+            // Drag rope (necromancer → roped corpse)
+            DrawRope();
+        };
+        _cbRain ??= (in SpriteScope _, int _, int _) => _g._weatherRenderer.DrawRain(_ctx.ScreenW, _ctx.ScreenH);
+
+        var q = _worldPass!;
+        // Ordering safety: block layers use whole-layer callback slots today;
+        // granular per-sprite submission inside these layers can come later
+        // without changing the frame order (the layer bands pin it).
+        q.SubmitCallback(WorldLayer.Roads, _cbRoads, 0, 0);
+        q.SubmitCallback(WorldLayer.Traps, _cbTraps, 0, 0);
+        // Glyph renderer context is primed at collect time; its draw runs when
+        // the queue executes this frame.
+        _g._glyphRenderer.SetContext(_g._spriteBatch, _g._pixel, _g._glowTex, _g._camera, _g._renderer, _g._flipbooks, _g._gameTime);
+        q.SubmitCallback(WorldLayer.Glyphs, _cbGlyphs, 0, 0);
+        q.SubmitCallback(WorldLayer.Walls, _cbWalls, 0, 0);
+        q.SubmitCallback(WorldLayer.Shadows, _cbShadows, 0, 0);
+        // Hover highlight — ground variants (Circle / Ground Box) BEHIND
+        // corpses/units (RTS-style).
+        q.SubmitCallback(WorldLayer.HoverMarkers, _cbHoverMarkers, 0, 0);
+        q.SubmitCallback(WorldLayer.Corpses, _cbCorpses, 0, 0);
+        q.SubmitCallback(WorldLayer.Projectiles, _cbProjectilesRope, 0, 0);
+        // Rain (world-space, drawn over the sorted scene like the old block order)
+        q.SubmitCallback(WorldLayer.Rain, _cbRain, 0, 0);
+
+        CollectYSortItems(ctx);
+    }
+
+    /// <summary>Collect the depth-sorted YSort layer — units, env objects, and
+    /// the particle types that interleave with them. This is the old
+    /// DrawUnitsAndObjects minus sorting and dispatch.</summary>
     private void CollectYSortItems(RenderContext ctx)
     {
         _cbUnit ??= (in SpriteScope s, int a, int _) => DrawSingleUnit(s, a);
@@ -95,7 +159,7 @@ partial class GameRenderer
         _cbDeathFogPuff ??= (in SpriteScope _, int a, int _) => _g._deathFogRenderer.DrawSinglePuff(a);
         _cbReanimDust ??= (in SpriteScope _, int a, int _) => _g._reanimFx.DrawSingleDust(a);
 
-        var queue = _worldYSort!;
+        var queue = _worldPass!;
 
         // View culling bounds
         float viewMargin = 20f;
