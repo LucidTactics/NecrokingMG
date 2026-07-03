@@ -20,7 +20,10 @@ using Necroking.UI;
 
 namespace Necroking;
 
-// Game1 partial: Draw orchestrator entry point.
+// Game1 partial: Draw orchestrator entry point. The frame itself is data — an
+// ordered list of phases/passes built in GameRenderer.Pipeline.cs. This file
+// keeps only the per-frame entry (menu early-outs, camera snap, pipeline
+// execute, present bookkeeping) and the bodies of a few large overlay passes.
 partial class GameRenderer
 {
     public void Draw(GameTime gameTime)
@@ -57,394 +60,187 @@ partial class GameRenderer
         }
 
         // Snap camera to pixel grid to prevent subpixel shimmer on ground/sprites
-        // X pixel size = 1/Zoom, Y pixel size = 1/(Zoom*YRatio) due to isometric compression
-        var realCameraPos = _g._camera.Position;
+        // X pixel size = 1/Zoom, Y pixel size = 1/(Zoom*YRatio) due to isometric compression.
+        // The Hud phase restores the real (smooth) position for input/HUD.
+        _realCameraPos = _g._camera.Position;
         float pixelSizeX = 1f / _g._camera.Zoom;
         float pixelSizeY = 1f / (_g._camera.Zoom * _g._camera.YRatio);
         _g._camera.Position = new Vec2(
-            MathF.Round(realCameraPos.X / pixelSizeX) * pixelSizeX,
-            MathF.Round(realCameraPos.Y / pixelSizeY) * pixelSizeY);
+            MathF.Round(_realCameraPos.X / pixelSizeX) * pixelSizeX,
+            MathF.Round(_realCameraPos.Y / pixelSizeY) * pixelSizeY);
 
-        // Set weather renderer context for this frame
-        _g._weatherRenderer.SetContext(_g._spriteBatch, _g._pixel, _g._glowTex, _g._camera, _g._gameTime, _g._gameData, _g.GraphicsDevice);
+        // --- Execute the frame (phases/passes built in GameRenderer.Pipeline.cs) ---
+        _pipeline ??= BuildPipeline();
+        _ctx.Device = _g.GraphicsDevice;
+        _ctx.Batch = _g._spriteBatch;
+        _ctx.GameTime = gameTime;
+        _ctx.ScreenW = screenW;
+        _ctx.ScreenH = screenH;
+        _pipeline.Execute(_ctx);
 
-        // Update fog of war render targets (before bloom, since this changes render targets)
+        _g._drawStopwatch.Stop();
+        // EMA so the HUD doesn't jitter frame-to-frame.
+        const double EmaAlpha = 0.1;
+        double drawMs = _g._drawStopwatch.Elapsed.TotalMilliseconds;
+        _g._drawMsAvg = _g._drawMsAvg * (1.0 - EmaAlpha) + drawMs * EmaAlpha;
+
+        // Feed perf scenarios raw per-frame samples (EMA hides bench detail).
+        if (_g._activeScenario is Scenario.Scenarios.PerfWaterScenario perf)
         {
-            bool fogActive = (FogOfWarMode)_g._gameData.Settings.FogOfWar.Mode != FogOfWarMode.Off;
-            bool editorOpen = _g._menuState != MenuState.None && _g._menuState != MenuState.MainMenu;
-            if (fogActive && !editorOpen)
-                _g._fogOfWar.Update(_g._spriteBatch, _g._sim.Units, _g._gameData.Settings.FogOfWar, _g._rawDt);
+            perf.LastDrawMs = drawMs;
+            perf.LastFrameMs = _g._rawDt * 1000.0;
+        }
+
+        // Handle deferred screenshots from scenarios BEFORE the present so
+        // GetBackBufferData reads the just-rendered frame. (This used to
+        // sit after `return;` below, which made it dead code and silently
+        // disabled the screenshot path for scenarios that didn't directly
+        // call TakeScreenshot.)
+        if (_g._activeScenario?.DeferredScreenshot != null)
+        {
+            ScenarioScreenshot.TakeScreenshot(_g.GraphicsDevice, _g._activeScenario.DeferredScreenshot);
+            _g._activeScenario.DeferredScreenshot = null;
+        }
+
+        // Dev-server screenshot (in-game path; menu paths call this too before
+        // their own Present).
+        _g.CompletePendingDevScreenshot();
+
+        // Time the Present()/blit done by base.Draw — anything that doesn't
+        // overlap with CPU work shows up here. Present blocks until the GPU
+        // can accept the frame, so this approximates GPU+vsync wait time.
+        var presentSw = System.Diagnostics.Stopwatch.StartNew();
+        _g.BaseDraw(gameTime);
+        presentSw.Stop();
+        _g._gpuPresentMsAvg = _g._gpuPresentMsAvg * (1.0 - EmaAlpha)
+                         + presentSw.Elapsed.TotalMilliseconds * EmaAlpha;
+    }
+
+    /// <summary>Death-fog debug overlay (F5) — fog cells plus per-corruptable-object
+    /// stress labels. Body moved verbatim out of Draw() (step 0); owns its batch.</summary>
+    private void DrawDeathFogDebugOverlay()
+    {
+        _g._spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.PointClamp);
+        _g._deathFog.DrawDebug(_g._spriteBatch, _g._pixel, _g._renderer, _g._camera);
+
+        // Per-corruptable-object stress label: "stress/threshold" when stress > 0,
+        // or "DEAD" once corrupted. Skip clean trees to reduce overlay clutter.
+        float threshold = _g._deathFog.CorruptionThreshold;
+        int corrW = _g.GraphicsDevice.Viewport.Width;
+        int corrH = _g.GraphicsDevice.Viewport.Height;
+        for (int oi = 0; oi < _g._envSystem.ObjectCount; oi++)
+        {
+            var obj = _g._envSystem.GetObject(oi);
+            var def = _g._envSystem.GetDef(obj.DefIndex);
+            if (!def.IsCorruptable) continue;
+            var rt = _g._envSystem.GetObjectRuntime(oi);
+            if (!rt.Alive) continue;
+            bool dying = rt.CorruptionTime > 0f && !rt.Corrupted;
+            if (!rt.Corrupted && !dying && rt.CorruptionStress <= 0.01f) continue;
+
+            var sp = _g._renderer.WorldToScreen(new Vec2(obj.X, obj.Y), 0f, _g._camera);
+            if (sp.X < -50 || sp.X > corrW + 50 || sp.Y < -50 || sp.Y > corrH + 50) continue;
+
+            string label;
+            Color labelColor;
+            if (rt.Corrupted)
+            {
+                label = "DEAD";
+                labelColor = new Color(255, 100, 100);
+            }
+            else if (dying)
+            {
+                float dur = _g._deathFog.CorruptionTransitionDuration;
+                label = $"DYING {rt.CorruptionTime:F1}/{dur:F0}s";
+                labelColor = new Color(255, 160, 80);
+            }
             else
-                // Update isn't running this frame, but IsVisible (which culls enemy
-                // sprites/shadows/projectiles) keys off the fog system's cached mode.
-                // Keep it in sync with the live setting so turning fog Off immediately
-                // reveals all enemies instead of leaving them culled against stale fog.
-                _g._fogOfWar.SyncMode(_g._gameData.Settings.FogOfWar);
-        }
-
-        // Begin bloom scene capture
-        var bloomSettings = _g._activeScenario?.BloomOverride ?? _g._gameData.Settings.Bloom;
-        bool useBloom = _g._bloom.IsInitialized && bloomSettings.Enabled;
-        var clearColor = _g._activeScenario?.BackgroundColor
-            ?? LaunchArgs.BgColor
-            ?? new Color(30, 30, 40);
-        if (useBloom)
-            _g._bloom.BeginScene(_g.GraphicsDevice);
-        else
-            _g.GraphicsDevice.Clear(clearColor);
-
-        // Compute ambient color from weather (brightness + tint) for lit sprite tinting
-        _g._ambientColor = _g._weatherRenderer.GetAmbientColor();
-
-        // AlphaBlend with premultiplied-alpha textures (loaded via TextureUtil.LoadPremultiplied).
-        // The pass state is defined in EffectBatch (SceneBlend/SceneSampler) so effect draws
-        // that suspend this batch restore the exact same state.
-        Render.EffectBatch.BeginScenePass(_g._spriteBatch);
-
-        if (!useBloom)
-            _g.GraphicsDevice.Clear(clearColor);
-
-        // --- Ground ---
-        if ((_g._activeScenario == null || _g._activeScenario.WantsGround) && !_g._devShotNoGround)
-        {
-            DrawGround();
-            // Perf scenarios can ask Game1 to redraw the ground N extra times to
-            // stress the GPU past the 16.67ms vsync budget. The redraws happen
-            // BEFORE the rest of the scene so they overwrite each other; only the
-            // last write contributes visually.
-            if (_g._activeScenario != null && _g._activeScenario.ExtraGroundDrawsPerFrame > 0
-                && _g._groundEffect != null && _g._groundVertexMapTex != null && _g._groundSystem.TypeCount > 0)
             {
-                int worldW2 = _g._groundSystem.WorldW > 0 ? _g._groundSystem.WorldW : Game1.WorldSize;
-                int worldH2 = _g._groundSystem.WorldH > 0 ? _g._groundSystem.WorldH : Game1.WorldSize;
-                for (int e = 0; e < _g._activeScenario.ExtraGroundDrawsPerFrame; e++)
-                    DrawGroundShader(worldW2, worldH2);
+                label = $"{rt.CorruptionStress:F1}/{threshold:F0}";
+                labelColor = new Color(255, 220, 120);
             }
-        }
 
-        // --- Roads ---
-        DrawRoads();
-
-        // --- Ground-layer objects (traps — render above dirt, below grass) ---
-        DrawGroundLayerObjects();
-
-        // --- Magic glyphs (ground level, after traps, before walls) ---
-        _g._glyphRenderer.SetContext(_g._spriteBatch, _g._pixel, _g._glowTex, _g._camera, _g._renderer, _g._flipbooks, _g._gameTime);
-        _g._glyphRenderer.DrawGround(_g._sim.MagicGlyphs);
-
-        // Build progress bars for blueprint glyphs
-        foreach (var g in _g._sim.MagicGlyphs.Glyphs)
-        {
-            // Show progress bar from the moment the glyph is placed (even at 0%), not only
-            // once construction has begun — so players can see "trap placed, awaiting build".
-            if (g.State == GameSystems.GlyphState.Blueprint && g.BuildProgress < 1f && g.Alive)
+            if (_g._smallFont != null)
             {
-                var gsp = _g._renderer.WorldToScreen(g.Position, 0f, _g._camera);
-                DrawBuildProgressBar(gsp, g.BuildProgress, g.Radius);
-            }
-        }
-
-        // --- Walls ---
-        DrawWalls();
-
-        // --- Wading sink offsets ---
-        // Compute Unit.WadingSinkOffsetY for every unit before any visual
-        // pass reads it. Must run before _g._shadowRenderer.Draw (which reads
-        // RenderPos to position shadows) and before DrawUnitsAndObjects
-        // (which reads RenderPos for sprites, buffs, damage numbers, etc.).
-        _g.UpdateWadingSinkOffsets();
-
-        // --- Shadows ---
-        // Grass is no longer drawn here — tufts are merged into the unit Y-sort
-        // inside DrawUnitsAndObjects so they can render in front of / behind
-        // units based on world Y.
-        _g._shadowRenderer.Draw(_g.GraphicsDevice, _g._spriteBatch, _g._glowTex, _g._camera, _g._renderer, _g._sim, _g._gameData, _g._unitAnims, _g._atlases, _g._envSystem, _g._fogOfWar, _g._groundSystem, _g._deathFog, _g._corpseAnims, _g._reanimFx);
-
-        // Hover highlight — ground variants (Circle / Ground Box) BEHIND corpses/units (RTS-style).
-        DrawHoverGroundMarkers();
-
-        // --- Corpses ---
-        DrawCorpses();
-
-        // --- Units + Environment objects + Poison cloud puffs (merged Y-sort for correct depth) ---
-        DrawUnitsAndObjects();
-
-        // --- Projectiles ---
-        DrawProjectiles();
-        DrawSoulOrbs();
-        // --- Drag rope (necromancer → roped corpse) ---
-        DrawRope();
-        // (Death-fog puffs render inside DrawUnitsAndObjects' merged Y-sort
-        // pass so they correctly occlude / are occluded by units & env objects
-        // based on relative ground Y — see DepthItemType.DeathFogPuff.)
-
-        // --- Rain (world-space, depth-sorted with scene objects) ---
-        _g._weatherRenderer.DrawRain(screenW, screenH);
-
-        _g._spriteBatch.End();
-
-        // Depth-sorted fog: stamp units' depth silhouettes into the scene RT's (already-bound, already-
-        // cleared) depth buffer so the additive reanimation fog can depth-test against them below.
-        if (_g._gameData.Settings.Performance.DepthSortedFog)
-            DrawFogDepthOccluders();
-
-        // Spawn new effects from impacts (once per frame, before drawing)
-        SpawnImpactEffects();
-
-        // --- Alpha-blended HDR effects (clouds, smoke) ---
-        _g._hdrSpriteEffect?.Parameters["AlphaMode"]?.SetValue(1f);
-        _g._spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.LinearClamp,
-            effect: _g._hdrSpriteEffect);
-        DrawEffectsFiltered(0);
-        _g._spriteBatch.End();
-
-        // --- Additive HDR pass (effects + fireball projectiles) ---
-        _g._hdrSpriteEffect?.Parameters["AlphaMode"]?.SetValue(0f);
-        _g._spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.Additive, SamplerState.LinearClamp,
-            effect: _g._hdrSpriteEffect);
-        DrawProjectilesHdr();
-        DrawEffectsFiltered(1);
-        if (_g._gameData.Settings.Performance.DepthSortedFog && _g._depthCutoutEffect != null)
-        {
-            // Depth-sorted fog: draw ALL reanim particles (light + clouds + dust) in ONE Y-sorted pass,
-            // so bright and dark puffs interleave by spawn position (not clouds-always-over-dust), and
-            // depth-test the units' stamps so a risen unit occludes them. It manages its own batches, so
-            // end the shared additive batch and re-open it for the lightning below.
-            _g._spriteBatch.End();
-            _g._reanimFx.DrawSortedParticles(_g._hdrSpriteEffect);
-            _g._spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.Additive, SamplerState.LinearClamp,
-                effect: _g._hdrSpriteEffect);
-        }
-        else
-        {
-            _g._reanimFx.DrawAdditive(); // reanimation light + green cloud puffs (additive HDR)
-        }
-        // Lightning bolts and drains use HDR vertex encoding — draw in this HDR batch
-        _g._lightningRenderer.SetGameTime(_g._gameTime);
-        _g._lightningRenderer.Draw();
-        _g._spriteBatch.End();
-
-        // --- Additive blend pass (energy columns, debug shapes) ---
-        _g._spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.Additive, SamplerState.LinearClamp);
-        _g._glyphRenderer.DrawEnergyColumns(_g._sim.MagicGlyphs);
-
-        // Bloom debug: draw test HDR shapes (multiple additive layers to exceed 1.0)
-        if (_g._activeScenario is Scenario.Scenarios.BloomDebugScenario bloomDebug && bloomDebug.DrawTestShapes)
-        {
-            foreach (var (wx, wy, sz, col, label) in Scenario.Scenarios.BloomDebugScenario.TestShapes)
-            {
-                var screenPos = _g._renderer.WorldToScreen(new Vec2(wx, wy), 0f, _g._camera);
-                int pixSz = (int)(sz * _g._camera.Zoom);
-                var rect = new Rectangle((int)screenPos.X - pixSz / 2, (int)screenPos.Y - pixSz / 2, pixSz, pixSz);
-
-                // Draw the shape multiple times additively to push values above 1.0
-                int layers = label.Contains("3x") ? 5 : 1;
-                for (int l = 0; l < layers; l++)
-                    _g._spriteBatch.Draw(_g._pixel, rect, col);
+                var size = _g._smallFont.MeasureString(label);
+                var pos = new Vector2((int)(sp.X - size.X * 0.5f), (int)(sp.Y - 16));
+                _g._spriteBatch.Draw(_g._pixel,
+                    new Rectangle((int)pos.X - 2, (int)pos.Y - 1, (int)size.X + 4, (int)size.Y + 2),
+                    new Color(0, 0, 0, 180));
+                _g._spriteBatch.DrawString(_g._smallFont, label, pos, labelColor);
             }
         }
 
         _g._spriteBatch.End();
+    }
 
-        // --- God ray pass (alpha blend + HDR intensity shader) ---
-        _g._lightningRenderer.DrawGodRays();
+    /// <summary>Alt-key name labels: env objects (+ animation debug), corpse names,
+    /// unit names. Body moved verbatim out of Draw() (step 0); owns its batch.</summary>
+    private void DrawAltNameLabels(int screenW, int screenH)
+    {
+        _g._spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.PointClamp);
 
-        // --- Alpha blend pass (collecting foragables + damage numbers on top) ---
-        _g._spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.LinearClamp);
-        _g._foragables.Draw();
-        DrawDamageNumbers();
-        _g._spriteBatch.End();
-
-        // End bloom and composite
-        if (useBloom)
-            _g._bloom.EndScene(_g.GraphicsDevice, _g._spriteBatch, bloomSettings);
-
-        // --- Fog of war overlay (after bloom, before HUD) ---
-        // Skip entirely when Off or when any editor is open
+        // Draws a centered name label at a world position, boxed for legibility.
+        // Returns silently if the position is off-screen or the label is empty.
+        void DrawWorldLabel(Vec2 world, string label, Color color)
         {
-            bool fogActive = (FogOfWarMode)_g._gameData.Settings.FogOfWar.Mode != FogOfWarMode.Off;
-            bool editorOpen = _g._menuState != MenuState.None && _g._menuState != MenuState.MainMenu;
-            if (fogActive && !editorOpen)
+            if (string.IsNullOrEmpty(label)) return;
+            var sp = _g._renderer.WorldToScreen(world, 0f, _g._camera);
+            if (sp.X <= -100 || sp.X >= screenW + 100 || sp.Y <= -100 || sp.Y >= screenH + 100) return;
+            var textSize = _g._smallFont != null ? _g._smallFont.MeasureString(label) : new Vector2(label.Length * 6, 12);
+            var textPos = new Vector2((int)(sp.X - textSize.X * 0.5f), (int)(sp.Y + 4));
+            _g._spriteBatch.Draw(_g._pixel, new Rectangle((int)textPos.X - 2, (int)textPos.Y - 1, (int)textSize.X + 4, (int)textSize.Y + 2), new Color(0, 0, 0, 160));
+            if (_g._smallFont != null)
+                _g._spriteBatch.DrawString(_g._smallFont, label, textPos, color);
+        }
+
+        for (int oi = 0; oi < _g._envSystem.ObjectCount; oi++)
+        {
+            if (!_g._envSystem.IsObjectVisible(oi)) continue;
+            var obj = _g._envSystem.GetObject(oi);
+            var def = _g._envSystem.GetDef(obj.DefIndex);
+            string label = !string.IsNullOrEmpty(def.Name) ? def.Name : def.Id;
+            // Animated objects: append frame info after the name
+            if (def.IsAnimated && def.AnimTotalFrames > 1)
             {
-                // Draw fog overlay (RTs already updated before bloom pass)
-                _g._fogOfWar.Draw(_g._spriteBatch, _g._camera, _g._renderer, screenW, screenH, _g._gameData.Settings.FogOfWar);
-            }
-        }
-
-        // --- Collision debug overlay (after world, before HUD) ---
-        if (_g._collisionDebugMode != CollisionDebugMode.Off)
-        {
-            _g._spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.PointClamp);
-            _g._debugDraw.DrawCollisionDebug(_g._spriteBatch, _g.GraphicsDevice, _g._sim, _g._camera, _g._renderer,
-                _g._collisionDebugMode, _g._envSystem, _g._sim.Pathfinder);
-            _g._spriteBatch.End();
-        }
-
-        // --- Weapon attach debug overlay (scenario opt-in) ---
-        if (_g._activeScenario != null && _g._activeScenario.ShowWeaponAttachDebug)
-        {
-            _g._spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.PointClamp);
-            DrawWeaponAttachDebug();
-            _g._spriteBatch.End();
-        }
-
-        // --- Death-fog debug overlay (F5) ---
-        if (_g._deathFog.DebugVisible)
-        {
-            _g._spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.PointClamp);
-            _g._deathFog.DrawDebug(_g._spriteBatch, _g._pixel, _g._renderer, _g._camera);
-
-            // Per-corruptable-object stress label: "stress/threshold" when stress > 0,
-            // or "DEAD" once corrupted. Skip clean trees to reduce overlay clutter.
-            float threshold = _g._deathFog.CorruptionThreshold;
-            int corrW = _g.GraphicsDevice.Viewport.Width;
-            int corrH = _g.GraphicsDevice.Viewport.Height;
-            for (int oi = 0; oi < _g._envSystem.ObjectCount; oi++)
-            {
-                var obj = _g._envSystem.GetObject(oi);
-                var def = _g._envSystem.GetDef(obj.DefIndex);
-                if (!def.IsCorruptable) continue;
                 var rt = _g._envSystem.GetObjectRuntime(oi);
-                if (!rt.Alive) continue;
-                bool dying = rt.CorruptionTime > 0f && !rt.Corrupted;
-                if (!rt.Corrupted && !dying && rt.CorruptionStress <= 0.01f) continue;
-
-                var sp = _g._renderer.WorldToScreen(new Vec2(obj.X, obj.Y), 0f, _g._camera);
-                if (sp.X < -50 || sp.X > corrW + 50 || sp.Y < -50 || sp.Y > corrH + 50) continue;
-
-                string label;
-                Color labelColor;
-                if (rt.Corrupted)
-                {
-                    label = "DEAD";
-                    labelColor = new Color(255, 100, 100);
-                }
-                else if (dying)
-                {
-                    float dur = _g._deathFog.CorruptionTransitionDuration;
-                    label = $"DYING {rt.CorruptionTime:F1}/{dur:F0}s";
-                    labelColor = new Color(255, 160, 80);
-                }
-                else
-                {
-                    label = $"{rt.CorruptionStress:F1}/{threshold:F0}";
-                    labelColor = new Color(255, 220, 120);
-                }
-
-                if (_g._smallFont != null)
-                {
-                    var size = _g._smallFont.MeasureString(label);
-                    var pos = new Vector2((int)(sp.X - size.X * 0.5f), (int)(sp.Y - 16));
-                    _g._spriteBatch.Draw(_g._pixel,
-                        new Rectangle((int)pos.X - 2, (int)pos.Y - 1, (int)size.X + 4, (int)size.Y + 2),
-                        new Color(0, 0, 0, 180));
-                    _g._spriteBatch.DrawString(_g._smallFont, label, pos, labelColor);
-                }
+                int frame = Math.Clamp((int)rt.AnimTime, 0, def.AnimTotalFrames - 1);
+                string dir = rt.AnimReversed ? "<" : ">";
+                label = $"{label}  F{frame}/{def.AnimTotalFrames - 1} {dir}";
             }
-
-            _g._spriteBatch.End();
+            DrawWorldLabel(new Vec2(obj.X, obj.Y), label, new Color(220, 220, 255));
         }
 
-        // --- Gameplay debug overlay (F7) ---
-        if (_g._gameplayDebugMode > 0)
+        // Corpse names — what's lying around to reanimate.
+        var corpses = _g._sim.Corpses;
+        for (int ci = 0; ci < corpses.Count; ci++)
         {
-            _g._spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.PointClamp);
-            if (_g._gameplayDebugMode == 1)
-                DrawHordeDebug();
-            else if (_g._gameplayDebugMode == 2)
-                DrawUnitInfoDebug();
-            _g._spriteBatch.End();
+            var cp = corpses[ci];
+            if (cp.ConsumedBySummon) continue;
+            var cdef = !string.IsNullOrEmpty(cp.UnitDefID) ? _g._gameData.Units.Get(cp.UnitDefID) : null;
+            string cname = cdef != null && cdef.DisplayName.Length > 0 ? cdef.DisplayName : cp.UnitType.ToString();
+            DrawWorldLabel(cp.Position, $"{cname} corpse", new Color(255, 220, 200));
         }
 
-        // --- Wind debug overlay (F6) ---
-        if (_g._windDebug)
+        // Unit names — living units on the field.
+        for (int ui = 0; ui < _g._sim.Units.Count; ui++)
         {
-            try
-            {
-                _g._spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.PointClamp);
-                DrawWindDebug(screenW, screenH);
-                _g._spriteBatch.End();
-            }
-            catch (Exception ex)
-            {
-                Core.DebugLog.Log("error", $"Wind debug crash: {ex}");
-                _g._windDebug = false;
-                try { _g._spriteBatch.End(); } catch { }
-            }
+            var u = _g._sim.Units[ui];
+            if (!u.Alive) continue;
+            var udef = !string.IsNullOrEmpty(u.UnitDefID) ? _g._gameData.Units.Get(u.UnitDefID) : null;
+            string uname = udef != null && udef.DisplayName.Length > 0 ? udef.DisplayName
+                         : !string.IsNullOrEmpty(u.UnitDefID) ? u.UnitDefID : u.Type.ToString();
+            DrawWorldLabel(u.Position, uname, new Color(200, 255, 210));
         }
 
-        // --- Alt shows object names (+ animation debug for animated objects),
-        //     plus corpse names and unit names ---
-        if ((_g._menuState == MenuState.MapEditor || _g._menuState == MenuState.None) && _g._input.IsKeyDown(Keys.LeftAlt))
-        {
-            _g._spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.PointClamp);
+        _g._spriteBatch.End();
+    }
 
-            // Draws a centered name label at a world position, boxed for legibility.
-            // Returns silently if the position is off-screen or the label is empty.
-            void DrawWorldLabel(Vec2 world, string label, Color color)
-            {
-                if (string.IsNullOrEmpty(label)) return;
-                var sp = _g._renderer.WorldToScreen(world, 0f, _g._camera);
-                if (sp.X <= -100 || sp.X >= screenW + 100 || sp.Y <= -100 || sp.Y >= screenH + 100) return;
-                var textSize = _g._smallFont != null ? _g._smallFont.MeasureString(label) : new Vector2(label.Length * 6, 12);
-                var textPos = new Vector2((int)(sp.X - textSize.X * 0.5f), (int)(sp.Y + 4));
-                _g._spriteBatch.Draw(_g._pixel, new Rectangle((int)textPos.X - 2, (int)textPos.Y - 1, (int)textSize.X + 4, (int)textSize.Y + 2), new Color(0, 0, 0, 160));
-                if (_g._smallFont != null)
-                    _g._spriteBatch.DrawString(_g._smallFont, label, textPos, color);
-            }
-
-            for (int oi = 0; oi < _g._envSystem.ObjectCount; oi++)
-            {
-                if (!_g._envSystem.IsObjectVisible(oi)) continue;
-                var obj = _g._envSystem.GetObject(oi);
-                var def = _g._envSystem.GetDef(obj.DefIndex);
-                string label = !string.IsNullOrEmpty(def.Name) ? def.Name : def.Id;
-                // Animated objects: append frame info after the name
-                if (def.IsAnimated && def.AnimTotalFrames > 1)
-                {
-                    var rt = _g._envSystem.GetObjectRuntime(oi);
-                    int frame = Math.Clamp((int)rt.AnimTime, 0, def.AnimTotalFrames - 1);
-                    string dir = rt.AnimReversed ? "<" : ">";
-                    label = $"{label}  F{frame}/{def.AnimTotalFrames - 1} {dir}";
-                }
-                DrawWorldLabel(new Vec2(obj.X, obj.Y), label, new Color(220, 220, 255));
-            }
-
-            // Corpse names — what's lying around to reanimate.
-            var corpses = _g._sim.Corpses;
-            for (int ci = 0; ci < corpses.Count; ci++)
-            {
-                var cp = corpses[ci];
-                if (cp.ConsumedBySummon) continue;
-                var cdef = !string.IsNullOrEmpty(cp.UnitDefID) ? _g._gameData.Units.Get(cp.UnitDefID) : null;
-                string cname = cdef != null && cdef.DisplayName.Length > 0 ? cdef.DisplayName : cp.UnitType.ToString();
-                DrawWorldLabel(cp.Position, $"{cname} corpse", new Color(255, 220, 200));
-            }
-
-            // Unit names — living units on the field.
-            for (int ui = 0; ui < _g._sim.Units.Count; ui++)
-            {
-                var u = _g._sim.Units[ui];
-                if (!u.Alive) continue;
-                var udef = !string.IsNullOrEmpty(u.UnitDefID) ? _g._gameData.Units.Get(u.UnitDefID) : null;
-                string uname = udef != null && udef.DisplayName.Length > 0 ? udef.DisplayName
-                             : !string.IsNullOrEmpty(u.UnitDefID) ? u.UnitDefID : u.Type.ToString();
-                DrawWorldLabel(u.Position, uname, new Color(200, 255, 210));
-            }
-
-            _g._spriteBatch.End();
-        }
-
-        // Restore real camera position (smooth, for input/HUD)
-        _g._camera.Position = realCameraPos;
-
-        // --- HUD (drawn after bloom so it's not affected) ---
-        // Pass state defined in EffectBatch (HudBlend/HudSampler) — see BeginScenePass note above.
-        Render.EffectBatch.BeginHudPass(_g._spriteBatch);
-
-        // --- Weather effects (fog/haze/brightness — rain draws in scene pass) ---
-        _g._weatherRenderer.DrawFog(screenW, screenH);
-
+    /// <summary>The HUD/UI block: hover info, HUD, panels, editors, perf readout.
+    /// Runs inside the Hud phase's open batch (EffectBatch.BeginHudPass state).
+    /// Body moved verbatim out of Draw() (step 0).</summary>
+    private void DrawHudBlock(int screenW, int screenH, GameTime gameTime)
+    {
         bool showUI = (_g._activeScenario == null || _g._activeScenario.WantsUI) && !_g._devShotNoUi;
         if (showUI)
             DrawHoverHighlights();
@@ -589,44 +385,5 @@ partial class GameRenderer
         {
             DrawText(_g._smallFont, "[F2] Water Debug", new Vector2(10, screenH - 54), new Color(120, 220, 255));
         }
-
-        _g._spriteBatch.End();
-
-        _g._drawStopwatch.Stop();
-        // EMA so the HUD doesn't jitter frame-to-frame.
-        const double EmaAlpha = 0.1;
-        double drawMs = _g._drawStopwatch.Elapsed.TotalMilliseconds;
-        _g._drawMsAvg = _g._drawMsAvg * (1.0 - EmaAlpha) + drawMs * EmaAlpha;
-
-        // Feed perf scenarios raw per-frame samples (EMA hides bench detail).
-        if (_g._activeScenario is Scenario.Scenarios.PerfWaterScenario perf)
-        {
-            perf.LastDrawMs = drawMs;
-            perf.LastFrameMs = _g._rawDt * 1000.0;
-        }
-
-        // Handle deferred screenshots from scenarios BEFORE the present so
-        // GetBackBufferData reads the just-rendered frame. (This used to
-        // sit after `return;` below, which made it dead code and silently
-        // disabled the screenshot path for scenarios that didn't directly
-        // call TakeScreenshot.)
-        if (_g._activeScenario?.DeferredScreenshot != null)
-        {
-            ScenarioScreenshot.TakeScreenshot(_g.GraphicsDevice, _g._activeScenario.DeferredScreenshot);
-            _g._activeScenario.DeferredScreenshot = null;
-        }
-
-        // Dev-server screenshot (in-game path; menu paths call this too before
-        // their own Present).
-        _g.CompletePendingDevScreenshot();
-
-        // Time the Present()/blit done by base.Draw — anything that doesn't
-        // overlap with CPU work shows up here. Present blocks until the GPU
-        // can accept the frame, so this approximates GPU+vsync wait time.
-        var presentSw = System.Diagnostics.Stopwatch.StartNew();
-        _g.BaseDraw(gameTime);
-        presentSw.Stop();
-        _g._gpuPresentMsAvg = _g._gpuPresentMsAvg * (1.0 - EmaAlpha)
-                         + presentSw.Elapsed.TotalMilliseconds * EmaAlpha;
     }
 }
