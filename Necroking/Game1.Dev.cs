@@ -305,6 +305,47 @@ public partial class Game1 {
                break;
             }
 
+            // List env objects as JSON: `objects [substring]` filters by def id
+            // (e.g. `objects mush`); `objects foragable` lists foragables only.
+            case "objects": {
+               string filter = c.Args.Length > 0 ? c.Args[0].ToLowerInvariant() : "";
+               bool foragableOnly = filter == "foragable";
+               var sb = new System.Text.StringBuilder("[");
+               int n = 0;
+               for (int i = 0; i < _envSystem.ObjectCount && n < 100; i++)
+               {
+                  if (!_envSystem.IsObjectVisible(i)) continue;
+                  var obj = _envSystem.GetObject(i);
+                  var def = _envSystem.GetDef(obj.DefIndex);
+                  if (foragableOnly && !def.IsForagable) continue;
+                  if (!foragableOnly && filter.Length > 0
+                      && !def.Id.ToLowerInvariant().Contains(filter)) continue;
+                  if (n > 0) sb.Append(',');
+                  sb.Append($"{{\"idx\":{i},\"def\":\"{def.Id}\",\"x\":{obj.X:F1},\"y\":{obj.Y:F1},\"foragable\":{(def.IsForagable ? "true" : "false")}}}");
+                  n++;
+               }
+               sb.Append(']');
+               c.Complete(Necroking.Dev.DevServer.OkRaw(sb.ToString()));
+               break;
+            }
+
+            // Necromancer inventory contents as JSON.
+            case "inventory": {
+               var sb = new System.Text.StringBuilder("[");
+               bool first = true;
+               for (int i = 0; i < _inventory.SlotCount; i++)
+               {
+                  var slot = _inventory.GetSlot(i);
+                  if (slot.IsEmpty) continue;
+                  if (!first) sb.Append(',');
+                  sb.Append($"{{\"item\":\"{slot.ItemId}\",\"qty\":{slot.Quantity}}}");
+                  first = false;
+               }
+               sb.Append(']');
+               c.Complete(Necroking.Dev.DevServer.OkRaw(sb.ToString()));
+               break;
+            }
+
             case "screenshot": {
                string name = c.Opt("name") ?? (c.Args.Length > 0 ? c.Args[0] : "devshot");
                // The dashboard polls a "live" frame ~1/s. When the window is shown
