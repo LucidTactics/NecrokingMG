@@ -379,8 +379,12 @@ public class HordeSystem
                     // flicker. The chaser's own leash break (StandardChasingExits)
                     // fires at the same LeashRadius, so the chase still stays
                     // bounded to the red circle — it just no longer quits early.
+                    // Pack-hunting wolves (WolfHuntTargetId set) are exempt: the hunt drives
+                    // prey well outside the horde circle by design, and its own (longer)
+                    // leash in WolfPackHuntAI bounds them. Without this, the whole pack
+                    // gives up in unison the moment the fleeing deer crosses this radius.
                     float targetDistToCircle = (units[targetIdx].Position - _circleCenter).Length();
-                    if (targetDistToCircle > LeashRadius)
+                    if (targetDistToCircle > LeashRadius && units[idx].WolfHuntTargetId == 0)
                     {
                         hu.State = HordeUnitState.Following;
                         hu.ChasingTarget = GameConstants.InvalidUnit;
@@ -409,7 +413,9 @@ public class HordeSystem
                     // rule with no fuzzy band beyond it.
                     Vec2 slotPos = ComputeSlotPosition(hu.SlotIndex);
                     float distToSlot = (units[idx].Position - slotPos).Length();
-                    if (distToSlot > LeashRadius)
+                    // Same pack-hunt exemption as the Chasing leash above: a wolf finishing
+                    // its driven kill fights past this radius on purpose.
+                    if (distToSlot > LeashRadius && units[idx].WolfHuntTargetId == 0)
                     {
                         hu.State = HordeUnitState.Returning;
                         break;

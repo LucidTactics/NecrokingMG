@@ -261,7 +261,12 @@ public class HordeMinionHandler : IArchetypeHandler
     private static void UpdateChasing(ref AIContext ctx)
     {
         // Canonical chase-exit checks (dead target → Return, leash break → Return).
-        float leash = ctx.Horde?.LeashRadius ?? 0f;
+        // Pack-hunting wolves (hunt tag set) chase their driven quarry outside the horde
+        // circle BY DESIGN — suspend the leash break (0 = no leash) or the whole pack
+        // abandons the deer in unison the moment it crosses the radius. WolfPackHuntAI's
+        // own, longer leash bounds the hunt instead.
+        float leash = ctx.Units[ctx.UnitIndex].WolfHuntTargetId != 0
+            ? 0f : ctx.Horde?.LeashRadius ?? 0f;
         Vec2 center = ctx.Horde?.CircleCenter ?? Vec2.Zero;
         if (CombatTransitions.StandardChasingExits(ref ctx, RoutineReturning, leash, center))
             return;
@@ -290,7 +295,10 @@ public class HordeMinionHandler : IArchetypeHandler
         //   - target dead → Returning (or Chasing if frenzied with another target)
         //   - target alive but out of melee (>1.2× range) → Chasing
         //   - leashed too far from horde center → Returning
-        float leash = ctx.Horde?.LeashRadius ?? 0f;
+        // Same pack-hunt exemption as UpdateChasing: a wolf mid-kill on its driven quarry
+        // must not drop it on the horde leash.
+        float leash = ctx.Units[ctx.UnitIndex].WolfHuntTargetId != 0
+            ? 0f : ctx.Horde?.LeashRadius ?? 0f;
         Vec2 center = ctx.Horde?.CircleCenter ?? Vec2.Zero;
         if (CombatTransitions.StandardEngagedExits(ref ctx,
                 chasingRoutine: RoutineChasing,
