@@ -487,10 +487,14 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         DebugLog.Log("startup", $"  [{now}ms +{now - _startupLastMs}ms] {step}");
         _startupLastMs = now;
     }
-    internal GroundSystem _groundSystem = new();
-    internal EnvironmentSystem _envSystem = new();
-    internal WallSystem _wallSystem = new();
-    internal RoadSystem _roadSystem = new();
+    // Per-game world state lives in GameSession; StartGame recreates it so nothing carries
+    // over between maps and its Dispose() frees the GPU resources. These forwarding
+    // properties keep every existing _groundSystem/_envSystem/... call site unchanged.
+    internal GameSession _session = new();
+    internal GroundSystem _groundSystem => _session.Ground;
+    internal EnvironmentSystem _envSystem => _session.Env;
+    internal WallSystem _wallSystem => _session.Wall;
+    internal RoadSystem _roadSystem => _session.Road;
     private TriggerSystem _triggerSystem = new();
 
     // Grass
@@ -1265,15 +1269,15 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         _skillBookState.InitFromDefs();
         _skillLearnToasts.Clear();
 
-        // Clear world systems for clean reload (prevents doubling on second play)
+        // Recreate the per-game world state: Dispose() frees the old map's GPU resources
+        // (ground/env textures) and the reassignment drops all references to the previous
+        // map's managed state (env objects/defs, wall defs) so it can't leak or bleed into
+        // the new map. Replaces the old per-system ClearObjects/ClearDefs/ClearTypes dance —
+        // wall defs in particular were never cleared, so every reload used to stack another
+        // full copy (unbounded growth that OOM'd on maps with a large walls array).
+        _session.Dispose();
+        _session = new GameSession();
         _envSystem.OnCollisionsDirty = null;
-        _envSystem.ClearObjects();
-        _envSystem.ClearDefs();
-        _groundSystem.ClearTypes();
-        // Wall defs are appended by MapData.Load and were NEVER cleared, so every reload
-        // stacked another full copy on top of the previous map's — unbounded growth that
-        // OOMs on maps carrying a bloated walls array (the test map had 5.8M junk defs).
-        _wallSystem.ClearDefs();
         // Reset the worker job system: reload jobs.json, wipe stockpiles + assignments
         // so a fresh game doesn't inherit the previous session's piles or priorities.
         _workerSystem.Reset();
