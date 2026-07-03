@@ -44,7 +44,12 @@ public class ForagableSystem
 
     // Long-lived references — set once via Bind().
     private EnvironmentSystem _env = null!;
-    private Simulation _sim = null!;
+    // Live-read the Simulation off Game1 instead of caching it: Game1._sim follows the
+    // per-game GameSession, recreated on every map load, so a cached ref would go stale after
+    // the first reload. Holding Game1 (a program-lifetime singleton) keeps this system following
+    // the live session. (_env is a persistent Game1 field, not session-owned, so it's a direct ref.)
+    private Game1 _game = null!;
+    private Simulation _sim => _game._sim;
     private Render.Camera25D _camera = null!;
     private Render.Renderer _renderer = null!;
     private SpriteBatch _spriteBatch = null!;
@@ -59,12 +64,12 @@ public class ForagableSystem
     private Action<string>? _onLearnTrigger;       // (resourceType) — Game1 runs skill-book triggers
 
     public void Bind(
-        EnvironmentSystem env, Simulation sim,
+        EnvironmentSystem env, Game1 game,
         Render.Camera25D camera, Render.Renderer renderer, SpriteBatch spriteBatch,
         Inventory inventory, EffectManager effects, SoundEffect? pickupSound,
         Action<Vec2, string>? onPickup, Action<string>? onLearnTrigger)
     {
-        _env = env; _sim = sim;
+        _env = env; _game = game;
         _camera = camera; _renderer = renderer; _spriteBatch = spriteBatch;
         _inventory = inventory; _effects = effects; _pickupSound = pickupSound;
         _onPickup = onPickup;

@@ -14,7 +14,13 @@ public class LightningRenderer
     private SpriteBatch _spriteBatch = null!;
     private Texture2D _pixel = null!;
     private Texture2D _glowTex = null!;
-    private Simulation _sim = null!;
+    // Read the live Simulation each frame off Game1 rather than caching the instance.
+    // Game1._sim forwards to the per-game GameSession, which is recreated on every map load —
+    // a cached Simulation reference would go stale after the first load and read an orphaned
+    // session's (always-empty) Lightning fx, drawing nothing. Holding Game1 (a program-lifetime
+    // singleton) instead keeps this renderer following the live session and dead sessions collectable.
+    private Game1 _game = null!;
+    private Simulation _sim => _game._sim;
     private Camera25D _camera = null!;
     private Renderer _renderer = null!;
     private GraphicsDevice _graphicsDevice = null!;
@@ -22,13 +28,13 @@ public class LightningRenderer
     private GodRayRenderer _godRayRenderer = null!;
 
     public void Init(SpriteBatch spriteBatch, Texture2D pixel, Texture2D glowTex,
-                     Simulation sim, Camera25D camera, Renderer renderer, GraphicsDevice graphicsDevice,
+                     Game1 game, Camera25D camera, Renderer renderer, GraphicsDevice graphicsDevice,
                      Microsoft.Xna.Framework.Graphics.Effect? hdrIntensityEffect = null)
     {
         _spriteBatch = spriteBatch;
         _pixel = pixel;
         _glowTex = glowTex;
-        _sim = sim;
+        _game = game;
         _camera = camera;
         _renderer = renderer;
         _graphicsDevice = graphicsDevice;
