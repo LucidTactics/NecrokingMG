@@ -1,4 +1,19 @@
 {
+  "hooks": {
+    "PreToolUse": [
+      {
+        "hooks": [
+          {
+            "command": "python \"$CLAUDE_PROJECT_DIR/tools/hooks/bash_prompt_guard.py\"",
+            "shell": "bash",
+            "timeout": 10,
+            "type": "command"
+          }
+        ],
+        "matcher": "Bash"
+      }
+    ]
+  },
   "permissions": {
     "allow": [
       "mcp__necroking__necro_status",
@@ -36,21 +51,6 @@
       "Edit(.claude/settings*.json)",
       "Write(.claude/settings*.json)",
       "MultiEdit(.claude/settings*.json)"
-    ]
-  },
-  "hooks": {
-    "PreToolUse": [
-      {
-        "matcher": "Bash",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python \"$CLAUDE_PROJECT_DIR/tools/hooks/bash_prompt_guard.py\"",
-            "shell": "bash",
-            "timeout": 10
-          }
-        ]
-      }
     ]
   }
 }
