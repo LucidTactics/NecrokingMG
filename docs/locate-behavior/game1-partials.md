@@ -33,7 +33,33 @@ a new field or system needs wiring into the loop. If a behavior is "what happens
 "what happens on this input", it's routed from here.
 See also: `Necroking/Game1.Dev.cs` (the `ExecuteDevCommand` body), `Core/Simulation.cs`,
 `Render/` (renderers constructed here), `Editor/` (editors), `data/maps/` (map JSON — world content
-lives in the map, not in startup spawns; see CLAUDE.md).
+lives in the map, not in startup spawns; see CLAUDE.md), and **`Necroking/Game/GameSession.cs`**
+(the per-game state owner — see next).
+
+### `Necroking/Game/GameSession.cs` — per-game world-state owner (recreated each map load)
+What lives here: `GameSession` — a single object that **owns the per-game world systems** (the ones
+rebuilt from scratch on every map load). `Game1` holds one `_session` and exposes its members through
+**forwarding properties** (`internal EnvironmentSystem _envSystem => _session.Env;`), so the hundreds
+of existing `_envSystem.Foo()` / `_g._envSystem` call sites are unchanged. `StartGame` does
+`_session.Dispose(); _session = new GameSession()`: `Dispose()` frees the old map's GPU/native
+resources (ground/env textures), and the reassignment drops every reference to the previous map's
+managed state — so **nothing carries over between maps and per-game memory can't leak or bleed**.
+This replaced a scattered per-system `ClearObjects`/`ClearDefs`/`ClearTypes` dance in `StartGame`;
+that pattern was the source of a whole class of reload leaks (wall defs were *never* cleared → each
+reload stacked another full copy → OOM on a map with a large walls array; flipbooks/textures were
+similar undisposed-on-reload misses).
+Key rule: **a new per-game resource must be owned by `GameSession` (or disposed on reload) or it will
+leak.** Migration is incremental (one system at a time: Game1 field → GameSession field + forwarding
+property + dispose wiring, build green each step). Distinguish **per-game** (world systems, sim,
+per-map textures/RTs) from **app-lifetime** (renderers, editors, `_gameData`, atlases, fonts — reused
+across games, must NOT be recreated).
+Look/edit here when: adding a per-game system/resource and deciding where it lives; a resource leaks
+across map reloads or bleeds state from the previous map; the world renders blank/stale after a
+reload (a system not wired to the fresh session). Current membership + the remaining migration
+checklist + the app-vs-game classification live in **`todos/gamesession-migration.md`**.
+See also: `Game1.cs` (`StartGame` recreates `_session`; forwarding properties declared near the
+system fields), `World/` (the owned systems), `Necroking/Game1.Dev.cs` (`mem` dev command — managed
+heap + process memory behind a forced compacting GC, for spotting reload leaks).
 
 ### `Necroking/Game1.Animation.cs` — per-frame animation, cast-phase & attack-anim updates
 What lives here: the per-frame animation tick — advancing sprite flipbooks for every unit, driving
