@@ -124,6 +124,54 @@ fails += not check("sed pattern containing w -> allow (w in regex text, not a co
 fails += not check("sed with file redirect -> defer (redirect owns the write question)",
                    evb("sed 's/a/b/' f.txt > out.txt"), "defer")
 
+# --- PowerShell: provably read-only one-liners allow; everything else stays gated ---
+fails += not check("Get-Process pipeline -> allow (read-only powershell)",
+                   evb("powershell -Command \"Get-Process | Where-Object "
+                       "{$_.ProcessName -like '*necro*'} | Select-Object Name,CPU\""),
+                   "allow")
+fails += not check("Start-Sleep -> allow (the sleep case)",
+                   evb('powershell -NoProfile -c "Start-Sleep -Seconds 3"'), "allow")
+fails += not check("pwsh alias sleep -> allow",
+                   evb('pwsh -c "sleep 2"'), "allow")
+fails += not check("implicit -Command positional -> allow",
+                   evb('powershell "Get-Process Necroking | Format-Table Name,Id,CPU"'),
+                   "allow")
+fails += not check("tasklist && powershell sleep compound -> allow",
+                   evb('tasklist | findstr Necroking && powershell -c "Start-Sleep -s 1"'),
+                   "allow")
+fails += not check("Stop-Process -> deny (mutating cmdlet not whitelisted)",
+                   evb('powershell -c "Stop-Process -Name Necroking"'), "deny")
+fails += not check("read-only then Remove-Item -> deny (second statement mutates)",
+                   evb('powershell -c "Get-Process; Remove-Item x.txt"'), "deny")
+fails += not check("Out-File -> deny (write cmdlet in pipeline)",
+                   evb('powershell -c "Get-Content f.txt | Out-File g.txt"'), "deny")
+fails += not check("PS-level redirect -> deny (banned construct)",
+                   evb('powershell -c "Get-Process > procs.txt"'), "deny")
+fails += not check("external command in block -> deny (head re-split at braces)",
+                   evb('powershell -c "Get-ChildItem | ForEach-Object { python x.py }"'),
+                   "deny")
+fails += not check("powershell -File -> deny (unverifiable script)",
+                   evb("powershell -File script.ps1"), "deny")
+fails += not check("powershell -EncodedCommand -> deny (unverifiable)",
+                   evb("powershell -enc SQBFAFgA"), "deny")
+fails += not check("method call .Kill() -> deny (banned construct)",
+                   evb('powershell -c "(Get-Process x).Kill()"'), "deny")
+
+# --- Windows admin CLIs: query forms allow, mutating verbs prompt -------------------
+fails += not check("tasklist -> allow (read-only)", evb("tasklist /v"), "allow")
+fails += not check("wmic list -> allow (query form)",
+                   evb("wmic process list brief"), "allow")
+fails += not check("wmic delete -> ask (mutating verb)",
+                   evb("wmic process where \"name='Necroking.exe'\" delete"), "ask")
+fails += not check("reg query -> allow", evb('reg query "HKCU\\Software"'), "allow")
+fails += not check("reg add -> ask", evb('reg add "HKCU\\Software\\X" /v y /d z'), "ask")
+fails += not check("sc query -> allow", evb("sc query type= service"), "allow")
+fails += not check("sc stop -> ask (case-insensitive verb)", evb("sc STOP Spooler"), "ask")
+fails += not check("schtasks /query -> allow", evb("schtasks /query /fo LIST"), "allow")
+fails += not check("schtasks /Create -> ask", evb("schtasks /Create /tn X /tr y.exe"), "ask")
+fails += not check("cmd /c del -> deny (cmd is an interpreter now)",
+                   evb('cmd /c del x.txt'), "deny")
+
 # --- Per-invocation precision: a write-named token in ARGUMENT position is not the
 #     command, so it no longer forces a deny (AST knows the real leader) --------------
 fails += not check("echo rm -rf x -> allow (rm is an argument, echo is read-only)",

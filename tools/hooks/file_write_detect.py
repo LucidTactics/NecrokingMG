@@ -137,7 +137,7 @@ INTERPRETERS = {
     "groovy", "scala", "kotlin", "clojure", "clj",
     "swift", "elixir", "iex", "erl", "escript",
     "raku", "perl6", "gforth", "gst",                # smalltalk
-    "osascript", "powershell", "pwsh", "cscript", "wscript",
+    "osascript", "powershell", "pwsh", "cscript", "wscript", "cmd", "mshta",
     "csi", "dotnet-script", "fsi",                   # C#/F# scripting
     "guile", "scheme", "racket", "sbcl", "clisp", "ecl",
     "bc", "dc",                                      # dc can write? bc no — but both shell-able; keep dc
@@ -157,6 +157,7 @@ WRAPPERS = {
     "sudo", "doas", "su", "runuser", "gosu", "pkexec",
     "make", "gmake", "ninja", "cmake", "meson", "scons", "bazel", "buck",
     "ssh",                                           # ssh host 'rm -rf …' runs a remote writer
+    "wsl",                                           # wsl <cmd> runs an inner Linux command
     "ssh-keygen",                                    # writes key files
     "entr",                                          # runs a command on file change
 }
@@ -235,6 +236,20 @@ CONDITIONAL_WRITERS = {
              "-fprintf", "-fprint", "-fprint0", "-fls"},
     "gfind": {"-exec", "-execdir", "-ok", "-okdir", "-delete",
               "-fprintf", "-fprint", "-fprint0", "-fls"},
+    # Windows admin CLIs: the query forms are common and read-only (`wmic process list`,
+    # `reg query`, `sc query`, `schtasks /query`, `net statistics`, `netsh … show`); only
+    # the mutating verbs below need a prompt. Trigger tokens are matched case-insensitively
+    # (Windows flags come in any casing). A trigger that's really a value (a service
+    # literally named "stop") just prompts — the safe direction.
+    "wmic": {"delete", "terminate", "call", "create", "uninstall", "set"},
+    "reg": {"add", "delete", "copy", "save", "restore", "load", "unload",
+            "import", "export"},
+    "sc": {"start", "stop", "pause", "continue", "config", "create", "delete",
+           "failure", "sdset", "control"},
+    "schtasks": {"/create", "/delete", "/change", "/run", "/end"},
+    "net": {"user", "use", "share", "localgroup", "group", "accounts", "computer",
+            "start", "stop", "pause", "continue", "/add", "/delete", "/close"},
+    "netsh": {"add", "delete", "set", "reset", "import", "exec", "install"},
 }
 
 # --- sed: a conditional writer whose mutating modes aren't single flag tokens --------
@@ -434,7 +449,7 @@ def _indicators(cmd: str, names):
         reasons.append("output redirection to a file (>, >>, 2>, &>)")
 
     toks = _tokenize(cmd)
-    tokset = set(toks)
+    tokset = {t.lower() for t in toks}
     seen = set()
     for idx, tok in enumerate(toks):
         base = _basename(tok)
@@ -486,7 +501,7 @@ def _conditional_trigger(leader: str, args):
     `leader` is a conditional writer used in its mutating mode, else None."""
     flags = CONDITIONAL_WRITERS.get(leader)
     if flags:
-        hit = flags & set(args)
+        hit = flags & {a.lower() for a in args}
         if hit:
             return sorted(hit)[0]
     fn = CONDITIONAL_WRITER_FNS.get(leader)
@@ -533,7 +548,7 @@ def conditional_write_triggers(cmd: str):
     caller single out 'allow-listed read-only tool used in its mutating mode' for special
     handling, separate from the catch-all can_write_files."""
     toks = _tokenize(cmd)
-    tokset = set(toks)
+    tokset = {t.lower() for t in toks}
     out, seen = [], set()
     for idx, tok in enumerate(toks):
         base = _basename(tok)

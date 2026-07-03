@@ -485,6 +485,132 @@ def rule_robocopy_into_project(cmd: str, project_dir=None) -> bool:
     return dest_abs == proj_abs or dest_abs.startswith(proj_abs + os.sep)
 
 
+# --- PowerShell: force-allow provably read-only invocations ------------------------
+# powershell/pwsh are general interpreters (unconditional writers in file_write_detect),
+# but the overwhelmingly common uses here are read-only one-liners: process checks
+# (`Get-Process | Where-Object …`), Start-Sleep, formatting/measuring output. This rule
+# allows exactly those, by requiring ALL of:
+#   * the payload is an inline -Command (a -File script or -EncodedCommand can't be
+#     verified -> not allowed by this rule);
+#   * no dangerous construct anywhere: redirection `>`, call/background `&`, backtick,
+#     subexpressions `$( @(`, static members `::`, method calls `.Foo(`, `--%`;
+#   * no dangerous single-word alias/command anywhere (iex, del, kill, sp*, cmd, reg, …);
+#   * every Verb-Noun token is on the read-only cmdlet whitelist (catches `Remove-Item`
+#     even inside a Where/ForEach script block);
+#   * every pipeline-stage / statement head is a whitelisted command (catches bareword
+#     externals like `python x.py` — heads are re-split at `(` and `{` so a command
+#     hiding inside parens/blocks still surfaces as a head).
+# Anything that fails just falls through to the normal deny/prompt flow — false rejects
+# are cheap, a false allow is what we guard against.
+_PS_LEAD = {"powershell", "pwsh"}
+
+_PS_VALUE_SWITCHES = ("windowstyle", "executionpolicy", "inputformat", "outputformat",
+                      "configurationname", "psconsolefile", "version",
+                      "workingdirectory", "settingsfile")
+_PS_REJECT_SWITCHES = ("file", "encodedcommand", "encodedarguments", "commandwithargs")
+
+_PS_READONLY = {
+    # cmdlets
+    "get-process", "get-service", "get-childitem", "get-item", "get-itemproperty",
+    "get-content", "get-date", "get-location", "get-psdrive", "get-command",
+    "get-member", "get-host", "get-variable", "get-unique", "get-counter",
+    "get-ciminstance", "get-wmiobject", "get-nettcpconnection", "get-computerinfo",
+    "get-winevent", "get-eventlog", "get-history", "get-alias", "get-random",
+    "select-object", "select-string", "where-object", "foreach-object", "sort-object",
+    "group-object", "measure-object", "compare-object",
+    "format-table", "format-list", "format-wide", "format-custom",
+    "out-string", "out-host", "out-null",
+    "write-output", "write-host", "write-warning", "write-error",
+    "start-sleep", "test-path", "test-connection", "resolve-path", "split-path",
+    "join-path", "measure-command",
+    "convertto-json", "convertfrom-json", "convertto-csv", "convertfrom-csv",
+    # aliases & read-only externals commonly piped to/from
+    "gps", "ps", "gsv", "gci", "dir", "ls", "gc", "cat", "type", "gi", "gp", "gl",
+    "pwd", "gcm", "gm", "gv", "select", "where", "sort", "group", "measure", "compare",
+    "ft", "fl", "fw", "echo", "write", "sleep", "sls", "oh",
+    "tasklist", "hostname", "whoami", "ver", "findstr", "?", "%",
+}
+
+# Constructs that can write/execute regardless of the command heads.
+_PS_BANNED = re.compile(r"[>&`]|--%|\$\(|@\(|::|\.\w+\s*\(")
+
+# Single-word mutating aliases / launchers, anywhere in the payload. Word-bounded so
+# `StartTime` or `-First` don't match. Verb-Noun cmdlets are covered by the whitelist
+# scan instead, so this list is only the one-word escape hatches.
+_PS_DANGEROUS = re.compile(
+    r"(?i)(?<![\w-])(iex|icm|irm|iwr|curl|wget|saps|sasv|spps|spsv|kill|del|erase|"
+    r"rd|ri|rm|rmdir|ni|mi|mv|move|cp|copy|ren|rni|rnp|sc|sp|si|sv|set|md|mkdir|"
+    r"start|stop|restart|cmd|taskkill|wmic|reg|schtasks|net|netsh|msiexec|rundll32|"
+    r"certutil|bitsadmin|powershell|pwsh|clc|cli|clp|clv)(?![\w-])")
+
+_PS_VERBNOUN = re.compile(r"(?<![\w-])([A-Za-z]{2,}-[A-Za-z][A-Za-z0-9]*)")
+
+
+def _ps_command_payload(args):
+    """The inline command text of a powershell/pwsh invocation, or None when there's no
+    verifiable inline command (-File, -EncodedCommand, --%, bare interactive shell).
+    Switch names match PowerShell's prefix abbreviation (`-c`/`-com` -> -Command,
+    `-e`/`-enc` -> EncodedCommand); everything after -Command is the payload, as is a
+    first positional arg (implicit -Command)."""
+    i, n = 0, len(args)
+    while i < n:
+        a = args[i]
+        if a == "--%":
+            return None
+        if a.startswith("-") and len(a) > 1:
+            name = a.lstrip("-").lower()
+            if name and "command".startswith(name):
+                return " ".join(args[i + 1:]) if i + 1 < n else None
+            if any(f.startswith(name) for f in _PS_REJECT_SWITCHES):
+                return None
+            if any(f.startswith(name) for f in _PS_VALUE_SWITCHES):
+                i += 2
+                continue
+            i += 1                       # value-less switch: -NoProfile, -NonInteractive, …
+            continue
+        return " ".join(args[i:])        # first positional = implicit -Command
+    return None
+
+
+def _ps_payload_readonly(text: str) -> bool:
+    """True if a PowerShell command payload is provably read-only per the checks in the
+    section comment above. Conservative: unusual-but-harmless constructs (hashtables,
+    strings containing banned characters) return False and fall through to a prompt."""
+    if not text or _PS_BANNED.search(text) or _PS_DANGEROUS.search(text):
+        return False
+    for m in _PS_VERBNOUN.finditer(text):
+        if m.group(1).lower() not in _PS_READONLY:
+            return False
+    # Statement/pipeline heads. Also split at `(` and `{` so a command inside a paren
+    # group or script block (`ForEach-Object { python x }`) becomes a head to judge.
+    for seg in re.split(r"[|;\n({]", text):
+        seg = seg.strip().lstrip("}) \t")
+        seg = re.sub(r"^\$[\w.:\[\]]+\s*=(?!=)\s*", "", seg)   # `$x = …` assignment
+        if not seg:
+            continue
+        if seg[0] in "$'\"" or seg[0].isdigit():
+            continue                    # variable / literal expression, not a command
+        head = re.match(r"[\w?%./:-]+", seg)
+        if not head:
+            return False
+        h = head.group(0).lower()
+        if h.endswith(".exe"):
+            h = h[:-4]
+        if h not in _PS_READONLY:
+            return False
+    return True
+
+
+def rule_powershell_readonly(command) -> bool:
+    """Per-segment allow predicate: True if this parsed invocation (a bash_ast.Command)
+    is powershell/pwsh running a provably read-only inline command. Used alongside the
+    robocopy/mkdir predicates in evaluate()'s force-allow pass; None (no parse) -> False."""
+    if command is None or command.leader not in _PS_LEAD:
+        return False
+    payload = _ps_command_payload(list(command.args))
+    return bool(payload) and _ps_payload_readonly(payload)
+
+
 # mkdir options that consume the FOLLOWING token as their value (the mode).
 _MKDIR_VALUE_OPTS = {"-m", "--mode"}
 
@@ -643,13 +769,24 @@ def evaluate(tool_name: str, tool_input: dict, mode: str, allow_rules, deny_rule
     # force-allow so the user isn't prompted — Claude's own permission system otherwise
     # prompts on `;`-chained compounds even when each part is individually allowed. Never
     # force-allow if any segment hits a `deny` rule (respect the user's deny-list).
-    def _seg_ok(s):
+    # Parsed view aligned to segments (None-padded so a length mismatch can never let a
+    # segment skip its check).
+    aligned = list(commands) if commands is not None else []
+    aligned += [None] * (len(segments) - len(aligned))
+
+    def _seg_ok(s, c):
         return (_allow_listed("Bash", s, allow_rules)
                 or rule_robocopy_into_project(s, pd)
-                or rule_mkdir_into_project(s, pd))
+                or rule_mkdir_into_project(s, pd)
+                or rule_powershell_readonly(c)
+                # A segment that itself has no side effect (the compound only reached
+                # here because ANOTHER segment mutates) is fine — `tasklist && sed -n…`
+                # shouldn't fail on the tasklist half.
+                or (c is not None
+                    and file_write_detect.command_side_effect(c.leader, c.args) is None))
 
     if segments and not any(_allow_listed("Bash", s, deny_rules) for s in segments):
-        if all(_seg_ok(s) for s in segments):
+        if all(_seg_ok(s, c) for s, c in zip(segments, aligned)):
             return ("allow", None)
 
     # Default: throw it back.
