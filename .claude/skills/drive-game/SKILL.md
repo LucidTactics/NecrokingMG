@@ -9,25 +9,10 @@ Drive the *running* game to verify almost anything visual — far faster than th
 write-scenario→rebuild→run loop. Spawn units, set up a situation, move the camera, open a
 UI panel, screenshot, read state.
 
-## Topology
-
-```
-Claude --(MCP tool | python)--> supervisor (:8777) --proxy--> game (:8778)
-```
-
-- Supervisor = `tools/devserver.py` (port 8777, persistent, owns the game process via a
-  Windows Job Object). Do NOT edit it — add control in C# instead (see below). Ask the
-  user before any change to it.
-- Game in-process HTTP listener = `Necroking/Dev/DevServer.cs` (port 8778, enabled by
-  `--devserver`). Commands run on the game main thread, drained in `Update`.
-- The supervisor owns the game, so the exe can be rebuilt + relaunched **without
-  restarting the supervisor**.
-
 ## Which interface to use (prefer the highest available tier)
 
-1. **`Claude_Preview` MCP tools** (`preview_start`, `preview_eval`, `preview_screenshot`, …)
-   — wired up **only in the desktop Claude Code app**. Approved by name, no per-command
-   prompts.
+1. **`Claude_Preview` MCP tools** — desktop Claude Code app only. Its own tier; see
+   [preview-server.md](preview-server.md) for the full JavaScript reference.
 2. **`necroking` project MCP server** (`.mcp.json` → `tools/necro_mcp.py`, stdlib-only) —
    the primary path on **every other surface** (e.g. the VS Code extension). Typed,
    no-shell tools: `necro_status`, `necro_start`, `necro_cmd` (main driver, same
@@ -36,41 +21,17 @@ Claude --(MCP tool | python)--> supervisor (:8777) --proxy--> game (:8778)
 3. **`tools/devctl.py`** — CLI fallback (one allowlisted bash command) when the `necroking`
    server isn't loaded. Same `tools/necro_devlib.py` under the hood.
 
-All three auto-start the supervisor and game from a cold start. **ALWAYS prefer the MCP
+All three auto-start the supervisor and game from a cold start. **ALWAYS prefer the Necroking
 tools over raw Bash/curl** — they're allowlisted by name (no prompts) and faster. A new
 `.mcp.json` server needs a one-time trust approval + Claude Code reload before its tools
 appear.
 
-## Claude_Preview workflow (desktop app only)
-
-JavaScript-based: `preview_start("necroking-dev")` → `preview_eval(id,
-"window.dev(cmd,args,opts)")` → `preview_screenshot(id)`. The full JS reference — the
-`.claude/launch.json` bootstrap, `window.dev` semantics, the `/game/restart` +
-`/game/stop` fetch calls, batch polling, recipes — lives in
-[preview-server.md](preview-server.md). Read it before driving through this tier.
-
-## necroking MCP / devctl.py quick reference
+## necroking MCP quick reference
 
 `necro_cmd {cmd,args,opts}` forwards the same commands as `window.dev`. Because `/cmd`
 forwards `{cmd,args,opts}` verbatim, **no MCP-server change is needed when a new game
 command is added** — add it in C# and `necro_restart` with build.
 
-devctl.py (run from repo root; use `py`/`python3` if `python` isn't on PATH):
-```bash
-python tools/devctl.py status                 # supervisor + game status JSON
-python tools/devctl.py up [--windowed] [--map default]
-python tools/devctl.py cmd state              # JSON snapshot (necromancer x/y/mana, etc.)
-python tools/devctl.py cmd menu new_game
-python tools/devctl.py cmd spawn Skeleton 2090 1882
-python tools/devctl.py cmd camera 2096 1882 48   # x y zoom
-python tools/devctl.py cmd speed 4
-python tools/devctl.py cmd help               # list every game dev command + selectors
-python tools/devctl.py shot fight no_ui=true downsample_to=full   # prints "SHOT: <abspath>"
-python tools/devctl.py raw '{"cmd":"units","args":["all"]}'
-python tools/devctl.py restart --build        # stop -> rebuild -> start (after a C# change)
-python tools/devctl.py down                   # stop game (leave supervisor up)
-python tools/devctl.py kill-server            # stop game AND supervisor
-```
 `cmd <gamecmd> [args...] [key=value...]`: bare tokens → positional args, `key=value` → opts.
 
 ## Game commands (`ExecuteDevCommand` in Game1.cs)
@@ -134,8 +95,7 @@ Via `necro_cmd` (or `devctl.py raw` with the same JSON):
 ```
 returns `{jobId}`; then poll `{"cmd":"job","args":[<jobId>]}` (`python tools/devctl.py
 cmd job <jobId>`) every ~0.3 s until `done:true`. `results` holds each step's reply;
-PNGs at `bin/Devbuild/log/screenshots/<name>.png`. (JS polling form:
-[preview-server.md](preview-server.md).)
+PNGs at `bin/Devbuild/log/screenshots/<name>.png`.
 
 ### UI panels & overlays
 
@@ -154,10 +114,7 @@ PNGs at `bin/Devbuild/log/screenshots/<name>.png`. (JS polling form:
 
 ## Screenshots — two ways
 
-- `preview_screenshot(id)` (or `necro_screenshot`) captures the whole **dashboard page**
-  (live frame + command log). Best for a quick glance / watching progress.
-- To **analyze just the game frame**, run the `screenshot` game command —
-  `necro_cmd {"cmd":"screenshot","args":["name"],"opts":{...}}` or
+- `necro_cmd {"cmd":"screenshot","args":["name"],"opts":{...}}` or
   `python tools/devctl.py shot name no_ui=true` — it returns the path and the PNG lands at
   `bin/Devbuild/log/screenshots/<name>.png` (the preview builds into its own bin/Devbuild
   folder; the reply/`necro_status` are the source of truth for the exact path — Read that,
@@ -171,11 +128,11 @@ PNGs at `bin/Devbuild/log/screenshots/<name>.png`. (JS polling form:
 ## Adding a new command — do this freely; it's the point
 
 If a check needs a verb the server doesn't have, ADD IT. One `case` in `ExecuteDevCommand`
-(`Game1.cs`) + a rebuild; the `/cmd` channel forwards `{cmd,args,opts}` verbatim, so **no
+(`Game1.Dev.cs`) + a rebuild; the `/cmd` channel forwards `{cmd,args,opts}` verbatim, so **no
 `tools/devserver.py` change is needed** (don't edit it).
 
 ```csharp
-// in ExecuteDevCommand(Necroking.Dev.DevCommand c), Game1.cs:
+// in ExecuteDevCommand( c), Game1.Dev.cs:
 case "kill_faction":                       // devctl: cmd kill_faction Human
 {
     if (c.Args.Length < 1) { c.Complete(Necroking.Dev.DevServer.Error("need <faction>")); break; }
@@ -204,8 +161,7 @@ case "kill_faction":                       // devctl: cmd kill_faction Human
 
 - **Stop the game via the server, NEVER taskkill.** When the exe is locked for a build, or
   you're done driving it, stop the game through the server: `necro_stop` /
-  `python tools/devctl.py down` (preview JS form: [preview-server.md](preview-server.md)).
-  The supervisor owns the process (Windows Job Object) and the headless game is hidden from
+  `python tools/devctl.py down`. The supervisor owns the process (Windows Job Object) and the headless game is hidden from
   the taskbar, so a force-killed PID orphans bookkeeping and a forgotten game idles
   invisibly. `necro_restart` / `restart --build` already stops it for you. The supervisor
   itself can stay up (cheap; holds the pinned frame).
@@ -221,8 +177,7 @@ case "kill_faction":                       // devctl: cmd kill_faction Human
 ## Recipes
 
 Set up a fight, speed it up, analyze it — read `state` first for the necromancer's `x,y`
-(e.g. 2096,1882), then everything else is **one `batch`** (via `necro_cmd`, or
-`devctl.py raw '<json>'`):
+(e.g. 2096,1882), then everything else is **one `batch`** via `necro_cmd`:
 ```bash
 python tools/devctl.py cmd state     # → necromancer x,y
 ```
@@ -242,6 +197,3 @@ Poll `{"cmd":"job","args":[<jobId>]}` until `done:true`, then `Read`
 
 Inspect an editor entry — one batch:
 `{"cmd":"batch","opts":{"script":[{"cmd":"panel","args":["spell_editor"]},{"cmd":"select","args":["Fireball"]},{"shot":"spell_editor"}]}}`.
-
-(JS versions of these recipes for the Claude_Preview tier:
-[preview-server.md](preview-server.md).)
