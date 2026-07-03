@@ -58,8 +58,9 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     // Data
     internal GameData _gameData = new();
 
-    // Simulation
-    internal Simulation _sim = new();
+    // Simulation — owned by the per-game GameSession (see _session below); forwarding
+    // property keeps every _sim.* call site unchanged while StartGame recreates the session.
+    internal Simulation _sim => _session.Sim;
     internal Inventory _inventory = null!;
     private Render.FontManager _fontManager = new();
     internal RuntimeWidgetRenderer _widgetRenderer = new();

@@ -33,8 +33,9 @@ or break renderers):** `_gameData`, `_atlases`, fonts, `_widgetRenderer`, `_came
 - [x] `_envSystem` (Env) — owns textures + corruption variants (ClearDefs disposes)
 - [x] `_wallSystem` (Wall) — defs list (the headline leak)
 - [x] `_roadSystem` (Road) — managed
-- [ ] `_sim` (Simulation) — big managed state; Init() already wipes it. Referenced everywhere;
-      forwarding property should be a clean move. Re-run the SetX wiring in StartGame after recreate.
+- [x] `_sim` (Simulation) — big managed state; forwarding property `_sim => _session.Sim`.
+      Managed-only (no GPU), so no Dispose wiring; dropping the session reference frees it.
+      The `census` dev command reads its collections via `GameSession.Census()`.
 - [ ] `_fogOfWar` (FogOfWarSystem) — owns 4 world-sized RTs + circle tex (has Dispose()).
 - [ ] `_grassRenderer` (GrassTuftRenderer) — `_texCache` textures (has Dispose()).
 - [ ] `_villageSystem` (Game1.Villages.cs, private readonly)

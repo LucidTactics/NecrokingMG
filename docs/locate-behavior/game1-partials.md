@@ -57,9 +57,13 @@ Look/edit here when: adding a per-game system/resource and deciding where it liv
 across map reloads or bleeds state from the previous map; the world renders blank/stale after a
 reload (a system not wired to the fresh session). Current membership + the remaining migration
 checklist + the app-vs-game classification live in **`todos/gamesession-migration.md`**.
+`GameSession.Census()` reports a live per-type count of every collection the session owns (units by
+def/faction, env objects by def, corpses/projectiles/wall-defs/… — the accumulation canaries); it's
+the single place to extend when a new per-game collection is added, surfaced by the `census` dev
+command.
 See also: `Game1.cs` (`StartGame` recreates `_session`; forwarding properties declared near the
 system fields), `World/` (the owned systems), `Necroking/Game1.Dev.cs` (`mem` dev command — managed
-heap + process memory behind a forced compacting GC, for spotting reload leaks).
+heap + process memory behind a forced compacting GC — and `census`, both for spotting reload leaks).
 
 ### `Necroking/Game1.Animation.cs` — per-frame animation, cast-phase & attack-anim updates
 What lives here: the per-frame animation tick — advancing sprite flipbooks for every unit, driving

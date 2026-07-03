@@ -36,6 +36,13 @@ public partial class Game1 {
                break;
             }
 
+            // Live census of every game-object collection: units by type/faction, env
+            // objects by def, and the misc per-game collections. The counting lives in
+            // GameSession.Census() so it's the single place to update as systems are added.
+            case "census":
+               c.Complete(Necroking.Dev.DevServer.Ok(_session.Census()));
+               break;
+
             case "state":
                c.Complete(Necroking.Dev.DevServer.OkRaw(BuildDevStateJson()));
                break;
@@ -1373,7 +1380,7 @@ public partial class Game1 {
             case "help":
             case "commands": {
                var cmds = new[] {
-                  "ping", "state", "help",
+                  "ping", "state", "help", "mem", "census",
                   "spawn <type> <x> <y>", "spawn_def <unitID> <x> <y> [count]",
                   "units [selector]", "unit <selector>", "combat_log [n]",
                   "damage <selector> <amount>", "kill <selector>", "remove <selector>",
