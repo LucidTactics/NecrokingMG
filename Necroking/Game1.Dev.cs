@@ -194,7 +194,7 @@ public partial class Game1 {
                break;
 
             case "start_game": {
-               string map = c.Args.Length > 0 ? c.Args[0] : "default";
+               string map = c.Args.Length > 0 ? c.Args[0] : "empty_test";
                StartGame(map);
                _menuState = MenuState.None;
                c.Complete(Necroking.Dev.DevServer.Ok($"started map={map} units={_sim.Units.Count}"));
