@@ -90,7 +90,7 @@ python tools/devctl.py kill-server            # stop game AND supervisor
 - `ping` · `state` — liveness / JSON snapshot of game state
 - `help` (alias `commands`) — list every dev command + selector syntax. Run this to
   discover what's available without reading the source.
-- `start_game [map]` — load a map into gameplay
+- `start_game [map]` — load a map into gameplay, use empty_test_map for most tests
 - `spawn <type> <x> <y>` · `camera <x> <y> [zoom]` · `speed <n>` · `pause` · `resume`
 - `screenshot [name]` with `opts`: `no_ui`, `no_ground`, `downsample_to` (`"WxH"` | `"full"`;
   default 640x360)
