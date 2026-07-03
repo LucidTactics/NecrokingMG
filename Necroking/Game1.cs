@@ -58,8 +58,9 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     // Data
     internal GameData _gameData = new();
 
-    // Simulation
-    internal Simulation _sim = new();
+    // Simulation — owned by the per-game GameSession (see _session below); forwarding
+    // property keeps every _sim.* call site unchanged while StartGame recreates the session.
+    internal Simulation _sim => _session.Sim;
     internal Inventory _inventory = null!;
     private Render.FontManager _fontManager = new();
     internal RuntimeWidgetRenderer _widgetRenderer = new();
@@ -487,10 +488,14 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         DebugLog.Log("startup", $"  [{now}ms +{now - _startupLastMs}ms] {step}");
         _startupLastMs = now;
     }
-    internal GroundSystem _groundSystem = new();
-    internal EnvironmentSystem _envSystem = new();
-    internal WallSystem _wallSystem = new();
-    internal RoadSystem _roadSystem = new();
+    // Per-game world state lives in GameSession; StartGame recreates it so nothing carries
+    // over between maps and its Dispose() frees the GPU resources. These forwarding
+    // properties keep every existing _groundSystem/_envSystem/... call site unchanged.
+    internal GameSession _session = new();
+    internal GroundSystem _groundSystem => _session.Ground;
+    internal EnvironmentSystem _envSystem => _session.Env;
+    internal WallSystem _wallSystem => _session.Wall;
+    internal RoadSystem _roadSystem => _session.Road;
     private TriggerSystem _triggerSystem = new();
 
     // Grass
@@ -1163,6 +1168,10 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             DebugLog.Log("startup",
                 $"  [BENCH] {b.label,-22} {b.sizeMb,3}MB tid={b.threadId,2} read={b.readMs,4}ms decode={b.decodeMs,5}ms pma={b.pmaMs,5}ms total={b.totalMs,5}ms {(b.cacheHit ? "CACHE-HIT" : b.skia ? "skia" : "stb")}{(b.wroteCache && !b.cacheHit ? " (wrote cache)" : "")}");
 
+        // Fresh asset log per process so it doesn't grow unbounded across runs (mirrors the
+        // perf-log Clear in Simulation.Init). Prior runs' AnimMeta/buff warnings are discarded.
+        DebugLog.Clear("asset");
+
         // Load animation metadata BEFORE GPU upload so the stride calibration pass
         // (which runs in the upload loop, while decoded pixels are still live) can
         // read per-gait cycle durations from animationmeta. Animationmeta is CPU-
@@ -1175,6 +1184,9 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             foreach (string extMeta in AtlasDefs.FindExtensionAnimMeta(name))
                 AnimMetaLoader.Load(extMeta, _animMeta);
         }
+        // Validate effect_time ONCE over the fully-loaded dict (not per-file inside Load — that
+        // was O(files × keys) and dumped tens of thousands of duplicate warnings into asset.log).
+        AnimMetaLoader.ValidateEffectTimes(_animMeta);
         LogTiming($"Animation metadata: {_animMeta.Count} entries");
         _sim.SetAnimMeta(_animMeta);
 
@@ -1258,11 +1270,15 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         _skillBookState.InitFromDefs();
         _skillLearnToasts.Clear();
 
-        // Clear world systems for clean reload (prevents doubling on second play)
+        // Recreate the per-game world state: Dispose() frees the old map's GPU resources
+        // (ground/env textures) and the reassignment drops all references to the previous
+        // map's managed state (env objects/defs, wall defs) so it can't leak or bleed into
+        // the new map. Replaces the old per-system ClearObjects/ClearDefs/ClearTypes dance —
+        // wall defs in particular were never cleared, so every reload used to stack another
+        // full copy (unbounded growth that OOM'd on maps with a large walls array).
+        _session.Dispose();
+        _session = new GameSession();
         _envSystem.OnCollisionsDirty = null;
-        _envSystem.ClearObjects();
-        _envSystem.ClearDefs();
-        _groundSystem.ClearTypes();
         // Reset the worker job system: reload jobs.json, wipe stockpiles + assignments
         // so a fresh game doesn't inherit the previous session's piles or priorities.
         _workerSystem.Reset();
@@ -1273,7 +1289,11 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         _roadSystem.Init();
         _dayNightSystem.Init(_gameData.Settings.DayNight);
 
-        // Load flipbooks
+        // Load flipbooks. Dispose the previous load's flipbook textures first — StartGame runs
+        // on every map load and overwrote _flipbooks[fbId] without freeing the old Flipbook,
+        // leaking its Texture2D each reload.
+        foreach (var oldFb in _flipbooks.Values) oldFb.Unload();
+        _flipbooks.Clear();
         foreach (var fbId in _gameData.Flipbooks.GetIDs())
         {
             var fbDef = _gameData.Flipbooks.Get(fbId);
@@ -1305,6 +1325,9 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         // (no JSON file) so technical-behavior tests don't fight the regular
         // map's content. See the "empty_test_map" menu dev command.
         var placedUnits = new List<Data.PlacedUnit>();
+        // Zones are reloaded per map below; clear here so maps without a zones file
+        // (empty_test, missing map) don't inherit the previous map's zones.
+        _zoneSystem.Clear();
         string mapPath = GamePaths.Resolve($"assets/maps/{mapName}.json");
         if (mapName == "empty_test")
         {
@@ -1339,6 +1362,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
                 out var grassInfo);
             MapData.LoadTriggers(GamePaths.Resolve($"assets/maps/{mapName}_triggers.json"), _triggerSystem);
             MapData.LoadRoads(GamePaths.Resolve($"assets/maps/{mapName}_roads.json"), _roadSystem);
+            MapData.LoadZones(GamePaths.Resolve($"assets/maps/{mapName}_zones.json"), _zoneSystem);
             // Village structures are placed here (before the collision bake below) so their
             // buildings are stamped into the pathfinding grid alongside the map's own objects.
             LoadVillageStructures(mapName);
@@ -1388,6 +1412,10 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
 
         // Load textures
         _groundSystem.LoadTextures(GraphicsDevice);
+        // Dispose the previous map's vertex texture before replacing it — StartGame runs on
+        // every "load map", so without this each reload orphans a full map-sized texture on
+        // the GPU (every other CreateVertexMapTexture call site disposes first).
+        _groundVertexMapTex?.Dispose();
         _groundVertexMapTex = _groundSystem.CreateVertexMapTexture(GraphicsDevice);
         // Now that the ground types are populated, bake a wake-particle
         // gradient variant per unique water tint so swamp shallow water
@@ -1464,6 +1492,10 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         // corpses, and the inter-village militia patrols. Structures were already placed
         // pre-bake in LoadVillageStructures.
         LoadVillagePopulation(mapName);
+
+        // Apply authored zones (village creation / animal squad grouping) now that every
+        // unit — map-placed and legacy villagers alike — exists with its final position.
+        ApplyZones();
 
         // One-shot: pull any editor-placed corpses sitting on a Corpse Pile into its
         // stock so they can be gathered back out. Done once here on map load (not per
@@ -1570,7 +1602,8 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             tileGrid: _sim.Grid,
             onGrassMapChanged: SyncGrassMapReference,
             editorBase: _editorUi,
-            onGrassTypesChanged: SyncGrassFromEditor);
+            onGrassTypesChanged: SyncGrassFromEditor,
+            zoneSystem: _zoneSystem);
         _mapEditor.SetItemRegistry(_gameData.Items);
         _mapEditor.SetSpellRegistry(_gameData.Spells);
         _mapEditor.SetGameData(_gameData);
@@ -2004,7 +2037,8 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             tileGrid: _sim.Grid,
             onGrassMapChanged: SyncGrassMapReference,
             editorBase: _editorUi,
-            onGrassTypesChanged: SyncGrassFromEditor);
+            onGrassTypesChanged: SyncGrassFromEditor,
+            zoneSystem: _zoneSystem);
         _mapEditor.SetItemRegistry(_gameData.Items);
 
         // Initialize the scenario
@@ -2423,6 +2457,96 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         LogTiming("Editors initialized");
         DebugLog.Log("startup", $"=== LoadContent complete ===");
     }
+
+    /// <summary>Read-only "what is under the cursor" picking that drives the debug
+    /// info tooltips (object/corpse/unit/belly). Sets the <c>_hovered*Idx</c> /
+    /// <c>_hoveredBellyUnitId</c> fields; renders nothing. Called from gameplay
+    /// Update and from the map editor (hover-inspect) — never runs gameplay input.
+    /// Uses <c>_input.MousePos</c> (not the raw MouseState) so picks stay anchored
+    /// to the same cursor the tooltips draw at, and the `mousepos` dev override
+    /// exercises the real pick path in headless runs.
+    /// Gameplay: each pick kind honours its Tooltips toggle. Map editor: all kinds
+    /// always pick (it's an inspection mode), including env objects that have no
+    /// gameplay tooltip (trees, rocks, props). Both suppress over UI — see
+    /// <see cref="HoverBlockedByUI"/> for what "over UI" means per mode.</summary>
+    private void UpdateHoverPicks(int screenW, int screenH)
+    {
+        bool inspectAll = _menuState == MenuState.MapEditor;
+        bool overUI = HoverBlockedByUI(screenW, screenH);
+        Vec2 mouseWorld = _camera.ScreenToWorld(_input.MousePos, screenW, screenH);
+        var tcfg = _gameData.Settings.Tooltips;
+
+        // --- Ground-object hover detection (buildings + foragable items;
+        //     every env object in the map editor) ---
+        _hoveredObjectIdx = -1;
+        if ((inspectAll || tcfg.ShowBuildingInfo || tcfg.ShowGroundItemInfo) && !overUI)
+            _hoveredObjectIdx = _gameRenderer.PickHoveredObject(_input.MousePos, mouseWorld, inspectAll);
+
+        // --- Corpse hover detection (for the reanimation info tooltip) ---
+        // Skips bodies that are mid-dissolve, consumed, bagged, or being carried.
+        _hoveredCorpseIdx = -1;
+        if ((inspectAll || tcfg.ShowCorpseInfo) && !overUI)
+        {
+            float pr = tcfg.GroundPickRadius;
+            float bcd = pr * pr;
+            var corpses = _sim.Corpses;
+            for (int ci = 0; ci < corpses.Count; ci++)
+            {
+                var cp = corpses[ci];
+                if (cp.ConsumedBySummon || cp.Dissolving || cp.Bagged
+                    || cp.DraggedByUnitID != GameConstants.InvalidUnit) continue;
+                float cdx = cp.Position.X - mouseWorld.X, cdy = cp.Position.Y - mouseWorld.Y;
+                float cd = cdx * cdx + cdy * cdy;
+                if (cd < bcd) { bcd = cd; _hoveredCorpseIdx = ci; }
+            }
+        }
+
+        // --- Hovered unit (for the outline-box highlight + info tooltip) ---
+        _hoveredUnitIdx = -1;
+        if ((inspectAll || tcfg.ShowHoverHighlight) && !overUI)
+        {
+            float pr = tcfg.HoverPickRadius;
+            float bud = pr * pr;
+            for (int i = 0; i < _sim.Units.Count; i++)
+            {
+                var u = _sim.Units[i];
+                if (!u.Alive) continue;
+                float udx = u.Position.X - mouseWorld.X, udy = u.Position.Y - mouseWorld.Y;
+                float d2 = udx * udx + udy * udy;
+                if (d2 < bud) { bud = d2; _hoveredUnitIdx = i; }
+            }
+        }
+
+        // Dev force-hover: pin the highlight to a chosen unit for headless variant testing.
+        if (_devForceHoverUnitId != uint.MaxValue)
+        {
+            _hoveredUnitIdx = -1;
+            for (int i = 0; i < _sim.Units.Count; i++)
+                if (_sim.Units[i].Alive && _sim.Units[i].Id == _devForceHoverUnitId) { _hoveredUnitIdx = i; break; }
+        }
+        // Dev force-hover an env object by index (headless variant testing has no real mouse).
+        if (_devForceHoverObjectIdx >= 0 && _devForceHoverObjectIdx < _envSystem.ObjectCount)
+            _hoveredObjectIdx = _devForceHoverObjectIdx;
+
+        // Forager (zombie boar) under the cursor? It suppresses the normal unit stat
+        // sheet and instead shows a corpse-pile-style belly tooltip (mushrooms eaten).
+        // Reuses the same hovered-unit pick that drives the outline highlight.
+        _hoveredBellyUnitId = uint.MaxValue;
+        if (_hoveredUnitIdx >= 0
+            && _gameData.Units.Get(_sim.Units[_hoveredUnitIdx].UnitDefID)?.Tags.Contains("forager") == true)
+            _hoveredBellyUnitId = _sim.Units[_hoveredUnitIdx].Id;
+    }
+
+    /// <summary>"Is the cursor over UI?" as the hover-inspect picks and the world-
+    /// hover readout should see it. Gameplay: the per-frame MouseOverUI flag.
+    /// Map editor: PopupManager keeps MouseOverUI true across the whole screen
+    /// (the editor layer is a full-screen popup — same trap the scroll-zoom gate
+    /// works around), so instead hover is blocked only while the cursor is on the
+    /// editor's side panel, or while a sub-popup (texture browser, env editor, …)
+    /// sits above the editor on the popup stack.</summary>
+    internal bool HoverBlockedByUI(int screenW, int screenH) => _menuState == MenuState.MapEditor
+        ? _popups.Top != _mapEditorLayer || _mapEditor.IsMouseOverPanel(screenW, screenH)
+        : _input.MouseOverUI;
 
     protected override void Update(GameTime gameTime)
     {
@@ -3088,6 +3212,13 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             || _menuState == MenuState.MapEditor || _menuState == MenuState.UIEditor
             || _menuState == MenuState.ItemEditor;
 
+        // Map-editor hover-inspect: run ONLY the read-only debug-tooltip picks while
+        // editing the map so you can hover things to see what they are. None of the
+        // gameplay input below runs in editors. The HUD pass renders the resulting
+        // tooltips; UpdateHoverPicks handles the editor-specific "over UI" rules.
+        if (_menuState == MenuState.MapEditor)
+            UpdateHoverPicks(screenW, screenH);
+
         if (!_paused && !editorActive)
         {
             // --- Player input ---
@@ -3461,78 +3592,10 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             // Per-frame tether physics (haul corpses, slow the necromancer, kick up dust).
             UpdateTethers(dt);
 
-            // --- Ground-object hover detection (buildings + foragable items) ---
-            // Picks the nearest hoverable env object under the cursor for the HUD
-            // info tooltip. Each kind is gated by its own Tooltips toggle, and the
-            // whole thing is suppressed when the cursor is over UI (a popup, HUD
-            // bar, etc.) so tooltips don't show through panels.
-            _hoveredObjectIdx = -1;
-            {
-                var tcfg = _gameData.Settings.Tooltips;
-                if ((tcfg.ShowBuildingInfo || tcfg.ShowGroundItemInfo) && !_input.MouseOverUI)
-                    _hoveredObjectIdx = _gameRenderer.PickHoveredObject(new Vector2(mouse.X, mouse.Y), mouseWorld);
-            }
-
-            // --- Corpse hover detection (for the reanimation info tooltip) ---
-            // Picks the nearest corpse under the cursor. Same gating as ground
-            // objects: opt-in toggle + suppressed over UI. Skips bodies that are
-            // mid-dissolve, consumed, bagged, or being carried (not pickable).
-            _hoveredCorpseIdx = -1;
-            {
-                var tcfg = _gameData.Settings.Tooltips;
-                if (tcfg.ShowCorpseInfo && !_input.MouseOverUI)
-                {
-                    float pr = tcfg.GroundPickRadius;
-                    float bcd = pr * pr;
-                    var corpses = _sim.Corpses;
-                    for (int ci = 0; ci < corpses.Count; ci++)
-                    {
-                        var cp = corpses[ci];
-                        if (cp.ConsumedBySummon || cp.Dissolving || cp.Bagged
-                            || cp.DraggedByUnitID != GameConstants.InvalidUnit) continue;
-                        float cdx = cp.Position.X - mouseWorld.X, cdy = cp.Position.Y - mouseWorld.Y;
-                        float cd = cdx * cdx + cdy * cdy;
-                        if (cd < bcd) { bcd = cd; _hoveredCorpseIdx = ci; }
-                    }
-                }
-            }
-
-            // --- Hovered unit (for the outline-box highlight) ---
-            // Independent of the auto-stat sheet so the box works even when that's
-            // off. Same gating: opt-in toggle + suppressed over UI.
-            _hoveredUnitIdx = -1;
-            if (_gameData.Settings.Tooltips.ShowHoverHighlight && !_input.MouseOverUI)
-            {
-                float pr = _gameData.Settings.Tooltips.HoverPickRadius;
-                float bud = pr * pr;
-                for (int i = 0; i < _sim.Units.Count; i++)
-                {
-                    var u = _sim.Units[i];
-                    if (!u.Alive) continue;
-                    float udx = u.Position.X - mouseWorld.X, udy = u.Position.Y - mouseWorld.Y;
-                    float d2 = udx * udx + udy * udy;
-                    if (d2 < bud) { bud = d2; _hoveredUnitIdx = i; }
-                }
-            }
-
-            // Dev force-hover: pin the highlight to a chosen unit for headless variant testing.
-            if (_devForceHoverUnitId != uint.MaxValue)
-            {
-                _hoveredUnitIdx = -1;
-                for (int i = 0; i < _sim.Units.Count; i++)
-                    if (_sim.Units[i].Alive && _sim.Units[i].Id == _devForceHoverUnitId) { _hoveredUnitIdx = i; break; }
-            }
-            // Dev force-hover an env object by index (headless variant testing has no real mouse).
-            if (_devForceHoverObjectIdx >= 0 && _devForceHoverObjectIdx < _envSystem.ObjectCount)
-                _hoveredObjectIdx = _devForceHoverObjectIdx;
-
-            // Forager (zombie boar) under the cursor? It suppresses the normal unit stat
-            // sheet and instead shows a corpse-pile-style belly tooltip (mushrooms eaten).
-            // Reuses the same hovered-unit pick that drives the outline highlight.
-            _hoveredBellyUnitId = uint.MaxValue;
-            if (_hoveredUnitIdx >= 0
-                && _gameData.Units.Get(_sim.Units[_hoveredUnitIdx].UnitDefID)?.Tags.Contains("forager") == true)
-                _hoveredBellyUnitId = _sim.Units[_hoveredUnitIdx].Id;
+            // --- Read-only hover picks (drive the debug info tooltips) ---
+            // Object/corpse/unit/belly picks under the cursor. Shared with the
+            // map editor's hover-inspect (the MenuState.MapEditor branch above).
+            UpdateHoverPicks(screenW, screenH);
 
             // --- Unit auto-hover stat sheet (Factorio-style; opt-in via Tooltips) ---
             // The cursor "carries" the stat sheet: hover a unit to show it, move off

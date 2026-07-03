@@ -15,6 +15,34 @@ public partial class Game1 {
                c.Complete(Necroking.Dev.DevServer.Ok("pong"));
                break;
 
+            // Memory diagnostic: managed heap before/after a forced compacting GC, plus
+            // process private/working set. If managedAfter stays high across map reloads it's
+            // a managed retained-reference leak; if managed stays flat but priv climbs it's a
+            // GPU/unmanaged (texture) leak.
+            case "mem": {
+               long managedBefore = GC.GetTotalMemory(false);
+               System.Runtime.GCSettings.LargeObjectHeapCompactionMode =
+                   System.Runtime.GCLargeObjectHeapCompactionMode.CompactOnce;
+               GC.Collect(2, GCCollectionMode.Forced, blocking: true, compacting: true);
+               GC.WaitForPendingFinalizers();
+               GC.Collect(2, GCCollectionMode.Forced, blocking: true, compacting: true);
+               long managedAfter = GC.GetTotalMemory(true);
+               using var proc = System.Diagnostics.Process.GetCurrentProcess();
+               c.Complete(Necroking.Dev.DevServer.Ok(
+                   $"managedBefore={managedBefore / (1024 * 1024)}MB " +
+                   $"managedAfter={managedAfter / (1024 * 1024)}MB " +
+                   $"priv={proc.PrivateMemorySize64 / (1024 * 1024)}MB " +
+                   $"ws={proc.WorkingSet64 / (1024 * 1024)}MB"));
+               break;
+            }
+
+            // Live census of every game-object collection: units by type/faction, env
+            // objects by def, and the misc per-game collections. The counting lives in
+            // GameSession.Census() so it's the single place to update as systems are added.
+            case "census":
+               c.Complete(Necroking.Dev.DevServer.Ok(_session.Census()));
+               break;
+
             case "state":
                c.Complete(Necroking.Dev.DevServer.OkRaw(BuildDevStateJson()));
                break;
@@ -955,7 +983,8 @@ public partial class Game1 {
                var pt = new Microsoft.Xna.Framework.Vector2(DevFloat(c.Args[0]), DevFloat(c.Args[1]));
                int sw = GraphicsDevice.Viewport.Width, sh = GraphicsDevice.Viewport.Height;
                var cw = _camera.ScreenToWorld(pt, sw, sh);
-               int idx = _gameRenderer.PickHoveredObject(pt, cw);
+               // Mirror the live pick's gating: the map editor inspects every env object.
+               int idx = _gameRenderer.PickHoveredObject(pt, cw, _menuState == MenuState.MapEditor);
                string did = idx >= 0 ? _envSystem.Defs[_envSystem.GetObject(idx).DefIndex].Id : "(none)";
                c.Complete(Necroking.Dev.DevServer.OkRaw($"{{\"objIdx\":{idx},\"def\":{System.Text.Json.JsonSerializer.Serialize(did)},\"worldX\":{cw.X:F2},\"worldY\":{cw.Y:F2}}}"));
                break;
@@ -1352,7 +1381,7 @@ public partial class Game1 {
             case "help":
             case "commands": {
                var cmds = new[] {
-                  "ping", "state", "help",
+                  "ping", "state", "help", "mem", "census",
                   "spawn <type> <x> <y>", "spawn_def <unitID> <x> <y> [count]",
                   "units [selector]", "unit <selector>", "combat_log [n]",
                   "damage <selector> <amount>", "kill <selector>", "remove <selector>",
@@ -1557,6 +1586,10 @@ public partial class Game1 {
             }
 
             return _uiEditor.SelectWidgetById(token) ? token : null;
+         case MenuState.MapEditor:
+            // Zones tab: select a zone by index/id/name so headless drives can
+            // exercise the selected-state UI (handles, left village panel).
+            return _mapEditor.DevSelectZone(token);
          default:
             return null;
       }
@@ -1780,6 +1813,7 @@ public partial class Game1 {
              $"\"wolfPhase\":{u.WolfPhase}," +
              $"\"huntTgt\":{u.WolfHuntTargetId},\"huntPhase\":{u.WolfHuntPhase},\"huntTimer\":{u.WolfHuntTimer.ToString("F1", ci)}," +
              $"\"squadId\":{u.SquadId}," +
+             $"\"villageId\":{u.VillageId}," +
              $"\"aggroScale\":{u.AggroRangeScale.ToString("F2", ci)},\"herdT\":{u.HerdedTimer.ToString("F1", ci)}," +
              $"\"anim\":\"{(_unitAnims.TryGetValue(u.Id, out var _adbg) ? _adbg.Ctrl.CurrentState.ToString() : "?")}\"," +
              $"\"facing\":{u.FacingAngle.ToString("F0", ci)}," +

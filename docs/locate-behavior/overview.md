@@ -62,6 +62,7 @@ Use this to pick a starting area. When the routed area isn't documented yet, doc
 - **Unit AI / routines / combat decisions / adding a per-unit behavior or archetype** → [ai.md](ai.md) (`AI/IArchetypeHandler.cs` registry, `AI/SubroutineSteps.cs` move primitives, `AI/WorkerHandler.cs` FSM template; register in `Game1.cs`).
 - **Pathfinding / movement** → `Movement/`.
 - **Environment objects / foragables / mushrooms / walls / world content / runtime world-object spawning / eating foragables / on-death drops** → [world.md](world.md) (`World/EnvironmentSystem.cs` `AddObject`/`FindDef`/`CollectForagable`, `Game/ForagableSystem.cs`, death hook in `Game/Simulation.cs` `RemoveDeadUnits`; and map content lives in `data/maps/`, not code).
+- **Per-game state ownership / memory leaks across map reloads / where a new per-game system or resource should live / state bleeding from one map to the next** → [game1-partials.md](game1-partials.md) (`Necroking/Game/GameSession.cs` — the recreated-each-load owner Game1 forwards to; `StartGame` does `_session.Dispose(); _session = new()`). App-vs-game classification + migration checklist in `todos/gamesession-migration.md`; `mem` dev command for spotting reload leaks.
 - **Dev/test commands driving the running game** → game1-partials.md (`Game1.Dev.cs` → `ExecuteDevCommand`) + `Dev/`.
 - **Headless regression tests** → `Scenario/` (and `docs/testing-scenarios.md`).
 

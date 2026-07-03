@@ -163,7 +163,7 @@ public partial class HUDRenderer
         float timeScale, int hoveredObjectIdx, EnvironmentSystem envSystem,
         Action<string, int, int> drawSpellCategoryIcon, int menuOpenMask = 0, bool paused = false,
         int hoveredCorpseIdx = -1, float[]? primaryFlash = null, float[]? secondaryFlash = null,
-        uint hoveredBellyUnitId = uint.MaxValue, int hoveredUnitIdx = -1)
+        uint hoveredBellyUnitId = uint.MaxValue, int hoveredUnitIdx = -1, bool editorInspect = false)
     {
         int necroIdx = FindNecromancer(sim);
 
@@ -195,7 +195,7 @@ public partial class HUDRenderer
         DrawObjectTooltip(hoveredObjectIdx, envSystem, sim, gameData, screenW, screenH);
         DrawBellyTooltip(hoveredBellyUnitId, sim, gameData, screenW, screenH);
         DrawCorpseTooltip(hoveredCorpseIdx, sim, gameData, screenW, screenH);
-        DrawUnitTooltip(hoveredUnitIdx, sim, gameData, screenW, screenH);
+        DrawUnitTooltip(hoveredUnitIdx, sim, gameData, screenW, screenH, editorInspect);
         // Controls hint intentionally omitted — overlapped the FPS/zoom bottom-
         // left readout. Re-enable if we add a menu page for it.
         DrawTimeControls(screenW, screenH, timeScale, gameData, paused);
@@ -660,7 +660,14 @@ public partial class HUDRenderer
                 ls.Add(itemDef.Description);
             lines = ls.ToArray();
         }
-        else return;
+        else
+        {
+            // Generic env object (tree, rock, prop, …) — only reachable from the map
+            // editor's hover-inspect and the hover_obj dev override; the gameplay pick
+            // never returns these. Programmer-facing: name plus the def id when they differ.
+            string title = def.Name.Length > 0 ? def.Name : def.Id;
+            lines = title == def.Id ? new[] { title } : new[] { title, $"id: {def.Id}" };
+        }
 
         DrawCursorTooltip(lines, screenW, screenH);
     }
@@ -707,13 +714,18 @@ public partial class HUDRenderer
     /// HP, and a membership line (in the player horde, in a named village, or its
     /// faction). Deliberately NOT the full stat sheet (that's UnitInfoPanel).
     /// Suppressed for foragers (belly tooltip owns them) and while the auto stat
-    /// sheet is enabled (it already shows everything).</summary>
+    /// sheet is enabled (it already shows everything) — except in editor inspect
+    /// mode, where the auto stat sheet doesn't run (it's gameplay-only) so this
+    /// tooltip is the only unit readout and always shows.</summary>
     private void DrawUnitTooltip(int hoveredIdx, Simulation sim, GameData gameData,
-        int screenW, int screenH)
+        int screenW, int screenH, bool editorInspect = false)
     {
         if (hoveredIdx < 0 || hoveredIdx >= sim.Units.Count || _smallFont == null) return;
-        if (!gameData.Settings.Tooltips.ShowUnitInfo) return;
-        if (gameData.Settings.Tooltips.AutoShowUnitStats) return; // stat sheet supersedes
+        if (!editorInspect)
+        {
+            if (!gameData.Settings.Tooltips.ShowUnitInfo) return;
+            if (gameData.Settings.Tooltips.AutoShowUnitStats) return; // stat sheet supersedes
+        }
 
         var u = sim.Units[hoveredIdx];
         if (!u.Alive) return;

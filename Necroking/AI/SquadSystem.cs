@@ -99,6 +99,19 @@ public sealed class SquadSystem
         _nextId = 1;
     }
 
+    /// <summary>Create a pre-formed squad (zone authoring at map load). The caller fills
+    /// <see cref="Squad.Members"/> and sets each member's <see cref="Unit.SquadId"/>; being
+    /// registered here means <see cref="AssignUnassigned"/> leaves those units alone, and
+    /// <see cref="Recompute"/> fills centroid/spread/leader on the next update. May exceed
+    /// <see cref="MaxMembers"/> — the cap only gates lazy joins, and a zone squad is explicit
+    /// authoring intent.</summary>
+    public Squad CreateSquad(Faction faction, byte archetype)
+    {
+        var sq = new Squad { Id = _nextId++, Faction = faction, Archetype = archetype };
+        _squads[sq.Id] = sq;
+        return sq;
+    }
+
     public void Update(UnitArrays units)
     {
         AssignUnassigned(units);

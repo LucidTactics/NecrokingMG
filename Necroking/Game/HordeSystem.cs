@@ -247,6 +247,21 @@ public class HordeSystem
         return hi >= 0 ? _hordeUnits[hi].ChasingTarget : GameConstants.InvalidUnit;
     }
 
+    /// <summary>Drop a Chasing assignment and put the unit back to Following. Needed by the
+    /// Wolf Hunt recall (<see cref="Simulation.CommandWolfHunt"/>) and the pack-hunt stalk gate:
+    /// resetting only the unit's Routine/Target isn't enough, because <c>SyncHordeState</c>
+    /// re-applies a stale <see cref="HordeUnitData.ChasingTarget"/> the very next AI tick.
+    /// Engaged/Returning states are left alone — combat resolution owns those.</summary>
+    public void ResetChasingToFollowing(uint id)
+    {
+        int hi = FindUnit(id);
+        if (hi < 0) return;
+        var hu = _hordeUnits[hi];
+        if (hu.State != HordeUnitState.Chasing) return;
+        hu.State = HordeUnitState.Following;
+        hu.ChasingTarget = GameConstants.InvalidUnit;
+    }
+
     public void Tick(float dt, UnitArrays units, int necroIdx)
     {
         _globalTime += dt;
@@ -364,8 +379,12 @@ public class HordeSystem
                     // flicker. The chaser's own leash break (StandardChasingExits)
                     // fires at the same LeashRadius, so the chase still stays
                     // bounded to the red circle — it just no longer quits early.
+                    // Pack-hunting wolves (WolfHuntTargetId set) are exempt: the hunt drives
+                    // prey well outside the horde circle by design, and its own (longer)
+                    // leash in WolfPackHuntAI bounds them. Without this, the whole pack
+                    // gives up in unison the moment the fleeing deer crosses this radius.
                     float targetDistToCircle = (units[targetIdx].Position - _circleCenter).Length();
-                    if (targetDistToCircle > LeashRadius)
+                    if (targetDistToCircle > LeashRadius && units[idx].WolfHuntTargetId == 0)
                     {
                         hu.State = HordeUnitState.Following;
                         hu.ChasingTarget = GameConstants.InvalidUnit;
@@ -394,7 +413,9 @@ public class HordeSystem
                     // rule with no fuzzy band beyond it.
                     Vec2 slotPos = ComputeSlotPosition(hu.SlotIndex);
                     float distToSlot = (units[idx].Position - slotPos).Length();
-                    if (distToSlot > LeashRadius)
+                    // Same pack-hunt exemption as the Chasing leash above: a wolf finishing
+                    // its driven kill fights past this radius on purpose.
+                    if (distToSlot > LeashRadius && units[idx].WolfHuntTargetId == 0)
                     {
                         hu.State = HordeUnitState.Returning;
                         break;

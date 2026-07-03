@@ -37,9 +37,14 @@ namespace Necroking.AI;
 public static class WolfPackHuntAI
 {
     private const float HuntRange = 28f;      // acquire the deer nearest the cast point within this
-    private const float LeashFromNecro = 60f; // a wolf this far from the necromancer drops the hunt — generous
-                                              // because a commanded pack ranges out to a herd up to a spell's
-                                              // cast range away, then flanks a standoff beyond it
+    private const float LeashFromNecro = 80f; // a wolf this far from the necromancer drops the hunt. Must roughly fit
+                                              // the flank geometry or wolves oscillate at the boundary (drop hunt →
+                                              // follow AI yanks them home → re-acquire → head out again): spell cast
+                                              // range (~30) + HuntRange (28) + far-side standoff ≈ 90 worst-case, but
+                                              // that stack only maxes out on an extreme cast; 80 covers the common
+                                              // case without letting the pack range absurdly far. Note a wolf
+                                              // FIGHTING its quarry is exempt (it keeps its hunt tag and finishes
+                                              // the kill — see the finishingKill carve-out in Update).
     private const float DetectMargin = 6f;    // flank standoff = deer DetectionRange + this. Keeps the circling
                                               // pack clear of the deer's vision, but small enough that the flank
                                               // ring still fits in tight spaces; the herded cheat covers an early
@@ -61,41 +66,84 @@ public static class WolfPackHuntAI
     // Scratch reused across frames to avoid per-tick allocation (single-threaded sim).
     private static readonly List<int> _hunters = new();
 
+    // True while a hunt command has been driving wolves — lets the expiry path sweep-clear
+    // every wolf's hunt tag exactly once instead of scanning all units every idle frame.
+    private static bool _huntWasActive;
+
     public static void Update(Simulation sim, float dt)
     {
         var gameData = sim.GameData;
         if (gameData == null) return;
         if (sim.NecromancerIndex < 0) return;   // no "you" to drive the prey toward — sit this out
-        if (!sim.WolfHuntCommandActive) return; // spell-activated: only hunt on the player's command
 
         var units = sim.UnitsMut;
+        // The spell timer is only the ACQUISITION window. A hunt already in progress (any wolf
+        // holding a lock) runs to completion even after the timer expires — expiry mid-flank or
+        // mid-kill must not make the whole pack "lose interest" and jog home in unison.
+        bool armed = sim.WolfHuntTimerArmed;
+        if (!armed && !sim.WolfHuntInProgress)  // spell-activated: only hunt on the player's command
+        {
+            // Hunt fully over: drop every wolf's hunt state once, so stale tags don't
+            // keep suppressing the horde's aggro scan and leash logic indefinitely.
+            if (_huntWasActive)
+            {
+                for (int u = 0; u < units.Count; u++)
+                    if (units[u].WolfHuntTargetId != 0) ClearHunt(units, u);
+                _huntWasActive = false;
+            }
+            return;
+        }
+        _huntWasActive = true;
+
         Vec2 necroPos = units[sim.NecromancerIndex].Position;
         Vec2 cmdPos = sim.WolfHuntCommandPos;   // where the Wolf Hunt spell was cast — the targeted herd
 
-        // 1. Gather eligible hunter wolves; clear hunt state on the rest.
+        // 1. Gather eligible hunter wolves; clear hunt state on the rest. Track whether any
+        //    INELIGIBLE wolf keeps its tag (= a kill still being finished) so the in-progress
+        //    flag stays truthful when every hunter is busy fighting.
         _hunters.Clear();
+        bool anyFightingTag = false;
         for (int u = 0; u < units.Count; u++)
         {
             if (!IsEligible(units, u, gameData, necroPos))
             {
-                if (units[u].WolfHuntTargetId != 0) ClearHunt(units, u);
+                // A drive-phase wolf that's actually FIGHTING its quarry keeps its hunt tag:
+                // the tag is what exempts it from the horde's (much shorter) leash, so the
+                // pack finishes a kill far from the necromancer instead of mass-abandoning
+                // a deer mid-bite the moment it crosses the horde's leash radius. The tag
+                // drops naturally when combat ends (target dead → next sweep clears it) —
+                // and hard-drops at 1.5× the hunt leash, so a deer the wolf can never quite
+                // catch can't kite the pack across the whole map on an endless chase.
+                bool finishingKill = units[u].WolfHuntPhase == 1
+                    && (units[u].InCombat || !units[u].Target.IsNone)
+                    && (units[u].Position - necroPos).LengthSq()
+                        <= (LeashFromNecro * 1.5f) * (LeashFromNecro * 1.5f);
+                if (!finishingKill && units[u].WolfHuntTargetId != 0) ClearHunt(units, u);
+                if (units[u].WolfHuntTargetId != 0) anyFightingTag = true;
                 continue;
             }
             _hunters.Add(u);
         }
-        if (_hunters.Count == 0) return;
+        if (_hunters.Count == 0)
+        {
+            sim.WolfHuntInProgress = anyFightingTag;
+            return;
+        }
 
         // 2. Pick ONE shared prey HERD for the whole pack: keep the currently-locked squad while it
-        //    lives, otherwise acquire the herd of the deer nearest the cast point. Hunting the whole
-        //    herd (its centroid + extent) — not one animal embedded in a moving cluster — is the
-        //    core of getting the flank right: "the far side, outside its vision" only means anything
-        //    when it's the far side of the whole pack.
-        var squad = ChooseTargetSquad(sim, units, cmdPos);
+        //    lives, otherwise acquire the herd of the deer nearest the cast point (new acquisition
+        //    only while the spell timer is armed). Hunting the whole herd (its centroid + extent) —
+        //    not one animal embedded in a moving cluster — is the core of getting the flank right:
+        //    "the far side, outside its vision" only means anything when it's the far side of the
+        //    whole pack.
+        var squad = ChooseTargetSquad(sim, units, cmdPos, allowAcquire: armed);
         if (squad == null || squad.AliveCount == 0)
         {
             for (int s = 0; s < _hunters.Count; s++) ClearHunt(units, _hunters[s]);
+            sim.WolfHuntInProgress = anyFightingTag;
             return;
         }
+        sim.WolfHuntInProgress = true;
         uint targetSquadId = squad.Id;
         Vec2 herdPos = squad.Centroid;            // flank/drive reference = where the pack is
         float herdSpread = squad.Spread;          // the pack's extent
@@ -170,8 +218,19 @@ public static class WolfPackHuntAI
             {
                 units[u].WolfHuntPhase = 1;
                 units[u].WolfHuntTimer = 0f;
-                // Initiator: full-commit sprint into the herd from behind.
-                sim.AIWolfHuntMove(u, herdPos, sprint: true, dt);
+                // Initiator: hand it its QUARRY directly — the nearest live member of the
+                // hunted herd — and let the normal chase/engage routines take over from here.
+                // Leaving target pickup to the generic self-aggro (FindClosestEnemy) sent
+                // drives everywhere but the deer: a rat or wild wolf the initiator sprints
+                // past would win "closest enemy", the side-chase would die on the horde
+                // leash, and the whole pack ended up jogging home with the herd untouched.
+                uint quarry = NearestQuarry(units, squad, units[u].Position);
+                if (quarry != 0)
+                    units[u].Target = CombatTarget.Unit(quarry);
+                else
+                    // Herd membership resolving to nothing this frame — sprint at the
+                    // centroid as before; the next sweep re-tries the assignment.
+                    sim.AIWolfHuntMove(u, herdPos, sprint: true, dt);
             }
             else
             {
@@ -184,6 +243,21 @@ public static class WolfPackHuntAI
                 sim.AIWolfHuntMove(u, ringTarget, sprint: false, dt);
             }
         }
+    }
+
+    /// <summary>Id of the live herd member nearest <paramref name="from"/>, or 0 if none resolve —
+    /// the deer a committing initiator is pointed at (see the drive branch in <see cref="Update"/>).</summary>
+    private static uint NearestQuarry(UnitArrays units, Squad squad, Vec2 from)
+    {
+        uint best = 0;
+        float bestSq = float.MaxValue;
+        for (int m = 0; m < squad.Members.Count; m++)
+        {
+            if (!units.TryGetIndex(squad.Members[m], out int j) || !units[j].Alive) continue;
+            float d2 = (units[j].Position - from).LengthSq();
+            if (d2 < bestSq) { bestSq = d2; best = squad.Members[m]; }
+        }
+        return best;
     }
 
     /// <summary>Widest detection range among the herd's live members (fallback 10). The flank
@@ -278,10 +352,12 @@ public static class WolfPackHuntAI
 
     /// <summary>Keep the pack's locked prey HERD while it still has live members (a commanded hunt
     /// sticks with its quarry even as it's driven away from the cast point); otherwise acquire the
-    /// herd of the deer nearest <paramref name="refPos"/> (the cast point) within HuntRange. Returns
-    /// the target <see cref="Squad"/> or null. The lock is a squad id read from whichever hunter
+    /// herd of the deer nearest <paramref name="refPos"/> (the cast point) within HuntRange —
+    /// but only while <paramref name="allowAcquire"/> (the spell timer is armed; an expired
+    /// command may finish its current hunt but not start another). Returns the target
+    /// <see cref="Squad"/> or null. The lock is a squad id read from whichever hunter
     /// already carries a WolfHuntTargetId.</summary>
-    private static Squad? ChooseTargetSquad(Simulation sim, UnitArrays units, Vec2 refPos)
+    private static Squad? ChooseTargetSquad(Simulation sim, UnitArrays units, Vec2 refPos, bool allowAcquire)
     {
         var squads = sim.Squads;
 
@@ -296,6 +372,8 @@ public static class WolfPackHuntAI
         if (lockedId != 0 && squads.TryGet(lockedId, out var locked)
             && locked.Archetype == ArchetypeRegistry.DeerHerd && locked.AliveCount > 0)
             return locked;
+
+        if (!allowAcquire) return null;
 
         // Acquire the herd of the nearest deer to the cast point within HuntRange.
         float bestSq = HuntRange * HuntRange;

@@ -262,8 +262,18 @@ public class Simulation
     // --- Wolf pack-hunt command (set by the "Wolf Hunt" spell; read by AI.WolfPackHuntAI) ---
     private Vec2 _wolfHuntCmdPos;
     private float _wolfHuntCmdTimer;
-    /// <summary>True while a Wolf Hunt spell is directing the player's wolves onto a herd.</summary>
-    public bool WolfHuntCommandActive => _wolfHuntCmdTimer > 0f;
+    /// <summary>True while the Wolf Hunt spell's timer is still running — the window in which the
+    /// pack may ACQUIRE a (new) herd. Distinct from <see cref="WolfHuntCommandActive"/>: an already
+    /// locked hunt runs to completion even after this expires.</summary>
+    public bool WolfHuntTimerArmed => _wolfHuntCmdTimer > 0f;
+    /// <summary>Maintained each frame by <see cref="AI.WolfPackHuntAI.Update"/>: true while any wolf
+    /// still carries a hunt lock (flanking, driving, or finishing a kill).</summary>
+    public bool WolfHuntInProgress;
+    /// <summary>True while a Wolf Hunt is directing the player's wolves onto a herd — either the
+    /// spell timer is running or an already-acquired hunt is still playing out. The spell duration
+    /// is an acquisition window, not a hard stop: expiring mid-hunt must not make the whole pack
+    /// abandon a deer it has spent 20 seconds flanking (or is standing over, biting).</summary>
+    public bool WolfHuntCommandActive => _wolfHuntCmdTimer > 0f || WolfHuntInProgress;
     /// <summary>World point the active Wolf Hunt was cast at — the pack targets the herd nearest it.</summary>
     public Vec2 WolfHuntCommandPos => _wolfHuntCmdPos;
     /// <summary>Spell hook: point the player's wolves at the herd near <paramref name="pos"/> for
@@ -299,6 +309,10 @@ public class Simulation
                 _units[u].Routine = 0;      // HordeMinion Following
                 _units[u].Subroutine = 0;
             }
+            // The horde system keeps its own per-unit Chasing state; without this reset,
+            // SyncHordeState re-applies the stale chase target next tick and the recalled
+            // wolf charges the deer head-on instead of flanking.
+            _horde.ResetChasingToFollowing(_units[u].Id);
         }
     }
     public Pathfinder Pathfinder => _pathfinder;
@@ -3436,7 +3450,7 @@ public class Simulation
         AnimMeta = _animMeta,
         DamageEvents = _damageEvents,
         NecroSprintT = _sprintRampValue,
-        WolfHuntCommandActive = _wolfHuntCmdTimer > 0f,
+        WolfHuntCommandActive = WolfHuntCommandActive,   // timer OR in-progress hunt (see property)
         Squads = _squads,
     };
 

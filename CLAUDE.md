@@ -182,8 +182,12 @@ silently. Three things to know:
   in [`tools/hooks/file_write_detect.py`](tools/hooks/file_write_detect.py) (≈365 file-writing
   command names + process/power control); it's the inverse of the allow-list, so a *miss*
   there = a command wrongly waved through — **err toward adding** when you touch it. Plain
-  `grep`/`cat`/`head`/`tail`/`sort`/`wc` now pass straight through; `find` is read-only until
-  a mutating flag (`-delete`/`-exec`/…) makes it **prompt**.
+  `grep`/`cat`/`head`/`tail`/`sort`/`wc`/`sed` now pass straight through; `find` and `sed` are
+  read-only until a mutating form (`find -delete`/`-exec`; `sed -i`/`-f`/a `w`-ing script)
+  makes them **prompt**. Provably read-only PowerShell one-liners are force-allowed
+  (`powershell -c "Get-Process …"`, `Start-Sleep`, whitelisted `Get-*`/pipe cmdlets only),
+  and Windows admin CLIs (`wmic`/`reg`/`sc`/`schtasks`/`net`/`netsh`) run in query form but
+  prompt on mutating verbs (`reg add`, `sc stop`, `wmic … delete`).
 - **Deny-by-default for the rest (aggressive by design).** Any Bash command that *can* mutate
   and isn't allow-listed is bounced back; allow-listed commands pass silently. Sensitive forms
   of allow-listed commands still prompt (`git push`, `find … -delete`). When the gate gets in

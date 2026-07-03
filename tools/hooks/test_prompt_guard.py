@@ -39,6 +39,37 @@ fails += not check("py_compile -> allow", evb("python -m py_compile x.py"), "all
 fails += not check("ast.parse -> deny",
                    evb("python -c 'import ast; ast.parse(open(1).read())'"), "deny")
 
+
+# --- Python-validate rule: AST-of-the-code precision -------------------------------
+def evr(cmd, mode=""):
+    """(kind, reason) — for asserting WHICH deny fired."""
+    return g.evaluate("Bash", {"command": cmd}, mode, RULES, DENY)
+
+
+def is_redirect(res):
+    return res[0] == "deny" and "py_compile <file>" in (res[1] or "")
+
+
+fails += not check("aliased from-import parse -> redirect (regex missed this)",
+                   is_redirect(evr('python -c "from ast import parse as p; p(open(1).read())"')),
+                   True)
+fails += not check("aliased module import -> redirect",
+                   is_redirect(evr('python -c "import ast as a; a.parse(x)"')), True)
+fails += not check("compile() builtin -> redirect",
+                   is_redirect(evr("python -c \"compile(open('f').read(), 'f', 'exec')\"")),
+                   True)
+fails += not check("python -m ast -> redirect (module-level parse check)",
+                   is_redirect(evr("python -m ast tools/devctl.py")), True)
+fails += not check("heredoc syntax check -> redirect (body scanned via fallback)",
+                   is_redirect(evr("python - <<'EOF'\nimport ast\nast.parse(open('f').read())\nEOF")),
+                   True)
+fails += not check("ast.parse as a string literal -> generic deny, NOT the redirect",
+                   is_redirect(evr("python -c \"print('ast.parse(')\"")), False)
+fails += not check("ast.parse text in a script arg -> not the redirect (payload is the script)",
+                   is_redirect(evr("python tools/devctl.py 'ast.parse(x)'")), False)
+fails += not check("re.compile is not the compile builtin -> not the redirect",
+                   is_redirect(evr("python -c \"import re; re.compile('x')\"")), False)
+
 # --- Layer 2: allow-listed -> force-allow; otherwise deny -------------------------
 fails += not check("git status -> allow", evb("git status"), "allow")
 fails += not check("dotnet build -> allow", evb("dotnet build Necroking/Necroking.csproj"), "allow")
@@ -67,6 +98,80 @@ fails += not check("find -delete -> ask (mutating flag surfaces despite find:* a
 fails += not check("find -exec -> ask (mutating flag surfaces despite find:* allow)",
                    evb("find . -name '*.cs' -exec sed -i s/a/b/ {} +"), "ask")
 
+# --- sed: read-only stream filtering allows; mutating modes surface as a prompt -----
+fails += not check("sed -n print range -> allow (read-only)",
+                   evb("sed -n '120,140p' Necroking/Game1.cs"), "allow")
+fails += not check("sed substitution to stdout -> allow (read-only)",
+                   evb("sed 's/foo/bar/g' data/spells.json"), "allow")
+fails += not check("sed in pipe -> allow (read-only)",
+                   evb("git log --oneline | sed -e 's/^[a-f0-9]* //'"), "allow")
+fails += not check("sed -i -> ask (in-place mutating flag)",
+                   evb("sed -i 's/a/b/' f.txt"), "ask")
+fails += not check("sed -i.bak -> ask (in-place with suffix)",
+                   evb("sed -i.bak 's/a/b/' f.txt"), "ask")
+fails += not check("sed bundled -ni -> ask (in-place hidden in a bundle)",
+                   evb("sed -ni 'p' f.txt"), "ask")
+fails += not check("sed --in-place=.bak -> ask",
+                   evb("sed --in-place=.bak 's/a/b/' f.txt"), "ask")
+fails += not check("sed s///w flag -> ask (script writes a file)",
+                   evb("sed 's/a/b/w out.txt' f.txt"), "ask")
+fails += not check("sed w command -> ask (script writes a file)",
+                   evb("sed -n '1,10w dump.txt' f.txt"), "ask")
+fails += not check("sed -f script file -> ask (unverifiable external script)",
+                   evb("sed -f fix.sed f.txt"), "ask")
+fails += not check("sed pattern containing w -> allow (w in regex text, not a command)",
+                   evb("sed -n '/window/p' Necroking/Game1.cs"), "allow")
+fails += not check("sed with file redirect -> defer (redirect owns the write question)",
+                   evb("sed 's/a/b/' f.txt > out.txt"), "defer")
+
+# --- PowerShell: provably read-only one-liners allow; everything else stays gated ---
+fails += not check("Get-Process pipeline -> allow (read-only powershell)",
+                   evb("powershell -Command \"Get-Process | Where-Object "
+                       "{$_.ProcessName -like '*necro*'} | Select-Object Name,CPU\""),
+                   "allow")
+fails += not check("Start-Sleep -> allow (the sleep case)",
+                   evb('powershell -NoProfile -c "Start-Sleep -Seconds 3"'), "allow")
+fails += not check("pwsh alias sleep -> allow",
+                   evb('pwsh -c "sleep 2"'), "allow")
+fails += not check("implicit -Command positional -> allow",
+                   evb('powershell "Get-Process Necroking | Format-Table Name,Id,CPU"'),
+                   "allow")
+fails += not check("tasklist && powershell sleep compound -> allow",
+                   evb('tasklist | findstr Necroking && powershell -c "Start-Sleep -s 1"'),
+                   "allow")
+fails += not check("Stop-Process -> deny (mutating cmdlet not whitelisted)",
+                   evb('powershell -c "Stop-Process -Name Necroking"'), "deny")
+fails += not check("read-only then Remove-Item -> deny (second statement mutates)",
+                   evb('powershell -c "Get-Process; Remove-Item x.txt"'), "deny")
+fails += not check("Out-File -> deny (write cmdlet in pipeline)",
+                   evb('powershell -c "Get-Content f.txt | Out-File g.txt"'), "deny")
+fails += not check("PS-level redirect -> deny (banned construct)",
+                   evb('powershell -c "Get-Process > procs.txt"'), "deny")
+fails += not check("external command in block -> deny (head re-split at braces)",
+                   evb('powershell -c "Get-ChildItem | ForEach-Object { python x.py }"'),
+                   "deny")
+fails += not check("powershell -File -> deny (unverifiable script)",
+                   evb("powershell -File script.ps1"), "deny")
+fails += not check("powershell -EncodedCommand -> deny (unverifiable)",
+                   evb("powershell -enc SQBFAFgA"), "deny")
+fails += not check("method call .Kill() -> deny (banned construct)",
+                   evb('powershell -c "(Get-Process x).Kill()"'), "deny")
+
+# --- Windows admin CLIs: query forms allow, mutating verbs prompt -------------------
+fails += not check("tasklist -> allow (read-only)", evb("tasklist /v"), "allow")
+fails += not check("wmic list -> allow (query form)",
+                   evb("wmic process list brief"), "allow")
+fails += not check("wmic delete -> ask (mutating verb)",
+                   evb("wmic process where \"name='Necroking.exe'\" delete"), "ask")
+fails += not check("reg query -> allow", evb('reg query "HKCU\\Software"'), "allow")
+fails += not check("reg add -> ask", evb('reg add "HKCU\\Software\\X" /v y /d z'), "ask")
+fails += not check("sc query -> allow", evb("sc query type= service"), "allow")
+fails += not check("sc stop -> ask (case-insensitive verb)", evb("sc STOP Spooler"), "ask")
+fails += not check("schtasks /query -> allow", evb("schtasks /query /fo LIST"), "allow")
+fails += not check("schtasks /Create -> ask", evb("schtasks /Create /tn X /tr y.exe"), "ask")
+fails += not check("cmd /c del -> deny (cmd is an interpreter now)",
+                   evb('cmd /c del x.txt'), "deny")
+
 # --- Per-invocation precision: a write-named token in ARGUMENT position is not the
 #     command, so it no longer forces a deny (AST knows the real leader) --------------
 fails += not check("echo rm -rf x -> allow (rm is an argument, echo is read-only)",
@@ -81,7 +186,6 @@ fails += not check("printf with tee-looking arg -> allow (tee is text, printf re
 fails += not check("echo -delete then find search -> allow (-delete belongs to echo)",
                    evb("echo -delete && find . -name '*.cs'"), "allow")
 # But an actual writer as the leader still denies — precision cuts only the false positives.
-# (sed itself is intentionally allow-listed via `Bash(sed *)`, so pick a non-listed writer.)
 fails += not check("truncate as leader -> deny (real file write, not the false-positive kind)",
                    evb("truncate -s0 f.txt"), "deny")
 fails += not check("xargs rm -> deny (wrapper launches a writer)",

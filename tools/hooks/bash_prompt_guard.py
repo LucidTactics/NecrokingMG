@@ -110,8 +110,101 @@ def leading_command(cmd: str) -> str:
 # --- Rule: hand-rolled python syntax check -> `python -m py_compile` --------------
 _PY_LEAD = {"python", "python3", "py"}
 
+_PY_VALIDATE_MSG = (
+    "Validate Python syntax with `python -m py_compile <file>` — it's pre-approved "
+    "in .claude/settings.json, so it runs without prompting the user. Re-run as "
+    "`python -m py_compile <file>` instead of a hand-rolled ast.parse / py_compile "
+    "check."
+)
 
-def rule_python_validate(cmd: str):
+# python interpreter options that consume the FOLLOWING token as their value (so the
+# payload scan doesn't mistake the value for a script path).
+_PY_VALUE_OPTS = {"-W", "-X", "--check-hash-based-pycs"}
+
+
+def _py_payload(args):
+    """What a python invocation actually runs, from its own parsed args:
+    ('code', <-c payload>), ('module', <-m name>), ('script', path), or None
+    (REPL / stdin / unparseable). Attached forms (`-cCODE`, `-mmod`) included;
+    the scan stops at the first script path because later args belong to the script."""
+    i, n = 0, len(args)
+    while i < n:
+        a = args[i]
+        if a in _PY_VALUE_OPTS:
+            i += 2
+            continue
+        if a == "-c" or a == "-m":
+            kind = "code" if a == "-c" else "module"
+            return (kind, args[i + 1]) if i + 1 < n else None
+        if len(a) > 2 and not a.startswith("--") and a[1] in ("c", "m"):
+            return ("code" if a[1] == "c" else "module", a[2:])
+        if a == "-" or not a.startswith("-"):
+            return ("script", a)
+        i += 1                          # value-less flag (-u, -B, py's -3, …)
+    return None
+
+
+def _code_is_syntax_check(code: str) -> bool:
+    """True if `code` (a `python -c` payload) is a hand-rolled syntax/parse check.
+    Detected by parsing the code with Python's own ast module and looking for CALLS to
+    ast.parse / py_compile.compile (under any import alias) or the compile() builtin —
+    so `from ast import parse as p; p(src)` is caught, while a string literal that
+    merely CONTAINS "ast.parse(" is not. Unparseable code falls back to the old
+    substring heuristics (it can't run anyway, but stay conservative)."""
+    import ast as _ast
+    try:
+        tree = _ast.parse(code)
+    except SyntaxError:
+        return bool(re.search(r"\bast\.parse\(|\bpy_compile\b|(?<![\w.])compile\(", code))
+    # Names that resolve to the checking callables. Bare module names are pre-seeded so
+    # `py_compile.compile(x)` flags even when the import is elsewhere/implicit.
+    modules = {"ast": "ast", "py_compile": "py_compile"}   # alias -> module
+    checkers = set()                                       # from-imported callables
+    for node in _ast.walk(tree):
+        if isinstance(node, _ast.Import):
+            for a in node.names:
+                if a.name in ("ast", "py_compile"):
+                    modules[a.asname or a.name] = a.name
+        elif isinstance(node, _ast.ImportFrom):
+            if node.module in ("ast", "py_compile"):
+                for a in node.names:
+                    if (node.module, a.name) in (("ast", "parse"), ("py_compile", "compile")):
+                        checkers.add(a.asname or a.name)
+    for node in _ast.walk(tree):
+        if not isinstance(node, _ast.Call):
+            continue
+        f = node.func
+        if isinstance(f, _ast.Name) and (f.id in checkers or f.id == "compile"):
+            return True
+        if isinstance(f, _ast.Attribute) and isinstance(f.value, _ast.Name):
+            mod = modules.get(f.value.id)
+            if (mod == "ast" and f.attr == "parse") or (mod == "py_compile" and f.attr == "compile"):
+                return True
+    return False
+
+
+def rule_python_validate(cmd: str, commands=None):
+    """Steer hand-rolled Python syntax checks to the pre-approved `python -m py_compile`.
+
+    `commands` is the bash_ast per-invocation view when a real parse was available; the
+    check then inspects each python invocation's OWN `-c` payload / `-m` module, so text
+    in unrelated arguments can't trigger it. Heredoc bodies aren't argument words, so a
+    `python - <<EOF` check still goes through the whole-string fallback below."""
+    if commands is not None:
+        for c in commands:
+            if c.leader not in _PY_LEAD:
+                continue
+            payload = _py_payload(c.args)
+            if not payload:
+                continue
+            kind, val = payload
+            if kind == "code" and val and _code_is_syntax_check(val):
+                return _PY_VALIDATE_MSG
+            if kind == "module" and val == "ast":      # `python -m ast f.py` = parse check
+                return _PY_VALIDATE_MSG
+        if "<<" not in cmd:
+            return None
+        # fall through: heredoc body may hold the check
     if leading_command(cmd) not in _PY_LEAD:
         return None
     if re.search(r"-m\s+py_compile\b", cmd):
@@ -119,12 +212,7 @@ def rule_python_validate(cmd: str):
     if (re.search(r"\bast\.parse\(", cmd)
             or re.search(r"\bimport\s+py_compile\b", cmd)
             or re.search(r"\bpy_compile\.compile\(", cmd)):
-        return (
-            "Validate Python syntax with `python -m py_compile <file>` — it's pre-approved "
-            "in .claude/settings.json, so it runs without prompting the user. Re-run as "
-            "`python -m py_compile <file>` instead of a hand-rolled ast.parse / py_compile "
-            "check."
-        )
+        return _PY_VALIDATE_MSG
     return None
 
 
@@ -154,9 +242,10 @@ def rule_intended_prompt(seg: str, command=None):
         return ("A push to a remote publishes your commits and needs your explicit "
                 "approval — every other git command is auto-accepted, just this one "
                 "prompts. Approve to proceed.")
-    # An otherwise read-only tool used in its mutating mode (`find … -delete`/`-exec`)
-    # must prompt even though the bare tool (`find:*`) is allow-listed — the mutating
-    # flag is the rare, dangerous case we want surfaced rather than silently allowed.
+    # An otherwise read-only tool used in its mutating mode (`find … -delete`/`-exec`,
+    # `sed -i`) must prompt even though the bare tool is read-only-fast-allowed or
+    # allow-listed — the mutating flag is the rare, dangerous case we want surfaced
+    # rather than silently allowed.
     if command is not None:
         trig = file_write_detect.command_conditional_trigger(command.leader, command.args)
     else:
@@ -165,7 +254,7 @@ def rule_intended_prompt(seg: str, command=None):
     if trig:
         base, flag = trig
         return (f"`{base} … {flag}` modifies the filesystem — `{base}` is auto-accepted "
-                f"for read-only searches, but the `{flag}` action mutates files and needs "
+                f"for read-only use, but the `{flag}` action mutates files and needs "
                 f"your approval. Approve to proceed.")
     return None
 
@@ -396,6 +485,132 @@ def rule_robocopy_into_project(cmd: str, project_dir=None) -> bool:
     return dest_abs == proj_abs or dest_abs.startswith(proj_abs + os.sep)
 
 
+# --- PowerShell: force-allow provably read-only invocations ------------------------
+# powershell/pwsh are general interpreters (unconditional writers in file_write_detect),
+# but the overwhelmingly common uses here are read-only one-liners: process checks
+# (`Get-Process | Where-Object …`), Start-Sleep, formatting/measuring output. This rule
+# allows exactly those, by requiring ALL of:
+#   * the payload is an inline -Command (a -File script or -EncodedCommand can't be
+#     verified -> not allowed by this rule);
+#   * no dangerous construct anywhere: redirection `>`, call/background `&`, backtick,
+#     subexpressions `$( @(`, static members `::`, method calls `.Foo(`, `--%`;
+#   * no dangerous single-word alias/command anywhere (iex, del, kill, sp*, cmd, reg, …);
+#   * every Verb-Noun token is on the read-only cmdlet whitelist (catches `Remove-Item`
+#     even inside a Where/ForEach script block);
+#   * every pipeline-stage / statement head is a whitelisted command (catches bareword
+#     externals like `python x.py` — heads are re-split at `(` and `{` so a command
+#     hiding inside parens/blocks still surfaces as a head).
+# Anything that fails just falls through to the normal deny/prompt flow — false rejects
+# are cheap, a false allow is what we guard against.
+_PS_LEAD = {"powershell", "pwsh"}
+
+_PS_VALUE_SWITCHES = ("windowstyle", "executionpolicy", "inputformat", "outputformat",
+                      "configurationname", "psconsolefile", "version",
+                      "workingdirectory", "settingsfile")
+_PS_REJECT_SWITCHES = ("file", "encodedcommand", "encodedarguments", "commandwithargs")
+
+_PS_READONLY = {
+    # cmdlets
+    "get-process", "get-service", "get-childitem", "get-item", "get-itemproperty",
+    "get-content", "get-date", "get-location", "get-psdrive", "get-command",
+    "get-member", "get-host", "get-variable", "get-unique", "get-counter",
+    "get-ciminstance", "get-wmiobject", "get-nettcpconnection", "get-computerinfo",
+    "get-winevent", "get-eventlog", "get-history", "get-alias", "get-random",
+    "select-object", "select-string", "where-object", "foreach-object", "sort-object",
+    "group-object", "measure-object", "compare-object",
+    "format-table", "format-list", "format-wide", "format-custom",
+    "out-string", "out-host", "out-null",
+    "write-output", "write-host", "write-warning", "write-error",
+    "start-sleep", "test-path", "test-connection", "resolve-path", "split-path",
+    "join-path", "measure-command",
+    "convertto-json", "convertfrom-json", "convertto-csv", "convertfrom-csv",
+    # aliases & read-only externals commonly piped to/from
+    "gps", "ps", "gsv", "gci", "dir", "ls", "gc", "cat", "type", "gi", "gp", "gl",
+    "pwd", "gcm", "gm", "gv", "select", "where", "sort", "group", "measure", "compare",
+    "ft", "fl", "fw", "echo", "write", "sleep", "sls", "oh",
+    "tasklist", "hostname", "whoami", "ver", "findstr", "?", "%",
+}
+
+# Constructs that can write/execute regardless of the command heads.
+_PS_BANNED = re.compile(r"[>&`]|--%|\$\(|@\(|::|\.\w+\s*\(")
+
+# Single-word mutating aliases / launchers, anywhere in the payload. Word-bounded so
+# `StartTime` or `-First` don't match. Verb-Noun cmdlets are covered by the whitelist
+# scan instead, so this list is only the one-word escape hatches.
+_PS_DANGEROUS = re.compile(
+    r"(?i)(?<![\w-])(iex|icm|irm|iwr|curl|wget|saps|sasv|spps|spsv|kill|del|erase|"
+    r"rd|ri|rm|rmdir|ni|mi|mv|move|cp|copy|ren|rni|rnp|sc|sp|si|sv|set|md|mkdir|"
+    r"start|stop|restart|cmd|taskkill|wmic|reg|schtasks|net|netsh|msiexec|rundll32|"
+    r"certutil|bitsadmin|powershell|pwsh|clc|cli|clp|clv)(?![\w-])")
+
+_PS_VERBNOUN = re.compile(r"(?<![\w-])([A-Za-z]{2,}-[A-Za-z][A-Za-z0-9]*)")
+
+
+def _ps_command_payload(args):
+    """The inline command text of a powershell/pwsh invocation, or None when there's no
+    verifiable inline command (-File, -EncodedCommand, --%, bare interactive shell).
+    Switch names match PowerShell's prefix abbreviation (`-c`/`-com` -> -Command,
+    `-e`/`-enc` -> EncodedCommand); everything after -Command is the payload, as is a
+    first positional arg (implicit -Command)."""
+    i, n = 0, len(args)
+    while i < n:
+        a = args[i]
+        if a == "--%":
+            return None
+        if a.startswith("-") and len(a) > 1:
+            name = a.lstrip("-").lower()
+            if name and "command".startswith(name):
+                return " ".join(args[i + 1:]) if i + 1 < n else None
+            if any(f.startswith(name) for f in _PS_REJECT_SWITCHES):
+                return None
+            if any(f.startswith(name) for f in _PS_VALUE_SWITCHES):
+                i += 2
+                continue
+            i += 1                       # value-less switch: -NoProfile, -NonInteractive, …
+            continue
+        return " ".join(args[i:])        # first positional = implicit -Command
+    return None
+
+
+def _ps_payload_readonly(text: str) -> bool:
+    """True if a PowerShell command payload is provably read-only per the checks in the
+    section comment above. Conservative: unusual-but-harmless constructs (hashtables,
+    strings containing banned characters) return False and fall through to a prompt."""
+    if not text or _PS_BANNED.search(text) or _PS_DANGEROUS.search(text):
+        return False
+    for m in _PS_VERBNOUN.finditer(text):
+        if m.group(1).lower() not in _PS_READONLY:
+            return False
+    # Statement/pipeline heads. Also split at `(` and `{` so a command inside a paren
+    # group or script block (`ForEach-Object { python x }`) becomes a head to judge.
+    for seg in re.split(r"[|;\n({]", text):
+        seg = seg.strip().lstrip("}) \t")
+        seg = re.sub(r"^\$[\w.:\[\]]+\s*=(?!=)\s*", "", seg)   # `$x = …` assignment
+        if not seg:
+            continue
+        if seg[0] in "$'\"" or seg[0].isdigit():
+            continue                    # variable / literal expression, not a command
+        head = re.match(r"[\w?%./:-]+", seg)
+        if not head:
+            return False
+        h = head.group(0).lower()
+        if h.endswith(".exe"):
+            h = h[:-4]
+        if h not in _PS_READONLY:
+            return False
+    return True
+
+
+def rule_powershell_readonly(command) -> bool:
+    """Per-segment allow predicate: True if this parsed invocation (a bash_ast.Command)
+    is powershell/pwsh running a provably read-only inline command. Used alongside the
+    robocopy/mkdir predicates in evaluate()'s force-allow pass; None (no parse) -> False."""
+    if command is None or command.leader not in _PS_LEAD:
+        return False
+    payload = _ps_command_payload(list(command.args))
+    return bool(payload) and _ps_payload_readonly(payload)
+
+
 # mkdir options that consume the FOLLOWING token as their value (the mode).
 _MKDIR_VALUE_OPTS = {"-m", "--mode"}
 
@@ -483,14 +698,6 @@ def evaluate(tool_name: str, tool_input: dict, mode: str, allow_rules, deny_rule
 
     cmd = str(tool_input.get("command", ""))
 
-    # Layer 1: special-case redirects (fire even when allow-listed) — e.g. a hand-rolled
-    # python syntax check is steered to `python -m py_compile`. Kept ahead of the
-    # read-only fast-allow below so these redirects win over a plain allow.
-    for rule in BASH_RULES:
-        reason = rule(cmd)
-        if reason:
-            return ("deny", reason)
-
     pd = project_dir or _project_dir()
 
     # bashlex-backed structural read of the command. When it parses (.ok), its segment
@@ -500,6 +707,16 @@ def evaluate(tool_name: str, tool_input: dict, mode: str, allow_rules, deny_rule
     # deny-by-default posture means a failed parse degrades to the old behaviour, never to
     # a wrong allow. See bash_ast.py.
     ast = bash_ast.analyze(cmd)
+
+    # Layer 1: special-case redirects (fire even when allow-listed) — e.g. a hand-rolled
+    # python syntax check is steered to `python -m py_compile`. Kept ahead of the
+    # read-only fast-allow below so these redirects win over a plain allow. Rules get the
+    # parsed per-invocation view when available (None on parse failure -> they fall back
+    # to their whole-string heuristics).
+    for rule in BASH_RULES:
+        reason = rule(cmd, ast.commands if ast.ok else None)
+        if reason:
+            return ("deny", reason)
 
     # Primary path is the AST: segments/commands are index-aligned, so command[i] is the
     # parsed (leader, args) view of segment[i]. When bashlex can't parse (arithmetic
@@ -552,13 +769,24 @@ def evaluate(tool_name: str, tool_input: dict, mode: str, allow_rules, deny_rule
     # force-allow so the user isn't prompted — Claude's own permission system otherwise
     # prompts on `;`-chained compounds even when each part is individually allowed. Never
     # force-allow if any segment hits a `deny` rule (respect the user's deny-list).
-    def _seg_ok(s):
+    # Parsed view aligned to segments (None-padded so a length mismatch can never let a
+    # segment skip its check).
+    aligned = list(commands) if commands is not None else []
+    aligned += [None] * (len(segments) - len(aligned))
+
+    def _seg_ok(s, c):
         return (_allow_listed("Bash", s, allow_rules)
                 or rule_robocopy_into_project(s, pd)
-                or rule_mkdir_into_project(s, pd))
+                or rule_mkdir_into_project(s, pd)
+                or rule_powershell_readonly(c)
+                # A segment that itself has no side effect (the compound only reached
+                # here because ANOTHER segment mutates) is fine — `tasklist && sed -n…`
+                # shouldn't fail on the tasklist half.
+                or (c is not None
+                    and file_write_detect.command_side_effect(c.leader, c.args) is None))
 
     if segments and not any(_allow_listed("Bash", s, deny_rules) for s in segments):
-        if all(_seg_ok(s) for s in segments):
+        if all(_seg_ok(s, c) for s, c in zip(segments, aligned)):
             return ("allow", None)
 
     # Default: throw it back.

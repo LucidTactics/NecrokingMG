@@ -322,6 +322,62 @@ public static class MapData
         }
     }
 
+    /// <summary>Load authored map zones from the <c>&lt;map&gt;_zones.json</c> sidecar.
+    /// Missing file is a silent no-op (zones are optional, like triggers/roads).</summary>
+    public static bool LoadZones(string path, ZoneSystem zones)
+    {
+        if (!File.Exists(path)) return false;
+
+        try
+        {
+            string json = File.ReadAllText(path);
+            using var doc = JsonDocument.Parse(json);
+            var root = doc.RootElement;
+
+            var list = new List<MapZone>();
+            if (root.TryGetProperty("zones", out var zArr))
+            {
+                foreach (var z in zArr.EnumerateArray())
+                {
+                    string kindStr = z.TryGetProperty("kind", out var k) ? k.GetString() ?? "" : "";
+                    if (!Enum.TryParse<ZoneKind>(kindStr, ignoreCase: true, out var kind))
+                    {
+                        DebugLog.Log("startup", $"  Zone with unknown kind '{kindStr}' skipped");
+                        continue;
+                    }
+
+                    var zone = new MapZone
+                    {
+                        Id = z.TryGetProperty("id", out var id) ? id.GetString() ?? "" : "",
+                        Name = z.TryGetProperty("name", out var n) ? n.GetString() ?? "" : "",
+                        Kind = kind,
+                        X = z.TryGetProperty("x", out var x) ? x.GetSingle() : 0f,
+                        Y = z.TryGetProperty("y", out var y) ? y.GetSingle() : 0f,
+                        HalfW = z.TryGetProperty("halfW", out var hw) ? hw.GetSingle() : 10f,
+                        HalfH = z.TryGetProperty("halfH", out var hh) ? hh.GetSingle() : 10f,
+                    };
+                    if (z.TryGetProperty("population", out var pop))
+                    {
+                        zone.Population.Peasant = pop.TryGetProperty("peasant", out var pp) ? pp.GetInt32() : 0;
+                        zone.Population.Hunter = pop.TryGetProperty("hunter", out var ph) ? ph.GetInt32() : 0;
+                        zone.Population.Militia = pop.TryGetProperty("militia", out var pm) ? pm.GetInt32() : 0;
+                        zone.Population.Watchdog = pop.TryGetProperty("watchdog", out var pw) ? pw.GetInt32() : 0;
+                    }
+                    list.Add(zone);
+                }
+            }
+            zones.SetZones(list);
+
+            DebugLog.Log("startup", $"  Zones: {list.Count}");
+            return true;
+        }
+        catch (Exception ex)
+        {
+            DebugLog.Log("startup", $"Zone load error: {ex.Message}");
+            return false;
+        }
+    }
+
     public static bool LoadRoads(string path, RoadSystem roads)
     {
         if (!File.Exists(path)) return false;

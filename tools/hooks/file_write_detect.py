@@ -49,8 +49,9 @@ import re
 # ---------------------------------------------------------------------------------
 
 # --- Text / stream editors that mutate files in place (or write via args) ---------
+# (sed/gsed are NOT here: they're read-only stream filters unless given a mutating
+#  flag/script, so they live in the conditional-writer machinery below instead.)
 EDITORS = {
-    "sed", "gsed",                       # -i in-place
     "awk", "gawk", "mawk", "nawk",       # gawk -i inplace; awk can open files for write
     "perl",                              # -i / -pi / -ni  (also an interpreter, see below)
     "ed", "red", "ex", "vi", "vim", "nvim", "view", "vimdiff",
@@ -136,7 +137,7 @@ INTERPRETERS = {
     "groovy", "scala", "kotlin", "clojure", "clj",
     "swift", "elixir", "iex", "erl", "escript",
     "raku", "perl6", "gforth", "gst",                # smalltalk
-    "osascript", "powershell", "pwsh", "cscript", "wscript",
+    "osascript", "powershell", "pwsh", "cscript", "wscript", "cmd", "mshta",
     "csi", "dotnet-script", "fsi",                   # C#/F# scripting
     "guile", "scheme", "racket", "sbcl", "clisp", "ecl",
     "bc", "dc",                                      # dc can write? bc no — but both shell-able; keep dc
@@ -156,6 +157,7 @@ WRAPPERS = {
     "sudo", "doas", "su", "runuser", "gosu", "pkexec",
     "make", "gmake", "ninja", "cmake", "meson", "scons", "bazel", "buck",
     "ssh",                                           # ssh host 'rm -rf …' runs a remote writer
+    "wsl",                                           # wsl <cmd> runs an inner Linux command
     "ssh-keygen",                                    # writes key files
     "entr",                                          # runs a command on file change
 }
@@ -234,6 +236,116 @@ CONDITIONAL_WRITERS = {
              "-fprintf", "-fprint", "-fprint0", "-fls"},
     "gfind": {"-exec", "-execdir", "-ok", "-okdir", "-delete",
               "-fprintf", "-fprint", "-fprint0", "-fls"},
+    # Windows admin CLIs: the query forms are common and read-only (`wmic process list`,
+    # `reg query`, `sc query`, `schtasks /query`, `net statistics`, `netsh … show`); only
+    # the mutating verbs below need a prompt. Trigger tokens are matched case-insensitively
+    # (Windows flags come in any casing). A trigger that's really a value (a service
+    # literally named "stop") just prompts — the safe direction.
+    "wmic": {"delete", "terminate", "call", "create", "uninstall", "set"},
+    "reg": {"add", "delete", "copy", "save", "restore", "load", "unload",
+            "import", "export"},
+    "sc": {"start", "stop", "pause", "continue", "config", "create", "delete",
+           "failure", "sdset", "control"},
+    "schtasks": {"/create", "/delete", "/change", "/run", "/end"},
+    "net": {"user", "use", "share", "localgroup", "group", "accounts", "computer",
+            "start", "stop", "pause", "continue", "/add", "/delete", "/close"},
+    "netsh": {"add", "delete", "set", "reset", "import", "exec", "install"},
+}
+
+# --- sed: a conditional writer whose mutating modes aren't single flag tokens --------
+# sed is a read-only stream filter (`sed -n '5p' f`, `sed 's/a/b/' f`) unless one of:
+#   * -i / --in-place (any spelling: bundled `-ni`, attached suffix `-i.bak`)  -> in-place
+#   * -f / --file  -> script comes from a file we can't statically inspect
+#   * the script text contains a file-writing command: standalone `w`/`W`, the
+#     shell-executing `e`, or a `w`/`e` flag on an `s///` command
+# A flag-set entry in CONDITIONAL_WRITERS can't express that, so sed gets a real arg
+# parser. On the AST path this sees the invocation's own dequoted args (precise); on the
+# whole-string fallback it gets every token after `sed` (coarse — a false hit just
+# defers to the normal permission flow, which is the safe direction).
+#
+# The script scan is heuristic: it anchors `w`/`W`/`e` at a command position (start of
+# script, after `;` `{` or newline, behind an optional NUM/$//regex/ address). Exotic
+# address forms (`\%re%`, nested blocks) can slip a `w` past it — accepted, since the
+# common read-only case is what we're clearing and the miss just defers to a prompt at
+# the redirect/allow-list layers if anything else looks off.
+_SED_ADDR = r"(?:\d+|\$|/(?:\\.|[^/\\])*/)"
+_SED_CMD_POS = rf"(?:^|[;{{\n])\s*(?:{_SED_ADDR}(?:\s*[,~]\s*{_SED_ADDR})?\s*!?\s*)?"
+_SED_WRITE_CMD = re.compile(_SED_CMD_POS + r"(?:[wW]\s*\S|e\b)")
+# s<delim>pat<delim>repl<delim>flags with a `w` or `e` flag; delimiter is any
+# non-word char, matched via backreference with `(?!\1).` guarding the body.
+_SED_S_WRITE_FLAG = re.compile(
+    _SED_CMD_POS + r"s([^\w\s])(?:\\.|(?!\1).)*\1(?:\\.|(?!\1).)*\1[0-9gpiImM]*[we]")
+
+_SED_LONG_VALUE_OPTS = ("--expression", "--file", "--line-length")
+
+
+def _sed_mutation(args):
+    """Trigger string if this sed invocation can write (the flag/reason, for messages),
+    else None. `args` are the invocation's own dequoted argument words."""
+    scripts = []          # script texts to scan for w/W/e commands
+    have_script_opt = False   # -e/--expression seen -> positionals are input files
+    script_taken = False
+    i, n = 0, len(args)
+    while i < n:
+        a = args[i]
+        if a == "--":
+            break                                  # rest are input files
+        if a.startswith("--"):
+            if re.match(r"^--in-?place(=|$)", a):
+                return a.split("=", 1)[0]
+            if re.match(r"^--expression(=|$)", a):
+                have_script_opt = True
+                if "=" in a:
+                    scripts.append(a.split("=", 1)[1])
+                elif i + 1 < n:
+                    i += 1
+                    scripts.append(args[i])
+            elif re.match(r"^--file(=|$)", a):
+                return "--file"                    # external script: can't verify it
+            elif a == "--line-length":
+                i += 1                             # consumes the length value
+            # other long opts (--quiet, --regexp-extended, …) take no value: ignore
+        elif len(a) > 1 and a[0] == "-":
+            # Bundled short options: scan letters until one that consumes the rest.
+            j = 1
+            while j < len(a):
+                c = a[j]
+                if c == "i":
+                    return a                       # -i / -i.bak / -ni — in-place
+                if c == "f":
+                    return a                       # script from a file: can't verify it
+                if c == "e":
+                    have_script_opt = True
+                    rest = a[j + 1:]
+                    if rest:
+                        scripts.append(rest)
+                    elif i + 1 < n:
+                        i += 1
+                        scripts.append(args[i])
+                    break
+                if c == "l":                       # -l N: numeric value, attached or next
+                    if j + 1 >= len(a):
+                        i += 1
+                    break
+                j += 1
+        else:
+            # First bare positional is the script (unless -e/-f supplied one already);
+            # everything after that is an input file.
+            if not have_script_opt and not script_taken:
+                scripts.append(a)
+                script_taken = True
+        i += 1
+    for s in scripts:
+        if _SED_WRITE_CMD.search(s) or _SED_S_WRITE_FLAG.search(s):
+            return "w/e script command"
+    return None
+
+
+# Conditional writers whose mutating mode needs real arg parsing, not a flag-token set.
+# Map: command basename -> fn(args) -> trigger string | None.
+CONDITIONAL_WRITER_FNS = {
+    "sed": _sed_mutation,
+    "gsed": _sed_mutation,
 }
 
 # Flag tokens that signal an in-place / output-to-file intent on tools that are
@@ -337,9 +449,9 @@ def _indicators(cmd: str, names):
         reasons.append("output redirection to a file (>, >>, 2>, &>)")
 
     toks = _tokenize(cmd)
-    tokset = set(toks)
+    tokset = {t.lower() for t in toks}
     seen = set()
-    for tok in toks:
+    for idx, tok in enumerate(toks):
         base = _basename(tok)
         if base in names and base not in seen:
             seen.add(base)
@@ -352,6 +464,13 @@ def _indicators(cmd: str, names):
             if triggers:
                 seen.add(base)
                 reasons.append(f"file-writing command: {base} ({sorted(triggers)[0]})")
+        # Parsed conditional writers (sed): hand the fn everything after the command
+        # token — coarse in this whole-string fallback, but a false hit only defers.
+        if base in CONDITIONAL_WRITER_FNS and base not in seen:
+            trig = CONDITIONAL_WRITER_FNS[base](toks[idx + 1:])
+            if trig:
+                seen.add(base)
+                reasons.append(f"file-writing command: {base} ({trig})")
         # dd of=FILE and friends — `of=` / `output=` style assignment positionals.
         if re.match(r"^(of|output|out)=", tok, re.IGNORECASE):
             reasons.append(f"output-file argument: {tok}")
@@ -382,9 +501,12 @@ def _conditional_trigger(leader: str, args):
     `leader` is a conditional writer used in its mutating mode, else None."""
     flags = CONDITIONAL_WRITERS.get(leader)
     if flags:
-        hit = flags & set(args)
+        hit = flags & {a.lower() for a in args}
         if hit:
             return sorted(hit)[0]
+    fn = CONDITIONAL_WRITER_FNS.get(leader)
+    if fn:
+        return fn(list(args))
     return None
 
 
@@ -426,15 +548,20 @@ def conditional_write_triggers(cmd: str):
     caller single out 'allow-listed read-only tool used in its mutating mode' for special
     handling, separate from the catch-all can_write_files."""
     toks = _tokenize(cmd)
-    tokset = set(toks)
+    tokset = {t.lower() for t in toks}
     out, seen = [], set()
-    for tok in toks:
+    for idx, tok in enumerate(toks):
         base = _basename(tok)
         if base in CONDITIONAL_WRITERS and base not in seen:
             trig = CONDITIONAL_WRITERS[base] & tokset
             if trig:
                 seen.add(base)
                 out.append((base, sorted(trig)[0]))
+        if base in CONDITIONAL_WRITER_FNS and base not in seen:
+            trig = CONDITIONAL_WRITER_FNS[base](toks[idx + 1:])
+            if trig:
+                seen.add(base)
+                out.append((base, trig))
     return out
 
 
