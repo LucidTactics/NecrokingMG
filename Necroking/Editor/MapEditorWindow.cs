@@ -64,23 +64,30 @@ public class GrassTypeDef
 // ============================================================================
 public class MapEditorWindow
 {
-    // ---- Dependencies (set via Init) ----
-    private GroundSystem _groundSystem = null!;
-    private EnvironmentSystem _envSystem = null!;
-    private TriggerSystem _triggerSystem = null!;
-    private ZoneSystem _zoneSystem = null!;
+    // ---- Owning game (set via Init) ----
+    // The editor pulls its shared engine systems, rendering handles, and the
+    // EditorBase straight off Game1 rather than caching its own copies, so it
+    // can never drift from the live session (StartGame swaps GameSession, and
+    // Game1's own _groundSystem/_envSystem/... are already session-forwarders).
+    // The underscore-named properties keep every existing _groundSystem/_camera/
+    // ... call site in this file unchanged.
+    private Game1 _game = null!;
+    private GroundSystem _groundSystem => _game._groundSystem;
+    private EnvironmentSystem _envSystem => _game._envSystem;
+    private TriggerSystem _triggerSystem => _game._triggerSystem;
+    private ZoneSystem _zoneSystem => _game._zoneSystem;
     private Data.Registries.ItemRegistry? _itemRegistry;
     private Data.GameData? _gameData;
-    private WallSystem _wallSystem = null!;
-    private RoadSystem _roadSystem = null!;
-    private TileGrid _tileGrid = null!;
-    private Camera25D _camera = null!;
-    private SpriteBatch _spriteBatch = null!;
-    private Texture2D _pixel = null!;
-    private SpriteFont? _font;
-    private SpriteFont? _smallFont;
-    private GraphicsDevice _device = null!;
-    private EditorBase? _eb;
+    private WallSystem _wallSystem => _game._wallSystem;
+    private RoadSystem _roadSystem => _game._roadSystem;
+    private TileGrid _tileGrid => _game._sim.Grid;
+    private Camera25D _camera => _game._camera;
+    private SpriteBatch _spriteBatch => _game._spriteBatch;
+    private Texture2D _pixel => _game._pixel;
+    private SpriteFont? _font => _game._font;
+    private SpriteFont? _smallFont => _game._smallFont;
+    private GraphicsDevice _device => _game.GraphicsDevice;
+    private EditorBase? _eb => _game._editorUi;
 
     // Callbacks
     private Action? _onVertexMapChanged;
@@ -482,47 +489,21 @@ public class MapEditorWindow
     // ========================================================================
 
     public void Init(
-        GroundSystem groundSystem,
-        EnvironmentSystem envSystem,
-        TriggerSystem triggerSystem,
-        Camera25D camera,
-        SpriteBatch spriteBatch,
-        Texture2D pixel,
-        SpriteFont? font,
-        SpriteFont? smallFont,
-        GraphicsDevice device,
+        Game1 game,
         Action? onVertexMapChanged = null,
-        WallSystem? wallSystem = null,
-        RoadSystem? roadSystem = null,
-        TileGrid? tileGrid = null,
         Action? onGrassMapChanged = null,
-        EditorBase? editorBase = null,
-        Action? onGrassTypesChanged = null,
-        ZoneSystem? zoneSystem = null)
+        Action? onGrassTypesChanged = null)
     {
-        _groundSystem = groundSystem;
-        _envSystem = envSystem;
-        _triggerSystem = triggerSystem;
-        _camera = camera;
-        _spriteBatch = spriteBatch;
-        _pixel = pixel;
-        _font = font;
-        _smallFont = smallFont;
-        _device = device;
+        _game = game;
         _onVertexMapChanged = onVertexMapChanged;
-        _wallSystem = wallSystem ?? new WallSystem();
-        _roadSystem = roadSystem ?? new RoadSystem();
-        _tileGrid = tileGrid ?? new TileGrid();
-        _zoneSystem = zoneSystem ?? new ZoneSystem();
         _onGrassMapChanged = onGrassMapChanged;
         _onGrassTypesChanged = onGrassTypesChanged;
-        _eb = editorBase;
 
         // Initialize the environment object def editor sub-window
         if (_eb != null)
         {
             _envObjectEditor = new EnvObjectEditorWindow();
-            _envObjectEditor.Init(_eb, _envSystem, device, spriteBatch, pixel, font, smallFont, _triggerSystem);
+            _envObjectEditor.Init(_eb, _envSystem, _device, _spriteBatch, _pixel, _font, _smallFont, _triggerSystem);
             _envObjectEditor.SetItemRegistry(_itemRegistry);
 
             _wallEditor = new WallEditorWindow(_eb);

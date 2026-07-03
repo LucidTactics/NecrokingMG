@@ -25,7 +25,7 @@ namespace Necroking;
 /// </summary>
 public partial class Game1
 {
-    private readonly ZoneSystem _zoneSystem = new();
+    internal readonly ZoneSystem _zoneSystem = new();
 
     /// <summary>Apply every authored zone. Call once per map load, after placed units and
     /// legacy villages have spawned.</summary>

@@ -451,7 +451,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     internal EnvironmentSystem _envSystem => _session.Env;
     internal WallSystem _wallSystem => _session.Wall;
     internal RoadSystem _roadSystem => _session.Road;
-    private TriggerSystem _triggerSystem = new();
+    internal TriggerSystem _triggerSystem = new();
 
     // Grass
     internal byte[] _grassMap = Array.Empty<byte>();
@@ -1576,8 +1576,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
 
         // Init map editor with live systems
         _mapEditor.Init(
-            _groundSystem, _envSystem, _triggerSystem, _camera,
-            _spriteBatch, _pixel, _font, _smallFont, GraphicsDevice,
+            this,
             onVertexMapChanged: () =>
             {
                 // Incremental: patch only the brush-sized dirty rect into the
@@ -1592,13 +1591,8 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
                     _groundVertexMapTex = _groundSystem.CreateVertexMapTexture(GraphicsDevice);
                 }
             },
-            wallSystem: _wallSystem,
-            roadSystem: _roadSystem,
-            tileGrid: _sim.Grid,
             onGrassMapChanged: SyncGrassMapReference,
-            editorBase: _editorUi,
-            onGrassTypesChanged: SyncGrassFromEditor,
-            zoneSystem: _zoneSystem);
+            onGrassTypesChanged: SyncGrassFromEditor);
         _mapEditor.SetItemRegistry(_gameData.Items);
         _mapEditor.SetSpellRegistry(_gameData.Spells);
         _mapEditor.SetGameData(_gameData);
@@ -2013,8 +2007,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
 
         // Init map editor with scenario systems (needed for editor screenshot scenarios)
         _mapEditor.Init(
-            _groundSystem, _envSystem, _triggerSystem, _camera,
-            _spriteBatch, _pixel, _font, _smallFont, GraphicsDevice,
+            this,
             onVertexMapChanged: () =>
             {
                 // Incremental: patch only the brush-sized dirty rect into the
@@ -2029,13 +2022,8 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
                     _groundVertexMapTex = _groundSystem.CreateVertexMapTexture(GraphicsDevice);
                 }
             },
-            wallSystem: _wallSystem,
-            roadSystem: _roadSystem,
-            tileGrid: _sim.Grid,
             onGrassMapChanged: SyncGrassMapReference,
-            editorBase: _editorUi,
-            onGrassTypesChanged: SyncGrassFromEditor,
-            zoneSystem: _zoneSystem);
+            onGrassTypesChanged: SyncGrassFromEditor);
         _mapEditor.SetItemRegistry(_gameData.Items);
 
         // Initialize the scenario
