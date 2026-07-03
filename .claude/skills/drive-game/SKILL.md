@@ -41,25 +41,13 @@ tools over raw Bash/curl** — they're allowlisted by name (no prompts) and fast
 `.mcp.json` server needs a one-time trust approval + Claude Code reload before its tools
 appear.
 
-## Claude_Preview workflow
+## Claude_Preview workflow (desktop app only)
 
-1. `preview_start("necroking-dev")` → `serverId` (launches the supervisor; the page
-   auto-starts the game headless at 1280x720). **Do not run `python tools/devserver.py`
-   yourself** — `preview_start` owns the supervisor. The launch config lives in gitignored
-   `.claude/launch.json`; on a fresh clone it won't exist, so create it first with exactly
-   this (then call `preview_start`):
-   ```json
-   {"version":"0.0.1","configurations":[{"name":"necroking-dev","runtimeExecutable":"python","runtimeArgs":["tools/devserver.py"],"port":8777}]}
-   ```
-   (use `python3` or `py` as `runtimeExecutable` if `python` isn't on PATH).
-2. `preview_eval(id, "window.dev('panel',['spell_editor'])")` — `window.dev(cmd, args,
-   opts)` POSTs to `/cmd`, awaits the game, and returns the JSON result. Chain multi-step
-   sequences in an async IIFE and `return` the final value.
-3. `preview_screenshot(id)` — captures the live dashboard view (frame refreshes ~1 Hz via
-   `/frame`).
-4. **After a C# change**, rebuild + relaunch through the supervisor:
-   `preview_eval(id, "fetch('/game/restart',{method:'POST',body:'{\"build\":true}'}).then(r=>r.json())")`
-   — build errors come back in the JSON (`build.errors`).
+JavaScript-based: `preview_start("necroking-dev")` → `preview_eval(id,
+"window.dev(cmd,args,opts)")` → `preview_screenshot(id)`. The full JS reference — the
+`.claude/launch.json` bootstrap, `window.dev` semantics, the `/game/restart` +
+`/game/stop` fetch calls, batch polling, recipes — lives in
+[preview-server.md](preview-server.md). Read it before driving through this tier.
 
 ## necroking MCP / devctl.py quick reference
 
@@ -136,15 +124,18 @@ game command) · `{wait:<simSecs>}` (frozen while paused) · `{wait_real:<secs>}
 `{wait_frames:<n>}` · `{shot:"name", ...screenshotOpts}` (sugar for a screenshot step).
 `job` returns `{done,step,total,results:[...]}` where `results[i]` is the raw response of
 step i (screenshot steps yield their PNG path); `job cancel` aborts.
-```js
-const {result:{jobId}} = await window.dev('batch',[],{script:[
-  {cmd:'camera',args:[x,y,48]}, {cmd:'speed',args:[4]},
-  {shot:'t0'}, {wait:2.0}, {shot:'t2'}, {wait:2.0}, {shot:'t4'},
-  {cmd:'units',args:['all']},
-]});
-let st; do { await new Promise(r=>setTimeout(r,300)); st=(await window.dev('job',[jobId])).result; } while(!st.done);
-// st.results holds each step's reply; PNGs at bin/Devbuild/log/screenshots/<name>.png
+Via `necro_cmd` (or `devctl.py raw` with the same JSON):
+```json
+{"cmd":"batch","opts":{"script":[
+  {"cmd":"camera","args":[2096,1882,48]}, {"cmd":"speed","args":[4]},
+  {"shot":"t0"}, {"wait":2.0}, {"shot":"t2"}, {"wait":2.0}, {"shot":"t4"},
+  {"cmd":"units","args":["all"]}
+]}}
 ```
+returns `{jobId}`; then poll `{"cmd":"job","args":[<jobId>]}` (`python tools/devctl.py
+cmd job <jobId>`) every ~0.3 s until `done:true`. `results` holds each step's reply;
+PNGs at `bin/Devbuild/log/screenshots/<name>.png`. (JS polling form:
+[preview-server.md](preview-server.md).)
 
 ### UI panels & overlays
 
@@ -165,8 +156,9 @@ let st; do { await new Promise(r=>setTimeout(r,300)); st=(await window.dev('job'
 
 - `preview_screenshot(id)` (or `necro_screenshot`) captures the whole **dashboard page**
   (live frame + command log). Best for a quick glance / watching progress.
-- To **analyze just the game frame**, run `window.dev('screenshot',['name'], opts)` via
-  `preview_eval` — it returns the path and the PNG lands at
+- To **analyze just the game frame**, run the `screenshot` game command —
+  `necro_cmd {"cmd":"screenshot","args":["name"],"opts":{...}}` or
+  `python tools/devctl.py shot name no_ui=true` — it returns the path and the PNG lands at
   `bin/Devbuild/log/screenshots/<name>.png` (the preview builds into its own bin/Devbuild
   folder; the reply/`necro_status` are the source of truth for the exact path — Read that,
   don't reconstruct it). Then **`Read` that file** (Read is approved → no prompt). Clean
@@ -184,7 +176,7 @@ If a check needs a verb the server doesn't have, ADD IT. One `case` in `ExecuteD
 
 ```csharp
 // in ExecuteDevCommand(Necroking.Dev.DevCommand c), Game1.cs:
-case "kill_faction":                       // window.dev('kill_faction',['Human'])
+case "kill_faction":                       // devctl: cmd kill_faction Human
 {
     if (c.Args.Length < 1) { c.Complete(Necroking.Dev.DevServer.Error("need <faction>")); break; }
     var fac = Enum.Parse<Data.Faction>(c.Args[0], true);
@@ -204,44 +196,52 @@ case "kill_faction":                       // window.dev('kill_faction',['Human'
 - **Deferred results** (need a rendered frame, like a screenshot): stash a pending field and
   call `c.Complete(...)` later from `Draw` instead of blocking — follow the
   `_pendingDevScreenshot` path.
-- After adding: rebuild via `/game/restart {"build":true}` (or `necro_restart`/`restart
-  --build`), then call it with `window.dev('your_verb',[...],{...})` (or
-  `window.devRaw({cmd,args,opts})`).
+- After adding: rebuild via `necro_restart` (or `python tools/devctl.py restart --build`),
+  then call it with `necro_cmd {"cmd":"your_verb","args":[...],"opts":{...}}` or
+  `python tools/devctl.py cmd your_verb ...`.
 
 ## Gotchas
 
 - **Stop the game via the server, NEVER taskkill.** When the exe is locked for a build, or
-  you're done driving it, stop the game through the server:
-  `preview_eval(id, "fetch('/game/stop',{method:'POST',body:'{}'})")` (or `necro_stop` /
-  `devctl.py down`). The supervisor owns the process (Windows Job Object) and the headless
-  game is hidden from the taskbar, so a force-killed PID orphans bookkeeping and a forgotten
-  game idles invisibly. `/game/restart {"build":true}` already stops it for you. The
-  supervisor itself can stay up (cheap; holds the pinned frame).
+  you're done driving it, stop the game through the server: `necro_stop` /
+  `python tools/devctl.py down` (preview JS form: [preview-server.md](preview-server.md)).
+  The supervisor owns the process (Windows Job Object) and the headless game is hidden from
+  the taskbar, so a force-killed PID orphans bookkeeping and a forgotten game idles
+  invisibly. `necro_restart` / `restart --build` already stops it for you. The supervisor
+  itself can stay up (cheap; holds the pinned frame).
 - **Spawn faction is implied by `UnitType`**: Skeleton/Abomination → Undead (friendly to the
   necromancer); the rest (Soldier/Knight/Militia/Archer) → Human (will attack and can kill
   the necromancer). Spawn humans at a distance, or spawn undead for a friendly scene. Types:
   Necromancer, Skeleton, Abomination, Militia, Soldier, Knight, Archer, Dynamic.
 - **World coordinates (Vec2).** Read `state` for the necromancer's `x,y` and anchor
   spawns/camera off it (default map necromancer ≈ 2096,1882).
-- A screenshot is captured one frame later in `Draw`; `window.dev` awaits until the PNG is
-  written, so the returned path is ready to `Read` immediately.
-- `preview_eval` awaits the returned promise and serialises it to JSON; wrap multi-step
-  sequences in an `async`-IIFE and `return` the final value.
+- A screenshot is captured one frame later in `Draw`; the command reply only returns once
+  the PNG is written, so the returned path is ready to `Read` immediately.
 
 ## Recipes
 
-Set up a fight, speed it up, analyze it (`preview_eval(id, "<this>")`):
-```js
-(async()=>{
-  await window.dev('menu',['new_game']);
-  const s = await window.dev('state'); const x=s.result.necromancer.x, y=s.result.necromancer.y;
-  await window.dev('spawn',['Skeleton',x-3,y]);
-  await window.dev('spawn',['Soldier',x+3,y]);
-  await window.dev('camera',[x,y,48]);
-  await window.dev('speed',[4]);
-  return await window.dev('screenshot',['fight']);   // then Read bin/Devbuild/log/screenshots/fight.png
-})()
+Set up a fight, speed it up, analyze it — read `state` first for the necromancer's `x,y`
+(e.g. 2096,1882), then everything else is **one `batch`** (via `necro_cmd`, or
+`devctl.py raw '<json>'`):
+```bash
+python tools/devctl.py cmd state     # → necromancer x,y
 ```
+```json
+{"cmd":"batch","opts":{"script":[
+  {"cmd":"menu","args":["new_game"]},
+  {"cmd":"spawn","args":["Skeleton",2093,1882]},
+  {"cmd":"spawn","args":["Soldier",2099,1882]},
+  {"cmd":"camera","args":[2096,1882,48]},
+  {"cmd":"speed","args":[4]},
+  {"wait":2.0},
+  {"shot":"fight"}
+]}}
+```
+Poll `{"cmd":"job","args":[<jobId>]}` until `done:true`, then `Read`
+`bin/Devbuild/log/screenshots/fight.png`.
 
-Inspect an editor entry: `window.dev('panel',['spell_editor'])` then
-`window.dev('select',['Fireball'])`, then `preview_screenshot(id)`.
+Inspect an editor entry — one batch:
+`{"cmd":"batch","opts":{"script":[{"cmd":"panel","args":["spell_editor"]},{"cmd":"select","args":["Fireball"]},{"shot":"spell_editor"}]}}`.
+
+(JS versions of these recipes for the Claude_Preview tier:
+[preview-server.md](preview-server.md).)
