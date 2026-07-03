@@ -23,16 +23,17 @@ namespace Necroking.Render;
 /// </summary>
 internal static class EffectBatch
 {
-    // --- Canonical pass states. GameRenderer.Draw.cs begins its passes through
-    // the helpers below, so these fields ARE the pass definition, not a copy. ---
+    // --- Canonical pass states now live in Materials (Materials.Scene /
+    // Materials.Hud); these delegate so existing call sites keep working while
+    // the migration runs. New code should reference Materials directly. ---
 
     /// <summary>Scene pass: premultiplied-alpha sprites, linear filtering.</summary>
-    public static readonly BlendState SceneBlend = BlendState.AlphaBlend;
-    public static readonly SamplerState SceneSampler = SamplerState.LinearClamp;
+    public static BlendState SceneBlend => Materials.Scene.Blend;
+    public static SamplerState SceneSampler => Materials.Scene.Sampler;
 
     /// <summary>HUD pass: premultiplied-alpha UI, point filtering (crisp pixel UI).</summary>
-    public static readonly BlendState HudBlend = BlendState.AlphaBlend;
-    public static readonly SamplerState HudSampler = SamplerState.PointClamp;
+    public static BlendState HudBlend => Materials.Hud.Blend;
+    public static SamplerState HudSampler => Materials.Hud.Sampler;
 
     /// <summary>Begin the scene pass with its canonical state.</summary>
     public static void BeginScenePass(SpriteBatch batch)

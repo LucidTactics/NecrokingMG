@@ -2331,6 +2331,12 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         }
         catch (Exception ex) { _hdrSpriteEffect = null; DebugLog.Log("startup", $"HdrSprite not loaded: {ex.Message}"); }
 
+        // Register the effect-backed materials now that shaders are loaded
+        // (Materials is the canonical pass-state registry for the render
+        // pipeline — see todos/render-pipeline-design.md).
+        Render.Materials.InitEffectMaterials(_wadingEffect, _dissolveTreeEffect,
+            _hdrSpriteEffect, _depthCutoutEffect);
+
         {
             Microsoft.Xna.Framework.Graphics.Effect? glyphEffect = null;
             try { glyphEffect = Content.Load<Microsoft.Xna.Framework.Graphics.Effect>("MagicCircle"); }
