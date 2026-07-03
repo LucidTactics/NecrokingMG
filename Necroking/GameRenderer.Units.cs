@@ -185,6 +185,27 @@ partial class GameRenderer
             queue.SubmitCallback(WorldLayer.YSort, rp.Y, _cbUnit, i, 0);
         }
 
+        // Occlusion fade: precompute the player's screen box once so the env
+        // loop below can test each tall object against it. Possible precisely
+        // because submissions are inspectable data before drawing.
+        bool occlusionActive = false;
+        float plLeft = 0, plRight = 0, plTop = 0, plBottom = 0, plY = 0;
+        int necroIdx = _g._sim.NecromancerIndex;
+        if (necroIdx >= 0 && necroIdx < _g._sim.Units.Count && _g._sim.Units[necroIdx].Alive)
+        {
+            var nu = _g._sim.Units[necroIdx];
+            var ndef = _g._gameData.Units.Get(nu.UnitDefID);
+            float nWorldH = (ndef != null && ndef.SpriteWorldHeight > 0 ? ndef.SpriteWorldHeight : 1.8f) * nu.SpriteScale;
+            var nsp = _g._renderer.WorldToScreen(nu.RenderPos, nu.Z, _g._camera);
+            float npxH = nWorldH * _g._camera.Zoom;
+            plLeft = nsp.X - npxH * 0.30f;
+            plRight = nsp.X + npxH * 0.30f;
+            plTop = nsp.Y - npxH;
+            plBottom = nsp.Y;
+            plY = nu.RenderPos.Y;
+            occlusionActive = true;
+        }
+
         // Add environment objects (with view culling, skip collected foragables, skip ground-layer objects)
         for (int i = 0; i < _g._envSystem.ObjectCount; i++)
         {
@@ -194,6 +215,9 @@ partial class GameRenderer
             if (def.Category == "Traps") continue; // drawn in ground layer pass
             if (obj.X < viewLeft || obj.X > viewRight || obj.Y < viewTop || obj.Y > viewBottom)
                 continue;
+
+            UpdateOcclusionFade(i, obj, def, occlusionActive, plLeft, plRight, plTop, plBottom, plY);
+
             // Note: defs whose sprites failed to load get a placeholder texture in EnvironmentSystem,
             // so GetDefTexture is non-null and the object still appears.
             queue.SubmitCallback(WorldLayer.YSort, obj.Y, _cbEnvObject, i, 0);
@@ -253,6 +277,47 @@ partial class GameRenderer
             if (cb != null)
                 queue.SubmitCallback(WorldLayer.YSort, item.Y, cb, item.Index, item.SubIndex);
         }
+    }
+
+    // --- Occlusion fade: a tall env object between the camera and the player
+    // goes semi-transparent so the necromancer stays visible. Per-object fade
+    // state persists across frames for a smooth lerp; entries at full opacity
+    // are dropped. Enabled by the retained model: items are data before draws,
+    // so the collect loop can inspect "what draws in front of the player."
+    private readonly Dictionary<int, float> _occlusionFade = new();
+    private const float OccludedAlpha = 0.40f;      // fade floor while occluding
+    private const float OcclusionMinWorldH = 2.5f;  // only tall things fade (trees, buildings)
+    private const float OcclusionFadeRate = 8f;     // exp-lerp speed, 1/s
+
+    private void UpdateOcclusionFade(int i, in PlacedObject obj, EnvironmentObjectDef def,
+        bool active, float plLeft, float plRight, float plTop, float plBottom, float plY)
+    {
+        float target = 1f;
+        float worldH = def.SpriteWorldHeight * obj.Scale * def.Scale;
+        if (active && worldH >= OcclusionMinWorldH && obj.Y > plY)
+        {
+            // Approximate the object's screen box (aspect from its texture when
+            // static; a 0.7 width ratio for animated sheets — close enough for
+            // an overlap test that feeds a soft fade).
+            var sp = _g._renderer.WorldToScreen(new Vec2(obj.X, obj.Y), 0f, _g._camera);
+            float pxH = worldH * _g._camera.Zoom;
+            var tex = _g._envSystem.GetDefTexture(obj.DefIndex);
+            float halfW = (tex != null && !def.IsAnimated)
+                ? pxH * (tex.Width / (float)tex.Height) * 0.5f
+                : pxH * 0.35f;
+            bool overlaps = sp.X - halfW < plRight && sp.X + halfW > plLeft
+                         && sp.Y - pxH < plBottom && sp.Y > plTop;
+            if (overlaps) target = OccludedAlpha;
+        }
+
+        if (!_occlusionFade.TryGetValue(i, out float fade))
+        {
+            if (target >= 1f) return;   // fully opaque and staying there — no entry
+            fade = 1f;
+        }
+        fade = MathHelper.Lerp(fade, target, 1f - MathF.Exp(-OcclusionFadeRate * _g._frameDt));
+        if (fade > 0.995f) _occlusionFade.Remove(i);
+        else _occlusionFade[i] = fade;
     }
 
     private void DrawSingleUnit(in SpriteScope scope, int i)
@@ -669,6 +734,11 @@ partial class GameRenderer
 
         // Apply weather ambient light
         tint = MultiplyColor(tint, _g._ambientColor);
+
+        // Occlusion fade — semi-transparent while this object hides the player
+        // (uniform RGBA scale = correct fade for premultiplied textures).
+        if (_occlusionFade.TryGetValue(i, out float occFade))
+            tint *= occFade;
 
         _g._spriteBatch.Draw(tex, screenPos, sourceRect, tint, rotation, origin, scale,
             flipX ? SpriteEffects.FlipHorizontally : SpriteEffects.None, 0f);

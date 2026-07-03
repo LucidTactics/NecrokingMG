@@ -78,6 +78,7 @@ public static class ScenarioRegistry
         Register("poison_cloud", () => new Scenarios.PoisonCloudScenario());
         Register("magic_glyph", () => new Scenarios.MagicGlyphScenario());
         Register("ground_fog", () => new Scenarios.GroundFogScenario());
+        Register("occlusion_fade", () => new Scenarios.OcclusionFadeScenario());
         Register("poison_burst", () => new Scenarios.PoisonBurstScenario());
         Register("poison_flee", () => new Scenarios.PoisonFleeScenario());
         Register("physics_single", () => new Scenarios.PhysicsSingleScenario());
