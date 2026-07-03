@@ -154,9 +154,10 @@ def rule_intended_prompt(seg: str, command=None):
         return ("A push to a remote publishes your commits and needs your explicit "
                 "approval — every other git command is auto-accepted, just this one "
                 "prompts. Approve to proceed.")
-    # An otherwise read-only tool used in its mutating mode (`find … -delete`/`-exec`)
-    # must prompt even though the bare tool (`find:*`) is allow-listed — the mutating
-    # flag is the rare, dangerous case we want surfaced rather than silently allowed.
+    # An otherwise read-only tool used in its mutating mode (`find … -delete`/`-exec`,
+    # `sed -i`) must prompt even though the bare tool is read-only-fast-allowed or
+    # allow-listed — the mutating flag is the rare, dangerous case we want surfaced
+    # rather than silently allowed.
     if command is not None:
         trig = file_write_detect.command_conditional_trigger(command.leader, command.args)
     else:
@@ -165,7 +166,7 @@ def rule_intended_prompt(seg: str, command=None):
     if trig:
         base, flag = trig
         return (f"`{base} … {flag}` modifies the filesystem — `{base}` is auto-accepted "
-                f"for read-only searches, but the `{flag}` action mutates files and needs "
+                f"for read-only use, but the `{flag}` action mutates files and needs "
                 f"your approval. Approve to proceed.")
     return None
 

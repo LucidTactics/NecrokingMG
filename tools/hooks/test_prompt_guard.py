@@ -67,6 +67,32 @@ fails += not check("find -delete -> ask (mutating flag surfaces despite find:* a
 fails += not check("find -exec -> ask (mutating flag surfaces despite find:* allow)",
                    evb("find . -name '*.cs' -exec sed -i s/a/b/ {} +"), "ask")
 
+# --- sed: read-only stream filtering allows; mutating modes surface as a prompt -----
+fails += not check("sed -n print range -> allow (read-only)",
+                   evb("sed -n '120,140p' Necroking/Game1.cs"), "allow")
+fails += not check("sed substitution to stdout -> allow (read-only)",
+                   evb("sed 's/foo/bar/g' data/spells.json"), "allow")
+fails += not check("sed in pipe -> allow (read-only)",
+                   evb("git log --oneline | sed -e 's/^[a-f0-9]* //'"), "allow")
+fails += not check("sed -i -> ask (in-place mutating flag)",
+                   evb("sed -i 's/a/b/' f.txt"), "ask")
+fails += not check("sed -i.bak -> ask (in-place with suffix)",
+                   evb("sed -i.bak 's/a/b/' f.txt"), "ask")
+fails += not check("sed bundled -ni -> ask (in-place hidden in a bundle)",
+                   evb("sed -ni 'p' f.txt"), "ask")
+fails += not check("sed --in-place=.bak -> ask",
+                   evb("sed --in-place=.bak 's/a/b/' f.txt"), "ask")
+fails += not check("sed s///w flag -> ask (script writes a file)",
+                   evb("sed 's/a/b/w out.txt' f.txt"), "ask")
+fails += not check("sed w command -> ask (script writes a file)",
+                   evb("sed -n '1,10w dump.txt' f.txt"), "ask")
+fails += not check("sed -f script file -> ask (unverifiable external script)",
+                   evb("sed -f fix.sed f.txt"), "ask")
+fails += not check("sed pattern containing w -> allow (w in regex text, not a command)",
+                   evb("sed -n '/window/p' Necroking/Game1.cs"), "allow")
+fails += not check("sed with file redirect -> defer (redirect owns the write question)",
+                   evb("sed 's/a/b/' f.txt > out.txt"), "defer")
+
 # --- Per-invocation precision: a write-named token in ARGUMENT position is not the
 #     command, so it no longer forces a deny (AST knows the real leader) --------------
 fails += not check("echo rm -rf x -> allow (rm is an argument, echo is read-only)",
@@ -81,7 +107,6 @@ fails += not check("printf with tee-looking arg -> allow (tee is text, printf re
 fails += not check("echo -delete then find search -> allow (-delete belongs to echo)",
                    evb("echo -delete && find . -name '*.cs'"), "allow")
 # But an actual writer as the leader still denies — precision cuts only the false positives.
-# (sed itself is intentionally allow-listed via `Bash(sed *)`, so pick a non-listed writer.)
 fails += not check("truncate as leader -> deny (real file write, not the false-positive kind)",
                    evb("truncate -s0 f.txt"), "deny")
 fails += not check("xargs rm -> deny (wrapper launches a writer)",
