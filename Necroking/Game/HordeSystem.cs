@@ -247,6 +247,21 @@ public class HordeSystem
         return hi >= 0 ? _hordeUnits[hi].ChasingTarget : GameConstants.InvalidUnit;
     }
 
+    /// <summary>Drop a Chasing assignment and put the unit back to Following. Needed by the
+    /// Wolf Hunt recall (<see cref="Simulation.CommandWolfHunt"/>) and the pack-hunt stalk gate:
+    /// resetting only the unit's Routine/Target isn't enough, because <c>SyncHordeState</c>
+    /// re-applies a stale <see cref="HordeUnitData.ChasingTarget"/> the very next AI tick.
+    /// Engaged/Returning states are left alone — combat resolution owns those.</summary>
+    public void ResetChasingToFollowing(uint id)
+    {
+        int hi = FindUnit(id);
+        if (hi < 0) return;
+        var hu = _hordeUnits[hi];
+        if (hu.State != HordeUnitState.Chasing) return;
+        hu.State = HordeUnitState.Following;
+        hu.ChasingTarget = GameConstants.InvalidUnit;
+    }
+
     public void Tick(float dt, UnitArrays units, int necroIdx)
     {
         _globalTime += dt;

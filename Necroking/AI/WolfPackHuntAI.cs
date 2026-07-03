@@ -37,9 +37,11 @@ namespace Necroking.AI;
 public static class WolfPackHuntAI
 {
     private const float HuntRange = 28f;      // acquire the deer nearest the cast point within this
-    private const float LeashFromNecro = 60f; // a wolf this far from the necromancer drops the hunt — generous
-                                              // because a commanded pack ranges out to a herd up to a spell's
-                                              // cast range away, then flanks a standoff beyond it
+    private const float LeashFromNecro = 100f; // a wolf this far from the necromancer drops the hunt. Must fit the
+                                               // WORST-CASE flank geometry or wolves oscillate at the boundary
+                                               // (drop hunt → follow AI yanks them home → re-acquire → head out
+                                               // again): spell cast range (~30) + HuntRange (28) + far-side
+                                               // standoff (herd spread + detection ~20 + DetectMargin) ≈ 90+.
     private const float DetectMargin = 6f;    // flank standoff = deer DetectionRange + this. Keeps the circling
                                               // pack clear of the deer's vision, but small enough that the flank
                                               // ring still fits in tight spaces; the herded cheat covers an early

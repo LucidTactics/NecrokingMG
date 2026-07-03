@@ -118,6 +118,14 @@ public class HordeMinionHandler : IArchetypeHandler
         // Horde assigns Chasing with a target — pick it up
         if (hordeState == HordeUnitState.Chasing && ctx.Routine != RoutineChasing && ctx.Routine != RoutineEngaged)
         {
+            // Pack-hunting wolves mid-stalk must not be yanked onto a naive charge by a horde
+            // chase assignment (stale or fresh) — same suppression as UpdateFollowing's
+            // self-aggro. Clear the horde-side state too, or this branch re-fires every tick.
+            if (WolfPackHuntAI.WantsToFlank(ref ctx))
+            {
+                ctx.Horde!.ResetChasingToFollowing(ctx.MyId);
+                return;
+            }
             uint chasingId = ctx.Horde!.GetChasingTarget(ctx.MyId);
             if (chasingId != GameConstants.InvalidUnit)
             {

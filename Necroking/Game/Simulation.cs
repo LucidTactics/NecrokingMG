@@ -299,6 +299,10 @@ public class Simulation
                 _units[u].Routine = 0;      // HordeMinion Following
                 _units[u].Subroutine = 0;
             }
+            // The horde system keeps its own per-unit Chasing state; without this reset,
+            // SyncHordeState re-applies the stale chase target next tick and the recalled
+            // wolf charges the deer head-on instead of flanking.
+            _horde.ResetChasingToFollowing(_units[u].Id);
         }
     }
     public Pathfinder Pathfinder => _pathfinder;
