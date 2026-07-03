@@ -289,6 +289,28 @@ extracted from the old `Game1.Render.*` partials into a `GameRenderer` class
 `_g` field; the `_effectManager` field + its per-frame `Update` live in `Game1`
 (see [game1-partials.md](game1-partials.md)).
 
+## Floating text / damage numbers ("+5", "Too Far", "Horde Full", pickup gains)
+One system: `struct DamageNumber` in `Necroking/Game/SpellEffectSystem.cs`
+(`WorldPos` (Vec2, world), `Damage` (int), `Timer`, `PickupText` (string → renders text
+instead of the number), `Height` (**world-units height passed to `WorldToScreen`**),
+`IsPoison`/`IsFatigue`/`IsAlert` (color: green/blue/red; alert also drops the "+" prefix)).
+- **Spawn** — add to `Game1._damageNumbers`. Canonical alert channel:
+  `Game1.cs::SpawnCastFailText(necroIdx, message)` (used by every cast-fail reason AND
+  world-click feedback like "Too Far"/"Pile Empty" in `Game1.WorldClicks.cs`). Pickup gains:
+  `Game1.Crafting.cs` and `SpellEffectSystem` push their own entries.
+- **Update** — `Game1.cs` (~`UpdateDamageNumbers` block): `Timer += dt`,
+  `Height += Settings.General.DamageNumberSpeed * dt` (the float-upward drift).
+- **Draw** — `GameRenderer.World.cs::DrawDamageNumbers`: fades over `DamageNumberFadeTime`,
+  fog-of-war culled, `sp = WorldToScreen(WorldPos, Height)` then centers the string on `sp`.
+- **Height trap:** `WorldToScreen`'s height lift is `Height * Zoom * YRatio` (YRatio=0.5)
+  but sprites are drawn `SpriteWorldHeight * SpriteScale * Zoom` pixels tall (no YRatio).
+  So to place text at a unit's HEAD you need `Height ≈ spriteWorldH * SpriteScale / YRatio`
+  (i.e. ~2× the sprite's world height), plus `unit.Z`. A `Height` equal to the sprite
+  height lands mid-sprite. `Unit.EffectSpawnHeight` is the weapon-tip/cast anchor (~0.6
+  fallback), NOT head height; `Unit.CollisionHeight` is a constant 1.0 (only used for the
+  status ?/! anchor `sp_upper` in `GameRenderer.Units.cs::DrawSingleUnit`, which also
+  subtracts the glyph's own text height so it clears the head).
+
 ## World-space overlay drawing (lines / bezier over the world)
 - **`Necroking/Render/DrawUtils.cs`** — `DrawLine(SpriteBatch, Texture2D pixel, Vector2 a,
   Vector2 b, Color)` (a rotated-pixel segment) and `DrawCircleOutline(...)`. These take
