@@ -26,6 +26,9 @@ public enum WorldLayer : byte
     Projectiles = 90,
     Rope = 100,
     Rain = 110,
+    EffectsHdrAlpha = 120,   // HDR clouds/smoke (alpha-blended sub-pass)
+    EffectsHdrAdditive = 130,// HDR glows/fireballs/reanim/lightning (additive)
+    AdditiveShapes = 140,    // plain additive shapes (energy columns, debug)
     Foragables = 200,
     DamageNumbers = 210,
 }
@@ -76,6 +79,14 @@ public readonly struct SpriteScope
         _batch.End();
         _resume.Begin(_batch);
     }
+
+    /// <summary>End the open batch so external code can run its own batches /
+    /// raw device draws. Pair with <see cref="Resume"/>. Prefer
+    /// Push/PopMaterial when the deviation is just a different material.</summary>
+    public void Suspend() => _batch.End();
+
+    /// <summary>Reopen the pass material after a <see cref="Suspend"/>.</summary>
+    public void Resume() => _resume.Begin(_batch);
 }
 
 /// <summary>One submitted draw: a sprite (SpriteBatch.Draw args, screen space)

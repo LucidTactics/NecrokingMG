@@ -16,6 +16,9 @@ partial class GameRenderer
     private RenderPipeline? _pipeline;
     private readonly RenderContext _ctx = new();
     private SpriteQueuePass? _worldPass;
+    private SpriteQueuePass? _fxPass;
+    private SpriteDrawCallback? _cbFxAlpha, _cbFxProjectilesHdr, _cbFxEffectsAdd,
+        _cbFxReanim, _cbFxLightning, _cbFxShapes;
 
     // Per-frame values shared between Scene OnBegin and OnEnd (computed once
     // per frame in Scene.OnBegin).
@@ -23,6 +26,73 @@ partial class GameRenderer
     private Data.Registries.BloomSettings? _frameBloomSettings;
     private Color _frameClearColor;
     private Vec2 _realCameraPos;
+
+    /// <summary>Collect the HDR/additive effects queue (runs after the world
+    /// pass and the fog depth-occluder stamp).</summary>
+    private void CollectFxItems(RenderContext ctx)
+    {
+        _cbFxAlpha ??= (in SpriteScope _, int _, int _) => DrawEffectsFiltered(0);
+        _cbFxProjectilesHdr ??= (in SpriteScope _, int _, int _) => DrawProjectilesHdr();
+        _cbFxEffectsAdd ??= (in SpriteScope _, int _, int _) => DrawEffectsFiltered(1);
+        _cbFxReanim ??= (in SpriteScope s, int _, int _) =>
+        {
+            if (_g._gameData.Settings.Performance.DepthSortedFog && _g._depthCutoutEffect != null)
+            {
+                // Depth-sorted fog: draw ALL reanim particles (light + clouds +
+                // dust) in ONE Y-sorted pass, so bright and dark puffs interleave
+                // by spawn position, depth-testing the units' stamps so a risen
+                // unit occludes them. It manages its own batches, so suspend the
+                // shared additive batch around it.
+                s.Suspend();
+                _g._reanimFx.DrawSortedParticles(_g._hdrSpriteEffect);
+                s.Resume();
+            }
+            else
+            {
+                _g._reanimFx.DrawAdditive(); // reanimation light + green cloud puffs (additive HDR)
+            }
+        };
+        _cbFxLightning ??= (in SpriteScope _, int _, int _) =>
+        {
+            // Lightning bolts and drains use HDR vertex encoding — drawn in the
+            // additive HDR batch.
+            _g._lightningRenderer.SetGameTime(_g._gameTime);
+            _g._lightningRenderer.Draw();
+        };
+        _cbFxShapes ??= (in SpriteScope _, int _, int _) =>
+        {
+            _g._glyphRenderer.DrawEnergyColumns(_g._sim.MagicGlyphs);
+
+            // Bloom debug: draw test HDR shapes (multiple additive layers to exceed 1.0)
+            if (_g._activeScenario is Scenario.Scenarios.BloomDebugScenario bloomDebug && bloomDebug.DrawTestShapes)
+            {
+                foreach (var (wx, wy, sz, col, label) in Scenario.Scenarios.BloomDebugScenario.TestShapes)
+                {
+                    var screenPos = _g._renderer.WorldToScreen(new Vec2(wx, wy), 0f, _g._camera);
+                    int pixSz = (int)(sz * _g._camera.Zoom);
+                    var rect = new Rectangle((int)screenPos.X - pixSz / 2, (int)screenPos.Y - pixSz / 2, pixSz, pixSz);
+
+                    // Draw the shape multiple times additively to push values above 1.0
+                    int layers = label.Contains("3x") ? 5 : 1;
+                    for (int l = 0; l < layers; l++)
+                        _g._spriteBatch.Draw(_g._pixel, rect, col);
+                }
+            }
+        };
+
+        // Fallbacks mirror the old behavior when HdrSprite.fx failed to load:
+        // same blend/sampler, no effect.
+        var matAlpha = Materials.HdrAlpha ?? Materials.Scene;
+        var matAdd = Materials.HdrAdditive ?? Materials.AdditiveShapes;
+
+        var q = _fxPass!;
+        q.SubmitCallback(WorldLayer.EffectsHdrAlpha, _cbFxAlpha, 0, 0, matAlpha);
+        q.SubmitCallback(WorldLayer.EffectsHdrAdditive, _cbFxProjectilesHdr, 0, 0, matAdd);
+        q.SubmitCallback(WorldLayer.EffectsHdrAdditive, _cbFxEffectsAdd, 0, 0, matAdd);
+        q.SubmitCallback(WorldLayer.EffectsHdrAdditive, _cbFxReanim, 0, 0, matAdd);
+        q.SubmitCallback(WorldLayer.EffectsHdrAdditive, _cbFxLightning, 0, 0, matAdd);
+        q.SubmitCallback(WorldLayer.AdditiveShapes, _cbFxShapes, 0, 0, Materials.AdditiveShapes);
+    }
 
     private RenderPipeline BuildPipeline()
     {
@@ -128,69 +198,17 @@ partial class GameRenderer
         // Spawn new effects from impacts (once per frame, before drawing)
         scene.Add(new CustomPass("SpawnImpactEffects", ctx => SpawnImpactEffects()));
 
-        scene.Add(new CustomPass("HdrAlphaEffects", ctx =>
+        // HDR / additive effects queue: alpha HDR clouds → additive HDR
+        // (fireballs, effects, reanim, lightning) → plain additive shapes.
+        // The AlphaMode uniform flip is gone — HdrAlpha/HdrAdditive are two
+        // Effect.Clone materials with the mode baked at load. Consecutive
+        // same-material items merge into one batch.
+        _fxPass = new SpriteQueuePass("HdrEffects", Materials.Scene,
+            () => _g._camera.Position.Y, capacity: 32)
         {
-            // Alpha-blended HDR effects (clouds, smoke)
-            _g._hdrSpriteEffect?.Parameters["AlphaMode"]?.SetValue(1f);
-            _g._spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.LinearClamp,
-                effect: _g._hdrSpriteEffect);
-            DrawEffectsFiltered(0);
-            _g._spriteBatch.End();
-        }));
-
-        scene.Add(new CustomPass("HdrAdditive", ctx =>
-        {
-            // Additive HDR pass (effects + fireball projectiles)
-            _g._hdrSpriteEffect?.Parameters["AlphaMode"]?.SetValue(0f);
-            _g._spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.Additive, SamplerState.LinearClamp,
-                effect: _g._hdrSpriteEffect);
-            DrawProjectilesHdr();
-            DrawEffectsFiltered(1);
-            if (_g._gameData.Settings.Performance.DepthSortedFog && _g._depthCutoutEffect != null)
-            {
-                // Depth-sorted fog: draw ALL reanim particles (light + clouds + dust) in ONE Y-sorted pass,
-                // so bright and dark puffs interleave by spawn position (not clouds-always-over-dust), and
-                // depth-test the units' stamps so a risen unit occludes them. It manages its own batches, so
-                // end the shared additive batch and re-open it for the lightning below.
-                _g._spriteBatch.End();
-                _g._reanimFx.DrawSortedParticles(_g._hdrSpriteEffect);
-                _g._spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.Additive, SamplerState.LinearClamp,
-                    effect: _g._hdrSpriteEffect);
-            }
-            else
-            {
-                _g._reanimFx.DrawAdditive(); // reanimation light + green cloud puffs (additive HDR)
-            }
-            // Lightning bolts and drains use HDR vertex encoding — draw in this HDR batch
-            _g._lightningRenderer.SetGameTime(_g._gameTime);
-            _g._lightningRenderer.Draw();
-            _g._spriteBatch.End();
-        }));
-
-        scene.Add(new CustomPass("AdditiveShapes", ctx =>
-        {
-            // Additive blend pass (energy columns, debug shapes)
-            _g._spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.Additive, SamplerState.LinearClamp);
-            _g._glyphRenderer.DrawEnergyColumns(_g._sim.MagicGlyphs);
-
-            // Bloom debug: draw test HDR shapes (multiple additive layers to exceed 1.0)
-            if (_g._activeScenario is Scenario.Scenarios.BloomDebugScenario bloomDebug && bloomDebug.DrawTestShapes)
-            {
-                foreach (var (wx, wy, sz, col, label) in Scenario.Scenarios.BloomDebugScenario.TestShapes)
-                {
-                    var screenPos = _g._renderer.WorldToScreen(new Vec2(wx, wy), 0f, _g._camera);
-                    int pixSz = (int)(sz * _g._camera.Zoom);
-                    var rect = new Rectangle((int)screenPos.X - pixSz / 2, (int)screenPos.Y - pixSz / 2, pixSz, pixSz);
-
-                    // Draw the shape multiple times additively to push values above 1.0
-                    int layers = label.Contains("3x") ? 5 : 1;
-                    for (int l = 0; l < layers; l++)
-                        _g._spriteBatch.Draw(_g._pixel, rect, col);
-                }
-            }
-
-            _g._spriteBatch.End();
-        }));
+            Collect = CollectFxItems,
+        };
+        scene.Add(_fxPass);
 
         // God ray pass (alpha blend + HDR intensity shader) — manages its own batch
         scene.Add(new CustomPass("GodRays", ctx => _g._lightningRenderer.DrawGodRays()));
