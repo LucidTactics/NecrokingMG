@@ -72,6 +72,9 @@ public class ColorPickerPopup : Necroking.UI.IModalLayer
 
     public bool IsOpen => _isOpen || _dropperActive;
     public bool IsDropperActive => _dropperActive;
+    /// <summary>True while a value box or the hex field is being typed into —
+    /// feeds <c>EditorBase.IsKeyboardCaptured</c> so editor hotkeys don't fire.</summary>
+    public bool IsEditingText => _editingField >= 0;
 
     public void SetContext(SpriteBatch sb, Texture2D pixel, SpriteFont? font, SpriteFont? smallFont)
     {

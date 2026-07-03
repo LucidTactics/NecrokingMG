@@ -24,6 +24,16 @@ public class EditorBase
             _activeFieldId = null;
             Necroking.Game1.Popups.Pop(_dropdownLayer);
         };
+        // ESC while typing should only defocus the field, not close the whole
+        // editor. While a text field is active this non-blocking layer sits on
+        // the modal stack so PopupManager routes ESC here (and consumes it)
+        // instead of the editor layer below. Non-blocking: world clicks still
+        // fall through (clicking the world defocuses via the widgets' own
+        // outside-click path).
+        _textFieldLayer.OnCancelAction = () =>
+        {
+            if (IsTextInputActive) _activeFieldId = null;
+        };
     }
 
     // Colors
@@ -94,9 +104,9 @@ public class EditorBase
     public bool HandlePanelScroll(Rectangle rect, ref float scroll, float maxScroll = float.MaxValue,
         float sensitivity = 0.3f, int layer = 0)
     {
-        if (IsInputBlocked(layer)) return false;
+        if (IsInputBlocked(EffectiveLayer(layer))) return false;
         if (_scrollConsumed) return false;
-        if (!rect.Contains(_mouse.X, _mouse.Y)) return false;
+        if (!HitTest(rect)) return false;
         int delta = _mouse.ScrollWheelValue - _prevMouse.ScrollWheelValue;
         if (delta == 0) return false;
         scroll = Math.Clamp(scroll - delta * sensitivity, 0f, maxScroll);
@@ -184,11 +194,84 @@ public class EditorBase
     // Scissor clipping stack
     private readonly Stack<Rectangle> _scissorStack = new();
     private static readonly RasterizerState _scissorRasterState = new() { ScissorTestEnable = true };
+    // CPU-side mirror of the active clip so hit-testing can respect it: a widget
+    // scrolled out of its clipped panel is invisible and must not be clickable.
+    private Rectangle? _activeClip;
+    private readonly Stack<Rectangle?> _clipRectStack = new();
+
+    /// <summary>Central mouse hit-test: inside <paramref name="rect"/> AND inside
+    /// the active scissor clip (if any). All widget hover/click checks must go
+    /// through this (or <see cref="IsHovered"/>) so that content scrolled out of a
+    /// clipped panel can't be invisibly interacted with.</summary>
+    public bool HitTest(Rectangle rect)
+        => rect.Contains(_mouse.X, _mouse.Y)
+           && (_activeClip == null || _activeClip.Value.Contains(_mouse.X, _mouse.Y));
 
     // Input layer system (0=main, 1=popup, 2=dropdown, 3=confirm dialog)
     private int _inputLayer;
     public int InputLayer { get => _inputLayer; set => _inputLayer = value; }
-    public bool IsInputBlocked(int layer) => _inputLayer > layer || (layer == 0 && _colorPicker.ConsumesInput);
+    // The color picker is a topmost modal (layer 3): while it consumes input it
+    // blocks widgets at every layer below 3 — including popup widgets at 1/2.
+    public bool IsInputBlocked(int layer) => _inputLayer > layer || (layer < 3 && _colorPicker.ConsumesInput);
+
+    // === Overlay / widget-layer contract ===
+    // Problem this solves: widgets process input during Draw against a per-frame
+    // _inputLayer, so a popup that raises the layer inside its OWN draw call only
+    // blocks widgets drawn AFTER it — everything the host drew earlier that frame
+    // already took the click. The old workaround ("save layer, force 0, restore"
+    // inside popups) additionally defeated the dropdown/color-picker pre-raises.
+    //
+    // Contract: a popup wraps its draw in BeginOverlay(layer)/EndOverlay().
+    //   • NotifyOverlay records the level; UpdateInput pre-raises _inputLayer to
+    //     it next frame (same trick the dropdown uses), blocking every widget the
+    //     host draws before the popup. It also raises immediately for widgets
+    //     drawn after the popup in the same frame.
+    //   • The widget base layer makes every widget drawn inside the scope
+    //     hit-test at `layer` instead of the hardcoded 0, so the popup's own
+    //     widgets work without any per-call layer args or layer forcing.
+    // Layer conventions: 1 = sub-editor/manager popup, 2 = dropdown, 3 = confirm
+    // dialog / topmost modal.
+    private readonly Stack<int> _widgetLayerStack = new();
+    private int _widgetLayer;
+    private int _overlayLevelThisFrame;
+    private int _overlayLevelLastFrame;
+
+    /// <summary>Effective layer a widget interacts at: the max of its explicit
+    /// layer argument and the current overlay widget base layer.</summary>
+    public int EffectiveLayer(int layer = 0) => Math.Max(layer, _widgetLayer);
+
+    /// <summary>Current widget base layer (0 outside overlays). Hand-rolled
+    /// raw-mouse handlers inside an overlay should gate on
+    /// <c>IsInputBlocked(EffectiveLayer())</c>.</summary>
+    public int CurrentWidgetLayer => _widgetLayer;
+
+    /// <summary>Declare that an overlay at <paramref name="layer"/> is open this
+    /// frame WITHOUT entering a widget scope. UpdateInput pre-raises the input
+    /// layer next frame so host widgets drawn before the overlay are blocked.
+    /// Prefer <see cref="BeginOverlay"/>; use this alone for overlays that draw
+    /// no EditorBase widgets.</summary>
+    public void NotifyOverlay(int layer)
+    {
+        _overlayLevelThisFrame = Math.Max(_overlayLevelThisFrame, layer);
+        if (_inputLayer < layer) _inputLayer = layer;
+    }
+
+    /// <summary>Enter an overlay scope: notifies the overlay level (see
+    /// <see cref="NotifyOverlay"/>) and makes all widgets drawn until
+    /// <see cref="EndOverlay"/> interact at <paramref name="layer"/>. Call at the
+    /// top of a popup's draw, every frame it is open.</summary>
+    public void BeginOverlay(int layer)
+    {
+        NotifyOverlay(layer);
+        _widgetLayerStack.Push(_widgetLayer);
+        _widgetLayer = layer;
+    }
+
+    /// <summary>Leave the innermost <see cref="BeginOverlay"/> scope.</summary>
+    public void EndOverlay()
+    {
+        _widgetLayer = _widgetLayerStack.Count > 0 ? _widgetLayerStack.Pop() : 0;
+    }
 
     /// <summary>Current mouse state for editor consumers that need raw
     /// position / button data without reading the OS again. Same instance
@@ -197,11 +280,13 @@ public class EditorBase
     public MouseState GetMouseState() => _mouse;
     public MouseState GetPrevMouseState() => _prevMouse;
 
-    /// <summary>Check if a rect is hovered, respecting input layers. Also sets MouseOverUI flag when true.</summary>
+    /// <summary>Check if a rect is hovered, respecting input layers (the max of
+    /// <paramref name="layer"/> and the current overlay widget layer), and the
+    /// active scissor clip. Also sets MouseOverUI flag when true.</summary>
     protected bool IsHovered(Rectangle rect, int layer = 0)
     {
-        if (IsInputBlocked(layer)) return false;
-        bool hit = rect.Contains(_mouse.X, _mouse.Y);
+        if (IsInputBlocked(EffectiveLayer(layer))) return false;
+        bool hit = HitTest(rect);
         if (hit) SetMouseOverUI();
         return hit;
     }
@@ -251,6 +336,20 @@ public class EditorBase
     // the button is released, so vertical moves don't hijack a neighbour.
     private string? _activeSliderId;
 
+    // Screen position where the current left press began (see UpdateInput).
+    private Point _pressStartPos = new(-1, -1);
+    // Guards against a shared color picker being drawn twice per frame when
+    // nested editors (wall/env inside map editor) each call DrawColorPickerPopup.
+    private bool _colorPickerDrawnThisFrame;
+    // Set by DrawCombo while its dropdown is open; EndDrawFrame closes the
+    // dropdown if the owning combo stopped being drawn (e.g. its tab was
+    // switched away by a hotkey) — otherwise the pre-raised layer 2 would
+    // block the whole editor with an invisible open dropdown.
+    private bool _openComboDrawnThisFrame;
+    // Non-blocking modal layer present while a text field is focused, so ESC
+    // routes to "defocus the field" instead of closing the editor (see ctor).
+    private readonly Necroking.UI.ActionModalLayer _textFieldLayer = new() { LightDismiss = false, IsBlocking = false };
+
     // Color picker popup (shared instance)
     private readonly ColorPickerPopup _colorPicker = new();
 
@@ -291,6 +390,13 @@ public class EditorBase
         if (_mouseOverEditorUI && _input != null)
             _input.MouseOverUI = true;
 
+        // Track where the current press began (measured against the same
+        // draw-snapshot edge the widgets use). DrawButton requires the press to
+        // have STARTED inside its rect before firing on release — pressing in
+        // the world / another widget and dragging onto a button no longer fires it.
+        if (_mouse.LeftButton == ButtonState.Pressed && _prevMouse.LeftButton == ButtonState.Released)
+            _pressStartPos = new Point(_mouse.X, _mouse.Y);
+
         // Reset per-frame flags
         // If a dropdown is open from last frame, pre-set input layer to block all widgets
         // This prevents widgets drawn BEFORE the combo from stealing clicks
@@ -302,10 +408,19 @@ public class EditorBase
             && prevMouse.LeftButton == ButtonState.Released)
             _dropdownHoldingMousePress = false;
         _inputLayer = (dropdownWasOpen || _dropdownHoldingMousePress) ? 2 : 0;
+        // Overlay pre-raise: popups that drew last frame (BeginOverlay/NotifyOverlay)
+        // block all lower-layer widgets this frame, exactly like the dropdown pre-raise.
+        _overlayLevelLastFrame = _overlayLevelThisFrame;
+        _overlayLevelThisFrame = 0;
+        if (_inputLayer < _overlayLevelLastFrame) _inputLayer = _overlayLevelLastFrame;
         _scrollConsumed = false;
         _mouseOverEditorUI = false;
         _pendingDropdown = null;
         _dropdownOverlayConsumedClick = false;
+        _colorPickerDrawnThisFrame = false;
+        // Defensive: if a widget scope leaked (exception between Begin/EndOverlay),
+        // don't let it poison every later frame.
+        if (_widgetLayerStack.Count > 0) { _widgetLayerStack.Clear(); _widgetLayer = 0; }
 
         // Release ends any in-progress slider drag capture (robust even if the
         // captured slider isn't drawn this frame).
@@ -324,9 +439,10 @@ public class EditorBase
             _dropdownHoldingMousePress = true;
         _colorPickerWasConsuming = pickerConsuming;
 
-        // Color picker is modal — block all editor input when it's open
-        if (pickerConsuming && _inputLayer < 1)
-            _inputLayer = 1;
+        // Color picker is a topmost modal — block all editor input when open,
+        // including popup widgets running at overlay layers 1/2.
+        if (pickerConsuming && _inputLayer < 3)
+            _inputLayer = 3;
         if (_dropdownHoldingMousePress && _inputLayer < 2)
             _inputLayer = 2;
 
@@ -351,17 +467,29 @@ public class EditorBase
     public void EndDrawFrame()
     {
         _drawSnapMouse = _mouse;
+        // An open dropdown whose combo wasn't drawn this frame is unreachable
+        // (its tab/panel went away) — close it so the pre-raised layer doesn't
+        // invisibly block the editor.
+        if (IsDropdownOpen && !_openComboDrawnThisFrame)
+            CloseActiveDropdown();
+        _openComboDrawnThisFrame = false;
     }
 
-    /// <summary>Push or pop <see cref="_dropdownLayer"/> on <see cref="Game1.Popups"/>
-    /// to mirror whether a combo dropdown is open. Cheap to call every frame —
-    /// hash-lookup inside the manager.</summary>
+    /// <summary>Push or pop <see cref="_dropdownLayer"/> / <see cref="_textFieldLayer"/>
+    /// on <see cref="Game1.Popups"/> to mirror whether a combo dropdown / text field
+    /// is open. Cheap to call every frame — hash-lookup inside the manager.</summary>
     private void SyncDropdownModalState()
     {
         bool open = IsDropdownOpen;
         bool onStack = Necroking.Game1.Popups.Contains(_dropdownLayer);
         if (open && !onStack) Necroking.Game1.Popups.Push(_dropdownLayer);
         else if (!open && onStack) Necroking.Game1.Popups.Pop(_dropdownLayer);
+
+        // Text-field focus layer: routes ESC to "defocus" while typing.
+        bool textOpen = IsTextInputActive;
+        bool textOnStack = Necroking.Game1.Popups.Contains(_textFieldLayer);
+        if (textOpen && !textOnStack) Necroking.Game1.Popups.Push(_textFieldLayer);
+        else if (!textOpen && textOnStack) Necroking.Game1.Popups.Pop(_textFieldLayer);
     }
 
     // === Drawing primitives ===
@@ -478,6 +606,12 @@ public class EditorBase
 
         // Push the current scissor rect onto the stack (for nesting)
         _scissorStack.Push(_gd.ScissorRectangle);
+        _clipRectStack.Push(_activeClip);
+        // Nested clips intersect with the parent — an inner region can never
+        // draw (or hit-test) outside the panel that contains it.
+        if (_activeClip != null)
+            clipRect = Rectangle.Intersect(clipRect, _activeClip.Value);
+        _activeClip = clipRect;
 
         // Set the new scissor rectangle
         _gd.ScissorRectangle = clipRect;
@@ -498,6 +632,7 @@ public class EditorBase
         // Restore the previous scissor rectangle
         if (_scissorStack.Count > 0)
             _gd.ScissorRectangle = _scissorStack.Pop();
+        _activeClip = _clipRectStack.Count > 0 ? _clipRectStack.Pop() : null;
 
         // Resume the normal SpriteBatch (matching the HUD pass in Game1.Draw)
         if (_scissorStack.Count > 0)
@@ -532,7 +667,10 @@ public class EditorBase
         var rect = new Rectangle(x, y, w, h);
         bool hovered = IsHovered(rect, layer);
         bool pressed = hovered && _mouse.LeftButton == ButtonState.Pressed;
-        bool clicked = hovered && _mouse.LeftButton == ButtonState.Released && _prevMouse.LeftButton == ButtonState.Pressed;
+        // Fire on release, but only if the press also STARTED on this button —
+        // pressing elsewhere and dragging onto the button must not click it.
+        bool clicked = hovered && _mouse.LeftButton == ButtonState.Released && _prevMouse.LeftButton == ButtonState.Pressed
+            && rect.Contains(_pressStartPos);
 
         Color bg = bgOverride ?? ButtonBg;
         if (pressed) bg = ButtonPress;
@@ -587,7 +725,7 @@ public class EditorBase
         int x, int y, int w, int h, string? searchFilter = null,
         ListItemRenderer? customRenderer = null)
     {
-        bool inputBlocked = IsInputBlocked(0);
+        bool inputBlocked = IsInputBlocked(EffectiveLayer(0));
 
         // Clip region
         var clipRect = new Rectangle(x, y, w, h);
@@ -595,7 +733,7 @@ public class EditorBase
 
         // Focus-follows-click: clicking anywhere in this list makes it the keyboard
         // nav target (until another list or a text field takes focus).
-        if (!inputBlocked && clipRect.Contains(_mouse.X, _mouse.Y)
+        if (!inputBlocked && HitTest(clipRect)
             && _mouse.LeftButton == ButtonState.Pressed && _prevMouse.LeftButton == ButtonState.Released)
             _focusedListId = panelId;
 
@@ -607,7 +745,7 @@ public class EditorBase
         int clicked = -1;
 
         // Handle scroll wheel when hovering
-        if (!inputBlocked && !_scrollConsumed && clipRect.Contains(_mouse.X, _mouse.Y))
+        if (!inputBlocked && !_scrollConsumed && HitTest(clipRect))
         {
             SetMouseOverUI();
             int scrollDelta = _mouse.ScrollWheelValue - _prevMouse.ScrollWheelValue;
@@ -749,6 +887,47 @@ public class EditorBase
 
     // === Text Input Field ===
 
+    /// <summary>Shared renderer for single-line field interiors: selection
+    /// highlight, text, and blinking cursor at the tracked cursor position.
+    /// Used by text/int/float/search fields and the slider value box so
+    /// select-all and cursor visuals are identical everywhere.</summary>
+    private void DrawFieldContent(Rectangle inputRect, string displayText, bool isActive)
+    {
+        int tx = inputRect.X + 3, ty = inputRect.Y + 2;
+        if (isActive && HasSelection)
+        {
+            var (selStart, selEnd) = GetSelectionRange();
+            int cs = Math.Clamp(selStart, 0, displayText.Length);
+            int ce = Math.Clamp(selEnd, 0, displayText.Length);
+            float x1 = MeasureText(displayText[..cs]).X;
+            float x2 = MeasureText(displayText[..ce]).X;
+            DrawRect(new Rectangle(tx + (int)x1, ty, (int)(x2 - x1), inputRect.Height - 4),
+                new Color(80, 120, 200, 140));
+        }
+        DrawText(displayText, new Vector2(tx, ty), isActive ? TextBright : TextColor);
+        if (isActive && !HasSelection && ((int)(_cursorBlink * 2) % 2 == 0))
+        {
+            int cp = Math.Clamp(_cursorPos, 0, displayText.Length);
+            float cursorX = tx + MeasureText(displayText[..cp]).X;
+            DrawRect(new Rectangle((int)cursorX, ty, 1, inputRect.Height - 4), TextBright);
+        }
+    }
+
+    /// <summary>Common focus bookkeeping when a single-line field is clicked:
+    /// select-all buffer init + cursor reset + text-field modal layer rect.</summary>
+    private void FocusTextField(string fieldId, string value, Rectangle inputRect)
+    {
+        _activeFieldId = fieldId;
+        _inputBuffer = value;
+        _cursorPos = value.Length;
+        _selectionStart = 0;
+        _selectAll = true;
+        _cursorBlink = 0;
+        _activeFieldInputX = inputRect.X + 3;
+        _activeFieldInputW = inputRect.Width - 6;
+        _textFieldLayer.Panel = inputRect;
+    }
+
     public string DrawTextField(string fieldId, string label, string value, int x, int y, int w)
     {
         int labelW = 120;
@@ -768,14 +947,7 @@ public class EditorBase
             if (!isActive)
             {
                 // First click: activate with select-all
-                _activeFieldId = fieldId;
-                _inputBuffer = value;
-                _cursorPos = value.Length;
-                _selectionStart = 0;
-                _selectAll = true;
-                _cursorBlink = 0;
-                _activeFieldInputX = inputX + 3;
-                _activeFieldInputW = inputW - 6;
+                FocusTextField(fieldId, value, inputRect);
                 isActive = true;
             }
             else
@@ -816,27 +988,7 @@ public class EditorBase
 
         DrawRect(inputRect, InputBg);
         DrawBorder(inputRect, isActive ? InputActive : InputBorder);
-
-        string displayText = isActive ? _inputBuffer : value;
-
-        // Draw selection highlight
-        if (isActive && HasSelection)
-        {
-            var (selStart, selEnd) = GetSelectionRange();
-            float selX1 = MeasureText(displayText[..selStart]).X;
-            float selX2 = MeasureText(displayText[..selEnd]).X;
-            DrawRect(new Rectangle(inputX + 3 + (int)selX1, y + 2, (int)(selX2 - selX1), inputH - 4),
-                new Color(80, 120, 200, 140));
-        }
-
-        DrawText(displayText, new Vector2(inputX + 3, y + 2), isActive ? TextBright : TextColor);
-
-        // Draw cursor
-        if (isActive && !HasSelection && ((int)(_cursorBlink * 2) % 2 == 0))
-        {
-            float cursorPixelX = inputX + 3 + MeasureText(displayText[.._cursorPos]).X;
-            DrawRect(new Rectangle((int)cursorPixelX, y + 2, 1, inputH - 4), TextBright);
-        }
+        DrawFieldContent(inputRect, isActive ? _inputBuffer : value, isActive);
 
         return isActive ? _inputBuffer : value;
     }
@@ -860,12 +1012,7 @@ public class EditorBase
 
         if (hovered && _mouse.LeftButton == ButtonState.Pressed && _prevMouse.LeftButton == ButtonState.Released)
         {
-            _activeFieldId = fieldId;
-            _inputBuffer = value.ToString();
-            _cursorPos = _inputBuffer.Length;
-            _selectionStart = 0;
-            _selectAll = true;
-            _cursorBlink = 0;
+            FocusTextField(fieldId, value.ToString(), inputRect);
             isActive = true;
         }
         else if (isActive && _mouse.LeftButton == ButtonState.Pressed && _prevMouse.LeftButton == ButtonState.Released && !hovered)
@@ -880,14 +1027,7 @@ public class EditorBase
 
         DrawRect(inputRect, InputBg);
         DrawBorder(inputRect, isActive ? InputActive : InputBorder);
-        string displayText = isActive ? _inputBuffer : value.ToString();
-        DrawText(displayText, new Vector2(inputX + 3, y + 2), isActive ? TextBright : TextColor);
-
-        if (isActive && ((int)(_cursorBlink * 2) % 2 == 0))
-        {
-            float cursorX = inputX + 3 + MeasureText(displayText).X;
-            DrawRect(new Rectangle((int)cursorX, y + 2, 1, inputH - 4), TextBright);
-        }
+        DrawFieldContent(inputRect, isActive ? _inputBuffer : value.ToString(), isActive);
 
         // +/- buttons
         int btnX = inputX + inputW + 2;
@@ -924,12 +1064,7 @@ public class EditorBase
 
         if (hovered && _mouse.LeftButton == ButtonState.Pressed && _prevMouse.LeftButton == ButtonState.Released)
         {
-            _activeFieldId = fieldId;
-            _inputBuffer = value.ToString("F2");
-            _cursorPos = _inputBuffer.Length;
-            _selectionStart = 0;
-            _selectAll = true;
-            _cursorBlink = 0;
+            FocusTextField(fieldId, value.ToString("F2"), inputRect);
             isActive = true;
         }
         else if (isActive && _mouse.LeftButton == ButtonState.Pressed && _prevMouse.LeftButton == ButtonState.Released && !hovered)
@@ -944,14 +1079,7 @@ public class EditorBase
 
         DrawRect(inputRect, InputBg);
         DrawBorder(inputRect, isActive ? InputActive : InputBorder);
-        string displayText = isActive ? _inputBuffer : value.ToString("F2");
-        DrawText(displayText, new Vector2(inputX + 3, y + 2), isActive ? TextBright : TextColor);
-
-        if (isActive && ((int)(_cursorBlink * 2) % 2 == 0))
-        {
-            float cursorX = inputX + 3 + MeasureText(displayText).X;
-            DrawRect(new Rectangle((int)cursorX, y + 2, 1, inputH - 4), TextBright);
-        }
+        DrawFieldContent(inputRect, isActive ? _inputBuffer : value.ToString("F2"), isActive);
 
         // +/- buttons
         int btnX = inputX + inputW + 2;
@@ -1146,8 +1274,9 @@ public class EditorBase
         string comboId = fieldId + "_combo";
         bool isOpen = _activeFieldId == comboId;
         // The combo button itself is always clickable when it's the open dropdown (to allow closing)
-        bool hovered = !_dropdownOverlayConsumedClick && (isOpen || !IsInputBlocked(0)) && inputRect.Contains(_mouse.X, _mouse.Y);
+        bool hovered = !_dropdownOverlayConsumedClick && (isOpen || !IsInputBlocked(EffectiveLayer(0))) && HitTest(inputRect);
         if (hovered) SetMouseOverUI();
+        if (isOpen) _openComboDrawnThisFrame = true;
 
         // Draw the current value
         DrawRect(inputRect, hovered || isOpen ? ItemHover : InputBg);
@@ -1496,6 +1625,11 @@ public class EditorBase
             int barY = dd.ItemsY + (int)(scrollRatio * (itemsDropH - barH));
             DrawRect(new Rectangle(inputX + inputW - 6, barY, 5, barH), new Color(100, 100, 140, 180));
         }
+
+        // Consume the pending overlay so nested editors that BOTH call
+        // DrawDropdownOverlays (wall/env editor inside the map editor) don't
+        // render the same dropdown twice per frame.
+        _pendingDropdown = null;
     }
 
     /// <summary>
@@ -1545,8 +1679,10 @@ public class EditorBase
         // If the color picker is open for this id, pass hideIntensity on open (already handled)
         // The ColorSwatch method handles drawing, click detection, and popup open/sync.
         // Pass the input-block state so a click on an open dropdown overlapping this
-        // swatch doesn't fall through and spuriously pop the picker.
-        return _colorPicker.ColorSwatch(id, x, y, w, h, ref color, IsInputBlocked(0));
+        // swatch doesn't fall through and spuriously pop the picker. Also treat a
+        // swatch scrolled outside the active clip as blocked (invisible ⇒ inert).
+        return _colorPicker.ColorSwatch(id, x, y, w, h, ref color,
+            IsInputBlocked(EffectiveLayer(0)) || !(_activeClip == null || _activeClip.Value.Contains(_mouse.X, _mouse.Y)));
     }
 
     /// <summary>
@@ -1563,6 +1699,11 @@ public class EditorBase
     /// </summary>
     public void DrawColorPickerPopup()
     {
+        // Once per frame — nested editors (wall/env inside map editor) may both
+        // call this; the second call would re-run the picker's click-edge logic.
+        if (_colorPickerDrawnThisFrame) return;
+        _colorPickerDrawnThisFrame = true;
+
         // Capture back buffer for eyedropper if dropper is active
         if (_colorPicker.IsDropperActive)
             _colorPicker.CaptureBackBuffer(_gd);
@@ -1596,16 +1737,11 @@ public class EditorBase
         int inputH = 22;
         var inputRect = new Rectangle(x, y, w, inputH);
         bool isActive = _activeFieldId == fieldId;
-        bool hovered = !IsInputBlocked(0) && inputRect.Contains(_mouse.X, _mouse.Y);
+        bool hovered = IsHovered(inputRect);
 
         if (hovered && _mouse.LeftButton == ButtonState.Pressed && _prevMouse.LeftButton == ButtonState.Released)
         {
-            _activeFieldId = fieldId;
-            _inputBuffer = value;
-            _cursorPos = value.Length;
-            _selectionStart = 0;
-            _selectAll = true;
-            _cursorBlink = 0;
+            FocusTextField(fieldId, value, inputRect);
             isActive = true;
         }
         else if (isActive && _mouse.LeftButton == ButtonState.Pressed && _prevMouse.LeftButton == ButtonState.Released && !hovered)
@@ -1619,17 +1755,10 @@ public class EditorBase
         DrawRect(inputRect, InputBg);
         DrawBorder(inputRect, isActive ? InputActive : InputBorder);
 
-        string displayText = isActive ? _inputBuffer : value;
-        if (string.IsNullOrEmpty(displayText) && !isActive)
+        if (string.IsNullOrEmpty(value) && !isActive)
             DrawText("Search...", new Vector2(x + 3, y + 3), new Color(80, 80, 100));
         else
-            DrawText(displayText, new Vector2(x + 3, y + 3), isActive ? TextBright : TextColor);
-
-        if (isActive && ((int)(_cursorBlink * 2) % 2 == 0))
-        {
-            float cursorX = x + 3 + MeasureText(displayText).X;
-            DrawRect(new Rectangle((int)cursorX, y + 3, 1, inputH - 6), TextBright);
-        }
+            DrawFieldContent(inputRect, isActive ? _inputBuffer : value, isActive);
 
         return isActive ? _inputBuffer : value;
     }
@@ -1671,9 +1800,8 @@ public class EditorBase
         // owns the drag until release. Without this, dragging vertically off the
         // track onto a neighbouring slider's hit area would hijack that slider.
         string sliderDragId = id + "_slider";
-        bool overTrack = !IsInputBlocked(0)
-            && _mouse.X >= sliderX - 4 && _mouse.X <= sliderX + sliderW + 4
-            && _mouse.Y >= trackY - 4 && _mouse.Y <= trackY + sliderH + 4;
+        bool overTrack = !IsInputBlocked(EffectiveLayer(0))
+            && HitTest(new Rectangle(sliderX - 4, trackY - 4, sliderW + 8, sliderH + 8));
         if (_mouse.LeftButton == ButtonState.Pressed && _prevMouse.LeftButton == ButtonState.Released && overTrack)
             _activeSliderId = sliderDragId;
 
@@ -1693,18 +1821,19 @@ public class EditorBase
         int vbX = sliderX + sliderW + 4;
         var vbRect = new Rectangle(vbX, y, valueBoxW, 20);
         bool vbActive = _activeFieldId == valueFieldId2;
-        bool vbHovered = !IsInputBlocked(0) && vbRect.Contains(_mouse.X, _mouse.Y);
+        bool vbHovered = IsHovered(vbRect);
 
         if (vbHovered && _mouse.LeftButton == ButtonState.Pressed && _prevMouse.LeftButton == ButtonState.Released)
         {
-            _activeFieldId = valueFieldId2;
-            _inputBuffer = value.ToString("F2");
-            _cursorBlink = 0;
+            // Select-all on focus, same as every other field — typing replaces.
+            FocusTextField(valueFieldId2, value.ToString("F2"), vbRect);
             vbActive = true;
         }
         else if (vbActive && _mouse.LeftButton == ButtonState.Pressed && _prevMouse.LeftButton == ButtonState.Released && !vbHovered)
         {
             _activeFieldId = null;
+            _selectAll = false;
+            _selectionStart = -1;
             if (float.TryParse(_inputBuffer, out float parsed))
                 return Math.Clamp(parsed, min, max);
             return value;
@@ -1712,14 +1841,7 @@ public class EditorBase
 
         DrawRect(vbRect, InputBg);
         DrawBorder(vbRect, vbActive ? InputActive : InputBorder);
-        string vbText = vbActive ? _inputBuffer : value.ToString("F2");
-        DrawText(vbText, new Vector2(vbX + 3, y + 2), vbActive ? TextBright : TextColor);
-
-        if (vbActive && ((int)(_cursorBlink * 2) % 2 == 0))
-        {
-            float cursorX = vbX + 3 + MeasureText(vbText).X;
-            DrawRect(new Rectangle((int)cursorX, y + 2, 1, 16), TextBright);
-        }
+        DrawFieldContent(vbRect, vbActive ? _inputBuffer : value.ToString("F2"), vbActive);
 
         if (vbActive && float.TryParse(_inputBuffer, out float cur))
             return Math.Clamp(cur, min, max);
@@ -1739,7 +1861,7 @@ public class EditorBase
         var areaRect = new Rectangle(x, y, w, h);
         string areaFieldId = id + "_textarea";
         bool isActive = _activeFieldId == areaFieldId;
-        bool hovered = !IsInputBlocked(0) && areaRect.Contains(_mouse.X, _mouse.Y);
+        bool hovered = IsHovered(areaRect);
 
         // Click to activate
         if (hovered && _mouse.LeftButton == ButtonState.Pressed && _prevMouse.LeftButton == ButtonState.Released)
@@ -1749,6 +1871,7 @@ public class EditorBase
             _textAreaCursorPos = _inputBuffer.Length;
             _textAreaScrollOffset = 0;
             _cursorBlink = 0;
+            _textFieldLayer.Panel = areaRect;
             isActive = true;
         }
         // Click outside to deactivate
@@ -2165,6 +2288,14 @@ public class EditorBase
     public bool IsTextInputActive => _activeFieldId != null && !_activeFieldId.EndsWith("_combo");
 
     /// <summary>
+    /// True whenever typed keys belong to a UI element rather than hotkeys: an
+    /// active text field, an open combo dropdown (its filter box eats keys), or
+    /// the color picker's value/hex boxes. Gate editor hotkeys / Game1 F-key
+    /// toggles on this, not on <see cref="IsTextInputActive"/> alone.
+    /// </summary>
+    public bool IsKeyboardCaptured => IsTextInputActive || IsDropdownOpen || _colorPicker.IsEditingText;
+
+    /// <summary>
     /// Returns true if a specific field (by fieldId) is currently the active text input.
     /// </summary>
     public bool IsFieldActive(string fieldId) => _activeFieldId == fieldId;
@@ -2173,6 +2304,20 @@ public class EditorBase
     /// Deactivate any active text field
     /// </summary>
     public void ClearActiveField() { _activeFieldId = null; }
+
+    /// <summary>
+    /// Replace the active field's edit buffer. For fields that display a
+    /// truncated value while idle but must edit the full one: call right after
+    /// the field activates to swap the truncated display text for the real value.
+    /// </summary>
+    public void SetActiveFieldText(string fieldId, string text)
+    {
+        if (_activeFieldId != fieldId) return;
+        _inputBuffer = text ?? "";
+        _cursorPos = _inputBuffer.Length;
+        _selectionStart = 0;
+        _selectAll = true;
+    }
 
     /// <summary>
     /// Reset all interactive state (active field, dropdown, color picker).
@@ -2224,8 +2369,9 @@ public class EditorBase
             return false;
         }
 
-        // Set input layer to block all lower-layer interactions
-        _inputLayer = 3;
+        // Overlay contract: blocks every widget the host drew earlier this frame
+        // (via next-frame pre-raise) and lets our own buttons interact at layer 3.
+        BeginOverlay(3);
 
         // Dark overlay
         DrawRect(new Rectangle(0, 0, _screenW, _screenH), new Color(0, 0, 0, 150));
@@ -2262,10 +2408,6 @@ public class EditorBase
         int confirmX = dx + dialogW / 2 - btnW - 10;
         int cancelX = dx + dialogW / 2 + 10;
 
-        // Temporarily allow button interaction at this layer
-        int savedLayer = _inputLayer;
-        _inputLayer = 0;
-
         bool confirmed = false;
 
         if (DrawButton("Confirm", confirmX, btnY, btnW, btnH, DangerColor))
@@ -2281,9 +2423,6 @@ public class EditorBase
             Necroking.Game1.Popups.Pop(_confirmDialogLayer);
         }
 
-        // Restore input layer
-        _inputLayer = savedLayer;
-
         // Also close on Escape — PopupManager has already consumed ESC for
         // the manager-aware path. This direct read remains so the dialog
         // closes its caller's ref-bool in the same frame instead of waiting
@@ -2294,6 +2433,7 @@ public class EditorBase
             Necroking.Game1.Popups.Pop(_confirmDialogLayer);
         }
 
+        EndOverlay();
         return confirmed;
     }
 }

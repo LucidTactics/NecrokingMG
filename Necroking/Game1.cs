@@ -477,6 +477,14 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         string uiDefPath = GamePaths.Resolve(GamePaths.UIDefsDir);
         if (Directory.Exists(uiDefPath))
             _uiEditor.LoadDefinitions(uiDefPath);
+        // Saving in the UI editor reloads the runtime widget renderer, so
+        // in-game HUD/panels pick up the edits without restarting the game.
+        _uiEditor.OnSaved = () =>
+        {
+            if (_inventoryUIsInitialized && _widgetRendererUiDefPath != null
+                && Directory.Exists(_widgetRendererUiDefPath))
+                _widgetRenderer.LoadDefinitions(_widgetRendererUiDefPath);
+        };
         Necroking.Core.DebugLog.Log("startup", "  [LazyInit] UI editor initialized on demand");
     }
 
@@ -527,6 +535,29 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     internal readonly Dictionary<(Microsoft.Xna.Framework.Graphics.Texture2D, Rectangle), Vector2> _frameCentroidCache = new();
     private bool _autostartExitPending; // --autostart headless: exit once world is loaded
     internal Dictionary<string, Flipbook> _flipbooks = new(); // keyed by flipbook ID
+
+    /// <summary>(Re)build the runtime flipbook dictionary from the registry.
+    /// Called at StartGame and by the spell editor after flipbook edits so
+    /// path/grid changes take effect immediately (previews + game) instead of
+    /// waiting for a map reload. Disposes the previous load's textures.</summary>
+    internal void ReloadFlipbooksFromRegistry()
+    {
+        foreach (var oldFb in _flipbooks.Values) oldFb.Unload();
+        _flipbooks.Clear();
+        foreach (var fbId in _gameData.Flipbooks.GetIDs())
+        {
+            var fbDef = _gameData.Flipbooks.Get(fbId);
+            if (fbDef == null || string.IsNullOrEmpty(fbDef.Path)) continue;
+            var resolvedPath = GamePaths.Resolve(fbDef.Path);
+            if (!File.Exists(resolvedPath)) continue;
+            var fb = new Flipbook();
+            if (fb.Load(GraphicsDevice, resolvedPath, fbDef.Cols, fbDef.Rows, fbDef.DefaultFPS))
+                _flipbooks[fbId] = fb;
+        }
+        // Systems holding flipbook lookups keep working: the dictionary
+        // INSTANCE is stable (cleared + repopulated in place).
+        _wakeSystem.Init(_flipbooks);
+    }
     internal Dictionary<string, AnimationMeta> _animMeta = new(); // animation metadata
     internal Microsoft.Xna.Framework.Graphics.Effect? _groundEffect;
     internal Microsoft.Xna.Framework.Graphics.Effect? _dissolveTreeEffect;
@@ -662,6 +693,12 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     /// threading the manager through 20+ existing UI constructors. Lifetime
     /// matches the Game1 instance; assigned in the ctor.</summary>
     public static Necroking.UI.PopupManager Popups { get; private set; } = null!;
+
+    /// <summary>The running Game1 instance, for editor components that need a
+    /// narrow runtime hook (e.g. the spell editor reloading flipbooks after an
+    /// edit) without threading the game through their constructors. Same
+    /// lifetime rationale as <see cref="Popups"/>; assigned in the ctor.</summary>
+    public static Game1? Instance { get; private set; }
 
     // Modal-stack adapters for the top-level editor windows. Each is
     // pushed/popped to keep the stack in sync with <see cref="_menuState"/>;
@@ -820,6 +857,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     public Game1()
     {
         Popups = _popups;
+        Instance = this;
         _gameRenderer = new GameRenderer(this);
 
         // Wire the top-level editor modal layers. Each layer's OnCancel
@@ -830,7 +868,10 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         _unitEditorLayer.OnCancelAction  = () => { _editorUi?.ResetAllState(); _menuState = MenuState.None; };
         _spellEditorLayer.OnCancelAction = () => { _editorUi?.ResetAllState(); _menuState = MenuState.None; };
         _mapEditorLayer.OnCancelAction   = () => { _editorUi?.ResetAllState(); _menuState = MenuState.None; };
-        _uiEditorLayer.OnCancelAction    = () => { _editorUi?.ResetAllState(); _menuState = MenuState.None; };
+        // The UI editor IS its own EditorBase (_uiEditor, not _editorUi) —
+        // resetting the wrong instance left a stale focused field / open picker
+        // across close/reopen, which blocked Ctrl+S/undo until a stray click.
+        _uiEditorLayer.OnCancelAction    = () => { _uiEditor?.ResetAllState(); _menuState = MenuState.None; };
         _itemEditorLayer.OnCancelAction  = () => { _editorUi?.ResetAllState(); _menuState = MenuState.None; };
         // Settings is reachable only from the pause menu; ESC returns there.
         _settingsLayer.OnCancelAction    = () => { _editorUi?.ResetAllState(); _menuState = MenuState.PauseMenu; };
@@ -1289,21 +1330,8 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         _roadSystem.Init();
         _dayNightSystem.Init(_gameData.Settings.DayNight);
 
-        // Load flipbooks. Dispose the previous load's flipbook textures first — StartGame runs
-        // on every map load and overwrote _flipbooks[fbId] without freeing the old Flipbook,
-        // leaking its Texture2D each reload.
-        foreach (var oldFb in _flipbooks.Values) oldFb.Unload();
-        _flipbooks.Clear();
-        foreach (var fbId in _gameData.Flipbooks.GetIDs())
-        {
-            var fbDef = _gameData.Flipbooks.Get(fbId);
-            if (fbDef == null || string.IsNullOrEmpty(fbDef.Path)) continue;
-            var resolvedPath = GamePaths.Resolve(fbDef.Path);
-            if (!File.Exists(resolvedPath)) continue;
-            var fb = new Flipbook();
-            if (fb.Load(GraphicsDevice, resolvedPath, fbDef.Cols, fbDef.Rows, fbDef.DefaultFPS))
-                _flipbooks[fbId] = fb;
-        }
+        // Load flipbooks (shared with the spell editor's live-reload path).
+        ReloadFlipbooksFromRegistry();
         LogTiming($"Flipbooks loaded: {_flipbooks.Count}");
         // Now that flipbooks are loaded, hand the dictionary to systems
         // that need to look up the trail / splash / rain-splash animations.
@@ -2831,9 +2859,12 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             return;
         }
 
-        // Check if any editor text field is active (persists from previous frame, safe to read before UpdateInput)
-        bool anyTextInputActive = (_editorUi != null && _editorUi.IsTextInputActive)
-            || (_menuState == MenuState.UIEditor && _uiEditor.IsTextInputActive);
+        // Check if any editor UI element owns the keyboard — active text field,
+        // open combo filter, or color-picker value box (persists from previous
+        // frame, safe to read before UpdateInput). Typing a digit into a combo
+        // filter must not trip F-key/hotkey toggles.
+        bool anyTextInputActive = (_editorUi != null && _editorUi.IsKeyboardCaptured)
+            || (_menuState == MenuState.UIEditor && _uiEditor.IsKeyboardCaptured);
 
         // --- F2 water debug toggle ---
         if (!anyTextInputActive && _input.WasKeyPressed(Keys.F2))

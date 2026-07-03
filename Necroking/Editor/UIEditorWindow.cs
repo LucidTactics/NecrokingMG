@@ -367,16 +367,38 @@ public partial class UIEditorWindow : EditorBase
     //  JSON Loading / Saving
     // ═══════════════════════════════════════
 
+    // Files that failed to PARSE on load (they exist but are corrupt / hand-
+    // edited wrong). SaveAll refuses to write these: with the in-memory list
+    // silently empty, an unconditional save would replace the corrupt-but-
+    // recoverable file with an empty one — silent data loss.
+    private readonly HashSet<string> _loadFailedFiles = new();
+
+    // Set when an id field edits a def's Id; consumed by the deferred rebake
+    // in Draw once the field loses focus (see InvalidateAllDerivedCaches).
+    private bool _idRenameRebakePending;
+
+    /// <summary>Fired after a successful SaveAll. Game1 hooks this to reload
+    /// the runtime widget renderer so in-game HUD/panels pick up edits without
+    /// a restart.</summary>
+    public Action? OnSaved;
+
     public void LoadDefinitions(string dirPath)
     {
         _nineSlices.Clear();
         _elements.Clear();
         _widgets.Clear();
         _defsDir = dirPath;
+        _loadFailedFiles.Clear();
 
         LoadNineSlices(Path.Combine(dirPath, "nine_slices.json"));
         LoadElements(Path.Combine(dirPath, "elements.json"));
         LoadWidgets(Path.Combine(dirPath, "widgets.json"));
+
+        if (_loadFailedFiles.Count > 0)
+        {
+            _statusMsg = $"LOAD FAILED: {string.Join(", ", _loadFailedFiles)} — fix the JSON; saving them is disabled";
+            _statusTimer = 10f;
+        }
 
         _loaded = true;
         _unsavedChanges = false;
@@ -407,7 +429,11 @@ public partial class UIEditorWindow : EditorBase
                 });
             }
         }
-        catch { /* skip parse errors */ }
+        catch (Exception ex)
+        {
+            _loadFailedFiles.Add("nine_slices.json");
+            Core.DebugLog.Log("error", $"UIEditor: failed to parse {path}: {ex.Message}");
+        }
     }
 
     private void LoadElements(string path)
@@ -467,7 +493,11 @@ public partial class UIEditorWindow : EditorBase
                 _elements.Add(def);
             }
         }
-        catch { /* skip parse errors */ }
+        catch (Exception ex)
+        {
+            _loadFailedFiles.Add("elements.json");
+            Core.DebugLog.Log("error", $"UIEditor: failed to parse {path}: {ex.Message}");
+        }
     }
 
     private void LoadWidgets(string path)
@@ -614,7 +644,11 @@ public partial class UIEditorWindow : EditorBase
                 _widgets.Add(def);
             }
         }
-        catch { /* skip parse errors */ }
+        catch (Exception ex)
+        {
+            _loadFailedFiles.Add("widgets.json");
+            Core.DebugLog.Log("error", $"UIEditor: failed to parse {path}: {ex.Message}");
+        }
     }
 
     private static byte[] ReadColorArray(JsonElement el)
@@ -1029,6 +1063,43 @@ public partial class UIEditorWindow : EditorBase
             old.Unload();
             _nsInstances.Remove(nsId);
         }
+
+        // Harmonized nine-slice instances bake the borders/texture at bake time
+        // into separate per-consumer caches — rebake every element/widget layer
+        // that references this nine-slice so border/texture edits show up in
+        // harmonized previews too (previously they kept the old bake).
+        if (_device == null) return;
+        foreach (var el in _elements)
+            if (el.Type == "nineSlice" && el.NineSlice == nsId && el.Harmonize != null && el.Harmonize.HasEffect)
+                ApplyHarmonize(nsId, "", "el:" + el.Id, el.Harmonize);
+        foreach (var wd in _widgets)
+        {
+            if (wd.Background == nsId && wd.BgHarmonize != null && wd.BgHarmonize.HasEffect)
+                ApplyHarmonize(nsId, "", "bg:" + wd.Id, wd.BgHarmonize);
+            if (wd.Stencil == nsId && wd.StencilHarmonize != null && wd.StencilHarmonize.HasEffect)
+                ApplyHarmonize(nsId, wd.StencilImagePath, "st:" + wd.Id, wd.StencilHarmonize);
+            if (wd.Frame == nsId && wd.FrameHarmonize != null && wd.FrameHarmonize.HasEffect)
+                ApplyHarmonize(nsId, "", "fr:" + wd.Id, wd.FrameHarmonize);
+        }
+    }
+
+    /// <summary>
+    /// Nuke and rebake every derived cache (nine-slice instances, harmonized
+    /// textures, harmonized nine-slices) from the CURRENT def data. The choke
+    /// point for mutation paths that bypass the per-edit invalidation calls:
+    /// undo/redo, id renames, deletes. Cheap enough for those rare events.
+    /// </summary>
+    private void InvalidateAllDerivedCaches()
+    {
+        foreach (var inst in _nsInstances.Values)
+            inst.Unload();
+        _nsInstances.Clear();
+        foreach (var tex in _harmonizedTextures.Values)
+            tex.Dispose();
+        _harmonizedTextures.Clear();
+        _harmonizedNineSlices.Clear();
+        if (_device != null)
+            RegenerateAllOnLoad();
     }
 
     // ═══════════════════════════════════════
@@ -1102,6 +1173,12 @@ public partial class UIEditorWindow : EditorBase
         SelectedIndex = Math.Clamp(SelectedIndex, -1, count - 1);
         _selectedChildIdx = -1;
         _selectedChildPath.Clear();
+        // Undo/redo replaced the def data wholesale — every baked cache
+        // (nine-slice instances, harmonized textures) now reflects the
+        // PRE-undo state; without this the canvas visibly doesn't change.
+        InvalidateAllDerivedCaches();
+        // The restored state differs from what's on disk.
+        _unsavedChanges = true;
     }
 
     /// <summary>Commit a snapshot once an edit settles (mouse released, no keys
@@ -1205,6 +1282,16 @@ public partial class UIEditorWindow : EditorBase
         CommitUndoState();
         HandleUndoRedo();
 
+        // Deferred rename rebake: id edits re-key the harmonized caches
+        // ("el:{id}" etc.), so the bakes must be regenerated — but ids commit
+        // per keystroke, so wait until the id field loses focus and rebake once.
+        if (_idRenameRebakePending
+            && !IsFieldActive("ns_id") && !IsFieldActive("el_id") && !IsFieldActive("wd_id"))
+        {
+            _idRenameRebakePending = false;
+            InvalidateAllDerivedCaches();
+        }
+
         // Panel fills most of the screen
         int margin = 30;
         int panelX = margin;
@@ -1255,9 +1342,11 @@ public partial class UIEditorWindow : EditorBase
                 _nsDetailScroll = 0;
                 _elemDetailScroll = 0;
                 _widgetDetailScroll = 0;
-                // Close any open add-child DrawCombo
-                if (_activeFieldId == AddElemComboId || _activeFieldId == AddWgtComboId)
-                    _activeFieldId = null;
+                // Drop ANY focused field/combo — a field from the old tab is
+                // never drawn again, so its focus would otherwise persist
+                // forever (blocking Ctrl+S / undo / child keyboard nav) and its
+                // orphaned buffer would commit on return to the same selection.
+                ClearActiveField();
             }
         }
 
@@ -1333,15 +1422,27 @@ public partial class UIEditorWindow : EditorBase
     {
         try
         {
-            // RI42: Save ALL tabs, not just the active one
-            SaveNineSlices();
-            SaveElements();
-            SaveWidgets();
+            // RI42: Save ALL tabs, not just the active one — EXCEPT files whose
+            // load failed to parse: their in-memory list is silently empty, and
+            // overwriting the corrupt-but-recoverable file with an empty one
+            // would be data loss.
+            if (!_loadFailedFiles.Contains("nine_slices.json")) SaveNineSlices();
+            if (!_loadFailedFiles.Contains("elements.json")) SaveElements();
+            if (!_loadFailedFiles.Contains("widgets.json")) SaveWidgets();
             _unsavedChanges = false;
-            _statusMsg = "Saved all tabs";
-            _statusTimer = 3f;
-
-            // Files saved directly to canonical location
+            if (_loadFailedFiles.Count > 0)
+            {
+                _statusMsg = $"Saved (SKIPPED corrupt: {string.Join(", ", _loadFailedFiles)})";
+                _statusTimer = 6f;
+            }
+            else
+            {
+                _statusMsg = "Saved all tabs";
+                _statusTimer = 3f;
+            }
+            // Let the host reload the runtime widget renderer so the in-game
+            // HUD/panels pick up the edits without a restart.
+            OnSaved?.Invoke();
         }
         catch (Exception ex)
         {
@@ -1464,7 +1565,7 @@ public partial class UIEditorWindow : EditorBase
 
         // ID
         string newId = DrawTextField("ns_id", "ID", def.Id, x + pad, curY, propW);
-        if (newId != def.Id) { def.Id = newId; _unsavedChanges = true; InvalidateNineSlice(def.Id); }
+        if (newId != def.Id) { def.Id = newId; _unsavedChanges = true; _idRenameRebakePending = true; }
         curY += 24;
 
         // Texture path + Browse button
@@ -1757,7 +1858,7 @@ public partial class UIEditorWindow : EditorBase
 
         // ID
         string newId = DrawTextField("el_id", "ID", def.Id, x + pad, curY, propW);
-        if (newId != def.Id) { def.Id = newId; _unsavedChanges = true; }
+        if (newId != def.Id) { def.Id = newId; _unsavedChanges = true; _idRenameRebakePending = true; }
         curY += 24;
 
         // Type dropdown
@@ -2261,7 +2362,7 @@ public partial class UIEditorWindow : EditorBase
 
         // ID
         string newId = DrawTextField("wd_id", "ID", def.Id, x + pad, curY, propW);
-        if (newId != def.Id) { def.Id = newId; _unsavedChanges = true; }
+        if (newId != def.Id) { def.Id = newId; _unsavedChanges = true; _idRenameRebakePending = true; }
         curY += 24;
 
         // Three-layer system: Background → Stencil → Children → Frame
@@ -3210,6 +3311,7 @@ public partial class UIEditorWindow : EditorBase
 
                 if (HitHandle(mouse, crx + crw - chs, cry + crh - chs, chs + 2))
                 {
+                    if (i != _selectedChildIdx) ClearActiveField();
                     _selectedChildIdx = i;
                     _canvasDragChild = i;
                     _widgetDragMode = CanvasDragMode.CornerBR;
@@ -3222,6 +3324,7 @@ public partial class UIEditorWindow : EditorBase
                 }
                 if (HitHandle(mouse, crx + crw - chs, cry + crh / 2 - chs / 2, chs + 2))
                 {
+                    if (i != _selectedChildIdx) ClearActiveField();
                     _selectedChildIdx = i;
                     _canvasDragChild = i;
                     _widgetDragMode = CanvasDragMode.EdgeR;
@@ -3232,6 +3335,7 @@ public partial class UIEditorWindow : EditorBase
                 }
                 if (HitHandle(mouse, crx + crw / 2 - chs / 2, cry + crh - chs, chs + 2))
                 {
+                    if (i != _selectedChildIdx) ClearActiveField();
                     _selectedChildIdx = i;
                     _canvasDragChild = i;
                     _widgetDragMode = CanvasDragMode.EdgeB;
@@ -3250,6 +3354,7 @@ public partial class UIEditorWindow : EditorBase
                     var childRect = dragChildRects[i];
                     if (childRect.Contains(mouse))
                     {
+                        if (i != _selectedChildIdx) ClearActiveField();
                         _selectedChildIdx = i;
                         _canvasDragChild = i;
                         _widgetDragMode = CanvasDragMode.Move;
@@ -3651,6 +3756,9 @@ public partial class UIEditorWindow : EditorBase
             if (depth == 0 && rowRect.Contains(_mouse.X, _mouse.Y) && LeftJustPressed
                 && !new Rectangle(x + 4 + depth * indent, drawY, 14, rowH).Contains(_mouse.X, _mouse.Y))
             {
+                // ch_*/co_* field ids are selection-agnostic — abandon any
+                // in-progress edit so it can't commit into the new child.
+                if (i != _selectedChildIdx) ClearActiveField();
                 _selectedChildIdx = i;
                 _selectedChildPath = path;
 

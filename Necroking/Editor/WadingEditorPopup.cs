@@ -167,19 +167,18 @@ public class WadingEditorPopup
         if (!_isOpen || _targetUnit == null) return;
         ConsumedInput = true;
 
-        // Raise InputLayer so any widgets at lower layers (the main unit
-        // editor, dropdowns, other sub-editors) see IsInputBlocked → true
-        // and ignore mouse events. Widgets inside our popup explicitly
-        // pass layer: PopupInputLayer so they remain responsive.
-        int savedLayer = _ui.InputLayer;
-        _ui.InputLayer = PopupInputLayer;
+        // Overlay contract: blocks every widget the host (unit editor) drew
+        // earlier this frame via the next-frame pre-raise, and lets our own
+        // widgets interact at PopupInputLayer.
+        _ui.BeginOverlay(PopupInputLayer);
 
         // Modal overlay dims the rest of the screen.
         _ui.DrawRect(new Rectangle(0, 0, screenW, screenH), new Color(0, 0, 0, 150));
 
         int popW = 900, popH = 600;
-        int popX = (screenW - popW) / 2;
-        int popY = (screenH - popH) / 2;
+        // Clamp to the window so the action buttons stay reachable on small screens.
+        int popX = Math.Max(0, (screenW - popW) / 2);
+        int popY = Math.Max(0, (screenH - popH) / 2);
         // Update modal layer's panel rect each frame so window-resize
         // tracks correctly. ContainsMouse uses this for outside-click
         // dismissal (currently disabled via LightDismiss=false but we
@@ -191,7 +190,7 @@ public class WadingEditorPopup
         if (_ui.DrawButton("X", popX + popW - 30, popY + 3, 24, 22, EditorBase.DangerColor, layer: PopupInputLayer))
         {
             Close();
-            _ui.InputLayer = savedLayer;
+            _ui.EndOverlay();
             return;
         }
 
@@ -214,11 +213,7 @@ public class WadingEditorPopup
         // Bottom action buttons.
         DrawActionButtons(popX + 12, popY + popH - 38, popW - 24);
 
-        // Restore InputLayer at the end of our draw so future popups (if
-        // any) and the editor's tail-end logic see the layer they expect.
-        // The next frame's popup Draw call will raise it again before
-        // any sibling editor widgets run.
-        _ui.InputLayer = savedLayer;
+        _ui.EndOverlay();
     }
 
     // =========================================================================
@@ -428,8 +423,10 @@ public class WadingEditorPopup
         sb.Draw(tex, screenPos, frame.Rect, Color.White, 0f, origin, scale, effects, 0f);
 
         sb.End();
-        // Restore the editor's default batch state (LinearClamp / AlphaBlend).
-        sb.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.LinearClamp);
+        // Restore the canonical HUD/editor batch state. The HUD pass runs
+        // PointClamp (see EffectBatch.HudSampler) — restoring LinearClamp here
+        // left all editor text drawn after the wading preview blurry.
+        sb.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.PointClamp);
         return true;
     }
 

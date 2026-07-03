@@ -316,13 +316,10 @@ public class UnitEditorWindow
 
         SyncSubPopupsModalState(screenW, screenH);
 
-        // A sub-editor popup (weapon/armor/shield) draws on top of the main panels and
-        // owns input while open. The main panels draw first (below), so raise the input
-        // layer here to block their widgets from also consuming the click — DrawSubEditor
-        // drops it back to 0 for its own widgets. (The ActionModalLayer it registers only
-        // blocks world/ESC routing via PopupManager, not the immediate-mode widget layer.)
-        if (_activeSubEditor != SubEditor.None && _ui.InputLayer < SubEditorInputLayer)
-            _ui.InputLayer = SubEditorInputLayer;
+        // Sub-editor / group-editor / wading popups block the main panels via
+        // the EditorBase overlay contract (each wraps its draw in BeginOverlay,
+        // which pre-raises the input layer for the following frame). Nothing to
+        // raise manually here anymore.
 
         // --- Dark overlay behind panel ---
         _ui.DrawRect(new Rectangle(0, 0, screenW, screenH), new Color(0, 0, 0, 160));
@@ -369,19 +366,21 @@ public class UnitEditorWindow
         if (_ui.DrawButton("Save All (Ctrl+S)", panelX + panelW - 200, panelY + 3, 160, 24, EditorBase.SuccessColor))
             SaveAll();
 
-        // U21: Guard keyboard shortcuts against active text fields
-        bool textActive = _ui.IsTextInputActive;
+        // U21: Guard keyboard shortcuts against active text fields, open combo
+        // filters / picker value boxes (IsKeyboardCaptured), and open confirm
+        // dialogs (so Ctrl+C/V/S don't fire behind the modal).
+        bool textActive = _ui.IsKeyboardCaptured
+            || _confirmDeleteOpen || _confirmDeleteUnit || _confirmDeleteGroup;
+        bool ctrlDown = _ui._kb.IsKeyDown(Keys.LeftControl) || _ui._kb.IsKeyDown(Keys.RightControl);
 
         // Ctrl+S (skip if text field active)
-        if (!textActive &&
-            _ui._kb.IsKeyDown(Keys.LeftControl) && _ui._kb.IsKeyDown(Keys.S) &&
-            !(_ui._prevKb.IsKeyDown(Keys.LeftControl) && _ui._prevKb.IsKeyDown(Keys.S)))
+        if (!textActive && ctrlDown &&
+            _ui._kb.IsKeyDown(Keys.S) && !_ui._prevKb.IsKeyDown(Keys.S))
             SaveAll();
 
         // U19: Ctrl+C in sub-editors copies weapon/armor/shield; otherwise copies unit
-        if (!textActive &&
-            _ui._kb.IsKeyDown(Keys.LeftControl) && _ui._kb.IsKeyDown(Keys.C) &&
-            !(_ui._prevKb.IsKeyDown(Keys.LeftControl) && _ui._prevKb.IsKeyDown(Keys.C)))
+        if (!textActive && ctrlDown &&
+            _ui._kb.IsKeyDown(Keys.C) && !_ui._prevKb.IsKeyDown(Keys.C))
         {
             if (_activeSubEditor == SubEditor.Weapon)
             {
@@ -426,9 +425,8 @@ public class UnitEditorWindow
         }
 
         // U19: Ctrl+V in sub-editors pastes weapon/armor/shield; otherwise pastes unit
-        if (!textActive &&
-            _ui._kb.IsKeyDown(Keys.LeftControl) && _ui._kb.IsKeyDown(Keys.V) &&
-            !(_ui._prevKb.IsKeyDown(Keys.LeftControl) && _ui._prevKb.IsKeyDown(Keys.V)))
+        if (!textActive && ctrlDown &&
+            _ui._kb.IsKeyDown(Keys.V) && !_ui._prevKb.IsKeyDown(Keys.V))
         {
             if (_activeSubEditor == SubEditor.Weapon && _clipboardWeapon != null)
             {
@@ -820,6 +818,7 @@ public class UnitEditorWindow
                         newId = srcDef.Id + "_copy" + (++suffix);
 
                     var newDef = CloneUnit(srcDef, newId);
+                    newDef.DisplayName = srcDef.DisplayName + " (Copy)";
                     newDef.UnitType = "Dynamic"; // RU28: copied units are always Dynamic
                     _gameData.Units.AddAfter(newDef, srcDef.Id);
                     _selectedIdx = IndexOf(_gameData.Units.GetIDs(), newId);
@@ -2627,6 +2626,10 @@ public class UnitEditorWindow
 
     private void DrawGroupEditor(int screenW, int screenH)
     {
+        // Overlay contract: blocks the main panels (drawn earlier this frame)
+        // and lets this popup's widgets interact at SubEditorInputLayer.
+        _ui.BeginOverlay(SubEditorInputLayer);
+
         // Modal overlay
         _ui.DrawRect(new Rectangle(0, 0, screenW, screenH), new Color(0, 0, 0, 120));
 
@@ -2641,6 +2644,7 @@ public class UnitEditorWindow
         if (_ui.DrawButton("X", popX + popW - 30, popY + 3, 24, 22, EditorBase.DangerColor))
         {
             _groupEditorOpen = false;
+            _ui.EndOverlay();
             return;
         }
 
@@ -2743,6 +2747,8 @@ public class UnitEditorWindow
                 _ui.EndClip();
             }
         }
+
+        _ui.EndOverlay();
     }
 
     private void DrawGroupDetail(UnitGroupDef g, int x, int y, int ww, int h)
@@ -2844,11 +2850,10 @@ public class UnitEditorWindow
 
     private void DrawSubEditor(int screenW, int screenH)
     {
-        // We were drawn with InputLayer raised (see Draw) so the panels behind us are
-        // input-blocked. Drop it to 0 so our own widgets respond — but only if WE raised
-        // it; an open dropdown sets a higher layer (2) that must stay to block siblings.
-        int savedLayer = _ui.InputLayer;
-        if (savedLayer == SubEditorInputLayer) _ui.InputLayer = 0;
+        // Overlay contract: blocks the main panels (drawn earlier this frame)
+        // and lets this popup's widgets interact at SubEditorInputLayer. An
+        // open dropdown still pre-raises to layer 2, correctly blocking us.
+        _ui.BeginOverlay(SubEditorInputLayer);
 
         // Modal overlay
         _ui.DrawRect(new Rectangle(0, 0, screenW, screenH), new Color(0, 0, 0, 120));
@@ -2873,7 +2878,7 @@ public class UnitEditorWindow
         {
             _activeSubEditor = SubEditor.None;
             _subSelectedIdx = -1;
-            _ui.InputLayer = savedLayer;
+            _ui.EndOverlay();
             return;
         }
 
@@ -2898,7 +2903,7 @@ public class UnitEditorWindow
         int bottomY = popY + popH - 34;
         DrawSubEditorCrudButtons(popX, bottomY, popW);
 
-        _ui.InputLayer = savedLayer;
+        _ui.EndOverlay();
     }
 
     // ---- WEAPON SUB-EDITOR ----
@@ -3399,6 +3404,7 @@ public class UnitEditorWindow
                             while (_gameData.Weapons.Get(newId) != null)
                                 newId = srcW.Id + "_copy" + (++suffix);
                             var newDef = CloneWeapon(srcW, newId);
+                            newDef.DisplayName = srcW.DisplayName + " (Copy)";
                             _gameData.Weapons.AddAfter(newDef, srcW.Id);
                             _subSelectedIdx = IndexOf(_gameData.Weapons.GetIDs(), newId);
                             _unsavedChanges = true;
@@ -3463,6 +3469,7 @@ public class UnitEditorWindow
                             while (_gameData.Armors.Get(newId) != null)
                                 newId = srcA.Id + "_copy" + (++suffix);
                             var newDef = CloneArmor(srcA, newId);
+                            newDef.DisplayName = srcA.DisplayName + " (Copy)";
                             _gameData.Armors.AddAfter(newDef, srcA.Id);
                             _subSelectedIdx = IndexOf(_gameData.Armors.GetIDs(), newId);
                             _unsavedChanges = true;
@@ -3526,6 +3533,7 @@ public class UnitEditorWindow
                             while (_gameData.Shields.Get(newId) != null)
                                 newId = srcS.Id + "_copy" + (++suffix);
                             var newDef = CloneShield(srcS, newId);
+                            newDef.DisplayName = srcS.DisplayName + " (Copy)";
                             _gameData.Shields.AddAfter(newDef, srcS.Id);
                             _subSelectedIdx = IndexOf(_gameData.Shields.GetIDs(), newId);
                             _unsavedChanges = true;
@@ -3598,16 +3606,25 @@ public class UnitEditorWindow
         var allIds = _gameData.Units.GetIDs();
         if (_selectedIdx < 0 || _selectedIdx >= allIds.Count) return;
         var def = _gameData.Units.Get(allIds[_selectedIdx]);
-        if (def?.Sprite == null) return;
+
+        // Reset tracking state BEFORE the sprite check: selecting a sprite-less
+        // unit must not keep the previous unit's animation state alive — the
+        // stale _previewAnimName would key this unit's "Set All Frames"/timing
+        // edits, and the frame readouts would come from the old unit.
+        _previewAnimName = "Idle";
+        _previewPlaying = true;
+        _lastPreviewSpriteData = null;
+        _lastPreviewAnimName = "";
+
+        if (def?.Sprite == null)
+        {
+            _previewAtlas = "";
+            _previewSprite = "";
+            return;
+        }
 
         _previewAtlas = def.Sprite.AtlasName;
         _previewSprite = def.Sprite.SpriteName;
-        _previewAnimName = "Idle";
-        _previewPlaying = true;
-
-        // Force re-init on next DrawPreviewSprite by clearing tracking state
-        _lastPreviewSpriteData = null;
-        _lastPreviewAnimName = "";
 
         // Re-init animation controller
         var atlasId = AtlasDefs.ResolveAtlasName(_previewAtlas);
@@ -3767,132 +3784,25 @@ public class UnitEditorWindow
         return AnimState.Idle;
     }
 
-    private static UnitDef CloneUnit(UnitDef src, string newId)
-    {
-        var def = new UnitDef
-        {
-            Id = newId,
-            DisplayName = src.DisplayName + " (Copy)",
-            UnitType = src.UnitType,
-            Faction = src.Faction,
-            AI = src.AI,
-            OrcaPriority = src.OrcaPriority,
-            Size = src.Size,
-            Radius = src.Radius,
-            SpriteScale = src.SpriteScale,
-            SpriteWorldHeight = src.SpriteWorldHeight,
-            ZombieTypeID = src.ZombieTypeID,
-            SpellID = src.SpellID,
-            MaxMana = src.MaxMana,
-            ManaRegen = src.ManaRegen,
-            Weapons = src.Weapons.ConvertAll(s => new UnitWeaponRef(s.Id, s.AnimOverride) { LungeDist = s.LungeDist }),
-            Armors = new List<string>(src.Armors),
-            Shields = new List<string>(src.Shields),
-        };
+    // Clones go through the registry's JSON round-trip (RegistryBase.CloneDef):
+    // clone fidelity == save/load fidelity, so fields added to the defs later
+    // can never be silently dropped by Copy/Paste again. (The old hand-written
+    // member copies here had drifted badly — CloneUnit lost morale, detection,
+    // locomotion calibration and wading data; CloneWeapon lost the entire
+    // pounce/trample/sweep archetype block.) DisplayName suffixing is done at
+    // the call sites ("(Copy)" on duplicate buttons, "(Paste)" on Ctrl+V).
 
-        if (src.Stats != null)
-        {
-            def.Stats = new UnitStatsJson
-            {
-                MaxHP = src.Stats.MaxHP,
-                Strength = src.Stats.Strength,
-                Attack = src.Stats.Attack,
-                Defense = src.Stats.Defense,
-                MagicResist = src.Stats.MagicResist,
-                Encumbrance = src.Stats.Encumbrance,
-                NaturalProt = src.Stats.NaturalProt,
-                CombatSpeed = src.Stats.CombatSpeed,
-            };
-        }
+    private UnitDef CloneUnit(UnitDef src, string newId)
+        => _gameData.Units.CloneDef(src, newId) ?? new UnitDef { Id = newId, DisplayName = src.DisplayName };
 
-        if (src.Color != null)
-        {
-            def.Color = new ColorJson { R = src.Color.R, G = src.Color.G, B = src.Color.B, A = src.Color.A };
-        }
+    private WeaponDef CloneWeapon(WeaponDef src, string newId)
+        => _gameData.Weapons.CloneDef(src, newId) ?? new WeaponDef { Id = newId, DisplayName = src.DisplayName };
 
-        if (src.Sprite != null)
-        {
-            def.Sprite = new SpriteRef { AtlasName = src.Sprite.AtlasName, SpriteName = src.Sprite.SpriteName };
-        }
+    private ArmorDef CloneArmor(ArmorDef src, string newId)
+        => _gameData.Armors.CloneDef(src, newId) ?? new ArmorDef { Id = newId, DisplayName = src.DisplayName };
 
-        // Clone weapon points
-        foreach (var (animKey, yawDict) in src.WeaponPoints)
-        {
-            var newYawDict = new Dictionary<string, List<WeaponFrameData>>();
-            foreach (var (yawKey, frames) in yawDict)
-            {
-                var newFrames = new List<WeaponFrameData>();
-                foreach (var f in frames)
-                {
-                    newFrames.Add(new WeaponFrameData
-                    {
-                        Hilt = new WeaponPointData { X = f.Hilt.X, Y = f.Hilt.Y, Behind = f.Hilt.Behind },
-                        Tip = new WeaponPointData { X = f.Tip.X, Y = f.Tip.Y, Behind = f.Tip.Behind },
-                    });
-                }
-                newYawDict[yawKey] = newFrames;
-            }
-            def.WeaponPoints[animKey] = newYawDict;
-        }
-
-        // Clone anim timings
-        foreach (var (animKey, timing) in src.AnimTimings)
-        {
-            def.AnimTimings[animKey] = new UnitAnimTimingOverride
-            {
-                FrameDurationsMs = new List<int>(timing.FrameDurationsMs),
-                EffectTimeMs = timing.EffectTimeMs,
-            };
-        }
-
-        return def;
-    }
-
-    private static WeaponDef CloneWeapon(WeaponDef src, string newId)
-    {
-        return new WeaponDef
-        {
-            Id = newId,
-            DisplayName = src.DisplayName + " (Copy)",
-            Damage = src.Damage,
-            AttackBonus = src.AttackBonus,
-            DefenseBonus = src.DefenseBonus,
-            Length = src.Length,
-            IsRanged = src.IsRanged,
-            Range = src.Range,
-            DirectRange = src.DirectRange,
-            Cooldown = src.Cooldown,
-            RangedDamage = src.RangedDamage,
-            Precision = src.Precision,
-            ProjectileType = src.ProjectileType,
-            Bonuses = new List<string>(src.Bonuses),
-        };
-    }
-
-    private static ArmorDef CloneArmor(ArmorDef src, string newId)
-    {
-        return new ArmorDef
-        {
-            Id = newId,
-            DisplayName = src.DisplayName + " (Copy)",
-            BodyProtection = src.BodyProtection,
-            HeadProtection = src.HeadProtection,
-            Encumbrance = src.Encumbrance,
-            Bonuses = new List<string>(src.Bonuses),
-        };
-    }
-
-    private static ShieldDef CloneShield(ShieldDef src, string newId)
-    {
-        return new ShieldDef
-        {
-            Id = newId,
-            DisplayName = src.DisplayName + " (Copy)",
-            Protection = src.Protection,
-            Parry = src.Parry,
-            Defense = src.Defense,
-        };
-    }
+    private ShieldDef CloneShield(ShieldDef src, string newId)
+        => _gameData.Shields.CloneDef(src, newId) ?? new ShieldDef { Id = newId, DisplayName = src.DisplayName };
 
     private static int IndexOf(IReadOnlyList<string> list, string value)
     {

@@ -138,6 +138,11 @@ public class ItemEditorWindow
             }
         }
 
+        // Color picker overlay — the reflection renderer can open the shared
+        // modal picker (HdrColor swatches); without this call an opened picker
+        // would be invisible while still blocking all input (soft-lock).
+        _ui.DrawColorPickerPopup();
+
         // Dropdown overlays (drawn last, on top of everything)
         _ui.DrawDropdownOverlays();
     }
@@ -147,7 +152,9 @@ public class ItemEditorWindow
     // ===========================
     private void HandleKeyboardShortcuts()
     {
-        if (_ui.IsTextInputActive) return;
+        // Skip while typing (field, combo filter, picker box) or while the
+        // delete-confirm dialog is up (Ctrl+C/V/S must not fire behind a modal).
+        if (_ui.IsKeyboardCaptured || _deleteConfirmOpen) return;
 
         bool ctrl = _ui._kb.IsKeyDown(Keys.LeftControl) || _ui._kb.IsKeyDown(Keys.RightControl);
         bool sPressed = _ui._kb.IsKeyDown(Keys.S) && !_ui._prevKb.IsKeyDown(Keys.S);
@@ -337,6 +344,23 @@ public class ItemEditorWindow
                         newId = srcDef.Id + "_copy" + (++suffix);
                     var newDef = CloneItem(srcDef, newId);
                     _gameData.Items.AddAfter(newDef, srcDef.Id);
+                    // A potion item is only half its data — clone the linked
+                    // PotionDef too (recipe, buff, throw params), keyed to the
+                    // new item id, or the copy is a potion with no definition.
+                    var srcPotion = FindPotionForItem(srcDef.Id);
+                    if (srcPotion != null)
+                    {
+                        string potId = newId + "_potion";
+                        int potSuffix = 1;
+                        while (_gameData.Potions.Get(potId) != null)
+                            potId = newId + "_potion" + (++potSuffix);
+                        var potClone = _gameData.Potions.CloneDef(srcPotion, potId);
+                        if (potClone != null)
+                        {
+                            potClone.ItemID = newId;
+                            _gameData.Potions.Add(potClone);
+                        }
+                    }
                     _selectedIdx = IndexOf(_gameData.Items.GetIDs(), newId);
                     MarkDirty();
                     SetStatus("Copied: " + newId);
@@ -463,17 +487,20 @@ public class ItemEditorWindow
             // Label
             _ui.DrawText($"Slot {i + 1}", new Vector2(x, curY + 2), EditorBase.TextDim);
 
-            // Item ID field (takes most of the width)
+            // Item ID field (takes most of the width). Field ids embed the
+            // owning potion def's identity so switching items mid-edit can't
+            // commit the old item's buffer into the new one.
+            string slotPrefix = $"recipe#{System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(def):x}_{i}";
             int fieldX = x + 50;
             int idFieldW = w - 50 - 90;
             string oldItemId = ingredient.ItemId;
-            ingredient.ItemId = _ui.DrawTextField($"recipe_{i}_id", "", ingredient.ItemId, fieldX, curY, idFieldW);
+            ingredient.ItemId = _ui.DrawTextField($"{slotPrefix}_id", "", ingredient.ItemId, fieldX, curY, idFieldW);
             if (ingredient.ItemId != oldItemId) MarkDirty();
 
             // Amount field
             int amtX = fieldX + idFieldW + 8;
             int oldAmt = ingredient.Amount;
-            ingredient.Amount = _ui.DrawIntField($"recipe_{i}_amt", "", ingredient.Amount, amtX, curY, 80);
+            ingredient.Amount = _ui.DrawIntField($"{slotPrefix}_amt", "", ingredient.Amount, amtX, curY, 80);
             if (ingredient.Amount != oldAmt) MarkDirty();
 
             curY += RowH;
@@ -566,18 +593,11 @@ public class ItemEditorWindow
         };
     }
 
-    private static ItemDef CloneItem(ItemDef src, string newId)
-    {
-        return new ItemDef
-        {
-            Id = newId,
-            DisplayName = src.DisplayName,
-            Icon = src.Icon,
-            MaxStack = src.MaxStack,
-            Category = src.Category,
-            Description = src.Description,
-        };
-    }
+    // JSON round-trip via the registry — clone fidelity == save/load fidelity,
+    // so fields added to ItemDef later can't be silently dropped by Copy/Paste
+    // (the old member copy here had already lost SkillPointPool/SkillPointAmount).
+    private ItemDef CloneItem(ItemDef src, string newId)
+        => _gameData.Items.CloneDef(src, newId) ?? new ItemDef { Id = newId, DisplayName = src.DisplayName };
 
     /// <summary>
     /// Draw a small filled circle using the pixel texture (scanline approach).

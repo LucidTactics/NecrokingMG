@@ -335,6 +335,11 @@ public class EnvObjectEditorWindow : Necroking.UI.IModalLayer
         // correct without scattering Push/Pop calls at every open/close site.
         SyncSubPopupsModalState(screenW, screenH);
 
+        // Overlay contract: this window draws on top of the map editor, whose
+        // widgets drew earlier this frame at layer 0 — block them and run our
+        // own widgets at layer 1.
+        _ui.BeginOverlay(1);
+
         // Dark overlay
         _ui.DrawRect(new Rectangle(0, 0, screenW, screenH), OverlayBg);
 
@@ -402,6 +407,7 @@ public class EnvObjectEditorWindow : Necroking.UI.IModalLayer
 
             HandleKeyboard();
             _ui.DrawDropdownOverlays();
+            _ui.EndOverlay();
             return;
         }
 
@@ -443,6 +449,8 @@ public class EnvObjectEditorWindow : Necroking.UI.IModalLayer
 
         // Dropdown overlays (drawn last, on top of everything)
         _ui.DrawDropdownOverlays();
+
+        _ui.EndOverlay();
     }
 
     // ========================================================================
@@ -1611,17 +1619,26 @@ public class EnvObjectEditorWindow : Necroking.UI.IModalLayer
         {
             int corrBrowseW = 55;
             string newCorrSprite = _ui.DrawTextField("envdef_corrsprite", "Corrupted Sprite", def.CorruptedSprite, fx, curY, fieldW - corrBrowseW - 4);
-            if (newCorrSprite != def.CorruptedSprite) def.CorruptedSprite = newCorrSprite;
-            if (_ui.DrawButton("Browse##corr", fx + fieldW - corrBrowseW, curY, corrBrowseW, 20))
+            if (newCorrSprite != def.CorruptedSprite)
+            {
+                def.CorruptedSprite = newCorrSprite;
+                // The harmonized-corrupt bake is cached per def and only
+                // invalidated by ReloadDefTexture — without this the game keeps
+                // serving the OLD sprite's bake after the path changes.
+                _env.ReloadDefTexture(_selectedDef);
+            }
+            if (_ui.DrawButton("Browse", fx + fieldW - corrBrowseW, curY, corrBrowseW, 20))
             {
                 // Default to the directory of the main texture so the dead-tree
                 // sprite usually sits right next to its live spritesheet.
                 string baseDir = !string.IsNullOrEmpty(def.TexturePath)
                     ? GamePaths.Resolve(System.IO.Path.GetDirectoryName(def.TexturePath) ?? "assets")
                     : GamePaths.Resolve("assets");
+                int capturedDef = _selectedDef;
                 _textureBrowser.Open(baseDir, def.CorruptedSprite, path =>
                 {
                     def.CorruptedSprite = path;
+                    _env.ReloadDefTexture(capturedDef);
                 });
             }
             curY += RowH;
@@ -1658,7 +1675,7 @@ public class EnvObjectEditorWindow : Necroking.UI.IModalLayer
             // When enabled, placement spawns a MagicGlyph blueprint instead of a sprite-based
             // env object; trigger spell, glyph colors, radius all derived here.
             _ui.DrawText("Glyph Trap", new Vector2(fx, curY + 4), EditorBase.TextColor);
-            bool newIsGlyph = _ui.DrawCheckbox("glyphtrap_chk", def.IsGlyphTrap, fx + fieldW - 24, curY + 2);
+            bool newIsGlyph = _ui.DrawCheckbox("", def.IsGlyphTrap, fx + fieldW - 24, curY + 2);
             if (newIsGlyph != def.IsGlyphTrap) def.IsGlyphTrap = newIsGlyph;
             curY += RowH;
 
@@ -1684,7 +1701,7 @@ public class EnvObjectEditorWindow : Necroking.UI.IModalLayer
 
             string newDeployed = _ui.DrawTextField("envdef_trapdeplspr", "Deployed Sprite", def.TrapDeployedSprite, fx, curY, fieldW - trapBrowseW - 4);
             if (newDeployed != def.TrapDeployedSprite) def.TrapDeployedSprite = newDeployed;
-            if (_ui.DrawButton("Browse##2", fx + fieldW - trapBrowseW, curY, trapBrowseW, 20))
+            if (_ui.DrawButton("Browse", fx + fieldW - trapBrowseW, curY, trapBrowseW, 20))
             {
                 _textureBrowser.Open("assets", def.TrapDeployedSprite, path =>
                 {
@@ -1820,8 +1837,8 @@ public class EnvObjectEditorWindow : Necroking.UI.IModalLayer
         var kb = _ui._kb;
         var prevKb = _ui._prevKb;
 
-        // Don't handle hotkeys if text input is active
-        if (_ui.IsTextInputActive) return;
+        // Don't handle hotkeys if typing (text field, combo filter, picker box)
+        if (_ui.IsKeyboardCaptured) return;
 
         // ESC handling now lives in PopupManager — this window pushes
         // itself onto the modal stack in Open(), and each sub-popup
@@ -1830,9 +1847,14 @@ public class EnvObjectEditorWindow : Necroking.UI.IModalLayer
         // them in LIFO order, one ESC per layer, no leakage to the map
         // editor underneath.
 
-        // Ctrl+S to save
-        if (kb.IsKeyDown(Keys.LeftControl) && kb.IsKeyDown(Keys.S) && prevKb.IsKeyUp(Keys.S))
-            SaveDefs();
+        // Ctrl+S to save — mode-aware, same as the Save button: saving env
+        // defs while tuning corpse pivots silently discarded the corpse work.
+        if ((kb.IsKeyDown(Keys.LeftControl) || kb.IsKeyDown(Keys.RightControl))
+            && kb.IsKeyDown(Keys.S) && prevKb.IsKeyUp(Keys.S))
+        {
+            if (_mode == EditorMode.Corpse) SaveCorpseSettings();
+            else SaveDefs();
+        }
     }
 
     // ========================================================================
@@ -1878,84 +1900,14 @@ public class EnvObjectEditorWindow : Necroking.UI.IModalLayer
             id = src.Id + $"_copy{idx}";
         }
 
-        var copy = new EnvironmentObjectDef
-        {
-            Id = id,
-            Name = src.Name + " (Copy)",
-            Category = src.Category,
-            TexturePath = src.TexturePath,
-            HeightMapPath = src.HeightMapPath,
-            SpriteWorldHeight = src.SpriteWorldHeight,
-            WorldHeight = src.WorldHeight,
-            PivotX = src.PivotX,
-            PivotY = src.PivotY,
-            CollisionRadius = src.CollisionRadius,
-            CollisionOffsetX = src.CollisionOffsetX,
-            CollisionOffsetY = src.CollisionOffsetY,
-            Scale = src.Scale,
-            PlacementScale = src.PlacementScale,
-            Group = src.Group,
-            GroupWeight = src.GroupWeight,
-            IsBuilding = src.IsBuilding,
-            PlayerBuildable = src.PlayerBuildable,
-            BuildingMaxHP = src.BuildingMaxHP,
-            BuildingProtection = src.BuildingProtection,
-            BuildingDefaultOwner = src.BuildingDefaultOwner,
-            CostWood = src.CostWood,
-            CostStone = src.CostStone,
-            CostGold = src.CostGold,
-            Cost1ItemId = src.Cost1ItemId,
-            Cost1Amount = src.Cost1Amount,
-            Cost2ItemId = src.Cost2ItemId,
-            Cost2Amount = src.Cost2Amount,
-            PlacementRadius = src.PlacementRadius,
-            ShadowType = src.ShadowType,
-            ShadowOpacityScale = src.ShadowOpacityScale,
-            ShadowOuterWScale = src.ShadowOuterWScale,
-            ShadowOuterHScale = src.ShadowOuterHScale,
-            ShadowInnerWScale = src.ShadowInnerWScale,
-            ShadowInnerHScale = src.ShadowInnerHScale,
-            TrapSpellId = src.TrapSpellId,
-            TrapUses = src.TrapUses,
-            TrapTriggeredSprite = src.TrapTriggeredSprite,
-            TrapDeployedSprite = src.TrapDeployedSprite,
-            TrapTriggeredDuration = src.TrapTriggeredDuration,
-            TrapDeployedDuration = src.TrapDeployedDuration,
-            TrapFadeDuration = src.TrapFadeDuration,
-            BoundTriggerID = src.BoundTriggerID,
-            Input1 = new ProcessSlot { Kind = src.Input1.Kind, ResourceID = src.Input1.ResourceID },
-            Input2 = new ProcessSlot { Kind = src.Input2.Kind, ResourceID = src.Input2.ResourceID },
-            Output = new ProcessSlot { Kind = src.Output.Kind, ResourceID = src.Output.ResourceID },
-            ProcessTime = src.ProcessTime,
-            MaxInputQueue = src.MaxInputQueue,
-            MaxOutputQueue = src.MaxOutputQueue,
-            AutoSpawn = src.AutoSpawn,
-            SpawnOffsetX = src.SpawnOffsetX,
-            SpawnOffsetY = src.SpawnOffsetY,
-            CorpseSlots = src.CorpseSlots,
-            ItemSlots = src.ItemSlots,
-            EssenceCost = src.EssenceCost,
-            HostsJob = src.HostsJob,
-            StoredResource = src.StoredResource,
-            StorageCap = src.StorageCap,
-            IsWorkerHome = src.IsWorkerHome,
-            WorkerSlots = src.WorkerSlots,
-            TintColor = src.TintColor,
-            RandomFlip = src.RandomFlip,
-            IsAnimated = src.IsAnimated,
-            AnimFramesX = src.AnimFramesX,
-            AnimFramesY = src.AnimFramesY,
-            AnimFPS = src.AnimFPS,
-            AnimNoise = src.AnimNoise,
-            AnimWindSync = src.AnimWindSync,
-            IsForagable = src.IsForagable,
-            ForagableType = src.ForagableType,
-            RespawnTime = src.RespawnTime,
-            ScaleMin = src.ScaleMin,
-            ScaleMax = src.ScaleMax,
-            IsCorruptable = src.IsCorruptable,
-            CorruptedSprite = src.CorruptedSprite,
-        };
+        // Deep clone via JSON round-trip — the old ~75-line member copy had
+        // silently drifted from the def schema (it dropped Harmonize,
+        // HarmonizeCorrupt, the glyph/fog/berry fields, …). Round-tripping
+        // guarantees every serializable field is copied, now and in the future.
+        var copy = Core.JsonClone.Deep(src);
+        if (copy == null) return;
+        copy.Id = id;
+        copy.Name = src.Name + " (Copy)";
 
         int newIdx = _env.AddDef(copy);
         _env.ReloadDefTexture(newIdx);
@@ -2154,8 +2106,9 @@ public class EnvObjectEditorWindow : Necroking.UI.IModalLayer
 
     private void DrawNewCategoryDialog(int screenW, int screenH)
     {
-        // Block input to lower layers
-        _ui.InputLayer = 3;
+        // Overlay contract: blocks everything drawn earlier this frame and lets
+        // this dialog's widgets interact at layer 3.
+        _ui.BeginOverlay(3);
 
         // Dark overlay
         _ui.DrawRect(new Rectangle(0, 0, screenW, screenH), new Color(0, 0, 0, 150));
@@ -2168,10 +2121,6 @@ public class EnvObjectEditorWindow : Necroking.UI.IModalLayer
         _ui.DrawBorder(new Rectangle(dx, dy, dw, dh), EditorBase.PanelBorder, 2);
         _ui.DrawRect(new Rectangle(dx, dy, dw, 28), EditorBase.PanelHeader);
         _ui.DrawText("New Category", new Vector2(dx + 10, dy + 5), EditorBase.TextBright, _font);
-
-        // Temporarily unblock for the text field
-        int savedLayer = _ui.InputLayer;
-        _ui.InputLayer = 0;
 
         _newCategoryName = _ui.DrawTextField("new_cat_name", "Name", _newCategoryName, dx + 16, dy + 40, dw - 32);
 
@@ -2189,13 +2138,14 @@ public class EnvObjectEditorWindow : Necroking.UI.IModalLayer
             _newCategoryDialogOpen = false;
         }
 
-        _ui.InputLayer = savedLayer;
+        _ui.EndOverlay();
     }
 
     private void DrawDeleteCategoryDialog(int screenW, int screenH)
     {
-        // Block input to lower layers
-        _ui.InputLayer = 3;
+        // Overlay contract: blocks everything drawn earlier this frame and lets
+        // this dialog's widgets interact at layer 3.
+        _ui.BeginOverlay(3);
 
         // Dark overlay
         _ui.DrawRect(new Rectangle(0, 0, screenW, screenH), new Color(0, 0, 0, 150));
@@ -2208,6 +2158,7 @@ public class EnvObjectEditorWindow : Necroking.UI.IModalLayer
         if (string.IsNullOrEmpty(catToDelete))
         {
             _deleteCategoryDialogOpen = false;
+            _ui.EndOverlay();
             return;
         }
 
@@ -2238,9 +2189,6 @@ public class EnvObjectEditorWindow : Necroking.UI.IModalLayer
         _ui.DrawBorder(new Rectangle(dx, dy, dw, dh), EditorBase.PanelBorder, 2);
         _ui.DrawRect(new Rectangle(dx, dy, dw, 28), EditorBase.PanelHeader);
         _ui.DrawText("Delete Category", new Vector2(dx + 10, dy + 5), EditorBase.TextBright, _font);
-
-        int savedLayer = _ui.InputLayer;
-        _ui.InputLayer = 0;
 
         int cy = dy + 36;
 
@@ -2278,7 +2226,7 @@ public class EnvObjectEditorWindow : Necroking.UI.IModalLayer
             _deleteCategoryDialogOpen = false;
         }
 
-        _ui.InputLayer = savedLayer;
+        _ui.EndOverlay();
     }
 
     // ========================================================================
@@ -2287,26 +2235,58 @@ public class EnvObjectEditorWindow : Necroking.UI.IModalLayer
 
     private void LoadEdgeTweakerTexture(EnvironmentObjectDef def)
     {
+        _edgeTweakerPreview?.Dispose();
         _edgeTweakerPreview = null;
         _edgeTweakerPixels = null;
 
-        if (string.IsNullOrEmpty(def.TexturePath) || !File.Exists(def.TexturePath))
+        // Resolve the project-relative path — the process CWD is the exe folder
+        // (bin/Publish), where the raw relative path doesn't exist.
+        string resolved = string.IsNullOrEmpty(def.TexturePath)
+            ? "" : Core.GamePaths.Resolve(def.TexturePath);
+        if (string.IsNullOrEmpty(resolved) || !File.Exists(resolved))
             return;
 
         try
         {
-            var tex = Render.TextureUtil.LoadPremultiplied(_device, def.TexturePath);
-            _edgeTweakerTexW = tex.Width;
-            _edgeTweakerTexH = tex.Height;
-            _edgeTweakerPixels = new Color[tex.Width * tex.Height];
-            tex.GetData(_edgeTweakerPixels);
-            _edgeTweakerPreview = tex;
+            // Load STRAIGHT (non-premultiplied) pixels: the tweaker writes the
+            // result back over the source PNG, and saving premultiplied data
+            // would re-premultiply on every load→save cycle, progressively
+            // darkening soft edges. The preview texture gets a premultiplied
+            // copy so it renders correctly in the premultiplied HUD batch.
+            using var fs = File.OpenRead(resolved);
+            using var straightTex = Texture2D.FromStream(_device, fs);
+            _edgeTweakerTexW = straightTex.Width;
+            _edgeTweakerTexH = straightTex.Height;
+            _edgeTweakerPixels = new Color[straightTex.Width * straightTex.Height];
+            straightTex.GetData(_edgeTweakerPixels);
+
+            _edgeTweakerPreview = new Texture2D(_device, _edgeTweakerTexW, _edgeTweakerTexH);
+            _edgeTweakerPreview.SetData(PremultiplyCopy(_edgeTweakerPixels));
         }
         catch
         {
+            _edgeTweakerPreview?.Dispose();
             _edgeTweakerPreview = null;
             _edgeTweakerPixels = null;
         }
+    }
+
+    /// <summary>Premultiplied copy of straight-alpha pixel data, for display in
+    /// the premultiplied-alpha sprite batch. The straight source stays intact
+    /// for processing/saving.</summary>
+    private static Color[] PremultiplyCopy(Color[] straight)
+    {
+        var pm = new Color[straight.Length];
+        for (int i = 0; i < straight.Length; i++)
+        {
+            var c = straight[i];
+            pm[i] = new Color(
+                (byte)(c.R * c.A / 255),
+                (byte)(c.G * c.A / 255),
+                (byte)(c.B * c.A / 255),
+                c.A);
+        }
+        return pm;
     }
 
     private void ProcessEdgeTweaker()
@@ -2362,7 +2342,7 @@ public class EnvObjectEditorWindow : Necroking.UI.IModalLayer
         }
 
         _edgeTweakerPixels = result;
-        _edgeTweakerPreview.SetData(result);
+        _edgeTweakerPreview.SetData(PremultiplyCopy(result));
     }
 
     private void SaveEdgeTweakerResult()
@@ -2375,8 +2355,16 @@ public class EnvObjectEditorWindow : Necroking.UI.IModalLayer
 
         try
         {
-            using var stream = File.Create(def.TexturePath);
-            _edgeTweakerPreview.SaveAsPng(stream, _edgeTweakerTexW, _edgeTweakerTexH);
+            // Save the STRAIGHT-alpha pixels (not the premultiplied preview) to
+            // the RESOLVED path — File.Create on the raw relative path would
+            // write into the exe folder instead of the assets directory.
+            string resolved = Core.GamePaths.Resolve(def.TexturePath);
+            using (var scratch = new Texture2D(_device, _edgeTweakerTexW, _edgeTweakerTexH))
+            {
+                scratch.SetData(_edgeTweakerPixels);
+                using var stream = File.Create(resolved);
+                scratch.SaveAsPng(stream, _edgeTweakerTexW, _edgeTweakerTexH);
+            }
 
             // Reload the texture in the environment system
             _env.ReloadDefTexture(_selectedDef);
@@ -2394,8 +2382,9 @@ public class EnvObjectEditorWindow : Necroking.UI.IModalLayer
 
     private void DrawEdgeTweakerPopup(int screenW, int screenH)
     {
-        // Block input to lower layers
-        _ui.InputLayer = 2;
+        // Overlay contract: blocks everything drawn earlier this frame and lets
+        // this popup's widgets interact at layer 3.
+        _ui.BeginOverlay(3);
 
         // Dark overlay
         _ui.DrawRect(new Rectangle(0, 0, screenW, screenH), new Color(0, 0, 0, 150));
@@ -2413,12 +2402,9 @@ public class EnvObjectEditorWindow : Necroking.UI.IModalLayer
         if (_ui.DrawButton("X", dx + dw - 32, dy + 4, 24, 20, EditorBase.DangerColor))
         {
             _edgeTweakerOpen = false;
-            _ui.InputLayer = 0;
+            _ui.EndOverlay();
             return;
         }
-
-        int savedLayer = _ui.InputLayer;
-        _ui.InputLayer = 0;
 
         int cy = dy + 36;
 
@@ -2473,7 +2459,7 @@ public class EnvObjectEditorWindow : Necroking.UI.IModalLayer
             _edgeTweakerOpen = false;
         }
 
-        _ui.InputLayer = savedLayer;
+        _ui.EndOverlay();
     }
 
     // ========================================================================

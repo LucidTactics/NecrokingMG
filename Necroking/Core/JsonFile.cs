@@ -51,4 +51,57 @@ public static class JsonFile
             return false;
         }
     }
+
+    // Last JSON this process wrote (or verified on disk) per path — lets
+    // SaveIfChanged skip disk writes when nothing actually changed.
+    private static readonly System.Collections.Generic.Dictionary<string, string> _lastWritten = new();
+
+    /// <summary>
+    /// Like <see cref="Save{T}"/>, but only touches the disk when the
+    /// serialized JSON differs from what was last written to (or first found
+    /// at) <paramref name="path"/>. Use for editor auto-save loops that mark
+    /// dirty liberally — prevents rewriting an unchanged file every frame.
+    /// Returns true when the file is up to date (whether or not a write happened).
+    /// </summary>
+    public static bool SaveIfChanged<T>(string path, T value, JsonSerializerOptions? opts) where T : class
+    {
+        try
+        {
+            string json = JsonSerializer.Serialize(value, opts);
+            return WriteStringIfChanged(path, json);
+        }
+        catch (Exception ex)
+        {
+            DebugLog.Log("error", $"Failed to save {path}: {ex.Message}");
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Atomic write that skips the disk when <paramref name="content"/> matches
+    /// what was last written to (or first found at) <paramref name="path"/>.
+    /// Returns true when the file is up to date.
+    /// </summary>
+    public static bool WriteStringIfChanged(string path, string content)
+    {
+        if (_lastWritten.TryGetValue(path, out var prev) && prev == content)
+            return true;
+        if (!_lastWritten.ContainsKey(path) && File.Exists(path))
+        {
+            // First save this session: seed from disk so an unchanged
+            // model doesn't rewrite an identical file.
+            try
+            {
+                if (File.ReadAllText(path) == content)
+                {
+                    _lastWritten[path] = content;
+                    return true;
+                }
+            }
+            catch { /* unreadable — fall through to write */ }
+        }
+        if (!AtomicFile.WriteAllText(path, content)) return false;
+        _lastWritten[path] = content;
+        return true;
+    }
 }

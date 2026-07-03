@@ -144,11 +144,15 @@ public class WallEditorWindow : Necroking.UI.IModalLayer
         // layer) ahead of the map editor underneath.
 
         // Ctrl+S to save (suppress when text field is active)
-        if (!textActive && kb.IsKeyDown(Keys.LeftControl) && kb.IsKeyDown(Keys.S) && prevKb.IsKeyUp(Keys.S))
+        if (!textActive && (kb.IsKeyDown(Keys.LeftControl) || kb.IsKeyDown(Keys.RightControl))
+            && kb.IsKeyDown(Keys.S) && prevKb.IsKeyUp(Keys.S))
             Save();
 
-        // Block input to layer 0 (parent editor) while this popup is open
-        _ui.InputLayer = 1;
+        // Overlay contract: blocks the map editor's widgets (drawn earlier this
+        // frame) and lets THIS window's widgets interact at layer 1. The old
+        // `InputLayer = 1` here blocked this window's own layer-0 widgets —
+        // Save/X/list/fields could never receive a click.
+        _ui.BeginOverlay(1);
 
         // Full-screen dark overlay
         _ui.DrawRect(new Rectangle(0, 0, screenW, screenH), new Color(0, 0, 0, 180));
@@ -183,10 +187,12 @@ public class WallEditorWindow : Necroking.UI.IModalLayer
             _ui.DrawText(_statusMessage, new Vector2(winX + winW - 160, winY + 8), col);
         }
 
-        // Close button
+        // Close button — must go through Close() so the modal-stack layer is
+        // popped; leaving it stranded makes PopupManager eat world clicks.
         if (_ui.DrawButton("X", winX + winW - 30, winY + 1, 28, 28, new Color(150, 50, 50)))
         {
-            _open = false;
+            Close();
+            _ui.EndOverlay();
             return false;
         }
 
@@ -219,6 +225,7 @@ public class WallEditorWindow : Necroking.UI.IModalLayer
         // Dropdown overlays (drawn last, on top of everything)
         _ui.DrawDropdownOverlays();
 
+        _ui.EndOverlay();
         return true;
     }
 
@@ -294,11 +301,11 @@ public class WallEditorWindow : Necroking.UI.IModalLayer
         if (_selectedDef < 0 || _selectedDef >= _walls.DefCount) return;
         var def = _walls.Defs[_selectedDef];
 
-        // This window forces InputLayer=1 (it's itself a popup), so IsInputBlocked(0)
-        // is always true here and can't flag an overlay. Check the overlays explicitly
-        // so the hand-rolled preview handlers (segment drag/resize, 3x3 selector) stay
-        // inert when the texture browser / color picker / a dropdown is open over them.
-        bool overlayBlocking = _textureBrowser.IsOpen || _ui.IsColorPickerOpen || _ui.IsDropdownOpen;
+        // Hand-rolled preview handlers (segment drag/resize, 3x3 selector) gate
+        // on the window's own widget layer: blocked whenever the texture
+        // browser (2), a dropdown (2), the color picker (3), or a confirm
+        // dialog (3) is open above this window.
+        bool overlayBlocking = _ui.IsInputBlocked(_ui.EffectiveLayer(0));
 
         int pad = 8;
         int previewH = h - 130; // Reserve space for neighbor sim controls
@@ -672,6 +679,10 @@ public class WallEditorWindow : Necroking.UI.IModalLayer
                 if (!overlayBlocking && hovered && mouse.LeftButton == ButtonState.Pressed &&
                     _ui._prevMouse.LeftButton == ButtonState.Released)
                 {
+                    // Abandon any in-progress field edit — segment field ids are
+                    // segment-agnostic, so an active buffer would otherwise be
+                    // committed into the newly selected segment.
+                    if (idx != _selectedSegment) _ui.ClearActiveField();
                     _selectedSegment = idx;
                 }
             }
@@ -737,18 +748,36 @@ public class WallEditorWindow : Necroking.UI.IModalLayer
             if (newEnabled != seg.Enabled) seg.Enabled = newEnabled;
             curY += RowH;
 
-            // RM32: Sprite path with Browse button
-            string displayPath = string.IsNullOrEmpty(seg.SpritePath) ? "(none)" : seg.SpritePath;
-            if (displayPath.Length > 25)
-            {
-                int lastSlash = displayPath.LastIndexOfAny(new[] { '/', '\\' });
-                if (lastSlash >= 0) displayPath = "..." + displayPath[lastSlash..];
-            }
+            // RM32: Sprite path with Browse button. Idle display is truncated
+            // ("...tail"), but the edit buffer must hold the FULL path — the old
+            // code committed the truncated display string into the def on edit.
             int browseBtnW = 55;
-            string newPath = _ui.DrawTextField("wallseg_sprite", "Sprite", displayPath, x + pad, curY, fieldW - browseBtnW - 4);
-            // If user edits the sprite path, apply it
-            if (newPath != displayPath && newPath != "(none)")
+            string fullPath = seg.SpritePath ?? "";
+            bool pathWasActive = _ui.IsFieldActive("wallseg_sprite");
+            string shownPath;
+            if (pathWasActive)
+            {
+                shownPath = fullPath;
+            }
+            else
+            {
+                shownPath = string.IsNullOrEmpty(fullPath) ? "(none)" : fullPath;
+                if (shownPath.Length > 25)
+                {
+                    int lastSlash = shownPath.LastIndexOfAny(new[] { '/', '\\' });
+                    if (lastSlash >= 0) shownPath = "..." + shownPath[lastSlash..];
+                }
+            }
+            string newPath = _ui.DrawTextField("wallseg_sprite", "Sprite", shownPath, x + pad, curY, fieldW - browseBtnW - 4);
+            if (!pathWasActive && _ui.IsFieldActive("wallseg_sprite"))
+            {
+                // Just activated: swap the truncated display text for the real value.
+                _ui.SetActiveFieldText("wallseg_sprite", fullPath);
+            }
+            else if (pathWasActive && newPath != fullPath && newPath != "(none)")
+            {
                 seg.SpritePath = newPath;
+            }
             if (_ui.DrawButton("Browse", x + pad + fieldW - browseBtnW, curY, browseBtnW, 20))
             {
                 int capturedSeg = _selectedSegment;

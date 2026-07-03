@@ -380,6 +380,8 @@ public class GameSettingsData
 
     public bool Save(string path)
     {
-        return Core.JsonFile.Save(path, this, Core.JsonDefaults.Indented);
+        // If-changed: the settings window auto-saves on a per-frame dirty flag,
+        // so an unconditional write would rewrite the file ~60×/sec.
+        return Core.JsonFile.SaveIfChanged(path, this, Core.JsonDefaults.Indented);
     }
 }

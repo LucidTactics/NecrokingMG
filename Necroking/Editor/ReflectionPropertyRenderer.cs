@@ -96,6 +96,14 @@ public class ReflectionPropertyRenderer
     public (int nextY, bool changed) DrawAnnotatedProperties(
         string prefix, object obj, int x, int y, int w)
     {
+        // Fold the object's identity into every fieldId. EditorBase keys its
+        // edit buffer by fieldId string only; with a constant prefix ("item",
+        // "sp"), switching the selected def while a field is focused made the
+        // same-frame deactivate-commit write the OLD object's buffer into the
+        // NEW object. The runtime hash is stable for the object's lifetime and
+        // immune to Id renames (which would drop focus per keystroke).
+        prefix = $"{prefix}#{System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(obj):x}";
+
         var layout = GetOrBuildLayout(obj.GetType());
         int curY = y;
         bool anyChanged = false;

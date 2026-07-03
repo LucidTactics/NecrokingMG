@@ -26,13 +26,17 @@ public static class SettingsEnvironmentTab
         ui.DrawText("-- Colors --", new Vector2(x, curY), EditorBase.AccentColor);
         curY += RowH;
 
-        // Base Color (convert ColorJson <-> HdrColor for the swatch)
+        // Base Color (convert ColorJson <-> HdrColor for the swatch).
+        // The swatch mutates its ref LIVE while the picker is open, so write it
+        // back only when it actually changed this frame — the old unconditional
+        // frame-start-snapshot copy-back also reverted every R/G/B int-field
+        // edit the same frame it was typed, making those fields dead.
         var baseHdr = ColorJsonToHdr(grass.BaseColor);
+        var baseBefore = baseHdr;
         ui.DrawText("Base Color", new Vector2(x, curY + 2), EditorBase.TextDim);
-        if (ui.DrawColorSwatch("env_baseColor", x + 120, curY, 40, 18, ref baseHdr))
-        {
+        ui.DrawColorSwatch("env_baseColor", x + 120, curY, 40, 18, ref baseHdr);
+        if (!baseHdr.Equals(baseBefore))
             HdrToColorJson(baseHdr, grass.BaseColor);
-        }
         // Also allow direct R/G/B editing
         int newR = ui.DrawIntField("env_baseR", "  R", grass.BaseColor.R, x, curY + RowH, w);
         grass.BaseColor.R = Math.Clamp(newR, 0, 255);
@@ -40,24 +44,21 @@ public static class SettingsEnvironmentTab
         grass.BaseColor.G = Math.Clamp(newG, 0, 255);
         int newB = ui.DrawIntField("env_baseB", "  B", grass.BaseColor.B, x, curY + RowH * 3, w);
         grass.BaseColor.B = Math.Clamp(newB, 0, 255);
-        // Sync swatch changes back
-        HdrToColorJson(baseHdr, grass.BaseColor);
         curY += RowH * 4;
 
-        // Tip Color
+        // Tip Color (same live-sync pattern as Base Color)
         var tipHdr = ColorJsonToHdr(grass.TipColor);
+        var tipBefore = tipHdr;
         ui.DrawText("Tip Color", new Vector2(x, curY + 2), EditorBase.TextDim);
-        if (ui.DrawColorSwatch("env_tipColor", x + 120, curY, 40, 18, ref tipHdr))
-        {
+        ui.DrawColorSwatch("env_tipColor", x + 120, curY, 40, 18, ref tipHdr);
+        if (!tipHdr.Equals(tipBefore))
             HdrToColorJson(tipHdr, grass.TipColor);
-        }
         int tipR = ui.DrawIntField("env_tipR", "  R", grass.TipColor.R, x, curY + RowH, w);
         grass.TipColor.R = Math.Clamp(tipR, 0, 255);
         int tipG = ui.DrawIntField("env_tipG", "  G", grass.TipColor.G, x, curY + RowH * 2, w);
         grass.TipColor.G = Math.Clamp(tipG, 0, 255);
         int tipB = ui.DrawIntField("env_tipB", "  B", grass.TipColor.B, x, curY + RowH * 3, w);
         grass.TipColor.B = Math.Clamp(tipB, 0, 255);
-        HdrToColorJson(tipHdr, grass.TipColor);
         curY += RowH * 4;
 
         // --- Section: Blade Parameters ---

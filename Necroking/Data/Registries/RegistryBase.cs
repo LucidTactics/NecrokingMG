@@ -57,6 +57,32 @@ public abstract class RegistryBase<TDef> where TDef : class, IHasId, new()
         catch (Exception ex) { error = ex.Message; return null; }
     }
 
+    /// <summary>
+    /// Deep-clone a def via a JSON round-trip using this registry's own
+    /// serializer options. Guarantees clone fidelity equals save/load fidelity:
+    /// any field that survives disk survives Copy/Paste — unlike the old
+    /// hand-maintained field-by-field clone functions, which silently dropped
+    /// every field added after they were written. Returns null on failure.
+    /// </summary>
+    public TDef? CloneDef(TDef src, string newId)
+    {
+        try
+        {
+            var options = CreateJsonOptions();
+            var json = JsonSerializer.Serialize(SerializeItem(src, options), options);
+            using var doc = JsonDocument.Parse(json);
+            var clone = DeserializeItem(doc.RootElement, options);
+            if (clone == null) return null;
+            clone.Id = newId;
+            return clone;
+        }
+        catch (Exception ex)
+        {
+            DebugLog.Log("error", $"CloneDef({src.Id}) failed: {ex.Message}");
+            return null;
+        }
+    }
+
     public void AddAfter(TDef def, string afterId)
     {
         _defs[def.Id] = def;
@@ -151,8 +177,10 @@ public abstract class RegistryBase<TDef> where TDef : class, IHasId, new()
 
             var doc = new Dictionary<string, object> { [RootKey] = items };
             string json = JsonSerializer.Serialize(doc, options);
-            // Atomic tmp+rename so a crash mid-write can't corrupt the registry file.
-            return Core.AtomicFile.WriteAllText(path, json);
+            // Atomic tmp+rename so a crash mid-write can't corrupt the registry
+            // file; if-changed so per-frame editor auto-save loops (weather tab)
+            // don't rewrite an unchanged file 60×/sec.
+            return Core.JsonFile.WriteStringIfChanged(path, json);
         }
         catch (Exception ex) { DebugLog.Log("error", $"Failed to save {path}: {ex.Message}"); return false; }
     }

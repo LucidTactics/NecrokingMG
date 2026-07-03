@@ -35,6 +35,13 @@ public class TextureFileBrowser : Necroking.UI.IModalLayer
     // Scroll state
     private float _scrollOffset;
 
+    // Overlay layer for the editor widget system: above sub-editor/manager
+    // popups (1), below confirm dialogs (3).
+    private const int OverlayLayer = 2;
+
+    // Footer warning (e.g. picking a file outside the project root)
+    private string _statusMsg = "";
+
     // Layout constants
     private const int PopupW = 660;
     private const int PopupH = 520;
@@ -119,6 +126,14 @@ public class TextureFileBrowser : Necroking.UI.IModalLayer
     {
         _isOpen = false;
         _onSelect = null;
+        _statusMsg = "";
+        // Preview textures are session-scoped: keep them cached while browsing
+        // (avoids reloading on every click), release them all on close so VRAM
+        // doesn't grow unboundedly across sessions.
+        foreach (var tex in _textureCache.Values)
+            tex.Dispose();
+        _textureCache.Clear();
+        _previewTexture = null;
         Necroking.Game1.Popups.Pop(this);
     }
 
@@ -128,13 +143,10 @@ public class TextureFileBrowser : Necroking.UI.IModalLayer
     public void Update(EditorBase ui, MouseState mouse, MouseState prevMouse, KeyboardState kb, KeyboardState prevKb)
     {
         if (!_isOpen) return;
-        // Raise the editor input layer NOW (in Update, not Draw) so any
-        // HandlePanelScroll / DrawScrollableList calls in the underlying
-        // editor's Draw pass that runs before our own Draw will see
-        // IsInputBlocked(0) == true and bail out. Without this, the env
-        // editor's property panel scroll fires before our Draw sets the
-        // layer, and the scroll wheel "leaks" through.
-        ui.InputLayer = Math.Max(ui.InputLayer, 1);
+        // Declare the overlay NOW (in Update, not Draw) so any HandlePanelScroll /
+        // DrawScrollableList calls in the underlying editor's Draw pass that run
+        // before our own Draw already see IsInputBlocked == true this frame.
+        ui.NotifyOverlay(OverlayLayer);
         // ESC handling moved to OnCancel — PopupManager dispatches when the
         // browser is the top of the stack.
     }
@@ -157,10 +169,12 @@ public class TextureFileBrowser : Necroking.UI.IModalLayer
     {
         if (!_isOpen) return;
 
-        var mouse = ui._input.Mouse;
+        var mouse = ui.GetMouseState();
+        var prevMouse = ui.GetPrevMouseState();
 
-        // Block input to layers beneath
-        ui.InputLayer = Math.Max(ui.InputLayer, 1);
+        // Overlay contract: blocks the host's widgets (this frame + next-frame
+        // pre-raise) and lets our own widgets interact at OverlayLayer.
+        ui.BeginOverlay(OverlayLayer);
 
         // Dark overlay
         ui.DrawRect(new Rectangle(0, 0, screenW, screenH), OverlayBg);
@@ -184,18 +198,15 @@ public class TextureFileBrowser : Necroking.UI.IModalLayer
         ui.DrawRect(new Rectangle(px, py + TitleBarH, PopupW, 1), BorderColor);
         ui.DrawText("Texture File Browser", new Vector2(px + Padding, py + 5), EditorBase.TextBright);
 
-        // Close button (X) in title bar — temporarily allow input
+        // Close button (X) in title bar
         int closeBtnX = px + totalW - 30;
         int closeBtnY = py + 2;
-        int layerForClose = ui.InputLayer;
-        ui.InputLayer = 0;
         if (ui.DrawButton("X", closeBtnX, closeBtnY, 24, 24, EditorBase.DangerColor))
         {
-            ui.InputLayer = layerForClose;
             Close();
+            ui.EndOverlay();
             return;
         }
-        ui.InputLayer = layerForClose;
 
         int curY = py + TitleBarH + 2;
 
@@ -209,28 +220,25 @@ public class TextureFileBrowser : Necroking.UI.IModalLayer
         _filterText = ui.DrawSearchField("texbrowser_filter", _filterText, px + Padding, curY, PopupW - Padding * 2);
         curY += FilterBarH + 2;
 
-        // Content area
+        // Content area — the list occupies only the left column; the preview
+        // panel owns the right PreviewW pixels (rows must not extend under it).
         int contentY = curY;
         int contentH = PopupH - (curY - py) - FooterH;
-        var contentRect = new Rectangle(px + 2, contentY, PopupW - 4, contentH);
+        var contentRect = new Rectangle(px + 2, contentY, listW - 4, contentH);
         ui.DrawRect(contentRect, new Color(20, 20, 35, 200));
 
         // Build filtered list of entries
         var displayEntries = BuildDisplayEntries();
         int totalItemH = displayEntries.Count * ItemH;
 
-        // Mouse wheel scrolling
-        if (contentRect.Contains(mouse.X, mouse.Y))
-        {
-            int scrollDelta = mouse.ScrollWheelValue - _prevScrollValue;
-            if (scrollDelta != 0)
-            {
-                _scrollOffset -= scrollDelta * 0.15f;
-                float maxScroll = Math.Max(0, totalItemH - contentH);
-                _scrollOffset = Math.Clamp(_scrollOffset, 0, maxScroll);
-            }
-        }
-        _prevScrollValue = mouse.ScrollWheelValue;
+        // Mouse wheel scrolling (consumes the shared scroll flag so it can't
+        // also scroll a panel beneath). Re-clamp every frame so a shrinking
+        // filtered list can't leave the offset stranded past the end.
+        float maxScroll = Math.Max(0, totalItemH - contentH);
+        ui.HandlePanelScroll(contentRect, ref _scrollOffset, maxScroll, 0.15f);
+        _scrollOffset = Math.Clamp(_scrollOffset, 0, maxScroll);
+
+        bool blocked = ui.IsInputBlocked(ui.EffectiveLayer(0));
 
         // Draw entries with clipping
         ui.BeginClip(contentRect);
@@ -244,8 +252,8 @@ public class TextureFileBrowser : Necroking.UI.IModalLayer
             if (iy + ItemH < contentY) continue;
             if (iy >= contentY + contentH) break;
 
-            var itemRect = new Rectangle(px + 2, iy, PopupW - 4, ItemH);
-            bool hovered = itemRect.Contains(mouse.X, mouse.Y) && contentRect.Contains(mouse.X, mouse.Y);
+            var itemRect = new Rectangle(px + 2, iy, listW - 4, ItemH);
+            bool hovered = !blocked && ui.HitTest(itemRect);
 
             bool isSelected = !entry.IsDirectory && entry.FullPath.Replace('\\', '/') == _selectedFile;
             if (isSelected)
@@ -255,7 +263,7 @@ public class TextureFileBrowser : Necroking.UI.IModalLayer
                 if (!isSelected) ui.DrawRect(itemRect, HoverBg);
 
                 // Click handling
-                if (mouse.LeftButton == ButtonState.Pressed && _prevMouseState.LeftButton == ButtonState.Released)
+                if (mouse.LeftButton == ButtonState.Pressed && prevMouse.LeftButton == ButtonState.Released)
                 {
                     if (entry.IsDirectory)
                     {
@@ -266,6 +274,7 @@ public class TextureFileBrowser : Necroking.UI.IModalLayer
                         // File clicked — select for preview (don't commit yet)
                         _selectedFile = entry.FullPath.Replace('\\', '/');
                         _previewTexture = LoadPreviewTexture(_selectedFile);
+                        _statusMsg = "";
                     }
                 }
             }
@@ -287,13 +296,13 @@ public class TextureFileBrowser : Necroking.UI.IModalLayer
 
         ui.EndClip();
 
-        // Scrollbar
+        // Scrollbar — inside the list column, not under the preview panel.
         if (totalItemH > contentH)
         {
             float scrollRatio = _scrollOffset / (totalItemH - contentH);
             int barH = Math.Max(20, contentH * contentH / totalItemH);
             int barY = contentY + (int)(scrollRatio * (contentH - barH));
-            ui.DrawRect(new Rectangle(px + PopupW - 10, barY, 7, barH), new Color(100, 100, 140, 180));
+            ui.DrawRect(new Rectangle(px + listW - 10, barY, 7, barH), new Color(100, 100, 140, 180));
         }
 
         // Preview panel (right side)
@@ -336,36 +345,40 @@ public class TextureFileBrowser : Necroking.UI.IModalLayer
             ui.DrawText("No preview", new Vector2(previewX + 8, previewY + 8), EditorBase.TextDim);
         }
 
-        // Footer: Use + Cancel buttons (temporarily lower InputLayer so buttons work)
+        // Footer: Use + Cancel buttons
         int footerY = py + PopupH - FooterH + 4;
         bool hasSelection = !string.IsNullOrEmpty(_selectedFile);
-        int savedLayer = ui.InputLayer;
-        ui.InputLayer = 0;
+
+        if (!string.IsNullOrEmpty(_statusMsg))
+            ui.DrawText(_statusMsg, new Vector2(px + Padding, footerY + 4), EditorBase.DangerColor);
 
         if (hasSelection && ui.DrawButton("Use", px + totalW - 170, footerY, 70, 24, EditorBase.AccentColor))
         {
-            ui.InputLayer = savedLayer;
-            _onSelect?.Invoke(Necroking.Core.GamePaths.MakeRelative(_selectedFile));
-            Close();
-            _prevMouseState = mouse;
-            return;
+            // Never persist an absolute path: asset paths in JSON must be
+            // project-relative. MakeRelative returns its input unchanged when
+            // the file is outside the project root — refuse instead of committing.
+            string rel = Necroking.Core.GamePaths.MakeRelative(_selectedFile);
+            if (Path.IsPathRooted(rel))
+            {
+                _statusMsg = "File is outside the project — pick one under assets/";
+            }
+            else
+            {
+                _onSelect?.Invoke(rel);
+                Close();
+                ui.EndOverlay();
+                return;
+            }
         }
         if (ui.DrawButton("Cancel", px + totalW - 80, footerY, 70, 24, EditorBase.DangerColor))
         {
-            ui.InputLayer = savedLayer;
             Close();
-            _prevMouseState = mouse;
+            ui.EndOverlay();
             return;
         }
-        ui.InputLayer = savedLayer;
 
-        // Store mouse for next frame click detection
-        _prevMouseState = mouse;
+        ui.EndOverlay();
     }
-
-    // Previous mouse state for click detection inside Draw
-    private MouseState _prevMouseState;
-    private int _prevScrollValue;
 
     // ================================================================
     //  Internal helpers
@@ -437,12 +450,13 @@ public class TextureFileBrowser : Necroking.UI.IModalLayer
         string normalizedCurrent = _currentDir.Replace('\\', '/').TrimEnd('/');
         string normalizedRoot = _rootDir.Replace('\\', '/').TrimEnd('/');
 
-        // ".." entry to go up (unless we're at or above the root)
-        bool canGoUp = normalizedCurrent.Length > normalizedRoot.Length
-                       && normalizedCurrent.StartsWith(normalizedRoot, StringComparison.OrdinalIgnoreCase);
+        // ".." entry to go up — never above the root. If Open() landed us
+        // OUTSIDE the root (current value pointed elsewhere), the up-entry
+        // jumps straight back to the root instead of climbing the drive.
+        bool insideRoot = normalizedCurrent.StartsWith(normalizedRoot, StringComparison.OrdinalIgnoreCase);
+        bool canGoUp = insideRoot && normalizedCurrent.Length > normalizedRoot.Length;
 
-        // Also allow going up if we're not inside root at all (shouldn't normally happen, but be safe)
-        if (!normalizedCurrent.Equals(normalizedRoot, StringComparison.OrdinalIgnoreCase))
+        if (canGoUp)
         {
             string? parent = Path.GetDirectoryName(_currentDir)?.Replace('\\', '/');
             if (!string.IsNullOrEmpty(parent))
@@ -455,6 +469,16 @@ public class TextureFileBrowser : Necroking.UI.IModalLayer
                     IsUpDir = true
                 });
             }
+        }
+        else if (!insideRoot)
+        {
+            entries.Add(new DisplayEntry
+            {
+                Name = "..",
+                FullPath = _rootDir,
+                IsDirectory = true,
+                IsUpDir = true
+            });
         }
 
         // Directories

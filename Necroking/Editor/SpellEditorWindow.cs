@@ -232,10 +232,10 @@ public class SpellEditorWindow : EditorWindow
         int previewX = detailX + detailW + 1;
         DrawPreviewPanel(previewX, contentY, previewPanelW, contentH);
 
-        // --- Popup overlays (drawn on top) ---
+        // --- Popup overlays (drawn on top; each wraps itself in BeginOverlay
+        // so the panels above are blocked and its own widgets work) ---
         if (_flipbookManagerOpen)
         {
-            _ui.InputLayer = 1;
             DrawFlipbookManagerPopup(screenW, screenH);
         }
 
@@ -245,7 +245,6 @@ public class SpellEditorWindow : EditorWindow
             UpdateBuffPreview(dt);
             RenderBuffPreviewToTarget();
 
-            _ui.InputLayer = 1;
             DrawBuffManagerPopup(screenW, screenH);
         }
 
@@ -631,6 +630,10 @@ public class SpellEditorWindow : EditorWindow
         // Update texture file browser input
         _fbTextureBrowser.Update(_ui, _ui._mouse, _ui._prevMouse, _ui._kb, _ui._prevKb);
 
+        // Overlay contract: blocks the spell editor's panels (which drew
+        // earlier this frame) and lets this popup's widgets interact at layer 1.
+        _ui.BeginOverlay(1);
+
         // Modal overlay
         _ui.DrawRect(new Rectangle(0, 0, screenW, screenH), new Color(0, 0, 0, 100));
 
@@ -647,15 +650,11 @@ public class SpellEditorWindow : EditorWindow
         var headerSize = _ui.MeasureText(headerText);
         _ui.DrawText(headerText, new Vector2(px + (pw - headerSize.X) / 2, py + 10), EditorBase.TextBright);
 
-        // Temporarily unblock input so popup buttons/fields work
-        int savedLayer = _ui.InputLayer;
-        _ui.InputLayer = 0;
-
         // Close button
         if (_ui.DrawButton("X", px + pw - 40, py + 5, 30, 30))
         {
-            _ui.InputLayer = savedLayer;
             _flipbookManagerOpen = false;
+            _ui.EndOverlay();
             return;
         }
 
@@ -692,7 +691,7 @@ public class SpellEditorWindow : EditorWindow
 
             var iRect = new Rectangle(px + 4, (int)fbDrawY, listW - 8, itemH);
             bool sel = (i == _fbSelectedIdx);
-            bool hov = iRect.Contains(_ui._mouse.X, _ui._mouse.Y) && fbListRect.Contains(_ui._mouse.X, _ui._mouse.Y);
+            bool hov = !_ui.IsInputBlocked(_ui.EffectiveLayer(0)) && _ui.HitTest(iRect);
 
             Color bg = sel ? new Color(60, 60, 90) : (hov ? new Color(45, 45, 60) : Color.Transparent);
             _ui.DrawRect(iRect, bg);
@@ -702,7 +701,13 @@ public class SpellEditorWindow : EditorWindow
                 sel ? EditorBase.TextBright : EditorBase.TextColor);
 
             if (hov && _ui._mouse.LeftButton == ButtonState.Pressed && _ui._prevMouse.LeftButton == ButtonState.Released)
+            {
+                // Abandon any in-progress field edit — the fb_* field ids are
+                // selection-agnostic, so an active buffer would otherwise be
+                // committed into the newly selected flipbook.
+                if (i != _fbSelectedIdx) _ui.ClearActiveField();
                 _fbSelectedIdx = i;
+            }
 
             fbDrawY += itemH;
         }
@@ -714,9 +719,14 @@ public class SpellEditorWindow : EditorWindow
 
         if (_ui.DrawButton("+ New", px + 6, btnRowY, btnW, 32))
         {
+            // Unique id: "flipbook_N" can collide after deletions (Add is an
+            // upsert and would silently overwrite the existing def).
+            int n = _gameData.Flipbooks.Count;
+            string newId = "flipbook_" + n;
+            while (_gameData.Flipbooks.Get(newId) != null) newId = "flipbook_" + ++n;
             var nf = new FlipbookDef
             {
-                Id = "flipbook_" + _gameData.Flipbooks.Count,
+                Id = newId,
                 DisplayName = "New Flipbook",
                 Path = "assets/Effects/"
             };
@@ -758,8 +768,8 @@ public class SpellEditorWindow : EditorWindow
         // Apply & Close
         if (_ui.DrawButton("Apply & Close", px + pw - 160, btnRowY, 150, 32))
         {
-            _ui.InputLayer = savedLayer;
             _flipbookManagerOpen = false;
+            _ui.EndOverlay();
             return;
         }
 
@@ -820,11 +830,11 @@ public class SpellEditorWindow : EditorWindow
             }
         }
 
-        // Texture file browser popup (drawn on top of flipbook manager)
+        // Texture file browser popup (drawn on top of flipbook manager; runs
+        // at its own higher overlay layer, blocking this popup's widgets)
         _fbTextureBrowser.Draw(_ui, screenW, screenH);
 
-        // Restore input layer
-        _ui.InputLayer = savedLayer;
+        _ui.EndOverlay();
     }
 
     // ======================================
@@ -850,14 +860,14 @@ public class SpellEditorWindow : EditorWindow
             var bd = _gameData.Buffs.Get(buffIDs[_buffSelectedIdx]);
             if (bd != null)
             {
-                if (_buffSelectedIdx != _lastBuffPreviewIdx)
+                // Re-sync only when the selection changed or an edit marked the
+                // preview dirty — NOT every frame (SetBuff sets the preview's
+                // dirty flag, and a permanently-dirty preview re-syncs its orbs
+                // to spawn angles each frame, freezing the orbit animation).
+                if (_buffSelectedIdx != _lastBuffPreviewIdx || _buffPreviewDirty)
                 {
                     _lastBuffPreviewIdx = _buffSelectedIdx;
-                    _buffPreview.SetBuff(bd);
-                }
-                else
-                {
-                    // Live update: always pass the current buff data
+                    _buffPreviewDirty = false;
                     _buffPreview.SetBuff(bd);
                 }
             }
@@ -882,6 +892,10 @@ public class SpellEditorWindow : EditorWindow
 
     private void DrawBuffManagerPopup(int screenW, int screenH)
     {
+        // Overlay contract: blocks the spell editor's panels (which drew
+        // earlier this frame) and lets this popup's widgets interact at layer 1.
+        _ui.BeginOverlay(1);
+
         // Modal overlay
         _ui.DrawRect(new Rectangle(0, 0, screenW, screenH), new Color(0, 0, 0, 100));
 
@@ -898,15 +912,11 @@ public class SpellEditorWindow : EditorWindow
         var headerSize = _ui.MeasureText(headerText);
         _ui.DrawText(headerText, new Vector2(px + (pw - headerSize.X) / 2, py + 10), EditorBase.TextBright);
 
-        // Temporarily unblock input so popup buttons/fields work
-        int savedLayer = _ui.InputLayer;
-        _ui.InputLayer = 0;
-
         // Close button
         if (_ui.DrawButton("X", px + pw - 40, py + 5, 30, 30))
         {
-            _ui.InputLayer = savedLayer;
             _buffManagerOpen = false;
+            _ui.EndOverlay();
             return;
         }
 
@@ -941,10 +951,9 @@ public class SpellEditorWindow : EditorWindow
 
             var iRect = new Rectangle(px + 4, (int)buffDrawY, listW - 8, itemH);
             bool sel = (i == _buffSelectedIdx);
-            // Inert while the color picker owns input (IsInputBlocked(0) is true via
-            // _colorPicker.ConsumesInput even though this popup forces InputLayer=0),
-            // so a click on the picker grid over a row doesn't also re-select the buff.
-            bool hov = !_ui.IsInputBlocked(0) && iRect.Contains(_ui._mouse.X, _ui._mouse.Y) && buffListRect.Contains(_ui._mouse.X, _ui._mouse.Y);
+            // Inert while anything above owns input (color picker, open
+            // dropdown, texture browser) — the effective-layer check covers all.
+            bool hov = !_ui.IsInputBlocked(_ui.EffectiveLayer(0)) && _ui.HitTest(iRect);
             if (hov) _ui.SetMouseOverUI();
 
             Color bg = sel ? new Color(60, 60, 90) : (hov ? new Color(45, 45, 60) : Color.Transparent);
@@ -955,7 +964,12 @@ public class SpellEditorWindow : EditorWindow
                 sel ? EditorBase.TextBright : EditorBase.TextColor);
 
             if (hov && _ui._mouse.LeftButton == ButtonState.Pressed && _ui._prevMouse.LeftButton == ButtonState.Released)
+            {
+                // Same wrong-object-commit guard as the flipbook list (bf_* ids
+                // are selection-agnostic).
+                if (i != _buffSelectedIdx) _ui.ClearActiveField();
                 _buffSelectedIdx = i;
+            }
 
             buffDrawY += itemH;
         }
@@ -967,9 +981,14 @@ public class SpellEditorWindow : EditorWindow
 
         if (_ui.DrawButton("+ New", px + 6, btnRowY, btnW, 32))
         {
+            // Unique id: "buff_N" can collide after deletions (Add is an
+            // upsert and would silently overwrite the existing def).
+            int n = _gameData.Buffs.Count;
+            string newId = "buff_" + n;
+            while (_gameData.Buffs.Get(newId) != null) newId = "buff_" + ++n;
             var nb = new BuffDef
             {
-                Id = "buff_" + _gameData.Buffs.Count,
+                Id = newId,
                 DisplayName = "New Buff"
             };
             _gameData.Buffs.Add(nb);
@@ -1006,8 +1025,8 @@ public class SpellEditorWindow : EditorWindow
         // Apply & Close
         if (_ui.DrawButton("Apply & Close", px + pw - 160, btnRowY, 150, 32))
         {
-            _ui.InputLayer = savedLayer;
             _buffManagerOpen = false;
+            _ui.EndOverlay();
             return;
         }
 
@@ -1020,7 +1039,7 @@ public class SpellEditorWindow : EditorWindow
                 DrawBuffDetail(bd, contentX, contentY, contentW, btnRowY - contentY - 10);
         }
 
-        _ui.InputLayer = savedLayer;
+        _ui.EndOverlay();
     }
 
     // ======================================
@@ -1660,8 +1679,27 @@ public class SpellEditorWindow : EditorWindow
     protected override void MarkDirty()
     {
         base.MarkDirty();
-        _spellPreview?.MarkDirty();
+        // Dispatch to the preview the user is actually looking at: buff-manager
+        // edits invalidate the buff preview (its orbs/arcs resync on dirty);
+        // everything else restarts the spell preview. Restarting the spell
+        // preview for every buff-color tweak was pure churn.
+        if (_buffManagerOpen)
+            _buffPreviewDirty = true;
+        else
+            _spellPreview?.MarkDirty();
+        // Flipbook grid/path edits must also reach the RUNTIME flipbook
+        // dictionary the previews (and the game) render from — without this,
+        // "Apply & Close" applied nothing until a map reload.
+        if (_flipbookManagerOpen)
+            Necroking.Game1.Instance?.ReloadFlipbooksFromRegistry();
     }
+
+    // Set by MarkDirty while the buff manager is open; consumed by
+    // UpdateBuffPreview. Pushing SetBuff every frame (the old approach)
+    // kept the preview permanently dirty — orbs re-synced to their spawn
+    // angles each frame (never orbiting) and lightning re-rolled at
+    // framerate regardless of JitterHz.
+    private bool _buffPreviewDirty;
 
     // SetStatus is inherited (default 2s timer). Old SpellEditor used 3s;
     // the 1s difference is imperceptible.
@@ -1688,126 +1726,22 @@ public class SpellEditorWindow : EditorWindow
         };
     }
 
-    private static SpellDef CloneSpell(SpellDef src, string newId)
+    // Clones go through the registry's JSON round-trip (RegistryBase.CloneDef):
+    // clone fidelity == save/load fidelity, so new SpellDef/BuffDef fields can
+    // never be silently dropped by Copy/Paste. (The old reflection copy here
+    // skipped every complex sub-object it didn't special-case; the manual
+    // BuffDef copy needed updating for every new visual block.)
+    private SpellDef CloneSpell(SpellDef src, string newId)
     {
-        var def = new SpellDef();
-        var props = typeof(SpellDef).GetProperties(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
-
-        foreach (var prop in props)
-        {
-            if (!prop.CanWrite || !prop.CanRead) continue;
-            var val = prop.GetValue(src);
-            if (val == null) { prop.SetValue(def, null); continue; }
-
-            if (val is List<string> strList)
-                prop.SetValue(def, new List<string>(strList));
-            else if (val is FlipbookRef fbRef)
-                prop.SetValue(def, new FlipbookRef
-                {
-                    FlipbookID = fbRef.FlipbookID, FPS = fbRef.FPS, Scale = fbRef.Scale,
-                    Color = fbRef.Color, Rotation = fbRef.Rotation, BlendMode = fbRef.BlendMode,
-                    Duration = fbRef.Duration, Alignment = fbRef.Alignment,
-                });
-            else if (prop.PropertyType.IsValueType || prop.PropertyType == typeof(string))
-                prop.SetValue(def, val);
-        }
-
-        def.Id = newId;
+        var def = _gameData.Spells.CloneDef(src, newId) ?? new SpellDef { Id = newId };
         def.DisplayName = src.DisplayName + " (Copy)";
         return def;
     }
 
-    private static BuffDef CloneBuff(BuffDef src, string newId)
+    private BuffDef CloneBuff(BuffDef src, string newId)
     {
-        var def = new BuffDef
-        {
-            Id = newId,
-            DisplayName = src.DisplayName + " (Copy)",
-            Duration = src.Duration,
-            MaxStacks = src.MaxStacks,
-            HasOrbital = src.HasOrbital,
-            HasGroundAura = src.HasGroundAura,
-            HasBehindEffect = src.HasBehindEffect,
-            HasFrontEffect = src.HasFrontEffect,
-            HasLightningAura = src.HasLightningAura,
-            HasImageBehind = src.HasImageBehind,
-            HasPulsingOutline = src.HasPulsingOutline,
-            HasWeaponParticle = src.HasWeaponParticle,
-        };
-
-        foreach (var eff in src.Effects)
-            def.Effects.Add(new BuffEffect { Type = eff.Type, Stat = eff.Stat, Value = eff.Value });
-
-        if (src.Orbital != null)
-            def.Orbital = new OrbitalVisual
-            {
-                FlipbookID = src.Orbital.FlipbookID, OrbScale = src.Orbital.OrbScale,
-                OrbColor = src.Orbital.OrbColor, SunOrbitRadius = src.Orbital.SunOrbitRadius,
-                SunOrbitSpeed = src.Orbital.SunOrbitSpeed, MoonOrbitRadius = src.Orbital.MoonOrbitRadius,
-                MoonOrbitSpeed = src.Orbital.MoonOrbitSpeed, OrbCount = src.Orbital.OrbCount,
-                OrbCountMatchesStacks = src.Orbital.OrbCountMatchesStacks,
-            };
-        if (src.GroundAura != null)
-            def.GroundAura = new GroundAuraVisual
-            {
-                FlipbookID = src.GroundAura.FlipbookID, Scale = src.GroundAura.Scale,
-                Color = src.GroundAura.Color, BlendMode = src.GroundAura.BlendMode,
-                PulseSpeed = src.GroundAura.PulseSpeed, PulseAmount = src.GroundAura.PulseAmount,
-            };
-        if (src.UnitTint != null)
-            def.UnitTint = new ColorJson { R = src.UnitTint.R, G = src.UnitTint.G, B = src.UnitTint.B, A = src.UnitTint.A };
-
-        // RS19: Deep copy remaining visual sub-objects
-        if (src.BehindEffect != null)
-            def.BehindEffect = new UprightEffectVisual
-            {
-                FlipbookID = src.BehindEffect.FlipbookID, Scale = src.BehindEffect.Scale,
-                Color = src.BehindEffect.Color, BlendMode = src.BehindEffect.BlendMode,
-                YOffset = src.BehindEffect.YOffset, PinToEffectSpawn = src.BehindEffect.PinToEffectSpawn,
-            };
-        if (src.FrontEffect != null)
-            def.FrontEffect = new UprightEffectVisual
-            {
-                FlipbookID = src.FrontEffect.FlipbookID, Scale = src.FrontEffect.Scale,
-                Color = src.FrontEffect.Color, BlendMode = src.FrontEffect.BlendMode,
-                YOffset = src.FrontEffect.YOffset, PinToEffectSpawn = src.FrontEffect.PinToEffectSpawn,
-            };
-        if (src.LightningAura != null)
-            def.LightningAura = new LightningAuraVisual
-            {
-                ArcCount = src.LightningAura.ArcCount, ArcRadius = src.LightningAura.ArcRadius,
-                CoreColor = src.LightningAura.CoreColor, GlowColor = src.LightningAura.GlowColor,
-                CoreWidth = src.LightningAura.CoreWidth, GlowWidth = src.LightningAura.GlowWidth,
-                FlickerHz = src.LightningAura.FlickerHz, JitterHz = src.LightningAura.JitterHz,
-            };
-        if (src.ImageBehind != null)
-            def.ImageBehind = new ImageBehindVisual
-            {
-                Color = src.ImageBehind.Color, Scale = src.ImageBehind.Scale,
-                PulseSpeed = src.ImageBehind.PulseSpeed, PulseAmount = src.ImageBehind.PulseAmount,
-                BlendMode = src.ImageBehind.BlendMode,
-            };
-        if (src.PulsingOutline != null)
-            def.PulsingOutline = new PulsingOutlineVisual
-            {
-                Color = src.PulsingOutline.Color, PulseColor = src.PulsingOutline.PulseColor,
-                OutlineWidth = src.PulsingOutline.OutlineWidth, PulseWidth = src.PulsingOutline.PulseWidth,
-                PulseSpeed = src.PulsingOutline.PulseSpeed, BlendMode = src.PulsingOutline.BlendMode,
-            };
-        if (src.WeaponParticle != null)
-            def.WeaponParticle = new WeaponParticleVisual
-            {
-                FlipbookID = src.WeaponParticle.FlipbookID, FPS = src.WeaponParticle.FPS,
-                Color = src.WeaponParticle.Color, SpawnRate = src.WeaponParticle.SpawnRate,
-                RangeMin = src.WeaponParticle.RangeMin, RangeMax = src.WeaponParticle.RangeMax,
-                ParticleLifetime = src.WeaponParticle.ParticleLifetime,
-                ParticleScale = src.WeaponParticle.ParticleScale,
-                MoveSpeed = src.WeaponParticle.MoveSpeed,
-                MoveDirX = src.WeaponParticle.MoveDirX, MoveDirY = src.WeaponParticle.MoveDirY,
-                MoveDirZ = src.WeaponParticle.MoveDirZ,
-                BlendMode = src.WeaponParticle.BlendMode, RenderBehind = src.WeaponParticle.RenderBehind,
-            };
-
+        var def = _gameData.Buffs.CloneDef(src, newId) ?? new BuffDef { Id = newId };
+        def.DisplayName = src.DisplayName + " (Copy)";
         return def;
     }
 

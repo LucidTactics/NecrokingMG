@@ -87,7 +87,14 @@ public class SettingsWindow
     /// </summary>
     public void Update(int screenW, int screenH, GameTime gameTime)
     {
-        // Auto-save when dirty
+        // Auto-save when dirty. The delegated tabs mark dirty every frame they
+        // are displayed (they write through to the settings objects live), so
+        // debounce the check — Save itself is if-changed (JsonFile), meaning
+        // the disk is only touched when a value actually changed.
+        _autoSaveTimer += (float)gameTime.ElapsedGameTime.TotalSeconds;
+        if (_autoSaveTimer < AutoSaveInterval) return;
+        _autoSaveTimer = 0f;
+
         if (_dirty)
         {
             _dirty = false;
@@ -102,6 +109,10 @@ public class SettingsWindow
             }
         }
     }
+
+    // Auto-save debounce (seconds between dirty checks).
+    private const float AutoSaveInterval = 0.5f;
+    private float _autoSaveTimer;
 
     /// <summary>
     /// Called each frame from Game1.Draw when MenuState == Settings.
