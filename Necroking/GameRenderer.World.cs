@@ -110,13 +110,19 @@ partial class GameRenderer
         }
     }
 
+    // Matches the shader's array length (16 in GroundShader.fx).
+    private const int MaxGroundTypes = 16;
+    // Reused every frame (refilled, never re-allocated) — the ground-shader
+    // uniform uploads previously allocated both arrays each frame.
+    private readonly Vector4[] _groundTintArr = new Vector4[MaxGroundTypes];
+    private readonly float[] _groundWaterArr = new float[MaxGroundTypes];
+
     private void DrawGroundShader(int worldW, int worldH)
     {
         _g._groundDrawStopwatch.Restart();
-        // End the current SpriteBatch and start a new one with the ground shader
-        _g._spriteBatch.End();
 
-        // Set shader parameters
+        // Set shader parameters (independent of SpriteBatch state — they upload
+        // at Apply time inside EffectBatch.BeginEffect's Begin below)
         _g._groundEffect!.Parameters["AmbientColor"]?.SetValue(new Vector3(_g._ambientColor.R / 255f, _g._ambientColor.G / 255f, _g._ambientColor.B / 255f));
         _g._groundEffect.Parameters["CameraPos"]?.SetValue(new Vector2(_g._camera.Position.X, _g._camera.Position.Y));
         _g._groundEffect.Parameters["Zoom"]?.SetValue(_g._camera.Zoom);
@@ -128,17 +134,14 @@ partial class GameRenderer
         _g._groundEffect.Parameters["UvWarpFreq"]?.SetValue(_g._groundSystem.UvWarpFreq);
         _g._groundEffect.Parameters["Time"]?.SetValue(_g._gameTime);
 
-        // Per-type uniforms: tint (defaults white) and water-animation flag.
-        // Shader treats array slots 0..7; unused slots are harmless defaults.
-        // Per-ground-type uniform arrays. Indexed by ground-type id (0..31)
-        // matching the bottom 5 bits of the tilemap byte; the top 3 bits hold
-        // the texture-slot id (0..7) which drives the shader cascade. The
-        // tint/iswater arrays must match the shader's array length (32 in
-        // GroundShader.fx).
-        const int MaxGroundTypes = 16;
+        // Per-ground-type uniform arrays, indexed by the type id in the bottom
+        // 5 bits of the tilemap byte (the top 3 bits hold the texture-slot id,
+        // 0..7, which drives the shader cascade). The shader clamps decoded
+        // type ids to 0..15, so a 17th+ ground type renders with type-15's
+        // tint/water entry rather than reading past the arrays.
         const int MaxTextureSlots = 8;
-        var tintArr = new Vector4[MaxGroundTypes];
-        var waterArr = new float[MaxGroundTypes];
+        var tintArr = _groundTintArr;
+        var waterArr = _groundWaterArr;
         for (int i = 0; i < MaxGroundTypes; i++) { tintArr[i] = Vector4.One; waterArr[i] = 0f; }
         int typeCap = Math.Min(_g._groundSystem.TypeCount, MaxGroundTypes);
         for (int i = 0; i < typeCap; i++)
@@ -165,15 +168,12 @@ partial class GameRenderer
                 _g._groundEffect.Parameters[texParamNames[i]]?.SetValue(tex);
         }
 
-        _g._spriteBatch.Begin(SpriteSortMode.Immediate, BlendState.Opaque, SamplerState.PointClamp,
-            null, null, _g._groundEffect);
+        Render.EffectBatch.BeginEffect(_g._spriteBatch, _g._groundEffect, BlendState.Opaque, SamplerState.PointClamp);
 
         // SpriteBatch.Draw binds _g._groundVertexMapTex to slot 0 (= TilemapSampler)
         _g._spriteBatch.Draw(_g._groundVertexMapTex!, new Rectangle(0, 0, _g._renderer.ScreenW, _g._renderer.ScreenH), Color.White);
-        _g._spriteBatch.End();
 
-        // Resume normal SpriteBatch (premultiplied alpha)
-        _g._spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.LinearClamp);
+        Render.EffectBatch.EndEffectResumeScene(_g._spriteBatch);
 
         _g._groundDrawStopwatch.Stop();
         double groundDrawMs = _g._groundDrawStopwatch.Elapsed.TotalMilliseconds;

@@ -174,8 +174,9 @@ public class FogOfWarSystem
     ///   - (throttled) redraw the raw visibility circles into _visibilityRT
     ///   - (every frame) temporally lerp _smoothedVisibilityRT toward the raw
     ///     visibility, accumulate into explored, and pack into combined
-    /// The temporal pass uses GraphicsDevice.BlendFactor to control the lerp
-    /// rate without a custom shader.
+    /// The temporal pass uses the FogSmooth shader's premultiplied-output trick
+    /// (output (rgb*Rate, Rate) under AlphaBlend = exact lerp toward the target
+    /// at Rate) to control the lerp rate portably on DesktopGL.
     /// </summary>
     public void Update(SpriteBatch spriteBatch, UnitArrays units, FogOfWarSettings settings, float dt)
     {

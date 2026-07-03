@@ -9,9 +9,6 @@
 
 // Matches C++ bloom_composite.fs: simple additive scene + bloom * intensity
 float BloomIntensity;
-float BaseIntensity;
-float BloomSaturation;
-float BaseSaturation;
 
 sampler2D TextureSampler : register(s0);
 sampler2D BloomSampler : register(s1);

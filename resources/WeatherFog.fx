@@ -20,10 +20,12 @@ float2 FogWorldScale;   // world units covered by screen (width, height)
 float HazeStrength;
 float3 HazeColor;
 
-// Brightness
+// Brightness — NOTE: WeatherRenderer.cs currently always passes 1.0 (darkening
+// is applied pre-bloom as ambient light on sprites); block kept for the weather
+// editor to re-enable.
 float Brightness;
 
-// Tint
+// Tint — NOTE: WeatherRenderer.cs currently always passes white/0 (see Brightness).
 float3 TintColor;
 float TintStrength;
 
@@ -31,13 +33,26 @@ float TintStrength;
 float VignetteStrength;
 float VignetteRadius;
 float VignetteSoftness;
-float2 Resolution;
+float2 ScreenSize;
 
 // Lightning flash
 float FlashIntensity;
 
 // SpriteBatch provides the texture in s0
 sampler2D TextureSampler : register(s0);
+
+// ─── Fog/haze tuning ───
+static const float2 FogWindDir       = float2(1.0, 0.3);         // scroll direction (unnormalized)
+static const float  FogUvScale       = 0.03;                     // world units → noise UV
+static const float3 FogOctaveScales  = float3(3.0, 7.0, 15.0);   // coarse / mid / fine layer
+static const float3 FogOctaveSpeeds  = float3(0.3, 0.7, 1.2);    // per-layer scroll multiplier
+static const float3 FogOctaveWeights = float3(0.5, 0.3, 0.2);    // per-layer blend (sums to 1)
+static const float  FogCoverLo       = 0.3;                      // noise below this = clear
+static const float  FogCoverHi       = 0.8;                      // noise above this = max fog
+static const float  FogMaxOpacity    = 0.6;                      // overlay alpha cap at density 1
+static const float  HazeRampLo       = 0.2;                      // haze fades in from this screen depth...
+static const float  HazeRampHi       = 0.7;                      // ...to full by this (0 = bottom, 1 = top)
+static const float  FlashMaxOpacity  = 0.8;                      // lightning flash white-layer cap
 
 // --- 2D Simplex noise ---
 // Based on the classic Ashima/Stefan Gustavson implementation
@@ -88,16 +103,12 @@ float snoise(float2 v)
     return 130.0 * dot(m, g);
 }
 
-// --- HLSL smoothstep (some profiles already have it, but define for safety) ---
-float smoothstep_custom(float edge0, float edge1, float x)
-{
-    float t = saturate((x - edge0) / (edge1 - edge0));
-    return t * t * (3.0 - 2.0 * t);
-}
-
 float4 PixelShaderFunction(float2 texCoord : TEXCOORD0) : COLOR0
 {
-    // Start with transparent (we'll output fog as a blended overlay)
+    // The whole overlay is composited in PREMULTIPLIED space: every layer is
+    // "over"-blended as (rgb*(1-a) + layerColor*layerA, a*(1-a) + layerA), and
+    // the final value is drawn with premultiplied AlphaBlend. Do NOT multiply
+    // rgb by alpha at the end — each layer's rgb is already alpha-weighted.
     float4 result = float4(0.0, 0.0, 0.0, 0.0);
 
     // --- Fog ---
@@ -105,25 +116,25 @@ float4 PixelShaderFunction(float2 texCoord : TEXCOORD0) : COLOR0
     {
         // Convert screen UV to world position
         float2 worldPos = FogWorldOrigin + texCoord * FogWorldScale;
-        float2 fuv = worldPos * FogScaleU * 0.03;
-        float2 scroll = float2(1.0, 0.3) * FogSpeed * Time;
+        float2 fuv = worldPos * FogScaleU * FogUvScale;
+        float2 scroll = FogWindDir * FogSpeed * Time;
 
-        // Three noise layers at different scales and speeds
-        float n1 = snoise(fuv * 3.0 + scroll * 0.3) * 0.5 + 0.5;
-        float n2 = snoise(fuv * 7.0 + scroll * 0.7 + float2(100.0, 100.0)) * 0.5 + 0.5;
-        float n3 = snoise(fuv * 15.0 + scroll * 1.2 + float2(200.0, 200.0)) * 0.5 + 0.5;
+        // Three noise layers at different scales and speeds (offsets decorrelate them)
+        float n1 = snoise(fuv * FogOctaveScales.x + scroll * FogOctaveSpeeds.x) * 0.5 + 0.5;
+        float n2 = snoise(fuv * FogOctaveScales.y + scroll * FogOctaveSpeeds.y + float2(100.0, 100.0)) * 0.5 + 0.5;
+        float n3 = snoise(fuv * FogOctaveScales.z + scroll * FogOctaveSpeeds.z + float2(200.0, 200.0)) * 0.5 + 0.5;
 
-        float fog = n1 * 0.5 + n2 * 0.3 + n3 * 0.2;
-        fog = smoothstep_custom(0.3, 0.8, fog) * FogDensity * 0.6;
+        float fog = n1 * FogOctaveWeights.x + n2 * FogOctaveWeights.y + n3 * FogOctaveWeights.z;
+        fog = smoothstep(FogCoverLo, FogCoverHi, fog) * FogDensity * FogMaxOpacity;
 
-        result = float4(FogColor, fog);
+        result = float4(FogColor * fog, fog);
     }
 
     // --- Haze (Y-based distance fade) ---
     if (HazeStrength > 0.001)
     {
         float depth = 1.0 - texCoord.y;
-        float haze = smoothstep_custom(0.2, 0.7, depth) * HazeStrength;
+        float haze = smoothstep(HazeRampLo, HazeRampHi, depth) * HazeStrength;
 
         // Blend haze on top of fog using standard alpha compositing
         float3 hazeRgb = HazeColor * haze;
@@ -155,10 +166,12 @@ float4 PixelShaderFunction(float2 texCoord : TEXCOORD0) : COLOR0
     {
         float2 center = texCoord - 0.5;
         // Aspect ratio correction
-        if (Resolution.y > 0.0)
-            center.x *= Resolution.x / Resolution.y;
+        if (ScreenSize.y > 0.0)
+            center.x *= ScreenSize.x / ScreenSize.y;
         float dist = length(center);
-        float vig = 1.0 - smoothstep_custom(VignetteRadius, VignetteRadius + VignetteSoftness, dist);
+        // Softness floor: the editor allows 0, and smoothstep with equal edges
+        // divides by zero (NaN on some drivers).
+        float vig = 1.0 - smoothstep(VignetteRadius, VignetteRadius + max(VignetteSoftness, 1e-4), dist);
         float vigDark = (1.0 - vig) * VignetteStrength;
 
         // Blend vignette darkness on top
@@ -166,19 +179,15 @@ float4 PixelShaderFunction(float2 texCoord : TEXCOORD0) : COLOR0
         result.a = result.a * (1.0 - vigDark) + vigDark;
     }
 
-    // --- Lightning flash (white additive) ---
+    // --- Lightning flash (white layer over the overlay) ---
     if (FlashIntensity > 0.001)
     {
-        // Flash reduces overlay opacity and adds white
-        // This brightens what's underneath
-        float flashAlpha = FlashIntensity * 0.8;
+        float flashAlpha = FlashIntensity * FlashMaxOpacity;
         result.rgb = result.rgb * (1.0 - flashAlpha) + float3(1.0, 1.0, 1.0) * flashAlpha;
-        result.a = max(result.a, flashAlpha);
+        result.a = result.a * (1.0 - flashAlpha) + flashAlpha;
     }
 
-    // Output as premultiplied alpha (MonoGame SpriteBatch expects this)
-    result.rgb *= result.a;
-
+    // Already premultiplied (see top of function) — output as-is.
     return result;
 }
 

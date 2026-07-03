@@ -30,6 +30,19 @@ public class BloomRenderer
     private XnaEffect? _blurEffect;
     private XnaEffect? _bicubicUpsampleEffect;
 
+    // Cached scatter blend state — BlendState is a native graphics object, so
+    // it's rebuilt only when the quantized scatter value changes, not per frame.
+    private BlendState? _scatterBlend;
+    private byte _scatterBlendByte;
+
+    // Gaussian blur kernel for the final wide blur, precomputed in CreateTargets
+    // (it only changes with RT size).
+    private const int BlurSampleCount = 15;
+    private const float BlurScale = 1.5f;
+    private readonly Vector2[] _blurOffsetsH = new Vector2[BlurSampleCount];
+    private readonly Vector2[] _blurOffsetsV = new Vector2[BlurSampleCount];
+    private readonly float[] _blurWeights = new float[BlurSampleCount];
+
     public bool IsInitialized => _initialized;
     public RenderTarget2D? SceneRT => _sceneRT;
     public bool IsHDR => _hdrScene;
@@ -140,6 +153,15 @@ public class BloomRenderer
             }
         }
 
+        // Precompute the Gaussian blur kernel for the final H/V passes — it only
+        // depends on the RT sizes created above, so rebuild it here (and on Resize
+        // via CreateTargets) instead of reallocating twice per frame in EndScene.
+        if (_mipCount > 0 && _mips[0] != null && _tempBlurRT != null)
+        {
+            BuildBlurKernel(BlurScale / _mips[0]!.Width, 0f, _blurOffsetsH, _blurWeights);
+            BuildBlurKernel(0f, BlurScale / _tempBlurRT.Height, _blurOffsetsV, _blurWeights);
+        }
+
         Console.Error.WriteLine($"[Bloom] Scene RT: {_sceneRT!.Format} ({_sceneRT.Width}x{_sceneRT.Height})");
         for (int i = 0; i < _mipCount; i++)
             Console.Error.WriteLine($"[Bloom]   mip[{i}]: {_mips[i]!.Format} ({_mips[i]!.Width}x{_mips[i]!.Height})");
@@ -190,6 +212,17 @@ public class BloomRenderer
         batch.Draw(_sceneRT, new Rectangle(0, 0, _mips[0]!.Width, _mips[0]!.Height), Color.White);
         batch.End();
 
+        if (DebugShowExtract)
+        {
+            // Diagnostic: show just what the extract pass produced (bright areas
+            // only), skipping the downsample/upsample/blur chain entirely.
+            device.SetRenderTarget(outputTarget);
+            batch.Begin(SpriteSortMode.Immediate, BlendState.Opaque, SamplerState.LinearClamp);
+            batch.Draw(_mips[0], new Rectangle(0, 0, _screenW, _screenH), Color.White);
+            batch.End();
+            return;
+        }
+
         // --- Step 2: Downsample chain — progressively halve resolution ---
         for (int i = 1; i < iters; i++)
         {
@@ -209,14 +242,20 @@ public class BloomRenderer
         // BlendFactor controls how much of the wider blur gets added at each level.
         // Destination stays at full strength (One) so sharp detail is preserved.
         byte sb = (byte)(scatter * 255f);
-        var scatterBlend = new BlendState
+        if (_scatterBlend == null || _scatterBlendByte != sb)
         {
-            ColorSourceBlend = Blend.BlendFactor,
-            ColorDestinationBlend = Blend.One,
-            AlphaSourceBlend = Blend.BlendFactor,
-            AlphaDestinationBlend = Blend.One,
-            BlendFactor = new Color(sb, sb, sb, sb)
-        };
+            _scatterBlend?.Dispose();
+            _scatterBlend = new BlendState
+            {
+                ColorSourceBlend = Blend.BlendFactor,
+                ColorDestinationBlend = Blend.One,
+                AlphaSourceBlend = Blend.BlendFactor,
+                AlphaDestinationBlend = Blend.One,
+                BlendFactor = new Color(sb, sb, sb, sb)
+            };
+            _scatterBlendByte = sb;
+        }
+        var scatterBlend = _scatterBlend;
 
         for (int i = iters - 2; i >= 0; i--)
         {
@@ -236,20 +275,19 @@ public class BloomRenderer
             batch.End();
         }
 
-        scatterBlend.Dispose();
-
-        // Extra Gaussian blur on the final bloom to spread it beyond the mip chain limit
+        // Extra Gaussian blur on the final bloom to spread it beyond the mip chain
+        // limit. Kernel arrays are precomputed in CreateTargets; only the uploads
+        // happen per frame (offsets alternate H/V on the same effect parameter).
         if (_tempBlurRT != null && _blurEffect != null)
         {
-            float blurScale = 1.5f;
-
-            SetBlurParameters(_blurEffect, blurScale / _mips[0]!.Width, 0);
+            _blurEffect.Parameters["SampleWeights"]?.SetValue(_blurWeights);
+            _blurEffect.Parameters["SampleOffsets"]?.SetValue(_blurOffsetsH);
             device.SetRenderTarget(_tempBlurRT);
             batch.Begin(SpriteSortMode.Immediate, BlendState.Opaque, SamplerState.LinearClamp, null, null, _blurEffect);
             batch.Draw(_mips[0], new Rectangle(0, 0, _tempBlurRT.Width, _tempBlurRT.Height), Color.White);
             batch.End();
 
-            SetBlurParameters(_blurEffect, 0, blurScale / _tempBlurRT.Height);
+            _blurEffect.Parameters["SampleOffsets"]?.SetValue(_blurOffsetsV);
             device.SetRenderTarget(_mips[0]);
             batch.Begin(SpriteSortMode.Immediate, BlendState.Opaque, SamplerState.LinearClamp, null, null, _blurEffect);
             batch.Draw(_tempBlurRT, new Rectangle(0, 0, _mips[0]!.Width, _mips[0]!.Height), Color.White);
@@ -259,19 +297,7 @@ public class BloomRenderer
         // --- Step 4: Composite — scene + bloom * intensity → output target ---
         device.SetRenderTarget(outputTarget);
 
-        if (DebugShowExtract)
-        {
-            // Diagnostic: show just what the extract pass produced (should be bright areas only)
-            batch.Begin(SpriteSortMode.Immediate, BlendState.Opaque, SamplerState.LinearClamp);
-            batch.Draw(_mips[0], new Rectangle(0, 0, _screenW, _screenH), Color.White);
-            batch.End();
-            return;
-        }
-
         _combineEffect.Parameters["BloomIntensity"]?.SetValue(settings.Intensity);
-        _combineEffect.Parameters["BaseIntensity"]?.SetValue(1f);
-        _combineEffect.Parameters["BloomSaturation"]?.SetValue(1.25f);
-        _combineEffect.Parameters["BaseSaturation"]?.SetValue(1f);
 
         // Bind the bloom texture to sampler slot 1 via the effect parameter
         var bloomParam = _combineEffect.Parameters["BloomSampler"];
@@ -286,30 +312,31 @@ public class BloomRenderer
             device.SamplerStates[1] = SamplerState.LinearClamp;
         }
 
+        // BloomSampler (s1) declares no sampler state in the .fx, so it samples
+        // with whatever is left in device slot 1 (default LinearWrap, which
+        // bleeds bloom across opposite screen edges). Set it explicitly.
+        device.SamplerStates[1] = SamplerState.LinearClamp;
+
         batch.Begin(SpriteSortMode.Immediate, BlendState.Opaque, SamplerState.LinearClamp, null, null, _combineEffect);
         batch.Draw(_sceneRT, new Rectangle(0, 0, _screenW, _screenH), Color.White);
         batch.End();
     }
 
-    private static void SetBlurParameters(XnaEffect effect, float dx, float dy)
+    /// <summary>Fill the given offset/weight arrays with a normalized 1D Gaussian
+    /// kernel along (dx, dy). Weights are identical for H and V, so both calls
+    /// write the same values into the shared weights array.</summary>
+    private static void BuildBlurKernel(float dx, float dy, Vector2[] offsets, float[] weights)
     {
-        const int sampleCount = 15;
-        var offsets = new Vector2[sampleCount];
-        var weights = new float[sampleCount];
-
         float totalWeight = 0;
-        float sigma = (sampleCount - 1) / 4f;
-        for (int i = 0; i < sampleCount; i++)
+        float sigma = (BlurSampleCount - 1) / 4f;
+        for (int i = 0; i < BlurSampleCount; i++)
         {
-            float offset = i - (sampleCount - 1) / 2f;
+            float offset = i - (BlurSampleCount - 1) / 2f;
             offsets[i] = new Vector2(offset * dx, offset * dy);
             weights[i] = MathF.Exp(-offset * offset / (2 * sigma * sigma));
             totalWeight += weights[i];
         }
-        for (int i = 0; i < sampleCount; i++) weights[i] /= totalWeight;
-
-        effect.Parameters["SampleOffsets"]?.SetValue(offsets);
-        effect.Parameters["SampleWeights"]?.SetValue(weights);
+        for (int i = 0; i < BlurSampleCount; i++) weights[i] /= totalWeight;
     }
 
     public void Unload()

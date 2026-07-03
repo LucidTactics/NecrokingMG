@@ -359,8 +359,11 @@ partial class GameRenderer
         // All per-unit wading parameters (waterness, waterline V, top cut V,
         // diagonal slope, sprite angle) are computed in one place; the same
         // struct is used by the shadow renderer for consistency.
+        // Sample at RenderPos (the visual position) — the shadow renderer also
+        // uses RenderPos, so sprite and shadow agree on the waterline during
+        // lunges near a shoreline.
         WadingState wading = WadingState.Compute(
-            _g._sim.Units[i].Position, _g._sim.Units[i].FacingAngle,
+            _g._sim.Units[i].RenderPos, _g._sim.Units[i].FacingAngle,
             fr.Frame.Value, unitDef, animData.Ctrl, _g._groundSystem, _g._camera.YRatio);
         if (wading.Active)
         {
@@ -670,7 +673,12 @@ partial class GameRenderer
         float pixelH = worldH * _g._camera.Zoom;
         float scale = pixelH / deadTex.Height;
         var screenPos = _g._renderer.WorldToScreen(new Vec2(obj.X, obj.Y), 0f, _g._camera);
-        var origin = new Vector2(def.PivotX * deadTex.Width, def.PivotY * deadTex.Height);
+        // Honor the per-instance random flip (same as the regular env-object path,
+        // including the mirrored pivot) so a corrupting tree doesn't mirror-pop for
+        // the duration of the dissolve. Flipping reverses the texCoord sweep, so
+        // the live-frame UV remap and the noise pattern simply mirror with it.
+        bool flipX = _g._envSystem.ShouldFlipObject(i);
+        var origin = new Vector2((flipX ? (1f - def.PivotX) : def.PivotX) * deadTex.Width, def.PivotY * deadTex.Height);
 
         Color tint = MultiplyColor(Color.White, _g._ambientColor);
 
@@ -682,14 +690,18 @@ partial class GameRenderer
         float threshold = MathHelper.Clamp(rt.CorruptionTime / MathF.Max(_g._deathFog.CorruptionTransitionDuration, 0.01f), 0f, 1f);
 
         // Set effect parameters before Begin (they upload at Apply time).
-        // Bind LiveSampler texture via the parameter system AND directly on the
-        // _g.GraphicsDevice slot — DesktopGL is finicky about which path actually
-        // takes effect; doing both is harmless and one of them should win.
-        _g._dissolveTreeEffect!.Parameters["LiveSampler"]?.SetValue(liveTex);
-        _g._dissolveTreeEffect.Parameters["LiveTexture"]?.SetValue(liveTex);
+        var liveParam = _g._dissolveTreeEffect!.Parameters["LiveSampler"];
+        if (liveParam != null) liveParam.SetValue(liveTex);
+        else _g.GraphicsDevice.Textures[1] = liveTex;
+        // Sampler state for s1 must be set on BOTH binding paths — the .fx
+        // declares no sampler state, so the slot otherwise inherits whatever a
+        // previous pass left in the device (same rule as DrawReanimMorph).
+        _g.GraphicsDevice.SamplerStates[1] = SamplerState.LinearClamp;
         _g._dissolveTreeEffect.Parameters["LiveFrameUV"]?.SetValue(new Vector4(u0, v0, u1, v1));
         _g._dissolveTreeEffect.Parameters["Threshold"]?.SetValue(threshold);
         _g._dissolveTreeEffect.Parameters["Seed"]?.SetValue(obj.Seed);
+        _g._dissolveTreeEffect.Parameters["NoiseScale"]?.SetValue(6f);
+        _g._dissolveTreeEffect.Parameters["EdgeSoftness"]?.SetValue(0.06f);
         _g._dissolveTreeEffect.Parameters["DebugMode"]?.SetValue(_g._deathFog.DebugVisible ? 1f : 0f);
 
         // Throttled per-instance log so we can confirm threshold animates over time.
@@ -700,21 +712,12 @@ partial class GameRenderer
             DebugLog.Log("startup", $"Dissolve frame: obj {i} ({def.Id}) t={threshold:F3} CorruptionTime={rt.CorruptionTime:F3} liveTex={liveTex.Width}x{liveTex.Height} deadTex={deadTex.Width}x{deadTex.Height}");
         }
 
-        // Flush the env-objects batch and start an Immediate batch with our effect.
-        _g._spriteBatch.End();
-        _g._spriteBatch.Begin(SpriteSortMode.Immediate, BlendState.AlphaBlend, SamplerState.LinearClamp,
-            null, null, _g._dissolveTreeEffect);
-
-        // Belt-and-suspenders: also bind directly to _g.GraphicsDevice slot 1.
-        _g.GraphicsDevice.Textures[1] = liveTex;
-        _g.GraphicsDevice.SamplerStates[1] = SamplerState.LinearClamp;
-
-        _g._spriteBatch.Draw(deadTex, screenPos, null, tint, 0f, origin, scale, SpriteEffects.None, 0f);
-        _g._spriteBatch.End();
-        // Restore the wrapping batch — the scene-pass Begin (Game1.cs ~line 4220)
-        // uses LinearClamp, NOT PointClamp. Restoring with PointClamp would alter
-        // the rest of the scene's sampler state.
-        _g._spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.LinearClamp);
+        // Flush the env-objects batch and run an Immediate batch with our effect.
+        Render.EffectBatch.BeginEffect(_g._spriteBatch, _g._dissolveTreeEffect,
+            BlendState.AlphaBlend, SamplerState.LinearClamp);
+        _g._spriteBatch.Draw(deadTex, screenPos, null, tint, 0f, origin, scale,
+            flipX ? SpriteEffects.FlipHorizontally : SpriteEffects.None, 0f);
+        Render.EffectBatch.EndEffectResumeScene(_g._spriteBatch);
         return true;
     }
 
@@ -832,10 +835,14 @@ partial class GameRenderer
     // Write depth only, no color — for the depth-sorted-fog occluder stamp.
     private static readonly BlendState _depthOnlyBlend = new() { ColorWriteChannels = ColorWriteChannels.None };
 
-    /// <summary>Ground-Y → SpriteBatch layerDepth. Larger world Y (drawn in front / nearer the camera
-    /// in the painter's sort) → SMALLER depth (occludes). Units (the occluder stamp) and the fog puffs
-    /// (ReanimEffectSystem.DrawAdditive) MUST use this same mapping so they compare.</summary>
-    internal static float FogDepthForY(float worldY) => MathHelper.Clamp(1f - worldY * 0.005f, 0f, 1f);
+    /// <summary>Ground-Y → SpriteBatch layerDepth, CAMERA-RELATIVE. Larger world Y (drawn in front /
+    /// nearer the camera in the painter's sort) → SMALLER depth (occludes). Camera-relative because the
+    /// old absolute mapping (1 - y*0.005) saturated to 0 at worldY ≥ 200 — a silent no-op across ~95%
+    /// of a 4096-unit map. This maps ±2000 world units around the camera into (0,1). Units (the
+    /// occluder stamp) and the fog puffs MUST use this same mapping so they compare —
+    /// ReanimEffectSystem.FogDepth delegates here.</summary>
+    internal static float FogDepthForY(float worldY, float cameraY)
+        => MathHelper.Clamp(0.5f - (worldY - cameraY) * 0.00025f, 0f, 1f);
 
     /// <summary>Stamp each UNIT's sprite silhouette into the depth buffer (color-write off, depth-write
     /// on, cutout shader) so the additive reanimation fog can depth-test against them. UNITS ONLY, not
@@ -875,7 +882,10 @@ partial class GameRenderer
             float pivotY = 1f - frame.PivotY;
             var origin = new Vector2(pivotX * frame.Rect.Width, pivotY * frame.Rect.Height);
             var effects = fr.FlipX ? SpriteEffects.FlipHorizontally : SpriteEffects.None;
-            _g._spriteBatch.Draw(tex, sp, frame.Rect, Color.White, 0f, origin, scale, effects, FogDepthForY(u.Position.Y));
+            // Depth from RenderPos.Y (not Position.Y) so a lunging unit's stamp is
+            // depth-valued where its sprite is actually drawn.
+            _g._spriteBatch.Draw(tex, sp, frame.Rect, Color.White, 0f, origin, scale, effects,
+                FogDepthForY(u.RenderPos.Y, _g._camera.Position.Y));
         }
 
         _g._spriteBatch.End();
@@ -1329,14 +1339,11 @@ partial class GameRenderer
         _g._wadingEffect.Parameters["WaterlineSlope"]?.SetValue(waterlineSlope);
         _g._wadingEffect.Parameters["TopWaterlineCenterV"]?.SetValue(topWaterlineCenterV);
         _g._wadingEffect.Parameters["TopWaterlineSlope"]?.SetValue(topWaterlineSlope);
-        _g._wadingEffect.Parameters["FoamHalfWidth"]?.SetValue(0.05f);
-        _g._wadingEffect.Parameters["TopFoamHalfWidth"]?.SetValue(0.05f);
-        _g._wadingEffect.Parameters["UnderwaterAlpha"]?.SetValue(0.0f);
-        _g._wadingEffect.Parameters["FoamColor"]?.SetValue(new Vector3(0.88f, 0.94f, 0.96f));
+        // FoamHalfWidth/TopFoamHalfWidth/UnderwaterAlpha/FoamColor are constants,
+        // set once at load (Game1 LoadContent, Wading block).
 
-        _g._spriteBatch.End();
-        _g._spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.LinearClamp,
-            null, null, _g._wadingEffect);
+        Render.EffectBatch.BeginEffect(_g._spriteBatch, _g._wadingEffect,
+            BlendState.AlphaBlend, SamplerState.LinearClamp, SpriteSortMode.Deferred);
 
         float pivotX = flipX ? (1f - frame.PivotX) : frame.PivotX;
         float pivotY = 1f - frame.PivotY;
@@ -1344,8 +1351,7 @@ partial class GameRenderer
         var effects = flipX ? SpriteEffects.FlipHorizontally : SpriteEffects.None;
         _g._spriteBatch.Draw(tex, screenPos, frame.Rect, tint, 0f, origin, scale, effects, 0f);
 
-        _g._spriteBatch.End();
-        _g._spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.LinearClamp);
+        Render.EffectBatch.EndEffectResumeScene(_g._spriteBatch);
     }
 
     /// <summary>Multiply two colors component-wise (for ambient tinting).</summary>
@@ -1380,9 +1386,10 @@ partial class GameRenderer
         _g._outlineFlatEffect.Parameters["OutlineColor"]?.SetValue(
             new Vector4(colR * intensity, colG * intensity, colB * intensity, colA));
 
-        _g._spriteBatch.End();
+        // OutlineFlat outputs STRAIGHT alpha — NonPremultiplied/Additive only (see the .fx header).
         var blend = blendMode == 1 ? BlendState.Additive : BlendState.NonPremultiplied;
-        _g._spriteBatch.Begin(SpriteSortMode.Deferred, blend, SamplerState.LinearClamp, effect: _g._outlineFlatEffect);
+        Render.EffectBatch.BeginEffect(_g._spriteBatch, _g._outlineFlatEffect,
+            blend, SamplerState.LinearClamp, SpriteSortMode.Deferred);
 
         float pivotX = flipX ? (1f - frame.PivotX) : frame.PivotX;
         float pivotY = 1f - frame.PivotY;
@@ -1397,8 +1404,7 @@ partial class GameRenderer
                 frame.Rect, Color.White, 0f, origin, scale, effects, 0f);
         }
 
-        _g._spriteBatch.End();
-        _g._spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.LinearClamp);
+        Render.EffectBatch.EndEffectResumeScene(_g._spriteBatch);
     }
 
     private void DrawUnitPulsingOutline(int unitIdx, SpriteAtlas atlas, SpriteFrame frame,

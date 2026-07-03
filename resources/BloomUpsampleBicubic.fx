@@ -7,23 +7,28 @@
 #define PS_SHADERMODEL ps_4_0
 #endif
 
-// Matches C++ bloom_upsample_bicubic.fs: Catmull-Rom bicubic upsampling
-// using 4 bilinear taps instead of 16 point samples.
+// Bicubic upsampling using 4 bilinear taps instead of 16 point samples
+// (based on C++ bloom_upsample_bicubic.fs).
 float2 TexelSize; // 1.0 / source texture size
 
 sampler2D TextureSampler : register(s0);
 
-// Catmull-Rom spline weights
+// B-spline bicubic weights. Deliberately B-spline, NOT Catmull-Rom: the 4-tap
+// bilinear trick requires non-negative weights, and Catmull-Rom's negative
+// lobes push the intra-pair offset outside the intended texel pair (the old
+// "Catmull-Rom" version of this function silently degraded into a skewed
+// smoothing kernel). B-spline is exact under the trick, slightly softer —
+// which is fine for bloom.
 float4 cubic(float x)
 {
     float x2 = x * x;
     float x3 = x2 * x;
     float4 w;
-    w.x = -x3 + 2.0 * x2 - x;            // weight at t-1
-    w.y =  3.0 * x3 - 5.0 * x2 + 2.0;    // weight at t
-    w.z = -3.0 * x3 + 4.0 * x2 + x;       // weight at t+1
-    w.w =  x3 - x2;                        // weight at t+2
-    return w * 0.5;
+    w.x = -x3 + 3.0 * x2 - 3.0 * x + 1.0;  // weight at t-1
+    w.y =  3.0 * x3 - 6.0 * x2 + 4.0;      // weight at t
+    w.z = -3.0 * x3 + 3.0 * x2 + 3.0 * x + 1.0; // weight at t+1
+    w.w =  x3;                              // weight at t+2
+    return w / 6.0;
 }
 
 float4 PixelShaderFunction(float4 color : COLOR0, float2 texCoord : TEXCOORD0) : COLOR0

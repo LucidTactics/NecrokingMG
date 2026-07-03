@@ -42,20 +42,22 @@ public class MagicGlyphRenderer
     /// </summary>
     public void DrawGround(MagicGlyphSystem glyphSystem)
     {
-        if (glyphSystem.Glyphs.Count == 0) return;
+        if (glyphSystem.Glyphs.Count == 0 || _effect == null) return;
 
-        // End current batch to switch to shader mode
-        _spriteBatch.End();
+        // Suspend the scene batch ONCE for all glyphs: Immediate mode applies the
+        // effect (with each glyph's freshly-set parameters) on every Draw call, so
+        // a single batch replaces the old per-glyph Begin/End pair. EffectBatch
+        // owns the restore state — a wrong restore here once switched the whole
+        // rest of the scene pass to point filtering.
+        EffectBatch.BeginEffect(_spriteBatch, _effect, BlendState.AlphaBlend, SamplerState.PointClamp);
 
         foreach (var glyph in glyphSystem.Glyphs)
         {
             if (!glyph.Alive) continue;
-            if (_effect != null)
-                DrawGlyphShader(glyph);
+            DrawGlyphShader(glyph);
         }
 
-        // Resume normal alpha blend batch
-        _spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.PointClamp);
+        EffectBatch.EndEffectResumeScene(_spriteBatch);
     }
 
     /// <summary>
@@ -86,6 +88,9 @@ public class MagicGlyphRenderer
 
         if (quadW < 2 || quadH < 2) return;
 
+        // Called inside DrawGround's open Immediate effect batch: parameters set
+        // here are uploaded when the Draw below flushes (Immediate applies the
+        // effect per Draw), so per-glyph values work without a per-glyph Begin/End.
         var c1 = glyph.Color;
         var c2 = glyph.Color2;
         _effect!.Parameters["Time"]?.SetValue(_gameTime);
@@ -96,12 +101,7 @@ public class MagicGlyphRenderer
         _effect.Parameters["Rotation"]?.SetValue(_gameTime * glyph.RotationSpeed);
         _effect.Parameters["PulseSpeed"]?.SetValue(glyph.PulseSpeed);
 
-        _spriteBatch.Begin(SpriteSortMode.Immediate, BlendState.AlphaBlend,
-            SamplerState.PointClamp, null, null, _effect);
-
         _spriteBatch.Draw(_pixel, new Rectangle(quadX, quadY, quadW, quadH), Color.White);
-
-        _spriteBatch.End();
     }
 
     // Total number of ribbon spawn points: 20 pentagram + 18 circle = 38

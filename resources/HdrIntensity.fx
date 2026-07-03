@@ -35,7 +35,10 @@ VSOutput VertexShaderFunction(VSInput input)
 float4 PixelShaderFunction(VSOutput input) : COLOR0
 {
     float4 c = input.Color;
-    return float4(c.rgb * Intensity, c.a);
+    // max() guards negative Intensity from unvalidated spell JSON — a negative
+    // value here writes negative color into the HalfVector4 scene RT, which the
+    // bloom chain then spreads as a darkening halo.
+    return float4(c.rgb * max(Intensity, 0.0), c.a);
 }
 
 technique HdrIntensityTechnique

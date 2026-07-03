@@ -392,7 +392,7 @@ internal class ReanimEffectSystem
                     // layerDepth from the puff's ground Y — only used when the depth-sorted-fog batch is
                     // active (DepthStencilState.DepthRead); ignored otherwise. MUST match the occluder
                     // stamp's mapping (GameRenderer.FogDepthForY): larger Y -> smaller depth.
-                    float ld = MathHelper.Clamp(1f - world.Y * 0.005f, 0f, 1f);
+                    float ld = FogDepth(world.Y);
                     _batch.Draw(tex, sp, src, q.Color.ToHdrVertex(a), q.RotSpeed * inst.FogAge, origin, scale, SpriteEffects.None, ld);
                 }
             }
@@ -407,7 +407,8 @@ internal class ReanimEffectSystem
         public float Scale, Rot; public Color Color; public bool Additive; public float SortY, LayerDepth;
     }
     private readonly List<ParticleDraw> _sortScratch = new();
-    private static float FogDepth(float y) => MathHelper.Clamp(1f - y * 0.005f, 0f, 1f);
+    // Delegates to the occluder stamp's mapping — puffs and unit stamps MUST share it to compare.
+    private float FogDepth(float y) => Necroking.GameRenderer.FogDepthForY(y, _camera!.Position.Y);
 
     /// <summary>Draw ALL active reanim particles — the diffuse light + green cloud puffs (additive) and
     /// the dark dust puffs (alpha) — in ONE Y-sorted sequence, flipping blend per puff, so bright and

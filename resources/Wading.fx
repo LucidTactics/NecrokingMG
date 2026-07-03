@@ -44,9 +44,14 @@ float4 PixelShaderFunction(float4 vColor : COLOR0, float2 texCoord : TEXCOORD0) 
 {
     float4 p = tex2D(TextureSampler, texCoord);
     if (p.a < 0.001) return float4(0, 0, 0, 0);
-    float3 rgbStraight = p.rgb / p.a;
-    rgbStraight *= vColor.rgb;
-    float alpha = p.a * vColor.a;
+
+    // Premultiplied all the way: p is a premultiplied texel and vColor may
+    // itself be a premultiplied tint (ghost units), so the land-sprite result
+    // is exactly p * vColor — what the default SpriteEffect computes. (The old
+    // un-premultiply → tint → re-premultiply round trip applied vColor.a to
+    // RGB twice, rendering wading ghosts ~2.5x darker than the same ghost on
+    // land.)
+    float4 result = p * vColor;
 
     // Normalize atlas UV into local frame UV (0..1 across the sprite frame).
     float localU = (texCoord.x - FrameLeftU) / max(FrameRightU - FrameLeftU, 0.00001);
@@ -61,7 +66,7 @@ float4 PixelShaderFunction(float4 vColor : COLOR0, float2 texCoord : TEXCOORD0) 
     float topDepth    = expectedTopV - localV;        // > 0 → above top waterline
 
     float alphaMul = 1.0;
-    float3 mixedRGB = rgbStraight;
+    float foamMix = 0.0;
 
     // --- Bottom waterline ---
     if (bottomDepth >= FoamHalfWidth)
@@ -72,8 +77,7 @@ float4 PixelShaderFunction(float4 vColor : COLOR0, float2 texCoord : TEXCOORD0) 
     {
         float t = (bottomDepth + FoamHalfWidth) / (2.0 * FoamHalfWidth);
         alphaMul = min(alphaMul, lerp(1.0, UnderwaterAlpha, t));
-        float foamMix = 1.0 - abs(2.0 * t - 1.0);
-        mixedRGB = lerp(mixedRGB, FoamColor, foamMix * 0.65);
+        foamMix = max(foamMix, 1.0 - abs(2.0 * t - 1.0));
     }
 
     // --- Top waterline (back submerged). TopWaterlineCenterV ≤ 0 effectively
@@ -86,12 +90,14 @@ float4 PixelShaderFunction(float4 vColor : COLOR0, float2 texCoord : TEXCOORD0) 
     {
         float t = (topDepth + TopFoamHalfWidth) / (2.0 * TopFoamHalfWidth);
         alphaMul = min(alphaMul, lerp(1.0, UnderwaterAlpha, t));
-        float foamMix = 1.0 - abs(2.0 * t - 1.0);
-        mixedRGB = lerp(mixedRGB, FoamColor, foamMix * 0.65);
+        foamMix = max(foamMix, 1.0 - abs(2.0 * t - 1.0));
     }
 
-    alpha *= alphaMul;
-    return float4(mixedRGB * alpha, alpha);
+    // Fade the premultiplied color uniformly, then mix foam scaled by the
+    // (faded) coverage so foam only appears on body pixels.
+    result *= alphaMul;
+    result.rgb = lerp(result.rgb, FoamColor * result.a, foamMix * 0.65);
+    return result;
 }
 
 technique Wading

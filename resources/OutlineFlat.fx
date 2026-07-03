@@ -9,6 +9,11 @@
 
 // Flat-color outline shader: outputs OutlineColor wherever the sprite has alpha.
 // Used by pulsing outline buff visual — draws sprite silhouette in a solid color.
+//
+// ALPHA CONVENTION: outputs STRAIGHT (non-premultiplied) alpha — the deliberate
+// exception to the codebase's premultiplied-output convention. Draw only in
+// NonPremultiplied or Additive batches; in a premultiplied AlphaBlend batch the
+// soft edges render as a bright halo.
 float4 OutlineColor;
 
 sampler2D TextureSampler : register(s0);

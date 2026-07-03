@@ -14,7 +14,11 @@
 //   output.rgb = tex * color.rgb * (color.a * MaxIntensity),  output.a = 1.0
 //
 // AlphaMode = 1 (Alpha blend): intensity baked into RGB, fade in alpha.
-//   output.rgb = tex * color.rgb * MaxIntensity,  output.a = tex.a * color.a
+//   output.rgb = tex * color.rgb * MaxIntensity * color.a,  output.a = tex.a * color.a
+//   RGB must be scaled by color.a too: output is premultiplied for AlphaBlend
+//   (One/InvSrcAlpha), where source RGB is added at full strength regardless of
+//   alpha — without the multiply, fading effects keep 100% brightness and turn
+//   into a lingering additive glow instead of dimming out.
 //
 // IMPORTANT: MaxIntensity and AlphaMode must be set explicitly from C# —
 // MGFX on OpenGL does not honor default uniform values.
@@ -32,8 +36,9 @@ float4 PixelShaderFunction(float4 color : COLOR0, float2 texCoord : TEXCOORD0) :
     float addIntensity = color.a * MaxIntensity;
     float4 addResult = float4(tex.rgb * color.rgb * addIntensity, 1.0);
 
-    // Alpha path: RGB carries scaled intensity, alpha is real fade
-    float4 alpResult = float4(tex.rgb * color.rgb * MaxIntensity, tex.a * color.a);
+    // Alpha path: RGB carries scaled intensity, alpha is real fade.
+    // color.a scales RGB as well — premultiplied output for AlphaBlend.
+    float4 alpResult = float4(tex.rgb * color.rgb * (MaxIntensity * color.a), tex.a * color.a);
 
     return lerp(addResult, alpResult, AlphaMode);
 }

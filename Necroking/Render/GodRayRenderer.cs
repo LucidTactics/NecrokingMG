@@ -37,18 +37,25 @@ public class GodRayRenderer
         };
     }
 
+    // Reused flush buffer — FlushTriangles runs ~20x per ray per frame, so a
+    // ToArray() per flush was steady allocation churn.
+    private VertexPositionColor[] _flushScratch = new VertexPositionColor[256];
+
     /// <summary>Flush pending triangle vertices with current shader state.</summary>
     private void FlushTriangles()
     {
-        if (_triVerts.Count < 3) return;
-        var verts = _triVerts.ToArray();
+        int count = _triVerts.Count;
+        if (count < 3) return;
+        if (_flushScratch.Length < count)
+            _flushScratch = new VertexPositionColor[Math.Max(count, _flushScratch.Length * 2)];
+        _triVerts.CopyTo(_flushScratch);
         _triVerts.Clear();
         var effect = _hdrIntensityEffect ?? (Microsoft.Xna.Framework.Graphics.Effect?)_basicEffect;
         foreach (var pass in effect!.CurrentTechnique.Passes)
         {
             pass.Apply();
             _graphicsDevice.DrawUserPrimitives(PrimitiveType.TriangleList,
-                verts, 0, verts.Length / 3);
+                _flushScratch, 0, count / 3);
         }
     }
 
@@ -88,6 +95,9 @@ public class GodRayRenderer
     /// Draw a single god ray using SpriteBatch rectangles (for use in preview/editor).
     /// Lower fidelity than triangle-based rendering but works in any SpriteBatch context.
     /// Requires HdrSprite.fx (additive mode) active on the batch for proper HDR.
+    /// NOTE: this is a hand-kept low-fi mirror of DrawGodRay below (fewer slices, no
+    /// edge sublayers) — when tuning the in-game look there, decide whether the
+    /// preview should follow.
     /// </summary>
     public static void DrawGodRaySpriteBatch(SpriteBatch batch, Texture2D pixel,
         Vector2 sky, Vector2 ground, LightningStyle style, GodRayParams p,
@@ -260,7 +270,10 @@ public class GodRayRenderer
                         n = 1f - p.NoiseStrength * 0.6f + p.NoiseStrength * 0.6f * raw;
                     }
 
-                    byte sliceA = (byte)(ca * n);
+                    // GodRayNoise spans [-0.5, 1.5], so n can exceed 1 — clamp
+                    // to keep the byte cast from wrapping (black flicker) at
+                    // high noise strengths.
+                    byte sliceA = (byte)Math.Clamp(ca * n, 0f, 255f);
                     Color sliceColor = new(lc.R, lc.G, lc.B, sliceA);
 
                     // Two triangles forming a proper trapezoid (matches C++ DrawTriangle)
