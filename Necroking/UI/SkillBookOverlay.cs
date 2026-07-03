@@ -43,8 +43,7 @@ public class SkillBookOverlay : IModalLayer
     private SkillBookState _state = null!;
     private Inventory _inventory = null!;
     private GameData _gameData = null!;
-    private SpellBarState _primaryBar;
-    private SpellBarState _secondaryBar;
+    private SpellBarState _bar;
     private Simulation? _sim;
 
     private int _x, _y, _w, _h, _sh;
@@ -86,10 +85,10 @@ public class SkillBookOverlay : IModalLayer
     }
 
     public void Bind(SkillBookState state, Inventory inv, GameData gd,
-        SpellBarState primaryBar, SpellBarState secondaryBar, Simulation? sim = null)
+        SpellBarState bar, Simulation? sim = null)
     {
         _state = state; _inventory = inv; _gameData = gd;
-        _primaryBar = primaryBar; _secondaryBar = secondaryBar; _sim = sim;
+        _bar = bar; _sim = sim;
     }
 
     public void Toggle() { if (IsVisible) Close(); else Open(); }
@@ -578,7 +577,7 @@ public class SkillBookOverlay : IModalLayer
         var ctx = new SkillEffectContext
         {
             Inventory = _inventory, GameData = _gameData,
-            PrimaryBar = _primaryBar, SecondaryBar = _secondaryBar,
+            Bar = _bar,
             BookState = _state, Sim = _sim,
         };
         if (_state.TryLearn(def, ctx)) Toast($"Learned: {def.Name}", timeSec);

@@ -25,24 +25,18 @@ public partial class HUDRenderer
     private const int HpBarY = 32;
     private const int ManaBarY = 50;
 
-    // Two rows of grimoire-style frame slots, sized so both rows span the same
-    // total width (bottom: 4 boxes; top: 6 = 4 secondary spells + 2 potions),
-    // centred and aligned. Bottom box fits the 96px spell icon at an exact 2:1
-    // downscale (48px) — pixel-perfect; top boxes are smaller with scaled icons.
-    // 4*60 + 3*6 = 258 == 6*38 + 5*6, so both offsets are 258/2 = 129.
+    // One row of grimoire-style frame slots (see SpellBarBindings for the
+    // slot count + key labels), centred on the screen. Each box fits the 96px
+    // spell icon at an exact 2:1 downscale (48px) — pixel-perfect.
     private const int PrimarySlotW = 60;
     private const int PrimarySlotH = 60;
-    private const int PrimaryBarOffsetX = 129; // screenW/2 - this
-    // Sits the primary row's bottom edge ~2px above the screen bottom
-    // (slot height 60 + 1px gap; the frame's own margin makes ~2 visible).
-    // The secondary row stacks above it.
+    // Sits the row's bottom edge ~2px above the screen bottom (slot height 60
+    // + 1px gap; the frame's own margin makes ~2 visible).
     private const int PrimaryBarBottomOffset = 61; // screenH - this
-
-    private const int SecondarySlotW = 38;
-    private const int SecondarySlotH = 38;
-    private const int SecondaryBarOffsetX = 129;
-    private const int SecondaryBarGap = 6;
     private const int SlotSpacing = 6;
+    // Half the bar's total width (screenW/2 - this = first slot's left edge).
+    private const int SpellBarCenterOffset =
+        (SpellBarBindings.SlotCount * (PrimarySlotW + SlotSpacing) - SlotSpacing) / 2;
     private const int SlotBorderHeight = 2;
 
     // The slot chrome is the SpellSlot widget (Background = fancy_inner parchment,
@@ -96,9 +90,6 @@ public partial class HUDRenderer
     private static readonly Color SlotFilledBg = new(50, 50, 70, 200);
     private static readonly Color SlotEmptyBg = new(30, 30, 40, 150);
     private static readonly Color SlotBorder = new(100, 100, 130, 200);
-    private static readonly Color SecFilledBg = new(45, 50, 65, 180);
-    private static readonly Color SecEmptyBg = new(25, 25, 35, 120);
-    private static readonly Color SecBorder = new(90, 90, 120, 180);
     private static readonly Color KeyLabelColor = new(0x3e, 0x31, 0x11); // dark brown, reads on the parchment slot
     private static readonly Color SpellNameColor = new(200, 200, 220);
     private static readonly Color CooldownOverlay = new(0, 0, 0, 150);
@@ -158,38 +149,32 @@ public partial class HUDRenderer
     /// <summary>Draw the complete HUD.</summary>
     public void Draw(int screenW, int screenH, Simulation sim, GameData gameData,
         Inventory inventory, bool inventoryVisible,
-        SpellBarState primaryBar, SpellBarState secondaryBar,
-        int spellDropdownSlot, int secondaryDropdownSlot,
+        SpellBarState bar,
+        int spellDropdownSlot,
         float timeScale, int hoveredObjectIdx, EnvironmentSystem envSystem,
         Action<string, int, int> drawSpellCategoryIcon, int menuOpenMask = 0, bool paused = false,
-        int hoveredCorpseIdx = -1, float[]? primaryFlash = null, float[]? secondaryFlash = null,
+        int hoveredCorpseIdx = -1, float[]? slotFlash = null,
         uint hoveredBellyUnitId = uint.MaxValue, int hoveredUnitIdx = -1, bool editorInspect = false)
     {
         int necroIdx = FindNecromancer(sim);
 
         DrawStatusBars(necroIdx, sim);
 
-        // Reset hover-tooltip capture; the spell bars set it if a filled slot is hovered.
+        // Reset hover-tooltip capture; the spell bar sets it if a filled slot is hovered.
         _hoverSlotSpell = null;
         _hoverSlotMelee = false;
 
-        int primaryY = screenH - PrimaryBarBottomOffset;
-        DrawSpellBar(screenW, primaryY, PrimarySlotW, PrimarySlotH, PrimaryBarOffsetX,
-            new[] { "Q", "E", "LC", "RC" }, primaryBar, sim, gameData, inventory, drawSpellCategoryIcon, primaryFlash);
+        var layout = GetSpellBarLayout(screenH);
+        DrawSpellBar(screenW, layout.barY, layout.slotW, layout.slotH, layout.centerOffset,
+            SpellBarBindings.SlotLabels, bar, sim, gameData, inventory, drawSpellCategoryIcon, slotFlash);
 
-        int secondaryY = primaryY - SecondarySlotH - SecondaryBarGap;
-        DrawSpellBar(screenW, secondaryY, SecondarySlotW, SecondarySlotH, SecondaryBarOffsetX,
-            new[] { "1", "2", "3", "4", "5", "6" }, secondaryBar, sim, gameData, inventory, drawSpellCategoryIcon, secondaryFlash);
-
-        // Draw all dropdowns after all bars so they render on top
-        DrawSpellDropdown(screenW, primaryY, PrimarySlotW, PrimaryBarOffsetX,
-            spellDropdownSlot, primaryBar, gameData);
-        DrawSpellDropdown(screenW, secondaryY, SecondarySlotW, SecondaryBarOffsetX,
-            secondaryDropdownSlot, secondaryBar, gameData);
+        // Dropdown after the bar so it renders on top
+        DrawSpellDropdown(screenW, layout.barY, layout.slotW, layout.centerOffset,
+            spellDropdownSlot, bar, gameData);
 
         // Hover tooltip for the spell-bar slot under the cursor — suppressed while a
         // slot-assign dropdown is open (the dropdown owns that interaction).
-        if (spellDropdownSlot < 0 && secondaryDropdownSlot < 0)
+        if (spellDropdownSlot < 0)
             DrawSpellSlotTooltip(gameData, inventory, screenW, screenH);
 
         DrawObjectTooltip(hoveredObjectIdx, envSystem, sim, gameData, screenW, screenH);
@@ -340,15 +325,13 @@ public partial class HUDRenderer
 
 
     // ═══════════════════════════════════════
-    //  Spell Bars (unified for primary + secondary)
+    //  Spell Bar
     // ═══════════════════════════════════════
 
     private void DrawSpellBar(int screenW, int barY, int slotW, int slotH, int centerOffset,
         string[] keys, SpellBarState bar, Simulation sim, GameData gameData,
         Inventory inventory, Action<string, int, int> drawCategoryIcon, float[]? flash = null)
     {
-        bool isSecondary = slotW < PrimarySlotW;
-
         for (int s = 0; s < keys.Length; s++)
         {
             int slotX = screenW / 2 - centerOffset + s * (slotW + SlotSpacing);
@@ -404,7 +387,7 @@ public partial class HUDRenderer
                     float cdFrac = MathF.Min(cd / MathF.Max(spell.Cooldown, 0.1f), 1f);
                     int cdH = (int)(inner.Height * cdFrac);
                     _batch.Draw(_pixel, new Rectangle(inner.X, inner.Bottom - cdH, inner.Width, cdH), CooldownOverlay);
-                    if (!isSecondary && _smallFont != null)
+                    if (_smallFont != null)
                         Text(_smallFont, $"{cd:F1}", new Vector2(inner.Center.X - 10, inner.Center.Y - 6), CooldownText);
                 }
                 if (sim.NecroState.Mana < spell.ManaCost)
@@ -464,7 +447,7 @@ public partial class HUDRenderer
     private void DrawSpellDropdown(int screenW, int barY, int slotW, int centerOffset,
         int openSlot, SpellBarState bar, GameData gameData)
     {
-        if (openSlot < 0 || openSlot >= 4 || _smallFont == null) return;
+        if (openSlot < 0 || openSlot >= SpellBarBindings.SlotCount || _smallFont == null) return;
 
         int slotX = screenW / 2 - centerOffset + openSlot * (slotW + SlotSpacing);
         var allSpells = gameData.Spells.GetIDs();
@@ -502,32 +485,21 @@ public partial class HUDRenderer
     // ═══════════════════════════════════════
 
     /// <summary>
-    /// Get the Y position and layout params for the primary spell bar.
+    /// Get the Y position and layout params for the spell bar.
     /// Returns (barY, slotW, slotH, centerOffset).
     /// </summary>
-    public (int barY, int slotW, int slotH, int centerOffset) GetPrimaryBarLayout(int screenH)
+    public (int barY, int slotW, int slotH, int centerOffset) GetSpellBarLayout(int screenH)
     {
         int barY = screenH - PrimaryBarBottomOffset;
-        return (barY, PrimarySlotW, PrimarySlotH, PrimaryBarOffsetX);
+        return (barY, PrimarySlotW, PrimarySlotH, SpellBarCenterOffset);
     }
 
     /// <summary>
-    /// Get the Y position and layout params for the secondary spell bar.
-    /// Returns (barY, slotW, slotH, centerOffset).
-    /// </summary>
-    public (int barY, int slotW, int slotH, int centerOffset) GetSecondaryBarLayout(int screenH)
-    {
-        int primaryY = screenH - PrimaryBarBottomOffset;
-        int barY = primaryY - SecondarySlotH - SecondaryBarGap;
-        return (barY, SecondarySlotW, SecondarySlotH, SecondaryBarOffsetX);
-    }
-
-    /// <summary>
-    /// Hit-test a spell bar slot. Returns slot index 0-3, or -1 if not hit.
+    /// Hit-test a spell bar slot. Returns the slot index, or -1 if not hit.
     /// Uses the same layout constants as drawing.
     /// </summary>
     public int HitTestBarSlot(int screenW, int barY, int slotW, int slotH, int centerOffset,
-        int mouseX, int mouseY, int slotCount = 4)
+        int mouseX, int mouseY, int slotCount = SpellBarBindings.SlotCount)
     {
         if (mouseY < barY || mouseY >= barY + slotH) return -1;
         for (int s = 0; s < slotCount; s++)
@@ -547,7 +519,7 @@ public partial class HUDRenderer
     public int HitTestSpellDropdown(int screenW, int barY, int slotW, int centerOffset,
         int openSlot, int totalSpells, int mouseX, int mouseY)
     {
-        if (openSlot < 0 || openSlot >= 4) return -1;
+        if (openSlot < 0 || openSlot >= SpellBarBindings.SlotCount) return -1;
 
         int slotX = screenW / 2 - centerOffset + openSlot * (slotW + SlotSpacing);
         int ddH = (totalSpells + 1) * DropdownItemH;

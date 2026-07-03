@@ -12,8 +12,12 @@ public class UISpellBarScenario : UIScenarioBase
 {
     public override string Name => "UISpellBar";
     public override bool WantsWidgetRenderer => true; // HUD reuses grimoire frame elements
-    public override string[] DebugPrimarySpells => new[] { "summon_skeleton", "fireball", "raise_zombie", "lightning_zap" };
-    public override string[] DebugSecondarySpells => new[] { "god_ray", "nether_darts", "sky_lightning", "life_drain", "potion_frenzy", "potion_paralysis" };
+    public override string[] DebugSpells => new[]
+    {
+        "summon_skeleton", "fireball", "raise_zombie", "lightning_zap",
+        "god_ray", "nether_darts", "sky_lightning", "life_drain",
+        "potion_frenzy", "potion_paralysis",
+    };
 
     private float _t;
     private int _phase;

@@ -329,7 +329,7 @@ public partial class Game1 {
    /// Execute a spell's effect (projectile, buff, strike, etc.). Called either immediately
    /// (no casting buff) or at the Spell1 animation action moment (deferred cast).
    /// </summary>
-   void ExecuteSpellEffect(SpellDef spell, int necroIdx, Vec2 target, int slot, bool isSecondary = false) {
+   void ExecuteSpellEffect(SpellDef spell, int necroIdx, Vec2 target, int slot) {
       // Cast flipbook effect at caster position
       SpawnCastEffect(spell, _sim.Units[necroIdx].EffectSpawnPos2D);
 
@@ -341,10 +341,8 @@ public partial class Game1 {
          ApplyBlightSpell);
 
       // Apply side effects that SpellEffectSystem can't own (Game1 state)
-      if (result.ChannelingSlot >= 0) {
+      if (result.ChannelingSlot >= 0)
          _channelingSlot = result.ChannelingSlot;
-         _channelingIsSecondary = isSecondary;
-      }
       if (result.PendingProjectile.HasValue)
          _pendingProjectiles.Add(result.PendingProjectile.Value);
    }
@@ -413,24 +411,23 @@ public partial class Game1 {
       }
    }
 
-   /// <summary>Single dispatch path for both spell bars. Handles built-in
-   /// ability intercepts (melee_gather, poison_berries_*) before falling
-   /// through to the normal SpellCaster + casting-buff + pending-anim pipeline.
-   /// Returns the cast result so callers can react (e.g. LMB melee fallback).</summary>
    /// <summary>Light up a hotbar slot for SlotFlashDuration so a fired spell gives
    /// immediate visual feedback. Decayed in real time in Update; drawn by the HUD.</summary>
-   void FlashSpellSlot(int slot, bool isSecondary) {
-      var arr = isSecondary ? _secondarySlotFlash : _primarySlotFlash;
-      if (slot >= 0 && slot < arr.Length) arr[slot] = HUDRenderer.SlotFlashDuration;
+   void FlashSpellSlot(int slot) {
+      if (slot >= 0 && slot < _slotFlash.Length) _slotFlash[slot] = HUDRenderer.SlotFlashDuration;
    }
 
+   /// <summary>Single dispatch path for the spell bar (and the dev 'cast'
+   /// command). Handles built-in ability intercepts (melee_gather,
+   /// poison_berries_*) before falling through to the normal SpellCaster +
+   /// casting-buff + pending-anim pipeline. Returns the cast result.</summary>
    CastResult DispatchSpellCast(string spellId, int necroIdx, int slot,
-      Vec2 mouseWorld, bool isSecondary) {
+      Vec2 mouseWorld) {
       if (string.IsNullOrEmpty(spellId) || necroIdx < 0) return CastResult.NoValidTarget;
 
       // Built-in abilities short-circuit the normal spell pipeline.
       if (TryDispatchBuiltinAbility(spellId, necroIdx, mouseWorld)) {
-         FlashSpellSlot(slot, isSecondary);
+         FlashSpellSlot(slot);
          return CastResult.Success;
       }
 
@@ -439,7 +436,7 @@ public partial class Game1 {
       var spellDef = _gameData.Spells.Get(spellId);
       if (spellDef != null && !string.IsNullOrEmpty(spellDef.ConsumesItem)) {
          CastPotionSpell(spellId, spellDef.ConsumesItem, necroIdx, mouseWorld);
-         FlashSpellSlot(slot, isSecondary);
+         FlashSpellSlot(slot);
          return CastResult.Success;
       }
 
@@ -473,7 +470,7 @@ public partial class Game1 {
       if (result != CastResult.Success) return result;
 
       // Successful real-spell cast → light up its hotbar slot.
-      FlashSpellSlot(slot, isSecondary);
+      FlashSpellSlot(slot);
 
       // Tally a player spell cast for the skill-book milestone (mirrors the
       // monster_kill / human_kill counters). Magic-tree skills cost "cast_spell"
@@ -497,7 +494,7 @@ public partial class Game1 {
             _sim.UnitsMut[necroIdx].FacingAngle = MathF.Atan2(dir.Y, dir.X) * 180f / MathF.PI;
 
          _pendingCastAnim = new PendingCastAnim {
-            SpellID = spellId, Target = mouseWorld, Slot = slot, IsSecondary = isSecondary,
+            SpellID = spellId, Target = mouseWorld, Slot = slot,
             CastingBuffID = spell.CastingBuffID,
             CastAnim = spell.CastAnim, ChannelPhase = 0,
             ChannelElapsed = 0f, LoopElapsed = 0f, CastTime = spell.CastTime, Executed = false,
@@ -518,7 +515,6 @@ public partial class Game1 {
             SpellID = spellId,
             Target = mouseWorld,
             Slot = slot,
-            IsSecondary = isSecondary,
             CastingBuffID = spell.CastingBuffID,
          };
 
@@ -529,7 +525,7 @@ public partial class Game1 {
          }
       } else {
          // No casting buff → execute immediately (legacy behavior).
-         ExecuteSpellEffect(spell, necroIdx, mouseWorld, slot, isSecondary);
+         ExecuteSpellEffect(spell, necroIdx, mouseWorld, slot);
       }
 
       return CastResult.Success;

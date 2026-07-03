@@ -81,65 +81,9 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     private string? _widgetRendererUiDefPath;
     private System.Diagnostics.Stopwatch? _startupTimer;
 
-    /// <summary>Deferred init for Inventory/Building/Crafting/Table menu UIs.
-    /// Called lazily on the first frame any of those UIs needs to be drawn or
-    /// updated. Idempotent — second call is a no-op via the flag.</summary>
-    /// <summary>Nearest Empty Grave (IsWorkerHome def) under the cursor, or -1.</summary>
-    private int FindGraveUnderCursor(Vec2 mouseWorld, float clickRange = 1.6f)
-    {
-        if (_envSystem == null) return -1;
-        int best = -1; float bestSq = clickRange * clickRange;
-        for (int i = 0; i < _envSystem.ObjectCount; i++)
-        {
-            var def = _envSystem.GetDef(_envSystem.GetObject(i).DefIndex);
-            var rt = _envSystem.GetObjectRuntime(i);
-            if (!def.IsWorkerHome || !rt.Alive || rt.BuildProgress < 1f) continue;
-            var o = _envSystem.GetObject(i);
-            float sq = (new Vec2(o.X, o.Y) - mouseWorld).LengthSq();
-            if (sq < bestSq) { bestSq = sq; best = i; }
-        }
-        return best;
-    }
-
-    // Nearest built Corpse Pile under the cursor (click-to-gather target), or -1.
-    private int FindCorpsePileUnderCursor(Vec2 mouseWorld, float clickRange = 1.6f)
-    {
-        if (_envSystem == null) return -1;
-        int pileDef = _envSystem.FindDef("corpse_pile");
-        if (pileDef < 0) return -1;
-        int best = -1; float bestSq = clickRange * clickRange;
-        for (int i = 0; i < _envSystem.ObjectCount; i++)
-        {
-            if (_envSystem.GetObject(i).DefIndex != pileDef) continue;
-            var rt = _envSystem.GetObjectRuntime(i);
-            if (!rt.Alive || rt.BuildProgress < 1f) continue;
-            var o = _envSystem.GetObject(i);
-            float sq = (new Vec2(o.X, o.Y) - mouseWorld).LengthSq();
-            if (sq < bestSq) { bestSq = sq; best = i; }
-        }
-        return best;
-    }
-
-    // Nearest built Corpse Pile that actually holds a corpse, within range of a point
-    // (used by the F-key pickup so it grabs from a pile the same way as a loose body).
-    private int FindNearestCorpsePileInRange(Vec2 from, float range)
-    {
-        if (_envSystem == null) return -1;
-        int pileDef = _envSystem.FindDef("corpse_pile");
-        if (pileDef < 0) return -1;
-        int best = -1; float bestSq = range * range;
-        for (int i = 0; i < _envSystem.ObjectCount; i++)
-        {
-            if (_envSystem.GetObject(i).DefIndex != pileDef) continue;
-            var rt = _envSystem.GetObjectRuntime(i);
-            if (!rt.Alive || rt.BuildProgress < 1f) continue;
-            if (_workerSystem.StoredOf(i, Game.Jobs.JobResources.Corpse) <= 0) continue;
-            var o = _envSystem.GetObject(i);
-            float sq = (new Vec2(o.X, o.Y) - from).LengthSq();
-            if (sq < bestSq) { bestSq = sq; best = i; }
-        }
-        return best;
-    }
+    // (World-object pick helpers — FindGraveUnderCursor, FindCorpsePileUnderCursor,
+    // FindNearestCorpsePileInRange — live in Game1.WorldClicks.cs with the rest of
+    // the world-interaction input.)
 
     // True if this corpse is an endpoint of any tether (so the renderer still draws it on
     // the ground even though its DraggedByUnitID claim would otherwise hide it as "carried").
@@ -412,6 +356,9 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         return true;
     }
 
+    /// <summary>Deferred init for Inventory/Building/Crafting/Table menu UIs.
+    /// Called lazily on the first frame any of those UIs needs to be drawn or
+    /// updated. Idempotent — second call is a no-op via the flag.</summary>
     internal void EnsureInventoryUIsInitialized()
     {
         if (_inventoryUIsInitialized) return;
@@ -586,23 +533,21 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     private PendingSpellCast _pendingSpell = new();
     private PendingCastAnim? _pendingCastAnim;
     internal SpellBarState _spellBarState = new();
-    internal SpellBarState _secondaryBarState = new();
+    // True when the bar was seeded for a test context (test maps, scenario
+    // DebugSpells) — SaveSpellBars then skips writing, so test runs can't
+    // stomp the player's per-machine spellbar.json on exit.
+    private bool _spellBarSeededForTest;
 
     // Per-slot "just activated" flash timers (seconds remaining), decayed in real
     // time. Set when a slot successfully fires a spell; the HUD draws a fading
     // highlight so a keypress visibly lights up its hotbar slot. Duration is owned
     // by HUDRenderer.SlotFlashDuration (single source of truth for the fade math).
-    internal readonly float[] _primarySlotFlash = new float[4];
-    internal readonly float[] _secondarySlotFlash = new float[6];
+    internal readonly float[] _slotFlash = new float[SpellBarBindings.SlotCount];
 
     // Dev cursor override for headless hover testing (set via the `mousepos` dev command).
     private Microsoft.Xna.Framework.Vector2? _devMouseOverride;
     internal int _spellDropdownSlot = -1;
-    internal int _secondaryDropdownSlot = -1;
     private int _channelingSlot = -1;
-    // Which bar the channeling slot belongs to. The hold key differs by bar (primary
-    // Q/E/LMB/RMB vs secondary D1..D6), so the slot index alone can't identify the input.
-    private bool _channelingIsSecondary;
     private readonly Dictionary<string, Texture2D?> _itemTextureCache = new();
     internal int _hoveredObjectIdx = -1;
     internal int _hoveredCorpseIdx = -1;
@@ -684,7 +629,6 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         public string SpellID;
         public Vec2 Target;
         public int Slot;           // spellbar slot that was used
-        public bool IsSecondary;   // secondary spellbar
         public string? CastingBuffID; // to remove on animation end
 
         // Channeled casts (CastAnim ImbueGround/Raise): a Start→Loop→Finish state
@@ -1526,12 +1470,11 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         // Pass placed units to map editor so markers are visible
         _mapEditor.SetPlacedUnits(placedUnits);
 
-        // Load spell bar from data file
-        // Load both spell bars from single JSON read
-        _spellBarState.Slots = new SpellBarSlot[4];
-        _secondaryBarState.Slots = new SpellBarSlot[6]; // 1-6 (was 4 spells + 2 potion slots)
-        for (int si = 0; si < 4; si++) _spellBarState.Slots[si] = new SpellBarSlot { SpellID = "" };
-        for (int si = 0; si < 6; si++) _secondaryBarState.Slots[si] = new SpellBarSlot { SpellID = "" };
+        // Load the spell bar from the data file
+        _spellBarSeededForTest = false; // regular loads save normally again
+        _spellBarState.Slots = new SpellBarSlot[SpellBarBindings.SlotCount];
+        for (int si = 0; si < _spellBarState.Slots.Length; si++)
+            _spellBarState.Slots[si] = new SpellBarSlot { SpellID = "" };
         try
         {
             // Per-machine spell-bar loadout: gitignored 'user settings/', seeded from
@@ -1539,18 +1482,17 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             string sbJson = File.ReadAllText(GamePaths.SeededUserFile(
                 GamePaths.UserSpellBarJson, GamePaths.Resolve(GamePaths.SpellBarJson)));
             using var sbDoc = System.Text.Json.JsonDocument.Parse(sbJson);
-            LoadSpellBarSlots(sbDoc.RootElement, "slots", _spellBarState);
-            LoadSpellBarSlots(sbDoc.RootElement, "secondary", _secondaryBarState);
+            if (sbDoc.RootElement.TryGetProperty("secondary", out _))
+                MigrateOldSpellBarJson(sbDoc.RootElement, _spellBarState);
+            else
+                LoadSpellBarSlots(sbDoc.RootElement, "slots", _spellBarState);
         }
         catch (Exception ex)
         {
             DebugLog.Log("startup", $"Failed to load spellbar.json: {ex.Message}");
-            _spellBarState.Slots = new[] {
-                new SpellBarSlot { SpellID = "summon_skeleton_copy_copy" },
-                new SpellBarSlot { SpellID = "summon_skeleton_copy" },
-                new SpellBarSlot { SpellID = "raise_zombie" },
-                new SpellBarSlot { SpellID = "" }
-            };
+            _spellBarState.Slots[0] = new SpellBarSlot { SpellID = "summon_skeleton_copy_copy" };
+            _spellBarState.Slots[1] = new SpellBarSlot { SpellID = "summon_skeleton_copy" };
+            _spellBarState.Slots[2] = new SpellBarSlot { SpellID = "raise_zombie" };
         }
 
         // Test maps: pre-load no-path test spells so the necromancer can
@@ -1560,11 +1502,12 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         // left alone — they ship with an empty default spellbar.
         if (mapName == "testmap" || mapName == "empty_test")
         {
-            // OutOfRange/NotEnoughMana/OnCooldown test projectile stays on the primary bar (Q).
+            // OutOfRange/NotEnoughMana/OnCooldown test projectile on Q (slot 0).
             _spellBarState.Slots[0] = new SpellBarSlot { SpellID = "test_projectile" };
-            // The canonical reanimation spell on number-key slot 1 (the SECONDARY bar, cast by
-            // D1) so it can be cast on a corpse. The debug necromancer has every path/mana.
-            _secondaryBarState.Slots[0] = new SpellBarSlot { SpellID = "reanimate_corpse" };
+            // The canonical reanimation spell on slot 2 (the "1" key) so it can be
+            // cast on a corpse. The debug necromancer has every path/mana.
+            _spellBarState.Slots[2] = new SpellBarSlot { SpellID = "reanimate_corpse" };
+            _spellBarSeededForTest = true;
         }
 
         // Empty test map: top up the necromancer's mana pool so high-cost
@@ -1662,7 +1605,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             _inventory.AddItem(item.ItemId, item.Quantity);
 
         _skillBookOverlay.Bind(_skillBookState, _inventory, _gameData,
-            _spellBarState, _secondaryBarState, _sim);
+            _spellBarState, _sim);
 
     }
 
@@ -1674,8 +1617,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         {
             Inventory = _inventory,
             GameData = _gameData,
-            PrimaryBar = _spellBarState,
-            SecondaryBar = _secondaryBarState,
+            Bar = _spellBarState,
             BookState = _skillBookState,
             Sim = _sim,
         });
@@ -1926,16 +1868,18 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
 
         // Ensure spell bar state is initialized for HUD safety
         if (_spellBarState.Slots == null)
-            _spellBarState.Slots = new SpellBarSlot[4] { new(), new(), new(), new() };
-        if (_secondaryBarState.Slots == null)
-            _secondaryBarState.Slots = new SpellBarSlot[6] { new(), new(), new(), new(), new(), new() };
-        // UI tests can seed the bars (StartGame's spellbar.json load doesn't run).
-        if (scenario.DebugPrimarySpells != null)
-            for (int i = 0; i < 4 && i < scenario.DebugPrimarySpells.Length; i++)
-                _spellBarState.Slots[i] = new SpellBarSlot { SpellID = scenario.DebugPrimarySpells[i] };
-        if (scenario.DebugSecondarySpells != null)
-            for (int i = 0; i < 6 && i < scenario.DebugSecondarySpells.Length; i++)
-                _secondaryBarState.Slots[i] = new SpellBarSlot { SpellID = scenario.DebugSecondarySpells[i] };
+        {
+            _spellBarState.Slots = new SpellBarSlot[SpellBarBindings.SlotCount];
+            for (int i = 0; i < _spellBarState.Slots.Length; i++)
+                _spellBarState.Slots[i] = new SpellBarSlot { SpellID = "" };
+        }
+        // UI tests can seed the bar (StartGame's spellbar.json load doesn't run).
+        // Scenario runs never save the bar — even unseeded ones exit with
+        // scenario state, not the player's loadout.
+        _spellBarSeededForTest = true;
+        if (scenario.DebugSpells != null)
+            for (int i = 0; i < _spellBarState.Slots.Length && i < scenario.DebugSpells.Length; i++)
+                _spellBarState.Slots[i] = new SpellBarSlot { SpellID = scenario.DebugSpells[i] };
 
         // Load ground data for scenarios that want it
         if (scenario.WantsGround)
@@ -2283,9 +2227,9 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         _skillBookOverlay.Init(_widgetRenderer, _spriteBatch, _pixel);
         // Early bind so scenarios (which skip StartGame) still have state. The spell-
         // bar Slots may be null at this point — re-bind happens in StartGame once the
-        // bars are allocated. AddSpellToBarEffect handles null Slots gracefully.
+        // bar is allocated. AddSpellToBarEffect handles null Slots gracefully.
         _skillBookOverlay.Bind(_skillBookState, _inventory, _gameData,
-            _spellBarState, _secondaryBarState, _sim);
+            _spellBarState, _sim);
 
         // Load TrueType fonts via FontStashSharp (dynamic sizing)
         _fontManager.LoadFontsFromDirectory(GamePaths.Resolve(GamePaths.FontsDir));
@@ -2656,10 +2600,8 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
 
         // Decay spell-bar activation flashes in REAL time (rawDt) so the press
         // feedback fades consistently regardless of game pause/speed.
-        for (int i = 0; i < _primarySlotFlash.Length; i++)
-            if (_primarySlotFlash[i] > 0f) _primarySlotFlash[i] = MathF.Max(0f, _primarySlotFlash[i] - rawDt);
-        for (int i = 0; i < _secondarySlotFlash.Length; i++)
-            if (_secondarySlotFlash[i] > 0f) _secondarySlotFlash[i] = MathF.Max(0f, _secondarySlotFlash[i] - rawDt);
+        for (int i = 0; i < _slotFlash.Length; i++)
+            if (_slotFlash[i] > 0f) _slotFlash[i] = MathF.Max(0f, _slotFlash[i] - rawDt);
 
         // Drain a slice of the reanim-morph prewarm queue (one heavy SDF build per frame)
         // so the builds spread over the first seconds of play instead of one big stall.
@@ -3112,16 +3054,13 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         {
             int mx = mouse.X, my = mouse.Y;
 
-            // Spell bars — use HUDRenderer layout (single source of truth)
-            var pri = _hudRenderer.GetPrimaryBarLayout(screenH);
-            if (_hudRenderer.HitTestBarSlot(screenW, pri.barY, pri.slotW, pri.slotH, pri.centerOffset, mx, my) >= 0)
-                _input.MouseOverUI = true;
-            var sec = _hudRenderer.GetSecondaryBarLayout(screenH);
-            if (_hudRenderer.HitTestBarSlot(screenW, sec.barY, sec.slotW, sec.slotH, sec.centerOffset, mx, my, slotCount: 6) >= 0)
+            // Spell bar — use HUDRenderer layout (single source of truth)
+            var bar = _hudRenderer.GetSpellBarLayout(screenH);
+            if (_hudRenderer.HitTestBarSlot(screenW, bar.barY, bar.slotW, bar.slotH, bar.centerOffset, mx, my) >= 0)
                 _input.MouseOverUI = true;
 
             // Spell dropdown open
-            if (_spellDropdownSlot >= 0 || _secondaryDropdownSlot >= 0)
+            if (_spellDropdownSlot >= 0)
                 _input.MouseOverUI = true;
 
             // Inventory, building, crafting
@@ -3272,48 +3211,26 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             }
 
             // --- Beam/drain channel-hold ---
-            if (_channelingSlot >= 0)
+            if (_channelingSlot >= 0
+                && !SpellBarBindings.IsSlotHeld(_input, _channelingSlot))
             {
-                bool stillHeld;
-                if (_channelingIsSecondary)
+                if (necroIdx >= 0)
                 {
-                    // Secondary bar slots 0..5 are held with number keys D1..D6.
-                    stillHeld = _channelingSlot >= 0 && _channelingSlot <= 5
-                        && _input.IsKeyDown((Keys)((int)Keys.D1 + _channelingSlot));
+                    _sim.Lightning.CancelBeamsForCaster(_sim.Units[necroIdx].Id);
+                    _sim.Lightning.CancelDrainsForCaster(_sim.Units[necroIdx].Id);
                 }
-                else
-                {
-                    stillHeld = _channelingSlot switch
-                    {
-                        0 => _input.IsKeyDown(Keys.Q),
-                        1 => _input.IsKeyDown(Keys.E),
-                        2 => _input.LeftDown,
-                        3 => _input.RightDown,
-                        _ => false
-                    };
-                }
-                if (!stillHeld)
-                {
-                    if (necroIdx >= 0)
-                    {
-                        _sim.Lightning.CancelBeamsForCaster(_sim.Units[necroIdx].Id);
-                        _sim.Lightning.CancelDrainsForCaster(_sim.Units[necroIdx].Id);
-                    }
-                    _channelingSlot = -1;
-                }
+                _channelingSlot = -1;
             }
 
             // --- Spell bar click interaction ---
             if (_input.LeftPressed)
             {
-                var priLayout = _hudRenderer.GetPrimaryBarLayout(screenH);
-                bool clickedSlot = false;
-
+                var barLayout = _hudRenderer.GetSpellBarLayout(screenH);
                 if (_spellDropdownSlot >= 0)
                 {
                     var spellIDs = _gameData.Spells.GetIDs();
                     int itemIdx = _hudRenderer.HitTestSpellDropdown(screenW,
-                        priLayout.barY, priLayout.slotW, priLayout.centerOffset,
+                        barLayout.barY, barLayout.slotW, barLayout.centerOffset,
                         _spellDropdownSlot, spellIDs.Count, mouse.X, mouse.Y);
                     if (itemIdx >= 0)
                     {
@@ -3322,7 +3239,6 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
                         else if (itemIdx - 1 < spellIDs.Count)
                             _spellBarState.Slots[_spellDropdownSlot].SpellID = spellIDs[itemIdx - 1];
                         SaveSpellBars();
-                        clickedSlot = true;
                         _input.ConsumeMouse();
                     }
                     _spellDropdownSlot = -1;
@@ -3330,7 +3246,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
                 else
                 {
                     int s = _hudRenderer.HitTestBarSlot(screenW,
-                        priLayout.barY, priLayout.slotW, priLayout.slotH, priLayout.centerOffset,
+                        barLayout.barY, barLayout.slotW, barLayout.slotH, barLayout.centerOffset,
                         mouse.X, mouse.Y);
                     if (s >= 0)
                     {
@@ -3342,107 +3258,27 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
                             _spellBarState.Slots[slot].SpellID = id;
                             SaveSpellBars();
                         });
-                        clickedSlot = true;
                         _input.ConsumeMouse();
-                    }
-                }
-
-                if (clickedSlot) goto SkipSpellCast;
-
-                // Also check secondary bar click
-                var secLayout = _hudRenderer.GetSecondaryBarLayout(screenH);
-                if (_secondaryDropdownSlot >= 0)
-                {
-                    var secSpellIDs = _gameData.Spells.GetIDs();
-                    int sddIdx = _hudRenderer.HitTestSpellDropdown(screenW,
-                        secLayout.barY, secLayout.slotW, secLayout.centerOffset,
-                        _secondaryDropdownSlot, secSpellIDs.Count, mouse.X, mouse.Y);
-                    if (sddIdx >= 0)
-                    {
-                        if (sddIdx == 0)
-                            _secondaryBarState.Slots[_secondaryDropdownSlot].SpellID = "";
-                        else if (sddIdx - 1 < secSpellIDs.Count)
-                            _secondaryBarState.Slots[_secondaryDropdownSlot].SpellID = secSpellIDs[sddIdx - 1];
-                        SaveSpellBars();
-                        _secondaryDropdownSlot = -1;
-                        _input.ConsumeMouse();
-                        goto SkipSpellCast;
-                    }
-                    _secondaryDropdownSlot = -1;
-                }
-                else
-                {
-                    int ss = _hudRenderer.HitTestBarSlot(screenW,
-                        secLayout.barY, secLayout.slotW, secLayout.slotH, secLayout.centerOffset,
-                        mouse.X, mouse.Y, slotCount: 6);
-                    if (ss >= 0)
-                    {
-                        int slot = ss;
-                        EnsureInventoryUIsInitialized();
-                        _grimoireOverlay.OpenForAssign(id =>
-                        {
-                            _secondaryBarState.Slots[slot].SpellID = id;
-                            SaveSpellBars();
-                        });
-                        _input.ConsumeMouse();
-                        goto SkipSpellCast;
                     }
                 }
             }
 
             // --- Aggression bar: Shift+E raises, Shift+Q lowers. The shift guard
-            // below stops Q/E from also casting slots 0/1 while adjusting. ---
+            // in the cast loop stops Q/E from also casting slots 0/1 while adjusting. ---
             bool aggrShift = _input.IsKeyDown(Keys.LeftShift) || _input.IsKeyDown(Keys.RightShift);
             if (aggrShift && _input.WasKeyPressed(Keys.E)) _sim.Horde.AggressionLevel++;
             if (aggrShift && _input.WasKeyPressed(Keys.Q)) _sim.Horde.AggressionLevel--;
 
-            // A left-click on a world object that has its own click action — a Corpse
-            // Pile (gather), a craft table (open its menu), an Empty Grave (open the
-            // worker roster) — is that interaction, NOT a spell cast. Suppress the LMB
-            // spell slot so the same click doesn't also fire its spell (e.g. Reanimate
-            // Corpse) on top, which at best double-acts and at worst deadlocks the
-            // necromancer. The actual handlers run in the world-click block below.
-            bool lmbOnWorldObject = _input.LeftPressed && !_input.MouseOverUI
-                && _envSystem != null
-                && (FindCorpsePileUnderCursor(mouseWorld) >= 0
-                    || Game.TableSystem.FindTableUnderCursor(_envSystem, mouseWorld) >= 0
-                    || FindGraveUnderCursor(mouseWorld) >= 0);
-
-            // --- Spell casting ---
-            // Primary bar: Q = slot 0, E = slot 1, LClick = slot 2, RClick = slot 3
-            // Secondary bar: D1-D4 = slots 0-3
-            // Both bars share the same dispatch via DispatchSpellCast; the LMB
-            // melee-fallback is primary-only and lives just after this loop.
-            for (int slot = 0; slot < 4; slot++)
+            // --- Spell casting (keyboard-only; see SpellBarBindings for the
+            // slot→key table). Mouse buttons never cast — they belong to the
+            // world-click dispatch in Game1.WorldClicks.cs. ---
+            for (int slot = 0; slot < SpellBarBindings.SlotCount; slot++)
             {
-                bool pressed = slot switch
-                {
-                    0 => !aggrShift && _input.WasKeyPressed(Keys.Q),
-                    1 => !aggrShift && _input.WasKeyPressed(Keys.E),
-                    2 => !_input.MouseOverUI && _input.LeftPressed && !lmbOnWorldObject,
-                    3 => !_input.MouseOverUI && _input.RightPressed,
-                    _ => false
-                };
-                if (!pressed || slot >= _spellBarState.Slots.Length) continue;
-                string spellId = _spellBarState.Slots[slot].SpellID;
-                var result = DispatchSpellCast(spellId, necroIdx, slot, mouseWorld, isSecondary: false);
-
-                // LMB on empty/failed primary slot = melee swing at nearest enemy.
-                if (slot == 2 && result == CastResult.NoValidTarget && necroIdx >= 0
-                    && _pendingCastAnim == null  // NoValidTarget also means "busy mid-cast" — don't stamp a stray melee then
-                    && _sim.Units[necroIdx].PendingAttack.IsNone)
-                {
-                    int meleeTarget = FindClosestEnemyToPoint(_sim.Units[necroIdx].Position, 2f);
-                    if (meleeTarget >= 0)
-                    {
-                        _sim.UnitsMut[necroIdx].Target = CombatTarget.Unit(_sim.Units[meleeTarget].Id);
-                        _sim.UnitsMut[necroIdx].PendingAttack = CombatTarget.Unit(_sim.Units[meleeTarget].Id);
-                        _sim.UnitsMut[necroIdx].AttackCooldown = 2f;
-                    }
-                }
+                if (aggrShift && slot <= 1) continue; // Shift+Q/E = aggression, not a cast
+                if (!SpellBarBindings.WasSlotPressed(_input, slot)) continue;
+                if (slot >= _spellBarState.Slots.Length) continue;
+                DispatchSpellCast(_spellBarState.Slots[slot].SpellID, necroIdx, slot, mouseWorld);
             }
-
-            SkipSpellCast:
 
             // --- Ghost mode toggle (G) ---
             if (_input.WasKeyPressed(Keys.G) && necroIdx >= 0)
@@ -3467,94 +3303,13 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
                 CheatAddAllSkillcounters(necroIdx, 10);
             }
             
-            // --- Secondary spell bar (keys 1-4) ---
-            if (necroIdx >= 0)
-            {
-                Keys[] secKeys = { Keys.D1, Keys.D2, Keys.D3, Keys.D4, Keys.D5, Keys.D6 };
-                for (int sk = 0; sk < 6; sk++)
-                {
-                    if (!_input.WasKeyPressed(secKeys[sk])) continue;
-                    if (sk >= _secondaryBarState.Slots.Length) continue;
-                    string secSpellId = _secondaryBarState.Slots[sk].SpellID;
-                    DispatchSpellCast(secSpellId, necroIdx, sk, mouseWorld, isSecondary: true);
-                }
-            }
+            // Potions are Construction spells (assignable to any spell slot) —
+            // the old dedicated potion slots and their throw-on-click flow are
+            // gone; casting routes through CastPotionSpell.
 
-            // Potions are now Construction spells (assignable to any spell slot,
-            // keys 1-6 / Q E LC RC) — the old dedicated potion slots 5-6 and their
-            // throw-on-click flow are gone; casting routes through CastPotionSpell.
-
-            // --- Corpse interaction (F key) ---
-            // Table-load takes precedence over normal PutDown when carrying a corpse
-            // AND the cursor is over a table within InteractRange of the necromancer.
-            // Full table → blocked (no PutDown either; corpse stays held).
+            // --- Corpse interaction (F key) — see Game1.WorldClicks.cs ---
             if (_input.WasKeyPressed(Keys.F))
-            {
-                bool tableHandled = false;
-                if (necroIdx >= 0 && _sim.Units[necroIdx].CarryingCorpseID >= 0
-                    && _sim.Units[necroIdx].CorpseInteractPhase == 0
-                    && _envSystem != null)
-                {
-                    var necroPos = _sim.Units[necroIdx].Position;
-                    int tableIdx = Game.TableSystem.FindTableUnderCursorInRange(_envSystem, mouseWorld, necroPos);
-                    if (tableIdx >= 0)
-                    {
-                        int corpseId = _sim.Units[necroIdx].CarryingCorpseID;
-                        var cc = _sim.FindCorpseByID(corpseId);
-                        bool corpseEligible = cc != null
-                            && Game.TableCraftingSystem.IsCorpseEligibleForTable(_gameData, cc.UnitDefID);
-                        var ts = _envSystem.GetTableState(tableIdx);
-                        int emptySlot = ts.FindEmptyCorpseSlot();
-
-                        DebugLog.Log("table",
-                            $"[F-press] tableIdx={tableIdx} corpseDef='{cc?.UnitDefID ?? "null"}' " +
-                            $"eligible={corpseEligible} emptyCorpseSlot={emptySlot}");
-
-                        if (corpseEligible)
-                        {
-                            if (emptySlot >= 0)
-                            {
-                                if (cc != null)
-                                    cc.LerpStartPos = Game.TableSystem.GetSpawnPos(_envSystem, tableIdx);
-                                _sim.UnitsMut[necroIdx].PutDownTableIdx = tableIdx;
-                                _sim.UnitsMut[necroIdx].CorpseInteractPhase = 5;
-                                DebugLog.Log("table", $"[F-press] Started PutDown anim → table {tableIdx}");
-                            }
-                            else
-                            {
-                                DebugLog.Log("table", $"[F-press] BLOCKED: table {tableIdx} corpse slots full");
-                            }
-                            tableHandled = true;
-                        }
-                        else
-                        {
-                            DebugLog.Log("table",
-                                $"[F-press] Corpse '{cc?.UnitDefID ?? "null"}' not eligible — falling through to normal PutDown");
-                        }
-                    }
-                    else if (_sim.Units[necroIdx].CarryingCorpseID >= 0)
-                    {
-                        // Carrying but no table under cursor — log only when this would have mattered.
-                        DebugLog.Log("table",
-                            $"[F-press] Carrying but no table found under cursor at ({mouseWorld.X:F1},{mouseWorld.Y:F1}) " +
-                            $"within necroRange={Game.TableSystem.InteractRange} cursorRange={Game.TableSystem.CursorRange}");
-                    }
-                }
-                if (!tableHandled)
-                {
-                    bool wasCarrying = necroIdx >= 0 && _sim.Units[necroIdx].CarryingCorpseID >= 0;
-                    Game.CorpseInteractionManager.TryInteract(_sim, necroIdx);
-                    // Nothing loose to grab? If a Corpse Pile is in reach, pull one from
-                    // it — same pickup as a loose corpse — so F is consistent near piles.
-                    if (necroIdx >= 0 && !wasCarrying
-                        && _sim.Units[necroIdx].CarryingCorpseID < 0
-                        && _sim.Units[necroIdx].CorpseInteractPhase == 0)
-                    {
-                        int pile = FindNearestCorpsePileInRange(_sim.Units[necroIdx].Position, 3f);
-                        if (pile >= 0) TryTakeCorpseFromPile(necroIdx, pile);
-                    }
-                }
-            }
+                HandleInteractKey(necroIdx, mouseWorld);
 
             // --- Tethers (Shift+T target, Shift+R attach/detach) ---
             // Shift+T marks the unit/corpse under the cursor as the tether anchor; Shift+R
@@ -3643,69 +3398,9 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
                 _craftingMenu.Toggle(screenW, screenH);
             }
 
-            // --- Building placement click (world click to place) ---
-            if (_buildingMenuUI.IsPlacementActive
-                && !_buildingMenuUI.ContainsMouse(mouse.X, mouse.Y)
-                && _input.LeftPressed)
-            {
-                _buildingMenuUI.TryPlace(mouseWorld.X, mouseWorld.Y);
-            }
-
-            // --- Left-click table to reopen its craft menu ---
-            // Only fires when no build placement is active and click hasn't been
-            // consumed by another UI element (e.g. the menu itself, inventory).
-            if (!_input.MouseOverUI && _input.LeftPressed && !_input.IsMouseConsumed
-                && !_buildingMenuUI.IsPlacementActive && _envSystem != null)
-            {
-                int clickedTable = Game.TableSystem.FindTableUnderCursor(_envSystem, mouseWorld);
-                if (clickedTable >= 0)
-                {
-                    EnsureInventoryUIsInitialized();
-                    _tableMenuUI.OpenForTable(clickedTable, screenW, screenH, _camera, _renderer);
-                    _input.ConsumeMouse();
-                }
-                else
-                {
-                    // Left-click an Empty Grave → open its worker-assignment roster.
-                    int clickedGrave = FindGraveUnderCursor(mouseWorld);
-                    if (clickedGrave >= 0)
-                    {
-                        EnsureInventoryUIsInitialized();
-                        _graveRosterUI.OpenForGrave(clickedGrave, screenW, screenH);
-                        _input.ConsumeMouse();
-                    }
-                    else
-                    {
-                        // Left-click a Corpse Pile → gather a corpse by hand, exactly like
-                        // the F-key pickup: grab one if close enough, otherwise nothing
-                        // happens (no auto-walk).
-                        int clickedPile = FindCorpsePileUnderCursor(mouseWorld);
-                        if (clickedPile >= 0 && necroIdx >= 0
-                            && _sim.Units[necroIdx].CarryingCorpseID < 0
-                            && _sim.Units[necroIdx].CorpseInteractPhase == 0)
-                        {
-                            if (!TryTakeCorpseFromPile(necroIdx, clickedPile))
-                            {
-                                // Don't fail silently — say why (the pile art looks full
-                                // even when its corpse count is 0).
-                                bool empty = _workerSystem.StoredOf(
-                                    clickedPile, Game.Jobs.JobResources.Corpse) <= 0;
-                                SpawnCastFailText(necroIdx, empty ? "Pile Empty" : "Too Far");
-                            }
-                            _input.ConsumeMouse();
-                        }
-                    }
-                }
-            }
-
-            // --- Foragable collection (right-click within 2 units of necromancer) ---
-            if (!_input.MouseOverUI && _input.RightPressed
-                && _sim.NecromancerIndex >= 0)
-            {
-                int bestIdx = _foragables.FindNearest(_sim.Units[_sim.NecromancerIndex].Position, 2f);
-                if (bestIdx >= 0)
-                    _foragables.StartCollection(bestIdx);
-            }
+            // --- World mouse clicks (placement, building panels, pile gather,
+            // foraging) — the dispatch lives in Game1.WorldClicks.cs ---
+            HandleWorldClicks(screenW, screenH, mouse.X, mouse.Y, mouseWorld, necroIdx);
 
             // --- Auto-pickup foragables ---
             _foragables.TickAutoPickup(dt, _gameData.Settings.General.AutoPickupForagables);
@@ -4079,21 +3774,60 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         DebugLog.Log("startup", $"SpellBar '{key}' loaded: {string.Join(", ", bar.Slots.Select(s => s.SpellID))}");
     }
 
-    /// <summary>Persist the current primary + secondary spell bar slot
-    /// assignments to spellbar.json. Called whenever the player edits a slot
-    /// via the in-game dropdown, and on game exit. Atomic write — partial
-    /// writes can't corrupt the file.</summary>
+    /// <summary>One-time migration of the old two-bar spellbar.json shape
+    /// ({"slots":[4], "secondary":[6]}) onto the single 10-slot bar. Q/E keep
+    /// their spells (slots 0-1), the old number keys 1-6 keep theirs (slots
+    /// 2-7), and the old LMB/RMB spells land in the first empty slots
+    /// (normally 8-9 = keys "7"/"8"; dropped only if the bar is full). The
+    /// next SaveSpellBars persists the new single-list shape.</summary>
+    private static void MigrateOldSpellBarJson(System.Text.Json.JsonElement root, SpellBarState bar)
+    {
+        static List<string> ReadIds(System.Text.Json.JsonElement root, string key)
+        {
+            var ids = new List<string>();
+            if (!root.TryGetProperty(key, out var arr)) return ids;
+            foreach (var slot in arr.EnumerateArray())
+                ids.Add(slot.TryGetProperty("spellID", out var id) ? id.GetString() ?? "" : "");
+            return ids;
+        }
+
+        var oldPrimary = ReadIds(root, "slots");       // Q, E, LMB, RMB
+        var oldSecondary = ReadIds(root, "secondary"); // number keys 1-6
+
+        for (int i = 0; i < 2 && i < oldPrimary.Count; i++)
+            bar.Slots[i].SpellID = oldPrimary[i];
+        for (int i = 0; i < 6 && i < oldSecondary.Count; i++)
+            bar.Slots[2 + i].SpellID = oldSecondary[i];
+
+        // Ex-mouse-button spells: first empty slot, or dropped when full.
+        for (int i = 2; i < 4 && i < oldPrimary.Count; i++)
+        {
+            if (string.IsNullOrEmpty(oldPrimary[i])) continue;
+            int empty = Array.FindIndex(bar.Slots, s => string.IsNullOrEmpty(s.SpellID));
+            if (empty >= 0) bar.Slots[empty].SpellID = oldPrimary[i];
+            else DebugLog.Log("startup", $"spellbar migration: bar full, dropped '{oldPrimary[i]}'");
+        }
+        DebugLog.Log("startup",
+            $"SpellBar migrated from two-bar format: {string.Join(", ", bar.Slots.Select(s => s.SpellID))}");
+    }
+
+    /// <summary>Persist the current spell bar slot assignments to
+    /// spellbar.json. Called whenever the player edits a slot, and on game
+    /// exit. Atomic write — partial writes can't corrupt the file. No-op when
+    /// the bar was seeded for a test map/scenario — those runs must not stomp
+    /// the player's per-machine loadout.</summary>
     private void SaveSpellBars()
     {
+        if (_spellBarSeededForTest)
+        {
+            DebugLog.Log("startup", "SaveSpellBars skipped: bar was test-seeded");
+            return;
+        }
         try
         {
             var doc = new Dictionary<string, object>
             {
                 ["slots"] = _spellBarState.Slots.Select(s => new Dictionary<string, string>
-                {
-                    ["spellID"] = s.SpellID ?? ""
-                }).Cast<object>().ToList(),
-                ["secondary"] = _secondaryBarState.Slots.Select(s => new Dictionary<string, string>
                 {
                     ["spellID"] = s.SpellID ?? ""
                 }).Cast<object>().ToList(),
@@ -4427,6 +4161,3 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         base.UnloadContent();
     }
 }
-
-public struct SpellBarSlot { public string SpellID; }
-public struct SpellBarState { public SpellBarSlot[] Slots; }

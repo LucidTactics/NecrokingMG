@@ -59,7 +59,23 @@ public class CharacterStatsUI : Necroking.UI.IModalLayer
     private const float ArchmageMaxManaBonus = 150f;
     private const float ArchmageRegenBonus = 5f;
 
-    private const int RcSlotIndex = 3;
+    /// <summary>Index of the bar slot holding this spell, or -1. Active skills
+    /// toggle on/off the spell bar (first empty slot on bind).</summary>
+    private static int FindBarSlot(in SpellBarState bar, string spellId)
+    {
+        if (bar.Slots == null || string.IsNullOrEmpty(spellId)) return -1;
+        for (int i = 0; i < bar.Slots.Length; i++)
+            if (bar.Slots[i].SpellID == spellId) return i;
+        return -1;
+    }
+
+    private static int FindEmptyBarSlot(in SpellBarState bar)
+    {
+        if (bar.Slots == null) return -1;
+        for (int i = 0; i < bar.Slots.Length; i++)
+            if (string.IsNullOrEmpty(bar.Slots[i].SpellID)) return i;
+        return -1;
+    }
 
     // Learned skills (keyed by Name). Passives apply while in this set;
     // actives appear in the Active Skills panel while in this set.
@@ -819,14 +835,11 @@ public class CharacterStatsUI : Necroking.UI.IModalLayer
         _batch.Draw(_pixel, new Rectangle(px, py, SkillsPanelW, panelH), PanelBg);
         DrawBorder(px, py, SkillsPanelW, panelH, PanelBorder);
 
-        string title = "Active Skills (RC)";
+        string title = "Active Skills";
         var titleSize = _font!.MeasureString(title);
         _batch.DrawString(_font, title,
             new Vector2((int)(px + (SkillsPanelW - titleSize.X) / 2), (int)(py + 4)),
             TitleColor);
-
-        string boundId = primaryBar.Slots != null && primaryBar.Slots.Length > RcSlotIndex
-            ? (primaryBar.Slots[RcSlotIndex].SpellID ?? "") : "";
 
         int mx = (int)input.MousePos.X;
         int my = (int)input.MousePos.Y;
@@ -840,7 +853,8 @@ public class CharacterStatsUI : Necroking.UI.IModalLayer
 
             learnedActiveCount++;
             var rect = new Rectangle(px + PadX, btnY, SkillsPanelW - PadX * 2, SkillBtnH);
-            bool bound = Skills[i].SpellId == boundId;
+            int boundSlot = FindBarSlot(primaryBar, Skills[i].SpellId);
+            bool bound = boundSlot >= 0;
             bool hovered = rect.Contains(mx, my);
 
             Color bg = bound ? SkillBtnBgActive : (hovered ? SkillBtnBgHover : SkillBtnBg);
@@ -856,10 +870,15 @@ public class CharacterStatsUI : Necroking.UI.IModalLayer
                            (int)(rect.Y + (rect.Height - tSize.Y) / 2)),
                 textColor);
 
-            if (hovered && input.LeftPressed
-                && primaryBar.Slots != null && primaryBar.Slots.Length > RcSlotIndex)
+            if (hovered && input.LeftPressed && primaryBar.Slots != null)
             {
-                primaryBar.Slots[RcSlotIndex].SpellID = bound ? "" : Skills[i].SpellId;
+                if (bound)
+                    primaryBar.Slots[boundSlot].SpellID = "";
+                else
+                {
+                    int empty = FindEmptyBarSlot(primaryBar);
+                    if (empty >= 0) primaryBar.Slots[empty].SpellID = Skills[i].SpellId;
+                }
             }
 
             btnY += SkillBtnH + SkillBtnGap;
@@ -896,11 +915,11 @@ public class CharacterStatsUI : Necroking.UI.IModalLayer
         switch (skill.Kind)
         {
             case SkillKind.ActiveSpell:
-                // Unlearning clears the RC slot if bound.
-                if (!learn && primaryBar.Slots != null && primaryBar.Slots.Length > RcSlotIndex
-                    && primaryBar.Slots[RcSlotIndex].SpellID == skill.SpellId)
+                // Unlearning clears the spell's bar slot if bound.
+                if (!learn)
                 {
-                    primaryBar.Slots[RcSlotIndex].SpellID = "";
+                    int boundSlot = FindBarSlot(primaryBar, skill.SpellId);
+                    if (boundSlot >= 0) primaryBar.Slots[boundSlot].SpellID = "";
                 }
                 break;
             case SkillKind.PassiveGhostMode:

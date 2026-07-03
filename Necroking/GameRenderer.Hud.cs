@@ -606,11 +606,11 @@ partial class GameRenderer
     {
         _g._hudRenderer.Draw(screenW, screenH, _g._sim, _g._gameData,
             _g._inventory, _g._inventoryUI.IsVisible,
-            _g._spellBarState, _g._secondaryBarState,
-            _g._spellDropdownSlot, _g._secondaryDropdownSlot,
+            _g._spellBarState,
+            _g._spellDropdownSlot,
             _g._timeScale, _g._hoveredObjectIdx, _g._envSystem,
             DrawSpellCategoryIcon, BuildMenuOpenMask(), _g._paused, _g._hoveredCorpseIdx,
-            _g._primarySlotFlash, _g._secondarySlotFlash, _g._hoveredBellyUnitId,
+            _g._slotFlash, _g._hoveredBellyUnitId,
             _g._hoveredUnitIdx, _g._menuState == MenuState.MapEditor);
     }
 
@@ -660,7 +660,7 @@ partial class GameRenderer
     }
 
     /// <summary>Draw the aggression bar (Shift+Q/Shift+E controlled) centered just
-    /// above the secondary spell bar, with a warm token on the active level's node.
+    /// above the spell bar, with a warm token on the active level's node.
     /// The bar size AND the node positions are read live from the widget def, so the
     /// token tracks any resize / re-spacing of the bar in the UI editor. Both
     /// DrawWidget and DrawCircle manage their own SpriteBatch, so this runs outside
@@ -698,9 +698,9 @@ partial class GameRenderer
         var barDef = _g._widgetRenderer.GetWidgetDef("AggressionBar");
         if (barDef == null) return false;
 
-        var sec = _g._hudRenderer.GetSecondaryBarLayout(screenH);
+        var barLayout = _g._hudRenderer.GetSpellBarLayout(screenH);
         int x = (screenW - barDef.Width) / 2;
-        int y = sec.barY - barDef.Height - 6; // sit just above the secondary (1-6) bar
+        int y = barLayout.barY - barDef.Height - 6; // sit just above the spell bar
         bar = new Rectangle(x, y, barDef.Width, barDef.Height);
 
         nodes = new System.Collections.Generic.List<Rectangle>();
@@ -805,7 +805,7 @@ partial class GameRenderer
         {
             string[] controls = {
                 "WASD - Move     Space - Jump",
-                "Q/E/LC/RC - Cast spells",
+                "Q/E/1-8 - Cast spells",
                 "Shift - Run    G - Ghost mode",
                 "+/- - Speed   Scroll - Zoom"
             };

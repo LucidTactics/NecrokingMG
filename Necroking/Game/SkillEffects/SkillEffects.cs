@@ -14,8 +14,7 @@ public class SkillEffectContext
 {
     public Inventory Inventory = null!;
     public GameData GameData = null!;
-    public SpellBarState PrimaryBar;
-    public SpellBarState SecondaryBar;
+    public SpellBarState Bar;
     /// <summary>Required by effects that mutate book state — unlock_potion writes
     /// to BookState.UnlockedPotions, passive_stat sets passive flags.</summary>
     public SkillBookState BookState = null!;
@@ -243,16 +242,15 @@ public sealed class MetamorphActionEffect : ISkillEffect
     }
 }
 
-/// <summary>Adds the spell id (arg) to the first empty slot of the primary spell bar,
-/// or secondary bar if the primary is full. Silently skips if both bars are full.</summary>
+/// <summary>Adds the spell id (arg) to the first empty slot of the spell bar.
+/// Silently skips if the bar is full.</summary>
 public sealed class AddSpellToBarEffect : ISkillEffect
 {
     public bool Apply(SkillEffectContext ctx, string arg)
     {
         if (string.IsNullOrEmpty(arg)) return true;
-        if (TryFill(ctx.PrimaryBar, arg)) return true;
-        if (TryFill(ctx.SecondaryBar, arg)) return true;
-        DebugLog.Log("skillbook", $"add_spell: both bars full, '{arg}' not assigned.");
+        if (TryFill(ctx.Bar, arg)) return true;
+        DebugLog.Log("skillbook", $"add_spell: spell bar full, '{arg}' not assigned.");
         return true;
     }
 

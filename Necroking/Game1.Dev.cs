@@ -1293,7 +1293,7 @@ public partial class Game1 {
                }
 
                var target = new Vec2(DevFloat(c.Args[1]), DevFloat(c.Args[2]));
-               var res = DispatchSpellCast(c.Args[0], necroIdx, 0, target, false);
+               var res = DispatchSpellCast(c.Args[0], necroIdx, 0, target);
                string detail = $"cast {c.Args[0]} -> {res}";
                // Path failure must NOT read as a mana failure — name the path(s) the
                // necromancer still needs so the reason is unambiguous.
@@ -1303,6 +1303,34 @@ public partial class Game1 {
                   detail = $"cast {c.Args[0]} -> MissingPath (needs {need})";
                }
                c.Complete(Necroking.Dev.DevServer.Ok(detail));
+               break;
+            }
+
+            // Simulate a world mouse click at a world point (the Game1.WorldClicks
+            // dispatch: LMB = open building panel / pile gather / attack clicked
+            // enemy; RMB = forage / pile gather / attack). Runs the same handlers
+            // as a real click, minus the HUD/popup mouse routing.
+            case "click": {
+               if (c.Args.Length < 2) {
+                  c.Complete(Necroking.Dev.DevServer.Error("click needs: <x> <y> [right]"));
+                  break;
+               }
+               var clickWorld = new Vec2(DevFloat(c.Args[0]), DevFloat(c.Args[1]));
+               bool right = c.Args.Length >= 3
+                  && c.Args[2].Equals("right", StringComparison.OrdinalIgnoreCase);
+               int clickNecro = _sim.NecromancerIndex;
+               int sw = GraphicsDevice.Viewport.Width, sh = GraphicsDevice.Viewport.Height;
+               bool consumedBefore = _input.IsMouseConsumed;
+               if (right)
+                  HandleWorldRightClick(clickWorld, clickNecro);
+               else {
+                  var screenPos = _camera.WorldToScreen(clickWorld, 0f, sw, sh);
+                  HandleWorldLeftClick(sw, sh, (int)screenPos.X, (int)screenPos.Y,
+                     clickWorld, clickNecro);
+               }
+               bool acted = _input.IsMouseConsumed && !consumedBefore;
+               c.Complete(Necroking.Dev.DevServer.Ok(
+                  $"click {(right ? "RMB" : "LMB")} at ({clickWorld.X:F1},{clickWorld.Y:F1}) -> {(acted ? "handled" : "no world action")}"));
                break;
             }
 
@@ -1390,7 +1418,8 @@ public partial class Game1 {
                   "mark <selector|clear>", "unmark [selector]",
                   "set_hp <selector> <hp> [maxHp]", "set_mana <selector|necro> <mana> [maxMana]",
                   "set_necro_type <unitDefId>",
-                  "cast <spellID> <x> <y>", "fireball <x> <y> [dmg] [radius] [name]",
+                  "cast <spellID> <x> <y>", "click <x> <y> [right]",
+                  "fireball <x> <y> [dmg] [radius] [name]",
                   "camera <x> <y> [zoom]", "speed <n>", "pause", "resume",
                   "start_game [map]", "menu <new_game|test_map|empty_test_map|scenarios|main_menu|quit>",
                   "screenshot [name]  opts:{no_ui,no_ground,downsample_to}",

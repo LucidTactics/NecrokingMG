@@ -194,7 +194,7 @@ public partial class Game1
                 if (pca.LoopElapsed >= loopBudget)
                 {
                     var spell = _gameData.Spells.Get(pca.SpellID);
-                    if (spell != null) ExecuteSpellEffect(spell, necroIdx, pca.Target, pca.Slot, pca.IsSecondary);
+                    if (spell != null) ExecuteSpellEffect(spell, necroIdx, pca.Target, pca.Slot);
                     if (finishS.HasValue)
                     {
                         pca.ChannelPhase = 2;
@@ -760,7 +760,7 @@ public partial class Game1
                     var pca = _pendingCastAnim.Value;
                     var spell = _gameData.Spells.Get(pca.SpellID);
                     if (spell != null)
-                        ExecuteSpellEffect(spell, i, pca.Target, pca.Slot, pca.IsSecondary);
+                        ExecuteSpellEffect(spell, i, pca.Target, pca.Slot);
                     _pendingCastAnim = null;
                 }
                 else if (hasPendingAttack)
@@ -794,7 +794,7 @@ public partial class Game1
                     var pca = _pendingCastAnim.Value;
                     var spell = _gameData.Spells.Get(pca.SpellID);
                     if (spell != null)
-                        ExecuteSpellEffect(spell, necroIdx, pca.Target, pca.Slot, pca.IsSecondary);
+                        ExecuteSpellEffect(spell, necroIdx, pca.Target, pca.Slot);
                     _pendingCastAnim = null;
                     RemoveCastingBuffAll(necroIdx);
                 }

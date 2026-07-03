@@ -89,11 +89,13 @@ public class DeathFogSystem
             $"DeathFog: grid {Width}x{Height} (cellSize={CellSize}, world={worldW}x{worldH})");
     }
 
-    /// <summary>Convert world coords to fog-cell coords. Clamped to grid bounds.</summary>
+    /// <summary>Convert world coords to fog-cell coords. Clamped to grid bounds.
+    /// Safe on an uninitialized grid (scenarios skip Init, leaving Width=0) —
+    /// clamps to cell (0,0) instead of throwing on the inverted 0..-1 range.</summary>
     public void WorldToCell(float wx, float wy, out int cx, out int cy)
     {
-        cx = Math.Clamp((int)(wx / CellSize), 0, Width  - 1);
-        cy = Math.Clamp((int)(wy / CellSize), 0, Height - 1);
+        cx = Math.Clamp((int)(wx / CellSize), 0, Math.Max(0, Width  - 1));
+        cy = Math.Clamp((int)(wy / CellSize), 0, Math.Max(0, Height - 1));
     }
 
     public float Sample(float worldX, float worldY)
