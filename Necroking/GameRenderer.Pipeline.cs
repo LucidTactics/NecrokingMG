@@ -86,6 +86,9 @@ partial class GameRenderer
         var matAdd = Materials.HdrAdditive ?? Materials.AdditiveShapes;
 
         var q = _fxPass!;
+        // Ground-fog wisps (depth-tested vs the occluder stamps drawn just
+        // before this pass) — FogWisps layer sorts before the HDR bands.
+        _g._groundFog.CollectWisps(q, _g._ambientColor, ctx.ScreenW, ctx.ScreenH);
         q.SubmitCallback(WorldLayer.EffectsHdrAlpha, _cbFxAlpha, 0, 0, matAlpha);
         q.SubmitCallback(WorldLayer.EffectsHdrAdditive, _cbFxProjectilesHdr, 0, 0, matAdd);
         q.SubmitCallback(WorldLayer.EffectsHdrAdditive, _cbFxEffectsAdd, 0, 0, matAdd);
@@ -220,10 +223,11 @@ partial class GameRenderer
 
         scene.Add(new CustomPass("FogDepthOccluders", ctx =>
         {
-            // Depth-sorted fog: stamp units' depth silhouettes into the scene RT's (already-bound,
-            // already-cleared) depth buffer so the additive reanimation fog can depth-test against
-            // them below.
-            if (_g._gameData.Settings.Performance.DepthSortedFog)
+            // Stamp units' depth silhouettes into the scene RT's (already-bound,
+            // already-cleared) depth buffer so depth-tested fog (reanim smoke,
+            // ground-fog wisps) can test against them below. Runs for the
+            // DepthSortedFog perf setting OR whenever ground fog is active.
+            if (_g._gameData.Settings.Performance.DepthSortedFog || _g._groundFog.HasActiveBanks)
                 DrawFogDepthOccluders();
         }));
 

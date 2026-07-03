@@ -110,6 +110,14 @@ public static class Materials
     public static readonly Material AdditiveShapes =
         Register("AdditiveShapes", null, BlendState.Additive, SamplerState.LinearClamp);
 
+    /// <summary>Ground-fog wisps: alpha-blended, DEPTH-TESTED (read-only)
+    /// against the unit silhouettes stamped by the fog occluder pass — a wisp
+    /// passes in front of feet, fails behind bodies, per pixel. Items carry
+    /// LayerDepth from GameRenderer.FogDepthForY.</summary>
+    public static readonly Material FogWisp =
+        Register("FogWisp", null, BlendState.AlphaBlend, SamplerState.LinearClamp,
+            DepthStencilState.DepthRead, RasterizerState.CullNone);
+
     // --- Effect-backed materials (null until InitEffectMaterials; stay null if
     //     their shader failed to load) ---
 

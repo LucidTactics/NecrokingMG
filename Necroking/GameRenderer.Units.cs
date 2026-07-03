@@ -222,6 +222,12 @@ partial class GameRenderer
         // Mirrors PoisonCloudRenderer's depth-list integration.
         if (_g._flipbooks != null && _g._flipbooks.TryGetValue("cloud03", out var deathFogFb))
         {
+            // Ground fog: update banks/wisps and submit the back blankets
+            // (behind YSort); the depth-tested wisps submit in CollectFxItems.
+            _g._groundFog.SetContext(_g._spriteBatch, _g._camera, _g._renderer, deathFogFb, _g._glowTex, _g._gameTime);
+            _g._groundFog.Update(_g._frameDt);
+            _g._groundFog.CollectBack(queue, _g._ambientColor);
+
             _g._deathFogRenderer.SetContext(_g._spriteBatch, _g._camera, _g._renderer, deathFogFb, _g._gameTime);
             _g._deathFogRenderer.AddPuffsToDepthList(_g._deathFog, _g._renderer.ScreenW, _g._renderer.ScreenH, items);
             // Reanimation dust puffs — Y-sorted with units (reuses the cloud03 sheet).

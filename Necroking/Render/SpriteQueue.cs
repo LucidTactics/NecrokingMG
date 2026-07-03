@@ -26,6 +26,7 @@ public enum WorldLayer : byte
     Projectiles = 90,
     Rope = 100,
     Rain = 110,
+    FogWisps = 115,          // ground-fog wisps, depth-tested vs unit stamps
     EffectsHdrAlpha = 120,   // HDR clouds/smoke (alpha-blended sub-pass)
     EffectsHdrAdditive = 130,// HDR glows/fireballs/reanim/lightning (additive)
     AdditiveShapes = 140,    // plain additive shapes (energy columns, debug)
@@ -106,6 +107,10 @@ public struct RenderItem : IComparable<RenderItem>
     public float Rotation;
     public Color Color;
     public SpriteEffects Flip;
+
+    // GPU depth for materials with a depth-testing DepthStencilState
+    // (FogDepthForY mapping); 0 for everything else.
+    public float LayerDepth;
 
     // Composite payload:
     public SpriteDrawCallback? Callback;
@@ -209,7 +214,7 @@ public sealed class SpriteQueuePass : RenderPass
     public void SubmitSprite(WorldLayer layer, float worldY, Texture2D texture, Vector2 position,
         Rectangle? source, Color color, float rotation, Vector2 origin, float scale,
         SpriteEffects flip = SpriteEffects.None, Material? material = null,
-        MaterialParamSetter? setParams = null)
+        MaterialParamSetter? setParams = null, float layerDepth = 0f)
     {
         var mat = material ?? _defaultMaterial;
         _items.Add(new RenderItem
@@ -225,6 +230,7 @@ public sealed class SpriteQueuePass : RenderPass
             Color = color,
             Flip = flip,
             SetParams = setParams,
+            LayerDepth = layerDepth,
         });
     }
 
@@ -275,7 +281,7 @@ public sealed class SpriteQueuePass : RenderPass
             else if (item.Texture != null)
             {
                 batch.Draw(item.Texture, item.Position, item.Source, item.Color,
-                    item.Rotation, item.Origin, item.Scale, item.Flip, 0f);
+                    item.Rotation, item.Origin, item.Scale, item.Flip, item.LayerDepth);
             }
         }
 

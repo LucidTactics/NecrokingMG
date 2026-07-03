@@ -539,6 +539,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     internal LightningRenderer _lightningRenderer = new();
     internal PoisonCloudRenderer _poisonCloudRenderer = new();
     internal DeathFogRenderer _deathFogRenderer = new();
+    internal GroundFogSystem _groundFog = new();   // depth-stamped ground-fog volume (wisps + blanket)
     internal ReanimEffectSystem _reanimFx = new();
     internal Render.ReanimMorph _reanimMorph = new();   // SDF body-morph data cache for the reanimation rise
     internal MagicGlyphRenderer _glyphRenderer = new();
@@ -1979,6 +1980,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         scenario.Font = _font;
         scenario.SmallFont = _smallFont;
         scenario.PixelTexture = _pixel;
+        scenario.GroundFog = _groundFog;
         if (scenario.WantsWidgetRenderer)
         {
             EnsureInventoryUIsInitialized();

@@ -77,6 +77,7 @@ public static class ScenarioRegistry
         Register("godray_render_test", () => new Scenarios.GodRayRenderTestScenario());
         Register("poison_cloud", () => new Scenarios.PoisonCloudScenario());
         Register("magic_glyph", () => new Scenarios.MagicGlyphScenario());
+        Register("ground_fog", () => new Scenarios.GroundFogScenario());
         Register("poison_burst", () => new Scenarios.PoisonBurstScenario());
         Register("poison_flee", () => new Scenarios.PoisonFleeScenario());
         Register("physics_single", () => new Scenarios.PhysicsSingleScenario());
