@@ -28,7 +28,7 @@ public class WadingEditorPopup
 {
     private readonly EditorBase _ui;
     private bool _isOpen;
-    private UnitDef? _targetUnit;
+    private UnitDef _targetUnit;
     private GameData _gameData = null!;
     private SpriteAtlas[] _atlases = Array.Empty<SpriteAtlas>();
 

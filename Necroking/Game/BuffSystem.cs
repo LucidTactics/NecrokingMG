@@ -517,7 +517,7 @@ public static class BuffSystem
     /// truth shared by spell casting (whether a unit may cast a spell), mana-cost
     /// scaling, and the unit-sheet path display.</summary>
     public static int EffectivePathLevel(UnitArrays units, int unitIdx,
-        Data.Registries.UnitDef? def, Data.Registries.MagicPath p)
+        Data.Registries.UnitDef def, Data.Registries.MagicPath p)
     {
         int total = (def?.GetPathLevel(p) ?? 0) + PathLevelBonus(units, unitIdx, p);
         float? floor = MaxSetExtra(units, unitIdx, "AllPaths");

@@ -510,7 +510,7 @@ public static class SubroutineSteps
     /// MaxSpeed derivation — so the two can no longer disagree. (They used to:
     /// Simulation reset MaxSpeed to plain CombatSpeed every frame while only the
     /// AI applied effort, which silently clobbered amortized followers' speed.)</summary>
-    public static float EffortMultiplier(Necroking.Data.Registries.UnitDef? def, MoveEffort effort)
+    public static float EffortMultiplier(Necroking.Data.Registries.UnitDef def, MoveEffort effort)
     {
         switch (effort)
         {

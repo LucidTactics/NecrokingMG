@@ -142,7 +142,7 @@ partial class GameRenderer
             }
 
             var unitDef = _g._gameData.Units.Get(corpse.UnitDefID);
-            if (unitDef?.Sprite == null) continue;
+            if (unitDef.Sprite == null) continue;
             var atlasId = AtlasDefs.ResolveAtlasName(unitDef.Sprite.AtlasName);
             var atlas = _g._atlases[atlasId];
             if (!atlas.IsLoaded) continue;
@@ -489,7 +489,7 @@ partial class GameRenderer
     {
         atlas = default!; frame = default; flipX = false; refH = 128f;
         var unitDef = _g._gameData.Units.Get(unitDefID);
-        if (unitDef?.Sprite == null) return false;
+        if (unitDef.Sprite == null) return false;
         var atlasId = AtlasDefs.ResolveAtlasName(unitDef.Sprite.AtlasName);
         int ai = atlasId;
         if (ai < 0 || ai >= _g._atlases.Length || !_g._atlases[ai].IsLoaded) return false;

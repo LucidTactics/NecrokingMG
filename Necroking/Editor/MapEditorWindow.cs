@@ -5412,7 +5412,7 @@ public class MapEditorWindow
                     UnitDefId = unitIds[_selectedUnitDefIdx],
                     X = worldPos.X,
                     Y = worldPos.Y,
-                    Faction = unitDef?.Faction ?? "Undead",
+                    Faction = unitDef.Faction ?? "Undead",
                     PatrolRouteId = _unitPatrolRoute,
                     IsCorpse = _placeAsCorpse,
                 });

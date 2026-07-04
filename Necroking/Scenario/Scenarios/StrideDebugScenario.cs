@@ -35,7 +35,7 @@ public class StrideDebugScenario : ScenarioBase
 
     private bool _complete;
     private float _elapsed;
-    private UnitDef? _def;
+    private UnitDef _def;
     private UnitSpriteData? _spriteData;
     private SpriteAtlas? _atlas;
     private StrideCalibration.UnitCalibration? _cal;

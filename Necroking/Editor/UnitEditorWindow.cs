@@ -148,7 +148,7 @@ public class UnitEditorWindow
     private float _groupPropScroll;
 
     // --- Clipboard for Ctrl+C / Ctrl+V ---
-    private UnitDef? _clipboardUnit;
+    private UnitDef _clipboardUnit;
     private WeaponDef? _clipboardWeapon;
     private ArmorDef? _clipboardArmor;
     private ShieldDef? _clipboardShield;

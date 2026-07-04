@@ -907,9 +907,9 @@ partial class GameRenderer
             return;
         }
         var unitDef = _g._gameData.Units.Get(unitDefId);
-        if (unitDef?.Sprite == null)
+        if (unitDef.Sprite == null)
         {
-            DebugLog.Log("table", $"[DrawUnitIdleSprite] '{unitDefId}': unitDef={unitDef != null} sprite={unitDef?.Sprite != null}");
+            DebugLog.Log("table", $"[DrawUnitIdleSprite] '{unitDefId}': unitDef={unitDef != null} sprite={unitDef.Sprite != null}");
             return;
         }
         var atlasId = AtlasDefs.ResolveAtlasName(unitDef.Sprite.AtlasName);

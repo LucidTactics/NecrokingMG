@@ -561,7 +561,7 @@ public class UnitInfoPanel : IModalLayer
 
     /// <summary>Bind the path tooltip: level = base (unit-type native) + buff
     /// bonus (AllPaths floor, e.g. god mode) + item bonus (none yet).</summary>
-    private void BindPathTooltip(MagicPath p, UnitDef? def, Simulation sim)
+    private void BindPathTooltip(MagicPath p, UnitDef def, Simulation sim)
     {
         int native = def?.GetPathLevel(p) ?? 0;
         int eff = BuffSystem.EffectivePathLevel(sim.UnitsMut, _unitIndex, def, p);

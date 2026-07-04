@@ -102,7 +102,7 @@ public class Unit
     /// The string-keyed registry Get was being paid per moving unit per frame
     /// (accel caps, turn speed). Reference-keyed on UnitDefID so a morph
     /// (UnitDefID reassignment) re-resolves automatically.</summary>
-    public Data.Registries.UnitDef? CachedDef;
+    public Data.Registries.UnitDef CachedDef;
     public string? CachedDefKey;
 
     /// <summary>AI-declared locomotion intent. Read by SetLocomotionAnim when
@@ -642,7 +642,7 @@ public static class UnitUtil
     /// Reference-compares the cached key against UnitDefID: a morph assigns a
     /// new string instance, which misses once and re-caches — always correct,
     /// no explicit invalidation needed.</summary>
-    public static Data.Registries.UnitDef? ResolveDef(Unit u, Data.GameData gameData)
+    public static Data.Registries.UnitDef ResolveDef(Unit u, Data.GameData gameData)
     {
         if (!ReferenceEquals(u.CachedDefKey, u.UnitDefID))
         {
