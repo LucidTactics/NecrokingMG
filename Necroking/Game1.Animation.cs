@@ -514,8 +514,12 @@ public partial class Game1
                     float spd = (animDur > cycle && cycle > 0f) ? animDur / cycle : 1f;
                     AnimResolver.SetOverride(_sim.UnitsMut[i], AnimRequest.Combat(atkState, spd));
                 }
-                else if (_sim.Units[i].InCombat && _sim.Units[i].AttackCooldown > 0f)
+                else if (_sim.Units[i].InCombat && _sim.Units[i].AttackCooldown > 0f
+                    && !_sim.Units[i].Fleeing && !_sim.Units[i].Routing)
                 {
+                    // (Fleeing/routing units skip the pre-roll: they're exempt from
+                    // the InCombat movement plant, so a windup here would play while
+                    // running — the exact sliding artifact the movement gate forbids.)
                     // Pre-roll: start attack animation early so its effect_time lines up
                     // with the end of the cooldown. Use the FIRST non-pounce weapon's
                     // anim (most units have one melee weapon; wolves have Bite then Pounce

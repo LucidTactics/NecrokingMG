@@ -234,9 +234,12 @@ public static class AnimResolver
     private static bool IsPlantedOrStopping(Unit unit)
     {
         if (unit.Velocity.LengthSq() <= MovingSpeedSq) return true;
+        // InCombat only plants non-fleeing units (fleeing units are exempt from the
+        // InCombat velocity plant in UpdateMovement — they keep running, so InCombat
+        // must not count as "stopping" for them here either).
         return !unit.PendingAttack.IsNone
             || unit.PostAttackTimer > 0f
-            || unit.InCombat
+            || (unit.InCombat && !unit.Fleeing && !unit.Routing)
             || unit.Incap.Active
             || unit.JumpPhase != 0
             || unit.DodgeTimer > 0f;

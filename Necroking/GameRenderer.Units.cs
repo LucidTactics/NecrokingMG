@@ -373,6 +373,15 @@ partial class GameRenderer
         // Apply weather ambient light
         tint = MultiplyColor(tint, _g._ambientColor);
 
+        // Hit flash: brief lerp toward white on physical impact. Applied AFTER the
+        // ambient multiply so it stays visible at night. This is the feedback that
+        // survives reaction-anim suppression (fleeing/mid-attack/cooldown units).
+        if (_g._sim.Units[i].HitFlashTimer > 0f)
+        {
+            float flash = _g._sim.Units[i].HitFlashTimer / GameSystems.DamageSystem.HitFlashSeconds;
+            tint = Color.Lerp(tint, Color.White, 0.8f * flash);
+        }
+
         float heightOffset = _g._sim.Units[i].Z;
         // Use RenderPos (Position + RenderOffset) so lunge and any future cosmetic
         // offsets propagate to every visual attached to this unit: sprite, weapon,

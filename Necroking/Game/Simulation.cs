@@ -459,6 +459,8 @@ public class Simulation
                 _units[i].HitReactTimer = MathF.Max(0f, _units[i].HitReactTimer - dt);
             if (_units[i].ReactionCooldownTimer > 0f)
                 _units[i].ReactionCooldownTimer = MathF.Max(0f, _units[i].ReactionCooldownTimer - dt);
+            if (_units[i].HitFlashTimer > 0f)
+                _units[i].HitFlashTimer = MathF.Max(0f, _units[i].HitFlashTimer - dt);
         }
 
         // Update mana and cooldowns. BonusManaRegen is the dynamic add (e.g.
@@ -1009,7 +1011,12 @@ public class Simulation
             if (!_units[i].PendingAttack.IsNone && !(_units[i].AI == AIBehavior.FleeWhenHit
                 || (selfManagesCombat && _units[i].WolfPhase >= WolfDisengage)))
             { _units[i].PreferredVel = Vec2.Zero; continue; }
-            if (_units[i].InCombat && _units[i].AI != AIBehavior.PlayerControlled && !selfManagesCombat)
+            // Fleeing/routing units are exempt from the InCombat plant: a fleeing
+            // unit with a stale/live engagement must keep running, not freeze in
+            // melee doing attack windups. (InCombat itself stays derived so male
+            // deer can still flip Fleeing→FightBack off it.)
+            if (_units[i].InCombat && _units[i].AI != AIBehavior.PlayerControlled && !selfManagesCombat
+                && !_units[i].Fleeing && !_units[i].Routing)
             { _units[i].PreferredVel = Vec2.Zero; continue; }
 
             switch (_units[i].AI)
@@ -1689,10 +1696,15 @@ public class Simulation
             // between swings) so melee units "stop to fight" instead of sliding while
             // the attack animation plays. PlayerControlled is exempt — the player is
             // never frozen by their own combat. Ranged units never set EngagedTarget
-            // so they're not InCombat and keep their kite.
+            // so they're not InCombat and keep their kite. Fleeing/routing units are
+            // exempt from the InCombat plant (they must keep running even when a
+            // pursuer is in melee range) — but NOT from the PendingAttack/PostAttack
+            // locks, so a swing that already started still finishes planted before
+            // the unit bolts.
             if (_units[i].Jumping || _units[i].Incap.IsLocked
                 || !_units[i].PendingAttack.IsNone || _units[i].PostAttackTimer > 0f
-                || (_units[i].InCombat && _units[i].AI != AIBehavior.PlayerControlled))
+                || (_units[i].InCombat && _units[i].AI != AIBehavior.PlayerControlled
+                    && !_units[i].Fleeing && !_units[i].Routing))
             {
                 _units[i].Velocity = Vec2.Zero;
                 _units[i].StuckTime = 0f; // frozen, not stuck — don't accrue escape bias

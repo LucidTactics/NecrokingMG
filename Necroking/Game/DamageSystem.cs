@@ -48,6 +48,10 @@ public static class DamageSystem
     /// this window. Prevents focus fire / repeated whiffs from perpetually
     /// twitching a unit so it can never act.</summary>
     public const float ReactionCooldownSeconds = 0.6f;
+    /// <summary>Duration of the cosmetic white sprite flash on a physical impact.
+    /// This is the feedback channel that survives every reaction-anim suppression
+    /// (fleeing, mid-attack, cooldown) — a hit always visibly lands.</summary>
+    public const float HitFlashSeconds = 0.15f;
 
     /// <summary>
     /// Shared gates for both reaction anims (BlockReact flinch, Dodge). A reaction
@@ -79,6 +83,11 @@ public static class DamageSystem
     /// </summary>
     public static void ApplyHitReactAnim(UnitArrays units, int idx)
     {
+        if (idx < 0 || idx >= units.Count) return;
+        // Cosmetic flash fires on EVERY physical impact, before the anim gates —
+        // a hit whose flinch is suppressed must still read as a hit.
+        units[idx].HitFlashTimer = HitFlashSeconds;
+
         if (!ReactionAllowed(units, idx)) return;
 
         var handle = Render.AnimResolver.SetOverride(units[idx],
