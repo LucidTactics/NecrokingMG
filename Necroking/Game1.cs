@@ -1611,6 +1611,10 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         _mapEditor.SetItemRegistry(_gameData.Items);
         _mapEditor.SetSpellRegistry(_gameData.Spells);
         _mapEditor.SetGameData(_gameData);
+        // Restore the last-open tab once, now that the editor has its settings —
+        // not in the open handlers (F11 / HUD button / pause menu each open it and
+        // we'd otherwise have to remember all of them).
+        _mapEditor.RestoreTabFromSettings();
         // Default the editor's Save target to whichever map was just loaded, so
         // editing after "Play Test Map" saves to testmap.json — not default.json.
         _mapEditor.SetMapFilename(mapName);
@@ -2962,7 +2966,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
                         break;
                     case HUDRenderer.EditorMap:
                         if (_menuState == MenuState.MapEditor) _menuState = MenuState.None;
-                        else { _menuState = MenuState.MapEditor; _mapEditor.RestoreTabFromSettings(); _mapEditor.SuppressClicksUntilRelease(); }
+                        else { _menuState = MenuState.MapEditor; _mapEditor.SuppressClicksUntilRelease(); }
                         break;
                     case HUDRenderer.EditorUi:
                         if (_menuState == MenuState.UIEditor) _menuState = MenuState.None;
@@ -3091,7 +3095,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             y2 += btnH2 + btnGap2;
             // Map Editor
             if (mouse.X >= menuX2 && mouse.X < menuX2 + btnW2 && mouse.Y >= y2 && mouse.Y < y2 + btnH2)
-            { _menuState = MenuState.MapEditor; _paused = false; _mapEditor.RestoreTabFromSettings(); _mapEditor.SuppressClicksUntilRelease(); }
+            { _menuState = MenuState.MapEditor; _paused = false; _mapEditor.SuppressClicksUntilRelease(); }
             y2 += btnH2 + btnGap2;
             // UI Editor
             if (mouse.X >= menuX2 && mouse.X < menuX2 + btnW2 && mouse.Y >= y2 && mouse.Y < y2 + btnH2)

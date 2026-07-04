@@ -712,8 +712,10 @@ public class MapEditorWindow
 
     public void SetGameData(Data.GameData? data) => _gameData = data;
 
-    /// <summary>Restore the last-open tab from per-machine settings (called when the
-    /// editor is reopened). Clamps to the valid enum range — a stale/hand-edited
+    /// <summary>Restore the last-open tab from per-machine settings. Called once at
+    /// init (right after SetGameData), not from the open handlers — the editor can be
+    /// opened via F11, the HUD button, or the pause menu, so init is the one place
+    /// that covers them all. Clamps to the valid enum range — a stale/hand-edited
     /// settings file could hold an out-of-range value.</summary>
     public void RestoreTabFromSettings()
     {
