@@ -219,7 +219,7 @@ public class SpellDef : IHasId
     // WolfHunt — how long the commanded pack-hunt stays active after the cast.
     [EditorField(Label = "Hunt Duration", Order = 250, Step = 0.5f, Decimals = 1)]
     [EditorVisible("Category", "WolfHunt")]
-    [JsonPropertyName("wolfHuntDuration")] public float WolfHuntDuration { get; set; } = 18f;
+    [JsonPropertyName("wolfHuntDuration")] public float WolfHuntDuration { get; set; } = 0;
 
     // HitEffectFlipbook — shown in Projectile and Strike(!target), handled manually for Strike
     [EditorHide]
