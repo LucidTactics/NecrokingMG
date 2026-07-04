@@ -523,8 +523,9 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     internal readonly Render.WadingWakeSystem _wakeSystem = new();
     /// <summary>Cached gameplay delta from the last Update tick. Drives
     /// frame-rate-independent systems that need dt during the Draw pass
-    /// (e.g. wading wake particles). Respects pause and time scale.</summary>
-    internal float _frameDt;
+    /// (e.g. wading wake particles). Respects pause and time scale.
+    /// (Forwarder — the value lives on <see cref="_clock"/>.)</summary>
+    internal float _frameDt => _clock.VisualDt;
     internal Microsoft.Xna.Framework.Graphics.Effect? _hdrSpriteEffect;
     internal Texture2D? _groundVertexMapTex;
     internal EffectManager _effectManager = new();
@@ -574,8 +575,24 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         || _menuState == MenuState.MapEditor || _menuState == MenuState.UIEditor
         || _menuState == MenuState.ItemEditor;
     internal bool _gameOver;
-    internal float _gameTime;
-    internal float _timeScale = 1f;
+
+    /// <summary>Central time & pause authority — see <see cref="Core.GameClock"/> for the
+    /// full domain docs (RawDt / RealDt / VisualDt+VisualTime / WorldDt+WorldRunning,
+    /// pause sources). Driven two-phase from Update: BeginFrame at the dt derivation
+    /// point, GateWorld right before the sim gate. The legacy fields below (_gameTime,
+    /// _timeScale, _rawDt, _frameDt) are read-forwarders kept so the many renderer
+    /// call sites don't churn.</summary>
+    internal readonly Core.GameClock _clock = new();
+
+    /// <summary>Visual/presentation clock (forwarder for <see cref="Core.GameClock.VisualTime"/>):
+    /// phase driver for wind/shader/pulse visuals. Never reset — NOT the world's age;
+    /// for "how long has this world existed" use <c>_sim.GameTime</c>.</summary>
+    internal float _gameTime => _clock.VisualTime;
+    internal float _timeScale
+    {
+        get => _clock.TimeScale;
+        set => _clock.SetTimeScale(value);
+    }
 
     // Glyph trap placement mode
     private PendingSpellCast _pendingSpell = new();
@@ -630,7 +647,8 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     internal readonly List<Rectangle> _devMarkBoxes = new();
     private KeyboardState _prevKb;
     private MouseState _prevMouse;
-    internal float _rawDt;
+    /// <summary>Unclamped wall-clock frame delta (forwarder for <see cref="Core.GameClock.RawDt"/>).</summary>
+    internal float _rawDt => _clock.RawDt;
 
     /// <summary>F2 — overlay raw waterness, computed waterline V, slope, and
     /// the body-bbox bounds on each wading unit. Tuning helper for the per-
@@ -2745,11 +2763,12 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         }
         _prevMenuState = _menuState;
 
-        _rawDt = (float)gameTime.ElapsedGameTime.TotalSeconds;
-        float rawDt = _rawDt;
-        float dt = _paused ? 0f : MathF.Min(rawDt, 1f / 20f) * _timeScale;
-        _gameTime += dt;
-        _frameDt = dt;
+        // Clock phase 1: derive this frame's time domains (see GameClock docs).
+        // Runs BEFORE the MainMenu/ScenarioList early-returns on purpose — menu frames
+        // keep accruing VisualTime so shader/wind phases don't stall in menus.
+        _clock.BeginFrame((float)gameTime.ElapsedGameTime.TotalSeconds, externallyPaused: _paused);
+        float rawDt = _clock.RawDt;
+        float dt = _clock.VisualDt;
 
         // Decay spell-bar activation flashes in REAL time (rawDt) so the press
         // feedback fades consistently regardless of game pause/speed.
