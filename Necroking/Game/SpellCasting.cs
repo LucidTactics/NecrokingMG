@@ -454,6 +454,23 @@ public static class SpellCaster
         return CastResult.Success;
     }
 
+    /// <summary>Refund a cast whose mana/cooldown were committed at press time but
+    /// whose effect never fired — a hard interrupt (knockdown/knockback) cancelled
+    /// the pending cast mid-wind-up. Recomputes the effective mana cost the same
+    /// way the deduction did so the two always match. Mana may transiently exceed
+    /// max (regen ticked during the wind-up); the per-frame clamp in Game1 corrects
+    /// it next tick.</summary>
+    public static void RefundSpellCast(string spellID, SpellRegistry spells, NecromancerState necro,
+        UnitArrays units, int necroIdx, GameData? gameData)
+    {
+        var spell = spells.Get(spellID);
+        if (spell == null || necroIdx < 0 || necroIdx >= units.Count) return;
+        var castingDef = gameData?.Units.Get(units[necroIdx].UnitDefID);
+        Func<MagicPath, int> castingLevel = ResolveCasterLevel(castingDef, units, necroIdx);
+        necro.Mana += spell.EffectiveManaCost(castingLevel);
+        necro.SpellCooldowns.Remove(spellID);
+    }
+
     /// <summary>True if the necromancer meets a spell's magic-path requirements
     /// (primary + secondary path/level). PATH GATING ONLY — deliberately does
     /// NOT check mana, cooldown, or targeting: "do I have this spell" is about

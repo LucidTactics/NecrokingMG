@@ -691,6 +691,13 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         public float LoopElapsed;     // seconds spent in the Loop phase
         public float CastTime;        // total target cast time (start + loop)
         public bool Executed;         // effect already fired (end of loop)
+
+        // Cast plant (todos/player_cast_plant.md): true from dispatch until the
+        // player has braked below the anim-start gate. While set, the cast anim
+        // has NOT started (locomotion keeps playing the skid), the channel state
+        // machine and the left-Spell1 safety net are both suspended, and movement
+        // input cannot cancel the cast (committed at press, Q2).
+        public bool WaitingForPlant;
     }
 
     private static bool IsChanneledCast(string? castAnim)
@@ -753,6 +760,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     private Necroking.Dev.DevJob? _devJob;        // active batch script (stepped each frame in Update)
     private int _devJobSeq;                        // id counter for batch jobs
     private Vec2? _devWalkTarget;                  // dev "walk_necro" goal; drives WASD-equivalent input, cancelled by any WASD press
+    private bool _devWalkSprint;                   // dev "walk_necro" sprint=true opt: hold virtual Shift while auto-walking
     internal int _scenarioScrollOffset;
 
     // --- Tethers / drag ropes (Shift+T target, Shift+R attach) ---
@@ -3333,7 +3341,8 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
                     }
                 }
 
-                bool running = _input.IsKeyDown(Keys.LeftShift) || _input.IsKeyDown(Keys.RightShift);
+                bool running = _input.IsKeyDown(Keys.LeftShift) || _input.IsKeyDown(Keys.RightShift)
+                    || (_devWalkTarget.HasValue && _devWalkSprint);
                 _sim.SetNecromancerInput(moveDir, running);
 
                 // Mouse facing — skipped when the necromancer is mid-scripted-

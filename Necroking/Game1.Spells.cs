@@ -489,25 +489,22 @@ public partial class Game1 {
             if (cb != null) BuffSystem.ApplyBuff(_sim.UnitsMut, necroIdx, cb);
          }
 
-         var dir = mouseWorld - _sim.Units[necroIdx].Position;
-         if (dir.LengthSq() > 0.0001f)
-            _sim.UnitsMut[necroIdx].FacingAngle = MathF.Atan2(dir.Y, dir.X) * 180f / MathF.PI;
-
+         // Cast plant: the anim does NOT start here — the necromancer brakes to
+         // a stop (locomotion keeps playing the skid) and turns toward the aim
+         // at a boosted rate; TickCastPlant starts the channel once speed drops
+         // below the gate. The old raw FacingAngle snap is gone — facing is
+         // owned by UpdateFacingAngles' cast branch for the whole cast.
          _pendingCastAnim = new PendingCastAnim {
             SpellID = spellId, Target = mouseWorld, Slot = slot,
             CastingBuffID = spell.CastingBuffID,
             CastAnim = spell.CastAnim, ChannelPhase = 0,
             ChannelElapsed = 0f, LoopElapsed = 0f, CastTime = spell.CastTime, Executed = false,
+            WaitingForPlant = true,
          };
-
-         GetChannelStates(spell.CastAnim, out var startS, out _, out _);
-         uint nUid = _sim.Units[necroIdx].Id;
-         if (_unitAnims.TryGetValue(nUid, out var nAnim)) {
-            nAnim.Ctrl.ForceState(startS);
-            _unitAnims[nUid] = nAnim;
-         }
       } else if (!string.IsNullOrEmpty(spell.CastingBuffID)) {
-         // Defer execution to the Spell1 animation event.
+         // Defer execution to the Spell1 animation event. Like the channel path,
+         // the Spell1 anim itself starts in TickCastPlant once braked below the
+         // gate (walking casts pass the gate the same frame — no added latency).
          var castBuff = _gameData.Buffs.Get(spell.CastingBuffID);
          if (castBuff != null) BuffSystem.ApplyBuff(_sim.UnitsMut, necroIdx, castBuff);
 
@@ -516,17 +513,20 @@ public partial class Game1 {
             Target = mouseWorld,
             Slot = slot,
             CastingBuffID = spell.CastingBuffID,
+            WaitingForPlant = true,
          };
-
-         uint necroUid = _sim.Units[necroIdx].Id;
-         if (_unitAnims.TryGetValue(necroUid, out var necroAnim)) {
-            necroAnim.Ctrl.RequestState(AnimState.Spell1);
-            _unitAnims[necroUid] = necroAnim;
-         }
       } else {
-         // No casting buff → execute immediately (legacy behavior).
+         // No casting buff → execute immediately (legacy behavior; Q6 — no anim,
+         // no pose to mismatch, so no plant either: castable at a full sprint).
          ExecuteSpellEffect(spell, necroIdx, mouseWorld, slot);
+         return CastResult.Success;
       }
+
+      // Start braking the same frame as the press (Game1's input block runs
+      // before _sim.Tick). TickCastPlant re-syncs this every frame after.
+      var aimDir = mouseWorld - _sim.Units[necroIdx].Position;
+      _sim.SetNecromancerCasting(true, aimDir.LengthSq() > 0.0001f
+         ? MathF.Atan2(aimDir.Y, aimDir.X) * 180f / MathF.PI : float.NaN);
 
       return CastResult.Success;
    }

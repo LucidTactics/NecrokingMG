@@ -203,6 +203,34 @@ knockdown mid-cast (cast cancelled, mana refunded). A `--scenario` can assert
 "necromancer velocity < walk threshold at spell-effect frame" once the feel is signed
 off.
 
+## 5.5 Implementation log (2026-07-04 — Phase A SHIPPED)
+
+All of Phase A + the settings tab landed in one pass:
+- **Sim**: `SetNecromancerCasting` bridge + `NecroCastPlant`/`NecroMoveInputActive`;
+  PreferredVel zeroed while casting; brake = `Settings.Animation.CastBrakeMultiplier`
+  × maxDecel; sprint ramp forced to half-rate decay; `UpdateFacingAngles` cast
+  branch (frozen aim, `CastTurnBoost` × turn speed via new `TurnToward` rateMult
+  param) — replaces the channel raw `FacingAngle` snaps.
+- **Game1**: `PendingCastAnim.WaitingForPlant`; dispatch defers all anim starts;
+  `TickCastPlant` (top of UpdateAnimations) syncs the plant declaratively, cancels
+  + REFUNDS on hard interrupt (`SpellCaster.RefundSpellCast` — also fixes the old
+  bug where a knockdown mid-cast still fired the spell via the safety net), and
+  releases the anim at the gate (speed ≤ `CastPlantGateSpeedMult` × CombatSpeed).
+  Channel machine + left-Spell1 safety net suspended while WaitingForPlant.
+  Tail-cancel at both effect-fire sites (Spell1 effect frame, channel loop end).
+- **Settings**: new `AnimationSettings` (brake/turn/gate/tailCancel + hit-flash
+  toggle/intensity) + esc-menu **Anim tab** (SettingsWindow), per-machine via
+  `user settings/settings.json`.
+- **Dev tooling**: `walk_necro … sprint=true`, `cast_state` inspector, `set_cap`.
+- **Verified live** (devserver + curl, headless): sprint-cast 180° behind —
+  Run@10.0 → cast → skid (locomotion playing) → Spell1 @ speed 2.5 already
+  pivoted 162° → planted+aimed at 0.00/180° → effect fires → tail-cancel →
+  Run@8.9 within ~1.2s, sprint ramp only dipped to 0.71. Channel (reanimate_raise
+  while jogging away): Jog@6.25 skid → RaiseStart@0.00 facing corpse →
+  RaiseLoop planted → skeleton raised. Settings tab renders.
+- NOT live-tested: hard-interrupt refund (code-reviewed only); held-key
+  beam/drain channels deliberately unplanted (Phase B candidate).
+
 ## 6. Decisions (user, 2026-07-04)
 
 1. **Q1 — Anim-start gate**: (a) speed ≤ walk threshold. May adjust later.

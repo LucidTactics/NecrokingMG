@@ -41,13 +41,14 @@ public static class FacingUtil
     /// (degrees), clamped by the unit's turn speed × <paramref name="dt"/>.
     /// Incap'd / airborne units don't rotate.
     /// </summary>
-    public static void TurnToward(Unit unit, float targetAngle, float dt, GameData? gameData)
+    public static void TurnToward(Unit unit, float targetAngle, float dt, GameData? gameData,
+        float rateMult = 1f)
     {
         // Can't rotate while knocked down / airborne.
         if (unit.Incap.IsLocked) return;
         if (unit.JumpPhase >= 2) return;
 
-        float turnSpeed = ResolveTurnSpeed(unit, gameData);
+        float turnSpeed = ResolveTurnSpeed(unit, gameData) * rateMult;
         float diff = AngleDiff(targetAngle, unit.FacingAngle);
         float maxTurn = turnSpeed * dt;
         unit.FacingAngle += MathUtil.Clamp(diff, -maxTurn, maxTurn);

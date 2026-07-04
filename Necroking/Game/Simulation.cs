@@ -936,6 +936,25 @@ public class Simulation
         _necroFacingOverride = angleDeg;
     }
 
+    // --- Cast plant (see todos/player_cast_plant.md) ---
+    // While the player has a pending spell cast, movement input is ignored and the
+    // necromancer brakes to a stop (Settings.Animation.CastBrakeMultiplier × decel)
+    // while turning toward the frozen cast aim (CastTurnBoost × turn speed). The
+    // sprint ramp decays at half rate so cast-weaving doesn't eat the whole ramp.
+    // Game1 owns the pending-cast lifecycle and syncs this flag every frame
+    // (declaratively — no lifecycle bugs when the cast ends on any of its paths).
+    private bool _necroCastPlant;
+    private float _necroCastAimAngle = float.NaN;
+    public bool NecroCastPlant => _necroCastPlant;
+    /// <summary>True while the player's WASD input is nonzero — used by the cast
+    /// tail-cancel to decide whether to cut the recovery into locomotion.</summary>
+    public bool NecroMoveInputActive => _necroMoveInput.LengthSq() > 0.01f;
+    public void SetNecromancerCasting(bool active, float aimAngleDeg = float.NaN)
+    {
+        _necroCastPlant = active;
+        _necroCastAimAngle = aimAngleDeg;
+    }
+
     // --- AI ---
     private void UpdateAI(float dt)
     {
@@ -1031,6 +1050,10 @@ public class Simulation
                     float rampRate = canSprint
                         ? dt / SprintRampUpSeconds
                         : -dt / SprintRampDownSeconds;
+                    // Cast plant: the ramp decays at HALF rate (and never rises) while
+                    // casting, so a quick cast mid-sprint doesn't cost the whole 3s ramp.
+                    if (_necroCastPlant)
+                        rampRate = -dt / (SprintRampDownSeconds * 2f);
                     _sprintRampValue = Necroking.Core.MathUtil.Clamp(_sprintRampValue + rampRate, 0f, 1f);
                     // Per-unit sprint cap: necromancer evolutions and other player
                     // forms can have different sprint multipliers. Falls back to
@@ -1082,8 +1105,13 @@ public class Simulation
                     }
                     else
                     {
-                        // Normal player control
-                        if (_units[i].CorpseInteractPhase != 0)
+                        // Normal player control. Cast plant: movement input is ignored
+                        // while a cast is pending — PreferredVel=0 lets the boosted
+                        // decel integrate the velocity down smoothly (a skid), unlike
+                        // the melee plant's hard Velocity=0. Held WASD resumes the
+                        // frame the cast releases (input is continuous state, never a
+                        // queued action).
+                        if (_units[i].CorpseInteractPhase != 0 || _necroCastPlant)
                             _units[i].PreferredVel = Vec2.Zero;
                         else
                             _units[i].PreferredVel = _necroMoveInput * speed;
@@ -1969,6 +1997,10 @@ public class Simulation
                 ?? _gameData?.Settings.Combat.MaxDeceleration ?? 25f;
             float maxLateral = accelDef?.MaxLateralAccel
                 ?? _gameData?.Settings.Combat.MaxLateralAccel ?? 15f;
+            // Cast plant: boosted brake so the player skids to a stop inside the
+            // cast wind-up window (~0.1s from a full sprint) instead of coasting.
+            if (_necroCastPlant && _units[i].AI == AIBehavior.PlayerControlled)
+                maxDecel *= _gameData?.Settings.Animation.CastBrakeMultiplier ?? 2f;
 
             // Integrate the accel model in sub-steps of at most 1/20s each.
             // The old single min(dt, 1/20) clamp prevented snap-turns at high
@@ -2440,7 +2472,18 @@ public class Simulation
                 }
 
                 float targetAngle;
-                if (_units[i].FaceVelocityMode && _units[i].Velocity.LengthSq() > 0.01f)
+                float turnMult = 1f;
+                if (_necroCastPlant && !float.IsNaN(_necroCastAimAngle))
+                {
+                    // Cast plant: the body swings to face the frozen cast aim point
+                    // (where the spell will actually go — not the live cursor) at a
+                    // boosted rate, overriding the walk/jog facing hysteresis. The
+                    // pivot overlaps the brake, so even a 180° sprint-cast is aimed
+                    // before the cast anim's effect frame.
+                    targetAngle = _necroCastAimAngle;
+                    turnMult = _gameData?.Settings.Animation.CastTurnBoost ?? 3f;
+                }
+                else if (_units[i].FaceVelocityMode && _units[i].Velocity.LengthSq() > 0.01f)
                 {
                     targetAngle = MathF.Atan2(_units[i].Velocity.Y, _units[i].Velocity.X) * Rad2Deg;
                 }
@@ -2452,7 +2495,7 @@ public class Simulation
                 {
                     continue; // nothing to aim at yet (pre-input frames)
                 }
-                Movement.FacingUtil.TurnToward(_units[i], targetAngle, dt, _gameData);
+                Movement.FacingUtil.TurnToward(_units[i], targetAngle, dt, _gameData, turnMult);
                 continue;
             }
 

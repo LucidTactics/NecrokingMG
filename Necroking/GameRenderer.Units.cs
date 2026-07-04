@@ -376,10 +376,12 @@ partial class GameRenderer
         // Hit flash: brief lerp toward white on physical impact. Applied AFTER the
         // ambient multiply so it stays visible at night. This is the feedback that
         // survives reaction-anim suppression (fleeing/mid-attack/cooldown units).
-        if (_g._sim.Units[i].HitFlashTimer > 0f)
+        // Toggle + intensity live in the esc-menu Animation tab.
+        var animSettings = _g._gameData.Settings.Animation;
+        if (animSettings.HitFlashEnabled && _g._sim.Units[i].HitFlashTimer > 0f)
         {
             float flash = _g._sim.Units[i].HitFlashTimer / GameSystems.DamageSystem.HitFlashSeconds;
-            tint = Color.Lerp(tint, Color.White, 0.8f * flash);
+            tint = Color.Lerp(tint, Color.White, animSettings.HitFlashIntensity * flash);
         }
 
         float heightOffset = _g._sim.Units[i].Z;
