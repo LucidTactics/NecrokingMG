@@ -20,7 +20,7 @@ using Necroking.UI;
 
 namespace Necroking;
 
-public enum MenuState { MainMenu, None, PauseMenu, Settings, UnitEditor, SpellEditor, MapEditor, UIEditor, ItemEditor, ScenarioList }
+public enum MenuState { MainMenu, None, PauseMenu, Settings, Multiplayer, UnitEditor, SpellEditor, MapEditor, UIEditor, ItemEditor, ScenarioList }
 
 public partial class Game1 : Microsoft.Xna.Framework.Game
 {
@@ -664,6 +664,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     private readonly Necroking.UI.ActionModalLayer _uiEditorLayer    = new() { LightDismiss = false, IsBlocking = true };
     private readonly Necroking.UI.ActionModalLayer _itemEditorLayer  = new() { LightDismiss = false, IsBlocking = true };
     private readonly Necroking.UI.ActionModalLayer _settingsLayer    = new() { LightDismiss = false, IsBlocking = true };
+    private readonly Necroking.UI.ActionModalLayer _multiplayerLayer = new() { LightDismiss = false, IsBlocking = true };
     private readonly Necroking.UI.ActionModalLayer _pauseMenuLayer   = new() { LightDismiss = false, IsBlocking = true };
 
     // Pending spell cast with animation delay (Spell1 animation → action moment → execute)
@@ -821,6 +822,8 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         _itemEditorLayer.OnCancelAction  = () => { _editorUi?.ResetAllState(); _menuState = MenuState.None; };
         // Settings is reachable only from the pause menu; ESC returns there.
         _settingsLayer.OnCancelAction    = () => { _editorUi?.ResetAllState(); _menuState = MenuState.PauseMenu; };
+        // Multiplayer, same deal (closing the menu does NOT stop the session).
+        _multiplayerLayer.OnCancelAction = () => { _editorUi?.ResetAllState(); _menuState = MenuState.PauseMenu; };
         // Pause menu: ESC unpauses back to gameplay.
         _pauseMenuLayer.OnCancelAction   = () => { _menuState = MenuState.None; _paused = false; };
 
@@ -2450,6 +2453,12 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         _spellEditor.SetContent(Content);
         _itemEditor = new ItemEditorWindow(_editorUi);
         _itemEditor.SetGameData(_gameData);
+        _net = new Necroking.Net.NetSession();
+        _multiplayerWindow = new MultiplayerWindow(_editorUi);
+        _multiplayerWindow.SetSession(_net);
+        // Clean disconnect on quit so peers see us leave immediately instead of timing out.
+        Exiting += (s, e) => _net.Stop();
+
         _settingsWindow = new SettingsWindow(_editorUi);
         System.IO.Directory.CreateDirectory(GamePaths.Resolve(GamePaths.UserSettingsDir));
         _settingsWindow.SetGameData(_gameData, GamePaths.Resolve(GamePaths.UserSettingsJson), GamePaths.Resolve(GamePaths.UserWeatherJson));
@@ -2597,6 +2606,11 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         // Drain dev-server commands first so they run even if the window is
         // unfocused (we bail out below in that case) and regardless of menu state.
         _devServer?.Drain(ExecuteDevCommand);
+
+        // Pump multiplayer next, same placement rationale: the connection must
+        // stay alive (keepalives, joins, ghost states) while paused, in menus,
+        // or unfocused. See Game1.Net.cs / Net/README.md.
+        UpdateNetwork(gameTime);
 
         // Headless (dev-server / scenario) runs keep an off-screen window; drop its
         // taskbar button so the supervisor-owned game doesn't clutter the taskbar.
@@ -3055,7 +3069,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             int sw = GraphicsDevice.Viewport.Width;
             int sh = GraphicsDevice.Viewport.Height;
             int btnW2 = 280, btnH2 = 40, btnGap2 = 10;
-            int pauseBtnCount = 9;
+            int pauseBtnCount = 10;
             int pauseControlLines = 4;
             int pauseBoxH = 60 + pauseBtnCount * (btnH2 + btnGap2) + 10 + pauseControlLines * 16 + 20;
             int boxY2 = (sh - pauseBoxH) / 2 + 60;
@@ -3089,6 +3103,10 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             // Settings
             if (mouse.X >= menuX2 && mouse.X < menuX2 + btnW2 && mouse.Y >= y2 && mouse.Y < y2 + btnH2)
             { _menuState = MenuState.Settings; }
+            y2 += btnH2 + btnGap2;
+            // Multiplayer
+            if (mouse.X >= menuX2 && mouse.X < menuX2 + btnW2 && mouse.Y >= y2 && mouse.Y < y2 + btnH2)
+            { _menuState = MenuState.Multiplayer; }
             y2 += btnH2 + btnGap2 + 10;
             // Main Menu
             if (mouse.X >= menuX2 && mouse.X < menuX2 + btnW2 && mouse.Y >= y2 && mouse.Y < y2 + btnH2)
@@ -3103,6 +3121,14 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         if (_menuState == MenuState.Settings && _settingsWindow.WantsClose)
         {
             _settingsWindow.WantsClose = false;
+            _editorUi.ResetAllState();
+            _menuState = MenuState.PauseMenu;
+        }
+
+        // --- Multiplayer window close handling (session keeps running) ---
+        if (_menuState == MenuState.Multiplayer && _multiplayerWindow.WantsClose)
+        {
+            _multiplayerWindow.WantsClose = false;
             _editorUi.ResetAllState();
             _menuState = MenuState.PauseMenu;
         }
@@ -3143,7 +3169,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         // (which consume MouseOverUI and OverGameplayHud).
         RebuildUIHitRects(screenW, screenH);
 
-        if (_menuState == MenuState.UnitEditor || _menuState == MenuState.SpellEditor || _menuState == MenuState.MapEditor || _menuState == MenuState.Settings || _menuState == MenuState.ItemEditor)
+        if (_menuState == MenuState.UnitEditor || _menuState == MenuState.SpellEditor || _menuState == MenuState.MapEditor || _menuState == MenuState.Settings || _menuState == MenuState.Multiplayer || _menuState == MenuState.ItemEditor)
         {
             _editorUi.UpdateInput(mouse, _prevMouse, kb, _prevKb, screenW, screenH, gameTime, _input);
         }
@@ -4218,6 +4244,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         Sync(_uiEditorLayer,    _menuState == MenuState.UIEditor);
         Sync(_itemEditorLayer,  _menuState == MenuState.ItemEditor);
         Sync(_settingsLayer,    _menuState == MenuState.Settings);
+        Sync(_multiplayerLayer, _menuState == MenuState.Multiplayer);
         Sync(_pauseMenuLayer,   _menuState == MenuState.PauseMenu);
 
         void Sync(Necroking.UI.ActionModalLayer layer, bool open)

@@ -307,6 +307,8 @@ partial class GameRenderer
             DrawPauseMenu(screenW, screenH);
         else if (_g._menuState == MenuState.Settings)
             _g._settingsWindow.Draw(screenW, screenH);
+        else if (_g._menuState == MenuState.Multiplayer)
+            _g._multiplayerWindow.Draw(screenW, screenH);
         if (_g._menuState == MenuState.UnitEditor)
         {
             _g._unitEditor.Draw(screenW, screenH, gameTime);
