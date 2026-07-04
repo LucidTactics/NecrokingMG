@@ -120,9 +120,36 @@ One ~6400-line file; single partial-free class. Structure to know when **adding 
 - **Def-dropdown precedent**: `DrawZoneSpawnPanel` rows use `_eb.DrawCombo` with cached
   filtered id arrays (`GetZoneForagableIdOptions` filters `_envSystem` defs by `IsForagable`,
   cache invalidated on `DefCount` change) — copy this for any "pick an env def" UI.
+- **ProcGen tab = density-based placement brush (the newest tab, after Zones).**
+  `MapEditorTab.ProcGen`; presets are `Editor/ProcGenStyle.cs` (`ProcGenStyle`: `Name`,
+  `LargeDefIds`/`LargeDensity`, `SmallDefIds`/`SmallDensity` — two independently-spaced env-def
+  pools), a global authoring registry loaded/saved as `data/procgen_styles.json`
+  (`EnsureProcGenStylesLoaded`, `ProcGenStyle.LoadAll`/`SaveAll`, same "global registry like env
+  defs" precedent as zones). `UpdateProcGenTab` → held-brush accrual `PaintProcGen` (fixed
+  radius-5 disc `ProcGenBrushRadius`, `ProcGenRatePerDensity` = 5 attempts/sec per density
+  point, fractional accum per pool so partial ticks carry over, capped at `maxPerFrame`=400) →
+  `PlaceProcGenPool` (`ProcGenTries`=6 random-point-in-disc retries per attempt, same-pool
+  min-spacing rejection via `ProcGenStyle.MinDistance(density)` = `8/sqrt(density)`, then the
+  same `_envSystem.CanPlaceObject`/`AddObject`/`StampObjectCollisionAt`/
+  `AutoCreateTriggerInstance` sequence as `PaintObjectsBatch`). Same batch-undo precedent
+  (`_batchPlacedObjects` → `PushUndo(UndoObjectBatchPlace)` on left-mouse-up). Dev-server hook
+  `DevPaintProcGen(styleName, pos, seconds)` exercises the exact same `PaintProcGen` path
+  headless (ticks it at 60/s for N simulated seconds) — use this over hand-rolling a test.
+  **Click guarding**: identical to every other tab — `UpdateProcGenTab` only paints on
+  `leftDown && !overPanel`; `overPanel` is computed **once** in the shared `Update()` dispatcher
+  via `IsMouseOverPanel(screenW, screenH)` (checks the standard right-side tab panel rect, plus
+  the Zones-only left-village-panel rect) and threaded down as a parameter to every
+  `Update<X>Tab`, so a click on the tab bar/style list/pool combos never also paints in the
+  world underneath. `leftDown`/`leftClick` themselves are already gated on
+  `!IsAnyPopupBlocking()` upstream (open dropdown/color-picker/texture-browser), so ProcGen
+  gets that for free too. ProcGen has no left-side panel of its own (unlike Zones), so it needs
+  no `IsMouseOverPanel` change — it reuses the existing right-panel check as-is.
 
 **Look/edit here when…** adding a map-editor tab/category, changing brush painting or
-placement spacing, changing what SaveMap persists, or building def-picker UI in a tab panel.
+placement spacing, changing what SaveMap persists, building def-picker UI in a tab panel, or
+adding a new density/procedural placement brush (ProcGen tab, `PaintProcGen`/`PlaceProcGenPool`).
+For **any new world-clicking tab**, gate world-affecting input on `!overPanel` (and reuse
+`overPanel`/`popupBlocking` computed once in `Update()`) — do not re-derive panel-hover per tab.
 
 ## UI / widget editor
 
