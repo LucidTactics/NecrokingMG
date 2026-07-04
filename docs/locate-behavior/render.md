@@ -80,6 +80,60 @@ dissolve, morph, outlines, glyphs) or `scope.Suspend()/Resume()` for raw-device 
   vertex channels (HdrColor) → material variant (Effect.Clone) → item `SetParams`/
   `PushMaterial` (batch break) → Immediate-sort material for runs (glyphs).
 
+## Premultiplied alpha — where it's handled (the full map)
+
+The codebase-wide convention (established by commit `d626422`, "full-fleet shader
+review"): **textures are premultiplied at load, batches blend with
+`BlendState.AlphaBlend` (= One/InvSrcAlpha, the premult pair), and every scene shader
+outputs premultiplied color.** The pieces:
+
+- **Load-time premultiply (the ONLY texture entry points)** — `Render/TextureUtil.cs`:
+  `LoadPremultiplied(device, path|stream)` (= `Texture2D.FromStream` +
+  `PremultiplyAlpha(tex)` in-place RGB*=A) and the CPU decode path
+  `DecodePngPremultiplied` (SkiaSharp asks for premultiplied RGBA directly; Stb
+  fallback premultiplies manually). Used by every loader: `SpriteAtlas`,
+  `AtlasCache` (its disk cache stores **premultiplied** RGBA), `EnvironmentSystem`,
+  `GroundSystem`, `Flipbook`, `NineSlice`, `RuntimeWidgetRenderer`, `GrassTuftRenderer`,
+  `MagicPathIcons`, editors. There is **no `Content.Load<Texture2D>` anywhere**; fonts
+  are pipeline-built with `PremultiplyAlpha=True` (`resources/Content.mgcb`). The only
+  straight-alpha load is deliberate: `Editor/EnvObjectEditorWindow.cs` edge tweaker
+  (`Texture2D.FromStream` raw, because it saves pixels back to the PNG — premultiplying
+  would darken edges every load→save cycle; `PremultiplyCopy` makes its preview).
+- **CPU color helpers** — `Core/ColorUtils.cs` `Premultiply(r,g,b,alpha)`;
+  `Color.FromNonPremultiplied(...)` at ~30 call sites for translucent tints;
+  `Color.White * a` idiom; `Core/HdrColor.cs` `ToHdrVertex/ToHdrVertexAlpha` for HDR
+  vertex encoding. Rule: inside an AlphaBlend batch a translucent tint must have RGB
+  pre-scaled by A (raw `new Color(r,g,b,128)` gives the "washed-out hue" bug —
+  commit `fddeb57`). `Editor/ColorHarmonizer.cs` un-premultiplies → does color math →
+  re-premultiplies (same round-trip in `WadingWakeSystem` texture recolor).
+- **Blend states** — `Render/Material.cs` `Materials` registry: everything is
+  `AlphaBlend` (Scene, Hud, FogWisp, Wading, DissolveTree, MorphSdf, HdrAlpha,
+  MagicGlyph, DepthStamp) or `Additive` (AdditiveShapes, HdrAdditive, OutlineAdditive)
+  — **except `OutlineAlpha` = `NonPremultiplied`**, matching OutlineFlat.fx's
+  straight-alpha output (the one sanctioned exception). Ad-hoc `Begin`s outside the
+  registry: editor UIs (`EditorBase`, previews) = AlphaBlend/PointClamp;
+  `SpellPreview`/`BuffPreview` add `Additive` FX passes into their own RTs; `Bloom`
+  internals = `Opaque` (alpha irrelevant); raw-device set: `GodRayRenderer` =
+  Additive, `ShadowRenderer` = AlphaBlend; `UIShaders` restore hardcodes
+  AlphaBlend+PointClamp.
+- **Shaders (resources/*.fx)** — output **premultiplied**: Wading, DissolveTree,
+  MorphSDF, HdrSprite (alpha mode; the additive mode is blend-agnostic), MagicCircle
+  (`return float4(color*alpha, alpha)`), WeatherFog (composites haze/flash in premult
+  space), FogSmooth (premult-output lerp trick), UIGradient/UIRectShadow/UICircleEffect
+  (premultiply stops/inputs BEFORE interpolating — lerping straight colors gives dark
+  fringes), FogComposite (RGB=0 so straight==premult). **Straight alpha**: OutlineFlat
+  only (header warns; NonPremultiplied/Additive batches only). Blend-irrelevant:
+  Bloom chain + GaussianBlur (Opaque blits), GroundShader (opaque quad), DepthCutout
+  (depth-only), HdrIntensity (additive god rays).
+- **Known bug history** (grep these commits when a new premult bug appears):
+  `d626422` (fleet review: HdrSprite fade, WeatherFog haze, Wading ghosts 2.5× dark,
+  UIGradient fringes), `fa4098a` (rain), `e457c47` (glow rectangles), `40329a3`
+  (hover tint), `fddeb57` (faint hover), `ab34130`; `todos/unit_tooltip_panel.md`
+  (HarmonizeTexture shifted premul RGB), `todos/editor-review-findings.md` E1 (edge
+  tweaker re-premultiply data loss). Design rationale:
+  `todos/render-pipeline-design.md` ("Premultiplied alpha" row — the convention is
+  written in exactly one file, Material.cs).
+
 ## Rendering feature inventory — everything we've tried, and its status
 
 One entry per feature: where it lives, how it works in a sentence, status
