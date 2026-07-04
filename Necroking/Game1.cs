@@ -861,6 +861,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         Exiting += (_, _) =>
         {
             System.IO.Directory.CreateDirectory(GamePaths.Resolve(GamePaths.UserSettingsDir));
+            _gameData.Settings.General.MapEditorLastTab = (int)_mapEditor.ActiveTab;
             _gameData.Settings.Save(GamePaths.Resolve(GamePaths.UserSettingsJson));
             _gameData.Weather.Save(GamePaths.Resolve(GamePaths.UserWeatherJson));
             SaveSpellBars();
@@ -2961,7 +2962,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
                         break;
                     case HUDRenderer.EditorMap:
                         if (_menuState == MenuState.MapEditor) _menuState = MenuState.None;
-                        else { _menuState = MenuState.MapEditor; _mapEditor.SuppressClicksUntilRelease(); }
+                        else { _menuState = MenuState.MapEditor; _mapEditor.RestoreTabFromSettings(); _mapEditor.SuppressClicksUntilRelease(); }
                         break;
                     case HUDRenderer.EditorUi:
                         if (_menuState == MenuState.UIEditor) _menuState = MenuState.None;
@@ -3090,7 +3091,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             y2 += btnH2 + btnGap2;
             // Map Editor
             if (mouse.X >= menuX2 && mouse.X < menuX2 + btnW2 && mouse.Y >= y2 && mouse.Y < y2 + btnH2)
-            { _menuState = MenuState.MapEditor; _paused = false; _mapEditor.SuppressClicksUntilRelease(); }
+            { _menuState = MenuState.MapEditor; _paused = false; _mapEditor.RestoreTabFromSettings(); _mapEditor.SuppressClicksUntilRelease(); }
             y2 += btnH2 + btnGap2;
             // UI Editor
             if (mouse.X >= menuX2 && mouse.X < menuX2 + btnW2 && mouse.Y >= y2 && mouse.Y < y2 + btnH2)
