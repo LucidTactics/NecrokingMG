@@ -33,9 +33,13 @@ The whole pathfinder (~2300 lines, one class `Pathfinder`). Map is split into 64
   `ExtractSectorSpans`/`ScanBorderSpans`), re-extracted per touched sector ring in
   `InvalidateRegion`.
 - **Portal cost matrices**: `GetPortalMatrix(sectorIdx, tier)` — lazy intra-sector
-  portal-to-portal cost matrix (`PortalMatrix`, `_portalMatrixCache`), one window
-  Dijkstra per portal (`RunWindowDijkstra` with null dirs = cost-only), **budget-charged**,
-  dropped on region invalidation; caches mid-abort so deferred routes progress each tick.
+  portal-to-portal cost matrix (`PortalMatrix`, `_portalMatrixCache`). **Uniform-cost
+  sectors** (`_sectorUniformCost`, maintained by `ComputeSectorUniformCost` in
+  BuildPortals/InvalidateRegion) get an **analytic octile matrix — no Dijkstras, no
+  budget charge** (open ground is the most portal-dense case and needed none). Mixed
+  sectors run one window Dijkstra per portal (`RunWindowDijkstra` with null dirs =
+  cost-only), **budget-charged per row and resumable** (`_partialMatrixCache` persists
+  finished rows; ≥1 row progress per call, no livelock), dropped on region invalidation.
 - **Routing** (commit `f202cb4`): `GetPortalRoute` / `SeedPortalRoute` /
   `ResumePortalRoute` — **corridor-bounded resumable A\*** over portal nodes (TWO nodes
   per portal, near/far side), seeded from the destination side, octile heuristic toward
@@ -59,8 +63,12 @@ The whole pathfinder (~2300 lines, one class `Pathfinder`). Map is split into 64
   `_lastQueryDeferred` distinguishes "deferred → beeline this tick" from "genuinely
   unpathable → imag chunk".
 - **Main API**: `GetDirection(unitPos, targetPos, frame, sizeTier, unitId)` — fallback
-  ladder: persistent imaginary chunk → tile/portal-set flow → BFS to nearest tile with
-  valid flow → lower-tier fallback → imaginary chunk → boundary escape → beeline.
+  ladder: persistent imaginary chunk → **straight-line shortcut** (`HasLineOfSight`,
+  supercover DDA on the tier cost field, ≤ `LosMaxTiles`=160; clear line → beeline,
+  `PathDecision.LineOfSight` — answers 60-80% of queries on open maps so the flow
+  machinery only runs where the straight path is blocked) → tile/portal-set flow →
+  BFS to nearest tile with valid flow → lower-tier fallback → imaginary chunk →
+  boundary escape → beeline.
   Each branch is recorded per-unit as a `PathDecision` (debug overlay via
   `GetUnitDecision`).
 - **Imaginary chunk** (stuck / concave-trap escape): `GetLocalChunkDirection` runs a

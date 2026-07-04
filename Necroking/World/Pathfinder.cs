@@ -11,7 +11,7 @@ public enum PathDecision : byte
 {
     None = 0, ImagChunkPersist, ImagChunkRecompute, TileFlow,
     SameSectorImagChunk, BorderFlow, BFSFallback, TierFallback, ImagChunkFallback,
-    BoundaryEscape, Beeline, Unreachable, UnreachableImagChunk, NoFlow
+    BoundaryEscape, Beeline, Unreachable, UnreachableImagChunk, NoFlow, LineOfSight
 }
 
 public struct PathDecisionInfo
@@ -60,6 +60,14 @@ public class Pathfinder
     private List<int>[][]? _sectorPortals;   // [tier][sectorIdx] — ids of portals touching the sector
     private List<Span>[][]? _spansE;         // [tier][sectorIdx] — spans on the sector's EAST border
     private List<Span>[][]? _spansS;         // [tier][sectorIdx] — spans on the sector's SOUTH border
+
+    // [tier][sectorIdx] — 0 = mixed/blocked terrain (matrix needs real Dijkstras);
+    // otherwise every tile of the sector is passable at this uniform cost and the
+    // portal matrix is analytic (octile distance × cost — no Dijkstras at all).
+    // Open grassland is simultaneously the most portal-dense case (a fully open
+    // border chops into SectorSize/MaxPortalWidth portals) and the one where the
+    // Dijkstras are pure waste, so this flag kills the single worst budget spike.
+    private byte[][]? _sectorUniformCost;
 
     // Cost added per portal crossing (stepping from one side of the border to
     // the other, ~1 cardinal step at cost 1). Also keeps graph edge weights
@@ -277,6 +285,7 @@ public class Pathfinder
     {
         BuildPortals();
         _portalMatrixCache.Clear();
+        _partialMatrixCache.Clear();
         _routeCache.Clear();
         _flowCache.Clear();
         _staleFlowCache.Clear();
@@ -305,12 +314,14 @@ public class Pathfinder
         _spansE = new List<Span>[tiers][];
         _spansS = new List<Span>[tiers][];
 
+        _sectorUniformCost = new byte[tiers][];
         for (int tier = 0; tier < tiers; tier++)
         {
             _portals[tier] = new List<Portal>();
             _sectorPortals[tier] = new List<int>[count];
             _spansE[tier] = new List<Span>[count];
             _spansS[tier] = new List<Span>[count];
+            _sectorUniformCost[tier] = new byte[count];
             for (int i = 0; i < count; i++)
             {
                 _sectorPortals[tier][i] = new List<int>();
@@ -319,9 +330,30 @@ public class Pathfinder
             }
             for (int sy = 0; sy < _sectorCountY; sy++)
                 for (int sx = 0; sx < _sectorCountX; sx++)
+                {
                     ExtractSectorSpans(tier, sx, sy);
+                    _sectorUniformCost[tier][SectorIdx(sx, sy)] = ComputeSectorUniformCost(tier, sx, sy);
+                }
             RebuildFlatPortals(tier);
         }
+    }
+
+    /// <summary>0 if the sector mixes costs or contains any tier-impassable tile;
+    /// otherwise the uniform passable cost shared by every tile. O(SectorSize²)
+    /// with an early-out on the first mismatch — mixed sectors bail almost
+    /// immediately, so the full scan is only paid where it buys an analytic matrix.</summary>
+    private byte ComputeSectorUniformCost(int tier, int sx, int sy)
+    {
+        if (_grid == null) return 0;
+        int baseX = sx * SectorSize, baseY = sy * SectorSize;
+        int endX = Math.Min(baseX + SectorSize, _grid.Width);
+        int endY = Math.Min(baseY + SectorSize, _grid.Height);
+        byte c0 = _grid.GetCost(baseX, baseY, tier);
+        if (c0 == 255) return 0;
+        for (int y = baseY; y < endY; y++)
+            for (int x = baseX; x < endX; x++)
+                if (_grid.GetCost(x, y, tier) != c0) return 0;
+        return c0;
     }
 
     /// <summary>Re-extract the E and S border spans of one sector for one
@@ -544,7 +576,11 @@ public class Pathfinder
                 for (int sx = Math.Max(0, s0x - 1); sx <= Math.Min(_sectorCountX - 1, s1x + 1); sx++)
                 {
                     tierChanged |= ExtractSectorSpans(tier, sx, sy);
-                    _portalMatrixCache.Remove(SectorIdx(sx, sy) * TerrainCosts.NumSizeTiers + tier);
+                    int mk = SectorIdx(sx, sy) * TerrainCosts.NumSizeTiers + tier;
+                    _portalMatrixCache.Remove(mk);
+                    _partialMatrixCache.Remove(mk);
+                    if (_sectorUniformCost != null)
+                        _sectorUniformCost[tier][SectorIdx(sx, sy)] = ComputeSectorUniformCost(tier, sx, sy);
                 }
 
             // 3. Any portal-set change shifts flat portal ids and invalidates
@@ -597,52 +633,104 @@ public class Pathfinder
     // Dijkstras (which use _pqScratch) WHILE the graph PQ holds frontier nodes.
     private readonly PriorityQueue<int, float> _portalPqScratch = new();
 
+    // Matrices interrupted by the budget mid-compute: rows [0, RowsDone) are
+    // final (each row is one independent Dijkstra), the rest still InfCost.
+    // Resuming continues at RowsDone — no row is ever recomputed, so even a
+    // 3 ms budget makes strictly monotonic progress (≥1 row per call).
+    private struct PartialMatrix { public PortalMatrix M; public int RowsDone; }
+    private readonly Dictionary<int, PartialMatrix> _partialMatrixCache = new();
+
     /// <summary>Lazily compute (and cache) one sector's portal-to-portal cost
-    /// matrix for a tier: one window Dijkstra per portal, seeded at its span
-    /// center on this sector's side, costs read at every other portal's
-    /// center. InfCost entries mean the two portals are in different internal
-    /// regions of the sector — exactly the split-sector case hop routing got
-    /// wrong. Returns null when the tick's Dijkstra budget is already spent
-    /// (caller defers). Budget is checked once up front, not per row, so a
-    /// pathological many-portal sector overshoots one tick instead of
-    /// livelocking on repeated partial computes.</summary>
+    /// matrix for a tier. Uniform-cost sectors (open ground — the common AND
+    /// most portal-dense case) get an analytic octile matrix with no Dijkstras
+    /// and no budget charge. Mixed sectors run one window Dijkstra per portal
+    /// (seeded at its span center, costs read at every other portal's center;
+    /// InfCost = the two portals live in different internal regions — the
+    /// split-sector case hop routing got wrong), charged per ROW against the
+    /// tick budget: when the budget dies mid-matrix the finished rows persist
+    /// in _partialMatrixCache and the next request resumes there. Returns null
+    /// when out of budget (caller defers).</summary>
     private PortalMatrix? GetPortalMatrix(int sectorIdx, int tier)
     {
         int key = sectorIdx * TerrainCosts.NumSizeTiers + tier;
         if (_portalMatrixCache.TryGetValue(key, out var m)) return m;
         if (_grid == null || _portals == null || _sectorPortals == null) return null;
-        if (!HasDijkstraBudget()) return null;
 
         var ids = _sectorPortals[tier][sectorIdx];
         int n = ids.Count;
-        m = new PortalMatrix { N = n, Cost = new float[n * n] };
-        Array.Fill(m.Cost, GameConstants.InfCost);
+        var flat = _portals[tier];
+
+        // Analytic fast path: every tile costs the same, so the cheapest
+        // portal-to-portal walk is the unobstructed octile path. Free.
+        byte uniform = _sectorUniformCost != null ? _sectorUniformCost[tier][sectorIdx] : (byte)0;
+        if (uniform > 0)
+        {
+            m = new PortalMatrix { N = n, Cost = new float[n * n] };
+            for (int i = 0; i < n; i++)
+            {
+                PortalCenterInSector(flat[ids[i]], sectorIdx, out int ax, out int ay);
+                for (int j = i + 1; j < n; j++)
+                {
+                    PortalCenterInSector(flat[ids[j]], sectorIdx, out int bx, out int by);
+                    int dx = Math.Abs(ax - bx), dy = Math.Abs(ay - by);
+                    // Octile: matches RunWindowDijkstra's per-step cost model
+                    // (enter-tile cost × StepMul8) on uniform ground.
+                    float c = uniform * (Math.Max(dx, dy) + 0.41421f * Math.Min(dx, dy));
+                    m.Cost[i * n + j] = c;
+                    m.Cost[j * n + i] = c;
+                }
+            }
+            _portalMatrixCache[key] = m;
+            return m;
+        }
+
+        int startRow = 0;
+        if (_partialMatrixCache.TryGetValue(key, out var partial) && partial.M.N == n)
+        {
+            m = partial.M;
+            startRow = partial.RowsDone;
+        }
+        else
+        {
+            if (!HasDijkstraBudget()) return null; // don't even start a fresh matrix over budget
+            m = new PortalMatrix { N = n, Cost = new float[n * n] };
+            Array.Fill(m.Cost, GameConstants.InfCost);
+        }
 
         int sx = sectorIdx % _sectorCountX, sy = sectorIdx / _sectorCountX;
         int baseX = sx * SectorSize, baseY = sy * SectorSize;
         int winW = Math.Min(SectorSize, _grid.Width - baseX);
         int winH = Math.Min(SectorSize, _grid.Height - baseY);
 
-        long sw0 = System.Diagnostics.Stopwatch.GetTimestamp();
-        var flat = _portals[tier];
-        for (int i = 0; i < n; i++)
+        for (int i = startRow; i < n; i++)
         {
+            // ≥1 row of progress per call even when already over budget
+            // (i > startRow ⇒ this call did a row) — bounded work per tick,
+            // no livelock: rows done are never redone.
+            if (i > startRow && !HasDijkstraBudget())
+            {
+                _partialMatrixCache[key] = new PartialMatrix { M = m, RowsDone = i };
+                return null;
+            }
+            long sw0 = System.Diagnostics.Stopwatch.GetTimestamp();
             m.Cost[i * n + i] = 0f;
             PortalCenterInSector(flat[ids[i]], sectorIdx, out int cgx, out int cgy);
             _portalGoalScratch.Clear();
             _portalGoalScratch.Add((cgy - baseY) * SectorSize + (cgx - baseX));
             DiagDijkstraInvocations++;
             // dirs: null — cost-only query, skip the direction-field pass.
-            if (!RunWindowDijkstra(baseX, baseY, winW, winH, tier, _portalGoalScratch, null, _costScratch, null))
-                continue;
-            for (int j = 0; j < n; j++)
+            if (RunWindowDijkstra(baseX, baseY, winW, winH, tier, _portalGoalScratch, null, _costScratch, null))
             {
-                if (j == i) continue;
-                PortalCenterInSector(flat[ids[j]], sectorIdx, out int qgx, out int qgy);
-                m.Cost[i * n + j] = _costScratch[(qgy - baseY) * SectorSize + (qgx - baseX)];
+                for (int j = 0; j < n; j++)
+                {
+                    if (j == i) continue;
+                    PortalCenterInSector(flat[ids[j]], sectorIdx, out int qgx, out int qgy);
+                    m.Cost[i * n + j] = _costScratch[(qgy - baseY) * SectorSize + (qgx - baseX)];
+                }
             }
+            ChargeDijkstraMs((float)ElapsedMs(sw0));
         }
-        ChargeDijkstraMs((float)ElapsedMs(sw0));
+        _partialMatrixCache.Remove(key);
         _portalMatrixCache[key] = m;
         return m;
     }
@@ -1700,8 +1788,59 @@ public class Pathfinder
     // Per-flow-type miss counters (reset per tick):
     public static int DiagMissTile;           // GetFlowToTile (same-sector, target tile as goal)
     public static int DiagMissPortalFlow;     // GetFlowToPortalSet (cross-sector, portal remaining costs)
+    public static int DiagLosHits;            // GetDirection answered by the straight-line shortcut
     // Tracks every FlowKey ever seen. Used to tell "new-key" vs "was-here-got-evicted".
     private static readonly System.Collections.Generic.HashSet<FlowKey> s_keysEverSeen = new();
+
+    // Straight-line checks longer than this fall through to the flow machinery:
+    // keeps the per-query cost bounded, and genuinely long hauls benefit from
+    // real routing (and share flow fields with everyone heading the same way).
+    private const int LosMaxTiles = 160;
+
+    /// <summary>Is the straight segment a→b walkable at this size tier? Grid DDA
+    /// (Amanatides &amp; Woo) over the tier-inflated cost field, visiting every
+    /// crossed tile; an exact corner crossing requires BOTH adjacent tiles open
+    /// (same no-corner-cutting rule as RunWindowDijkstra). The tier field is
+    /// radius-inflated, so tile passability along the line == the unit fits.
+    /// Ignores tile COST variation (a clear line through mud beelines through
+    /// the mud) — same tradeoff the short-distance beeline in MoveToward makes.</summary>
+    private bool HasLineOfSight(Vec2 a, Vec2 b, int tier)
+    {
+        if (_grid == null) return false;
+        float ts = GameConstants.TileSize;
+        int x0 = (int)(a.X / ts), y0 = (int)(a.Y / ts);
+        int x1 = (int)(b.X / ts), y1 = (int)(b.Y / ts);
+        if (!_grid.InBounds(x0, y0) || !_grid.InBounds(x1, y1)) return false;
+        if (Math.Abs(x1 - x0) + Math.Abs(y1 - y0) > LosMaxTiles) return false;
+        // Unit inside a tier-inflated tile: the ladder's escape propagation is
+        // what knows how to get OUT — never claim LOS from in there.
+        if (_grid.GetCost(x0, y0, tier) == 255) return false;
+
+        float dx = b.X - a.X, dy = b.Y - a.Y;
+        int stepX = dx > 0 ? 1 : -1, stepY = dy > 0 ? 1 : -1;
+        float tMaxX = dx != 0 ? (((dx > 0 ? x0 + 1 : x0) * ts) - a.X) / dx : float.PositiveInfinity;
+        float tMaxY = dy != 0 ? (((dy > 0 ? y0 + 1 : y0) * ts) - a.Y) / dy : float.PositiveInfinity;
+        float tDeltaX = dx != 0 ? ts / Math.Abs(dx) : float.PositiveInfinity;
+        float tDeltaY = dy != 0 ? ts / Math.Abs(dy) : float.PositiveInfinity;
+
+        int x = x0, y = y0;
+        int guard = LosMaxTiles * 2 + 4; // FP safety net — cannot loop forever
+        while ((x != x1 || y != y1) && guard-- > 0)
+        {
+            if (Math.Abs(tMaxX - tMaxY) < 1e-6f)
+            {
+                // Exact corner crossing: both orthogonal neighbors must be open
+                // or the unit would cut the corner between two blockers.
+                if (_grid.GetCost(x + stepX, y, tier) == 255) return false;
+                if (_grid.GetCost(x, y + stepY, tier) == 255) return false;
+                x += stepX; y += stepY; tMaxX += tDeltaX; tMaxY += tDeltaY;
+            }
+            else if (tMaxX < tMaxY) { x += stepX; tMaxX += tDeltaX; }
+            else { y += stepY; tMaxY += tDeltaY; }
+            if (!_grid.InBounds(x, y) || _grid.GetCost(x, y, tier) == 255) return false;
+        }
+        return guard > 0;
+    }
 
     public Vec2 GetDirection(Vec2 unitPos, Vec2 targetPos, uint frame, int sizeTier = 0, uint unitId = GameConstants.InvalidUnit)
     {
@@ -1775,6 +1914,26 @@ public class Pathfinder
                     existingIc.Active = false;
                 }
             }
+        }
+
+        // --- Straight-line shortcut ---
+        // If the direct line to the target is tier-passable the whole way,
+        // just walk it: on open ground every flow field, portal route, and
+        // matrix below only reproduces this answer at ~1000× the cost (and
+        // wander/flee targets churn keys so those fields rarely get reused).
+        // The expensive machinery is reserved for queries where the straight
+        // path is actually blocked — the only case it improves on a beeline.
+        if (HasLineOfSight(unitPos, targetPos, sizeTier))
+        {
+            var losDir = targetPos - unitPos;
+            float losLen = losDir.Length();
+            if (losLen > 0.01f)
+            {
+                DiagLosHits++;
+                RecordDecision(unitId, PathDecision.LineOfSight);
+                return losDir * (1f / losLen);
+            }
+            return Vec2.Zero; // standing on the target
         }
 
         WorldToSector(unitPos.X, unitPos.Y, out int unitSX, out int unitSY);

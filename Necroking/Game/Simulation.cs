@@ -444,6 +444,7 @@ public class Simulation
         Necroking.World.Pathfinder.DiagCacheSize = _pathfinder.FlowCacheSize;
         Necroking.World.Pathfinder.DiagMissTile = 0;
         Necroking.World.Pathfinder.DiagMissPortalFlow = 0;
+        Necroking.World.Pathfinder.DiagLosHits = 0;
         _frameNumber++;
         _gameTime += dt;
         _damageEvents.Clear();
@@ -838,6 +839,7 @@ public class Simulation
                     sb.Append($"  {p}={v:F2}");
             }
             sb.Append($"  pf={{calls:{Necroking.World.Pathfinder.DiagCallsThisTick}")
+              .Append($",los:{Necroking.World.Pathfinder.DiagLosHits}")
               .Append($",hits:{Necroking.World.Pathfinder.DiagFlowCacheHits}")
               .Append($",miss:{Necroking.World.Pathfinder.DiagFlowCacheMisses}")
               .Append($"(tile:{Necroking.World.Pathfinder.DiagMissTile}")
