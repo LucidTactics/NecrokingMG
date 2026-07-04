@@ -71,6 +71,15 @@ public partial class HUDRenderer
     private const int MenuBtnRightMargin = 8;
     private readonly Rectangle[] _menuBtnRects = new Rectangle[MenuBtnCount];
 
+    // ── Editor-launcher row (below the core-menu row) ──
+    // Click mirror of the F9-F12 editor-toggle shortcuts, and Game1.ToggleEditorButton.
+    public const int EditorUnit = 0, EditorSpell = 1, EditorMap = 2, EditorUi = 3;
+    public const int EditorBtnCount = 4;
+    public static readonly string[] EditorButtonLabels =
+        { "Units (F9)", "Spells (F10)", "Map (F11)", "UI (F12)" };
+    private const int EditorBtnTop = MenuBtnTop + MenuBtnH + 4;
+    private readonly Rectangle[] _editorBtnRects = new Rectangle[EditorBtnCount];
+
     /// <summary>Time-control button block layout, shared by DrawTimeControls and
     /// HitTestTimeControls so they never desync. The block is right-aligned with
     /// room reserved for the speed-text readout (so it can't crop off-screen), and
@@ -154,7 +163,8 @@ public partial class HUDRenderer
         float timeScale, int hoveredObjectIdx, EnvironmentSystem envSystem,
         Action<string, int, int> drawSpellCategoryIcon, int menuOpenMask = 0, bool paused = false,
         int hoveredCorpseIdx = -1, float[]? slotFlash = null,
-        uint hoveredBellyUnitId = uint.MaxValue, int hoveredUnitIdx = -1, bool editorInspect = false)
+        uint hoveredBellyUnitId = uint.MaxValue, int hoveredUnitIdx = -1, bool editorInspect = false,
+        int editorOpenMask = 0)
     {
         int necroIdx = FindNecromancer(sim);
 
@@ -185,6 +195,7 @@ public partial class HUDRenderer
         // left readout. Re-enable if we add a menu page for it.
         DrawTimeControls(screenW, screenH, timeScale, gameData, paused);
         DrawMenuButtons(screenW, menuOpenMask, (int)_input.MousePos.X, (int)_input.MousePos.Y);
+        DrawEditorButtons(screenW, editorOpenMask, (int)_input.MousePos.X, (int)_input.MousePos.Y);
         DrawHordeCaps(screenW, sim, gameData);
         DrawCombatLog(screenW, screenH, sim, gameData);
     }
@@ -208,7 +219,7 @@ public partial class HUDRenderer
         if (monsterCap <= 0 && humanCap <= 0) return;
 
         int x = screenW - 110;
-        int y = MenuBtnTop + MenuBtnH + 6; // sit below the core-menu button row
+        int y = EditorBtnTop + MenuBtnH + 6; // sit below the core-menu + editor-launcher rows
         const int lineH = 16;
 
         if (humanCap > 0)
@@ -287,6 +298,62 @@ public partial class HUDRenderer
             Text(_smallFont, label,
                 new Vector2(r.X + r.Width / 2f - ls.X / 2f, r.Y + r.Height / 2f - ls.Y / 2f),
                 open ? Color.White : new Color(210, 210, 230));
+        }
+    }
+
+    /// <summary>Right-aligned, auto-sized rects for the editor-launcher row (below
+    /// the core-menu row), computed into _editorBtnRects. Shared by draw + hit-test
+    /// so they never desync. Returns false when no font is available.</summary>
+    private bool LayoutEditorButtons(int screenW)
+    {
+        if (_smallFont == null) return false;
+        Span<int> ws = stackalloc int[EditorBtnCount];
+        int totalW = MenuBtnGap * (EditorBtnCount - 1);
+        for (int i = 0; i < EditorBtnCount; i++)
+        {
+            ws[i] = (int)_smallFont.MeasureString(EditorButtonLabels[i]).X + MenuBtnPadX * 2;
+            totalW += ws[i];
+        }
+        int x = screenW - MenuBtnRightMargin - totalW;
+        for (int i = 0; i < EditorBtnCount; i++)
+        {
+            _editorBtnRects[i] = new Rectangle(x, EditorBtnTop, ws[i], MenuBtnH);
+            x += ws[i] + MenuBtnGap;
+        }
+        return true;
+    }
+
+    /// <summary>Returns the editor-button index under the cursor, or -1.</summary>
+    public int HitTestEditorButtons(int screenW, int mouseX, int mouseY)
+    {
+        if (!LayoutEditorButtons(screenW)) return -1;
+        for (int i = 0; i < EditorBtnCount; i++)
+            if (_editorBtnRects[i].Contains(mouseX, mouseY)) return i;
+        return -1;
+    }
+
+    /// <summary>Draw the editor-launcher row. <paramref name="editorOpenMask"/> has
+    /// bit i set when editor i is the one currently open (highlighted).</summary>
+    private void DrawEditorButtons(int screenW, int editorOpenMask, int mx, int my)
+    {
+        if (!LayoutEditorButtons(screenW)) return;
+        for (int i = 0; i < EditorBtnCount; i++)
+        {
+            var r = _editorBtnRects[i];
+            bool open = (editorOpenMask & (1 << i)) != 0;
+            bool hover = r.Contains(mx, my);
+            Color bg = open  ? new Color(160, 100, 70, 220)
+                     : hover ? new Color(80, 60, 50, 200)
+                             : new Color(30, 20, 20, 160);
+            _batch.Draw(_pixel, r, bg);
+            // Top accent line — brighter when open.
+            _batch.Draw(_pixel, new Rectangle(r.X, r.Y, r.Width, 2),
+                open ? new Color(255, 180, 140) : new Color(120, 90, 90, 180));
+            string label = EditorButtonLabels[i];
+            var ls = _smallFont!.MeasureString(label);
+            Text(_smallFont, label,
+                new Vector2(r.X + r.Width / 2f - ls.X / 2f, r.Y + r.Height / 2f - ls.Y / 2f),
+                open ? Color.White : new Color(230, 210, 210));
         }
     }
 

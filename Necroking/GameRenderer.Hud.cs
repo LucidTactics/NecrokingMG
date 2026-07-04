@@ -611,7 +611,21 @@ partial class GameRenderer
             _g._timeScale, _g._hoveredObjectIdx, _g._envSystem,
             DrawSpellCategoryIcon, BuildMenuOpenMask(), _g._paused, _g._hoveredCorpseIdx,
             _g._slotFlash, _g._hoveredBellyUnitId,
-            _g._hoveredUnitIdx, _g._menuState == MenuState.MapEditor);
+            _g._hoveredUnitIdx, _g._menuState == MenuState.MapEditor, BuildEditorOpenMask());
+    }
+
+    /// <summary>Bitmask of which editor is open, by HUDRenderer.Editor* index, for
+    /// highlighting the editor-launcher row.</summary>
+    private int BuildEditorOpenMask()
+    {
+        return _g._menuState switch
+        {
+            MenuState.UnitEditor  => 1 << HUDRenderer.EditorUnit,
+            MenuState.SpellEditor => 1 << HUDRenderer.EditorSpell,
+            MenuState.MapEditor   => 1 << HUDRenderer.EditorMap,
+            MenuState.UIEditor    => 1 << HUDRenderer.EditorUi,
+            _ => 0,
+        };
     }
 
     /// <summary>Bitmask of which core menus are open, by HUDRenderer.Menu* index,

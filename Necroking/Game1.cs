@@ -2877,6 +2877,38 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             else { EnsureUIEditorInitialized(); _menuState = MenuState.UIEditor; }
         }
 
+        // --- Editor-launcher row click (top-right HUD row) — click mirror of
+        // F9-F12, so editors can be opened/switched without the keyboard. Works
+        // regardless of current MenuState, same as the F-keys above.
+        if (!anyTextInputActive && _input.LeftPressed && !_input.IsMouseConsumed)
+        {
+            int hudScreenW = GraphicsDevice.Viewport.Width;
+            int ebHit = _hudRenderer.HitTestEditorButtons(hudScreenW, (int)_input.MousePos.X, (int)_input.MousePos.Y);
+            if (ebHit >= 0)
+            {
+                switch (ebHit)
+                {
+                    case HUDRenderer.EditorUnit:
+                        _menuState = _menuState == MenuState.UnitEditor ? MenuState.None : MenuState.UnitEditor;
+                        _editorUi.ClearActiveField();
+                        break;
+                    case HUDRenderer.EditorSpell:
+                        _menuState = _menuState == MenuState.SpellEditor ? MenuState.None : MenuState.SpellEditor;
+                        _editorUi.ClearActiveField();
+                        break;
+                    case HUDRenderer.EditorMap:
+                        if (_menuState == MenuState.MapEditor) _menuState = MenuState.None;
+                        else { _menuState = MenuState.MapEditor; _mapEditor.SuppressClicksUntilRelease(); }
+                        break;
+                    case HUDRenderer.EditorUi:
+                        if (_menuState == MenuState.UIEditor) _menuState = MenuState.None;
+                        else { EnsureUIEditorInitialized(); _menuState = MenuState.UIEditor; }
+                        break;
+                }
+                _input.ConsumeMouse();
+            }
+        }
+
         // 'I' key toggles inventory (lazy-inits the UI family on first open)
         if (!anyTextInputActive && _input.WasKeyPressed(Keys.I) && _menuState == MenuState.None)
         {
@@ -3067,7 +3099,8 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             // without this, clicking e.g. "Crafting" also painted/placed in the
             // world underneath. Mirrors the gameplay hit-tests below (menuState ==
             // None branch), just re-run for map editor's mouse coords.
-            bool overHud = _hudRenderer.HitTestMenuButtons(screenW, mouse.X, mouse.Y) != -1;
+            bool overHud = _hudRenderer.HitTestMenuButtons(screenW, mouse.X, mouse.Y) != -1
+                || _hudRenderer.HitTestEditorButtons(screenW, mouse.X, mouse.Y) != -1;
             if (!overHud)
             {
                 var barLayout = _hudRenderer.GetSpellBarLayout(screenH);
@@ -3168,6 +3201,10 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
 
             // Core-menu buttons (top-right)
             if (_hudRenderer.HitTestMenuButtons(screenW, mx, my) != -1)
+                _input.MouseOverUI = true;
+
+            // Editor-launcher row (top-right, below the core-menu row)
+            if (_hudRenderer.HitTestEditorButtons(screenW, mx, my) != -1)
                 _input.MouseOverUI = true;
 
             // Aggression bar — hovering blocks world clicks; a left click snaps the
