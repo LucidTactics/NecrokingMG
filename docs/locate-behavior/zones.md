@@ -3,16 +3,16 @@
 Rectangular authored map areas ("zones") drawn in the **map editor's Zones tab**, saved to
 an `assets/maps/<map>_zones.json` sidecar (`GamePaths.MapsDir = "assets/maps"`), applied **once at map load** by
 `Game1.ApplyZones`, and — for non-Village kinds — **ticked at runtime** by
-`Game1.UpdateZoneSpawns` (periodic respawn via each zone's `Spawns` table). Four kinds:
-`Village`, `WolfPack`, `DeerHerd`, `Foraging`.
+`Game1.UpdateZoneSpawns` (periodic respawn via each zone's `Spawns` table). Five kinds:
+`Village`, `WolfPack`, `DeerHerd`, `Foraging`, `AnimalPack` (generic animal group).
 There is **no in-game (non-editor) click/selection of zones** — selection exists only in
 the editor.
 
 ## Files
 
 ### `Necroking/Game/ZoneTypes.cs`  ← the data model
-- `ZoneKind` enum (`Village`, `WolfPack`, `DeerHerd`, `Foraging`) — extend here for a new
-  kind (also extend `ZoneColors`).
+- `ZoneKind` enum (`Village`, `WolfPack`, `DeerHerd`, `Foraging`, `AnimalPack`) — extend
+  here for a new kind (also extend `ZoneColors`).
 - `MapZone` — `Id` ("zone_N"), `Name`, `Kind`, center `X/Y` + `HalfW/HalfH` (same rect
   convention as `TriggerRegion`), `ContainsPoint(Vec2)`, `Population`
   (`ZonePopulation`: Peasant/Hunter/Militia/Watchdog counts — Village kind only), and
@@ -76,6 +76,16 @@ AND in the editor's `SaveZones`.**
 - `SaveZones(mapsDir)` — writes the sidecar with `Utf8JsonWriter` (`population` only for
   Village, `spawns` only for other kinds). `DevSelectZone` (via `Game1.Dev.cs`) selects a
   zone headlessly for testing.
+- Selection state is `SelectedZoneIndex` (public int, -1 = none); zone creation is the
+  `_zoneDrawMode` rubber-band in `UpdateZonesTab` → `_zoneSystem.Add(new MapZone { Id =
+  NextZoneId(), … })` (returns the new index, assigned to `SelectedZoneIndex`).
+  `NextZoneId()` = first free `"zone_N"`. Undo exists only for rect drags
+  (`UndoZoneEdit`/`_zonePendingUndo`) — zone add/delete are NOT undoable today.
+- **Editor-wide keyboard shortcuts** (Ctrl+S/L/Z) live in `MapEditorWindow.Update` in one
+  block gated on `bool textEditing = _eb.IsKeyboardCaptured` and `ctrlDown` — new global
+  or per-tab chords (e.g. zone Ctrl+C/V) belong next to them, gated on `!textEditing` so
+  they don't fire while a text field owns the keyboard (`EditorBase.HandleTextInput` has
+  its own Ctrl+C/X/V/A for field text).
 
 **Look/edit here when…** zone selection/drag feels wrong, adding config UI for a zone
 kind, or persisting new zone fields.
