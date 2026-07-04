@@ -59,6 +59,40 @@ instead of calling `Mouse.GetState()` directly.
 Look/edit here when: a click made while the window is unfocused registers in-game; you need to gate
 input on window focus; "run when unfocused" behaviour; where click pressed-this-frame edges come from.
 
+#### GameClock — time & pause authority (`Necroking/Core/GameClock.cs`)
+**The single place that answers "what time is flowing, how fast, and what is paused".** `Game1` owns
+`_clock` and drives it two-phase from `Update`: `BeginFrame(rawDt)` at the top-of-frame dt derivation
+(before the MainMenu early-returns, so menus keep accruing VisualTime for shader phases), then
+`GateWorld(worldSuspended: EditorActive)` right before the sim gate (after all pause/menu input, so
+pausing or entering an editor freezes the world the *same* frame). Everything else only reads.
+
+Domains — pick by what the consumer IS, not where it runs:
+- **`RawDt`** — unclamped wall delta. FPS/perf readouts, real-time decays (slot flash, toasts).
+- **`RealDt`** — RawDt clamped to 1/20. Real-time UI that shouldn't jump after a hitch.
+- **`VisualDt` / `VisualTime`** — 0 while paused, × TimeScale. Presentation only: shader/wind/pulse
+  phase drivers, damage numbers. VisualTime is **never reset** (phase continuity) — it is NOT the
+  world's age.
+- **`WorldDt` / `WorldRunning`** — VisualDt, additionally 0 while a full-screen editor is open or on
+  frames that never reach the gate. **All gameplay-mutating code consumes WorldDt** — the sim gate is
+  `if (_clock.WorldRunning)`, and `UpdateAnimations`/death-fog/Draw-pass corpse anims take WorldDt.
+  Feeding gameplay from VisualDt is the "corruption spreads in the map editor" bug class.
+- **World age** — canonical on `Simulation.GameTime` (reset by `Simulation.Init` each game; the sim
+  stays self-contained for headless scenarios). Dev status JSON `gameTime` reports this;
+  `visualTime`/`worldRunning`/`pauseSources` are also in the payload.
+
+Pausing is **source-flagged** (`GameClock.PauseSource`: `User` = ESC/Space/HUD, `Inspect` = press-O
+unit sheet, `Dev` = dev server): `Pause(s)`/`Resume(s)` release per-source (the inspect pause
+survives unrelated resumes); menu/editor buttons force-run via `ClearAllPauses()`. `StartGame`/
+`StartScenario` call `_clock.OnWorldStart()` (clear pauses, TimeScale→1). Legacy fields
+`_paused`/`_gameTime`/`_timeScale`/`_rawDt`/`_frameDt` on `Game1` are read-forwarders onto the clock.
+
+Deliberately OUTSIDE the clock: the net loop (`UpdateNetwork`, wall clock, must run while
+paused/in menus — `Net/README.md`), dev-server drain, editor cursor blinks, the editor-mode scenario
+tick's fixed 1/60 step.
+Look/edit here when: something advances while paused / in an editor (wrong domain — switch it to
+WorldDt); a new update call needs a dt (pick a domain above); adding a new thing that can pause the
+game (add a PauseSource); time scale or world-time reporting behaves wrong.
+
 ### `Necroking/Game/GameSession.cs` — per-game world-state owner (recreated each map load)
 What lives here: `GameSession` — a single object that **owns the per-game world systems** (the ones
 rebuilt from scratch on every map load). `Game1` holds one `_session` and exposes its members through

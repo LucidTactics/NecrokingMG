@@ -1923,8 +1923,11 @@ public partial class Game1 {
              $"\"menuState\":\"{_menuState}\"," +
              $"\"paused\":{(_paused ? "true" : "false")}," +
              $"\"pauseSources\":\"{_clock.PauseSources}\"," +
+             $"\"worldRunning\":{(_clock.WorldRunning ? "true" : "false")}," +
              $"\"timeScale\":{_timeScale.ToString("F2", ci)}," +
-             $"\"gameTime\":{_gameTime.ToString("F2", ci)}," +
+             // World age (resets per game) — was the never-resetting visual clock.
+             $"\"gameTime\":{_sim.GameTime.ToString("F2", ci)}," +
+             $"\"visualTime\":{_clock.VisualTime.ToString("F2", ci)}," +
              $"\"units\":{_sim.Units.Count}," +
              $"\"undead\":{undead},\"human\":{human},\"animal\":{animal}," +
              $"\"camera\":{{\"x\":{_camera.Position.X.ToString("F2", ci)},\"y\":{_camera.Position.Y.ToString("F2", ci)},\"zoom\":{_camera.Zoom.ToString("F2", ci)}}}," +

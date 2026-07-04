@@ -570,11 +570,11 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     /// TogglePause / ClearAllPauses</c> with a <see cref="Core.GameClock.PauseSource"/>.</summary>
     internal bool _paused => _clock.Paused;
 
-    /// <summary>True while any full-screen editor (map / unit / spell / UI / item) owns the
-    /// screen. Editors pause the gameplay simulation — <c>_sim.Tick</c> is gated on
-    /// <c>!EditorActive</c> — so any OTHER sim-mutating update (e.g. death-fog diffusion +
-    /// ground-corruption spread, which runs from UpdateAnimations) must consult this too.
-    /// Note the map editor leaves <c>_paused</c> false, so a dt-only gate isn't enough.</summary>
+    /// <summary>True while any full-screen editor (map / unit / spell / UI / item) owns
+    /// the screen. Fed into <c>_clock.GateWorld(worldSuspended:)</c> each frame — editors
+    /// freeze the world by zeroing <see cref="Core.GameClock.WorldDt"/>, so gameplay code
+    /// never needs to consult this directly: consume WorldDt (not VisualDt) and the
+    /// editor gate comes for free.</summary>
     internal bool EditorActive => _menuState == MenuState.UnitEditor || _menuState == MenuState.SpellEditor
         || _menuState == MenuState.MapEditor || _menuState == MenuState.UIEditor
         || _menuState == MenuState.ItemEditor;
@@ -1308,10 +1308,19 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     {
         _gameWorldLoaded = false;
         _gameOver = false;
+        // Fresh world = fresh clock state: clear pause holders + restore 1x speed so a
+        // pause or 8x from the previous session isn't carried in. World age resets with
+        // the fresh Simulation below; VisualTime deliberately keeps running (phase).
+        _clock.OnWorldStart();
         _damageNumbers.Clear();
         _unitAnims.Clear();
         _corpseAnims.Clear();
         _effectManager.Clear();
+        // In-flight reanimation effects + buff particle emitters would otherwise
+        // carry into the new session (they were the only per-game visual systems
+        // not cleared here).
+        _reanimFx.Clear();
+        _buffVisuals.Clear();
         _tethers.Clear(); _tetherAnchor = null; _tetherDustAccum.Clear();
         _pendingProjectiles.Clear();
         // Kill mid-flight pickup arcs — they hold textures from the session being
@@ -1928,10 +1937,13 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
 
         _gameWorldLoaded = false;
         _gameOver = false;
+        _clock.OnWorldStart(); // same reset as StartGame: no inherited pause/speed
         _damageNumbers.Clear();
         _unitAnims.Clear();
         _corpseAnims.Clear();
         _effectManager.Clear();
+        _reanimFx.Clear();
+        _buffVisuals.Clear();
         _tethers.Clear(); _tetherAnchor = null; _tetherDustAccum.Clear();
 
         // Load flipbooks (needed for cloud effects, hit effects, etc.)

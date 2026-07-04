@@ -1,9 +1,10 @@
 # Death fog / corruption / blight spread
 
 The "death fog" scalar field and everything it corrupts (ground vertices, grass tufts,
-trees). This is a **simulation** system, but its per-frame tick is driven from the *visual*
-`UpdateAnimations` path — which is the source of the "corruption spreads while paused in the
-map editor" class of bug (see Pitfalls).
+trees). This is a **simulation** system whose per-frame tick is driven from the
+`UpdateAnimations` path — which now runs on **`GameClock.WorldDt`** (0 while paused OR while
+any full-screen editor is open), so the historical "corruption spreads while paused in the
+map editor" bug class is closed structurally (see Pitfalls).
 
 ## Files
 
@@ -34,18 +35,19 @@ Drives the fog tick and all corruption *visual* fades every frame:
 `_groundSystem.AdvanceCorruptionFades(dt)` → `_grassRenderer.AdvanceFades(dt)` → uploads the
 dirty vertex-map rect when `_groundSystem.CorruptionDirty`. Death-fog-consumption passive
 (necro mana regen while standing in fog) is here too.
-- **Look/edit here when**: corruption ticks when it shouldn't, or you need to gate the fog
-  spread — this is the call site, and it is *outside* the sim/editor gate (see Pitfalls).
+- The whole method is fed **`_clock.WorldDt`** from `Game1.Update` — paused or in an editor
+  means dt=0 here, and `DeathFogSystem.Update` no-ops on dt<=0. No local editor guard needed.
+- **Look/edit here when**: corruption ticks when it shouldn't (check what dt domain the call
+  site passes), or a new corruption-adjacent tick needs adding — give it the same WorldDt.
 
-### `Necroking/Game1.cs` — the update-loop gate
-- **`dt = _paused ? 0f : MathF.Min(rawDt, 1f/20f) * _timeScale;`** (~line 2741) — the ONLY
-  place `_paused` zeroes the game clock. Note it does **not** consult `editorActive`.
-- **`bool editorActive = … || _menuState == MenuState.MapEditor || …;`** (~line 3290) +
-  **`if (!_paused && !editorActive) { … }`** (~line 3301, closes ~3822) — the real
-  "editors pause the game" gate. Wraps player input, `_sim.Tick(dt)`, workers, day/night,
-  `_envSystem.UpdateAnimations`, zone spawns, projectiles — none run in the map editor.
-- **`UpdateAnimations(dt)`** is called ~line 3825, **after / outside** that block, so it
-  runs in every menu state including the map editor.
+### `Necroking/Game1.cs` + `Necroking/Core/GameClock.cs` — the update-loop gate
+- **`GameClock`** is the central time/pause authority — see
+  [game1-partials.md](game1-partials.md) "GameClock — time & pause authority" for domains.
+  Short version: gameplay consumes `WorldDt` (0 while paused or in editors); visuals consume
+  `VisualDt`/`VisualTime`; the sim gate is `if (_clock.WorldRunning)`.
+- **`UpdateAnimations(_clock.WorldDt)`** is called after/outside the sim-gate block (it must
+  run its dirty-rect texture upload every frame for editor ground painting), but its dt is
+  the WORLD domain, so nothing in it advances while the world is frozen.
 - `Game1.SyncCorruptionSettings` (~line 1804) pushes `_gameData.Settings.Corruption.*` into
   `_deathFog`/`_groundSystem`/`_grassRenderer` each tick.
 
@@ -57,21 +59,16 @@ fades nearby grass tufts to their `CorruptedTint`).
 
 ## Pitfalls / gotchas
 
-- **Corruption spread is NOT gated by the map-editor pause.** The sim gate
-  `if (!_paused && !editorActive)` (Game1.cs ~3301) stops `_sim.Tick` in the map editor, but
-  `_deathFog.Update` is invoked from `UpdateAnimations(dt)` which is called *outside* that
-  block. `dt` is only zeroed by `_paused` (Game1.cs ~2741), and entering the map editor sets
-  `editorActive`, **not** `_paused` (see the `_paused = false` on the MapEditor transitions).
-  So in the map editor `dt` is a live frame delta and fog keeps diffusing + corrupting ground.
-  Fix options: gate the `_deathFog.Update`/corruption block in `UpdateAnimations` behind
-  `!editorActive` (compute/pass an `editorActive` flag), pass `dt=0` to the fog tick when in an
-  editor, or move the fog tick inside the sim block (but that also freezes it when `_paused`
-  for inspect, which may or may not be wanted — corruption fades in `UpdateAnimations` are
-  intentionally kept running for pure-visual smoothness, so gate the *spread* specifically,
-  not the visual fades).
-- `DeathFogSystem.Update` early-returns on `dt <= 0f`, so any gate that yields dt=0 is enough
-  to stop spread — but the grass/ground *fade* advances also take `dt` and will likewise
-  freeze if you zero the whole `UpdateAnimations` dt. Prefer a targeted flag.
+- **(Historical, fixed 2026-07-04)** Corruption spread used to run in the map editor:
+  `UpdateAnimations` was fed the visual dt, which the editor leaves live (editors set
+  `editorActive`, not `_paused`). Fixed by moving the whole `UpdateAnimations` call onto
+  `GameClock.WorldDt`. If spread-in-editor ever regresses, check which dt domain the
+  `UpdateAnimations(...)` call in `Game1.Update` passes — it must be `_clock.WorldDt`.
+- `DeathFogSystem.Update` early-returns on `dt <= 0f`, so any domain that yields dt=0 stops
+  the spread. The grass/ground *fade* advances share that dt and freeze with it — they only
+  finish transitions already begun, so a frozen world showing frozen fades is correct.
+- The `CorruptionDirty` dirty-rect texture upload at the end of `UpdateAnimations` must keep
+  running every frame regardless of dt — the map editor's ground painting depends on it.
 
 ## Related
 
