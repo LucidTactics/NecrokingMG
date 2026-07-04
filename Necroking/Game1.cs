@@ -3318,8 +3318,12 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
                 _camera.ZoomBy(_input.ScrollDelta / 120f);
         }
 
-        // Editors pause the game
+        // Editors pause the game. Clock phase 2: all pause/menu input for the frame
+        // has run by here, so gate the world domain — WorldRunning/WorldDt reflect
+        // THIS frame's pause + editor state (same-frame freeze, as the old inline
+        // `!_paused && !editorActive` check did).
         bool editorActive = EditorActive;
+        _clock.GateWorld(worldSuspended: editorActive);
 
         // Map-editor hover-inspect: run ONLY the read-only debug-tooltip picks while
         // editing the map so you can hover things to see what they are. None of the
@@ -3328,7 +3332,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         if (_menuState == MenuState.MapEditor)
             UpdateHoverPicks(screenW, screenH);
 
-        if (!_paused && !editorActive)
+        if (_clock.WorldRunning)
         {
             // --- Player input ---
             Vec2 mouseWorld = _camera.ScreenToWorld(new Vector2(mouse.X, mouse.Y), screenW, screenH);
@@ -3515,7 +3519,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             }
 
             // Per-frame tether physics (haul corpses, slow the necromancer, kick up dust).
-            UpdateTethers(dt);
+            UpdateTethers(_clock.WorldDt);
 
             // --- Read-only hover picks (drive the debug info tooltips) ---
             // Object/corpse/unit/belly picks under the cursor. Shared with the
@@ -3591,7 +3595,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             HandleWorldClicks(screenW, screenH, mouse.X, mouse.Y, mouseWorld, necroIdx);
 
             // --- Auto-pickup foragables ---
-            _foragables.TickAutoPickup(dt, _gameData.Settings.General.AutoPickupForagables);
+            _foragables.TickAutoPickup(_clock.WorldDt, _gameData.Settings.General.AutoPickupForagables);
 
             // --- Time controls (keyboard) ---
             if (_input.WasKeyPressed(Keys.OemPlus) || _input.WasKeyPressed(Keys.Add))
@@ -3626,27 +3630,29 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             }
 
             // --- Tick pending projectiles ---
-            TickPendingProjectiles(dt);
+            // Gameplay consumes the WORLD domain (== dt inside this gate, but explicit
+            // so a future move outside the gate can't silently pick up editor-live dt).
+            TickPendingProjectiles(_clock.WorldDt);
 
             // --- Simulate ---
-            _sim.Tick(dt);
-            _workerSystem.Update(dt);
+            _sim.Tick(_clock.WorldDt);
+            _workerSystem.Update(_clock.WorldDt);
             ApplyBlightBombImpacts();
             FinalizeBushWorkIfPending();
-            _dayNightSystem.Update(dt, _gameData);
-            _sim.MagicGlyphs.Update(dt, _sim.UnitsMut, _sim.Quadtree, _sim.PoisonClouds, _gameData.Spells);
-            _weatherRenderer.Update(dt, _gameData);
-            _envSystem.UpdateForagables(dt);
-            UpdateZoneSpawns(dt);
-            _envSystem.UpdateBerryBushes(dt);
-            _envSystem.UpdateAnimations(dt, _gameTime);
-            _envSystem.UpdateTraps(dt, _sim.Units);
+            _dayNightSystem.Update(_clock.WorldDt, _gameData);
+            _sim.MagicGlyphs.Update(_clock.WorldDt, _sim.UnitsMut, _sim.Quadtree, _sim.PoisonClouds, _gameData.Spells);
+            _weatherRenderer.Update(_clock.WorldDt, _gameData);
+            _envSystem.UpdateForagables(_clock.WorldDt);
+            UpdateZoneSpawns(_clock.WorldDt);
+            _envSystem.UpdateBerryBushes(_clock.WorldDt);
+            _envSystem.UpdateAnimations(_clock.WorldDt, _clock.VisualTime);
+            _envSystem.UpdateTraps(_clock.WorldDt, _sim.Units);
             ProcessTrapFireEvents();
 
             // --- Scenario tick ---
             if (_activeScenario != null)
             {
-                _activeScenario.OnTick(_sim, dt);
+                _activeScenario.OnTick(_sim, _clock.WorldDt);
 
                 // Apply menu state requests from scenario (for editor screenshots)
                 if (_activeScenario.RequestedMenuState != null)
