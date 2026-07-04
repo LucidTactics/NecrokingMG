@@ -893,16 +893,16 @@ public class Simulation
     private float _necroFacingOverride = float.NaN;
 
     // Sprint ramp: 0.0 = walking at base CombatSpeed, 1.0 = full sprint at 4×.
-    // Tracks how far we've ramped through the build-up while shift is held; gives
-    // the unit a deliberate 3-second wind-up to full speed (not an instant snap)
-    // and a faster ~1-second decay on release so it doesn't keep coasting at
-    // sprint speed after letting go. Lerped into _sprintMultiplier each AI tick
+    // Tracks how far we've ramped through the build-up while shift is held. The
+    // ramp duration is derived per-tick from the unit's MaxAcceleration /
+    // MaxDeceleration (see the PlayerControlled branch), so MaxSpeed grows exactly
+    // as fast as the Newtonian accel cap allows — no hardcoded wind-up, and decel
+    // (typically ~5× accel) gives a naturally faster decay on release so the unit
+    // doesn't keep coasting at sprint speed. Lerped into _sprintMultiplier each AI tick
     // in the PlayerControlled case; multiplier scales MaxSpeed and biases the
     // unit's MoveEffort toward Sprint so the gait picker shows Run earlier than
     // raw velocity would warrant (= unit visibly cycles Walk → Jog → Run during
     // the ramp instead of staying in Walk until ~mid-ramp).
-    private const float SprintRampUpSeconds = 3.0f;
-    private const float SprintRampDownSeconds = 1.0f;
     private const float SprintMaxMultiplier = 4.0f;
     private float _sprintRampValue; // 0..1
 
@@ -1048,23 +1048,36 @@ public class Simulation
                     // Carrying a corpse disqualifies sprinting (preserves the prior
                     // behavior where carrying suppressed the run bonus).
                     bool canSprint = _necroRunning && _units[i].CarryingCorpseID < 0 && !_units[i].GhostMode && !_necroRopeTaut;
-                    float rampRate = canSprint
-                        ? dt / SprintRampUpSeconds
-                        : -dt / SprintRampDownSeconds;
-                    // Cast plant: the ramp decays at HALF rate (and never rises) while
-                    // casting, so a quick cast mid-sprint doesn't cost the whole 3s ramp.
-                    if (_necroCastPlant)
-                        rampRate = -dt / (SprintRampDownSeconds * 2f);
-                    _sprintRampValue = Necroking.Core.MathUtil.Clamp(_sprintRampValue + rampRate, 0f, 1f);
+                    
+                    var playerDef = _gameData.Units.Get(_units[i].UnitDefID);
+
                     // Per-unit sprint cap: necromancer evolutions and other player
                     // forms can have different sprint multipliers. Falls back to
                     // the system default (4× biped sprint) when the def doesn't
                     // specify. Each different player form (Lich, GrandNecromancer,
                     // etc.) can have its own sprint character via this knob.
-                    var playerDef = _gameData.Units.Get(_units[i].UnitDefID);
                     float maxSprintMult = (playerDef?.SprintSpeedMultiplier > 0f)
-                        ? playerDef.SprintSpeedMultiplier
-                        : SprintMaxMultiplier;
+                       ? playerDef.SprintSpeedMultiplier
+                       : SprintMaxMultiplier;
+
+                    var maxAcceleration = playerDef?.MaxAcceleration ?? _gameData.Settings.Combat.MaxAcceleration;
+                    var maxDeceleration = playerDef?.MaxDeceleration ?? _gameData.Settings.Combat.MaxDeceleration;
+
+                    // Ramp duration = time the Newtonian accel model actually needs to
+                    // go from CombatSpeed to sprint speed, so MaxSpeed rises exactly as
+                    // fast as the accel cap can follow (no artificial hard-coded ramp).
+                    float sprintSpeedGain = MathF.Max(0.01f, _units[i].Stats.CombatSpeed * (maxSprintMult - 1f));
+                    float sprintRampUpSeconds = sprintSpeedGain / MathF.Max(0.01f, maxAcceleration);
+                    float sprintRampDownSeconds = sprintSpeedGain / MathF.Max(0.01f, maxDeceleration);
+
+                    float rampRate = canSprint
+                        ? dt / sprintRampUpSeconds
+                        : -dt / sprintRampDownSeconds;
+                    // Cast plant: the ramp decays at HALF rate (and never rises) while
+                    // casting, so a quick cast mid-sprint doesn't cost the whole ramp.
+                    if (_necroCastPlant)
+                        rampRate = -dt / (sprintRampDownSeconds * 2f);
+                    _sprintRampValue = Necroking.Core.MathUtil.Clamp(_sprintRampValue + rampRate, 0f, 1f);
                     float sprintMultiplier = 1f + (maxSprintMult - 1f) * _sprintRampValue;
 
                     float speed = _units[i].Stats.CombatSpeed;
@@ -1077,7 +1090,7 @@ public class Simulation
 
                     // Bias the gait picker toward Sprint while ramping so the player
                     // sees the gait transition early (Walk → Jog → Run cycles through
-                    // during the 3-second ramp) rather than the gait lagging actual
+                    // during the ramp) rather than the gait lagging actual
                     // velocity. Tiny ramp values (<5%) snap back to Normal so a
                     // single-frame shift-tap doesn't lock the unit into Sprint intent.
                     _units[i].MoveEffort = _sprintRampValue > 0.05f
