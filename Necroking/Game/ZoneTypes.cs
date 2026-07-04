@@ -8,10 +8,12 @@ namespace Necroking.GameSystems;
 /// when adding a new zone kind.</summary>
 public enum ZoneKind : byte
 {
-    Village = 0,   // humans + structures inside become a Village (VillageSystem)
-    WolfPack = 1,  // wild wolves inside form one squad (SquadSystem)
-    DeerHerd = 2,  // wild deer inside form one squad (SquadSystem)
-    Foraging = 3,  // periodically spawns foragable env objects (Spawns list)
+    Village = 0,    // humans + structures inside become a Village (VillageSystem)
+    WolfPack = 1,   // wild wolves inside form one squad (SquadSystem)
+    DeerHerd = 2,   // wild deer inside form one squad (SquadSystem)
+    Foraging = 3,   // periodically spawns foragable env objects (Spawns list)
+    AnimalPack = 4, // generic animal group (any Animal-faction defs) — same squad/spawn
+                    // machinery as WolfPack/DeerHerd without the species coding
 }
 
 /// <summary>Village-zone spawn config: extra villagers spawned inside the zone at map load,
@@ -88,6 +90,7 @@ public static class ZoneColors
         ZoneKind.WolfPack => new Color(205, 65, 65),    // crimson
         ZoneKind.DeerHerd => new Color(110, 205, 110),  // leaf green
         ZoneKind.Foraging => new Color(170, 115, 220),  // mushroom violet
+        ZoneKind.AnimalPack => new Color(70, 190, 190), // teal
         _ => new Color(255, 0, 255),                    // magenta = unknown kind
     };
 

@@ -64,6 +64,9 @@ public partial class Game1
                 case ZoneKind.DeerHerd:
                     if (ApplyAnimalZone(z, AI.ArchetypeRegistry.DeerHerd)) squads++;
                     break;
+                case ZoneKind.AnimalPack:
+                    if (ApplyAnimalZone(z, null)) squads++;
+                    break;
             }
             FillZoneSpawnsAtStart(z, grid);
         }
@@ -155,19 +158,21 @@ public partial class Game1
         return new Vec2(z.X, z.Y);
     }
 
-    /// <summary>Group the wild animals of <paramref name="archetype"/> inside the zone into
-    /// one pre-formed squad. Returns false when the zone is empty (no squad created — an
-    /// empty squad would just be culled by SquadSystem.Recompute). The squad is recorded
-    /// as the zone's herd and given the zone rect as its roaming territory.</summary>
-    private bool ApplyAnimalZone(MapZone z, byte archetype)
+    /// <summary>Group the wild animals inside the zone into one pre-formed squad —
+    /// units of <paramref name="archetype"/>, or any Animal-faction unit when null
+    /// (the generic AnimalPack kind). Returns false when the zone is empty (no squad
+    /// created — an empty squad would just be culled by SquadSystem.Recompute). The
+    /// squad is recorded as the zone's herd and given the zone rect as its territory.</summary>
+    private bool ApplyAnimalZone(MapZone z, byte? archetype)
     {
         AI.Squad? sq = null;
         for (int i = 0; i < _sim.Units.Count; i++)
         {
             var u = _sim.Units[i];
-            if (!u.Alive || u.Archetype != archetype || u.SquadId != 0) continue;
+            if (!u.Alive || u.SquadId != 0) continue;
+            if (archetype.HasValue ? u.Archetype != archetype.Value : u.Faction != Faction.Animal) continue;
             if (!z.ContainsPoint(u.Position)) continue;
-            sq ??= _sim.Squads.CreateSquad(u.Faction, archetype);
+            sq ??= _sim.Squads.CreateSquad(u.Faction, archetype ?? u.Archetype);
             sq.Members.Add(u.Id);
             _sim.UnitsMut[i].SquadId = sq.Id;
         }

@@ -4389,15 +4389,40 @@ public class MapEditorWindow
 
     // Combo option caches for the zone spawn panel (unit ids are static per session,
     // foragable env def ids follow the per-map def list).
-    private string[]? _zoneUnitIdOptions;
+    private string[]? _zoneWolfIdOptions, _zoneDeerIdOptions, _zoneAnimalIdOptions;
     private string[]? _zoneForagableIdOptions;
     private int _zoneForagableDefCount = -1;
 
-    private string[] GetZoneUnitIdOptions()
+    /// <summary>Unit dropdown per zone kind: WolfPack → wolves only, DeerHerd → deer only,
+    /// AnimalPack → every other Animal-faction def. Wolf/deer membership = the pack
+    /// archetype where set, else the def id (DireWolf/JuvWolf carry no archetype).</summary>
+    private string[] GetZoneUnitIdOptions(ZoneKind kind)
     {
-        if (_zoneUnitIdOptions == null && _gameData != null)
-            _zoneUnitIdOptions = new List<string>(_gameData.Units.GetIDs()).ToArray();
-        return _zoneUnitIdOptions ?? Array.Empty<string>();
+        if (_gameData == null) return Array.Empty<string>();
+        if (_zoneWolfIdOptions == null)
+        {
+            List<string> wolves = new(), deer = new(), rest = new();
+            foreach (var id in _gameData.Units.GetIDs())
+            {
+                var def = _gameData.Units.Get(id);
+                if (def == null || def.Faction != "Animal") continue;
+                if (def.Archetype == "WolfPack" || id.Contains("wolf", StringComparison.OrdinalIgnoreCase))
+                    wolves.Add(id);
+                else if (def.Archetype == "DeerHerd" || id.Contains("deer", StringComparison.OrdinalIgnoreCase))
+                    deer.Add(id);
+                else
+                    rest.Add(id);
+            }
+            _zoneWolfIdOptions = wolves.ToArray();
+            _zoneDeerIdOptions = deer.ToArray();
+            _zoneAnimalIdOptions = rest.ToArray();
+        }
+        return kind switch
+        {
+            ZoneKind.WolfPack => _zoneWolfIdOptions,
+            ZoneKind.DeerHerd => _zoneDeerIdOptions!,
+            _ => _zoneAnimalIdOptions!,
+        };
     }
 
     private string[] GetZoneForagableIdOptions()
@@ -4449,7 +4474,7 @@ public class MapEditorWindow
         y += FieldHeight + 6;
 
         bool forage = z.Kind == ZoneKind.Foraging;
-        string[] options = forage ? GetZoneForagableIdOptions() : GetZoneUnitIdOptions();
+        string[] options = forage ? GetZoneForagableIdOptions() : GetZoneUnitIdOptions(z.Kind);
 
         DrawSmallText(forage ? "Item spawning" : "Unit spawning", x, y, AccentColor);
         y += LineHeight;
