@@ -123,6 +123,39 @@ Enable when hunting "anim got weird N frames ago" bugs.
 - `GameRenderer.Corpses.cs` — corpse controllers (Death held at end), not live units.
 - Editor previews (`Editor/UnitEditorWindow.cs`, `WadingEditorPopup.cs`).
 
+## Player (necromancer) cast-anim pipeline — the `_pendingCastAnim` machine
+
+The player is `Archetype == 0` (legacy branch) and casts bypass AnimResolver entirely —
+they poke the controller directly. All state is Game1-side (`PendingCastAnim?
+_pendingCastAnim` struct in `Game1.cs`, near `IsChanneledCast`/`GetChannelStates`):
+
+- **Dispatch**: spellbar keypress in `Game1.cs` Update → `DispatchSpellCast`
+  (`Game1.Spells.cs`). Mana + cooldown are committed at PRESS time
+  (`SpellCaster.TryStartSpellCast`, `Game/SpellCasting.cs`); the cursor world pos is
+  frozen into `PendingCastAnim.Target` at press.
+- **Instant path** (`CastAnim` empty/`Spell1` + a `CastingBuffID`): `ctrl.RequestState(Spell1)`;
+  the effect fires on `JustHitEffectFrame` (effect_time_ms, 50% fallback) in
+  `UpdateAnimations`, with a **fallback execute** when the necromancer leaves Spell1
+  without the effect frame having fired. No CastingBuffID → effect executes immediately
+  on press, no anim.
+- **Channeled path** (`CastAnim` = `ImbueGround`/`Raise`/`ImbueTable`):
+  `ctrl.ForceState(start)` at dispatch, then `UpdateChanneledCast` (`Game1.Animation.cs`)
+  drives Start→Loop→Finish; effect fires at END of the loop budget
+  (`ChannelPlaybackSpeed` fits the cycle into `spell.CastTime`). It also RAW-snaps
+  `FacingAngle` to the frozen target every frame — and since `UpdateAnimations` runs
+  AFTER `Simulation.Tick` (`UpdateFacingAngles`), the snap wins over turn-rate-limited
+  cursor facing.
+- **Casting does NOT gate movement**: no plant reads `_pendingCastAnim`; WASD
+  `PreferredVel` keeps flowing, so the player slides in the cast pose (cast anims are
+  priority 3 + non-interruptible, so the walk `RequestState` just parks in
+  `_pendingState`). Contrast: a player MELEE swing does plant — `PendingAttack` zeroes
+  PreferredVel (`UpdateAI`) and Velocity (`UpdateMovement`); only the `InCombat` plant
+  exempts PlayerControlled.
+- One real cast at a time: `DispatchSpellCast` rejects while `_pendingCastAnim != null`;
+  `TryAttackClick` (`Game1.WorldClicks.cs`) also refuses to stamp a melee attack mid-cast.
+  Separate held-key channel state: `_channelingSlot` (beam/drain spells, cancelled on key
+  release in `Game1.cs` Update).
+
 ## Interruption / lock / cooldown mechanisms that exist
 
 - Priority lanes + same-priority "must have started" replacement gate (AnimResolver).
