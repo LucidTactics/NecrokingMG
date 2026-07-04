@@ -106,14 +106,21 @@ partial class GameRenderer
         // their own Present).
         _g.CompletePendingDevScreenshot();
 
-        // Time the Present()/blit done by base.Draw — anything that doesn't
-        // overlap with CPU work shows up here. Present blocks until the GPU
-        // can accept the frame, so this approximates GPU+vsync wait time.
-        var presentSw = System.Diagnostics.Stopwatch.StartNew();
+        // base.Draw only draws components — the actual GPU swap/Present happens in
+        // Game1.EndDraw (overridden there), which is where present time is measured.
         _g.BaseDraw(gameTime);
-        presentSw.Stop();
-        _g._gpuPresentMsAvg = _g._gpuPresentMsAvg * (1.0 - EmaAlpha)
-                         + presentSw.Elapsed.TotalMilliseconds * EmaAlpha;
+
+        // Feed the `perf` dev command's ring buffers. Frame = wall-clock interval
+        // between Draw ends, so it captures the whole loop (updates + draw + present).
+        // The present slot for this frame is stamped afterwards by Game1.EndDraw.
+        double perfFrameMs = _g._perfFrameSw.IsRunning ? _g._perfFrameSw.Elapsed.TotalMilliseconds : 0;
+        _g._perfFrameSw.Restart();
+        int perfIdx = (int)(_g._perfFrames % _g._perfFrameMs.Length);
+        _g._perfFrameMs[perfIdx] = perfFrameMs;
+        _g._perfSimMs[perfIdx] = _g._sim?.LastTickMs ?? 0;
+        _g._perfDrawMs[perfIdx] = drawMs;
+        _g._perfPresentMs[perfIdx] = 0; // stamped in Game1.EndDraw
+        _g._perfFrames++;
     }
 
     /// <summary>Death-fog debug overlay (F5) — fog cells plus per-corruptable-object

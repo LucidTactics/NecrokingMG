@@ -4329,6 +4329,21 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     /// (component drawing) it used to reach via <c>base.Draw</c> when it lived on Game1.</summary>
     internal void BaseDraw(GameTime gameTime) => base.Draw(gameTime);
 
+    /// <summary>The GPU swap/Present happens here, after <see cref="Draw"/> returns —
+    /// NOT inside <see cref="BaseDraw"/> (profiling showed the old BaseDraw stopwatch
+    /// reads ~0 while the thread spends 25%+ of the frame blocked in Present). This is
+    /// the real "GPU + swap wait" number for the F3 readout and the `perf` dev command.</summary>
+    protected override void EndDraw()
+    {
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        base.EndDraw();
+        sw.Stop();
+        double presentMs = sw.Elapsed.TotalMilliseconds;
+        _gpuPresentMsAvg = _gpuPresentMsAvg * 0.9 + presentMs * 0.1;
+        if (_perfFrames > 0)
+            _perfPresentMs[(int)((_perfFrames - 1) % _perfPresentMs.Length)] = presentMs;
+    }
+
     protected override void UnloadContent()
     {
         _widgetRenderer.Shutdown();

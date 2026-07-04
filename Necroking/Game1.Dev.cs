@@ -9,6 +9,16 @@ using Necroking.Scenario;
 namespace Necroking;
 
 public partial class Game1 {
+   // Ring buffers behind the `perf` dev command — fed once per frame at the end of
+   // GameRenderer.Draw. Frame = real wall-clock Draw-to-Draw interval (valid in both
+   // fixed and variable timestep, unlike _rawDt under fixed-timestep catch-up).
+   internal readonly double[] _perfFrameMs = new double[300];
+   internal readonly double[] _perfSimMs = new double[300];
+   internal readonly double[] _perfDrawMs = new double[300];
+   internal readonly double[] _perfPresentMs = new double[300];
+   internal long _perfFrames;
+   internal readonly System.Diagnostics.Stopwatch _perfFrameSw = new();
+
    void ExecuteDevCommand(Necroking.Dev.DevCommand c) {
       try {
          switch (c.Cmd) {
@@ -45,6 +55,43 @@ public partial class Game1 {
                    $"managedAfter={managedAfter / (1024 * 1024)}MB " +
                    $"priv={proc.PrivateMemorySize64 / (1024 * 1024)}MB " +
                    $"ws={proc.WorkingSet64 / (1024 * 1024)}MB"));
+               break;
+            }
+
+            // Frame-time stats over the last ≤300 frames (rings fed in GameRenderer.Draw):
+            // wall frame interval, sim tick, draw, present — avg/p50/p95/max each — plus
+            // fps and cumulative GC collection counts.
+            //   window.dev('perf')            → JSON stats
+            //   window.dev('perf',['reset'])  → zero the ring (start a fresh window)
+            case "perf": {
+               if (c.Args.Length >= 1 && c.Args[0] == "reset") {
+                  _perfFrames = 0;
+                  c.Complete(Necroking.Dev.DevServer.Ok("perf ring reset"));
+                  break;
+               }
+               int n = (int)Math.Min(_perfFrames, _perfFrameMs.Length);
+               if (n == 0) {
+                  c.Complete(Necroking.Dev.DevServer.Error("no frames recorded yet"));
+                  break;
+               }
+               static string Stats(double[] ring, int n) {
+                  var a = new double[n];
+                  Array.Copy(ring, a, n);
+                  Array.Sort(a);
+                  double sum = 0;
+                  for (int i = 0; i < n; i++) sum += a[i];
+                  return FormattableString.Invariant(
+                     $"{{\"avg\":{sum / n:F2},\"p50\":{a[n / 2]:F2},\"p95\":{a[(int)(n * 0.95)]:F2},\"max\":{a[n - 1]:F2}}}");
+               }
+               string frame = Stats(_perfFrameMs, n), sim = Stats(_perfSimMs, n);
+               string draw = Stats(_perfDrawMs, n), present = Stats(_perfPresentMs, n);
+               double fsum = 0;
+               for (int i = 0; i < n; i++) fsum += _perfFrameMs[i];
+               double fpsAvg = fsum > 0 ? 1000.0 * n / fsum : 0;
+               string gc = FormattableString.Invariant(
+                  $"{{\"gen0\":{GC.CollectionCount(0)},\"gen1\":{GC.CollectionCount(1)},\"gen2\":{GC.CollectionCount(2)}}}");
+               c.Complete(Necroking.Dev.DevServer.OkRaw(FormattableString.Invariant(
+                  $"{{\"frames\":{n},\"fps\":{fpsAvg:F1},\"frame\":{frame},\"sim\":{sim},\"draw\":{draw},\"present\":{present},\"gc\":{gc},\"units\":{(_sim?.Units.Count ?? 0)}}}")));
                break;
             }
 
@@ -1593,7 +1640,7 @@ public partial class Game1 {
                // new command that isn't added here is invisible. Keep the groups.
                var cmds = new[] {
                   // liveness / state dumps
-                  "ping", "state", "help", "mem", "census",
+                  "ping", "state", "help", "mem", "perf [reset]", "census",
                   "units [selector]", "unit <selector>", "corpses", "combat_log [n]",
                   "jobs", "cooldowns", "locomotion [selector]  (alias loco)",
                   "fog <x> <y>", "setting <dotted.path> [value]  (alias set_setting)",
