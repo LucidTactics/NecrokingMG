@@ -39,6 +39,17 @@ forwards to it so AI and sim share one formula (they previously drifted — 1.5f
   path (below) must replicate it.
 - Other `MeleeRangeUtil.Compute` call sites: `~1469`, `~1550` (engage transitions), `~2375`
   (InCombat set), `~3634` (a secondary engage check).
+- **Special weapon archetypes are dispatched inside the attack-selection loop** by
+  `WeaponStats.Archetype`: `WeaponArchetype.Pounce` → **`InitiatePounceWithWeapon(i, ti,
+  w, roundDuration)`** (computes `landingPos` = target position minus a
+  radius-sum+0.2 standoff along the current attacker→target line — **no velocity lead** —
+  then `JumpSystem.BeginPounce(units, i, landingPos, targetId, animMeta, sprite,
+  arcPeak, speedOverride: CombatSpeed*SprintMult)` and stamps `PendingAttack` so the
+  landing resolves melee); `Trample` → `TrampleSystem.BeginCharge`; `Sweep` → stamps a
+  sweep `PendingAttack`. This is the ONLY `BeginPounce` caller — wild-wolf and other AI
+  handlers don't pounce themselves (see `WolfPackHandler.cs` comment: pounce is central).
+  `BeginPounce` (`Necroking/GameSystems/JumpSystem.cs`) derives travel duration itself
+  from `dist / speed` + anim compression.
 
 ### `Necroking/Game1.WorldClicks.cs` — the player click → melee order (regression lives here)
 - **`TryAttackClick(mouseWorld, necroIdx)`** — LMB/RMB on an enemy orders the necromancer to
@@ -72,6 +83,13 @@ per-frame `Update(dt, units, qt, corpses)` (physics, homing/swirl, collision, pr
   `Unit.EffectSpawnHeight` (bow-tip anim point).
 - `SpawnFireball` / `SpawnPotionLob` — always-lobbed variants; `DetonateAtTarget` bursts
   exactly at the aimed point instead of overshooting.
+- **Target leading exists in ONE place**: `Simulation.FireArrowAt(attackerIdx, defenderIdx,
+  weaponIdx)` (the single arrow-ballistics chokepoint called by both the
+  `ResolvePendingAttack` ranged branch and legacy `ArcherAttack`) does a one-iteration
+  linear lead — `aim += defender.Velocity * (dist / ProjectileManager.ArrowSpeed)` — inline,
+  not via any shared helper. It also picks direct-vs-lob (`IsFireLaneClear`) and passes
+  precision to `SpawnArrow`. Pounce (`InitiatePounceWithWeapon`), trample (straight
+  per-frame homing in `TrampleSystem.TickCharge`), and spell target points do NOT lead.
 - **Projectiles do NOT collide with walls/env objects** — only units (quadtree radius
   query, arrows hit while `0 < Height < 2`), corpses (potions), and the ground. There is
   **no line-of-sight utility in the codebase** (no LoS/raycast helper) — a "lob over
