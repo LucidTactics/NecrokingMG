@@ -587,6 +587,27 @@ public class EditorBase
         _selectAll = false;
     }
 
+    /// <summary>Text currently selected in the active single-line field: the whole
+    /// buffer under select-all, the highlighted range otherwise, else empty.</summary>
+    private string SelectedText()
+    {
+        if (_selectAll) return _inputBuffer;
+        if (!HasSelection) return "";
+        var (start, end) = GetSelectionRange();
+        return _inputBuffer[start..end];
+    }
+
+    /// <summary>Drop control chars (newlines, tabs, etc.) from pasted text so a
+    /// single-line field can't get a stray line break.</summary>
+    private static string StripControlChars(string s)
+    {
+        if (string.IsNullOrEmpty(s)) return "";
+        var sb = new System.Text.StringBuilder(s.Length);
+        foreach (char ch in s)
+            if (!char.IsControl(ch)) sb.Append(ch);
+        return sb.ToString();
+    }
+
     public void DrawTexture(Texture2D texture, Vector2 position, Rectangle sourceRect,
         Color color, float rotation, Vector2 origin, float scale, SpriteEffects effects)
     {
@@ -2028,6 +2049,7 @@ public class EditorBase
         var pressed = _kb.GetPressedKeys();
         double dt = gameTime.ElapsedGameTime.TotalSeconds;
         bool shift = _kb.IsKeyDown(Keys.LeftShift) || _kb.IsKeyDown(Keys.RightShift);
+        bool ctrl = _kb.IsKeyDown(Keys.LeftControl) || _kb.IsKeyDown(Keys.RightControl);
 
         foreach (var key in pressed)
         {
@@ -2210,13 +2232,53 @@ public class EditorBase
                     _selectAll = false;
                     _cursorBlink = 0;
                 }
-                else if (key == Keys.A && (_kb.IsKeyDown(Keys.LeftControl) || _kb.IsKeyDown(Keys.RightControl)))
+                else if (key == Keys.A && ctrl)
                 {
                     // Ctrl+A: select all
                     _selectionStart = 0;
                     _cursorPos = _inputBuffer.Length;
                     _selectAll = false;
                     _cursorBlink = 0;
+                }
+                else if (ctrl && key == Keys.C)
+                {
+                    // Ctrl+C: copy selection (or the whole field if nothing selected).
+                    string sel = SelectedText();
+                    if (sel.Length == 0) sel = _inputBuffer;
+                    if (sel.Length > 0) { try { TextCopy.ClipboardService.SetText(sel); } catch { } }
+                }
+                else if (ctrl && key == Keys.X)
+                {
+                    // Ctrl+X: cut selection to clipboard.
+                    string sel = SelectedText();
+                    if (sel.Length > 0)
+                    {
+                        try { TextCopy.ClipboardService.SetText(sel); } catch { }
+                        if (_selectAll) { _inputBuffer = ""; _cursorPos = 0; _selectionStart = -1; _selectAll = false; }
+                        else DeleteSelection();
+                        _cursorBlink = 0;
+                    }
+                }
+                else if (ctrl && key == Keys.V)
+                {
+                    // Ctrl+V: paste, replacing any selection. Single-line field, so
+                    // strip control chars (newlines/tabs) from the clipboard text.
+                    string paste = "";
+                    try { paste = TextCopy.ClipboardService.GetText() ?? ""; } catch { }
+                    paste = StripControlChars(paste);
+                    if (paste.Length > 0)
+                    {
+                        if (_selectAll) { _inputBuffer = ""; _cursorPos = 0; _selectionStart = -1; _selectAll = false; }
+                        else if (HasSelection) DeleteSelection();
+                        _inputBuffer = _inputBuffer[.._cursorPos] + paste + _inputBuffer[_cursorPos..];
+                        _cursorPos += paste.Length;
+                        _cursorBlink = 0;
+                    }
+                }
+                else if (ctrl && KeyToChar(key, shift).HasValue)
+                {
+                    // Other Ctrl+<letter> chords (Ctrl+S, etc.) are not text — swallow
+                    // them so they don't insert a stray character into the field.
                 }
                 else
                 {
