@@ -443,7 +443,7 @@ public class Simulation
         Necroking.World.Pathfinder.DiagCacheEvictions = 0;
         Necroking.World.Pathfinder.DiagCacheSize = _pathfinder.FlowCacheSize;
         Necroking.World.Pathfinder.DiagMissTile = 0;
-        Necroking.World.Pathfinder.DiagMissMultiBorder = 0;
+        Necroking.World.Pathfinder.DiagMissPortalFlow = 0;
         _frameNumber++;
         _gameTime += dt;
         _damageEvents.Clear();
@@ -831,7 +831,7 @@ public class Simulation
               .Append($",hits:{Necroking.World.Pathfinder.DiagFlowCacheHits}")
               .Append($",miss:{Necroking.World.Pathfinder.DiagFlowCacheMisses}")
               .Append($"(tile:{Necroking.World.Pathfinder.DiagMissTile}")
-              .Append($",mult:{Necroking.World.Pathfinder.DiagMissMultiBorder}")
+              .Append($",pflow:{Necroking.World.Pathfinder.DiagMissPortalFlow}")
               .Append($",new:{Necroking.World.Pathfinder.DiagMissNewKey}")
               .Append($",evict:{Necroking.World.Pathfinder.DiagMissEvicted})")
               .Append($",imag:{Necroking.World.Pathfinder.DiagImagChunkComputes}")

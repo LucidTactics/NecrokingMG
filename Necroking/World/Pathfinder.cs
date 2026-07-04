@@ -29,11 +29,83 @@ public class Pathfinder
     private TileGrid? _grid;
     private int _sectorCountX, _sectorCountY;
 
-    // Per-tier sector connectivity: [tier][sectorIdx][direction]
-    private bool[,,]? _sectorConnected;
+    // =========================================================================
+    // Portal graph (per tier)
+    // =========================================================================
+    // A portal is one maximal CONTIGUOUS run of border-tile pairs between two
+    // adjacent sectors where BOTH sides are tier-passable — the exact
+    // passability test the old per-side connectivity scan used. Routing over
+    // portals instead of whole sectors makes inter-sector paths terrain-aware
+    // (crossing a rough sector costs what its tiles cost), chokepoint-aware
+    // (a 1-tile gap is one narrow portal instead of "border connected"), and
+    // split-sector-aware (two internal regions of one sector simply have no
+    // finite intra-sector cost between their portals, so routes can't thread
+    // through the wrong region).
+    private struct Portal
+    {
+        public int SectorA;          // owner sector (west/north side of the border)
+        public int SectorB;          // neighbor sector (east/south side)
+        public bool SouthBorder;     // false = A's EAST border, true = A's SOUTH border
+        public short Start, End;     // inclusive local run range along the border axis (0..SectorSize-1)
+        public short IdxInA, IdxInB; // position in each side's per-sector portal list
+                                     // (= row/column index into that sector's portal-cost matrix)
+    }
 
-    // Sector-level BFS route cache: key = destSector * tiers + tier
-    private readonly Dictionary<int, SectorRoute> _routeCache = new();
+    // Local-coordinate span along one border axis; per-border span lists are
+    // the source of truth the flat portal lists are rebuilt from, and give
+    // InvalidateRegion a cheap "did this border's portal set change" compare.
+    private struct Span { public short Start, End; }
+
+    private List<Portal>[]? _portals;        // [tier] — flat list, portal id = list index
+    private List<int>[][]? _sectorPortals;   // [tier][sectorIdx] — ids of portals touching the sector
+    private List<Span>[][]? _spansE;         // [tier][sectorIdx] — spans on the sector's EAST border
+    private List<Span>[][]? _spansS;         // [tier][sectorIdx] — spans on the sector's SOUTH border
+
+    // Cost added per portal crossing (stepping from one side of the border to
+    // the other, ~1 cardinal step at cost 1). Also keeps graph edge weights
+    // strictly positive when two portals of a sector share a corner center.
+    private const float PortalCrossCost = 1f;
+
+    // Maximal portal width: longer passable runs are chopped into segments of
+    // at most this many tiles. Portal costs are measured at span CENTERS, so
+    // an uncapped 64-tile border portal misjudges its ends by ~32 tiles —
+    // enough to route through the wrong exit. Capping bounds that error to
+    // ±MaxPortalWidth/2 (the flow seeding's along-span slope covers the rest).
+    private const int MaxPortalWidth = 16;
+
+    // Intra-sector portal-to-portal cost matrix, lazily computed on the first
+    // route request that expands into the sector (one window Dijkstra per
+    // portal, budget-charged). Costs are in the same units the tile Dijkstra
+    // accumulates (byte tile cost x StepMul8), measured center-to-center on
+    // this sector's side, so they compose with flow-field seeding costs.
+    private sealed class PortalMatrix
+    {
+        public float[] Cost = Array.Empty<float>(); // n*n; [i*N+j] = cost portal i -> portal j (list order)
+        public int N;
+    }
+    private readonly Dictionary<int, PortalMatrix> _portalMatrixCache = new(); // key = sectorIdx * NumSizeTiers + tier
+
+    // Per-destination remaining costs over the portal graph. Replaces the old
+    // hop-count SectorRoute: true Dijkstra cost (tile-cost units) from a
+    // portal to the destination tile. Each portal is TWO graph nodes — one
+    // per side — because remaining cost is side-dependent: standing on the
+    // side the path continues into is one crossing cheaper than standing on
+    // the far side. With a single side-agnostic node, both adjacent sectors
+    // would seed the portal as an "exit" at the same cost and the two border
+    // tiles would point INTO each other (observed as units ping-ponging on
+    // the sector border). Cached per (destSector, tier) — the first
+    // requester's dest tile seeds the search; later targets in the same
+    // sector reuse it (error bounded by one sector crossing, same granularity
+    // the hop scheme had). Ages out with the same loose horizon flows use
+    // (EvictStaleFlowFields).
+    private sealed class PortalRoute
+    {
+        // [portalId * 2 + side], side 0 = SectorA's side, 1 = SectorB's side;
+        // InfCost = no path from that side.
+        public float[] Cost = Array.Empty<float>();
+        public uint FrameAccessed;
+    }
+    private readonly Dictionary<int, PortalRoute> _routeCache = new(); // key = destSector * NumSizeTiers + tier
 
     // Per-sector flow field cache
     private readonly Dictionary<FlowKey, CachedFlow> _flowCache = new();
@@ -72,13 +144,6 @@ public class Pathfinder
     // Per-unit decision tracking (for debug). Keyed by stable Unit.Id.
     private readonly Dictionary<uint, PathDecisionInfo> _unitDecisions = new();
 
-    private struct SectorRoute
-    {
-        public sbyte[] NextDir;
-        public short[] HopDist;
-        public uint FrameAccessed;
-    }
-
     private struct CachedFlow
     {
         public FlowDir[] Dirs;
@@ -109,14 +174,6 @@ public class Pathfinder
         FlowDir.N, FlowDir.NE, FlowDir.E, FlowDir.SE,
         FlowDir.S, FlowDir.SW, FlowDir.W, FlowDir.NW
     };
-
-    // 4-directional offsets for sector BFS
-    private static readonly int[] Dx4 = { 0, 1, 0, -1 };
-    private static readonly int[] Dy4 = { -1, 0, 1, 0 };
-    private static readonly int[] Opposite4 = { 2, 3, 0, 1 };
-    // Exit direction for each border index (N/E/S/W) — hoisted so the flow
-    // post-process loops don't allocate a fresh array per miss.
-    private static readonly FlowDir[] BorderExitDirs = { FlowDir.N, FlowDir.E, FlowDir.S, FlowDir.W };
 
     /// <summary>Milliseconds since a Stopwatch.GetTimestamp() sample. Replaces
     /// per-call Stopwatch.StartNew() — that allocates a Stopwatch instance on
@@ -190,7 +247,8 @@ public class Pathfinder
 
     public void Rebuild()
     {
-        BuildConnectivity();
+        BuildPortals();
+        _portalMatrixCache.Clear();
         _routeCache.Clear();
         _flowCache.Clear();
         _staleFlowCache.Clear();
@@ -205,71 +263,195 @@ public class Pathfinder
         _lastQueryDeferred = false;
     }
 
-    // --- Sector connectivity ---
+    // --- Portal extraction ---
 
-    private void BuildConnectivity()
+    /// <summary>Eager whole-map portal extraction (all tiers). O(border tiles),
+    /// cheap relative to the whole-grid cost rebake that precedes Rebuild().</summary>
+    private void BuildPortals()
     {
         if (_grid == null) return;
         int count = _sectorCountX * _sectorCountY;
-        _sectorConnected = new bool[TerrainCosts.NumSizeTiers, count, 4];
+        int tiers = TerrainCosts.NumSizeTiers;
+        _portals = new List<Portal>[tiers];
+        _sectorPortals = new List<int>[tiers][];
+        _spansE = new List<Span>[tiers][];
+        _spansS = new List<Span>[tiers][];
 
-        for (int tier = 0; tier < TerrainCosts.NumSizeTiers; tier++)
+        for (int tier = 0; tier < tiers; tier++)
+        {
+            _portals[tier] = new List<Portal>();
+            _sectorPortals[tier] = new List<int>[count];
+            _spansE[tier] = new List<Span>[count];
+            _spansS[tier] = new List<Span>[count];
+            for (int i = 0; i < count; i++)
+            {
+                _sectorPortals[tier][i] = new List<int>();
+                _spansE[tier][i] = new List<Span>();
+                _spansS[tier][i] = new List<Span>();
+            }
             for (int sy = 0; sy < _sectorCountY; sy++)
                 for (int sx = 0; sx < _sectorCountX; sx++)
-                    RescanSectorConnectivity(tier, sx, sy);
+                    ExtractSectorSpans(tier, sx, sy);
+            RebuildFlatPortals(tier);
+        }
     }
 
-    /// <summary>Recompute one sector's 4 border-connectivity flags for one tier.
-    /// Shared by the full BuildConnectivity and by InvalidateRegion's targeted
-    /// rescan. Returns true if any flag changed.</summary>
-    private bool RescanSectorConnectivity(int tier, int sx, int sy)
+    /// <summary>Re-extract the E and S border spans of one sector for one
+    /// tier. Returns true if either span list changed (portal set changed).
+    /// Each border is owned by its west/north sector, so scanning every
+    /// sector's E+S borders covers every border exactly once.</summary>
+    private bool ExtractSectorSpans(int tier, int sx, int sy)
     {
-        if (_grid == null || _sectorConnected == null) return false;
-        int idx = SectorIdx(sx, sy);
-        int baseX = sx * SectorSize;
-        int baseY = sy * SectorSize;
-        int endX = Math.Min(baseX + SectorSize, _grid.Width);
-        int endY = Math.Min(baseY + SectorSize, _grid.Height);
-
-        bool n = false, e = false, s = false, w = false;
-
-        // North
-        if (sy > 0)
-            for (int x = baseX; x < endX; x++)
-                if (_grid.GetCost(x, baseY, tier) != 255 && _grid.GetCost(x, baseY - 1, tier) != 255)
-                { n = true; break; }
-
-        // East
-        if (sx < _sectorCountX - 1)
-        {
-            int lastCol = endX - 1;
-            for (int y = baseY; y < endY; y++)
-                if (_grid.GetCost(lastCol, y, tier) != 255 && _grid.GetCost(lastCol + 1, y, tier) != 255)
-                { e = true; break; }
-        }
-
-        // South
-        if (sy < _sectorCountY - 1)
-        {
-            int lastRow = endY - 1;
-            for (int x = baseX; x < endX; x++)
-                if (_grid.GetCost(x, lastRow, tier) != 255 && _grid.GetCost(x, lastRow + 1, tier) != 255)
-                { s = true; break; }
-        }
-
-        // West
-        if (sx > 0)
-            for (int y = baseY; y < endY; y++)
-                if (_grid.GetCost(baseX, y, tier) != 255 && _grid.GetCost(baseX - 1, y, tier) != 255)
-                { w = true; break; }
-
-        bool changed = _sectorConnected[tier, idx, 0] != n || _sectorConnected[tier, idx, 1] != e
-                    || _sectorConnected[tier, idx, 2] != s || _sectorConnected[tier, idx, 3] != w;
-        _sectorConnected[tier, idx, 0] = n;
-        _sectorConnected[tier, idx, 1] = e;
-        _sectorConnected[tier, idx, 2] = s;
-        _sectorConnected[tier, idx, 3] = w;
+        bool changed = ScanBorderSpans(tier, sx, sy, south: false);
+        changed |= ScanBorderSpans(tier, sx, sy, south: true);
         return changed;
+    }
+
+    // Scratch for span extraction (single-threaded sim assumption).
+    private readonly List<Span> _spanScratch = new();
+
+    /// <summary>Append a passable run as one or more portals of at most
+    /// MaxPortalWidth tiles. Pieces are distributed evenly (17 → 9+8, not
+    /// 16+1) so no sliver segment masquerades as a chokepoint.</summary>
+    private static void AddSpansChopped(List<Span> spans, int start, int end)
+    {
+        int len = end - start + 1;
+        int pieces = (len + MaxPortalWidth - 1) / MaxPortalWidth;
+        for (int i = 0; i < pieces; i++)
+        {
+            int s = start + len * i / pieces;
+            int e = start + len * (i + 1) / pieces - 1;
+            spans.Add(new Span { Start = (short)s, End = (short)e });
+        }
+    }
+
+    private bool ScanBorderSpans(int tier, int sx, int sy, bool south)
+    {
+        if (_grid == null || _spansE == null || _spansS == null) return false;
+        var store = south ? _spansS[tier][SectorIdx(sx, sy)] : _spansE[tier][SectorIdx(sx, sy)];
+        var scratch = _spanScratch;
+        scratch.Clear();
+
+        int baseX = sx * SectorSize, baseY = sy * SectorSize;
+        if (!south && sx < _sectorCountX - 1)
+        {
+            // East border: both columns fully exist (only the last sector
+            // column can be width-clipped, and it has no east neighbor); rows
+            // may be clipped at the map's bottom edge.
+            int col = baseX + SectorSize - 1;
+            int endY = Math.Min(baseY + SectorSize, _grid.Height);
+            int runStart = -1;
+            for (int y = baseY; y < endY; y++)
+            {
+                bool open = _grid.GetCost(col, y, tier) != 255 && _grid.GetCost(col + 1, y, tier) != 255;
+                if (open) { if (runStart < 0) runStart = y; }
+                else if (runStart >= 0)
+                {
+                    AddSpansChopped(scratch, runStart - baseY, y - 1 - baseY);
+                    runStart = -1;
+                }
+            }
+            if (runStart >= 0)
+                AddSpansChopped(scratch, runStart - baseY, endY - 1 - baseY);
+        }
+        else if (south && sy < _sectorCountY - 1)
+        {
+            int row = baseY + SectorSize - 1;
+            int endX = Math.Min(baseX + SectorSize, _grid.Width);
+            int runStart = -1;
+            for (int x = baseX; x < endX; x++)
+            {
+                bool open = _grid.GetCost(x, row, tier) != 255 && _grid.GetCost(x, row + 1, tier) != 255;
+                if (open) { if (runStart < 0) runStart = x; }
+                else if (runStart >= 0)
+                {
+                    AddSpansChopped(scratch, runStart - baseX, x - 1 - baseX);
+                    runStart = -1;
+                }
+            }
+            if (runStart >= 0)
+                AddSpansChopped(scratch, runStart - baseX, endX - 1 - baseX);
+        }
+
+        bool changed = scratch.Count != store.Count;
+        if (!changed)
+            for (int i = 0; i < scratch.Count; i++)
+                if (scratch[i].Start != store[i].Start || scratch[i].End != store[i].End)
+                { changed = true; break; }
+        if (changed)
+        {
+            store.Clear();
+            store.AddRange(scratch);
+        }
+        return changed;
+    }
+
+    /// <summary>Rebuild one tier's flat portal list + per-sector id lists from
+    /// the span storage. Deterministic sector-major order: a sector whose own
+    /// span membership did not change keeps its list CONTENT and ORDER, so its
+    /// cached portal-cost matrix stays index-aligned even though flat ids
+    /// shift. Routes store per-flat-id arrays, so they must always die here.</summary>
+    private void RebuildFlatPortals(int tier)
+    {
+        if (_portals == null || _sectorPortals == null || _spansE == null || _spansS == null) return;
+        var flat = _portals[tier];
+        var perSector = _sectorPortals[tier];
+        flat.Clear();
+        for (int i = 0; i < perSector.Length; i++) perSector[i].Clear();
+
+        for (int sy = 0; sy < _sectorCountY; sy++)
+        {
+            for (int sx = 0; sx < _sectorCountX; sx++)
+            {
+                int a = SectorIdx(sx, sy);
+                foreach (var span in _spansE[tier][a])
+                {
+                    int b = SectorIdx(sx + 1, sy);
+                    int id = flat.Count;
+                    flat.Add(new Portal
+                    {
+                        SectorA = a, SectorB = b, SouthBorder = false,
+                        Start = span.Start, End = span.End,
+                        IdxInA = (short)perSector[a].Count, IdxInB = (short)perSector[b].Count
+                    });
+                    perSector[a].Add(id);
+                    perSector[b].Add(id);
+                }
+                foreach (var span in _spansS[tier][a])
+                {
+                    int b = SectorIdx(sx, sy + 1);
+                    int id = flat.Count;
+                    flat.Add(new Portal
+                    {
+                        SectorA = a, SectorB = b, SouthBorder = true,
+                        Start = span.Start, End = span.End,
+                        IdxInA = (short)perSector[a].Count, IdxInB = (short)perSector[b].Count
+                    });
+                    perSector[a].Add(id);
+                    perSector[b].Add(id);
+                }
+            }
+        }
+        _routeCache.Clear();
+    }
+
+    /// <summary>Global tile of a portal's span center on the side facing
+    /// <paramref name="sectorIdx"/> (which must be SectorA or SectorB).</summary>
+    private void PortalCenterInSector(in Portal p, int sectorIdx, out int gx, out int gy)
+    {
+        int mid = (p.Start + p.End) / 2;
+        int asx = p.SectorA % _sectorCountX, asy = p.SectorA / _sectorCountX;
+        int baseX = asx * SectorSize, baseY = asy * SectorSize;
+        if (!p.SouthBorder)
+        {
+            gy = baseY + mid;
+            gx = sectorIdx == p.SectorA ? baseX + SectorSize - 1 : baseX + SectorSize;
+        }
+        else
+        {
+            gx = baseX + mid;
+            gy = sectorIdx == p.SectorA ? baseY + SectorSize - 1 : baseY + SectorSize;
+        }
     }
 
     // Scratch lists for InvalidateRegion (single-threaded sim assumption,
@@ -288,7 +470,7 @@ public class Pathfinder
     /// first (EnvironmentSystem.RebakeCollisionRegion).</summary>
     public void InvalidateRegion(int minTX, int minTY, int maxTX, int maxTY)
     {
-        if (_grid == null || _sectorConnected == null) return;
+        if (_grid == null || _portals == null) return;
 
         int s0x = Math.Clamp(minTX / SectorSize, 0, _sectorCountX - 1);
         int s1x = Math.Clamp(maxTX / SectorSize, 0, _sectorCountX - 1);
@@ -319,22 +501,34 @@ public class Pathfinder
                 _regionKeyScratch.Add(kv.Key);
         foreach (var k in _regionKeyScratch) _pendingRequests.Remove(k);
 
-        // 2. Rescan connectivity for touched sectors. No ±1 ring needed: a
-        //    sector's flags read at most one tile INTO each neighbor, and a
-        //    change confined to [minTX..maxTX] can only flip flags of sectors
-        //    the rect itself touches — but the rect passed in already includes
-        //    the stamp inflation, and a border pair's flag is stored on BOTH
-        //    sides, so rescan one ring around to be safe (cheap: O(64) per
-        //    sector side).
-        bool connChanged = false;
+        // 2. Re-extract portal spans for the touched sectors plus a ±1 ring
+        //    (a border's spans read one tile into each neighbor, and every
+        //    border is owned by its W/N sector, so the ring covers every
+        //    border a change inside the rect can affect — same reasoning the
+        //    old connectivity rescan used; cheap: O(64) per border). Also
+        //    drop the ring's intra-sector portal-cost matrices outright: even
+        //    a span-preserving change (obstacle appearing mid-sector) alters
+        //    portal-to-portal costs.
         for (int tier = 0; tier < TerrainCosts.NumSizeTiers; tier++)
+        {
+            bool tierChanged = false;
             for (int sy = Math.Max(0, s0y - 1); sy <= Math.Min(_sectorCountY - 1, s1y + 1); sy++)
                 for (int sx = Math.Max(0, s0x - 1); sx <= Math.Min(_sectorCountX - 1, s1x + 1); sx++)
-                    connChanged |= RescanSectorConnectivity(tier, sx, sy);
+                {
+                    tierChanged |= ExtractSectorSpans(tier, sx, sy);
+                    _portalMatrixCache.Remove(SectorIdx(sx, sy) * TerrainCosts.NumSizeTiers + tier);
+                }
 
-        // 3. Routes encode global sector paths; any flipped edge can reroute
-        //    arbitrary destinations. Only pay the clear when something flipped.
-        if (connChanged) _routeCache.Clear();
+            // 3. Any portal-set change shifts flat portal ids and invalidates
+            //    every route's remaining costs — RebuildFlatPortals clears
+            //    _routeCache (conservative, like the old connChanged logic).
+            //    Span-preserving interior changes leave routes slightly stale
+            //    (costs off, topology unchanged) until the route age-out;
+            //    flows for the touched sectors were dropped above and get
+            //    recomputed against the fresh grid, so units still steer
+            //    around the new obstacle locally.
+            if (tierChanged) RebuildFlatPortals(tier);
+        }
 
         // 4. Imaginary chunks whose window intersects the rect are stale.
         //    Failure memos are reset on ALL entries — a removed obstacle can
@@ -359,7 +553,7 @@ public class Pathfinder
         foreach (var k in _regionImagScratch) _unitImagChunks.Remove(k);
     }
 
-    // --- Sector-level BFS routing ---
+    // --- Portal-graph routing ---
 
     private void WorldToSector(float wx, float wy, out int sx, out int sy)
     {
@@ -369,47 +563,183 @@ public class Pathfinder
 
     private int SectorIdx(int sx, int sy) => sy * _sectorCountX + sx;
 
-    private SectorRoute GetRoute(int destSector, int tier, uint frame)
+    // Goal scratch for the single-seed Dijkstras (matrix rows, dest seeding).
+    private readonly List<int> _portalGoalScratch = new();
+    // Graph-search PQ. Deliberately NOT _pqScratch: matrix computes run window
+    // Dijkstras (which use _pqScratch) WHILE the graph PQ holds frontier nodes.
+    private readonly PriorityQueue<int, float> _portalPqScratch = new();
+
+    /// <summary>Lazily compute (and cache) one sector's portal-to-portal cost
+    /// matrix for a tier: one window Dijkstra per portal, seeded at its span
+    /// center on this sector's side, costs read at every other portal's
+    /// center. InfCost entries mean the two portals are in different internal
+    /// regions of the sector — exactly the split-sector case hop routing got
+    /// wrong. Returns null when the tick's Dijkstra budget is already spent
+    /// (caller defers). Budget is checked once up front, not per row, so a
+    /// pathological many-portal sector overshoots one tick instead of
+    /// livelocking on repeated partial computes.</summary>
+    private PortalMatrix? GetPortalMatrix(int sectorIdx, int tier)
+    {
+        int key = sectorIdx * TerrainCosts.NumSizeTiers + tier;
+        if (_portalMatrixCache.TryGetValue(key, out var m)) return m;
+        if (_grid == null || _portals == null || _sectorPortals == null) return null;
+        if (!HasDijkstraBudget()) return null;
+
+        var ids = _sectorPortals[tier][sectorIdx];
+        int n = ids.Count;
+        m = new PortalMatrix { N = n, Cost = new float[n * n] };
+        Array.Fill(m.Cost, GameConstants.InfCost);
+
+        int sx = sectorIdx % _sectorCountX, sy = sectorIdx / _sectorCountX;
+        int baseX = sx * SectorSize, baseY = sy * SectorSize;
+        int winW = Math.Min(SectorSize, _grid.Width - baseX);
+        int winH = Math.Min(SectorSize, _grid.Height - baseY);
+
+        long sw0 = System.Diagnostics.Stopwatch.GetTimestamp();
+        var flat = _portals[tier];
+        for (int i = 0; i < n; i++)
+        {
+            m.Cost[i * n + i] = 0f;
+            PortalCenterInSector(flat[ids[i]], sectorIdx, out int cgx, out int cgy);
+            _portalGoalScratch.Clear();
+            _portalGoalScratch.Add((cgy - baseY) * SectorSize + (cgx - baseX));
+            DiagDijkstraInvocations++;
+            // dirs: null — cost-only query, skip the direction-field pass.
+            if (!RunWindowDijkstra(baseX, baseY, winW, winH, tier, _portalGoalScratch, null, _costScratch, null))
+                continue;
+            for (int j = 0; j < n; j++)
+            {
+                if (j == i) continue;
+                PortalCenterInSector(flat[ids[j]], sectorIdx, out int qgx, out int qgy);
+                m.Cost[i * n + j] = _costScratch[(qgy - baseY) * SectorSize + (qgx - baseX)];
+            }
+        }
+        ChargeDijkstraMs((float)ElapsedMs(sw0));
+        _portalMatrixCache[key] = m;
+        return m;
+    }
+
+    /// <summary>Remaining-cost route over the portal graph for one destination.
+    /// Seeds the destination sector's portals with REAL costs from the dest
+    /// tile (one window Dijkstra in that sector), then runs Dijkstra outward
+    /// over portals: edges are the lazily-cached intra-sector matrices plus a
+    /// small crossing cost. Everything is in tile-cost units, so the results
+    /// feed straight into flow-field goal seeding. Returns null when the
+    /// Dijkstra budget dies before/while computing (caller defers; matrices
+    /// finished so far stay cached, so retries make forward progress).</summary>
+    private PortalRoute? GetPortalRoute(int destSector, int destTX, int destTY, int tier, uint frame)
     {
         int routeKey = destSector * TerrainCosts.NumSizeTiers + tier;
         if (_routeCache.TryGetValue(routeKey, out var existing))
         {
             existing.FrameAccessed = frame;
-            _routeCache[routeKey] = existing;
             return existing;
         }
+        if (_grid == null || _portals == null || _sectorPortals == null) return null;
+        if (!HasDijkstraBudget()) return null;
 
-        int totalSectors = _sectorCountX * _sectorCountY;
-        var route = new SectorRoute
+        var flat = _portals[tier];
+        var destIds = _sectorPortals[tier][destSector];
+        var route = new PortalRoute { Cost = new float[flat.Count * 2], FrameAccessed = frame };
+        Array.Fill(route.Cost, GameConstants.InfCost);
+        if (destIds.Count == 0)
         {
-            NextDir = new sbyte[totalSectors],
-            HopDist = new short[totalSectors],
-            FrameAccessed = frame
-        };
-        Array.Fill(route.NextDir, (sbyte)-1);
-        Array.Fill(route.HopDist, (short)-1);
+            // Isolated destination sector: cache the all-Inf route so every
+            // unit heading there shares one "unreachable" answer instead of
+            // re-deriving it (the caller's fallback ladder takes over).
+            _routeCache[routeKey] = route;
+            return route;
+        }
 
-        var queue = new Queue<int>();
-        queue.Enqueue(destSector);
-        route.HopDist[destSector] = 0;
+        // --- Destination-side seeding ---
+        int dsx = destSector % _sectorCountX, dsy = destSector / _sectorCountX;
+        int baseX = dsx * SectorSize, baseY = dsy * SectorSize;
+        int winW = Math.Min(SectorSize, _grid.Width - baseX);
+        int winH = Math.Min(SectorSize, _grid.Height - baseY);
+        int localTX = Math.Clamp(destTX - baseX, 0, winW - 1);
+        int localTY = Math.Clamp(destTY - baseY, 0, winH - 1);
 
-        while (queue.Count > 0)
+        long sw0 = System.Diagnostics.Stopwatch.GetTimestamp();
+        _portalGoalScratch.Clear();
+        _portalGoalScratch.Add(localTY * SectorSize + localTX);
+        DiagDijkstraInvocations++;
+        bool seeded = RunWindowDijkstra(baseX, baseY, winW, winH, tier, _portalGoalScratch, null, _costScratch, null);
+        ChargeDijkstraMs((float)ElapsedMs(sw0));
+
+        var pq = _portalPqScratch;
+        pq.Clear();
+        bool anyFinite = false;
+        if (seeded)
         {
-            int curr = queue.Dequeue();
-            int cx = curr % _sectorCountX;
-            int cy = curr / _sectorCountX;
-            short nextDist = (short)(route.HopDist[curr] + 1);
-
-            for (int d = 0; d < 4; d++)
+            foreach (int pid in destIds)
             {
-                if (_sectorConnected == null || !_sectorConnected[tier, curr, d]) continue;
-                int nx = cx + Dx4[d], ny = cy + Dy4[d];
-                if (nx < 0 || nx >= _sectorCountX || ny < 0 || ny >= _sectorCountY) continue;
-                int neighbor = ny * _sectorCountX + nx;
-                if (route.HopDist[neighbor] >= 0) continue;
-                route.HopDist[neighbor] = nextDist;
-                route.NextDir[neighbor] = (sbyte)Opposite4[d];
-                queue.Enqueue(neighbor);
+                PortalCenterInSector(flat[pid], destSector, out int cgx, out int cgy);
+                float c = _costScratch[(cgy - baseY) * SectorSize + (cgx - baseX)];
+                if (c < GameConstants.InfCost)
+                {
+                    int node = pid * 2 + (flat[pid].SectorA == destSector ? 0 : 1);
+                    route.Cost[node] = c;
+                    pq.Enqueue(node, c);
+                    anyFinite = true;
+                }
+            }
+        }
+        if (!anyFinite)
+        {
+            // Dest tile is walled off from every portal of its sector (or was
+            // unseedable). Preserve the old hop-BFS semantics — "a route
+            // exists if the sector graph connects" — by seeding all dest
+            // portals at 0: units still close in, and the same-sector /
+            // imaginary-chunk ladder takes over on arrival.
+            pq.Clear();
+            foreach (int pid in destIds)
+            {
+                int node = pid * 2 + (flat[pid].SectorA == destSector ? 0 : 1);
+                route.Cost[node] = 0f;
+                pq.Enqueue(node, 0f);
+            }
+        }
+
+        // --- Dijkstra over the portal graph ---
+        // Node = (portal, side). Edges: crossing to the twin side
+        // (PortalCrossCost), and walking the shared sector center-to-center
+        // to another portal's near side (intra-sector matrix). Relaxing
+        // (q, s-side) from (p, s-side) means "walk sector s from q to p,
+        // then continue along p's remaining path".
+        while (pq.TryDequeue(out int nid, out float pri))
+        {
+            if (pri > route.Cost[nid]) continue; // stale PQ entry
+            int pid = nid >> 1;
+            int side = nid & 1;
+            var p = flat[pid];
+
+            // Twin: step across the border to the portal's other side.
+            int twin = pid * 2 + (side ^ 1);
+            float twinCand = route.Cost[nid] + PortalCrossCost;
+            if (twinCand < route.Cost[twin])
+            {
+                route.Cost[twin] = twinCand;
+                pq.Enqueue(twin, twinCand);
+            }
+
+            int s = side == 0 ? p.SectorA : p.SectorB;
+            var m = GetPortalMatrix(s, tier);
+            if (m == null) { pq.Clear(); return null; } // budget died mid-search — defer, keep cached matrices
+            int myIdx = side == 0 ? p.IdxInA : p.IdxInB;
+            var ids = _sectorPortals[tier][s];
+            for (int j = 0; j < ids.Count; j++)
+            {
+                int qid = ids[j];
+                if (qid == pid) continue;
+                float w = m.Cost[myIdx * m.N + j];
+                if (w >= GameConstants.InfCost) continue;
+                int qNode = qid * 2 + (flat[qid].SectorA == s ? 0 : 1);
+                float cand = route.Cost[nid] + w;
+                if (cand < route.Cost[qNode])
+                {
+                    route.Cost[qNode] = cand;
+                    pq.Enqueue(qNode, cand);
+                }
             }
         }
 
@@ -440,14 +770,16 @@ public class Pathfinder
     /// tiles), runs the 8-dir Dijkstra with diagonal corner-cut rejection,
     /// extends costs into tier-inflated but base-passable tiles (escape
     /// propagation, uniform StepMul8 costs), and builds the direction field
-    /// (with plateau fallback) into <paramref name="dirs"/>.
+    /// (with plateau fallback) into <paramref name="dirs"/> — pass null dirs
+    /// for cost-only queries (portal matrices / route seeding) to skip that
+    /// pass.
     /// Returns false when no goal could be seeded — cost stays all-Inf and
     /// dirs all-None. Chunk callers rely on that to preserve their historical
     /// "no seedable goal → bail without memoizing a failure" early-out.
     /// </summary>
     private bool RunWindowDijkstra(int baseX, int baseY, int winW, int winH, int tier,
                                    List<int> goals, List<float>? goalCosts,
-                                   float[] cost, FlowDir[] dirs)
+                                   float[] cost, FlowDir[]? dirs)
     {
         if (_grid == null) return false;
 
@@ -567,8 +899,9 @@ public class Pathfinder
             }
         }
 
-        // Build direction field
-        BuildDirectionField(dirs, cost, baseX, baseY, winW, winH, tier);
+        // Build direction field (skipped for cost-only queries)
+        if (dirs != null)
+            BuildDirectionField(dirs, cost, baseX, baseY, winW, winH, tier);
         return true;
     }
 
@@ -758,27 +1091,26 @@ public class Pathfinder
     }
 
     /// <summary>
-    /// Multi-border flow with lateral/extended masks and distance weighting.
-    /// Primary borders get cost 0, lateral borders get half-sector penalty,
-    /// extended borders get full-sector penalty. Manhattan distance to clamped
-    /// target position biases the flow toward the geometrically correct exit.
+    /// Portal-set flow for a cross-sector destination: seed every tile of
+    /// each of the unit sector's portals that has a finite remaining cost to
+    /// the destination, at goalInitCost = that remaining cost. Remaining
+    /// costs and intra-window tile costs are in the same units (byte tile
+    /// cost x StepMul8), so the field is exact w.r.t. the portal abstraction:
+    /// it picks the globally cheaper exit (narrow-vs-wide, rough-vs-clear)
+    /// instead of the old hop-count + penalty-mask heuristic — and it's
+    /// shared by every unit in this sector heading to the same dest sector.
+    /// <paramref name="unreachable"/> is set when the portal graph offers no
+    /// route at this tier (caller runs the tier-fallback/imag-chunk ladder);
+    /// a default return with unreachable=false means the request was
+    /// budget-deferred (check _lastQueryDeferred).
     /// </summary>
-    private CachedFlow GetFlowToMultiBorder(int sx, int sy, byte borderMask, byte lateralMask,
-                                             byte extendedMask, int tier, uint frame,
-                                             int clampedLocalTX = -1, int clampedLocalTY = -1,
-                                             Vec2 unitPos = default, Vec2 targetPos = default)
+    private CachedFlow GetFlowToPortalSet(int sx, int sy, int destSector, int tier, uint frame,
+                                          Vec2 unitPos, Vec2 targetPos, out bool unreachable)
     {
-        int combinedMask = borderMask | (lateralMask << 4) | (extendedMask << 8);
-        // Quantize the clamped bias tile to an 8-tile band (band center). It's
-        // only a geometric tie-breaker among exit borders, and exact-tile keys
-        // fragmented the cache: targets due east of a sector all shared
-        // clampedLTX=63 but split across 64 clampedLTY rows — 64 Dijkstras +
-        // 64 x 4KB entries where 8 banded ones steer indistinguishably.
-        if (clampedLocalTX >= 0) clampedLocalTX = Math.Min(SectorSize - 1, (clampedLocalTX & ~7) + 4);
-        if (clampedLocalTY >= 0) clampedLocalTY = Math.Min(SectorSize - 1, (clampedLocalTY & ~7) + 4);
-        int clampedIdx = (clampedLocalTX >= 0 && clampedLocalTY >= 0)
-            ? clampedLocalTY * SectorSize + clampedLocalTX : -1;
-        var key = MakeFlowKey(sx, sy, 2, combinedMask, clampedIdx, tier);
+        unreachable = false;
+        // TargetType 3: TargetData = destination sector index. One field per
+        // (unit sector, dest sector, tier) — no mask/band fragmentation.
+        var key = MakeFlowKey(sx, sy, 3, destSector, -1, tier);
 
         if (_flowCache.TryGetValue(key, out var cached))
         {
@@ -788,10 +1120,11 @@ public class Pathfinder
             return cached;
         }
         DiagFlowCacheMisses++;
-        DiagMissMultiBorder++;
+        DiagMissPortalFlow++;
         if (s_keysEverSeen.Add(key)) DiagMissNewKey++; else DiagMissEvicted++;
 
-        if (_grid == null) return new CachedFlow { Dirs = new FlowDir[SectorSize * SectorSize] };
+        if (_grid == null || _portals == null || _sectorPortals == null)
+            return new CachedFlow { Dirs = new FlowDir[SectorSize * SectorSize] };
 
         if (!HasDijkstraBudget())
         {
@@ -809,99 +1142,98 @@ public class Pathfinder
             return default;
         }
 
-        int baseX = sx * SectorSize, baseY = sy * SectorSize;
-        int endX = Math.Min(baseX + SectorSize, _grid.Width);
-        int endY = Math.Min(baseY + SectorSize, _grid.Height);
+        // Route lookup AFTER the flow-cache check: a cached field never pays
+        // for a route, and a route miss (budget death mid-graph/matrix) defers
+        // exactly like a flow miss would.
+        int destTX = (int)(targetPos.X / GameConstants.TileSize);
+        int destTY = (int)(targetPos.Y / GameConstants.TileSize);
+        var route = GetPortalRoute(destSector, destTX, destTY, tier, frame);
+        if (route == null)
+        {
+            EnqueueMiss(key, sx, sy, unitPos, targetPos);
+            _lastQueryDeferred = true;
+            if (_staleFlowCache.TryGetValue(key, out var stale))
+            {
+                stale.FrameAccessed = frame;
+                _staleFlowCache[key] = stale;
+                return stale;
+            }
+            return default;
+        }
 
-        float lateralPenalty = SectorSize * 0.5f;
-        float extendedPenalty = SectorSize * 1.0f;
-        bool hasClampedTarget = clampedLocalTX >= 0 && clampedLocalTY >= 0;
+        int unitSector = SectorIdx(sx, sy);
+        var flat = _portals[tier];
+        var ids = _sectorPortals[tier][unitSector];
 
         var goals = new List<int>();
         var goalCosts = new List<float>();
-        var goalBorderDir = new List<int>();
+        var goalExit = new List<FlowDir>();
 
-        byte fullMask = (byte)(borderMask | lateralMask | extendedMask);
-        for (int bDir = 0; bDir < 4; bDir++)
+        foreach (int pid in ids)
         {
-            if (((fullMask >> bDir) & 1) == 0) continue;
-            float basePenalty = 0f;
-            if (((extendedMask >> bDir) & 1) != 0) basePenalty = extendedPenalty;
-            else if (((lateralMask >> bDir) & 1) != 0) basePenalty = lateralPenalty;
-
-            switch (bDir)
+            var p = flat[pid];
+            bool owner = p.SectorA == unitSector;
+            // Seed with the FAR side's remaining cost + one crossing: "what
+            // exiting here actually costs". Using this sector's own side
+            // would be self-referential (it can include walking back through
+            // this very sector) and made opposite border tiles of one portal
+            // point into each other. A portal whose path continues back
+            // through this sector carries a two-crossing penalty here, so the
+            // interior route to the correct portal always beats it.
+            float rc = route.Cost[pid * 2 + (owner ? 1 : 0)];
+            if (rc >= GameConstants.InfCost) continue;
+            rc += PortalCrossCost;
+            FlowDir exit = p.SouthBorder ? (owner ? FlowDir.S : FlowDir.N)
+                                         : (owner ? FlowDir.E : FlowDir.W);
+            // Seed EVERY tile of the span on this sector's side, so wide
+            // portals stay attractive across their whole width and crowds
+            // don't funnel through one tile. The remaining cost is measured
+            // at the span CENTER, so each tile adds |t - center| — the walk
+            // to where that cost is valid (slope 1 = minimum tile cost;
+            // underestimates rough spans, fine at this granularity). Without
+            // the slope, span-end tiles look exactly one crossing cheap and
+            // the forced-exit below fires where walking inside to a better
+            // portal is strictly cheaper — units ping-ponged across borders.
+            // Span-local coords are relative to SectorA's base, which the
+            // B side shares along the border axis, so t works for both sides.
+            int mid = (p.Start + p.End) / 2;
+            for (int t = p.Start; t <= p.End; t++)
             {
-                case 0: // North
-                    for (int x = baseX; x < endX; x++)
-                    {
-                        if (_grid.GetCost(x, baseY, tier) != 255 &&
-                            baseY > 0 && _grid.GetCost(x, baseY - 1, tier) != 255)
-                        {
-                            int lx = x - baseX, ly = 0;
-                            float distCost = hasClampedTarget ? (Math.Abs(lx - clampedLocalTX) + Math.Abs(ly - clampedLocalTY)) : 0f;
-                            goals.Add(ly * SectorSize + lx);
-                            goalCosts.Add(basePenalty + distCost);
-                            goalBorderDir.Add(0);
-                        }
-                    }
-                    break;
-                case 1: // East
-                    for (int y = baseY; y < endY; y++)
-                    {
-                        int x = endX - 1;
-                        if (_grid.GetCost(x, y, tier) != 255 &&
-                            x + 1 < _grid.Width && _grid.GetCost(x + 1, y, tier) != 255)
-                        {
-                            int lx = x - baseX, ly = y - baseY;
-                            float distCost = hasClampedTarget ? (Math.Abs(lx - clampedLocalTX) + Math.Abs(ly - clampedLocalTY)) : 0f;
-                            goals.Add(ly * SectorSize + lx);
-                            goalCosts.Add(basePenalty + distCost);
-                            goalBorderDir.Add(1);
-                        }
-                    }
-                    break;
-                case 2: // South
-                    for (int x = baseX; x < endX; x++)
-                    {
-                        int y = endY - 1;
-                        if (_grid.GetCost(x, y, tier) != 255 &&
-                            y + 1 < _grid.Height && _grid.GetCost(x, y + 1, tier) != 255)
-                        {
-                            int lx = x - baseX, ly = y - baseY;
-                            float distCost = hasClampedTarget ? (Math.Abs(lx - clampedLocalTX) + Math.Abs(ly - clampedLocalTY)) : 0f;
-                            goals.Add(ly * SectorSize + lx);
-                            goalCosts.Add(basePenalty + distCost);
-                            goalBorderDir.Add(2);
-                        }
-                    }
-                    break;
-                case 3: // West
-                    for (int y = baseY; y < endY; y++)
-                    {
-                        if (_grid.GetCost(baseX, y, tier) != 255 &&
-                            baseX > 0 && _grid.GetCost(baseX - 1, y, tier) != 255)
-                        {
-                            int lx = 0, ly = y - baseY;
-                            float distCost = hasClampedTarget ? (Math.Abs(lx - clampedLocalTX) + Math.Abs(ly - clampedLocalTY)) : 0f;
-                            goals.Add(ly * SectorSize + lx);
-                            goalCosts.Add(basePenalty + distCost);
-                            goalBorderDir.Add(3);
-                        }
-                    }
-                    break;
+                int lx, ly;
+                if (!p.SouthBorder) { lx = owner ? SectorSize - 1 : 0; ly = t; }
+                else { lx = t; ly = owner ? SectorSize - 1 : 0; }
+                goals.Add(ly * SectorSize + lx);
+                goalCosts.Add(rc + Math.Abs(t - mid));
+                goalExit.Add(exit);
             }
+        }
+
+        if (goals.Count == 0)
+        {
+            // No portal of this sector reaches the destination at this tier —
+            // genuinely unreachable via the graph (isolated sector, or the
+            // unit's internal region is cut off). Same semantics the old
+            // HopDist == -1 had; caller runs the fallback ladder. Not cached:
+            // an all-None field would shadow later route improvements.
+            unreachable = true;
+            return default;
         }
 
         long sw0 = System.Diagnostics.Stopwatch.GetTimestamp();
         var flow = ComputeSectorFlow(sx, sy, goals, tier, frame, goalCosts);
 
-        // Post-process: border goal tiles get their respective exit direction
+        // Post-process: a seeded border tile whose settled cost is still its
+        // own seed (nothing cheaper reachable inside the window) must EXIT the
+        // sector — BuildDirectionField's plateau fallback would otherwise
+        // point it back inward. If some other portal is cheaper via an
+        // interior path, the computed interior direction wins. _costScratch
+        // still holds this compute's cost field (single-threaded; no Dijkstra
+        // ran since ComputeSectorFlow).
         for (int i = 0; i < goals.Count; i++)
         {
-            int dir = goalBorderDir[i];
-            bool isPrimary = ((borderMask >> dir) & 1) != 0;
-            if (isPrimary || flow.Dirs[goals[i]] == FlowDir.None)
-                flow.Dirs[goals[i]] = BorderExitDirs[dir];
+            int g = goals[i];
+            if (flow.Dirs[g] == FlowDir.None || _costScratch[g] >= goalCosts[i] - 0.001f)
+                flow.Dirs[g] = goalExit[i];
         }
         ChargeDijkstraMs((float)ElapsedMs(sw0));
 
@@ -1225,7 +1557,7 @@ public class Pathfinder
     public static int DiagCacheEvictions;
     // Per-flow-type miss counters (reset per tick):
     public static int DiagMissTile;           // GetFlowToTile (same-sector, target tile as goal)
-    public static int DiagMissMultiBorder;    // GetFlowToMultiBorder (cross-sector with weighted borders)
+    public static int DiagMissPortalFlow;     // GetFlowToPortalSet (cross-sector, portal remaining costs)
     // Tracks every FlowKey ever seen. Used to tell "new-key" vs "was-here-got-evicted".
     private static readonly System.Collections.Generic.HashSet<FlowKey> s_keysEverSeen = new();
 
@@ -1235,7 +1567,7 @@ public class Pathfinder
         DiagCallsThisTick++;
         try
         {
-        if (_grid == null || _sectorConnected == null) return Vec2.Zero;
+        if (_grid == null || _portals == null) return Vec2.Zero;
         sizeTier = Math.Clamp(sizeTier, 0, TerrainCosts.NumSizeTiers - 1);
 
         // Reset the deferral flag for this query; GetFlow* sets it when it
@@ -1351,44 +1683,40 @@ public class Pathfinder
         }
         else
         {
-            // Different sector: use sector-level BFS routing
-            var route = GetRoute(targetSector, sizeTier, frame);
-            short myDist = route.HopDist[unitSector];
-
-            if (myDist < 0)
+            // Different sector: portal-graph routing + portal-set flow. The
+            // field's border seeds carry the graph's true remaining costs, so
+            // the whole heuristic mask/penalty scheme the old multi-border
+            // flow needed is gone.
+            flow = GetFlowToPortalSet(unitSX, unitSY, targetSector, sizeTier, frame,
+                                      unitPos, targetPos, out bool unreachable);
+            if (flow.Dirs != null)
             {
-                // Unreachable for this tier — try lower tier fallback
+                hasFlow = true;
+            }
+            else if (unreachable)
+            {
+                // Unreachable for this tier — try lower tier fallback (a big
+                // unit whose tier graph is severed can still follow a smaller
+                // tier's field; movement squeezes via escape directions).
                 for (int fallback = sizeTier - 1; fallback >= 0; fallback--)
                 {
-                    var fbRoute = GetRoute(targetSector, fallback, frame);
-                    if (fbRoute.HopDist[unitSector] >= 0)
+                    var fbFlow = GetFlowToPortalSet(unitSX, unitSY, targetSector, fallback, frame,
+                                                    unitPos, targetPos, out _);
+                    if (fbFlow.Dirs != null)
                     {
-                        short fbDist = fbRoute.HopDist[unitSector];
-                        byte borderMask = 0;
-                        for (int d = 0; d < 4; d++)
-                        {
-                            if (!_sectorConnected[fallback, unitSector, d]) continue;
-                            int nx = unitSX + Dx4[d], ny = unitSY + Dy4[d];
-                            if (nx < 0 || nx >= _sectorCountX || ny < 0 || ny >= _sectorCountY) continue;
-                            int neighbor = SectorIdx(nx, ny);
-                            if (fbRoute.HopDist[neighbor] >= 0 && fbRoute.HopDist[neighbor] < fbDist)
-                                borderMask |= (byte)(1 << d);
-                        }
-                        if (borderMask != 0)
-                        {
-                            int clTX = Math.Clamp((int)(targetPos.X / GameConstants.TileSize) - unitSX * SectorSize, 0, SectorSize - 1);
-                            int clTY = Math.Clamp((int)(targetPos.Y / GameConstants.TileSize) - unitSY * SectorSize, 0, SectorSize - 1);
-                            flow = GetFlowToMultiBorder(unitSX, unitSY, borderMask, 0, 0, fallback, frame, clTX, clTY, unitPos, targetPos);
-                            hasFlow = true;
-                            break;
-                        }
+                        flow = fbFlow;
+                        hasFlow = true;
+                        break;
                     }
+                    // Deferred mid-fallback: beeline below, NOT imag chunk
+                    // (which costs what the deferred Dijkstra would have).
+                    if (_lastQueryDeferred) break;
                 }
 
-                if (!hasFlow)
+                if (!hasFlow && !_lastQueryDeferred)
                 {
                     // Try imaginary chunk before beeline
-                    Vec2 localDir = _lastQueryDeferred ? Vec2.Zero : GetLocalChunkDirection(unitPos, targetPos, sizeTier, unitId);
+                    Vec2 localDir = GetLocalChunkDirection(unitPos, targetPos, sizeTier, unitId);
                     if (localDir.LengthSq() > 0.001f)
                     {
                         RecordDecision(unitId, PathDecision.UnreachableImagChunk);
@@ -1400,43 +1728,8 @@ public class Pathfinder
                     return len > 0.01f ? dd * (1f / len) : Vec2.Zero;
                 }
             }
-            else
-            {
-                // Build border masks: primary (closer), lateral (same), extended (+1)
-                byte borderMask = 0;
-                byte lateralMask = 0;
-                byte extendedMask = 0;
-
-                for (int d = 0; d < 4; d++)
-                {
-                    if (!_sectorConnected[sizeTier, unitSector, d]) continue;
-                    int nx = unitSX + Dx4[d], ny = unitSY + Dy4[d];
-                    if (nx < 0 || nx >= _sectorCountX || ny < 0 || ny >= _sectorCountY) continue;
-                    int neighbor = SectorIdx(nx, ny);
-                    if (route.HopDist[neighbor] < 0) continue;
-                    if (route.HopDist[neighbor] < myDist)
-                        borderMask |= (byte)(1 << d);
-                    else if (route.HopDist[neighbor] == myDist)
-                        lateralMask |= (byte)(1 << d);
-                    else if (route.HopDist[neighbor] == myDist + 1)
-                        extendedMask |= (byte)(1 << d);
-                }
-
-                // Unreachable armor: BFS guarantees a neighbor with
-                // HopDist == myDist-1 in a connected direction (connectivity is
-                // symmetric by construction), so borderMask always has that bit.
-                // If it were ever empty, synthesize it from the route direction
-                // rather than keeping a whole dead single-border flow variant
-                // (GetFlowToBorder, deleted 2026-07-04) around for it.
-                if (borderMask == 0 && route.NextDir[unitSector] >= 0)
-                    borderMask = (byte)(1 << route.NextDir[unitSector]);
-
-                int clampedLTX = Math.Clamp((int)(targetPos.X / GameConstants.TileSize) - unitSX * SectorSize, 0, SectorSize - 1);
-                int clampedLTY = Math.Clamp((int)(targetPos.Y / GameConstants.TileSize) - unitSY * SectorSize, 0, SectorSize - 1);
-                flow = GetFlowToMultiBorder(unitSX, unitSY, borderMask, lateralMask, extendedMask,
-                                            sizeTier, frame, clampedLTX, clampedLTY, unitPos, targetPos);
-                hasFlow = true;
-            }
+            // else: budget-deferred with no stale fallback — the !hasFlow
+            // branch below beelines this tick (BeginTick fills the flow next).
         }
 
         if (!hasFlow || flow.Dirs == null)
@@ -1543,24 +1836,8 @@ public class Pathfinder
                 }
                 else
                 {
-                    var fbRoute = GetRoute(targetSector, fallbackTier, frame);
-                    if (fbRoute.HopDist[unitSector] < 0) continue;
-                    short fbDist = fbRoute.HopDist[unitSector];
-                    byte fbBorderMask = 0, fbLateralMask = 0;
-                    for (int d = 0; d < 4; d++)
-                    {
-                        if (!_sectorConnected[fallbackTier, unitSector, d]) continue;
-                        int nx = unitSX + Dx4[d], ny = unitSY + Dy4[d];
-                        if (nx < 0 || nx >= _sectorCountX || ny < 0 || ny >= _sectorCountY) continue;
-                        int neighbor = SectorIdx(nx, ny);
-                        if (fbRoute.HopDist[neighbor] < 0) continue;
-                        if (fbRoute.HopDist[neighbor] < fbDist) fbBorderMask |= (byte)(1 << d);
-                        else if (fbRoute.HopDist[neighbor] == fbDist) fbLateralMask |= (byte)(1 << d);
-                    }
-                    if (fbBorderMask == 0) continue;
-                    int clTX = Math.Clamp((int)(targetPos.X / GameConstants.TileSize) - unitSX * SectorSize, 0, SectorSize - 1);
-                    int clTY = Math.Clamp((int)(targetPos.Y / GameConstants.TileSize) - unitSY * SectorSize, 0, SectorSize - 1);
-                    fbFlow = GetFlowToMultiBorder(unitSX, unitSY, fbBorderMask, fbLateralMask, 0, fallbackTier, frame, clTX, clTY, unitPos, targetPos);
+                    fbFlow = GetFlowToPortalSet(unitSX, unitSY, targetSector, fallbackTier, frame,
+                                                unitPos, targetPos, out _);
                 }
 
                 if (fbFlow.Dirs == null) continue;
@@ -1727,40 +2004,37 @@ public class Pathfinder
         var sorted = new List<KeyValuePair<FlowKey, PendingRequest>>(_pendingRequests);
         sorted.Sort((a, b) => b.Value.Priority.CompareTo(a.Value.Priority));
 
-        foreach (var (key, _) in sorted)
+        foreach (var (key, req) in sorted)
         {
             if (_dijkstraMsThisTick >= DijkstraBudgetMsPerTick) break;
             if (_flowCache.ContainsKey(key)) continue;  // already computed via another path
-            ProcessPendingRequest(key, frame);
+            ProcessPendingRequest(key, req, frame);
         }
         _pendingRequests.Clear();
     }
 
-    private void ProcessPendingRequest(FlowKey key, uint frame)
+    private void ProcessPendingRequest(FlowKey key, in PendingRequest req, uint frame)
     {
         // FlowKey round-trips: TargetData encodes per-type params, invertibly.
         switch (key.TargetType)
         {
-            // (TargetType 0 was the single-border flow — deleted 2026-07-04;
-            // nothing enqueues type-0 keys anymore.)
+            // (TargetType 0 single-border and 2 multi-border flows are gone —
+            // 0 deleted 2026-07-04, 2 replaced by portal-set flows 2026-07-04;
+            // nothing enqueues those key types anymore.)
             case 1: // tile
                 int tLY = key.TargetData / SectorSize;
                 int tLX = key.TargetData - tLY * SectorSize;
                 GetFlowToTile(key.SectorX, key.SectorY, tLX, tLY, key.SizeTier, frame);
                 break;
-            case 2: // multi-border
-                byte bm = (byte)(key.TargetData & 0xF);
-                byte lm = (byte)((key.TargetData >> 4) & 0xF);
-                byte em = (byte)((key.TargetData >> 8) & 0xF);
-                int clampIdx = key.TargetData2;
-                int clampTX = -1, clampTY = -1;
-                if (clampIdx >= 0)
-                {
-                    clampTY = clampIdx / SectorSize;
-                    clampTX = clampIdx - clampTY * SectorSize;
-                }
-                GetFlowToMultiBorder(key.SectorX, key.SectorY, bm, lm, em,
-                    key.SizeTier, frame, clampTX, clampTY);
+            case 3: // portal-set flow: TargetData = destination sector index.
+                // The stored request's TargetPos seeds the dest-side Dijkstra
+                // if the route isn't cached yet (the key alone doesn't carry
+                // the dest tile). May re-defer if this tick's budget dies
+                // mid-drain; the re-enqueue is wiped by the Clear() above and
+                // the unit re-enqueues on its next query — same semantics
+                // deferred tile flows have.
+                GetFlowToPortalSet(key.SectorX, key.SectorY, key.TargetData, key.SizeTier, frame,
+                                   req.UnitPos, req.TargetPos, out _);
                 break;
         }
     }
