@@ -52,6 +52,7 @@ open the listed `<area>.md`. Areas marked **(not yet documented)** have no doc y
 Use this to pick a starting area. When the routed area isn't documented yet, document it.
 
 - **A spell does the wrong thing / adding a spell** → game1-partials.md (`Game1.Spells.cs`) + `Game/` (SpellCasting, SpellEffectSystem) + `Data/Registries/` (SpellRegistry). See also `docs/spells.md`.
+- **Cast begin/end lifecycle, "is the necromancer casting", cast-time/channel state, gate/lock something for the cast duration (e.g. stop moving while casting)** → game1-partials.md (`_pendingCastAnim` field: set in `Game1.Spells.cs` `DispatchSpellCast`, cleared in `Game1.Animation.cs` `UpdateAnimations`/`UpdateChanneledCast`) + [movement.md](movement.md) (player movement gate = `Simulation.UpdateAI` `PlayerControlled` case, `PreferredVel = _necroMoveInput * speed`, with the `CorpseInteractPhase` zero-`PreferredVel` precedent).
 - **Crafting / gathering / table craft** → game1-partials.md (`Game1.Crafting.cs`) + `Game/` (table-craft system).
 - **Corpses — data model, picking up / carrying a corpse, click/F-key corpse interaction, corpse piles** → [corpses.md](corpses.md) (`Game/Simulation.cs` `Corpse`, `Game/CorpseInteractionManager.cs`, `Game1.cs` input + `_hoveredCorpseIdx`, `Game/ForagableSystem.cs` for the gather pattern).
 - **Workers / jobs — assigning workers, job board, grave roster, auto-dispatch** → [jobs-workers.md](jobs-workers.md) (`UI/JobBoardUI.cs`, `UI/GraveRosterUI.cs`, `Game/Jobs/WorkerSystem.cs`, `AI/WorkerHandler.cs`).

@@ -94,9 +94,15 @@ channeled/cast animation state machines, table-craft channel buffs, and keeping 
 wading sink-offsets glued to their moving owners. Called from `Update`.
 Key members: `UpdateAnimations`, `UpdateChanneledCast`, `UpdateTableChannelBuff`,
 `UpdateEffectSpawnPositions`, `UpdateWadingSinkOffsets`, `RebuildUnitAnim`, `ComputeWeaponCycleSeconds`.
+**This file is where a cast ends / `_pendingCastAnim` is cleared** (set in `Game1.Spells.cs`): the
+single-shot effect fires on the Spell1 `JustHitEffectFrame` (or when the necromancer leaves Spell1)
+and channeled casts run their Start→Loop→Finish machine in `UpdateChanneledCast` (effect fires at end
+of loop). Every terminal path clears `_pendingCastAnim = null` (+ `RemoveCastingBuffAll`). So the cast
+window is exactly "`DispatchSpellCast` sets it → `UpdateAnimations`/`UpdateChanneledCast` clears it."
 Look/edit here when: a unit's walk/attack/cast animation is stuck, mistimed, or plays the wrong
 clip; a channeled cast's start/loop/finish phases are off; attack speed (weapon cycle) feels wrong;
-an effect or sprite lags behind a moving unit; a unit doesn't re-animate after a def change.
+an effect or sprite lags behind a moving unit; a unit doesn't re-animate after a def change; you need
+to run logic on cast-start vs cast-end (gate/release something for the cast duration).
 See also: `Game1.Spells.cs` (cast effects + channel buff application), `Render/` (the anim
 controller / atlases / flipbook data), `Data/Registries/` (unit anim metadata).
 
@@ -129,6 +135,19 @@ wrong / never impacts; the spell-slot doesn't flash; a potion or built-in abilit
 "command here" / "regroup" orders go wrong; poison berries don't start. This is the orchestration
 layer — **targeting** lives in `Game/SpellCasting.cs` and **effect resolution** in
 `Game/SpellEffectSystem.cs`.
+**Cast begin + "is a cast in progress" state:** `DispatchSpellCast` is the single spell-bar/dev-`cast`
+entry. After a successful `SpellCaster.TryStartSpellCast`, it sets the field **`_pendingCastAnim`**
+(a `PendingCastAnim?` declared in `Game1.cs`, struct defined there too — carries `SpellID`, `Target`,
+`Slot`, `CastAnim`, `CastTime`, `ChannelPhase`, `Executed`). **`_pendingCastAnim != null` is the
+canonical "the necromancer is mid-cast" flag** and it self-guards re-entry (`DispatchSpellCast` bails
+early while one is pending). Two flavors: channeled (`CastAnim` ImbueGround/Raise/ImbueTable → a
+Start/Loop/Finish machine) and deferred single-shot (has a `CastingBuffID`, fires on the Spell1
+action frame). Note: instant spells with no `CastingBuffID` and no channel execute immediately and
+never set `_pendingCastAnim` — there is no cast-duration window to lock against for those. The
+**necromancer already faces the target and stops during a channel** (facing pinned each frame in
+`UpdateChanneledCast`), but plain WASD movement is NOT gated by a cast today. A separate
+`_channelingSlot` (int, `Game1.cs`) tracks hold-to-channel beam/drain spells (released in `Game1.cs`
+Update when the slot key is let go) — unrelated to `_pendingCastAnim`.
 See also: **`docs/spells.md`** (read before adding/changing a spell — explains the three-layer
 split), `Game/SpellCasting.cs`, `Game/SpellEffectSystem.cs`, `Game/SpellPenetration.cs`,
 `Data/Registries/SpellRegistry.cs`, `Game1.Spells.cs` is paired with the main loop in `Game1.cs`.
