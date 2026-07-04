@@ -126,6 +126,9 @@ public static class Program
 
         LaunchArgs.Parse(args);
         Necroking.Core.GamePaths.DetectRoot();
+        // Must run before Game1 creates the GL context — on dual-GPU laptops Windows
+        // otherwise routes this OpenGL app to the integrated GPU (see GpuPreference).
+        Necroking.Core.GpuPreference.EnsureHighPerformance();
         try
         {
             using var game = new Game1();

@@ -607,6 +607,10 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     internal int _hoverHighlightVariant = -1;
     internal float _hoverVariantLabelTimer;     // seconds left to show the "which variant" toast
     internal float _depthFogToastTimer;         // seconds left to show the depth-fog ON/OFF toast ('H' key)
+    // Hybrid-GPU warning (see Core/GpuPreference.cs): set once in LoadContent when the
+    // game is rendering on an integrated GPU while a discrete one is installed.
+    internal float _gpuWarnToastTimer;
+    internal string? _gpuWarnToastMsg;
     // Dev: pin the hovered unit (headless testing has no real mouse). uint.MaxValue = off.
     private uint _devForceHoverUnitId = uint.MaxValue;
     // Dev: pin the hovered env object by index (headless variant testing). -1 = off.
@@ -2254,6 +2258,21 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         _pixel = TextureUtil.GetWhitePixel(GraphicsDevice);
         _buffVisuals.SetPixel(_pixel);
 
+        // Hybrid-GPU check: are we actually rendering on the integrated GPU while a
+        // discrete one sits idle? GpuPreference wrote the high-performance registry
+        // entry before context creation; if the driver didn't pick it up in-process,
+        // tell the player a restart fixes it. (Toast drawn in GameRenderer.Units.cs.)
+        string glRenderer = GpuPreference.ActiveRenderer();
+        DebugLog.Log("startup", $"GL_RENDERER: {glRenderer}");
+        if (GpuPreference.IsIntegrated(glRenderer) && GpuPreference.HasDiscreteAdapter())
+        {
+            _gpuWarnToastMsg = GpuPreference.WrotePreferenceThisLaunch
+                ? "Integrated graphics detected - high-performance GPU enabled. Restart the game to apply."
+                : "Running on integrated graphics. Set Necroking to High performance in Windows > Display > Graphics.";
+            _gpuWarnToastTimer = 15f;
+            DebugLog.Log("startup", $"GPU warning: {_gpuWarnToastMsg}");
+        }
+
         // Create radial glow texture (64x64 with smooth quadratic falloff)
         _glowTex = new Texture2D(GraphicsDevice, 64, 64);
         var glowData = new Color[64 * 64];
@@ -3036,6 +3055,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         // timer ticks down here. (No keyboard hotkey — it was removed to free 'H'.)
         if (_hoverVariantLabelTimer > 0f) _hoverVariantLabelTimer -= _rawDt;
         if (_depthFogToastTimer > 0f) _depthFogToastTimer -= _rawDt;
+        if (_gpuWarnToastTimer > 0f) _gpuWarnToastTimer -= _rawDt;
         if (_foragerEatSoundCd > 0f) _foragerEatSoundCd -= _rawDt;
 
         // 'H' = toggle depth-sorted reanimation fog (A/B dev switch; Performance.DepthSortedFog).

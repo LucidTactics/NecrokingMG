@@ -1157,6 +1157,7 @@ partial class GameRenderer
         // Toast naming the active variant after a cycle press (drawn even when Off).
         DrawHoverVariantLabel();
         DrawDepthFogToast();   // 'H' depth-sorted-fog ON/OFF flash
+        DrawGpuWarnToast();    // hybrid-GPU warning (integrated GPU while discrete idle)
 
         if (!_g._gameData.Settings.Tooltips.ShowHoverHighlight) return;
 
@@ -1442,6 +1443,16 @@ partial class GameRenderer
         var pos = new Vector2((int)18, (int)112);
         _g.Scope.DrawString(_g._font, label, pos + new Vector2(1, 1), new Color(0, 0, 0, 190));
         _g.Scope.DrawString(_g._font, label, pos, new Color(255, 235, 150));
+    }
+
+    // One-time hybrid-GPU warning (set in LoadContent): the game is on the integrated
+    // GPU while a discrete one is installed. Amber so it reads as a warning.
+    private void DrawGpuWarnToast()
+    {
+        if (_g._gpuWarnToastTimer <= 0f || _g._font == null || _g._gpuWarnToastMsg == null) return;
+        var pos = new Vector2((int)18, (int)152);
+        _g.Scope.DrawString(_g._font, _g._gpuWarnToastMsg, pos + new Vector2(1, 1), new Color(0, 0, 0, 190));
+        _g.Scope.DrawString(_g._font, _g._gpuWarnToastMsg, pos, new Color(255, 190, 90));
     }
 
     // Flash the depth-sorted-fog state (ON/OFF) for a couple seconds after the 'H' toggle.
