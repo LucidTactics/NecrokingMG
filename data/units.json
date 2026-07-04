@@ -5478,7 +5478,7 @@
       "faction": "Animal",
       "ai": "WolfHitAndRun",
       "orcaPriority": 0,
-      "size": 2,
+      "size": 3,
       "radius": 0.5,
       "spriteScale": 0.83125,
       "spriteWorldHeight": 1.3,

@@ -9,14 +9,22 @@ namespace Necroking.Scenario.Scenarios;
 
 /// <summary>
 /// Trample dodge-failure test. The primary target has Defense=999 (always misses)
-/// AND is fully surrounded by allied skeletons in every cardinal+diagonal direction
-/// at 1u — no safe tile within DodgeDistance. The dodge MUST fail and the trample
-/// must force-hit: damage applied, target launched into physics, despite the dice
-/// rolling a miss.
+/// AND is penned into a wall pocket open only toward the charging boar — every
+/// dodge candidate in the away-from-attacker half is inside a wall tile, and the
+/// toward/sideways candidates are rejected by the direction check. The dodge MUST
+/// fail and the trample must force-hit: damage applied, target launched into
+/// physics, despite the dice rolling a miss.
+///
+/// (History: this used to use a cordon of 16 allied soldiers instead of walls.
+/// That setup was fragile — the boar's own sweep tramples the front cordon and
+/// the launched bodies chain-collide through the rest, so by the time the
+/// primary rolls its dodge, real gaps exist and it legally hops away. Walls
+/// can't be bowled aside, and the dodge validates wall tiles via
+/// Simulation.IsSpotBlocked.)
 ///
 /// Verifies:
 ///   - Boar's swing rolls a miss
-///   - Dodge cannot find a free tile (all 8 candidates occupied)
+///   - Dodge cannot find a free tile (walls behind, attacker in front)
 ///   - Force-hit is triggered: damage applied AND knockback fires
 ///   - Target enters physics
 /// </summary>
@@ -42,7 +50,7 @@ public class TrampleNoEscapeScenario : ScenarioBase
     {
         DebugLog.Clear(ScenarioLog);
         DebugLog.Log(ScenarioLog, "=== Trample No-Escape (force-hit on dodge fail) ===");
-        DebugLog.Log(ScenarioLog, "Primary surrounded by allies → no safe tile → dodge fails → force-hit.");
+        DebugLog.Log(ScenarioLog, "Primary penned by walls (open toward boar) → no safe tile → dodge fails → force-hit.");
 
         var units = sim.UnitsMut;
 
@@ -68,43 +76,24 @@ public class TrampleNoEscapeScenario : ScenarioBase
 
         units[boarIdx].Target = CombatTarget.Unit(_primaryId);
 
-        // Tight cordon: 16 allies at 0.5u (half the dodge distance). Each dodge
-        // candidate tile is well inside several cordon bodies — overcrowding
-        // exceeds the dodge tolerance (allowed up to ~50% body overlap).
-        const float invSqrt2 = 0.70710678f;
-        const float r = 0.5f;
-        const float diag1 = 0.382683f;  // cos(67.5°)
-        const float diag2 = 0.923879f;  // sin(67.5°)
-        Vec2[] cordonOffsets = new[] {
-            new Vec2( r, 0f),
-            new Vec2( r * diag2,  r * diag1),
-            new Vec2( r * invSqrt2, r * invSqrt2),
-            new Vec2( r * diag1,  r * diag2),
-            new Vec2( 0f, r),
-            new Vec2(-r * diag1,  r * diag2),
-            new Vec2(-r * invSqrt2,  r * invSqrt2),
-            new Vec2(-r * diag2,  r * diag1),
-            new Vec2(-r, 0f),
-            new Vec2(-r * diag2, -r * diag1),
-            new Vec2(-r * invSqrt2, -r * invSqrt2),
-            new Vec2(-r * diag1, -r * diag2),
-            new Vec2( 0f,-r),
-            new Vec2( r * diag1, -r * diag2),
-            new Vec2( r * invSqrt2, -r * invSqrt2),
-            new Vec2( r * diag2, -r * diag1),
-        };
-        foreach (var off in cordonOffsets)
+        // Wall pocket around the primary's tile (7,10), open only to the WEST
+        // (the boar's approach). Dodge candidates 1u away in the away-from-
+        // attacker half (NE/E/SE via walls at x=8; N/S via walls at (7,9) and
+        // (7,11)) are all inside wall tiles; the toward/sideways candidates
+        // (W/NW/SW) fail the dodge's away-from-attacker direction check.
+        var grid = sim.Grid;
+        var ws = sim.WallSystem;
+        (int x, int y)[] pocket = { (8, 9), (8, 10), (8, 11), (7, 9), (7, 11) };
+        foreach (var (wx, wy) in pocket)
         {
-            int s = units.AddUnit(new Vec2(_primaryStartPos.X + off.X, _primaryStartPos.Y + off.Y),
-                UnitType.Soldier);
-            units[s].AI = AIBehavior.IdleAtPoint;
-            units[s].Faction = Faction.Human;
-            units[s].Stats.MaxHP = 99999;
-            units[s].Stats.HP = 99999;
+            grid.SetTerrain(wx, wy, World.TerrainType.Wall);
+            ws?.SetWall(wx, wy, 1);
         }
+        grid.RebuildCostField();
+        sim.RebuildPathfinder();
 
         DebugLog.Log(ScenarioLog,
-            $"Primary id={_primaryId} surrounded by 8 allies; Defense=999.");
+            $"Primary id={_primaryId} penned in a wall pocket (open west); Defense=999.");
         _initialCombatLogCount = sim.CombatLog.Entries.Count;
         ZoomOnLocation(7.5f, 10f, 60f);
     }
