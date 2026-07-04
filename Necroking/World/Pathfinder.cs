@@ -418,42 +418,54 @@ public class Pathfinder
     }
 
     // =========================================================================
-    // Sector Dijkstra with escape propagation
+    // Window Dijkstra core (shared by sector flows and imaginary chunks)
     // =========================================================================
 
+    // Pooled scratch for RunWindowDijkstra (single-threaded sim assumption,
+    // same as the rest of the pathfinder). The cost array is pure scratch —
+    // it never escapes the core or its callers. The PQ is fully drained by
+    // the main pass, so the escape-propagation pass reuses the same instance.
+    // `dirs` is deliberately NOT pooled: result arrays escape into _flowCache
+    // and ImaginaryChunk objects, so each call needs a fresh allocation.
+    private readonly float[] _costScratch = new float[SectorSize * SectorSize];
+    private readonly PriorityQueue<int, float> _pqScratch = new();
+    // Pooled goal-index list for the imaginary-chunk callers (the sector flow
+    // callers build their own goal lists because they also carry init costs).
+    private readonly List<int> _goalScratch = new();
+
     /// <summary>
-    /// Core Dijkstra within a sector. Computes flow directions from goal tiles.
-    /// Includes escape propagation for tier-inflated tiles.
+    /// Shared window Dijkstra: fills <paramref name="cost"/> with InfCost,
+    /// seeds the goal tiles (local indices with SectorSize stride) that are
+    /// tier- OR base-passable (base-passable covers tier-inflated target
+    /// tiles), runs the 8-dir Dijkstra with diagonal corner-cut rejection,
+    /// extends costs into tier-inflated but base-passable tiles (escape
+    /// propagation, uniform StepMul8 costs), and builds the direction field
+    /// (with plateau fallback) into <paramref name="dirs"/>.
+    /// Returns false when no goal could be seeded — cost stays all-Inf and
+    /// dirs all-None. Chunk callers rely on that to preserve their historical
+    /// "no seedable goal → bail without memoizing a failure" early-out.
     /// </summary>
-    private CachedFlow ComputeSectorFlow(int sx, int sy, List<int> goalLocalIndices, int tier, uint frame,
-                                          List<float>? goalInitCosts = null)
+    private bool RunWindowDijkstra(int baseX, int baseY, int winW, int winH, int tier,
+                                   List<int> goals, List<float>? goalCosts,
+                                   float[] cost, FlowDir[] dirs)
     {
-        DiagDijkstraInvocations++;
-        int cells = SectorSize * SectorSize;
-        var flow = new CachedFlow { Dirs = new FlowDir[cells], FrameAccessed = frame };
-        if (_grid == null || goalLocalIndices.Count == 0) return flow;
+        if (_grid == null) return false;
 
-        float[] cost = new float[cells];
         Array.Fill(cost, GameConstants.InfCost);
+        var openList = _pqScratch;
+        openList.Clear();
 
-        var openList = new PriorityQueue<int, float>();
-
-        int baseX = sx * SectorSize;
-        int baseY = sy * SectorSize;
-        int sectorW = Math.Min(SectorSize, _grid.Width - baseX);
-        int sectorH = Math.Min(SectorSize, _grid.Height - baseY);
-
-        for (int i = 0; i < goalLocalIndices.Count; i++)
+        for (int i = 0; i < goals.Count; i++)
         {
-            int g = goalLocalIndices[i];
+            int g = goals[i];
             int lx = g % SectorSize, ly = g / SectorSize;
-            if (lx >= sectorW || ly >= sectorH) continue;
+            if (lx >= winW || ly >= winH) continue;
             int gx = baseX + lx, gy = baseY + ly;
             if (!_grid.InBounds(gx, gy)) continue;
             // Accept if tier-passable OR base-passable (for tier-inflated target tiles)
             if (_grid.GetCost(gx, gy, tier) != 255 || _grid.GetCost(gx, gy) != 255)
             {
-                float initCost = (goalInitCosts != null && i < goalInitCosts.Count) ? goalInitCosts[i] : 0f;
+                float initCost = (goalCosts != null && i < goalCosts.Count) ? goalCosts[i] : 0f;
                 if (initCost < cost[g])
                 {
                     cost[g] = initCost;
@@ -462,17 +474,19 @@ public class Pathfinder
             }
         }
 
+        if (openList.Count == 0) return false;
+
         // 8-directional Dijkstra
-        while (openList.Count > 0)
+        while (openList.TryDequeue(out int idx, out float pri))
         {
-            int idx = openList.Dequeue();
+            if (pri > cost[idx]) continue; // stale PQ entry (tile relaxed since enqueue)
             float c = cost[idx];
             int lx = idx % SectorSize, ly = idx / SectorSize;
 
             for (int d = 0; d < 8; d++)
             {
                 int nlx = lx + Dx8[d], nly = ly + Dy8[d];
-                if (nlx < 0 || nlx >= sectorW || nly < 0 || nly >= sectorH) continue;
+                if (nlx < 0 || nlx >= winW || nly < 0 || nly >= winH) continue;
 
                 int gx = baseX + nlx, gy = baseY + nly;
                 byte nc = _grid.GetCost(gx, gy, tier);
@@ -483,8 +497,8 @@ public class Pathfinder
                 {
                     int cax = lx + Dx8[d], cay = ly;
                     int cbx = lx, cby = ly + Dy8[d];
-                    if (cax >= 0 && cax < sectorW && _grid.GetCost(baseX + cax, baseY + cay, tier) == 255) continue;
-                    if (cby >= 0 && cby < sectorH && _grid.GetCost(baseX + cbx, baseY + cby, tier) == 255) continue;
+                    if (cax >= 0 && cax < winW && _grid.GetCost(baseX + cax, baseY + cay, tier) == 255) continue;
+                    if (cby >= 0 && cby < winH && _grid.GetCost(baseX + cbx, baseY + cby, tier) == 255) continue;
                 }
 
                 int nidx = nly * SectorSize + nlx;
@@ -499,52 +513,27 @@ public class Pathfinder
 
         // === Escape propagation ===
         // Extend costs into tier-impassable but base-passable tiles so units
-        // in inflated zones get proper directions toward the goal.
+        // in inflated zones get proper directions toward the goal. Reuses the
+        // main PQ — it is empty here.
+        var escapePQ = openList;
+        for (int ly = 0; ly < winH; ly++)
         {
-            var escapePQ = new PriorityQueue<int, float>();
-            for (int ly = 0; ly < sectorH; ly++)
+            for (int lx = 0; lx < winW; lx++)
             {
-                for (int lx = 0; lx < sectorW; lx++)
-                {
-                    int idx = ly * SectorSize + lx;
-                    if (cost[idx] >= GameConstants.InfCost) continue;
-
-                    for (int d = 0; d < 8; d++)
-                    {
-                        int nlx = lx + Dx8[d], nly = ly + Dy8[d];
-                        if (nlx < 0 || nlx >= sectorW || nly < 0 || nly >= sectorH) continue;
-                        int nidx = nly * SectorSize + nlx;
-                        if (cost[nidx] < GameConstants.InfCost) continue; // already has cost
-                        int ngx = baseX + nlx, ngy = baseY + nly;
-                        if (_grid.GetCost(ngx, ngy, tier) != 255) continue; // not inflated
-                        if (_grid.GetCost(ngx, ngy) == 255) continue; // truly impassable
-
-                        float newCost = cost[idx] + StepMul8[d];
-                        if (newCost < cost[nidx])
-                        {
-                            cost[nidx] = newCost;
-                            escapePQ.Enqueue(nidx, newCost);
-                        }
-                    }
-                }
-            }
-
-            while (escapePQ.Count > 0)
-            {
-                int idx = escapePQ.Dequeue();
-                float c = cost[idx];
-                int lx = idx % SectorSize, ly = idx / SectorSize;
+                int idx = ly * SectorSize + lx;
+                if (cost[idx] >= GameConstants.InfCost) continue;
 
                 for (int d = 0; d < 8; d++)
                 {
                     int nlx = lx + Dx8[d], nly = ly + Dy8[d];
-                    if (nlx < 0 || nlx >= sectorW || nly < 0 || nly >= sectorH) continue;
+                    if (nlx < 0 || nlx >= winW || nly < 0 || nly >= winH) continue;
                     int nidx = nly * SectorSize + nlx;
-                    if (cost[nidx] < GameConstants.InfCost) continue;
+                    if (cost[nidx] < GameConstants.InfCost) continue; // already has cost
                     int ngx = baseX + nlx, ngy = baseY + nly;
+                    if (_grid.GetCost(ngx, ngy, tier) != 255) continue; // not inflated
                     if (_grid.GetCost(ngx, ngy) == 255) continue; // truly impassable
 
-                    float newCost = c + StepMul8[d];
+                    float newCost = cost[idx] + StepMul8[d];
                     if (newCost < cost[nidx])
                     {
                         cost[nidx] = newCost;
@@ -554,15 +543,63 @@ public class Pathfinder
             }
         }
 
+        while (escapePQ.TryDequeue(out int idx, out float pri))
+        {
+            if (pri > cost[idx]) continue; // stale PQ entry
+            float c = cost[idx];
+            int lx = idx % SectorSize, ly = idx / SectorSize;
+
+            for (int d = 0; d < 8; d++)
+            {
+                int nlx = lx + Dx8[d], nly = ly + Dy8[d];
+                if (nlx < 0 || nlx >= winW || nly < 0 || nly >= winH) continue;
+                int nidx = nly * SectorSize + nlx;
+                if (cost[nidx] < GameConstants.InfCost) continue;
+                int ngx = baseX + nlx, ngy = baseY + nly;
+                if (_grid.GetCost(ngx, ngy) == 255) continue; // truly impassable
+
+                float newCost = c + StepMul8[d];
+                if (newCost < cost[nidx])
+                {
+                    cost[nidx] = newCost;
+                    escapePQ.Enqueue(nidx, newCost);
+                }
+            }
+        }
+
         // Build direction field
-        BuildDirectionField(flow.Dirs, cost, baseX, baseY, sectorW, sectorH, tier);
+        BuildDirectionField(dirs, cost, baseX, baseY, winW, winH, tier);
+        return true;
+    }
+
+    /// <summary>
+    /// Core Dijkstra within a sector. Computes flow directions from goal tiles.
+    /// Thin wrapper over RunWindowDijkstra: window = whole sector, clamped at
+    /// the map edge for partial sectors.
+    /// </summary>
+    private CachedFlow ComputeSectorFlow(int sx, int sy, List<int> goalLocalIndices, int tier, uint frame,
+                                          List<float>? goalInitCosts = null)
+    {
+        DiagDijkstraInvocations++;
+        int cells = SectorSize * SectorSize;
+        // Fresh dirs array per call — it goes into the flow cache (never pooled).
+        var flow = new CachedFlow { Dirs = new FlowDir[cells], FrameAccessed = frame };
+        if (_grid == null || goalLocalIndices.Count == 0) return flow;
+
+        int baseX = sx * SectorSize;
+        int baseY = sy * SectorSize;
+        int sectorW = Math.Min(SectorSize, _grid.Width - baseX);
+        int sectorH = Math.Min(SectorSize, _grid.Height - baseY);
+
+        RunWindowDijkstra(baseX, baseY, sectorW, sectorH, tier,
+                          goalLocalIndices, goalInitCosts, _costScratch, flow.Dirs);
         return flow;
     }
 
     /// <summary>
-    /// Build direction field from integration cost array.
-    /// Each tile points toward the neighbor with strictly lower cost.
-    /// Includes plateau fallback for flat-cost regions.
+    /// Build direction field from integration cost array (any window; local
+    /// indices use SectorSize stride). Each tile points toward the neighbor
+    /// with strictly lower cost. Includes plateau fallback for flat-cost regions.
     /// </summary>
     private void BuildDirectionField(FlowDir[] dirs, float[] cost, int baseX, int baseY,
                                       int sectorW, int sectorH, int tier)
@@ -918,25 +955,24 @@ public class Pathfinder
         int localUY = Math.Clamp(unitTY - baseY, 0, chunkH - 1);
 
         int cells = SectorSize * SectorSize;
-        float[] cost = new float[cells];
-        Array.Fill(cost, GameConstants.InfCost);
-
-        var openList = new PriorityQueue<int, float>();
 
         bool targetInChunk = targetTX >= baseX && targetTX < endX &&
                              targetTY >= baseY && targetTY < endY;
+
+        // Goal seeding (chunk-specific: target tile if inside the window, else
+        // target-facing border tiles). Passability of each goal tile itself
+        // (tier- OR base-passable) is checked by RunWindowDijkstra; the border
+        // loops additionally require the tile to be tier-passable and the
+        // adjacent OUTSIDE tile to be base-passable, which is stricter and
+        // stays here.
+        var goals = _goalScratch;
+        goals.Clear();
 
         if (targetInChunk)
         {
             int localTX = targetTX - baseX;
             int localTY = targetTY - baseY;
-            int goalIdx = localTY * SectorSize + localTX;
-            int gx = baseX + localTX, gy = baseY + localTY;
-            if (_grid.GetCost(gx, gy, tier) != 255 || _grid.GetCost(gx, gy) != 255)
-            {
-                cost[goalIdx] = 0f;
-                openList.Enqueue(goalIdx, 0f);
-            }
+            goals.Add(localTY * SectorSize + localTX);
         }
         else
         {
@@ -955,11 +991,7 @@ public class Pathfinder
                     int gx = baseX + lx, gy = baseY;
                     if (_grid.GetCost(gx, gy, tier) == 255) continue;
                     if (_grid.GetCost(gx, gy - 1) != 255)
-                    {
-                        int idx = 0 * SectorSize + lx;
-                        cost[idx] = 0f;
-                        openList.Enqueue(idx, 0f);
-                    }
+                        goals.Add(0 * SectorSize + lx);
                 }
             }
             if (seedS && endY < _grid.Height)
@@ -969,11 +1001,7 @@ public class Pathfinder
                     int gx = baseX + lx, gy = endY - 1;
                     if (_grid.GetCost(gx, gy, tier) == 255) continue;
                     if (_grid.GetCost(gx, gy + 1) != 255)
-                    {
-                        int idx = (chunkH - 1) * SectorSize + lx;
-                        cost[idx] = 0f;
-                        openList.Enqueue(idx, 0f);
-                    }
+                        goals.Add((chunkH - 1) * SectorSize + lx);
                 }
             }
             if (seedW && baseX > 0)
@@ -983,11 +1011,7 @@ public class Pathfinder
                     int gx = baseX, gy = baseY + ly;
                     if (_grid.GetCost(gx, gy, tier) == 255) continue;
                     if (_grid.GetCost(gx - 1, gy) != 255)
-                    {
-                        int idx = ly * SectorSize + 0;
-                        cost[idx] = 0f;
-                        openList.Enqueue(idx, 0f);
-                    }
+                        goals.Add(ly * SectorSize + 0);
                 }
             }
             if (seedE && endX < _grid.Width)
@@ -997,58 +1021,18 @@ public class Pathfinder
                     int gx = endX - 1, gy = baseY + ly;
                     if (_grid.GetCost(gx, gy, tier) == 255) continue;
                     if (_grid.GetCost(gx + 1, gy) != 255)
-                    {
-                        int idx = ly * SectorSize + (chunkW - 1);
-                        cost[idx] = 0f;
-                        openList.Enqueue(idx, 0f);
-                    }
+                        goals.Add(ly * SectorSize + (chunkW - 1));
                 }
             }
         }
 
-        if (openList.Count == 0) return Vec2.Zero;
-
-        // Dijkstra within chunk
-        while (openList.Count > 0)
-        {
-            int idx = openList.Dequeue();
-            float c = cost[idx];
-            int lx = idx % SectorSize, ly = idx / SectorSize;
-
-            for (int d = 0; d < 8; d++)
-            {
-                int nlx = lx + Dx8[d], nly = ly + Dy8[d];
-                if (nlx < 0 || nlx >= chunkW || nly < 0 || nly >= chunkH) continue;
-
-                int gx = baseX + nlx, gy = baseY + nly;
-                byte nc = _grid.GetCost(gx, gy, tier);
-                if (nc == 255) continue;
-
-                // Diagonal corner-cutting
-                if (d % 2 == 1)
-                {
-                    int cAlx = lx + Dx8[d], cAly = ly;
-                    int cBlx = lx, cBly = ly + Dy8[d];
-                    if (cAlx >= 0 && cAlx < chunkW && _grid.GetCost(baseX + cAlx, baseY + cAly, tier) == 255) continue;
-                    if (cBly >= 0 && cBly < chunkH && _grid.GetCost(baseX + cBlx, baseY + cBly, tier) == 255) continue;
-                }
-
-                int nidx = nly * SectorSize + nlx;
-                float newCost = c + nc * StepMul8[d];
-                if (newCost < cost[nidx])
-                {
-                    cost[nidx] = newCost;
-                    openList.Enqueue(nidx, newCost);
-                }
-            }
-        }
-
-        // Escape propagation for tier-inflated tiles
-        RunEscapePropagation(cost, baseX, baseY, chunkW, chunkH, tier);
-
-        // Build direction field
+        // Fresh dirs array per call — it may be stored in the ImaginaryChunk
+        // (never pooled). Cost is pooled scratch; safe to read until the next
+        // RunWindowDijkstra call (single-threaded).
         var dirs = new FlowDir[cells];
-        BuildChunkDirectionField(dirs, cost, baseX, baseY, chunkW, chunkH, tier);
+        float[] cost = _costScratch;
+        if (!RunWindowDijkstra(baseX, baseY, chunkW, chunkH, tier, goals, null, cost, dirs))
+            return Vec2.Zero; // no seedable goal — historical early-out, no failure memo
 
         // Extract direction at unit's tile
         int unitTileIdx = localUY * SectorSize + localUX;
@@ -1126,25 +1110,21 @@ public class Pathfinder
 
         tier = Math.Clamp(tier, 0, TerrainCosts.NumSizeTiers - 1);
         int cells = SectorSize * SectorSize;
-        float[] cost = new float[cells];
-        Array.Fill(cost, GameConstants.InfCost);
-
-        var openList = new PriorityQueue<int, float>();
 
         bool targetInChunk = targetTX >= baseX && targetTX < endX &&
                              targetTY >= baseY && targetTY < endY;
+
+        // Goal seeding — same pattern as GetLocalChunkDirection (target tile if
+        // inside, else target-facing borders), over the existing chunk bounds.
+        // See the seeding comment there for the passability-check split.
+        var goals = _goalScratch;
+        goals.Clear();
 
         if (targetInChunk)
         {
             int localTX = targetTX - baseX;
             int localTY = targetTY - baseY;
-            int goalIdx = localTY * SectorSize + localTX;
-            int gx = baseX + localTX, gy = baseY + localTY;
-            if (_grid.GetCost(gx, gy, tier) != 255 || _grid.GetCost(gx, gy) != 255)
-            {
-                cost[goalIdx] = 0f;
-                openList.Enqueue(goalIdx, 0f);
-            }
+            goals.Add(localTY * SectorSize + localTX);
         }
         else
         {
@@ -1161,7 +1141,7 @@ public class Pathfinder
                     int gx = baseX + lx, gy = baseY;
                     if (_grid.GetCost(gx, gy, tier) == 255) continue;
                     if (_grid.GetCost(gx, gy - 1) != 255)
-                    { int idx = lx; cost[idx] = 0f; openList.Enqueue(idx, 0f); }
+                        goals.Add(lx);
                 }
 
             if (seedS && endY < _grid.Height)
@@ -1170,7 +1150,7 @@ public class Pathfinder
                     int gx = baseX + lx, gy = endY - 1;
                     if (_grid.GetCost(gx, gy, tier) == 255) continue;
                     if (_grid.GetCost(gx, gy + 1) != 255)
-                    { int idx = (chunkH - 1) * SectorSize + lx; cost[idx] = 0f; openList.Enqueue(idx, 0f); }
+                        goals.Add((chunkH - 1) * SectorSize + lx);
                 }
 
             if (seedW && baseX > 0)
@@ -1179,7 +1159,7 @@ public class Pathfinder
                     int gx = baseX, gy = baseY + ly;
                     if (_grid.GetCost(gx, gy, tier) == 255) continue;
                     if (_grid.GetCost(gx - 1, gy) != 255)
-                    { int idx = ly * SectorSize; cost[idx] = 0f; openList.Enqueue(idx, 0f); }
+                        goals.Add(ly * SectorSize);
                 }
 
             if (seedE && endX < _grid.Width)
@@ -1188,52 +1168,15 @@ public class Pathfinder
                     int gx = endX - 1, gy = baseY + ly;
                     if (_grid.GetCost(gx, gy, tier) == 255) continue;
                     if (_grid.GetCost(gx + 1, gy) != 255)
-                    { int idx = ly * SectorSize + (chunkW - 1); cost[idx] = 0f; openList.Enqueue(idx, 0f); }
+                        goals.Add(ly * SectorSize + (chunkW - 1));
                 }
         }
 
-        if (openList.Count == 0) return Vec2.Zero;
-
-        // Dijkstra
-        while (openList.Count > 0)
-        {
-            int idx = openList.Dequeue();
-            float c = cost[idx];
-            int lx = idx % SectorSize, ly = idx / SectorSize;
-
-            for (int d = 0; d < 8; d++)
-            {
-                int nlx = lx + Dx8[d], nly = ly + Dy8[d];
-                if (nlx < 0 || nlx >= chunkW || nly < 0 || nly >= chunkH) continue;
-
-                int gx = baseX + nlx, gy = baseY + nly;
-                byte nc = _grid.GetCost(gx, gy, tier);
-                if (nc == 255) continue;
-
-                if (d % 2 == 1)
-                {
-                    int cAlx = lx + Dx8[d], cAly = ly;
-                    int cBlx = lx, cBly = ly + Dy8[d];
-                    if (cAlx >= 0 && cAlx < chunkW && _grid.GetCost(baseX + cAlx, baseY + cAly, tier) == 255) continue;
-                    if (cBly >= 0 && cBly < chunkH && _grid.GetCost(baseX + cBlx, baseY + cBly, tier) == 255) continue;
-                }
-
-                int nidx = nly * SectorSize + nlx;
-                float newCost = c + nc * StepMul8[d];
-                if (newCost < cost[nidx])
-                {
-                    cost[nidx] = newCost;
-                    openList.Enqueue(nidx, newCost);
-                }
-            }
-        }
-
-        // Escape propagation
-        RunEscapePropagation(cost, baseX, baseY, chunkW, chunkH, tier);
-
-        // Build direction field
+        // Fresh dirs array per call — stored in the ImaginaryChunk (never pooled).
         var dirs = new FlowDir[cells];
-        BuildChunkDirectionField(dirs, cost, baseX, baseY, chunkW, chunkH, tier);
+        float[] cost = _costScratch;
+        if (!RunWindowDijkstra(baseX, baseY, chunkW, chunkH, tier, goals, null, cost, dirs))
+            return Vec2.Zero; // no seedable goal — historical early-out, chunk state untouched
 
         // Update chunk state
         ic.Dirs = dirs;
@@ -1253,127 +1196,9 @@ public class Pathfinder
         }
     }
 
-    /// <summary>
-    /// Escape propagation: extend costs into tier-impassable but base-passable tiles.
-    /// </summary>
-    private void RunEscapePropagation(float[] cost, int baseX, int baseY, int chunkW, int chunkH, int tier)
-    {
-        if (_grid == null) return;
-
-        var escapePQ = new PriorityQueue<int, float>();
-        for (int ly = 0; ly < chunkH; ly++)
-        {
-            for (int lx = 0; lx < chunkW; lx++)
-            {
-                int idx = ly * SectorSize + lx;
-                if (cost[idx] >= GameConstants.InfCost) continue;
-
-                for (int d = 0; d < 8; d++)
-                {
-                    int nlx = lx + Dx8[d], nly = ly + Dy8[d];
-                    if (nlx < 0 || nlx >= chunkW || nly < 0 || nly >= chunkH) continue;
-                    int nidx = nly * SectorSize + nlx;
-                    if (cost[nidx] < GameConstants.InfCost) continue;
-                    int ngx = baseX + nlx, ngy = baseY + nly;
-                    if (_grid.GetCost(ngx, ngy, tier) != 255) continue; // not inflated
-                    if (_grid.GetCost(ngx, ngy) == 255) continue; // truly impassable
-
-                    float newCost = cost[idx] + StepMul8[d];
-                    if (newCost < cost[nidx])
-                    {
-                        cost[nidx] = newCost;
-                        escapePQ.Enqueue(nidx, newCost);
-                    }
-                }
-            }
-        }
-
-        while (escapePQ.Count > 0)
-        {
-            int idx = escapePQ.Dequeue();
-            float c = cost[idx];
-            int lx = idx % SectorSize, ly = idx / SectorSize;
-
-            for (int d = 0; d < 8; d++)
-            {
-                int nlx = lx + Dx8[d], nly = ly + Dy8[d];
-                if (nlx < 0 || nlx >= chunkW || nly < 0 || nly >= chunkH) continue;
-                int nidx = nly * SectorSize + nlx;
-                if (cost[nidx] < GameConstants.InfCost) continue;
-                int ngx = baseX + nlx, ngy = baseY + nly;
-                if (_grid.GetCost(ngx, ngy) == 255) continue;
-
-                float newCost = c + StepMul8[d];
-                if (newCost < cost[nidx])
-                {
-                    cost[nidx] = newCost;
-                    escapePQ.Enqueue(nidx, newCost);
-                }
-            }
-        }
-    }
-
-    /// <summary>
-    /// Build direction field for a chunk (same as sector but with chunk dimensions).
-    /// </summary>
-    private void BuildChunkDirectionField(FlowDir[] dirs, float[] cost, int baseX, int baseY,
-                                           int chunkW, int chunkH, int tier)
-    {
-        if (_grid == null) return;
-
-        for (int ly = 0; ly < chunkH; ly++)
-        {
-            for (int lx = 0; lx < chunkW; lx++)
-            {
-                int idx = ly * SectorSize + lx;
-                if (cost[idx] >= GameConstants.InfCost) continue;
-
-                float bc = cost[idx];
-                FlowDir bd = FlowDir.None;
-
-                for (int d = 0; d < 8; d++)
-                {
-                    int nlx = lx + Dx8[d], nly = ly + Dy8[d];
-                    if (nlx < 0 || nlx >= chunkW || nly < 0 || nly >= chunkH) continue;
-
-                    if (d % 2 == 1)
-                    {
-                        int cax = lx + Dx8[d], cay = ly;
-                        int cbx = lx, cby = ly + Dy8[d];
-                        if (cax >= 0 && cax < chunkW && _grid.GetCost(baseX + cax, baseY + cay, tier) == 255) continue;
-                        if (cby >= 0 && cby < chunkH && _grid.GetCost(baseX + cbx, baseY + cby, tier) == 255) continue;
-                    }
-
-                    float nc = cost[nly * SectorSize + nlx];
-                    if (nc < bc) { bc = nc; bd = FlowDirs8[d]; }
-                }
-
-                // Plateau fallback
-                if (bd == FlowDir.None && cost[idx] > 0f)
-                {
-                    float lowest = GameConstants.InfCost;
-                    for (int d = 0; d < 8; d++)
-                    {
-                        int nlx = lx + Dx8[d], nly = ly + Dy8[d];
-                        if (nlx < 0 || nlx >= chunkW || nly < 0 || nly >= chunkH) continue;
-
-                        if (d % 2 == 1)
-                        {
-                            int cax = lx + Dx8[d], cay = ly;
-                            int cbx = lx, cby = ly + Dy8[d];
-                            if (cax >= 0 && cax < chunkW && _grid.GetCost(baseX + cax, baseY + cay, tier) == 255) continue;
-                            if (cby >= 0 && cby < chunkH && _grid.GetCost(baseX + cbx, baseY + cby, tier) == 255) continue;
-                        }
-
-                        float nc = cost[nly * SectorSize + nlx];
-                        if (nc < lowest) { lowest = nc; bd = FlowDirs8[d]; }
-                    }
-                }
-
-                dirs[idx] = bd;
-            }
-        }
-    }
+    // (RunEscapePropagation and BuildChunkDirectionField — chunk-window copies
+    //  of the sector escape pass and BuildDirectionField — were folded into
+    //  RunWindowDijkstra / BuildDirectionField, 2026-07-04.)
 
     // =========================================================================
     // Main API

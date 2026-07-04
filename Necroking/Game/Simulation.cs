@@ -1662,11 +1662,11 @@ public class Simulation
             // at the desired charge speed. Skip ORCA / acceleration ramp / env-circle
             // clipping — the charger phases through smaller units by design, and
             // impact handling (larger-unit block, reach target) is in TickCharge.
-            // Wall collision at the bottom of the loop still applies, so solid
-            // geometry stops the charge.
+            // The collision pass still applies, so solid geometry stops the charge.
             if (_units[i].ChargePhase == 1 || _units[i].ChargePhase == 3)
             {
-                goto __ChargeWallCollision;
+                ResolveWallCollision(i, dt, envEntries);
+                continue;
             }
             // Dodge hop owns this unit's position interpolation — set in main tick
             // before UpdateMovement runs. Skip everything (ORCA, wall, env) so the
@@ -1953,38 +1953,50 @@ public class Simulation
             float maxLateral = accelDef?.MaxLateralAccel
                 ?? _gameData?.Settings.Combat.MaxLateralAccel ?? 15f;
 
+            // Integrate the accel model in sub-steps of at most 1/20s each.
+            // The old single min(dt, 1/20) clamp prevented snap-turns at high
+            // game speed but made the sim non-invariant: a x8 tick advanced
+            // 0.4s of game time while granting only 0.05s of accel/turn budget,
+            // so units accelerated and cornered 8x slower in game time at x8.
+            // Sub-stepping applies the same per-0.05s caps but for the WHOLE
+            // tick's duration — identical at x1 (one iteration), speed-
+            // invariant at any multiplier, and cheap (pure scalar math, no
+            // neighbor queries; the ORCA solve stays once per tick).
             Vec2 curVel = _units[i].Velocity;
-            Vec2 deltaVel = newVel - curVel;
-            float curSpeedSq = curVel.LengthSq();
+            int accelSubs = System.Math.Max(1, (int)MathF.Ceiling(dt / (1f / 20f)));
+            float accelH = dt / accelSubs;
+            for (int accStep = 0; accStep < accelSubs; accStep++)
+            {
+                Vec2 deltaVel = newVel - curVel;
+                float curSpeedSq = curVel.LengthSq();
 
-            // Pick the "forward" axis: current velocity direction if moving,
-            // else the desired direction (so a unit starting from rest still
-            // applies accel along its intended path).
-            Vec2 fwdDir;
-            if (curSpeedSq > 0.0001f)
-                fwdDir = curVel * (1f / MathF.Sqrt(curSpeedSq));
-            else if (newVel.LengthSq() > 0.0001f)
-                fwdDir = newVel.Normalized();
-            else
-                fwdDir = new Vec2(1, 0);
-            Vec2 latDir = new Vec2(-fwdDir.Y, fwdDir.X);
+                // Pick the "forward" axis: current velocity direction if moving,
+                // else the desired direction (so a unit starting from rest still
+                // applies accel along its intended path).
+                Vec2 fwdDir;
+                if (curSpeedSq > 0.0001f)
+                    fwdDir = curVel * (1f / MathF.Sqrt(curSpeedSq));
+                else if (newVel.LengthSq() > 0.0001f)
+                    fwdDir = newVel.Normalized();
+                else
+                    fwdDir = new Vec2(1, 0);
+                Vec2 latDir = new Vec2(-fwdDir.Y, fwdDir.X);
 
-            float fwdComp = deltaVel.X * fwdDir.X + deltaVel.Y * fwdDir.Y;
-            float latComp = deltaVel.X * latDir.X + deltaVel.Y * latDir.Y;
+                float fwdComp = deltaVel.X * fwdDir.X + deltaVel.Y * fwdDir.Y;
+                float latComp = deltaVel.X * latDir.X + deltaVel.Y * latDir.Y;
 
-            // Bound the per-step dt for the accel/turn caps. With the speed-scaled sim dt
-            // (up to ~0.4s at x8) an uncapped cap*dt budget can exceed the unit's entire
-            // velocity in one step → instant 180° snap-turns/reversals. Clamp to one frame.
-            float capDt = MathF.Min(dt, 1f / 20f);
-            float fwdCap = (fwdComp > 0f ? maxAccel : maxDecel) * capDt;
-            if (fwdComp > 0f) fwdComp = MathF.Min(fwdComp, fwdCap);
-            else fwdComp = MathF.Max(fwdComp, -fwdCap);
+                float fwdCap = (fwdComp > 0f ? maxAccel : maxDecel) * accelH;
+                if (fwdComp > 0f) fwdComp = MathF.Min(fwdComp, fwdCap);
+                else fwdComp = MathF.Max(fwdComp, -fwdCap);
 
-            float latCap = maxLateral * capDt;
-            if (latComp > latCap) latComp = latCap;
-            else if (latComp < -latCap) latComp = -latCap;
+                float latCap = maxLateral * accelH;
+                if (latComp > latCap) latComp = latCap;
+                else if (latComp < -latCap) latComp = -latCap;
 
-            _units[i].Velocity = curVel + fwdDir * fwdComp + latDir * latComp;
+                curVel += fwdDir * fwdComp + latDir * latComp;
+                if (fwdComp == 0f && latComp == 0f) break; // converged onto newVel
+            }
+            _units[i].Velocity = curVel;
 
             // For player-controlled (skipOrca) units: clip velocity against nearby
             // env circles so the necromancer stops / slides at tree edges instead
@@ -2037,267 +2049,277 @@ public class Simulation
                 _units[i].Velocity = vel;
             }
 
-            // Move with wall collision (axis-independent, gap probes, wall sliding)
-            __ChargeWallCollision:
-            Vec2 oldPos = _units[i].Position;
-            Vec2 delta = _units[i].Velocity * dt;
-            // Wall collision uses smaller radius than ORCA for 1-tile gap clearance
-            float r = _units[i].Radius * 0.7f;
+            ResolveWallCollision(i, dt, envEntries);
+        }
+    }
 
-            // Escape checks exist to catch EXTERNAL position writers (knockback
-            // landings, editor moves, spawns) — a unit that isn't moving and was
-            // clear can only become stuck via one of those, which is rare. For
-            // parked units (most of a formation), amortize the two escape probes
-            // to every 8th frame, staggered by index, instead of paying an
-            // IsBlocked + env query per unit per frame for nothing.
-            bool idleNow = delta.LengthSq() < 0.000001f;
-            bool skipEscapeChecks = idleNow && (((_frameNumber + (uint)i) & 7u) != 0u);
+    /// <summary>Collision pass: stuck-escapes (blocked tile, env-circle
+    /// overlap), the sub-stepped axis-independent wall move with gap probes
+    /// and wall sliding, and the world-bounds clamp. Runs for every moving
+    /// unit AND for chargers — TrampleSystem owns a charger's velocity and it
+    /// skips the velocity-resolution phases in UpdateMovement, but solid
+    /// geometry must still stop it. (Extracted 2026-07-04; replaced the
+    /// __ChargeWallCollision goto.)</summary>
+    private void ResolveWallCollision(int i, float dt, List<EnvSpatialIndex.Entry> envEntries)
+    {
+        Vec2 oldPos = _units[i].Position;
+        Vec2 delta = _units[i].Velocity * dt;
+        // Wall collision uses smaller radius than ORCA for 1-tile gap clearance
+        float r = _units[i].Radius * 0.7f;
 
-            // --- Stuck-inside-blocked-tile escape ---
-            // If unit's current position overlaps an impassable tile, push toward nearest free tile
-            if (!skipEscapeChecks && IsBlocked(oldPos.X, oldPos.Y, r))
+        // Escape checks exist to catch EXTERNAL position writers (knockback
+        // landings, editor moves, spawns) — a unit that isn't moving and was
+        // clear can only become stuck via one of those, which is rare. For
+        // parked units (most of a formation), amortize the two escape probes
+        // to every 8th frame, staggered by index, instead of paying an
+        // IsBlocked + env query per unit per frame for nothing.
+        bool idleNow = delta.LengthSq() < 0.000001f;
+        bool skipEscapeChecks = idleNow && (((_frameNumber + (uint)i) & 7u) != 0u);
+
+        // --- Stuck-inside-blocked-tile escape ---
+        // If unit's current position overlaps an impassable tile, push toward nearest free tile
+        if (!skipEscapeChecks && IsBlocked(oldPos.X, oldPos.Y, r))
+        {
+            int unitGX = (int)MathF.Floor(oldPos.X / GameConstants.TileSize);
+            int unitGY = (int)MathF.Floor(oldPos.Y / GameConstants.TileSize);
+            float bestDist2 = 1e18f;
+            Vec2 bestPos = oldPos;
+            bool found = false;
+
+            // Expanding Chebyshev rings, nearest ring first. The old scan
+            // walked full rows top-to-bottom and stopped at the FIRST row
+            // containing any free tile — i.e. it picked a tile up to 20
+            // tiles NORTH and shoved the unit through every wall between,
+            // even when the adjacent tile south was free. Ring order finds
+            // the genuinely nearest tile and touches ~2 rings in the common
+            // case instead of 41x41 tiles. After the first hit we scan one
+            // extra ring: a cardinal tile in ring k+1 can be closer
+            // (Euclidean) than a diagonal tile in ring k.
+            const int EscapeSearchRadius = 20;
+            int foundRing = -1;
+            for (int ring = 0; ring <= EscapeSearchRadius; ring++)
             {
-                int unitGX = (int)MathF.Floor(oldPos.X / GameConstants.TileSize);
-                int unitGY = (int)MathF.Floor(oldPos.Y / GameConstants.TileSize);
-                float bestDist2 = 1e18f;
-                Vec2 bestPos = oldPos;
-                bool found = false;
-
-                // Expanding Chebyshev rings, nearest ring first. The old scan
-                // walked full rows top-to-bottom and stopped at the FIRST row
-                // containing any free tile — i.e. it picked a tile up to 20
-                // tiles NORTH and shoved the unit through every wall between,
-                // even when the adjacent tile south was free. Ring order finds
-                // the genuinely nearest tile and touches ~2 rings in the common
-                // case instead of 41x41 tiles. After the first hit we scan one
-                // extra ring: a cardinal tile in ring k+1 can be closer
-                // (Euclidean) than a diagonal tile in ring k.
-                const int EscapeSearchRadius = 20;
-                int foundRing = -1;
-                for (int ring = 0; ring <= EscapeSearchRadius; ring++)
+                if (foundRing >= 0 && ring > foundRing + 1) break;
+                for (int dy = -ring; dy <= ring; dy++)
                 {
-                    if (foundRing >= 0 && ring > foundRing + 1) break;
-                    for (int dy = -ring; dy <= ring; dy++)
+                    int stepX = (dy == -ring || dy == ring) ? 1 : 2 * ring;
+                    if (stepX == 0) stepX = 1; // ring 0: single tile
+                    for (int dx = -ring; dx <= ring; dx += stepX)
                     {
-                        int stepX = (dy == -ring || dy == ring) ? 1 : 2 * ring;
-                        if (stepX == 0) stepX = 1; // ring 0: single tile
-                        for (int dx = -ring; dx <= ring; dx += stepX)
+                        int gx = unitGX + dx, gy = unitGY + dy;
+                        if (!_grid.InBounds(gx, gy)) continue;
+                        if (_grid.GetCost(gx, gy) == 255) continue;
+
+                        float tx = (gx + 0.5f) * GameConstants.TileSize;
+                        float ty = (gy + 0.5f) * GameConstants.TileSize;
+                        if (IsBlocked(tx, ty, r)) continue;
+
+                        float d2 = (tx - oldPos.X) * (tx - oldPos.X) + (ty - oldPos.Y) * (ty - oldPos.Y);
+                        if (d2 < bestDist2)
                         {
-                            int gx = unitGX + dx, gy = unitGY + dy;
-                            if (!_grid.InBounds(gx, gy)) continue;
-                            if (_grid.GetCost(gx, gy) == 255) continue;
-
-                            float tx = (gx + 0.5f) * GameConstants.TileSize;
-                            float ty = (gy + 0.5f) * GameConstants.TileSize;
-                            if (IsBlocked(tx, ty, r)) continue;
-
-                            float d2 = (tx - oldPos.X) * (tx - oldPos.X) + (ty - oldPos.Y) * (ty - oldPos.Y);
-                            if (d2 < bestDist2)
-                            {
-                                bestDist2 = d2;
-                                bestPos = new Vec2(tx, ty);
-                                found = true;
-                            }
+                            bestDist2 = d2;
+                            bestPos = new Vec2(tx, ty);
+                            found = true;
                         }
                     }
-                    if (found && foundRing < 0) foundRing = ring;
                 }
-
-                if (found)
-                {
-                    float dist = MathF.Sqrt(bestDist2);
-                    // Floor the push at an absolute speed: MaxSpeed can be 0 here
-                    // (deep-water/wall terrain multiplies it to 0), and a 0-speed
-                    // escape means the unit is stuck forever with the scan
-                    // re-running every frame.
-                    float pushSpeed = MathF.Max(_units[i].MaxSpeed * 3f, 2f);
-                    // Cap the escape shove at ~1 tile/frame: with the speed-scaled dt the
-                    // raw MaxSpeed*3*dt push can reach ~9.6 tiles at x8, teleporting the unit
-                    // through thin walls to the "nearest free tile" on the far side.
-                    float step = MathF.Min(pushSpeed * dt, 1f);
-                    if (dist <= step || dist < 0.1f)
-                    {
-                        oldPos = bestPos;
-                    }
-                    else
-                    {
-                        Vec2 dir = new((bestPos.X - oldPos.X) / dist, (bestPos.Y - oldPos.Y) / dist);
-                        oldPos = new Vec2(oldPos.X + dir.X * step, oldPos.Y + dir.Y * step);
-                    }
-                    _units[i].Position = oldPos;
-                }
+                if (found && foundRing < 0) foundRing = ring;
             }
 
-            // --- Stuck-inside-env-object escape ---
-            // Env objects aren't on the walls-only grid anymore, so the wall escape
-            // above won't catch a unit that spawned on a tree or had one placed on
-            // it. Push outward along the vector from the closest overlapping
-            // object's centre, same feel as the grid escape (MaxSpeed × 3).
-            // Amortized for parked units (see skipEscapeChecks above).
-            if (!skipEscapeChecks)
+            if (found)
             {
-                envEntries.Clear();
-                float selfR = _units[i].Radius;
-                _envIndex.QueryRadius(oldPos, selfR, envEntries);
-                float bestPenDist2 = 0f;
-                Vec2 pushDir = Vec2.Zero;
-                foreach (var e in envEntries)
+                float dist = MathF.Sqrt(bestDist2);
+                // Floor the push at an absolute speed: MaxSpeed can be 0 here
+                // (deep-water/wall terrain multiplies it to 0), and a 0-speed
+                // escape means the unit is stuck forever with the scan
+                // re-running every frame.
+                float pushSpeed = MathF.Max(_units[i].MaxSpeed * 3f, 2f);
+                // Cap the escape shove at ~1 tile/frame: with the speed-scaled dt the
+                // raw MaxSpeed*3*dt push can reach ~9.6 tiles at x8, teleporting the unit
+                // through thin walls to the "nearest free tile" on the far side.
+                float step = MathF.Min(pushSpeed * dt, 1f);
+                if (dist <= step || dist < 0.1f)
                 {
-                    float dx = oldPos.X - e.CX, dy = oldPos.Y - e.CY;
-                    float combined = selfR + e.Radius;
-                    float d2 = dx * dx + dy * dy;
-                    if (d2 >= combined * combined) continue;
-                    // Penetration depth: how far inside the combined circle we are.
-                    float pen = combined - MathF.Sqrt(d2);
-                    if (pen * pen > bestPenDist2)
-                    {
-                        bestPenDist2 = pen * pen;
-                        float len = MathF.Max(0.001f, MathF.Sqrt(d2));
-                        pushDir = new Vec2(dx / len, dy / len);
-                    }
-                }
-                if (bestPenDist2 > 0f)
-                {
-                    // Speed floor: MaxSpeed can be 0 (deep-water/wall terrain mult).
-                    float pushSpeed = MathF.Max(_units[i].MaxSpeed * 3f, 2f);
-                    // Cap at ~1 tile/frame (see grid escape) AND at the actual
-                    // penetration depth — a 0.01u overlap shouldn't shove a full
-                    // tile (visible pop at high game speed).
-                    float pen = MathF.Sqrt(bestPenDist2);
-                    float step = MathF.Min(MathF.Min(pushSpeed * dt, 1f), pen + 0.01f);
-                    oldPos = new Vec2(oldPos.X + pushDir.X * step, oldPos.Y + pushDir.Y * step);
-                    _units[i].Position = oldPos;
-                }
-            }
-
-            // Sub-step the displacement so each collision probe is <= half a tile apart: at
-            // high game speed dt can be large enough that one Euler step skips a 1-tile wall
-            // (start clear, end clear, the wall between never sampled -> tunneling). At normal
-            // speed delta is small so moveSubs==1 and this is identical to a single move.
-            int moveSubs = System.Math.Max(1, (int)MathF.Ceiling(delta.Length() / (0.5f * GameConstants.TileSize)));
-            Vec2 fullDelta = delta;
-            Vec2 subStart = oldPos;
-            Vec2 movedPos = oldPos;
-            for (int ms = 0; ms < moveSubs; ms++)
-            {
-            oldPos = subStart;
-            delta = fullDelta * (1f / moveSubs);
-
-            // --- Axis-independent movement with gap probing ---
-            Vec2 newPos = oldPos;
-
-            // Try X movement, with perpendicular Y probe if blocked
-            if (delta.X != 0f)
-            {
-                if (!IsBlocked(oldPos.X + delta.X, oldPos.Y, r))
-                {
-                    newPos = new Vec2(oldPos.X + delta.X, newPos.Y);
+                    oldPos = bestPos;
                 }
                 else
                 {
-                    // Probe small Y offsets to find a gap center
-                    foreach (float off in WallGapProbes)
-                    {
-                        float probeY = oldPos.Y + off;
-                        if (!IsBlocked(oldPos.X, probeY, r) &&
-                            !IsBlocked(oldPos.X + delta.X, probeY, r))
-                        {
-                            newPos = new Vec2(oldPos.X + delta.X, probeY);
-                            break;
-                        }
-                    }
+                    Vec2 dir = new((bestPos.X - oldPos.X) / dist, (bestPos.Y - oldPos.Y) / dist);
+                    oldPos = new Vec2(oldPos.X + dir.X * step, oldPos.Y + dir.Y * step);
                 }
+                _units[i].Position = oldPos;
             }
-
-            // Try Y movement, with perpendicular X probe if blocked
-            if (delta.Y != 0f)
-            {
-                if (!IsBlocked(newPos.X, oldPos.Y + delta.Y, r))
-                {
-                    newPos = new Vec2(newPos.X, oldPos.Y + delta.Y);
-                }
-                else if (newPos.Y == oldPos.Y) // only probe if Y wasn't already adjusted
-                {
-                    foreach (float off in WallGapProbes)
-                    {
-                        float probeX = newPos.X + off;
-                        if (!IsBlocked(probeX, oldPos.Y, r) &&
-                            !IsBlocked(probeX, oldPos.Y + delta.Y, r))
-                        {
-                            newPos = new Vec2(probeX, oldPos.Y + delta.Y);
-                            break;
-                        }
-                    }
-                }
-            }
-
-            // --- Wall sliding ---
-            // If both axes blocked but velocity is nonzero, compute wall normal
-            // from nearby impassable tiles and slide along the tangent
-            if (newPos.X == oldPos.X && newPos.Y == oldPos.Y &&
-                (delta.X != 0f || delta.Y != 0f))
-            {
-                Vec2 wallNormal = Vec2.Zero;
-                int gx0 = (int)MathF.Floor((oldPos.X - r * 2f) / GameConstants.TileSize);
-                int gy0 = (int)MathF.Floor((oldPos.Y - r * 2f) / GameConstants.TileSize);
-                int gx1 = (int)MathF.Floor((oldPos.X + r * 2f) / GameConstants.TileSize);
-                int gy1 = (int)MathF.Floor((oldPos.Y + r * 2f) / GameConstants.TileSize);
-
-                for (int gy = gy0; gy <= gy1; gy++)
-                {
-                    for (int gx = gx0; gx <= gx1; gx++)
-                    {
-                        if (!_grid.InBounds(gx, gy)) continue;
-                        if (_grid.GetCost(gx, gy) != 255) continue;
-                        float tileX = (gx + 0.5f) * GameConstants.TileSize;
-                        float tileY = (gy + 0.5f) * GameConstants.TileSize;
-                        float awayX = oldPos.X - tileX;
-                        float awayY = oldPos.Y - tileY;
-                        float d2 = awayX * awayX + awayY * awayY;
-                        if (d2 > 0.0001f)
-                        {
-                            wallNormal = new Vec2(wallNormal.X + awayX / d2, wallNormal.Y + awayY / d2);
-                        }
-                    }
-                }
-
-                float nLen = wallNormal.Length();
-                if (nLen > 0.001f)
-                {
-                    wallNormal = wallNormal * (1f / nLen);
-                    // Project velocity onto wall tangent: slide = v - (v.n)*n
-                    float dot = delta.X * wallNormal.X + delta.Y * wallNormal.Y;
-                    Vec2 slide = new(delta.X - dot * wallNormal.X, delta.Y - dot * wallNormal.Y);
-
-                    if (slide.LengthSq() > 0.0001f)
-                    {
-                        Vec2 slidePos = oldPos;
-                        if (slide.X != 0f && !IsBlocked(oldPos.X + slide.X, oldPos.Y, r))
-                            slidePos = new Vec2(oldPos.X + slide.X, slidePos.Y);
-                        if (slide.Y != 0f && !IsBlocked(slidePos.X, oldPos.Y + slide.Y, r))
-                            slidePos = new Vec2(slidePos.X, oldPos.Y + slide.Y);
-                        newPos = slidePos;
-                    }
-                }
-            }
-
-            subStart = newPos;
-            movedPos = newPos;
-            // Fully blocked this sub-step (neither axis advanced, no slide) — further
-            // sub-steps can't help, so stop early.
-            if (newPos.X == oldPos.X && newPos.Y == oldPos.Y) break;
-            } // end displacement sub-step loop
-
-            // Clamp to world bounds: knockback / ORCA / stuck-escape / dev-move can push a
-            // unit off the map, and off-map positions corrupt the quadtree (corner-leaf
-            // pruning drops them from queries) and WorldToGrid (negative indices). IsBlocked
-            // treats out-of-bounds tiles as walkable, so nothing else stops it.
-            float wMax = _grid.Width * GameConstants.TileSize - 1e-3f;
-            float hMax = _grid.Height * GameConstants.TileSize - 1e-3f;
-            _units[i].Position = new Vec2(
-                MathUtil.Clamp(movedPos.X, 0f, wMax),
-                MathUtil.Clamp(movedPos.Y, 0f, hMax));
         }
+
+        // --- Stuck-inside-env-object escape ---
+        // Env objects aren't on the walls-only grid anymore, so the wall escape
+        // above won't catch a unit that spawned on a tree or had one placed on
+        // it. Push outward along the vector from the closest overlapping
+        // object's centre, same feel as the grid escape (MaxSpeed × 3).
+        // Amortized for parked units (see skipEscapeChecks above).
+        if (!skipEscapeChecks)
+        {
+            envEntries.Clear();
+            float selfR = _units[i].Radius;
+            _envIndex.QueryRadius(oldPos, selfR, envEntries);
+            float bestPenDist2 = 0f;
+            Vec2 pushDir = Vec2.Zero;
+            foreach (var e in envEntries)
+            {
+                float dx = oldPos.X - e.CX, dy = oldPos.Y - e.CY;
+                float combined = selfR + e.Radius;
+                float d2 = dx * dx + dy * dy;
+                if (d2 >= combined * combined) continue;
+                // Penetration depth: how far inside the combined circle we are.
+                float pen = combined - MathF.Sqrt(d2);
+                if (pen * pen > bestPenDist2)
+                {
+                    bestPenDist2 = pen * pen;
+                    float len = MathF.Max(0.001f, MathF.Sqrt(d2));
+                    pushDir = new Vec2(dx / len, dy / len);
+                }
+            }
+            if (bestPenDist2 > 0f)
+            {
+                // Speed floor: MaxSpeed can be 0 (deep-water/wall terrain mult).
+                float pushSpeed = MathF.Max(_units[i].MaxSpeed * 3f, 2f);
+                // Cap at ~1 tile/frame (see grid escape) AND at the actual
+                // penetration depth — a 0.01u overlap shouldn't shove a full
+                // tile (visible pop at high game speed).
+                float pen = MathF.Sqrt(bestPenDist2);
+                float step = MathF.Min(MathF.Min(pushSpeed * dt, 1f), pen + 0.01f);
+                oldPos = new Vec2(oldPos.X + pushDir.X * step, oldPos.Y + pushDir.Y * step);
+                _units[i].Position = oldPos;
+            }
+        }
+
+        // Sub-step the displacement so each collision probe is <= half a tile apart: at
+        // high game speed dt can be large enough that one Euler step skips a 1-tile wall
+        // (start clear, end clear, the wall between never sampled -> tunneling). At normal
+        // speed delta is small so moveSubs==1 and this is identical to a single move.
+        int moveSubs = System.Math.Max(1, (int)MathF.Ceiling(delta.Length() / (0.5f * GameConstants.TileSize)));
+        Vec2 fullDelta = delta;
+        Vec2 subStart = oldPos;
+        Vec2 movedPos = oldPos;
+        for (int ms = 0; ms < moveSubs; ms++)
+        {
+        oldPos = subStart;
+        delta = fullDelta * (1f / moveSubs);
+
+        // --- Axis-independent movement with gap probing ---
+        Vec2 newPos = oldPos;
+
+        // Try X movement, with perpendicular Y probe if blocked
+        if (delta.X != 0f)
+        {
+            if (!IsBlocked(oldPos.X + delta.X, oldPos.Y, r))
+            {
+                newPos = new Vec2(oldPos.X + delta.X, newPos.Y);
+            }
+            else
+            {
+                // Probe small Y offsets to find a gap center
+                foreach (float off in WallGapProbes)
+                {
+                    float probeY = oldPos.Y + off;
+                    if (!IsBlocked(oldPos.X, probeY, r) &&
+                        !IsBlocked(oldPos.X + delta.X, probeY, r))
+                    {
+                        newPos = new Vec2(oldPos.X + delta.X, probeY);
+                        break;
+                    }
+                }
+            }
+        }
+
+        // Try Y movement, with perpendicular X probe if blocked
+        if (delta.Y != 0f)
+        {
+            if (!IsBlocked(newPos.X, oldPos.Y + delta.Y, r))
+            {
+                newPos = new Vec2(newPos.X, oldPos.Y + delta.Y);
+            }
+            else if (newPos.Y == oldPos.Y) // only probe if Y wasn't already adjusted
+            {
+                foreach (float off in WallGapProbes)
+                {
+                    float probeX = newPos.X + off;
+                    if (!IsBlocked(probeX, oldPos.Y, r) &&
+                        !IsBlocked(probeX, oldPos.Y + delta.Y, r))
+                    {
+                        newPos = new Vec2(probeX, oldPos.Y + delta.Y);
+                        break;
+                    }
+                }
+            }
+        }
+
+        // --- Wall sliding ---
+        // If both axes blocked but velocity is nonzero, compute wall normal
+        // from nearby impassable tiles and slide along the tangent
+        if (newPos.X == oldPos.X && newPos.Y == oldPos.Y &&
+            (delta.X != 0f || delta.Y != 0f))
+        {
+            Vec2 wallNormal = Vec2.Zero;
+            int gx0 = (int)MathF.Floor((oldPos.X - r * 2f) / GameConstants.TileSize);
+            int gy0 = (int)MathF.Floor((oldPos.Y - r * 2f) / GameConstants.TileSize);
+            int gx1 = (int)MathF.Floor((oldPos.X + r * 2f) / GameConstants.TileSize);
+            int gy1 = (int)MathF.Floor((oldPos.Y + r * 2f) / GameConstants.TileSize);
+
+            for (int gy = gy0; gy <= gy1; gy++)
+            {
+                for (int gx = gx0; gx <= gx1; gx++)
+                {
+                    if (!_grid.InBounds(gx, gy)) continue;
+                    if (_grid.GetCost(gx, gy) != 255) continue;
+                    float tileX = (gx + 0.5f) * GameConstants.TileSize;
+                    float tileY = (gy + 0.5f) * GameConstants.TileSize;
+                    float awayX = oldPos.X - tileX;
+                    float awayY = oldPos.Y - tileY;
+                    float d2 = awayX * awayX + awayY * awayY;
+                    if (d2 > 0.0001f)
+                    {
+                        wallNormal = new Vec2(wallNormal.X + awayX / d2, wallNormal.Y + awayY / d2);
+                    }
+                }
+            }
+
+            float nLen = wallNormal.Length();
+            if (nLen > 0.001f)
+            {
+                wallNormal = wallNormal * (1f / nLen);
+                // Project velocity onto wall tangent: slide = v - (v.n)*n
+                float dot = delta.X * wallNormal.X + delta.Y * wallNormal.Y;
+                Vec2 slide = new(delta.X - dot * wallNormal.X, delta.Y - dot * wallNormal.Y);
+
+                if (slide.LengthSq() > 0.0001f)
+                {
+                    Vec2 slidePos = oldPos;
+                    if (slide.X != 0f && !IsBlocked(oldPos.X + slide.X, oldPos.Y, r))
+                        slidePos = new Vec2(oldPos.X + slide.X, slidePos.Y);
+                    if (slide.Y != 0f && !IsBlocked(slidePos.X, oldPos.Y + slide.Y, r))
+                        slidePos = new Vec2(slidePos.X, oldPos.Y + slide.Y);
+                    newPos = slidePos;
+                }
+            }
+        }
+
+        subStart = newPos;
+        movedPos = newPos;
+        // Fully blocked this sub-step (neither axis advanced, no slide) — further
+        // sub-steps can't help, so stop early.
+        if (newPos.X == oldPos.X && newPos.Y == oldPos.Y) break;
+        } // end displacement sub-step loop
+
+        // Clamp to world bounds: knockback / ORCA / stuck-escape / dev-move can push a
+        // unit off the map, and off-map positions corrupt the quadtree (corner-leaf
+        // pruning drops them from queries) and WorldToGrid (negative indices). IsBlocked
+        // treats out-of-bounds tiles as walkable, so nothing else stops it.
+        float wMax = _grid.Width * GameConstants.TileSize - 1e-3f;
+        float hMax = _grid.Height * GameConstants.TileSize - 1e-3f;
+        _units[i].Position = new Vec2(
+            MathUtil.Clamp(movedPos.X, 0f, wMax),
+            MathUtil.Clamp(movedPos.Y, 0f, hMax));
     }
 
     // Wall-slide gap probe offsets. Static so the per-blocked-probe, per-sub-step

@@ -1,5 +1,43 @@
 # Movement Systems Review — findings & plans (2026-07-03)
 
+## STATUS 2026-07-04 — implementation done through Phase 3
+
+- **Phase 1 (correctness)** — commit `ecdffe8`. Everything in P0 + the P1 ORCA/budget
+  fixes below is DONE.
+- **Phase 2 (perf)** — commit `def083d`. Dirty-region rebuild (P0-C2), flow-key
+  quantization (P2-1 light: 2x2 tile buckets + 8-tile border bands), allocation churn
+  (P2-2..8), speed-aware ORCA query radius (P1-ORCA-3). DONE.
+- **Phase 3 (structural)** — dead-code deletion (`e8c3617`), window-Dijkstra
+  consolidation into one `RunWindowDijkstra` core with pooled scratch + stale-pop skip,
+  RVO2-canonical LP restructure (fail-index LP2D, hard static lines in LP3, no
+  recursion/alloc), `__ChargeWallCollision` goto replaced by an extracted
+  `ResolveWallCollision` pass, sub-stepped accel integration (fixes 8x-slower
+  accel/turn at x8), swept trample scan + impact trigger (fixes phase-through at x8).
+
+### Deliberately deferred (still open)
+1. **Portal-set flows / portal graph (P4-1, P4-2)** — NOT implemented. The cache-dedupe
+   half of its value was captured by the Phase 2 key quantization; the remaining value
+   (terrain-aware inter-sector routing, chokepoint-width awareness, exact fields w.r.t.
+   the abstraction) requires the actual portal graph (contiguous border spans as nodes,
+   cached intra-sector portal-to-portal costs, incremental updates hooked into
+   InvalidateRegion). That is a feature-sized project — do it as its own session, not as
+   the tail of this one. Design sketch in P4 below still stands.
+2. **Full MovementSystem class extraction (P4-3)** — partially done (collision pass
+   extracted, goto gone, accel sub-stepped). The remaining step — moving velocity
+   resolution/gather into separate methods or a dedicated system class — is cosmetic
+   structure, best done fresh.
+3. **Legacy UpdateWolfAI deletion (P3 debt)** — blocked on porting WolfHitAndRunScenario
+   to the archetype handler; also the legacy AIBehavior path has the live pre-existing
+   trample bug (below) worth fixing first.
+4. **Pre-existing trample scenario failures** — `trample_miss` / `trample_no_escape`
+   fail on baseline master: the boar never initiates its charge (maxPhase=0, zero
+   combat-log entries) via legacy `AIBehavior.AttackClosest`. Suspect the
+   routine-transition change (0b435eb) or def application (spawned Boar logs
+   size=2 radius=0.50 combatSpeed=0.9 vs older logs' selfR=0.60). Own task.
+5. **Progress-based stuck detection (P4-4)** and **walls as ORCA constraints (P4-5)** —
+   not implemented; current stuck detection still can't see walls (only crowd/env
+   congestion). Revisit if wall-hugging stalls show up in play.
+
 Full review of the movement stack: sector pathfinding, inter-chunk routing, imaginary-chunk
 escape, ORCA, wall collision, and connected systems (quadtree, horde formation, physics,
 trample, unit lifecycle). Four parallel deep-review agents + main-session verification of the

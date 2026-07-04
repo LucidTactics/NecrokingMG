@@ -141,11 +141,14 @@ public static class TrampleSystem
         Vec2 toTarget = units[targetIdx].Position - units[idx].Position;
         float distToTarget = toTarget.Length();
 
-        // Impact trigger: leading edges meet.
+        // Impact trigger: leading edges meet. Swept: the charger homes STRAIGHT
+        // at the target, so if this tick's motion (chargeSpeed*dt — up to
+        // several units at x8 game speed) would carry it inside the trigger,
+        // fire now instead of leapfrogging past it and orbiting back.
         float collisionTrigger = units[idx].Radius + units[targetIdx].Radius;
         float effectiveTrigger = MathF.Max(collisionTrigger, weapon.TrampleImpactRange);
 
-        if (distToTarget <= effectiveTrigger)
+        if (distToTarget <= effectiveTrigger + chargeSpeed * dt)
         {
             Vec2 chargeDir = distToTarget > 0.0001f
                 ? new Vec2(toTarget.X / distToTarget, toTarget.Y / distToTarget)
@@ -194,7 +197,7 @@ public static class TrampleSystem
         units[idx].Velocity = new Vec2(dir.X * chargeSpeed, dir.Y * chargeSpeed);
         units[idx].FacingAngle = MathF.Atan2(dir.Y, dir.X) * (180f / MathF.PI);
 
-        ScanAndTrample(sim, idx, weaponIdx, weapon, dir, chargeSpeed);
+        ScanAndTrample(sim, idx, weaponIdx, weapon, dir, chargeSpeed, stepLen);
 
         // Same-or-larger blocker → stop charge, stagger trampler.
         if (TryCheckBlockingUnit(sim, idx, weapon.TrampleRadius, out int blockerIdx))
@@ -232,7 +235,7 @@ public static class TrampleSystem
         units[idx].Velocity = new Vec2(dir.X * chargeSpeed, dir.Y * chargeSpeed);
         units[idx].FacingAngle = MathF.Atan2(dir.Y, dir.X) * (180f / MathF.PI);
 
-        ScanAndTrample(sim, idx, weaponIdx, weapon, dir, chargeSpeed);
+        ScanAndTrample(sim, idx, weaponIdx, weapon, dir, chargeSpeed, stepLen);
 
         if (TryCheckBlockingUnit(sim, idx, weapon.TrampleRadius, out int blockerIdx))
         {
@@ -527,17 +530,24 @@ public static class TrampleSystem
     }
 
     /// <summary>Scan quadtree for smaller hostile units within TrampleRadius of
-    /// the charger and resolve a billiards-style hit on each.</summary>
+    /// the charger's SWEPT path this tick and resolve a billiards-style hit on
+    /// each. Swept (segment, not point): at x8 game speed the charger covers
+    /// several units of distance per tick, and the old point sample at the
+    /// current position phased straight through everyone in between.</summary>
     private static readonly List<uint> _scratch = new(16);
     private static void ScanAndTrample(Simulation sim, int idx, int weaponIdx,
-        WeaponStats weapon, Vec2 trampleDir, float chargeSpeed)
+        WeaponStats weapon, Vec2 trampleDir, float chargeSpeed, float sweepLen)
     {
         var units = sim.UnitsMut;
         Faction selfFaction = units[idx].Faction;
         FactionMask mask = FactionMaskExt.AllExcept(selfFaction);
 
+        Vec2 p0 = units[idx].Position;
         _scratch.Clear();
-        sim.Quadtree.QueryRadiusByFaction(units[idx].Position, weapon.TrampleRadius, mask, _scratch);
+        // Capsule query: circle around the segment midpoint, widened by half
+        // the sweep length, then an exact point-to-segment test per candidate.
+        Vec2 mid = new(p0.X + trampleDir.X * sweepLen * 0.5f, p0.Y + trampleDir.Y * sweepLen * 0.5f);
+        sim.Quadtree.QueryRadiusByFaction(mid, weapon.TrampleRadius + sweepLen * 0.5f, mask, _scratch);
 
         int selfSize = units[idx].Size;
         for (int k = 0; k < _scratch.Count; k++)
@@ -546,6 +556,13 @@ public static class TrampleSystem
             if (vi < 0 || vi == idx || !units[vi].Alive) continue;
             if (units[vi].Size >= selfSize) continue; // bigger blocks via TryCheckBlockingUnit
             if (units[idx].TrampledIds!.Contains(units[vi].Id)) continue;
+
+            // Exact distance from victim to the swept segment [p0, p0 + dir*sweepLen].
+            Vec2 vp = units[vi].Position;
+            float t = MathUtil.Clamp((vp.X - p0.X) * trampleDir.X + (vp.Y - p0.Y) * trampleDir.Y, 0f, sweepLen);
+            float cx = p0.X + trampleDir.X * t, cy = p0.Y + trampleDir.Y * t;
+            float dx = vp.X - cx, dy = vp.Y - cy;
+            if (dx * dx + dy * dy > weapon.TrampleRadius * weapon.TrampleRadius) continue;
 
             TryTrampleHit(sim, idx, vi, weaponIdx, trampleDir, chargeSpeed,
                 isPrimary: false);
