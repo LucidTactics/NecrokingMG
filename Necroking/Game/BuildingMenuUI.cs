@@ -348,13 +348,16 @@ public class BuildingMenuUI : Necroking.UI.IModalLayer
             }
 
             // Assign the player's necromancer to walk over and build the glyph.
+            // StartRoutine fires the OLD routine's exit cleanup (and restarts the build
+            // routine when retargeting a new blueprint); fields are set after.
             if (_sim != null && _sim.NecromancerIndex >= 0)
             {
                 int necroIdx = _sim.NecromancerIndex;
+                AI.AIControl.StartRoutine(_sim.UnitsMut, necroIdx,
+                    AI.PlayerControlledHandler.RoutineBuildGlyph,
+                    AI.PlayerControlledHandler.BuildSub_WalkToSite);
                 _sim.UnitsMut[necroIdx].BuildGlyphId = glyph.Id;
                 _sim.UnitsMut[necroIdx].BuildTimer = 0f;
-                _sim.UnitsMut[necroIdx].Routine = AI.PlayerControlledHandler.RoutineBuildGlyph;
-                _sim.UnitsMut[necroIdx].Subroutine = AI.PlayerControlledHandler.BuildSub_WalkToSite;
             }
             return true;
         }

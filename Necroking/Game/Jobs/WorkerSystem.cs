@@ -209,6 +209,10 @@ public class WorkerSystem
         if (IsGraveOccupied(graveObjIdx)) return false;
 
         var u = _sim.Units[idx];
+        // Yank the unit out of whatever its OLD archetype was doing (fires that
+        // archetype's exit hook, clears combat pins, resets routine) BEFORE swapping
+        // the archetype — the new one starts from a clean slate.
+        AI.AIControl.Interrupt(_sim.Units, idx, "worker-assign");
         u.WorkerPrevArchetype = u.Archetype;
         u.Archetype = WorkerArchetype;
         u.WorkerHomeObjIdx = graveObjIdx;
@@ -217,7 +221,6 @@ public class WorkerSystem
         u.WorkerTargetObjIdx = -1;
         u.WorkerCarryType = "";
         u.WorkerCarryAmount = 0;
-        u.Routine = 0; u.Subroutine = 0;
         return true;
     }
 
@@ -226,6 +229,9 @@ public class WorkerSystem
         if (!_sim.Units.TryGetIndex(unitId, out int idx)) return false;
         var u = _sim.Units[idx];
         if (u.Archetype != WorkerArchetype) return false;
+        // Interrupt while still the Worker archetype (its exit hook, if any, must see
+        // the worker state), then restore the previous archetype at routine 0.
+        AI.AIControl.Interrupt(_sim.Units, idx, "worker-unassign");
         u.Archetype = u.WorkerPrevArchetype;
         u.WorkerHomeObjIdx = -1;
         u.WorkerJobId = "";
@@ -233,7 +239,6 @@ public class WorkerSystem
         u.WorkerTargetObjIdx = -1;
         u.WorkerCarryType = "";
         u.WorkerCarryAmount = 0;
-        u.Routine = 0; u.Subroutine = 0;
         u.PreferredVel = Vec2.Zero;
         return true;
     }

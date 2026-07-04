@@ -88,9 +88,12 @@ public partial class Game1
         // else: resume — essence already spent on first start; just reassign channeler.
 
         ts.ChannelerUnitID = _sim.Units[necroIdx].Id;
+        // StartRoutine fires the OLD routine's exit cleanup (and restarts the craft
+        // routine when retargeting a different table); fields are set after.
+        AI.AIControl.StartRoutine(_sim.UnitsMut, necroIdx,
+            AI.PlayerControlledHandler.RoutineCraftAtTable,
+            AI.PlayerControlledHandler.BuildSub_WalkToSite);
         _sim.UnitsMut[necroIdx].CraftTableIdx = envIdx;
-        _sim.UnitsMut[necroIdx].Routine = AI.PlayerControlledHandler.RoutineCraftAtTable;
-        _sim.UnitsMut[necroIdx].Subroutine = AI.PlayerControlledHandler.BuildSub_WalkToSite;
         _sim.UnitsMut[necroIdx].BuildTimer = 0f;
         return true;
     }

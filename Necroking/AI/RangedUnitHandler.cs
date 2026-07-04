@@ -40,6 +40,17 @@ public class RangedUnitHandler : IArchetypeHandler
         ctx.SubroutineTimer = 0f;
     }
 
+    public void OnRoutineExit(ref AIContext ctx, byte oldRoutine, byte newRoutine)
+    {
+        // Combat owns the target. (PendingAttack is deliberately kept — a queued arrow
+        // still fires via the animation system regardless of routine.)
+        if (oldRoutine == RoutineCombat)
+        {
+            ctx.Units[ctx.UnitIndex].Target = CombatTarget.None;
+            ctx.Units[ctx.UnitIndex].EngagedTarget = CombatTarget.None;
+        }
+    }
+
     public void Update(ref AIContext ctx)
     {
         EvaluateRoutine(ref ctx);
@@ -59,8 +70,7 @@ public class RangedUnitHandler : IArchetypeHandler
 
         if (alert >= (byte)UnitAlertState.Alert && ctx.Routine == RoutineIdle)
         {
-            ctx.Routine = RoutineAlert;
-            ctx.SubroutineTimer = 0f;
+            ctx.TransitionTo(RoutineAlert);
             return;
         }
 
@@ -68,9 +78,8 @@ public class RangedUnitHandler : IArchetypeHandler
         {
             if (ctx.AlertTarget != GameConstants.InvalidUnit)
             {
+                ctx.TransitionTo(RoutineCombat);
                 ctx.Units[ctx.UnitIndex].Target = CombatTarget.Unit(ctx.AlertTarget);
-                ctx.Routine = RoutineCombat;
-                ctx.SubroutineTimer = 0f;
                 return;
             }
         }
@@ -83,8 +92,8 @@ public class RangedUnitHandler : IArchetypeHandler
                 ctx.Units[ctx.UnitIndex].Target = CombatTarget.Unit(ctx.Units[next].Id);
             else
             {
-                ctx.Routine = RoutineReturn;
-                ctx.Units[ctx.UnitIndex].Target = CombatTarget.None;
+                // OnRoutineExit(Combat) clears Target/EngagedTarget.
+                ctx.TransitionTo(RoutineReturn);
                 ctx.AlertState = (byte)UnitAlertState.Unaware;
                 ctx.AlertTarget = GameConstants.InvalidUnit;
             }
@@ -92,8 +101,7 @@ public class RangedUnitHandler : IArchetypeHandler
 
         if (alert == (byte)UnitAlertState.Unaware && ctx.Routine == RoutineAlert)
         {
-            ctx.Routine = RoutineIdle;
-            ctx.SubroutineTimer = 0f;
+            ctx.TransitionTo(RoutineIdle);
         }
     }
 
@@ -196,9 +204,7 @@ public class RangedUnitHandler : IArchetypeHandler
         }
         else
         {
-            ctx.Routine = RoutineIdle;
-            ctx.Subroutine = 0;
-            ctx.SubroutineTimer = 0f;
+            ctx.TransitionTo(RoutineIdle);
             ctx.Units[ctx.UnitIndex].PreferredVel = Vec2.Zero;
         }
     }

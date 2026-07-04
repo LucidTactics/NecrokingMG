@@ -15,6 +15,11 @@ namespace Necroking.AI;
 ///
 /// Helpers are static, allocation-free, and return true when they transitioned
 /// state (caller should return immediately — the routine was changed).
+///
+/// Routine changes go through <see cref="AIContext.TransitionTo"/>, so the handler's
+/// OnRoutineExit/OnRoutineEnter hooks fire as well. The explicit field clears here are
+/// kept as the shared policy for any handler using these helpers, hooks or not —
+/// double-clearing is idempotent.
 /// </summary>
 public static class CombatTransitions
 {
@@ -53,18 +58,18 @@ public static class CombatTransitions
                 int next = SubroutineSteps.FindClosestEnemy(ref ctx, 30f);
                 if (next >= 0)
                 {
-                    ctx.Units[ctx.UnitIndex].Target = CombatTarget.Unit(ctx.Units[next].Id);
-                    ctx.Routine = chasingRoutine;
                     ctx.Units[ctx.UnitIndex].EngagedTarget = CombatTarget.None;
+                    ctx.Units[ctx.UnitIndex].Target = CombatTarget.Unit(ctx.Units[next].Id);
+                    ctx.TransitionTo(chasingRoutine);
                     return true;
                 }
                 // else: no enemies nearby — stay Engaged, handler will idle.
                 return false;
             }
-            ctx.Routine = returningRoutine;
             ctx.Units[ctx.UnitIndex].Target = CombatTarget.None;
             ctx.Units[ctx.UnitIndex].EngagedTarget = CombatTarget.None;
             ctx.Units[ctx.UnitIndex].InCombat = false;
+            ctx.TransitionTo(returningRoutine);
             return true;
         }
 
@@ -84,9 +89,9 @@ public static class CombatTransitions
             float meleeRange = SubroutineSteps.GetMeleeRange(ref ctx, tIdx);
             if (dist > meleeRange * meleeHysteresis)
             {
-                ctx.Routine = chasingRoutine;
                 ctx.Units[ctx.UnitIndex].EngagedTarget = CombatTarget.None;
                 ctx.Units[ctx.UnitIndex].PendingAttack = CombatTarget.None;
+                ctx.TransitionTo(chasingRoutine);
                 return true;
             }
         }
@@ -99,13 +104,13 @@ public static class CombatTransitions
             float distToCenter = (ctx.MyPos - leashCenter).Length();
             if (distToCenter > leashRadius)
             {
-                ctx.Routine = returningRoutine;
                 ctx.Units[ctx.UnitIndex].Target = CombatTarget.None;
                 ctx.Units[ctx.UnitIndex].EngagedTarget = CombatTarget.None;
                 ctx.Units[ctx.UnitIndex].PendingAttack = CombatTarget.None;
                 // Keep PostAttackTimer so an in-progress swing finishes planted
                 // before the unit runs home (see the out-of-melee branch above).
                 ctx.Units[ctx.UnitIndex].InCombat = false;
+                ctx.TransitionTo(returningRoutine);
                 return true;
             }
         }
@@ -132,11 +137,11 @@ public static class CombatTransitions
 
         if (!SubroutineSteps.IsTargetAlive(ref ctx))
         {
-            ctx.Routine = returningRoutine;
             ctx.Units[ctx.UnitIndex].Target = CombatTarget.None;
             ctx.Units[ctx.UnitIndex].EngagedTarget = CombatTarget.None;
             ctx.Units[ctx.UnitIndex].PendingAttack = CombatTarget.None;
             // Keep PostAttackTimer — let the swing finish planted (see StandardEngagedExits).
+            ctx.TransitionTo(returningRoutine);
             return true;
         }
 
@@ -145,11 +150,11 @@ public static class CombatTransitions
             float distToCenter = (ctx.MyPos - leashCenter).Length();
             if (distToCenter > leashRadius)
             {
-                ctx.Routine = returningRoutine;
                 ctx.Units[ctx.UnitIndex].Target = CombatTarget.None;
                 ctx.Units[ctx.UnitIndex].EngagedTarget = CombatTarget.None;
                 ctx.Units[ctx.UnitIndex].PendingAttack = CombatTarget.None;
                 // Keep PostAttackTimer — let the swing finish planted (see StandardEngagedExits).
+                ctx.TransitionTo(returningRoutine);
                 DebugLog.Log("horde_aggro",
                     $"  [unit {ctx.MyId}] leash break while chasing: distToCenter={distToCenter:F1} > leash={leashRadius:F1}");
                 return true;

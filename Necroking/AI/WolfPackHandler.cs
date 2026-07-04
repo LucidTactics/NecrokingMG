@@ -66,6 +66,21 @@ public class WolfPackHandler : IArchetypeHandler
         ctx.SubroutineTimer = 0f;
     }
 
+    public void OnRoutineExit(ref AIContext ctx, byte oldRoutine, byte newRoutine)
+    {
+        // Fighting owns the combat-lock fields and the engage-commitment flag. Clearing
+        // them on exit (instead of at each transition site) means no exit path can leak
+        // them — a leaked PendingAttack pins the unit via the movement lockout.
+        if (oldRoutine == RoutineFighting)
+        {
+            ctx.Units[ctx.UnitIndex].Target = CombatTarget.None;
+            ctx.Units[ctx.UnitIndex].EngagedTarget = CombatTarget.None;
+            ctx.Units[ctx.UnitIndex].PendingAttack = CombatTarget.None;
+            // Fresh combat starts with the predator stalk-then-commit ramp again.
+            ctx.Units[ctx.UnitIndex].FightCommitted = false;
+        }
+    }
+
     public void Update(ref AIContext ctx)
     {
         // --- Event evaluation: select routine ---
@@ -167,19 +182,17 @@ public class WolfPackHandler : IArchetypeHandler
                 ctx.AlertState = (byte)UnitAlertState.Aggressive;
                 ctx.AlertTarget = ctx.Units[enemyIdx].Id;
                 ctx.Units[ctx.UnitIndex].Target = CombatTarget.Unit(ctx.Units[enemyIdx].Id);
-                ctx.Routine = RoutineFighting;
-                ctx.Subroutine = FightMoveToEngage;
-                ctx.SubroutineTimer = 0f;
+                ctx.TransitionTo(RoutineFighting, FightMoveToEngage);
                 ctx.Units[ctx.UnitIndex].ShowStatusSymbol(UnitStatusSymbol.React, 1.5f);
                 return;
             }
             else
             {
-                // No enemy visible — flee in random direction then calm down
+                // No enemy visible — flee in random direction then calm down.
+                // StartRoutine (not TransitionTo): if already IdleRoaming we still need the
+                // subroutine reset to 0 so the walk toward the flee target starts now.
                 SubroutineSteps.SetFleeRandomTarget(ref ctx, 10f);
-                ctx.Routine = RoutineIdleRoaming;
-                ctx.Subroutine = 0; // walking subroutine will move to MoveTarget
-                ctx.SubroutineTimer = 0f;
+                AIControl.StartRoutine(ref ctx, RoutineIdleRoaming);
                 return;
             }
         }
@@ -211,22 +224,19 @@ public class WolfPackHandler : IArchetypeHandler
             if (threatId != GameConstants.InvalidUnit)
             {
                 ctx.Units[ctx.UnitIndex].Target = CombatTarget.Unit(threatId);
-                ctx.Routine = RoutineFighting;
-                ctx.Subroutine = FightMoveToEngage;
-                ctx.SubroutineTimer = 0f;
+                ctx.TransitionTo(RoutineFighting, FightMoveToEngage);
                 ctx.Units[ctx.UnitIndex].ShowStatusSymbol(UnitStatusSymbol.React, 1.5f);
                 return;
             }
         }
 
-        // In fighting: check if target still valid
+        // In fighting: check if target still valid.
+        // (Combat-field cleanup lives in OnRoutineExit(Fighting) — the transition fires it.)
         if (ctx.Routine == RoutineFighting)
         {
             if (!SubroutineSteps.IsTargetAlive(ref ctx))
             {
                 // Target dead — return to time-of-day routine
-                ctx.Units[ctx.UnitIndex].Target = CombatTarget.None;
-                ctx.Units[ctx.UnitIndex].EngagedTarget = CombatTarget.None;
                 ctx.AlertState = (byte)UnitAlertState.Unaware;
                 ctx.AlertTarget = GameConstants.InvalidUnit;
                 SwitchToTimeOfDayRoutine(ref ctx);
@@ -236,8 +246,6 @@ public class WolfPackHandler : IArchetypeHandler
             // Alert dropped (enemy left break range) — disengage
             if (alertState == (byte)UnitAlertState.Unaware)
             {
-                ctx.Units[ctx.UnitIndex].Target = CombatTarget.None;
-                ctx.Units[ctx.UnitIndex].EngagedTarget = CombatTarget.None;
                 SwitchToTimeOfDayRoutine(ref ctx);
                 return;
             }
@@ -265,12 +273,8 @@ public class WolfPackHandler : IArchetypeHandler
             if (ctx.Routine == RoutineSleeping && ctx.Subroutine == SleepWaking)
                 return;
 
-            ctx.Routine = target;
-            ctx.Subroutine = 0;
-            ctx.SubroutineTimer = 0f;
-            // Combat exit: clear the engage-ramp-done flag so a fresh combat
-            // starts with the predator stalk-then-commit sequence again.
-            ctx.Units[ctx.UnitIndex].FightCommitted = false;
+            // FightCommitted reset moved to OnRoutineExit(Fighting).
+            ctx.TransitionTo(target);
         }
     }
 
@@ -319,9 +323,7 @@ public class WolfPackHandler : IArchetypeHandler
                         if (threatId != GameConstants.InvalidUnit)
                         {
                             ctx.Units[ctx.UnitIndex].Target = CombatTarget.Unit(threatId);
-                            ctx.Routine = RoutineFighting;
-                            ctx.Subroutine = FightMoveToEngage;
-                            ctx.SubroutineTimer = 0f;
+                            ctx.TransitionTo(RoutineFighting, FightMoveToEngage);
                             ctx.Units[ctx.UnitIndex].ShowStatusSymbol(UnitStatusSymbol.React, 1.5f);
                         }
                         else
@@ -329,10 +331,11 @@ public class WolfPackHandler : IArchetypeHandler
                     }
                     else
                     {
+                        // StartRoutine: at night the target IS Sleeping — the routine must
+                        // restart at SleepSitting or the unit would stay wedged in
+                        // SleepWaking with an expired timer.
                         byte target = ctx.IsNight ? RoutineSleeping : RoutineIdleRoaming;
-                        ctx.Routine = target;
-                        ctx.Subroutine = 0;
-                        ctx.SubroutineTimer = 0f;
+                        AIControl.StartRoutine(ref ctx, target);
                     }
                 }
                 break;

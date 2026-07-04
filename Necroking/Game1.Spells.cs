@@ -577,12 +577,7 @@ public partial class Game1 {
          if (units[ci].Faction != Faction.Undead) continue;
          if (units[ci].Archetype != AI.ArchetypeRegistry.HordeMinion) continue;
 
-         units[ci].Routine = 4;            // RoutineCommanded
-         units[ci].Subroutine = 0;
-         units[ci].SubroutineTimer = 0f;
-         units[ci].MoveTarget = target;
-         units[ci].Target = CombatTarget.None;
-         units[ci].EngagedTarget = CombatTarget.None;
+         AI.HordeMinionHandler.CommandTo(units, ci, target);
       }
 
       float cd = _gameData.Spells.Get("order_attack")?.Cooldown ?? 0f;
@@ -603,14 +598,8 @@ public partial class Game1 {
          if (!units[ci].Alive) continue;
          if (units[ci].Faction != Faction.Undead) continue;
          if (units[ci].Archetype != AI.ArchetypeRegistry.HordeMinion) continue;
-         if (units[ci].Routine != 4) continue;   // only those under a command (RoutineCommanded)
 
-         units[ci].Routine = 3;            // RoutineReturning → back to formation
-         units[ci].Subroutine = 0;
-         units[ci].SubroutineTimer = 0f;
-         units[ci].Target = CombatTarget.None;
-         units[ci].EngagedTarget = CombatTarget.None;
-         units[ci].InCombat = false;
+         AI.HordeMinionHandler.Recall(units, ci); // no-op unless under a command
       }
    }
 
@@ -677,9 +666,12 @@ public partial class Game1 {
          return;
       }
 
+      // StartRoutine fires the OLD routine's exit cleanup (and restarts if already
+      // working a bush); the new routine's fields are set after.
+      AI.AIControl.StartRoutine(_sim.UnitsMut, necroIdx,
+         AI.PlayerControlledHandler.RoutineWorkOnBush,
+         AI.PlayerControlledHandler.BuildSub_WalkToSite);
       var u = _sim.UnitsMut[necroIdx];
-      u.Routine = AI.PlayerControlledHandler.RoutineWorkOnBush;
-      u.Subroutine = AI.PlayerControlledHandler.BuildSub_WalkToSite;
       u.BushWorkObjIdx = bushIdx;
       u.BushWorkBuffID = buffID;
       u.BushWorkItemID = itemID;

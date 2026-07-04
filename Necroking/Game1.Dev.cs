@@ -15,6 +15,17 @@ public partial class Game1 {
                c.Complete(Necroking.Dev.DevServer.Ok("pong"));
                break;
 
+            // Toggle AI routine-transition tracing. Every transition (unit, archetype,
+            // from → to routine, interrupt reason) is appended to log/ai_transition.log.
+            //   window.dev('ai_trace',['on'|'off'])  → set;  no args → report current
+            case "ai_trace": {
+               if (c.Args.Length >= 1)
+                  AI.AIControl.TraceTransitions = c.Args[0] is "on" or "true" or "1";
+               c.Complete(Necroking.Dev.DevServer.Ok(
+                  $"ai_trace = {(AI.AIControl.TraceTransitions ? "on" : "off")} (log/ai_transition.log)"));
+               break;
+            }
+
             // Memory diagnostic: managed heap before/after a forced compacting GC, plus
             // process private/working set. If managedAfter stays high across map reloads it's
             // a managed retained-reference leak; if managed stays flat but priv climbs it's a

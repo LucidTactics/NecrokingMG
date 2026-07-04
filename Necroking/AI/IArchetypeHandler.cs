@@ -22,6 +22,27 @@ public interface IArchetypeHandler
     /// <summary>Called when a unit of this archetype is first spawned. Initialize routine state.</summary>
     void OnSpawn(ref AIContext ctx);
 
+    /// <summary>
+    /// Fired by <see cref="AIContext.TransitionTo"/> / <see cref="AIControl"/> just BEFORE
+    /// the unit leaves <paramref name="oldRoutine"/>. Put the routine's cleanup here — clear
+    /// the fields that routine owns (combat locks, target indices, work timers) so no exit
+    /// path can leak them. Written once per routine instead of once per transition site.
+    ///
+    /// Contract: touch unit fields only (ctx.Units[ctx.UnitIndex].*). Never change
+    /// Routine/Subroutine from inside a hook (no nested transitions), and never rely on the
+    /// context's world services (Horde, EnvSystem, …) — external interrupters call hooks
+    /// with a minimal context where those are null.
+    /// </summary>
+    void OnRoutineExit(ref AIContext ctx, byte oldRoutine, byte newRoutine) { }
+
+    /// <summary>
+    /// Fired just AFTER the unit enters <paramref name="newRoutine"/> (Routine/Subroutine/
+    /// SubroutineTimer already stamped). Put entry invariants here — state that must hold
+    /// whenever the routine is entered, whatever path led in (e.g. "Returning means
+    /// disengaged: Target cleared, InCombat false"). Same contract as OnRoutineExit.
+    /// </summary>
+    void OnRoutineEnter(ref AIContext ctx, byte oldRoutine, byte newRoutine) { }
+
     /// <summary>Human-readable name for the given routine index.</summary>
     string GetRoutineName(byte routine);
 

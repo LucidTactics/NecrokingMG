@@ -51,6 +51,24 @@ public class RatPackHandler : IArchetypeHandler
         ctx.SubroutineTimer = 0f;
     }
 
+    public void OnRoutineExit(ref AIContext ctx, byte oldRoutine, byte newRoutine)
+    {
+        // Fighting owns the combat-lock fields; no exit path may leak a queued bite.
+        if (oldRoutine == RoutineFighting)
+        {
+            ctx.Units[ctx.UnitIndex].Target = CombatTarget.None;
+            ctx.Units[ctx.UnitIndex].EngagedTarget = CombatTarget.None;
+            ctx.Units[ctx.UnitIndex].PendingAttack = CombatTarget.None;
+        }
+    }
+
+    public void OnRoutineEnter(ref AIContext ctx, byte oldRoutine, byte newRoutine)
+    {
+        // Standing down must zero velocity — a stale PreferredVel coasts the rat off the map.
+        if (newRoutine == RoutineScurry)
+            ctx.Units[ctx.UnitIndex].PreferredVel = Vec2.Zero;
+    }
+
     public void Update(ref AIContext ctx)
     {
         // Panic decays over time.
@@ -95,12 +113,8 @@ public class RatPackHandler : IArchetypeHandler
 
             if (targetGone || calm)
             {
-                ctx.Units[ctx.UnitIndex].Target = CombatTarget.None;
-                ctx.Units[ctx.UnitIndex].EngagedTarget = CombatTarget.None;
-                ctx.Units[ctx.UnitIndex].PreferredVel = Vec2.Zero; // don't coast away
-                ctx.Routine = RoutineScurry;
-                ctx.Subroutine = 0;
-                ctx.SubroutineTimer = 0f;
+                // Exit/enter hooks clear the combat fields and zero PreferredVel.
+                ctx.TransitionTo(RoutineScurry);
             }
             return;
         }
@@ -114,12 +128,10 @@ public class RatPackHandler : IArchetypeHandler
             int targetIdx = PickGangUpTarget(ref ctx);
             if (targetIdx >= 0)
             {
+                ctx.TransitionTo(RoutineFighting, FightRushIn);
                 ctx.Units[ctx.UnitIndex].Target = CombatTarget.Unit(ctx.Units[targetIdx].Id);
                 ctx.AlertState = (byte)UnitAlertState.Aggressive;
                 ctx.AlertTarget = ctx.Units[targetIdx].Id;
-                ctx.Routine = RoutineFighting;
-                ctx.Subroutine = FightRushIn;
-                ctx.SubroutineTimer = 0f;
                 ctx.Units[ctx.UnitIndex].ShowStatusSymbol(UnitStatusSymbol.React, 1.0f);
             }
         }

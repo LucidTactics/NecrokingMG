@@ -46,33 +46,22 @@ public class VillagerHandler : IArchetypeHandler
         // Personal survival trumps village coordination.
         if (enemy >= 0)
         {
-            if (ctx.Routine != RoutinePanic)
-            {
-                ctx.Routine = RoutinePanic;
-                ctx.Subroutine = 0;
+            if (ctx.TransitionTo(RoutinePanic))
                 ctx.Units[i].ShowStatusSymbol(UnitStatusSymbol.React, 1.5f);
-            }
         }
         else if (village != null)
         {
             switch (village.Posture)
             {
-                case GameSystems.VillagePosture.Fleeing:
-                    if (ctx.Routine != RoutineFlee) { ctx.Routine = RoutineFlee; ctx.Subroutine = 0; }
-                    break;
-                case GameSystems.VillagePosture.Cowering:
-                    if (ctx.Routine != RoutineCower) { ctx.Routine = RoutineCower; ctx.Subroutine = 0; }
-                    break;
-                default:
-                    if (ctx.Routine != RoutineRoam) { ctx.Routine = RoutineRoam; ctx.Subroutine = 0; }
-                    break;
+                case GameSystems.VillagePosture.Fleeing:  ctx.TransitionTo(RoutineFlee); break;
+                case GameSystems.VillagePosture.Cowering: ctx.TransitionTo(RoutineCower); break;
+                default:                                  ctx.TransitionTo(RoutineRoam); break;
             }
         }
         else if (ctx.Routine == RoutinePanic)
         {
             // No village and threat gone — settle back to roaming.
-            ctx.Routine = RoutineRoam;
-            ctx.Subroutine = 0;
+            ctx.TransitionTo(RoutineRoam);
         }
 
         ctx.Units[i].Fleeing = ctx.Routine == RoutineFlee || ctx.Routine == RoutinePanic;
@@ -130,8 +119,7 @@ public class VillagerHandler : IArchetypeHandler
         if (enemy < 0)
         {
             // Threat left the area — calm down.
-            ctx.Routine = RoutineRoam;
-            ctx.Subroutine = 0;
+            ctx.TransitionTo(RoutineRoam);
             return;
         }
         SubroutineSteps.SetEffort(ref ctx, MoveEffort.Sprint);

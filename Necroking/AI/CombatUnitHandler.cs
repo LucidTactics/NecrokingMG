@@ -57,6 +57,18 @@ public class CombatUnitHandler : IArchetypeHandler
         ctx.SubroutineTimer = 0f;
     }
 
+    public void OnRoutineExit(ref AIContext ctx, byte oldRoutine, byte newRoutine)
+    {
+        // Combat owns the melee-lock fields; no exit path may leak a queued swing.
+        if (oldRoutine == RoutineCombat)
+        {
+            ctx.Units[ctx.UnitIndex].Target = CombatTarget.None;
+            ctx.Units[ctx.UnitIndex].EngagedTarget = CombatTarget.None;
+            ctx.Units[ctx.UnitIndex].PendingAttack = CombatTarget.None;
+            ctx.Units[ctx.UnitIndex].InCombat = false;
+        }
+    }
+
     public void Update(ref AIContext ctx)
     {
         EvaluateRoutine(ref ctx);
@@ -77,9 +89,7 @@ public class CombatUnitHandler : IArchetypeHandler
         // Alert → enter Alert routine
         if (alert >= (byte)UnitAlertState.Alert && ctx.Routine == RoutineIdle)
         {
-            ctx.Routine = RoutineAlert;
-            ctx.Subroutine = 0;
-            ctx.SubroutineTimer = 0f;
+            ctx.TransitionTo(RoutineAlert);
             return;
         }
 
@@ -89,10 +99,8 @@ public class CombatUnitHandler : IArchetypeHandler
             uint threatId = ctx.AlertTarget;
             if (threatId != GameConstants.InvalidUnit)
             {
+                ctx.TransitionTo(RoutineCombat, CombatChase);
                 ctx.Units[ctx.UnitIndex].Target = CombatTarget.Unit(threatId);
-                ctx.Routine = RoutineCombat;
-                ctx.Subroutine = CombatChase;
-                ctx.SubroutineTimer = 0f;
                 return;
             }
         }
@@ -112,10 +120,8 @@ public class CombatUnitHandler : IArchetypeHandler
             }
             else if (!frenzied)
             {
-                ctx.Routine = RoutineReturn;
-                ctx.SubroutineTimer = 0f;
-                ctx.Units[ctx.UnitIndex].Target = CombatTarget.None;
-                ctx.Units[ctx.UnitIndex].EngagedTarget = CombatTarget.None;
+                // OnRoutineExit(Combat) clears Target/EngagedTarget/PendingAttack/InCombat.
+                ctx.TransitionTo(RoutineReturn);
                 ctx.AlertState = (byte)UnitAlertState.Unaware;
                 ctx.AlertTarget = GameConstants.InvalidUnit;
             }
@@ -125,9 +131,7 @@ public class CombatUnitHandler : IArchetypeHandler
         // Threat gone → return
         if (alert == (byte)UnitAlertState.Unaware && ctx.Routine == RoutineAlert)
         {
-            ctx.Routine = RoutineIdle;
-            ctx.Subroutine = 0;
-            ctx.SubroutineTimer = 0f;
+            ctx.TransitionTo(RoutineIdle);
         }
     }
 
@@ -244,9 +248,7 @@ public class CombatUnitHandler : IArchetypeHandler
         // Frenzied units don't return — go back to idle/combat search
         if (ctx.Units[ctx.UnitIndex].Frenzied)
         {
-            ctx.Routine = RoutineIdle;
-            ctx.Subroutine = 0;
-            ctx.SubroutineTimer = 0f;
+            ctx.TransitionTo(RoutineIdle);
             return;
         }
 
@@ -270,9 +272,7 @@ public class CombatUnitHandler : IArchetypeHandler
         }
         else
         {
-            ctx.Routine = RoutineIdle;
-            ctx.Subroutine = 0;
-            ctx.SubroutineTimer = 0f;
+            ctx.TransitionTo(RoutineIdle);
             ctx.Units[ctx.UnitIndex].PreferredVel = Vec2.Zero;
         }
     }

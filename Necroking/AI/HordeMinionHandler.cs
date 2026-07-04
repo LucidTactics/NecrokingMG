@@ -21,11 +21,13 @@ namespace Necroking.AI;
 /// </summary>
 public class HordeMinionHandler : IArchetypeHandler
 {
-    private const byte RoutineFollowing = 0;
-    private const byte RoutineChasing = 1;
-    private const byte RoutineEngaged = 2;
-    private const byte RoutineReturning = 3;
-    private const byte RoutineCommanded = 4;
+    // Public: external intent APIs (CommandTo/Recall) and spawn paths reference these by
+    // name — never write raw byte literals that must match this numbering by convention.
+    public const byte RoutineFollowing = 0;
+    public const byte RoutineChasing = 1;
+    public const byte RoutineEngaged = 2;
+    public const byte RoutineReturning = 3;
+    public const byte RoutineCommanded = 4;
 
     // Following subroutines
     private const byte FollowMoving = 0;  // actively moving toward slot
@@ -67,6 +69,56 @@ public class HordeMinionHandler : IArchetypeHandler
 
         // Auto-enroll in horde
         ctx.Horde?.AddUnit(ctx.MyId);
+    }
+
+    public void OnRoutineExit(ref AIContext ctx, byte oldRoutine, byte newRoutine)
+    {
+        // The combat routines own the melee-lock fields. Leaving one must never leak a
+        // queued swing: a PendingAttack that can no longer resolve pins the unit in place
+        // forever (the movement lockout waits on it). PostAttackTimer is deliberately
+        // kept — it plants the unit until the in-progress swing anim finishes, then ticks
+        // to zero on its own (a bounded plant, not a pin).
+        if (oldRoutine == RoutineChasing || oldRoutine == RoutineEngaged || oldRoutine == RoutineCommanded)
+        {
+            ctx.Units[ctx.UnitIndex].EngagedTarget = CombatTarget.None;
+            ctx.Units[ctx.UnitIndex].PendingAttack = CombatTarget.None;
+        }
+    }
+
+    public void OnRoutineEnter(ref AIContext ctx, byte oldRoutine, byte newRoutine)
+    {
+        // Returning/Following are the disengaged states — entering them means the fight
+        // is over, whatever path led here.
+        if (newRoutine == RoutineReturning || newRoutine == RoutineFollowing)
+        {
+            ctx.Units[ctx.UnitIndex].Target = CombatTarget.None;
+            ctx.Units[ctx.UnitIndex].InCombat = false;
+        }
+    }
+
+    // ═══════════════════════════════════════
+    //  External intent APIs (player orders)
+    // ═══════════════════════════════════════
+
+    /// <summary>Player "Command" (attack-move) order — the external entry point for the
+    /// built-in order_attack ability. Re-issuing while already Commanded restarts the
+    /// command (timer + target) rather than continuing the old one.</summary>
+    public static void CommandTo(Movement.UnitArrays units, int idx, Vec2 target)
+    {
+        AIControl.StartRoutine(units, idx, RoutineCommanded);
+        units[idx].MoveTarget = target;
+        // Fresh order — drop whatever fight the unit was in and reassess at the target.
+        units[idx].Target = CombatTarget.None;
+        units[idx].EngagedTarget = CombatTarget.None;
+    }
+
+    /// <summary>Player "Regroup" order: pull a commanded minion straight back to formation
+    /// (the same reset <see cref="ReturnFromCommand"/> does when a command finishes on its
+    /// own). No-op unless the unit is currently under a command.</summary>
+    public static void Recall(Movement.UnitArrays units, int idx)
+    {
+        if (units[idx].Routine != RoutineCommanded) return;
+        AIControl.StartRoutine(units, idx, RoutineReturning);
     }
 
     public void Update(ref AIContext ctx)
@@ -130,8 +182,7 @@ public class HordeMinionHandler : IArchetypeHandler
             if (chasingId != GameConstants.InvalidUnit)
             {
                 ctx.Units[ctx.UnitIndex].Target = CombatTarget.Unit(chasingId);
-                ctx.Routine = RoutineChasing;
-                ctx.Subroutine = 0;
+                ctx.TransitionTo(RoutineChasing);
                 DebugLog.Log("horde_aggro",
                     $"  [Minion {ctx.MyId}] accepted horde Chasing assignment → target={chasingId}");
             }
@@ -158,10 +209,8 @@ public class HordeMinionHandler : IArchetypeHandler
             && (ctx.Routine == RoutineChasing
                 || (ctx.Routine == RoutineEngaged && !ctx.Units[ctx.UnitIndex].InCombat)))
         {
-            ctx.Routine = RoutineReturning;
-            ctx.Units[ctx.UnitIndex].Target = CombatTarget.None;
-            ctx.Units[ctx.UnitIndex].EngagedTarget = CombatTarget.None;
-            ctx.Units[ctx.UnitIndex].InCombat = false;
+            // Exit/enter hooks clear Target/EngagedTarget/PendingAttack/InCombat.
+            ctx.TransitionTo(RoutineReturning);
         }
     }
 
@@ -173,8 +222,7 @@ public class HordeMinionHandler : IArchetypeHandler
         // hit by a wolf would keep following its slot — target set but ignored.
         if (SubroutineSteps.IsTargetAlive(ref ctx))
         {
-            ctx.Routine = RoutineChasing;
-            ctx.Subroutine = 0;
+            ctx.TransitionTo(RoutineChasing);
             DebugLog.Log("horde_aggro",
                 $"  [Minion {ctx.MyId}] UpdateFollowing saw live Target → Chasing " +
                 $"(target id={ctx.Units[ctx.UnitIndex].Target.UnitID})");
@@ -193,8 +241,7 @@ public class HordeMinionHandler : IArchetypeHandler
             if (enemy >= 0)
             {
                 ctx.Units[ctx.UnitIndex].Target = CombatTarget.Unit(ctx.Units[enemy].Id);
-                ctx.Routine = RoutineChasing;
-                ctx.Subroutine = 0;
+                ctx.TransitionTo(RoutineChasing);
                 DebugLog.Log("horde_aggro",
                     $"  [Minion {ctx.MyId}] self-aggro (UpdateFollowing) → enemy id={ctx.Units[enemy].Id} " +
                     $"dist={(ctx.Units[enemy].Position - ctx.MyPos).Length():F1} range={engageRange:F1}");
@@ -283,7 +330,7 @@ public class HordeMinionHandler : IArchetypeHandler
             float engageRange = SubroutineSteps.GetMeleeRange(ref ctx, targetIdx);
             if (dist <= engageRange)
             {
-                ctx.Routine = RoutineEngaged;
+                ctx.TransitionTo(RoutineEngaged);
                 ctx.Units[ctx.UnitIndex].EngagedTarget = ctx.Units[ctx.UnitIndex].Target;
             }
         }
@@ -330,15 +377,13 @@ public class HordeMinionHandler : IArchetypeHandler
             }
             else
             {
-                ctx.Routine = RoutineFollowing;
-                ctx.Subroutine = FollowIdle;
+                ctx.TransitionTo(RoutineFollowing, FollowIdle);
                 ctx.Units[ctx.UnitIndex].PreferredVel = Vec2.Zero;
             }
         }
         else
         {
-            ctx.Routine = RoutineFollowing;
-            ctx.Subroutine = FollowMoving;
+            ctx.TransitionTo(RoutineFollowing, FollowMoving);
             ctx.Units[ctx.UnitIndex].PreferredVel = Vec2.Zero;
         }
     }
@@ -406,11 +451,8 @@ public class HordeMinionHandler : IArchetypeHandler
 
     private static void ReturnFromCommand(ref AIContext ctx)
     {
-        ctx.Routine = RoutineReturning;
-        ctx.SubroutineTimer = 0f;
-        ctx.Units[ctx.UnitIndex].Target = CombatTarget.None;
-        ctx.Units[ctx.UnitIndex].EngagedTarget = CombatTarget.None;
-        ctx.Units[ctx.UnitIndex].InCombat = false;
+        // Exit/enter hooks clear Target/EngagedTarget/PendingAttack/InCombat.
+        ctx.TransitionTo(RoutineReturning);
     }
 
     public string GetRoutineName(byte routine) => routine switch

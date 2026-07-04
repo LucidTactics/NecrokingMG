@@ -85,8 +85,8 @@ public class CorpsePuppetHandler : IArchetypeHandler
         ctx.Units[i].DodgeTimer = dur;     // > 0 → UpdateMovement hands Position to the dodge lerp
         ctx.Units[i].PreferredVel = Vec2.Zero;
 
-        ctx.SubroutineTimer = dur;         // removal clock, in lockstep with the slide + death anim
-        ctx.Routine = RoutineDepositing;
+        // Timer = removal clock, in lockstep with the slide + death anim.
+        ctx.TransitionTo(RoutineDepositing, 0, dur);
     }
 
     /// <summary>Collapse phase: the dodge lerp slides the body in; when the death animation has

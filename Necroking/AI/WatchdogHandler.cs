@@ -41,12 +41,11 @@ public class WatchdogHandler : IArchetypeHandler
         if (threatIdx >= 0)
         {
             ctx.AlertTarget = ctx.Units[threatIdx].Id;
-            if (ctx.Routine != RoutineBark) { ctx.Routine = RoutineBark; ctx.Subroutine = 0; ctx.SubroutineTimer = 0f; }
+            ctx.TransitionTo(RoutineBark);
         }
-        else if (ctx.Routine != RoutineGuard)
+        else
         {
-            ctx.Routine = RoutineGuard;
-            ctx.Subroutine = 0;
+            ctx.TransitionTo(RoutineGuard);
         }
 
         switch (ctx.Routine)

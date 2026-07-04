@@ -105,12 +105,10 @@ public class PhysicsSystem
         units[unitIdx].InPhysics = true;
         units[unitIdx].PreferredVel = Vec2.Zero;
 
-        // Clear AI/combat state
-        units[unitIdx].Routine = 0;
-        units[unitIdx].Subroutine = 0;
-        units[unitIdx].SubroutineTimer = 0f;
-        units[unitIdx].EngagedTarget = CombatTarget.None;
-        units[unitIdx].Target = CombatTarget.None;
+        // Clear AI/combat state — physics owns the unit now. Interrupt fires the
+        // archetype's routine-exit hook and clears the combat pin fields
+        // (Target/EngagedTarget/PendingAttack/InCombat).
+        AI.AIControl.Interrupt(units, unitIdx, "physics-launch");
 
         // Set fall animation (priority 3 = forced, can't be interrupted)
         AnimResolver.SetOverride(units[unitIdx], AnimRequest.Forced(AnimState.Fall));

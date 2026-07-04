@@ -300,15 +300,10 @@ public class Simulation
             _units[u].WolfHuntPhase = 0;
             _units[u].WolfHuntTimer = 0f;
             // Recall a wolf that had committed to a deer from the previous cast so it re-flanks the
-            // new herd instead of finishing its old chase. Reset to Following so it's immediately
-            // eligible for re-acquisition in WolfPackHuntAI's next sweep.
+            // new herd instead of finishing its old chase. Interrupt resets to Following (routine 0)
+            // with exit-hook cleanup, so it's immediately eligible for WolfPackHuntAI's next sweep.
             if (_units[u].Target.IsUnit || _units[u].EngagedTarget.IsUnit)
-            {
-                _units[u].Target = CombatTarget.None;
-                _units[u].EngagedTarget = CombatTarget.None;
-                _units[u].Routine = 0;      // HordeMinion Following
-                _units[u].Subroutine = 0;
-            }
+                AI.AIControl.Interrupt(_units, u, "wolf-hunt-recast");
             // The horde system keeps its own per-unit Chasing state; without this reset,
             // SyncHordeState re-applies the stale chase target next tick and the recalled
             // wolf charges the deer head-on instead of flanking.
@@ -1029,24 +1024,13 @@ public class Simulation
                         }
 
                         // Player movement cancels active routines (WASD override).
-                        // Note: CraftTableIdx is cleared too, but ts.Crafting / ts.CraftTimer
-                        // on the env-side TableCraftState are left intact so the player can
-                        // resume the craft from where it paused by clicking Start again.
-                        // Bush-work routine cancellation here means the potion is NOT
-                        // consumed (consumption only happens on successful WorkLoop completion).
+                        // PlayerControlledHandler.OnRoutineExit does the per-routine field
+                        // cleanup (build targets, craft table, bush work, interact phase).
+                        // Table-side ts.Crafting / ts.CraftTimer are left intact so the
+                        // player can resume the craft by clicking Start again; bush-work
+                        // cancellation here means the potion is NOT consumed.
                         if (_necroMoveInput.LengthSq() > 0.01f && _units[i].Routine != 0)
-                        {
-                            _units[i].Routine = 0;
-                            _units[i].Subroutine = 0;
-                            _units[i].CorpseInteractPhase = 0;
-                            _units[i].BuildTargetIdx = -1;
-                            _units[i].BuildGlyphId = -1;
-                            _units[i].BuildTimer = 0f;
-                            _units[i].CraftTableIdx = -1;
-                            _units[i].BushWorkObjIdx = -1;
-                            _units[i].BushWorkBuffID = "";
-                            _units[i].BushWorkItemID = "";
-                        }
+                            AI.AIControl.Interrupt(_units, i, "player-move");
                     }
                     else
                     {
@@ -4168,7 +4152,7 @@ public class Simulation
             if (resolved != AI.ArchetypeRegistry.None) arch = resolved;
         }
         _units[idx].Archetype = arch;
-        _units[idx].Routine = 0; // Following
+        _units[idx].Routine = AI.HordeMinionHandler.RoutineFollowing; // fresh-spawn init
 
         // Cap-count safeguard. The horde count isn't an incremented counter — it's
         // derived live by HordeCapTracker, which counts undead units whose def

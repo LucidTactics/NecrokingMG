@@ -58,6 +58,47 @@ public class PlayerControlledHandler : IArchetypeHandler
         ctx.Subroutine = 0;
     }
 
+    /// <summary>
+    /// Per-routine cleanup, fired by every transition path (completion, cancel, WASD
+    /// interrupt, another order taking over). Each routine's fields are cleared exactly
+    /// where the routine ends — no call site can forget one.
+    /// </summary>
+    public void OnRoutineExit(ref AIContext ctx, byte oldRoutine, byte newRoutine)
+    {
+        int i = ctx.UnitIndex;
+        switch (oldRoutine)
+        {
+            case RoutineBuildTrap:
+            case RoutineBuildGlyph:
+                ctx.Units[i].BuildTargetIdx = -1;
+                ctx.Units[i].BuildGlyphId = -1;
+                ctx.Units[i].BuildTimer = 0f;
+                ctx.Units[i].CorpseInteractPhase = 0;
+                break;
+            case RoutineCraftAtTable:
+                // Table-side state (ts.Crafting / ts.CraftTimer) is deliberately NOT
+                // touched — the player can resume a paused craft by clicking Start again.
+                ctx.Units[i].CraftTableIdx = -1;
+                ctx.Units[i].BuildTimer = 0f;
+                ctx.Units[i].CorpseInteractPhase = 0;
+                break;
+            case RoutineWorkOnBush:
+                // Cancelling here means the potion is NOT consumed (consumption only
+                // happens on successful WorkLoop completion via Game1's post-AI hook).
+                ctx.Units[i].BushWorkObjIdx = -1;
+                ctx.Units[i].BushWorkBuffID = "";
+                ctx.Units[i].BushWorkItemID = "";
+                ctx.Units[i].BuildTimer = 0f;
+                ctx.Units[i].CorpseInteractPhase = 0;
+                break;
+            case RoutineBagCorpse:
+            case RoutinePickupCorpse:
+            case RoutinePutDownCorpse:
+                ctx.Units[i].CorpseInteractPhase = 0;
+                break;
+        }
+    }
+
     public void Update(ref AIContext ctx)
     {
         switch (ctx.Routine)
@@ -117,9 +158,7 @@ public class PlayerControlledHandler : IArchetypeHandler
         }
         else if (phase == WorkRoutine.Phase.Done)
         {
-            ctx.Units[i].BuildGlyphId = -1;
-            ctx.Routine = RoutineIdle;
-            ctx.Subroutine = 0;
+            ctx.TransitionTo(RoutineIdle); // OnRoutineExit clears the build fields
         }
     }
 
@@ -169,9 +208,7 @@ public class PlayerControlledHandler : IArchetypeHandler
         }
         else if (phase == WorkRoutine.Phase.Done)
         {
-            ctx.Units[i].BuildTargetIdx = -1;
-            ctx.Routine = RoutineIdle;
-            ctx.Subroutine = 0;
+            ctx.TransitionTo(RoutineIdle); // OnRoutineExit clears the build fields
         }
     }
 
@@ -213,21 +250,17 @@ public class PlayerControlledHandler : IArchetypeHandler
 
         if (phase == WorkRoutine.Phase.Done)
         {
-            ctx.Units[i].CraftTableIdx = -1;
-            ctx.Routine = RoutineIdle;
-            ctx.Subroutine = 0;
+            ctx.TransitionTo(RoutineIdle); // OnRoutineExit clears the craft fields
         }
     }
 
     /// <summary>Reset a unit out of the craft routine. Does NOT touch table state
     /// (ts.Crafting / ts.CraftTimer) — the player can re-engage by clicking Start
-    /// again, which re-attaches the channeler and resumes from CraftTimer.</summary>
+    /// again, which re-attaches the channeler and resumes from CraftTimer.
+    /// Field cleanup lives in <see cref="OnRoutineExit"/>.</summary>
     public static void CancelCraftAtTable(ref AIContext ctx)
     {
-        ctx.Units[ctx.UnitIndex].CraftTableIdx = -1;
-        ctx.Units[ctx.UnitIndex].CorpseInteractPhase = 0;
-        ctx.Routine = RoutineIdle;
-        ctx.Subroutine = 0;
+        ctx.TransitionTo(RoutineIdle);
     }
 
     // ═══════════════════════════════════════
@@ -308,27 +341,20 @@ public class PlayerControlledHandler : IArchetypeHandler
         }
     }
 
+    /// <summary>Field cleanup lives in <see cref="OnRoutineExit"/>.</summary>
     public static void CancelBushWork(ref AIContext ctx)
     {
-        ctx.Units[ctx.UnitIndex].BushWorkObjIdx = -1;
-        ctx.Units[ctx.UnitIndex].BushWorkBuffID = "";
-        ctx.Units[ctx.UnitIndex].BushWorkItemID = "";
-        WorkRoutine.Reset(ref ctx);
-        ctx.Routine = RoutineIdle;
+        ctx.TransitionTo(RoutineIdle);
     }
 
     // ═══════════════════════════════════════
     //  Helpers
     // ═══════════════════════════════════════
 
+    /// <summary>Field cleanup lives in <see cref="OnRoutineExit"/>.</summary>
     public static void CancelBuild(ref AIContext ctx)
     {
-        ctx.Units[ctx.UnitIndex].BuildTargetIdx = -1;
-        ctx.Units[ctx.UnitIndex].BuildGlyphId = -1;
-        ctx.Units[ctx.UnitIndex].CorpseInteractPhase = 0;
-        ctx.Units[ctx.UnitIndex].BuildTimer = 0f;
-        ctx.Routine = RoutineIdle;
-        ctx.Subroutine = 0;
+        ctx.TransitionTo(RoutineIdle);
     }
 
     public string GetRoutineName(byte routine) => routine switch

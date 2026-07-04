@@ -100,6 +100,31 @@ public class DeerHerdHandler : IArchetypeHandler
         ctx.SubroutineTimer = 0f;
     }
 
+    public void OnRoutineExit(ref AIContext ctx, byte oldRoutine, byte newRoutine)
+    {
+        int i = ctx.UnitIndex;
+        // FightBack owns the combat-lock fields; no exit path may leak a queued charge.
+        if (oldRoutine == RoutineFightBack)
+        {
+            ctx.Units[i].Target = CombatTarget.None;
+            ctx.Units[i].EngagedTarget = CombatTarget.None;
+            ctx.Units[i].PendingAttack = CombatTarget.None;
+        }
+        // Feeding owns its bush claim — don't leave a stale index behind when spooked away.
+        if (oldRoutine == RoutineFeeding)
+            ctx.Units[i].BushWorkObjIdx = -1;
+    }
+
+    public void OnRoutineEnter(ref AIContext ctx, byte oldRoutine, byte newRoutine)
+    {
+        // Calming means "threat resolved" — no combat state may survive into it.
+        if (newRoutine == RoutineCalming)
+        {
+            ctx.Units[ctx.UnitIndex].Target = CombatTarget.None;
+            ctx.Units[ctx.UnitIndex].EngagedTarget = CombatTarget.None;
+        }
+    }
+
     public void Update(ref AIContext ctx)
     {
         // "Herded" cheat (set by AI.WolfPackHuntAI when a wolf pack commits its drive): for a short
@@ -112,8 +137,9 @@ public class DeerHerdHandler : IArchetypeHandler
             Vec2 herdDir = ctx.Units[ctx.UnitIndex].HerdedDir;
             if (herdDir.LengthSq() > 1e-4f)
             {
-                ctx.Routine = RoutineFleeing;
-                ctx.Subroutine = 0;
+                // Per-frame re-assert: no-op while already Fleeing, real transition
+                // (with exit hooks — e.g. out of FightBack) on the first herded frame.
+                ctx.TransitionTo(RoutineFleeing);
                 ctx.Units[ctx.UnitIndex].Fleeing = true;
                 ctx.Units[ctx.UnitIndex].FleeElapsed += ctx.Dt;
                 SubroutineSteps.SetEffort(ref ctx, Movement.MoveEffort.Sprint);
@@ -232,9 +258,8 @@ public class DeerHerdHandler : IArchetypeHandler
                 // No visible enemy — flee in random direction
                 SubroutineSteps.SetFleeRandomTarget(ref ctx, 10f);
             }
-            ctx.Routine = RoutineFleeing;
-            ctx.Subroutine = 0;
-            ctx.SubroutineTimer = MinFleeDuration; // Minimum flee time before calming allowed
+            // Timer = minimum flee time before calming allowed.
+            ctx.TransitionTo(RoutineFleeing, 0, MinFleeDuration);
             ctx.AlertState = (byte)UnitAlertState.Alert;
             ctx.Units[ctx.UnitIndex].ShowStatusSymbol(UnitStatusSymbol.React, 1.5f);
             return;
@@ -267,21 +292,17 @@ public class DeerHerdHandler : IArchetypeHandler
             if (ctx.Routine == RoutineSleeping && ctx.Subroutine == SleepWaking)
                 return;
 
-            ctx.Routine = RoutineAlert;
-            ctx.Subroutine = AlertWatch;
-            ctx.SubroutineTimer = 0f;
+            ctx.TransitionTo(RoutineAlert, AlertWatch);
             return;
         }
 
-        // Threat gone while alert/fleeing → calm down (but respect minimum flee time)
+        // Threat gone while alert/fleeing → calm down (but respect minimum flee time).
+        // (OnRoutineEnter(Calming) clears Target/EngagedTarget on every path in.)
         if (alert == (byte)UnitAlertState.Unaware)
         {
             if (ctx.Routine == RoutineAlert)
             {
-                ctx.Routine = RoutineCalming;
-                ctx.SubroutineTimer = CalmDuration;
-                ctx.Units[ctx.UnitIndex].Target = CombatTarget.None;
-                ctx.Units[ctx.UnitIndex].EngagedTarget = CombatTarget.None;
+                ctx.TransitionTo(RoutineCalming, 0, CalmDuration);
                 return;
             }
             if (ctx.Routine == RoutineFleeing)
@@ -300,19 +321,13 @@ public class DeerHerdHandler : IArchetypeHandler
                 bool canCalm = hasAlertTarget || ctx.SubroutineTimer <= 0f;
                 if (canCalm)
                 {
-                    ctx.Routine = RoutineCalming;
-                    ctx.SubroutineTimer = CalmDuration;
-                    ctx.Units[ctx.UnitIndex].Target = CombatTarget.None;
-                    ctx.Units[ctx.UnitIndex].EngagedTarget = CombatTarget.None;
+                    ctx.TransitionTo(RoutineCalming, 0, CalmDuration);
                     return;
                 }
             }
             if (ctx.Routine == RoutineFightBack && !SubroutineSteps.IsTargetAlive(ref ctx))
             {
-                ctx.Routine = RoutineCalming;
-                ctx.SubroutineTimer = CalmDuration;
-                ctx.Units[ctx.UnitIndex].Target = CombatTarget.None;
-                ctx.Units[ctx.UnitIndex].EngagedTarget = CombatTarget.None;
+                ctx.TransitionTo(RoutineCalming, 0, CalmDuration);
                 return;
             }
         }
@@ -322,9 +337,7 @@ public class DeerHerdHandler : IArchetypeHandler
         {
             if (ShouldFightBack(ref ctx))
             {
-                ctx.Routine = RoutineFightBack;
-                ctx.Subroutine = FightStance;
-                ctx.SubroutineTimer = 0f;
+                ctx.TransitionTo(RoutineFightBack, FightStance);
                 ctx.Units[ctx.UnitIndex].Target = CombatTarget.Unit(ctx.AlertTarget);
                 ctx.Units[ctx.UnitIndex].ShowStatusSymbol(UnitStatusSymbol.React, 1.5f);
                 return;
@@ -350,19 +363,16 @@ public class DeerHerdHandler : IArchetypeHandler
                 if (ctx.Routine == RoutineSleeping && ctx.Subroutine == SleepWaking)
                     return;
 
-                ctx.Routine = target;
-                ctx.Subroutine = 0;
-                ctx.SubroutineTimer = 0f;
+                ctx.TransitionTo(target);
             }
         }
 
-        // Fight target died or left
+        // Fight target died or left.
+        // (Combat-field cleanup lives in OnRoutineExit(FightBack) — the transition fires it.)
         if (ctx.Routine == RoutineFightBack)
         {
             if (!SubroutineSteps.IsTargetAlive(ref ctx))
             {
-                ctx.Units[ctx.UnitIndex].Target = CombatTarget.None;
-                ctx.Units[ctx.UnitIndex].EngagedTarget = CombatTarget.None;
                 ctx.AlertState = (byte)UnitAlertState.Unaware;
                 ctx.AlertTarget = GameConstants.InvalidUnit;
                 SwitchToTimeOfDayRoutine(ref ctx);
@@ -370,8 +380,6 @@ public class DeerHerdHandler : IArchetypeHandler
             }
             if (ctx.AlertState == (byte)UnitAlertState.Unaware)
             {
-                ctx.Units[ctx.UnitIndex].Target = CombatTarget.None;
-                ctx.Units[ctx.UnitIndex].EngagedTarget = CombatTarget.None;
                 SwitchToTimeOfDayRoutine(ref ctx);
                 return;
             }
@@ -380,13 +388,7 @@ public class DeerHerdHandler : IArchetypeHandler
 
     private static void SwitchToTimeOfDayRoutine(ref AIContext ctx)
     {
-        byte target = ctx.IsNight ? RoutineSleeping : RoutineIdleRoaming;
-        if (ctx.Routine != target)
-        {
-            ctx.Routine = target;
-            ctx.Subroutine = 0;
-            ctx.SubroutineTimer = 0f;
-        }
+        ctx.TransitionTo(ctx.IsNight ? RoutineSleeping : RoutineIdleRoaming);
     }
 
     private static bool IsMale(ref AIContext ctx)
@@ -518,13 +520,15 @@ public class DeerHerdHandler : IArchetypeHandler
                     // Standup complete — transition to alert if threat present, else time-of-day routine
                     if (ctx.AlertState >= (byte)UnitAlertState.Alert)
                     {
-                        ctx.Routine = RoutineAlert;
-                        ctx.Subroutine = AlertWatch;
-                        ctx.SubroutineTimer = 0f;
+                        ctx.TransitionTo(RoutineAlert, AlertWatch);
                     }
                     else
                     {
-                        SwitchToTimeOfDayRoutine(ref ctx);
+                        // StartRoutine, not SwitchToTimeOfDayRoutine: at night the target
+                        // IS Sleeping — the routine must restart at SleepSitting, or the
+                        // deer stays wedged in SleepWaking with an expired timer.
+                        AIControl.StartRoutine(ref ctx,
+                            ctx.IsNight ? RoutineSleeping : RoutineIdleRoaming);
                     }
                 }
                 break;
@@ -569,9 +573,7 @@ public class DeerHerdHandler : IArchetypeHandler
             {
                 // Threat is close — escalate (always flee, FightBack kept for future use)
                 {
-                    ctx.Routine = RoutineFleeing;
-                    ctx.Subroutine = 0;
-                    ctx.SubroutineTimer = 0f;
+                    ctx.TransitionTo(RoutineFleeing);
                     ctx.Units[ctx.UnitIndex].ShowStatusSymbol(UnitStatusSymbol.React, 1.5f);
                     // Propagate flee to nearby herd
                     PropagateFleeToHerd(ref ctx);
@@ -621,9 +623,7 @@ public class DeerHerdHandler : IArchetypeHandler
         byte r = ctx.Units[j].Routine;
         if (r == RoutineFleeing || r == RoutineFightBack) return;
 
-        ctx.Units[j].Routine = RoutineFleeing;
-        ctx.Units[j].Subroutine = 0;
-        ctx.Units[j].SubroutineTimer = 0f;
+        AIControl.TransitionUnit(ref ctx, j, RoutineFleeing);
         ctx.Units[j].AlertTarget = ctx.AlertTarget;
         ctx.Units[j].AlertState = (byte)UnitAlertState.Aggressive;
         ctx.Units[j].ShowStatusSymbol(UnitStatusSymbol.React, 1.5f);
@@ -691,9 +691,7 @@ public class DeerHerdHandler : IArchetypeHandler
 
         if (ctx.SubroutineTimer <= 0f)
         {
-            ctx.Routine = ctx.IsNight ? RoutineSleeping : RoutineIdleRoaming;
-            ctx.Subroutine = 0;
-            ctx.SubroutineTimer = 0f;
+            ctx.TransitionTo(ctx.IsNight ? RoutineSleeping : RoutineIdleRoaming);
         }
     }
 
@@ -705,8 +703,7 @@ public class DeerHerdHandler : IArchetypeHandler
     {
         if (!SubroutineSteps.IsTargetAlive(ref ctx))
         {
-            ctx.Routine = RoutineCalming;
-            ctx.SubroutineTimer = CalmDuration;
+            ctx.TransitionTo(RoutineCalming, 0, CalmDuration);
             return;
         }
 
@@ -785,9 +782,7 @@ public class DeerHerdHandler : IArchetypeHandler
         if (!FindNearbyBush(ref ctx, out var bushPos, out int bushIdx))
             return false;
 
-        ctx.Routine = RoutineFeeding;
-        ctx.Subroutine = FeedWalkToBush;
-        ctx.SubroutineTimer = 0f;
+        ctx.TransitionTo(RoutineFeeding, FeedWalkToBush);
         ctx.Units[ctx.UnitIndex].MoveTarget = bushPos;
         ctx.Units[ctx.UnitIndex].BushWorkObjIdx = bushIdx;
         return true;

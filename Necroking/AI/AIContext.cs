@@ -80,6 +80,39 @@ public ref struct AIContext
     public readonly float AlertTimer { get => Units[UnitIndex].AlertTimer; set => Units[UnitIndex].AlertTimer = value; }
     public readonly uint AlertTarget { get => Units[UnitIndex].AlertTarget; set => Units[UnitIndex].AlertTarget = value; }
 
+    /// <summary>
+    /// The single legal way to change this unit's Routine. Fires the archetype handler's
+    /// OnRoutineExit/OnRoutineEnter hooks around the change and stamps Subroutine +
+    /// SubroutineTimer with fresh-entry values.
+    ///
+    /// No-op (returns false) when the unit is already in <paramref name="routine"/> —
+    /// re-asserting the current routine every frame is safe and neither re-fires hooks nor
+    /// clobbers Subroutine/SubroutineTimer. To restart a subroutine within the same routine,
+    /// set Subroutine/SubroutineTimer directly (a step change, not a transition); to force a
+    /// full re-entry of the same routine use <see cref="AIControl.StartRoutine"/>.
+    ///
+    /// Setting <see cref="Routine"/> directly bypasses exit cleanup and is how "unit locked
+    /// by a stale PendingAttack/EngagedTarget" bugs shipped — don't.
+    /// </summary>
+    public bool TransitionTo(byte routine, byte subroutine = 0, float timer = 0f)
+    {
+        byte old = Units[UnitIndex].Routine;
+        if (old == routine) return false;
+
+        var handler = ArchetypeRegistry.Get(Units[UnitIndex].Archetype);
+        handler?.OnRoutineExit(ref this, old, routine);
+        Units[UnitIndex].Routine = routine;
+        Units[UnitIndex].Subroutine = subroutine;
+        Units[UnitIndex].SubroutineTimer = timer;
+        handler?.OnRoutineEnter(ref this, old, routine);
+
+        if (AIControl.TraceTransitions && handler != null)
+            DebugLog.Log("ai_transition",
+                $"[unit {Units[UnitIndex].Id}] {ArchetypeRegistry.GetName(Units[UnitIndex].Archetype)}: " +
+                $"{handler.GetRoutineName(old)} -> {handler.GetRoutineName(routine)}");
+        return true;
+    }
+
     /// <summary>This unit's squad this frame, or null if it has none / squads aren't wired
     /// (some scenarios). Read-only view — the squad's fields are recomputed by SquadSystem.</summary>
     public readonly Squad? MySquad
