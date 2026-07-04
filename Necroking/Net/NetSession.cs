@@ -232,9 +232,16 @@ public sealed class NetSession
                     kv.Key.Send(_writer, DeliveryMethod.ReliableOrdered);
             }
         }
-        else if (Mode == NetMode.Client && peer == _hostPeer)
+        else if (Mode == NetMode.Client)
         {
-            AddLog($"lost connection to host ({info.Reason})");
+            // peer == _hostPeer  → we were connected and got dropped.
+            // _hostPeer == null  → the initial connect never completed (host
+            //   unreachable, wrong IP/port, firewalled, or timed out). Without
+            //   this branch that failure was swallowed and the UI sat on
+            //   "waiting for connection..." forever with no error.
+            AddLog(_hostPeer != null
+                ? $"lost connection to host ({info.Reason})"
+                : $"could not connect to host ({info.Reason})");
             Stop();
         }
     }

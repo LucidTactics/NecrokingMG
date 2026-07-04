@@ -28,7 +28,11 @@ public class MultiplayerWindow
     private List<string>? _lanIps; // cached on first open
 
     private const int PanelW = 620;
-    private const int PanelH = 560;
+    private const int PanelH = 600;
+
+    private static readonly Color BannerActive = new(45, 110, 65, 240);  // green: hosting / connected
+    private static readonly Color BannerTrying = new(150, 115, 40, 240); // amber: connecting
+    private static readonly Color BannerIdle = new(45, 45, 65, 240);     // gray: offline
 
     public MultiplayerWindow(EditorBase ui)
     {
@@ -55,10 +59,34 @@ public class MultiplayerWindow
 
         int x = panelX + 20;
         int w = PanelW - 40;
-        int y = panelY + 36;
 
         bool hosting = _session.Mode == NetMode.Host;
         bool clienting = _session.Mode == NetMode.Client;
+        bool connected = _session.StatusLine.StartsWith("CONNECTED") || _session.StatusLine.StartsWith("HOSTING");
+
+        // ── Live-state banner (prominent, top) ──────────────────────────
+        // Flips the INSTANT Host/Connect is clicked — placed high and drawn as a
+        // filled colored bar so it's unmistakable the buttons are wired even
+        // before any peer answers. StartHost/Connect run inside DrawButton below,
+        // but this bar is redrawn every frame from the live session state.
+        Color bannerBg = _session.Mode switch
+        {
+            NetMode.Host => BannerActive,
+            NetMode.Client when connected => BannerActive,
+            NetMode.Client => BannerTrying,
+            _ => BannerIdle,
+        };
+        var bannerRect = new Rectangle(panelX + 12, panelY + 30, PanelW - 24, 28);
+        _ui.DrawRect(bannerRect, bannerBg);
+        _ui.DrawBorder(bannerRect, EditorBase.PanelBorder);
+        string bannerText = _session.StatusLine;
+        var bSize = _ui.MeasureText(bannerText);
+        _ui.DrawText(bannerText,
+            new Vector2(panelX + PanelW / 2f - (int)(bSize.X / 2f),
+                        panelY + 30 + (28 - (int)bSize.Y) / 2),
+            EditorBase.TextBright);
+
+        int y = panelY + 68;
 
         // ── Host section ────────────────────────────────────────────────
         _ui.DrawText("HOST A GAME", new Vector2(x, y), EditorBase.AccentColor);
@@ -72,6 +100,7 @@ public class MultiplayerWindow
         Color hostBtnBg = hosting ? new Color(120, 50, 50, 240) : EditorBase.ButtonBg;
         if (_ui.DrawButton(hostBtn, x, y, 180, 30, hostBtnBg))
         {
+            Necroking.Core.DebugLog.Log("net", $"[UI] Host button clicked (hosting was {hosting})");
             if (hosting) _session.Stop();
             else _session.StartHost(_hostBindIp, ParsePort(_hostPort));
         }
@@ -97,20 +126,21 @@ public class MultiplayerWindow
         Color joinBtnBg = clienting ? new Color(120, 50, 50, 240) : EditorBase.ButtonBg;
         if (_ui.DrawButton(joinBtn, x, y, 180, 30, joinBtnBg))
         {
+            Necroking.Core.DebugLog.Log("net", $"[UI] Connect button clicked (clienting was {clienting})");
             if (clienting) _session.Stop();
             else _session.Connect(_joinIp, ParsePort(_joinPort));
         }
         y += 38;
 
-        // ── Status ──────────────────────────────────────────────────────
-        _ui.DrawText("STATUS", new Vector2(x, y), EditorBase.AccentColor);
+        // ── Log ─────────────────────────────────────────────────────────
+        // Live-state now lives in the top banner; this is the event history.
+        _ui.DrawText("LOG", new Vector2(x, y), EditorBase.AccentColor);
         y += 20;
-        _ui.DrawText(_session.StatusLine, new Vector2(x, y), EditorBase.TextBright);
-        y += 22;
-
-        // Last few log lines, newest at the bottom. Errors stand out in red.
         var log = _session.Log;
-        int logLines = 6;
+        if (log.Count == 0)
+            _ui.DrawText("(no activity yet - click Start Hosting or Connect)",
+                new Vector2(x, y), EditorBase.TextDim);
+        int logLines = 7;
         for (int i = System.Math.Max(0, log.Count - logLines); i < log.Count; i++)
         {
             Color lineColor = IsErrorLine(log[i]) ? EditorBase.DangerColor : EditorBase.TextDim;
@@ -132,7 +162,7 @@ public class MultiplayerWindow
     private static bool IsErrorLine(string line)
     {
         foreach (var kw in new[] { "failed", "invalid", "error", "rejected",
-                                   "lost", "no host", "bad packet", "in use" })
+                                   "lost", "no host", "bad packet", "in use", "could not" })
             if (line.Contains(kw, System.StringComparison.OrdinalIgnoreCase))
                 return true;
         return false;

@@ -361,7 +361,7 @@ partial class GameRenderer
         // unit/spell/map/item editors; _g._uiEditor is its own EditorBase instance.
         if (_g._menuState == MenuState.Settings || _g._menuState == MenuState.UnitEditor
             || _g._menuState == MenuState.SpellEditor || _g._menuState == MenuState.MapEditor
-            || _g._menuState == MenuState.ItemEditor)
+            || _g._menuState == MenuState.ItemEditor || _g._menuState == MenuState.Multiplayer)
             _g._editorUi.EndDrawFrame();
         else if (_g._menuState == MenuState.UIEditor)
             _g._uiEditor.EndDrawFrame();
