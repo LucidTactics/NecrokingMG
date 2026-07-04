@@ -78,7 +78,7 @@ public static class ZoneColors
     public static Color Fill(ZoneKind k, bool selected = false)
     {
         var b = Base(k);
-        return new Color(b.R, b.G, b.B, selected ? 90 : 45);
+        return Color.FromNonPremultiplied(b.R, b.G, b.B, selected ? 90 : 45);
     }
 
     public static Color Border(ZoneKind k, bool selected = false)
