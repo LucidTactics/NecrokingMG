@@ -2721,14 +2721,6 @@ public class Simulation
     {
         var weapon = _units[i].Stats.MeleeWeapons[weaponIdx];
 
-        // Locked landing spot: just short of the target, in melee range with a small margin.
-        Vec2 toTarget = _units[ti].Position - _units[i].Position;
-        float len = toTarget.Length();
-        float standoff = _units[ti].Radius + _units[i].Radius + 0.2f;
-        Vec2 landingPos = len > 0.01f
-            ? _units[ti].Position - toTarget * (standoff / len)
-            : _units[ti].Position;
-
         var def = _gameData?.Units.Get(_units[i].UnitDefID);
         string spriteName = def?.Sprite?.SpriteName ?? "";
         // Pounce traverses at sprint-top-speed regardless of current MaxSpeed
@@ -2738,6 +2730,27 @@ public class Simulation
             ? def.SprintSpeedMultiplier
             : Render.LocomotionProfile.DefaultSprintMult;
         float pounceSpeed = _units[i].Stats.CombatSpeed * pounceSprintMult;
+
+        // Lead the target: aim where it will be when the leap arrives, not
+        // where it is now (a strafing deer used to be missed by design).
+        // Leading may stretch the leap up to +30% past PounceMaxRange to
+        // catch a runner (range was gated on the UNLED distance upstream);
+        // beyond that the landing point pulls back onto the allowance circle.
+        Vec2 predicted = GameSystems.Combat.InterceptUtil.PredictPosition(
+            _units[i].Position, _units[ti].Position, _units[ti].Velocity, pounceSpeed);
+        predicted = GameSystems.Combat.InterceptUtil.ClampLeadOvershoot(
+            _units[i].Position, predicted, weapon.PounceMaxRange);
+
+        // Locked landing spot: just short of the PREDICTED point, in melee
+        // range with a small margin. Standoff direction recomputed toward the
+        // predicted point — offsetting along the stale attacker→current vector
+        // would land the pouncer sideways of a moving target.
+        Vec2 toTarget = predicted - _units[i].Position;
+        float len = toTarget.Length();
+        float standoff = _units[ti].Radius + _units[i].Radius + 0.2f;
+        Vec2 landingPos = len > 0.01f
+            ? predicted - toTarget * (standoff / len)
+            : predicted;
         JumpSystem.BeginPounce(_units, i, landingPos, _units[ti].Id,
             _animMeta, spriteName, weapon.PounceArcPeak, speedOverride: pounceSpeed);
 
@@ -2864,12 +2877,13 @@ public class Simulation
         string weaponName = wIdx < stats.RangedWeapons.Count ? stats.RangedWeapons[wIdx].Name : "";
 
         Vec2 from = _units[attackerIdx].Position;
-        Vec2 aim = _units[defenderIdx].Position;
+        // Lead the shot (shared intercept helper; 2 iterations converge the
+        // flight-time estimate — the old inline one-pass lead under-led fast
+        // strafers). dist re-measured to the led point for direct-vs-lob.
+        Vec2 aim = GameSystems.Combat.InterceptUtil.PredictPosition(
+            from, _units[defenderIdx].Position, _units[defenderIdx].Velocity,
+            ProjectileManager.ArrowSpeed);
         float dist = (aim - from).Length();
-
-        float flightTime = dist / ProjectileManager.ArrowSpeed;
-        aim += _units[defenderIdx].Velocity * flightTime;
-        dist = (aim - from).Length();
 
         bool direct = dist <= directRange && IsFireLaneClear(attackerIdx, aim);
         _projectiles.SpawnArrow(from, aim, _units[attackerIdx].Faction, _units[attackerIdx].Id,

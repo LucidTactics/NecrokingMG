@@ -32,6 +32,21 @@ CLAUDE.md → "Standard Patterns Reference".)
   `DrawDropdownOverlays()` → `DrawColorPickerPopup()` last. Both are
   double-draw-guarded for nested editors.
 
+## Combat / gameplay math
+
+- **Target leading (intercept prediction)** — `GameSystems.Combat.InterceptUtil`
+  (Necroking/Game/Combat/InterceptUtil.cs). `PredictPosition(from, targetPos,
+  targetVel, travelSpeed)` = where a moving target will be when your
+  projectile/leap arrives (iterative linear intercept, default 2 passes);
+  `ClampLeadOvershoot(from, ledPoint, maxRange, fraction=0.3)` = WC3-style
+  cap letting the lead stretch +30% past ability range. Used by arrow
+  ballistics (FireArrowAt) and pounce (InitiatePounceWithWeapon). Any spell
+  launching something at a moving unit calls this — never re-derive the
+  intercept inline. Leading happens in the CALLER; position consumers
+  (SpawnArrow, BeginPounce) take the already-led point.
+- **Melee engage range** — `GameSystems.Combat.MeleeRangeUtil.Compute`
+  (single source for "am I close enough to melee", sim + AI handlers).
+
 ## Data / registries
 
 - **Cloning defs** — `registry.CloneDef(src, newId)` (RegistryBase): JSON
