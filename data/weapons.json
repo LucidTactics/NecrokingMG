@@ -334,7 +334,7 @@
       "trampleImpactForce": 10
     },
     {
-      "id": "weapon_8",
+      "id": "weapon_battle_axe",
       "name": "Battle Axe",
       "damage": 12,
       "attackBonus": 4,
@@ -371,7 +371,7 @@
       "trampleImpactForce": 10
     },
     {
-      "id": "weapon_10",
+      "id": "weapon_zombie_bite",
       "name": "Zombie Bite",
       "damage": 2,
       "attackBonus": -4,
@@ -408,7 +408,7 @@
       "trampleImpactForce": 10
     },
     {
-      "id": "weapon_11",
+      "id": "weapon_zombie_claw",
       "name": "Zombie Claw",
       "damage": 0,
       "attackBonus": -2,
@@ -445,7 +445,7 @@
       "trampleImpactForce": 10
     },
     {
-      "id": "weapon_174944",
+      "id": "weapon_kick",
       "name": "Kick",
       "damage": -4,
       "attackBonus": -2,
@@ -519,7 +519,7 @@
       "trampleImpactForce": 10
     },
     {
-      "id": "weapon_181921",
+      "id": "weapon_antlers",
       "name": "Antlers",
       "damage": -2,
       "attackBonus": 1,
@@ -632,7 +632,7 @@
       "trampleImpactForce": 10
     },
     {
-      "id": "weapon_011352",
+      "id": "weapon_claw",
       "name": "Claw",
       "damage": 1,
       "attackBonus": 1,
