@@ -2145,15 +2145,24 @@ public class UnitEditorWindow
 
         // Per-gait velocity overrides. Rarely needed now that the calibration
         // works; left in as an escape hatch for sprites where the auto-derived
-        // value is wrong. Each override wins over the pixel-derived value when
-        // set; checkbox to enable/disable per gait.
-        curY = DrawNullableFloat("loc_walk_ov", "Walk velOverride",
+        // value is wrong, or to deliberately slow/speed a gait's cadence. Each
+        // override wins over the pixel-derived value when set; checkbox to
+        // enable/disable per gait. The auto-derived value is shown per gait so
+        // the designer has the baseline to scale from (playback = velocity ÷
+        // this value, hence the reminder line).
+        bool hasAutoVels = Render.LocomotionProfile.TryComputePixelVels(
+            def, out float autoWalkVel, out float autoJogVel, out float autoRunVel);
+        string AutoVel(float v) => hasAutoVels ? v.ToString("F2") : "n/a";
+        _ui.DrawText("Anim vel per gait — BIGGER value = SLOWER animation",
+            new Vector2(x, curY + 4), EditorBase.TextDim);
+        curY += RowH;
+        curY = DrawNullableFloat("loc_walk_ov", $"Walk velOverride (auto {AutoVel(autoWalkVel)})",
             def.AnimWalkVelOverride, x, curY, w, 0.1f,
             v => { def.AnimWalkVelOverride = v; _unsavedChanges = true; });
-        curY = DrawNullableFloat("loc_jog_ov", "Jog velOverride",
+        curY = DrawNullableFloat("loc_jog_ov", $"Jog velOverride (auto {AutoVel(autoJogVel)})",
             def.AnimJogVelOverride, x, curY, w, 0.1f,
             v => { def.AnimJogVelOverride = v; _unsavedChanges = true; });
-        curY = DrawNullableFloat("loc_run_ov", "Run velOverride",
+        curY = DrawNullableFloat("loc_run_ov", $"Run velOverride (auto {AutoVel(autoRunVel)})",
             def.AnimRunVelOverride, x, curY, w, 0.1f,
             v => { def.AnimRunVelOverride = v; _unsavedChanges = true; });
 

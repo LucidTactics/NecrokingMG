@@ -117,34 +117,9 @@ public readonly struct LocomotionProfile
     public static LocomotionProfile FromUnit(UnitDef def)
     {
         float baseSpeed = def.Stats?.CombatSpeed ?? 8f;
-        if (def.LegacyGaitMode || def.SpriteData?.Calibration == null)
-            return FromBaseSpeed(baseSpeed);
-
-        var cal = def.SpriteData.Calibration;
-        // Pass SpriteScale alongside SpriteWorldHeight so the pixel→world
-        // conversion uses the unit's actual rendered height (some units like
-        // Wretched render at 0.9× scale). Omitting it would overstate cycle
-        // distance and underestimate feet-lock velocity, causing the playback
-        // rate at any given velocity to be too low — feet would drag.
-        //
-        // For quadrupeds (def.IsQuadruped), subtract IdleFootSpreadPx from
-        // each gait's stride. The "stride spread" pixel measurement on a 4-
-        // legged unit captures front-paw-to-rear-paw distance, which is
-        // dominated by body length, not by leg stride. Idle stance pose gives
-        // us the body length to strip out so the residual is the actual
-        // leg-stride that drives ground motion.
-        float bodySub = def.IsQuadruped ? cal.IdleFootSpreadPx : 0f;
-        // 0 means "use default (biped 0.5)"; non-zero values like 0.75 reshape
-        // the cycle-distance formula. Per-unit override lets quadrupeds with
-        // unusual gait patterns (high-bound run, gallop) be tuned later.
-        float duty = def.DutyCycle > 0f ? def.DutyCycle : StrideCalibration.DefaultDutyCycle;
-        float pixelWalk = StrideCalibration.ResolveAnimVel(cal.Walk, def.SpriteWorldHeight, def.SpriteScale, bodySub, duty);
-        float pixelJog  = StrideCalibration.ResolveAnimVel(cal.Jog,  def.SpriteWorldHeight, def.SpriteScale, bodySub, duty);
-        float pixelRun  = StrideCalibration.ResolveAnimVel(cal.Run,  def.SpriteWorldHeight, def.SpriteScale, bodySub, duty);
-
-        // Need valid pixel velocities to use the new mode. If any gait is missing,
-        // drop back to legacy.
-        if (pixelWalk <= 0f || pixelJog <= 0f || pixelRun <= 0f)
+        // Need valid pixel velocities to use the new mode. If any gait is missing
+        // (or legacy mode / no calibration), drop back to legacy.
+        if (!TryComputePixelVels(def, out float pixelWalk, out float pixelJog, out float pixelRun))
             return FromBaseSpeed(baseSpeed);
 
         // Playback anchors = pixel-derived per-gait feet-lock velocities. Override
@@ -166,6 +141,41 @@ public readonly struct LocomotionProfile
         float jogThresh = baseSpeed * (1f + jogMult) * 0.5f;
         float runThresh = baseSpeed * (jogMult + sprintMult) * 0.5f;
         return BuildNewModeProfile(walk, jog, run, jogThresh, runThresh);
+    }
+
+    /// <summary>Raw pixel-stride-derived feet-lock velocity for each gait, BEFORE
+    /// the per-gait <c>AnimXxxVelOverride</c> fields are applied — i.e. what the
+    /// unit uses when no overrides are set. Returns false when the unit is in
+    /// legacy gait mode, has no stride calibration, or any gait's calibration is
+    /// invalid (callers should show "n/a"). Single source of truth shared with
+    /// <see cref="FromUnit"/>; the unit editor also displays these next to the
+    /// override inputs.
+    ///
+    /// Details of the computation:
+    ///  - SpriteScale is passed alongside SpriteWorldHeight so the pixel→world
+    ///    conversion uses the unit's actual rendered height (some units like
+    ///    Wretched render at 0.9× scale). Omitting it would overstate cycle
+    ///    distance and underestimate feet-lock velocity — feet would drag.
+    ///  - For quadrupeds, IdleFootSpreadPx is subtracted from each gait's stride:
+    ///    the stride-spread pixel measurement on a 4-legged unit captures
+    ///    front-paw-to-rear-paw distance, dominated by body length; the idle
+    ///    stance gives the body length to strip so the residual is the actual
+    ///    leg-stride that drives ground motion.
+    ///  - DutyCycle 0 means "use default (biped 0.5)"; non-zero values like 0.75
+    ///    reshape the cycle-distance formula for unusual gaits (bound, gallop).</summary>
+    public static bool TryComputePixelVels(UnitDef def,
+        out float pixelWalk, out float pixelJog, out float pixelRun)
+    {
+        pixelWalk = pixelJog = pixelRun = 0f;
+        if (def.LegacyGaitMode || def.SpriteData?.Calibration == null) return false;
+
+        var cal = def.SpriteData.Calibration;
+        float bodySub = def.IsQuadruped ? cal.IdleFootSpreadPx : 0f;
+        float duty = def.DutyCycle > 0f ? def.DutyCycle : StrideCalibration.DefaultDutyCycle;
+        pixelWalk = StrideCalibration.ResolveAnimVel(cal.Walk, def.SpriteWorldHeight, def.SpriteScale, bodySub, duty);
+        pixelJog  = StrideCalibration.ResolveAnimVel(cal.Jog,  def.SpriteWorldHeight, def.SpriteScale, bodySub, duty);
+        pixelRun  = StrideCalibration.ResolveAnimVel(cal.Run,  def.SpriteWorldHeight, def.SpriteScale, bodySub, duty);
+        return pixelWalk > 0f && pixelJog > 0f && pixelRun > 0f;
     }
 
     /// <summary>Build a new-mode profile directly from per-gait feet-lock
