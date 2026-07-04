@@ -87,25 +87,53 @@ public class Pathfinder
 
     // Per-destination remaining costs over the portal graph. Replaces the old
     // hop-count SectorRoute: true Dijkstra cost (tile-cost units) from a
-    // portal to the destination tile. Each portal is TWO graph nodes — one
-    // per side — because remaining cost is side-dependent: standing on the
-    // side the path continues into is one crossing cheaper than standing on
-    // the far side. With a single side-agnostic node, both adjacent sectors
-    // would seed the portal as an "exit" at the same cost and the two border
-    // tiles would point INTO each other (observed as units ping-ponging on
-    // the sector border). Cached per (destSector, tier) — the first
-    // requester's dest tile seeds the search; later targets in the same
-    // sector reuse it (error bounded by one sector crossing, same granularity
-    // the hop scheme had). Ages out with the same loose horizon flows use
-    // (EvictStaleFlowFields).
+    // portal to the destination tile. Each portal is TWO graph nodes
+    // (nodeId = portalId * 2 + side; side 0 = SectorA's, 1 = SectorB's)
+    // because remaining cost is side-dependent: standing on the side the path
+    // continues into is one crossing cheaper than the far side. With a single
+    // side-agnostic node, both adjacent sectors would seed the portal as an
+    // "exit" at the same cost and the two border tiles would point INTO each
+    // other (observed as units ping-ponging on the sector border).
+    //
+    // The search is a RESUMABLE, corridor-bounded A* from the destination
+    // side toward the requesting unit's sector — never a whole-map Dijkstra.
+    // On a 4096-sector map an exhaustive search meant thousands of lazy
+    // matrix computes; budget-aborted and restarted from scratch every tick
+    // it never converged (tick time ramped while every dependent flow stayed
+    // deferred forever). Instead: node costs persist sparsely in Nodes; a
+    // budget abort keeps all progress and the next request resumes by
+    // rebuilding the open set from the unsettled frontier; a request for a
+    // sector whose portals are already settled costs a dictionary probe.
+    // Cached per (destSector, tier) — the first requester's dest tile seeds
+    // the search; later targets in the same sector reuse it (error bounded by
+    // one sector crossing, same granularity the hop scheme had). Ages out
+    // with the same loose horizon flows use (EvictStaleFlowFields).
+    private struct PortalNodeState
+    {
+        public float G;      // remaining cost to the destination (optimal once Settled)
+        public bool Settled;
+    }
     private sealed class PortalRoute
     {
-        // [portalId * 2 + side], side 0 = SectorA's side, 1 = SectorB's side;
-        // InfCost = no path from that side.
-        public float[] Cost = Array.Empty<float>();
+        // Sparse, corridor-sized: only nodes the A* has touched. A node
+        // absent here is unreached — unreachable if Exhausted, unknown-yet
+        // otherwise. Unsettled entries are the persisted open frontier.
+        public readonly Dictionary<int, PortalNodeState> Nodes = new();
+        // Sectors whose flow-relevant portals are settled or provably worse
+        // than the best exit by > RouteStopSlack (see ResumePortalRoute).
+        public readonly HashSet<int> ResolvedSectors = new();
+        // Open set ran dry: every untouched/unsettled node is unreachable,
+        // so every sector is implicitly resolved.
+        public bool Exhausted;
         public uint FrameAccessed;
     }
     private readonly Dictionary<int, PortalRoute> _routeCache = new(); // key = destSector * NumSizeTiers + tier
+
+    // A* early-out slack: once the open set's best f exceeds the best settled
+    // target-portal cost by this much, still-unsettled target portals can't
+    // matter to the flow (their exit would be over a whole sector crossing
+    // worse) and the resume stops. Bounds the corridor width off the beeline.
+    private const float RouteStopSlack = SectorSize * 2f;
 
     // Per-sector flow field cache
     private readonly Dictionary<FlowKey, CachedFlow> _flowCache = new();
@@ -619,42 +647,52 @@ public class Pathfinder
         return m;
     }
 
-    /// <summary>Remaining-cost route over the portal graph for one destination.
-    /// Seeds the destination sector's portals with REAL costs from the dest
-    /// tile (one window Dijkstra in that sector), then runs Dijkstra outward
-    /// over portals: edges are the lazily-cached intra-sector matrices plus a
-    /// small crossing cost. Everything is in tile-cost units, so the results
-    /// feed straight into flow-field goal seeding. Returns null when the
-    /// Dijkstra budget dies before/while computing (caller defers; matrices
-    /// finished so far stay cached, so retries make forward progress).</summary>
-    private PortalRoute? GetPortalRoute(int destSector, int destTX, int destTY, int tier, uint frame)
+    /// <summary>Remaining-cost route over the portal graph for one destination,
+    /// resolved lazily per requesting sector. Seeds the destination sector's
+    /// portals with REAL costs from the dest tile (one window Dijkstra in
+    /// that sector), then A*-expands toward <paramref name="targetSector"/>
+    /// (octile heuristic), stopping as soon as that sector's flow-relevant
+    /// portals are settled — matrices only get computed along the corridor,
+    /// not map-wide. Everything is in tile-cost units, so the results feed
+    /// straight into flow-field goal seeding. Returns null when the Dijkstra
+    /// budget dies before/while computing — all progress (seeds, settled
+    /// costs, frontier, matrices) persists in the cached route, so the next
+    /// request RESUMES instead of restarting.</summary>
+    private PortalRoute? GetPortalRoute(int destSector, int destTX, int destTY, int tier, uint frame, int targetSector)
     {
-        int routeKey = destSector * TerrainCosts.NumSizeTiers + tier;
-        if (_routeCache.TryGetValue(routeKey, out var existing))
-        {
-            existing.FrameAccessed = frame;
-            return existing;
-        }
         if (_grid == null || _portals == null || _sectorPortals == null) return null;
-        if (!HasDijkstraBudget()) return null;
+        int routeKey = destSector * TerrainCosts.NumSizeTiers + tier;
+        if (!_routeCache.TryGetValue(routeKey, out var route))
+        {
+            if (!HasDijkstraBudget()) return null;
+            route = SeedPortalRoute(destSector, destTX, destTY, tier);
+            _routeCache[routeKey] = route;
+        }
+        route.FrameAccessed = frame;
+        if (route.Exhausted || route.ResolvedSectors.Contains(targetSector))
+            return route;
+        return ResumePortalRoute(route, targetSector, tier) ? route : null;
+    }
 
-        var flat = _portals[tier];
-        var destIds = _sectorPortals[tier][destSector];
-        var route = new PortalRoute { Cost = new float[flat.Count * 2], FrameAccessed = frame };
-        Array.Fill(route.Cost, GameConstants.InfCost);
+    /// <summary>Create a route with just the destination-side seeds (no graph
+    /// expansion yet). One budget-charged window Dijkstra in the dest sector.</summary>
+    private PortalRoute SeedPortalRoute(int destSector, int destTX, int destTY, int tier)
+    {
+        var route = new PortalRoute();
+        var flat = _portals![tier];
+        var destIds = _sectorPortals![tier][destSector];
         if (destIds.Count == 0)
         {
-            // Isolated destination sector: cache the all-Inf route so every
-            // unit heading there shares one "unreachable" answer instead of
-            // re-deriving it (the caller's fallback ladder takes over).
-            _routeCache[routeKey] = route;
+            // Isolated destination sector: nothing to expand from — cache the
+            // exhausted route so every unit heading there shares one
+            // "unreachable" answer (the caller's fallback ladder takes over).
+            route.Exhausted = true;
             return route;
         }
 
-        // --- Destination-side seeding ---
         int dsx = destSector % _sectorCountX, dsy = destSector / _sectorCountX;
         int baseX = dsx * SectorSize, baseY = dsy * SectorSize;
-        int winW = Math.Min(SectorSize, _grid.Width - baseX);
+        int winW = Math.Min(SectorSize, _grid!.Width - baseX);
         int winH = Math.Min(SectorSize, _grid.Height - baseY);
         int localTX = Math.Clamp(destTX - baseX, 0, winW - 1);
         int localTY = Math.Clamp(destTY - baseY, 0, winH - 1);
@@ -666,8 +704,6 @@ public class Pathfinder
         bool seeded = RunWindowDijkstra(baseX, baseY, winW, winH, tier, _portalGoalScratch, null, _costScratch, null);
         ChargeDijkstraMs((float)ElapsedMs(sw0));
 
-        var pq = _portalPqScratch;
-        pq.Clear();
         bool anyFinite = false;
         if (seeded)
         {
@@ -678,8 +714,7 @@ public class Pathfinder
                 if (c < GameConstants.InfCost)
                 {
                     int node = pid * 2 + (flat[pid].SectorA == destSector ? 0 : 1);
-                    route.Cost[node] = c;
-                    pq.Enqueue(node, c);
+                    route.Nodes[node] = new PortalNodeState { G = c };
                     anyFinite = true;
                 }
             }
@@ -691,40 +726,111 @@ public class Pathfinder
             // exists if the sector graph connects" — by seeding all dest
             // portals at 0: units still close in, and the same-sector /
             // imaginary-chunk ladder takes over on arrival.
-            pq.Clear();
+            route.Nodes.Clear();
             foreach (int pid in destIds)
             {
                 int node = pid * 2 + (flat[pid].SectorA == destSector ? 0 : 1);
-                route.Cost[node] = 0f;
-                pq.Enqueue(node, 0f);
+                route.Nodes[node] = new PortalNodeState { G = 0f };
             }
         }
+        return route;
+    }
 
-        // --- Dijkstra over the portal graph ---
-        // Node = (portal, side). Edges: crossing to the twin side
-        // (PortalCrossCost), and walking the shared sector center-to-center
-        // to another portal's near side (intra-sector matrix). Relaxing
-        // (q, s-side) from (p, s-side) means "walk sector s from q to p,
-        // then continue along p's remaining path".
-        while (pq.TryDequeue(out int nid, out float pri))
+    // Scratch for ResumePortalRoute's per-call target-node list.
+    private readonly List<int> _routeTargetScratch = new();
+
+    /// <summary>Resume the route's A* until <paramref name="targetSector"/> is
+    /// resolved. Node = (portal, side). Edges: crossing to the twin side
+    /// (PortalCrossCost), and walking the shared sector center-to-center to
+    /// another portal's near side (intra-sector matrix, computed lazily and
+    /// budget-charged). Targets are the FAR-side nodes of the target sector's
+    /// portals — exactly what GetFlowToPortalSet seeds from. Returns false
+    /// when the budget dies mid-search (all progress persisted; caller
+    /// defers), true when the sector is resolved (all targets settled, the
+    /// early-out slack tripped, or the whole graph is exhausted).</summary>
+    private bool ResumePortalRoute(PortalRoute route, int targetSector, int tier)
+    {
+        var flat = _portals![tier];
+        var targetIds = _sectorPortals![tier][targetSector];
+
+        var targets = _routeTargetScratch;
+        targets.Clear();
+        int unsettled = 0;
+        float bestTargetG = GameConstants.InfCost;
+        foreach (int pid in targetIds)
         {
-            if (pri > route.Cost[nid]) continue; // stale PQ entry
+            int node = pid * 2 + (flat[pid].SectorA == targetSector ? 1 : 0);
+            targets.Add(node);
+            if (route.Nodes.TryGetValue(node, out var st) && st.Settled)
+                bestTargetG = Math.Min(bestTargetG, st.G);
+            else
+                unsettled++;
+        }
+        if (unsettled == 0)
+        {
+            // Also covers a portal-less target sector: trivially resolved,
+            // the flow build finds no finite portal and reports unreachable.
+            route.ResolvedSectors.Add(targetSector);
+            return true;
+        }
+
+        // Rebuild the open set from the persisted frontier. Correctness of
+        // resuming under a DIFFERENT heuristic than previous resumes used:
+        // settled g's are optimal (consistent h), frontier g's are valid
+        // tentative costs — re-prioritizing them with the new target's h is
+        // just A* on the residual graph.
+        var pq = _portalPqScratch;
+        pq.Clear();
+        foreach (var kv in route.Nodes)
+            if (!kv.Value.Settled)
+                pq.Enqueue(kv.Key, kv.Value.G + RouteHeuristic(kv.Key, targetSector, tier));
+        if (pq.Count == 0)
+        {
+            route.Exhausted = true;
+            return true;
+        }
+
+        int pops = 0;
+        while (pq.TryDequeue(out int nid, out float f))
+        {
+            var st = route.Nodes[nid];
+            if (st.Settled) continue;
+            // Early-out: pq pops in increasing f, so everything left costs
+            // > bestTargetG + slack — any still-unsettled target portal is
+            // irrelevant to the flow (its seed would lose by a full sector
+            // crossing). Its node stays unsettled in the frontier, so a
+            // later requester can still settle it.
+            if (bestTargetG < GameConstants.InfCost && f > bestTargetG + RouteStopSlack)
+            {
+                route.ResolvedSectors.Add(targetSector);
+                pq.Clear();
+                return true;
+            }
+            if (f > st.G + RouteHeuristic(nid, targetSector, tier) + 0.001f) continue; // stale entry (relaxed since enqueue)
+
+            st.Settled = true;
+            route.Nodes[nid] = st;
+            if (targets.Contains(nid)) // small list (sector portal count) — linear is fine
+            {
+                bestTargetG = Math.Min(bestTargetG, st.G);
+                if (--unsettled == 0)
+                {
+                    route.ResolvedSectors.Add(targetSector);
+                    pq.Clear();
+                    return true;
+                }
+            }
+
             int pid = nid >> 1;
             int side = nid & 1;
             var p = flat[pid];
 
             // Twin: step across the border to the portal's other side.
-            int twin = pid * 2 + (side ^ 1);
-            float twinCand = route.Cost[nid] + PortalCrossCost;
-            if (twinCand < route.Cost[twin])
-            {
-                route.Cost[twin] = twinCand;
-                pq.Enqueue(twin, twinCand);
-            }
+            RelaxPortalNode(route, pq, pid * 2 + (side ^ 1), st.G + PortalCrossCost, targetSector, tier);
 
             int s = side == 0 ? p.SectorA : p.SectorB;
             var m = GetPortalMatrix(s, tier);
-            if (m == null) { pq.Clear(); return null; } // budget died mid-search — defer, keep cached matrices
+            if (m == null) { pq.Clear(); return false; } // budget died — Nodes persist, next request resumes
             int myIdx = side == 0 ? p.IdxInA : p.IdxInB;
             var ids = _sectorPortals[tier][s];
             for (int j = 0; j < ids.Count; j++)
@@ -733,18 +839,50 @@ public class Pathfinder
                 if (qid == pid) continue;
                 float w = m.Cost[myIdx * m.N + j];
                 if (w >= GameConstants.InfCost) continue;
-                int qNode = qid * 2 + (flat[qid].SectorA == s ? 0 : 1);
-                float cand = route.Cost[nid] + w;
-                if (cand < route.Cost[qNode])
-                {
-                    route.Cost[qNode] = cand;
-                    pq.Enqueue(qNode, cand);
-                }
+                RelaxPortalNode(route, pq, qid * 2 + (flat[qid].SectorA == s ? 0 : 1), st.G + w, targetSector, tier);
             }
+
+            // Matrices dominate the cost and charge the budget themselves,
+            // but a long crawl over already-cached matrices should yield too.
+            if ((++pops & 63) == 0 && !HasDijkstraBudget()) { pq.Clear(); return false; }
         }
 
-        _routeCache[routeKey] = route;
-        return route;
+        // Open set ran dry: every reachable node is settled; anything else is
+        // unreachable for good (until invalidation clears the route).
+        route.Exhausted = true;
+        return true;
+    }
+
+    private void RelaxPortalNode(PortalRoute route, PriorityQueue<int, float> pq, int node, float g,
+                                 int targetSector, int tier)
+    {
+        if (route.Nodes.TryGetValue(node, out var st))
+        {
+            if (st.Settled || g >= st.G) return;
+            st.G = g;
+            route.Nodes[node] = st;
+        }
+        else
+        {
+            route.Nodes[node] = new PortalNodeState { G = g };
+        }
+        pq.Enqueue(node, g + RouteHeuristic(node, targetSector, tier));
+    }
+
+    /// <summary>Octile tile distance from a node's portal center to the target
+    /// sector's rect. Admissible AND consistent: intra-sector edge weights are
+    /// window-Dijkstra costs over tiles of cost >= 1 (so >= octile distance
+    /// between the two centers), and the crossing edge (weight 1) moves the
+    /// center exactly 1 tile.</summary>
+    private float RouteHeuristic(int node, int targetSector, int tier)
+    {
+        var p = _portals![tier][node >> 1];
+        PortalCenterInSector(p, (node & 1) == 0 ? p.SectorA : p.SectorB, out int gx, out int gy);
+        int tsx = targetSector % _sectorCountX, tsy = targetSector / _sectorCountX;
+        int bx = tsx * SectorSize, by = tsy * SectorSize;
+        int dx = gx < bx ? bx - gx : Math.Max(0, gx - (bx + SectorSize - 1));
+        int dy = gy < by ? by - gy : Math.Max(0, gy - (by + SectorSize - 1));
+        return dx > dy ? dx + 0.41421f * dy : dy + 0.41421f * dx;
     }
 
     // =========================================================================
@@ -1143,11 +1281,13 @@ public class Pathfinder
         }
 
         // Route lookup AFTER the flow-cache check: a cached field never pays
-        // for a route, and a route miss (budget death mid-graph/matrix) defers
-        // exactly like a flow miss would.
+        // for a route, and a route miss (budget death mid-search) defers
+        // exactly like a flow miss would. The unit's sector is the A* target:
+        // the search stops once THIS sector's portals are resolved.
+        int unitSector = SectorIdx(sx, sy);
         int destTX = (int)(targetPos.X / GameConstants.TileSize);
         int destTY = (int)(targetPos.Y / GameConstants.TileSize);
-        var route = GetPortalRoute(destSector, destTX, destTY, tier, frame);
+        var route = GetPortalRoute(destSector, destTX, destTY, tier, frame, unitSector);
         if (route == null)
         {
             EnqueueMiss(key, sx, sy, unitPos, targetPos);
@@ -1161,7 +1301,6 @@ public class Pathfinder
             return default;
         }
 
-        int unitSector = SectorIdx(sx, sy);
         var flat = _portals[tier];
         var ids = _sectorPortals[tier][unitSector];
 
@@ -1180,9 +1319,12 @@ public class Pathfinder
             // point into each other. A portal whose path continues back
             // through this sector carries a two-crossing penalty here, so the
             // interior route to the correct portal always beats it.
-            float rc = route.Cost[pid * 2 + (owner ? 1 : 0)];
-            if (rc >= GameConstants.InfCost) continue;
-            rc += PortalCrossCost;
+            // Only SETTLED nodes are trusted — an unsettled tentative G could
+            // steer through a worse exit; unresolved-but-relevant portals are
+            // > RouteStopSlack worse by the resolve contract, so skipping
+            // them is safe.
+            if (!route.Nodes.TryGetValue(pid * 2 + (owner ? 1 : 0), out var ns) || !ns.Settled) continue;
+            float rc = ns.G + PortalCrossCost;
             FlowDir exit = p.SouthBorder ? (owner ? FlowDir.S : FlowDir.N)
                                          : (owner ? FlowDir.E : FlowDir.W);
             // Seed EVERY tile of the span on this sector's side, so wide
