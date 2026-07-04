@@ -5143,7 +5143,9 @@ public class MapEditorWindow
             if (hovered && !selected)
                 _spriteBatch.Draw(_pixel, new Rectangle(x, itemY, w, itemH), new Color(40, 40, 70, 150));
 
-            Color textCol = selected ? new Color(255, 230, 160) : EditorBase.TextDim;
+            // TextColor to match every other list in this panel (TextDim is the
+            // label/hint color and made the unit rows look greyed-out/disabled).
+            Color textCol = selected ? new Color(255, 230, 160) : TextColor;
             _eb.DrawText(label, new Vector2(x + 4, itemY + 3), textCol, _smallFont);
         }
         curY += listH;
