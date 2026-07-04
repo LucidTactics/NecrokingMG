@@ -114,6 +114,16 @@ public class Pathfinder
     private static readonly int[] Dx4 = { 0, 1, 0, -1 };
     private static readonly int[] Dy4 = { -1, 0, 1, 0 };
     private static readonly int[] Opposite4 = { 2, 3, 0, 1 };
+    // Exit direction for each border index (N/E/S/W) — hoisted so the flow
+    // post-process loops don't allocate a fresh array per miss.
+    private static readonly FlowDir[] BorderExitDirs = { FlowDir.N, FlowDir.E, FlowDir.S, FlowDir.W };
+
+    /// <summary>Milliseconds since a Stopwatch.GetTimestamp() sample. Replaces
+    /// per-call Stopwatch.StartNew() — that allocates a Stopwatch instance on
+    /// every GetDirection / flow-miss / imag-chunk call, purely for diagnostics.</summary>
+    private static double ElapsedMs(long startTimestamp)
+        => (System.Diagnostics.Stopwatch.GetTimestamp() - startTimestamp)
+           * 1000.0 / System.Diagnostics.Stopwatch.Frequency;
 
     // --- Budgeted pathfinding (optional) ---
     // When enabled, synchronous GetFlow* calls check a per-tick Dijkstra time
@@ -203,49 +213,149 @@ public class Pathfinder
         _sectorConnected = new bool[TerrainCosts.NumSizeTiers, count, 4];
 
         for (int tier = 0; tier < TerrainCosts.NumSizeTiers; tier++)
-        {
             for (int sy = 0; sy < _sectorCountY; sy++)
-            {
                 for (int sx = 0; sx < _sectorCountX; sx++)
-                {
-                    int idx = SectorIdx(sx, sy);
-                    int baseX = sx * SectorSize;
-                    int baseY = sy * SectorSize;
-                    int endX = Math.Min(baseX + SectorSize, _grid.Width);
-                    int endY = Math.Min(baseY + SectorSize, _grid.Height);
+                    RescanSectorConnectivity(tier, sx, sy);
+    }
 
-                    // North
-                    if (sy > 0)
-                        for (int x = baseX; x < endX; x++)
-                            if (_grid.GetCost(x, baseY, tier) != 255 && _grid.GetCost(x, baseY - 1, tier) != 255)
-                            { _sectorConnected[tier, idx, 0] = true; break; }
+    /// <summary>Recompute one sector's 4 border-connectivity flags for one tier.
+    /// Shared by the full BuildConnectivity and by InvalidateRegion's targeted
+    /// rescan. Returns true if any flag changed.</summary>
+    private bool RescanSectorConnectivity(int tier, int sx, int sy)
+    {
+        if (_grid == null || _sectorConnected == null) return false;
+        int idx = SectorIdx(sx, sy);
+        int baseX = sx * SectorSize;
+        int baseY = sy * SectorSize;
+        int endX = Math.Min(baseX + SectorSize, _grid.Width);
+        int endY = Math.Min(baseY + SectorSize, _grid.Height);
 
-                    // East
-                    if (sx < _sectorCountX - 1)
-                    {
-                        int lastCol = endX - 1;
-                        for (int y = baseY; y < endY; y++)
-                            if (_grid.GetCost(lastCol, y, tier) != 255 && _grid.GetCost(lastCol + 1, y, tier) != 255)
-                            { _sectorConnected[tier, idx, 1] = true; break; }
-                    }
+        bool n = false, e = false, s = false, w = false;
 
-                    // South
-                    if (sy < _sectorCountY - 1)
-                    {
-                        int lastRow = endY - 1;
-                        for (int x = baseX; x < endX; x++)
-                            if (_grid.GetCost(x, lastRow, tier) != 255 && _grid.GetCost(x, lastRow + 1, tier) != 255)
-                            { _sectorConnected[tier, idx, 2] = true; break; }
-                    }
+        // North
+        if (sy > 0)
+            for (int x = baseX; x < endX; x++)
+                if (_grid.GetCost(x, baseY, tier) != 255 && _grid.GetCost(x, baseY - 1, tier) != 255)
+                { n = true; break; }
 
-                    // West
-                    if (sx > 0)
-                        for (int y = baseY; y < endY; y++)
-                            if (_grid.GetCost(baseX, y, tier) != 255 && _grid.GetCost(baseX - 1, y, tier) != 255)
-                            { _sectorConnected[tier, idx, 3] = true; break; }
-                }
+        // East
+        if (sx < _sectorCountX - 1)
+        {
+            int lastCol = endX - 1;
+            for (int y = baseY; y < endY; y++)
+                if (_grid.GetCost(lastCol, y, tier) != 255 && _grid.GetCost(lastCol + 1, y, tier) != 255)
+                { e = true; break; }
+        }
+
+        // South
+        if (sy < _sectorCountY - 1)
+        {
+            int lastRow = endY - 1;
+            for (int x = baseX; x < endX; x++)
+                if (_grid.GetCost(x, lastRow, tier) != 255 && _grid.GetCost(x, lastRow + 1, tier) != 255)
+                { s = true; break; }
+        }
+
+        // West
+        if (sx > 0)
+            for (int y = baseY; y < endY; y++)
+                if (_grid.GetCost(baseX, y, tier) != 255 && _grid.GetCost(baseX - 1, y, tier) != 255)
+                { w = true; break; }
+
+        bool changed = _sectorConnected[tier, idx, 0] != n || _sectorConnected[tier, idx, 1] != e
+                    || _sectorConnected[tier, idx, 2] != s || _sectorConnected[tier, idx, 3] != w;
+        _sectorConnected[tier, idx, 0] = n;
+        _sectorConnected[tier, idx, 1] = e;
+        _sectorConnected[tier, idx, 2] = s;
+        _sectorConnected[tier, idx, 3] = w;
+        return changed;
+    }
+
+    // Scratch lists for InvalidateRegion (single-threaded sim assumption,
+    // same as the rest of the pathfinder).
+    private readonly List<FlowKey> _regionKeyScratch = new();
+    private readonly List<uint> _regionImagScratch = new();
+
+    /// <summary>Targeted invalidation for a collision change confined to a tile
+    /// AABB (env object added/removed/collected). Replaces the full Rebuild()
+    /// (~450ms on a 4097² map: whole-grid rebake + every cache cleared) with:
+    /// drop flow fields of touched sectors, rescan connectivity for touched
+    /// sectors, clear routes only if connectivity actually flipped, drop
+    /// intersecting imaginary chunks, and reset failure memos (a removed
+    /// obstacle can make a memoized-unreachable target reachable). The caller
+    /// is responsible for having re-baked the tier cost fields for the region
+    /// first (EnvironmentSystem.RebakeCollisionRegion).</summary>
+    public void InvalidateRegion(int minTX, int minTY, int maxTX, int maxTY)
+    {
+        if (_grid == null || _sectorConnected == null) return;
+
+        int s0x = Math.Clamp(minTX / SectorSize, 0, _sectorCountX - 1);
+        int s1x = Math.Clamp(maxTX / SectorSize, 0, _sectorCountX - 1);
+        int s0y = Math.Clamp(minTY / SectorSize, 0, _sectorCountY - 1);
+        int s1y = Math.Clamp(maxTY / SectorSize, 0, _sectorCountY - 1);
+
+        // 1. Drop flow fields (live, stale, pending) for touched sectors.
+        //    Outright, not moved-to-stale: the grid changed under them, so a
+        //    stale copy would steer units through the new obstacle.
+        _regionKeyScratch.Clear();
+        foreach (var kv in _flowCache)
+            if (kv.Key.SectorX >= s0x && kv.Key.SectorX <= s1x &&
+                kv.Key.SectorY >= s0y && kv.Key.SectorY <= s1y)
+                _regionKeyScratch.Add(kv.Key);
+        foreach (var k in _regionKeyScratch) _flowCache.Remove(k);
+
+        _regionKeyScratch.Clear();
+        foreach (var kv in _staleFlowCache)
+            if (kv.Key.SectorX >= s0x && kv.Key.SectorX <= s1x &&
+                kv.Key.SectorY >= s0y && kv.Key.SectorY <= s1y)
+                _regionKeyScratch.Add(kv.Key);
+        foreach (var k in _regionKeyScratch) _staleFlowCache.Remove(k);
+
+        _regionKeyScratch.Clear();
+        foreach (var kv in _pendingRequests)
+            if (kv.Key.SectorX >= s0x && kv.Key.SectorX <= s1x &&
+                kv.Key.SectorY >= s0y && kv.Key.SectorY <= s1y)
+                _regionKeyScratch.Add(kv.Key);
+        foreach (var k in _regionKeyScratch) _pendingRequests.Remove(k);
+
+        // 2. Rescan connectivity for touched sectors. No ±1 ring needed: a
+        //    sector's flags read at most one tile INTO each neighbor, and a
+        //    change confined to [minTX..maxTX] can only flip flags of sectors
+        //    the rect itself touches — but the rect passed in already includes
+        //    the stamp inflation, and a border pair's flag is stored on BOTH
+        //    sides, so rescan one ring around to be safe (cheap: O(64) per
+        //    sector side).
+        bool connChanged = false;
+        for (int tier = 0; tier < TerrainCosts.NumSizeTiers; tier++)
+            for (int sy = Math.Max(0, s0y - 1); sy <= Math.Min(_sectorCountY - 1, s1y + 1); sy++)
+                for (int sx = Math.Max(0, s0x - 1); sx <= Math.Min(_sectorCountX - 1, s1x + 1); sx++)
+                    connChanged |= RescanSectorConnectivity(tier, sx, sy);
+
+        // 3. Routes encode global sector paths; any flipped edge can reroute
+        //    arbitrary destinations. Only pay the clear when something flipped.
+        if (connChanged) _routeCache.Clear();
+
+        // 4. Imaginary chunks whose window intersects the rect are stale.
+        //    Failure memos are reset on ALL entries — a removed obstacle can
+        //    unblock a memoized-unreachable target anywhere; re-failing costs
+        //    one chunk compute per affected unit, once.
+        _regionImagScratch.Clear();
+        foreach (var kv in _unitImagChunks)
+        {
+            var ic = kv.Value;
+            if (ic.Active &&
+                ic.BaseX <= maxTX && ic.BaseX + ic.ChunkW > minTX &&
+                ic.BaseY <= maxTY && ic.BaseY + ic.ChunkH > minTY)
+            {
+                _regionImagScratch.Add(kv.Key);
+            }
+            else
+            {
+                ic.FailedUnitTX = -1; ic.FailedUnitTY = -1;
+                ic.FailedTargetTX = -1; ic.FailedTargetTY = -1;
             }
         }
+        foreach (var k in _regionImagScratch) _unitImagChunks.Remove(k);
     }
 
     // --- Sector-level BFS routing ---
@@ -534,6 +644,17 @@ public class Pathfinder
     private CachedFlow GetFlowToTile(int sx, int sy, int localTX, int localTY, int tier, uint frame,
                                      Vec2 unitPos = default, Vec2 targetPos = default)
     {
+        // Quantize the target to a 2x2 tile bucket and seed EVERY passable tile
+        // of the bucket as a cost-0 goal. Per-exact-tile keys meant a unit
+        // chasing a moving target re-ran a full sector Dijkstra every time the
+        // target crossed a tile line, and units with targets one tile apart
+        // shared nothing — the single biggest Dijkstra-count driver. The field
+        // steers to within ~1.4 tiles of the true target; callers beeline the
+        // final 3 tiles, and the imag-chunk path covers the one caller that
+        // doesn't. Key encodes the bucket's top-left member, so the pending-
+        // request decode (ProcessPendingRequest) re-quantizes idempotently.
+        localTX &= ~1;
+        localTY &= ~1;
         var key = MakeFlowKey(sx, sy, 1, localTY * SectorSize + localTX, -1, tier);
         if (_flowCache.TryGetValue(key, out var cached))
         {
@@ -568,24 +689,30 @@ public class Pathfinder
         }
 
         int baseX = sx * SectorSize, baseY = sy * SectorSize;
-        int targetGlobalX = baseX + localTX;
-        int targetGlobalY = baseY + localTY;
 
         var goals = new List<int>();
         var goalCosts = new List<float>();
 
-        // Seed the actual target tile if base-passable
-        if (_grid.InBounds(targetGlobalX, targetGlobalY) &&
-            _grid.GetCost(targetGlobalX, targetGlobalY) != 255)
+        // Seed every base-passable tile of the 2x2 bucket (see quantization
+        // note above) so the shared field is valid for any target inside it.
+        for (int oy = 0; oy < 2; oy++)
         {
-            goals.Add(localTY * SectorSize + localTX);
-            goalCosts.Add(0f);
+            for (int ox = 0; ox < 2; ox++)
+            {
+                int ltx = localTX + ox, lty = localTY + oy;
+                if (ltx >= SectorSize || lty >= SectorSize) continue;
+                int gx = baseX + ltx, gy = baseY + lty;
+                if (_grid.InBounds(gx, gy) && _grid.GetCost(gx, gy) != 255)
+                {
+                    goals.Add(lty * SectorSize + ltx);
+                    goalCosts.Add(0f);
+                }
+            }
         }
 
-        var sw = System.Diagnostics.Stopwatch.StartNew();
+        long sw0 = System.Diagnostics.Stopwatch.GetTimestamp();
         var flow = ComputeSectorFlow(sx, sy, goals, tier, frame, goalCosts);
-        sw.Stop();
-        ChargeDijkstraMs((float)sw.Elapsed.TotalMilliseconds);
+        ChargeDijkstraMs((float)ElapsedMs(sw0));
 
         _flowCache[key] = flow;
         _staleFlowCache.Remove(key);
@@ -664,19 +791,17 @@ public class Pathfinder
                 break;
         }
 
-        var sw = System.Diagnostics.Stopwatch.StartNew();
+        long sw0 = System.Diagnostics.Stopwatch.GetTimestamp();
         var flow = ComputeSectorFlow(sx, sy, goals, tier, frame);
 
         // Post-process: border goal tiles get exit direction
-        FlowDir[] borderExitDir = { FlowDir.N, FlowDir.E, FlowDir.S, FlowDir.W };
-        FlowDir exitDir = borderExitDir[borderDir];
+        FlowDir exitDir = BorderExitDirs[borderDir];
         foreach (int g in goals)
         {
             if (flow.Dirs[g] == FlowDir.None)
                 flow.Dirs[g] = exitDir;
         }
-        sw.Stop();
-        ChargeDijkstraMs((float)sw.Elapsed.TotalMilliseconds);
+        ChargeDijkstraMs((float)ElapsedMs(sw0));
 
         _flowCache[key] = flow;
         _staleFlowCache.Remove(key);
@@ -695,6 +820,13 @@ public class Pathfinder
                                              Vec2 unitPos = default, Vec2 targetPos = default)
     {
         int combinedMask = borderMask | (lateralMask << 4) | (extendedMask << 8);
+        // Quantize the clamped bias tile to an 8-tile band (band center). It's
+        // only a geometric tie-breaker among exit borders, and exact-tile keys
+        // fragmented the cache: targets due east of a sector all shared
+        // clampedLTX=63 but split across 64 clampedLTY rows — 64 Dijkstras +
+        // 64 x 4KB entries where 8 banded ones steer indistinguishably.
+        if (clampedLocalTX >= 0) clampedLocalTX = Math.Min(SectorSize - 1, (clampedLocalTX & ~7) + 4);
+        if (clampedLocalTY >= 0) clampedLocalTY = Math.Min(SectorSize - 1, (clampedLocalTY & ~7) + 4);
         int clampedIdx = (clampedLocalTX >= 0 && clampedLocalTY >= 0)
             ? clampedLocalTY * SectorSize + clampedLocalTX : -1;
         var key = MakeFlowKey(sx, sy, 2, combinedMask, clampedIdx, tier);
@@ -811,20 +943,18 @@ public class Pathfinder
             }
         }
 
-        var sw = System.Diagnostics.Stopwatch.StartNew();
+        long sw0 = System.Diagnostics.Stopwatch.GetTimestamp();
         var flow = ComputeSectorFlow(sx, sy, goals, tier, frame, goalCosts);
 
         // Post-process: border goal tiles get their respective exit direction
-        FlowDir[] borderExitDir = { FlowDir.N, FlowDir.E, FlowDir.S, FlowDir.W };
         for (int i = 0; i < goals.Count; i++)
         {
             int dir = goalBorderDir[i];
             bool isPrimary = ((borderMask >> dir) & 1) != 0;
             if (isPrimary || flow.Dirs[goals[i]] == FlowDir.None)
-                flow.Dirs[goals[i]] = borderExitDir[dir];
+                flow.Dirs[goals[i]] = BorderExitDirs[dir];
         }
-        sw.Stop();
-        ChargeDijkstraMs((float)sw.Elapsed.TotalMilliseconds);
+        ChargeDijkstraMs((float)ElapsedMs(sw0));
 
         _flowCache[key] = flow;
         _staleFlowCache.Remove(key);
@@ -859,7 +989,7 @@ public class Pathfinder
             return Vec2.Zero;
 
         DiagImagChunkComputes++;
-        var _diagSw = System.Diagnostics.Stopwatch.StartNew();
+        long _diagSw0 = System.Diagnostics.Stopwatch.GetTimestamp();
         try {
 
         // Center the chunk on the unit, clamped to map bounds
@@ -1050,7 +1180,7 @@ public class Pathfinder
         }
         finally
         {
-            double elapsed = _diagSw.Elapsed.TotalMilliseconds;
+            double elapsed = ElapsedMs(_diagSw0);
             DiagImagChunkMs += elapsed;
             // Charge the budget: an imag-chunk compute costs about the same as
             // the sector Dijkstra the budget exists to bound. Without this, N
@@ -1066,7 +1196,7 @@ public class Pathfinder
     private Vec2 RecomputeImaginaryChunkFlow(ImaginaryChunk ic, Vec2 unitPos, Vec2 targetPos, int tier)
     {
         DiagImagChunkRecomputes++;
-        var _diagSw = System.Diagnostics.Stopwatch.StartNew();
+        long _diagSw0 = System.Diagnostics.Stopwatch.GetTimestamp();
         try {
         if (_grid == null) return Vec2.Zero;
 
@@ -1205,7 +1335,7 @@ public class Pathfinder
         }
         finally
         {
-            double elapsed = _diagSw.Elapsed.TotalMilliseconds;
+            double elapsed = ElapsedMs(_diagSw0);
             DiagImagChunkMs += elapsed;
             ChargeDijkstraMs((float)elapsed); // same reasoning as GetLocalChunkDirection
         }
@@ -1365,7 +1495,7 @@ public class Pathfinder
 
     public Vec2 GetDirection(Vec2 unitPos, Vec2 targetPos, uint frame, int sizeTier = 0, uint unitId = GameConstants.InvalidUnit)
     {
-        var diagSw = System.Diagnostics.Stopwatch.StartNew();
+        long diagSw0 = System.Diagnostics.Stopwatch.GetTimestamp();
         DiagCallsThisTick++;
         try
         {
@@ -1806,7 +1936,7 @@ public class Pathfinder
         }
         finally
         {
-            DiagTotalMsThisTick += diagSw.Elapsed.TotalMilliseconds;
+            DiagTotalMsThisTick += ElapsedMs(diagSw0);
         }
     }
 

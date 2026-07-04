@@ -52,6 +52,10 @@ public class Quadtree
 
     private readonly List<Node> _nodes = new();
     private readonly List<Entry> _entries = new();
+    // Reusable partition buffer for Subdivide. Safe to share across the
+    // recursion: each call finishes its partition copy-back before recursing
+    // into children, so usages never overlap in time. Grown in Build.
+    private Entry[] _partitionScratch = Array.Empty<Entry>();
 
     public bool IsEmpty => _nodes.Count == 0;
 
@@ -76,6 +80,9 @@ public class Quadtree
             byte fb = (byte)(1 << factions[i]);
             _entries.Add(new Entry { Pos = positions[i], Id = ids[i], FactionBit = fb });
         }
+
+        if (_partitionScratch.Length < count)
+            _partitionScratch = new Entry[Math.Max(count, _partitionScratch.Length * 2)];
 
         _nodes.Add(new Node { Bounds = worldBounds, FirstChild = -1, EntryStart = 0, EntryCount = count });
         Subdivide(0, 0);
@@ -215,7 +222,7 @@ public class Quadtree
         int start = node.EntryStart;
         int total = node.EntryCount;
 
-        int[] counts = new int[4];
+        Span<int> counts = stackalloc int[4];
         for (int i = 0; i < total; i++)
         {
             var p = _entries[start + i].Pos;
@@ -223,9 +230,9 @@ public class Quadtree
             counts[q]++;
         }
 
-        int[] offsets = { 0, counts[0], counts[0] + counts[1], counts[0] + counts[1] + counts[2] };
-        int[] writeIdx = { offsets[0], offsets[1], offsets[2], offsets[3] };
-        var sorted = new Entry[total];
+        Span<int> offsets = stackalloc int[4] { 0, counts[0], counts[0] + counts[1], counts[0] + counts[1] + counts[2] };
+        Span<int> writeIdx = stackalloc int[4] { offsets[0], offsets[1], offsets[2], offsets[3] };
+        var sorted = _partitionScratch;
 
         for (int i = 0; i < total; i++)
         {
@@ -241,16 +248,10 @@ public class Quadtree
         node.FirstChild = firstChild;
         _nodes[nodeIdx] = node;
 
-        AABB[] childBounds =
-        {
-            new(node.Bounds.MinX, node.Bounds.MinY, mid.X, mid.Y),
-            new(mid.X, node.Bounds.MinY, node.Bounds.MaxX, mid.Y),
-            new(node.Bounds.MinX, mid.Y, mid.X, node.Bounds.MaxY),
-            new(mid.X, mid.Y, node.Bounds.MaxX, node.Bounds.MaxY)
-        };
-
-        for (int q = 0; q < 4; q++)
-            _nodes.Add(new Node { Bounds = childBounds[q], FirstChild = -1, EntryStart = start + offsets[q], EntryCount = counts[q] });
+        _nodes.Add(new Node { Bounds = new(node.Bounds.MinX, node.Bounds.MinY, mid.X, mid.Y), FirstChild = -1, EntryStart = start + offsets[0], EntryCount = counts[0] });
+        _nodes.Add(new Node { Bounds = new(mid.X, node.Bounds.MinY, node.Bounds.MaxX, mid.Y), FirstChild = -1, EntryStart = start + offsets[1], EntryCount = counts[1] });
+        _nodes.Add(new Node { Bounds = new(node.Bounds.MinX, mid.Y, mid.X, node.Bounds.MaxY), FirstChild = -1, EntryStart = start + offsets[2], EntryCount = counts[2] });
+        _nodes.Add(new Node { Bounds = new(mid.X, mid.Y, node.Bounds.MaxX, node.Bounds.MaxY), FirstChild = -1, EntryStart = start + offsets[3], EntryCount = counts[3] });
 
         for (int q = 0; q < 4; q++)
             if (counts[q] > 0)

@@ -98,6 +98,13 @@ public class Unit
     public Vec2 Velocity;
     public Vec2 PreferredVel;
 
+    /// <summary>Memoized UnitDef lookup — see <see cref="UnitUtil.ResolveDef"/>.
+    /// The string-keyed registry Get was being paid per moving unit per frame
+    /// (accel caps, turn speed). Reference-keyed on UnitDefID so a morph
+    /// (UnitDefID reassignment) re-resolves automatically.</summary>
+    public Data.Registries.UnitDef? CachedDef;
+    public string? CachedDefKey;
+
     /// <summary>AI-declared locomotion intent. Read by SetLocomotionAnim when
     /// picking Walk/Jog/Run gait — biases the choice without overriding the
     /// raw-velocity floor. Default <see cref="MoveEffort.Normal"/> means
@@ -622,6 +629,21 @@ public static class UnitUtil
         if (uid == GameConstants.InvalidUnit) return -1;
         if (!units.TryGetIndex(uid, out int idx)) return -1;
         return units[idx].Alive ? idx : -1;
+    }
+
+    /// <summary>Memoized per-unit UnitDef lookup. Replaces per-frame
+    /// string-keyed registry Gets on hot paths (accel caps, turn speed).
+    /// Reference-compares the cached key against UnitDefID: a morph assigns a
+    /// new string instance, which misses once and re-caches — always correct,
+    /// no explicit invalidation needed.</summary>
+    public static Data.Registries.UnitDef? ResolveDef(Unit u, Data.GameData? gameData)
+    {
+        if (!ReferenceEquals(u.CachedDefKey, u.UnitDefID))
+        {
+            u.CachedDef = gameData?.Units.Get(u.UnitDefID);
+            u.CachedDefKey = u.UnitDefID;
+        }
+        return u.CachedDef;
     }
 
     private static readonly Random _rng = new();

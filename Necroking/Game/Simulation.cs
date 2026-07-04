@@ -551,10 +551,18 @@ public class Simulation
         // picked/respawned, tree destroyed, boar belly burst placing N objects
         // in one frame) request a rebuild instead of running the ~450ms full
         // rebuild inline per change. Coalesced here to at most one per tick.
+        // Region requests (single env objects) take the targeted ~ms path; a
+        // pending full rebuild subsumes them.
         if (_pathfinderRebuildPending)
         {
             _pathfinderRebuildPending = false;
+            _pfRegionPending = false;
             PhaseStart(); RebuildPathfinder(); PhaseEnd("pf_rebuild");
+        }
+        else if (_pfRegionPending)
+        {
+            _pfRegionPending = false;
+            PhaseStart(); RebuildPathfinderRegion(_pfRegionMinX, _pfRegionMinY, _pfRegionMaxX, _pfRegionMaxY); PhaseEnd("pf_region");
         }
 
         // Rebuild quadtree
@@ -665,7 +673,7 @@ public class Simulation
         // SetEffort/potion mults so ORCA's velocity cap sees the final value.
         ApplyTerrainSpeedModulation();
         PhaseStart(); UpdateMovement(dt); PhaseEnd("movement");
-        PhaseStart(); _physics.Update(dt, _units, _grid.Width * GameConstants.TileSize, _grid.Height * GameConstants.TileSize); PhaseEnd("physics");
+        PhaseStart(); _physics.Update(dt, _units, _grid.Width * GameConstants.TileSize, _grid.Height * GameConstants.TileSize, _quadtree); PhaseEnd("physics");
         PhaseStart(); _horde.UpdateStates(_units, _quadtree, _necromancerIdx, dt); PhaseEnd("horde_states");
         PhaseStart(); UpdateFacingAngles(dt); PhaseEnd("facing");
         PhaseStart(); UpdateCombat(dt); PhaseEnd("combat");
@@ -845,19 +853,34 @@ public class Simulation
         }
     }
 
+    // Persistent build buffers — rebuilt every tick; fresh arrays here were
+    // ~8KB/tick of Gen0 garbage at horde scale. Grown geometrically, never shrunk.
+    private Vec2[] _qtPositions = Array.Empty<Vec2>();
+    private uint[] _qtIds = Array.Empty<uint>();
+    private byte[] _qtFactions = Array.Empty<byte>();
+
     private void RebuildQuadtree()
     {
-        if (_units.Count <= 0) return;
-        var positions = new Vec2[_units.Count];
-        var ids = new uint[_units.Count];
-        var factions = new byte[_units.Count];
+        // No early-out on 0 units: Build clears the tree, so queries can't hit
+        // last tick's stale entries after a wipe.
+        if (_qtPositions.Length < _units.Count)
+        {
+            int cap = Math.Max(_units.Count, Math.Max(64, _qtPositions.Length * 2));
+            _qtPositions = new Vec2[cap];
+            _qtIds = new uint[cap];
+            _qtFactions = new byte[cap];
+        }
+        int n = 0;
         for (int i = 0; i < _units.Count; i++)
         {
-            positions[i] = _units[i].Position;
-            ids[i] = _units[i].Id;
-            factions[i] = (byte)_units[i].Faction;
+            if (!_units[i].Alive) continue; // dead-this-tick units aren't query results anywhere
+            _qtPositions[n] = _units[i].Position;
+            _qtIds[n] = _units[i].Id;
+            _qtFactions[n] = (byte)_units[i].Faction;
+            n++;
         }
-        _quadtree.Build(positions, ids, factions, new AABB(0, 0, _grid.Width, _grid.Height));
+        _quadtree.Build(_qtPositions.AsSpan(0, n), _qtIds.AsSpan(0, n),
+            _qtFactions.AsSpan(0, n), new AABB(0, 0, _grid.Width, _grid.Height));
     }
 
     // Player input (set by Game1 before Tick)
@@ -1633,6 +1656,11 @@ public class Simulation
         const int TopK = 10;
         Span<float> topDist = stackalloc float[TopK];
         Span<int>   topIdx  = stackalloc int[TopK];
+        // Static-env nearest-6 buffers (same hoisting rationale — stackalloc
+        // inside the unit loop would grow the stack per iteration).
+        const int MaxStatic = 6;
+        Span<float> envDist = stackalloc float[MaxStatic];
+        Span<int>   envIdx  = stackalloc int[MaxStatic];
 
         for (int i = 0; i < _units.Count; i++)
         {
@@ -1719,7 +1747,17 @@ public class Simulation
             }
             else
             {
-                float queryRadius = MathF.Max(_units[i].Radius * 5f, 3f);
+                // Neighbor gather radius must scale with speed: a fixed 3 tiles
+                // vs a 3s TimeHorizon meant every avoidance started late, and at
+                // high game speed (dt up to 0.4s at x8) two fast units could
+                // close more than the radius in ONE tick — from "not neighbors"
+                // straight to "passed through" (walls are sub-stepped; unit
+                // circles are not). ~1s of own max speed + the largest neighbor
+                // radius keeps a reaction window without RVO2's full
+                // horizon×speed reach (36 tiles — overkill for a swarm game).
+                float queryRadius = MathF.Max(
+                    MathF.Max(_units[i].Radius * 5f, 3f),
+                    _units[i].MaxSpeed * 1.0f + 1.5f);
                 _quadtree.QueryRadius(_units[i].Position, queryRadius, nearbyIDs);
 
                 // Top-K (10) closest dynamic neighbours, inline without allocating a
@@ -1799,22 +1837,37 @@ public class Simulation
                 _envIndex.QueryRadius(myPos, queryRadius, envEntries);
                 if (envEntries.Count > 0)
                 {
-                    envEntries.Sort((a, b) =>
+                    // Nearest-6 selection via insertion (same pattern as the
+                    // dynamic top-K above). The previous full Sort with a
+                    // myPos-capturing lambda allocated a closure + delegate per
+                    // moving unit per tick — the exact churn the top-K rewrite
+                    // was built to remove.
+                    for (int k = 0; k < MaxStatic; k++) { envDist[k] = float.MaxValue; envIdx[k] = -1; }
+                    int envCount = 0;
+                    for (int ei = 0; ei < envEntries.Count; ei++)
                     {
-                        float da = (a.CX - myPos.X) * (a.CX - myPos.X) + (a.CY - myPos.Y) * (a.CY - myPos.Y);
-                        float db = (b.CX - myPos.X) * (b.CX - myPos.X) + (b.CY - myPos.Y) * (b.CY - myPos.Y);
-                        return da.CompareTo(db);
-                    });
-                    int staticKept = 0;
-                    const int MaxStatic = 6;
-                    foreach (var e in envEntries)
-                    {
-                        if (staticKept >= MaxStatic) break;
+                        var e = envEntries[ei];
                         float dx = e.CX - myPos.X, dy = e.CY - myPos.Y;
                         float combined = _units[i].Radius + e.Radius + 0.1f;
                         float reach = _units[i].MaxSpeed * 3f + combined;
-                        if (dx * dx + dy * dy > reach * reach) continue;
+                        float d2 = dx * dx + dy * dy;
+                        if (d2 > reach * reach) continue;
+                        if (envCount == MaxStatic && d2 >= envDist[MaxStatic - 1]) continue;
 
+                        int ins = Math.Min(envCount, MaxStatic - 1);
+                        while (ins > 0 && envDist[ins - 1] > d2)
+                        {
+                            envDist[ins] = envDist[ins - 1];
+                            envIdx[ins]  = envIdx[ins - 1];
+                            ins--;
+                        }
+                        envDist[ins] = d2;
+                        envIdx[ins]  = ei;
+                        if (envCount < MaxStatic) envCount++;
+                    }
+                    for (int k = 0; k < envCount; k++)
+                    {
+                        var e = envEntries[envIdx[k]];
                         neighbors.Add(new ORCANeighbor
                         {
                             Position = new Vec2(e.CX, e.CY),
@@ -1824,7 +1877,6 @@ public class Simulation
                             Priority = int.MaxValue,
                             IsStatic = true,
                         });
-                        staticKept++;
                     }
                 }
 
@@ -1905,7 +1957,7 @@ public class Simulation
                     newVel = nvSq > 0.000001f ? newVel * (maxSp / MathF.Sqrt(nvSq)) : Vec2.Zero;
             }
 
-            var accelDef = _gameData?.Units.Get(_units[i].UnitDefID);
+            var accelDef = UnitUtil.ResolveDef(_units[i], _gameData); // memoized — per moving unit per frame
             float maxAccel = accelDef?.MaxAcceleration
                 ?? _gameData?.Settings.Combat.MaxAcceleration ?? 6f;
             float maxDecel = accelDef?.MaxDeceleration
@@ -2004,9 +2056,18 @@ public class Simulation
             // Wall collision uses smaller radius than ORCA for 1-tile gap clearance
             float r = _units[i].Radius * 0.7f;
 
+            // Escape checks exist to catch EXTERNAL position writers (knockback
+            // landings, editor moves, spawns) — a unit that isn't moving and was
+            // clear can only become stuck via one of those, which is rare. For
+            // parked units (most of a formation), amortize the two escape probes
+            // to every 8th frame, staggered by index, instead of paying an
+            // IsBlocked + env query per unit per frame for nothing.
+            bool idleNow = delta.LengthSq() < 0.000001f;
+            bool skipEscapeChecks = idleNow && (((_frameNumber + (uint)i) & 7u) != 0u);
+
             // --- Stuck-inside-blocked-tile escape ---
             // If unit's current position overlaps an impassable tile, push toward nearest free tile
-            if (IsBlocked(oldPos.X, oldPos.Y, r))
+            if (!skipEscapeChecks && IsBlocked(oldPos.X, oldPos.Y, r))
             {
                 int unitGX = (int)MathF.Floor(oldPos.X / GameConstants.TileSize);
                 int unitGY = (int)MathF.Floor(oldPos.Y / GameConstants.TileSize);
@@ -2084,6 +2145,8 @@ public class Simulation
             // above won't catch a unit that spawned on a tree or had one placed on
             // it. Push outward along the vector from the closest overlapping
             // object's centre, same feel as the grid escape (MaxSpeed × 3).
+            // Amortized for parked units (see skipEscapeChecks above).
+            if (!skipEscapeChecks)
             {
                 envEntries.Clear();
                 float selfR = _units[i].Radius;
@@ -2145,8 +2208,7 @@ public class Simulation
                 else
                 {
                     // Probe small Y offsets to find a gap center
-                    float[] probes = { 0.1f, -0.1f, 0.2f, -0.2f, 0.3f, -0.3f };
-                    foreach (float off in probes)
+                    foreach (float off in WallGapProbes)
                     {
                         float probeY = oldPos.Y + off;
                         if (!IsBlocked(oldPos.X, probeY, r) &&
@@ -2168,8 +2230,7 @@ public class Simulation
                 }
                 else if (newPos.Y == oldPos.Y) // only probe if Y wasn't already adjusted
                 {
-                    float[] probes = { 0.1f, -0.1f, 0.2f, -0.2f, 0.3f, -0.3f };
-                    foreach (float off in probes)
+                    foreach (float off in WallGapProbes)
                     {
                         float probeX = newPos.X + off;
                         if (!IsBlocked(probeX, oldPos.Y, r) &&
@@ -2250,6 +2311,10 @@ public class Simulation
                 MathUtil.Clamp(movedPos.Y, 0f, hMax));
         }
     }
+
+    // Wall-slide gap probe offsets. Static so the per-blocked-probe, per-sub-step
+    // wall loop doesn't allocate a fresh array each execution.
+    private static readonly float[] WallGapProbes = { 0.1f, -0.1f, 0.2f, -0.2f, 0.3f, -0.3f };
 
     private bool IsBlocked(float px, float py, float r)
     {
@@ -4350,6 +4415,9 @@ public class Simulation
 
     // See RequestPathfinderRebuild / the drain at the top of Tick.
     private bool _pathfinderRebuildPending;
+    // Dirty-region accumulation (tile AABB union of same-tick region requests).
+    private bool _pfRegionPending;
+    private int _pfRegionMinX, _pfRegionMinY, _pfRegionMaxX, _pfRegionMaxY;
 
     /// <summary>Request a full pathfinder rebuild at the start of the next Tick.
     /// Coalesces any number of same-frame collision changes into one rebuild.
@@ -4358,8 +4426,47 @@ public class Simulation
     /// scenario setup).</summary>
     public void RequestPathfinderRebuild() => _pathfinderRebuildPending = true;
 
+    /// <summary>Request a dirty-region pathfinder update for a tile AABB (from
+    /// OnCollisionRegionDirty — one env object placed/removed/collected).
+    /// Same-tick requests union into one rect; drained at the top of Tick as a
+    /// region rebake + targeted invalidation (~ms) instead of the ~450ms full
+    /// rebuild. A pending FULL rebuild subsumes any pending region.</summary>
+    public void RequestPathfinderRegionRebuild(int minTX, int minTY, int maxTX, int maxTY)
+    {
+        if (_pfRegionPending)
+        {
+            _pfRegionMinX = Math.Min(_pfRegionMinX, minTX);
+            _pfRegionMinY = Math.Min(_pfRegionMinY, minTY);
+            _pfRegionMaxX = Math.Max(_pfRegionMaxX, maxTX);
+            _pfRegionMaxY = Math.Max(_pfRegionMaxY, maxTY);
+        }
+        else
+        {
+            _pfRegionPending = true;
+            _pfRegionMinX = minTX; _pfRegionMinY = minTY;
+            _pfRegionMaxX = maxTX; _pfRegionMaxY = maxTY;
+        }
+    }
+
+    /// <summary>Dirty-region pathfinder update: region cost rebake + env-index
+    /// rebuild + targeted pathfinder invalidation. Assumes walls/terrain did
+    /// NOT change (env-object events only — wall edits go through the full
+    /// RebuildPathfinder).</summary>
+    private void RebuildPathfinderRegion(int minTX, int minTY, int maxTX, int maxTY)
+    {
+        if (_envSystem == null) { RebuildPathfinder(); return; }
+        _envSystem.RebakeCollisionRegion(_grid, minTX, minTY, maxTX, maxTY);
+        // Env spatial index (ORCA statics + player clipping) has no region form,
+        // but its full rebuild is clear-in-place + O(N) reinserts — cheap.
+        _envIndex.Rebuild(_envSystem, _grid.Width, _grid.Height);
+        _pathfinder.InvalidateRegion(minTX, minTY, maxTX, maxTY);
+    }
+
     public void RebuildPathfinder()
     {
+        // A full rebuild makes any pending deferred request moot.
+        _pathfinderRebuildPending = false;
+        _pfRegionPending = false;
         // Walls first: they write TerrainType.Wall into the grid's terrain, which
         // RebuildCostField then reads into the cost field (and RebuildTieredCostFields
         // copies into the per-size tier fields). Baking walls after the cost field

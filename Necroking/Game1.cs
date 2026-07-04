@@ -1288,6 +1288,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         // consumers (lightning/foragable/worker systems) follow _sim automatically.
         WireSimCallbacks();
         _envSystem.OnCollisionsDirty = null;
+        _envSystem.OnCollisionRegionDirty = null;
         // Reset the worker job system: reload jobs.json, wipe stockpiles + assignments
         // so a fresh game doesn't inherit the previous session's piles or priorities.
         _workerSystem.Reset();
@@ -1433,10 +1434,13 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         _sim.SetVillageSystem(_villageSystem);
         _sim.SetSkillBook(_skillBookState);
 
-        // Wire collision change callback so pathfinding rebuilds when objects
-        // change state. Deferred + coalesced: N same-frame changes (boar belly
-        // bursting several mushrooms, editor multi-place) = one rebuild next tick.
+        // Wire collision change callbacks so pathfinding stays in sync.
+        // Region path: single-object changes (forage pickup/respawn, tree
+        // destroyed, building placed) do a targeted ~ms rebake + invalidation.
+        // Full path: batch signals with no region info (editor exit). Both are
+        // deferred + coalesced to at most one rebuild per tick.
         _envSystem.OnCollisionsDirty = () => _sim.RequestPathfinderRebuild();
+        _envSystem.OnCollisionRegionDirty = (x0, y0, x1, y1) => _sim.RequestPathfinderRegionRebuild(x0, y0, x1, y1);
 
         // Stamp pathfinding terrain from ground vertex types (e.g. water-textured
         // tiles become ShallowWater/DeepWater for the cost field). Must happen
@@ -1903,6 +1907,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         _groundSystem.Init(gridSize, gridSize);
         _envSystem.Init(gridSize);
         _envSystem.OnCollisionsDirty = () => _sim.RequestPathfinderRebuild();
+        _envSystem.OnCollisionRegionDirty = (x0, y0, x1, y1) => _sim.RequestPathfinderRegionRebuild(x0, y0, x1, y1);
         _wallSystem.Init(gridSize, gridSize, gridSize);
         // Add a default wall def so scenarios can render walls
         _wallSystem.Defs.Add(new World.WallVisualDef { Name = "Stone", Color = new Color(130, 130, 130, 255), MaxHP = 100 });
@@ -4227,6 +4232,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         foreach (var atlas in _atlases)
             atlas?.Texture?.Dispose();
         _envSystem.OnCollisionsDirty = null;
+        _envSystem.OnCollisionRegionDirty = null;
         base.UnloadContent();
     }
 }

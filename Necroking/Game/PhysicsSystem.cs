@@ -161,11 +161,19 @@ public class PhysicsSystem
         return launched;
     }
 
+    // Scratch for quadtree candidate gathering in CheckUnitCollisions.
+    private readonly List<uint> _collisionScratch = new();
+    // Conservative upper bound on any unit's radius, for the candidate query
+    // (GreatBoar is 0.85; margin for future large units).
+    private const float MaxUnitRadius = 1.5f;
+
     /// <summary>
     /// Update all active physics bodies. Call from Simulation.Tick between
-    /// UpdateMovement and UpdateCombat.
+    /// UpdateMovement and UpdateCombat. Pass the frame's quadtree so chain
+    /// collisions query neighbors instead of scanning every unit per body.
     /// </summary>
-    public void Update(float dt, UnitArrays units, float worldMaxX, float worldMaxY)
+    public void Update(float dt, UnitArrays units, float worldMaxX, float worldMaxY,
+        Spatial.Quadtree? quadtree = null)
     {
         if (_bodies.Count > 0 && dt > 0.05f)
             DebugLog.Log("physics", $"[FRAME] dt={dt * 1000:F0}ms bodies={_bodies.Count} — SLOW FRAME");
@@ -216,7 +224,7 @@ public class PhysicsSystem
             // Only check after launch grace expires and near ground level.
             if (body.LaunchGrace <= 0f && units[idx].Z < 1.5f)
             {
-                CheckUnitCollisions(ref body, idx, units, dt);
+                CheckUnitCollisions(ref body, idx, units, dt, quadtree);
             }
 
             // --- Map-bounds clamp (the load-bearing half of the wall TODO) ---
@@ -245,7 +253,8 @@ public class PhysicsSystem
         }
     }
 
-    private void CheckUnitCollisions(ref PhysicsBody body, int flyerIdx, UnitArrays units, float dt)
+    private void CheckUnitCollisions(ref PhysicsBody body, int flyerIdx, UnitArrays units, float dt,
+        Spatial.Quadtree? quadtree)
     {
         float flyerSpeed = body.VelocityXY.Length();
         if (flyerSpeed < MinTransferSpeed) return; // too slow to register
@@ -254,8 +263,29 @@ public class PhysicsSystem
 
         float flyerMass = MassOf(units[flyerIdx]);
 
-        for (int i = 0; i < units.Count; i++)
+        // Candidate set: quadtree neighbors within combined-radius reach when a
+        // tree is available (rebuilt at tick start, so positions are at most one
+        // tick stale — the combined-radius test below is exact either way);
+        // full scan as fallback.
+        int candidateCount;
+        if (quadtree != null && !quadtree.IsEmpty)
         {
+            _collisionScratch.Clear();
+            quadtree.QueryRadius(units[flyerIdx].Position,
+                units[flyerIdx].Radius + MaxUnitRadius + flyerSpeed * dt, _collisionScratch);
+            candidateCount = _collisionScratch.Count;
+        }
+        else
+        {
+            candidateCount = units.Count;
+        }
+
+        for (int ci = 0; ci < candidateCount; ci++)
+        {
+            int i = quadtree != null && !quadtree.IsEmpty
+                ? UnitUtil.ResolveUnitIndex(units, _collisionScratch[ci])
+                : ci;
+            if (i < 0) continue;
             if (i == flyerIdx || !units[i].Alive || units[i].InPhysics) continue;
             // Chargers (Trample) phase through smaller units by design.
             if (units[i].ChargePhase == 1 || units[i].ChargePhase == 3) continue;

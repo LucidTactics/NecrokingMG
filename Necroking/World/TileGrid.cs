@@ -129,6 +129,28 @@ public class TileGrid
         }
     }
 
+    /// <summary>Region variant of <see cref="RebuildTieredCostFields"/>: reset
+    /// only the tiles in the AABB back to the walls/terrain base cost. Used by
+    /// the dirty-region collision rebake so removing one env object doesn't
+    /// re-copy 16.8M tiles × 3 tiers. Caller re-stamps intersecting objects.</summary>
+    public void RebuildTieredCostFieldsRegion(int minTX, int minTY, int maxTX, int maxTY)
+    {
+        minTX = Math.Max(0, minTX); minTY = Math.Max(0, minTY);
+        maxTX = Math.Min(Width - 1, maxTX); maxTY = Math.Min(Height - 1, maxTY);
+        if (minTX > maxTX || minTY > maxTY) return;
+
+        int spanLen = maxTX - minTX + 1;
+        for (int t = 0; t < TerrainCosts.NumSizeTiers; t++)
+        {
+            if (_costFieldTier[t] == null) { RebuildTieredCostFields(); return; }
+            for (int ty = minTY; ty <= maxTY; ty++)
+            {
+                int row = ty * Width + minTX;
+                Array.Copy(_costField, row, _costFieldTier[t], row, spanLen);
+            }
+        }
+    }
+
     public void RebuildCostField()
     {
         // Per-tile independent (reads _terrain[i], writes _costField[i]); parallelize
