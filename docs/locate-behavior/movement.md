@@ -118,6 +118,18 @@ The per-frame consumer of everything above.
 - `IsBlocked(px, py, r)` — AABB-of-tiles impassability probe (base cost field only).
 - Steering helpers: `MoveTowardPosition`/`MoveTowardUnit` (dist>3 → `GetDirection`,
   else beeline), used by the legacy `AIBehavior` switch (`MoveToPoint`, wolf AI, etc.).
+- **Player (necromancer) movement is computed in `UpdateAI` → `AIBehavior.PlayerControlled`
+  case, NOT in `UpdateMovement`.** Input arrives via `SetNecromancerInput(moveDir, running)`
+  (stored in `_necroMoveInput`/`_necroRunning`, pushed each frame from `Game1.cs` Update's
+  WASD block before `Tick`). That case does the sprint ramp + speed calc, sets `MaxSpeed`,
+  then applies `_units[i].PreferredVel = _necroMoveInput * speed` — this is the one line
+  that drives the player. **The player movement-gate precedent lives right here**: the case
+  already zeroes `PreferredVel` when `CorpseInteractPhase != 0`, and the pre-switch guards
+  zero it for `PendingAttack`/`InCombat`. To add a "can't move while casting" gate, force
+  `PreferredVel = Vec2.Zero` (and, for an *instant* stop rather than a decel-capped glide,
+  also zero `Velocity`) in this case when the cast flag is set. The cast-in-progress flag
+  (`_pendingCastAnim`) is a `Game1` field, so plumb it in like the existing inputs via a new
+  `Simulation.SetNecromancerCasting(bool)` setter called next to `SetNecromancerInput`.
 - `ApplyTerrainSpeedModulation`, `UpdateFacingAngles`, `RebuildQuadtree`.
 - `RebuildPathfinder()` — the invalidation choke point: bake walls → `RebuildCostField`
   → env collisions → `_envIndex.Rebuild` → `_pathfinder.Rebuild()` (clears all caches).
