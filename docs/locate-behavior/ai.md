@@ -105,10 +105,20 @@ ownership:
   `Watchdog`, Guard/Bark routines) — village AI; both consult `VillageThreat.cs`
   (static undead-detection helpers) and `Game/VillageSystem.cs` (per-village alert/posture,
   updated inside `UpdateAI` before the unit loop; wiring in `Game1.Villages.cs`).
-- `SquadSystem.cs` — persistent unit groups (`Squad`: Members/Centroid/Spread/shared
-  alert/leader, keyed by `Unit.SquadId`). Recomputed once per frame by `_squads.Update`
-  in `Simulation.Update` *before* `UpdateAI`; read by DeerHerd/WolfPack/RatPack handlers
-  and `WolfPackHuntAI` so groups act as one object instead of per-frame proximity scans.
+- `SquadSystem.cs` — persistent unit groups (`Squad`: `Members` (unit **ids**, not
+  indices) / derived `Centroid`/`Spread`/`AliveCount`/`LeaderId`/shared alert, keyed by
+  `Unit.SquadId`). API: `CreateSquad(faction, archetype)` (pre-formed, caller fills
+  Members + stamps each `SquadId` — the zone-load path), `TryGet(id)`/`Get(id)`,
+  `Squads` (read-only dict view), `Clear()`. `_squads.Update` runs once per frame in
+  `Simulation.Update` *before* `UpdateAI`: `AssignUnassigned` (lazy clustering — any
+  squad-kind unit with `SquadId==0` or a dead squad id joins the nearest same-kind squad
+  within `ClusterRadius` 22u / `MaxMembers` 24, else seeds a new one), then `Recompute`
+  (prunes dead members in place, recomputes derived fields, **culls squads with zero
+  living members**). Ids are monotonic (`_nextId++`), never reused within a map (reset
+  only by `Clear()` per map load). Handlers read their group via `AIContext.MySquad`.
+  No merge/split logic exists — only lazy join + cull-on-empty.
+  Read by DeerHerd/WolfPack/RatPack handlers and `WolfPackHuntAI` so groups act as one
+  object instead of per-frame proximity scans. `Simulation.Squads` is the public accessor.
 
 ### Shared transition logic
 - **Routine-transition choke point (commit 0b435eb)** — every `Routine` change goes
