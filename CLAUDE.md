@@ -79,6 +79,17 @@ or just run the tool. Bulk/derived changes across many entries → a one-off `to
 - **Exception — true fallbacks:** the necromancer fallback at the start of `LoadGame` ("if no necromancer in placed units, spawn Wretched at map center") is fine because it only fires when the map provides nothing. Distinguish "fill in what's missing" from "always add on top of what's there."
 - **Past offenders (now removed):** `SpawnStarterMushroom` and `SpawnStarterBlightAltar` in `Game1.cs` unconditionally inserted a Deathcap and a Blight Altar near the necromancer every launch, making them un-deletable via the map editor. Both removed 2026-05-13.
 
+## Multiplayer Networking (`Necroking/Net/`) — DO NOT CASUALLY EDIT
+The multiplayer transport/protocol core lives in **`Necroking/Net/`** and is deliberately
+isolated and **brittle**: field order in the packet code IS the wire format, and everything
+assumes single-threaded polling from `Game1.Update`. **Do not modify anything under
+`Necroking/Net/` unless the task is explicitly about multiplayer networking** — read
+[Necroking/Net/README.md](Necroking/Net/README.md) first; it has the invariants (wire
+format + `ConnectionKey` bump rule, no game-system references from that folder, poll-model
+threading). Game-facing glue lives in `Necroking/Game1.Net.cs` (ghost units, send loop)
+and `Necroking/Editor/MultiplayerWindow.cs` (pause-menu UI) — those are normal code and
+safe to change.
+
 ## Spells
 Adding or changing a spell? **Use the `add-spell` skill** (`/add-spell`) — it covers the
 three-layer split (`SpellRegistry` / `SpellCasting` / `SpellEffectSystem` + the

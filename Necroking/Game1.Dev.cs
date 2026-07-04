@@ -376,7 +376,7 @@ public partial class Game1 {
             case "panels": {
                var js = System.Text.Json.JsonSerializer.Serialize(new {
                   panels = new[] {
-                     "main_menu", "scenarios", "game", "pause", "settings",
+                     "main_menu", "scenarios", "game", "pause", "settings", "multiplayer",
                      "unit_editor", "spell_editor", "map_editor", "ui_editor", "item_editor"
                   },
                   tabs = new {
@@ -1294,6 +1294,46 @@ public partial class Game1 {
                break;
             }
 
+            // Multiplayer session control, mirroring the pause-menu Multiplayer UI.
+            // net host [port] | net connect <ip> [port] | net stop | net status
+            case "net": {
+               string sub = c.Args.Length >= 1 ? c.Args[0].ToLowerInvariant() : "status";
+               switch (sub) {
+                  case "host": {
+                     int port = c.Args.Length >= 2 ? (int)DevFloat(c.Args[1]) : Necroking.Net.NetProtocol.DefaultPort;
+                     bool ok = _net.StartHost("", port);
+                     c.Complete(ok ? Necroking.Dev.DevServer.Ok($"hosting on {port}")
+                                   : Necroking.Dev.DevServer.Error("failed to host (see net status log)"));
+                     break;
+                  }
+                  case "connect": {
+                     if (c.Args.Length < 2) { c.Complete(Necroking.Dev.DevServer.Error("net connect <ip> [port]")); break; }
+                     int port = c.Args.Length >= 3 ? (int)DevFloat(c.Args[2]) : Necroking.Net.NetProtocol.DefaultPort;
+                     bool ok = _net.Connect(c.Args[1], port);
+                     c.Complete(ok ? Necroking.Dev.DevServer.Ok($"connecting to {c.Args[1]}:{port}")
+                                   : Necroking.Dev.DevServer.Error("connect failed (see net status log)"));
+                     break;
+                  }
+                  case "stop":
+                     _net.Stop();
+                     c.Complete(Necroking.Dev.DevServer.Ok("session stopped"));
+                     break;
+                  default: {
+                     var js = System.Text.Json.JsonSerializer.Serialize(new {
+                        mode = _net.Mode.ToString(),
+                        status = _net.StatusLine,
+                        localPlayerId = _net.LocalPlayerId,
+                        remotePlayers = _net.RemotePlayers.Count,
+                        ghosts = _netGhosts.Count,
+                        log = _net.Log,
+                     });
+                     c.Complete(Necroking.Dev.DevServer.OkRaw(js));
+                     break;
+                  }
+               }
+               break;
+            }
+
             // Override the cursor position for headless hover testing (tooltips,
             // hover highlights). window.dev('mousepos',['541','685']) ; 'clear' removes it.
             case "mousepos": {
@@ -1568,6 +1608,10 @@ public partial class Game1 {
          case "settings":
          case "options":
             _menuState = MenuState.Settings;
+            return true;
+         case "multiplayer":
+         case "mp":
+            _menuState = MenuState.Multiplayer;
             return true;
          case "unit_editor":
          case "uniteditor":

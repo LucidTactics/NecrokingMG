@@ -769,7 +769,7 @@ partial class GameRenderer
             _g._spriteBatch.Draw(_g._pixel, new Rectangle(0, 0, screenW, screenH), new Color(0, 0, 0, 150));
 
         int boxW = 350;
-        int btnCount = 9; // Resume + 6 editors + Main Menu + Quit
+        int btnCount = 10; // Resume + 5 editors + Settings + Multiplayer + Main Menu + Quit (hit-tests: Game1.cs pause-menu click block — keep in lockstep!)
         int btnH2 = 40, btnGap2 = 10;
         int controlLines = 4;
         int boxH = 60 + btnCount * (btnH2 + btnGap2) + 10 + controlLines * 16 + 20;
@@ -796,6 +796,7 @@ partial class GameRenderer
         DrawMenuButton("UI Editor (F12)", menuX, ref menuY, btnW, btnH, btnGap);
         DrawMenuButton("Item Editor", menuX, ref menuY, btnW, btnH, btnGap);
         DrawMenuButton("Settings", menuX, ref menuY, btnW, btnH, btnGap);
+        DrawMenuButton("Multiplayer", menuX, ref menuY, btnW, btnH, btnGap);
 
         menuY += 10;
         DrawMenuButton("Main Menu", menuX, ref menuY, btnW, btnH, btnGap);
