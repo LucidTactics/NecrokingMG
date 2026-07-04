@@ -23,30 +23,43 @@ wall-collision pass integrates position. "Repath" = flow-field cache invalidatio
 
 ## Files
 
-### `Necroking/World/Pathfinder.cs` — sector flow fields + routing + imaginary chunks
-The whole pathfinder (~2000 lines, one class `Pathfinder`). Map is split into 64×64-tile
+### `Necroking/World/Pathfinder.cs` — sector flow fields + portal-graph routing + imaginary chunks
+The whole pathfinder (~2300 lines, one class `Pathfinder`). Map is split into 64×64-tile
 **sectors** (`SectorSize`), 3 unit-size tiers (`TerrainCosts.NumSizeTiers`).
-- **Sector connectivity**: `BuildConnectivity` → `_sectorConnected[tier, sector, 4]`
-  (open tile pair across each shared edge).
-- **Inter-sector routing** (the "portal" layer): `GetRoute(destSector, tier)` — 4-dir BFS
-  over sectors producing `NextDir`/`HopDist` arrays, cached in `_routeCache`.
+- **Portal graph** (commit `ccfeadc`, replaced the old `_sectorConnected`/`GetRoute` hop-BFS
+  + border-mask scheme — those symbols are deleted): portals = maximal contiguous
+  tier-passable border spans chopped to ≤16 tiles (`struct Portal`, `_portals[tier]` flat
+  list, `_sectorPortals`). Extracted eagerly in `Rebuild()` (`BuildPortals`/
+  `ExtractSectorSpans`/`ScanBorderSpans`), re-extracted per touched sector ring in
+  `InvalidateRegion`.
+- **Portal cost matrices**: `GetPortalMatrix(sectorIdx, tier)` — lazy intra-sector
+  portal-to-portal cost matrix (`PortalMatrix`, `_portalMatrixCache`), one window
+  Dijkstra per portal (`RunWindowDijkstra` with null dirs = cost-only), **budget-charged**,
+  dropped on region invalidation; caches mid-abort so deferred routes progress each tick.
+- **Routing** (commit `f202cb4`): `GetPortalRoute` / `SeedPortalRoute` /
+  `ResumePortalRoute` — **corridor-bounded resumable A\*** over portal nodes (TWO nodes
+  per portal, near/far side), seeded from the destination side, octile heuristic toward
+  the *requesting* unit's sector, early-out when that sector's portals settle
+  (+2-sector stop-slack). Cached per (destSector, tier) in `_routeCache` as a **sparse**
+  `PortalRoute` (Dictionary node→{G,Settled} + resolved-sector set); budget aborts
+  resume from the persisted frontier. Memory scales with the corridor, not the map.
 - **Per-sector Dijkstra flow**: `ComputeSectorFlow` (8-dir, diagonal corner-cut checks,
   escape propagation into tier-inflated tiles) + `BuildDirectionField` (plateau
-  fallback). Entry variants: `GetFlowToTile` (same sector), `GetFlowToBorder`,
-  `GetFlowToMultiBorder` (primary/lateral/extended border masks + Manhattan bias toward
-  the clamped target).
+  fallback). Entry variants: `GetFlowToTile` (same sector) and `GetFlowToPortalSet`
+  (FlowKey type 3 — one field per (unit sector, dest sector, tier), seeding every
+  **settled** finite-cost portal's span tiles at remaining-cost + along-span slope; all
+  units heading to the same dest sector share one field).
 - **Flow cache**: `_flowCache` keyed by `FlowKey` (sector, target type/data, tier);
   evicted entries drop to `_staleFlowCache` and can serve as budget-defer fallback.
   Live eviction is age-based: `EvictStaleFlowFields` (called from Simulation cleanup,
-  600 frames). NOTE: `EvictFlowFields(maxCached)` and `EvictRoutes` exist but currently
-  have **no callers**.
+  600 frames).
 - **Budgeted pathfinding**: `BudgetedPathfinding` / `DijkstraBudgetMsPerTick` (pushed
   from settings each tick), `BeginTick` drains `_pendingRequests` (priority = how badly
   the stale flow steers vs the straight line, see `EnqueueMiss`), `HasDijkstraBudget`,
   `_lastQueryDeferred` distinguishes "deferred → beeline this tick" from "genuinely
   unpathable → imag chunk".
-- **Main API**: `GetDirection(unitPos, targetPos, frame, sizeTier, unitIdx)` — fallback
-  ladder: persistent imaginary chunk → tile/border flow → BFS to nearest tile with
+- **Main API**: `GetDirection(unitPos, targetPos, frame, sizeTier, unitId)` — fallback
+  ladder: persistent imaginary chunk → tile/portal-set flow → BFS to nearest tile with
   valid flow → lower-tier fallback → imaginary chunk → boundary escape → beeline.
   Each branch is recorded per-unit as a `PathDecision` (debug overlay via
   `GetUnitDecision`).
@@ -56,11 +69,12 @@ The whole pathfinder (~2000 lines, one class `Pathfinder`). Map is split into 64
   (`ImagChunkPersist`) until the unit reaches the target tile, leaves the chunk, or the
   flow dies; target moved → `RecomputeImaginaryChunkFlow` within same bounds.
   `RunEscapePropagation` / `BuildChunkDirectionField` are the chunk-local twins of the
-  sector versions. `ClearImaginaryChunk(unitIdx)` exists but has **no callers** — and
-  `_unitImagChunks`/`_unitDecisions` are keyed by unit **index** while `UnitArrays`
-  swap-and-pops, so state can leak to a different unit after removals.
-- Diagnostics: `Diag*` static counters, dumped into `log/perf.log` by Simulation's
-  slow-tick logger (`pf={...}` fields).
+  sector versions. Per-unit state (`_unitImagChunks`, decisions) is keyed by unit **Id**
+  (uint) — the old index-keying leak is fixed — and `Simulation` calls
+  `ClearImaginaryChunk(id)` on unit removal.
+- Diagnostics: `Diag*` static counters (incl. `DiagMissPortalFlow`), dumped into
+  `log/perf.log` by Simulation's slow-tick logger (`pf={...}` fields; `pflow:` = portal
+  flow misses, `dj_ms` = budget spend, `pend` = deferred requests).
 - **Look/edit here when…** units path wrong around obstacles, get trapped in concave
   "cups", sector-boundary oscillation, pathfinding perf spikes, adding a new fallback
   or flow-target type.
@@ -174,9 +188,11 @@ dodge-hop lerp inline in `Simulation.Tick`.
 of the runtime stack.
 
 ## Pitfalls
-- Per-unit pathfinder state (`_unitImagChunks`, `_unitDecisions`) is keyed by **unit
-  index**, which is recycled by `UnitArrays.RemoveUnit` swap-and-pop; nothing calls
-  `ClearImaginaryChunk`. Stale/wrong-unit state after deaths is possible.
+- Routing work is on-demand + budget-capped (`DijkstraBudgetMsPerTick`, default from
+  `Settings.Performance`): a moving destination (e.g. followers chasing a sprinting
+  player) creates a new route + flow key every time the dest crosses a sector border —
+  route A\* resumes cheaply, but flow fields and matrices are recomputed. Watch
+  `dj_ms`/`pend`/`pflow` in `log/perf.log`; `PortalRouteScaleScenario` is the guardrail.
 - The imag-chunk fallback costs about the same as the Dijkstra the budget deferred —
   never run it on the `_lastQueryDeferred` path (comments in `GetDirection` explain).
 - ORCA reads raw `Position`; `RenderPos`/`RenderOffset` are cosmetic only.
