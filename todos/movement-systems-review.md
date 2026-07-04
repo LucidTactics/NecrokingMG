@@ -14,21 +14,24 @@
   `ResolveWallCollision` pass, sub-stepped accel integration (fixes 8x-slower
   accel/turn at x8), swept trample scan + impact trigger (fixes phase-through at x8).
 
-### Deliberately deferred (still open)
-1. **Portal-set flows / portal graph (P4-1, P4-2)** — NOT implemented. The cache-dedupe
-   half of its value was captured by the Phase 2 key quantization; the remaining value
-   (terrain-aware inter-sector routing, chokepoint-width awareness, exact fields w.r.t.
-   the abstraction) requires the actual portal graph (contiguous border spans as nodes,
-   cached intra-sector portal-to-portal costs, incremental updates hooked into
-   InvalidateRegion). That is a feature-sized project — do it as its own session, not as
-   the tail of this one. Design sketch in P4 below still stands.
-2. **Full MovementSystem class extraction (P4-3)** — partially done (collision pass
-   extracted, goto gone, accel sub-stepped). The remaining step — moving velocity
-   resolution/gather into separate methods or a dedicated system class — is cosmetic
-   structure, best done fresh.
-3. **Legacy UpdateWolfAI deletion (P3 debt)** — blocked on porting WolfHitAndRunScenario
-   to the archetype handler; also the legacy AIBehavior path has the live pre-existing
-   trample bug (below) worth fixing first.
+### Deferred-items status (final, 2026-07-04)
+1. **Portal-set flows / portal graph — DONE (commit ccfeadc).** True portal graph:
+   <=16-tile contiguous border-span portals, lazy budget-charged intra-sector cost
+   matrices, dest-seeded Dijkstra routing with TWO nodes per portal (near/far side —
+   single-sided costs made border tiles point at each other), portal-set flow fields
+   keyed (unit sector, dest sector, tier) with remaining-cost + along-span-slope
+   seeding. Old hop BFS / connectivity bitmask / multiborder masks deleted. 12/12.
+2. **Full MovementSystem class extraction — INTENTIONALLY STOPPED.** All functional
+   payoffs landed (collision pass extracted, goto gone, accel sub-stepped, hand-back
+   contract fixed); the remainder is relocating the gather/solve block behind a
+   7-scratch-parameter method signature — arrangement, not behavior. Do it only if/when
+   UpdateMovement needs surgery again anyway.
+3. **Legacy UpdateWolfAI deletion — BLOCKED, new finding: the comment claiming
+   WolfHitAndRunScenario is its only user is STALE. The Boar def itself ships
+   `"ai": "WolfHitAndRun"` (units.json), so the legacy machine drives live boars in
+   gameplay. Deletion requires migrating boar AI to an archetype handler (BoarForageAI
+   exists as a starting point) + in-game behavior verification via drive-game — a
+   gameplay task, not a mechanical deletion.
 4. **Pre-existing trample scenario failures — RESOLVED 2026-07-04.** Root cause was
    neither the routine-transition change nor def application: the Boar def is size 2
    while trample requires a STRICTLY smaller target, and every common unit (skeleton,
@@ -39,9 +42,13 @@
    + knockback chain reactions bowl the cordon away before the dodge rolls) — rewritten
    as a wall pocket, which can't be displaced and exercises the dodge's IsSpotBlocked
    wall check. Suite now 12/12.
-5. **Progress-based stuck detection (P4-4)** and **walls as ORCA constraints (P4-5)** —
-   not implemented; current stuck detection still can't see walls (only crowd/env
-   congestion). Revisit if wall-hugging stalls show up in play.
+5. **Progress-based stuck detection — DONE (minimal robust version):** StuckTime now
+   also accrues when the collision pass eats >80% of the intended displacement
+   (wall-blocked), not just when ORCA output is near zero (solver-blocked) — wall
+   grinding, crowd jams, and env pins all feed the same constraint-checked escape
+   bias. **Walls as ORCA half-plane constraints (P4-5) remains open** — revisit only
+   if wall-adjacent dead-end steering shows up in play; the stuck escape now covers
+   the stall case.
 
 Full review of the movement stack: sector pathfinding, inter-chunk routing, imaginary-chunk
 escape, ORCA, wall collision, and connected systems (quadtree, horde formation, physics,
