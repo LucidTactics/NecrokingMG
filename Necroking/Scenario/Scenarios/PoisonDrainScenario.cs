@@ -42,7 +42,7 @@ public class PoisonDrainScenario : ScenarioBase
         if (!_spawned && _elapsed >= 0.2f)
         {
             _spawned = true;
-            var spell = sim.GameData?.Spells.Get("poison_burst");
+            var spell = sim.GameData.Spells.Get("poison_burst");
             if (spell == null) { DebugLog.Log(ScenarioLog, "ERR: poison_burst spell missing"); _complete = true; return; }
 
             int idx = ResolveIdx(sim);

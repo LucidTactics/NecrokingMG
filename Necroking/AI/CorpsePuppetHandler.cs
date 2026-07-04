@@ -105,7 +105,7 @@ public class CorpsePuppetHandler : IArchetypeHandler
     /// has no Death clip or no metadata is loaded (e.g. headless).</summary>
     private static float DeathClipSeconds(ref AIContext ctx)
     {
-        var def = ctx.GameData?.Units.Get(ctx.Units[ctx.UnitIndex].UnitDefID);
+        var def = ctx.GameData.Units.Get(ctx.Units[ctx.UnitIndex].UnitDefID);
         if (def != null && ctx.AnimMeta != null)
         {
             string key = Render.AnimMetaLoader.MetaKey(def.Sprite.SpriteName, "Death");

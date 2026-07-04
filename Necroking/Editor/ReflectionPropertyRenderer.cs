@@ -75,14 +75,14 @@ namespace Necroking.Editor;
 public class ReflectionPropertyRenderer
 {
     private readonly EditorBase _ui;
-    private readonly GameData? _gameData;
+    private readonly GameData _gameData;
     private readonly Dictionary<Type, TypeLayout> _layoutCache = new();
     private readonly Dictionary<string, bool> _expandedSections = new();
 
     private const int RowH = 24;
     private const int LabelW = 130;
 
-    public ReflectionPropertyRenderer(EditorBase ui, GameData? gameData = null)
+    public ReflectionPropertyRenderer(EditorBase ui, GameData gameData = null)
     {
         _ui = ui;
         _gameData = gameData;

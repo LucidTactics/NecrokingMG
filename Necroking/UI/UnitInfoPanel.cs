@@ -40,7 +40,7 @@ public class UnitInfoPanel : IModalLayer
     private const string IcoFat = "assets/UI/Icons/SturmIcons/exhausted.2.24.png";
 
     private RuntimeWidgetRenderer _renderer = null!;
-    private GameData? _gameData;
+    private GameData _gameData;
     private int _unitIndex = -1;        // resolved from _unitId each Draw — transient
     private uint _unitId = Core.GameConstants.InvalidUnit; // stable identity of the pinned unit
     private int _panelX, _panelY, _panelH;
@@ -251,7 +251,7 @@ public class UnitInfoPanel : IModalLayer
             case "speed": Generic(b.CombatSpeed, fv = s.CombatSpeed); bv = b.CombatSpeed; break;
             case "encumbrance": Generic(b.Encumbrance, fv = s.Encumbrance); bv = b.Encumbrance; break;
             case "size":
-                bv = fv = _gameData?.Units.Get(unit.UnitDefID)?.Size ?? 2;
+                bv = fv = _gameData.Units.Get(unit.UnitDefID)?.Size ?? 2;
                 rows.Add(new ResourceTooltip.Row("Base", fv.ToString("0"), ResourceTooltip.ValueDefault));
                 break;
             default:
@@ -309,7 +309,7 @@ public class UnitInfoPanel : IModalLayer
         var r = _renderer;
         r.ClearOverridesRecursive(InstanceId);
 
-        var def = _gameData?.Units.Get(unit.UnitDefID);
+        var def = _gameData.Units.Get(unit.UnitDefID);
         string name = !string.IsNullOrEmpty(def?.DisplayName) ? def!.DisplayName
                     : !string.IsNullOrEmpty(unit.UnitDefID) ? unit.UnitDefID : unit.Type.ToString();
         r.SetText(Desc, "ud_title", name);
@@ -394,7 +394,7 @@ public class UnitInfoPanel : IModalLayer
         var list = new List<(BuffDef, Movement.ActiveBuff)>();
         foreach (var ab in unit.ActiveBuffs)
         {
-            var bdef = _gameData?.Buffs.Get(ab.BuffDefID);
+            var bdef = _gameData.Buffs.Get(ab.BuffDefID);
             if (bdef == null || bdef.Intrinsic) continue; // intrinsic = permanent passive, no icon
             list.Add((bdef, ab));
             if (list.Count >= MaxBuffIcons) break;
@@ -409,7 +409,7 @@ public class UnitInfoPanel : IModalLayer
     private void ComputeAbilitiesLayout(Movement.Unit unit, Simulation sim)
     {
         _abEntries.Clear();
-        var def = _gameData?.Units.Get(unit.UnitDefID);
+        var def = _gameData.Units.Get(unit.UnitDefID);
         int gap = 6, x = 7, row = 0;
 
         void Place(int w, AbEntry e)
@@ -527,7 +527,7 @@ public class UnitInfoPanel : IModalLayer
     /// duration. Shared hover-delay timer across both.</summary>
     private void DrawAbilitiesTooltips(int screenW, int screenH, Movement.Unit unit, Simulation sim, int mx, int my)
     {
-        var def = _gameData?.Units.Get(unit.UnitDefID);
+        var def = _gameData.Units.Get(unit.UnitDefID);
         string? key = null;
         Rectangle anchor = Rectangle.Empty;
         Action? bind = null;

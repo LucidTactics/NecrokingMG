@@ -458,7 +458,7 @@ public static class SubroutineSteps
     /// </summary>
     public static void SetLocomotionAnim(ref AIContext ctx, float speed)
     {
-        var def = ctx.GameData?.Units.Get(ctx.Units[ctx.UnitIndex].UnitDefID);
+        var def = ctx.GameData.Units.Get(ctx.Units[ctx.UnitIndex].UnitDefID);
         var profile = def != null
             ? LocomotionProfile.FromUnit(def)
             : LocomotionProfile.FromBaseSpeed(ctx.Units[ctx.UnitIndex].Stats.CombatSpeed);
@@ -530,7 +530,7 @@ public static class SubroutineSteps
     public static float ResolveEffortSpeed(ref AIContext ctx, MoveEffort effort,
         float? routineCapMult = null)
     {
-        var def = ctx.GameData?.Units.Get(ctx.Units[ctx.UnitIndex].UnitDefID);
+        var def = ctx.GameData.Units.Get(ctx.Units[ctx.UnitIndex].UnitDefID);
         float speed = ctx.Units[ctx.UnitIndex].Stats.CombatSpeed * EffortMultiplier(def, effort);
         if (routineCapMult.HasValue) speed *= routineCapMult.Value;
         return speed;

@@ -43,7 +43,7 @@ public class WolfRetargetScenario : ScenarioBase
         int wolfIdx = sim.SpawnUnitByID("Wolf", new Vec2(15f, 20f));
         units[wolfIdx].Archetype = ArchetypeRegistry.WolfPack;
         units[wolfIdx].Faction = Faction.Animal;
-        var wolfDef = sim.GameData?.Units.Get("Wolf");
+        var wolfDef = sim.GameData.Units.Get("Wolf");
         if (wolfDef != null)
         {
             units[wolfIdx].DetectionRange = wolfDef.DetectionRange;

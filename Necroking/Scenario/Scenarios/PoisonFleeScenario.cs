@@ -64,7 +64,7 @@ public class PoisonFleeScenario : ScenarioBase
             }
 
             // Spawn poison cloud directly on the deer
-            var spell = sim.GameData?.Spells.Get("poison_burst");
+            var spell = sim.GameData.Spells.Get("poison_burst");
             if (spell != null)
             {
                 sim.PoisonClouds.SpawnCloud(_deerStartPos, spell, Faction.Undead);

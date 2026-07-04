@@ -47,7 +47,7 @@ public class GrimoireOverlay : IModalLayer
     private static readonly Color ChromeInactive = new(112, 104, 92);
 
     private RuntimeWidgetRenderer _renderer = null!;
-    private GameData? _gameData;
+    private GameData _gameData;
     private int _x, _y;
 
     // The tile grid is 2 wide; 22 tiles => 11 visible rows. Scrolling moves the

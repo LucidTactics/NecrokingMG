@@ -122,7 +122,7 @@ public class Simulation
     private readonly List<Corpse> _corpses = new();
     private readonly List<DamageEvent> _damageEvents = new();
     private readonly List<SoulOrb> _soulOrbs = new();
-    private GameData? _gameData;
+    private GameData _gameData;
     private EnvironmentSystem? _envSystem;
     private WallSystem? _wallSystem;
     // Per-boar mushroom belly: unit id → env def indices of eaten mushrooms, in eat
@@ -240,7 +240,7 @@ public class Simulation
         // (ApplyDefRuntimeFields), so a corpse must too, else a scaled body (e.g. a
         // deer) renders at 1.0 and looks wrong.
         float scale = 1f;
-        if (!string.IsNullOrEmpty(unitDefId) && _gameData?.Units.Get(unitDefId) is { } def)
+        if (!string.IsNullOrEmpty(unitDefId) && _gameData.Units.Get(unitDefId) is { } def)
             scale = def.SpriteScale;
         var corpse = new Corpse
         {
@@ -262,7 +262,7 @@ public class Simulation
     public HordeSystem Horde => _horde;
     public CombatLog CombatLog => _combatLog;
     public float GameTime => _gameTime;
-    public GameData? GameData => _gameData;
+    public GameData GameData => _gameData;
     public int NecromancerIndex => _necromancerIdx;
     public bool NecroRunning => _necroRunning;
 
@@ -300,7 +300,7 @@ public class Simulation
             if (!_units[u].Alive) continue;
             if (_units[u].Faction != Faction.Undead) continue;
             if (_units[u].Archetype != AI.ArchetypeRegistry.HordeMinion) continue;
-            var def = _gameData?.Units.Get(_units[u].UnitDefID);
+            var def = _gameData.Units.Get(_units[u].UnitDefID);
             if (def == null || !def.Tags.Contains("wolf")) continue;
 
             _units[u].WolfHuntTargetId = 0;
@@ -340,12 +340,12 @@ public class Simulation
         Core.DebugLog.Log("jump", $"[SetAnimMeta] {animMeta.Count} entries");
     }
 
-    public void Init(int gridWidth, int gridHeight, GameData? gameData = null)
+    public void Init(int gridWidth, int gridHeight, GameData gameData = null)
     {
         // Fresh perf log per session so the file doesn't grow unbounded across runs.
         DebugLog.Clear("perf");
         _gameData = gameData;
-        if (gameData?.Buffs != null)
+        if (gameData.Buffs != null)
             _physics.Init(gameData.Buffs);
         _grid.Init(gridWidth, gridHeight);
         _grid.RebuildCostField();
@@ -368,7 +368,7 @@ public class Simulation
         _harassmentDecayTimer = CombatTickInterval;
         _fatigueRegenTimer = FatigueRegenInterval;
 
-        if (gameData?.Settings.Horde != null)
+        if (gameData.Settings.Horde != null)
             _horde.Init(gameData.Settings.Horde);
     }
 
@@ -492,7 +492,7 @@ public class Simulation
         UpdateMorale(dt);
 
         // Tick buffs
-        BuffSystem.TickBuffs(_units, dt, _gameData?.Buffs);
+        BuffSystem.TickBuffs(_units, dt, _gameData.Buffs);
         for (int i = 0; i < _units.Count; i++)
         {
             float baseSpeed = _units[i].ActiveBuffs.Count > 0
@@ -508,7 +508,7 @@ public class Simulation
             // lookup; Walk/Normal is 1× so the common case stays a field read.
             var eff = _units[i].MoveEffort;
             if (eff == Movement.MoveEffort.Hurry || eff == Movement.MoveEffort.Sprint)
-                baseSpeed *= AI.SubroutineSteps.EffortMultiplier(_gameData?.Units.Get(_units[i].UnitDefID), eff);
+                baseSpeed *= AI.SubroutineSteps.EffortMultiplier(_gameData.Units.Get(_units[i].UnitDefID), eff);
             _units[i].MaxSpeed = baseSpeed;
         }
 
@@ -790,7 +790,7 @@ public class Simulation
         // Poison clouds
         PhaseStart();
         _poisonClouds.Update(dt, _units, _quadtree, _corpses, _damageEvents,
-            _gameData?.Buffs);
+            _gameData.Buffs);
         PhaseEnd("clouds");
 
         // Corpse Eater AI — passive eat by wolves/bears once corpses age past
@@ -958,12 +958,11 @@ public class Simulation
     }
 
     // --- AI ---
-    private void UpdateAI(float dt)
-    {
+    private void UpdateAI(float dt) {
         // Awareness pass (runs before AI updates)
         float dayFraction;
         bool isNight;
-        var dnSettings = _gameData?.Settings.DayNight;
+        var dnSettings = _gameData.Settings.DayNight;
         if (dnSettings != null && dnSettings.Enabled)
         {
             // Use DayNightSystem phases: Night and Dusk count as "night" for animal AI
@@ -1062,7 +1061,7 @@ public class Simulation
                     // the system default (4× biped sprint) when the def doesn't
                     // specify. Each different player form (Lich, GrandNecromancer,
                     // etc.) can have its own sprint character via this knob.
-                    var playerDef = _gameData?.Units.Get(_units[i].UnitDefID);
+                    var playerDef = _gameData.Units.Get(_units[i].UnitDefID);
                     float maxSprintMult = (playerDef?.SprintSpeedMultiplier > 0f)
                         ? playerDef.SprintSpeedMultiplier
                         : SprintMaxMultiplier;
@@ -1281,7 +1280,7 @@ public class Simulation
                     if (string.IsNullOrEmpty(spellId) || _units[i].MaxMana <= 0f) break;
 
                     // Look up spell definition
-                    var spell = _gameData?.Spells.Get(spellId);
+                    var spell = _gameData.Spells.Get(spellId);
                     if (spell == null) break;
 
                     // Find closest enemy within spell range
@@ -1291,7 +1290,7 @@ public class Simulation
                         float dist = (_units[enemy].Position - _units[i].Position).Length();
                         // Path-aware gating: caster must meet primary+secondary
                         // path requirements; cost is scaled down by primary mastery.
-                        var casterDef = _gameData?.Units.Get(_units[i].UnitDefID);
+                        var casterDef = _gameData.Units.Get(_units[i].UnitDefID);
                         System.Func<Data.Registries.MagicPath, int> casterLevel = casterDef != null
                             ? casterDef.GetPathLevel
                             : _ => 0;
@@ -1917,7 +1916,7 @@ public class Simulation
 
                 var param = new ORCAParams
                 {
-                    TimeHorizon = 3f,
+                    TimeHorizon = 0.0f,
                     MaxSpeed = _units[i].MaxSpeed,
                     Radius = _units[i].Radius,
                     Priority = _units[i].OrcaPriority
@@ -1994,15 +1993,15 @@ public class Simulation
 
             var accelDef = UnitUtil.ResolveDef(_units[i], _gameData); // memoized — per moving unit per frame
             float maxAccel = accelDef?.MaxAcceleration
-                ?? _gameData?.Settings.Combat.MaxAcceleration ?? 6f;
+                ?? _gameData.Settings.Combat.MaxAcceleration;
             float maxDecel = accelDef?.MaxDeceleration
-                ?? _gameData?.Settings.Combat.MaxDeceleration ?? 25f;
+                ?? _gameData.Settings.Combat.MaxDeceleration;
             float maxLateral = accelDef?.MaxLateralAccel
-                ?? _gameData?.Settings.Combat.MaxLateralAccel ?? 15f;
+                ?? _gameData.Settings.Combat.MaxLateralAccel;
             // Cast plant: boosted brake so the player skids to a stop inside the
             // cast wind-up window (~0.1s from a full sprint) instead of coasting.
             if (_necroCastPlant && _units[i].AI == AIBehavior.PlayerControlled)
-                maxDecel *= _gameData?.Settings.Animation.CastBrakeMultiplier ?? 2f;
+                maxDecel *= _gameData.Settings.Animation.CastBrakeMultiplier;
 
             // Integrate the accel model in sub-steps of at most 1/20s each.
             // The old single min(dt, 1/20) clamp prevented snap-turns at high
@@ -2456,7 +2455,7 @@ public class Simulation
             {
                 if (_units[i].IsLockedByAction()) continue;
 
-                var def = _gameData?.Units.Get(_units[i].UnitDefID);
+                var def = _gameData.Units.Get(_units[i].UnitDefID);
                 if (def != null)
                 {
                     var profile = Render.LocomotionProfile.FromUnit(def);
@@ -2483,7 +2482,7 @@ public class Simulation
                     // pivot overlaps the brake, so even a 180° sprint-cast is aimed
                     // before the cast anim's effect frame.
                     targetAngle = _necroCastAimAngle;
-                    turnMult = _gameData?.Settings.Animation.CastTurnBoost ?? 3f;
+                    turnMult = _gameData.Settings.Animation.CastTurnBoost;
                 }
                 else if (_units[i].FaceVelocityMode && _units[i].Velocity.LengthSq() > 0.01f)
                 {
@@ -2562,7 +2561,7 @@ public class Simulation
     /// </summary>
     private bool IsFacingTarget(int i, int ti)
     {
-        float threshold = _gameData?.Settings.Combat.FacingThreshold ?? 60f;
+        float threshold = _gameData.Settings.Combat.FacingThreshold;
         Vec2 dir = _units[ti].Position - _units[i].Position;
         if (dir.LengthSq() < 0.001f) return true;
         float targetAngle = MathF.Atan2(dir.Y, dir.X) * Rad2Deg;
@@ -2573,7 +2572,7 @@ public class Simulation
     // --- Combat ---
     private void UpdateCombat(float dt)
     {
-        float roundDuration = _gameData?.Settings.Combat.RoundDuration ?? 3.0f;
+        float roundDuration = _gameData.Settings.Combat.RoundDuration;
 
         // Tick down post-attack timers
         for (int i = 0; i < _units.Count; i++)
@@ -2778,7 +2777,7 @@ public class Simulation
     {
         var weapon = _units[i].Stats.MeleeWeapons[weaponIdx];
 
-        var def = _gameData?.Units.Get(_units[i].UnitDefID);
+        var def = _gameData.Units.Get(_units[i].UnitDefID);
         string spriteName = def?.Sprite?.SpriteName ?? "";
         // Pounce traverses at sprint-top-speed regardless of current MaxSpeed
         // (a predator springing from idle still leaps fast). Falls back to
@@ -2839,7 +2838,7 @@ public class Simulation
     private float GetAttackAnimDurationSec(int unitIdx, int weaponIdx)
     {
         if (_animMeta == null) return 1.0f;
-        var def = _gameData?.Units.Get(_units[unitIdx].UnitDefID);
+        var def = _gameData.Units.Get(_units[unitIdx].UnitDefID);
         if (def?.Sprite == null) return 1.0f;
 
         string? animName = null;
@@ -3439,7 +3438,7 @@ public class Simulation
         if (diff < 0) return; // defender won (ties go to attacker)
 
         int durationSec = Math.Max(KnockdownMinDuration, diff);
-        var knockdownBuff = _gameData?.Buffs.Get("buff_knockdown");
+        var knockdownBuff = _gameData.Buffs.Get("buff_knockdown");
         if (knockdownBuff == null) return;
 
         BuffSystem.ApplyBuffWithDuration(_units, defenderIdx, knockdownBuff, durationSec);
@@ -4522,7 +4521,7 @@ public class Simulation
         // Resolve the def's archetype (HordeMinion for deer/wolf/bear zombies),
         // falling back to HordeMinion for any undead def that didn't specify one.
         byte arch = AI.ArchetypeRegistry.HordeMinion;
-        var def = _gameData?.Units.Get(unitID);
+        var def = _gameData.Units.Get(unitID);
         if (def != null && !string.IsNullOrEmpty(def.Archetype))
         {
             byte resolved = AI.ArchetypeRegistry.FromName(def.Archetype);

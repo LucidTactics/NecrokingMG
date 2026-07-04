@@ -642,11 +642,11 @@ public static class UnitUtil
     /// Reference-compares the cached key against UnitDefID: a morph assigns a
     /// new string instance, which misses once and re-caches — always correct,
     /// no explicit invalidation needed.</summary>
-    public static Data.Registries.UnitDef? ResolveDef(Unit u, Data.GameData? gameData)
+    public static Data.Registries.UnitDef? ResolveDef(Unit u, Data.GameData gameData)
     {
         if (!ReferenceEquals(u.CachedDefKey, u.UnitDefID))
         {
-            u.CachedDef = gameData?.Units.Get(u.UnitDefID);
+            u.CachedDef = gameData.Units.Get(u.UnitDefID);
             u.CachedDefKey = u.UnitDefID;
         }
         return u.CachedDef;

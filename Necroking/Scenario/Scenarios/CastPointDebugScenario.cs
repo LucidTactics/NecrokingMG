@@ -58,7 +58,7 @@ public class CastPointDebugScenario : ScenarioBase
             ("NE", 315f),
         };
 
-        var castBuff = sim.GameData?.Buffs.Get("buff_4");
+        var castBuff = sim.GameData.Buffs.Get("buff_4");
         if (castBuff == null)
             DebugLog.Log(ScenarioLog, "WARNING: buff_4 not found in buff registry!");
 

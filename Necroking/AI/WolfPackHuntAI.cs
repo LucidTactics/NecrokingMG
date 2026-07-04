@@ -307,7 +307,7 @@ public static class WolfPackHuntAI
         if (u.Archetype != ArchetypeRegistry.HordeMinion) return false;
         if (u.Faction != Faction.Undead) return false;
         if (u.WolfHuntPhase == 1) return false;          // driving — let it engage
-        var def = ctx.GameData?.Units.Get(u.UnitDefID);
+        var def = ctx.GameData.Units.Get(u.UnitDefID);
         if (def == null || !def.Tags.Contains("wolf")) return false;
         if (u.WolfHuntTargetId != 0) return true;        // already assigned to a hunt → keep stalking
 

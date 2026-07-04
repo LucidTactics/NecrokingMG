@@ -41,7 +41,7 @@ public static class FacingUtil
     /// (degrees), clamped by the unit's turn speed × <paramref name="dt"/>.
     /// Incap'd / airborne units don't rotate.
     /// </summary>
-    public static void TurnToward(Unit unit, float targetAngle, float dt, GameData? gameData,
+    public static void TurnToward(Unit unit, float targetAngle, float dt, GameData gameData,
         float rateMult = 1f)
     {
         // Can't rotate while knocked down / airborne.
@@ -57,7 +57,7 @@ public static class FacingUtil
     /// <summary>Rotate toward the angle pointing from <paramref name="unit"/>
     /// toward <paramref name="worldTarget"/>. No-op if target is on top of
     /// the unit.</summary>
-    public static void TurnTowardPosition(Unit unit, Vec2 worldTarget, float dt, GameData? gameData)
+    public static void TurnTowardPosition(Unit unit, Vec2 worldTarget, float dt, GameData gameData)
     {
         var dir = worldTarget - unit.Position;
         if (dir.LengthSq() < 0.01f) return;
@@ -66,12 +66,12 @@ public static class FacingUtil
     }
 
     /// <summary>Per-unit TurnSpeed with fallback to the global default.</summary>
-    public static float ResolveTurnSpeed(Unit unit, GameData? gameData)
+    public static float ResolveTurnSpeed(Unit unit, GameData gameData)
     {
         // Memoized def lookup — this runs per facing unit per frame.
         var def = UnitUtil.ResolveDef(unit, gameData);
         if (def?.TurnSpeed.HasValue == true) return def.TurnSpeed.Value;
-        return gameData?.Settings.Combat.TurnSpeed ?? DefaultTurnSpeed;
+        return gameData.Settings.Combat.TurnSpeed;
     }
 
     /// <summary>Unit direction vector for a FacingAngle in DEGREES (the engine's facing

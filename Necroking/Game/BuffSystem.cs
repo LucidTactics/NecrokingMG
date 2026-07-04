@@ -10,7 +10,7 @@ namespace Necroking.GameSystems;
 
 public static class BuffSystem
 {
-    public static void ApplyBuff(UnitArrays units, int unitIdx, BuffDef def, GameData? gameData = null)
+    public static void ApplyBuff(UnitArrays units, int unitIdx, BuffDef def, GameData gameData = null)
         => ApplyBuffWithDuration(units, unitIdx, def, def.Duration, gameData);
 
     /// <summary>
@@ -32,7 +32,7 @@ public static class BuffSystem
     /// Used where duration is computed at runtime — e.g. knockdown-on-hit, where
     /// duration comes from the STR/Size/DRN roll difference.
     /// </summary>
-    public static void ApplyBuffWithDuration(UnitArrays units, int unitIdx, BuffDef def, float durationSeconds, GameData? gameData = null)
+    public static void ApplyBuffWithDuration(UnitArrays units, int unitIdx, BuffDef def, float durationSeconds, GameData gameData = null)
     {
         if (unitIdx < 0 || unitIdx >= units.Count) return;
         var buffs = units[unitIdx].ActiveBuffs;

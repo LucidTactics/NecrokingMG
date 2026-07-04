@@ -241,7 +241,7 @@ public class CharacterStatsUI : Necroking.UI.IModalLayer
     };
 
     public void Draw(int screenW, int screenH, Simulation sim, BuffRegistry buffs,
-        ref SpellBarState primaryBar, InputState input, GameData? gameData = null,
+        ref SpellBarState primaryBar, InputState input, GameData gameData = null,
         SkillBookState? bookState = null)
     {
         if (!IsVisible || _font == null) return;
@@ -271,7 +271,7 @@ public class CharacterStatsUI : Necroking.UI.IModalLayer
 
         // Necromancer's UnitDef for path lookup. Optional — without GameData
         // we just skip the inline path row, the rest of the panel renders fine.
-        var necroDef = gameData?.Units.Get(unit.UnitDefID);
+        var necroDef = gameData.Units.Get(unit.UnitDefID);
 
         float buffedMaxHp = BuffSystem.GetModifiedStat(sim.UnitsMut, necroIdx, BuffStat.MaxHP, s.MaxHP);
         int buffedMaxHpI = (int)System.MathF.Round(buffedMaxHp);
@@ -671,7 +671,7 @@ public class CharacterStatsUI : Necroking.UI.IModalLayer
     /// corpse's source UnitDef's Faction == Human. Returns silently when no
     /// valid corpse is in range — the player just sees no effect.</summary>
     private void TryConsumeNearestCorpse(Simulation sim, int necroIdx,
-        SkillBookState bookState, GameData? gameData, bool humansOnly)
+        SkillBookState bookState, GameData gameData, bool humansOnly)
     {
         if (necroIdx < 0) return;
         const float Range = 6f;

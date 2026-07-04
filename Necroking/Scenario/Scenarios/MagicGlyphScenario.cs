@@ -28,7 +28,7 @@ public class MagicGlyphScenario : ScenarioBase
         DebugLog.Log(ScenarioLog, "Testing: procedural magic circle shader rendering");
 
         // Disable weather and bloom for clean visual test
-        if (sim.GameData?.Settings.Weather != null)
+        if (sim.GameData.Settings.Weather != null)
             sim.GameData.Settings.Weather.Enabled = false;
         BloomOverride = new BloomSettings { Enabled = false };
 

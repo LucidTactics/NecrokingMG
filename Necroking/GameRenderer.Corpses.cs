@@ -645,7 +645,7 @@ partial class GameRenderer
     /// offline via <c>--bake-centroids</c>; the resulting file ships with the build.</summary>
     internal void BakeAllCorpseCentroids()
     {
-        if (_g._gameData?.Units == null) return;
+        if (_g._gameData.Units == null) return;
         if (_g._persistedCentroids == null) LoadPersistedCentroids();
         _g._bulkCentroidBake = true;
         int total = 0;
@@ -698,7 +698,7 @@ partial class GameRenderer
     internal void QueueReanimMorphPrewarm()
     {
         _morphPrewarmQueue.Clear();
-        if (_g._morphSdfEffect == null || _g._gameData?.Units == null) return;
+        if (_g._morphSdfEffect == null || _g._gameData.Units == null) return;
         var seen = new HashSet<string>();
         foreach (var def in _g._gameData.Units.All())
         {

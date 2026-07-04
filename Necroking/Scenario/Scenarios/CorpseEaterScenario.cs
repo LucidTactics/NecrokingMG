@@ -110,7 +110,7 @@ public class CorpseEaterScenario : ScenarioBase
         // The +MaxHP buff must be a REAL HP gain: current HP rises by the buff's
         // MaxHP value, and EffectiveMaxHP rises by the same (base MaxHP unchanged).
         int expectGain = 0;
-        var mealDef = sim.GameData?.Buffs.Get("buff_corpse_meal");
+        var mealDef = sim.GameData.Buffs.Get("buff_corpse_meal");
         if (mealDef != null)
             foreach (var e in mealDef.Effects)
                 if (e.Stat == "MaxHP") expectGain += (int)e.Value;

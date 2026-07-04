@@ -1888,7 +1888,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     private void OnGroundVertexCorruptedForGrass(int vx, int vy)
     {
         if (_grassMap.Length == 0 || _grassW == 0) return;
-        float cellSize = _gameData?.Settings.Grass.CellSize ?? 1f;
+        float cellSize = _gameData.Settings.Grass.CellSize;
         if (cellSize <= 0f) cellSize = 1f;
 
         float wx0 = vx - 1f, wx1 = vx + 1f;
@@ -2713,7 +2713,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         // ticking (like "run when unfocused"). But the dev server injects input directly
         // (DispatchSpellCast / editor mouse), so we still NEUTRALISE the real mouse below
         // when unfocused — otherwise a stray click on the unfocused window casts a spell.
-        bool runWhenUnfocused = _gameData?.Settings.General.RunWhenUnfocused ?? false;
+        bool runWhenUnfocused = _gameData.Settings.General.RunWhenUnfocused;
         bool keepRunningUnfocused = runWhenUnfocused || _devServer != null;
 
         // Default behaviour: freeze entirely while unfocused — skip all input so

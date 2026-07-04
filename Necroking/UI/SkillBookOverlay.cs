@@ -547,7 +547,7 @@ public class SkillBookOverlay : IModalLayer
     {
         if (c.Type == "item")
         {
-            var it = _gameData?.Items?.Get(c.Id);
+            var it = _gameData.Items?.Get(c.Id);
             if (it != null && Has(it.Icon)) return it.Icon;
         }
         return "";
@@ -560,7 +560,7 @@ public class SkillBookOverlay : IModalLayer
         foreach (var c in def.Costs)
             if (c.Type == "item")
             {
-                var it = _gameData?.Items?.Get(c.Id);
+                var it = _gameData.Items?.Get(c.Id);
                 if (it != null && !string.IsNullOrEmpty(it.Icon)) return it.Icon;
             }
         return Data.Registries.MagicPathHelpers.IconPath(Data.Registries.MagicPath.Death, 24);
@@ -741,10 +741,10 @@ public class SkillBookOverlay : IModalLayer
         return $"Grant {BuffName(buff)} to {who}";
     }
 
-    private string SpellName(string id) { var d = _gameData?.Spells?.Get(id); return d != null && Has(d.DisplayName) ? d.DisplayName : id; }
-    private string ItemName(string id)  { var d = _gameData?.Items?.Get(id);  return d != null && Has(d.DisplayName) ? d.DisplayName : id; }
-    private string UnitName(string id)  { var d = _gameData?.Units?.Get(id);  return d != null && Has(d.DisplayName) ? d.DisplayName : id; }
-    private string BuffName(string id)  { var d = _gameData?.Buffs?.Get(id);  return d != null && Has(d.DisplayName) ? d.DisplayName : Humanize(id); }
+    private string SpellName(string id) { var d = _gameData.Spells?.Get(id); return d != null && Has(d.DisplayName) ? d.DisplayName : id; }
+    private string ItemName(string id)  { var d = _gameData.Items?.Get(id);  return d != null && Has(d.DisplayName) ? d.DisplayName : id; }
+    private string UnitName(string id)  { var d = _gameData.Units?.Get(id);  return d != null && Has(d.DisplayName) ? d.DisplayName : id; }
+    private string BuffName(string id)  { var d = _gameData.Buffs?.Get(id);  return d != null && Has(d.DisplayName) ? d.DisplayName : Humanize(id); }
 
     private string NameList(string csv, Func<string, string> map)
         => string.Join(", ", System.Linq.Enumerable.Select(SplitTrim(csv), map));
@@ -787,7 +787,7 @@ public class SkillBookOverlay : IModalLayer
     {
         if (c.Type == "item")
         {
-            var it = _gameData?.Items?.Get(c.Id);
+            var it = _gameData.Items?.Get(c.Id);
             if (it != null && Has(it.DisplayName)) return it.DisplayName;
         }
         else if (c.Type == "skillpoints")

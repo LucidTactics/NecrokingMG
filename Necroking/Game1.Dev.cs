@@ -930,7 +930,7 @@ public partial class Game1 {
             case "locomotion": case "loco": {
                var lidxs = DevResolveUnits(c.Args.Length > 0 ? string.Join(" ", c.Args) : "necro");
                if (lidxs.Count == 0) { c.Complete(Necroking.Dev.DevServer.Error("no unit matched")); break; }
-               var ldef = _gameData?.Units.Get(_sim.Units[lidxs[0]].UnitDefID);
+               var ldef = _gameData.Units.Get(_sim.Units[lidxs[0]].UnitDefID);
                if (ldef == null) { c.Complete(Necroking.Dev.DevServer.Error("no def")); break; }
                var prof = Render.LocomotionProfile.FromUnit(ldef);
                var ci2 = System.Globalization.CultureInfo.InvariantCulture;

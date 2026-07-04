@@ -77,7 +77,7 @@ public class MapEditorWindow
     private TriggerSystem _triggerSystem => _game._triggerSystem;
     private ZoneSystem _zoneSystem => _game._zoneSystem;
     private Data.Registries.ItemRegistry? _itemRegistry;
-    private Data.GameData? _gameData;
+    private Data.GameData _gameData;
     private WallSystem _wallSystem => _game._wallSystem;
     private RoadSystem _roadSystem => _game._roadSystem;
     private TileGrid _tileGrid => _game._sim.Grid;
@@ -713,7 +713,7 @@ public class MapEditorWindow
         _envObjectEditor?.SetCorpseSettings(settings, corpsesAtlas);
     }
 
-    public void SetGameData(Data.GameData? data) => _gameData = data;
+    public void SetGameData(Data.GameData data) => _gameData = data;
 
     /// <summary>Restore the last-open tab from per-machine settings. Called once at
     /// init (right after SetGameData), not from the open handlers — the editor can be
@@ -5604,7 +5604,7 @@ public class MapEditorWindow
             // Label
             if (_smallFont != null)
             {
-                var def = _gameData?.Units.Get(pu.UnitDefId);
+                var def = _gameData.Units.Get(pu.UnitDefId);
                 string label = def?.DisplayName ?? pu.UnitDefId;
                 if (label.Length > 10) label = label[..10];
                 // Explicitly tag corpses so they're identifiable like living units are.

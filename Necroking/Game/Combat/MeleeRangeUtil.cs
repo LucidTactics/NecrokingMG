@@ -16,7 +16,7 @@ public static class MeleeRangeUtil
     public const float MeleeRangeBase = 0.8f;
 
     /// <summary>Engage/attack range = base + attacker reach (Length*0.15) + both radii.</summary>
-    public static float Compute(UnitArrays units, int attackerIdx, int targetIdx, GameData? gd)
+    public static float Compute(UnitArrays units, int attackerIdx, int targetIdx, GameData gd)
     {
         float baseRange = gd?.Settings.Combat.MeleeRange ?? MeleeRangeBase;
         return baseRange + units[attackerIdx].Stats.Length * 0.15f

@@ -117,7 +117,7 @@ public static class TrampleSystem
         // this was CombatSpeed × (1 + bonus), but CombatSpeed is now walk
         // speed — a trample at walk-speed-with-bonus would barely move.
         // Sprint multiplier from UnitDef (4× biped, 9× quadruped default).
-        var trampleDef = sim.GameData?.Units.Get(units[idx].UnitDefID);
+        var trampleDef = sim.GameData.Units.Get(units[idx].UnitDefID);
         float sprintMult = (trampleDef?.SprintSpeedMultiplier > 0f)
             ? trampleDef.SprintSpeedMultiplier
             : Render.LocomotionProfile.DefaultSprintMult;

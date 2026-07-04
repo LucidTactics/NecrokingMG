@@ -24,7 +24,7 @@ namespace Necroking.GameSystems;
 public static class HordeCapTracker
 {
     /// <summary>Count of alive permanent undead minions in the given category.</summary>
-    public static int CountUsed(UnitArrays units, GameData? gameData, UndeadCategory cat)
+    public static int CountUsed(UnitArrays units, GameData gameData, UndeadCategory cat)
     {
         if (gameData == null || cat == UndeadCategory.None) return 0;
         int n = 0;
@@ -61,7 +61,7 @@ public static class HordeCapTracker
 
     /// <summary>How many more of <paramref name="cat"/> the player can summon
     /// right now without going over cap. Clamped to ≥ 0.</summary>
-    public static int Available(UnitArrays units, GameData? gameData,
+    public static int Available(UnitArrays units, GameData gameData,
         NecromancerState necro, UndeadCategory cat)
     {
         if (cat == UndeadCategory.None) return int.MaxValue;
@@ -78,7 +78,7 @@ public static class HordeCapTracker
     /// <summary>Resolve the UndeadCategory that <paramref name="summonUnitDefID"/>
     /// would consume. Returns None when the def is missing or the unit doesn't
     /// participate in cap enforcement (cosmetic-only undead, player forms).</summary>
-    public static UndeadCategory CategoryFor(GameData? gameData, string summonUnitDefID)
+    public static UndeadCategory CategoryFor(GameData gameData, string summonUnitDefID)
     {
         if (gameData == null || string.IsNullOrEmpty(summonUnitDefID)) return UndeadCategory.None;
         var def = gameData.Units.Get(summonUnitDefID);

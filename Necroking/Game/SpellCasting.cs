@@ -33,7 +33,7 @@ public static class SpellCaster
     /// <summary>
     /// Check if a corpse has a valid zombieTypeID on its UnitDef.
     /// </summary>
-    private static bool CorpseHasZombieType(Corpse corpse, GameData? gameData)
+    private static bool CorpseHasZombieType(Corpse corpse, GameData gameData)
     {
         if (gameData == null) return true; // no validation possible, allow it
         var def = gameData.Units.Get(corpse.UnitDefID);
@@ -44,7 +44,7 @@ public static class SpellCaster
         string spellID, SpellRegistry spells, NecromancerState necro,
         UnitArrays units, int necroIdx, Vec2 mouseWorld,
         IReadOnlyList<Corpse> corpses, PendingSpellCast outPending,
-        GameData? gameData = null)
+        GameData gameData = null)
     {
         if (necroIdx < 0) return CastResult.NoNecromancer;
 
@@ -59,7 +59,7 @@ public static class SpellCaster
         // existing test paths keep working. Buff "AllPaths" Set effects floor
         // every path level (e.g. god mode = 9 everywhere) without overwriting
         // higher native levels.
-        var casterDef = gameData?.Units.Get(units[necroIdx].UnitDefID);
+        var casterDef = gameData.Units.Get(units[necroIdx].UnitDefID);
         Func<MagicPath, int> casterLevel = ResolveCasterLevel(casterDef, units, necroIdx);
         // Path gate is a DISTINCT failure from mana — don't conflate them, or the
         // feedback lies ("not enough mana" when the caster simply lacks the path).
@@ -439,7 +439,7 @@ public static class SpellCaster
         // Deduct mana and start cooldown. Recompute the effective cost rather
         // than capturing it from the eligibility check so we stay in sync if a
         // future refactor moves the gate around.
-        var castingDef = gameData?.Units.Get(units[necroIdx].UnitDefID);
+        var castingDef = gameData.Units.Get(units[necroIdx].UnitDefID);
         Func<MagicPath, int> castingLevel = ResolveCasterLevel(castingDef, units, necroIdx);
         necro.Mana -= spell.EffectiveManaCost(castingLevel);
         if (spell.Cooldown > 0f)
@@ -461,11 +461,11 @@ public static class SpellCaster
     /// max (regen ticked during the wind-up); the per-frame clamp in Game1 corrects
     /// it next tick.</summary>
     public static void RefundSpellCast(string spellID, SpellRegistry spells, NecromancerState necro,
-        UnitArrays units, int necroIdx, GameData? gameData)
+        UnitArrays units, int necroIdx, GameData gameData)
     {
         var spell = spells.Get(spellID);
         if (spell == null || necroIdx < 0 || necroIdx >= units.Count) return;
-        var castingDef = gameData?.Units.Get(units[necroIdx].UnitDefID);
+        var castingDef = gameData.Units.Get(units[necroIdx].UnitDefID);
         Func<MagicPath, int> castingLevel = ResolveCasterLevel(castingDef, units, necroIdx);
         necro.Mana += spell.EffectiveManaCost(castingLevel);
         necro.SpellCooldowns.Remove(spellID);
@@ -478,12 +478,12 @@ public static class SpellCaster
     /// vanish from the book just because they're low on mana). Used to filter
     /// the grimoire so spells whose paths the player hasn't unlocked don't show.
     /// necroIdx &lt; 0 (no caster context, e.g. editor/tests) => true (show all).</summary>
-    public static bool HasSpellRequirements(SpellDef? spell, GameData? gameData,
+    public static bool HasSpellRequirements(SpellDef? spell, GameData gameData,
         UnitArrays units, int necroIdx)
     {
         if (spell == null) return false;
         if (necroIdx < 0) return true;
-        var def = gameData?.Units.Get(units[necroIdx].UnitDefID);
+        var def = gameData.Units.Get(units[necroIdx].UnitDefID);
         return spell.MeetsPathRequirements(ResolveCasterLevel(def, units, necroIdx));
     }
 
@@ -493,11 +493,11 @@ public static class SpellCaster
     /// none). Powers the cast-failure feedback so a <see cref="CastResult.MissingPath"/>
     /// names the path the player still needs, instead of misreporting it as a mana
     /// shortfall.</summary>
-    public static string DescribeMissingPath(SpellDef? spell, GameData? gameData,
+    public static string DescribeMissingPath(SpellDef? spell, GameData gameData,
         UnitArrays units, int necroIdx)
     {
         if (spell == null || necroIdx < 0) return "";
-        var def = gameData?.Units.Get(units[necroIdx].UnitDefID);
+        var def = gameData.Units.Get(units[necroIdx].UnitDefID);
         var casterLevel = ResolveCasterLevel(def, units, necroIdx);
 
         var parts = new List<string>();

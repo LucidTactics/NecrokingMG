@@ -514,7 +514,7 @@ public class WorkerSystem
     private string CorpseLabel(string unitDefId)
     {
         if (string.IsNullOrEmpty(unitDefId)) return "Corpse";
-        var def = _gameData?.Units.Get(unitDefId);
+        var def = _gameData.Units.Get(unitDefId);
         return def != null && !string.IsNullOrEmpty(def.DisplayName) ? def.DisplayName : unitDefId;
     }
 

@@ -47,7 +47,7 @@ public class UIUnitInfoScenario : ScenarioBase
         // buff-modified values (green/red) + the tooltip itemisation.
         void Buff(string id)
         {
-            var bd = sim.GameData?.Buffs.Get(id);
+            var bd = sim.GameData.Buffs.Get(id);
             if (bd != null) BuffSystem.ApplyBuff(sim.UnitsMut, _soldierIdx, bd);
             else DebugLog.Log(ScenarioLog, $"WARN buff '{id}' not found");
         }
@@ -68,12 +68,12 @@ public class UIUnitInfoScenario : ScenarioBase
             sim.UnitsMut[_necroIdx].AI = AIBehavior.IdleAtPoint;
             void NBuff(string id)
             {
-                var bd = sim.GameData?.Buffs.Get(id);
+                var bd = sim.GameData.Buffs.Get(id);
                 if (bd != null) BuffSystem.ApplyBuff(sim.UnitsMut, _necroIdx, bd);
             }
             NBuff("buff_god_mode");
             NBuff("strength_buff");
-            int nativeDeath = sim.GameData?.Units.Get("necromancer")
+            int nativeDeath = sim.GameData.Units.Get("necromancer")
                 ?.GetPathLevel(Necroking.Data.Registries.MagicPath.Death) ?? -1;
             DebugLog.Log(ScenarioLog, $"necromancer #{_necroIdx} native Death={nativeDeath}");
         }

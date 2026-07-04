@@ -19,7 +19,7 @@ public ref struct AIContext
     public int FrameNumber;
 
     // World queries (set by Simulation before AI tick)
-    public GameData? GameData;
+    public GameData GameData;
     public World.Pathfinder? Pathfinder;
     public Spatial.Quadtree? Quadtree;
     public GameSystems.HordeSystem? Horde;

@@ -50,7 +50,7 @@ public class ParalyzeBurstScenario : ScenarioBase
         if (!_cast && _elapsed >= 0.2f)
         {
             _cast = true;
-            var spell = sim.GameData?.Spells.Get("paralyze_burst");
+            var spell = sim.GameData.Spells.Get("paralyze_burst");
             if (spell == null) { DebugLog.Log(ScenarioLog, "ERR: paralyze_burst missing"); _complete = true; return; }
             int idx = ResolveIdx(sim);
             sim.PoisonClouds.SpawnCloud(sim.Units[idx].Position, spell, Faction.Undead);

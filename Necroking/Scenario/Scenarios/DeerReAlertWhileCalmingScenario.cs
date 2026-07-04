@@ -69,7 +69,7 @@ public class DeerReAlertWhileCalmingScenario : ScenarioBase
         // SpawnUnitByID doesn't wire archetype / awareness fields the way
         // Game1.SpawnUnit does. Apply the missing DeerHerd plumbing manually
         // so the scenario actually exercises the deer AI.
-        var deerDef = sim.GameData?.Units.Get("FemaleDeer");
+        var deerDef = sim.GameData.Units.Get("FemaleDeer");
         if (deerDef != null)
         {
             sim.UnitsMut[deerIdx].Archetype = ArchetypeRegistry.DeerHerd;

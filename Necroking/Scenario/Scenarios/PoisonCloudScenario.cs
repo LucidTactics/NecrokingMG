@@ -35,7 +35,7 @@ public class PoisonCloudScenario : ScenarioBase
         DebugLog.Log(ScenarioLog, "Testing: single cloud puff flipbook rendering");
 
         // Disable weather and bloom for clean visual test
-        if (sim.GameData?.Settings.Weather != null)
+        if (sim.GameData.Settings.Weather != null)
             sim.GameData.Settings.Weather.Enabled = false;
         BloomOverride = new BloomSettings { Enabled = true, Threshold = 0.9f, Intensity = 0.8f, Scatter = 0.5f };
 
@@ -117,7 +117,7 @@ public class PoisonCloudScenario : ScenarioBase
             _spawnTimer -= dt;
             if (_spawnTimer <= 0f)
             {
-                var spellDef = sim.GameData?.Spells.Get("necromantic_miasma");
+                var spellDef = sim.GameData.Spells.Get("necromantic_miasma");
                 if (spellDef != null)
                 {
                     sim.PoisonClouds.SpawnCloud(new Vec2(CX, CY), spellDef, Faction.Undead);

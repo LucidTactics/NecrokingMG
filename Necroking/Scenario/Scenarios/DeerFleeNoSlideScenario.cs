@@ -70,7 +70,7 @@ public class DeerFleeNoSlideScenario : ScenarioBase
         int dIdx = sim.SpawnUnitByID("FemaleDeer", new Vec2(45f, 10f));
         if (dIdx < 0) { Fail("could not spawn FemaleDeer"); _complete = true; return; }
         units[dIdx].Archetype = ArchetypeRegistry.DeerHerd;
-        var deerDef = sim.GameData?.Units.Get("FemaleDeer");
+        var deerDef = sim.GameData.Units.Get("FemaleDeer");
         if (deerDef != null)
         {
             units[dIdx].DetectionRange = deerDef.DetectionRange;

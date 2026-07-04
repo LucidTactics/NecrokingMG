@@ -54,7 +54,7 @@ public class PounceTestScenario : ScenarioBase
         units[wolfIdx].Faction = Faction.Animal;
         // SpawnUnitByID doesn't populate awareness config (Game1 spawn pipeline does that) —
         // set it directly from the UnitDef so awareness/alert escalation works.
-        var wolfDef = sim.GameData?.Units.Get("Wolf");
+        var wolfDef = sim.GameData.Units.Get("Wolf");
         if (wolfDef != null)
         {
             units[wolfIdx].DetectionRange = wolfDef.DetectionRange;

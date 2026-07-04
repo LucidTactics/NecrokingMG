@@ -58,7 +58,7 @@ public class PoisonBurstScenario : ScenarioBase
         if (!_spawned && _elapsed >= 0.1f)
         {
             _spawned = true;
-            var spell = sim.GameData?.Spells.Get("poison_burst");
+            var spell = sim.GameData.Spells.Get("poison_burst");
             if (spell != null)
             {
                 sim.PoisonClouds.SpawnCloud(new Vec2(15, 15), spell, Faction.Undead);
