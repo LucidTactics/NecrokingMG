@@ -443,7 +443,7 @@ public class Simulation
         Necroking.World.Pathfinder.DiagCacheEvictions = 0;
         Necroking.World.Pathfinder.DiagCacheSize = _pathfinder.FlowCacheSize;
         Necroking.World.Pathfinder.DiagMissTile = 0;
-        Necroking.World.Pathfinder.DiagMissMultiBorder = 0;
+        Necroking.World.Pathfinder.DiagMissPortalFlow = 0;
         _frameNumber++;
         _gameTime += dt;
         _damageEvents.Clear();
@@ -839,7 +839,7 @@ public class Simulation
               .Append($",hits:{Necroking.World.Pathfinder.DiagFlowCacheHits}")
               .Append($",miss:{Necroking.World.Pathfinder.DiagFlowCacheMisses}")
               .Append($"(tile:{Necroking.World.Pathfinder.DiagMissTile}")
-              .Append($",mult:{Necroking.World.Pathfinder.DiagMissMultiBorder}")
+              .Append($",pflow:{Necroking.World.Pathfinder.DiagMissPortalFlow}")
               .Append($",new:{Necroking.World.Pathfinder.DiagMissNewKey}")
               .Append($",evict:{Necroking.World.Pathfinder.DiagMissEvicted})")
               .Append($",imag:{Necroking.World.Pathfinder.DiagImagChunkComputes}")
@@ -1916,14 +1916,15 @@ public class Simulation
                     neighbors, param, dt);
             }
 
-            // Stuck accounting: AI wants motion but the solver says we can
-            // barely move. Feeds the pre-solve escape bias next tick.
+            // Solver-blocked signal: AI wants motion but ORCA says we can
+            // barely move (crowd/env congestion). Combined with a
+            // wall-blocked signal after the collision pass below — walls are
+            // NOT ORCA constraints, so a unit grinding flat against one
+            // reports full desired speed here and would never accrue
+            // StuckTime from this check alone.
             float speed = newVel.Length();
             float prefSpeed = _units[i].PreferredVel.Length();
-            if (prefSpeed > 0.1f && speed < 0.1f * _units[i].MaxSpeed)
-                _units[i].StuckTime += dt;
-            else
-                _units[i].StuckTime = 0f;
+            bool solverBlocked = prefSpeed > 0.1f && speed < 0.1f * _units[i].MaxSpeed;
 
             // --- Newtonian acceleration model ---
             // Treat newVel (ORCA-resolved, MaxSpeed-capped) as the desired velocity.
@@ -2053,7 +2054,22 @@ public class Simulation
                 _units[i].Velocity = vel;
             }
 
+            Vec2 preMovePos = _units[i].Position;
             ResolveWallCollision(i, dt, envEntries);
+
+            // Stuck accounting AFTER the move so walls count: wall-blocked =
+            // the unit intended real displacement this tick but the collision
+            // pass ate almost all of it. Progress-based, so wall grinding,
+            // crowd jams, and env pins all feed the same escape bias — the
+            // pre-solve perpendicular blend next tick, which ORCA then
+            // constraint-checks (and the wall slide resolves tangentially).
+            float intendedStep = _units[i].Velocity.Length() * dt;
+            float actualStep = (_units[i].Position - preMovePos).Length();
+            bool wallBlocked = intendedStep > 0.02f && actualStep < intendedStep * 0.2f;
+            if (solverBlocked || wallBlocked)
+                _units[i].StuckTime += dt;
+            else
+                _units[i].StuckTime = 0f;
         }
     }
 

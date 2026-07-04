@@ -61,6 +61,7 @@ public static class ScenarioRegistry
         Register("collision_debug_test", () => new Scenarios.CollisionDebugTestScenario());
         Register("grass_blade_test", () => new Scenarios.GrassBladeTestScenario());
         Register("pathfinding_test", () => new Scenarios.PathfindingTestScenario());
+        Register("portal_route_scale", () => new Scenarios.PortalRouteScaleScenario());
         Register("wolf_hit_and_run", () => new Scenarios.WolfHitAndRunScenario());
         Register("flee_when_hit", () => new Scenarios.FleeWhenHitScenario());
         Register("deer_realert_while_calming", () => new Scenarios.DeerReAlertWhileCalmingScenario());
