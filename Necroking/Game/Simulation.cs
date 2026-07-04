@@ -2741,13 +2741,21 @@ public class Simulation
         predicted = GameSystems.Combat.InterceptUtil.ClampLeadOvershoot(
             _units[i].Position, predicted, weapon.PounceMaxRange);
 
-        // Locked landing spot: just short of the PREDICTED point, in melee
-        // range with a small margin. Standoff direction recomputed toward the
-        // predicted point — offsetting along the stale attacker→current vector
-        // would land the pouncer sideways of a moving target.
+        // Locked landing spot: the pouncer's center lands ON the predicted
+        // target's collision edge (standoff = target radius, along THIS
+        // attacker's approach). Why exactly the target radius: the landing
+        // hit window is attackerR + targetR + PounceLandingHitMargin, so this
+        // leaves attackerR + margin (~1.0u) of slack for prediction error —
+        // the old melee-range standoff (bothR + 0.2) left only 0.3u and
+        // near-missed constantly vs accelerating deer (logged misses at
+        // dist 1.51-1.59 vs reach 1.50). Not zero: per-direction standoff
+        // spreads simultaneous pouncers around the target's rim instead of
+        // piling every wolf onto the exact center point. Direction is toward
+        // the PREDICTED point — offsetting along the stale attacker→current
+        // vector would land the pouncer sideways of a moving target.
         Vec2 toTarget = predicted - _units[i].Position;
         float len = toTarget.Length();
-        float standoff = _units[ti].Radius + _units[i].Radius + 0.2f;
+        float standoff = _units[ti].Radius;
         Vec2 landingPos = len > 0.01f
             ? predicted - toTarget * (standoff / len)
             : predicted;
