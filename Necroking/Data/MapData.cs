@@ -363,6 +363,18 @@ public static class MapData
                         zone.Population.Militia = pop.TryGetProperty("militia", out var pm) ? pm.GetInt32() : 0;
                         zone.Population.Watchdog = pop.TryGetProperty("watchdog", out var pw) ? pw.GetInt32() : 0;
                     }
+                    if (z.TryGetProperty("spawns", out var spawns))
+                    {
+                        foreach (var s in spawns.EnumerateArray())
+                        {
+                            zone.Spawns.Add(new ZoneSpawnEntry
+                            {
+                                DefId = s.TryGetProperty("defId", out var sd) ? sd.GetString() ?? "" : "",
+                                PerMinute = s.TryGetProperty("perMinute", out var sr) ? sr.GetSingle() : 1f,
+                                MaxAlive = s.TryGetProperty("maxAlive", out var sm) ? sm.GetInt32() : 5,
+                            });
+                        }
+                    }
                     list.Add(zone);
                 }
             }

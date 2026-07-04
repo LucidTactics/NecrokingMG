@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Necroking.Core;
 using Necroking.Data;
 using Necroking.GameSystems;
@@ -27,10 +28,18 @@ public partial class Game1
 {
     internal readonly ZoneSystem _zoneSystem = new();
 
+    // Periodic zone-spawn state (see UpdateZoneSpawns). Keyed by "zoneId|defId" so it
+    // survives list reordering in the editor; cleared per map load in ApplyZones.
+    private readonly Dictionary<string, float> _zoneSpawnAccum = new();
+    private float _zoneSpawnTickTimer;
+    private uint _zoneSpawnRng = 0x9E3779B9u;
+
     /// <summary>Apply every authored zone. Call once per map load, after placed units and
     /// legacy villages have spawned.</summary>
     private void ApplyZones()
     {
+        _zoneSpawnAccum.Clear();
+        _zoneSpawnTickTimer = 0f;
         if (_zoneSystem.Count == 0) return;
         var grid = _sim.Grid;
         uint rng = 0x2468ACEu;
@@ -141,5 +150,95 @@ public partial class Game1
         if (sq != null)
             DebugLog.Log("startup", $"[zones] '{z.Name}' ({z.Id}): squad {sq.Id} with {sq.Members.Count} members");
         return sq != null;
+    }
+
+    /// <summary>Periodic zone spawning: each WolfPack/DeerHerd/Foraging zone with a
+    /// <see cref="MapZone.Spawns"/> table refills its def up to MaxAlive at PerMinute
+    /// spawns per minute. Ticked from the sim block at 1 Hz — spawn rates are
+    /// per-minute, so sub-second resolution buys nothing.</summary>
+    private void UpdateZoneSpawns(float dt)
+    {
+        if (_zoneSystem.Count == 0) return;
+        _zoneSpawnTickTimer += dt;
+        if (_zoneSpawnTickTimer < 1f) return;
+        float step = _zoneSpawnTickTimer;
+        _zoneSpawnTickTimer = 0f;
+
+        var grid = _sim.Grid;
+        foreach (var z in _zoneSystem.Zones)
+        {
+            if (z.Kind == ZoneKind.Village || z.Spawns.Count == 0) continue;
+            bool forage = z.Kind == ZoneKind.Foraging;
+            foreach (var e in z.Spawns)
+            {
+                if (string.IsNullOrEmpty(e.DefId) || e.PerMinute <= 0f || e.MaxAlive <= 0) continue;
+                string key = z.Id + "|" + e.DefId;
+                _zoneSpawnAccum.TryGetValue(key, out float acc);
+                acc += e.PerMinute / 60f * step;
+                while (acc >= 1f)
+                {
+                    bool spawned = forage ? TrySpawnZoneForagable(z, e, grid) : TrySpawnZoneUnit(z, e, grid);
+                    if (!spawned)
+                    {
+                        // At cap (or no valid def/spot): hold exactly one pending spawn so
+                        // a pickup/death is refilled promptly but never as a burst.
+                        acc = 1f;
+                        break;
+                    }
+                    acc -= 1f;
+                }
+                _zoneSpawnAccum[key] = acc;
+            }
+        }
+    }
+
+    /// <summary>Spawn one unit of the entry's def inside the zone, unless the zone
+    /// already has MaxAlive of them. "Belongs to the zone" = alive unit of that def
+    /// whose immutable SpawnPosition lies inside the rect — hand-placed units count,
+    /// and wanderers keep counting no matter how far they roam.</summary>
+    private bool TrySpawnZoneUnit(MapZone z, ZoneSpawnEntry e, TileGrid? grid)
+    {
+        if (_gameData.Units.Get(e.DefId) == null) return false;
+
+        int alive = 0;
+        for (int i = 0; i < _sim.Units.Count; i++)
+        {
+            var u = _sim.Units[i];
+            if (u.Alive && u.UnitDefID == e.DefId && z.ContainsPoint(u.SpawnPosition)) alive++;
+        }
+        if (alive >= e.MaxAlive) return false;
+
+        Vec2 p = ScatterSpotInRect(grid, z, ref _zoneSpawnRng);
+        SpawnUnit(e.DefId, p);
+        DebugLog.Log("zones", $"[zones] '{z.Name}' ({z.Id}): spawned {e.DefId} ({alive + 1}/{e.MaxAlive})");
+        return true;
+    }
+
+    /// <summary>Spawn one foragable env object of the entry's def inside the zone,
+    /// unless MaxAlive uncollected ones are already there. Prefers reviving a spent
+    /// single-use instance over adding a fresh object.</summary>
+    private bool TrySpawnZoneForagable(MapZone z, ZoneSpawnEntry e, TileGrid? grid)
+    {
+        int defIdx = _envSystem.FindDef(e.DefId);
+        if (defIdx < 0) return false;
+
+        float minX = z.X - z.HalfW, maxX = z.X + z.HalfW;
+        float minY = z.Y - z.HalfH, maxY = z.Y + z.HalfH;
+        int active = _envSystem.CountActiveOfDefInRect(defIdx, minX, minY, maxX, maxY);
+        if (active >= e.MaxAlive) return false;
+
+        if (!_envSystem.TryReviveForagableInRect(defIdx, minX, minY, maxX, maxY))
+        {
+            for (int a = 0; ; a++)
+            {
+                if (a >= 12) return false; // zone too crowded for a valid spot — retry next tick
+                Vec2 p = ScatterSpotInRect(grid, z, ref _zoneSpawnRng);
+                if (!_envSystem.CanPlaceObject(defIdx, p.X, p.Y)) continue;
+                _envSystem.AddObject((ushort)defIdx, p.X, p.Y);
+                break;
+            }
+        }
+        DebugLog.Log("zones", $"[zones] '{z.Name}' ({z.Id}): spawned foragable {e.DefId} ({active + 1}/{e.MaxAlive})");
+        return true;
     }
 }

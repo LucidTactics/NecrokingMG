@@ -11,6 +11,7 @@ public enum ZoneKind : byte
     Village = 0,   // humans + structures inside become a Village (VillageSystem)
     WolfPack = 1,  // wild wolves inside form one squad (SquadSystem)
     DeerHerd = 2,  // wild deer inside form one squad (SquadSystem)
+    Foraging = 3,  // periodically spawns foragable env objects (Spawns list)
 }
 
 /// <summary>Village-zone spawn config: extra villagers spawned inside the zone at map load,
@@ -21,6 +22,17 @@ public class ZonePopulation
     public int Hunter { get; set; }
     public int Militia { get; set; }
     public int Watchdog { get; set; }
+}
+
+/// <summary>One row of a zone's periodic spawn table (see <see cref="MapZone.Spawns"/>):
+/// keep up to <see cref="MaxAlive"/> of <see cref="DefId"/> alive inside the rect,
+/// refilling at <see cref="PerMinute"/> spawns per minute. On animal zones DefId is a
+/// unit def id (units.json); on Foraging zones it's a foragable env def id (env_defs.json).</summary>
+public class ZoneSpawnEntry
+{
+    public string DefId { get; set; } = "";
+    public float PerMinute { get; set; } = 1f;
+    public int MaxAlive { get; set; } = 5;
 }
 
 /// <summary>
@@ -40,6 +52,9 @@ public class MapZone
     public float HalfH { get; set; } = 10f;
     /// <summary>Village zones only: villagers spawned inside the rect at load.</summary>
     public ZonePopulation Population { get; set; } = new();
+    /// <summary>WolfPack/DeerHerd/Foraging zones: periodic runtime spawn table
+    /// (applied by Game1.UpdateZoneSpawns, ignored on Village zones).</summary>
+    public List<ZoneSpawnEntry> Spawns { get; set; } = new();
 
     public bool ContainsPoint(Vec2 p) =>
         p.X >= X - HalfW && p.X <= X + HalfW && p.Y >= Y - HalfH && p.Y <= Y + HalfH;
@@ -72,6 +87,7 @@ public static class ZoneColors
         ZoneKind.Village => new Color(235, 185, 60),    // amber
         ZoneKind.WolfPack => new Color(205, 65, 65),    // crimson
         ZoneKind.DeerHerd => new Color(110, 205, 110),  // leaf green
+        ZoneKind.Foraging => new Color(170, 115, 220),  // mushroom violet
         _ => new Color(255, 0, 255),                    // magenta = unknown kind
     };
 

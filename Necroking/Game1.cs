@@ -3511,6 +3511,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             _sim.MagicGlyphs.Update(dt, _sim.UnitsMut, _sim.Quadtree, _sim.PoisonClouds, _gameData.Spells);
             _weatherRenderer.Update(dt, _gameData);
             _envSystem.UpdateForagables(dt);
+            UpdateZoneSpawns(dt);
             _envSystem.UpdateBerryBushes(dt);
             _envSystem.UpdateAnimations(dt, _gameTime);
             _envSystem.UpdateTraps(dt, _sim.Units);
