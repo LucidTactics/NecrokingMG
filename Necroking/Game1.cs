@@ -3858,7 +3858,11 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         }
 
         // --- Update animations (scaled by timeScale so they match game speed) ---
-        UpdateAnimations(dt);
+        // WORLD domain: UpdateAnimations isn't just visual — it drives the corpse-
+        // interaction state machine, resolves pending attacks / spell casts on anim
+        // action-frames, ticks jump/incap and death-fog corruption. Editors and pause
+        // must freeze all of it (the map-editor corruption-spread bug lived here).
+        UpdateAnimations(_clock.WorldDt);
 
         // --- Update damage numbers ---
         for (int i = _damageNumbers.Count - 1; i >= 0; i--)

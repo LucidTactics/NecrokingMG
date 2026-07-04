@@ -835,15 +835,12 @@ public partial class Game1
                 necroState.BonusManaRegen = 2f;
         }
 
-        // Death-fog diffusion + ground-corruption spread is gameplay simulation, not a
-        // visual — skip it while an editor owns the screen. The map editor leaves _paused
-        // false (so dt is a live frame delta), and this call lives OUTSIDE the sim gate in
-        // Update, so without this guard corruption kept spreading over the map you're
-        // editing. The corruption/grass *fades* below still run — they're purely visual and
-        // only finish transitions already begun. (DeathFogSystem.Update also no-ops on dt<=0,
-        // so the pause menu / pause-on-inspect case is already covered by dt=0.)
-        if (!EditorActive)
-            _deathFog.Update(_envSystem, dt, _groundSystem);
+        // Death-fog diffusion + ground-corruption spread is gameplay simulation. This
+        // whole method now runs on GameClock.WorldDt (0 while paused OR in an editor),
+        // and DeathFogSystem.Update no-ops on dt<=0 — so the old ad-hoc !EditorActive
+        // guard is gone; the domain choice IS the gate. The corruption/grass *fades*
+        // below share the same dt: they only finish transitions already begun.
+        _deathFog.Update(_envSystem, dt, _groundSystem);
 
         // Advance per-vertex visual fades for newly corrupted grass vertices.
         // Internally rate-limits texture re-uploads so we don't push pixels
