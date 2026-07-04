@@ -15,7 +15,7 @@ using Necroking.GameSystems;
 
 namespace Necroking.Editor;
 
-public enum MapEditorTab { Ground, Grass, Objects, Walls, Roads, Regions, Triggers, Units, Zones }
+public enum MapEditorTab { Ground, Grass, Objects, Walls, Roads, Regions, Triggers, Units, Zones, ProcGen }
 
 // ============================================================================
 //  Grass type definition (editor-side, no dedicated GrassSystem yet)
@@ -111,7 +111,7 @@ public class MapEditorWindow
     public int BrushRadius = 2;
 
     // Per-tab scroll offsets
-    private readonly float[] _tabScroll = new float[9];
+    private readonly float[] _tabScroll = new float[10];
 
     // Ground tab
     public int SelectedGroundType;
@@ -203,6 +203,17 @@ public class MapEditorWindow
     private Vec2 _zoneDragOffset;                // zone center - click point, for body drag
     // Reused per-frame accumulator for the village panel's contents summary
     private readonly Dictionary<string, int> _zoneContentCounts = new();
+
+    // ProcGen tab
+    private readonly List<ProcGenStyle> _procGenStyles = new();
+    private bool _procGenStylesLoaded;                 // lazy-load data/procgen_styles.json once
+    public int SelectedProcGenStyle = -1;
+    private float _procGenLargeAccum, _procGenSmallAccum; // fractional placement attempts
+    private const float ProcGenBrushRadius = 5f;       // brush disc radius in world units
+    private const float ProcGenRatePerDensity = 5f;    // placement attempts/sec per density point
+    private const int ProcGenTries = 6;                // 1 attempt + 5 retries per placement
+    private string[]? _procGenDefIdOptions;            // all env def ids, cached for the combos
+    private int _procGenDefIdOptionCount = -1;
 
     // Cached enum name arrays (avoid per-frame allocation)
     private static readonly string[] CachedFactionNames = Enum.GetNames<Faction>();
@@ -510,7 +521,7 @@ public class MapEditorWindow
 
     // Tab names and layout
     private static readonly string[] TabRow1 = { "Ground", "Grass", "Objects", "Walls" };
-    private static readonly string[] TabRow2 = { "Roads", "Regions", "Triggers", "Units", "Zones" };
+    private static readonly string[] TabRow2 = { "Roads", "Regions", "Triggers", "Units", "Zones", "ProcGen" };
 
     // ========================================================================
     //  Init
@@ -904,6 +915,9 @@ public class MapEditorWindow
             case MapEditorTab.Zones:
                 UpdateZonesTab(mouse, leftClick, leftDown, leftUp, overPanel, screenW, screenH);
                 break;
+            case MapEditorTab.ProcGen:
+                UpdateProcGenTab(mouse, leftDown, leftUp, overPanel, screenW, screenH, dt);
+                break;
         }
 
         // Selection changed (list click, world click, tab hotkey…) → drop any
@@ -950,6 +964,7 @@ public class MapEditorWindow
         h.Add(SelectedEffectIndex);
         h.Add(_triggerSubSection);
         h.Add(_selectedUnitDefIdx);
+        h.Add(SelectedProcGenStyle);
         return h.ToHashCode();
     }
 
@@ -1022,6 +1037,9 @@ public class MapEditorWindow
             case MapEditorTab.Zones:
                 DrawZoneOverlays(screenW, screenH);
                 break;
+            case MapEditorTab.ProcGen:
+                if (!overPanel) DrawProcGenBrushCursor(screenW, screenH);
+                break;
         }
     }
 
@@ -1090,6 +1108,9 @@ public class MapEditorWindow
                 break;
             case MapEditorTab.Zones:
                 DrawZonesTab(panelX, contentY, contentH);
+                break;
+            case MapEditorTab.ProcGen:
+                DrawProcGenTab(panelX, contentY, contentH);
                 break;
         }
 
@@ -5420,6 +5441,317 @@ public class MapEditorWindow
     }
 
     // ====================================================================
+    //  PROCGEN TAB
+    // ====================================================================
+
+    /// <summary>Lazy one-shot load of the global style registry. Called from the
+    /// tab and from SaveMap (so saving without ever opening the tab round-trips
+    /// the file instead of clobbering it with an empty list).</summary>
+    private void EnsureProcGenStylesLoaded()
+    {
+        if (_procGenStylesLoaded) return;
+        _procGenStylesLoaded = true;
+        try
+        {
+            ProcGenStyle.LoadAll(GamePaths.Resolve("data/procgen_styles.json"), _procGenStyles);
+        }
+        catch (Exception ex)
+        {
+            DebugLog.Log("editor", $"procgen styles load error: {ex.Message}");
+        }
+    }
+
+    /// <summary>Every env def id, for the style pool combos. Cached until the def
+    /// list changes (same invalidation as GetZoneForagableIdOptions).</summary>
+    private string[] GetProcGenDefIdOptions()
+    {
+        if (_procGenDefIdOptions == null || _procGenDefIdOptionCount != _envSystem.DefCount)
+        {
+            var list = new List<string>(_envSystem.DefCount);
+            for (int i = 0; i < _envSystem.DefCount; i++)
+                list.Add(_envSystem.GetDef(i).Id);
+            _procGenDefIdOptions = list.ToArray();
+            _procGenDefIdOptionCount = _envSystem.DefCount;
+        }
+        return _procGenDefIdOptions;
+    }
+
+    /// <summary>Dev-server hook (procgen_paint): paint a style at a world point for
+    /// a simulated duration, as if the brush were held there — exercises the exact
+    /// PaintProcGen path the editor uses. Returns a result summary string.</summary>
+    public string DevPaintProcGen(string styleName, Vec2 pos, float seconds)
+    {
+        EnsureProcGenStylesLoaded();
+        var style = _procGenStyles.FirstOrDefault(
+            s => s.Name.Equals(styleName, StringComparison.OrdinalIgnoreCase));
+        if (style == null)
+            return $"style '{styleName}' not found ({_procGenStyles.Count} styles loaded)";
+
+        int before = _envSystem.ObjectCount;
+        _procGenLargeAccum = 0f;
+        _procGenSmallAccum = 0f;
+        int ticks = Math.Max(1, (int)(seconds * 60f));
+        for (int i = 0; i < ticks; i++)
+            PaintProcGen(style, pos, 1f / 60f);
+        return $"placed {_envSystem.ObjectCount - before} objects over {ticks} ticks";
+    }
+
+    private void UpdateProcGenTab(MouseState mouse, bool leftDown, bool leftUp,
+        bool overPanel, int screenW, int screenH, float dt)
+    {
+        EnsureProcGenStylesLoaded();
+
+        // Default to the first style so the tab is paint-ready on open.
+        if (SelectedProcGenStyle < 0 && _procGenStyles.Count > 0)
+            SelectedProcGenStyle = 0;
+
+        bool styleSelected = SelectedProcGenStyle >= 0 && SelectedProcGenStyle < _procGenStyles.Count;
+        if (styleSelected && leftDown && !overPanel)
+        {
+            _batchPlacedObjects ??= new();
+            Vec2 worldPos = _camera.ScreenToWorld(new Vector2(mouse.X, mouse.Y), screenW, screenH);
+            PaintProcGen(_procGenStyles[SelectedProcGenStyle], worldPos, dt);
+        }
+        else
+        {
+            // Not painting: drop fractional attempts so a long pause can't burst
+            // a backlog of placements on the next press.
+            _procGenLargeAccum = 0f;
+            _procGenSmallAccum = 0f;
+        }
+
+        if (leftUp && _batchPlacedObjects != null)
+        {
+            if (_batchPlacedObjects.Count > 0)
+            {
+                PushUndo(new UndoObjectBatchPlace
+                {
+                    Env = _envSystem,
+                    ObjectIndices = new List<int>(_batchPlacedObjects.Select(b => b.objIdx))
+                });
+            }
+            _batchPlacedObjects = null;
+        }
+    }
+
+    /// <summary>One held-brush tick: each pool accrues density*5 placement attempts
+    /// per second; each attempt tries up to ProcGenTries random points in the brush
+    /// disc and places unless another object from the same pool is closer than
+    /// 8/sqrt(density) (or physical collision rejects the spot).</summary>
+    private void PaintProcGen(ProcGenStyle style, Vec2 center, float dt)
+    {
+        _procGenLargeAccum += style.LargeDensity * ProcGenRatePerDensity * dt;
+        _procGenSmallAccum += style.SmallDensity * ProcGenRatePerDensity * dt;
+
+        // Bound the per-frame burst so a frame hitch can't queue thousands of
+        // attempts; overflow beyond the cap is dropped, fractions carry over.
+        const int maxPerFrame = 400;
+        int largeN = Math.Min((int)_procGenLargeAccum, maxPerFrame);
+        int smallN = Math.Min((int)_procGenSmallAccum, maxPerFrame);
+        _procGenLargeAccum = Math.Min(_procGenLargeAccum - largeN, 1f);
+        _procGenSmallAccum = Math.Min(_procGenSmallAccum - smallN, 1f);
+
+        // Resolve ids fresh each tick — the env object editor can reorder defs
+        // mid-session, so cached indices would go stale.
+        var largePool = ResolveProcGenDefs(style.LargeDefIds);
+        var smallPool = ResolveProcGenDefs(style.SmallDefIds);
+
+        // Suppress the per-AddObject pathfinder rebuild for the whole tick and
+        // stamp collisions incrementally (same pattern as PaintObjectsBatch).
+        var prevHandler = _envSystem.OnCollisionsDirty;
+        _envSystem.OnCollisionsDirty = null;
+        try
+        {
+            PlaceProcGenPool(largePool, largeN, ProcGenStyle.MinDistance(style.LargeDensity), center);
+            PlaceProcGenPool(smallPool, smallN, ProcGenStyle.MinDistance(style.SmallDensity), center);
+        }
+        finally
+        {
+            _envSystem.OnCollisionsDirty = prevHandler;
+        }
+    }
+
+    private List<int> ResolveProcGenDefs(List<string> defIds)
+    {
+        var result = new List<int>(defIds.Count);
+        foreach (var id in defIds)
+        {
+            int idx = _envSystem.FindDef(id);
+            if (idx >= 0) result.Add(idx);
+        }
+        return result;
+    }
+
+    private void PlaceProcGenPool(List<int> pool, int attempts, float minDist, Vec2 center)
+    {
+        if (pool.Count == 0 || attempts <= 0) return;
+
+        var poolSet = new HashSet<int>(pool);
+        float minDistSq = minDist * minDist;
+
+        for (int a = 0; a < attempts; a++)
+        {
+            for (int t = 0; t < ProcGenTries; t++)
+            {
+                // Uniform random point in the brush disc (sqrt for area-uniformity).
+                float ang = Random.Shared.NextSingle() * MathF.Tau;
+                float rad = ProcGenBrushRadius * MathF.Sqrt(Random.Shared.NextSingle());
+                float px = center.X + MathF.Cos(ang) * rad;
+                float py = center.Y + MathF.Sin(ang) * rad;
+
+                // Density rule: nothing placed from the same pool within minDist.
+                bool tooClose = false;
+                for (int i = 0; i < _envSystem.ObjectCount; i++)
+                {
+                    var obj = _envSystem.GetObject(i);
+                    if (!poolSet.Contains(obj.DefIndex)) continue;
+                    float dx = obj.X - px, dy = obj.Y - py;
+                    if (dx * dx + dy * dy < minDistSq) { tooClose = true; break; }
+                }
+                if (tooClose) continue;
+
+                int defIdx = pool[Random.Shared.Next(pool.Count)];
+                float scale = GetRandomPlacementScale(defIdx);
+                if (!_envSystem.CanPlaceObject(defIdx, px, py, scale)) continue;
+
+                int newIdx = _envSystem.AddObject((ushort)defIdx, px, py, scale);
+                _batchPlacedObjects?.Add(((ushort)defIdx, px, py, scale, 0f, newIdx));
+                _envSystem.StampObjectCollisionAt(_tileGrid, newIdx);
+                AutoCreateTriggerInstance(newIdx); // RM06
+                break; // placed — move to the next attempt
+            }
+        }
+    }
+
+    private void DrawProcGenTab(int panelX, int contentY, int contentH)
+    {
+        EnsureProcGenStylesLoaded();
+        DrawSectionHeader(panelX, ref contentY, $"ProcGen Styles ({_procGenStyles.Count})");
+        if (_eb == null) return;
+
+        int y = contentY - (int)_tabScroll[(int)MapEditorTab.ProcGen];
+        int fw = PanelWidth - Margin * 2;
+
+        if (_eb.DrawButton("+ New Style", panelX + Margin, y, fw, ButtonHeight))
+        {
+            _procGenStyles.Add(new ProcGenStyle { Name = $"Style {_procGenStyles.Count + 1}" });
+            SelectedProcGenStyle = _procGenStyles.Count - 1;
+        }
+        y += ButtonHeight + 8;
+
+        _spriteBatch.Draw(_pixel, new Rectangle(panelX, y, PanelWidth, 1), SeparatorColor);
+        y += 4;
+
+        // Style list — invisible row buttons with the name drawn on top (zones-list style).
+        for (int i = 0; i < _procGenStyles.Count; i++)
+        {
+            bool selected = i == SelectedProcGenStyle;
+            if (_eb.DrawButton("", panelX + Margin, y, fw, ButtonHeight,
+                selected ? HighlightColor : Color.Transparent))
+                SelectedProcGenStyle = i;
+            DrawSmallText(_procGenStyles[i].Name, panelX + Margin + 8, y + 3,
+                selected ? TextBright : TextColor);
+            y += ButtonHeight + 2;
+        }
+        y += 4;
+
+        if (SelectedProcGenStyle < 0 || SelectedProcGenStyle >= _procGenStyles.Count)
+        {
+            DrawSmallText("Create or select a style, then hold", panelX + Margin, y, TextDim);
+            y += LineHeight;
+            DrawSmallText("LMB in the world to paint.", panelX + Margin, y, TextDim);
+            return;
+        }
+
+        var st = _procGenStyles[SelectedProcGenStyle];
+        int idx = SelectedProcGenStyle;
+
+        if (_eb.DrawButton("Delete Style", panelX + Margin, y, 110, ButtonHeight, DangerColor))
+        {
+            _procGenStyles.RemoveAt(idx);
+            SelectedProcGenStyle = Math.Min(idx, _procGenStyles.Count - 1);
+            return; // list changed — re-layout next frame
+        }
+        y += ButtonHeight + 8;
+
+        _spriteBatch.Draw(_pixel, new Rectangle(panelX, y, PanelWidth, 1), SeparatorColor);
+        y += 4;
+
+        st.Name = _eb.DrawTextField($"procgen_name_{idx}", "Name", st.Name, panelX + Margin, y, fw);
+        y += FieldHeight + 6;
+
+        y = DrawProcGenPoolSection(idx, "large", "Large objects", st.LargeDefIds, ref st.LargeDensity, panelX, y);
+
+        _spriteBatch.Draw(_pixel, new Rectangle(panelX, y, PanelWidth, 1), SeparatorColor);
+        y += 4;
+
+        y = DrawProcGenPoolSection(idx, "small", "Small objects", st.SmallDefIds, ref st.SmallDensity, panelX, y);
+
+        DrawSmallText("Hold LMB in the world to paint.", panelX + Margin, y, TextDim);
+    }
+
+    /// <summary>One pool's config block: density field (with derived spacing/rate
+    /// readout) + a row per pool member (combo + remove) + an add button. Field ids
+    /// embed style index, pool key and row so selection changes drop text focus.</summary>
+    private int DrawProcGenPoolSection(int idx, string key, string title,
+        List<string> defIds, ref float density, int panelX, int y)
+    {
+        var eb = _eb!;
+        int fw = PanelWidth - Margin * 2;
+
+        DrawSmallText(title, panelX + Margin, y, AccentColor);
+        y += LineHeight;
+
+        density = MathF.Max(0.01f, eb.DrawFloatField($"procgen_{key}_density_{idx}",
+            "Density", density, panelX + Margin, y, fw, 1f));
+        y += FieldHeight + 2;
+        DrawSmallText($"min spacing {ProcGenStyle.MinDistance(density):0.0}, " +
+            $"{density * ProcGenRatePerDensity:0}/s", panelX + Margin, y, TextDim);
+        y += LineHeight;
+
+        string[] options = GetProcGenDefIdOptions();
+        for (int row = 0; row < defIds.Count; row++)
+        {
+            defIds[row] = eb.DrawCombo($"procgen_{key}_def_{idx}_{row}", $"Object {row + 1}",
+                defIds[row], options, panelX + Margin, y, fw - 46);
+            if (eb.DrawButton("X", panelX + Margin + fw - 40, y, 40, FieldHeight, DangerColor))
+            {
+                defIds.RemoveAt(row);
+                return y; // list changed — re-layout next frame
+            }
+            y += FieldHeight + 2;
+        }
+
+        if (options.Length > 0 && eb.DrawButton("+ Add Object", panelX + Margin, y, 110, ButtonHeight))
+            defIds.Add(options[0]);
+        y += ButtonHeight + 6;
+
+        return y;
+    }
+
+    /// <summary>World-space brush cursor for the ProcGen tab: a fixed radius-5
+    /// circle outline at the mouse (the brush isn't tile-snapped like the grid
+    /// brushes, so a ring beats the square-tile cursor).</summary>
+    private void DrawProcGenBrushCursor(int screenW, int screenH)
+    {
+        var mouse = _eb._input.Mouse;
+        Vec2 c = _camera.ScreenToWorld(new Vector2(mouse.X, mouse.Y), screenW, screenH);
+
+        const int segs = 48;
+        Vector2 prev = default;
+        for (int i = 0; i <= segs; i++)
+        {
+            float ang = i / (float)segs * MathF.Tau;
+            var s = _camera.WorldToScreen(new Vec2(
+                c.X + MathF.Cos(ang) * ProcGenBrushRadius,
+                c.Y + MathF.Sin(ang) * ProcGenBrushRadius), 0, screenW, screenH);
+            var pt = new Vector2(s.X, s.Y);
+            if (i > 0) DrawLine(prev, pt, BrushCursorEdge);
+            prev = pt;
+        }
+    }
+
+    // ====================================================================
     //  SAVE / LOAD
     // ====================================================================
 
@@ -5518,6 +5850,11 @@ public class MapEditorWindow
             // Env defs are now saved separately to data/env_defs.json
             // Save them alongside the map save for convenience
             MapData.SaveEnvDefs(GamePaths.Resolve("data/env_defs.json"), _envSystem);
+
+            // ProcGen styles are a global authoring registry like env defs. Load
+            // first if the tab was never opened so an untouched registry survives.
+            EnsureProcGenStylesLoaded();
+            ProcGenStyle.SaveAll(GamePaths.Resolve("data/procgen_styles.json"), _procGenStyles);
 
             // Placed objects
             writer.WriteStartArray("placedObjects");

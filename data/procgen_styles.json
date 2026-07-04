@@ -1,0 +1,36 @@
+{
+  "styles": [
+    {
+      "name": "Cozy Forest",
+      "largeDensity": 25,
+      "largeDefIds": [
+        "Oak7",
+        "Oak8",
+        "Oak9",
+        "Oak10"
+      ],
+      "smallDensity": 25,
+      "smallDefIds": [
+        "moss_clump",
+        "small_fern",
+        "wild_growth"
+      ]
+    },
+    {
+      "name": "Dense Bush Forest",
+      "largeDensity": 1,
+      "largeDefIds": [
+        "Oak7",
+        "Oak8",
+        "Oak9",
+        "Oak10"
+      ],
+      "smallDensity": 100,
+      "smallDefIds": [
+        "moss_clump",
+        "small_fern",
+        "wild_growth"
+      ]
+    }
+  ]
+}

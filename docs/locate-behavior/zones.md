@@ -1,7 +1,7 @@
 # Zones — authored map areas (villages, wolf packs, deer herds, foraging)
 
 Rectangular authored map areas ("zones") drawn in the **map editor's Zones tab**, saved to
-a `data/maps/<map>_zones.json` sidecar, applied **once at map load** by
+an `assets/maps/<map>_zones.json` sidecar (`GamePaths.MapsDir = "assets/maps"`), applied **once at map load** by
 `Game1.ApplyZones`, and — for non-Village kinds — **ticked at runtime** by
 `Game1.UpdateZoneSpawns` (periodic respawn via each zone's `Spawns` table). Four kinds:
 `Village`, `WolfPack`, `DeerHerd`, `Foraging`.
@@ -88,12 +88,13 @@ kind, or persisting new zone fields.
   from runtime systems every tick; it always reflects the current map.
 - `UpdateZoneSpawns(dt)` is called from the `Game1.cs` sim-tick block (`~line 3514`,
   next to the other per-tick system updates); internal 1 Hz gate.
-- As of 2026-07 no `*_zones.json` exists in `data/maps/` — the system is live but the
-  default map has no authored zones yet.
+- `assets/maps/default_zones.json` and `testmap_zones.json` exist — the default map has
+  authored zones.
 
 ## Pitfalls
-- Doc comments in `ZoneTypes.cs`/`Game1.Zones.cs` say `assets/maps/…` — stale; the real
-  path is `data/maps/<map>_zones.json` (`GamePaths.MapsDir`).
+- Maps live in **`assets/maps/`** (`GamePaths.MapsDir = "assets/maps"` in
+  `Core/GamePaths.cs`) — NOT `data/maps/` as CLAUDE.md's layout section suggests. Env
+  defs however are canonical at `data/env_defs.json` (`GamePaths.EnvDefsJson`).
 - `population` is only serialized for Village zones and `spawns` only for non-Village
   (`SaveZones` gates) — a new kind's config needs its own save/load branch or an
   unconditional block.
