@@ -19,14 +19,21 @@ Archetype (IArchetypeHandler singleton) — drives behavior
    HordeMinion=2 … Worker=12). `ArchetypeRegistry.FromName(string)` is the **single
    source of truth** mapping a `UnitDef.Archetype` string → byte id; `Get(byte)` returns
    the handler.
-2. **Registration** — `Necroking/Game1.cs` `~line 718` ("Register AI archetypes"):
-   `ArchetypeRegistry.Register(id, "Name", new XHandler())` for every archetype. **Add
-   your handler registration here.**
-3. **Per-tick dispatch** — `Necroking/Game/Simulation.cs` `~line 837`: the unit loop does
-   `ArchetypeRegistry.Get(_units[i].Archetype)?.Update(ref ctx)`. The `AIContext` is built
-   by `Simulation.BuildAIContext(i, dt, …)` (`~line 3327`) — this is the **full** context
-   (includes `Workers`, `EnvSystem`, `Pathfinder`, `Quadtree`). A separate
-   `PlayerControlled` re-dispatch lives at `~line 909`.
+2. **Registration** — `Necroking/Game1.cs`, the "Register AI archetypes" block (search
+   `ArchetypeRegistry.Register`): one `Register(id, "Name", new XHandler())` per archetype
+   (currently PlayerControlled, WolfPack, RatPack, DeerHerd, HordeMinion, PatrolSoldier,
+   GuardStationary, ArmyUnit, ArcherUnit, CasterUnit, Worker, CorpsePuppet,
+   Civilian→VillagerHandler, Watchdog). **Add your handler registration here.**
+3. **Per-tick dispatch** — `Necroking/Game/Simulation.cs` `UpdateAI(dt)`: per-unit loop,
+   gates first (`!Alive` / `InPhysics` / `Jumping`/`Incap.IsLocked` → PreferredVel=0 /
+   `Routing` → `SteerRout`), then if `Archetype > 0` →
+   `ArchetypeRegistry.Get(archetype).Update(ref ctx)` and `continue`. The `AIContext` is
+   built by `Simulation.BuildAIContext(i, dt, dayFraction, isNight)` — this is the **full**
+   context (includes `Workers`, `EnvSystem`, `Pathfinder`, `Quadtree`). `Archetype == 0`
+   falls through to a **legacy `AIBehavior` switch** (same method) — PlayerControlled runs
+   there and re-dispatches to `PlayerControlledHandler` when `Routine != 0`. Pre-passes
+   inside `UpdateAI`: `AwarenessSystem.Update` then `_villages?.Update` (village alert),
+   and before `UpdateAI` in `Simulation.Update`: `_squads.Update` (SquadSystem pre-pass).
 4. **Archetype assignment at spawn** — two spawn paths, both resolve the same way:
    - `Game1.SpawnUnit(unitDefID, pos)` — `Necroking/Game1.cs` `~line 1815`: reads
      `unitDef.Archetype`, `FromName` → `UnitsMut[idx].Archetype = id`, then calls
@@ -81,17 +88,45 @@ ownership:
 - `HordeMinionHandler.cs` — routine-switch template (Following/Chasing/Engaged/…),
   good model for `GetRoutineName`/`GetSubroutineName` and `OnSpawn`.
 - `CombatUnitHandler.cs` / `RangedUnitHandler.cs` — constructed with an archetype id arg
-  (one class, several registered ids). `PlayerControlledHandler.cs`, `WolfPackHandler.cs`,
-  `RatPackHandler.cs`, `DeerHerdHandler.cs`, `CorpseEatAI.cs`.
-- `AwarenessSystem.cs` (enemy detection → sets prey `AlertState`/`AlertTarget`),
-  `CombatTransitions.cs` (shared chase/engage exit checks), `WorkRoutine.cs`
-  (channel/work-timer step), `AIContext.cs`.
+  (one class, several registered ids: PatrolSoldier/GuardStationary/ArmyUnit,
+  ArcherUnit/CasterUnit). `PlayerControlledHandler.cs` (exposes public routine consts —
+  `RoutineCraftAtTable`, `RoutineBuildGlyph`, `RoutineWorkOnBush`, `BuildSub_*` — written
+  by external systems, see "External routine writers"), `WolfPackHandler.cs` (wild wolves),
+  `RatPackHandler.cs`, `DeerHerdHandler.cs`.
+- `VillagerHandler.cs` (archetype `Civilian`) and `WatchdogHandler.cs` (archetype
+  `Watchdog`, Guard/Bark routines) — village AI; both consult `VillageThreat.cs`
+  (static undead-detection helpers) and `Game/VillageSystem.cs` (per-village alert/posture,
+  updated inside `UpdateAI` before the unit loop; wiring in `Game1.Villages.cs`).
+- `SquadSystem.cs` — persistent unit groups (`Squad`: Members/Centroid/Spread/shared
+  alert/leader, keyed by `Unit.SquadId`). Recomputed once per frame by `_squads.Update`
+  in `Simulation.Update` *before* `UpdateAI`; read by DeerHerd/WolfPack/RatPack handlers
+  and `WolfPackHuntAI` so groups act as one object instead of per-frame proximity scans.
 
-### `Necroking/AI/BoarForageAI.cs`, `Necroking/AI/CorpseEatAI.cs`  ← the sweep-override style
+### Shared transition logic
+- `CombatTransitions.cs` — **the canonical routine-transition helpers**:
+  `StandardEngagedExits(ref ctx, chasingRoutine, returningRoutine, meleeHysteresis, leashRadius, leashCenter)`
+  and `StandardChasingExits(...)`. Handlers pass their own routine byte values (different
+  handlers use different indices for "chase"/"return"). Return true = transition applied,
+  caller must `return`. They centralize: target-dead → Returning (or re-acquire if
+  `Frenzied`), out-of-melee (1.2× hysteresis) → Chasing, leash break → Returning; they
+  **clear `PendingAttack`** on exit (a never-resolving PendingAttack pins the unit forever
+  via the movement lockout) but deliberately keep `PostAttackTimer` (bounded plant so the
+  swing anim finishes). Historic bugs from before this existed: "horde unit stands still
+  while target kites", "chaser drags the horde across the map".
+- `AwarenessSystem.cs` — enemy-detection pass (sets prey `AlertState`/`AlertTarget`,
+  same-faction group alert propagation); runs at the top of `UpdateAI`, amortized via
+  `_amortizedAI`/`_aiUpdateInterval`.
+- `WorkRoutine.cs` — channel/work-timer step shared by craft/build/bush-work routines.
+
+### `Necroking/AI/BoarForageAI.cs`, `Necroking/AI/CorpseEatAI.cs`, `Necroking/AI/WolfPackHuntAI.cs`  ← the sweep-override style
 Static `Update(Simulation sim, float dt)` layers that run after the archetype pass and override
-`PreferredVel`. See "Second AI style" below — this is the pattern to copy for a player-wolf
-pack-hunt behavior (it can reach `sim.NecromancerIndex` / `sim.EnvironmentSystem`, which
-`AIContext` cannot).
+`PreferredVel`. See "Second AI style" below — the pattern to copy when a behavior needs a
+`Simulation` handle (`sim.NecromancerIndex` / `sim.EnvironmentSystem`, which `AIContext`
+cannot reach). **`WolfPackHuntAI` is implemented**: pack-hunt for the player's zombie wolves
+(HordeMinion + `wolf` tag) — Flanking (circle outside the deer's `DetectionRange` to the far
+side from the necromancer) then Driving (chase the deer toward the player). Gated on the
+"Wolf Hunt" spell command (`Simulation._wolfHuntCmdTimer` + cast point, set in
+`Game1.Spells.cs`); uses `SquadSystem` centroid/spread to stand off the whole herd.
 
 ## Second AI style — post-archetype "sweep" overrides (BoarForageAI / CorpseEatAI)
 
@@ -110,9 +145,10 @@ the archetype's follow velocity.
   player-wolf pack-hunt behavior.**
 - **`Necroking/AI/CorpseEatAI.cs`** — same shape (`Update(Simulation, dt)`), called at
   `Simulation.cs ~line 694`.
-- **Wiring** — `Necroking/Game/Simulation.cs`: `PhaseStart(); AI.BoarForageAI.Update(this, dt);
-  PhaseEnd("boar_forage");` at `~line 523` (inside `Update`, right after `UpdateAI(dt)` at
-  `~line 518`). **Add a new sweep's call here** the same way.
+- **Wiring** — `Necroking/Game/Simulation.cs` `Update`: order is `_squads.Update` →
+  `UpdateAI(dt)` → `BoarForageAI.Update(this, dt)` → `WolfPackHuntAI.Update(this, dt)` →
+  (later) `UpdateMovement`; `CorpseEatAI.Update` is called further down the same method.
+  **Add a new sweep's call here** the same way (after `UpdateAI`, before movement).
 - **Why this style for the wolf pack-hunt**: it needs the **necromancer position**
   (`sim.NecromancerIndex` → `sim.Units[idx].Position` — only reachable via a `Simulation`
   handle, NOT `AIContext`) to compute the "far side of the deer, opposite the necro," and it
@@ -124,14 +160,9 @@ the archetype's follow velocity.
 `WolfPackHandler` (archetype `WolfPack`, id 3) is for **wild** wolves (`data/units.json` `Wolf`
 `archetype:"WolfPack"`). The player's raised **`ZombieWolf`** def has **no `archetype` field**,
 so it takes the horde-follow default (`HordeMinion`, like zombie boars) via the reanimate spawn
-path (`Simulation.SpawnZombieMinion`). So "add a new pack-hunting AI for the player's wolves"
-does NOT mean editing `WolfPackHandler` — that governs wild predators. Two implementation routes:
-1. **Sweep override (recommended, matches BoarForageAI)** — new static `WolfPackHuntAI.Update
-   (sim, dt)` layered on HordeMinion wolves; no new archetype, no `units.json` change.
-2. **New archetype** — give ZombieWolf `"archetype":"PackHunter"`, add the id + `FromName` case
-   in `AI/IArchetypeHandler.cs`, register in `Game1.cs ~line 984`, write a
-   `PackHunterHandler : IArchetypeHandler`. But this loses free horde-follow/formation and can't
-   see the necromancer position without a Sim handle — heavier for this feature.
+path (`Simulation.SpawnZombieMinion`). The pack-hunt behavior for the player's wolves was
+implemented as the sweep override **`AI/WolfPackHuntAI.cs`** (see above) — NOT by editing
+`WolfPackHandler`, which still governs wild predators only.
 
 Prey detection / vision reference (from `DeerHerdHandler`): the **deer's** vision is its
 `Units[i].DetectionRange` (from `UnitDef.DetectionRange`); the deer flee when a hostile is within
@@ -186,6 +217,30 @@ raise time (a new field on `UnitArrays`, set in the reanim spawn callback) and p
 `RecordPiledCorpse` instead of `Units[i].UnitDefID`. The abstract `Deposit(pile,"Corpse",1)`
 count stays the same; only the recorded identity changes.
 
+## External routine writers — who sets Routine/Subroutine from OUTSIDE the handlers
+
+Per-unit AI state (`Routine`, `Subroutine`, `SubroutineTimer` bytes/float) lives on the
+`Unit` class in `Necroking/Movement/UnitSystem.cs`; `AIContext.Routine/Subroutine` are just
+pass-throughs. Handlers own them per-tick, but several engine systems write them directly
+("assign a routine and walk away" — the handler is then expected to run/exit it):
+
+- `Game1.Crafting.cs` / `Game1.Spells.cs` (bush-work) / `Game/BuildingMenuUI.cs` — set the
+  **player's** `Routine`/`Subroutine` to `PlayerControlledHandler.RoutineCraftAtTable` /
+  `RoutineWorkOnBush` / `RoutineBuildGlyph` + `BuildSub_WalkToSite`. Cancel path: WASD input
+  zeroes `Routine`/`Subroutine`/`CorpseInteractPhase` in `Simulation.UpdateAI`'s
+  PlayerControlled branch. `Game/TableCraftingSystem.cs` *reads* these to know the player is
+  channeling.
+- `Game1.Spells.cs` horde-command spell — force-writes `Routine = 4` (RoutineCommanded) on
+  horde minions, and later flips `Routine == 4` units to `3` (Returning). Raw byte literals,
+  not named consts — must match `HordeMinionHandler`'s routine indices.
+- `Game/PhysicsSystem.cs` — zeroes Routine/Subroutine/SubroutineTimer when a unit enters
+  physics (knockback etc.); the unit re-enters its archetype default state on release.
+- `Game/Jobs/WorkerSystem.cs` — zeroes Routine/Subroutine on worker assign/unassign
+  (WorkerHandler uses its own `WorkerPhase` byte, not Routine).
+- `Game1.Villages.cs` — zeroes Routine/Subroutine on some village-unit state change.
+- `Simulation` — resets horde minions to `Routine = 0` (Following) in a couple of places
+  (e.g. wolf-hunt release, respawn/convert paths).
+
 ## Pitfalls / gotchas
 
 - **Archetype = string in the def, resolved by `FromName`.** Forgetting the `FromName`
@@ -210,6 +265,17 @@ count stays the same; only the recorded identity changes.
   withdrawn later as the same type (matches `WorkerHandler.GoToStorage` ordering).
 - **Build-gated buildings** — `FindDepositBuilding` skips piles with `BuildProgress < 1`
   (the `Built` check). A blueprint pile won't be a valid target.
+- **Stuck/locked units — the classic causes**: (a) a `PendingAttack` that never resolves
+  pins the unit (legacy path zeroes `PreferredVel` while one is set; archetype routines must
+  clear it on transitions — `CombatTransitions` does); (b) legacy-path `InCombat == true`
+  zeroes `PreferredVel` for non-self-managing AIs — forget to clear `InCombat` on routine
+  exit and the unit freezes; (c) `Routing`/`Incap.IsLocked`/`Jumping`/`InPhysics` all
+  short-circuit the AI dispatch entirely — a stale flag means the handler never runs;
+  (d) routine byte written externally with no exit arc in the handler (see "External
+  routine writers") leaves the unit in a state its handler never leaves.
+- **Routine byte indices are per-handler, not global** — `Routine = 4` means different
+  things to different handlers; external writers using raw literals (e.g. `Game1.Spells.cs`
+  horde command) silently desync if a handler's routine enum is renumbered.
 
 ## Related areas
 - [jobs-workers.md](jobs-workers.md) — `WorkerSystem` (the deposit/pile/stockpile brain) and
