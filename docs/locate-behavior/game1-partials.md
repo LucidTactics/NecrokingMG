@@ -186,6 +186,14 @@ Look/edit here when: the spellbar or HUD draws incorrectly; a menu/pause/scenari
 screen looks wrong or its buttons mis-hit; the aggression bar/tooltip is off; skill-learn toasts
 mistime or mislay out; a debug overlay (horde rings, wind, world-hover) renders wrong; remember to
 round text positions to integer pixels (CLAUDE.md → UI Text Rendering).
+**Pause-menu pitfall:** `DrawPauseMenu` (in `GameRenderer.Hud.cs`) draws the buttons, but the click
+hit-testing lives in `Game1.cs` `Update` ("Pause menu button clicks" block) with **independently
+hardcoded geometry** (`pauseBtnCount`/`btnW2`/`btnH2`/`boxY2` must mirror `btnCount`/`btnW`/`btnH`/
+`boxY` in the draw). Adding/removing/reordering a pause-menu button means updating BOTH files in
+lockstep or clicks land on the wrong button. Submenus opened from pause (e.g. Settings) follow the
+`MenuState.Settings` + `Editor/SettingsWindow.cs` pattern: a window class driven by the shared
+`EditorBase` (`_editorUi`) widgets, `WantsClose` flag polled in `Game1.Update` to return to
+`MenuState.PauseMenu`.
 See also: `Render/HUDRenderer` and the spellbar renderer (the actual spellbar widget), `UI/`
 (inventory/grimoire/skill-book overlays), `Game1.Render.cs` (when HUD draws in the pipeline).
 
