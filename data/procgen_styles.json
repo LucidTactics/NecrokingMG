@@ -1,22 +1,6 @@
 {
   "styles": [
     {
-      "name": "Forest",
-      "largeDensity": 4,
-      "largeDefIds": [
-        "Oak7",
-        "Oak8",
-        "Oak9",
-        "Oak10"
-      ],
-      "smallDensity": 4,
-      "smallDefIds": [
-        "moss_clump",
-        "small_fern",
-        "wild_growth"
-      ]
-    },
-    {
       "name": "Light Forest",
       "largeDensity": 2,
       "largeDefIds": [
@@ -26,6 +10,22 @@
         "Oak10"
       ],
       "smallDensity": 5,
+      "smallDefIds": [
+        "moss_clump",
+        "small_fern",
+        "wild_growth"
+      ]
+    },
+    {
+      "name": "Forest",
+      "largeDensity": 4,
+      "largeDefIds": [
+        "Oak7",
+        "Oak8",
+        "Oak9",
+        "Oak10"
+      ],
+      "smallDensity": 4,
       "smallDefIds": [
         "moss_clump",
         "small_fern",
