@@ -100,7 +100,6 @@ public class Simulation
     private const float Rad2Deg = 57.29577951f;
 
     private TileGrid _grid = new();
-    private FlowFieldManager _flowFields = new();
     private Pathfinder _pathfinder = new();
     private Quadtree _quadtree = new();
 
@@ -350,7 +349,6 @@ public class Simulation
             _physics.Init(gameData.Buffs);
         _grid.Init(gridWidth, gridHeight);
         _grid.RebuildCostField();
-        _flowFields.Init(_grid);
         _pathfinder.Init(_grid);
         _units.Clear();
         _squads.Clear();
@@ -445,7 +443,6 @@ public class Simulation
         Necroking.World.Pathfinder.DiagCacheEvictions = 0;
         Necroking.World.Pathfinder.DiagCacheSize = _pathfinder.FlowCacheSize;
         Necroking.World.Pathfinder.DiagMissTile = 0;
-        Necroking.World.Pathfinder.DiagMissBorder = 0;
         Necroking.World.Pathfinder.DiagMissMultiBorder = 0;
         _frameNumber++;
         _gameTime += dt;
@@ -513,11 +510,8 @@ public class Simulation
         }
 
         // Standup/recovery timing now handled by IncapState inside BuffSystem.TickBuffs
-
-        // Clear per-tick dodge flags (HitReacting/BlockReacting are cleared later
-        // after AI reads them; Dodging is single-tick and safe to reset here).
-        for (int i = 0; i < _units.Count; i++)
-            _units[i].Dodging = false;
+        // (Dodging is already cleared in the per-frame flag loop above — a second
+        //  full-unit clear loop here was pure duplicate work, removed 2026-07-04.)
 
         // Harassment decay
         _harassmentDecayTimer -= dt;
@@ -800,7 +794,6 @@ public class Simulation
         RemoveDeadUnits();
         // Update corpses
         UpdateCorpses(dt);
-        _flowFields.EvictIfNeeded();
         // Age out unused pathfinder flow fields. An entry stays hot as long as any
         // unit is still reading it (FrameAccessed is bumped on every cache hit).
         // Stale == "no unit has hit this in 10 seconds" — safe to drop because
@@ -838,7 +831,6 @@ public class Simulation
               .Append($",hits:{Necroking.World.Pathfinder.DiagFlowCacheHits}")
               .Append($",miss:{Necroking.World.Pathfinder.DiagFlowCacheMisses}")
               .Append($"(tile:{Necroking.World.Pathfinder.DiagMissTile}")
-              .Append($",bord:{Necroking.World.Pathfinder.DiagMissBorder}")
               .Append($",mult:{Necroking.World.Pathfinder.DiagMissMultiBorder}")
               .Append($",new:{Necroking.World.Pathfinder.DiagMissNewKey}")
               .Append($",evict:{Necroking.World.Pathfinder.DiagMissEvicted})")
@@ -1671,11 +1663,9 @@ public class Simulation
             // clipping — the charger phases through smaller units by design, and
             // impact handling (larger-unit block, reach target) is in TickCharge.
             // Wall collision at the bottom of the loop still applies, so solid
-            // geometry stops the charge. MoveTime saturated so if charge ends and
-            // normal movement resumes, there's no spin-up lag.
+            // geometry stops the charge.
             if (_units[i].ChargePhase == 1 || _units[i].ChargePhase == 3)
             {
-                _units[i].MoveTime = 10f;
                 goto __ChargeWallCollision;
             }
             // Dodge hop owns this unit's position interpolation — set in main tick
@@ -1701,7 +1691,6 @@ public class Simulation
                 || (_units[i].InCombat && _units[i].AI != AIBehavior.PlayerControlled))
             {
                 _units[i].Velocity = Vec2.Zero;
-                _units[i].MoveTime = 0f;
                 _units[i].StuckTime = 0f; // frozen, not stuck — don't accrue escape bias
                 continue;
             }
@@ -1885,7 +1874,6 @@ public class Simulation
                     TimeHorizon = 3f,
                     MaxSpeed = _units[i].MaxSpeed,
                     Radius = _units[i].Radius,
-                    MaxNeighbors = 16,
                     Priority = _units[i].OrcaPriority
                 };
 

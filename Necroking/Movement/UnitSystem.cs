@@ -373,7 +373,6 @@ public class Unit
     // Engagement & combat state
     public CombatTarget EngagedTarget = CombatTarget.None;
     public float PostAttackTimer;
-    public float MoveTime;
     public QueuedUnitAction QueuedAction = QueuedUnitAction.None;
 
     // Ghost mode

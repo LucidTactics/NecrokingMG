@@ -30,13 +30,10 @@ public struct ORCAParams
     public float TimeHorizon;
     public float MaxSpeed;
     public float Radius;
-    public int MaxNeighbors;
     public int Priority;
-
-    public static ORCAParams Default => new()
-    {
-        TimeHorizon = 3f, MaxSpeed = 3f, Radius = 0.3f, MaxNeighbors = 10, Priority = 0
-    };
+    // (MaxNeighbors and the unused Default preset were deleted 2026-07-04 —
+    //  neighbor caps live at the gather site in Simulation: TopK dynamic + 6
+    //  static; the solver itself takes whatever list it's given.)
 }
 
 public static class Orca
@@ -103,7 +100,6 @@ public static class Orca
                 }
                 else
                 {
-                    float dist = MathF.Sqrt(distSq);
                     float leg = MathF.Sqrt(MathF.Max(0f, distSq - combinedRadiusSq));
 
                     if (Det(relPos, w) > 0f)

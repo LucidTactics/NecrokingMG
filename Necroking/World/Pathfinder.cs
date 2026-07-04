@@ -196,6 +196,7 @@ public class Pathfinder
         _staleFlowCache.Clear();
         _pendingRequests.Clear();
         _unitImagChunks.Clear();
+        _unitDecisions.Clear(); // debug overlay: don't show pre-rebuild decisions
         // s_keysEverSeen tracks "has this key ever been requested in this run"
         // for miss-cause telemetry; after Rebuild all prior keys point into a
         // now-destroyed grid, so the classifier should start fresh.
@@ -719,95 +720,6 @@ public class Pathfinder
         return flow;
     }
 
-    private CachedFlow GetFlowToBorder(int sx, int sy, int borderDir, int tier, uint frame,
-                                       Vec2 unitPos = default, Vec2 targetPos = default)
-    {
-        var key = MakeFlowKey(sx, sy, 0, borderDir, -1, tier);
-        if (_flowCache.TryGetValue(key, out var cached))
-        {
-            DiagFlowCacheHits++;
-            cached.FrameAccessed = frame;
-            _flowCache[key] = cached;
-            return cached;
-        }
-        DiagFlowCacheMisses++;
-        DiagMissBorder++;
-        if (s_keysEverSeen.Add(key)) DiagMissNewKey++; else DiagMissEvicted++;
-
-        if (_grid == null) return new CachedFlow { Dirs = new FlowDir[SectorSize * SectorSize] };
-
-        if (!HasDijkstraBudget())
-        {
-            EnqueueMiss(key, sx, sy, unitPos, targetPos);
-            _lastQueryDeferred = true;
-            if (_staleFlowCache.TryGetValue(key, out var stale))
-            {
-                // CachedFlow is a struct: write the touched copy back, or the
-                // access bump is lost and an actively-used stale entry still
-                // ages out of EvictStaleFlowFields mid-use.
-                stale.FrameAccessed = frame;
-                _staleFlowCache[key] = stale;
-                return stale;
-            }
-            return default;
-        }
-
-        int baseX = sx * SectorSize, baseY = sy * SectorSize;
-        int endX = Math.Min(baseX + SectorSize, _grid.Width);
-        int endY = Math.Min(baseY + SectorSize, _grid.Height);
-
-        var goals = new List<int>();
-        switch (borderDir)
-        {
-            case 0: // North
-                for (int x = baseX; x < endX; x++)
-                    if (_grid.GetCost(x, baseY, tier) != 255 &&
-                        baseY > 0 && _grid.GetCost(x, baseY - 1, tier) != 255)
-                        goals.Add(0 * SectorSize + (x - baseX));
-                break;
-            case 1: // East
-                for (int y = baseY; y < endY; y++)
-                {
-                    int x = endX - 1;
-                    if (_grid.GetCost(x, y, tier) != 255 &&
-                        x + 1 < _grid.Width && _grid.GetCost(x + 1, y, tier) != 255)
-                        goals.Add((y - baseY) * SectorSize + (x - baseX));
-                }
-                break;
-            case 2: // South
-                for (int x = baseX; x < endX; x++)
-                {
-                    int y = endY - 1;
-                    if (_grid.GetCost(x, y, tier) != 255 &&
-                        y + 1 < _grid.Height && _grid.GetCost(x, y + 1, tier) != 255)
-                        goals.Add((y - baseY) * SectorSize + (x - baseX));
-                }
-                break;
-            case 3: // West
-                for (int y = baseY; y < endY; y++)
-                    if (_grid.GetCost(baseX, y, tier) != 255 &&
-                        baseX > 0 && _grid.GetCost(baseX - 1, y, tier) != 255)
-                        goals.Add((y - baseY) * SectorSize + 0);
-                break;
-        }
-
-        long sw0 = System.Diagnostics.Stopwatch.GetTimestamp();
-        var flow = ComputeSectorFlow(sx, sy, goals, tier, frame);
-
-        // Post-process: border goal tiles get exit direction
-        FlowDir exitDir = BorderExitDirs[borderDir];
-        foreach (int g in goals)
-        {
-            if (flow.Dirs[g] == FlowDir.None)
-                flow.Dirs[g] = exitDir;
-        }
-        ChargeDijkstraMs((float)ElapsedMs(sw0));
-
-        _flowCache[key] = flow;
-        _staleFlowCache.Remove(key);
-        return flow;
-    }
-
     /// <summary>
     /// Multi-border flow with lateral/extended masks and distance weighting.
     /// Primary borders get cost 0, lateral borders get half-sector penalty,
@@ -970,7 +882,7 @@ public class Pathfinder
     /// target tile (if inside) or border tiles facing the target (if outside).
     /// Returns direction at unit's position. Stores chunk per-unit for persistence.
     /// </summary>
-    private Vec2 GetLocalChunkDirection(Vec2 unitPos, Vec2 targetPos, int tier, uint unitId = GameConstants.InvalidUnit, bool activate = true)
+    private Vec2 GetLocalChunkDirection(Vec2 unitPos, Vec2 targetPos, int tier, uint unitId = GameConstants.InvalidUnit)
     {
         if (_grid == null) return Vec2.Zero;
 
@@ -1161,7 +1073,7 @@ public class Pathfinder
                 ic.ChunkH = chunkH;
                 ic.TargetTX = targetTX;
                 ic.TargetTY = targetTY;
-                ic.Active = activate;
+                ic.Active = true;
                 ic.FailedUnitTX = -1; ic.FailedUnitTY = -1;
                 ic.FailedTargetTX = -1; ic.FailedTargetTY = -1;
             }
@@ -1488,7 +1400,6 @@ public class Pathfinder
     public static int DiagCacheEvictions;
     // Per-flow-type miss counters (reset per tick):
     public static int DiagMissTile;           // GetFlowToTile (same-sector, target tile as goal)
-    public static int DiagMissBorder;         // GetFlowToBorder (cross-sector via single border)
     public static int DiagMissMultiBorder;    // GetFlowToMultiBorder (cross-sector with weighted borders)
     // Tracks every FlowKey ever seen. Used to tell "new-key" vs "was-here-got-evicted".
     private static readonly System.Collections.Generic.HashSet<FlowKey> s_keysEverSeen = new();
@@ -1686,20 +1597,20 @@ public class Pathfinder
                         extendedMask |= (byte)(1 << d);
                 }
 
-                if (borderMask != 0)
-                {
-                    int clampedLTX = Math.Clamp((int)(targetPos.X / GameConstants.TileSize) - unitSX * SectorSize, 0, SectorSize - 1);
-                    int clampedLTY = Math.Clamp((int)(targetPos.Y / GameConstants.TileSize) - unitSY * SectorSize, 0, SectorSize - 1);
-                    flow = GetFlowToMultiBorder(unitSX, unitSY, borderMask, lateralMask, extendedMask,
-                                                sizeTier, frame, clampedLTX, clampedLTY, unitPos, targetPos);
-                    hasFlow = true;
-                }
-                else
-                {
-                    // Fallback to single border
-                    flow = GetFlowToBorder(unitSX, unitSY, route.NextDir[unitSector], sizeTier, frame, unitPos, targetPos);
-                    hasFlow = true;
-                }
+                // Unreachable armor: BFS guarantees a neighbor with
+                // HopDist == myDist-1 in a connected direction (connectivity is
+                // symmetric by construction), so borderMask always has that bit.
+                // If it were ever empty, synthesize it from the route direction
+                // rather than keeping a whole dead single-border flow variant
+                // (GetFlowToBorder, deleted 2026-07-04) around for it.
+                if (borderMask == 0 && route.NextDir[unitSector] >= 0)
+                    borderMask = (byte)(1 << route.NextDir[unitSector]);
+
+                int clampedLTX = Math.Clamp((int)(targetPos.X / GameConstants.TileSize) - unitSX * SectorSize, 0, SectorSize - 1);
+                int clampedLTY = Math.Clamp((int)(targetPos.Y / GameConstants.TileSize) - unitSY * SectorSize, 0, SectorSize - 1);
+                flow = GetFlowToMultiBorder(unitSX, unitSY, borderMask, lateralMask, extendedMask,
+                                            sizeTier, frame, clampedLTX, clampedLTY, unitPos, targetPos);
+                hasFlow = true;
             }
         }
 
@@ -2005,9 +1916,8 @@ public class Pathfinder
         // FlowKey round-trips: TargetData encodes per-type params, invertibly.
         switch (key.TargetType)
         {
-            case 0: // border
-                GetFlowToBorder(key.SectorX, key.SectorY, key.TargetData, key.SizeTier, frame);
-                break;
+            // (TargetType 0 was the single-border flow — deleted 2026-07-04;
+            // nothing enqueues type-0 keys anymore.)
             case 1: // tile
                 int tLY = key.TargetData / SectorSize;
                 int tLX = key.TargetData - tLY * SectorSize;
@@ -2089,21 +1999,9 @@ public class Pathfinder
     }
 
     // --- Cache eviction ---
-
-    public void EvictFlowFields(int maxCached = 384)
-    {
-        while (_flowCache.Count > maxCached)
-        {
-            FlowKey oldestKey = default;
-            uint oldestFrame = uint.MaxValue;
-            foreach (var (k, v) in _flowCache)
-                if (v.FrameAccessed < oldestFrame) { oldestFrame = v.FrameAccessed; oldestKey = k; }
-            if (_flowCache.TryGetValue(oldestKey, out var victim))
-                _staleFlowCache[oldestKey] = victim;
-            _flowCache.Remove(oldestKey);
-            DiagCacheEvictions++;
-        }
-    }
+    // (The old size-capped EvictFlowFields/EvictRoutes were deleted 2026-07-04:
+    //  neither ever had a caller, and both were O(n) full scans per evicted
+    //  entry. Age-based eviction below is the one live policy.)
 
     /// <summary>
     /// Age-based eviction: remove flow-cache entries that no unit has looked at
@@ -2143,20 +2041,19 @@ public class Pathfinder
         if (staleToRemove != null)
             foreach (var k in staleToRemove)
                 _staleFlowCache.Remove(k);
+
+        // Routes age out on the same loose horizon. They previously had NO
+        // eviction at all — a session visiting many distinct destinations
+        // accumulated (sectors x tiers)-sized arrays forever.
+        List<int>? routesToRemove = null;
+        foreach (var (k, v) in _routeCache)
+            if (currentFrame - v.FrameAccessed > staleMax)
+                (routesToRemove ??= new List<int>()).Add(k);
+        if (routesToRemove != null)
+            foreach (var k in routesToRemove)
+                _routeCache.Remove(k);
     }
 
     /// <summary>Current flow-cache entry count. Diagnostic probe.</summary>
     public int FlowCacheSize => _flowCache.Count;
-
-    public void EvictRoutes(int maxCached = 96)
-    {
-        while (_routeCache.Count > maxCached)
-        {
-            int oldestKey = 0;
-            uint oldestFrame = uint.MaxValue;
-            foreach (var (k, v) in _routeCache)
-                if (v.FrameAccessed < oldestFrame) { oldestFrame = v.FrameAccessed; oldestKey = k; }
-            _routeCache.Remove(oldestKey);
-        }
-    }
 }
