@@ -8,7 +8,7 @@ namespace Necroking.Scenario.Scenarios;
 
 /// <summary>
 /// Tests that corpses continue their knockback arc when a unit dies mid-flight.
-/// Fires a knockback fireball (fireball_kb) at a cluster of weak enemies.
+/// Fires a knockback fireball (nether_blast_kb) at a cluster of weak enemies.
 /// Validates that corpses land at positions different from where the units died.
 /// </summary>
 public class KnockbackCorpseScenario : ScenarioBase
@@ -68,14 +68,14 @@ public class KnockbackCorpseScenario : ScenarioBase
                     if (necroIdx >= 0)
                     {
                         var from = sim.Units[necroIdx].Position;
-                        DebugLog.Log(ScenarioLog, $"Firing fireball_kb from ({from.X:F1},{from.Y:F1}) to ({_clusterCenter.X:F1},{_clusterCenter.Y:F1})");
+                        DebugLog.Log(ScenarioLog, $"Firing nether_blast_kb from ({from.X:F1},{from.Y:F1}) to ({_clusterCenter.X:F1},{_clusterCenter.Y:F1})");
 
-                        // Spawn fireball with high damage and tag with fireball_kb for knockback
+                        // Spawn fireball with high damage and tag with nether_blast_kb for knockback
                         sim.Projectiles.SpawnFireball(from, _clusterCenter, Faction.Undead,
                             sim.Units[necroIdx].Id, 100, 4f, "Nether Blast KB");
                         var projs = sim.Projectiles.Projectiles;
                         if (projs.Count > 0)
-                            projs[projs.Count - 1].SpellID = "fireball_kb";
+                            projs[projs.Count - 1].SpellID = "nether_blast_kb";
                     }
                     _phase = 1;
                     _phaseTimer = 0.5f; // wait for projectile to arrive

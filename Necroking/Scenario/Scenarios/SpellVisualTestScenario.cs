@@ -12,12 +12,12 @@ namespace Necroking.Scenario.Scenarios;
 /// and combat effects (log validation).
 ///
 /// Spell types tested:
-///   Projectile  — "fireball"         (Nether Blast)
+///   Projectile  — "nether_blast"     (Nether Blast)
 ///   Strike      — "sky_lightning"     (Sky Lightning)
 ///   Zap         — "lightning_zap"     (Lightning Zap)
 ///   Beam        — "lightning_beam"    (Lightning Beam)
 ///   Drain       — "life_drain"       (Life Drain)
-///   Buff        — "spell_9"          (Iron Skin)
+///   Buff        — "iron_skin"        (Iron Skin)
 ///   Summon      — "summon_abomination" (Summon Abomination)
 /// </summary>
 public class SpellVisualTestScenario : ScenarioBase
@@ -163,13 +163,13 @@ public class SpellVisualTestScenario : ScenarioBase
             case Phase.Projectile_Setup:
                 SpawnEnemyGroup(sim, new Vec2(CenterX + 10f, CenterY), 3);
                 ZoomOnLocation(CenterX + 5f, CenterY, Zoom);
-                DebugLog.Log(ScenarioLog, "--- Projectile Test (fireball) ---");
+                DebugLog.Log(ScenarioLog, "--- Projectile Test (nether_blast) ---");
                 AdvanceTo(Phase.Projectile_Cast);
                 break;
 
             case Phase.Projectile_Cast:
                 if (_phaseTimer < SetupDelay) break;
-                CastProjectile(sim, "fireball", new Vec2(CenterX + 10f, CenterY));
+                CastProjectile(sim, "nether_blast", new Vec2(CenterX + 10f, CenterY));
                 AdvanceTo(Phase.Projectile_Wait);
                 break;
 
@@ -300,13 +300,13 @@ public class SpellVisualTestScenario : ScenarioBase
                 // Spawn friendly skeletons near necromancer for buff target
                 SpawnFriendlyGroup(sim, new Vec2(CenterX + 3f, CenterY), 3);
                 ZoomOnLocation(CenterX + 1.5f, CenterY, Zoom);
-                DebugLog.Log(ScenarioLog, "--- Buff Test (spell_9 / Iron Skin) ---");
+                DebugLog.Log(ScenarioLog, "--- Buff Test (iron_skin / Iron Skin) ---");
                 AdvanceTo(Phase.Buff_Cast);
                 break;
 
             case Phase.Buff_Cast:
                 if (_phaseTimer < SetupDelay) break;
-                CastBuff(sim, "spell_9");
+                CastBuff(sim, "iron_skin");
                 AdvanceTo(Phase.Buff_Wait);
                 break;
 

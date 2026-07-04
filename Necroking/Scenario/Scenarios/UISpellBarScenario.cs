@@ -14,7 +14,7 @@ public class UISpellBarScenario : UIScenarioBase
     public override bool WantsWidgetRenderer => true; // HUD reuses grimoire frame elements
     public override string[] DebugSpells => new[]
     {
-        "summon_skeleton", "fireball", "raise_zombie", "lightning_zap",
+        "summon_skeleton", "nether_blast", "raise_zombie", "lightning_zap",
         "god_ray", "nether_darts", "sky_lightning", "life_drain",
         "potion_frenzy", "potion_paralysis",
     };

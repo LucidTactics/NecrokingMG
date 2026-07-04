@@ -2,7 +2,7 @@
   "spells": [
     {
       "name": "Nether Blast",
-      "id": "fireball",
+      "id": "nether_blast",
       "category": "Projectile",
       "school": "Evocation",
       "tileTemplate": "evocation",
@@ -219,7 +219,7 @@
     },
     {
       "name": "Nether Blast (KB)",
-      "id": "fireball_kb",
+      "id": "nether_blast_kb",
       "category": "Projectile",
       "school": "Evocation",
       "tileTemplate": "evocation",
@@ -855,7 +855,7 @@
     },
     {
       "name": "Summon Deer",
-      "id": "summon_skeleton_copy",
+      "id": "summon_deer",
       "category": "Summon",
       "school": "Conjuration",
       "tileTemplate": "summon",
@@ -1057,7 +1057,7 @@
     },
     {
       "name": "Summon Wolf",
-      "id": "summon_skeleton_copy_copy",
+      "id": "summon_wolf",
       "category": "Summon",
       "school": "Conjuration",
       "tileTemplate": "summon",
@@ -1259,7 +1259,7 @@
     },
     {
       "name": "Summon Wolf Zombie",
-      "id": "summon_skeleton_copy_copy_copy",
+      "id": "summon_wolf_zombie",
       "category": "Summon",
       "school": "Conjuration",
       "tileTemplate": "summon",
@@ -2458,7 +2458,7 @@
     },
     {
       "name": "Elite Skeleton Upgrade",
-      "id": "skeleton_warrior_upgrade_copy",
+      "id": "elite_skeleton_upgrade",
       "category": "Summon",
       "school": "Construction",
       "tileTemplate": "summon",
@@ -2662,7 +2662,7 @@
     },
     {
       "name": "Iron Skin",
-      "id": "spell_9",
+      "id": "iron_skin",
       "category": "Buff",
       "school": "Alteration",
       "tileTemplate": "buff",
@@ -2864,7 +2864,7 @@
     },
     {
       "name": "Quickness",
-      "id": "spell_9_copy",
+      "id": "quickness",
       "category": "Buff",
       "school": "Alteration",
       "tileTemplate": "buff",
@@ -3066,7 +3066,7 @@
     },
     {
       "name": "Lucky",
-      "id": "spell_11",
+      "id": "lucky",
       "category": "Buff",
       "school": "Alteration",
       "tileTemplate": "buff",
@@ -3268,7 +3268,7 @@
     },
     {
       "name": "Lifedrain",
-      "id": "spell_12",
+      "id": "lifedrain",
       "category": "Drain",
       "school": "Evocation",
       "tileTemplate": "evocation",
@@ -3859,7 +3859,7 @@
     },
     {
       "name": "Debug Priest",
-      "id": "debug_militia_summon_copy",
+      "id": "debug_priest",
       "category": "Summon",
       "school": "Conjuration",
       "tileTemplate": "summon",
@@ -5071,7 +5071,7 @@
     },
     {
       "name": "Command",
-      "id": "order_attack",
+      "id": "command",
       "category": "Command",
       "school": "Skill",
       "tileTemplate": "debuff",
@@ -5632,7 +5632,7 @@
     },
     {
       "name": "Necromantic Miasma",
-      "id": "poison_cloud",
+      "id": "necromantic_miasma",
       "category": "Cloud",
       "school": "Alteration",
       "tileTemplate": "debuff",
@@ -9670,7 +9670,7 @@
     },
     {
       "name": "Fast Raise Zombie",
-      "id": "raise_zombie_3",
+      "id": "raise_zombie_fast",
       "category": "Summon",
       "school": "Conjuration",
       "tileTemplate": "summon",
@@ -10074,7 +10074,7 @@
     },
     {
       "name": "Call the Hunt",
-      "id": "wolf_hunt",
+      "id": "call_the_hunt",
       "category": "WolfHunt",
       "school": "Alteration",
       "tileTemplate": "debuff",
