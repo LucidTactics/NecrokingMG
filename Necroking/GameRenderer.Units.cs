@@ -413,7 +413,9 @@ partial class GameRenderer
                     _g._wpDefsCache.Add(bd);
             }
             if (_g._wpDefsCache.Count > 0 || _g._buffVisuals.HasEmitters(i))
-                _g._buffVisuals.UpdateWeaponParticles(i, _g._rawDt * _g._timeScale, _g._gameTime, _g._wpDefsCache, weaponAttach, _g._gameData.Buffs);
+                // WORLD domain (was rawDt*timeScale: unclamped and not even pause-gated,
+                // so emitters kept spawning while paused/in editors).
+                _g._buffVisuals.UpdateWeaponParticles(i, _g._clock.WorldDt, _g._gameTime, _g._wpDefsCache, weaponAttach, _g._gameData.Buffs);
         }
 
         // Buff visuals: phase 0 (behind sprite)

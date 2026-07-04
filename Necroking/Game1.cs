@@ -46,7 +46,6 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     internal CharacterStatsUI _characterStatsUI = new();
     internal UI.UnitInfoPanel _unitInfoPanel = new();
     internal UI.GrimoireOverlay _grimoireOverlay = new();
-    private bool _pausedByInspect;
     internal UI.SkillBookOverlay _skillBookOverlay = new();
     internal SkillBookState _skillBookState = new();
     internal GameSystems.DeathFogSystem _deathFog = new();
@@ -413,7 +412,9 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         _unitInfoPanel.DrawUnitIconCallback = (defId, rect) => _gameRenderer.DrawUnitIdleSprite(defId, rect);
         _unitInfoPanel.OnClosed = () =>
         {
-            if (_pausedByInspect) { _paused = false; _pausedByInspect = false; }
+            // Release only the pause the inspect set — no-op if a menu button
+            // already force-cleared it (GameClock.Resume is per-source).
+            _clock.Resume(GameClock.PauseSource.Inspect);
         };
         Necroking.Core.DebugLog.Log("startup", "  [LazyInit] Inventory/Building/Crafting/Table UIs initialized on demand");
     }
@@ -523,8 +524,9 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     internal readonly Render.WadingWakeSystem _wakeSystem = new();
     /// <summary>Cached gameplay delta from the last Update tick. Drives
     /// frame-rate-independent systems that need dt during the Draw pass
-    /// (e.g. wading wake particles). Respects pause and time scale.</summary>
-    internal float _frameDt;
+    /// (e.g. wading wake particles). Respects pause and time scale.
+    /// (Forwarder — the value lives on <see cref="_clock"/>.)</summary>
+    internal float _frameDt => _clock.VisualDt;
     internal Microsoft.Xna.Framework.Graphics.Effect? _hdrSpriteEffect;
     internal Texture2D? _groundVertexMapTex;
     internal EffectManager _effectManager = new();
@@ -563,10 +565,38 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     /// collision data.</summary>
     private MenuState _prevMenuState = MenuState.MainMenu;
     private bool _gameWorldLoaded;
-    internal bool _paused;
+    /// <summary>True while anything holds the game paused (forwarder for
+    /// <see cref="Core.GameClock.Paused"/>). Write via <c>_clock.Pause / Resume /
+    /// TogglePause / ClearAllPauses</c> with a <see cref="Core.GameClock.PauseSource"/>.</summary>
+    internal bool _paused => _clock.Paused;
+
+    /// <summary>True while any full-screen editor (map / unit / spell / UI / item) owns
+    /// the screen. Fed into <c>_clock.GateWorld(worldSuspended:)</c> each frame — editors
+    /// freeze the world by zeroing <see cref="Core.GameClock.WorldDt"/>, so gameplay code
+    /// never needs to consult this directly: consume WorldDt (not VisualDt) and the
+    /// editor gate comes for free.</summary>
+    internal bool EditorActive => _menuState == MenuState.UnitEditor || _menuState == MenuState.SpellEditor
+        || _menuState == MenuState.MapEditor || _menuState == MenuState.UIEditor
+        || _menuState == MenuState.ItemEditor;
     internal bool _gameOver;
-    internal float _gameTime;
-    internal float _timeScale = 1f;
+
+    /// <summary>Central time & pause authority — see <see cref="Core.GameClock"/> for the
+    /// full domain docs (RawDt / RealDt / VisualDt+VisualTime / WorldDt+WorldRunning,
+    /// pause sources). Driven two-phase from Update: BeginFrame at the dt derivation
+    /// point, GateWorld right before the sim gate. The legacy fields below (_gameTime,
+    /// _timeScale, _rawDt, _frameDt) are read-forwarders kept so the many renderer
+    /// call sites don't churn.</summary>
+    internal readonly Core.GameClock _clock = new();
+
+    /// <summary>Visual/presentation clock (forwarder for <see cref="Core.GameClock.VisualTime"/>):
+    /// phase driver for wind/shader/pulse visuals. Never reset — NOT the world's age;
+    /// for "how long has this world existed" use <c>_sim.GameTime</c>.</summary>
+    internal float _gameTime => _clock.VisualTime;
+    internal float _timeScale
+    {
+        get => _clock.TimeScale;
+        set => _clock.SetTimeScale(value);
+    }
 
     // Glyph trap placement mode
     private PendingSpellCast _pendingSpell = new();
@@ -625,7 +655,8 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     internal readonly List<Rectangle> _devMarkBoxes = new();
     private KeyboardState _prevKb;
     private MouseState _prevMouse;
-    internal float _rawDt;
+    /// <summary>Unclamped wall-clock frame delta (forwarder for <see cref="Core.GameClock.RawDt"/>).</summary>
+    internal float _rawDt => _clock.RawDt;
 
     /// <summary>F2 — overlay raw waterness, computed waterline V, slope, and
     /// the body-bbox bounds on each wading unit. Tuning helper for the per-
@@ -844,7 +875,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         // Multiplayer, same deal (closing the menu does NOT stop the session).
         _multiplayerLayer.OnCancelAction = () => { _editorUi?.ResetAllState(); _menuState = MenuState.PauseMenu; };
         // Pause menu: ESC unpauses back to gameplay.
-        _pauseMenuLayer.OnCancelAction   = () => { _menuState = MenuState.None; _paused = false; };
+        _pauseMenuLayer.OnCancelAction   = () => { _menuState = MenuState.None; _clock.ClearAllPauses(); };
 
         _graphics = new GraphicsDeviceManager(this);
         _graphics.GraphicsProfile = GraphicsProfile.HiDef;
@@ -1289,10 +1320,19 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     {
         _gameWorldLoaded = false;
         _gameOver = false;
+        // Fresh world = fresh clock state: clear pause holders + restore 1x speed so a
+        // pause or 8x from the previous session isn't carried in. World age resets with
+        // the fresh Simulation below; VisualTime deliberately keeps running (phase).
+        _clock.OnWorldStart();
         _damageNumbers.Clear();
         _unitAnims.Clear();
         _corpseAnims.Clear();
         _effectManager.Clear();
+        // In-flight reanimation effects + buff particle emitters would otherwise
+        // carry into the new session (they were the only per-game visual systems
+        // not cleared here).
+        _reanimFx.Clear();
+        _buffVisuals.Clear();
         _tethers.Clear(); _tetherAnchor = null; _tetherDustAccum.Clear();
         _pendingProjectiles.Clear();
         // Kill mid-flight pickup arcs — they hold textures from the session being
@@ -1909,10 +1949,13 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
 
         _gameWorldLoaded = false;
         _gameOver = false;
+        _clock.OnWorldStart(); // same reset as StartGame: no inherited pause/speed
         _damageNumbers.Clear();
         _unitAnims.Clear();
         _corpseAnims.Clear();
         _effectManager.Clear();
+        _reanimFx.Clear();
+        _buffVisuals.Clear();
         _tethers.Clear(); _tetherAnchor = null; _tetherDustAccum.Clear();
 
         // Load flipbooks (needed for cloud effects, hit effects, etc.)
@@ -2763,11 +2806,12 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         }
         _prevMenuState = _menuState;
 
-        _rawDt = (float)gameTime.ElapsedGameTime.TotalSeconds;
-        float rawDt = _rawDt;
-        float dt = _paused ? 0f : MathF.Min(rawDt, 1f / 20f) * _timeScale;
-        _gameTime += dt;
-        _frameDt = dt;
+        // Clock phase 1: derive this frame's time domains (see GameClock docs).
+        // Runs BEFORE the MainMenu/ScenarioList early-returns on purpose — menu frames
+        // keep accruing VisualTime so shader/wind phases don't stall in menus.
+        _clock.BeginFrame((float)gameTime.ElapsedGameTime.TotalSeconds);
+        float rawDt = _clock.RawDt;
+        float dt = _clock.VisualDt;
 
         // Decay spell-bar activation flashes in REAL time (rawDt) so the press
         // feedback fades consistently regardless of game pause/speed.
@@ -3098,7 +3142,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
                 if (best >= 0)
                 {
                     _unitInfoPanel.ShowForUnit(_sim.Units[best].Id);
-                    if (tipCfg.PauseOnManualInspect && !_paused) { _paused = true; _pausedByInspect = true; }
+                    if (tipCfg.PauseOnManualInspect && !_paused) _clock.Pause(GameClock.PauseSource.Inspect);
                 }
             }
         }
@@ -3118,27 +3162,27 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
 
             // Resume
             if (mouse.X >= menuX2 && mouse.X < menuX2 + btnW2 && mouse.Y >= y2 && mouse.Y < y2 + btnH2)
-            { _menuState = MenuState.None; _paused = false; }
+            { _menuState = MenuState.None; _clock.ClearAllPauses(); }
             y2 += btnH2 + btnGap2;
             // Unit Editor
             if (mouse.X >= menuX2 && mouse.X < menuX2 + btnW2 && mouse.Y >= y2 && mouse.Y < y2 + btnH2)
-            { _menuState = MenuState.UnitEditor; _paused = false; }
+            { _menuState = MenuState.UnitEditor; _clock.ClearAllPauses(); }
             y2 += btnH2 + btnGap2;
             // Spell Editor
             if (mouse.X >= menuX2 && mouse.X < menuX2 + btnW2 && mouse.Y >= y2 && mouse.Y < y2 + btnH2)
-            { _menuState = MenuState.SpellEditor; _paused = false; }
+            { _menuState = MenuState.SpellEditor; _clock.ClearAllPauses(); }
             y2 += btnH2 + btnGap2;
             // Map Editor
             if (mouse.X >= menuX2 && mouse.X < menuX2 + btnW2 && mouse.Y >= y2 && mouse.Y < y2 + btnH2)
-            { _menuState = MenuState.MapEditor; _paused = false; _mapEditor.SuppressClicksUntilRelease(); }
+            { _menuState = MenuState.MapEditor; _clock.ClearAllPauses(); _mapEditor.SuppressClicksUntilRelease(); }
             y2 += btnH2 + btnGap2;
             // UI Editor
             if (mouse.X >= menuX2 && mouse.X < menuX2 + btnW2 && mouse.Y >= y2 && mouse.Y < y2 + btnH2)
-            { EnsureUIEditorInitialized(); _menuState = MenuState.UIEditor; _paused = false; }
+            { EnsureUIEditorInitialized(); _menuState = MenuState.UIEditor; _clock.ClearAllPauses(); }
             y2 += btnH2 + btnGap2;
             // Item Editor
             if (mouse.X >= menuX2 && mouse.X < menuX2 + btnW2 && mouse.Y >= y2 && mouse.Y < y2 + btnH2)
-            { _menuState = MenuState.ItemEditor; _paused = false; }
+            { _menuState = MenuState.ItemEditor; _clock.ClearAllPauses(); }
             y2 += btnH2 + btnGap2;
             // Settings
             if (mouse.X >= menuX2 && mouse.X < menuX2 + btnW2 && mouse.Y >= y2 && mouse.Y < y2 + btnH2)
@@ -3150,7 +3194,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             y2 += btnH2 + btnGap2 + 10;
             // Main Menu
             if (mouse.X >= menuX2 && mouse.X < menuX2 + btnW2 && mouse.Y >= y2 && mouse.Y < y2 + btnH2)
-            { _menuState = MenuState.MainMenu; _paused = false; _gameWorldLoaded = false; }
+            { _menuState = MenuState.MainMenu; _clock.ClearAllPauses(); _gameWorldLoaded = false; }
             y2 += btnH2 + btnGap2;
             // Quit
             if (mouse.X >= menuX2 && mouse.X < menuX2 + btnW2 && mouse.Y >= y2 && mouse.Y < y2 + btnH2)
@@ -3186,7 +3230,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             if (_menuState == MenuState.None)
             {
                 _menuState = MenuState.PauseMenu;
-                _paused = true;
+                _clock.Pause(GameClock.PauseSource.User);
             }
         }
 
@@ -3314,10 +3358,12 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
                 _camera.ZoomBy(_input.ScrollDelta / 120f);
         }
 
-        // Editors pause the game
-        bool editorActive = _menuState == MenuState.UnitEditor || _menuState == MenuState.SpellEditor
-            || _menuState == MenuState.MapEditor || _menuState == MenuState.UIEditor
-            || _menuState == MenuState.ItemEditor;
+        // Editors pause the game. Clock phase 2: all pause/menu input for the frame
+        // has run by here, so gate the world domain — WorldRunning/WorldDt reflect
+        // THIS frame's pause + editor state (same-frame freeze, as the old inline
+        // `!_paused && !editorActive` check did).
+        bool editorActive = EditorActive;
+        _clock.GateWorld(worldSuspended: editorActive);
 
         // Map-editor hover-inspect: run ONLY the read-only debug-tooltip picks while
         // editing the map so you can hover things to see what they are. None of the
@@ -3326,7 +3372,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         if (_menuState == MenuState.MapEditor)
             UpdateHoverPicks(screenW, screenH);
 
-        if (!_paused && !editorActive)
+        if (_clock.WorldRunning)
         {
             // --- Player input ---
             Vec2 mouseWorld = _camera.ScreenToWorld(new Vector2(mouse.X, mouse.Y), screenW, screenH);
@@ -3514,7 +3560,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             }
 
             // Per-frame tether physics (haul corpses, slow the necromancer, kick up dust).
-            UpdateTethers(dt);
+            UpdateTethers(_clock.WorldDt);
 
             // --- Read-only hover picks (drive the debug info tooltips) ---
             // Object/corpse/unit/belly picks under the cursor. Shared with the
@@ -3590,7 +3636,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             HandleWorldClicks(screenW, screenH, mouse.X, mouse.Y, mouseWorld, necroIdx);
 
             // --- Auto-pickup foragables ---
-            _foragables.TickAutoPickup(dt, _gameData.Settings.General.AutoPickupForagables);
+            _foragables.TickAutoPickup(_clock.WorldDt, _gameData.Settings.General.AutoPickupForagables);
 
             // --- Time controls (keyboard) ---
             if (_input.WasKeyPressed(Keys.OemPlus) || _input.WasKeyPressed(Keys.Add))
@@ -3605,11 +3651,11 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             {
                 int tcHit = _hudRenderer.HitTestTimeControls(screenW, screenH, mouse.X, mouse.Y);
                 if (tcHit == -2)
-                    _paused = !_paused;
+                    _clock.TogglePause(GameClock.PauseSource.User);
                 else if (tcHit >= 0)
                 {
                     _timeScale = HUDRenderer.TimeControlSpeeds[tcHit];
-                    _paused = false;
+                    _clock.ClearAllPauses();
                 }
             }
 
@@ -3625,27 +3671,29 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             }
 
             // --- Tick pending projectiles ---
-            TickPendingProjectiles(dt);
+            // Gameplay consumes the WORLD domain (== dt inside this gate, but explicit
+            // so a future move outside the gate can't silently pick up editor-live dt).
+            TickPendingProjectiles(_clock.WorldDt);
 
             // --- Simulate ---
-            _sim.Tick(dt);
-            _workerSystem.Update(dt);
+            _sim.Tick(_clock.WorldDt);
+            _workerSystem.Update(_clock.WorldDt);
             ApplyBlightBombImpacts();
             FinalizeBushWorkIfPending();
-            _dayNightSystem.Update(dt, _gameData);
-            _sim.MagicGlyphs.Update(dt, _sim.UnitsMut, _sim.Quadtree, _sim.PoisonClouds, _gameData.Spells);
-            _weatherRenderer.Update(dt, _gameData);
-            _envSystem.UpdateForagables(dt);
-            UpdateZoneSpawns(dt);
-            _envSystem.UpdateBerryBushes(dt);
-            _envSystem.UpdateAnimations(dt, _gameTime);
-            _envSystem.UpdateTraps(dt, _sim.Units);
+            _dayNightSystem.Update(_clock.WorldDt, _gameData);
+            _sim.MagicGlyphs.Update(_clock.WorldDt, _sim.UnitsMut, _sim.Quadtree, _sim.PoisonClouds, _gameData.Spells);
+            _weatherRenderer.Update(_clock.WorldDt, _gameData);
+            _envSystem.UpdateForagables(_clock.WorldDt);
+            UpdateZoneSpawns(_clock.WorldDt);
+            _envSystem.UpdateBerryBushes(_clock.WorldDt);
+            _envSystem.UpdateAnimations(_clock.WorldDt, _clock.VisualTime);
+            _envSystem.UpdateTraps(_clock.WorldDt, _sim.Units);
             ProcessTrapFireEvents();
 
             // --- Scenario tick ---
             if (_activeScenario != null)
             {
-                _activeScenario.OnTick(_sim, dt);
+                _activeScenario.OnTick(_sim, _clock.WorldDt);
 
                 // Apply menu state requests from scenario (for editor screenshots)
                 if (_activeScenario.RequestedMenuState != null)
@@ -3851,7 +3899,11 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         }
 
         // --- Update animations (scaled by timeScale so they match game speed) ---
-        UpdateAnimations(dt);
+        // WORLD domain: UpdateAnimations isn't just visual — it drives the corpse-
+        // interaction state machine, resolves pending attacks / spell casts on anim
+        // action-frames, ticks jump/incap and death-fog corruption. Editors and pause
+        // must freeze all of it (the map-editor corruption-spread bug lived here).
+        UpdateAnimations(_clock.WorldDt);
 
         // --- Update damage numbers ---
         for (int i = _damageNumbers.Count - 1; i >= 0; i--)

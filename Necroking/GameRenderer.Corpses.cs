@@ -190,8 +190,11 @@ partial class GameRenderer
                 cad.Ctrl.ForceStateAtEnd(AnimState.Death);
 
             bool reanimating = corpse.ReanimInstanceId > 0;
-            if (!cad.Ctrl.IsAnimFinished && !_g._paused)
-                cad.Ctrl.Update(MathF.Min(_g._rawDt, 1f / 20f) * _g._timeScale);
+            // WORLD domain: freezes while paused AND in editors (the old hand-rolled
+            // `!_paused` + min(rawDt,1/20)*timeScale expression was VisualDt by another
+            // name, which kept corpse anims playing inside the map editor).
+            if (!cad.Ctrl.IsAnimFinished)
+                cad.Ctrl.Update(_g._clock.WorldDt);
 
             int alphaInt = 255;
             if (corpse.Dissolving)
