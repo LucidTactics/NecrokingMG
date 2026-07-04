@@ -84,6 +84,46 @@ bound to the *slot id*, not the *object*, and no flush happens on selection chan
 - **Adding a new editable field type** → add a `DrawXField(fieldId, label, value, …)` in
   `EditorBase` following the activate-once / return-`_inputBuffer`-while-active contract.
 
+## Map editor (`Editor/MapEditorWindow.cs`) — tabs, object brushes, map save
+
+One ~6400-line file; single partial-free class. Structure to know when **adding a tab**:
+
+- **`MapEditorTab` enum** (top of file: `Ground, Grass, Objects, Walls, Roads, Regions,
+  Triggers, Units, Zones`) + `ActiveTab` field.
+- **Per-tab plumbing that must all be extended together** (add a case/slot in each):
+  `TabRow1`/`TabRow2` static string arrays (two-row tab bar; widths = `PanelWidth / row.Length`),
+  `_tabScroll = new float[9]` (size = tab count), keyboard `1-9` switch loop (`for (int i = 0;
+  i < 9; …) ActiveTab = (MapEditorTab)i`), click hit-test in `Update` (maps row/col →
+  `(MapEditorTab)(idx + TabRow1.Length)` for row 2), the `switch (ActiveTab)` in `Update`
+  (→ `Update<X>Tab`), the `switch` in `Draw` (→ `Draw<X>Tab`), and
+  `DrawWorldOverlaysForActiveTab` (world-space brush cursor / zone overlays). Also the
+  `canAdjustBrush` gate (Q/E, `[`/`]` adjust `BrushRadius`, clamp 0..20) if the new tab brushes.
+- **Objects tab = the env-object brush precedent.** `UpdateObjectsTab`: category buttons
+  (`GetEnvCategories()` = distinct `def.Category` + "All" + "Groups"), def list
+  (`GetFilteredEnvDefs`), Single vs Paint mode (`_objectPaintMode`, 'B' hotkey). Painting:
+  `PaintObjectsBatch` runs **every frame while leftDown** — hex-grid offsets over
+  `BrushRadius` (world units, circle test `dx²+dy²≤r²`), jitter, weighted-random def pick
+  (`GetSelectedGroupMembers` — env-def `Group`/`GroupWeight` = the existing "set of defs with
+  weights" concept), spacing rejection via `_envSystem.CanPlaceObject(def, x, y)`
+  (collisionRadius·scale + placementRadius vs every live object), then
+  `_envSystem.AddObject((ushort)def, x, y, GetRandomPlacementScale(def))`. **Perf pattern**:
+  null out `_envSystem.OnCollisionsDirty` around the loop (else per-object pathfinder
+  rebuild) and call `_envSystem.StampObjectCollisionAt(_tileGrid, newIdx)` per placement.
+  **Undo**: accumulate into `_batchPlacedObjects`, push `UndoObjectBatchPlace` on mouse-up
+  (`UndoObjectBatchRemove` for the right-drag eraser). `AutoCreateTriggerInstance(newIdx)`
+  after every add (RM06).
+- **Save**: `SaveMap()` writes `assets/maps/<map>.json` with `Utf8JsonWriter` — env objects
+  go in the `placedObjects` array (`defId, x, y, scale, seed`) straight from
+  `_envSystem.Objects`, so anything placed via `AddObject` is persisted automatically. Env
+  *defs* save separately via `MapData.SaveEnvDefs("data/env_defs.json")`; zones to the
+  `SaveZones` sidecar (see [zones.md](zones.md)).
+- **Def-dropdown precedent**: `DrawZoneSpawnPanel` rows use `_eb.DrawCombo` with cached
+  filtered id arrays (`GetZoneForagableIdOptions` filters `_envSystem` defs by `IsForagable`,
+  cache invalidated on `DefCount` change) — copy this for any "pick an env def" UI.
+
+**Look/edit here when…** adding a map-editor tab/category, changing brush painting or
+placement spacing, changing what SaveMap persists, or building def-picker UI in a tab panel.
+
 ## UI / widget editor
 
 ### `Editor/UIEditorWindow.cs` — main window + all data models + clone logic
