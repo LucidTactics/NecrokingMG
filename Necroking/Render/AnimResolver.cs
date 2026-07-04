@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Necroking.Movement;
 
 namespace Necroking.Render;
@@ -52,6 +53,22 @@ public static class AnimResolver
                 unit.OverrideAnim = AnimRequest.None;
                 unit.CurrentOverrideHandleId = 0;
             }
+        }
+
+        // Missing-clip policy: an override whose state has no real clip on this
+        // sprite would silently render the Idle clip while the resolver believes
+        // e.g. a flinch/stun is playing — the render lies about the state and the
+        // one-shot's length becomes "the Idle clip's length". Drop it (logged once
+        // per unit-type+state) so the unit honestly falls back to its routine anim.
+        // SetOverride can't do this check (no controller there); doing it here
+        // catches the override before it is ever applied to the controller.
+        if (unit.OverrideAnim.IsActive && !unit.OverrideStarted
+            && !ctrl.HasRealAnim(unit.OverrideAnim.State))
+        {
+            LogMissingClipOnce(unit.UnitDefID, unit.OverrideAnim.State);
+            unit.OverrideAnim = AnimRequest.None;
+            unit.OverrideTimer = 0f;
+            unit.CurrentOverrideHandleId = 0;
         }
 
         // Track OverrideStarted for ALL active overrides, regardless of Kind. The
@@ -142,6 +159,20 @@ public static class AnimResolver
     /// </summary>
     public static OverrideHandle SetOverride(Unit unit, AnimRequest request)
     {
+        // Movement gate (Rule 1): a state authored for a stationary body may not
+        // play while the unit is actually moving, UNLESS something is stopping the
+        // movement. Priority-3 requests (death, knockdown holds, physics Fall) are
+        // exempt — their owning systems zero/own velocity themselves. Combat
+        // requests pass whenever a plant flag is set (PendingAttack/PostAttackTimer/
+        // InCombat/incap/jump/dodge-hop) because movement is zeroed the same tick.
+        // This is the structural guard against the "sliding" bug class: any writer —
+        // current or future — that requests e.g. a Dodge or flinch on a running unit
+        // simply gets rejected and locomotion keeps playing.
+        if (request.Priority < 3
+            && AnimController.IsMovementLocked(request.State)
+            && !IsPlantedOrStopping(unit))
+            return OverrideHandle.None;
+
         bool canReplace;
         if (!unit.OverrideAnim.IsActive) canReplace = true;
         else if (request.Priority > unit.OverrideAnim.Priority) canReplace = true;
@@ -191,6 +222,35 @@ public static class AnimResolver
         unit.OverrideTimer = 0f;
         unit.OverrideStarted = false;
         unit.CurrentOverrideHandleId = 0;
+    }
+
+    /// <summary>Speed below which a unit visually reads as standing — movement-
+    /// locked overrides are allowed through. Roughly the Idle/Walk gait boundary.</summary>
+    private const float MovingSpeedSq = 0.3f * 0.3f;
+
+    /// <summary>True when the unit is effectively stationary, or a plant mechanism
+    /// is active that zeroes/owns its movement this tick (see the movement gate in
+    /// SetOverride).</summary>
+    private static bool IsPlantedOrStopping(Unit unit)
+    {
+        if (unit.Velocity.LengthSq() <= MovingSpeedSq) return true;
+        return !unit.PendingAttack.IsNone
+            || unit.PostAttackTimer > 0f
+            || unit.InCombat
+            || unit.Incap.Active
+            || unit.JumpPhase != 0
+            || unit.DodgeTimer > 0f;
+    }
+
+    // One log line per (unit type, state) so a missing clip is loud in the debug
+    // log without spamming every frame of every unit.
+    private static readonly HashSet<(string, AnimState)> _loggedMissingClips = new();
+    private static void LogMissingClipOnce(string unitDefId, AnimState state)
+    {
+        if (!_loggedMissingClips.Add((unitDefId ?? "?", state))) return;
+        Necroking.Core.DebugLog.Log("anim",
+            $"[AnimResolver] '{unitDefId}' has no clip for {state} (nor a chain fallback) — " +
+            "override dropped; author the clip or stop requesting this state for this unit");
     }
 
     // Handle ID counter. 0 is reserved for OverrideHandle.None, so we start at 1

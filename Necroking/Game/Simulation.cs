@@ -457,8 +457,8 @@ public class Simulation
             _units[i].BlockReacting = false;
             if (_units[i].HitReactTimer > 0f)
                 _units[i].HitReactTimer = MathF.Max(0f, _units[i].HitReactTimer - dt);
-            if (_units[i].FlinchRefractoryTimer > 0f)
-                _units[i].FlinchRefractoryTimer = MathF.Max(0f, _units[i].FlinchRefractoryTimer - dt);
+            if (_units[i].ReactionCooldownTimer > 0f)
+                _units[i].ReactionCooldownTimer = MathF.Max(0f, _units[i].ReactionCooldownTimer - dt);
         }
 
         // Update mana and cooldowns. BonusManaRegen is the dynamic add (e.g.
@@ -3139,24 +3139,14 @@ public class Simulation
         {
             _units[defenderIdx].Harassment++;
             _units[defenderIdx].Dodging = true;
-            // Don't play a Dodge anim on a prone target — they can't dodge while
-            // knocked down. Leaving the knockdown hold in place. Also skip mid-jump
-            // so the dodge doesn't visually pop the jumper out of the arc.
+            // Visual dodge reaction — gated centrally in ApplyDodgeAnim (prone,
+            // mid-jump, fleeing/routing, shared reaction cooldown) at Reaction
+            // priority so it can't cancel the defender's own in-progress swing.
             // suppressDodgeAnim: trample owns its own dodge anim (snappy 0.4s hop)
             // and only plays it after confirming a safe tile exists, so the standard
             // dodge anim must not flash here.
-            if (!suppressDodgeAnim && !_units[defenderIdx].Incap.Active && _units[defenderIdx].JumpPhase == 0)
-            {
-                // Dodge one-shot at Priority=1 (intentionally below Combat=2 so a
-                // mid-attack dodge doesn't cancel its own swing — the attack anim
-                // continues, the swing just didn't land on the defender because of
-                // the hit/miss roll this method is returning from).
-                Render.AnimResolver.SetOverride(_units[defenderIdx], new Render.AnimRequest
-                {
-                    State = Render.AnimState.Dodge, Priority = 1, Interrupt = true,
-                    Kind = Render.OverrideKind.OneShot, Duration = 0, PlaybackSpeed = 1f
-                });
-            }
+            if (!suppressDodgeAnim)
+                DamageSystem.ApplyDodgeAnim(_units, defenderIdx);
             // Record the swing so retarget-on-hit AI still fires on misses — a missed
             // attack is still active combat engagement. Without this, a low-attack unit
             // (e.g. zombie deer vs high-defense wolf) whiffs repeatedly and the wolf
