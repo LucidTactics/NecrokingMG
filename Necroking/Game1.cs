@@ -564,6 +564,15 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     private MenuState _prevMenuState = MenuState.MainMenu;
     private bool _gameWorldLoaded;
     internal bool _paused;
+
+    /// <summary>True while any full-screen editor (map / unit / spell / UI / item) owns the
+    /// screen. Editors pause the gameplay simulation — <c>_sim.Tick</c> is gated on
+    /// <c>!EditorActive</c> — so any OTHER sim-mutating update (e.g. death-fog diffusion +
+    /// ground-corruption spread, which runs from UpdateAnimations) must consult this too.
+    /// Note the map editor leaves <c>_paused</c> false, so a dt-only gate isn't enough.</summary>
+    internal bool EditorActive => _menuState == MenuState.UnitEditor || _menuState == MenuState.SpellEditor
+        || _menuState == MenuState.MapEditor || _menuState == MenuState.UIEditor
+        || _menuState == MenuState.ItemEditor;
     internal bool _gameOver;
     internal float _gameTime;
     internal float _timeScale = 1f;
@@ -3287,9 +3296,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         }
 
         // Editors pause the game
-        bool editorActive = _menuState == MenuState.UnitEditor || _menuState == MenuState.SpellEditor
-            || _menuState == MenuState.MapEditor || _menuState == MenuState.UIEditor
-            || _menuState == MenuState.ItemEditor;
+        bool editorActive = EditorActive;
 
         // Map-editor hover-inspect: run ONLY the read-only debug-tooltip picks while
         // editing the map so you can hover things to see what they are. None of the
