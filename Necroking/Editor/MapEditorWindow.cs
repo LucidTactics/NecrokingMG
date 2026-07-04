@@ -196,6 +196,9 @@ public class MapEditorWindow
     private bool _zoneRubberBanding;             // drag-out in progress
     private Vec2 _zoneDragStartWorld;            // rubber-band anchor corner
     private int _draggingZone = -1;
+    // Snapshot of the dragged zone's rect, taken at mouse press; pushed to the undo
+    // stack on the first frame the drag actually changes something (see UndoZoneEdit).
+    private UndoZoneEdit? _zonePendingUndo;
     private RegionHandle _zoneHandle = RegionHandle.None; // rect subset only (no CircleRadius)
     private Vec2 _zoneDragOffset;                // zone center - click point, for body drag
     // Reused per-frame accumulator for the village panel's contents summary
@@ -438,6 +441,31 @@ public class MapEditorWindow
         {
             Units.Clear();
             Units.AddRange(Cleared);
+        }
+    }
+
+    // One zone rect move/resize = one mouse press (snapshot taken at drag start,
+    // pushed on the first actual change). Undoing also cancels an in-flight drag
+    // so the held mouse doesn't immediately re-apply the undone move. The zone is
+    // found by Id — indices may have shifted since the drag.
+    private class UndoZoneEdit : UndoAction
+    {
+        public MapEditorWindow Owner = null!;
+        public string ZoneId = "";
+        public float X, Y, HalfW, HalfH;
+        public override void Undo()
+        {
+            var zones = Owner._zoneSystem.ZonesMut;
+            for (int i = 0; i < zones.Count; i++)
+            {
+                if (zones[i].Id != ZoneId) continue;
+                zones[i].X = X; zones[i].Y = Y;
+                zones[i].HalfW = HalfW; zones[i].HalfH = HalfH;
+                break;
+            }
+            Owner._draggingZone = -1;
+            Owner._zoneHandle = RegionHandle.None;
+            Owner._zonePendingUndo = null;
         }
     }
 
@@ -4111,6 +4139,17 @@ public class MapEditorWindow
                             break;
                         }
                     }
+
+                    // Drag started: snapshot the rect as this press's undo state.
+                    if (_draggingZone >= 0)
+                    {
+                        var dz = zones[_draggingZone];
+                        _zonePendingUndo = new UndoZoneEdit
+                        {
+                            Owner = this, ZoneId = dz.Id,
+                            X = dz.X, Y = dz.Y, HalfW = dz.HalfW, HalfH = dz.HalfH,
+                        };
+                    }
                 }
 
                 if (leftDown && _draggingZone >= 0 && _draggingZone < _zoneSystem.Count)
@@ -4127,6 +4166,16 @@ public class MapEditorWindow
                         ApplyRectHandleDrag(_zoneHandle, worldPos, ref x, ref y, ref hw, ref hh);
                         z.X = x; z.Y = y; z.HalfW = hw; z.HalfH = hh;
                     }
+
+                    // First frame the drag actually moves something: commit the snapshot,
+                    // so a plain click-select never costs an undo step.
+                    if (_zonePendingUndo != null
+                        && (z.X != _zonePendingUndo.X || z.Y != _zonePendingUndo.Y
+                            || z.HalfW != _zonePendingUndo.HalfW || z.HalfH != _zonePendingUndo.HalfH))
+                    {
+                        PushUndo(_zonePendingUndo);
+                        _zonePendingUndo = null;
+                    }
                 }
             }
         }
@@ -4138,6 +4187,7 @@ public class MapEditorWindow
             _draggingZone = -1;
             _zoneHandle = RegionHandle.None;
             _zoneRubberBanding = false;
+            _zonePendingUndo = null;
         }
     }
 

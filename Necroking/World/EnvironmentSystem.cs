@@ -723,8 +723,11 @@ public class EnvironmentSystem
     /// <summary>Count objects of the given def inside the rect that still occupy a
     /// "spawned" slot for zone spawning: visible, or collected-but-pending-respawn
     /// (def RespawnTime &gt; 0, so it comes back on its own). Collected single-use
-    /// objects don't count — they stay gone until revived.</summary>
-    public int CountActiveOfDefInRect(int defIdx, float minX, float minY, float maxX, float maxY)
+    /// objects don't count — they stay gone until revived. Pass
+    /// <paramref name="positions"/> to also collect their world positions (used for
+    /// keep-apart spacing when scattering new spawns).</summary>
+    public int CountActiveOfDefInRect(int defIdx, float minX, float minY, float maxX, float maxY,
+        List<Necroking.Core.Vec2>? positions = null)
     {
         int n = 0;
         for (int i = 0; i < _objects.Count; i++)
@@ -739,6 +742,7 @@ public class EnvironmentSystem
                 if (rt.Collected && _defs[obj.DefIndex].RespawnTime <= 0f) continue;
             }
             n++;
+            positions?.Add(new Necroking.Core.Vec2(obj.X, obj.Y));
         }
         return n;
     }

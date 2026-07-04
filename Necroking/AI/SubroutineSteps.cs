@@ -78,6 +78,21 @@ public static class SubroutineSteps
     {
         int i = ctx.UnitIndex;
         Vec2 center = ctx.Units[i].SpawnPosition;
+        bool territory = false;
+
+        // Zone-owned herds roam around a shared waypoint that itself wanders the
+        // territory rect, so the whole herd drifts around its zone together instead
+        // of each member orbiting its own spawn point forever.
+        var sq = ctx.MySquad;
+        if (sq != null && sq.HasTerritory)
+        {
+            territory = true;
+            if (ctx.GameTime >= sq.NextWaypointTime)
+                PickTerritoryWaypoint(sq, ref ctx);
+            center = sq.TerritoryWaypoint;
+            roamRadius = MathF.Min(roamRadius,
+                MathF.Max(2f, MathF.Min(sq.TerritoryHalfW, sq.TerritoryHalfH)));
+        }
 
         if (ctx.Subroutine == 0) // walking to point
         {
@@ -117,6 +132,16 @@ public static class SubroutineSteps
                     float dist = roamRadius * (0.2f + (((seed * 3) & 0x7F) % 80) / 100f);
                     var candidate = center + new Vec2(MathF.Cos(angle) * dist, MathF.Sin(angle) * dist);
 
+                    // Keep territory herds inside their zone rect (the waypoint sits
+                    // inside it, but waypoint + roam offset can poke past the edge).
+                    if (territory)
+                    {
+                        candidate.X = Math.Clamp(candidate.X,
+                            sq!.TerritoryCenter.X - sq.TerritoryHalfW, sq.TerritoryCenter.X + sq.TerritoryHalfW);
+                        candidate.Y = Math.Clamp(candidate.Y,
+                            sq.TerritoryCenter.Y - sq.TerritoryHalfH, sq.TerritoryCenter.Y + sq.TerritoryHalfH);
+                    }
+
                     if (grid != null && !IsPointWalkable(grid, candidate, unitRadius))
                         continue;
 
@@ -133,6 +158,29 @@ public static class SubroutineSteps
                 }
             }
         }
+    }
+
+    /// <summary>Pick the squad's next shared territory waypoint: a random walkable point
+    /// inside the territory rect (slightly inset), valid for the next ~20-40 s. Falls back
+    /// to the territory center when no walkable spot is found this tick.</summary>
+    private static void PickTerritoryWaypoint(Squad sq, ref AIContext ctx)
+    {
+        var grid = ctx.Pathfinder?.Grid;
+        uint seed = (uint)ctx.FrameNumber * 2654435761u ^ sq.Id * 2246822519u;
+        Vec2 pick = sq.TerritoryCenter;
+        for (int a = 0; a < 12; a++)
+        {
+            seed = seed * 1664525u + 1013904223u;
+            float fx = ((seed % 1000u) / 1000f - 0.5f) * 2f;
+            seed = seed * 1664525u + 1013904223u;
+            float fy = ((seed % 1000u) / 1000f - 0.5f) * 2f;
+            var cand = new Vec2(
+                sq.TerritoryCenter.X + fx * sq.TerritoryHalfW * 0.8f,
+                sq.TerritoryCenter.Y + fy * sq.TerritoryHalfH * 0.8f);
+            if (grid == null || IsPointWalkable(grid, cand, 0.6f)) { pick = cand; break; }
+        }
+        sq.TerritoryWaypoint = pick;
+        sq.NextWaypointTime = ctx.GameTime + 20f + seed % 20u;
     }
 
     /// <summary>

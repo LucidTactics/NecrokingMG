@@ -47,6 +47,20 @@ public sealed class Squad
     public byte AlertState;
     /// <summary>Alert target carried by the most-alerted member (what the squad is reacting to).</summary>
     public uint AlertTarget = GameConstants.InvalidUnit;
+
+    // ── Territory (zone-owned herds; set by Game1.Zones.cs, never touched by Recompute) ──
+    /// <summary>True for squads that belong to a map zone. Idle roaming is then anchored
+    /// to <see cref="TerritoryWaypoint"/> — a shared point that itself wanders the
+    /// territory rect — instead of each member's SpawnPosition, so the whole herd
+    /// drifts around its territory together (see SubroutineSteps.IdleRoam).</summary>
+    public bool HasTerritory;
+    public Vec2 TerritoryCenter;
+    public float TerritoryHalfW, TerritoryHalfH;
+    /// <summary>Current shared roam anchor inside the territory rect.</summary>
+    public Vec2 TerritoryWaypoint;
+    /// <summary>Game time at which the next waypoint gets picked (lazily, by whichever
+    /// member's IdleRoam runs first after expiry).</summary>
+    public float NextWaypointTime;
 }
 
 /// <summary>

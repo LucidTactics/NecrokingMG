@@ -527,6 +527,7 @@ public partial class Game1 {
                   });
                }
                _zoneSystem.Add(devZone);
+               FillZoneSpawnsAtStart(devZone, _sim.Grid); // same half-cap pre-fill as map load
                c.Complete(Necroking.Dev.DevServer.Ok($"added {devZone.Id} ({zkind}) at {devZone.X},{devZone.Y}"));
                break;
             }
