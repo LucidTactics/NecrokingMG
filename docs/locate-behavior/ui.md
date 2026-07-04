@@ -167,6 +167,53 @@ assign mode when a spell-bar slot is clicked). `class GrimoireOverlay : IModalLa
 **Look/edit here when:** repositioning/anchoring the spell list panel, changing its size, or
 its scroll/tab/tile hit-testing.
 
+## MouseOverUI / UI hit-testing — who writes the flag (pre-registry map)
+
+`InputState.MouseOverUI` (`Necroking/Core/InputState.cs`) is reset in `Capture()` at the
+top of `Game1.Update`, then written by several independent paths each frame (in order):
+1. **`PopupManager.RouteInput`** (`UI/PopupManager.cs`, called early in `Game1.Update`) —
+   scans the whole modal stack: any layer with `IsBlocking == true` OR whose
+   `ContainsMouse(mx,my)` hits sets the flag. A blocking layer (SkillBookOverlay, the map
+   editor's full-screen `ActionModalLayer` `_mapEditorLayer`, `EnvObjectEditorWindow`,
+   `WallEditorWindow`) therefore blankets the **whole screen** — this is why the scroll-zoom
+   gate and `Game1.HoverBlockedByUI` special-case the map editor via
+   `MapEditorWindow.IsMouseOverPanel(screenW,screenH)` instead of reading `MouseOverUI`.
+2. **The ad-hoc block in `Game1.cs` Update** (`// --- IsMouseOverUI: test UI element bounds ---`,
+   only when `_menuState == MenuState.None`): spellbar (`HUDRenderer.GetSpellBarLayout` +
+   `HitTestBarSlot`), spell dropdown open (`_spellDropdownSlot >= 0` = whole-screen blanket),
+   `InventoryUI` / `CharacterStatsUI` (5-arg) / `BuildingMenuUI` / `CraftingMenuUI` /
+   `GrimoireOverlay` / `SkillBookOverlay` `.ContainsMouse`, skill-learn toasts
+   (`GameRenderer.Hud.cs` `UpdateSkillLearnToastInput` — also handles the click), time
+   controls (`HitTestTimeControls`), core-menu buttons (`HitTestMenuButtons`), editor-launcher
+   row (`HitTestEditorButtons`), aggression bar (`GetAggressionBarLayout` + inflate, click
+   handled inline).
+3. **`InputState.ConsumeMouse()`** sets `MouseOverUI = true` — "consumed" and "over UI"
+   deliberately collapse into one check (see the header comment in `Game1.WorldClicks.cs`).
+4. **`SkillBookOverlay.Update`** sets it itself (whole screen while a tile drag is live,
+   else on `ContainsMouse`).
+5. **Editors:** `EditorBase` keeps its own `_mouseOverEditorUI` (set via `SetMouseOverUI()`
+   from widget draws and from `MapEditor/Spell/Settings/UnitEditorWindow`), propagated into
+   `_input.MouseOverUI` at the START of the NEXT frame's `EditorBase.Update` — **one frame
+   stale by design**. Also read directly as `_editorUi.IsMouseOverUI` (cursor swap in Game1).
+
+**Stale-rect pattern:** several hit-tests use rects cached during the previous `Draw`
+(`CharacterStatsUI._lastBoundsRect` for the 2-arg IModalLayer overload, SkillBook
+`_tileRects`, EditorBase flag). The clean pattern is `GrimoireOverlay.Layout(screenH)` —
+called in both Update and Draw so hit-test and pixels can never diverge.
+
+**`ContainsMouse` implementers (all `_visible/IsVisible && rect`):** `InventoryUI`,
+`CraftingMenuUI`, `BuildingMenuUI`, `TableCraftMenuUI` (all in `Game/`, widget-def rect
+`_screenX/_screenY/_widgetW/_widgetH`), `GrimoireOverlay`, `SkillBookOverlay`,
+`UnitInfoPanel`, `JobBoardUI`, `GraveRosterUI` (in `UI/`), `CharacterStatsUI` (in `Render/`,
+two overloads), plus editor layers (`ColorPickerPopup`, `TextureFileBrowser` cached rect,
+full-screen `EnvObjectEditorWindow`/`WallEditorWindow`). `UnitInfoPanel` in transient
+auto-hover mode is deliberately NOT on the popup stack so it doesn't claim `MouseOverUI`
+(the auto-hover block in `Game1.cs` checks its `ContainsMouse` explicitly instead).
+
+**Look/edit here when:** a world click leaks through a panel (or a panel eats world
+clicks), hover picks are wrongly suppressed, or you're centralizing UI hit rects — the
+block in (2) is the thing a central registry would replace.
+
 ## Other panels in UI/ (brief)
 - `UI/JobBoardUI.cs`, `UI/GraveRosterUI.cs` — worker economy (see [jobs-workers.md](jobs-workers.md)).
 - `UI/GrimoireOverlay.cs` / `GrimoirePanel.cs`, `UI/SkillBookOverlay.cs` — spellbook / skills (Grimoire positioning above).

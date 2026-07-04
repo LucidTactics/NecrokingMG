@@ -61,6 +61,15 @@ public interface IModalLayer
     /// non-light-dismiss layer. Default false. Opt-in via a default-interface
     /// member so existing layers need no change.</summary>
     bool CloseOnOutsideClick => false;
+
+    /// <summary>The layer's interactive surface as a concrete rect, for the
+    /// central <see cref="UIHitRegistry"/> — should cover the same area
+    /// <see cref="ContainsMouse"/> tests. Layers that can't cheaply compute a
+    /// rect return null (the default) and get registered as a ContainsMouse
+    /// probe instead; implement this where possible so the region is
+    /// inspectable (ui_rects dev command) and stays hover-accurate even before
+    /// the layer's first Draw.</summary>
+    Rectangle? HitBounds(int screenW, int screenH) => null;
 }
 
 /// <summary>
@@ -223,21 +232,32 @@ public sealed class PopupManager
             input.ConsumeKey(Keys.Escape);
         }
 
-        // Flag MouseOverUI for any game-side "is the cursor over UI?" check (spell
-        // cast targeting, world hover). A BLOCKING modal covers the whole screen;
-        // a non-blocking side panel only covers its OWN rect, so the rest of the
-        // screen stays interactive (the IsBlocking=false contract — e.g. cast
-        // spells / hover-click the world with the inventory or bench open). Scan
-        // the whole stack, not just the top, so a panel under another open panel
-        // still blocks its own footprint. (Note OnCancel above may have already
-        // popped a close-on-click-away layer this frame — it won't be counted.)
+        // NOTE: MouseOverUI is no longer set here. Every open layer's footprint
+        // is catalogued into the central UIHitRegistry via AppendHitRects below
+        // (blocking modal = whole screen, side panel = its own rect), and
+        // Game1.RebuildUIHitRects derives MouseOverUI from that in one place.
+    }
+
+    /// <summary>Catalogue every open layer's footprint into the central
+    /// <see cref="UIHitRegistry"/>: a BLOCKING modal covers the whole screen
+    /// (same semantics RouteInput's click-swallowing gives it); a non-blocking
+    /// side panel covers its own rect via <see cref="IModalLayer.HitBounds"/>,
+    /// falling back to a ContainsMouse probe for layers without one. The whole
+    /// stack is walked, not just the top, so a panel under another open panel
+    /// still blocks its own footprint.</summary>
+    public void AppendHitRects(UIHitRegistry reg, int screenW, int screenH)
+    {
         foreach (var layer in _stack)
         {
-            if (layer.IsBlocking || layer.ContainsMouse(mx, my))
+            string id = "popup." + layer.GetType().Name;
+            if (layer.IsBlocking)
             {
-                input.MouseOverUI = true;
-                break;
+                reg.AddFullScreen(id);
+                continue;
             }
+            var bounds = layer.HitBounds(screenW, screenH);
+            if (bounds.HasValue) reg.Add(id, bounds.Value);
+            else reg.AddProbe(id, layer.ContainsMouse);
         }
     }
 }
@@ -259,5 +279,6 @@ public sealed class ActionModalLayer : IModalLayer
     public bool IsBlocking { get; init; } = true;
 
     public bool ContainsMouse(int mx, int my) => Panel.Contains(mx, my);
+    public Rectangle? HitBounds(int screenW, int screenH) => Panel;
     public void OnCancel() => OnCancelAction?.Invoke();
 }

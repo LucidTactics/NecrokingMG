@@ -1,15 +1,15 @@
 {
   "styles": [
     {
-      "name": "Cozy Forest",
-      "largeDensity": 25,
+      "name": "Light Forest",
+      "largeDensity": 2,
       "largeDefIds": [
         "Oak7",
         "Oak8",
         "Oak9",
         "Oak10"
       ],
-      "smallDensity": 25,
+      "smallDensity": 5,
       "smallDefIds": [
         "moss_clump",
         "small_fern",
@@ -17,15 +17,15 @@
       ]
     },
     {
-      "name": "Dense Bush Forest",
-      "largeDensity": 1,
+      "name": "Forest",
+      "largeDensity": 4,
       "largeDefIds": [
         "Oak7",
         "Oak8",
         "Oak9",
         "Oak10"
       ],
-      "smallDensity": 100,
+      "smallDensity": 4,
       "smallDefIds": [
         "moss_clump",
         "small_fern",

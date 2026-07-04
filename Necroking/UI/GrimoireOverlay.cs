@@ -185,6 +185,12 @@ public class GrimoireOverlay : IModalLayer
     // === IModalLayer ===
     public bool ContainsMouse(int mx, int my)
         => IsVisible && mx >= _x && mx < _x + PanelW && my >= _y && my < _y + PanelH;
+    public Rectangle? HitBounds(int screenW, int screenH)
+    {
+        if (!IsVisible) return null;
+        Layout(screenH); // live layout — accurate even before the first Draw
+        return new Rectangle(_x, _y, PanelW, PanelH);
+    }
     public void OnCancel() => Hide();
     public bool LightDismiss => false;
     public bool IsBlocking => false;

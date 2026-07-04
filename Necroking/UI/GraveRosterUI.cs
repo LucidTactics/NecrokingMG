@@ -143,6 +143,7 @@ public class GraveRosterUI : IModalLayer
 
     // IModalLayer
     public bool ContainsMouse(int mx, int my) => _visible && new Rectangle(_x, _y, _w, _h).Contains(mx, my);
+    public Rectangle? HitBounds(int screenW, int screenH) => _visible ? new Rectangle(_x, _y, _w, _h) : null;
     public void OnCancel() => Close();
     public bool LightDismiss => true;
     public bool IsBlocking => false;

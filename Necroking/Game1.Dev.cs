@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Reflection;
 using Necroking.Core;
 using Necroking.Data;
@@ -386,6 +387,34 @@ public partial class Game1 {
                   },
                   overlays = new[] { "inventory", "character_stats", "skill_book", "grimoire", "character_sheet" },
                   current = _menuState.ToString(),
+               });
+               c.Complete(Necroking.Dev.DevServer.OkRaw(js));
+               break;
+            }
+
+            // Dump the central UI hit-rect registry: every active UI region that
+            // blocks mouse interaction with the world (popup panels, HUD buttons/
+            // bars, toasts), plus where the cursor is relative to them. The
+            // registry is rebuilt each Update (Game1.RebuildUIHitRects), so this
+            // reflects the frame that just ran.
+            case "ui_rects": {
+               int uiMx = (int)_input.MousePos.X, uiMy = (int)_input.MousePos.Y;
+               var js = System.Text.Json.JsonSerializer.Serialize(new {
+                  mouse = new { x = uiMx, y = uiMy },
+                  mouseOverUI = _input.MouseOverUI,
+                  hitId = _uiHits.HitId(uiMx, uiMy),
+                  rects = _uiHits.Entries.Select(e => new {
+                     id = e.Id,
+                     x = e.FullScreen || e.Probe != null ? (int?)null : e.Rect.X,
+                     y = e.FullScreen || e.Probe != null ? (int?)null : e.Rect.Y,
+                     w = e.FullScreen || e.Probe != null ? (int?)null : e.Rect.Width,
+                     h = e.FullScreen || e.Probe != null ? (int?)null : e.Rect.Height,
+                     fullscreen = e.FullScreen ? (bool?)true : null,
+                     probe = e.Probe != null ? (bool?)true : null,
+                     hit = e.Test(uiMx, uiMy),
+                  }).ToArray(),
+               }, new System.Text.Json.JsonSerializerOptions {
+                  DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
                });
                c.Complete(Necroking.Dev.DevServer.OkRaw(js));
                break;
@@ -1548,7 +1577,7 @@ public partial class Game1 {
                   "groundfog add <x> <y> [radius] [density] [ttl] | at_camera [radius] [density] | clear",
                   "depthfog [on|off]", "gpdebug [0|1|2]",
                   // UI panels
-                  "panels", "panel <name> [tab]", "tab <name>",
+                  "panels", "panel <name> [tab]", "tab <name>", "ui_rects",
                   "overlay <name> [open|close|toggle]", "select <name|id|index>",
                   // batching & data injection
                   "batch  opts:{script:[{cmd,args,opts}|{wait:n}|{wait_real:n}|{wait_frames:n}|{shot:\"name\"}]}",

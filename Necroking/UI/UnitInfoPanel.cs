@@ -99,6 +99,14 @@ public class UnitInfoPanel : IModalLayer
     public bool ContainsMouse(int mx, int my)
         => IsVisible && mx >= _panelX && mx < _panelX + PanelW && my >= _panelY && my < _panelY + _panelH;
 
+    /// <summary>Only pinned sheets are on the popup stack, so this is never asked
+    /// for a transient view — transient views must not claim MouseOverUI (see
+    /// <see cref="IsTransient"/>). Rect fields come from the last Draw.</summary>
+    public Microsoft.Xna.Framework.Rectangle? HitBounds(int screenW, int screenH)
+        => IsVisible && !IsTransient
+            ? new Microsoft.Xna.Framework.Rectangle(_panelX, _panelY, PanelW, _panelH)
+            : null;
+
     public void OnCancel() => Hide();
     public bool LightDismiss => false;
     public bool IsBlocking => false;

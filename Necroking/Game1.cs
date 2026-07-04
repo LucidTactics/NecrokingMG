@@ -634,6 +634,11 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     internal double _gpuPresentMsAvg;
     internal readonly InputState _input = new();
     private readonly Necroking.UI.PopupManager _popups = new();
+    /// <summary>Central per-frame catalogue of every active UI region (popup
+    /// panels, HUD buttons/bars, toasts). Rebuilt in <see cref="RebuildUIHitRects"/>
+    /// each Update; the single source for <c>_input.MouseOverUI</c>. Inspect live
+    /// via the <c>ui_rects</c> dev command.</summary>
+    internal readonly Necroking.UI.UIHitRegistry _uiHits = new();
     /// <summary>Process-wide accessor — popups call <c>Game1.Popups.Push(this)</c>
     /// on open and <c>Pop</c> on close. Static because the alternative is
     /// threading the manager through 20+ existing UI constructors. Lifetime
@@ -2552,6 +2557,50 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         ? _popups.Top != _mapEditorLayer || _mapEditor.IsMouseOverPanel(screenW, screenH)
         : _input.MouseOverUI;
 
+    /// <summary>Rebuild the central UI hit-rect registry for this frame and derive
+    /// the "cursor over UI" state from it in ONE place: popup layers (via
+    /// PopupManager), the persistent HUD (spell bar, time controls, top-right
+    /// button rows), and Game1-level extras (spell dropdown, skill toasts,
+    /// aggression bar). Replaces the old scattering of per-element hit tests.
+    /// The map editor's OverGameplayHud flag is derived here too — the HUD rows
+    /// render on top of the editor, and without this a click on e.g. "Crafting"
+    /// painted/placed in the world underneath.</summary>
+    private void RebuildUIHitRects(int screenW, int screenH)
+    {
+        _uiHits.Clear();
+        _popups.AppendHitRects(_uiHits, screenW, screenH);
+
+        // The persistent gameplay HUD draws during normal play AND on top of the
+        // (full-screen) map editor — mirror the showUI gate in DrawHudBlock.
+        bool hudVisible = _gameWorldLoaded
+            && (_menuState == MenuState.None || _menuState == MenuState.MapEditor)
+            && (_activeScenario == null || _activeScenario.WantsUI);
+        if (hudVisible)
+        {
+            _hudRenderer.AppendHitRects(_uiHits, screenW, screenH,
+                _gameData.Settings.General.ShowTimeControls);
+            if (_spellDropdownSlot >= 0)
+                _uiHits.AddFullScreen("hud.spell_dropdown"); // open dropdown owns all clicks
+            _gameRenderer.AppendSkillToastHitRects(_uiHits, screenW, screenH);
+            if (_gameRenderer.GetAggressionBarLayout(screenW, screenH, out var aggroBar, out _))
+            {
+                aggroBar.Inflate(0, 8); // same hover slack as the click handler
+                _uiHits.Add("hud.aggression_bar", aggroBar);
+            }
+        }
+
+        int mx = (int)_input.MousePos.X, my = (int)_input.MousePos.Y;
+        if (_uiHits.Hit(mx, my))
+            _input.MouseOverUI = true;
+
+        // Map editor rides a full-screen blocking popup layer, so MouseOverUI is
+        // blanket-true there; the editor instead needs "is the cursor on the HUD
+        // drawn OVER me" — scoped to hud./toast. entries so its own popup-layer
+        // blanket doesn't count.
+        if (_menuState == MenuState.MapEditor)
+            _mapEditor.OverGameplayHud = _uiHits.Hit(mx, my, "hud.") || _uiHits.Hit(mx, my, "toast.");
+    }
+
     protected override void Update(GameTime gameTime)
     {
         // Drain dev-server commands first so they run even if the window is
@@ -2891,6 +2940,38 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             else { EnsureUIEditorInitialized(); _menuState = MenuState.UIEditor; }
         }
 
+        // --- Editor-launcher row click (top-right HUD row) — click mirror of
+        // F9-F12, so editors can be opened/switched without the keyboard. Works
+        // regardless of current MenuState, same as the F-keys above.
+        if (!anyTextInputActive && _input.LeftPressed && !_input.IsMouseConsumed)
+        {
+            int hudScreenW = GraphicsDevice.Viewport.Width;
+            int ebHit = _hudRenderer.HitTestEditorButtons(hudScreenW, (int)_input.MousePos.X, (int)_input.MousePos.Y);
+            if (ebHit >= 0)
+            {
+                switch (ebHit)
+                {
+                    case HUDRenderer.EditorUnit:
+                        _menuState = _menuState == MenuState.UnitEditor ? MenuState.None : MenuState.UnitEditor;
+                        _editorUi.ClearActiveField();
+                        break;
+                    case HUDRenderer.EditorSpell:
+                        _menuState = _menuState == MenuState.SpellEditor ? MenuState.None : MenuState.SpellEditor;
+                        _editorUi.ClearActiveField();
+                        break;
+                    case HUDRenderer.EditorMap:
+                        if (_menuState == MenuState.MapEditor) _menuState = MenuState.None;
+                        else { _menuState = MenuState.MapEditor; _mapEditor.SuppressClicksUntilRelease(); }
+                        break;
+                    case HUDRenderer.EditorUi:
+                        if (_menuState == MenuState.UIEditor) _menuState = MenuState.None;
+                        else { EnsureUIEditorInitialized(); _menuState = MenuState.UIEditor; }
+                        break;
+                }
+                _input.ConsumeMouse();
+            }
+        }
+
         // 'I' key toggles inventory (lazy-inits the UI family on first open)
         if (!anyTextInputActive && _input.WasKeyPressed(Keys.I) && _menuState == MenuState.None)
         {
@@ -3081,12 +3162,21 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         if (_uiEditor != null) _uiEditor.AllowWasdListNav = true;
         if (_mapEditor != null) _mapEditor.CameraInputEnabled = bareMapEditor;
 
+        // Central UI hit-rect pass: catalogue every active UI region (popup
+        // panels, HUD buttons/bars, toasts) and derive MouseOverUI from it in one
+        // place. Runs after the keyboard toggles above (so a panel opened this
+        // frame is counted) and before the editor updates / world input below
+        // (which consume MouseOverUI and OverGameplayHud).
+        RebuildUIHitRects(screenW, screenH);
+
         if (_menuState == MenuState.UnitEditor || _menuState == MenuState.SpellEditor || _menuState == MenuState.MapEditor || _menuState == MenuState.Settings || _menuState == MenuState.Multiplayer || _menuState == MenuState.ItemEditor)
         {
             _editorUi.UpdateInput(mouse, _prevMouse, kb, _prevKb, screenW, screenH, gameTime, _input);
         }
         if (_menuState == MenuState.MapEditor && _gameWorldLoaded)
+        {
             _mapEditor.Update(screenW, screenH);
+        }
         if (_menuState == MenuState.Settings)
             _settingsWindow.Update(screenW, screenH, gameTime);
         if (_menuState == MenuState.UIEditor)
@@ -3137,60 +3227,28 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
                 _camera.Position += camMove.Normalized() * camSpeed * rawDt;
         }
 
-        // --- IsMouseOverUI: test UI element bounds ---
+        // --- UI click routing for non-popup HUD elements ---
+        // (MouseOverUI itself is no longer hit-tested here — every UI rect lives
+        // in the central UIHitRegistry, rebuilt in RebuildUIHitRects above.)
         if (_menuState == MenuState.None)
         {
             int mx = mouse.X, my = mouse.Y;
 
-            // Spell bar — use HUDRenderer layout (single source of truth)
-            var bar = _hudRenderer.GetSpellBarLayout(screenH);
-            if (_hudRenderer.HitTestBarSlot(screenW, bar.barY, bar.slotW, bar.slotH, bar.centerOffset, mx, my) >= 0)
-                _input.MouseOverUI = true;
-
-            // Spell dropdown open
-            if (_spellDropdownSlot >= 0)
-                _input.MouseOverUI = true;
-
-            // Inventory, building, crafting
-            if (_inventoryUI.ContainsMouse(mx, my))
-                _input.MouseOverUI = true;
-            if (_characterStatsUI.ContainsMouse(screenW, screenH, mx, my, _sim))
-                _input.MouseOverUI = true;
-            if (_buildingMenuUI.ContainsMouse(mx, my))
-                _input.MouseOverUI = true;
-            if (_craftingMenu.ContainsMouse(mx, my))
-                _input.MouseOverUI = true;
-            if (_grimoireOverlay.ContainsMouse(mx, my))
-                _input.MouseOverUI = true;
-            if (_skillBookOverlay.ContainsMouse(mx, my))
-                _input.MouseOverUI = true;
-
             // Skill-learn corner toasts (clickable to jump to the relevant tab)
             _gameRenderer.UpdateSkillLearnToastInput(screenW, screenH);
 
-            // Time controls
-            if (_gameData.Settings.General.ShowTimeControls
-                && _hudRenderer.HitTestTimeControls(screenW, screenH, mx, my) != -1)
-                _input.MouseOverUI = true;
-
-            // Core-menu buttons (top-right)
-            if (_hudRenderer.HitTestMenuButtons(screenW, mx, my) != -1)
-                _input.MouseOverUI = true;
-
-            // Aggression bar — hovering blocks world clicks; a left click snaps the
-            // level to the nearest node (same control as Shift+Q / Shift+E).
-            if (_gameRenderer.GetAggressionBarLayout(screenW, screenH, out var aggroBar, out var aggroNodes))
+            // Aggression bar — a left click snaps the level to the nearest node
+            // (same control as Shift+Q / Shift+E). Hover-blocking comes from the
+            // registry ("hud.aggression_bar").
+            if (_input.LeftPressed
+                && _gameRenderer.GetAggressionBarLayout(screenW, screenH, out var aggroBar, out var aggroNodes))
             {
                 var aggroHover = aggroBar;
                 aggroHover.Inflate(0, 8);
                 if (aggroHover.Contains(mx, my))
                 {
-                    _input.MouseOverUI = true;
-                    if (_input.LeftPressed)
-                    {
-                        _sim.Horde.AggressionLevel = GameRenderer.NearestAggroNode(aggroNodes, mx);
-                        _input.ConsumeMouse();
-                    }
+                    _sim.Horde.AggressionLevel = GameRenderer.NearestAggroNode(aggroNodes, mx);
+                    _input.ConsumeMouse();
                 }
             }
         }

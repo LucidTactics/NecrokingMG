@@ -164,16 +164,16 @@ public class SkillBookOverlay : IModalLayer
         if (!_hoverLock) _hoverId = null;
 
         // A drag in progress continues anywhere on screen until the button releases.
+        // (No MouseOverUI set needed here: this overlay is IsBlocking, so the
+        // central UIHitRegistry blankets the whole screen while it's open.)
         if (_dragId != null)
         {
-            input.MouseOverUI = true;
             if (input.LeftDown) DragTo(mx, my);
             else _dragId = null;
             return;
         }
 
         if (!ContainsMouse(mx, my)) return;
-        input.MouseOverUI = true;
 
         // Hover tooltip: track the tile under the cursor (skip while editing layout,
         // where the cursor means "drag", not "inspect"). _tileRects is from last
