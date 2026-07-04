@@ -3060,7 +3060,26 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             _editorUi.UpdateInput(mouse, _prevMouse, kb, _prevKb, screenW, screenH, gameTime, _input);
         }
         if (_menuState == MenuState.MapEditor && _gameWorldLoaded)
+        {
+            // The gameplay HUD (top menu buttons, spell bar, time controls) still
+            // renders on top of the full-screen map editor but isn't part of the
+            // editor's own side panel, so IsMouseOverPanel doesn't know about it —
+            // without this, clicking e.g. "Crafting" also painted/placed in the
+            // world underneath. Mirrors the gameplay hit-tests below (menuState ==
+            // None branch), just re-run for map editor's mouse coords.
+            bool overHud = _hudRenderer.HitTestMenuButtons(screenW, mouse.X, mouse.Y) != -1;
+            if (!overHud)
+            {
+                var barLayout = _hudRenderer.GetSpellBarLayout(screenH);
+                overHud = _hudRenderer.HitTestBarSlot(screenW, barLayout.barY, barLayout.slotW,
+                    barLayout.slotH, barLayout.centerOffset, mouse.X, mouse.Y) >= 0;
+            }
+            if (!overHud && _gameData.Settings.General.ShowTimeControls)
+                overHud = _hudRenderer.HitTestTimeControls(screenW, screenH, mouse.X, mouse.Y) != -1;
+            _mapEditor.OverGameplayHud = overHud;
+
             _mapEditor.Update(screenW, screenH);
+        }
         if (_menuState == MenuState.Settings)
             _settingsWindow.Update(screenW, screenH, gameTime);
         if (_menuState == MenuState.UIEditor)

@@ -607,8 +607,18 @@ public class MapEditorWindow
     //  IsMouseOverPanel
     // ========================================================================
 
+    /// <summary>Set by Game1 each frame (before calling Update/Draw) when the cursor
+    /// is over the persistent gameplay HUD — top menu buttons, spell bar, time
+    /// controls — which keeps rendering on top of the full-screen map editor but
+    /// lives outside the editor's own side panel. Without this, a click on e.g. the
+    /// "Crafting" button also fell through to the world underneath and painted/
+    /// placed there, since IsMouseOverPanel only knew about the editor's own rects.</summary>
+    public bool OverGameplayHud = false;
+
     public bool IsMouseOverPanel(int screenW, int screenH)
     {
+        if (OverGameplayHud) return true;
+
         // MousePos, not the raw Mouse state — it's the canonical per-frame cursor
         // (and the `mousepos` dev override patches only MousePos, so headless
         // hover tests see the same panel gating a real mouse would).
