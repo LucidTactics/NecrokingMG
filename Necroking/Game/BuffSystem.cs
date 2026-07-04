@@ -361,6 +361,7 @@ public static class BuffSystem
                 stats.RangedDirectRange.Add(w.DirectRange);
                 stats.RangedCooldownTime.Add(w.Cooldown);
                 stats.RangedDmg.Add(w.RangedDamage);
+                stats.RangedPrecision.Add(w.Precision);
                 anyRanged = true;
             }
             else
@@ -378,7 +379,7 @@ public static class BuffSystem
                 System.Linq.Enumerable.OrderByDescending(stats.MeleeWeapons, w => w.Priority));
         if (anyRanged && stats.RangedWeapons.Count > 1)
         {
-            // Same desync fix as UnitRegistry.BuildStats: permute all five parallel ranged
+            // Same desync fix as UnitRegistry.BuildStats: permute all six parallel ranged
             // lists by one shared Priority order (sorting only RangedWeapons would misalign
             // the RangedRange/Dmg/Cooldown side-lists that StripGrantedWeapons relies on).
             var order = System.Linq.Enumerable.ToList(
@@ -386,12 +387,13 @@ public static class BuffSystem
                     System.Linq.Enumerable.Range(0, stats.RangedWeapons.Count),
                     idx => stats.RangedWeapons[idx].Priority));
             var rw = stats.RangedWeapons; var rr = stats.RangedRange; var rdr = stats.RangedDirectRange;
-            var rct = stats.RangedCooldownTime; var rd = stats.RangedDmg;
+            var rct = stats.RangedCooldownTime; var rd = stats.RangedDmg; var rp = stats.RangedPrecision;
             stats.RangedWeapons      = order.ConvertAll(o => rw[o]);
             stats.RangedRange        = order.ConvertAll(o => rr[o]);
             stats.RangedDirectRange  = order.ConvertAll(o => rdr[o]);
             stats.RangedCooldownTime = order.ConvertAll(o => rct[o]);
             stats.RangedDmg          = order.ConvertAll(o => rd[o]);
+            stats.RangedPrecision    = order.ConvertAll(o => rp[o]);
         }
     }
 
@@ -404,8 +406,8 @@ public static class BuffSystem
         var stats = units[unitIdx].Stats;
 
         // Ranged removal needs to keep the parallel side-lists (RangedRange,
-        // RangedDirectRange, RangedCooldownTime, RangedDmg) in lockstep, so
-        // walk the indexes manually rather than using RemoveAll.
+        // RangedDirectRange, RangedCooldownTime, RangedDmg, RangedPrecision)
+        // in lockstep, so walk the indexes manually rather than using RemoveAll.
         for (int i = stats.RangedWeapons.Count - 1; i >= 0; i--)
         {
             if (stats.RangedWeapons[i].SourceBuffID == buffDefID)
@@ -415,6 +417,7 @@ public static class BuffSystem
                 if (i < stats.RangedDirectRange.Count) stats.RangedDirectRange.RemoveAt(i);
                 if (i < stats.RangedCooldownTime.Count) stats.RangedCooldownTime.RemoveAt(i);
                 if (i < stats.RangedDmg.Count) stats.RangedDmg.RemoveAt(i);
+                if (i < stats.RangedPrecision.Count) stats.RangedPrecision.RemoveAt(i);
             }
         }
         stats.MeleeWeapons.RemoveAll(w => w.SourceBuffID == buffDefID);

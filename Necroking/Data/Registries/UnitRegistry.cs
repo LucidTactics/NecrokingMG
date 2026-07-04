@@ -651,6 +651,7 @@ public class UnitRegistry : RegistryBase<UnitDef>
                 s.RangedDirectRange.Add(w.DirectRange);
                 s.RangedCooldownTime.Add(w.Cooldown);
                 s.RangedDmg.Add(w.RangedDamage);
+                s.RangedPrecision.Add(w.Precision);
             }
             else
             {
@@ -675,21 +676,23 @@ public class UnitRegistry : RegistryBase<UnitDef>
                 System.Linq.Enumerable.OrderByDescending(s.MeleeWeapons, w => w.Priority));
         if (s.RangedWeapons.Count > 1)
         {
-            // Sort all FIVE parallel ranged lists by the SAME Priority order. Sorting only
+            // Sort all SIX parallel ranged lists by the SAME Priority order. Sorting only
             // RangedWeapons (as before) desynced it from the index-aligned RangedRange/
-            // RangedDirectRange/RangedCooldownTime/RangedDmg side-lists, so a priority-chosen
-            // weapon fired with another weapon's range/damage. Permute by a shared index order.
+            // RangedDirectRange/RangedCooldownTime/RangedDmg/RangedPrecision side-lists, so a
+            // priority-chosen weapon fired with another weapon's range/damage. Permute by a
+            // shared index order.
             var order = System.Linq.Enumerable.ToList(
                 System.Linq.Enumerable.OrderByDescending(
                     System.Linq.Enumerable.Range(0, s.RangedWeapons.Count),
                     idx => s.RangedWeapons[idx].Priority));
             var rw = s.RangedWeapons; var rr = s.RangedRange; var rdr = s.RangedDirectRange;
-            var rct = s.RangedCooldownTime; var rd = s.RangedDmg;
+            var rct = s.RangedCooldownTime; var rd = s.RangedDmg; var rp = s.RangedPrecision;
             s.RangedWeapons      = order.ConvertAll(o => rw[o]);
             s.RangedRange        = order.ConvertAll(o => rr[o]);
             s.RangedDirectRange  = order.ConvertAll(o => rdr[o]);
             s.RangedCooldownTime = order.ConvertAll(o => rct[o]);
             s.RangedDmg          = order.ConvertAll(o => rd[o]);
+            s.RangedPrecision    = order.ConvertAll(o => rp[o]);
         }
 
         // Backward compat: populate primary weapon from first melee
