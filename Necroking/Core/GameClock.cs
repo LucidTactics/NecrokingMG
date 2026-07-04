@@ -139,14 +139,12 @@ public sealed class GameClock
     /// <summary>Phase 1 — call once at the top of Update with the wall-clock frame delta.
     /// Computes Raw/Real/Visual and zeroes the World domain until <see cref="GateWorld"/>
     /// runs, so frames that early-return before the gate (main menu, scenario list)
-    /// always present WorldDt = 0 / WorldRunning = false to the Draw pass.
-    /// TEMPORARY (migration step 1): <paramref name="externallyPaused"/> carries the old
-    /// Game1._paused bool until pause state moves into this clock's PauseSources.</summary>
-    public void BeginFrame(float rawDt, bool externallyPaused = false)
+    /// always present WorldDt = 0 / WorldRunning = false to the Draw pass.</summary>
+    public void BeginFrame(float rawDt)
     {
         RawDt = rawDt;
         RealDt = MathF.Min(rawDt, MaxFrameDt);
-        VisualDt = (Paused || externallyPaused) ? 0f : RealDt * TimeScale;
+        VisualDt = Paused ? 0f : RealDt * TimeScale;
         VisualTime += VisualDt;
         WorldDt = 0f;
         WorldRunning = false;

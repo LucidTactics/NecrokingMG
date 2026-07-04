@@ -189,17 +189,17 @@ public partial class Game1 {
                }
 
                _timeScale = DevFloat(c.Args[0]);
-               _paused = false;
+               _clock.ClearAllPauses();
                c.Complete(Necroking.Dev.DevServer.Ok($"speed={_timeScale}"));
                break;
 
             case "pause":
-               _paused = true;
+               _clock.Pause(GameClock.PauseSource.Dev);
                c.Complete(Necroking.Dev.DevServer.Ok("paused"));
                break;
 
             case "resume":
-               _paused = false;
+               _clock.ClearAllPauses();
                c.Complete(Necroking.Dev.DevServer.Ok("resumed"));
                break;
 
@@ -241,7 +241,7 @@ public partial class Game1 {
                   case "main_menu":
                   case "back":
                      _menuState = MenuState.MainMenu;
-                     _paused = false;
+                     _clock.ClearAllPauses();
                      _gameWorldLoaded = false;
                      c.Complete(Necroking.Dev.DevServer.Ok("returned to main menu"));
                      break;
@@ -1621,7 +1621,7 @@ public partial class Game1 {
          case "main_menu":
          case "mainmenu":
             _menuState = MenuState.MainMenu;
-            _paused = false;
+            _clock.ClearAllPauses();
             _gameWorldLoaded = false;
             return true;
          case "scenarios":
@@ -1639,13 +1639,13 @@ public partial class Game1 {
          case "gameplay":
          case "none":
             _menuState = MenuState.None;
-            _paused = false;
+            _clock.ClearAllPauses();
             return true;
          case "pause":
          case "pause_menu":
          case "esc":
             _menuState = MenuState.PauseMenu;
-            _paused = true;
+            _clock.Pause(GameClock.PauseSource.User); // emulates the ESC path
             return true;
          case "settings":
          case "options":
@@ -1658,29 +1658,29 @@ public partial class Game1 {
          case "unit_editor":
          case "uniteditor":
             _menuState = MenuState.UnitEditor;
-            _paused = false;
+            _clock.ClearAllPauses();
             return true;
          case "spell_editor":
          case "spelleditor":
             _menuState = MenuState.SpellEditor;
-            _paused = false;
+            _clock.ClearAllPauses();
             return true;
          case "map_editor":
          case "mapeditor":
             _menuState = MenuState.MapEditor;
-            _paused = false;
+            _clock.ClearAllPauses();
             _mapEditor.SuppressClicksUntilRelease();
             return true;
          case "ui_editor":
          case "uieditor":
             EnsureUIEditorInitialized();
             _menuState = MenuState.UIEditor;
-            _paused = false;
+            _clock.ClearAllPauses();
             return true;
          case "item_editor":
          case "itemeditor":
             _menuState = MenuState.ItemEditor;
-            _paused = false;
+            _clock.ClearAllPauses();
             return true;
          default:
             return false;
@@ -1922,6 +1922,7 @@ public partial class Game1 {
              $"\"worldLoaded\":{(_gameWorldLoaded ? "true" : "false")}," +
              $"\"menuState\":\"{_menuState}\"," +
              $"\"paused\":{(_paused ? "true" : "false")}," +
+             $"\"pauseSources\":\"{_clock.PauseSources}\"," +
              $"\"timeScale\":{_timeScale.ToString("F2", ci)}," +
              $"\"gameTime\":{_gameTime.ToString("F2", ci)}," +
              $"\"units\":{_sim.Units.Count}," +

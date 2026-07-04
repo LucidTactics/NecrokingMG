@@ -46,7 +46,6 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     internal CharacterStatsUI _characterStatsUI = new();
     internal UI.UnitInfoPanel _unitInfoPanel = new();
     internal UI.GrimoireOverlay _grimoireOverlay = new();
-    private bool _pausedByInspect;
     internal UI.SkillBookOverlay _skillBookOverlay = new();
     internal SkillBookState _skillBookState = new();
     internal GameSystems.DeathFogSystem _deathFog = new();
@@ -413,7 +412,9 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         _unitInfoPanel.DrawUnitIconCallback = (defId, rect) => _gameRenderer.DrawUnitIdleSprite(defId, rect);
         _unitInfoPanel.OnClosed = () =>
         {
-            if (_pausedByInspect) { _paused = false; _pausedByInspect = false; }
+            // Release only the pause the inspect set — no-op if a menu button
+            // already force-cleared it (GameClock.Resume is per-source).
+            _clock.Resume(GameClock.PauseSource.Inspect);
         };
         Necroking.Core.DebugLog.Log("startup", "  [LazyInit] Inventory/Building/Crafting/Table UIs initialized on demand");
     }
@@ -564,7 +565,10 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     /// collision data.</summary>
     private MenuState _prevMenuState = MenuState.MainMenu;
     private bool _gameWorldLoaded;
-    internal bool _paused;
+    /// <summary>True while anything holds the game paused (forwarder for
+    /// <see cref="Core.GameClock.Paused"/>). Write via <c>_clock.Pause / Resume /
+    /// TogglePause / ClearAllPauses</c> with a <see cref="Core.GameClock.PauseSource"/>.</summary>
+    internal bool _paused => _clock.Paused;
 
     /// <summary>True while any full-screen editor (map / unit / spell / UI / item) owns the
     /// screen. Editors pause the gameplay simulation — <c>_sim.Tick</c> is gated on
@@ -859,7 +863,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         // Multiplayer, same deal (closing the menu does NOT stop the session).
         _multiplayerLayer.OnCancelAction = () => { _editorUi?.ResetAllState(); _menuState = MenuState.PauseMenu; };
         // Pause menu: ESC unpauses back to gameplay.
-        _pauseMenuLayer.OnCancelAction   = () => { _menuState = MenuState.None; _paused = false; };
+        _pauseMenuLayer.OnCancelAction   = () => { _menuState = MenuState.None; _clock.ClearAllPauses(); };
 
         _graphics = new GraphicsDeviceManager(this);
         _graphics.GraphicsProfile = GraphicsProfile.HiDef;
@@ -2766,7 +2770,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         // Clock phase 1: derive this frame's time domains (see GameClock docs).
         // Runs BEFORE the MainMenu/ScenarioList early-returns on purpose — menu frames
         // keep accruing VisualTime so shader/wind phases don't stall in menus.
-        _clock.BeginFrame((float)gameTime.ElapsedGameTime.TotalSeconds, externallyPaused: _paused);
+        _clock.BeginFrame((float)gameTime.ElapsedGameTime.TotalSeconds);
         float rawDt = _clock.RawDt;
         float dt = _clock.VisualDt;
 
@@ -3098,7 +3102,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
                 if (best >= 0)
                 {
                     _unitInfoPanel.ShowForUnit(_sim.Units[best].Id);
-                    if (tipCfg.PauseOnManualInspect && !_paused) { _paused = true; _pausedByInspect = true; }
+                    if (tipCfg.PauseOnManualInspect && !_paused) _clock.Pause(GameClock.PauseSource.Inspect);
                 }
             }
         }
@@ -3118,27 +3122,27 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
 
             // Resume
             if (mouse.X >= menuX2 && mouse.X < menuX2 + btnW2 && mouse.Y >= y2 && mouse.Y < y2 + btnH2)
-            { _menuState = MenuState.None; _paused = false; }
+            { _menuState = MenuState.None; _clock.ClearAllPauses(); }
             y2 += btnH2 + btnGap2;
             // Unit Editor
             if (mouse.X >= menuX2 && mouse.X < menuX2 + btnW2 && mouse.Y >= y2 && mouse.Y < y2 + btnH2)
-            { _menuState = MenuState.UnitEditor; _paused = false; }
+            { _menuState = MenuState.UnitEditor; _clock.ClearAllPauses(); }
             y2 += btnH2 + btnGap2;
             // Spell Editor
             if (mouse.X >= menuX2 && mouse.X < menuX2 + btnW2 && mouse.Y >= y2 && mouse.Y < y2 + btnH2)
-            { _menuState = MenuState.SpellEditor; _paused = false; }
+            { _menuState = MenuState.SpellEditor; _clock.ClearAllPauses(); }
             y2 += btnH2 + btnGap2;
             // Map Editor
             if (mouse.X >= menuX2 && mouse.X < menuX2 + btnW2 && mouse.Y >= y2 && mouse.Y < y2 + btnH2)
-            { _menuState = MenuState.MapEditor; _paused = false; _mapEditor.SuppressClicksUntilRelease(); }
+            { _menuState = MenuState.MapEditor; _clock.ClearAllPauses(); _mapEditor.SuppressClicksUntilRelease(); }
             y2 += btnH2 + btnGap2;
             // UI Editor
             if (mouse.X >= menuX2 && mouse.X < menuX2 + btnW2 && mouse.Y >= y2 && mouse.Y < y2 + btnH2)
-            { EnsureUIEditorInitialized(); _menuState = MenuState.UIEditor; _paused = false; }
+            { EnsureUIEditorInitialized(); _menuState = MenuState.UIEditor; _clock.ClearAllPauses(); }
             y2 += btnH2 + btnGap2;
             // Item Editor
             if (mouse.X >= menuX2 && mouse.X < menuX2 + btnW2 && mouse.Y >= y2 && mouse.Y < y2 + btnH2)
-            { _menuState = MenuState.ItemEditor; _paused = false; }
+            { _menuState = MenuState.ItemEditor; _clock.ClearAllPauses(); }
             y2 += btnH2 + btnGap2;
             // Settings
             if (mouse.X >= menuX2 && mouse.X < menuX2 + btnW2 && mouse.Y >= y2 && mouse.Y < y2 + btnH2)
@@ -3150,7 +3154,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             y2 += btnH2 + btnGap2 + 10;
             // Main Menu
             if (mouse.X >= menuX2 && mouse.X < menuX2 + btnW2 && mouse.Y >= y2 && mouse.Y < y2 + btnH2)
-            { _menuState = MenuState.MainMenu; _paused = false; _gameWorldLoaded = false; }
+            { _menuState = MenuState.MainMenu; _clock.ClearAllPauses(); _gameWorldLoaded = false; }
             y2 += btnH2 + btnGap2;
             // Quit
             if (mouse.X >= menuX2 && mouse.X < menuX2 + btnW2 && mouse.Y >= y2 && mouse.Y < y2 + btnH2)
@@ -3186,7 +3190,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             if (_menuState == MenuState.None)
             {
                 _menuState = MenuState.PauseMenu;
-                _paused = true;
+                _clock.Pause(GameClock.PauseSource.User);
             }
         }
 
@@ -3602,11 +3606,11 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             {
                 int tcHit = _hudRenderer.HitTestTimeControls(screenW, screenH, mouse.X, mouse.Y);
                 if (tcHit == -2)
-                    _paused = !_paused;
+                    _clock.TogglePause(GameClock.PauseSource.User);
                 else if (tcHit >= 0)
                 {
                     _timeScale = HUDRenderer.TimeControlSpeeds[tcHit];
-                    _paused = false;
+                    _clock.ClearAllPauses();
                 }
             }
 
