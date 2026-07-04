@@ -2,10 +2,7 @@
   "shields": [
     {
       "id": "none",
-      "name": "None",
-      "protection": 0,
-      "parry": 0,
-      "defense": 0
+      "name": "None"
     },
     {
       "id": "buckler",

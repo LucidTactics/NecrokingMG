@@ -4,71 +4,50 @@
       "id": "Mushroom",
       "displayName": "Deathcap Mushroom",
       "icon": "assets/Environment/Mushrooms/Deathcap.png",
-      "maxStack": 99,
       "category": "material",
-      "description": "A poisonous mushroom found in dark forests.",
-      "skillPointPool": "",
-      "skillPointAmount": 0
+      "description": "A poisonous mushroom found in dark forests."
     },
     {
       "id": "Ghostcap",
       "displayName": "Ghostcap",
       "icon": "assets/Environment/Mushrooms/Ghostcap.png",
-      "maxStack": 99,
       "category": "material",
-      "description": "A pale, ghostly mushroom that glows faintly.",
-      "skillPointPool": "",
-      "skillPointAmount": 0
+      "description": "A pale, ghostly mushroom that glows faintly."
     },
     {
       "id": "Rotgill",
       "displayName": "Rotgill",
       "icon": "assets/Environment/Mushrooms/Rotgill.png",
-      "maxStack": 99,
       "category": "material",
-      "description": "A foul-smelling fungus favored by necromancers.",
-      "skillPointPool": "",
-      "skillPointAmount": 0
+      "description": "A foul-smelling fungus favored by necromancers."
     },
     {
       "id": "Toadstool",
       "displayName": "Toadstool",
       "icon": "assets/Environment/Mushrooms/Toadstool.png",
-      "maxStack": 99,
       "category": "material",
-      "description": "A common toadstool with mild toxicity.",
-      "skillPointPool": "",
-      "skillPointAmount": 0
+      "description": "A common toadstool with mild toxicity."
     },
     {
       "id": "PoisonMushroom",
       "displayName": "Poison Mushroom",
       "icon": "assets/Environment/Mushrooms/PoisonMushroom.png",
-      "maxStack": 99,
       "category": "material",
-      "description": "Extremely toxic - handle with care.",
-      "skillPointPool": "",
-      "skillPointAmount": 0
+      "description": "Extremely toxic - handle with care."
     },
     {
       "id": "MagicMushroom",
       "displayName": "Magic Mushroom",
       "icon": "assets/Environment/Mushrooms/MagicMushroom.png",
-      "maxStack": 99,
       "category": "material",
-      "description": "Infused with arcane energy. Restores mana.",
-      "skillPointPool": "",
-      "skillPointAmount": 0
+      "description": "Infused with arcane energy. Restores mana."
     },
     {
       "id": "Log",
       "displayName": "Log",
       "icon": "assets/Environment/Misc/Log2.png",
-      "maxStack": 99,
       "category": "material",
-      "description": "A small wooden log. Useful for building and fuel.",
-      "skillPointPool": "",
-      "skillPointAmount": 0
+      "description": "A small wooden log. Useful for building and fuel."
     },
     {
       "id": "potion_frenzy",
@@ -76,9 +55,7 @@
       "icon": "assets/Items/Potions/FrenzyPotion.png",
       "maxStack": 10,
       "category": "potion",
-      "description": "Drives the target into a berserk frenzy.",
-      "skillPointPool": "",
-      "skillPointAmount": 0
+      "description": "Drives the target into a berserk frenzy."
     },
     {
       "id": "potion_paralysis",
@@ -86,9 +63,7 @@
       "icon": "assets/Items/Potions/Paralysis Potion.png",
       "maxStack": 10,
       "category": "potion",
-      "description": "Gradually paralyzes the target.",
-      "skillPointPool": "",
-      "skillPointAmount": 0
+      "description": "Gradually paralyzes the target."
     },
     {
       "id": "potion_zombie",
@@ -96,9 +71,7 @@
       "icon": "assets/Items/Potions/ZombiePotion.png",
       "maxStack": 10,
       "category": "potion",
-      "description": "Curses the target to rise as a zombie.",
-      "skillPointPool": "",
-      "skillPointAmount": 0
+      "description": "Curses the target to rise as a zombie."
     },
     {
       "id": "potion_poison",
@@ -106,9 +79,7 @@
       "icon": "assets/Items/Potions/PoisonPotion.png",
       "maxStack": 10,
       "category": "potion",
-      "description": "Coats in deadly poison.",
-      "skillPointPool": "",
-      "skillPointAmount": 0
+      "description": "Coats in deadly poison."
     },
     {
       "id": "potion_skillpoint",

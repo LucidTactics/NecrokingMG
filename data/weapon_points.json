@@ -3590,6 +3590,39 @@
           ]
         }
       }
+    },
+    {
+      "unit": "watchdog",
+      "anims": {
+        "Idle": {
+          "60": [
+            {
+              "hx": 0,
+              "hy": 0,
+              "hb": false,
+              "tx": 0,
+              "ty": 0,
+              "tb": false
+            },
+            {
+              "hx": 0,
+              "hy": 0,
+              "hb": false,
+              "tx": 0,
+              "ty": 0,
+              "tb": false
+            },
+            {
+              "hx": 0,
+              "hy": 0,
+              "hb": false,
+              "tx": 0,
+              "ty": 1,
+              "tb": false
+            }
+          ]
+        }
+      }
     }
   ]
 }

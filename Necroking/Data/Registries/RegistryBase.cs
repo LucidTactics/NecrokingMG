@@ -167,12 +167,21 @@ public abstract class RegistryBase<TDef> where TDef : class, IHasId, new()
         try
         {
             var options = CreateJsonOptions();
+            // Baseline: what a freshly-constructed def serializes to. Any top-level
+            // property whose JSON equals it is omitted from the file — the C# field
+            // initializers restore it on load — so only authored values are written.
+            // Diffing serialized JSON (not CLR defaults) is deliberate: many
+            // initializers are non-zero (Size=2, AggroRangeScale=1, ...), so
+            // JsonIgnoreCondition.WhenWritingDefault would be wrong here.
+            var baseline = JsonSerializer.SerializeToNode(SerializeItem(new TDef(), options), options)!.AsObject();
             var items = new List<object>();
 
             foreach (var id in _orderedIDs)
             {
-                if (_defs.TryGetValue(id, out var def))
-                    items.Add(SerializeItem(def, options));
+                if (!_defs.TryGetValue(id, out var def)) continue;
+                var node = JsonSerializer.SerializeToNode(SerializeItem(def, options), options)!.AsObject();
+                PruneDefaults(node, baseline);
+                items.Add(node);
             }
 
             var doc = new Dictionary<string, object> { [RootKey] = items };
@@ -183,6 +192,27 @@ public abstract class RegistryBase<TDef> where TDef : class, IHasId, new()
             return Core.JsonFile.WriteStringIfChanged(path, json);
         }
         catch (Exception ex) { DebugLog.Log("error", $"Failed to save {path}: {ex.Message}"); return false; }
+    }
+
+    /// <summary>Drop every top-level property whose serialized value equals the
+    /// freshly-constructed default's ("id" always stays). Top-level ONLY, on
+    /// purpose: nested objects are kept or dropped as whole subtrees, so a
+    /// partially-authored nested object is written intact and member-level
+    /// omission can never change what its setters observe during load (e.g.
+    /// DirectionalFractions tracks explicitly-authored members via setter flags).</summary>
+    private static void PruneDefaults(System.Text.Json.Nodes.JsonObject item,
+        System.Text.Json.Nodes.JsonObject baseline)
+    {
+        List<string>? toRemove = null;
+        foreach (var (key, value) in item)
+        {
+            if (key == "id") continue;
+            if (baseline.TryGetPropertyValue(key, out var defVal)
+                && System.Text.Json.Nodes.JsonNode.DeepEquals(value, defVal))
+                (toRemove ??= new()).Add(key);
+        }
+        if (toRemove != null)
+            foreach (var key in toRemove) item.Remove(key);
     }
 
     protected virtual TDef? DeserializeItem(JsonElement elem, JsonSerializerOptions options)

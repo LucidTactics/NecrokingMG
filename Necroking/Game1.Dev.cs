@@ -1490,6 +1490,18 @@ public partial class Game1 {
                DevAddData(c);
                break;
 
+            // Write every data registry back to data/*.json — exactly what the
+            // editors' Save button does (GameData.Save). Lets headless sessions
+            // exercise/migrate the on-disk format (e.g. omit-defaults pruning).
+            case "save_data": {
+               if (_gameData == null) { c.Complete(Necroking.Dev.DevServer.Error("no game data loaded")); break; }
+               bool saved = _gameData.Save();
+               c.Complete(saved
+                  ? Necroking.Dev.DevServer.Ok("data saved")
+                  : Necroking.Dev.DevServer.Error("save failed — see log"));
+               break;
+            }
+
             // Discovery: list every dev command with a one-line signature.
             case "help":
             case "commands": {
@@ -1543,6 +1555,7 @@ public partial class Game1 {
                   "batch  opts:{script:[{cmd,args,opts}|{wait:n}|{wait_real:n}|{wait_frames:n}|{shot:\"name\"}]}",
                   "job [jobId|cancel]",
                   "add_data [spell|unit|item|buff|weapon|armor|shield|potion|flipbook]  opts:{json:<entry|array|datafile>,open}  (alias add_json)",
+                  "save_data",
                };
                c.Complete(Necroking.Dev.DevServer.OkRaw(
                   $"{{\"selectors\":\"all|necro|undead|human|animal|<index>|id:<n>|<unitDefId>|<UnitType>\",\"commands\":{System.Text.Json.JsonSerializer.Serialize(cmds)}}}"));

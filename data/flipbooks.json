@@ -5,8 +5,7 @@
       "name": "Fire Loop",
       "path": "assets/Effects/FX_TX_Fire_Fireloop_01_4x4.png",
       "cols": 4,
-      "rows": 4,
-      "defaultFPS": 30
+      "rows": 4
     },
     {
       "id": "cloud03",
@@ -20,8 +19,6 @@
       "id": "radial_glow",
       "name": "Radial Glow",
       "path": "assets/Effects/radial_gradient_circle_256.png",
-      "cols": 1,
-      "rows": 1,
       "defaultFPS": 1
     },
     {
@@ -29,24 +26,21 @@
       "name": "Mini Splash (trail)",
       "path": "assets/Effects/FX_TX_MiniSplash_2x6_01_Grayscale.png",
       "cols": 2,
-      "rows": 6,
-      "defaultFPS": 30
+      "rows": 6
     },
     {
       "id": "bubble_magic",
       "name": "Bubble Magic (airborne splash)",
       "path": "assets/Effects/FX_TX_BubbleMagic_5x5_01.png",
       "cols": 5,
-      "rows": 5,
-      "defaultFPS": 30
+      "rows": 5
     },
     {
       "id": "rain_splash",
       "name": "Rain Splash (landed splash)",
       "path": "assets/Effects/FX_TX_RainSplash_03_Grayscale.png",
       "cols": 3,
-      "rows": 3,
-      "defaultFPS": 30
+      "rows": 3
     }
   ]
 }
