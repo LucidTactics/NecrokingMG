@@ -27,7 +27,7 @@ delegated to `SpellEffectSystem`.
 is the single entry point for both spell bars. In order:
 
 1. **Built-in abilities** (`TryDispatchBuiltinAbility`) short-circuit first. These are
-   hard-wired IDs *not* in `spells.json`: `melee_gather`, `order_attack` (command
+   hard-wired IDs *not* in `spells.json`: `melee_gather`, `command` (command
    horde), `regroup`, and the `poison_berries_*` abilities. They bypass `SpellCaster`
    entirely. If you're adding a hotkey-style action that isn't really a spell, add it
    here.
@@ -75,7 +75,7 @@ So: **targeting** is in `SpellCaster`, **effects** are in `SpellEffectSystem`, a
   necromancer each shot.
 - **Cast/summon flipbook spawners** (`SpawnCastEffect`, `SpawnSummonEffect`),
   `FlashSpellSlot`, casting-buff cleanup (`RemoveCastingBuffAll`).
-- **Built-in abilities**: `TryCommandHorde` (order_attack), `TryRegroupHorde`,
+- **Built-in abilities**: `TryCommandHorde` (command), `TryRegroupHorde`,
   `TryStartPoisonBerries`, and the `PoisonBerryAbilities` table +
   `ValidatePotionAbilities` load-time guard.
 

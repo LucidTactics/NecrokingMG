@@ -541,7 +541,7 @@ public partial class Game1 {
          return true;
       }
 
-      if (spellId == "order_attack") {
+      if (spellId == "command") {
          TryCommandHorde(necroIdx, mouseWorld);
          return true;
       }
@@ -569,7 +569,7 @@ public partial class Game1 {
    void TryCommandHorde(int necroIdx, Vec2 target) {
       if (necroIdx < 0) return;
       var necro = _sim.NecroState;
-      if (necro.GetCooldown("order_attack") > 0f) return;   // still recharging
+      if (necro.GetCooldown("command") > 0f) return;   // still recharging
 
       var units = _sim.UnitsMut;
       for (int ci = 0; ci < units.Count; ci++) {
@@ -580,8 +580,8 @@ public partial class Game1 {
          AI.HordeMinionHandler.CommandTo(units, ci, target);
       }
 
-      float cd = _gameData.Spells.Get("order_attack")?.Cooldown ?? 0f;
-      if (cd > 0f) necro.SpellCooldowns["order_attack"] = cd;
+      float cd = _gameData.Spells.Get("command")?.Cooldown ?? 0f;
+      if (cd > 0f) necro.SpellCooldowns["command"] = cd;
    }
 
    /// <summary>Built-in "Regroup" ability: cancel any command in effect and snap

@@ -117,7 +117,7 @@ public class PoisonCloudScenario : ScenarioBase
             _spawnTimer -= dt;
             if (_spawnTimer <= 0f)
             {
-                var spellDef = sim.GameData?.Spells.Get("poison_cloud");
+                var spellDef = sim.GameData?.Spells.Get("necromantic_miasma");
                 if (spellDef != null)
                 {
                     sim.PoisonClouds.SpawnCloud(new Vec2(CX, CY), spellDef, Faction.Undead);
@@ -126,7 +126,7 @@ public class PoisonCloudScenario : ScenarioBase
                 }
                 else
                 {
-                    DebugLog.Log(ScenarioLog, "ERROR: poison_cloud spell not found!");
+                    DebugLog.Log(ScenarioLog, "ERROR: necromantic_miasma spell not found!");
                     _complete = true;
                 }
             }

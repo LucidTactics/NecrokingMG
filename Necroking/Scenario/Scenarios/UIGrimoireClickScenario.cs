@@ -83,8 +83,8 @@ public class UIGrimoireClickScenario : ScenarioBase
         _grim.HandleClickAt(skill.X, skill.Y);
         string skill0 = _grim.DebugShownId(0);
         DebugLog.Log(ScenarioLog, $"Skill tab: count={_grim.DebugShownCount} first='{skill0}'");
-        Check($"Skill tab shows order_attack (count={_grim.DebugShownCount}, id='{skill0}')",
-            _grim.DebugShownCount >= 1 && skill0 == "order_attack");
+        Check($"Skill tab shows command (count={_grim.DebugShownCount}, id='{skill0}')",
+            _grim.DebugShownCount >= 1 && skill0 == "command");
 
         // Construction tab (#5) still works after the Skill insertion / tab renumber.
         var constr = _grim.DebugTabCenter("SchoolTabBar", 5);

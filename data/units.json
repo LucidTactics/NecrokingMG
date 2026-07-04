@@ -2664,7 +2664,7 @@
       "playerForm": false,
       "paths": {},
       "weapons": [
-        "weapon_174944"
+        "weapon_kick"
       ],
       "armors": [],
       "shields": [],
@@ -2738,7 +2738,7 @@
       "playerForm": false,
       "paths": {},
       "weapons": [
-        "weapon_011352"
+        "weapon_claw"
       ],
       "armors": [],
       "shields": [],
@@ -2812,7 +2812,7 @@
       "playerForm": false,
       "paths": {},
       "weapons": [
-        "weapon_011352"
+        "weapon_claw"
       ],
       "armors": [],
       "shields": [],
@@ -2886,7 +2886,7 @@
       "playerForm": false,
       "paths": {},
       "weapons": [
-        "weapon_174944"
+        "weapon_kick"
       ],
       "armors": [],
       "shields": [],
@@ -2965,8 +2965,8 @@
       "playerForm": false,
       "paths": {},
       "weapons": [
-        "weapon_174944",
-        "weapon_181921"
+        "weapon_kick",
+        "weapon_antlers"
       ],
       "armors": [],
       "shields": [],
@@ -3180,7 +3180,7 @@
           "anim": "Attack1"
         },
         {
-          "id": "weapon_011352",
+          "id": "weapon_claw",
           "anim": "Attack2"
         }
       ],
@@ -3277,7 +3277,7 @@
           "anim": "Attack1"
         },
         {
-          "id": "weapon_011352",
+          "id": "weapon_claw",
           "anim": "Attack2"
         }
       ],
@@ -3717,8 +3717,8 @@
       "playerForm": false,
       "paths": {},
       "weapons": [
-        "weapon_174944",
-        "weapon_181921"
+        "weapon_kick",
+        "weapon_antlers"
       ],
       "armors": [],
       "shields": [],
@@ -3965,8 +3965,8 @@
       "playerForm": false,
       "paths": {},
       "weapons": [
-        "weapon_10",
-        "weapon_11"
+        "weapon_zombie_bite",
+        "weapon_zombie_claw"
       ],
       "armors": [
         "armor_8",
@@ -4050,8 +4050,8 @@
       "playerForm": false,
       "paths": {},
       "weapons": [
-        "weapon_10",
-        "weapon_11"
+        "weapon_zombie_bite",
+        "weapon_zombie_claw"
       ],
       "armors": [
         "armor_8",
@@ -4135,8 +4135,8 @@
       "playerForm": false,
       "paths": {},
       "weapons": [
-        "weapon_10",
-        "weapon_11"
+        "weapon_zombie_bite",
+        "weapon_zombie_claw"
       ],
       "armors": [
         "armor_11"
@@ -4219,7 +4219,7 @@
       "playerForm": false,
       "paths": {},
       "weapons": [
-        "weapon_11"
+        "weapon_zombie_claw"
       ],
       "armors": [
         "armor_10",
@@ -4303,7 +4303,7 @@
       "playerForm": false,
       "paths": {},
       "weapons": [
-        "weapon_11"
+        "weapon_zombie_claw"
       ],
       "armors": [
         "armor_10",
@@ -4387,8 +4387,8 @@
       "playerForm": false,
       "paths": {},
       "weapons": [
-        "weapon_11",
-        "weapon_10"
+        "weapon_zombie_claw",
+        "weapon_zombie_bite"
       ],
       "armors": [
         "chainmail_helm"
@@ -4471,8 +4471,8 @@
       "playerForm": false,
       "paths": {},
       "weapons": [
-        "weapon_11",
-        "weapon_10"
+        "weapon_zombie_claw",
+        "weapon_zombie_bite"
       ],
       "armors": [
         "chainmail_helm"
@@ -5351,7 +5351,7 @@
       "playerForm": false,
       "paths": {},
       "weapons": [
-        "weapon_8"
+        "weapon_battle_axe"
       ],
       "armors": [
         "armor_9",
@@ -5435,8 +5435,8 @@
       "playerForm": false,
       "paths": {},
       "weapons": [
-        "weapon_11",
-        "weapon_11"
+        "weapon_zombie_claw",
+        "weapon_zombie_claw"
       ],
       "armors": [],
       "shields": [
@@ -5679,7 +5679,7 @@
           "anim": "Attack1"
         },
         {
-          "id": "weapon_011352",
+          "id": "weapon_claw",
           "anim": "Attack2"
         }
       ],
@@ -5764,7 +5764,7 @@
           "anim": "Attack1"
         },
         {
-          "id": "weapon_011352",
+          "id": "weapon_claw",
           "anim": "Attack2"
         }
       ],

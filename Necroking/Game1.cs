@@ -1548,8 +1548,8 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         catch (Exception ex)
         {
             DebugLog.Log("startup", $"Failed to load spellbar.json: {ex.Message}");
-            _spellBarState.Slots[0] = new SpellBarSlot { SpellID = "summon_skeleton_copy_copy" };
-            _spellBarState.Slots[1] = new SpellBarSlot { SpellID = "summon_skeleton_copy" };
+            _spellBarState.Slots[0] = new SpellBarSlot { SpellID = "summon_wolf" };
+            _spellBarState.Slots[1] = new SpellBarSlot { SpellID = "summon_deer" };
             _spellBarState.Slots[2] = new SpellBarSlot { SpellID = "raise_zombie" };
         }
 
