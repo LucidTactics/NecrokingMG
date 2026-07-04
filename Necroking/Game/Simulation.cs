@@ -200,6 +200,14 @@ public class Simulation
     /// directly — the Dev 'remove' loop bypassing it left _necromancerIdx stale.</summary>
     public void RemoveUnitTracked(int idx)
     {
+        // Drop pathfinder per-unit state for the dying id (imag chunk + debug
+        // decision). Id-keyed, so this is leak hygiene, not swap-pop repair.
+        _pathfinder.ClearImaginaryChunk(_units[idx].Id);
+        // Unenroll from the horde so the formation slot is recycled. Without
+        // this, _nextSlot grows monotonically with every minion ever raised and
+        // EffectiveRadius (and the aggro/leash/engagement ranges derived from
+        // it) inflates forever. No-op for units that were never enrolled.
+        _horde.RemoveUnit(_units[idx].Id);
         _units.RemoveUnit(idx);
         if (_necromancerIdx == idx) _necromancerIdx = -1;
         else if (_necromancerIdx == _units.Count) _necromancerIdx = idx;
@@ -537,6 +545,16 @@ public class Simulation
                     _units[i].Fatigue = MathF.Max(0f, _units[i].Fatigue - regen);
                 UpdateUnconsciousState(i);
             }
+        }
+
+        // Deferred pathfinder rebuild: gameplay collision changes (foragable
+        // picked/respawned, tree destroyed, boar belly burst placing N objects
+        // in one frame) request a rebuild instead of running the ~450ms full
+        // rebuild inline per change. Coalesced here to at most one per tick.
+        if (_pathfinderRebuildPending)
+        {
+            _pathfinderRebuildPending = false;
+            PhaseStart(); RebuildPathfinder(); PhaseEnd("pf_rebuild");
         }
 
         // Rebuild quadtree
@@ -1117,7 +1135,7 @@ public class Simulation
                     if (toTarget.LengthSq() > 1f)
                     {
                         int sizeTier = TerrainCosts.SizeToTier(_units[i].Size);
-                        var dir = _pathfinder.GetDirection(_units[i].Position, _units[i].MoveTarget, _frameNumber, sizeTier, i);
+                        var dir = _pathfinder.GetDirection(_units[i].Position, _units[i].MoveTarget, _frameNumber, sizeTier, _units[i].Id);
                         _units[i].PreferredVel = dir * _units[i].MaxSpeed;
                     }
                     else
@@ -1639,6 +1657,7 @@ public class Simulation
             {
                 _units[i].Velocity = Vec2.Zero;
                 _units[i].PreferredVel = Vec2.Zero;
+                _units[i].StuckTime = 0f; // don't resume with a stale escape bias
                 continue;
             }
             // Movement blocked by: jumping, knockdown (buff), standup, pending attack,
@@ -1655,6 +1674,7 @@ public class Simulation
             {
                 _units[i].Velocity = Vec2.Zero;
                 _units[i].MoveTime = 0f;
+                _units[i].StuckTime = 0f; // frozen, not stuck — don't accrue escape bias
                 continue;
             }
 
@@ -1739,6 +1759,25 @@ public class Simulation
                 for (int k = 0; k < topCount; k++)
                 {
                     int j = topIdx[k];
+                    // Reciprocity check: ORCA's responsibility split assumes the
+                    // neighbor runs the solver too and takes its share of the
+                    // avoidance. Neighbors that skip ORCA this tick — idle-shortcut
+                    // parked units, frozen melee, ragdolls, chargers, dodgers,
+                    // jumpers, the player, ghosts — take 0%, so the mover must take
+                    // 100% (IsStatic) or the pair under-avoids and grinds overlap.
+                    // Their real Velocity still feeds the VO, so a moving
+                    // non-reciprocator (charger, flying body) is dodged correctly.
+                    bool reciprocates =
+                        !_units[j].InPhysics
+                        && _units[j].ChargePhase != 1 && _units[j].ChargePhase != 3
+                        && _units[j].DodgeTimer <= 0f
+                        && !_units[j].Jumping && !_units[j].Incap.IsLocked
+                        && _units[j].PendingAttack.IsNone && _units[j].PostAttackTimer <= 0f
+                        && !(_units[j].InCombat && _units[j].AI != AIBehavior.PlayerControlled)
+                        && !_units[j].GhostMode
+                        && _units[j].AI != AIBehavior.PlayerControlled
+                        && (_units[j].PreferredVel.LengthSq() >= 0.0001f
+                            || _units[j].Velocity.LengthSq() >= 0.0001f);
                     neighbors.Add(new ORCANeighbor
                     {
                         Position = _units[j].Position,
@@ -1747,7 +1786,8 @@ public class Simulation
                         Id = _units[j].Id,
                         Priority = _units[j].Faction != _units[i].Faction
                             ? _units[i].OrcaPriority  // cross-faction: equal
-                            : _units[j].OrcaPriority  // same-faction: respect hierarchy
+                            : _units[j].OrcaPriority, // same-faction: respect hierarchy
+                        IsStatic = !reciprocates,
                     });
                 }
 
@@ -1797,24 +1837,23 @@ public class Simulation
                     Priority = _units[i].OrcaPriority
                 };
 
-                newVel = Orca.ComputeORCAVelocity(
-                    _units[i].Position, _units[i].Velocity, _units[i].PreferredVel,
-                    neighbors, param, dt);
-            }
-
-            // Stuck detection + perpendicular nudge
-            float speed = newVel.Length();
-            float prefSpeed = _units[i].PreferredVel.Length();
-            if (prefSpeed > 0.1f && speed < 0.1f * _units[i].MaxSpeed)
-            {
-                _units[i].StuckTime += dt;
-                if (_units[i].StuckTime > 0.33f)
+                // Stuck-escape bias: when the unit has been stuck (accumulated
+                // below from last tick's solve), rotate the GOAL toward a
+                // sidestep and let ORCA constraint-check it — instead of
+                // overwriting the solved velocity afterwards, which rammed
+                // units into exactly the neighbors/trees the solver had just
+                // forbidden (jitter at chokepoints, shoving through crowds).
+                // Consistent handedness (always own-left): head-on stuck pairs
+                // then pick opposite world directions and separate. The old
+                // index-parity alternation made mismatched-parity pairs
+                // sidestep in lockstep, and the side flipped whenever a death
+                // reindexed the unit.
+                Vec2 desiredVel = _units[i].PreferredVel;
+                float desiredSpeed = desiredVel.Length();
+                if (_units[i].StuckTime > 0.33f && desiredSpeed > 0.1f)
                 {
-                    // Compute perpendicular to preferred velocity
-                    Vec2 prefDir = _units[i].PreferredVel * (1f / prefSpeed);
-                    Vec2 perp = (i % 2 == 0)
-                        ? new Vec2(-prefDir.Y, prefDir.X)
-                        : new Vec2(prefDir.Y, -prefDir.X);
+                    Vec2 prefDir = desiredVel * (1f / desiredSpeed);
+                    Vec2 perp = new Vec2(-prefDir.Y, prefDir.X);
 
                     // Blend ramps from 30% at ~0.33s stuck to 80% at ~1.9s — timed in seconds
                     // so it is invariant to game speed / framerate (was a raw per-Tick frame
@@ -1822,14 +1861,25 @@ public class Simulation
                     float t = MathUtil.Clamp((_units[i].StuckTime - 0.33f) / 1.6f, 0f, 1f);
                     float blend = 0.3f + t * 0.5f;
 
-                    newVel = _units[i].PreferredVel * (1f - blend) + perp * (prefSpeed * blend);
-                    speed = newVel.Length();
+                    Vec2 escapeDir = prefDir * (1f - blend) + perp * blend;
+                    float escLen = escapeDir.Length();
+                    if (escLen > 0.001f)
+                        desiredVel = escapeDir * (desiredSpeed / escLen);
                 }
+
+                newVel = Orca.ComputeORCAVelocity(
+                    _units[i].Position, _units[i].Velocity, desiredVel,
+                    neighbors, param, dt);
             }
+
+            // Stuck accounting: AI wants motion but the solver says we can
+            // barely move. Feeds the pre-solve escape bias next tick.
+            float speed = newVel.Length();
+            float prefSpeed = _units[i].PreferredVel.Length();
+            if (prefSpeed > 0.1f && speed < 0.1f * _units[i].MaxSpeed)
+                _units[i].StuckTime += dt;
             else
-            {
                 _units[i].StuckTime = 0f;
-            }
 
             // --- Newtonian acceleration model ---
             // Treat newVel (ORCA-resolved, MaxSpeed-capped) as the desired velocity.
@@ -1842,6 +1892,19 @@ public class Simulation
             // through 0 (decel then accel), sharp turns at speed are impossible
             // without first slowing down, slight turns at speed cost only the
             // lateral budget.
+            // Clamp desired speed to MaxSpeed. ORCA output is already capped by
+            // param.MaxSpeed, so this bites only the paths that bypass the solver
+            // (player skipOrca, idle shortcut): without it, terrain speed
+            // modulation (shallow water 0.5x etc.) was a no-op for the player —
+            // PreferredVel was built from the pre-modulation speed in UpdateAI
+            // and nothing downstream enforced the modulated MaxSpeed.
+            {
+                float maxSp = _units[i].MaxSpeed;
+                float nvSq = newVel.LengthSq();
+                if (nvSq > maxSp * maxSp)
+                    newVel = nvSq > 0.000001f ? newVel * (maxSp / MathF.Sqrt(nvSq)) : Vec2.Zero;
+            }
+
             var accelDef = _gameData?.Units.Get(_units[i].UnitDefID);
             float maxAccel = accelDef?.MaxAcceleration
                 ?? _gameData?.Settings.Combat.MaxAcceleration ?? 6f;
@@ -1951,33 +2014,54 @@ public class Simulation
                 Vec2 bestPos = oldPos;
                 bool found = false;
 
-                int searchRadius = 20;
-                for (int dy = -searchRadius; dy <= searchRadius && !found; dy++)
+                // Expanding Chebyshev rings, nearest ring first. The old scan
+                // walked full rows top-to-bottom and stopped at the FIRST row
+                // containing any free tile — i.e. it picked a tile up to 20
+                // tiles NORTH and shoved the unit through every wall between,
+                // even when the adjacent tile south was free. Ring order finds
+                // the genuinely nearest tile and touches ~2 rings in the common
+                // case instead of 41x41 tiles. After the first hit we scan one
+                // extra ring: a cardinal tile in ring k+1 can be closer
+                // (Euclidean) than a diagonal tile in ring k.
+                const int EscapeSearchRadius = 20;
+                int foundRing = -1;
+                for (int ring = 0; ring <= EscapeSearchRadius; ring++)
                 {
-                    for (int dx = -searchRadius; dx <= searchRadius; dx++)
+                    if (foundRing >= 0 && ring > foundRing + 1) break;
+                    for (int dy = -ring; dy <= ring; dy++)
                     {
-                        int gx = unitGX + dx, gy = unitGY + dy;
-                        if (!_grid.InBounds(gx, gy)) continue;
-                        if (_grid.GetCost(gx, gy) == 255) continue;
-
-                        float tx = (gx + 0.5f) * GameConstants.TileSize;
-                        float ty = (gy + 0.5f) * GameConstants.TileSize;
-                        if (IsBlocked(tx, ty, r)) continue;
-
-                        float d2 = (tx - oldPos.X) * (tx - oldPos.X) + (ty - oldPos.Y) * (ty - oldPos.Y);
-                        if (d2 < bestDist2)
+                        int stepX = (dy == -ring || dy == ring) ? 1 : 2 * ring;
+                        if (stepX == 0) stepX = 1; // ring 0: single tile
+                        for (int dx = -ring; dx <= ring; dx += stepX)
                         {
-                            bestDist2 = d2;
-                            bestPos = new Vec2(tx, ty);
-                            found = true;
+                            int gx = unitGX + dx, gy = unitGY + dy;
+                            if (!_grid.InBounds(gx, gy)) continue;
+                            if (_grid.GetCost(gx, gy) == 255) continue;
+
+                            float tx = (gx + 0.5f) * GameConstants.TileSize;
+                            float ty = (gy + 0.5f) * GameConstants.TileSize;
+                            if (IsBlocked(tx, ty, r)) continue;
+
+                            float d2 = (tx - oldPos.X) * (tx - oldPos.X) + (ty - oldPos.Y) * (ty - oldPos.Y);
+                            if (d2 < bestDist2)
+                            {
+                                bestDist2 = d2;
+                                bestPos = new Vec2(tx, ty);
+                                found = true;
+                            }
                         }
                     }
+                    if (found && foundRing < 0) foundRing = ring;
                 }
 
                 if (found)
                 {
                     float dist = MathF.Sqrt(bestDist2);
-                    float pushSpeed = _units[i].MaxSpeed * 3f;
+                    // Floor the push at an absolute speed: MaxSpeed can be 0 here
+                    // (deep-water/wall terrain multiplies it to 0), and a 0-speed
+                    // escape means the unit is stuck forever with the scan
+                    // re-running every frame.
+                    float pushSpeed = MathF.Max(_units[i].MaxSpeed * 3f, 2f);
                     // Cap the escape shove at ~1 tile/frame: with the speed-scaled dt the
                     // raw MaxSpeed*3*dt push can reach ~9.6 tiles at x8, teleporting the unit
                     // through thin walls to the "nearest free tile" on the far side.
@@ -2023,8 +2107,13 @@ public class Simulation
                 }
                 if (bestPenDist2 > 0f)
                 {
-                    float pushSpeed = _units[i].MaxSpeed * 3f;
-                    float step = MathF.Min(pushSpeed * dt, 1f); // cap at ~1 tile/frame (see grid escape)
+                    // Speed floor: MaxSpeed can be 0 (deep-water/wall terrain mult).
+                    float pushSpeed = MathF.Max(_units[i].MaxSpeed * 3f, 2f);
+                    // Cap at ~1 tile/frame (see grid escape) AND at the actual
+                    // penetration depth — a 0.01u overlap shouldn't shove a full
+                    // tile (visible pop at high game speed).
+                    float pen = MathF.Sqrt(bestPenDist2);
+                    float step = MathF.Min(MathF.Min(pushSpeed * dt, 1f), pen + 0.01f);
                     oldPos = new Vec2(oldPos.X + pushDir.X * step, oldPos.Y + pushDir.Y * step);
                     _units[i].Position = oldPos;
                 }
@@ -2174,6 +2263,27 @@ public class Simulation
         return false;
     }
 
+    private readonly List<EnvSpatialIndex.Entry> _spotCheckScratch = new();
+
+    /// <summary>True if a unit of the given radius can NOT stand at pos:
+    /// overlaps an impassable tile (checked at the wall-collision radius,
+    /// Radius*0.7, same as UpdateMovement) or a static env collision circle.
+    /// For teleport-style destination checks (dodge hops, spawn placement) —
+    /// those bypass normal collision, so landing spots must be validated.</summary>
+    public bool IsSpotBlocked(Vec2 pos, float unitRadius)
+    {
+        if (IsBlocked(pos.X, pos.Y, unitRadius * 0.7f)) return true;
+        _spotCheckScratch.Clear();
+        _envIndex.QueryRadius(pos, unitRadius, _spotCheckScratch);
+        foreach (var e in _spotCheckScratch)
+        {
+            float dx = pos.X - e.CX, dy = pos.Y - e.CY;
+            float combined = unitRadius + e.Radius;
+            if (dx * dx + dy * dy < combined * combined) return true;
+        }
+        return false;
+    }
+
     // --- Facing Angles ---
     // Delegates the per-unit rotation math to Movement.FacingUtil so the turn
     // rate cap is applied identically everywhere (UpdateFacingAngles, handler
@@ -2190,6 +2300,11 @@ public class Simulation
             if (_units[i].Incap.IsLocked) continue;
             if (_units[i].JumpPhase >= 2) continue;
             if (_units[i].ChargePhase > 0) continue; // TrampleSystem owns facing during charge
+            // Tumbling ragdolls keep the facing they were launched with —
+            // PhysicsSystem writes Velocity each tick, and letting the
+            // face-away-from-attacker priority act on it turned launched units
+            // to face their flight direction mid-arc (visible pop on launch).
+            if (_units[i].InPhysics) continue;
 
             // Player-controlled (necromancer): two facing sources, hysteresis between
             // them. Walk gait → face the mouse (cursor angle stored in
@@ -3552,7 +3667,7 @@ public class Simulation
         if (dist > 3f && _pathfinder != null && _pathfinder.Grid != null)
         {
             int sizeTier = TerrainCosts.SizeToTier(_units[i].Size);
-            Vec2 dir = _pathfinder.GetDirection(myPos, targetPos, _frameNumber, sizeTier, i);
+            Vec2 dir = _pathfinder.GetDirection(myPos, targetPos, _frameNumber, sizeTier, _units[i].Id);
             _units[i].PreferredVel = dir * speed;
         }
         else
@@ -3913,8 +4028,8 @@ public class Simulation
                 float corpseDragMul = 1f;
                 if (wasInPhysics)
                 {
-                    _physics.TryGetBodyVelocity(i, out corpseVelXY, out corpseVelZ);
-                    _physics.TryGetBodyTuning(i, out corpseGravityMul, out corpseDragMul);
+                    _physics.TryGetBodyVelocity(_units[i].Id, out corpseVelXY, out corpseVelZ);
+                    _physics.TryGetBodyTuning(_units[i].Id, out corpseGravityMul, out corpseDragMul);
                 }
 
                 var corpse = MakeCorpseFromUnit(i);
@@ -3941,9 +4056,8 @@ public class Simulation
                 corpse.DragMul = corpseDragMul;
                 // Clean up the physics body now that the corpse has captured its
                 // velocity — physics tick keeps bodies alive on death so the
-                // velocity can be read here, but we must remove it before the
-                // unit array shifts (otherwise UnitIdx points to wrong unit).
-                if (wasInPhysics) _physics.RemoveBody(i);
+                // velocity can be read here.
+                if (wasInPhysics) _physics.RemoveBody(_units[i].Id);
 
                 // RatPack fear: a dying rat spooks its nearby packmates (longer skitter
                 // retreats for a moment). Done before the swap-and-pop remove so the
@@ -4233,6 +4347,16 @@ public class Simulation
         if (unitIdx < 0 || unitIdx >= _units.Count) return "Unknown";
         return _units[unitIdx].UnitDefID;
     }
+
+    // See RequestPathfinderRebuild / the drain at the top of Tick.
+    private bool _pathfinderRebuildPending;
+
+    /// <summary>Request a full pathfinder rebuild at the start of the next Tick.
+    /// Coalesces any number of same-frame collision changes into one rebuild.
+    /// Use this from gameplay paths (OnCollisionsDirty); call RebuildPathfinder()
+    /// directly only when the rebuilt state is needed synchronously (map load,
+    /// scenario setup).</summary>
+    public void RequestPathfinderRebuild() => _pathfinderRebuildPending = true;
 
     public void RebuildPathfinder()
     {

@@ -1433,8 +1433,10 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         _sim.SetVillageSystem(_villageSystem);
         _sim.SetSkillBook(_skillBookState);
 
-        // Wire collision change callback so pathfinding rebuilds when objects change state
-        _envSystem.OnCollisionsDirty = () => _sim.RebuildPathfinder();
+        // Wire collision change callback so pathfinding rebuilds when objects
+        // change state. Deferred + coalesced: N same-frame changes (boar belly
+        // bursting several mushrooms, editor multi-place) = one rebuild next tick.
+        _envSystem.OnCollisionsDirty = () => _sim.RequestPathfinderRebuild();
 
         // Stamp pathfinding terrain from ground vertex types (e.g. water-textured
         // tiles become ShallowWater/DeepWater for the cost field). Must happen
@@ -1900,7 +1902,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         _groundSystem.ClearTypes();
         _groundSystem.Init(gridSize, gridSize);
         _envSystem.Init(gridSize);
-        _envSystem.OnCollisionsDirty = () => _sim.RebuildPathfinder();
+        _envSystem.OnCollisionsDirty = () => _sim.RequestPathfinderRebuild();
         _wallSystem.Init(gridSize, gridSize, gridSize);
         // Add a default wall def so scenarios can render walls
         _wallSystem.Defs.Add(new World.WallVisualDef { Name = "Stone", Color = new Color(130, 130, 130, 255), MaxHP = 100 });

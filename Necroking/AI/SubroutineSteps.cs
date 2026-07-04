@@ -381,7 +381,7 @@ public static class SubroutineSteps
         if (dist > 3f && ctx.Pathfinder?.Grid != null)
         {
             int sizeTier = TerrainCosts.SizeToTier(ctx.Units[i].Size);
-            Vec2 dir = ctx.Pathfinder.GetDirection(myPos, target, (uint)ctx.FrameNumber, sizeTier, i);
+            Vec2 dir = ctx.Pathfinder.GetDirection(myPos, target, (uint)ctx.FrameNumber, sizeTier, ctx.Units[i].Id);
             ctx.Units[i].PreferredVel = dir * speed;
         }
         else if (dist > 0.01f)

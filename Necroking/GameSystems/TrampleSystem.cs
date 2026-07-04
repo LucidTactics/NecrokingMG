@@ -418,6 +418,12 @@ public static class TrampleSystem
             float awayScore = dirs[d].X * awayFromAtk.X + dirs[d].Y * awayFromAtk.Y;
             if (awayScore <= 0f) continue;
 
+            // The hop lerp bypasses ALL collision (UpdateMovement skips dodging
+            // units), so the landing spot must be validated here: walls and env
+            // circles were never checked and a deer could dodge INTO a tree or
+            // wall tile, then depend on stuck-escape to dig it back out.
+            if (sim.IsSpotBlocked(candidate, defR)) continue;
+
             // Find the nearest unit body to this candidate spot.
             float nearestOverlap = float.PositiveInfinity;
             for (int j = 0; j < units.Count; j++)
@@ -599,6 +605,7 @@ public static class TrampleSystem
         units[idx].ChargeFollowDir = Vec2.Zero;
         units[idx].Velocity = Vec2.Zero;
         units[idx].PreferredVel = Vec2.Zero;
+        units[idx].StuckTime = 0f; // hand back to normal movement without stale escape bias
     }
 
     private static Vec2 DirFromFacing(float facingDeg)

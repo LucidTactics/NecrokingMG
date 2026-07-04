@@ -64,11 +64,13 @@ public class Pathfinder
         }
     }
 
-    // Per-unit imaginary chunk state
-    private readonly Dictionary<int, ImaginaryChunk> _unitImagChunks = new();
+    // Per-unit imaginary chunk state. Keyed by stable Unit.Id — NOT array index.
+    // UnitArrays.RemoveUnit swap-and-pops indices, so index-keyed entries would
+    // silently transfer to whichever unit inherits a dead unit's slot.
+    private readonly Dictionary<uint, ImaginaryChunk> _unitImagChunks = new();
 
-    // Per-unit decision tracking (for debug)
-    private readonly Dictionary<int, PathDecisionInfo> _unitDecisions = new();
+    // Per-unit decision tracking (for debug). Keyed by stable Unit.Id.
+    private readonly Dictionary<uint, PathDecisionInfo> _unitDecisions = new();
 
     private struct SectorRoute
     {
@@ -90,6 +92,12 @@ public class Pathfinder
         public int ChunkW, ChunkH;
         public int TargetTX, TargetTY;
         public bool Active;
+        // Negative-result memo: the last (unit tile, target tile) pair for which
+        // the chunk Dijkstra failed to produce a direction. Without this, a unit
+        // whose target is walled off re-ran the full 64x64 compute EVERY tick
+        // (fail -> beeline into the wall -> same tiles next tick -> fail...).
+        public int FailedUnitTX = -1, FailedUnitTY = -1;
+        public int FailedTargetTX = -1, FailedTargetTY = -1;
     }
 
     // 8-directional offsets
@@ -148,15 +156,15 @@ public class Pathfinder
     public TileGrid? Grid => _grid;
 
     /// <summary>Get imaginary chunk bounds for debug visualization. Returns (baseX, baseY, w, h, active) or null.</summary>
-    public (int baseX, int baseY, int w, int h, bool active)? GetImaginaryChunkInfo(int unitIdx)
+    public (int baseX, int baseY, int w, int h, bool active)? GetImaginaryChunkInfo(uint unitId)
     {
-        if (_unitImagChunks.TryGetValue(unitIdx, out var ic) && ic.Active)
+        if (_unitImagChunks.TryGetValue(unitId, out var ic) && ic.Active)
             return (ic.BaseX, ic.BaseY, ic.ChunkW, ic.ChunkH, ic.Active);
         return null;
     }
 
-    /// <summary>Get all active imaginary chunk unit indices for debug overlay.</summary>
-    public IEnumerable<int> GetActiveImaginaryChunkUnits()
+    /// <summary>Get all active imaginary chunk unit ids for debug overlay.</summary>
+    public IEnumerable<uint> GetActiveImaginaryChunkUnits()
     {
         foreach (var kv in _unitImagChunks)
             if (kv.Value.Active) yield return kv.Key;
@@ -549,7 +557,11 @@ public class Pathfinder
             _lastQueryDeferred = true;
             if (_staleFlowCache.TryGetValue(key, out var stale))
             {
+                // CachedFlow is a struct: write the touched copy back, or the
+                // access bump is lost and an actively-used stale entry still
+                // ages out of EvictStaleFlowFields mid-use.
                 stale.FrameAccessed = frame;
+                _staleFlowCache[key] = stale;
                 return stale;
             }
             return default;
@@ -603,7 +615,11 @@ public class Pathfinder
             _lastQueryDeferred = true;
             if (_staleFlowCache.TryGetValue(key, out var stale))
             {
+                // CachedFlow is a struct: write the touched copy back, or the
+                // access bump is lost and an actively-used stale entry still
+                // ages out of EvictStaleFlowFields mid-use.
                 stale.FrameAccessed = frame;
+                _staleFlowCache[key] = stale;
                 return stale;
             }
             return default;
@@ -702,7 +718,11 @@ public class Pathfinder
             _lastQueryDeferred = true;
             if (_staleFlowCache.TryGetValue(key, out var stale))
             {
+                // CachedFlow is a struct: write the touched copy back, or the
+                // access bump is lost and an actively-used stale entry still
+                // ages out of EvictStaleFlowFields mid-use.
                 stale.FrameAccessed = frame;
+                _staleFlowCache[key] = stale;
                 return stale;
             }
             return default;
@@ -820,17 +840,27 @@ public class Pathfinder
     /// target tile (if inside) or border tiles facing the target (if outside).
     /// Returns direction at unit's position. Stores chunk per-unit for persistence.
     /// </summary>
-    private Vec2 GetLocalChunkDirection(Vec2 unitPos, Vec2 targetPos, int tier, int unitIdx = -1, bool activate = true)
+    private Vec2 GetLocalChunkDirection(Vec2 unitPos, Vec2 targetPos, int tier, uint unitId = GameConstants.InvalidUnit, bool activate = true)
     {
-        DiagImagChunkComputes++;
-        var _diagSw = System.Diagnostics.Stopwatch.StartNew();
-        try {
         if (_grid == null) return Vec2.Zero;
 
         int unitTX = (int)(unitPos.X / GameConstants.TileSize);
         int unitTY = (int)(unitPos.Y / GameConstants.TileSize);
         int targetTX = (int)(targetPos.X / GameConstants.TileSize);
         int targetTY = (int)(targetPos.Y / GameConstants.TileSize);
+
+        // Negative-result memo: if the last compute for this exact (unit tile,
+        // target tile) pair failed, don't burn another full chunk Dijkstra —
+        // nothing changed. Cleared on success and on Rebuild().
+        if (unitId != GameConstants.InvalidUnit
+            && _unitImagChunks.TryGetValue(unitId, out var memo)
+            && memo.FailedUnitTX == unitTX && memo.FailedUnitTY == unitTY
+            && memo.FailedTargetTX == targetTX && memo.FailedTargetTY == targetTY)
+            return Vec2.Zero;
+
+        DiagImagChunkComputes++;
+        var _diagSw = System.Diagnostics.Stopwatch.StartNew();
+        try {
 
         // Center the chunk on the unit, clamped to map bounds
         int halfSize = SectorSize / 2;
@@ -980,31 +1010,54 @@ public class Pathfinder
 
         // Extract direction at unit's tile
         int unitTileIdx = localUY * SectorSize + localUX;
-        if (cost[unitTileIdx] >= GameConstants.InfCost) return Vec2.Zero;
+        FlowDir bestDir = cost[unitTileIdx] >= GameConstants.InfCost
+            ? FlowDir.None
+            : dirs[unitTileIdx];
 
-        FlowDir bestDir = dirs[unitTileIdx];
-
-        // Store chunk per-unit for persistence
-        if (unitIdx >= 0 && bestDir != FlowDir.None)
+        if (unitId != GameConstants.InvalidUnit)
         {
-            if (!_unitImagChunks.TryGetValue(unitIdx, out var ic))
+            if (!_unitImagChunks.TryGetValue(unitId, out var ic))
             {
                 ic = new ImaginaryChunk();
-                _unitImagChunks[unitIdx] = ic;
+                _unitImagChunks[unitId] = ic;
             }
-            ic.Dirs = dirs;
-            ic.BaseX = baseX;
-            ic.BaseY = baseY;
-            ic.ChunkW = chunkW;
-            ic.ChunkH = chunkH;
-            ic.TargetTX = targetTX;
-            ic.TargetTY = targetTY;
-            ic.Active = activate;
+            if (bestDir != FlowDir.None)
+            {
+                // Store chunk per-unit for persistence; clear any failure memo.
+                ic.Dirs = dirs;
+                ic.BaseX = baseX;
+                ic.BaseY = baseY;
+                ic.ChunkW = chunkW;
+                ic.ChunkH = chunkH;
+                ic.TargetTX = targetTX;
+                ic.TargetTY = targetTY;
+                ic.Active = activate;
+                ic.FailedUnitTX = -1; ic.FailedUnitTY = -1;
+                ic.FailedTargetTX = -1; ic.FailedTargetTY = -1;
+            }
+            else
+            {
+                // Unreachable (or plateau at the unit tile): memoize the failure
+                // so the next tick's identical query is a dictionary hit, not a
+                // full 64x64 Dijkstra.
+                ic.Active = false;
+                ic.FailedUnitTX = unitTX; ic.FailedUnitTY = unitTY;
+                ic.FailedTargetTX = targetTX; ic.FailedTargetTY = targetTY;
+            }
         }
 
         return FlowDirUtil.ToVec(bestDir);
         }
-        finally { DiagImagChunkMs += _diagSw.Elapsed.TotalMilliseconds; }
+        finally
+        {
+            double elapsed = _diagSw.Elapsed.TotalMilliseconds;
+            DiagImagChunkMs += elapsed;
+            // Charge the budget: an imag-chunk compute costs about the same as
+            // the sector Dijkstra the budget exists to bound. Without this, N
+            // units running chunk computes in one tick passed HasDijkstraBudget()
+            // every time and the budget only throttled flow misses.
+            ChargeDijkstraMs((float)elapsed);
+        }
     }
 
     /// <summary>
@@ -1150,7 +1203,12 @@ public class Pathfinder
 
         return FlowDirUtil.ToVec(ic.Dirs[unitTileIdx]);
         }
-        finally { DiagImagChunkMs += _diagSw.Elapsed.TotalMilliseconds; }
+        finally
+        {
+            double elapsed = _diagSw.Elapsed.TotalMilliseconds;
+            DiagImagChunkMs += elapsed;
+            ChargeDijkstraMs((float)elapsed); // same reasoning as GetLocalChunkDirection
+        }
     }
 
     /// <summary>
@@ -1305,7 +1363,7 @@ public class Pathfinder
     // Tracks every FlowKey ever seen. Used to tell "new-key" vs "was-here-got-evicted".
     private static readonly System.Collections.Generic.HashSet<FlowKey> s_keysEverSeen = new();
 
-    public Vec2 GetDirection(Vec2 unitPos, Vec2 targetPos, uint frame, int sizeTier = 0, int unitIdx = -1)
+    public Vec2 GetDirection(Vec2 unitPos, Vec2 targetPos, uint frame, int sizeTier = 0, uint unitId = GameConstants.InvalidUnit)
     {
         var diagSw = System.Diagnostics.Stopwatch.StartNew();
         DiagCallsThisTick++;
@@ -1319,7 +1377,7 @@ public class Pathfinder
         _lastQueryDeferred = false;
 
         // --- Per-unit persistent imaginary chunk ---
-        if (unitIdx >= 0 && _unitImagChunks.TryGetValue(unitIdx, out var existingIc) && existingIc.Active)
+        if (unitId != GameConstants.InvalidUnit && _unitImagChunks.TryGetValue(unitId, out var existingIc) && existingIc.Active)
         {
             int uTX = (int)(unitPos.X / GameConstants.TileSize);
             int uTY = (int)(unitPos.Y / GameConstants.TileSize);
@@ -1358,7 +1416,7 @@ public class Pathfinder
                         Vec2 dir = RecomputeImaginaryChunkFlow(existingIc, unitPos, targetPos, sizeTier);
                         if (dir.LengthSq() > 0.001f)
                         {
-                            RecordDecision(unitIdx, PathDecision.ImagChunkRecompute);
+                            RecordDecision(unitId, PathDecision.ImagChunkRecompute);
                             return dir;
                         }
                         existingIc.Active = false;
@@ -1371,7 +1429,7 @@ public class Pathfinder
                     Vec2 dir = FlowDirUtil.ToVec(fd);
                     if (dir.LengthSq() > 0.001f)
                     {
-                        RecordDecision(unitIdx, PathDecision.ImagChunkPersist);
+                        RecordDecision(unitId, PathDecision.ImagChunkPersist);
                         return dir;
                     }
                     existingIc.Active = false;
@@ -1411,16 +1469,16 @@ public class Pathfinder
                 else
                 {
                     // No tile flow at unit tile — use imaginary chunk
-                    Vec2 localDir = _lastQueryDeferred ? Vec2.Zero : GetLocalChunkDirection(unitPos, targetPos, sizeTier, unitIdx);
+                    Vec2 localDir = _lastQueryDeferred ? Vec2.Zero : GetLocalChunkDirection(unitPos, targetPos, sizeTier, unitId);
                     if (localDir.LengthSq() > 0.001f)
                     {
-                        RecordDecision(unitIdx, PathDecision.SameSectorImagChunk);
+                        RecordDecision(unitId, PathDecision.SameSectorImagChunk);
                         return localDir;
                     }
                     // Beeline
                     var bee = targetPos - unitPos;
                     float beeLen = bee.Length();
-                    RecordDecision(unitIdx, PathDecision.Unreachable);
+                    RecordDecision(unitId, PathDecision.Unreachable);
                     return beeLen > 0.01f ? bee * (1f / beeLen) : Vec2.Zero;
                 }
             }
@@ -1464,15 +1522,15 @@ public class Pathfinder
                 if (!hasFlow)
                 {
                     // Try imaginary chunk before beeline
-                    Vec2 localDir = _lastQueryDeferred ? Vec2.Zero : GetLocalChunkDirection(unitPos, targetPos, sizeTier, unitIdx);
+                    Vec2 localDir = _lastQueryDeferred ? Vec2.Zero : GetLocalChunkDirection(unitPos, targetPos, sizeTier, unitId);
                     if (localDir.LengthSq() > 0.001f)
                     {
-                        RecordDecision(unitIdx, PathDecision.UnreachableImagChunk);
+                        RecordDecision(unitId, PathDecision.UnreachableImagChunk);
                         return localDir;
                     }
                     var dd = targetPos - unitPos;
                     float len = dd.Length();
-                    RecordDecision(unitIdx, PathDecision.Unreachable);
+                    RecordDecision(unitId, PathDecision.Unreachable);
                     return len > 0.01f ? dd * (1f / len) : Vec2.Zero;
                 }
             }
@@ -1527,19 +1585,19 @@ public class Pathfinder
                 float beeDLen = beeD.Length();
                 if (beeDLen > 0.01f)
                 {
-                    RecordDecision(unitIdx, PathDecision.Beeline);
+                    RecordDecision(unitId, PathDecision.Beeline);
                     return beeD * (1f / beeDLen);
                 }
-                RecordDecision(unitIdx, PathDecision.None);
+                RecordDecision(unitId, PathDecision.None);
                 return Vec2.Zero;
             }
-            Vec2 localDir = GetLocalChunkDirection(unitPos, targetPos, sizeTier, unitIdx);
+            Vec2 localDir = GetLocalChunkDirection(unitPos, targetPos, sizeTier, unitId);
             if (localDir.LengthSq() > 0.001f)
             {
-                RecordDecision(unitIdx, PathDecision.NoFlow);
+                RecordDecision(unitId, PathDecision.NoFlow);
                 return localDir;
             }
-            RecordDecision(unitIdx, PathDecision.None);
+            RecordDecision(unitId, PathDecision.None);
             return Vec2.Zero;
         }
 
@@ -1603,7 +1661,7 @@ public class Pathfinder
 
             if (bestDir.LengthSq() > 0.001f)
             {
-                RecordDecision(unitIdx, PathDecision.BFSFallback);
+                RecordDecision(unitId, PathDecision.BFSFallback);
                 return bestDir;
             }
 
@@ -1675,17 +1733,17 @@ public class Pathfinder
 
                 if (fbBestDir.LengthSq() > 0.001f)
                 {
-                    RecordDecision(unitIdx, PathDecision.TierFallback, -1, -1, fallbackTier);
+                    RecordDecision(unitId, PathDecision.TierFallback, -1, -1, fallbackTier);
                     return fbBestDir;
                 }
             }
 
             // Try imaginary chunk
             {
-                Vec2 localDir = _lastQueryDeferred ? Vec2.Zero : GetLocalChunkDirection(unitPos, targetPos, sizeTier, unitIdx);
+                Vec2 localDir = _lastQueryDeferred ? Vec2.Zero : GetLocalChunkDirection(unitPos, targetPos, sizeTier, unitId);
                 if (localDir.LengthSq() > 0.001f)
                 {
-                    RecordDecision(unitIdx, PathDecision.ImagChunkFallback);
+                    RecordDecision(unitId, PathDecision.ImagChunkFallback);
                     return localDir;
                 }
             }
@@ -1730,7 +1788,7 @@ public class Pathfinder
 
                 if (boundaryDir.LengthSq() > 0.001f)
                 {
-                    RecordDecision(unitIdx, PathDecision.BoundaryEscape);
+                    RecordDecision(unitId, PathDecision.BoundaryEscape);
                     return boundaryDir;
                 }
             }
@@ -1738,12 +1796,12 @@ public class Pathfinder
             // Last resort: beeline
             var diff = targetPos - unitPos;
             float diffLen = diff.Length();
-            RecordDecision(unitIdx, PathDecision.Beeline);
+            RecordDecision(unitId, PathDecision.Beeline);
             return diffLen > 0.01f ? diff * (1f / diffLen) : Vec2.Zero;
         }
 
         // Normal flow direction
-        RecordDecision(unitIdx, unitSector == targetSector ? PathDecision.TileFlow : PathDecision.BorderFlow);
+        RecordDecision(unitId, unitSector == targetSector ? PathDecision.TileFlow : PathDecision.BorderFlow);
         return finalDir;
         }
         finally
@@ -1754,10 +1812,10 @@ public class Pathfinder
 
     // --- Decision tracking ---
 
-    private void RecordDecision(int unitIdx, PathDecision decision, int bfsLX = -1, int bfsLY = -1, int fbTier = -1)
+    private void RecordDecision(uint unitId, PathDecision decision, int bfsLX = -1, int bfsLY = -1, int fbTier = -1)
     {
-        if (unitIdx >= 0)
-            _unitDecisions[unitIdx] = new PathDecisionInfo
+        if (unitId != GameConstants.InvalidUnit)
+            _unitDecisions[unitId] = new PathDecisionInfo
             {
                 Decision = decision,
                 BfsTargetLocalX = bfsLX,
@@ -1766,14 +1824,18 @@ public class Pathfinder
             };
     }
 
-    public PathDecisionInfo? GetUnitDecision(int unitIdx)
+    public PathDecisionInfo? GetUnitDecision(uint unitId)
     {
-        return _unitDecisions.TryGetValue(unitIdx, out var info) ? info : null;
+        return _unitDecisions.TryGetValue(unitId, out var info) ? info : null;
     }
 
-    public void ClearImaginaryChunk(int unitIdx)
+    /// <summary>Drop a unit's persistent imaginary chunk and debug decision.
+    /// Call when a unit is removed so the dictionaries don't accumulate
+    /// entries for ids that will never query again.</summary>
+    public void ClearImaginaryChunk(uint unitId)
     {
-        _unitImagChunks.Remove(unitIdx);
+        _unitImagChunks.Remove(unitId);
+        _unitDecisions.Remove(unitId);
     }
 
     // --- Budgeted pathfinding ---

@@ -142,9 +142,24 @@ public static class Orca
                 }
                 else
                 {
-                    Vec2 pushDir = relPos.LengthSq() > Epsilon
-                        ? relPos.Normalized()
-                        : new Vec2(1f, 0f);
+                    // Degenerate w — mirror the healthy branch above: with
+                    // relVel≈0, w = -relPos·invDT, so the push must point AWAY
+                    // from the neighbor (the old +relPos sign drove the unit
+                    // deeper into the overlap).
+                    Vec2 pushDir;
+                    if (relPos.LengthSq() > Epsilon)
+                    {
+                        pushDir = relPos.Normalized() * -1f;
+                    }
+                    else
+                    {
+                        // Exactly coincident: derive the arbitrary direction from
+                        // the neighbor's id so the two sides pick different escape
+                        // vectors — a shared constant translated the pair together
+                        // forever without separating.
+                        float ang = (neighbor.Id * 2654435761u & 0xFFFFu) * (MathF.PI * 2f / 65536f);
+                        pushDir = new Vec2(MathF.Cos(ang), MathF.Sin(ang));
+                    }
                     line.Direction = new Vec2(pushDir.Y, -pushDir.X);
                     Vec2 u = pushDir * (combinedRadius * invDT);
                     line.Point = currentVelocity + u * responsibility;

@@ -436,11 +436,12 @@ public class DebugDraw
         }
 
         // Draw imaginary chunks for each unit that has one (different color: orange/yellow)
-        foreach (int unitIdx in pathfinder.GetActiveImaginaryChunkUnits())
+        foreach (uint unitId in pathfinder.GetActiveImaginaryChunkUnits())
         {
-            if (unitIdx < 0 || unitIdx >= sim.Units.Count || !sim.Units[unitIdx].Alive) continue;
+            int unitIdx = Necroking.Movement.UnitUtil.ResolveUnitIndex(sim.Units, unitId);
+            if (unitIdx < 0 || !sim.Units[unitIdx].Alive) continue;
 
-            var info = pathfinder.GetImaginaryChunkInfo(unitIdx);
+            var info = pathfinder.GetImaginaryChunkInfo(unitId);
             if (info == null) continue;
             var (baseX, baseY, w, h, active) = info.Value;
 

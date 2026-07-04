@@ -306,6 +306,7 @@ public static class JumpSystem
         units[idx].JumpKind = 0;
         units[idx].Z = 0f;
         units[idx].JumpPlaybackSpeed = 1f;
+        units[idx].StuckTime = 0f; // hand back to normal movement without stale escape bias
     }
 
     // --- Helpers ---
