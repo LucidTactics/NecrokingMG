@@ -762,7 +762,15 @@ public class Simulation
                         GameSystems.SpellPenetration.Compute(_gameData, _units, casterIdx, spellDef));
                 }
                 if (affects)
-                    DealDamage(hit.UnitIdx, hit.Damage, casterIdx);
+                {
+                    // Plain arrows resolve Dominions-style (dodge roll + hit-location
+                    // armor); fireballs and spell projectiles auto-hit for flat damage.
+                    if (hit.ProjectileType == ProjectileType.Arrow
+                        && string.IsNullOrEmpty(hit.SpellID) && hit.Precision > 0)
+                        ResolveArrowHit(hit, casterIdx);
+                    else
+                        DealDamage(hit.UnitIdx, hit.Damage, casterIdx);
+                }
             }
         }
         PhaseEnd("projectiles");
@@ -1096,11 +1104,7 @@ public class Simulation
                                 _units[i].PreferredVel = Vec2.Zero;
                                 if (_units[i].AttackCooldown <= 0f && _units[i].PendingAttack.IsNone)
                                 {
-                                    int damage = _units[i].Stats.RangedDmg.Count > 0 ? _units[i].Stats.RangedDmg[0] : 8;
-                                    bool volley = dist > bestRange * 0.4f;
-                                    _projectiles.SpawnArrow(_units[i].Position, _units[targetIdx].Position,
-                                        _units[i].Faction, _units[i].Id, damage, volley, 10,
-                                        spawnHeight: _units[i].EffectSpawnHeight);
+                                    FireArrowAt(i, targetIdx, 0);
                                     _units[i].AttackCooldown = _units[i].Stats.RangedCooldownTime.Count > 0
                                         ? _units[i].Stats.RangedCooldownTime[0] : 2f;
                                 }
@@ -2801,15 +2805,7 @@ public class Simulation
                 defenderIdx = ResolveUnitTarget(t);
             if (defenderIdx < 0) return;
 
-            ref var stats = ref _units[unitIdx].Stats;
-            int wIdx = (weaponIdx >= 0 && weaponIdx < stats.RangedDmg.Count) ? weaponIdx : 0;
-            int damage = stats.RangedDmg.Count > 0 ? stats.RangedDmg[wIdx] : 8;
-            float maxRange = stats.RangedRange.Count > 0 ? stats.RangedRange[wIdx] : 18f;
-            float dist = (_units[defenderIdx].Position - _units[unitIdx].Position).Length();
-            bool volley = dist > maxRange * 0.4f;
-            _projectiles.SpawnArrow(_units[unitIdx].Position, _units[defenderIdx].Position,
-                _units[unitIdx].Faction, _units[unitIdx].Id, damage, volley, 10,
-                spawnHeight: _units[unitIdx].EffectSpawnHeight);
+            FireArrowAt(unitIdx, defenderIdx, weaponIdx);
             return;
         }
 
@@ -2841,6 +2837,113 @@ public class Simulation
         }
 
         ResolveMeleeAttack(unitIdx, meleeDefenderIdx, weaponIdx);
+    }
+
+    /// <summary>
+    /// Fire one arrow from attacker at defender using ranged weapon <paramref name="weaponIdx"/> —
+    /// the single source of truth for arrow ballistics, shared by the archetype path
+    /// (ResolvePendingAttack action moment) and the legacy ArcherAttack behavior.
+    /// Ports the C++ resolveRangedAttack:
+    ///  - lead a moving target by the arrow's straight-line flight time,
+    ///  - direct (flat 5°) shot only when the target is inside the weapon's DirectRange
+    ///    AND no friendly stands in the fire lane — otherwise lob a ballistic arc that
+    ///    sails over allies' heads (lobbed arrows only turn lethal below head height
+    ///    on the way down),
+    ///  - per-weapon Precision drives the lob scatter / direct wobble in SpawnArrow.
+    /// </summary>
+    private void FireArrowAt(int attackerIdx, int defenderIdx, int weaponIdx)
+    {
+        ref var stats = ref _units[attackerIdx].Stats;
+        int wIdx = (weaponIdx >= 0 && weaponIdx < stats.RangedDmg.Count) ? weaponIdx : 0;
+        int damage = stats.RangedDmg.Count > 0 ? stats.RangedDmg[wIdx] : 8;
+        float maxRange = stats.RangedRange.Count > 0 ? stats.RangedRange[wIdx] : 18f;
+        float directRange = (wIdx < stats.RangedDirectRange.Count && stats.RangedDirectRange[wIdx] > 0f)
+            ? stats.RangedDirectRange[wIdx] : maxRange * 0.4f;
+        int precision = (wIdx < stats.RangedPrecision.Count && stats.RangedPrecision[wIdx] > 0)
+            ? stats.RangedPrecision[wIdx] : 10;
+        string weaponName = wIdx < stats.RangedWeapons.Count ? stats.RangedWeapons[wIdx].Name : "";
+
+        Vec2 from = _units[attackerIdx].Position;
+        Vec2 aim = _units[defenderIdx].Position;
+        float dist = (aim - from).Length();
+
+        float flightTime = dist / ProjectileManager.ArrowSpeed;
+        aim += _units[defenderIdx].Velocity * flightTime;
+        dist = (aim - from).Length();
+
+        bool direct = dist <= directRange && IsFireLaneClear(attackerIdx, aim);
+        _projectiles.SpawnArrow(from, aim, _units[attackerIdx].Faction, _units[attackerIdx].Id,
+            damage, volley: !direct, precision, weaponName,
+            spawnHeight: _units[attackerIdx].EffectSpawnHeight);
+    }
+
+    /// <summary>
+    /// Dominions-style ranged hit resolution (ported from the C++ resolveRangedAttack):
+    /// an arrow that physically reaches its target can still be dodged/parried — opposed
+    /// Precision + DRN vs max(Defense/2 − harassment, 0) + ShieldParry×2 + DRN — and a
+    /// connecting arrow is mitigated by hit-location armor (head vs body, rolled from the
+    /// projectile's arc in ProjectileManager: plunging lobs strike the head half the time,
+    /// flat shots rarely) + natural protection. Arrows count as piercing (15% armor
+    /// reduction), and damage is weapon-only — no Strength behind a bowshot.
+    /// </summary>
+    private void ResolveArrowHit(ProjectileHit hit, int attackerIdx)
+    {
+        int defenderIdx = hit.UnitIdx;
+        var defStats = _units[defenderIdx].Stats;
+
+        int atkRoll = hit.Precision + UnitUtil.RollDRN();
+        int defRoll = Math.Max(defStats.Defense / 2 - _units[defenderIdx].Harassment, 0)
+                    + defStats.ShieldParry * 2 + UnitUtil.RollDRN();
+        if (atkRoll < defRoll)
+        {
+            DebugLog.Log("combat", $"[Ranged] {hit.WeaponName} deflected by #{defenderIdx}: " +
+                $"prec {hit.Precision}+DRN={atkRoll} vs def {defRoll}");
+            return;
+        }
+
+        int armorProt = hit.HitLocation == HitLocation.Head
+            ? defStats.Armor.HeadProtection : defStats.Armor.BodyProtection;
+        float protStat = (defStats.NaturalProt + armorProt) * 0.85f; // piercing
+        int prot = (int)protStat + UnitUtil.RollDRN();
+        int netDmg = Math.Max(0, hit.Damage + UnitUtil.RollDRN() - prot);
+
+        DebugLog.Log("combat", $"[Ranged] {hit.WeaponName} hits #{defenderIdx} " +
+            $"{hit.HitLocation}: dmg {hit.Damage} vs prot {prot} → {netDmg} net");
+        if (netDmg > 0)
+            DealDamage(defenderIdx, netDmg, attackerIdx);
+    }
+
+    // A friendly within this distance of the attacker→aim line forces a lob.
+    private const float FireLaneBlockRadius = 1.0f;
+    private static readonly List<uint> _fireLaneScratch = new(32);
+
+    /// <summary>True when no living friendly stands within <see cref="FireLaneBlockRadius"/>
+    /// of the straight segment from the attacker to the aim point — i.e. a flat direct
+    /// shot wouldn't skewer an ally on the way. Enemies in the lane don't block (the
+    /// arrow simply hits them instead).</summary>
+    private bool IsFireLaneClear(int attackerIdx, Vec2 target)
+    {
+        Vec2 from = _units[attackerIdx].Position;
+        Vec2 seg = target - from;
+        float segLenSq = seg.LengthSq();
+        if (segLenSq < 1e-4f) return true;
+
+        Vec2 mid = (from + target) * 0.5f;
+        float queryRadius = 0.5f * MathF.Sqrt(segLenSq) + FireLaneBlockRadius;
+        _fireLaneScratch.Clear();
+        _quadtree.QueryRadiusByFaction(mid, queryRadius,
+            _units[attackerIdx].Faction.Bit(), _fireLaneScratch);
+        foreach (uint nid in _fireLaneScratch)
+        {
+            if (nid == _units[attackerIdx].Id) continue;
+            int j = UnitUtil.ResolveUnitIndex(_units, nid);
+            if (j < 0) continue;
+            float tSeg = Math.Clamp((_units[j].Position - from).Dot(seg) / segLenSq, 0f, 1f);
+            Vec2 closest = from + seg * tSeg;
+            if ((_units[j].Position - closest).LengthSq() < FireLaneBlockRadius * FireLaneBlockRadius)
+                return false;
+        }
+        return true;
     }
 
     private static readonly List<uint> _sweepScratch = new(32);

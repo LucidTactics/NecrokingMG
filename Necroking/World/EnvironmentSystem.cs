@@ -720,6 +720,57 @@ public class EnvironmentSystem
         }
     }
 
+    /// <summary>Count objects of the given def inside the rect that still occupy a
+    /// "spawned" slot for zone spawning: visible, or collected-but-pending-respawn
+    /// (def RespawnTime &gt; 0, so it comes back on its own). Collected single-use
+    /// objects don't count — they stay gone until revived. Pass
+    /// <paramref name="positions"/> to also collect their world positions (used for
+    /// keep-apart spacing when scattering new spawns).</summary>
+    public int CountActiveOfDefInRect(int defIdx, float minX, float minY, float maxX, float maxY,
+        List<Necroking.Core.Vec2>? positions = null)
+    {
+        int n = 0;
+        for (int i = 0; i < _objects.Count; i++)
+        {
+            var obj = _objects[i];
+            if (obj.DefIndex != defIdx) continue;
+            if (obj.X < minX || obj.X > maxX || obj.Y < minY || obj.Y > maxY) continue;
+            if (i < _objectRuntime.Count)
+            {
+                var rt = _objectRuntime[i];
+                if (!rt.Alive) continue;
+                if (rt.Collected && _defs[obj.DefIndex].RespawnTime <= 0f) continue;
+            }
+            n++;
+            positions?.Add(new Necroking.Core.Vec2(obj.X, obj.Y));
+        }
+        return n;
+    }
+
+    /// <summary>Revive one collected single-use object of the given def inside the rect.
+    /// Zone spawning prefers this over AddObject so long sessions reuse spent instances
+    /// instead of growing the object list forever. Returns false when there is nothing
+    /// to revive (spawn a fresh object instead).</summary>
+    public bool TryReviveForagableInRect(int defIdx, float minX, float minY, float maxX, float maxY)
+    {
+        for (int i = 0; i < _objects.Count && i < _objectRuntime.Count; i++)
+        {
+            var obj = _objects[i];
+            if (obj.DefIndex != defIdx) continue;
+            if (_defs[obj.DefIndex].RespawnTime > 0f) continue; // self-respawns on its own timer
+            var rt = _objectRuntime[i];
+            if (!rt.Collected || !rt.Alive) continue;
+            if (obj.X < minX || obj.X > maxX || obj.Y < minY || obj.Y > maxY) continue;
+            rt.Collected = false;
+            rt.RespawnTimer = 0f;
+            _objectRuntime[i] = rt;
+            if (_defs[obj.DefIndex].CollisionRadius > 0)
+                FireCollisionsDirty(i);
+            return true;
+        }
+        return false;
+    }
+
     /// <summary>Tick berry-bush state machines. NoBerry bushes count up to
     /// BerryRespawnTime then return to Berries (clearing any prior AppliedBuffID).
     /// Poisoned bushes do not decay back on their own — they stay Poisoned until

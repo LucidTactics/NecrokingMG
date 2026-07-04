@@ -59,6 +59,33 @@ forwards to it so AI and sim share one formula (they previously drifted — 1.5f
 - `FindClosestEnemyToPoint(worldPos, maxRange)` lives in `Game1.cs` (`~line 4097`) — nearest
   non-Undead unit within `maxRange` of `worldPos`; squared-distance, no path/LoS.
 
+### Ranged / projectiles — `Necroking/Game/Projectile.cs` (namespace `Necroking.GameSystems`)
+**`ProjectileManager`** owns all projectiles (arrows, fireballs, potion lobs): spawn API +
+per-frame `Update(dt, units, qt, corpses)` (physics, homing/swirl, collision, produces
+`Hits`/`Impacts` lists consumed by `Simulation`).
+- **`SpawnArrow(from, target, faction, owner, damage, volley, precision, weaponName,
+  spawnHeight)`** — `volley:false` = near-flat 5° direct shot; **`volley:true` = ballistic
+  lob**: solves launch angle from `dist*Gravity/speed²`, clamped 10°–45°, plus
+  precision-scaled scatter (`Projectile.IsLob`). So **arcing shots already exist** — the
+  choice is made by the CALLER (`Simulation.ResolvePendingAttack` ranged branch uses
+  `volley = dist > maxRange*0.4f`). `spawnHeight` should be the attacker's
+  `Unit.EffectSpawnHeight` (bow-tip anim point).
+- `SpawnFireball` / `SpawnPotionLob` — always-lobbed variants; `DetonateAtTarget` bursts
+  exactly at the aimed point instead of overshooting.
+- **Projectiles do NOT collide with walls/env objects** — only units (quadtree radius
+  query, arrows hit while `0 < Height < 2`), corpses (potions), and the ground. There is
+  **no line-of-sight utility in the codebase** (no LoS/raycast helper) — a "lob over
+  blockers" feature needs both a new LoS query and (optionally) arrow-vs-wall collision.
+- **Ranged fire path (archetype units)**: `RangedUnitHandler.UpdateCombat` stamps
+  `PendingAttack` + `PendingWeaponIdx/PendingWeaponIsRanged/PendingRangedTarget` →
+  anim hit frame → `ResolvePendingAttack` ranged branch (`isRanged ||
+  Archetype == ArcherUnit`): re-resolves the target by stored ID, reads
+  `Stats.RangedDmg/RangedRange[weaponIdx]`, calls `SpawnArrow`. **No range/LoS re-check at
+  resolve** (same stamp-time-gating rule as melee).
+- **Legacy path**: `AIBehavior.ArcherAttack` in `Simulation.UpdateAI` (`~line 1046`)
+  spawns arrows directly (no anim sync) for archetype-less units — don't extend it; new
+  ranged behavior belongs in `RangedUnitHandler`.
+
 ### `Necroking/Game1.Animation.cs` — the resolve trigger
 The per-unit anim tick (`~line 752`): when `animData.Ctrl.JustHitEffectFrame` fires and the
 unit has a non-none `PendingAttack`, it calls `_sim.ResolvePendingAttack(i)`. (A pending

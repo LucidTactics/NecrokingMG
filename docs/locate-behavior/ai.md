@@ -89,7 +89,15 @@ ownership:
   good model for `GetRoutineName`/`GetSubroutineName` and `OnSpawn`.
 - `CombatUnitHandler.cs` / `RangedUnitHandler.cs` — constructed with an archetype id arg
   (one class, several registered ids: PatrolSoldier/GuardStationary/ArmyUnit,
-  ArcherUnit/CasterUnit). `PlayerControlledHandler.cs` (exposes public routine consts —
+  ArcherUnit/CasterUnit). **`RangedUnitHandler.cs` is the archer/caster brain**: routines
+  Idle(0)/Alert(1)/Combat(2)/Return(3); `UpdateCombat` reads `Stats.RangedRange[w]`
+  (fallback 18f), closes in (Hurry) when `dist > maxRange`, **kites** when
+  `dist < maxRange*0.25` (ArcherUnit only — `SubroutineSteps.MoveAwayFrom` at Walk effort;
+  casters stand), else stops; fires by stamping `PendingAttack` + `PendingWeaponIdx` +
+  `PendingWeaponIsRanged` + `PendingRangedTarget` (never `EngagedTarget` — that runs the
+  melee queue). Arrow spawns later at the anim hit frame via
+  `Simulation.ResolvePendingAttack`'s ranged branch (see combat.md "Ranged / projectiles").
+  `PlayerControlledHandler.cs` (exposes public routine consts —
   `RoutineCraftAtTable`, `RoutineBuildGlyph`, `RoutineWorkOnBush`, `BuildSub_*` — written
   by external systems, see "External routine writers"), `WolfPackHandler.cs` (wild wolves),
   `RatPackHandler.cs`, `DeerHerdHandler.cs`.
@@ -97,12 +105,41 @@ ownership:
   `Watchdog`, Guard/Bark routines) — village AI; both consult `VillageThreat.cs`
   (static undead-detection helpers) and `Game/VillageSystem.cs` (per-village alert/posture,
   updated inside `UpdateAI` before the unit loop; wiring in `Game1.Villages.cs`).
-- `SquadSystem.cs` — persistent unit groups (`Squad`: Members/Centroid/Spread/shared
-  alert/leader, keyed by `Unit.SquadId`). Recomputed once per frame by `_squads.Update`
-  in `Simulation.Update` *before* `UpdateAI`; read by DeerHerd/WolfPack/RatPack handlers
-  and `WolfPackHuntAI` so groups act as one object instead of per-frame proximity scans.
+- `SquadSystem.cs` — persistent unit groups (`Squad`: `Members` (unit **ids**, not
+  indices) / derived `Centroid`/`Spread`/`AliveCount`/`LeaderId`/shared alert, keyed by
+  `Unit.SquadId`). API: `CreateSquad(faction, archetype)` (pre-formed, caller fills
+  Members + stamps each `SquadId` — the zone-load path), `TryGet(id)`/`Get(id)`,
+  `Squads` (read-only dict view), `Clear()`. `_squads.Update` runs once per frame in
+  `Simulation.Update` *before* `UpdateAI`: `AssignUnassigned` (lazy clustering — any
+  squad-kind unit with `SquadId==0` or a dead squad id joins the nearest same-kind squad
+  within `ClusterRadius` 22u / `MaxMembers` 24, else seeds a new one), then `Recompute`
+  (prunes dead members in place, recomputes derived fields, **culls squads with zero
+  living members**). Ids are monotonic (`_nextId++`), never reused within a map (reset
+  only by `Clear()` per map load). Handlers read their group via `AIContext.MySquad`.
+  No merge/split logic exists — only lazy join + cull-on-empty.
+  Read by DeerHerd/WolfPack/RatPack handlers and `WolfPackHuntAI` so groups act as one
+  object instead of per-frame proximity scans. `Simulation.Squads` is the public accessor.
 
 ### Shared transition logic
+- **Routine-transition choke point (commit 0b435eb)** — every `Routine` change goes
+  through one of three sanctioned paths; **writing `Unit.Routine` directly is a bug**
+  (skips exit cleanup; the only exception is `OnSpawn` initializers):
+  - `AIContext.TransitionTo(routine, sub=0, timer=0)` (`AI/AIContext.cs`) — a handler
+    changing its OWN unit. Fires the handler's `OnRoutineExit`/`OnRoutineEnter` hooks,
+    stamps Subroutine+SubroutineTimer; no-op (returns false) when already in the routine.
+  - `AIControl.Interrupt(units|ctx, idx, reason)` (`AI/AIControl.cs`) — the one legal way
+    for an EXTERNAL system to yank a unit: fires the exit hook, clears the pin fields
+    (`Target`/`EngagedTarget`/`PendingAttack`/`InCombat`), resets to routine 0. Callers:
+    physics launch, worker assign/unassign, player WASD-cancel, wolf-hunt recast.
+  - `AIControl.StartRoutine(units|ctx, idx, routine, sub, timer)` — external order start;
+    a same-routine call RESTARTS it (full exit/enter cycle). Used by spells/crafting/
+    build-UI and by handlers wanting restart semantics. Set routine parameter fields
+    (MoveTarget etc.) AFTER the call — the exit hook clears the old routine's fields.
+  - Per-routine cleanup lives ONCE in each handler's `OnRoutineExit` (e.g.
+    `RangedUnitHandler.OnRoutineExit` clears Target/EngagedTarget on Combat exit but
+    deliberately keeps `PendingAttack` so a queued arrow still fires).
+  - Debugging: `ai_trace` dev command → logs every transition (unit, archetype, from→to,
+    interrupt reason) to `log/ai_transition.log` (`AIControl.TraceTransitions`).
 - `CombatTransitions.cs` — **the canonical routine-transition helpers**:
   `StandardEngagedExits(ref ctx, chasingRoutine, returningRoutine, meleeHysteresis, leashRadius, leashCenter)`
   and `StandardChasingExits(...)`. Handlers pass their own routine byte values (different
@@ -221,25 +258,24 @@ count stays the same; only the recorded identity changes.
 
 Per-unit AI state (`Routine`, `Subroutine`, `SubroutineTimer` bytes/float) lives on the
 `Unit` class in `Necroking/Movement/UnitSystem.cs`; `AIContext.Routine/Subroutine` are just
-pass-throughs. Handlers own them per-tick, but several engine systems write them directly
-("assign a routine and walk away" — the handler is then expected to run/exit it):
+pass-throughs. Since commit 0b435eb external systems no longer write the bytes raw — they
+go through `AIControl.StartRoutine` (order start) / `AIControl.Interrupt` (cancel/yank),
+see "Shared transition logic" above. Current external writers:
 
-- `Game1.Crafting.cs` / `Game1.Spells.cs` (bush-work) / `Game/BuildingMenuUI.cs` — set the
-  **player's** `Routine`/`Subroutine` to `PlayerControlledHandler.RoutineCraftAtTable` /
-  `RoutineWorkOnBush` / `RoutineBuildGlyph` + `BuildSub_WalkToSite`. Cancel path: WASD input
-  zeroes `Routine`/`Subroutine`/`CorpseInteractPhase` in `Simulation.UpdateAI`'s
-  PlayerControlled branch. `Game/TableCraftingSystem.cs` *reads* these to know the player is
-  channeling.
-- `Game1.Spells.cs` horde-command spell — force-writes `Routine = 4` (RoutineCommanded) on
-  horde minions, and later flips `Routine == 4` units to `3` (Returning). Raw byte literals,
-  not named consts — must match `HordeMinionHandler`'s routine indices.
-- `Game/PhysicsSystem.cs` — zeroes Routine/Subroutine/SubroutineTimer when a unit enters
-  physics (knockback etc.); the unit re-enters its archetype default state on release.
-- `Game/Jobs/WorkerSystem.cs` — zeroes Routine/Subroutine on worker assign/unassign
+- `Game1.Crafting.cs` / `Game1.Spells.cs` (bush-work) / `Game/BuildingMenuUI.cs` — call
+  `AIControl.StartRoutine(units, necroIdx, PlayerControlledHandler.RoutineCraftAtTable /
+  RoutineWorkOnBush / RoutineBuildGlyph, …)`. Cancel path: WASD input →
+  `AIControl.Interrupt(units, i, "player-move")` in `Simulation.UpdateAI`'s
+  PlayerControlled branch. `Game/TableCraftingSystem.cs` *reads* these to know the player
+  is channeling.
+- `Game1.Spells.cs` horde-command spell — `HordeMinionHandler.CommandTo(units, idx, target)`
+  / `Recall(units, idx)` intent APIs (which call `StartRoutine` with the now-public
+  `RoutineCommanded`/`RoutineReturning` consts). No more raw `Routine = 4` literals.
+- `Game/PhysicsSystem.cs` — `AIControl.Interrupt(units, idx, "physics-launch")` when a unit
+  enters physics (knockback etc.).
+- `Game/Jobs/WorkerSystem.cs` — `Interrupt(…, "worker-assign"/"worker-unassign")`
   (WorkerHandler uses its own `WorkerPhase` byte, not Routine).
-- `Game1.Villages.cs` — zeroes Routine/Subroutine on some village-unit state change.
-- `Simulation` — resets horde minions to `Routine = 0` (Following) in a couple of places
-  (e.g. wolf-hunt release, respawn/convert paths).
+- `Simulation` — `Interrupt(…, "wolf-hunt-recast")` on wolf-hunt release.
 
 ## Pitfalls / gotchas
 
@@ -274,8 +310,10 @@ pass-throughs. Handlers own them per-tick, but several engine systems write them
   (d) routine byte written externally with no exit arc in the handler (see "External
   routine writers") leaves the unit in a state its handler never leaves.
 - **Routine byte indices are per-handler, not global** — `Routine = 4` means different
-  things to different handlers; external writers using raw literals (e.g. `Game1.Spells.cs`
-  horde command) silently desync if a handler's routine enum is renumbered.
+  things to different handlers. Use the handler's public routine consts (e.g.
+  `HordeMinionHandler.RoutineCommanded`) via `AIControl.StartRoutine`/intent APIs — never
+  raw literals, and **never write `Unit.Routine` directly** (skips `OnRoutineExit` cleanup;
+  see "Shared transition logic").
 
 ## Related areas
 - [jobs-workers.md](jobs-workers.md) — `WorkerSystem` (the deposit/pile/stockpile brain) and

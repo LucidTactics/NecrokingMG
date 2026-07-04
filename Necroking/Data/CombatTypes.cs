@@ -160,4 +160,5 @@ public class UnitStats
     public List<float> RangedDirectRange { get; set; } = new();
     public List<float> RangedCooldownTime { get; set; } = new();
     public List<int> RangedDmg { get; set; } = new();
+    public List<int> RangedPrecision { get; set; } = new();
 }

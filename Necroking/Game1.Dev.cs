@@ -500,6 +500,38 @@ public partial class Game1 {
                break;
             }
 
+            // Add a runtime map zone with one spawn-table entry, for driving the periodic
+            // zone spawn system without editor mouse work:
+            // zone_add <kind> <x> <y> <halfW> <halfH> [defId] [perMinute] [maxAlive]
+            case "zone_add": {
+               if (c.Args.Length < 5) {
+                  c.Complete(Necroking.Dev.DevServer.Error("zone_add needs: <kind> <x> <y> <halfW> <halfH> [defId] [perMinute] [maxAlive]"));
+                  break;
+               }
+               if (!Enum.TryParse<GameSystems.ZoneKind>(c.Args[0], true, out var zkind)) {
+                  c.Complete(Necroking.Dev.DevServer.Error($"unknown zone kind: {c.Args[0]}"));
+                  break;
+               }
+               var devZone = new GameSystems.MapZone {
+                  Id = $"devzone_{_zoneSystem.Count}",
+                  Name = $"dev {zkind}",
+                  Kind = zkind,
+                  X = DevFloat(c.Args[1]), Y = DevFloat(c.Args[2]),
+                  HalfW = DevFloat(c.Args[3]), HalfH = DevFloat(c.Args[4]),
+               };
+               if (c.Args.Length >= 6) {
+                  devZone.Spawns.Add(new GameSystems.ZoneSpawnEntry {
+                     DefId = c.Args[5],
+                     PerMinute = c.Args.Length >= 7 ? DevFloat(c.Args[6]) : 1f,
+                     MaxAlive = c.Args.Length >= 8 ? (int)DevFloat(c.Args[7]) : 5,
+                  });
+               }
+               _zoneSystem.Add(devZone);
+               FillZoneSpawnsAtStart(devZone, _sim.Grid); // same half-cap pre-fill as map load
+               c.Complete(Necroking.Dev.DevServer.Ok($"added {devZone.Id} ({zkind}) at {devZone.X},{devZone.Y}"));
+               break;
+            }
+
             // ── Worker job system (P0/P1) dev verbs ──
 
             // Place an env object by def id: window.dev('place_obj',['mushroom_pile', x, y, scale])

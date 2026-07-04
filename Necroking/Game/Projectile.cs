@@ -324,7 +324,7 @@ public class ProjectileManager
                     if (nid == proj.OwnerID) continue;
                     int hitIdx = UnitUtil.ResolveUnitIndex(units, nid);
                     if (hitIdx < 0) continue;
-                    _hits.Add(new ProjectileHit { UnitIdx = hitIdx, Damage = proj.Damage, OwnerID = proj.OwnerID, OwnerFaction = proj.OwnerFaction, Precision = proj.Precision, WeaponName = proj.WeaponName, ProjectileType = proj.Type });
+                    _hits.Add(new ProjectileHit { UnitIdx = hitIdx, Damage = proj.Damage, OwnerID = proj.OwnerID, OwnerFaction = proj.OwnerFaction, Precision = proj.Precision, WeaponName = proj.WeaponName, ProjectileType = proj.Type, HitLocation = RollArrowHitLocation(proj.IsLob) });
                     _impacts.Add(new ImpactEvent { Position = proj.Position, Type = proj.Type });
                     proj.Alive = false;
                     break;
@@ -445,7 +445,7 @@ public class ProjectileManager
                         if (d < bestDist) { bestDist = d; bestIdx = idx; }
                     }
                     if (bestIdx >= 0)
-                        _hits.Add(new ProjectileHit { UnitIdx = bestIdx, Damage = proj.Damage, OwnerID = proj.OwnerID, OwnerFaction = proj.OwnerFaction, Precision = proj.Precision, WeaponName = proj.WeaponName, ProjectileType = proj.Type, SpellID = proj.SpellID, ImpactPos = proj.Position });
+                        _hits.Add(new ProjectileHit { UnitIdx = bestIdx, Damage = proj.Damage, OwnerID = proj.OwnerID, OwnerFaction = proj.OwnerFaction, Precision = proj.Precision, WeaponName = proj.WeaponName, ProjectileType = proj.Type, SpellID = proj.SpellID, ImpactPos = proj.Position, HitLocation = proj.Type == ProjectileType.Arrow ? RollArrowHitLocation(proj.IsLob) : HitLocation.Chest });
                 }
                 _impacts.Add(new ImpactEvent { Position = proj.Position, Type = proj.Type, AoeRadius = proj.AoeRadius, SpellID = proj.SpellID, HitEffectFlipbookID = proj.HitEffectFlipbookID, HitEffectColor = proj.HitEffectColor, HitEffectScale = proj.HitEffectScale, HitEffectBlendMode = proj.HitEffectBlendMode, HitEffectAlignment = proj.HitEffectAlignment });
                 proj.Alive = false;
@@ -476,6 +476,15 @@ public class ProjectileManager
         }
         for (int i = _projectiles.Count - 1; i >= 0; i--)
             if (!_projectiles[i].Alive) _projectiles.RemoveAt(i);
+    }
+
+    /// <summary>Where an arrow strikes: a plunging lob comes down on the target
+    /// (50% head), a flat direct shot flies at torso height (20% head). Mirrors
+    /// the C++ hit-location split; feeds head-vs-body armor in ResolveArrowHit.</summary>
+    private static HitLocation RollArrowHitLocation(bool isLob)
+    {
+        float headChance = isLob ? 0.5f : 0.2f;
+        return _rng.NextDouble() < headChance ? HitLocation.Head : HitLocation.Chest;
     }
 
     public void Clear() { _projectiles.Clear(); _impacts.Clear(); _hits.Clear(); }

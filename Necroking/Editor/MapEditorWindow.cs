@@ -196,6 +196,9 @@ public class MapEditorWindow
     private bool _zoneRubberBanding;             // drag-out in progress
     private Vec2 _zoneDragStartWorld;            // rubber-band anchor corner
     private int _draggingZone = -1;
+    // Snapshot of the dragged zone's rect, taken at mouse press; pushed to the undo
+    // stack on the first frame the drag actually changes something (see UndoZoneEdit).
+    private UndoZoneEdit? _zonePendingUndo;
     private RegionHandle _zoneHandle = RegionHandle.None; // rect subset only (no CircleRadius)
     private Vec2 _zoneDragOffset;                // zone center - click point, for body drag
     // Reused per-frame accumulator for the village panel's contents summary
@@ -438,6 +441,31 @@ public class MapEditorWindow
         {
             Units.Clear();
             Units.AddRange(Cleared);
+        }
+    }
+
+    // One zone rect move/resize = one mouse press (snapshot taken at drag start,
+    // pushed on the first actual change). Undoing also cancels an in-flight drag
+    // so the held mouse doesn't immediately re-apply the undone move. The zone is
+    // found by Id — indices may have shifted since the drag.
+    private class UndoZoneEdit : UndoAction
+    {
+        public MapEditorWindow Owner = null!;
+        public string ZoneId = "";
+        public float X, Y, HalfW, HalfH;
+        public override void Undo()
+        {
+            var zones = Owner._zoneSystem.ZonesMut;
+            for (int i = 0; i < zones.Count; i++)
+            {
+                if (zones[i].Id != ZoneId) continue;
+                zones[i].X = X; zones[i].Y = Y;
+                zones[i].HalfW = HalfW; zones[i].HalfH = HalfH;
+                break;
+            }
+            Owner._draggingZone = -1;
+            Owner._zoneHandle = RegionHandle.None;
+            Owner._zonePendingUndo = null;
         }
     }
 
@@ -4111,6 +4139,17 @@ public class MapEditorWindow
                             break;
                         }
                     }
+
+                    // Drag started: snapshot the rect as this press's undo state.
+                    if (_draggingZone >= 0)
+                    {
+                        var dz = zones[_draggingZone];
+                        _zonePendingUndo = new UndoZoneEdit
+                        {
+                            Owner = this, ZoneId = dz.Id,
+                            X = dz.X, Y = dz.Y, HalfW = dz.HalfW, HalfH = dz.HalfH,
+                        };
+                    }
                 }
 
                 if (leftDown && _draggingZone >= 0 && _draggingZone < _zoneSystem.Count)
@@ -4127,6 +4166,16 @@ public class MapEditorWindow
                         ApplyRectHandleDrag(_zoneHandle, worldPos, ref x, ref y, ref hw, ref hh);
                         z.X = x; z.Y = y; z.HalfW = hw; z.HalfH = hh;
                     }
+
+                    // First frame the drag actually moves something: commit the snapshot,
+                    // so a plain click-select never costs an undo step.
+                    if (_zonePendingUndo != null
+                        && (z.X != _zonePendingUndo.X || z.Y != _zonePendingUndo.Y
+                            || z.HalfW != _zonePendingUndo.HalfW || z.HalfH != _zonePendingUndo.HalfH))
+                    {
+                        PushUndo(_zonePendingUndo);
+                        _zonePendingUndo = null;
+                    }
                 }
             }
         }
@@ -4138,6 +4187,7 @@ public class MapEditorWindow
             _draggingZone = -1;
             _zoneHandle = RegionHandle.None;
             _zoneRubberBanding = false;
+            _zonePendingUndo = null;
         }
     }
 
@@ -4221,8 +4271,9 @@ public class MapEditorWindow
             z.HalfH = MathF.Max(1f, _eb.DrawFloatField($"zone_hh_{idx}", "Half H", z.HalfH, panelX + Margin, y, fw, 1f));
             y += FieldHeight + 4;
 
-            if (z.Kind == ZoneKind.Village)
-                DrawSmallText("Village config: see left panel", panelX + Margin, y, TextDim);
+            DrawSmallText(z.Kind == ZoneKind.Village
+                ? "Village config: see left panel"
+                : "Spawn config: see left panel", panelX + Margin, y, TextDim);
         }
         else
         {
@@ -4232,20 +4283,20 @@ public class MapEditorWindow
         }
     }
 
-    /// <summary>Rect of the left-side village panel, or null when it isn't showing
-    /// (Zones tab with a Village zone selected only). Single source for Draw,
+    /// <summary>Rect of the left-side zone config panel, or null when it isn't showing
+    /// (Zones tab with a zone selected only). Single source for Draw,
     /// UpdateZonesTab world-input gating and IsMouseOverPanel.</summary>
     private Rectangle? ZoneLeftPanelRect(int screenH)
     {
         if (ActiveTab != MapEditorTab.Zones) return null;
         if (SelectedZoneIndex < 0 || SelectedZoneIndex >= _zoneSystem.Count) return null;
-        if (_zoneSystem.Zones[SelectedZoneIndex].Kind != ZoneKind.Village) return null;
         return new Rectangle(10, 10, 300, Math.Min(screenH - 20, 560));
     }
 
-    /// <summary>The village config panel on the LEFT side of the screen: name, population
-    /// spawn config, and a live summary of what's authored inside the zone rect. Drawn
-    /// post-clip (the right-panel scissor would hide it entirely).</summary>
+    /// <summary>The zone config panel on the LEFT side of the screen. Village zones get
+    /// name + population + a live contents summary; the other kinds get the periodic
+    /// spawn table (def / per-minute / max-alive rows). Drawn post-clip (the right-panel
+    /// scissor would hide it entirely).</summary>
     private void DrawZoneLeftPanel(int screenW, int screenH)
     {
         var rectOpt = ZoneLeftPanelRect(screenH);
@@ -4257,7 +4308,13 @@ public class MapEditorWindow
         _spriteBatch.Draw(_pixel, rect, BgColor);
         DrawRectBorder(rect.X, rect.Y, rect.Width, rect.Height, SeparatorColor);
         _spriteBatch.Draw(_pixel, new Rectangle(rect.X, rect.Y, rect.Width, HeaderHeight), HeaderBg);
-        DrawSmallText($"Village: {z.Name}", rect.X + Margin, rect.Y + 6, TextBright);
+        DrawSmallText($"{z.Kind}: {z.Name}", rect.X + Margin, rect.Y + 6, TextBright);
+
+        if (z.Kind != ZoneKind.Village)
+        {
+            DrawZoneSpawnPanel(rect, z, idx);
+            return;
+        }
 
         int x = rect.X + Margin;
         int fw = rect.Width - Margin * 2;
@@ -4328,6 +4385,144 @@ public class MapEditorWindow
             y += LineHeight;
         }
         return y + 2;
+    }
+
+    // Combo option caches for the zone spawn panel (unit ids are static per session,
+    // foragable env def ids follow the per-map def list).
+    private string[]? _zoneWolfIdOptions, _zoneDeerIdOptions, _zoneAnimalIdOptions;
+    private string[]? _zoneForagableIdOptions;
+    private int _zoneForagableDefCount = -1;
+
+    /// <summary>Unit dropdown per zone kind: WolfPack → wolves only, DeerHerd → deer only,
+    /// AnimalPack → every other Animal-faction def. Wolf/deer membership = the pack
+    /// archetype where set, else the def id (DireWolf/JuvWolf carry no archetype).</summary>
+    private string[] GetZoneUnitIdOptions(ZoneKind kind)
+    {
+        if (_gameData == null) return Array.Empty<string>();
+        if (_zoneWolfIdOptions == null)
+        {
+            List<string> wolves = new(), deer = new(), rest = new();
+            foreach (var id in _gameData.Units.GetIDs())
+            {
+                var def = _gameData.Units.Get(id);
+                if (def == null || def.Faction != "Animal") continue;
+                if (def.Archetype == "WolfPack" || id.Contains("wolf", StringComparison.OrdinalIgnoreCase))
+                    wolves.Add(id);
+                else if (def.Archetype == "DeerHerd" || id.Contains("deer", StringComparison.OrdinalIgnoreCase))
+                    deer.Add(id);
+                else
+                    rest.Add(id);
+            }
+            _zoneWolfIdOptions = wolves.ToArray();
+            _zoneDeerIdOptions = deer.ToArray();
+            _zoneAnimalIdOptions = rest.ToArray();
+        }
+        return kind switch
+        {
+            ZoneKind.WolfPack => _zoneWolfIdOptions,
+            ZoneKind.DeerHerd => _zoneDeerIdOptions!,
+            _ => _zoneAnimalIdOptions!,
+        };
+    }
+
+    private string[] GetZoneForagableIdOptions()
+    {
+        if (_zoneForagableIdOptions == null || _zoneForagableDefCount != _envSystem.DefCount)
+        {
+            var list = new List<string>();
+            for (int i = 0; i < _envSystem.DefCount; i++)
+            {
+                var d = _envSystem.GetDef(i);
+                if (d.IsForagable) list.Add(d.Id);
+            }
+            _zoneForagableIdOptions = list.ToArray();
+            _zoneForagableDefCount = _envSystem.DefCount;
+        }
+        return _zoneForagableIdOptions;
+    }
+
+    /// <summary>How many of the entry's def the zone currently holds — live env objects
+    /// for Foraging zones (shared with the running game), editor-placed units for the
+    /// animal kinds (runtime spawns aren't map data).</summary>
+    private int CountZoneSpawnTargets(MapZone z, ZoneSpawnEntry e, bool forage)
+    {
+        if (forage)
+        {
+            int defIdx = _envSystem.FindDef(e.DefId);
+            if (defIdx < 0) return 0;
+            return _envSystem.CountActiveOfDefInRect(defIdx,
+                z.X - z.HalfW, z.Y - z.HalfH, z.X + z.HalfW, z.Y + z.HalfH);
+        }
+        int n = 0;
+        foreach (var pu in _placedUnits)
+            if (!pu.IsCorpse && pu.UnitDefId == e.DefId && z.ContainsPoint(new Vec2(pu.X, pu.Y)))
+                n++;
+        return n;
+    }
+
+    /// <summary>Body of the left panel for WolfPack/DeerHerd/Foraging zones: the periodic
+    /// spawn table. Each row = def combo + spawns-per-minute + max-alive + remove. Field
+    /// ids embed zone AND row index so selection/row changes drop text-field focus.</summary>
+    private void DrawZoneSpawnPanel(Rectangle rect, MapZone z, int idx)
+    {
+        if (_eb == null) return;
+        int x = rect.X + Margin;
+        int fw = rect.Width - Margin * 2;
+        int y = rect.Y + HeaderHeight + 6;
+
+        z.Name = _eb.DrawTextField($"zone_vname_{idx}", "Name", z.Name, x, y, fw);
+        y += FieldHeight + 6;
+
+        bool forage = z.Kind == ZoneKind.Foraging;
+        string[] options = forage ? GetZoneForagableIdOptions() : GetZoneUnitIdOptions(z.Kind);
+
+        DrawSmallText(forage ? "Item spawning" : "Unit spawning", x, y, AccentColor);
+        y += LineHeight;
+
+        for (int row = 0; row < z.Spawns.Count; row++)
+        {
+            // Each row needs 3 fields + a button; truncate instead of overflowing the panel.
+            if (y > rect.Bottom - (FieldHeight * 3 + ButtonHeight + LineHeight * 2 + 14))
+            {
+                DrawSmallText($"... {z.Spawns.Count - row} more (panel full)", x, y, TextDim);
+                y += LineHeight;
+                break;
+            }
+
+            var e = z.Spawns[row];
+            e.DefId = _eb.DrawCombo($"zone_spawn_def_{idx}_{row}", forage ? "Item" : "Unit",
+                e.DefId, options, x, y, fw);
+            y += FieldHeight + 2;
+            e.PerMinute = MathF.Max(0f, _eb.DrawFloatField($"zone_spawn_rate_{idx}_{row}",
+                "Per minute", e.PerMinute, x, y, fw, 0.1f));
+            y += FieldHeight + 2;
+            e.MaxAlive = Math.Max(1, _eb.DrawIntField($"zone_spawn_max_{idx}_{row}",
+                "Max alive", e.MaxAlive, x, y, fw));
+            y += FieldHeight + 2;
+
+            if (_eb.DrawButton("Remove", x, y, 70, ButtonHeight, DangerColor))
+            {
+                z.Spawns.RemoveAt(row);
+                return; // list changed — re-layout next frame
+            }
+            DrawSmallText($"{(forage ? "in zone now" : "placed in zone")}: {CountZoneSpawnTargets(z, e, forage)}",
+                x + 78, y + 4, TextDim);
+            y += ButtonHeight + 4;
+
+            _spriteBatch.Draw(_pixel, new Rectangle(rect.X, y, rect.Width, 1), SeparatorColor);
+            y += 4;
+        }
+
+        if (y <= rect.Bottom - ButtonHeight - LineHeight * 2
+            && _eb.DrawButton(forage ? "+ Add Item" : "+ Add Unit", x, y, 110, ButtonHeight))
+        {
+            z.Spawns.Add(new ZoneSpawnEntry
+            {
+                DefId = options.Length > 0 ? options[0] : "",
+                PerMinute = 1f,
+                MaxAlive = 5,
+            });
+        }
     }
 
     /// <summary>World overlays for the Zones tab: every zone as a transparent kind-colored
@@ -5502,7 +5697,7 @@ public class MapEditorWindow
 
     /// <summary>Write the authored zones to the <c>&lt;map&gt;_zones.json</c> sidecar
     /// (same pattern as SaveTriggers/SaveRoads). Population is only written for
-    /// Village zones — it's meaningless on the animal kinds.</summary>
+    /// Village zones, the periodic spawn table only for the other kinds.</summary>
     private void SaveZones(string mapsDir)
     {
         string path = Path.Combine(mapsDir, _mapFilename + "_zones.json");
@@ -5529,6 +5724,19 @@ public class MapEditorWindow
                 writer.WriteNumber("militia", z.Population.Militia);
                 writer.WriteNumber("watchdog", z.Population.Watchdog);
                 writer.WriteEndObject();
+            }
+            else if (z.Spawns.Count > 0)
+            {
+                writer.WriteStartArray("spawns");
+                foreach (var s in z.Spawns)
+                {
+                    writer.WriteStartObject();
+                    writer.WriteString("defId", s.DefId);
+                    writer.WriteNumber("perMinute", s.PerMinute);
+                    writer.WriteNumber("maxAlive", s.MaxAlive);
+                    writer.WriteEndObject();
+                }
+                writer.WriteEndArray();
             }
             writer.WriteEndObject();
         }
